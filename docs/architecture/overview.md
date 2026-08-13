@@ -118,8 +118,9 @@ flowchart TD
 
 **UI 按 capability 渲染，绝不按 provider 名字硬编码。** 端口缺失或 `capability = false` 时，对应入口根本不会出现在菜单里；应用层误调用会抛 `UnsupportedError`——**不允许静默成功**，因为静默成功会让用户以为操作生效了。
 
-Bundle 是严格边界：它和 `AgentRuntimePort` 不提供取回原始 `AgentProvider` 的通道；
-ViewModel 只持有中立端口。
+Bundle 是严格边界：工厂直接创建原生 `AgentProviderBundle`，旧 `AgentProvider`
+大接口已删除。ViewModel 只持有中立端口。静态能力默认值由 data 组合层注入，
+Shared Domain 不按厂商名称 switch。
 
 这也是"新增 Provider 不用改共享层"的底气所在。正常的接入范围是：
 

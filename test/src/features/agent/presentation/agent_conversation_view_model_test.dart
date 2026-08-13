@@ -8,6 +8,7 @@ import 'package:zeta/src/features/agent/application/agent_model_catalog_reposito
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/application/agent_ui_update_request.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
+import 'package:zeta/src/features/agent/data/agent_provider_static_capabilities.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/agent/domain/agent_turn_terminal_signal.dart';
@@ -3101,7 +3102,7 @@ void main() {
       'compact stays unavailable without capability or while running',
       () async {
         final unsupportedProvider = _FakeAgentProvider(
-          declaredCapabilities: AgentProviderCapabilities.codexAppServer
+          declaredCapabilities: AgentProviderStaticCapabilities.codexAppServer
               .copyWith(canCompactThread: false),
         );
         final unsupportedViewModel = _createViewModel(
@@ -3289,8 +3290,8 @@ void main() {
       await viewModel.loadModels();
 
       // Assert
-      expect(provider.refreshModelsCalls, 1);
-      expect(provider.listModelsCalls, 0);
+      // 仓储决定何时 forceRefresh；第二次命中缓存，不再打 Provider。
+      expect(provider.listModelsCalls, 1);
       expect(viewModel.models.single.id, 'fresh-model');
     });
 
@@ -4584,7 +4585,7 @@ class _FakeAgentProvider
         const <String, Completer<AgentThreadHistorySnapshot>>{},
   }) : declaredCapabilities =
            declaredCapabilities ??
-           AgentProviderCapabilities.codexAppServer.copyWith(
+           AgentProviderStaticCapabilities.codexAppServer.copyWith(
              canForkThreadAtTurn: true,
            ),
        _defaultHistorySnapshot =

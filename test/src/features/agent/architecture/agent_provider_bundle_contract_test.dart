@@ -16,6 +16,18 @@ void main() {
       }
     });
 
+    test('domain capabilities stay vendor-neutral', () {
+      final source = File(
+        'lib/src/features/agent/domain/agent_provider_capabilities.dart',
+      ).readAsStringSync();
+
+      expect(source, isNot(contains('defaultsFor')));
+      expect(source, isNot(contains('static const codexAppServer')));
+      expect(source, isNot(contains('static const grokAcp')));
+      expect(source, isNot(contains('static const claudeCode')));
+      expect(source, isNot(contains('AgentProviderKind.')));
+    });
+
     test('shared bundle has no adapt path or provider-kind branches', () {
       final source = File(
         'lib/src/features/agent/domain/agent_provider_bundle.dart',

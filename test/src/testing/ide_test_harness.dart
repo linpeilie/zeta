@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/features/agent/data/agent_provider_static_capabilities.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 
@@ -223,7 +224,7 @@ class FakeAgentProvider
     this.responseText = 'Fake response from provider',
     this.turnErrorMessage,
     this.onResumeSession,
-    this.declaredCapabilities = AgentProviderCapabilities.codexAppServer,
+    this.declaredCapabilities = AgentProviderStaticCapabilities.codexAppServer,
     this.config = AgentProviderConfig.defaultCodex,
     this.includeConversationTestThread = false,
     this.conversationThreadProviderId,

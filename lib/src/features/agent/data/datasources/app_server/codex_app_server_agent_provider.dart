@@ -10,6 +10,7 @@ import 'package:zeta/src/features/agent/data/datasources/app_server/codex_proces
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/provider_operation_scheduler.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/provider_runtime_json_rpc_peer.dart';
+import 'package:zeta/src/features/agent/data/agent_provider_static_capabilities.dart';
 import 'package:zeta/src/features/agent/data/mappers/codex_permission_policy_codec.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
@@ -143,7 +144,7 @@ class CodexAppServerAgentProvider
   AgentModelSelection _modelSelection;
 
   AgentProviderCapabilities _capabilities =
-      AgentProviderCapabilities.codexAppServer;
+      AgentProviderStaticCapabilities.codexAppServer;
 
   AgentRuntimeInfo? _runtimeInfo;
 

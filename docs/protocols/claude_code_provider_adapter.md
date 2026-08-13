@@ -6,6 +6,11 @@
 > [Claude Code stream-json 协议基线](./claude_code_stream_json_protocol.md) 为准。
 > 本提案原定的 OAuth `/v1/models` 与静态目录兜底已经被否决并删除。当前实现改为
 > 从无 Prompt 的 CLI initialize 读取模型和套餐名称；OAuth REST 只用于可关闭的额度详情。
+>
+> 2026-08-13 起，旧 `AgentProvider` 大接口、`AgentProviderBundle.adapt` 与 Domain 中的
+> `defaultsFor(kind)` 已删除。静态能力走 data 层 `AgentProviderStaticCapabilities`，
+> 工厂走 `AgentProviderBundleFactory.createBundle`。本文仍出现的旧符号只反映提案当时的
+> 骨架设计，不要照抄回 Shared Domain。
 
 > 目的：将 Anthropic 的 Claude Code CLI 作为 **第三个** Agent Provider 接入
 > Zeta（与 Codex app-server、Grok ACP 并列），复用 `~/.claude` 已登录态，覆盖

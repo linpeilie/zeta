@@ -6,6 +6,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/features/agent/data/agent_ignored_message_logger.dart';
+import 'package:zeta/src/features/agent/data/agent_provider_static_capabilities.dart';
 import 'package:zeta/src/features/agent/data/datasources/acp/grok_models_cli.dart';
 import 'package:zeta/src/features/agent/data/datasources/acp/grok_process_starter.dart';
 import 'package:zeta/src/features/agent/data/datasources/local_history/grok_session_history_reader.dart';
@@ -205,7 +206,7 @@ class GrokAcpAgentProvider
   Stream<AgentEvent> get events => _events.stream;
 
   @override
-  AgentProviderCapabilities get capabilities => AgentProviderCapabilities
+  AgentProviderCapabilities get capabilities => AgentProviderStaticCapabilities
       .grokAcp
       .copyWith(canResumeSession: _loadSessionSupported);
 

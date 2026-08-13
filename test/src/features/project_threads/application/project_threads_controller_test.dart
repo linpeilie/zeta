@@ -6,6 +6,7 @@ import 'package:zeta/src/features/agent/application/agent_conversation_binding_m
 import 'package:zeta/src/features/agent/application/agent_provider_global_runtime.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
+import 'package:zeta/src/features/agent/data/agent_provider_static_capabilities.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/project_threads/application/project_threads_controller.dart';
@@ -1445,7 +1446,7 @@ class _FakeAgentProvider
   _FakeAgentProvider({
     required List<AgentThreadPage> pages,
     this.config = AgentProviderConfig.defaultCodex,
-    this.declaredCapabilities = AgentProviderCapabilities.codexAppServer,
+    this.declaredCapabilities = AgentProviderStaticCapabilities.codexAppServer,
   }) : _pages = List<AgentThreadPage>.from(pages);
 
   final List<AgentThreadPage> _pages;

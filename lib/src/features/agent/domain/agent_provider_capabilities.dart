@@ -1,5 +1,9 @@
 import 'package:zeta/src/features/agent/domain/agent_provider_models.dart';
 
+/// 初始化前按 kind 查询保守静态能力。具体映射由 data/app 组合层注入。
+typedef AgentProviderStaticCapabilitiesFor =
+    AgentProviderCapabilities Function(AgentProviderKind kind);
+
 /// Provider 的启动时机约束。
 ///
 /// 该策略属于初始化前可判断的静态能力，应用层据此决定是否可以在尚未选中项目时
@@ -31,11 +35,16 @@ class AgentProviderBootstrapPolicy {
 
 /// Agent provider 向应用层声明的中立能力集合。
 ///
+/// 操作是否存在以 [AgentProviderBundle] 端口是否非空为单一真源。本对象只承载：
+/// 初始化前可判断的保守静态声明，以及握手后 runtime 覆盖的动态位。
+/// 输入模态、reasoning effort、service tier 以模型 / runtime typed 能力为准。
+///
 /// 能力默认采用保守语义：只有 provider 能真实完成操作时才设为 `true`。
 /// UI 用它隐藏不可用入口，应用层和 provider 自身仍需在执行前再次校验。
 ///
 /// 权限选项选择不使用静态 capability 位：是否可用由
 /// [AgentProviderBundle.permissionPolicy] 端口是否非空决定。
+/// 具体厂商默认值由 data 组合层注入，本文件不列举 Provider 名称。
 class AgentProviderCapabilities {
   const AgentProviderCapabilities({
     this.canCreateSession = false,
@@ -174,93 +183,6 @@ class AgentProviderCapabilities {
     );
   }
 
-  /// Codex app-server 当前已落地能力。
-  static const codexAppServer = AgentProviderCapabilities(
-    canCreateSession: true,
-    canResumeSession: true,
-    canListThreads: true,
-    canReadHistory: true,
-    canDeleteThread: true,
-    canPrompt: true,
-    canCancelTurn: true,
-    canSteerTurn: true,
-    canRenameThread: true,
-    canArchiveThread: true,
-    canUnarchiveThread: true,
-    canForkThread: true,
-    // 指定 turn 分支取决于运行时 Codex 版本，初始化后动态开启。
-    canForkThreadAtTurn: false,
-    canCompactThread: true,
-    supportsLocalImageInput: true,
-    supportsResourceInput: true,
-    supportsSkillInput: true,
-    supportsPermissionRequests: true,
-    supportsUserQuestions: true,
-    // 当前 Codex 适配尚未暴露独立计划审批回写端口，避免提前声明可执行能力。
-    supportsPlanApproval: false,
-    supportsModelSelection: true,
-    supportsReasoningOptions: true,
-    supportsServiceTierSelection: true,
-    supportsUsage: true,
-  );
-
-  /// Grok ACP 当前真实可用能力。
-  ///
-  /// 本地图片当前只会退化为路径文本，因此不声明图片输入能力。
-  /// 重命名/删除走 xAI 扩展 `_x.ai/session/rename|delete`；归档无协议支持，保持关闭。
-  /// Skill 目录走 xAI 扩展 `_x.ai/skills/list`；发送时以 `$name` 文本 marker 调用。
-  static const grokAcp = AgentProviderCapabilities(
-    canCreateSession: true,
-    canResumeSession: true,
-    canListThreads: true,
-    canReadHistory: true,
-    canDeleteThread: true,
-    canPrompt: true,
-    canCancelTurn: true,
-    canRenameThread: true,
-    supportsResourceInput: true,
-    supportsSkillInput: true,
-    supportsPermissionRequests: true,
-    // `_x.ai/ask_user_question` park 到 UI 并经 respondToQuestion 回写。
-    supportsUserQuestions: true,
-    supportsModeSelection: true,
-    supportsPlanApproval: true,
-    supportsModelSelection: true,
-    supportsReasoningOptions: true,
-    supportsUsage: true,
-  );
-
-  /// 尚未接入的 provider 使用全关闭能力，避免误显示可操作入口。
+  /// 尚未接入或已退役的 provider 使用全关闭能力，避免误显示可操作入口。
   static const unsupported = AgentProviderCapabilities();
-
-  /// Claude Code 当前已落地能力集。
-  ///
-  /// 开放创建/恢复会话、本地历史列表与读取、prompt / cancel / usage、权限审批、
-  /// Plan 审批、Zeta 本地隐藏记录、静态模型选择与 `/compact`；其他能力随后续任务
-  /// 逐步打开，避免「入口在但点了报错」的窗口期（G4）。
-  static const claudeCode = AgentProviderCapabilities(
-    canCreateSession: true,
-    canResumeSession: true,
-    canListThreads: true,
-    canReadHistory: true,
-    canRemoveThreadFromList: true,
-    canPrompt: true,
-    canCancelTurn: true,
-    canCompactThread: true,
-    supportsPermissionRequests: true,
-    supportsPlanApproval: true,
-    supportsModelSelection: true,
-    supportsReasoningOptions: true,
-    supportsUsage: true,
-  );
-
-  /// 在 provider 尚未实例化时，根据持久化 kind 提供保守静态能力。
-  static AgentProviderCapabilities defaultsFor(AgentProviderKind kind) {
-    return switch (kind) {
-      AgentProviderKind.codexAppServer => codexAppServer,
-      AgentProviderKind.acp => grokAcp,
-      AgentProviderKind.cursorAcp => unsupported,
-      AgentProviderKind.claudeCode => claudeCode,
-    };
-  }
 }

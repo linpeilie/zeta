@@ -179,7 +179,7 @@ grep -rn "import 'package:shadcn_flutter" lib | grep -v "as sf"
 | 你要动的东西 | 必守门禁 | 动手前必读 | 额外必做 |
 |---|---|---|---|
 | 新增或修改 `AgentEvent` | G1 G2 G3 | [开发者文档 §7「新增 AgentEvent 接入清单」](docs/guides/developer_guide.md) 的 **16 条**，逐项回答 | 每条答案用测试固定 |
-| 接入新 Provider | G1 G2 G4 G6 | [工程规范 §4.2](docs/architecture/engineering_standards.md#42-共享适配层纯度门禁) + [开发者文档 §7](docs/guides/developer_guide.md) 十二步 | 改动范围应 = 自有 data 文件 + 中立 domain 契约 + factory 组合 + 契约测试 |
+| 接入新 Provider | G1 G2 G4 G6 | [工程规范 §4.2](docs/architecture/engineering_standards.md#42-共享适配层纯度门禁) + [开发者文档 §7](docs/guides/developer_guide.md) 十二步 | 改动范围应 = 自有 data 文件 + 中立 domain 契约 + `createBundle` 组合 + 契约测试；静态能力走 data 组合层，Domain 不按厂商 switch |
 | Provider adapter / reducer / 流式显示 | G1 G2 G3 | [工程规范 §4.1](docs/architecture/engineering_standards.md) | 带 Provider/CLI 版本的脱敏 fixture 序列测试；有 history/replay 就补 canonical signature 逐位置回归 |
 | Provider 文件变更证据 | G1 G2 G3 G6 G7 | [开发者文档 §7「文件变更证据接入」](docs/guides/developer_guide.md) | Provider-local tracker 输出完整 typed snapshot；command-only 不猜文件；live/history/replay 独立；正文不进日志或持久化 |
 | 权限选项 / 审批 / Plan 模式 | G4 G5 | [开发者文档 §7「权限选项选择」+「Plan conversation mode」](docs/guides/developer_guide.md) | 覆盖两 thread 两 Canvas 的真实 wire 参数、runtime 状态仅限所属 Binding、迟到 apply、旧 generation 丢弃 |

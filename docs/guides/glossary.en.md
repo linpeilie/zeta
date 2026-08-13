@@ -79,11 +79,11 @@ Does exactly three things: update on matching entryId, create on new entryId, up
 An integration with one agent CLI. Currently active: Codex (default) and Grok. Cursor is retired.
 
 **AgentProviderBundle**
-The strict neutral entry point to a provider's capabilities. Required ports: `runtime` and `conversation`. Everything else (`threadCatalog`, `threadSubscription`, `threadNaming`, `threadArchival`, `threadDeletion`, `threadCompaction`, `threadBranching`, `turnSteering`, `permissionResponses`, `questions`, `deniedActionOverride`, `modelCatalog`, `localThreadList`, `sessionConfiguration`, `planApproval`, `conversationModes`, `skills`, `permissionPolicy`, `usageQuota`) is optional. The bundle does not expose the raw `AgentProvider`.
+The strict neutral entry point to a provider's capabilities, created directly by `AgentProviderBundleFactory.createBundle`. Required ports: `runtime` and `conversation`. Everything else (`threadCatalog`, `threadSubscription`, `threadNaming`, `threadArchival`, `threadDeletion`, `threadCompaction`, `threadBranching`, `turnSteering`, `permissionResponses`, `questions`, `deniedActionOverride`, `modelCatalog`, `localThreadList`, `sessionConfiguration`, `planApproval`, `conversationModes`, `skills`, `permissionPolicy`, `usageQuota`) is optional. Unsupported ports must be `null`. The old `AgentProvider` facade has been deleted.
 `agent_provider_bundle.dart`
 
 **Capability**
-A provider's declaration of what it supports. **UI renders by capability, never hard-coded on provider name.** Unsupported capabilities must report `capability = false` and throw `UnsupportedError` — never succeed silently.
+A provider's declaration of what it supports. **UI renders by capability and port presence, never hard-coded on provider name.** Unsupported capabilities must report `capability = false` and throw `UnsupportedError` — never succeed silently. `AgentProviderCapabilities` is a neutral value object; vendor defaults are injected by the data-layer `AgentProviderStaticCapabilities` catalog.
 `agent_provider_capabilities.dart`
 
 **Runtime lease**

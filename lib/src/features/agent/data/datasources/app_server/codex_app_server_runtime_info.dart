@@ -53,7 +53,7 @@ AgentProviderCapabilities _codexCapabilitiesForRuntime(
           AgentRuntimeCompatibilityStatus.olderUnsupported ||
       runtime.compatibilityStatus ==
           AgentRuntimeCompatibilityStatus.protocolMismatch;
-  return AgentProviderCapabilities.codexAppServer.copyWith(
+  return AgentProviderStaticCapabilities.codexAppServer.copyWith(
     canPrompt: !isUnsupported,
     canForkThreadAtTurn:
         !isUnsupported && version != null && version >= _codexTargetVersion,

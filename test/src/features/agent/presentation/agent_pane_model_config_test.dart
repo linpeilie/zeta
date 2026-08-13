@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
+import 'package:zeta/src/features/agent/data/agent_provider_static_capabilities.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
@@ -976,5 +977,5 @@ final class _ClaudeEffortModelProvider extends AgentPaneFakeProvider {
 
   @override
   AgentProviderCapabilities get capabilities =>
-      AgentProviderCapabilities.claudeCode;
+      AgentProviderStaticCapabilities.claudeCode;
 }

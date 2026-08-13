@@ -7,6 +7,7 @@ import 'package:zeta/src/app/app_constants.dart';
 import 'package:zeta/src/app/shell/ide_shell_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
+import 'package:zeta/src/features/agent/data/agent_provider_static_capabilities.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/agent/domain/agent_turn_terminal_signal.dart';
@@ -1724,7 +1725,7 @@ class _ShellTestAgentProvider
   AgentProviderConfig get config => backend.config;
 
   @override
-  AgentProviderCapabilities get capabilities => AgentProviderCapabilities
+  AgentProviderCapabilities get capabilities => AgentProviderStaticCapabilities
       .codexAppServer
       .copyWith(canForkThreadAtTurn: backend.canForkThreadAtTurn);
 

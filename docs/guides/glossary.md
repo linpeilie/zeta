@@ -79,11 +79,11 @@ reducer 唯一的副作用出口。带作用域校验（generation / runtime / t
 一个 Agent CLI 的接入实现。当前活跃的是 Codex（默认）与 Grok。Cursor 已退役。
 
 **AgentProviderBundle（能力包）**
-Provider 能力的严格中立入口。必选端口 `runtime` 和 `conversation`；其余（`threadCatalog`、`threadSubscription`、`threadNaming`、`threadArchival`、`threadDeletion`、`threadCompaction`、`threadBranching`、`turnSteering`、`permissionResponses`、`questions`、`deniedActionOverride`、`modelCatalog`、`localThreadList`、`sessionConfiguration`、`planApproval`、`conversationModes`、`skills`、`permissionPolicy`、`usageQuota`）都是可选的。Bundle 不暴露原始 `AgentProvider`。
+Provider 能力的严格中立入口，由 `AgentProviderBundleFactory.createBundle` 直接创建。必选端口 `runtime` 和 `conversation`；其余（`threadCatalog`、`threadSubscription`、`threadNaming`、`threadArchival`、`threadDeletion`、`threadCompaction`、`threadBranching`、`turnSteering`、`permissionResponses`、`questions`、`deniedActionOverride`、`modelCatalog`、`localThreadList`、`sessionConfiguration`、`planApproval`、`conversationModes`、`skills`、`permissionPolicy`、`usageQuota`）都是可选的。不支持的端口必须为 `null`。旧 `AgentProvider` 大接口已删除。
 `agent_provider_bundle.dart`
 
 **Capability（能力声明）**
-Provider 声明自己支持什么。**UI 一律按 capability 渲染，不按 provider 名字硬编码。** 不支持的能力必须 `capability = false` 并抛 `UnsupportedError`，不得静默成功。
+Provider 声明自己支持什么。**UI 一律按 capability 与端口是否非空渲染，不按 provider 名字硬编码。** 不支持的能力必须 `capability = false` 并抛 `UnsupportedError`，不得静默成功。`AgentProviderCapabilities` 是中立值对象；厂商默认值由 data 组合层的 `AgentProviderStaticCapabilities` 注入。
 `agent_provider_capabilities.dart`
 
 **Runtime lease（运行时租约）**

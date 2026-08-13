@@ -1,3 +1,4 @@
+import 'package:zeta/src/features/agent/data/agent_provider_static_capabilities.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 
@@ -13,7 +14,7 @@ mixin AgentProviderThreadLifecycleStub
         AgentThreadCompactionPort,
         AgentThreadBranchingPort {
   /// 测试 fake 默认模拟能力完整的 Codex；专项测试可 override。
-  AgentProviderCapabilities get capabilities => AgentProviderCapabilities
+  AgentProviderCapabilities get capabilities => AgentProviderStaticCapabilities
       .codexAppServer
       .copyWith(canForkThreadAtTurn: true);
 

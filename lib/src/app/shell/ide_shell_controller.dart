@@ -13,6 +13,7 @@ import 'package:zeta/src/features/agent/application/agent_thread_workspace_contr
 import 'package:zeta/src/features/agent/application/agent_ui_update_port.dart';
 import 'package:zeta/src/core/utils/system_file_manager.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
+import 'package:zeta/src/features/agent/data/agent_provider_static_capabilities.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/agent/domain/agent_turn_terminal_signal.dart';
@@ -119,6 +120,7 @@ class IdeShellController extends ChangeNotifier {
       modelCatalogRepository: agentModelCatalogRepository,
       runtimeRegistry: this.agentProviderRuntimeRegistry,
       globalRuntime: agentProviderGlobalRuntime,
+      staticCapabilitiesFor: AgentProviderStaticCapabilities.forKind,
     );
     final partitionStore =
         usageStatistics?.partitionStore ??

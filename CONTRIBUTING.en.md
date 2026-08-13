@@ -148,7 +148,7 @@ Common types: `feat` / `fix` / `docs` / `refactor` / `test` / `chore` / `perf`.
 - Provider processes are created only by `AgentProviderRuntimeRegistry`. Global work uses `AgentProviderGlobalRuntime`; session instances are created lazily only by `AgentConversationBinding.beginTurn()`. View models own no lease/scope/pin, and the binding manager owns idle reclamation.
 - A workspace entry binds its thread, binding, and view model once. View models expose no cross-thread switch/restore compatibility API and may update only project/file context. Runtime acquisition must pass an explicit scope.
 - A binding attached to a real thread must never be rebound in place. A forked session goes through the shell's standard new-thread registration and selection flow, and later operations target only the fork result.
-- `AgentProviderBundle` / `AgentRuntimePort` never expose the raw `AgentProvider`; each binding owns one immutable permission snapshot, with no cross-provider/runtime/thread permission registry.
+- `AgentProviderBundle` is the only Application / Presentation capability surface and is created directly by `createBundle`; the old `AgentProvider` facade is gone. Each binding owns one immutable permission snapshot, with no cross-provider/runtime/thread permission registry. Static capability defaults are injected by the data composition layer; Domain does not switch on vendor names.
 
 **Event pipeline**
 

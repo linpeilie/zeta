@@ -6,6 +6,7 @@ import 'package:zeta/src/features/agent/application/agent_provider_config_store.
 import 'package:zeta/src/features/agent/application/agent_provider_global_runtime.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
+import 'package:zeta/src/features/agent/data/agent_provider_static_capabilities.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 final _log = loggerFor('zeta.agent.provider_controller');
@@ -21,6 +22,7 @@ class AgentProviderSettingsController extends ChangeNotifier
     required this.runtimeRegistry,
     AgentModelCatalogRepository? modelCatalogRepository,
     AgentProviderGlobalRuntime? globalRuntime,
+    AgentProviderStaticCapabilitiesFor? staticCapabilitiesFor,
   }) : modelCatalogRepository =
            modelCatalogRepository ??
            AgentModelCatalogRepository(
@@ -28,13 +30,16 @@ class AgentProviderSettingsController extends ChangeNotifier
            ),
        _globalRuntime =
            globalRuntime ??
-           AgentProviderGlobalRuntime(runtimeRegistry: runtimeRegistry);
+           AgentProviderGlobalRuntime(runtimeRegistry: runtimeRegistry),
+       _staticCapabilitiesFor =
+           staticCapabilitiesFor ?? AgentProviderStaticCapabilities.forKind;
 
   final AgentProviderConfigStore configStore;
   @override
   final AgentModelCatalogRepository modelCatalogRepository;
   final AgentProviderRuntimeRegistry runtimeRegistry;
   final AgentProviderGlobalRuntime _globalRuntime;
+  final AgentProviderStaticCapabilitiesFor _staticCapabilitiesFor;
 
   AgentProviderSettings _settings = const AgentProviderSettings();
   CursorRetirementResolution _runtimeSelection = CursorRetirementPolicy.resolve(
@@ -117,7 +122,7 @@ class AgentProviderSettingsController extends ChangeNotifier
     if (config == null) {
       return AgentProviderCapabilities.unsupported;
     }
-    return AgentProviderCapabilities.defaultsFor(config.kind);
+    return _staticCapabilitiesFor(config.kind);
   }
 
   /// 更新一个 provider 的全局配置，并按需重建运行实例。

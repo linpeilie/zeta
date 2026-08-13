@@ -148,7 +148,7 @@ chore: bump flutter action pin
 - Provider 进程只由 `AgentProviderRuntimeRegistry` 创建；全局操作走 `AgentProviderGlobalRuntime`，会话实例只由 `AgentConversationBinding.beginTurn()` 惰性创建。ViewModel 不持有 lease/scope/pin，空闲回收归 Binding Manager。
 - Workspace entry 创建时一次性绑定 thread、Binding 与 ViewModel；ViewModel 不提供跨 thread 切换/恢复兼容入口，只允许更新 project/file context。Registry 获取 runtime 必须显式传 scope。
 - 真实 thread 的 Binding 不得原地改绑；fork 返回的 session 走 Shell 的新 thread 通用登记/选择流程，后续操作只作用于 fork 结果。
-- `AgentProviderBundle` / `AgentRuntimePort` 不暴露原始 `AgentProvider`；每个 Binding 独占一份不可变权限快照，不得恢复跨 provider/runtime/thread 的权限注册表。
+- `AgentProviderBundle` 是 Application / Presentation 的唯一能力入口，由 `createBundle` 直接创建；旧 `AgentProvider` 大接口已删除。每个 Binding 独占一份不可变权限快照，不得恢复跨 provider/runtime/thread 的权限注册表。静态能力默认值由 data 组合层注入，Domain 不按厂商名称 switch。
 
 **事件管线**
 

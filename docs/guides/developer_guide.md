@@ -169,7 +169,7 @@ windows/
 ## 7. Agent provider 开发指南
 
 Provider 实例只由 app 组合层的 `AgentProviderRuntimeRegistry` 创建和销毁；任何其他
-文件调用 `AgentProviderFactory.create` 都是架构错误。会话前/全局操作通过
+文件调用 `AgentProviderBundleFactory.createBundle` 都是架构错误。会话前/全局操作通过
 `AgentProviderGlobalRuntime` 使用每个 Provider ID 唯一的 global 实例，包括项目列表、
 历史、用量、连接检测、模型和 Skill 目录；global 不参与空闲回收。
 
@@ -189,28 +189,29 @@ Registry acquire 必须显式选择 global/session scope；使用统计面板只
 
 新增 provider 时：
 
-1. 先确认现有 `AgentProviderBundle` 端口是否足够。已迁移的能力域优先接到
+1. 先确认现有 `AgentProviderBundle` 端口是否足够。能力域接到
    `conversation`、`threadCatalog`、`threadSubscription`、`threadNaming`、
    `threadArchival`、`threadDeletion`、`threadCompaction`、`threadBranching`、
    `turnSteering`、`permissionResponses`、`questions`、`deniedActionOverride`、
    `modelCatalog`、`localThreadList`、
    `sessionConfiguration`、`planApproval`、`conversationModes`、`skills`、
-   `permissionPolicy` 等端口，不要继续优先扩张 `AgentProvider` 旧必选接口。
-   Bundle、`AgentRuntimePort` 与 Binding context 都不得提供取回原始 `AgentProvider` 的
-   getter；controller / ViewModel 必须始终停留在中立端口边界。
-2. 在领域层定义初始化前可判断的静态 `AgentProviderCapabilities` 与 bootstrap
-   policy；握手后若能力发生变化，应返回更精确的动态 capabilities。
-3. 在 data 层新增具体 provider 实现，不让 UI 直接依赖 provider 协议。
-   `AgentProviderFactory` 当前仍返回 `AgentProvider`，但仅 registry、global runtime 与
-   Binding 的内部适配代码可以接触它；其余 application/presentation 只接收 bundle 端口。
+   `permissionPolicy` 等端口。不支持的端口必须为 `null`，禁止 no-op 或
+   `UnsupportedError` 伪实现。controller / ViewModel 必须始终停留在中立端口边界。
+2. 在 data 组合层声明初始化前可判断的静态 `AgentProviderCapabilities` 与 bootstrap
+   policy（见 `AgentProviderStaticCapabilities`）；不要往 Shared Domain 增加厂商命名
+   默认值或 `defaultsFor(kind)`。握手后若能力发生变化，由 `runtime.capabilities`
+   返回更精确的动态值。
+3. 在 data 层新增具体 provider 实现，只实现真实支持的中立端口，并由
+   `AgentProviderBundleFactory.createBundle` 直接返回原生 Bundle。application /
+   presentation 只接收 bundle 端口。
 4. 把 provider 原始事件映射成 `AgentEvent`、`AgentToolCall`、
    `AgentPermissionRequest`、`AgentQuestionRequest`、`AgentThreadSummary`、
    `AgentSessionConfigOption` 等中立模型。
    Provider 原始 `sourceItemId` / `sourceMessageId` 只作为 source metadata；进入 application
    前必须由 adapter/reducer 生成最终 entryId。文件变更同样要在 Provider-local tracker 中
    形成完整 `AgentFileChangeSnapshot`，不得把 partial/raw 留给 Store 或 UI 补齐。
-5. 如果出现新的可选能力域，优先新增 bundle 可选端口及其测试，再决定是否保留
-   兼容门面；不要把非通用能力直接做成所有 provider 的必选方法。
+5. 如果出现新的可选能力域，优先新增 bundle 可选端口及其测试；不要把非通用能力
+   直接做成所有 provider 的必选方法。旧 `AgentProvider` 大接口已删除，不得恢复。
 6. ACP provider 复用无状态 `AcpSessionUpdateDecoder`、`AcpPermissionMapper`、
    `AcpContentCodec` 和 `AcpSessionConfigMapper`；每个厂商自行实现 adapter/reducer，决定
    message segment、reasoning phase、tool upsert、去重和 lifecycle。共享 ACP 文件不得
@@ -627,8 +628,8 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
 - 统计 Provider 选择与会话 active Provider 是两套状态。前台或后台 thread 终态必须通过
   typed signal 携带实际 Provider；Shell 只更新统计选择、Workbench 快照并请求静默刷新，
   不得写 `AgentProviderController`、Provider 配置或会话 Binding。一次终态只刷新一次。
-- 新 provider 的套餐读取实现 `AgentUsageQuotaProvider` 可选能力；不要为不支持套餐的
-  provider 在通用 `AgentProvider` 上制造强制实现。Grok 通过 `_x.ai/billing` 映射
+- 新 provider 的套餐读取实现 `AgentUsageQuotaProvider` 可选端口；不支持时
+  `bundle.usageQuota` 必须为 `null`。Grok 通过 `_x.ai/billing` 映射
   到 `AgentUsageQuotaSnapshot`，原始 billing JSON 不得泄漏到 presentation。
 - Claude 的 `planType` 只来自 initialize metadata；可选 `/api/oauth/usage` 仅补额度窗口
   与 extra usage。只有增强开启、非 API key、token 有效且 scopes 同时含

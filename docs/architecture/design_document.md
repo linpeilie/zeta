@@ -90,7 +90,7 @@ AgentConversationViewModel
     -> AgentConversationModeCatalogPort?
 
 AgentProviderRuntimeRegistry
-  -> AgentProviderFactory
+  -> AgentProviderBundleFactory.createBundle
     -> CodexAppServerAgentProvider -> JsonRpcPeer -> codex app-server stdio
     -> GrokAcpAgentProvider -> JsonRpcPeer -> grok agent stdio
     -> ClaudeCodeAgentProvider -> StreamJsonPeer -> claude stream-json stdio
@@ -305,9 +305,9 @@ projection 与 unified diff 以 turn render revision 缓存，代码高亮复用
 
 ### Provider 抽象
 
-Application / Presentation 只以 `AgentProviderBundle` 的中立端口作为能力入口；
-`AgentProvider` 仅保留为 data adapter 的生命周期宿主和 bundle 适配入口，不通过
-Bundle、RuntimePort 或 Binding 暴露给 ViewModel。
+Application / Presentation 只以 `AgentProviderBundle` 的中立端口作为能力入口。
+工厂通过 `AgentProviderBundleFactory.createBundle` 直接创建原生 Bundle；Provider
+实现类只实现自己真实支持的端口。旧 `AgentProvider` 大接口与 `adapt()` 已删除。
 
 `AgentProviderBundle` 当前负责把会话与线程能力拆成明确端口：
 
@@ -318,10 +318,11 @@ Bundle、RuntimePort 或 Binding 暴露给 ViewModel。
   `localThreadList`、`sessionConfiguration`、`planApproval`、`permissionPolicy`、
   `conversationModes`、`skills`、`usageQuota`。
 
-`AgentProvider` 仍负责承载具体 CLI 对接和运行时边界，核心职责包括：
+`AgentRuntimePort` / `AgentConversationPort` 与各可选端口承载具体 CLI 对接和
+运行时边界，核心职责包括：
 
 - 通过 `AgentProviderCapabilities` 声明 session、history、turn、thread、input、
-  interaction、config、telemetry 和 bootstrap 能力。
+  interaction、config、telemetry 和 bootstrap 能力；厂商默认值由 data 组合层注入。
 - 初始化 provider（含握手后的 capability 收敛 / 通知 opt-out）。
 - 创建和恢复 session；切换会话时 best-effort `unsubscribeThread`。
 - 列出项目 threads、读取 thread 历史。
@@ -329,9 +330,9 @@ Bundle、RuntimePort 或 Binding 暴露给 ViewModel。
 - 响应权限请求；他端已解决的审批通过事件撤销本地卡片。
 - 推送状态、消息、推理/计划流、工具调用、文件变更快照、审批与系统提示事件。
 
-当前 `AgentConversationViewModel` 与 `ProjectThreadsController` 已改为通过 bundle
+当前 `AgentConversationViewModel` 与 `ProjectThreadsController` 通过 bundle
 消费上述端口；Agent 管理页中的模型探测也统一走 `bundle.modelCatalog`。应用层不再
-需要通过 provider kind 或 `is SomeOptionalProvider` 决定这些已迁移功能域。
+需要通过 provider kind 或运行时类型判断决定这些功能域。
 
 capability 与 bundle 端口都采用保守声明：端口缺失或 capability=false 的操作不进入
 Project thread 菜单、Agent header 或 composer，应用层误调用时抛出
@@ -343,7 +344,7 @@ workspace 下启动、是否允许 eager model preload。
 为每次连接生成 `runtimeId + connectionEpoch`，并把 scope 注入服务端反向请求。进入
 `closing` 后拒绝新的 client RPC；关闭 transport 后等待已入场的 start、RPC 和
 server-request handler 排空。Codex 的 `AgentRuntimeInfo` 同步暴露 runtime identity，
-Grok 通过可选 `AgentRuntimeLifecycleProvider` 暴露中立生命周期，不把协议状态泄漏到 UI。
+Grok 通过 `AgentRuntimePort.lifecycleState` 暴露中立生命周期，不把协议状态泄漏到 UI。
 
 Provider 事件进入对话详情前由 `AgentEventPipeline` 集中管理。每次绑定以
 `runtimeId + connectionEpoch + providerId + threadId + listenerGeneration` 标识；新监听先安装、

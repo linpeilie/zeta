@@ -1,6 +1,6 @@
 # 工程规范
 
-最后更新：2026-08-12
+最后更新：2026-08-13
 
 本文从当前 `lib/` 重构后的代码结构中提炼长期遵循的工程规范。它补充根目录 `AGENTS.md`，用于指导后续功能开发、重构和评审。
 
@@ -184,7 +184,7 @@ main -> app -> presentation/application -> domain
 - 启动时机由 `AgentProviderBootstrapPolicy` 描述；需要项目目录的 provider 不得在获得
   workspace 前启动，也不得参与 eager model preload。
 - `AgentProviderRuntimeRegistry` 是应用进程内 Provider 实例和子进程的唯一所有者，也是
-  唯一允许调用 `AgentProviderFactory.create` 的对象。`AgentProviderGlobalRuntime` 只借用
+  唯一允许调用 `AgentProviderBundleFactory.createBundle` 的对象。`AgentProviderGlobalRuntime` 只借用
   每个 Provider ID 唯一且永不空闲回收的 global runtime；模型、Skill、用量、历史和
   thread 管理等会话前/全局操作不得创建 session runtime。
 - Registry `acquire` 必须显式传入 global/session scope，不得提供默认 global 兼容值。
@@ -216,12 +216,13 @@ main -> app -> presentation/application -> domain
   端口，不持久化，并在 thread、workspace、provider 或可写性边界变化时清除。
 - 本地交接只能由成功的 Plan 终态和非空计划内容触发。执行动作必须通过新的 Default
   `turn/start` 发起；继续规划保持 Plan draft；任何动作都不得预授权后续工具或文件修改。
-- 只有支持独立用户提问协议的 Provider 才实现 `AgentQuestionResponseProvider`；
+- 只有支持独立用户提问协议的 Provider 才发布 `questions` 端口；
   permission-only Provider 不得用空 answers、no-op 或权限拒绝伪造提问能力。
 - 新 provider 应先评估现有 bundle 端口是否足够；不足时优先扩展可选端口，再在 data 层
-  实现具体协议。只有明确需要兼容旧调用面时，才同步补 `AgentProvider` 门面。
-- 非所有 provider 都具备的账号能力使用可选接口（例如
-  `AgentUsageQuotaProvider`），不要扩大 `AgentProvider` 的必选实现面。
+  实现具体协议。工厂直接创建原生 `AgentProviderBundle`；旧 `AgentProvider` 大接口已删除，
+  不得恢复。静态能力默认值由 data 组合层注入，Shared Domain 不按厂商名称 switch。
+- 非所有 provider 都具备的账号能力使用可选端口（例如
+  `usageQuota`），不要把可选能力做成所有 provider 的必选实现。
 - mapper 文件负责字段兼容、默认值和协议名称转换；不要在 widget 中写散落的 JSON key。
 - 模型目录的 Reasoning 和 service tier 在 data mapper 中转为中立领域模型，保留服务端顺序和
   精确 tier id；Fast 等产品语义可在 domain/application 层识别，但不得改写 provider 协议值。

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta/src/features/agent/data/agent_provider_static_capabilities.dart';
 import 'package:zeta/src/features/agent/data/claude_code_cli_locator.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_control_request_handler.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_cli_metadata_coordinator.dart';
@@ -156,7 +157,7 @@ class ClaudeCodeAgentProvider
 
   @override
   AgentProviderCapabilities get capabilities =>
-      AgentProviderCapabilities.defaultsFor(AgentProviderKind.claudeCode);
+      AgentProviderStaticCapabilities.claudeCode;
 
   @override
   Stream<AgentEvent> get events => _events.stream;

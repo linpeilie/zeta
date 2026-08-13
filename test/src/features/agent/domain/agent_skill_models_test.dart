@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/features/agent/data/agent_provider_static_capabilities.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 void main() {
@@ -99,10 +100,13 @@ void main() {
   group('AgentProviderCapabilities.supportsSkillInput', () {
     test('enables Codex and Grok', () {
       expect(
-        AgentProviderCapabilities.codexAppServer.supportsSkillInput,
+        AgentProviderStaticCapabilities.codexAppServer.supportsSkillInput,
         isTrue,
       );
-      expect(AgentProviderCapabilities.grokAcp.supportsSkillInput, isTrue);
+      expect(
+        AgentProviderStaticCapabilities.grokAcp.supportsSkillInput,
+        isTrue,
+      );
     });
   });
 }

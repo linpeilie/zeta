@@ -11,6 +11,7 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/main.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
+import 'package:zeta/src/features/agent/data/agent_provider_static_capabilities.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
@@ -757,7 +758,7 @@ void main() {
     final session = activeProjectSessionStore(tempDirectories);
     final provider = FakeAgentProvider(
       config: AgentProviderConfig.defaultGrok,
-      declaredCapabilities: AgentProviderCapabilities.grokAcp,
+      declaredCapabilities: AgentProviderStaticCapabilities.grokAcp,
       includeConversationTestThread: true,
       permissionOptions: const <AgentPermissionOption>[
         AgentPermissionOption(
@@ -883,7 +884,7 @@ void main() {
         config: AgentProviderConfig.defaultGrok.copyWith(
           selectedPermissionOptionId: 'ask',
         ),
-        declaredCapabilities: AgentProviderCapabilities.grokAcp,
+        declaredCapabilities: AgentProviderStaticCapabilities.grokAcp,
         includeConversationTestThread: true,
         permissionOptions: const <AgentPermissionOption>[
           AgentPermissionOption(
@@ -992,7 +993,7 @@ void main() {
     final session = activeProjectSessionStore(tempDirectories);
     final provider = FakeAgentProvider(
       config: AgentProviderConfig.defaultGrok,
-      declaredCapabilities: AgentProviderCapabilities.grokAcp,
+      declaredCapabilities: AgentProviderStaticCapabilities.grokAcp,
       turnErrorMessage: errorMessage,
       includeConversationTestThread: true,
     );
@@ -4134,9 +4135,8 @@ class _ModeCapableFakeAgentProvider extends FakeAgentProvider
   _ModeCapableFakeAgentProvider({required super.completeTurns})
     : super(
         includeConversationTestThread: true,
-        declaredCapabilities: AgentProviderCapabilities.codexAppServer.copyWith(
-          supportsModeSelection: true,
-        ),
+        declaredCapabilities: AgentProviderStaticCapabilities.codexAppServer
+            .copyWith(supportsModeSelection: true),
       );
 
   @override
