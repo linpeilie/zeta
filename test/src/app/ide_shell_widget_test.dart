@@ -63,6 +63,60 @@ void main() {
     expect(find.text('No tools running'), findsNothing);
   });
 
+  testWidgets('设置页与使用统计页标题栏折叠位切换为返回主界面', (tester) async {
+    await _pumpIde(tester, enableNativeWindowFrame: true);
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('titlebar-left-sidebar-action')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('titlebar-back-action')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('titlebar-settings-action')));
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('titlebar-left-sidebar-action')),
+      findsNothing,
+    );
+    var backAction = find.byKey(const ValueKey('titlebar-back-action'));
+    expect(backAction, findsOneWidget);
+
+    await tester.tap(backAction);
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('settings-nav-panel')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('titlebar-left-sidebar-action')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('titlebar-back-action')), findsNothing);
+
+    await tester.tap(
+      find.byKey(const ValueKey('titlebar-usage-statistics-action')),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('titlebar-left-sidebar-action')),
+      findsNothing,
+    );
+    backAction = find.byKey(const ValueKey('titlebar-back-action'));
+    expect(backAction, findsOneWidget);
+
+    await tester.tap(backAction);
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('usage-statistics-page')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('titlebar-left-sidebar-action')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('titlebar-back-action')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('窗口从最小化恢复可重启全局 ticker', (tester) async {
     await _pumpIde(tester);
     final appState = tester.state<MainAppState>(find.byType(MainApp));
@@ -1173,7 +1227,7 @@ void main() {
         findsOneWidget,
       );
 
-      await tester.tap(find.byKey(const ValueKey('settings-back-button')));
+      await tester.tap(find.byKey(const ValueKey('titlebar-back-action')));
       await tester.pump();
 
       _expectRetainedAgentState(tester, retained);
@@ -1201,9 +1255,7 @@ void main() {
     );
     expect(retained.agentPaneElement.mounted, isTrue);
 
-    await tester.tap(
-      find.byKey(const ValueKey('usage-statistics-back-button')),
-    );
+    await tester.tap(find.byKey(const ValueKey('titlebar-back-action')));
     await tester.pump();
 
     _expectRetainedAgentState(tester, retained);

@@ -30,7 +30,6 @@ class SettingsPage extends StatefulWidget {
     required this.activeSection,
     required this.appearanceController,
     required this.generalSettingsController,
-    required this.onBackPressed,
     required this.onSectionSelected,
     this.agentManagementController,
     super.key,
@@ -40,7 +39,6 @@ class SettingsPage extends StatefulWidget {
   final AppearanceSettingsController appearanceController;
   final GeneralSettingsController generalSettingsController;
   final AgentManagementController? agentManagementController;
-  final VoidCallback onBackPressed;
   final ValueChanged<SettingsSection> onSectionSelected;
 
   @override
@@ -63,9 +61,6 @@ class _SettingsPageState extends State<SettingsPage> {
           child: SettingsNavigationPane(
             activeSection: widget.activeSection,
             showAgentManagement: widget.agentManagementController != null,
-            onBackPressed: () {
-              unawaited(_handleBackPressed());
-            },
             onSectionSelected: (section) {
               unawaited(_handleSectionSelected(section));
             },
@@ -83,13 +78,6 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
       ],
     );
-  }
-
-  Future<void> _handleBackPressed() async {
-    if (!(await _canvasKey.currentState?.confirmCanLeave() ?? true)) {
-      return;
-    }
-    widget.onBackPressed();
   }
 
   Future<void> _handleSectionSelected(SettingsSection section) async {
@@ -110,42 +98,23 @@ class _SettingsPageState extends State<SettingsPage> {
 class SettingsNavigationPane extends StatelessWidget {
   const SettingsNavigationPane({
     required this.activeSection,
-    required this.onBackPressed,
     required this.onSectionSelected,
     required this.showAgentManagement,
     super.key,
   });
 
   final SettingsSection activeSection;
-  final VoidCallback onBackPressed;
   final ValueChanged<SettingsSection> onSectionSelected;
   final bool showAgentManagement;
 
   @override
   Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
     return IdeSurface.pane(
       key: const ValueKey('settings-nav-panel'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          IdePageHeader(
-            title: '设置',
-            leading: IdeTooltip(
-              message: '返回主界面',
-              child: sf.IconButton.ghost(
-                key: const ValueKey('settings-back-button'),
-                onPressed: onBackPressed,
-                size: sf.ButtonSize.small,
-                density: sf.ButtonDensity.iconDense,
-                icon: Icon(
-                  Icons.arrow_back_rounded,
-                  size: 18,
-                  color: colors.textSecondary,
-                ),
-              ),
-            ),
-          ),
+          const IdePageHeader(title: '设置'),
           Expanded(
             child: ListView(
               padding: IdeSpacing.all8,

@@ -123,7 +123,6 @@ void main() {
 
     expect(find.byKey(const ValueKey('settings-nav-panel')), findsOneWidget);
     expect(find.byKey(const ValueKey('settings-detail-panel')), findsOneWidget);
-    expect(find.byKey(const ValueKey('settings-back-button')), findsOneWidget);
     expect(
       find.byKey(const ValueKey('settings-nav-appearance')),
       findsOneWidget,
@@ -167,21 +166,6 @@ void main() {
     );
     expect(find.byKey(const ValueKey('ide-settings-row-inline')), findsNothing);
     expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('settings back button invokes onBackPressed', (tester) async {
-    var backPressed = false;
-    await _pumpSettingsPage(
-      tester,
-      onBackPressed: () {
-        backPressed = true;
-      },
-    );
-
-    await tester.tap(find.byKey(const ValueKey('settings-back-button')));
-    await tester.pump();
-
-    expect(backPressed, isTrue);
   });
 
   testWidgets('theme selection updates controller and selected option', (
@@ -503,7 +487,6 @@ Future<void> _pumpSettingsPage(
   GeneralSettingsController? generalController,
   SettingsSection activeSection = SettingsSection.appearance,
   TargetPlatform? platform,
-  VoidCallback? onBackPressed,
   Size size = const Size(1400, 900),
 }) async {
   tester.view
@@ -569,7 +552,6 @@ Future<void> _pumpSettingsPage(
                 activeSection: activeSection,
                 appearanceController: appearanceController,
                 generalSettingsController: resolvedGeneralController,
-                onBackPressed: onBackPressed ?? () {},
                 onSectionSelected: (_) {},
               ),
             ),

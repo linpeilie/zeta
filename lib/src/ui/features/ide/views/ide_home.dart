@@ -262,19 +262,38 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
       key: const ValueKey('ide-window-frame'),
       enableNativeWindowFrame: widget.enableNativeWindowFrame,
       menus: _windowMenus,
-      titleBarLeadingActions: _page == _IdeHomePage.home
-          ? <WindowTitleBarAction>[
-              WindowTitleBarAction(
-                key: const ValueKey('titlebar-left-sidebar-action'),
-                icon: Icons.view_sidebar_outlined,
-                tooltip: leftSidebarVisible ? '隐藏左侧栏' : '显示左侧栏',
-                semanticLabel: leftSidebarVisible ? '隐藏左侧栏' : '显示左侧栏',
-                active: leftSidebarVisible,
-                focusNode: _leftSidebarFocusNode,
-                onPressed: () => _toggleLeftSidebar(_leftSidebarFocusNode),
-              ),
-            ]
-          : const <WindowTitleBarAction>[],
+      titleBarLeadingActions: switch (_page) {
+        _IdeHomePage.home => <WindowTitleBarAction>[
+          WindowTitleBarAction(
+            key: const ValueKey('titlebar-left-sidebar-action'),
+            icon: Icons.view_sidebar_outlined,
+            tooltip: leftSidebarVisible ? '隐藏左侧栏' : '显示左侧栏',
+            semanticLabel: leftSidebarVisible ? '隐藏左侧栏' : '显示左侧栏',
+            active: leftSidebarVisible,
+            focusNode: _leftSidebarFocusNode,
+            onPressed: () => _toggleLeftSidebar(_leftSidebarFocusNode),
+          ),
+        ],
+        // 设置页 / 使用统计页脱离主界面栈，标题栏折叠位改为返回主界面。
+        _IdeHomePage.settings => <WindowTitleBarAction>[
+          WindowTitleBarAction(
+            key: const ValueKey('titlebar-back-action'),
+            icon: Icons.arrow_back_rounded,
+            tooltip: '返回主界面',
+            semanticLabel: '返回主界面',
+            onPressed: () => unawaited(_closeSettingsPage()),
+          ),
+        ],
+        _IdeHomePage.usageStatistics => <WindowTitleBarAction>[
+          WindowTitleBarAction(
+            key: const ValueKey('titlebar-back-action'),
+            icon: Icons.arrow_back_rounded,
+            tooltip: '返回主界面',
+            semanticLabel: '返回主界面',
+            onPressed: _closeUsageStatisticsPage,
+          ),
+        ],
+      },
       titleBarActions: <WindowTitleBarAction>[
         WindowTitleBarAction(
           key: const ValueKey('titlebar-usage-statistics-action'),
@@ -368,9 +387,6 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
           ? SettingsNavigationPane(
               activeSection: _settingsSection,
               showAgentManagement: true,
-              onBackPressed: () {
-                unawaited(_closeSettingsPage());
-              },
               onSectionSelected: (section) {
                 unawaited(_selectSettingsSection(section));
               },
@@ -436,7 +452,6 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
                 ? UsageStatisticsPage(
                     key: const ValueKey('usage-statistics-page-host'),
                     controller: _usageStatisticsController,
-                    onBackPressed: _closeUsageStatisticsPage,
                     onOpenAgentManagement: _openAgentManagementFromUsage,
                   )
                 : const SizedBox.shrink(),

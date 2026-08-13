@@ -547,7 +547,6 @@ Future<void> _pumpUsagePage(
         home: sf.Scaffold(
           child: UsageStatisticsPage(
             controller: controller,
-            onBackPressed: () {},
             onOpenAgentManagement: onOpenAgentManagement ?? () {},
           ),
         ),

@@ -29,13 +29,11 @@ import 'package:zeta/src/ui/core/workbench/ide_section.dart';
 class UsageStatisticsPage extends StatefulWidget {
   const UsageStatisticsPage({
     required this.controller,
-    required this.onBackPressed,
     required this.onOpenAgentManagement,
     super.key,
   });
 
   final UsageStatisticsController controller;
-  final VoidCallback onBackPressed;
   final VoidCallback onOpenAgentManagement;
 
   @override
@@ -56,17 +54,7 @@ class _UsageStatisticsPageState extends State<UsageStatisticsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          IdePageHeader(
-            title: '使用统计',
-            subtitle: '分析调用、性能、Token、项目与套餐额度',
-            leading: sf.IconButton.ghost(
-              key: const ValueKey('usage-statistics-back-button'),
-              onPressed: widget.onBackPressed,
-              size: sf.ButtonSize.small,
-              density: sf.ButtonDensity.iconDense,
-              icon: const Icon(Icons.arrow_back_rounded, size: 18),
-            ),
-          ),
+          const IdePageHeader(title: '使用统计', subtitle: '分析调用、性能、Token、项目与套餐额度'),
           Expanded(
             child: ListenableBuilder(
               listenable: widget.controller,
