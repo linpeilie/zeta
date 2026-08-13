@@ -4,16 +4,35 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('conversation binding architecture contracts', () {
+    test('app shell injects BundleFactory and does not wrap old Factory', () {
+      const files = <String>[
+        'lib/src/app/app.dart',
+        'lib/src/app/shell/ide_shell_controller.dart',
+        'lib/src/ui/features/ide/views/ide_home.dart',
+      ];
+      for (final path in files) {
+        final source = File(path).readAsStringSync();
+        expect(source, contains('AgentProviderBundleFactory'));
+        expect(source, isNot(contains('asAgentProviderBundleFactory')));
+        expect(
+          source,
+          isNot(
+            matches(RegExp(r'(?<![A-Za-z])AgentProviderFactory(?![A-Za-z])')),
+          ),
+          reason: path,
+        );
+      }
+    });
+
     test('registry remains the only runtime factory caller', () {
       final callers = Directory('lib/src')
           .listSync(recursive: true)
           .whereType<File>()
           .where((file) => file.path.endsWith('.dart'))
           .where(
-            (file) =>
-                file.readAsStringSync().contains(
-                  'providerFactory.createBundle(',
-                ),
+            (file) => file.readAsStringSync().contains(
+              'providerFactory.createBundle(',
+            ),
           )
           .map((file) => file.path.replaceAll(Platform.pathSeparator, '/'))
           .toList(growable: false);

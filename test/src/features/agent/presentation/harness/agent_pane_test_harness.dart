@@ -363,8 +363,7 @@ void expectMarkdownWidgetDefaults(MarkdownWidget widget) {
   expect(widget.contextMenuBuilder, isNotNull);
 }
 
-class AgentPaneFakeProviderFactory extends AgentProviderFactory
-    with LegacyBundleFactoryMixin {
+class AgentPaneFakeProviderFactory with LegacyBundleFactoryMixin {
   AgentPaneFakeProviderFactory(this.provider);
 
   final AgentPaneFakeProvider provider;

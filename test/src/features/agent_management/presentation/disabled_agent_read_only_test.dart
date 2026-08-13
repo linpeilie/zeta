@@ -21,7 +21,7 @@ void main() {
   ) async {
     final provider = FakeAgentProvider();
     final registry = AgentProviderRuntimeRegistry(
-      providerFactory: FakeAgentProviderFactory(provider),
+      providerFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
     );
     final providerController = AgentProviderSettingsController(
       runtimeRegistry: registry,
@@ -90,7 +90,9 @@ void main() {
   ) async {
     // Arrange
     final registry = AgentProviderRuntimeRegistry(
-      providerFactory: FakeAgentProviderFactory(FakeAgentProvider()),
+      providerFactory: FakeAgentProviderBundleBuilder.fromFake(
+        FakeAgentProvider(),
+      ),
     );
     final providerController = AgentProviderSettingsController(
       runtimeRegistry: registry,

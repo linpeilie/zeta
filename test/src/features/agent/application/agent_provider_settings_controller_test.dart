@@ -16,7 +16,9 @@ void main() {
     test('persists only normalized V2 permission optionId', () async {
       final store = _RecordingConfigStore(const AgentProviderSettings());
       final registry = AgentProviderRuntimeRegistry(
-        providerFactory: FakeAgentProviderFactory(_TrackingFakeAgentProvider()),
+        providerFactory: FakeAgentProviderBundleBuilder.fromFake(
+          _TrackingFakeAgentProvider(),
+        ),
       );
       addTearDown(registry.close);
       final controller = AgentProviderSettingsController(
@@ -43,7 +45,9 @@ void main() {
       // Arrange
       final activeProvider = _TrackingFakeAgentProvider();
       final registry = AgentProviderRuntimeRegistry(
-        providerFactory: FakeAgentProviderFactory(activeProvider),
+        providerFactory: FakeAgentProviderBundleBuilder.fromFake(
+          activeProvider,
+        ),
       );
       addTearDown(registry.close);
       final controller = AgentProviderSettingsController(
@@ -79,7 +83,7 @@ void main() {
         source: 'test',
       );
       final registry = AgentProviderRuntimeRegistry(
-        providerFactory: FakeAgentProviderFactory(
+        providerFactory: FakeAgentProviderBundleBuilder.fromFake(
           _TrackingFakeAgentProvider(initial),
         ),
       );
@@ -168,7 +172,9 @@ void main() {
         // Arrange
         final activeProvider = _TrackingFakeAgentProvider();
         final registry = AgentProviderRuntimeRegistry(
-          providerFactory: FakeAgentProviderFactory(activeProvider),
+          providerFactory: FakeAgentProviderBundleBuilder.fromFake(
+            activeProvider,
+          ),
         );
         addTearDown(registry.close);
         final controller = AgentProviderSettingsController(
@@ -228,7 +234,9 @@ void main() {
         AgentProviderConfig.defaultGrok,
       );
       final registry = AgentProviderRuntimeRegistry(
-        providerFactory: FakeAgentProviderFactory(mismatchedProvider),
+        providerFactory: FakeAgentProviderBundleBuilder.fromFake(
+          mismatchedProvider,
+        ),
       );
       addTearDown(registry.close);
       final controller = AgentProviderSettingsController(
@@ -392,8 +400,7 @@ class _RecordingConfigStore implements AgentProviderConfigStore {
   }
 }
 
-class _RuntimePathSpyFactory extends AgentProviderFactory
-    with LegacyBundleFactoryMixin {
+class _RuntimePathSpyFactory with LegacyBundleFactoryMixin {
   final List<String> createdProviderIds = <String>[];
   int cursorProviderCreations = 0;
   int cursorCliLocatorCalls = 0;
@@ -414,10 +421,9 @@ class _RuntimePathSpyFactory extends AgentProviderFactory
   }
 }
 
-/// 与 [FakeAgentProviderFactory] 不同：每次 create 返回**新**实例，用于证明
+/// 与 [FakeAgentProviderBundleBuilder.fromFake] 不同：每次 create 返回**新**实例，用于证明
 /// 不同 scope 拿到的是可区分的对象。
-class _MultiInstanceFakeProviderFactory extends AgentProviderFactory
-    with LegacyBundleFactoryMixin {
+class _MultiInstanceFakeProviderFactory with LegacyBundleFactoryMixin {
   final List<AgentProvider> providers = <AgentProvider>[];
 
   @override

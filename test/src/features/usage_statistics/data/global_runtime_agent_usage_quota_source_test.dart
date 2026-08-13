@@ -62,8 +62,7 @@ void main() {
   });
 }
 
-final class _QuotaProviderFactory extends AgentProviderFactory
-    with LegacyBundleFactoryMixin {
+final class _QuotaProviderFactory with LegacyBundleFactoryMixin {
   _QuotaProviderFactory({required bool quotaThrows})
     : provider = _QuotaProvider(quotaThrows: quotaThrows);
 
@@ -73,8 +72,7 @@ final class _QuotaProviderFactory extends AgentProviderFactory
   AgentProvider create(AgentProviderConfig config) => provider;
 }
 
-final class _PlainProviderFactory extends AgentProviderFactory
-    with LegacyBundleFactoryMixin {
+final class _PlainProviderFactory with LegacyBundleFactoryMixin {
   final _PlainProvider provider = _PlainProvider();
 
   @override

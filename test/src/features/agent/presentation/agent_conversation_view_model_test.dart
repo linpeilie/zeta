@@ -4520,8 +4520,7 @@ AgentThreadHistorySnapshot _historySnapshot({
   );
 }
 
-class _FakeAgentProviderFactory extends AgentProviderFactory
-    with LegacyBundleFactoryMixin {
+class _FakeAgentProviderFactory with LegacyBundleFactoryMixin {
   _FakeAgentProviderFactory(this.provider);
 
   final _FakeAgentProvider provider;
@@ -4530,8 +4529,7 @@ class _FakeAgentProviderFactory extends AgentProviderFactory
   AgentProvider create(AgentProviderConfig config) => provider;
 }
 
-class _MultiFakeAgentProviderFactory extends AgentProviderFactory
-    with LegacyBundleFactoryMixin {
+class _MultiFakeAgentProviderFactory with LegacyBundleFactoryMixin {
   _MultiFakeAgentProviderFactory(this.providers);
 
   final Map<String, AgentProvider> providers;

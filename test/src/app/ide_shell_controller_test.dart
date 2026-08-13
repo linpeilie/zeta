@@ -1608,8 +1608,7 @@ final class _DirectoryTrackingUsageRepository
   }
 }
 
-class _RecordingAgentProviderFactory extends AgentProviderFactory
-    with LegacyBundleFactoryMixin {
+class _RecordingAgentProviderFactory with LegacyBundleFactoryMixin {
   _RecordingAgentProviderFactory(this.backendsById);
 
   final Map<String, _ProviderBackend> backendsById;

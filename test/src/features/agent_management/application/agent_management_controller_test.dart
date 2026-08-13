@@ -57,7 +57,7 @@ void main() {
   test('filters Cursor before Agent management auto detection', () async {
     // Arrange
     final provider = FakeAgentProvider();
-    final providerFactory = FakeAgentProviderFactory(provider);
+    final providerFactory = FakeAgentProviderBundleBuilder.fromFake(provider);
     final registry = AgentProviderRuntimeRegistry(
       providerFactory: providerFactory,
     );
@@ -121,7 +121,7 @@ class _ManagementHarness {
       'zeta-thread-provider-test-',
     );
     final provider = FakeAgentProvider();
-    final providerFactory = FakeAgentProviderFactory(provider);
+    final providerFactory = FakeAgentProviderBundleBuilder.fromFake(provider);
     final registry = AgentProviderRuntimeRegistry(
       providerFactory: providerFactory,
     );

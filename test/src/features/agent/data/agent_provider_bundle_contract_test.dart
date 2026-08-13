@@ -156,9 +156,18 @@ void main() {
           scope: const AgentProviderRuntimeScopeKey.session('entry-a'),
         );
 
-        expect(identical(global.bundle.runtime, sessionA.bundle.runtime), isFalse);
-        expect(identical(sessionA.bundle.runtime, sessionB.bundle.runtime), isFalse);
-        expect(identical(sessionA.bundle.runtime, sessionAAgain.bundle.runtime), isTrue);
+        expect(
+          identical(global.bundle.runtime, sessionA.bundle.runtime),
+          isFalse,
+        );
+        expect(
+          identical(sessionA.bundle.runtime, sessionB.bundle.runtime),
+          isFalse,
+        );
+        expect(
+          identical(sessionA.bundle.runtime, sessionAAgain.bundle.runtime),
+          isTrue,
+        );
         expect(global.runtimeIdentity, isNot(sessionA.runtimeIdentity));
         expect(sessionA.runtimeIdentity, isNot(sessionB.runtimeIdentity));
         expect(sessionA.runtimeIdentity, sessionAAgain.runtimeIdentity);

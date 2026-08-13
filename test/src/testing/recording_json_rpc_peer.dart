@@ -202,16 +202,13 @@ final class RecordingJsonRpcPeer implements JsonRpcPeer {
   }
 }
 
-/// 始终返回同一运行实例，用于验证应用级共享 Provider。
-final class FixedAgentProviderFactory
-    implements AgentProviderFactory, AgentProviderBundleFactory {
-  FixedAgentProviderFactory(this.provider);
+/// 始终返回同一 Bundle，用于验证应用级共享运行时。
+final class FixedAgentProviderBundleFactory
+    implements AgentProviderBundleFactory {
+  FixedAgentProviderBundleFactory(this.provider);
 
   final AgentProvider provider;
   AgentProviderBundle? _bundle;
-
-  @override
-  AgentProvider create(AgentProviderConfig config) => provider;
 
   @override
   AgentProviderBundle createBundle(AgentProviderConfig config) {

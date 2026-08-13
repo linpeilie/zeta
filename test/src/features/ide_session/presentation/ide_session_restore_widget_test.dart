@@ -44,7 +44,9 @@ void main() {
         directoryPicker: () async => directory.path,
         sessionLoader: session.load,
         sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderFactory(FakeAgentProvider()),
+        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
+          FakeAgentProvider(),
+        ),
         agentProviderConfigStore: MemoryAgentProviderConfigStore(),
       ),
     );
@@ -70,7 +72,9 @@ void main() {
         showWindowControls: false,
         sessionLoader: session.load,
         sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderFactory(FakeAgentProvider()),
+        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
+          FakeAgentProvider(),
+        ),
         agentProviderConfigStore: MemoryAgentProviderConfigStore(),
       ),
     );
@@ -102,7 +106,9 @@ void main() {
         directoryPicker: () async => directory.path,
         sessionLoader: session.load,
         sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderFactory(FakeAgentProvider()),
+        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
+          FakeAgentProvider(),
+        ),
         agentProviderConfigStore: MemoryAgentProviderConfigStore(),
       ),
     );
@@ -127,7 +133,9 @@ void main() {
         showWindowControls: false,
         sessionLoader: session.load,
         sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderFactory(FakeAgentProvider()),
+        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
+          FakeAgentProvider(),
+        ),
         agentProviderConfigStore: MemoryAgentProviderConfigStore(),
       ),
     );
@@ -167,7 +175,9 @@ void main() {
           showWindowControls: false,
           sessionLoader: session.load,
           sessionSaver: session.save,
-          agentProviderFactory: FakeAgentProviderFactory(FakeAgentProvider()),
+          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
+            FakeAgentProvider(),
+          ),
           agentProviderConfigStore: MemoryAgentProviderConfigStore(),
         ),
       );
@@ -230,7 +240,9 @@ void main() {
         showWindowControls: false,
         sessionLoader: session.load,
         sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderFactory(FakeAgentProvider()),
+        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
+          FakeAgentProvider(),
+        ),
         agentProviderConfigStore: MemoryAgentProviderConfigStore(),
       ),
     );
@@ -257,7 +269,9 @@ void main() {
           showWindowControls: false,
           sessionLoader: session.load,
           sessionSaver: session.save,
-          agentProviderFactory: FakeAgentProviderFactory(FakeAgentProvider()),
+          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
+            FakeAgentProvider(),
+          ),
           agentProviderConfigStore: MemoryAgentProviderConfigStore(),
           agentUsagePanelRepository: const _WorkbenchUsageRepository(),
         ),
@@ -382,7 +396,9 @@ void main() {
           directoryPicker: () async => chosenDirectory.path,
           sessionLoader: () => restoreCompleter.future,
           sessionSaver: savedSession.save,
-          agentProviderFactory: FakeAgentProviderFactory(FakeAgentProvider()),
+          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
+            FakeAgentProvider(),
+          ),
           agentProviderConfigStore: MemoryAgentProviderConfigStore(),
         ),
       );

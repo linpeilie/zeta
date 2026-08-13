@@ -13,9 +13,8 @@ import 'package:zeta/src/features/agent/application/agent_thread_workspace_contr
 import 'package:zeta/src/features/agent/application/agent_ui_update_port.dart';
 import 'package:zeta/src/core/utils/system_file_manager.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
-import 'package:zeta/src/features/agent/data/legacy_agent_provider_factory_bundle_adapter.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/agent/domain/agent_turn_terminal_signal.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_persistence_coordinator.dart';
@@ -86,7 +85,7 @@ class IdeShellController extends ChangeNotifier {
   IdeShellController({
     required this._directoryPicker,
     required IdeSessionStore sessionStore,
-    required AgentProviderFactory agentProviderFactory,
+    required AgentProviderBundleFactory agentProviderFactory,
     required AgentProviderConfigStore agentProviderConfigStore,
     this._projectLocationOpener = openPathInSystemFileManager,
     this._statusReporter,
@@ -106,9 +105,7 @@ class IdeShellController extends ChangeNotifier {
        _now = now ?? DateTime.now {
     this.agentProviderRuntimeRegistry =
         agentProviderRuntimeRegistry ??
-        AgentProviderRuntimeRegistry(
-          providerFactory: asAgentProviderBundleFactory(agentProviderFactory),
-        );
+        AgentProviderRuntimeRegistry(providerFactory: agentProviderFactory);
     agentProviderGlobalRuntime = AgentProviderGlobalRuntime(
       runtimeRegistry: this.agentProviderRuntimeRegistry,
     );

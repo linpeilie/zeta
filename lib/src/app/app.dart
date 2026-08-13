@@ -18,11 +18,10 @@ import 'package:zeta/src/features/agent/data/agent_provider_config_codec.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_permission_migration.dart';
 import 'package:zeta/src/features/agent/data/default_agent_provider_factory.dart';
-import 'package:zeta/src/features/agent/data/legacy_agent_provider_factory_bundle_adapter.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_hidden_thread_store.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_permission_policy_adapter.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_models.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
@@ -73,7 +72,7 @@ class MainApp extends StatefulWidget {
   final bool showWindowControls;
   final Future<String?> Function()? sessionLoader;
   final Future<void> Function(String value)? sessionSaver;
-  final AgentProviderFactory? agentProviderFactory;
+  final AgentProviderBundleFactory? agentProviderFactory;
   final AgentProviderConfigStore? agentProviderConfigStore;
   final AgentProviderAvailabilityLoader? agentProviderAvailabilityLoader;
   final HomeProviderDetectionLoader? homeProviderDetectionLoader;
@@ -114,8 +113,8 @@ class MainAppState extends State<MainApp>
     with WidgetsBindingObserver, WindowListener {
   late final AppearanceSettingsController _appearanceController;
   late final GeneralSettingsController _generalSettingsController;
-  late final AgentProviderFactory _defaultAgentProviderFactory;
-  late final AgentProviderFactory _agentProviderFactory;
+  late final AgentProviderBundleFactory _defaultAgentProviderFactory;
+  late final AgentProviderBundleFactory _agentProviderFactory;
   late final AgentProviderRuntimeRegistry _agentProviderRuntimeRegistry;
   late final AgentProviderSettingsCodec _agentProviderSettingsCodec;
   late final Future<void> Function() _providerRuntimeShutdownHook;
@@ -171,9 +170,7 @@ class MainAppState extends State<MainApp>
     final injectedRuntimeRegistry = widget.agentProviderRuntimeRegistry;
     _agentProviderRuntimeRegistry =
         injectedRuntimeRegistry ??
-        AgentProviderRuntimeRegistry(
-          providerFactory: asAgentProviderBundleFactory(_agentProviderFactory),
-        );
+        AgentProviderRuntimeRegistry(providerFactory: _agentProviderFactory);
     _ownsAgentProviderRuntimeRegistry = injectedRuntimeRegistry == null;
     _providerRuntimeShutdownHook = _agentProviderRuntimeRegistry.close;
     if (widget.enableNativeWindowFrame) {

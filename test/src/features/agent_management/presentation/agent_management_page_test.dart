@@ -366,7 +366,7 @@ class _ManagementHarness {
     );
     final provider = FakeAgentProvider();
     final registry = AgentProviderRuntimeRegistry(
-      providerFactory: FakeAgentProviderFactory(provider),
+      providerFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
     );
     final providerController = AgentProviderSettingsController(
       runtimeRegistry: registry,
@@ -438,7 +438,7 @@ class _CursorManagementHarness {
     final provider = FakeAgentProvider();
     final repository = _FakeCursorManagementRepository();
     final registry = AgentProviderRuntimeRegistry(
-      providerFactory: FakeAgentProviderFactory(provider),
+      providerFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
     );
     final providerController = AgentProviderSettingsController(
       runtimeRegistry: registry,
@@ -496,7 +496,7 @@ class _ClaudeManagementHarness {
       accountLabel: accountLabel,
     );
     final registry = AgentProviderRuntimeRegistry(
-      providerFactory: FakeAgentProviderFactory(provider),
+      providerFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
     );
     final providerController = AgentProviderSettingsController(
       runtimeRegistry: registry,

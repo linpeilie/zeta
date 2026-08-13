@@ -257,8 +257,7 @@ final class _WorkspaceHarness {
 
 /// 与 [AgentPaneFakeProviderFactory] 不同：每次 create 返回**新**实例，
 /// 这样不同 scope（global / 各个 entry 的 session）拿到的才是可区分的对象。
-final class _MultiInstanceProviderFactory extends AgentProviderFactory
-    with LegacyBundleFactoryMixin {
+final class _MultiInstanceProviderFactory with LegacyBundleFactoryMixin {
   final List<AgentPaneFakeProvider> created = <AgentPaneFakeProvider>[];
 
   @override
@@ -269,8 +268,7 @@ final class _MultiInstanceProviderFactory extends AgentProviderFactory
   }
 }
 
-final class _TerminalProviderFactory extends AgentProviderFactory
-    with LegacyBundleFactoryMixin {
+final class _TerminalProviderFactory with LegacyBundleFactoryMixin {
   @override
   AgentProvider create(AgentProviderConfig config) {
     return FakeAgentProvider(config: config);

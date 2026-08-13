@@ -221,7 +221,7 @@ void main() {
           peer: peer,
         );
         final registry = AgentProviderRuntimeRegistry(
-          providerFactory: FixedAgentProviderFactory(provider),
+          providerFactory: FixedAgentProviderBundleFactory(provider),
         );
         final providerController = AgentProviderSettingsController(
           runtimeRegistry: registry,
@@ -327,7 +327,7 @@ void main() {
           peer: peer,
         );
         final registry = AgentProviderRuntimeRegistry(
-          providerFactory: FixedAgentProviderFactory(provider),
+          providerFactory: FixedAgentProviderBundleFactory(provider),
         );
         final providerController = AgentProviderSettingsController(
           runtimeRegistry: registry,
@@ -427,7 +427,7 @@ void main() {
           peer: peer,
         );
         final registry = AgentProviderRuntimeRegistry(
-          providerFactory: FixedAgentProviderFactory(provider),
+          providerFactory: FixedAgentProviderBundleFactory(provider),
         );
         final providerController = AgentProviderSettingsController(
           runtimeRegistry: registry,

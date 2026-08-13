@@ -131,8 +131,7 @@ final class _RecycleHarness {
 
 /// 与 [AgentPaneFakeProviderFactory] 不同：每次 create 返回**新**实例，
 /// 这样销毁旧实例后重建才能被观测到。
-final class _MultiInstanceProviderFactory extends AgentProviderFactory
-    with LegacyBundleFactoryMixin {
+final class _MultiInstanceProviderFactory with LegacyBundleFactoryMixin {
   final List<_RecycleProvider> created = <_RecycleProvider>[];
 
   @override

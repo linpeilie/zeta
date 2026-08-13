@@ -1402,8 +1402,7 @@ Future<void> _flushAsync() async {
   await Future<void>.delayed(Duration.zero);
 }
 
-class _FakeAgentProviderFactory extends AgentProviderFactory
-    with LegacyBundleFactoryMixin {
+class _FakeAgentProviderFactory with LegacyBundleFactoryMixin {
   _FakeAgentProviderFactory(this.provider);
 
   final _FakeAgentProvider provider;
@@ -1412,8 +1411,7 @@ class _FakeAgentProviderFactory extends AgentProviderFactory
   AgentProvider create(AgentProviderConfig config) => provider;
 }
 
-class _MultiAgentProviderFactory extends AgentProviderFactory
-    with LegacyBundleFactoryMixin {
+class _MultiAgentProviderFactory with LegacyBundleFactoryMixin {
   _MultiAgentProviderFactory({
     required this.codex,
     required this.grok,

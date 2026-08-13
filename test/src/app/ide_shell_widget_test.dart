@@ -8,6 +8,7 @@ import 'package:zeta/src/app/app.dart' show MainAppState;
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
@@ -161,7 +162,7 @@ void main() {
       await _pumpIde(
         tester,
         directoryPicker: () async => directory.path,
-        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
         agentProviderConfigStore: MemoryAgentProviderConfigStore(),
         agentUsagePanelRepository: repository,
         sessionStore: session,
@@ -700,7 +701,7 @@ void main() {
     await _pumpIde(
       tester,
       directoryPicker: () async => directory.path,
-      agentProviderFactory: FakeAgentProviderFactory(provider),
+      agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
       agentProviderConfigStore: MemoryAgentProviderConfigStore(),
     );
 
@@ -1375,7 +1376,7 @@ void main() {
       await _pumpIde(
         tester,
         directoryPicker: () async => directory.path,
-        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
         agentProviderConfigStore: MemoryAgentProviderConfigStore(),
       );
 
@@ -1524,7 +1525,7 @@ void main() {
     await _pumpIde(
       tester,
       directoryPicker: () async => directory.path,
-      agentProviderFactory: FakeAgentProviderFactory(provider),
+      agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
       agentProviderConfigStore: MemoryAgentProviderConfigStore(),
     );
 
@@ -1623,7 +1624,7 @@ void main() {
     await _pumpIde(
       tester,
       directoryPicker: () async => directory.path,
-      agentProviderFactory: FakeAgentProviderFactory(provider),
+      agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
       agentProviderConfigStore: MemoryAgentProviderConfigStore(),
     );
 
@@ -1719,7 +1720,7 @@ void main() {
     await _pumpIde(
       tester,
       initialSessionJson: session.encode(),
-      agentProviderFactory: FakeAgentProviderFactory(provider),
+      agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
       agentProviderConfigStore: MemoryAgentProviderConfigStore(
         const AgentProviderSettings(
           providers: <AgentProviderConfig>[AgentProviderConfig.defaultCodex],
@@ -1807,7 +1808,7 @@ void main() {
     await _pumpIde(
       tester,
       initialSessionJson: session.encode(),
-      agentProviderFactory: FakeAgentProviderFactory(provider),
+      agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
       agentProviderConfigStore: MemoryAgentProviderConfigStore(
         const AgentProviderSettings(
           providers: <AgentProviderConfig>[AgentProviderConfig.defaultCodex],
@@ -1849,7 +1850,7 @@ Future<void> _pumpIde(
   Size size = const Size(1400, 900),
   bool enableNativeWindowFrame = false,
   Future<String?> Function()? directoryPicker,
-  AgentProviderFactory? agentProviderFactory,
+  AgentProviderBundleFactory? agentProviderFactory,
   AgentProviderConfigStore? agentProviderConfigStore,
   Future<List<AgentProviderConfig>> Function()? agentProviderAvailabilityLoader,
   AgentUsagePanelRepository? agentUsagePanelRepository,
@@ -1933,7 +1934,7 @@ _prepareEventStormAgentPane(
   await _pumpIde(
     tester,
     directoryPicker: () async => directory.path,
-    agentProviderFactory: FakeAgentProviderFactory(provider),
+    agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
     agentProviderConfigStore: MemoryAgentProviderConfigStore(),
   );
 
@@ -2158,7 +2159,7 @@ Future<_RetainedAgentState> _prepareRetainedAgentState(
     tester,
     enableNativeWindowFrame: true,
     directoryPicker: () async => directory.path,
-    agentProviderFactory: FakeAgentProviderFactory(provider),
+    agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
     agentProviderConfigStore: MemoryAgentProviderConfigStore(),
   );
 

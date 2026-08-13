@@ -12,7 +12,7 @@ import 'package:zeta/src/features/agent/application/agent_model_catalog_reposito
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/agent/domain/agent_turn_terminal_signal.dart';
 import 'package:zeta/src/features/desktop_notifications/application/desktop_attention_controller.dart';
 import 'package:zeta/src/features/desktop_notifications/data/flutter_desktop_notification_service.dart';
@@ -84,7 +84,7 @@ class IdeHome extends StatefulWidget {
   final Future<String?> Function() directoryPicker;
   final bool enableNativeWindowFrame;
   final IdeSessionStore sessionStore;
-  final AgentProviderFactory agentProviderFactory;
+  final AgentProviderBundleFactory agentProviderFactory;
   final AgentProviderConfigStore agentProviderConfigStore;
   final IdeShellUsageStatisticsDependencies usageStatisticsDependencies;
   final ProjectLocationOpener projectLocationOpener;

@@ -70,7 +70,7 @@ done
       ).writeAsStringSync('{"msg":"hello"}\n');
 
       final registry = AgentProviderRuntimeRegistry(
-        providerFactory: FakeAgentProviderFactory(
+        providerFactory: FakeAgentProviderBundleBuilder.fromFake(
           FakeAgentProvider(config: AgentProviderConfig.defaultGrok),
         ),
       );
@@ -125,7 +125,7 @@ done
       ).writeAsStringSync('{"token":"x"}');
 
       final registry = AgentProviderRuntimeRegistry(
-        providerFactory: FakeAgentProviderFactory(
+        providerFactory: FakeAgentProviderBundleBuilder.fromFake(
           FakeAgentProvider(config: AgentProviderConfig.defaultGrok),
         ),
       );
@@ -173,7 +173,7 @@ done
       ).writeAsStringSync('{"token":"x"}');
 
       final registry = AgentProviderRuntimeRegistry(
-        providerFactory: FakeAgentProviderFactory(
+        providerFactory: FakeAgentProviderBundleBuilder.fromFake(
           FakeAgentProvider(config: AgentProviderConfig.defaultGrok),
         ),
       );
@@ -217,7 +217,7 @@ done
       )..writeAsStringSync('stub');
 
       final registry = AgentProviderRuntimeRegistry(
-        providerFactory: FakeAgentProviderFactory(
+        providerFactory: FakeAgentProviderBundleBuilder.fromFake(
           FakeAgentProvider(config: AgentProviderConfig.defaultGrok),
         ),
       );
@@ -257,7 +257,7 @@ done
         '${root.path}${Platform.pathSeparator}config.toml',
       ).writeAsStringSync('permission_mode = "default"\n');
       final registry = AgentProviderRuntimeRegistry(
-        providerFactory: FakeAgentProviderFactory(
+        providerFactory: FakeAgentProviderBundleBuilder.fromFake(
           FakeAgentProvider(config: AgentProviderConfig.defaultGrok),
         ),
       );
@@ -279,7 +279,7 @@ done
       final grokScript = File('${root.path}${Platform.pathSeparator}grok.cmd')
         ..writeAsStringSync('stub');
       final registry = AgentProviderRuntimeRegistry(
-        providerFactory: FakeAgentProviderFactory(
+        providerFactory: FakeAgentProviderBundleBuilder.fromFake(
           FakeAgentProvider(config: AgentProviderConfig.defaultGrok),
         ),
       );
@@ -417,11 +417,10 @@ bool _listEquals(List<String> a, List<String> b) {
   return true;
 }
 
-/// 与 [FakeAgentProviderFactory] 不同：每次 create 返回**新**实例，用于证明
+/// 与 [FakeAgentProviderBundleBuilder.fromFake] 不同：每次 create 返回**新**实例，用于证明
 /// 不同 scope 拿到的是可区分的对象（对齐
 /// codex_agent_management_repository_test.dart 里同名类的写法）。
-class _ProbeProviderFactory extends AgentProviderFactory
-    with LegacyBundleFactoryMixin {
+class _ProbeProviderFactory with LegacyBundleFactoryMixin {
   final List<_ProbeFakeProvider> providers = <_ProbeFakeProvider>[];
 
   @override

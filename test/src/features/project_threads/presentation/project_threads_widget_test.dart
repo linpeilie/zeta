@@ -163,7 +163,7 @@ void main() {
         directoryPicker: () async => directory.path,
         sessionLoader: session.load,
         sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
         agentProviderConfigStore: singleFakeProviderConfigStore(),
       ),
     );
@@ -382,7 +382,9 @@ void main() {
           directoryPicker: () async => directory.path,
           sessionLoader: session.load,
           sessionSaver: session.save,
-          agentProviderFactory: FakeAgentProviderFactory(provider),
+          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
+            provider,
+          ),
           agentProviderConfigStore: MemoryAgentProviderConfigStore(),
         ),
       );
@@ -562,7 +564,7 @@ void main() {
         enableNativeWindowFrame: false,
         sessionLoader: session.load,
         sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
         agentProviderConfigStore: MemoryAgentProviderConfigStore(),
       ),
     );
@@ -689,7 +691,7 @@ void main() {
         directoryPicker: () async => directory.path,
         sessionLoader: session.load,
         sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
         agentProviderConfigStore: MemoryAgentProviderConfigStore(),
       ),
     );
@@ -757,7 +759,7 @@ void main() {
         directoryPicker: () async => directory.path,
         sessionLoader: session.load,
         sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
         agentProviderConfigStore: MemoryAgentProviderConfigStore(),
       ),
     );
@@ -841,7 +843,7 @@ void main() {
         directoryPicker: () async => directory.path,
         sessionLoader: session.load,
         sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
         agentProviderConfigStore: MemoryAgentProviderConfigStore(),
         agentProviderAvailabilityLoader: () async =>
             const <AgentProviderConfig>[
@@ -1006,7 +1008,7 @@ void main() {
         directoryPicker: () async => directory.path,
         sessionLoader: session.load,
         sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
         agentProviderConfigStore: MemoryAgentProviderConfigStore(),
         projectLocationOpener: (path) async {
           openedPaths.add(path);
@@ -1078,7 +1080,7 @@ void main() {
         directoryPicker: () async => directory.path,
         sessionLoader: session.load,
         sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
         agentProviderConfigStore: singleFakeProviderConfigStore(),
       ),
     );
@@ -1178,7 +1180,9 @@ void main() {
           directoryPicker: () async => directory.path,
           sessionLoader: session.load,
           sessionSaver: session.save,
-          agentProviderFactory: FakeAgentProviderFactory(provider),
+          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
+            provider,
+          ),
           agentProviderConfigStore: MemoryAgentProviderConfigStore(),
         ),
       );
@@ -1257,7 +1261,7 @@ void main() {
         directoryPicker: () async => directory.path,
         sessionLoader: session.load,
         sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
         agentProviderConfigStore: MemoryAgentProviderConfigStore(),
       ),
     );
@@ -1371,7 +1375,7 @@ void main() {
         directoryPicker: () async => directory.path,
         sessionLoader: session.load,
         sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
         agentProviderConfigStore: MemoryAgentProviderConfigStore(
           AgentProviderSettings(
             providers: <AgentProviderConfig>[
@@ -1445,7 +1449,7 @@ void main() {
         directoryPicker: () async => directory.path,
         sessionLoader: session.load,
         sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderFactory(provider),
+        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
         agentProviderConfigStore: MemoryAgentProviderConfigStore(),
       ),
     );

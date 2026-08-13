@@ -103,20 +103,91 @@ class MemorySessionStore {
   }
 }
 
-class FakeAgentProviderFactory
-    implements AgentProviderFactory, AgentProviderBundleFactory {
-  FakeAgentProviderFactory(this.provider);
+/// 测试用 Bundle 工厂。默认只发布 runtime / conversation；可选端口必须显式传入。
+///
+/// 存量 Widget / Controller 测试若仍依赖 [FakeAgentProvider] 的 adapt 端口面，
+/// 使用 [FakeAgentProviderBundleBuilder.fromFake]。
+class FakeAgentProviderBundleBuilder implements AgentProviderBundleFactory {
+  FakeAgentProviderBundleBuilder({
+    required AgentRuntimePort runtime,
+    required AgentConversationPort conversation,
+    AgentThreadCatalogPort? threadCatalog,
+    AgentThreadSubscriptionPort? threadSubscription,
+    AgentThreadNamingPort? threadNaming,
+    AgentThreadArchivalPort? threadArchival,
+    AgentThreadDeletionPort? threadDeletion,
+    AgentThreadCompactionPort? threadCompaction,
+    AgentThreadBranchingPort? threadBranching,
+    AgentTurnSteeringPort? turnSteering,
+    AgentPermissionResponsePort? permissionResponses,
+    AgentQuestionResponsePort? questions,
+    AgentDeniedActionOverridePort? deniedActionOverride,
+    AgentModelCatalogPort? modelCatalog,
+    AgentConversationModeCatalogPort? conversationModes,
+    AgentSkillsPort? skills,
+    AgentLocalThreadListPort? localThreadList,
+    AgentSessionConfigurationPort? sessionConfiguration,
+    AgentPlanApprovalPort? planApproval,
+    AgentPermissionPolicyPort? permissionPolicy,
+    AgentUsageQuotaProvider? usageQuota,
+  }) : _bundle = AgentProviderBundle(
+         runtime: runtime,
+         conversation: conversation,
+         threadCatalog: threadCatalog,
+         threadSubscription: threadSubscription,
+         threadNaming: threadNaming,
+         threadArchival: threadArchival,
+         threadDeletion: threadDeletion,
+         threadCompaction: threadCompaction,
+         threadBranching: threadBranching,
+         turnSteering: turnSteering,
+         permissionResponses: permissionResponses,
+         questions: questions,
+         deniedActionOverride: deniedActionOverride,
+         modelCatalog: modelCatalog,
+         conversationModes: conversationModes,
+         skills: skills,
+         localThreadList: localThreadList,
+         sessionConfiguration: sessionConfiguration,
+         planApproval: planApproval,
+         permissionPolicy: permissionPolicy,
+         usageQuota: usageQuota,
+       );
 
-  final FakeAgentProvider provider;
-  AgentProviderBundle? _bundle;
-
-  @override
-  AgentProvider create(AgentProviderConfig config) => provider;
-
-  @override
-  AgentProviderBundle createBundle(AgentProviderConfig config) {
-    return _bundle ??= AgentProviderBundle.adapt(provider);
+  /// 按 [FakeAgentProvider] 已实现的接口 / capability 发布端口。
+  ///
+  /// 仅用于迁移存量测试；新测试应使用显式端口构造。
+  factory FakeAgentProviderBundleBuilder.fromFake(FakeAgentProvider provider) {
+    final adapted = AgentProviderBundle.adapt(provider);
+    return FakeAgentProviderBundleBuilder(
+      runtime: adapted.runtime,
+      conversation: adapted.conversation,
+      threadCatalog: adapted.threadCatalog,
+      threadSubscription: adapted.threadSubscription,
+      threadNaming: adapted.threadNaming,
+      threadArchival: adapted.threadArchival,
+      threadDeletion: adapted.threadDeletion,
+      threadCompaction: adapted.threadCompaction,
+      threadBranching: adapted.threadBranching,
+      turnSteering: adapted.turnSteering,
+      permissionResponses: adapted.permissionResponses,
+      questions: adapted.questions,
+      deniedActionOverride: adapted.deniedActionOverride,
+      modelCatalog: adapted.modelCatalog,
+      conversationModes: adapted.conversationModes,
+      skills: adapted.skills,
+      localThreadList: adapted.localThreadList,
+      sessionConfiguration: adapted.sessionConfiguration,
+      planApproval: adapted.planApproval,
+      permissionPolicy: adapted.permissionPolicy,
+      usageQuota: adapted.usageQuota,
+    );
   }
+
+  final AgentProviderBundle _bundle;
+
+  @override
+  AgentProviderBundle createBundle(AgentProviderConfig config) => _bundle;
 }
 
 class FakeAgentProvider

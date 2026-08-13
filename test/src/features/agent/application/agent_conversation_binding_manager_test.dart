@@ -422,8 +422,7 @@ void main() {
   });
 }
 
-final class _BindingProviderFactory extends AgentProviderFactory
-    with LegacyBundleFactoryMixin {
+final class _BindingProviderFactory with LegacyBundleFactoryMixin {
   final List<_BindingProvider> providers = <_BindingProvider>[];
 
   @override

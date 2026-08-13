@@ -170,8 +170,7 @@ refreshToken = "refresh-secret"
   });
 }
 
-class _ThrowingProviderFactory extends AgentProviderFactory
-    with LegacyBundleFactoryMixin {
+class _ThrowingProviderFactory with LegacyBundleFactoryMixin {
   _ThrowingProviderFactory();
 
   @override
@@ -229,8 +228,7 @@ class _LoggedInProcessRunner implements CliProcessRunner {
 
 /// 每次 create 返回新实例，capabilities 全关（不声明模型目录支持），让
 /// `_probeProvider` 走最短路径：不触碰 `fetchAgentProviderModels`。
-class _ProbeProviderFactory extends AgentProviderFactory
-    with LegacyBundleFactoryMixin {
+class _ProbeProviderFactory with LegacyBundleFactoryMixin {
   final List<_ProbeFakeProvider> providers = <_ProbeFakeProvider>[];
 
   @override
