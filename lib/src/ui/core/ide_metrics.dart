@@ -74,7 +74,8 @@ abstract final class IdeMetrics {
   ///
   /// 生效位置：`IdeWorkbenchScaffold` 的 rail 列宽。Scaffold 内总占用为
   /// `activityRailWidth + IdeSpacing.space4`（内侧 gap `space4`，外侧贴
-  /// scaffold 边；窗口级外距由 `IdeHome` 的 `space4` 工作台 padding 提供）。
+  /// scaffold 边；窗口级外距由 `IdeHome` 的工作台 padding 提供：左右/底
+  /// `space8`，顶部 `space0` 与标题栏贴齐）。
   static const double activityRailWidth = 36;
 
   /// Activity Rail 图标尺寸。

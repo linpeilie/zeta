@@ -189,6 +189,8 @@ flowchart TD
 
 Page switching only swaps slot content; `WindowFrame` and `IdeWorkbenchScaffold` stay the same Element throughout. **Feature pages must not replace the top-level workbench.**
 
+Workbench chrome padding lives on `IdeHome`: `space8` on the left, right, and bottom, and `space0` on top so the workbench sits flush with the title bar and there is no hairline between them. `IdeWorkbenchScaffold` is flush to that chrome; rails keep only the inner `space4` gap. Feature pages must not add another window-level inset.
+
 The Agent home page mounts no Activity Rail. A leading title-bar action on `WindowFrame` is the sole visibility control for the merged sidebar; inside the Navigation slot, one `ProjectAgentSidebar` card contains Projects / Threads and the read-only agent-usage summary at the bottom. Usage starts collapsed. In Compact mode the entire sidebar reuses the Navigation Overlay, and dismissing it with the scrim or Escape restores focus to the title-bar action.
 
 Sidebar visibility, usage expansion, sidebar width, and the selected usage provider are application-level Workbench preferences restored tolerantly from `ide_session.json`. Expanded usage takes its natural content height, with no height drag handle or internal vertical scrolling; legacy height-fraction fields are accepted only for tolerant compatibility. A terminal signal from either a foreground or background thread only makes usage follow that signal's provider and refresh silently; it never switches the conversation's active provider.

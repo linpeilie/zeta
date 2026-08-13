@@ -142,8 +142,9 @@ Agent turn 终态、权限、问题、Provider 计划审批和本地 Plan 执行
 `IdeHome` 是主要页面唯一的 Workbench 组合边界。`WindowFrame` 与
 `IdeWorkbenchScaffold` 在页面切换期间保持同一 Element 和稳定 Key，首页、设置、
 Agent 管理与使用统计只切换 Navigation、Canvas、Inspector slot 内容，不再创建相互
-独立的顶层页面骨架。Feature 仍持有自己的业务组件和离开确认逻辑，共享 Scaffold 只做
-布局与 Overlay 编排。
+独立的顶层页面骨架。工作台外圈 padding 由 `IdeHome` 统一提供（左右/底 `space8`，
+顶部 `space0` 与标题栏贴齐，中间不画分隔线）；Scaffold 外侧贴边。Feature 仍持有
+自己的业务组件和离开确认逻辑，共享 Scaffold 只做布局与 Overlay 编排。
 
 | 页面 | Navigation slot | Canvas slot | Inspector slot | 响应式策略 |
 |---|---|---|---|---|

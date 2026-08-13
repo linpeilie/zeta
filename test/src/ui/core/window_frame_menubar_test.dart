@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/app/app_constants.dart';
+import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/window_frame.dart';
@@ -151,6 +152,37 @@ void main() {
       );
       expect(logoSvg.width, 22);
       expect(logoSvg.height, 22);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  testWidgets('标题栏与工作台之间不画底部分隔线', (tester) async {
+    await _withTargetPlatform(TargetPlatform.windows, () async {
+      await pumpIdeComponent(
+        tester,
+        size: const Size(960, 640),
+        child: const WindowFrame(
+          enableNativeWindowFrame: true,
+          showWindowControls: false,
+          child: ColoredBox(color: Colors.black),
+        ),
+      );
+
+      final titleBar = find.byKey(const ValueKey('window-title-bar'));
+      final decoration =
+          tester
+                  .widget<DecoratedBox>(
+                    find
+                        .ancestor(
+                          of: titleBar,
+                          matching: find.byType(DecoratedBox),
+                        )
+                        .first,
+                  )
+                  .decoration
+              as BoxDecoration;
+      expect(decoration.border, isNull);
+      expect(decoration.color, IdeColors.of(tester.element(titleBar)).frame);
       expect(tester.takeException(), isNull);
     });
   });

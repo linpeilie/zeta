@@ -188,6 +188,8 @@ flowchart TD
 
 页面切换只换 slot 内容，`WindowFrame` 和 `IdeWorkbenchScaffold` 始终是同一个 Element。**feature 页面不得替换顶层 workbench。**
 
+工作台外圈 padding 由 `IdeHome` 统一提供：左右与底部 `space8`，顶部 `space0` 与标题栏贴齐，中间不画分隔线。`IdeWorkbenchScaffold` 外侧贴边，rail 只保留内侧 `space4`；Feature 页不要再套一层窗口级外距。
+
 Agent 首页不挂载 Activity Rail。`WindowFrame` 的标题栏左侧按钮是合并左栏唯一的显隐入口，标题栏右侧按钮是 Files Inspector 唯一的显隐入口；Navigation slot 内的 `ProjectAgentSidebar` 以一个卡片承载 Projects / Threads 和底部只读 Agent 统计。统计默认折叠，Compact 模式下左右侧栏分别复用 Navigation / Inspector Overlay，scrim 或 Esc 关闭后焦点回到对应标题栏按钮。
 
 左栏显隐、统计展开态、左栏宽度和统计 Provider 选择属于应用级 Workbench 偏好，随 `ide_session.json` 宽容恢复。统计展开后按内容自然撑高，不提供高度拖动或内部纵向滚动；旧快照中的高度比例字段只做宽容兼容。前台或后台 thread 的终态只会让统计跟随该信号的 Provider 并静默刷新，不会切换会话 active Provider。

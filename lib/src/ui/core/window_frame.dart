@@ -141,12 +141,7 @@ class _TitleBar extends StatelessWidget {
     // 最小高度保证无菜单时仍可拖拽；有 Menubar 时由内容撑开，不再锁死固定像素。
     // Column 给非 flex 子项无限高约束，不能用 CrossAxisAlignment.stretch。
     return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.frame,
-        // 标题栏与工作台之间用一条 1px 分隔线划界，而不是靠背景色差；
-        // 桌面应用的标题栏需要一个明确但克制的下边界。
-        border: Border(bottom: BorderSide(color: colors.borderSubtle)),
-      ),
+      decoration: BoxDecoration(color: colors.frame),
       child: ConstrainedBox(
         key: const ValueKey('window-title-bar'),
         constraints: const BoxConstraints(minHeight: IdeMetrics.titleBarHeight),

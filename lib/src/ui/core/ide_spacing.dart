@@ -5,12 +5,17 @@ import 'package:flutter/widgets.dart';
 /// 全项目间隙、padding 与 `SizedBox` 间距优先取这里的档位；禁止在 feature
 /// 中散落裸数字（如 `EdgeInsets.all(12)`），以便统一调密度。
 ///
-/// - **原始档位** `space2`…`space32`：用于 `SizedBox`、局部 `EdgeInsets` 组合。
+/// - **原始档位** `space0`…`space32`：用于 `SizedBox`、局部 `EdgeInsets` 组合。
 /// - **语义 EdgeInsets**：已绑定典型组件，改一处即可联动同类 UI。
 abstract final class IdeSpacing {
   // ---------------------------------------------------------------------------
   // 原始间距档位（px）
   // ---------------------------------------------------------------------------
+
+  /// 零间隙：某一侧明确不要额外 inset。
+  ///
+  /// 生效位置：`IdeHome` 工作台顶部与标题栏贴齐（`fromLTRB` 的 top）。
+  static const double space0 = 0;
 
   /// 最小间隙：图标与紧贴标签、微分隔。
   ///
@@ -33,7 +38,8 @@ abstract final class IdeSpacing {
   /// 默认组件内间隙：最常用的图标-文字间距、卡片内小节间距。
   ///
   /// 生效位置：折叠卡/选择卡间距、拖拽手柄厚度默认值、上下文菜单项图标间距、
-  /// Agent Composer / 模型配置动画相关间距、Markdown 块间距、大量 `SizedBox`。
+  /// Agent Composer / 模型配置动画相关间距、Markdown 块间距、
+  /// `IdeHome` 工作台左右与底部外距、大量 `SizedBox`。
   static const double space8 = 8;
 
   /// 中等间隙：卡片内段落、Composer 内边、消息区垂直节奏。

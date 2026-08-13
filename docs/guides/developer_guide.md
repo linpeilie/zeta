@@ -545,6 +545,9 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
 
 - `IdeHome` 持有主要页面唯一的 `WindowFrame` 和 `IdeWorkbenchScaffold`。新增主要页面时
   只提供 Navigation、Canvas、Inspector slot 内容，不得用页面组件替换整个 Workbench。
+- 工作台外圈 padding 只写在 `IdeHome`：左右与底部 `IdeSpacing.space8`，顶部
+  `space0` 与标题栏贴齐，标题栏不再画底部分隔线。Scaffold 外侧贴边，rail 只保留
+  内侧 `space4`；Feature 页不要再套一层窗口级外距。
 - Agent 首页、设置/Agent 管理和使用统计分别按设计文档中的 slot 矩阵组合：Agent 首页
   的 Navigation slot 使用一个 `ProjectAgentSidebar` 组合 Projects / Threads 与底部统计；
   设置 Feature 使用 `SettingsNavigationPane` + `SettingsPageCanvas`，使用统计只占用 Canvas。

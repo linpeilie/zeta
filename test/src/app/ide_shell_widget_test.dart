@@ -17,6 +17,7 @@ import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
+import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
 import 'package:zeta/src/ui/core/window_frame.dart';
@@ -61,6 +62,24 @@ void main() {
     expect(find.text('No folder opened'), findsOneWidget);
     expect(find.text('No file context'), findsNothing);
     expect(find.text('No tools running'), findsNothing);
+    expect(
+      tester
+          .widget<Padding>(
+            find
+                .ancestor(
+                  of: find.byKey(const ValueKey('ide-workbench')),
+                  matching: find.byType(Padding),
+                )
+                .first,
+          )
+          .padding,
+      const EdgeInsets.fromLTRB(
+        IdeSpacing.space8,
+        IdeSpacing.space0,
+        IdeSpacing.space8,
+        IdeSpacing.space8,
+      ),
+    );
   });
 
   testWidgets('设置页与使用统计页标题栏折叠位切换为返回主界面', (tester) async {
@@ -588,7 +607,9 @@ void main() {
   ) async {
     await _pumpIde(
       tester,
-      size: const Size(832, 900),
+      // mediumBreakpoint(820) + 工作台左右 space8 + WindowFrame 非 macOS 1px
+      // 双边框，再留 2px 余量，确保内层仍落在 medium。
+      size: const Size(840, 900),
       enableNativeWindowFrame: true,
       initialSessionJson: const IdeSessionState(
         workbenchLayout: IdeWorkbenchLayoutState(leftSidebarVisible: false),
@@ -1282,7 +1303,8 @@ void main() {
       find.byKey(const ValueKey('workbench-canvas-slot')),
     );
 
-    // 外窗 1197 / 1196 / 1195px 精确跨越 WindowFrame 内层 wide 断点。
+    // 外窗 1197 / 1196 / 1195px = wideBreakpoint(1180) + 工作台左右 space8 ± 1，
+    // 精确跨越 IdeHome chrome 后的内层 wide 断点。
     for (final width in <double>[1197, 1196, 1195, 1196, 1197]) {
       tester.view.physicalSize = Size(width, 900);
       await tester.pump();

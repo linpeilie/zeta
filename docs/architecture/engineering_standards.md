@@ -508,7 +508,8 @@ Zeta 是桌面工具，不是营销页。界面应紧凑、克制、可扫描。
   确认态回滚、完整快照重试与损坏持久化输入。
 - provider datasource 和 transport 用 fake process、fake storage 或 callback 注入。
 - pane、timeline、file tree 等用户可见行为用 widget test。
-- resize 相关测试至少覆盖外窗 1197/1196/1195px、Agent Canvas 641/640/639px、隐藏
+- resize 相关测试至少覆盖外窗 1197/1196/1195px（`wideBreakpoint` + 工作台左右
+  `space8` ± 1）、Agent Canvas 641/640/639px、隐藏
   retained page 的 build/layout 增量、viewport item 构建上界、缓存命中和 transient
   callback 不增长。
 - 主要页面切换必须使用实际 `IdeHome` 做集成级 Widget 测试。Agent → Settings → Agent

@@ -326,9 +326,15 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
           ),
       ],
       showWindowControls: widget.showWindowControls,
-      // 工作台外圈统一保留 space4，让左右 Pane 与窗口边缘保持稳定呼吸感。
+      // 左右/底 space8 让 Pane 与窗口边缘保持呼吸感；顶部 space0 与标题栏贴齐，
+      // 中间不再画分隔线。
       child: Padding(
-        padding: const EdgeInsets.all(IdeSpacing.space4),
+        padding: const EdgeInsets.fromLTRB(
+          IdeSpacing.space8,
+          IdeSpacing.space0,
+          IdeSpacing.space8,
+          IdeSpacing.space8,
+        ),
         child: _buildWorkbench(),
       ),
     );

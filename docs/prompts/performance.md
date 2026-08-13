@@ -31,7 +31,7 @@
 flutter run -d windows --profile
 ```
 
-边界档位回归至少覆盖：外窗 **1197 / 1196 / 1195px**，Agent Canvas **641 / 640 / 639px**。
+边界档位回归至少覆盖：外窗 **1197 / 1196 / 1195px**（`wideBreakpoint` + 工作台左右 `space8` ± 1），Agent Canvas **641 / 640 / 639px**。
 
 ---
 
@@ -150,7 +150,7 @@ flutter run -d windows --profile
    - 数据未变化时 resize 的解析增量为 0
    - viewport item 构建数的上界
    - transient callback 不随 resize 增长
-   - 边界档位：外窗 1197/1196/1195px、Agent Canvas 641/640/639px
+   - 边界档位：外窗 1197/1196/1195px（`wideBreakpoint` + 工作台左右 `space8` ± 1）、Agent Canvas 641/640/639px
 2. 在关键位置加注释说明「这里为什么不能改成 XX」（中文，说清代价）
 3. 在 05-固化.md 里列出：加了哪些不变量测试、各自防的是什么退化、
    以及「如果这个测试红了，说明谁改坏了什么」
