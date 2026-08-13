@@ -11,7 +11,7 @@ import 'package:zeta/src/features/agent/application/agent_conversation_mode_cont
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
@@ -369,17 +369,28 @@ class AgentPaneFakeProviderFactory with LegacyBundleFactoryMixin {
   final AgentPaneFakeProvider provider;
 
   @override
-  AgentProvider create(AgentProviderConfig config) => provider;
+  Object create(AgentProviderConfig config) => provider;
 }
 
 class AgentPaneFakeProvider
     with AgentProviderThreadLifecycleStub
     implements
-        AgentProvider,
-        AgentSessionConfigProvider,
-        AgentPlanApprovalProvider,
-        AgentQuestionResponseProvider,
-        AgentPermissionPolicyProvider {
+        AgentRuntimePort,
+        AgentConversationPort,
+        AgentThreadCatalogPort,
+        AgentThreadSubscriptionPort,
+        AgentThreadNamingPort,
+        AgentThreadArchivalPort,
+        AgentThreadDeletionPort,
+        AgentThreadCompactionPort,
+        AgentThreadBranchingPort,
+        AgentTurnSteeringPort,
+        AgentPermissionResponsePort,
+        AgentQuestionResponsePort,
+        AgentModelCatalogPort,
+        AgentSessionConfigurationPort,
+        AgentPlanApprovalPort,
+        TestPermissionPolicyHost {
   AgentPaneFakeProvider({
     Map<String, AgentThreadHistorySnapshot> historySnapshotsByThread =
         const <String, AgentThreadHistorySnapshot>{},
@@ -453,6 +464,16 @@ class AgentPaneFakeProvider
   Stream<AgentEvent> get events => _events.stream;
 
   @override
+  AgentRuntimeInfo? get runtimeInfo => null;
+
+  @override
+  AgentProviderLifecycleState get lifecycleState =>
+      AgentProviderLifecycleState.stopped;
+
+  @override
+  AgentRuntimeScope? get runtimeScope => null;
+
+  @override
   Future<void> initialize() async {}
 
   @override
@@ -491,6 +512,7 @@ class AgentPaneFakeProvider
   Future<AgentModelList> listModels({
     int limit = 20,
     bool includeHidden = false,
+    bool forceRefresh = false,
   }) async {
     final error = modelListError;
     if (error != null) {
@@ -506,12 +528,6 @@ class AgentPaneFakeProvider
 
   @override
   AgentPermissionPolicyPort get permissionPolicy => _permissionPolicy;
-
-  @override
-  Future<void> approveGuardianDeniedAction({
-    required String threadId,
-    required Object event,
-  }) async {}
 
   @override
   Future<AgentThreadHistorySnapshot> readThreadHistory({
@@ -635,7 +651,7 @@ final class _AgentPanePermissionPolicyPort
 }
 
 class AgentPaneModeFakeProvider extends AgentPaneFakeProvider
-    implements AgentConversationModeCatalogProvider {
+    implements AgentConversationModeCatalogPort {
   AgentPaneModeFakeProvider({
     super.models = const AgentModelList(models: <AgentModelInfo>[]),
     super.permissionOptions,

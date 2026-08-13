@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 
 import 'ide_test_harness.dart';
 
@@ -10,8 +9,8 @@ void main() {
     test('默认只发布 runtime 与 conversation', () {
       final provider = FakeAgentProvider();
       final factory = FakeAgentProviderBundleBuilder(
-        runtime: AgentProviderBundle.adapt(provider).runtime,
-        conversation: AgentProviderBundle.adapt(provider).conversation,
+        runtime: provider,
+        conversation: provider,
       );
 
       final bundle = factory.createBundle(AgentProviderConfig.defaultCodex);
@@ -43,9 +42,8 @@ void main() {
       final provider = FakeAgentProvider();
       final factory = FakeAgentProviderBundleBuilder.fromFake(provider);
       final bundle = factory.createBundle(AgentProviderConfig.defaultCodex);
-      final adapted = AgentProviderBundle.adapt(provider);
 
-      expect(bundle.threadCatalog != null, adapted.threadCatalog != null);
+      expect(bundle.threadCatalog, isNotNull);
       expect(bundle.localThreadList, isNotNull);
       expect(bundle.questions, isNotNull);
       expect(bundle.permissionPolicy, isNotNull);

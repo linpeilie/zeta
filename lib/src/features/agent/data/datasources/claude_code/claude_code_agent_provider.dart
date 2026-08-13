@@ -22,7 +22,6 @@ import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdi
 import 'package:zeta/src/features/agent/data/mappers/claude_code_permission_mode_codec.dart';
 import 'package:zeta/src/features/agent/data/mappers/claude_code_stream_identity.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 
 final _log = loggerFor('zeta.agent.claude_code.provider');
@@ -35,7 +34,6 @@ final _log = loggerFor('zeta.agent.claude_code.provider');
 /// [ClaudeCodePlanApprovalAdapter] 接管，不进入普通权限 registry。
 class ClaudeCodeAgentProvider
     implements
-        AgentProvider,
         AgentRuntimePort,
         AgentConversationPort,
         AgentThreadCatalogPort,
@@ -44,10 +42,6 @@ class ClaudeCodeAgentProvider
         AgentModelCatalogPort,
         AgentLocalThreadListPort,
         AgentPlanApprovalPort,
-        AgentPermissionPolicyProvider,
-        AgentPlanApprovalProvider,
-        AgentLocalThreadListProvider,
-        AgentRefreshableModelCatalogProvider,
         AgentUsageQuotaProvider {
   ClaudeCodeAgentProvider({
     required this.config,
@@ -184,7 +178,6 @@ class ClaudeCodeAgentProvider
   @override
   AgentRuntimeScope? get runtimeScope => _runtimeScope;
 
-  @override
   AgentPermissionPolicyPort get permissionPolicy => _permissionPolicy;
 
   /// 测试/诊断：立即 deny 的 control_request 计数（malformed / 未知 type）。
@@ -347,7 +340,6 @@ class ClaudeCodeAgentProvider
     return _modelCatalog.listModels(limit: limit, includeHidden: includeHidden);
   }
 
-  @override
   Future<AgentModelList> refreshModels({
     int limit = 20,
     bool includeHidden = false,
@@ -362,16 +354,6 @@ class ClaudeCodeAgentProvider
   void updateModelSelection(AgentModelSelection selection) {
     _modelSelection = selection;
     _log.t('Updated Claude Code model selection');
-  }
-
-  @override
-  Future<void> approveGuardianDeniedAction({
-    required String threadId,
-    required Object event,
-  }) async {
-    throw UnsupportedError(
-      '${config.displayName} does not support guardian approvals',
-    );
   }
 
   @override
@@ -394,53 +376,6 @@ class ClaudeCodeAgentProvider
       projectPath: normalizedProjectPath,
       sessionPath: sessionPath,
       environment: config.environment,
-    );
-  }
-
-  @override
-  Future<void> unsubscribeThread(String threadId) async {}
-
-  @override
-  Future<void> renameThread({
-    required String threadId,
-    required String name,
-  }) async {
-    throw UnsupportedError(
-      '${config.displayName} does not support renaming threads yet',
-    );
-  }
-
-  @override
-  Future<void> archiveThread(String threadId) async {
-    throw UnsupportedError(
-      '${config.displayName} does not support archiving threads',
-    );
-  }
-
-  @override
-  Future<void> unarchiveThread(String threadId) async {
-    throw UnsupportedError(
-      '${config.displayName} does not support unarchiving threads',
-    );
-  }
-
-  @override
-  Future<void> deleteThread(String threadId) async {
-    throw UnsupportedError(
-      '${config.displayName} does not support deleting threads yet',
-    );
-  }
-
-  @override
-  Future<AgentSession> forkThread({
-    required String threadId,
-    required AgentContext context,
-    AgentForkBoundary boundary = const AgentForkCurrentHead(),
-    AgentPermissionRequestSnapshot permissionSnapshot =
-        const AgentPermissionRequestSnapshot.providerFallback(),
-  }) async {
-    throw UnsupportedError(
-      '${config.displayName} does not support forking threads',
     );
   }
 
@@ -638,20 +573,6 @@ class ClaudeCodeAgentProvider
     }
 
     return turn;
-  }
-
-  @override
-  Future<void> steerTurn({
-    required AgentSession session,
-    required String expectedTurnId,
-    required AgentContext context,
-    String? message,
-    List<AgentUserInput>? inputs,
-    String? clientUserMessageId,
-  }) async {
-    throw UnsupportedError(
-      '${config.displayName} does not support steering active turns',
-    );
   }
 
   @override

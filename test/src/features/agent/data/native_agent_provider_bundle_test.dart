@@ -1,7 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/data/datasources/acp/grok_acp_agent_provider.dart';
-import 'package:zeta/src/features/agent/data/datasources/app_server/codex_app_server_agent_provider.dart';
-import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_agent_provider.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_cli_metadata.dart';
 import 'package:zeta/src/features/agent/data/default_agent_provider_factory.dart';
 import 'package:zeta/src/features/agent/data/native_agent_provider_bundles.dart';
@@ -13,51 +10,39 @@ import '../../../testing/recording_json_rpc_peer.dart';
 void main() {
   const factory = DefaultAgentProviderFactory();
 
-  group('native vs adapt port presence', () {
-    test('Codex native bundle matches adapt() and owns the same runtime', () {
-      final provider = factory.create(AgentProviderConfig.defaultCodex);
-      addTearDown(provider.dispose);
-      final native = nativeBundleFromCodex(
-        provider as CodexAppServerAgentProvider,
-      );
+  group('native port presence', () {
+    test('Codex native bundle owns the same runtime', () {
+      final native = factory.createBundle(AgentProviderConfig.defaultCodex);
+      addTearDown(native.runtime.dispose);
 
-      expect(_portPresence(native), _portPresence(provider.bundle));
       expect(_portPresence(native), _codexPresence);
-      expect(identical(native.runtime, provider), isTrue);
-      expect(identical(native.conversation, provider), isTrue);
-      expect(identical(native.deniedActionOverride, provider), isTrue);
+      expect(identical(native.runtime, native.conversation), isTrue);
+      expect(identical(native.deniedActionOverride, native.runtime), isTrue);
     });
 
-    test('Grok native bundle matches adapt() and omits unsupported ports', () {
-      final provider = factory.create(AgentProviderConfig.defaultGrok);
-      addTearDown(provider.dispose);
-      final native = nativeBundleFromGrok(provider as GrokAcpAgentProvider);
+    test('Grok native bundle omits unsupported ports', () {
+      final native = factory.createBundle(AgentProviderConfig.defaultGrok);
+      addTearDown(native.runtime.dispose);
 
-      expect(_portPresence(native), _portPresence(provider.bundle));
       expect(_portPresence(native), _grokPresence);
-      expect(identical(native.runtime, provider), isTrue);
+      expect(identical(native.runtime, native.conversation), isTrue);
       expect(native.threadSubscription, isNull);
       expect(native.deniedActionOverride, isNull);
       expect(native.threadArchival, isNull);
     });
 
-    test(
-      'Claude Code native bundle matches adapt() and omits unsupported ports',
-      () {
-        final provider = factory.create(AgentProviderConfig.defaultClaudeCode);
-        addTearDown(provider.dispose);
-        final native = nativeBundleFromClaudeCode(
-          provider as ClaudeCodeAgentProvider,
-        );
+    test('Claude Code native bundle omits unsupported ports', () {
+      final native = factory.createBundle(
+        AgentProviderConfig.defaultClaudeCode,
+      );
+      addTearDown(native.runtime.dispose);
 
-        expect(_portPresence(native), _portPresence(provider.bundle));
-        expect(_portPresence(native), _claudePresence);
-        expect(identical(native.runtime, provider), isTrue);
-        expect(native.questions, isNull);
-        expect(native.deniedActionOverride, isNull);
-        expect(native.threadNaming, isNull);
-      },
-    );
+      expect(_portPresence(native), _claudePresence);
+      expect(identical(native.runtime, native.conversation), isTrue);
+      expect(native.questions, isNull);
+      expect(native.deniedActionOverride, isNull);
+      expect(native.threadNaming, isNull);
+    });
   });
 
   group('create*Bundle', () {

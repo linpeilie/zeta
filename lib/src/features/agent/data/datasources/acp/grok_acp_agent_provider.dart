@@ -22,7 +22,6 @@ import 'package:zeta/src/features/agent/data/mappers/grok_permission_mode_codec.
 import 'package:zeta/src/features/agent/data/mappers/grok_question_mapper.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_skills_mapper.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 
 final _log = loggerFor('zeta.agent.grok_acp');
@@ -39,7 +38,6 @@ typedef JsonRpcPeerFactory = JsonRpcPeer Function(AgentProviderConfig config);
 /// 不支持的 Codex 专有能力通过 [capabilities] 关闭，并在误调用时明确失败。
 class GrokAcpAgentProvider
     implements
-        AgentProvider,
         AgentRuntimePort,
         AgentConversationPort,
         AgentThreadCatalogPort,
@@ -51,15 +49,7 @@ class GrokAcpAgentProvider
         AgentConversationModeCatalogPort,
         AgentSkillsPort,
         AgentPlanApprovalPort,
-        AgentUsageQuotaProvider,
-        AgentRuntimeLifecycleProvider,
-        AgentRuntimeScopeProvider,
-        AgentRefreshableModelCatalogProvider,
-        AgentSkillsCatalogProvider,
-        AgentConversationModeCatalogProvider,
-        AgentPlanApprovalProvider,
-        AgentQuestionResponseProvider,
-        AgentPermissionPolicyProvider {
+        AgentUsageQuotaProvider {
   GrokAcpAgentProvider({
     required this.config,
     JsonRpcPeer? peer,
@@ -601,7 +591,6 @@ class GrokAcpAgentProvider
     return fromCli;
   }
 
-  @override
   Future<AgentModelList> refreshModels({
     int limit = 20,
     bool includeHidden = false,
@@ -626,7 +615,6 @@ class GrokAcpAgentProvider
     _modelSelection = selection;
   }
 
-  @override
   AgentPermissionPolicyPort get permissionPolicy => _permissionPolicyAdapter;
 
   /// 读取 Grok 账号套餐剩余与重置时间。
@@ -655,7 +643,7 @@ class GrokAcpAgentProvider
   ///
   /// 对应 grok-build 的 `SessionMode { Default, Plan }` 闭集，协议层面不提供
   /// 运行时探测；这里直接返回静态目录。模式通过 `session/prompt` 的
-  /// `_meta.mode` 逐回合驱动（见 [AgentProvider.sendMessage]）。
+  /// `_meta.mode` 逐回合驱动（见 [AgentConversationPort.sendMessage]）。
   @override
   Future<AgentConversationModeCatalog> listConversationModes() async {
     return AgentConversationModeCatalog(
@@ -720,14 +708,6 @@ class GrokAcpAgentProvider
   }
 
   @override
-  Future<void> approveGuardianDeniedAction({
-    required String threadId,
-    required Object event,
-  }) async {
-    _log.t('Grok ACP has no Guardian; ignore approveGuardianDeniedAction');
-  }
-
-  @override
   Future<AgentThreadHistorySnapshot> readThreadHistory({
     required String threadId,
     String? sessionPath,
@@ -741,11 +721,6 @@ class GrokAcpAgentProvider
       projectPath: projectPath,
     ),
   );
-
-  @override
-  Future<void> unsubscribeThread(String threadId) async {
-    // ACP 无 thread 订阅模型。
-  }
 
   @override
   Future<void> renameThread({
@@ -776,16 +751,6 @@ class GrokAcpAgentProvider
   );
 
   @override
-  Future<void> archiveThread(String threadId) async {
-    throw UnsupportedError('Grok ACP does not support archiving threads');
-  }
-
-  @override
-  Future<void> unarchiveThread(String threadId) async {
-    throw UnsupportedError('Grok ACP does not support unarchiving threads');
-  }
-
-  @override
   Future<void> deleteThread(String threadId) => _scheduleThreadOperation(
     threadId,
     ProviderOperationAccess.exclusive,
@@ -807,22 +772,6 @@ class GrokAcpAgentProvider
       _log.i('Deleted Grok session $threadId');
     },
   );
-
-  @override
-  Future<AgentSession> forkThread({
-    required String threadId,
-    required AgentContext context,
-    AgentForkBoundary boundary = const AgentForkCurrentHead(),
-    AgentPermissionRequestSnapshot permissionSnapshot =
-        const AgentPermissionRequestSnapshot.providerFallback(),
-  }) async {
-    throw UnsupportedError('Grok ACP does not support forking threads');
-  }
-
-  @override
-  Future<void> compactThread(String threadId) async {
-    throw UnsupportedError('Grok ACP does not support compacting threads');
-  }
 
   @override
   Future<AgentTurn> sendMessage({
@@ -990,18 +939,6 @@ class GrokAcpAgentProvider
       ),
     };
     return <String, Object?>{'mode': mode};
-  }
-
-  @override
-  Future<void> steerTurn({
-    required AgentSession session,
-    required String expectedTurnId,
-    required AgentContext context,
-    String? message,
-    List<AgentUserInput>? inputs,
-    String? clientUserMessageId,
-  }) async {
-    throw UnsupportedError('Grok ACP does not support steering active turns');
   }
 
   @override

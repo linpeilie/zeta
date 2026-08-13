@@ -12,7 +12,7 @@ import 'package:zeta/main.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_file_change_evidence_views.dart';
@@ -4130,7 +4130,7 @@ Future<void> pumpLiveAgentUi(WidgetTester tester) async {
 }
 
 class _ModeCapableFakeAgentProvider extends FakeAgentProvider
-    implements AgentConversationModeCatalogProvider {
+    implements AgentConversationModeCatalogPort {
   _ModeCapableFakeAgentProvider({required super.completeTurns})
     : super(
         includeConversationTestThread: true,
@@ -4143,6 +4143,7 @@ class _ModeCapableFakeAgentProvider extends FakeAgentProvider
   Future<AgentModelList> listModels({
     int limit = 20,
     bool includeHidden = false,
+    bool forceRefresh = false,
   }) async {
     return const AgentModelList(
       models: <AgentModelInfo>[

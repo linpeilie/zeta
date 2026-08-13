@@ -5,10 +5,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 
 import 'agent_provider_stub_base.dart';
+import 'legacy_bundle_factory_mixin.dart';
 
 const String conversationTestThreadId = 'thread-1';
 
@@ -154,33 +154,38 @@ class FakeAgentProviderBundleBuilder implements AgentProviderBundleFactory {
          usageQuota: usageQuota,
        );
 
-  /// 按 [FakeAgentProvider] 已实现的接口 / capability 发布端口。
+  /// 按 [FakeAgentProvider] 已实现的端口 / capability 发布端口。
   ///
   /// 仅用于迁移存量测试；新测试应使用显式端口构造。
   factory FakeAgentProviderBundleBuilder.fromFake(FakeAgentProvider provider) {
-    final adapted = AgentProviderBundle.adapt(provider);
     return FakeAgentProviderBundleBuilder(
-      runtime: adapted.runtime,
-      conversation: adapted.conversation,
-      threadCatalog: adapted.threadCatalog,
-      threadSubscription: adapted.threadSubscription,
-      threadNaming: adapted.threadNaming,
-      threadArchival: adapted.threadArchival,
-      threadDeletion: adapted.threadDeletion,
-      threadCompaction: adapted.threadCompaction,
-      threadBranching: adapted.threadBranching,
-      turnSteering: adapted.turnSteering,
-      permissionResponses: adapted.permissionResponses,
-      questions: adapted.questions,
-      deniedActionOverride: adapted.deniedActionOverride,
-      modelCatalog: adapted.modelCatalog,
-      conversationModes: adapted.conversationModes,
-      skills: adapted.skills,
-      localThreadList: adapted.localThreadList,
-      sessionConfiguration: adapted.sessionConfiguration,
-      planApproval: adapted.planApproval,
-      permissionPolicy: adapted.permissionPolicy,
-      usageQuota: adapted.usageQuota,
+      runtime: provider,
+      conversation: provider,
+      threadCatalog: provider,
+      threadSubscription: provider,
+      threadNaming: provider,
+      threadArchival: provider,
+      threadDeletion: provider,
+      threadCompaction: provider,
+      threadBranching: provider,
+      turnSteering: provider,
+      permissionResponses: provider,
+      questions: provider,
+      localThreadList: provider,
+      permissionPolicy: provider.permissionPolicy,
+      modelCatalog: provider,
+      conversationModes: provider is AgentConversationModeCatalogPort
+          ? provider as AgentConversationModeCatalogPort
+          : null,
+      sessionConfiguration: provider is AgentSessionConfigurationPort
+          ? provider as AgentSessionConfigurationPort
+          : null,
+      planApproval: provider is AgentPlanApprovalPort
+          ? provider as AgentPlanApprovalPort
+          : null,
+      usageQuota: provider is AgentUsageQuotaProvider
+          ? provider as AgentUsageQuotaProvider
+          : null,
     );
   }
 
@@ -193,10 +198,21 @@ class FakeAgentProviderBundleBuilder implements AgentProviderBundleFactory {
 class FakeAgentProvider
     with AgentProviderThreadLifecycleStub
     implements
-        AgentProvider,
-        AgentLocalThreadListProvider,
-        AgentQuestionResponseProvider,
-        AgentPermissionPolicyProvider {
+        AgentRuntimePort,
+        AgentConversationPort,
+        AgentThreadCatalogPort,
+        AgentThreadSubscriptionPort,
+        AgentThreadNamingPort,
+        AgentThreadArchivalPort,
+        AgentThreadDeletionPort,
+        AgentThreadCompactionPort,
+        AgentThreadBranchingPort,
+        AgentTurnSteeringPort,
+        AgentPermissionResponsePort,
+        AgentQuestionResponsePort,
+        AgentLocalThreadListPort,
+        AgentModelCatalogPort,
+        TestPermissionPolicyHost {
   FakeAgentProvider({
     this.emitToolAndApproval = false,
     this.emitCompletedCommentary = false,
@@ -292,6 +308,16 @@ class FakeAgentProvider
 
   @override
   Stream<AgentEvent> get events => _events.stream;
+
+  @override
+  AgentRuntimeInfo? get runtimeInfo => null;
+
+  @override
+  AgentProviderLifecycleState get lifecycleState =>
+      AgentProviderLifecycleState.stopped;
+
+  @override
+  AgentRuntimeScope? get runtimeScope => null;
 
   @override
   Future<void> initialize() async {
@@ -568,6 +594,7 @@ class FakeAgentProvider
   Future<AgentModelList> listModels({
     int limit = 20,
     bool includeHidden = false,
+    bool forceRefresh = false,
   }) async {
     return const AgentModelList(models: <AgentModelInfo>[]);
   }
@@ -582,11 +609,9 @@ class FakeAgentProvider
   /// 供测试直接拿到权限 port。
   AgentPermissionPolicyPort? get permissionPolicyPort => permissionPolicy;
 
-  @override
-  Future<void> approveGuardianDeniedAction({
-    required String threadId,
-    required Object event,
-  }) async {}
+  Future<void> approveDeniedAction(
+    AgentDeniedActionOverrideRequest request,
+  ) async {}
 
   @override
   Future<void> respondToPermission(AgentPermissionDecision decision) async {

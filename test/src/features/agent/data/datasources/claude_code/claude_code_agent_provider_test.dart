@@ -14,9 +14,8 @@ import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_usage_quota_adapter.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart'
     show ProcessStarter;
+import 'package:zeta/src/features/agent/data/native_agent_provider_bundles.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 
 void main() {
   group('ClaudeCodeAgentProvider', () {
@@ -508,8 +507,7 @@ void main() {
         addTearDown(provider.dispose);
 
         final first = await provider.listModels();
-        final refreshable = provider as AgentRefreshableModelCatalogProvider;
-        final refreshed = await refreshable.refreshModels();
+        final refreshed = await provider.listModels(forceRefresh: true);
 
         expect(first.models.single.id, 'cli-refresh-1');
         expect(refreshed.models.single.id, 'cli-refresh-2');
@@ -574,7 +572,7 @@ void main() {
       );
       addTearDown(provider.dispose);
 
-      final quotaPort = provider.bundle.usageQuota;
+      final quotaPort = nativeBundleFromClaudeCode(provider).usageQuota;
       final quota = await quotaPort?.readUsageQuota();
 
       expect(quotaPort, same(provider));

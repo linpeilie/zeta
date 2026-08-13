@@ -7,7 +7,6 @@ import 'package:zeta/main.dart';
 import 'package:zeta/src/app/app.dart' show MainAppState;
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
@@ -2391,7 +2390,7 @@ final class _LocalTimelineBuildCounter {
 }
 
 class _ModeCapableFakeAgentProvider extends FakeAgentProvider
-    implements AgentConversationModeCatalogProvider {
+    implements AgentConversationModeCatalogPort {
   _ModeCapableFakeAgentProvider({
     required super.threadHistories,
     required super.threadPages,

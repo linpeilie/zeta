@@ -9,7 +9,7 @@ import 'package:zeta/src/features/agent/application/agent_provider_runtime_regis
 import 'package:zeta/src/features/agent/application/agent_ui_update_request.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/agent/domain/agent_turn_terminal_signal.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
@@ -3478,7 +3478,7 @@ void main() {
           providerConfig: cursorConfig,
           declaredCapabilities: AgentProviderCapabilities.unsupported,
         );
-        final factory = _MultiFakeAgentProviderFactory(<String, AgentProvider>{
+        final factory = _MultiFakeAgentProviderFactory(<String, Object>{
           defaultAgentProviderId: codex,
           cursorAgentProviderId: cursor,
         });
@@ -3534,7 +3534,7 @@ void main() {
         final cursorConfig = AgentProviderConfig.defaultCursor.copyWith(
           enabled: true,
         );
-        final factory = _MultiFakeAgentProviderFactory(<String, AgentProvider>{
+        final factory = _MultiFakeAgentProviderFactory(<String, Object>{
           defaultAgentProviderId: codex,
         });
         final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
@@ -3590,7 +3590,7 @@ void main() {
         ),
         declaredCapabilities: AgentProviderCapabilities.unsupported,
       );
-      final factory = _MultiFakeAgentProviderFactory(<String, AgentProvider>{
+      final factory = _MultiFakeAgentProviderFactory(<String, Object>{
         defaultAgentProviderId: codex,
         cursorAgentProviderId: cursor,
       });
@@ -3753,12 +3753,10 @@ void main() {
           ),
         );
         final registry = AgentProviderRuntimeRegistry(
-          providerFactory: _MultiFakeAgentProviderFactory(
-            <String, AgentProvider>{
-              defaultAgentProviderId: codex,
-              grokAgentProviderId: grok,
-            },
-          ),
+          providerFactory: _MultiFakeAgentProviderFactory(<String, Object>{
+            defaultAgentProviderId: codex,
+            grokAgentProviderId: grok,
+          }),
         );
         addTearDown(registry.close);
         final controller = AgentProviderSettingsController(
@@ -3822,12 +3820,10 @@ void main() {
           },
         );
         final registry = AgentProviderRuntimeRegistry(
-          providerFactory: _MultiFakeAgentProviderFactory(
-            <String, AgentProvider>{
-              defaultAgentProviderId: codex,
-              grokAgentProviderId: grok,
-            },
-          ),
+          providerFactory: _MultiFakeAgentProviderFactory(<String, Object>{
+            defaultAgentProviderId: codex,
+            grokAgentProviderId: grok,
+          }),
         );
         addTearDown(registry.close);
         final controller = AgentProviderSettingsController(
@@ -3914,7 +3910,7 @@ void main() {
       final grok = _FakeAgentProvider(
         providerConfig: AgentProviderConfig.defaultGrok,
       );
-      final factory = _MultiFakeAgentProviderFactory(<String, AgentProvider>{
+      final factory = _MultiFakeAgentProviderFactory(<String, Object>{
         defaultAgentProviderId: codex,
         grokAgentProviderId: grok,
       });
@@ -4526,17 +4522,17 @@ class _FakeAgentProviderFactory with LegacyBundleFactoryMixin {
   final _FakeAgentProvider provider;
 
   @override
-  AgentProvider create(AgentProviderConfig config) => provider;
+  Object create(AgentProviderConfig config) => provider;
 }
 
 class _MultiFakeAgentProviderFactory with LegacyBundleFactoryMixin {
   _MultiFakeAgentProviderFactory(this.providers);
 
-  final Map<String, AgentProvider> providers;
+  final Map<String, Object> providers;
   final List<String> createdProviderIds = <String>[];
 
   @override
-  AgentProvider create(AgentProviderConfig config) {
+  Object create(AgentProviderConfig config) {
     createdProviderIds.add(config.id);
     return providers[config.id]!;
   }
@@ -4561,7 +4557,11 @@ class _DelayedAgentProviderConfigStore implements AgentProviderConfigStore {
 
 class _FakeAgentProvider
     with AgentProviderThreadLifecycleStub
-    implements AgentProvider, AgentRefreshableModelCatalogProvider {
+    implements
+        AgentRuntimePort,
+        AgentConversationPort,
+        AgentThreadCatalogPort,
+        AgentModelCatalogPort {
   _FakeAgentProvider({
     this.failHistory = false,
     this.failResume = false,
@@ -4671,12 +4671,12 @@ class _FakeAgentProvider
   Future<AgentModelList> listModels({
     int limit = 20,
     bool includeHidden = false,
+    bool forceRefresh = false,
   }) async {
     listModelsCalls += 1;
     return availableModels;
   }
 
-  @override
   Future<AgentModelList> refreshModels({
     int limit = 20,
     bool includeHidden = false,
@@ -4693,7 +4693,6 @@ class _FakeAgentProvider
     lastModelSelection = selection;
   }
 
-  @override
   Future<void> approveGuardianDeniedAction({
     required String threadId,
     required Object event,
@@ -4718,7 +4717,6 @@ class _FakeAgentProvider
     return _historySnapshotsByThread[threadId] ?? _defaultHistorySnapshot;
   }
 
-  @override
   Future<void> unsubscribeThread(String threadId) async {
     calls.add('unsubscribe:$threadId');
     unsubscribedThreads.add(threadId);
@@ -4795,7 +4793,6 @@ class _FakeAgentProvider
     return AgentTurn(id: 'turn-1', sessionId: session.id);
   }
 
-  @override
   Future<void> steerTurn({
     required AgentSession session,
     required String expectedTurnId,
@@ -4812,7 +4809,6 @@ class _FakeAgentProvider
     calls.add('cancel:${turn.sessionId}:${turn.id}');
   }
 
-  @override
   Future<void> respondToPermission(AgentPermissionDecision decision) async {}
 
   @override
@@ -4869,7 +4865,7 @@ class _FakeAgentProvider
 }
 
 class _ModeFakeAgentProvider extends _FakeAgentProvider
-    implements AgentConversationModeCatalogProvider {
+    implements AgentConversationModeCatalogPort {
   _ModeFakeAgentProvider({
     super.sendError,
     super.availableModels,
@@ -4901,7 +4897,7 @@ class _ModeFakeAgentProvider extends _FakeAgentProvider
 }
 
 class _PlanApprovalFakeAgentProvider extends _FakeAgentProvider
-    implements AgentPlanApprovalProvider {
+    implements AgentPlanApprovalPort {
   final List<AgentPlanApprovalDecision> planApprovalDecisions =
       <AgentPlanApprovalDecision>[];
 
@@ -4979,8 +4975,7 @@ Map<String, Object?> _structuredLogContext(
       as Map<String, Object?>;
 }
 
-class _RuntimeScopedFakeAgentProvider extends _FakeAgentProvider
-    implements AgentRuntimeScopeProvider {
+class _RuntimeScopedFakeAgentProvider extends _FakeAgentProvider {
   _RuntimeScopedFakeAgentProvider({
     required this.runtimeScope,
     required super.historySnapshotsByThread,

@@ -11,7 +11,6 @@ import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdi
 import 'package:zeta/src/features/agent/data/datasources/transport/provider_operation_scheduler.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/provider_runtime_json_rpc_peer.dart';
 import 'package:zeta/src/features/agent/data/mappers/codex_permission_policy_codec.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_usage_window_labels.dart';
@@ -43,7 +42,6 @@ typedef JsonRpcPeerFactory = JsonRpcPeer Function(AgentProviderConfig config);
 /// 通知映射、审批映射与历史解析已经拆分到独立模块。
 class CodexAppServerAgentProvider
     implements
-        AgentProvider,
         AgentRuntimePort,
         AgentConversationPort,
         AgentThreadCatalogPort,
@@ -60,16 +58,7 @@ class CodexAppServerAgentProvider
         AgentModelCatalogPort,
         AgentConversationModeCatalogPort,
         AgentSkillsPort,
-        AgentUsageQuotaProvider,
-        AgentRuntimeInfoProvider,
-        AgentRuntimeLifecycleProvider,
-        AgentRuntimeScopeProvider,
-        AgentRefreshableModelCatalogProvider,
-        AgentQuestionResponseProvider,
-        AgentConversationModeCatalogProvider,
-        AgentSkillsCatalogProvider,
-        AgentPermissionPolicyProvider,
-        AgentThreadSubscriptionProvider {
+        AgentUsageQuotaProvider {
   /// 创建 Codex app-server provider 实例。
   ///
   /// [config] 包含命令、参数、环境变量等 provider 配置。
@@ -455,7 +444,6 @@ class CodexAppServerAgentProvider
     return _fetchModelList(limit: limit, includeHidden: includeHidden);
   }
 
-  @override
   Future<AgentModelList> refreshModels({
     int limit = 20,
     bool includeHidden = false,
@@ -598,18 +586,7 @@ class CodexAppServerAgentProvider
     );
   }
 
-  @override
   AgentPermissionPolicyPort get permissionPolicy => _permissionPolicyAdapter;
-
-  @override
-  Future<void> approveGuardianDeniedAction({
-    required String threadId,
-    required Object event,
-  }) async {
-    await initialize();
-    _log.i('Approving guardian-denied action for thread $threadId');
-    await _client.approveGuardianDeniedAction(threadId: threadId, event: event);
-  }
 
   @override
   Future<void> approveDeniedAction(

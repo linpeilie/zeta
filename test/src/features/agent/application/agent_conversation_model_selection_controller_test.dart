@@ -2,10 +2,9 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_model_selection_controller.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 
 import '../../../testing/agent_provider_stub_base.dart';
 
@@ -53,7 +52,7 @@ void main() {
       );
       addTearDown(controller.dispose);
 
-      controller.bindRuntime(AgentProviderBundle.adapt(provider).runtime);
+      controller.bindRuntime(provider);
       controller.handleModelList(_modelList);
       await Future<void>.delayed(Duration.zero);
       persistedSelections.clear();
@@ -295,7 +294,7 @@ const AgentModelList _modelList = AgentModelList(
 
 class _FakeAgentProvider
     with AgentProviderThreadLifecycleStub
-    implements AgentProvider {
+    implements AgentRuntimePort, AgentConversationPort {
   AgentModelSelection? runtimeSelection;
 
   @override
@@ -307,7 +306,6 @@ class _FakeAgentProvider
   @override
   Future<void> initialize() async {}
 
-  @override
   Future<AgentThreadPage> listThreads({
     required AgentThreadListQuery query,
   }) async {
@@ -317,10 +315,10 @@ class _FakeAgentProvider
     );
   }
 
-  @override
   Future<AgentModelList> listModels({
     int limit = 20,
     bool includeHidden = false,
+    bool forceRefresh = false,
   }) async {
     return _modelList;
   }
@@ -330,13 +328,11 @@ class _FakeAgentProvider
     runtimeSelection = selection;
   }
 
-  @override
   Future<void> approveGuardianDeniedAction({
     required String threadId,
     required Object event,
   }) async {}
 
-  @override
   Future<AgentThreadHistorySnapshot> readThreadHistory({
     required String threadId,
     String? sessionPath,
@@ -348,7 +344,6 @@ class _FakeAgentProvider
     );
   }
 
-  @override
   Future<void> unsubscribeThread(String threadId) async {}
 
   @override
@@ -385,7 +380,6 @@ class _FakeAgentProvider
     return const AgentTurn(id: 'turn-1', sessionId: 'thread-1');
   }
 
-  @override
   Future<void> steerTurn({
     required AgentSession session,
     required String expectedTurnId,
@@ -398,7 +392,6 @@ class _FakeAgentProvider
   @override
   Future<void> cancelTurn(AgentTurn turn) async {}
 
-  @override
   Future<void> respondToPermission(AgentPermissionDecision decision) async {}
 
   @override

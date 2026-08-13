@@ -9,7 +9,7 @@ import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdi
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 
-/// 由已构造的 Codex adapter 组装原生 Bundle，不经过 [AgentProviderBundle.adapt]。
+/// 由已构造的 Codex adapter 组装原生 Bundle。
 AgentProviderBundle nativeBundleFromCodex(
   CodexAppServerAgentProvider provider,
 ) {
@@ -35,7 +35,7 @@ AgentProviderBundle nativeBundleFromCodex(
   );
 }
 
-/// 由已构造的 Grok adapter 组装原生 Bundle，不经过 [AgentProviderBundle.adapt]。
+/// 由已构造的 Grok adapter 组装原生 Bundle。
 AgentProviderBundle nativeBundleFromGrok(GrokAcpAgentProvider provider) {
   return AgentProviderBundle(
     runtime: provider,
@@ -54,7 +54,7 @@ AgentProviderBundle nativeBundleFromGrok(GrokAcpAgentProvider provider) {
   );
 }
 
-/// 由已构造的 Claude Code adapter 组装原生 Bundle，不经过 [AgentProviderBundle.adapt]。
+/// 由已构造的 Claude Code adapter 组装原生 Bundle。
 AgentProviderBundle nativeBundleFromClaudeCode(
   ClaudeCodeAgentProvider provider,
 ) {

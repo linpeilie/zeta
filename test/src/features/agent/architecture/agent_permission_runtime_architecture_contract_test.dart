@@ -618,9 +618,10 @@ void main() {
     });
 
     test('legacy permission facades and domain config decoders are absent', () {
-      final providerApi = File(
-        'lib/src/features/agent/domain/agent_provider.dart',
-      ).readAsStringSync();
+      expect(
+        File('lib/src/features/agent/domain/agent_provider.dart').existsSync(),
+        isFalse,
+      );
       final turnConfiguration = File(
         'lib/src/features/agent/domain/agent_conversation_mode_models.dart',
       ).readAsStringSync();
@@ -632,7 +633,6 @@ void main() {
         'codex_app_server_agent_provider.dart',
       ).readAsStringSync();
 
-      expect(providerApi, isNot(contains('Use permissionSnapshot')));
       expect(
         turnConfiguration,
         isNot(contains('AgentTurnConfiguration.permissionSelection')),

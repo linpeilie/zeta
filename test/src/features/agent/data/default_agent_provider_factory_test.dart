@@ -3,14 +3,13 @@ import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_cli_metadata.dart';
 import 'package:zeta/src/features/agent/data/default_agent_provider_factory.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 
 void main() {
   test('DefaultAgentProviderFactory never creates a Cursor runtime', () {
     const factory = DefaultAgentProviderFactory();
 
     expect(
-      () => factory.create(AgentProviderConfig.defaultCursor),
+      () => factory.createBundle(AgentProviderConfig.defaultCursor),
       throwsA(
         isA<UnsupportedError>().having(
           (error) => error.message,
@@ -28,25 +27,22 @@ void main() {
       displayName: 'Legacy Cursor Alias',
     );
 
-    expect(() => factory.create(config), throwsUnsupportedError);
+    expect(() => factory.createBundle(config), throwsUnsupportedError);
   });
 
-  test(
-    'creates Claude Code provider that initializes without process',
-    () async {
-      const factory = DefaultAgentProviderFactory();
+  test('creates Claude Code bundle that initializes without process', () async {
+    const factory = DefaultAgentProviderFactory();
 
-      final provider = factory.create(AgentProviderConfig.defaultClaudeCode);
-      expect(provider, isA<ClaudeCodeAgentProvider>());
-      expect(provider.config.kind, AgentProviderKind.claudeCode);
-      expect(provider.capabilities.canRemoveThreadFromList, isTrue);
-      expect(provider.bundle.threadCatalog, isNotNull);
-      expect(provider.bundle.localThreadList, isNotNull);
+    final bundle = factory.createBundle(AgentProviderConfig.defaultClaudeCode);
+    expect(bundle.runtime, isA<ClaudeCodeAgentProvider>());
+    expect(bundle.runtime.config.kind, AgentProviderKind.claudeCode);
+    expect(bundle.runtime.capabilities.canRemoveThreadFromList, isTrue);
+    expect(bundle.threadCatalog, isNotNull);
+    expect(bundle.localThreadList, isNotNull);
 
-      await provider.initialize();
-      await provider.dispose();
-    },
-  );
+    await bundle.runtime.initialize();
+    await bundle.runtime.dispose();
+  });
 
   test('createBundle never creates a Cursor runtime', () {
     const factory = DefaultAgentProviderFactory();
@@ -83,10 +79,10 @@ void main() {
         );
       },
     );
-    final provider = factory.create(AgentProviderConfig.defaultClaudeCode);
-    addTearDown(provider.dispose);
+    final bundle = factory.createBundle(AgentProviderConfig.defaultClaudeCode);
+    addTearDown(bundle.runtime.dispose);
 
-    final models = await provider.bundle.modelCatalog!.listModels();
+    final models = await bundle.modelCatalog!.listModels();
 
     expect(models.models.single.id, 'cli-default');
     expect(metadataCalls, 1);

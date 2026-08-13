@@ -3,13 +3,13 @@ import 'package:zeta/src/features/agent/application/agent_provider_runtime_regis
 import 'package:zeta/src/features/agent/data/datasources/app_server/codex_app_server_agent_provider.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_cli_metadata.dart';
 import 'package:zeta/src/features/agent/data/default_agent_provider_factory.dart';
+import 'package:zeta/src/features/agent/data/native_agent_provider_bundles.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 
 import '../../../testing/recording_json_rpc_peer.dart';
 
-/// 三个生产 Provider 经 [AgentProviderBundle.adapt] 后的细分端口矩阵。
+/// 三个生产 Provider 原生 Bundle 的细分端口矩阵。
 ///
 /// 不支持的能力必须是端口为 null，不能靠 Bundle 上的 no-op / 抛错方法冒充。
 void main() {
@@ -17,11 +17,10 @@ void main() {
 
   group('production Bundle port matrix', () {
     test('Codex exposes the split ports it actually supports', () {
-      final provider = factory.create(AgentProviderConfig.defaultCodex);
-      addTearDown(provider.dispose);
-      final bundle = provider.bundle;
+      final bundle = factory.createBundle(AgentProviderConfig.defaultCodex);
+      addTearDown(bundle.runtime.dispose);
 
-      _expectRuntimeOwner(bundle, provider);
+      _expectRuntimeOwner(bundle);
       expect(bundle.threadCatalog, isNotNull);
       expect(bundle.threadSubscription, isNotNull);
       expect(bundle.threadNaming, isNotNull);
@@ -41,21 +40,19 @@ void main() {
       expect(bundle.planApproval, isNull);
       expect(bundle.permissionPolicy, isNotNull);
       expect(bundle.usageQuota, isNotNull);
-      expect(provider, isA<AgentRefreshableModelCatalogProvider>());
-      expect(provider, isA<AgentQuestionResponseProvider>());
-      expect(provider, isA<AgentThreadSubscriptionProvider>());
-      expect(provider, isA<AgentDeniedActionOverridePort>());
-      expect(provider, isNot(isA<AgentLocalThreadListProvider>()));
-      expect(provider, isNot(isA<AgentSessionConfigProvider>()));
-      expect(provider, isNot(isA<AgentPlanApprovalProvider>()));
+      expect(bundle.runtime, isA<AgentThreadSubscriptionPort>());
+      expect(bundle.runtime, isA<AgentDeniedActionOverridePort>());
+      expect(bundle.runtime, isA<AgentQuestionResponsePort>());
+      expect(bundle.runtime, isNot(isA<AgentLocalThreadListPort>()));
+      expect(bundle.runtime, isNot(isA<AgentSessionConfigurationPort>()));
+      expect(bundle.runtime, isNot(isA<AgentPlanApprovalPort>()));
     });
 
     test('Grok exposes only the split ports it actually supports', () {
-      final provider = factory.create(AgentProviderConfig.defaultGrok);
-      addTearDown(provider.dispose);
-      final bundle = provider.bundle;
+      final bundle = factory.createBundle(AgentProviderConfig.defaultGrok);
+      addTearDown(bundle.runtime.dispose);
 
-      _expectRuntimeOwner(bundle, provider);
+      _expectRuntimeOwner(bundle);
       expect(bundle.threadCatalog, isNotNull);
       expect(bundle.threadSubscription, isNull);
       expect(bundle.threadNaming, isNotNull);
@@ -75,21 +72,21 @@ void main() {
       expect(bundle.planApproval, isNotNull);
       expect(bundle.permissionPolicy, isNotNull);
       expect(bundle.usageQuota, isNotNull);
-      expect(provider, isA<AgentRefreshableModelCatalogProvider>());
-      expect(provider, isA<AgentQuestionResponseProvider>());
-      expect(provider, isA<AgentPlanApprovalProvider>());
-      expect(provider, isNot(isA<AgentThreadSubscriptionProvider>()));
-      expect(provider, isNot(isA<AgentDeniedActionOverridePort>()));
-      expect(provider, isNot(isA<AgentLocalThreadListProvider>()));
-      expect(provider, isNot(isA<AgentSessionConfigProvider>()));
+      expect(bundle.runtime, isA<AgentQuestionResponsePort>());
+      expect(bundle.runtime, isA<AgentPlanApprovalPort>());
+      expect(bundle.runtime, isNot(isA<AgentThreadSubscriptionPort>()));
+      expect(bundle.runtime, isNot(isA<AgentDeniedActionOverridePort>()));
+      expect(bundle.runtime, isNot(isA<AgentLocalThreadListPort>()));
+      expect(bundle.runtime, isNot(isA<AgentSessionConfigurationPort>()));
     });
 
     test('Claude Code exposes only the split ports it actually supports', () {
-      final provider = factory.create(AgentProviderConfig.defaultClaudeCode);
-      addTearDown(provider.dispose);
-      final bundle = provider.bundle;
+      final bundle = factory.createBundle(
+        AgentProviderConfig.defaultClaudeCode,
+      );
+      addTearDown(bundle.runtime.dispose);
 
-      _expectRuntimeOwner(bundle, provider);
+      _expectRuntimeOwner(bundle);
       expect(bundle.threadCatalog, isNotNull);
       expect(bundle.threadSubscription, isNull);
       expect(bundle.threadNaming, isNull);
@@ -109,28 +106,26 @@ void main() {
       expect(bundle.planApproval, isNotNull);
       expect(bundle.permissionPolicy, isNotNull);
       expect(bundle.usageQuota, isNotNull);
-      expect(provider, isA<AgentRefreshableModelCatalogProvider>());
-      expect(provider, isA<AgentLocalThreadListProvider>());
-      expect(provider, isA<AgentPlanApprovalProvider>());
-      expect(provider, isNot(isA<AgentQuestionResponseProvider>()));
-      expect(provider, isNot(isA<AgentThreadSubscriptionProvider>()));
-      expect(provider, isNot(isA<AgentDeniedActionOverridePort>()));
-      expect(provider, isNot(isA<AgentSessionConfigProvider>()));
-      expect(provider, isNot(isA<AgentSkillsCatalogProvider>()));
-      expect(provider, isNot(isA<AgentConversationModeCatalogProvider>()));
+      expect(bundle.runtime, isA<AgentLocalThreadListPort>());
+      expect(bundle.runtime, isA<AgentPlanApprovalPort>());
+      expect(bundle.runtime, isNot(isA<AgentQuestionResponsePort>()));
+      expect(bundle.runtime, isNot(isA<AgentThreadSubscriptionPort>()));
+      expect(bundle.runtime, isNot(isA<AgentDeniedActionOverridePort>()));
+      expect(bundle.runtime, isNot(isA<AgentSessionConfigurationPort>()));
+      expect(bundle.runtime, isNot(isA<AgentSkillsPort>()));
+      expect(bundle.runtime, isNot(isA<AgentConversationModeCatalogPort>()));
     });
   });
 
   group('factory and registry identity', () {
-    test('factory create returns a new runtime owner each time', () {
-      final first = factory.create(AgentProviderConfig.defaultCodex);
-      final second = factory.create(AgentProviderConfig.defaultCodex);
-      addTearDown(first.dispose);
-      addTearDown(second.dispose);
+    test('factory createBundle returns a new runtime owner each time', () {
+      final first = factory.createBundle(AgentProviderConfig.defaultCodex);
+      final second = factory.createBundle(AgentProviderConfig.defaultCodex);
+      addTearDown(first.runtime.dispose);
+      addTearDown(second.runtime.dispose);
 
-      expect(identical(first, second), isFalse);
-      expect(identical(first.bundle.runtime.config, first.config), isTrue);
-      expect(identical(second.bundle.runtime.config, second.config), isTrue);
+      expect(identical(first.runtime, second.runtime), isFalse);
+      expect(identical(first.runtime.config, first.runtime.config), isTrue);
     });
 
     test(
@@ -185,7 +180,7 @@ void main() {
           peer: peer,
         );
         addTearDown(provider.dispose);
-        final bundle = provider.bundle;
+        final bundle = nativeBundleFromCodex(provider);
 
         final first = await bundle.modelCatalog!.listModels();
         final cached = await bundle.modelCatalog!.listModels();
@@ -197,7 +192,6 @@ void main() {
         );
         expect(peer.callsFor('model/list'), hasLength(2));
         expect(refreshed.models.single.id, 'gpt-contract');
-        // capabilities 是 runtime 上的动态 getter，握手后仍与 provider 当前值一致。
         expect(
           bundle.runtime.capabilities.canForkThread,
           provider.capabilities.canForkThread,
@@ -232,11 +226,11 @@ void main() {
             );
           },
         );
-        final provider = providerFactory.create(
+        final bundle = providerFactory.createBundle(
           AgentProviderConfig.defaultClaudeCode,
         );
-        addTearDown(provider.dispose);
-        final catalog = provider.bundle.modelCatalog!;
+        addTearDown(bundle.runtime.dispose);
+        final catalog = bundle.modelCatalog!;
 
         final first = await catalog.listModels();
         final cached = await catalog.listModels();
@@ -262,20 +256,7 @@ void main() {
   });
 }
 
-void _expectRuntimeOwner(AgentProviderBundle bundle, AgentProvider provider) {
-  expect(bundle.runtime.config, same(provider.config));
-  // Grok / Claude 的 capabilities getter 每次分配新对象；只比较当前值。
-  expect(
-    bundle.runtime.capabilities.canPrompt,
-    provider.capabilities.canPrompt,
-  );
-  expect(
-    bundle.runtime.capabilities.canListThreads,
-    provider.capabilities.canListThreads,
-  );
-  expect(
-    bundle.runtime.capabilities.supportsModelSelection,
-    provider.capabilities.supportsModelSelection,
-  );
+void _expectRuntimeOwner(AgentProviderBundle bundle) {
+  expect(bundle.runtime.capabilities.canPrompt, isTrue);
   expect(bundle.runtime.events, isA<Stream<AgentEvent>>());
 }

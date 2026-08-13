@@ -7,7 +7,7 @@ import 'package:zeta/src/features/agent/application/agent_provider_global_runtim
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/project_threads/application/project_threads_controller.dart';
 import 'package:zeta/src/features/project_threads/application/project_threads_session_snapshot_codec.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
@@ -1408,7 +1408,7 @@ class _FakeAgentProviderFactory with LegacyBundleFactoryMixin {
   final _FakeAgentProvider provider;
 
   @override
-  AgentProvider create(AgentProviderConfig config) => provider;
+  Object create(AgentProviderConfig config) => provider;
 }
 
 class _MultiAgentProviderFactory with LegacyBundleFactoryMixin {
@@ -1425,7 +1425,7 @@ class _MultiAgentProviderFactory with LegacyBundleFactoryMixin {
   final List<String> createdProviderIds;
 
   @override
-  AgentProvider create(AgentProviderConfig config) {
+  Object create(AgentProviderConfig config) {
     createdProviderIds.add(config.id);
     return switch (config.id) {
       grokAgentProviderId => grok,
@@ -1437,7 +1437,11 @@ class _MultiAgentProviderFactory with LegacyBundleFactoryMixin {
 
 class _FakeAgentProvider
     with AgentProviderThreadLifecycleStub
-    implements AgentProvider, AgentLocalThreadListProvider {
+    implements
+        AgentRuntimePort,
+        AgentConversationPort,
+        AgentThreadCatalogPort,
+        AgentLocalThreadListPort {
   _FakeAgentProvider({
     required List<AgentThreadPage> pages,
     this.config = AgentProviderConfig.defaultCodex,
@@ -1500,7 +1504,6 @@ class _FakeAgentProvider
     );
   }
 
-  @override
   Future<void> unsubscribeThread(String threadId) async {}
 
   @override
@@ -1537,7 +1540,6 @@ class _FakeAgentProvider
     return AgentTurn(id: 'turn-1', sessionId: session.id);
   }
 
-  @override
   Future<void> steerTurn({
     required AgentSession session,
     required String expectedTurnId,
@@ -1550,10 +1552,10 @@ class _FakeAgentProvider
   @override
   Future<void> cancelTurn(AgentTurn turn) async {}
 
-  @override
   Future<AgentModelList> listModels({
     int limit = 20,
     bool includeHidden = false,
+    bool forceRefresh = false,
   }) async {
     return const AgentModelList(models: <AgentModelInfo>[]);
   }
@@ -1561,13 +1563,11 @@ class _FakeAgentProvider
   @override
   void updateModelSelection(AgentModelSelection selection) {}
 
-  @override
   Future<void> approveGuardianDeniedAction({
     required String threadId,
     required Object event,
   }) async {}
 
-  @override
   Future<void> respondToPermission(AgentPermissionDecision decision) async {}
 
   @override

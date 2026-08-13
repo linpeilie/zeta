@@ -5,7 +5,6 @@ import 'package:zeta/src/features/agent/application/agent_provider_runtime_regis
 import 'package:zeta/src/features/agent/data/agent_model_catalog_cache_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
 
 import '../../../testing/ide_test_harness.dart';
@@ -408,7 +407,7 @@ class _RuntimePathSpyFactory with LegacyBundleFactoryMixin {
   int cursorSessionIndexWrites = 0;
 
   @override
-  AgentProvider create(AgentProviderConfig config) {
+  Object create(AgentProviderConfig config) {
     createdProviderIds.add(config.id);
     if (CursorRetirementPolicy.isRetiredProvider(config)) {
       cursorProviderCreations += 1;
@@ -424,10 +423,10 @@ class _RuntimePathSpyFactory with LegacyBundleFactoryMixin {
 /// 与 [FakeAgentProviderBundleBuilder.fromFake] 不同：每次 create 返回**新**实例，用于证明
 /// 不同 scope 拿到的是可区分的对象。
 class _MultiInstanceFakeProviderFactory with LegacyBundleFactoryMixin {
-  final List<AgentProvider> providers = <AgentProvider>[];
+  final List<Object> providers = <Object>[];
 
   @override
-  AgentProvider create(AgentProviderConfig config) {
+  Object create(AgentProviderConfig config) {
     final provider = _TrackingFakeAgentProvider(config);
     providers.add(provider);
     return provider;

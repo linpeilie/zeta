@@ -6,7 +6,6 @@ import 'package:zeta/src/features/agent/application/agent_thread_workspace_contr
 import 'package:zeta/src/features/agent/data/agent_model_catalog_cache_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/domain/agent_turn_terminal_signal.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
@@ -261,7 +260,7 @@ final class _MultiInstanceProviderFactory with LegacyBundleFactoryMixin {
   final List<AgentPaneFakeProvider> created = <AgentPaneFakeProvider>[];
 
   @override
-  AgentProvider create(AgentProviderConfig config) {
+  Object create(AgentProviderConfig config) {
     final provider = AgentPaneFakeProvider();
     created.add(provider);
     return provider;
@@ -270,7 +269,7 @@ final class _MultiInstanceProviderFactory with LegacyBundleFactoryMixin {
 
 final class _TerminalProviderFactory with LegacyBundleFactoryMixin {
   @override
-  AgentProvider create(AgentProviderConfig config) {
+  Object create(AgentProviderConfig config) {
     return FakeAgentProvider(config: config);
   }
 }

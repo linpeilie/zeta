@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-/// S0 架构守卫：钉住删除旧 [AgentProvider] 之前的生产边界，避免测试万能 fake
+/// 架构守卫：钉住 native Bundle 边界，避免测试万能 fake
 /// 或共享层分支出卖真实端口矩阵。
 void main() {
   group('provider bundle architecture contracts', () {
@@ -16,12 +16,17 @@ void main() {
       }
     });
 
-    test('shared bundle still adapts without provider-kind branches', () {
+    test('shared bundle has no adapt path or provider-kind branches', () {
       final source = File(
         'lib/src/features/agent/domain/agent_provider_bundle.dart',
       ).readAsStringSync();
 
-      expect(source, contains('factory AgentProviderBundle.adapt'));
+      expect(source, isNot(contains('factory AgentProviderBundle.adapt')));
+      expect(source, isNot(contains('_LegacyAgent')));
+      expect(
+        File('lib/src/features/agent/domain/agent_provider.dart').existsSync(),
+        isFalse,
+      );
       for (final token in const <String>[
         'AgentProviderKind.codexAppServer',
         'AgentProviderKind.acp',

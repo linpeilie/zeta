@@ -10,8 +10,8 @@ import 'package:zeta/src/features/agent/data/agent_provider_permission_migration
 import 'package:zeta/src/features/agent/data/datasources/app_server/codex_app_server_agent_provider.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/provider_operation_scheduler.dart';
+import 'package:zeta/src/features/agent/data/native_agent_provider_bundles.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 
 import '../../../../../testing/agent_file_change_canonical.dart';
@@ -5384,7 +5384,7 @@ void main() {
       addTearDown(provider.dispose);
 
       expect(provider.capabilities.supportsSkillInput, isTrue);
-      expect(provider, isA<AgentSkillsCatalogProvider>());
+      expect(provider, isA<AgentSkillsPort>());
 
       final changed = <void>[];
       final subscription = provider.skillsChanged.listen(changed.add);
@@ -5460,7 +5460,9 @@ void main() {
       expect(reviews.last.status, 'denied');
       expect(reviews.last.rationale, 'risky');
 
-      await provider.bundle.deniedActionOverride!.approveDeniedAction(
+      await nativeBundleFromCodex(
+        provider,
+      ).deniedActionOverride!.approveDeniedAction(
         const AgentDeniedActionOverrideRequest(
           threadId: 'thread-1',
           requestId: 'review-1',
@@ -5471,7 +5473,9 @@ void main() {
         contains('thread/approveGuardianDeniedAction'),
       );
       await expectLater(
-        provider.bundle.deniedActionOverride!.approveDeniedAction(
+        nativeBundleFromCodex(
+          provider,
+        ).deniedActionOverride!.approveDeniedAction(
           const AgentDeniedActionOverrideRequest(
             threadId: 'thread-1',
             requestId: 'review-1',

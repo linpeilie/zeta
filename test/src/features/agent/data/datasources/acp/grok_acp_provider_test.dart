@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:logger/logger.dart';
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/features/agent/data/datasources/acp/grok_acp_agent_provider.dart';
+import 'package:zeta/src/features/agent/data/native_agent_provider_bundles.dart';
 import 'package:zeta/src/features/agent/data/datasources/acp/grok_models_cli.dart';
 import 'package:zeta/src/features/agent/data/datasources/local_history/grok_session_history_reader.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
@@ -860,30 +861,21 @@ void main() {
       );
     });
 
-    test(
-      'fails explicitly for unsupported thread lifecycle operations',
-      () async {
-        final provider = GrokAcpAgentProvider(
-          config: AgentProviderConfig.defaultGrok,
-          peer: _FakeJsonRpcPeer(),
-        );
-        addTearDown(provider.dispose);
+    test('does not publish unsupported thread lifecycle ports', () {
+      final provider = GrokAcpAgentProvider(
+        config: AgentProviderConfig.defaultGrok,
+        peer: _FakeJsonRpcPeer(),
+      );
+      addTearDown(provider.dispose);
+      final bundle = nativeBundleFromGrok(provider);
 
-        await expectLater(
-          provider.archiveThread('session-1'),
-          throwsA(isA<UnsupportedError>()),
-        );
-        await expectLater(
-          provider.forkThread(
-            threadId: 'session-1',
-            context: const AgentContext(projectPath: '/repo'),
-          ),
-          throwsA(isA<UnsupportedError>()),
-        );
-        expect(provider.capabilities.canArchiveThread, isFalse);
-        expect(provider.capabilities.canForkThread, isFalse);
-      },
-    );
+      expect(bundle.threadArchival, isNull);
+      expect(bundle.threadBranching, isNull);
+      expect(bundle.threadCompaction, isNull);
+      expect(bundle.turnSteering, isNull);
+      expect(provider.capabilities.canArchiveThread, isFalse);
+      expect(provider.capabilities.canForkThread, isFalse);
+    });
 
     test(
       'encodes plan conversation mode as session/prompt _meta.mode',

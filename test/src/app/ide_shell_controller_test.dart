@@ -8,7 +8,7 @@ import 'package:zeta/src/app/shell/ide_shell_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/agent/domain/agent_turn_terminal_signal.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
@@ -1619,7 +1619,7 @@ class _RecordingAgentProviderFactory with LegacyBundleFactoryMixin {
   int cursorSessionIndexWrites = 0;
 
   @override
-  AgentProvider create(AgentProviderConfig config) {
+  Object create(AgentProviderConfig config) {
     createdProviderIds.add(config.id);
     if (CursorRetirementPolicy.isRetiredProvider(config)) {
       cursorProviderCreations += 1;
@@ -1697,7 +1697,20 @@ class _ProviderBackend {
 
 class _ShellTestAgentProvider
     with AgentProviderThreadLifecycleStub
-    implements AgentProvider {
+    implements
+        AgentRuntimePort,
+        AgentConversationPort,
+        AgentThreadCatalogPort,
+        AgentThreadSubscriptionPort,
+        AgentThreadNamingPort,
+        AgentThreadArchivalPort,
+        AgentThreadDeletionPort,
+        AgentThreadCompactionPort,
+        AgentThreadBranchingPort,
+        AgentTurnSteeringPort,
+        AgentPermissionResponsePort,
+        AgentQuestionResponsePort,
+        AgentModelCatalogPort {
   _ShellTestAgentProvider({required this.backend});
 
   final _ProviderBackend backend;
@@ -1717,6 +1730,16 @@ class _ShellTestAgentProvider
 
   @override
   Stream<AgentEvent> get events => _events.stream;
+
+  @override
+  AgentRuntimeInfo? get runtimeInfo => null;
+
+  @override
+  AgentProviderLifecycleState get lifecycleState =>
+      AgentProviderLifecycleState.stopped;
+
+  @override
+  AgentRuntimeScope? get runtimeScope => null;
 
   void emit(AgentEvent event) {
     _events.add(event);
@@ -1771,6 +1794,7 @@ class _ShellTestAgentProvider
   Future<AgentModelList> listModels({
     int limit = 20,
     bool includeHidden = false,
+    bool forceRefresh = false,
   }) async {
     return const AgentModelList(models: <AgentModelInfo>[]);
   }
@@ -1779,10 +1803,7 @@ class _ShellTestAgentProvider
   void updateModelSelection(AgentModelSelection selection) {}
 
   @override
-  Future<void> approveGuardianDeniedAction({
-    required String threadId,
-    required Object event,
-  }) async {}
+  Future<void> respondToQuestion(AgentQuestionResponse response) async {}
 
   @override
   Future<AgentThreadHistorySnapshot> readThreadHistory({

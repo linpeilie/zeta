@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/data/cli_command_locator.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/agent_management/data/cli_process_runner.dart';
 import 'package:zeta/src/features/agent_management/data/grok_agent_management_repository.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
@@ -424,14 +424,15 @@ class _ProbeProviderFactory with LegacyBundleFactoryMixin {
   final List<_ProbeFakeProvider> providers = <_ProbeFakeProvider>[];
 
   @override
-  AgentProvider create(AgentProviderConfig config) {
+  Object create(AgentProviderConfig config) {
     final provider = _ProbeFakeProvider(config);
     providers.add(provider);
     return provider;
   }
 }
 
-class _ProbeFakeProvider extends Fake implements AgentProvider {
+class _ProbeFakeProvider extends Fake
+    implements AgentRuntimePort, AgentConversationPort {
   _ProbeFakeProvider(this.config);
 
   @override
@@ -440,6 +441,16 @@ class _ProbeFakeProvider extends Fake implements AgentProvider {
   @override
   AgentProviderCapabilities get capabilities =>
       const AgentProviderCapabilities();
+
+  @override
+  AgentRuntimeInfo? get runtimeInfo => null;
+
+  @override
+  AgentProviderLifecycleState get lifecycleState =>
+      AgentProviderLifecycleState.stopped;
+
+  @override
+  AgentRuntimeScope? get runtimeScope => null;
 
   @override
   Future<void> initialize() async {}

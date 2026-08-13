@@ -4,6 +4,20 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('conversation binding architecture contracts', () {
+    test('legacy AgentProvider interface and adapter files stay deleted', () {
+      expect(
+        File('lib/src/features/agent/domain/agent_provider.dart').existsSync(),
+        isFalse,
+      );
+      expect(
+        File(
+          'lib/src/features/agent/data/'
+          'legacy_agent_provider_factory_bundle_adapter.dart',
+        ).existsSync(),
+        isFalse,
+      );
+    });
+
     test('app shell injects BundleFactory and does not wrap old Factory', () {
       const files = <String>[
         'lib/src/app/app.dart',

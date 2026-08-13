@@ -4,7 +4,6 @@ import 'package:zeta/src/features/agent/application/agent_conversation_binding_m
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
 
@@ -135,7 +134,7 @@ final class _MultiInstanceProviderFactory with LegacyBundleFactoryMixin {
   final List<_RecycleProvider> created = <_RecycleProvider>[];
 
   @override
-  AgentProvider create(AgentProviderConfig config) {
+  Object create(AgentProviderConfig config) {
     final provider = _RecycleProvider();
     created.add(provider);
     return provider;

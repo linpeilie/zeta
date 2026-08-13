@@ -6,7 +6,6 @@ import 'package:zeta/src/features/agent/application/agent_conversation_binding.d
 import 'package:zeta/src/features/agent/application/agent_conversation_binding_manager.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider.dart';
 
 import '../../../testing/legacy_bundle_factory_mixin.dart';
 import '../presentation/harness/agent_pane_test_harness.dart';
@@ -426,7 +425,7 @@ final class _BindingProviderFactory with LegacyBundleFactoryMixin {
   final List<_BindingProvider> providers = <_BindingProvider>[];
 
   @override
-  AgentProvider create(AgentProviderConfig config) {
+  Object create(AgentProviderConfig config) {
     final provider = _BindingProvider();
     providers.add(provider);
     return provider;

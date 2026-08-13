@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_global_runtime.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider.dart';
+import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/usage_statistics/data/global_runtime_agent_usage_quota_source.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_query_models.dart';
 
@@ -69,19 +69,22 @@ final class _QuotaProviderFactory with LegacyBundleFactoryMixin {
   final _QuotaProvider provider;
 
   @override
-  AgentProvider create(AgentProviderConfig config) => provider;
+  Object create(AgentProviderConfig config) => provider;
 }
 
 final class _PlainProviderFactory with LegacyBundleFactoryMixin {
   final _PlainProvider provider = _PlainProvider();
 
   @override
-  AgentProvider create(AgentProviderConfig config) => provider;
+  Object create(AgentProviderConfig config) => provider;
 }
 
 final class _QuotaProvider extends Fake
     with AgentProviderThreadLifecycleStub
-    implements AgentProvider, AgentUsageQuotaProvider {
+    implements
+        AgentRuntimePort,
+        AgentConversationPort,
+        AgentUsageQuotaProvider {
   _QuotaProvider({required this.quotaThrows});
 
   final bool quotaThrows;
@@ -118,7 +121,7 @@ final class _QuotaProvider extends Fake
 
 final class _PlainProvider extends Fake
     with AgentProviderThreadLifecycleStub
-    implements AgentProvider {
+    implements AgentRuntimePort, AgentConversationPort {
   @override
   AgentProviderConfig get config => AgentProviderConfig.defaultCodex;
 
