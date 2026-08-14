@@ -119,6 +119,9 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   bool _windowFocused = true;
 
   bool _rightSidebarVisible = false;
+
+  /// Agent 统计弹层是否展开；弹层是临时 UI，不写入会话。
+  bool _agentUsageExpanded = false;
   bool _settingsPageMounted = false;
   bool _usageStatisticsPageMounted = false;
   bool _globalHomeLoadRequested = false;
@@ -678,21 +681,19 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   }
 
   Widget _buildLeftPanel() {
-    final workbenchLayout = _shellController.workbenchLayout;
     return ProjectAgentSidebar(
       projects: _buildProjectsContent(),
       agentUsage: AgentUsagePanelContent(
         controller: _agentUsagePanelController,
-        mode: workbenchLayout.agentUsageExpanded
+        mode: _agentUsageExpanded
             ? AgentUsagePanelMode.expanded
             : AgentUsagePanelMode.collapsed,
         onModeChanged: (mode) {
-          _shellController.setAgentUsageExpanded(
-            mode == AgentUsagePanelMode.expanded,
-          );
+          setState(() {
+            _agentUsageExpanded = mode == AgentUsagePanelMode.expanded;
+          });
         },
       ),
-      agentUsageExpanded: workbenchLayout.agentUsageExpanded,
     );
   }
 

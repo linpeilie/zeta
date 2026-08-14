@@ -1310,7 +1310,6 @@ void main() {
 
       shell
         ..setLeftSidebarVisible(true)
-        ..setAgentUsageExpanded(false)
         ..setLeftSidebarWidth(340)
         ..setSelectedAgentUsageProviderId('claude_code');
       expect(savedJson, isNull);
@@ -1319,7 +1318,9 @@ void main() {
         sessionSaveDelay + const Duration(milliseconds: 50),
       );
 
+      // agentUsageExpanded 已是只读遗留字段：原样带过，不被布局改写。
       const updatedWorkbench = IdeWorkbenchLayoutState(
+        agentUsageExpanded: true,
         leftSidebarWidth: 340,
         agentUsageHeightFraction: 0.41,
         selectedAgentUsageProviderId: 'claude_code',

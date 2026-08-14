@@ -280,13 +280,6 @@ class IdeShellController extends ChangeNotifier {
     _setWorkbenchLayout(_workbenchLayout.copyWith(leftSidebarVisible: visible));
   }
 
-  /// 提交 Agent 统计区的展开偏好。
-  void setAgentUsageExpanded(bool expanded) {
-    _setWorkbenchLayout(
-      _workbenchLayout.copyWith(agentUsageExpanded: expanded),
-    );
-  }
-
   /// 提交左栏逻辑像素宽度；传空恢复 UI 默认宽度。
   void setLeftSidebarWidth(double? width) {
     _setWorkbenchLayout(_workbenchLayout.copyWith(leftSidebarWidth: width));

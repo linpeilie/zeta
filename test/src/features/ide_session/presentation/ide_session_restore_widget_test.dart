@@ -285,20 +285,17 @@ void main() {
     }
 
     await pumpApp();
-    await tester.tap(find.byKey(const ValueKey('agent-usage-expand-button')));
-    await tester.pump();
-
     await tester.drag(
       find.byKey(const ValueKey('left-width-resize-handle')),
       const Offset(44, 0),
     );
     await tester.pump();
+
+    // Provider 选择在弹层内完成；收起弹层后偏好仍须留在会话里。
+    await tester.tap(find.byKey(const ValueKey('agent-usage-expand-button')));
+    await _settleUsagePopover(tester);
     await tester.tap(find.byKey(const ValueKey('agent-usage-tab-grok')));
     await tester.pump();
-
-    final expectedUsageHeight = tester
-        .getSize(find.byKey(const ValueKey('project-agent-sidebar-usage')))
-        .height;
     expect(
       tester
           .widget<IdeTabs<String>>(
@@ -307,6 +304,12 @@ void main() {
           .value,
       'grok',
     );
+    await tester.tap(find.byKey(const ValueKey('agent-usage-collapse-button')));
+    await _settleUsagePopover(tester);
+
+    final expectedUsageHeight = tester
+        .getSize(find.byKey(const ValueKey('project-agent-sidebar-usage')))
+        .height;
 
     await tester.tap(
       find.byKey(const ValueKey('titlebar-left-sidebar-action')),
@@ -315,7 +318,6 @@ void main() {
 
     final persisted = IdeSessionState.tryDecode(session.value)!.workbenchLayout;
     expect(persisted.leftSidebarVisible, isFalse);
-    expect(persisted.agentUsageExpanded, isTrue);
     expect(persisted.leftSidebarWidth, 324);
     expect(persisted.agentUsageHeightFraction, isNull);
     expect(persisted.selectedAgentUsageProviderId, 'grok');
@@ -333,9 +335,11 @@ void main() {
     );
     await pumpUntilCondition(
       tester,
-      () =>
-          find.byKey(const ValueKey('agent-usage-tabs')).evaluate().isNotEmpty,
-      failureMessage: 'Restored expanded Agent usage did not become ready',
+      () => find
+          .byKey(const ValueKey('agent-usage-expand-button'))
+          .evaluate()
+          .isNotEmpty,
+      failureMessage: 'Restored Agent usage summary did not become ready',
     );
 
     expect(
@@ -356,6 +360,9 @@ void main() {
           .height,
       moreOrLessEquals(expectedUsageHeight, epsilon: 1),
     );
+
+    await tester.tap(find.byKey(const ValueKey('agent-usage-expand-button')));
+    await _settleUsagePopover(tester);
     expect(
       tester
           .widget<IdeTabs<String>>(
@@ -450,6 +457,13 @@ class _WorkbenchUsageRepository implements AgentUsagePanelRepository {
       refreshedAt: DateTime(2026, 8, 12),
     );
   }
+}
+
+/// Agent 统计弹层在帧末挂载，开合都要多走一帧并跑完过渡。
+Future<void> _settleUsagePopover(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
 }
 
 Future<void> _openFilesPanel(WidgetTester tester) async {

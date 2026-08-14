@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/features/ide/views/project_agent_sidebar.dart';
 
 import '../../../core/ide_component_test_harness.dart';
 
 void main() {
-  testWidgets('折叠态只有一个卡片、统计固定底部且不显示拖动手柄', (tester) async {
+  testWidgets('只有一个卡片、统计固定底部且不显示拖动手柄', (tester) async {
     await _pumpSidebar(
       tester,
       height: 520,
-      expanded: false,
       projects: const ColoredBox(
         key: ValueKey('projects-content'),
         color: Colors.blue,
@@ -46,28 +46,25 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('展开态移除分隔手柄并按统计内容自然高度布局', (tester) async {
+  testWidgets('统计摘要超出上限时在自身区域滚动而不挤压 Projects', (tester) async {
     await _pumpSidebar(
       tester,
-      height: 600,
-      expanded: true,
+      height: 300,
       projects: const ColoredBox(color: Colors.blue),
-      agentUsage: const SizedBox(key: ValueKey('usage-content'), height: 236),
+      agentUsage: const SizedBox(key: ValueKey('usage-content'), height: 400),
     );
 
     final projects = find.byKey(
       const ValueKey('project-agent-sidebar-projects'),
     );
     final usage = find.byKey(const ValueKey('project-agent-sidebar-usage'));
-    expect(tester.getSize(usage).height, 236);
-    expect(tester.getSize(projects).height, 600 - 236);
     expect(
-      tester.getTopLeft(usage).dy,
-      closeTo(tester.getBottomLeft(projects).dy, 0.01),
+      tester.getSize(projects).height,
+      greaterThanOrEqualTo(IdeMetrics.projectsPaneMinHeight),
     );
     expect(
-      find.byKey(const ValueKey('agent-usage-resize-handle')),
-      findsNothing,
+      tester.getSize(usage).height,
+      closeTo(300 - IdeMetrics.projectsPaneMinHeight, 0.01),
     );
     expect(
       find.descendant(
@@ -78,12 +75,12 @@ void main() {
               widget.scrollDirection == Axis.vertical,
         ),
       ),
-      findsNothing,
+      findsOneWidget,
     );
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('展开态内容高度变化时同步让 Projects 伸缩', (tester) async {
+  testWidgets('统计内容高度变化时同步让 Projects 伸缩', (tester) async {
     final usageHeight = ValueNotifier<double>(120);
     addTearDown(usageHeight.dispose);
 
@@ -95,7 +92,6 @@ void main() {
         builder: (context, value, _) => ProjectAgentSidebar(
           projects: const ColoredBox(color: Colors.blue),
           agentUsage: SizedBox(height: value),
-          agentUsageExpanded: true,
         ),
       ),
     );
@@ -134,17 +130,12 @@ void main() {
 Future<void> _pumpSidebar(
   WidgetTester tester, {
   required double height,
-  required bool expanded,
   required Widget projects,
   required Widget agentUsage,
 }) {
   return pumpIdeComponent(
     tester,
     size: Size(320, height),
-    child: ProjectAgentSidebar(
-      projects: projects,
-      agentUsage: agentUsage,
-      agentUsageExpanded: expanded,
-    ),
+    child: ProjectAgentSidebar(projects: projects, agentUsage: agentUsage),
   );
 }

@@ -8,17 +8,17 @@ import 'package:zeta/src/ui/core/pane_widgets.dart';
 /// 在单一卡片内编排 Projects 与底部 Agent 统计的合并左栏。
 ///
 /// 本组件只处理父约束与上下区域编排，不读取两个业务区域的数据。
+/// Agent 统计常驻折叠摘要，完整内容由统计区自身以 Popover 向上弹出，
+/// 因此这里不再需要为展开态预留高度。
 class ProjectAgentSidebar extends StatelessWidget {
   const ProjectAgentSidebar({
     required this.projects,
     required this.agentUsage,
-    required this.agentUsageExpanded,
     super.key,
   });
 
   final Widget projects;
   final Widget agentUsage;
-  final bool agentUsageExpanded;
 
   @override
   Widget build(BuildContext context) {
@@ -30,15 +30,13 @@ class ProjectAgentSidebar extends StatelessWidget {
           if (!availableHeight.isFinite) {
             return _buildUnboundedFallback();
           }
-          return agentUsageExpanded
-              ? _buildExpanded()
-              : _buildCollapsed(availableHeight);
+          return _buildBounded(availableHeight);
         },
       ),
     );
   }
 
-  Widget _buildCollapsed(double availableHeight) {
+  Widget _buildBounded(double availableHeight) {
     final maxSummaryHeight =
         availableHeight >=
             IdeMetrics.projectsPaneMinHeight + IdeMetrics.paneHeaderHeight
@@ -59,24 +57,6 @@ class ProjectAgentSidebar extends StatelessWidget {
             maxHeight: math.max(0.0, maxSummaryHeight),
           ),
           child: SingleChildScrollView(child: agentUsage),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildExpanded() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Expanded(
-          child: KeyedSubtree(
-            key: const ValueKey('project-agent-sidebar-projects'),
-            child: projects,
-          ),
-        ),
-        KeyedSubtree(
-          key: const ValueKey('project-agent-sidebar-usage'),
-          child: agentUsage,
         ),
       ],
     );

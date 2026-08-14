@@ -346,8 +346,11 @@ void main() {
     expect(find.byIcon(sf.LucideIcons.panelLeftClose), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('agent-usage-expand-button')));
-    await tester.pump();
+    await _settleUsagePopover(tester);
 
+    // 展开态由弹层承载，折叠摘要仍留在左栏底部作为锚点。
+    expect(find.byKey(const ValueKey('agent-usage-popover')), findsOneWidget);
+    expect(find.byKey(const ValueKey('agent-usage-compact')), findsOneWidget);
     expect(find.text('Agent 统计'), findsNothing);
     expect(
       find.byKey(const ValueKey('agent-usage-resize-handle')),
@@ -361,6 +364,12 @@ void main() {
       find.byKey(const ValueKey('left-width-resize-handle')),
       findsOneWidget,
     );
+
+    await tester.tap(find.byKey(const ValueKey('agent-usage-collapse-button')));
+    await _settleUsagePopover(tester);
+
+    expect(find.byKey(const ValueKey('agent-usage-popover')), findsNothing);
+    expect(find.byKey(const ValueKey('agent-usage-compact')), findsOneWidget);
 
     await tester.tap(
       find.byKey(const ValueKey('titlebar-left-sidebar-action')),
@@ -384,10 +393,6 @@ void main() {
       find.byKey(const ValueKey('left-width-resize-handle')),
       findsOneWidget,
     );
-
-    await tester.tap(find.byKey(const ValueKey('agent-usage-collapse-button')));
-    await tester.pump();
-
     expect(find.byKey(const ValueKey('agent-usage-compact')), findsOneWidget);
     expect(
       find.byKey(const ValueKey('agent-usage-resize-handle')),
@@ -443,11 +448,20 @@ void main() {
       final retained = await _prepareRetainedAgentState(tester);
 
       await tester.tap(find.byKey(const ValueKey('agent-usage-expand-button')));
-      await tester.pump();
+      await _settleUsagePopover(tester);
 
+      expect(find.byKey(const ValueKey('agent-usage-popover')), findsOneWidget);
       expect(find.byKey(const ValueKey('projects-panel-card')), findsOneWidget);
       expect(find.byKey(const ValueKey('context-panel-card')), findsNothing);
       expect(find.text('Agent 统计'), findsNothing);
+      _expectRetainedAgentContentState(tester, retained);
+
+      // 弹层是模态的：先收起再切换侧栏，避免点击被遮罩吞掉。
+      await tester.tap(
+        find.byKey(const ValueKey('agent-usage-collapse-button')),
+      );
+      await _settleUsagePopover(tester);
+      expect(find.byKey(const ValueKey('agent-usage-popover')), findsNothing);
       _expectRetainedAgentContentState(tester, retained);
 
       await tester.tap(
@@ -468,12 +482,6 @@ void main() {
         find.byKey(const ValueKey('workbench-navigation-inline')),
         findsOneWidget,
       );
-      _expectRetainedAgentContentState(tester, retained);
-
-      await tester.tap(
-        find.byKey(const ValueKey('agent-usage-collapse-button')),
-      );
-      await tester.pump();
 
       _expectRetainedAgentState(tester, retained);
     },
@@ -582,7 +590,7 @@ void main() {
   });
 
   testWidgets(
-    'expanded usage follows content height and ignores legacy resize fraction',
+    'usage summary keeps its own height and ignores legacy layout fields',
     (tester) async {
       final session = MemorySessionStore(
         const IdeSessionState(
@@ -594,6 +602,8 @@ void main() {
       );
       await _pumpIde(tester, sessionStore: session);
 
+      // 展开态是临时弹层：恢复出来的旧标记不会自动弹出统计。
+      expect(find.byKey(const ValueKey('agent-usage-popover')), findsNothing);
       final usage = find.byKey(const ValueKey('project-agent-sidebar-usage'));
       expect(tester.getSize(usage).height, lessThan(200));
       expect(
@@ -601,19 +611,32 @@ void main() {
         findsNothing,
       );
 
+      await tester.tap(find.byKey(const ValueKey('agent-usage-expand-button')));
+      await _settleUsagePopover(tester);
+      expect(find.byKey(const ValueKey('agent-usage-popover')), findsOneWidget);
+
       await tester.tap(
         find.byKey(const ValueKey('agent-usage-collapse-button')),
       );
+      await _settleUsagePopover(tester);
       await pumpSessionSave(tester);
+      expect(find.byKey(const ValueKey('agent-usage-popover')), findsNothing);
       expect(
         find.byKey(const ValueKey('agent-usage-resize-handle')),
         findsNothing,
       );
+      // 旧字段原样保留，不被当前布局改写。
       expect(
         IdeSessionState.tryDecode(
           session.value,
         )?.workbenchLayout.agentUsageHeightFraction,
         0.4,
+      );
+      expect(
+        IdeSessionState.tryDecode(
+          session.value,
+        )?.workbenchLayout.agentUsageExpanded,
+        isTrue,
       );
     },
   );
@@ -1978,6 +2001,13 @@ Future<void> _pumpIde(
   if (flushInitialUsageRefresh) {
     await _flushInitialUsageRefresh(tester);
   }
+}
+
+/// Agent 统计弹层在帧末挂载，开合都要多走一帧并跑完过渡。
+Future<void> _settleUsagePopover(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
 }
 
 Future<void> _flushInitialUsageRefresh(WidgetTester tester) async {

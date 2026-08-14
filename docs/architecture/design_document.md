@@ -155,17 +155,20 @@ Agent 管理与使用统计只切换 Navigation、Canvas、Inspector slot 内容
 Agent 首页的标题栏左侧 action 是合并栏唯一的显隐入口：macOS 位于三色灯 gutter
 之后，Windows/Linux 位于 Logo 与菜单之前；左栏隐藏后入口仍可操作。Navigation slot
 内只有一个 `ProjectAgentSidebar` / `PanelCard`，Projects / Threads 占剩余空间，
-cardless Agent 统计固定在底部并默认折叠。折叠态最多展示 Provider 图标、套餐名（无
-套餐时显示 Provider 名）、最短周期额度进度和今日 Token；展开态以 Provider Tabs、
-右侧折叠/刷新操作和完整明细按内容自然撑高，不显示独立标题栏、拖动分隔或内部纵向滚动。Compact 模式不挤压 Canvas，而是使用
+cardless Agent 统计固定在底部并常驻折叠摘要。折叠态最多展示 Provider 图标、套餐名（无
+套餐时显示 Provider 名）、最短周期额度进度和今日 Token；展开态以折叠摘要为锚点向上弹出
+Popover，内含 Provider Tabs、右侧折叠/刷新操作和完整明细，宽度跟随左栏，超出可用高度时
+只在弹层内滚动，不显示独立标题栏或拖动分隔，也不再挤压 Projects / Threads。点击弹层外部或
+折叠按钮都收敛回折叠态。Compact 模式不挤压 Canvas，而是使用
 Navigation Overlay；scrim 与 Esc 均关闭浮层并把焦点还给标题栏入口。
 
 Canvas 与 Agent 会话都使用 `IdeRetainedPageView` 延迟挂载并保活已访问页面；任一时刻
 只布局活动页面和活动 `AgentPane`，离屏页保留 State、输入/滚动控制器并暂停 ticker。
 Workbench 的 Canvas Flex slot 自身也使用稳定 Key，保证 Navigation/Inspector slot
-增删或 Wide/Medium 断点切换时仍复用原 Element。左栏显隐、统计展开态、左栏宽度和
+增删或 Wide/Medium 断点切换时仍复用原 Element。左栏显隐、左栏宽度和
 统计 Provider 选择投影进应用级 `IdeWorkbenchLayoutState`，随 `ide_session.json`
-宽容恢复；旧高度比例字段只为历史快照保留，不再参与布局。离开其他页面
+宽容恢复；统计展开态改由 Popover 承载，属于临时 UI，不再投影进会话，旧高度比例与旧展开
+标记只为历史快照保留，不再参与布局。离开其他页面
 再返回时，这些偏好与 AgentPane / Thread / 草稿 / 滚动位置都保持不变。
 
 `AgentPane` 以 compact / regular 离散宽度档位缓存结构，父级每像素 resize 只有在回调

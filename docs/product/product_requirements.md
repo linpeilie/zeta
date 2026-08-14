@@ -36,9 +36,9 @@ Zeta 是一个基于 Flutter Desktop 的本地 AI IDE 壳层。它面向需要�
 
 - 桌面端 Flutter 应用入口和自定义窗口启动流程。
 - 三栏布局：左侧项目与 thread，中间 Agent 时间线，右侧文件树。
-- Agent 首页将 Projects / Threads 与只读 Agent 统计摘要合并在一个左侧卡片；统计默认
-  折叠，标题栏左侧按钮控制整个左栏，窄窗口以浮层展示。应用重启后恢复左栏显隐、
-  统计展开态、栏宽、统计高度和统计 Provider 选择。
+- Agent 首页将 Projects / Threads 与只读 Agent 统计摘要合并在一个左侧卡片；统计常驻
+  折叠摘要，展开时向上弹出 Popover 展示完整明细，标题栏左侧按钮控制整个左栏，窄窗口以
+  浮层展示。应用重启后恢复左栏显隐、栏宽和统计 Provider 选择；统计弹层是临时 UI，不做恢复。
 - 本地目录选择和文件树懒加载。
 - 忽略常见大目录：`.git`、`.dart_tool`、`build`、`node_modules` 等。
 - 使用 `~/.zeta` 下的版本化 JSON 文件保存 Zeta 自有 IDE 会话、Agent provider、外观设置与
@@ -98,7 +98,7 @@ Zeta 是一个基于 Flutter Desktop 的本地 AI IDE 壳层。它面向需要�
 1. 应用启动时读取持久化 IDE 会话。
 2. 系统过滤已经不存在的项目或文件。
 3. 系统恢复项目列表、当前项目、文件树展开状态、选中文件、thread 缓存，以及左栏显隐、
-   统计展开态、栏宽、统计高度和统计 Provider 选择。
+   栏宽和统计 Provider 选择；统计弹层不参与恢复。
 4. 用户再次发送消息或切换 thread 时，系统尝试恢复对应 Agent session。
 
 ## 7. 非功能需求

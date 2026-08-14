@@ -560,12 +560,14 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
 - Inspector 只承载 Files，不再编排右下 Tools 占位面板或纵向分隔拖拽。Compact 下复用
   Workbench Inspector Overlay，scrim / Esc 关闭后必须恢复标题栏右侧入口焦点。
 - `ProjectAgentSidebar` 只编排两个业务 Widget 的约束与自然高度。它不得读取 Provider
-  数据；Projects 与 cardless `AgentUsagePanelContent` 共用一个 `PanelCard`，统计首次默认
-  折叠。展开态顶部直接使用 Provider Tabs，折叠与刷新操作位于其右侧，不显示独立标题栏、
-  拖动分隔或内部纵向滚动。Compact 下复用 Workbench Navigation Overlay，scrim / Esc
+  数据；Projects 与 cardless `AgentUsagePanelContent` 共用一个 `PanelCard`，统计常驻
+  折叠摘要。展开态由折叠摘要向上弹出的 Popover 承载：顶部直接使用 Provider Tabs，折叠与
+  刷新操作位于其右侧，不显示独立标题栏或拖动分隔，正文超出可用高度时只在弹层内滚动，
+  左栏本身不为展开态让位。Compact 下复用 Workbench Navigation Overlay，scrim / Esc
   关闭后必须恢复标题栏入口焦点，不能通过压缩 Canvas 模拟窄屏侧栏。
-- 左栏显隐、统计展开态、左栏宽度和统计 Provider 选择统一写入应用级
-  `IdeWorkbenchLayoutState`。JSON 按字段宽容读取；旧 `agentUsageHeightFraction` 仅保留
+- 左栏显隐、左栏宽度和统计 Provider 选择统一写入应用级
+  `IdeWorkbenchLayoutState`。JSON 按字段宽容读取；统计展开态是临时弹层状态，只留在
+  presentation 层，不写会话；旧 `agentUsageHeightFraction` 与 `agentUsageExpanded` 仅保留
   解码/回写兼容，不得再用于 presentation 布局。
 - 需要跨页面保持的 Canvas 应使用稳定位置、稳定 Key 和保活容器。Key 必须放在可能因
   slot 增删而换位的 Flex 子节点上，不能只放在其内部后代；保活容器必须只布局活动页，

@@ -14,7 +14,8 @@ final class IdeWorkbenchLayoutState {
   /// Projects / Agent 统计合并栏是否可见。
   final bool leftSidebarVisible;
 
-  /// Agent 统计是否展示完整内容。
+  /// 旧版统计区展开标记，仅为会话 JSON 宽容兼容而保留；完整统计改为临时
+  /// Popover 后不再持久化展开态，当前布局不消费该字段。
   final bool agentUsageExpanded;
 
   /// 用户提交的左栏逻辑像素宽度；为空时由 UI 使用默认 token。

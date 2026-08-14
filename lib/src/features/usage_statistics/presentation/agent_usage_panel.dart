@@ -13,20 +13,24 @@ import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
+import 'package:zeta/src/ui/core/ide_motion.dart';
+import 'package:zeta/src/ui/core/ide_popover.dart';
 import 'package:zeta/src/ui/core/ide_skeleton.dart';
 import 'package:zeta/src/ui/core/rows/ide_row_divider.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_tabs.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
+import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
 
 /// Agent 统计在合并左栏中的显示模式。
 enum AgentUsagePanelMode { collapsed, expanded }
 
 /// 不包含 [PanelCard] 外框的 Agent 统计内容。
 ///
-/// 折叠态提供最多三行摘要；展开态以 Provider Tabs 和完整统计内容自然撑高。
-class AgentUsagePanelContent extends StatelessWidget {
+/// 左栏常驻的始终是最多三行的折叠摘要；展开态不再原地撑高，而是以摘要为锚点
+/// 向上弹出 Popover 承载完整统计，避免挤压 Projects 列表。
+class AgentUsagePanelContent extends StatefulWidget {
   const AgentUsagePanelContent({
     required this.controller,
     required this.mode,
@@ -39,27 +43,168 @@ class AgentUsagePanelContent extends StatelessWidget {
   final ValueChanged<AgentUsagePanelMode>? onModeChanged;
 
   @override
+  State<AgentUsagePanelContent> createState() => _AgentUsagePanelContentState();
+}
+
+class _AgentUsagePanelContentState extends State<AgentUsagePanelContent> {
+  /// 锚点上方空间不足时仍保留的最小弹层高度，避免塌缩成不可读的窄条。
+  static const double _minPopoverHeight = 160;
+
+  IdePopoverHandle<void>? _popover;
+  bool _openScheduled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncPopover();
+  }
+
+  @override
+  void didUpdateWidget(covariant AgentUsagePanelContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.mode != oldWidget.mode) {
+      _syncPopover();
+    }
+  }
+
+  @override
+  void dispose() {
+    final popover = _popover;
+    _popover = null;
+    if (popover != null) {
+      // 关闭会触发 overlay 重建，而 dispose 期间组件树被锁定，推迟到帧末执行。
+      WidgetsBinding.instance.addPostFrameCallback((_) => popover.dismiss());
+    }
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return switch (mode) {
-      AgentUsagePanelMode.collapsed => ListenableBuilder(
-        listenable: controller,
-        builder: (context, _) => _CompactAgentUsage(
-          controller: controller,
-          onExpand: onModeChanged == null
-              ? null
-              : () => onModeChanged!(AgentUsagePanelMode.expanded),
+    return ListenableBuilder(
+      listenable: widget.controller,
+      builder: (context, _) => _CompactAgentUsage(
+        controller: widget.controller,
+        expanded: widget.mode == AgentUsagePanelMode.expanded,
+        onToggle: widget.onModeChanged == null ? null : _toggleMode,
+      ),
+    );
+  }
+
+  void _toggleMode() {
+    widget.onModeChanged?.call(
+      widget.mode == AgentUsagePanelMode.expanded
+          ? AgentUsagePanelMode.collapsed
+          : AgentUsagePanelMode.expanded,
+    );
+  }
+
+  void _syncPopover() {
+    if (widget.mode == AgentUsagePanelMode.expanded) {
+      _scheduleOpen();
+      return;
+    }
+    _popover?.dismiss();
+  }
+
+  /// 弹层需要锚点已完成布局，因此挂载 overlay 推迟到本帧结束。
+  void _scheduleOpen() {
+    if (_popover != null || _openScheduled) {
+      return;
+    }
+    _openScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _openScheduled = false;
+      if (!mounted ||
+          _popover != null ||
+          widget.mode != AgentUsagePanelMode.expanded) {
+        return;
+      }
+      _openPopover();
+    });
+  }
+
+  void _openPopover() {
+    final anchor = context.findRenderObject();
+    if (anchor is! RenderBox || !anchor.hasSize) {
+      return;
+    }
+    final mediaQuery = MediaQuery.of(context);
+    final anchorTop = anchor.localToGlobal(Offset.zero).dy;
+    final maxHeight = math.max(
+      _minPopoverHeight,
+      anchorTop -
+          mediaQuery.padding.top -
+          IdeSpacing.space6 -
+          IdeSpacing.space12,
+    );
+    final duration = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : IdeMotion.durationFast;
+    final handle = showIdePopover<void>(
+      context: context,
+      // 锚点顶边对齐弹层底边：始终向上弹出，不随空间不足翻转到下方。
+      alignment: Alignment.bottomLeft,
+      anchorAlignment: Alignment.topLeft,
+      widthConstraint: IdePopoverConstraint.anchorFixedSize,
+      heightConstraint: IdePopoverConstraint.flexible,
+      offset: const Offset(0, -IdeSpacing.space6),
+      // 宽度跟随锚点，只留纵向边距；横向留白会把弹层推离左栏对齐。
+      margin: const EdgeInsets.symmetric(vertical: IdeSpacing.space12),
+      transitionAlignment: Alignment.bottomLeft,
+      allowInvertVertical: false,
+      showDuration: duration,
+      dismissDuration: duration,
+      builder: (popoverContext) => _AgentUsagePopover(
+        controller: widget.controller,
+        maxHeight: maxHeight,
+        onCollapse: () => sf.closeOverlay(popoverContext),
+      ),
+    );
+    _popover = handle;
+    unawaited(_awaitPopoverClose(handle));
+  }
+
+  /// 点击弹层外部、折叠按钮或锚点开合按钮最终都从同一 future 收敛回折叠态。
+  Future<void> _awaitPopoverClose(IdePopoverHandle<void> handle) async {
+    await handle.future;
+    handle.dispose();
+    if (!mounted || !identical(_popover, handle)) {
+      return;
+    }
+    _popover = null;
+    if (widget.mode == AgentUsagePanelMode.expanded) {
+      widget.onModeChanged?.call(AgentUsagePanelMode.collapsed);
+    }
+  }
+}
+
+/// 向上弹出的 Agent 统计弹层：内容超出可用高度时在弹层内滚动。
+class _AgentUsagePopover extends StatelessWidget {
+  const _AgentUsagePopover({
+    required this.controller,
+    required this.maxHeight,
+    required this.onCollapse,
+  });
+
+  final AgentUsagePanelController controller;
+  final double maxHeight;
+  final VoidCallback onCollapse;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: maxHeight),
+      child: IdeSurface.popover(
+        key: const ValueKey('agent-usage-popover'),
+        child: ListenableBuilder(
+          listenable: controller,
+          builder: (context, _) => _AgentUsagePanelBody(
+            controller: controller,
+            onCollapse: onCollapse,
+          ),
         ),
       ),
-      AgentUsagePanelMode.expanded => ListenableBuilder(
-        listenable: controller,
-        builder: (context, _) => _AgentUsagePanelBody(
-          controller: controller,
-          onCollapse: onModeChanged == null
-              ? null
-              : () => onModeChanged!(AgentUsagePanelMode.collapsed),
-        ),
-      ),
-    };
+    );
   }
 }
 
@@ -116,11 +261,17 @@ class _AgentUsageModeButton extends StatelessWidget {
   }
 }
 
+/// 折叠摘要同时是弹层锚点：[expanded] 只影响开合按钮的图标与语义。
 class _CompactAgentUsage extends StatelessWidget {
-  const _CompactAgentUsage({required this.controller, required this.onExpand});
+  const _CompactAgentUsage({
+    required this.controller,
+    required this.expanded,
+    required this.onToggle,
+  });
 
   final AgentUsagePanelController controller;
-  final VoidCallback? onExpand;
+  final bool expanded;
+  final VoidCallback? onToggle;
 
   @override
   Widget build(BuildContext context) {
@@ -133,12 +284,14 @@ class _CompactAgentUsage extends StatelessWidget {
           message: error,
           warning: true,
           onRetry: () => unawaited(controller.refresh()),
-          onExpand: onExpand,
+          expanded: expanded,
+          onToggle: onToggle,
         );
       }
       return _CompactAgentUsageMessage(
         message: '暂无已启用的 Agent',
-        onExpand: onExpand,
+        expanded: expanded,
+        onToggle: onToggle,
       );
     }
 
@@ -153,16 +306,45 @@ class _CompactAgentUsage extends StatelessWidget {
           message: error,
           warning: true,
           onRetry: () => unawaited(controller.refresh()),
-          onExpand: onExpand,
+          expanded: expanded,
+          onToggle: onToggle,
         );
       }
-      return _CompactAgentUsageMessage(message: '暂无统计', onExpand: onExpand);
+      return _CompactAgentUsageMessage(
+        message: '暂无统计',
+        expanded: expanded,
+        onToggle: onToggle,
+      );
     }
 
     return _CompactAgentUsageSummary(
       entry: entry,
       providerName: selected.provider.providerName,
-      onExpand: onExpand,
+      expanded: expanded,
+      onToggle: onToggle,
+    );
+  }
+}
+
+/// 摘要右上角的弹层开合按钮。
+class _AgentUsageToggleButton extends StatelessWidget {
+  const _AgentUsageToggleButton({
+    required this.expanded,
+    required this.onToggle,
+  });
+
+  final bool expanded;
+  final VoidCallback? onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    return _AgentUsageModeButton(
+      key: const ValueKey('agent-usage-expand-button'),
+      icon: expanded
+          ? Icons.keyboard_arrow_down_rounded
+          : Icons.keyboard_arrow_up_rounded,
+      tooltip: expanded ? '折叠 Agent 统计' : '展开 Agent 统计',
+      onPressed: onToggle,
     );
   }
 }
@@ -171,12 +353,14 @@ class _CompactAgentUsageSummary extends StatelessWidget {
   const _CompactAgentUsageSummary({
     required this.entry,
     required this.providerName,
-    required this.onExpand,
+    required this.expanded,
+    required this.onToggle,
   });
 
   final AgentUsagePanelEntry entry;
   final String providerName;
-  final VoidCallback? onExpand;
+  final bool expanded;
+  final VoidCallback? onToggle;
 
   @override
   Widget build(BuildContext context) {
@@ -220,12 +404,7 @@ class _CompactAgentUsageSummary extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: IdeSpacing.space4),
-                _AgentUsageModeButton(
-                  key: const ValueKey('agent-usage-expand-button'),
-                  icon: Icons.keyboard_arrow_up_rounded,
-                  tooltip: '展开 Agent 统计',
-                  onPressed: onExpand,
-                ),
+                _AgentUsageToggleButton(expanded: expanded, onToggle: onToggle),
               ],
             ),
             if (quotaWindow != null) ...[
@@ -345,7 +524,8 @@ class _CompactAgentUsageSkeleton extends StatelessWidget {
 class _CompactAgentUsageMessage extends StatelessWidget {
   const _CompactAgentUsageMessage({
     required this.message,
-    required this.onExpand,
+    required this.expanded,
+    required this.onToggle,
     this.warning = false,
     this.onRetry,
   });
@@ -353,7 +533,8 @@ class _CompactAgentUsageMessage extends StatelessWidget {
   final String message;
   final bool warning;
   final VoidCallback? onRetry;
-  final VoidCallback? onExpand;
+  final bool expanded;
+  final VoidCallback? onToggle;
 
   @override
   Widget build(BuildContext context) {
@@ -389,12 +570,7 @@ class _CompactAgentUsageMessage extends StatelessWidget {
             ),
           ],
           const SizedBox(width: IdeSpacing.space4),
-          _AgentUsageModeButton(
-            key: const ValueKey('agent-usage-expand-button'),
-            icon: Icons.keyboard_arrow_up_rounded,
-            tooltip: '展开 Agent 统计',
-            onPressed: onExpand,
-          ),
+          _AgentUsageToggleButton(expanded: expanded, onToggle: onToggle),
         ],
       ),
     );
@@ -480,7 +656,8 @@ class _AgentUsagePanelBody extends StatelessWidget {
           selectedProviderId: selected?.provider.providerId,
           onCollapse: onCollapse,
         ),
-        content,
+        // Tabs 与刷新常驻，仅正文在弹层可用高度内滚动。
+        Flexible(child: SingleChildScrollView(child: content)),
       ],
     );
   }

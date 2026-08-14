@@ -16,6 +16,12 @@ import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_skeleton.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 
+/// 展开态弹层的根节点；折叠摘要仍留在锚点上，断言需按弹层限定范围。
+final _popover = find.byKey(const ValueKey('agent-usage-popover'));
+
+Finder _inPopover(Finder matching) =>
+    find.descendant(of: _popover, matching: matching);
+
 void main() {
   testWidgets('默认 Provider Tab 仅展示 Codex 和 Grok', (tester) async {
     final controller = AgentUsagePanelController(
@@ -28,8 +34,8 @@ void main() {
 
     await _pumpPanel(tester, controller);
 
-    expect(find.text('Codex'), findsOneWidget);
-    expect(find.text('Grok'), findsOneWidget);
+    expect(_inPopover(find.text('Codex')), findsOneWidget);
+    expect(_inPopover(find.text('Grok')), findsOneWidget);
     expect(find.textContaining('CLI'), findsNothing);
   });
 
@@ -47,13 +53,13 @@ void main() {
     expect(find.text('Codex Work'), findsOneWidget);
     expect(find.text('Grok Personal'), findsOneWidget);
     expect(find.textContaining('CLI'), findsNothing);
-    expect(find.text('1.6K'), findsOneWidget);
-    expect(find.text('ChatGPT Plus'), findsOneWidget);
-    expect(find.text('5 小时'), findsOneWidget);
-    expect(find.text('75%'), findsOneWidget);
-    expect(find.text('1 周'), findsOneWidget);
-    expect(find.text('可用重置卡'), findsOneWidget);
-    expect(find.text('2 张'), findsOneWidget);
+    expect(_inPopover(find.text('1.6K')), findsOneWidget);
+    expect(_inPopover(find.text('ChatGPT Plus')), findsOneWidget);
+    expect(_inPopover(find.text('5 小时')), findsOneWidget);
+    expect(_inPopover(find.text('75%')), findsOneWidget);
+    expect(_inPopover(find.text('1 周')), findsOneWidget);
+    expect(_inPopover(find.text('可用重置卡')), findsOneWidget);
+    expect(_inPopover(find.text('2 张')), findsOneWidget);
 
     final firstWindow = find.byKey(
       const ValueKey<String>('agent-usage-window-0'),
@@ -90,7 +96,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('暂无统计'), findsOneWidget);
+    expect(_inPopover(find.text('暂无统计')), findsOneWidget);
     expect(
       find.byKey(const ValueKey('agent-usage-plan-section')),
       findsNothing,
@@ -155,7 +161,7 @@ void main() {
       findsOneWidget,
     );
     // 无 entry 时用呼吸 Skeleton 占位，不再展示进度条文案。
-    expect(find.bySemanticsLabel('正在读取 Agent 用量'), findsOneWidget);
+    expect(_inPopover(find.bySemanticsLabel('正在读取 Agent 用量')), findsOneWidget);
     expect(find.textContaining('正在读取'), findsNothing);
 
     repository.requests.last.complete(_usageEntries.last);
@@ -213,12 +219,12 @@ void main() {
     final controller = AgentUsagePanelController(repository: repository);
     addTearDown(controller.dispose);
     await _pumpPanel(tester, controller);
-    expect(find.text('1.6K'), findsOneWidget);
+    expect(_inPopover(find.text('1.6K')), findsOneWidget);
 
     final refresh = controller.refresh();
     await tester.pump();
     // 有旧数据时不替换为 Skeleton，也不再展示顶栏进度条。
-    expect(find.text('1.6K'), findsOneWidget);
+    expect(_inPopover(find.text('1.6K')), findsOneWidget);
     expect(
       find.byKey(const ValueKey('agent-usage-panel-loading')),
       findsNothing,
@@ -232,8 +238,8 @@ void main() {
     await refresh;
     await tester.pump();
 
-    expect(find.text('1.6K'), findsOneWidget);
-    expect(find.text('Agent 用量暂时无法读取'), findsOneWidget);
+    expect(_inPopover(find.text('1.6K')), findsOneWidget);
+    expect(_inPopover(find.text('Agent 用量暂时无法读取')), findsOneWidget);
   });
 
   testWidgets('静默刷新保留旧内容且不展示加载 Skeleton', (tester) async {
@@ -241,11 +247,11 @@ void main() {
     final controller = AgentUsagePanelController(repository: repository);
     addTearDown(controller.dispose);
     await _pumpPanel(tester, controller);
-    expect(find.text('1.6K'), findsOneWidget);
+    expect(_inPopover(find.text('1.6K')), findsOneWidget);
 
     final refresh = controller.refresh(showLoading: false);
     await tester.pump();
-    expect(find.text('1.6K'), findsOneWidget);
+    expect(_inPopover(find.text('1.6K')), findsOneWidget);
     expect(
       find.byKey(const ValueKey('agent-usage-panel-loading')),
       findsNothing,
@@ -261,7 +267,7 @@ void main() {
     await refresh;
     await tester.pump();
 
-    expect(find.text('1.6K'), findsOneWidget);
+    expect(_inPopover(find.text('1.6K')), findsOneWidget);
     expect(controller.isLoading, isFalse);
   });
 
@@ -277,7 +283,7 @@ void main() {
     );
     expect(find.byType(sf.LinearProgressIndicator), findsNothing);
     expect(find.byType(sf.Progress), findsNothing);
-    expect(find.bySemanticsLabel('正在读取 Agent 用量'), findsOneWidget);
+    expect(_inPopover(find.bySemanticsLabel('正在读取 Agent 用量')), findsOneWidget);
   });
 
   testWidgets('单 Provider 不显示 Tabs', (tester) async {
@@ -299,13 +305,15 @@ void main() {
     addTearDown(controller.dispose);
 
     await _pumpPanel(tester, controller);
-    expect(find.text('Agent 用量暂时无法读取'), findsOneWidget);
+    expect(_inPopover(find.text('Agent 用量暂时无法读取')), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('agent-usage-retry-button')));
+    await tester.tap(
+      _inPopover(find.byKey(const ValueKey('agent-usage-retry-button'))),
+    );
     await tester.pump();
     await tester.pump();
 
-    expect(find.text('暂无已启用的 Agent'), findsOneWidget);
+    expect(_inPopover(find.text('暂无已启用的 Agent')), findsOneWidget);
     expect(repository.discoverCount, 2);
   });
 
@@ -328,12 +336,12 @@ void main() {
 
     await _pumpPanel(tester, controller);
 
-    expect(find.text('Claude Pro'), findsOneWidget);
+    expect(_inPopover(find.text('Claude Pro')), findsOneWidget);
     expect(
       find.byKey(const ValueKey('agent-usage-plan-section')),
       findsOneWidget,
     );
-    expect(find.text('额度详情暂不可用'), findsOneWidget);
+    expect(_inPopover(find.text('额度详情暂不可用')), findsOneWidget);
     expect(find.byKey(const ValueKey('agent-usage-window-0')), findsNothing);
     expect(find.byType(sf.LinearProgressIndicator), findsNothing);
     expect(find.text('0%'), findsNothing);
@@ -366,12 +374,15 @@ void main() {
 
     await _pumpPanel(tester, controller);
 
-    expect(find.text('Claude Max'), findsOneWidget);
-    expect(find.text('五小时会话额度'), findsOneWidget);
-    expect(find.text('1 周'), findsOneWidget);
-    expect(find.text('Sonnet 1 周'), findsOneWidget);
-    expect(find.text('Opus 1 周'), findsOneWidget);
-    expect(find.byType(sf.LinearProgressIndicator), findsNWidgets(4));
+    expect(_inPopover(find.text('Claude Max')), findsOneWidget);
+    expect(_inPopover(find.text('五小时会话额度')), findsOneWidget);
+    expect(_inPopover(find.text('1 周')), findsOneWidget);
+    expect(_inPopover(find.text('Sonnet 1 周')), findsOneWidget);
+    expect(_inPopover(find.text('Opus 1 周')), findsOneWidget);
+    expect(
+      _inPopover(find.byType(sf.LinearProgressIndicator)),
+      findsNWidgets(4),
+    );
     expect(find.text('额度详情暂不可用'), findsNothing);
     expect(tester.takeException(), isNull);
   });
@@ -404,7 +415,8 @@ void main() {
     );
     addTearDown(controller.dispose);
 
-    await _pumpPanel(tester, controller);
+    // 宽度需容纳弹层内的 Tabs 与开合、刷新操作，Tab 才不会被裁到操作区下方。
+    await _pumpPanel(tester, controller, width: 420);
 
     expect(
       find.byKey(const ValueKey('agent-usage-reset-credit-count')),
@@ -486,6 +498,8 @@ void main() {
     final tokens = find.byKey(const ValueKey('agent-usage-compact-tokens'));
     expect(tester.getTopLeft(header).dy, lessThan(tester.getTopLeft(quota).dy));
     expect(tester.getTopLeft(quota).dy, lessThan(tester.getTopLeft(tokens).dy));
+
+    expect(_popover, findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('agent-usage-expand-button')));
     expect(requestedMode, AgentUsagePanelMode.expanded);
@@ -658,7 +672,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('cardless 展开态把操作并入 Tabs 且正文不再纵向滚动', (tester) async {
+  testWidgets('展开态在折叠摘要上方弹出 Popover 并保留摘要锚点', (tester) async {
     final controller = AgentUsagePanelController(
       repository: _ImmediatePanelRepository(_usageEntries),
     );
@@ -676,12 +690,22 @@ void main() {
     expect(find.byType(PanelCard), findsNothing);
     expect(find.byType(Pane), findsNothing);
     expect(find.text('Agent 统计'), findsNothing);
+    expect(_popover, findsOneWidget);
+
+    // 摘要仍留在原位作为锚点，弹层整体位于摘要上方。
+    final anchor = find.byKey(const ValueKey('agent-usage-compact'));
+    expect(anchor, findsOneWidget);
+    expect(
+      tester.getBottomLeft(_popover).dy,
+      lessThanOrEqualTo(tester.getTopLeft(anchor).dy),
+    );
+
     final tabs = find.byKey(const ValueKey('agent-usage-tabs'));
     final collapse = find.byKey(const ValueKey('agent-usage-collapse-button'));
     final refresh = find.byKey(const ValueKey('agent-usage-refresh-button'));
-    expect(tabs, findsOneWidget);
-    expect(collapse, findsOneWidget);
-    expect(refresh, findsOneWidget);
+    expect(_inPopover(tabs), findsOneWidget);
+    expect(_inPopover(collapse), findsOneWidget);
+    expect(_inPopover(refresh), findsOneWidget);
     expect(
       tester.getCenter(collapse).dx,
       greaterThan(tester.getTopRight(tabs).dx),
@@ -690,6 +714,7 @@ void main() {
       tester.getCenter(refresh).dx,
       greaterThan(tester.getCenter(collapse).dx),
     );
+    // 折叠摘要自身不滚动；仅弹层正文在可用高度内滚动。
     expect(
       find.descendant(
         of: find.byType(AgentUsagePanelContent),
@@ -702,18 +727,86 @@ void main() {
       findsNothing,
     );
     expect(
-      find.byKey(const ValueKey('agent-usage-plan-section')),
+      _inPopover(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is SingleChildScrollView &&
+              widget.scrollDirection == Axis.vertical,
+        ),
+      ),
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('agent-usage-token-section')),
+      _inPopover(find.byKey(const ValueKey('agent-usage-plan-section'))),
       findsOneWidget,
     );
-    expect(find.text('5 小时'), findsOneWidget);
-    expect(find.text('1.6K'), findsOneWidget);
+    expect(
+      _inPopover(find.byKey(const ValueKey('agent-usage-token-section'))),
+      findsOneWidget,
+    );
+    expect(_inPopover(find.text('5 小时')), findsOneWidget);
+    expect(_inPopover(find.text('1.6K')), findsOneWidget);
 
     await tester.tap(collapse);
+    await tester.pumpAndSettle();
     expect(requestedMode, AgentUsagePanelMode.collapsed);
+    expect(_popover, findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('展开态点击摘要开合按钮请求折叠', (tester) async {
+    final controller = AgentUsagePanelController(
+      repository: _ImmediatePanelRepository(_usageEntries),
+    );
+    addTearDown(controller.dispose);
+    AgentUsagePanelMode? requestedMode;
+
+    await _pumpPanelContent(
+      tester,
+      controller,
+      mode: AgentUsagePanelMode.expanded,
+      height: 520,
+      onModeChanged: (mode) => requestedMode = mode,
+    );
+
+    final toggle = find.byKey(const ValueKey('agent-usage-expand-button'));
+    expect(
+      tester
+          .widget<Icon>(
+            find.descendant(of: toggle, matching: find.byType(Icon)),
+          )
+          .icon,
+      Icons.keyboard_arrow_down_rounded,
+    );
+
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+
+    expect(requestedMode, AgentUsagePanelMode.collapsed);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('展开态点击弹层外部收敛回折叠态', (tester) async {
+    final controller = AgentUsagePanelController(
+      repository: _ImmediatePanelRepository(_usageEntries),
+    );
+    addTearDown(controller.dispose);
+    AgentUsagePanelMode? requestedMode;
+
+    await _pumpPanelContent(
+      tester,
+      controller,
+      mode: AgentUsagePanelMode.expanded,
+      height: 520,
+      onModeChanged: (mode) => requestedMode = mode,
+    );
+    expect(_popover, findsOneWidget);
+
+    await tester.tapAt(const Offset(160, 8));
+    await tester.pumpAndSettle();
+
+    expect(requestedMode, AgentUsagePanelMode.collapsed);
+    expect(_popover, findsNothing);
     expect(tester.takeException(), isNull);
   });
 }
@@ -797,9 +890,16 @@ Future<void> _pumpPanel(
         theme: buildShadcnTheme(ideTheme),
         materialTheme: buildMaterialTheme(ideTheme),
         home: sf.Scaffold(
-          child: AgentUsagePanelContent(
-            controller: controller,
-            mode: AgentUsagePanelMode.expanded,
+          // 统计区在真实左栏中贴底且横向撑满，弹层才有向上展开的空间与宽度。
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Spacer(),
+              AgentUsagePanelContent(
+                controller: controller,
+                mode: AgentUsagePanelMode.expanded,
+              ),
+            ],
           ),
         ),
       ),
@@ -807,6 +907,13 @@ Future<void> _pumpPanel(
   );
   await tester.pump();
   await tester.pump();
+  await _settlePopover(tester);
+}
+
+/// 展开态弹层在帧末挂载，需再走一帧并跑完过渡。
+Future<void> _settlePopover(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
 }
 
 Future<void> _pumpPanelContent(
@@ -842,10 +949,16 @@ Future<void> _pumpPanelContent(
         theme: buildShadcnTheme(ideTheme),
         materialTheme: buildMaterialTheme(ideTheme),
         home: sf.Scaffold(
-          child: AgentUsagePanelContent(
-            controller: controller,
-            mode: mode,
-            onModeChanged: onModeChanged,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Spacer(),
+              AgentUsagePanelContent(
+                controller: controller,
+                mode: mode,
+                onModeChanged: onModeChanged,
+              ),
+            ],
           ),
         ),
       ),
@@ -853,6 +966,9 @@ Future<void> _pumpPanelContent(
   );
   await tester.pump();
   await tester.pump();
+  if (mode == AgentUsagePanelMode.expanded) {
+    await _settlePopover(tester);
+  }
 }
 
 class _ImmediatePanelRepository implements AgentUsagePanelRepository {
