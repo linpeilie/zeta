@@ -24,6 +24,7 @@
 
 ### 变更
 
+- 标题栏菜单图标在 macOS 上也显示，与 Windows / Linux 一致
 - 工作台与标题栏贴齐，去掉两者之间的分隔线；左右和底部留白改为 8px
 - Agent 首页移除最左侧 Activity Rail，将 Projects / Threads 与只读 Agent 统计合并为
   一个左侧卡片；统计默认折叠并展示套餐/Provider、最短周期余量和今日 Token。标题栏

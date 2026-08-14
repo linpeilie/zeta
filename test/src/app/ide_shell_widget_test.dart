@@ -40,6 +40,7 @@ void main() {
     expect(find.text('Zeta'), findsNothing);
     expect(find.byKey(const ValueKey('projects-panel-card')), findsOneWidget);
     expect(find.byKey(const ValueKey('agent-usage-compact')), findsOneWidget);
+    expect(find.byKey(const ValueKey('window-menu-trigger')), findsOneWidget);
     expect(
       find.byKey(const ValueKey('titlebar-left-sidebar-action')),
       findsOneWidget,

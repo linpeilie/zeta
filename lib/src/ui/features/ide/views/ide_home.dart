@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
@@ -350,8 +349,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   }
 
   List<WindowMenu> get _windowMenus {
-    if (!widget.enableNativeWindowFrame ||
-        !(Platform.isWindows || Platform.isLinux)) {
+    if (!widget.enableNativeWindowFrame) {
       return const <WindowMenu>[];
     }
     return [

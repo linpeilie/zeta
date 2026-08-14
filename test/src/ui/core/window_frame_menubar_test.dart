@@ -206,6 +206,32 @@ void main() {
     });
   });
 
+  testWidgets('macOS 标题栏同样展示菜单图标', (tester) async {
+    await _withTargetPlatform(TargetPlatform.macOS, () async {
+      await pumpIdeComponent(
+        tester,
+        size: const Size(960, 640),
+        child: WindowFrame(
+          enableNativeWindowFrame: true,
+          showWindowControls: false,
+          menus: const [
+            WindowMenu(
+              key: ValueKey('window-menu-file'),
+              label: '文件',
+              items: <WindowMenuItem>[WindowMenuItem(label: '打开项目')],
+            ),
+          ],
+          child: const ColoredBox(color: Colors.black),
+        ),
+      );
+
+      expect(find.byKey(const ValueKey('window-menu-trigger')), findsOneWidget);
+      expect(find.byIcon(sf.LucideIcons.menu), findsOneWidget);
+      expect(find.byIcon(sf.LucideIcons.minus), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
   testWidgets('macOS 标题栏拖拽区覆盖可见标题栏高度', (tester) async {
     await _withTargetPlatform(TargetPlatform.macOS, () async {
       await pumpIdeComponent(

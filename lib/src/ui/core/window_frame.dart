@@ -17,8 +17,8 @@ import 'package:zeta/src/ui/core/pane_widgets.dart';
 /// 包裹主内容的窗口外框。
 ///
 /// 隐藏原生标题栏后由本组件提供自定义标题栏：macOS 下保留系统交通灯按钮并
-/// 提供拖拽区与标题；Windows 下在最左侧显示应用 Logo；Windows/Linux 下可承载
-/// Flutter 菜单，并额外绘制最小化/最大化/关闭按钮。
+/// 提供拖拽区与标题；Windows 下在最左侧显示应用 Logo；全平台可承载 Flutter
+/// 菜单；Windows/Linux 额外绘制最小化/最大化/关闭按钮。
 @immutable
 class WindowMenu {
   const WindowMenu({required this.label, required this.items, this.key});
@@ -263,7 +263,7 @@ class _WindowsTitleBarLogo extends StatelessWidget {
   }
 }
 
-/// Windows/Linux 标题栏菜单，委托给 [sf.Menubar] 以获得标准悬停切换与键盘导航。
+/// 全平台标题栏菜单，委托给 [sf.Menubar] 以获得标准悬停切换与键盘导航。
 class _WindowMenuBar extends StatelessWidget {
   const _WindowMenuBar({required this.menus});
 
