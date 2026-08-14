@@ -14,7 +14,7 @@ AgentUsageQuotaSnapshot? mapClaudeCodeUsageQuota(
   final windows = <AgentUsageWindow>[
     ?_window(
       response['five_hour'],
-      label: '五小时会话额度',
+      label: '5h',
       duration: const Duration(hours: 5),
     ),
     ?_window(

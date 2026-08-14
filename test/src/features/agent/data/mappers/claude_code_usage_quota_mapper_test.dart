@@ -42,7 +42,7 @@ void main() {
       expect(result.planType, 'Claude Max');
       expect(result.limitName, 'Claude Code 订阅额度');
       expect(result.windows, hasLength(4));
-      expect(result.windows.first.label, '五小时会话额度');
+      expect(result.windows.first.label, '5h');
       expect(result.windows.first.usedPercent, 13);
       expect(result.windows.first.windowDuration, const Duration(hours: 5));
       expect(
@@ -50,7 +50,7 @@ void main() {
         DateTime.parse('2026-08-12T09:30:00Z').toLocal(),
       );
       expect(result.windows.map((window) => window.label), <String>[
-        '五小时会话额度',
+        '5h',
         '1 周',
         'Sonnet 1 周',
         'Opus 1 周',

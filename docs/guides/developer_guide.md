@@ -563,7 +563,9 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
   数据；Projects 与 cardless `AgentUsagePanelContent` 共用一个 `PanelCard`，统计常驻
   折叠摘要。展开态由折叠摘要向上弹出的 Popover 承载：正文为套餐名加固定高度横向胶囊
   画廊（1/2/3+ 窗口分别占满、对半、各 40%）和 Token 统计；无额度窗口时不渲染整块套餐
-  区。Provider Tabs 与刷新常驻底部右侧，不显示独立标题栏、折叠按钮或拖动分隔，正文超出
+  区。额度卡片使用紧凑 `space6` 内边距，重置时刻使用 `meta` 样式；距当前 7 天内显示
+  `mm-dd HH:mm`，超过 7 天只显示 `mm-dd`，Claude Code 五小时窗口显示为 `5h`。
+  Provider Tabs 与刷新常驻底部右侧，不显示独立标题栏、折叠按钮或拖动分隔，正文超出
   可用高度时只在弹层内滚动，左栏本身不为展开态让位。点击弹层外部或摘要开合按钮收敛回
   折叠态。Compact 下复用 Workbench Navigation Overlay，scrim / Esc 关闭后必须恢复标题栏
   入口焦点，不能通过压缩 Canvas 模拟窄屏侧栏。

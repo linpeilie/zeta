@@ -17,6 +17,8 @@ import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_motion.dart';
 import 'package:zeta/src/ui/core/ide_skeleton.dart';
+import 'package:zeta/src/ui/core/ide_spacing.dart';
+import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 
 /// 展开态弹层的根节点；折叠摘要仍留在锚点上，断言需按弹层限定范围。
@@ -423,7 +425,7 @@ void main() {
             providerName: 'Claude Code',
             planType: 'Claude Max',
             windows: <AgentUsageWindow>[
-              AgentUsageWindow(label: '五小时会话额度', usedPercent: 10),
+              AgentUsageWindow(label: '5h', usedPercent: 10),
               AgentUsageWindow(label: '1 周', usedPercent: 20),
               AgentUsageWindow(label: 'Sonnet 1 周', usedPercent: 30),
               AgentUsageWindow(label: 'Opus 1 周', usedPercent: 40),
@@ -438,7 +440,7 @@ void main() {
     await _pumpPanel(tester, controller);
 
     expect(_inPopover(find.text('Claude Max')), findsOneWidget);
-    expect(_inPopover(find.text('五小时会话额度')), findsOneWidget);
+    expect(_inPopover(find.text('5h')), findsOneWidget);
     expect(_inPopover(find.text('1 周')), findsOneWidget);
     expect(_inPopover(find.text('Sonnet 1 周')), findsOneWidget);
     expect(_inPopover(find.text('Opus 1 周')), findsOneWidget);
@@ -448,6 +450,30 @@ void main() {
     );
     expect(find.text('额度详情暂不可用'), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('额度卡片使用紧凑内边距和元信息重置时间样式', (tester) async {
+    await _pumpQuotaWindows(tester, <AgentUsageWindow>[
+      AgentUsageWindow(
+        label: '5h',
+        usedPercent: 25,
+        resetsAt: DateTime.now().add(const Duration(hours: 2)),
+      ),
+    ]);
+
+    final card = find.byKey(const ValueKey<String>('agent-usage-window-0'));
+    final padding = find.descendant(of: card, matching: find.byType(Padding));
+    expect(padding, findsOneWidget);
+    expect(tester.widget<Padding>(padding).padding, IdeSpacing.all6);
+
+    final metaStyle = IdeTextStyles.of(tester.element(card)).meta;
+    final resetText = find.descendant(
+      of: card,
+      matching: find.byWidgetPredicate(
+        (widget) => widget is Text && widget.style == metaStyle,
+      ),
+    );
+    expect(resetText, findsOneWidget);
   });
 
   test('套餐卡片宽度按窗口数量分配', () {
@@ -477,14 +503,14 @@ void main() {
 
   testWidgets('三套以上窗口各占 40% 且画廊高度固定', (tester) async {
     await _pumpQuotaWindows(tester, <AgentUsageWindow>[
-      const AgentUsageWindow(label: '五小时会话额度', usedPercent: 10),
+      const AgentUsageWindow(label: '5h', usedPercent: 10),
       const AgentUsageWindow(label: '1 周', usedPercent: 20),
       const AgentUsageWindow(label: 'Sonnet 1 周', usedPercent: 30),
     ]);
     final threeHeight = _expectGalleryCardWidths(tester, windowCount: 3);
 
     await _pumpQuotaWindows(tester, <AgentUsageWindow>[
-      const AgentUsageWindow(label: '五小时会话额度', usedPercent: 10),
+      const AgentUsageWindow(label: '5h', usedPercent: 10),
       const AgentUsageWindow(label: '1 周', usedPercent: 20),
       const AgentUsageWindow(label: 'Sonnet 1 周', usedPercent: 30),
       const AgentUsageWindow(label: 'Opus 1 周', usedPercent: 40),
@@ -495,7 +521,7 @@ void main() {
 
   testWidgets('超过两张时 Hover 显示箭头并按卡片距离横滑', (tester) async {
     await _pumpQuotaWindows(tester, <AgentUsageWindow>[
-      const AgentUsageWindow(label: '五小时会话额度', usedPercent: 10),
+      const AgentUsageWindow(label: '5h', usedPercent: 10),
       const AgentUsageWindow(label: '1 周', usedPercent: 20),
       const AgentUsageWindow(label: 'Sonnet 1 周', usedPercent: 30),
       const AgentUsageWindow(label: 'Opus 1 周', usedPercent: 40),

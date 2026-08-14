@@ -296,7 +296,7 @@ class _QuotaWindowCard extends StatelessWidget {
         borderRadius: IdeRadius.allSmall,
       ),
       child: Padding(
-        padding: const EdgeInsets.all(IdeSpacing.space8),
+        padding: const EdgeInsets.all(IdeSpacing.space6),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -321,18 +321,16 @@ class _QuotaWindowCard extends StatelessWidget {
             ),
             const SizedBox(height: IdeSpacing.space6),
             AgentUsageQuotaProgressBar(usedPercent: used.toDouble()),
-            const SizedBox(height: IdeSpacing.space2),
+            const SizedBox(height: IdeSpacing.space4),
             SizedBox(
-              height: 13,
+              height: 12,
               child: window.resetsAt == null
                   ? null
                   : Text(
                       formatUsageResetAt(window.resetsAt!),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: textStyles.caption.copyWith(
-                        color: colors.textTertiary,
-                      ),
+                      style: textStyles.meta,
                     ),
             ),
           ],

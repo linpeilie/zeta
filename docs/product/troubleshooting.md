@@ -231,8 +231,9 @@ Codex、Grok 和 Claude Code 的 Token 统计都来自各自 CLI 的本地历史
 
 只展示 Provider 实际返回的字段：套餐类型、百分比窗口、重置时间和可选余额。Zeta **不推算**绝对 Token 总额度或 Provider 没提供的到期日。
 
-Claude 的套餐名称来自上述 initialize metadata，和“额度详情增强”开关无关。五小时、周
-窗口与 extra usage 才来自可选 usage API；增强关闭、API key 模式、OAuth scope 不足、token
+Claude 的套餐名称来自上述 initialize metadata，和“额度详情增强”开关无关。`5h`（五小时）、周
+窗口与 extra usage 才来自可选 usage API；展开态中距当前 7 天内的重置时间显示到分钟，超过
+7 天只显示月日。增强关闭、API key 模式、OAuth scope 不足、token
 过期、401/429、超时或断网时，页面会保留套餐名称并显示“额度详情暂不可用”。macOS 优先
 读取 Claude Code Keychain 条目、失败后回退 Claude credentials 文件；Windows 使用 Claude
 credentials 文件。凭据只在一次只读请求期间留在内存，不写入 Zeta 配置或缓存。

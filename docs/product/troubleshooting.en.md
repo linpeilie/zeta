@@ -234,8 +234,10 @@ Only samples where Codex explicitly returned `time_to_first_token_ms` are used; 
 Only fields the provider actually returned are shown: plan type, percentage windows, reset time, and optional balance. Zeta does **not** infer absolute token allowances or expiry dates the provider didn't supply.
 
 For Claude, the plan name comes from initialize metadata and does not depend on **Quota detail
-enhancement**. Five-hour/weekly windows and extra usage come from the optional usage API. When the
-enhancement is off, API-key mode is active, OAuth scopes are insufficient, the token is expired, or a
+enhancement**. The `5h` (five-hour) and weekly windows, along with extra usage, come from the
+optional usage API. In the expanded panel, reset times within seven days keep the minute
+(`mm-dd HH:mm`); older reset times show only the month and day. When the enhancement is off,
+API-key mode is active, OAuth scopes are insufficient, the token is expired, or a
 401/429/timeout/network failure occurs, Zeta keeps the plan name and shows quota details as unavailable.
 macOS tries the Claude Code Keychain entry before the Claude credentials file; Windows uses the Claude
 credentials file. Credentials live only for the read-only request and are never stored in Zeta config or

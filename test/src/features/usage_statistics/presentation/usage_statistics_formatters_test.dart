@@ -16,14 +16,14 @@ void main() {
       );
     });
 
-    test('超过 24 小时且不超过 7 天展示 mm-dd HH', () {
+    test('超过 24 小时且不超过 7 天仍展示 mm-dd HH:mm', () {
       expect(
         formatUsageResetAt(DateTime(2026, 8, 15, 17, 31), now: now),
-        '08-15 17',
+        '08-15 17:31',
       );
       expect(
         formatUsageResetAt(DateTime(2026, 8, 21, 17, 30), now: now),
-        '08-21 17',
+        '08-21 17:30',
       );
     });
 
