@@ -64,6 +64,7 @@ AgentProviderBundle nativeBundleFromClaudeCode(
     threadCatalog: provider,
     threadCompaction: provider,
     permissionResponses: provider,
+    questions: provider,
     modelCatalog: provider,
     localThreadList: provider,
     planApproval: provider,

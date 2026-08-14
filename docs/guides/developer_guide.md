@@ -274,6 +274,11 @@ evidence 只在内存时间线存在，不得进入日志、缓存、通知、th
 表示 Skip；计划审批仍使用 `AgentPlanApprovalPort`。三类请求可以共享 Pending Interaction
 Dock，但不得共享 request/decision 模型或 pending registry。
 
+Claude Code 的 `AskUserQuestion` 在 stdio host 下包在 `can_use_tool` control_request 中，
+但领域语义仍是用户提问。Claude data adapter 必须在 remembered permission 与普通权限
+handler 之前识别它，映射问题和选项，并通过独立 question pending registry 回写
+`updatedInput.answers`；不得把它保存为工具 allow/deny 决定。
+
 ### 权限选项选择（Permission Policy Port）
 
 - **端口**：实现 `AgentPermissionPolicyProvider` 的 Provider 经

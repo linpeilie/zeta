@@ -81,7 +81,7 @@ void main() {
       expect(capabilities.canForkThreadAtTurn, isFalse);
       expect(capabilities.canCompactThread, isTrue);
       expect(capabilities.supportsPermissionRequests, isTrue);
-      expect(capabilities.supportsUserQuestions, isFalse);
+      expect(capabilities.supportsUserQuestions, isTrue);
       expect(capabilities.supportsPlanApproval, isTrue);
       expect(capabilities.supportsModelSelection, isTrue);
       expect(capabilities.supportsModeSelection, isFalse);

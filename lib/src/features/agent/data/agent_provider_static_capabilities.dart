@@ -77,6 +77,7 @@ abstract final class AgentProviderStaticCapabilities {
     canCancelTurn: true,
     canCompactThread: true,
     supportsPermissionRequests: true,
+    supportsUserQuestions: true,
     supportsPlanApproval: true,
     supportsModelSelection: true,
     supportsReasoningOptions: true,

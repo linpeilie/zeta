@@ -225,6 +225,104 @@ void main() {
     );
 
     test(
+      'AskUserQuestion emits question options and accepts structured answers',
+      () async {
+        final process = _FakeClaudeProcess();
+        final provider = ClaudeCodeAgentProvider(
+          config: AgentProviderConfig.defaultClaudeCode,
+          processStarter: _starter(process),
+          locator: const _FakeClaudeCodeCliLocator(),
+          idFactory: _sequenceIds(<String>[
+            'session-question-1',
+            'turn-question-1',
+          ]),
+        );
+        addTearDown(provider.dispose);
+        final events = <AgentEvent>[];
+        provider.events.listen(events.add);
+
+        final session = await provider.startSession(
+          context: const AgentContext(projectPath: r'C:\tmp\zeta-cc-test'),
+        );
+        process.emitInit(sessionId: session.id);
+        await provider.sendMessage(
+          session: session,
+          context: const AgentContext(projectPath: r'C:\tmp\zeta-cc-test'),
+          message: 'ask a question',
+        );
+        process.emitControlRequest(
+          requestId: 'req-question-1',
+          toolName: 'AskUserQuestion',
+          input: <String, Object?>{
+            'questions': <Object?>[
+              <String, Object?>{
+                'question': 'Choose a repair direction',
+                'header': 'Repair',
+                'multiSelect': false,
+                'options': <Object?>[
+                  <String, Object?>{
+                    'label': 'Static fallback',
+                    'description': 'Use a versioned table',
+                  },
+                  <String, Object?>{
+                    'label': 'Keep hidden',
+                    'description': 'Explain the missing value',
+                  },
+                  <String, Object?>{
+                    'label': 'No change',
+                    'description': 'Only report the cause',
+                  },
+                ],
+              },
+            ],
+          },
+        );
+        await pumpEventQueue(times: 5);
+
+        expect(events.whereType<AgentPermissionRequestedEvent>(), isEmpty);
+        final questionEvent = events
+            .whereType<AgentQuestionRequestedEvent>()
+            .single;
+        expect(questionEvent.request.sessionId, 'session-question-1');
+        expect(questionEvent.request.turnId, 'turn-question-1');
+        expect(
+          questionEvent.request.questions.single.optionItems.map(
+            (option) => option.label,
+          ),
+          <String>['Static fallback', 'Keep hidden', 'No change'],
+        );
+        expect(provider.controlPendingCount, 0);
+        expect(provider.questionPendingCount, 1);
+        expect(process.receivedControlResponses, isEmpty);
+
+        await provider.respondToQuestion(
+          const AgentQuestionResponse(
+            requestId: 'req-question-1',
+            answers: <String, List<String>>{
+              'Choose a repair direction': <String>['Static fallback'],
+            },
+          ),
+        );
+        await pumpEventQueue(times: 3);
+
+        expect(provider.questionPendingCount, 0);
+        final response = process.receivedControlResponses.single;
+        final envelope = response['response'] as Map<String, Object?>;
+        expect(envelope['request_id'], 'req-question-1');
+        final body = envelope['response'] as Map<String, Object?>;
+        expect(body['behavior'], 'allow');
+        final updatedInput = body['updatedInput'] as Map<String, Object?>;
+        expect(updatedInput['answers'], <String, String>{
+          'Choose a repair direction': 'Static fallback',
+        });
+        expect(
+          events.whereType<AgentQuestionResolvedEvent>().single.requestId,
+          'req-question-1',
+        );
+      },
+    );
+
+    test(
       'ExitPlanMode uses the isolated plan approval route and response id',
       () async {
         final process = _FakeClaudeProcess();

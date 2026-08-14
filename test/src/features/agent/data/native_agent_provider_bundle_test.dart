@@ -39,7 +39,7 @@ void main() {
 
       expect(_portPresence(native), _claudePresence);
       expect(identical(native.runtime, native.conversation), isTrue);
-      expect(native.questions, isNull);
+      expect(identical(native.questions, native.runtime), isTrue);
       expect(native.deniedActionOverride, isNull);
       expect(native.threadNaming, isNull);
     });
@@ -175,7 +175,7 @@ const _claudePresence = <String, bool>{
   'threadBranching': false,
   'turnSteering': false,
   'permissionResponses': true,
-  'questions': false,
+  'questions': true,
   'deniedActionOverride': false,
   'modelCatalog': true,
   'conversationModes': false,

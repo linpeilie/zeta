@@ -96,7 +96,7 @@ void main() {
       expect(bundle.threadBranching, isNull);
       expect(bundle.turnSteering, isNull);
       expect(bundle.permissionResponses, isNotNull);
-      expect(bundle.questions, isNull);
+      expect(bundle.questions, isNotNull);
       expect(bundle.deniedActionOverride, isNull);
       expect(bundle.modelCatalog, isNotNull);
       expect(bundle.conversationModes, isNull);
@@ -108,7 +108,7 @@ void main() {
       expect(bundle.usageQuota, isNotNull);
       expect(bundle.runtime, isA<AgentLocalThreadListPort>());
       expect(bundle.runtime, isA<AgentPlanApprovalPort>());
-      expect(bundle.runtime, isNot(isA<AgentQuestionResponsePort>()));
+      expect(bundle.runtime, isA<AgentQuestionResponsePort>());
       expect(bundle.runtime, isNot(isA<AgentThreadSubscriptionPort>()));
       expect(bundle.runtime, isNot(isA<AgentDeniedActionOverridePort>()));
       expect(bundle.runtime, isNot(isA<AgentSessionConfigurationPort>()));

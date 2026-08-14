@@ -826,9 +826,8 @@ IconData _planTodoIcon(String? status) {
 
 /// 权限审批卡片。
 ///
-/// 两段式布局：
-/// 1. 标题栏单行：左侧协议类型（如「命令」），右侧操作按钮，禁止换行；
-/// 2. 资源区：语义标题 + 命令代码块及 cwd / 文件等详情。
+/// 中性悬浮卡：浅色表面 + 细描边，警告语义只落在左上角图标上。
+/// 标题描述本次请求；命令块是视觉焦点；按钮按主次排在底部。
 class _AgentPermissionCard extends StatefulWidget {
   const _AgentPermissionCard({
     required this.request,
@@ -870,78 +869,47 @@ class _AgentPermissionCardState extends State<_AgentPermissionCard> {
       label: '权限请求：$kindLabel · $displayTitle',
       child: PanelCard(
         key: ValueKey<String>('agent-permission-card-${request.id}'),
-        color: colors.warning.withValues(alpha: 0.08),
+        color: colors.surfaceOverlay,
         showBorder: true,
-        borderColor: colors.warning.withValues(alpha: 0.35),
+        borderColor: colors.borderSubtle,
         borderRadius: IdeRadius.allMedium,
+        boxShadow: IdeEffects.overlayShadow(Theme.of(context).brightness),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(
             IdeSpacing.space12,
-            IdeSpacing.space8,
-            IdeSpacing.space8,
-            IdeSpacing.space10,
+            IdeSpacing.space12,
+            IdeSpacing.space12,
+            IdeSpacing.space16,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
             children: [
-              // —— 标题栏：类型 | 操作，固定单行 ——
-              SizedBox(
-                height: 28,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Icon(
-                      _permissionKindIcon(request.kind),
-                      size: 15,
-                      color: colors.warning,
-                    ),
-                    const SizedBox(width: IdeSpacing.space6),
-                    Text(
-                      kindLabel,
-                      maxLines: 1,
-                      softWrap: false,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Icon(
+                    _permissionKindIcon(request.kind),
+                    size: 15,
+                    color: colors.accent,
+                  ),
+                  const SizedBox(width: IdeSpacing.space6),
+                  Expanded(
+                    child: Text(
+                      displayTitle,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: textStyles.bodyMedium.copyWith(
-                        color: colors.warning,
+                      style: textStyles.titleSmall.copyWith(
+                        color: colors.textPrimary,
                         fontWeight: FontWeight.w700,
-                        height: 1.1,
+                        height: 1.25,
                       ),
                     ),
-                    const SizedBox(width: IdeSpacing.space8),
-                    Expanded(
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          reverse: true,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: _buildHeaderActions(
-                              colors: colors,
-                              isCommand: isCommand,
-                              hasAmendment: hasAmendment,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: IdeSpacing.space8),
-              // —— 资源区：语义标题 + 命令代码块 ——
-              Text(
-                displayTitle,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: textStyles.titleSmall.copyWith(
-                  fontWeight: FontWeight.w600,
-                  height: 1.3,
-                ),
+                  ),
+                ],
               ),
               if (command != null && command.isNotEmpty) ...[
-                const SizedBox(height: IdeSpacing.space8),
+                const SizedBox(height: IdeSpacing.space10),
                 _AgentPermissionCommandBlock(
                   key: ValueKey<String>(
                     'agent-permission-command-${request.id}',
@@ -949,6 +917,19 @@ class _AgentPermissionCardState extends State<_AgentPermissionCard> {
                   command: command,
                 ),
               ],
+              const SizedBox(height: IdeSpacing.space12),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: IdeSpacing.space4,
+                  runSpacing: IdeSpacing.space4,
+                  children: _buildHeaderActions(
+                    isCommand: isCommand,
+                    hasAmendment: hasAmendment,
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -956,88 +937,72 @@ class _AgentPermissionCardState extends State<_AgentPermissionCard> {
     );
   }
 
-  /// 标题栏右侧操作：始终单行，窄宽度时由外层横向滚动承接。
   List<Widget> _buildHeaderActions({
-    required IdeColors colors,
     required bool isCommand,
     required bool hasAmendment,
   }) {
-    final actions = <Widget>[
-      sf.GhostButton(
+    return <Widget>[
+      IdeButton(
         key: ValueKey('agent-permission-cancel-${request.id}'),
+        label: '取消',
+        semanticLabel: '取消回合',
+        variant: IdeButtonVariant.ghost,
         onPressed: () => widget.onRespond(approved: false, cancelTurn: true),
-        size: sf.ButtonSize.small,
-        density: sf.ButtonDensity.dense,
-        child: const Text('取消回合'),
       ),
-      const SizedBox(width: IdeSpacing.space4),
-      sf.OutlineButton(
+      IdeButton(
         key: ValueKey('agent-permission-deny-${request.id}'),
+        label: '拒绝',
+        variant: IdeButtonVariant.ghost,
         onPressed: () => widget.onRespond(
           approved: false,
           commandDecision: isCommand
               ? AgentCommandApprovalDecisionKind.decline
               : null,
         ),
-        size: sf.ButtonSize.small,
-        density: sf.ButtonDensity.dense,
-        child: Text('拒绝', style: TextStyle(color: colors.error)),
       ),
-      if (isCommand) ...[
-        const SizedBox(width: IdeSpacing.space4),
-        sf.OutlineButton(
+      if (isCommand)
+        IdeButton(
           key: ValueKey('agent-permission-session-${request.id}'),
+          label: '本会话允许',
+          variant: IdeButtonVariant.outline,
           onPressed: () => widget.onRespond(
             approved: true,
             commandDecision: AgentCommandApprovalDecisionKind.acceptForSession,
           ),
-          size: sf.ButtonSize.small,
-          density: sf.ButtonDensity.dense,
-          child: const Text('本会话允许'),
         ),
-        if (hasAmendment) ...[
-          const SizedBox(width: IdeSpacing.space4),
-          sf.OutlineButton(
-            key: ValueKey('agent-permission-always-${request.id}'),
-            onPressed: () => widget.onRespond(
-              approved: true,
-              commandDecision: AgentCommandApprovalDecisionKind
-                  .acceptWithExecpolicyAmendment,
-              execpolicyAmendment: request.proposedExecpolicyAmendment,
-            ),
-            size: sf.ButtonSize.small,
-            density: sf.ButtonDensity.dense,
-            child: const Text('始终允许'),
+      if (isCommand && hasAmendment)
+        IdeButton(
+          key: ValueKey('agent-permission-always-${request.id}'),
+          label: '始终允许',
+          variant: IdeButtonVariant.outline,
+          onPressed: () => widget.onRespond(
+            approved: true,
+            commandDecision:
+                AgentCommandApprovalDecisionKind.acceptWithExecpolicyAmendment,
+            execpolicyAmendment: request.proposedExecpolicyAmendment,
           ),
-        ],
-      ],
-      if (widget.autoReview?.status == 'denied' &&
-          widget.onApproveGuardian != null) ...[
-        const SizedBox(width: IdeSpacing.space4),
-        sf.OutlineButton(
-          key: ValueKey('agent-permission-guardian-override-${request.id}'),
-          onPressed: widget.onApproveGuardian,
-          size: sf.ButtonSize.small,
-          density: sf.ButtonDensity.dense,
-          child: const Text('覆盖守护'),
         ),
-      ],
-      const SizedBox(width: IdeSpacing.space4),
-      sf.PrimaryButton(
+      if (widget.autoReview?.status == 'denied' &&
+          widget.onApproveGuardian != null)
+        IdeButton(
+          key: ValueKey('agent-permission-guardian-override-${request.id}'),
+          label: '覆盖守护',
+          variant: IdeButtonVariant.outline,
+          onPressed: widget.onApproveGuardian,
+        ),
+      IdeButton(
         key: ValueKey('agent-permission-approve-${request.id}'),
+        label: '允许',
+        variant: IdeButtonVariant.primary,
+        leadingIcon: Icons.check_rounded,
         onPressed: () => widget.onRespond(
           approved: true,
           commandDecision: isCommand
               ? AgentCommandApprovalDecisionKind.accept
               : null,
         ),
-        size: sf.ButtonSize.small,
-        density: sf.ButtonDensity.dense,
-        leading: const Icon(Icons.check_rounded, size: 14),
-        child: const Text('允许'),
       ),
     ];
-    return actions;
   }
 }
 
@@ -1058,9 +1023,9 @@ String _permissionDisplayTitle(AgentPermissionRequest request) {
 
 String _permissionKindTitle(AgentPermissionKind kind) {
   return switch (kind) {
-    AgentPermissionKind.commandExecution => '请求执行命令',
-    AgentPermissionKind.fileChange => '请求应用文件变更',
-    AgentPermissionKind.permissions => '请求授予权限',
+    AgentPermissionKind.commandExecution => '执行命令',
+    AgentPermissionKind.fileChange => '应用文件变更',
+    AgentPermissionKind.permissions => '授予权限',
     AgentPermissionKind.other => '请求确认',
   };
 }
@@ -1092,7 +1057,14 @@ class _AgentPermissionCommandBlock extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     return DecoratedBox(
-      decoration: _agentCodeBlockDecoration(colors),
+      decoration: BoxDecoration(
+        color: Color.alphaBlend(
+          colors.textPrimary.withValues(alpha: 0.06),
+          colors.surfaceElevated,
+        ),
+        borderRadius: IdeRadius.allSmall,
+        border: Border.all(color: colors.borderSubtle),
+      ),
       child: Padding(
         padding: const EdgeInsets.symmetric(
           horizontal: IdeSpacing.space10,

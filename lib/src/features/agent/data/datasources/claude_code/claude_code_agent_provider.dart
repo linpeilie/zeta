@@ -15,6 +15,7 @@ import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_permission_policy_adapter.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_plan_approval_adapter.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_process_starter.dart';
+import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_question_adapter.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_session_history_reader.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_usage_quota_adapter.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/stream_json_peer.dart';
@@ -32,7 +33,8 @@ final _log = loggerFor('zeta.agent.claude_code.provider');
 /// 进程常驻 + 串行 turn；`--permission-mode default` 下高风险工具走
 /// [ClaudeCodeControlRequestHandler] 的 UI 审批（T20），未知 control 类型
 /// 仍 fail-closed deny。`ExitPlanMode` 由独立的
-/// [ClaudeCodePlanApprovalAdapter] 接管，不进入普通权限 registry。
+/// [ClaudeCodePlanApprovalAdapter] 接管，`AskUserQuestion` 由独立的
+/// [ClaudeCodeQuestionAdapter] 接管，二者都不进入普通权限 registry。
 class ClaudeCodeAgentProvider
     implements
         AgentRuntimePort,
@@ -40,6 +42,7 @@ class ClaudeCodeAgentProvider
         AgentThreadCatalogPort,
         AgentThreadCompactionPort,
         AgentPermissionResponsePort,
+        AgentQuestionResponsePort,
         AgentModelCatalogPort,
         AgentLocalThreadListPort,
         AgentPlanApprovalPort,
@@ -54,6 +57,7 @@ class ClaudeCodeAgentProvider
     ClaudeCodeCliMetadataCoordinator? metadataCoordinator,
     ClaudeCodeUsageQuotaAdapter? usageQuotaAdapter,
     ClaudeCodeControlRequestHandler? controlRequestHandler,
+    ClaudeCodeQuestionAdapter? questionAdapter,
     ClaudeCodeSessionDecisionStoreFactory? sessionDecisionStoreFactory,
     ClaudeCodeSessionHistoryReader? sessionHistoryReader,
     ClaudeCodeHiddenThreadStore? hiddenThreadStore,
@@ -63,6 +67,7 @@ class ClaudeCodeAgentProvider
        _mapper = mapper ?? ClaudeCodeEventMapper(providerId: config.id),
        _controlHandler =
            controlRequestHandler ?? ClaudeCodeControlRequestHandler(),
+       _questionAdapter = questionAdapter ?? ClaudeCodeQuestionAdapter(),
        _sessionHistoryReader =
            sessionHistoryReader ??
            ClaudeCodeSessionHistoryReader(hiddenThreadStore: hiddenThreadStore),
@@ -125,6 +130,7 @@ class ClaudeCodeAgentProvider
   late final ClaudeCodeModelCatalog _modelCatalog;
   late final ClaudeCodeUsageQuotaAdapter _usageQuotaAdapter;
   final ClaudeCodeControlRequestHandler _controlHandler;
+  final ClaudeCodeQuestionAdapter _questionAdapter;
   final ClaudeCodeSessionHistoryReader _sessionHistoryReader;
   final String Function() _idFactory;
   AgentModelSelection _modelSelection;
@@ -189,6 +195,9 @@ class ClaudeCodeAgentProvider
 
   /// 测试/诊断：等待用户决定的 Plan 审批数（与普通工具权限完全隔离）。
   int get planApprovalPendingCount => _planApprovalAdapter.pendingCount;
+
+  /// 测试/诊断：等待用户回答的 Claude Code 提问数。
+  int get questionPendingCount => _questionAdapter.pendingCount;
 
   @override
   Future<void> initialize() async {
@@ -556,6 +565,7 @@ class ClaudeCodeAgentProvider
         eventKind: 'provider.send.failed',
       );
       _planApprovalAdapter.completeTurn(sessionId: session.id, turnId: turnId);
+      _completeQuestionTurn(sessionId: session.id, turnId: turnId);
       _log.w(
         'Failed to send Claude Code user frame (${error.runtimeType})',
         error: error,
@@ -604,6 +614,10 @@ class ClaudeCodeAgentProvider
       );
       if (terminal.accepted) {
         _planApprovalAdapter.completeTurn(
+          sessionId: terminal.sessionId,
+          turnId: terminal.turnId,
+        );
+        _completeQuestionTurn(
           sessionId: terminal.sessionId,
           turnId: terminal.turnId,
         );
@@ -682,6 +696,42 @@ class ClaudeCodeAgentProvider
   }
 
   @override
+  Future<void> respondToQuestion(AgentQuestionResponse response) async {
+    _ensureNotDisposed();
+    final resolved = _questionAdapter.resolveResponse(response);
+    if (resolved == null) {
+      return;
+    }
+    final peer = _peer;
+    if (peer == null) {
+      _log.w(
+        'Cannot send question control_response: '
+        'Claude Code peer is not running',
+      );
+      return;
+    }
+    try {
+      await peer.send(resolved.responseFrame);
+    } catch (error, stackTrace) {
+      _log.w(
+        'Failed to send question control_response (${error.runtimeType})',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      rethrow;
+    }
+    final sessionId = resolved.sessionId;
+    if (sessionId != null) {
+      _addEvent(
+        AgentQuestionResolvedEvent(
+          requestId: resolved.requestId,
+          threadId: sessionId,
+        ),
+      );
+    }
+  }
+
+  @override
   Future<void> respondToPlanApproval(AgentPlanApprovalDecision decision) async {
     _ensureNotDisposed();
     final resolved = _planApprovalAdapter.resolveDecision(decision);
@@ -752,6 +802,7 @@ class ClaudeCodeAgentProvider
       } catch (_) {}
     }
     _controlHandler.clearPending();
+    _questionAdapter.clear();
     _mapper.dispose();
     _runningTurnIdsBySessionId.clear();
     await _events.close();
@@ -838,6 +889,7 @@ class ClaudeCodeAgentProvider
     _activePeerModel = null;
     _activePeerReasoningEffort = null;
     _controlHandler.clearPending();
+    _questionAdapter.clear();
     _planApprovalAdapter.clear();
     if (peer != null) {
       try {
@@ -915,6 +967,29 @@ class ClaudeCodeAgentProvider
         }
         return;
       }
+      final questionResult = _questionAdapter.handleControlRequest(
+        event.raw,
+        sessionId: sessionId,
+        turnId: runningTurnId,
+      );
+      if (questionResult.handled) {
+        for (final domainEvent in questionResult.events) {
+          _addEvent(domainEvent);
+        }
+        final responseFrame = questionResult.responseFrame;
+        final peer = _peer;
+        if (responseFrame != null && peer != null) {
+          unawaited(
+            peer.send(responseFrame).catchError((Object error) {
+              _log.w(
+                'Failed to send question control_response '
+                '(${error.runtimeType})',
+              );
+            }),
+          );
+        }
+        return;
+      }
       if (_tryHandleRememberedToolDecision(event.raw)) {
         return;
       }
@@ -948,12 +1023,34 @@ class ClaudeCodeAgentProvider
     for (final domainEvent in mapped.events) {
       _addEvent(domainEvent);
       if (domainEvent is AgentTurnCompletedEvent) {
+        _completeQuestionTurn(
+          sessionId: domainEvent.sessionId,
+          turnId: domainEvent.turnId,
+        );
         if (_runningTurnIdsBySessionId[domainEvent.sessionId] ==
             domainEvent.turnId) {
           _runningTurnIdsBySessionId.remove(domainEvent.sessionId);
         }
         _emitReadyIfIdle();
       }
+    }
+  }
+
+  void _completeQuestionTurn({
+    required String sessionId,
+    required String turnId,
+  }) {
+    final completed = _questionAdapter.completeTurn(
+      sessionId: sessionId,
+      turnId: turnId,
+    );
+    for (final question in completed) {
+      _addEvent(
+        AgentQuestionResolvedEvent(
+          requestId: question.requestId,
+          threadId: sessionId,
+        ),
+      );
     }
   }
 
@@ -1040,6 +1137,7 @@ class ClaudeCodeAgentProvider
     }
     if (_runningTurnIdsBySessionId.isNotEmpty ||
         _controlHandler.pendingCount > 0 ||
+        _questionAdapter.pendingCount > 0 ||
         _planApprovalAdapter.pendingCount > 0) {
       throw StateError(
         'Claude Code model configuration cannot change while a turn is running',
@@ -1098,6 +1196,7 @@ class ClaudeCodeAgentProvider
     if ((!allowTurnAdmission && _turnAdmissionInProgress) ||
         _runningTurnIdsBySessionId.isNotEmpty ||
         _controlHandler.pendingCount > 0 ||
+        _questionAdapter.pendingCount > 0 ||
         _planApprovalAdapter.pendingCount > 0) {
       throw StateError(
         'Claude Code permission mode cannot change while a turn is running',

@@ -79,6 +79,9 @@
 
 ### 修复
 
+- Claude 提问现在会显示 `AskUserQuestion` 的真实问题、选项与自由文本入口，并把结构化
+  回答写回原回合；不再误显示成“取消回合 / 拒绝 / 允许”的权限卡，也会自动清理旧会话
+  中误存的该工具 allow/deny 决定
 - Claude Code 的本地历史 Token 现在会进入 Agent 今日统计和完整使用统计；完全无历史时
   显示“暂无 Token 历史”，已有历史但当前时间窗无调用时显示 0
 - Claude Code 的 Token 总量现在会计入缓存读取/创建的部分；此前总量只算 input + output，

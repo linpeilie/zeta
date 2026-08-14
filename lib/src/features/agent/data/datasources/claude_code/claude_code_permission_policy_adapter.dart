@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/core/storage/atomic_text_file.dart';
+import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_question_adapter.dart';
 import 'package:zeta/src/features/agent/data/mappers/claude_code_permission_mode_codec.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
@@ -173,13 +174,36 @@ final class ClaudeCodePermissionPolicyAdapter
   Future<void> bindSession(String sessionId) async {
     final store = _sessionDecisionStoreFactory(sessionId);
     _sessionDecisionStore = store;
-    _sessionDecisions = await store.load();
+    final loaded = Map<String, ClaudeCodeSessionToolDecision>.of(
+      await store.load(),
+    );
+    final removedInteractiveDecision = loaded.keys.any(
+      _isInteractiveQuestionTool,
+    );
+    loaded.removeWhere((toolName, _) => _isInteractiveQuestionTool(toolName));
+    _sessionDecisions = loaded;
+    if (removedInteractiveDecision) {
+      // 旧版本曾把 AskUserQuestion 错当权限并落盘。绑定时主动清理，避免恢复
+      // 历史会话后继续静默 allow/deny；清理失败不能阻断会话启动。
+      try {
+        await store.save(
+          Map<String, ClaudeCodeSessionToolDecision>.unmodifiable(
+            _sessionDecisions,
+          ),
+        );
+      } catch (error) {
+        _log.w(
+          'Could not remove stale Claude Code question decision '
+          '(${error.runtimeType})',
+        );
+      }
+    }
   }
 
   /// 查询当前 session 对 [toolName] 的固定决定。
   ClaudeCodeSessionToolDecision? decisionForTool(String toolName) {
     final normalized = toolName.trim();
-    if (normalized.isEmpty) {
+    if (normalized.isEmpty || _isInteractiveQuestionTool(normalized)) {
       return null;
     }
     return _sessionDecisions[normalized];
@@ -193,7 +217,7 @@ final class ClaudeCodePermissionPolicyAdapter
     ClaudeCodeSessionToolDecision decision,
   ) async {
     final normalized = toolName.trim();
-    if (normalized.isEmpty) {
+    if (normalized.isEmpty || _isInteractiveQuestionTool(normalized)) {
       return;
     }
     _sessionDecisions[normalized] = decision;
@@ -205,5 +229,10 @@ final class ClaudeCodePermissionPolicyAdapter
         ),
       );
     }
+  }
+
+  static bool _isInteractiveQuestionTool(String toolName) {
+    return toolName.trim().toLowerCase() ==
+        claudeCodeAskUserQuestionToolName.toLowerCase();
   }
 }

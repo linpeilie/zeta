@@ -102,11 +102,19 @@ wire 没有宿主侧 turn id，因此这个责任不能下沉给共享 TimelineS
 取消、需要终止回合的权限拒绝和 Plan 取消都可写出 interrupt，但各自的领域决策和
 pending registry 保持隔离。
 
-### 4.3 权限与 Plan 响应
+### 4.3 权限、用户提问与 Plan 响应
 
 `control_request.request_id` 只用于对应的 `control_response`。工具审批按
 `request.tool_use_id` 配对工具，Plan 审批只接管已观察到的 `ExitPlanMode` tool id。
 具体 allow/deny payload 由各自 adapter 编码；未知、缺字段或冲突请求一律 fail-closed。
+
+`AskUserQuestion` 虽然也包在 `control_request/can_use_tool` 中，但它是用户提问，不是
+权限审批。Provider 必须在 remembered permission 与普通权限 handler 之前，由独立的
+question adapter 接管：`input.questions` 映射为 `AgentQuestionRequest`，回答经
+`AgentQuestionResponsePort` 写回 `behavior: allow`，并把原始 input 与
+`answers: {<question text>: <answer string>}` 合并进 `updatedInput`。多选使用 `, ` 连接，
+空 answers map 表示 Skip。该工具不得进入会话级 allow/deny 缓存；旧版本误写的决定在
+session bind 时清理。
 
 ## 5. Claude Code → Zeta
 
@@ -117,7 +125,7 @@ pending registry 保持隔离。
 | `assistant` thinking | 映射为 reasoning delta；text/tool 边界关闭当前 phase |
 | `assistant` tool_use | 按 tool id 原位创建/更新工具卡；Edit/Write 等由 Claude-local tracker 产生文件变更快照，`ExitPlanMode` 交给 Plan adapter |
 | `user` tool_result | 按 `tool_use_id` 更新为 completed/failed；缺 `is_error` 视为成功，并携带对应 tool_use 已记录的完整快照 |
-| `control_request` / `can_use_tool` | Provider 路由到权限或 Plan pending registry |
+| `control_request` / `can_use_tool` | Provider 先后路由到 Plan、用户提问或权限的独立 pending registry |
 | `result` | first-terminal-wins；映射回合终态及本回合 usage |
 | 未识别 type | 只增加诊断计数并丢弃，不抛异常、不阻断后续帧 |
 

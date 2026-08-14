@@ -99,5 +99,52 @@ void main() {
       );
       expect(await store.load(), isEmpty);
     });
+
+    test(
+      'removes stale AskUserQuestion decisions during session bind',
+      () async {
+        final directory = await Directory.systemTemp.createTemp(
+          'zeta-claude-question-decision-',
+        );
+        addTearDown(() => directory.delete(recursive: true));
+        final file = File(
+          '${directory.path}${Platform.pathSeparator}session.json',
+        );
+        await file.writeAsString(
+          jsonEncode(<String, Object?>{
+            'version': FileClaudeCodeSessionDecisionStore.currentVersion,
+            'decisions': <Object?>[
+              <String, Object?>{
+                'toolName': 'AskUserQuestion',
+                'decision': 'deny',
+              },
+              <String, Object?>{'toolName': 'Bash', 'decision': 'allow'},
+            ],
+          }),
+        );
+        final adapter = ClaudeCodePermissionPolicyAdapter(
+          applyPermissionMode: (_) async =>
+              AgentPermissionApplyScope.nextSession,
+          sessionDecisionStoreFactory: (_) =>
+              FileClaudeCodeSessionDecisionStore(file: file),
+        );
+
+        await adapter.bindSession('session-question-cache');
+        await adapter.rememberToolDecision(
+          'AskUserQuestion',
+          ClaudeCodeSessionToolDecision.allow,
+        );
+
+        expect(adapter.decisionForTool('AskUserQuestion'), isNull);
+        expect(
+          adapter.decisionForTool('Bash'),
+          ClaudeCodeSessionToolDecision.allow,
+        );
+        final decoded = jsonDecode(await file.readAsString()) as Map;
+        expect(decoded['decisions'], <Object?>[
+          <String, Object?>{'toolName': 'Bash', 'decision': 'allow'},
+        ]);
+      },
+    );
   });
 }
