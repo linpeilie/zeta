@@ -282,7 +282,7 @@ ClaudeCodeUsageIndexedTurn _projectTurn(AgentHistoryTurn turn) {
     duration: turn.duration,
     timeToFirstToken: turn.timeToFirstToken,
     cwd: turn.cwd,
-    model: turn.model,
+    model: turn.modelId,
     inputTokens: _nonNegative(usage?.inputTokens),
     cachedInputTokens: _nonNegative(usage?.cachedInputTokens),
     outputTokens: _nonNegative(usage?.outputTokens),

@@ -3356,12 +3356,15 @@ void main() {
               turns: <AgentHistoryTurn>[
                 AgentHistoryTurn(
                   id: 'turn-1',
-                  model: 'gpt-5.5',
+                  modelId: 'gpt-5.5',
                   reasoningEffort: AgentHistoryReasoningEffort.explicit('low'),
+                  serviceTierId: 'priority',
+                  explicitFast: true,
                   raw: <String, Object?>{
                     'turnContext': <String, Object?>{
-                      'model': 'gpt-5.5',
-                      'serviceTier': 'priority',
+                      'model': 'ignored-model',
+                      'serviceTier': 'ignored-tier',
+                      'fast': false,
                     },
                   },
                 ),
@@ -3412,7 +3415,7 @@ void main() {
               turns: <AgentHistoryTurn>[
                 AgentHistoryTurn(
                   id: 'turn-1',
-                  model: 'claude-opus-5',
+                  modelId: 'claude-opus-5',
                   reasoningEffort: AgentHistoryReasoningEffort.explicit(
                     'xhigh',
                   ),
@@ -3420,7 +3423,7 @@ void main() {
               ],
               currentTurn: AgentHistoryTurn(
                 id: 'turn-1',
-                model: 'claude-opus-5',
+                modelId: 'claude-opus-5',
                 reasoningEffort: AgentHistoryReasoningEffort.explicit('xhigh'),
               ),
             ),
@@ -3484,13 +3487,13 @@ void main() {
             turns: <AgentHistoryTurn>[
               AgentHistoryTurn(
                 id: 'turn-1',
-                model: 'gpt-5.5',
+                modelId: 'gpt-5.5',
                 reasoningEffort: AgentHistoryReasoningEffort.providerDefault(),
               ),
             ],
             currentTurn: AgentHistoryTurn(
               id: 'turn-1',
-              model: 'gpt-5.5',
+              modelId: 'gpt-5.5',
               reasoningEffort: AgentHistoryReasoningEffort.providerDefault(),
             ),
           ),
@@ -3523,11 +3526,11 @@ void main() {
             'claude-thread-stale': const AgentThreadHistorySnapshot(
               threadId: 'claude-thread-stale',
               turns: <AgentHistoryTurn>[
-                AgentHistoryTurn(id: 'turn-1', model: 'claude-opus-4-1'),
+                AgentHistoryTurn(id: 'turn-1', modelId: 'claude-opus-4-1'),
               ],
               currentTurn: AgentHistoryTurn(
                 id: 'turn-1',
-                model: 'claude-opus-4-1',
+                modelId: 'claude-opus-4-1',
               ),
             ),
           },
@@ -3590,7 +3593,7 @@ void main() {
               turns: <AgentHistoryTurn>[
                 AgentHistoryTurn(
                   id: 'turn-1',
-                  model: 'gpt-5.5',
+                  modelId: 'gpt-5.5',
                   raw: <String, Object?>{
                     'turnContext': <String, Object?>{
                       'model': 'gpt-5.5',

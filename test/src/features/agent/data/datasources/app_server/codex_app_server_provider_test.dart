@@ -2712,8 +2712,10 @@ void main() {
       expect(turn.completedAt, DateTime.parse('2026-07-04T06:00:03.000Z'));
       expect(turn.duration, const Duration(seconds: 3));
       expect(turn.cwd, '/repo');
-      expect(turn.model, 'gpt-5');
+      expect(turn.modelId, 'gpt-5');
       expect(turn.reasoningEffort.value, 'high');
+      expect(turn.serviceTierId, 'priority');
+      expect(turn.explicitFast, isTrue);
       expect(turn.modelContextWindow, 258400);
       expect(turn.collaborationMode, AgentConversationModeId.defaultMode);
       expect(
@@ -2902,6 +2904,7 @@ void main() {
             'cwd': '/repo',
             'model': 'gpt-5',
             'effort': 'xhigh',
+            'service_tier': 'priority',
             'model_context_window': 258400,
             'collaboration_mode': 'Default',
           },
@@ -3006,8 +3009,10 @@ void main() {
       expect(turn.duration, const Duration(seconds: 6));
       expect(turn.timeToFirstToken, const Duration(milliseconds: 350));
       expect(turn.cwd, '/repo');
-      expect(turn.model, 'gpt-5');
+      expect(turn.modelId, 'gpt-5');
       expect(turn.reasoningEffort.value, 'xhigh');
+      expect(turn.serviceTierId, 'priority');
+      expect(turn.explicitFast, isTrue);
       expect(turn.modelContextWindow, 258400);
       expect(turn.collaborationMode, AgentConversationModeId.defaultMode);
       expect(
@@ -3175,7 +3180,7 @@ void main() {
     );
 
     test(
-      'distinguishes missing and default effort in thread history',
+      'normalizes model config aliases and keeps missing effort distinct',
       () async {
         final peer = _FakeJsonRpcPeer(
           threadReadResponseProvider: (_) => <String, Object?>{
@@ -3190,7 +3195,10 @@ void main() {
                 <String, Object?>{
                   'id': 'turn-default',
                   'status': 'completed',
+                  'model_id': 'gpt-5.5',
                   'effort': null,
+                  'service_tier_id': 'priority',
+                  'fastMode': 'false',
                   'items': <Object?>[],
                 },
               ],
@@ -3212,6 +3220,9 @@ void main() {
           history.turns[1].reasoningEffort.kind,
           AgentHistoryReasoningEffortKind.providerDefault,
         );
+        expect(history.turns[1].modelId, 'gpt-5.5');
+        expect(history.turns[1].serviceTierId, 'priority');
+        expect(history.turns[1].explicitFast, isFalse);
       },
     );
 
@@ -4159,6 +4170,7 @@ void main() {
                     'id': 'turn-capacity',
                     'status': 'failed',
                     'effort': 'high',
+                    'serviceTier': 'priority',
                     'items': <Object?>[],
                     'error': <String, Object?>{
                       'message':
@@ -4219,6 +4231,8 @@ void main() {
         expect(turn.id, 'turn-capacity');
         expect(turn.status, AgentHistoryTurnStatus.failed);
         expect(turn.reasoningEffort.value, 'high');
+        expect(turn.serviceTierId, 'priority');
+        expect(turn.explicitFast, isTrue);
         expect(turn.errorMessage, contains('at capacity'));
         expect(turn.errorCode, 'serverOverloaded');
       },
@@ -5772,6 +5786,7 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
               'cwd': '/repo',
               'model': 'gpt-5',
               'effort': 'high',
+              'serviceTier': 'priority',
               'modelContextWindow': 258400,
               'collaborationMode': 'Default',
               'items': <Object?>[

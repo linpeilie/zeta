@@ -2254,7 +2254,7 @@ class GrokAcpAgentProvider
       final window =
           turn.modelContextWindow ??
           usage?.modelContextWindow ??
-          _contextWindowForModel(turn.model);
+          _contextWindowForModel(turn.modelId);
       if (window == null) {
         turns.add(turn);
         continue;
@@ -2269,7 +2269,10 @@ class GrokAcpAgentProvider
           duration: turn.duration,
           timeToFirstToken: turn.timeToFirstToken,
           cwd: turn.cwd,
-          model: turn.model,
+          modelId: turn.modelId,
+          reasoningEffort: turn.reasoningEffort,
+          serviceTierId: turn.serviceTierId,
+          explicitFast: turn.explicitFast,
           modelContextWindow: window,
           collaborationMode: turn.collaborationMode,
           tokenUsage: usage == null ? null : _withContextWindow(usage, window),

@@ -966,7 +966,7 @@ void main() {
           sessionPath: sessionDir.path,
         );
 
-        expect(history.turns.single.model, 'grok-4.5');
+        expect(history.turns.single.modelId, 'grok-4.5');
         expect(history.turns.single.modelContextWindow, 500000);
         expect(history.turns.single.tokenUsage?.modelContextWindow, 500000);
         expect(history.turns.single.tokenUsage?.totalTokens, 403400);

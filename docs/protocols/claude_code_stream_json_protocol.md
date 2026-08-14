@@ -231,11 +231,12 @@ absolutePath.replaceAll(RegExp(r'[\\/:]'), '-')
 Claude Code 文件。完整 history 有自己的 parser/identity/reducer；磁盘 JSONL 不能当作
 live stream 原样送入 mapper。
 
-本地 JSONL 的 `assistant` 记录可能在顶层携带本回合 `effort`。history parser
-必须在 Claude data 边界把同一 turn 内稳定一致的非空值投影为中立 typed
-`AgentHistoryTurn.reasoningEffort` 的 explicit value；缺失时保持 unknown，出现冲突值时保守丢弃，禁止用
-当前 Composer 选择、模型默认值、thinking 内容或相邻 turn 推断。该 typed 字段同时供
-历史 turn footer 与恢复后的下一回合模型配置使用，raw payload 不进入共享 Store/UI。
+本地 JSONL 的 `assistant.message.model` 提供本回合模型，顶层还可能携带 `effort`。
+history parser 必须在 Claude data 边界分别投影为 typed `AgentHistoryTurn.modelId` 与
+`reasoningEffort` explicit value；effort 缺失时保持 unknown，出现冲突值时保守丢弃。
+当前协议没有可靠的 Composer service tier / Fast 历史证据，因此 `serviceTierId` 与
+`explicitFast` 保持未知，禁止从 usage `service_tier`、当前选择、模型默认值、thinking
+内容或相邻 turn 推断。共享 Store/ViewModel/UI 不读取 raw payload。
 
 “从列表移除”只把 project-scoped thread key 写入 Zeta 自有、版本化且宽容解码的
 hidden list；原始 Claude history 保留不动。

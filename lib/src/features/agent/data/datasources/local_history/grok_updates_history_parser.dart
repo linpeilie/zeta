@@ -94,7 +94,7 @@ class GrokUpdatesHistoryParser {
         id: turnId,
         sessionId: sessionId,
         stablePromptId: promptId,
-        model: currentModelId,
+        modelId: currentModelId,
       )..noteTime(at);
       turns.add(next);
       current = next;
@@ -157,7 +157,7 @@ class GrokUpdatesHistoryParser {
         ]);
         if (reportedModelId != null) {
           currentModelId = reportedModelId;
-          current?.model ??= reportedModelId;
+          current?.modelId ??= reportedModelId;
         }
 
         final decoded = mapper.decoder.decode(normalizedParams);
@@ -290,7 +290,7 @@ class _TurnBuilder {
     required this.id,
     required this.sessionId,
     this.stablePromptId,
-    this.model,
+    this.modelId,
   });
 
   final String id;
@@ -310,7 +310,7 @@ class _TurnBuilder {
   DateTime? startedAt;
   DateTime? completedAt;
   Duration? duration;
-  String? model;
+  String? modelId;
   bool identityTerminal = false;
 
   bool get hasContent => entries.isNotEmpty;
@@ -536,7 +536,7 @@ class _TurnBuilder {
       startedAt: startedAt,
       completedAt: completedAt,
       duration: duration,
-      model: model,
+      modelId: modelId,
       tokenUsage: tokenUsage,
       // Grok turn_completed.usage 是本回合绝对用量，不是会话累计。
       tokenUsageIsSessionCumulative: false,

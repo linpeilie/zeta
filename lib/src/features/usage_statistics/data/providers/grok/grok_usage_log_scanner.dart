@@ -364,7 +364,7 @@ GrokUsageIndexedTurn _projectTurn(AgentHistoryTurn turn) {
     duration: turn.duration,
     timeToFirstToken: turn.timeToFirstToken,
     cwd: turn.cwd,
-    model: turn.model,
+    model: turn.modelId,
     inputTokens: _exclusiveTokens(usage?.inputTokens, cached),
     cachedInputTokens: cached,
     outputTokens: _exclusiveTokens(usage?.outputTokens, reasoning),

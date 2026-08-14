@@ -624,10 +624,11 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
   冲突确认、保存回滚/重试与运行中的下一回合 Banner。
 - 目录首次加载失败时必须渲染 `AgentModelConfigUiState.refreshError` 的中立状态；tooltip、
   semantics 和日志不得展示 Provider 原始异常。已有 stale 列表时保留列表并显示刷新警示。
-- 历史 parser 必须在 Provider data 边界把协议别名归一化到唯一的
-  `AgentHistoryTurn.reasoningEffort` typed 字段，并明确区分 unknown、Provider default 与
-  explicit value。共享 TimelineStore/ViewModel/footer 只消费该字段；缺失或冲突证据保持
-  unknown，不得从 raw、当前选择、模型默认值或相邻 turn 猜测。
+- 历史 parser 必须在 Provider data 边界把协议别名归一化到
+  `AgentHistoryTurn.modelId`、`reasoningEffort`、`serviceTierId` 和 `explicitFast` typed 字段；
+  reasoning effort 明确区分 unknown、Provider default 与 explicit value，Fast 是否可由
+  service tier 推导也由 Provider 决定。共享 TimelineStore/ViewModel/footer 只消费 typed
+  字段；缺失或冲突证据保持 unknown，不得从 raw、当前选择、模型默认值或相邻 turn 猜测。
 
 ### 使用统计开发约束
 

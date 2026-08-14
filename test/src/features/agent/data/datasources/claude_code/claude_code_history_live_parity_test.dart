@@ -241,7 +241,7 @@ void main() {
         expect(turn.completedAt, DateTime.utc(2026, 8, 10, 1, 0, 3));
         expect(turn.duration, const Duration(seconds: 3));
         expect(turn.cwd, projectPath);
-        expect(turn.model, 'claude-test-model');
+        expect(turn.modelId, 'claude-test-model');
         expect(turn.tokenUsageIsSessionCumulative, isFalse);
         expect(turn.tokenUsage?.inputTokens, 8);
         expect(turn.tokenUsage?.outputTokens, 6);

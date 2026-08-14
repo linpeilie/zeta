@@ -114,7 +114,7 @@ void main() {
 
       final turn = parser.parse(threadId: 's1', content: content).turns.single;
 
-      expect(turn.model, 'grok-4.5');
+      expect(turn.modelId, 'grok-4.5');
       expect(turn.tokenUsage?.modelContextWindow, 500000);
     });
 

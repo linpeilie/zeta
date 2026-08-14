@@ -134,15 +134,18 @@ void main() {
   });
 
   group('AgentTurnModelConfig', () {
-    test('uses typed effort and parses remaining model config', () {
+    test('uses only Provider-normalized model config', () {
       const turn = AgentHistoryTurn(
         id: 'turn-1',
-        model: 'gpt-5.5',
+        modelId: 'gpt-5.5',
         reasoningEffort: AgentHistoryReasoningEffort.explicit('high'),
+        serviceTierId: 'priority',
+        explicitFast: true,
         raw: <String, Object?>{
           'turnContext': <String, Object?>{
-            'model': 'gpt-5.5',
-            'serviceTier': 'priority',
+            'model': 'ignored-model',
+            'serviceTier': 'ignored-tier',
+            'fast': false,
           },
         },
       );
@@ -154,26 +157,34 @@ void main() {
       expect(config.fastEnabled, isTrue);
     });
 
-    test('ignores raw effort aliases after Provider normalization', () {
+    test('ignores every raw model config alias', () {
       const turn = AgentHistoryTurn(
         id: 'turn-typed-effort',
-        model: 'claude-opus-5',
+        modelId: 'claude-opus-5',
         reasoningEffort: AgentHistoryReasoningEffort.explicit('xhigh'),
+        explicitFast: false,
         raw: <String, Object?>{
-          'turnContext': <String, Object?>{'effort': 'low'},
+          'turnContext': <String, Object?>{
+            'model': 'raw-model',
+            'effort': 'low',
+            'serviceTier': 'priority',
+            'fast': true,
+          },
         },
       );
 
       final config = AgentTurnModelConfig.fromHistoryTurn(turn);
 
       expect(config?.reasoningEffort, 'xhigh');
+      expect(config?.modelId, 'claude-opus-5');
+      expect(config?.fastEnabled, isFalse);
     });
 
     test('keeps unknown and explicit provider default distinct', () {
-      const unknown = AgentHistoryTurn(id: 'turn-unknown', model: 'gpt-5.5');
+      const unknown = AgentHistoryTurn(id: 'turn-unknown', modelId: 'gpt-5.5');
       const providerDefault = AgentHistoryTurn(
         id: 'turn-default',
-        model: 'gpt-5.5',
+        modelId: 'gpt-5.5',
         reasoningEffort: AgentHistoryReasoningEffort.providerDefault(),
       );
 
@@ -186,8 +197,16 @@ void main() {
       );
     });
 
-    test('returns null when turn has no model config', () {
-      const turn = AgentHistoryTurn(id: 'turn-empty');
+    test('returns null when only raw model config exists', () {
+      const turn = AgentHistoryTurn(
+        id: 'turn-empty',
+        raw: <String, Object?>{
+          'modelId': 'raw-model',
+          'reasoning_effort': 'high',
+          'service_tier_id': 'priority',
+          'fast_enabled': true,
+        },
+      );
       expect(AgentTurnModelConfig.fromHistoryTurn(turn), isNull);
     });
 

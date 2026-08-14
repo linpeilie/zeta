@@ -97,8 +97,10 @@ class _CodexThreadHistoryReader {
             completedAt: completedAt,
             duration: _durationFromMilliseconds(turn['durationMs']),
             cwd: _string(turn['cwd']),
-            model: _string(turn['model']),
+            modelId: _codexHistoryModelId(turn),
             reasoningEffort: _codexReadReasoningEffort(turn),
+            serviceTierId: _codexHistoryServiceTierId(turn),
+            explicitFast: _codexHistoryExplicitFast(turn),
             modelContextWindow:
                 _numberToInt(turn['modelContextWindow']) ??
                 _numberToInt(turn['model_context_window']),
@@ -142,7 +144,7 @@ class _CodexThreadHistoryReader {
   ///
   /// Codex session JSONL 通常不持久化 `error` 通知；live 时 `serverOverloaded`
   /// 等失败只会经 JSON-RPC 到达客户端。优先使用内容更完整的本地条目，仅在
-  /// 本地 turn 缺少 reasoning effort 或 error/failed 状态时用远端补齐。
+  /// 本地 turn 缺少模型配置证据或 error/failed 状态时用远端补齐。
   AgentThreadHistorySnapshot mergeRemoteTurnFailures({
     required AgentThreadHistorySnapshot local,
     required AgentThreadHistorySnapshot remote,
@@ -200,6 +202,11 @@ class _CodexThreadHistoryReader {
         remoteError.isNotEmpty;
     final needsReasoningEffort =
         !local.reasoningEffort.isKnown && remote.reasoningEffort.isKnown;
+    final needsModelId = local.modelId == null && remote.modelId != null;
+    final needsServiceTierId =
+        local.serviceTierId == null && remote.serviceTierId != null;
+    final needsExplicitFast =
+        local.explicitFast == null && remote.explicitFast != null;
 
     final localError = local.errorMessage?.trim();
     final needsStatus =
@@ -213,7 +220,13 @@ class _CodexThreadHistoryReader {
         (local.errorCode == null || local.errorCode!.trim().isEmpty) &&
         remote.errorCode != null &&
         remote.errorCode!.trim().isNotEmpty;
-    if (!needsReasoningEffort && !needsStatus && !needsMessage && !needsCode) {
+    if (!needsReasoningEffort &&
+        !needsModelId &&
+        !needsServiceTierId &&
+        !needsExplicitFast &&
+        !needsStatus &&
+        !needsMessage &&
+        !needsCode) {
       return local;
     }
 
@@ -226,10 +239,12 @@ class _CodexThreadHistoryReader {
       duration: local.duration ?? remote.duration,
       timeToFirstToken: local.timeToFirstToken ?? remote.timeToFirstToken,
       cwd: local.cwd ?? remote.cwd,
-      model: local.model ?? remote.model,
+      modelId: local.modelId ?? remote.modelId,
       reasoningEffort: needsReasoningEffort
           ? remote.reasoningEffort
           : local.reasoningEffort,
+      serviceTierId: local.serviceTierId ?? remote.serviceTierId,
+      explicitFast: local.explicitFast ?? remote.explicitFast,
       modelContextWindow: local.modelContextWindow ?? remote.modelContextWindow,
       collaborationMode: local.collaborationMode ?? remote.collaborationMode,
       tokenUsage: local.tokenUsage ?? remote.tokenUsage,
@@ -238,7 +253,11 @@ class _CodexThreadHistoryReader {
       errorCode: needsCode ? remote.errorCode : local.errorCode,
       raw: <String, Object?>{
         ...local.raw,
-        if (needsReasoningEffort) 'remoteReasoningEffortOverlay': true,
+        if (needsReasoningEffort ||
+            needsModelId ||
+            needsServiceTierId ||
+            needsExplicitFast)
+          'remoteModelConfigOverlay': true,
         if (hasRemoteFailure)
           'remoteFailureOverlay': <String, Object?>{
             'status': remote.status.name,
@@ -504,3 +523,73 @@ class _CodexThreadHistoryReader {
     );
   }
 }
+
+const _codexModelIdKeys = <String>['model', 'modelId', 'model_id'];
+const _codexServiceTierKeys = <String>[
+  'serviceTier',
+  'service_tier',
+  'serviceTierId',
+  'service_tier_id',
+];
+const _codexExplicitFastKeys = <String>[
+  'fast',
+  'fastMode',
+  'isFast',
+  'fast_enabled',
+];
+
+String? _codexHistoryModelId(Map<String, Object?> source) =>
+    _codexHistoryString(source, _codexModelIdKeys);
+
+String? _codexHistoryServiceTierId(Map<String, Object?> source) =>
+    _codexHistoryString(source, _codexServiceTierKeys);
+
+bool? _codexHistoryExplicitFast(Map<String, Object?> source) {
+  for (final key in _codexExplicitFastKeys) {
+    if (!source.containsKey(key)) {
+      continue;
+    }
+    final explicit = _codexHistoryBool(source[key]);
+    if (explicit != null) {
+      return explicit;
+    }
+  }
+  if (!_codexHistoryContainsAnyKey(source, _codexServiceTierKeys)) {
+    return null;
+  }
+  final serviceTierId = _codexHistoryServiceTierId(source);
+  if (serviceTierId == null) {
+    return false;
+  }
+  final normalized = serviceTierId.toLowerCase();
+  return normalized == 'fast' || normalized == 'priority';
+}
+
+String? _codexHistoryString(Map<String, Object?> source, List<String> keys) {
+  for (final key in keys) {
+    final value = _string(source[key])?.trim();
+    if (value != null && value.isNotEmpty) {
+      return value;
+    }
+  }
+  return null;
+}
+
+bool? _codexHistoryBool(Object? value) {
+  if (value is bool) {
+    return value;
+  }
+  if (value is String) {
+    return switch (value.trim().toLowerCase()) {
+      'true' || '1' || 'yes' => true,
+      'false' || '0' || 'no' => false,
+      _ => null,
+    };
+  }
+  return null;
+}
+
+bool _codexHistoryContainsAnyKey(
+  Map<String, Object?> source,
+  List<String> keys,
+) => keys.any(source.containsKey);

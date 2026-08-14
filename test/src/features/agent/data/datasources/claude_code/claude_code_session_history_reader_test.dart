@@ -200,8 +200,11 @@ void main() {
         );
 
         expect(snapshot.turns, hasLength(3));
+        expect(snapshot.turns[0].modelId, 'claude-test-model');
         expect(snapshot.turns[0].reasoningEffort.value, 'xhigh');
         expect(snapshot.turns[0].reasoningEffort.isKnown, isTrue);
+        expect(snapshot.turns[0].serviceTierId, isNull);
+        expect(snapshot.turns[0].explicitFast, isNull);
         expect(snapshot.turns[1].reasoningEffort.isKnown, isFalse);
         expect(snapshot.turns[2].reasoningEffort.isKnown, isFalse);
       },

@@ -86,8 +86,10 @@ class AgentHistoryTurn {
     this.duration,
     this.timeToFirstToken,
     this.cwd,
-    this.model,
+    this.modelId,
     this.reasoningEffort = const AgentHistoryReasoningEffort.unknown(),
+    this.serviceTierId,
+    this.explicitFast,
     this.modelContextWindow,
     this.collaborationMode,
     this.tokenUsage,
@@ -121,14 +123,22 @@ class AgentHistoryTurn {
   /// turn 运行目录。
   final String? cwd;
 
-  /// 使用的模型。
-  final String? model;
+  /// Provider 归一化后的模型 id 或模型标识。
+  final String? modelId;
 
   /// 本回合实际使用的归一化推理深度证据。
   ///
   /// Provider 历史解析器应在协议边界完成归一化；缺少可靠证据时使用
   /// [AgentHistoryReasoningEffort.unknown]，不得用当前配置、模型默认值或相邻回合推断。
   final AgentHistoryReasoningEffort reasoningEffort;
+
+  /// Provider 归一化后的服务档位 id；缺少可靠证据时为空。
+  final String? serviceTierId;
+
+  /// Provider 归一化后的 Fast 开关证据；缺少可靠证据时为空。
+  ///
+  /// Provider 可以按自身协议从显式布尔字段或服务档位推导该值。
+  final bool? explicitFast;
 
   /// 模型上下文窗口大小。
   final int? modelContextWindow;
@@ -180,65 +190,17 @@ class AgentTurnModelConfig {
 
   /// 从历史 turn 解析本回合模型配置。
   ///
-  /// 推理深度只读取 Provider 已归一化的 typed 字段；`turnContext` 与顶层 raw
-  /// 仅兼容尚未 typed 化的模型和 Fast 信息。
+  /// 所有字段只读取 Provider 已归一化的 typed 历史证据。
   static AgentTurnModelConfig? fromHistoryTurn(AgentHistoryTurn turn) {
-    final turnContext = _objectMap(turn.raw['turnContext']);
-    final source = turnContext.isEmpty ? turn.raw : turnContext;
-
-    final modelId =
-        _nonEmptyString(turn.model) ??
-        _nonEmptyString(source['model']) ??
-        _nonEmptyString(source['modelId']);
-
+    final modelId = _nonEmptyString(turn.modelId);
     final reasoningEffort = _nonEmptyString(turn.reasoningEffort.value);
-
-    final serviceTierId =
-        _nonEmptyString(source['serviceTier']) ??
-        _nonEmptyString(source['service_tier']) ??
-        _nonEmptyString(source['serviceTierId']) ??
-        _nonEmptyString(source['service_tier_id']);
-
-    final explicitFast =
-        _boolValue(source['fast']) ??
-        _boolValue(source['fastMode']) ??
-        _boolValue(source['isFast']) ??
-        _boolValue(source['fast_enabled']);
-
-    final fastEnabled =
-        explicitFast ?? _fastEnabledFromServiceTier(serviceTierId);
 
     final config = AgentTurnModelConfig(
       modelId: modelId,
       reasoningEffort: reasoningEffort,
-      fastEnabled: fastEnabled,
+      fastEnabled: turn.explicitFast,
     );
     return config.hasDisplayable ? config : null;
-  }
-
-  static bool? _fastEnabledFromServiceTier(String? serviceTierId) {
-    if (serviceTierId == null) {
-      return null;
-    }
-    final normalized = serviceTierId.trim().toLowerCase();
-    if (normalized.isEmpty) {
-      return null;
-    }
-    // 与 agentFastServiceTier 启发式一致：fast / priority 视为 Fast。
-    if (normalized == 'fast' || normalized == 'priority') {
-      return true;
-    }
-    return false;
-  }
-
-  static Map<String, Object?> _objectMap(Object? value) {
-    if (value is! Map) {
-      return const <String, Object?>{};
-    }
-    return <String, Object?>{
-      for (final entry in value.entries)
-        if (entry.key is String) entry.key as String: entry.value,
-    };
   }
 
   static String? _nonEmptyString(Object? value) {
@@ -247,22 +209,6 @@ class AgentTurnModelConfig {
     }
     final trimmed = value.trim();
     return trimmed.isEmpty ? null : trimmed;
-  }
-
-  static bool? _boolValue(Object? value) {
-    if (value is bool) {
-      return value;
-    }
-    if (value is String) {
-      final normalized = value.trim().toLowerCase();
-      if (normalized == 'true' || normalized == '1' || normalized == 'yes') {
-        return true;
-      }
-      if (normalized == 'false' || normalized == '0' || normalized == 'no') {
-        return false;
-      }
-    }
-    return null;
   }
 }
 

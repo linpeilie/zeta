@@ -1601,38 +1601,24 @@ class AgentConversationViewModel {
     if (turn == null) {
       return null;
     }
-    final turnContext = _objectMap(turn.raw['turnContext']);
-    final source = turnContext.isEmpty ? turn.raw : turnContext;
-
     Object? reasoningEffort = _threadModelSelectionUnset;
     if (turn.reasoningEffort.isKnown) {
       reasoningEffort = _nonEmptyValue(turn.reasoningEffort.value);
     }
 
     Object? serviceTierId = _threadModelSelectionUnset;
-    if (source.containsKey('serviceTier')) {
-      serviceTierId = _stringValue(source['serviceTier']);
-    } else if (source.containsKey('service_tier')) {
-      serviceTierId = _stringValue(source['service_tier']);
-    } else if (source.containsKey('serviceTierId')) {
-      serviceTierId = _stringValue(source['serviceTierId']);
-    } else if (source.containsKey('service_tier_id')) {
-      serviceTierId = _stringValue(source['service_tier_id']);
+    final typedServiceTierId = _nonEmptyValue(turn.serviceTierId);
+    if (typedServiceTierId != null) {
+      serviceTierId = typedServiceTierId;
     }
 
     Object? fastEnabled = _threadModelSelectionUnset;
-    if (source.containsKey('fast')) {
-      fastEnabled = _boolValue(source['fast']);
-    } else if (source.containsKey('fastMode')) {
-      fastEnabled = _boolValue(source['fastMode']);
-    } else if (source.containsKey('isFast')) {
-      fastEnabled = _boolValue(source['isFast']);
-    } else if (source.containsKey('fast_enabled')) {
-      fastEnabled = _boolValue(source['fast_enabled']);
+    if (turn.explicitFast != null) {
+      fastEnabled = turn.explicitFast;
     }
 
     final patch = _ThreadModelSelectionPatch(
-      modelId: _nonEmptyValue(turn.model) ?? _stringValue(source['model']),
+      modelId: _nonEmptyValue(turn.modelId),
       reasoningEffort: reasoningEffort,
       serviceTierId: serviceTierId,
       fastEnabled: fastEnabled,
@@ -1706,15 +1692,6 @@ class AgentConversationViewModel {
       }
     }
     return candidate;
-  }
-
-  Map<String, Object?> _objectMap(Object? value) {
-    if (value is! Map) {
-      return const <String, Object?>{};
-    }
-    return <String, Object?>{
-      for (final entry in value.entries) entry.key.toString(): entry.value,
-    };
   }
 
   String? _stringValue(Object? value) {

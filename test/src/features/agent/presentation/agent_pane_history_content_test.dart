@@ -87,7 +87,7 @@ void main() {
                   id: 'turn-grok-failed',
                   status: AgentHistoryTurnStatus.failed,
                   duration: Duration(seconds: 9),
-                  model: 'grok-4.5',
+                  modelId: 'grok-4.5',
                   errorMessage: errorMessage,
                   entries: <AgentHistoryEntry>[
                     AgentHistoryMessageEntry(
@@ -145,7 +145,7 @@ void main() {
                   id: 'turn-capacity',
                   status: AgentHistoryTurnStatus.failed,
                   duration: Duration(seconds: 12),
-                  model: 'gpt-5.6-luna',
+                  modelId: 'gpt-5.6-luna',
                   errorMessage: errorMessage,
                   errorCode: 'serverOverloaded',
                   entries: <AgentHistoryEntry>[
@@ -195,8 +195,10 @@ void main() {
                   id: 'turn-footer-1',
                   status: AgentHistoryTurnStatus.completed,
                   duration: const Duration(seconds: 95),
-                  model: 'gpt-5.5',
+                  modelId: 'gpt-5.5',
                   reasoningEffort: AgentHistoryReasoningEffort.explicit('high'),
+                  serviceTierId: 'priority',
+                  explicitFast: true,
                   tokenUsage: const AgentTokenUsage(
                     inputTokens: 1000,
                     outputTokens: 240,
@@ -205,7 +207,7 @@ void main() {
                   raw: const <String, Object?>{
                     'turnContext': <String, Object?>{
                       'model': 'gpt-5.5',
-                      'serviceTier': 'priority',
+                      'serviceTier': 'ignored',
                     },
                   },
                   entries: const <AgentHistoryEntry>[

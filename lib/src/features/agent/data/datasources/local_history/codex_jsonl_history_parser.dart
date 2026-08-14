@@ -306,7 +306,7 @@ class _JsonlHistoryParser {
     }
     turn
       ..cwd = _string(payload['cwd']) ?? turn.cwd
-      ..model = _string(payload['model']) ?? turn.model
+      ..modelId = _codexHistoryModelId(payload) ?? turn.modelId
       ..modelContextWindow =
           _numberToInt(payload['model_context_window']) ??
           turn.modelContextWindow
@@ -317,6 +317,13 @@ class _JsonlHistoryParser {
           turn.collaborationMode;
     if (payload.containsKey('effort')) {
       turn.reasoningEffort = _codexJsonlReasoningEffort(payload['effort']);
+    }
+    if (_codexHistoryContainsAnyKey(payload, _codexServiceTierKeys)) {
+      turn.serviceTierId = _codexHistoryServiceTierId(payload);
+    }
+    final explicitFast = _codexHistoryExplicitFast(payload);
+    if (explicitFast != null) {
+      turn.explicitFast = explicitFast;
     }
     turn.raw['turnContext'] = payload;
   }
@@ -842,9 +849,11 @@ class _JsonlTurnBuilder {
   Duration? duration;
   Duration? timeToFirstToken;
   String? cwd;
-  String? model;
+  String? modelId;
   AgentHistoryReasoningEffort reasoningEffort =
       const AgentHistoryReasoningEffort.unknown();
+  String? serviceTierId;
+  bool? explicitFast;
   int? modelContextWindow;
   AgentConversationModeId? collaborationMode;
   AgentTokenUsage? tokenUsage;
@@ -866,8 +875,10 @@ class _JsonlTurnBuilder {
       duration: duration,
       timeToFirstToken: timeToFirstToken,
       cwd: cwd,
-      model: model,
+      modelId: modelId,
       reasoningEffort: reasoningEffort,
+      serviceTierId: serviceTierId,
+      explicitFast: explicitFast,
       modelContextWindow: modelContextWindow,
       collaborationMode: collaborationMode,
       tokenUsage: tokenUsage,

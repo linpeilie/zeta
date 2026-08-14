@@ -317,12 +317,14 @@ void main() {
           turns: <AgentHistoryTurn>[
             AgentHistoryTurn(
               id: 'turn-history',
-              model: 'gpt-5.5',
+              modelId: 'gpt-5.5',
               reasoningEffort: AgentHistoryReasoningEffort.explicit('medium'),
+              serviceTierId: 'priority',
+              explicitFast: true,
               status: AgentHistoryTurnStatus.completed,
               duration: Duration(seconds: 12),
               raw: <String, Object?>{
-                'turnContext': <String, Object?>{'serviceTier': 'priority'},
+                'turnContext': <String, Object?>{'serviceTier': 'ignored'},
               },
             ),
           ],

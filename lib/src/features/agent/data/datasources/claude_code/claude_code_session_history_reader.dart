@@ -579,7 +579,7 @@ class ClaudeCodeSessionHistoryReader {
           reducer.updateTurnMetadata(
             turnId: turnId,
             cwd: _string(frame['cwd']) ?? cwd,
-            model: _string(message['model']),
+            modelId: _string(message['model']),
             reasoningEffort: _string(frame['effort']),
           );
           if (_string(message['stop_reason']) == 'end_turn') {
@@ -771,7 +771,7 @@ final class _ClaudeCodeHistoryEventReducer {
   void updateTurnMetadata({
     required String turnId,
     String? cwd,
-    String? model,
+    String? modelId,
     String? reasoningEffort,
   }) {
     final turn = _turns[turnId];
@@ -780,7 +780,7 @@ final class _ClaudeCodeHistoryEventReducer {
     }
     turn
       ..cwd = cwd ?? turn.cwd
-      ..model = model ?? turn.model
+      ..modelId = modelId ?? turn.modelId
       ..observeReasoningEffort(reasoningEffort);
   }
 
@@ -808,7 +808,7 @@ final class _MutableHistoryTurn {
   DateTime? completedAt;
   Duration? duration;
   String? cwd;
-  String? model;
+  String? modelId;
   AgentHistoryReasoningEffort reasoningEffort =
       const AgentHistoryReasoningEffort.unknown();
   bool _hasReasoningEffortConflict = false;
@@ -947,7 +947,7 @@ final class _MutableHistoryTurn {
       completedAt: completedAt,
       duration: duration,
       cwd: cwd,
-      model: model,
+      modelId: modelId,
       reasoningEffort: reasoningEffort,
       tokenUsage: tokenUsage,
       tokenUsageIsSessionCumulative: tokenUsageIsSessionCumulative,
