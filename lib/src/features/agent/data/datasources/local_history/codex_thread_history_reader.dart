@@ -98,6 +98,7 @@ class _CodexThreadHistoryReader {
             duration: _durationFromMilliseconds(turn['durationMs']),
             cwd: _string(turn['cwd']),
             model: _string(turn['model']),
+            reasoningEffort: _codexReadReasoningEffort(turn),
             modelContextWindow:
                 _numberToInt(turn['modelContextWindow']) ??
                 _numberToInt(turn['model_context_window']),
@@ -137,11 +138,11 @@ class _CodexThreadHistoryReader {
     return map.isEmpty ? null : map.keys.first;
   }
 
-  /// 将 thread/read 中的终态错误叠到本地 JSONL 历史上。
+  /// 将 thread/read 中的补充元数据与终态错误叠到本地 JSONL 历史上。
   ///
   /// Codex session JSONL 通常不持久化 `error` 通知；live 时 `serverOverloaded`
   /// 等失败只会经 JSON-RPC 到达客户端。优先使用内容更完整的本地条目，仅在
-  /// 本地 turn 缺少 error/failed 状态时用远端补齐。
+  /// 本地 turn 缺少 reasoning effort 或 error/failed 状态时用远端补齐。
   AgentThreadHistorySnapshot mergeRemoteTurnFailures({
     required AgentThreadHistorySnapshot local,
     required AgentThreadHistorySnapshot remote,
@@ -160,7 +161,7 @@ class _CodexThreadHistoryReader {
         mergedTurns.add(localTurn);
         continue;
       }
-      final merged = _overlayRemoteFailure(localTurn, remoteTurn);
+      final merged = _overlayRemoteTurn(localTurn, remoteTurn);
       if (!identical(merged, localTurn)) {
         changed = true;
       }
@@ -188,7 +189,7 @@ class _CodexThreadHistoryReader {
     );
   }
 
-  AgentHistoryTurn _overlayRemoteFailure(
+  AgentHistoryTurn _overlayRemoteTurn(
     AgentHistoryTurn local,
     AgentHistoryTurn remote,
   ) {
@@ -197,20 +198,22 @@ class _CodexThreadHistoryReader {
         remote.status == AgentHistoryTurnStatus.failed &&
         remoteError != null &&
         remoteError.isNotEmpty;
-    if (!hasRemoteFailure) {
-      return local;
-    }
+    final needsReasoningEffort =
+        !local.reasoningEffort.isKnown && remote.reasoningEffort.isKnown;
 
     final localError = local.errorMessage?.trim();
     final needsStatus =
+        hasRemoteFailure &&
         local.status != AgentHistoryTurnStatus.failed &&
         local.status != AgentHistoryTurnStatus.interrupted;
-    final needsMessage = localError == null || localError.isEmpty;
+    final needsMessage =
+        hasRemoteFailure && (localError == null || localError.isEmpty);
     final needsCode =
+        hasRemoteFailure &&
         (local.errorCode == null || local.errorCode!.trim().isEmpty) &&
         remote.errorCode != null &&
         remote.errorCode!.trim().isNotEmpty;
-    if (!needsStatus && !needsMessage && !needsCode) {
+    if (!needsReasoningEffort && !needsStatus && !needsMessage && !needsCode) {
       return local;
     }
 
@@ -224,6 +227,9 @@ class _CodexThreadHistoryReader {
       timeToFirstToken: local.timeToFirstToken ?? remote.timeToFirstToken,
       cwd: local.cwd ?? remote.cwd,
       model: local.model ?? remote.model,
+      reasoningEffort: needsReasoningEffort
+          ? remote.reasoningEffort
+          : local.reasoningEffort,
       modelContextWindow: local.modelContextWindow ?? remote.modelContextWindow,
       collaborationMode: local.collaborationMode ?? remote.collaborationMode,
       tokenUsage: local.tokenUsage ?? remote.tokenUsage,
@@ -232,13 +238,38 @@ class _CodexThreadHistoryReader {
       errorCode: needsCode ? remote.errorCode : local.errorCode,
       raw: <String, Object?>{
         ...local.raw,
-        'remoteFailureOverlay': <String, Object?>{
-          'status': remote.status.name,
-          'errorMessage': remote.errorMessage,
-          'errorCode': remote.errorCode,
-        },
+        if (needsReasoningEffort) 'remoteReasoningEffortOverlay': true,
+        if (hasRemoteFailure)
+          'remoteFailureOverlay': <String, Object?>{
+            'status': remote.status.name,
+            'errorMessage': remote.errorMessage,
+            'errorCode': remote.errorCode,
+          },
       },
     );
+  }
+
+  AgentHistoryReasoningEffort _codexReadReasoningEffort(
+    Map<String, Object?> turn,
+  ) {
+    for (final key in const <String>[
+      'effort',
+      'reasoningEffort',
+      'reasoning_effort',
+    ]) {
+      if (!turn.containsKey(key)) {
+        continue;
+      }
+      final raw = turn[key];
+      if (raw == null) {
+        return const AgentHistoryReasoningEffort.providerDefault();
+      }
+      final effort = _string(raw);
+      return effort == null
+          ? const AgentHistoryReasoningEffort.unknown()
+          : AgentHistoryReasoningEffort.explicit(effort);
+    }
+    return const AgentHistoryReasoningEffort.unknown();
   }
 
   AgentHistoryEntry? _historyEntryFromItem(

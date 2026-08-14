@@ -1,6 +1,6 @@
 # Claude Code stream-json 协议基线
 
-最后更新：2026-08-12
+最后更新：2026-08-14
 
 本文记录 Zeta 当前 Claude Code Provider 的实际协议边界、已验证帧形状和升级门禁。
 它是实现与维护时的事实基线；早期取舍和未落地设想见
@@ -230,6 +230,12 @@ absolutePath.replaceAll(RegExp(r'[\\/:]'), '-')
 列表只读取每个文件的有界头尾窗口，跳过损坏行并计数，不跟随符号链接，也不改写
 Claude Code 文件。完整 history 有自己的 parser/identity/reducer；磁盘 JSONL 不能当作
 live stream 原样送入 mapper。
+
+本地 JSONL 的 `assistant` 记录可能在顶层携带本回合 `effort`。history parser
+必须在 Claude data 边界把同一 turn 内稳定一致的非空值投影为中立 typed
+`AgentHistoryTurn.reasoningEffort` 的 explicit value；缺失时保持 unknown，出现冲突值时保守丢弃，禁止用
+当前 Composer 选择、模型默认值、thinking 内容或相邻 turn 推断。该 typed 字段同时供
+历史 turn footer 与恢复后的下一回合模型配置使用，raw payload 不进入共享 Store/UI。
 
 “从列表移除”只把 project-scoped thread key 写入 Zeta 自有、版本化且宽容解码的
 hidden list；原始 Claude history 保留不动。

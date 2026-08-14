@@ -196,6 +196,7 @@ void main() {
                   status: AgentHistoryTurnStatus.completed,
                   duration: const Duration(seconds: 95),
                   model: 'gpt-5.5',
+                  reasoningEffort: AgentHistoryReasoningEffort.explicit('high'),
                   tokenUsage: const AgentTokenUsage(
                     inputTokens: 1000,
                     outputTokens: 240,
@@ -204,7 +205,6 @@ void main() {
                   raw: const <String, Object?>{
                     'turnContext': <String, Object?>{
                       'model': 'gpt-5.5',
-                      'effort': 'high',
                       'serviceTier': 'priority',
                     },
                   },

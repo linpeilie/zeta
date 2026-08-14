@@ -77,6 +77,8 @@
 
 ### 修复
 
+- Claude Code 历史会话现在会恢复每个回合实际记录的思考程度，并显示在 turn footer；
+  缺少或存在冲突证据的旧回合继续保持未知，不使用当前设置猜测
 - 修复桌面弹层在极少数窗口变换时产生非法鼠标命中矩阵，继而持续触发
   `MouseTracker._deviceUpdatePhase` 断言并让鼠标交互失效的问题
 - Claude Code 打开历史会话时会用 `resolvedModel` 匹配当前模型目录，并过滤重复的

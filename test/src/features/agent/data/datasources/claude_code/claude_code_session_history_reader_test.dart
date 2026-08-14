@@ -128,6 +128,85 @@ void main() {
       );
     });
 
+    test(
+      'restores stable turn effort and omits missing or conflicting evidence',
+      () async {
+        const projectPath = '/workspace/effort-history';
+        const sessionId = 'effort-history-session';
+        final projectDirectory = await _projectDirectory(
+          tempRoot,
+          projectPath,
+        ).create(recursive: true);
+        final sessionFile = File(
+          '${projectDirectory.path}${Platform.pathSeparator}$sessionId.jsonl',
+        );
+        // Claude Code 2.1.227 / Windows 脱敏本地 JSONL 形状：effort 只出现在
+        // assistant 顶层，user/result 不携带；正文与 source id 均为测试占位值。
+        final frames = <Map<String, Object?>>[
+          _historyUserFrame(
+            sessionId: sessionId,
+            id: 'user-stable',
+            content: '[PROMPT_REDACTED_1]',
+          ),
+          _historyAssistantFrame(
+            sessionId: sessionId,
+            id: 'assistant-stable-1',
+            effort: 'xhigh',
+          ),
+          _historyAssistantFrame(
+            sessionId: sessionId,
+            id: 'assistant-stable-2',
+            effort: 'xhigh',
+            endTurn: true,
+          ),
+          _historyUserFrame(
+            sessionId: sessionId,
+            id: 'user-missing',
+            content: '[PROMPT_REDACTED_2]',
+          ),
+          _historyAssistantFrame(
+            sessionId: sessionId,
+            id: 'assistant-missing',
+            endTurn: true,
+          ),
+          _historyUserFrame(
+            sessionId: sessionId,
+            id: 'user-conflict',
+            content: '[PROMPT_REDACTED_3]',
+          ),
+          _historyAssistantFrame(
+            sessionId: sessionId,
+            id: 'assistant-conflict-1',
+            effort: 'medium',
+          ),
+          _historyAssistantFrame(
+            sessionId: sessionId,
+            id: 'assistant-conflict-2',
+            effort: 'high',
+            endTurn: true,
+          ),
+        ];
+        await sessionFile.writeAsString(
+          '${frames.map(jsonEncode).join('\n')}\n',
+        );
+        final reader = ClaudeCodeSessionHistoryReader(
+          claudeHome: tempRoot.path,
+        );
+
+        final snapshot = await reader.readThreadHistory(
+          threadId: sessionId,
+          providerId: 'claude-code',
+          projectPath: projectPath,
+        );
+
+        expect(snapshot.turns, hasLength(3));
+        expect(snapshot.turns[0].reasoningEffort.value, 'xhigh');
+        expect(snapshot.turns[0].reasoningEffort.isKnown, isTrue);
+        expect(snapshot.turns[1].reasoningEffort.isKnown, isFalse);
+        expect(snapshot.turns[2].reasoningEffort.isKnown, isFalse);
+      },
+    );
+
     test('lists summaries, skips malformed lines, and stays read-only', () async {
       const projectPath = r'D:\Development\Workspace\zeta';
       const sessionId = 'session-redacted-1';
@@ -450,4 +529,41 @@ Future<void> _writeSession(
       'message': <String, Object?>{'role': 'user', 'content': prompt},
     })}\n',
   );
+}
+
+Map<String, Object?> _historyUserFrame({
+  required String sessionId,
+  required String id,
+  required String content,
+}) {
+  return <String, Object?>{
+    'type': 'user',
+    'sessionId': sessionId,
+    'uuid': id,
+    'timestamp': '2026-08-12T02:00:00.000Z',
+    'message': <String, Object?>{'role': 'user', 'content': content},
+  };
+}
+
+Map<String, Object?> _historyAssistantFrame({
+  required String sessionId,
+  required String id,
+  String? effort,
+  bool endTurn = false,
+}) {
+  return <String, Object?>{
+    'type': 'assistant',
+    'sessionId': sessionId,
+    'uuid': id,
+    'timestamp': '2026-08-12T02:00:01.000Z',
+    'effort': ?effort,
+    'message': <String, Object?>{
+      'role': 'assistant',
+      'model': 'claude-test-model',
+      'stop_reason': endTurn ? 'end_turn' : null,
+      'content': <Object?>[
+        <String, Object?>{'type': 'text', 'text': '[RESPONSE_REDACTED]'},
+      ],
+    },
+  };
 }

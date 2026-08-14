@@ -307,7 +307,6 @@ class _JsonlHistoryParser {
     turn
       ..cwd = _string(payload['cwd']) ?? turn.cwd
       ..model = _string(payload['model']) ?? turn.model
-      ..effort = _string(payload['effort']) ?? turn.effort
       ..modelContextWindow =
           _numberToInt(payload['model_context_window']) ??
           turn.modelContextWindow
@@ -316,6 +315,9 @@ class _JsonlHistoryParser {
             payload['collaboration_mode'],
           ) ??
           turn.collaborationMode;
+    if (payload.containsKey('effort')) {
+      turn.reasoningEffort = _codexJsonlReasoningEffort(payload['effort']);
+    }
     turn.raw['turnContext'] = payload;
   }
 
@@ -841,7 +843,8 @@ class _JsonlTurnBuilder {
   Duration? timeToFirstToken;
   String? cwd;
   String? model;
-  String? effort;
+  AgentHistoryReasoningEffort reasoningEffort =
+      const AgentHistoryReasoningEffort.unknown();
   int? modelContextWindow;
   AgentConversationModeId? collaborationMode;
   AgentTokenUsage? tokenUsage;
@@ -864,6 +867,7 @@ class _JsonlTurnBuilder {
       timeToFirstToken: timeToFirstToken,
       cwd: cwd,
       model: model,
+      reasoningEffort: reasoningEffort,
       modelContextWindow: modelContextWindow,
       collaborationMode: collaborationMode,
       tokenUsage: tokenUsage,
@@ -872,6 +876,17 @@ class _JsonlTurnBuilder {
       raw: Map<String, Object?>.unmodifiable(raw),
     );
   }
+}
+
+AgentHistoryReasoningEffort _codexJsonlReasoningEffort(Object? value) {
+  if (value == null) {
+    return const AgentHistoryReasoningEffort.providerDefault();
+  }
+  final effort = _string(value);
+  if (effort == null) {
+    return const AgentHistoryReasoningEffort.unknown();
+  }
+  return AgentHistoryReasoningEffort.explicit(effort);
 }
 
 class _JsonlPendingTool {

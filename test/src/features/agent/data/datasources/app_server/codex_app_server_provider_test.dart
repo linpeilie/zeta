@@ -2713,6 +2713,7 @@ void main() {
       expect(turn.duration, const Duration(seconds: 3));
       expect(turn.cwd, '/repo');
       expect(turn.model, 'gpt-5');
+      expect(turn.reasoningEffort.value, 'high');
       expect(turn.modelContextWindow, 258400);
       expect(turn.collaborationMode, AgentConversationModeId.defaultMode);
       expect(
@@ -2900,6 +2901,7 @@ void main() {
             'turn_id': 'turn-local',
             'cwd': '/repo',
             'model': 'gpt-5',
+            'effort': 'xhigh',
             'model_context_window': 258400,
             'collaboration_mode': 'Default',
           },
@@ -3005,6 +3007,7 @@ void main() {
       expect(turn.timeToFirstToken, const Duration(milliseconds: 350));
       expect(turn.cwd, '/repo');
       expect(turn.model, 'gpt-5');
+      expect(turn.reasoningEffort.value, 'xhigh');
       expect(turn.modelContextWindow, 258400);
       expect(turn.collaborationMode, AgentConversationModeId.defaultMode);
       expect(
@@ -3167,6 +3170,47 @@ void main() {
         expect(
           history.latestCollaborationMode,
           AgentConversationModeId.fromRaw('future-mode'),
+        );
+      },
+    );
+
+    test(
+      'distinguishes missing and default effort in thread history',
+      () async {
+        final peer = _FakeJsonRpcPeer(
+          threadReadResponseProvider: (_) => <String, Object?>{
+            'thread': <String, Object?>{
+              'id': 'thread-effort',
+              'turns': <Object?>[
+                <String, Object?>{
+                  'id': 'turn-missing',
+                  'status': 'completed',
+                  'items': <Object?>[],
+                },
+                <String, Object?>{
+                  'id': 'turn-default',
+                  'status': 'completed',
+                  'effort': null,
+                  'items': <Object?>[],
+                },
+              ],
+            },
+          },
+        );
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        addTearDown(provider.dispose);
+
+        final history = await provider.readThreadHistory(
+          threadId: 'thread-effort',
+        );
+
+        expect(history.turns[0].reasoningEffort.isKnown, isFalse);
+        expect(
+          history.turns[1].reasoningEffort.kind,
+          AgentHistoryReasoningEffortKind.providerDefault,
         );
       },
     );
@@ -4114,6 +4158,7 @@ void main() {
                   <String, Object?>{
                     'id': 'turn-capacity',
                     'status': 'failed',
+                    'effort': 'high',
                     'items': <Object?>[],
                     'error': <String, Object?>{
                       'message':
@@ -4173,6 +4218,7 @@ void main() {
         final turn = history.turns.single;
         expect(turn.id, 'turn-capacity');
         expect(turn.status, AgentHistoryTurnStatus.failed);
+        expect(turn.reasoningEffort.value, 'high');
         expect(turn.errorMessage, contains('at capacity'));
         expect(turn.errorCode, 'serverOverloaded');
       },
@@ -5725,6 +5771,7 @@ class _FakeJsonRpcPeer implements JsonRpcPeer {
               'durationMs': 3000,
               'cwd': '/repo',
               'model': 'gpt-5',
+              'effort': 'high',
               'modelContextWindow': 258400,
               'collaborationMode': 'Default',
               'items': <Object?>[

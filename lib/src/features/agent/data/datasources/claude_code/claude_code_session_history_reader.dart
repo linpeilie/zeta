@@ -580,6 +580,7 @@ class ClaudeCodeSessionHistoryReader {
             turnId: turnId,
             cwd: _string(frame['cwd']) ?? cwd,
             model: _string(message['model']),
+            reasoningEffort: _string(frame['effort']),
           );
           if (_string(message['stop_reason']) == 'end_turn') {
             finishActiveTurn(completedAt: occurredAt);
@@ -771,6 +772,7 @@ final class _ClaudeCodeHistoryEventReducer {
     required String turnId,
     String? cwd,
     String? model,
+    String? reasoningEffort,
   }) {
     final turn = _turns[turnId];
     if (turn == null) {
@@ -778,7 +780,8 @@ final class _ClaudeCodeHistoryEventReducer {
     }
     turn
       ..cwd = cwd ?? turn.cwd
-      ..model = model ?? turn.model;
+      ..model = model ?? turn.model
+      ..observeReasoningEffort(reasoningEffort);
   }
 
   AgentThreadHistorySnapshot build() {
@@ -806,10 +809,30 @@ final class _MutableHistoryTurn {
   Duration? duration;
   String? cwd;
   String? model;
+  AgentHistoryReasoningEffort reasoningEffort =
+      const AgentHistoryReasoningEffort.unknown();
+  bool _hasReasoningEffortConflict = false;
   AgentTokenUsage? tokenUsage;
   bool tokenUsageIsSessionCumulative = false;
   String? errorMessage;
   String? errorCode;
+
+  void observeReasoningEffort(String? incoming) {
+    if (incoming == null || _hasReasoningEffortConflict) {
+      return;
+    }
+    final current = reasoningEffort.value;
+    if (!reasoningEffort.isKnown) {
+      reasoningEffort = AgentHistoryReasoningEffort.explicit(incoming);
+      return;
+    }
+    if (current != incoming) {
+      // 同一 turn 的 effort 按协议应保持稳定。冲突说明历史证据不可靠，
+      // Provider 边界保守丢弃，避免共享层或 UI 猜测应展示哪一个值。
+      reasoningEffort = const AgentHistoryReasoningEffort.unknown();
+      _hasReasoningEffortConflict = true;
+    }
+  }
 
   void upsertMessage(
     AgentMessageUpdatedEvent event, {
@@ -925,6 +948,7 @@ final class _MutableHistoryTurn {
       duration: duration,
       cwd: cwd,
       model: model,
+      reasoningEffort: reasoningEffort,
       tokenUsage: tokenUsage,
       tokenUsageIsSessionCumulative: tokenUsageIsSessionCumulative,
       errorMessage: errorMessage,

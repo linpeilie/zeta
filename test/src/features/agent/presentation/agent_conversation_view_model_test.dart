@@ -3357,10 +3357,10 @@ void main() {
                 AgentHistoryTurn(
                   id: 'turn-1',
                   model: 'gpt-5.5',
+                  reasoningEffort: AgentHistoryReasoningEffort.explicit('low'),
                   raw: <String, Object?>{
                     'turnContext': <String, Object?>{
                       'model': 'gpt-5.5',
-                      'effort': 'low',
                       'serviceTier': 'priority',
                     },
                   },
@@ -3369,9 +3369,7 @@ void main() {
               ],
               currentTurn: AgentHistoryTurn(
                 id: 'turn-2',
-                raw: <String, Object?>{
-                  'turnContext': <String, Object?>{'effort': 'high'},
-                },
+                reasoningEffort: AgentHistoryReasoningEffort.explicit('high'),
               ),
             ),
           },
@@ -3401,6 +3399,10 @@ void main() {
                 id: 'opus',
                 model: 'claude-opus-5',
                 displayName: 'Opus',
+                supportedReasoningEfforts: <AgentModelReasoningEffort>[
+                  AgentModelReasoningEffort(effort: 'high'),
+                  AgentModelReasoningEffort(effort: 'xhigh'),
+                ],
               ),
             ],
           ),
@@ -3408,11 +3410,18 @@ void main() {
             'claude-thread-1': const AgentThreadHistorySnapshot(
               threadId: 'claude-thread-1',
               turns: <AgentHistoryTurn>[
-                AgentHistoryTurn(id: 'turn-1', model: 'claude-opus-5'),
+                AgentHistoryTurn(
+                  id: 'turn-1',
+                  model: 'claude-opus-5',
+                  reasoningEffort: AgentHistoryReasoningEffort.explicit(
+                    'xhigh',
+                  ),
+                ),
               ],
               currentTurn: AgentHistoryTurn(
                 id: 'turn-1',
                 model: 'claude-opus-5',
+                reasoningEffort: AgentHistoryReasoningEffort.explicit('xhigh'),
               ),
             ),
           },
@@ -3443,9 +3452,57 @@ void main() {
 
         expect(viewModel.selectedModelId, 'opus');
         expect(viewModel.selectedModel?.displayName, 'Opus');
+        expect(viewModel.selectedReasoningEffort, 'xhigh');
         expect(provider.listModelsCalls, 1);
       },
     );
+
+    test('bound thread applies explicit Provider default effort', () async {
+      final provider = _FakeAgentProvider(
+        providerConfig: AgentProviderConfig.defaultCodex.copyWith(
+          selectedModel: 'gpt-5.5',
+          selectedReasoningEffort: 'high',
+        ),
+        availableModels: const AgentModelList(
+          models: <AgentModelInfo>[
+            AgentModelInfo(
+              id: 'gpt-5.5',
+              model: 'gpt-5.5',
+              displayName: 'GPT-5.5',
+              isDefault: true,
+              supportedReasoningEfforts: <AgentModelReasoningEffort>[
+                AgentModelReasoningEffort(effort: 'low'),
+                AgentModelReasoningEffort(effort: 'high'),
+              ],
+              defaultReasoningEffort: 'low',
+            ),
+          ],
+        ),
+        historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+          'thread-1': const AgentThreadHistorySnapshot(
+            threadId: 'thread-1',
+            turns: <AgentHistoryTurn>[
+              AgentHistoryTurn(
+                id: 'turn-1',
+                model: 'gpt-5.5',
+                reasoningEffort: AgentHistoryReasoningEffort.providerDefault(),
+              ),
+            ],
+            currentTurn: AgentHistoryTurn(
+              id: 'turn-1',
+              model: 'gpt-5.5',
+              reasoningEffort: AgentHistoryReasoningEffort.providerDefault(),
+            ),
+          ),
+        },
+      );
+      final viewModel = _createViewModel(provider, initialThread: _thread());
+      addTearDown(viewModel.dispose);
+
+      await viewModel.initialization;
+
+      expect(viewModel.selectedReasoningEffort, 'low');
+    });
 
     test(
       'bound Claude thread keeps a valid catalog model when history is stale',

@@ -648,6 +648,9 @@ data 精确编码”的单向流：
   `AgentModelPreference` 保存每个 `modelId` 最后一次有效的 Reasoning / Fast 组合。
 - Provider 只有在运行时确实接受推理档位时才声明 `supportsReasoningOptions`；Claude 将
   initialize 的 `supportedEffortLevels` 映射为该能力的数据，并通过 `--effort` 应用。
+- Provider 历史解析器将协议别名归一化到唯一的 typed
+  `AgentHistoryTurn.reasoningEffort`，并区分 unknown、Provider default 与 explicit value，
+  供历史 footer 和恢复选择消费；共享 Store/ViewModel/UI 不读取 raw payload 猜测。
 - `AgentConversationModelSelectionController` 是配置真源，负责 capability 归一化、
   Fast / `xhigh` 冲突解决、provider 运行态更新及持久化。快速连续修改串行合并，
   过期请求不得覆盖新快照。

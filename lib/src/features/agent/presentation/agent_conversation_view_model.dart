@@ -1605,10 +1605,8 @@ class AgentConversationViewModel {
     final source = turnContext.isEmpty ? turn.raw : turnContext;
 
     Object? reasoningEffort = _threadModelSelectionUnset;
-    if (source.containsKey('effort')) {
-      reasoningEffort = _stringValue(source['effort']);
-    } else if (source.containsKey('reasoningEffort')) {
-      reasoningEffort = _stringValue(source['reasoningEffort']);
+    if (turn.reasoningEffort.isKnown) {
+      reasoningEffort = _nonEmptyValue(turn.reasoningEffort.value);
     }
 
     Object? serviceTierId = _threadModelSelectionUnset;

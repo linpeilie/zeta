@@ -44,6 +44,37 @@ class AgentThreadHistorySnapshot {
   }
 }
 
+/// Provider 从历史协议中恢复出的推理深度证据。
+///
+/// [unknown] 表示历史没有可靠证据，恢复会话时应保留已有选择；
+/// [providerDefault] 表示 Provider 明确使用默认档位，应清空已有选择；
+/// [explicit] 表示本回合明确使用了 [value]。
+enum AgentHistoryReasoningEffortKind { unknown, providerDefault, explicit }
+
+/// 一个历史 turn 的归一化推理深度。
+final class AgentHistoryReasoningEffort {
+  const AgentHistoryReasoningEffort.unknown()
+    : kind = AgentHistoryReasoningEffortKind.unknown,
+      value = null;
+
+  const AgentHistoryReasoningEffort.providerDefault()
+    : kind = AgentHistoryReasoningEffortKind.providerDefault,
+      value = null;
+
+  const AgentHistoryReasoningEffort.explicit(this.value)
+    : assert(value != null),
+      kind = AgentHistoryReasoningEffortKind.explicit;
+
+  /// 历史证据种类。
+  final AgentHistoryReasoningEffortKind kind;
+
+  /// Provider 归一化后的明确档位；非 [AgentHistoryReasoningEffortKind.explicit] 时为空。
+  final String? value;
+
+  /// 历史是否明确给出了档位或 Provider 默认语义。
+  bool get isKnown => kind != AgentHistoryReasoningEffortKind.unknown;
+}
+
 /// 一个 turn 的历史聚合结果。
 class AgentHistoryTurn {
   const AgentHistoryTurn({
@@ -56,6 +87,7 @@ class AgentHistoryTurn {
     this.timeToFirstToken,
     this.cwd,
     this.model,
+    this.reasoningEffort = const AgentHistoryReasoningEffort.unknown(),
     this.modelContextWindow,
     this.collaborationMode,
     this.tokenUsage,
@@ -91,6 +123,12 @@ class AgentHistoryTurn {
 
   /// 使用的模型。
   final String? model;
+
+  /// 本回合实际使用的归一化推理深度证据。
+  ///
+  /// Provider 历史解析器应在协议边界完成归一化；缺少可靠证据时使用
+  /// [AgentHistoryReasoningEffort.unknown]，不得用当前配置、模型默认值或相邻回合推断。
+  final AgentHistoryReasoningEffort reasoningEffort;
 
   /// 模型上下文窗口大小。
   final int? modelContextWindow;
@@ -140,7 +178,10 @@ class AgentTurnModelConfig {
         fastEnabled == true;
   }
 
-  /// 从历史 turn 解析本回合模型配置（优先 `turnContext`，回退 turn 顶层字段）。
+  /// 从历史 turn 解析本回合模型配置。
+  ///
+  /// 推理深度只读取 Provider 已归一化的 typed 字段；`turnContext` 与顶层 raw
+  /// 仅兼容尚未 typed 化的模型和 Fast 信息。
   static AgentTurnModelConfig? fromHistoryTurn(AgentHistoryTurn turn) {
     final turnContext = _objectMap(turn.raw['turnContext']);
     final source = turnContext.isEmpty ? turn.raw : turnContext;
@@ -150,10 +191,7 @@ class AgentTurnModelConfig {
         _nonEmptyString(source['model']) ??
         _nonEmptyString(source['modelId']);
 
-    final reasoningEffort =
-        _nonEmptyString(source['effort']) ??
-        _nonEmptyString(source['reasoningEffort']) ??
-        _nonEmptyString(source['reasoning_effort']);
+    final reasoningEffort = _nonEmptyString(turn.reasoningEffort.value);
 
     final serviceTierId =
         _nonEmptyString(source['serviceTier']) ??
