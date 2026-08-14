@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/ui/core/ide_button.dart';
+import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
 
@@ -82,4 +83,29 @@ void main() {
     expect(presses, 0);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('primary 按钮文字与前置图标都使用 onAccent', (tester) async {
+    await pumpIdeComponent(
+      tester,
+      child: const Align(
+        alignment: Alignment.center,
+        child: IdeButton(
+          key: ValueKey('primary-button'),
+          label: '允许',
+          variant: IdeButtonVariant.primary,
+          leadingIcon: Icons.check_rounded,
+          onPressed: _noop,
+        ),
+      ),
+    );
+
+    final colors = IdeColors.of(tester.element(find.text('允许')));
+    expect(tester.widget<Text>(find.text('允许')).style?.color, colors.onAccent);
+    expect(
+      tester.widget<Icon>(find.byIcon(Icons.check_rounded)).color,
+      colors.onAccent,
+    );
+  });
 }
+
+void _noop() {}

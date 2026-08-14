@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/ui/core/ide_motion.dart';
+import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 
 import 'harness/agent_pane_test_harness.dart';
@@ -564,6 +565,19 @@ void main() {
         final composer = find.byKey(const ValueKey('agent-message-input'));
         expect(dock, findsOneWidget);
         expect(permission, findsOneWidget);
+        expect(find.text('Approve command'), findsOneWidget);
+        expect(find.text('允许'), findsOneWidget);
+        expect(find.text('拒绝'), findsOneWidget);
+        expect(find.text('取消'), findsOneWidget);
+        expect(find.text('本会话允许'), findsOneWidget);
+        expect(find.text('flutter test'), findsOneWidget);
+        final dockPadding = tester.widget<Padding>(
+          find.ancestor(of: dock, matching: find.byType(Padding)).first,
+        );
+        expect(
+          dockPadding.padding.resolve(TextDirection.ltr).bottom,
+          IdeSpacing.space12,
+        );
         // dock 只承载权限与提问；计划卡已移入对话流。
         expect(
           find.byKey(const ValueKey('agent-pending-plan-plan-long')),

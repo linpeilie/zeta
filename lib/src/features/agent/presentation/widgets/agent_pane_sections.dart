@@ -923,7 +923,10 @@ class _AgentPendingInteractionSection extends StatelessWidget {
 
     return _AgentContentAlign(
       child: Padding(
-        padding: pagePadding.copyWith(top: IdeSpacing.space8, bottom: 0),
+        padding: pagePadding.copyWith(
+          top: IdeSpacing.space8,
+          bottom: IdeSpacing.space12,
+        ),
         child: ConstrainedBox(
           key: const ValueKey('agent-pending-interaction-dock'),
           constraints: BoxConstraints(maxHeight: maxHeight),

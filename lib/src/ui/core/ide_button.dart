@@ -106,7 +106,14 @@ class IdeButton extends StatelessWidget {
       enabled: isEnabled,
       variant: variant,
     );
-    final iconColor = isEnabled ? colors.textSecondary : colors.textTertiary;
+    // 实心底必须与文字同色，避免「允许」勾号落在灰字/蓝底上。
+    final iconColor = switch (variant) {
+      IdeButtonVariant.primary || IdeButtonVariant.destructive => foreground,
+      IdeButtonVariant.outline ||
+      IdeButtonVariant.secondary ||
+      IdeButtonVariant.ghost =>
+        isEnabled ? colors.textSecondary : colors.textTertiary,
+    };
 
     final button = sf.Button(
       onPressed: isEnabled ? onPressed : null,
