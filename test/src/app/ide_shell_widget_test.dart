@@ -365,7 +365,7 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(find.byKey(const ValueKey('agent-usage-collapse-button')));
+    await tester.tap(find.byKey(const ValueKey('agent-usage-expand-button')));
     await _settleUsagePopover(tester);
 
     expect(find.byKey(const ValueKey('agent-usage-popover')), findsNothing);
@@ -457,9 +457,7 @@ void main() {
       _expectRetainedAgentContentState(tester, retained);
 
       // 弹层是模态的：先收起再切换侧栏，避免点击被遮罩吞掉。
-      await tester.tap(
-        find.byKey(const ValueKey('agent-usage-collapse-button')),
-      );
+      await tester.tap(find.byKey(const ValueKey('agent-usage-expand-button')));
       await _settleUsagePopover(tester);
       expect(find.byKey(const ValueKey('agent-usage-popover')), findsNothing);
       _expectRetainedAgentContentState(tester, retained);
@@ -615,9 +613,7 @@ void main() {
       await _settleUsagePopover(tester);
       expect(find.byKey(const ValueKey('agent-usage-popover')), findsOneWidget);
 
-      await tester.tap(
-        find.byKey(const ValueKey('agent-usage-collapse-button')),
-      );
+      await tester.tap(find.byKey(const ValueKey('agent-usage-expand-button')));
       await _settleUsagePopover(tester);
       await pumpSessionSave(tester);
       expect(find.byKey(const ValueKey('agent-usage-popover')), findsNothing);

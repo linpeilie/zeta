@@ -707,18 +707,16 @@ void main() {
     expect(popoverRect.right, closeTo(anchorRect.right - 4, 0.01));
 
     final tabs = find.byKey(const ValueKey('agent-usage-tabs'));
-    final collapse = find.byKey(const ValueKey('agent-usage-collapse-button'));
     final refresh = find.byKey(const ValueKey('agent-usage-refresh-button'));
     expect(_inPopover(tabs), findsOneWidget);
-    expect(_inPopover(collapse), findsOneWidget);
+    expect(
+      _inPopover(find.byKey(const ValueKey('agent-usage-collapse-button'))),
+      findsNothing,
+    );
     expect(_inPopover(refresh), findsOneWidget);
     expect(
-      tester.getCenter(collapse).dx,
-      greaterThan(tester.getTopRight(tabs).dx),
-    );
-    expect(
       tester.getCenter(refresh).dx,
-      greaterThan(tester.getCenter(collapse).dx),
+      greaterThan(tester.getTopRight(tabs).dx),
     );
     // 折叠摘要自身不滚动；仅弹层正文在可用高度内滚动。
     expect(
@@ -753,7 +751,7 @@ void main() {
     expect(_inPopover(find.text('5 小时')), findsOneWidget);
     expect(_inPopover(find.text('1.6K')), findsOneWidget);
 
-    await tester.tap(collapse);
+    await tester.tap(find.byKey(const ValueKey('agent-usage-expand-button')));
     await tester.pumpAndSettle();
     expect(requestedMode, AgentUsagePanelMode.collapsed);
     expect(_popover, findsNothing);

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_macos_keychain_source.dart';
@@ -180,7 +181,7 @@ void main() {
 
       expect(
         reader.resolveCredentialsPath(),
-        '/fixture/custom-claude/.credentials.json',
+        '/fixture/custom-claude${Platform.pathSeparator}.credentials.json',
       );
     });
 

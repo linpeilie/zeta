@@ -304,7 +304,7 @@ void main() {
           .value,
       'grok',
     );
-    await tester.tap(find.byKey(const ValueKey('agent-usage-collapse-button')));
+    await tester.tap(find.byKey(const ValueKey('agent-usage-expand-button')));
     await _settleUsagePopover(tester);
 
     final expectedUsageHeight = tester

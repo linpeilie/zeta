@@ -159,18 +159,17 @@ class _AgentUsagePanelContentState extends State<AgentUsagePanelContent> {
       allowInvertVertical: false,
       showDuration: duration,
       dismissDuration: duration,
-      builder: (popoverContext) => _AgentUsagePopover(
+      builder: (_) => _AgentUsagePopover(
         controller: widget.controller,
         width: width,
         maxHeight: maxHeight,
-        onCollapse: () => sf.closeOverlay(popoverContext),
       ),
     );
     _popover = handle;
     unawaited(_awaitPopoverClose(handle));
   }
 
-  /// 点击弹层外部、折叠按钮或锚点开合按钮最终都从同一 future 收敛回折叠态。
+  /// 点击弹层外部或锚点开合按钮最终都从同一 future 收敛回折叠态。
   Future<void> _awaitPopoverClose(IdePopoverHandle<void> handle) async {
     await handle.future;
     handle.dispose();
@@ -190,7 +189,6 @@ class _AgentUsagePopover extends StatelessWidget {
     required this.controller,
     required this.width,
     required this.maxHeight,
-    required this.onCollapse,
   });
 
   final AgentUsagePanelController controller;
@@ -199,7 +197,6 @@ class _AgentUsagePopover extends StatelessWidget {
   final double width;
 
   final double maxHeight;
-  final VoidCallback onCollapse;
 
   @override
   Widget build(BuildContext context) {
@@ -213,10 +210,7 @@ class _AgentUsagePopover extends StatelessWidget {
         key: const ValueKey('agent-usage-popover'),
         child: ListenableBuilder(
           listenable: controller,
-          builder: (context, _) => _AgentUsagePanelBody(
-            controller: controller,
-            onCollapse: onCollapse,
-          ),
+          builder: (context, _) => _AgentUsagePanelBody(controller: controller),
         ),
       ),
     );
@@ -593,10 +587,9 @@ class _CompactAgentUsageMessage extends StatelessWidget {
 }
 
 class _AgentUsagePanelBody extends StatelessWidget {
-  const _AgentUsagePanelBody({required this.controller, this.onCollapse});
+  const _AgentUsagePanelBody({required this.controller});
 
   final AgentUsagePanelController controller;
-  final VoidCallback? onCollapse;
 
   @override
   Widget build(BuildContext context) {
@@ -669,7 +662,6 @@ class _AgentUsagePanelBody extends StatelessWidget {
         _AgentUsageTabsToolbar(
           controller: controller,
           selectedProviderId: selected?.provider.providerId,
-          onCollapse: onCollapse,
         ),
         // Tabs 与刷新常驻，仅正文在弹层可用高度内滚动。
         Flexible(child: SingleChildScrollView(child: content)),
@@ -682,12 +674,10 @@ class _AgentUsageTabsToolbar extends StatelessWidget {
   const _AgentUsageTabsToolbar({
     required this.controller,
     required this.selectedProviderId,
-    required this.onCollapse,
   });
 
   final AgentUsagePanelController controller;
   final String? selectedProviderId;
-  final VoidCallback? onCollapse;
 
   @override
   Widget build(BuildContext context) {
@@ -727,15 +717,6 @@ class _AgentUsageTabsToolbar extends StatelessWidget {
           else
             const Spacer(),
           if (showTabs) const SizedBox(width: IdeSpacing.space4),
-          if (onCollapse != null) ...[
-            _AgentUsageModeButton(
-              key: const ValueKey('agent-usage-collapse-button'),
-              icon: Icons.keyboard_arrow_down_rounded,
-              tooltip: '折叠 Agent 统计',
-              onPressed: onCollapse,
-            ),
-            const SizedBox(width: IdeSpacing.space2),
-          ],
           _AgentUsageRefreshButton(controller: controller),
         ],
       ),
