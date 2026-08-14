@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
@@ -10,9 +11,11 @@ import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/agent_usage_panel.dart';
+import 'package:zeta/src/features/usage_statistics/presentation/agent_usage_quota_gallery.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
+import 'package:zeta/src/ui/core/ide_motion.dart';
 import 'package:zeta/src/ui/core/ide_skeleton.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 
@@ -21,6 +24,58 @@ final _popover = find.byKey(const ValueKey('agent-usage-popover'));
 
 Finder _inPopover(Finder matching) =>
     find.descendant(of: _popover, matching: matching);
+
+double _expectGalleryCardWidths(
+  WidgetTester tester, {
+  required int windowCount,
+}) {
+  final gallery = find.byKey(const ValueKey('agent-usage-quota-gallery'));
+  expect(gallery, findsOneWidget);
+  final gallerySize = tester.getSize(gallery);
+  expect(gallerySize.height, agentUsageQuotaGalleryHeight);
+  final expectedWidth = agentUsageQuotaCardWidth(
+    viewportWidth: gallerySize.width,
+    windowCount: windowCount,
+  );
+  for (var index = 0; index < windowCount && index < 2; index++) {
+    expect(
+      tester
+          .getSize(find.byKey(ValueKey<String>('agent-usage-window-$index')))
+          .width,
+      closeTo(expectedWidth, 0.5),
+    );
+  }
+  return gallerySize.height;
+}
+
+Future<void> _hoverAt(WidgetTester tester, Offset location) async {
+  final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+  await gesture.addPointer(location: location);
+  addTearDown(gesture.removePointer);
+  await tester.pump();
+}
+
+Future<void> _pumpQuotaWindows(
+  WidgetTester tester,
+  List<AgentUsageWindow> windows,
+) async {
+  final controller = AgentUsagePanelController(
+    repository: _ImmediatePanelRepository(<AgentUsagePanelEntry>[
+      AgentUsagePanelEntry(
+        providerId: 'codex',
+        providerName: 'Codex',
+        quota: AgentUsageQuotaSnapshot(
+          providerId: 'codex',
+          providerName: 'Codex',
+          planType: 'plus',
+          windows: windows,
+        ),
+      ),
+    ]),
+  );
+  addTearDown(controller.dispose);
+  await _pumpPanel(tester, controller);
+}
 
 void main() {
   testWidgets('默认 Provider Tab 仅展示 Codex 和 Grok', (tester) async {
@@ -55,6 +110,8 @@ void main() {
     expect(find.textContaining('CLI'), findsNothing);
     expect(_inPopover(find.text('1.6K')), findsOneWidget);
     expect(_inPopover(find.text('ChatGPT Plus')), findsOneWidget);
+    expect(_inPopover(find.text('套餐')), findsNothing);
+    expect(_inPopover(find.textContaining('重置 ')), findsNothing);
     expect(_inPopover(find.text('5 小时')), findsOneWidget);
     expect(_inPopover(find.text('75%')), findsOneWidget);
     expect(_inPopover(find.text('1 周')), findsOneWidget);
@@ -317,12 +374,13 @@ void main() {
     expect(repository.discoverCount, 2);
   });
 
-  testWidgets('plan-only 展示套餐和额度不可用提示且不伪造窗口', (tester) async {
+  testWidgets('plan-only 展开态隐藏套餐区，只保留 Token 统计', (tester) async {
     final controller = AgentUsagePanelController(
       repository: _ImmediatePanelRepository(const <AgentUsagePanelEntry>[
         AgentUsagePanelEntry(
           providerId: 'claude-code',
           providerName: 'Claude Code',
+          todayTokens: UsageTokenBreakdown(totalTokens: 42),
           quota: AgentUsageQuotaSnapshot(
             providerId: 'claude-code',
             providerName: 'Claude Code',
@@ -336,16 +394,21 @@ void main() {
 
     await _pumpPanel(tester, controller);
 
-    expect(_inPopover(find.text('Claude Pro')), findsOneWidget);
     expect(
       find.byKey(const ValueKey('agent-usage-plan-section')),
+      findsNothing,
+    );
+    expect(_inPopover(find.text('Claude Pro')), findsNothing);
+    expect(_inPopover(find.text('额度详情暂不可用')), findsNothing);
+    expect(find.byKey(const ValueKey('agent-usage-window-0')), findsNothing);
+    expect(_inPopover(find.byType(sf.LinearProgressIndicator)), findsNothing);
+    expect(_inPopover(find.text('0%')), findsNothing);
+    expect(_inPopover(find.text('100%')), findsNothing);
+    expect(
+      _inPopover(find.byKey(const ValueKey('agent-usage-token-section'))),
       findsOneWidget,
     );
-    expect(_inPopover(find.text('额度详情暂不可用')), findsOneWidget);
-    expect(find.byKey(const ValueKey('agent-usage-window-0')), findsNothing);
-    expect(find.byType(sf.LinearProgressIndicator), findsNothing);
-    expect(find.text('0%'), findsNothing);
-    expect(find.text('100%'), findsNothing);
+    expect(_inPopover(find.text('42')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -384,6 +447,82 @@ void main() {
       findsNWidgets(4),
     );
     expect(find.text('额度详情暂不可用'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  test('套餐卡片宽度按窗口数量分配', () {
+    expect(agentUsageQuotaCardWidth(viewportWidth: 200, windowCount: 1), 200);
+    expect(
+      agentUsageQuotaCardWidth(viewportWidth: 200, windowCount: 2),
+      (200 - agentUsageQuotaGalleryGap) / 2,
+    );
+    expect(agentUsageQuotaCardWidth(viewportWidth: 200, windowCount: 3), 80);
+    expect(agentUsageQuotaCardWidth(viewportWidth: 200, windowCount: 4), 80);
+  });
+
+  testWidgets('一套餐窗口占满画廊宽度', (tester) async {
+    await _pumpQuotaWindows(tester, <AgentUsageWindow>[
+      const AgentUsageWindow(label: '5 小时', usedPercent: 25),
+    ]);
+    _expectGalleryCardWidths(tester, windowCount: 1);
+  });
+
+  testWidgets('两套餐窗口各占一半并保留间距', (tester) async {
+    await _pumpQuotaWindows(tester, <AgentUsageWindow>[
+      const AgentUsageWindow(label: '5 小时', usedPercent: 25),
+      const AgentUsageWindow(label: '1 周', usedPercent: 40),
+    ]);
+    _expectGalleryCardWidths(tester, windowCount: 2);
+  });
+
+  testWidgets('三套以上窗口各占 40% 且画廊高度固定', (tester) async {
+    await _pumpQuotaWindows(tester, <AgentUsageWindow>[
+      const AgentUsageWindow(label: '五小时会话额度', usedPercent: 10),
+      const AgentUsageWindow(label: '1 周', usedPercent: 20),
+      const AgentUsageWindow(label: 'Sonnet 1 周', usedPercent: 30),
+    ]);
+    final threeHeight = _expectGalleryCardWidths(tester, windowCount: 3);
+
+    await _pumpQuotaWindows(tester, <AgentUsageWindow>[
+      const AgentUsageWindow(label: '五小时会话额度', usedPercent: 10),
+      const AgentUsageWindow(label: '1 周', usedPercent: 20),
+      const AgentUsageWindow(label: 'Sonnet 1 周', usedPercent: 30),
+      const AgentUsageWindow(label: 'Opus 1 周', usedPercent: 40),
+    ]);
+    final fourHeight = _expectGalleryCardWidths(tester, windowCount: 4);
+    expect(fourHeight, threeHeight);
+  });
+
+  testWidgets('超过两张时 Hover 显示箭头并按卡片距离横滑', (tester) async {
+    await _pumpQuotaWindows(tester, <AgentUsageWindow>[
+      const AgentUsageWindow(label: '五小时会话额度', usedPercent: 10),
+      const AgentUsageWindow(label: '1 周', usedPercent: 20),
+      const AgentUsageWindow(label: 'Sonnet 1 周', usedPercent: 30),
+      const AgentUsageWindow(label: 'Opus 1 周', usedPercent: 40),
+    ]);
+
+    final gallery = find.byKey(const ValueKey('agent-usage-quota-gallery'));
+    final next = find.byKey(const ValueKey('agent-usage-quota-next-button'));
+    await _hoverAt(tester, tester.getCenter(gallery));
+    expect(next, findsOneWidget);
+
+    final scrollView = tester.widget<SingleChildScrollView>(
+      find.byKey(const ValueKey('agent-usage-quota-gallery-scroll')),
+    );
+    final controller = scrollView.controller!;
+    expect(controller.offset, 0);
+
+    await tester.tap(next);
+    await tester.pump();
+    await tester.pump(IdeMotion.durationNormal);
+
+    final cardWidth = tester
+        .getSize(find.byKey(const ValueKey<String>('agent-usage-window-0')))
+        .width;
+    expect(
+      controller.offset,
+      closeTo(cardWidth + agentUsageQuotaGalleryGap, 1),
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -717,6 +856,18 @@ void main() {
     expect(
       tester.getCenter(refresh).dx,
       greaterThan(tester.getTopRight(tabs).dx),
+    );
+    expect(
+      tester
+          .getTopLeft(find.byKey(const ValueKey('agent-usage-tabs-toolbar')))
+          .dy,
+      greaterThanOrEqualTo(
+        tester
+            .getBottomLeft(
+              find.byKey(const ValueKey('agent-usage-token-section')),
+            )
+            .dy,
+      ),
     );
     // 折叠摘要自身不滚动；仅弹层正文在可用高度内滚动。
     expect(

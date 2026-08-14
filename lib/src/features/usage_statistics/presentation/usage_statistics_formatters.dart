@@ -72,6 +72,29 @@ String formatUsageClock(DateTime? value) {
       '${local.minute.toString().padLeft(2, '0')}';
 }
 
+/// 套餐窗口重置时刻的精简本地时间，不含「重置」前缀。
+///
+/// - 距 [now] 不超过 24 小时：`mm-dd HH:mm`
+/// - 超过 24 小时且不超过 7 天：`mm-dd HH`
+/// - 超过 7 天：`mm-dd`
+String formatUsageResetAt(DateTime value, {DateTime? now}) {
+  final local = value.toLocal();
+  final reference = (now ?? DateTime.now()).toLocal();
+  final delta = local.difference(reference).abs();
+  final monthDay =
+      '${local.month.toString().padLeft(2, '0')}-'
+      '${local.day.toString().padLeft(2, '0')}';
+  if (delta > const Duration(days: 7)) {
+    return monthDay;
+  }
+  final hour = local.hour.toString().padLeft(2, '0');
+  if (delta > const Duration(hours: 24)) {
+    return '$monthDay $hour';
+  }
+  final minute = local.minute.toString().padLeft(2, '0');
+  return '$monthDay $hour:$minute';
+}
+
 String formatUsageRelativeTime(DateTime value, DateTime now) {
   final difference = now.difference(value);
   if (difference.isNegative || difference.inMinutes < 1) {

@@ -561,11 +561,12 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
   Workbench Inspector Overlay，scrim / Esc 关闭后必须恢复标题栏右侧入口焦点。
 - `ProjectAgentSidebar` 只编排两个业务 Widget 的约束与自然高度。它不得读取 Provider
   数据；Projects 与 cardless `AgentUsagePanelContent` 共用一个 `PanelCard`，统计常驻
-  折叠摘要。展开态由折叠摘要向上弹出的 Popover 承载：顶部直接使用 Provider Tabs，刷新
-  操作位于其右侧，不显示独立标题栏、折叠按钮或拖动分隔，正文超出可用高度时只在弹层内
-  滚动，左栏本身不为展开态让位。点击弹层外部或摘要开合按钮收敛回折叠态。Compact 下复用
-  Workbench Navigation Overlay，scrim / Esc 关闭后必须恢复标题栏入口焦点，不能通过压缩
-  Canvas 模拟窄屏侧栏。
+  折叠摘要。展开态由折叠摘要向上弹出的 Popover 承载：正文为套餐名加固定高度横向胶囊
+  画廊（1/2/3+ 窗口分别占满、对半、各 40%）和 Token 统计；无额度窗口时不渲染整块套餐
+  区。Provider Tabs 与刷新常驻底部右侧，不显示独立标题栏、折叠按钮或拖动分隔，正文超出
+  可用高度时只在弹层内滚动，左栏本身不为展开态让位。点击弹层外部或摘要开合按钮收敛回
+  折叠态。Compact 下复用 Workbench Navigation Overlay，scrim / Esc 关闭后必须恢复标题栏
+  入口焦点，不能通过压缩 Canvas 模拟窄屏侧栏。
 - 左栏显隐、左栏宽度和统计 Provider 选择统一写入应用级
   `IdeWorkbenchLayoutState`。JSON 按字段宽容读取；统计展开态是临时弹层状态，只留在
   presentation 层，不写会话；旧 `agentUsageHeightFraction` 与 `agentUsageExpanded` 仅保留

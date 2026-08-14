@@ -9,6 +9,7 @@ import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_controller.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
+import 'package:zeta/src/features/usage_statistics/presentation/agent_usage_quota_gallery.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_formatters.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
@@ -487,7 +488,7 @@ class _CompactQuotaWindow extends StatelessWidget {
         const SizedBox(width: IdeSpacing.space8),
         SizedBox(
           width: 64,
-          child: _QuotaProgressBar(usedPercent: used.toDouble()),
+          child: AgentUsageQuotaProgressBar(usedPercent: used.toDouble()),
         ),
         const SizedBox(width: IdeSpacing.space6),
         Text(
@@ -659,12 +660,12 @@ class _AgentUsagePanelBody extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // Tabs 与刷新常驻底部，仅正文在弹层可用高度内滚动。
+        Flexible(child: SingleChildScrollView(child: content)),
         _AgentUsageTabsToolbar(
           controller: controller,
           selectedProviderId: selected?.provider.providerId,
         ),
-        // Tabs 与刷新常驻，仅正文在弹层可用高度内滚动。
-        Flexible(child: SingleChildScrollView(child: content)),
       ],
     );
   }
@@ -687,9 +688,9 @@ class _AgentUsageTabsToolbar extends StatelessWidget {
       key: const ValueKey('agent-usage-tabs-toolbar'),
       padding: const EdgeInsets.fromLTRB(
         IdeSpacing.space8,
-        IdeSpacing.space8,
-        IdeSpacing.space6,
         0,
+        IdeSpacing.space6,
+        IdeSpacing.space8,
       ),
       child: Row(
         children: [
@@ -785,15 +786,9 @@ class _AgentUsageSkeleton extends StatelessWidget {
               const IdeSkeletonLine(width: 120, height: 16),
               const SizedBox(height: IdeSpacing.space12),
             ],
-            const IdeSkeletonLine(width: 40, height: 10),
-            const SizedBox(height: IdeSpacing.space4),
             const IdeSkeletonLine(width: 140, height: 22),
-            const SizedBox(height: IdeSpacing.space2),
-            const IdeSkeletonLine(width: 88, height: 10),
             const SizedBox(height: IdeSpacing.space10),
-            const _SkeletonQuotaWindow(),
-            const SizedBox(height: IdeSpacing.space8),
-            const _SkeletonQuotaWindow(),
+            const _SkeletonQuotaGallery(),
             const SizedBox(height: IdeSpacing.space12),
             const IdeSkeletonLine(width: 56, height: 10),
             const SizedBox(height: IdeSpacing.space4),
@@ -810,24 +805,47 @@ class _AgentUsageSkeleton extends StatelessWidget {
   }
 }
 
-class _SkeletonQuotaWindow extends StatelessWidget {
-  const _SkeletonQuotaWindow();
+class _SkeletonQuotaGallery extends StatelessWidget {
+  const _SkeletonQuotaGallery();
 
   @override
   Widget build(BuildContext context) {
-    return const Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Expanded(child: IdeSkeletonLine(height: 12)),
-            SizedBox(width: IdeSpacing.space8),
-            IdeSkeletonLine(width: 56, height: 10),
-          ],
-        ),
-        SizedBox(height: IdeSpacing.space4),
-        IdeSkeletonLine(height: 6),
-      ],
+    return const SizedBox(
+      height: agentUsageQuotaGalleryHeight,
+      child: Row(
+        children: [
+          Expanded(child: _SkeletonQuotaCapsule()),
+          SizedBox(width: agentUsageQuotaGalleryGap),
+          Expanded(child: _SkeletonQuotaCapsule()),
+        ],
+      ),
+    );
+  }
+}
+
+class _SkeletonQuotaCapsule extends StatelessWidget {
+  const _SkeletonQuotaCapsule();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.all(IdeSpacing.space8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(child: IdeSkeletonLine(height: 12)),
+              SizedBox(width: IdeSpacing.space8),
+              IdeSkeletonLine(width: 28, height: 10),
+            ],
+          ),
+          SizedBox(height: IdeSpacing.space6),
+          IdeSkeletonLine(height: 4),
+          SizedBox(height: IdeSpacing.space2),
+          IdeSkeletonLine(width: 64, height: 10),
+        ],
+      ),
     );
   }
 }
@@ -868,6 +886,7 @@ class _ProviderUsage extends StatelessWidget {
     final textStyles = IdeTextStyles.of(context);
     final resetCreditCount = entry.quota?.availableResetCreditCount;
     final hasResetCredits = resetCreditCount != null && resetCreditCount > 0;
+    final hasQuotaWindows = entry.quota?.windows.isNotEmpty ?? false;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -880,9 +899,9 @@ class _ProviderUsage extends StatelessWidget {
           ),
           const SizedBox(height: IdeSpacing.space12),
         ],
-        if (entry.hasSubscriptionPlan || hasResetCredits) ...[
-          if (entry.hasSubscriptionPlan) _PlanSection(quota: entry.quota!),
-          if (entry.hasSubscriptionPlan && hasResetCredits)
+        if (hasQuotaWindows || hasResetCredits) ...[
+          if (hasQuotaWindows) _PlanSection(quota: entry.quota!),
+          if (hasQuotaWindows && hasResetCredits)
             const SizedBox(height: IdeSpacing.space10),
           if (hasResetCredits) _ResetCreditCountRow(count: resetCreditCount),
           const SizedBox(height: IdeSpacing.space12),
@@ -1002,14 +1021,11 @@ class _PlanSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     return Column(
       key: const ValueKey('agent-usage-plan-section'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('套餐', style: textStyles.caption),
-        const SizedBox(height: IdeSpacing.space4),
         Text(
           formatUsagePlanType(quota.planType),
           key: const ValueKey('agent-usage-plan-name'),
@@ -1018,93 +1034,8 @@ class _PlanSection extends StatelessWidget {
           style: textStyles.titleLarge,
         ),
         const SizedBox(height: IdeSpacing.space10),
-        if (quota.windows.isEmpty)
-          Text(
-            '额度详情暂不可用',
-            key: const ValueKey('agent-usage-quota-unavailable'),
-            style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
-          ),
-        for (var index = 0; index < quota.windows.length; index++) ...[
-          _QuotaWindow(
-            key: ValueKey<String>('agent-usage-window-$index'),
-            window: quota.windows[index],
-          ),
-          if (index != quota.windows.length - 1)
-            const SizedBox(height: IdeSpacing.space8),
-        ],
+        AgentUsageQuotaGallery(windows: quota.windows),
       ],
-    );
-  }
-}
-
-class _QuotaWindow extends StatelessWidget {
-  const _QuotaWindow({required this.window, super.key});
-
-  final AgentUsageWindow window;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
-    final textStyles = IdeTextStyles.of(context);
-    final used = window.usedPercent.clamp(0, 100);
-    final remaining = math.max(0, 100 - used);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                window.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: textStyles.bodySmall,
-              ),
-            ),
-            const SizedBox(width: IdeSpacing.space8),
-            Text(
-              '$remaining%',
-              style: textStyles.caption.copyWith(color: colors.textSecondary),
-            ),
-          ],
-        ),
-        const SizedBox(height: IdeSpacing.space6),
-        _QuotaProgressBar(usedPercent: used.toDouble()),
-        if (window.resetsAt case final resetsAt?) ...[
-          const SizedBox(height: IdeSpacing.space2),
-          Text(
-            '重置 ${formatUsageDateTime(resetsAt)}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: textStyles.caption.copyWith(color: colors.textTertiary),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-/// 当前额度窗口的已用进度。
-class _QuotaProgressBar extends StatelessWidget {
-  const _QuotaProgressBar({required this.usedPercent});
-
-  /// 已用百分比，0~100。
-  final double usedPercent;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
-    final used = usedPercent.clamp(0, 100);
-    final remaining = 100 - used;
-    final fraction = remaining / 100;
-    return sf.LinearProgressIndicator(
-      value: fraction,
-      minHeight: 4,
-      color: colors.textSecondary,
-      backgroundColor: colors.borderSubtle,
-      borderRadius: IdeRadius.allMicro,
-      showSparks: false,
-      disableAnimation: true,
     );
   }
 }
