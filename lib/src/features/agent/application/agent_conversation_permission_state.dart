@@ -150,10 +150,13 @@ final class AgentConversationPermissionState {
     if (runtimeIdentity == null && runtimeSelection == null) {
       return this;
     }
-    final session = sessionEffective;
+    final nextSessionWasLast =
+        lastApplyScope == AgentPermissionApplyScope.nextSession;
+    final session = nextSessionWasLast ? null : sessionEffective;
     final runtimeWasLast = lastApplyScope == AgentPermissionApplyScope.runtime;
     return _copyWith(
       runtimeIdentity: null,
+      sessionEffective: session,
       runtimeSelection: null,
       source: runtimeWasLast ? session?.source : source,
       lastApplyScope: runtimeWasLast ? session?.lastApplyScope : lastApplyScope,
@@ -210,6 +213,11 @@ final class AgentConversationPermissionState {
         if (updateDefault) {
           nextProviderDefault = result.normalizedSelection;
         }
+        // runtime 已回收时，旧 session effective 只描述上一个进程。用户为下一
+        // session 选择的新偏好必须成为下次启动真源，不能再被旧值覆盖。
+        if (runtimeIdentity == null) {
+          nextSession = null;
+        }
     }
 
     return _copyWith(
@@ -253,8 +261,20 @@ final class AgentConversationPermissionState {
     final effective = addressesBinding
         ? runtimeSelection ?? sessionEffective?.selection
         : null;
+    final consumesDormantNextSession =
+        addressesBinding &&
+        runtimeIdentity == null &&
+        lastApplyScope == AgentPermissionApplyScope.nextSession;
     return (
-      state: this,
+      // dormant 选择已经冻结进启动快照；清掉一次性提示，避免 runtime attach 后
+      // 又显示“下次生效”。provider default 本身继续保留，供后续请求使用。
+      state: consumesDormantNextSession
+          ? _copyWith(
+              lastApplyScope: null,
+              warning: null,
+              revision: revision + 1,
+            )
+          : this,
       snapshot: AgentPermissionRequestResolver.resolve(
         threadEffective: effective,
         providerDefault: providerDefaultPreference,

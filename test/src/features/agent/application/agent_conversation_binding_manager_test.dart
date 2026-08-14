@@ -79,7 +79,7 @@ void main() {
         lease.binding.permissions.snapshotForRequest().selection?.optionId,
         ':read-only',
       );
-      expect(lease.binding.permissions.applyScopeHint, '下次发送时生效');
+      expect(lease.binding.permissions.applyScopeHint, isNull);
     });
 
     test('dormant 权限持久化失败后创建 runtime 仍保留选择且不重复 apply', () async {

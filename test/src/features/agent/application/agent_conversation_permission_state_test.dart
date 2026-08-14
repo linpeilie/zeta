@@ -114,7 +114,7 @@ void main() {
       expect(detached.providerDefaultPreference, providerDefault);
     });
 
-    test('nextSession changes default but preserves session effective', () {
+    test('nextSession preserves active session then replaces it on detach', () {
       var state = const AgentConversationPermissionState(
         runtimeIdentity: runtime,
         threadId: 'thread-a',
@@ -142,6 +142,59 @@ void main() {
       expect(state.sessionEffective?.selection.optionId, 'session');
       expect(state.effectiveValue?.selection.optionId, 'session');
       expect(state.warning, 'restart session');
+
+      final detached = state.detachRuntime();
+      final request = detached.takeRequestSnapshot(
+        requestedThreadId: 'thread-a',
+        catalogDefault: null,
+      );
+
+      expect(detached.sessionEffective, isNull);
+      expect(detached.effectiveValue?.selection.optionId, 'next');
+      expect(request.snapshot.selection?.optionId, 'next');
+    });
+
+    test('dormant nextSession replaces detached session effective', () {
+      var state = const AgentConversationPermissionState(
+        runtimeIdentity: runtime,
+        threadId: 'thread-a',
+        providerDefaultPreference: providerDefault,
+      );
+      state = state.commitApplyResult(
+        result: const AgentPermissionApplyResult(
+          normalizedSelection: AgentPermissionSelection(optionId: 'session'),
+          scope: AgentPermissionApplyScope.currentSession,
+        ),
+        source: AgentPermissionStateSource.serverSettings,
+        updateDefault: false,
+      );
+      state = state.detachRuntime();
+      state = state.commitApplyResult(
+        result: const AgentPermissionApplyResult(
+          normalizedSelection: AgentPermissionSelection(optionId: 'next'),
+          scope: AgentPermissionApplyScope.nextSession,
+          warning: 'next launch',
+        ),
+        source: AgentPermissionStateSource.userSelection,
+        updateDefault: true,
+      );
+
+      final request = state.takeRequestSnapshot(
+        requestedThreadId: 'thread-a',
+        catalogDefault: null,
+      );
+
+      expect(state.runtimeIdentity, isNull);
+      expect(state.sessionEffective, isNull);
+      expect(state.effectiveValue?.selection.optionId, 'next');
+      expect(state.lastApplyScope, AgentPermissionApplyScope.nextSession);
+      expect(request.snapshot.selection?.optionId, 'next');
+      expect(
+        request.snapshot.source,
+        AgentPermissionRequestSource.providerDefault,
+      );
+      expect(request.state.lastApplyScope, isNull);
+      expect(request.state.warning, isNull);
     });
 
     test('runtime identity is a single exact generation guard', () {

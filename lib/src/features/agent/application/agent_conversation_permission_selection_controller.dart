@@ -123,6 +123,12 @@ class AgentConversationPermissionSelectionController extends ChangeNotifier {
   }
 
   String? get applyScopeHint {
+    // 尚无 session runtime 时，选择已经是下一次启动的确定配置，不把它展示成
+    // “尚未设置成功”。已有 runtime 明确返回 nextSession 时仍保留提示。
+    if (lastApplyScope == AgentPermissionApplyScope.nextSession &&
+        !isRuntimeAttached) {
+      return null;
+    }
     final warning = lastApplyWarning?.trim();
     if (warning != null && warning.isNotEmpty) {
       return warning;

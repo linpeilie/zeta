@@ -88,6 +88,86 @@ void main() {
     });
 
     test(
+      'new session freezes dormant permission before runtime creation',
+      () async {
+        final provider = _PermissionFakeAgentProvider();
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        await viewModel.loadModels();
+        final plan = viewModel.composerState.permissionOptions.singleWhere(
+          (option) => option.id == ':plan',
+        );
+        expect(await viewModel.selectPermissionOption(plan), isNull);
+        expect(provider.permissionPolicy.applyCount, 0);
+        expect(viewModel.permissionApplyScopeHint, isNull);
+
+        await viewModel.sendMessage('use selected permission');
+
+        expect(provider.startPermissionSnapshots, hasLength(1));
+        expect(
+          provider.startPermissionSnapshots.single.selection?.optionId,
+          ':plan',
+        );
+        expect(
+          provider
+              .turnConfigurations
+              .single
+              .permissionSnapshot
+              .selection
+              ?.optionId,
+          ':plan',
+        );
+        expect(provider.permissionPolicy.applyCount, 0);
+        expect(viewModel.permissionApplyScopeHint, isNull);
+      },
+    );
+
+    test(
+      'history resume freezes dormant permission before runtime creation',
+      () async {
+        final provider = _PermissionFakeAgentProvider(
+          historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+            'thread-1': _historySnapshot(
+              threadId: 'thread-1',
+              userText: 'Previous question',
+            ),
+          },
+        );
+        final viewModel = _createViewModel(provider, initialThread: _thread());
+        addTearDown(viewModel.dispose);
+
+        await viewModel.initialization;
+        await viewModel.loadModels();
+        final plan = viewModel.composerState.permissionOptions.singleWhere(
+          (option) => option.id == ':plan',
+        );
+        expect(await viewModel.selectPermissionOption(plan), isNull);
+        expect(provider.permissionPolicy.applyCount, 0);
+        expect(viewModel.permissionApplyScopeHint, isNull);
+
+        await viewModel.sendMessage('continue with selected permission');
+
+        expect(provider.resumePermissionSnapshots, hasLength(1));
+        expect(
+          provider.resumePermissionSnapshots.single.selection?.optionId,
+          ':plan',
+        );
+        expect(
+          provider
+              .turnConfigurations
+              .single
+              .permissionSnapshot
+              .selection
+              ?.optionId,
+          ':plan',
+        );
+        expect(provider.permissionPolicy.applyCount, 0);
+        expect(viewModel.permissionApplyScopeHint, isNull);
+      },
+    );
+
+    test(
       'bound thread initialization hydrates models without loadModels',
       () async {
         final provider = _FakeAgentProvider(
@@ -4722,6 +4802,40 @@ class _FakeAgentProviderFactory with LegacyBundleFactoryMixin {
 
   @override
   Object create(AgentProviderConfig config) => provider;
+}
+
+class _PermissionFakeAgentProvider extends _FakeAgentProvider
+    implements TestPermissionPolicyHost {
+  _PermissionFakeAgentProvider({super.historySnapshotsByThread});
+
+  @override
+  final _FakePermissionPolicy permissionPolicy = _FakePermissionPolicy();
+}
+
+class _FakePermissionPolicy implements AgentPermissionPolicyPort {
+  int applyCount = 0;
+
+  @override
+  Future<AgentPermissionCatalog> listPermissionOptions() async {
+    return AgentPermissionCatalog(
+      options: const <AgentPermissionOption>[
+        AgentPermissionOption(id: ':ask', label: 'Ask'),
+        AgentPermissionOption(id: ':plan', label: 'Plan'),
+      ],
+      defaultOptionId: ':ask',
+    );
+  }
+
+  @override
+  Future<AgentPermissionApplyResult> applyPermissionSelection(
+    AgentPermissionSelection selection,
+  ) async {
+    applyCount += 1;
+    return AgentPermissionApplyResult(
+      normalizedSelection: selection,
+      scope: AgentPermissionApplyScope.currentSession,
+    );
+  }
 }
 
 class _MultiFakeAgentProviderFactory with LegacyBundleFactoryMixin {

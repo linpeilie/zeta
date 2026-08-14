@@ -1845,6 +1845,13 @@ class AgentConversationViewModel {
           '${conversationBinding.providerId}, not $selectedProviderId',
         );
       }
+      // 在创建 session runtime 之前冻结权限。这样 dormant 期间的用户选择不会被
+      // runtime attach 或目录刷新重新解释，start/resume/send 也始终消费同一快照。
+      final permissionSnapshot =
+          permissionSnapshotOverride ??
+          _permissionSelectionController.snapshotForRequest(
+            threadId: selectedThreadId,
+          );
       _turnActivity ??= await conversationBinding.beginTurn();
       bundle = _turnActivity!.runtime.bundle;
       _modelSelectionController.bindRuntime(bundle.runtime);
@@ -1859,10 +1866,6 @@ class AgentConversationViewModel {
         projectPath: _projectPath,
         filePath: _contextFilePath,
       );
-      final resolvedPermissionSnapshot = _permissionSelectionController
-          .snapshotForRequest(threadId: selectedThreadId);
-      final permissionSnapshot =
-          permissionSnapshotOverride ?? resolvedPermissionSnapshot;
       providerOperation = 'session/ensure';
       final session = await _ensureSession(
         bundle,
