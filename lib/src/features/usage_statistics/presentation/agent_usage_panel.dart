@@ -790,14 +790,15 @@ class _AgentUsageSkeleton extends StatelessWidget {
             const SizedBox(height: IdeSpacing.space10),
             const _SkeletonQuotaGallery(),
             const SizedBox(height: IdeSpacing.space12),
-            const IdeSkeletonLine(width: 56, height: 10),
-            const SizedBox(height: IdeSpacing.space4),
-            const IdeSkeletonLine(width: 96, height: 24),
+            const Row(
+              children: [
+                IdeSkeletonLine(width: 56, height: 10),
+                Spacer(),
+                IdeSkeletonLine(width: 64, height: 18),
+              ],
+            ),
             const SizedBox(height: IdeSpacing.space10),
-            for (var i = 0; i < 4; i++) ...[
-              if (i > 0) const SizedBox(height: IdeSpacing.space2),
-              const _SkeletonMetricRow(),
-            ],
+            const _SkeletonTokenGrid(),
           ],
         ),
       ),
@@ -850,20 +851,56 @@ class _SkeletonQuotaCapsule extends StatelessWidget {
   }
 }
 
-class _SkeletonMetricRow extends StatelessWidget {
-  const _SkeletonMetricRow();
+/// [_TokenMetricGrid] 的骨架版本：同一容器化背景 + 2×2 占位块。
+class _SkeletonTokenGrid extends StatelessWidget {
+  const _SkeletonTokenGrid();
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: IdeSpacing.space2),
-      child: Row(
-        children: [
-          Expanded(child: IdeSkeletonLine(height: 12)),
-          SizedBox(width: IdeSpacing.space8),
-          IdeSkeletonLine(width: 40, height: 12),
-        ],
+    final colors = IdeColors.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.hoverSurface,
+        borderRadius: IdeRadius.allSmall,
       ),
+      child: const Padding(
+        padding: EdgeInsets.all(IdeSpacing.space8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(child: _SkeletonTokenCell()),
+                SizedBox(width: IdeSpacing.space8),
+                Expanded(child: _SkeletonTokenCell()),
+              ],
+            ),
+            SizedBox(height: IdeSpacing.space8),
+            Row(
+              children: [
+                Expanded(child: _SkeletonTokenCell()),
+                SizedBox(width: IdeSpacing.space8),
+                Expanded(child: _SkeletonTokenCell()),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SkeletonTokenCell extends StatelessWidget {
+  const _SkeletonTokenCell();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Row(
+      children: [
+        Expanded(child: IdeSkeletonLine(height: 10)),
+        SizedBox(width: IdeSpacing.space6),
+        IdeSkeletonLine(width: 28, height: 12),
+      ],
     );
   }
 }
@@ -950,6 +987,10 @@ class _ResetCreditCountRow extends StatelessWidget {
   }
 }
 
+/// 今日 Token 统计：横向 Header（标签 + 总数）叠加 2×2 子项网格。
+///
+/// Header 保持素色呼应 [_PlanSection] 的套餐名，网格则复用
+/// [_QuotaWindowCard] 同款浅灰圆角容器，让上下两个模块读作同一套系统组件。
 class _TokenSection extends StatelessWidget {
   const _TokenSection({required this.tokens});
 
@@ -960,56 +1001,136 @@ class _TokenSection extends StatelessWidget {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     final tokens = this.tokens;
+    final labelStyle = textStyles.caption.copyWith(color: colors.textSecondary);
     return Column(
       key: const ValueKey('agent-usage-token-section'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('今日 Token', style: textStyles.caption),
-        const SizedBox(height: IdeSpacing.space4),
-        Text(
-          tokens == null
-              ? '暂无统计'
-              : formatUsageCount(tokens.effectiveTotal ?? 0),
-          key: const ValueKey('agent-usage-today-total'),
-          style: textStyles.metricValue.copyWith(
-            color: tokens == null ? colors.textSecondary : colors.textPrimary,
-          ),
+        Row(
+          children: [
+            Expanded(child: Text('今日 Token', style: labelStyle)),
+            const SizedBox(width: IdeSpacing.space8),
+            Text(
+              tokens == null
+                  ? '暂无统计'
+                  : formatUsageCount(tokens.effectiveTotal ?? 0),
+              key: const ValueKey('agent-usage-today-total'),
+              style: textStyles.metricValue.copyWith(
+                color: tokens == null
+                    ? colors.textSecondary
+                    : colors.textPrimary,
+              ),
+            ),
+          ],
         ),
         if (tokens != null) ...[
           const SizedBox(height: IdeSpacing.space10),
-          _MetricRow(label: '输入', value: tokens.inputTokens ?? 0),
-          _MetricRow(label: '缓存输入', value: tokens.cachedInputTokens ?? 0),
-          _MetricRow(label: '输出', value: tokens.outputTokens ?? 0),
-          _MetricRow(label: '推理', value: tokens.reasoningTokens ?? 0),
+          _TokenMetricGrid(tokens: tokens, labelStyle: labelStyle),
         ],
       ],
     );
   }
 }
 
-class _MetricRow extends StatelessWidget {
-  const _MetricRow({required this.label, required this.value});
+/// 输入 / 缓存输入 / 输出 / 推理四项子指标的 2×2 网格容器。
+class _TokenMetricGrid extends StatelessWidget {
+  const _TokenMetricGrid({required this.tokens, required this.labelStyle});
 
-  final String label;
-  final int value;
+  final UsageTokenBreakdown tokens;
+  final TextStyle labelStyle;
 
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
-    final textStyles = IdeTextStyles.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: IdeSpacing.space2),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
-            ),
-          ),
-          Text(formatUsageCount(value), style: textStyles.numeric),
-        ],
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.hoverSurface,
+        borderRadius: IdeRadius.allSmall,
       ),
+      child: Padding(
+        padding: const EdgeInsets.all(IdeSpacing.space8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: _TokenMetricCell(
+                    label: '输入',
+                    value: tokens.inputTokens ?? 0,
+                    labelStyle: labelStyle,
+                  ),
+                ),
+                const SizedBox(width: IdeSpacing.space8),
+                Expanded(
+                  child: _TokenMetricCell(
+                    label: '缓存输入',
+                    value: tokens.cachedInputTokens ?? 0,
+                    labelStyle: labelStyle,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: IdeSpacing.space8),
+            Row(
+              children: [
+                Expanded(
+                  child: _TokenMetricCell(
+                    label: '输出',
+                    value: tokens.outputTokens ?? 0,
+                    labelStyle: labelStyle,
+                  ),
+                ),
+                const SizedBox(width: IdeSpacing.space8),
+                Expanded(
+                  child: _TokenMetricCell(
+                    label: '推理',
+                    value: tokens.reasoningTokens ?? 0,
+                    labelStyle: labelStyle,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 网格单元格：标签靠左（次级灰）、数值靠右（加粗深色、等宽数字），两端对齐。
+class _TokenMetricCell extends StatelessWidget {
+  const _TokenMetricCell({
+    required this.label,
+    required this.value,
+    required this.labelStyle,
+  });
+
+  final String label;
+  final int value;
+  final TextStyle labelStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    final textStyles = IdeTextStyles.of(context);
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: labelStyle,
+          ),
+        ),
+        const SizedBox(width: IdeSpacing.space6),
+        Text(
+          formatUsageCount(value),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: textStyles.numeric.copyWith(fontWeight: FontWeight.w700),
+        ),
+      ],
     );
   }
 }

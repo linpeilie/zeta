@@ -161,7 +161,9 @@ void main() {
         expect(completed.tokens.inputTokens, 3);
         expect(completed.tokens.outputTokens, 2);
         expect(completed.tokens.cachedInputTokens, 12);
-        expect(completed.tokens.totalTokens, 5);
+        // cache_creation/cache_read 是独立于 input 的额外桶，总量须把它们加回来
+        // （3 input + 12 cached + 2 output），不能只算 input + output。
+        expect(completed.tokens.totalTokens, 17);
         expect(completed.duration, const Duration(milliseconds: 900));
         expect(completed.sourceKind, 'claude_code_stream_json');
         expect(
@@ -257,7 +259,8 @@ void main() {
         expect(snapshot.records, hasLength(1));
         expect(snapshot.records.single.tokens.cachedInputTokens, 12);
         expect(snapshot.records.single.tokens.outputTokens, 3);
-        expect(snapshot.records.single.tokens.totalTokens, 5);
+        // 2 input + 12 cached + 3 output，同上须计入缓存桶。
+        expect(snapshot.records.single.tokens.totalTokens, 17);
       },
     );
 

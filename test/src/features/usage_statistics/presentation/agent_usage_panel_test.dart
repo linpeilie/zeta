@@ -167,6 +167,81 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('今日 Token 子项按 2×2 网格排布在浅灰圆角容器中', (tester) async {
+    final controller = AgentUsagePanelController(
+      repository: _ImmediatePanelRepository(_usageEntries),
+    );
+    addTearDown(controller.dispose);
+
+    await _pumpPanel(tester, controller);
+
+    final input = _inPopover(find.text('1.2K'));
+    final cachedInput = _inPopover(find.text('300'));
+    final output = _inPopover(find.text('400'));
+    final reasoning = _inPopover(find.text('100'));
+    expect(input, findsOneWidget);
+    expect(cachedInput, findsOneWidget);
+    expect(output, findsOneWidget);
+    expect(reasoning, findsOneWidget);
+
+    // 第一行“输入/缓存输入”、第二行“输出/推理”，行内左右并排、行间上下堆叠。
+    expect(
+      tester.getTopLeft(input).dy,
+      closeTo(tester.getTopLeft(cachedInput).dy, 0.5),
+    );
+    expect(
+      tester.getTopLeft(output).dy,
+      closeTo(tester.getTopLeft(reasoning).dy, 0.5),
+    );
+    expect(
+      tester.getTopLeft(output).dy,
+      greaterThan(tester.getTopLeft(input).dy),
+    );
+    expect(
+      tester.getTopLeft(input).dx,
+      lessThan(tester.getTopLeft(cachedInput).dx),
+    );
+    expect(
+      tester.getTopLeft(output).dx,
+      lessThan(tester.getTopLeft(reasoning).dx),
+    );
+
+    // 每个单元格内标签靠左、数值靠右，两端对齐同一行。
+    final inputLabel = _inPopover(find.text('输入'));
+    expect(
+      tester.getTopLeft(inputLabel).dx,
+      lessThan(tester.getTopLeft(input).dx),
+    );
+    expect(
+      tester.getCenter(inputLabel).dy,
+      closeTo(tester.getCenter(input).dy, 1),
+    );
+
+    // 网格背景复用与套餐额度卡片一致的浅灰底 + 小圆角。
+    final tokenSection = find.byKey(
+      const ValueKey('agent-usage-token-section'),
+    );
+    final grid = find.descendant(
+      of: tokenSection,
+      matching: find.byType(DecoratedBox),
+    );
+    expect(grid, findsOneWidget);
+    final decoration =
+        tester.widget<DecoratedBox>(grid).decoration as BoxDecoration;
+    final colors = IdeColors.of(tester.element(tokenSection));
+    expect(decoration.color, colors.hoverSurface);
+    expect(decoration.borderRadius, IdeRadius.allSmall);
+
+    // 标签统一降级为次级灰色，数值保持深色并加粗。
+    final inputLabelStyle = tester.widget<Text>(inputLabel).style;
+    expect(inputLabelStyle?.color, colors.textSecondary);
+    final inputValueStyle = tester.widget<Text>(input).style;
+    expect(inputValueStyle?.color, colors.textPrimary);
+    expect(inputValueStyle?.fontWeight, FontWeight.w700);
+
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('目录到达即展示 Tabs，只有选中项按需显示加载动画', (tester) async {
     final repository = _ControlledPanelRepository();
     final controller = AgentUsagePanelController(repository: repository);

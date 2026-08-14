@@ -638,6 +638,9 @@ final class ClaudeCodeEventMapper {
         final cacheCreate = _int(usageRaw['cache_creation_input_tokens']);
         final cacheRead = _int(usageRaw['cache_read_input_tokens']);
         final cached = _sumOptional(cacheCreate, cacheRead);
+        // Anthropic 的 cache_creation/cache_read 是独立于 input_tokens 的额外桶，
+        // 不像 OpenAI/xAI 那样已被 total_tokens 隐含覆盖，总量必须显式把它加回来，
+        // 否则大量走缓存的回合会被少算。
         usageEvent = AgentTokenUsageEvent(
           sessionId: usageIdentity.sessionId,
           turnId: usageIdentity.turnId,
@@ -646,7 +649,7 @@ final class ClaudeCodeEventMapper {
             inputTokens: input,
             outputTokens: output,
             cachedInputTokens: cached,
-            totalTokens: _sumOptional(input, output),
+            totalTokens: _sumOptional(_sumOptional(input, cached), output),
           ),
           raw: const <String, Object?>{},
         );
