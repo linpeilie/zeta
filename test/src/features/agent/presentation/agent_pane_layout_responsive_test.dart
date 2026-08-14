@@ -6,6 +6,7 @@ import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/ide_motion.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
@@ -350,7 +351,7 @@ void main() {
     );
 
     testWidgets(
-      'moves the same focused composer below an active neutral user message',
+      'moves the same focused composer below an active user message',
       (tester) async {
         await tester.binding.setSurfaceSize(const Size(1280, 800));
         addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -424,13 +425,16 @@ void main() {
         final bubble = tester.widget<DecoratedBox>(bubbleFinder);
         final decoration = bubble.decoration as BoxDecoration;
         final colors = IdeColors.of(tester.element(bubbleFinder));
-        // 用户消息是左对齐日志行：没有底色、没有四边框，只有一条左侧竖线。
-        expect(decoration.color, isNull);
+        // 用户消息是左对齐的轻量气泡卡片：极浅背景 + 四边细边框 + 小圆角，
+        // 不是左右交错的聊天气泡，也不再是无底色的纯日志行。
+        expect(decoration.color, colors.hoverSurface);
+        expect(decoration.borderRadius, IdeRadius.allSmall);
         final border = decoration.border! as Border;
-        expect(border.left.color, colors.textTertiary);
-        expect(border.left.width, 2);
-        expect(border.top, BorderSide.none);
-        expect(border.right, BorderSide.none);
+        expect(border.left.color, colors.borderSubtle);
+        expect(border.left.width, 1);
+        expect(border.top, border.left);
+        expect(border.right, border.left);
+        expect(border.bottom, border.left);
         final historyEvent = find.byKey(
           const ValueKey('agent-history-event-history-system-design-system'),
         );

@@ -365,6 +365,7 @@ class _AgentContextRawMessageRow extends StatelessWidget {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     final hasRaw = item.raw.isNotEmpty;
+    final rawText = hasRaw ? _prettyJson(item.raw) : '';
     return IdeCollapsibleCard(
       headerKey: ValueKey<String>('agent-context-raw-${item.id}'),
       bodyKey: ValueKey<String>('agent-context-raw-body-${item.id}'),
@@ -407,19 +408,60 @@ class _AgentContextRawMessageRow extends StatelessWidget {
         ],
       ),
       body: hasRaw
-          ? ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 360),
-              child: SingleChildScrollView(
-                child: _AgentHighlightedCodeBlock(
-                  code: _prettyJson(item.raw),
-                  language: 'json',
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Semantics(
+                    button: true,
+                    label: '复制原文',
+                    child: IdeTooltip(
+                      message: '复制原文',
+                      child: sf.IconButton.ghost(
+                        key: ValueKey<String>(
+                          'agent-context-raw-copy-${item.id}',
+                        ),
+                        onPressed: () => _copyContextRaw(context, rawText),
+                        size: sf.ButtonSize.small,
+                        density: sf.ButtonDensity.iconDense,
+                        icon: Icon(
+                          Icons.copy_rounded,
+                          size: 14,
+                          color: colors.textSecondary,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 360),
+                  child: SingleChildScrollView(
+                    child: _AgentHighlightedCodeBlock(
+                      code: rawText,
+                      language: 'json',
+                    ),
+                  ),
+                ),
+              ],
             )
           : Padding(
               padding: const EdgeInsets.only(top: IdeSpacing.space4),
               child: Text('（无原始数据）', style: _agentMetaTextStyle(context)),
             ),
+    );
+  }
+}
+
+/// 复制展开态原文；内容只写入系统剪贴板，不进入 Zeta 持久化或诊断日志。
+Future<void> _copyContextRaw(BuildContext context, String text) async {
+  await Clipboard.setData(ClipboardData(text: text));
+  if (context.mounted) {
+    showIdeToast(
+      context,
+      message: '已复制原文。',
+      location: sf.ToastLocation.bottomLeft,
     );
   }
 }

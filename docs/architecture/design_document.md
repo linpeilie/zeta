@@ -164,6 +164,10 @@ Popover，内含完整明细、底部 Provider Tabs 与右侧刷新，宽度按�
 摘要开合按钮都收敛回折叠态。Compact 模式不挤压 Canvas，而是使用
 Navigation Overlay；scrim 与 Esc 均关闭浮层并把焦点还给标题栏入口。
 
+标题栏「更多」菜单中的上下文详情面板是只读审计视图，展示 typed 会话概览与按条目过滤的
+原始消息。原始消息展开后，JSON 高亮正文接入统一选择区，支持拖选；复制按钮只写入系统
+剪贴板，并以 Toast 反馈，不把原文写入 Zeta 的持久化状态或日志。
+
 Canvas 与 Agent 会话都使用 `IdeRetainedPageView` 延迟挂载并保活已访问页面；任一时刻
 只布局活动页面和活动 `AgentPane`，离屏页保留 State、输入/滚动控制器并暂停 ticker。
 Workbench 的 Canvas Flex slot 自身也使用稳定 Key，保证 Navigation/Inspector slot
@@ -177,7 +181,7 @@ Workbench 的 Canvas Flex slot 自身也使用稳定 Key，保证 Navigation/Ins
 身份或档位变化时才使缓存失效。对话时间线使用 `CustomScrollView` +
 `SliverList.builder`，按稳定的 block、live activity 和 turn footer item 虚拟化；
 projection 与 unified diff 以 turn render revision 缓存，代码高亮复用
-`HighlightView` identity。Composer、Pending interaction 与 Active plan 在一次
+缓存的高亮 TextSpan。Composer、Pending interaction 与 Active plan 在一次
 `CustomMultiChildLayout` 中确定位置，不使用 post-frame 高度反馈。
 
 设置 Feature 对 Workbench 暴露 `SettingsNavigationPane` 与 `SettingsPageCanvas`；

@@ -246,9 +246,9 @@ MarkdownThemeData _agentUserBubbleMarkdownTheme(BuildContext context) {
   final colors = IdeColors.of(context);
   final textStyles = IdeTextStyles.of(context);
   final base = _agentMarkdownTheme(context);
-  // 用户消息日志行内收敛：标题统一降级为正文加粗，代码/引用/表格底色用控制面。
-  // 日志行本身没有底色（只有左侧竖线），所以这些区块直接取不透明的控制面档，
-  // 不再像旧气泡那样降透明度去和气泡底色调和。
+  // 用户/系统消息内收敛：标题统一降级为正文加粗，代码/引用/表格底色用控制面。
+  // 控制面（surfaceElevated）比用户气泡的 hoverSurface 底色或系统日志行的纯
+  // 画布底色都更深一档，两层天然有对比，不需要再对代码块/引用做透明度调和。
   // 用户正文比 Agent 长文重一档字重：Agent 走 proseBody（w400 / 行高 1.55）
   // 追求长段可读，用户提问通常只有一两句，加重后在回溯时更容易被扫到，
   // 和左侧竖线、等宽角色前缀共同构成身份锚点。

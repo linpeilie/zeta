@@ -585,11 +585,14 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
   保持 `SliverList.builder`、`findChildIndexCallback` 和 prepend 锚点修正；不要恢复
   `SingleChildScrollView + Column` 或把整个长 turn 合并为一个 sliver child。
 - grouping、unified diff 与代码高亮必须分别受 render revision、projection cache 和
-  `HighlightView` identity 约束。窗口宽度变化不是数据变化，不得触发这些解析。
+  缓存的高亮 TextSpan identity 约束。窗口宽度变化不是数据变化，不得触发这些解析。
 - Composer、Pending interaction 与 Active plan 的高度关系必须在同一次 layout 中解决；
   禁止重新引入 post-frame 测量、`GlobalKey` 查高或 layout 后 `setState` 反馈环。
 - 页面容器只负责切换 slot。搜索、筛选、未保存配置确认等业务状态继续归对应 Feature；
   例如离开 Agent 管理前通过 `SettingsPageCanvasState.confirmCanLeave()` 查询。
+- Agent 标题栏「更多」菜单打开的上下文详情面板是只读审计视图：正文放在统一
+  `SelectionArea` 内；展开原始消息时，JSON 高亮 `RichText` 必须接入选择注册器，旁边提供
+  「复制原文」按钮。复制只写系统剪贴板并给出 Toast，不得写入 Zeta 持久化状态或日志。
 - 保持三栏工作台的职责边界：Projects 管项目和 threads，Agent 管对话，Files 管文件上下文。
 - 复杂交互逻辑优先放入 view model，widget 层负责渲染和用户输入。
 - 桌面工具界面需要保持信息密度，但文本必须可读，按钮和状态提示不能挤压变形。

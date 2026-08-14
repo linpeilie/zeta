@@ -203,7 +203,7 @@ class _AgentHighlightedCodeBlock extends StatefulWidget {
 
 class _AgentHighlightedCodeBlockState
     extends State<_AgentHighlightedCodeBlock> {
-  Widget? _cachedHighlight;
+  TextSpan? _cachedHighlight;
   String? _cachedCode;
   String? _cachedLanguage;
   Object? _cachedThemeSignature;
@@ -224,12 +224,12 @@ class _AgentHighlightedCodeBlockState
         _cachedCode != widget.code ||
         _cachedLanguage != widget.language ||
         _cachedThemeSignature != themeSignature) {
-      _cachedHighlight = HighlightView(
-        widget.code,
-        language: widget.language,
-        theme: highlightTheme,
-        padding: IdeSpacing.cardPadding,
-        textStyle: codeTextStyle,
+      final nodes = highlight
+          .parse(widget.code, language: widget.language)
+          .nodes;
+      _cachedHighlight = TextSpan(
+        style: codeTextStyle,
+        children: _highlightTextSpans(nodes ?? const <Node>[], highlightTheme),
       );
       _cachedCode = widget.code;
       _cachedLanguage = widget.language;
@@ -241,11 +241,40 @@ class _AgentHighlightedCodeBlockState
         decoration: _agentCodeBlockDecoration(colors),
         child: ClipRRect(
           borderRadius: IdeRadius.allSmall,
-          // 相同 Widget identity 会跳过 HighlightView.build，避免 resize 重复 parse。
-          child: _cachedHighlight!,
+          // RichText 显式接入 SelectionArea 的 registrar；普通 HighlightView
+          // 内部不会传递 registrar，展开后的原文因此无法被拖选。
+          child: Padding(
+            padding: IdeSpacing.cardPadding,
+            child: RichText(
+              text: _cachedHighlight!,
+              selectionRegistrar: SelectionContainer.maybeOf(context),
+              selectionColor: colors.primaryMuted,
+            ),
+          ),
         ),
       ),
     );
+  }
+
+  List<TextSpan> _highlightTextSpans(
+    List<Node> nodes,
+    Map<String, TextStyle> theme,
+  ) {
+    TextSpan convert(Node node) {
+      final style = node.className == null ? null : theme[node.className!];
+      final value = node.value;
+      if (value != null) {
+        return TextSpan(text: value, style: style);
+      }
+      return TextSpan(
+        style: style,
+        children: [
+          for (final child in node.children ?? const <Node>[]) convert(child),
+        ],
+      );
+    }
+
+    return [for (final node in nodes) convert(node)];
   }
 }
 

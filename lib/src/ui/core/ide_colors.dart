@@ -255,7 +255,7 @@ class IdeColors {
   /// [accent] 的半透明弱化背景，用于蓝色弱强调。
   ///
   /// 生效位置：可操作提示、少量活动状态和 Markdown 文本选区。普通导航、
-  /// 列表选中与用户消息分别使用 [selectedSurface] 和 [userMessageSurface]。
+  /// 列表选中与用户消息气泡分别使用 [selectedSurface] 和 [hoverSurface]。
   final Color primaryMuted;
 
   /// 需要注意、等待或可恢复异常的状态色。
@@ -317,10 +317,11 @@ class IdeColors {
   /// `sf.Colors.red[500]`，以保持平台操作语义一致。
   final Color closeHover;
 
-  /// 普通可交互控件的悬停背景。
+  /// 普通可交互控件的悬停背景；同一档极浅灰也用作静态卡片底色。
   ///
   /// 生效位置：`PaneInteractiveSurface` 默认 hover；设置页导航项 hover；
-  /// Agent 消息区可点击块 hover；Material `hoverColor` 投影。
+  /// Agent 消息区可点击块 hover；Material `hoverColor` 投影；用户消息气泡、
+  /// Agent 统计套餐额度卡片与 Token 统计网格等静态浅底容器。
   final Color hoverSurface;
 
   /// 普通可交互控件的按下背景。

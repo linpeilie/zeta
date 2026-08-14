@@ -9,7 +9,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_highlight/flutter_highlight.dart';
+import 'package:highlight/highlight.dart' show Node, highlight;
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 import 'package:pasteboard/pasteboard.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;

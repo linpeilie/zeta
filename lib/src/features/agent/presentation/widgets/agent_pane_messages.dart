@@ -386,12 +386,15 @@ String? _turnDurationLabel(AgentConversationTurnGroup group) {
   };
 }
 
-/// 用户或系统消息渲染为**左对齐日志行**：一条左侧竖线加等宽角色前缀，
-/// 正文走与 Agent 相同的 Markdown 渲染管线（收敛主题：标题降级、代码块用控制面底色）。
+/// 用户消息渲染为**左对齐的轻量气泡卡片**（极浅背景 + 细边框 + 小圆角）；
+/// 系统消息量级小、多是注入提示，仍是**左对齐日志行**（一条左侧竖线加等宽角色
+/// 前缀）。两者正文都走与 Agent 相同的 Markdown 渲染管线（收敛主题：标题降级、
+/// 代码块用控制面底色）。
 ///
-/// 这里刻意**不使用左右交错的聊天气泡**。会话区要读起来像终端日志：所有
-/// 问答同一条左基线，谁说的话由前缀标识，而不是由对齐方向暗示。右对齐气泡
-/// 还会在宽窗口下把用户消息推到视线之外，与 Agent 全宽正文割裂成两栏。
+/// 这里刻意**不使用左右交错的聊天气泡**。会话区要读起来像文档：所有问答同一条
+/// 左基线，谁说的话由前缀和边界标识，而不是由对齐方向暗示。右对齐气泡还会在
+/// 宽窗口下把用户消息推到视线之外，与 Agent 全宽正文割裂成两栏。气泡卡片只解决
+/// 「长段用户输入和 Agent 正文平级、层级不分明」的问题，不改变左对齐这条基线。
 class _AgentBubbleMessage extends StatelessWidget {
   const _AgentBubbleMessage({
     required this.message,
@@ -431,22 +434,37 @@ class _AgentBubbleMessage extends StatelessWidget {
       color: colors.textSecondary,
     );
 
+    // 用户消息套一张极浅卡片，和 Agent 的纯文档正文拉开可辨识的边界；系统消息
+    // 量级小、多是注入提示，继续用左侧竖线的日志行样式，不占用卡片这种更重的
+    // 视觉语言。hoverSurface 足够浅，不会盖过 Markdown 内嵌代码块/引用块的
+    // controlSurface 底色（后者更深一档，两层天然有对比，无需再做透明度调和）。
+    final decoration = isUser
+        ? BoxDecoration(
+            color: colors.hoverSurface,
+            border: Border.all(color: colors.borderSubtle),
+            borderRadius: IdeRadius.allSmall,
+          )
+        : BoxDecoration(
+            // 竖线画在 Border.left：它天然撑满内容高度，不需要 IntrinsicHeight，
+            // 也就不会在时间线热路径上多一次布局测量。
+            //
+            // 用 textTertiary（不透明中灰）而不是 border（白 8%）：后者在炭黑底上
+            // 几乎不可见，等于没有锚点。同样是 2px，对比度差着一个数量级。
+            border: Border(
+              left: BorderSide(color: colors.textTertiary, width: 2),
+            ),
+          );
+    final contentPadding = isUser
+        ? const EdgeInsets.all(IdeSpacing.space12)
+        : const EdgeInsets.only(left: IdeSpacing.space10);
+
     return Padding(
       padding: const EdgeInsets.only(bottom: IdeSpacing.space12),
       child: DecoratedBox(
         key: ValueKey<String>('agent-message-bubble-${message.id}'),
-        // 竖线画在 Border.left：它天然撑满内容高度，不需要 IntrinsicHeight，
-        // 也就不会在时间线热路径上多一次布局测量。
-        //
-        // 用 textTertiary（不透明中灰）而不是 border（白 8%）：后者在炭黑底上
-        // 几乎不可见，等于没有锚点。同样是 2px，对比度差着一个数量级。
-        decoration: BoxDecoration(
-          border: Border(
-            left: BorderSide(color: colors.textTertiary, width: 2),
-          ),
-        ),
+        decoration: decoration,
         child: Padding(
-          padding: const EdgeInsets.only(left: IdeSpacing.space10),
+          padding: contentPadding,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,

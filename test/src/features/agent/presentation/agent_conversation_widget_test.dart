@@ -1570,6 +1570,18 @@ void main() {
   testWidgets('opens the context details panel from the header more menu', (
     tester,
   ) async {
+    String? copiedText;
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData' && call.arguments is Map) {
+        copiedText = (call.arguments as Map)['text'] as String?;
+      }
+      return null;
+    });
+    addTearDown(
+      () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+    );
     final createdAt = DateTime(2024, 1, 15, 10, 30);
     final lastActiveAt = DateTime(2024, 6, 20, 14, 5);
     final provider = FakeAgentProvider(
@@ -1800,14 +1812,35 @@ void main() {
       find.byKey(const ValueKey('agent-context-raw-body-msg-user-1')),
       findsOneWidget,
     );
+    final rawBody = find.byKey(
+      const ValueKey('agent-context-raw-body-msg-user-1'),
+    );
+    final rawRichText = find.descendant(
+      of: rawBody,
+      matching: find.byWidgetPredicate(
+        (widget) => widget is RichText && widget.selectionRegistrar != null,
+      ),
+    );
+    expect(rawRichText, findsOneWidget);
+    expect(tester.widget<RichText>(rawRichText).selectionRegistrar, isNotNull);
+    await tester.tap(
+      find.byKey(const ValueKey('agent-context-raw-copy-msg-user-1')),
+    );
+    await tester.pump();
+    expect(copiedText, contains('ctx-user-raw'));
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
 
     // 文件编辑上下文只展示 typed snapshot；raw/wire sentinel 不得回流。
     await tester.tap(find.byKey(const ValueKey('agent-context-raw-filter')));
     await tester.pumpAndSettle();
     expect(find.text('ctx-edit-1'), findsOneWidget);
-    await tester.tap(
-      find.byKey(const ValueKey('agent-context-raw-ctx-edit-1')),
+    final editHeader = find.byKey(
+      const ValueKey('agent-context-raw-ctx-edit-1'),
     );
+    await tester.ensureVisible(editHeader);
+    await tester.pumpAndSettle();
+    await tester.tap(editHeader);
     await tester.pumpAndSettle();
     final editContextBody = find.byKey(
       const ValueKey('agent-context-raw-body-ctx-edit-1'),
