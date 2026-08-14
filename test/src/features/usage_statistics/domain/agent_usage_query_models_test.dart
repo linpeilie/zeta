@@ -45,6 +45,7 @@ void main() {
     final snapshot = AgentTokenUsageSourceSnapshot(
       providerId: 'test',
       providerName: 'Test',
+      historyPresence: AgentTokenHistoryPresence.present,
       records: records,
       refreshedAt: DateTime.utc(2026, 8, 12),
       warnings: warnings,
@@ -54,6 +55,7 @@ void main() {
     warnings.clear();
 
     expect(snapshot.records, hasLength(1));
+    expect(snapshot.historyPresence, AgentTokenHistoryPresence.present);
     expect(snapshot.warnings, hasLength(1));
     expect(() => snapshot.records.add(_record()), throwsUnsupportedError);
     expect(

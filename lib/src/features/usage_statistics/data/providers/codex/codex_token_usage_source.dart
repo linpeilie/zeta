@@ -114,6 +114,9 @@ final class CodexTokenUsageSource implements AgentTokenUsageSource {
     return AgentTokenUsageSourceSnapshot(
       providerId: providerId,
       providerName: providerName,
+      historyPresence: scan.sessions.isEmpty
+          ? AgentTokenHistoryPresence.absent
+          : AgentTokenHistoryPresence.present,
       records: records,
       refreshedAt: _clock(),
       warnings: warnings,

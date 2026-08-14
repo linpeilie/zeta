@@ -311,6 +311,7 @@ AgentTokenUsageSourceSnapshot _tokenSnapshot(AgentProviderConfig config) {
   return AgentTokenUsageSourceSnapshot(
     providerId: config.id,
     providerName: config.displayName,
+    historyPresence: AgentTokenHistoryPresence.present,
     records: <AgentUsageRecord>[
       AgentUsageRecord(
         threadId: 'thread-${config.id}',

@@ -28,6 +28,39 @@ void main() {
       }
     });
 
+    test('distinguishes no local history from an empty query window', () async {
+      final source = ClaudeCodeTokenUsageSource(
+        config: AgentProviderConfig.defaultClaudeCode,
+        partitionStore: store,
+        historyReader: reader,
+      );
+
+      final absent = await source.load(
+        AgentUsageQuery(earliest: DateTime.utc(2026, 8, 12)),
+      );
+      await _writeHistory(
+        root: tempRoot,
+        projectPath: '/workspace/old',
+        fileName: 'old.jsonl',
+        sessionId: 'old-session',
+        userId: 'old-user',
+        startedAt: DateTime.utc(2026, 8, 11),
+        subtype: 'success',
+        durationMs: 100,
+        usage: const <String, Object?>{'input_tokens': 3, 'output_tokens': 2},
+        prompt: '[PROMPT_REDACTED]',
+        response: '[RESPONSE_REDACTED]',
+      );
+      final outsideWindow = await source.load(
+        AgentUsageQuery(earliest: DateTime.utc(2026, 8, 12)),
+      );
+
+      expect(absent.historyPresence, AgentTokenHistoryPresence.absent);
+      expect(absent.records, isEmpty);
+      expect(outsideWindow.historyPresence, AgentTokenHistoryPresence.present);
+      expect(outsideWindow.records, isEmpty);
+    });
+
     test(
       'projects completed failed interrupted turns and absolute cache usage',
       () async {
@@ -118,6 +151,7 @@ void main() {
         expect(snapshot.records, hasLength(3));
         expect(snapshot.providerId, 'claude-work');
         expect(snapshot.providerName, 'Claude Work');
+        expect(snapshot.historyPresence, AgentTokenHistoryPresence.present);
         expect(snapshot.refreshedAt, refreshedAt);
         final byThread = <String, AgentUsageRecord>{
           for (final record in snapshot.records) record.threadId: record,

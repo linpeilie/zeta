@@ -221,6 +221,10 @@ The accounting rules are explicit and may differ from your assumptions:
 - **running and unknown states are excluded from the success-rate denominator**;
 - root threads from the CLI, VS Code, `codex exec`, and Zeta are all counted, **including archived threads but excluding sub-agents** (to avoid double counting).
 
+Token statistics for Codex, Grok, and Claude Code come from each CLI's local history. Zeta shows
+“No token history” when no readable history exists, and 0 when history exists but the selected time
+range contains no calls.
+
 ### Time-to-first-token shows very few samples
 
 Only samples where Codex explicitly returned `time_to_first_token_ms` are used; missing ones are not approximated. The page states the valid sample count.

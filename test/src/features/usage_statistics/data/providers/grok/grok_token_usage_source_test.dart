@@ -32,6 +32,7 @@ void main() {
     final actual = await source.load(AgentUsageQuery(earliest: earliest));
 
     expect(actual.records, hasLength(2));
+    expect(actual.historyPresence, AgentTokenHistoryPresence.present);
     final failed = actual.records.first;
     expect(failed.id, 'grok-work/thread-beta/turn-beta');
     expect(failed.projectPath, '/work/beta/nested');

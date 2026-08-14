@@ -65,8 +65,8 @@
 ### 变更
 
 - Claude Code Provider 的展示名简化为 Claude，并改用保留品牌原色的 Claude 图标
-- 使用统计派生索引升级为多 Provider 分区：Codex 与 Grok 共用 fingerprint 缓存，
-  打开统计页时未变更的本地历史可跳过重解析
+- 使用统计派生索引升级为多 Provider 分区：Codex、Grok 与 Claude Code 使用各自的
+  fingerprint 缓存，打开统计页时未变更的本地历史可跳过重解析
 - 界面字体改为内置 Geist，不再依赖各平台系统字体；中文仍由平台回退字体承接，
   在外观设置里可以改回系统字体
 - 模型 ID、Provider 名、Token 统计和表格数字列统一改用等宽字体；数字启用等宽
@@ -77,6 +77,8 @@
 
 ### 修复
 
+- Claude Code 的本地历史 Token 现在会进入 Agent 今日统计和完整使用统计；完全无历史时
+  显示“暂无 Token 历史”，已有历史但当前时间窗无调用时显示 0
 - Claude 新建或打开历史会话后，在首个回合前切换的权限会随同一份请求快照传给
   session 启动、恢复与发送；已回收 runtime 的旧权限不再覆盖新选择，界面也不再
   将已经选定的启动权限提示为“下次生效”

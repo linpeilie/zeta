@@ -1,4 +1,5 @@
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/usage_statistics/data/providers/claude_code/claude_code_token_usage_source.dart';
 import 'package:zeta/src/features/usage_statistics/data/providers/codex/codex_token_usage_source.dart';
 import 'package:zeta/src/features/usage_statistics/data/providers/grok/grok_token_usage_source.dart';
 import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partition_store.dart';
@@ -24,7 +25,11 @@ final class BuiltInAgentTokenUsageSourceRegistry
         config: config,
         partitionStore: _partitionStore,
       ),
-      AgentProviderKind.cursorAcp || AgentProviderKind.claudeCode => null,
+      AgentProviderKind.claudeCode => ClaudeCodeTokenUsageSource(
+        config: config,
+        partitionStore: _partitionStore,
+      ),
+      AgentProviderKind.cursorAcp => null,
     };
   }
 }

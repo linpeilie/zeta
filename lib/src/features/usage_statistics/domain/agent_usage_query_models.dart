@@ -27,6 +27,12 @@ final class AgentUsageQuery {
 /// 查询能力当前可观察的状态。
 enum AgentUsageCapabilityStatus { unsupported, available, unavailable }
 
+/// Token 历史权威来源中是否发现过可读取的会话。
+///
+/// 它与查询时间窗内是否有记录是两件事：历史存在但当前时间窗无记录时应展示 0；
+/// 完全没有历史时保持“暂无历史”，不能伪造 0。
+enum AgentTokenHistoryPresence { absent, present }
+
 /// 可安全展示的非阻断诊断，不包含 Provider raw、路径或原始异常正文。
 final class AgentUsageWarning {
   const AgentUsageWarning({required this.code, required this.message});
@@ -67,6 +73,7 @@ final class AgentTokenUsageSourceSnapshot {
   AgentTokenUsageSourceSnapshot({
     required this.providerId,
     required this.providerName,
+    required this.historyPresence,
     required List<AgentUsageRecord> records,
     required this.refreshedAt,
     List<AgentUsageWarning> warnings = const <AgentUsageWarning>[],
@@ -79,6 +86,7 @@ final class AgentTokenUsageSourceSnapshot {
 
   final String providerId;
   final String providerName;
+  final AgentTokenHistoryPresence historyPresence;
   final List<AgentUsageRecord> records;
   final DateTime refreshedAt;
   final List<AgentUsageWarning> warnings;

@@ -652,12 +652,18 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
   `zeta`、`Codex Desktop`、`codex_cli_rs` 等客户端会话均应计入 Token。
 - Grok 使用统计扫描 `$GROK_HOME/sessions/**/updates.jsonl`，解析后投影为
   `GrokUsageIndexedSession` 白名单快照（不含 entries / raw / 原始错误正文）。
+- Claude Code 使用统计扫描用户 `.claude/projects/**/*.jsonl`，复用 Provider 自有历史
+  reader/mapper/reducer 投影单回合绝对 usage；cache creation/read 合并为 cached input，
+  不做累计差分。Provider source 必须同时声明是否发现可读取历史，使“完全无历史”和
+  “有历史但当前时间窗无调用”分别展示为暂无历史与 0。
 - Codex `token_count` 是 thread 累计值，写入 turn 记录前必须相对上一 turn 做非负差分。
-- 派生索引 `usage_statistics_index.json`（version ≥ 3）按 `providers.codex` /
-  `providers.grok` 分区；扫描层共用 `usageSourceId` + `usageFileFingerprint` +
-  `forceRefresh` 命中语义。并行刷新必须走 `mergeSave`，禁止整表覆盖写丢另一分区。
-- `UsageStatisticsIndexStore` 的 JSON 必须保持版本化和宽容读取；v2 顶层 `sessions`
-  迁移进 `codex` 分区；索引损坏时从 provider 历史重建，不得阻断页面或应用启动。
+- 派生索引 `usage_statistics_index.json`（version ≥ 4）通过通用
+  `UsageStatisticsPartitionStore` 按 `providers.<providerId>` 保存 Provider 不透明分区；
+  当前生产分区包括 Codex、Grok 与 Claude Code。扫描层共用 `usageSourceId` +
+  `usageFileFingerprint` + `forceRefresh` 命中语义；并行刷新必须原子合并，禁止整表覆盖
+  写丢另一分区。
+- 分区 Store 的 JSON 必须保持版本化和宽容读取；v2 顶层 `sessions` 迁移进 `codex`
+  分区；索引损坏时从 provider 历史重建，不得阻断页面或应用启动。
 - 派生索引禁止保存 Prompt、回复、工具输出、session JSONL 路径和原始错误文本。
 - 历史 TTFT 缺失时保持 `null`；UI 显示“数据不足”和有效样本数，禁止用总耗时冒充。
 - 套餐类型、额度窗口、重置时间、余额和可用重置卡数量都是 Provider 返回数据的只读投影；

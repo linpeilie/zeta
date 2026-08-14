@@ -58,9 +58,13 @@ final class QueryAgentUsagePanelRepository
       case AgentUsageCapabilityStatus.available:
         final history = snapshot.tokenHistory.value;
         if (history != null) {
-          todayTokens = sumAgentUsageTokens(
-            history.records.where((record) => !record.startedAt.isAfter(now)),
-          );
+          if (history.historyPresence == AgentTokenHistoryPresence.absent) {
+            message = '暂无 Token 历史';
+          } else {
+            todayTokens = sumAgentUsageTokens(
+              history.records.where((record) => !record.startedAt.isAfter(now)),
+            );
+          }
         }
       case AgentUsageCapabilityStatus.unavailable:
         message = '今日 Token 暂时无法读取';

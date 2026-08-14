@@ -220,6 +220,9 @@ Cursor 会话数据。
 - **运行中和未知状态不计入成功率分母**；
 - 默认统计 CLI、VS Code、`codex exec` 和 Zeta 发起的根会话，**包含已归档会话，排除子 Agent**（避免重复计数）。
 
+Codex、Grok 和 Claude Code 的 Token 统计都来自各自 CLI 的本地历史。完全没有可读取历史时
+显示“暂无 Token 历史”；已经存在历史、只是当前时间范围没有调用时显示 0。
+
 ### 首字响应时间（TTFT）显示样本数很少
 
 只有 Codex 明确返回了 `time_to_first_token_ms` 的样本才会被采用，缺失的样本不做近似估算。页面上会标明有效样本数。

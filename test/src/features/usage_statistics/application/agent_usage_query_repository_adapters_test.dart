@@ -41,6 +41,7 @@ void main() {
   final sourceSnapshot = AgentTokenUsageSourceSnapshot(
     providerId: config.id,
     providerName: config.displayName,
+    historyPresence: AgentTokenHistoryPresence.present,
     records: <AgentUsageRecord>[earlierRecord, laterRecord],
     refreshedAt: DateTime(2026, 8, 12, 11, 59),
     warnings: const <AgentUsageWarning>[
@@ -141,6 +142,45 @@ void main() {
     expect(unavailableEntry.todayTokens, isNull);
     expect(unavailableEntry.message, '今日 Token 暂时无法读取');
   });
+
+  test(
+    'panel distinguishes missing history from an empty time window',
+    () async {
+      AgentTokenUsageSourceSnapshot snapshot(
+        AgentTokenHistoryPresence presence,
+      ) => AgentTokenUsageSourceSnapshot(
+        providerId: config.id,
+        providerName: config.displayName,
+        historyPresence: presence,
+        records: const <AgentUsageRecord>[],
+        refreshedAt: now,
+      );
+
+      final absentResult = await QueryAgentUsagePanelRepository(
+        _service(
+          config: config,
+          quota: null,
+          sourceSnapshot: snapshot(AgentTokenHistoryPresence.absent),
+          clock: now,
+        ),
+        clock: () => now,
+      ).loadProvider(config.id);
+      final presentResult = await QueryAgentUsagePanelRepository(
+        _service(
+          config: config,
+          quota: null,
+          sourceSnapshot: snapshot(AgentTokenHistoryPresence.present),
+          clock: now,
+        ),
+        clock: () => now,
+      ).loadProvider(config.id);
+
+      expect(absentResult!.entry.todayTokens, isNull);
+      expect(absentResult.entry.message, '暂无 Token 历史');
+      expect(presentResult!.entry.todayTokens?.totalTokens, 0);
+      expect(presentResult.entry.message, isNull);
+    },
+  );
 }
 
 AgentUsageQueryService _service({

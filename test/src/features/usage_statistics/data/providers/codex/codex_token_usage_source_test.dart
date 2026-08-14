@@ -32,6 +32,7 @@ void main() {
     final actual = await source.load(AgentUsageQuery(earliest: earliest));
 
     expect(actual.records, hasLength(2));
+    expect(actual.historyPresence, AgentTokenHistoryPresence.present);
     final fork = actual.records.first;
     expect(fork.id, 'codex-work/fork/turn-fork');
     expect(fork.startedAt, DateTime(2026, 8, 9, 9));
