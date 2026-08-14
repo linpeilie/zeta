@@ -3391,13 +3391,24 @@ void main() {
     );
 
     test(
-      'bound Claude thread maps resolved history model to catalog value',
+      'retained Claude thread preserves history selection on catalog reload',
       () async {
         final provider = _FakeAgentProvider(
           providerConfig: AgentProviderConfig.defaultClaudeCode,
           declaredCapabilities: AgentProviderStaticCapabilities.claudeCode,
           availableModels: const AgentModelList(
             models: <AgentModelInfo>[
+              AgentModelInfo(
+                id: 'sonnet',
+                model: 'claude-sonnet-5',
+                displayName: 'Sonnet',
+                isDefault: true,
+                supportedReasoningEfforts: <AgentModelReasoningEffort>[
+                  AgentModelReasoningEffort(effort: 'medium'),
+                  AgentModelReasoningEffort(effort: 'high'),
+                ],
+                defaultReasoningEffort: 'medium',
+              ),
               AgentModelInfo(
                 id: 'opus',
                 model: 'claude-opus-5',
@@ -3406,6 +3417,7 @@ void main() {
                   AgentModelReasoningEffort(effort: 'high'),
                   AgentModelReasoningEffort(effort: 'xhigh'),
                 ],
+                defaultReasoningEffort: 'high',
               ),
             ],
           ),
@@ -3452,6 +3464,13 @@ void main() {
         addTearDown(viewModel.dispose);
 
         await viewModel.initialization;
+
+        expect(viewModel.selectedModelId, 'opus');
+        expect(viewModel.selectedModel?.displayName, 'Opus');
+        expect(viewModel.selectedReasoningEffort, 'xhigh');
+
+        // Shell 再次进入常驻 thread 时会刷新目录，但不会重新读取历史。
+        await viewModel.loadModels();
 
         expect(viewModel.selectedModelId, 'opus');
         expect(viewModel.selectedModel?.displayName, 'Opus');

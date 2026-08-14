@@ -274,6 +274,7 @@ class AgentConversationViewModel {
 
   bool _modelsRefreshing = false;
   String? _modelRefreshError;
+  bool _modelSelectionSeededFromProviderConfig = false;
 
   /// 上下文详情面板是否展开（头栏「上下文」菜单触发）。
   final ValueNotifier<bool> contextPanelVisible = ValueNotifier<bool>(false);
@@ -1189,7 +1190,12 @@ class AgentConversationViewModel {
       return;
     }
     final config = _boundProviderConfig;
-    _modelSelectionController.seedFromConfig(config);
+    // 一个 ViewModel 永久绑定同一个 Provider/thread。Provider 默认值只用于首次
+    // 初始化；历史或用户选择生效后，后续目录刷新必须保留该 thread 的当前配置。
+    if (!_modelSelectionSeededFromProviderConfig) {
+      _modelSelectionSeededFromProviderConfig = true;
+      _modelSelectionController.seedFromConfig(config);
+    }
     _permissionSelectionController.seedFromConfig(
       config.resolvedPermissionOptionId,
     );
