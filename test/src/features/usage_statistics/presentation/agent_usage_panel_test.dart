@@ -700,6 +700,12 @@ void main() {
       lessThanOrEqualTo(tester.getTopLeft(anchor).dy),
     );
 
+    // 弹层不占满左栏宽度：相对锚点左右各内缩 4。
+    final anchorRect = tester.getRect(anchor);
+    final popoverRect = tester.getRect(_popover);
+    expect(popoverRect.left, closeTo(anchorRect.left + 4, 0.01));
+    expect(popoverRect.right, closeTo(anchorRect.right - 4, 0.01));
+
     final tabs = find.byKey(const ValueKey('agent-usage-tabs'));
     final collapse = find.byKey(const ValueKey('agent-usage-collapse-button'));
     final refresh = find.byKey(const ValueKey('agent-usage-refresh-button'));

@@ -157,7 +157,7 @@ Agent 首页的标题栏左侧 action 是合并栏唯一的显隐入口：macOS 
 内只有一个 `ProjectAgentSidebar` / `PanelCard`，Projects / Threads 占剩余空间，
 cardless Agent 统计固定在底部并常驻折叠摘要。折叠态最多展示 Provider 图标、套餐名（无
 套餐时显示 Provider 名）、最短周期额度进度和今日 Token；展开态以折叠摘要为锚点向上弹出
-Popover，内含 Provider Tabs、右侧折叠/刷新操作和完整明细，宽度跟随左栏，超出可用高度时
+Popover，内含 Provider Tabs、右侧折叠/刷新操作和完整明细，宽度按左栏左右各内缩 `space4`，超出可用高度时
 只在弹层内滚动，不显示独立标题栏或拖动分隔，也不再挤压 Projects / Threads。点击弹层外部或
 折叠按钮都收敛回折叠态。Compact 模式不挤压 Canvas，而是使用
 Navigation Overlay；scrim 与 Esc 均关闭浮层并把焦点还给标题栏入口。

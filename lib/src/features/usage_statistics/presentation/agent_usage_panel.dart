@@ -50,6 +50,9 @@ class _AgentUsagePanelContentState extends State<AgentUsagePanelContent> {
   /// 锚点上方空间不足时仍保留的最小弹层高度，避免塌缩成不可读的窄条。
   static const double _minPopoverHeight = 160;
 
+  /// 弹层相对锚点左右各内缩的间距，避免贴死左栏边缘。
+  static const double _popoverInset = IdeSpacing.space4;
+
   IdePopoverHandle<void>? _popover;
   bool _openScheduled = false;
 
@@ -137,6 +140,7 @@ class _AgentUsagePanelContentState extends State<AgentUsagePanelContent> {
           IdeSpacing.space6 -
           IdeSpacing.space12,
     );
+    final width = math.max(1.0, anchor.size.width - _popoverInset * 2);
     final duration = MediaQuery.disableAnimationsOf(context)
         ? Duration.zero
         : IdeMotion.durationFast;
@@ -145,10 +149,11 @@ class _AgentUsagePanelContentState extends State<AgentUsagePanelContent> {
       // 锚点顶边对齐弹层底边：始终向上弹出，不随空间不足翻转到下方。
       alignment: Alignment.bottomLeft,
       anchorAlignment: Alignment.topLeft,
-      widthConstraint: IdePopoverConstraint.anchorFixedSize,
+      widthConstraint: IdePopoverConstraint.flexible,
       heightConstraint: IdePopoverConstraint.flexible,
-      offset: const Offset(0, -IdeSpacing.space6),
-      // 宽度跟随锚点，只留纵向边距；横向留白会把弹层推离左栏对齐。
+      // 宽度由 builder 按锚点内缩后固定，这里同步右移相同间距保持左右对称。
+      offset: const Offset(_popoverInset, -IdeSpacing.space6),
+      // 横向留白由内缩宽度承担，margin 只管纵向，避免再被推离左栏。
       margin: const EdgeInsets.symmetric(vertical: IdeSpacing.space12),
       transitionAlignment: Alignment.bottomLeft,
       allowInvertVertical: false,
@@ -156,6 +161,7 @@ class _AgentUsagePanelContentState extends State<AgentUsagePanelContent> {
       dismissDuration: duration,
       builder: (popoverContext) => _AgentUsagePopover(
         controller: widget.controller,
+        width: width,
         maxHeight: maxHeight,
         onCollapse: () => sf.closeOverlay(popoverContext),
       ),
@@ -182,18 +188,27 @@ class _AgentUsagePanelContentState extends State<AgentUsagePanelContent> {
 class _AgentUsagePopover extends StatelessWidget {
   const _AgentUsagePopover({
     required this.controller,
+    required this.width,
     required this.maxHeight,
     required this.onCollapse,
   });
 
   final AgentUsagePanelController controller;
+
+  /// 锚点宽度左右各内缩后的弹层宽度。
+  final double width;
+
   final double maxHeight;
   final VoidCallback onCollapse;
 
   @override
   Widget build(BuildContext context) {
     return ConstrainedBox(
-      constraints: BoxConstraints(maxHeight: maxHeight),
+      constraints: BoxConstraints(
+        minWidth: width,
+        maxWidth: width,
+        maxHeight: maxHeight,
+      ),
       child: IdeSurface.popover(
         key: const ValueKey('agent-usage-popover'),
         child: ListenableBuilder(
