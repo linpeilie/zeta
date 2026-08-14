@@ -45,6 +45,44 @@ void main() {
       await provider.dispose();
     });
 
+    test(
+      'emits turn started context from the current model selection',
+      () async {
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        addTearDown(provider.dispose);
+        final events = <AgentEvent>[];
+        provider.events.listen(events.add);
+        provider.updateModelSelection(
+          const AgentModelSelection(
+            modelId: 'gpt-5',
+            reasoningEffort: 'high',
+            serviceTierId: 'fast',
+          ),
+        );
+
+        final session = await provider.startSession(
+          context: const AgentContext(projectPath: '/repo'),
+        );
+        await provider.sendMessage(
+          session: session,
+          message: 'hello',
+          context: const AgentContext(projectPath: '/repo'),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        final started = events.whereType<AgentTurnStartedEvent>().single;
+        expect(started.turn.id, 'turn-1');
+        expect(started.modelId, 'gpt-5');
+        expect(started.reasoningEffort, 'high');
+        expect(started.serviceTierId, 'fast');
+        expect(started.startedAt, isNotNull);
+      },
+    );
+
     test('rejects unknown turn mode before sending a request', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(

@@ -14,6 +14,7 @@ import 'package:zeta/src/features/agent/application/agent_ui_update_port.dart';
 import 'package:zeta/src/core/utils/system_file_manager.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_static_capabilities.dart';
+import 'package:zeta/src/features/agent/data/agent_turn_context_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/agent/domain/agent_turn_terminal_signal.dart';
@@ -97,6 +98,7 @@ class IdeShellController extends ChangeNotifier {
     ValueChanged<AgentTurnTerminalSignal>? onAgentTurnTerminal,
     ValueChanged<AgentWorkspaceAttention>? onAgentAttention,
     IdeShellUsageStatisticsDependencies? usageStatistics,
+    AgentTurnContextStore? turnContextStore,
     DateTime Function()? now,
   }) : projectThreadsViewModel = ProjectThreadsViewModel(),
        _sessionCoordinator = IdeSessionPersistenceCoordinator(
@@ -172,6 +174,7 @@ class IdeShellController extends ChangeNotifier {
       onAttention: onAgentAttention,
       onCreatedThread: _openCreatedThread,
       uiFrameSchedulerFactory: agentUiFrameSchedulerFactory,
+      turnContextStore: turnContextStore,
     );
     _bootstrapAgentEntry = agentWorkspaceController.ensureDraftEntry(
       projectPath: _bootstrapProjectPath,

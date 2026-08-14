@@ -9,6 +9,7 @@ import 'package:zeta/src/features/agent/application/agent_provider_runtime_regis
 import 'package:zeta/src/features/agent/application/agent_ui_update_request.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_static_capabilities.dart';
+import 'package:zeta/src/features/agent/data/agent_turn_context_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/agent/domain/agent_turn_terminal_signal.dart';
@@ -85,6 +86,45 @@ void main() {
         'Tool search',
       );
       expect(viewModel.currentThreadTitle, 'Thread one');
+    });
+
+    test('overlays Zeta turn context onto provider history', () async {
+      final provider = _FakeAgentProvider(
+        historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
+          'thread-1': _historySnapshot(
+            threadId: 'thread-1',
+            userText: 'What changed?',
+            agentText: 'The provider layer changed.',
+          ),
+        },
+      );
+      final store = MemoryAgentTurnContextStore(
+        contexts: <String, AgentThreadTurnContext>{
+          'codex\u0000thread-1': const AgentThreadTurnContext(
+            providerId: 'codex',
+            threadId: 'thread-1',
+            turns: <AgentTurnContextRecord>[
+              AgentTurnContextRecord(
+                turnId: 'thread-1-turn-1',
+                modelId: 'zeta-model',
+                reasoningEffort: 'high',
+              ),
+            ],
+          ),
+        },
+      );
+      final viewModel = _createViewModel(
+        provider,
+        initialThread: _thread(),
+        turnContextStore: store,
+      );
+      addTearDown(viewModel.dispose);
+
+      await viewModel.initialization;
+
+      final turn = viewModel.visibleHistoryTurns.single;
+      expect(turn.modelConfig?.modelId, 'zeta-model');
+      expect(turn.modelConfig?.reasoningEffort, 'high');
     });
 
     test(
@@ -4686,6 +4726,7 @@ AgentConversationViewModel _createViewModel(
   void Function(AgentTurnTerminalSignal signal)? onTurnTerminal,
   void Function(AgentAttentionSignal signal)? onAttention,
   AgentCreatedThreadCallback? onCreatedThread,
+  AgentTurnContextStore? turnContextStore,
 }) {
   final registry = AgentProviderRuntimeRegistry(
     providerFactory: _FakeAgentProviderFactory(provider),
@@ -4718,6 +4759,7 @@ AgentConversationViewModel _createViewModel(
     onTurnTerminal: onTurnTerminal,
     onAttention: onAttention,
     onCreatedThread: onCreatedThread,
+    turnContextStore: turnContextStore,
     initialProjectPath: initialThread?.projectPath ?? '/repo',
     initialThread: initialThread,
     uiFrameScheduler: _createUiFrameScheduler(),

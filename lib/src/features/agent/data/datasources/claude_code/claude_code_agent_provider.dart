@@ -531,7 +531,16 @@ class ClaudeCodeAgentProvider
       _turnAdmissionInProgress = false;
     }
     final turn = AgentTurn(id: turnId, sessionId: session.id);
-    _addEvent(AgentTurnStartedEvent(turn));
+    _addEvent(
+      AgentTurnStartedEvent.fromModelSelection(
+        turn: turn,
+        selection: AgentModelSelection(
+          modelId: _effectiveModel,
+          reasoningEffort: _effectiveReasoningEffort,
+          serviceTierId: _modelSelection.serviceTierId,
+        ),
+      ),
+    );
     _emitStatus(
       const AgentProviderStatus(
         state: AgentProviderConnectionState.running,
@@ -577,6 +586,7 @@ class ClaudeCodeAgentProvider
           turnId: turnId,
           status: AgentHistoryTurnStatus.failed,
           errorMessage: 'Failed to send prompt',
+          completedAt: DateTime.now(),
         ),
       );
       _emitReadyIfIdle();
@@ -626,6 +636,7 @@ class ClaudeCodeAgentProvider
             sessionId: terminal.sessionId,
             turnId: terminal.turnId,
             status: AgentHistoryTurnStatus.interrupted,
+            completedAt: DateTime.now(),
           ),
         );
       }

@@ -80,7 +80,51 @@ void main() {
       final completed = events.whereType<AgentTurnCompletedEvent>().single;
       expect(completed.status, AgentHistoryTurnStatus.completed);
       expect(completed.turnId, 'turn-hello-1');
+      expect(completed.completedAt, isNotNull);
     });
+
+    test(
+      'emits turn started context from the current model selection',
+      () async {
+        final process = _FakeClaudeProcess();
+        var idSeq = 0;
+        final provider = ClaudeCodeAgentProvider(
+          config: AgentProviderConfig.defaultClaudeCode.copyWith(
+            selectedModel: 'opus',
+            selectedReasoningEffort: 'xhigh',
+          ),
+          processStarter: _starter(process),
+          locator: const _FakeClaudeCodeCliLocator(),
+          idFactory: () {
+            idSeq += 1;
+            return idSeq == 1
+                ? '00000000-0000-4000-8000-000000000101'
+                : 'turn-context-1';
+          },
+        );
+        addTearDown(provider.dispose);
+        final events = <AgentEvent>[];
+        provider.events.listen(events.add);
+
+        await provider.initialize();
+        final session = await provider.startSession(
+          context: const AgentContext(projectPath: r'C:\tmp\zeta-cc-test'),
+        );
+        await pumpEventQueue();
+        process.emitInit(sessionId: session.id);
+        await pumpEventQueue();
+        await provider.sendMessage(
+          session: session,
+          context: const AgentContext(projectPath: r'C:\tmp\zeta-cc-test'),
+          message: 'ping',
+        );
+
+        final started = events.whereType<AgentTurnStartedEvent>().single;
+        expect(started.modelId, 'opus');
+        expect(started.reasoningEffort, 'xhigh');
+        expect(started.startedAt, isNotNull);
+      },
+    );
 
     test(
       'compactThread sends /compact and allows the following turn',

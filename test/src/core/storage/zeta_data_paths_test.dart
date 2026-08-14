@@ -45,6 +45,10 @@ void main() {
         ),
       );
       expect(
+        paths.sessionStateDirectory.path,
+        _join(homeDirectory.path, '.zeta', 'state', 'session'),
+      );
+      expect(
         paths.agentModelCatalogCacheFile.path,
         _join(homeDirectory.path, '.zeta', 'cache', 'agent_models_v1.json'),
       );

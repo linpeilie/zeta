@@ -16,6 +16,7 @@ import 'package:zeta/src/features/agent/application/agent_provider_runtime_regis
 import 'package:zeta/src/features/agent/data/agent_model_catalog_cache_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_codec.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
+import 'package:zeta/src/features/agent/data/agent_turn_context_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_permission_migration.dart';
 import 'package:zeta/src/features/agent/data/default_agent_provider_factory.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_hidden_thread_store.dart';
@@ -64,6 +65,7 @@ class MainApp extends StatefulWidget {
     this.agentProviderRuntimeRegistry,
     this.desktopNotificationService,
     this.desktopAttentionIndicator,
+    this.turnContextStore,
   });
 
   final Future<String?> Function()? directoryPicker;
@@ -105,6 +107,7 @@ class MainApp extends StatefulWidget {
   final AgentProviderRuntimeRegistry? agentProviderRuntimeRegistry;
   final DesktopNotificationService? desktopNotificationService;
   final DesktopAttentionIndicator? desktopAttentionIndicator;
+  final AgentTurnContextStore? turnContextStore;
 
   @override
   State<MainApp> createState() => MainAppState();
@@ -121,6 +124,7 @@ class MainAppState extends State<MainApp>
   late final Future<void> Function() _providerRuntimeShutdownHook;
   late final UsageStatisticsPartitionStore _usageStatisticsPartitionStore;
   late final AgentModelCatalogRepository _agentModelCatalogRepository;
+  late final AgentTurnContextStore _turnContextStore;
   bool _ownsAppearanceController = false;
   bool _ownsGeneralSettingsController = false;
   bool _ownsAgentProviderRuntimeRegistry = false;
@@ -193,6 +197,13 @@ class MainAppState extends State<MainApp>
                 )
               : MemoryAgentModelCatalogCacheStore(),
         );
+    _turnContextStore =
+        widget.turnContextStore ??
+        (useFilePersistence
+            ? FileAgentTurnContextStore(
+                rootDirectory: dataPaths!.sessionStateDirectory,
+              )
+            : MemoryAgentTurnContextStore());
     if (widget.appearanceController != null) {
       _appearanceController = widget.appearanceController!;
       _ownsAppearanceController = false;
@@ -360,6 +371,7 @@ class MainAppState extends State<MainApp>
                           widget.agentUsagePanelRepository,
                     ),
                 agentModelCatalogRepository: _agentModelCatalogRepository,
+                turnContextStore: _turnContextStore,
                 // 回调存储用于测试/嵌入宿主；未显式注入统计仓储时不读取本机 CLI 历史。
                 enableAgentUsageAutoRefresh:
                     !_usesCallbackPersistence ||

@@ -235,10 +235,51 @@ class AgentAutoApprovalReviewEvent extends AgentEvent {
 
 /// 新回合已开始。
 class AgentTurnStartedEvent extends AgentEvent {
-  const AgentTurnStartedEvent(this.turn);
+  const AgentTurnStartedEvent(
+    this.turn, {
+    this.modelId,
+    this.reasoningEffort,
+    this.serviceTierId,
+    this.explicitFast,
+    this.startedAt,
+  });
+
+  /// 用当前模型选择构造 live 开始事件。
+  ///
+  /// 空白选择字段保持为 null，供后续字段级 upsert 使用，避免空值覆盖已有记录。
+  factory AgentTurnStartedEvent.fromModelSelection({
+    required AgentTurn turn,
+    required AgentModelSelection selection,
+    DateTime? startedAt,
+    bool? explicitFast,
+  }) {
+    return AgentTurnStartedEvent(
+      turn,
+      modelId: _nonEmptyEventString(selection.modelId),
+      reasoningEffort: _nonEmptyEventString(selection.reasoningEffort),
+      serviceTierId: _nonEmptyEventString(selection.serviceTierId),
+      explicitFast: explicitFast,
+      startedAt: startedAt ?? DateTime.now(),
+    );
+  }
 
   /// 已开始的回合。
   final AgentTurn turn;
+
+  /// 本回合发送时的模型 id；历史/协议通知路径可为空。
+  final String? modelId;
+
+  /// 本回合明确选择的推理深度档位；未选择时为空。
+  final String? reasoningEffort;
+
+  /// 本回合选择的服务档位 id。
+  final String? serviceTierId;
+
+  /// 本回合 Fast 开关证据；缺少可靠证据时为空。
+  final bool? explicitFast;
+
+  /// Zeta 观测到的回合开始时间。
+  final DateTime? startedAt;
 }
 
 /// 回合已结束（完成、被中断或失败）。
@@ -250,6 +291,7 @@ class AgentTurnCompletedEvent extends AgentEvent {
     this.errorMessage,
     this.errorCode,
     this.duration,
+    this.completedAt,
     this.raw = const <String, Object?>{},
   });
 
@@ -271,8 +313,19 @@ class AgentTurnCompletedEvent extends AgentEvent {
   /// provider 上报的回合耗时（`turn.durationMs`）。
   final Duration? duration;
 
+  /// Zeta 观测到的回合结束时间。
+  final DateTime? completedAt;
+
   /// 原始完成事件 payload。
   final Map<String, Object?> raw;
+}
+
+String? _nonEmptyEventString(String? value) {
+  final trimmed = value?.trim();
+  if (trimmed == null || trimmed.isEmpty) {
+    return null;
+  }
+  return trimmed;
 }
 
 /// 回合 token 用量更新。

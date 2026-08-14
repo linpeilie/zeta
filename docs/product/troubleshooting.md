@@ -253,6 +253,7 @@ credentials 文件。凭据只在一次只读请求期间留在内存，不写�
 ├── state/
 │   ├── ide_session.json               打开的项目、选中文件、展开状态、会话缓存
 │   ├── usage_statistics_index.json    使用统计派生索引
+│   ├── session/<providerId>/          Zeta 发起 turn 的上下文（模型、思考程度、时间）
 │   ├── migration_marker.json          一次性迁移完成标记
 │   └── cursor_sessions.json           退役遗留，运行时不读不写
 ├── logs/
@@ -290,6 +291,7 @@ Claude 的模型探测和连接测试使用 `--no-session-persistence`，Zeta �
 | --- | --- |
 | 清掉模型目录缓存 | `~/.zeta/cache/` |
 | 清掉历史统计 | `~/.zeta/state/usage_statistics_index.json` |
+| 清掉 Zeta 记录的回合上下文 | `~/.zeta/state/session/` |
 | 忘掉打开过的项目和会话缓存 | `~/.zeta/state/ide_session.json` |
 | 重置外观和常规设置 | `~/.zeta/config/appearance.json`、`general.json` |
 | 清掉日志 | `~/.zeta/logs/` 下的文件 |

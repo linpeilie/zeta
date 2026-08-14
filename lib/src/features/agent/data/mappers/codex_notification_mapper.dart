@@ -184,6 +184,7 @@ class _CodexNotificationMapper {
               errorMessage: _string(_map(turn['error'])['message']),
               errorCode: _codexErrorCode(_map(turn['error'])['codexErrorInfo']),
               duration: _durationFromMilliseconds(turn['durationMs']),
+              completedAt: DateTime.now(),
               raw: notification.params,
             ),
           ],

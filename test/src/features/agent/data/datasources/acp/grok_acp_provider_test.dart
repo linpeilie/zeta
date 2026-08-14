@@ -48,6 +48,44 @@ void main() {
       expect(provider.lifecycleState, AgentProviderLifecycleState.closed);
     });
 
+    test(
+      'emits turn started context from the current model selection',
+      () async {
+        final peer = _FakeJsonRpcPeer()..promptCompleter = Completer<Object?>();
+        final provider = GrokAcpAgentProvider(
+          config: AgentProviderConfig.defaultGrok,
+          peer: peer,
+        );
+        addTearDown(provider.dispose);
+        final events = <AgentEvent>[];
+        provider.events.listen(events.add);
+        provider.updateModelSelection(
+          const AgentModelSelection(modelId: 'grok-4', reasoningEffort: 'high'),
+        );
+
+        final session = await provider.startSession(
+          context: const AgentContext(projectPath: r'D:\repo\zeta'),
+        );
+        final turnFuture = provider.sendMessage(
+          session: session,
+          context: const AgentContext(projectPath: r'D:\repo\zeta'),
+          message: 'hello',
+        );
+        await _waitUntil(
+          () => events.whereType<AgentTurnStartedEvent>().isNotEmpty,
+        );
+        peer.promptCompleter!.complete(<String, Object?>{
+          'stopReason': 'end_turn',
+        });
+        await turnFuture;
+
+        final started = events.whereType<AgentTurnStartedEvent>().single;
+        expect(started.modelId, 'grok-4');
+        expect(started.reasoningEffort, 'high');
+        expect(started.startedAt, isNotNull);
+      },
+    );
+
     test('injects permission mode meta on session/new', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = GrokAcpAgentProvider(

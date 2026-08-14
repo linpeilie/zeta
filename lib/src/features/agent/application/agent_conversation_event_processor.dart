@@ -1,11 +1,15 @@
+import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_effect.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_effect_runner.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_mutation.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_reducer.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
+import 'package:zeta/src/features/agent/application/agent_turn_context_recorder.dart';
 import 'package:zeta/src/features/agent/application/agent_ui_update_port.dart';
 import 'package:zeta/src/features/agent/application/agent_ui_update_request.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+
+final _log = loggerFor('zeta.agent.turn_context');
 
 typedef AgentConversationReducerContextReader =
     AgentConversationReducerContext Function();
@@ -35,6 +39,7 @@ final class AgentConversationEventProcessor {
     required AgentConversationStateMutationTarget stateTarget,
     required AgentUiUpdatePort uiUpdates,
     required AgentConversationEffectRunner effectRunner,
+    AgentTurnContextRecorder? turnContextRecorder,
   }) => AgentConversationEventProcessor._(
     reducer,
     context,
@@ -42,6 +47,7 @@ final class AgentConversationEventProcessor {
     stateTarget,
     uiUpdates,
     effectRunner,
+    turnContextRecorder,
   );
 
   AgentConversationEventProcessor._(
@@ -51,6 +57,7 @@ final class AgentConversationEventProcessor {
     this._stateTarget,
     this._uiUpdates,
     this._effectRunner,
+    this._turnContextRecorder,
   );
 
   final AgentConversationReducer _reducer;
@@ -59,11 +66,14 @@ final class AgentConversationEventProcessor {
   final AgentConversationStateMutationTarget _stateTarget;
   final AgentUiUpdatePort _uiUpdates;
   final AgentConversationEffectRunner _effectRunner;
+  final AgentTurnContextRecorder? _turnContextRecorder;
 
   /// 处理一个规范化事件，并返回最终 reduction 结果供诊断/测试。
   AgentConversationMutation process(AgentEvent event) {
-    final mutation = _reducer.reduce(event, _context());
+    final context = _context();
+    final mutation = _reducer.reduce(event, context);
     _apply(mutation);
+    _recordTurnContext(event, mutation, context);
     return mutation;
   }
 
@@ -76,6 +86,34 @@ final class AgentConversationEventProcessor {
     );
     _apply(mutation);
     return mutation;
+  }
+
+  void _recordTurnContext(
+    AgentEvent event,
+    AgentConversationMutation mutation,
+    AgentConversationReducerContext context,
+  ) {
+    if (!mutation.accepted ||
+        context.scope != AgentConversationReductionScope.live) {
+      return;
+    }
+    final recorder = _turnContextRecorder;
+    if (recorder == null) {
+      return;
+    }
+    final providerId = context.effectScope.providerId;
+    try {
+      switch (event) {
+        case AgentTurnStartedEvent():
+          recorder.recordStarted(providerId: providerId, event: event);
+        case AgentTurnCompletedEvent():
+          recorder.recordCompleted(providerId: providerId, event: event);
+        default:
+          break;
+      }
+    } catch (error) {
+      _log.w('Could not record Agent turn context (${error.runtimeType})');
+    }
   }
 
   void _apply(AgentConversationMutation mutation) {

@@ -213,6 +213,7 @@ final class GrokSessionUpdateMapper {
           errorMessage: terminal.status == AgentHistoryTurnStatus.failed
               ? errorMessage ?? stopReason
               : null,
+          completedAt: DateTime.now(),
           raw: raw,
         ),
       ],
@@ -673,6 +674,7 @@ final class GrokSessionUpdateMapper {
             turnId: terminal.turnId,
             status: AgentHistoryTurnStatus.failed,
             errorMessage: message,
+            completedAt: DateTime.now(),
             raw: update.raw,
           ),
         ],
@@ -836,6 +838,7 @@ final class GrokSessionUpdateMapper {
                     agentResult: _agentResultFromRaw(update.raw),
                   )
                 : null,
+            completedAt: DateTime.now(),
             raw: update.raw,
           ),
       ],

@@ -848,7 +848,12 @@ class GrokAcpAgentProvider
       turnId: turnId,
     );
     final turn = AgentTurn(id: turnId, sessionId: session.id);
-    _addEvent(AgentTurnStartedEvent(turn));
+    _addEvent(
+      AgentTurnStartedEvent.fromModelSelection(
+        turn: turn,
+        selection: _modelSelection,
+      ),
+    );
     _emitStatus(
       const AgentProviderStatus(
         state: AgentProviderConnectionState.running,

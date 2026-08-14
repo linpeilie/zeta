@@ -10,6 +10,7 @@ import 'package:zeta/src/features/agent/application/agent_provider_runtime_regis
 import 'package:zeta/src/features/agent/application/agent_provider_global_runtime.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
 import 'package:zeta/src/features/agent/application/agent_ui_update_port.dart';
+import 'package:zeta/src/features/agent/data/agent_turn_context_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_turn_terminal_signal.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
@@ -205,6 +206,7 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
     this._onAttention,
     this.onCreatedThread,
     this.uiFrameSchedulerFactory,
+    this.turnContextStore,
   }) : bindingManager =
            bindingManager ??
            AgentConversationBindingManager(runtimeRegistry: runtimeRegistry),
@@ -229,6 +231,9 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
 
   /// 为每个常驻 ViewModel 创建独立 frame 端口；生产环境为空时使用 Flutter 实现。
   final AgentFrameScheduler Function()? uiFrameSchedulerFactory;
+
+  /// Zeta 自有 turn 上下文存储，注入到每个常驻 ViewModel。
+  final AgentTurnContextStore? turnContextStore;
 
   final List<AgentThreadWorkspaceEntry> _entries =
       <AgentThreadWorkspaceEntry>[];
@@ -458,6 +463,7 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
       onCreatedThread: onCreatedThread,
       initialProjectPath: projectPath,
       initialThread: initialThread,
+      turnContextStore: turnContextStore,
       onAttention: (signal) {
         final threadId = signal.threadId ?? entry.threadId;
         if (threadId == null || threadId.trim().isEmpty) {

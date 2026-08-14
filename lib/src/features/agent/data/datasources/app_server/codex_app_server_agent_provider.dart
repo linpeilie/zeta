@@ -778,7 +778,12 @@ class CodexAppServerAgentProvider
       clientUserMessageId: clientUserMessageId,
     );
     _markRunningTurn(session.id, turn.id);
-    _events.add(AgentTurnStartedEvent(turn));
+    _events.add(
+      AgentTurnStartedEvent.fromModelSelection(
+        turn: turn,
+        selection: _modelSelection,
+      ),
+    );
     _log.t('Started Codex turn ${turn.id}');
     return turn;
   }

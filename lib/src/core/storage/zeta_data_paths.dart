@@ -52,6 +52,13 @@ class ZetaDataPaths {
   Directory get stateDirectory =>
       Directory(_joinPath(rootDirectory.path, 'state'));
 
+  /// Zeta 发起 turn 时记录的会话上下文根目录。
+  ///
+  /// 实际文件为 `state/session/<providerId>/<threadId>.json`，子目录在首次
+  /// 写入时创建。
+  Directory get sessionStateDirectory =>
+      Directory(_joinPath(stateDirectory.path, 'session'));
+
   /// Zeta 应用日志目录。
   Directory get logsDirectory =>
       Directory(_joinPath(rootDirectory.path, 'logs'));

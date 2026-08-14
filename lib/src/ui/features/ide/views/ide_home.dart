@@ -10,6 +10,7 @@ import 'package:zeta/src/core/utils/system_file_manager.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
+import 'package:zeta/src/features/agent/data/agent_turn_context_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/agent/domain/agent_turn_terminal_signal.dart';
@@ -77,6 +78,7 @@ class IdeHome extends StatefulWidget {
     this.showWindowControls = true,
     this.desktopNotificationService,
     this.desktopAttentionIndicator,
+    this.turnContextStore,
     super.key,
   });
 
@@ -99,6 +101,7 @@ class IdeHome extends StatefulWidget {
   final bool showWindowControls;
   final DesktopNotificationService? desktopNotificationService;
   final DesktopAttentionIndicator? desktopAttentionIndicator;
+  final AgentTurnContextStore? turnContextStore;
 
   @override
   State<IdeHome> createState() => _IdeHomeState();
@@ -181,6 +184,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
         unawaited(_desktopAttentionController.handleAttention(attention));
       },
       usageStatistics: widget.usageStatisticsDependencies,
+      turnContextStore: widget.turnContextStore,
     )..addListener(_handleShellChanged);
     if (widget.enableNativeWindowFrame) {
       windowManager.addListener(this);

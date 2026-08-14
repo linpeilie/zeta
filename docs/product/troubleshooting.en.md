@@ -258,6 +258,7 @@ Everything lives under `~/.zeta/` (`%USERPROFILE%\.zeta\` on Windows) as plain J
 ├── state/
 │   ├── ide_session.json               Open projects, selected file, expansion, thread cache
 │   ├── usage_statistics_index.json    Derived usage index
+│   ├── session/<providerId>/          Turn context for Zeta-started turns (model, effort, timestamps)
 │   ├── migration_marker.json          One-time migration marker
 │   └── cursor_sessions.json           Retired leftover; never read or written at runtime
 ├── logs/
@@ -296,6 +297,7 @@ From narrowest to broadest:
 | --- | --- |
 | Clear the model catalog cache | `~/.zeta/cache/` |
 | Clear historical statistics | `~/.zeta/state/usage_statistics_index.json` |
+| Clear Zeta-recorded turn context | `~/.zeta/state/session/` |
 | Forget opened projects and thread cache | `~/.zeta/state/ide_session.json` |
 | Reset appearance and general settings | `~/.zeta/config/appearance.json`, `general.json` |
 | Clear logs | files under `~/.zeta/logs/` |

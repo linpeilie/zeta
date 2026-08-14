@@ -675,6 +675,7 @@ final class ClaudeCodeEventMapper {
           duration: durationMs == null
               ? null
               : Duration(milliseconds: durationMs),
+          completedAt: DateTime.now(),
           raw: const <String, Object?>{},
         ),
       ],

@@ -1,6 +1,6 @@
 # 开发者文档
 
-最后更新：2026-08-12
+最后更新：2026-08-15
 
 ## 1. 项目简介
 
@@ -697,6 +697,7 @@ Zeta 自有数据统一写入用户主目录下的以下结构：
     ide_session.json
     cursor_sessions.json  # 退役遗留数据，只读保护边界
     usage_statistics_index.json
+    session/<providerId>/<threadId>.json
     migration_marker.json
   logs/
     zeta-YYYY-MM-DD.log
@@ -725,6 +726,11 @@ Zeta 自有数据统一写入用户主目录下的以下结构：
 `cache/agent_models_v1.json` 是可丢弃、可重建的版本化缓存，只保存规范化后的
 `AgentModelInfo` 白名单字段和不含密钥的配置指纹。损坏、版本不兼容、配置指纹变化或
 超过最长离线期限时视为空缓存；不得持久化 provider raw payload、环境变量值或凭证。
+
+`state/session/<providerId>/<threadId>.json` 保存 Zeta 发起 turn 时的白名单上下文
+（turnId、modelId、reasoningEffort、时间戳、终态）。打开历史会话时按字段覆盖
+Provider 历史；文件缺失或损坏时回落原解析逻辑。不保存 prompt、回复、工具输出或
+raw payload。
 
 Agent CLI 的数据不属于这套目录：Codex/Grok/Claude Code/Cursor 配置与 session 历史
 继续保留在各 CLI 自有目录（包括 `~/.codex`、`~/.grok`、`~/.claude`、`~/.cursor`

@@ -6,6 +6,7 @@ import 'package:zeta/src/features/agent/application/agent_conversation_event_pro
 import 'package:zeta/src/features/agent/application/agent_conversation_mutation.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_reducer.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
+import 'package:zeta/src/features/agent/application/agent_turn_context_recorder.dart';
 import 'package:zeta/src/features/agent/application/agent_ui_update_port.dart';
 import 'package:zeta/src/features/agent/application/agent_ui_update_request.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
@@ -152,6 +153,123 @@ void main() {
         ]),
       );
     });
+
+    test('records accepted live turn start and complete events', () {
+      final timeline = _runningTimeline();
+      addTearDown(timeline.dispose);
+      final recorder = _RecordingTurnContextRecorder();
+      final processor = _processor(
+        timeline: timeline,
+        stateTarget: _RecordingStateTarget(
+          timeline: timeline,
+          order: <String>[],
+        ),
+        uiUpdates: _RecordingUiUpdatePort(<String>[]),
+        effectRunner: _RecordingEffectRunner(<String>[]),
+        turnContextRecorder: recorder,
+      );
+
+      processor.process(
+        const AgentTurnStartedEvent(
+          AgentTurn(id: 'turn-1', sessionId: 'thread-1'),
+          modelId: 'gpt',
+          reasoningEffort: 'high',
+        ),
+      );
+      processor.process(
+        const AgentTurnCompletedEvent(sessionId: 'thread-1', turnId: 'turn-1'),
+      );
+
+      expect(recorder.started, hasLength(1));
+      expect(recorder.started.single.reasoningEffort, 'high');
+      expect(recorder.completed, hasLength(1));
+    });
+
+    test('does not record rejected or history-scoped turn events', () {
+      final timeline = AgentConversationTimelineStore();
+      addTearDown(timeline.dispose);
+      final recorder = _RecordingTurnContextRecorder();
+      final liveProcessor = _processor(
+        timeline: timeline,
+        stateTarget: _RecordingStateTarget(
+          timeline: timeline,
+          order: <String>[],
+        ),
+        uiUpdates: _RecordingUiUpdatePort(<String>[]),
+        effectRunner: _RecordingEffectRunner(<String>[]),
+        turnContextRecorder: recorder,
+      );
+      liveProcessor.process(
+        const AgentTurnCompletedEvent(
+          sessionId: 'thread-other',
+          turnId: 'turn-other',
+        ),
+      );
+
+      final historyTimeline = AgentConversationTimelineStore();
+      addTearDown(historyTimeline.dispose);
+      final historyProcessor = AgentConversationEventProcessor(
+        reducer: AgentConversationReducer.history(
+          clock: () => DateTime.utc(2026, 7, 31),
+        ),
+        context: () => AgentConversationReducerContext(
+          scope: AgentConversationReductionScope.history,
+          selectedThreadId: 'thread-1',
+          requiresResumedSelectedThread: false,
+          pendingTurnGroupId: historyTimeline.pendingTurnGroupId,
+          hasTurn: historyTimeline.hasTurn,
+          isHistoryTurnId: historyTimeline.isHistoryTurnId,
+          modelsRefreshing: false,
+          activeProviderName: 'Codex',
+          activeProviderConfig: AgentProviderConfig.defaultCodex,
+          effectScope: const AgentConversationEffectScope(
+            reductionScope: AgentConversationReductionScope.history,
+            providerId: 'codex',
+            listenerGeneration: 1,
+            threadId: 'thread-1',
+          ),
+        ),
+        timeline: historyTimeline,
+        stateTarget: _RecordingStateTarget(
+          timeline: historyTimeline,
+          order: <String>[],
+        ),
+        uiUpdates: _RecordingUiUpdatePort(<String>[]),
+        effectRunner: _RecordingEffectRunner(<String>[]),
+        turnContextRecorder: recorder,
+      );
+      historyProcessor.process(
+        const AgentTurnStartedEvent(
+          AgentTurn(id: 'turn-1', sessionId: 'thread-1'),
+          modelId: 'history-model',
+        ),
+      );
+
+      expect(recorder.started, isEmpty);
+      expect(recorder.completed, isEmpty);
+    });
+
+    test('keeps the mutation when the recorder throws', () {
+      final timeline = _runningTimeline();
+      addTearDown(timeline.dispose);
+      final processor = _processor(
+        timeline: timeline,
+        stateTarget: _RecordingStateTarget(
+          timeline: timeline,
+          order: <String>[],
+        ),
+        uiUpdates: _RecordingUiUpdatePort(<String>[]),
+        effectRunner: _RecordingEffectRunner(<String>[]),
+        turnContextRecorder: _ThrowingTurnContextRecorder(),
+      );
+
+      final mutation = processor.process(
+        const AgentTurnCompletedEvent(sessionId: 'thread-1', turnId: 'turn-1'),
+      );
+
+      expect(mutation.accepted, isTrue);
+      expect(timeline.isTurnRunning, isFalse);
+    });
   });
 }
 
@@ -160,6 +278,7 @@ AgentConversationEventProcessor _processor({
   required AgentConversationStateMutationTarget stateTarget,
   required AgentUiUpdatePort uiUpdates,
   required AgentConversationEffectRunner effectRunner,
+  AgentTurnContextRecorder? turnContextRecorder,
 }) {
   return AgentConversationEventProcessor(
     reducer: AgentConversationReducer.live(
@@ -170,6 +289,7 @@ AgentConversationEventProcessor _processor({
     stateTarget: stateTarget,
     uiUpdates: uiUpdates,
     effectRunner: effectRunner,
+    turnContextRecorder: turnContextRecorder,
   );
 }
 
@@ -286,5 +406,44 @@ final class _RecordingEffectRunner implements AgentConversationEffectRunner {
   @override
   void dispose() {
     disposed = true;
+  }
+}
+
+final class _RecordingTurnContextRecorder implements AgentTurnContextRecorder {
+  final List<AgentTurnStartedEvent> started = <AgentTurnStartedEvent>[];
+  final List<AgentTurnCompletedEvent> completed = <AgentTurnCompletedEvent>[];
+
+  @override
+  void recordStarted({
+    required String providerId,
+    required AgentTurnStartedEvent event,
+  }) {
+    started.add(event);
+  }
+
+  @override
+  void recordCompleted({
+    required String providerId,
+    required AgentTurnCompletedEvent event,
+  }) {
+    completed.add(event);
+  }
+}
+
+final class _ThrowingTurnContextRecorder implements AgentTurnContextRecorder {
+  @override
+  void recordStarted({
+    required String providerId,
+    required AgentTurnStartedEvent event,
+  }) {
+    throw StateError('recorder failed');
+  }
+
+  @override
+  void recordCompleted({
+    required String providerId,
+    required AgentTurnCompletedEvent event,
+  }) {
+    throw StateError('recorder failed');
   }
 }

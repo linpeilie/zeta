@@ -25,7 +25,10 @@ import 'package:zeta/src/features/agent/application/agent_conversation_permissio
 import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
 import 'package:zeta/src/features/agent/application/agent_elapsed_ticker.dart';
 import 'package:zeta/src/features/agent/application/agent_skills_catalog_controller.dart';
+import 'package:zeta/src/features/agent/application/agent_turn_context_overlay.dart';
+import 'package:zeta/src/features/agent/application/agent_turn_context_recorder.dart';
 import 'package:zeta/src/features/agent/application/bounded_event_dispatcher.dart';
+import 'package:zeta/src/features/agent/data/agent_turn_context_store.dart';
 import 'package:zeta/src/features/agent/application/coalescing_event_buffer.dart';
 import 'package:zeta/src/features/agent/application/agent_event_pipeline.dart';
 import 'package:zeta/src/features/agent/application/agent_ui_update_port.dart';
@@ -81,6 +84,7 @@ class AgentConversationViewModel {
     this.onAttention,
     this.onProviderSwitchRequested,
     this.onCreatedThread,
+    this.turnContextStore,
     String? initialProjectPath,
     String? initialContextFilePath,
     AgentThreadSummary? initialThread,
@@ -149,6 +153,9 @@ class AgentConversationViewModel {
       stateTarget: _eventStateTarget,
       uiUpdates: _eventUiUpdates,
       effectRunner: _effectRunner,
+      turnContextRecorder: turnContextStore == null
+          ? null
+          : DefaultAgentTurnContextRecorder(store: turnContextStore!),
     );
     _modelSelectionController.addListener(_handleModelSelectionChanged);
     _conversationModeController.addListener(_handleConversationModeChanged);
@@ -192,6 +199,9 @@ class AgentConversationViewModel {
 
   /// Provider 创建 thread 后请求 Shell 登记并选中，禁止当前 Binding 原地改绑。
   final AgentCreatedThreadCallback? onCreatedThread;
+
+  /// Zeta 自有 turn 上下文存储；为空时不落盘、打开历史也不 overlay。
+  final AgentTurnContextStore? turnContextStore;
 
   /// 后台文件索引是否已就绪；无注入时恒为 true。
   bool get isWorkspaceFileIndexReady =>
@@ -2182,7 +2192,7 @@ class AgentConversationViewModel {
           ),
         );
       }
-      final history = await _runGlobalBundle((bundle) {
+      final providerHistory = await _runGlobalBundle((bundle) {
         final threadCatalog = bundle.threadCatalog;
         if (threadCatalog == null) {
           throw UnsupportedError(
@@ -2203,6 +2213,14 @@ class AgentConversationViewModel {
       if (!_isCurrentSwitch(switchToken)) {
         return;
       }
+      final localContext = await turnContextStore?.load(
+        providerId: thread.providerId,
+        threadId: thread.id,
+      );
+      if (!_isCurrentSwitch(switchToken)) {
+        return;
+      }
+      final history = overlayThreadTurnContext(providerHistory, localContext);
       if (_historySelectionNeedsCatalogRefresh(history)) {
         // 旧缓存可能还只有 CLI `value`，缺少用于历史匹配的 resolved model。
         // 只强制刷新一次；刷新仍无法匹配时由历史应用入口保留当前有效选择。
