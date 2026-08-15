@@ -12,6 +12,7 @@ import 'package:zeta/src/features/agent_management/presentation/agent_management
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
+import 'package:zeta/src/ui/core/ide_switch.dart';
 import 'package:zeta/src/ui/core/ide_tabs.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/ide_toast.dart';
@@ -21,9 +22,62 @@ import 'package:zeta/src/ui/core/rows/ide_row_divider.dart';
 import 'package:zeta/src/ui/core/rows/ide_settings_row.dart';
 import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
 import 'package:zeta/src/ui/core/workbench/ide_page_body.dart';
-import 'package:zeta/src/ui/core/workbench/ide_page_header.dart';
 
 enum SettingsSection { general, appearance, agents }
+
+/// 平铺设置行：不自带横向内边距，也不自带分割线。
+///
+/// 横向对齐交给 `IdePageBody` 的页面 padding，分割线由 [_SettingsGroup] 在行
+/// 与行之间统一插入——这样整页只有一套分割线机制。
+IdeSettingsRow _flatSettingsRow({
+  required String label,
+  required String description,
+  required Widget control,
+  Key? key,
+}) {
+  return IdeSettingsRow(
+    key: key,
+    label: label,
+    description: description,
+    control: control,
+    showDivider: false,
+    padding: IdeSpacing.settingsRowPaddingFlat,
+  );
+}
+
+/// 无卡片的设置分组：弱化小标题 + 平铺行 + 行间细分割线。
+///
+/// 去掉 `IdeSurface.pane` 后，分组感由三样东西承担：一个明显弱于行标题的
+/// 小标题（`caption`，10/w500/textTertiary）、行之间的 `borderSubtle` 细线，
+/// 以及分组之间 `space24` 的留白。小标题刻意不用 `sectionTitle`——那一档
+/// （13/w600/textPrimary）会和行标题（12/w600/textPrimary）打架，反而削弱
+/// 「行标题才是主标题」的层级。
+class _SettingsGroup extends StatelessWidget {
+  const _SettingsGroup({
+    required this.title,
+    required this.children,
+    super.key,
+  });
+
+  final String title;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final styles = IdeTextStyles.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(title, style: styles.caption),
+        const SizedBox(height: IdeSpacing.space8),
+        for (var index = 0; index < children.length; index++) ...[
+          if (index > 0) const IdeRowDivider(),
+          children[index],
+        ],
+      ],
+    );
+  }
+}
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
@@ -111,43 +165,37 @@ class SettingsNavigationPane extends StatelessWidget {
   Widget build(BuildContext context) {
     return IdeSurface.pane(
       key: const ValueKey('settings-nav-panel'),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      // 无描边：导航与内容区只靠 paneSurface / canvasSurface 的明度差分层，
+      // 少一圈线就少一层视觉容器。
+      showBorder: false,
+      child: ListView(
+        padding: IdeSpacing.all8,
         children: [
-          const IdePageHeader(title: '设置'),
-          Expanded(
-            child: ListView(
-              padding: IdeSpacing.all8,
-              children: [
-                IdeListRow(
-                  key: const ValueKey('settings-nav-general'),
-                  title: '常规',
-                  leading: const Icon(Icons.tune_rounded),
-                  selected: activeSection == SettingsSection.general,
-                  onPressed: () => onSectionSelected(SettingsSection.general),
-                  showDivider: false,
-                ),
-                IdeListRow(
-                  key: const ValueKey('settings-nav-appearance'),
-                  title: '外观',
-                  leading: const Icon(Icons.palette_outlined),
-                  selected: activeSection == SettingsSection.appearance,
-                  onPressed: () =>
-                      onSectionSelected(SettingsSection.appearance),
-                  showDivider: false,
-                ),
-                if (showAgentManagement)
-                  IdeListRow(
-                    key: const ValueKey('settings-nav-agents'),
-                    title: 'Agent 管理',
-                    leading: const Icon(Icons.smart_toy_outlined),
-                    selected: activeSection == SettingsSection.agents,
-                    onPressed: () => onSectionSelected(SettingsSection.agents),
-                    showDivider: false,
-                  ),
-              ],
-            ),
+          IdeListRow(
+            key: const ValueKey('settings-nav-general'),
+            title: '常规',
+            leading: const Icon(Icons.tune_rounded),
+            selected: activeSection == SettingsSection.general,
+            onPressed: () => onSectionSelected(SettingsSection.general),
+            showDivider: false,
           ),
+          IdeListRow(
+            key: const ValueKey('settings-nav-appearance'),
+            title: '外观',
+            leading: const Icon(Icons.palette_outlined),
+            selected: activeSection == SettingsSection.appearance,
+            onPressed: () => onSectionSelected(SettingsSection.appearance),
+            showDivider: false,
+          ),
+          if (showAgentManagement)
+            IdeListRow(
+              key: const ValueKey('settings-nav-agents'),
+              title: 'Agent 管理',
+              leading: const Icon(Icons.smart_toy_outlined),
+              selected: activeSection == SettingsSection.agents,
+              onPressed: () => onSectionSelected(SettingsSection.agents),
+              showDivider: false,
+            ),
         ],
       ),
     );
@@ -213,186 +261,152 @@ class _GeneralSettingsPane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
     final isMacOS = Theme.of(context).platform == TargetPlatform.macOS;
     final modifierLabel = isMacOS ? 'Cmd + Enter 发送' : 'Ctrl + Enter 发送';
     return IdeSurface.canvas(
       key: const ValueKey('settings-detail-panel'),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          IdePageHeader(
-            title: '常规',
-            subtitle: '配置消息输入与发送行为',
-            leading: Icon(
-              Icons.tune_rounded,
-              size: 18,
-              color: colors.textSecondary,
-            ),
-          ),
-          Expanded(
-            child: ValueListenableBuilder<GeneralSettings>(
-              valueListenable: generalSettingsController.listenable,
-              builder: (context, settings, _) {
-                final textStyles = IdeTextStyles.of(context);
-                final colors = IdeColors.of(context);
-                final description = switch (settings.sendMessageShortcut) {
-                  MessageSendShortcut.enter =>
-                    '按 Enter 发送消息，按 Shift + Enter 换行。',
-                  MessageSendShortcut.primaryModifierEnter =>
-                    isMacOS
-                        ? '按 Cmd + Enter 发送消息，按 Enter 换行。'
-                        : '按 Ctrl + Enter 发送消息，按 Enter 换行。',
-                };
-                return IdePageBody(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(
-                        '设置会立即应用，并保留到下次启动。',
-                        style: textStyles.bodySmall.copyWith(
-                          color: colors.textSecondary,
-                        ),
-                      ),
-                      const SizedBox(height: IdeSpacing.space12),
-                      IdeSurface.pane(
-                        key: const ValueKey('settings-general-group'),
-                        child: IdeSettingsRow(
+      child: ValueListenableBuilder<GeneralSettings>(
+        valueListenable: generalSettingsController.listenable,
+        builder: (context, settings, _) {
+          final description = switch (settings.sendMessageShortcut) {
+            MessageSendShortcut.enter => '按 Enter 发送消息，按 Shift + Enter 换行。',
+            MessageSendShortcut.primaryModifierEnter =>
+              isMacOS
+                  ? '按 Cmd + Enter 发送消息，按 Enter 换行。'
+                  : '按 Ctrl + Enter 发送消息，按 Enter 换行。',
+          };
+          return IdePageBody(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _SettingsGroup(
+                  key: const ValueKey('settings-general-group'),
+                  title: '消息发送',
+                  children: [
+                    _flatSettingsRow(
+                      key: const ValueKey('settings-send-message-shortcut-row'),
+                      label: '发送快捷键',
+                      description: description,
+                      control: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 380),
+                        child: IdeTabs<MessageSendShortcut>(
                           key: const ValueKey(
-                            'settings-send-message-shortcut-row',
+                            'settings-send-message-shortcut-tabs',
                           ),
-                          label: '发送快捷键',
-                          description: description,
-                          showDivider: false,
-                          control: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 380),
-                            child: IdeTabs<MessageSendShortcut>(
-                              key: const ValueKey(
-                                'settings-send-message-shortcut-tabs',
+                          value: settings.sendMessageShortcut,
+                          semanticLabel: '发送快捷键',
+                          items: <IdeTabItem<MessageSendShortcut>>[
+                            const IdeTabItem<MessageSendShortcut>(
+                              key: ValueKey(
+                                'settings-send-message-shortcut-enter',
                               ),
-                              value: settings.sendMessageShortcut,
-                              semanticLabel: '发送快捷键',
-                              items: <IdeTabItem<MessageSendShortcut>>[
-                                const IdeTabItem<MessageSendShortcut>(
-                                  key: ValueKey(
-                                    'settings-send-message-shortcut-enter',
-                                  ),
-                                  value: MessageSendShortcut.enter,
-                                  label: 'Enter 发送',
-                                  leadingIcon: Icons.keyboard_return_rounded,
-                                  semanticLabel: 'Enter 发送',
-                                ),
-                                IdeTabItem<MessageSendShortcut>(
-                                  key: const ValueKey(
-                                    'settings-send-message-shortcut-modifier',
-                                  ),
-                                  value:
-                                      MessageSendShortcut.primaryModifierEnter,
-                                  label: modifierLabel,
-                                  leadingIcon:
-                                      Icons.keyboard_command_key_rounded,
-                                  semanticLabel: modifierLabel,
-                                ),
-                              ],
-                              onChanged: (value) {
-                                unawaited(
-                                  generalSettingsController
-                                      .setMessageSendShortcut(value),
-                                );
-                              },
+                              value: MessageSendShortcut.enter,
+                              label: 'Enter 发送',
+                              leadingIcon: Icons.keyboard_return_rounded,
+                              semanticLabel: 'Enter 发送',
                             ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: IdeSpacing.space12),
-                      IdeSurface.pane(
-                        key: const ValueKey(
-                          'settings-agent-notifications-group',
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            IdeSettingsRow(
+                            IdeTabItem<MessageSendShortcut>(
                               key: const ValueKey(
-                                'settings-notifications-enabled-row',
+                                'settings-send-message-shortcut-modifier',
                               ),
-                              label: '系统通知',
-                              description: '在任务转入后台或其他会话时发送系统提醒。',
-                              control: sf.Switch(
-                                key: const ValueKey(
-                                  'settings-notifications-enabled-switch',
-                                ),
-                                value: settings.notifications.enabled,
-                                onChanged: (value) {
-                                  unawaited(
-                                    generalSettingsController
-                                        .setNotificationsEnabled(value),
-                                  );
-                                },
-                              ),
-                            ),
-                            IdeSettingsRow(
-                              key: const ValueKey(
-                                'settings-turn-terminal-notifications-row',
-                              ),
-                              label: '任务结束',
-                              description: '任务完成、失败或中断时提醒。',
-                              control: sf.Switch(
-                                key: const ValueKey(
-                                  'settings-turn-terminal-notifications-switch',
-                                ),
-                                value:
-                                    settings.notifications.turnTerminalEnabled,
-                                enabled: settings.notifications.enabled,
-                                onChanged: settings.notifications.enabled
-                                    ? (value) {
-                                        unawaited(
-                                          generalSettingsController
-                                              .setTurnTerminalNotificationsEnabled(
-                                                value,
-                                              ),
-                                        );
-                                      }
-                                    : null,
-                              ),
-                            ),
-                            IdeSettingsRow(
-                              key: const ValueKey(
-                                'settings-action-required-notifications-row',
-                              ),
-                              label: '需要确认',
-                              description: '权限、问题、计划审批或执行确认等待处理时提醒。',
-                              showDivider: false,
-                              control: sf.Switch(
-                                key: const ValueKey(
-                                  'settings-action-required-notifications-switch',
-                                ),
-                                value: settings
-                                    .notifications
-                                    .actionRequiredEnabled,
-                                enabled: settings.notifications.enabled,
-                                onChanged: settings.notifications.enabled
-                                    ? (value) {
-                                        unawaited(
-                                          generalSettingsController
-                                              .setActionRequiredNotificationsEnabled(
-                                                value,
-                                              ),
-                                        );
-                                      }
-                                    : null,
-                              ),
+                              value: MessageSendShortcut.primaryModifierEnter,
+                              label: modifierLabel,
+                              leadingIcon: Icons.keyboard_command_key_rounded,
+                              semanticLabel: modifierLabel,
                             ),
                           ],
+                          onChanged: (value) {
+                            unawaited(
+                              generalSettingsController.setMessageSendShortcut(
+                                value,
+                              ),
+                            );
+                          },
                         ),
                       ),
-                    ],
-                  ),
-                );
-              },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: IdeSpacing.space24),
+                _SettingsGroup(
+                  key: const ValueKey('settings-agent-notifications-group'),
+                  title: '通知',
+                  children: [
+                    _flatSettingsRow(
+                      key: const ValueKey('settings-notifications-enabled-row'),
+                      label: '系统通知',
+                      description: '在任务转入后台或其他会话时发送系统提醒。',
+                      control: IdeSwitch(
+                        key: const ValueKey(
+                          'settings-notifications-enabled-switch',
+                        ),
+                        semanticLabel: '系统通知',
+                        value: settings.notifications.enabled,
+                        onChanged: (value) {
+                          unawaited(
+                            generalSettingsController.setNotificationsEnabled(
+                              value,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    _flatSettingsRow(
+                      key: const ValueKey(
+                        'settings-turn-terminal-notifications-row',
+                      ),
+                      label: '任务结束',
+                      description: '任务完成、失败或中断时提醒。',
+                      control: IdeSwitch(
+                        key: const ValueKey(
+                          'settings-turn-terminal-notifications-switch',
+                        ),
+                        semanticLabel: '任务结束',
+                        value: settings.notifications.turnTerminalEnabled,
+                        enabled: settings.notifications.enabled,
+                        onChanged: settings.notifications.enabled
+                            ? (value) {
+                                unawaited(
+                                  generalSettingsController
+                                      .setTurnTerminalNotificationsEnabled(
+                                        value,
+                                      ),
+                                );
+                              }
+                            : null,
+                      ),
+                    ),
+                    _flatSettingsRow(
+                      key: const ValueKey(
+                        'settings-action-required-notifications-row',
+                      ),
+                      label: '需要确认',
+                      description: '权限、问题、计划审批或执行确认等待处理时提醒。',
+                      control: IdeSwitch(
+                        key: const ValueKey(
+                          'settings-action-required-notifications-switch',
+                        ),
+                        semanticLabel: '需要确认',
+                        value: settings.notifications.actionRequiredEnabled,
+                        enabled: settings.notifications.enabled,
+                        onChanged: settings.notifications.enabled
+                            ? (value) {
+                                unawaited(
+                                  generalSettingsController
+                                      .setActionRequiredNotificationsEnabled(
+                                        value,
+                                      ),
+                                );
+                              }
+                            : null,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -429,130 +443,95 @@ class _AppearanceSettingsPane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
     return IdeSurface.canvas(
       key: const ValueKey('settings-detail-panel'),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          IdePageHeader(
-            title: '外观',
-            subtitle: '切换主题模式、字体与字号',
-            leading: Icon(
-              Icons.palette_outlined,
-              size: 18,
-              color: colors.textSecondary,
-            ),
-          ),
-          Expanded(
-            child: ValueListenableBuilder<AppearanceSettings>(
-              valueListenable: appearanceController.listenable,
-              builder: (context, settings, _) {
-                final textStyles = IdeTextStyles.of(context);
-                final colors = IdeColors.of(context);
-                return IdePageBody(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(
-                        '设置会立即应用，并保留到下次启动。',
-                        style: textStyles.bodySmall.copyWith(
-                          color: colors.textSecondary,
-                        ),
+      child: ValueListenableBuilder<AppearanceSettings>(
+        valueListenable: appearanceController.listenable,
+        builder: (context, settings, _) {
+          return IdePageBody(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _SettingsGroup(
+                  key: const ValueKey('settings-appearance-group'),
+                  title: '主题',
+                  children: [
+                    _ThemeModeSection(
+                      tabs: _tabs,
+                      groupValue: settings.themeMode,
+                      onSelected: (value) {
+                        unawaited(appearanceController.setThemeMode(value));
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: IdeSpacing.space24),
+                _SettingsGroup(
+                  key: const ValueKey('settings-appearance-font-group'),
+                  title: '字体',
+                  children: [
+                    _FontChoiceSettingRow(
+                      key: const ValueKey('settings-ui-font-row'),
+                      keyPrefix: 'settings-ui-font',
+                      label: '界面字体',
+                      description: '用于普通界面文本与非代码 Markdown 正文。',
+                      selectedChoice: settings.uiFontChoice,
+                      selectedLabel: _fontChoiceLabel(
+                        settings.uiFontChoice,
+                        systemFontDisplayName: appearanceController
+                            .displayNameFor(settings.uiFontChoice),
                       ),
-                      const SizedBox(height: IdeSpacing.space12),
-                      IdeSurface.pane(
-                        key: const ValueKey('settings-appearance-group'),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            _ThemeModeSection(
-                              tabs: _tabs,
-                              groupValue: settings.themeMode,
-                              onSelected: (value) {
-                                unawaited(
-                                  appearanceController.setThemeMode(value),
-                                );
-                              },
-                            ),
-                            const IdeRowDivider(),
-                            _FontChoiceSettingRow(
-                              key: const ValueKey('settings-ui-font-row'),
-                              keyPrefix: 'settings-ui-font',
-                              label: '界面字体',
-                              description: '用于普通界面文本与非代码 Markdown 正文。',
-                              selectedChoice: settings.uiFontChoice,
-                              selectedLabel: _fontChoiceLabel(
-                                settings.uiFontChoice,
-                                systemFontDisplayName: appearanceController
-                                    .displayNameFor(settings.uiFontChoice),
-                              ),
-                              choicesLoader:
-                                  appearanceController.loadUiFontChoices,
-                              onChanged: appearanceController.setUiFontChoice,
-                              errorMessage: '无法加载所选界面字体。',
-                            ),
-                            const IdeRowDivider(),
-                            _FontSizeSettingRow(
-                              key: const ValueKey('settings-ui-font-size-row'),
-                              keyPrefix: 'settings-ui-font-size',
-                              label: '界面字号',
-                              description:
-                                  '缩放普通界面文本（${minUiFontSize.toInt()}–${maxUiFontSize.toInt()} px）。',
-                              value: settings.uiFontSize,
-                              min: minUiFontSize,
-                              max: maxUiFontSize,
-                              onChanged: (value) {
-                                unawaited(
-                                  appearanceController.setUiFontSize(value),
-                                );
-                              },
-                            ),
-                            const IdeRowDivider(),
-                            _FontChoiceSettingRow(
-                              key: const ValueKey('settings-code-font-row'),
-                              keyPrefix: 'settings-code-font',
-                              label: '代码字体',
-                              description: '用于代码块、命令、Diff 和工具输出。',
-                              selectedChoice: settings.codeFontChoice,
-                              selectedLabel: _fontChoiceLabel(
-                                settings.codeFontChoice,
-                                systemFontDisplayName: appearanceController
-                                    .displayNameFor(settings.codeFontChoice),
-                              ),
-                              choicesLoader:
-                                  appearanceController.loadCodeFontChoices,
-                              onChanged: appearanceController.setCodeFontChoice,
-                              errorMessage: '无法加载所选代码字体。',
-                            ),
-                            const IdeRowDivider(),
-                            _FontSizeSettingRow(
-                              key: const ValueKey(
-                                'settings-code-font-size-row',
-                              ),
-                              keyPrefix: 'settings-code-font-size',
-                              label: '代码字号',
-                              description:
-                                  '缩放代码内容（${minCodeFontSize.toInt()}–${maxCodeFontSize.toInt()} px）。',
-                              value: settings.codeFontSize,
-                              min: minCodeFontSize,
-                              max: maxCodeFontSize,
-                              onChanged: (value) {
-                                unawaited(
-                                  appearanceController.setCodeFontSize(value),
-                                );
-                              },
-                            ),
-                          ],
-                        ),
+                      choicesLoader: appearanceController.loadUiFontChoices,
+                      onChanged: appearanceController.setUiFontChoice,
+                      errorMessage: '无法加载所选界面字体。',
+                    ),
+                    _FontSizeSettingRow(
+                      key: const ValueKey('settings-ui-font-size-row'),
+                      keyPrefix: 'settings-ui-font-size',
+                      label: '界面字号',
+                      description:
+                          '缩放普通界面文本（${minUiFontSize.toInt()}–${maxUiFontSize.toInt()} px）。',
+                      value: settings.uiFontSize,
+                      min: minUiFontSize,
+                      max: maxUiFontSize,
+                      onChanged: (value) {
+                        unawaited(appearanceController.setUiFontSize(value));
+                      },
+                    ),
+                    _FontChoiceSettingRow(
+                      key: const ValueKey('settings-code-font-row'),
+                      keyPrefix: 'settings-code-font',
+                      label: '代码字体',
+                      description: '用于代码块、命令、Diff 和工具输出。',
+                      selectedChoice: settings.codeFontChoice,
+                      selectedLabel: _fontChoiceLabel(
+                        settings.codeFontChoice,
+                        systemFontDisplayName: appearanceController
+                            .displayNameFor(settings.codeFontChoice),
                       ),
-                    ],
-                  ),
-                );
-              },
+                      choicesLoader: appearanceController.loadCodeFontChoices,
+                      onChanged: appearanceController.setCodeFontChoice,
+                      errorMessage: '无法加载所选代码字体。',
+                    ),
+                    _FontSizeSettingRow(
+                      key: const ValueKey('settings-code-font-size-row'),
+                      keyPrefix: 'settings-code-font-size',
+                      label: '代码字号',
+                      description:
+                          '缩放代码内容（${minCodeFontSize.toInt()}–${maxCodeFontSize.toInt()} px）。',
+                      value: settings.codeFontSize,
+                      min: minCodeFontSize,
+                      max: maxCodeFontSize,
+                      onChanged: (value) {
+                        unawaited(appearanceController.setCodeFontSize(value));
+                      },
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -592,10 +571,9 @@ class _ThemeModeSection extends StatelessWidget {
       (tab) => tab.value == groupValue,
       orElse: () => tabs.first,
     );
-    return IdeSettingsRow(
+    return _flatSettingsRow(
       label: '主题模式',
       description: selectedTab.description,
-      showDivider: false,
       control: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 380),
         child: IdeTabs<ThemeMode>(
@@ -684,10 +662,9 @@ class _FontChoiceSettingRowState extends State<_FontChoiceSettingRow> {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    return IdeSettingsRow(
+    return _flatSettingsRow(
       label: widget.label,
       description: widget.description,
-      showDivider: false,
       control: Semantics(
         label: '${widget.label}：${widget.selectedLabel}',
         container: true,
@@ -862,10 +839,9 @@ class _FontSizeSettingRow extends StatelessWidget {
       ),
     );
 
-    return IdeSettingsRow(
+    return _flatSettingsRow(
       label: label,
       description: description,
-      showDivider: false,
       control: controls,
     );
   }

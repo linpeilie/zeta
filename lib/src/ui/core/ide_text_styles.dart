@@ -119,7 +119,7 @@ class IdeTextStyles {
 
   /// 页面顶栏标题（基准 15 / w600）。
   ///
-  /// 生效位置：`IdePageHeader` 标题；Agent 日志页标题。
+  /// 生效位置：`IdePageHeader` 标题（Agent 管理详情页、用量统计）；Agent 日志页标题。
   final TextStyle pageTitle;
 
   /// 页面内 section 标题（基准 13 / w600）。

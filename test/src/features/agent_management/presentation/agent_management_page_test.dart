@@ -14,6 +14,7 @@ import 'package:zeta/src/features/agent_management/domain/agent_management_model
 import 'package:zeta/src/features/agent_management/presentation/agent_configuration_editor.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_management_page.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
+import 'package:zeta/src/ui/core/ide_switch.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
 import 'package:zeta/src/ui/core/workbench/ide_section.dart';
@@ -119,8 +120,8 @@ void main() {
       expect(find.textContaining('模型列表与套餐名称始终来自 Claude CLI'), findsOneWidget);
       expect(find.textContaining('claude auth login'), findsOneWidget);
       expect(find.textContaining('claude login'), findsNothing);
-      expect(tester.widget<sf.Switch>(switchFinder).value, isTrue);
-      expect(tester.widget<sf.Switch>(switchFinder).onChanged, isNotNull);
+      expect(tester.widget<IdeSwitch>(switchFinder).value, isTrue);
+      expect(tester.widget<IdeSwitch>(switchFinder).onChanged, isNotNull);
 
       await tester.runAsync(
         () => harness.managementController
@@ -135,7 +136,7 @@ void main() {
         disabledConfig?.extra[claudeCodeAccountDataEnrichmentKey],
         isFalse,
       );
-      expect(tester.widget<sf.Switch>(switchFinder).value, isFalse);
+      expect(tester.widget<IdeSwitch>(switchFinder).value, isFalse);
       expect(tester.takeException(), isNull);
     },
   );
@@ -159,7 +160,7 @@ void main() {
     await tester.ensureVisible(switchFinder);
     await tester.pump();
 
-    expect(tester.widget<sf.Switch>(switchFinder).value, isFalse);
+    expect(tester.widget<IdeSwitch>(switchFinder).value, isFalse);
     expect(
       harness.providerController
           .providerConfigById(defaultClaudeCodeProviderId)

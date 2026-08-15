@@ -203,12 +203,25 @@ abstract final class IdeSpacing {
     vertical: space6,
   );
 
-  /// 设置行内边距（更宽松，容纳控件）。
+  /// 卡片内设置行的内边距（更宽松，容纳控件）。
   ///
-  /// 生效位置：`IdeSettingsRow`。
+  /// 上下留白刻意大于 [rowPadding]：设置行是「标题 + 描述 + 控件」的复合行，
+  /// 即使有分割线也要靠留白保证每一项读起来是独立的一块。
+  ///
+  /// 生效位置：`IdeSettingsRow` 默认值；Agent 管理页卡片内的信息行。
   static const EdgeInsets settingsRowPadding = EdgeInsets.symmetric(
     horizontal: space12,
-    vertical: space10,
+    vertical: space16,
+  );
+
+  /// 平铺（无卡片）设置行的内边距：只留上下，横向交给页面。
+  ///
+  /// 设置页去掉卡片容器后，行的横向对齐由 `IdePageBody` 的 [pagePadding]
+  /// 统一提供；行自身不再缩进，分割线因此与内容列同宽、贯穿到底。
+  ///
+  /// 生效位置：`SettingsPage` 各分区的 `IdeSettingsRow`。
+  static const EdgeInsets settingsRowPaddingFlat = EdgeInsets.symmetric(
+    vertical: space16,
   );
 
   /// Agent Composer 外卡内边距（左上略宽，右下略紧以容纳拖拽角）。

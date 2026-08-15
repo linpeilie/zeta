@@ -19,7 +19,8 @@ abstract final class IdeMetrics {
 
   /// 页面顶栏（标题 + 操作区）固定高度。
   ///
-  /// 生效位置：`IdePageHeader`（设置页、Agent 管理、用量统计等页面顶栏）。
+  /// 生效位置：`IdePageHeader`（Agent 管理详情页、用量统计等页面顶栏）。
+  /// 设置页与 Agent 管理列表页已取消顶栏，内容直接从 `IdePageBody` 起排。
   static const double pageHeaderHeight = 44;
 
   /// 侧栏 / Pane 内部标题条高度。
@@ -63,6 +64,31 @@ abstract final class IdeMetrics {
   ///
   /// 生效位置：项目列表操作按钮、文件树折叠按钮、侧栏图标按钮等。
   static const double iconButtonHitSize = 28;
+
+  // ---------------------------------------------------------------------------
+  // 开关（IdeSwitch）
+  // ---------------------------------------------------------------------------
+
+  /// 开关轨道宽度。
+  ///
+  /// 生效位置：`IdeSwitch`。
+  static const double switchTrackWidth = 36;
+
+  /// 开关轨道高度。
+  ///
+  /// 生效位置：`IdeSwitch`。轨道走 `IdeRadius.small`（6）而非胶囊：与分段
+  /// 控件、hover 底色共用同一套「小圆角」语言。
+  static const double switchTrackHeight = 20;
+
+  /// 开关滑块边长（正方形，圆角走 `IdeRadius.micro`）。
+  ///
+  /// 生效位置：`IdeSwitch`。
+  static const double switchThumbSize = 16;
+
+  /// 开关轨道到滑块的内边距。
+  ///
+  /// 生效位置：`IdeSwitch`；等于 (`switchTrackHeight` − `switchThumbSize`) / 2。
+  static const double switchTrackPadding = 2;
 
   /// 会话消息内联图片缩略图边长（正方形）。
   ///

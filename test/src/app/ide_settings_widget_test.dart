@@ -12,6 +12,7 @@ import 'package:zeta/src/features/settings/domain/system_font_family.dart';
 import 'package:zeta/src/features/settings/presentation/settings_page.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta/src/ui/core/ide_switch.dart';
 import 'package:zeta/src/ui/core/ide_tabs.dart';
 import 'package:zeta/src/ui/core/rows/ide_row_divider.dart';
 
@@ -67,7 +68,7 @@ void main() {
     expect(find.text('需要确认'), findsOneWidget);
     expect(
       tester
-          .widget<sf.Switch>(
+          .widget<IdeSwitch>(
             find.byKey(
               const ValueKey('settings-action-required-notifications-switch'),
             ),
@@ -151,8 +152,14 @@ void main() {
       find.byKey(const ValueKey('settings-code-font-size-row')),
       findsOneWidget,
     );
-    expect(find.text('外观'), findsNWidgets(2));
-    expect(find.byType(IdeRowDivider), findsNWidgets(4));
+    // 页面顶栏已移除，'外观' 只剩左侧导航项一处。
+    expect(find.text('外观'), findsOneWidget);
+    // 外观分成「主题」（1 行，组内无分割线）与「字体」（4 行 → 3 条分割线）。
+    expect(
+      find.byKey(const ValueKey('settings-appearance-font-group')),
+      findsOneWidget,
+    );
+    expect(find.byType(IdeRowDivider), findsNWidgets(3));
   });
 
   testWidgets('settings rows stack below the content breakpoint', (

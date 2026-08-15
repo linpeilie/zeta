@@ -95,7 +95,9 @@ class IdeTabs<T> extends StatelessWidget {
             vertical: IdeSpacing.space4,
           ),
           backgroundColor: colors.surfaceElevated,
-          borderRadius: IdeRadius.allMedium,
+          // 内层选中态严格小于外框的 medium，遵守圆角递减规则；同时与
+          // IdeSwitch 轨道、列表行 hover 底共用同一档「小圆角」。
+          borderRadius: IdeRadius.allSmall,
         ),
         child: sf.Tabs(
           index: selectedIndex,

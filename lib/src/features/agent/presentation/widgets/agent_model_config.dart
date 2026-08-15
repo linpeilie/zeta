@@ -1250,7 +1250,7 @@ class _FastConfigRow extends StatelessWidget {
           ),
           Semantics(
             label: '${model.displayName}，Fast，${value ? '已开启' : '已关闭'}',
-            child: sf.Switch(
+            child: IdeSwitch(
               key: ValueKey<String>('agent-fast-switch-${model.id}'),
               value: value,
               onChanged: onChanged,

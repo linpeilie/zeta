@@ -6,6 +6,10 @@ import '../ide_spacing.dart';
 import '../ide_text_styles.dart';
 
 /// 统一设置项说明与控件的对齐方式。
+///
+/// 排版上刻意拉开主标题与描述的对比：标题走 `titleSmall`（w600 + textPrimary），
+/// 描述压到 `textTertiary`。两者字号同为 12/11，层级完全靠字重与明度表达，
+/// 这样即使整页去掉卡片容器，每一项的「标题—说明」结构依然一眼可读。
 class IdeSettingsRow extends StatelessWidget {
   const IdeSettingsRow({
     required this.label,
@@ -13,12 +17,19 @@ class IdeSettingsRow extends StatelessWidget {
     super.key,
     this.description,
     this.showDivider = true,
+    this.padding,
   });
 
   final String label;
   final String? description;
   final Widget control;
   final bool showDivider;
+
+  /// 行内边距；为 null 时使用 [IdeSpacing.settingsRowPadding]。
+  ///
+  /// 平铺（无卡片）场景传 [IdeSpacing.settingsRowPaddingFlat]，把横向对齐
+  /// 交给页面级 padding。
+  final EdgeInsetsGeometry? padding;
 
   @override
   Widget build(BuildContext context) {
@@ -32,12 +43,12 @@ class IdeSettingsRow extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(label, style: styles.rowTitle),
+            Text(label, style: styles.titleSmall),
             if (description case final String descriptionText) ...[
-              const SizedBox(height: IdeSpacing.space2),
+              const SizedBox(height: IdeSpacing.space4),
               Text(
                 descriptionText,
-                style: styles.bodySmall.copyWith(color: colors.textSecondary),
+                style: styles.bodySmall.copyWith(color: colors.textTertiary),
               ),
             ],
           ],
@@ -54,7 +65,7 @@ class IdeSettingsRow extends StatelessWidget {
               minHeight: IdeMetrics.settingsRowMinHeight,
             ),
             child: Padding(
-              padding: IdeSpacing.settingsRowPadding,
+              padding: padding ?? IdeSpacing.settingsRowPadding,
               child: stacked
                   ? Column(
                       key: const ValueKey('ide-settings-row-stacked'),

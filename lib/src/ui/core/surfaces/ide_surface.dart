@@ -32,14 +32,18 @@ class IdeSurface extends StatelessWidget {
          child: child,
        );
 
+  /// [showBorder] 为 null 时保持 pane 默认的描边；传 `false` 可得到「只有
+  /// 浅灰底 + 圆角」的无边框面板（设置页左侧导航即用这一形态）。
   const IdeSurface.pane({
     required Widget child,
     Key? key,
     EdgeInsetsGeometry? padding,
+    bool? showBorder,
   }) : this(
          key: key,
          level: IdeSurfaceLevel.pane,
          padding: padding,
+         showBorder: showBorder,
          child: child,
        );
 

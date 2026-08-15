@@ -74,6 +74,27 @@ void main() {
     expect(_foregroundShapeOf(tester, 'popover-surface'), isNotNull);
     expect(_shapeDecorationOf(tester, 'popover-surface').shadows, isNotEmpty);
   });
+
+  testWidgets('pane 可显式关闭描边，仅保留底色与圆角', (tester) async {
+    await pumpIdeComponent(
+      tester,
+      child: const IdeSurface.pane(
+        key: ValueKey('borderless-pane'),
+        showBorder: false,
+        child: Text('Pane'),
+      ),
+    );
+
+    expect(
+      _shapeDecorationOf(tester, 'borderless-pane').color,
+      IdeColors.dark.surface,
+    );
+    expect(
+      _panelShapeOf(tester, 'borderless-pane').borderRadius,
+      IdeRadius.allLarge,
+    );
+    expect(_foregroundShapeOf(tester, 'borderless-pane'), isNull);
+  });
 }
 
 BoxDecoration _decorationOf(WidgetTester tester, String key) {

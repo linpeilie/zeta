@@ -20,6 +20,7 @@ import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_status_card.dart';
+import 'package:zeta/src/ui/core/ide_switch.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/ide_toast.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
@@ -105,30 +106,6 @@ class AgentManagementPageState extends State<AgentManagementPage> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            IdePageHeader(
-              title: 'Agent 管理',
-              subtitle: '管理本机已安装及当前应用支持的 Agent',
-              leading: Icon(
-                Icons.smart_toy_outlined,
-                size: 20,
-                color: colors.accent,
-              ),
-              actions: [
-                sf.PrimaryButton(
-                  key: const ValueKey('agent-detect-button'),
-                  onPressed: widget.controller.detecting
-                      ? null
-                      : widget.controller.detect,
-                  size: sf.ButtonSize.small,
-                  leading: widget.controller.detecting
-                      ? const IdeLoadingIndicator(width: 18, height: 10)
-                      : const Icon(Icons.radar_rounded, size: 16),
-                  child: Text(
-                    widget.controller.detecting ? '正在检测…' : '自动检测 Agent',
-                  ),
-                ),
-              ],
-            ),
             if (widget.controller.detecting &&
                 widget.controller.detectionProgress != null)
               _DetectionProgressBanner(
@@ -257,6 +234,21 @@ class AgentManagementPageState extends State<AgentManagementPage> {
                       Icon(Icons.search_rounded, size: 18),
                     ),
                   ],
+                ),
+              ),
+              // 页面顶栏移除后，自动检测改由工具栏承载——列表非空时这里是
+              // 唯一的检测入口（空列表另有 _ActionEmptyState 的引导按钮）。
+              sf.PrimaryButton(
+                key: const ValueKey('agent-detect-button'),
+                onPressed: widget.controller.detecting
+                    ? null
+                    : widget.controller.detect,
+                size: sf.ButtonSize.small,
+                leading: widget.controller.detecting
+                    ? const IdeLoadingIndicator(width: 18, height: 10)
+                    : const Icon(Icons.radar_rounded, size: 16),
+                child: Text(
+                  widget.controller.detecting ? '正在检测…' : '自动检测 Agent',
                 ),
               ),
             ],
@@ -875,7 +867,7 @@ class _AgentRowStatus extends StatelessWidget {
             ),
           ),
         ),
-        sf.Switch(
+        IdeSwitch(
           value: agent.enabled,
           enabled: agent.installed,
           onChanged: agent.installed ? onEnabledChanged : null,
@@ -1507,7 +1499,7 @@ class _ClaudeCodeAccountDataEnrichmentCard extends StatelessWidget {
               '此开关只控制 Zeta 是否瞬时读取 Claude Code OAuth 凭据并调用 usage REST。'
               '模型列表与套餐名称始终来自 Claude CLI；Zeta 不会刷新、写回或持久化凭据。',
           showDivider: false,
-          control: sf.Switch(
+          control: IdeSwitch(
             key: const ValueKey('claude-account-data-enrichment-switch'),
             value: enabled,
             enabled: !updating,
