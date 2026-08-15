@@ -156,7 +156,8 @@ Agent 首页的标题栏左侧 action 是合并栏唯一的显隐入口：macOS 
 之后，Windows/Linux 位于 Logo 与菜单之前；左栏隐藏后入口仍可操作。Navigation slot
 内只有一个 `ProjectAgentSidebar` / `PanelCard`，Projects / Threads 占剩余空间，
 cardless Agent 统计固定在底部并常驻折叠摘要。折叠态最多展示 Provider 图标、套餐名（无
-套餐时显示 Provider 名）、最短周期额度进度和今日 Token；展开态以折叠摘要为锚点向上弹出
+套餐时显示 Provider 名）、最短周期额度进度和今日 Token；没有额度窗口时不渲染套餐进度行。
+冷加载 Skeleton 与摘要同结构，右上角保留开合按钮。展开态以折叠摘要为锚点向上弹出
 Popover，内含完整明细、底部 Provider Tabs 与右侧刷新，宽度按左栏左右各内缩 `space4`，超出可用高度时
 只在弹层内滚动，不显示独立标题栏、折叠按钮或拖动分隔，也不再挤压 Projects / Threads。套餐窗口以固定高度
 横向胶囊画廊排布，卡片使用紧凑内边距与元信息层级的重置时刻；距当前 7 天内显示 `mm-dd HH:mm`，

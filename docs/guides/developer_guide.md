@@ -566,7 +566,8 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
   Workbench Inspector Overlay，scrim / Esc 关闭后必须恢复标题栏右侧入口焦点。
 - `ProjectAgentSidebar` 只编排两个业务 Widget 的约束与自然高度。它不得读取 Provider
   数据；Projects 与 cardless `AgentUsagePanelContent` 共用一个 `PanelCard`，统计常驻
-  折叠摘要。展开态由折叠摘要向上弹出的 Popover 承载：正文为套餐名加固定高度横向胶囊
+  折叠摘要。无额度窗口时折叠态不渲染套餐进度行；冷加载 Skeleton 保留开合按钮。
+  展开态由折叠摘要向上弹出的 Popover 承载：正文为套餐名加固定高度横向胶囊
   画廊（1/2/3+ 窗口分别占满、对半、各 40%）和 Token 统计；无额度窗口时不渲染整块套餐
   区。额度卡片使用紧凑 `space6` 内边距，重置时刻使用 `meta` 样式；距当前 7 天内显示
   `mm-dd HH:mm`，超过 7 天只显示 `mm-dd`，Claude Code 五小时窗口显示为 `5h`。

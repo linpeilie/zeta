@@ -746,7 +746,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('折叠态 plan-only 显示额度不可用且不伪造进度', (tester) async {
+  testWidgets('折叠态 plan-only 隐藏套餐行且不伪造进度', (tester) async {
     final controller = AgentUsagePanelController(
       repository: const _ImmediatePanelRepository(<AgentUsagePanelEntry>[
         AgentUsagePanelEntry(
@@ -773,7 +773,11 @@ void main() {
     );
 
     expect(find.text('Claude Max'), findsOneWidget);
-    expect(find.text('额度详情暂不可用'), findsOneWidget);
+    expect(find.text('额度详情暂不可用'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('agent-usage-compact-quota-unavailable')),
+      findsNothing,
+    );
     expect(
       find.byKey(const ValueKey('agent-usage-compact-quota')),
       findsNothing,
@@ -818,17 +822,18 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('折叠态冷加载使用三行呼吸 Skeleton', (tester) async {
+  testWidgets('折叠态冷加载使用三行呼吸 Skeleton 并保留展开按钮', (tester) async {
     final repository = _ControlledPanelRepository();
     final controller = AgentUsagePanelController(repository: repository);
     addTearDown(controller.dispose);
+    AgentUsagePanelMode? requestedMode;
 
     await _pumpPanelContent(
       tester,
       controller,
       mode: AgentUsagePanelMode.collapsed,
       height: 88,
-      onModeChanged: (_) {},
+      onModeChanged: (mode) => requestedMode = mode,
     );
 
     expect(
@@ -837,7 +842,14 @@ void main() {
     );
     expect(find.byType(IdeSkeletonLine), findsNWidgets(3));
     expect(find.bySemanticsLabel('正在读取 Agent 用量'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('agent-usage-expand-button')),
+      findsOneWidget,
+    );
     expect(find.byType(sf.Progress), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('agent-usage-expand-button')));
+    expect(requestedMode, AgentUsagePanelMode.expanded);
     expect(tester.takeException(), isNull);
   });
 
@@ -850,7 +862,7 @@ void main() {
       tester,
       controller,
       mode: AgentUsagePanelMode.collapsed,
-      height: 64,
+      height: 88,
       onModeChanged: (_) {},
     );
 

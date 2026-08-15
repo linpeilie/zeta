@@ -287,7 +287,10 @@ class _CompactAgentUsage extends StatelessWidget {
   Widget build(BuildContext context) {
     if (controller.providers.isEmpty) {
       if (controller.isLoading) {
-        return const _CompactAgentUsageSkeleton();
+        return _CompactAgentUsageSkeleton(
+          expanded: expanded,
+          onToggle: onToggle,
+        );
       }
       if (controller.errorMessage case final error?) {
         return _CompactAgentUsageMessage(
@@ -309,7 +312,10 @@ class _CompactAgentUsage extends StatelessWidget {
     final entry = selected.entry;
     if (entry == null) {
       if (selected.isLoading) {
-        return const _CompactAgentUsageSkeleton();
+        return _CompactAgentUsageSkeleton(
+          expanded: expanded,
+          onToggle: onToggle,
+        );
       }
       if (selected.loadError case final error?) {
         return _CompactAgentUsageMessage(
@@ -420,17 +426,6 @@ class _CompactAgentUsageSummary extends StatelessWidget {
             if (quotaWindow != null) ...[
               const SizedBox(height: IdeSpacing.space4),
               _CompactQuotaWindow(window: quotaWindow),
-            ] else if (entry.hasSubscriptionPlan) ...[
-              const SizedBox(height: IdeSpacing.space4),
-              Text(
-                '额度详情暂不可用',
-                key: const ValueKey('agent-usage-compact-quota-unavailable'),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: textStyles.bodySmall.copyWith(
-                  color: colors.textSecondary,
-                ),
-              ),
             ],
             const SizedBox(height: IdeSpacing.space4),
             Row(
@@ -502,16 +497,23 @@ class _CompactQuotaWindow extends StatelessWidget {
 }
 
 class _CompactAgentUsageSkeleton extends StatelessWidget {
-  const _CompactAgentUsageSkeleton();
+  const _CompactAgentUsageSkeleton({
+    required this.expanded,
+    required this.onToggle,
+  });
+
+  final bool expanded;
+  final VoidCallback? onToggle;
 
   @override
   Widget build(BuildContext context) {
     return Semantics(
       label: '正在读取 Agent 用量',
       container: true,
-      child: const Padding(
-        key: ValueKey('agent-usage-compact-loading'),
-        padding: EdgeInsets.symmetric(
+      explicitChildNodes: true,
+      child: Padding(
+        key: const ValueKey('agent-usage-compact-loading'),
+        padding: const EdgeInsets.symmetric(
           horizontal: IdeSpacing.space12,
           vertical: IdeSpacing.space8,
         ),
@@ -519,11 +521,22 @@ class _CompactAgentUsageSkeleton extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            IdeSkeletonLine(width: 136, height: 16),
-            SizedBox(height: IdeSpacing.space4),
-            IdeSkeletonLine(height: 10),
-            SizedBox(height: IdeSpacing.space4),
-            IdeSkeletonLine(width: 96, height: 12),
+            Row(
+              children: [
+                const Expanded(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: IdeSkeletonLine(width: 136, height: 16),
+                  ),
+                ),
+                const SizedBox(width: IdeSpacing.space4),
+                _AgentUsageToggleButton(expanded: expanded, onToggle: onToggle),
+              ],
+            ),
+            const SizedBox(height: IdeSpacing.space4),
+            const IdeSkeletonLine(height: 10),
+            const SizedBox(height: IdeSpacing.space4),
+            const IdeSkeletonLine(width: 96, height: 12),
           ],
         ),
       ),

@@ -24,6 +24,7 @@
 
 ### 变更
 
+- Agent 统计折叠摘要在没有额度窗口时不再显示套餐行；冷加载 Skeleton 保留展开按钮
 - 标题栏菜单图标在 macOS 上也显示，与 Windows / Linux 一致
 - 工作台与标题栏贴齐，去掉两者之间的分隔线；左右和底部留白改为 8px
 - Agent 首页移除最左侧 Activity Rail，将 Projects / Threads 与只读 Agent 统计合并为
