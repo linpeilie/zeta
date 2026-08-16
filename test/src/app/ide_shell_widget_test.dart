@@ -106,6 +106,16 @@ void main() {
       find.byKey(const ValueKey('titlebar-left-sidebar-action')),
       findsNothing,
     );
+    expect(
+      find.byKey(const ValueKey('titlebar-right-sidebar-action')),
+      findsOneWidget,
+    );
+    expect(_rightSidebarAction(tester).enabled, isFalse);
+    await tester.tap(
+      find.byKey(const ValueKey('titlebar-right-sidebar-action')),
+    );
+    await tester.pump();
+    expect(find.byKey(const ValueKey('files-panel-card')), findsNothing);
     var backAction = find.byKey(const ValueKey('titlebar-back-action'));
     expect(backAction, findsOneWidget);
 
@@ -117,6 +127,7 @@ void main() {
       find.byKey(const ValueKey('titlebar-left-sidebar-action')),
       findsOneWidget,
     );
+    expect(_rightSidebarAction(tester).enabled, isTrue);
     expect(find.byKey(const ValueKey('titlebar-back-action')), findsNothing);
 
     await tester.tap(
@@ -128,6 +139,16 @@ void main() {
       find.byKey(const ValueKey('titlebar-left-sidebar-action')),
       findsNothing,
     );
+    expect(
+      find.byKey(const ValueKey('titlebar-right-sidebar-action')),
+      findsOneWidget,
+    );
+    expect(_rightSidebarAction(tester).enabled, isFalse);
+    await tester.tap(
+      find.byKey(const ValueKey('titlebar-right-sidebar-action')),
+    );
+    await tester.pump();
+    expect(find.byKey(const ValueKey('files-panel-card')), findsNothing);
     backAction = find.byKey(const ValueKey('titlebar-back-action'));
     expect(backAction, findsOneWidget);
 
@@ -139,6 +160,7 @@ void main() {
       find.byKey(const ValueKey('titlebar-left-sidebar-action')),
       findsOneWidget,
     );
+    expect(_rightSidebarAction(tester).enabled, isTrue);
     expect(find.byKey(const ValueKey('titlebar-back-action')), findsNothing);
     expect(tester.takeException(), isNull);
   });
@@ -2422,6 +2444,17 @@ void _expectRetainedAgentContentState(
     findsOneWidget,
   );
   expect(tester.takeException(), isNull);
+}
+
+WindowTitleBarAction _rightSidebarAction(WidgetTester tester) {
+  return tester
+      .widget<WindowFrame>(find.byKey(const ValueKey('ide-window-frame')))
+      .titleBarActions
+      .singleWhere(
+        (action) =>
+            action.key ==
+            const ValueKey<String>('titlebar-right-sidebar-action'),
+      );
 }
 
 Finder _agentMessageInput() {

@@ -47,6 +47,7 @@ class WindowTitleBarAction {
     this.key,
     this.focusNode,
     this.active = false,
+    this.enabled = true,
   });
 
   final IconData icon;
@@ -56,6 +57,9 @@ class WindowTitleBarAction {
   final Key? key;
   final FocusNode? focusNode;
   final bool active;
+
+  /// 为 false 时按钮仍渲染，但不响应点击。
+  final bool enabled;
 }
 
 class WindowFrame extends StatelessWidget {
@@ -452,7 +456,9 @@ class _TitleBarActionButton extends StatelessWidget {
     // active 落在淡化 primary 底上，用 accentForeground（选中强调色）；
     // 不能用 primaryForeground/onAccent（实心 accent 上的白字）。
     final colors = IdeColors.of(context);
-    final foreground = action.active
+    final foreground = !action.enabled
+        ? colors.textTertiary
+        : action.active
         ? colors.accentForeground
         : colorScheme.mutedForeground;
     return IdeTooltip(
@@ -460,6 +466,7 @@ class _TitleBarActionButton extends StatelessWidget {
       child: PaneInteractiveSurface(
         focusNode: action.focusNode,
         onPressed: action.onPressed,
+        enabled: action.enabled,
         selected: action.active,
         button: true,
         semanticLabel: action.semanticLabel,

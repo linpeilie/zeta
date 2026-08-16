@@ -319,21 +319,25 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
           active: _page == _IdeHomePage.settings,
           onPressed: _openSettingsPage,
         ),
-        if (homePage)
-          WindowTitleBarAction(
-            key: const ValueKey('titlebar-right-sidebar-action'),
-            icon: rightSidebarExpanded
-                ? sf.LucideIcons.panelRightClose
-                : sf.LucideIcons.panelRightOpen,
-            tooltip: rightSidebarExpanded ? '隐藏右侧栏' : '显示右侧栏',
-            semanticLabel: rightSidebarExpanded ? '隐藏右侧栏' : '显示右侧栏',
-            active: rightSidebarExpanded,
-            focusNode: _rightSidebarFocusNode,
-            onPressed: () => _toggleRightSidebar(
-              useOverlay: rightSidebarUsesOverlay,
-              triggerFocusNode: _rightSidebarFocusNode,
-            ),
+        WindowTitleBarAction(
+          key: const ValueKey('titlebar-right-sidebar-action'),
+          icon: rightSidebarExpanded
+              ? sf.LucideIcons.panelRightClose
+              : sf.LucideIcons.panelRightOpen,
+          tooltip: homePage
+              ? (rightSidebarExpanded ? '隐藏右侧栏' : '显示右侧栏')
+              : '右侧栏仅在主界面可用',
+          semanticLabel: homePage
+              ? (rightSidebarExpanded ? '隐藏右侧栏' : '显示右侧栏')
+              : '右侧栏仅在主界面可用',
+          active: rightSidebarExpanded,
+          enabled: homePage,
+          focusNode: homePage ? _rightSidebarFocusNode : null,
+          onPressed: () => _toggleRightSidebar(
+            useOverlay: rightSidebarUsesOverlay,
+            triggerFocusNode: _rightSidebarFocusNode,
           ),
+        ),
       ],
       showWindowControls: widget.showWindowControls,
       // 左右/底 space8 让 Pane 与窗口边缘保持呼吸感；顶部 space0 与标题栏贴齐，
