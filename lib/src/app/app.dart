@@ -57,6 +57,7 @@ class MainApp extends StatefulWidget {
     this.homeProviderDetectionLoader,
     this.projectLocationOpener,
     this.appearanceController,
+    this.initialAppearanceSettings,
     this.generalSettingsController,
     this.dataPaths,
     this.usageStatisticsPartitionStore,
@@ -84,6 +85,9 @@ class MainApp extends StatefulWidget {
   /// 全局外观控制器。测试可注入内存版本以避免触碰真实用户文件；
   /// 生产环境由 [MainAppState.appearanceController] 自动创建并加载持久化偏好。
   final AppearanceSettingsController? appearanceController;
+
+  /// 启动阶段已读入的外观偏好，供第一帧使用，避免先按默认 system 再跳变。
+  final AppearanceSettings? initialAppearanceSettings;
 
   /// 全局常规设置控制器。测试可注入内存版本；生产环境自动使用
   /// `~/.zeta/config/general.json`。
@@ -216,6 +220,7 @@ class MainAppState extends State<MainApp>
       _appearanceController = AppearanceSettingsController(
         store: store,
         fontCatalog: DesktopSystemFontCatalogService(),
+        initialSettings: widget.initialAppearanceSettings,
       );
       _ownsAppearanceController = true;
     }

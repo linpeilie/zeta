@@ -24,23 +24,34 @@ void removeDesktopWindowShutdownHook(Future<void> Function() hook) {
   _desktopWindowShutdownHooks.remove(hook);
 }
 
+/// 启动窗口底色：优先用已解析的外观亮度，缺省再跟随系统。
+Color launchWindowFrameColor({
+  required Brightness systemBrightness,
+  Brightness? preferredBrightness,
+}) {
+  final brightness = preferredBrightness ?? systemBrightness;
+  return brightness == Brightness.dark
+      ? IdeColors.dark.frame
+      : IdeColors.light.frame;
+}
+
 /// 初始化桌面窗口。
 ///
 /// 隐藏原生标题栏（macOS 仍保留交通灯按钮）、设定初始尺寸与最小尺寸后显示窗口。
 /// 需要在 `runApp` 之前调用 [windowManager.ensureInitialized]。
-Future<void> bootstrapDesktopWindow() async {
+///
+/// [preferredBrightness] 应来自已读入的外观偏好；未传入时跟随系统亮度。
+Future<void> bootstrapDesktopWindow({Brightness? preferredBrightness}) async {
   if (!_loggingWindowCloseInstalled) {
     windowManager.addListener(_loggingWindowCloseListener);
     await windowManager.setPreventClose(true);
     _loggingWindowCloseInstalled = true;
   }
-  // 启动时尚未读取持久化的主题偏好，默认跟随系统：用系统亮度决定窗口初始
-  // 背景色，避免浅色系统下出现深色闪烁。
-  final systemBrightness =
-      WidgetsBinding.instance.platformDispatcher.platformBrightness;
-  final frameColor = systemBrightness == Brightness.dark
-      ? IdeColors.dark.frame
-      : IdeColors.light.frame;
+  final frameColor = launchWindowFrameColor(
+    systemBrightness:
+        WidgetsBinding.instance.platformDispatcher.platformBrightness,
+    preferredBrightness: preferredBrightness,
+  );
   final options = WindowOptions(
     size: const Size(1280, 800),
     minimumSize: const Size(900, 560),

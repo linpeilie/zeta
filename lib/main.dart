@@ -9,6 +9,9 @@ import 'package:zeta/src/app/window_bootstrap.dart';
 import 'package:zeta/src/app/zeta_storage_migrator.dart';
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/core/storage/zeta_data_paths.dart';
+import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
+import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
+import 'package:zeta/src/ui/core/app_theme.dart';
 
 export 'package:zeta/src/app/app.dart' show MainApp;
 
@@ -41,8 +44,15 @@ void main() {
         }
       }
       await windowManager.ensureInitialized();
-      await bootstrapDesktopWindow();
-      runApp(MainApp(dataPaths: dataPaths));
+      final appearance = await _loadLaunchAppearance(dataPaths);
+      await bootstrapDesktopWindow(
+        preferredBrightness: resolveBrightnessForThemeMode(
+          appearance.themeMode,
+        ),
+      );
+      runApp(
+        MainApp(dataPaths: dataPaths, initialAppearanceSettings: appearance),
+      );
     },
     (error, stackTrace) {
       loggerFor(
@@ -50,6 +60,22 @@ void main() {
       ).e('Unhandled zone error', error: error, stackTrace: stackTrace);
     },
   );
+}
+
+Future<AppearanceSettings> _loadLaunchAppearance(ZetaDataPaths? paths) async {
+  if (paths == null) {
+    return const AppearanceSettings();
+  }
+  try {
+    return await FileAppearanceSettingsStore(file: paths.appearanceFile).load();
+  } catch (error, stackTrace) {
+    loggerFor('zeta.storage').w(
+      'Could not load appearance settings before showing the window',
+      error: error,
+      stackTrace: stackTrace,
+    );
+    return const AppearanceSettings();
+  }
 }
 
 Future<bool> _prepareZetaStorage(ZetaDataPaths paths) async {

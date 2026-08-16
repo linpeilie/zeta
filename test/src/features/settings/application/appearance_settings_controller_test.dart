@@ -29,6 +29,38 @@ const _fangSong = SystemFontFamily(
 );
 
 void main() {
+  test('uses initial settings before load completes', () {
+    final controller = AppearanceSettingsController(
+      store: MemoryAppearanceSettingsStore(
+        const AppearanceSettings(themeMode: ThemeMode.dark),
+      ),
+      fontCatalog: const _FakeSystemFontCatalogService(),
+      initialSettings: const AppearanceSettings(themeMode: ThemeMode.light),
+    );
+    addTearDown(controller.dispose);
+
+    expect(controller.settings.themeMode, ThemeMode.light);
+    expect(controller.listenable.value.themeMode, ThemeMode.light);
+  });
+
+  test('does not notify when load matches the preloaded settings', () async {
+    const settings = AppearanceSettings(themeMode: ThemeMode.light);
+    final controller = AppearanceSettingsController(
+      store: MemoryAppearanceSettingsStore(settings),
+      fontCatalog: const _FakeSystemFontCatalogService(),
+      initialSettings: settings,
+    );
+    addTearDown(controller.dispose);
+
+    var notifications = 0;
+    controller.addListener(() {
+      notifications += 1;
+    });
+
+    expect(await controller.load(), settings);
+    expect(notifications, 0);
+  });
+
   test('loads persisted appearance settings', () async {
     final controller = AppearanceSettingsController(
       store: MemoryAppearanceSettingsStore(
@@ -75,7 +107,7 @@ void main() {
 
     expect(updated, isTrue);
     expect(controller.settings.themeMode, ThemeMode.dark);
-    expect(notifications, greaterThanOrEqualTo(2));
+    expect(notifications, 1);
   });
 
   test(

@@ -63,18 +63,21 @@ class AppearanceSettingsController extends ChangeNotifier {
   AppearanceSettingsController({
     required this.store,
     required this.fontCatalog,
-  });
+    AppearanceSettings? initialSettings,
+  }) : _settings = initialSettings ?? const AppearanceSettings(),
+       _settingsNotifier = ValueNotifier<AppearanceSettings>(
+         initialSettings ?? const AppearanceSettings(),
+       );
 
   final AppearanceSettingsStore store;
   final SystemFontCatalogService fontCatalog;
 
-  AppearanceSettings _settings = const AppearanceSettings();
+  AppearanceSettings _settings;
   Future<AppearanceSettings>? _loadFuture;
   bool _disposed = false;
   final Map<String, String> _fontDisplayNames = <String, String>{};
 
-  final ValueNotifier<AppearanceSettings> _settingsNotifier =
-      ValueNotifier<AppearanceSettings>(const AppearanceSettings());
+  final ValueNotifier<AppearanceSettings> _settingsNotifier;
 
   AppearanceSettings get settings => _settings;
 
@@ -203,6 +206,9 @@ class AppearanceSettingsController extends ChangeNotifier {
   Future<AppearanceSettings> _loadOnce() async {
     final stored = await store.load();
     final normalized = await _normalizeSettings(stored);
+    if (normalized == _settings) {
+      return normalized;
+    }
     _settings = normalized;
     _notify();
     return normalized;
