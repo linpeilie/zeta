@@ -15,6 +15,8 @@ final class ZetaTextCatalogs {
 
   AgentManagementTextCatalog get agentManagement =>
       AppAgentManagementTextCatalog(l10n);
+
+  AgentUiTextCatalog get agentUi => AppAgentUiTextCatalog(l10n);
 }
 
 final class AppUsageStatisticsTextCatalog
@@ -330,4 +332,13 @@ final class AppAgentManagementTextCatalog
 
   @override
   String logsReadFailed(Object error) => _l10n.mgmtLogsReadFailed('$error');
+}
+
+final class AppAgentUiTextCatalog implements AgentUiTextCatalog {
+  const AppAgentUiTextCatalog(this._l10n);
+
+  final AppLocalizations _l10n;
+
+  @override
+  String get thinkingToolTitle => _l10n.agentToolThink;
 }

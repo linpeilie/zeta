@@ -14,6 +14,7 @@ import 'package:zeta/src/features/agent/data/agent_turn_context_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/agent/domain/agent_turn_terminal_signal.dart';
+import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 import 'package:zeta/src/features/desktop_notifications/application/desktop_attention_controller.dart';
 import 'package:zeta/src/features/desktop_notifications/data/flutter_desktop_notification_service.dart';
 import 'package:zeta/src/features/desktop_notifications/data/method_channel_desktop_attention_indicator.dart';
@@ -80,6 +81,7 @@ class IdeHome extends StatefulWidget {
     this.desktopNotificationService,
     this.desktopAttentionIndicator,
     this.turnContextStore,
+    this.agentUiTextCatalog = const FallbackAgentUiTextCatalog(),
     super.key,
   });
 
@@ -103,6 +105,7 @@ class IdeHome extends StatefulWidget {
   final DesktopNotificationService? desktopNotificationService;
   final DesktopAttentionIndicator? desktopAttentionIndicator;
   final AgentTurnContextStore? turnContextStore;
+  final AgentUiTextCatalog agentUiTextCatalog;
 
   @override
   State<IdeHome> createState() => _IdeHomeState();
@@ -186,6 +189,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
       },
       usageStatistics: widget.usageStatisticsDependencies,
       turnContextStore: widget.turnContextStore,
+      agentUiTextCatalog: widget.agentUiTextCatalog,
     )..addListener(_handleShellChanged);
     if (widget.enableNativeWindowFrame) {
       windowManager.addListener(this);

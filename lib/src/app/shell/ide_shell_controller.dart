@@ -18,6 +18,7 @@ import 'package:zeta/src/features/agent/data/agent_turn_context_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/agent/domain/agent_turn_terminal_signal.dart';
+import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_persistence_coordinator.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_restore_result.dart';
@@ -99,6 +100,7 @@ class IdeShellController extends ChangeNotifier {
     ValueChanged<AgentWorkspaceAttention>? onAgentAttention,
     IdeShellUsageStatisticsDependencies? usageStatistics,
     AgentTurnContextStore? turnContextStore,
+    this.agentUiTextCatalog = const FallbackAgentUiTextCatalog(),
     DateTime Function()? now,
   }) : projectThreadsViewModel = ProjectThreadsViewModel(),
        _sessionCoordinator = IdeSessionPersistenceCoordinator(
@@ -175,6 +177,7 @@ class IdeShellController extends ChangeNotifier {
       onCreatedThread: _openCreatedThread,
       uiFrameSchedulerFactory: agentUiFrameSchedulerFactory,
       turnContextStore: turnContextStore,
+      textCatalog: agentUiTextCatalog,
     );
     _bootstrapAgentEntry = agentWorkspaceController.ensureDraftEntry(
       projectPath: _bootstrapProjectPath,
@@ -226,6 +229,7 @@ class IdeShellController extends ChangeNotifier {
   late final AgentThreadWorkspaceEntry _bootstrapAgentEntry;
   late final ProjectThreadsController projectThreadsController;
   final ProjectThreadsViewModel projectThreadsViewModel;
+  final AgentUiTextCatalog agentUiTextCatalog;
   final Map<String, ({AgentThreadWorkspaceEntry entry, VoidCallback listener})>
   _workspaceEntryListeners =
       <String, ({AgentThreadWorkspaceEntry entry, VoidCallback listener})>{};

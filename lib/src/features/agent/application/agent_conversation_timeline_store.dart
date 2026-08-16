@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'package:flutter/foundation.dart';
 
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 
 /// Agent 对话时间线与 turn 分组的运行时状态仓库。
 ///
@@ -11,8 +12,15 @@ import 'package:zeta/src/features/agent/domain/agent_models.dart';
 /// - live turn / history turn / standby turn 的分组状态
 /// - token 汇总与 UI 展开态
 class AgentConversationTimelineStore {
+  AgentConversationTimelineStore({
+    this.textCatalog = const FallbackAgentUiTextCatalog(),
+  });
+
   /// 回合外系统消息所属的 standby 分组 id。
   static const String standbyTurnId = '__standby__';
+
+  /// 当前进程的 Zeta 自有文案目录；步骤 11 仅思考卡 fallback 消费。
+  final AgentUiTextCatalog textCatalog;
 
   final List<AgentConversationMessage> _messages = <AgentConversationMessage>[];
   final List<AgentToolCall> _toolCalls = <AgentToolCall>[];
@@ -1022,7 +1030,7 @@ class AgentConversationTimelineStore {
     final startedAt = existing?.startedAt ?? now;
     final toolCall = AgentToolCall(
       id: event.itemId,
-      title: existing?.title ?? '思考',
+      title: existing?.title ?? textCatalog.thinkingToolTitle,
       kind: AgentToolKind.think,
       status: isCompleted
           ? AgentToolStatus.completed

@@ -415,6 +415,50 @@ void main() {
       expect(store.isTurnRunning, isFalse);
       final frozenThink = store.toolCalls.singleWhere((t) => t.id == 'think-1');
       expect(frozenThink.duration, isNotNull);
+      expect(frozenThink.title, '思考');
+    });
+
+    test('reasoning fallback title comes from injected catalog', () {
+      const catalog = _EnglishThinkingCatalog();
+      final store = AgentConversationTimelineStore(textCatalog: catalog);
+      addTearDown(store.dispose);
+
+      store.appendReasoningDelta(
+        const AgentReasoningDeltaEvent(
+          itemId: 'think-en',
+          kind: AgentReasoningDeltaKind.summaryText,
+          delta: 'planning',
+        ),
+      );
+
+      expect(store.toolCalls.single.title, 'Think');
+      expect(store.toolCalls.single.kind, AgentToolKind.think);
+      expect(store.toolCalls.single.content, 'planning');
+    });
+
+    test('reasoning keeps an existing title instead of catalog fallback', () {
+      const catalog = _EnglishThinkingCatalog();
+      final store = AgentConversationTimelineStore(textCatalog: catalog);
+      addTearDown(store.dispose);
+
+      store.upsertToolCall(
+        const AgentToolCall(
+          id: 'think-1',
+          title: 'Custom reasoning',
+          kind: AgentToolKind.think,
+          status: AgentToolStatus.inProgress,
+        ),
+      );
+      store.appendReasoningDelta(
+        const AgentReasoningDeltaEvent(
+          itemId: 'think-1',
+          kind: AgentReasoningDeltaKind.summaryText,
+          delta: 'more',
+        ),
+      );
+
+      expect(store.toolCalls.single.title, 'Custom reasoning');
+      expect(store.toolCalls.single.content, 'more');
     });
 
     test('converts cumulative history token usage into per-turn deltas', () {
@@ -1484,4 +1528,11 @@ AgentThreadSummary _thread() {
     updatedAt: DateTime.fromMillisecondsSinceEpoch(2),
     status: AgentThreadRuntimeStatus.idle,
   );
+}
+
+final class _EnglishThinkingCatalog implements AgentUiTextCatalog {
+  const _EnglishThinkingCatalog();
+
+  @override
+  String get thinkingToolTitle => 'Think';
 }

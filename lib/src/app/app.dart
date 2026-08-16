@@ -8,6 +8,7 @@ import 'package:window_manager/window_manager.dart';
 
 import 'package:zeta/src/app/app_constants.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
+import 'package:zeta/src/app/localization/zeta_text_catalogs.dart';
 import 'package:zeta/src/app/shell/ide_shell_controller.dart';
 import 'package:zeta/src/app/window_bootstrap.dart';
 import 'package:zeta/src/core/storage/zeta_data_paths.dart';
@@ -39,6 +40,7 @@ import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_mode
 import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/core/ide_stable_overlay_handler.dart';
 import 'package:zeta/src/ui/features/ide/views/ide_home.dart';
+import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
 
 /// 应用根组件。
 ///
@@ -152,6 +154,7 @@ class MainAppState extends State<MainApp>
   bool _nativeWindowSuspended = false;
   var _generalSettingsReady = false;
   late final Locale _frozenDisplayLocale;
+  late final AgentUiTextCatalog _agentUiTextCatalog;
 
   /// 全局外观控制器引用，供设置面板和主题构建共享。
   AppearanceSettingsController get appearanceController =>
@@ -259,6 +262,9 @@ class MainAppState extends State<MainApp>
     _frozenDisplayLocale = ZetaLocalization.localeFor(
       widget.displayLanguageOverride ?? AppLanguage.simplifiedChinese,
     );
+    _agentUiTextCatalog = ZetaTextCatalogs(
+      lookupAppLocalizations(_frozenDisplayLocale),
+    ).agentUi;
     final loadGeneralSettings = _generalSettingsController.load();
     final shouldWait = widget.waitForGeneralSettings;
     if (shouldWait) {
@@ -425,6 +431,7 @@ class MainAppState extends State<MainApp>
                           ),
                       agentModelCatalogRepository: _agentModelCatalogRepository,
                       turnContextStore: _turnContextStore,
+                      agentUiTextCatalog: _agentUiTextCatalog,
                       // 回调存储用于测试/嵌入宿主；未显式注入统计仓储时不读取本机 CLI 历史。
                       enableAgentUsageAutoRefresh:
                           !_usesCallbackPersistence ||

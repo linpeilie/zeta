@@ -108,7 +108,8 @@ List<File> _dartFiles(Directory root) {
     return path.endsWith('.dart') &&
         !_generatedDirPattern.hasMatch(path) &&
         !path.endsWith('/fallback_usage_statistics_text_catalog.dart') &&
-        !path.endsWith('/fallback_agent_management_text_catalog.dart');
+        !path.endsWith('/fallback_agent_management_text_catalog.dart') &&
+        !path.endsWith('/fallback_agent_ui_text_catalog.dart');
   }).toList()..sort((a, b) => _normalize(a.path).compareTo(_normalize(b.path)));
 }
 

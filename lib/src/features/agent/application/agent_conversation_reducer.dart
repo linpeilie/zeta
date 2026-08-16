@@ -2,6 +2,7 @@ import 'package:zeta/src/features/agent/application/agent_conversation_effect.da
 import 'package:zeta/src/features/agent/application/agent_conversation_mutation.dart';
 import 'package:zeta/src/features/agent/application/agent_ui_update_request.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 
 typedef AgentConversationClock = DateTime Function();
 
@@ -27,12 +28,20 @@ final class AgentConversationReducerContexts {
   AgentConversationReducerContexts({
     AgentConversationClock? clock,
     AgentConversationLocalTimelineIdGenerator? liveTimelineIds,
+    AgentUiTextCatalog textCatalog = const FallbackAgentUiTextCatalog(),
   }) : live = AgentConversationReducer.live(
          clock: clock,
          timelineIds: liveTimelineIds,
+         textCatalog: textCatalog,
        ),
-       history = AgentConversationReducer.history(clock: clock),
-       replay = AgentConversationReducer.replay(clock: clock);
+       history = AgentConversationReducer.history(
+         clock: clock,
+         textCatalog: textCatalog,
+       ),
+       replay = AgentConversationReducer.replay(
+         clock: clock,
+         textCatalog: textCatalog,
+       );
 
   final AgentConversationReducer live;
   final AgentConversationReducer history;
@@ -76,6 +85,7 @@ final class AgentConversationReducerContext {
 final class AgentConversationReducer {
   AgentConversationReducer._({
     required this.scope,
+    required this.textCatalog,
     AgentConversationClock? clock,
     AgentConversationLocalTimelineIdGenerator? timelineIds,
   }) : _timelineIds =
@@ -85,29 +95,42 @@ final class AgentConversationReducer {
   factory AgentConversationReducer.live({
     AgentConversationClock? clock,
     AgentConversationLocalTimelineIdGenerator? timelineIds,
+    AgentUiTextCatalog textCatalog = const FallbackAgentUiTextCatalog(),
   }) {
     return AgentConversationReducer._(
       scope: AgentConversationReductionScope.live,
       clock: clock,
       timelineIds: timelineIds,
+      textCatalog: textCatalog,
     );
   }
 
-  factory AgentConversationReducer.history({AgentConversationClock? clock}) {
+  factory AgentConversationReducer.history({
+    AgentConversationClock? clock,
+    AgentUiTextCatalog textCatalog = const FallbackAgentUiTextCatalog(),
+  }) {
     return AgentConversationReducer._(
       scope: AgentConversationReductionScope.history,
       clock: clock,
+      textCatalog: textCatalog,
     );
   }
 
-  factory AgentConversationReducer.replay({AgentConversationClock? clock}) {
+  factory AgentConversationReducer.replay({
+    AgentConversationClock? clock,
+    AgentUiTextCatalog textCatalog = const FallbackAgentUiTextCatalog(),
+  }) {
     return AgentConversationReducer._(
       scope: AgentConversationReductionScope.replay,
       clock: clock,
+      textCatalog: textCatalog,
     );
   }
 
   final AgentConversationReductionScope scope;
+
+  /// 步骤 11 贯通注入；步骤 12 起消费 Zeta 自有 context-free 文案。
+  final AgentUiTextCatalog textCatalog;
   final AgentConversationLocalTimelineIdGenerator _timelineIds;
   final Set<String> _shownDeprecationSummaries = <String>{};
   String? _lastShownErrorMessage;

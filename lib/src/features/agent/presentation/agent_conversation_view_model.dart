@@ -35,6 +35,7 @@ import 'package:zeta/src/features/agent/application/agent_ui_update_port.dart';
 import 'package:zeta/src/features/agent/application/agent_ui_update_request.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
+import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_ui_state.dart';
 import 'package:zeta/src/features/agent/presentation/agent_ui_update_scheduler.dart';
 import 'package:zeta/src/features/agent/presentation/model_config_ui_state.dart';
@@ -73,6 +74,7 @@ class AgentConversationViewModel {
     required this.providerController,
     required this.conversationBinding,
     required this.globalRuntime,
+    AgentUiTextCatalog? textCatalog,
     AgentConversationTimelineStore? timelineStore,
     AgentConversationModelSelectionController? modelSelectionController,
     AgentConversationModeController? conversationModeController,
@@ -89,7 +91,12 @@ class AgentConversationViewModel {
     String? initialContextFilePath,
     AgentThreadSummary? initialThread,
     AgentFrameScheduler? uiFrameScheduler,
-  }) : _timeline = timelineStore ?? AgentConversationTimelineStore(),
+  }) : _textCatalog = textCatalog ?? const FallbackAgentUiTextCatalog(),
+       _timeline =
+           timelineStore ??
+           AgentConversationTimelineStore(
+             textCatalog: textCatalog ?? const FallbackAgentUiTextCatalog(),
+           ),
        _ownsModelSelectionController = modelSelectionController == null,
        _modelSelectionController =
            modelSelectionController ??
@@ -117,6 +124,7 @@ class AgentConversationViewModel {
     _boundThreadSummary = thread;
     _eventReducerContexts = AgentConversationReducerContexts(
       liveTimelineIds: _localTimelineIds,
+      textCatalog: _textCatalog,
     );
     _uiStateStore = AgentConversationUiStateStore(
       timeline: _timeline,
@@ -210,6 +218,7 @@ class AgentConversationViewModel {
   final AgentProviderSettingsPort providerController;
   final AgentConversationBinding conversationBinding;
   final AgentProviderGlobalRuntime globalRuntime;
+  final AgentUiTextCatalog _textCatalog;
   final AgentConversationTimelineStore _timeline;
   final bool _ownsModelSelectionController;
   final AgentConversationModelSelectionController _modelSelectionController;

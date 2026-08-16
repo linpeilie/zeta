@@ -13,6 +13,7 @@ import 'package:zeta/src/features/agent/application/agent_ui_update_port.dart';
 import 'package:zeta/src/features/agent/data/agent_turn_context_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_turn_terminal_signal.dart';
+import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 
@@ -207,13 +208,15 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
     this.onCreatedThread,
     this.uiFrameSchedulerFactory,
     this.turnContextStore,
+    AgentUiTextCatalog? textCatalog,
   }) : bindingManager =
            bindingManager ??
            AgentConversationBindingManager(runtimeRegistry: runtimeRegistry),
        globalRuntime =
            globalRuntime ??
            AgentProviderGlobalRuntime(runtimeRegistry: runtimeRegistry),
-       _ownsBindingManager = bindingManager == null {
+       _ownsBindingManager = bindingManager == null,
+       _textCatalog = textCatalog ?? const FallbackAgentUiTextCatalog() {
     this.bindingManager.start();
   }
 
@@ -234,6 +237,8 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
 
   /// Zeta 自有 turn 上下文存储，注入到每个常驻 ViewModel。
   final AgentTurnContextStore? turnContextStore;
+
+  final AgentUiTextCatalog _textCatalog;
 
   final List<AgentThreadWorkspaceEntry> _entries =
       <AgentThreadWorkspaceEntry>[];
@@ -449,6 +454,7 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
       providerController: providerController,
       conversationBinding: bindingLease.binding,
       globalRuntime: globalRuntime,
+      textCatalog: _textCatalog,
       workspaceFilesProvider: _workspaceFilesProvider,
       workspaceFilesListenable: _workspaceFilesListenable,
       workspaceFilesIndexReady: _workspaceFilesIndexReady,
