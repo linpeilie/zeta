@@ -18,6 +18,7 @@ void main() {
     expect(styles.pageTitle.fontSize, 17.5);
     expect(styles.sectionTitle.fontSize, closeTo(15.1667, 0.0001));
     expect(styles.rowTitle.fontSize, 14);
+    expect(styles.groupTitle.fontSize, 10.5);
     expect(styles.toolbarLabel.fontSize, closeTo(12.8333, 0.0001));
     expect(styles.proseBody.fontSize, closeTo(15.1667, 0.0001));
     expect(styles.meta.fontSize, closeTo(11.6667, 0.0001));
@@ -77,5 +78,19 @@ void main() {
     expect(styles.meta.color, IdeColors.dark.textTertiary);
     expect(styles.metricValue.fontWeight, FontWeight.w600);
     expect(styles.placeholder.color, IdeColors.dark.textTertiary);
+  });
+
+  test('分组眉标题压到全表最小字号，并靠字重与次级色站住索引位', () {
+    final styles = IdeTextStyles.resolve(colors: IdeColors.dark);
+
+    // 眉标题必须小于它管辖的行标题与行描述，否则会重新变成「区块标题」。
+    expect(styles.groupTitle.fontSize, lessThan(styles.titleSmall.fontSize!));
+    expect(styles.groupTitle.fontSize, lessThan(styles.meta.fontSize!));
+    expect(styles.groupTitle.fontWeight, FontWeight.w700);
+    expect(styles.groupTitle.color, IdeColors.dark.textSecondary);
+    // 字距补偿小字号下的拥挤感。
+    expect(styles.groupTitle.letterSpacing, 0.4);
+    // 对照：sectionTitle 是要被读到的区块标题，方向相反。
+    expect(styles.groupTitle.fontSize, lessThan(styles.sectionTitle.fontSize!));
   });
 }

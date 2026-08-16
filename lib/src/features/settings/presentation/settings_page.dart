@@ -45,13 +45,16 @@ IdeSettingsRow _flatSettingsRow({
   );
 }
 
-/// 无卡片的设置分组：弱化小标题 + 平铺行 + 行间细分割线。
+/// 无卡片的设置分组：眉标题 + 平铺行 + 行间细分割线。
 ///
 /// 去掉 `IdeSurface.pane` 后，分组感由三样东西承担：一个明显弱于行标题的
-/// 小标题（`caption`，10/w500/textTertiary）、行之间的 `borderSubtle` 细线，
-/// 以及分组之间 `space24` 的留白。小标题刻意不用 `sectionTitle`——那一档
-/// （13/w600/textPrimary）会和行标题（12/w600/textPrimary）打架，反而削弱
-/// 「行标题才是主标题」的层级。
+/// 眉标题（`groupTitle`，9/w700/textSecondary）、行之间的 `borderSubtle` 细线，
+/// 以及分组之间 [IdeSpacing.space32] 的留白。眉标题刻意不用 `sectionTitle`
+/// ——那一档（13/w600/textPrimary）会和行标题（12/w600/textPrimary）打架，
+/// 反而削弱「行标题才是主标题」的层级。
+///
+/// 标题自带上下内边距（[IdeSpacing.settingsGroupTitlePadding]），所以分组的
+/// 纵向节奏完全由本组件闭合，调用方只需在分组之间放一段间隙。
 class _SettingsGroup extends StatelessWidget {
   const _SettingsGroup({
     required this.title,
@@ -68,8 +71,10 @@ class _SettingsGroup extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(title, style: styles.caption),
-        const SizedBox(height: IdeSpacing.space8),
+        Padding(
+          padding: IdeSpacing.settingsGroupTitlePadding,
+          child: Text(title, style: styles.groupTitle),
+        ),
         for (var index = 0; index < children.length; index++) ...[
           if (index > 0) const IdeRowDivider(),
           children[index],
@@ -327,7 +332,7 @@ class _GeneralSettingsPane extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: IdeSpacing.space24),
+                const SizedBox(height: IdeSpacing.space32),
                 _SettingsGroup(
                   key: const ValueKey('settings-agent-notifications-group'),
                   title: '通知',
@@ -465,7 +470,7 @@ class _AppearanceSettingsPane extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: IdeSpacing.space24),
+                const SizedBox(height: IdeSpacing.space32),
                 _SettingsGroup(
                   key: const ValueKey('settings-appearance-font-group'),
                   title: '字体',

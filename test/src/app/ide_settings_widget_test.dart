@@ -117,6 +117,35 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('分组标题压过行标题一档，并靠留白把分组之间拉开', (tester) async {
+    await _pumpSettingsPage(tester, activeSection: SettingsSection.general);
+
+    final groupTitle = tester.widget<Text>(find.text('通知')).style!;
+    final rowTitle = tester.widget<Text>(find.text('系统通知')).style!;
+    final rowDescription = tester
+        .widget<Text>(find.text('在任务转入后台或其他会话时发送系统提醒。'))
+        .style!;
+
+    // 眉标题：最小字号 + 最粗字重 + 次级色，不参与阅读只做索引。
+    expect(groupTitle.fontSize, lessThan(rowTitle.fontSize!));
+    expect(groupTitle.fontSize, lessThan(rowDescription.fontSize!));
+    expect(groupTitle.fontWeight, FontWeight.w700);
+    expect(groupTitle.color, isNot(rowTitle.color));
+    expect(groupTitle.color, isNot(rowDescription.color));
+
+    // 分组标题离上一组的距离必须大于它到自己首行的距离，
+    // 否则去掉卡片后读者无法判断标题管辖哪几行。
+    final previousGroupBottom = tester
+        .getBottomLeft(find.byKey(const ValueKey('settings-general-group')))
+        .dy;
+    final titleRect = tester.getRect(find.text('通知'));
+    final firstRowTitleTop = tester.getTopLeft(find.text('系统通知')).dy;
+    expect(
+      titleRect.top - previousGroupBottom,
+      greaterThan(firstRowTitleTop - titleRect.bottom),
+    );
+  });
+
   testWidgets('settings page renders navigation and appearance detail', (
     tester,
   ) async {

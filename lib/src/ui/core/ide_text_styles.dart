@@ -30,6 +30,7 @@ class IdeTextStyles {
     required this.numeric,
     required this.pageTitle,
     required this.sectionTitle,
+    required this.groupTitle,
     required this.rowTitle,
     required this.toolbarLabel,
     required this.proseBody,
@@ -126,6 +127,19 @@ class IdeTextStyles {
   ///
   /// 生效位置：`IdeSection` 标题；配置编辑器「配置文件」等分组标题。
   final TextStyle sectionTitle;
+
+  /// 无容器分组的眉标题（基准 9 / w700 / 次级色 / 字距 0.4）。
+  ///
+  /// 用在**去掉卡片后**仍需表达「这几行是一组」的地方：靠字号压到全表最小、
+  /// 字重顶到最粗、颜色停在 [IdeColors.textSecondary] 来和行内容拉开分工——
+  /// 它是索引标签，不参与阅读，扫视时应该整块跳过。
+  ///
+  /// 与 [sectionTitle]（13 / w600 / 主色）的区别是**方向相反**：`sectionTitle`
+  /// 是要被读到的区块标题，会盖过行标题；`groupTitle` 刻意小于行内一切文字，
+  /// 让行标题稳居主标题位。字距 0.4 补偿小字号下的拥挤感。
+  ///
+  /// 生效位置：设置页各分组标题（「消息发送」「通知」「主题」「字体」）。
+  final TextStyle groupTitle;
 
   /// 列表/表格行主标题（基准 12 / w500）。
   ///
@@ -307,6 +321,15 @@ class IdeTextStyles {
         height: 1.35,
         fontWeight: FontWeight.w600,
       ),
+      groupTitle: _textStyle(
+        color: colors.textSecondary,
+        fontFamily: uiFontFamily,
+        fontFamilyFallback: uiFontFamilyFallback,
+        fontSize: 9 * uiScale,
+        height: 1.25,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.4,
+      ),
       rowTitle: _textStyle(
         color: colors.textPrimary,
         fontFamily: uiFontFamily,
@@ -368,6 +391,7 @@ TextStyle _textStyle({
   String? fontFamily,
   List<String>? fontFamilyFallback,
   List<FontFeature>? fontFeatures,
+  double? letterSpacing,
 }) {
   return TextStyle(
     color: color,
@@ -377,5 +401,6 @@ TextStyle _textStyle({
     height: height,
     fontWeight: fontWeight,
     fontFeatures: fontFeatures,
+    letterSpacing: letterSpacing,
   );
 }

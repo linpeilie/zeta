@@ -69,6 +69,8 @@ abstract final class IdeSpacing {
   static const double space24 = 24;
 
   /// 最大步进：大段空白或特殊布局占位。
+  ///
+  /// 生效位置：设置页分组之间的间隙——无卡片布局下，这段留白是唯一的分组边界。
   static const double space32 = 32;
 
   /// 零边距别名，语义上表示「不要额外 padding」。
@@ -222,6 +224,17 @@ abstract final class IdeSpacing {
   /// 生效位置：`SettingsPage` 各分区的 `IdeSettingsRow`。
   static const EdgeInsets settingsRowPaddingFlat = EdgeInsets.symmetric(
     vertical: space16,
+  );
+
+  /// 平铺设置分组标题的内边距：上下都留白，把标题夹在两段空隙中间。
+  ///
+  /// 下边距刻意大于上边距，但**远小于分组之间的 [space32] 间隙**——标题必须
+  /// 明显更靠近它管辖的那几行，分组边界才由留白本身讲清楚，而不是靠框线。
+  ///
+  /// 生效位置：`SettingsPage` 各分组标题。
+  static const EdgeInsets settingsGroupTitlePadding = EdgeInsets.only(
+    top: space8,
+    bottom: space12,
   );
 
   /// Agent Composer 外卡内边距（左上略宽，右下略紧以容纳拖拽角）。
