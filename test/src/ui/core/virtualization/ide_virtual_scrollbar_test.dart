@@ -173,8 +173,9 @@ void main() {
         tester.element(find.byType(IdeVirtualScrollbar)),
       );
       final scrollbar = tester.widget<RawScrollbar>(find.byType(RawScrollbar));
-      expect(scrollbar.thumbColor, colors.textTertiary.withValues(alpha: 0.38));
-      expect(scrollbar.trackColor, colors.borderSubtle);
+      expect(scrollbar.thumbColor, colors.textTertiary.withValues(alpha: 0.22));
+      expect(scrollbar.trackColor, Colors.transparent);
+      expect(scrollbar.trackVisibility, isFalse);
       expect(scrollbar.radius, const Radius.circular(6)); // IdeRadius.small
     });
 

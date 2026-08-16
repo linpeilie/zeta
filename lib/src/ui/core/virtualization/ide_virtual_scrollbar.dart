@@ -54,8 +54,8 @@ class IdeVirtualScrollbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
-    final thumbColor = colors.textTertiary.withValues(alpha: 0.38);
-    final trackColor = colors.borderSubtle;
+    // 只画 thumb，不画轨道底色；alpha 压低以免压过时间线内容。
+    final thumbColor = colors.textTertiary.withValues(alpha: 0.22);
 
     return Semantics(
       container: true,
@@ -63,14 +63,14 @@ class IdeVirtualScrollbar extends StatelessWidget {
       child: RawScrollbar(
         controller: controller,
         thumbVisibility: true,
-        trackVisibility: true,
+        trackVisibility: false,
         interactive: true,
         thickness: thickness,
         radius: const Radius.circular(IdeRadius.small),
         minThumbLength: minThumbLength,
         padding: padding,
         thumbColor: thumbColor,
-        trackColor: trackColor,
+        trackColor: Colors.transparent,
         trackBorderColor: Colors.transparent,
         child: ScrollConfiguration(
           behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
