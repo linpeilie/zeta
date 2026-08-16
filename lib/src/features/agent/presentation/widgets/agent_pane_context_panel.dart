@@ -158,7 +158,7 @@ class _AgentContextPanelHeader extends StatelessWidget {
           ),
           const SizedBox(width: IdeSpacing.space8),
           Text(
-            '上下文',
+            context.l10n.agentContext,
             style: textStyles.titleSmall.copyWith(
               fontWeight: FontWeight.w700,
               color: colors.textPrimary,
@@ -166,7 +166,7 @@ class _AgentContextPanelHeader extends StatelessWidget {
           ),
           const Spacer(),
           IdeTooltip(
-            message: '关闭',
+            message: context.l10n.agentClose,
             child: sf.IconButton.ghost(
               key: const ValueKey('agent-context-panel-close'),
               onPressed: onClose,
@@ -416,9 +416,9 @@ class _AgentContextRawMessageRow extends StatelessWidget {
                   alignment: Alignment.centerRight,
                   child: Semantics(
                     button: true,
-                    label: '复制原文',
+                    label: context.l10n.agentCopyOriginal,
                     child: IdeTooltip(
-                      message: '复制原文',
+                      message: context.l10n.agentCopyOriginal,
                       child: sf.IconButton.ghost(
                         key: ValueKey<String>(
                           'agent-context-raw-copy-${item.id}',
@@ -460,7 +460,7 @@ Future<void> _copyContextRaw(BuildContext context, String text) async {
   if (context.mounted) {
     showIdeToast(
       context,
-      message: '已复制原文。',
+      message: context.l10n.agentCopiedOriginal,
       location: sf.ToastLocation.bottomLeft,
     );
   }

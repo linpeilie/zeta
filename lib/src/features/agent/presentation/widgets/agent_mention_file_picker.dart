@@ -153,7 +153,7 @@ class _AgentMentionFilePickerPopoverState
         candidates.isEmpty && !(widget.isIndexReady?.call() ?? true);
 
     return Semantics(
-      label: 'Mention file',
+      label: context.l10n.agentMentionFile,
       container: true,
       child: SizedBox(
         key: const ValueKey('agent-mention-picker-popover'),

@@ -51,7 +51,10 @@ EdgeInsets _operationGroupOuterPadding({
   );
 }
 
-String _commandGroupSummary(AgentTimelineCommandGroup group) {
+String _commandGroupSummary(
+  AgentTimelineCommandGroup group,
+  AppLocalizations l10n,
+) {
   final counts = <AgentToolKind, int>{};
   final order = <AgentToolKind>[];
   for (final item in group.items) {
@@ -62,7 +65,7 @@ String _commandGroupSummary(AgentTimelineCommandGroup group) {
   }
 
   return order
-      .map((kind) => '${counts[kind]} 次${_toolKindLabel(kind)}')
+      .map((kind) => '${counts[kind]} 次${_toolKindLabel(kind, l10n)}')
       .join(' · ');
 }
 
@@ -98,7 +101,10 @@ InlineSpan _fileEditGroupSummarySpan(
     (sum, item) => sum + (item.removedLines ?? 0),
   );
   // 回合级降级汇总用固定标题，与单次 fileChange 工具卡区分。
-  final label = group.isTurnFallback ? '本回合改动' : '${group.items.length} 个文件';
+  final l10n = context.l10n;
+  final label = group.isTurnFallback
+      ? l10n.agentTurnChanges
+      : l10n.agentFileCount('${group.items.length}');
   if (addedLines == 0 && removedLines == 0) {
     return TextSpan(text: label);
   }
@@ -126,18 +132,8 @@ InlineSpan _fileEditGroupSummarySpan(
   );
 }
 
-String _toolKindLabel(AgentToolKind kind) {
-  return switch (kind) {
-    AgentToolKind.read => '读取',
-    AgentToolKind.edit => '编辑',
-    AgentToolKind.delete => '删除',
-    AgentToolKind.move => '移动',
-    AgentToolKind.search => '搜索',
-    AgentToolKind.execute => '执行',
-    AgentToolKind.think => '思考',
-    AgentToolKind.fetch => '获取',
-    AgentToolKind.other => '操作',
-  };
+String _toolKindLabel(AgentToolKind kind, AppLocalizations l10n) {
+  return kind.localizedLabel(l10n);
 }
 
 /// 根据工具类型选择图标。

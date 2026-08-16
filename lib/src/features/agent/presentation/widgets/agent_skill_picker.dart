@@ -122,7 +122,7 @@ class _AgentSkillPickerPopoverState extends State<_AgentSkillPickerPopover> {
     final highlightIndex = widget.listController.highlightIndex;
 
     return Semantics(
-      label: 'Insert skill',
+      label: context.l10n.agentInsertSkill,
       container: true,
       child: SizedBox(
         key: const ValueKey('agent-skill-picker-popover'),

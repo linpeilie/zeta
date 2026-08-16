@@ -2062,4 +2062,595 @@ class AppLocalizationsEn extends AppLocalizations {
   String mgmtCopiedLogs(String count) {
     return 'Copied $count redacted log lines.';
   }
+
+  @override
+  String get agentReadonlyTitle => 'This session is read-only';
+
+  @override
+  String get agentReadonlyBody =>
+      'The Agent for this session has been disabled. You can still view history, but you cannot send more messages.';
+
+  @override
+  String get agentMessagePlaceholder => 'Message Agent';
+
+  @override
+  String get agentSend => 'Send';
+
+  @override
+  String get agentCancel => 'Cancel';
+
+  @override
+  String get agentCancelAction => 'Cancel';
+
+  @override
+  String get agentCancelTurn => 'Cancel turn';
+
+  @override
+  String get agentMoreActions => 'More actions';
+
+  @override
+  String get agentMoreActionsExpanded => 'More actions, expanded';
+
+  @override
+  String get agentMentionFile => 'Mention file';
+
+  @override
+  String get agentInsertSkill => 'Insert skill';
+
+  @override
+  String get agentAttachImage => 'Attach image';
+
+  @override
+  String get agentPermissionMode => 'Permission mode';
+
+  @override
+  String get agentPlanReadOnlyHint => 'Read-only planning; cannot change files';
+
+  @override
+  String get agentTokenUsage => 'Token usage';
+
+  @override
+  String get agentContextWindowUsage => 'Context window token usage';
+
+  @override
+  String get agentRename => 'Rename';
+
+  @override
+  String get agentForkSession => 'Fork this session';
+
+  @override
+  String get agentArchive => 'Archive';
+
+  @override
+  String get agentContext => 'Context';
+
+  @override
+  String get agentMore => 'More';
+
+  @override
+  String agentProjectName(String name) {
+    return 'Project $name';
+  }
+
+  @override
+  String get agentReadonlyPlanMode => 'Read-only Plan mode';
+
+  @override
+  String get agentLoadingSession => 'Loading session…';
+
+  @override
+  String get agentAcceptPlan => 'Accept plan';
+
+  @override
+  String get agentAcceptPlanHint =>
+      'Accepting the plan only confirms the proposal. Commands, files, and network still need separate permission.';
+
+  @override
+  String get agentCommandGroup => 'Command group';
+
+  @override
+  String get agentFileEditGroup => 'File edit group';
+
+  @override
+  String get agentToolCall => 'Tool call';
+
+  @override
+  String get agentThinking => 'Thinking';
+
+  @override
+  String get agentRunning => 'Running';
+
+  @override
+  String agentRunningPrefix(String title) {
+    return 'Running · $title';
+  }
+
+  @override
+  String get agentExecute => 'Execute';
+
+  @override
+  String get agentSteps => 'Steps';
+
+  @override
+  String get agentRevisePlanHint => 'Add to or revise the plan…';
+
+  @override
+  String get agentRevise => 'Revise';
+
+  @override
+  String get agentAbandon => 'Abandon';
+
+  @override
+  String get agentExecPermission => 'Execution permission';
+
+  @override
+  String get agentChooseExecPermission => 'Choose execution permission';
+
+  @override
+  String get agentPermCatalogDefault => 'Conservative default';
+
+  @override
+  String get agentPermUserOverride => 'This time only';
+
+  @override
+  String get agentPermNeedsChoice => 'Selection required';
+
+  @override
+  String agentPermissionRequest(String kind, String title) {
+    return 'Permission request: $kind · $title';
+  }
+
+  @override
+  String get agentDeny => 'Deny';
+
+  @override
+  String get agentAllowSession => 'Allow this session';
+
+  @override
+  String get agentAlwaysAllow => 'Always allow';
+
+  @override
+  String get agentOverrideGuard => 'Override guard';
+
+  @override
+  String get agentAllow => 'Allow';
+
+  @override
+  String get agentPermKindCommand => 'Run command';
+
+  @override
+  String get agentPermKindFile => 'Apply file changes';
+
+  @override
+  String get agentPermKindPermissions => 'Grant permissions';
+
+  @override
+  String get agentPermKindOther => 'Request confirmation';
+
+  @override
+  String get agentPermShortCommand => 'Command';
+
+  @override
+  String get agentPermShortFile => 'File';
+
+  @override
+  String get agentPermShortPermissions => 'Permission';
+
+  @override
+  String get agentPermShortOther => 'Confirm';
+
+  @override
+  String get agentCloseQuestion => 'Close question';
+
+  @override
+  String get agentNoAnswerableQuestions =>
+      'This request has no questions to answer.';
+
+  @override
+  String get agentSubmitAnswers => 'Submit answers';
+
+  @override
+  String get agentConfirmNextQuestion => 'Confirm and go to the next question';
+
+  @override
+  String get agentSkip => 'Skip';
+
+  @override
+  String get agentSubmit => 'Submit';
+
+  @override
+  String get agentNext => 'Next';
+
+  @override
+  String get agentMultiSelect => 'Multiple options can be selected';
+
+  @override
+  String get agentPreviousQuestion => 'Previous question';
+
+  @override
+  String get agentNextQuestion => 'Next question';
+
+  @override
+  String get agentCustomSolutionHint => 'Enter your solution…';
+
+  @override
+  String get agentOtherCustomSolution => 'Other, enter a custom solution';
+
+  @override
+  String get agentWaitingApproval => 'Waiting for approval';
+
+  @override
+  String get agentWaitingInput => 'Waiting for input';
+
+  @override
+  String get agentSystemError => 'System error';
+
+  @override
+  String get agentToolRead => 'Read';
+
+  @override
+  String get agentToolEdit => 'Edit';
+
+  @override
+  String get agentToolDelete => 'Delete';
+
+  @override
+  String get agentToolMove => 'Move';
+
+  @override
+  String get agentToolSearch => 'Search';
+
+  @override
+  String get agentToolExecute => 'Execute';
+
+  @override
+  String get agentToolThink => 'Think';
+
+  @override
+  String get agentToolFetch => 'Fetch';
+
+  @override
+  String get agentToolOther => 'Action';
+
+  @override
+  String get agentTurnChanges => 'Changes in this turn';
+
+  @override
+  String agentFileCount(String count) {
+    return '$count files';
+  }
+
+  @override
+  String get agentNavConversation => 'Conversation navigation';
+
+  @override
+  String agentTurnOrdinal(String n) {
+    return 'Turn $n';
+  }
+
+  @override
+  String agentTurnOrdinalWithLabel(String n, String label) {
+    return 'Turn $n: $label';
+  }
+
+  @override
+  String get agentStatusStreaming => 'Generating';
+
+  @override
+  String get agentStatusCompleted => 'Completed';
+
+  @override
+  String get agentStatusFailed => 'Failed';
+
+  @override
+  String get agentStatusInterrupted => 'Interrupted';
+
+  @override
+  String get agentStatusUnknown => 'Unknown';
+
+  @override
+  String get agentCreateBranchHere => 'Create a branch from here';
+
+  @override
+  String get agentCreateBranchRetry => 'Create a branch and retry';
+
+  @override
+  String get agentCreateBranchBody =>
+      'The original session is kept, and a new branch starts after the previous turn. Workspace files are not rolled back; earlier Agent writes remain.';
+
+  @override
+  String get agentEditMessage => 'Edit message…';
+
+  @override
+  String get agentCreateBranchSend => 'Create branch and send';
+
+  @override
+  String get agentPlan => 'Plan';
+
+  @override
+  String get agentCollapsePlan => 'Collapse plan';
+
+  @override
+  String get agentExpandPlan => 'Expand plan';
+
+  @override
+  String get agentCollapseCurrentPlan => 'Collapse current plan';
+
+  @override
+  String get agentExpandCurrentPlan => 'Expand current plan';
+
+  @override
+  String agentCurrentPlanProgress(String progress) {
+    return 'Current plan progress $progress';
+  }
+
+  @override
+  String agentCurrentStep(String content) {
+    return 'Current step: $content';
+  }
+
+  @override
+  String get agentCurrent => 'Current';
+
+  @override
+  String get agentPlanCompleted => 'Completed';
+
+  @override
+  String get agentPlanInProgress => 'In progress';
+
+  @override
+  String get agentPlanPending => 'Pending';
+
+  @override
+  String get agentPlanUnknown => 'Unknown status';
+
+  @override
+  String get agentNoExecPermission =>
+      'No execution permission is available. Choose one first. Execution does not pre-authorize commands, files, or the network.';
+
+  @override
+  String agentDefaultExecPermission(String label) {
+    return 'Default is “$label”. Execution starts a new Default turn. Commands, files, and network still follow that mode.';
+  }
+
+  @override
+  String get agentSlashCommands => 'Commands';
+
+  @override
+  String get agentModel => 'Model';
+
+  @override
+  String get agentModelLoadFailed => 'Failed to load models';
+
+  @override
+  String get agentModelConfig => 'Model configuration';
+
+  @override
+  String get agentLoadingModels => 'Loading models…';
+
+  @override
+  String get agentNoModels => 'No models available';
+
+  @override
+  String get agentConfigNextTurn => 'Configuration applies on the next turn';
+
+  @override
+  String get agentModelUnavailable => 'This model is currently unavailable';
+
+  @override
+  String get agentNoReasoningConfig =>
+      'This model does not provide configurable reasoning effort';
+
+  @override
+  String get agentRetry => 'Retry';
+
+  @override
+  String get agentReasoningEffort => 'Reasoning effort';
+
+  @override
+  String get agentFastOn => 'On';
+
+  @override
+  String get agentFastOff => 'Off';
+
+  @override
+  String get agentClose => 'Close';
+
+  @override
+  String get agentSessionName => 'Session name';
+
+  @override
+  String get agentSessionId => 'Session ID';
+
+  @override
+  String get agentMessageCount => 'Messages';
+
+  @override
+  String get agentProvider => 'Provider';
+
+  @override
+  String get agentContextLimit => 'Context limit';
+
+  @override
+  String get agentTotalTokens => 'Total tokens';
+
+  @override
+  String get agentInputTokens => 'Input tokens';
+
+  @override
+  String get agentOutputTokens => 'Output tokens';
+
+  @override
+  String get agentCachedTokens => 'Cached tokens';
+
+  @override
+  String get agentCreatedAt => 'Created';
+
+  @override
+  String get agentLastActive => 'Last active';
+
+  @override
+  String get agentRawMessages => 'Raw messages';
+
+  @override
+  String get agentChatOnly => 'Chat only';
+
+  @override
+  String get agentAll => 'All';
+
+  @override
+  String get agentShowChatOnly =>
+      'Showing chat messages only. Tap to show all.';
+
+  @override
+  String get agentShowAllMessages =>
+      'Showing all messages. Tap to show chat only.';
+
+  @override
+  String get agentNoChatMessages => 'No chat messages';
+
+  @override
+  String get agentNoRawMessages => 'No raw messages';
+
+  @override
+  String get agentCopyOriginal => 'Copy original';
+
+  @override
+  String get agentCopiedOriginal => 'Original copied.';
+
+  @override
+  String get agentKindApproval => 'Approval';
+
+  @override
+  String get agentKindQuestion => 'Question';
+
+  @override
+  String get agentKindPlanApproval => 'Plan approval';
+
+  @override
+  String get agentKindFileChange => 'File change';
+
+  @override
+  String get agentRoleUser => 'User';
+
+  @override
+  String get agentRoleAgent => 'Assistant';
+
+  @override
+  String get agentRoleSystem => 'System';
+
+  @override
+  String get agentEvidenceReplaceBefore => 'Before replacement';
+
+  @override
+  String get agentEvidenceReplaceAfter => 'After replacement';
+
+  @override
+  String get agentEvidenceEmptySnippet =>
+      'Empty snippet (explicitly provided by the Provider)';
+
+  @override
+  String get agentEvidenceEmptyContent =>
+      'Empty content (explicitly provided by the Provider)';
+
+  @override
+  String get agentEvidenceEmptyDiff =>
+      'Empty diff (explicitly provided by the Provider)';
+
+  @override
+  String get agentEvidenceAdd => 'Added';
+
+  @override
+  String get agentEvidenceRemove => 'Removed';
+
+  @override
+  String get agentEvidenceWrite => 'Write';
+
+  @override
+  String get agentWrittenContent => 'Written content';
+
+  @override
+  String agentWrittenContentWithStatus(String title, String status) {
+    return '$title · $status';
+  }
+
+  @override
+  String get agentUnifiedDiff => 'Unified diff';
+
+  @override
+  String get agentDiffMetadata => 'Diff metadata';
+
+  @override
+  String get agentDiffHunkTitle => 'Diff hunk title';
+
+  @override
+  String get agentEmptyLine => 'Empty line';
+
+  @override
+  String get agentLiveSummary => 'Live summary for this turn';
+
+  @override
+  String get agentLiveSummaryHint =>
+      'Live summary for this turn; cannot be restored from history';
+
+  @override
+  String get agentTurnSummary => 'Summary for this turn';
+
+  @override
+  String get agentReplaceSnippet => 'Replacement snippet';
+
+  @override
+  String get agentReplaceSnippetAll => 'Replacement snippet · all matches';
+
+  @override
+  String get agentFileCreated => 'Created';
+
+  @override
+  String get agentFileModified => 'Modified';
+
+  @override
+  String get agentFileDeleted => 'Deleted';
+
+  @override
+  String get agentFileMoved => 'Moved';
+
+  @override
+  String get agentFileChanged => 'File change';
+
+  @override
+  String get agentToolPending => 'Pending';
+
+  @override
+  String get agentToolInProgress => 'In progress';
+
+  @override
+  String get agentToolCompleted => 'Completed';
+
+  @override
+  String get agentToolFailed => 'Failed';
+
+  @override
+  String get agentToolCancelled => 'Cancelled';
+
+  @override
+  String get agentConversationModeIcon => 'Conversation mode icon';
+
+  @override
+  String get agentConversationModeOptions => 'Conversation mode options';
+
+  @override
+  String get agentModeSelected => 'Selected';
+
+  @override
+  String get agentModeSelectable => 'Selectable';
+
+  @override
+  String get agentModeNotSelectable => 'Not selectable';
+
+  @override
+  String get agentLoadingModes => 'Loading conversation modes';
+
+  @override
+  String get agentCannotLoadModes =>
+      'The current Provider cannot load conversation modes';
 }

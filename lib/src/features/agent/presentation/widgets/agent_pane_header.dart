@@ -38,7 +38,7 @@ class _AgentHeader extends StatelessWidget {
                           child: IdeTooltip(
                             message: viewModel.projectPath ?? name,
                             child: Semantics(
-                              label: '项目 $name',
+                              label: context.l10n.agentProjectName(name),
                               child: ConstrainedBox(
                                 constraints: const BoxConstraints(
                                   maxWidth: 180,
@@ -106,7 +106,7 @@ class _AgentHeader extends StatelessWidget {
                           label: 'Plan',
                           leadingIcon: Icons.fact_check_outlined,
                           trailingIcon: null,
-                          semanticLabel: '只读 Plan 模式',
+                          semanticLabel: context.l10n.agentReadonlyPlanMode,
                         ),
                       ],
                       if (state.statusCapsuleLabel case final label?) ...[
@@ -230,7 +230,7 @@ class _AgentHeaderMoreButtonState extends State<_AgentHeaderMoreButton> {
       if (canRename)
         IdeContextMenuAction(
           key: const ValueKey('agent-header-menu-rename'),
-          label: '重命名',
+          label: context.l10n.agentRename,
           leadingIcon: Icons.drive_file_rename_outline_rounded,
           onPressed: () {
             unawaited(_showRenameDialog());
@@ -239,7 +239,7 @@ class _AgentHeaderMoreButtonState extends State<_AgentHeaderMoreButton> {
       if (canFork)
         IdeContextMenuAction(
           key: const ValueKey('agent-header-menu-fork'),
-          label: '分叉当前会话',
+          label: context.l10n.agentForkSession,
           leadingIcon: Icons.call_split_rounded,
           onPressed: () {
             unawaited(widget.viewModel.forkCurrentThread());
@@ -248,7 +248,7 @@ class _AgentHeaderMoreButtonState extends State<_AgentHeaderMoreButton> {
       if (canArchive)
         IdeContextMenuAction(
           key: const ValueKey('agent-header-menu-archive'),
-          label: '归档',
+          label: context.l10n.agentArchive,
           leadingIcon: Icons.archive_outlined,
           onPressed: () {
             unawaited(widget.viewModel.archiveCurrentThread());
@@ -258,7 +258,7 @@ class _AgentHeaderMoreButtonState extends State<_AgentHeaderMoreButton> {
     final actions = <IdeContextMenuAction>[
       IdeContextMenuAction(
         key: const ValueKey('agent-header-menu-context'),
-        label: '上下文',
+        label: context.l10n.agentContext,
         leadingIcon: Icons.account_tree_outlined,
         onPressed: () {
           widget.viewModel.toggleContextPanel();
@@ -315,7 +315,7 @@ class _AgentHeaderMoreButtonState extends State<_AgentHeaderMoreButton> {
       builder: (dialogContext) {
         return IdeDialog(
           key: const ValueKey('agent-header-rename-dialog'),
-          title: const Text('重命名'),
+          title: Text(context.l10n.agentRename),
           content: SizedBox(
             width: 320,
             child: sf.TextField(
@@ -350,7 +350,7 @@ class _AgentHeaderMoreButtonState extends State<_AgentHeaderMoreButton> {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     return IdeTooltip(
-      message: '更多',
+      message: context.l10n.agentMore,
       child: sf.IconButton.ghost(
         key: const ValueKey('agent-header-more'),
         onPressed: _toggleMenu,

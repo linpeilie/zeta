@@ -1991,4 +1991,583 @@ class AppLocalizationsZh extends AppLocalizations {
   String mgmtCopiedLogs(String count) {
     return '已复制 $count 行脱敏日志。';
   }
+
+  @override
+  String get agentReadonlyTitle => '此会话为只读模式';
+
+  @override
+  String get agentReadonlyBody => '该会话所属的 Agent 已被禁用。你仍可查看历史数据，但不能继续发送消息。';
+
+  @override
+  String get agentMessagePlaceholder => 'Message Agent';
+
+  @override
+  String get agentSend => 'Send';
+
+  @override
+  String get agentCancel => 'Cancel';
+
+  @override
+  String get agentCancelAction => '取消';
+
+  @override
+  String get agentCancelTurn => '取消回合';
+
+  @override
+  String get agentMoreActions => 'More actions';
+
+  @override
+  String get agentMoreActionsExpanded => 'More actions, expanded';
+
+  @override
+  String get agentMentionFile => 'Mention file';
+
+  @override
+  String get agentInsertSkill => 'Insert skill';
+
+  @override
+  String get agentAttachImage => 'Attach image';
+
+  @override
+  String get agentPermissionMode => '权限模式';
+
+  @override
+  String get agentPlanReadOnlyHint => '只读规划，不能改文件';
+
+  @override
+  String get agentTokenUsage => 'Token 用量';
+
+  @override
+  String get agentContextWindowUsage => 'Context window token usage';
+
+  @override
+  String get agentRename => '重命名';
+
+  @override
+  String get agentForkSession => '分叉当前会话';
+
+  @override
+  String get agentArchive => '归档';
+
+  @override
+  String get agentContext => '上下文';
+
+  @override
+  String get agentMore => '更多';
+
+  @override
+  String agentProjectName(String name) {
+    return '项目 $name';
+  }
+
+  @override
+  String get agentReadonlyPlanMode => '只读 Plan 模式';
+
+  @override
+  String get agentLoadingSession => '正在加载会话…';
+
+  @override
+  String get agentAcceptPlan => '接受计划';
+
+  @override
+  String get agentAcceptPlanHint => '接受计划仅确认方案；命令、文件与网络权限仍会单独请求。';
+
+  @override
+  String get agentCommandGroup => '命令组';
+
+  @override
+  String get agentFileEditGroup => '文件编辑组';
+
+  @override
+  String get agentToolCall => '工具调用';
+
+  @override
+  String get agentThinking => '思考中';
+
+  @override
+  String get agentRunning => '执行中';
+
+  @override
+  String agentRunningPrefix(String title) {
+    return '执行中 · $title';
+  }
+
+  @override
+  String get agentExecute => '执行';
+
+  @override
+  String get agentSteps => '步骤';
+
+  @override
+  String get agentRevisePlanHint => '补充或修改计划…';
+
+  @override
+  String get agentRevise => '修改';
+
+  @override
+  String get agentAbandon => '放弃';
+
+  @override
+  String get agentExecPermission => '执行权限';
+
+  @override
+  String get agentChooseExecPermission => '请选择执行权限';
+
+  @override
+  String get agentPermCatalogDefault => '保守默认';
+
+  @override
+  String get agentPermUserOverride => '仅本次';
+
+  @override
+  String get agentPermNeedsChoice => '需要选择';
+
+  @override
+  String agentPermissionRequest(String kind, String title) {
+    return '权限请求：$kind · $title';
+  }
+
+  @override
+  String get agentDeny => '拒绝';
+
+  @override
+  String get agentAllowSession => '本会话允许';
+
+  @override
+  String get agentAlwaysAllow => '始终允许';
+
+  @override
+  String get agentOverrideGuard => '覆盖守护';
+
+  @override
+  String get agentAllow => '允许';
+
+  @override
+  String get agentPermKindCommand => '执行命令';
+
+  @override
+  String get agentPermKindFile => '应用文件变更';
+
+  @override
+  String get agentPermKindPermissions => '授予权限';
+
+  @override
+  String get agentPermKindOther => '请求确认';
+
+  @override
+  String get agentPermShortCommand => '命令';
+
+  @override
+  String get agentPermShortFile => '文件';
+
+  @override
+  String get agentPermShortPermissions => '权限';
+
+  @override
+  String get agentPermShortOther => '确认';
+
+  @override
+  String get agentCloseQuestion => '关闭提问';
+
+  @override
+  String get agentNoAnswerableQuestions => '该请求没有可回答的问题。';
+
+  @override
+  String get agentSubmitAnswers => '提交答案';
+
+  @override
+  String get agentConfirmNextQuestion => '确认并进入下一题';
+
+  @override
+  String get agentSkip => '跳过';
+
+  @override
+  String get agentSubmit => '提交';
+
+  @override
+  String get agentNext => '下一步';
+
+  @override
+  String get agentMultiSelect => '可选择多个选项';
+
+  @override
+  String get agentPreviousQuestion => '上一题';
+
+  @override
+  String get agentNextQuestion => '下一题';
+
+  @override
+  String get agentCustomSolutionHint => '输入你的解决方案…';
+
+  @override
+  String get agentOtherCustomSolution => '其他，输入自定义解决方案';
+
+  @override
+  String get agentWaitingApproval => '等待审批';
+
+  @override
+  String get agentWaitingInput => '等待输入';
+
+  @override
+  String get agentSystemError => '系统错误';
+
+  @override
+  String get agentToolRead => '读取';
+
+  @override
+  String get agentToolEdit => '编辑';
+
+  @override
+  String get agentToolDelete => '删除';
+
+  @override
+  String get agentToolMove => '移动';
+
+  @override
+  String get agentToolSearch => '搜索';
+
+  @override
+  String get agentToolExecute => '执行';
+
+  @override
+  String get agentToolThink => '思考';
+
+  @override
+  String get agentToolFetch => '获取';
+
+  @override
+  String get agentToolOther => '操作';
+
+  @override
+  String get agentTurnChanges => '本回合改动';
+
+  @override
+  String agentFileCount(String count) {
+    return '$count 个文件';
+  }
+
+  @override
+  String get agentNavConversation => '对话导航';
+
+  @override
+  String agentTurnOrdinal(String n) {
+    return '第 $n 个回合';
+  }
+
+  @override
+  String agentTurnOrdinalWithLabel(String n, String label) {
+    return '第 $n 个回合：$label';
+  }
+
+  @override
+  String get agentStatusStreaming => '生成中';
+
+  @override
+  String get agentStatusCompleted => '已完成';
+
+  @override
+  String get agentStatusFailed => '失败';
+
+  @override
+  String get agentStatusInterrupted => '已中断';
+
+  @override
+  String get agentStatusUnknown => '未知';
+
+  @override
+  String get agentCreateBranchHere => '从此处创建分支';
+
+  @override
+  String get agentCreateBranchRetry => '创建分支并重试';
+
+  @override
+  String get agentCreateBranchBody =>
+      '将保留原会话，并从上一回合结束处创建新分支。工作区文件不会回滚，之前由 Agent 写入的改动仍然存在。';
+
+  @override
+  String get agentEditMessage => '编辑消息…';
+
+  @override
+  String get agentCreateBranchSend => '创建分支并发送';
+
+  @override
+  String get agentPlan => '计划';
+
+  @override
+  String get agentCollapsePlan => '收起计划';
+
+  @override
+  String get agentExpandPlan => '展开计划';
+
+  @override
+  String get agentCollapseCurrentPlan => '收起当前计划';
+
+  @override
+  String get agentExpandCurrentPlan => '展开当前计划';
+
+  @override
+  String agentCurrentPlanProgress(String progress) {
+    return '当前计划进度 $progress';
+  }
+
+  @override
+  String agentCurrentStep(String content) {
+    return '当前步骤：$content';
+  }
+
+  @override
+  String get agentCurrent => '当前';
+
+  @override
+  String get agentPlanCompleted => '已完成';
+
+  @override
+  String get agentPlanInProgress => '进行中';
+
+  @override
+  String get agentPlanPending => '待处理';
+
+  @override
+  String get agentPlanUnknown => '状态未知';
+
+  @override
+  String get agentNoExecPermission => '当前没有可用的执行权限，请先选择；执行不会预授权命令、文件或网络。';
+
+  @override
+  String agentDefaultExecPermission(String label) {
+    return '默认使用“$label”；执行将开启新的 Default 回合，命令、文件与网络权限仍按该模式处理。';
+  }
+
+  @override
+  String get agentSlashCommands => '命令';
+
+  @override
+  String get agentModel => '模型';
+
+  @override
+  String get agentModelLoadFailed => '模型加载失败';
+
+  @override
+  String get agentModelConfig => '模型配置';
+
+  @override
+  String get agentLoadingModels => '正在加载模型…';
+
+  @override
+  String get agentNoModels => '暂无可用模型';
+
+  @override
+  String get agentConfigNextTurn => '配置将在下一回合生效';
+
+  @override
+  String get agentModelUnavailable => '该模型当前不可用';
+
+  @override
+  String get agentNoReasoningConfig => '该模型未提供可配置的思考程度';
+
+  @override
+  String get agentRetry => '重试';
+
+  @override
+  String get agentReasoningEffort => '思考程度';
+
+  @override
+  String get agentFastOn => '已开启';
+
+  @override
+  String get agentFastOff => '已关闭';
+
+  @override
+  String get agentClose => '关闭';
+
+  @override
+  String get agentSessionName => '会话名称';
+
+  @override
+  String get agentSessionId => '会话 ID';
+
+  @override
+  String get agentMessageCount => '消息数';
+
+  @override
+  String get agentProvider => '提供商';
+
+  @override
+  String get agentContextLimit => '上下文限制';
+
+  @override
+  String get agentTotalTokens => '总 Token';
+
+  @override
+  String get agentInputTokens => '输入 Token';
+
+  @override
+  String get agentOutputTokens => '输出 Token';
+
+  @override
+  String get agentCachedTokens => '缓存 Token';
+
+  @override
+  String get agentCreatedAt => '创建时间';
+
+  @override
+  String get agentLastActive => '最后活跃时间';
+
+  @override
+  String get agentRawMessages => '原始消息';
+
+  @override
+  String get agentChatOnly => '仅对话';
+
+  @override
+  String get agentAll => '全部';
+
+  @override
+  String get agentShowChatOnly => '当前仅显示对话消息，点击显示全部';
+
+  @override
+  String get agentShowAllMessages => '当前显示全部消息，点击仅显示对话';
+
+  @override
+  String get agentNoChatMessages => '暂无对话消息';
+
+  @override
+  String get agentNoRawMessages => '暂无原始消息';
+
+  @override
+  String get agentCopyOriginal => '复制原文';
+
+  @override
+  String get agentCopiedOriginal => '已复制原文。';
+
+  @override
+  String get agentKindApproval => '审批';
+
+  @override
+  String get agentKindQuestion => '提问';
+
+  @override
+  String get agentKindPlanApproval => '计划审批';
+
+  @override
+  String get agentKindFileChange => '文件变更';
+
+  @override
+  String get agentRoleUser => '用户';
+
+  @override
+  String get agentRoleAgent => '助手';
+
+  @override
+  String get agentRoleSystem => '系统';
+
+  @override
+  String get agentEvidenceReplaceBefore => '替换前';
+
+  @override
+  String get agentEvidenceReplaceAfter => '替换后';
+
+  @override
+  String get agentEvidenceEmptySnippet => '空片段（Provider 明确提供）';
+
+  @override
+  String get agentEvidenceEmptyContent => '空内容（Provider 明确提供）';
+
+  @override
+  String get agentEvidenceEmptyDiff => '空差异（Provider 明确提供）';
+
+  @override
+  String get agentEvidenceAdd => '新增';
+
+  @override
+  String get agentEvidenceRemove => '删除';
+
+  @override
+  String get agentEvidenceWrite => '写入';
+
+  @override
+  String get agentWrittenContent => '写入内容';
+
+  @override
+  String agentWrittenContentWithStatus(String title, String status) {
+    return '$title · $status';
+  }
+
+  @override
+  String get agentUnifiedDiff => '统一差异';
+
+  @override
+  String get agentDiffMetadata => '差异元数据';
+
+  @override
+  String get agentDiffHunkTitle => '差异分块标题';
+
+  @override
+  String get agentEmptyLine => '空行';
+
+  @override
+  String get agentLiveSummary => '本回合实时汇总';
+
+  @override
+  String get agentLiveSummaryHint => '本回合实时汇总，不可从历史恢复';
+
+  @override
+  String get agentTurnSummary => '本回合汇总';
+
+  @override
+  String get agentReplaceSnippet => '替换片段';
+
+  @override
+  String get agentReplaceSnippetAll => '替换片段 · 全部匹配';
+
+  @override
+  String get agentFileCreated => '新建';
+
+  @override
+  String get agentFileModified => '修改';
+
+  @override
+  String get agentFileDeleted => '删除';
+
+  @override
+  String get agentFileMoved => '移动';
+
+  @override
+  String get agentFileChanged => '文件变更';
+
+  @override
+  String get agentToolPending => '待执行';
+
+  @override
+  String get agentToolInProgress => '进行中';
+
+  @override
+  String get agentToolCompleted => '已完成';
+
+  @override
+  String get agentToolFailed => '失败';
+
+  @override
+  String get agentToolCancelled => '已取消';
+
+  @override
+  String get agentConversationModeIcon => '对话模式图标';
+
+  @override
+  String get agentConversationModeOptions => '对话模式选项';
+
+  @override
+  String get agentModeSelected => '已选择';
+
+  @override
+  String get agentModeSelectable => '可选择';
+
+  @override
+  String get agentModeNotSelectable => '不可选择';
+
+  @override
+  String get agentLoadingModes => '正在加载对话模式';
+
+  @override
+  String get agentCannotLoadModes => '当前 Provider 无法加载对话模式';
 }

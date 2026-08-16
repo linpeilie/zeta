@@ -273,7 +273,9 @@ class _AgentSlashCommandPickerPopoverState
                     shrinkWrap: true,
                     children: <Widget>[
                       if (commandItems.isNotEmpty) ...[
-                        const _SlashMenuSectionHeader(label: '命令'),
+                        _SlashMenuSectionHeader(
+                          label: context.l10n.agentSlashCommands,
+                        ),
                         for (var i = 0; i < commandItems.length; i++)
                           _SlashMenuOptionRow(
                             itemKey: ValueKey(commandItems[i].identity),

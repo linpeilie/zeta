@@ -10,6 +10,7 @@ import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
 /// owner/change/role 组成的稳定 key；revision 与宽度不参与 identity。
 ValueKey<Object> agentFileChangeEvidenceKey(
@@ -65,13 +66,13 @@ class AgentTextReplacementEvidenceView extends StatelessWidget {
                   owner: ownerEntryId,
                   changeId: changeId,
                   role: 'before',
-                  title: '替换前',
+                  title: context.l10n.agentEvidenceReplaceBefore,
                   count: detail.beforeLines.length,
                   viewportCount: alignedLines,
-                  emptyLabel: '空片段（Provider 明确提供）',
+                  emptyLabel: context.l10n.agentEvidenceEmptySnippet,
                   lineAt: (index) => _LineData(
                     detail.beforeLines[index],
-                    '删除',
+                    context.l10n.agentEvidenceRemove,
                     _LineTone.removed,
                     marker: '−',
                   ),
@@ -88,13 +89,13 @@ class AgentTextReplacementEvidenceView extends StatelessWidget {
                   owner: ownerEntryId,
                   changeId: changeId,
                   role: 'after',
-                  title: '替换后',
+                  title: context.l10n.agentEvidenceReplaceAfter,
                   count: detail.afterLines.length,
                   viewportCount: alignedLines,
-                  emptyLabel: '空片段（Provider 明确提供）',
+                  emptyLabel: context.l10n.agentEvidenceEmptySnippet,
                   lineAt: (index) => _LineData(
                     detail.afterLines[index],
-                    '新增',
+                    context.l10n.agentEvidenceAdd,
                     _LineTone.added,
                     marker: '+',
                   ),
@@ -132,11 +133,17 @@ class AgentWrittenContentEvidenceView extends StatelessWidget {
       owner: ownerEntryId,
       changeId: changeId,
       role: 'written',
-      title: '写入内容 · $statusLabel',
+      title: context.l10n.agentWrittenContentWithStatus(
+        context.l10n.agentWrittenContent,
+        statusLabel,
+      ),
       count: detail.lines.length,
-      emptyLabel: '空内容（Provider 明确提供）',
-      lineAt: (index) =>
-          _LineData(detail.lines[index], '写入', _LineTone.neutral),
+      emptyLabel: context.l10n.agentEvidenceEmptyContent,
+      lineAt: (index) => _LineData(
+        detail.lines[index],
+        context.l10n.agentEvidenceWrite,
+        _LineTone.neutral,
+      ),
     ),
   );
 }
@@ -163,10 +170,10 @@ class AgentUnifiedPatchEvidenceView extends StatelessWidget {
       owner: ownerEntryId,
       changeId: changeId,
       role: 'patch',
-      title: '统一差异',
+      title: context.l10n.agentUnifiedDiff,
       count: detail.lines.length,
-      emptyLabel: '空差异（Provider 明确提供）',
-      lineAt: (index) => _patchLine(detail.lines[index]),
+      emptyLabel: context.l10n.agentEvidenceEmptyDiff,
+      lineAt: (index) => _patchLine(detail.lines[index], context.l10n),
     ),
   );
 }
@@ -183,31 +190,34 @@ class _LineData {
   final String? marker;
 }
 
-_LineData _patchLine(AgentUnifiedPatchLineProjection line) {
+_LineData _patchLine(
+  AgentUnifiedPatchLineProjection line,
+  AppLocalizations l10n,
+) {
   return switch (line.kind) {
     AgentUnifiedPatchLineKind.metadata => _LineData(
       line.text,
-      '差异元数据',
+      l10n.agentDiffMetadata,
       _LineTone.metadata,
     ),
     AgentUnifiedPatchLineKind.hunkHeader => _LineData(
       line.text,
-      '差异分块标题',
+      l10n.agentDiffHunkTitle,
       _LineTone.hunk,
     ),
     AgentUnifiedPatchLineKind.context => _LineData(
       line.text,
-      '上下文',
+      l10n.agentContext,
       _LineTone.neutral,
     ),
     AgentUnifiedPatchLineKind.added => _LineData(
       line.text,
-      '新增',
+      l10n.agentEvidenceAdd,
       _LineTone.added,
     ),
     AgentUnifiedPatchLineKind.removed => _LineData(
       line.text,
-      '删除',
+      l10n.agentEvidenceRemove,
       _LineTone.removed,
     ),
   };

@@ -41,6 +41,8 @@ import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/core/rows/ide_row_divider.dart';
 import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
+import 'package:zeta/src/features/agent/presentation/agent_presentation_l10n.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_ui_state.dart';
 import 'package:zeta/src/features/agent/presentation/agent_markdown_cache.dart';
 import 'package:zeta/src/features/agent/presentation/agent_plan_revision_drafts.dart';
@@ -1332,10 +1334,10 @@ class _AgentReadOnlyNotice extends StatelessWidget {
         child: IdeStatusCard(
           key: const ValueKey('agent-read-only-notice'),
           tone: IdeStatusCardTone.warning,
-          title: '此会话为只读模式',
+          title: context.l10n.agentReadonlyTitle,
           margin: EdgeInsets.zero,
           body: Text(
-            '该会话所属的 Agent 已被禁用。你仍可查看历史数据，但不能继续发送消息。',
+            context.l10n.agentReadonlyBody,
             style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
           ),
         ),

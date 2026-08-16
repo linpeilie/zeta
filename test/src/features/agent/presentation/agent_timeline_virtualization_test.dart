@@ -4,6 +4,7 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection.dart';
+import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/core/virtualization/ide_dynamic_sliver_list.dart';
 import 'package:zeta/src/ui/core/virtualization/ide_virtual_item.dart';
@@ -303,6 +304,9 @@ class _TimelineHost extends StatelessWidget {
       lightTheme: light,
       darkTheme: dark,
       child: sf.ShadcnApp(
+        locale: ZetaLocalization.simplifiedChinese,
+        supportedLocales: ZetaLocalization.supportedLocales,
+        localizationsDelegates: ZetaLocalization.delegates,
         theme: buildShadcnTheme(light),
         darkTheme: buildShadcnTheme(dark),
         materialTheme: buildMaterialTheme(dark),

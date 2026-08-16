@@ -258,7 +258,7 @@ class _AgentComposer extends StatelessWidget {
                                 controller: controller,
                                 focusNode: focusNode,
                                 placeholder: Text(
-                                  'Message Agent',
+                                  context.l10n.agentMessagePlaceholder,
                                   style: textStyles.bodyMedium.copyWith(
                                     color: colors.textTertiary,
                                   ),
@@ -458,7 +458,7 @@ class _AgentComposer extends StatelessWidget {
       child: showCancel
           ? _ComposerActionButton(
               key: const ValueKey('agent-cancel-button-state'),
-              tooltip: 'Cancel',
+              tooltip: context.l10n.agentCancel,
               backgroundColor: colors.border.withValues(alpha: 0.36),
               foregroundColor: colors.textSecondary,
               buttonKey: const ValueKey('agent-cancel-button'),
@@ -468,7 +468,7 @@ class _AgentComposer extends StatelessWidget {
           : showSend
           ? _ComposerActionButton(
               key: const ValueKey('agent-send-button-state'),
-              tooltip: 'Send',
+              tooltip: context.l10n.agentSend,
               // 可发送时使用实心 accent，作为界面最强的行动锚点；不可发送时退回弱化中性底。
               backgroundColor: canSubmit
                   ? colors.accent
@@ -742,7 +742,7 @@ class _ComposerMoreActionsButtonState
       if (widget.showMentionFile)
         IdeContextMenuAction(
           key: const ValueKey('agent-mention-file-button'),
-          label: 'Mention file',
+          label: context.l10n.agentMentionFile,
           leadingIcon: Icons.alternate_email_rounded,
           dividerAbove: widget.showPlan,
           onPressed: () => _activateAction(widget.onMentionFile),
@@ -750,7 +750,7 @@ class _ComposerMoreActionsButtonState
       if (widget.showInsertSkill)
         IdeContextMenuAction(
           key: const ValueKey('agent-insert-skill-button'),
-          label: 'Insert skill',
+          label: context.l10n.agentInsertSkill,
           leadingIcon: Icons.auto_awesome_rounded,
           dividerAbove: widget.showPlan || widget.showMentionFile,
           onPressed: () => _activateAction(widget.onInsertSkill),
@@ -758,7 +758,7 @@ class _ComposerMoreActionsButtonState
       if (widget.showAttachImage)
         IdeContextMenuAction(
           key: const ValueKey('agent-attach-image-button'),
-          label: 'Attach image',
+          label: context.l10n.agentAttachImage,
           leadingIcon: Icons.image_outlined,
           dividerAbove:
               widget.showPlan ||
@@ -778,7 +778,7 @@ class _ComposerMoreActionsButtonState
     final open = _popoverEntry != null;
     return _ComposerSelectorTrigger(
       surfaceKey: const ValueKey('agent-more-actions-button'),
-      tooltip: 'More actions',
+      tooltip: context.l10n.agentMoreActions,
       semanticLabel: open ? 'More actions, expanded' : 'More actions',
       open: open,
       focusNode: _triggerFocusNode,
@@ -975,7 +975,7 @@ class _ComposerContextWindowUsage extends StatelessWidget {
     return IdeTooltip(
       message: tooltip,
       child: Semantics(
-        label: 'Context window token usage',
+        label: context.l10n.agentContextWindowUsage,
         value: '${(progress * 100).round()}%',
         child: Row(
           key: const ValueKey('agent-composer-token-usage'),
@@ -988,7 +988,7 @@ class _ComposerContextWindowUsage extends StatelessWidget {
               value: progress,
               color: colors.accent,
               backgroundColor: colors.border.withValues(alpha: 0.32),
-              semanticsLabel: 'Token 用量',
+              semanticsLabel: context.l10n.agentTokenUsage,
             ),
           ],
         ),
@@ -1475,7 +1475,7 @@ class _PermissionOptionPopover extends StatelessWidget {
     return Semantics(
       container: true,
       explicitChildNodes: true,
-      label: '权限模式',
+      label: context.l10n.agentPermissionMode,
       child: SizedBox(
         key: const ValueKey('agent-permission-option-popover'),
         width: width,
@@ -1499,7 +1499,7 @@ class _PermissionOptionPopover extends StatelessWidget {
                   child: Semantics(
                     label:
                         '${option.label}'
-                        '${_permissionOptionCaption(option) == null ? '' : '，${_permissionOptionCaption(option)}'}'
+                        '${_permissionOptionCaption(option, context.l10n) == null ? '' : '，${_permissionOptionCaption(option, context.l10n)}'}'
                         '${option.allowed ? '' : '，不可用'}'
                         '${option.id == selectedOptionId ? '，已选择' : ''}',
                     child: Column(
@@ -1516,7 +1516,7 @@ class _PermissionOptionPopover extends StatelessWidget {
                                 : colors.textTertiary,
                           ),
                         ),
-                        if (_permissionOptionCaption(option)
+                        if (_permissionOptionCaption(option, context.l10n)
                             case final caption?)
                           Text(
                             caption,
@@ -1588,13 +1588,16 @@ class _ComposerActionButton extends StatelessWidget {
   }
 }
 
-String? _permissionOptionCaption(AgentPermissionOption option) {
+String? _permissionOptionCaption(
+  AgentPermissionOption option,
+  AppLocalizations l10n,
+) {
   final description = option.description?.trim();
   if (description != null && description.isNotEmpty) {
     return description;
   }
   if (option.planningOnly) {
-    return '只读规划，不能改文件';
+    return l10n.agentPlanReadOnlyHint;
   }
   return null;
 }

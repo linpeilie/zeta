@@ -173,7 +173,7 @@ class _AgentModeSelectorState extends State<AgentModeSelector> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Semantics(
-                label: '对话模式图标',
+                label: context.l10n.agentConversationModeIcon,
                 excludeSemantics: true,
                 child: Icon(
                   Icons.alt_route_rounded,
@@ -246,7 +246,7 @@ class _AgentModeSelectorPopover extends StatelessWidget {
     final unknownMode = selectedMode?.kind == AgentConversationModeKind.unknown;
 
     return Semantics(
-      label: '对话模式选项',
+      label: context.l10n.agentConversationModeOptions,
       container: true,
       child: SizedBox(
         key: const ValueKey('agent-mode-selector-popover'),

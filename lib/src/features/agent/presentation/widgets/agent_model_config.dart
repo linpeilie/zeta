@@ -715,7 +715,7 @@ class _ModelConfigPopoverState extends State<_ModelConfigPopover> {
       child: Semantics(
         container: true,
         explicitChildNodes: true,
-        label: '模型配置',
+        label: context.l10n.agentModelConfig,
         child: ValueListenableBuilder<AgentModelConfigUiState>(
           valueListenable: widget.stateListenable,
           builder: (context, state, _) {
@@ -755,8 +755,8 @@ class _ModelConfigPopoverState extends State<_ModelConfigPopover> {
                                     child: Center(
                                       child: Text(
                                         state.isRefreshing
-                                            ? '正在加载模型…'
-                                            : '暂无可用模型',
+                                            ? context.l10n.agentLoadingModels
+                                            : context.l10n.agentNoModels,
                                         style: IdeTextStyles.of(context)
                                             .bodySmall
                                             .copyWith(
@@ -833,7 +833,7 @@ class _NextTurnModelConfigBanner extends StatelessWidget {
           Icon(Icons.info_outline_rounded, size: 14, color: colors.info),
           const SizedBox(width: IdeSpacing.space6),
           Text(
-            '配置将在下一回合生效',
+            context.l10n.agentConfigNextTurn,
             style: IdeTextStyles.of(context).bodySmall.copyWith(
               color: colors.info,
               fontWeight: FontWeight.w600,
@@ -1162,7 +1162,7 @@ class _ModelInlineConfig extends StatelessWidget {
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      '该模型未提供可配置的思考程度',
+                      context.l10n.agentNoReasoningConfig,
                       style: textStyles.bodySmall.copyWith(
                         color: colors.textTertiary,
                       ),
@@ -1203,7 +1203,7 @@ class _ModelInlineConfig extends StatelessWidget {
                   key: const ValueKey('agent-model-save-error'),
                   icon: Icons.error_outline_rounded,
                   message: saveError.message,
-                  actionLabel: '重试',
+                  actionLabel: context.l10n.agentRetry,
                   color: colors.error,
                   onAction: onRetrySave,
                 ),
@@ -1555,7 +1555,7 @@ class _ReasoningEffortSliderState extends State<_ReasoningEffortSlider>
       key: const ValueKey('agent-reasoning-segment-control'),
       container: true,
       slider: true,
-      label: '思考程度',
+      label: context.l10n.agentReasoningEffort,
       value: _displayLabel,
       increasedValue: increasedValue,
       decreasedValue: decreasedValue,
@@ -1587,7 +1587,7 @@ class _ReasoningEffortSliderState extends State<_ReasoningEffortSlider>
                   ),
                   const SizedBox(width: IdeSpacing.space4),
                   Text(
-                    '思考程度',
+                    context.l10n.agentReasoningEffort,
                     style: textStyles.rowTitle.copyWith(
                       color: colors.textSecondary,
                     ),

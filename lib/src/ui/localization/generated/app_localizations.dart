@@ -3751,6 +3751,1122 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Copied {count} redacted log lines.'**
   String mgmtCopiedLogs(String count);
+
+  /// Disabled agent session title
+  ///
+  /// In en, this message translates to:
+  /// **'This session is read-only'**
+  String get agentReadonlyTitle;
+
+  /// Disabled agent session body
+  ///
+  /// In en, this message translates to:
+  /// **'The Agent for this session has been disabled. You can still view history, but you cannot send more messages.'**
+  String get agentReadonlyBody;
+
+  /// Composer placeholder
+  ///
+  /// In en, this message translates to:
+  /// **'Message Agent'**
+  String get agentMessagePlaceholder;
+
+  /// Send
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get agentSend;
+
+  /// Composer cancel
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get agentCancel;
+
+  /// Generic cancel action
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get agentCancelAction;
+
+  /// Cancel turn semantics
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel turn'**
+  String get agentCancelTurn;
+
+  /// More actions
+  ///
+  /// In en, this message translates to:
+  /// **'More actions'**
+  String get agentMoreActions;
+
+  /// More actions expanded
+  ///
+  /// In en, this message translates to:
+  /// **'More actions, expanded'**
+  String get agentMoreActionsExpanded;
+
+  /// Mention file
+  ///
+  /// In en, this message translates to:
+  /// **'Mention file'**
+  String get agentMentionFile;
+
+  /// Insert skill
+  ///
+  /// In en, this message translates to:
+  /// **'Insert skill'**
+  String get agentInsertSkill;
+
+  /// Attach image
+  ///
+  /// In en, this message translates to:
+  /// **'Attach image'**
+  String get agentAttachImage;
+
+  /// Permission mode
+  ///
+  /// In en, this message translates to:
+  /// **'Permission mode'**
+  String get agentPermissionMode;
+
+  /// Plan mode hint
+  ///
+  /// In en, this message translates to:
+  /// **'Read-only planning; cannot change files'**
+  String get agentPlanReadOnlyHint;
+
+  /// Token usage semantics
+  ///
+  /// In en, this message translates to:
+  /// **'Token usage'**
+  String get agentTokenUsage;
+
+  /// Context window usage
+  ///
+  /// In en, this message translates to:
+  /// **'Context window token usage'**
+  String get agentContextWindowUsage;
+
+  /// Rename thread
+  ///
+  /// In en, this message translates to:
+  /// **'Rename'**
+  String get agentRename;
+
+  /// Fork session
+  ///
+  /// In en, this message translates to:
+  /// **'Fork this session'**
+  String get agentForkSession;
+
+  /// Archive
+  ///
+  /// In en, this message translates to:
+  /// **'Archive'**
+  String get agentArchive;
+
+  /// Context
+  ///
+  /// In en, this message translates to:
+  /// **'Context'**
+  String get agentContext;
+
+  /// More
+  ///
+  /// In en, this message translates to:
+  /// **'More'**
+  String get agentMore;
+
+  /// Project name
+  ///
+  /// In en, this message translates to:
+  /// **'Project {name}'**
+  String agentProjectName(String name);
+
+  /// Read-only plan
+  ///
+  /// In en, this message translates to:
+  /// **'Read-only Plan mode'**
+  String get agentReadonlyPlanMode;
+
+  /// Loading session
+  ///
+  /// In en, this message translates to:
+  /// **'Loading session…'**
+  String get agentLoadingSession;
+
+  /// Accept plan
+  ///
+  /// In en, this message translates to:
+  /// **'Accept plan'**
+  String get agentAcceptPlan;
+
+  /// Accept plan hint
+  ///
+  /// In en, this message translates to:
+  /// **'Accepting the plan only confirms the proposal. Commands, files, and network still need separate permission.'**
+  String get agentAcceptPlanHint;
+
+  /// Command group
+  ///
+  /// In en, this message translates to:
+  /// **'Command group'**
+  String get agentCommandGroup;
+
+  /// File edit group
+  ///
+  /// In en, this message translates to:
+  /// **'File edit group'**
+  String get agentFileEditGroup;
+
+  /// Tool call
+  ///
+  /// In en, this message translates to:
+  /// **'Tool call'**
+  String get agentToolCall;
+
+  /// Thinking
+  ///
+  /// In en, this message translates to:
+  /// **'Thinking'**
+  String get agentThinking;
+
+  /// Running
+  ///
+  /// In en, this message translates to:
+  /// **'Running'**
+  String get agentRunning;
+
+  /// Running prefix
+  ///
+  /// In en, this message translates to:
+  /// **'Running · {title}'**
+  String agentRunningPrefix(String title);
+
+  /// Execute
+  ///
+  /// In en, this message translates to:
+  /// **'Execute'**
+  String get agentExecute;
+
+  /// Steps
+  ///
+  /// In en, this message translates to:
+  /// **'Steps'**
+  String get agentSteps;
+
+  /// Revise plan hint
+  ///
+  /// In en, this message translates to:
+  /// **'Add to or revise the plan…'**
+  String get agentRevisePlanHint;
+
+  /// Revise
+  ///
+  /// In en, this message translates to:
+  /// **'Revise'**
+  String get agentRevise;
+
+  /// Abandon
+  ///
+  /// In en, this message translates to:
+  /// **'Abandon'**
+  String get agentAbandon;
+
+  /// Execution permission
+  ///
+  /// In en, this message translates to:
+  /// **'Execution permission'**
+  String get agentExecPermission;
+
+  /// Choose permission
+  ///
+  /// In en, this message translates to:
+  /// **'Choose execution permission'**
+  String get agentChooseExecPermission;
+
+  /// Catalog default
+  ///
+  /// In en, this message translates to:
+  /// **'Conservative default'**
+  String get agentPermCatalogDefault;
+
+  /// User override
+  ///
+  /// In en, this message translates to:
+  /// **'This time only'**
+  String get agentPermUserOverride;
+
+  /// Needs choice
+  ///
+  /// In en, this message translates to:
+  /// **'Selection required'**
+  String get agentPermNeedsChoice;
+
+  /// Permission request
+  ///
+  /// In en, this message translates to:
+  /// **'Permission request: {kind} · {title}'**
+  String agentPermissionRequest(String kind, String title);
+
+  /// Deny
+  ///
+  /// In en, this message translates to:
+  /// **'Deny'**
+  String get agentDeny;
+
+  /// Allow session
+  ///
+  /// In en, this message translates to:
+  /// **'Allow this session'**
+  String get agentAllowSession;
+
+  /// Always allow
+  ///
+  /// In en, this message translates to:
+  /// **'Always allow'**
+  String get agentAlwaysAllow;
+
+  /// Override guard
+  ///
+  /// In en, this message translates to:
+  /// **'Override guard'**
+  String get agentOverrideGuard;
+
+  /// Allow
+  ///
+  /// In en, this message translates to:
+  /// **'Allow'**
+  String get agentAllow;
+
+  /// Perm kind command
+  ///
+  /// In en, this message translates to:
+  /// **'Run command'**
+  String get agentPermKindCommand;
+
+  /// Perm kind file
+  ///
+  /// In en, this message translates to:
+  /// **'Apply file changes'**
+  String get agentPermKindFile;
+
+  /// Perm kind permissions
+  ///
+  /// In en, this message translates to:
+  /// **'Grant permissions'**
+  String get agentPermKindPermissions;
+
+  /// Perm kind other
+  ///
+  /// In en, this message translates to:
+  /// **'Request confirmation'**
+  String get agentPermKindOther;
+
+  /// Perm short command
+  ///
+  /// In en, this message translates to:
+  /// **'Command'**
+  String get agentPermShortCommand;
+
+  /// Perm short file
+  ///
+  /// In en, this message translates to:
+  /// **'File'**
+  String get agentPermShortFile;
+
+  /// Perm short permissions
+  ///
+  /// In en, this message translates to:
+  /// **'Permission'**
+  String get agentPermShortPermissions;
+
+  /// Perm short other
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm'**
+  String get agentPermShortOther;
+
+  /// Close question
+  ///
+  /// In en, this message translates to:
+  /// **'Close question'**
+  String get agentCloseQuestion;
+
+  /// No questions
+  ///
+  /// In en, this message translates to:
+  /// **'This request has no questions to answer.'**
+  String get agentNoAnswerableQuestions;
+
+  /// Submit answers
+  ///
+  /// In en, this message translates to:
+  /// **'Submit answers'**
+  String get agentSubmitAnswers;
+
+  /// Confirm next
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm and go to the next question'**
+  String get agentConfirmNextQuestion;
+
+  /// Skip
+  ///
+  /// In en, this message translates to:
+  /// **'Skip'**
+  String get agentSkip;
+
+  /// Submit
+  ///
+  /// In en, this message translates to:
+  /// **'Submit'**
+  String get agentSubmit;
+
+  /// Next
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get agentNext;
+
+  /// Multi select
+  ///
+  /// In en, this message translates to:
+  /// **'Multiple options can be selected'**
+  String get agentMultiSelect;
+
+  /// Previous question
+  ///
+  /// In en, this message translates to:
+  /// **'Previous question'**
+  String get agentPreviousQuestion;
+
+  /// Next question
+  ///
+  /// In en, this message translates to:
+  /// **'Next question'**
+  String get agentNextQuestion;
+
+  /// Custom solution
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your solution…'**
+  String get agentCustomSolutionHint;
+
+  /// Other custom
+  ///
+  /// In en, this message translates to:
+  /// **'Other, enter a custom solution'**
+  String get agentOtherCustomSolution;
+
+  /// Waiting approval
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for approval'**
+  String get agentWaitingApproval;
+
+  /// Waiting input
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for input'**
+  String get agentWaitingInput;
+
+  /// System error
+  ///
+  /// In en, this message translates to:
+  /// **'System error'**
+  String get agentSystemError;
+
+  /// Tool read
+  ///
+  /// In en, this message translates to:
+  /// **'Read'**
+  String get agentToolRead;
+
+  /// Tool edit
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get agentToolEdit;
+
+  /// Tool delete
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get agentToolDelete;
+
+  /// Tool move
+  ///
+  /// In en, this message translates to:
+  /// **'Move'**
+  String get agentToolMove;
+
+  /// Tool search
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get agentToolSearch;
+
+  /// Tool execute
+  ///
+  /// In en, this message translates to:
+  /// **'Execute'**
+  String get agentToolExecute;
+
+  /// Tool think
+  ///
+  /// In en, this message translates to:
+  /// **'Think'**
+  String get agentToolThink;
+
+  /// Tool fetch
+  ///
+  /// In en, this message translates to:
+  /// **'Fetch'**
+  String get agentToolFetch;
+
+  /// Tool other
+  ///
+  /// In en, this message translates to:
+  /// **'Action'**
+  String get agentToolOther;
+
+  /// Turn changes
+  ///
+  /// In en, this message translates to:
+  /// **'Changes in this turn'**
+  String get agentTurnChanges;
+
+  /// File count
+  ///
+  /// In en, this message translates to:
+  /// **'{count} files'**
+  String agentFileCount(String count);
+
+  /// Conversation nav
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation navigation'**
+  String get agentNavConversation;
+
+  /// Turn ordinal
+  ///
+  /// In en, this message translates to:
+  /// **'Turn {n}'**
+  String agentTurnOrdinal(String n);
+
+  /// Turn with label
+  ///
+  /// In en, this message translates to:
+  /// **'Turn {n}: {label}'**
+  String agentTurnOrdinalWithLabel(String n, String label);
+
+  /// Streaming
+  ///
+  /// In en, this message translates to:
+  /// **'Generating'**
+  String get agentStatusStreaming;
+
+  /// Completed
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get agentStatusCompleted;
+
+  /// Failed
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get agentStatusFailed;
+
+  /// Interrupted
+  ///
+  /// In en, this message translates to:
+  /// **'Interrupted'**
+  String get agentStatusInterrupted;
+
+  /// Unknown
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get agentStatusUnknown;
+
+  /// Create branch here
+  ///
+  /// In en, this message translates to:
+  /// **'Create a branch from here'**
+  String get agentCreateBranchHere;
+
+  /// Create branch retry
+  ///
+  /// In en, this message translates to:
+  /// **'Create a branch and retry'**
+  String get agentCreateBranchRetry;
+
+  /// Create branch body
+  ///
+  /// In en, this message translates to:
+  /// **'The original session is kept, and a new branch starts after the previous turn. Workspace files are not rolled back; earlier Agent writes remain.'**
+  String get agentCreateBranchBody;
+
+  /// Edit message
+  ///
+  /// In en, this message translates to:
+  /// **'Edit message…'**
+  String get agentEditMessage;
+
+  /// Create branch send
+  ///
+  /// In en, this message translates to:
+  /// **'Create branch and send'**
+  String get agentCreateBranchSend;
+
+  /// Plan
+  ///
+  /// In en, this message translates to:
+  /// **'Plan'**
+  String get agentPlan;
+
+  /// Collapse plan
+  ///
+  /// In en, this message translates to:
+  /// **'Collapse plan'**
+  String get agentCollapsePlan;
+
+  /// Expand plan
+  ///
+  /// In en, this message translates to:
+  /// **'Expand plan'**
+  String get agentExpandPlan;
+
+  /// Collapse current plan
+  ///
+  /// In en, this message translates to:
+  /// **'Collapse current plan'**
+  String get agentCollapseCurrentPlan;
+
+  /// Expand current plan
+  ///
+  /// In en, this message translates to:
+  /// **'Expand current plan'**
+  String get agentExpandCurrentPlan;
+
+  /// Plan progress
+  ///
+  /// In en, this message translates to:
+  /// **'Current plan progress {progress}'**
+  String agentCurrentPlanProgress(String progress);
+
+  /// Current step
+  ///
+  /// In en, this message translates to:
+  /// **'Current step: {content}'**
+  String agentCurrentStep(String content);
+
+  /// Current
+  ///
+  /// In en, this message translates to:
+  /// **'Current'**
+  String get agentCurrent;
+
+  /// Plan completed
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get agentPlanCompleted;
+
+  /// Plan in progress
+  ///
+  /// In en, this message translates to:
+  /// **'In progress'**
+  String get agentPlanInProgress;
+
+  /// Plan pending
+  ///
+  /// In en, this message translates to:
+  /// **'Pending'**
+  String get agentPlanPending;
+
+  /// Plan unknown
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown status'**
+  String get agentPlanUnknown;
+
+  /// No exec permission
+  ///
+  /// In en, this message translates to:
+  /// **'No execution permission is available. Choose one first. Execution does not pre-authorize commands, files, or the network.'**
+  String get agentNoExecPermission;
+
+  /// Default exec permission
+  ///
+  /// In en, this message translates to:
+  /// **'Default is “{label}”. Execution starts a new Default turn. Commands, files, and network still follow that mode.'**
+  String agentDefaultExecPermission(String label);
+
+  /// Slash commands
+  ///
+  /// In en, this message translates to:
+  /// **'Commands'**
+  String get agentSlashCommands;
+
+  /// Model
+  ///
+  /// In en, this message translates to:
+  /// **'Model'**
+  String get agentModel;
+
+  /// Model load failed
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to load models'**
+  String get agentModelLoadFailed;
+
+  /// Model config
+  ///
+  /// In en, this message translates to:
+  /// **'Model configuration'**
+  String get agentModelConfig;
+
+  /// Loading models
+  ///
+  /// In en, this message translates to:
+  /// **'Loading models…'**
+  String get agentLoadingModels;
+
+  /// No models
+  ///
+  /// In en, this message translates to:
+  /// **'No models available'**
+  String get agentNoModels;
+
+  /// Config next turn
+  ///
+  /// In en, this message translates to:
+  /// **'Configuration applies on the next turn'**
+  String get agentConfigNextTurn;
+
+  /// Model unavailable
+  ///
+  /// In en, this message translates to:
+  /// **'This model is currently unavailable'**
+  String get agentModelUnavailable;
+
+  /// No reasoning
+  ///
+  /// In en, this message translates to:
+  /// **'This model does not provide configurable reasoning effort'**
+  String get agentNoReasoningConfig;
+
+  /// Retry
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get agentRetry;
+
+  /// Reasoning effort
+  ///
+  /// In en, this message translates to:
+  /// **'Reasoning effort'**
+  String get agentReasoningEffort;
+
+  /// Fast on
+  ///
+  /// In en, this message translates to:
+  /// **'On'**
+  String get agentFastOn;
+
+  /// Fast off
+  ///
+  /// In en, this message translates to:
+  /// **'Off'**
+  String get agentFastOff;
+
+  /// Close
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get agentClose;
+
+  /// Session name
+  ///
+  /// In en, this message translates to:
+  /// **'Session name'**
+  String get agentSessionName;
+
+  /// Session id
+  ///
+  /// In en, this message translates to:
+  /// **'Session ID'**
+  String get agentSessionId;
+
+  /// Message count
+  ///
+  /// In en, this message translates to:
+  /// **'Messages'**
+  String get agentMessageCount;
+
+  /// Provider
+  ///
+  /// In en, this message translates to:
+  /// **'Provider'**
+  String get agentProvider;
+
+  /// Context limit
+  ///
+  /// In en, this message translates to:
+  /// **'Context limit'**
+  String get agentContextLimit;
+
+  /// Total tokens
+  ///
+  /// In en, this message translates to:
+  /// **'Total tokens'**
+  String get agentTotalTokens;
+
+  /// Input tokens
+  ///
+  /// In en, this message translates to:
+  /// **'Input tokens'**
+  String get agentInputTokens;
+
+  /// Output tokens
+  ///
+  /// In en, this message translates to:
+  /// **'Output tokens'**
+  String get agentOutputTokens;
+
+  /// Cached tokens
+  ///
+  /// In en, this message translates to:
+  /// **'Cached tokens'**
+  String get agentCachedTokens;
+
+  /// Created
+  ///
+  /// In en, this message translates to:
+  /// **'Created'**
+  String get agentCreatedAt;
+
+  /// Last active
+  ///
+  /// In en, this message translates to:
+  /// **'Last active'**
+  String get agentLastActive;
+
+  /// Raw messages
+  ///
+  /// In en, this message translates to:
+  /// **'Raw messages'**
+  String get agentRawMessages;
+
+  /// Chat only
+  ///
+  /// In en, this message translates to:
+  /// **'Chat only'**
+  String get agentChatOnly;
+
+  /// All
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get agentAll;
+
+  /// Show chat only hint
+  ///
+  /// In en, this message translates to:
+  /// **'Showing chat messages only. Tap to show all.'**
+  String get agentShowChatOnly;
+
+  /// Show all hint
+  ///
+  /// In en, this message translates to:
+  /// **'Showing all messages. Tap to show chat only.'**
+  String get agentShowAllMessages;
+
+  /// No chat
+  ///
+  /// In en, this message translates to:
+  /// **'No chat messages'**
+  String get agentNoChatMessages;
+
+  /// No raw
+  ///
+  /// In en, this message translates to:
+  /// **'No raw messages'**
+  String get agentNoRawMessages;
+
+  /// Copy original
+  ///
+  /// In en, this message translates to:
+  /// **'Copy original'**
+  String get agentCopyOriginal;
+
+  /// Copied original
+  ///
+  /// In en, this message translates to:
+  /// **'Original copied.'**
+  String get agentCopiedOriginal;
+
+  /// Kind approval
+  ///
+  /// In en, this message translates to:
+  /// **'Approval'**
+  String get agentKindApproval;
+
+  /// Kind question
+  ///
+  /// In en, this message translates to:
+  /// **'Question'**
+  String get agentKindQuestion;
+
+  /// Kind plan approval
+  ///
+  /// In en, this message translates to:
+  /// **'Plan approval'**
+  String get agentKindPlanApproval;
+
+  /// Kind file change
+  ///
+  /// In en, this message translates to:
+  /// **'File change'**
+  String get agentKindFileChange;
+
+  /// Role user
+  ///
+  /// In en, this message translates to:
+  /// **'User'**
+  String get agentRoleUser;
+
+  /// Role agent
+  ///
+  /// In en, this message translates to:
+  /// **'Assistant'**
+  String get agentRoleAgent;
+
+  /// Role system
+  ///
+  /// In en, this message translates to:
+  /// **'System'**
+  String get agentRoleSystem;
+
+  /// Replace before
+  ///
+  /// In en, this message translates to:
+  /// **'Before replacement'**
+  String get agentEvidenceReplaceBefore;
+
+  /// Replace after
+  ///
+  /// In en, this message translates to:
+  /// **'After replacement'**
+  String get agentEvidenceReplaceAfter;
+
+  /// Empty snippet
+  ///
+  /// In en, this message translates to:
+  /// **'Empty snippet (explicitly provided by the Provider)'**
+  String get agentEvidenceEmptySnippet;
+
+  /// Empty content
+  ///
+  /// In en, this message translates to:
+  /// **'Empty content (explicitly provided by the Provider)'**
+  String get agentEvidenceEmptyContent;
+
+  /// Empty diff
+  ///
+  /// In en, this message translates to:
+  /// **'Empty diff (explicitly provided by the Provider)'**
+  String get agentEvidenceEmptyDiff;
+
+  /// Added
+  ///
+  /// In en, this message translates to:
+  /// **'Added'**
+  String get agentEvidenceAdd;
+
+  /// Removed
+  ///
+  /// In en, this message translates to:
+  /// **'Removed'**
+  String get agentEvidenceRemove;
+
+  /// Write
+  ///
+  /// In en, this message translates to:
+  /// **'Write'**
+  String get agentEvidenceWrite;
+
+  /// Written content
+  ///
+  /// In en, this message translates to:
+  /// **'Written content'**
+  String get agentWrittenContent;
+
+  /// Written content with status
+  ///
+  /// In en, this message translates to:
+  /// **'{title} · {status}'**
+  String agentWrittenContentWithStatus(String title, String status);
+
+  /// Unified diff
+  ///
+  /// In en, this message translates to:
+  /// **'Unified diff'**
+  String get agentUnifiedDiff;
+
+  /// Diff metadata
+  ///
+  /// In en, this message translates to:
+  /// **'Diff metadata'**
+  String get agentDiffMetadata;
+
+  /// Hunk title
+  ///
+  /// In en, this message translates to:
+  /// **'Diff hunk title'**
+  String get agentDiffHunkTitle;
+
+  /// Empty line
+  ///
+  /// In en, this message translates to:
+  /// **'Empty line'**
+  String get agentEmptyLine;
+
+  /// Live summary
+  ///
+  /// In en, this message translates to:
+  /// **'Live summary for this turn'**
+  String get agentLiveSummary;
+
+  /// Live summary hint
+  ///
+  /// In en, this message translates to:
+  /// **'Live summary for this turn; cannot be restored from history'**
+  String get agentLiveSummaryHint;
+
+  /// Turn summary
+  ///
+  /// In en, this message translates to:
+  /// **'Summary for this turn'**
+  String get agentTurnSummary;
+
+  /// Replace snippet
+  ///
+  /// In en, this message translates to:
+  /// **'Replacement snippet'**
+  String get agentReplaceSnippet;
+
+  /// Replace all
+  ///
+  /// In en, this message translates to:
+  /// **'Replacement snippet · all matches'**
+  String get agentReplaceSnippetAll;
+
+  /// File created
+  ///
+  /// In en, this message translates to:
+  /// **'Created'**
+  String get agentFileCreated;
+
+  /// File modified
+  ///
+  /// In en, this message translates to:
+  /// **'Modified'**
+  String get agentFileModified;
+
+  /// File deleted
+  ///
+  /// In en, this message translates to:
+  /// **'Deleted'**
+  String get agentFileDeleted;
+
+  /// File moved
+  ///
+  /// In en, this message translates to:
+  /// **'Moved'**
+  String get agentFileMoved;
+
+  /// File changed
+  ///
+  /// In en, this message translates to:
+  /// **'File change'**
+  String get agentFileChanged;
+
+  /// Tool pending
+  ///
+  /// In en, this message translates to:
+  /// **'Pending'**
+  String get agentToolPending;
+
+  /// Tool in progress
+  ///
+  /// In en, this message translates to:
+  /// **'In progress'**
+  String get agentToolInProgress;
+
+  /// Tool completed
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get agentToolCompleted;
+
+  /// Tool failed
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get agentToolFailed;
+
+  /// Tool cancelled
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get agentToolCancelled;
+
+  /// Mode icon
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation mode icon'**
+  String get agentConversationModeIcon;
+
+  /// Mode options
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation mode options'**
+  String get agentConversationModeOptions;
+
+  /// Selected
+  ///
+  /// In en, this message translates to:
+  /// **'Selected'**
+  String get agentModeSelected;
+
+  /// Selectable
+  ///
+  /// In en, this message translates to:
+  /// **'Selectable'**
+  String get agentModeSelectable;
+
+  /// Not selectable
+  ///
+  /// In en, this message translates to:
+  /// **'Not selectable'**
+  String get agentModeNotSelectable;
+
+  /// Loading modes
+  ///
+  /// In en, this message translates to:
+  /// **'Loading conversation modes'**
+  String get agentLoadingModes;
+
+  /// Cannot load modes
+  ///
+  /// In en, this message translates to:
+  /// **'The current Provider cannot load conversation modes'**
+  String get agentCannotLoadModes;
 }
 
 class _AppLocalizationsDelegate

@@ -222,7 +222,7 @@ class _AgentConversationNavigationRailState
       onKeyEvent: _handleKey,
       child: Semantics(
         container: true,
-        label: '对话导航',
+        label: context.l10n.agentNavConversation,
         child: Material(
           type: MaterialType.transparency,
           // 整轨 + 预览卡同一 MouseRegion，移入卡片不丢失 hover。
@@ -459,7 +459,7 @@ class _AgentConversationNavigationPreviewCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    final status = _navStatusPresentation(entry.status, colors);
+    final status = _navStatusPresentation(entry.status, colors, context.l10n);
     final tokenLabel = agentConversationNavigationTokenLabel(entry.tokenUsage);
 
     return ConstrainedBox(
@@ -628,30 +628,31 @@ class _NavMetaChip extends StatelessWidget {
 ({String label, Color foreground, Color background}) _navStatusPresentation(
   AgentConversationNavigationStatus status,
   IdeColors colors,
+  AppLocalizations l10n,
 ) {
   return switch (status) {
     AgentConversationNavigationStatus.streaming => (
-      label: '生成中',
+      label: l10n.agentStatusStreaming,
       foreground: colors.accent,
       background: colors.accent.withValues(alpha: 0.14),
     ),
     AgentConversationNavigationStatus.completed => (
-      label: '已完成',
+      label: l10n.agentStatusCompleted,
       foreground: colors.success,
       background: colors.success.withValues(alpha: 0.14),
     ),
     AgentConversationNavigationStatus.failed => (
-      label: '失败',
+      label: l10n.agentStatusFailed,
       foreground: colors.error,
       background: colors.error.withValues(alpha: 0.14),
     ),
     AgentConversationNavigationStatus.interrupted => (
-      label: '已中断',
+      label: l10n.agentStatusInterrupted,
       foreground: colors.warning,
       background: colors.warning.withValues(alpha: 0.14),
     ),
     AgentConversationNavigationStatus.unknown => (
-      label: '未知',
+      label: l10n.agentStatusUnknown,
       foreground: colors.textSecondary,
       background: colors.border.withValues(alpha: 0.2),
     ),

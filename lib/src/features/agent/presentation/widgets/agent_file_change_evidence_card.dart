@@ -7,6 +7,8 @@ import 'package:zeta/src/ui/core/ide_collapsible_card.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
+import 'package:zeta/src/features/agent/presentation/agent_presentation_l10n.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
 /// 只消费 typed projection 的文件变更卡；展开状态由时间线持有。
 class AgentFileChangeEvidenceCard extends StatelessWidget {
@@ -27,11 +29,14 @@ class AgentFileChangeEvidenceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final detail = item.detail;
-    final statusPresentation = status == null ? null : _status(status!, colors);
+    final l10n = context.l10n;
+    final statusPresentation = status == null
+        ? null
+        : _status(status!, colors, l10n);
     final statusLabel = statusPresentation?.$1;
     final statusColor = statusPresentation?.$2;
-    final action = _action(item.kind);
-    final detailLabel = _detailLabel(detail);
+    final action = item.kind.localizedLabel(l10n);
+    final detailLabel = _detailLabel(detail, l10n);
     return RepaintBoundary(
       key: agentFileChangeEvidenceKey(item.ownerEntryId, item.changeId, 'card'),
       child: IdeCollapsibleCard(
@@ -97,7 +102,7 @@ class AgentFileChangeEvidenceCard extends StatelessWidget {
                       ownerEntryId: item.ownerEntryId,
                       changeId: item.changeId,
                       detail: detail,
-                      statusLabel: statusLabel ?? '本回合汇总',
+                      statusLabel: statusLabel ?? context.l10n.agentTurnSummary,
                     ),
                   AgentUnifiedPatchDetailProjection() =>
                     AgentUnifiedPatchEvidenceView(
@@ -208,9 +213,9 @@ class _Summary extends StatelessWidget {
         ),
         if (item.replayability == AgentFileChangeReplayability.liveOnly)
           Semantics(
-            label: '本回合实时汇总，不可从历史恢复',
+            label: context.l10n.agentLiveSummaryHint,
             child: Text(
-              '本回合实时汇总',
+              context.l10n.agentLiveSummary,
               key: agentFileChangeEvidenceKey(
                 item.ownerEntryId,
                 item.changeId,
@@ -224,23 +229,19 @@ class _Summary extends StatelessWidget {
   }
 }
 
-(String, Color) _status(AgentToolStatus status, IdeColors colors) {
+(String, Color) _status(
+  AgentToolStatus status,
+  IdeColors colors,
+  AppLocalizations l10n,
+) {
   return switch (status) {
-    AgentToolStatus.pending => ('待执行', colors.warning),
-    AgentToolStatus.inProgress => ('进行中', colors.info),
-    AgentToolStatus.completed => ('已完成', colors.success),
-    AgentToolStatus.failed => ('失败', colors.error),
-    AgentToolStatus.cancelled => ('已取消', colors.textTertiary),
+    AgentToolStatus.pending => (l10n.agentToolPending, colors.warning),
+    AgentToolStatus.inProgress => (l10n.agentToolInProgress, colors.info),
+    AgentToolStatus.completed => (l10n.agentToolCompleted, colors.success),
+    AgentToolStatus.failed => (l10n.agentToolFailed, colors.error),
+    AgentToolStatus.cancelled => (l10n.agentToolCancelled, colors.textTertiary),
   };
 }
-
-String _action(AgentFileChangeKind kind) => switch (kind) {
-  AgentFileChangeKind.created => '新建',
-  AgentFileChangeKind.modified => '修改',
-  AgentFileChangeKind.deleted => '删除',
-  AgentFileChangeKind.moved => '移动',
-  AgentFileChangeKind.unknown => '文件变更',
-};
 
 IconData _icon(AgentFileChangeKind kind) => switch (kind) {
   AgentFileChangeKind.created => Icons.note_add_outlined,
@@ -250,14 +251,16 @@ IconData _icon(AgentFileChangeKind kind) => switch (kind) {
   AgentFileChangeKind.unknown => Icons.description_outlined,
 };
 
-String _detailLabel(AgentFileChangeDetailProjection? detail) =>
-    switch (detail) {
-      null => 'Provider 未提供内容证据',
-      AgentTextReplacementDetailProjection(:final replaceAll) =>
-        replaceAll == true ? '替换片段 · 全部匹配' : '替换片段',
-      AgentWrittenContentDetailProjection() => '写入内容',
-      AgentUnifiedPatchDetailProjection() => '统一差异',
-    };
+String _detailLabel(
+  AgentFileChangeDetailProjection? detail,
+  AppLocalizations l10n,
+) => switch (detail) {
+  null => 'Provider 未提供内容证据',
+  AgentTextReplacementDetailProjection(:final replaceAll) =>
+    replaceAll == true ? l10n.agentReplaceSnippetAll : l10n.agentReplaceSnippet,
+  AgentWrittenContentDetailProjection() => l10n.agentWrittenContent,
+  AgentUnifiedPatchDetailProjection() => l10n.agentUnifiedDiff,
+};
 
 String _path(AgentFileChangeItemProjection item) =>
     item.destinationPath == null || item.destinationPath!.isEmpty

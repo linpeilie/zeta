@@ -506,7 +506,10 @@ class _AgentBubbleMessage extends StatelessWidget {
                   onPressed: () {
                     unawaited(_showEditRetryDialog(context));
                   },
-                  child: Text('从此处创建分支', style: textStyles.bodySmall),
+                  child: Text(
+                    context.l10n.agentCreateBranchHere,
+                    style: textStyles.bodySmall,
+                  ),
                 ),
               ],
             ],
@@ -522,7 +525,7 @@ class _AgentBubbleMessage extends StatelessWidget {
       context: context,
       builder: (dialogContext) {
         return IdeDialog(
-          title: const Text('创建分支并重试'),
+          title: Text(context.l10n.agentCreateBranchRetry),
           content: SizedBox(
             width: 360,
             child: Column(
@@ -537,7 +540,7 @@ class _AgentBubbleMessage extends StatelessWidget {
                 sf.TextField(
                   controller: controller,
                   autofocus: true,
-                  placeholder: const Text('编辑消息…'),
+                  placeholder: Text(context.l10n.agentEditMessage),
                 ),
               ],
             ),
@@ -547,7 +550,7 @@ class _AgentBubbleMessage extends StatelessWidget {
               onPressed: () => Navigator.of(dialogContext).pop(false),
             ),
             IdeDialogAction.confirm(
-              label: '创建分支并发送',
+              label: context.l10n.agentCreateBranchSend,
               onPressed: () => Navigator.of(dialogContext).pop(true),
             ),
           ],

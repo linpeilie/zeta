@@ -342,7 +342,7 @@ class _AgentActivePlanStepRow extends StatelessWidget {
     final textStyles = IdeTextStyles.of(context);
     return Semantics(
       label:
-          '${_activePlanStatusLabel(entry.normalizedStatus)}：${entry.content}',
+          '${_activePlanStatusLabel(entry.normalizedStatus, context.l10n)}：${entry.content}',
       excludeSemantics: true,
       child: Padding(
         padding: const EdgeInsets.symmetric(
@@ -453,11 +453,9 @@ int _activePlanCurrentIndex(List<AgentPlanEntry> entries) {
   return unknown == -1 ? entries.length - 1 : unknown;
 }
 
-String _activePlanStatusLabel(AgentPlanEntryStatus status) {
-  return switch (status) {
-    AgentPlanEntryStatus.completed => '已完成',
-    AgentPlanEntryStatus.inProgress => '进行中',
-    AgentPlanEntryStatus.pending => '待处理',
-    AgentPlanEntryStatus.unknown => '状态未知',
-  };
+String _activePlanStatusLabel(
+  AgentPlanEntryStatus status,
+  AppLocalizations l10n,
+) {
+  return status.localizedLabel(l10n);
 }

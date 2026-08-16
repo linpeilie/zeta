@@ -267,7 +267,7 @@ class _AgentThreadHistoryLoading extends StatelessWidget {
               ),
               const SizedBox(height: IdeSpacing.space16),
               Text(
-                '正在加载会话…',
+                context.l10n.agentLoadingSession,
                 key: const ValueKey('agent-thread-history-loading-label'),
                 textAlign: TextAlign.center,
                 style: textStyles.bodyMedium.copyWith(
@@ -753,6 +753,7 @@ class _AgentTimelineBlockSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final content = switch (block) {
       AgentTimelineEntryRenderBlock(:final entry) => _buildTimelineEntry(
+        context,
         entry,
         markdownCache: markdownCache,
       ),
@@ -778,6 +779,7 @@ class _AgentTimelineBlockSection extends StatelessWidget {
   }
 
   Widget _buildTimelineEntry(
+    BuildContext context,
     AgentTimelineEntry entry, {
     required AgentMarkdownCache markdownCache,
   }) {
@@ -801,6 +803,7 @@ class _AgentTimelineBlockSection extends StatelessWidget {
       AgentQuestionTimelineEntry() => const SizedBox.shrink(),
       // 计划文档改在对话流内渲染：仍待审批时才是交互卡，决定后条目即被移除。
       AgentPlanApprovalTimelineEntry(:final request) => _buildPlanApprovalCard(
+        context,
         request,
       ),
       // 正常路径会在 grouping 中转成文件编辑组；此处仅作兜底。
@@ -815,12 +818,15 @@ class _AgentTimelineBlockSection extends StatelessWidget {
   ///
   /// 审批是阻塞请求、回合仍在运行，「修改」只能把意见随 `rejected` 决定回传，
   /// 不能走 `sendMessage`。「执行」仅代表接受方案，不预授权任何操作。
-  Widget _buildPlanApprovalCard(AgentPlanApprovalRequest request) {
+  Widget _buildPlanApprovalCard(
+    BuildContext context,
+    AgentPlanApprovalRequest request,
+  ) {
     return _AgentPlanDocumentCard(
       key: ValueKey<String>('agent-plan-approval-card-${request.id}'),
       requestId: request.id,
       title: request.title,
-      subtitle: '接受计划仅确认方案；命令、文件与网络权限仍会单独请求。',
+      subtitle: context.l10n.agentAcceptPlanHint,
       markdown: request.markdown,
       todos: request.todos,
       phases: request.phases,
@@ -834,7 +840,7 @@ class _AgentTimelineBlockSection extends StatelessWidget {
           reason: revision,
         ),
       ),
-      executeLabel: '接受计划',
+      executeLabel: context.l10n.agentAcceptPlan,
       onExecute: () => unawaited(
         viewModel.respondToPlanApproval(
           request,

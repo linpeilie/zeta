@@ -24,7 +24,7 @@ class _AgentCommandGroupCard extends StatelessWidget {
           expanded: expanded,
           onToggle: () => viewModel.toggleCommandGroup(group.id),
           titleWidget: Text(
-            _commandGroupSummary(group),
+            _commandGroupSummary(group, context.l10n),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: _agentSummaryTextStyle(context),
@@ -39,7 +39,7 @@ class _AgentCommandGroupCard extends StatelessWidget {
             left: IdeSpacing.space20,
           ),
           hoverBackgroundColor: _agentHoverBackground(context),
-          semanticLabel: '命令组',
+          semanticLabel: context.l10n.agentCommandGroup,
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
@@ -65,7 +65,7 @@ class _AgentCommandGroupItemRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       key: ValueKey<String>('agent-command-group-item-${item.id}'),
-      _commandGroupItemTitle(item),
+      _commandGroupItemTitle(item, context.l10n),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
       style: _agentItemTextStyle(context),
@@ -74,8 +74,11 @@ class _AgentCommandGroupItemRow extends StatelessWidget {
 }
 
 /// 展开命令组后同时显示事件类型和具体标题，避免 Grok 事件退化成重复的「操作」。
-String _commandGroupItemTitle(AgentTimelineCommandGroupItem item) {
-  final kindLabel = _toolKindLabel(item.kind);
+String _commandGroupItemTitle(
+  AgentTimelineCommandGroupItem item,
+  AppLocalizations l10n,
+) {
+  final kindLabel = _toolKindLabel(item.kind, l10n);
   final title = item.title.trim();
   if (title.isEmpty || title == kindLabel || title.startsWith('$kindLabel ·')) {
     return title.isEmpty ? kindLabel : title;
@@ -135,7 +138,7 @@ class _AgentFileEditGroupCardState extends State<_AgentFileEditGroupCard> {
         left: IdeSpacing.space20,
       ),
       hoverBackgroundColor: _agentHoverBackground(context),
-      semanticLabel: '文件编辑组',
+      semanticLabel: context.l10n.agentFileEditGroup,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
@@ -360,7 +363,7 @@ class _AgentToolCallCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  _toolCardTitle(toolCall),
+                  _toolCardTitle(toolCall, context.l10n),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: _agentItemTextStyle(context),
@@ -393,7 +396,7 @@ class _AgentToolCallCard extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: IdeSpacing.space10),
           bodyPadding: const EdgeInsets.only(top: IdeSpacing.space8),
           hoverBackgroundColor: _agentHoverBackground(context),
-          semanticLabel: '工具调用',
+          semanticLabel: context.l10n.agentToolCall,
           body: toolCall.content == null
               ? null
               : SelectableText(
@@ -409,23 +412,25 @@ class _AgentToolCallCard extends StatelessWidget {
 }
 
 /// 思考/命令卡标题：进行中时用更明确的相位文案。
-String _toolCardTitle(AgentToolCall toolCall) {
+String _toolCardTitle(AgentToolCall toolCall, AppLocalizations l10n) {
   // displayTitle 会把 call-... 合成成「类型 · 路径/命令」。
   final resolved = toolCall.displayTitle.trim();
   if (!toolCall.isActiveStatus) {
     return resolved;
   }
   if (toolCall.kind == AgentToolKind.think) {
-    return '思考中';
+    return l10n.agentThinking;
   }
   if (resolved.isEmpty) {
-    return '执行中';
+    return l10n.agentRunning;
   }
-  // 已是「执行中」前缀则不再重复。
-  if (resolved.startsWith('执行中') || resolved.startsWith('思考中')) {
+  if (resolved.startsWith(l10n.agentRunning) ||
+      resolved.startsWith(l10n.agentThinking) ||
+      resolved.startsWith('执行中') ||
+      resolved.startsWith('思考中')) {
     return resolved;
   }
-  return '执行中 · $resolved';
+  return l10n.agentRunningPrefix(resolved);
 }
 
 /// 计划文档在对话流中的统一卡片。
@@ -524,7 +529,10 @@ class _AgentPlanDocumentCard extends StatelessWidget {
                       _AgentRawMarkdownBody(data: markdown),
                     if (todos.isNotEmpty) ...[
                       const SizedBox(height: IdeSpacing.space8),
-                      _AgentPlanTodoList(title: '步骤', todos: todos),
+                      _AgentPlanTodoList(
+                        title: context.l10n.agentSteps,
+                        todos: todos,
+                      ),
                     ],
                     for (final phase in phases) ...[
                       const SizedBox(height: IdeSpacing.space8),
@@ -630,7 +638,7 @@ class _AgentPlanDocumentCard extends StatelessWidget {
                     controller: revisionController,
                     focusNode: revisionFocusNode,
                     placeholder: Text(
-                      '补充或修改计划…',
+                      context.l10n.agentRevisePlanHint,
                       style: textStyles.bodyMedium.copyWith(
                         color: colors.textTertiary,
                       ),
@@ -657,14 +665,14 @@ class _AgentPlanDocumentCard extends StatelessWidget {
               ),
               const SizedBox(height: IdeSpacing.space8),
               if (onSelectExecutionPermission != null) ...[
-                _buildExecutionPermissionRow(textStyles),
+                _buildExecutionPermissionRow(context, textStyles),
                 const SizedBox(height: IdeSpacing.space8),
               ],
               Row(
                 children: [
                   IdeButton(
                     key: ValueKey<String>('agent-plan-revise-$requestId'),
-                    label: '修改',
+                    label: context.l10n.agentRevise,
                     variant: IdeButtonVariant.outline,
                     // 空输入没有可发送的修改意见，保持禁用而非静默无响应。
                     onPressed: hasRevision ? _submitRevision : null,
@@ -696,7 +704,7 @@ class _AgentPlanDocumentCard extends StatelessWidget {
                   const SizedBox(width: IdeSpacing.space8),
                   IdeButton(
                     key: ValueKey<String>('agent-plan-abandon-$requestId'),
-                    label: '放弃',
+                    label: context.l10n.agentAbandon,
                     variant: IdeButtonVariant.ghost,
                     onPressed: onAbandon,
                   ),
@@ -709,22 +717,27 @@ class _AgentPlanDocumentCard extends StatelessWidget {
     );
   }
 
-  Widget _buildExecutionPermissionRow(IdeTextStyles textStyles) {
+  Widget _buildExecutionPermissionRow(
+    BuildContext context,
+    IdeTextStyles textStyles,
+  ) {
     final permission = executionPermission;
     final scopeHint = switch (permission?.origin) {
       AgentPlanExecutionPermissionOrigin.beforePlan => 'Plan 前',
-      AgentPlanExecutionPermissionOrigin.catalogDefault => '保守默认',
-      AgentPlanExecutionPermissionOrigin.userOverride => '仅本次',
+      AgentPlanExecutionPermissionOrigin.catalogDefault =>
+        context.l10n.agentPermCatalogDefault,
+      AgentPlanExecutionPermissionOrigin.userOverride =>
+        context.l10n.agentPermUserOverride,
       AgentPlanExecutionPermissionOrigin.providerFallback => 'Provider 默认',
-      null => '需要选择',
+      null => context.l10n.agentPermNeedsChoice,
     };
     return Row(
       children: [
-        Text('执行权限', style: textStyles.bodySmall),
+        Text(context.l10n.agentExecPermission, style: textStyles.bodySmall),
         const SizedBox(width: IdeSpacing.space8),
         Flexible(
           child: _PermissionOptionButton(
-            label: permission?.label ?? '请选择执行权限',
+            label: permission?.label ?? context.l10n.agentChooseExecPermission,
             options: executionPermissionOptions,
             selectedOptionId: permission?.selection?.optionId,
             scopeHint: scopeHint,
@@ -862,13 +875,13 @@ class _AgentPermissionCardState extends State<_AgentPermissionCard> {
     final textStyles = IdeTextStyles.of(context);
     final hasAmendment = request.proposedExecpolicyAmendment.isNotEmpty;
     final isCommand = request.kind == AgentPermissionKind.commandExecution;
-    final displayTitle = _permissionDisplayTitle(request);
+    final displayTitle = _permissionDisplayTitle(request, context.l10n);
     final command = request.command?.trim();
-    final kindLabel = _permissionKindLabel(request.kind);
+    final kindLabel = request.kind.localizedShortLabel(context.l10n);
 
     return Semantics(
       container: true,
-      label: '权限请求：$kindLabel · $displayTitle',
+      label: context.l10n.agentPermissionRequest(kindLabel, displayTitle),
       child: PanelCard(
         key: ValueKey<String>('agent-permission-card-${request.id}'),
         color: colors.surfaceOverlay,
@@ -946,14 +959,14 @@ class _AgentPermissionCardState extends State<_AgentPermissionCard> {
     return <Widget>[
       IdeButton(
         key: ValueKey('agent-permission-cancel-${request.id}'),
-        label: '取消',
-        semanticLabel: '取消回合',
+        label: context.l10n.agentCancelAction,
+        semanticLabel: context.l10n.agentCancelTurn,
         variant: IdeButtonVariant.ghost,
         onPressed: () => widget.onRespond(approved: false, cancelTurn: true),
       ),
       IdeButton(
         key: ValueKey('agent-permission-deny-${request.id}'),
-        label: '拒绝',
+        label: context.l10n.agentDeny,
         variant: IdeButtonVariant.ghost,
         onPressed: () => widget.onRespond(
           approved: false,
@@ -965,7 +978,7 @@ class _AgentPermissionCardState extends State<_AgentPermissionCard> {
       if (isCommand)
         IdeButton(
           key: ValueKey('agent-permission-session-${request.id}'),
-          label: '本会话允许',
+          label: context.l10n.agentAllowSession,
           variant: IdeButtonVariant.outline,
           onPressed: () => widget.onRespond(
             approved: true,
@@ -975,7 +988,7 @@ class _AgentPermissionCardState extends State<_AgentPermissionCard> {
       if (isCommand && hasAmendment)
         IdeButton(
           key: ValueKey('agent-permission-always-${request.id}'),
-          label: '始终允许',
+          label: context.l10n.agentAlwaysAllow,
           variant: IdeButtonVariant.outline,
           onPressed: () => widget.onRespond(
             approved: true,
@@ -988,13 +1001,13 @@ class _AgentPermissionCardState extends State<_AgentPermissionCard> {
           widget.onApproveGuardian != null)
         IdeButton(
           key: ValueKey('agent-permission-guardian-override-${request.id}'),
-          label: '覆盖守护',
+          label: context.l10n.agentOverrideGuard,
           variant: IdeButtonVariant.outline,
           onPressed: widget.onApproveGuardian,
         ),
       IdeButton(
         key: ValueKey('agent-permission-approve-${request.id}'),
-        label: '允许',
+        label: context.l10n.agentAllow,
         variant: IdeButtonVariant.primary,
         leadingIcon: Icons.check_rounded,
         onPressed: () => widget.onRespond(
@@ -1009,36 +1022,25 @@ class _AgentPermissionCardState extends State<_AgentPermissionCard> {
 }
 
 /// 权限类型语义标题：命令已单独展示时，避免把长命令再塞进标题。
-String _permissionDisplayTitle(AgentPermissionRequest request) {
+String _permissionDisplayTitle(
+  AgentPermissionRequest request,
+  AppLocalizations l10n,
+) {
   final title = request.title.trim();
   final command = request.command?.trim();
   if (command != null &&
       command.isNotEmpty &&
       (title.isEmpty || title == command)) {
-    return _permissionKindTitle(request.kind);
+    return _permissionKindTitle(request.kind, l10n);
   }
   if (title.isNotEmpty) {
     return title;
   }
-  return _permissionKindTitle(request.kind);
+  return _permissionKindTitle(request.kind, l10n);
 }
 
-String _permissionKindTitle(AgentPermissionKind kind) {
-  return switch (kind) {
-    AgentPermissionKind.commandExecution => '执行命令',
-    AgentPermissionKind.fileChange => '应用文件变更',
-    AgentPermissionKind.permissions => '授予权限',
-    AgentPermissionKind.other => '请求确认',
-  };
-}
-
-String _permissionKindLabel(AgentPermissionKind kind) {
-  return switch (kind) {
-    AgentPermissionKind.commandExecution => '命令',
-    AgentPermissionKind.fileChange => '文件',
-    AgentPermissionKind.permissions => '权限',
-    AgentPermissionKind.other => '确认',
-  };
+String _permissionKindTitle(AgentPermissionKind kind, AppLocalizations l10n) {
+  return kind.localizedLabel(l10n);
 }
 
 IconData _permissionKindIcon(AgentPermissionKind kind) {
@@ -1282,14 +1284,14 @@ class _AgentQuestionCardState extends State<_AgentQuestionCard>
             _AgentQuestionToolbarButton(
               buttonKey: ValueKey<String>('agent-question-close-${request.id}'),
               icon: Icons.close_rounded,
-              semanticLabel: '关闭提问',
+              semanticLabel: context.l10n.agentCloseQuestion,
               onPressed: _closeRequest,
             ),
           ],
         ),
         const SizedBox(height: IdeSpacing.space8),
         Text(
-          '该请求没有可回答的问题。',
+          context.l10n.agentNoAnswerableQuestions,
           style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
         ),
       ],
@@ -1405,7 +1407,7 @@ class _AgentQuestionCardState extends State<_AgentQuestionCard>
               onPressed: _advancing ? null : _skipCurrentQuestion,
               size: sf.ButtonSize.small,
               density: sf.ButtonDensity.dense,
-              child: const Text('跳过'),
+              child: Text(context.l10n.agentSkip),
             ),
             if (showManualConfirm && options.isNotEmpty) ...[
               const SizedBox(width: IdeSpacing.space6),
@@ -1478,7 +1480,7 @@ class _AgentQuestionCardState extends State<_AgentQuestionCard>
       if (question.allowMultiple) ...[
         const SizedBox(height: IdeSpacing.space4),
         Text(
-          '可选择多个选项',
+          context.l10n.agentMultiSelect,
           style: textStyles.caption.copyWith(color: colors.textTertiary),
         ),
       ],
@@ -1501,7 +1503,7 @@ class _AgentQuestionCardState extends State<_AgentQuestionCard>
             'agent-question-previous-${request.id}-${_currentQuestion!.questionId}',
           ),
           icon: Icons.chevron_left_rounded,
-          semanticLabel: '上一题',
+          semanticLabel: context.l10n.agentPreviousQuestion,
           onPressed: canGoBack
               ? () => _goToQuestion(_currentQuestionIndex - 1)
               : null,
@@ -1524,7 +1526,7 @@ class _AgentQuestionCardState extends State<_AgentQuestionCard>
             'agent-question-next-${request.id}-${_currentQuestion!.questionId}',
           ),
           icon: Icons.chevron_right_rounded,
-          semanticLabel: '下一题',
+          semanticLabel: context.l10n.agentNextQuestion,
           onPressed: canGoForward
               ? () => _goToQuestion(_currentQuestionIndex + 1)
               : null,
@@ -1535,7 +1537,7 @@ class _AgentQuestionCardState extends State<_AgentQuestionCard>
             'agent-question-close-${request.id}-${_currentQuestion!.questionId}',
           ),
           icon: Icons.close_rounded,
-          semanticLabel: '关闭提问',
+          semanticLabel: context.l10n.agentCloseQuestion,
           onPressed: _advancing ? null : _closeRequest,
         ),
       ],
@@ -1912,7 +1914,7 @@ class _AgentQuestionOtherField extends StatelessWidget {
                   autofocus: hasOptions,
                   enabled: enabled,
                   placeholder: Text(
-                    '输入你的解决方案…',
+                    context.l10n.agentCustomSolutionHint,
                     style: textStyles.bodySmall.copyWith(
                       color: colors.textTertiary,
                     ),
@@ -1946,7 +1948,7 @@ class _AgentQuestionOtherField extends StatelessWidget {
             onPressed: onExpand,
             enabled: enabled,
             button: true,
-            semanticLabel: '其他，输入自定义解决方案',
+            semanticLabel: context.l10n.agentOtherCustomSolution,
             padding: const EdgeInsets.symmetric(
               horizontal: IdeSpacing.space10,
               vertical: IdeSpacing.space8,
@@ -1976,7 +1978,7 @@ class _AgentQuestionOtherField extends StatelessWidget {
                 const SizedBox(width: IdeSpacing.space10),
                 Expanded(
                   child: Text(
-                    '其他，输入自定义解决方案',
+                    context.l10n.agentOtherCustomSolution,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: textStyles.rowTitle.copyWith(

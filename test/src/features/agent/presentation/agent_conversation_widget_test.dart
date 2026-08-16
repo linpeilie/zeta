@@ -19,6 +19,7 @@ import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_file_change_evidence_views.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
+import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_motion.dart';
@@ -1444,6 +1445,9 @@ void main() {
           lightTheme: lightIdeTheme,
           darkTheme: darkIdeTheme,
           child: sf.ShadcnApp(
+            locale: ZetaLocalization.simplifiedChinese,
+            supportedLocales: ZetaLocalization.supportedLocales,
+            localizationsDelegates: ZetaLocalization.delegates,
             theme: buildShadcnTheme(lightIdeTheme),
             darkTheme: buildShadcnTheme(darkIdeTheme),
             materialTheme: buildMaterialTheme(darkIdeTheme),
@@ -1525,6 +1529,9 @@ void main() {
         lightTheme: lightIdeTheme,
         darkTheme: darkIdeTheme,
         child: sf.ShadcnApp(
+          locale: ZetaLocalization.simplifiedChinese,
+          supportedLocales: ZetaLocalization.supportedLocales,
+          localizationsDelegates: ZetaLocalization.delegates,
           theme: buildShadcnTheme(lightIdeTheme),
           darkTheme: buildShadcnTheme(darkIdeTheme),
           materialTheme: buildMaterialTheme(darkIdeTheme),
@@ -1713,6 +1720,9 @@ void main() {
         lightTheme: lightIdeTheme,
         darkTheme: darkIdeTheme,
         child: sf.ShadcnApp(
+          locale: ZetaLocalization.simplifiedChinese,
+          supportedLocales: ZetaLocalization.supportedLocales,
+          localizationsDelegates: ZetaLocalization.delegates,
           theme: buildShadcnTheme(lightIdeTheme),
           darkTheme: buildShadcnTheme(darkIdeTheme),
           materialTheme: buildMaterialTheme(darkIdeTheme),
@@ -1965,6 +1975,9 @@ void main() {
         lightTheme: lightIdeTheme,
         darkTheme: darkIdeTheme,
         child: sf.ShadcnApp(
+          locale: ZetaLocalization.simplifiedChinese,
+          supportedLocales: ZetaLocalization.supportedLocales,
+          localizationsDelegates: ZetaLocalization.delegates,
           theme: buildShadcnTheme(lightIdeTheme),
           darkTheme: buildShadcnTheme(darkIdeTheme),
           materialTheme: buildMaterialTheme(darkIdeTheme),
