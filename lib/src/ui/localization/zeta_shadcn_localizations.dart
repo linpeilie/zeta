@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
@@ -369,9 +370,13 @@ final class ZetaShadcnLocalizationsDelegate
   }
 
   @override
-  Future<sf.ShadcnLocalizations> load(Locale locale) async {
-    final l10n = await AppLocalizations.delegate.load(locale);
-    return ZetaShadcnLocalizations(l10n, locale.toLanguageTag());
+  Future<sf.ShadcnLocalizations> load(Locale locale) {
+    return SynchronousFuture<sf.ShadcnLocalizations>(
+      ZetaShadcnLocalizations(
+        lookupAppLocalizations(locale),
+        locale.toLanguageTag(),
+      ),
+    );
   }
 
   @override

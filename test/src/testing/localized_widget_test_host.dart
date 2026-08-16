@@ -1,15 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
+import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/core/ide_stable_overlay_handler.dart';
-import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
-import 'package:zeta/src/ui/localization/zeta_shadcn_localizations.dart';
 
-/// 带 App/Global 本地化 delegates 的 Widget 测试宿主。
-///
-/// 步骤 6 之前生产 [MainApp] 仍不挂这些 delegates；测试可显式指定 [locale]。
+/// 带 App/Global/Zeta shadcn 本地化 delegates 的 Widget 测试宿主。
 Future<void> pumpLocalizedWidget(
   WidgetTester tester, {
   required Widget child,
@@ -42,14 +38,8 @@ Future<void> pumpLocalizedWidget(
       darkTheme: darkTheme,
       child: sf.ShadcnApp(
         locale: locale,
-        supportedLocales: AppLocalizations.supportedLocales,
-        localizationsDelegates: const [
-          AppLocalizations.delegate,
-          ZetaShadcnLocalizations.delegate,
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
+        supportedLocales: ZetaLocalization.supportedLocales,
+        localizationsDelegates: ZetaLocalization.delegates,
         popoverHandler: ideStablePopoverOverlayHandler,
         tooltipHandler: ideStablePopoverOverlayHandler,
         menuHandler: ideStablePopoverOverlayHandler,

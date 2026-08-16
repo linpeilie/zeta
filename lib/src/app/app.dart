@@ -7,6 +7,7 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:window_manager/window_manager.dart';
 
 import 'package:zeta/src/app/app_constants.dart';
+import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta/src/app/shell/ide_shell_controller.dart';
 import 'package:zeta/src/app/window_bootstrap.dart';
 import 'package:zeta/src/core/storage/zeta_data_paths.dart';
@@ -61,6 +62,8 @@ class MainApp extends StatefulWidget {
     this.initialAppearanceSettings,
     this.generalSettingsController,
     this.fallbackLanguage = AppLanguage.simplifiedChinese,
+    this.displayLanguageOverride,
+    this.waitForGeneralSettings = false,
     this.dataPaths,
     this.usageStatisticsPartitionStore,
     this.agentUsagePanelRepository,
@@ -95,8 +98,16 @@ class MainApp extends StatefulWidget {
   /// `~/.zeta/config/general.json`。
   final GeneralSettingsController? generalSettingsController;
 
-  /// 常规设置文件缺失或损坏时使用的语言。步骤 5 只注入 store，不改变根 Locale。
+  /// 常规设置文件缺失或损坏时使用的语言。
   final AppLanguage fallbackLanguage;
+
+  /// 测试可注入显示语言；生产路径忽略设置与系统 locale，固定简体中文。
+  final AppLanguage? displayLanguageOverride;
+
+  /// 是否等到常规设置加载完成后再挂有文字的 UI。
+  ///
+  /// 生产 `main` 传 true；Widget 测试默认 false，避免多等一帧。
+  final bool waitForGeneralSettings;
 
   /// 生产启动阶段解析并初始化的 Zeta 自有数据路径。
   ///
@@ -139,6 +150,8 @@ class MainAppState extends State<MainApp>
   bool _ownsAgentProviderRuntimeRegistry = false;
   AppLifecycleState? _appLifecycleState;
   bool _nativeWindowSuspended = false;
+  var _generalSettingsReady = false;
+  late final Locale _frozenDisplayLocale;
 
   /// 全局外观控制器引用，供设置面板和主题构建共享。
   AppearanceSettingsController get appearanceController =>
@@ -243,7 +256,24 @@ class MainAppState extends State<MainApp>
       _ownsGeneralSettingsController = true;
     }
     unawaited(_appearanceController.load());
-    unawaited(_generalSettingsController.load());
+    _frozenDisplayLocale = ZetaLocalization.localeFor(
+      widget.displayLanguageOverride ?? AppLanguage.simplifiedChinese,
+    );
+    final loadGeneralSettings = _generalSettingsController.load();
+    final shouldWait = widget.waitForGeneralSettings;
+    if (shouldWait) {
+      unawaited(
+        loadGeneralSettings.then((_) {
+          if (!mounted || _generalSettingsReady) {
+            return;
+          }
+          setState(() => _generalSettingsReady = true);
+        }),
+      );
+    } else {
+      _generalSettingsReady = true;
+      unawaited(loadGeneralSettings);
+    }
   }
 
   @override
@@ -347,6 +377,9 @@ class MainAppState extends State<MainApp>
             child: sf.ShadcnApp(
               debugShowCheckedModeBanner: false,
               title: appTitle,
+              locale: _frozenDisplayLocale,
+              supportedLocales: ZetaLocalization.supportedLocales,
+              localizationsDelegates: ZetaLocalization.delegates,
               popoverHandler: ideStablePopoverOverlayHandler,
               tooltipHandler: ideStablePopoverOverlayHandler,
               menuHandler: ideStablePopoverOverlayHandler,
@@ -354,42 +387,53 @@ class MainAppState extends State<MainApp>
               darkTheme: buildShadcnTheme(darkIdeTheme),
               materialTheme: buildMaterialTheme(materialIdeTheme),
               themeMode: resolveShadcnThemeMode(settings.themeMode),
-              home: IdeHome(
-                directoryPicker: widget.directoryPicker ?? getDirectoryPath,
-                enableNativeWindowFrame: widget.enableNativeWindowFrame,
-                showWindowControls: widget.showWindowControls,
-                sessionStore: _createSessionStore(),
-                agentProviderFactory: _agentProviderFactory,
-                agentProviderRuntimeRegistry: _agentProviderRuntimeRegistry,
-                desktopNotificationService: widget.desktopNotificationService,
-                desktopAttentionIndicator: widget.desktopAttentionIndicator,
-                agentProviderConfigStore:
-                    widget.agentProviderConfigStore ??
-                    _createAgentProviderConfigStore(),
-                agentProviderAvailabilityLoader:
-                    widget.agentProviderAvailabilityLoader,
-                homeProviderDetectionLoader:
-                    widget.homeProviderDetectionLoader ??
-                    (_usesCallbackPersistence
-                        ? _loadNoInstalledHomeProviders
-                        : null),
-                projectLocationOpener:
-                    widget.projectLocationOpener ?? openPathInSystemFileManager,
-                appearanceController: _appearanceController,
-                generalSettingsController: _generalSettingsController,
-                usageStatisticsDependencies:
-                    IdeShellUsageStatisticsDependencies(
-                      partitionStore: _usageStatisticsPartitionStore,
-                      agentUsagePanelRepository:
-                          widget.agentUsagePanelRepository,
+              home: _generalSettingsReady
+                  ? IdeHome(
+                      key: const ValueKey<String>('zeta.ide-home'),
+                      directoryPicker:
+                          widget.directoryPicker ?? getDirectoryPath,
+                      enableNativeWindowFrame: widget.enableNativeWindowFrame,
+                      showWindowControls: widget.showWindowControls,
+                      sessionStore: _createSessionStore(),
+                      agentProviderFactory: _agentProviderFactory,
+                      agentProviderRuntimeRegistry:
+                          _agentProviderRuntimeRegistry,
+                      desktopNotificationService:
+                          widget.desktopNotificationService,
+                      desktopAttentionIndicator:
+                          widget.desktopAttentionIndicator,
+                      agentProviderConfigStore:
+                          widget.agentProviderConfigStore ??
+                          _createAgentProviderConfigStore(),
+                      agentProviderAvailabilityLoader:
+                          widget.agentProviderAvailabilityLoader,
+                      homeProviderDetectionLoader:
+                          widget.homeProviderDetectionLoader ??
+                          (_usesCallbackPersistence
+                              ? _loadNoInstalledHomeProviders
+                              : null),
+                      projectLocationOpener:
+                          widget.projectLocationOpener ??
+                          openPathInSystemFileManager,
+                      appearanceController: _appearanceController,
+                      generalSettingsController: _generalSettingsController,
+                      usageStatisticsDependencies:
+                          IdeShellUsageStatisticsDependencies(
+                            partitionStore: _usageStatisticsPartitionStore,
+                            agentUsagePanelRepository:
+                                widget.agentUsagePanelRepository,
+                          ),
+                      agentModelCatalogRepository: _agentModelCatalogRepository,
+                      turnContextStore: _turnContextStore,
+                      // 回调存储用于测试/嵌入宿主；未显式注入统计仓储时不读取本机 CLI 历史。
+                      enableAgentUsageAutoRefresh:
+                          !_usesCallbackPersistence ||
+                          widget.agentUsagePanelRepository != null,
+                    )
+                  : ColoredBox(
+                      key: const ValueKey<String>('zeta.localization-loading'),
+                      color: materialIdeTheme.colors.frame,
                     ),
-                agentModelCatalogRepository: _agentModelCatalogRepository,
-                turnContextStore: _turnContextStore,
-                // 回调存储用于测试/嵌入宿主；未显式注入统计仓储时不读取本机 CLI 历史。
-                enableAgentUsageAutoRefresh:
-                    !_usesCallbackPersistence ||
-                    widget.agentUsagePanelRepository != null,
-              ),
             ),
           ),
         );

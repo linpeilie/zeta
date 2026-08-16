@@ -70,6 +70,7 @@ void main() {
           dataPaths: dataPaths,
           initialAppearanceSettings: appearance,
           fallbackLanguage: fallbackLanguage,
+          waitForGeneralSettings: true,
         ),
       );
     },
