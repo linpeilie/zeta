@@ -109,7 +109,7 @@ void main() {
           ),
         );
         expect(resolved, isNotNull);
-        expect(resolved!.interruptTurn, isFalse);
+        expect(resolved!.interruptTurn, isTrue);
         final envelope =
             resolved.responseFrame['response'] as Map<String, Object?>;
         expect(envelope['subtype'], 'success');

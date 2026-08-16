@@ -18,7 +18,10 @@
 在一个 turn 还在跑的时候，往里追加输入，而不是新开一个 turn。对应可选端口 `turnSteering`。注意：Plan 的"执行计划"**不是** steer，它必须新建回合。
 
 **Default / Plan conversation mode（对话模式）**
-Provider 提供的运行时模式目录。Default 是正常执行，Plan 是只规划不动手。模式选择作用于**下一个**回合，不修改进行中的 turn。目录为空或缺少 Default/Plan 时，模式选择器直接隐藏，退回普通对话——**不允许用 prompt 伪造 Plan 模式**。
+Provider 提供的运行时模式目录（端口 `conversationModes`）。Default 是正常执行，Plan 是只规划不动手。模式选择作用于**下一个**回合，不修改进行中的 turn。目录为空或缺少 Default/Plan 时，模式选择器直接隐藏，退回普通对话——**不允许用 prompt 伪造 Plan 模式**。
+
+**权限 Plan（`planningOnly`）**
+权限目录里标成只读规划的档（端口 `permissionPolicy`）。和对话 Plan 不是同一能力：它限制进程能做什么，不是下一回合聊法。点本地交接「执行」必须离开该档，不能带着只读规划去「执行」。
 
 ## 时间线
 

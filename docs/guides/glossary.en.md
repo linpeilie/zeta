@@ -18,7 +18,10 @@ One complete "user sends something → agent finishes working" round trip. It's 
 Appending input to a turn that's still running, instead of starting a new one. Backed by the optional `turnSteering` port. Note: "run plan" is **not** steering — it must create a new turn.
 
 **Default / Plan conversation mode**
-A runtime mode catalog supplied by the provider. Default executes normally; Plan only plans. Mode selection applies to the **next** turn and doesn't modify one in flight. When the catalog is empty or lacks Default/Plan, the mode selector is hidden and normal conversation continues — **faking Plan mode via prompting is not allowed**.
+A runtime mode catalog supplied by the provider (`conversationModes`). Default executes normally; Plan only plans. Mode selection applies to the **next** turn and doesn't modify one in flight. When the catalog is empty or lacks Default/Plan, the mode selector is hidden and normal conversation continues — **faking Plan mode via prompting is not allowed**.
+
+**Permission Plan (`planningOnly`)**
+A permission-catalog option marked read-only planning (`permissionPolicy`). It is not the same capability as conversation Plan: it constrains what the process may do. Local handoff "Run" must leave this option; execution must not keep a planning-only permission.
 
 ## Timeline
 

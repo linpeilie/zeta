@@ -139,6 +139,30 @@ void main() {
         expect(option.label, isNotEmpty);
         expect(catalog.optionById(option.id), option);
       }
+      expect(
+        catalog
+            .optionById(ClaudeCodePermissionModeCodec.optionPlan)
+            ?.planningOnly,
+        isTrue,
+      );
+      expect(
+        catalog
+            .optionById(ClaudeCodePermissionModeCodec.optionAsk)
+            ?.planningOnly,
+        isFalse,
+      );
+      expect(
+        catalog
+            .optionById(ClaudeCodePermissionModeCodec.optionAcceptEdits)
+            ?.planningOnly,
+        isFalse,
+      );
+      expect(
+        catalog
+            .optionById(ClaudeCodePermissionModeCodec.optionBypass)
+            ?.planningOnly,
+        isFalse,
+      );
     });
   });
 }

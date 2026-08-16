@@ -834,6 +834,7 @@ class _AgentTimelineBlockSection extends StatelessWidget {
           reason: revision,
         ),
       ),
+      executeLabel: '接受计划',
       onExecute: () => unawaited(
         viewModel.respondToPlanApproval(
           request,

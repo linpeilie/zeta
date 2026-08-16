@@ -475,13 +475,147 @@ void main() {
           const AgentTurnCompletedEvent(
             sessionId: 'thread-1',
             turnId: 'turn-1',
+            status: AgentHistoryTurnStatus.interrupted,
+          ),
+        );
+        await _drainTypedUiUpdate();
+
+        expect(viewModel.planExecutionRequest, isNull);
+        expect(provider.turnConfigurations, hasLength(2));
+        expect(
+          provider.calls.where((call) => call.startsWith('send:')),
+          hasLength(2),
+        );
+      },
+    );
+
+    test(
+      'provider-approved turn that already ran tools does not block composer',
+      () async {
+        final provider = _PlanningPermissionPlanApprovalFakeAgentProvider();
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        await viewModel.loadModels();
+        final plan = viewModel.composerState.permissionOptions.singleWhere(
+          (option) => option.id == ':plan',
+        );
+        await viewModel.selectPermissionOption(plan);
+        await viewModel.sendMessage('create a plan');
+        provider.emit(
+          const AgentPlanApprovalRequestedEvent(
+            AgentPlanApprovalRequest(
+              id: 'approval-already-ran',
+              title: 'Review plan',
+              markdown: '# Provider plan',
+              sessionId: 'thread-1',
+              turnId: 'turn-1',
+              continuation: AgentPlanApprovalContinuation.localExecutionHandoff,
+            ),
+          ),
+        );
+        await _drainTypedUiUpdate();
+        await viewModel.respondToPlanApproval(
+          viewModel.planApprovalRequests.single,
+          AgentPlanApprovalDecisionKind.accepted,
+        );
+        provider.emit(
+          const AgentToolCallEvent(
+            AgentToolCall(
+              id: 'write-1',
+              title: 'Write file',
+              kind: AgentToolKind.edit,
+              status: AgentToolStatus.completed,
+              sessionId: 'thread-1',
+              turnId: 'turn-1',
+            ),
+          ),
+        );
+        provider.emit(
+          const AgentTurnCompletedEvent(
+            sessionId: 'thread-1',
+            turnId: 'turn-1',
             status: AgentHistoryTurnStatus.completed,
           ),
         );
         await _drainTypedUiUpdate();
 
-        expect(viewModel.planExecutionRequest?.markdown, '# Provider plan');
-        expect(provider.turnConfigurations, hasLength(1));
+        expect(viewModel.planExecutionRequest, isNull);
+        expect(viewModel.pendingInteractionState.blocksComposer, isFalse);
+        expect(viewModel.composerState.selectedPermissionOptionId, ':ask');
+        expect(provider.turnConfigurations, hasLength(2));
+        expect(
+          provider
+              .turnConfigurations
+              .last
+              .permissionSnapshot
+              .selection
+              ?.optionId,
+          ':ask',
+        );
+      },
+    );
+
+    test(
+      'permission-plan handoff leaves planningOnly and adopts session Ask',
+      () async {
+        final provider = _PlanningPermissionPlanApprovalFakeAgentProvider();
+        final viewModel = _createViewModel(provider);
+        addTearDown(viewModel.dispose);
+
+        await viewModel.loadModels();
+        final plan = viewModel.composerState.permissionOptions.singleWhere(
+          (option) => option.id == ':plan',
+        );
+        await viewModel.selectPermissionOption(plan);
+        await viewModel.sendMessage('create a plan');
+        provider.emit(
+          const AgentPlanApprovalRequestedEvent(
+            AgentPlanApprovalRequest(
+              id: 'approval-planning',
+              title: 'Review plan',
+              markdown: '# Provider plan',
+              sessionId: 'thread-1',
+              turnId: 'turn-1',
+              continuation: AgentPlanApprovalContinuation.localExecutionHandoff,
+            ),
+          ),
+        );
+        await _drainTypedUiUpdate();
+        await viewModel.respondToPlanApproval(
+          viewModel.planApprovalRequests.single,
+          AgentPlanApprovalDecisionKind.accepted,
+        );
+        provider.emit(
+          const AgentTurnCompletedEvent(
+            sessionId: 'thread-1',
+            turnId: 'turn-1',
+            status: AgentHistoryTurnStatus.completed,
+          ),
+        );
+        await _drainTypedUiUpdate();
+
+        expect(viewModel.planExecutionRequest, isNull);
+        expect(viewModel.pendingInteractionState.blocksComposer, isFalse);
+        expect(viewModel.composerState.selectedPermissionOptionId, ':ask');
+        expect(
+          provider
+              .turnConfigurations
+              .last
+              .permissionSnapshot
+              .selection
+              ?.optionId,
+          ':ask',
+        );
+        expect(
+          provider
+              .turnConfigurations
+              .last
+              .permissionSnapshot
+              .selection
+              ?.optionId,
+          isNot(':plan'),
+        );
       },
     );
 
@@ -4848,23 +4982,57 @@ class _FakeAgentProviderFactory with LegacyBundleFactoryMixin {
 
 class _PermissionFakeAgentProvider extends _FakeAgentProvider
     implements TestPermissionPolicyHost {
-  _PermissionFakeAgentProvider({super.historySnapshotsByThread});
+  _PermissionFakeAgentProvider({
+    super.historySnapshotsByThread,
+    _FakePermissionPolicy? permissionPolicy,
+  }) : permissionPolicy = permissionPolicy ?? _FakePermissionPolicy();
 
   @override
-  final _FakePermissionPolicy permissionPolicy = _FakePermissionPolicy();
+  final _FakePermissionPolicy permissionPolicy;
+}
+
+class _PlanningPermissionPlanApprovalFakeAgentProvider
+    extends _PermissionFakeAgentProvider
+    implements AgentPlanApprovalPort {
+  _PlanningPermissionPlanApprovalFakeAgentProvider()
+    : super(
+        permissionPolicy: _FakePermissionPolicy(
+          options: const <AgentPermissionOption>[
+            AgentPermissionOption(id: ':ask', label: 'Ask'),
+            AgentPermissionOption(
+              id: ':plan',
+              label: 'Plan',
+              planningOnly: true,
+            ),
+          ],
+        ),
+      );
+
+  final List<AgentPlanApprovalDecision> planApprovalDecisions =
+      <AgentPlanApprovalDecision>[];
+
+  @override
+  Future<void> respondToPlanApproval(AgentPlanApprovalDecision decision) async {
+    planApprovalDecisions.add(decision);
+  }
 }
 
 class _FakePermissionPolicy implements AgentPermissionPolicyPort {
+  _FakePermissionPolicy({
+    this.options = const <AgentPermissionOption>[
+      AgentPermissionOption(id: ':ask', label: 'Ask'),
+      AgentPermissionOption(id: ':plan', label: 'Plan'),
+    ],
+  });
+
+  final List<AgentPermissionOption> options;
   int applyCount = 0;
 
   @override
   Future<AgentPermissionCatalog> listPermissionOptions() async {
     return AgentPermissionCatalog(
-      options: const <AgentPermissionOption>[
-        AgentPermissionOption(id: ':ask', label: 'Ask'),
-        AgentPermissionOption(id: ':plan', label: 'Plan'),
-      ],
-      defaultOptionId: ':ask',
+      options: options,
+      defaultOptionId: options.first.id,
     );
   }
 

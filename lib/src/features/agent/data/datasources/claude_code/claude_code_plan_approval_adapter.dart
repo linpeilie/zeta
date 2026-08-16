@@ -35,7 +35,8 @@ final class ClaudeCodePlanApprovalDecisionResult {
 
   final Map<String, Object?> responseFrame;
 
-  /// 用户取消整个审批时终止当前 turn；拒绝并附修改意见时让 Claude 继续修订。
+  /// 取消，或接受后要由 Zeta 新开执行回合时，终止当前 turn。
+  /// 拒绝并附修改意见时不打断，让 Claude 在本回合继续修订。
   final bool interruptTurn;
 }
 
@@ -228,7 +229,9 @@ final class ClaudeCodePlanApprovalAdapter {
         requestId: pending.controlRequestId,
         response: response,
       ),
-      interruptTurn: decision.kind == AgentPlanApprovalDecisionKind.cancelled,
+      interruptTurn:
+          decision.kind == AgentPlanApprovalDecisionKind.cancelled ||
+          decision.kind == AgentPlanApprovalDecisionKind.accepted,
     );
   }
 

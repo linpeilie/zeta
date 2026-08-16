@@ -379,8 +379,12 @@ create/resume/fork/send --> Binding.permissions.snapshotForRequest()
 
 ### Plan conversation mode 开发与验证
 
+- 存在两种**能力**，不是两种厂商名：对话 Plan（`conversationModes` 目录含 Plan）与
+  权限 Plan（`permissionPolicy` 目录项 `planningOnly == true`）。共享层只认端口和
+  标记，不得解析 optionId、不得按 providerId 分支。
 - Domain 只使用 `AgentConversationMode*`；Codex 的 `collaborationMode` JSON 只存在于
-  data client / mapper / encoder。
+  data client / mapper / encoder。`planningOnly` 由各 Provider 的权限 catalog 打标
+  （Claude 的 Plan 档为 true）。
 - `AgentConversationModeController` 管理目录、draft、confirmed、pending 和 generation；
   ViewModel 只负责绑定 Provider/thread 与冻结 `AgentTurnConfiguration`，Widget 不直接发 RPC。
 - Plan 终态的执行确认由 `AgentPlanExecutionHandoffController` 管理，是非持久化的本地
@@ -390,13 +394,20 @@ create/resume/fork/send --> Binding.permissions.snapshotForRequest()
   交接卡出现时 `blocksComposer` 为 true，隐藏主 Composer。交接底栏整合修订输入与
   「执行计划」：执行始终新建 Default 回合；「继续规划 / 发送修改」保持 Plan，可选
   发送修订文本。对话流中的 `AgentMessageKind.plan` 折叠消息卡保持独立，不承载执行动作。
-- Run plan 必须先选择 Default，再创建一个新的 turn；不得把它实现成当前 turn steer，
-  也不得调用 `AgentPlanApprovalPort`。执行权限默认恢复进入 Plan 前同 Binding/thread/runtime
-  generation 仍有效且 catalog 中 allowed 的选择；失效时回落到 catalog default，无可用项时
-  禁止执行并要求显式选择。卡内改选只写本地一次性快照，不调用 permission apply、不持久化。
-  继续规划显式保留 Plan，关闭不改变权限状态。
+  Provider 审批卡按钮应写成「接受计划」，不要和交接「执行」混用。
+  `localExecutionHandoff` 的接受必须结束当前回合（Claude：allow `ExitPlanMode` 后
+  interrupt），再由 Zeta 用非 planning 权限自动新开执行回合；不得让 CLI 在原
+  `--permission-mode plan` 进程里继续写文件。
+- Run plan 必须先选择 Default（若对话 Plan 可用），再创建一个新的 turn；不得把它实现成
+  当前 turn steer，也不得调用 `AgentPlanApprovalPort`。有权限端口时，执行快照不得使用
+  `planningOnly` 项：优先恢复进入只读规划前的选择（同 Binding/thread，**不**绑 runtime
+  generation），否则 catalog 中第一个非 planning 的 allowed 项；都没有则禁止执行。
+  点交接「执行」会 **会话内 adopt** 该权限（可 apply 到当前 runtime），**不** persist
+  用户默认。离开只读规划 ≠ 预授权命令/文件/网络。卡内改选仍只写本地一次性快照，
+  不 apply、不持久化。继续规划显式保留 Plan，关闭不改变权限状态。
 - 新增或修改该流程时至少覆盖：成功 Plan 展示、失败/中断不展示、结构化步骤回退、
-  Default 执行快照、Plan 前权限恢复、catalog fallback、一次性覆盖零 apply、继续规划模式、
+  Default 执行快照、planningOnly 种子丢弃、Plan 前权限恢复、catalog fallback、
+  卡上改选零 apply、点执行会话 adopt、继续规划模式、
   陈旧请求与 thread/provider/workspace 切换清理。
 - 模式来自 `bundle.conversationModes` 的运行时目录。端口为空、method-not-found、目录损坏
   或缺少 Default/Plan 时隐藏选择器，继续使用原有普通对话，不用 Prompt 伪造 Plan。

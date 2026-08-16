@@ -485,6 +485,8 @@ void main() {
 
       expect(find.text('Refactor tabs'), findsOneWidget);
       expect(find.text('Inspect current layout'), findsOneWidget);
+      expect(find.text('接受计划'), findsOneWidget);
+      expect(find.text('执行'), findsNothing);
       final execute = find.byKey(const ValueKey('agent-plan-execute-plan-1'));
       expect(execute, findsOneWidget);
       // 计划卡在对话流内渲染，不再挂到 Composer 上方的 pending dock。

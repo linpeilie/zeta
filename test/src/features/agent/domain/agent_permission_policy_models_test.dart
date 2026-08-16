@@ -25,6 +25,27 @@ void main() {
       expect(a, equals(b));
       expect(a.hashCode, b.hashCode);
       expect(a, isNot(equals(c)));
+      expect(a.planningOnly, isFalse);
+    });
+
+    test('planningOnly defaults to false and participates in equality', () {
+      const omitted = AgentPermissionOption(id: 'ask', label: 'Ask');
+      const explicitFalse = AgentPermissionOption(
+        id: 'ask',
+        label: 'Ask',
+        planningOnly: false,
+      );
+      const planning = AgentPermissionOption(
+        id: 'ask',
+        label: 'Ask',
+        planningOnly: true,
+      );
+
+      expect(omitted.planningOnly, isFalse);
+      expect(omitted, equals(explicitFalse));
+      expect(omitted.hashCode, explicitFalse.hashCode);
+      expect(omitted, isNot(equals(planning)));
+      expect(planning.planningOnly, isTrue);
     });
   });
 

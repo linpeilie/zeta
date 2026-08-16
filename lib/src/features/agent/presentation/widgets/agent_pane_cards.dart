@@ -450,6 +450,7 @@ class _AgentPlanDocumentCard extends StatelessWidget {
     required this.onRevise,
     required this.onExecute,
     required this.onAbandon,
+    this.executeLabel = '执行',
     this.todos = const <AgentPlanEntry>[],
     this.phases = const <AgentPlanApprovalPhase>[],
     this.executionPermission,
@@ -475,6 +476,7 @@ class _AgentPlanDocumentCard extends StatelessWidget {
   /// 提交修改意见；仅在输入非空时被调用。
   final ValueChanged<String> onRevise;
   final VoidCallback? onExecute;
+  final String executeLabel;
   final VoidCallback onAbandon;
   final List<AgentPlanEntry> todos;
   final List<AgentPlanApprovalPhase> phases;
@@ -686,7 +688,7 @@ class _AgentPlanDocumentCard extends StatelessWidget {
                   ),
                   IdeButton(
                     key: ValueKey<String>('agent-plan-execute-$requestId'),
-                    label: '执行',
+                    label: executeLabel,
                     variant: IdeButtonVariant.primary,
                     leadingIcon: Icons.play_arrow_rounded,
                     onPressed: onExecute,

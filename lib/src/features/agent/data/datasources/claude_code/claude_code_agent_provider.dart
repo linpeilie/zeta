@@ -774,7 +774,7 @@ class ClaudeCodeAgentProvider
         });
       } catch (error) {
         _log.w(
-          'Claude Code interrupt after plan cancellation failed '
+          'Claude Code interrupt after plan decision failed '
           '(${error.runtimeType})',
         );
       }

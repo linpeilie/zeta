@@ -1499,17 +1499,34 @@ class _PermissionOptionPopover extends StatelessWidget {
                   child: Semantics(
                     label:
                         '${option.label}'
+                        '${_permissionOptionCaption(option) == null ? '' : '，${_permissionOptionCaption(option)}'}'
                         '${option.allowed ? '' : '，不可用'}'
                         '${option.id == selectedOptionId ? '，已选择' : ''}',
-                    child: Text(
-                      option.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: textStyles.rowTitle.copyWith(
-                        color: option.allowed
-                            ? colors.textPrimary
-                            : colors.textTertiary,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          option.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: textStyles.rowTitle.copyWith(
+                            color: option.allowed
+                                ? colors.textPrimary
+                                : colors.textTertiary,
+                          ),
+                        ),
+                        if (_permissionOptionCaption(option)
+                            case final caption?)
+                          Text(
+                            caption,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: textStyles.bodySmall.copyWith(
+                              color: colors.textTertiary,
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 ),
@@ -1569,4 +1586,15 @@ class _ComposerActionButton extends StatelessWidget {
       ),
     );
   }
+}
+
+String? _permissionOptionCaption(AgentPermissionOption option) {
+  final description = option.description?.trim();
+  if (description != null && description.isNotEmpty) {
+    return description;
+  }
+  if (option.planningOnly) {
+    return '只读规划，不能改文件';
+  }
+  return null;
 }

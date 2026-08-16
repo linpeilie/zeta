@@ -221,6 +221,7 @@ class AgentConversationViewModel {
   _permissionSelectionController;
   final AgentPlanExecutionHandoffController _planExecutionHandoffController =
       AgentPlanExecutionHandoffController();
+  String? _autoStartPlanExecutionRequestId;
   final AgentConversationLocalTimelineIdGenerator _localTimelineIds =
       AgentConversationLocalTimelineIdGenerator();
   late final AgentConversationUiStateStore _uiStateStore;
@@ -557,11 +558,29 @@ class AgentConversationViewModel {
       );
       return;
     }
+    if (executionPermission.selection != null &&
+        _isPlanningOnlyPermission(executionPermission.selection!.optionId)) {
+      _publishUiChanges(
+        AgentUiUpdateRequest(
+          regions: const <AgentUiRegion>{AgentUiRegion.pendingInteraction},
+          urgency: AgentUiUpdateUrgency.immediate,
+        ),
+      );
+      return;
+    }
     if (!_planExecutionHandoffController.resolve(validatedRequest)) {
       return;
     }
     _resolvePlanExecutionAttention(validatedRequest);
     _conversationModeController.selectMode(AgentConversationModeId.defaultMode);
+    if (_permissionSelectionController.hasPort &&
+        executionPermission.selection != null) {
+      await _permissionSelectionController.adoptSessionPermission(
+        executionPermission.selection!,
+      );
+    }
+    // resolve 已清交接；无论 adopt 是否因 runtime 换代失败，都要立刻解除
+    // blocksComposer，否则主输入框会一直被旧 pending 状态藏住。
     _publishUiChanges(
       AgentUiUpdateRequest(
         regions: const <AgentUiRegion>{
@@ -2374,8 +2393,9 @@ class AgentConversationViewModel {
         kind == AgentPlanApprovalDecisionKind.accepted &&
         _planExecutionHandoffController.stageProviderApprovedPlan(
           request: request,
-          executionPermission: _permissionSelectionController
-              .selectionBeforeCurrentUserSelection(threadId: request.sessionId),
+          executionPermission: _executionPermissionSeed(
+            threadId: request.sessionId,
+          ),
           permissionRuntimeIdentity:
               _permissionSelectionController.runtimeIdentity,
         );
@@ -3361,6 +3381,30 @@ class AgentConversationViewModel {
     };
   }
 
+  AgentPermissionSelection? _executionPermissionSeed({
+    required String? threadId,
+  }) {
+    final beforePlanning = _permissionSelectionController
+        .selectionBeforePlanningOnly(threadId: threadId);
+    if (beforePlanning != null) {
+      return beforePlanning;
+    }
+    final current = _permissionSelectionController.effectiveSelection;
+    if (current == null || _isPlanningOnlyPermission(current.optionId)) {
+      return null;
+    }
+    return current;
+  }
+
+  bool _isPlanningOnlyPermission(String optionId) {
+    for (final option in _permissionSelectionController.options) {
+      if (option.id == optionId) {
+        return option.planningOnly;
+      }
+    }
+    return false;
+  }
+
   bool _canResolvePlanExecution(AgentPlanExecutionRequest request) {
     return planExecutionRequest?.id == request.id &&
         sessionId == request.sessionId;
@@ -3458,6 +3502,11 @@ class AgentConversationViewModel {
     final modeState = _conversationModeController.state;
     final completedMode =
         modeState.pendingTurnMode?.modeId ?? modeState.confirmedMode;
+    final fromProviderApproval = _planExecutionHandoffController
+        .hasStagedProviderPlan(
+          sessionId: event.sessionId,
+          turnId: event.turnId,
+        );
     final offeredRequest = _planExecutionHandoffController.offerCompletedPlan(
       sessionId: event.sessionId,
       turnId: event.turnId,
@@ -3466,13 +3515,33 @@ class AgentConversationViewModel {
       planMarkdown: planMarkdown,
       planMessageId: planMessageId,
       planEntries: List<AgentPlanEntry>.of(liveTurn.planEntries),
-      executionPermission: _permissionSelectionController.effectiveSelection,
+      executionPermission: _executionPermissionSeed(threadId: event.sessionId),
       permissionRuntimeIdentity: _permissionSelectionController.runtimeIdentity,
     );
     final request = offeredRequest == null
         ? null
         : _reconcilePlanExecutionPermission(offeredRequest);
+    if (request != null && fromProviderApproval) {
+      // 接受 ExitPlanMode 后当前回合会被打断；终态后自动新开执行回合。
+      _autoStartPlanExecutionRequestId = request.id;
+    }
     return previousId != request?.id;
+  }
+
+  void _maybeAutoStartPlanExecution() {
+    final requestId = _autoStartPlanExecutionRequestId;
+    if (requestId == null) {
+      return;
+    }
+    _autoStartPlanExecutionRequestId = null;
+    final request = planExecutionRequest;
+    if (request == null ||
+        request.id != requestId ||
+        isTurnRunning ||
+        !canSubmitMessage) {
+      return;
+    }
+    unawaited(startPlanExecution(request));
   }
 
   /// 时间线中最近一条用户消息（用于编辑重试）。
@@ -4031,6 +4100,7 @@ final class _AgentConversationEventStateTarget
         }
         _viewModel._consumeActivityDirty();
         _viewModel._syncElapsedTicker();
+        _viewModel._maybeAutoStartPlanExecution();
       case AgentPrepareInterruptedTurnChange():
         _viewModel._clearThreadRuntimeStatus();
         return AgentConversationStateMutationOutcome(

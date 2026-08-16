@@ -20,6 +20,18 @@ final class _AgentPermissionSelectionTransition {
   final String? threadId;
 }
 
+final class _PlanningOnlyPermissionMemory {
+  const _PlanningOnlyPermissionMemory({
+    required this.selection,
+    required this.providerId,
+    required this.threadId,
+  });
+
+  final AgentPermissionSelection selection;
+  final String? providerId;
+  final String? threadId;
+}
+
 /// 单个 Conversation Binding 的权限协调器。
 ///
 /// catalog、Provider apply 和偏好持久化在此编排；所有权限事实收敛到一个
@@ -41,6 +53,7 @@ class AgentConversationPermissionSelectionController extends ChangeNotifier {
       const AgentConversationPermissionState();
   AgentPermissionPolicyPort? _runtimePort;
   _AgentPermissionSelectionTransition? _lastUserSelectionTransition;
+  _PlanningOnlyPermissionMemory? _permissionBeforePlanning;
   bool _disposed = false;
   String? _lastError;
 
@@ -86,6 +99,49 @@ class AgentConversationPermissionSelectionController extends ChangeNotifier {
       return null;
     }
     return transition.previous;
+  }
+
+  /// 进入只读规划档之前的权限；同 Binding/thread 有效，不绑定 runtime generation。
+  AgentPermissionSelection? selectionBeforePlanningOnly({String? threadId}) {
+    final memory = _permissionBeforePlanning;
+    if (memory == null) {
+      return null;
+    }
+    final current = effectiveSelection;
+    if (current == null ||
+        _optionById(current.optionId)?.planningOnly != true) {
+      return null;
+    }
+    if (memory.threadId != _state.threadId) {
+      return null;
+    }
+    final requestedThreadId = _normalizeThreadId(threadId ?? _state.threadId);
+    if (requestedThreadId != _state.threadId) {
+      return null;
+    }
+    final currentProviderId = _state.runtimeIdentity?.providerId;
+    if (memory.providerId != null &&
+        currentProviderId != null &&
+        memory.providerId != currentProviderId) {
+      return null;
+    }
+    return memory.selection;
+  }
+
+  /// 将会话权限改为 [selection]，应用到当前 runtime，不写持久化默认。
+  Future<bool> adoptSessionPermission(
+    AgentPermissionSelection selection,
+  ) async {
+    if (_disposed) {
+      return false;
+    }
+    await applyEffectiveSelection(selection, syncPort: true);
+    if (effectiveSelection != selection) {
+      // apply 可能因 Claude 重启进程导致 runtime generation 变化而被丢弃；
+      // 会话工具栏仍必须离开 planning，本回合发送另带 permission 快照。
+      await applyEffectiveSelection(selection, syncPort: false);
+    }
+    return effectiveSelection == selection;
   }
 
   AgentPermissionStateSource? get stateSource => _state.effectiveValue?.source;
@@ -194,6 +250,7 @@ class AgentConversationPermissionSelectionController extends ChangeNotifier {
     }
     _runtimePort = null;
     _lastUserSelectionTransition = null;
+    _permissionBeforePlanning = null;
     _catalogController.bind(port);
     _lastError = null;
     _setState(
@@ -217,6 +274,11 @@ class AgentConversationPermissionSelectionController extends ChangeNotifier {
   void bindThread(String? threadId) {
     if (_disposed) {
       return;
+    }
+    final nextThread = _normalizeThreadId(threadId);
+    if (_permissionBeforePlanning != null &&
+        _permissionBeforePlanning!.threadId != nextThread) {
+      _permissionBeforePlanning = null;
     }
     _setState(_state.bindThread(threadId));
   }
@@ -246,6 +308,7 @@ class AgentConversationPermissionSelectionController extends ChangeNotifier {
         expectedIdentity: expectedIdentity,
         expectedThreadId: expectedThreadId,
       );
+      _rememberBeforePlanning(previous: previous, current: effectiveSelection);
       return;
     }
     final port = _runtimePort;
@@ -267,6 +330,7 @@ class AgentConversationPermissionSelectionController extends ChangeNotifier {
       expectedIdentity: expectedIdentity,
       expectedThreadId: expectedThreadId,
     );
+    _rememberBeforePlanning(previous: previous, current: appliedSelection);
   }
 
   Future<void> _selectDormantOption(AgentPermissionOption option) async {
@@ -299,6 +363,7 @@ class AgentConversationPermissionSelectionController extends ChangeNotifier {
       return;
     }
     final port = _runtimePort;
+    final previous = effectiveSelection;
     if (!syncPort || port == null) {
       _commitApplyResult(
         AgentPermissionApplyResult(
@@ -308,6 +373,7 @@ class AgentConversationPermissionSelectionController extends ChangeNotifier {
         source: AgentPermissionStateSource.userSelection,
         updateDefault: false,
       );
+      _rememberBeforePlanning(previous: previous, current: effectiveSelection);
       return;
     }
     await _applyThroughPort(
@@ -317,6 +383,7 @@ class AgentConversationPermissionSelectionController extends ChangeNotifier {
       updateDefault: false,
       persistDefault: false,
     );
+    _rememberBeforePlanning(previous: previous, current: effectiveSelection);
   }
 
   /// `thread/settings/updated` 服务端事实回写。
@@ -441,6 +508,39 @@ class AgentConversationPermissionSelectionController extends ChangeNotifier {
       }
       return null;
     }
+  }
+
+  AgentPermissionOption? _optionById(String? optionId) {
+    final normalized = optionId?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    for (final option in options) {
+      if (option.id == normalized) {
+        return option;
+      }
+    }
+    return null;
+  }
+
+  void _rememberBeforePlanning({
+    required AgentPermissionSelection? previous,
+    required AgentPermissionSelection? current,
+  }) {
+    if (current == null ||
+        _optionById(current.optionId)?.planningOnly != true) {
+      _permissionBeforePlanning = null;
+      return;
+    }
+    if (previous == null ||
+        _optionById(previous.optionId)?.planningOnly == true) {
+      return;
+    }
+    _permissionBeforePlanning = _PlanningOnlyPermissionMemory(
+      selection: previous,
+      providerId: _state.runtimeIdentity?.providerId,
+      threadId: _state.threadId,
+    );
   }
 
   void _recordUserSelectionTransition({

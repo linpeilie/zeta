@@ -15,6 +15,7 @@ class AgentPermissionOption {
     required this.label,
     this.description,
     this.allowed = true,
+    this.planningOnly = false,
   });
 
   /// 稳定选项 id（不透明；不得由共享层解析协议语义）。
@@ -29,6 +30,9 @@ class AgentPermissionOption {
   /// 当前环境是否允许选择。
   final bool allowed;
 
+  /// 只读规划档：可作为对话/权限入口，但不能作为「执行计划」权限。
+  final bool planningOnly;
+
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
@@ -36,15 +40,18 @@ class AgentPermissionOption {
             other.id == id &&
             other.label == label &&
             other.description == description &&
-            other.allowed == allowed;
+            other.allowed == allowed &&
+            other.planningOnly == planningOnly;
   }
 
   @override
-  int get hashCode => Object.hash(id, label, description, allowed);
+  int get hashCode =>
+      Object.hash(id, label, description, allowed, planningOnly);
 
   @override
   String toString() =>
-      'AgentPermissionOption(id: $id, label: $label, allowed: $allowed)';
+      'AgentPermissionOption(id: $id, label: $label, allowed: $allowed, '
+      'planningOnly: $planningOnly)';
 }
 
 /// Provider 暴露的权限选项目录。

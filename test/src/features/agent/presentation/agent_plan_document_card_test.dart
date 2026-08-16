@@ -118,7 +118,8 @@ void main() {
         snapshot.source,
         AgentPermissionRequestSource.localWorkflowOverride,
       );
-      expect(provider.permissionApplyCount, 0);
+      // 点交接「执行」会会话内 adopt 权限，卡上改选本身仍不 apply。
+      expect(provider.permissionApplyCount, 1);
       expect(provider.permissionDecisions, isEmpty);
       expect(provider.planDecisions, isEmpty);
 

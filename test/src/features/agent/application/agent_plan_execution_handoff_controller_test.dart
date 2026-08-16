@@ -25,6 +25,45 @@ void main() {
       expect(controller.pendingRequest, same(request));
     });
 
+    test('hasStagedProviderPlan is true only for the staged turn', () {
+      final controller = AgentPlanExecutionHandoffController();
+      expect(
+        controller.hasStagedProviderPlan(
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+        ),
+        isFalse,
+      );
+      expect(
+        controller.stageProviderApprovedPlan(
+          request: const AgentPlanApprovalRequest(
+            id: 'approval-1',
+            title: 'Review plan',
+            markdown: '# Provider plan',
+            sessionId: 'thread-1',
+            turnId: 'turn-1',
+          ),
+          executionPermission: null,
+          permissionRuntimeIdentity: null,
+        ),
+        isTrue,
+      );
+      expect(
+        controller.hasStagedProviderPlan(
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+        ),
+        isTrue,
+      );
+      expect(
+        controller.hasStagedProviderPlan(
+          sessionId: 'thread-1',
+          turnId: 'turn-2',
+        ),
+        isFalse,
+      );
+    });
+
     test('builds a numbered fallback from structured plan entries', () {
       final controller = AgentPlanExecutionHandoffController();
 
@@ -153,6 +192,27 @@ void main() {
         expect(seed?.selection?.optionId, 'ask');
         expect(seed?.runtimeIdentity, runtimeIdentity);
         expect(seed?.threadId, 'thread-1');
+
+        final interrupted = AgentPlanExecutionHandoffController()
+          ..stageProviderApprovedPlan(
+            request: approval,
+            executionPermission: const AgentPermissionSelection(
+              optionId: 'ask',
+            ),
+            permissionRuntimeIdentity: runtimeIdentity,
+          );
+        expect(
+          interrupted
+              .offerCompletedPlan(
+                sessionId: 'thread-1',
+                turnId: 'turn-1',
+                status: AgentHistoryTurnStatus.interrupted,
+                modeId: AgentConversationModeId.defaultMode,
+                planMarkdown: null,
+              )
+              ?.markdown,
+          '# Approved plan',
+        );
       },
     );
 
@@ -312,6 +372,105 @@ void main() {
         reconciled?.executionPermission?.toRequestSnapshot().source,
         AgentPermissionRequestSource.providerFallback,
       );
+    });
+
+    test('discards planningOnly seed and card selection', () {
+      final controller = AgentPlanExecutionHandoffController();
+      const runtimeIdentity = AgentProviderRuntimeIdentity(
+        providerId: 'provider-1',
+        generation: 1,
+      );
+      final offered = controller.offerCompletedPlan(
+        sessionId: 'thread-1',
+        turnId: 'turn-1',
+        status: AgentHistoryTurnStatus.completed,
+        modeId: AgentConversationModeId.plan,
+        planMarkdown: '# Plan',
+        executionPermission: const AgentPermissionSelection(optionId: 'plan'),
+        permissionRuntimeIdentity: runtimeIdentity,
+      )!;
+      const options = <AgentPermissionOption>[
+        AgentPermissionOption(id: 'ask', label: 'Ask'),
+        AgentPermissionOption(id: 'plan', label: 'Plan', planningOnly: true),
+      ];
+
+      final restored = controller.reconcileExecutionPermission(
+        request: offered,
+        supportsPermissionSelection: true,
+        options: options,
+        catalogDefault: const AgentPermissionSelection(optionId: 'ask'),
+        currentRuntimeIdentity: runtimeIdentity,
+      )!;
+      expect(restored.executionPermission?.label, 'Ask');
+      expect(
+        restored.executionPermission?.origin,
+        AgentPlanExecutionPermissionOrigin.catalogDefault,
+      );
+
+      expect(
+        controller.selectExecutionPermission(
+          request: restored,
+          option: options[1],
+          currentRuntimeIdentity: runtimeIdentity,
+        ),
+        isNull,
+      );
+      expect(controller.pendingRequest?.executionPermission?.label, 'Ask');
+    });
+
+    test(
+      'falls back to first executable option when catalog default is planningOnly',
+      () {
+        final controller = AgentPlanExecutionHandoffController();
+        final offered = controller.offerCompletedPlan(
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+          status: AgentHistoryTurnStatus.completed,
+          modeId: AgentConversationModeId.plan,
+          planMarkdown: '# Plan',
+        )!;
+        const options = <AgentPermissionOption>[
+          AgentPermissionOption(id: 'plan', label: 'Plan', planningOnly: true),
+          AgentPermissionOption(id: 'ask', label: 'Ask'),
+        ];
+
+        final reconciled = controller.reconcileExecutionPermission(
+          request: offered,
+          supportsPermissionSelection: true,
+          options: options,
+          catalogDefault: const AgentPermissionSelection(optionId: 'plan'),
+          currentRuntimeIdentity: null,
+        );
+
+        expect(reconciled?.executionPermission?.label, 'Ask');
+        expect(
+          reconciled?.executionPermission?.origin,
+          AgentPlanExecutionPermissionOrigin.catalogDefault,
+        );
+      },
+    );
+
+    test('blocks execute when every allowed option is planningOnly', () {
+      final controller = AgentPlanExecutionHandoffController();
+      final offered = controller.offerCompletedPlan(
+        sessionId: 'thread-1',
+        turnId: 'turn-1',
+        status: AgentHistoryTurnStatus.completed,
+        modeId: AgentConversationModeId.plan,
+        planMarkdown: '# Plan',
+      )!;
+
+      final blocked = controller.reconcileExecutionPermission(
+        request: offered,
+        supportsPermissionSelection: true,
+        options: const <AgentPermissionOption>[
+          AgentPermissionOption(id: 'plan', label: 'Plan', planningOnly: true),
+        ],
+        catalogDefault: const AgentPermissionSelection(optionId: 'plan'),
+        currentRuntimeIdentity: null,
+      );
+
+      expect(blocked?.executionPermission, isNull);
     });
   });
 }

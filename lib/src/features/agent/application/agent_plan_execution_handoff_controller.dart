@@ -70,7 +70,7 @@ final class AgentPlanExecutionHandoffController {
         (seed.runtimeIdentity != null ||
             seedOrigin == AgentPlanExecutionPermissionOrigin.userOverride);
     final seededOption = seedIsCurrent
-        ? _allowedOption(available, seed.selection)
+        ? _executableOption(available, seed.selection)
         : null;
     if (seededOption != null) {
       final origin =
@@ -87,7 +87,9 @@ final class AgentPlanExecutionHandoffController {
       );
     }
 
-    final defaultOption = _allowedOption(available, catalogDefault);
+    final defaultOption =
+        _executableOption(available, catalogDefault) ??
+        _firstExecutableOption(available);
     if (defaultOption == null) {
       return _replacePendingPermission(request, null, seed: null, origin: null);
     }
@@ -116,7 +118,9 @@ final class AgentPlanExecutionHandoffController {
     required AgentPermissionOption option,
     required AgentProviderRuntimeIdentity? currentRuntimeIdentity,
   }) {
-    if (_pendingRequest?.id != request.id || !option.allowed) {
+    if (_pendingRequest?.id != request.id ||
+        !option.allowed ||
+        option.planningOnly) {
       return null;
     }
     final selection = AgentPermissionSelection(optionId: option.id);
@@ -167,6 +171,17 @@ final class AgentPlanExecutionHandoffController {
   }
 
   /// 仅丢弃同一个 Provider Plan 审批暂存，避免旧回调清除新请求。
+  /// 是否已有匹配该回合的 Provider 审批暂存（尚未被 offer 消费）。
+  bool hasStagedProviderPlan({
+    required String sessionId,
+    required String turnId,
+  }) {
+    final candidate = _providerApprovedCandidate;
+    return candidate != null &&
+        candidate.sessionId == sessionId &&
+        candidate.turnId == turnId;
+  }
+
   bool discardStagedProviderPlan(String requestId) {
     if (_providerApprovedCandidate?.requestId != requestId) {
       return false;
@@ -194,7 +209,8 @@ final class AgentPlanExecutionHandoffController {
         providerCandidate.sessionId == sessionId &&
         providerCandidate.turnId == turnId) {
       _providerApprovedCandidate = null;
-      if (status != AgentHistoryTurnStatus.completed) {
+      if (status != AgentHistoryTurnStatus.completed &&
+          status != AgentHistoryTurnStatus.interrupted) {
         _pendingRequest = null;
         _pendingPermissionSeed = null;
         _pendingPermissionOrigin = null;
@@ -324,7 +340,7 @@ final class AgentPlanExecutionHandoffController {
   }
 }
 
-AgentPermissionOption? _allowedOption(
+AgentPermissionOption? _executableOption(
   Iterable<AgentPermissionOption> options,
   AgentPermissionSelection? selection,
 ) {
@@ -332,7 +348,20 @@ AgentPermissionOption? _allowedOption(
     return null;
   }
   for (final option in options) {
-    if (option.id == selection.optionId && option.allowed) {
+    if (option.id == selection.optionId &&
+        option.allowed &&
+        !option.planningOnly) {
+      return option;
+    }
+  }
+  return null;
+}
+
+AgentPermissionOption? _firstExecutableOption(
+  Iterable<AgentPermissionOption> options,
+) {
+  for (final option in options) {
+    if (option.allowed && !option.planningOnly) {
       return option;
     }
   }

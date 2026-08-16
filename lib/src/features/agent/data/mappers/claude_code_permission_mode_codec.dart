@@ -141,6 +141,7 @@ abstract final class ClaudeCodePermissionModeCodec {
             label: displayLabel(mode),
             description: displayDescription(mode),
             allowed: true,
+            planningOnly: mode == ClaudeCodePermissionMode.plan,
           ),
         )
         .toList(growable: false);

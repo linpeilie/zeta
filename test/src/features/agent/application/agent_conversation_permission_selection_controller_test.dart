@@ -109,6 +109,190 @@ void main() {
       },
     );
 
+    test(
+      'remembers selection before planningOnly across runtime generation',
+      () async {
+        const ask = AgentPermissionOption(id: 'ask', label: 'Ask');
+        const plan = AgentPermissionOption(
+          id: 'plan',
+          label: 'Plan',
+          planningOnly: true,
+        );
+        final port = _FakePermissionPort(
+          options: const <AgentPermissionOption>[ask, plan],
+        );
+        final controller = AgentConversationPermissionSelectionController(
+          persistOptionId: (_) async {},
+        );
+        addTearDown(controller.dispose);
+        controller.bind(
+          port: port,
+          persistedOptionId: 'ask',
+          runtimeIdentity: _runtimeIdentity,
+        );
+        controller.bindThread('thread-1');
+        await controller.refreshOptions();
+
+        await controller.selectOption(plan);
+
+        expect(
+          controller
+              .selectionBeforePlanningOnly(threadId: 'thread-1')
+              ?.optionId,
+          'ask',
+        );
+
+        controller.bind(
+          port: port,
+          persistedOptionId: 'plan',
+          runtimeIdentity: const AgentProviderRuntimeIdentity(
+            providerId: 'test-provider',
+            generation: 2,
+          ),
+        );
+        controller.bindThread('thread-1');
+        await controller.refreshOptions();
+        await controller.applyEffectiveSelection(
+          const AgentPermissionSelection(optionId: 'plan'),
+          syncPort: false,
+        );
+
+        expect(
+          controller
+              .selectionBeforePlanningOnly(threadId: 'thread-1')
+              ?.optionId,
+          'ask',
+        );
+      },
+    );
+
+    test(
+      'clears planning memory when the thread or provider changes',
+      () async {
+        const ask = AgentPermissionOption(id: 'ask', label: 'Ask');
+        const plan = AgentPermissionOption(
+          id: 'plan',
+          label: 'Plan',
+          planningOnly: true,
+        );
+        final port = _FakePermissionPort(
+          options: const <AgentPermissionOption>[ask, plan],
+        );
+        final controller = AgentConversationPermissionSelectionController(
+          persistOptionId: (_) async {},
+        );
+        addTearDown(controller.dispose);
+        controller.bind(
+          port: port,
+          persistedOptionId: 'ask',
+          runtimeIdentity: _runtimeIdentity,
+        );
+        controller.bindThread('thread-1');
+        await controller.refreshOptions();
+        await controller.selectOption(plan);
+        expect(
+          controller.selectionBeforePlanningOnly(threadId: 'thread-1'),
+          isNotNull,
+        );
+
+        controller.resetForProvider(port: port, persistedOptionId: 'plan');
+
+        expect(
+          controller.selectionBeforePlanningOnly(threadId: 'thread-1'),
+          isNull,
+        );
+      },
+    );
+
+    test('adoptSessionPermission applies without persisting default', () async {
+      var persistCount = 0;
+      const ask = AgentPermissionOption(id: 'ask', label: 'Ask');
+      const plan = AgentPermissionOption(
+        id: 'plan',
+        label: 'Plan',
+        planningOnly: true,
+      );
+      final port = _FakePermissionPort(
+        options: const <AgentPermissionOption>[ask, plan],
+      );
+      final controller = AgentConversationPermissionSelectionController(
+        persistOptionId: (_) async => persistCount += 1,
+      );
+      addTearDown(controller.dispose);
+      controller.bind(
+        port: port,
+        persistedOptionId: 'plan',
+        runtimeIdentity: _runtimeIdentity,
+      );
+      controller.bindThread('thread-1');
+      await controller.refreshOptions();
+      await controller.applyEffectiveSelection(
+        const AgentPermissionSelection(optionId: 'plan'),
+        syncPort: false,
+      );
+      persistCount = 0;
+      port.applyCalls = 0;
+
+      final adopted = await controller.adoptSessionPermission(
+        const AgentPermissionSelection(optionId: 'ask'),
+      );
+
+      expect(adopted, isTrue);
+      expect(controller.selectedOptionId, 'ask');
+      expect(controller.defaultOptionId, 'plan');
+      expect(persistCount, 0);
+      expect(port.applyCalls, 1);
+    });
+
+    test(
+      'adoptSessionPermission still updates the toolbar if apply retires the runtime',
+      () async {
+        const ask = AgentPermissionOption(id: 'ask', label: 'Ask');
+        const plan = AgentPermissionOption(
+          id: 'plan',
+          label: 'Plan',
+          planningOnly: true,
+        );
+        late AgentConversationPermissionSelectionController controller;
+        late _FakePermissionPort port;
+        port = _FakePermissionPort(
+          options: const <AgentPermissionOption>[ask, plan],
+          onApply: (_) {
+            controller.bind(
+              port: port,
+              persistedOptionId: 'plan',
+              runtimeIdentity: const AgentProviderRuntimeIdentity(
+                providerId: 'test-provider',
+                generation: 2,
+              ),
+            );
+          },
+        );
+        controller = AgentConversationPermissionSelectionController(
+          persistOptionId: (_) async {},
+        );
+        addTearDown(controller.dispose);
+        controller.bind(
+          port: port,
+          persistedOptionId: 'plan',
+          runtimeIdentity: _runtimeIdentity,
+        );
+        controller.bindThread('thread-1');
+        await controller.refreshOptions();
+        await controller.applyEffectiveSelection(
+          const AgentPermissionSelection(optionId: 'plan'),
+          syncPort: false,
+        );
+
+        final adopted = await controller.adoptSessionPermission(
+          const AgentPermissionSelection(optionId: 'ask'),
+        );
+
+        expect(adopted, isTrue);
+        expect(controller.selectedOptionId, 'ask');
+      },
+    );
+
     test('refreshOptions ignores stale catalog after rebinding port', () async {
       final slow = _FakePermissionPort(
         options: const <AgentPermissionOption>[
@@ -795,6 +979,7 @@ class _FakePermissionPort implements AgentPermissionPolicyPort {
     this.applyScope = AgentPermissionApplyScope.runtime,
     this.normalizeSelection,
     this.applyCompleter,
+    this.onApply,
   });
 
   final List<AgentPermissionOption> options;
@@ -804,6 +989,7 @@ class _FakePermissionPort implements AgentPermissionPolicyPort {
   final AgentPermissionApplyResult Function(AgentPermissionSelection selection)?
   normalizeSelection;
   final Completer<AgentPermissionApplyResult>? applyCompleter;
+  final void Function(AgentPermissionSelection selection)? onApply;
 
   Object? listError;
   int listCalls = 0;
@@ -833,6 +1019,7 @@ class _FakePermissionPort implements AgentPermissionPolicyPort {
   ) async {
     applyCalls += 1;
     lastApplied = selection;
+    onApply?.call(selection);
     final error = applyError;
     if (error != null) {
       throw error;
