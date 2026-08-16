@@ -14,14 +14,21 @@ import 'package:zeta/src/features/agent_management/domain/agent_management_model
 import 'package:zeta/src/features/agent_management/presentation/agent_configuration_editor.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_management_page.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
+import 'package:zeta/src/ui/core/ide_metrics.dart';
+import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_switch.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
+import 'package:zeta/src/ui/core/rows/ide_key_value_row.dart';
 import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
 import 'package:zeta/src/ui/core/workbench/ide_section.dart';
 import 'package:zeta/src/ui/core/workbench/ide_toolbar.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
 
 import '../../../testing/ide_test_harness.dart';
+
+/// 按字段名定位一条 [IdeKeyValueRow]。
+Finder _keyValueRowFor(String label) =>
+    find.ancestor(of: find.text(label), matching: find.byType(IdeKeyValueRow));
 
 void main() {
   testWidgets('renders list and opens responsive Codex detail page', (
@@ -41,8 +48,7 @@ void main() {
     expect(find.byKey(const ValueKey('agent-row-codex')), findsOneWidget);
     expect(find.byKey(const ValueKey('agent-detect-button')), findsOneWidget);
     expect(find.text('Codex'), findsOneWidget);
-    expect(find.byType(IdeToolbar), findsOneWidget);
-    expect(find.byKey(const ValueKey('agent-list-pane')), findsOneWidget);
+    expect(find.byKey(const ValueKey('agent-list')), findsOneWidget);
     expect(
       find.byKey(const ValueKey<String>('agent-provider-icon-svg-codex')),
       findsOneWidget,
@@ -51,13 +57,17 @@ void main() {
       find.byKey(const ValueKey('agent-row-status-compact')),
       findsOneWidget,
     );
+    // 去卡片化的回归锁：列表页不再有 IdeToolbar 条带，也不再被 pane 表面框住。
+    expect(find.byType(IdeToolbar), findsNothing);
     expect(
       find.byWidgetPredicate(
         (widget) =>
             widget is IdeSurface && widget.level == IdeSurfaceLevel.pane,
       ),
-      findsOneWidget,
+      findsNothing,
     );
+    // 整行可点击已由 hover 高亮表达，右端不再画指向箭头。
+    expect(find.byIcon(Icons.chevron_right_rounded), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('agent-row-codex')));
     await tester.pump();
@@ -77,6 +87,58 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('详情页键值对同行阅读且机器数据走等宽', (tester) async {
+    final harness = _ManagementHarness.create();
+    addTearDown(harness.dispose);
+    await tester.runAsync(harness.managementController.initialize);
+
+    await _pumpManagementPage(
+      tester,
+      controller: harness.managementController,
+      size: const Size(1280, 900),
+    );
+    await tester.tap(find.byKey(const ValueKey('agent-row-codex')));
+    await tester.pump();
+
+    expect(find.byType(IdeKeyValueRow), findsWidgets);
+
+    // Key 与 Value 必须在同一条水平线上——这正是重构要消灭的「Z」形动线。
+    final nameRow = find.ancestor(
+      of: find.text('名称'),
+      matching: find.byType(IdeKeyValueRow),
+    );
+    expect(nameRow, findsOneWidget);
+    final labelBox = tester.getRect(
+      find.descendant(of: nameRow, matching: find.text('名称')),
+    );
+    final valueBox = tester.getRect(
+      find.descendant(of: nameRow, matching: find.text('Codex')),
+    );
+    expect((labelBox.top - valueBox.top).abs(), lessThan(1));
+    // 值紧跟 Key 起排：Key 列宽 92 + 间隙 8，视线只需横移这一段。
+    expect(
+      valueBox.left - labelBox.left,
+      IdeMetrics.keyValueLabelWidth + IdeSpacing.space8,
+    );
+
+    // 排版分工：名称/版本这类机器数据走等宽，厂商这类人类文案走 UI 字体。
+    String fontOf(String label, String value) => tester
+        .widget<Text>(
+          find.descendant(
+            of: _keyValueRowFor(label),
+            matching: find.text(value),
+          ),
+        )
+        .style!
+        .fontFamily!;
+
+    final identifierFont = fontOf('名称', 'Codex');
+    expect(fontOf('启动命令', 'codex'), identifierFont);
+    expect(fontOf('通信协议', 'JSON-RPC'), identifierFont);
+    expect(fontOf('厂商', 'OpenAI'), isNot(identifierFont));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('wide Agent rows keep neutral status columns', (tester) async {
     final harness = _ManagementHarness.create();
     addTearDown(harness.dispose);
@@ -86,6 +148,18 @@ void main() {
 
     expect(find.byKey(const ValueKey('agent-row-status-wide')), findsOneWidget);
     expect(find.byType(StateLabel), findsNothing);
+    expect(find.byIcon(Icons.chevron_right_rounded), findsNothing);
+
+    // 三个状态列等宽：宽度一旦按内容浮动，相邻两行的列轴就会错开。
+    final statusRow = find.byKey(const ValueKey('agent-row-status-wide'));
+    final columns = tester
+        .widgetList<SizedBox>(
+          find.descendant(of: statusRow, matching: find.byType(SizedBox)),
+        )
+        .where((box) => box.width != null && box.child != null)
+        .map((box) => box.width!)
+        .toList(growable: false);
+    expect(columns.where((width) => width == 96).length, 3);
     expect(tester.takeException(), isNull);
   });
 

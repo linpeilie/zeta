@@ -12,6 +12,7 @@ import 'package:zeta/src/features/agent_management/application/agent_management_
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_configuration_editor.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_log_view.dart';
+import 'package:zeta/src/ui/core/ide_button.dart';
 import 'package:zeta/src/ui/core/ide_chip.dart';
 import 'package:zeta/src/ui/core/ide_tabs.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
@@ -24,12 +25,37 @@ import 'package:zeta/src/ui/core/ide_switch.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/ide_toast.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
+import 'package:zeta/src/ui/core/rows/ide_key_value_row.dart';
 import 'package:zeta/src/ui/core/rows/ide_list_row.dart';
+import 'package:zeta/src/ui/core/rows/ide_row_divider.dart';
+import 'package:zeta/src/ui/core/rows/ide_row_group.dart';
 import 'package:zeta/src/ui/core/rows/ide_settings_row.dart';
 import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
 import 'package:zeta/src/ui/core/workbench/ide_page_header.dart';
 import 'package:zeta/src/ui/core/workbench/ide_section.dart';
 import 'package:zeta/src/ui/core/workbench/ide_toolbar.dart';
+
+/// 列表筛选条中搜索框的固定宽度。
+const double _searchFieldWidth = 280;
+
+/// Agent 列表行右侧每个状态列的宽度。
+///
+/// 三列等宽是这一片能读成「表格」而不是「一堆标签」的唯一原因：宽度一旦按
+/// 内容浮动，账号、版本、运行状态在相邻两行就会各自错开，眼睛得逐行重新
+/// 定位。宁可让个别长文案省略，也不让列轴动。
+const double _statusColumnWidth = 96;
+
+/// Beta 标识槽与开关槽的宽度。
+///
+/// Beta 槽在非 Beta 行也会占位（渲染空盒）——否则一行有标签、一行没有，
+/// 右侧整列就会整体平移。
+const double _statusBadgeSlotWidth = 44;
+
+/// Agent 列表行左侧图标的边长。
+const double _agentLogoSize = 24;
+
+/// 详情页「基础信息」标签下切换单栏 / 双栏的宽度阈值。
+const double _overviewTwoColumnBreakpoint = 780;
 
 /// 设置中的 Agent 管理列表、详情、配置和日志页面。
 class AgentManagementPage extends StatefulWidget {
@@ -144,35 +170,31 @@ class AgentManagementPageState extends State<AgentManagementPage> {
                               const SizedBox(height: IdeSpacing.space12),
                             ],
                             _buildListToolbar(context),
-                            const SizedBox(height: IdeSpacing.space8),
+                            // 去掉列表卡片后，这条线是整页唯一的贯通分隔：
+                            // 它交代「上面是筛选、下面是数据」，不再需要一圈
+                            // 描边把列表框起来。
+                            const IdeRowDivider(),
                             Expanded(
                               child: visibleAgents.isEmpty
                                   ? _buildListEmptyState(context, allAgents)
-                                  : IdeSurface.pane(
-                                      key: const ValueKey('agent-list-pane'),
-                                      child: ListView.builder(
-                                        key: const ValueKey(
-                                          'agent-management-list',
-                                        ),
-                                        itemCount: visibleAgents.length,
-                                        itemBuilder: (context, index) {
-                                          final agent = visibleAgents[index];
-                                          return _AgentListRow(
-                                            agent: agent,
-                                            showDivider:
-                                                index <
-                                                visibleAgents.length - 1,
-                                            onOpen: () => _openDetail(
-                                              agent.definition.id,
-                                            ),
-                                            onEnabledChanged: (enabled) =>
-                                                _setEnabled(
-                                                  agent.definition.id,
-                                                  enabled,
-                                                ),
-                                          );
-                                        },
-                                      ),
+                                  : ListView.builder(
+                                      key: const ValueKey('agent-list'),
+                                      itemCount: visibleAgents.length,
+                                      itemBuilder: (context, index) {
+                                        final agent = visibleAgents[index];
+                                        return _AgentListRow(
+                                          agent: agent,
+                                          showDivider:
+                                              index < visibleAgents.length - 1,
+                                          onOpen: () =>
+                                              _openDetail(agent.definition.id),
+                                          onEnabledChanged: (enabled) =>
+                                              _setEnabled(
+                                                agent.definition.id,
+                                                enabled,
+                                              ),
+                                        );
+                                      },
                                     ),
                             ),
                           ],
@@ -189,68 +211,85 @@ class AgentManagementPageState extends State<AgentManagementPage> {
     );
   }
 
+  /// 列表筛选条：分段控件、搜索框与检测按钮排在同一条基线上。
+  ///
+  /// 这里刻意**不用** `IdeToolbar`——它画 `surfaceElevated` 底加上下边框，是一条
+  /// 独立「条带」。列表卡片去掉之后，再留一条带背景的横幅就会变成整页仅存的
+  /// 容器边界，反而更显眼。筛选条直接坐在 canvas 底色上，只靠下方那条
+  /// `IdeRowDivider` 与数据区分界。
   Widget _buildListToolbar(BuildContext context) {
-    return IdeToolbar(
-      key: const ValueKey('agent-list-toolbar'),
+    final detecting = widget.controller.detecting;
+    final tabs = IdeTabs<_AgentListTab>(
+      value: _listTab,
+      semanticLabel: 'Agent 列表范围',
+      items: const [
+        IdeTabItem<_AgentListTab>(
+          key: ValueKey('agent-tab-installed'),
+          value: _AgentListTab.installed,
+          label: '已安装',
+        ),
+        IdeTabItem<_AgentListTab>(
+          key: ValueKey('agent-tab-supported'),
+          value: _AgentListTab.supported,
+          label: '全部支持',
+        ),
+      ],
+      onChanged: (value) {
+        setState(() {
+          _listTab = value;
+        });
+      },
+    );
+    final searchField = sf.TextField(
+      key: const ValueKey('agent-search-field'),
+      controller: _searchController,
+      placeholder: const Text('搜索 Agent 或厂商'),
+      features: const <sf.InputFeature>[
+        sf.InputFeature.leading(Icon(Icons.search_rounded, size: 18)),
+      ],
+    );
+    // 页面顶栏移除后，自动检测改由筛选条承载——列表非空时这里是唯一的检测
+    // 入口（空列表另有 _ActionEmptyState 的引导按钮）。用主色描边而不是实心
+    // 主色：一条筛选条上不该有唯一亮点，它会把注意力从搜索和分段控件上夺走。
+    final detectButton = IdeButton(
+      key: const ValueKey('agent-detect-button'),
+      label: detecting ? '正在检测…' : '自动检测 Agent',
+      variant: IdeButtonVariant.accentOutline,
+      onPressed: detecting ? null : widget.controller.detect,
+      leading: detecting
+          ? const IdeLoadingIndicator(width: 18, height: 10)
+          : null,
+      leadingIcon: detecting ? null : Icons.radar_rounded,
+    );
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: IdeSpacing.space8),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final searchWidth = constraints.maxWidth < 280
-              ? constraints.maxWidth
-              : 280.0;
-          return Wrap(
-            spacing: IdeSpacing.space8,
-            runSpacing: IdeSpacing.space8,
-            crossAxisAlignment: WrapCrossAlignment.center,
+          // 窄视口下三件套排不进一行，回落成换行流；宽视口保持同一条基线，
+          // 搜索框定宽、检测按钮被 Spacer 推到右端。
+          if (constraints.maxWidth < IdeMetrics.mediumBreakpoint) {
+            final searchWidth = constraints.maxWidth < _searchFieldWidth
+                ? constraints.maxWidth
+                : _searchFieldWidth;
+            return Wrap(
+              spacing: IdeSpacing.space8,
+              runSpacing: IdeSpacing.space8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                tabs,
+                SizedBox(width: searchWidth, child: searchField),
+                detectButton,
+              ],
+            );
+          }
+          return Row(
             children: [
-              IdeTabs<_AgentListTab>(
-                value: _listTab,
-                semanticLabel: 'Agent 列表范围',
-                items: const [
-                  IdeTabItem<_AgentListTab>(
-                    key: ValueKey('agent-tab-installed'),
-                    value: _AgentListTab.installed,
-                    label: '已安装',
-                  ),
-                  IdeTabItem<_AgentListTab>(
-                    key: ValueKey('agent-tab-supported'),
-                    value: _AgentListTab.supported,
-                    label: '全部支持',
-                  ),
-                ],
-                onChanged: (value) {
-                  setState(() {
-                    _listTab = value;
-                  });
-                },
-              ),
-              SizedBox(
-                width: searchWidth,
-                child: sf.TextField(
-                  key: const ValueKey('agent-search-field'),
-                  controller: _searchController,
-                  placeholder: const Text('搜索 Agent 或厂商'),
-                  features: const <sf.InputFeature>[
-                    sf.InputFeature.leading(
-                      Icon(Icons.search_rounded, size: 18),
-                    ),
-                  ],
-                ),
-              ),
-              // 页面顶栏移除后，自动检测改由工具栏承载——列表非空时这里是
-              // 唯一的检测入口（空列表另有 _ActionEmptyState 的引导按钮）。
-              sf.PrimaryButton(
-                key: const ValueKey('agent-detect-button'),
-                onPressed: widget.controller.detecting
-                    ? null
-                    : widget.controller.detect,
-                size: sf.ButtonSize.small,
-                leading: widget.controller.detecting
-                    ? const IdeLoadingIndicator(width: 18, height: 10)
-                    : const Icon(Icons.radar_rounded, size: 16),
-                child: Text(
-                  widget.controller.detecting ? '正在检测…' : '自动检测 Agent',
-                ),
-              ),
+              tabs,
+              const SizedBox(width: IdeSpacing.space8),
+              SizedBox(width: _searchFieldWidth, child: searchField),
+              const Spacer(),
+              detectButton,
             ],
           );
         },
@@ -306,27 +345,31 @@ class AgentManagementPageState extends State<AgentManagementPage> {
                 density: sf.ButtonDensity.iconDense,
                 icon: const Icon(Icons.arrow_back_rounded, size: 18),
               ),
+              // 三个操作按同一尺寸、同一圆角、space4 间隔排成一组，读起来是
+              // 「这一片是对当前 Agent 的操作」，而不是三颗散落的按钮。
               actions: [
-                sf.OutlineButton(
+                IdeButton(
                   key: const ValueKey('agent-test-connection-button'),
+                  label: widget.controller.testing ? '正在测试…' : '测试连接',
                   onPressed: agent.installed && !widget.controller.testing
                       ? _testConnection
                       : null,
-                  size: sf.ButtonSize.small,
-                  child: Text(widget.controller.testing ? '正在测试…' : '测试连接'),
                 ),
-                sf.OutlineButton(
+                IdeButton(
                   key: const ValueKey('agent-open-logs-button'),
+                  label: '查看运行日志',
                   onPressed: agent.logPaths.isEmpty ? null : _openLogs,
-                  size: sf.ButtonSize.small,
-                  child: const Text('查看运行日志'),
                 ),
-                sf.OutlineButton(
+                IdeButton(
+                  label: agent.enabled ? '禁用 Agent' : '启用 Agent',
+                  // 只有「禁用」是危险态。启用是恢复动作，套红会让这个来回
+                  // 切换的开关长期处于报警状态。
+                  variant: agent.enabled
+                      ? IdeButtonVariant.dangerOutline
+                      : IdeButtonVariant.outline,
                   onPressed: agent.installed
                       ? () => _setEnabled(agent.definition.id, !agent.enabled)
                       : null,
-                  size: sf.ButtonSize.small,
-                  child: Text(agent.enabled ? '禁用 Agent' : '启用 Agent'),
                 ),
               ],
             ),
@@ -411,20 +454,26 @@ class AgentManagementPageState extends State<AgentManagementPage> {
                   },
                 )
               : null;
-          if (constraints.maxWidth < 780) {
+          if (constraints.maxWidth < _overviewTwoColumnBreakpoint) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 information,
                 if (accountDataEnrichment != null) ...[
-                  const SizedBox(height: IdeSpacing.space12),
+                  const SizedBox(height: IdeSpacing.space24),
+                  const IdeRowDivider(),
+                  const SizedBox(height: IdeSpacing.space16),
                   accountDataEnrichment,
                 ],
                 if (setupGuide != null) ...[
-                  const SizedBox(height: IdeSpacing.space12),
+                  const SizedBox(height: IdeSpacing.space24),
+                  const IdeRowDivider(),
+                  const SizedBox(height: IdeSpacing.space16),
                   setupGuide,
                 ],
-                const SizedBox(height: IdeSpacing.space12),
+                const SizedBox(height: IdeSpacing.space24),
+                const IdeRowDivider(),
+                const SizedBox(height: IdeSpacing.space16),
                 diagnostics,
               ],
             );
@@ -432,20 +481,28 @@ class AgentManagementPageState extends State<AgentManagementPage> {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // 两栏之间只留白，不画竖线：`IdeColumnDivider` 需要有界高度，而
+              // 撑起它的 `IntrinsicHeight` 无法穿过 `IdeSection` / `IdeSettingsRow`
+              // 内部的 `LayoutBuilder`。这也正是 `IdeSpacing.space32` 的本职
+              // ——无卡片布局下，那段留白就是分组边界。
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(flex: 3, child: information),
-                  const SizedBox(width: IdeSpacing.space12),
+                  const SizedBox(width: IdeSpacing.space32),
                   Expanded(flex: 2, child: diagnostics),
                 ],
               ),
               if (accountDataEnrichment != null) ...[
-                const SizedBox(height: IdeSpacing.space12),
+                const SizedBox(height: IdeSpacing.space24),
+                const IdeRowDivider(),
+                const SizedBox(height: IdeSpacing.space16),
                 accountDataEnrichment,
               ],
               if (setupGuide != null) ...[
-                const SizedBox(height: IdeSpacing.space12),
+                const SizedBox(height: IdeSpacing.space24),
+                const IdeRowDivider(),
+                const SizedBox(height: IdeSpacing.space16),
                 setupGuide,
               ],
             ],
@@ -767,6 +824,10 @@ class _AgentListRow extends StatelessWidget {
             onEnabledChanged: onEnabledChanged,
           ),
           showDivider: showDivider,
+          // 线的起点推到标题左边缘：行内边距 + logo 宽 + logo 与文字的间隙。
+          // 用 token 相加而不是写死，改 logo 尺寸时对齐会自己跟上。
+          dividerIndent:
+              IdeSpacing.space10 + _agentLogoSize + IdeSpacing.space8,
           semanticLabel: '查看 ${agent.definition.displayName} 详情',
           onPressed: onOpen,
         );
@@ -789,20 +850,13 @@ class _AgentRowStatus extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
+    // 两个断点都不画 `>` 箭头：整行可点击已由 `PaneInteractiveSurface` 的
+    // hover 高亮表达，重复一个指向性图标只会让右端多一列噪音。
     if (compact) {
       final status = _priorityAgentStatus(colors, agent);
-      return Row(
+      return _AgentStatusText(
         key: const ValueKey('agent-row-status-compact'),
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _AgentStatusText(status: status),
-          const SizedBox(width: IdeSpacing.space4),
-          Icon(
-            Icons.chevron_right_rounded,
-            size: 18,
-            color: colors.textTertiary,
-          ),
-        ],
+        status: status,
       );
     }
 
@@ -815,16 +869,24 @@ class _AgentRowStatus extends StatelessWidget {
       AgentRuntimeState.error || AgentRuntimeState.unavailable => true,
       _ => false,
     };
+    // 固定宽度栅格：Beta 槽 → 账号 → 版本 → 运行状态 → 开关。每一格宽度都与
+    // 内容无关，纵向才会真的对齐成列。
     return Row(
       key: const ValueKey('agent-row-status-wide'),
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (agent.definition.isBeta) ...[
-          StateLabel(text: 'Beta', color: colors.warning),
-          const SizedBox(width: IdeSpacing.space8),
-        ],
         SizedBox(
-          width: 92,
+          width: _statusBadgeSlotWidth,
+          child: agent.definition.isBeta
+              ? Align(
+                  alignment: Alignment.centerRight,
+                  child: StateLabel(text: 'Beta', color: colors.warning),
+                )
+              : null,
+        ),
+        const SizedBox(width: IdeSpacing.space8),
+        SizedBox(
+          width: _statusColumnWidth,
           child: _AgentStatusText(
             status: _AgentStatus(
               label: agent.installed ? _accountEvidenceLabel(agent) : '—',
@@ -838,8 +900,11 @@ class _AgentRowStatus extends StatelessWidget {
           ),
         ),
         SizedBox(
-          width: 96,
+          width: _statusColumnWidth,
           child: _AgentStatusText(
+            // 版本号是机器数据：等宽 + tabularFigures 之后，0.144.1 与
+            // 0.99.10 才会按小数点逐位对齐，扫视一列版本才有意义。
+            mono: true,
             status: _AgentStatus(
               label: agent.currentVersion ?? '版本未知',
               icon: Icons.tag_rounded,
@@ -850,7 +915,7 @@ class _AgentRowStatus extends StatelessWidget {
           ),
         ),
         SizedBox(
-          width: 92,
+          width: _statusColumnWidth,
           child: _AgentStatusText(
             status: _AgentStatus(
               label: agent.installed
@@ -867,26 +932,34 @@ class _AgentRowStatus extends StatelessWidget {
             ),
           ),
         ),
-        IdeSwitch(
-          value: agent.enabled,
-          enabled: agent.installed,
-          onChanged: agent.installed ? onEnabledChanged : null,
+        SizedBox(
+          width: _statusBadgeSlotWidth,
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: IdeSwitch(
+              value: agent.enabled,
+              enabled: agent.installed,
+              onChanged: agent.installed ? onEnabledChanged : null,
+            ),
+          ),
         ),
-        const SizedBox(width: IdeSpacing.space6),
-        Icon(Icons.chevron_right_rounded, size: 18, color: colors.textTertiary),
       ],
     );
   }
 }
 
 class _AgentStatusText extends StatelessWidget {
-  const _AgentStatusText({required this.status});
+  const _AgentStatusText({required this.status, super.key, this.mono = false});
 
   final _AgentStatus status;
+
+  /// 标签是否为机器数据（版本号等），为真时改用等宽 `numeric`。
+  final bool mono;
 
   @override
   Widget build(BuildContext context) {
     final textStyles = IdeTextStyles.of(context);
+    final style = mono ? textStyles.numeric : textStyles.meta;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -897,7 +970,7 @@ class _AgentStatusText extends StatelessWidget {
             status.label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: textStyles.meta.copyWith(color: status.color),
+            style: style.copyWith(color: status.color),
           ),
         ),
       ],
@@ -1003,8 +1076,8 @@ class _AgentLogo extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     return Container(
-      width: 32,
-      height: 32,
+      width: _agentLogoSize,
+      height: _agentLogoSize,
       decoration: BoxDecoration(
         color: colors.surfaceElevated,
         borderRadius: IdeRadius.allSmall,
@@ -1014,7 +1087,7 @@ class _AgentLogo extends StatelessWidget {
       child: AgentProviderIcon(
         providerId: providerId,
         kind: kind,
-        size: 17,
+        size: 14,
         color: installed ? colors.textSecondary : colors.textTertiary,
       ),
     );
@@ -1073,17 +1146,15 @@ class _ActionEmptyState extends StatelessWidget {
               Wrap(
                 spacing: IdeSpacing.space8,
                 children: [
-                  sf.PrimaryButton(
+                  // 空状态里主色实心是对的：整屏没有别的内容可被它压过，
+                  // 这一颗按钮就是用户此刻唯一该做的事。
+                  IdeButton(
+                    label: primaryLabel,
+                    variant: IdeButtonVariant.primary,
                     onPressed: onPrimary,
-                    size: sf.ButtonSize.small,
-                    child: Text(primaryLabel),
                   ),
-                  if (secondaryLabel != null)
-                    sf.OutlineButton(
-                      onPressed: onSecondary,
-                      size: sf.ButtonSize.small,
-                      child: Text(secondaryLabel!),
-                    ),
+                  if (secondaryLabel case final String label)
+                    IdeButton(label: label, onPressed: onSecondary),
                 ],
               ),
             ],
@@ -1113,111 +1184,109 @@ class _AgentInformationCard extends StatelessWidget {
     final textStyles = IdeTextStyles.of(context);
     return IdeSection(
       title: '基础信息',
-      child: IdeSurface.pane(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _InfoRow(label: '名称', value: agent.definition.displayName),
-            _InfoRow(label: '厂商', value: agent.definition.vendor),
-            _InfoRow(
-              label: '启动命令',
-              value: agent.definition.commandName,
-              trailing: sf.IconButton.ghost(
-                onPressed: onCopyCommand,
-                size: sf.ButtonSize.xSmall,
-                density: sf.ButtonDensity.iconDense,
-                icon: const Icon(Icons.copy_rounded, size: 14),
-              ),
-            ),
-            _InfoRow(label: '当前版本', value: agent.currentVersion ?? '未知'),
-            _InfoRow(
-              label: '最新版本',
-              value: agent.latestVersion ?? '未知',
-              valueColor: agent.updateAvailable ? colors.warning : null,
-            ),
-            _InfoRow(label: '通信协议', value: agent.definition.protocol),
-            _InfoRow(label: '传输方式', value: agent.definition.transport),
-            IdeSettingsRow(
-              label: '可执行文件路径',
-              description: agent.executablePath == null
-                  ? '尚未检测到可执行文件，请先安装并确保已加入 PATH'
-                  : null,
-              showDivider: false,
-              control: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  if (agent.executablePath case final String executablePath)
-                    SelectableText(
-                      executablePath,
-                      maxLines: 2,
-                      style: textStyles.codeSmall.copyWith(
-                        color: colors.textSecondary,
-                      ),
-                    ),
-                  const SizedBox(height: IdeSpacing.space6),
-                  Wrap(
-                    spacing: IdeSpacing.space6,
-                    runSpacing: IdeSpacing.space6,
-                    alignment: WrapAlignment.end,
-                    children: [
-                      sf.OutlineButton(
-                        onPressed: onDetect,
-                        size: sf.ButtonSize.small,
-                        child: const Text('自动检测'),
-                      ),
-                      sf.OutlineButton(
-                        onPressed: agent.executablePath == null
-                            ? null
-                            : onOpenExecutableDirectory,
-                        size: sf.ButtonSize.small,
-                        child: const Text('打开目录'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _InfoRow extends StatelessWidget {
-  const _InfoRow({
-    required this.label,
-    required this.value,
-    this.trailing,
-    this.valueColor,
-  });
-
-  final String label;
-  final String value;
-  final Widget? trailing;
-  final Color? valueColor;
-
-  @override
-  Widget build(BuildContext context) {
-    final textStyles = IdeTextStyles.of(context);
-    return IdeSettingsRow(
-      label: label,
-      control: Row(
-        mainAxisSize: MainAxisSize.min,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Flexible(
-            child: Text(
-              value,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.end,
-              style: textStyles.bodyMedium.copyWith(color: valueColor),
-            ),
+          IdeRowGroup(
+            title: '基本属性',
+            dividers: false,
+            children: [
+              // 显示名与协议名都是「可复制的机器串」，走等宽；厂商是人类
+              // 文案，留在 UI 字体里。
+              IdeKeyValueRow(
+                label: '名称',
+                value: agent.definition.displayName,
+                tone: IdeKeyValueTone.identifier,
+              ),
+              IdeKeyValueRow(label: '厂商', value: agent.definition.vendor),
+              IdeKeyValueRow(
+                label: '通信协议',
+                value: agent.definition.protocol,
+                tone: IdeKeyValueTone.identifier,
+              ),
+              IdeKeyValueRow(
+                label: '传输方式',
+                value: agent.definition.transport,
+                tone: IdeKeyValueTone.identifier,
+              ),
+            ],
           ),
-          if (trailing case final Widget trailingWidget) ...[
-            const SizedBox(width: IdeSpacing.space4),
-            trailingWidget,
-          ],
+          const SizedBox(height: IdeSpacing.space12),
+          const IdeRowDivider(),
+          IdeRowGroup(
+            title: '版本',
+            dividers: false,
+            children: [
+              IdeKeyValueRow(
+                label: '当前版本',
+                value: agent.currentVersion ?? '未知',
+                tone: IdeKeyValueTone.numeric,
+              ),
+              IdeKeyValueRow(
+                label: '最新版本',
+                value: agent.latestVersion ?? '未知',
+                tone: IdeKeyValueTone.numeric,
+                valueColor: agent.updateAvailable ? colors.warning : null,
+              ),
+            ],
+          ),
+          const SizedBox(height: IdeSpacing.space12),
+          const IdeRowDivider(),
+          IdeRowGroup(
+            title: '路径与命令',
+            dividers: false,
+            children: [
+              IdeKeyValueRow(
+                label: '启动命令',
+                value: agent.definition.commandName,
+                tone: IdeKeyValueTone.identifier,
+                trailing: sf.IconButton.ghost(
+                  onPressed: onCopyCommand,
+                  size: sf.ButtonSize.xSmall,
+                  density: sf.ButtonDensity.iconDense,
+                  icon: const Icon(Icons.copy_rounded, size: 14),
+                ),
+              ),
+              IdeKeyValueRow(
+                label: '可执行文件路径',
+                value: agent.executablePath ?? '未检测到',
+                tone: IdeKeyValueTone.code,
+                selectable: agent.executablePath != null,
+              ),
+              if (agent.executablePath == null)
+                Padding(
+                  padding: const EdgeInsets.only(
+                    left: IdeMetrics.keyValueLabelWidth + IdeSpacing.space8,
+                    bottom: IdeSpacing.space6,
+                  ),
+                  child: Text(
+                    '尚未检测到可执行文件，请先安装并确保已加入 PATH',
+                    style: textStyles.meta.copyWith(height: 1.25),
+                  ),
+                ),
+              // 去掉卡片后右对齐失去了参照边：按钮跟着值列左对齐，和上面
+              // 几行共用同一条竖轴。
+              Padding(
+                padding: const EdgeInsets.only(
+                  left: IdeMetrics.keyValueLabelWidth + IdeSpacing.space8,
+                  top: IdeSpacing.space4,
+                ),
+                child: Wrap(
+                  spacing: IdeSpacing.space6,
+                  runSpacing: IdeSpacing.space6,
+                  children: [
+                    IdeButton(label: '自动检测', onPressed: onDetect),
+                    IdeButton(
+                      label: '打开目录',
+                      onPressed: agent.executablePath == null
+                          ? null
+                          : onOpenExecutableDirectory,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -1265,15 +1334,21 @@ class _AgentDiagnosticsCard extends StatelessWidget {
         _DiagnosticEntry(
           label: '最近测试耗时',
           value: '${agent.connectionTest!.elapsed.inMilliseconds} ms',
+          tone: IdeKeyValueTone.numeric,
         ),
       if (agent.connectionTest?.protocolVersion case final String version)
-        _DiagnosticEntry(label: '协议', value: version),
+        _DiagnosticEntry(
+          label: '协议',
+          value: version,
+          tone: IdeKeyValueTone.identifier,
+        ),
       if (agent.connectionTest?.agentName case final String agentName)
         _DiagnosticEntry(
           label: '握手身份',
           value:
               '$agentName'
               '${agent.connectionTest!.agentVersion == null ? '' : ' ${agent.connectionTest!.agentVersion}'}',
+          tone: IdeKeyValueTone.identifier,
         ),
       if (agent.connectionTest?.capabilitySummary.isNotEmpty == true)
         _DiagnosticEntry(
@@ -1305,93 +1380,60 @@ class _AgentDiagnosticsCard extends StatelessWidget {
         size: 17,
         color: healthy ? colors.textSecondary : colors.error,
       ),
-      child: IdeSurface.pane(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (var index = 0; index < diagnostics.length; index++)
-              _DiagnosticLine(
-                label: diagnostics[index].label,
-                value: diagnostics[index].value,
-                showDivider: index < diagnostics.length - 1 || hasSupplement,
-              ),
-            if (agent.errorDetails case final String errorDetails)
-              Container(
-                padding: IdeSpacing.all12,
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(color: colors.borderSubtle),
-                  ),
-                ),
-                child: SelectableText(
-                  errorDetails,
-                  maxLines: 8,
-                  style: textStyles.codeSmall.copyWith(
-                    color: colors.textSecondary,
-                  ),
-                ),
-              ),
-            if (agent.suggestion case final String suggestion)
-              Container(
-                padding: IdeSpacing.all12,
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(color: colors.borderSubtle),
-                  ),
-                ),
-                child: Text(
-                  '建议操作：$suggestion',
-                  style: textStyles.bodySmall.copyWith(
-                    color: colors.textSecondary,
-                  ),
-                ),
-              ),
-            if (!healthy)
-              Padding(
-                padding: IdeSpacing.all12,
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: sf.OutlineButton(
-                    onPressed: onDetect,
-                    size: sf.ButtonSize.small,
-                    child: const Text('自动检测'),
-                  ),
-                ),
-              ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final entry in diagnostics)
+            IdeKeyValueRow(
+              label: entry.label,
+              value: entry.value,
+              tone: entry.tone,
+            ),
+          // 补充信息（错误正文、建议、修复入口）与上面的事实清单之间只隔
+          // 一条线，不再各自套一个带边框的盒子。
+          if (hasSupplement) ...[
+            const SizedBox(height: IdeSpacing.space8),
+            const IdeRowDivider(),
+            const SizedBox(height: IdeSpacing.space12),
           ],
-        ),
+          if (agent.errorDetails case final String errorDetails) ...[
+            SelectableText(
+              errorDetails,
+              maxLines: 8,
+              style: textStyles.codeSmall.copyWith(color: colors.textSecondary),
+            ),
+            const SizedBox(height: IdeSpacing.space8),
+          ],
+          if (agent.suggestion case final String suggestion) ...[
+            Text(
+              '建议操作：$suggestion',
+              style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
+            ),
+            const SizedBox(height: IdeSpacing.space8),
+          ],
+          if (!healthy)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: IdeButton(label: '自动检测', onPressed: onDetect),
+            ),
+        ],
       ),
     );
   }
 }
 
 class _DiagnosticEntry {
-  const _DiagnosticEntry({required this.label, required this.value});
-
-  final String label;
-  final String value;
-}
-
-class _DiagnosticLine extends StatelessWidget {
-  const _DiagnosticLine({
+  const _DiagnosticEntry({
     required this.label,
     required this.value,
-    required this.showDivider,
+    this.tone = IdeKeyValueTone.text,
   });
 
   final String label;
   final String value;
-  final bool showDivider;
 
-  @override
-  Widget build(BuildContext context) {
-    return IdeListRow(
-      title: label,
-      subtitle: value,
-      leading: const Icon(Icons.circle_outlined),
-      showDivider: showDivider,
-    );
-  }
+  /// 值的排版语义；协议号、耗时这类机器数据走等宽档。
+  final IdeKeyValueTone tone;
 }
 
 class _ModelCard extends StatelessWidget {
@@ -1491,20 +1533,19 @@ class _ClaudeCodeAccountDataEnrichmentCard extends StatelessWidget {
     return IdeSection(
       title: '额度详情增强',
       subtitle: 'OAuth 凭据 · Usage REST',
-      child: IdeSurface.pane(
-        child: IdeSettingsRow(
-          key: const ValueKey('claude-account-data-enrichment-row'),
-          label: '读取 Claude Code 额度详情',
-          description:
-              '此开关只控制 Zeta 是否瞬时读取 Claude Code OAuth 凭据并调用 usage REST。'
-              '模型列表与套餐名称始终来自 Claude CLI；Zeta 不会刷新、写回或持久化凭据。',
-          showDivider: false,
-          control: IdeSwitch(
-            key: const ValueKey('claude-account-data-enrichment-switch'),
-            value: enabled,
-            enabled: !updating,
-            onChanged: updating ? null : onChanged,
-          ),
+      child: IdeSettingsRow(
+        key: const ValueKey('claude-account-data-enrichment-row'),
+        label: '读取 Claude Code 额度详情',
+        description:
+            '此开关只控制 Zeta 是否瞬时读取 Claude Code OAuth 凭据并调用 usage REST。'
+            '模型列表与套餐名称始终来自 Claude CLI；Zeta 不会刷新、写回或持久化凭据。',
+        showDivider: false,
+        padding: IdeSpacing.settingsRowPaddingFlat,
+        control: IdeSwitch(
+          key: const ValueKey('claude-account-data-enrichment-switch'),
+          value: enabled,
+          enabled: !updating,
+          onChanged: updating ? null : onChanged,
         ),
       ),
     );
@@ -1525,38 +1566,36 @@ class _ClaudeCodeSetupGuideCard extends StatelessWidget {
     return IdeSection(
       title: '接入指引',
       subtitle: '安装 · 登录 · 文档',
-      child: IdeSurface.pane(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _SetupGuideStep(
-              title: '1. 安装 Claude Code CLI',
-              body:
-                  '在终端执行 npm install -g @anthropic-ai/claude-code，'
-                  '并确认 claude 已加入 PATH。',
-              textStyles: textStyles,
-              colors: colors,
-              showDivider: true,
-            ),
-            _SetupGuideStep(
-              title: '2. 登录账号',
-              body:
-                  '运行 claude auth login 完成 Anthropic 账号登录。'
-                  '自动检测不会读取凭据内容；额度详情增强只做上方说明的瞬时只读查询，'
-                  '且绝不写回凭据文件。',
-              textStyles: textStyles,
-              colors: colors,
-              showDivider: true,
-            ),
-            _SetupGuideStep(
-              title: '3. 官方文档',
-              body: '完整能力与协议说明见 Anthropic Claude Code 文档：$_docsUrl',
-              textStyles: textStyles,
-              colors: colors,
-              showDivider: false,
-            ),
-          ],
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _SetupGuideStep(
+            title: '1. 安装 Claude Code CLI',
+            body:
+                '在终端执行 npm install -g @anthropic-ai/claude-code，'
+                '并确认 claude 已加入 PATH。',
+            textStyles: textStyles,
+            colors: colors,
+            showDivider: true,
+          ),
+          _SetupGuideStep(
+            title: '2. 登录账号',
+            body:
+                '运行 claude auth login 完成 Anthropic 账号登录。'
+                '自动检测不会读取凭据内容；额度详情增强只做上方说明的瞬时只读查询，'
+                '且绝不写回凭据文件。',
+            textStyles: textStyles,
+            colors: colors,
+            showDivider: true,
+          ),
+          _SetupGuideStep(
+            title: '3. 官方文档',
+            body: '完整能力与协议说明见 Anthropic Claude Code 文档：$_docsUrl',
+            textStyles: textStyles,
+            colors: colors,
+            showDivider: false,
+          ),
+        ],
       ),
     );
   }
@@ -1579,24 +1618,28 @@ class _SetupGuideStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: IdeSpacing.all12,
-      decoration: BoxDecoration(
-        border: showDivider
-            ? Border(bottom: BorderSide(color: colors.borderSubtle))
-            : null,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: textStyles.identifier),
-          const SizedBox(height: IdeSpacing.space6),
-          Text(
-            body,
-            style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: IdeSpacing.space8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: textStyles.identifier),
+              const SizedBox(height: IdeSpacing.space6),
+              Text(
+                body,
+                style: textStyles.bodySmall.copyWith(
+                  color: colors.textSecondary,
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+        // 全页共用一套分隔线机制，不再各自手写 BorderSide。
+        if (showDivider) const IdeRowDivider(),
+      ],
     );
   }
 }

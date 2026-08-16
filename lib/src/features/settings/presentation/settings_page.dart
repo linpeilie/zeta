@@ -18,7 +18,7 @@ import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/ide_toast.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/core/rows/ide_list_row.dart';
-import 'package:zeta/src/ui/core/rows/ide_row_divider.dart';
+import 'package:zeta/src/ui/core/rows/ide_row_group.dart';
 import 'package:zeta/src/ui/core/rows/ide_settings_row.dart';
 import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
 import 'package:zeta/src/ui/core/workbench/ide_page_body.dart';
@@ -27,7 +27,7 @@ enum SettingsSection { general, appearance, agents }
 
 /// 平铺设置行：不自带横向内边距，也不自带分割线。
 ///
-/// 横向对齐交给 `IdePageBody` 的页面 padding，分割线由 [_SettingsGroup] 在行
+/// 横向对齐交给 `IdePageBody` 的页面 padding，分割线由 [IdeRowGroup] 在行
 /// 与行之间统一插入——这样整页只有一套分割线机制。
 IdeSettingsRow _flatSettingsRow({
   required String label,
@@ -43,45 +43,6 @@ IdeSettingsRow _flatSettingsRow({
     showDivider: false,
     padding: IdeSpacing.settingsRowPaddingFlat,
   );
-}
-
-/// 无卡片的设置分组：眉标题 + 平铺行 + 行间细分割线。
-///
-/// 去掉 `IdeSurface.pane` 后，分组感由三样东西承担：一个明显弱于行标题的
-/// 眉标题（`groupTitle`，9/w700/textSecondary）、行之间的 `borderSubtle` 细线，
-/// 以及分组之间 [IdeSpacing.space32] 的留白。眉标题刻意不用 `sectionTitle`
-/// ——那一档（13/w600/textPrimary）会和行标题（12/w600/textPrimary）打架，
-/// 反而削弱「行标题才是主标题」的层级。
-///
-/// 标题自带上下内边距（[IdeSpacing.settingsGroupTitlePadding]），所以分组的
-/// 纵向节奏完全由本组件闭合，调用方只需在分组之间放一段间隙。
-class _SettingsGroup extends StatelessWidget {
-  const _SettingsGroup({
-    required this.title,
-    required this.children,
-    super.key,
-  });
-
-  final String title;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    final styles = IdeTextStyles.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: IdeSpacing.settingsGroupTitlePadding,
-          child: Text(title, style: styles.groupTitle),
-        ),
-        for (var index = 0; index < children.length; index++) ...[
-          if (index > 0) const IdeRowDivider(),
-          children[index],
-        ],
-      ],
-    );
-  }
 }
 
 class SettingsPage extends StatefulWidget {
@@ -284,7 +245,7 @@ class _GeneralSettingsPane extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _SettingsGroup(
+                IdeRowGroup(
                   key: const ValueKey('settings-general-group'),
                   title: '消息发送',
                   children: [
@@ -333,7 +294,7 @@ class _GeneralSettingsPane extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: IdeSpacing.space32),
-                _SettingsGroup(
+                IdeRowGroup(
                   key: const ValueKey('settings-agent-notifications-group'),
                   title: '通知',
                   children: [
@@ -457,7 +418,7 @@ class _AppearanceSettingsPane extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _SettingsGroup(
+                IdeRowGroup(
                   key: const ValueKey('settings-appearance-group'),
                   title: '主题',
                   children: [
@@ -471,7 +432,7 @@ class _AppearanceSettingsPane extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: IdeSpacing.space32),
-                _SettingsGroup(
+                IdeRowGroup(
                   key: const ValueKey('settings-appearance-font-group'),
                   title: '字体',
                   children: [

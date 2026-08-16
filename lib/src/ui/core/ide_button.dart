@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'ide_colors.dart';
+import 'ide_effects.dart';
 import 'ide_metrics.dart';
 import 'ide_text_styles.dart';
 
@@ -21,6 +22,24 @@ enum IdeButtonVariant {
 
   /// 危险/破坏性操作。
   destructive,
+
+  /// 主色描边 + 浅蓝底：需要被找到、但不该压过页面其余内容的次级主行动点。
+  ///
+  /// 与 [primary] 的分工：实心主色在工具栏里会抢走搜索框和分段控件的注意力
+  /// ——一个筛选条上不该有「唯一亮点」。这一档保留主色的可识别性，把面积
+  /// 换成描边和 `primaryMuted` 弱底。
+  ///
+  /// 生效位置：Agent 管理列表工具条的「自动检测 Agent」。
+  accentOutline,
+
+  /// 错误色描边：破坏性操作的次级形态。
+  ///
+  /// 与 [destructive] 的分工：实心红底适合确认对话框里那个「确定删除」；
+  /// 页面头部一个随时可来回切换的开关（禁用/启用 Agent）用满色会长期报警。
+  /// 这一档只把文字与描边染红，悬停时底色跟着泛红。
+  ///
+  /// 生效位置：Agent 管理详情页头部的「禁用 Agent」。
+  dangerOutline,
 }
 
 /// 统一 IDE 紧凑按钮。
@@ -39,6 +58,7 @@ class IdeButton extends StatelessWidget {
     required this.label,
     super.key,
     this.onPressed,
+    this.leading,
     this.leadingIcon,
     this.trailingIcon,
     this.enabled = true,
@@ -54,6 +74,7 @@ class IdeButton extends StatelessWidget {
     required this.label,
     super.key,
     this.onPressed,
+    this.leading,
     this.leadingIcon,
     this.trailingIcon,
     this.enabled = true,
@@ -68,6 +89,14 @@ class IdeButton extends StatelessWidget {
 
   /// 点击回调；为 `null` 时按钮禁用。
   final VoidCallback? onPressed;
+
+  /// 文案前的可选自定义前导组件，优先于 [leadingIcon]。
+  ///
+  /// 存在的理由是加载指示器：按钮进入等待态时需要把图标换成
+  /// `IdeLoadingIndicator`，如果只能传 [IconData]，调用方就只好退回裸
+  /// `sf.Button` 自己拼——那正是本组件要消除的分叉。自定义组件的着色由调用方
+  /// 负责，本组件不再套 [IconTheme]。
+  final Widget? leading;
 
   /// 文案前可选图标。
   final IconData? leadingIcon;
@@ -107,8 +136,12 @@ class IdeButton extends StatelessWidget {
       variant: variant,
     );
     // 实心底必须与文字同色，避免「允许」勾号落在灰字/蓝底上。
+    // 染色描边档同理：图标退回中性灰会把刚立起来的主色/危险语义拆散。
     final iconColor = switch (variant) {
-      IdeButtonVariant.primary || IdeButtonVariant.destructive => foreground,
+      IdeButtonVariant.primary ||
+      IdeButtonVariant.destructive ||
+      IdeButtonVariant.accentOutline ||
+      IdeButtonVariant.dangerOutline => foreground,
       IdeButtonVariant.outline ||
       IdeButtonVariant.secondary ||
       IdeButtonVariant.ghost =>
@@ -121,9 +154,11 @@ class IdeButton extends StatelessWidget {
       style: _resolveStyle(variant),
       // 有 leading 时 shadcn 内部 Row 默认顶对齐，alignment 负责垂直居中。
       alignment: Alignment.centerLeft,
-      leading: leadingIcon == null
-          ? null
-          : Icon(leadingIcon, size: _leadingIconSize, color: iconColor),
+      leading:
+          leading ??
+          (leadingIcon == null
+              ? null
+              : Icon(leadingIcon, size: _leadingIconSize, color: iconColor)),
       trailing: trailingIcon == null
           ? null
           : Icon(trailingIcon, size: _trailingIconSize, color: iconColor),
@@ -172,6 +207,16 @@ class IdeButton extends StatelessWidget {
         size: size,
         density: density,
       ),
+      IdeButtonVariant.accentOutline => const sf.ButtonStyle(
+        variance: _TintedOutlineVariance(_OutlineTint.accent),
+        size: size,
+        density: density,
+      ),
+      IdeButtonVariant.dangerOutline => const sf.ButtonStyle(
+        variance: _TintedOutlineVariance(_OutlineTint.danger),
+        size: size,
+        density: density,
+      ),
     };
   }
 
@@ -187,9 +232,71 @@ class IdeButton extends StatelessWidget {
       IdeButtonVariant.primary => colors.onAccent,
       // 与 app_theme 中 destructiveForeground 一致。
       IdeButtonVariant.destructive => Colors.white,
+      IdeButtonVariant.accentOutline => colors.accent,
+      IdeButtonVariant.dangerOutline => colors.error,
       IdeButtonVariant.outline ||
       IdeButtonVariant.secondary ||
       IdeButtonVariant.ghost => colors.textPrimary,
     };
+  }
+}
+
+/// [_TintedOutlineVariance] 的语义色来源。
+enum _OutlineTint { accent, danger }
+
+/// 复用 shadcn outline 按钮的全部度量，只把描边与底色换成 Graphite 语义色。
+///
+/// 除 `decoration` 外的每一项都直接转发给 [sf.ButtonVariance.outline]：内边距、
+/// 光标、字号、外边距必须与其他 [IdeButton] 逐像素一致，否则同一个按钮组里
+/// 染色的那一颗会比邻居高半个像素。文字与图标颜色由 [IdeButton] 在外层统一
+/// 覆盖，这里只负责画框和底。
+class _TintedOutlineVariance implements sf.AbstractButtonStyle {
+  const _TintedOutlineVariance(this.tint);
+
+  final _OutlineTint tint;
+
+  static const sf.AbstractButtonStyle _base = sf.ButtonVariance.outline;
+
+  @override
+  sf.ButtonStateProperty<Decoration> get decoration => _decoration;
+
+  @override
+  sf.ButtonStateProperty<MouseCursor> get mouseCursor => _base.mouseCursor;
+
+  @override
+  sf.ButtonStateProperty<EdgeInsetsGeometry> get padding => _base.padding;
+
+  @override
+  sf.ButtonStateProperty<TextStyle> get textStyle => _base.textStyle;
+
+  @override
+  sf.ButtonStateProperty<IconThemeData> get iconTheme => _base.iconTheme;
+
+  @override
+  sf.ButtonStateProperty<EdgeInsetsGeometry> get margin => _base.margin;
+
+  Decoration _decoration(BuildContext context, Set<WidgetState> states) {
+    final colors = IdeColors.of(context);
+    // 禁用态一律退回中性描边：这一档的语义色是「请注意我」，按不动的按钮
+    // 继续喊就是噪音。
+    if (states.contains(WidgetState.disabled)) {
+      return _base.decoration(context, states);
+    }
+    final accent = switch (tint) {
+      _OutlineTint.accent => colors.accent,
+      _OutlineTint.danger => colors.error,
+    };
+    final hovered =
+        states.contains(WidgetState.hovered) ||
+        states.contains(WidgetState.pressed);
+    return BoxDecoration(
+      // 静息态就带一层弱底，悬停再加深：只靠描边变化的反馈在 1px 线上看不见。
+      color: accent.withValues(alpha: hovered ? 0.16 : 0.08),
+      border: Border.all(
+        color: accent.withValues(alpha: hovered ? 0.9 : 0.55),
+        strokeAlign: BorderSide.strokeAlignCenter,
+      ),
+      borderRadius: IdeRadius.allSmall,
+    );
   }
 }

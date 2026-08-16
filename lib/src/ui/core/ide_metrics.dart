@@ -60,6 +60,15 @@ abstract final class IdeMetrics {
   /// 生效位置：`IdeSettingsRow`。
   static const double settingsRowMinHeight = 52;
 
+  /// 密集键值行的字段名列宽。
+  ///
+  /// 取值依据：本产品最长的中文字段名是「可执行文件路径」，7 字 × 12px（
+  /// `IdeTextStyles.titleSmall` 基准字号）≈ 84px，留 8px 余量到 92。固定宽度是
+  /// 这一档的关键——只有所有行的值都从同一条竖线起排，纵向扫视才能一眼比对。
+  ///
+  /// 生效位置：`IdeKeyValueRow`。
+  static const double keyValueLabelWidth = 92;
+
   /// 图标按钮的最小点击区域（宽/高）。
   ///
   /// 生效位置：项目列表操作按钮、文件树折叠按钮、侧栏图标按钮等。
