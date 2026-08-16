@@ -11,6 +11,7 @@ import 'package:zeta/src/core/utils/system_file_manager.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_controller.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 import 'package:zeta/src/ui/core/ide_dialog.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_status_card.dart';
@@ -84,15 +85,15 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
       context: context,
       barrierDismissible: false,
       builder: (context) => IdeDialog(
-        title: const Text('配置尚未保存'),
-        content: const Text('离开后本次修改将丢失。'),
+        title: Text(context.l10n.mgmtUnsavedTitle),
+        content: Text(context.l10n.mgmtUnsavedBody),
         actions: <IdeDialogAction>[
           IdeDialogAction.cancel(
-            label: '继续编辑',
+            label: context.l10n.mgmtKeepEditing,
             onPressed: () => Navigator.of(context).pop(false),
           ),
           IdeDialogAction.destructive(
-            label: '放弃修改',
+            label: context.l10n.mgmtDiscardChanges,
             onPressed: () => Navigator.of(context).pop(true),
           ),
         ],
@@ -115,17 +116,19 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
       builder: (context, _) {
         final document = widget.controller.configuration;
         if (widget.controller.loadingConfiguration && document == null) {
-          return const Center(
+          return Center(
             child: IdeLoadingIndicator(
               width: 32,
               height: 14,
-              semanticsLabel: '正在加载配置文件',
+              semanticsLabel: context.l10n.mgmtLoadingConfig,
             ),
           );
         }
         if (document == null) {
           return EmptyState(
-            text: widget.controller.operationError ?? '配置文件尚未加载。',
+            text:
+                widget.controller.operationError ??
+                context.l10n.mgmtConfigNotLoadedYet,
           );
         }
 
@@ -140,9 +143,9 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
               if (!_revealed)
                 IdeStatusCard(
                   tone: IdeStatusCardTone.warning,
-                  title: '敏感值已遮挡',
+                  title: context.l10n.mgmtSensitiveMaskedTitle,
                   body: Text(
-                    '为避免凭证意外暴露，默认以只读方式显示。点击“显示敏感值”后才可编辑完整配置。',
+                    context.l10n.mgmtSensitiveMaskedBody,
                     style: textStyles.bodySmall.copyWith(
                       color: colors.textSecondary,
                     ),
@@ -216,7 +219,7 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
         final info = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('配置文件', style: textStyles.sectionTitle),
+            Text(context.l10n.mgmtConfigFile, style: textStyles.sectionTitle),
             const SizedBox(height: IdeSpacing.space4),
             SelectableText(
               document.path,
@@ -224,8 +227,8 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
             ),
             const SizedBox(height: IdeSpacing.space4),
             Text(
-              '${document.format} · ${document.exists ? '已存在' : '尚未创建'} · '
-              '最后加载 ${_formatDateTime(document.loadedAt)}',
+              '${document.format} · ${document.exists ? context.l10n.mgmtConfigExists : context.l10n.mgmtConfigMissing} · '
+              '${context.l10n.mgmtLastLoaded(_formatDateTime(document.loadedAt))}',
               style: textStyles.caption.copyWith(color: colors.textTertiary),
             ),
           ],
@@ -237,18 +240,22 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
             sf.OutlineButton(
               onPressed: _dirty ? null : _load,
               size: sf.ButtonSize.small,
-              child: const Text('重新加载'),
+              child: Text(context.l10n.mgmtReloadConfig),
             ),
             sf.OutlineButton(
               onPressed: () => _openContainingDirectory(document.path),
               size: sf.ButtonSize.small,
-              child: const Text('打开所在目录'),
+              child: Text(context.l10n.mgmtOpenContainingFolder),
             ),
             sf.OutlineButton(
               key: const ValueKey('agent-config-reveal-button'),
               onPressed: _dirty && _revealed ? null : _toggleReveal,
               size: sf.ButtonSize.small,
-              child: Text(_revealed ? '隐藏敏感值' : '显示敏感值'),
+              child: Text(
+                _revealed
+                    ? context.l10n.mgmtHideSensitive
+                    : context.l10n.mgmtShowSensitive,
+              ),
             ),
           ],
         );
@@ -281,7 +288,7 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
           child: sf.TextField(
             key: const ValueKey('agent-config-search'),
             controller: _searchController,
-            placeholder: const Text('在配置中查找'),
+            placeholder: Text(context.l10n.mgmtSearchInConfig),
             features: const <sf.InputFeature>[
               sf.InputFeature.leading(Icon(Icons.search_rounded, size: 18)),
             ],
@@ -292,7 +299,7 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
         sf.OutlineButton(
           onPressed: _findNext,
           size: sf.ButtonSize.small,
-          child: const Text('查找下一个'),
+          child: Text(context.l10n.mgmtFindNext),
         ),
       ],
     );
@@ -319,7 +326,7 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
             const SizedBox(width: IdeSpacing.space6),
             Flexible(
               child: Text(
-                valid ? '配置格式有效' : _validationError!,
+                valid ? context.l10n.mgmtConfigValid : _validationError!,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: textStyles.bodySmall.copyWith(
@@ -335,7 +342,7 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
             sf.OutlineButton(
               onPressed: _dirty ? _discardChanges : null,
               size: sf.ButtonSize.small,
-              child: const Text('取消修改'),
+              child: Text(context.l10n.mgmtCancelEdits),
             ),
             const SizedBox(width: IdeSpacing.space8),
             sf.PrimaryButton(
@@ -346,7 +353,9 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
                   : null,
               size: sf.ButtonSize.small,
               child: Text(
-                widget.controller.savingConfiguration ? '正在保存…' : '保存配置',
+                widget.controller.savingConfiguration
+                    ? context.l10n.mgmtSaving
+                    : context.l10n.mgmtSaveConfig,
               ),
             ),
           ],
@@ -420,8 +429,8 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
       showIdeToast(
         context,
         message: result.backupPath == null
-            ? '配置已保存。请重新启动 Codex 以应用新配置。'
-            : '配置已保存，并已创建原文件备份。',
+            ? context.l10n.mgmtConfigSavedRestart
+            : context.l10n.mgmtConfigSavedBackup,
         tone: IdeToastTone.success,
       );
     } on AgentConfigurationConflictException {
@@ -432,15 +441,15 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
         context: context,
         barrierDismissible: false,
         builder: (context) => IdeDialog(
-          title: const Text('配置文件已在外部发生修改'),
-          content: const Text('继续保存将覆盖外部修改。'),
+          title: Text(context.l10n.mgmtConfigExternalTitle),
+          content: Text(context.l10n.mgmtConfigExternalBody),
           actions: <IdeDialogAction>[
             IdeDialogAction.cancel(
-              label: '重新加载',
+              label: context.l10n.mgmtReloadConfig,
               onPressed: () => Navigator.of(context).pop('reload'),
             ),
             IdeDialogAction.destructive(
-              label: '仍然保存',
+              label: context.l10n.mgmtSaveAnyway,
               onPressed: () => Navigator.of(context).pop('overwrite'),
             ),
           ],
@@ -464,7 +473,7 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
       if (mounted) {
         showIdeToast(
           context,
-          message: '配置保存失败：$error',
+          message: context.l10n.mgmtConfigSaveFailed('$error'),
           tone: IdeToastTone.error,
         );
       }
@@ -483,7 +492,7 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
       index = text.toLowerCase().indexOf(query.toLowerCase());
     }
     if (index < 0) {
-      showIdeToast(context, message: '没有找到“$query”。');
+      showIdeToast(context, message: context.l10n.mgmtQueryNotFound(query));
       return;
     }
     _editingController.selection = TextSelection(
@@ -518,7 +527,7 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
       if (mounted) {
         showIdeToast(
           context,
-          message: '无法打开配置目录：$error',
+          message: context.l10n.mgmtCannotOpenConfigDir('$error'),
           tone: IdeToastTone.error,
         );
       }

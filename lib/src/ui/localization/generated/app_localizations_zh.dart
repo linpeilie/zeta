@@ -1265,4 +1265,730 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get usageNextWindow => '下一窗口';
+
+  @override
+  String mgmtLocating(String name) {
+    return '正在定位 $name';
+  }
+
+  @override
+  String get mgmtLocatingClaudeCodeCli => '正在检测 Claude Code CLI';
+
+  @override
+  String mgmtNotFound(String name) {
+    return '未找到 $name';
+  }
+
+  @override
+  String get mgmtNotFoundClaudeCodeCli => '未找到 Claude Code CLI';
+
+  @override
+  String mgmtInstallAndAddToPath(String name) {
+    return '请先安装 $name，并确认可执行文件已加入 PATH。';
+  }
+
+  @override
+  String get mgmtInstallClaudeCodeAndAddToPath =>
+      '请先安装 Claude Code，并确认 claude 已加入 PATH。';
+
+  @override
+  String mgmtFound(String name) {
+    return '已找到 $name';
+  }
+
+  @override
+  String get mgmtConfirmExecutableThenRedetect => '请确认检测到的可执行文件可以正常执行，然后重新检测。';
+
+  @override
+  String get mgmtConfirmClaudeVersionCommand =>
+      '请确认 Claude Code CLI 可以正常执行 `claude --version`。';
+
+  @override
+  String get mgmtVersionDetected => '已检测当前版本';
+
+  @override
+  String get mgmtClaudeVersionDetected => '已检测 Claude Code 版本';
+
+  @override
+  String get mgmtAccountDetected => '已检测账号状态';
+
+  @override
+  String get mgmtClaudeAuthDetected => '已检测 Claude Code 登录状态';
+
+  @override
+  String get mgmtConfigStatusRead => '已读取配置文件状态';
+
+  @override
+  String mgmtLogsLocated(String name) {
+    return '已定位 $name 日志';
+  }
+
+  @override
+  String get mgmtLatestVersionChecked => '已检查最新版本';
+
+  @override
+  String get mgmtHandshakeComplete => '已完成协议握手';
+
+  @override
+  String mgmtDetectionComplete(String name) {
+    return '$name 检测完成';
+  }
+
+  @override
+  String mgmtRetestAfterCheckingConfig(String name) {
+    return '请检查 $name 配置和账号状态后重新测试连接。';
+  }
+
+  @override
+  String get mgmtRetestAfterCheckingGrokAuth => '请检查 Grok 登录态与配置后重新测试连接。';
+
+  @override
+  String get mgmtConfirmClaudeAuthStatusJson =>
+      '请确认 `claude auth status --json` 可执行；也可运行连接测试确认当前 CLI 认证路径。';
+
+  @override
+  String get mgmtNoClaudeLoginEvidenceSuggestion =>
+      '未检测到 Claude.ai 登录证据；如需登录可运行 `claude auth login`，也可直接执行连接测试确认当前 CLI 认证路径。';
+
+  @override
+  String mgmtCannotIdentifyVersion(String name) {
+    return '无法识别 $name 版本。';
+  }
+
+  @override
+  String get mgmtLatestVersionCheckFailed => '最新版本检查失败。';
+
+  @override
+  String get mgmtCannotParseVersionCheck => '无法解析版本检查结果。';
+
+  @override
+  String get mgmtVersionServiceUnknownFormat => '版本服务返回了未知格式。';
+
+  @override
+  String get mgmtVersionServiceMissingVersion => '版本服务未返回最新版本号。';
+
+  @override
+  String mgmtCannotGetLatestVersion(String name) {
+    return '无法获取 $name 最新版本。';
+  }
+
+  @override
+  String get mgmtAccountLoggedIn => '账号已登录';
+
+  @override
+  String get mgmtRunCodexLogin => '请在终端运行 codex login 后重新检测。';
+
+  @override
+  String get mgmtRunGrokLogin => '请在终端运行 grok login 后重新检测。';
+
+  @override
+  String get mgmtRerunGrokLogin => '请重新运行 grok login。';
+
+  @override
+  String get mgmtRunCodexLoginStatus => '请在终端运行 codex login status 查看详细信息。';
+
+  @override
+  String get mgmtFixConfigTomlThenRedetect => '请修复 config.toml 中提示的字段后重新检测。';
+
+  @override
+  String get mgmtCodexConfigUnparseable => 'Codex 配置文件无法解析。';
+
+  @override
+  String get mgmtCannotDetectAccount => '无法检测账号状态。';
+
+  @override
+  String get mgmtAccountCheckFailed => '账号状态检测失败。';
+
+  @override
+  String mgmtConfirmCliRuns(String name) {
+    return '请确认 $name 可以在终端中正常运行。';
+  }
+
+  @override
+  String get mgmtCannotParseGrokLoginCache => '无法解析 Grok 登录缓存。';
+
+  @override
+  String get mgmtNoClaudeLoginEvidenceLabel =>
+      '未检测到 Claude.ai OAuth 或 API key 登录证据';
+
+  @override
+  String get mgmtCannotCheckClaudeAuth => '无法通过 Claude CLI 检查登录状态。';
+
+  @override
+  String get mgmtCannotStartClaudeInitialize =>
+      '无法启动 Claude Code initialize 探测。';
+
+  @override
+  String get mgmtClaudeAuthViaApiKey => '已通过 Anthropic API key 配置认证';
+
+  @override
+  String get mgmtClaudeAuthViaApiKeyHelper => '已通过 API key helper 配置认证';
+
+  @override
+  String get mgmtClaudeAuthViaOauthToken => '已通过 OAuth token 配置认证';
+
+  @override
+  String get mgmtClaudeAuthPathDetected => '已检测到 Claude Code 认证路径';
+
+  @override
+  String get mgmtThirdPartyApiProviderConfigured => '已配置第三方 API Provider';
+
+  @override
+  String mgmtConfiguredProvider(String provider) {
+    return '已配置 $provider';
+  }
+
+  @override
+  String get mgmtPathNotRegularFile => '该路径不存在或不是普通文件';
+
+  @override
+  String get mgmtRefuseSymlinkConfig => '拒绝写入符号链接配置文件';
+
+  @override
+  String get mgmtConfigExternallyModified => '配置文件已在外部发生修改。';
+
+  @override
+  String get mgmtCompatSupported => '已验证支持';
+
+  @override
+  String get mgmtCompatLimited => '兼容运行，部分能力关闭';
+
+  @override
+  String get mgmtCompatNewerUntested => '版本较新，尚未完整验证';
+
+  @override
+  String get mgmtCompatOlderUnsupported => '版本过旧，不受支持';
+
+  @override
+  String get mgmtCompatProtocolMismatch => '协议不兼容';
+
+  @override
+  String mgmtCannotEnable(String name, String error) {
+    return '无法启用 $name：$error';
+  }
+
+  @override
+  String mgmtCannotDisable(String name, String error) {
+    return '无法禁用 $name：$error';
+  }
+
+  @override
+  String mgmtAccountDataEnrichmentSaveFailed(String error) {
+    return '额度详情增强设置保存失败：$error';
+  }
+
+  @override
+  String mgmtConnectionTestFailed(String error) {
+    return '连接测试失败：$error';
+  }
+
+  @override
+  String mgmtConfigurationReadFailed(String error) {
+    return '配置文件读取失败：$error';
+  }
+
+  @override
+  String get mgmtConfigurationNotLoaded => '配置文件尚未加载';
+
+  @override
+  String mgmtLogsReadFailed(String error) {
+    return '运行日志读取失败：$error';
+  }
+
+  @override
+  String get mgmtOperationIncomplete => '操作未完成';
+
+  @override
+  String get mgmtFilterInstalled => '已安装';
+
+  @override
+  String get mgmtFilterAllSupported => '全部支持';
+
+  @override
+  String get mgmtSearchPlaceholder => '搜索 Agent 或厂商';
+
+  @override
+  String get mgmtDetecting => '正在检测…';
+
+  @override
+  String get mgmtAutoDetect => '自动检测 Agent';
+
+  @override
+  String get mgmtEmptyInstalledTitle => '暂未检测到已安装的 Agent';
+
+  @override
+  String get mgmtEmptyInstalledBody => '可以自动检测本机环境，或者前往“全部支持”查看当前应用支持的 Agent。';
+
+  @override
+  String get mgmtViewAllSupported => '查看全部支持';
+
+  @override
+  String get mgmtNoMatchTitle => '没有找到匹配的 Agent';
+
+  @override
+  String get mgmtNoMatchBody => '请尝试修改搜索内容。';
+
+  @override
+  String get mgmtClearSearch => '清除搜索';
+
+  @override
+  String mgmtVersionWithValue(String version) {
+    return '版本 $version';
+  }
+
+  @override
+  String get mgmtUnknown => '未知';
+
+  @override
+  String get mgmtTesting => '正在测试…';
+
+  @override
+  String get mgmtTestConnection => '测试连接';
+
+  @override
+  String get mgmtViewLogs => '查看运行日志';
+
+  @override
+  String get mgmtDisableAgent => '禁用 Agent';
+
+  @override
+  String get mgmtEnableAgent => '启用 Agent';
+
+  @override
+  String get mgmtTabBasics => '基础信息';
+
+  @override
+  String get mgmtTabModels => '模型';
+
+  @override
+  String get mgmtTabConfig => '配置';
+
+  @override
+  String get mgmtCopiedCommand => '已复制启动命令。';
+
+  @override
+  String get mgmtCannotLoadModels => '无法加载模型列表';
+
+  @override
+  String get mgmtModelsNeedLogin => '当前账号尚未登录。登录 Codex 后重新加载。';
+
+  @override
+  String get mgmtReload => '重新加载';
+
+  @override
+  String mgmtModelSourceUpdated(String source, String updated) {
+    return '数据来源：$source · 更新时间：$updated';
+  }
+
+  @override
+  String get mgmtDisableWarning => '禁用后将停止当前任务，已有会话会变为只读模式。';
+
+  @override
+  String get mgmtStopAndDisable => '停止并禁用';
+
+  @override
+  String get mgmtTestClaudeTitle => '测试 Claude Code 连接';
+
+  @override
+  String get mgmtTestClaudeBody =>
+      '只发送无 Prompt 的 initialize 控制请求，不调用模型；Claude CLI 仍可能维护自身认证或 bootstrap 缓存。';
+
+  @override
+  String get mgmtContinueTest => '继续测试';
+
+  @override
+  String mgmtConnectionTestSuccess(String ms) {
+    return '连接测试成功，响应耗时 $ms ms。';
+  }
+
+  @override
+  String mgmtConnectionTestFailedMessage(String message) {
+    return '连接测试失败：$message';
+  }
+
+  @override
+  String get mgmtUnknownError => '未知错误';
+
+  @override
+  String mgmtCannotOpenExecutableDir(String error) {
+    return '无法打开可执行文件目录：$error';
+  }
+
+  @override
+  String mgmtViewDetails(String name) {
+    return '查看 $name 详情';
+  }
+
+  @override
+  String get mgmtVersionUnknown => '版本未知';
+
+  @override
+  String get mgmtNotInstalled => '未安装';
+
+  @override
+  String get mgmtConnectionAvailable => '连接可用';
+
+  @override
+  String get mgmtUpdateAvailable => '可更新';
+
+  @override
+  String get mgmtDetectingShort => '检测中';
+
+  @override
+  String get mgmtRunning => '运行中';
+
+  @override
+  String get mgmtEnabled => '已启用';
+
+  @override
+  String get mgmtInstalled => '已安装';
+
+  @override
+  String get mgmtSectionBasics => '基础信息';
+
+  @override
+  String get mgmtBasicAttributes => '基本属性';
+
+  @override
+  String get mgmtName => '名称';
+
+  @override
+  String get mgmtVendor => '厂商';
+
+  @override
+  String get mgmtProtocol => '通信协议';
+
+  @override
+  String get mgmtTransport => '传输方式';
+
+  @override
+  String get mgmtSectionVersion => '版本';
+
+  @override
+  String get mgmtCurrentVersion => '当前版本';
+
+  @override
+  String get mgmtLatestVersion => '最新版本';
+
+  @override
+  String get mgmtPathsAndCommands => '路径与命令';
+
+  @override
+  String get mgmtLaunchCommand => '启动命令';
+
+  @override
+  String get mgmtExecutablePath => '可执行文件路径';
+
+  @override
+  String get mgmtNotDetected => '未检测到';
+
+  @override
+  String get mgmtExecutableNotDetectedHint => '尚未检测到可执行文件，请先安装并确保已加入 PATH';
+
+  @override
+  String get mgmtAutoDetectShort => '自动检测';
+
+  @override
+  String get mgmtOpenDirectory => '打开目录';
+
+  @override
+  String get mgmtProgram => '程序';
+
+  @override
+  String get mgmtExecutablePresent => '可执行文件存在且可调用';
+
+  @override
+  String get mgmtExecutableMissing => '未找到可执行文件';
+
+  @override
+  String get mgmtAuthEvidence => '认证证据';
+
+  @override
+  String get mgmtCommunication => '通信';
+
+  @override
+  String get mgmtHandshakeOk => '基础握手正常';
+
+  @override
+  String get mgmtNotConfirmed => '尚未确认';
+
+  @override
+  String get mgmtLastDetected => '最近检测';
+
+  @override
+  String get mgmtLastTestDuration => '最近测试耗时';
+
+  @override
+  String get mgmtHandshakeIdentity => '握手身份';
+
+  @override
+  String get mgmtNegotiatedCapabilities => '协商能力';
+
+  @override
+  String get mgmtCompatibility => '兼容性';
+
+  @override
+  String get mgmtExitReason => '退出原因';
+
+  @override
+  String get mgmtFailureStage => '异常阶段';
+
+  @override
+  String get mgmtDiagnostics => '诊断';
+
+  @override
+  String get mgmtConnectionHealthy => '连接正常';
+
+  @override
+  String mgmtSuggestedAction(String suggestion) {
+    return '建议操作：$suggestion';
+  }
+
+  @override
+  String get mgmtHidden => '隐藏';
+
+  @override
+  String get mgmtAvailable => '可用';
+
+  @override
+  String get mgmtChipText => '文本';
+
+  @override
+  String get mgmtChipImage => '图片';
+
+  @override
+  String get mgmtChipCode => '代码';
+
+  @override
+  String get mgmtChipFiles => '文件操作';
+
+  @override
+  String get mgmtChipTools => '工具调用';
+
+  @override
+  String get mgmtChipTerminal => '终端';
+
+  @override
+  String get mgmtChipStreaming => '流式输出';
+
+  @override
+  String get mgmtReasoningUnknown => '思考能力：未知';
+
+  @override
+  String mgmtReasoningAdjustable(String efforts) {
+    return '思考能力：可调节（$efforts）';
+  }
+
+  @override
+  String get mgmtQuotaEnrichmentTitle => '额度详情增强';
+
+  @override
+  String get mgmtQuotaEnrichmentLabel => '读取 Claude Code 额度详情';
+
+  @override
+  String get mgmtQuotaEnrichmentBody =>
+      '此开关只控制 Zeta 是否瞬时读取 Claude Code OAuth 凭据并调用 usage REST。模型列表与套餐名称始终来自 Claude CLI；Zeta 不会刷新、写回或持久化凭据。';
+
+  @override
+  String get mgmtOnboardingTitle => '接入指引';
+
+  @override
+  String get mgmtOnboardingSubtitle => '安装 · 登录 · 文档';
+
+  @override
+  String get mgmtAccountUnknown => '无法检测';
+
+  @override
+  String get mgmtAccountChecking => '检测中';
+
+  @override
+  String get mgmtAccountLoggedInShort => '已登录';
+
+  @override
+  String get mgmtAccountLoggedOut => '未登录';
+
+  @override
+  String get mgmtAccountExpired => '登录失效';
+
+  @override
+  String get mgmtAccountNotRequired => '无需登录';
+
+  @override
+  String get mgmtRuntimeNotRunning => '未运行';
+
+  @override
+  String get mgmtRuntimeIdle => '空闲';
+
+  @override
+  String get mgmtRuntimeStarting => '启动中';
+
+  @override
+  String get mgmtRuntimeStopping => '停止中';
+
+  @override
+  String get mgmtRuntimeError => '异常';
+
+  @override
+  String get mgmtRuntimeUnavailable => '不可用';
+
+  @override
+  String get mgmtRuntimeDisabled => '已禁用';
+
+  @override
+  String get mgmtStageFileDetection => '文件检测';
+
+  @override
+  String get mgmtStageCliStartup => '进程启动';
+
+  @override
+  String get mgmtStageVersionDetection => '版本检测';
+
+  @override
+  String get mgmtStageAccountAuthentication => '账号认证';
+
+  @override
+  String get mgmtStageProtocolHandshake => '协议握手';
+
+  @override
+  String get mgmtStageModelLoading => '模型读取';
+
+  @override
+  String get mgmtStageConfigurationRead => '配置读取';
+
+  @override
+  String get mgmtStageTestRequest => '测试请求';
+
+  @override
+  String get mgmtStageProcessExit => '进程退出';
+
+  @override
+  String get mgmtNotUpdated => '尚未更新';
+
+  @override
+  String get mgmtUnsavedTitle => '配置尚未保存';
+
+  @override
+  String get mgmtUnsavedBody => '离开后本次修改将丢失。';
+
+  @override
+  String get mgmtKeepEditing => '继续编辑';
+
+  @override
+  String get mgmtDiscardChanges => '放弃修改';
+
+  @override
+  String get mgmtLoadingConfig => '正在加载配置文件';
+
+  @override
+  String get mgmtConfigNotLoadedYet => '配置文件尚未加载。';
+
+  @override
+  String get mgmtSensitiveMaskedTitle => '敏感值已遮挡';
+
+  @override
+  String get mgmtSensitiveMaskedBody =>
+      '为避免凭证意外暴露，默认以只读方式显示。点击“显示敏感值”后才可编辑完整配置。';
+
+  @override
+  String get mgmtConfigFile => '配置文件';
+
+  @override
+  String get mgmtConfigExists => '已存在';
+
+  @override
+  String get mgmtConfigMissing => '尚未创建';
+
+  @override
+  String mgmtLastLoaded(String time) {
+    return '最后加载 $time';
+  }
+
+  @override
+  String get mgmtReloadConfig => '重新加载';
+
+  @override
+  String get mgmtOpenContainingFolder => '打开所在目录';
+
+  @override
+  String get mgmtHideSensitive => '隐藏敏感值';
+
+  @override
+  String get mgmtShowSensitive => '显示敏感值';
+
+  @override
+  String get mgmtSearchInConfig => '在配置中查找';
+
+  @override
+  String get mgmtFindNext => '查找下一个';
+
+  @override
+  String get mgmtConfigValid => '配置格式有效';
+
+  @override
+  String get mgmtCancelEdits => '取消修改';
+
+  @override
+  String get mgmtSaving => '正在保存…';
+
+  @override
+  String get mgmtSaveConfig => '保存配置';
+
+  @override
+  String get mgmtConfigSavedRestart => '配置已保存。请重新启动 Codex 以应用新配置。';
+
+  @override
+  String get mgmtConfigSavedBackup => '配置已保存，并已创建原文件备份。';
+
+  @override
+  String get mgmtConfigExternalTitle => '配置文件已在外部发生修改';
+
+  @override
+  String get mgmtConfigExternalBody => '继续保存将覆盖外部修改。';
+
+  @override
+  String get mgmtSaveAnyway => '仍然保存';
+
+  @override
+  String mgmtConfigSaveFailed(String error) {
+    return '配置保存失败：$error';
+  }
+
+  @override
+  String mgmtQueryNotFound(String query) {
+    return '没有找到“$query”。';
+  }
+
+  @override
+  String mgmtCannotOpenConfigDir(String error) {
+    return '无法打开配置目录：$error';
+  }
+
+  @override
+  String get mgmtRefreshing => '刷新中…';
+
+  @override
+  String get mgmtRefresh => '刷新';
+
+  @override
+  String get mgmtCopyLogs => '复制日志';
+
+  @override
+  String get mgmtSearchLogKeywords => '搜索日志关键词';
+
+  @override
+  String get mgmtLogLevel => '日志级别';
+
+  @override
+  String get mgmtAll => '全部';
+
+  @override
+  String get mgmtReadingLogs => '正在读取 Agent 日志';
+
+  @override
+  String get mgmtNoMatchingLogs => '没有符合当前条件的日志。';
+
+  @override
+  String mgmtCopiedLogs(String count) {
+    return '已复制 $count 行脱敏日志。';
+  }
 }

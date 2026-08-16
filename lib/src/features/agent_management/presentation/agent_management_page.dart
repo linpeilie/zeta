@@ -12,6 +12,8 @@ import 'package:zeta/src/features/agent_management/application/agent_management_
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_configuration_editor.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_log_view.dart';
+import 'package:zeta/src/features/agent_management/presentation/agent_management_l10n.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 import 'package:zeta/src/ui/core/ide_button.dart';
 import 'package:zeta/src/ui/core/ide_chip.dart';
 import 'package:zeta/src/ui/core/ide_tabs.dart';
@@ -159,7 +161,7 @@ class AgentManagementPageState extends State<AgentManagementPage> {
                                 case final String error) ...[
                               IdeStatusCard(
                                 tone: IdeStatusCardTone.error,
-                                title: '操作未完成',
+                                title: context.l10n.mgmtOperationIncomplete,
                                 body: Text(
                                   error,
                                   style: textStyles.bodySmall.copyWith(
@@ -222,16 +224,16 @@ class AgentManagementPageState extends State<AgentManagementPage> {
     final tabs = IdeTabs<_AgentListTab>(
       value: _listTab,
       semanticLabel: 'Agent 列表范围',
-      items: const [
+      items: [
         IdeTabItem<_AgentListTab>(
-          key: ValueKey('agent-tab-installed'),
+          key: const ValueKey('agent-tab-installed'),
           value: _AgentListTab.installed,
-          label: '已安装',
+          label: context.l10n.mgmtFilterInstalled,
         ),
         IdeTabItem<_AgentListTab>(
-          key: ValueKey('agent-tab-supported'),
+          key: const ValueKey('agent-tab-supported'),
           value: _AgentListTab.supported,
-          label: '全部支持',
+          label: context.l10n.mgmtFilterAllSupported,
         ),
       ],
       onChanged: (value) {
@@ -243,7 +245,7 @@ class AgentManagementPageState extends State<AgentManagementPage> {
     final searchField = sf.TextField(
       key: const ValueKey('agent-search-field'),
       controller: _searchController,
-      placeholder: const Text('搜索 Agent 或厂商'),
+      placeholder: Text(context.l10n.mgmtSearchPlaceholder),
       features: const <sf.InputFeature>[
         sf.InputFeature.leading(Icon(Icons.search_rounded, size: 18)),
       ],
@@ -253,7 +255,9 @@ class AgentManagementPageState extends State<AgentManagementPage> {
     // 主色：一条筛选条上不该有唯一亮点，它会把注意力从搜索和分段控件上夺走。
     final detectButton = IdeButton(
       key: const ValueKey('agent-detect-button'),
-      label: detecting ? '正在检测…' : '自动检测 Agent',
+      label: detecting
+          ? context.l10n.mgmtDetecting
+          : context.l10n.mgmtAutoDetect,
       variant: IdeButtonVariant.accentOutline,
       onPressed: detecting ? null : widget.controller.detect,
       leading: detecting
@@ -304,11 +308,11 @@ class AgentManagementPageState extends State<AgentManagementPage> {
     if (installedTab && !anyInstalled && noQuery) {
       return _ActionEmptyState(
         icon: Icons.travel_explore_rounded,
-        title: '暂未检测到已安装的 Agent',
-        description: '可以自动检测本机环境，或者前往“全部支持”查看当前应用支持的 Agent。',
-        primaryLabel: '自动检测 Agent',
+        title: context.l10n.mgmtEmptyInstalledTitle,
+        description: context.l10n.mgmtEmptyInstalledBody,
+        primaryLabel: context.l10n.mgmtAutoDetect,
         onPrimary: widget.controller.detect,
-        secondaryLabel: '查看全部支持',
+        secondaryLabel: context.l10n.mgmtViewAllSupported,
         onSecondary: () {
           setState(() {
             _listTab = _AgentListTab.supported;
@@ -337,7 +341,7 @@ class AgentManagementPageState extends State<AgentManagementPage> {
               title: agent.definition.displayName,
               subtitle:
                   '${agent.definition.vendor} · ${agent.definition.commandName} · '
-                  '版本 ${agent.currentVersion ?? '未知'}',
+                  '${context.l10n.mgmtVersionWithValue(agent.currentVersion ?? context.l10n.mgmtUnknown)}',
               leading: sf.IconButton.ghost(
                 key: const ValueKey('agent-detail-back-button'),
                 onPressed: _backToList,
@@ -350,18 +354,22 @@ class AgentManagementPageState extends State<AgentManagementPage> {
               actions: [
                 IdeButton(
                   key: const ValueKey('agent-test-connection-button'),
-                  label: widget.controller.testing ? '正在测试…' : '测试连接',
+                  label: widget.controller.testing
+                      ? context.l10n.mgmtTesting
+                      : context.l10n.mgmtTestConnection,
                   onPressed: agent.installed && !widget.controller.testing
                       ? _testConnection
                       : null,
                 ),
                 IdeButton(
                   key: const ValueKey('agent-open-logs-button'),
-                  label: '查看运行日志',
+                  label: context.l10n.mgmtViewLogs,
                   onPressed: agent.logPaths.isEmpty ? null : _openLogs,
                 ),
                 IdeButton(
-                  label: agent.enabled ? '禁用 Agent' : '启用 Agent',
+                  label: agent.enabled
+                      ? context.l10n.mgmtDisableAgent
+                      : context.l10n.mgmtEnableAgent,
                   // 只有「禁用」是危险态。启用是恢复动作，套红会让这个来回
                   // 切换的开关长期处于报警状态。
                   variant: agent.enabled
@@ -383,21 +391,21 @@ class AgentManagementPageState extends State<AgentManagementPage> {
                   IdeTabs<_AgentDetailTab>(
                     value: _detailTab,
                     semanticLabel: 'Agent 详情',
-                    items: const [
+                    items: [
                       IdeTabItem<_AgentDetailTab>(
-                        key: ValueKey('agent-detail-tab-overview'),
+                        key: const ValueKey('agent-detail-tab-overview'),
                         value: _AgentDetailTab.overview,
-                        label: '基础信息',
+                        label: context.l10n.mgmtTabBasics,
                       ),
                       IdeTabItem<_AgentDetailTab>(
-                        key: ValueKey('agent-detail-tab-models'),
+                        key: const ValueKey('agent-detail-tab-models'),
                         value: _AgentDetailTab.models,
-                        label: '模型',
+                        label: context.l10n.mgmtTabModels,
                       ),
                       IdeTabItem<_AgentDetailTab>(
-                        key: ValueKey('agent-detail-tab-configuration'),
+                        key: const ValueKey('agent-detail-tab-configuration'),
                         value: _AgentDetailTab.configuration,
-                        label: '配置',
+                        label: context.l10n.mgmtTabConfig,
                       ),
                     ],
                     onChanged: _selectDetailTab,
@@ -430,8 +438,10 @@ class AgentManagementPageState extends State<AgentManagementPage> {
             agent: agent,
             onDetect: widget.controller.detect,
             onOpenExecutableDirectory: _openExecutableDirectory,
-            onCopyCommand: () =>
-                _copyText(agent.definition.commandName, '已复制启动命令。'),
+            onCopyCommand: () => _copyText(
+              agent.definition.commandName,
+              context.l10n.mgmtCopiedCommand,
+            ),
           );
           final diagnostics = _AgentDiagnosticsCard(
             agent: agent,
@@ -518,11 +528,11 @@ class AgentManagementPageState extends State<AgentManagementPage> {
     if (agent.models.isEmpty) {
       return _ActionEmptyState(
         icon: Icons.view_in_ar_outlined,
-        title: '无法加载模型列表',
+        title: context.l10n.mgmtCannotLoadModels,
         description: agent.accountState == AgentAccountState.loggedOut
-            ? '当前账号尚未登录。登录 Codex 后重新加载。'
+            ? context.l10n.mgmtModelsNeedLogin
             : 'Codex app-server 未返回模型，或当前配置无法完成握手。',
-        primaryLabel: '重新加载',
+        primaryLabel: context.l10n.mgmtReload,
         onPrimary: _testConnection,
       );
     }
@@ -533,7 +543,7 @@ class AgentManagementPageState extends State<AgentManagementPage> {
           padding: IdeSpacing.all12,
           child: Text(
             '数据来源：${agent.modelSource ?? 'Codex app-server'} · '
-            '更新时间：${_relativeTime(agent.modelsUpdatedAt)}',
+            '更新时间：${_relativeTime(agent.modelsUpdatedAt, notUpdated: context.l10n.mgmtNotUpdated)}',
             style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
           ),
         ),
@@ -621,13 +631,13 @@ class AgentManagementPageState extends State<AgentManagementPage> {
         barrierDismissible: false,
         builder: (context) => IdeDialog(
           title: Text('${agent.definition.displayName} 当前正在运行'),
-          content: const Text('禁用后将停止当前任务，已有会话会变为只读模式。'),
+          content: Text(context.l10n.mgmtDisableWarning),
           actions: <IdeDialogAction>[
             IdeDialogAction.cancel(
               onPressed: () => Navigator.of(context).pop(false),
             ),
             IdeDialogAction.destructive(
-              label: '停止并禁用',
+              label: context.l10n.mgmtStopAndDisable,
               onPressed: () => Navigator.of(context).pop(true),
             ),
           ],
@@ -646,17 +656,14 @@ class AgentManagementPageState extends State<AgentManagementPage> {
         context: context,
         barrierDismissible: false,
         builder: (context) => IdeDialog(
-          title: const Text('测试 Claude Code 连接'),
-          content: const Text(
-            '只发送无 Prompt 的 initialize 控制请求，不调用模型；'
-            'Claude CLI 仍可能维护自身认证或 bootstrap 缓存。',
-          ),
+          title: Text(context.l10n.mgmtTestClaudeTitle),
+          content: Text(context.l10n.mgmtTestClaudeBody),
           actions: <IdeDialogAction>[
             IdeDialogAction.cancel(
               onPressed: () => Navigator.of(context).pop(false),
             ),
             IdeDialogAction.confirm(
-              label: '继续测试',
+              label: context.l10n.mgmtContinueTest,
               onPressed: () => Navigator.of(context).pop(true),
             ),
           ],
@@ -735,7 +742,9 @@ class _AgentDetailStatusSummary extends StatelessWidget {
           installed: agent.installed,
         ),
         const SizedBox(width: IdeSpacing.space8),
-        _AgentStatusText(status: _priorityAgentStatus(colors, agent)),
+        _AgentStatusText(
+          status: _priorityAgentStatus(colors, agent, context.l10n),
+        ),
       ],
     );
   }
@@ -853,7 +862,7 @@ class _AgentRowStatus extends StatelessWidget {
     // 两个断点都不画 `>` 箭头：整行可点击已由 `PaneInteractiveSurface` 的
     // hover 高亮表达，重复一个指向性图标只会让右端多一列噪音。
     if (compact) {
-      final status = _priorityAgentStatus(colors, agent);
+      final status = _priorityAgentStatus(colors, agent, context.l10n);
       return _AgentStatusText(
         key: const ValueKey('agent-row-status-compact'),
         status: status,
@@ -889,7 +898,9 @@ class _AgentRowStatus extends StatelessWidget {
           width: _statusColumnWidth,
           child: _AgentStatusText(
             status: _AgentStatus(
-              label: agent.installed ? _accountEvidenceLabel(agent) : '—',
+              label: agent.installed
+                  ? _accountEvidenceLabel(agent, context.l10n)
+                  : '—',
               icon: accountNeedsAttention
                   ? Icons.account_circle_outlined
                   : Icons.person_outline_rounded,
@@ -919,7 +930,7 @@ class _AgentRowStatus extends StatelessWidget {
           child: _AgentStatusText(
             status: _AgentStatus(
               label: agent.installed
-                  ? _runtimeLabel(agent.runtimeState)
+                  ? agent.runtimeState.localizedLabel(context.l10n)
                   : '未安装',
               icon: runtimeNeedsAttention
                   ? Icons.error_outline_rounded
@@ -990,11 +1001,15 @@ class _AgentStatus {
   final Color color;
 }
 
-_AgentStatus _priorityAgentStatus(IdeColors colors, ManagedAgent agent) {
+_AgentStatus _priorityAgentStatus(
+  IdeColors colors,
+  ManagedAgent agent,
+  AppLocalizations l10n,
+) {
   if (agent.runtimeState == AgentRuntimeState.error ||
       agent.runtimeState == AgentRuntimeState.unavailable) {
     return _AgentStatus(
-      label: _runtimeLabel(agent.runtimeState),
+      label: agent.runtimeState.localizedLabel(l10n),
       icon: Icons.error_outline_rounded,
       color: colors.error,
     );
@@ -1010,13 +1025,13 @@ _AgentStatus _priorityAgentStatus(IdeColors colors, ManagedAgent agent) {
       agent.accountState == AgentAccountState.expired) {
     if (_hasSuccessfulConnectionTest(agent)) {
       return _AgentStatus(
-        label: '连接可用',
+        label: l10n.mgmtConnectionAvailable,
         icon: Icons.check_circle_outline_rounded,
         color: colors.textSecondary,
       );
     }
     return _AgentStatus(
-      label: _accountEvidenceLabel(agent),
+      label: _accountEvidenceLabel(agent, l10n),
       icon: Icons.account_circle_outlined,
       color: colors.warning,
     );
@@ -1034,7 +1049,7 @@ _AgentStatus _priorityAgentStatus(IdeColors colors, ManagedAgent agent) {
     return _AgentStatus(
       label: agent.accountState == AgentAccountState.checking
           ? '检测中'
-          : _runtimeLabel(agent.runtimeState),
+          : agent.runtimeState.localizedLabel(l10n),
       icon: Icons.sync_rounded,
       color: colors.info,
     );
@@ -1183,22 +1198,25 @@ class _AgentInformationCard extends StatelessWidget {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     return IdeSection(
-      title: '基础信息',
+      title: context.l10n.mgmtSectionBasics,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           IdeRowGroup(
-            title: '基本属性',
+            title: context.l10n.mgmtBasicAttributes,
             dividers: false,
             children: [
               // 显示名与协议名都是「可复制的机器串」，走等宽；厂商是人类
               // 文案，留在 UI 字体里。
               IdeKeyValueRow(
-                label: '名称',
+                label: context.l10n.mgmtName,
                 value: agent.definition.displayName,
                 tone: IdeKeyValueTone.identifier,
               ),
-              IdeKeyValueRow(label: '厂商', value: agent.definition.vendor),
+              IdeKeyValueRow(
+                label: context.l10n.mgmtVendor,
+                value: agent.definition.vendor,
+              ),
               IdeKeyValueRow(
                 label: '通信协议',
                 value: agent.definition.protocol,
@@ -1317,7 +1335,10 @@ class _AgentDiagnosticsCard extends StatelessWidget {
         label: '程序',
         value: agent.installed ? '可执行文件存在且可调用' : '未找到可执行文件',
       ),
-      _DiagnosticEntry(label: '认证证据', value: _accountEvidenceLabel(agent)),
+      _DiagnosticEntry(
+        label: context.l10n.mgmtAuthEvidence,
+        value: _accountEvidenceLabel(agent, context.l10n),
+      ),
       _DiagnosticEntry(
         label: '通信',
         value: connectionReady
@@ -1328,7 +1349,10 @@ class _AgentDiagnosticsCard extends StatelessWidget {
       ),
       _DiagnosticEntry(
         label: '最近检测',
-        value: _relativeTime(agent.lastDetectedAt),
+        value: _relativeTime(
+          agent.lastDetectedAt,
+          notUpdated: context.l10n.mgmtNotUpdated,
+        ),
       ),
       if (agent.connectionTest != null)
         _DiagnosticEntry(
@@ -1367,14 +1391,16 @@ class _AgentDiagnosticsCard extends StatelessWidget {
       if (agent.errorStage case final AgentDiagnosticStage errorStage)
         _DiagnosticEntry(
           label: '异常阶段',
-          value: _diagnosticStageLabel(errorStage),
+          value: errorStage.localizedLabel(context.l10n),
         ),
     ];
     final hasSupplement =
         agent.errorDetails != null || agent.suggestion != null || !healthy;
     return IdeSection(
-      title: '诊断',
-      subtitle: healthy ? '连接正常' : (agent.errorMessage ?? '状态需要检查'),
+      title: context.l10n.mgmtDiagnostics,
+      subtitle: healthy
+          ? context.l10n.mgmtConnectionHealthy
+          : (agent.errorMessage ?? '状态需要检查'),
       trailing: Icon(
         healthy ? Icons.check_circle_outline_rounded : Icons.error_outline,
         size: 17,
@@ -1531,14 +1557,12 @@ class _ClaudeCodeAccountDataEnrichmentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IdeSection(
-      title: '额度详情增强',
+      title: context.l10n.mgmtQuotaEnrichmentTitle,
       subtitle: 'OAuth 凭据 · Usage REST',
       child: IdeSettingsRow(
         key: const ValueKey('claude-account-data-enrichment-row'),
-        label: '读取 Claude Code 额度详情',
-        description:
-            '此开关只控制 Zeta 是否瞬时读取 Claude Code OAuth 凭据并调用 usage REST。'
-            '模型列表与套餐名称始终来自 Claude CLI；Zeta 不会刷新、写回或持久化凭据。',
+        label: context.l10n.mgmtQuotaEnrichmentLabel,
+        description: context.l10n.mgmtQuotaEnrichmentBody,
         showDivider: false,
         padding: IdeSpacing.settingsRowPaddingFlat,
         control: IdeSwitch(
@@ -1654,22 +1678,10 @@ AgentProviderKind? _kindForAgentId(String agentId) {
   };
 }
 
-String _accountLabel(AgentAccountState state) {
-  return switch (state) {
-    AgentAccountState.unknown => '无法检测',
-    AgentAccountState.checking => '检测中',
-    AgentAccountState.loggedIn => '已登录',
-    AgentAccountState.loggedOut => '未登录',
-    AgentAccountState.expired => '登录失效',
-    AgentAccountState.notRequired => '无需登录',
-    AgentAccountState.unavailable => '无法检测',
-  };
-}
-
-String _accountEvidenceLabel(ManagedAgent agent) {
+String _accountEvidenceLabel(ManagedAgent agent, AppLocalizations l10n) {
   final label = agent.accountLabel?.trim();
   return label == null || label.isEmpty
-      ? _accountLabel(agent.accountState)
+      ? agent.accountState.localizedLabel(l10n)
       : label;
 }
 
@@ -1677,36 +1689,9 @@ bool _hasSuccessfulConnectionTest(ManagedAgent agent) {
   return agent.connectionTest?.protocolReady == true;
 }
 
-String _runtimeLabel(AgentRuntimeState state) {
-  return switch (state) {
-    AgentRuntimeState.notRunning => '未运行',
-    AgentRuntimeState.idle => '空闲',
-    AgentRuntimeState.starting => '启动中',
-    AgentRuntimeState.running => '运行中',
-    AgentRuntimeState.stopping => '停止中',
-    AgentRuntimeState.error => '异常',
-    AgentRuntimeState.unavailable => '不可用',
-    AgentRuntimeState.disabled => '已禁用',
-  };
-}
-
-String _diagnosticStageLabel(AgentDiagnosticStage stage) {
-  return switch (stage) {
-    AgentDiagnosticStage.fileDetection => '文件检测',
-    AgentDiagnosticStage.cliStartup => '进程启动',
-    AgentDiagnosticStage.versionDetection => '版本检测',
-    AgentDiagnosticStage.accountAuthentication => '账号认证',
-    AgentDiagnosticStage.protocolHandshake => '协议握手',
-    AgentDiagnosticStage.modelLoading => '模型读取',
-    AgentDiagnosticStage.configurationRead => '配置读取',
-    AgentDiagnosticStage.testRequest => '测试请求',
-    AgentDiagnosticStage.processExit => '进程退出',
-  };
-}
-
-String _relativeTime(DateTime? value) {
+String _relativeTime(DateTime? value, {required String notUpdated}) {
   if (value == null) {
-    return '尚未更新';
+    return notUpdated;
   }
   final difference = DateTime.now().difference(value);
   if (difference.inMinutes < 1) {

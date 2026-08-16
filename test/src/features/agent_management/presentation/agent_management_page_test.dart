@@ -13,6 +13,7 @@ import 'package:zeta/src/features/agent_management/domain/agent_cli_management_r
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_configuration_editor.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_management_page.dart';
+import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
@@ -842,6 +843,9 @@ Future<void> _pumpManagementPage(
         codeFontFamily: 'JetBrainsMono',
       ),
       child: sf.ShadcnApp(
+        locale: ZetaLocalization.simplifiedChinese,
+        supportedLocales: ZetaLocalization.supportedLocales,
+        localizationsDelegates: ZetaLocalization.delegates,
         theme: buildShadcnTheme(ideTheme),
         materialTheme: buildMaterialTheme(ideTheme),
         home: sf.Scaffold(

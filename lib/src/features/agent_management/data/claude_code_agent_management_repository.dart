@@ -9,6 +9,8 @@ import 'package:zeta/src/features/agent_management/data/claude_code_auth_status_
 import 'package:zeta/src/features/agent_management/data/cli_process_runner.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_cli_management_repository.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
+import 'package:zeta/src/features/agent_management/domain/agent_management_text_catalog.dart';
+import 'package:zeta/src/features/agent_management/domain/fallback_agent_management_text_catalog.dart';
 
 /// Claude Code 版本命令执行入口；认证证据由独立 probe 负责。
 typedef ClaudeCodeCliProcessRun =
@@ -103,6 +105,7 @@ class ClaudeCodeAgentManagementRepository
     ClaudeCodeMetadataFileSystem? fileSystem,
     DateTime Function()? now,
     String Function()? claudeHomeProvider,
+    AgentManagementTextCatalog? textCatalog,
   }) : _processRunner =
            processRunner ??
            ((command, arguments, {timeout = _versionTimeout, environment}) {
@@ -128,7 +131,10 @@ class ClaudeCodeAgentManagementRepository
        _locator = locator ?? const ClaudeCodeCliLocator(),
        _fileSystem = fileSystem ?? const IoClaudeCodeMetadataFileSystem(),
        _now = now ?? DateTime.now,
-       _claudeHomeProvider = claudeHomeProvider ?? _defaultClaudeHome;
+       _claudeHomeProvider = claudeHomeProvider ?? _defaultClaudeHome,
+       _textCatalog = textCatalog ?? const FallbackAgentManagementTextCatalog();
+
+  final AgentManagementTextCatalog _textCatalog;
 
   static const Duration _versionTimeout = Duration(seconds: 10);
   static const Duration _connectionTimeout = Duration(seconds: 20);
@@ -169,7 +175,7 @@ class ClaudeCodeAgentManagementRepository
       );
     }
 
-    publish(0, '正在检测 Claude Code CLI');
+    publish(0, _textCatalog.locatingClaudeCodeCli());
     final version = await _readVersion(providerConfig);
     if (!version.cliCallable) {
       current = current.copyWith(
@@ -182,10 +188,10 @@ class ClaudeCodeAgentManagementRepository
         logPaths: await discoverLogPaths(),
         lastDetectedAt: _now(),
         errorStage: AgentDiagnosticStage.fileDetection,
-        errorMessage: '未找到 Claude Code CLI',
-        suggestion: '请先安装 Claude Code，并确认 claude 已加入 PATH。',
+        errorMessage: _textCatalog.notFoundClaudeCodeCli(),
+        suggestion: _textCatalog.installClaudeCodeAndAddToPath(),
       );
-      publish(total, '未找到 Claude Code');
+      publish(total, _textCatalog.notFound('Claude Code'));
       return current;
     }
 
@@ -205,9 +211,9 @@ class ClaudeCodeAgentManagementRepository
       errorMessage: version.error,
       suggestion: version.error == null
           ? null
-          : '请确认 Claude Code CLI 可以正常执行 `claude --version`。',
+          : _textCatalog.confirmClaudeVersionCommand(),
     );
-    publish(1, '已检测 Claude Code 版本');
+    publish(1, _textCatalog.claudeVersionDetected());
 
     final account = await _readAccountStatus(providerConfig);
     current = current.copyWith(
@@ -218,13 +224,12 @@ class ClaudeCodeAgentManagementRepository
           : AgentDiagnosticStage.accountAuthentication,
       errorMessage: account.error ?? current.errorMessage,
       suggestion: account.state == AgentAccountState.loggedOut
-          ? '未检测到 Claude.ai 登录证据；如需登录可运行 `claude auth login`，'
-                '也可直接执行连接测试确认当前 CLI 认证路径。'
+          ? _textCatalog.noClaudeLoginEvidenceSuggestion()
           : account.error == null
           ? current.suggestion
-          : '请确认 `claude auth status --json` 可执行；也可运行连接测试确认当前 CLI 认证路径。',
+          : _textCatalog.confirmClaudeAuthStatusJson(),
     );
-    publish(2, '已检测 Claude Code 登录状态');
+    publish(2, _textCatalog.claudeAuthDetected());
 
     final config = await _fileSystem.stat(configPath);
     final logs = await discoverLogPaths();
@@ -234,7 +239,7 @@ class ClaudeCodeAgentManagementRepository
       logPaths: logs,
       lastDetectedAt: _now(),
     );
-    publish(total, 'Claude Code 检测完成');
+    publish(total, _textCatalog.detectionComplete('Claude Code'));
     return current;
   }
 
@@ -256,7 +261,7 @@ class ClaudeCodeAgentManagementRepository
           accountValid: false,
           protocolReady: false,
           failureStage: AgentDiagnosticStage.fileDetection,
-          message: '未找到 Claude Code CLI',
+          message: _textCatalog.notFoundClaudeCodeCli(),
         ),
         const <AgentModelInfo>[],
       );
@@ -292,7 +297,7 @@ class ClaudeCodeAgentManagementRepository
           accountValid: false,
           protocolReady: false,
           failureStage: AgentDiagnosticStage.protocolHandshake,
-          message: _metadataProbeFailureMessage(error.failure),
+          message: _metadataProbeFailureMessage(error.failure, _textCatalog),
           agentVersion: version.version,
         ),
         const <AgentModelInfo>[],
@@ -432,7 +437,7 @@ class ClaudeCodeAgentManagementRepository
         return _ClaudeCodeVersionRead(
           cliCallable: true,
           displayPath: command.displayPath,
-          error: '无法识别 Claude Code 版本。',
+          error: _textCatalog.cannotIdentifyVersion('Claude Code'),
         );
       }
       return _ClaudeCodeVersionRead(
@@ -465,23 +470,26 @@ class ClaudeCodeAgentManagementRepository
     try {
       final status = await _authStatusLoader(providerConfig);
       if (status != null) {
-        return _mapAuthStatus(status);
+        return _mapAuthStatus(status, _textCatalog);
       }
     } catch (_) {
       // 统一折叠为不可用，不依据凭据文件名猜测账号状态。
     }
-    return const _ClaudeCodeAccountRead(
+    return _ClaudeCodeAccountRead(
       state: AgentAccountState.unavailable,
       label: 'Claude Code 登录证据不可用',
-      error: '无法通过 Claude CLI 检查登录状态。',
+      error: _textCatalog.cannotCheckClaudeAuth(),
     );
   }
 }
 
-String _metadataProbeFailureMessage(ClaudeCodeCliMetadataProbeFailure failure) {
+String _metadataProbeFailureMessage(
+  ClaudeCodeCliMetadataProbeFailure failure,
+  AgentManagementTextCatalog catalog,
+) {
   return switch (failure) {
     ClaudeCodeCliMetadataProbeFailure.processUnavailable =>
-      '无法启动 Claude Code initialize 探测。',
+      catalog.cannotStartClaudeInitialize(),
     ClaudeCodeCliMetadataProbeFailure.timeout =>
       'Claude Code initialize 在 20 秒内未完成。',
     ClaudeCodeCliMetadataProbeFailure.processExited =>
@@ -497,22 +505,25 @@ String _metadataProbeFailureMessage(ClaudeCodeCliMetadataProbeFailure failure) {
   };
 }
 
-_ClaudeCodeAccountRead _mapAuthStatus(ClaudeCodeAuthStatusSnapshot status) {
+_ClaudeCodeAccountRead _mapAuthStatus(
+  ClaudeCodeAuthStatusSnapshot status,
+  AgentManagementTextCatalog catalog,
+) {
   if (!status.loggedIn) {
-    return const _ClaudeCodeAccountRead(
+    return _ClaudeCodeAccountRead(
       state: AgentAccountState.loggedOut,
-      label: '未检测到 Claude.ai OAuth 或 API key 登录证据',
+      label: catalog.noClaudeLoginEvidenceLabel(),
     );
   }
 
   final authMethod = status.authMethod?.trim().toLowerCase();
   final label = switch (authMethod) {
     'claude.ai' => _claudeAiAccountLabel(status.subscriptionType),
-    'api_key' => '已通过 Anthropic API key 配置认证',
-    'api_key_helper' => '已通过 API key helper 配置认证',
-    'oauth_token' => '已通过 OAuth token 配置认证',
-    'third_party' => _thirdPartyAccountLabel(status.apiProvider),
-    _ => '已检测到 Claude Code 认证路径',
+    'api_key' => catalog.claudeAuthViaApiKey(),
+    'api_key_helper' => catalog.claudeAuthViaApiKeyHelper(),
+    'oauth_token' => catalog.claudeAuthViaOauthToken(),
+    'third_party' => _thirdPartyAccountLabel(status.apiProvider, catalog),
+    _ => catalog.claudeAuthPathDetected(),
   };
   return _ClaudeCodeAccountRead(
     state: AgentAccountState.loggedIn,
@@ -531,7 +542,10 @@ String _claudeAiAccountLabel(String? subscriptionType) {
   return plan == null ? 'Claude.ai 已登录' : 'Claude.ai 已登录 · $plan';
 }
 
-String _thirdPartyAccountLabel(String? apiProvider) {
+String _thirdPartyAccountLabel(
+  String? apiProvider,
+  AgentManagementTextCatalog catalog,
+) {
   final provider = switch (apiProvider?.trim().toLowerCase()) {
     'bedrock' => 'Amazon Bedrock',
     'vertex' => 'Google Vertex AI',
@@ -541,7 +555,9 @@ String _thirdPartyAccountLabel(String? apiProvider) {
     'openai' => 'OpenAI',
     _ => null,
   };
-  return provider == null ? '已配置第三方 API Provider' : '已配置 $provider';
+  return provider == null
+      ? catalog.thirdPartyApiProviderConfigured()
+      : catalog.configuredProvider(provider);
 }
 
 String _preferredClaudeCodePath(AgentProviderConfig config) {

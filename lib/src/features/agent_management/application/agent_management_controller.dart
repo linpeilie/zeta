@@ -14,6 +14,8 @@ import 'package:zeta/src/features/agent_management/data/codex_agent_management_r
     show isNewerVersion;
 import 'package:zeta/src/features/agent_management/domain/agent_cli_management_repository.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
+import 'package:zeta/src/features/agent_management/domain/agent_management_text_catalog.dart';
+import 'package:zeta/src/features/agent_management/domain/fallback_agent_management_text_catalog.dart';
 
 /// Agent 管理页面的应用层协调器（支持多 Agent CLI）。
 class AgentManagementController extends ChangeNotifier {
@@ -22,7 +24,9 @@ class AgentManagementController extends ChangeNotifier {
     required this.providerController,
     this.runtimeStateProvider,
     this.runtimeListenable,
-  }) : _repositories = Map<String, AgentCliManagementRepository>.unmodifiable(
+    AgentManagementTextCatalog? textCatalog,
+  }) : _textCatalog = textCatalog ?? const FallbackAgentManagementTextCatalog(),
+       _repositories = Map<String, AgentCliManagementRepository>.unmodifiable(
          _supportedRepositories(repositories),
        ),
        _selectedAgentId = _supportedRepositories(repositories).keys.isEmpty
@@ -52,6 +56,7 @@ class AgentManagementController extends ChangeNotifier {
   }
 
   final Map<String, AgentCliManagementRepository> _repositories;
+  final AgentManagementTextCatalog _textCatalog;
   final AgentProviderSettingsPort providerController;
   final AgentRuntimeState Function()? runtimeStateProvider;
   final Listenable? runtimeListenable;
@@ -258,8 +263,11 @@ class AgentManagementController extends ChangeNotifier {
             : AgentRuntimeState.disabled,
       );
     } catch (error) {
-      _operationError =
-          '无法${enabled ? '启用' : '禁用'} ${current.definition.displayName}：$error';
+      _operationError = _textCatalog.cannotToggleEnabled(
+        enabled: enabled,
+        displayName: current.definition.displayName,
+        error: error,
+      );
     }
     _notify();
   }
@@ -294,7 +302,7 @@ class AgentManagementController extends ChangeNotifier {
         current.copyWith(extra: extra),
       );
     } catch (error) {
-      _operationError = '额度详情增强设置保存失败：$error';
+      _operationError = _textCatalog.accountDataEnrichmentSaveFailed(error);
     } finally {
       _updatingAccountDataEnrichment = false;
       _notify();
@@ -337,7 +345,7 @@ class AgentManagementController extends ChangeNotifier {
       );
       return result.$1;
     } catch (error) {
-      _operationError = '连接测试失败：$error';
+      _operationError = _textCatalog.connectionTestFailed(error);
       return null;
     } finally {
       _testing = false;
@@ -357,7 +365,7 @@ class AgentManagementController extends ChangeNotifier {
       _configuration = await repository.readConfiguration();
       return _configuration;
     } catch (error) {
-      _operationError = '配置文件读取失败：$error';
+      _operationError = _textCatalog.configurationReadFailed(error);
       return null;
     } finally {
       _loadingConfiguration = false;
@@ -376,7 +384,7 @@ class AgentManagementController extends ChangeNotifier {
   }) async {
     final original = _configuration;
     if (original == null) {
-      throw StateError('配置文件尚未加载');
+      throw StateError(_textCatalog.configurationNotLoaded());
     }
     _savingConfiguration = true;
     _operationError = null;
@@ -413,7 +421,7 @@ class AgentManagementController extends ChangeNotifier {
       _agents[_selectedAgentId] = agent.copyWith(logPaths: paths);
       return logs;
     } catch (error) {
-      _operationError = '运行日志读取失败：$error';
+      _operationError = _textCatalog.logsReadFailed(error);
       return const <AgentLogEntry>[];
     } finally {
       _loadingLogs = false;

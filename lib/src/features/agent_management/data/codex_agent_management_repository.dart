@@ -15,6 +15,8 @@ import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/agent_management/data/cli_process_runner.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_cli_management_repository.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
+import 'package:zeta/src/features/agent_management/domain/agent_management_text_catalog.dart';
+import 'package:zeta/src/features/agent_management/domain/fallback_agent_management_text_catalog.dart';
 
 /// Codex CLI 的检测、配置与日志数据仓库。
 class CodexAgentManagementRepository implements AgentCliManagementRepository {
@@ -26,11 +28,13 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
     DateTime Function()? now,
     String Function()? codexHomeProvider,
     this.modelCatalogRepository,
+    AgentManagementTextCatalog? textCatalog,
   }) : _processRunner = processRunner ?? const CliProcessRunner(),
        _locator = locator ?? const CodexCliLocator(),
        _httpClientFactory = httpClientFactory ?? HttpClient.new,
        _now = now ?? DateTime.now,
-       _codexHomeProvider = codexHomeProvider ?? _defaultCodexHome;
+       _codexHomeProvider = codexHomeProvider ?? _defaultCodexHome,
+       _textCatalog = textCatalog ?? const FallbackAgentManagementTextCatalog();
 
   /// 检测 / 连接测试中 initialize 与模型目录加载的固定上限。
   static const Duration _probeTimeout = Duration(seconds: 60);
@@ -42,6 +46,7 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
   final String Function() _codexHomeProvider;
   final AgentModelCatalogRepository? modelCatalogRepository;
   final AgentProviderRuntimeRegistry runtimeRegistry;
+  final AgentManagementTextCatalog _textCatalog;
 
   @override
   String get agentId => AgentDefinition.codex.id;
@@ -72,7 +77,7 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
       );
     }
 
-    publish(0, '正在定位 Codex');
+    publish(0, _textCatalog.locating('Codex'));
     final resolved = await _locator.locate(providerConfig);
     if (resolved == null) {
       final configInfo = await _configurationInfo();
@@ -86,10 +91,10 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
         logPaths: await discoverLogPaths(),
         lastDetectedAt: _now(),
         errorStage: AgentDiagnosticStage.fileDetection,
-        errorMessage: '未找到 Codex',
-        suggestion: '请先安装 Codex，并确认可执行文件已加入 PATH。',
+        errorMessage: _textCatalog.notFound('Codex'),
+        suggestion: _textCatalog.installAndAddToPath('Codex'),
       );
-      publish(total, '未找到 Codex');
+      publish(total, _textCatalog.notFound('Codex'));
       return current;
     }
 
@@ -104,7 +109,7 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
       errorDetails: null,
       suggestion: null,
     );
-    publish(1, '已找到 Codex');
+    publish(1, _textCatalog.found('Codex'));
 
     final version = await _readVersion(resolved);
     current = current.copyWith(
@@ -116,9 +121,9 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
       errorDetails: version.details ?? current.errorDetails,
       suggestion: version.error == null
           ? current.suggestion
-          : '请确认检测到的可执行文件可以正常执行，然后重新检测。',
+          : _textCatalog.confirmExecutableThenRedetect(),
     );
-    publish(2, '已检测当前版本');
+    publish(2, _textCatalog.versionDetected());
 
     final account = await _readAccountStatus(resolved);
     current = current.copyWith(
@@ -133,18 +138,18 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
           ? current.suggestion
           : account.suggestion,
     );
-    publish(3, '已检测账号状态');
+    publish(3, _textCatalog.accountDetected());
 
     final configInfo = await _configurationInfo();
     current = current.copyWith(
       configExists: configInfo.exists,
       configModifiedAt: configInfo.modifiedAt,
     );
-    publish(4, '已读取配置文件状态');
+    publish(4, _textCatalog.configStatusRead());
 
     final logs = await discoverLogPaths();
     current = current.copyWith(logPaths: logs);
-    publish(5, '已定位 Codex 日志');
+    publish(5, _textCatalog.logsLocated('Codex'));
 
     final latest = await _latestVersion();
     final versionState = switch ((version.version, latest.version)) {
@@ -168,7 +173,7 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
           ? current.errorDetails
           : (current.errorDetails ?? latest.details),
     );
-    publish(6, '已检查最新版本');
+    publish(6, _textCatalog.latestVersionChecked());
 
     final effectiveConfig = _providerConfig(providerConfig, resolved);
     final probe = await _probeProvider(
@@ -190,12 +195,12 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
       errorDetails: probe.success ? current.errorDetails : probe.details,
       suggestion: probe.success
           ? current.suggestion
-          : '请检查 Codex 配置和账号状态后重新测试连接。',
+          : _textCatalog.retestAfterCheckingConfig('Codex'),
     );
-    publish(7, '已完成协议握手');
+    publish(7, _textCatalog.handshakeComplete());
 
     current = current.copyWith(lastDetectedAt: _now());
-    publish(total, 'Codex 检测完成');
+    publish(total, _textCatalog.detectionComplete('Codex'));
     return current;
   }
 
@@ -218,7 +223,7 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
           accountValid: false,
           protocolReady: false,
           failureStage: AgentDiagnosticStage.fileDetection,
-          message: '未找到 Codex 可执行文件。',
+          message: _textCatalog.notFound('Codex'),
         ),
         const <AgentModelInfo>[],
       );
@@ -249,7 +254,10 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
         capabilitySummary: _capabilitySummary(probe.capabilities),
         compatibilitySummary: probe.runtimeInfo == null
             ? null
-            : _compatibilitySummary(probe.runtimeInfo!.compatibilityStatus),
+            : _compatibilitySummary(
+                probe.runtimeInfo!.compatibilityStatus,
+                _textCatalog,
+              ),
       ),
       probe.models,
     );
@@ -263,7 +271,7 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
   }) async {
     final resolved = await _locator.resolvePath(path);
     if (resolved == null) {
-      throw FileSystemException('该路径不存在或不是普通文件', path);
+      throw FileSystemException(_textCatalog.pathNotRegularFile(), path);
     }
     return _providerConfig(current, resolved);
   }
@@ -321,7 +329,10 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
       followLinks: false,
     );
     if (existingType == FileSystemEntityType.link) {
-      throw FileSystemException('拒绝写入符号链接配置文件', original.path);
+      throw FileSystemException(
+        _textCatalog.refuseSymlinkConfig(),
+        original.path,
+      );
     }
 
     if (await file.exists()) {
@@ -329,7 +340,9 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
       final currentStat = await file.stat();
       if (!overwriteExternalChanges &&
           _signature(currentContent, currentStat) != original.signature) {
-        throw const AgentConfigurationConflictException('配置文件已在外部发生修改。');
+        throw AgentConfigurationConflictException(
+          _textCatalog.configExternallyModified(),
+        );
       }
     }
 
@@ -484,7 +497,10 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
         r'\b(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)\b',
       ).firstMatch(output);
       if (!result.succeeded || match == null) {
-        return _VersionRead(error: '无法识别 Codex 版本。', details: output);
+        return _VersionRead(
+          error: _textCatalog.cannotIdentifyVersion('Codex'),
+          details: output,
+        );
       }
       return _VersionRead(version: match.group(1));
     } catch (error) {
@@ -503,17 +519,17 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
       if (result.succeeded &&
           (normalized.contains('logged in') ||
               normalized.contains('authenticated'))) {
-        return const _AccountRead(
+        return _AccountRead(
           state: AgentAccountState.loggedIn,
-          label: '账号已登录',
+          label: _textCatalog.accountLoggedIn(),
         );
       }
       if (normalized.contains('not logged') ||
           normalized.contains('login required')) {
-        return const _AccountRead(
+        return _AccountRead(
           state: AgentAccountState.loggedOut,
           error: 'Codex 尚未登录。',
-          suggestion: '请在终端运行 codex login 后重新检测。',
+          suggestion: _textCatalog.runCodexLogin(),
           failureStage: AgentDiagnosticStage.accountAuthentication,
         );
       }
@@ -523,11 +539,13 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
           normalized.contains('unknown variant');
       return _AccountRead(
         state: AgentAccountState.unavailable,
-        error: configFailure ? 'Codex 配置文件无法解析。' : '无法检测账号状态。',
+        error: configFailure
+            ? _textCatalog.codexConfigUnparseable()
+            : _textCatalog.cannotDetectAccount(),
         details: output,
         suggestion: configFailure
-            ? '请修复 config.toml 中提示的字段后重新检测。'
-            : '请在终端运行 codex login status 查看详细信息。',
+            ? _textCatalog.fixConfigTomlThenRedetect()
+            : _textCatalog.runCodexLoginStatus(),
         failureStage: configFailure
             ? AgentDiagnosticStage.configurationRead
             : AgentDiagnosticStage.accountAuthentication,
@@ -535,9 +553,9 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
     } catch (error) {
       return _AccountRead(
         state: AgentAccountState.unavailable,
-        error: '账号状态检测失败。',
+        error: _textCatalog.accountCheckFailed(),
         details: '$error',
-        suggestion: '请确认 Codex 可以在终端中正常运行。',
+        suggestion: _textCatalog.confirmCliRuns('Codex'),
         failureStage: AgentDiagnosticStage.accountAuthentication,
       );
     }
@@ -630,7 +648,7 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
       );
       if (response.statusCode != HttpStatus.ok) {
         return _LatestVersionRead(
-          error: '最新版本检查失败。',
+          error: _textCatalog.latestVersionCheckFailed(),
           details: 'HTTP ${response.statusCode}',
         );
       }
@@ -642,9 +660,14 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
       if (decoded is Map && decoded['version'] is String) {
         return _LatestVersionRead(version: decoded['version'] as String);
       }
-      return const _LatestVersionRead(error: '版本服务返回了未知格式。');
+      return _LatestVersionRead(
+        error: _textCatalog.versionServiceUnknownFormat(),
+      );
     } catch (error) {
-      return _LatestVersionRead(error: '无法获取 Codex 最新版本。', details: '$error');
+      return _LatestVersionRead(
+        error: _textCatalog.cannotGetLatestVersion('Codex'),
+        details: '$error',
+      );
     } finally {
       client.close(force: true);
     }
@@ -830,15 +853,11 @@ List<String> _capabilitySummary(AgentProviderCapabilities? capabilities) {
   ];
 }
 
-String _compatibilitySummary(AgentRuntimeCompatibilityStatus status) {
-  return switch (status) {
-    AgentRuntimeCompatibilityStatus.supported => '已验证支持',
-    AgentRuntimeCompatibilityStatus.supportedWithLimitedCapabilities =>
-      '兼容运行，部分能力关闭',
-    AgentRuntimeCompatibilityStatus.newerUntested => '版本较新，尚未完整验证',
-    AgentRuntimeCompatibilityStatus.olderUnsupported => '版本过旧，不受支持',
-    AgentRuntimeCompatibilityStatus.protocolMismatch => '协议不兼容',
-  };
+String _compatibilitySummary(
+  AgentRuntimeCompatibilityStatus status,
+  AgentManagementTextCatalog catalog,
+) {
+  return catalog.compatibilitySummary(status);
 }
 
 class _ConfigurationInfo {

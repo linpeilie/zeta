@@ -2437,6 +2437,1320 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Next window'**
   String get usageNextWindow;
+
+  /// Detect locating
+  ///
+  /// In en, this message translates to:
+  /// **'Locating {name}'**
+  String mgmtLocating(String name);
+
+  /// Detect locating Claude CLI
+  ///
+  /// In en, this message translates to:
+  /// **'Checking Claude Code CLI'**
+  String get mgmtLocatingClaudeCodeCli;
+
+  /// Detect not found
+  ///
+  /// In en, this message translates to:
+  /// **'{name} was not found'**
+  String mgmtNotFound(String name);
+
+  /// Claude CLI not found
+  ///
+  /// In en, this message translates to:
+  /// **'Claude Code CLI was not found'**
+  String get mgmtNotFoundClaudeCodeCli;
+
+  /// Install suggestion
+  ///
+  /// In en, this message translates to:
+  /// **'Install {name} first and make sure the executable is on PATH.'**
+  String mgmtInstallAndAddToPath(String name);
+
+  /// Install Claude suggestion
+  ///
+  /// In en, this message translates to:
+  /// **'Install Claude Code first and make sure claude is on PATH.'**
+  String get mgmtInstallClaudeCodeAndAddToPath;
+
+  /// Detect found
+  ///
+  /// In en, this message translates to:
+  /// **'Found {name}'**
+  String mgmtFound(String name);
+
+  /// Confirm executable
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm the detected executable can run, then detect again.'**
+  String get mgmtConfirmExecutableThenRedetect;
+
+  /// Confirm claude version
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm Claude Code CLI can run `claude --version`.'**
+  String get mgmtConfirmClaudeVersionCommand;
+
+  /// Version detected
+  ///
+  /// In en, this message translates to:
+  /// **'Current version detected'**
+  String get mgmtVersionDetected;
+
+  /// Claude version detected
+  ///
+  /// In en, this message translates to:
+  /// **'Claude Code version detected'**
+  String get mgmtClaudeVersionDetected;
+
+  /// Account detected
+  ///
+  /// In en, this message translates to:
+  /// **'Account status detected'**
+  String get mgmtAccountDetected;
+
+  /// Claude auth detected
+  ///
+  /// In en, this message translates to:
+  /// **'Claude Code sign-in status detected'**
+  String get mgmtClaudeAuthDetected;
+
+  /// Config status read
+  ///
+  /// In en, this message translates to:
+  /// **'Configuration file status read'**
+  String get mgmtConfigStatusRead;
+
+  /// Logs located
+  ///
+  /// In en, this message translates to:
+  /// **'{name} logs located'**
+  String mgmtLogsLocated(String name);
+
+  /// Latest version checked
+  ///
+  /// In en, this message translates to:
+  /// **'Latest version checked'**
+  String get mgmtLatestVersionChecked;
+
+  /// Handshake complete
+  ///
+  /// In en, this message translates to:
+  /// **'Protocol handshake completed'**
+  String get mgmtHandshakeComplete;
+
+  /// Detection complete
+  ///
+  /// In en, this message translates to:
+  /// **'{name} detection finished'**
+  String mgmtDetectionComplete(String name);
+
+  /// Retest after config
+  ///
+  /// In en, this message translates to:
+  /// **'Check {name} configuration and account status, then test the connection again.'**
+  String mgmtRetestAfterCheckingConfig(String name);
+
+  /// Retest Grok
+  ///
+  /// In en, this message translates to:
+  /// **'Check the Grok sign-in state and configuration, then test the connection again.'**
+  String get mgmtRetestAfterCheckingGrokAuth;
+
+  /// Confirm claude auth status
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm `claude auth status --json` can run; you can also run a connection test to verify the current CLI auth path.'**
+  String get mgmtConfirmClaudeAuthStatusJson;
+
+  /// No Claude login evidence suggestion
+  ///
+  /// In en, this message translates to:
+  /// **'No Claude.ai sign-in evidence found. Run `claude auth login` if needed, or run a connection test to confirm the current CLI auth path.'**
+  String get mgmtNoClaudeLoginEvidenceSuggestion;
+
+  /// Cannot identify version
+  ///
+  /// In en, this message translates to:
+  /// **'Could not identify the {name} version.'**
+  String mgmtCannotIdentifyVersion(String name);
+
+  /// Latest check failed
+  ///
+  /// In en, this message translates to:
+  /// **'Latest version check failed.'**
+  String get mgmtLatestVersionCheckFailed;
+
+  /// Cannot parse version check
+  ///
+  /// In en, this message translates to:
+  /// **'Could not parse the version check result.'**
+  String get mgmtCannotParseVersionCheck;
+
+  /// Unknown version format
+  ///
+  /// In en, this message translates to:
+  /// **'The version service returned an unknown format.'**
+  String get mgmtVersionServiceUnknownFormat;
+
+  /// Missing latest version
+  ///
+  /// In en, this message translates to:
+  /// **'The version service did not return a latest version.'**
+  String get mgmtVersionServiceMissingVersion;
+
+  /// Cannot get latest
+  ///
+  /// In en, this message translates to:
+  /// **'Could not get the latest {name} version.'**
+  String mgmtCannotGetLatestVersion(String name);
+
+  /// Account logged in
+  ///
+  /// In en, this message translates to:
+  /// **'Signed in'**
+  String get mgmtAccountLoggedIn;
+
+  /// Run codex login
+  ///
+  /// In en, this message translates to:
+  /// **'Run codex login in a terminal, then detect again.'**
+  String get mgmtRunCodexLogin;
+
+  /// Run grok login
+  ///
+  /// In en, this message translates to:
+  /// **'Run grok login in a terminal, then detect again.'**
+  String get mgmtRunGrokLogin;
+
+  /// Rerun grok login
+  ///
+  /// In en, this message translates to:
+  /// **'Run grok login again.'**
+  String get mgmtRerunGrokLogin;
+
+  /// Codex login status
+  ///
+  /// In en, this message translates to:
+  /// **'Run codex login status in a terminal for details.'**
+  String get mgmtRunCodexLoginStatus;
+
+  /// Fix config.toml
+  ///
+  /// In en, this message translates to:
+  /// **'Fix the fields reported in config.toml, then detect again.'**
+  String get mgmtFixConfigTomlThenRedetect;
+
+  /// Codex config unparseable
+  ///
+  /// In en, this message translates to:
+  /// **'The Codex configuration file could not be parsed.'**
+  String get mgmtCodexConfigUnparseable;
+
+  /// Cannot detect account
+  ///
+  /// In en, this message translates to:
+  /// **'Could not detect account status.'**
+  String get mgmtCannotDetectAccount;
+
+  /// Account check failed
+  ///
+  /// In en, this message translates to:
+  /// **'Account status check failed.'**
+  String get mgmtAccountCheckFailed;
+
+  /// Confirm CLI runs
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm {name} can run in a terminal.'**
+  String mgmtConfirmCliRuns(String name);
+
+  /// Grok login cache
+  ///
+  /// In en, this message translates to:
+  /// **'Could not parse the Grok login cache.'**
+  String get mgmtCannotParseGrokLoginCache;
+
+  /// No Claude login label
+  ///
+  /// In en, this message translates to:
+  /// **'No Claude.ai OAuth or API key sign-in evidence found'**
+  String get mgmtNoClaudeLoginEvidenceLabel;
+
+  /// Cannot check Claude auth
+  ///
+  /// In en, this message translates to:
+  /// **'Could not check sign-in status through the Claude CLI.'**
+  String get mgmtCannotCheckClaudeAuth;
+
+  /// Cannot start initialize
+  ///
+  /// In en, this message translates to:
+  /// **'Could not start the Claude Code initialize probe.'**
+  String get mgmtCannotStartClaudeInitialize;
+
+  /// Auth via API key
+  ///
+  /// In en, this message translates to:
+  /// **'Authenticated with an Anthropic API key'**
+  String get mgmtClaudeAuthViaApiKey;
+
+  /// Auth via helper
+  ///
+  /// In en, this message translates to:
+  /// **'Authenticated with an API key helper'**
+  String get mgmtClaudeAuthViaApiKeyHelper;
+
+  /// Auth via OAuth
+  ///
+  /// In en, this message translates to:
+  /// **'Authenticated with an OAuth token'**
+  String get mgmtClaudeAuthViaOauthToken;
+
+  /// Auth path detected
+  ///
+  /// In en, this message translates to:
+  /// **'A Claude Code authentication path was detected'**
+  String get mgmtClaudeAuthPathDetected;
+
+  /// Third party provider
+  ///
+  /// In en, this message translates to:
+  /// **'A third-party API Provider is configured'**
+  String get mgmtThirdPartyApiProviderConfigured;
+
+  /// Configured provider
+  ///
+  /// In en, this message translates to:
+  /// **'{provider} is configured'**
+  String mgmtConfiguredProvider(String provider);
+
+  /// Path not regular file
+  ///
+  /// In en, this message translates to:
+  /// **'That path does not exist or is not a regular file'**
+  String get mgmtPathNotRegularFile;
+
+  /// Refuse symlink
+  ///
+  /// In en, this message translates to:
+  /// **'Refusing to write a symlink configuration file'**
+  String get mgmtRefuseSymlinkConfig;
+
+  /// Config externally modified
+  ///
+  /// In en, this message translates to:
+  /// **'The configuration file was modified externally.'**
+  String get mgmtConfigExternallyModified;
+
+  /// Compat supported
+  ///
+  /// In en, this message translates to:
+  /// **'Verified as supported'**
+  String get mgmtCompatSupported;
+
+  /// Compat limited
+  ///
+  /// In en, this message translates to:
+  /// **'Runs with limited capabilities'**
+  String get mgmtCompatLimited;
+
+  /// Compat newer
+  ///
+  /// In en, this message translates to:
+  /// **'Newer version, not fully verified'**
+  String get mgmtCompatNewerUntested;
+
+  /// Compat older
+  ///
+  /// In en, this message translates to:
+  /// **'Too old to be supported'**
+  String get mgmtCompatOlderUnsupported;
+
+  /// Compat protocol
+  ///
+  /// In en, this message translates to:
+  /// **'Protocol incompatible'**
+  String get mgmtCompatProtocolMismatch;
+
+  /// Cannot enable
+  ///
+  /// In en, this message translates to:
+  /// **'Could not enable {name}: {error}'**
+  String mgmtCannotEnable(String name, String error);
+
+  /// Cannot disable
+  ///
+  /// In en, this message translates to:
+  /// **'Could not disable {name}: {error}'**
+  String mgmtCannotDisable(String name, String error);
+
+  /// Enrichment save failed
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save usage-detail enrichment: {error}'**
+  String mgmtAccountDataEnrichmentSaveFailed(String error);
+
+  /// Connection test failed
+  ///
+  /// In en, this message translates to:
+  /// **'Connection test failed: {error}'**
+  String mgmtConnectionTestFailed(String error);
+
+  /// Config read failed
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the configuration file: {error}'**
+  String mgmtConfigurationReadFailed(String error);
+
+  /// Config not loaded
+  ///
+  /// In en, this message translates to:
+  /// **'The configuration file has not been loaded'**
+  String get mgmtConfigurationNotLoaded;
+
+  /// Logs read failed
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read runtime logs: {error}'**
+  String mgmtLogsReadFailed(String error);
+
+  /// Operation incomplete
+  ///
+  /// In en, this message translates to:
+  /// **'The operation did not finish'**
+  String get mgmtOperationIncomplete;
+
+  /// Filter installed
+  ///
+  /// In en, this message translates to:
+  /// **'Installed'**
+  String get mgmtFilterInstalled;
+
+  /// Filter all supported
+  ///
+  /// In en, this message translates to:
+  /// **'All supported'**
+  String get mgmtFilterAllSupported;
+
+  /// Search placeholder
+  ///
+  /// In en, this message translates to:
+  /// **'Search Agents or vendors'**
+  String get mgmtSearchPlaceholder;
+
+  /// Detecting
+  ///
+  /// In en, this message translates to:
+  /// **'Detecting…'**
+  String get mgmtDetecting;
+
+  /// Auto detect
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-detect Agents'**
+  String get mgmtAutoDetect;
+
+  /// Empty installed title
+  ///
+  /// In en, this message translates to:
+  /// **'No installed Agent detected'**
+  String get mgmtEmptyInstalledTitle;
+
+  /// Empty installed body
+  ///
+  /// In en, this message translates to:
+  /// **'You can auto-detect this machine, or open All supported to see Agents this app supports.'**
+  String get mgmtEmptyInstalledBody;
+
+  /// View all supported
+  ///
+  /// In en, this message translates to:
+  /// **'View all supported'**
+  String get mgmtViewAllSupported;
+
+  /// No match title
+  ///
+  /// In en, this message translates to:
+  /// **'No matching Agent'**
+  String get mgmtNoMatchTitle;
+
+  /// No match body
+  ///
+  /// In en, this message translates to:
+  /// **'Try changing the search.'**
+  String get mgmtNoMatchBody;
+
+  /// Clear search
+  ///
+  /// In en, this message translates to:
+  /// **'Clear search'**
+  String get mgmtClearSearch;
+
+  /// Version with value
+  ///
+  /// In en, this message translates to:
+  /// **'Version {version}'**
+  String mgmtVersionWithValue(String version);
+
+  /// Unknown
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get mgmtUnknown;
+
+  /// Testing
+  ///
+  /// In en, this message translates to:
+  /// **'Testing…'**
+  String get mgmtTesting;
+
+  /// Test connection
+  ///
+  /// In en, this message translates to:
+  /// **'Test connection'**
+  String get mgmtTestConnection;
+
+  /// View logs
+  ///
+  /// In en, this message translates to:
+  /// **'View runtime logs'**
+  String get mgmtViewLogs;
+
+  /// Disable agent
+  ///
+  /// In en, this message translates to:
+  /// **'Disable Agent'**
+  String get mgmtDisableAgent;
+
+  /// Enable agent
+  ///
+  /// In en, this message translates to:
+  /// **'Enable Agent'**
+  String get mgmtEnableAgent;
+
+  /// Tab basics
+  ///
+  /// In en, this message translates to:
+  /// **'Basics'**
+  String get mgmtTabBasics;
+
+  /// Tab models
+  ///
+  /// In en, this message translates to:
+  /// **'Models'**
+  String get mgmtTabModels;
+
+  /// Tab config
+  ///
+  /// In en, this message translates to:
+  /// **'Configuration'**
+  String get mgmtTabConfig;
+
+  /// Copied command
+  ///
+  /// In en, this message translates to:
+  /// **'Launch command copied.'**
+  String get mgmtCopiedCommand;
+
+  /// Cannot load models
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load the model list'**
+  String get mgmtCannotLoadModels;
+
+  /// Models need login
+  ///
+  /// In en, this message translates to:
+  /// **'This account is not signed in. Sign in to Codex and reload.'**
+  String get mgmtModelsNeedLogin;
+
+  /// Reload
+  ///
+  /// In en, this message translates to:
+  /// **'Reload'**
+  String get mgmtReload;
+
+  /// Model source line
+  ///
+  /// In en, this message translates to:
+  /// **'Source: {source} · Updated: {updated}'**
+  String mgmtModelSourceUpdated(String source, String updated);
+
+  /// Disable warning
+  ///
+  /// In en, this message translates to:
+  /// **'Disabling stops the current task. Existing sessions become read-only.'**
+  String get mgmtDisableWarning;
+
+  /// Stop and disable
+  ///
+  /// In en, this message translates to:
+  /// **'Stop and disable'**
+  String get mgmtStopAndDisable;
+
+  /// Test Claude title
+  ///
+  /// In en, this message translates to:
+  /// **'Test the Claude Code connection'**
+  String get mgmtTestClaudeTitle;
+
+  /// Test Claude body
+  ///
+  /// In en, this message translates to:
+  /// **'Sends a prompt-free initialize control request only and does not call the model; the Claude CLI may still maintain its own auth or bootstrap cache.'**
+  String get mgmtTestClaudeBody;
+
+  /// Continue test
+  ///
+  /// In en, this message translates to:
+  /// **'Continue test'**
+  String get mgmtContinueTest;
+
+  /// Test success
+  ///
+  /// In en, this message translates to:
+  /// **'Connection test succeeded. Response took {ms} ms.'**
+  String mgmtConnectionTestSuccess(String ms);
+
+  /// Test failed message
+  ///
+  /// In en, this message translates to:
+  /// **'Connection test failed: {message}'**
+  String mgmtConnectionTestFailedMessage(String message);
+
+  /// Unknown error
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown error'**
+  String get mgmtUnknownError;
+
+  /// Open dir failed
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open the executable directory: {error}'**
+  String mgmtCannotOpenExecutableDir(String error);
+
+  /// View details
+  ///
+  /// In en, this message translates to:
+  /// **'View {name} details'**
+  String mgmtViewDetails(String name);
+
+  /// Version unknown
+  ///
+  /// In en, this message translates to:
+  /// **'Version unknown'**
+  String get mgmtVersionUnknown;
+
+  /// Not installed
+  ///
+  /// In en, this message translates to:
+  /// **'Not installed'**
+  String get mgmtNotInstalled;
+
+  /// Connection available
+  ///
+  /// In en, this message translates to:
+  /// **'Connection available'**
+  String get mgmtConnectionAvailable;
+
+  /// Update available
+  ///
+  /// In en, this message translates to:
+  /// **'Update available'**
+  String get mgmtUpdateAvailable;
+
+  /// Detecting short
+  ///
+  /// In en, this message translates to:
+  /// **'Detecting'**
+  String get mgmtDetectingShort;
+
+  /// Running
+  ///
+  /// In en, this message translates to:
+  /// **'Running'**
+  String get mgmtRunning;
+
+  /// Enabled
+  ///
+  /// In en, this message translates to:
+  /// **'Enabled'**
+  String get mgmtEnabled;
+
+  /// Installed
+  ///
+  /// In en, this message translates to:
+  /// **'Installed'**
+  String get mgmtInstalled;
+
+  /// Section basics
+  ///
+  /// In en, this message translates to:
+  /// **'Basics'**
+  String get mgmtSectionBasics;
+
+  /// Basic attributes
+  ///
+  /// In en, this message translates to:
+  /// **'Basic attributes'**
+  String get mgmtBasicAttributes;
+
+  /// Name
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get mgmtName;
+
+  /// Vendor
+  ///
+  /// In en, this message translates to:
+  /// **'Vendor'**
+  String get mgmtVendor;
+
+  /// Protocol
+  ///
+  /// In en, this message translates to:
+  /// **'Protocol'**
+  String get mgmtProtocol;
+
+  /// Transport
+  ///
+  /// In en, this message translates to:
+  /// **'Transport'**
+  String get mgmtTransport;
+
+  /// Section version
+  ///
+  /// In en, this message translates to:
+  /// **'Version'**
+  String get mgmtSectionVersion;
+
+  /// Current version
+  ///
+  /// In en, this message translates to:
+  /// **'Current version'**
+  String get mgmtCurrentVersion;
+
+  /// Latest version
+  ///
+  /// In en, this message translates to:
+  /// **'Latest version'**
+  String get mgmtLatestVersion;
+
+  /// Paths and commands
+  ///
+  /// In en, this message translates to:
+  /// **'Paths and commands'**
+  String get mgmtPathsAndCommands;
+
+  /// Launch command
+  ///
+  /// In en, this message translates to:
+  /// **'Launch command'**
+  String get mgmtLaunchCommand;
+
+  /// Executable path
+  ///
+  /// In en, this message translates to:
+  /// **'Executable path'**
+  String get mgmtExecutablePath;
+
+  /// Not detected
+  ///
+  /// In en, this message translates to:
+  /// **'Not detected'**
+  String get mgmtNotDetected;
+
+  /// Executable hint
+  ///
+  /// In en, this message translates to:
+  /// **'No executable detected yet. Install it and make sure it is on PATH'**
+  String get mgmtExecutableNotDetectedHint;
+
+  /// Auto detect short
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-detect'**
+  String get mgmtAutoDetectShort;
+
+  /// Open directory
+  ///
+  /// In en, this message translates to:
+  /// **'Open folder'**
+  String get mgmtOpenDirectory;
+
+  /// Program
+  ///
+  /// In en, this message translates to:
+  /// **'Program'**
+  String get mgmtProgram;
+
+  /// Executable present
+  ///
+  /// In en, this message translates to:
+  /// **'Executable exists and can be invoked'**
+  String get mgmtExecutablePresent;
+
+  /// Executable missing
+  ///
+  /// In en, this message translates to:
+  /// **'Executable not found'**
+  String get mgmtExecutableMissing;
+
+  /// Auth evidence
+  ///
+  /// In en, this message translates to:
+  /// **'Auth evidence'**
+  String get mgmtAuthEvidence;
+
+  /// Communication
+  ///
+  /// In en, this message translates to:
+  /// **'Communication'**
+  String get mgmtCommunication;
+
+  /// Handshake ok
+  ///
+  /// In en, this message translates to:
+  /// **'Basic handshake succeeded'**
+  String get mgmtHandshakeOk;
+
+  /// Not confirmed
+  ///
+  /// In en, this message translates to:
+  /// **'Not confirmed yet'**
+  String get mgmtNotConfirmed;
+
+  /// Last detected
+  ///
+  /// In en, this message translates to:
+  /// **'Last detection'**
+  String get mgmtLastDetected;
+
+  /// Last test duration
+  ///
+  /// In en, this message translates to:
+  /// **'Last test duration'**
+  String get mgmtLastTestDuration;
+
+  /// Handshake identity
+  ///
+  /// In en, this message translates to:
+  /// **'Handshake identity'**
+  String get mgmtHandshakeIdentity;
+
+  /// Capabilities
+  ///
+  /// In en, this message translates to:
+  /// **'Negotiated capabilities'**
+  String get mgmtNegotiatedCapabilities;
+
+  /// Compatibility
+  ///
+  /// In en, this message translates to:
+  /// **'Compatibility'**
+  String get mgmtCompatibility;
+
+  /// Exit reason
+  ///
+  /// In en, this message translates to:
+  /// **'Exit reason'**
+  String get mgmtExitReason;
+
+  /// Failure stage
+  ///
+  /// In en, this message translates to:
+  /// **'Failure stage'**
+  String get mgmtFailureStage;
+
+  /// Diagnostics
+  ///
+  /// In en, this message translates to:
+  /// **'Diagnostics'**
+  String get mgmtDiagnostics;
+
+  /// Connection healthy
+  ///
+  /// In en, this message translates to:
+  /// **'Connection healthy'**
+  String get mgmtConnectionHealthy;
+
+  /// Suggested action
+  ///
+  /// In en, this message translates to:
+  /// **'Suggested action: {suggestion}'**
+  String mgmtSuggestedAction(String suggestion);
+
+  /// Hidden
+  ///
+  /// In en, this message translates to:
+  /// **'Hidden'**
+  String get mgmtHidden;
+
+  /// Available
+  ///
+  /// In en, this message translates to:
+  /// **'Available'**
+  String get mgmtAvailable;
+
+  /// Chip text
+  ///
+  /// In en, this message translates to:
+  /// **'Text'**
+  String get mgmtChipText;
+
+  /// Chip image
+  ///
+  /// In en, this message translates to:
+  /// **'Images'**
+  String get mgmtChipImage;
+
+  /// Chip code
+  ///
+  /// In en, this message translates to:
+  /// **'Code'**
+  String get mgmtChipCode;
+
+  /// Chip files
+  ///
+  /// In en, this message translates to:
+  /// **'File operations'**
+  String get mgmtChipFiles;
+
+  /// Chip tools
+  ///
+  /// In en, this message translates to:
+  /// **'Tool calls'**
+  String get mgmtChipTools;
+
+  /// Chip terminal
+  ///
+  /// In en, this message translates to:
+  /// **'Terminal'**
+  String get mgmtChipTerminal;
+
+  /// Chip streaming
+  ///
+  /// In en, this message translates to:
+  /// **'Streaming'**
+  String get mgmtChipStreaming;
+
+  /// Reasoning unknown
+  ///
+  /// In en, this message translates to:
+  /// **'Reasoning: unknown'**
+  String get mgmtReasoningUnknown;
+
+  /// Reasoning adjustable
+  ///
+  /// In en, this message translates to:
+  /// **'Reasoning: adjustable ({efforts})'**
+  String mgmtReasoningAdjustable(String efforts);
+
+  /// Quota enrichment title
+  ///
+  /// In en, this message translates to:
+  /// **'Usage-detail enrichment'**
+  String get mgmtQuotaEnrichmentTitle;
+
+  /// Quota enrichment label
+  ///
+  /// In en, this message translates to:
+  /// **'Read Claude Code usage details'**
+  String get mgmtQuotaEnrichmentLabel;
+
+  /// Quota enrichment body
+  ///
+  /// In en, this message translates to:
+  /// **'This switch only controls whether Zeta briefly reads Claude Code OAuth credentials and calls the usage REST API. Model lists and plan names always come from the Claude CLI; Zeta does not refresh, write back, or persist credentials.'**
+  String get mgmtQuotaEnrichmentBody;
+
+  /// Onboarding title
+  ///
+  /// In en, this message translates to:
+  /// **'Setup guide'**
+  String get mgmtOnboardingTitle;
+
+  /// Onboarding subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Install · Sign in · Docs'**
+  String get mgmtOnboardingSubtitle;
+
+  /// Account unknown
+  ///
+  /// In en, this message translates to:
+  /// **'Could not detect'**
+  String get mgmtAccountUnknown;
+
+  /// Account checking
+  ///
+  /// In en, this message translates to:
+  /// **'Checking'**
+  String get mgmtAccountChecking;
+
+  /// Account logged in short
+  ///
+  /// In en, this message translates to:
+  /// **'Signed in'**
+  String get mgmtAccountLoggedInShort;
+
+  /// Account logged out
+  ///
+  /// In en, this message translates to:
+  /// **'Signed out'**
+  String get mgmtAccountLoggedOut;
+
+  /// Account expired
+  ///
+  /// In en, this message translates to:
+  /// **'Sign-in expired'**
+  String get mgmtAccountExpired;
+
+  /// Account not required
+  ///
+  /// In en, this message translates to:
+  /// **'Sign-in not required'**
+  String get mgmtAccountNotRequired;
+
+  /// Runtime not running
+  ///
+  /// In en, this message translates to:
+  /// **'Not running'**
+  String get mgmtRuntimeNotRunning;
+
+  /// Runtime idle
+  ///
+  /// In en, this message translates to:
+  /// **'Idle'**
+  String get mgmtRuntimeIdle;
+
+  /// Runtime starting
+  ///
+  /// In en, this message translates to:
+  /// **'Starting'**
+  String get mgmtRuntimeStarting;
+
+  /// Runtime stopping
+  ///
+  /// In en, this message translates to:
+  /// **'Stopping'**
+  String get mgmtRuntimeStopping;
+
+  /// Runtime error
+  ///
+  /// In en, this message translates to:
+  /// **'Error'**
+  String get mgmtRuntimeError;
+
+  /// Runtime unavailable
+  ///
+  /// In en, this message translates to:
+  /// **'Unavailable'**
+  String get mgmtRuntimeUnavailable;
+
+  /// Runtime disabled
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled'**
+  String get mgmtRuntimeDisabled;
+
+  /// Stage file
+  ///
+  /// In en, this message translates to:
+  /// **'File detection'**
+  String get mgmtStageFileDetection;
+
+  /// Stage startup
+  ///
+  /// In en, this message translates to:
+  /// **'Process startup'**
+  String get mgmtStageCliStartup;
+
+  /// Stage version
+  ///
+  /// In en, this message translates to:
+  /// **'Version detection'**
+  String get mgmtStageVersionDetection;
+
+  /// Stage account
+  ///
+  /// In en, this message translates to:
+  /// **'Account authentication'**
+  String get mgmtStageAccountAuthentication;
+
+  /// Stage handshake
+  ///
+  /// In en, this message translates to:
+  /// **'Protocol handshake'**
+  String get mgmtStageProtocolHandshake;
+
+  /// Stage models
+  ///
+  /// In en, this message translates to:
+  /// **'Model loading'**
+  String get mgmtStageModelLoading;
+
+  /// Stage config
+  ///
+  /// In en, this message translates to:
+  /// **'Configuration read'**
+  String get mgmtStageConfigurationRead;
+
+  /// Stage test
+  ///
+  /// In en, this message translates to:
+  /// **'Test request'**
+  String get mgmtStageTestRequest;
+
+  /// Stage exit
+  ///
+  /// In en, this message translates to:
+  /// **'Process exit'**
+  String get mgmtStageProcessExit;
+
+  /// Not updated
+  ///
+  /// In en, this message translates to:
+  /// **'Not updated yet'**
+  String get mgmtNotUpdated;
+
+  /// Unsaved title
+  ///
+  /// In en, this message translates to:
+  /// **'Configuration is not saved'**
+  String get mgmtUnsavedTitle;
+
+  /// Unsaved body
+  ///
+  /// In en, this message translates to:
+  /// **'Leaving now discards these changes.'**
+  String get mgmtUnsavedBody;
+
+  /// Keep editing
+  ///
+  /// In en, this message translates to:
+  /// **'Keep editing'**
+  String get mgmtKeepEditing;
+
+  /// Discard changes
+  ///
+  /// In en, this message translates to:
+  /// **'Discard changes'**
+  String get mgmtDiscardChanges;
+
+  /// Loading config
+  ///
+  /// In en, this message translates to:
+  /// **'Loading the configuration file'**
+  String get mgmtLoadingConfig;
+
+  /// Config not loaded yet
+  ///
+  /// In en, this message translates to:
+  /// **'The configuration file has not been loaded.'**
+  String get mgmtConfigNotLoadedYet;
+
+  /// Sensitive title
+  ///
+  /// In en, this message translates to:
+  /// **'Sensitive values are hidden'**
+  String get mgmtSensitiveMaskedTitle;
+
+  /// Sensitive body
+  ///
+  /// In en, this message translates to:
+  /// **'Shown read-only by default so credentials are not exposed. Click Show sensitive values to edit the full configuration.'**
+  String get mgmtSensitiveMaskedBody;
+
+  /// Config file
+  ///
+  /// In en, this message translates to:
+  /// **'Configuration file'**
+  String get mgmtConfigFile;
+
+  /// Config exists
+  ///
+  /// In en, this message translates to:
+  /// **'exists'**
+  String get mgmtConfigExists;
+
+  /// Config missing
+  ///
+  /// In en, this message translates to:
+  /// **'not created yet'**
+  String get mgmtConfigMissing;
+
+  /// Last loaded
+  ///
+  /// In en, this message translates to:
+  /// **'Last loaded {time}'**
+  String mgmtLastLoaded(String time);
+
+  /// Reload config
+  ///
+  /// In en, this message translates to:
+  /// **'Reload'**
+  String get mgmtReloadConfig;
+
+  /// Open containing folder
+  ///
+  /// In en, this message translates to:
+  /// **'Open containing folder'**
+  String get mgmtOpenContainingFolder;
+
+  /// Hide sensitive
+  ///
+  /// In en, this message translates to:
+  /// **'Hide sensitive values'**
+  String get mgmtHideSensitive;
+
+  /// Show sensitive
+  ///
+  /// In en, this message translates to:
+  /// **'Show sensitive values'**
+  String get mgmtShowSensitive;
+
+  /// Search in config
+  ///
+  /// In en, this message translates to:
+  /// **'Search in configuration'**
+  String get mgmtSearchInConfig;
+
+  /// Find next
+  ///
+  /// In en, this message translates to:
+  /// **'Find next'**
+  String get mgmtFindNext;
+
+  /// Config valid
+  ///
+  /// In en, this message translates to:
+  /// **'Configuration format is valid'**
+  String get mgmtConfigValid;
+
+  /// Cancel edits
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel edits'**
+  String get mgmtCancelEdits;
+
+  /// Saving
+  ///
+  /// In en, this message translates to:
+  /// **'Saving…'**
+  String get mgmtSaving;
+
+  /// Save config
+  ///
+  /// In en, this message translates to:
+  /// **'Save configuration'**
+  String get mgmtSaveConfig;
+
+  /// Saved restart
+  ///
+  /// In en, this message translates to:
+  /// **'Configuration saved. Restart Codex to apply it.'**
+  String get mgmtConfigSavedRestart;
+
+  /// Saved backup
+  ///
+  /// In en, this message translates to:
+  /// **'Configuration saved, and a backup of the original file was created.'**
+  String get mgmtConfigSavedBackup;
+
+  /// External title
+  ///
+  /// In en, this message translates to:
+  /// **'The configuration file was modified externally'**
+  String get mgmtConfigExternalTitle;
+
+  /// External body
+  ///
+  /// In en, this message translates to:
+  /// **'Continuing will overwrite the external changes.'**
+  String get mgmtConfigExternalBody;
+
+  /// Save anyway
+  ///
+  /// In en, this message translates to:
+  /// **'Save anyway'**
+  String get mgmtSaveAnyway;
+
+  /// Save failed
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save the configuration: {error}'**
+  String mgmtConfigSaveFailed(String error);
+
+  /// Query not found
+  ///
+  /// In en, this message translates to:
+  /// **'No matches for \"{query}\".'**
+  String mgmtQueryNotFound(String query);
+
+  /// Open config dir
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open the configuration directory: {error}'**
+  String mgmtCannotOpenConfigDir(String error);
+
+  /// Refreshing
+  ///
+  /// In en, this message translates to:
+  /// **'Refreshing…'**
+  String get mgmtRefreshing;
+
+  /// Refresh
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get mgmtRefresh;
+
+  /// Copy logs
+  ///
+  /// In en, this message translates to:
+  /// **'Copy logs'**
+  String get mgmtCopyLogs;
+
+  /// Search logs
+  ///
+  /// In en, this message translates to:
+  /// **'Search log keywords'**
+  String get mgmtSearchLogKeywords;
+
+  /// Log level
+  ///
+  /// In en, this message translates to:
+  /// **'Log level'**
+  String get mgmtLogLevel;
+
+  /// All
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get mgmtAll;
+
+  /// Reading logs
+  ///
+  /// In en, this message translates to:
+  /// **'Reading Agent logs'**
+  String get mgmtReadingLogs;
+
+  /// No matching logs
+  ///
+  /// In en, this message translates to:
+  /// **'No logs match the current filters.'**
+  String get mgmtNoMatchingLogs;
+
+  /// Copied logs
+  ///
+  /// In en, this message translates to:
+  /// **'Copied {count} redacted log lines.'**
+  String mgmtCopiedLogs(String count);
 }
 
 class _AppLocalizationsDelegate

@@ -16,6 +16,8 @@ import 'package:zeta/src/features/agent_management/data/codex_agent_management_r
     show isNewerVersion, maskSensitiveConfiguration, redactLogLine;
 import 'package:zeta/src/features/agent_management/domain/agent_cli_management_repository.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
+import 'package:zeta/src/features/agent_management/domain/agent_management_text_catalog.dart';
+import 'package:zeta/src/features/agent_management/domain/fallback_agent_management_text_catalog.dart';
 
 /// 可注入的 CLI 执行函数（测试可替换）。
 typedef GrokCliProcessRun =
@@ -35,6 +37,7 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
     DateTime Function()? now,
     String Function()? grokHomeProvider,
     this.modelCatalogRepository,
+    AgentManagementTextCatalog? textCatalog,
   }) : _processRunner =
            processRunner ??
            ((
@@ -52,7 +55,8 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
            }),
        _locator = locator ?? const GrokCliLocator(),
        _now = now ?? DateTime.now,
-       _grokHomeProvider = grokHomeProvider ?? _defaultGrokHome;
+       _grokHomeProvider = grokHomeProvider ?? _defaultGrokHome,
+       _textCatalog = textCatalog ?? const FallbackAgentManagementTextCatalog();
 
   /// 检测 / 连接测试中 initialize 与模型目录加载的固定上限。
   static const Duration _probeTimeout = Duration(seconds: 60);
@@ -63,6 +67,7 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
   final String Function() _grokHomeProvider;
   final AgentModelCatalogRepository? modelCatalogRepository;
   final AgentProviderRuntimeRegistry runtimeRegistry;
+  final AgentManagementTextCatalog _textCatalog;
 
   @override
   String get agentId => AgentDefinition.grok.id;
@@ -92,7 +97,7 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
       );
     }
 
-    publish(0, '正在定位 Grok');
+    publish(0, _textCatalog.locating('Grok'));
     final resolved = await _locator.locate(providerConfig);
     if (resolved == null) {
       final configInfo = await _configurationInfo();
@@ -106,10 +111,10 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
         logPaths: await discoverLogPaths(),
         lastDetectedAt: _now(),
         errorStage: AgentDiagnosticStage.fileDetection,
-        errorMessage: '未找到 Grok',
-        suggestion: '请先安装 Grok，并确认可执行文件已加入 PATH。',
+        errorMessage: _textCatalog.notFound('Grok'),
+        suggestion: _textCatalog.installAndAddToPath('Grok'),
       );
-      publish(total, '未找到 Grok');
+      publish(total, _textCatalog.notFound('Grok'));
       return current;
     }
 
@@ -124,7 +129,7 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
       errorDetails: null,
       suggestion: null,
     );
-    publish(1, '已找到 Grok');
+    publish(1, _textCatalog.found('Grok'));
 
     final version = await _readVersion(resolved);
     current = current.copyWith(
@@ -136,9 +141,9 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
       errorDetails: version.details ?? current.errorDetails,
       suggestion: version.error == null
           ? current.suggestion
-          : '请确认检测到的可执行文件可以正常执行，然后重新检测。',
+          : _textCatalog.confirmExecutableThenRedetect(),
     );
-    publish(2, '已检测当前版本');
+    publish(2, _textCatalog.versionDetected());
 
     final latest = await _latestVersion(resolved);
     final versionState = _resolveVersionState(
@@ -161,7 +166,7 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
           ? current.suggestion
           : (current.suggestion ?? '请检查网络后重新检测，或在终端运行 grok update --check。'),
     );
-    publish(3, '已检查最新版本');
+    publish(3, _textCatalog.latestVersionChecked());
 
     final account = await _readAccountStatus();
     current = current.copyWith(
@@ -176,18 +181,18 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
           ? current.suggestion
           : account.suggestion,
     );
-    publish(4, '已检测账号状态');
+    publish(4, _textCatalog.accountDetected());
 
     final configInfo = await _configurationInfo();
     current = current.copyWith(
       configExists: configInfo.exists,
       configModifiedAt: configInfo.modifiedAt,
     );
-    publish(5, '已读取配置文件状态');
+    publish(5, _textCatalog.configStatusRead());
 
     final logs = await discoverLogPaths();
     current = current.copyWith(logPaths: logs);
-    publish(6, '已定位 Grok 日志');
+    publish(6, _textCatalog.logsLocated('Grok'));
 
     final effectiveConfig = _providerConfig(providerConfig, resolved);
     final probe = await _probeProvider(
@@ -209,12 +214,12 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
       errorDetails: probe.success ? current.errorDetails : probe.details,
       suggestion: probe.success
           ? current.suggestion
-          : '请检查 Grok 登录态与配置后重新测试连接。',
+          : _textCatalog.retestAfterCheckingGrokAuth(),
     );
-    publish(7, '已完成协议握手');
+    publish(7, _textCatalog.handshakeComplete());
 
     current = current.copyWith(lastDetectedAt: _now());
-    publish(total, 'Grok 检测完成');
+    publish(total, _textCatalog.detectionComplete('Grok'));
     return current;
   }
 
@@ -235,7 +240,7 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
           accountValid: false,
           protocolReady: false,
           failureStage: AgentDiagnosticStage.fileDetection,
-          message: '未找到 Grok',
+          message: _textCatalog.notFound('Grok'),
         ),
         const <AgentModelInfo>[],
       );
@@ -272,7 +277,7 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
   }) async {
     final resolved = await _locator.resolvePath(path);
     if (resolved == null) {
-      throw FileSystemException('该路径不存在或不是普通文件', path);
+      throw FileSystemException(_textCatalog.pathNotRegularFile(), path);
     }
     return _providerConfig(current, resolved);
   }
@@ -325,7 +330,10 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
       followLinks: false,
     );
     if (existingType == FileSystemEntityType.link) {
-      throw FileSystemException('拒绝写入符号链接配置文件', original.path);
+      throw FileSystemException(
+        _textCatalog.refuseSymlinkConfig(),
+        original.path,
+      );
     }
 
     if (await file.exists()) {
@@ -333,7 +341,9 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
       final currentStat = await file.stat();
       if (!overwriteExternalChanges &&
           _signature(currentContent, currentStat) != original.signature) {
-        throw const AgentConfigurationConflictException('配置文件已在外部发生修改。');
+        throw AgentConfigurationConflictException(
+          _textCatalog.configExternallyModified(),
+        );
       }
     }
 
@@ -498,7 +508,10 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
       ).firstMatch(output);
       final version = match?.group(1) ?? fallback?.group(1);
       if (!result.succeeded || version == null) {
-        return _VersionRead(error: '无法识别 Grok 版本。', details: output);
+        return _VersionRead(
+          error: _textCatalog.cannotIdentifyVersion('Grok'),
+          details: output,
+        );
       }
       return _VersionRead(version: version);
     } catch (error) {
@@ -517,23 +530,31 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
       final payload = parseGrokUpdateCheckJson(result.combinedOutput);
       if (payload == null) {
         return _LatestVersionRead(
-          error: '无法解析版本检查结果。',
+          error: _textCatalog.cannotParseVersionCheck(),
           details: result.combinedOutput,
         );
       }
       if (payload.error != null && payload.error!.isNotEmpty) {
-        return _LatestVersionRead(error: '最新版本检查失败。', details: payload.error);
+        return _LatestVersionRead(
+          error: _textCatalog.latestVersionCheckFailed(),
+          details: payload.error,
+        );
       }
       final latest = payload.latestVersion;
       if (latest == null || latest.isEmpty) {
-        return const _LatestVersionRead(error: '版本服务未返回最新版本号。');
+        return _LatestVersionRead(
+          error: _textCatalog.versionServiceMissingVersion(),
+        );
       }
       return _LatestVersionRead(
         version: latest,
         updateAvailable: payload.updateAvailable,
       );
     } catch (error) {
-      return _LatestVersionRead(error: '无法获取 Grok 最新版本。', details: '$error');
+      return _LatestVersionRead(
+        error: _textCatalog.cannotGetLatestVersion('Grok'),
+        details: '$error',
+      );
     }
   }
 
@@ -565,51 +586,51 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
     try {
       final authFile = File(_join(_grokHomeProvider(), 'auth.json'));
       if (!await authFile.exists()) {
-        return const _AccountRead(
+        return _AccountRead(
           state: AgentAccountState.loggedOut,
           error: 'Grok 尚未登录。',
-          suggestion: '请在终端运行 grok login 后重新检测。',
+          suggestion: _textCatalog.runGrokLogin(),
           failureStage: AgentDiagnosticStage.accountAuthentication,
         );
       }
       final raw = await authFile.readAsString();
       if (raw.trim().isEmpty || raw.trim() == '{}') {
-        return const _AccountRead(
+        return _AccountRead(
           state: AgentAccountState.loggedOut,
           error: 'Grok 登录缓存为空。',
-          suggestion: '请在终端运行 grok login 后重新检测。',
+          suggestion: _textCatalog.runGrokLogin(),
           failureStage: AgentDiagnosticStage.accountAuthentication,
         );
       }
       try {
         final decoded = jsonDecode(raw);
         if (decoded is Map && decoded.isNotEmpty) {
-          return const _AccountRead(
+          return _AccountRead(
             state: AgentAccountState.loggedIn,
-            label: '账号已登录',
+            label: _textCatalog.accountLoggedIn(),
           );
         }
       } catch (_) {
         // 非 JSON 但有内容：仍视为可能已登录。
         if (raw.trim().length > 8) {
-          return const _AccountRead(
+          return _AccountRead(
             state: AgentAccountState.loggedIn,
-            label: '账号已登录',
+            label: _textCatalog.accountLoggedIn(),
           );
         }
       }
-      return const _AccountRead(
+      return _AccountRead(
         state: AgentAccountState.unavailable,
-        error: '无法解析 Grok 登录缓存。',
-        suggestion: '请重新运行 grok login。',
+        error: _textCatalog.cannotParseGrokLoginCache(),
+        suggestion: _textCatalog.rerunGrokLogin(),
         failureStage: AgentDiagnosticStage.accountAuthentication,
       );
     } catch (error) {
       return _AccountRead(
         state: AgentAccountState.unavailable,
-        error: '账号状态检测失败。',
+        error: _textCatalog.accountCheckFailed(),
         details: '$error',
-        suggestion: '请确认 Grok 可以在终端中正常运行。',
+        suggestion: _textCatalog.confirmCliRuns('Grok'),
         failureStage: AgentDiagnosticStage.accountAuthentication,
       );
     }

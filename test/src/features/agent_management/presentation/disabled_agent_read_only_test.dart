@@ -9,6 +9,7 @@ import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
+import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
 
@@ -162,6 +163,9 @@ Future<void> _pumpAgentPane(
         codeFontFamily: 'JetBrainsMono',
       ),
       child: sf.ShadcnApp(
+        locale: ZetaLocalization.simplifiedChinese,
+        supportedLocales: ZetaLocalization.supportedLocales,
+        localizationsDelegates: ZetaLocalization.delegates,
         theme: buildShadcnTheme(ideTheme),
         materialTheme: buildMaterialTheme(ideTheme),
         home: sf.Scaffold(child: AgentPane(viewModel: viewModel)),

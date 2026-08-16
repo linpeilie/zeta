@@ -9,6 +9,7 @@ import 'package:zeta/src/features/agent_management/application/agent_management_
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/ui/core/ide_tabs.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/ide_toast.dart';
@@ -101,7 +102,9 @@ class _AgentLogViewState extends State<AgentLogView> {
                             : widget.controller.loadLogs,
                         size: sf.ButtonSize.small,
                         child: Text(
-                          widget.controller.loadingLogs ? '刷新中…' : '刷新',
+                          widget.controller.loadingLogs
+                              ? context.l10n.mgmtRefreshing
+                              : context.l10n.mgmtRefresh,
                         ),
                       ),
                       const SizedBox(width: IdeSpacing.space8),
@@ -110,7 +113,7 @@ class _AgentLogViewState extends State<AgentLogView> {
                             ? null
                             : () => _copy(entries),
                         size: sf.ButtonSize.small,
-                        child: const Text('复制日志'),
+                        child: Text(context.l10n.mgmtCopyLogs),
                       ),
                     ],
                   ),
@@ -120,7 +123,7 @@ class _AgentLogViewState extends State<AgentLogView> {
                       final search = sf.TextField(
                         key: const ValueKey('agent-log-search'),
                         controller: _searchController,
-                        placeholder: const Text('搜索日志关键词'),
+                        placeholder: Text(context.l10n.mgmtSearchLogKeywords),
                         features: const <sf.InputFeature>[
                           sf.InputFeature.leading(
                             Icon(Icons.search_rounded, size: 18),
@@ -129,9 +132,12 @@ class _AgentLogViewState extends State<AgentLogView> {
                       );
                       final filters = IdeTabs<AgentLogLevel?>(
                         value: _level,
-                        semanticLabel: '日志级别',
-                        items: const [
-                          IdeTabItem<AgentLogLevel?>(value: null, label: '全部'),
+                        semanticLabel: context.l10n.mgmtLogLevel,
+                        items: [
+                          IdeTabItem<AgentLogLevel?>(
+                            value: null,
+                            label: context.l10n.mgmtAll,
+                          ),
                           IdeTabItem<AgentLogLevel?>(
                             value: AgentLogLevel.debug,
                             label: 'Debug',
@@ -181,15 +187,15 @@ class _AgentLogViewState extends State<AgentLogView> {
               child:
                   widget.controller.loadingLogs &&
                       widget.controller.logs.isEmpty
-                  ? const Center(
+                  ? Center(
                       child: IdeLoadingIndicator(
                         width: 32,
                         height: 14,
-                        semanticsLabel: '正在读取 Agent 日志',
+                        semanticsLabel: context.l10n.mgmtReadingLogs,
                       ),
                     )
                   : entries.isEmpty
-                  ? const EmptyState(text: '没有符合当前条件的日志。')
+                  ? EmptyState(text: context.l10n.mgmtNoMatchingLogs)
                   : ListView.builder(
                       key: const ValueKey('agent-log-list'),
                       padding: IdeSpacing.all12,
@@ -233,7 +239,10 @@ class _AgentLogViewState extends State<AgentLogView> {
         .join('\n');
     await Clipboard.setData(ClipboardData(text: text));
     if (mounted) {
-      showIdeToast(context, message: '已复制 ${entries.length} 行脱敏日志。');
+      showIdeToast(
+        context,
+        message: context.l10n.mgmtCopiedLogs('${entries.length}'),
+      );
     }
   }
 

@@ -1307,4 +1307,759 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get usageNextWindow => 'Next window';
+
+  @override
+  String mgmtLocating(String name) {
+    return 'Locating $name';
+  }
+
+  @override
+  String get mgmtLocatingClaudeCodeCli => 'Checking Claude Code CLI';
+
+  @override
+  String mgmtNotFound(String name) {
+    return '$name was not found';
+  }
+
+  @override
+  String get mgmtNotFoundClaudeCodeCli => 'Claude Code CLI was not found';
+
+  @override
+  String mgmtInstallAndAddToPath(String name) {
+    return 'Install $name first and make sure the executable is on PATH.';
+  }
+
+  @override
+  String get mgmtInstallClaudeCodeAndAddToPath =>
+      'Install Claude Code first and make sure claude is on PATH.';
+
+  @override
+  String mgmtFound(String name) {
+    return 'Found $name';
+  }
+
+  @override
+  String get mgmtConfirmExecutableThenRedetect =>
+      'Confirm the detected executable can run, then detect again.';
+
+  @override
+  String get mgmtConfirmClaudeVersionCommand =>
+      'Confirm Claude Code CLI can run `claude --version`.';
+
+  @override
+  String get mgmtVersionDetected => 'Current version detected';
+
+  @override
+  String get mgmtClaudeVersionDetected => 'Claude Code version detected';
+
+  @override
+  String get mgmtAccountDetected => 'Account status detected';
+
+  @override
+  String get mgmtClaudeAuthDetected => 'Claude Code sign-in status detected';
+
+  @override
+  String get mgmtConfigStatusRead => 'Configuration file status read';
+
+  @override
+  String mgmtLogsLocated(String name) {
+    return '$name logs located';
+  }
+
+  @override
+  String get mgmtLatestVersionChecked => 'Latest version checked';
+
+  @override
+  String get mgmtHandshakeComplete => 'Protocol handshake completed';
+
+  @override
+  String mgmtDetectionComplete(String name) {
+    return '$name detection finished';
+  }
+
+  @override
+  String mgmtRetestAfterCheckingConfig(String name) {
+    return 'Check $name configuration and account status, then test the connection again.';
+  }
+
+  @override
+  String get mgmtRetestAfterCheckingGrokAuth =>
+      'Check the Grok sign-in state and configuration, then test the connection again.';
+
+  @override
+  String get mgmtConfirmClaudeAuthStatusJson =>
+      'Confirm `claude auth status --json` can run; you can also run a connection test to verify the current CLI auth path.';
+
+  @override
+  String get mgmtNoClaudeLoginEvidenceSuggestion =>
+      'No Claude.ai sign-in evidence found. Run `claude auth login` if needed, or run a connection test to confirm the current CLI auth path.';
+
+  @override
+  String mgmtCannotIdentifyVersion(String name) {
+    return 'Could not identify the $name version.';
+  }
+
+  @override
+  String get mgmtLatestVersionCheckFailed => 'Latest version check failed.';
+
+  @override
+  String get mgmtCannotParseVersionCheck =>
+      'Could not parse the version check result.';
+
+  @override
+  String get mgmtVersionServiceUnknownFormat =>
+      'The version service returned an unknown format.';
+
+  @override
+  String get mgmtVersionServiceMissingVersion =>
+      'The version service did not return a latest version.';
+
+  @override
+  String mgmtCannotGetLatestVersion(String name) {
+    return 'Could not get the latest $name version.';
+  }
+
+  @override
+  String get mgmtAccountLoggedIn => 'Signed in';
+
+  @override
+  String get mgmtRunCodexLogin =>
+      'Run codex login in a terminal, then detect again.';
+
+  @override
+  String get mgmtRunGrokLogin =>
+      'Run grok login in a terminal, then detect again.';
+
+  @override
+  String get mgmtRerunGrokLogin => 'Run grok login again.';
+
+  @override
+  String get mgmtRunCodexLoginStatus =>
+      'Run codex login status in a terminal for details.';
+
+  @override
+  String get mgmtFixConfigTomlThenRedetect =>
+      'Fix the fields reported in config.toml, then detect again.';
+
+  @override
+  String get mgmtCodexConfigUnparseable =>
+      'The Codex configuration file could not be parsed.';
+
+  @override
+  String get mgmtCannotDetectAccount => 'Could not detect account status.';
+
+  @override
+  String get mgmtAccountCheckFailed => 'Account status check failed.';
+
+  @override
+  String mgmtConfirmCliRuns(String name) {
+    return 'Confirm $name can run in a terminal.';
+  }
+
+  @override
+  String get mgmtCannotParseGrokLoginCache =>
+      'Could not parse the Grok login cache.';
+
+  @override
+  String get mgmtNoClaudeLoginEvidenceLabel =>
+      'No Claude.ai OAuth or API key sign-in evidence found';
+
+  @override
+  String get mgmtCannotCheckClaudeAuth =>
+      'Could not check sign-in status through the Claude CLI.';
+
+  @override
+  String get mgmtCannotStartClaudeInitialize =>
+      'Could not start the Claude Code initialize probe.';
+
+  @override
+  String get mgmtClaudeAuthViaApiKey =>
+      'Authenticated with an Anthropic API key';
+
+  @override
+  String get mgmtClaudeAuthViaApiKeyHelper =>
+      'Authenticated with an API key helper';
+
+  @override
+  String get mgmtClaudeAuthViaOauthToken => 'Authenticated with an OAuth token';
+
+  @override
+  String get mgmtClaudeAuthPathDetected =>
+      'A Claude Code authentication path was detected';
+
+  @override
+  String get mgmtThirdPartyApiProviderConfigured =>
+      'A third-party API Provider is configured';
+
+  @override
+  String mgmtConfiguredProvider(String provider) {
+    return '$provider is configured';
+  }
+
+  @override
+  String get mgmtPathNotRegularFile =>
+      'That path does not exist or is not a regular file';
+
+  @override
+  String get mgmtRefuseSymlinkConfig =>
+      'Refusing to write a symlink configuration file';
+
+  @override
+  String get mgmtConfigExternallyModified =>
+      'The configuration file was modified externally.';
+
+  @override
+  String get mgmtCompatSupported => 'Verified as supported';
+
+  @override
+  String get mgmtCompatLimited => 'Runs with limited capabilities';
+
+  @override
+  String get mgmtCompatNewerUntested => 'Newer version, not fully verified';
+
+  @override
+  String get mgmtCompatOlderUnsupported => 'Too old to be supported';
+
+  @override
+  String get mgmtCompatProtocolMismatch => 'Protocol incompatible';
+
+  @override
+  String mgmtCannotEnable(String name, String error) {
+    return 'Could not enable $name: $error';
+  }
+
+  @override
+  String mgmtCannotDisable(String name, String error) {
+    return 'Could not disable $name: $error';
+  }
+
+  @override
+  String mgmtAccountDataEnrichmentSaveFailed(String error) {
+    return 'Could not save usage-detail enrichment: $error';
+  }
+
+  @override
+  String mgmtConnectionTestFailed(String error) {
+    return 'Connection test failed: $error';
+  }
+
+  @override
+  String mgmtConfigurationReadFailed(String error) {
+    return 'Could not read the configuration file: $error';
+  }
+
+  @override
+  String get mgmtConfigurationNotLoaded =>
+      'The configuration file has not been loaded';
+
+  @override
+  String mgmtLogsReadFailed(String error) {
+    return 'Could not read runtime logs: $error';
+  }
+
+  @override
+  String get mgmtOperationIncomplete => 'The operation did not finish';
+
+  @override
+  String get mgmtFilterInstalled => 'Installed';
+
+  @override
+  String get mgmtFilterAllSupported => 'All supported';
+
+  @override
+  String get mgmtSearchPlaceholder => 'Search Agents or vendors';
+
+  @override
+  String get mgmtDetecting => 'Detecting…';
+
+  @override
+  String get mgmtAutoDetect => 'Auto-detect Agents';
+
+  @override
+  String get mgmtEmptyInstalledTitle => 'No installed Agent detected';
+
+  @override
+  String get mgmtEmptyInstalledBody =>
+      'You can auto-detect this machine, or open All supported to see Agents this app supports.';
+
+  @override
+  String get mgmtViewAllSupported => 'View all supported';
+
+  @override
+  String get mgmtNoMatchTitle => 'No matching Agent';
+
+  @override
+  String get mgmtNoMatchBody => 'Try changing the search.';
+
+  @override
+  String get mgmtClearSearch => 'Clear search';
+
+  @override
+  String mgmtVersionWithValue(String version) {
+    return 'Version $version';
+  }
+
+  @override
+  String get mgmtUnknown => 'Unknown';
+
+  @override
+  String get mgmtTesting => 'Testing…';
+
+  @override
+  String get mgmtTestConnection => 'Test connection';
+
+  @override
+  String get mgmtViewLogs => 'View runtime logs';
+
+  @override
+  String get mgmtDisableAgent => 'Disable Agent';
+
+  @override
+  String get mgmtEnableAgent => 'Enable Agent';
+
+  @override
+  String get mgmtTabBasics => 'Basics';
+
+  @override
+  String get mgmtTabModels => 'Models';
+
+  @override
+  String get mgmtTabConfig => 'Configuration';
+
+  @override
+  String get mgmtCopiedCommand => 'Launch command copied.';
+
+  @override
+  String get mgmtCannotLoadModels => 'Could not load the model list';
+
+  @override
+  String get mgmtModelsNeedLogin =>
+      'This account is not signed in. Sign in to Codex and reload.';
+
+  @override
+  String get mgmtReload => 'Reload';
+
+  @override
+  String mgmtModelSourceUpdated(String source, String updated) {
+    return 'Source: $source · Updated: $updated';
+  }
+
+  @override
+  String get mgmtDisableWarning =>
+      'Disabling stops the current task. Existing sessions become read-only.';
+
+  @override
+  String get mgmtStopAndDisable => 'Stop and disable';
+
+  @override
+  String get mgmtTestClaudeTitle => 'Test the Claude Code connection';
+
+  @override
+  String get mgmtTestClaudeBody =>
+      'Sends a prompt-free initialize control request only and does not call the model; the Claude CLI may still maintain its own auth or bootstrap cache.';
+
+  @override
+  String get mgmtContinueTest => 'Continue test';
+
+  @override
+  String mgmtConnectionTestSuccess(String ms) {
+    return 'Connection test succeeded. Response took $ms ms.';
+  }
+
+  @override
+  String mgmtConnectionTestFailedMessage(String message) {
+    return 'Connection test failed: $message';
+  }
+
+  @override
+  String get mgmtUnknownError => 'Unknown error';
+
+  @override
+  String mgmtCannotOpenExecutableDir(String error) {
+    return 'Could not open the executable directory: $error';
+  }
+
+  @override
+  String mgmtViewDetails(String name) {
+    return 'View $name details';
+  }
+
+  @override
+  String get mgmtVersionUnknown => 'Version unknown';
+
+  @override
+  String get mgmtNotInstalled => 'Not installed';
+
+  @override
+  String get mgmtConnectionAvailable => 'Connection available';
+
+  @override
+  String get mgmtUpdateAvailable => 'Update available';
+
+  @override
+  String get mgmtDetectingShort => 'Detecting';
+
+  @override
+  String get mgmtRunning => 'Running';
+
+  @override
+  String get mgmtEnabled => 'Enabled';
+
+  @override
+  String get mgmtInstalled => 'Installed';
+
+  @override
+  String get mgmtSectionBasics => 'Basics';
+
+  @override
+  String get mgmtBasicAttributes => 'Basic attributes';
+
+  @override
+  String get mgmtName => 'Name';
+
+  @override
+  String get mgmtVendor => 'Vendor';
+
+  @override
+  String get mgmtProtocol => 'Protocol';
+
+  @override
+  String get mgmtTransport => 'Transport';
+
+  @override
+  String get mgmtSectionVersion => 'Version';
+
+  @override
+  String get mgmtCurrentVersion => 'Current version';
+
+  @override
+  String get mgmtLatestVersion => 'Latest version';
+
+  @override
+  String get mgmtPathsAndCommands => 'Paths and commands';
+
+  @override
+  String get mgmtLaunchCommand => 'Launch command';
+
+  @override
+  String get mgmtExecutablePath => 'Executable path';
+
+  @override
+  String get mgmtNotDetected => 'Not detected';
+
+  @override
+  String get mgmtExecutableNotDetectedHint =>
+      'No executable detected yet. Install it and make sure it is on PATH';
+
+  @override
+  String get mgmtAutoDetectShort => 'Auto-detect';
+
+  @override
+  String get mgmtOpenDirectory => 'Open folder';
+
+  @override
+  String get mgmtProgram => 'Program';
+
+  @override
+  String get mgmtExecutablePresent => 'Executable exists and can be invoked';
+
+  @override
+  String get mgmtExecutableMissing => 'Executable not found';
+
+  @override
+  String get mgmtAuthEvidence => 'Auth evidence';
+
+  @override
+  String get mgmtCommunication => 'Communication';
+
+  @override
+  String get mgmtHandshakeOk => 'Basic handshake succeeded';
+
+  @override
+  String get mgmtNotConfirmed => 'Not confirmed yet';
+
+  @override
+  String get mgmtLastDetected => 'Last detection';
+
+  @override
+  String get mgmtLastTestDuration => 'Last test duration';
+
+  @override
+  String get mgmtHandshakeIdentity => 'Handshake identity';
+
+  @override
+  String get mgmtNegotiatedCapabilities => 'Negotiated capabilities';
+
+  @override
+  String get mgmtCompatibility => 'Compatibility';
+
+  @override
+  String get mgmtExitReason => 'Exit reason';
+
+  @override
+  String get mgmtFailureStage => 'Failure stage';
+
+  @override
+  String get mgmtDiagnostics => 'Diagnostics';
+
+  @override
+  String get mgmtConnectionHealthy => 'Connection healthy';
+
+  @override
+  String mgmtSuggestedAction(String suggestion) {
+    return 'Suggested action: $suggestion';
+  }
+
+  @override
+  String get mgmtHidden => 'Hidden';
+
+  @override
+  String get mgmtAvailable => 'Available';
+
+  @override
+  String get mgmtChipText => 'Text';
+
+  @override
+  String get mgmtChipImage => 'Images';
+
+  @override
+  String get mgmtChipCode => 'Code';
+
+  @override
+  String get mgmtChipFiles => 'File operations';
+
+  @override
+  String get mgmtChipTools => 'Tool calls';
+
+  @override
+  String get mgmtChipTerminal => 'Terminal';
+
+  @override
+  String get mgmtChipStreaming => 'Streaming';
+
+  @override
+  String get mgmtReasoningUnknown => 'Reasoning: unknown';
+
+  @override
+  String mgmtReasoningAdjustable(String efforts) {
+    return 'Reasoning: adjustable ($efforts)';
+  }
+
+  @override
+  String get mgmtQuotaEnrichmentTitle => 'Usage-detail enrichment';
+
+  @override
+  String get mgmtQuotaEnrichmentLabel => 'Read Claude Code usage details';
+
+  @override
+  String get mgmtQuotaEnrichmentBody =>
+      'This switch only controls whether Zeta briefly reads Claude Code OAuth credentials and calls the usage REST API. Model lists and plan names always come from the Claude CLI; Zeta does not refresh, write back, or persist credentials.';
+
+  @override
+  String get mgmtOnboardingTitle => 'Setup guide';
+
+  @override
+  String get mgmtOnboardingSubtitle => 'Install · Sign in · Docs';
+
+  @override
+  String get mgmtAccountUnknown => 'Could not detect';
+
+  @override
+  String get mgmtAccountChecking => 'Checking';
+
+  @override
+  String get mgmtAccountLoggedInShort => 'Signed in';
+
+  @override
+  String get mgmtAccountLoggedOut => 'Signed out';
+
+  @override
+  String get mgmtAccountExpired => 'Sign-in expired';
+
+  @override
+  String get mgmtAccountNotRequired => 'Sign-in not required';
+
+  @override
+  String get mgmtRuntimeNotRunning => 'Not running';
+
+  @override
+  String get mgmtRuntimeIdle => 'Idle';
+
+  @override
+  String get mgmtRuntimeStarting => 'Starting';
+
+  @override
+  String get mgmtRuntimeStopping => 'Stopping';
+
+  @override
+  String get mgmtRuntimeError => 'Error';
+
+  @override
+  String get mgmtRuntimeUnavailable => 'Unavailable';
+
+  @override
+  String get mgmtRuntimeDisabled => 'Disabled';
+
+  @override
+  String get mgmtStageFileDetection => 'File detection';
+
+  @override
+  String get mgmtStageCliStartup => 'Process startup';
+
+  @override
+  String get mgmtStageVersionDetection => 'Version detection';
+
+  @override
+  String get mgmtStageAccountAuthentication => 'Account authentication';
+
+  @override
+  String get mgmtStageProtocolHandshake => 'Protocol handshake';
+
+  @override
+  String get mgmtStageModelLoading => 'Model loading';
+
+  @override
+  String get mgmtStageConfigurationRead => 'Configuration read';
+
+  @override
+  String get mgmtStageTestRequest => 'Test request';
+
+  @override
+  String get mgmtStageProcessExit => 'Process exit';
+
+  @override
+  String get mgmtNotUpdated => 'Not updated yet';
+
+  @override
+  String get mgmtUnsavedTitle => 'Configuration is not saved';
+
+  @override
+  String get mgmtUnsavedBody => 'Leaving now discards these changes.';
+
+  @override
+  String get mgmtKeepEditing => 'Keep editing';
+
+  @override
+  String get mgmtDiscardChanges => 'Discard changes';
+
+  @override
+  String get mgmtLoadingConfig => 'Loading the configuration file';
+
+  @override
+  String get mgmtConfigNotLoadedYet =>
+      'The configuration file has not been loaded.';
+
+  @override
+  String get mgmtSensitiveMaskedTitle => 'Sensitive values are hidden';
+
+  @override
+  String get mgmtSensitiveMaskedBody =>
+      'Shown read-only by default so credentials are not exposed. Click Show sensitive values to edit the full configuration.';
+
+  @override
+  String get mgmtConfigFile => 'Configuration file';
+
+  @override
+  String get mgmtConfigExists => 'exists';
+
+  @override
+  String get mgmtConfigMissing => 'not created yet';
+
+  @override
+  String mgmtLastLoaded(String time) {
+    return 'Last loaded $time';
+  }
+
+  @override
+  String get mgmtReloadConfig => 'Reload';
+
+  @override
+  String get mgmtOpenContainingFolder => 'Open containing folder';
+
+  @override
+  String get mgmtHideSensitive => 'Hide sensitive values';
+
+  @override
+  String get mgmtShowSensitive => 'Show sensitive values';
+
+  @override
+  String get mgmtSearchInConfig => 'Search in configuration';
+
+  @override
+  String get mgmtFindNext => 'Find next';
+
+  @override
+  String get mgmtConfigValid => 'Configuration format is valid';
+
+  @override
+  String get mgmtCancelEdits => 'Cancel edits';
+
+  @override
+  String get mgmtSaving => 'Saving…';
+
+  @override
+  String get mgmtSaveConfig => 'Save configuration';
+
+  @override
+  String get mgmtConfigSavedRestart =>
+      'Configuration saved. Restart Codex to apply it.';
+
+  @override
+  String get mgmtConfigSavedBackup =>
+      'Configuration saved, and a backup of the original file was created.';
+
+  @override
+  String get mgmtConfigExternalTitle =>
+      'The configuration file was modified externally';
+
+  @override
+  String get mgmtConfigExternalBody =>
+      'Continuing will overwrite the external changes.';
+
+  @override
+  String get mgmtSaveAnyway => 'Save anyway';
+
+  @override
+  String mgmtConfigSaveFailed(String error) {
+    return 'Could not save the configuration: $error';
+  }
+
+  @override
+  String mgmtQueryNotFound(String query) {
+    return 'No matches for \"$query\".';
+  }
+
+  @override
+  String mgmtCannotOpenConfigDir(String error) {
+    return 'Could not open the configuration directory: $error';
+  }
+
+  @override
+  String get mgmtRefreshing => 'Refreshing…';
+
+  @override
+  String get mgmtRefresh => 'Refresh';
+
+  @override
+  String get mgmtCopyLogs => 'Copy logs';
+
+  @override
+  String get mgmtSearchLogKeywords => 'Search log keywords';
+
+  @override
+  String get mgmtLogLevel => 'Log level';
+
+  @override
+  String get mgmtAll => 'All';
+
+  @override
+  String get mgmtReadingLogs => 'Reading Agent logs';
+
+  @override
+  String get mgmtNoMatchingLogs => 'No logs match the current filters.';
+
+  @override
+  String mgmtCopiedLogs(String count) {
+    return 'Copied $count redacted log lines.';
+  }
 }
