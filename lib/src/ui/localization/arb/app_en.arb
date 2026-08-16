@@ -507,5 +507,1054 @@
   "shadcnAbbreviatedDecember": "Dec",
   "@shadcnAbbreviatedDecember": {
     "description": "Calendar token kept language-stable for D6 date format."
-  }
+  },
+  "settingsNavGeneral": "General",
+  "@settingsNavGeneral": {
+    "description": "Settings nav general"
+  },
+  "settingsNavAppearance": "Appearance",
+  "@settingsNavAppearance": {
+    "description": "Settings nav appearance"
+  },
+  "settingsNavAgents": "Agent management",
+  "@settingsNavAgents": {
+    "description": "Settings nav agents"
+  },
+  "settingsAgentsUnavailable": "Agent management is unavailable.",
+  "@settingsAgentsUnavailable": {
+    "description": "Settings agents missing"
+  },
+  "settingsSendShortcutCmdEnter": "Cmd + Enter to send",
+  "@settingsSendShortcutCmdEnter": {
+    "description": "macOS send shortcut tab"
+  },
+  "settingsSendShortcutCtrlEnter": "Ctrl + Enter to send",
+  "@settingsSendShortcutCtrlEnter": {
+    "description": "non-mac send shortcut tab"
+  },
+  "settingsSendShortcutEnterHint": "Press Enter to send, Shift + Enter for a new line.",
+  "@settingsSendShortcutEnterHint": {
+    "description": "Enter send hint"
+  },
+  "settingsSendShortcutCmdHint": "Press Cmd + Enter to send, Enter for a new line.",
+  "@settingsSendShortcutCmdHint": {
+    "description": "Cmd send hint"
+  },
+  "settingsSendShortcutCtrlHint": "Press Ctrl + Enter to send, Enter for a new line.",
+  "@settingsSendShortcutCtrlHint": {
+    "description": "Ctrl send hint"
+  },
+  "settingsMessageSending": "Sending messages",
+  "@settingsMessageSending": {
+    "description": "General settings group"
+  },
+  "settingsSendShortcut": "Send shortcut",
+  "@settingsSendShortcut": {
+    "description": "Send shortcut label"
+  },
+  "settingsSendShortcutEnter": "Enter to send",
+  "@settingsSendShortcutEnter": {
+    "description": "Enter tab"
+  },
+  "settingsNotifications": "Notifications",
+  "@settingsNotifications": {
+    "description": "Notifications group"
+  },
+  "settingsSystemNotifications": "System notifications",
+  "@settingsSystemNotifications": {
+    "description": "Master notification switch"
+  },
+  "settingsSystemNotificationsHint": "Send system alerts when a task moves to the background or another session.",
+  "@settingsSystemNotificationsHint": {
+    "description": "Master notification hint"
+  },
+  "settingsTurnTerminalNotifications": "Task finished",
+  "@settingsTurnTerminalNotifications": {
+    "description": "Turn terminal switch"
+  },
+  "settingsTurnTerminalNotificationsHint": "Notify when a task completes, fails, or is interrupted.",
+  "@settingsTurnTerminalNotificationsHint": {
+    "description": "Turn terminal hint"
+  },
+  "settingsActionRequiredNotifications": "Needs confirmation",
+  "@settingsActionRequiredNotifications": {
+    "description": "Action required switch"
+  },
+  "settingsActionRequiredNotificationsHint": "Notify when permission, a question, plan approval, or execution confirmation is waiting.",
+  "@settingsActionRequiredNotificationsHint": {
+    "description": "Action required hint"
+  },
+  "settingsThemeFollowSystem": "System",
+  "@settingsThemeFollowSystem": {
+    "description": "Theme system tab"
+  },
+  "settingsThemeFollowSystemHint": "Use the current system light or dark preference.",
+  "@settingsThemeFollowSystemHint": {
+    "description": "Theme system hint"
+  },
+  "settingsThemeLight": "Light",
+  "@settingsThemeLight": {
+    "description": "Theme light tab"
+  },
+  "settingsThemeLightHint": "Light background, low-contrast borders, and a blue accent.",
+  "@settingsThemeLightHint": {
+    "description": "Theme light hint"
+  },
+  "settingsThemeDark": "Dark",
+  "@settingsThemeDark": {
+    "description": "Theme dark tab"
+  },
+  "settingsThemeDarkHint": "Dark background, high-contrast panes, and a bright accent.",
+  "@settingsThemeDarkHint": {
+    "description": "Theme dark hint"
+  },
+  "settingsTheme": "Theme",
+  "@settingsTheme": {
+    "description": "Theme group"
+  },
+  "settingsFonts": "Fonts",
+  "@settingsFonts": {
+    "description": "Fonts group"
+  },
+  "settingsUiFont": "UI font",
+  "@settingsUiFont": {
+    "description": "UI font label"
+  },
+  "settingsUiFontHint": "Used for regular UI text and non-code Markdown body.",
+  "@settingsUiFontHint": {
+    "description": "UI font hint"
+  },
+  "settingsUiFontLoadError": "Could not load the selected UI font.",
+  "@settingsUiFontLoadError": {
+    "description": "UI font error"
+  },
+  "settingsUiFontSize": "UI font size",
+  "@settingsUiFontSize": {
+    "description": "UI size label"
+  },
+  "settingsUiFontSizeHint": "Scale regular UI text ({min}–{max} px).",
+  "@settingsUiFontSizeHint": {
+    "description": "UI size hint",
+    "placeholders": {
+      "min": {
+        "type": "String",
+        "example": "12"
+      },
+      "max": {
+        "type": "String",
+        "example": "18"
+      }
+    }
+  },
+  "settingsCodeFont": "Code font",
+  "@settingsCodeFont": {
+    "description": "Code font label"
+  },
+  "settingsCodeFontHint": "Used for code blocks, commands, diffs, and tool output.",
+  "@settingsCodeFontHint": {
+    "description": "Code font hint"
+  },
+  "settingsCodeFontLoadError": "Could not load the selected code font.",
+  "@settingsCodeFontLoadError": {
+    "description": "Code font error"
+  },
+  "settingsCodeFontSize": "Code font size",
+  "@settingsCodeFontSize": {
+    "description": "Code size label"
+  },
+  "settingsCodeFontSizeHint": "Scale code content ({min}–{max} px).",
+  "@settingsCodeFontSizeHint": {
+    "description": "Code size hint",
+    "placeholders": {
+      "min": {
+        "type": "String",
+        "example": "12"
+      },
+      "max": {
+        "type": "String",
+        "example": "18"
+      }
+    }
+  },
+  "settingsThemeMode": "Theme mode",
+  "@settingsThemeMode": {
+    "description": "Theme mode label"
+  },
+  "settingsLabeledValue": "{label}: {value}",
+  "@settingsLabeledValue": {
+    "description": "Semantics label value",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "UI font"
+      },
+      "value": {
+        "type": "String",
+        "example": "Geist"
+      }
+    }
+  },
+  "settingsSearchSomething": "Search {label}",
+  "@settingsSearchSomething": {
+    "description": "Font search placeholder",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "UI font"
+      }
+    }
+  },
+  "settingsNoMatchingFonts": "No matching fonts.",
+  "@settingsNoMatchingFonts": {
+    "description": "Font empty"
+  },
+  "settingsFontListLoadFailed": "Could not load the font list.",
+  "@settingsFontListLoadFailed": {
+    "description": "Font list error"
+  },
+  "settingsFontSizeSemantics": "{label}, currently {size} pixels",
+  "@settingsFontSizeSemantics": {
+    "description": "Font size semantics",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "UI font size"
+      },
+      "size": {
+        "type": "String",
+        "example": "14"
+      }
+    }
+  },
+  "settingsDecreaseSomething": "Decrease {label}",
+  "@settingsDecreaseSomething": {
+    "description": "Decrease control",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "UI font size"
+      }
+    }
+  },
+  "settingsPixelValue": "{size} px",
+  "@settingsPixelValue": {
+    "description": "Pixel value",
+    "placeholders": {
+      "size": {
+        "type": "String",
+        "example": "14"
+      }
+    }
+  },
+  "settingsIncreaseSomething": "Increase {label}",
+  "@settingsIncreaseSomething": {
+    "description": "Increase control",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "UI font size"
+      }
+    }
+  },
+  "settingsFontGeistDefault": "Geist (built-in default)",
+  "@settingsFontGeistDefault": {
+    "description": "Geist default label"
+  },
+  "settingsFontJetBrainsDefault": "JetBrainsMono (built-in default)",
+  "@settingsFontJetBrainsDefault": {
+    "description": "JetBrains default label"
+  },
+  "commonCancel": "Cancel",
+  "@commonCancel": {
+    "description": "Common cancel"
+  },
+  "commonConfirm": "Confirm",
+  "@commonConfirm": {
+    "description": "Common confirm"
+  },
+  "commonRetry": "Retry",
+  "@commonRetry": {
+    "description": "Common retry"
+  },
+  "commonMore": "More",
+  "@commonMore": {
+    "description": "Common more"
+  },
+  "commonRemove": "Remove",
+  "@commonRemove": {
+    "description": "Common remove"
+  },
+  "commonMenu": "Menu",
+  "@commonMenu": {
+    "description": "Window menu semantics"
+  },
+  "workbenchHideLeftSidebar": "Hide left sidebar",
+  "@workbenchHideLeftSidebar": {
+    "description": "Left sidebar hide"
+  },
+  "workbenchShowLeftSidebar": "Show left sidebar",
+  "@workbenchShowLeftSidebar": {
+    "description": "Left sidebar show"
+  },
+  "workbenchBackToHome": "Back to home",
+  "@workbenchBackToHome": {
+    "description": "Back home"
+  },
+  "workbenchUsageStatistics": "Usage statistics",
+  "@workbenchUsageStatistics": {
+    "description": "Usage tooltip (keep current)"
+  },
+  "workbenchOpenUsageStatistics": "Open usage statistics page",
+  "@workbenchOpenUsageStatistics": {
+    "description": "Usage semantic (keep current)"
+  },
+  "workbenchOpenSettings": "Open settings page",
+  "@workbenchOpenSettings": {
+    "description": "Settings semantic (keep current)"
+  },
+  "workbenchHideRightSidebar": "Hide right sidebar",
+  "@workbenchHideRightSidebar": {
+    "description": "Right sidebar hide"
+  },
+  "workbenchShowRightSidebar": "Show right sidebar",
+  "@workbenchShowRightSidebar": {
+    "description": "Right sidebar show"
+  },
+  "workbenchRightSidebarHomeOnly": "The right sidebar is only available on the home screen",
+  "@workbenchRightSidebarHomeOnly": {
+    "description": "Right sidebar disabled"
+  },
+  "workbenchMenuFile": "File",
+  "@workbenchMenuFile": {
+    "description": "Window File menu"
+  },
+  "workbenchMenuOpenProject": "Open Project",
+  "@workbenchMenuOpenProject": {
+    "description": "Window open project"
+  },
+  "workbenchMenuQuit": "Quit",
+  "@workbenchMenuQuit": {
+    "description": "Window quit"
+  },
+  "workbenchResizeLeftPanel": "Resize left panel width",
+  "@workbenchResizeLeftPanel": {
+    "description": "Left resize (keep current)"
+  },
+  "workbenchResizeRightPanel": "Resize right panel width",
+  "@workbenchResizeRightPanel": {
+    "description": "Right resize (keep current)"
+  },
+  "workbenchCannotOpenNotificationThread": "Could not open the session from the notification. It may have been deleted or is not in the current project list.",
+  "@workbenchCannotOpenNotificationThread": {
+    "description": "Notification thread missing"
+  },
+  "workbenchProviderDetectionFailed": "Could not detect Provider: {error}",
+  "@workbenchProviderDetectionFailed": {
+    "description": "Provider detect error",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "timeout"
+      }
+    }
+  },
+  "workbenchCloseOverlay": "Close workbench overlay",
+  "@workbenchCloseOverlay": {
+    "description": "Overlay close (keep current)"
+  },
+  "workbenchLogoSemantics": "Zeta Logo",
+  "@workbenchLogoSemantics": {
+    "description": "Logo semantics"
+  },
+  "timelineScrollbar": "Conversation scrollbar",
+  "@timelineScrollbar": {
+    "description": "Virtual scrollbar"
+  },
+  "timelineScrollToBottom": "Scroll to end of conversation",
+  "@timelineScrollToBottom": {
+    "description": "Scroll to bottom"
+  },
+  "timelineNewContent": "New content",
+  "@timelineNewContent": {
+    "description": "New content chip"
+  },
+  "timelineBackToBottom": "Back to bottom",
+  "@timelineBackToBottom": {
+    "description": "Back to bottom"
+  },
+  "imagePreviewUnavailable": "Image file unavailable",
+  "@imagePreviewUnavailable": {
+    "description": "Image missing"
+  },
+  "imagePreviewViewLarge": "View larger image",
+  "@imagePreviewViewLarge": {
+    "description": "View large"
+  },
+  "imagePreviewView": "View image",
+  "@imagePreviewView": {
+    "description": "View image"
+  },
+  "tabsLoadingSuffix": "{label}, loading",
+  "@tabsLoadingSuffix": {
+    "description": "Tabs loading",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "Models"
+      }
+    }
+  },
+  "homeWelcomeTitle": "Welcome to Zeta",
+  "@homeWelcomeTitle": {
+    "description": "Global home welcome"
+  },
+  "homeWelcomeSubtitle": "Continue recent work, or open a project to start.",
+  "@homeWelcomeSubtitle": {
+    "description": "Global home subtitle"
+  },
+  "homeOpenProjectFolder": "Open project folder",
+  "@homeOpenProjectFolder": {
+    "description": "Open folder CTA"
+  },
+  "homeOpenProject": "Open project",
+  "@homeOpenProject": {
+    "description": "Open project"
+  },
+  "homeRecentProjects": "Recent projects",
+  "@homeRecentProjects": {
+    "description": "Recent projects"
+  },
+  "homeReadingRecentProjects": "Reading recent projects…",
+  "@homeReadingRecentProjects": {
+    "description": "Reading projects"
+  },
+  "homeNoRecentProjects": "No recent projects",
+  "@homeNoRecentProjects": {
+    "description": "Empty projects"
+  },
+  "homeRecentProjectsAfterRestore": "Recent projects will appear here after restore finishes.",
+  "@homeRecentProjectsAfterRestore": {
+    "description": "Projects restoring"
+  },
+  "homeRecentProjectsAfterOpen": "After you open a project, it will appear here.",
+  "@homeRecentProjectsAfterOpen": {
+    "description": "Projects empty"
+  },
+  "homeRecentSessions": "Recent sessions",
+  "@homeRecentSessions": {
+    "description": "Recent sessions"
+  },
+  "homeRefreshFailed": "Refresh failed",
+  "@homeRefreshFailed": {
+    "description": "Refresh failed"
+  },
+  "homeCannotRefreshSessions": "Could not refresh recent sessions",
+  "@homeCannotRefreshSessions": {
+    "description": "Cannot refresh"
+  },
+  "homeLoadingRecentSessions": "Loading recent sessions…",
+  "@homeLoadingRecentSessions": {
+    "description": "Loading sessions"
+  },
+  "homeNoRecentSessions": "No recent sessions",
+  "@homeNoRecentSessions": {
+    "description": "Empty sessions"
+  },
+  "homeSessionsCacheHint": "Cached sessions show first; newer ones fill in in the background.",
+  "@homeSessionsCacheHint": {
+    "description": "Sessions cache"
+  },
+  "homeSessionsEmptyHint": "After you create a session, it appears by last activity.",
+  "@homeSessionsEmptyHint": {
+    "description": "Sessions empty"
+  },
+  "homeInstalledProviders": "Installed providers",
+  "@homeInstalledProviders": {
+    "description": "Installed providers"
+  },
+  "homeDetectionFailed": "Detection failed",
+  "@homeDetectionFailed": {
+    "description": "Detection failed"
+  },
+  "homeProviderDetectionFailedTitle": "Provider detection failed",
+  "@homeProviderDetectionFailedTitle": {
+    "description": "Provider detect title"
+  },
+  "homeDetectingProviders": "Detecting providers…",
+  "@homeDetectingProviders": {
+    "description": "Detecting"
+  },
+  "homeNoInstalledProviders": "No installed providers detected",
+  "@homeNoInstalledProviders": {
+    "description": "No providers"
+  },
+  "homeProvidersAfterDetect": "Available Agent environments appear here after detection.",
+  "@homeProvidersAfterDetect": {
+    "description": "Providers after detect"
+  },
+  "homeProvidersAfterInstall": "After you install and configure a supported Agent, it appears here.",
+  "@homeProvidersAfterInstall": {
+    "description": "Providers after install"
+  },
+  "homeOpenRecentProject": "Open recent project {name}",
+  "@homeOpenRecentProject": {
+    "description": "Open recent project",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "zeta"
+      }
+    }
+  },
+  "homeOpenRecentSession": "Open recent session {title}",
+  "@homeOpenRecentSession": {
+    "description": "Open recent session",
+    "placeholders": {
+      "title": {
+        "type": "String",
+        "example": "Fix layout"
+      }
+    }
+  },
+  "homeCommaJoin": "{left}, {right}",
+  "@homeCommaJoin": {
+    "description": "Join two labels",
+    "placeholders": {
+      "left": {
+        "type": "String",
+        "example": "Codex"
+      },
+      "right": {
+        "type": "String",
+        "example": "Available"
+      }
+    }
+  },
+  "homeProviderAvailable": "Available",
+  "@homeProviderAvailable": {
+    "description": "Provider available"
+  },
+  "homeProviderRunning": "Running",
+  "@homeProviderRunning": {
+    "description": "Provider running"
+  },
+  "homeProviderDisabled": "Disabled",
+  "@homeProviderDisabled": {
+    "description": "Provider disabled"
+  },
+  "homeProviderNeedsLogin": "Sign-in required",
+  "@homeProviderNeedsLogin": {
+    "description": "Provider login"
+  },
+  "homeProviderError": "Error",
+  "@homeProviderError": {
+    "description": "Provider error"
+  },
+  "homeProviderUpdateAvailable": "Update available",
+  "@homeProviderUpdateAvailable": {
+    "description": "Provider update"
+  },
+  "homeProviderDetecting": "Detecting",
+  "@homeProviderDetecting": {
+    "description": "Provider detecting"
+  },
+  "projectNewSession": "New session",
+  "@projectNewSession": {
+    "description": "New session"
+  },
+  "projectNewSessionFor": "New session for {name}",
+  "@projectNewSessionFor": {
+    "description": "New session for project",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "zeta"
+      }
+    }
+  },
+  "projectNoRecentSessions": "No recent sessions",
+  "@projectNoRecentSessions": {
+    "description": "Project empty sessions"
+  },
+  "projectCreateThreadHint": "After you create a Thread, it appears here.",
+  "@projectCreateThreadHint": {
+    "description": "Create thread hint"
+  },
+  "projectCannotLoadSessions": "Could not load recent sessions",
+  "@projectCannotLoadSessions": {
+    "description": "Cannot load sessions"
+  },
+  "projectPleaseRetryLater": "Please try again later.",
+  "@projectPleaseRetryLater": {
+    "description": "Retry later"
+  },
+  "projectRetryLoadSessions": "Retry loading recent sessions",
+  "@projectRetryLoadSessions": {
+    "description": "Retry sessions"
+  },
+  "projectOpenSession": "Open session {title}",
+  "@projectOpenSession": {
+    "description": "Open session",
+    "placeholders": {
+      "title": {
+        "type": "String",
+        "example": "Fix layout"
+      }
+    }
+  },
+  "threadWaitingApproval": "Waiting for approval",
+  "@threadWaitingApproval": {
+    "description": "Waiting approval"
+  },
+  "threadWaitingInput": "Waiting for input",
+  "@threadWaitingInput": {
+    "description": "Waiting input"
+  },
+  "threadRunning": "Running",
+  "@threadRunning": {
+    "description": "Thread running"
+  },
+  "threadSystemError": "System error",
+  "@threadSystemError": {
+    "description": "System error"
+  },
+  "projectOpenFolder": "Open folder",
+  "@projectOpenFolder": {
+    "description": "Open folder (keep current)"
+  },
+  "projectRefreshSessions": "Refresh sessions",
+  "@projectRefreshSessions": {
+    "description": "Refresh sessions"
+  },
+  "projectHasRunningThreads": "Project has running threads",
+  "@projectHasRunningThreads": {
+    "description": "Running threads (keep current)"
+  },
+  "threadRename": "Rename",
+  "@threadRename": {
+    "description": "Rename"
+  },
+  "threadUnarchive": "Unarchive",
+  "@threadUnarchive": {
+    "description": "Unarchive"
+  },
+  "threadArchive": "Archive",
+  "@threadArchive": {
+    "description": "Archive"
+  },
+  "threadFork": "Fork",
+  "@threadFork": {
+    "description": "Fork"
+  },
+  "threadDelete": "Delete",
+  "@threadDelete": {
+    "description": "Delete"
+  },
+  "threadRemoveFromZetaOnly": "Remove from Zeta list only",
+  "@threadRemoveFromZetaOnly": {
+    "description": "Remove index only"
+  },
+  "threadRemoveFromList": "Remove session from list",
+  "@threadRemoveFromList": {
+    "description": "Remove from list"
+  },
+  "threadDeleteSession": "Delete session",
+  "@threadDeleteSession": {
+    "description": "Delete session"
+  },
+  "threadDeleteIrreversible": "This cannot be undone and permanently deletes the session.",
+  "@threadDeleteIrreversible": {
+    "description": "Delete warning"
+  },
+  "threadRemoveIndexOnlyHint": "This only removes Zeta''s local index. Provider history files remain.",
+  "@threadRemoveIndexOnlyHint": {
+    "description": "Remove index hint"
+  },
+  "threadDeleteInAgentHint": "To delete it completely, use the corresponding Agent tool.",
+  "@threadDeleteInAgentHint": {
+    "description": "Delete in agent"
+  },
+  "threadRunningStatus": "Thread running",
+  "@threadRunningStatus": {
+    "description": "Thread running tooltip (keep current)"
+  },
+  "threadCompletedClickToDismiss": "Finished, click to dismiss",
+  "@threadCompletedClickToDismiss": {
+    "description": "Completed dismiss"
+  },
+  "threadCouldNotLoadThreads": "Could not load threads",
+  "@threadCouldNotLoadThreads": {
+    "description": "Load threads error (keep current)"
+  },
+  "projectOpenInFinder": "Open in Finder",
+  "@projectOpenInFinder": {
+    "description": "Open Finder"
+  },
+  "projectOpenInExplorer": "Open in Explorer",
+  "@projectOpenInExplorer": {
+    "description": "Open Explorer"
+  },
+  "projectOpenInFileManager": "Open in file manager",
+  "@projectOpenInFileManager": {
+    "description": "Open file manager"
+  },
+  "newThreadSelectProvider": "Select Agent Provider",
+  "@newThreadSelectProvider": {
+    "description": "Select provider"
+  },
+  "newThreadLoadingAgents": "Loading Agent…",
+  "@newThreadLoadingAgents": {
+    "description": "Loading agents"
+  },
+  "newThreadCannotLoadAgents": "Could not load Agent: {error}",
+  "@newThreadCannotLoadAgents": {
+    "description": "Load agents error",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "timeout"
+      }
+    }
+  },
+  "newThreadNoEnabledProviders": "No enabled supported Agent provider. Enable one in Settings > Agents first.",
+  "@newThreadNoEnabledProviders": {
+    "description": "No enabled providers"
+  },
+  "newThreadChooseAgent": "Choose the Agent used to create the new session.",
+  "@newThreadChooseAgent": {
+    "description": "Choose agent"
+  },
+  "newThreadUseProvider": "Create thread with {name}",
+  "@newThreadUseProvider": {
+    "description": "Use provider",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Codex"
+      }
+    }
+  },
+  "usageTimeRangeToday": "Today",
+  "@usageTimeRangeToday": { "description": "Usage time range today" },
+  "usageTimeRangeLast7Days": "Last 7 days",
+  "@usageTimeRangeLast7Days": { "description": "Usage time range last 7 days" },
+  "usageTimeRangeLast30Days": "Last 30 days",
+  "@usageTimeRangeLast30Days": { "description": "Usage time range last 30 days" },
+  "usageTimeRangeLast90Days": "Last 90 days",
+  "@usageTimeRangeLast90Days": { "description": "Usage time range last 90 days" },
+  "usageTimeRangeThisMonth": "This month",
+  "@usageTimeRangeThisMonth": { "description": "Usage time range this month" },
+  "usageTimeRangePreviousMonth": "Last month",
+  "@usageTimeRangePreviousMonth": { "description": "Usage time range previous month" },
+  "usageTimeRangeCustom": "Custom range",
+  "@usageTimeRangeCustom": { "description": "Usage time range custom" },
+  "usageTaskStatusRunning": "Running",
+  "@usageTaskStatusRunning": { "description": "Usage task running" },
+  "usageTaskStatusCompleted": "Succeeded",
+  "@usageTaskStatusCompleted": { "description": "Usage task completed" },
+  "usageTaskStatusInterrupted": "Cancelled",
+  "@usageTaskStatusInterrupted": { "description": "Usage task interrupted" },
+  "usageTaskStatusFailed": "Failed",
+  "@usageTaskStatusFailed": { "description": "Usage task failed" },
+  "usageTaskStatusUnknown": "Unknown",
+  "@usageTaskStatusUnknown": { "description": "Usage task unknown" },
+  "usageErrorCategoryAccount": "Account issue",
+  "@usageErrorCategoryAccount": { "description": "Usage error account" },
+  "usageErrorCategoryCli": "Runtime issue",
+  "@usageErrorCategoryCli": { "description": "Usage error CLI" },
+  "usageErrorCategoryNetwork": "Network error",
+  "@usageErrorCategoryNetwork": { "description": "Usage error network" },
+  "usageErrorCategoryTimeout": "Timed out",
+  "@usageErrorCategoryTimeout": { "description": "Usage error timeout" },
+  "usageErrorCategoryCancelled": "Cancelled by user",
+  "@usageErrorCategoryCancelled": { "description": "Usage error cancelled" },
+  "usageErrorCategoryOther": "Other error",
+  "@usageErrorCategoryOther": { "description": "Usage error other" },
+  "usageErrorNextActionAccount": "Check the Codex sign-in status and current plan quota.",
+  "@usageErrorNextActionAccount": { "description": "Usage next action account" },
+  "usageErrorNextActionCli": "Check the Codex version, configuration, and runtime logs.",
+  "@usageErrorNextActionCli": { "description": "Usage next action CLI" },
+  "usageErrorNextActionNetwork": "Check the network and proxy settings, then retry.",
+  "@usageErrorNextActionNetwork": { "description": "Usage next action network" },
+  "usageErrorNextActionTimeout": "Narrow the task scope and retry.",
+  "@usageErrorNextActionTimeout": { "description": "Usage next action timeout" },
+  "usageErrorNextActionCancelled": "Start the task again if you still need it.",
+  "@usageErrorNextActionCancelled": { "description": "Usage next action cancelled" },
+  "usageErrorNextActionOther": "Open the task details or Agent logs for the original reason.",
+  "@usageErrorNextActionOther": { "description": "Usage next action other" },
+  "usageTrendMetricCalls": "Calls",
+  "@usageTrendMetricCalls": { "description": "Usage trend calls" },
+  "usageTrendMetricSuccessRate": "Success rate",
+  "@usageTrendMetricSuccessRate": { "description": "Usage trend success rate" },
+  "usageTrendMetricTotalTokens": "Token usage",
+  "@usageTrendMetricTotalTokens": { "description": "Usage trend tokens" },
+  "usageTrendMetricAverageResponse": "Average response time",
+  "@usageTrendMetricAverageResponse": { "description": "Usage trend response" },
+  "usageTrendMetricAverageDuration": "Task duration",
+  "@usageTrendMetricAverageDuration": { "description": "Usage trend duration" },
+  "usageRankSortCalls": "Calls",
+  "@usageRankSortCalls": { "description": "Usage rank sort calls" },
+  "usageRankSortTotalTokens": "Token usage",
+  "@usageRankSortTotalTokens": { "description": "Usage rank sort tokens" },
+  "usageRankSortFailures": "Failures",
+  "@usageRankSortFailures": { "description": "Usage rank sort failures" },
+  "usageRankSortAverageDuration": "Task duration",
+  "@usageRankSortAverageDuration": { "description": "Usage rank sort duration" },
+  "usageUnknownProject": "Unknown project",
+  "@usageUnknownProject": { "description": "Usage unknown project" },
+  "usageLoadFailed": "Unable to load usage statistics: {error}",
+  "@usageLoadFailed": {
+    "description": "Usage load failed",
+    "placeholders": {
+      "error": { "type": "String", "example": "timeout" }
+    }
+  },
+  "usageQuotaUnreadable": "Plan quota is temporarily unavailable",
+  "@usageQuotaUnreadable": { "description": "Usage quota unreadable" },
+  "usageAgentTemporarilyUnavailable": "This Agent is temporarily unavailable",
+  "@usageAgentTemporarilyUnavailable": { "description": "Usage agent unavailable" },
+  "usageTokenHistoryUnavailable": "Token history is temporarily unavailable",
+  "@usageTokenHistoryUnavailable": { "description": "Usage token history unavailable" },
+  "usageTokenSourceMismatch": "Token history source configuration does not match",
+  "@usageTokenSourceMismatch": { "description": "Usage token source mismatch" },
+  "usageNoTokenHistory": "No Token history",
+  "@usageNoTokenHistory": { "description": "Usage no token history" },
+  "usageTodayTokensUnreadable": "Today''s Token usage is temporarily unavailable",
+  "@usageTodayTokensUnreadable": { "description": "Usage today tokens unreadable" },
+  "usageIndexWriteFailed": "The statistics index could not be saved. This result is still available.",
+  "@usageIndexWriteFailed": { "description": "Usage index write failed" },
+  "usageIndexReadRescanned": "{providerName} statistics index is temporarily unreadable. Local history was rescanned.",
+  "@usageIndexReadRescanned": {
+    "description": "Usage index read failed then rescanned",
+    "placeholders": {
+      "providerName": { "type": "String", "example": "Codex" }
+    }
+  },
+  "usageAgentDisabledOrUnavailable": "This Agent is disabled or unavailable",
+  "@usageAgentDisabledOrUnavailable": { "description": "Usage agent disabled" },
+  "usageAgentUsageTemporarilyUnavailable": "Agent usage is temporarily unavailable",
+  "@usageAgentUsageTemporarilyUnavailable": { "description": "Usage panel load error" },
+  "usagePageTitle": "Usage statistics",
+  "@usagePageTitle": { "description": "Usage page title" },
+  "usagePageSubtitle": "Analyze calls, performance, tokens, projects, and plan quota",
+  "@usagePageSubtitle": { "description": "Usage page subtitle" },
+  "usageLoadFailedTitle": "Failed to load statistics",
+  "@usageLoadFailedTitle": { "description": "Usage load failed title" },
+  "usagePartialUnavailable": "Some data is unavailable",
+  "@usagePartialUnavailable": { "description": "Usage partial unavailable" },
+  "usageReload": "Reload",
+  "@usageReload": { "description": "Usage reload" },
+  "usageTimeRangeLabel": "Time range",
+  "@usageTimeRangeLabel": { "description": "Usage time range field" },
+  "usageAllAgents": "All Agents",
+  "@usageAllAgents": { "description": "Usage all agents" },
+  "usageModelLabel": "Model",
+  "@usageModelLabel": { "description": "Usage model field" },
+  "usageAllModels": "All models",
+  "@usageAllModels": { "description": "Usage all models" },
+  "usageLastUpdated": "Last updated: {time}",
+  "@usageLastUpdated": {
+    "description": "Usage last updated",
+    "placeholders": {
+      "time": { "type": "String", "example": "12:00" }
+    }
+  },
+  "usageRefresh": "Refresh",
+  "@usageRefresh": { "description": "Usage refresh" },
+  "usageTokenBreakdownLine": "Input {input} · Output {output} · Reasoning {reasoning}",
+  "@usageTokenBreakdownLine": {
+    "description": "Usage token breakdown line",
+    "placeholders": {
+      "input": { "type": "String", "example": "1K" },
+      "output": { "type": "String", "example": "2K" },
+      "reasoning": { "type": "String", "example": "3K" }
+    }
+  },
+  "usageNoTokenStats": "No Token statistics for the current filters",
+  "@usageNoTokenStats": { "description": "Usage no token stats" },
+  "usageTokenUsageLabel": "Token usage",
+  "@usageTokenUsageLabel": { "description": "Usage token usage card label" },
+  "usageTokenUsageAmount": "Token usage {amount}",
+  "@usageTokenUsageAmount": {
+    "description": "Usage token amount heading",
+    "placeholders": {
+      "amount": { "type": "String", "example": "12K" }
+    }
+  },
+  "usageCallCount": "Calls",
+  "@usageCallCount": { "description": "Usage call count" },
+  "usageCallCountSemantic": "Calls {count}",
+  "@usageCallCountSemantic": {
+    "description": "Usage call count semantics",
+    "placeholders": {
+      "count": { "type": "String", "example": "12" }
+    }
+  },
+  "usageTrendTitle": "Usage trend",
+  "@usageTrendTitle": { "description": "Usage trend title" },
+  "usageTrendSubtitle": "Token usage · granularity follows the selected range",
+  "@usageTrendSubtitle": { "description": "Usage trend subtitle" },
+  "usageTrendSemantic": "{metric} trend, {count} time points",
+  "@usageTrendSemantic": {
+    "description": "Usage trend semantics",
+    "placeholders": {
+      "metric": { "type": "String", "example": "Token usage" },
+      "count": { "type": "String", "example": "7" }
+    }
+  },
+  "usageDetailTabsSemantic": "Usage statistics detail categories",
+  "@usageDetailTabsSemantic": { "description": "Usage detail tabs" },
+  "usageAgentStats": "Agent statistics",
+  "@usageAgentStats": { "description": "Usage agent stats tab - keep current chrome if mixed" },
+  "usageModelStats": "Model statistics",
+  "@usageModelStats": { "description": "Usage model stats tab" },
+  "usageProjectList": "Project list",
+  "@usageProjectList": { "description": "Usage project list tab" },
+  "usageTaskList": "Task list",
+  "@usageTaskList": { "description": "Usage task list tab" },
+  "usageRankSummary": "Summarized for the current filters",
+  "@usageRankSummary": { "description": "Usage rank summary" },
+  "usageUnsupported": "Unsupported",
+  "@usageUnsupported": { "description": "Usage unsupported metric" },
+  "usageHeaderCalls": "Calls",
+  "@usageHeaderCalls": { "description": "Usage table header calls" },
+  "usageHeaderSuccessRate": "Success rate",
+  "@usageHeaderSuccessRate": { "description": "Usage table header success" },
+  "usageHeaderToken": "Token",
+  "@usageHeaderToken": { "description": "Usage table header token" },
+  "usageHeaderFailures": "Failures",
+  "@usageHeaderFailures": { "description": "Usage table header failures" },
+  "usageHeaderAverageDuration": "Avg. duration",
+  "@usageHeaderAverageDuration": { "description": "Usage table header duration" },
+  "usageModelTokenShare": "Model Token usage and share",
+  "@usageModelTokenShare": { "description": "Usage model share heading" },
+  "usageNoModelStats": "No model statistics for the current filters",
+  "@usageNoModelStats": { "description": "Usage no model stats" },
+  "usageTokenTotal": "Total",
+  "@usageTokenTotal": { "description": "Usage token total" },
+  "usageTokenInput": "Input",
+  "@usageTokenInput": { "description": "Usage token input" },
+  "usageTokenCachedInput": "Cached input",
+  "@usageTokenCachedInput": { "description": "Usage token cached input" },
+  "usageTokenOutput": "Output",
+  "@usageTokenOutput": { "description": "Usage token output" },
+  "usageTokenReasoning": "Reasoning",
+  "@usageTokenReasoning": { "description": "Usage token reasoning" },
+  "usageHeaderModel": "Model",
+  "@usageHeaderModel": { "description": "Usage table header model" },
+  "usageHeaderShare": "Share",
+  "@usageHeaderShare": { "description": "Usage table header share" },
+  "usageProjectSummary": "Summarized for the current filters · click a project to focus it",
+  "@usageProjectSummary": { "description": "Usage project summary" },
+  "usageHeaderProject": "Project",
+  "@usageHeaderProject": { "description": "Usage table header project" },
+  "usageHeaderLastUsed": "Last used",
+  "@usageHeaderLastUsed": { "description": "Usage table header last used" },
+  "usageTaskListSummary": "{count} items · {pageSize} per page · metadata only",
+  "@usageTaskListSummary": {
+    "description": "Usage task list summary",
+    "placeholders": {
+      "count": { "type": "String", "example": "12" },
+      "pageSize": { "type": "String", "example": "20" }
+    }
+  },
+  "usageHeaderTime": "Time",
+  "@usageHeaderTime": { "description": "Usage table header time" },
+  "usageHeaderDuration": "Duration",
+  "@usageHeaderDuration": { "description": "Usage table header duration short" },
+  "usageHeaderStatus": "Status",
+  "@usageHeaderStatus": { "description": "Usage table header status" },
+  "usageUnknownModel": "Unknown model",
+  "@usageUnknownModel": { "description": "Usage unknown model" },
+  "usageOpenDetail": "Open {name} details",
+  "@usageOpenDetail": {
+    "description": "Usage open detail",
+    "placeholders": {
+      "name": { "type": "String", "example": "Codex" }
+    }
+  },
+  "usageTaskDetail": "Task details",
+  "@usageTaskDetail": { "description": "Usage task detail title" },
+  "usageFieldProject": "Project",
+  "@usageFieldProject": { "description": "Usage field project" },
+  "usageFieldProjectPath": "Project path",
+  "@usageFieldProjectPath": { "description": "Usage field project path" },
+  "usageFieldSource": "Source",
+  "@usageFieldSource": { "description": "Usage field source" },
+  "usageFieldStartTime": "Start time",
+  "@usageFieldStartTime": { "description": "Usage field start time" },
+  "usageFieldDuration": "Duration",
+  "@usageFieldDuration": { "description": "Usage field duration" },
+  "usageFieldFirstResponse": "First response",
+  "@usageFieldFirstResponse": { "description": "Usage field first response" },
+  "usageTokenNotSupported": "This record does not support Token statistics",
+  "@usageTokenNotSupported": { "description": "Usage token not supported" },
+  "usageTokenFullDetail": "{total} (Input {input} / Cached {cached} / Output {output} / Reasoning {reasoning})",
+  "@usageTokenFullDetail": {
+    "description": "Usage token full detail",
+    "placeholders": {
+      "total": { "type": "String", "example": "10" },
+      "input": { "type": "String", "example": "1" },
+      "cached": { "type": "String", "example": "2" },
+      "output": { "type": "String", "example": "3" },
+      "reasoning": { "type": "String", "example": "4" }
+    }
+  },
+  "usageTokenDetail": "Cached {cached} / Output {output} / Reasoning {reasoning})",
+  "@usageTokenDetail": {
+    "description": "Usage token detail suffix; leading parenthesis is in the value prefix",
+    "placeholders": {
+      "cached": { "type": "String", "example": "1" },
+      "output": { "type": "String", "example": "2" },
+      "reasoning": { "type": "String", "example": "3" }
+    }
+  },
+  "usageFieldStatus": "Status",
+  "@usageFieldStatus": { "description": "Usage field status" },
+  "usageFieldErrorCategory": "Error category",
+  "@usageFieldErrorCategory": { "description": "Usage field error category" },
+  "usageFieldReason": "Reason",
+  "@usageFieldReason": { "description": "Usage field reason" },
+  "usageNoReason": "No detailed reason provided",
+  "@usageNoReason": { "description": "Usage no reason" },
+  "usageFieldNextStep": "Next step",
+  "@usageFieldNextStep": { "description": "Usage field next step" },
+  "usageSourceKindCli": "Local record",
+  "@usageSourceKindCli": { "description": "Usage source kind cli" },
+  "usageEmptyTitle": "No usage records yet",
+  "@usageEmptyTitle": { "description": "Usage empty title" },
+  "usageEmptyBody": "After you start using an Agent, call counts, performance, and resource usage appear here.",
+  "@usageEmptyBody": { "description": "Usage empty body" },
+  "usageOpenAgentManagement": "Open Agent management",
+  "@usageOpenAgentManagement": { "description": "Usage open agent management" },
+  "usageLoading": "Loading usage statistics",
+  "@usageLoading": { "description": "Usage loading" },
+  "usageQuickShortcuts": "Shortcuts",
+  "@usageQuickShortcuts": { "description": "Usage time shortcuts heading" },
+  "usageRefreshUsage": "Refresh usage",
+  "@usageRefreshUsage": { "description": "Usage panel refresh" },
+  "usageNoEnabledAgent": "No enabled Agent",
+  "@usageNoEnabledAgent": { "description": "Usage no enabled agent" },
+  "usageNoStats": "No statistics",
+  "@usageNoStats": { "description": "Usage no stats" },
+  "usageCollapseAgentStats": "Collapse Agent statistics",
+  "@usageCollapseAgentStats": { "description": "Usage collapse panel" },
+  "usageExpandAgentStats": "Expand Agent statistics",
+  "@usageExpandAgentStats": { "description": "Usage expand panel" },
+  "usageTodayToken": "Today''s Token",
+  "@usageTodayToken": { "description": "Usage today token" },
+  "usageReadingAgentUsage": "Reading Agent usage",
+  "@usageReadingAgentUsage": { "description": "Usage reading" },
+  "usageRetryReadAgentUsage": "Retry reading Agent usage",
+  "@usageRetryReadAgentUsage": { "description": "Usage retry read" },
+  "usageSelectAgentUsage": "Select Agent usage",
+  "@usageSelectAgentUsage": { "description": "Usage select agent" },
+  "usageAvailableResetCards": "Available reset cards",
+  "@usageAvailableResetCards": { "description": "Usage reset cards" },
+  "usageRetry": "Retry",
+  "@usageRetry": { "description": "Usage retry" },
+  "usagePrevWindow": "Previous window",
+  "@usagePrevWindow": { "description": "Usage previous quota window" },
+  "usageNextWindow": "Next window",
+  "@usageNextWindow": { "description": "Usage next quota window" }
 }

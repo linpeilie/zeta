@@ -12,6 +12,7 @@ import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_mode
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/agent_usage_panel.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/agent_usage_quota_gallery.dart';
+import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
@@ -1155,6 +1156,9 @@ Future<void> _pumpPanel(
         codeFontFamily: 'JetBrainsMono',
       ),
       child: sf.ShadcnApp(
+        locale: ZetaLocalization.simplifiedChinese,
+        supportedLocales: ZetaLocalization.supportedLocales,
+        localizationsDelegates: ZetaLocalization.delegates,
         theme: buildShadcnTheme(ideTheme),
         materialTheme: buildMaterialTheme(ideTheme),
         home: sf.Scaffold(
@@ -1214,6 +1218,9 @@ Future<void> _pumpPanelContent(
         codeFontFamily: 'JetBrainsMono',
       ),
       child: sf.ShadcnApp(
+        locale: ZetaLocalization.simplifiedChinese,
+        supportedLocales: ZetaLocalization.supportedLocales,
+        localizationsDelegates: ZetaLocalization.delegates,
         theme: buildShadcnTheme(ideTheme),
         materialTheme: buildMaterialTheme(ideTheme),
         home: sf.Scaffold(

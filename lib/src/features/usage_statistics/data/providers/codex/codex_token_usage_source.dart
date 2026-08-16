@@ -6,7 +6,9 @@ import 'package:zeta/src/features/usage_statistics/data/providers/codex/codex_us
 import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partition_store.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_token_usage_source.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_query_models.dart';
+import 'package:zeta/src/features/usage_statistics/domain/fallback_usage_statistics_text_catalog.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
+import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_text_catalog.dart';
 
 /// 直接从 Codex rollout 与自有 v4 分区读取 Token 历史。
 ///
@@ -21,6 +23,7 @@ final class CodexTokenUsageSource implements AgentTokenUsageSource {
     Map<String, String>? environment,
     String? homeDirectory,
     DateTime Function()? clock,
+    UsageStatisticsTextCatalog? textCatalog,
   }) {
     return CodexTokenUsageSource._(
       providerId: config.id,
@@ -32,6 +35,7 @@ final class CodexTokenUsageSource implements AgentTokenUsageSource {
       environment: environment ?? Platform.environment,
       homeDirectory: homeDirectory,
       clock: clock ?? DateTime.now,
+      textCatalog: textCatalog ?? const FallbackUsageStatisticsTextCatalog(),
     );
   }
 
@@ -45,6 +49,7 @@ final class CodexTokenUsageSource implements AgentTokenUsageSource {
     required Map<String, String> environment,
     required this._homeDirectory,
     required this._clock,
+    required this._textCatalog,
   }) : _configuredEnvironment = Map<String, String>.unmodifiable(
          configuredEnvironment,
        ),
@@ -61,6 +66,7 @@ final class CodexTokenUsageSource implements AgentTokenUsageSource {
   final Map<String, String> _environment;
   final String? _homeDirectory;
   final DateTime Function() _clock;
+  final UsageStatisticsTextCatalog _textCatalog;
 
   @override
   Future<AgentTokenUsageSourceSnapshot> load(AgentUsageQuery query) async {
@@ -73,9 +79,9 @@ final class CodexTokenUsageSource implements AgentTokenUsageSource {
     } catch (_) {
       cachedSessions = const <String, CodexUsageSessionSnapshot>{};
       warnings.add(
-        const AgentUsageWarning(
+        AgentUsageWarning(
           code: 'codex-index-read',
-          message: 'Codex 统计索引暂时无法读取，已重新扫描本地历史。',
+          message: _textCatalog.indexReadRescanned(providerName),
         ),
       );
     }
@@ -99,9 +105,9 @@ final class CodexTokenUsageSource implements AgentTokenUsageSource {
       );
     } catch (_) {
       warnings.add(
-        const AgentUsageWarning(
+        AgentUsageWarning(
           code: 'codex-index-write',
-          message: '统计索引暂时无法保存，本次结果仍可正常查看。',
+          message: _textCatalog.indexWriteFailed,
         ),
       );
     }

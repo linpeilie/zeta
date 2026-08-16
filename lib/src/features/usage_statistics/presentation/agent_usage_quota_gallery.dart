@@ -6,6 +6,7 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'package:zeta/src/features/agent/domain/agent_usage_models.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_formatters.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
@@ -193,7 +194,7 @@ class _AgentUsageQuotaGalleryState extends State<AgentUsageQuotaGallery> {
                     alignment: Alignment.centerLeft,
                     visible: _hovered && _canScroll,
                     enabled: _canScrollBack,
-                    tooltip: '上一窗口',
+                    tooltip: context.l10n.usagePrevWindow,
                     icon: Icons.chevron_left_rounded,
                     buttonKey: const ValueKey('agent-usage-quota-prev-button'),
                     onPressed: () => unawaited(_scrollByCard(-1)),
@@ -202,7 +203,7 @@ class _AgentUsageQuotaGalleryState extends State<AgentUsageQuotaGallery> {
                     alignment: Alignment.centerRight,
                     visible: _hovered && _canScroll,
                     enabled: _canScrollForward,
-                    tooltip: '下一窗口',
+                    tooltip: context.l10n.usageNextWindow,
                     icon: Icons.chevron_right_rounded,
                     buttonKey: const ValueKey('agent-usage-quota-next-button'),
                     onPressed: () => unawaited(_scrollByCard(1)),

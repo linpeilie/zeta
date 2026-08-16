@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import 'package:zeta/src/features/usage_statistics/domain/fallback_usage_statistics_text_catalog.dart';
 import 'package:zeta/src/features/usage_statistics/application/usage_statistics_report_builder.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_repository.dart';
+import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_text_catalog.dart';
 
 typedef UsageStatisticsClock = DateTime Function();
 
@@ -13,9 +15,12 @@ class UsageStatisticsController extends ChangeNotifier {
   UsageStatisticsController({
     required this.repository,
     UsageStatisticsClock? clock,
-  }) : _clock = clock ?? DateTime.now;
+    UsageStatisticsTextCatalog? textCatalog,
+  }) : _clock = clock ?? DateTime.now,
+       _textCatalog = textCatalog ?? const FallbackUsageStatisticsTextCatalog();
 
   final UsageStatisticsRepository repository;
+  final UsageStatisticsTextCatalog _textCatalog;
   final UsageStatisticsClock _clock;
 
   UsageTimeRangePreset _timePreset = UsageTimeRangePreset.last7Days;
@@ -152,7 +157,7 @@ class UsageStatisticsController extends ChangeNotifier {
       if (_disposed || token != _loadToken) {
         return;
       }
-      _errorMessage = '无法加载使用统计：$error';
+      _errorMessage = _textCatalog.loadFailed(error);
     } finally {
       if (!_disposed && token == _loadToken) {
         _loading = false;

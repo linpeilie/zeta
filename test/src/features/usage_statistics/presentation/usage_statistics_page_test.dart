@@ -11,6 +11,7 @@ import 'package:zeta/src/features/usage_statistics/application/usage_statistics_
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_repository.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_page.dart';
+import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/rows/ide_data_row.dart';
@@ -513,6 +514,31 @@ void main() {
       semantics.dispose();
     }
   });
+
+  testWidgets('same records keep provider names across locales', (
+    tester,
+  ) async {
+    final now = DateTime(2026, 7, 10, 12);
+    final controller = UsageStatisticsController(
+      repository: _UsageRepository(_source(now)),
+      clock: () => now,
+    );
+    addTearDown(controller.dispose);
+    await tester.runAsync(controller.initialize);
+
+    await _pumpUsagePage(
+      tester,
+      controller: controller,
+      locale: ZetaLocalization.english,
+    );
+    expect(find.text('Usage statistics'), findsOneWidget);
+    expect(find.text('Codex'), findsWidgets);
+    expect(find.text('使用统计'), findsNothing);
+
+    await _pumpUsagePage(tester, controller: controller);
+    expect(find.text('使用统计'), findsOneWidget);
+    expect(find.text('Codex'), findsWidgets);
+  });
 }
 
 Future<void> _pumpUsagePage(
@@ -520,6 +546,7 @@ Future<void> _pumpUsagePage(
   required UsageStatisticsController controller,
   Size size = const Size(1200, 900),
   VoidCallback? onOpenAgentManagement,
+  Locale locale = ZetaLocalization.simplifiedChinese,
 }) async {
   tester.view
     ..physicalSize = size
@@ -542,6 +569,9 @@ Future<void> _pumpUsagePage(
         codeFontFamily: 'JetBrainsMono',
       ),
       child: sf.ShadcnApp(
+        locale: locale,
+        supportedLocales: ZetaLocalization.supportedLocales,
+        localizationsDelegates: ZetaLocalization.delegates,
         theme: buildShadcnTheme(ideTheme),
         materialTheme: buildMaterialTheme(ideTheme),
         home: sf.Scaffold(

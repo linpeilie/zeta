@@ -9,7 +9,9 @@ import 'package:zeta/src/features/usage_statistics/application/usage_statistics_
 import 'package:zeta/src/features/usage_statistics/application/usage_statistics_report_builder.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_formatters.dart';
+import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_l10n.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_time_range_filter.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 import 'package:zeta/src/ui/core/ide_button.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
@@ -54,7 +56,10 @@ class _UsageStatisticsPageState extends State<UsageStatisticsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const IdePageHeader(title: '使用统计', subtitle: '分析调用、性能、Token、项目与套餐额度'),
+          IdePageHeader(
+            title: context.l10n.usagePageTitle,
+            subtitle: context.l10n.usagePageSubtitle,
+          ),
           Expanded(
             child: ListenableBuilder(
               listenable: widget.controller,
@@ -97,20 +102,20 @@ class _UsageStatisticsPageState extends State<UsageStatisticsPage> {
                       if (controller.errorMessage case final error?)
                         IdeStatusCard(
                           tone: IdeStatusCardTone.error,
-                          title: '统计加载失败',
+                          title: context.l10n.usageLoadFailedTitle,
                           body: Text(error),
                           footer: Align(
                             alignment: Alignment.centerLeft,
                             child: IdeButton(
                               onPressed: controller.refresh,
-                              label: '重新加载',
+                              label: context.l10n.usageReload,
                             ),
                           ),
                         ),
                       for (final warning in controller.warnings)
                         IdeStatusCard(
                           tone: IdeStatusCardTone.warning,
-                          title: '部分数据不可用',
+                          title: context.l10n.usagePartialUnavailable,
                           body: Text(warning),
                         ),
                       if (report == null && controller.loading)
@@ -198,7 +203,7 @@ class _UsageFilters extends StatelessWidget {
                 crossAxisAlignment: WrapCrossAlignment.end,
                 children: [
                   _LabeledFilter(
-                    label: '时间范围',
+                    label: context.l10n.usageTimeRangeLabel,
                     width: fieldWidth,
                     child: UsageTimeRangeFilter(
                       controller: controller,
@@ -213,7 +218,7 @@ class _UsageFilters extends StatelessWidget {
                       width: fieldWidth,
                       value: controller.providerId ?? _all,
                       options: <IdeSelectOption<String>>[
-                        const IdeSelectOption(_all, '全部 Agent'),
+                        IdeSelectOption(_all, context.l10n.usageAllAgents),
                         for (final agent in agents)
                           IdeSelectOption(agent, _providerName(report, agent)),
                       ],
@@ -223,14 +228,14 @@ class _UsageFilters extends StatelessWidget {
                     ),
                   ),
                   _LabeledFilter(
-                    label: '模型',
+                    label: context.l10n.usageModelLabel,
                     width: fieldWidth,
                     child: IdeSelect<String>(
                       key: const ValueKey('usage-model-filter'),
                       width: fieldWidth,
                       value: controller.model ?? _all,
                       options: <IdeSelectOption<String>>[
-                        const IdeSelectOption(_all, '全部模型'),
+                        IdeSelectOption(_all, context.l10n.usageAllModels),
                         for (final model in models)
                           IdeSelectOption(model, model),
                       ],
@@ -249,7 +254,9 @@ class _UsageFilters extends StatelessWidget {
                         if (compact)
                           Expanded(
                             child: Text(
-                              '最后更新：${formatUsageClock(controller.lastUpdated)}',
+                              context.l10n.usageLastUpdated(
+                                formatUsageClock(controller.lastUpdated),
+                              ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               textAlign: TextAlign.end,
@@ -260,7 +267,9 @@ class _UsageFilters extends StatelessWidget {
                           )
                         else
                           Text(
-                            '最后更新：${formatUsageClock(controller.lastUpdated)}',
+                            context.l10n.usageLastUpdated(
+                              formatUsageClock(controller.lastUpdated),
+                            ),
                             style: textStyles.caption.copyWith(
                               color: colors.textSecondary,
                             ),
@@ -268,7 +277,7 @@ class _UsageFilters extends StatelessWidget {
                         const SizedBox(width: IdeSpacing.space8),
                         IdeButton.toolbar(
                           key: const ValueKey('usage-refresh-button'),
-                          label: '刷新',
+                          label: context.l10n.usageRefresh,
                           leadingIcon: Icons.refresh_rounded,
                           onPressed: controller.loading
                               ? null
@@ -338,27 +347,35 @@ class _UsageOverviewBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final tokenCard = _OverviewMetricCard(
       key: const ValueKey('usage-overview-tokens'),
-      label: 'Token 使用量',
+      label: l10n.usageTokenUsageLabel,
       value: overview.tokens.hasData
           ? formatUsageCount(overview.tokens.effectiveTotal ?? 0)
           : '—',
       detail: overview.tokens.hasData
-          ? '输入 ${formatUsageCount(overview.tokens.inputTokens ?? 0)} · '
-                '输出 ${formatUsageCount(overview.tokens.outputTokens ?? 0)} · '
-                '推理 ${formatUsageCount(overview.tokens.reasoningTokens ?? 0)}'
-          : '当前筛选下暂无 Token 统计',
+          ? l10n.usageTokenBreakdownLine(
+              formatUsageCount(overview.tokens.inputTokens ?? 0),
+              formatUsageCount(overview.tokens.outputTokens ?? 0),
+              formatUsageCount(overview.tokens.reasoningTokens ?? 0),
+            )
+          : l10n.usageNoTokenStats,
       icon: Icons.data_usage_rounded,
-      semanticLabel:
-          'Token 使用量 ${overview.tokens.hasData ? formatUsageCount(overview.tokens.effectiveTotal ?? 0) : '暂无数据'}',
+      semanticLabel: l10n.usageTokenUsageAmount(
+        overview.tokens.hasData
+            ? formatUsageCount(overview.tokens.effectiveTotal ?? 0)
+            : formatUsagePercent(null),
+      ),
     );
     final callsCard = _OverviewMetricCard(
       key: const ValueKey('usage-overview-calls'),
-      label: '调用次数',
+      label: l10n.usageCallCount,
       value: formatUsageCount(overview.totalCalls),
       icon: Icons.bolt_rounded,
-      semanticLabel: '调用次数 ${formatUsageCount(overview.totalCalls)}',
+      semanticLabel: l10n.usageCallCountSemantic(
+        formatUsageCount(overview.totalCalls),
+      ),
     );
 
     return LayoutBuilder(
@@ -485,8 +502,8 @@ class _TrendSection extends StatelessWidget {
       key: const ValueKey('usage-primary-trend-pane'),
       padding: IdeSpacing.panelPadding,
       child: IdeSection(
-        title: '使用趋势',
-        subtitle: 'Token 消耗 · 粒度根据时间范围自动调整',
+        title: context.l10n.usageTrendTitle,
+        subtitle: context.l10n.usageTrendSubtitle,
         child: _UsageLineChart(
           key: const ValueKey('usage-main-chart-totalTokens'),
           points: report.tokenTrend,
@@ -551,27 +568,27 @@ class _UsageDetailTabsState extends State<_UsageDetailTabs> {
           IdeTabs<_UsageDetailTab>(
             key: const ValueKey('usage-detail-tab-bar'),
             value: _tab,
-            semanticLabel: '使用统计详情分类',
-            items: const [
+            semanticLabel: context.l10n.usageDetailTabsSemantic,
+            items: [
               IdeTabItem(
-                key: ValueKey('usage-detail-tab-agents'),
+                key: const ValueKey('usage-detail-tab-agents'),
                 value: _UsageDetailTab.agents,
-                label: 'Agent 统计',
+                label: context.l10n.usageAgentStats,
               ),
               IdeTabItem(
-                key: ValueKey('usage-detail-tab-models'),
+                key: const ValueKey('usage-detail-tab-models'),
                 value: _UsageDetailTab.models,
-                label: '模型统计',
+                label: context.l10n.usageModelStats,
               ),
               IdeTabItem(
-                key: ValueKey('usage-detail-tab-projects'),
+                key: const ValueKey('usage-detail-tab-projects'),
                 value: _UsageDetailTab.projects,
-                label: '项目列表',
+                label: context.l10n.usageProjectList,
               ),
               IdeTabItem(
-                key: ValueKey('usage-detail-tab-tasks'),
+                key: const ValueKey('usage-detail-tab-tasks'),
                 value: _UsageDetailTab.tasks,
-                label: '任务列表',
+                label: context.l10n.usageTaskList,
               ),
             ],
             onChanged: (value) {
@@ -627,7 +644,7 @@ class _AgentStatsPanel extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                '按当前筛选范围汇总',
+                context.l10n.usageRankSummary,
                 style: textStyles.meta.copyWith(color: colors.textSecondary),
               ),
             ),
@@ -637,7 +654,7 @@ class _AgentStatsPanel extends StatelessWidget {
               value: controller.rankSort,
               options: [
                 for (final sort in UsageRankSort.values)
-                  IdeSelectOption(sort, sort.label),
+                  IdeSelectOption(sort, sort.localizedLabel(context.l10n)),
               ],
               onChanged: (value) {
                 if (value != null) {
@@ -650,7 +667,14 @@ class _AgentStatsPanel extends StatelessWidget {
         const SizedBox(height: IdeSpacing.space8),
         _UsageTable(
           minWidth: 620,
-          headers: const ['Agent', '调用次数', '成功率', 'Token', '失败', '平均耗时'],
+          headers: [
+            'Agent',
+            context.l10n.usageHeaderCalls,
+            context.l10n.usageHeaderSuccessRate,
+            context.l10n.usageHeaderToken,
+            context.l10n.usageHeaderFailures,
+            context.l10n.usageHeaderAverageDuration,
+          ],
           flexes: const [3, 2, 2, 2, 2, 2],
           identifierColumns: const {0},
           numericColumns: const {1, 2, 3, 4, 5},
@@ -661,7 +685,7 @@ class _AgentStatsPanel extends StatelessWidget {
                 formatUsageCount(entry.calls),
                 formatUsagePercent(entry.successRate),
                 entry.totalTokens == null
-                    ? '不支持'
+                    ? context.l10n.usageUnsupported
                     : formatUsageCount(entry.totalTokens!),
                 entry.failures.toString(),
                 formatUsageDuration(entry.averageDuration, compact: true),
@@ -688,13 +712,13 @@ class _ModelStatsPanel extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          '模型 Token 消耗与占比',
+          context.l10n.usageModelTokenShare,
           style: textStyles.meta.copyWith(color: colors.textSecondary),
         ),
         const SizedBox(height: IdeSpacing.space8),
         if (!tokens.hasData && report.modelShares.isEmpty)
           Text(
-            '当前筛选下暂无模型统计',
+            context.l10n.usageNoModelStats,
             style: textStyles.bodyMedium.copyWith(color: colors.textSecondary),
           )
         else ...[
@@ -704,23 +728,23 @@ class _ModelStatsPanel extends StatelessWidget {
               runSpacing: IdeSpacing.space6,
               children: [
                 _InlineMetric(
-                  label: '总量',
+                  label: context.l10n.usageTokenTotal,
                   value: formatUsageCount(tokens.effectiveTotal ?? 0),
                 ),
                 _InlineMetric(
-                  label: '输入',
+                  label: context.l10n.usageTokenInput,
                   value: formatUsageCount(tokens.inputTokens ?? 0),
                 ),
                 _InlineMetric(
-                  label: '缓存输入',
+                  label: context.l10n.usageTokenCachedInput,
                   value: formatUsageCount(tokens.cachedInputTokens ?? 0),
                 ),
                 _InlineMetric(
-                  label: '输出',
+                  label: context.l10n.usageTokenOutput,
                   value: formatUsageCount(tokens.outputTokens ?? 0),
                 ),
                 _InlineMetric(
-                  label: '推理',
+                  label: context.l10n.usageTokenReasoning,
                   value: formatUsageCount(tokens.reasoningTokens ?? 0),
                 ),
               ],
@@ -729,7 +753,11 @@ class _ModelStatsPanel extends StatelessWidget {
           ],
           _UsageTable(
             minWidth: 520,
-            headers: const ['模型', 'Token', '占比'],
+            headers: [
+              context.l10n.usageHeaderModel,
+              context.l10n.usageHeaderToken,
+              context.l10n.usageHeaderShare,
+            ],
             flexes: const [4, 2, 2],
             identifierColumns: const {0},
             numericColumns: const {1, 2},
@@ -767,7 +795,7 @@ class _ProjectListPanel extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          '按当前筛选范围汇总 · 点击项目可聚焦该项目',
+          context.l10n.usageProjectSummary,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: textStyles.meta.copyWith(color: colors.textSecondary),
@@ -775,7 +803,13 @@ class _ProjectListPanel extends StatelessWidget {
         const SizedBox(height: IdeSpacing.space8),
         _UsageTable(
           minWidth: 620,
-          headers: const ['项目', '调用次数', 'Token', '平均耗时', '最近使用'],
+          headers: [
+            context.l10n.usageHeaderProject,
+            context.l10n.usageHeaderCalls,
+            context.l10n.usageHeaderToken,
+            context.l10n.usageHeaderAverageDuration,
+            context.l10n.usageHeaderLastUsed,
+          ],
           flexes: const [3, 2, 2, 2, 2],
           numericColumns: const {1, 2, 3},
           rows: [
@@ -784,7 +818,7 @@ class _ProjectListPanel extends StatelessWidget {
                 entry.projectName,
                 formatUsageCount(entry.calls),
                 entry.totalTokens == null
-                    ? '不支持'
+                    ? context.l10n.usageUnsupported
                     : formatUsageCount(entry.totalTokens!),
                 formatUsageDuration(entry.averageDuration, compact: true),
                 formatUsageRelativeTime(entry.lastUsedAt, DateTime.now()),
@@ -830,13 +864,21 @@ class _TaskListPanel extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          '共 ${records.length} 条 · 每页 $pageSize 条 · 仅展示统计元数据',
+          context.l10n.usageTaskListSummary('${records.length}', '$pageSize'),
           style: textStyles.meta.copyWith(color: colors.textSecondary),
         ),
         const SizedBox(height: IdeSpacing.space8),
         _UsageTable(
           minWidth: 780,
-          headers: const ['时间', '项目', 'Agent', '模型', '耗时', 'Token', '状态'],
+          headers: [
+            context.l10n.usageHeaderTime,
+            context.l10n.usageHeaderProject,
+            'Agent',
+            context.l10n.usageHeaderModel,
+            context.l10n.usageHeaderDuration,
+            context.l10n.usageHeaderToken,
+            context.l10n.usageHeaderStatus,
+          ],
           flexes: const [2, 3, 2, 3, 2, 2, 2],
           identifierColumns: const {2, 3},
           numericColumns: const {4, 5},
@@ -846,12 +888,12 @@ class _TaskListPanel extends StatelessWidget {
                 formatUsageDateTime(record.startedAt),
                 record.projectName,
                 record.providerName,
-                record.model ?? '未知模型',
+                record.model ?? context.l10n.usageUnknownModel,
                 formatUsageDuration(record.duration, compact: true),
                 record.tokens.effectiveTotal == null
-                    ? '不支持'
+                    ? context.l10n.usageUnsupported
                     : formatUsageCount(record.tokens.effectiveTotal!),
-                record.status.label,
+                record.status.localizedLabel(context.l10n),
               ],
           ],
           rowKeys: [for (final record in visible) record.id],
@@ -968,7 +1010,7 @@ class _UsageTable extends StatelessWidget {
                       showDivider: index + 1 < rows.length,
                       semanticLabel: onRowPressed == null
                           ? null
-                          : '打开${rows[index].first}详情',
+                          : context.l10n.usageOpenDetail(rows[index].first),
                     ),
                 ],
               ),
@@ -1037,7 +1079,10 @@ class _UsageLineChart extends StatelessWidget {
     final titleStyle = textStyles.caption.copyWith(color: colors.textTertiary);
 
     return Semantics(
-      label: '${metric.label}趋势，共 ${points.length} 个时间点',
+      label: context.l10n.usageTrendSemantic(
+        metric.localizedLabel(context.l10n),
+        '${points.length}',
+      ),
       child: RepaintBoundary(
         child: SizedBox(
           height: 210,
@@ -1226,45 +1271,71 @@ class _TaskDetailDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _DrawerSurface(
-      title: '任务详情',
+      title: context.l10n.usageTaskDetail,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _DetailRow(label: '项目', value: record.projectName),
-          _DetailRow(label: '项目路径', value: record.projectPath),
-          _DetailRow(label: 'Agent', value: record.providerName),
-          _DetailRow(label: '模型', value: record.model ?? '未知模型'),
-          _DetailRow(label: '来源', value: _sourceKindLabel(record.sourceKind)),
           _DetailRow(
-            label: '开始时间',
+            label: context.l10n.usageFieldProject,
+            value: record.projectName,
+          ),
+          _DetailRow(
+            label: context.l10n.usageFieldProjectPath,
+            value: record.projectPath,
+          ),
+          _DetailRow(label: 'Agent', value: record.providerName),
+          _DetailRow(
+            label: context.l10n.usageModelLabel,
+            value: record.model ?? context.l10n.usageUnknownModel,
+          ),
+          _DetailRow(
+            label: context.l10n.usageFieldSource,
+            value: _sourceKindLabel(record.sourceKind, context.l10n),
+          ),
+          _DetailRow(
+            label: context.l10n.usageFieldStartTime,
             value: formatUsageDateTime(record.startedAt),
           ),
           _DetailRow(
-            label: '执行时间',
+            label: context.l10n.usageFieldDuration,
             value: formatUsageDuration(record.duration),
           ),
           _DetailRow(
-            label: '首次响应',
+            label: context.l10n.usageFieldFirstResponse,
             value: formatUsageDuration(record.timeToFirstToken),
           ),
           _DetailRow(
-            label: 'Token',
+            label: context.l10n.usageHeaderToken,
             value: record.tokens.effectiveTotal == null
-                ? '当前记录不支持 Token 统计'
-                : '${formatUsageCount(record.tokens.effectiveTotal!)} '
-                      '（输入 ${formatUsageCount(record.tokens.inputTokens ?? 0)} / '
-                      '缓存 ${formatUsageCount(record.tokens.cachedInputTokens ?? 0)} / '
-                      '输出 ${formatUsageCount(record.tokens.outputTokens ?? 0)} / '
-                      '推理 ${formatUsageCount(record.tokens.reasoningTokens ?? 0)}）',
+                ? context.l10n.usageTokenNotSupported
+                : context.l10n.usageTokenFullDetail(
+                    formatUsageCount(record.tokens.effectiveTotal!),
+                    formatUsageCount(record.tokens.inputTokens ?? 0),
+                    formatUsageCount(record.tokens.cachedInputTokens ?? 0),
+                    formatUsageCount(record.tokens.outputTokens ?? 0),
+                    formatUsageCount(record.tokens.reasoningTokens ?? 0),
+                  ),
           ),
-          _DetailRow(label: '状态', value: record.status.label),
+          _DetailRow(
+            label: context.l10n.usageFieldStatus,
+            value: record.status.localizedLabel(context.l10n),
+          ),
           if (record.errorCategory case final category?) ...[
-            _DetailRow(label: '错误分类', value: category.label),
             _DetailRow(
-              label: '原因',
-              value: record.errorMessage ?? record.errorCode ?? '未提供详细原因',
+              label: context.l10n.usageFieldErrorCategory,
+              value: category.localizedLabel(context.l10n),
             ),
-            _DetailRow(label: '下一步', value: category.nextAction),
+            _DetailRow(
+              label: context.l10n.usageFieldReason,
+              value:
+                  record.errorMessage ??
+                  record.errorCode ??
+                  context.l10n.usageNoReason,
+            ),
+            _DetailRow(
+              label: context.l10n.usageFieldNextStep,
+              value: category.localizedNextAction(context.l10n),
+            ),
           ],
         ],
       ),
@@ -1338,9 +1409,9 @@ class _DetailRow extends StatelessWidget {
   }
 }
 
-String _sourceKindLabel(String sourceKind) {
+String _sourceKindLabel(String sourceKind, AppLocalizations l10n) {
   return switch (sourceKind) {
-    'cli' => '本地记录',
+    'cli' => l10n.usageSourceKindCli,
     'appServer' => 'App Server',
     _ => sourceKind,
   };
@@ -1370,10 +1441,10 @@ class _EmptyUsageState extends StatelessWidget {
               color: colors.textTertiary,
             ),
             const SizedBox(height: IdeSpacing.space12),
-            Text('暂无使用记录', style: textStyles.displaySmall),
+            Text(context.l10n.usageEmptyTitle, style: textStyles.displaySmall),
             const SizedBox(height: IdeSpacing.space6),
             Text(
-              '开始使用 Agent 后，这里会展示调用次数、性能和资源消耗。',
+              context.l10n.usageEmptyBody,
               textAlign: TextAlign.center,
               style: textStyles.bodyMedium.copyWith(
                 color: colors.textSecondary,
@@ -1382,7 +1453,7 @@ class _EmptyUsageState extends StatelessWidget {
             const SizedBox(height: IdeSpacing.space16),
             IdeButton(
               key: const ValueKey('usage-open-agent-management-button'),
-              label: '打开 Agent 管理',
+              label: context.l10n.usageOpenAgentManagement,
               variant: IdeButtonVariant.primary,
               onPressed: onOpenAgentManagement,
             ),
@@ -1400,7 +1471,7 @@ class _LoadingState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Semantics(
-      label: '正在加载使用统计',
+      label: context.l10n.usageLoading,
       container: true,
       child: const Column(
         key: ValueKey('usage-statistics-loading'),

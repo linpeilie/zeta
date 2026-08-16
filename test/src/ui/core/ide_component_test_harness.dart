@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/ui/core/app_theme.dart';
+import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta/src/ui/core/ide_stable_overlay_handler.dart';
 
 /// ui/core 组件测试的统一主题与窗口宿主。
@@ -35,6 +36,9 @@ Future<void> pumpIdeComponent(
       lightTheme: lightTheme,
       darkTheme: darkTheme,
       child: sf.ShadcnApp(
+        locale: ZetaLocalization.simplifiedChinese,
+        supportedLocales: ZetaLocalization.supportedLocales,
+        localizationsDelegates: ZetaLocalization.delegates,
         popoverHandler: ideStablePopoverOverlayHandler,
         tooltipHandler: ideStablePopoverOverlayHandler,
         menuHandler: ideStablePopoverOverlayHandler,

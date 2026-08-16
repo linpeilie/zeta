@@ -507,5 +507,1054 @@
   "shadcnAbbreviatedDecember": "Dec",
   "@shadcnAbbreviatedDecember": {
     "description": "Calendar token kept language-stable for D6 date format."
-  }
+  },
+  "settingsNavGeneral": "常规",
+  "@settingsNavGeneral": {
+    "description": "Settings nav general"
+  },
+  "settingsNavAppearance": "外观",
+  "@settingsNavAppearance": {
+    "description": "Settings nav appearance"
+  },
+  "settingsNavAgents": "Agent 管理",
+  "@settingsNavAgents": {
+    "description": "Settings nav agents"
+  },
+  "settingsAgentsUnavailable": "Agent 管理服务不可用。",
+  "@settingsAgentsUnavailable": {
+    "description": "Settings agents missing"
+  },
+  "settingsSendShortcutCmdEnter": "Cmd + Enter 发送",
+  "@settingsSendShortcutCmdEnter": {
+    "description": "macOS send shortcut tab"
+  },
+  "settingsSendShortcutCtrlEnter": "Ctrl + Enter 发送",
+  "@settingsSendShortcutCtrlEnter": {
+    "description": "non-mac send shortcut tab"
+  },
+  "settingsSendShortcutEnterHint": "按 Enter 发送消息，按 Shift + Enter 换行。",
+  "@settingsSendShortcutEnterHint": {
+    "description": "Enter send hint"
+  },
+  "settingsSendShortcutCmdHint": "按 Cmd + Enter 发送消息，按 Enter 换行。",
+  "@settingsSendShortcutCmdHint": {
+    "description": "Cmd send hint"
+  },
+  "settingsSendShortcutCtrlHint": "按 Ctrl + Enter 发送消息，按 Enter 换行。",
+  "@settingsSendShortcutCtrlHint": {
+    "description": "Ctrl send hint"
+  },
+  "settingsMessageSending": "消息发送",
+  "@settingsMessageSending": {
+    "description": "General settings group"
+  },
+  "settingsSendShortcut": "发送快捷键",
+  "@settingsSendShortcut": {
+    "description": "Send shortcut label"
+  },
+  "settingsSendShortcutEnter": "Enter 发送",
+  "@settingsSendShortcutEnter": {
+    "description": "Enter tab"
+  },
+  "settingsNotifications": "通知",
+  "@settingsNotifications": {
+    "description": "Notifications group"
+  },
+  "settingsSystemNotifications": "系统通知",
+  "@settingsSystemNotifications": {
+    "description": "Master notification switch"
+  },
+  "settingsSystemNotificationsHint": "在任务转入后台或其他会话时发送系统提醒。",
+  "@settingsSystemNotificationsHint": {
+    "description": "Master notification hint"
+  },
+  "settingsTurnTerminalNotifications": "任务结束",
+  "@settingsTurnTerminalNotifications": {
+    "description": "Turn terminal switch"
+  },
+  "settingsTurnTerminalNotificationsHint": "任务完成、失败或中断时提醒。",
+  "@settingsTurnTerminalNotificationsHint": {
+    "description": "Turn terminal hint"
+  },
+  "settingsActionRequiredNotifications": "需要确认",
+  "@settingsActionRequiredNotifications": {
+    "description": "Action required switch"
+  },
+  "settingsActionRequiredNotificationsHint": "权限、问题、计划审批或执行确认等待处理时提醒。",
+  "@settingsActionRequiredNotificationsHint": {
+    "description": "Action required hint"
+  },
+  "settingsThemeFollowSystem": "跟随系统",
+  "@settingsThemeFollowSystem": {
+    "description": "Theme system tab"
+  },
+  "settingsThemeFollowSystemHint": "使用系统当前的浅色或深色偏好。",
+  "@settingsThemeFollowSystemHint": {
+    "description": "Theme system hint"
+  },
+  "settingsThemeLight": "浅色",
+  "@settingsThemeLight": {
+    "description": "Theme light tab"
+  },
+  "settingsThemeLightHint": "使用浅底、低对比度边框和蔚蓝强调色。",
+  "@settingsThemeLightHint": {
+    "description": "Theme light hint"
+  },
+  "settingsThemeDark": "深色",
+  "@settingsThemeDark": {
+    "description": "Theme dark tab"
+  },
+  "settingsThemeDarkHint": "使用深底、高对比度面板和明亮强调色。",
+  "@settingsThemeDarkHint": {
+    "description": "Theme dark hint"
+  },
+  "settingsTheme": "主题",
+  "@settingsTheme": {
+    "description": "Theme group"
+  },
+  "settingsFonts": "字体",
+  "@settingsFonts": {
+    "description": "Fonts group"
+  },
+  "settingsUiFont": "界面字体",
+  "@settingsUiFont": {
+    "description": "UI font label"
+  },
+  "settingsUiFontHint": "用于普通界面文本与非代码 Markdown 正文。",
+  "@settingsUiFontHint": {
+    "description": "UI font hint"
+  },
+  "settingsUiFontLoadError": "无法加载所选界面字体。",
+  "@settingsUiFontLoadError": {
+    "description": "UI font error"
+  },
+  "settingsUiFontSize": "界面字号",
+  "@settingsUiFontSize": {
+    "description": "UI size label"
+  },
+  "settingsUiFontSizeHint": "缩放普通界面文本（{min}–{max} px）。",
+  "@settingsUiFontSizeHint": {
+    "description": "UI size hint",
+    "placeholders": {
+      "min": {
+        "type": "String",
+        "example": "12"
+      },
+      "max": {
+        "type": "String",
+        "example": "18"
+      }
+    }
+  },
+  "settingsCodeFont": "代码字体",
+  "@settingsCodeFont": {
+    "description": "Code font label"
+  },
+  "settingsCodeFontHint": "用于代码块、命令、Diff 和工具输出。",
+  "@settingsCodeFontHint": {
+    "description": "Code font hint"
+  },
+  "settingsCodeFontLoadError": "无法加载所选代码字体。",
+  "@settingsCodeFontLoadError": {
+    "description": "Code font error"
+  },
+  "settingsCodeFontSize": "代码字号",
+  "@settingsCodeFontSize": {
+    "description": "Code size label"
+  },
+  "settingsCodeFontSizeHint": "缩放代码内容（{min}–{max} px）。",
+  "@settingsCodeFontSizeHint": {
+    "description": "Code size hint",
+    "placeholders": {
+      "min": {
+        "type": "String",
+        "example": "12"
+      },
+      "max": {
+        "type": "String",
+        "example": "18"
+      }
+    }
+  },
+  "settingsThemeMode": "主题模式",
+  "@settingsThemeMode": {
+    "description": "Theme mode label"
+  },
+  "settingsLabeledValue": "{label}：{value}",
+  "@settingsLabeledValue": {
+    "description": "Semantics label value",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "UI font"
+      },
+      "value": {
+        "type": "String",
+        "example": "Geist"
+      }
+    }
+  },
+  "settingsSearchSomething": "搜索{label}",
+  "@settingsSearchSomething": {
+    "description": "Font search placeholder",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "UI font"
+      }
+    }
+  },
+  "settingsNoMatchingFonts": "没有匹配的字体。",
+  "@settingsNoMatchingFonts": {
+    "description": "Font empty"
+  },
+  "settingsFontListLoadFailed": "字体列表加载失败。",
+  "@settingsFontListLoadFailed": {
+    "description": "Font list error"
+  },
+  "settingsFontSizeSemantics": "{label}，当前 {size} 像素",
+  "@settingsFontSizeSemantics": {
+    "description": "Font size semantics",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "UI font size"
+      },
+      "size": {
+        "type": "String",
+        "example": "14"
+      }
+    }
+  },
+  "settingsDecreaseSomething": "减小{label}",
+  "@settingsDecreaseSomething": {
+    "description": "Decrease control",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "UI font size"
+      }
+    }
+  },
+  "settingsPixelValue": "{size} px",
+  "@settingsPixelValue": {
+    "description": "Pixel value",
+    "placeholders": {
+      "size": {
+        "type": "String",
+        "example": "14"
+      }
+    }
+  },
+  "settingsIncreaseSomething": "增大{label}",
+  "@settingsIncreaseSomething": {
+    "description": "Increase control",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "UI font size"
+      }
+    }
+  },
+  "settingsFontGeistDefault": "Geist（内置默认）",
+  "@settingsFontGeistDefault": {
+    "description": "Geist default label"
+  },
+  "settingsFontJetBrainsDefault": "JetBrainsMono（内置默认）",
+  "@settingsFontJetBrainsDefault": {
+    "description": "JetBrains default label"
+  },
+  "commonCancel": "取消",
+  "@commonCancel": {
+    "description": "Common cancel"
+  },
+  "commonConfirm": "确认",
+  "@commonConfirm": {
+    "description": "Common confirm"
+  },
+  "commonRetry": "重试",
+  "@commonRetry": {
+    "description": "Common retry"
+  },
+  "commonMore": "更多",
+  "@commonMore": {
+    "description": "Common more"
+  },
+  "commonRemove": "移除",
+  "@commonRemove": {
+    "description": "Common remove"
+  },
+  "commonMenu": "菜单",
+  "@commonMenu": {
+    "description": "Window menu semantics"
+  },
+  "workbenchHideLeftSidebar": "隐藏左侧栏",
+  "@workbenchHideLeftSidebar": {
+    "description": "Left sidebar hide"
+  },
+  "workbenchShowLeftSidebar": "显示左侧栏",
+  "@workbenchShowLeftSidebar": {
+    "description": "Left sidebar show"
+  },
+  "workbenchBackToHome": "返回主界面",
+  "@workbenchBackToHome": {
+    "description": "Back home"
+  },
+  "workbenchUsageStatistics": "Usage statistics",
+  "@workbenchUsageStatistics": {
+    "description": "Usage tooltip (keep current)"
+  },
+  "workbenchOpenUsageStatistics": "Open usage statistics page",
+  "@workbenchOpenUsageStatistics": {
+    "description": "Usage semantic (keep current)"
+  },
+  "workbenchOpenSettings": "Open settings page",
+  "@workbenchOpenSettings": {
+    "description": "Settings semantic (keep current)"
+  },
+  "workbenchHideRightSidebar": "隐藏右侧栏",
+  "@workbenchHideRightSidebar": {
+    "description": "Right sidebar hide"
+  },
+  "workbenchShowRightSidebar": "显示右侧栏",
+  "@workbenchShowRightSidebar": {
+    "description": "Right sidebar show"
+  },
+  "workbenchRightSidebarHomeOnly": "右侧栏仅在主界面可用",
+  "@workbenchRightSidebarHomeOnly": {
+    "description": "Right sidebar disabled"
+  },
+  "workbenchMenuFile": "文件",
+  "@workbenchMenuFile": {
+    "description": "Window File menu"
+  },
+  "workbenchMenuOpenProject": "打开项目",
+  "@workbenchMenuOpenProject": {
+    "description": "Window open project"
+  },
+  "workbenchMenuQuit": "退出",
+  "@workbenchMenuQuit": {
+    "description": "Window quit"
+  },
+  "workbenchResizeLeftPanel": "Resize left panel width",
+  "@workbenchResizeLeftPanel": {
+    "description": "Left resize (keep current)"
+  },
+  "workbenchResizeRightPanel": "Resize right panel width",
+  "@workbenchResizeRightPanel": {
+    "description": "Right resize (keep current)"
+  },
+  "workbenchCannotOpenNotificationThread": "无法打开通知对应的会话：该会话可能已被删除或不在当前项目列表中。",
+  "@workbenchCannotOpenNotificationThread": {
+    "description": "Notification thread missing"
+  },
+  "workbenchProviderDetectionFailed": "无法检测 Provider：{error}",
+  "@workbenchProviderDetectionFailed": {
+    "description": "Provider detect error",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "timeout"
+      }
+    }
+  },
+  "workbenchCloseOverlay": "Close workbench overlay",
+  "@workbenchCloseOverlay": {
+    "description": "Overlay close (keep current)"
+  },
+  "workbenchLogoSemantics": "Zeta Logo",
+  "@workbenchLogoSemantics": {
+    "description": "Logo semantics"
+  },
+  "timelineScrollbar": "对话滚动条",
+  "@timelineScrollbar": {
+    "description": "Virtual scrollbar"
+  },
+  "timelineScrollToBottom": "滚动到对话底部",
+  "@timelineScrollToBottom": {
+    "description": "Scroll to bottom"
+  },
+  "timelineNewContent": "有新内容",
+  "@timelineNewContent": {
+    "description": "New content chip"
+  },
+  "timelineBackToBottom": "回到底部",
+  "@timelineBackToBottom": {
+    "description": "Back to bottom"
+  },
+  "imagePreviewUnavailable": "图片文件不可用",
+  "@imagePreviewUnavailable": {
+    "description": "Image missing"
+  },
+  "imagePreviewViewLarge": "查看大图",
+  "@imagePreviewViewLarge": {
+    "description": "View large"
+  },
+  "imagePreviewView": "查看图片",
+  "@imagePreviewView": {
+    "description": "View image"
+  },
+  "tabsLoadingSuffix": "{label}，正在加载",
+  "@tabsLoadingSuffix": {
+    "description": "Tabs loading",
+    "placeholders": {
+      "label": {
+        "type": "String",
+        "example": "Models"
+      }
+    }
+  },
+  "homeWelcomeTitle": "欢迎使用 Zeta",
+  "@homeWelcomeTitle": {
+    "description": "Global home welcome"
+  },
+  "homeWelcomeSubtitle": "继续最近的工作，或打开一个项目开始。",
+  "@homeWelcomeSubtitle": {
+    "description": "Global home subtitle"
+  },
+  "homeOpenProjectFolder": "打开项目文件夹",
+  "@homeOpenProjectFolder": {
+    "description": "Open folder CTA"
+  },
+  "homeOpenProject": "打开项目",
+  "@homeOpenProject": {
+    "description": "Open project"
+  },
+  "homeRecentProjects": "近期项目",
+  "@homeRecentProjects": {
+    "description": "Recent projects"
+  },
+  "homeReadingRecentProjects": "正在读取近期项目…",
+  "@homeReadingRecentProjects": {
+    "description": "Reading projects"
+  },
+  "homeNoRecentProjects": "暂无近期项目",
+  "@homeNoRecentProjects": {
+    "description": "Empty projects"
+  },
+  "homeRecentProjectsAfterRestore": "恢复完成后会在这里显示最近访问的项目。",
+  "@homeRecentProjectsAfterRestore": {
+    "description": "Projects restoring"
+  },
+  "homeRecentProjectsAfterOpen": "打开一个项目后，它会显示在这里。",
+  "@homeRecentProjectsAfterOpen": {
+    "description": "Projects empty"
+  },
+  "homeRecentSessions": "近期会话",
+  "@homeRecentSessions": {
+    "description": "Recent sessions"
+  },
+  "homeRefreshFailed": "刷新失败",
+  "@homeRefreshFailed": {
+    "description": "Refresh failed"
+  },
+  "homeCannotRefreshSessions": "无法刷新近期会话",
+  "@homeCannotRefreshSessions": {
+    "description": "Cannot refresh"
+  },
+  "homeLoadingRecentSessions": "正在加载近期会话…",
+  "@homeLoadingRecentSessions": {
+    "description": "Loading sessions"
+  },
+  "homeNoRecentSessions": "暂无近期会话",
+  "@homeNoRecentSessions": {
+    "description": "Empty sessions"
+  },
+  "homeSessionsCacheHint": "缓存会先显示，最新会话将在后台补齐。",
+  "@homeSessionsCacheHint": {
+    "description": "Sessions cache"
+  },
+  "homeSessionsEmptyHint": "创建会话后，它会按最近活跃时间显示。",
+  "@homeSessionsEmptyHint": {
+    "description": "Sessions empty"
+  },
+  "homeInstalledProviders": "已安装 Provider",
+  "@homeInstalledProviders": {
+    "description": "Installed providers"
+  },
+  "homeDetectionFailed": "检测失败",
+  "@homeDetectionFailed": {
+    "description": "Detection failed"
+  },
+  "homeProviderDetectionFailedTitle": "Provider 检测失败",
+  "@homeProviderDetectionFailedTitle": {
+    "description": "Provider detect title"
+  },
+  "homeDetectingProviders": "正在检测 Provider…",
+  "@homeDetectingProviders": {
+    "description": "Detecting"
+  },
+  "homeNoInstalledProviders": "未检测到已安装 Provider",
+  "@homeNoInstalledProviders": {
+    "description": "No providers"
+  },
+  "homeProvidersAfterDetect": "检测完成后会显示本机可用的 Agent 环境。",
+  "@homeProvidersAfterDetect": {
+    "description": "Providers after detect"
+  },
+  "homeProvidersAfterInstall": "安装并配置受支持的 Agent 后，它会显示在这里。",
+  "@homeProvidersAfterInstall": {
+    "description": "Providers after install"
+  },
+  "homeOpenRecentProject": "打开近期项目 {name}",
+  "@homeOpenRecentProject": {
+    "description": "Open recent project",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "zeta"
+      }
+    }
+  },
+  "homeOpenRecentSession": "打开近期会话 {title}",
+  "@homeOpenRecentSession": {
+    "description": "Open recent session",
+    "placeholders": {
+      "title": {
+        "type": "String",
+        "example": "Fix layout"
+      }
+    }
+  },
+  "homeCommaJoin": "{left}，{right}",
+  "@homeCommaJoin": {
+    "description": "Join two labels",
+    "placeholders": {
+      "left": {
+        "type": "String",
+        "example": "Codex"
+      },
+      "right": {
+        "type": "String",
+        "example": "Available"
+      }
+    }
+  },
+  "homeProviderAvailable": "可用",
+  "@homeProviderAvailable": {
+    "description": "Provider available"
+  },
+  "homeProviderRunning": "运行中",
+  "@homeProviderRunning": {
+    "description": "Provider running"
+  },
+  "homeProviderDisabled": "已禁用",
+  "@homeProviderDisabled": {
+    "description": "Provider disabled"
+  },
+  "homeProviderNeedsLogin": "需登录",
+  "@homeProviderNeedsLogin": {
+    "description": "Provider login"
+  },
+  "homeProviderError": "异常",
+  "@homeProviderError": {
+    "description": "Provider error"
+  },
+  "homeProviderUpdateAvailable": "可更新",
+  "@homeProviderUpdateAvailable": {
+    "description": "Provider update"
+  },
+  "homeProviderDetecting": "检测中",
+  "@homeProviderDetecting": {
+    "description": "Provider detecting"
+  },
+  "projectNewSession": "新建会话",
+  "@projectNewSession": {
+    "description": "New session"
+  },
+  "projectNewSessionFor": "为 {name} 新建会话",
+  "@projectNewSessionFor": {
+    "description": "New session for project",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "zeta"
+      }
+    }
+  },
+  "projectNoRecentSessions": "暂无近期会话",
+  "@projectNoRecentSessions": {
+    "description": "Project empty sessions"
+  },
+  "projectCreateThreadHint": "创建一个 Thread 后，它会显示在这里。",
+  "@projectCreateThreadHint": {
+    "description": "Create thread hint"
+  },
+  "projectCannotLoadSessions": "无法加载近期会话",
+  "@projectCannotLoadSessions": {
+    "description": "Cannot load sessions"
+  },
+  "projectPleaseRetryLater": "请稍后重试。",
+  "@projectPleaseRetryLater": {
+    "description": "Retry later"
+  },
+  "projectRetryLoadSessions": "重试加载近期会话",
+  "@projectRetryLoadSessions": {
+    "description": "Retry sessions"
+  },
+  "projectOpenSession": "打开会话 {title}",
+  "@projectOpenSession": {
+    "description": "Open session",
+    "placeholders": {
+      "title": {
+        "type": "String",
+        "example": "Fix layout"
+      }
+    }
+  },
+  "threadWaitingApproval": "等待审批",
+  "@threadWaitingApproval": {
+    "description": "Waiting approval"
+  },
+  "threadWaitingInput": "等待输入",
+  "@threadWaitingInput": {
+    "description": "Waiting input"
+  },
+  "threadRunning": "执行中",
+  "@threadRunning": {
+    "description": "Thread running"
+  },
+  "threadSystemError": "系统错误",
+  "@threadSystemError": {
+    "description": "System error"
+  },
+  "projectOpenFolder": "Open folder",
+  "@projectOpenFolder": {
+    "description": "Open folder (keep current)"
+  },
+  "projectRefreshSessions": "刷新会话",
+  "@projectRefreshSessions": {
+    "description": "Refresh sessions"
+  },
+  "projectHasRunningThreads": "Project has running threads",
+  "@projectHasRunningThreads": {
+    "description": "Running threads (keep current)"
+  },
+  "threadRename": "重命名",
+  "@threadRename": {
+    "description": "Rename"
+  },
+  "threadUnarchive": "取消归档",
+  "@threadUnarchive": {
+    "description": "Unarchive"
+  },
+  "threadArchive": "归档",
+  "@threadArchive": {
+    "description": "Archive"
+  },
+  "threadFork": "分叉",
+  "@threadFork": {
+    "description": "Fork"
+  },
+  "threadDelete": "删除",
+  "@threadDelete": {
+    "description": "Delete"
+  },
+  "threadRemoveFromZetaOnly": "仅从 Zeta 列表移除",
+  "@threadRemoveFromZetaOnly": {
+    "description": "Remove index only"
+  },
+  "threadRemoveFromList": "从列表移除会话",
+  "@threadRemoveFromList": {
+    "description": "Remove from list"
+  },
+  "threadDeleteSession": "删除会话",
+  "@threadDeleteSession": {
+    "description": "Delete session"
+  },
+  "threadDeleteIrreversible": "此操作不可撤销，将永久删除该会话。",
+  "@threadDeleteIrreversible": {
+    "description": "Delete warning"
+  },
+  "threadRemoveIndexOnlyHint": "只会移除 Zeta 的本地索引记录，Provider 端历史文件仍会保留。",
+  "@threadRemoveIndexOnlyHint": {
+    "description": "Remove index hint"
+  },
+  "threadDeleteInAgentHint": "如需彻底删除，请在对应 Agent 工具中处理。",
+  "@threadDeleteInAgentHint": {
+    "description": "Delete in agent"
+  },
+  "threadRunningStatus": "Thread running",
+  "@threadRunningStatus": {
+    "description": "Thread running tooltip (keep current)"
+  },
+  "threadCompletedClickToDismiss": "执行完毕，点击关闭",
+  "@threadCompletedClickToDismiss": {
+    "description": "Completed dismiss"
+  },
+  "threadCouldNotLoadThreads": "Could not load threads",
+  "@threadCouldNotLoadThreads": {
+    "description": "Load threads error (keep current)"
+  },
+  "projectOpenInFinder": "在 Finder 中打开",
+  "@projectOpenInFinder": {
+    "description": "Open Finder"
+  },
+  "projectOpenInExplorer": "在资源管理器中打开",
+  "@projectOpenInExplorer": {
+    "description": "Open Explorer"
+  },
+  "projectOpenInFileManager": "在文件管理器中打开",
+  "@projectOpenInFileManager": {
+    "description": "Open file manager"
+  },
+  "newThreadSelectProvider": "选择 Agent Provider",
+  "@newThreadSelectProvider": {
+    "description": "Select provider"
+  },
+  "newThreadLoadingAgents": "正在加载 Agent…",
+  "@newThreadLoadingAgents": {
+    "description": "Loading agents"
+  },
+  "newThreadCannotLoadAgents": "无法加载 Agent：{error}",
+  "@newThreadCannotLoadAgents": {
+    "description": "Load agents error",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "timeout"
+      }
+    }
+  },
+  "newThreadNoEnabledProviders": "没有已启用且受支持的 Agent provider。请先在 Settings > Agents 中启用。",
+  "@newThreadNoEnabledProviders": {
+    "description": "No enabled providers"
+  },
+  "newThreadChooseAgent": "请选择用于创建新会话的 Agent。",
+  "@newThreadChooseAgent": {
+    "description": "Choose agent"
+  },
+  "newThreadUseProvider": "使用 {name} 创建 thread",
+  "@newThreadUseProvider": {
+    "description": "Use provider",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Codex"
+      }
+    }
+  },
+  "usageTimeRangeToday": "当天",
+  "@usageTimeRangeToday": { "description": "Usage time range today" },
+  "usageTimeRangeLast7Days": "最近7天",
+  "@usageTimeRangeLast7Days": { "description": "Usage time range last 7 days" },
+  "usageTimeRangeLast30Days": "最近30天",
+  "@usageTimeRangeLast30Days": { "description": "Usage time range last 30 days" },
+  "usageTimeRangeLast90Days": "最近90天",
+  "@usageTimeRangeLast90Days": { "description": "Usage time range last 90 days" },
+  "usageTimeRangeThisMonth": "本月",
+  "@usageTimeRangeThisMonth": { "description": "Usage time range this month" },
+  "usageTimeRangePreviousMonth": "上个月",
+  "@usageTimeRangePreviousMonth": { "description": "Usage time range previous month" },
+  "usageTimeRangeCustom": "自定义时间",
+  "@usageTimeRangeCustom": { "description": "Usage time range custom" },
+  "usageTaskStatusRunning": "运行中",
+  "@usageTaskStatusRunning": { "description": "Usage task running" },
+  "usageTaskStatusCompleted": "成功",
+  "@usageTaskStatusCompleted": { "description": "Usage task completed" },
+  "usageTaskStatusInterrupted": "已取消",
+  "@usageTaskStatusInterrupted": { "description": "Usage task interrupted" },
+  "usageTaskStatusFailed": "失败",
+  "@usageTaskStatusFailed": { "description": "Usage task failed" },
+  "usageTaskStatusUnknown": "未知",
+  "@usageTaskStatusUnknown": { "description": "Usage task unknown" },
+  "usageErrorCategoryAccount": "账号异常",
+  "@usageErrorCategoryAccount": { "description": "Usage error account" },
+  "usageErrorCategoryCli": "运行时异常",
+  "@usageErrorCategoryCli": { "description": "Usage error CLI" },
+  "usageErrorCategoryNetwork": "网络错误",
+  "@usageErrorCategoryNetwork": { "description": "Usage error network" },
+  "usageErrorCategoryTimeout": "超时",
+  "@usageErrorCategoryTimeout": { "description": "Usage error timeout" },
+  "usageErrorCategoryCancelled": "用户取消",
+  "@usageErrorCategoryCancelled": { "description": "Usage error cancelled" },
+  "usageErrorCategoryOther": "其他异常",
+  "@usageErrorCategoryOther": { "description": "Usage error other" },
+  "usageErrorNextActionAccount": "检查 Codex 登录状态与当前套餐额度。",
+  "@usageErrorNextActionAccount": { "description": "Usage next action account" },
+  "usageErrorNextActionCli": "检查 Codex 版本、配置和运行日志。",
+  "@usageErrorNextActionCli": { "description": "Usage next action CLI" },
+  "usageErrorNextActionNetwork": "检查网络、代理设置后重试。",
+  "@usageErrorNextActionNetwork": { "description": "Usage next action network" },
+  "usageErrorNextActionTimeout": "缩小任务范围后重试。",
+  "@usageErrorNextActionTimeout": { "description": "Usage next action timeout" },
+  "usageErrorNextActionCancelled": "如需继续，请重新发起该任务。",
+  "@usageErrorNextActionCancelled": { "description": "Usage next action cancelled" },
+  "usageErrorNextActionOther": "打开任务详情或 Agent 日志查看原始原因。",
+  "@usageErrorNextActionOther": { "description": "Usage next action other" },
+  "usageTrendMetricCalls": "调用次数",
+  "@usageTrendMetricCalls": { "description": "Usage trend calls" },
+  "usageTrendMetricSuccessRate": "成功率",
+  "@usageTrendMetricSuccessRate": { "description": "Usage trend success rate" },
+  "usageTrendMetricTotalTokens": "Token 消耗",
+  "@usageTrendMetricTotalTokens": { "description": "Usage trend tokens" },
+  "usageTrendMetricAverageResponse": "平均响应时间",
+  "@usageTrendMetricAverageResponse": { "description": "Usage trend response" },
+  "usageTrendMetricAverageDuration": "任务耗时",
+  "@usageTrendMetricAverageDuration": { "description": "Usage trend duration" },
+  "usageRankSortCalls": "调用次数",
+  "@usageRankSortCalls": { "description": "Usage rank sort calls" },
+  "usageRankSortTotalTokens": "Token 消耗",
+  "@usageRankSortTotalTokens": { "description": "Usage rank sort tokens" },
+  "usageRankSortFailures": "失败次数",
+  "@usageRankSortFailures": { "description": "Usage rank sort failures" },
+  "usageRankSortAverageDuration": "任务耗时",
+  "@usageRankSortAverageDuration": { "description": "Usage rank sort duration" },
+  "usageUnknownProject": "未知项目",
+  "@usageUnknownProject": { "description": "Usage unknown project" },
+  "usageLoadFailed": "无法加载使用统计：{error}",
+  "@usageLoadFailed": {
+    "description": "Usage load failed",
+    "placeholders": {
+      "error": { "type": "String", "example": "timeout" }
+    }
+  },
+  "usageQuotaUnreadable": "套餐额度暂时无法读取",
+  "@usageQuotaUnreadable": { "description": "Usage quota unreadable" },
+  "usageAgentTemporarilyUnavailable": "当前 Agent 暂时无法连接",
+  "@usageAgentTemporarilyUnavailable": { "description": "Usage agent unavailable" },
+  "usageTokenHistoryUnavailable": "Token 历史暂时无法读取",
+  "@usageTokenHistoryUnavailable": { "description": "Usage token history unavailable" },
+  "usageTokenSourceMismatch": "Token 历史数据源配置不匹配",
+  "@usageTokenSourceMismatch": { "description": "Usage token source mismatch" },
+  "usageNoTokenHistory": "暂无 Token 历史",
+  "@usageNoTokenHistory": { "description": "Usage no token history" },
+  "usageTodayTokensUnreadable": "今日 Token 暂时无法读取",
+  "@usageTodayTokensUnreadable": { "description": "Usage today tokens unreadable" },
+  "usageIndexWriteFailed": "统计索引暂时无法保存，本次结果仍可正常查看。",
+  "@usageIndexWriteFailed": { "description": "Usage index write failed" },
+  "usageIndexReadRescanned": "{providerName} 统计索引暂时无法读取，已重新扫描本地历史。",
+  "@usageIndexReadRescanned": {
+    "description": "Usage index read failed then rescanned",
+    "placeholders": {
+      "providerName": { "type": "String", "example": "Codex" }
+    }
+  },
+  "usageAgentDisabledOrUnavailable": "该 Agent 已禁用或不可用",
+  "@usageAgentDisabledOrUnavailable": { "description": "Usage agent disabled" },
+  "usageAgentUsageTemporarilyUnavailable": "Agent 用量暂时无法读取",
+  "@usageAgentUsageTemporarilyUnavailable": { "description": "Usage panel load error" },
+  "usagePageTitle": "使用统计",
+  "@usagePageTitle": { "description": "Usage page title" },
+  "usagePageSubtitle": "分析调用、性能、Token、项目与套餐额度",
+  "@usagePageSubtitle": { "description": "Usage page subtitle" },
+  "usageLoadFailedTitle": "统计加载失败",
+  "@usageLoadFailedTitle": { "description": "Usage load failed title" },
+  "usagePartialUnavailable": "部分数据不可用",
+  "@usagePartialUnavailable": { "description": "Usage partial unavailable" },
+  "usageReload": "重新加载",
+  "@usageReload": { "description": "Usage reload" },
+  "usageTimeRangeLabel": "时间范围",
+  "@usageTimeRangeLabel": { "description": "Usage time range field" },
+  "usageAllAgents": "全部 Agent",
+  "@usageAllAgents": { "description": "Usage all agents" },
+  "usageModelLabel": "模型",
+  "@usageModelLabel": { "description": "Usage model field" },
+  "usageAllModels": "全部模型",
+  "@usageAllModels": { "description": "Usage all models" },
+  "usageLastUpdated": "最后更新：{time}",
+  "@usageLastUpdated": {
+    "description": "Usage last updated",
+    "placeholders": {
+      "time": { "type": "String", "example": "12:00" }
+    }
+  },
+  "usageRefresh": "刷新",
+  "@usageRefresh": { "description": "Usage refresh" },
+  "usageTokenBreakdownLine": "输入 {input} · 输出 {output} · 推理 {reasoning}",
+  "@usageTokenBreakdownLine": {
+    "description": "Usage token breakdown line",
+    "placeholders": {
+      "input": { "type": "String", "example": "1K" },
+      "output": { "type": "String", "example": "2K" },
+      "reasoning": { "type": "String", "example": "3K" }
+    }
+  },
+  "usageNoTokenStats": "当前筛选下暂无 Token 统计",
+  "@usageNoTokenStats": { "description": "Usage no token stats" },
+  "usageTokenUsageLabel": "Token 使用量",
+  "@usageTokenUsageLabel": { "description": "Usage token usage card label" },
+  "usageTokenUsageAmount": "Token 使用量 {amount}",
+  "@usageTokenUsageAmount": {
+    "description": "Usage token amount heading",
+    "placeholders": {
+      "amount": { "type": "String", "example": "12K" }
+    }
+  },
+  "usageCallCount": "调用次数",
+  "@usageCallCount": { "description": "Usage call count" },
+  "usageCallCountSemantic": "调用次数 {count}",
+  "@usageCallCountSemantic": {
+    "description": "Usage call count semantics",
+    "placeholders": {
+      "count": { "type": "String", "example": "12" }
+    }
+  },
+  "usageTrendTitle": "使用趋势",
+  "@usageTrendTitle": { "description": "Usage trend title" },
+  "usageTrendSubtitle": "Token 消耗 · 粒度根据时间范围自动调整",
+  "@usageTrendSubtitle": { "description": "Usage trend subtitle" },
+  "usageTrendSemantic": "{metric}趋势，共 {count} 个时间点",
+  "@usageTrendSemantic": {
+    "description": "Usage trend semantics",
+    "placeholders": {
+      "metric": { "type": "String", "example": "Token 消耗" },
+      "count": { "type": "String", "example": "7" }
+    }
+  },
+  "usageDetailTabsSemantic": "使用统计详情分类",
+  "@usageDetailTabsSemantic": { "description": "Usage detail tabs" },
+  "usageAgentStats": "Agent 统计",
+  "@usageAgentStats": { "description": "Usage agent stats tab" },
+  "usageModelStats": "模型统计",
+  "@usageModelStats": { "description": "Usage model stats tab" },
+  "usageProjectList": "项目列表",
+  "@usageProjectList": { "description": "Usage project list tab" },
+  "usageTaskList": "任务列表",
+  "@usageTaskList": { "description": "Usage task list tab" },
+  "usageRankSummary": "按当前筛选范围汇总",
+  "@usageRankSummary": { "description": "Usage rank summary" },
+  "usageUnsupported": "不支持",
+  "@usageUnsupported": { "description": "Usage unsupported metric" },
+  "usageHeaderCalls": "调用次数",
+  "@usageHeaderCalls": { "description": "Usage table header calls" },
+  "usageHeaderSuccessRate": "成功率",
+  "@usageHeaderSuccessRate": { "description": "Usage table header success" },
+  "usageHeaderToken": "Token",
+  "@usageHeaderToken": { "description": "Usage table header token" },
+  "usageHeaderFailures": "失败",
+  "@usageHeaderFailures": { "description": "Usage table header failures" },
+  "usageHeaderAverageDuration": "平均耗时",
+  "@usageHeaderAverageDuration": { "description": "Usage table header duration" },
+  "usageModelTokenShare": "模型 Token 消耗与占比",
+  "@usageModelTokenShare": { "description": "Usage model share heading" },
+  "usageNoModelStats": "当前筛选下暂无模型统计",
+  "@usageNoModelStats": { "description": "Usage no model stats" },
+  "usageTokenTotal": "总量",
+  "@usageTokenTotal": { "description": "Usage token total" },
+  "usageTokenInput": "输入",
+  "@usageTokenInput": { "description": "Usage token input" },
+  "usageTokenCachedInput": "缓存输入",
+  "@usageTokenCachedInput": { "description": "Usage token cached input" },
+  "usageTokenOutput": "输出",
+  "@usageTokenOutput": { "description": "Usage token output" },
+  "usageTokenReasoning": "推理",
+  "@usageTokenReasoning": { "description": "Usage token reasoning" },
+  "usageHeaderModel": "模型",
+  "@usageHeaderModel": { "description": "Usage table header model" },
+  "usageHeaderShare": "占比",
+  "@usageHeaderShare": { "description": "Usage table header share" },
+  "usageProjectSummary": "按当前筛选范围汇总 · 点击项目可聚焦该项目",
+  "@usageProjectSummary": { "description": "Usage project summary" },
+  "usageHeaderProject": "项目",
+  "@usageHeaderProject": { "description": "Usage table header project" },
+  "usageHeaderLastUsed": "最近使用",
+  "@usageHeaderLastUsed": { "description": "Usage table header last used" },
+  "usageTaskListSummary": "共 {count} 条 · 每页 {pageSize} 条 · 仅展示统计元数据",
+  "@usageTaskListSummary": {
+    "description": "Usage task list summary",
+    "placeholders": {
+      "count": { "type": "String", "example": "12" },
+      "pageSize": { "type": "String", "example": "20" }
+    }
+  },
+  "usageHeaderTime": "时间",
+  "@usageHeaderTime": { "description": "Usage table header time" },
+  "usageHeaderDuration": "耗时",
+  "@usageHeaderDuration": { "description": "Usage table header duration short" },
+  "usageHeaderStatus": "状态",
+  "@usageHeaderStatus": { "description": "Usage table header status" },
+  "usageUnknownModel": "未知模型",
+  "@usageUnknownModel": { "description": "Usage unknown model" },
+  "usageOpenDetail": "打开{name}详情",
+  "@usageOpenDetail": {
+    "description": "Usage open detail",
+    "placeholders": {
+      "name": { "type": "String", "example": "Codex" }
+    }
+  },
+  "usageTaskDetail": "任务详情",
+  "@usageTaskDetail": { "description": "Usage task detail title" },
+  "usageFieldProject": "项目",
+  "@usageFieldProject": { "description": "Usage field project" },
+  "usageFieldProjectPath": "项目路径",
+  "@usageFieldProjectPath": { "description": "Usage field project path" },
+  "usageFieldSource": "来源",
+  "@usageFieldSource": { "description": "Usage field source" },
+  "usageFieldStartTime": "开始时间",
+  "@usageFieldStartTime": { "description": "Usage field start time" },
+  "usageFieldDuration": "执行时间",
+  "@usageFieldDuration": { "description": "Usage field duration" },
+  "usageFieldFirstResponse": "首次响应",
+  "@usageFieldFirstResponse": { "description": "Usage field first response" },
+  "usageTokenNotSupported": "当前记录不支持 Token 统计",
+  "@usageTokenNotSupported": { "description": "Usage token not supported" },
+  "usageTokenFullDetail": "{total} （输入 {input} / 缓存 {cached} / 输出 {output} / 推理 {reasoning}）",
+  "@usageTokenFullDetail": {
+    "description": "Usage token full detail",
+    "placeholders": {
+      "total": { "type": "String", "example": "10" },
+      "input": { "type": "String", "example": "1" },
+      "cached": { "type": "String", "example": "2" },
+      "output": { "type": "String", "example": "3" },
+      "reasoning": { "type": "String", "example": "4" }
+    }
+  },
+  "usageTokenDetail": "缓存 {cached} / 输出 {output} / 推理 {reasoning}）",
+  "@usageTokenDetail": {
+    "description": "Usage token detail suffix",
+    "placeholders": {
+      "cached": { "type": "String", "example": "1" },
+      "output": { "type": "String", "example": "2" },
+      "reasoning": { "type": "String", "example": "3" }
+    }
+  },
+  "usageFieldStatus": "状态",
+  "@usageFieldStatus": { "description": "Usage field status" },
+  "usageFieldErrorCategory": "错误分类",
+  "@usageFieldErrorCategory": { "description": "Usage field error category" },
+  "usageFieldReason": "原因",
+  "@usageFieldReason": { "description": "Usage field reason" },
+  "usageNoReason": "未提供详细原因",
+  "@usageNoReason": { "description": "Usage no reason" },
+  "usageFieldNextStep": "下一步",
+  "@usageFieldNextStep": { "description": "Usage field next step" },
+  "usageSourceKindCli": "本地记录",
+  "@usageSourceKindCli": { "description": "Usage source kind cli" },
+  "usageEmptyTitle": "暂无使用记录",
+  "@usageEmptyTitle": { "description": "Usage empty title" },
+  "usageEmptyBody": "开始使用 Agent 后，这里会展示调用次数、性能和资源消耗。",
+  "@usageEmptyBody": { "description": "Usage empty body" },
+  "usageOpenAgentManagement": "打开 Agent 管理",
+  "@usageOpenAgentManagement": { "description": "Usage open agent management" },
+  "usageLoading": "正在加载使用统计",
+  "@usageLoading": { "description": "Usage loading" },
+  "usageQuickShortcuts": "快捷",
+  "@usageQuickShortcuts": { "description": "Usage time shortcuts heading" },
+  "usageRefreshUsage": "刷新用量",
+  "@usageRefreshUsage": { "description": "Usage panel refresh" },
+  "usageNoEnabledAgent": "暂无已启用的 Agent",
+  "@usageNoEnabledAgent": { "description": "Usage no enabled agent" },
+  "usageNoStats": "暂无统计",
+  "@usageNoStats": { "description": "Usage no stats" },
+  "usageCollapseAgentStats": "折叠 Agent 统计",
+  "@usageCollapseAgentStats": { "description": "Usage collapse panel" },
+  "usageExpandAgentStats": "展开 Agent 统计",
+  "@usageExpandAgentStats": { "description": "Usage expand panel" },
+  "usageTodayToken": "今日 Token",
+  "@usageTodayToken": { "description": "Usage today token" },
+  "usageReadingAgentUsage": "正在读取 Agent 用量",
+  "@usageReadingAgentUsage": { "description": "Usage reading" },
+  "usageRetryReadAgentUsage": "重试读取 Agent 用量",
+  "@usageRetryReadAgentUsage": { "description": "Usage retry read" },
+  "usageSelectAgentUsage": "选择 Agent 用量",
+  "@usageSelectAgentUsage": { "description": "Usage select agent" },
+  "usageAvailableResetCards": "可用重置卡",
+  "@usageAvailableResetCards": { "description": "Usage reset cards" },
+  "usageRetry": "重试",
+  "@usageRetry": { "description": "Usage retry" },
+  "usagePrevWindow": "上一窗口",
+  "@usagePrevWindow": { "description": "Usage previous quota window" },
+  "usageNextWindow": "下一窗口",
+  "@usageNextWindow": { "description": "Usage next quota window" }
 }

@@ -105,7 +105,9 @@ void main(List<String> args) {
 List<File> _dartFiles(Directory root) {
   return root.listSync(recursive: true).whereType<File>().where((file) {
     final path = _normalize(file.path);
-    return path.endsWith('.dart') && !_generatedDirPattern.hasMatch(path);
+    return path.endsWith('.dart') &&
+        !_generatedDirPattern.hasMatch(path) &&
+        !path.endsWith('/fallback_usage_statistics_text_catalog.dart');
   }).toList()..sort((a, b) => _normalize(a.path).compareTo(_normalize(b.path)));
 }
 

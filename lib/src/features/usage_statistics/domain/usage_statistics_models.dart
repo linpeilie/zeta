@@ -14,22 +14,6 @@ enum UsageTimeRangePreset {
   custom,
 }
 
-extension UsageTimeRangePresetLabel on UsageTimeRangePreset {
-  /// 完整文案，用于辅助说明与无障碍语义。
-  String get label => switch (this) {
-    UsageTimeRangePreset.today => '当天',
-    UsageTimeRangePreset.last7Days => '最近7天',
-    UsageTimeRangePreset.last30Days => '最近30天',
-    UsageTimeRangePreset.last90Days => '最近90天',
-    UsageTimeRangePreset.thisMonth => '本月',
-    UsageTimeRangePreset.previousMonth => '上个月',
-    UsageTimeRangePreset.custom => '自定义时间',
-  };
-
-  /// 条件栏与快捷列表使用的标签。
-  String get compactLabel => label;
-}
-
 /// 时间范围弹层左侧快捷选项（不含自定义；日历选择即自定义）。
 const List<UsageTimeRangePreset> kUsageTimeRangeQuickOptions =
     <UsageTimeRangePreset>[
@@ -128,37 +112,9 @@ extension UsageTaskStatusX on UsageTaskStatus {
 
   bool get isFailure =>
       this == UsageTaskStatus.interrupted || this == UsageTaskStatus.failed;
-
-  String get label => switch (this) {
-    UsageTaskStatus.running => '运行中',
-    UsageTaskStatus.completed => '成功',
-    UsageTaskStatus.interrupted => '已取消',
-    UsageTaskStatus.failed => '失败',
-    UsageTaskStatus.unknown => '未知',
-  };
 }
 
 enum UsageErrorCategory { account, cli, network, timeout, cancelled, other }
-
-extension UsageErrorCategoryLabel on UsageErrorCategory {
-  String get label => switch (this) {
-    UsageErrorCategory.account => '账号异常',
-    UsageErrorCategory.cli => '运行时异常',
-    UsageErrorCategory.network => '网络错误',
-    UsageErrorCategory.timeout => '超时',
-    UsageErrorCategory.cancelled => '用户取消',
-    UsageErrorCategory.other => '其他异常',
-  };
-
-  String get nextAction => switch (this) {
-    UsageErrorCategory.account => '检查 Codex 登录状态与当前套餐额度。',
-    UsageErrorCategory.cli => '检查 Codex 版本、配置和运行日志。',
-    UsageErrorCategory.network => '检查网络、代理设置后重试。',
-    UsageErrorCategory.timeout => '缩小任务范围后重试。',
-    UsageErrorCategory.cancelled => '如需继续，请重新发起该任务。',
-    UsageErrorCategory.other => '打开任务详情或 Agent 日志查看原始原因。',
-  };
-}
 
 /// 单次调用的 Token 明细。
 class UsageTokenBreakdown {
@@ -335,13 +291,13 @@ class AgentUsageRecord {
   }
 }
 
-String usageProjectName(String projectPath) {
+String usageProjectName(String projectPath, {String unknownName = '未知项目'}) {
   final normalized = projectPath.replaceAll('\\', '/');
   final segments = normalized
       .split('/')
       .where((segment) => segment.trim().isNotEmpty)
       .toList();
-  return segments.isEmpty ? '未知项目' : segments.last;
+  return segments.isEmpty ? unknownName : segments.last;
 }
 
 class UsageStatisticsSourceSnapshot {
@@ -374,26 +330,7 @@ enum UsageTrendMetric {
   averageDuration,
 }
 
-extension UsageTrendMetricLabel on UsageTrendMetric {
-  String get label => switch (this) {
-    UsageTrendMetric.calls => '调用次数',
-    UsageTrendMetric.successRate => '成功率',
-    UsageTrendMetric.totalTokens => 'Token 消耗',
-    UsageTrendMetric.averageResponse => '平均响应时间',
-    UsageTrendMetric.averageDuration => '任务耗时',
-  };
-}
-
 enum UsageRankSort { calls, totalTokens, failures, averageDuration }
-
-extension UsageRankSortLabel on UsageRankSort {
-  String get label => switch (this) {
-    UsageRankSort.calls => '调用次数',
-    UsageRankSort.totalTokens => 'Token 消耗',
-    UsageRankSort.failures => '失败次数',
-    UsageRankSort.averageDuration => '任务耗时',
-  };
-}
 
 class UsageMetricComparison {
   const UsageMetricComparison({

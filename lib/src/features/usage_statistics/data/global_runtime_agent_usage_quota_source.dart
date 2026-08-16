@@ -1,7 +1,9 @@
 import 'package:zeta/src/features/agent/application/agent_provider_global_runtime.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/usage_statistics/domain/fallback_usage_statistics_text_catalog.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_query_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_quota_source.dart';
+import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_text_catalog.dart';
 
 /// 经 application global runtime 读取现有 bundle quota 可选端口。
 ///
@@ -9,9 +11,13 @@ import 'package:zeta/src/features/usage_statistics/domain/agent_usage_quota_sour
 /// unavailable，不把 Provider 协议或原始错误带入统一查询。
 final class GlobalRuntimeAgentUsageQuotaSource
     implements AgentUsageQuotaSource {
-  const GlobalRuntimeAgentUsageQuotaSource(this._globalRuntime);
+  const GlobalRuntimeAgentUsageQuotaSource(
+    this._globalRuntime, {
+    UsageStatisticsTextCatalog? textCatalog,
+  }) : _textCatalog = textCatalog ?? const FallbackUsageStatisticsTextCatalog();
 
   final AgentProviderGlobalRuntime _globalRuntime;
+  final UsageStatisticsTextCatalog _textCatalog;
 
   @override
   Future<AgentUsageCapabilityResult<AgentUsageQuotaSnapshot>> loadQuota(
@@ -28,30 +34,34 @@ final class GlobalRuntimeAgentUsageQuotaSource
         try {
           final quota = await port.readUsageQuota();
           if (quota == null) {
-            return const AgentUsageCapabilityResult<
+            return AgentUsageCapabilityResult<
               AgentUsageQuotaSnapshot
             >.unavailable(
-              AgentUsageWarning(code: 'quota-empty', message: '套餐额度暂时无法读取'),
+              AgentUsageWarning(
+                code: 'quota-empty',
+                message: _textCatalog.quotaUnreadable,
+              ),
             );
           }
           return AgentUsageCapabilityResult<AgentUsageQuotaSnapshot>.available(
             quota,
           );
         } catch (_) {
-          return const AgentUsageCapabilityResult<
+          return AgentUsageCapabilityResult<
             AgentUsageQuotaSnapshot
           >.unavailable(
-            AgentUsageWarning(code: 'quota-unavailable', message: '套餐额度暂时无法读取'),
+            AgentUsageWarning(
+              code: 'quota-unavailable',
+              message: _textCatalog.quotaUnreadable,
+            ),
           );
         }
       });
     } catch (_) {
-      return const AgentUsageCapabilityResult<
-        AgentUsageQuotaSnapshot
-      >.unavailable(
+      return AgentUsageCapabilityResult<AgentUsageQuotaSnapshot>.unavailable(
         AgentUsageWarning(
           code: 'provider-unavailable',
-          message: '当前 Agent 暂时无法连接',
+          message: _textCatalog.agentTemporarilyUnavailable,
         ),
       );
     }

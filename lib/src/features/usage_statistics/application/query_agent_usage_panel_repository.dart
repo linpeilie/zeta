@@ -1,8 +1,10 @@
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_query_service.dart';
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_token_aggregation.dart';
+import 'package:zeta/src/features/usage_statistics/domain/fallback_usage_statistics_text_catalog.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_query_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
+import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_text_catalog.dart';
 
 /// 将统一用量查询事件投影为现有侧栏面板仓储契约。
 final class QueryAgentUsagePanelRepository
@@ -10,10 +12,13 @@ final class QueryAgentUsagePanelRepository
   QueryAgentUsagePanelRepository(
     this._queryService, {
     DateTime Function()? clock,
-  }) : _clock = clock ?? DateTime.now;
+    UsageStatisticsTextCatalog? textCatalog,
+  }) : _clock = clock ?? DateTime.now,
+       _textCatalog = textCatalog ?? const FallbackUsageStatisticsTextCatalog();
 
   final AgentUsageQueryService _queryService;
   final DateTime Function() _clock;
+  final UsageStatisticsTextCatalog _textCatalog;
 
   @override
   Future<List<AgentUsagePanelProvider>> discoverProviders() async {
@@ -59,7 +64,7 @@ final class QueryAgentUsagePanelRepository
         final history = snapshot.tokenHistory.value;
         if (history != null) {
           if (history.historyPresence == AgentTokenHistoryPresence.absent) {
-            message = '暂无 Token 历史';
+            message = _textCatalog.noTokenHistory;
           } else {
             todayTokens = sumAgentUsageTokens(
               history.records.where((record) => !record.startedAt.isAfter(now)),
@@ -67,7 +72,7 @@ final class QueryAgentUsagePanelRepository
           }
         }
       case AgentUsageCapabilityStatus.unavailable:
-        message = '今日 Token 暂时无法读取';
+        message = _textCatalog.todayTokensUnreadable;
       case AgentUsageCapabilityStatus.unsupported:
         break;
     }

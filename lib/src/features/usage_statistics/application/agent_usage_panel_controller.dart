@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import 'package:zeta/src/features/usage_statistics/domain/fallback_usage_statistics_text_catalog.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
+import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_text_catalog.dart';
 
 /// 单个 Provider 的侧栏加载阶段。
 enum AgentUsagePanelProviderLoadStatus { notLoaded, loading, loaded, failed }
@@ -36,9 +38,12 @@ class AgentUsagePanelController extends ChangeNotifier {
     required this.repository,
     String? initialPreferredProviderId,
     this.onSelectionChanged,
-  }) : _preferredProviderId = _normalizeProviderId(initialPreferredProviderId);
+    UsageStatisticsTextCatalog? textCatalog,
+  }) : _preferredProviderId = _normalizeProviderId(initialPreferredProviderId),
+       _textCatalog = textCatalog ?? const FallbackUsageStatisticsTextCatalog();
 
   final AgentUsagePanelRepository repository;
+  final UsageStatisticsTextCatalog _textCatalog;
 
   /// 可持久化选择偏好发生变化时回调；恢复 seed 本身不会触发。
   final ValueChanged<String?>? onSelectionChanged;
@@ -315,7 +320,7 @@ class AgentUsagePanelController extends ChangeNotifier {
             provider: state.provider,
             entry: state.entry,
             status: AgentUsagePanelProviderLoadStatus.failed,
-            loadError: '该 Agent 已禁用或不可用',
+            loadError: _textCatalog.agentDisabledOrUnavailable,
           ),
         );
         _notify();
@@ -342,7 +347,7 @@ class AgentUsagePanelController extends ChangeNotifier {
           provider: state.provider,
           entry: state.entry,
           status: AgentUsagePanelProviderLoadStatus.failed,
-          loadError: 'Agent 用量暂时无法读取',
+          loadError: _textCatalog.agentUsageTemporarilyUnavailable,
         ),
       );
       _notify();

@@ -11,6 +11,7 @@ import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_mode
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/agent_usage_quota_gallery.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_formatters.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
@@ -226,7 +227,7 @@ class _AgentUsageRefreshButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IdeTooltip(
-      message: '刷新用量',
+      message: context.l10n.usageRefreshUsage,
       child: sf.IconButton.ghost(
         key: const ValueKey('agent-usage-refresh-button'),
         onPressed: controller.isLoading
@@ -302,7 +303,7 @@ class _CompactAgentUsage extends StatelessWidget {
         );
       }
       return _CompactAgentUsageMessage(
-        message: '暂无已启用的 Agent',
+        message: context.l10n.usageNoEnabledAgent,
         expanded: expanded,
         onToggle: onToggle,
       );
@@ -327,7 +328,7 @@ class _CompactAgentUsage extends StatelessWidget {
         );
       }
       return _CompactAgentUsageMessage(
-        message: '暂无统计',
+        message: context.l10n.usageNoStats,
         expanded: expanded,
         onToggle: onToggle,
       );
@@ -359,7 +360,9 @@ class _AgentUsageToggleButton extends StatelessWidget {
       icon: expanded
           ? Icons.keyboard_arrow_down_rounded
           : Icons.keyboard_arrow_up_rounded,
-      tooltip: expanded ? '折叠 Agent 统计' : '展开 Agent 统计',
+      tooltip: expanded
+          ? context.l10n.usageCollapseAgentStats
+          : context.l10n.usageExpandAgentStats,
       onPressed: onToggle,
     );
   }
@@ -433,7 +436,7 @@ class _CompactAgentUsageSummary extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    '今日 Token',
+                    context.l10n.usageTodayToken,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: textStyles.bodySmall.copyWith(
@@ -508,7 +511,7 @@ class _CompactAgentUsageSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Semantics(
-      label: '正在读取 Agent 用量',
+      label: context.l10n.usageReadingAgentUsage,
       container: true,
       explicitChildNodes: true,
       child: Padding(
@@ -588,7 +591,7 @@ class _CompactAgentUsageMessage extends StatelessWidget {
             _AgentUsageModeButton(
               key: const ValueKey('agent-usage-retry-button'),
               icon: Icons.refresh_rounded,
-              tooltip: '重试读取 Agent 用量',
+              tooltip: context.l10n.usageRetryReadAgentUsage,
               onPressed: onRetry,
             ),
           ],
@@ -622,7 +625,7 @@ class _AgentUsagePanelBody extends StatelessWidget {
           onRetry: () => unawaited(controller.refresh()),
         );
       } else {
-        content = const EmptyState(text: '暂无已启用的 Agent');
+        content = EmptyState(text: context.l10n.usageNoEnabledAgent);
       }
     } else {
       final resolvedSelected = selected!;
@@ -712,7 +715,7 @@ class _AgentUsageTabsToolbar extends StatelessWidget {
               child: IdeTabs<String>(
                 key: const ValueKey('agent-usage-tabs'),
                 value: selectedProviderId!,
-                semanticLabel: '选择 Agent 用量',
+                semanticLabel: context.l10n.usageSelectAgentUsage,
                 scrollContentAlignment: Alignment.center,
                 items: [
                   for (final state in controller.providers)
@@ -762,7 +765,7 @@ class _SelectedProviderBody extends StatelessWidget {
           onRetry: () => unawaited(controller.refresh()),
         );
       }
-      return const EmptyState(text: '暂无统计');
+      return EmptyState(text: context.l10n.usageNoStats);
     }
 
     return Padding(
@@ -788,7 +791,7 @@ class _AgentUsageSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Semantics(
-      label: '正在读取 Agent 用量',
+      label: context.l10n.usageReadingAgentUsage,
       container: true,
       child: Padding(
         padding: const EdgeInsets.all(IdeSpacing.space12),
@@ -985,7 +988,7 @@ class _ResetCreditCountRow extends StatelessWidget {
       children: [
         Expanded(
           child: Text(
-            '可用重置卡',
+            context.l10n.usageAvailableResetCards,
             style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
           ),
         ),
@@ -1021,11 +1024,13 @@ class _TokenSection extends StatelessWidget {
       children: [
         Row(
           children: [
-            Expanded(child: Text('今日 Token', style: labelStyle)),
+            Expanded(
+              child: Text(context.l10n.usageTodayToken, style: labelStyle),
+            ),
             const SizedBox(width: IdeSpacing.space8),
             Text(
               tokens == null
-                  ? '暂无统计'
+                  ? context.l10n.usageNoStats
                   : formatUsageCount(tokens.effectiveTotal ?? 0),
               key: const ValueKey('agent-usage-today-total'),
               style: textStyles.metricValue.copyWith(
@@ -1069,7 +1074,7 @@ class _TokenMetricGrid extends StatelessWidget {
               children: [
                 Expanded(
                   child: _TokenMetricCell(
-                    label: '输入',
+                    label: context.l10n.usageTokenInput,
                     value: tokens.inputTokens ?? 0,
                     labelStyle: labelStyle,
                   ),
@@ -1077,7 +1082,7 @@ class _TokenMetricGrid extends StatelessWidget {
                 const SizedBox(width: IdeSpacing.space8),
                 Expanded(
                   child: _TokenMetricCell(
-                    label: '缓存输入',
+                    label: context.l10n.usageTokenCachedInput,
                     value: tokens.cachedInputTokens ?? 0,
                     labelStyle: labelStyle,
                   ),
@@ -1089,7 +1094,7 @@ class _TokenMetricGrid extends StatelessWidget {
               children: [
                 Expanded(
                   child: _TokenMetricCell(
-                    label: '输出',
+                    label: context.l10n.usageTokenOutput,
                     value: tokens.outputTokens ?? 0,
                     labelStyle: labelStyle,
                   ),
@@ -1097,7 +1102,7 @@ class _TokenMetricGrid extends StatelessWidget {
                 const SizedBox(width: IdeSpacing.space8),
                 Expanded(
                   child: _TokenMetricCell(
-                    label: '推理',
+                    label: context.l10n.usageTokenReasoning,
                     value: tokens.reasoningTokens ?? 0,
                     labelStyle: labelStyle,
                   ),
@@ -1200,7 +1205,7 @@ class _RetryState extends StatelessWidget {
               onPressed: onRetry,
               size: sf.ButtonSize.small,
               density: sf.ButtonDensity.dense,
-              child: const Text('重试'),
+              child: Text(context.l10n.usageRetry),
             ),
           ],
         ),

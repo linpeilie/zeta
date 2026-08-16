@@ -6,6 +6,8 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/features/usage_statistics/application/usage_statistics_controller.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_formatters.dart';
+import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_l10n.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 import 'package:zeta/src/ui/core/ide_button.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_effects.dart';
@@ -50,7 +52,7 @@ class _UsageTimeRangeFilterState extends State<UsageTimeRangeFilter> {
       );
       return formatUsageDateRange(window.start, endInclusive);
     }
-    return controller.timePreset.compactLabel;
+    return controller.timePreset.localizedLabel(context.l10n);
   }
 
   Future<void> _togglePopover() async {
@@ -231,7 +233,7 @@ class _UsageTimeRangePopoverState extends State<_UsageTimeRangePopover> {
             IdeSpacing.space6,
           ),
           child: Text(
-            '快捷',
+            context.l10n.usageQuickShortcuts,
             style: textStyles.caption.copyWith(color: colors.textSecondary),
           ),
         ),
@@ -243,7 +245,7 @@ class _UsageTimeRangePopoverState extends State<_UsageTimeRangePopover> {
             ),
             child: PaneInteractiveSurface(
               key: ValueKey<String>('usage-time-range-preset-${preset.name}'),
-              semanticLabel: preset.label,
+              semanticLabel: preset.localizedLabel(context.l10n),
               selected:
                   selectedPreset == preset &&
                   !_awaitingRangeEnd &&
@@ -255,7 +257,7 @@ class _UsageTimeRangePopoverState extends State<_UsageTimeRangePopover> {
               ),
               alignment: Alignment.centerLeft,
               child: Text(
-                preset.compactLabel,
+                preset.localizedLabel(context.l10n),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: textStyles.bodySmall.copyWith(

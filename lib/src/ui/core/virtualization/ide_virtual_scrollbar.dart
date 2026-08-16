@@ -12,6 +12,7 @@ import '../ide_motion.dart';
 import '../ide_spacing.dart';
 import '../ide_text_styles.dart';
 import '../pane_widgets.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 import 'ide_virtual_scroll_coordinator.dart';
 
 /// 默认滚动条语义标签。
@@ -131,7 +132,9 @@ class IdeScrollToEndButton extends StatelessWidget {
           ),
           const SizedBox(width: IdeSpacing.space6),
           Text(
-            hasNewContent ? '有新内容' : '回到底部',
+            hasNewContent
+                ? (context.l10nOrNull?.timelineNewContent ?? '有新内容')
+                : (context.l10nOrNull?.timelineBackToBottom ?? '回到底部'),
             style: textStyles.bodySmall.copyWith(
               color: colors.textPrimary,
               fontWeight: FontWeight.w600,

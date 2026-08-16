@@ -7,7 +7,9 @@ import 'package:zeta/src/features/usage_statistics/data/providers/usage_scan_cac
 import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partition_store.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_token_usage_source.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_query_models.dart';
+import 'package:zeta/src/features/usage_statistics/domain/fallback_usage_statistics_text_catalog.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
+import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_text_catalog.dart';
 
 /// 直接从 Claude Code 本地历史与自有 v4 分区读取 Token 用量。
 ///
@@ -22,6 +24,7 @@ final class ClaudeCodeTokenUsageSource implements AgentTokenUsageSource {
     Map<String, String>? environment,
     String? homeDirectory,
     DateTime Function()? clock,
+    UsageStatisticsTextCatalog? textCatalog,
   }) {
     return ClaudeCodeTokenUsageSource._(
       providerId: config.id,
@@ -36,6 +39,7 @@ final class ClaudeCodeTokenUsageSource implements AgentTokenUsageSource {
       codec: codec,
       environment: environment ?? Platform.environment,
       clock: clock ?? DateTime.now,
+      textCatalog: textCatalog ?? const FallbackUsageStatisticsTextCatalog(),
     );
   }
 
@@ -48,6 +52,7 @@ final class ClaudeCodeTokenUsageSource implements AgentTokenUsageSource {
     required this._codec,
     required Map<String, String> environment,
     required this._clock,
+    required this._textCatalog,
   }) : _configuredEnvironment = Map<String, String>.unmodifiable(
          configuredEnvironment,
        ),
@@ -63,6 +68,7 @@ final class ClaudeCodeTokenUsageSource implements AgentTokenUsageSource {
   final ClaudeCodeUsagePartitionCodec _codec;
   final Map<String, String> _environment;
   final DateTime Function() _clock;
+  final UsageStatisticsTextCatalog _textCatalog;
 
   @override
   Future<AgentTokenUsageSourceSnapshot> load(AgentUsageQuery query) async {
@@ -75,9 +81,9 @@ final class ClaudeCodeTokenUsageSource implements AgentTokenUsageSource {
     } catch (_) {
       cachedSessions = const <String, ClaudeCodeUsageIndexedSession>{};
       warnings.add(
-        const AgentUsageWarning(
+        AgentUsageWarning(
           code: 'claude-code-index-read',
-          message: 'Claude Code 统计索引暂时无法读取，已重新扫描本地历史。',
+          message: _textCatalog.indexReadRescanned(providerName),
         ),
       );
     }
@@ -102,9 +108,9 @@ final class ClaudeCodeTokenUsageSource implements AgentTokenUsageSource {
       );
     } catch (_) {
       warnings.add(
-        const AgentUsageWarning(
+        AgentUsageWarning(
           code: 'claude-code-index-write',
-          message: '统计索引暂时无法保存，本次结果仍可正常查看。',
+          message: _textCatalog.indexWriteFailed,
         ),
       );
     }

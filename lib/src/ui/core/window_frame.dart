@@ -13,6 +13,7 @@ import 'package:zeta/src/ui/core/ide_motion.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
 /// 包裹主内容的窗口外框。
 ///
@@ -251,7 +252,7 @@ class _WindowsTitleBarLogo extends StatelessWidget {
     return Semantics(
       key: const ValueKey('window-title-bar-logo'),
       image: true,
-      label: 'Zeta Logo',
+      label: context.l10nOrNull?.workbenchLogoSemantics ?? 'Zeta Logo',
       child: Padding(
         padding: const EdgeInsets.only(
           left: IdeSpacing.space8,
@@ -354,7 +355,7 @@ class _WindowMenuBar extends StatelessWidget {
                 ],
                 child: Semantics(
                   button: true,
-                  label: '菜单',
+                  label: context.l10nOrNull?.commonMenu ?? '菜单',
                   child: Icon(
                     sf.LucideIcons.menu,
                     size: 16,

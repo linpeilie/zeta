@@ -14,6 +14,7 @@ import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/core/rows/ide_list_row.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
 const int globalHomeRecentItemLimit = 5;
 
@@ -154,16 +155,18 @@ class GlobalHomePage extends StatelessWidget {
         .toList(growable: false);
     return _HomeSection(
       key: const ValueKey<String>('global-home-projects-section'),
-      title: '近期项目',
+      title: context.l10n.homeRecentProjects,
       loading: isLoadingRecentProjects,
       child: projects.isEmpty
           ? _HomeSectionState(
               key: const ValueKey<String>('global-home-projects-empty'),
               icon: Icons.folder_open_rounded,
-              title: isLoadingRecentProjects ? '正在读取近期项目…' : '暂无近期项目',
+              title: isLoadingRecentProjects
+                  ? context.l10n.homeReadingRecentProjects
+                  : context.l10n.homeNoRecentProjects,
               body: isLoadingRecentProjects
-                  ? '恢复完成后会在这里显示最近访问的项目。'
-                  : '打开一个项目后，它会显示在这里。',
+                  ? context.l10n.homeRecentProjectsAfterRestore
+                  : context.l10n.homeRecentProjectsAfterOpen,
               loading: isLoadingRecentProjects,
             )
           : Column(
@@ -190,9 +193,11 @@ class GlobalHomePage extends StatelessWidget {
         .toList(growable: false);
     return _HomeSection(
       key: const ValueKey<String>('global-home-threads-section'),
-      title: '近期会话',
+      title: context.l10n.homeRecentSessions,
       loading: isLoadingRecentThreads,
-      warning: recentThreadsError == null ? null : '刷新失败',
+      warning: recentThreadsError == null
+          ? null
+          : context.l10n.homeRefreshFailed,
       warningTooltip: recentThreadsError,
       child: threads.isEmpty
           ? _HomeSectionState(
@@ -201,15 +206,15 @@ class GlobalHomePage extends StatelessWidget {
                   ? Icons.forum_outlined
                   : Icons.error_outline_rounded,
               title: recentThreadsError != null
-                  ? '无法刷新近期会话'
+                  ? context.l10n.homeCannotRefreshSessions
                   : isLoadingRecentThreads
-                  ? '正在加载近期会话…'
-                  : '暂无近期会话',
+                  ? context.l10n.homeLoadingRecentSessions
+                  : context.l10n.homeNoRecentSessions,
               body:
                   recentThreadsError ??
                   (isLoadingRecentThreads
-                      ? '缓存会先显示，最新会话将在后台补齐。'
-                      : '创建会话后，它会按最近活跃时间显示。'),
+                      ? context.l10n.homeSessionsCacheHint
+                      : context.l10n.homeSessionsEmptyHint),
               loading: isLoadingRecentThreads,
               error: recentThreadsError != null,
             )
@@ -234,9 +239,9 @@ class GlobalHomePage extends StatelessWidget {
   Widget _buildProvidersSection(BuildContext context) {
     return _HomeSection(
       key: const ValueKey<String>('global-home-providers-section'),
-      title: '已安装 Provider',
+      title: context.l10n.homeInstalledProviders,
       loading: isLoadingProviders,
-      warning: providerError == null ? null : '检测失败',
+      warning: providerError == null ? null : context.l10n.homeDetectionFailed,
       warningTooltip: providerError,
       child: installedProviders.isEmpty
           ? _HomeSectionState(
@@ -245,15 +250,15 @@ class GlobalHomePage extends StatelessWidget {
                   ? Icons.extension_off_outlined
                   : Icons.error_outline_rounded,
               title: providerError != null
-                  ? 'Provider 检测失败'
+                  ? context.l10n.homeProviderDetectionFailedTitle
                   : isLoadingProviders
-                  ? '正在检测 Provider…'
-                  : '未检测到已安装 Provider',
+                  ? context.l10n.homeDetectingProviders
+                  : context.l10n.homeNoInstalledProviders,
               body:
                   providerError ??
                   (isLoadingProviders
-                      ? '检测完成后会显示本机可用的 Agent 环境。'
-                      : '安装并配置受支持的 Agent 后，它会显示在这里。'),
+                      ? context.l10n.homeProvidersAfterDetect
+                      : context.l10n.homeProvidersAfterInstall),
               loading: isLoadingProviders,
               error: providerError != null,
             )
@@ -304,13 +309,13 @@ class _WelcomeHeader extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '欢迎使用 Zeta',
+          context.l10n.homeWelcomeTitle,
           key: const ValueKey<String>('global-home-title'),
           style: textStyles.displayLarge,
         ),
         const SizedBox(height: IdeSpacing.space6),
         Text(
-          '继续最近的工作，或打开一个项目开始。',
+          context.l10n.homeWelcomeSubtitle,
           key: const ValueKey<String>('global-home-subtitle'),
           style: textStyles.bodyMedium.copyWith(color: colors.textSecondary),
         ),
@@ -318,17 +323,17 @@ class _WelcomeHeader extends StatelessWidget {
     );
     final button = Semantics(
       button: true,
-      label: '打开项目文件夹',
+      label: context.l10n.homeOpenProjectFolder,
       child: sf.PrimaryButton(
         key: const ValueKey<String>('global-home-open-project'),
         onPressed: onOpenProject,
         size: sf.ButtonSize.small,
-        child: const Row(
+        child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.folder_open_rounded, size: 16),
-            SizedBox(width: IdeSpacing.space6),
-            Text('打开项目'),
+            const Icon(Icons.folder_open_rounded, size: 16),
+            const SizedBox(width: IdeSpacing.space6),
+            Text(context.l10n.homeOpenProject),
           ],
         ),
       ),
@@ -446,7 +451,9 @@ class _RecentProjectRow extends StatelessWidget {
         leading: const Icon(Icons.folder_outlined),
         trailing: const Icon(Icons.chevron_right_rounded, size: 16),
         showDivider: showDivider,
-        semanticLabel: '打开近期项目 ${_fileName(project.path)}',
+        semanticLabel: context.l10n.homeOpenRecentProject(
+          _fileName(project.path),
+        ),
         onPressed: onPressed,
       ),
     );
@@ -480,7 +487,7 @@ class _RecentThreadRow extends StatelessWidget {
       leading: AgentProviderIcon(providerId: thread.providerId, size: 18),
       trailing: const Icon(Icons.chevron_right_rounded, size: 16),
       showDivider: showDivider,
-      semanticLabel: '打开近期会话 ${thread.displayName}',
+      semanticLabel: context.l10n.homeOpenRecentSession(thread.displayName),
       onPressed: onPressed,
     );
   }
@@ -497,7 +504,10 @@ class _ProviderStatusItem extends StatelessWidget {
     final textStyles = IdeTextStyles.of(context);
     final version = provider.version?.trim();
     return Semantics(
-      label: '${provider.displayName}，${_providerStatusLabel(provider.status)}',
+      label: context.l10n.homeCommaJoin(
+        provider.displayName,
+        _providerStatusLabel(context, provider.status),
+      ),
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: colors.controlSurface,
@@ -540,7 +550,7 @@ class _ProviderStatusItem extends StatelessWidget {
               ),
               const SizedBox(width: IdeSpacing.space8),
               IdeChip(
-                label: _providerStatusLabel(provider.status),
+                label: _providerStatusLabel(context, provider.status),
                 leadingIcon: _providerStatusIcon(provider.status),
                 variant: _providerChipVariant(provider.status),
                 selected:
@@ -639,15 +649,18 @@ HomeProviderStatus _resolveProviderStatus(ManagedAgent agent) {
   return HomeProviderStatus.available;
 }
 
-String _providerStatusLabel(HomeProviderStatus status) => switch (status) {
-  HomeProviderStatus.available => '可用',
-  HomeProviderStatus.running => '运行中',
-  HomeProviderStatus.disabled => '已禁用',
-  HomeProviderStatus.needsLogin => '需登录',
-  HomeProviderStatus.error => '异常',
-  HomeProviderStatus.updateAvailable => '可更新',
-  HomeProviderStatus.detecting => '检测中',
-};
+String _providerStatusLabel(BuildContext context, HomeProviderStatus status) {
+  final l10n = context.l10n;
+  return switch (status) {
+    HomeProviderStatus.available => l10n.homeProviderAvailable,
+    HomeProviderStatus.running => l10n.homeProviderRunning,
+    HomeProviderStatus.disabled => l10n.homeProviderDisabled,
+    HomeProviderStatus.needsLogin => l10n.homeProviderNeedsLogin,
+    HomeProviderStatus.error => l10n.homeProviderError,
+    HomeProviderStatus.updateAvailable => l10n.homeProviderUpdateAvailable,
+    HomeProviderStatus.detecting => l10n.homeProviderDetecting,
+  };
+}
 
 IconData _providerStatusIcon(HomeProviderStatus status) => switch (status) {
   HomeProviderStatus.available => Icons.check_circle_outline_rounded,

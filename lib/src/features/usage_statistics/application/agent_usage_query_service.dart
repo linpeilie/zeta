@@ -2,9 +2,11 @@ import 'dart:async';
 import 'dart:collection';
 
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/usage_statistics/domain/fallback_usage_statistics_text_catalog.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_token_usage_source.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_query_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_quota_source.dart';
+import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_text_catalog.dart';
 
 typedef EnabledAgentUsageProviderLoader =
     Future<List<AgentProviderConfig>> Function();
@@ -49,11 +51,14 @@ final class AgentUsageQueryService {
     this._quotaSource,
     this._tokenSourceRegistry, {
     DateTime Function()? clock,
-  }) : _clock = clock ?? DateTime.now;
+    UsageStatisticsTextCatalog? textCatalog,
+  }) : _clock = clock ?? DateTime.now,
+       _textCatalog = textCatalog ?? const FallbackUsageStatisticsTextCatalog();
 
   final EnabledAgentUsageProviderLoader _enabledProviderLoader;
   final AgentUsageQuotaSource _quotaSource;
   final AgentTokenUsageSourceRegistry _tokenSourceRegistry;
+  final UsageStatisticsTextCatalog _textCatalog;
   final DateTime Function() _clock;
   final Map<_ProviderQueryKey, Future<AgentUsageProviderSnapshot>> _inFlight =
       <_ProviderQueryKey, Future<AgentUsageProviderSnapshot>>{};
@@ -165,10 +170,11 @@ final class AgentUsageQueryService {
     try {
       return await _quotaSource.loadQuota(config);
     } catch (_) {
-      return const AgentUsageCapabilityResult<
-        AgentUsageQuotaSnapshot
-      >.unavailable(
-        AgentUsageWarning(code: 'quota-unavailable', message: '套餐额度暂时无法读取'),
+      return AgentUsageCapabilityResult<AgentUsageQuotaSnapshot>.unavailable(
+        AgentUsageWarning(
+          code: 'quota-unavailable',
+          message: _textCatalog.quotaUnreadable,
+        ),
       );
     }
   }
@@ -183,12 +189,12 @@ final class AgentUsageQueryService {
         >.unsupported();
       }
       if (source.providerId != config.id) {
-        return const AgentUsageCapabilityResult<
+        return AgentUsageCapabilityResult<
           AgentTokenUsageSourceSnapshot
         >.unavailable(
           AgentUsageWarning(
             code: 'token-source-mismatch',
-            message: 'Token 历史数据源配置不匹配',
+            message: _textCatalog.tokenSourceMismatch,
           ),
         );
       }
@@ -197,12 +203,12 @@ final class AgentUsageQueryService {
         AgentTokenUsageSourceSnapshot
       >.available(snapshot);
     } catch (_) {
-      return const AgentUsageCapabilityResult<
+      return AgentUsageCapabilityResult<
         AgentTokenUsageSourceSnapshot
       >.unavailable(
         AgentUsageWarning(
           code: 'token-history-unavailable',
-          message: 'Token 历史暂时无法读取',
+          message: _textCatalog.tokenHistoryUnavailable,
         ),
       );
     }

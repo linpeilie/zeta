@@ -6,6 +6,7 @@ import '../ide_effects.dart';
 import '../ide_metrics.dart';
 import '../ide_spacing.dart';
 import '../surfaces/ide_surface.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
 /// 工作台按父容器宽度解析出的布局模式。
 enum IdeWorkbenchLayoutMode { wide, medium, compact }
@@ -226,7 +227,9 @@ class IdeWorkbenchScaffold extends StatelessWidget {
             Positioned.fill(
               child: Semantics(
                 button: true,
-                label: 'Close workbench overlay',
+                label:
+                    context.l10nOrNull?.workbenchCloseOverlay ??
+                    'Close workbench overlay',
                 child: GestureDetector(
                   key: const ValueKey('workbench-overlay-scrim'),
                   behavior: HitTestBehavior.opaque,

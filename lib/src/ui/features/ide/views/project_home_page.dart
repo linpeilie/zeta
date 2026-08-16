@@ -11,6 +11,7 @@ import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/features/ide/views/new_thread_provider_popover.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
 /// 活动项目未选中 Thread 时显示的中栏首页。
 class ProjectHomePage extends StatefulWidget {
@@ -180,8 +181,8 @@ class _ProjectHomePageState extends State<ProjectHomePage> {
             key: _newThreadButtonKey,
             child: _FlatActionButton(
               key: const ValueKey<String>('project-home-new-thread-button'),
-              label: '新建会话',
-              semanticLabel: '为 $projectName 新建会话',
+              label: context.l10n.projectNewSession,
+              semanticLabel: context.l10n.projectNewSessionFor(projectName),
               icon: Icons.add_comment_outlined,
               onPressed: _toggleProviderPopover,
             ),
@@ -206,7 +207,7 @@ class _ProjectHomePageState extends State<ProjectHomePage> {
           children: [
             Expanded(
               child: Text(
-                '近期会话',
+                context.l10n.homeRecentSessions,
                 key: const ValueKey<String>('project-home-recent-title'),
                 textAlign: TextAlign.start,
                 style: textStyles.sectionTitle,
@@ -226,11 +227,11 @@ class _ProjectHomePageState extends State<ProjectHomePage> {
         else if (state.errorMessage != null && threads.isEmpty)
           _buildErrorState(context)
         else if (threads.isEmpty)
-          const _FlatStateMessage(
-            key: ValueKey<String>('project-home-empty-state'),
+          _FlatStateMessage(
+            key: const ValueKey<String>('project-home-empty-state'),
             icon: Icons.forum_outlined,
-            title: '暂无近期会话',
-            body: '创建一个 Thread 后，它会显示在这里。',
+            title: context.l10n.projectNoRecentSessions,
+            body: context.l10n.projectCreateThreadHint,
           )
         else ...[
           if (state.errorMessage != null) ...[
@@ -265,7 +266,7 @@ class _ProjectHomePageState extends State<ProjectHomePage> {
           const SizedBox(width: IdeSpacing.space10),
           Flexible(
             child: Text(
-              '正在加载近期会话…',
+              context.l10n.homeLoadingRecentSessions,
               textAlign: TextAlign.start,
               style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
             ),
@@ -280,12 +281,14 @@ class _ProjectHomePageState extends State<ProjectHomePage> {
       key: const ValueKey<String>('project-home-error-state'),
       icon: Icons.error_outline_rounded,
       tone: _FlatStateTone.error,
-      title: '无法加载近期会话',
-      body: widget.threadState.errorMessage ?? '请稍后重试。',
+      title: context.l10n.projectCannotLoadSessions,
+      body:
+          widget.threadState.errorMessage ??
+          context.l10n.projectPleaseRetryLater,
       action: _FlatActionButton(
         key: const ValueKey<String>('project-home-retry-button'),
-        label: '重试',
-        semanticLabel: '重试加载近期会话',
+        label: context.l10n.commonRetry,
+        semanticLabel: context.l10n.projectRetryLoadSessions,
         icon: Icons.refresh_rounded,
         onPressed: widget.onRetryThreads,
       ),
@@ -310,6 +313,7 @@ class _RecentThreadRow extends StatelessWidget {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     final statusLabel = _threadStatusLabel(
+      context,
       thread,
       isZetaLiveRunning: isZetaLiveRunning,
     );
@@ -321,7 +325,7 @@ class _RecentThreadRow extends StatelessWidget {
 
     return PaneInteractiveSurface(
       onPressed: onPressed,
-      semanticLabel: '打开会话 ${thread.displayName}',
+      semanticLabel: context.l10n.projectOpenSession(thread.displayName),
       padding: const EdgeInsets.symmetric(
         horizontal: IdeSpacing.space16,
         vertical: IdeSpacing.space12,
@@ -532,20 +536,22 @@ class _FlatStateMessage extends StatelessWidget {
 }
 
 String? _threadStatusLabel(
+  BuildContext context,
   AgentThreadSummary thread, {
   required bool isZetaLiveRunning,
 }) {
+  final l10n = context.l10n;
   if (isZetaLiveRunning && thread.waitingOnApproval) {
-    return '等待审批';
+    return l10n.threadWaitingApproval;
   }
   if (isZetaLiveRunning && thread.waitingOnUserInput) {
-    return '等待输入';
+    return l10n.threadWaitingInput;
   }
   if (isZetaLiveRunning) {
-    return '执行中';
+    return l10n.threadRunning;
   }
   if (thread.status == AgentThreadRuntimeStatus.systemError) {
-    return '系统错误';
+    return l10n.threadSystemError;
   }
   return null;
 }

@@ -8,6 +8,7 @@ import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
 /// 新建 Thread 时使用的 Agent Provider 选择内容。
 ///
@@ -57,7 +58,7 @@ class _NewThreadProviderPopoverState extends State<NewThreadProviderPopover> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      '选择 Agent Provider',
+                      context.l10n.newThreadSelectProvider,
                       style: textStyles.bodyMedium.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
@@ -71,7 +72,7 @@ class _NewThreadProviderPopoverState extends State<NewThreadProviderPopover> {
                         sf.OutlineButton(
                           onPressed: () => sf.closeOverlay(context),
                           size: sf.ButtonSize.small,
-                          child: const Text('取消'),
+                          child: Text(context.l10n.commonCancel),
                         ),
                         const SizedBox(width: IdeSpacing.space8),
                         sf.PrimaryButton(
@@ -83,7 +84,7 @@ class _NewThreadProviderPopoverState extends State<NewThreadProviderPopover> {
                               : () =>
                                     sf.closeOverlay(context, selectedProvider),
                           size: sf.ButtonSize.small,
-                          child: const Text('新建会话'),
+                          child: Text(context.l10n.projectNewSession),
                         ),
                       ],
                     ),
@@ -114,7 +115,7 @@ class _NewThreadProviderPopoverState extends State<NewThreadProviderPopover> {
             const SizedBox(width: IdeSpacing.space10),
             Flexible(
               child: Text(
-                '正在加载 Agent…',
+                context.l10n.newThreadLoadingAgents,
                 style: textStyles.bodySmall.copyWith(
                   color: colors.textSecondary,
                 ),
@@ -128,7 +129,7 @@ class _NewThreadProviderPopoverState extends State<NewThreadProviderPopover> {
       return Padding(
         padding: IdeSpacing.all16,
         child: Text(
-          '无法加载 Agent：${snapshot.error}',
+          context.l10n.newThreadCannotLoadAgents('${snapshot.error}'),
           style: textStyles.bodySmall.copyWith(color: colors.error),
         ),
       );
@@ -137,7 +138,7 @@ class _NewThreadProviderPopoverState extends State<NewThreadProviderPopover> {
       return Padding(
         padding: IdeSpacing.all16,
         child: Text(
-          '没有已启用且受支持的 Agent provider。请先在 Settings > Agents 中启用。',
+          context.l10n.newThreadNoEnabledProviders,
           style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
         ),
       );
@@ -150,7 +151,7 @@ class _NewThreadProviderPopoverState extends State<NewThreadProviderPopover> {
         Padding(
           padding: const EdgeInsets.only(bottom: IdeSpacing.space10),
           child: Text(
-            '请选择用于创建新会话的 Agent。',
+            context.l10n.newThreadChooseAgent,
             style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
           ),
         ),
@@ -167,7 +168,7 @@ class _NewThreadProviderPopoverState extends State<NewThreadProviderPopover> {
               return Semantics(
                 button: true,
                 selected: selected,
-                label: '使用 ${provider.displayName} 创建 thread',
+                label: context.l10n.newThreadUseProvider(provider.displayName),
                 child: PaneInteractiveSurface(
                   key: ValueKey<String>(
                     'new-thread-provider-option-${provider.id}',

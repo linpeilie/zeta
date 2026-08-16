@@ -19,6 +19,7 @@ import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/features/ide/views/new_thread_provider_popover.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
 typedef ProjectThreadSelected =
     void Function(String projectPath, AgentThreadSummary thread);
@@ -86,7 +87,7 @@ class ProjectListPane extends StatelessWidget {
     return Pane(
       title: 'Projects',
       trailing: IdeTooltip(
-        message: 'Open folder',
+        message: context.l10n.projectOpenFolder,
         child: sf.IconButton.ghost(
           onPressed: onOpenProject,
           size: sf.ButtonSize.small,
@@ -240,7 +241,7 @@ class _ProjectTileState extends State<_ProjectTile> {
                 key: ValueKey<String>(
                   'project-tile-refresh-threads-${widget.path}',
                 ),
-                label: '刷新会话',
+                label: context.l10n.projectRefreshSessions,
                 onPressed: () =>
                     _handleMenuAction(_ProjectTileMenuAction.refreshThreads),
               ),
@@ -248,14 +249,14 @@ class _ProjectTileState extends State<_ProjectTile> {
                 key: ValueKey<String>(
                   'project-tile-open-location-${widget.path}',
                 ),
-                label: _openProjectLocationLabel(),
+                label: _openProjectLocationLabel(context),
                 onPressed: () => _handleMenuAction(
                   _ProjectTileMenuAction.openProjectLocation,
                 ),
               ),
               IdeContextMenuAction(
                 key: ValueKey<String>('project-tile-remove-${widget.path}'),
-                label: '移除',
+                label: context.l10n.commonRemove,
                 destructive: true,
                 onPressed: () =>
                     _handleMenuAction(_ProjectTileMenuAction.removeProject),
@@ -419,7 +420,7 @@ class _ProjectTileState extends State<_ProjectTile> {
                     ),
                     size: 12,
                     strokeWidth: 1.8,
-                    semanticsLabel: 'Project has running threads',
+                    semanticsLabel: context.l10n.projectHasRunningThreads,
                   ),
                 ],
                 AnimatedSize(
@@ -459,7 +460,7 @@ class _ProjectTileState extends State<_ProjectTile> {
                               KeyedSubtree(
                                 key: _moreButtonKey,
                                 child: IdeTooltip(
-                                  message: '更多',
+                                  message: context.l10n.commonMore,
                                   child: sf.IconButton.ghost(
                                     key: ValueKey<String>(
                                       'project-tile-more-menu-${widget.path}',
@@ -484,7 +485,7 @@ class _ProjectTileState extends State<_ProjectTile> {
                               KeyedSubtree(
                                 key: _newThreadButtonKey,
                                 child: IdeTooltip(
-                                  message: '新建会话',
+                                  message: context.l10n.projectNewSession,
                                   child: sf.IconButton.ghost(
                                     key: ValueKey<String>(
                                       'project-tile-new-thread-${widget.path}',
@@ -713,7 +714,7 @@ class _ThreadTileState extends State<_ThreadTile> {
                   key: ValueKey<String>(
                     'project-thread-rename-${widget.projectPath}-${thread.id}',
                   ),
-                  label: '重命名',
+                  label: context.l10n.threadRename,
                   onPressed: () =>
                       _handleMenuAction(_ThreadTileMenuAction.rename),
                 ),
@@ -722,7 +723,7 @@ class _ThreadTileState extends State<_ThreadTile> {
                   key: ValueKey<String>(
                     'project-thread-unarchive-${widget.projectPath}-${thread.id}',
                   ),
-                  label: '取消归档',
+                  label: context.l10n.threadUnarchive,
                   onPressed: () =>
                       _handleMenuAction(_ThreadTileMenuAction.unarchive),
                 )
@@ -732,7 +733,7 @@ class _ThreadTileState extends State<_ThreadTile> {
                   key: ValueKey<String>(
                     'project-thread-archive-${widget.projectPath}-${thread.id}',
                   ),
-                  label: '归档',
+                  label: context.l10n.threadArchive,
                   onPressed: () =>
                       _handleMenuAction(_ThreadTileMenuAction.archive),
                 ),
@@ -741,7 +742,7 @@ class _ThreadTileState extends State<_ThreadTile> {
                   key: ValueKey<String>(
                     'project-thread-fork-${widget.projectPath}-${thread.id}',
                   ),
-                  label: '分叉',
+                  label: context.l10n.threadFork,
                   onPressed: () =>
                       _handleMenuAction(_ThreadTileMenuAction.fork),
                 ),
@@ -752,8 +753,8 @@ class _ThreadTileState extends State<_ThreadTile> {
                     'project-thread-delete-${widget.projectPath}-${thread.id}',
                   ),
                   label: widget.capabilities.canDeleteThread
-                      ? '删除'
-                      : '仅从 Zeta 列表移除',
+                      ? context.l10n.threadDelete
+                      : context.l10n.threadRemoveFromZetaOnly,
                   destructive: widget.capabilities.canDeleteThread,
                   dividerAbove: true,
                   onPressed: () =>
@@ -799,7 +800,7 @@ class _ThreadTileState extends State<_ThreadTile> {
           key: ValueKey<String>(
             'project-thread-rename-dialog-${widget.projectPath}-${widget.thread.id}',
           ),
-          title: const Text('重命名'),
+          title: Text(context.l10n.threadRename),
           content: SizedBox(
             width: 320,
             child: sf.TextField(
@@ -839,12 +840,16 @@ class _ThreadTileState extends State<_ThreadTile> {
           key: ValueKey<String>(
             'project-thread-delete-dialog-${widget.projectPath}-${widget.thread.id}',
           ),
-          title: Text(deletesProviderHistory ? '删除会话' : '从列表移除会话'),
+          title: Text(
+            deletesProviderHistory
+                ? context.l10n.threadDeleteSession
+                : context.l10n.threadRemoveFromList,
+          ),
           content: Text(
             deletesProviderHistory
-                ? '此操作不可撤销，将永久删除该会话。'
-                : '只会移除 Zeta 的本地索引记录，Provider 端历史文件仍会保留。'
-                      '如需彻底删除，请在对应 Agent 工具中处理。',
+                ? context.l10n.threadDeleteIrreversible
+                : '${context.l10n.threadRemoveIndexOnlyHint}'
+                      '${context.l10n.threadDeleteInAgentHint}',
           ),
           actions: [
             IdeDialogAction.cancel(
@@ -852,12 +857,12 @@ class _ThreadTileState extends State<_ThreadTile> {
             ),
             if (deletesProviderHistory)
               IdeDialogAction.destructive(
-                label: '删除',
+                label: context.l10n.threadDelete,
                 onPressed: () => Navigator.of(dialogContext).pop(true),
               )
             else
               IdeDialogAction.confirm(
-                label: '移除',
+                label: context.l10n.commonRemove,
                 onPressed: () => Navigator.of(dialogContext).pop(true),
               ),
           ],
@@ -899,9 +904,9 @@ class _ThreadTileState extends State<_ThreadTile> {
     final waitingLabel = !isBusy
         ? null
         : thread.waitingOnApproval
-        ? '等待审批'
+        ? context.l10n.threadWaitingApproval
         : thread.waitingOnUserInput
-        ? '等待输入'
+        ? context.l10n.threadWaitingInput
         : null;
     final lastActiveLabel = _relativeThreadTime(
       thread.lastActiveAt,
@@ -968,12 +973,12 @@ class _ThreadTileState extends State<_ThreadTile> {
                   ),
                   size: 12,
                   strokeWidth: 1.8,
-                  semanticsLabel: 'Thread running',
+                  semanticsLabel: context.l10n.threadRunningStatus,
                 ),
               ] else if (widget.showCompleted) ...[
                 const SizedBox(width: IdeSpacing.space8),
                 IdeTooltip(
-                  message: '执行完毕，点击关闭',
+                  message: context.l10n.threadCompletedClickToDismiss,
                   child: sf.IconButton.ghost(
                     key: ValueKey<String>(
                       'project-thread-completed-icon-${widget.projectPath}-${thread.id}',
@@ -1006,7 +1011,7 @@ class _ThreadTileState extends State<_ThreadTile> {
                         width: IdeMetrics.iconButtonHitSize,
                         height: IdeMetrics.iconButtonHitSize,
                         child: IdeTooltip(
-                          message: '更多',
+                          message: context.l10n.commonMore,
                           child: sf.IconButton.ghost(
                             key: ValueKey<String>(
                               'project-thread-more-menu-${widget.projectPath}-${thread.id}',
@@ -1075,7 +1080,7 @@ class _ThreadErrorRow extends StatelessWidget {
         children: [
           Expanded(
             child: Text(
-              'Could not load threads',
+              context.l10n.threadCouldNotLoadThreads,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: textStyles.bodySmall.copyWith(color: colors.error),
@@ -1146,12 +1151,13 @@ String? _relativeThreadTime(DateTime? value, DateTime now) {
   return '${difference.inDays}d';
 }
 
-String _openProjectLocationLabel() {
+String _openProjectLocationLabel(BuildContext context) {
+  final l10n = context.l10n;
   if (Platform.isMacOS) {
-    return '在 Finder 中打开';
+    return l10n.projectOpenInFinder;
   }
   if (Platform.isWindows) {
-    return '在资源管理器中打开';
+    return l10n.projectOpenInExplorer;
   }
-  return '在文件管理器中打开';
+  return l10n.projectOpenInFileManager;
 }

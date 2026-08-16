@@ -37,6 +37,7 @@ import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/workspace/presentation/file_tree_pane.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/ide_resize_handle.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
@@ -267,7 +268,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
     final body = WindowFrame(
       key: const ValueKey('ide-window-frame'),
       enableNativeWindowFrame: widget.enableNativeWindowFrame,
-      menus: _windowMenus,
+      menus: _windowMenus(context),
       titleBarLeadingActions: switch (_page) {
         _IdeHomePage.home => <WindowTitleBarAction>[
           WindowTitleBarAction(
@@ -275,8 +276,12 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
             icon: leftSidebarVisible
                 ? sf.LucideIcons.panelLeftClose
                 : sf.LucideIcons.panelLeftOpen,
-            tooltip: leftSidebarVisible ? '隐藏左侧栏' : '显示左侧栏',
-            semanticLabel: leftSidebarVisible ? '隐藏左侧栏' : '显示左侧栏',
+            tooltip: leftSidebarVisible
+                ? context.l10n.workbenchHideLeftSidebar
+                : context.l10n.workbenchShowLeftSidebar,
+            semanticLabel: leftSidebarVisible
+                ? context.l10n.workbenchHideLeftSidebar
+                : context.l10n.workbenchShowLeftSidebar,
             active: leftSidebarVisible,
             focusNode: _leftSidebarFocusNode,
             onPressed: () => _toggleLeftSidebar(_leftSidebarFocusNode),
@@ -287,8 +292,8 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
           WindowTitleBarAction(
             key: const ValueKey('titlebar-back-action'),
             icon: Icons.arrow_back_rounded,
-            tooltip: '返回主界面',
-            semanticLabel: '返回主界面',
+            tooltip: context.l10n.workbenchBackToHome,
+            semanticLabel: context.l10n.workbenchBackToHome,
             onPressed: () => unawaited(_closeSettingsPage()),
           ),
         ],
@@ -296,8 +301,8 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
           WindowTitleBarAction(
             key: const ValueKey('titlebar-back-action'),
             icon: Icons.arrow_back_rounded,
-            tooltip: '返回主界面',
-            semanticLabel: '返回主界面',
+            tooltip: context.l10n.workbenchBackToHome,
+            semanticLabel: context.l10n.workbenchBackToHome,
             onPressed: _closeUsageStatisticsPage,
           ),
         ],
@@ -306,8 +311,8 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
         WindowTitleBarAction(
           key: const ValueKey('titlebar-usage-statistics-action'),
           icon: sf.LucideIcons.chartLine,
-          tooltip: 'Usage statistics',
-          semanticLabel: 'Open usage statistics page',
+          tooltip: context.l10n.workbenchUsageStatistics,
+          semanticLabel: context.l10n.workbenchOpenUsageStatistics,
           active: _page == _IdeHomePage.usageStatistics,
           onPressed: _openUsageStatisticsPage,
         ),
@@ -315,7 +320,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
           key: const ValueKey('titlebar-settings-action'),
           icon: sf.RadixIcons.mixerHorizontal,
           tooltip: 'Settings',
-          semanticLabel: 'Open settings page',
+          semanticLabel: context.l10n.workbenchOpenSettings,
           active: _page == _IdeHomePage.settings,
           onPressed: _openSettingsPage,
         ),
@@ -325,11 +330,15 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
               ? sf.LucideIcons.panelRightClose
               : sf.LucideIcons.panelRightOpen,
           tooltip: homePage
-              ? (rightSidebarExpanded ? '隐藏右侧栏' : '显示右侧栏')
-              : '右侧栏仅在主界面可用',
+              ? (rightSidebarExpanded
+                    ? context.l10n.workbenchHideRightSidebar
+                    : context.l10n.workbenchShowRightSidebar)
+              : context.l10n.workbenchRightSidebarHomeOnly,
           semanticLabel: homePage
-              ? (rightSidebarExpanded ? '隐藏右侧栏' : '显示右侧栏')
-              : '右侧栏仅在主界面可用',
+              ? (rightSidebarExpanded
+                    ? context.l10n.workbenchHideRightSidebar
+                    : context.l10n.workbenchShowRightSidebar)
+              : context.l10n.workbenchRightSidebarHomeOnly,
           active: rightSidebarExpanded,
           enabled: homePage,
           focusNode: homePage ? _rightSidebarFocusNode : null,
@@ -356,23 +365,24 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
     return body;
   }
 
-  List<WindowMenu> get _windowMenus {
+  List<WindowMenu> _windowMenus(BuildContext context) {
     if (!widget.enableNativeWindowFrame) {
       return const <WindowMenu>[];
     }
+    final l10n = context.l10n;
     return [
       WindowMenu(
         key: const ValueKey('window-menu-file'),
-        label: '文件',
+        label: l10n.workbenchMenuFile,
         items: [
           WindowMenuItem(
             key: const ValueKey('window-menu-open-project'),
-            label: '打开项目',
+            label: l10n.workbenchMenuOpenProject,
             onPressed: _handleMenuOpenProject,
           ),
           WindowMenuItem(
             key: const ValueKey('window-menu-exit'),
-            label: '退出',
+            label: l10n.workbenchMenuQuit,
             onPressed: _handleMenuExit,
           ),
         ],
@@ -587,7 +597,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
     return IdeResizeHandle(
       key: const ValueKey('left-width-resize-handle'),
       axis: IdeResizeHandleAxis.horizontal,
-      semanticLabel: 'Resize left panel width',
+      semanticLabel: context.l10n.workbenchResizeLeftPanel,
       onDragStart: (_) {
         _leftPanelWidthDragging = true;
       },
@@ -616,7 +626,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
     return IdeResizeHandle(
       key: const ValueKey('right-width-resize-handle'),
       axis: IdeResizeHandleAxis.horizontal,
-      semanticLabel: 'Resize right panel width',
+      semanticLabel: context.l10n.workbenchResizeRightPanel,
       onDragUpdate: (details) {
         setState(() {
           _rightPanelWidth = (_rightPanelWidth - details.delta.dx).clamp(
@@ -906,7 +916,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
     if (!activated) {
       showIdeToast(
         context,
-        message: '无法打开通知对应的会话：该会话可能已被删除或不在当前项目列表中。',
+        message: context.l10n.workbenchCannotOpenNotificationThread,
         tone: IdeToastTone.error,
       );
     }
@@ -986,7 +996,9 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
       _installedHomeProviders = List<HomeProviderSummary>.unmodifiable(
         cachedProviders,
       );
-      _homeProviderError = '无法检测 Provider：$error';
+      _homeProviderError = context.l10n.workbenchProviderDetectionFailed(
+        '$error',
+      );
     } finally {
       if (mounted && token == _globalHomeLoadToken) {
         setState(() {

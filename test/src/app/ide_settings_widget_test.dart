@@ -14,9 +14,31 @@ import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_switch.dart';
 import 'package:zeta/src/ui/core/ide_tabs.dart';
+import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta/src/ui/core/rows/ide_row_divider.dart';
 
 void main() {
+  testWidgets('settings chrome follows locale while values stay stable', (
+    tester,
+  ) async {
+    await _pumpSettingsPage(
+      tester,
+      locale: ZetaLocalization.english,
+      activeSection: SettingsSection.general,
+    );
+    expect(find.text('General'), findsOneWidget);
+    expect(find.text('Enter to send'), findsOneWidget);
+    expect(find.text('常规'), findsNothing);
+
+    await _pumpSettingsPage(
+      tester,
+      locale: ZetaLocalization.simplifiedChinese,
+      activeSection: SettingsSection.general,
+    );
+    expect(find.text('常规'), findsOneWidget);
+    expect(find.text('Enter 发送'), findsOneWidget);
+  });
+
   testWidgets('general settings defaults to Enter and updates shortcut', (
     tester,
   ) async {
@@ -524,6 +546,7 @@ Future<void> _pumpSettingsPage(
   SettingsSection activeSection = SettingsSection.appearance,
   TargetPlatform? platform,
   Size size = const Size(1400, 900),
+  Locale locale = ZetaLocalization.simplifiedChinese,
 }) async {
   tester.view
     ..physicalSize = size
@@ -577,6 +600,9 @@ Future<void> _pumpSettingsPage(
           lightTheme: lightIdeTheme,
           darkTheme: darkIdeTheme,
           child: sf.ShadcnApp(
+            locale: locale,
+            supportedLocales: ZetaLocalization.supportedLocales,
+            localizationsDelegates: ZetaLocalization.delegates,
             theme: buildShadcnTheme(lightIdeTheme),
             darkTheme: buildShadcnTheme(darkIdeTheme),
             materialTheme: buildMaterialTheme(

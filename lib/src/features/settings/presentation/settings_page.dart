@@ -22,6 +22,7 @@ import 'package:zeta/src/ui/core/rows/ide_row_group.dart';
 import 'package:zeta/src/ui/core/rows/ide_settings_row.dart';
 import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
 import 'package:zeta/src/ui/core/workbench/ide_page_body.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
 enum SettingsSection { general, appearance, agents }
 
@@ -139,7 +140,7 @@ class SettingsNavigationPane extends StatelessWidget {
         children: [
           IdeListRow(
             key: const ValueKey('settings-nav-general'),
-            title: '常规',
+            title: context.l10n.settingsNavGeneral,
             leading: const Icon(Icons.tune_rounded),
             selected: activeSection == SettingsSection.general,
             onPressed: () => onSectionSelected(SettingsSection.general),
@@ -147,7 +148,7 @@ class SettingsNavigationPane extends StatelessWidget {
           ),
           IdeListRow(
             key: const ValueKey('settings-nav-appearance'),
-            title: '外观',
+            title: context.l10n.settingsNavAppearance,
             leading: const Icon(Icons.palette_outlined),
             selected: activeSection == SettingsSection.appearance,
             onPressed: () => onSectionSelected(SettingsSection.appearance),
@@ -156,7 +157,7 @@ class SettingsNavigationPane extends StatelessWidget {
           if (showAgentManagement)
             IdeListRow(
               key: const ValueKey('settings-nav-agents'),
-              title: 'Agent 管理',
+              title: context.l10n.settingsNavAgents,
               leading: const Icon(Icons.smart_toy_outlined),
               selected: activeSection == SettingsSection.agents,
               onPressed: () => onSectionSelected(SettingsSection.agents),
@@ -211,7 +212,9 @@ class SettingsPageCanvasState extends State<SettingsPageCanvas> {
       ),
       SettingsSection.agents =>
         widget.agentManagementController == null
-            ? const IdeSurface.canvas(child: EmptyState(text: 'Agent 管理服务不可用。'))
+            ? IdeSurface.canvas(
+                child: EmptyState(text: context.l10n.settingsAgentsUnavailable),
+              )
             : AgentManagementPage(
                 key: _agentManagementKey,
                 controller: widget.agentManagementController!,
@@ -227,19 +230,22 @@ class _GeneralSettingsPane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final isMacOS = Theme.of(context).platform == TargetPlatform.macOS;
-    final modifierLabel = isMacOS ? 'Cmd + Enter 发送' : 'Ctrl + Enter 发送';
+    final modifierLabel = isMacOS
+        ? l10n.settingsSendShortcutCmdEnter
+        : l10n.settingsSendShortcutCtrlEnter;
     return IdeSurface.canvas(
       key: const ValueKey('settings-detail-panel'),
       child: ValueListenableBuilder<GeneralSettings>(
         valueListenable: generalSettingsController.listenable,
         builder: (context, settings, _) {
           final description = switch (settings.sendMessageShortcut) {
-            MessageSendShortcut.enter => '按 Enter 发送消息，按 Shift + Enter 换行。',
+            MessageSendShortcut.enter => l10n.settingsSendShortcutEnterHint,
             MessageSendShortcut.primaryModifierEnter =>
               isMacOS
-                  ? '按 Cmd + Enter 发送消息，按 Enter 换行。'
-                  : '按 Ctrl + Enter 发送消息，按 Enter 换行。',
+                  ? l10n.settingsSendShortcutCmdHint
+                  : l10n.settingsSendShortcutCtrlHint,
           };
           return IdePageBody(
             child: Column(
@@ -247,11 +253,11 @@ class _GeneralSettingsPane extends StatelessWidget {
               children: [
                 IdeRowGroup(
                   key: const ValueKey('settings-general-group'),
-                  title: '消息发送',
+                  title: l10n.settingsMessageSending,
                   children: [
                     _flatSettingsRow(
                       key: const ValueKey('settings-send-message-shortcut-row'),
-                      label: '发送快捷键',
+                      label: l10n.settingsSendShortcut,
                       description: description,
                       control: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 380),
@@ -260,16 +266,16 @@ class _GeneralSettingsPane extends StatelessWidget {
                             'settings-send-message-shortcut-tabs',
                           ),
                           value: settings.sendMessageShortcut,
-                          semanticLabel: '发送快捷键',
+                          semanticLabel: l10n.settingsSendShortcut,
                           items: <IdeTabItem<MessageSendShortcut>>[
-                            const IdeTabItem<MessageSendShortcut>(
-                              key: ValueKey(
+                            IdeTabItem<MessageSendShortcut>(
+                              key: const ValueKey(
                                 'settings-send-message-shortcut-enter',
                               ),
                               value: MessageSendShortcut.enter,
-                              label: 'Enter 发送',
+                              label: l10n.settingsSendShortcutEnter,
                               leadingIcon: Icons.keyboard_return_rounded,
-                              semanticLabel: 'Enter 发送',
+                              semanticLabel: l10n.settingsSendShortcutEnter,
                             ),
                             IdeTabItem<MessageSendShortcut>(
                               key: const ValueKey(
@@ -296,17 +302,17 @@ class _GeneralSettingsPane extends StatelessWidget {
                 const SizedBox(height: IdeSpacing.space32),
                 IdeRowGroup(
                   key: const ValueKey('settings-agent-notifications-group'),
-                  title: '通知',
+                  title: l10n.settingsNotifications,
                   children: [
                     _flatSettingsRow(
                       key: const ValueKey('settings-notifications-enabled-row'),
-                      label: '系统通知',
-                      description: '在任务转入后台或其他会话时发送系统提醒。',
+                      label: l10n.settingsSystemNotifications,
+                      description: l10n.settingsSystemNotificationsHint,
                       control: IdeSwitch(
                         key: const ValueKey(
                           'settings-notifications-enabled-switch',
                         ),
-                        semanticLabel: '系统通知',
+                        semanticLabel: l10n.settingsSystemNotifications,
                         value: settings.notifications.enabled,
                         onChanged: (value) {
                           unawaited(
@@ -321,13 +327,13 @@ class _GeneralSettingsPane extends StatelessWidget {
                       key: const ValueKey(
                         'settings-turn-terminal-notifications-row',
                       ),
-                      label: '任务结束',
-                      description: '任务完成、失败或中断时提醒。',
+                      label: l10n.settingsTurnTerminalNotifications,
+                      description: l10n.settingsTurnTerminalNotificationsHint,
                       control: IdeSwitch(
                         key: const ValueKey(
                           'settings-turn-terminal-notifications-switch',
                         ),
-                        semanticLabel: '任务结束',
+                        semanticLabel: l10n.settingsTurnTerminalNotifications,
                         value: settings.notifications.turnTerminalEnabled,
                         enabled: settings.notifications.enabled,
                         onChanged: settings.notifications.enabled
@@ -346,13 +352,13 @@ class _GeneralSettingsPane extends StatelessWidget {
                       key: const ValueKey(
                         'settings-action-required-notifications-row',
                       ),
-                      label: '需要确认',
-                      description: '权限、问题、计划审批或执行确认等待处理时提醒。',
+                      label: l10n.settingsActionRequiredNotifications,
+                      description: l10n.settingsActionRequiredNotificationsHint,
                       control: IdeSwitch(
                         key: const ValueKey(
                           'settings-action-required-notifications-switch',
                         ),
-                        semanticLabel: '需要确认',
+                        semanticLabel: l10n.settingsActionRequiredNotifications,
                         value: settings.notifications.actionRequiredEnabled,
                         enabled: settings.notifications.enabled,
                         onChanged: settings.notifications.enabled
@@ -383,32 +389,36 @@ class _AppearanceSettingsPane extends StatelessWidget {
 
   final AppearanceSettingsController appearanceController;
 
-  static const List<_ThemeModeTabSpec> _tabs = <_ThemeModeTabSpec>[
-    _ThemeModeTabSpec(
-      keyName: 'system',
-      title: '跟随系统',
-      icon: Icons.brightness_auto_rounded,
-      description: '使用系统当前的浅色或深色偏好。',
-      value: ThemeMode.system,
-    ),
-    _ThemeModeTabSpec(
-      keyName: 'light',
-      title: '浅色',
-      icon: Icons.light_mode_outlined,
-      description: '使用浅底、低对比度边框和蔚蓝强调色。',
-      value: ThemeMode.light,
-    ),
-    _ThemeModeTabSpec(
-      keyName: 'dark',
-      title: '深色',
-      icon: Icons.dark_mode_outlined,
-      description: '使用深底、高对比度面板和明亮强调色。',
-      value: ThemeMode.dark,
-    ),
-  ];
+  List<_ThemeModeTabSpec> _tabs(BuildContext context) {
+    final l10n = context.l10n;
+    return <_ThemeModeTabSpec>[
+      _ThemeModeTabSpec(
+        keyName: 'system',
+        title: l10n.settingsThemeFollowSystem,
+        icon: Icons.brightness_auto_rounded,
+        description: l10n.settingsThemeFollowSystemHint,
+        value: ThemeMode.system,
+      ),
+      _ThemeModeTabSpec(
+        keyName: 'light',
+        title: l10n.settingsThemeLight,
+        icon: Icons.light_mode_outlined,
+        description: l10n.settingsThemeLightHint,
+        value: ThemeMode.light,
+      ),
+      _ThemeModeTabSpec(
+        keyName: 'dark',
+        title: l10n.settingsThemeDark,
+        icon: Icons.dark_mode_outlined,
+        description: l10n.settingsThemeDarkHint,
+        value: ThemeMode.dark,
+      ),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return IdeSurface.canvas(
       key: const ValueKey('settings-detail-panel'),
       child: ValueListenableBuilder<AppearanceSettings>(
@@ -420,10 +430,10 @@ class _AppearanceSettingsPane extends StatelessWidget {
               children: [
                 IdeRowGroup(
                   key: const ValueKey('settings-appearance-group'),
-                  title: '主题',
+                  title: l10n.settingsTheme,
                   children: [
                     _ThemeModeSection(
-                      tabs: _tabs,
+                      tabs: _tabs(context),
                       groupValue: settings.themeMode,
                       onSelected: (value) {
                         unawaited(appearanceController.setThemeMode(value));
@@ -434,29 +444,32 @@ class _AppearanceSettingsPane extends StatelessWidget {
                 const SizedBox(height: IdeSpacing.space32),
                 IdeRowGroup(
                   key: const ValueKey('settings-appearance-font-group'),
-                  title: '字体',
+                  title: l10n.settingsFonts,
                   children: [
                     _FontChoiceSettingRow(
                       key: const ValueKey('settings-ui-font-row'),
                       keyPrefix: 'settings-ui-font',
-                      label: '界面字体',
-                      description: '用于普通界面文本与非代码 Markdown 正文。',
+                      label: l10n.settingsUiFont,
+                      description: l10n.settingsUiFontHint,
                       selectedChoice: settings.uiFontChoice,
                       selectedLabel: _fontChoiceLabel(
+                        context,
                         settings.uiFontChoice,
                         systemFontDisplayName: appearanceController
                             .displayNameFor(settings.uiFontChoice),
                       ),
                       choicesLoader: appearanceController.loadUiFontChoices,
                       onChanged: appearanceController.setUiFontChoice,
-                      errorMessage: '无法加载所选界面字体。',
+                      errorMessage: l10n.settingsUiFontLoadError,
                     ),
                     _FontSizeSettingRow(
                       key: const ValueKey('settings-ui-font-size-row'),
                       keyPrefix: 'settings-ui-font-size',
-                      label: '界面字号',
-                      description:
-                          '缩放普通界面文本（${minUiFontSize.toInt()}–${maxUiFontSize.toInt()} px）。',
+                      label: l10n.settingsUiFontSize,
+                      description: l10n.settingsUiFontSizeHint(
+                        '${minUiFontSize.toInt()}',
+                        '${maxUiFontSize.toInt()}',
+                      ),
                       value: settings.uiFontSize,
                       min: minUiFontSize,
                       max: maxUiFontSize,
@@ -467,24 +480,27 @@ class _AppearanceSettingsPane extends StatelessWidget {
                     _FontChoiceSettingRow(
                       key: const ValueKey('settings-code-font-row'),
                       keyPrefix: 'settings-code-font',
-                      label: '代码字体',
-                      description: '用于代码块、命令、Diff 和工具输出。',
+                      label: l10n.settingsCodeFont,
+                      description: l10n.settingsCodeFontHint,
                       selectedChoice: settings.codeFontChoice,
                       selectedLabel: _fontChoiceLabel(
+                        context,
                         settings.codeFontChoice,
                         systemFontDisplayName: appearanceController
                             .displayNameFor(settings.codeFontChoice),
                       ),
                       choicesLoader: appearanceController.loadCodeFontChoices,
                       onChanged: appearanceController.setCodeFontChoice,
-                      errorMessage: '无法加载所选代码字体。',
+                      errorMessage: l10n.settingsCodeFontLoadError,
                     ),
                     _FontSizeSettingRow(
                       key: const ValueKey('settings-code-font-size-row'),
                       keyPrefix: 'settings-code-font-size',
-                      label: '代码字号',
-                      description:
-                          '缩放代码内容（${minCodeFontSize.toInt()}–${maxCodeFontSize.toInt()} px）。',
+                      label: l10n.settingsCodeFontSize,
+                      description: l10n.settingsCodeFontSizeHint(
+                        '${minCodeFontSize.toInt()}',
+                        '${maxCodeFontSize.toInt()}',
+                      ),
                       value: settings.codeFontSize,
                       min: minCodeFontSize,
                       max: maxCodeFontSize,
@@ -537,15 +553,16 @@ class _ThemeModeSection extends StatelessWidget {
       (tab) => tab.value == groupValue,
       orElse: () => tabs.first,
     );
+    final l10n = context.l10n;
     return _flatSettingsRow(
-      label: '主题模式',
+      label: l10n.settingsThemeMode,
       description: selectedTab.description,
       control: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 380),
         child: IdeTabs<ThemeMode>(
           key: const ValueKey('settings-theme-tabs'),
           value: groupValue,
-          semanticLabel: '主题模式',
+          semanticLabel: l10n.settingsThemeMode,
           items: [
             for (final tab in tabs)
               IdeTabItem<ThemeMode>(
@@ -632,7 +649,10 @@ class _FontChoiceSettingRowState extends State<_FontChoiceSettingRow> {
       label: widget.label,
       description: widget.description,
       control: Semantics(
-        label: '${widget.label}：${widget.selectedLabel}',
+        label: context.l10n.settingsLabeledValue(
+          widget.label,
+          widget.selectedLabel,
+        ),
         container: true,
         child: sf.Select<AppearanceFontChoice>(
           key: ValueKey<String>('${widget.keyPrefix}-select'),
@@ -654,7 +674,9 @@ class _FontChoiceSettingRowState extends State<_FontChoiceSettingRow> {
           },
           popup: sf.SelectPopup<AppearanceFontChoice>.builder(
             key: ValueKey<String>('${widget.keyPrefix}-select-popup'),
-            searchPlaceholder: Text('搜索${widget.label}'),
+            searchPlaceholder: Text(
+              context.l10n.settingsSearchSomething(widget.label),
+            ),
             loadingBuilder: (context) => SizedBox(
               height: 72,
               child: Center(
@@ -669,7 +691,7 @@ class _FontChoiceSettingRowState extends State<_FontChoiceSettingRow> {
             emptyBuilder: (context) => Padding(
               padding: const EdgeInsets.all(IdeSpacing.space16),
               child: Text(
-                '没有匹配的字体。',
+                context.l10n.settingsNoMatchingFonts,
                 textAlign: TextAlign.center,
                 style: textStyles.bodySmall.copyWith(
                   color: colors.textSecondary,
@@ -679,7 +701,7 @@ class _FontChoiceSettingRowState extends State<_FontChoiceSettingRow> {
             errorBuilder: (context, error, stackTrace) => Padding(
               padding: const EdgeInsets.all(IdeSpacing.space16),
               child: Text(
-                '字体列表加载失败。',
+                context.l10n.settingsFontListLoadFailed,
                 textAlign: TextAlign.center,
                 style: textStyles.bodySmall.copyWith(
                   color: colors.textSecondary,
@@ -687,6 +709,7 @@ class _FontChoiceSettingRowState extends State<_FontChoiceSettingRow> {
               ),
             ),
             builder: (context, searchQuery) async {
+              final l10n = context.l10n;
               final choices = await _loadChoices();
               final filtered = choices
                   .where((option) => option.matches(searchQuery ?? ''))
@@ -701,7 +724,7 @@ class _FontChoiceSettingRowState extends State<_FontChoiceSettingRow> {
                       ),
                       value: option.choice,
                       child: Text(
-                        option.label,
+                        _fontOptionDisplayLabelFor(l10n, option),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: textStyles.bodyMedium.copyWith(
@@ -748,16 +771,16 @@ class _FontSizeSettingRow extends StatelessWidget {
     final canIncrease = value < max;
     final controls = Semantics(
       container: true,
-      label: '$label，当前 ${value.toInt()} 像素',
+      label: context.l10n.settingsFontSizeSemantics(label, '${value.toInt()}'),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           IdeTooltip(
-            message: '减小$label',
+            message: context.l10n.settingsDecreaseSomething(label),
             child: Semantics(
               button: true,
               enabled: canDecrease,
-              label: '减小$label',
+              label: context.l10n.settingsDecreaseSomething(label),
               child: ExcludeSemantics(
                 child: sf.IconButton.outline(
                   key: ValueKey<String>('$keyPrefix-decrease'),
@@ -773,7 +796,7 @@ class _FontSizeSettingRow extends StatelessWidget {
           SizedBox(
             width: 48,
             child: Text(
-              '${value.toInt()} px',
+              context.l10n.settingsPixelValue('${value.toInt()}'),
               key: ValueKey<String>('$keyPrefix-value'),
               textAlign: TextAlign.center,
               maxLines: 1,
@@ -785,11 +808,11 @@ class _FontSizeSettingRow extends StatelessWidget {
           ),
           const SizedBox(width: IdeSpacing.space8),
           IdeTooltip(
-            message: '增大$label',
+            message: context.l10n.settingsIncreaseSomething(label),
             child: Semantics(
               button: true,
               enabled: canIncrease,
-              label: '增大$label',
+              label: context.l10n.settingsIncreaseSomething(label),
               child: ExcludeSemantics(
                 child: sf.IconButton.outline(
                   key: ValueKey<String>('$keyPrefix-increase'),
@@ -814,14 +837,29 @@ class _FontSizeSettingRow extends StatelessWidget {
 }
 
 String _fontChoiceLabel(
+  BuildContext context,
   AppearanceFontChoice choice, {
   String? systemFontDisplayName,
 }) {
   return switch (choice.kind) {
-    AppearanceFontChoiceKind.systemDefault => 'Geist（内置默认）',
-    AppearanceFontChoiceKind.bundledJetBrainsMono => 'JetBrainsMono（内置默认）',
+    AppearanceFontChoiceKind.systemDefault =>
+      context.l10n.settingsFontGeistDefault,
+    AppearanceFontChoiceKind.bundledJetBrainsMono =>
+      context.l10n.settingsFontJetBrainsDefault,
     AppearanceFontChoiceKind.system =>
       systemFontDisplayName ?? choice.fontFamily!,
+  };
+}
+
+String _fontOptionDisplayLabelFor(
+  AppLocalizations l10n,
+  AppearanceFontOption option,
+) {
+  return switch (option.choice.kind) {
+    AppearanceFontChoiceKind.systemDefault => l10n.settingsFontGeistDefault,
+    AppearanceFontChoiceKind.bundledJetBrainsMono =>
+      l10n.settingsFontJetBrainsDefault,
+    AppearanceFontChoiceKind.system => option.label,
   };
 }
 

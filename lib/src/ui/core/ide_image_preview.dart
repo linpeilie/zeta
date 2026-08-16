@@ -11,6 +11,7 @@ import 'ide_effects.dart';
 import 'ide_text_styles.dart';
 import 'ide_toast.dart';
 import 'pane_widgets.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
 /// 打开本地图片预览弹层。
 ///
@@ -31,7 +32,11 @@ Future<bool> showIdeLocalImagePreview(
   final file = File(trimmed);
   if (!file.existsSync()) {
     if (context.mounted) {
-      showIdeToast(context, message: '图片文件不可用', tone: IdeToastTone.error);
+      showIdeToast(
+        context,
+        message: context.l10nOrNull?.imagePreviewUnavailable ?? '图片文件不可用',
+        tone: IdeToastTone.error,
+      );
     }
     return false;
   }
@@ -42,13 +47,21 @@ Future<bool> showIdeLocalImagePreview(
     bytes = file.readAsBytesSync();
   } on FileSystemException {
     if (context.mounted) {
-      showIdeToast(context, message: '图片文件不可用', tone: IdeToastTone.error);
+      showIdeToast(
+        context,
+        message: context.l10nOrNull?.imagePreviewUnavailable ?? '图片文件不可用',
+        tone: IdeToastTone.error,
+      );
     }
     return false;
   }
   if (bytes.isEmpty) {
     if (context.mounted) {
-      showIdeToast(context, message: '图片文件不可用', tone: IdeToastTone.error);
+      showIdeToast(
+        context,
+        message: context.l10nOrNull?.imagePreviewUnavailable ?? '图片文件不可用',
+        tone: IdeToastTone.error,
+      );
     }
     return false;
   }
@@ -80,7 +93,7 @@ Future<bool> showIdeLocalImagePreview(
             errorBuilder: (_, _, _) {
               return Center(
                 child: Text(
-                  '图片文件不可用',
+                  context.l10nOrNull?.imagePreviewUnavailable ?? '图片文件不可用',
                   style: IdeTextStyles.of(dialogContext).bodySmall,
                 ),
               );
@@ -167,7 +180,8 @@ class IdeLocalImageThumbnail extends StatelessWidget {
       child: _PreviewTapTarget(
         path: path,
         tooltip: tooltip,
-        semanticLabel: semanticLabel ?? '查看图片',
+        semanticLabel:
+            semanticLabel ?? context.l10nOrNull?.imagePreviewView ?? '查看图片',
         child: image,
       ),
     );
