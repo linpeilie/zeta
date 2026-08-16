@@ -935,10 +935,12 @@ void main() {
       ),
       findsOneWidget,
     );
-    await tester.tap(find.text('创建 Thread'));
+    await tester.tap(
+      find.byKey(const ValueKey<String>('new-thread-provider-confirm')),
+    );
     await tester.pumpAndSettle();
 
-    expect(headerTitleText(tester), 'New thread');
+    expect(headerTitleText(tester), agentDefaultThreadTitle);
     expect(find.text('Previously asked question'), findsNothing);
     expect(find.text('Historical answer'), findsNothing);
 

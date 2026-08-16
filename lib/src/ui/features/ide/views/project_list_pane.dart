@@ -484,7 +484,7 @@ class _ProjectTileState extends State<_ProjectTile> {
                               KeyedSubtree(
                                 key: _newThreadButtonKey,
                                 child: IdeTooltip(
-                                  message: 'New thread',
+                                  message: '新建会话',
                                   child: sf.IconButton.ghost(
                                     key: ValueKey<String>(
                                       'project-tile-new-thread-${widget.path}',

@@ -25,15 +25,20 @@ const Object agentThreadSummaryUnset = Object();
 /// 详情头栏在生成正式名之前使用该文案；**不得**把它写进列表
 /// [AgentThreadSummary.title]，否则会伪装成正式 generated_title，挡住后续
 /// 首条消息临时标题与 provider 异步改名。
-const String agentDefaultThreadTitle = 'New thread';
+const String agentDefaultThreadTitle = '新建会话';
+
+/// Provider 协议侧常见的英文占位标题，不得当正式名回写。
+const String agentProviderPlaceholderThreadTitle = 'New thread';
 
 /// 是否为空/默认占位标题（不可作为列表或详情的正式 title 回写）。
 ///
 /// 对所有 Provider 通用：Codex / Grok 新建 thread 的 snapshot 与 session 都可能
-/// 短暂携带「New thread」或空串。
+/// 短暂携带「New thread」或空串；Zeta 本地占位为 [agentDefaultThreadTitle]。
 bool isAgentThreadTitlePlaceholder(String? title) {
   final trimmed = title?.trim() ?? '';
-  return trimmed.isEmpty || trimmed == agentDefaultThreadTitle;
+  return trimmed.isEmpty ||
+      trimmed == agentDefaultThreadTitle ||
+      trimmed == agentProviderPlaceholderThreadTitle;
 }
 
 /// Agent thread 当前运行状态。

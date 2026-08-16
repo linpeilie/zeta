@@ -1453,7 +1453,7 @@ void main() {
         ),
       );
       await tester.pump();
-      expect(headerTitleText(tester), 'New thread');
+      expect(headerTitleText(tester), agentDefaultThreadTitle);
 
       await viewModel.sendMessage('Start a brand new conversation');
       await tester.pump();

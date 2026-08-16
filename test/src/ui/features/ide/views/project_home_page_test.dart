@@ -234,7 +234,9 @@ void main() {
       find.byKey(const ValueKey<String>('new-thread-provider-option-codex')),
     );
     await tester.pump();
-    await tester.tap(find.text('创建 Thread'));
+    await tester.tap(
+      find.byKey(const ValueKey<String>('new-thread-provider-confirm')),
+    );
     await tester.pumpAndSettle();
 
     expect(selectedProviderId, defaultAgentProviderId);

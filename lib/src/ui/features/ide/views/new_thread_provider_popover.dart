@@ -75,12 +75,15 @@ class _NewThreadProviderPopoverState extends State<NewThreadProviderPopover> {
                         ),
                         const SizedBox(width: IdeSpacing.space8),
                         sf.PrimaryButton(
+                          key: const ValueKey<String>(
+                            'new-thread-provider-confirm',
+                          ),
                           onPressed: selectedProvider == null
                               ? null
                               : () =>
                                     sf.closeOverlay(context, selectedProvider),
                           size: sf.ButtonSize.small,
-                          child: const Text('创建 Thread'),
+                          child: const Text('新建会话'),
                         ),
                       ],
                     ),
