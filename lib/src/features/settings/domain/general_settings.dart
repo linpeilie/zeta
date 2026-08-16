@@ -87,7 +87,7 @@ class GeneralSettings {
   final MessageSendShortcut sendMessageShortcut;
   final AgentNotificationSettings notifications;
 
-  /// 下次启动使用的界面语言。步骤 4 起存在于 domain，旧 JSON 路径暂不读写。
+  /// 下次启动使用的界面语言。
   final AppLanguage appLanguage;
 
   GeneralSettings copyWith({
@@ -99,39 +99,6 @@ class GeneralSettings {
       sendMessageShortcut: sendMessageShortcut ?? this.sendMessageShortcut,
       notifications: notifications ?? this.notifications,
       appLanguage: appLanguage ?? this.appLanguage,
-    );
-  }
-
-  Map<String, Object?> toJson() {
-    return <String, Object?>{
-      'version': 2,
-      'sendMessageShortcut': switch (sendMessageShortcut) {
-        MessageSendShortcut.enter => 'enter',
-        MessageSendShortcut.primaryModifierEnter => 'primaryModifierEnter',
-      },
-      'notifications': notifications.toJson(),
-    };
-  }
-
-  /// 容错解析持久化内容；未知版本或字段回退到默认设置。
-  static GeneralSettings tryDecode(Object? raw) {
-    if (raw is! Map) {
-      return const GeneralSettings();
-    }
-    final map = Map<Object?, Object?>.from(raw);
-    final version = map['version'];
-    if (version != 1 && version != 2) {
-      return const GeneralSettings();
-    }
-    return GeneralSettings(
-      sendMessageShortcut: switch (map['sendMessageShortcut']) {
-        'primaryModifierEnter' => MessageSendShortcut.primaryModifierEnter,
-        'enter' => MessageSendShortcut.enter,
-        _ => MessageSendShortcut.enter,
-      },
-      notifications: version == 2
-          ? AgentNotificationSettings.tryDecode(map['notifications'])
-          : const AgentNotificationSettings(),
     );
   }
 

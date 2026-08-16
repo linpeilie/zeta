@@ -3,71 +3,24 @@ import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 
 void main() {
-  test('defaults to Enter and enabled notification categories', () {
+  test('defaults to Enter, enabled notifications and Chinese', () {
     const settings = GeneralSettings();
 
     expect(settings.sendMessageShortcut, MessageSendShortcut.enter);
     expect(settings.notifications, const AgentNotificationSettings());
     expect(settings.appLanguage, AppLanguage.simplifiedChinese);
-    expect(settings.toJson(), <String, Object?>{
-      'version': 2,
-      'sendMessageShortcut': 'enter',
-      'notifications': <String, Object?>{
-        'enabled': true,
-        'turnTerminalEnabled': true,
-        'actionRequiredEnabled': true,
-      },
-    });
   });
 
-  test('migrates version 1 while preserving the shortcut', () {
-    final settings = GeneralSettings.tryDecode(<String, Object?>{
-      'version': 1,
-      'sendMessageShortcut': 'primaryModifierEnter',
-    });
+  test('copyWith can change language independently', () {
+    const settings = GeneralSettings();
 
     expect(
-      settings,
-      const GeneralSettings(
-        sendMessageShortcut: MessageSendShortcut.primaryModifierEnter,
-      ),
-    );
-  });
-
-  test('falls back to Enter for invalid versions and fields', () {
-    expect(
-      GeneralSettings.tryDecode(<String, Object?>{
-        'version': 3,
-        'sendMessageShortcut': 'primaryModifierEnter',
-      }),
-      const GeneralSettings(),
+      settings.copyWith(appLanguage: AppLanguage.english).appLanguage,
+      AppLanguage.english,
     );
     expect(
-      GeneralSettings.tryDecode(<String, Object?>{
-        'version': 1,
-        'sendMessageShortcut': 'unknown',
-      }),
-      const GeneralSettings(),
-    );
-  });
-
-  test('decodes notification category switches from version 2', () {
-    final settings = GeneralSettings.tryDecode(<String, Object?>{
-      'version': 2,
-      'sendMessageShortcut': 'primaryModifierEnter',
-      'notifications': <String, Object?>{
-        'enabled': true,
-        'turnTerminalEnabled': false,
-        'actionRequiredEnabled': true,
-      },
-    });
-
-    expect(
-      settings,
-      const GeneralSettings(
-        sendMessageShortcut: MessageSendShortcut.primaryModifierEnter,
-        notifications: AgentNotificationSettings(turnTerminalEnabled: false),
-      ),
+      settings.copyWith(appLanguage: AppLanguage.english).sendMessageShortcut,
+      MessageSendShortcut.enter,
     );
   });
 }

@@ -1,7 +1,7 @@
 import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 
-/// `general.json` v3 编解码。步骤 4 与旧 domain JSON 并行，生产 store 暂不调用。
+/// `general.json` v3 编解码。
 final class GeneralSettingsCodec {
   const GeneralSettingsCodec();
 

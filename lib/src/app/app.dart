@@ -31,6 +31,7 @@ import 'package:zeta/src/features/settings/application/general_settings_controll
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
 import 'package:zeta/src/features/settings/data/general_settings_store.dart';
 import 'package:zeta/src/features/settings/data/system_font_catalog_service.dart';
+import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partition_store.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
@@ -59,6 +60,7 @@ class MainApp extends StatefulWidget {
     this.appearanceController,
     this.initialAppearanceSettings,
     this.generalSettingsController,
+    this.fallbackLanguage = AppLanguage.simplifiedChinese,
     this.dataPaths,
     this.usageStatisticsPartitionStore,
     this.agentUsagePanelRepository,
@@ -92,6 +94,9 @@ class MainApp extends StatefulWidget {
   /// 全局常规设置控制器。测试可注入内存版本；生产环境自动使用
   /// `~/.zeta/config/general.json`。
   final GeneralSettingsController? generalSettingsController;
+
+  /// 常规设置文件缺失或损坏时使用的语言。步骤 5 只注入 store，不改变根 Locale。
+  final AppLanguage fallbackLanguage;
 
   /// 生产启动阶段解析并初始化的 Zeta 自有数据路径。
   ///
@@ -229,8 +234,11 @@ class MainAppState extends State<MainApp>
       _ownsGeneralSettingsController = false;
     } else {
       final store = useFilePersistence
-          ? FileGeneralSettingsStore(file: dataPaths!.generalSettingsFile)
-          : MemoryGeneralSettingsStore();
+          ? FileGeneralSettingsStore(
+              file: dataPaths!.generalSettingsFile,
+              fallbackLanguage: widget.fallbackLanguage,
+            )
+          : MemoryGeneralSettingsStore(null, widget.fallbackLanguage);
       _generalSettingsController = GeneralSettingsController(store: store);
       _ownsGeneralSettingsController = true;
     }

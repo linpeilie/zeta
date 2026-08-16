@@ -6,10 +6,12 @@ import 'package:window_manager/window_manager.dart';
 
 import 'package:zeta/src/app/app.dart';
 import 'package:zeta/src/app/window_bootstrap.dart';
-import 'package:zeta/src/app/zeta_storage_migrator.dart';
+import 'package:zeta/src/app/zeta_startup_bootstrap.dart';
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/core/storage/zeta_data_paths.dart';
+import 'package:zeta/src/features/settings/application/app_language_resolver.dart';
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
+import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
 
@@ -19,7 +21,16 @@ void main() {
   runZonedGuarded(
     () async {
       WidgetsFlutterBinding.ensureInitialized();
+      final firstLocale = PlatformDispatcher.instance.locales.isEmpty
+          ? null
+          : PlatformDispatcher.instance.locales.first;
+      final firstSystemLanguage = resolveAppLanguageFromFirstSystemLocale(
+        languageCode: firstLocale?.languageCode,
+        scriptCode: firstLocale?.scriptCode,
+        countryCode: firstLocale?.countryCode,
+      );
       ZetaDataPaths? dataPaths;
+      var fallbackLanguage = firstSystemLanguage;
       Object? pathError;
       StackTrace? pathStackTrace;
       try {
@@ -37,8 +48,12 @@ void main() {
           stackTrace: pathStackTrace,
         );
       } else if (dataPaths != null) {
-        final storageReady = await _prepareZetaStorage(dataPaths);
-        if (!storageReady) {
+        final bootstrap = await _prepareZetaStorage(
+          dataPaths,
+          firstSystemLanguage,
+        );
+        fallbackLanguage = bootstrap.fallbackLanguage;
+        if (!bootstrap.filePersistenceEnabled) {
           // 避免迁移半途失败后，本次运行用空状态覆盖尚未迁入的旧偏好。
           dataPaths = null;
         }
@@ -51,7 +66,11 @@ void main() {
         ),
       );
       runApp(
-        MainApp(dataPaths: dataPaths, initialAppearanceSettings: appearance),
+        MainApp(
+          dataPaths: dataPaths,
+          initialAppearanceSettings: appearance,
+          fallbackLanguage: fallbackLanguage,
+        ),
       );
     },
     (error, stackTrace) {
@@ -78,24 +97,15 @@ Future<AppearanceSettings> _loadLaunchAppearance(ZetaDataPaths? paths) async {
   }
 }
 
-Future<bool> _prepareZetaStorage(ZetaDataPaths paths) async {
-  final log = loggerFor('zeta.storage');
-  try {
-    await paths.ensureDirectories();
-    final result = await ZetaStorageMigrator(paths: paths).migrate();
-    if (!result.alreadyCompleted) {
-      log.i('Migrated ${result.migratedKeys.length} Zeta storage entries');
-    }
-    return true;
-  } catch (error, stackTrace) {
-    // 目录或旧偏好迁移失败不能阻断启动；本次运行改用内存状态，留待下次重试。
-    log.w(
-      'Could not prepare the Zeta data directory',
-      error: error,
-      stackTrace: stackTrace,
-    );
-    return false;
-  }
+Future<ZetaStartupBootstrapResult> _prepareZetaStorage(
+  ZetaDataPaths paths,
+  AppLanguage firstSystemLanguage,
+) async {
+  final result = await ZetaStartupBootstrap(
+    paths: paths,
+    firstSystemLanguage: firstSystemLanguage,
+  ).run();
+  return result;
 }
 
 void _installGlobalErrorLogging() {

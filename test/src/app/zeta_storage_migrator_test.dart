@@ -7,6 +7,7 @@ import 'package:zeta/src/core/storage/zeta_data_paths.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
+import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partition_store.dart';
 
 const _legacyCursorSessionIndexStorageKey = 'zeta.agent.cursor.sessions.v1';
@@ -290,6 +291,81 @@ void main() {
           jsonDecode(await paths.migrationMarkerFile.readAsString())
               as Map<String, Object?>;
       expect(marker['version'], zetaStorageMigrationVersion);
+    });
+
+    test('upgrades v1 general.json and writes marker v2 last', () async {
+      await paths.configDirectory.create(recursive: true);
+      await paths.generalSettingsFile.writeAsString(
+        jsonEncode(<String, Object?>{
+          'version': 1,
+          'sendMessageShortcut': 'primaryModifierEnter',
+        }),
+      );
+      final result = await ZetaStorageMigrator(
+        paths: paths,
+        preferences: _FakeLegacyZetaPreferences(const <String, String>{}),
+      ).migrate();
+
+      expect(result.alreadyCompleted, isFalse);
+      final general =
+          jsonDecode(await paths.generalSettingsFile.readAsString())
+              as Map<String, Object?>;
+      expect(general['version'], 3);
+      expect(general['appLanguage'], 'zh-Hans');
+      expect(general['sendMessageShortcut'], 'primaryModifierEnter');
+      final marker =
+          jsonDecode(await paths.migrationMarkerFile.readAsString())
+              as Map<String, Object?>;
+      expect(marker['version'], 2);
+    });
+
+    test(
+      'creates missing general.json with the supplied seed language',
+      () async {
+        await ZetaStorageMigrator(
+          paths: paths,
+          missingGeneralLanguage: AppLanguage.english,
+          preferences: _FakeLegacyZetaPreferences(const <String, String>{}),
+        ).migrate();
+
+        final general =
+            jsonDecode(await paths.generalSettingsFile.readAsString())
+                as Map<String, Object?>;
+        expect(general['version'], 3);
+        expect(general['appLanguage'], 'en');
+      },
+    );
+
+    test(
+      'leaves damaged general.json untouched and still writes marker',
+      () async {
+        await paths.configDirectory.create(recursive: true);
+        await paths.generalSettingsFile.writeAsString('{not-json');
+
+        await ZetaStorageMigrator(
+          paths: paths,
+          preferences: _FakeLegacyZetaPreferences(const <String, String>{}),
+        ).migrate();
+
+        expect(await paths.generalSettingsFile.readAsString(), '{not-json');
+        expect(paths.migrationMarkerFile.existsSync(), isTrue);
+      },
+    );
+
+    test('does not write marker when general.json cannot be created', () async {
+      await paths.configDirectory.create(recursive: true);
+      final blocker = Directory(paths.generalSettingsFile.path)..createSync();
+
+      await expectLater(
+        ZetaStorageMigrator(
+          paths: paths,
+          preferences: _FakeLegacyZetaPreferences(const <String, String>{}),
+        ).migrate(),
+        throwsA(isA<FileSystemException>()),
+      );
+
+      expect(paths.migrationMarkerFile.existsSync(), isFalse);
+      blocker.deleteSync();
     });
 
     test('does not inspect or modify protected Cursor data', () async {

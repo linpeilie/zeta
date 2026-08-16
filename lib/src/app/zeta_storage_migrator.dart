@@ -8,11 +8,17 @@ import 'package:zeta/src/core/storage/zeta_data_paths.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
+import 'package:zeta/src/features/settings/data/general_settings_codec.dart';
+import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
+import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partition_store.dart';
 
 /// 当前 Zeta 自有存储迁移版本。
-const int zetaStorageMigrationVersion = 1;
+const int zetaStorageMigrationVersion = 2;
+
+/// 任一有效 marker（含旧 v1）都视为已经运行过 Zeta。
+const int zetaStorageExistingCohortMarkerVersion = 1;
 
 /// 旧版 Zeta 偏好读取边界。
 ///
@@ -79,6 +85,7 @@ class ZetaStorageMigrationResult {
 class ZetaStorageMigrator {
   ZetaStorageMigrator({
     required this.paths,
+    this.missingGeneralLanguage = AppLanguage.simplifiedChinese,
     LegacyZetaPreferences? preferences,
     DateTime Function()? clock,
   }) : _preferences = preferences ?? SharedPreferencesLegacyZetaPreferences(),
@@ -86,6 +93,11 @@ class ZetaStorageMigrator {
 
   /// 迁移目标的 Zeta 自有路径集合。
   final ZetaDataPaths paths;
+
+  /// 磁盘上没有 `general.json` 时写入的语言。
+  ///
+  /// existing cohort 应传入简体中文，fresh 传入第一系统 locale 的解析结果。
+  final AppLanguage missingGeneralLanguage;
   final LegacyZetaPreferences _preferences;
   final DateTime Function() _clock;
 
@@ -119,6 +131,7 @@ class ZetaStorageMigrator {
       migratedKeys: migratedKeys,
       existingTargetKeys: existingTargetKeys,
     );
+    await _ensureGeneralSettings();
 
     final marker = <String, Object?>{
       'version': zetaStorageMigrationVersion,
@@ -212,34 +225,74 @@ class ZetaStorageMigrator {
     migratedKeys.add(usageStatisticsIndexStorageKey);
   }
 
-  Future<bool> _hasCompletedMarker() async {
-    String? encoded;
+  Future<void> _ensureGeneralSettings() async {
+    const codec = GeneralSettingsCodec();
+    final target = AtomicTextFile(paths.generalSettingsFile);
+    String? raw;
     try {
-      encoded = await AtomicTextFile(paths.migrationMarkerFile).read();
-    } on FileSystemException {
-      return false;
+      raw = await target.read();
     } on FormatException {
-      return false;
+      return;
     }
-    if (encoded == null || encoded.trim().isEmpty) {
-      return false;
+    if (raw == null || raw.trim().isEmpty) {
+      final settings = GeneralSettings(appLanguage: missingGeneralLanguage);
+      await target.write(jsonEncode(codec.encode(settings)));
+      return;
     }
+
+    Object? decoded;
     try {
-      final decoded = jsonDecode(encoded);
-      if (decoded is! Map) {
-        return false;
-      }
-      final rawVersion = decoded['version'];
-      final version = switch (rawVersion) {
-        int() => rawVersion,
-        num() => rawVersion.toInt(),
-        String() => int.tryParse(rawVersion),
-        _ => null,
-      };
-      return version != null && version >= zetaStorageMigrationVersion;
+      decoded = jsonDecode(raw);
     } catch (_) {
-      return false;
+      return;
     }
+    if (decoded is! Map) {
+      return;
+    }
+    final version = decoded['version'];
+    if (version != 1 && version != 2) {
+      return;
+    }
+    final upgraded = codec.decode(
+      decoded,
+      fallbackLanguage: AppLanguage.simplifiedChinese,
+    );
+    await target.write(jsonEncode(codec.encode(upgraded)));
+  }
+
+  Future<bool> _hasCompletedMarker() async {
+    final version = await readZetaStorageMarkerVersion(paths);
+    return version != null && version >= zetaStorageMigrationVersion;
+  }
+}
+
+/// 读取迁移 marker 的版本；缺失或损坏时返回 null。
+Future<int?> readZetaStorageMarkerVersion(ZetaDataPaths paths) async {
+  String? encoded;
+  try {
+    encoded = await AtomicTextFile(paths.migrationMarkerFile).read();
+  } on FileSystemException {
+    return null;
+  } on FormatException {
+    return null;
+  }
+  if (encoded == null || encoded.trim().isEmpty) {
+    return null;
+  }
+  try {
+    final decoded = jsonDecode(encoded);
+    if (decoded is! Map) {
+      return null;
+    }
+    final rawVersion = decoded['version'];
+    return switch (rawVersion) {
+      int() => rawVersion,
+      num() => rawVersion.toInt(),
+      String() => int.tryParse(rawVersion),
+      _ => null,
+    };
+  } catch (_) {
+    return null;
   }
 }
 
