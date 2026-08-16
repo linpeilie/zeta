@@ -89,7 +89,7 @@ class IdeTabs<T> extends StatelessWidget {
       ),
       child: sf.ComponentTheme(
         data: sf.TabsTheme(
-          containerPadding: const EdgeInsets.all(IdeSpacing.space2),
+          containerPadding: const EdgeInsets.all(IdeSpacing.space4),
           tabPadding: const EdgeInsets.symmetric(
             horizontal: IdeSpacing.space10,
             vertical: IdeSpacing.space4,
