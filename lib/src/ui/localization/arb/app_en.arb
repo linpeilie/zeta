@@ -1,0 +1,511 @@
+{
+  "@@locale": "en",
+  "appTitle": "Zeta",
+  "@appTitle": {
+    "description": "Application window title and brand name. Keep as Zeta."
+  },
+  "localizationContractGreeting": "Hello {name}",
+  "@localizationContractGreeting": {
+    "description": "Contract-only greeting used to lock placeholder generation.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Ada"
+      }
+    }
+  },
+  "shadcnFormNotEmpty": "This field cannot be empty",
+  "@shadcnFormNotEmpty": {
+    "description": "shadcn form empty validation"
+  },
+  "shadcnInvalidValue": "Invalid value",
+  "@shadcnInvalidValue": {
+    "description": "shadcn generic invalid value"
+  },
+  "shadcnInvalidEmail": "Invalid email",
+  "@shadcnInvalidEmail": {
+    "description": "shadcn email validation"
+  },
+  "shadcnInvalidURL": "Invalid URL",
+  "@shadcnInvalidURL": {
+    "description": "shadcn URL validation"
+  },
+  "shadcnFormLessThan": "Must be less than {value}",
+  "@shadcnFormLessThan": {
+    "description": "shadcn less-than validation; value is preformatted",
+    "placeholders": {
+      "value": {
+        "type": "String",
+        "example": "10"
+      }
+    }
+  },
+  "shadcnFormGreaterThan": "Must be greater than {value}",
+  "@shadcnFormGreaterThan": {
+    "description": "shadcn greater-than validation; value is preformatted",
+    "placeholders": {
+      "value": {
+        "type": "String",
+        "example": "10"
+      }
+    }
+  },
+  "shadcnFormLessThanOrEqualTo": "Must be less than or equal to {value}",
+  "@shadcnFormLessThanOrEqualTo": {
+    "description": "shadcn LTE validation; value is preformatted",
+    "placeholders": {
+      "value": {
+        "type": "String",
+        "example": "10"
+      }
+    }
+  },
+  "shadcnFormGreaterThanOrEqualTo": "Must be greater than or equal to {value}",
+  "@shadcnFormGreaterThanOrEqualTo": {
+    "description": "shadcn GTE validation; value is preformatted",
+    "placeholders": {
+      "value": {
+        "type": "String",
+        "example": "10"
+      }
+    }
+  },
+  "shadcnFormPhoneNumberInvalid": "Phone number is invalid",
+  "@shadcnFormPhoneNumberInvalid": {
+    "description": "shadcn phone validation"
+  },
+  "shadcnFormPhoneNumberEmpty": "Phone number is required",
+  "@shadcnFormPhoneNumberEmpty": {
+    "description": "shadcn phone required"
+  },
+  "shadcnFormBetweenInclusively": "Must be between {min} and {max} (inclusive)",
+  "@shadcnFormBetweenInclusively": {
+    "description": "shadcn inclusive range; numbers preformatted",
+    "placeholders": {
+      "min": {
+        "type": "String",
+        "example": "1"
+      },
+      "max": {
+        "type": "String",
+        "example": "10"
+      }
+    }
+  },
+  "shadcnFormBetweenExclusively": "Must be between {min} and {max} (exclusive)",
+  "@shadcnFormBetweenExclusively": {
+    "description": "shadcn exclusive range; numbers preformatted",
+    "placeholders": {
+      "min": {
+        "type": "String",
+        "example": "1"
+      },
+      "max": {
+        "type": "String",
+        "example": "10"
+      }
+    }
+  },
+  "shadcnFormLengthLessThan": "Must be at least {value} characters",
+  "@shadcnFormLengthLessThan": {
+    "description": "shadcn min length; value is digits",
+    "placeholders": {
+      "value": {
+        "type": "String",
+        "example": "8"
+      }
+    }
+  },
+  "shadcnFormLengthGreaterThan": "Must be at most {value} characters",
+  "@shadcnFormLengthGreaterThan": {
+    "description": "shadcn max length; value is digits",
+    "placeholders": {
+      "value": {
+        "type": "String",
+        "example": "8"
+      }
+    }
+  },
+  "shadcnFormPasswordDigits": "Must contain at least one digit",
+  "@shadcnFormPasswordDigits": {
+    "description": "shadcn password digit rule"
+  },
+  "shadcnFormPasswordLowercase": "Must contain at least one lowercase letter",
+  "@shadcnFormPasswordLowercase": {
+    "description": "shadcn password lowercase rule"
+  },
+  "shadcnFormPasswordUppercase": "Must contain at least one uppercase letter",
+  "@shadcnFormPasswordUppercase": {
+    "description": "shadcn password uppercase rule"
+  },
+  "shadcnFormPasswordSpecial": "Must contain at least one special character",
+  "@shadcnFormPasswordSpecial": {
+    "description": "shadcn password special rule"
+  },
+  "shadcnCommandSearch": "Type a command or search...",
+  "@shadcnCommandSearch": {
+    "description": "shadcn command palette search"
+  },
+  "shadcnCommandEmpty": "No results found.",
+  "@shadcnCommandEmpty": {
+    "description": "shadcn command empty"
+  },
+  "shadcnCommandMoveUp": "Move Up",
+  "@shadcnCommandMoveUp": {
+    "description": "shadcn command move up"
+  },
+  "shadcnCommandMoveDown": "Move Down",
+  "@shadcnCommandMoveDown": {
+    "description": "shadcn command move down"
+  },
+  "shadcnCommandActivate": "Select",
+  "@shadcnCommandActivate": {
+    "description": "shadcn command activate"
+  },
+  "shadcnDatePickerSelectYear": "Select a year",
+  "@shadcnDatePickerSelectYear": {
+    "description": "shadcn date picker year"
+  },
+  "shadcnPlaceholderDatePicker": "Select a date",
+  "@shadcnPlaceholderDatePicker": {
+    "description": "shadcn date picker placeholder"
+  },
+  "shadcnPlaceholderTimePicker": "Select a time",
+  "@shadcnPlaceholderTimePicker": {
+    "description": "shadcn time picker placeholder"
+  },
+  "shadcnPlaceholderColorPicker": "Select a color",
+  "@shadcnPlaceholderColorPicker": {
+    "description": "shadcn color picker placeholder"
+  },
+  "shadcnPlaceholderDurationPicker": "Select a duration",
+  "@shadcnPlaceholderDurationPicker": {
+    "description": "shadcn duration picker placeholder"
+  },
+  "shadcnButtonCancel": "Cancel",
+  "@shadcnButtonCancel": {
+    "description": "shadcn cancel"
+  },
+  "shadcnButtonSave": "Save",
+  "@shadcnButtonSave": {
+    "description": "shadcn save"
+  },
+  "shadcnButtonPrevious": "Previous",
+  "@shadcnButtonPrevious": {
+    "description": "shadcn previous"
+  },
+  "shadcnButtonNext": "Next",
+  "@shadcnButtonNext": {
+    "description": "shadcn next"
+  },
+  "shadcnTimeHour": "Hour",
+  "@shadcnTimeHour": {
+    "description": "shadcn hour label"
+  },
+  "shadcnTimeMinute": "Minute",
+  "@shadcnTimeMinute": {
+    "description": "shadcn minute label"
+  },
+  "shadcnTimeSecond": "Second",
+  "@shadcnTimeSecond": {
+    "description": "shadcn second label"
+  },
+  "shadcnTimeAM": "AM",
+  "@shadcnTimeAM": {
+    "description": "Keep AM token for D6 time format"
+  },
+  "shadcnTimePM": "PM",
+  "@shadcnTimePM": {
+    "description": "Keep PM token for D6 time format"
+  },
+  "shadcnColorRed": "Red",
+  "@shadcnColorRed": {
+    "description": "shadcn color red"
+  },
+  "shadcnColorGreen": "Green",
+  "@shadcnColorGreen": {
+    "description": "shadcn color green"
+  },
+  "shadcnColorBlue": "Blue",
+  "@shadcnColorBlue": {
+    "description": "shadcn color blue"
+  },
+  "shadcnColorAlpha": "Alpha",
+  "@shadcnColorAlpha": {
+    "description": "shadcn color alpha"
+  },
+  "shadcnColorHue": "Hue",
+  "@shadcnColorHue": {
+    "description": "shadcn color hue"
+  },
+  "shadcnColorSaturation": "Sat",
+  "@shadcnColorSaturation": {
+    "description": "shadcn color saturation"
+  },
+  "shadcnColorValue": "Val",
+  "@shadcnColorValue": {
+    "description": "shadcn color value"
+  },
+  "shadcnColorLightness": "Lum",
+  "@shadcnColorLightness": {
+    "description": "shadcn color lightness"
+  },
+  "shadcnMenuCut": "Cut",
+  "@shadcnMenuCut": {
+    "description": "context menu cut"
+  },
+  "shadcnMenuCopy": "Copy",
+  "@shadcnMenuCopy": {
+    "description": "context menu copy"
+  },
+  "shadcnMenuPaste": "Paste",
+  "@shadcnMenuPaste": {
+    "description": "context menu paste"
+  },
+  "shadcnMenuSelectAll": "Select All",
+  "@shadcnMenuSelectAll": {
+    "description": "context menu select all"
+  },
+  "shadcnMenuUndo": "Undo",
+  "@shadcnMenuUndo": {
+    "description": "context menu undo"
+  },
+  "shadcnMenuRedo": "Redo",
+  "@shadcnMenuRedo": {
+    "description": "context menu redo"
+  },
+  "shadcnMenuDelete": "Delete",
+  "@shadcnMenuDelete": {
+    "description": "context menu delete"
+  },
+  "shadcnMenuShare": "Share",
+  "@shadcnMenuShare": {
+    "description": "context menu share"
+  },
+  "shadcnMenuSearchWeb": "Search Web",
+  "@shadcnMenuSearchWeb": {
+    "description": "context menu search web"
+  },
+  "shadcnMenuLiveTextInput": "Live Text Input",
+  "@shadcnMenuLiveTextInput": {
+    "description": "context menu live text"
+  },
+  "shadcnRefreshTriggerPull": "Pull to refresh",
+  "@shadcnRefreshTriggerPull": {
+    "description": "refresh pull"
+  },
+  "shadcnRefreshTriggerRelease": "Release to refresh",
+  "@shadcnRefreshTriggerRelease": {
+    "description": "refresh release"
+  },
+  "shadcnRefreshTriggerRefreshing": "Refreshing...",
+  "@shadcnRefreshTriggerRefreshing": {
+    "description": "refresh in progress"
+  },
+  "shadcnRefreshTriggerComplete": "Refresh complete",
+  "@shadcnRefreshTriggerComplete": {
+    "description": "refresh complete"
+  },
+  "shadcnColorPickerTabRecent": "Recent",
+  "@shadcnColorPickerTabRecent": {
+    "description": "color picker recent"
+  },
+  "shadcnColorPickerTabRGB": "RGB",
+  "@shadcnColorPickerTabRGB": {
+    "description": "color picker RGB tab token"
+  },
+  "shadcnColorPickerTabHSV": "HSV",
+  "@shadcnColorPickerTabHSV": {
+    "description": "color picker HSV tab token"
+  },
+  "shadcnColorPickerTabHSL": "HSL",
+  "@shadcnColorPickerTabHSL": {
+    "description": "color picker HSL tab token"
+  },
+  "shadcnColorPickerTabHEX": "HEX",
+  "@shadcnColorPickerTabHEX": {
+    "description": "color picker HEX tab token"
+  },
+  "shadcnDataTableSelectedRows": "{count} of {total} row(s) selected.",
+  "@shadcnDataTableSelectedRows": {
+    "description": "data table selection; counts preformatted",
+    "placeholders": {
+      "count": {
+        "type": "String",
+        "example": "1"
+      },
+      "total": {
+        "type": "String",
+        "example": "10"
+      }
+    }
+  },
+  "shadcnDataTableNext": "Next",
+  "@shadcnDataTableNext": {
+    "description": "data table next"
+  },
+  "shadcnDataTablePrevious": "Previous",
+  "@shadcnDataTablePrevious": {
+    "description": "data table previous"
+  },
+  "shadcnDataTableColumns": "Columns",
+  "@shadcnDataTableColumns": {
+    "description": "data table columns"
+  },
+  "shadcnTimeDaysAbbreviation": "DD",
+  "@shadcnTimeDaysAbbreviation": {
+    "description": "duration day abbreviation, keep token"
+  },
+  "shadcnTimeHoursAbbreviation": "HH",
+  "@shadcnTimeHoursAbbreviation": {
+    "description": "duration hour abbreviation, keep token"
+  },
+  "shadcnTimeMinutesAbbreviation": "MM",
+  "@shadcnTimeMinutesAbbreviation": {
+    "description": "duration minute abbreviation, keep token"
+  },
+  "shadcnTimeSecondsAbbreviation": "SS",
+  "@shadcnTimeSecondsAbbreviation": {
+    "description": "duration second abbreviation, keep token"
+  },
+  "shadcnDurationDay": "Day",
+  "@shadcnDurationDay": {
+    "description": "duration day label"
+  },
+  "shadcnDurationHour": "Hour",
+  "@shadcnDurationHour": {
+    "description": "duration hour label"
+  },
+  "shadcnDurationMinute": "Minute",
+  "@shadcnDurationMinute": {
+    "description": "duration minute label"
+  },
+  "shadcnDurationSecond": "Second",
+  "@shadcnDurationSecond": {
+    "description": "duration second label"
+  },
+  "shadcnAbbreviatedMonday": "Mo",
+  "@shadcnAbbreviatedMonday": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnAbbreviatedTuesday": "Tu",
+  "@shadcnAbbreviatedTuesday": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnAbbreviatedWednesday": "We",
+  "@shadcnAbbreviatedWednesday": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnAbbreviatedThursday": "Th",
+  "@shadcnAbbreviatedThursday": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnAbbreviatedFriday": "Fr",
+  "@shadcnAbbreviatedFriday": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnAbbreviatedSaturday": "Sa",
+  "@shadcnAbbreviatedSaturday": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnAbbreviatedSunday": "Su",
+  "@shadcnAbbreviatedSunday": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnMonthJanuary": "January",
+  "@shadcnMonthJanuary": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnMonthFebruary": "February",
+  "@shadcnMonthFebruary": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnMonthMarch": "March",
+  "@shadcnMonthMarch": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnMonthApril": "April",
+  "@shadcnMonthApril": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnMonthMay": "May",
+  "@shadcnMonthMay": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnMonthJune": "June",
+  "@shadcnMonthJune": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnMonthJuly": "July",
+  "@shadcnMonthJuly": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnMonthAugust": "August",
+  "@shadcnMonthAugust": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnMonthSeptember": "September",
+  "@shadcnMonthSeptember": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnMonthOctober": "October",
+  "@shadcnMonthOctober": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnMonthNovember": "November",
+  "@shadcnMonthNovember": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnMonthDecember": "December",
+  "@shadcnMonthDecember": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnAbbreviatedJanuary": "Jan",
+  "@shadcnAbbreviatedJanuary": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnAbbreviatedFebruary": "Feb",
+  "@shadcnAbbreviatedFebruary": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnAbbreviatedMarch": "Mar",
+  "@shadcnAbbreviatedMarch": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnAbbreviatedApril": "Apr",
+  "@shadcnAbbreviatedApril": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnAbbreviatedMay": "May",
+  "@shadcnAbbreviatedMay": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnAbbreviatedJune": "Jun",
+  "@shadcnAbbreviatedJune": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnAbbreviatedJuly": "Jul",
+  "@shadcnAbbreviatedJuly": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnAbbreviatedAugust": "Aug",
+  "@shadcnAbbreviatedAugust": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnAbbreviatedSeptember": "Sep",
+  "@shadcnAbbreviatedSeptember": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnAbbreviatedOctober": "Oct",
+  "@shadcnAbbreviatedOctober": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnAbbreviatedNovember": "Nov",
+  "@shadcnAbbreviatedNovember": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnAbbreviatedDecember": "Dec",
+  "@shadcnAbbreviatedDecember": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  }
+}

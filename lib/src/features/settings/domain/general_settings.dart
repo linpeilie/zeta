@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import 'package:zeta/src/features/settings/domain/app_language.dart';
+
 /// 消息输入框使用的发送快捷键。
 enum MessageSendShortcut {
   /// 无修饰键的 Enter 发送消息。
@@ -78,19 +80,25 @@ class GeneralSettings {
   const GeneralSettings({
     this.sendMessageShortcut = MessageSendShortcut.enter,
     this.notifications = const AgentNotificationSettings(),
+    this.appLanguage = AppLanguage.simplifiedChinese,
   });
 
   /// 消息输入框当前使用的发送快捷键。
   final MessageSendShortcut sendMessageShortcut;
   final AgentNotificationSettings notifications;
 
+  /// 下次启动使用的界面语言。步骤 4 起存在于 domain，旧 JSON 路径暂不读写。
+  final AppLanguage appLanguage;
+
   GeneralSettings copyWith({
     MessageSendShortcut? sendMessageShortcut,
     AgentNotificationSettings? notifications,
+    AppLanguage? appLanguage,
   }) {
     return GeneralSettings(
       sendMessageShortcut: sendMessageShortcut ?? this.sendMessageShortcut,
       notifications: notifications ?? this.notifications,
+      appLanguage: appLanguage ?? this.appLanguage,
     );
   }
 
@@ -131,9 +139,11 @@ class GeneralSettings {
   bool operator ==(Object other) {
     return other is GeneralSettings &&
         other.sendMessageShortcut == sendMessageShortcut &&
-        other.notifications == notifications;
+        other.notifications == notifications &&
+        other.appLanguage == appLanguage;
   }
 
   @override
-  int get hashCode => Object.hash(sendMessageShortcut, notifications);
+  int get hashCode =>
+      Object.hash(sendMessageShortcut, notifications, appLanguage);
 }

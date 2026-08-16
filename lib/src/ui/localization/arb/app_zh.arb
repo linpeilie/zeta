@@ -1,0 +1,511 @@
+{
+  "@@locale": "zh",
+  "appTitle": "Zeta",
+  "@appTitle": {
+    "description": "Application window title and brand name. Keep as Zeta."
+  },
+  "localizationContractGreeting": "你好 {name}",
+  "@localizationContractGreeting": {
+    "description": "Contract-only greeting used to lock placeholder generation.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Ada"
+      }
+    }
+  },
+  "shadcnFormNotEmpty": "此项不能为空",
+  "@shadcnFormNotEmpty": {
+    "description": "shadcn form empty validation"
+  },
+  "shadcnInvalidValue": "值无效",
+  "@shadcnInvalidValue": {
+    "description": "shadcn generic invalid value"
+  },
+  "shadcnInvalidEmail": "邮箱无效",
+  "@shadcnInvalidEmail": {
+    "description": "shadcn email validation"
+  },
+  "shadcnInvalidURL": "URL 无效",
+  "@shadcnInvalidURL": {
+    "description": "shadcn URL validation"
+  },
+  "shadcnFormLessThan": "必须小于 {value}",
+  "@shadcnFormLessThan": {
+    "description": "shadcn less-than validation; value is preformatted",
+    "placeholders": {
+      "value": {
+        "type": "String",
+        "example": "10"
+      }
+    }
+  },
+  "shadcnFormGreaterThan": "必须大于 {value}",
+  "@shadcnFormGreaterThan": {
+    "description": "shadcn greater-than validation; value is preformatted",
+    "placeholders": {
+      "value": {
+        "type": "String",
+        "example": "10"
+      }
+    }
+  },
+  "shadcnFormLessThanOrEqualTo": "必须小于或等于 {value}",
+  "@shadcnFormLessThanOrEqualTo": {
+    "description": "shadcn LTE validation; value is preformatted",
+    "placeholders": {
+      "value": {
+        "type": "String",
+        "example": "10"
+      }
+    }
+  },
+  "shadcnFormGreaterThanOrEqualTo": "必须大于或等于 {value}",
+  "@shadcnFormGreaterThanOrEqualTo": {
+    "description": "shadcn GTE validation; value is preformatted",
+    "placeholders": {
+      "value": {
+        "type": "String",
+        "example": "10"
+      }
+    }
+  },
+  "shadcnFormPhoneNumberInvalid": "电话号码无效",
+  "@shadcnFormPhoneNumberInvalid": {
+    "description": "shadcn phone validation"
+  },
+  "shadcnFormPhoneNumberEmpty": "请填写电话号码",
+  "@shadcnFormPhoneNumberEmpty": {
+    "description": "shadcn phone required"
+  },
+  "shadcnFormBetweenInclusively": "必须介于 {min} 和 {max} 之间（含边界）",
+  "@shadcnFormBetweenInclusively": {
+    "description": "shadcn inclusive range; numbers preformatted",
+    "placeholders": {
+      "min": {
+        "type": "String",
+        "example": "1"
+      },
+      "max": {
+        "type": "String",
+        "example": "10"
+      }
+    }
+  },
+  "shadcnFormBetweenExclusively": "必须介于 {min} 和 {max} 之间（不含边界）",
+  "@shadcnFormBetweenExclusively": {
+    "description": "shadcn exclusive range; numbers preformatted",
+    "placeholders": {
+      "min": {
+        "type": "String",
+        "example": "1"
+      },
+      "max": {
+        "type": "String",
+        "example": "10"
+      }
+    }
+  },
+  "shadcnFormLengthLessThan": "至少 {value} 个字符",
+  "@shadcnFormLengthLessThan": {
+    "description": "shadcn min length; value is digits",
+    "placeholders": {
+      "value": {
+        "type": "String",
+        "example": "8"
+      }
+    }
+  },
+  "shadcnFormLengthGreaterThan": "最多 {value} 个字符",
+  "@shadcnFormLengthGreaterThan": {
+    "description": "shadcn max length; value is digits",
+    "placeholders": {
+      "value": {
+        "type": "String",
+        "example": "8"
+      }
+    }
+  },
+  "shadcnFormPasswordDigits": "至少包含一位数字",
+  "@shadcnFormPasswordDigits": {
+    "description": "shadcn password digit rule"
+  },
+  "shadcnFormPasswordLowercase": "至少包含一个小写字母",
+  "@shadcnFormPasswordLowercase": {
+    "description": "shadcn password lowercase rule"
+  },
+  "shadcnFormPasswordUppercase": "至少包含一个大写字母",
+  "@shadcnFormPasswordUppercase": {
+    "description": "shadcn password uppercase rule"
+  },
+  "shadcnFormPasswordSpecial": "至少包含一个特殊字符",
+  "@shadcnFormPasswordSpecial": {
+    "description": "shadcn password special rule"
+  },
+  "shadcnCommandSearch": "输入命令或搜索…",
+  "@shadcnCommandSearch": {
+    "description": "shadcn command palette search"
+  },
+  "shadcnCommandEmpty": "未找到结果。",
+  "@shadcnCommandEmpty": {
+    "description": "shadcn command empty"
+  },
+  "shadcnCommandMoveUp": "上移",
+  "@shadcnCommandMoveUp": {
+    "description": "shadcn command move up"
+  },
+  "shadcnCommandMoveDown": "下移",
+  "@shadcnCommandMoveDown": {
+    "description": "shadcn command move down"
+  },
+  "shadcnCommandActivate": "选择",
+  "@shadcnCommandActivate": {
+    "description": "shadcn command activate"
+  },
+  "shadcnDatePickerSelectYear": "选择年份",
+  "@shadcnDatePickerSelectYear": {
+    "description": "shadcn date picker year"
+  },
+  "shadcnPlaceholderDatePicker": "选择日期",
+  "@shadcnPlaceholderDatePicker": {
+    "description": "shadcn date picker placeholder"
+  },
+  "shadcnPlaceholderTimePicker": "选择时间",
+  "@shadcnPlaceholderTimePicker": {
+    "description": "shadcn time picker placeholder"
+  },
+  "shadcnPlaceholderColorPicker": "选择颜色",
+  "@shadcnPlaceholderColorPicker": {
+    "description": "shadcn color picker placeholder"
+  },
+  "shadcnPlaceholderDurationPicker": "选择时长",
+  "@shadcnPlaceholderDurationPicker": {
+    "description": "shadcn duration picker placeholder"
+  },
+  "shadcnButtonCancel": "取消",
+  "@shadcnButtonCancel": {
+    "description": "shadcn cancel"
+  },
+  "shadcnButtonSave": "保存",
+  "@shadcnButtonSave": {
+    "description": "shadcn save"
+  },
+  "shadcnButtonPrevious": "上一页",
+  "@shadcnButtonPrevious": {
+    "description": "shadcn previous"
+  },
+  "shadcnButtonNext": "下一页",
+  "@shadcnButtonNext": {
+    "description": "shadcn next"
+  },
+  "shadcnTimeHour": "时",
+  "@shadcnTimeHour": {
+    "description": "shadcn hour label"
+  },
+  "shadcnTimeMinute": "分",
+  "@shadcnTimeMinute": {
+    "description": "shadcn minute label"
+  },
+  "shadcnTimeSecond": "秒",
+  "@shadcnTimeSecond": {
+    "description": "shadcn second label"
+  },
+  "shadcnTimeAM": "AM",
+  "@shadcnTimeAM": {
+    "description": "Keep AM token for D6 time format"
+  },
+  "shadcnTimePM": "PM",
+  "@shadcnTimePM": {
+    "description": "Keep PM token for D6 time format"
+  },
+  "shadcnColorRed": "红",
+  "@shadcnColorRed": {
+    "description": "shadcn color red"
+  },
+  "shadcnColorGreen": "绿",
+  "@shadcnColorGreen": {
+    "description": "shadcn color green"
+  },
+  "shadcnColorBlue": "蓝",
+  "@shadcnColorBlue": {
+    "description": "shadcn color blue"
+  },
+  "shadcnColorAlpha": "透明",
+  "@shadcnColorAlpha": {
+    "description": "shadcn color alpha"
+  },
+  "shadcnColorHue": "色相",
+  "@shadcnColorHue": {
+    "description": "shadcn color hue"
+  },
+  "shadcnColorSaturation": "饱和",
+  "@shadcnColorSaturation": {
+    "description": "shadcn color saturation"
+  },
+  "shadcnColorValue": "明度",
+  "@shadcnColorValue": {
+    "description": "shadcn color value"
+  },
+  "shadcnColorLightness": "亮度",
+  "@shadcnColorLightness": {
+    "description": "shadcn color lightness"
+  },
+  "shadcnMenuCut": "剪切",
+  "@shadcnMenuCut": {
+    "description": "context menu cut"
+  },
+  "shadcnMenuCopy": "复制",
+  "@shadcnMenuCopy": {
+    "description": "context menu copy"
+  },
+  "shadcnMenuPaste": "粘贴",
+  "@shadcnMenuPaste": {
+    "description": "context menu paste"
+  },
+  "shadcnMenuSelectAll": "全选",
+  "@shadcnMenuSelectAll": {
+    "description": "context menu select all"
+  },
+  "shadcnMenuUndo": "撤销",
+  "@shadcnMenuUndo": {
+    "description": "context menu undo"
+  },
+  "shadcnMenuRedo": "重做",
+  "@shadcnMenuRedo": {
+    "description": "context menu redo"
+  },
+  "shadcnMenuDelete": "删除",
+  "@shadcnMenuDelete": {
+    "description": "context menu delete"
+  },
+  "shadcnMenuShare": "分享",
+  "@shadcnMenuShare": {
+    "description": "context menu share"
+  },
+  "shadcnMenuSearchWeb": "搜索网页",
+  "@shadcnMenuSearchWeb": {
+    "description": "context menu search web"
+  },
+  "shadcnMenuLiveTextInput": "实况文本",
+  "@shadcnMenuLiveTextInput": {
+    "description": "context menu live text"
+  },
+  "shadcnRefreshTriggerPull": "下拉刷新",
+  "@shadcnRefreshTriggerPull": {
+    "description": "refresh pull"
+  },
+  "shadcnRefreshTriggerRelease": "松开刷新",
+  "@shadcnRefreshTriggerRelease": {
+    "description": "refresh release"
+  },
+  "shadcnRefreshTriggerRefreshing": "正在刷新…",
+  "@shadcnRefreshTriggerRefreshing": {
+    "description": "refresh in progress"
+  },
+  "shadcnRefreshTriggerComplete": "刷新完成",
+  "@shadcnRefreshTriggerComplete": {
+    "description": "refresh complete"
+  },
+  "shadcnColorPickerTabRecent": "最近",
+  "@shadcnColorPickerTabRecent": {
+    "description": "color picker recent"
+  },
+  "shadcnColorPickerTabRGB": "RGB",
+  "@shadcnColorPickerTabRGB": {
+    "description": "color picker RGB tab token"
+  },
+  "shadcnColorPickerTabHSV": "HSV",
+  "@shadcnColorPickerTabHSV": {
+    "description": "color picker HSV tab token"
+  },
+  "shadcnColorPickerTabHSL": "HSL",
+  "@shadcnColorPickerTabHSL": {
+    "description": "color picker HSL tab token"
+  },
+  "shadcnColorPickerTabHEX": "HEX",
+  "@shadcnColorPickerTabHEX": {
+    "description": "color picker HEX tab token"
+  },
+  "shadcnDataTableSelectedRows": "已选择 {count} / {total} 行。",
+  "@shadcnDataTableSelectedRows": {
+    "description": "data table selection; counts preformatted",
+    "placeholders": {
+      "count": {
+        "type": "String",
+        "example": "1"
+      },
+      "total": {
+        "type": "String",
+        "example": "10"
+      }
+    }
+  },
+  "shadcnDataTableNext": "下一页",
+  "@shadcnDataTableNext": {
+    "description": "data table next"
+  },
+  "shadcnDataTablePrevious": "上一页",
+  "@shadcnDataTablePrevious": {
+    "description": "data table previous"
+  },
+  "shadcnDataTableColumns": "列",
+  "@shadcnDataTableColumns": {
+    "description": "data table columns"
+  },
+  "shadcnTimeDaysAbbreviation": "DD",
+  "@shadcnTimeDaysAbbreviation": {
+    "description": "duration day abbreviation, keep token"
+  },
+  "shadcnTimeHoursAbbreviation": "HH",
+  "@shadcnTimeHoursAbbreviation": {
+    "description": "duration hour abbreviation, keep token"
+  },
+  "shadcnTimeMinutesAbbreviation": "MM",
+  "@shadcnTimeMinutesAbbreviation": {
+    "description": "duration minute abbreviation, keep token"
+  },
+  "shadcnTimeSecondsAbbreviation": "SS",
+  "@shadcnTimeSecondsAbbreviation": {
+    "description": "duration second abbreviation, keep token"
+  },
+  "shadcnDurationDay": "天",
+  "@shadcnDurationDay": {
+    "description": "duration day label"
+  },
+  "shadcnDurationHour": "小时",
+  "@shadcnDurationHour": {
+    "description": "duration hour label"
+  },
+  "shadcnDurationMinute": "分钟",
+  "@shadcnDurationMinute": {
+    "description": "duration minute label"
+  },
+  "shadcnDurationSecond": "秒",
+  "@shadcnDurationSecond": {
+    "description": "duration second label"
+  },
+  "shadcnAbbreviatedMonday": "Mo",
+  "@shadcnAbbreviatedMonday": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnAbbreviatedTuesday": "Tu",
+  "@shadcnAbbreviatedTuesday": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnAbbreviatedWednesday": "We",
+  "@shadcnAbbreviatedWednesday": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnAbbreviatedThursday": "Th",
+  "@shadcnAbbreviatedThursday": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnAbbreviatedFriday": "Fr",
+  "@shadcnAbbreviatedFriday": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnAbbreviatedSaturday": "Sa",
+  "@shadcnAbbreviatedSaturday": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnAbbreviatedSunday": "Su",
+  "@shadcnAbbreviatedSunday": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnMonthJanuary": "January",
+  "@shadcnMonthJanuary": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnMonthFebruary": "February",
+  "@shadcnMonthFebruary": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnMonthMarch": "March",
+  "@shadcnMonthMarch": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnMonthApril": "April",
+  "@shadcnMonthApril": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnMonthMay": "May",
+  "@shadcnMonthMay": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnMonthJune": "June",
+  "@shadcnMonthJune": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnMonthJuly": "July",
+  "@shadcnMonthJuly": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnMonthAugust": "August",
+  "@shadcnMonthAugust": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnMonthSeptember": "September",
+  "@shadcnMonthSeptember": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnMonthOctober": "October",
+  "@shadcnMonthOctober": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnMonthNovember": "November",
+  "@shadcnMonthNovember": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnMonthDecember": "December",
+  "@shadcnMonthDecember": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnAbbreviatedJanuary": "Jan",
+  "@shadcnAbbreviatedJanuary": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnAbbreviatedFebruary": "Feb",
+  "@shadcnAbbreviatedFebruary": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnAbbreviatedMarch": "Mar",
+  "@shadcnAbbreviatedMarch": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnAbbreviatedApril": "Apr",
+  "@shadcnAbbreviatedApril": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnAbbreviatedMay": "May",
+  "@shadcnAbbreviatedMay": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnAbbreviatedJune": "Jun",
+  "@shadcnAbbreviatedJune": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnAbbreviatedJuly": "Jul",
+  "@shadcnAbbreviatedJuly": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnAbbreviatedAugust": "Aug",
+  "@shadcnAbbreviatedAugust": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnAbbreviatedSeptember": "Sep",
+  "@shadcnAbbreviatedSeptember": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnAbbreviatedOctober": "Oct",
+  "@shadcnAbbreviatedOctober": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnAbbreviatedNovember": "Nov",
+  "@shadcnAbbreviatedNovember": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  },
+  "shadcnAbbreviatedDecember": "Dec",
+  "@shadcnAbbreviatedDecember": {
+    "description": "Calendar token kept language-stable for D6 date format."
+  }
+}

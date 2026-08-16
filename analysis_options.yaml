@@ -3,3 +3,4 @@ include: package:flutter_lints/flutter.yaml
 analyzer:
   exclude:
     - third_party/**
+    - lib/src/ui/localization/generated/**

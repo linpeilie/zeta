@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 
 void main() {
@@ -7,6 +8,7 @@ void main() {
 
     expect(settings.sendMessageShortcut, MessageSendShortcut.enter);
     expect(settings.notifications, const AgentNotificationSettings());
+    expect(settings.appLanguage, AppLanguage.simplifiedChinese);
     expect(settings.toJson(), <String, Object?>{
       'version': 2,
       'sendMessageShortcut': 'enter',
