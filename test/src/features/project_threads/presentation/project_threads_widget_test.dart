@@ -171,7 +171,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+    await openProjectFromMenu(tester);
     await tester.runAsync(waitForIo);
     await tester.pumpAndSettle();
 
@@ -392,7 +392,7 @@ void main() {
         ),
       );
 
-      await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+      await openProjectFromMenu(tester);
       await tester.runAsync(waitForIo);
       await tester.pumpAndSettle();
 
@@ -699,7 +699,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+    await openProjectFromMenu(tester);
     await tester.runAsync(waitForIo);
     await tester.pumpAndSettle();
 
@@ -767,7 +767,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+    await openProjectFromMenu(tester);
     await tester.runAsync(waitForIo);
     await tester.pumpAndSettle();
 
@@ -857,7 +857,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+    await openProjectFromMenu(tester);
     await tester.runAsync(waitForIo);
     await tester.pumpAndSettle();
 
@@ -1021,7 +1021,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+    await openProjectFromMenu(tester);
     await tester.runAsync(waitForIo);
     await tester.pumpAndSettle();
 
@@ -1090,7 +1090,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+    await openProjectFromMenu(tester);
     await tester.runAsync(waitForIo);
     await tester.pumpAndSettle();
 
@@ -1192,7 +1192,7 @@ void main() {
         ),
       );
 
-      await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+      await openProjectFromMenu(tester);
       await tester.runAsync(waitForIo);
       await tester.pumpAndSettle();
 
@@ -1271,7 +1271,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+    await openProjectFromMenu(tester);
     await tester.runAsync(waitForIo);
     await tester.pumpAndSettle();
 
@@ -1459,7 +1459,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+    await openProjectFromMenu(tester);
     await tester.runAsync(waitForIo);
     await tester.pumpAndSettle();
 
@@ -1534,7 +1534,6 @@ void main() {
           hasLoaded: true,
           threads: <AgentThreadSummary>[thread],
         ),
-        onOpenProject: () {},
         onSelectProject: (_) {},
         onSelectThread: (_, _) {},
         onLoadMoreThreads: (_) {},

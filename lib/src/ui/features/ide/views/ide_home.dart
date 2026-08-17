@@ -229,10 +229,8 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
     if (widget.enableAgentUsageAutoRefresh) {
       _scheduleInitialAgentUsageRefresh();
     }
-    // 生产环境注册原生菜单的「打开项目」回调，与工具栏按钮走同一逻辑。
-    if (widget.enableNativeWindowFrame) {
-      MenuActionBridge.instance.setOpenProject(_handleMenuOpenProject);
-    }
+    // 打开项目只走菜单栏（原生 File 菜单或标题栏菜单），不在项目列表放入口。
+    MenuActionBridge.instance.setOpenProject(_handleMenuOpenProject);
   }
 
   @override
@@ -252,8 +250,8 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
 
   @override
   void dispose() {
+    MenuActionBridge.instance.setOpenProject(null);
     if (widget.enableNativeWindowFrame) {
-      MenuActionBridge.instance.setOpenProject(null);
       windowManager.removeListener(this);
     }
     _shellController.removeListener(_handleShellChanged);
@@ -671,7 +669,6 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
       projects: _shellController.projects,
       activeProject: _shellController.activeProjectPath,
       threadStateFor: _shellController.projectThreadStateFor,
-      onOpenProject: _openProject,
       onSelectProject: (path) {
         unawaited(_shellController.selectKnownProject(path));
       },
@@ -853,7 +850,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
     });
   }
 
-  /// 标题栏 / 原生菜单「文件 - 打开项目」入口，与工具栏按钮一致。
+  /// 标题栏 / 原生菜单「文件 - 打开项目」入口。
   void _handleMenuOpenProject() {
     _openProject();
   }

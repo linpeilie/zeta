@@ -558,19 +558,25 @@ class PanelCard extends StatelessWidget {
 
 class Pane extends StatelessWidget {
   const Pane({
-    required this.title,
     required this.child,
     super.key,
+    this.title,
     this.subtitle,
     this.trailing,
     this.titleContent,
   });
 
-  final String title;
+  final String? title;
   final String? subtitle;
   final Widget? trailing;
   final Widget? titleContent;
   final Widget child;
+
+  bool get _showHeader =>
+      title != null ||
+      subtitle != null ||
+      trailing != null ||
+      titleContent != null;
 
   @override
   Widget build(BuildContext context) {
@@ -592,51 +598,53 @@ class Pane extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            height: IdeMetrics.paneHeaderHeight,
-            decoration: BoxDecoration(
-              // 极简边框：全局只用一种 1px 分隔线色，不再叠魔法透明度。
-              border: Border(bottom: BorderSide(color: colors.borderSubtle)),
-            ),
-            padding: const EdgeInsets.only(
-              left: IdeSpacing.space12,
-              right: IdeSpacing.space6,
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child:
-                      titleContent ??
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: textStyles.titleSmall.copyWith(
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.2,
-                              color: colors.textPrimary,
-                            ),
-                          ),
-                          if (subtitle != null)
-                            Text(
-                              subtitle!,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: textStyles.caption.copyWith(
-                                color: resolveMutedForegroundColor(context),
+          if (_showHeader)
+            Container(
+              height: IdeMetrics.paneHeaderHeight,
+              decoration: BoxDecoration(
+                // 极简边框：全局只用一种 1px 分隔线色，不再叠魔法透明度。
+                border: Border(bottom: BorderSide(color: colors.borderSubtle)),
+              ),
+              padding: const EdgeInsets.only(
+                left: IdeSpacing.space12,
+                right: IdeSpacing.space6,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child:
+                        titleContent ??
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            if (title != null)
+                              Text(
+                                title!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: textStyles.titleSmall.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.2,
+                                  color: colors.textPrimary,
+                                ),
                               ),
-                            ),
-                        ],
-                      ),
-                ),
-                if (trailingWidget case final Widget w) w,
-              ],
+                            if (subtitle != null)
+                              Text(
+                                subtitle!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: textStyles.caption.copyWith(
+                                  color: resolveMutedForegroundColor(context),
+                                ),
+                              ),
+                          ],
+                        ),
+                  ),
+                  if (trailingWidget case final Widget w) w,
+                ],
+              ),
             ),
-          ),
           Expanded(child: child),
         ],
       ),

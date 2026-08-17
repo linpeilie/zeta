@@ -186,7 +186,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+    await openProjectFromMenu(tester);
     await tester.runAsync(waitForIo);
     await pumpAgentConversationUi(tester);
 
@@ -289,7 +289,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+    await openProjectFromMenu(tester);
     await tester.runAsync(waitForIo);
     await pumpAgentConversationUi(tester);
 
@@ -382,7 +382,7 @@ void main() {
         ),
       );
 
-      await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+      await openProjectFromMenu(tester);
       await tester.runAsync(waitForIo);
       await pumpAgentConversationUi(tester);
 
@@ -494,7 +494,7 @@ void main() {
         ),
       );
 
-      await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+      await openProjectFromMenu(tester);
       await tester.runAsync(waitForIo);
       await pumpAgentConversationUi(tester);
 
@@ -624,7 +624,7 @@ void main() {
         ),
       );
 
-      await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+      await openProjectFromMenu(tester);
       await tester.runAsync(waitForIo);
       await tester.pump();
 
@@ -717,7 +717,7 @@ void main() {
         ),
       );
 
-      await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+      await openProjectFromMenu(tester);
       await tester.runAsync(waitForIo);
       await pumpAgentConversationUi(tester);
 
@@ -1185,7 +1185,7 @@ void main() {
         ),
       );
 
-      await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+      await openProjectFromMenu(tester);
       await tester.runAsync(waitForIo);
       await pumpAgentConversationUi(tester);
 
@@ -1356,7 +1356,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+    await openProjectFromMenu(tester);
     await tester.runAsync(waitForIo);
     await pumpAgentConversationUi(tester);
 
@@ -2266,7 +2266,7 @@ void main() {
         ),
       );
 
-      await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+      await openProjectFromMenu(tester);
       await tester.runAsync(waitForIo);
       await pumpAgentConversationUi(tester);
 
@@ -2463,7 +2463,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+    await openProjectFromMenu(tester);
     await tester.runAsync(waitForIo);
     await pumpAgentConversationUi(tester);
 
@@ -2581,7 +2581,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+    await openProjectFromMenu(tester);
     await tester.runAsync(waitForIo);
     await pumpAgentConversationUi(tester);
 
@@ -3884,7 +3884,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+    await openProjectFromMenu(tester);
     await tester.runAsync(waitForIo);
     await pumpAgentConversationUi(tester);
 

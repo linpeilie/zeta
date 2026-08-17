@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_static_capabilities.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
@@ -19,6 +20,18 @@ ValueKey<String> fileNodeKey(String label) {
 
 Future<void> waitForIo() {
   return Future<void>.delayed(const Duration(milliseconds: 300));
+}
+
+/// 模拟菜单栏「打开项目」（与原生 / 标题栏 File 菜单同一通道）。
+Future<void> openProjectFromMenu(WidgetTester tester) async {
+  const channel = MethodChannel('zeta/menu');
+  await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .handlePlatformMessage(
+        channel.name,
+        channel.codec.encodeMethodCall(const MethodCall('openProject')),
+        (_) {},
+      );
+  await tester.pump();
 }
 
 Future<void> pumpSessionSave(WidgetTester tester) async {

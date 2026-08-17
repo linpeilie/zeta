@@ -63,7 +63,7 @@ void main() {
     expect(find.byKey(const ValueKey('right-files-action')), findsNothing);
     expect(find.byKey(const ValueKey('right-tools-action')), findsNothing);
     expect(find.byKey(const ValueKey('workbench-trailing-rail')), findsNothing);
-    expect(find.text('Projects'), findsOneWidget);
+    expect(find.byIcon(Icons.create_new_folder_outlined), findsNothing);
     expect(find.byKey(const ValueKey('global-home-page')), findsOneWidget);
     expect(find.text('欢迎使用 Zeta'), findsOneWidget);
     expect(find.byKey(const ValueKey('agent-header-title')), findsNothing);
@@ -277,7 +277,7 @@ void main() {
       repository.forceRefreshValues.clear();
       repository.providerIds.clear();
 
-      await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+      await openProjectFromMenu(tester);
       await tester.runAsync(waitForIo);
       final threadRow = find.byKey(
         ValueKey<String>(
@@ -841,7 +841,7 @@ void main() {
       agentProviderConfigStore: MemoryAgentProviderConfigStore(),
     );
 
-    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+    await openProjectFromMenu(tester);
     await tester.runAsync(waitForIo);
     final threadRow = find.byKey(
       ValueKey<String>('project-thread-${directory.path}-${fixture.sessionId}'),
@@ -1524,7 +1524,7 @@ void main() {
         agentProviderConfigStore: MemoryAgentProviderConfigStore(),
       );
 
-      await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+      await openProjectFromMenu(tester);
       await tester.runAsync(waitForIo);
 
       final threadARow = find.byKey(
@@ -1673,7 +1673,7 @@ void main() {
       agentProviderConfigStore: MemoryAgentProviderConfigStore(),
     );
 
-    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+    await openProjectFromMenu(tester);
     await tester.runAsync(waitForIo);
 
     final threadARow = find.byKey(
@@ -1772,7 +1772,7 @@ void main() {
       agentProviderConfigStore: MemoryAgentProviderConfigStore(),
     );
 
-    await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+    await openProjectFromMenu(tester);
     await tester.runAsync(waitForIo);
     await pumpUntilCondition(
       tester,
@@ -2089,7 +2089,7 @@ _prepareEventStormAgentPane(
     agentProviderConfigStore: MemoryAgentProviderConfigStore(),
   );
 
-  await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+  await openProjectFromMenu(tester);
   await tester.runAsync(waitForIo);
   final threadRow = find.byKey(
     ValueKey<String>('project-thread-${directory.path}-${fixture.sessionId}'),
@@ -2314,7 +2314,7 @@ Future<_RetainedAgentState> _prepareRetainedAgentState(
     agentProviderConfigStore: MemoryAgentProviderConfigStore(),
   );
 
-  await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
+  await openProjectFromMenu(tester);
   await tester.runAsync(waitForIo);
   await tester.tap(find.byKey(const ValueKey('titlebar-right-sidebar-action')));
   await tester.pump();

@@ -43,7 +43,6 @@ class ProjectListPane extends StatelessWidget {
     required this.projects,
     required this.activeProject,
     required this.threadStateFor,
-    required this.onOpenProject,
     required this.onSelectProject,
     required this.onSelectThread,
     required this.onLoadMoreThreads,
@@ -65,7 +64,6 @@ class ProjectListPane extends StatelessWidget {
   final List<String> projects;
   final String? activeProject;
   final ProjectThreadListState Function(String projectPath) threadStateFor;
-  final VoidCallback onOpenProject;
   final ValueChanged<String> onSelectProject;
   final ProjectThreadSelected onSelectThread;
   final ValueChanged<String> onLoadMoreThreads;
@@ -85,20 +83,13 @@ class ProjectListPane extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Pane(
-      title: 'Projects',
-      trailing: IdeTooltip(
-        message: context.l10n.projectOpenFolder,
-        child: sf.IconButton.ghost(
-          onPressed: onOpenProject,
-          size: sf.ButtonSize.small,
-          density: sf.ButtonDensity.iconDense,
-          icon: const Icon(Icons.create_new_folder_outlined, size: 17),
-        ),
-      ),
       child: projects.isEmpty
           ? const EmptyState(text: 'No folder opened')
           : ListView.builder(
-              padding: IdeSpacing.vertical6,
+              padding: const EdgeInsets.only(
+                top: IdeSpacing.space4,
+                bottom: IdeSpacing.space6,
+              ),
               itemCount: projects.length,
               itemBuilder: (context, index) {
                 final path = projects[index];
