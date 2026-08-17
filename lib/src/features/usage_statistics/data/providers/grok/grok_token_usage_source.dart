@@ -87,6 +87,7 @@ final class GrokTokenUsageSource implements AgentTokenUsageSource {
       grokHome: _resolveGrokHome(),
       cachedSessions: cachedSessions,
       forceRefresh: query.forceRefresh,
+      textCatalog: _textCatalog,
     );
     warnings.addAll(
       scan.warnings.map(

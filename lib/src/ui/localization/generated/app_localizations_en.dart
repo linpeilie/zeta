@@ -3312,4 +3312,265 @@ class AppLocalizationsEn extends AppLocalizations {
   String agentLabeledValue(String label, String value) {
     return '$label: $value';
   }
+
+  @override
+  String agentStartingProvider(String name) {
+    return 'Starting $name';
+  }
+
+  @override
+  String agentPreparingProvider(String name) {
+    return 'Preparing $name';
+  }
+
+  @override
+  String agentCouldNotStart(String name) {
+    return 'Could not start $name';
+  }
+
+  @override
+  String agentProtocolWarning(String name) {
+    return '$name protocol warning';
+  }
+
+  @override
+  String agentRequestTimedOut(String name) {
+    return '$name request timed out. Please try again.';
+  }
+
+  @override
+  String agentConnectionClosedRetry(String name) {
+    return '$name connection closed. Reconnect and try again.';
+  }
+
+  @override
+  String agentAppServerConnectionClosed(String name) {
+    return '$name App Server connection closed';
+  }
+
+  @override
+  String agentProcessExited(String name) {
+    return '$name process exited';
+  }
+
+  @override
+  String get agentFailedToSendPrompt => 'Failed to send prompt';
+
+  @override
+  String agentWaitingApprovalFor(String title) {
+    return 'Waiting for approval: $title';
+  }
+
+  @override
+  String agentWaitingAnswersFor(String title) {
+    return 'Waiting for answers: $title';
+  }
+
+  @override
+  String get agentWaitingPlanApproval => 'Waiting for plan approval';
+
+  @override
+  String get agentPlanApprovalTitle => 'Plan approval';
+
+  @override
+  String agentSessionIdentityChanged(String name) {
+    return '$name changed session identity unexpectedly';
+  }
+
+  @override
+  String agentCouldNotRestoreSession(String name) {
+    return '$name could not restore the requested session';
+  }
+
+  @override
+  String agentPermissionRequestDescription(String name, String tool) {
+    return '$name requests permission to use $tool';
+  }
+
+  @override
+  String get agentApplyPatch => 'Apply patch';
+
+  @override
+  String get agentHistoryToolSearch => 'Tool search';
+
+  @override
+  String get agentHistoryWebSearch => 'Web search';
+
+  @override
+  String get agentRequestsInput => 'Agent requests input';
+
+  @override
+  String get agentDefaultThreadTitle => 'New conversation';
+
+  @override
+  String agentUsageWindowWeeks(String count) {
+    return '$count weeks';
+  }
+
+  @override
+  String agentUsageWindowDays(String count) {
+    return '$count days';
+  }
+
+  @override
+  String agentUsageWindowHours(String count) {
+    return '$count hours';
+  }
+
+  @override
+  String agentUsageWindowHoursMinutes(String hours, String minutes) {
+    return '$hours hours $minutes minutes';
+  }
+
+  @override
+  String agentUsageWindowMinutes(String count) {
+    return '$count minutes';
+  }
+
+  @override
+  String get agentUsageWindowOneWeek => '1 week';
+
+  @override
+  String get agentUsageWindowOneDay => '1 day';
+
+  @override
+  String get agentQuotaFiveHours => '5h';
+
+  @override
+  String get agentQuotaOneWeek => '1 week';
+
+  @override
+  String get agentQuotaSonnetOneWeek => 'Sonnet 1 week';
+
+  @override
+  String get agentQuotaOpusOneWeek => 'Opus 1 week';
+
+  @override
+  String get agentClaudeCodeSubscriptionQuota =>
+      'Claude Code subscription quota';
+
+  @override
+  String get agentCursorRetired =>
+      'Cursor Agent has been retired. This version no longer starts or restores Cursor sessions.';
+
+  @override
+  String agentCursorNoEnabledProvider(String message) {
+    return '$message No enabled Provider is available; the old Cursor configuration is unchanged.';
+  }
+
+  @override
+  String agentCursorFallbackTo(String message, String name) {
+    return '$message Temporarily fell back to $name; the old Cursor configuration is unchanged.';
+  }
+
+  @override
+  String agentCursorConfigPreserved(String message) {
+    return '$message The old Cursor configuration and session data are unchanged.';
+  }
+
+  @override
+  String get agentCouldNotLoadThreads => 'Could not load threads';
+
+  @override
+  String get agentNoEnabledProviders => 'No enabled Agent providers';
+
+  @override
+  String get mgmtClaudeInitializeSuccess =>
+      'Claude Code initialize succeeded. The CLI and current auth path are available.';
+
+  @override
+  String get mgmtClaudeInitializeTimeout =>
+      'Claude Code initialize did not finish within 20 seconds.';
+
+  @override
+  String get mgmtClaudeInitializeFailed =>
+      'Claude Code initialize probe failed.';
+
+  @override
+  String mgmtVersionDetectFailed(String name) {
+    return '$name version detection failed.';
+  }
+
+  @override
+  String get mgmtClaudeLoginEvidenceUnavailable =>
+      'Claude Code login evidence is unavailable';
+
+  @override
+  String get mgmtClaudeInitializeProcessExited =>
+      'The Claude Code process exited before initialize finished.';
+
+  @override
+  String get mgmtClaudeInitializeRejected =>
+      'Claude Code rejected the initialize request.';
+
+  @override
+  String get mgmtClaudeInitializeInvalidResponse =>
+      'Claude Code returned an invalid initialize response.';
+
+  @override
+  String get mgmtClaudeInitializeInvalidStream =>
+      'Claude Code returned invalid stream-json data.';
+
+  @override
+  String get mgmtClaudeInitializeCommunicationFailed =>
+      'Claude Code initialize communication failed.';
+
+  @override
+  String get mgmtClaudeAiLoggedIn => 'Signed in to Claude.ai';
+
+  @override
+  String mgmtClaudeAiLoggedInAs(String plan) {
+    return 'Signed in to Claude.ai · $plan';
+  }
+
+  @override
+  String mgmtNotLoggedIn(String name) {
+    return '$name is not signed in.';
+  }
+
+  @override
+  String get mgmtGrokLoginCacheEmpty => 'The Grok login cache is empty.';
+
+  @override
+  String get mgmtGrokAcpOk => 'Grok ACP connection is healthy';
+
+  @override
+  String get mgmtGrokAcpFailed => 'Grok ACP connection failed.';
+
+  @override
+  String get mgmtGrokLatestVersionNetworkHint =>
+      'Check the network and detect again, or run grok update --check in a terminal.';
+
+  @override
+  String get mgmtCodexAppServerFailed => 'Codex app-server connection failed.';
+
+  @override
+  String mgmtDetectionIncomplete(String error) {
+    return 'Agent detection did not finish: $error';
+  }
+
+  @override
+  String mgmtDetectionProgress(
+    String index,
+    String total,
+    String name,
+    String message,
+  ) {
+    return '[$index/$total] $name: $message';
+  }
+
+  @override
+  String usageSessionDirIncomplete(String name) {
+    return 'The $name session directory could not be fully enumerated. Readable data is shown.';
+  }
+
+  @override
+  String usageSessionFilesUnreadable(String count, String name) {
+    return '$count $name session files could not be read. Other data is shown.';
+  }
+
+  @override
+  String usageHistoryRowsCorrupt(String count, String name) {
+    return '$count $name history lines were corrupt and skipped.';
+  }
 }

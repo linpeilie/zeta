@@ -8,7 +8,9 @@ import 'package:zeta/src/features/usage_statistics/data/providers/grok/grok_usag
 import 'package:zeta/src/features/usage_statistics/data/providers/grok/grok_usage_partition_codec.dart';
 import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partition_store.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_query_models.dart';
+import 'package:zeta/src/features/usage_statistics/domain/fallback_usage_statistics_text_catalog.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
+import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_text_catalog.dart';
 
 void main() {
   test('maps canonical records and uses config id partition', () async {
@@ -257,6 +259,8 @@ final class _GrokUsageScanner implements GrokUsageLogScanner {
     required String grokHome,
     required Map<String, GrokUsageIndexedSession> cachedSessions,
     bool forceRefresh = false,
+    UsageStatisticsTextCatalog textCatalog =
+        const FallbackUsageStatisticsTextCatalog(),
   }) async {
     grokHomes.add(grokHome);
     forceRefreshes.add(forceRefresh);

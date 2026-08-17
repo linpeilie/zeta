@@ -107,7 +107,7 @@ class CodexAppServerAgentProvider
       textCatalog: textCatalog,
     );
     _approvalMapper = _CodexApprovalMapper();
-    _questionMapper = _CodexQuestionMapper();
+    _questionMapper = _CodexQuestionMapper(textCatalog);
     _permissionPolicyAdapter = CodexPermissionPolicyAdapter(
       ensureInitialized: initialize,
       sendRequest: (method, {Map<String, Object?> params = const {}}) async {
@@ -285,9 +285,9 @@ class CodexAppServerAgentProvider
   Future<void> _initializeOnce() async {
     _log.i('Initializing Agent provider ${config.id}');
     _emitStatus(
-      const AgentProviderStatus(
+      AgentProviderStatus(
         state: AgentProviderConnectionState.connecting,
-        message: 'Starting Codex',
+        message: textCatalog.startingProvider(config.displayName),
       ),
     );
 
@@ -332,7 +332,7 @@ class CodexAppServerAgentProvider
       _emitStatus(
         AgentProviderStatus(
           state: AgentProviderConnectionState.ready,
-          message: '${config.displayName} ready',
+          message: textCatalog.providerReady(config.displayName),
         ),
       );
       _log.i('Agent provider ${config.id} initialized');
@@ -353,13 +353,13 @@ class CodexAppServerAgentProvider
       _emitStatus(
         AgentProviderStatus(
           state: AgentProviderConnectionState.error,
-          message: 'Could not start ${config.displayName}',
+          message: textCatalog.couldNotStart(config.displayName),
           details: error.toString(),
         ),
       );
       _events.add(
         AgentErrorEvent(
-          message: 'Could not start ${config.displayName}',
+          message: textCatalog.couldNotStart(config.displayName),
           details: error.toString(),
         ),
       );
@@ -773,9 +773,9 @@ class CodexAppServerAgentProvider
     final resolvedInputs = _resolveUserInputs(message: message, inputs: inputs);
     _log.i('Starting Codex turn for thread ${session.id}');
     _emitStatus(
-      const AgentProviderStatus(
+      AgentProviderStatus(
         state: AgentProviderConnectionState.running,
-        message: 'Agent is working',
+        message: textCatalog.agentIsWorking,
       ),
     );
 
@@ -969,7 +969,7 @@ class CodexAppServerAgentProvider
       );
       _events.add(
         AgentErrorEvent(
-          message: 'Codex protocol warning',
+          message: textCatalog.protocolWarning(config.displayName),
           details: error.toString(),
         ),
       );
@@ -1053,7 +1053,7 @@ class CodexAppServerAgentProvider
         _emitStatus(
           AgentProviderStatus(
             state: AgentProviderConnectionState.ready,
-            message: '${config.displayName} ready',
+            message: textCatalog.providerReady(config.displayName),
           ),
         );
       }
@@ -1149,7 +1149,7 @@ class CodexAppServerAgentProvider
     _initialized = false;
     _runningTurnIdsBySessionId.clear();
     _resolvePendingInteractionsOnConnectionClosed();
-    _emitUnavailable('Codex App Server 连接已关闭');
+    _emitUnavailable(textCatalog.appServerConnectionClosed(config.displayName));
   }
 
   void _resolvePendingInteractionsOnConnectionClosed() {

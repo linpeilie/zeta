@@ -90,6 +90,7 @@ final class CodexTokenUsageSource implements AgentTokenUsageSource {
       codexHome: _resolveCodexHome(),
       cachedSessions: cachedSessions,
       forceRefresh: query.forceRefresh,
+      textCatalog: _textCatalog,
     );
     warnings.addAll(
       scan.warnings.map(

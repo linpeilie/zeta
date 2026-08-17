@@ -75,8 +75,14 @@ AgentUsageWindow? _primaryWindow(
   }
 
   final label =
-      formatAgentUsageWindowLabelFromMinutes(windowDuration?.inMinutes) ??
-      formatAgentUsageWindowLabelFromPeriodType(periodType) ??
+      formatAgentUsageWindowLabelFromMinutes(
+        windowDuration?.inMinutes,
+        catalog: textCatalog,
+      ) ??
+      formatAgentUsageWindowLabelFromPeriodType(
+        periodType,
+        catalog: textCatalog,
+      ) ??
       textCatalog.planQuotaLabel;
 
   return AgentUsageWindow(

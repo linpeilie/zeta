@@ -3,14 +3,18 @@ import 'dart:io';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_models.dart';
+import 'package:zeta/src/features/desktop_notifications/domain/fallback_desktop_attention_text_catalog.dart';
 
 /// 基于 flutter_local_notifications 的三桌面平台系统通知实现。
 final class FlutterDesktopNotificationService
     implements DesktopNotificationService {
   FlutterDesktopNotificationService({
     FlutterLocalNotificationsPlugin? plugin,
-    this.linuxActionName = '打开 Zeta',
-  }) : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
+    String? linuxActionName,
+  }) : _plugin = plugin ?? FlutterLocalNotificationsPlugin(),
+       linuxActionName =
+           linuxActionName ??
+           const FallbackDesktopAttentionTextCatalog().linuxAction;
 
   final FlutterLocalNotificationsPlugin _plugin;
   final String linuxActionName;

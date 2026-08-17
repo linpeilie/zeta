@@ -195,4 +195,74 @@ final class FallbackAgentManagementTextCatalog
 
   @override
   String logsReadFailed(Object error) => '运行日志读取失败：$error';
+
+  @override
+  String claudeInitializeSuccess() =>
+      'Claude Code initialize 成功，CLI 与当前认证路径可用。';
+
+  @override
+  String claudeInitializeTimeout() => 'Claude Code initialize 在 20 秒内未完成。';
+
+  @override
+  String claudeInitializeFailed() => 'Claude Code initialize 探测失败。';
+
+  @override
+  String versionDetectFailed(String name) => '$name 版本检测失败。';
+
+  @override
+  String claudeLoginEvidenceUnavailable() => 'Claude Code 登录证据不可用';
+
+  @override
+  String claudeInitializeProcessExited() => 'Claude Code 进程在 initialize 完成前退出。';
+
+  @override
+  String claudeInitializeRejected() => 'Claude Code 拒绝了 initialize 请求。';
+
+  @override
+  String claudeInitializeInvalidResponse() =>
+      'Claude Code 返回的 initialize 响应无效。';
+
+  @override
+  String claudeInitializeInvalidStream() =>
+      'Claude Code 返回了无效的 stream-json 数据。';
+
+  @override
+  String claudeInitializeCommunicationFailed() =>
+      'Claude Code initialize 通信失败。';
+
+  @override
+  String claudeAiLoggedIn() => 'Claude.ai 已登录';
+
+  @override
+  String claudeAiLoggedInAs(String plan) => 'Claude.ai 已登录 · $plan';
+
+  @override
+  String notLoggedIn(String name) => '$name 尚未登录。';
+
+  @override
+  String grokLoginCacheEmpty() => 'Grok 登录缓存为空。';
+
+  @override
+  String grokAcpOk() => 'Grok ACP 连接正常';
+
+  @override
+  String grokAcpFailed() => 'Grok ACP 连接失败。';
+
+  @override
+  String grokLatestVersionNetworkHint() =>
+      '请检查网络后重新检测，或在终端运行 grok update --check。';
+
+  @override
+  String codexAppServerFailed() => 'Codex app-server 连接失败。';
+
+  @override
+  String detectionIncomplete(Object error) => 'Agent 检测未能完成：$error';
+
+  @override
+  String detectionProgress({
+    required String index,
+    required String total,
+    required String name,
+    required String message,
+  }) => '[$index/$total] $name: $message';
 }

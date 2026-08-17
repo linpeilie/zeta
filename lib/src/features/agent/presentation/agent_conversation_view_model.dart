@@ -1941,7 +1941,7 @@ class AgentConversationViewModel {
       requestModeSelection = turnConfiguration.conversationMode;
       // 新会话在 Grok 异步 generated_title 出现前，先用首条用户消息作临时标题。
       if (_isStillSelectedThread(switchToken, session.id) &&
-          _currentThreadTitle == defaultThreadTitle &&
+          isAgentThreadTitlePlaceholder(_currentThreadTitle) &&
           trimmed.isNotEmpty) {
         _applyThreadTitle(_provisionalThreadTitle(trimmed));
         _publishUiChanges(
@@ -3795,7 +3795,7 @@ class AgentConversationViewModel {
     if (isAgentThreadTitlePlaceholder(title)) {
       return;
     }
-    if (_currentThreadTitle != defaultThreadTitle) {
+    if (!isAgentThreadTitlePlaceholder(_currentThreadTitle)) {
       return;
     }
     _applyThreadTitle(title!);

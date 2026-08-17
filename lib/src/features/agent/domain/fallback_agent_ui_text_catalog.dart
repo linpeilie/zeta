@@ -266,4 +266,130 @@ class FallbackAgentUiTextCatalog implements AgentUiTextCatalog {
 
   @override
   String threadDisabled(String name) => '$name 已禁用或不可用；无法修改会话。';
+
+  @override
+  String startingProvider(String name) => 'Starting $name';
+
+  @override
+  String preparingProvider(String name) => 'Preparing $name';
+
+  @override
+  String couldNotStart(String name) => 'Could not start $name';
+
+  @override
+  String protocolWarning(String name) => '$name protocol warning';
+
+  @override
+  String requestTimedOut(String name) =>
+      '$name request timed out. Please try again.';
+
+  @override
+  String connectionClosedRetry(String name) =>
+      '$name connection closed. Reconnect and try again.';
+
+  @override
+  String appServerConnectionClosed(String name) => '$name App Server 连接已关闭';
+
+  @override
+  String processExited(String name) => '$name process exited';
+
+  @override
+  String get failedToSendPrompt => 'Failed to send prompt';
+
+  @override
+  String waitingApprovalFor(String title) => 'Waiting for approval: $title';
+
+  @override
+  String waitingAnswersFor(String title) => 'Waiting for answers: $title';
+
+  @override
+  String get waitingPlanApproval => 'Waiting for plan approval';
+
+  @override
+  String get planApprovalTitle => 'Plan approval';
+
+  @override
+  String sessionIdentityChanged(String name) =>
+      '$name changed session identity unexpectedly';
+
+  @override
+  String couldNotRestoreSession(String name) =>
+      '$name could not restore the requested session';
+
+  @override
+  String permissionRequestDescription(String name, String tool) =>
+      '$name requests permission to use $tool';
+
+  @override
+  String get applyPatchTitle => 'Apply patch';
+
+  @override
+  String get toolSearchTitle => 'Tool search';
+
+  @override
+  String get historyWebSearchTitle => 'Web search';
+
+  @override
+  String get agentRequestsInput => 'Agent requests input';
+
+  @override
+  String get defaultThreadTitle => '新建会话';
+
+  @override
+  String usageWindowWeeks(String count) => '$count 周';
+
+  @override
+  String usageWindowDays(String count) => '$count 天';
+
+  @override
+  String usageWindowHours(String count) => '$count 小时';
+
+  @override
+  String usageWindowHoursMinutes(String hours, String minutes) =>
+      '$hours 小时 $minutes 分钟';
+
+  @override
+  String usageWindowMinutes(String count) => '$count 分钟';
+
+  @override
+  String get usageWindowOneWeek => '1 周';
+
+  @override
+  String get usageWindowOneDay => '1 天';
+
+  @override
+  String get quotaFiveHours => '5h';
+
+  @override
+  String get quotaOneWeek => '1 周';
+
+  @override
+  String get quotaSonnetOneWeek => 'Sonnet 1 周';
+
+  @override
+  String get quotaOpusOneWeek => 'Opus 1 周';
+
+  @override
+  String get claudeCodeSubscriptionQuota => 'Claude Code 订阅额度';
+
+  @override
+  String get cursorRetired => 'Cursor Agent 已退役，当前版本不再支持启动或恢复 Cursor 会话。';
+
+  @override
+  String cursorNoEnabledProvider(String message) =>
+      '$message 当前没有已启用的可用 Provider；旧 Cursor 配置保持原样。';
+
+  @override
+  String cursorFallbackTo(String message, String name) =>
+      '$message 已临时回退到 $name；旧 Cursor 配置保持原样。';
+
+  @override
+  String cursorConfigPreserved(String message) =>
+      '$message 旧 Cursor 配置和会话数据保持原样。';
+
+  @override
+  String get couldNotLoadThreads => 'Could not load threads';
+
+  @override
+  String get noEnabledProviders => 'No enabled Agent providers';
 }

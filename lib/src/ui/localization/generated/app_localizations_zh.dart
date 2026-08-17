@@ -3199,4 +3199,260 @@ class AppLocalizationsZh extends AppLocalizations {
   String agentLabeledValue(String label, String value) {
     return '$label：$value';
   }
+
+  @override
+  String agentStartingProvider(String name) {
+    return 'Starting $name';
+  }
+
+  @override
+  String agentPreparingProvider(String name) {
+    return 'Preparing $name';
+  }
+
+  @override
+  String agentCouldNotStart(String name) {
+    return 'Could not start $name';
+  }
+
+  @override
+  String agentProtocolWarning(String name) {
+    return '$name protocol warning';
+  }
+
+  @override
+  String agentRequestTimedOut(String name) {
+    return '$name request timed out. Please try again.';
+  }
+
+  @override
+  String agentConnectionClosedRetry(String name) {
+    return '$name connection closed. Reconnect and try again.';
+  }
+
+  @override
+  String agentAppServerConnectionClosed(String name) {
+    return '$name App Server 连接已关闭';
+  }
+
+  @override
+  String agentProcessExited(String name) {
+    return '$name process exited';
+  }
+
+  @override
+  String get agentFailedToSendPrompt => 'Failed to send prompt';
+
+  @override
+  String agentWaitingApprovalFor(String title) {
+    return 'Waiting for approval: $title';
+  }
+
+  @override
+  String agentWaitingAnswersFor(String title) {
+    return 'Waiting for answers: $title';
+  }
+
+  @override
+  String get agentWaitingPlanApproval => 'Waiting for plan approval';
+
+  @override
+  String get agentPlanApprovalTitle => 'Plan approval';
+
+  @override
+  String agentSessionIdentityChanged(String name) {
+    return '$name changed session identity unexpectedly';
+  }
+
+  @override
+  String agentCouldNotRestoreSession(String name) {
+    return '$name could not restore the requested session';
+  }
+
+  @override
+  String agentPermissionRequestDescription(String name, String tool) {
+    return '$name requests permission to use $tool';
+  }
+
+  @override
+  String get agentApplyPatch => 'Apply patch';
+
+  @override
+  String get agentHistoryToolSearch => 'Tool search';
+
+  @override
+  String get agentHistoryWebSearch => 'Web search';
+
+  @override
+  String get agentRequestsInput => 'Agent requests input';
+
+  @override
+  String get agentDefaultThreadTitle => '新建会话';
+
+  @override
+  String agentUsageWindowWeeks(String count) {
+    return '$count 周';
+  }
+
+  @override
+  String agentUsageWindowDays(String count) {
+    return '$count 天';
+  }
+
+  @override
+  String agentUsageWindowHours(String count) {
+    return '$count 小时';
+  }
+
+  @override
+  String agentUsageWindowHoursMinutes(String hours, String minutes) {
+    return '$hours 小时 $minutes 分钟';
+  }
+
+  @override
+  String agentUsageWindowMinutes(String count) {
+    return '$count 分钟';
+  }
+
+  @override
+  String get agentUsageWindowOneWeek => '1 周';
+
+  @override
+  String get agentUsageWindowOneDay => '1 天';
+
+  @override
+  String get agentQuotaFiveHours => '5h';
+
+  @override
+  String get agentQuotaOneWeek => '1 周';
+
+  @override
+  String get agentQuotaSonnetOneWeek => 'Sonnet 1 周';
+
+  @override
+  String get agentQuotaOpusOneWeek => 'Opus 1 周';
+
+  @override
+  String get agentClaudeCodeSubscriptionQuota => 'Claude Code 订阅额度';
+
+  @override
+  String get agentCursorRetired => 'Cursor Agent 已退役，当前版本不再支持启动或恢复 Cursor 会话。';
+
+  @override
+  String agentCursorNoEnabledProvider(String message) {
+    return '$message 当前没有已启用的可用 Provider；旧 Cursor 配置保持原样。';
+  }
+
+  @override
+  String agentCursorFallbackTo(String message, String name) {
+    return '$message 已临时回退到 $name；旧 Cursor 配置保持原样。';
+  }
+
+  @override
+  String agentCursorConfigPreserved(String message) {
+    return '$message 旧 Cursor 配置和会话数据保持原样。';
+  }
+
+  @override
+  String get agentCouldNotLoadThreads => 'Could not load threads';
+
+  @override
+  String get agentNoEnabledProviders => 'No enabled Agent providers';
+
+  @override
+  String get mgmtClaudeInitializeSuccess =>
+      'Claude Code initialize 成功，CLI 与当前认证路径可用。';
+
+  @override
+  String get mgmtClaudeInitializeTimeout =>
+      'Claude Code initialize 在 20 秒内未完成。';
+
+  @override
+  String get mgmtClaudeInitializeFailed => 'Claude Code initialize 探测失败。';
+
+  @override
+  String mgmtVersionDetectFailed(String name) {
+    return '$name 版本检测失败。';
+  }
+
+  @override
+  String get mgmtClaudeLoginEvidenceUnavailable => 'Claude Code 登录证据不可用';
+
+  @override
+  String get mgmtClaudeInitializeProcessExited =>
+      'Claude Code 进程在 initialize 完成前退出。';
+
+  @override
+  String get mgmtClaudeInitializeRejected => 'Claude Code 拒绝了 initialize 请求。';
+
+  @override
+  String get mgmtClaudeInitializeInvalidResponse =>
+      'Claude Code 返回的 initialize 响应无效。';
+
+  @override
+  String get mgmtClaudeInitializeInvalidStream =>
+      'Claude Code 返回了无效的 stream-json 数据。';
+
+  @override
+  String get mgmtClaudeInitializeCommunicationFailed =>
+      'Claude Code initialize 通信失败。';
+
+  @override
+  String get mgmtClaudeAiLoggedIn => 'Claude.ai 已登录';
+
+  @override
+  String mgmtClaudeAiLoggedInAs(String plan) {
+    return 'Claude.ai 已登录 · $plan';
+  }
+
+  @override
+  String mgmtNotLoggedIn(String name) {
+    return '$name 尚未登录。';
+  }
+
+  @override
+  String get mgmtGrokLoginCacheEmpty => 'Grok 登录缓存为空。';
+
+  @override
+  String get mgmtGrokAcpOk => 'Grok ACP 连接正常';
+
+  @override
+  String get mgmtGrokAcpFailed => 'Grok ACP 连接失败。';
+
+  @override
+  String get mgmtGrokLatestVersionNetworkHint =>
+      '请检查网络后重新检测，或在终端运行 grok update --check。';
+
+  @override
+  String get mgmtCodexAppServerFailed => 'Codex app-server 连接失败。';
+
+  @override
+  String mgmtDetectionIncomplete(String error) {
+    return 'Agent 检测未能完成：$error';
+  }
+
+  @override
+  String mgmtDetectionProgress(
+    String index,
+    String total,
+    String name,
+    String message,
+  ) {
+    return '[$index/$total] $name: $message';
+  }
+
+  @override
+  String usageSessionDirIncomplete(String name) {
+    return '$name 会话目录未能完整枚举，已展示可读取的数据。';
+  }
+
+  @override
+  String usageSessionFilesUnreadable(String count, String name) {
+    return '$count 个 $name 会话文件读取失败，已展示其余数据。';
+  }
+
+  @override
+  String usageHistoryRowsCorrupt(String count, String name) {
+    return '$count 行 $name 历史损坏，已跳过并继续统计。';
+  }
 }

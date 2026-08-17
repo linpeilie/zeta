@@ -2,7 +2,9 @@ import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_cli_metadata_coordinator.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_oauth_credentials_reader.dart';
 import 'package:zeta/src/features/agent/data/mappers/claude_code_usage_quota_mapper.dart';
+import 'package:zeta/src/features/agent/domain/agent_ui_text_catalog.dart';
 import 'package:zeta/src/features/agent/domain/agent_usage_models.dart';
+import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 
 typedef ClaudeCodeUsageCredentialsLoader =
     Future<ClaudeCodeOAuthCredentials?> Function();
@@ -28,6 +30,7 @@ final class ClaudeCodeUsageQuotaAdapter {
     ClaudeCodeUsageCredentialsLoader? credentialsLoader,
     ClaudeCodeRemoteUsageLoader? remoteUsageLoader,
     DateTime Function()? clock,
+    this.textCatalog = const FallbackAgentUiTextCatalog(),
   }) : _loadMetadata = metadataLoader,
        _credentialsLoader =
            credentialsLoader ?? ClaudeCodeOAuthCredentialsReader().read,
@@ -46,6 +49,7 @@ final class ClaudeCodeUsageQuotaAdapter {
   final ClaudeCodeUsageCredentialsLoader _credentialsLoader;
   final ClaudeCodeRemoteUsageLoader _remoteUsageLoader;
   final DateTime Function() _clock;
+  final AgentUiTextCatalog textCatalog;
 
   DateTime? _lastAttemptAt;
   AgentUsageQuotaSnapshot? _lastResult;
@@ -106,6 +110,7 @@ final class ClaudeCodeUsageQuotaAdapter {
       providerId: providerId,
       providerName: providerName,
       subscriptionType: subscriptionType,
+      textCatalog: textCatalog,
     );
     _lastResult = result;
     return result;

@@ -271,9 +271,9 @@ class GrokAcpAgentProvider
   Future<void> _initializeOnce() async {
     _log.i('Initializing Grok ACP provider ${config.id}');
     _emitStatus(
-      const AgentProviderStatus(
+      AgentProviderStatus(
         state: AgentProviderConnectionState.connecting,
-        message: 'Starting Grok',
+        message: textCatalog.startingProvider(config.displayName),
       ),
     );
 
@@ -323,7 +323,7 @@ class GrokAcpAgentProvider
       _emitStatus(
         AgentProviderStatus(
           state: AgentProviderConnectionState.ready,
-          message: '${config.displayName} ready',
+          message: textCatalog.providerReady(config.displayName),
         ),
       );
       _log.i('Grok ACP provider ${config.id} initialized');
@@ -338,13 +338,13 @@ class GrokAcpAgentProvider
       _emitStatus(
         AgentProviderStatus(
           state: AgentProviderConnectionState.error,
-          message: 'Could not start ${config.displayName}',
+          message: textCatalog.couldNotStart(config.displayName),
           details: error.toString(),
         ),
       );
       _addEvent(
         AgentErrorEvent(
-          message: 'Could not start ${config.displayName}',
+          message: textCatalog.couldNotStart(config.displayName),
           details: error.toString(),
         ),
       );
@@ -865,9 +865,9 @@ class GrokAcpAgentProvider
       ),
     );
     _emitStatus(
-      const AgentProviderStatus(
+      AgentProviderStatus(
         state: AgentProviderConnectionState.running,
-        message: 'Agent is working',
+        message: textCatalog.agentIsWorking,
       ),
     );
 
@@ -1207,7 +1207,7 @@ class GrokAcpAgentProvider
       );
       _addEvent(
         AgentErrorEvent(
-          message: 'Grok protocol warning',
+          message: textCatalog.protocolWarning(config.displayName),
           details: error.toString(),
         ),
       );
@@ -1546,7 +1546,7 @@ class GrokAcpAgentProvider
     }
     if (error is TimeoutException) {
       return _GrokPromptFailure(
-        message: 'Grok request timed out. Please try again.',
+        message: textCatalog.requestTimedOut(config.displayName),
         raw: <String, Object?>{
           'operation': 'session/prompt',
           'exceptionType': exceptionType,
@@ -1559,7 +1559,7 @@ class GrokAcpAgentProvider
     if (error is JsonRpcTransportClosedException ||
         error is ProviderConnectionClosedException) {
       return _GrokPromptFailure(
-        message: 'Grok connection closed. Reconnect and try again.',
+        message: textCatalog.connectionClosedRetry(config.displayName),
         raw: <String, Object?>{
           'operation': 'session/prompt',
           'exceptionType': exceptionType,
@@ -1858,7 +1858,7 @@ class GrokAcpAgentProvider
     _emitStatus(
       AgentProviderStatus(
         state: AgentProviderConnectionState.running,
-        message: 'Waiting for approval: ${mapping.request.title}',
+        message: textCatalog.waitingApprovalFor(mapping.request.title),
       ),
     );
   }
@@ -1940,7 +1940,7 @@ class GrokAcpAgentProvider
     _emitStatus(
       AgentProviderStatus(
         state: AgentProviderConnectionState.running,
-        message: 'Waiting for answers: ${mapped.event.request.title}',
+        message: textCatalog.waitingAnswersFor(mapped.event.request.title),
       ),
     );
   }
@@ -1987,7 +1987,7 @@ class GrokAcpAgentProvider
     final planContent = params['planContent']?.toString();
     final approval = AgentPlanApprovalRequest(
       id: toolCallId,
-      title: 'Plan approval',
+      title: textCatalog.planApprovalTitle,
       markdown: planContent ?? '',
       sessionId: sessionId,
       turnId: _runningTurnIdsBySessionId[sessionId],
@@ -2007,7 +2007,7 @@ class GrokAcpAgentProvider
     _emitStatus(
       AgentProviderStatus(
         state: AgentProviderConnectionState.running,
-        message: 'Waiting for plan approval',
+        message: textCatalog.waitingPlanApproval,
       ),
     );
   }
@@ -2393,7 +2393,7 @@ class GrokAcpAgentProvider
     _emitStatus(
       AgentProviderStatus(
         state: AgentProviderConnectionState.ready,
-        message: '${config.displayName} ready',
+        message: textCatalog.providerReady(config.displayName),
       ),
     );
   }
@@ -2496,9 +2496,9 @@ class GrokAcpAgentProvider
 
   void _emitConnectionUnavailableStatus() {
     _emitStatus(
-      const AgentProviderStatus(
+      AgentProviderStatus(
         state: AgentProviderConnectionState.unavailable,
-        message: 'Grok connection closed. Reconnect and try again.',
+        message: textCatalog.connectionClosedRetry(config.displayName),
       ),
     );
   }

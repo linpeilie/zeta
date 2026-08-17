@@ -1,5 +1,6 @@
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 
 final _log = loggerFor('zeta.agent.claude_code.plan_approval');
 
@@ -48,6 +49,11 @@ final class ClaudeCodePlanApprovalDecisionResult {
 ///
 /// 本类无 I/O；Provider 负责发送 [responseFrame]。
 final class ClaudeCodePlanApprovalAdapter {
+  ClaudeCodePlanApprovalAdapter({
+    this.textCatalog = const FallbackAgentUiTextCatalog(),
+  });
+
+  final AgentUiTextCatalog textCatalog;
   final Map<String, _ObservedExitPlanTool> _observedByToolUseId =
       <String, _ObservedExitPlanTool>{};
   final Map<String, _PendingPlanApproval> _pendingByToolUseId =
@@ -174,7 +180,7 @@ final class ClaudeCodePlanApprovalAdapter {
     final controlPlan = _string(toolInput['plan']);
     final approval = AgentPlanApprovalRequest(
       id: toolUseId,
-      title: 'Plan approval',
+      title: textCatalog.planApprovalTitle,
       markdown: controlPlan ?? observed.markdown,
       sessionId: observed.sessionId,
       turnId: observed.turnId,

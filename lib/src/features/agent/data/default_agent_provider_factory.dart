@@ -35,7 +35,9 @@ class DefaultAgentProviderFactory implements AgentProviderBundleFactory {
   @override
   AgentProviderBundle createBundle(AgentProviderConfig config) {
     if (CursorRetirementPolicy.isRetiredProvider(config)) {
-      throw UnsupportedError(CursorRetirementPolicy.unavailableMessage);
+      throw UnsupportedError(
+        CursorRetirementPolicy.unavailableMessage(textCatalog),
+      );
     }
     return switch (config.kind) {
       AgentProviderKind.codexAppServer => createCodexBundle(
@@ -47,7 +49,7 @@ class DefaultAgentProviderFactory implements AgentProviderBundleFactory {
         textCatalog: textCatalog,
       ),
       AgentProviderKind.cursorAcp => throw UnsupportedError(
-        CursorRetirementPolicy.unavailableMessage,
+        CursorRetirementPolicy.unavailableMessage(textCatalog),
       ),
       AgentProviderKind.claudeCode => createClaudeCodeBundle(
         config,

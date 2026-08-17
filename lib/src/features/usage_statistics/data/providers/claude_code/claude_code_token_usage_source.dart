@@ -262,10 +262,15 @@ final class ClaudeCodeTokenUsageSource implements AgentTokenUsageSource {
         sessions,
       ),
       warnings: List<String>.unmodifiable(<String>[
-        if (discoveryFailures > 0) 'Claude Code 会话目录未能完整枚举，已展示可读取的数据。',
+        if (discoveryFailures > 0)
+          _textCatalog.sessionDirIncomplete('Claude Code'),
         if (unreadableFiles > 0)
-          '$unreadableFiles 个 Claude Code 会话文件读取失败，已展示其余数据。',
-        if (malformedLines > 0) '$malformedLines 行 Claude Code 历史损坏，已跳过并继续统计。',
+          _textCatalog.sessionFilesUnreadable(
+            '$unreadableFiles',
+            'Claude Code',
+          ),
+        if (malformedLines > 0)
+          _textCatalog.historyRowsCorrupt('$malformedLines', 'Claude Code'),
       ]),
     );
   }

@@ -5935,6 +5935,383 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{label}: {value}'**
   String agentLabeledValue(String label, String value);
+
+  /// Provider starting status
+  ///
+  /// In en, this message translates to:
+  /// **'Starting {name}'**
+  String agentStartingProvider(String name);
+
+  /// Provider preparing status
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing {name}'**
+  String agentPreparingProvider(String name);
+
+  /// Provider start failed
+  ///
+  /// In en, this message translates to:
+  /// **'Could not start {name}'**
+  String agentCouldNotStart(String name);
+
+  /// Provider protocol warning
+  ///
+  /// In en, this message translates to:
+  /// **'{name} protocol warning'**
+  String agentProtocolWarning(String name);
+
+  /// Provider request timeout
+  ///
+  /// In en, this message translates to:
+  /// **'{name} request timed out. Please try again.'**
+  String agentRequestTimedOut(String name);
+
+  /// Provider connection closed retry
+  ///
+  /// In en, this message translates to:
+  /// **'{name} connection closed. Reconnect and try again.'**
+  String agentConnectionClosedRetry(String name);
+
+  /// App-server connection closed
+  ///
+  /// In en, this message translates to:
+  /// **'{name} App Server connection closed'**
+  String agentAppServerConnectionClosed(String name);
+
+  /// Provider process exited
+  ///
+  /// In en, this message translates to:
+  /// **'{name} process exited'**
+  String agentProcessExited(String name);
+
+  /// Prompt send failed
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to send prompt'**
+  String get agentFailedToSendPrompt;
+
+  /// Waiting approval status
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for approval: {title}'**
+  String agentWaitingApprovalFor(String title);
+
+  /// Waiting answers status
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for answers: {title}'**
+  String agentWaitingAnswersFor(String title);
+
+  /// Waiting plan approval status
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for plan approval'**
+  String get agentWaitingPlanApproval;
+
+  /// Plan approval request title
+  ///
+  /// In en, this message translates to:
+  /// **'Plan approval'**
+  String get agentPlanApprovalTitle;
+
+  /// Session identity mismatch
+  ///
+  /// In en, this message translates to:
+  /// **'{name} changed session identity unexpectedly'**
+  String agentSessionIdentityChanged(String name);
+
+  /// Session restore failed
+  ///
+  /// In en, this message translates to:
+  /// **'{name} could not restore the requested session'**
+  String agentCouldNotRestoreSession(String name);
+
+  /// Permission request description
+  ///
+  /// In en, this message translates to:
+  /// **'{name} requests permission to use {tool}'**
+  String agentPermissionRequestDescription(String name, String tool);
+
+  /// History apply-patch title
+  ///
+  /// In en, this message translates to:
+  /// **'Apply patch'**
+  String get agentApplyPatch;
+
+  /// History tool-search title
+  ///
+  /// In en, this message translates to:
+  /// **'Tool search'**
+  String get agentHistoryToolSearch;
+
+  /// History web-search title
+  ///
+  /// In en, this message translates to:
+  /// **'Web search'**
+  String get agentHistoryWebSearch;
+
+  /// Question request fallback title
+  ///
+  /// In en, this message translates to:
+  /// **'Agent requests input'**
+  String get agentRequestsInput;
+
+  /// Local placeholder thread title
+  ///
+  /// In en, this message translates to:
+  /// **'New conversation'**
+  String get agentDefaultThreadTitle;
+
+  /// Quota window weeks
+  ///
+  /// In en, this message translates to:
+  /// **'{count} weeks'**
+  String agentUsageWindowWeeks(String count);
+
+  /// Quota window days
+  ///
+  /// In en, this message translates to:
+  /// **'{count} days'**
+  String agentUsageWindowDays(String count);
+
+  /// Quota window hours
+  ///
+  /// In en, this message translates to:
+  /// **'{count} hours'**
+  String agentUsageWindowHours(String count);
+
+  /// Quota window hours and minutes
+  ///
+  /// In en, this message translates to:
+  /// **'{hours} hours {minutes} minutes'**
+  String agentUsageWindowHoursMinutes(String hours, String minutes);
+
+  /// Quota window minutes
+  ///
+  /// In en, this message translates to:
+  /// **'{count} minutes'**
+  String agentUsageWindowMinutes(String count);
+
+  /// Quota window one week
+  ///
+  /// In en, this message translates to:
+  /// **'1 week'**
+  String get agentUsageWindowOneWeek;
+
+  /// Quota window one day
+  ///
+  /// In en, this message translates to:
+  /// **'1 day'**
+  String get agentUsageWindowOneDay;
+
+  /// Claude five-hour quota label
+  ///
+  /// In en, this message translates to:
+  /// **'5h'**
+  String get agentQuotaFiveHours;
+
+  /// Claude weekly quota label
+  ///
+  /// In en, this message translates to:
+  /// **'1 week'**
+  String get agentQuotaOneWeek;
+
+  /// Claude Sonnet weekly quota
+  ///
+  /// In en, this message translates to:
+  /// **'Sonnet 1 week'**
+  String get agentQuotaSonnetOneWeek;
+
+  /// Claude Opus weekly quota
+  ///
+  /// In en, this message translates to:
+  /// **'Opus 1 week'**
+  String get agentQuotaOpusOneWeek;
+
+  /// Claude Code quota limit name
+  ///
+  /// In en, this message translates to:
+  /// **'Claude Code subscription quota'**
+  String get agentClaudeCodeSubscriptionQuota;
+
+  /// Cursor retirement message
+  ///
+  /// In en, this message translates to:
+  /// **'Cursor Agent has been retired. This version no longer starts or restores Cursor sessions.'**
+  String get agentCursorRetired;
+
+  /// Cursor retirement no fallback
+  ///
+  /// In en, this message translates to:
+  /// **'{message} No enabled Provider is available; the old Cursor configuration is unchanged.'**
+  String agentCursorNoEnabledProvider(String message);
+
+  /// Cursor retirement fallback
+  ///
+  /// In en, this message translates to:
+  /// **'{message} Temporarily fell back to {name}; the old Cursor configuration is unchanged.'**
+  String agentCursorFallbackTo(String message, String name);
+
+  /// Cursor retirement config preserved
+  ///
+  /// In en, this message translates to:
+  /// **'{message} The old Cursor configuration and session data are unchanged.'**
+  String agentCursorConfigPreserved(String message);
+
+  /// Thread list load failed
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load threads'**
+  String get agentCouldNotLoadThreads;
+
+  /// No enabled providers for thread list
+  ///
+  /// In en, this message translates to:
+  /// **'No enabled Agent providers'**
+  String get agentNoEnabledProviders;
+
+  /// Claude initialize probe success
+  ///
+  /// In en, this message translates to:
+  /// **'Claude Code initialize succeeded. The CLI and current auth path are available.'**
+  String get mgmtClaudeInitializeSuccess;
+
+  /// Claude initialize probe timeout
+  ///
+  /// In en, this message translates to:
+  /// **'Claude Code initialize did not finish within 20 seconds.'**
+  String get mgmtClaudeInitializeTimeout;
+
+  /// Claude initialize probe failed
+  ///
+  /// In en, this message translates to:
+  /// **'Claude Code initialize probe failed.'**
+  String get mgmtClaudeInitializeFailed;
+
+  /// CLI version detection failed
+  ///
+  /// In en, this message translates to:
+  /// **'{name} version detection failed.'**
+  String mgmtVersionDetectFailed(String name);
+
+  /// Claude login evidence missing
+  ///
+  /// In en, this message translates to:
+  /// **'Claude Code login evidence is unavailable'**
+  String get mgmtClaudeLoginEvidenceUnavailable;
+
+  /// Claude initialize process exited
+  ///
+  /// In en, this message translates to:
+  /// **'The Claude Code process exited before initialize finished.'**
+  String get mgmtClaudeInitializeProcessExited;
+
+  /// Claude initialize rejected
+  ///
+  /// In en, this message translates to:
+  /// **'Claude Code rejected the initialize request.'**
+  String get mgmtClaudeInitializeRejected;
+
+  /// Claude initialize invalid response
+  ///
+  /// In en, this message translates to:
+  /// **'Claude Code returned an invalid initialize response.'**
+  String get mgmtClaudeInitializeInvalidResponse;
+
+  /// Claude initialize invalid stream
+  ///
+  /// In en, this message translates to:
+  /// **'Claude Code returned invalid stream-json data.'**
+  String get mgmtClaudeInitializeInvalidStream;
+
+  /// Claude initialize transport failed
+  ///
+  /// In en, this message translates to:
+  /// **'Claude Code initialize communication failed.'**
+  String get mgmtClaudeInitializeCommunicationFailed;
+
+  /// Claude.ai logged in
+  ///
+  /// In en, this message translates to:
+  /// **'Signed in to Claude.ai'**
+  String get mgmtClaudeAiLoggedIn;
+
+  /// Claude.ai logged in with plan
+  ///
+  /// In en, this message translates to:
+  /// **'Signed in to Claude.ai · {plan}'**
+  String mgmtClaudeAiLoggedInAs(String plan);
+
+  /// Provider not logged in
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is not signed in.'**
+  String mgmtNotLoggedIn(String name);
+
+  /// Grok login cache empty
+  ///
+  /// In en, this message translates to:
+  /// **'The Grok login cache is empty.'**
+  String get mgmtGrokLoginCacheEmpty;
+
+  /// Grok ACP connection ok
+  ///
+  /// In en, this message translates to:
+  /// **'Grok ACP connection is healthy'**
+  String get mgmtGrokAcpOk;
+
+  /// Grok ACP connection failed
+  ///
+  /// In en, this message translates to:
+  /// **'Grok ACP connection failed.'**
+  String get mgmtGrokAcpFailed;
+
+  /// Grok latest version network hint
+  ///
+  /// In en, this message translates to:
+  /// **'Check the network and detect again, or run grok update --check in a terminal.'**
+  String get mgmtGrokLatestVersionNetworkHint;
+
+  /// Codex app-server probe failed
+  ///
+  /// In en, this message translates to:
+  /// **'Codex app-server connection failed.'**
+  String get mgmtCodexAppServerFailed;
+
+  /// Agent detection incomplete
+  ///
+  /// In en, this message translates to:
+  /// **'Agent detection did not finish: {error}'**
+  String mgmtDetectionIncomplete(String error);
+
+  /// Agent detection progress
+  ///
+  /// In en, this message translates to:
+  /// **'[{index}/{total}] {name}: {message}'**
+  String mgmtDetectionProgress(
+    String index,
+    String total,
+    String name,
+    String message,
+  );
+
+  /// Usage session dir incomplete
+  ///
+  /// In en, this message translates to:
+  /// **'The {name} session directory could not be fully enumerated. Readable data is shown.'**
+  String usageSessionDirIncomplete(String name);
+
+  /// Usage session files unreadable
+  ///
+  /// In en, this message translates to:
+  /// **'{count} {name} session files could not be read. Other data is shown.'**
+  String usageSessionFilesUnreadable(String count, String name);
+
+  /// Usage history rows corrupt
+  ///
+  /// In en, this message translates to:
+  /// **'{count} {name} history lines were corrupt and skipped.'**
+  String usageHistoryRowsCorrupt(String count, String name);
 }
 
 class _AppLocalizationsDelegate

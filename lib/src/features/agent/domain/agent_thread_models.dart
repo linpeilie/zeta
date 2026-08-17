@@ -20,12 +20,15 @@ final class AgentForkThroughTurn extends AgentForkBoundary {
 
 const Object agentThreadSummaryUnset = Object();
 
-/// Zeta 新建会话时的本地占位标题。
+/// Zeta 新建会话时的本地占位标题（身份哨兵，含历史中文与英语）。
 ///
-/// 详情头栏在生成正式名之前使用该文案；**不得**把它写进列表
+/// 详情头栏在生成正式名之前使用目录文案；**不得**把它写进列表
 /// [AgentThreadSummary.title]，否则会伪装成正式 generated_title，挡住后续
 /// 首条消息临时标题与 provider 异步改名。
 const String agentDefaultThreadTitle = '新建会话';
+
+/// 英语界面下的本地占位标题；与 [agentDefaultThreadTitle] 一样只作身份哨兵。
+const String agentDefaultThreadTitleEn = 'New conversation';
 
 /// Provider 协议侧常见的英文占位标题，不得当正式名回写。
 const String agentProviderPlaceholderThreadTitle = 'New thread';
@@ -33,11 +36,13 @@ const String agentProviderPlaceholderThreadTitle = 'New thread';
 /// 是否为空/默认占位标题（不可作为列表或详情的正式 title 回写）。
 ///
 /// 对所有 Provider 通用：Codex / Grok 新建 thread 的 snapshot 与 session 都可能
-/// 短暂携带「New thread」或空串；Zeta 本地占位为 [agentDefaultThreadTitle]。
+/// 短暂携带「New thread」或空串；Zeta 本地占位为 [agentDefaultThreadTitle]
+/// 或其英语等价。
 bool isAgentThreadTitlePlaceholder(String? title) {
   final trimmed = title?.trim() ?? '';
   return trimmed.isEmpty ||
       trimmed == agentDefaultThreadTitle ||
+      trimmed == agentDefaultThreadTitleEn ||
       trimmed == agentProviderPlaceholderThreadTitle;
 }
 

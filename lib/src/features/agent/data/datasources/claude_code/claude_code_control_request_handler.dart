@@ -1,5 +1,6 @@
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 
 final _log = loggerFor('zeta.agent.claude_code.control_request');
 
@@ -78,7 +79,11 @@ final class ClaudeCodePendingToolPermission {
 ///
 /// 无 I/O 副作用；`StreamJsonPeer.send` 由 Provider 负责。
 final class ClaudeCodeControlRequestHandler {
-  ClaudeCodeControlRequestHandler();
+  ClaudeCodeControlRequestHandler({
+    this.textCatalog = const FallbackAgentUiTextCatalog(),
+  });
+
+  final AgentUiTextCatalog textCatalog;
 
   final Map<String, ClaudeCodePendingToolPermission> _pending =
       <String, ClaudeCodePendingToolPermission>{};
@@ -309,7 +314,7 @@ final class ClaudeCodeControlRequestHandler {
     };
   }
 
-  static AgentPermissionRequest _buildPermissionRequest({
+  AgentPermissionRequest _buildPermissionRequest({
     required ClaudeCodePendingToolPermission pending,
     String? cwd,
   }) {
@@ -325,7 +330,10 @@ final class ClaudeCodeControlRequestHandler {
       id: pending.requestId,
       title: title,
       kind: kind,
-      description: 'Claude Code requests permission to use ${pending.toolName}',
+      description: textCatalog.permissionRequestDescription(
+        'Claude Code',
+        pending.toolName,
+      ),
       command: command,
       cwd: cwd,
       sessionId: pending.sessionId,

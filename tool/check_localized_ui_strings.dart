@@ -37,11 +37,24 @@ const _productTermLiterals = <String>{
   'JSON-RPC',
   'ACP',
   'CLI',
+  'Read only',
+  'Workspace write',
+  'Full access',
+};
+
+const _identitySentinelLiterals = <String>{
+  '新建会话',
+  'New conversation',
+  'New thread',
+  '工具调用',
+  '操作',
+  '5h',
 };
 
 final _cjkPattern = RegExp(r'[\u3400-\u9FFF]');
 final _loggerCallPattern = RegExp(
   r'(?:loggerFor\s*\(|logger\s*\(|developer\.log\s*\(|'
+  r'logStructuredFailure\s*\(|'
   r'debugPrint\s*\(|'
   r'\.(?:info|warn|warning|debug|error|fine|severe|trace|wtf)\s*\()',
 );
@@ -154,6 +167,12 @@ String? _classify(String source, _ExtractedLiteral literal) {
   if (_brandLiterals.contains(text) || _productTermLiterals.contains(text)) {
     return null;
   }
+  if (_identitySentinelLiterals.contains(text)) {
+    return null;
+  }
+  if (text.startsWith('JSON-RPC ') || text == 'Unknown JSON-RPC error') {
+    return null;
+  }
   if (_isFormatOnlyLiteral(text)) {
     return null;
   }
@@ -194,7 +213,8 @@ bool _isLoggingContext(String source, int offset) {
 final _developerContractPattern = RegExp(
   r'(?:FlutterError(?:\.fromParts)?|ErrorSummary|ErrorHint|'
   r'ErrorDescription|ArgumentError(?:\.value)?|'
-  r'StateError|UnsupportedError|assert)\s*\(',
+  r'StateError|UnsupportedError|JsonRpcError|'
+  r'assert)\s*\(',
 );
 
 /// `${}`、`%`、`·` 这类纯格式碎片不是可翻译句子。
@@ -306,8 +326,9 @@ String _encodeAllowlist(List<_AllowlistEntry> entries) {
   final payload = <String, Object>{
     'version': 1,
     'description':
-        'Baseline user-visible Zeta copy. Existing debt is allowed; '
-        'new (file, text) pairs must be registered or migrated to ARB.',
+        'Remaining user-visible Zeta copy. Brand, product terms, '
+        'Provider/user/raw, protocol keys and logs are skipped by the scanner. '
+        'New (file, text) pairs must be registered or migrated to ARB.',
     'entries': [
       for (final entry in entries)
         <String, String>{

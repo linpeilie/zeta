@@ -587,7 +587,7 @@ class _JsonlHistoryParser {
     if (callId != null && _pendingToolsByCallId.containsKey(callId)) {
       _updatePendingTool(
         callId,
-        title: 'Apply patch',
+        title: textCatalog.applyPatchTitle,
         kind: AgentToolKind.edit,
         status: payload['success'] == false
             ? AgentToolStatus.failed
@@ -603,7 +603,7 @@ class _JsonlHistoryParser {
 
     final toolCall = AgentToolCall(
       id: toolCallId,
-      title: 'Apply patch',
+      title: textCatalog.applyPatchTitle,
       kind: AgentToolKind.edit,
       status: payload['success'] == false
           ? AgentToolStatus.failed
@@ -657,7 +657,7 @@ class _JsonlHistoryParser {
     final entry = AgentHistoryEventEntry(
       id: 'search-$callId',
       kind: AgentHistoryEventKind.search,
-      title: 'Tool search',
+      title: textCatalog.toolSearchTitle,
       description: query,
       content: _toolSearchQueryPreview(arguments),
       raw: raw,
@@ -677,7 +677,7 @@ class _JsonlHistoryParser {
     final entry = AgentHistoryEventEntry(
       id: 'search-$callId',
       kind: AgentHistoryEventKind.search,
-      title: 'Web search',
+      title: textCatalog.historyWebSearchTitle,
       description:
           _trimmedText(_string(action['query'])) ??
           _trimmedText(_string(payload['query'])),

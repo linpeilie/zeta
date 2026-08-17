@@ -8,7 +8,9 @@ import 'package:zeta/src/features/usage_statistics/data/providers/codex/codex_us
 import 'package:zeta/src/features/usage_statistics/data/providers/codex/codex_usage_partition_codec.dart';
 import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partition_store.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_query_models.dart';
+import 'package:zeta/src/features/usage_statistics/domain/fallback_usage_statistics_text_catalog.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
+import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_text_catalog.dart';
 
 void main() {
   test('maps canonical records and uses config id partition', () async {
@@ -255,6 +257,8 @@ final class _UsageScanner implements CodexUsageLogScanner {
     required String codexHome,
     required Map<String, CodexUsageSessionSnapshot> cachedSessions,
     bool forceRefresh = false,
+    UsageStatisticsTextCatalog textCatalog =
+        const FallbackUsageStatisticsTextCatalog(),
   }) async {
     codexHomes.add(codexHome);
     cachedSessionCounts.add(cachedSessions.length);

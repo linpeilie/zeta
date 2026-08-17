@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:zeta/src/features/agent/domain/agent_provider_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_usage_models.dart';
+import 'package:zeta/src/features/usage_statistics/domain/fallback_usage_statistics_text_catalog.dart';
 
 /// 使用统计支持的时间范围。
 enum UsageTimeRangePreset {
@@ -291,13 +292,16 @@ class AgentUsageRecord {
   }
 }
 
-String usageProjectName(String projectPath, {String unknownName = '未知项目'}) {
+String usageProjectName(String projectPath, {String? unknownName}) {
   final normalized = projectPath.replaceAll('\\', '/');
   final segments = normalized
       .split('/')
       .where((segment) => segment.trim().isNotEmpty)
       .toList();
-  return segments.isEmpty ? unknownName : segments.last;
+  return segments.isEmpty
+      ? (unknownName ??
+            const FallbackUsageStatisticsTextCatalog().unknownProjectName)
+      : segments.last;
 }
 
 class UsageStatisticsSourceSnapshot {

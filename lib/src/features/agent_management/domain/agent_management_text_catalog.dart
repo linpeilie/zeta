@@ -121,4 +121,49 @@ abstract interface class AgentManagementTextCatalog {
   String configurationNotLoaded();
 
   String logsReadFailed(Object error);
+
+  String claudeInitializeSuccess();
+
+  String claudeInitializeTimeout();
+
+  String claudeInitializeFailed();
+
+  String versionDetectFailed(String name);
+
+  String claudeLoginEvidenceUnavailable();
+
+  String claudeInitializeProcessExited();
+
+  String claudeInitializeRejected();
+
+  String claudeInitializeInvalidResponse();
+
+  String claudeInitializeInvalidStream();
+
+  String claudeInitializeCommunicationFailed();
+
+  String claudeAiLoggedIn();
+
+  String claudeAiLoggedInAs(String plan);
+
+  String notLoggedIn(String name);
+
+  String grokLoginCacheEmpty();
+
+  String grokAcpOk();
+
+  String grokAcpFailed();
+
+  String grokLatestVersionNetworkHint();
+
+  String codexAppServerFailed();
+
+  String detectionIncomplete(Object error);
+
+  String detectionProgress({
+    required String index,
+    required String total,
+    required String name,
+    required String message,
+  });
 }

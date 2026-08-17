@@ -213,8 +213,12 @@ class AgentManagementController extends ChangeNotifier {
             _detectionProgress = AgentDetectionProgress(
               completed: progress.completed,
               total: progress.total,
-              message:
-                  '[$index/${ids.length}] ${partial.definition.displayName}: ${progress.message}',
+              message: _textCatalog.detectionProgress(
+                index: '$index',
+                total: '${ids.length}',
+                name: partial.definition.displayName,
+                message: progress.message,
+              ),
             );
             _agents[id] = partial.copyWith(
               runtimeState: _runtimeState(
@@ -237,7 +241,7 @@ class AgentManagementController extends ChangeNotifier {
       }
       _detectionProgress = null;
     } catch (error) {
-      _operationError = 'Agent 检测未能完成：$error';
+      _operationError = _textCatalog.detectionIncomplete(error);
     } finally {
       _detecting = false;
       _notify();

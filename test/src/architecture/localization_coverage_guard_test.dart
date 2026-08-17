@@ -42,7 +42,6 @@ void main() {
           .where((line) => line.isNotEmpty && !line.startsWith('#'))
           .skip(1)
           .toList();
-      expect(rows, isNotEmpty);
       for (final row in rows.take(20)) {
         final columns = row.split('\t');
         expect(columns.length, 5, reason: row);
@@ -63,7 +62,6 @@ void main() {
     final decoded = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
     expect(decoded['version'], 1);
     final entries = decoded['entries'] as List<dynamic>;
-    expect(entries, isNotEmpty);
     for (final raw in entries) {
       final entry = raw as Map<String, dynamic>;
       expect(entry['file'], startsWith('lib/'));

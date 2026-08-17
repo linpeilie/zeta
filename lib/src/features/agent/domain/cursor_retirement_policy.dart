@@ -1,4 +1,6 @@
 import 'package:zeta/src/features/agent/domain/agent_provider_models.dart';
+import 'package:zeta/src/features/agent/domain/agent_ui_text_catalog.dart';
+import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 
 /// Cursor 退役后的运行时选择结果。
 ///
@@ -20,8 +22,9 @@ final class CursorRetirementResolution {
 ///
 /// 该策略只处理产品目录和旧配置选择，不读取或修改任何 Cursor 会话数据。
 abstract final class CursorRetirementPolicy {
-  static const String unavailableMessage =
-      'Cursor Agent 已退役，当前版本不再支持启动或恢复 Cursor 会话。';
+  static String unavailableMessage([
+    AgentUiTextCatalog catalog = const FallbackAgentUiTextCatalog(),
+  ]) => catalog.cursorRetired;
 
   /// 配置是否属于已经退役的 Cursor 运行时。
   static bool isRetiredProvider(AgentProviderConfig config) {
@@ -55,7 +58,10 @@ abstract final class CursorRetirementPolicy {
   }
 
   /// 解析当前进程应使用的 Provider，但不修改或保存 [settings]。
-  static CursorRetirementResolution resolve(AgentProviderSettings settings) {
+  static CursorRetirementResolution resolve(
+    AgentProviderSettings settings, {
+    AgentUiTextCatalog catalog = const FallbackAgentUiTextCatalog(),
+  }) {
     final selected = _providerById(
       settings.providers,
       settings.activeProviderId,
@@ -78,9 +84,10 @@ abstract final class CursorRetirementPolicy {
         (supported.isEmpty
             ? AgentProviderConfig.defaultCodex.copyWith(enabled: false)
             : supported.first);
+    final retired = catalog.cursorRetired;
     final reason = fallback == null
-        ? '$unavailableMessage 当前没有已启用的可用 Provider；旧 Cursor 配置保持原样。'
-        : '$unavailableMessage 已临时回退到 ${fallback.displayName}；旧 Cursor 配置保持原样。';
+        ? catalog.cursorNoEnabledProvider(retired)
+        : catalog.cursorFallbackTo(retired, fallback.displayName);
     return CursorRetirementResolution(
       effectiveProvider: safeDisplayProvider,
       hasRuntimeProvider: fallback != null,
@@ -92,10 +99,11 @@ abstract final class CursorRetirementPolicy {
   static String? unavailableReasonFor({
     required String providerId,
     AgentProviderConfig? config,
+    AgentUiTextCatalog catalog = const FallbackAgentUiTextCatalog(),
   }) {
     if (isRetiredProviderId(providerId) ||
         (config != null && isRetiredProvider(config))) {
-      return '$unavailableMessage 旧 Cursor 配置和会话数据保持原样。';
+      return catalog.cursorConfigPreserved(catalog.cursorRetired);
     }
     return null;
   }

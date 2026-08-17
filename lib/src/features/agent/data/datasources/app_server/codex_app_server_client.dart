@@ -220,7 +220,10 @@ class _CodexAppServerClient {
       AgentUsageWindow(
         // 优先用 windowDurationMins 生成可读时长；缺失时回退 limitName / 默认文案。
         label:
-            formatAgentUsageWindowLabelFromMinutes(durationMinutes) ??
+            formatAgentUsageWindowLabelFromMinutes(
+              durationMinutes,
+              catalog: _textCatalog,
+            ) ??
             fallbackLabel,
         usedPercent: usedPercent.clamp(0, 100),
         resetsAt: resetsAtSeconds == null

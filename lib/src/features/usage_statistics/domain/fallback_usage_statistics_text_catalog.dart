@@ -99,4 +99,15 @@ final class FallbackUsageStatisticsTextCatalog
 
   @override
   String get agentUsageTemporarilyUnavailable => 'Agent 用量暂时无法读取';
+
+  @override
+  String sessionDirIncomplete(String name) => '$name 会话目录未能完整枚举，已展示可读取的数据。';
+
+  @override
+  String sessionFilesUnreadable(String count, String name) =>
+      '$count 个 $name 会话文件读取失败，已展示其余数据。';
+
+  @override
+  String historyRowsCorrupt(String count, String name) =>
+      '$count 行 $name 历史损坏，已跳过并继续统计。';
 }

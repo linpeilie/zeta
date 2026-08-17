@@ -1,4 +1,6 @@
+import 'package:zeta/src/features/agent/domain/agent_ui_text_catalog.dart';
 import 'package:zeta/src/features/agent/domain/agent_usage_models.dart';
+import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 
 /// 将 Claude Code OAuth usage 响应映射为中立套餐快照。
 ///
@@ -8,28 +10,29 @@ AgentUsageQuotaSnapshot? mapClaudeCodeUsageQuota(
   required String providerId,
   required String providerName,
   String? subscriptionType,
+  AgentUiTextCatalog textCatalog = const FallbackAgentUiTextCatalog(),
 }) {
   final response = _asMap(raw) ?? const <String, Object?>{};
 
   final windows = <AgentUsageWindow>[
     ?_window(
       response['five_hour'],
-      label: '5h',
+      label: textCatalog.quotaFiveHours,
       duration: const Duration(hours: 5),
     ),
     ?_window(
       response['seven_day'],
-      label: '1 周',
+      label: textCatalog.quotaOneWeek,
       duration: const Duration(days: 7),
     ),
     ?_window(
       response['seven_day_sonnet'],
-      label: 'Sonnet 1 周',
+      label: textCatalog.quotaSonnetOneWeek,
       duration: const Duration(days: 7),
     ),
     ?_window(
       response['seven_day_opus'],
-      label: 'Opus 1 周',
+      label: textCatalog.quotaOpusOneWeek,
       duration: const Duration(days: 7),
     ),
   ];
@@ -43,7 +46,7 @@ AgentUsageQuotaSnapshot? mapClaudeCodeUsageQuota(
     providerId: providerId,
     providerName: providerName,
     planType: planType,
-    limitName: 'Claude Code 订阅额度',
+    limitName: textCatalog.claudeCodeSubscriptionQuota,
     windows: List<AgentUsageWindow>.unmodifiable(windows),
     credits: credits,
   );

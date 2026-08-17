@@ -165,6 +165,84 @@ abstract interface class AgentUiTextCatalog {
   String get providerDefaultPermission;
 
   String threadDisabled(String name);
+
+  String startingProvider(String name);
+
+  String preparingProvider(String name);
+
+  String couldNotStart(String name);
+
+  String protocolWarning(String name);
+
+  String requestTimedOut(String name);
+
+  String connectionClosedRetry(String name);
+
+  String appServerConnectionClosed(String name);
+
+  String processExited(String name);
+
+  String get failedToSendPrompt;
+
+  String waitingApprovalFor(String title);
+
+  String waitingAnswersFor(String title);
+
+  String get waitingPlanApproval;
+
+  String get planApprovalTitle;
+
+  String sessionIdentityChanged(String name);
+
+  String couldNotRestoreSession(String name);
+
+  String permissionRequestDescription(String name, String tool);
+
+  String get applyPatchTitle;
+
+  String get toolSearchTitle;
+
+  String get historyWebSearchTitle;
+
+  String get agentRequestsInput;
+
+  String get defaultThreadTitle;
+
+  String usageWindowWeeks(String count);
+
+  String usageWindowDays(String count);
+
+  String usageWindowHours(String count);
+
+  String usageWindowHoursMinutes(String hours, String minutes);
+
+  String usageWindowMinutes(String count);
+
+  String get usageWindowOneWeek;
+
+  String get usageWindowOneDay;
+
+  String get quotaFiveHours;
+
+  String get quotaOneWeek;
+
+  String get quotaSonnetOneWeek;
+
+  String get quotaOpusOneWeek;
+
+  String get claudeCodeSubscriptionQuota;
+
+  String get cursorRetired;
+
+  String cursorNoEnabledProvider(String message);
+
+  String cursorFallbackTo(String message, String name);
+
+  String cursorConfigPreserved(String message);
+
+  String get couldNotLoadThreads;
+
+  String get noEnabledProviders;
 }
 
 /// 用当前进程目录解析工具卡展示标题。

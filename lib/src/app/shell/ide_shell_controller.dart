@@ -189,6 +189,7 @@ class IdeShellController extends ChangeNotifier {
       globalRuntime: agentProviderGlobalRuntime,
       bindingManager: agentWorkspaceController.bindingManager,
       viewModel: projectThreadsViewModel,
+      textCatalog: agentUiTextCatalog,
     );
     projectThreadsController.onActiveThreadCleared = _handleActiveThreadCleared;
     agentWorkspaceController.addListener(_handleAgentWorkspaceChanged);

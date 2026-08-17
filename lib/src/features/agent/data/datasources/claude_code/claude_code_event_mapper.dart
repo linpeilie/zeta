@@ -3,6 +3,7 @@ import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_plan_approval_adapter.dart';
 import 'package:zeta/src/features/agent/data/mappers/claude_code_stream_identity.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 
 final _log = loggerFor('zeta.agent.claude_code.event_mapper');
 
@@ -34,12 +35,15 @@ final class ClaudeCodeEventMapper {
     ClaudeCodeStreamIdentity? identity,
     ClaudeCodePlanApprovalAdapter? planApprovalAdapter,
     ClaudeCodeFileChangeTracker? fileChangeTracker,
+    this.textCatalog = const FallbackAgentUiTextCatalog(),
   }) : identity = identity ?? ClaudeCodeStreamIdentity(),
        planApprovalAdapter =
-           planApprovalAdapter ?? ClaudeCodePlanApprovalAdapter(),
+           planApprovalAdapter ??
+           ClaudeCodePlanApprovalAdapter(textCatalog: textCatalog),
        fileChangeTracker = fileChangeTracker ?? ClaudeCodeFileChangeTracker();
 
   final String providerId;
+  final AgentUiTextCatalog textCatalog;
   final ClaudeCodeStreamIdentity identity;
   final ClaudeCodePlanApprovalAdapter planApprovalAdapter;
   final ClaudeCodeFileChangeTracker fileChangeTracker;
@@ -235,7 +239,7 @@ final class ClaudeCodeEventMapper {
       return ClaudeCodeMappedFrame(
         events: <AgentEvent>[
           AgentErrorEvent(
-            message: 'Claude Code changed session identity unexpectedly',
+            message: textCatalog.sessionIdentityChanged('Claude Code'),
             code: 'claudeCodeSessionMismatch',
             sessionId: expectedSessionId,
           ),
@@ -254,7 +258,7 @@ final class ClaudeCodeEventMapper {
       return ClaudeCodeMappedFrame(
         events: <AgentEvent>[
           AgentErrorEvent(
-            message: 'Claude Code could not restore the requested session',
+            message: textCatalog.couldNotRestoreSession('Claude Code'),
             code: 'claudeCodeSessionMismatch',
             sessionId: expected,
           ),

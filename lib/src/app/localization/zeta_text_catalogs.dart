@@ -125,6 +125,18 @@ final class AppUsageStatisticsTextCatalog
   @override
   String get agentUsageTemporarilyUnavailable =>
       _l10n.usageAgentUsageTemporarilyUnavailable;
+
+  @override
+  String sessionDirIncomplete(String name) =>
+      _l10n.usageSessionDirIncomplete(name);
+
+  @override
+  String sessionFilesUnreadable(String count, String name) =>
+      _l10n.usageSessionFilesUnreadable(count, name);
+
+  @override
+  String historyRowsCorrupt(String count, String name) =>
+      _l10n.usageHistoryRowsCorrupt(count, name);
 }
 
 final class AppAgentManagementTextCatalog
@@ -336,6 +348,79 @@ final class AppAgentManagementTextCatalog
 
   @override
   String logsReadFailed(Object error) => _l10n.mgmtLogsReadFailed('$error');
+
+  @override
+  String claudeInitializeSuccess() => _l10n.mgmtClaudeInitializeSuccess;
+
+  @override
+  String claudeInitializeTimeout() => _l10n.mgmtClaudeInitializeTimeout;
+
+  @override
+  String claudeInitializeFailed() => _l10n.mgmtClaudeInitializeFailed;
+
+  @override
+  String versionDetectFailed(String name) =>
+      _l10n.mgmtVersionDetectFailed(name);
+
+  @override
+  String claudeLoginEvidenceUnavailable() =>
+      _l10n.mgmtClaudeLoginEvidenceUnavailable;
+
+  @override
+  String claudeInitializeProcessExited() =>
+      _l10n.mgmtClaudeInitializeProcessExited;
+
+  @override
+  String claudeInitializeRejected() => _l10n.mgmtClaudeInitializeRejected;
+
+  @override
+  String claudeInitializeInvalidResponse() =>
+      _l10n.mgmtClaudeInitializeInvalidResponse;
+
+  @override
+  String claudeInitializeInvalidStream() =>
+      _l10n.mgmtClaudeInitializeInvalidStream;
+
+  @override
+  String claudeInitializeCommunicationFailed() =>
+      _l10n.mgmtClaudeInitializeCommunicationFailed;
+
+  @override
+  String claudeAiLoggedIn() => _l10n.mgmtClaudeAiLoggedIn;
+
+  @override
+  String claudeAiLoggedInAs(String plan) => _l10n.mgmtClaudeAiLoggedInAs(plan);
+
+  @override
+  String notLoggedIn(String name) => _l10n.mgmtNotLoggedIn(name);
+
+  @override
+  String grokLoginCacheEmpty() => _l10n.mgmtGrokLoginCacheEmpty;
+
+  @override
+  String grokAcpOk() => _l10n.mgmtGrokAcpOk;
+
+  @override
+  String grokAcpFailed() => _l10n.mgmtGrokAcpFailed;
+
+  @override
+  String grokLatestVersionNetworkHint() =>
+      _l10n.mgmtGrokLatestVersionNetworkHint;
+
+  @override
+  String codexAppServerFailed() => _l10n.mgmtCodexAppServerFailed;
+
+  @override
+  String detectionIncomplete(Object error) =>
+      _l10n.mgmtDetectionIncomplete('$error');
+
+  @override
+  String detectionProgress({
+    required String index,
+    required String total,
+    required String name,
+    required String message,
+  }) => _l10n.mgmtDetectionProgress(index, total, name, message);
 }
 
 final class AppAgentUiTextCatalog implements AgentUiTextCatalog {
@@ -614,6 +699,135 @@ final class AppAgentUiTextCatalog implements AgentUiTextCatalog {
 
   @override
   String threadDisabled(String name) => _l10n.agentThreadDisabled(name);
+
+  @override
+  String startingProvider(String name) => _l10n.agentStartingProvider(name);
+
+  @override
+  String preparingProvider(String name) => _l10n.agentPreparingProvider(name);
+
+  @override
+  String couldNotStart(String name) => _l10n.agentCouldNotStart(name);
+
+  @override
+  String protocolWarning(String name) => _l10n.agentProtocolWarning(name);
+
+  @override
+  String requestTimedOut(String name) => _l10n.agentRequestTimedOut(name);
+
+  @override
+  String connectionClosedRetry(String name) =>
+      _l10n.agentConnectionClosedRetry(name);
+
+  @override
+  String appServerConnectionClosed(String name) =>
+      _l10n.agentAppServerConnectionClosed(name);
+
+  @override
+  String processExited(String name) => _l10n.agentProcessExited(name);
+
+  @override
+  String get failedToSendPrompt => _l10n.agentFailedToSendPrompt;
+
+  @override
+  String waitingApprovalFor(String title) =>
+      _l10n.agentWaitingApprovalFor(title);
+
+  @override
+  String waitingAnswersFor(String title) => _l10n.agentWaitingAnswersFor(title);
+
+  @override
+  String get waitingPlanApproval => _l10n.agentWaitingPlanApproval;
+
+  @override
+  String get planApprovalTitle => _l10n.agentPlanApprovalTitle;
+
+  @override
+  String sessionIdentityChanged(String name) =>
+      _l10n.agentSessionIdentityChanged(name);
+
+  @override
+  String couldNotRestoreSession(String name) =>
+      _l10n.agentCouldNotRestoreSession(name);
+
+  @override
+  String permissionRequestDescription(String name, String tool) =>
+      _l10n.agentPermissionRequestDescription(name, tool);
+
+  @override
+  String get applyPatchTitle => _l10n.agentApplyPatch;
+
+  @override
+  String get toolSearchTitle => _l10n.agentHistoryToolSearch;
+
+  @override
+  String get historyWebSearchTitle => _l10n.agentHistoryWebSearch;
+
+  @override
+  String get agentRequestsInput => _l10n.agentRequestsInput;
+
+  @override
+  String get defaultThreadTitle => _l10n.agentDefaultThreadTitle;
+
+  @override
+  String usageWindowWeeks(String count) => _l10n.agentUsageWindowWeeks(count);
+
+  @override
+  String usageWindowDays(String count) => _l10n.agentUsageWindowDays(count);
+
+  @override
+  String usageWindowHours(String count) => _l10n.agentUsageWindowHours(count);
+
+  @override
+  String usageWindowHoursMinutes(String hours, String minutes) =>
+      _l10n.agentUsageWindowHoursMinutes(hours, minutes);
+
+  @override
+  String usageWindowMinutes(String count) =>
+      _l10n.agentUsageWindowMinutes(count);
+
+  @override
+  String get usageWindowOneWeek => _l10n.agentUsageWindowOneWeek;
+
+  @override
+  String get usageWindowOneDay => _l10n.agentUsageWindowOneDay;
+
+  @override
+  String get quotaFiveHours => _l10n.agentQuotaFiveHours;
+
+  @override
+  String get quotaOneWeek => _l10n.agentQuotaOneWeek;
+
+  @override
+  String get quotaSonnetOneWeek => _l10n.agentQuotaSonnetOneWeek;
+
+  @override
+  String get quotaOpusOneWeek => _l10n.agentQuotaOpusOneWeek;
+
+  @override
+  String get claudeCodeSubscriptionQuota =>
+      _l10n.agentClaudeCodeSubscriptionQuota;
+
+  @override
+  String get cursorRetired => _l10n.agentCursorRetired;
+
+  @override
+  String cursorNoEnabledProvider(String message) =>
+      _l10n.agentCursorNoEnabledProvider(message);
+
+  @override
+  String cursorFallbackTo(String message, String name) =>
+      _l10n.agentCursorFallbackTo(message, name);
+
+  @override
+  String cursorConfigPreserved(String message) =>
+      _l10n.agentCursorConfigPreserved(message);
+
+  @override
+  String get couldNotLoadThreads => _l10n.agentCouldNotLoadThreads;
+
+  @override
+  String get noEnabledProviders => _l10n.agentNoEnabledProviders;
 }
 
 final class AppDesktopAttentionTextCatalog

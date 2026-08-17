@@ -278,7 +278,7 @@ class ClaudeCodeAgentManagementRepository
           cliCallable: true,
           accountValid: true,
           protocolReady: true,
-          message: 'Claude Code initialize 成功，CLI 与当前认证路径可用。',
+          message: _textCatalog.claudeInitializeSuccess(),
           protocolVersion: 'stream-json',
           agentName: 'Claude Code',
           agentVersion: version.version,
@@ -313,7 +313,7 @@ class ClaudeCodeAgentManagementRepository
           accountValid: false,
           protocolReady: false,
           failureStage: AgentDiagnosticStage.protocolHandshake,
-          message: 'Claude Code initialize 在 20 秒内未完成。',
+          message: _textCatalog.claudeInitializeTimeout(),
           agentVersion: version.version,
         ),
         const <AgentModelInfo>[],
@@ -329,7 +329,7 @@ class ClaudeCodeAgentManagementRepository
           accountValid: false,
           protocolReady: false,
           failureStage: AgentDiagnosticStage.protocolHandshake,
-          message: 'Claude Code initialize 探测失败。',
+          message: _textCatalog.claudeInitializeFailed(),
           agentVersion: version.version,
         ),
         const <AgentModelInfo>[],
@@ -427,7 +427,7 @@ class ClaudeCodeAgentManagementRepository
         return _ClaudeCodeVersionRead(
           cliCallable: true,
           displayPath: command.displayPath,
-          error: 'Claude Code 版本检测失败。',
+          error: _textCatalog.versionDetectFailed('Claude Code'),
         );
       }
       final match = RegExp(
@@ -459,7 +459,7 @@ class ClaudeCodeAgentManagementRepository
       return _ClaudeCodeVersionRead(
         cliCallable: true,
         displayPath: command.displayPath,
-        error: 'Claude Code 版本检测失败。',
+        error: _textCatalog.versionDetectFailed('Claude Code'),
       );
     }
   }
@@ -477,7 +477,7 @@ class ClaudeCodeAgentManagementRepository
     }
     return _ClaudeCodeAccountRead(
       state: AgentAccountState.unavailable,
-      label: 'Claude Code 登录证据不可用',
+      label: _textCatalog.claudeLoginEvidenceUnavailable(),
       error: _textCatalog.cannotCheckClaudeAuth(),
     );
   }
@@ -491,17 +491,17 @@ String _metadataProbeFailureMessage(
     ClaudeCodeCliMetadataProbeFailure.processUnavailable =>
       catalog.cannotStartClaudeInitialize(),
     ClaudeCodeCliMetadataProbeFailure.timeout =>
-      'Claude Code initialize 在 20 秒内未完成。',
+      catalog.claudeInitializeTimeout(),
     ClaudeCodeCliMetadataProbeFailure.processExited =>
-      'Claude Code 进程在 initialize 完成前退出。',
+      catalog.claudeInitializeProcessExited(),
     ClaudeCodeCliMetadataProbeFailure.errorResponse =>
-      'Claude Code 拒绝了 initialize 请求。',
+      catalog.claudeInitializeRejected(),
     ClaudeCodeCliMetadataProbeFailure.invalidResponse =>
-      'Claude Code 返回的 initialize 响应无效。',
+      catalog.claudeInitializeInvalidResponse(),
     ClaudeCodeCliMetadataProbeFailure.invalidStream =>
-      'Claude Code 返回了无效的 stream-json 数据。',
+      catalog.claudeInitializeInvalidStream(),
     ClaudeCodeCliMetadataProbeFailure.transportFailure =>
-      'Claude Code initialize 通信失败。',
+      catalog.claudeInitializeCommunicationFailed(),
   };
 }
 
@@ -518,7 +518,7 @@ _ClaudeCodeAccountRead _mapAuthStatus(
 
   final authMethod = status.authMethod?.trim().toLowerCase();
   final label = switch (authMethod) {
-    'claude.ai' => _claudeAiAccountLabel(status.subscriptionType),
+    'claude.ai' => _claudeAiAccountLabel(status.subscriptionType, catalog),
     'api_key' => catalog.claudeAuthViaApiKey(),
     'api_key_helper' => catalog.claudeAuthViaApiKeyHelper(),
     'oauth_token' => catalog.claudeAuthViaOauthToken(),
@@ -531,7 +531,10 @@ _ClaudeCodeAccountRead _mapAuthStatus(
   );
 }
 
-String _claudeAiAccountLabel(String? subscriptionType) {
+String _claudeAiAccountLabel(
+  String? subscriptionType,
+  AgentManagementTextCatalog catalog,
+) {
   final plan = switch (subscriptionType?.trim().toLowerCase()) {
     'pro' || 'claude pro' => 'Claude Pro',
     'max' || 'claude max' => 'Claude Max',
@@ -539,7 +542,9 @@ String _claudeAiAccountLabel(String? subscriptionType) {
     'enterprise' || 'claude enterprise' => 'Claude Enterprise',
     _ => null,
   };
-  return plan == null ? 'Claude.ai 已登录' : 'Claude.ai 已登录 · $plan';
+  return plan == null
+      ? catalog.claudeAiLoggedIn()
+      : catalog.claudeAiLoggedInAs(plan);
 }
 
 String _thirdPartyAccountLabel(

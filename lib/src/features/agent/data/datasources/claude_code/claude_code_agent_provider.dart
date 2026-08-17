@@ -66,9 +66,15 @@ class ClaudeCodeAgentProvider
     String Function()? idFactory,
   }) : _processStarterDelegate = processStarter,
        _cliLocator = locator,
-       _mapper = mapper ?? ClaudeCodeEventMapper(providerId: config.id),
+       _mapper =
+           mapper ??
+           ClaudeCodeEventMapper(
+             providerId: config.id,
+             textCatalog: textCatalog,
+           ),
        _controlHandler =
-           controlRequestHandler ?? ClaudeCodeControlRequestHandler(),
+           controlRequestHandler ??
+           ClaudeCodeControlRequestHandler(textCatalog: textCatalog),
        _questionAdapter = questionAdapter ?? ClaudeCodeQuestionAdapter(),
        _sessionHistoryReader =
            sessionHistoryReader ??
@@ -104,6 +110,7 @@ class ClaudeCodeAgentProvider
         ClaudeCodeUsageQuotaAdapter(
           providerId: config.id,
           providerName: config.displayName,
+          textCatalog: textCatalog,
           metadataLoader: sharedMetadata.readForQuota,
           accountDataEnrichmentEnabled:
               config.extra[claudeCodeAccountDataEnrichmentKey] != false,
@@ -229,9 +236,9 @@ class ClaudeCodeAgentProvider
   Future<void> _initializeOnce() async {
     _log.i('Initializing Claude Code provider ${config.id}');
     _emitStatus(
-      const AgentProviderStatus(
+      AgentProviderStatus(
         state: AgentProviderConnectionState.connecting,
-        message: 'Preparing Claude Code',
+        message: textCatalog.preparingProvider(config.displayName),
       ),
     );
     // 进程在 startSession 时按 cwd 拉起；initialize 只完成 provider 就绪标记。
@@ -239,7 +246,7 @@ class ClaudeCodeAgentProvider
     _emitStatus(
       AgentProviderStatus(
         state: AgentProviderConnectionState.ready,
-        message: '${config.displayName} ready',
+        message: textCatalog.providerReady(config.displayName),
       ),
     );
     _log.i('Claude Code provider ${config.id} initialized');
@@ -547,9 +554,9 @@ class ClaudeCodeAgentProvider
       ),
     );
     _emitStatus(
-      const AgentProviderStatus(
+      AgentProviderStatus(
         state: AgentProviderConnectionState.running,
-        message: 'Agent is working',
+        message: textCatalog.agentIsWorking,
       ),
     );
 
@@ -590,7 +597,7 @@ class ClaudeCodeAgentProvider
           sessionId: session.id,
           turnId: turnId,
           status: AgentHistoryTurnStatus.failed,
-          errorMessage: 'Failed to send prompt',
+          errorMessage: textCatalog.failedToSendPrompt,
           completedAt: DateTime.now(),
         ),
       );
@@ -878,9 +885,9 @@ class ClaudeCodeAgentProvider
     _listenToPeer(peer);
 
     _emitStatus(
-      const AgentProviderStatus(
+      AgentProviderStatus(
         state: AgentProviderConnectionState.connecting,
-        message: 'Starting Claude Code',
+        message: textCatalog.startingProvider(config.displayName),
       ),
     );
     await peer.start();
@@ -889,7 +896,7 @@ class ClaudeCodeAgentProvider
     _emitStatus(
       AgentProviderStatus(
         state: AgentProviderConnectionState.ready,
-        message: '${config.displayName} ready',
+        message: textCatalog.providerReady(config.displayName),
       ),
     );
   }
@@ -936,9 +943,9 @@ class ClaudeCodeAgentProvider
         _log.i('Claude Code peer event stream closed');
         if (!_disposed) {
           _emitStatus(
-            const AgentProviderStatus(
+            AgentProviderStatus(
               state: AgentProviderConnectionState.unavailable,
-              message: 'Claude Code process exited',
+              message: textCatalog.processExited(config.displayName),
             ),
           );
         }
@@ -1334,7 +1341,7 @@ class ClaudeCodeAgentProvider
       _emitStatus(
         AgentProviderStatus(
           state: AgentProviderConnectionState.ready,
-          message: '${config.displayName} ready',
+          message: textCatalog.providerReady(config.displayName),
         ),
       );
     }

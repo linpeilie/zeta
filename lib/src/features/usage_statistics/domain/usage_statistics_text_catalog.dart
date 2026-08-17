@@ -37,4 +37,10 @@ abstract interface class UsageStatisticsTextCatalog {
   String get agentDisabledOrUnavailable;
 
   String get agentUsageTemporarilyUnavailable;
+
+  String sessionDirIncomplete(String name);
+
+  String sessionFilesUnreadable(String count, String name);
+
+  String historyRowsCorrupt(String count, String name);
 }

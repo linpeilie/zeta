@@ -2,6 +2,10 @@ part of '../datasources/app_server/codex_app_server_agent_provider.dart';
 
 /// 映射 Codex 独立用户提问，并编码严格的 answers 响应。
 class _CodexQuestionMapper {
+  _CodexQuestionMapper(this._textCatalog);
+
+  final AgentUiTextCatalog _textCatalog;
+
   _MappedQuestionRequest mapRequest(JsonRpcRequest request) {
     final id = '${request.id}';
     return _MappedQuestionRequest(
@@ -14,7 +18,7 @@ class _CodexQuestionMapper {
       event: AgentQuestionRequestedEvent(
         AgentQuestionRequest(
           id: id,
-          title: 'Agent requests input',
+          title: _textCatalog.agentRequestsInput,
           description: _string(request.params['reason']),
           questions: _userInputQaPairs(request.params),
           sessionId: _string(request.params['threadId']),

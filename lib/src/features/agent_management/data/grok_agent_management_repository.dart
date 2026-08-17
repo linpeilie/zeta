@@ -164,7 +164,7 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
           : (current.errorDetails ?? latest.details),
       suggestion: latest.error == null
           ? current.suggestion
-          : (current.suggestion ?? '请检查网络后重新检测，或在终端运行 grok update --check。'),
+          : (current.suggestion ?? _textCatalog.grokLatestVersionNetworkHint()),
     );
     publish(3, _textCatalog.latestVersionChecked());
 
@@ -263,7 +263,7 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
         accountValid: account.state == AgentAccountState.loggedIn,
         protocolReady: probe.success,
         failureStage: probe.success ? null : probe.failureStage,
-        message: probe.success ? 'Grok ACP 连接正常' : probe.message,
+        message: probe.success ? _textCatalog.grokAcpOk() : probe.message,
         rawErrorSummary: probe.details,
       ),
       probe.models,
@@ -515,7 +515,10 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
       }
       return _VersionRead(version: version);
     } catch (error) {
-      return _VersionRead(error: 'Grok 版本检测失败。', details: '$error');
+      return _VersionRead(
+        error: _textCatalog.versionDetectFailed('Grok'),
+        details: '$error',
+      );
     }
   }
 
@@ -588,7 +591,7 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
       if (!await authFile.exists()) {
         return _AccountRead(
           state: AgentAccountState.loggedOut,
-          error: 'Grok 尚未登录。',
+          error: _textCatalog.notLoggedIn('Grok'),
           suggestion: _textCatalog.runGrokLogin(),
           failureStage: AgentDiagnosticStage.accountAuthentication,
         );
@@ -597,7 +600,7 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
       if (raw.trim().isEmpty || raw.trim() == '{}') {
         return _AccountRead(
           state: AgentAccountState.loggedOut,
-          error: 'Grok 登录缓存为空。',
+          error: _textCatalog.grokLoginCacheEmpty(),
           suggestion: _textCatalog.runGrokLogin(),
           failureStage: AgentDiagnosticStage.accountAuthentication,
         );
@@ -666,7 +669,7 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
         failureStage: accountState == AgentAccountState.loggedIn
             ? AgentDiagnosticStage.protocolHandshake
             : AgentDiagnosticStage.accountAuthentication,
-        message: 'Grok ACP 连接失败。',
+        message: _textCatalog.grokAcpFailed(),
         details: '$error',
       );
     } finally {

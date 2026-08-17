@@ -504,7 +504,10 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
       }
       return _VersionRead(version: match.group(1));
     } catch (error) {
-      return _VersionRead(error: 'Codex 版本检测失败。', details: '$error');
+      return _VersionRead(
+        error: _textCatalog.versionDetectFailed('Codex'),
+        details: '$error',
+      );
     }
   }
 
@@ -528,7 +531,7 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
           normalized.contains('login required')) {
         return _AccountRead(
           state: AgentAccountState.loggedOut,
-          error: 'Codex 尚未登录。',
+          error: _textCatalog.notLoggedIn('Codex'),
           suggestion: _textCatalog.runCodexLogin(),
           failureStage: AgentDiagnosticStage.accountAuthentication,
         );
@@ -596,7 +599,7 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
         failureStage: accountState == AgentAccountState.loggedIn
             ? AgentDiagnosticStage.protocolHandshake
             : AgentDiagnosticStage.accountAuthentication,
-        message: 'Codex app-server 连接失败。',
+        message: _textCatalog.codexAppServerFailed(),
         details: '$error',
       );
     } finally {

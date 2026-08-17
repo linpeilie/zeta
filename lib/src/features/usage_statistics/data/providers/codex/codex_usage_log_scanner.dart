@@ -5,6 +5,8 @@ import 'dart:isolate';
 
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/usage_statistics/data/providers/usage_scan_cache.dart';
+import 'package:zeta/src/features/usage_statistics/domain/fallback_usage_statistics_text_catalog.dart';
+import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_text_catalog.dart';
 
 /// 一条 Codex 模型请求的精确 Token 用量。
 class CodexUsageSample {
@@ -278,10 +280,17 @@ String? codexUsageErrorCategoryHint({
 }
 
 class CodexUsageScanResult {
-  const CodexUsageScanResult({required this.sessions, required this.warnings});
+  const CodexUsageScanResult({
+    required this.sessions,
+    required this.warnings,
+    this.discoveryFailures = 0,
+    this.unreadableFiles = 0,
+  });
 
   final Map<String, CodexUsageSessionSnapshot> sessions;
   final List<String> warnings;
+  final int discoveryFailures;
+  final int unreadableFiles;
 }
 
 /// 可注入的 Codex 本地 usage 扫描接口。
@@ -290,6 +299,8 @@ abstract interface class CodexUsageLogScanner {
     required String codexHome,
     required Map<String, CodexUsageSessionSnapshot> cachedSessions,
     bool forceRefresh = false,
+    UsageStatisticsTextCatalog textCatalog =
+        const FallbackUsageStatisticsTextCatalog(),
   });
 }
 
@@ -302,22 +313,34 @@ class FileSystemCodexUsageLogScanner implements CodexUsageLogScanner {
     required String codexHome,
     required Map<String, CodexUsageSessionSnapshot> cachedSessions,
     bool forceRefresh = false,
-  }) {
-    if (forceRefresh) {
-      // 全量 JSONL 解码可能是 CPU 密集型工作，不能占用 Flutter UI isolate。
-      return Isolate.run(
-        () => _scan(
-          codexHome: codexHome,
-          cachedSessions: cachedSessions,
-          forceRefresh: true,
-        ),
-        debugName: 'zeta-codex-usage-scan',
-      );
-    }
-    return _scan(
-      codexHome: codexHome,
-      cachedSessions: cachedSessions,
-      forceRefresh: false,
+    UsageStatisticsTextCatalog textCatalog =
+        const FallbackUsageStatisticsTextCatalog(),
+  }) async {
+    final scanned = forceRefresh
+        ? await Isolate.run(
+            () => _scan(
+              codexHome: codexHome,
+              cachedSessions: cachedSessions,
+              forceRefresh: true,
+            ),
+            debugName: 'zeta-codex-usage-scan',
+          )
+        : await _scan(
+            codexHome: codexHome,
+            cachedSessions: cachedSessions,
+            forceRefresh: false,
+          );
+    return CodexUsageScanResult(
+      sessions: scanned.sessions,
+      warnings: <String>[
+        if (scanned.discoveryFailures > 0)
+          textCatalog.sessionDirIncomplete('Codex'),
+        if (scanned.unreadableFiles > 0)
+          textCatalog.sessionFilesUnreadable(
+            '${scanned.unreadableFiles}',
+            'Codex',
+          ),
+      ],
     );
   }
 
@@ -382,13 +405,11 @@ class FileSystemCodexUsageLogScanner implements CodexUsageLogScanner {
       }
     }
 
-    final warnings = <String>[
-      if (discoveryFailures > 0) 'Codex 会话目录未能完整枚举，已展示可读取的数据。',
-      if (unreadableFiles > 0) '$unreadableFiles 个 Codex 会话文件读取失败，已展示其余数据。',
-    ];
     return CodexUsageScanResult(
       sessions: Map<String, CodexUsageSessionSnapshot>.unmodifiable(sessions),
-      warnings: List<String>.unmodifiable(warnings),
+      warnings: const <String>[],
+      discoveryFailures: discoveryFailures,
+      unreadableFiles: unreadableFiles,
     );
   }
 }

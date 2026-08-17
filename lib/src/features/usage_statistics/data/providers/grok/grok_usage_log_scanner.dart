@@ -5,6 +5,8 @@ import 'dart:isolate';
 import 'package:zeta/src/features/agent/data/datasources/local_history/grok_updates_history_parser.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/usage_statistics/data/providers/usage_scan_cache.dart';
+import 'package:zeta/src/features/usage_statistics/domain/fallback_usage_statistics_text_catalog.dart';
+import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_text_catalog.dart';
 
 /// Grok 派生索引中的单 turn 白名单快照。
 ///
@@ -183,11 +185,18 @@ class GrokUsageIndexedSession {
 
 /// Grok 本地用量扫描结果。
 class GrokUsageScanResult {
-  const GrokUsageScanResult({required this.sessions, required this.warnings});
+  const GrokUsageScanResult({
+    required this.sessions,
+    required this.warnings,
+    this.discoveryFailures = 0,
+    this.unreadableFiles = 0,
+  });
 
   /// key 为本次扫描发现的源路径（内存）；持久化时改按 sourceId。
   final Map<String, GrokUsageIndexedSession> sessions;
   final List<String> warnings;
+  final int discoveryFailures;
+  final int unreadableFiles;
 }
 
 /// 可注入的 Grok 本地 usage 扫描接口。
@@ -196,6 +205,8 @@ abstract interface class GrokUsageLogScanner {
     required String grokHome,
     required Map<String, GrokUsageIndexedSession> cachedSessions,
     bool forceRefresh = false,
+    UsageStatisticsTextCatalog textCatalog =
+        const FallbackUsageStatisticsTextCatalog(),
   });
 }
 
@@ -212,22 +223,34 @@ class FileSystemGrokUsageLogScanner implements GrokUsageLogScanner {
     required String grokHome,
     required Map<String, GrokUsageIndexedSession> cachedSessions,
     bool forceRefresh = false,
-  }) {
-    if (forceRefresh) {
-      // Grok parser 会同步归并完整历史，强制刷新时放到后台 isolate 执行。
-      return Isolate.run(
-        () => _scan(
-          grokHome: grokHome,
-          cachedSessions: cachedSessions,
-          forceRefresh: true,
-        ),
-        debugName: 'zeta-grok-usage-scan',
-      );
-    }
-    return _scan(
-      grokHome: grokHome,
-      cachedSessions: cachedSessions,
-      forceRefresh: false,
+    UsageStatisticsTextCatalog textCatalog =
+        const FallbackUsageStatisticsTextCatalog(),
+  }) async {
+    final scanned = forceRefresh
+        ? await Isolate.run(
+            () => _scan(
+              grokHome: grokHome,
+              cachedSessions: cachedSessions,
+              forceRefresh: true,
+            ),
+            debugName: 'zeta-grok-usage-scan',
+          )
+        : await _scan(
+            grokHome: grokHome,
+            cachedSessions: cachedSessions,
+            forceRefresh: false,
+          );
+    return GrokUsageScanResult(
+      sessions: scanned.sessions,
+      warnings: <String>[
+        if (scanned.discoveryFailures > 0)
+          textCatalog.sessionDirIncomplete('Grok'),
+        if (scanned.unreadableFiles > 0)
+          textCatalog.sessionFilesUnreadable(
+            '${scanned.unreadableFiles}',
+            'Grok',
+          ),
+      ],
     );
   }
 
@@ -314,10 +337,9 @@ class FileSystemGrokUsageLogScanner implements GrokUsageLogScanner {
 
     return GrokUsageScanResult(
       sessions: Map<String, GrokUsageIndexedSession>.unmodifiable(sessions),
-      warnings: List<String>.unmodifiable(<String>[
-        if (discoveryFailures > 0) 'Grok 会话目录未能完整枚举，已展示可读取的数据。',
-        if (unreadableFiles > 0) '$unreadableFiles 个 Grok 会话文件读取失败，已展示其余数据。',
-      ]),
+      warnings: const <String>[],
+      discoveryFailures: discoveryFailures,
+      unreadableFiles: unreadableFiles,
     );
   }
 
