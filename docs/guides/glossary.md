@@ -152,6 +152,20 @@ Composer 里的原子 chip，用 `U+FFFC` 占位符 + `WidgetSpan` 渲染成 `$n
 深色 Graphite Night / 浅色 Graphite Day 两套语义 token，真源是 `IdeThemeScope`。`shadcn_flutter` 的 theme 只是投影，不能反向回读。业务代码禁止硬编码颜色、圆角和阴影。表面遵循严格单调的明度阶梯（frame → canvas → pane → control → popover），层级只靠阶梯加 1px 半透明描边表达，除浮层的极淡兜底投影外全局零阴影。
 `lib/src/ui/core/`
 
+## 界面语言
+
+**AppLanguage（界面语言）**
+首期仅 `english` / `simplifiedChinese`，持久化码 `en` / `zh-Hans`。Flutter `Locale` 不是领域模型，只在 app/UI 组合层出现。
+
+**文本目录（text catalog）**
+feature 在 domain 边界声明的不可变纯 Dart 接口，例如 `AgentUiTextCatalog`。application / data / reducer 用它生成当前进程的 Zeta 文案，不持有 `BuildContext`、generated l10n 或 Flutter `Locale`。
+
+**启动冻结 Locale**
+`MainApp` 在常规设置加载后把本次进程语言固定下来。设置页改的是下次启动语言；当前进程不跟随系统 locale，也不重挂 Workbench。
+
+**第一系统 locale**
+首次安装只看 `PlatformDispatcher` 首选语言列表的第一项。第一项不受支持（含繁体中文）时直接回退英语，不继续往后找。
+
 ## 数据与诊断
 
 **`~/.zeta/`**

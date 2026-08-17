@@ -64,6 +64,8 @@ lib/src/features/agent/data/mappers/acp_*.dart      # 共享 ACP decoder/codec/m
 
 这些文件里**禁止**出现：具体 Provider 的 import、按 `providerId`/kind/实现类型/显示名分支、从 raw 或 extra payload 猜身份、为某个 Provider 修乱序或补 id。文件变更的 owner/change id、动作、累计快照、可回放性与 tool/turn fallback 取舍同样属于 Provider 语义。厂商差异一律退回该 Provider 自己的 adapter/reducer 消化后输出语义完整的 `AgentEvent`。
 
+共享层若必须产出 Zeta 自有用户可见文案，只允许通过构造函数注入不可变、Provider 无关的 `AgentUiTextCatalog`；禁止 import generated l10n、Flutter `Locale` / `BuildContext`，也不得按 Provider 分支选文案。
+
 **自查**（应无输出；注释里出现 Provider 名做说明是允许的）：
 
 ```sh
@@ -135,6 +137,7 @@ main → app → presentation/application → domain
 - `domain` 是纯的：无 Flutter、无 `dart:io`、无任何 Provider 协议字段。想在 domain 里 import Codex 类型，说明放错层了。
 - Codex JSON-RPC、JSONL 历史解析、ACP payload、provider 配置格式**只能存在于 data 层的 adapter / mapper / codec**。UI 和 application 消费中立 domain 模型。
 - Provider 自有 data adapter 可按明确功能读取对应 CLI 的配置、会话、日志、账号 metadata 等私有数据；原始结构和路径不得泄漏到 domain、application 或 presentation。读取权限不自动授权迁移、改写或删除，写操作仍须由明确的产品能力和用户动作约束。
+- Flutter `Locale`、`BuildContext` 和 generated `AppLocalizations` 只允许出现在 `app` 组合层、presentation 和 `ui/`。application / data / domain 若必须产出即时文案，只依赖该 feature 的纯 Dart 文本目录 port。
 - `lib/main.dart` 只做 Flutter 绑定、窗口启动、全局错误日志和 `runApp`；`lib/src/app` 是唯一装配点。
 - 新代码进 `lib/src/features/<feature>/{domain,application,data,presentation}`，**不要新建顶层宽泛目录**。现有 feature：`agent`、`agent_management`、`desktop_notifications`、`ide_session`、`project_threads`、`settings`、`usage_statistics`、`workspace`。跨 feature 基础设施才进 `lib/src/core`，跨 feature 复用 UI 原语才进 `lib/src/ui/core`。
 
@@ -146,7 +149,7 @@ Zeta 自有数据全部在 `~/.zeta/`：`config/` · `state/` · `logs/` · `cac
 
 - 持久化 JSON 必须**版本化 + 宽容解码**：缺字段、损坏、旧版本、未知字段都不能阻断应用启动。
 - 派生索引、缓存、日志、系统通知 payload **只保存规范化白名单字段**。
-- **禁止落盘**：prompt、回复正文、工具输出、文件变更 evidence 正文（替换片段、写入内容、patch）、原始错误文本、session 文件路径、环境变量值、凭证、Provider raw payload。
+- **禁止落盘**：prompt、回复正文、工具输出、文件变更 evidence 正文（替换片段、写入内容、patch）、原始错误文本、session 文件路径、环境变量值、凭证、Provider raw payload、localized UI copy（ARB 字符串、文本目录输出）。
 - JSON-RPC transport 日志不得记录 prompt、文件内容、认证参数或 stderr 原文；Agent 日志进 UI 前必须在 data 层完成脱敏。
 
 > 正文：[工程规范 §5](docs/architecture/engineering_standards.md) · [开发者文档 §9](docs/guides/developer_guide.md)
@@ -185,6 +188,7 @@ grep -rn "import 'package:shadcn_flutter" lib | grep -v "as sf"
 | 权限选项 / 审批 / Plan 模式 | G4 G5 | [开发者文档 §7「权限选项选择」+「Plan conversation mode」](docs/guides/developer_guide.md) | 覆盖两 thread 两 Canvas 的真实 wire 参数、runtime 状态仅限所属 Binding、迟到 apply、旧 generation 丢弃 |
 | Provider 生命周期 / 进程 / Binding | G4 G6 | [工程规范 §4](docs/architecture/engineering_standards.md) | factory 只由 registry 调用且 acquire 显式传 scope；全局操作走 `AgentProviderGlobalRuntime`；session 只由 `AgentConversationBinding.beginTurn()` 惰性创建，回收由 Binding Manager 负责；Workspace entry 一次性绑定 thread/Binding/ViewModel，真实 thread 不得原地改绑，fork 结果走 Shell 的新 thread 通用登记/选择流程；Thread 操作走 `ProviderOperationScheduler` |
 | 主题、UI 原语、工作台 slot | G6 G8 | [架构总览「工作台 UI」](docs/architecture/overview.md) + [开发者文档 §8](docs/guides/developer_guide.md) | `IdeHome` 是唯一 Workbench 组合边界，feature 页只填 Navigation / Canvas / Inspector 三个 slot |
+| 界面文案 / 语言 / ARB / 文本目录 | G6 G7 G8 | [开发者文档 §8「界面语言与文案」](docs/guides/developer_guide.md) + [工程规范 §5–6](docs/architecture/engineering_standards.md) | Widget 走 `context.l10n`；application/data/reducer 只注入不可变 feature 文本目录；禁止 Flutter Locale / BuildContext / generated l10n 下沉；新字面量跑 `dart run tool/check_localized_ui_strings.dart --check`；两份 ARB key/placeholder 对齐且不用 plural/date/number formatter |
 | 时间线渲染 / resize 热路径 | G8 | [工程规范 §6](docs/architecture/engineering_standards.md) | 禁止 post-frame 测高、`GlobalKey` 查高、layout 后 `setState` 反馈环；Windows Profile 采样，Debug 数据不作结论 |
 | 页面切换 / 跨页保活 | G6 G8 | [开发者文档 §8](docs/guides/developer_guide.md) | 用真实 `IdeHome` 补集成级 Widget 测试：常驻骨架、AgentPane Element、当前 Thread、草稿、滚动位置、Pane 宽度与可见性都不能被重置；用 `IdeRetainedPageView`，不用 `IndexedStack` |
 | 持久化字段 / `~/.zeta` | G7 | [开发者文档 §9](docs/guides/developer_guide.md) | 版本化 + `tryDecode` 宽容读；覆盖损坏输入与旧版本迁移 |
@@ -241,6 +245,8 @@ lint 已经覆盖的不再重复，这里只写 `flutter analyze` 抓不到的�
 - 用 `LayoutBuilder` / `Flexible` / `Expanded` / `Wrap` / 滚动视图避免溢出；桌面宽窗和窄视口都要能看。
 - 重复的交互行用稳定 `ValueKey`；流式 turn、语法高亮、diff 明细加 `RepaintBoundary`。
 - 非文本按钮给 tooltip，重要自定义控件给语义标签；系统文字放大后仍要可读。
+- Zeta 自有用户可见文案走 `context.l10n` 或对应 feature 的文本目录；不要在生产 Widget / application / data 里新写中英文字面量。品牌名 `Zeta`、产品术语 `Agent` / `Provider` / `Thread` / `Token`、Provider/user/raw 内容保持原文。
+- 新增 ARB key 必须同时写入 `app_en.arb` 与 `app_zh.arb`，带 description；placeholder 一律 `String`，禁用 plural/date/number formatter。日期、数字、百分比、相对时间继续用语言无关算法。
 
 **导航**
 
@@ -287,6 +293,8 @@ flutter test test/src/features/agent/presentation/agent_conversation_widget_test
 - **Cursor 已退役。** 只允许保留旧配置 decode/fallback、明确 unavailable 和用户数据未改写回归；`CursorRetirementPolicy` 在 catalog、选择、恢复和 factory 边界 fail-closed。不参与 catalog、UI、运行时组合、live/replay/load、ACP 扩展或进程启动。相关代码不接受回流。
 - **Grok CLI 基线是 `0.2.119`**（grok-build）。更早版本不支持多会话，同时打开多个 Grok 会话时无法正确隔离会话状态和回合终态。
 - `desktop_notifications` 和 `ide_session` 两个 feature 只有 `domain/application/data`，没有 `presentation/`——这是有意的。
+- **界面语言只有英语与简体中文。** 首次启动只看系统首选语言第一项（显式繁体与其他语言回退英语）；已有安装保持中文。设置里切换后下次启动才生效，当前进程不跟随系统 locale。
+- **产品术语 `Agent` / `Provider` / `Thread` / `Token` 保持英文。** 日期、数字、百分比、相对时间格式不随界面语言变化。
 
 ---
 

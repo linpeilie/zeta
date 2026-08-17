@@ -152,6 +152,20 @@ The cross-page retention container. Mounts lazily, preserves State and scroll po
 The dark Graphite Night / light Graphite Day semantic token sets, with `IdeThemeScope` as the source of truth. The `shadcn_flutter` theme is only a projection and must never be read back from. Business code must not hard-code colors, radii, or shadows. Surfaces follow a strictly monotonic luminance ladder (frame to canvas to pane to control to popover); depth comes from that ladder plus 1px translucent hairlines, with zero shadows anywhere except a deliberately faint fallback on floating layers.
 `lib/src/ui/core/`
 
+## Interface language
+
+**AppLanguage**
+The first ship has only `english` / `simplifiedChinese`, persisted as `en` / `zh-Hans`. Flutter `Locale` is not a domain model; it exists only in the app/UI composition layer.
+
+**Text catalog**
+An immutable, pure-Dart port declared at a feature's domain boundary — for example `AgentUiTextCatalog`. Application / data / reducer code uses it to produce this process's Zeta copy and must not hold a `BuildContext`, generated l10n, or Flutter `Locale`.
+
+**Startup-frozen Locale**
+`MainApp` pins the process language after general settings load. The settings page writes the next-launch language; the current process neither follows the OS locale nor remounts the workbench.
+
+**First system locale**
+A fresh install inspects only the first entry of `PlatformDispatcher`'s preferred locales. If that entry is unsupported (including Traditional Chinese), the app falls back to English and does not keep scanning the list.
+
 ## Data and diagnostics
 
 **`~/.zeta/`**

@@ -168,12 +168,13 @@ Common types: `feat` / `fix` / `docs` / `refactor` / `test` / `chore` / `perf`.
 - No Material `ThemeData` / `ColorScheme.fromSeed`, no bare `Color(0x...)`, no hand-written `BoxShadow`, no ad-hoc `BorderRadius.circular(...)`.
 - Use `showIdeToast` for notifications; don't call `sf.showToast` directly from features.
 - The timeline forbids post-frame measurement, `GlobalKey` height probing, and post-layout `setState` feedback loops.
+- User-visible Zeta copy goes through `context.l10n` or a feature text catalog — do not add Chinese or English literals in production code. Application / data layers must not import generated l10n or Flutter `Locale`. Brand names, product terms, and provider/user/raw content stay verbatim.
 
 **Persistence and privacy**
 
 - All Zeta-owned data lives under `~/.zeta/`. JSON must be versioned with tolerant `tryDecode` — missing or corrupt fields must never block startup.
 - Provider-owned data adapters may read the corresponding CLI's private data for an explicit feature. Protocol fields, raw content, and paths must not leak into upper layers; read access does not authorize migration, rewriting, or deletion.
-- Derived indexes and caches store only normalized allow-listed fields. **Never persist prompts, responses, tool output, file-change evidence bodies, raw error text, environment variables, credentials, or provider raw payloads.**
+- Derived indexes and caches store only normalized allow-listed fields. **Never persist prompts, responses, tool output, file-change evidence bodies, raw error text, environment variables, credentials, provider raw payloads, or localized UI copy.**
 
 **Misc**
 

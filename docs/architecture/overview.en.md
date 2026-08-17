@@ -201,6 +201,14 @@ Post-frame measurement, `GlobalKey` height probing, and post-layout `setState` f
 
 On theming: import `shadcn_flutter` only `as sf`, and route all semantic colors through `IdeThemeScope` / `IdeColors.of(context)`. Business code must not contain bare `Color(0x...)`, hand-written `BoxShadow`, or ad-hoc `BorderRadius.circular(...)`.
 
+## Interface language
+
+The first ship supports English and Simplified Chinese only. The preference is `AppLanguage` in settings, stored in `config/general.json` (v3, codes `en` / `zh-Hans`). `MainApp` freezes the process Locale after general settings load, then mounts UI that has copy. Changing the setting shows “restart to apply”; the current process neither follows the OS locale nor remounts the workbench.
+
+First launch looks at the first preferred system locale only: Simplified Chinese (including bare `zh`) selects Chinese; Traditional Chinese and anything else fall back to English. Existing installs stay Chinese. Widgets read `context.l10n`; application / data / reducer code only receives immutable text catalogs — Flutter Locale and generated l10n must not sink below the UI/app composition layer. Product terms `Agent` / `Provider` / `Thread` / `Token` stay English; date, number, and relative-time formats do not change with the UI language. Provider/user/raw strings are never translated.
+
+`shadcn_flutter` ships English only; Zeta’s own adapter maps the public localization API onto the same ARB set. OS-owned surfaces such as the native file picker may keep the system language.
+
 ## Persistence
 
 All Zeta-owned data lives under `~/.zeta/`:
@@ -216,7 +224,7 @@ Three hard requirements:
 
 - **Versioned JSON with tolerant decoding.** Missing fields, corruption, and old versions must never block startup.
 - **Read Provider-private data only inside that Provider's data adapter.** Protocol fields, raw content, and private paths stay out of upper layers; read access does not automatically authorize migration, rewriting, or deletion.
-- **Derived indexes store allow-listed fields only.** Never persist prompts, response bodies, tool output, file-change evidence bodies, raw error text, environment variables, credentials, or provider raw payloads.
+- **Derived indexes store allow-listed fields only.** Never persist prompts, response bodies, tool output, file-change evidence bodies, raw error text, environment variables, credentials, provider raw payloads, or localized UI copy.
 
 Feature stores also must not assemble `File('~/.zeta/...')` themselves in presentation or application code — concrete files are injected from `lib/src/app`.
 
@@ -233,5 +241,6 @@ For the user-facing file listing and cleanup instructions, see the [data referen
 | Onboard a brand-new agent CLI | new `data/` implementation + factory wiring + contract tests |
 | Change file-tree ignore rules | `features/workspace/domain/workspace_directory_rules.dart` |
 | Change a persisted field | that feature's `data/` + versioned decoding + migration compatibility |
+| Add user-visible copy | ARB (`app_en.arb` / `app_zh.arb`) or the matching feature text catalog; run the literal scanner |
 
 **Read before you start**: the [hard lines in CONTRIBUTING](../../CONTRIBUTING.en.md#architectural-hard-lines) are the short version; [engineering standards](./engineering_standards.md) is the complete version with review gates.

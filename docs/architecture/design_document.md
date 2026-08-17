@@ -295,6 +295,27 @@ projection 与 unified diff 以 turn render revision 缓存，代码高亮复用
   不要在调用点写 `fontSize:`（那会绕过用户的字号设置）。
 - 面板圆角 12、卡片 8、间距紧凑，适合桌面工具密度：页面内边距按 IDE 而不是
   移动端取值，省下的空间还给内容行数。
+
+### 界面语言
+
+Zeta 首期只支持英语与简体中文。`AppLanguage` 持久化为 `en` / `zh-Hans`；Flutter
+`Locale` 只出现在 app/UI 组合层。`MainApp` 等待常规设置加载后冻结本次进程 Locale
+与不可变文本目录，再挂载有文案的 UI。设置页改选的是下次启动语言：选项始终自称
+`English` / `简体中文`，保存成功显示「重启后生效」，失败不改内存选择。当前进程
+不监听系统 locale，也不因语言字段重挂 Workbench。
+
+文案分两条路径：有 `BuildContext` 的 Widget 走 `context.l10n`；application / data /
+reducer 注入 feature-owned 文本目录
+（`AgentUiTextCatalog`、`AgentManagementTextCatalog`、
+`UsageStatisticsTextCatalog`、`DesktopAttentionTextCatalog`）。目录不可变、无监听、
+无异步，因此不破坏 reducer 同步性，也不在进程内切换语言。Provider/user/raw 内容、
+路径、命令和模型名保持原文；产品术语 `Agent` / `Provider` / `Thread` / `Token`
+保持英文。日期、数字、百分比、相对时间格式不随界面语言变化。
+
+`shadcn_flutter` 上游只有英语。Zeta 自有 `ZetaShadcnLocalizations` 把公开抽象 API
+接到同一批 ARB；Calendar / DatePicker 的月份、星期和日期格式 token 在两种语言下
+保持英文，以满足格式不随 locale 变化。操作系统拥有的原生表面（文件选择器、
+Cocoa 标准菜单）可以继续使用系统语言。
 - **会话区是文档流，不是卡片流**：Agent 正文、最终答复、工具调用、命令组、
   文件编辑一律无边框无底色，文字直接落在画布上。回合之间只用「大留白 + 一条
   全宽 1px `borderSubtle` 发丝线」分隔，元信息作为落款贴在线下右侧。
@@ -702,13 +723,18 @@ data 精确编码”的单向流：
 ### Zeta 自有存储边界
 
 Zeta 通过 `ZetaDataPaths` 统一解析 `~/.zeta`，由 app 装配层把文件注入 feature data
-store。配置位于 `config/providers.json` 与 `config/appearance.json`；IDE 会话、使用统计
-派生索引和迁移 marker 位于 `state/`；应用日志按本地日期写入
-`logs/zeta-YYYY-MM-DD.log`；规范化模型目录缓存位于
+store。配置位于 `config/providers.json`、`config/appearance.json` 与
+`config/general.json`；IDE 会话、使用统计派生索引和迁移 marker 位于 `state/`；应用日志
+按本地日期写入 `logs/zeta-YYYY-MM-DD.log`；规范化模型目录缓存位于
 `cache/agent_models_v1.json`。JSON store 使用同目录临时文件、flush 与 rename 替换，
 并在读取损坏或 I/O 失败时按 feature 语义降级。模型缓存只保存中立白名单字段，不保存
 provider 原始 payload、环境变量值或凭证；文件变更的替换片段、写入内容与 patch 也只留在
-当前内存时间线，不进入任何 Zeta store 或日志。
+当前内存时间线，不进入任何 Zeta store 或日志。localized UI copy 同样不得写入配置、
+会话、缓存、日志或通知 payload。
+
+`general.json` 为 v3，字段含发送快捷键、通知开关和 `appLanguage`（`en` /
+`zh-Hans`）。v1/v2 升级补简体中文并保留旧字段。存储迁移 marker 为 v2：已有安装播种
+简体中文，真正的新安装按系统首选语言第一项播种；语言写入成功后才完成 marker。
 
 启动迁移只读取 Zeta 旧版 SharedPreferences key，目标文件存在时不覆盖，全部处理成功
 后才写 `migration_marker.json`。迁移不会删除旧值，以便旧版应用临时降级；新版本运行时

@@ -200,6 +200,14 @@ Agent 首页不挂载 Activity Rail。`WindowFrame` 的标题栏左侧按钮是�
 
 主题方面：`shadcn_flutter` 只能 `as sf` 导入，所有语义色走 `IdeThemeScope` / `IdeColors.of(context)`。业务代码里不许出现裸 `Color(0x...)`、手写 `BoxShadow` 或临时 `BorderRadius.circular(...)`。
 
+## 界面语言
+
+首期只支持英语与简体中文。语言偏好是 `settings` 里的 `AppLanguage`，存在 `config/general.json`（v3，码为 `en` / `zh-Hans`）。`MainApp` 在加载常规设置后冻结本次进程 Locale，再挂有文案的 UI；设置里切换后显示「重启后生效」，当前进程不跟随系统、也不重挂 Workbench。
+
+首次启动只看系统首选语言第一项：简体中文（含无 script 的 `zh`）选中文，繁体与其他语言回退英语。已经用过 Zeta 的安装继续中文。Widget 走 `context.l10n`；application / data / reducer 只注入不可变文本目录，禁止把 Flutter Locale 或 generated l10n 下沉。`Agent` / `Provider` / `Thread` / `Token` 保持英文；日期、数字、相对时间格式不随语言变。Provider/user/raw 原文也不翻译。
+
+`shadcn_flutter` 上游只有英语，Zeta 自有适配器把组件库文案接到同一批 ARB。操作系统拥有的文件选择器等可以继续用系统语言。
+
 ## 持久化
 
 Zeta 自己的数据全在 `~/.zeta/`：
@@ -215,7 +223,7 @@ cache/    agent_models_v1.json
 
 - **JSON 必须版本化 + 宽容解码。** 缺字段、损坏、旧版本都不能阻断启动。
 - **Provider 私有数据只在自有 data adapter 中读取。** 协议字段、原始正文和私有路径不进入上层；读取权限不自动授权迁移、改写或删除。
-- **派生索引只存白名单字段。** 禁止落盘 prompt、回复正文、工具输出、文件变更 evidence 正文、原始错误文本、环境变量、凭证或 Provider raw payload。
+- **派生索引只存白名单字段。** 禁止落盘 prompt、回复正文、工具输出、文件变更 evidence 正文、原始错误文本、环境变量、凭证、Provider raw payload 或 localized UI copy。
 
 feature store 也不得在 presentation / application 里自己拼 `File('~/.zeta/...')`——具体文件由 `lib/src/app` 注入。
 
@@ -232,5 +240,6 @@ feature store 也不得在 presentation / application 里自己拼 `File('~/.zet
 | 接入一个全新的 Agent CLI | 新建 `data/` 实现 + factory 组合 + 契约测试 |
 | 改文件树忽略规则 | `features/workspace/domain/workspace_directory_rules.dart` |
 | 改持久化字段 | 对应 feature 的 `data/` + 版本化解码 + 迁移兼容 |
+| 加一条用户可见文案 | ARB（`app_en.arb` / `app_zh.arb`）或对应 feature 文本目录；跑字面量扫描 |
 
 **动手前先读**：[贡献指南的架构红线](../../CONTRIBUTING.md#架构红线)是精简版；[工程规范](./engineering_standards.md)是完整版和评审门禁。

@@ -168,12 +168,13 @@ chore: bump flutter action pin
 - 禁止 Material `ThemeData` / `ColorScheme.fromSeed`、裸 `Color(0x...)`、手写 `BoxShadow`、临时 `BorderRadius.circular(...)`。
 - 通知统一用 `showIdeToast`，不要在 feature 里直接调 `sf.showToast`。
 - 时间线禁止 post-frame 测量、`GlobalKey` 查高、layout 后 `setState` 反馈环。
+- 用户可见的 Zeta 文案走 `context.l10n` 或 feature 文本目录，不要在生产代码里新写中英文字面量。application / data 不得 import generated l10n 或 Flutter `Locale`。品牌名、产品术语和 Provider/user/raw 内容保持原文。
 
 **持久化与隐私**
 
 - Zeta 自有数据全部在 `~/.zeta/`，JSON 必须版本化 + 宽容 `tryDecode`（缺字段或损坏不能阻断启动）。
 - Provider 自有 data adapter 可以按明确功能读取对应 CLI 的私有数据；协议字段、原始内容和路径不得泄漏到上层。读取权限不等于迁移、改写或删除授权。
-- 派生索引与缓存只保存规范化白名单字段。**禁止持久化 prompt、回复、工具输出、文件变更 evidence 正文、原始错误文本、环境变量、凭证或 Provider raw payload。**
+- 派生索引与缓存只保存规范化白名单字段。**禁止持久化 prompt、回复、工具输出、文件变更 evidence 正文、原始错误文本、环境变量、凭证、Provider raw payload 或 localized UI copy。**
 
 **其他**
 

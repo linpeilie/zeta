@@ -32,6 +32,8 @@ dart format .
 flutter analyze
 flutter test
 flutter run -d macos
+flutter gen-l10n
+dart run tool/check_localized_ui_strings.dart --check
 ```
 
 重新导出 Codex app-server JSON Schema（协议升级 / 审计时）：
@@ -71,6 +73,7 @@ lib/
   main.dart
   src/
     app/
+      localization/
     core/
     features/
       agent/
@@ -95,6 +98,16 @@ lib/
         application/
         domain/
         presentation/
+      settings/
+        application/
+        data/
+        domain/
+        presentation/
+      usage_statistics/
+        application/
+        data/
+        domain/
+        presentation/
       workspace/
         application/
         domain/
@@ -102,6 +115,9 @@ lib/
     ui/
       core/
       features/ide/
+      localization/
+        arb/
+        generated/
 test/
 docs/
 tool/
@@ -115,6 +131,8 @@ windows/
 重要模块：
 
 - `lib/src/app`：应用装配、窗口启动、菜单桥接、shell controller 和常量。
+- `lib/src/app/localization`：启动冻结 Locale、`ZetaLocalization` delegates，以及
+  按 feature 拆分的不可变文本目录适配器。
 - `lib/src/core`：日志、`~/.zeta` 路径布局、原子文本写入等跨功能基础设施。
 - `lib/src/features/agent`：Agent provider 抽象、Codex app-server、Grok ACP、Claude Code
   stream-json、
@@ -130,13 +148,17 @@ windows/
 - `lib/src/features/project_threads`：项目 thread 列表状态、恢复快照、分页控制器和 view model；
   打开中 thread 的执行中/等待态由常驻 workspace 的 `threadSnapshot` 经
   `syncRuntimeSnapshot` 写入，不依赖 shell 单路 provider 事件流。
+- `lib/src/features/settings`：常规/外观设置，含 `AppLanguage` 与 `general.json` v3 codec。
 - `lib/src/features/usage_statistics`：Codex 全局历史读取、版本化派生索引、统计聚合
   controller、响应式统计页面和任务详情抽屉。
 - `lib/src/features/workspace`：工作区目录规则、文件树构建、文件节点映射和 file tree pane。
 - `lib/src/ui/core`：主题、窗口框架、pane、panel、`IdeChip`、empty state 和状态标签等共享 UI 原语。
 - `lib/src/ui/features/ide`：IDE shell 视图、项目列表 pane 和 active provider controller。
+- `lib/src/ui/localization`：ARB、generated `AppLocalizations`、`context.l10n`、
+  Zeta shadcn 适配器与相对时间静态 token。
 - `test/src`：app、core、feature 各层的单元测试和 widget 测试。
-- `tool/`：仓库维护脚本（含 Codex schema 导出与真实 CLI smoke）。
+- `tool/`：仓库维护脚本（含 Codex schema 导出、真实 CLI smoke 与
+  `check_localized_ui_strings.dart`）。
 - `third_party/codex_app_server_schema/`：pinned Codex app-server JSON Schema 快照。
 
 桌面通知不得从 Provider raw payload 直接组装；应复用归一化
@@ -621,6 +643,57 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
   `IdeThemeScope` / `IdeColors.of(context)` / `IdeTextStyles.of(context)` 读取。
 - 通知反馈使用 `showIdeToast`（`lib/src/ui/core/ide_toast.dart`）。
 - 不要再引入已移除的 `shadcn_ui` 或任何旧 `Shad*` API。
+
+### 界面语言与文案
+
+- 首期只支持英语与简体中文。产品语义是 `zh-Hans`；资源文件因 Flutter `gen-l10n`
+  要求基础 `zh` fallback，使用 `app_en.arb` + `app_zh.arb`（`@@locale: zh`），
+  不要再拆第三种界面语言。
+- 语言偏好是 `settings` domain 的 `AppLanguage`，持久化码 `en` / `zh-Hans`。
+  Flutter `Locale` 只允许出现在 `lib/src/app/localization` 与 presentation / `ui/`。
+- 生产路径：`MainApp` 在 `waitForGeneralSettings` 时等常规设置加载完成，按
+  `settings.appLanguage` 冻结 Locale 与文本目录，再挂 `IdeHome`。测试可用
+  `displayLanguageOverride`；`waitForGeneralSettings` 默认 false，避免 Widget
+  测试第一帧找不到宿主。
+- 设置常规页用现有 `IdeSelect<AppLanguage>`，选项自称固定 `English` /
+  `简体中文`。保存走 persist-first：成功后当前界面只显示「重启后生效」，
+  失败 Toast 且不改内存选择。当前进程不监听系统 locale，也不因语言字段重挂
+  Workbench。
+- 首次启动只解析系统首选语言第一项（`resolveAppLanguageFromFirstSystemLocale`）：
+  `en-*` → 英语；`zh-Hant` / `zh-TW` / `zh-HK` / `zh-MO` → 英语；`zh-Hans` /
+  `zh-CN` / `zh-SG` / 无 script·region 的 `zh` → 简体中文；其他或空 → 英语。
+  已有安装（marker / 旧 general）播种简体中文，不跟升级时的系统语言走。
+- Widget 与 `ui/core` 走 `context.l10n`。application / data / reducer 注入对应
+  feature 的不可变目录：`AgentUiTextCatalog`、`AgentManagementTextCatalog`、
+  `UsageStatisticsTextCatalog`、`DesktopAttentionTextCatalog`。目录由
+  `ZetaTextCatalogs` 在 app 组合层包装同一份 `AppLocalizations`；测试与未注入
+  路径可用与 zh ARB 对齐的 `Fallback*`。禁止把 generated l10n、`Locale` 或
+  `BuildContext` 下沉到 application / data / domain。
+- 英文 ARB 是 key、description、placeholder 的模板真源；两份 ARB 必须对齐。
+  placeholder 一律 `String`，禁用 plural / date / number formatter。日期、数字、
+  百分比、相对时间继续用语言无关算法（相对时间只翻译
+  `formatLocalizedRelativeTime` 的静态 token）。`Agent` / `Provider` / `Thread` /
+  `Token` 保持英文。
+- `shadcn_flutter` 上游只有英语。新增或改组件库文案走
+  `ZetaShadcnLocalizations`；Calendar / DatePicker 的月份、星期和日期格式
+  token 在 en/zh 使用相同英文值。升级 `shadcn_flutter` 前必须重跑
+  `test/src/ui/localization/zeta_shadcn_localizations_test.dart`。
+- 共享时间线内部的 Zeta fallback 只许走注入的 `AgentUiTextCatalog`，不得在
+  G1 文件里写死中英文或按 Provider 选文案。
+- 新增用户可见 Zeta 文案后：同时改 `app_en.arb` / `app_zh.arb`，跑
+  `flutter gen-l10n`，再跑
+  `dart run tool/check_localized_ui_strings.dart --check`。扫描器跳过品牌、
+  产品术语、Provider/user/raw、协议 key 与日志；`--check` 只拒绝新的
+  `(file, text)` zeta_copy。不要把新债务写进
+  `tool/localization_literal_allowlist.json`。
+- Provider 返回的标题、选项、回复、工具输出，以及用户输入、项目名、文件名、
+  路径、命令、模型名保持原文。日志继续用稳定技术英语并脱敏。localized string
+  只进当前进程的 UI / 时间线 / 通知，不写入 session、cache、usage index 或其他
+  JSON。
+- 原生文件选择器和 Cocoa 标准应用/Edit/View/Window/Help 菜单是操作系统拥有
+  表面，可以继续使用系统语言。Zeta 自有 Windows/Linux 菜单与 macOS File /
+  Open Project 标签走当前进程 l10n；macOS 在 Locale 就绪后才 configure。
+
 - Agent 管理位于设置页；桌面宽度使用表格信息密度，窄窗口改为卡片和上下布局。
 - 被禁用 Agent 的历史会话只读：允许加载和查看历史，但隐藏输入区，并阻止新建、
   分叉、重命名、归档和删除等写操作。
@@ -705,6 +778,7 @@ Zeta 自有数据统一写入用户主目录下的以下结构：
   config/
     providers.json
     appearance.json
+    general.json
   state/
     ide_session.json
     cursor_sessions.json  # 退役遗留数据，只读保护边界
@@ -729,6 +803,12 @@ Zeta 自有数据统一写入用户主目录下的以下结构：
 - 如破坏兼容性，提升版本并保留旧版本迁移逻辑。
 - 不要把 provider 全局配置复制进每个项目状态。
 - 不要在 presentation/application 中直接构造 `File('~/.zeta/...')`。
+
+`general.json` 当前为 v3，保存发送快捷键、通知开关和 `appLanguage`
+（`en` / `zh-Hans`）。v1/v2 宽容升级补简体中文并保留旧字段；未知语言回退英语；
+损坏或未知版本在无法识别语言时才使用启动编排的 fallback。存储迁移 marker 为
+v2：已有安装播种简体中文，真正的新安装按系统首选语言第一项播种；语言写入
+成功后才完成 marker。编码结果不得包含任何 localized UI 字符串。
 
 `providers.json` 中的 `modelPreferences` 是 provider 全局配置，按 `modelId` 保存
 `reasoningEffort`、`fastEnabled`、`serviceTierId`、`updatedAt` 和条目 `version`。
@@ -778,6 +858,10 @@ Agent CLI 的数据不属于这套目录：Codex/Grok/Claude Code/Cursor 配置�
   保留、command-only 负向路径、live/history/replay 隔离和 presentation raw-key purity guard。
 - 对乐观配置增加“运行态更新→持久化失败→确认态回滚→重试”测试，
   并用可控 Completer 覆盖快速连续修改的最终快照语义。
+- 新增或改写用户可见文案后，运行 ARB 契约测试、
+  `dart run tool/check_localized_ui_strings.dart --check`，以及
+  `test/src/architecture/` 下的本地化分层 / 持久化守卫。同一份 fake 数据在
+  en / zh-Hans 下只应改变 Zeta chrome，Provider/user/raw 内容逐字相同。
 - 只有端到端用户流程稳定后再添加 integration test。
 
 ### 执行中 Plan 浮动面板的手动验收

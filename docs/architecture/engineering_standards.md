@@ -397,6 +397,11 @@ domain contract，并证明至少是协议级或跨 Provider 的共同语义。�
 adapter/reducer 消化后输出语义完整的 `AgentEvent`。共享 decoder 的协议版本兼容也只能基于
 通用协议证据，不得以 Provider 名称作为条件。
 
+`AgentConversationTimelineStore` 与共享 reducer 若必须产出 Zeta 自有用户可见文案，
+只允许通过构造函数注入不可变、Provider 无关的 `AgentUiTextCatalog`。禁止 import
+generated l10n、Flutter `Locale` / `BuildContext`，也不得按 Provider 分支选文案；
+entryId、叙事边界和 merge 规则仍不得因语言变化。
+
 该边界是新增 Provider 和流式改动的评审门禁：正常接入只修改 Provider data 层、组合边界和
 Provider 契约测试。若 PR 因 Provider 差异修改 CoalescingPolicy/Buffer 或 TimelineStore，
 必须先证明这是中立
@@ -408,10 +413,15 @@ Provider 契约测试。若 PR 因 Provider 差异修改 CoalescingPolicy/Buffer
 持久化数据必须可演进、可恢复、可容错。
 
 - Zeta 自有配置、状态、派生索引、日志和预留缓存统一位于 `~/.zeta`：
-  `config/providers.json`、`config/appearance.json`、`state/ide_session.json`、
-  `state/cursor_sessions.json`、`state/usage_statistics_index.json`、
-  `state/migration_marker.json`、`logs/zeta-YYYY-MM-DD.log` 与
-  `cache/agent_models_v1.json`。
+  `config/providers.json`、`config/appearance.json`、`config/general.json`、
+  `state/ide_session.json`、`state/cursor_sessions.json`、
+  `state/usage_statistics_index.json`、`state/migration_marker.json`、
+  `logs/zeta-YYYY-MM-DD.log` 与 `cache/agent_models_v1.json`。
+- `config/general.json` 当前为 v3，用 `appLanguage` 持久化 `en` / `zh-Hans`。
+  v1/v2 宽容升级时补简体中文并保留快捷键/通知字段；未知语言回退英语；损坏或
+  未知版本在无法识别语言时才使用启动编排给出的 fallback。存储迁移 marker 为
+  v2：已有安装一律播种简体中文，真正的新安装按系统首选语言第一项播种；
+  `general.json` 写成功后才写 marker。localized UI copy 不得进入任何 JSON store。
 - HOME 解析、目录布局和安全文本替换属于 `core`；各 feature 的 data store 只接收
   app 注入的具体文件并负责自身 codec，presentation/application 不拼接 `~/.zeta` 路径。
 - 旧 SharedPreferences 仅由 app 启动迁移器读取。迁移以已存在的目标文件为准，全部
@@ -489,6 +499,26 @@ Zeta 是桌面工具，不是营销页。界面应紧凑、克制、可扫描。
 - 桌面布局优先用 `Expanded`、`Flexible`、`LayoutBuilder`、scroll view 和固定高度工具栏避免溢出。
 - 统计页等宽数据面板在宽屏可双栏排列，窄屏必须回退为单栏；宽表格使用受限的
   横向滚动，不得挤压文本到不可读宽度。
+- 界面语言只有英语与简体中文。生产 Locale 在常规设置加载后冻结为
+  `settings.appLanguage`，当前进程不监听设置选择或系统 locale，也不因语言字段
+  重挂 `IdeHome`。首次启动只解析系统首选语言第一项：显式简体与无 script/region
+  的 `zh` 选简体中文，显式繁体与其他语言回退英语；已有安装保持中文。
+- Widget 与 `ui/core` 通过 `context.l10n` 读取 `AppLocalizations`。application /
+  data / reducer 只注入该 feature 的不可变文本目录 port
+  （`AgentUiTextCatalog`、`AgentManagementTextCatalog`、
+  `UsageStatisticsTextCatalog`、`DesktopAttentionTextCatalog`），禁止下沉
+  Flutter `Locale`、`BuildContext` 或 generated l10n。
+- 英文 ARB 是 key / description / placeholder 的模板真源；`app_en.arb` 与
+  `app_zh.arb` 必须一一对应。首期禁用 plural / date / number formatter；日期、
+  数字、百分比和相对时间继续用语言无关算法，目录只翻译外围静态 token。
+  `Agent` / `Provider` / `Thread` / `Token` 等产品术语保持英文。
+- `shadcn_flutter` 上游只有英语资源。Zeta 自有 `ZetaShadcnLocalizations` 覆盖
+  `en` / `zh-Hans`，把公开抽象 API 接到同一批 ARB；参数化日期/数字格式保持
+  现有算法。升级该包前必须重跑适配器契约测试。
+- 新增用户可见 Zeta 文案不得写成生产字面量。提交前运行
+  `dart run tool/check_localized_ui_strings.dart --check`；品牌、产品术语、
+  Provider/user/raw、协议 key 与日志由扫描器跳过，allowlist 不得再登记新的
+  zeta_copy 债务。Provider 返回值、用户输入、路径、命令和模型名保持原文。
 
 ## 7. 文件系统与工作区
 
