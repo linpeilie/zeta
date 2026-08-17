@@ -19,7 +19,7 @@ abstract final class IdeSpacing {
 
   /// 最小间隙：图标与紧贴标签、微分隔。
   ///
-  /// 生效位置：Activity Rail 垂直微 padding、Tab 指示条偏移、Toast 内小间距、
+  /// 生效位置：Activity Rail 垂直微 padding、Toast 内小间距、
   /// 项目列表 chip 微边距等。
   static const double space2 = 2;
 

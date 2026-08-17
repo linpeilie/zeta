@@ -372,8 +372,8 @@ class _AgentContextRawMessageList extends StatelessWidget {
 
 /// 「原始消息」区的过滤控件：在「仅对话」与「全部」之间切换。
 ///
-/// 刻意不用 [IdeTab]：那一档带选中下划线和 `bodySmall` 加粗标签，会和左边的
-/// 区块标题抢主次。这里按**次级操作**来定型——`caption` 字号、次级色文字、
+/// 刻意不用 [IdeTab]：那一档的选中态是换底色加 `bodySmall` 加粗标签，会和左边
+/// 的区块标题抢主次。这里按**次级操作**来定型——`caption` 字号、次级色文字、
 /// 极轻的灰底加 [IdeRadius.small]（6px）圆角、无边框，只在 hover / 按下时
 /// 加深底色告诉用户它可点。
 class _AgentContextRawFilterButton extends StatelessWidget {

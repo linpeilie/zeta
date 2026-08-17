@@ -31,7 +31,7 @@ enum IdeChipVariant {
 ///
 /// 与 [IdeTab] / [IdeTabs] 的分工：
 /// - **Chip**：属性标签、可删除 tag、轻量筛选/状态胶囊；
-/// - **Tab**：单选分组与桌面风格选中指示（下划线）。
+/// - **Tab**：单选分组与桌面风格选中态（选中项换底色与文字主色）。
 class IdeChip extends StatelessWidget {
   /// 创建一个紧凑 IDE chip。
   const IdeChip({

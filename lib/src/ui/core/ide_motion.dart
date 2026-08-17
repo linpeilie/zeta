@@ -14,9 +14,9 @@ abstract final class IdeMotion {
   /// 快速状态切换。
   static const Duration durationFast = Duration(milliseconds: 100);
 
-  /// 常规交互：Tab 指示、折叠摘要、列表选中、多数 `AnimatedContainer`。
+  /// 常规交互：Tab 选中态、折叠摘要、列表选中、多数 `AnimatedContainer`。
   ///
-  /// 生效位置：`IdeTabs` 指示条与背景；`IdeCollapsibleCard` 摘要区；
+  /// 生效位置：`IdeTabs` 选中底色与文字过渡；`IdeCollapsibleCard` 摘要区；
   /// `PaneInteractiveSurface` 状态过渡；项目列表选中；Composer 外卡与
   /// 发送区切换；消息区展开/收起；模型配置面板动画等。
   static const Duration durationNormal = Duration(milliseconds: 160);

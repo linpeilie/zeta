@@ -48,7 +48,7 @@ class IdeTabItem<T> {
 /// 面向桌面 IDE 的紧凑单选 Tab 组。
 ///
 /// 交互结构复用 [sf.Tabs]，视觉层通过 Graphite token 收紧圆角、间距与
-/// 层级；选中项额外使用短下划线和淡入动效，避免移动端胶囊感。
+/// 层级；选中项由底色、文字主色与字重表达，配合淡入动效。
 class IdeTabs<T> extends StatelessWidget {
   /// 创建一个受控的单选 Tab 组。
   const IdeTabs({
@@ -185,7 +185,7 @@ class IdeTabs<T> extends StatelessWidget {
 /// 独立的桌面 Tab 风格动作或状态标签。
 ///
 /// 下拉选择、多选项与只读状态不属于单选 Tab 组，因此使用该组件保留正确
-/// 语义，同时与 [IdeTabs] 共享矩形表面、选中下划线与过渡动效。
+/// 语义，同时与 [IdeTabs] 共享矩形表面、选中态配色与过渡动效。
 class IdeTab extends StatelessWidget {
   /// 创建一个独立的 Tab 风格控件。
   const IdeTab({
@@ -278,16 +278,6 @@ class IdeTab extends StatelessWidget {
 /// 独立 [IdeTab] 的描边宽度。
 const double _tabBorderWidth = 1;
 
-/// 选中指示条的厚度。
-const double _tabIndicatorHeight = 2;
-
-/// 指示条底边到文字行盒底边的距离。
-///
-/// 指示条画在控件的下内边距里（[IdeMetrics.controlPaddingYFor]），因此这个值
-/// 必须小于该内边距，否则条会溢出到控件外面。取 [IdeSpacing.space4] 让条与
-/// 文字之间留出 2px 呼吸。
-const double _tabIndicatorGap = IdeSpacing.space4;
-
 class _IdeTabContent extends StatelessWidget {
   const _IdeTabContent({
     required this.label,
@@ -365,34 +355,13 @@ class _IdeTabContent extends StatelessWidget {
       ),
     );
 
+    // 选中态由底色、文字主色与字重表达，不再画下划线：Tab 组本身已经有选中
+    // pill，独立 Tab 有选中底色与描边，再加一条横线属于第三重冗余表达。
     final animatedContent = AnimatedOpacity(
       opacity: enabled ? (selected ? 1 : 0.82) : 0.48,
       duration: IdeMotion.durationNormal,
       curve: IdeMotion.curveDefault,
-      // 选中指示条是**装饰，不是内容**：Stack 只被文字撑开，指示条用
-      // `Positioned` 画到文字下方的内边距里，因此不参与内容高度。这是控件
-      // 能按「2 × 竖向内边距 + 文字行盒」撑高的前提——以前靠 `Padding` 预留
-      // 2px 再往外画，那 2px 会被算进内容，Tab 组就比 Select / Button 高一档。
-      child: Stack(
-        clipBehavior: Clip.none,
-        alignment: Alignment.bottomCenter,
-        children: [
-          content,
-          Positioned(
-            bottom: -_tabIndicatorGap,
-            child: AnimatedContainer(
-              duration: IdeMotion.durationNormal,
-              curve: IdeMotion.curveDefault,
-              width: selected ? 18 : 0,
-              height: _tabIndicatorHeight,
-              decoration: BoxDecoration(
-                color: colors.accent,
-                borderRadius: IdeRadius.allSmall,
-              ),
-            ),
-          ),
-        ],
-      ),
+      child: content,
     );
     if (semanticLabel == null) {
       return animatedContent;
