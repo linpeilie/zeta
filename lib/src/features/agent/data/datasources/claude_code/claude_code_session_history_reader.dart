@@ -411,8 +411,19 @@ class ClaudeCodeSessionHistoryReader {
     String? activeTurnId;
     DateTime? activeStartedAt;
     DateTime? lastObservedAt;
+    DateTime? lastAssistantAt;
+    DateTime? lastEndTurnAt;
     var activeTerminal = false;
     var usage = _HistoryUsageAccumulator();
+
+    DateTime? activeCompletedAt({DateTime? fallback}) {
+      return lastEndTurnAt ?? lastAssistantAt ?? fallback;
+    }
+
+    void resetTurnClock() {
+      lastAssistantAt = null;
+      lastEndTurnAt = null;
+    }
 
     void addEvents(Iterable<AgentEvent> mapped, DateTime? occurredAt) {
       for (final event in mapped) {
@@ -491,7 +502,10 @@ class ClaudeCodeSessionHistoryReader {
           if (userText == null) {
             continue;
           }
-          finishActiveTurn(completedAt: lastObservedAt);
+          // 下一条用户正文才是 turn 边界。磁盘 JSONL 会把同一条 API
+          // message 拆成多行并复制 stop_reason，不能用当前行时间提前收口。
+          finishActiveTurn(completedAt: activeCompletedAt());
+          resetTurnClock();
           turnOrdinal += 1;
           final sourceTurnId = _firstNonEmpty(<String?>[
             _string(frame['promptId']),
@@ -550,6 +564,7 @@ class ClaudeCodeSessionHistoryReader {
             activeTurnId = turnId;
             activeStartedAt = occurredAt;
             activeTerminal = false;
+            resetTurnClock();
             usage = _HistoryUsageAccumulator();
             turnIds.add(turnId);
             mapper.beginTurn(
@@ -575,25 +590,36 @@ class ClaudeCodeSessionHistoryReader {
           );
           addEvents(mapped.events, occurredAt);
           final message = _objectMap(frame['message']);
-          usage.add(_objectMap(message['usage']));
+          usage.record(
+            messageId: _string(message['id']),
+            usage: _objectMap(message['usage']),
+          );
           reducer.updateTurnMetadata(
             turnId: turnId,
             cwd: _string(frame['cwd']) ?? cwd,
             modelId: _string(message['model']),
             reasoningEffort: _string(frame['effort']),
           );
+          lastAssistantAt = occurredAt ?? lastAssistantAt;
+          // stop_reason 是整条 message 的 metadata，会被复制到拆开的每一行。
+          // 只记录终态时间，等下一条用户正文 / result / EOF 再收口。
           if (_string(message['stop_reason']) == 'end_turn') {
-            finishActiveTurn(completedAt: occurredAt);
+            lastEndTurnAt = occurredAt ?? lastEndTurnAt;
           }
           continue;
         }
 
         if (type == 'result' && activeTurnId != null) {
-          finishActiveTurn(completedAt: occurredAt, sourceResult: frame);
+          finishActiveTurn(
+            completedAt: occurredAt ?? activeCompletedAt(),
+            sourceResult: frame,
+          );
         }
       }
 
-      finishActiveTurn(completedAt: lastObservedAt);
+      finishActiveTurn(
+        completedAt: activeCompletedAt(fallback: lastObservedAt),
+      );
       final snapshots = <String, ClaudeCodeTurnIdentitySnapshot>{};
       for (final turnId in turnIds) {
         final snapshot = identity.snapshot(
@@ -959,25 +985,42 @@ final class _MutableHistoryTurn {
 }
 
 final class _HistoryUsageAccumulator {
-  int? inputTokens;
-  int? outputTokens;
-  int? cacheCreationInputTokens;
-  int? cacheReadInputTokens;
+  final Map<String, Map<String, Object?>> _usageByMessageKey =
+      <String, Map<String, Object?>>{};
+  var _anonymousOrdinal = 0;
 
-  void add(Map<String, Object?> usage) {
-    inputTokens = _sumNullable(inputTokens, _integer(usage['input_tokens']));
-    outputTokens = _sumNullable(outputTokens, _integer(usage['output_tokens']));
-    cacheCreationInputTokens = _sumNullable(
-      cacheCreationInputTokens,
-      _integer(usage['cache_creation_input_tokens']),
-    );
-    cacheReadInputTokens = _sumNullable(
-      cacheReadInputTokens,
-      _integer(usage['cache_read_input_tokens']),
-    );
+  /// 同一 [messageId] 的拆行 usage 只保留最后一次；不同 id 在收口时再求和。
+  void record({
+    required String? messageId,
+    required Map<String, Object?> usage,
+  }) {
+    if (!_hasHistoryUsageFields(usage)) {
+      return;
+    }
+    final key = messageId ?? 'anon:${_anonymousOrdinal++}';
+    _usageByMessageKey[key] = Map<String, Object?>.of(usage);
   }
 
   Map<String, Object?>? toJson() {
+    int? inputTokens;
+    int? outputTokens;
+    int? cacheCreationInputTokens;
+    int? cacheReadInputTokens;
+    for (final usage in _usageByMessageKey.values) {
+      inputTokens = _sumNullable(inputTokens, _integer(usage['input_tokens']));
+      outputTokens = _sumNullable(
+        outputTokens,
+        _integer(usage['output_tokens']),
+      );
+      cacheCreationInputTokens = _sumNullable(
+        cacheCreationInputTokens,
+        _integer(usage['cache_creation_input_tokens']),
+      );
+      cacheReadInputTokens = _sumNullable(
+        cacheReadInputTokens,
+        _integer(usage['cache_read_input_tokens']),
+      );
+    }
     if (inputTokens == null &&
         outputTokens == null &&
         cacheCreationInputTokens == null &&
@@ -991,6 +1034,13 @@ final class _HistoryUsageAccumulator {
       'cache_read_input_tokens': ?cacheReadInputTokens,
     };
   }
+}
+
+bool _hasHistoryUsageFields(Map<String, Object?> usage) {
+  return _integer(usage['input_tokens']) != null ||
+      _integer(usage['output_tokens']) != null ||
+      _integer(usage['cache_creation_input_tokens']) != null ||
+      _integer(usage['cache_read_input_tokens']) != null;
 }
 
 Map<String, Object?> _normalizeHistoryFrame(

@@ -210,6 +210,324 @@ void main() {
       },
     );
 
+    test(
+      'keeps split end_turn text and closes on the next user, not the thinking row',
+      () async {
+        const projectPath = '/workspace/split-end-turn';
+        const sessionId = 'split-end-turn-session';
+        final projectDirectory = await _projectDirectory(
+          tempRoot,
+          projectPath,
+        ).create(recursive: true);
+        final sessionFile = File(
+          '${projectDirectory.path}${Platform.pathSeparator}$sessionId.jsonl',
+        );
+        const usage = <String, Object?>{
+          'input_tokens': 10,
+          'output_tokens': 20,
+          'cache_read_input_tokens': 4,
+        };
+        final frames = <Map<String, Object?>>[
+          _historyUserFrame(
+            sessionId: sessionId,
+            id: 'user-1',
+            content: '[PROMPT_REDACTED_1]',
+            timestamp: '2026-08-17T02:00:00.000Z',
+          ),
+          _historyAssistantContentFrame(
+            sessionId: sessionId,
+            uuid: 'assistant-tool',
+            messageId: 'msg-tool',
+            timestamp: '2026-08-17T02:00:01.000Z',
+            stopReason: 'tool_use',
+            content: <Map<String, Object?>>[
+              <String, Object?>{
+                'type': 'tool_use',
+                'id': 'tool-1',
+                'name': 'Read',
+                'input': <String, Object?>{'file_path': '[PATH_REDACTED]'},
+              },
+            ],
+            usage: const <String, Object?>{
+              'input_tokens': 3,
+              'output_tokens': 2,
+            },
+          ),
+          <String, Object?>{
+            'type': 'user',
+            'sessionId': sessionId,
+            'uuid': 'tool-result-1',
+            'timestamp': '2026-08-17T02:00:02.000Z',
+            'message': <String, Object?>{
+              'role': 'user',
+              'content': <Object?>[
+                <String, Object?>{
+                  'type': 'tool_result',
+                  'tool_use_id': 'tool-1',
+                  'content': '[TOOL_OUTPUT_REDACTED]',
+                },
+              ],
+            },
+          },
+          _historyAssistantContentFrame(
+            sessionId: sessionId,
+            uuid: 'assistant-thinking',
+            messageId: 'msg-final',
+            timestamp: '2026-08-17T02:00:03.000Z',
+            stopReason: 'end_turn',
+            content: <Map<String, Object?>>[
+              <String, Object?>{
+                'type': 'thinking',
+                'thinking': '',
+                'signature': '[SIGNATURE_REDACTED]',
+              },
+            ],
+            usage: usage,
+          ),
+          _historyAssistantContentFrame(
+            sessionId: sessionId,
+            uuid: 'assistant-text',
+            messageId: 'msg-final',
+            timestamp: '2026-08-17T02:00:04.000Z',
+            stopReason: 'end_turn',
+            content: <Map<String, Object?>>[
+              <String, Object?>{
+                'type': 'text',
+                'text': '[RESPONSE_REDACTED_FINAL]',
+              },
+            ],
+            usage: usage,
+          ),
+          _historyUserFrame(
+            sessionId: sessionId,
+            id: 'user-2',
+            content: '[PROMPT_REDACTED_2]',
+            timestamp: '2026-08-17T04:00:00.000Z',
+          ),
+          _historyAssistantContentFrame(
+            sessionId: sessionId,
+            uuid: 'assistant-followup',
+            messageId: 'msg-followup',
+            timestamp: '2026-08-17T04:00:01.000Z',
+            stopReason: 'end_turn',
+            content: <Map<String, Object?>>[
+              <String, Object?>{
+                'type': 'text',
+                'text': '[RESPONSE_REDACTED_FOLLOWUP]',
+              },
+            ],
+          ),
+        ];
+        await sessionFile.writeAsString(
+          '${frames.map(jsonEncode).join('\n')}\n',
+        );
+        final reader = ClaudeCodeSessionHistoryReader(
+          claudeHome: tempRoot.path,
+        );
+
+        final snapshot = await reader.readThreadHistory(
+          threadId: sessionId,
+          providerId: 'claude-code',
+          projectPath: projectPath,
+        );
+
+        expect(snapshot.turns, hasLength(2));
+        final first = snapshot.turns.first;
+        expect(first.status, AgentHistoryTurnStatus.completed);
+        expect(first.completedAt, DateTime.utc(2026, 8, 17, 2, 0, 4));
+        expect(first.duration, const Duration(seconds: 4));
+        expect(first.tokenUsageIsSessionCumulative, isFalse);
+        expect(first.tokenUsage?.inputTokens, 13);
+        expect(first.tokenUsage?.outputTokens, 22);
+        expect(first.tokenUsage?.cachedInputTokens, 4);
+        expect(
+          first.entries.whereType<AgentHistoryMessageEntry>().map(
+            (entry) => entry.text,
+          ),
+          <String>['[PROMPT_REDACTED_1]', '[RESPONSE_REDACTED_FINAL]'],
+        );
+        expect(first.entries.whereType<AgentHistoryToolEntry>(), hasLength(2));
+        expect(
+          snapshot.turns.last.entries.whereType<AgentHistoryMessageEntry>().map(
+            (entry) => entry.text,
+          ),
+          <String>['[PROMPT_REDACTED_2]', '[RESPONSE_REDACTED_FOLLOWUP]'],
+        );
+      },
+    );
+
+    test(
+      'keeps split end_turn text when the file ends without another user',
+      () async {
+        const projectPath = '/workspace/split-end-turn-eof';
+        const sessionId = 'split-end-turn-eof-session';
+        final projectDirectory = await _projectDirectory(
+          tempRoot,
+          projectPath,
+        ).create(recursive: true);
+        final sessionFile = File(
+          '${projectDirectory.path}${Platform.pathSeparator}$sessionId.jsonl',
+        );
+        final frames = <Map<String, Object?>>[
+          _historyUserFrame(
+            sessionId: sessionId,
+            id: 'user-1',
+            content: '[PROMPT_REDACTED]',
+            timestamp: '2026-08-17T02:00:00.000Z',
+          ),
+          _historyAssistantContentFrame(
+            sessionId: sessionId,
+            uuid: 'assistant-thinking',
+            messageId: 'msg-final',
+            timestamp: '2026-08-17T02:00:01.000Z',
+            stopReason: 'end_turn',
+            content: <Map<String, Object?>>[
+              <String, Object?>{
+                'type': 'thinking',
+                'thinking': '',
+                'signature': '[SIGNATURE_REDACTED]',
+              },
+            ],
+          ),
+          _historyAssistantContentFrame(
+            sessionId: sessionId,
+            uuid: 'assistant-text',
+            messageId: 'msg-final',
+            timestamp: '2026-08-17T02:00:02.000Z',
+            stopReason: 'end_turn',
+            content: <Map<String, Object?>>[
+              <String, Object?>{
+                'type': 'text',
+                'text': '[RESPONSE_REDACTED_FINAL]',
+              },
+            ],
+          ),
+        ];
+        await sessionFile.writeAsString(
+          '${frames.map(jsonEncode).join('\n')}\n',
+        );
+        final reader = ClaudeCodeSessionHistoryReader(
+          claudeHome: tempRoot.path,
+        );
+
+        final snapshot = await reader.readThreadHistory(
+          threadId: sessionId,
+          providerId: 'claude-code',
+          projectPath: projectPath,
+        );
+
+        expect(snapshot.turns, hasLength(1));
+        expect(snapshot.turns.single.status, AgentHistoryTurnStatus.completed);
+        expect(
+          snapshot.turns.single.completedAt,
+          DateTime.utc(2026, 8, 17, 2, 0, 2),
+        );
+        expect(
+          snapshot.turns.single.entries
+              .whereType<AgentHistoryMessageEntry>()
+              .map((entry) => entry.text),
+          <String>['[PROMPT_REDACTED]', '[RESPONSE_REDACTED_FINAL]'],
+        );
+      },
+    );
+
+    test(
+      'still drops assistant text that arrives after an explicit result frame',
+      () async {
+        const projectPath = '/workspace/split-end-turn-result';
+        const sessionId = 'split-end-turn-result-session';
+        final projectDirectory = await _projectDirectory(
+          tempRoot,
+          projectPath,
+        ).create(recursive: true);
+        final sessionFile = File(
+          '${projectDirectory.path}${Platform.pathSeparator}$sessionId.jsonl',
+        );
+        final frames = <Map<String, Object?>>[
+          _historyUserFrame(
+            sessionId: sessionId,
+            id: 'user-1',
+            content: '[PROMPT_REDACTED]',
+            timestamp: '2026-08-17T02:00:00.000Z',
+          ),
+          _historyAssistantContentFrame(
+            sessionId: sessionId,
+            uuid: 'assistant-thinking',
+            messageId: 'msg-final',
+            timestamp: '2026-08-17T02:00:01.000Z',
+            stopReason: 'end_turn',
+            content: <Map<String, Object?>>[
+              <String, Object?>{
+                'type': 'thinking',
+                'thinking': '',
+                'signature': '[SIGNATURE_REDACTED]',
+              },
+            ],
+          ),
+          _historyAssistantContentFrame(
+            sessionId: sessionId,
+            uuid: 'assistant-text',
+            messageId: 'msg-final',
+            timestamp: '2026-08-17T02:00:02.000Z',
+            stopReason: 'end_turn',
+            content: <Map<String, Object?>>[
+              <String, Object?>{
+                'type': 'text',
+                'text': '[RESPONSE_REDACTED_FINAL]',
+              },
+            ],
+          ),
+          <String, Object?>{
+            'type': 'result',
+            'subtype': 'success',
+            'sessionId': sessionId,
+            'uuid': 'result-1',
+            'timestamp': '2026-08-17T02:00:03.000Z',
+            'usage': <String, Object?>{'input_tokens': 1, 'output_tokens': 1},
+          },
+          _historyAssistantContentFrame(
+            sessionId: sessionId,
+            uuid: 'assistant-late',
+            messageId: 'msg-late',
+            timestamp: '2026-08-17T02:00:04.000Z',
+            stopReason: 'end_turn',
+            content: <Map<String, Object?>>[
+              <String, Object?>{
+                'type': 'text',
+                'text': '[RESPONSE_REDACTED_LATE]',
+              },
+            ],
+          ),
+        ];
+        await sessionFile.writeAsString(
+          '${frames.map(jsonEncode).join('\n')}\n',
+        );
+        final reader = ClaudeCodeSessionHistoryReader(
+          claudeHome: tempRoot.path,
+        );
+
+        final snapshot = await reader.readThreadHistory(
+          threadId: sessionId,
+          providerId: 'claude-code',
+          projectPath: projectPath,
+        );
+
+        expect(snapshot.turns, hasLength(1));
+        expect(
+          snapshot.turns.single.entries
+              .whereType<AgentHistoryMessageEntry>()
+              .map((entry) => entry.text),
+          <String>['[PROMPT_REDACTED]', '[RESPONSE_REDACTED_FINAL]'],
+        );
+        expect(
+          snapshot.turns.single.entries
+              .whereType<AgentHistoryMessageEntry>()
+              .map((entry) => entry.text),
+          isNot(contains('[RESPONSE_REDACTED_LATE]')),
+        );
+      },
+    );
+
     test('lists summaries, skips malformed lines, and stays read-only', () async {
       const projectPath = r'D:\Development\Workspace\zeta';
       const sessionId = 'session-redacted-1';
@@ -538,13 +856,39 @@ Map<String, Object?> _historyUserFrame({
   required String sessionId,
   required String id,
   required String content,
+  String timestamp = '2026-08-12T02:00:00.000Z',
 }) {
   return <String, Object?>{
     'type': 'user',
     'sessionId': sessionId,
     'uuid': id,
-    'timestamp': '2026-08-12T02:00:00.000Z',
+    'timestamp': timestamp,
     'message': <String, Object?>{'role': 'user', 'content': content},
+  };
+}
+
+Map<String, Object?> _historyAssistantContentFrame({
+  required String sessionId,
+  required String uuid,
+  required String messageId,
+  required String timestamp,
+  required List<Map<String, Object?>> content,
+  String? stopReason,
+  Map<String, Object?>? usage,
+}) {
+  return <String, Object?>{
+    'type': 'assistant',
+    'sessionId': sessionId,
+    'uuid': uuid,
+    'timestamp': timestamp,
+    'message': <String, Object?>{
+      'id': messageId,
+      'role': 'assistant',
+      'model': 'claude-test-model',
+      'stop_reason': ?stopReason,
+      'content': content,
+      'usage': ?usage,
+    },
   };
 }
 

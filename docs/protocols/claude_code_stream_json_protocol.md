@@ -1,6 +1,6 @@
 # Claude Code stream-json 协议基线
 
-最后更新：2026-08-14
+最后更新：2026-08-17
 
 本文记录 Zeta 当前 Claude Code Provider 的实际协议边界、已验证帧形状和升级门禁。
 它是实现与维护时的事实基线；早期取舍和未落地设想见
@@ -238,6 +238,14 @@ absolutePath.replaceAll(RegExp(r'[\\/:]'), '-')
 列表只读取每个文件的有界头尾窗口，跳过损坏行并计数，不跟随符号链接，也不改写
 Claude Code 文件。完整 history 有自己的 parser/identity/reducer；磁盘 JSONL 不能当作
 live stream 原样送入 mapper。
+
+磁盘 JSONL 常把一条 Anthropic assistant message 拆成多行（一行一个 content
+block），并在每一行复制同一份 `message.id` 与 `message.stop_reason`。history
+parser 不得把单行 `stop_reason: end_turn` 当成 turn 终态，否则 thinking 行会先
+关掉 identity，随后的 text 会被当成迟到正文丢掉。history 只在下一条用户正文、
+磁盘 `type: result` 或文件结束时收口；`completedAt` 取该回合最后一次
+`end_turn` 或最后一条 assistant 的时间，而不是下一条用户时间。同一
+`message.id` 的 `usage` last-write-wins，不同 id 再求和。
 
 本地 JSONL 的 `assistant.message.model` 提供本回合模型，顶层还可能携带 `effort`。
 history parser 必须在 Claude data 边界分别投影为 typed `AgentHistoryTurn.modelId` 与
