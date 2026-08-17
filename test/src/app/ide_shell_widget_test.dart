@@ -1269,6 +1269,15 @@ void main() {
       );
       expect(retained.inputController.text, retained.draft);
 
+      await tester.tap(find.byKey(const ValueKey('settings-language-select')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.byKey(const ValueKey('settings-language-english')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('重启后生效'), findsOneWidget);
+      expect(retained.agentPaneElement.mounted, isTrue);
+
       // 设置页不依赖 Activity Rail；窄窗口也必须保留可见的设置分区导航。
       tester.view.physicalSize = const Size(700, 900);
       await tester.pump();

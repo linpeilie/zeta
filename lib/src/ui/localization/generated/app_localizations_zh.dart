@@ -384,6 +384,24 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsSendShortcutCtrlHint => '按 Ctrl + Enter 发送消息，按 Enter 换行。';
 
   @override
+  String get settingsLanguage => '界面语言';
+
+  @override
+  String get settingsLanguageHint => '保存后需重启应用才会切换界面语言。';
+
+  @override
+  String get settingsLanguageEnglish => 'English';
+
+  @override
+  String get settingsLanguageSimplifiedChinese => '简体中文';
+
+  @override
+  String get settingsLanguageRestartToApply => '重启后生效';
+
+  @override
+  String get settingsLanguageSaveFailed => '语言设置保存失败，已恢复当前选择。';
+
+  @override
   String get settingsMessageSending => '消息发送';
 
   @override

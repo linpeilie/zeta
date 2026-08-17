@@ -53,6 +53,51 @@ void main() {
     expect(WidgetsLocalizations.of(context), isNotNull);
   });
 
+  testWidgets('wait path freezes the persisted app language', (tester) async {
+    final englishStore = _DeferredGeneralSettingsStore(
+      const GeneralSettings(appLanguage: AppLanguage.english),
+    );
+    final englishController = GeneralSettingsController(store: englishStore);
+    addTearDown(englishController.dispose);
+    await _pumpMainApp(
+      tester,
+      key: const ValueKey<String>('main-app-en'),
+      generalSettingsController: englishController,
+      waitForGeneralSettings: true,
+    );
+    await tester.pump();
+    expect(find.byType(IdeHome), findsNothing);
+
+    englishStore.complete();
+    await tester.pump();
+    await tester.pump();
+    expect(
+      Localizations.localeOf(tester.element(find.byType(IdeHome))).languageCode,
+      'en',
+    );
+
+    final chineseStore = _DeferredGeneralSettingsStore(
+      const GeneralSettings(appLanguage: AppLanguage.simplifiedChinese),
+    );
+    final chineseController = GeneralSettingsController(store: chineseStore);
+    addTearDown(chineseController.dispose);
+    await _pumpMainApp(
+      tester,
+      key: const ValueKey<String>('main-app-zh'),
+      generalSettingsController: chineseController,
+      waitForGeneralSettings: true,
+    );
+    await tester.pump();
+    expect(find.byType(IdeHome), findsNothing);
+    chineseStore.complete();
+    await tester.pump();
+    await tester.pump();
+    expect(
+      Localizations.localeOf(tester.element(find.byType(IdeHome))).languageCode,
+      'zh',
+    );
+  });
+
   testWidgets('tests can pump English without changing production default', (
     tester,
   ) async {
@@ -96,10 +141,103 @@ void main() {
     expect(tester.element(find.byType(IdeHome)), same(first));
     expect(Localizations.localeOf(first).languageCode, 'zh');
   });
+
+  testWidgets(
+    'ignores platform locale changes after the display language freezes',
+    (tester) async {
+      final store = MemoryGeneralSettingsStore(
+        const GeneralSettings(appLanguage: AppLanguage.simplifiedChinese),
+      );
+      final controller = GeneralSettingsController(store: store);
+      addTearDown(controller.dispose);
+
+      await _pumpMainApp(
+        tester,
+        generalSettingsController: controller,
+        waitForGeneralSettings: true,
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(
+        Localizations.localeOf(
+          tester.element(find.byType(IdeHome)),
+        ).languageCode,
+        'zh',
+      );
+
+      tester.platformDispatcher.localesTestValue = <Locale>[
+        const Locale('en', 'US'),
+        const Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hans'),
+      ];
+      addTearDown(tester.platformDispatcher.clearLocalesTestValue);
+      await tester.pump();
+
+      expect(
+        Localizations.localeOf(
+          tester.element(find.byType(IdeHome)),
+        ).languageCode,
+        'zh',
+      );
+    },
+  );
+
+  testWidgets(
+    'rebuilding MainApp with the same store applies the saved language',
+    (tester) async {
+      final store = MemoryGeneralSettingsStore(
+        const GeneralSettings(appLanguage: AppLanguage.simplifiedChinese),
+      );
+      final firstController = GeneralSettingsController(store: store);
+      addTearDown(firstController.dispose);
+
+      await _pumpMainApp(
+        tester,
+        key: const ValueKey<String>('main-app-before-restart'),
+        generalSettingsController: firstController,
+        waitForGeneralSettings: true,
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(
+        Localizations.localeOf(
+          tester.element(find.byType(IdeHome)),
+        ).languageCode,
+        'zh',
+      );
+
+      await firstController.setAppLanguage(AppLanguage.english);
+      await tester.pump();
+      expect(
+        Localizations.localeOf(
+          tester.element(find.byType(IdeHome)),
+        ).languageCode,
+        'zh',
+      );
+
+      final secondController = GeneralSettingsController(store: store);
+      addTearDown(secondController.dispose);
+      await _pumpMainApp(
+        tester,
+        key: const ValueKey<String>('main-app-after-restart'),
+        generalSettingsController: secondController,
+        waitForGeneralSettings: true,
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(
+        Localizations.localeOf(
+          tester.element(find.byType(IdeHome)),
+        ).languageCode,
+        'en',
+      );
+    },
+  );
 }
 
 Future<void> _pumpMainApp(
   WidgetTester tester, {
+  Key? key,
   GeneralSettingsController? generalSettingsController,
   AppearanceSettingsController? appearanceController,
   AppLanguage? displayLanguageOverride,
@@ -115,6 +253,7 @@ Future<void> _pumpMainApp(
   });
   await tester.pumpWidget(
     MainApp(
+      key: key,
       enableNativeWindowFrame: false,
       showWindowControls: false,
       sessionLoader: () async => null,
@@ -132,10 +271,13 @@ Future<void> _pumpMainApp(
 }
 
 class _DeferredGeneralSettingsStore implements GeneralSettingsStore {
+  _DeferredGeneralSettingsStore([this._value = const GeneralSettings()]);
+
+  final GeneralSettings _value;
   final _completer = Completer<GeneralSettings>();
 
   void complete() {
-    _completer.complete(const GeneralSettings());
+    _completer.complete(_value);
   }
 
   @override

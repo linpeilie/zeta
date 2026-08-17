@@ -3,8 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
+import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
 import 'package:zeta/src/features/settings/application/general_settings_controller.dart';
+import 'package:zeta/src/features/settings/application/general_settings_update_result.dart';
+import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_controller.dart';
@@ -12,6 +15,7 @@ import 'package:zeta/src/features/agent_management/presentation/agent_management
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
+import 'package:zeta/src/ui/core/ide_select.dart';
 import 'package:zeta/src/ui/core/ide_switch.dart';
 import 'package:zeta/src/ui/core/ide_tabs.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
@@ -223,10 +227,30 @@ class SettingsPageCanvasState extends State<SettingsPageCanvas> {
   }
 }
 
-class _GeneralSettingsPane extends StatelessWidget {
+class _GeneralSettingsPane extends StatefulWidget {
   const _GeneralSettingsPane({required this.generalSettingsController});
 
   final GeneralSettingsController generalSettingsController;
+
+  @override
+  State<_GeneralSettingsPane> createState() => _GeneralSettingsPaneState();
+}
+
+class _GeneralSettingsPaneState extends State<_GeneralSettingsPane> {
+  Future<void> _setAppLanguage(AppLanguage language) async {
+    final result = await widget.generalSettingsController.setAppLanguage(
+      language,
+    );
+    if (!mounted || result != GeneralSettingsUpdateResult.persistenceFailed) {
+      return;
+    }
+    showIdeToast(
+      context,
+      message: context.l10n.settingsLanguageSaveFailed,
+      tone: IdeToastTone.error,
+      showDuration: const Duration(seconds: 3),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -238,7 +262,7 @@ class _GeneralSettingsPane extends StatelessWidget {
     return IdeSurface.canvas(
       key: const ValueKey('settings-detail-panel'),
       child: ValueListenableBuilder<GeneralSettings>(
-        valueListenable: generalSettingsController.listenable,
+        valueListenable: widget.generalSettingsController.listenable,
         builder: (context, settings, _) {
           final description = switch (settings.sendMessageShortcut) {
             MessageSendShortcut.enter => l10n.settingsSendShortcutEnterHint,
@@ -247,10 +271,53 @@ class _GeneralSettingsPane extends StatelessWidget {
                   ? l10n.settingsSendShortcutCmdHint
                   : l10n.settingsSendShortcutCtrlHint,
           };
+          final effectiveLanguage = ZetaLocalization.languageForLocale(
+            Localizations.localeOf(context),
+          );
+          final languagePending = settings.appLanguage != effectiveLanguage;
           return IdePageBody(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                IdeRowGroup(
+                  key: const ValueKey('settings-language-group'),
+                  title: l10n.settingsLanguage,
+                  children: [
+                    _flatSettingsRow(
+                      key: const ValueKey('settings-language-row'),
+                      label: l10n.settingsLanguage,
+                      description: languagePending
+                          ? l10n.settingsLanguageRestartToApply
+                          : l10n.settingsLanguageHint,
+                      control: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 380),
+                        child: IdeSelect<AppLanguage>(
+                          key: const ValueKey('settings-language-select'),
+                          value: settings.appLanguage,
+                          options: <IdeSelectOption<AppLanguage>>[
+                            IdeSelectOption<AppLanguage>(
+                              AppLanguage.english,
+                              l10n.settingsLanguageEnglish,
+                              key: const ValueKey('settings-language-english'),
+                            ),
+                            IdeSelectOption<AppLanguage>(
+                              AppLanguage.simplifiedChinese,
+                              l10n.settingsLanguageSimplifiedChinese,
+                              key: const ValueKey('settings-language-zh-hans'),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            if (value == null) {
+                              return;
+                            }
+                            unawaited(_setAppLanguage(value));
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: IdeSpacing.space32),
                 IdeRowGroup(
                   key: const ValueKey('settings-general-group'),
                   title: l10n.settingsMessageSending,
@@ -289,9 +356,8 @@ class _GeneralSettingsPane extends StatelessWidget {
                           ],
                           onChanged: (value) {
                             unawaited(
-                              generalSettingsController.setMessageSendShortcut(
-                                value,
-                              ),
+                              widget.generalSettingsController
+                                  .setMessageSendShortcut(value),
                             );
                           },
                         ),
@@ -316,9 +382,8 @@ class _GeneralSettingsPane extends StatelessWidget {
                         value: settings.notifications.enabled,
                         onChanged: (value) {
                           unawaited(
-                            generalSettingsController.setNotificationsEnabled(
-                              value,
-                            ),
+                            widget.generalSettingsController
+                                .setNotificationsEnabled(value),
                           );
                         },
                       ),
@@ -339,7 +404,7 @@ class _GeneralSettingsPane extends StatelessWidget {
                         onChanged: settings.notifications.enabled
                             ? (value) {
                                 unawaited(
-                                  generalSettingsController
+                                  widget.generalSettingsController
                                       .setTurnTerminalNotificationsEnabled(
                                         value,
                                       ),
@@ -364,7 +429,7 @@ class _GeneralSettingsPane extends StatelessWidget {
                         onChanged: settings.notifications.enabled
                             ? (value) {
                                 unawaited(
-                                  generalSettingsController
+                                  widget.generalSettingsController
                                       .setActionRequiredNotificationsEnabled(
                                         value,
                                       ),

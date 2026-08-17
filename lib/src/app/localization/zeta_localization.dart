@@ -8,7 +8,7 @@ import 'package:zeta/src/ui/localization/zeta_shadcn_localizations.dart';
 
 /// App / Global / Zeta shadcn 本地化组合入口。
 ///
-/// Flutter `Locale` 只允许出现在这一层。步骤 6 生产路径固定简体中文。
+/// Flutter `Locale` 只允许出现在这一层。生产路径在启动时冻结已加载的设置语言。
 abstract final class ZetaLocalization {
   static const Locale english = Locale('en');
   static const Locale simplifiedChinese = Locale.fromSubtags(
@@ -36,6 +36,13 @@ abstract final class ZetaLocalization {
       AppLanguage.english => english,
       AppLanguage.simplifiedChinese => simplifiedChinese,
     };
+  }
+
+  /// 把当前进程 Locale 映射回领域语言；非英语一律视为简体中文。
+  static AppLanguage languageForLocale(Locale locale) {
+    return locale.languageCode == 'en'
+        ? AppLanguage.english
+        : AppLanguage.simplifiedChinese;
   }
 }
 

@@ -806,6 +806,42 @@ abstract class AppLocalizations {
   /// **'Press Ctrl + Enter to send, Enter for a new line.'**
   String get settingsSendShortcutCtrlHint;
 
+  /// Display language label
+  ///
+  /// In en, this message translates to:
+  /// **'Language'**
+  String get settingsLanguage;
+
+  /// Display language hint
+  ///
+  /// In en, this message translates to:
+  /// **'The interface language changes after you restart the app.'**
+  String get settingsLanguageHint;
+
+  /// English option self-name
+  ///
+  /// In en, this message translates to:
+  /// **'English'**
+  String get settingsLanguageEnglish;
+
+  /// Simplified Chinese option self-name
+  ///
+  /// In en, this message translates to:
+  /// **'简体中文'**
+  String get settingsLanguageSimplifiedChinese;
+
+  /// Language change pending restart
+  ///
+  /// In en, this message translates to:
+  /// **'Takes effect after restart'**
+  String get settingsLanguageRestartToApply;
+
+  /// Language save failure toast
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save the language setting. The current selection was kept.'**
+  String get settingsLanguageSaveFailed;
+
   /// General settings group
   ///
   /// In en, this message translates to:

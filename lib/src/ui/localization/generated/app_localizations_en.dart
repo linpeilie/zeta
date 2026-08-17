@@ -389,6 +389,26 @@ class AppLocalizationsEn extends AppLocalizations {
       'Press Ctrl + Enter to send, Enter for a new line.';
 
   @override
+  String get settingsLanguage => 'Language';
+
+  @override
+  String get settingsLanguageHint =>
+      'The interface language changes after you restart the app.';
+
+  @override
+  String get settingsLanguageEnglish => 'English';
+
+  @override
+  String get settingsLanguageSimplifiedChinese => '简体中文';
+
+  @override
+  String get settingsLanguageRestartToApply => 'Takes effect after restart';
+
+  @override
+  String get settingsLanguageSaveFailed =>
+      'Could not save the language setting. The current selection was kept.';
+
+  @override
   String get settingsMessageSending => 'Sending messages';
 
   @override

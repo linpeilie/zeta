@@ -544,6 +544,30 @@
   "@settingsSendShortcutCtrlHint": {
     "description": "Ctrl send hint"
   },
+  "settingsLanguage": "界面语言",
+  "@settingsLanguage": {
+    "description": "Display language label"
+  },
+  "settingsLanguageHint": "保存后需重启应用才会切换界面语言。",
+  "@settingsLanguageHint": {
+    "description": "Display language hint"
+  },
+  "settingsLanguageEnglish": "English",
+  "@settingsLanguageEnglish": {
+    "description": "English option self-name"
+  },
+  "settingsLanguageSimplifiedChinese": "简体中文",
+  "@settingsLanguageSimplifiedChinese": {
+    "description": "Simplified Chinese option self-name"
+  },
+  "settingsLanguageRestartToApply": "重启后生效",
+  "@settingsLanguageRestartToApply": {
+    "description": "Language change pending restart"
+  },
+  "settingsLanguageSaveFailed": "语言设置保存失败，已恢复当前选择。",
+  "@settingsLanguageSaveFailed": {
+    "description": "Language save failure toast"
+  },
   "settingsMessageSending": "消息发送",
   "@settingsMessageSending": {
     "description": "General settings group"

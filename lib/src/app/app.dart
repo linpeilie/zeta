@@ -104,7 +104,7 @@ class MainApp extends StatefulWidget {
   /// 常规设置文件缺失或损坏时使用的语言。
   final AppLanguage fallbackLanguage;
 
-  /// 测试可注入显示语言；生产路径忽略设置与系统 locale，固定简体中文。
+  /// 测试可强制显示语言。生产路径在常规设置加载后冻结 `settings.appLanguage`。
   final AppLanguage? displayLanguageOverride;
 
   /// 是否等到常规设置加载完成后再挂有文字的 UI。
@@ -141,10 +141,10 @@ class MainAppState extends State<MainApp>
   late final AppearanceSettingsController _appearanceController;
   late final GeneralSettingsController _generalSettingsController;
   late final AgentProviderBundleFactory _defaultAgentProviderFactory;
-  late final AgentProviderBundleFactory _agentProviderFactory;
-  late final AgentProviderRuntimeRegistry _agentProviderRuntimeRegistry;
+  late AgentProviderBundleFactory _agentProviderFactory;
+  late AgentProviderRuntimeRegistry _agentProviderRuntimeRegistry;
   late final AgentProviderSettingsCodec _agentProviderSettingsCodec;
-  late final Future<void> Function() _providerRuntimeShutdownHook;
+  Future<void> Function()? _providerRuntimeShutdownHook;
   late final UsageStatisticsPartitionStore _usageStatisticsPartitionStore;
   late final AgentModelCatalogRepository _agentModelCatalogRepository;
   late final AgentTurnContextStore _turnContextStore;
@@ -154,9 +154,10 @@ class MainAppState extends State<MainApp>
   AppLifecycleState? _appLifecycleState;
   bool _nativeWindowSuspended = false;
   var _generalSettingsReady = false;
-  late final Locale _frozenDisplayLocale;
-  late final AgentUiTextCatalog _agentUiTextCatalog;
-  late final DesktopAttentionTextCatalog _desktopAttentionTextCatalog;
+  var _localeRuntimeReady = false;
+  late Locale _frozenDisplayLocale;
+  late AgentUiTextCatalog _agentUiTextCatalog;
+  late DesktopAttentionTextCatalog _desktopAttentionTextCatalog;
 
   /// 全局外观控制器引用，供设置面板和主题构建共享。
   AppearanceSettingsController get appearanceController =>
@@ -177,25 +178,7 @@ class MainAppState extends State<MainApp>
     final useFilePersistence = _useFilePersistence;
     final dataPaths = widget.dataPaths;
     _frozenDisplayLocale = ZetaLocalization.localeFor(
-      widget.displayLanguageOverride ?? AppLanguage.simplifiedChinese,
-    );
-    final textCatalogs = ZetaTextCatalogs(
-      lookupAppLocalizations(_frozenDisplayLocale),
-    );
-    _agentUiTextCatalog = textCatalogs.agentUi;
-    _desktopAttentionTextCatalog = textCatalogs.desktopAttention;
-    _defaultAgentProviderFactory = DefaultAgentProviderFactory(
-      claudeCodeSessionDecisionStoreFactory: useFilePersistence
-          ? (sessionId) => FileClaudeCodeSessionDecisionStore(
-              file: _claudeCodeSessionDecisionFile(dataPaths!, sessionId),
-            )
-          : null,
-      claudeCodeHiddenThreadStore: useFilePersistence
-          ? FileClaudeCodeHiddenThreadStore(
-              file: _claudeCodeHiddenThreadsFile(dataPaths!),
-            )
-          : null,
-      textCatalog: _agentUiTextCatalog,
+      widget.displayLanguageOverride ?? widget.fallbackLanguage,
     );
     _agentProviderSettingsCodec = AgentProviderSettingsCodec(
       migrationRegistry: AgentProviderPermissionMigrationRegistry(
@@ -206,16 +189,24 @@ class MainAppState extends State<MainApp>
         },
       ),
     );
-    _agentProviderFactory =
-        widget.agentProviderFactory ?? _defaultAgentProviderFactory;
+    final injectedFactory = widget.agentProviderFactory;
+    if (injectedFactory != null) {
+      _agentProviderFactory = injectedFactory;
+    }
     final injectedRuntimeRegistry = widget.agentProviderRuntimeRegistry;
-    _agentProviderRuntimeRegistry =
-        injectedRuntimeRegistry ??
-        AgentProviderRuntimeRegistry(providerFactory: _agentProviderFactory);
-    _ownsAgentProviderRuntimeRegistry = injectedRuntimeRegistry == null;
-    _providerRuntimeShutdownHook = _agentProviderRuntimeRegistry.close;
-    if (widget.enableNativeWindowFrame) {
-      addDesktopWindowShutdownHook(_providerRuntimeShutdownHook);
+    if (injectedRuntimeRegistry != null) {
+      _agentProviderRuntimeRegistry = injectedRuntimeRegistry;
+      _ownsAgentProviderRuntimeRegistry = false;
+      _providerRuntimeShutdownHook = _agentProviderRuntimeRegistry.close;
+    } else if (injectedFactory != null) {
+      _agentProviderRuntimeRegistry = AgentProviderRuntimeRegistry(
+        providerFactory: injectedFactory,
+      );
+      _ownsAgentProviderRuntimeRegistry = true;
+      _providerRuntimeShutdownHook = _agentProviderRuntimeRegistry.close;
+      if (widget.enableNativeWindowFrame) {
+        addDesktopWindowShutdownHook(_agentProviderRuntimeRegistry.close);
+      }
     }
     _usageStatisticsPartitionStore =
         widget.usageStatisticsPartitionStore ??
@@ -271,13 +262,22 @@ class MainAppState extends State<MainApp>
     }
     unawaited(_appearanceController.load());
     final loadGeneralSettings = _generalSettingsController.load();
+    final overrideLanguage = widget.displayLanguageOverride;
     final shouldWait = widget.waitForGeneralSettings;
+    if (overrideLanguage != null || !shouldWait) {
+      _installLocaleDependentRuntime(
+        overrideLanguage ?? widget.fallbackLanguage,
+      );
+    }
     if (shouldWait) {
       unawaited(
-        loadGeneralSettings.then((_) {
+        loadGeneralSettings.then((settings) {
           if (!mounted || _generalSettingsReady) {
             return;
           }
+          _installLocaleDependentRuntime(
+            overrideLanguage ?? settings.appLanguage,
+          );
           setState(() => _generalSettingsReady = true);
         }),
       );
@@ -285,6 +285,48 @@ class MainAppState extends State<MainApp>
       _generalSettingsReady = true;
       unawaited(loadGeneralSettings);
     }
+  }
+
+  void _installLocaleDependentRuntime(AppLanguage language) {
+    if (!_localeRuntimeReady) {
+      _frozenDisplayLocale = ZetaLocalization.localeFor(language);
+      final textCatalogs = ZetaTextCatalogs(
+        lookupAppLocalizations(_frozenDisplayLocale),
+      );
+      _agentUiTextCatalog = textCatalogs.agentUi;
+      _desktopAttentionTextCatalog = textCatalogs.desktopAttention;
+    }
+    if (widget.agentProviderFactory == null && !_localeRuntimeReady) {
+      final dataPaths = widget.dataPaths;
+      final useFilePersistence = _useFilePersistence;
+      _defaultAgentProviderFactory = DefaultAgentProviderFactory(
+        claudeCodeSessionDecisionStoreFactory: useFilePersistence
+            ? (sessionId) => FileClaudeCodeSessionDecisionStore(
+                file: _claudeCodeSessionDecisionFile(dataPaths!, sessionId),
+              )
+            : null,
+        claudeCodeHiddenThreadStore: useFilePersistence
+            ? FileClaudeCodeHiddenThreadStore(
+                file: _claudeCodeHiddenThreadsFile(dataPaths!),
+              )
+            : null,
+        textCatalog: _agentUiTextCatalog,
+      );
+      _agentProviderFactory = _defaultAgentProviderFactory;
+    }
+    if (widget.agentProviderRuntimeRegistry == null &&
+        widget.agentProviderFactory == null &&
+        !_localeRuntimeReady) {
+      _agentProviderRuntimeRegistry = AgentProviderRuntimeRegistry(
+        providerFactory: _agentProviderFactory,
+      );
+      _ownsAgentProviderRuntimeRegistry = true;
+      _providerRuntimeShutdownHook = _agentProviderRuntimeRegistry.close;
+      if (widget.enableNativeWindowFrame) {
+        addDesktopWindowShutdownHook(_providerRuntimeShutdownHook!);
+      }
+    }
+    _localeRuntimeReady = true;
   }
 
   @override
@@ -295,11 +337,17 @@ class MainAppState extends State<MainApp>
     }
     if (widget.enableNativeWindowFrame) {
       windowManager.addListener(this);
-      addDesktopWindowShutdownHook(_providerRuntimeShutdownHook);
+      final hook = _providerRuntimeShutdownHook;
+      if (hook != null) {
+        addDesktopWindowShutdownHook(hook);
+      }
       return;
     }
     windowManager.removeListener(this);
-    removeDesktopWindowShutdownHook(_providerRuntimeShutdownHook);
+    final hook = _providerRuntimeShutdownHook;
+    if (hook != null) {
+      removeDesktopWindowShutdownHook(hook);
+    }
     _nativeWindowSuspended = false;
   }
 
@@ -308,7 +356,10 @@ class MainAppState extends State<MainApp>
     WidgetsBinding.instance.removeObserver(this);
     if (widget.enableNativeWindowFrame) {
       windowManager.removeListener(this);
-      removeDesktopWindowShutdownHook(_providerRuntimeShutdownHook);
+      final hook = _providerRuntimeShutdownHook;
+      if (hook != null) {
+        removeDesktopWindowShutdownHook(hook);
+      }
     }
     if (_ownsAgentProviderRuntimeRegistry) {
       unawaited(_agentProviderRuntimeRegistry.close());

@@ -6,6 +6,7 @@ import 'package:zeta/src/features/settings/application/general_settings_controll
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
 import 'package:zeta/src/features/settings/data/general_settings_store.dart';
 import 'package:zeta/src/features/settings/data/system_font_catalog_service.dart';
+import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/settings/domain/system_font_family.dart';
@@ -110,6 +111,73 @@ void main() {
       generalController.settings.notifications.actionRequiredEnabled,
       isFalse,
     );
+  });
+
+  testWidgets('language options keep self-names and wait for restart', (
+    tester,
+  ) async {
+    final generalController = GeneralSettingsController(
+      store: MemoryGeneralSettingsStore(),
+    );
+    await _pumpSettingsPage(
+      tester,
+      activeSection: SettingsSection.general,
+      generalController: generalController,
+    );
+
+    expect(
+      find.byKey(const ValueKey('settings-language-group')),
+      findsOneWidget,
+    );
+    expect(find.text('简体中文'), findsWidgets);
+    expect(find.text('重启后生效'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('settings-language-select')));
+    await _pumpSelectOverlay(tester);
+    expect(find.text('English'), findsWidgets);
+    await tester.tap(find.byKey(const ValueKey('settings-language-english')));
+    await _pumpSelectOverlay(tester);
+
+    expect(generalController.settings.appLanguage, AppLanguage.english);
+    expect(find.text('重启后生效'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('settings-language-select')));
+    await _pumpSelectOverlay(tester);
+    await tester.tap(find.byKey(const ValueKey('settings-language-zh-hans')));
+    await _pumpSelectOverlay(tester);
+
+    expect(
+      generalController.settings.appLanguage,
+      AppLanguage.simplifiedChinese,
+    );
+    expect(find.text('重启后生效'), findsNothing);
+  });
+
+  testWidgets('language save failure keeps the current selection and toasts', (
+    tester,
+  ) async {
+    final store = _FailingGeneralSettingsStore();
+    final generalController = GeneralSettingsController(store: store);
+    await _pumpSettingsPage(
+      tester,
+      activeSection: SettingsSection.general,
+      generalController: generalController,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('settings-language-select')));
+    await _pumpSelectOverlay(tester);
+    await tester.tap(find.byKey(const ValueKey('settings-language-english')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(
+      generalController.settings.appLanguage,
+      AppLanguage.simplifiedChinese,
+    );
+    expect(find.text('语言设置保存失败，已恢复当前选择。'), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump(const Duration(milliseconds: 600));
   });
 
   testWidgets('general settings uses Cmd label on macOS', (tester) async {
@@ -623,6 +691,18 @@ Future<void> _pumpSettingsPage(
     ),
   );
   await tester.pump();
+}
+
+class _FailingGeneralSettingsStore implements GeneralSettingsStore {
+  final GeneralSettings _settings = const GeneralSettings();
+
+  @override
+  Future<GeneralSettings> load() async => _settings;
+
+  @override
+  Future<void> save(GeneralSettings settings) {
+    throw StateError('save failed');
+  }
 }
 
 class _FakeSystemFontCatalogService implements SystemFontCatalogService {
