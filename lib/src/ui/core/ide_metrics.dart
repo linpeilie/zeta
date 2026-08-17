@@ -47,67 +47,13 @@ abstract final class IdeMetrics {
   /// 生效位置：`WindowFrame` 标题栏；仅 macOS 生效，且该区域不拦截点击。
   static const double macOSTrafficLightGutter = 76;
 
-  /// 常规交互控件的最小外框高度。
-  ///
-  /// 设置页、工具栏里的 Select、Tabs 与 Button 都从这一档起步；字号增大时由
-  /// [controlHeightFor] 在此基础上同步扩高。
-  ///
-  /// **迁移中**：这一档正在被「内容撑高 + [controlMinHeightFor] 兜底」取代，
-  /// 原因见 [controlHeightFor] 的注释。新代码不要再引用它。
-  static const double regularControlHeight = 34;
-
-  /// 紧凑交互控件的最小外框高度。
-  ///
-  /// 用于 Pane 内独立 Tab 和普通紧凑按钮，不与列表行高度混用。
-  ///
-  /// **迁移中**：同 [regularControlHeight]。
-  static const double compactControlHeight = 28;
-
   /// 工具条最小高度。
   ///
+  /// 这是**条**的下限，不是控件高度：工具条的实际高度由内部控件加
+  /// [toolbarPadding] 撑开，本值只保证条在没有内容时也不塌。
+  ///
   /// 生效位置：`IdeToolbar`；用量统计页筛选/操作条等复用该高度。
-  static const double toolbarHeight = regularControlHeight;
-
-  // Tabs 的常规档有两层 4px 上下 inset，并为选中下划线预留 2px；紧凑档
-  // 只有一层 inset。把这段 chrome 纳入统一计算，Select/Button 才能在用户
-  // 放大 UI 字号后继续和 Tabs 外框等高，而不是只在默认字号下碰巧一致。
-  static const double _regularControlChromeHeight = 18;
-  static const double _compactControlChromeHeight = 10;
-
-  /// 按当前文字行框解析控件外框高度。
-  ///
-  /// 返回值永远不小于对应密度档的基准高度；当 UI 字号放大时，各类控件使用
-  /// 同一增长公式，避免固定高度的 Select 与内容自适应的 Tabs 再次分叉。
-  ///
-  /// **迁移中，新代码不要再用。** 这个函数有两个已知问题：
-  /// 1. 它的 chrome 常数是从 **Tabs 一个控件**的内边距反推出来的，Select 和
-  ///    Button 只是被告知了 Tabs 的答案——三者的竖向内边距（2 / 4 / 4+4）
-  ///    从未统一，是固定高度替它们盖住了 13px 的落差。
-  /// 2. 默认 UI 字号下公式永远输不过 34 这个下限（要 UI 字号 > 12.93 才轮到
-  ///    公式生效），所以它实际退化成了常数：用户从 12 调到 12.9，控件纹丝
-  ///    不动，过了阈值才突然开始长。
-  ///
-  /// 替代方案是「内容撑高 + 下限兜底」：竖向内边距取 [controlPaddingYFor]，
-  /// 图标盒取 [controlIconBoxFor]，最小点击目标取 [controlMinHeightFor]，
-  /// 高度由内容自然决定。控件迁移完成后本函数删除。
-  static double controlHeightFor(
-    TextStyle textStyle, {
-    required IdeControlSize size,
-  }) {
-    final fontSize = textStyle.fontSize ?? 0;
-    final lineHeight = fontSize * (textStyle.height ?? 1);
-    final (minimum, chromeHeight) = switch (size) {
-      IdeControlSize.compact => (
-        compactControlHeight,
-        _compactControlChromeHeight,
-      ),
-      IdeControlSize.regular => (
-        regularControlHeight,
-        _regularControlChromeHeight,
-      ),
-    };
-    return math.max(minimum, lineHeight + chromeHeight);
-  }
+  static const double toolbarHeight = 34;
 
   // ---------------------------------------------------------------------------
   // 控件尺寸（内容撑高体系）
@@ -123,25 +69,27 @@ abstract final class IdeMetrics {
   // 控件——Select / Tabs / Button / 未来的 TextField 与 IconButton——都必须
   // 走这一条公式，不允许再出现第二套内边距。
   //
-  // 默认 UI 字号（12）下的落点：常规档 10×2 + 15 = 35，紧凑档 6×2 + 15 = 27，
-  // 与迁移前的 34 / 28 各差 1px——这是刻意的，让「拆掉固定高度」这次结构性
-  // 改动在视觉上几乎不可见，出问题时容易判断是结构错了还是数值错了。
+  // 默认 UI 字号（12）下的落点：常规档 10×2 + 15 = 35，紧凑档 6×2 + 15 = 27。
+  //
+  // **控件实现只应引用内边距与下限这两个 token，不要去算高度**：一旦有人把
+  // 算出来的数字塞进 `SizedBox`，高度就又有了第二个出处，也就回到了迁移前
+  // 「固定高度替内边距的分歧兜底」的老路。需要一个具体数字（回归测试、为
+  // 控件预留空位的骨架屏）时走 [controlNaturalHeightFor]。
 
   /// 常规控件的竖向内边距（单侧）。
   ///
-  /// 生效位置：迁移后的 `IdeSelect` / `IdeTabs` / `IdeButton`（常规档）。
+  /// 生效位置：`IdeSelect` / `IdeTabs` / `IdeButton`（常规档）。
   static const double controlPaddingYRegular = IdeSpacing.space10;
 
   /// 紧凑控件的竖向内边距（单侧）。
   ///
-  /// 生效位置：迁移后的 `IdeTab` 与 Pane 内紧凑按钮。
+  /// 生效位置：`IdeTab` 与 Pane 内紧凑按钮。
   static const double controlPaddingYCompact = IdeSpacing.space6;
 
   /// 常规控件的最小外框高度（点击目标下限）。
   ///
-  /// 与 [regularControlHeight] 的区别是**谁说了算**：这一档只在内容小到不
-  /// 好点时才生效（默认字号下不生效，UI 字号 ≤ 10 时才轮到它），不再决定
-  /// 正常状态下的控件高度。
+  /// 只在内容小到不好点时才生效（默认字号下不生效，UI 字号 ≤ 10 时才轮到
+  /// 它），不决定正常状态下的控件高度——那是内边距和内容的事。
   static const double controlMinHeightRegular = 28;
 
   /// 紧凑控件的最小外框高度（点击目标下限）。
@@ -179,6 +127,25 @@ abstract final class IdeMetrics {
   static double controlIconBoxFor(TextStyle textStyle) {
     final fontSize = textStyle.fontSize ?? 0;
     return (fontSize * (textStyle.height ?? 1)).roundToDouble();
+  }
+
+  /// 按公式预估控件的自然外框高度。
+  ///
+  /// **控件实现不得用它设定高度**——高度必须由内边距和内容自然得出，否则就
+  /// 又回到了「固定高度」那一套。它存在只为两种用途：
+  /// - 回归测试用同一条公式表达期望值，而不是把 35 这种数字抄进断言；
+  /// - 需要为尚未构建的控件预留空位的布局（骨架屏、占位测量）。
+  ///
+  /// 内容高度按纯文字/等高图标算，即 [controlIconBoxFor]；控件里塞了更高的
+  /// 自定义组件时，本函数的结果会偏小。
+  static double controlNaturalHeightFor(
+    TextStyle textStyle, {
+    required IdeControlSize size,
+  }) {
+    return math.max(
+      controlMinHeightFor(size),
+      2 * controlPaddingYFor(size) + controlIconBoxFor(textStyle),
+    );
   }
 
   // ---------------------------------------------------------------------------

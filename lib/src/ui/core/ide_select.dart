@@ -69,8 +69,9 @@ enum IdeSelectPopupWidthPolicy {
 ///
 /// 封装 [sf.Select] 的默认规格差异，统一为：
 /// - 字号 [IdeTextStyles.bodySmall]（对齐工具栏 / [IdeButton]）
-/// - 默认最小高度 [IdeMetrics.regularControlHeight]，并随 UI 字号同步增长
-/// - small+dense 等效内边距（水平 [IdeSpacing.space6]，垂直 [IdeSpacing.space2]）
+/// - 竖向内边距 [IdeMetrics.controlPaddingYFor]，高度由内容自然撑开，
+///   低于 [IdeMetrics.controlMinHeightFor] 时才被抬到点击目标下限
+/// - 展开箭头走 [IdeSelectExpandIcon]，不让图标决定控件高度
 ///
 /// feature 页面应优先使用本组件，而不是直接拼装 [sf.Select] 细节。
 class IdeSelect<T> extends StatelessWidget {
@@ -122,16 +123,6 @@ class IdeSelect<T> extends StatelessWidget {
   /// 无匹配值时的占位文案（当前实现仍要求 [value] 有对应项时优先）。
   final String? placeholder;
 
-  /// 触发器内边距。
-  ///
-  /// **迁移中**：竖向的 2 只是历史值——它比 Button 的 4、Tabs 的 4+4 都小，
-  /// 三者之所以现在还能等高，全靠外层 `minHeight = maxHeight` 把高度钉死。
-  /// 改成内容撑高时，这里要换成 [IdeMetrics.controlPaddingYFor]。
-  static const EdgeInsets _contentPadding = EdgeInsets.symmetric(
-    horizontal: IdeSpacing.space8,
-    vertical: IdeSpacing.space2,
-  );
-
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
@@ -140,11 +131,6 @@ class IdeSelect<T> extends StatelessWidget {
     final labelStyle = textStyles.bodySmall.copyWith(
       color: isEnabled ? colors.textPrimary : colors.textTertiary,
     );
-    final controlHeight = IdeMetrics.controlHeightFor(
-      labelStyle,
-      size: controlSize,
-    );
-
     final selected = _resolveSelectedOption();
     final minWidth = math.max(width ?? 0.0, popupMinWidth ?? 0.0);
 
@@ -154,13 +140,17 @@ class IdeSelect<T> extends StatelessWidget {
       expandIcon: IdeSelectExpandIcon(
         color: isEnabled ? colors.textSecondary : colors.textTertiary,
       ),
+      // 高度不再夹死：由下面的竖向内边距 + 内容（文字行盒或等高的展开箭头）
+      // 自然撑开，minHeight 只在 UI 字号很小时兜住点击目标。
       constraints: BoxConstraints(
         minWidth: width ?? 0,
         maxWidth: width ?? double.infinity,
-        minHeight: controlHeight,
-        maxHeight: controlHeight,
+        minHeight: IdeMetrics.controlMinHeightFor(controlSize),
       ),
-      padding: _contentPadding,
+      padding: EdgeInsets.symmetric(
+        horizontal: IdeSpacing.space8,
+        vertical: IdeMetrics.controlPaddingYFor(controlSize),
+      ),
       popupConstraints: BoxConstraints(
         maxHeight: popupMaxHeight,
         minWidth: minWidth,

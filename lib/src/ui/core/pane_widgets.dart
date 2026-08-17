@@ -260,6 +260,7 @@ class PaneInteractiveSurface extends StatefulWidget {
     this.width,
     this.height,
     this.alignment = Alignment.center,
+    this.expandToConstraints = true,
     this.borderRadius,
     this.backgroundColor,
     this.hoverBackgroundColor,
@@ -285,6 +286,16 @@ class PaneInteractiveSurface extends StatefulWidget {
   final double? width;
   final double? height;
   final AlignmentGeometry alignment;
+
+  /// 有多余空间时是否撑满父级约束。
+  ///
+  /// 默认 `true`，保持列表行、文件树行这类「铺满一行」的既有表现：内部的
+  /// `Container` 一旦带 [alignment] 就会尽可能大，父级给多少占多少。
+  ///
+  /// **按内容撑高的控件必须传 `false`**（如 `IdeTab`）：它们的高度只应由
+  /// 内边距和内容决定，被放进一条固定高度的工具栏时不该跟着抻长。
+  final bool expandToConstraints;
+
   final BorderRadiusGeometry? borderRadius;
   final Color? backgroundColor;
   final Color? hoverBackgroundColor;
@@ -459,7 +470,9 @@ class _PaneInteractiveSurfaceState extends State<PaneInteractiveSurface> {
               curve: IdeMotion.curveDefault,
               width: widget.width,
               height: widget.height,
-              alignment: widget.alignment,
+              // Container 只要带 alignment 就会尽可能撑满父级约束；按内容撑高
+              // 的控件必须把它交出来，否则放进固定高度的容器里会被抻长。
+              alignment: widget.expandToConstraints ? widget.alignment : null,
               padding: widget.padding,
               decoration: BoxDecoration(
                 color: resolvedBackground,

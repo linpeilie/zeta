@@ -5,6 +5,7 @@ import 'ide_colors.dart';
 import 'ide_effects.dart';
 import 'ide_icon_box.dart';
 import 'ide_metrics.dart';
+import 'ide_spacing.dart';
 import 'ide_text_styles.dart';
 
 /// IDE 紧凑按钮视觉变体，映射到 `shadcn_flutter` 的 [sf.ButtonStyle] 预设。
@@ -159,7 +160,7 @@ class IdeButton extends StatelessWidget {
     final button = sf.Button(
       onPressed: isEnabled ? onPressed : null,
       enabled: isEnabled,
-      style: _resolveStyle(variant),
+      style: _resolveStyle(variant, controlSize),
       // 有 leading 时 shadcn 内部 Row 默认顶对齐，alignment 负责垂直居中。
       alignment: Alignment.centerLeft,
       // 图标一律走等高图标盒：拆掉固定高度后，15/16px 的裸图标会比 15px 的
@@ -180,16 +181,19 @@ class IdeButton extends StatelessWidget {
       ),
     );
 
-    final minHeight = IdeMetrics.controlHeightFor(
-      textStyles.bodySmall,
-      size: controlSize,
+    // 高度由 `_resolveStyle` 给的竖向内边距和内容自然撑开；这里只兜住点击
+    // 目标下限（UI 字号很小时才会生效）。
+    final naturalButton = ConstrainedBox(
+      constraints: BoxConstraints(
+        minHeight: IdeMetrics.controlMinHeightFor(controlSize),
+      ),
+      child: button,
     );
-    final minSizedButton = SizedBox(height: minHeight, child: button);
     final content = height != null
         ? SizedBox(height: height, width: width, child: button)
         : width == null
-        ? minSizedButton
-        : SizedBox(width: width, child: minSizedButton);
+        ? naturalButton
+        : SizedBox(width: width, child: naturalButton);
 
     return Semantics(
       button: true,
@@ -200,10 +204,19 @@ class IdeButton extends StatelessWidget {
     );
   }
 
-  static sf.AbstractButtonStyle _resolveStyle(IdeButtonVariant variant) {
+  /// 解析按钮样式，并把内边距接管过来。
+  ///
+  /// shadcn 的 `ButtonSize` / `ButtonDensity` 是作用在基准内边距上的**乘法
+  /// 修饰符**（dense = ×0.5），复合出来的数字不落在任何设计档位上，而且每换
+  /// 一种组合就多一个高度。这里保留 density 影响到的其他视觉，只把内边距
+  /// 换成 [IdeMetrics] 的档位——控件高度从此只有一个出处。
+  static sf.AbstractButtonStyle _resolveStyle(
+    IdeButtonVariant variant,
+    IdeControlSize controlSize,
+  ) {
     const size = sf.ButtonSize.normal;
     const density = sf.ButtonDensity.dense;
-    return switch (variant) {
+    final base = switch (variant) {
       IdeButtonVariant.outline => const sf.ButtonStyle.outline(
         size: size,
         density: density,
@@ -235,6 +248,12 @@ class IdeButton extends StatelessWidget {
         density: density,
       ),
     };
+    return base.copyWith(
+      padding: (context, states, value) => EdgeInsets.symmetric(
+        horizontal: IdeSpacing.space8,
+        vertical: IdeMetrics.controlPaddingYFor(controlSize),
+      ),
+    );
   }
 
   static Color _resolveForeground({

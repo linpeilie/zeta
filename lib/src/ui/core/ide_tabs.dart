@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
@@ -89,47 +91,49 @@ class IdeTabs<T> extends StatelessWidget {
     }
 
     final colors = IdeColors.of(context);
-    final controlHeight = IdeMetrics.controlHeightFor(
-      IdeTextStyles.of(context).bodySmall,
-      size: controlSize,
+    // Tab 组有两层竖向内边距：外框到选中 pill（containerPadding）、pill 到
+    // 文字（tabPadding）。两层加起来必须正好等于这一档的竖向内边距，组的
+    // 高度才与 Select / Button 落在同一条公式上。外层固定 4——它是「组边框
+    // 与 pill 的呼吸」，与密度档无关；剩下的都给 pill。
+    const containerPaddingY = IdeSpacing.space4;
+    final tabPaddingY = math.max(
+      0.0,
+      IdeMetrics.controlPaddingYFor(controlSize) - containerPaddingY,
     );
-    final tabs = SizedBox(
-      height: controlHeight,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          border: Border.all(color: colors.borderSubtle),
-          borderRadius: IdeRadius.allMedium,
+    final tabs = DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border.all(color: colors.borderSubtle),
+        borderRadius: IdeRadius.allMedium,
+      ),
+      child: sf.ComponentTheme(
+        data: sf.TabsTheme(
+          containerPadding: const EdgeInsets.all(containerPaddingY),
+          tabPadding: EdgeInsets.symmetric(
+            horizontal: IdeSpacing.space10,
+            vertical: tabPaddingY,
+          ),
+          backgroundColor: colors.surfaceElevated,
+          // 内层选中态严格小于外框的 medium，遵守圆角递减规则；同时与
+          // IdeSwitch 轨道、列表行 hover 底共用同一档「小圆角」。
+          borderRadius: IdeRadius.allSmall,
         ),
-        child: sf.ComponentTheme(
-          data: sf.TabsTheme(
-            containerPadding: const EdgeInsets.all(IdeSpacing.space4),
-            tabPadding: const EdgeInsets.symmetric(
-              horizontal: IdeSpacing.space10,
-              vertical: IdeSpacing.space4,
-            ),
-            backgroundColor: colors.surfaceElevated,
-            // 内层选中态严格小于外框的 medium，遵守圆角递减规则；同时与
-            // IdeSwitch 轨道、列表行 hover 底共用同一档「小圆角」。
-            borderRadius: IdeRadius.allSmall,
-          ),
-          child: sf.Tabs(
-            index: selectedIndex,
-            expand: expand,
-            onChanged: (index) => onChanged(items[index].value),
-            children: [
-              for (var index = 0; index < items.length; index++)
-                sf.TabItem(
-                  key: items[index].key,
-                  child: _IdeTabContent(
-                    label: items[index].label,
-                    leadingIcon: items[index].leadingIcon,
-                    selected: index == selectedIndex,
-                    loading: items[index].loading,
-                    semanticLabel: _loadingSemanticLabel(context, items[index]),
-                  ),
+        child: sf.Tabs(
+          index: selectedIndex,
+          expand: expand,
+          onChanged: (index) => onChanged(items[index].value),
+          children: [
+            for (var index = 0; index < items.length; index++)
+              sf.TabItem(
+                key: items[index].key,
+                child: _IdeTabContent(
+                  label: items[index].label,
+                  leadingIcon: items[index].leadingIcon,
+                  selected: index == selectedIndex,
+                  loading: items[index].loading,
+                  semanticLabel: _loadingSemanticLabel(context, items[index]),
                 ),
-            ],
-          ),
+              ),
+          ],
         ),
       ),
     );
@@ -138,8 +142,10 @@ class IdeTabs<T> extends StatelessWidget {
       container: true,
       explicitChildNodes: true,
       label: semanticLabel,
-      child: SizedBox(
-        height: controlHeight,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          minHeight: IdeMetrics.controlMinHeightFor(controlSize),
+        ),
         child: expand
             ? tabs
             : LayoutBuilder(
@@ -151,8 +157,12 @@ class IdeTabs<T> extends StatelessWidget {
                     scrollDirection: Axis.horizontal,
                     child: ConstrainedBox(
                       constraints: BoxConstraints(minWidth: minWidth),
+                      // heightFactor 1：Align 默认会在竖向撑满可用空间，那会
+                      // 让 Tab 组在固定高度的容器里被抻长。这里只借它做横向
+                      // 对齐，高度仍然交给内容。
                       child: Align(
                         alignment: scrollContentAlignment,
+                        heightFactor: 1,
                         child: tabs,
                       ),
                     ),
@@ -221,12 +231,18 @@ class IdeTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
-    final controlHeight = IdeMetrics.controlHeightFor(
-      IdeTextStyles.of(context).bodySmall,
-      size: controlSize,
+    // 独立 Tab 始终有 1px 描边，而 `PaneInteractiveSurface` 的边框画在
+    // Container 的 decoration 里、会占掉布局空间（Tab 组的边框走 DecoratedBox
+    // 则不占）。把它从内边距里扣掉：文字到外框边缘仍是完整的一档内边距，
+    // 外框高度也就落在「2 × controlPaddingY + 内容」上，与同档位的 Button 等高。
+    final paddingY = math.max(
+      0.0,
+      IdeMetrics.controlPaddingYFor(controlSize) - _tabBorderWidth,
     );
-    return SizedBox(
-      height: controlHeight,
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        minHeight: IdeMetrics.controlMinHeightFor(controlSize),
+      ),
       child: PaneInteractiveSurface(
         focusNode: focusNode,
         onPressed: enabled ? onPressed : null,
@@ -234,9 +250,11 @@ class IdeTab extends StatelessWidget {
         selected: selected,
         button: onPressed != null,
         semanticLabel: semanticLabel,
-        padding: const EdgeInsets.symmetric(
+        // 高度只由内边距和文字决定：放进固定高度的头栏 / 工具条时不跟着抻长。
+        expandToConstraints: false,
+        padding: EdgeInsets.symmetric(
           horizontal: IdeSpacing.space10,
-          vertical: IdeSpacing.space4,
+          vertical: paddingY,
         ),
         borderRadius: IdeRadius.allSmall,
         backgroundColor: colors.surfaceElevated,
@@ -256,6 +274,19 @@ class IdeTab extends StatelessWidget {
     );
   }
 }
+
+/// 独立 [IdeTab] 的描边宽度。
+const double _tabBorderWidth = 1;
+
+/// 选中指示条的厚度。
+const double _tabIndicatorHeight = 2;
+
+/// 指示条底边到文字行盒底边的距离。
+///
+/// 指示条画在控件的下内边距里（[IdeMetrics.controlPaddingYFor]），因此这个值
+/// 必须小于该内边距，否则条会溢出到控件外面。取 [IdeSpacing.space4] 让条与
+/// 文字之间留出 2px 呼吸。
+const double _tabIndicatorGap = IdeSpacing.space4;
 
 class _IdeTabContent extends StatelessWidget {
   const _IdeTabContent({
@@ -338,21 +369,22 @@ class _IdeTabContent extends StatelessWidget {
       opacity: enabled ? (selected ? 1 : 0.82) : 0.48,
       duration: IdeMotion.durationNormal,
       curve: IdeMotion.curveDefault,
+      // 选中指示条是**装饰，不是内容**：Stack 只被文字撑开，指示条用
+      // `Positioned` 画到文字下方的内边距里，因此不参与内容高度。这是控件
+      // 能按「2 × 竖向内边距 + 文字行盒」撑高的前提——以前靠 `Padding` 预留
+      // 2px 再往外画，那 2px 会被算进内容，Tab 组就比 Select / Button 高一档。
       child: Stack(
         clipBehavior: Clip.none,
         alignment: Alignment.bottomCenter,
         children: [
-          Padding(
-            padding: const EdgeInsets.only(bottom: IdeSpacing.space2),
-            child: content,
-          ),
+          content,
           Positioned(
-            bottom: -IdeSpacing.space2,
+            bottom: -_tabIndicatorGap,
             child: AnimatedContainer(
               duration: IdeMotion.durationNormal,
               curve: IdeMotion.curveDefault,
               width: selected ? 18 : 0,
-              height: 2,
+              height: _tabIndicatorHeight,
               decoration: BoxDecoration(
                 color: colors.accent,
                 borderRadius: IdeRadius.allSmall,
