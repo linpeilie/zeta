@@ -2420,6 +2420,30 @@ abstract class AppLocalizations {
   /// **'Available reset cards'**
   String get usageAvailableResetCards;
 
+  /// Reset card count
+  ///
+  /// In en, this message translates to:
+  /// **'{count} cards'**
+  String usageResetCardCount(String count);
+
+  /// Compact usage panel semantics
+  ///
+  /// In en, this message translates to:
+  /// **'Agent statistics summary'**
+  String get usageAgentStatsSummary;
+
+  /// Business usage-based plan label
+  ///
+  /// In en, this message translates to:
+  /// **'ChatGPT Business (usage-based)'**
+  String get usagePlanBusinessUsageBased;
+
+  /// Enterprise usage-based plan label
+  ///
+  /// In en, this message translates to:
+  /// **'ChatGPT Enterprise (usage-based)'**
+  String get usagePlanEnterpriseUsageBased;
+
   /// Usage retry
   ///
   /// In en, this message translates to:
@@ -3212,6 +3236,12 @@ abstract class AppLocalizations {
   /// **'Communication'**
   String get mgmtCommunication;
 
+  /// Connection probe succeeded
+  ///
+  /// In en, this message translates to:
+  /// **'Connection probe succeeded'**
+  String get mgmtConnectionProbeOk;
+
   /// Handshake ok
   ///
   /// In en, this message translates to:
@@ -3511,6 +3541,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Process exit'**
   String get mgmtStageProcessExit;
+
+  /// Management list tabs semantics
+  ///
+  /// In en, this message translates to:
+  /// **'Agent list scope'**
+  String get mgmtListScope;
+
+  /// Management detail tabs semantics
+  ///
+  /// In en, this message translates to:
+  /// **'Agent details'**
+  String get mgmtDetailTabs;
+
+  /// Models empty after handshake failure
+  ///
+  /// In en, this message translates to:
+  /// **'The app-server did not return models, or the current configuration could not complete the handshake.'**
+  String get mgmtModelsHandshakeFailed;
+
+  /// Disable-while-running dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is currently running'**
+  String mgmtAgentCurrentlyRunning(String name);
+
+  /// Diagnostics unhealthy subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Status needs attention'**
+  String get mgmtStatusNeedsCheck;
+
+  /// Log view title
+  ///
+  /// In en, this message translates to:
+  /// **'{name} runtime logs'**
+  String mgmtRuntimeLogsTitle(String name);
+
+  /// Log view subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'{sources} diagnostic sources · {lines} lines loaded'**
+  String mgmtLogSourcesLoaded(String sources, String lines);
 
   /// Not updated
   ///

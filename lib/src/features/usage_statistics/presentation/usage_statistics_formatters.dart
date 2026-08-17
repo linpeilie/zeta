@@ -1,3 +1,6 @@
+import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
+import 'package:zeta/src/ui/localization/relative_time.dart';
+
 String formatUsageCount(num value) {
   final absolute = value.abs();
   if (absolute < 1000) {
@@ -13,16 +16,20 @@ String formatUsageCount(num value) {
   return '${_trimDecimal(scaled, scaled.abs() >= 100 ? 0 : 1)}${suffixes[index]}';
 }
 
-String formatUsagePercent(double? ratio) {
+String formatUsagePercent(double? ratio, {required String empty}) {
   if (ratio == null) {
-    return '暂无数据';
+    return empty;
   }
   return '${_trimDecimal(ratio * 100, 1)}%';
 }
 
-String formatUsageDuration(Duration? duration, {bool compact = false}) {
+String formatUsageDuration(
+  Duration? duration, {
+  bool compact = false,
+  required String empty,
+}) {
   if (duration == null) {
-    return '暂无数据';
+    return empty;
   }
   if (duration.inMinutes >= 1) {
     final minutes = duration.inMinutes;
@@ -36,9 +43,9 @@ String formatUsageDuration(Duration? duration, {bool compact = false}) {
   return '${duration.inMilliseconds}ms';
 }
 
-String formatUsageDateTime(DateTime? value) {
+String formatUsageDateTime(DateTime? value, {required String empty}) {
   if (value == null) {
-    return '暂无数据';
+    return empty;
   }
   final local = value.toLocal();
   return '${local.year.toString().padLeft(4, '0')}-'
@@ -49,9 +56,9 @@ String formatUsageDateTime(DateTime? value) {
 }
 
 /// 仅日期（本地时区），用于时间范围触发器与自定义区间摘要。
-String formatUsageDate(DateTime? value) {
+String formatUsageDate(DateTime? value, {required String empty}) {
   if (value == null) {
-    return '暂无数据';
+    return empty;
   }
   final local = value.toLocal();
   return '${local.year.toString().padLeft(4, '0')}-'
@@ -59,8 +66,12 @@ String formatUsageDate(DateTime? value) {
       '${local.day.toString().padLeft(2, '0')}';
 }
 
-String formatUsageDateRange(DateTime start, DateTime endInclusive) {
-  return '${formatUsageDate(start)} – ${formatUsageDate(endInclusive)}';
+String formatUsageDateRange(
+  DateTime start,
+  DateTime endInclusive, {
+  required String empty,
+}) {
+  return '${formatUsageDate(start, empty: empty)} – ${formatUsageDate(endInclusive, empty: empty)}';
 }
 
 String formatUsageClock(DateTime? value) {
@@ -91,27 +102,22 @@ String formatUsageResetAt(DateTime value, {DateTime? now}) {
   return '$monthDay $hour:$minute';
 }
 
-String formatUsageRelativeTime(DateTime value, DateTime now) {
+String formatUsageRelativeTime(
+  DateTime value,
+  DateTime now, {
+  required AppLocalizations l10n,
+}) {
   final difference = now.difference(value);
-  if (difference.isNegative || difference.inMinutes < 1) {
-    return '刚刚';
+  if (difference.inDays >= 30) {
+    return formatUsageDateTime(value, empty: l10n.usageNoData);
   }
-  if (difference.inHours < 1) {
-    return '${difference.inMinutes} 分钟前';
-  }
-  if (difference.inDays < 1) {
-    return '${difference.inHours} 小时前';
-  }
-  if (difference.inDays < 30) {
-    return '${difference.inDays} 天前';
-  }
-  return formatUsageDateTime(value);
+  return formatLocalizedRelativeTime(value, now, l10n);
 }
 
-String formatUsagePlanType(String? value) {
+String formatUsagePlanType(String? value, {required AppLocalizations l10n}) {
   final cleaned = value?.trim();
   if (cleaned == null || cleaned.isEmpty) {
-    return '未知套餐';
+    return l10n.usageUnknownPlan;
   }
   return switch (cleaned.toLowerCase()) {
     'free' => 'ChatGPT Free',
@@ -120,9 +126,9 @@ String formatUsagePlanType(String? value) {
     'pro' => 'ChatGPT Pro',
     'prolite' => 'ChatGPT Pro Lite',
     'team' => 'ChatGPT Team',
-    'self_serve_business_usage_based' => 'ChatGPT Business（按量）',
+    'self_serve_business_usage_based' => l10n.usagePlanBusinessUsageBased,
     'business' => 'ChatGPT Business',
-    'enterprise_cbp_usage_based' => 'ChatGPT Enterprise（按量）',
+    'enterprise_cbp_usage_based' => l10n.usagePlanEnterpriseUsageBased,
     'enterprise' => 'ChatGPT Enterprise',
     'edu' => 'ChatGPT Edu',
     'supergrok' => 'SuperGrok',

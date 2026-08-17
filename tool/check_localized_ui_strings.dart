@@ -154,6 +154,9 @@ String? _classify(String source, _ExtractedLiteral literal) {
   if (_brandLiterals.contains(text) || _productTermLiterals.contains(text)) {
     return null;
   }
+  if (_isFormatOnlyLiteral(text)) {
+    return null;
+  }
   if (_pathLikePattern.hasMatch(text) || text.startsWith('http')) {
     return null;
   }
@@ -190,8 +193,17 @@ bool _isLoggingContext(String source, int offset) {
 
 final _developerContractPattern = RegExp(
   r'(?:FlutterError(?:\.fromParts)?|ErrorSummary|ErrorHint|'
-  r'ErrorDescription|ArgumentError(?:\.value)?|assert)\s*\(',
+  r'ErrorDescription|ArgumentError(?:\.value)?|'
+  r'StateError|UnsupportedError|assert)\s*\(',
 );
+
+/// `${}`、`%`、`·` 这类纯格式碎片不是可翻译句子。
+bool _isFormatOnlyLiteral(String text) {
+  final stripped = text
+      .replaceAll(r'${}', '')
+      .replaceAll(RegExp(r'[\s·•$%:/,.\-–—→]'), '');
+  return stripped.isEmpty;
+}
 
 bool _isDeveloperContractContext(String source, int offset) {
   final start = offset > 280 ? offset - 280 : 0;

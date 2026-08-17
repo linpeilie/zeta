@@ -1258,6 +1258,20 @@ class AppLocalizationsZh extends AppLocalizations {
   String get usageAvailableResetCards => '可用重置卡';
 
   @override
+  String usageResetCardCount(String count) {
+    return '$count 张';
+  }
+
+  @override
+  String get usageAgentStatsSummary => 'Agent 统计摘要';
+
+  @override
+  String get usagePlanBusinessUsageBased => 'ChatGPT Business（按量）';
+
+  @override
+  String get usagePlanEnterpriseUsageBased => 'ChatGPT Enterprise（按量）';
+
+  @override
   String get usageRetry => '重试';
 
   @override
@@ -1707,6 +1721,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get mgmtCommunication => '通信';
 
   @override
+  String get mgmtConnectionProbeOk => '连接探测成功';
+
+  @override
   String get mgmtHandshakeOk => '基础握手正常';
 
   @override
@@ -1860,6 +1877,33 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get mgmtStageProcessExit => '进程退出';
+
+  @override
+  String get mgmtListScope => 'Agent 列表范围';
+
+  @override
+  String get mgmtDetailTabs => 'Agent 详情';
+
+  @override
+  String get mgmtModelsHandshakeFailed => 'Codex app-server 未返回模型，或当前配置无法完成握手。';
+
+  @override
+  String mgmtAgentCurrentlyRunning(String name) {
+    return '$name 当前正在运行';
+  }
+
+  @override
+  String get mgmtStatusNeedsCheck => '状态需要检查';
+
+  @override
+  String mgmtRuntimeLogsTitle(String name) {
+    return '$name 运行日志';
+  }
+
+  @override
+  String mgmtLogSourcesLoaded(String sources, String lines) {
+    return '$sources 个诊断来源 · $lines 行已加载';
+  }
 
   @override
   String get mgmtNotUpdated => '尚未更新';

@@ -7,7 +7,7 @@ import 'ide_motion.dart';
 import 'ide_spacing.dart';
 import 'ide_text_styles.dart';
 import 'pane_widgets.dart';
-import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
 /// [IdeTabs] 中的单个选项。
 @immutable
@@ -152,8 +152,7 @@ class IdeTabs<T> extends StatelessWidget {
     if (!item.loading) {
       return label;
     }
-    final l10n = Localizations.of<AppLocalizations>(context, AppLocalizations);
-    return l10n?.tabsLoadingSuffix(label) ?? '$label，正在加载';
+    return context.l10n.tabsLoadingSuffix(label);
   }
 }
 

@@ -387,7 +387,7 @@ class _CompactAgentUsageSummary extends StatelessWidget {
     final colors = IdeColors.of(context);
     final quotaWindow = entry.compactQuotaWindow;
     final title = entry.hasSubscriptionPlan
-        ? formatUsagePlanType(entry.quota?.planType)
+        ? formatUsagePlanType(entry.quota?.planType, l10n: context.l10n)
         : providerName;
     final tokenTotal = entry.todayTokens == null
         ? '-'
@@ -395,7 +395,7 @@ class _CompactAgentUsageSummary extends StatelessWidget {
 
     return Semantics(
       container: true,
-      label: 'Agent 统计摘要',
+      label: context.l10n.usageAgentStatsSummary,
       child: Padding(
         key: const ValueKey('agent-usage-compact'),
         padding: const EdgeInsets.symmetric(
@@ -994,7 +994,7 @@ class _ResetCreditCountRow extends StatelessWidget {
         ),
         const SizedBox(width: IdeSpacing.space8),
         Text(
-          '$count 张',
+          context.l10n.usageResetCardCount('$count'),
           key: const ValueKey('agent-usage-reset-credit-count-value'),
           style: textStyles.numeric,
         ),
@@ -1166,7 +1166,7 @@ class _PlanSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          formatUsagePlanType(quota.planType),
+          formatUsagePlanType(quota.planType, l10n: context.l10n),
           key: const ValueKey('agent-usage-plan-name'),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,

@@ -83,12 +83,16 @@ class _AgentLogViewState extends State<AgentLogView> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '${widget.controller.agent.definition.displayName} 运行日志',
+                              context.l10n.mgmtRuntimeLogsTitle(
+                                widget.controller.agent.definition.displayName,
+                              ),
                               style: textStyles.pageTitle,
                             ),
                             Text(
-                              '${widget.controller.agent.logPaths.length} 个诊断来源 · '
-                              '${widget.controller.logs.length} 行已加载',
+                              context.l10n.mgmtLogSourcesLoaded(
+                                '${widget.controller.agent.logPaths.length}',
+                                '${widget.controller.logs.length}',
+                              ),
                               style: textStyles.caption.copyWith(
                                 color: colors.textSecondary,
                               ),

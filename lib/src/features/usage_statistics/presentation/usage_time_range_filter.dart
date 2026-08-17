@@ -50,7 +50,11 @@ class _UsageTimeRangeFilterState extends State<UsageTimeRangeFilter> {
       final endInclusive = window.endExclusive.subtract(
         const Duration(milliseconds: 1),
       );
-      return formatUsageDateRange(window.start, endInclusive);
+      return formatUsageDateRange(
+        window.start,
+        endInclusive,
+        empty: context.l10n.usageNoData,
+      );
     }
     return controller.timePreset.localizedLabel(context.l10n);
   }

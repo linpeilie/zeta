@@ -1300,6 +1300,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get usageAvailableResetCards => 'Available reset cards';
 
   @override
+  String usageResetCardCount(String count) {
+    return '$count cards';
+  }
+
+  @override
+  String get usageAgentStatsSummary => 'Agent statistics summary';
+
+  @override
+  String get usagePlanBusinessUsageBased => 'ChatGPT Business (usage-based)';
+
+  @override
+  String get usagePlanEnterpriseUsageBased =>
+      'ChatGPT Enterprise (usage-based)';
+
+  @override
   String get usageRetry => 'Retry';
 
   @override
@@ -1773,6 +1788,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get mgmtCommunication => 'Communication';
 
   @override
+  String get mgmtConnectionProbeOk => 'Connection probe succeeded';
+
+  @override
   String get mgmtHandshakeOk => 'Basic handshake succeeded';
 
   @override
@@ -1926,6 +1944,34 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get mgmtStageProcessExit => 'Process exit';
+
+  @override
+  String get mgmtListScope => 'Agent list scope';
+
+  @override
+  String get mgmtDetailTabs => 'Agent details';
+
+  @override
+  String get mgmtModelsHandshakeFailed =>
+      'The app-server did not return models, or the current configuration could not complete the handshake.';
+
+  @override
+  String mgmtAgentCurrentlyRunning(String name) {
+    return '$name is currently running';
+  }
+
+  @override
+  String get mgmtStatusNeedsCheck => 'Status needs attention';
+
+  @override
+  String mgmtRuntimeLogsTitle(String name) {
+    return '$name runtime logs';
+  }
+
+  @override
+  String mgmtLogSourcesLoaded(String sources, String lines) {
+    return '$sources diagnostic sources · $lines lines loaded';
+  }
 
   @override
   String get mgmtNotUpdated => 'Not updated yet';

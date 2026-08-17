@@ -15,12 +15,6 @@ import '../pane_widgets.dart';
 import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 import 'ide_virtual_scroll_coordinator.dart';
 
-/// 默认滚动条语义标签。
-const String kIdeVirtualScrollbarSemanticLabel = '对话滚动条';
-
-/// 滚到底部按钮默认语义。
-const String kIdeScrollToEndButtonSemanticLabel = '滚动到对话底部';
-
 /// 项目级 RawScrollbar 包装：绑定同一 [ScrollController]，关闭自动双条。
 class IdeVirtualScrollbar extends StatelessWidget {
   /// 创建虚拟列表滚动条。
@@ -28,7 +22,7 @@ class IdeVirtualScrollbar extends StatelessWidget {
     required this.controller,
     required this.child,
     super.key,
-    this.semanticLabel = kIdeVirtualScrollbarSemanticLabel,
+    this.semanticLabel,
     this.thickness = 8,
     this.minThumbLength = 32,
     this.padding = EdgeInsets.zero,
@@ -40,8 +34,8 @@ class IdeVirtualScrollbar extends StatelessWidget {
   /// 通常为关闭了自动 scrollbar 的 [CustomScrollView]。
   final Widget child;
 
-  /// 无障碍名称。
-  final String semanticLabel;
+  /// 无障碍名称；缺省使用当前 Locale 的时间线滚动条文案。
+  final String? semanticLabel;
 
   /// thumb 默认厚度（logical px）。
   final double thickness;
@@ -60,7 +54,7 @@ class IdeVirtualScrollbar extends StatelessWidget {
 
     return Semantics(
       container: true,
-      label: semanticLabel,
+      label: semanticLabel ?? context.l10n.timelineScrollbar,
       child: RawScrollbar(
         controller: controller,
         thumbVisibility: true,
@@ -92,7 +86,7 @@ class IdeScrollToEndButton extends StatelessWidget {
     required this.onPressed,
     super.key,
     this.hasNewContent = false,
-    this.semanticLabel = kIdeScrollToEndButtonSemanticLabel,
+    this.semanticLabel,
   });
 
   /// 点击后应进入 followEnd 并 reveal 末项。
@@ -101,8 +95,8 @@ class IdeScrollToEndButton extends StatelessWidget {
   /// streaming 期间可提示有新内容（v1 不要求未读计数）。
   final bool hasNewContent;
 
-  /// 无障碍名称。
-  final String semanticLabel;
+  /// 无障碍名称；缺省使用当前 Locale 的滚到底部文案。
+  final String? semanticLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -112,7 +106,7 @@ class IdeScrollToEndButton extends StatelessWidget {
     return PaneInteractiveSurface(
       onPressed: onPressed,
       button: true,
-      semanticLabel: semanticLabel,
+      semanticLabel: semanticLabel ?? context.l10n.timelineScrollToEnd,
       borderRadius: IdeRadius.allMedium,
       backgroundColor: colors.surfaceElevated,
       hoverBackgroundColor: colors.hoverSurface,
@@ -156,11 +150,11 @@ class IdeVirtualScrollShell extends StatelessWidget {
     required this.child,
     super.key,
     this.coordinator,
-    this.semanticLabel = kIdeVirtualScrollbarSemanticLabel,
+    this.semanticLabel,
     this.showScrollToEndButton = false,
     this.hasNewContent = false,
     this.onScrollToEnd,
-    this.scrollToEndSemanticLabel = kIdeScrollToEndButtonSemanticLabel,
+    this.scrollToEndSemanticLabel,
   });
 
   /// 与列表共用 controller。
@@ -172,8 +166,8 @@ class IdeVirtualScrollShell extends StatelessWidget {
   /// 可选协调器；若提供且 [showScrollToEndButton] 未强制，可推导按钮可见性。
   final IdeVirtualScrollCoordinator? coordinator;
 
-  /// 滚动条语义。
-  final String semanticLabel;
+  /// 滚动条语义；缺省走当前 Locale。
+  final String? semanticLabel;
 
   /// 是否显示滚到底部按钮。
   final bool showScrollToEndButton;
@@ -184,8 +178,8 @@ class IdeVirtualScrollShell extends StatelessWidget {
   /// 点击滚到底部。
   final VoidCallback? onScrollToEnd;
 
-  /// 按钮语义。
-  final String scrollToEndSemanticLabel;
+  /// 按钮语义；缺省走当前 Locale。
+  final String? scrollToEndSemanticLabel;
 
   @override
   Widget build(BuildContext context) {

@@ -224,7 +224,7 @@ class AgentManagementPageState extends State<AgentManagementPage> {
     final detecting = widget.controller.detecting;
     final tabs = IdeTabs<_AgentListTab>(
       value: _listTab,
-      semanticLabel: 'Agent 列表范围',
+      semanticLabel: context.l10n.mgmtListScope,
       items: [
         IdeTabItem<_AgentListTab>(
           key: const ValueKey('agent-tab-installed'),
@@ -323,9 +323,9 @@ class AgentManagementPageState extends State<AgentManagementPage> {
     }
     return _ActionEmptyState(
       icon: Icons.search_off_rounded,
-      title: '没有找到匹配的 Agent',
-      description: '请尝试修改搜索内容。',
-      primaryLabel: '清除搜索',
+      title: context.l10n.mgmtNoMatchTitle,
+      description: context.l10n.mgmtNoMatchBody,
+      primaryLabel: context.l10n.mgmtClearSearch,
       onPrimary: _searchController.clear,
     );
   }
@@ -391,7 +391,7 @@ class AgentManagementPageState extends State<AgentManagementPage> {
                   _AgentDetailStatusSummary(agent: agent),
                   IdeTabs<_AgentDetailTab>(
                     value: _detailTab,
-                    semanticLabel: 'Agent 详情',
+                    semanticLabel: context.l10n.mgmtDetailTabs,
                     items: [
                       IdeTabItem<_AgentDetailTab>(
                         key: const ValueKey('agent-detail-tab-overview'),
@@ -532,7 +532,7 @@ class AgentManagementPageState extends State<AgentManagementPage> {
         title: context.l10n.mgmtCannotLoadModels,
         description: agent.accountState == AgentAccountState.loggedOut
             ? context.l10n.mgmtModelsNeedLogin
-            : 'Codex app-server 未返回模型，或当前配置无法完成握手。',
+            : context.l10n.mgmtModelsHandshakeFailed,
         primaryLabel: context.l10n.mgmtReload,
         onPrimary: _testConnection,
       );
@@ -543,8 +543,14 @@ class AgentManagementPageState extends State<AgentManagementPage> {
         Padding(
           padding: IdeSpacing.all12,
           child: Text(
-            '数据来源：${agent.modelSource ?? 'Codex app-server'} · '
-            '更新时间：${_relativeTime(agent.modelsUpdatedAt, notUpdated: context.l10n.mgmtNotUpdated, l10n: context.l10n)}',
+            context.l10n.mgmtModelSourceUpdated(
+              agent.modelSource ?? 'Codex app-server',
+              _relativeTime(
+                agent.modelsUpdatedAt,
+                notUpdated: context.l10n.mgmtNotUpdated,
+                l10n: context.l10n,
+              ),
+            ),
             style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
           ),
         ),
@@ -631,7 +637,11 @@ class AgentManagementPageState extends State<AgentManagementPage> {
         context: context,
         barrierDismissible: false,
         builder: (context) => IdeDialog(
-          title: Text('${agent.definition.displayName} 当前正在运行'),
+          title: Text(
+            context.l10n.mgmtAgentCurrentlyRunning(
+              agent.definition.displayName,
+            ),
+          ),
           content: Text(context.l10n.mgmtDisableWarning),
           actions: <IdeDialogAction>[
             IdeDialogAction.cancel(
@@ -683,8 +693,12 @@ class AgentManagementPageState extends State<AgentManagementPage> {
     showIdeToast(
       context,
       message: result.success
-          ? '连接测试成功，响应耗时 ${result.elapsed.inMilliseconds} ms。'
-          : '连接测试失败：${result.message ?? '未知错误'}',
+          ? context.l10n.mgmtConnectionTestSuccess(
+              '${result.elapsed.inMilliseconds}',
+            )
+          : context.l10n.mgmtConnectionTestFailedMessage(
+              result.message ?? context.l10n.mgmtUnknownError,
+            ),
       tone: result.success ? IdeToastTone.success : IdeToastTone.error,
     );
   }
@@ -700,7 +714,7 @@ class AgentManagementPageState extends State<AgentManagementPage> {
       if (mounted) {
         showIdeToast(
           context,
-          message: '无法打开可执行文件目录：$error',
+          message: context.l10n.mgmtCannotOpenExecutableDir('$error'),
           tone: IdeToastTone.error,
         );
       }
@@ -840,7 +854,9 @@ class _AgentListRow extends StatelessWidget {
           // 用 token 相加而不是写死，改 logo 尺寸时对齐会自己跟上。
           dividerIndent:
               IdeSpacing.space10 + _agentLogoSize + IdeSpacing.space8,
-          semanticLabel: '查看 ${agent.definition.displayName} 详情',
+          semanticLabel: context.l10n.mgmtViewDetails(
+            agent.definition.displayName,
+          ),
           onPressed: onOpen,
         );
       },
@@ -920,7 +936,7 @@ class _AgentRowStatus extends StatelessWidget {
             // 0.99.10 才会按小数点逐位对齐，扫视一列版本才有意义。
             mono: true,
             status: _AgentStatus(
-              label: agent.currentVersion ?? '版本未知',
+              label: agent.currentVersion ?? context.l10n.mgmtVersionUnknown,
               icon: Icons.tag_rounded,
               color: agent.updateAvailable
                   ? colors.warning
@@ -934,7 +950,7 @@ class _AgentRowStatus extends StatelessWidget {
             status: _AgentStatus(
               label: agent.installed
                   ? agent.runtimeState.localizedLabel(context.l10n)
-                  : '未安装',
+                  : context.l10n.mgmtNotInstalled,
               icon: runtimeNeedsAttention
                   ? Icons.error_outline_rounded
                   : Icons.circle_outlined,
@@ -1019,7 +1035,7 @@ _AgentStatus _priorityAgentStatus(
   }
   if (!agent.installed) {
     return _AgentStatus(
-      label: '未安装',
+      label: l10n.mgmtNotInstalled,
       icon: Icons.download_for_offline_outlined,
       color: colors.warning,
     );
@@ -1041,7 +1057,7 @@ _AgentStatus _priorityAgentStatus(
   }
   if (agent.updateAvailable) {
     return _AgentStatus(
-      label: '可更新',
+      label: l10n.mgmtUpdateAvailable,
       icon: Icons.system_update_alt_rounded,
       color: colors.warning,
     );
@@ -1051,7 +1067,7 @@ _AgentStatus _priorityAgentStatus(
       agent.runtimeState == AgentRuntimeState.stopping) {
     return _AgentStatus(
       label: agent.accountState == AgentAccountState.checking
-          ? '检测中'
+          ? l10n.mgmtDetectingShort
           : agent.runtimeState.localizedLabel(l10n),
       icon: Icons.sync_rounded,
       color: colors.info,
@@ -1066,10 +1082,10 @@ _AgentStatus _priorityAgentStatus(
   }
   return _AgentStatus(
     label: agent.runtimeState == AgentRuntimeState.running
-        ? '运行中'
+        ? l10n.mgmtRunning
         : agent.enabled
-        ? '已启用'
-        : '已安装',
+        ? l10n.mgmtEnabled
+        : l10n.mgmtInstalled,
     icon: agent.runtimeState == AgentRuntimeState.running
         ? Icons.play_circle_outline_rounded
         : agent.enabled
@@ -1221,12 +1237,12 @@ class _AgentInformationCard extends StatelessWidget {
                 value: agent.definition.vendor,
               ),
               IdeKeyValueRow(
-                label: '通信协议',
+                label: context.l10n.mgmtProtocol,
                 value: agent.definition.protocol,
                 tone: IdeKeyValueTone.identifier,
               ),
               IdeKeyValueRow(
-                label: '传输方式',
+                label: context.l10n.mgmtTransport,
                 value: agent.definition.transport,
                 tone: IdeKeyValueTone.identifier,
               ),
@@ -1235,17 +1251,17 @@ class _AgentInformationCard extends StatelessWidget {
           const SizedBox(height: IdeSpacing.space12),
           const IdeRowDivider(),
           IdeRowGroup(
-            title: '版本',
+            title: context.l10n.mgmtSectionVersion,
             dividers: false,
             children: [
               IdeKeyValueRow(
-                label: '当前版本',
-                value: agent.currentVersion ?? '未知',
+                label: context.l10n.mgmtCurrentVersion,
+                value: agent.currentVersion ?? context.l10n.mgmtUnknown,
                 tone: IdeKeyValueTone.numeric,
               ),
               IdeKeyValueRow(
-                label: '最新版本',
-                value: agent.latestVersion ?? '未知',
+                label: context.l10n.mgmtLatestVersion,
+                value: agent.latestVersion ?? context.l10n.mgmtUnknown,
                 tone: IdeKeyValueTone.numeric,
                 valueColor: agent.updateAvailable ? colors.warning : null,
               ),
@@ -1254,11 +1270,11 @@ class _AgentInformationCard extends StatelessWidget {
           const SizedBox(height: IdeSpacing.space12),
           const IdeRowDivider(),
           IdeRowGroup(
-            title: '路径与命令',
+            title: context.l10n.mgmtPathsAndCommands,
             dividers: false,
             children: [
               IdeKeyValueRow(
-                label: '启动命令',
+                label: context.l10n.mgmtLaunchCommand,
                 value: agent.definition.commandName,
                 tone: IdeKeyValueTone.identifier,
                 trailing: sf.IconButton.ghost(
@@ -1269,8 +1285,8 @@ class _AgentInformationCard extends StatelessWidget {
                 ),
               ),
               IdeKeyValueRow(
-                label: '可执行文件路径',
-                value: agent.executablePath ?? '未检测到',
+                label: context.l10n.mgmtExecutablePath,
+                value: agent.executablePath ?? context.l10n.mgmtNotDetected,
                 tone: IdeKeyValueTone.code,
                 selectable: agent.executablePath != null,
               ),
@@ -1281,7 +1297,7 @@ class _AgentInformationCard extends StatelessWidget {
                     bottom: IdeSpacing.space6,
                   ),
                   child: Text(
-                    '尚未检测到可执行文件，请先安装并确保已加入 PATH',
+                    context.l10n.mgmtExecutableNotDetectedHint,
                     style: textStyles.meta.copyWith(height: 1.25),
                   ),
                 ),
@@ -1296,9 +1312,12 @@ class _AgentInformationCard extends StatelessWidget {
                   spacing: IdeSpacing.space6,
                   runSpacing: IdeSpacing.space6,
                   children: [
-                    IdeButton(label: '自动检测', onPressed: onDetect),
                     IdeButton(
-                      label: '打开目录',
+                      label: context.l10n.mgmtAutoDetectShort,
+                      onPressed: onDetect,
+                    ),
+                    IdeButton(
+                      label: context.l10n.mgmtOpenDirectory,
                       onPressed: agent.executablePath == null
                           ? null
                           : onOpenExecutableDirectory,
@@ -1335,23 +1354,26 @@ class _AgentDiagnosticsCard extends StatelessWidget {
         accountOrConnectionReady;
     final diagnostics = <_DiagnosticEntry>[
       _DiagnosticEntry(
-        label: '程序',
-        value: agent.installed ? '可执行文件存在且可调用' : '未找到可执行文件',
+        label: context.l10n.mgmtProgram,
+        value: agent.installed
+            ? context.l10n.mgmtExecutablePresent
+            : context.l10n.mgmtExecutableMissing,
       ),
       _DiagnosticEntry(
         label: context.l10n.mgmtAuthEvidence,
         value: _accountEvidenceLabel(agent, context.l10n),
       ),
       _DiagnosticEntry(
-        label: '通信',
+        label: context.l10n.mgmtCommunication,
         value: connectionReady
-            ? agent.connectionTest?.message ?? '连接探测成功'
+            ? agent.connectionTest?.message ??
+                  context.l10n.mgmtConnectionProbeOk
             : agent.runtimeState == AgentRuntimeState.idle
-            ? '基础握手正常'
-            : '尚未确认',
+            ? context.l10n.mgmtHandshakeOk
+            : context.l10n.mgmtNotConfirmed,
       ),
       _DiagnosticEntry(
-        label: '最近检测',
+        label: context.l10n.mgmtLastDetected,
         value: _relativeTime(
           agent.lastDetectedAt,
           notUpdated: context.l10n.mgmtNotUpdated,
@@ -1360,19 +1382,19 @@ class _AgentDiagnosticsCard extends StatelessWidget {
       ),
       if (agent.connectionTest != null)
         _DiagnosticEntry(
-          label: '最近测试耗时',
+          label: context.l10n.mgmtLastTestDuration,
           value: '${agent.connectionTest!.elapsed.inMilliseconds} ms',
           tone: IdeKeyValueTone.numeric,
         ),
       if (agent.connectionTest?.protocolVersion case final String version)
         _DiagnosticEntry(
-          label: '协议',
+          label: context.l10n.mgmtProtocol,
           value: version,
           tone: IdeKeyValueTone.identifier,
         ),
       if (agent.connectionTest?.agentName case final String agentName)
         _DiagnosticEntry(
-          label: '握手身份',
+          label: context.l10n.mgmtHandshakeIdentity,
           value:
               '$agentName'
               '${agent.connectionTest!.agentVersion == null ? '' : ' ${agent.connectionTest!.agentVersion}'}',
@@ -1380,21 +1402,24 @@ class _AgentDiagnosticsCard extends StatelessWidget {
         ),
       if (agent.connectionTest?.capabilitySummary.isNotEmpty == true)
         _DiagnosticEntry(
-          label: '协商能力',
+          label: context.l10n.mgmtNegotiatedCapabilities,
           value: agent.connectionTest!.capabilitySummary.join(', '),
         ),
       if (agent.connectionTest?.compatibilitySummary
           case final String compatibility)
-        _DiagnosticEntry(label: '兼容性', value: compatibility),
+        _DiagnosticEntry(
+          label: context.l10n.mgmtCompatibility,
+          value: compatibility,
+        ),
       if (agent.connectionTest?.success == false &&
           agent.connectionTest?.exitReason != null)
         _DiagnosticEntry(
-          label: '退出原因',
+          label: context.l10n.mgmtExitReason,
           value: agent.connectionTest!.exitReason!,
         ),
       if (agent.errorStage case final AgentDiagnosticStage errorStage)
         _DiagnosticEntry(
-          label: '异常阶段',
+          label: context.l10n.mgmtFailureStage,
           value: errorStage.localizedLabel(context.l10n),
         ),
     ];
@@ -1404,7 +1429,7 @@ class _AgentDiagnosticsCard extends StatelessWidget {
       title: context.l10n.mgmtDiagnostics,
       subtitle: healthy
           ? context.l10n.mgmtConnectionHealthy
-          : (agent.errorMessage ?? '状态需要检查'),
+          : (agent.errorMessage ?? context.l10n.mgmtStatusNeedsCheck),
       trailing: Icon(
         healthy ? Icons.check_circle_outline_rounded : Icons.error_outline,
         size: 17,
@@ -1436,7 +1461,7 @@ class _AgentDiagnosticsCard extends StatelessWidget {
           ],
           if (agent.suggestion case final String suggestion) ...[
             Text(
-              '建议操作：$suggestion',
+              context.l10n.mgmtSuggestedAction(suggestion),
               style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
             ),
             const SizedBox(height: IdeSpacing.space8),
@@ -1444,7 +1469,10 @@ class _AgentDiagnosticsCard extends StatelessWidget {
           if (!healthy)
             Align(
               alignment: Alignment.centerLeft,
-              child: IdeButton(label: '自动检测', onPressed: onDetect),
+              child: IdeButton(
+                label: context.l10n.mgmtAutoDetectShort,
+                onPressed: onDetect,
+              ),
             ),
         ],
       ),

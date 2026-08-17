@@ -365,7 +365,7 @@ class _UsageOverviewBar extends StatelessWidget {
       semanticLabel: l10n.usageTokenUsageAmount(
         overview.tokens.hasData
             ? formatUsageCount(overview.tokens.effectiveTotal ?? 0)
-            : formatUsagePercent(null),
+            : formatUsagePercent(null, empty: l10n.usageNoData),
       ),
     );
     final callsCard = _OverviewMetricCard(
@@ -683,12 +683,19 @@ class _AgentStatsPanel extends StatelessWidget {
               [
                 entry.providerName,
                 formatUsageCount(entry.calls),
-                formatUsagePercent(entry.successRate),
+                formatUsagePercent(
+                  entry.successRate,
+                  empty: context.l10n.usageNoData,
+                ),
                 entry.totalTokens == null
                     ? context.l10n.usageUnsupported
                     : formatUsageCount(entry.totalTokens!),
                 entry.failures.toString(),
-                formatUsageDuration(entry.averageDuration, compact: true),
+                formatUsageDuration(
+                  entry.averageDuration,
+                  compact: true,
+                  empty: context.l10n.usageNoData,
+                ),
               ],
           ],
         ),
@@ -820,8 +827,16 @@ class _ProjectListPanel extends StatelessWidget {
                 entry.totalTokens == null
                     ? context.l10n.usageUnsupported
                     : formatUsageCount(entry.totalTokens!),
-                formatUsageDuration(entry.averageDuration, compact: true),
-                formatUsageRelativeTime(entry.lastUsedAt, DateTime.now()),
+                formatUsageDuration(
+                  entry.averageDuration,
+                  compact: true,
+                  empty: context.l10n.usageNoData,
+                ),
+                formatUsageRelativeTime(
+                  entry.lastUsedAt,
+                  DateTime.now(),
+                  l10n: context.l10n,
+                ),
               ],
           ],
           rowKeys: [for (final entry in entries) entry.projectPath],
@@ -885,11 +900,18 @@ class _TaskListPanel extends StatelessWidget {
           rows: [
             for (final record in visible)
               [
-                formatUsageDateTime(record.startedAt),
+                formatUsageDateTime(
+                  record.startedAt,
+                  empty: context.l10n.usageNoData,
+                ),
                 record.projectName,
                 record.providerName,
                 record.model ?? context.l10n.usageUnknownModel,
-                formatUsageDuration(record.duration, compact: true),
+                formatUsageDuration(
+                  record.duration,
+                  compact: true,
+                  empty: context.l10n.usageNoData,
+                ),
                 record.tokens.effectiveTotal == null
                     ? context.l10n.usageUnsupported
                     : formatUsageCount(record.tokens.effectiveTotal!),
@@ -975,7 +997,7 @@ class _UsageTable extends StatelessWidget {
     final textStyles = IdeTextStyles.of(context);
     if (rows.isEmpty) {
       return Text(
-        '暂无数据',
+        context.l10n.usageNoData,
         style: textStyles.bodyMedium.copyWith(color: colors.textSecondary),
       );
     }
@@ -1128,7 +1150,11 @@ class _UsageLineChart extends StatelessWidget {
                         meta: meta,
                         space: 6,
                         child: Text(
-                          _formatTrendAxisValue(metric: metric, value: value),
+                          _formatTrendAxisValue(
+                            metric: metric,
+                            value: value,
+                            empty: context.l10n.usageNoData,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           textAlign: TextAlign.right,
@@ -1201,6 +1227,7 @@ class _UsageLineChart extends StatelessWidget {
                             metric: metric,
                             label: points[touched.x.toInt()].label,
                             value: touched.y,
+                            empty: context.l10n.usageNoData,
                           ),
                           textStyles.caption.copyWith(
                             color: colors.textPrimary,
@@ -1245,21 +1272,27 @@ String _formatTrendTooltip({
   required UsageTrendMetric metric,
   required String label,
   required double value,
+  required String empty,
 }) {
-  return '$label · ${_formatTrendAxisValue(metric: metric, value: value)}';
+  return '$label · ${_formatTrendAxisValue(metric: metric, value: value, empty: empty)}';
 }
 
 /// Y 轴与 Tooltip 共用的趋势数值格式化。
 String _formatTrendAxisValue({
   required UsageTrendMetric metric,
   required double value,
+  required String empty,
 }) {
   return switch (metric) {
     UsageTrendMetric.calls ||
     UsageTrendMetric.totalTokens => formatUsageCount(value),
-    UsageTrendMetric.successRate => formatUsagePercent(value),
-    UsageTrendMetric.averageResponse || UsageTrendMetric.averageDuration =>
-      formatUsageDuration(Duration(milliseconds: value.round()), compact: true),
+    UsageTrendMetric.successRate => formatUsagePercent(value, empty: empty),
+    UsageTrendMetric.averageResponse ||
+    UsageTrendMetric.averageDuration => formatUsageDuration(
+      Duration(milliseconds: value.round()),
+      compact: true,
+      empty: empty,
+    ),
   };
 }
 
@@ -1294,15 +1327,24 @@ class _TaskDetailDrawer extends StatelessWidget {
           ),
           _DetailRow(
             label: context.l10n.usageFieldStartTime,
-            value: formatUsageDateTime(record.startedAt),
+            value: formatUsageDateTime(
+              record.startedAt,
+              empty: context.l10n.usageNoData,
+            ),
           ),
           _DetailRow(
             label: context.l10n.usageFieldDuration,
-            value: formatUsageDuration(record.duration),
+            value: formatUsageDuration(
+              record.duration,
+              empty: context.l10n.usageNoData,
+            ),
           ),
           _DetailRow(
             label: context.l10n.usageFieldFirstResponse,
-            value: formatUsageDuration(record.timeToFirstToken),
+            value: formatUsageDuration(
+              record.timeToFirstToken,
+              empty: context.l10n.usageNoData,
+            ),
           ),
           _DetailRow(
             label: context.l10n.usageHeaderToken,
