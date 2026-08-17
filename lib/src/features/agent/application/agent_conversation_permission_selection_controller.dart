@@ -4,6 +4,7 @@ import 'package:zeta/src/features/agent/application/agent_conversation_permissio
 import 'package:zeta/src/features/agent/application/agent_permission_catalog_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_identity.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 
 @immutable
 final class _AgentPermissionSelectionTransition {
@@ -42,10 +43,12 @@ final class _PlanningOnlyPermissionMemory {
 class AgentConversationPermissionSelectionController extends ChangeNotifier {
   AgentConversationPermissionSelectionController({
     required this.persistOptionId,
-  });
+    AgentUiTextCatalog? textCatalog,
+  }) : _textCatalog = textCatalog ?? const FallbackAgentUiTextCatalog();
 
   /// 持久化 provider 默认 optionId。
   final Future<void> Function(String optionId) persistOptionId;
+  final AgentUiTextCatalog _textCatalog;
   final AgentPermissionCatalogController _catalogController =
       AgentPermissionCatalogController();
 
@@ -190,8 +193,8 @@ class AgentConversationPermissionSelectionController extends ChangeNotifier {
       return warning;
     }
     return switch (lastApplyScope) {
-      AgentPermissionApplyScope.nextSession => '下次会话生效',
-      AgentPermissionApplyScope.currentTurn => '本回合生效',
+      AgentPermissionApplyScope.nextSession => _textCatalog.permNextSession,
+      AgentPermissionApplyScope.currentTurn => _textCatalog.permCurrentTurn,
       AgentPermissionApplyScope.currentSession ||
       AgentPermissionApplyScope.runtime ||
       null => null,
@@ -313,7 +316,7 @@ class AgentConversationPermissionSelectionController extends ChangeNotifier {
     }
     final port = _runtimePort;
     if (port == null) {
-      _lastError = '当前 Provider 不支持权限选择';
+      _lastError = _textCatalog.permUnsupported;
       _notify();
       return;
     }
@@ -339,14 +342,14 @@ class AgentConversationPermissionSelectionController extends ChangeNotifier {
       AgentPermissionApplyResult(
         normalizedSelection: selection,
         scope: AgentPermissionApplyScope.nextSession,
-        warning: '下次发送时生效',
+        warning: _textCatalog.permNextSend,
       ),
       source: AgentPermissionStateSource.userSelection,
       updateDefault: true,
     );
     await _persistSelection(
       selection,
-      successFailureMessage: '权限偏好已更新，但保存失败；可重试',
+      successFailureMessage: _textCatalog.permSavedButPersistFailed,
     );
   }
 
@@ -454,7 +457,7 @@ class AgentConversationPermissionSelectionController extends ChangeNotifier {
         _setState(
           _state.recordPersistenceFailure(
             selection: failure.selection,
-            message: '权限偏好已应用，但保存失败；可重试',
+            message: _textCatalog.permAppliedButPersistFailed,
           ),
         );
       }
@@ -480,7 +483,7 @@ class AgentConversationPermissionSelectionController extends ChangeNotifier {
   }) async {
     final identity = _state.runtimeIdentity;
     if (identity == null || !_state.isCurrent(identity)) {
-      _lastError = 'Provider 运行实例已失效，请重试';
+      _lastError = _textCatalog.permRuntimeStale;
       _notify();
       return null;
     }
@@ -498,12 +501,12 @@ class AgentConversationPermissionSelectionController extends ChangeNotifier {
       await _persistSelection(
         result.normalizedSelection,
         expectedIdentity: identity,
-        successFailureMessage: '权限偏好已应用，但保存失败；可重试',
+        successFailureMessage: _textCatalog.permAppliedButPersistFailed,
       );
       return result.normalizedSelection;
     } catch (_) {
       if (_isRuntimeCurrent(identity, port)) {
-        _lastError = '权限模式切换失败';
+        _lastError = _textCatalog.permSwitchFailed;
         _notify();
       }
       return null;

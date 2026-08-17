@@ -8,6 +8,7 @@ import 'package:zeta/src/features/agent/application/agent_conversation_binding.d
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_identity.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 
 final _log = loggerFor('zeta.agent.conversation_bindings');
 
@@ -37,8 +38,10 @@ final class AgentConversationBindingManager extends ChangeNotifier {
     timerFactory,
     this.scanInterval = const Duration(minutes: 1),
     this.idleTtl = const Duration(minutes: 10),
+    AgentUiTextCatalog? textCatalog,
   }) : clock = clock ?? DateTime.now,
-       timerFactory = timerFactory ?? Timer.periodic;
+       timerFactory = timerFactory ?? Timer.periodic,
+       _textCatalog = textCatalog ?? const FallbackAgentUiTextCatalog();
 
   final AgentProviderRuntimeRegistry runtimeRegistry;
   final DateTime Function() clock;
@@ -46,6 +49,7 @@ final class AgentConversationBindingManager extends ChangeNotifier {
   timerFactory;
   final Duration scanInterval;
   final Duration idleTtl;
+  final AgentUiTextCatalog _textCatalog;
 
   final Map<AgentConversationBindingKey, AgentConversationBinding> _bindings =
       <AgentConversationBindingKey, AgentConversationBinding>{};
@@ -152,6 +156,7 @@ final class AgentConversationBindingManager extends ChangeNotifier {
       clock: clock,
       promote: _promote,
       onRuntimeCleared: _handleRuntimeCleared,
+      textCatalog: _textCatalog,
     );
     _bindings[key] = binding;
     binding.attachConsumer();

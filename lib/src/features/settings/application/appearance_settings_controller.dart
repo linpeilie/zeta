@@ -32,12 +32,12 @@ class AppearanceFontOption {
   /// 内置 Geist（见 `buildIdeThemeData`），所以展示名按内置字体来写。
   const AppearanceFontOption.systemDefault()
     : choice = const AppearanceFontChoice.systemDefault(),
-      label = 'Geist（内置默认）',
-      searchAliases = const <String>['Geist', '系统默认'];
+      label = 'Geist',
+      searchAliases = const <String>['Geist', 'system default'];
 
   const AppearanceFontOption.bundledJetBrainsMono()
     : choice = const AppearanceFontChoice.bundledJetBrainsMono(),
-      label = 'JetBrainsMono（内置默认）',
+      label = 'JetBrainsMono',
       searchAliases = const <String>['JetBrains Mono'];
 
   final AppearanceFontChoice choice;

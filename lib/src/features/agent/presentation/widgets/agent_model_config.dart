@@ -987,7 +987,8 @@ class _ModelListItem extends StatelessWidget {
         IdeTooltip(
           message: model.enabled
               ? model.displayName
-              : model.unavailableReason ?? '该模型当前不可用',
+              : model.unavailableReason ??
+                    context.l10n.agentModelUnavailableNow,
           child: row,
         ),
         _AnimatedModelExpansion(
@@ -1257,7 +1258,10 @@ class _FastConfigRow extends StatelessWidget {
             ),
           ),
           Semantics(
-            label: '${model.displayName}，Fast，${value ? '已开启' : '已关闭'}',
+            label: context.l10n.agentFastSemantic(
+              model.displayName,
+              value ? context.l10n.agentFastOn : context.l10n.agentFastOff,
+            ),
             child: IdeSwitch(
               key: ValueKey<String>('agent-fast-switch-${model.id}'),
               value: value,

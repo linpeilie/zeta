@@ -133,6 +133,38 @@ abstract interface class AgentUiTextCatalog {
   String get couldNotUpdateSessionOption;
 
   String get providerOperationFailed;
+
+  String get modeLoadFailed;
+
+  String fastIncompatible(String effort);
+
+  String fastDisableAndSwitch(String effort);
+
+  String fastSwitchAndEnable(String effort);
+
+  String get modelSaveFailed;
+
+  String modelUnavailableSwitched(String previous, String current);
+
+  String get permNextSession;
+
+  String get permCurrentTurn;
+
+  String get permUnsupported;
+
+  String get permNextSend;
+
+  String get permSavedButPersistFailed;
+
+  String get permAppliedButPersistFailed;
+
+  String get permRuntimeStale;
+
+  String get permSwitchFailed;
+
+  String get providerDefaultPermission;
+
+  String threadDisabled(String name);
 }
 
 /// 用当前进程目录解析工具卡展示标题。

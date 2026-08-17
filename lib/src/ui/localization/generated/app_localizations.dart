@@ -5845,6 +5845,96 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Cursor Agent unavailable'**
   String get agentCursorUnavailable;
+
+  /// Replacement evidence semantics
+  ///
+  /// In en, this message translates to:
+  /// **'Replacement snippet, {before} lines before, {after} lines after'**
+  String agentEvidenceReplaceSemantics(String before, String after);
+
+  /// Written evidence semantics
+  ///
+  /// In en, this message translates to:
+  /// **'Written content, {status}, {count} lines'**
+  String agentWrittenContentSemantics(String status, String count);
+
+  /// Patch evidence semantics
+  ///
+  /// In en, this message translates to:
+  /// **'Unified diff, {count} lines'**
+  String agentUnifiedDiffSemantics(String count);
+
+  /// Evidence viewport semantics
+  ///
+  /// In en, this message translates to:
+  /// **'{title}, scrollable, {count} lines'**
+  String agentScrollableLines(String title, String count);
+
+  /// Evidence keyboard scroll hint
+  ///
+  /// In en, this message translates to:
+  /// **'Use arrow keys, Page Up, Page Down, Home, or End to scroll'**
+  String get agentKeyboardScrollHint;
+
+  /// Evidence line semantics
+  ///
+  /// In en, this message translates to:
+  /// **'{kind}, line {n}: {text}'**
+  String agentLineAt(String kind, String n, String text);
+
+  /// Question pager
+  ///
+  /// In en, this message translates to:
+  /// **'{current} of {total}'**
+  String agentQuestionProgress(String current, String total);
+
+  /// Composer remove image tooltip
+  ///
+  /// In en, this message translates to:
+  /// **'Remove image'**
+  String get agentRemoveImage;
+
+  /// Permission trigger tooltip with hint
+  ///
+  /// In en, this message translates to:
+  /// **'Permission mode · {hint}'**
+  String agentPermissionModeHint(String hint);
+
+  /// Permission trigger semantics with hint
+  ///
+  /// In en, this message translates to:
+  /// **'{label}, permission mode, {hint}'**
+  String agentPermissionModeSemantic(String label, String hint);
+
+  /// Permission trigger semantics
+  ///
+  /// In en, this message translates to:
+  /// **'{label}, permission mode'**
+  String agentPermissionModeOnly(String label);
+
+  /// Fast switch semantics
+  ///
+  /// In en, this message translates to:
+  /// **'{model}, Fast, {state}'**
+  String agentFastSemantic(String model, String state);
+
+  /// Disabled model tooltip
+  ///
+  /// In en, this message translates to:
+  /// **'This model is currently unavailable'**
+  String get agentModelUnavailableNow;
+
+  /// Selected option suffix
+  ///
+  /// In en, this message translates to:
+  /// **', selected'**
+  String get agentOptionSelectedSuffix;
+
+  /// Generic labeled value
+  ///
+  /// In en, this message translates to:
+  /// **'{label}: {value}'**
+  String agentLabeledValue(String label, String value);
 }
 
 class _AppLocalizationsDelegate

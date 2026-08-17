@@ -562,6 +562,58 @@ final class AppAgentUiTextCatalog implements AgentUiTextCatalog {
 
   @override
   String get providerOperationFailed => _l10n.agentProviderOperationFailed;
+
+  @override
+  String get modeLoadFailed => _l10n.agentModeLoadFailed;
+
+  @override
+  String fastIncompatible(String effort) => _l10n.agentFastIncompatible(effort);
+
+  @override
+  String fastDisableAndSwitch(String effort) =>
+      _l10n.agentFastDisableAndSwitch(effort);
+
+  @override
+  String fastSwitchAndEnable(String effort) =>
+      _l10n.agentFastSwitchAndEnable(effort);
+
+  @override
+  String get modelSaveFailed => _l10n.agentModelSaveFailed;
+
+  @override
+  String modelUnavailableSwitched(String previous, String current) =>
+      _l10n.agentModelUnavailableSwitched(previous, current);
+
+  @override
+  String get permNextSession => _l10n.agentPermNextSession;
+
+  @override
+  String get permCurrentTurn => _l10n.agentPermCurrentTurn;
+
+  @override
+  String get permUnsupported => _l10n.agentPermUnsupported;
+
+  @override
+  String get permNextSend => _l10n.agentPermNextSend;
+
+  @override
+  String get permSavedButPersistFailed => _l10n.agentPermSavedButPersistFailed;
+
+  @override
+  String get permAppliedButPersistFailed =>
+      _l10n.agentPermAppliedButPersistFailed;
+
+  @override
+  String get permRuntimeStale => _l10n.agentPermRuntimeStale;
+
+  @override
+  String get permSwitchFailed => _l10n.agentPermSwitchFailed;
+
+  @override
+  String get providerDefaultPermission => _l10n.agentProviderDefaultPermission;
+
+  @override
+  String threadDisabled(String name) => _l10n.agentThreadDisabled(name);
 }
 
 final class AppDesktopAttentionTextCatalog

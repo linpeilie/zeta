@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:zeta/src/features/agent/domain/agent_conversation_mode_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_event_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
+import 'package:zeta/src/features/agent/domain/agent_ui_text_catalog.dart';
+import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 
 /// 对话模式目录的加载状态。
 enum AgentConversationModeLoadStatus {
@@ -81,6 +83,11 @@ final class AgentConversationModeState {
 /// Controller 仅依赖 Provider 中立的 domain 端口和事件。JSON-RPC、Codex mask
 /// 解析与 Widget 展示均留在各自层中，ViewModel 只需要转交生命周期事件。
 final class AgentConversationModeController extends ChangeNotifier {
+  AgentConversationModeController({AgentUiTextCatalog? textCatalog})
+    : _textCatalog = textCatalog ?? const FallbackAgentUiTextCatalog();
+
+  final AgentUiTextCatalog _textCatalog;
+
   AgentConversationModeState _state = AgentConversationModeState(
     status: AgentConversationModeLoadStatus.unavailable,
     presets: const <AgentConversationModePreset>[],
@@ -513,7 +520,7 @@ final class AgentConversationModeController extends ChangeNotifier {
           presets: const <AgentConversationModePreset>[],
           confirmedMode: _state.confirmedMode,
           draftMode: _state.draftMode,
-          errorMessage: '无法加载对话模式，请重试。',
+          errorMessage: _textCatalog.modeLoadFailed,
           appliesToNextTurn: _state.appliesToNextTurn,
         ),
       );

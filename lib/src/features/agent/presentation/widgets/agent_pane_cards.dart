@@ -1517,7 +1517,10 @@ class _AgentQuestionCardState extends State<_AgentQuestionCard>
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: IdeSpacing.space4),
           child: Text(
-            '${_currentQuestionIndex + 1} of $questionCount',
+            context.l10n.agentQuestionProgress(
+              '${_currentQuestionIndex + 1}',
+              '$questionCount',
+            ),
             key: ValueKey<String>(
               'agent-question-progress-${request.id}-${_currentQuestion!.questionId}',
             ),
@@ -1792,8 +1795,8 @@ class _AgentQuestionOptionRow extends StatelessWidget {
       enabled: enabled,
       button: true,
       semanticLabel:
-          '${index + 1}，${option.label}'
-          '${selected ? '，已选择' : ''}'
+          '${context.l10n.agentLabeledValue('${index + 1}', option.label)}'
+          '${selected ? context.l10n.agentOptionSelectedSuffix : ''}'
           '${description == null || description.isEmpty ? '' : '，$description'}',
       padding: const EdgeInsets.symmetric(
         horizontal: IdeSpacing.space10,

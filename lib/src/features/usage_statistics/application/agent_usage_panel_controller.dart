@@ -243,7 +243,7 @@ class AgentUsagePanelController extends ChangeNotifier {
       if (_disposed) {
         return;
       }
-      _errorMessage = 'Agent 用量暂时无法读取';
+      _errorMessage = _textCatalog.agentUsageTemporarilyUnavailable;
     } finally {
       if (!_disposed) {
         _discovering = false;

@@ -1405,7 +1405,7 @@ class IdeShellController extends ChangeNotifier {
             .providerConfigById(targetProviderId)
             ?.displayName ??
         targetProviderId;
-    _statusReporter?.call('$providerName 已禁用或不可用；无法修改会话。');
+    _statusReporter?.call(agentUiTextCatalog.threadDisabled(providerName));
     return false;
   }
 

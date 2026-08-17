@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
+import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 
 typedef AgentModelSelectionPersistCallback =
     Future<void> Function(
@@ -53,10 +54,13 @@ class AgentConversationModelSelectionController extends ChangeNotifier {
   AgentConversationModelSelectionController({
     required this.persistSelection,
     DateTime Function()? clock,
-  }) : _clock = clock ?? DateTime.now;
+    AgentUiTextCatalog? textCatalog,
+  }) : _clock = clock ?? DateTime.now,
+       _textCatalog = textCatalog ?? const FallbackAgentUiTextCatalog();
 
   final AgentModelSelectionPersistCallback persistSelection;
   final DateTime Function() _clock;
+  final AgentUiTextCatalog _textCatalog;
 
   AgentRuntimePort? _runtime;
   AgentModelList? _modelList;
@@ -281,8 +285,8 @@ class AgentConversationModelSelectionController extends ChangeNotifier {
       final effortLabel = effort!.trim();
       _compatibilityConflict = AgentModelCompatibilityConflict(
         modelId: model.id,
-        message: 'Fast 与“$effortLabel”不兼容',
-        actionLabel: '关闭 Fast 并切换到 $effortLabel',
+        message: _textCatalog.fastIncompatible(effortLabel),
+        actionLabel: _textCatalog.fastDisableAndSwitch(effortLabel),
         resolution: AgentModelSelection(
           modelId: model.id,
           reasoningEffort: effort,
@@ -321,8 +325,8 @@ class AgentConversationModelSelectionController extends ChangeNotifier {
       final currentEffort = _modelSelection.reasoningEffort!.trim();
       _compatibilityConflict = AgentModelCompatibilityConflict(
         modelId: model.id,
-        message: 'Fast 与“$currentEffort”不兼容',
-        actionLabel: '切换到 $compatibleEffort 并开启 Fast',
+        message: _textCatalog.fastIncompatible(currentEffort),
+        actionLabel: _textCatalog.fastSwitchAndEnable(compatibleEffort),
         resolution: AgentModelSelection(
           modelId: model.id,
           reasoningEffort: compatibleEffort,
@@ -501,7 +505,7 @@ class AgentConversationModelSelectionController extends ChangeNotifier {
           // 失败快照仍由 [_failedSnapshot] 保留用于重试。
           modelId: _confirmedSelection.modelId ?? snapshot.modelId,
           field: snapshot.field,
-          message: '配置保存失败，已恢复上次有效设置。',
+          message: _textCatalog.modelSaveFailed,
           details: error.toString(),
         );
         _completeWaitersThrough(targetRevision, false);
@@ -558,8 +562,10 @@ class AgentConversationModelSelectionController extends ChangeNotifier {
         orElse: () => available.first,
       );
       if (previousModelId != null && previousModelId.isNotEmpty) {
-        _selectionNotice =
-            '模型“$previousModelId”当前不可用，已切换到 ${selected.displayName}。';
+        _selectionNotice = _textCatalog.modelUnavailableSwitched(
+          previousModelId,
+          selected.displayName,
+        );
       }
       changed = true;
     }

@@ -102,10 +102,14 @@ class AgentConversationViewModel {
            modelSelectionController ??
            AgentConversationModelSelectionController(
              persistSelection: providerController.persistModelSelection,
+             textCatalog: textCatalog ?? const FallbackAgentUiTextCatalog(),
            ),
        _ownsConversationModeController = conversationModeController == null,
        _conversationModeController =
-           conversationModeController ?? AgentConversationModeController(),
+           conversationModeController ??
+           AgentConversationModeController(
+             textCatalog: textCatalog ?? const FallbackAgentUiTextCatalog(),
+           ),
        _ownsSkillsCatalogController = skillsCatalogController == null,
        _skillsCatalogController =
            skillsCatalogController ?? AgentSkillsCatalogController(),
@@ -2625,7 +2629,7 @@ class AgentConversationViewModel {
     }
     _status = AgentProviderStatus(
       state: AgentProviderConnectionState.ready,
-      message: '$activeProviderName ready',
+      message: _textCatalog.providerReady(activeProviderName),
     );
     _publishUiChanges(
       AgentUiUpdateRequest(

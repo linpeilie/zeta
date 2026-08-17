@@ -211,7 +211,10 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
     AgentUiTextCatalog? textCatalog,
   }) : bindingManager =
            bindingManager ??
-           AgentConversationBindingManager(runtimeRegistry: runtimeRegistry),
+           AgentConversationBindingManager(
+             runtimeRegistry: runtimeRegistry,
+             textCatalog: textCatalog ?? const FallbackAgentUiTextCatalog(),
+           ),
        globalRuntime =
            globalRuntime ??
            AgentProviderGlobalRuntime(runtimeRegistry: runtimeRegistry),

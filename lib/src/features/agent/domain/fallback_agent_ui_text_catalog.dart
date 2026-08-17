@@ -217,4 +217,53 @@ class FallbackAgentUiTextCatalog implements AgentUiTextCatalog {
 
   @override
   String get providerOperationFailed => 'Agent provider operation failed';
+
+  @override
+  String get modeLoadFailed => '无法加载对话模式，请重试。';
+
+  @override
+  String fastIncompatible(String effort) => 'Fast 与“$effort”不兼容';
+
+  @override
+  String fastDisableAndSwitch(String effort) => '关闭 Fast 并切换到 $effort';
+
+  @override
+  String fastSwitchAndEnable(String effort) => '切换到 $effort 并开启 Fast';
+
+  @override
+  String get modelSaveFailed => '配置保存失败，已恢复上次有效设置。';
+
+  @override
+  String modelUnavailableSwitched(String previous, String current) =>
+      '模型“$previous”当前不可用，已切换到 $current。';
+
+  @override
+  String get permNextSession => '下次会话生效';
+
+  @override
+  String get permCurrentTurn => '本回合生效';
+
+  @override
+  String get permUnsupported => '当前 Provider 不支持权限选择';
+
+  @override
+  String get permNextSend => '下次发送时生效';
+
+  @override
+  String get permSavedButPersistFailed => '权限偏好已更新，但保存失败；可重试';
+
+  @override
+  String get permAppliedButPersistFailed => '权限偏好已应用，但保存失败；可重试';
+
+  @override
+  String get permRuntimeStale => 'Provider 运行实例已失效，请重试';
+
+  @override
+  String get permSwitchFailed => '权限模式切换失败';
+
+  @override
+  String get providerDefaultPermission => 'Provider 默认权限';
+
+  @override
+  String threadDisabled(String name) => '$name 已禁用或不可用；无法修改会话。';
 }

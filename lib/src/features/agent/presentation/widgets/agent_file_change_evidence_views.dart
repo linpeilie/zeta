@@ -37,8 +37,10 @@ class AgentTextReplacementEvidenceView extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       container: true,
-      label:
-          '替换片段，替换前 ${detail.beforeLines.length} 行，替换后 ${detail.afterLines.length} 行',
+      label: context.l10n.agentEvidenceReplaceSemantics(
+        '${detail.beforeLines.length}',
+        '${detail.afterLines.length}',
+      ),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final width = constraints.hasBoundedWidth
@@ -127,7 +129,10 @@ class AgentWrittenContentEvidenceView extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Semantics(
     container: true,
-    label: '写入内容，$statusLabel，共 ${detail.lines.length} 行',
+    label: context.l10n.agentWrittenContentSemantics(
+      statusLabel,
+      '${detail.lines.length}',
+    ),
     child: _EvidencePanel(
       key: agentFileChangeEvidenceKey(ownerEntryId, changeId, 'panel-written'),
       owner: ownerEntryId,
@@ -164,7 +169,7 @@ class AgentUnifiedPatchEvidenceView extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Semantics(
     container: true,
-    label: '统一差异，共 ${detail.lines.length} 行',
+    label: context.l10n.agentUnifiedDiffSemantics('${detail.lines.length}'),
     child: _EvidencePanel(
       key: agentFileChangeEvidenceKey(ownerEntryId, changeId, 'panel-patch'),
       owner: ownerEntryId,
@@ -277,7 +282,10 @@ class _EvidencePanel extends StatelessWidget {
                       ),
                     ),
                   ),
-                  Text('$count 行', style: styles.meta),
+                  Text(
+                    context.l10n.agentLineCount('$count'),
+                    style: styles.meta,
+                  ),
                 ],
               ),
             ),
@@ -298,7 +306,7 @@ class _EvidencePanel extends StatelessWidget {
                       owner: owner,
                       changeId: changeId,
                       role: role,
-                      label: '$title，可滚动，$count 行',
+                      label: context.l10n.agentScrollableLines(title, '$count'),
                       count: count,
                       lineAt: lineAt,
                     ),
@@ -388,7 +396,7 @@ class _LazyLinesState extends State<_LazyLines> {
         focusable: true,
         focused: _focused,
         label: widget.label,
-        hint: '使用方向键、Page Up、Page Down、Home 或 End 滚动',
+        hint: context.l10n.agentKeyboardScrollHint,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: _focusNode.requestFocus,
@@ -445,10 +453,14 @@ class _EvidenceLine extends StatelessWidget {
       _LineTone.metadata => (colors.textTertiary, colors.surfaceElevated),
       _LineTone.hunk => (colors.info, colors.info.withValues(alpha: 0.08)),
     };
-    final spoken = data.text.isEmpty ? '空行' : data.text;
+    final spoken = data.text.isEmpty ? context.l10n.agentEmptyLine : data.text;
     return Semantics(
       container: true,
-      label: '${data.semanticKind}，第 ${index + 1} 行：$spoken',
+      label: context.l10n.agentLineAt(
+        data.semanticKind,
+        '${index + 1}',
+        spoken,
+      ),
       child: ColoredBox(
         color: background,
         child: Padding(

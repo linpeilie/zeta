@@ -1059,7 +1059,7 @@ class _ComposerImageDraftStrip extends StatelessWidget {
                   width: _removeHitSize,
                   height: _removeHitSize,
                   child: IdeTooltip(
-                    message: 'Remove image',
+                    message: context.l10n.agentRemoveImage,
                     child: MouseRegion(
                       cursor: SystemMouseCursors.click,
                       child: GestureDetector(
@@ -1392,10 +1392,12 @@ class _PermissionOptionButtonState extends State<_PermissionOptionButton> {
     final hasHint = scopeHint != null && scopeHint.isNotEmpty;
     return _ComposerSelectorTrigger(
       surfaceKey: widget.surfaceKey,
-      tooltip: hasHint ? 'Permission mode · $scopeHint' : 'Permission mode',
+      tooltip: hasHint
+          ? context.l10n.agentPermissionModeHint(scopeHint)
+          : context.l10n.agentPermissionMode,
       semanticLabel: hasHint
-          ? '$displayLabel，权限模式，$scopeHint'
-          : '$displayLabel，权限模式',
+          ? context.l10n.agentPermissionModeSemantic(displayLabel, scopeHint)
+          : context.l10n.agentPermissionModeOnly(displayLabel),
       open: open,
       focusNode: _triggerFocusNode,
       onPressed: widget.enabled && widget.options.isNotEmpty

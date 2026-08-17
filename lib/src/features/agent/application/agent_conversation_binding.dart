@@ -146,11 +146,13 @@ final class AgentConversationBinding extends ChangeNotifier {
     required DateTime Function() clock,
     required AgentConversationBindingPromotion promote,
     required AgentConversationBindingRuntimeCleared onRuntimeCleared,
+    AgentUiTextCatalog? textCatalog,
   }) : _key = key,
        _runtimeScope = AgentProviderRuntimeScopeKey.session(runtimeScopeId),
        _clock = clock,
        permissions = AgentConversationPermissionSelectionController(
          persistOptionId: persistPermissionOptionId,
+         textCatalog: textCatalog,
        ),
        _lastActiveAt = clock() {
     _runtimeRegistry = runtimeRegistry;

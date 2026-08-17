@@ -57,8 +57,8 @@ final class AgentPlanExecutionHandoffController {
     if (!supportsPermissionSelection) {
       return _replacePendingPermission(
         request,
-        const AgentPlanExecutionPermissionChoice(
-          label: 'Provider 默认权限',
+        AgentPlanExecutionPermissionChoice(
+          label: textCatalog.providerDefaultPermission,
           origin: AgentPlanExecutionPermissionOrigin.providerFallback,
         ),
         seed: null,

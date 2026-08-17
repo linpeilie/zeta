@@ -3132,4 +3132,71 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get agentCursorUnavailable => 'Cursor Agent unavailable';
+
+  @override
+  String agentEvidenceReplaceSemantics(String before, String after) {
+    return '替换片段，替换前 $before 行，替换后 $after 行';
+  }
+
+  @override
+  String agentWrittenContentSemantics(String status, String count) {
+    return '写入内容，$status，共 $count 行';
+  }
+
+  @override
+  String agentUnifiedDiffSemantics(String count) {
+    return '统一差异，共 $count 行';
+  }
+
+  @override
+  String agentScrollableLines(String title, String count) {
+    return '$title，可滚动，$count 行';
+  }
+
+  @override
+  String get agentKeyboardScrollHint => '使用方向键、Page Up、Page Down、Home 或 End 滚动';
+
+  @override
+  String agentLineAt(String kind, String n, String text) {
+    return '$kind，第 $n 行：$text';
+  }
+
+  @override
+  String agentQuestionProgress(String current, String total) {
+    return '$current of $total';
+  }
+
+  @override
+  String get agentRemoveImage => 'Remove image';
+
+  @override
+  String agentPermissionModeHint(String hint) {
+    return 'Permission mode · $hint';
+  }
+
+  @override
+  String agentPermissionModeSemantic(String label, String hint) {
+    return '$label，权限模式，$hint';
+  }
+
+  @override
+  String agentPermissionModeOnly(String label) {
+    return '$label，权限模式';
+  }
+
+  @override
+  String agentFastSemantic(String model, String state) {
+    return '$model，Fast，$state';
+  }
+
+  @override
+  String get agentModelUnavailableNow => '该模型当前不可用';
+
+  @override
+  String get agentOptionSelectedSuffix => '，已选择';
+
+  @override
+  String agentLabeledValue(String label, String value) {
+    return '$label：$value';
+  }
 }

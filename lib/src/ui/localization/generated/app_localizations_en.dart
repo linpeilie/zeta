@@ -3244,4 +3244,72 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentCursorUnavailable => 'Cursor Agent unavailable';
+
+  @override
+  String agentEvidenceReplaceSemantics(String before, String after) {
+    return 'Replacement snippet, $before lines before, $after lines after';
+  }
+
+  @override
+  String agentWrittenContentSemantics(String status, String count) {
+    return 'Written content, $status, $count lines';
+  }
+
+  @override
+  String agentUnifiedDiffSemantics(String count) {
+    return 'Unified diff, $count lines';
+  }
+
+  @override
+  String agentScrollableLines(String title, String count) {
+    return '$title, scrollable, $count lines';
+  }
+
+  @override
+  String get agentKeyboardScrollHint =>
+      'Use arrow keys, Page Up, Page Down, Home, or End to scroll';
+
+  @override
+  String agentLineAt(String kind, String n, String text) {
+    return '$kind, line $n: $text';
+  }
+
+  @override
+  String agentQuestionProgress(String current, String total) {
+    return '$current of $total';
+  }
+
+  @override
+  String get agentRemoveImage => 'Remove image';
+
+  @override
+  String agentPermissionModeHint(String hint) {
+    return 'Permission mode · $hint';
+  }
+
+  @override
+  String agentPermissionModeSemantic(String label, String hint) {
+    return '$label, permission mode, $hint';
+  }
+
+  @override
+  String agentPermissionModeOnly(String label) {
+    return '$label, permission mode';
+  }
+
+  @override
+  String agentFastSemantic(String model, String state) {
+    return '$model, Fast, $state';
+  }
+
+  @override
+  String get agentModelUnavailableNow => 'This model is currently unavailable';
+
+  @override
+  String get agentOptionSelectedSuffix => ', selected';
+
+  @override
+  String agentLabeledValue(String label, String value) {
+    return '$label: $value';
+  }
 }

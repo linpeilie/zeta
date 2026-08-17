@@ -343,8 +343,10 @@ class _AgentActivePlanStepRow extends StatelessWidget {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     return Semantics(
-      label:
-          '${_activePlanStatusLabel(entry.normalizedStatus, context.l10n)}：${entry.content}',
+      label: context.l10n.agentLabeledValue(
+        _activePlanStatusLabel(entry.normalizedStatus, context.l10n),
+        entry.content,
+      ),
       excludeSemantics: true,
       child: Padding(
         padding: const EdgeInsets.symmetric(
