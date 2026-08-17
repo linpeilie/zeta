@@ -214,7 +214,7 @@ class _AgentThreadHistoryLoading extends StatelessWidget {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     return Semantics(
-      label: 'Loading thread history',
+      label: context.l10n.agentLoadingHistory,
       child: Center(
         key: const ValueKey('agent-thread-history-loading'),
         child: Padding(
@@ -531,7 +531,7 @@ class _AgentConversationTimeline extends StatelessWidget {
                               final showButton = _shouldShowScrollToEndButton();
                               return IdeVirtualScrollShell(
                                 controller: scrollController,
-                                semanticLabel: 'Agent 对话滚动条',
+                                semanticLabel: context.l10n.timelineScrollbar,
                                 showScrollToEndButton: showButton,
                                 hasNewContent:
                                     showButton &&

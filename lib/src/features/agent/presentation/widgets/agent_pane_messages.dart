@@ -26,7 +26,7 @@ class _AgentMessageEntry extends StatelessWidget {
       // 待交接的那条计划消息直接升级为交互卡，正文不再重复出现两次。
       if (planExecutionHandoff case final handoff?
           when handoff.messageId == message.id) {
-        return _buildPlanExecutionCard(handoff);
+        return _buildPlanExecutionCard(context, handoff);
       }
       return _AgentPlanMessageCard(
         message: message,
@@ -65,15 +65,19 @@ class _AgentMessageEntry extends StatelessWidget {
   ///
   /// 不向 Provider 回写审批，也不预先授予任何权限：「执行」只是用 Default
   /// 模式开启新回合，命令、文件与网络权限仍会逐个单独请求。
-  Widget _buildPlanExecutionCard(AgentPlanExecutionRequest request) {
+  Widget _buildPlanExecutionCard(
+    BuildContext context,
+    AgentPlanExecutionRequest request,
+  ) {
     return _AgentPlanDocumentCard(
       key: ValueKey<String>('agent-plan-execution-card-${request.id}'),
       requestId: request.id,
       title: request.title,
       subtitle: request.executionPermission == null
-          ? '当前没有可用的执行权限，请先选择；执行不会预授权命令、文件或网络。'
-          : '默认使用“${request.executionPermission!.label}”；执行将开启新的 Default '
-                '回合，命令、文件与网络权限仍按该模式处理。',
+          ? context.l10n.agentNoExecPermission
+          : context.l10n.agentDefaultExecPermission(
+              request.executionPermission!.label,
+            ),
       markdown: request.markdown,
       revisionController: planRevisionDrafts.controllerFor(request.id),
       revisionFocusNode: planRevisionDrafts.focusNodeFor(request.id),
@@ -121,7 +125,7 @@ class _AgentLiveActivityStatus extends StatelessWidget {
           final isWaiting = waitingLabel != null;
           final statusText = isWaiting
               ? waitingLabel
-              : _liveActivityStatusText(state, now);
+              : _liveActivityStatusText(state, now, context.l10n);
           final accent = isWaiting ? colors.warning : colors.accent;
           return Padding(
             key: const ValueKey<String>('agent-live-activity-status'),
@@ -143,11 +147,11 @@ class _AgentLiveActivityStatus extends StatelessWidget {
                     color: accent,
                   )
                 else
-                  const IdeBusySpinner(
-                    key: ValueKey<String>('agent-live-activity-spinner'),
+                  IdeBusySpinner(
+                    key: const ValueKey<String>('agent-live-activity-spinner'),
                     size: 12,
                     strokeWidth: 1.8,
-                    semanticsLabel: 'Turn running',
+                    semanticsLabel: context.l10n.agentTurnRunning,
                   ),
                 const SizedBox(width: IdeSpacing.space8),
                 Expanded(
@@ -209,7 +213,7 @@ class _AgentTurnFooter extends StatelessWidget {
       fontFamilyFallback: textStyles.codeSmall.fontFamilyFallback,
       fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
     );
-    final durationLabel = _turnDurationLabel(turn);
+    final durationLabel = _turnDurationLabel(turn, context.l10n);
     final modelConfig = turn.modelConfig;
     final modelLabel = _nonEmptyTrimmed(modelConfig?.modelId);
     final effortLabel = agentReasoningEffortFooterLabel(
@@ -372,16 +376,24 @@ List<Widget> _turnFooterMetaItems({
 }
 
 /// turn 末尾耗时/状态文案（仅终态 footer 使用；进行中不渲染 footer）。
-String? _turnDurationLabel(AgentConversationTurnGroup group) {
+String? _turnDurationLabel(
+  AgentConversationTurnGroup group,
+  AppLocalizations l10n,
+) {
   final durationText = _formatDuration(group.duration);
   return switch (group.status) {
     AgentHistoryTurnStatus.running => null,
     // 中断/失败终态优先展示状态词，有耗时再附加。
     AgentHistoryTurnStatus.interrupted =>
-      durationText == null ? '已中断' : '已中断 · $durationText',
+      durationText == null
+          ? l10n.agentStatusInterrupted
+          : '${l10n.agentStatusInterrupted} · $durationText',
     AgentHistoryTurnStatus.failed =>
-      durationText == null ? '失败' : '失败 · $durationText',
-    AgentHistoryTurnStatus.completed => durationText ?? '已完成',
+      durationText == null
+          ? l10n.agentStatusFailed
+          : '${l10n.agentStatusFailed} · $durationText',
+    AgentHistoryTurnStatus.completed =>
+      durationText ?? l10n.agentStatusCompleted,
     AgentHistoryTurnStatus.unknown || null => durationText,
   };
 }
@@ -532,10 +544,7 @@ class _AgentBubbleMessage extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text(
-                  '将保留原会话，并从上一回合结束处创建新分支。'
-                  '工作区文件不会回滚，之前由 Agent 写入的改动仍然存在。',
-                ),
+                Text(dialogContext.l10n.agentCreateBranchBody),
                 const SizedBox(height: IdeSpacing.space12),
                 sf.TextField(
                   controller: controller,
@@ -797,7 +806,7 @@ class _AgentPlanMessageCard extends StatelessWidget {
                 color: colors.textSecondary.withValues(alpha: 0.78),
               ),
               titleWidget: Text(
-                '计划',
+                context.l10n.agentPlan,
                 style: textStyles.titleLarge.copyWith(
                   color: colors.textSecondary.withValues(alpha: 0.9),
                 ),
@@ -825,7 +834,9 @@ class _AgentPlanMessageCard extends StatelessWidget {
               summaryPadding: const EdgeInsets.only(top: IdeSpacing.space6),
               bodyPadding: const EdgeInsets.only(top: IdeSpacing.space8),
               hoverBackgroundColor: colors.hoverSurface,
-              semanticLabel: expanded ? '收起计划' : '展开计划',
+              semanticLabel: expanded
+                  ? context.l10n.agentCollapsePlan
+                  : context.l10n.agentExpandPlan,
               body: Padding(
                 padding: const EdgeInsets.only(right: IdeSpacing.space4),
                 child: _AgentMarkdownBody(

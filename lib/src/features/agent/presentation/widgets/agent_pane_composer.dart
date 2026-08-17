@@ -533,9 +533,11 @@ class _AgentComposerPlanBadgeState extends State<_AgentComposerPlanBadge> {
   @override
   Widget build(BuildContext context) {
     final semanticLabel = widget.appliesToNextTurn
-        ? 'Plan，对话模式，下一回合生效，点击清除'
-        : 'Plan，对话模式，点击清除';
-    final tooltip = widget.appliesToNextTurn ? 'Plan\n将在下一回合生效' : 'Plan';
+        ? context.l10n.agentPlanModeClearNextTurn
+        : context.l10n.agentPlanModeClear;
+    final tooltip = widget.appliesToNextTurn
+        ? context.l10n.agentPlanNextTurnTooltip
+        : context.l10n.agentPlan;
     return MouseRegion(
       onEnter: (_) {
         if (!_hovered) {

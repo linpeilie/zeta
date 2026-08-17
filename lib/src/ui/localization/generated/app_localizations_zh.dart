@@ -2961,4 +2961,175 @@ class AppLocalizationsZh extends AppLocalizations {
   String agentThreadDisabled(String name) {
     return '$name 已禁用或不可用；无法修改会话。';
   }
+
+  @override
+  String get agentNoRawPayload => '（无原始数据）';
+
+  @override
+  String get agentTurnRunning => 'Turn running';
+
+  @override
+  String get agentToolRunning => 'Tool running';
+
+  @override
+  String get agentNoPromptSummary => '（无提问摘要）';
+
+  @override
+  String agentStatusWithValue(String status) {
+    return '状态：$status';
+  }
+
+  @override
+  String agentTimeWithValue(String time) {
+    return '时间：$time';
+  }
+
+  @override
+  String get agentLoadingHistory => 'Loading thread history';
+
+  @override
+  String get agentNoSkills => 'No skills found';
+
+  @override
+  String get agentNoMatches => 'No matches';
+
+  @override
+  String agentCountTimes(String count, String kind) {
+    return '$count 次$kind';
+  }
+
+  @override
+  String agentElapsedTotal(String duration) {
+    return '共 $duration';
+  }
+
+  @override
+  String get agentCurrentlyViewing => '，当前查看';
+
+  @override
+  String agentLineCount(String count) {
+    return '$count 行';
+  }
+
+  @override
+  String agentAddedRemovedLines(String added, String removed) {
+    return '新增 $added 行，删除 $removed 行';
+  }
+
+  @override
+  String get agentNoContentEvidence => 'Provider 未提供内容证据';
+
+  @override
+  String get agentBeforePlan => 'Plan 前';
+
+  @override
+  String get agentAsk => 'Agent 提问';
+
+  @override
+  String get agentReadOnlyCustomMode => '当前为只读的自定义模式，可选择内置模式覆盖。';
+
+  @override
+  String get agentModeLoadingSemantic => 'Mode…，对话模式，正在加载';
+
+  @override
+  String agentModeErrorSemantic(String detail) {
+    return 'Mode unavailable，对话模式，$detail';
+  }
+
+  @override
+  String agentNextTurnShort(String label) {
+    return '$label · 下一回合';
+  }
+
+  @override
+  String get agentModeReadOnlySuffix => '，当前模式只读';
+
+  @override
+  String get agentNextTurnSuffix => '，下一回合生效';
+
+  @override
+  String get agentModeProviderSet => '当前模式由 Provider 设置；可选择内置模式覆盖';
+
+  @override
+  String agentNextTurnAppliesTooltip(String label) {
+    return '$label\n将在下一回合生效';
+  }
+
+  @override
+  String agentConversationModeSemantic(String label, String suffix) {
+    return '$label，对话模式$suffix';
+  }
+
+  @override
+  String agentModeOptionSemantic(String label, String state) {
+    return '$label，$state';
+  }
+
+  @override
+  String agentReasoningEffortValue(String value) {
+    return '思考程度：$value';
+  }
+
+  @override
+  String agentFastValue(String value) {
+    return 'Fast：$value';
+  }
+
+  @override
+  String agentModelConfigSemantic(String label) {
+    return '$label，模型配置';
+  }
+
+  @override
+  String agentModelConfigErrorSemantic(String label, String error) {
+    return '$label，$error';
+  }
+
+  @override
+  String get agentPlanModeClearNextTurn => 'Plan，对话模式，下一回合生效，点击清除';
+
+  @override
+  String get agentPlanModeClear => 'Plan，对话模式，点击清除';
+
+  @override
+  String get agentPlanNextTurnTooltip => 'Plan\n将在下一回合生效';
+
+  @override
+  String get agentLoadingModesStatus => '正在加载对话模式…';
+
+  @override
+  String get agentModeNotSelectableNow => '当前模式暂不支持主动选择';
+
+  @override
+  String get agentModelCatalogRefreshFailed => '模型目录刷新失败，正在使用本地缓存。';
+
+  @override
+  String get agentModelListRefreshFailed => '模型列表刷新失败，已保留现有配置。';
+
+  @override
+  String get agentCannotSwitchPermissionDuringTurn => '当前回合执行中，请等待结束后再切换权限模式。';
+
+  @override
+  String agentProviderReady(String name) {
+    return '$name ready';
+  }
+
+  @override
+  String get agentCouldNotLoadProviders => 'Could not load Agent providers';
+
+  @override
+  String get agentIsWorking => 'Agent is working';
+
+  @override
+  String get agentCreatingBranch => 'Creating branch';
+
+  @override
+  String get agentCouldNotUpdateSessionOption =>
+      'Could not update session option';
+
+  @override
+  String get agentProviderOperationFailed => 'Agent provider operation failed';
+
+  @override
+  String get agentCursorUnavailable => 'Cursor Agent unavailable';
 }

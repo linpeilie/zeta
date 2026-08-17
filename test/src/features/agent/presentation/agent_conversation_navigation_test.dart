@@ -1,5 +1,7 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
+import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_navigation.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
@@ -258,10 +260,11 @@ void main() {
         anchorViewportItemId: 'turn-block-t1-message-u1',
         tokenUsage: const AgentTokenUsage(totalTokens: 1280),
       );
-      final text = buildAgentConversationNavigationTooltip(entry);
-      expect(text, contains('第 6 个回合'));
+      final l10n = lookupAppLocalizations(const Locale('zh'));
+      final text = buildAgentConversationNavigationTooltip(entry, l10n);
+      expect(text, contains(l10n.agentTurnOrdinal('6')));
       expect(text, contains('建立 Agent 权限架构契约测试'));
-      expect(text, contains('已完成'));
+      expect(text, contains(l10n.agentStatusCompleted));
       expect(text, contains('1.3k tokens'));
     });
   });

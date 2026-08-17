@@ -383,10 +383,10 @@ class _AgentToolCallCard extends StatelessWidget {
             ],
           ),
           leading: toolCall.isActiveStatus
-              ? const IdeBusySpinner(
+              ? IdeBusySpinner(
                   size: 12,
                   strokeWidth: 1.8,
-                  semanticsLabel: 'Tool running',
+                  semanticsLabel: context.l10n.agentToolRunning,
                 )
               : Icon(
                   _toolIcon(toolCall.kind),
@@ -453,7 +453,7 @@ class _AgentPlanDocumentCard extends StatelessWidget {
     required this.onRevise,
     required this.onExecute,
     required this.onAbandon,
-    this.executeLabel = '执行',
+    this.executeLabel,
     this.todos = const <AgentPlanEntry>[],
     this.phases = const <AgentPlanApprovalPhase>[],
     this.executionPermission,
@@ -479,7 +479,7 @@ class _AgentPlanDocumentCard extends StatelessWidget {
   /// 提交修改意见；仅在输入非空时被调用。
   final ValueChanged<String> onRevise;
   final VoidCallback? onExecute;
-  final String executeLabel;
+  final String? executeLabel;
   final VoidCallback onAbandon;
   final List<AgentPlanEntry> todos;
   final List<AgentPlanApprovalPhase> phases;
@@ -694,7 +694,7 @@ class _AgentPlanDocumentCard extends StatelessWidget {
                   ),
                   IdeButton(
                     key: ValueKey<String>('agent-plan-execute-$requestId'),
-                    label: executeLabel,
+                    label: executeLabel ?? context.l10n.agentExecute,
                     variant: IdeButtonVariant.primary,
                     leadingIcon: Icons.play_arrow_rounded,
                     onPressed: onExecute,
@@ -721,12 +721,14 @@ class _AgentPlanDocumentCard extends StatelessWidget {
   ) {
     final permission = executionPermission;
     final scopeHint = switch (permission?.origin) {
-      AgentPlanExecutionPermissionOrigin.beforePlan => 'Plan 前',
+      AgentPlanExecutionPermissionOrigin.beforePlan =>
+        context.l10n.agentBeforePlan,
       AgentPlanExecutionPermissionOrigin.catalogDefault =>
         context.l10n.agentPermCatalogDefault,
       AgentPlanExecutionPermissionOrigin.userOverride =>
         context.l10n.agentPermUserOverride,
-      AgentPlanExecutionPermissionOrigin.providerFallback => 'Provider 默认',
+      AgentPlanExecutionPermissionOrigin.providerFallback =>
+        context.l10n.agentProviderDefaultPermission,
       null => context.l10n.agentPermNeedsChoice,
     };
     return Row(
@@ -1241,7 +1243,7 @@ class _AgentQuestionCardState extends State<_AgentQuestionCard>
         position: _enterSlide,
         child: Semantics(
           container: true,
-          label: 'Agent 提问',
+          label: context.l10n.agentAsk,
           child: PanelCard(
             key: ValueKey<String>('agent-question-card-${request.id}'),
             color: colors.panel,
@@ -1388,7 +1390,9 @@ class _AgentQuestionCardState extends State<_AgentQuestionCard>
             hasOptions: options.isNotEmpty,
             expanded: _expandedOtherQuestionIds.contains(question.questionId),
             enabled: !_advancing,
-            submitLabel: isLastQuestion ? '提交答案' : '确认并进入下一题',
+            submitLabel: isLastQuestion
+                ? context.l10n.agentSubmitAnswers
+                : context.l10n.agentConfirmNextQuestion,
             onExpand: () => _expandOther(question),
             onChanged: (value) => _setOtherAnswer(question.questionId, value),
             onSubmitted: (_) => _confirmTextAnswer(question),
@@ -1424,7 +1428,11 @@ class _AgentQuestionCardState extends State<_AgentQuestionCard>
                       : Icons.arrow_forward_rounded,
                   size: 14,
                 ),
-                child: Text(isLastQuestion ? '提交' : '下一步'),
+                child: Text(
+                  isLastQuestion
+                      ? context.l10n.agentSubmit
+                      : context.l10n.agentNext,
+                ),
               ),
             ],
           ],

@@ -134,7 +134,7 @@ class _AgentSkillPickerPopoverState extends State<_AgentSkillPickerPopover> {
                 ? Padding(
                     padding: IdeSpacing.all12,
                     child: Text(
-                      'No skills found',
+                      context.l10n.agentNoSkills,
                       style: textStyles.bodyMedium.copyWith(
                         color: colors.textTertiary,
                       ),

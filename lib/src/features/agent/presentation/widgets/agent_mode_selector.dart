@@ -147,7 +147,7 @@ class _AgentModeSelectorState extends State<AgentModeSelector> {
 
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    final display = _agentModeSelectorDisplay(widget);
+    final display = _agentModeSelectorDisplay(widget, context.l10n);
     final isLoading = widget.status == AgentModeSelectorStatus.loading;
     final open = _popoverController.isOpen;
 
@@ -289,7 +289,7 @@ class _AgentModeSelectorPopover extends StatelessWidget {
                       const SizedBox(width: IdeSpacing.space6),
                       Expanded(
                         child: Text(
-                          '当前为只读的自定义模式，可选择内置模式覆盖。',
+                          context.l10n.agentReadOnlyCustomMode,
                           style: textStyles.bodySmall.copyWith(
                             color: colors.textSecondary,
                           ),
@@ -308,13 +308,14 @@ class _AgentModeSelectorPopover extends StatelessWidget {
                   value: preset.id,
                   enabled: preset.isSelectable,
                   child: Semantics(
-                    label:
-                        '${_agentModePresetLabel(preset)}，'
-                        '${preset.id == selectedMode
-                            ? '已选择'
-                            : preset.isSelectable
-                            ? '可选择'
-                            : '不可选择'}',
+                    label: context.l10n.agentModeOptionSemantic(
+                      _agentModePresetLabel(preset),
+                      preset.id == selectedMode
+                          ? context.l10n.agentModeSelected
+                          : preset.isSelectable
+                          ? context.l10n.agentModeSelectable
+                          : context.l10n.agentModeNotSelectable,
+                    ),
                     child: Text(
                       _agentModePresetLabel(preset),
                       maxLines: 2,
@@ -344,7 +345,10 @@ typedef _AgentModeSelectorDisplay = ({
   String semanticLabel,
 });
 
-_AgentModeSelectorDisplay _agentModeSelectorDisplay(AgentModeSelector widget) {
+_AgentModeSelectorDisplay _agentModeSelectorDisplay(
+  AgentModeSelector widget,
+  AppLocalizations l10n,
+) {
   final statusMessage = widget.statusMessage?.trim();
   switch (widget.status) {
     case AgentModeSelectorStatus.unavailable:
@@ -353,18 +357,18 @@ _AgentModeSelectorDisplay _agentModeSelectorDisplay(AgentModeSelector widget) {
       return (
         visibleLabel: 'Mode…',
         tooltip: statusMessage == null || statusMessage.isEmpty
-            ? '正在加载对话模式'
+            ? l10n.agentLoadingModes
             : statusMessage,
-        semanticLabel: 'Mode…，对话模式，正在加载',
+        semanticLabel: l10n.agentModeLoadingSemantic,
       );
     case AgentModeSelectorStatus.error:
       final detail = statusMessage == null || statusMessage.isEmpty
-          ? '当前 Provider 无法加载对话模式'
+          ? l10n.agentCannotLoadModes
           : statusMessage;
       return (
         visibleLabel: 'Mode unavailable',
         tooltip: detail,
-        semanticLabel: 'Mode unavailable，对话模式，$detail',
+        semanticLabel: l10n.agentModeErrorSemantic(detail),
       );
     case AgentModeSelectorStatus.ready:
       final selectedMode = widget.selectedMode;
@@ -377,22 +381,25 @@ _AgentModeSelectorDisplay _agentModeSelectorDisplay(AgentModeSelector widget) {
           ? _agentModeFallbackLabel(selectedMode)
           : _agentModePresetLabel(selectedPreset);
       final visibleLabel = widget.appliesToNextTurn
-          ? '$baseLabel · 下一回合'
+          ? l10n.agentNextTurnShort(baseLabel)
           : baseLabel;
       final semanticSuffix = unknownMode
-          ? '，当前模式只读'
+          ? l10n.agentModeReadOnlySuffix
           : widget.appliesToNextTurn
-          ? '，下一回合生效'
+          ? l10n.agentNextTurnSuffix
           : '';
       final tooltip = unknownMode
-          ? '当前模式由 Provider 设置；可选择内置模式覆盖'
+          ? l10n.agentModeProviderSet
           : widget.appliesToNextTurn
-          ? '$baseLabel\n将在下一回合生效'
+          ? l10n.agentNextTurnAppliesTooltip(baseLabel)
           : baseLabel;
       return (
         visibleLabel: visibleLabel,
         tooltip: tooltip,
-        semanticLabel: '$baseLabel，对话模式$semanticSuffix',
+        semanticLabel: l10n.agentConversationModeSemantic(
+          baseLabel,
+          semanticSuffix,
+        ),
       );
   }
 }

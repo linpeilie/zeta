@@ -65,7 +65,10 @@ String _commandGroupSummary(
   }
 
   return order
-      .map((kind) => '${counts[kind]} 次${_toolKindLabel(kind, l10n)}')
+      .map(
+        (kind) =>
+            l10n.agentCountTimes('${counts[kind]}', _toolKindLabel(kind, l10n)),
+      )
       .join(' · ');
 }
 
@@ -316,7 +319,11 @@ String? _formatDuration(Duration? duration, {bool includeSubSecond = false}) =>
 /// 对话流执行中文案：主 segment 时长 + turn 总时长。
 ///
 /// 例：`思考中 · 24s · 共 1m 12s`、`启动中 · 共 3s`。
-String _liveActivityStatusText(AgentHeaderState state, DateTime now) {
+String _liveActivityStatusText(
+  AgentHeaderState state,
+  DateTime now,
+  AppLocalizations l10n,
+) {
   final segmentLabel = state.runningActivityLabel;
   final segmentElapsed = _formatDuration(
     resolveAgentElapsed(now: now, startedAt: state.segmentStartedAt),
@@ -335,10 +342,10 @@ String _liveActivityStatusText(AgentHeaderState state, DateTime now) {
     }
   }
   if (turnElapsed != null) {
-    parts.add('共 $turnElapsed');
+    parts.add(l10n.agentElapsedTotal(turnElapsed));
   }
   if (parts.isEmpty) {
-    return '运行中';
+    return l10n.agentRunning;
   }
   return parts.join(' · ');
 }

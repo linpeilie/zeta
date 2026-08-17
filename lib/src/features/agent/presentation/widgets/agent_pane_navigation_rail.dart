@@ -411,8 +411,8 @@ class _AgentConversationNavigationTick extends StatelessWidget {
       button: true,
       alignment: Alignment.centerLeft,
       semanticLabel:
-          '第 ${entry.ordinal} 个回合：${entry.label}'
-          '${isActiveView ? '，当前查看' : ''}',
+          '${context.l10n.agentTurnOrdinalWithLabel('${entry.ordinal}', entry.label.isEmpty ? context.l10n.agentNoPromptSummary : entry.label)}'
+          '${isActiveView ? context.l10n.agentCurrentlyViewing : ''}',
       borderRadius: IdeRadius.allSmall,
       // 导航短线以线色/线宽表达 hover；不刷 surface 底，避免 bottomGap
       // 区域出现整块异色 hover 条。
@@ -471,7 +471,10 @@ class _AgentConversationNavigationPreviewCard extends StatelessWidget {
         onPressed: onTap,
         button: true,
         borderRadius: IdeRadius.allMedium,
-        semanticLabel: buildAgentConversationNavigationTooltip(entry),
+        semanticLabel: buildAgentConversationNavigationTooltip(
+          entry,
+          context.l10n,
+        ),
         child: PanelCard(
           color: colors.surfaceElevated,
           borderRadius: IdeRadius.allMedium,
@@ -492,7 +495,7 @@ class _AgentConversationNavigationPreviewCard extends StatelessWidget {
                   children: [
                     Flexible(
                       child: Text(
-                        '第 ${entry.ordinal} 个回合',
+                        context.l10n.agentTurnOrdinal('${entry.ordinal}'),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: textStyles.meta.copyWith(

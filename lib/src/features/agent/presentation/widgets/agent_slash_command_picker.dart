@@ -248,7 +248,7 @@ class _AgentSlashCommandPickerPopoverState
     );
 
     return Semantics(
-      label: 'Slash commands',
+      label: context.l10n.agentSlashCommands,
       container: true,
       child: SizedBox(
         key: const ValueKey('agent-slash-command-picker-popover'),
@@ -260,7 +260,7 @@ class _AgentSlashCommandPickerPopoverState
                 ? Padding(
                     padding: IdeSpacing.all12,
                     child: Text(
-                      'No matches',
+                      context.l10n.agentNoMatches,
                       style: textStyles.bodyMedium.copyWith(
                         color: colors.textTertiary,
                       ),

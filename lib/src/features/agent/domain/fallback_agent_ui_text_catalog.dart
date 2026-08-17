@@ -172,4 +172,49 @@ class FallbackAgentUiTextCatalog implements AgentUiTextCatalog {
 
   @override
   String get extraQuotaLabel => '补充额度';
+
+  @override
+  String get waitingApproval => '等待审批';
+
+  @override
+  String get waitingInput => '等待输入';
+
+  @override
+  String get systemError => '系统错误';
+
+  @override
+  String get loadingConversationModes => '正在加载对话模式…';
+
+  @override
+  String get modeNotSelectableNow => '当前模式暂不支持主动选择';
+
+  @override
+  String get modelCatalogRefreshFailed => '模型目录刷新失败，正在使用本地缓存。';
+
+  @override
+  String get modelListRefreshFailed => '模型列表刷新失败，已保留现有配置。';
+
+  @override
+  String get cannotSwitchPermissionDuringTurn => '当前回合执行中，请等待结束后再切换权限模式。';
+
+  @override
+  String providerReady(String name) => '$name ready';
+
+  @override
+  String get couldNotLoadProviders => 'Could not load Agent providers';
+
+  @override
+  String get agentIsWorking => 'Agent is working';
+
+  @override
+  String get loadingHistory => 'Loading history';
+
+  @override
+  String get creatingBranch => 'Creating branch';
+
+  @override
+  String get couldNotUpdateSessionOption => 'Could not update session option';
+
+  @override
+  String get providerOperationFailed => 'Agent provider operation failed';
 }

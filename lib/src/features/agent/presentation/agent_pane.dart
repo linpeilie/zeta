@@ -1309,7 +1309,7 @@ class _AgentProviderUnavailableNotice extends StatelessWidget {
         child: IdeStatusCard(
           key: const ValueKey('agent-provider-unavailable-notice'),
           tone: IdeStatusCardTone.warning,
-          title: 'Cursor Agent unavailable',
+          title: context.l10n.agentCursorUnavailable,
           margin: EdgeInsets.zero,
           body: Text(
             reason,

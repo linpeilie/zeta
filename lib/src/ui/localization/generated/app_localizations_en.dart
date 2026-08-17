@@ -3065,4 +3065,183 @@ class AppLocalizationsEn extends AppLocalizations {
   String agentThreadDisabled(String name) {
     return '$name is disabled or unavailable; the session cannot be modified.';
   }
+
+  @override
+  String get agentNoRawPayload => '(No raw data)';
+
+  @override
+  String get agentTurnRunning => 'Turn running';
+
+  @override
+  String get agentToolRunning => 'Tool running';
+
+  @override
+  String get agentNoPromptSummary => '(No prompt summary)';
+
+  @override
+  String agentStatusWithValue(String status) {
+    return 'Status: $status';
+  }
+
+  @override
+  String agentTimeWithValue(String time) {
+    return 'Time: $time';
+  }
+
+  @override
+  String get agentLoadingHistory => 'Loading thread history';
+
+  @override
+  String get agentNoSkills => 'No skills found';
+
+  @override
+  String get agentNoMatches => 'No matches';
+
+  @override
+  String agentCountTimes(String count, String kind) {
+    return '$count×$kind';
+  }
+
+  @override
+  String agentElapsedTotal(String duration) {
+    return 'Total $duration';
+  }
+
+  @override
+  String get agentCurrentlyViewing => ', currently viewing';
+
+  @override
+  String agentLineCount(String count) {
+    return '$count lines';
+  }
+
+  @override
+  String agentAddedRemovedLines(String added, String removed) {
+    return 'Added $added lines, removed $removed lines';
+  }
+
+  @override
+  String get agentNoContentEvidence =>
+      'The Provider did not supply content evidence';
+
+  @override
+  String get agentBeforePlan => 'Before Plan';
+
+  @override
+  String get agentAsk => 'Agent question';
+
+  @override
+  String get agentReadOnlyCustomMode =>
+      'This is a read-only custom mode. You can override it with a built-in mode.';
+
+  @override
+  String get agentModeLoadingSemantic => 'Mode…, conversation mode, loading';
+
+  @override
+  String agentModeErrorSemantic(String detail) {
+    return 'Mode unavailable, conversation mode, $detail';
+  }
+
+  @override
+  String agentNextTurnShort(String label) {
+    return '$label · next turn';
+  }
+
+  @override
+  String get agentModeReadOnlySuffix => ', current mode is read-only';
+
+  @override
+  String get agentNextTurnSuffix => ', applies on the next turn';
+
+  @override
+  String get agentModeProviderSet =>
+      'The current mode comes from the Provider. You can override it with a built-in mode.';
+
+  @override
+  String agentNextTurnAppliesTooltip(String label) {
+    return '$label\nApplies on the next turn';
+  }
+
+  @override
+  String agentConversationModeSemantic(String label, String suffix) {
+    return '$label, conversation mode$suffix';
+  }
+
+  @override
+  String agentModeOptionSemantic(String label, String state) {
+    return '$label, $state';
+  }
+
+  @override
+  String agentReasoningEffortValue(String value) {
+    return 'Reasoning effort: $value';
+  }
+
+  @override
+  String agentFastValue(String value) {
+    return 'Fast: $value';
+  }
+
+  @override
+  String agentModelConfigSemantic(String label) {
+    return '$label, model configuration';
+  }
+
+  @override
+  String agentModelConfigErrorSemantic(String label, String error) {
+    return '$label, $error';
+  }
+
+  @override
+  String get agentPlanModeClearNextTurn =>
+      'Plan, conversation mode, applies next turn, tap to clear';
+
+  @override
+  String get agentPlanModeClear => 'Plan, conversation mode, tap to clear';
+
+  @override
+  String get agentPlanNextTurnTooltip => 'Plan\nApplies on the next turn';
+
+  @override
+  String get agentLoadingModesStatus => 'Loading conversation modes…';
+
+  @override
+  String get agentModeNotSelectableNow =>
+      'The current mode cannot be selected directly';
+
+  @override
+  String get agentModelCatalogRefreshFailed =>
+      'Model catalog refresh failed. Using the local cache.';
+
+  @override
+  String get agentModelListRefreshFailed =>
+      'Model list refresh failed. The current configuration was kept.';
+
+  @override
+  String get agentCannotSwitchPermissionDuringTurn =>
+      'A turn is running. Wait until it finishes before changing the permission mode.';
+
+  @override
+  String agentProviderReady(String name) {
+    return '$name ready';
+  }
+
+  @override
+  String get agentCouldNotLoadProviders => 'Could not load Agent providers';
+
+  @override
+  String get agentIsWorking => 'Agent is working';
+
+  @override
+  String get agentCreatingBranch => 'Creating branch';
+
+  @override
+  String get agentCouldNotUpdateSessionOption =>
+      'Could not update session option';
+
+  @override
+  String get agentProviderOperationFailed => 'Agent provider operation failed';
+
+  @override
+  String get agentCursorUnavailable => 'Cursor Agent unavailable';
 }

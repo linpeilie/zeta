@@ -11,6 +11,7 @@ import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dar
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection.dart';
 import 'package:zeta/src/ui/core/virtualization/ide_extent_index.dart';
 import 'package:zeta/src/ui/core/virtualization/ide_virtual_list_controller.dart';
+import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
 
 /// 少于该数量时隐藏导航轨，避免短对话视觉噪声。
 const int kAgentConversationNavigationMinEntries = 3;
@@ -233,11 +234,12 @@ double? resolveNavigationScrollOffset({
 /// 悬停/无障碍用的多行预览文案（仅内存）。
 String buildAgentConversationNavigationTooltip(
   AgentConversationNavigationEntry entry,
+  AppLocalizations l10n,
 ) {
   final buffer = StringBuffer()
-    ..writeln('第 ${entry.ordinal} 个回合')
-    ..writeln(entry.label)
-    ..write('状态：${_statusLabel(entry.status)}');
+    ..writeln(l10n.agentTurnOrdinal('${entry.ordinal}'))
+    ..writeln(entry.label.isEmpty ? l10n.agentNoPromptSummary : entry.label)
+    ..write(l10n.agentStatusWithValue(_statusLabel(entry.status, l10n)));
   final tokenLabel = agentConversationNavigationTokenLabel(entry.tokenUsage);
   if (tokenLabel != null) {
     buffer
@@ -250,7 +252,7 @@ String buildAgentConversationNavigationTooltip(
     final mm = t.minute.toString().padLeft(2, '0');
     buffer
       ..writeln()
-      ..write('时间：$hh:$mm');
+      ..write(l10n.agentTimeWithValue('$hh:$mm'));
   }
   return buffer.toString();
 }
@@ -299,7 +301,7 @@ AgentTimelineRenderBlock? _preferUserMessageBlock(
 String _summarizePromptLabel(String? text) {
   final normalized = (text ?? '').replaceAll(RegExp(r'\s+'), ' ').trim();
   if (normalized.isEmpty) {
-    return '（无提问摘要）';
+    return '';
   }
   if (normalized.length <= kAgentConversationNavigationLabelMaxChars) {
     return normalized;
@@ -323,12 +325,16 @@ AgentConversationNavigationStatus _mapTurnStatus(
   };
 }
 
-String _statusLabel(AgentConversationNavigationStatus status) {
+String _statusLabel(
+  AgentConversationNavigationStatus status,
+  AppLocalizations l10n,
+) {
   return switch (status) {
-    AgentConversationNavigationStatus.streaming => '生成中',
-    AgentConversationNavigationStatus.completed => '已完成',
-    AgentConversationNavigationStatus.failed => '失败',
-    AgentConversationNavigationStatus.interrupted => '已中断',
-    AgentConversationNavigationStatus.unknown => '未知',
+    AgentConversationNavigationStatus.streaming => l10n.agentStatusStreaming,
+    AgentConversationNavigationStatus.completed => l10n.agentStatusCompleted,
+    AgentConversationNavigationStatus.failed => l10n.agentStatusFailed,
+    AgentConversationNavigationStatus.interrupted =>
+      l10n.agentStatusInterrupted,
+    AgentConversationNavigationStatus.unknown => l10n.agentStatusUnknown,
   };
 }

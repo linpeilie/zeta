@@ -159,11 +159,16 @@ class _Title extends StatelessWidget {
         if (statistics != null) ...<Widget>[
           const SizedBox(width: IdeSpacing.space8),
           if (statistics.addedLines == null && statistics.removedLines == null)
-            Text('${statistics.totalLines} 行', style: styles.meta)
+            Text(
+              context.l10n.agentLineCount('${statistics.totalLines}'),
+              style: styles.meta,
+            )
           else
             Semantics(
-              label:
-                  '新增 ${statistics.addedLines ?? 0} 行，删除 ${statistics.removedLines ?? 0} 行',
+              label: context.l10n.agentAddedRemovedLines(
+                '${statistics.addedLines ?? 0}',
+                '${statistics.removedLines ?? 0}',
+              ),
               child: Text.rich(
                 TextSpan(
                   children: <InlineSpan>[
@@ -255,7 +260,7 @@ String _detailLabel(
   AgentFileChangeDetailProjection? detail,
   AppLocalizations l10n,
 ) => switch (detail) {
-  null => 'Provider 未提供内容证据',
+  null => l10n.agentNoContentEvidence,
   AgentTextReplacementDetailProjection(:final replaceAll) =>
     replaceAll == true ? l10n.agentReplaceSnippetAll : l10n.agentReplaceSnippet,
   AgentWrittenContentDetailProjection() => l10n.agentWrittenContent,

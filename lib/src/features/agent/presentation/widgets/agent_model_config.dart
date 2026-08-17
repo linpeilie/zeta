@@ -324,7 +324,10 @@ class _ModelConfigTrigger extends StatelessWidget {
     final selectedModel = state.selectedModel;
     final refreshError = state.refreshError;
     final modelLabel =
-        selectedModel?.displayName ?? (refreshError == null ? '模型' : '模型加载失败');
+        selectedModel?.displayName ??
+        (refreshError == null
+            ? context.l10n.agentModel
+            : context.l10n.agentModelLoadFailed);
     final effortRaw = state.selectedReasoningEffort?.trim();
     final effortLabel = (effortRaw == null || effortRaw.isEmpty)
         ? null
@@ -335,13 +338,15 @@ class _ModelConfigTrigger extends StatelessWidget {
     final fastSupported = fastTier != null && fastTier.enabled;
     final tooltip = StringBuffer(modelLabel);
     if (effortLabel != null) {
-      tooltip.write('\n思考程度：$effortLabel');
+      tooltip.write('\n${context.l10n.agentReasoningEffortValue(effortLabel)}');
     }
     if (fastSupported) {
-      tooltip.write('\nFast：${state.selectedFastEnabled ? '已开启' : '已关闭'}');
+      tooltip.write(
+        '\n${context.l10n.agentFastValue(state.selectedFastEnabled ? context.l10n.agentFastOn : context.l10n.agentFastOff)}',
+      );
     }
     if (state.appliesNextTurn) {
-      tooltip.write('\n配置将在下一回合生效');
+      tooltip.write('\n${context.l10n.agentConfigNextTurn}');
     }
     if (refreshError != null) {
       tooltip.write('\n$refreshError');
@@ -351,8 +356,11 @@ class _ModelConfigTrigger extends StatelessWidget {
       surfaceKey: const ValueKey('agent-model-selector'),
       tooltip: tooltip.toString(),
       semanticLabel: refreshError == null
-          ? '$modelLabel，模型配置'
-          : '$modelLabel，$refreshError',
+          ? context.l10n.agentModelConfigSemantic(modelLabel)
+          : context.l10n.agentModelConfigErrorSemantic(
+              modelLabel,
+              refreshError,
+            ),
       open: open,
       focusNode: focusNode,
       onPressed: onPressed,

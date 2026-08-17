@@ -217,18 +217,25 @@ class _AgentContextSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final rows = <_ContextSummaryRow>[
-      _ContextSummaryRow('会话名称', title),
-      _ContextSummaryRow('会话 ID', sessionId ?? '—'),
-      _ContextSummaryRow('消息数', '$messageCount'),
-      _ContextSummaryRow('提供商', providerName),
-      _ContextSummaryRow('上下文限制', contextLimit ?? '—'),
-      _ContextSummaryRow('总 Token', totalTokens ?? '—'),
-      _ContextSummaryRow('输入 Token', inputTokens ?? '—'),
-      _ContextSummaryRow('输出 Token', outputTokens ?? '—'),
-      _ContextSummaryRow('缓存 Token', cachedTokens ?? '—'),
-      _ContextSummaryRow('创建时间', _formatContextDateTime(createdAt)),
-      _ContextSummaryRow('最后活跃时间', _formatContextDateTime(lastActiveAt)),
+      _ContextSummaryRow(l10n.agentSessionName, title),
+      _ContextSummaryRow(l10n.agentSessionId, sessionId ?? '—'),
+      _ContextSummaryRow(l10n.agentMessageCount, '$messageCount'),
+      _ContextSummaryRow(l10n.agentProvider, providerName),
+      _ContextSummaryRow(l10n.agentContextLimit, contextLimit ?? '—'),
+      _ContextSummaryRow(l10n.agentTotalTokens, totalTokens ?? '—'),
+      _ContextSummaryRow(l10n.agentInputTokens, inputTokens ?? '—'),
+      _ContextSummaryRow(l10n.agentOutputTokens, outputTokens ?? '—'),
+      _ContextSummaryRow(l10n.agentCachedTokens, cachedTokens ?? '—'),
+      _ContextSummaryRow(
+        l10n.agentCreatedAt,
+        _formatContextDateTime(createdAt),
+      ),
+      _ContextSummaryRow(
+        l10n.agentLastActive,
+        _formatContextDateTime(lastActiveAt),
+      ),
     ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -306,7 +313,7 @@ class _AgentContextRawMessageList extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  '原始消息',
+                  context.l10n.agentRawMessages,
                   style: textStyles.titleSmall.copyWith(
                     fontWeight: FontWeight.w700,
                     color: colors.textPrimary,
@@ -315,12 +322,14 @@ class _AgentContextRawMessageList extends StatelessWidget {
               ),
               IdeTab(
                 key: const ValueKey('agent-context-raw-filter'),
-                label: filterNonChat ? '仅对话' : '全部',
+                label: filterNonChat
+                    ? context.l10n.agentChatOnly
+                    : context.l10n.agentAll,
                 selected: filterNonChat,
                 trailingIcon: Icons.filter_list_rounded,
                 semanticLabel: filterNonChat
-                    ? '当前仅显示对话消息，点击显示全部'
-                    : '当前显示全部消息，点击仅显示对话',
+                    ? context.l10n.agentShowChatOnly
+                    : context.l10n.agentShowAllMessages,
                 onPressed: () => onFilterChanged(!filterNonChat),
               ),
             ],
@@ -330,7 +339,9 @@ class _AgentContextRawMessageList extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: IdeSpacing.space8),
             child: Text(
-              filterNonChat ? '暂无对话消息' : '暂无原始消息',
+              filterNonChat
+                  ? context.l10n.agentNoChatMessages
+                  : context.l10n.agentNoRawMessages,
               style: textStyles.bodySmall.copyWith(
                 color: colors.textSecondary.withValues(alpha: 0.8),
               ),
@@ -377,7 +388,7 @@ class _AgentContextRawMessageRow extends StatelessWidget {
       hoverBackgroundColor: _agentHoverBackground(context),
       padding: const EdgeInsets.symmetric(vertical: IdeSpacing.space2),
       bodyPadding: const EdgeInsets.only(top: IdeSpacing.space8),
-      semanticLabel: '原始消息',
+      semanticLabel: context.l10n.agentRawMessages,
       titleWidget: Row(
         children: [
           Expanded(
@@ -450,7 +461,10 @@ class _AgentContextRawMessageRow extends StatelessWidget {
             )
           : Padding(
               padding: const EdgeInsets.only(top: IdeSpacing.space4),
-              child: Text('（无原始数据）', style: _agentMetaTextStyle(context)),
+              child: Text(
+                context.l10n.agentNoRawPayload,
+                style: _agentMetaTextStyle(context),
+              ),
             ),
     );
   }
@@ -531,7 +545,7 @@ List<_ContextRawItem> _buildContextRawItems({
           _ContextRawItem(
             id: request.id,
             displayId: request.id,
-            kindLabel: '审批',
+            kindLabel: l10n.agentKindApproval,
             raw: request.raw.isNotEmpty
                 ? request.raw
                 : <String, Object?>{
@@ -551,7 +565,7 @@ List<_ContextRawItem> _buildContextRawItems({
           _ContextRawItem(
             id: request.id,
             displayId: request.id,
-            kindLabel: '提问',
+            kindLabel: l10n.agentKindQuestion,
             raw: request.raw.isNotEmpty
                 ? request.raw
                 : <String, Object?>{
@@ -577,7 +591,7 @@ List<_ContextRawItem> _buildContextRawItems({
           _ContextRawItem(
             id: request.id,
             displayId: request.id,
-            kindLabel: '计划审批',
+            kindLabel: l10n.agentKindPlanApproval,
             raw: request.raw,
           ),
         );
@@ -609,7 +623,7 @@ List<_ContextRawItem> _buildContextRawItems({
           _ContextRawItem(
             id: entry.id,
             displayId: turnId,
-            kindLabel: '文件变更',
+            kindLabel: l10n.agentKindFileChange,
             raw: <String, Object?>{
               'turnId': turnId,
               'fileChanges': _fileChangeSnapshotContextMap(snapshot),

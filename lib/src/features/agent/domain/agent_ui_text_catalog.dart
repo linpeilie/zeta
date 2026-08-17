@@ -103,6 +103,36 @@ abstract interface class AgentUiTextCatalog {
   String get primaryQuotaLabel;
 
   String get extraQuotaLabel;
+
+  String get waitingApproval;
+
+  String get waitingInput;
+
+  String get systemError;
+
+  String get loadingConversationModes;
+
+  String get modeNotSelectableNow;
+
+  String get modelCatalogRefreshFailed;
+
+  String get modelListRefreshFailed;
+
+  String get cannotSwitchPermissionDuringTurn;
+
+  String providerReady(String name);
+
+  String get couldNotLoadProviders;
+
+  String get agentIsWorking;
+
+  String get loadingHistory;
+
+  String get creatingBranch;
+
+  String get couldNotUpdateSessionOption;
+
+  String get providerOperationFailed;
 }
 
 /// 用当前进程目录解析工具卡展示标题。

@@ -181,7 +181,9 @@ class _AgentActivePlanCardState extends State<_AgentActivePlanCard> {
               ),
               borderRadius: IdeRadius.allMedium,
               hoverBackgroundColor: colors.hoverSurface,
-              semanticLabel: widget.expanded ? '收起当前计划' : '展开当前计划',
+              semanticLabel: widget.expanded
+                  ? context.l10n.agentCollapseCurrentPlan
+                  : context.l10n.agentExpandCurrentPlan,
               child: Row(
                 children: [
                   Container(
@@ -204,7 +206,7 @@ class _AgentActivePlanCardState extends State<_AgentActivePlanCard> {
                     ),
                   ),
                   Semantics(
-                    label: '当前计划进度 $progress',
+                    label: context.l10n.agentCurrentPlanProgress(progress),
                     child: Container(
                       key: ValueKey<String>(
                         'agent-active-plan-progress-${widget.turnId}',
@@ -251,12 +253,12 @@ class _AgentActivePlanCardState extends State<_AgentActivePlanCard> {
                   IdeSpacing.space10,
                 ),
                 child: Semantics(
-                  label: '当前步骤：${current.content}',
+                  label: context.l10n.agentCurrentStep(current.content),
                   excludeSemantics: true,
                   child: Row(
                     children: [
                       Text(
-                        '当前',
+                        context.l10n.agentCurrent,
                         style: textStyles.bodySmall.copyWith(
                           color: colors.textTertiary,
                         ),

@@ -5569,6 +5569,282 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{name} is disabled or unavailable; the session cannot be modified.'**
   String agentThreadDisabled(String name);
+
+  /// Context raw empty
+  ///
+  /// In en, this message translates to:
+  /// **'(No raw data)'**
+  String get agentNoRawPayload;
+
+  /// Live turn spinner semantics
+  ///
+  /// In en, this message translates to:
+  /// **'Turn running'**
+  String get agentTurnRunning;
+
+  /// Tool spinner semantics
+  ///
+  /// In en, this message translates to:
+  /// **'Tool running'**
+  String get agentToolRunning;
+
+  /// Empty navigation prompt
+  ///
+  /// In en, this message translates to:
+  /// **'(No prompt summary)'**
+  String get agentNoPromptSummary;
+
+  /// Navigation status line
+  ///
+  /// In en, this message translates to:
+  /// **'Status: {status}'**
+  String agentStatusWithValue(String status);
+
+  /// Navigation time line
+  ///
+  /// In en, this message translates to:
+  /// **'Time: {time}'**
+  String agentTimeWithValue(String time);
+
+  /// History loading semantics
+  ///
+  /// In en, this message translates to:
+  /// **'Loading thread history'**
+  String get agentLoadingHistory;
+
+  /// Skill picker empty
+  ///
+  /// In en, this message translates to:
+  /// **'No skills found'**
+  String get agentNoSkills;
+
+  /// Slash picker empty
+  ///
+  /// In en, this message translates to:
+  /// **'No matches'**
+  String get agentNoMatches;
+
+  /// Tool kind count
+  ///
+  /// In en, this message translates to:
+  /// **'{count}×{kind}'**
+  String agentCountTimes(String count, String kind);
+
+  /// Turn elapsed total
+  ///
+  /// In en, this message translates to:
+  /// **'Total {duration}'**
+  String agentElapsedTotal(String duration);
+
+  /// Nav tick current suffix
+  ///
+  /// In en, this message translates to:
+  /// **', currently viewing'**
+  String get agentCurrentlyViewing;
+
+  /// Evidence line count
+  ///
+  /// In en, this message translates to:
+  /// **'{count} lines'**
+  String agentLineCount(String count);
+
+  /// Evidence add/remove
+  ///
+  /// In en, this message translates to:
+  /// **'Added {added} lines, removed {removed} lines'**
+  String agentAddedRemovedLines(String added, String removed);
+
+  /// Missing file evidence
+  ///
+  /// In en, this message translates to:
+  /// **'The Provider did not supply content evidence'**
+  String get agentNoContentEvidence;
+
+  /// Permission origin before plan
+  ///
+  /// In en, this message translates to:
+  /// **'Before Plan'**
+  String get agentBeforePlan;
+
+  /// Question card semantics
+  ///
+  /// In en, this message translates to:
+  /// **'Agent question'**
+  String get agentAsk;
+
+  /// Custom mode hint
+  ///
+  /// In en, this message translates to:
+  /// **'This is a read-only custom mode. You can override it with a built-in mode.'**
+  String get agentReadOnlyCustomMode;
+
+  /// Mode selector loading semantics
+  ///
+  /// In en, this message translates to:
+  /// **'Mode…, conversation mode, loading'**
+  String get agentModeLoadingSemantic;
+
+  /// Mode selector error semantics
+  ///
+  /// In en, this message translates to:
+  /// **'Mode unavailable, conversation mode, {detail}'**
+  String agentModeErrorSemantic(String detail);
+
+  /// Mode applies next turn
+  ///
+  /// In en, this message translates to:
+  /// **'{label} · next turn'**
+  String agentNextTurnShort(String label);
+
+  /// Mode read-only suffix
+  ///
+  /// In en, this message translates to:
+  /// **', current mode is read-only'**
+  String get agentModeReadOnlySuffix;
+
+  /// Mode next-turn suffix
+  ///
+  /// In en, this message translates to:
+  /// **', applies on the next turn'**
+  String get agentNextTurnSuffix;
+
+  /// Unknown mode tooltip
+  ///
+  /// In en, this message translates to:
+  /// **'The current mode comes from the Provider. You can override it with a built-in mode.'**
+  String get agentModeProviderSet;
+
+  /// Next turn tooltip
+  ///
+  /// In en, this message translates to:
+  /// **'{label}\nApplies on the next turn'**
+  String agentNextTurnAppliesTooltip(String label);
+
+  /// Mode trigger semantics
+  ///
+  /// In en, this message translates to:
+  /// **'{label}, conversation mode{suffix}'**
+  String agentConversationModeSemantic(String label, String suffix);
+
+  /// Mode option semantics
+  ///
+  /// In en, this message translates to:
+  /// **'{label}, {state}'**
+  String agentModeOptionSemantic(String label, String state);
+
+  /// Model tooltip effort
+  ///
+  /// In en, this message translates to:
+  /// **'Reasoning effort: {value}'**
+  String agentReasoningEffortValue(String value);
+
+  /// Model tooltip Fast
+  ///
+  /// In en, this message translates to:
+  /// **'Fast: {value}'**
+  String agentFastValue(String value);
+
+  /// Model trigger semantics
+  ///
+  /// In en, this message translates to:
+  /// **'{label}, model configuration'**
+  String agentModelConfigSemantic(String label);
+
+  /// Model trigger error semantics
+  ///
+  /// In en, this message translates to:
+  /// **'{label}, {error}'**
+  String agentModelConfigErrorSemantic(String label, String error);
+
+  /// Composer plan badge next turn
+  ///
+  /// In en, this message translates to:
+  /// **'Plan, conversation mode, applies next turn, tap to clear'**
+  String get agentPlanModeClearNextTurn;
+
+  /// Composer plan badge
+  ///
+  /// In en, this message translates to:
+  /// **'Plan, conversation mode, tap to clear'**
+  String get agentPlanModeClear;
+
+  /// Composer plan tooltip
+  ///
+  /// In en, this message translates to:
+  /// **'Plan\nApplies on the next turn'**
+  String get agentPlanNextTurnTooltip;
+
+  /// ViewModel mode loading
+  ///
+  /// In en, this message translates to:
+  /// **'Loading conversation modes…'**
+  String get agentLoadingModesStatus;
+
+  /// ViewModel unknown mode
+  ///
+  /// In en, this message translates to:
+  /// **'The current mode cannot be selected directly'**
+  String get agentModeNotSelectableNow;
+
+  /// Model catalog cache fallback
+  ///
+  /// In en, this message translates to:
+  /// **'Model catalog refresh failed. Using the local cache.'**
+  String get agentModelCatalogRefreshFailed;
+
+  /// Model list refresh failed
+  ///
+  /// In en, this message translates to:
+  /// **'Model list refresh failed. The current configuration was kept.'**
+  String get agentModelListRefreshFailed;
+
+  /// Permission switch blocked
+  ///
+  /// In en, this message translates to:
+  /// **'A turn is running. Wait until it finishes before changing the permission mode.'**
+  String get agentCannotSwitchPermissionDuringTurn;
+
+  /// Provider ready status
+  ///
+  /// In en, this message translates to:
+  /// **'{name} ready'**
+  String agentProviderReady(String name);
+
+  /// Provider load failed
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load Agent providers'**
+  String get agentCouldNotLoadProviders;
+
+  /// Provider working status
+  ///
+  /// In en, this message translates to:
+  /// **'Agent is working'**
+  String get agentIsWorking;
+
+  /// Branch creation status
+  ///
+  /// In en, this message translates to:
+  /// **'Creating branch'**
+  String get agentCreatingBranch;
+
+  /// Session option update failed
+  ///
+  /// In en, this message translates to:
+  /// **'Could not update session option'**
+  String get agentCouldNotUpdateSessionOption;
+
+  /// Provider operation failed
+  ///
+  /// In en, this message translates to:
+  /// **'Agent provider operation failed'**
+  String get agentProviderOperationFailed;
+
+  /// Cursor unavailable card
+  ///
+  /// In en, this message translates to:
+  /// **'Cursor Agent unavailable'**
+  String get agentCursorUnavailable;
 }
 
 class _AppLocalizationsDelegate

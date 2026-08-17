@@ -515,6 +515,53 @@ final class AppAgentUiTextCatalog implements AgentUiTextCatalog {
 
   @override
   String get extraQuotaLabel => _l10n.agentExtraQuota;
+
+  @override
+  String get waitingApproval => _l10n.agentWaitingApproval;
+
+  @override
+  String get waitingInput => _l10n.agentWaitingInput;
+
+  @override
+  String get systemError => _l10n.agentSystemError;
+
+  @override
+  String get loadingConversationModes => _l10n.agentLoadingModesStatus;
+
+  @override
+  String get modeNotSelectableNow => _l10n.agentModeNotSelectableNow;
+
+  @override
+  String get modelCatalogRefreshFailed => _l10n.agentModelCatalogRefreshFailed;
+
+  @override
+  String get modelListRefreshFailed => _l10n.agentModelListRefreshFailed;
+
+  @override
+  String get cannotSwitchPermissionDuringTurn =>
+      _l10n.agentCannotSwitchPermissionDuringTurn;
+
+  @override
+  String providerReady(String name) => _l10n.agentProviderReady(name);
+
+  @override
+  String get couldNotLoadProviders => _l10n.agentCouldNotLoadProviders;
+
+  @override
+  String get agentIsWorking => _l10n.agentIsWorking;
+
+  @override
+  String get loadingHistory => _l10n.agentLoadingHistory;
+
+  @override
+  String get creatingBranch => _l10n.agentCreatingBranch;
+
+  @override
+  String get couldNotUpdateSessionOption =>
+      _l10n.agentCouldNotUpdateSessionOption;
+
+  @override
+  String get providerOperationFailed => _l10n.agentProviderOperationFailed;
 }
 
 final class AppDesktopAttentionTextCatalog

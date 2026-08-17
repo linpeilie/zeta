@@ -383,13 +383,13 @@ class AgentConversationViewModel {
   /// 状态胶囊文案；等待态优先于普通运行指示。
   String? get threadStatusCapsuleLabel {
     if (_threadWaitingOnApproval) {
-      return '等待审批';
+      return _textCatalog.waitingApproval;
     }
     if (_threadWaitingOnUserInput) {
-      return '等待输入';
+      return _textCatalog.waitingInput;
     }
     if (_threadRuntimeStatus == AgentThreadRuntimeStatus.systemError) {
-      return '系统错误';
+      return _textCatalog.systemError;
     }
     return null;
   }
@@ -529,11 +529,12 @@ class AgentConversationViewModel {
     final state = _conversationModeController.state;
     return switch (state.status) {
       AgentConversationModeLoadStatus.unavailable => null,
-      AgentConversationModeLoadStatus.loading => '正在加载对话模式…',
+      AgentConversationModeLoadStatus.loading =>
+        _textCatalog.loadingConversationModes,
       AgentConversationModeLoadStatus.error => state.errorMessage,
       AgentConversationModeLoadStatus.ready
           when state.draftMode?.kind == AgentConversationModeKind.unknown =>
-        '当前模式暂不支持主动选择',
+        _textCatalog.modeNotSelectableNow,
       AgentConversationModeLoadStatus.ready => null,
     };
   }
@@ -1198,7 +1199,7 @@ class AgentConversationViewModel {
       } else {
         _status = AgentProviderStatus(
           state: AgentProviderConnectionState.idle,
-          message: '$activeProviderName ready',
+          message: _textCatalog.providerReady(activeProviderName),
         );
       }
       _log.t('Loaded Agent provider settings: $activeProviderId');
@@ -1206,7 +1207,7 @@ class AgentConversationViewModel {
       _log.w('Could not load Agent provider settings (${error.runtimeType})');
       _status = AgentProviderStatus(
         state: AgentProviderConnectionState.error,
-        message: 'Could not load Agent providers',
+        message: _textCatalog.couldNotLoadProviders,
         details: error.toString(),
       );
     }
@@ -1296,13 +1297,13 @@ class AgentConversationViewModel {
       );
       _handleModelList(result.models);
       if (result.refreshError != null) {
-        _modelRefreshError = '模型目录刷新失败，正在使用本地缓存。';
+        _modelRefreshError = _textCatalog.modelCatalogRefreshFailed;
       }
       await _runGlobalBundle((_) async {}, hydrateCatalogs: true);
       await _permissionSelectionController.refreshOptions();
     } catch (error) {
       _log.w('Could not preload Agent models (${error.runtimeType})');
-      _modelRefreshError = '模型列表刷新失败，已保留现有配置。';
+      _modelRefreshError = _textCatalog.modelListRefreshFailed;
     } finally {
       _modelsRefreshing = false;
       _publishUiChanges(
@@ -1323,7 +1324,7 @@ class AgentConversationViewModel {
   /// 用户选择权限选项；返回错误文案（供 UI toast），成功时返回 null。
   Future<String?> selectPermissionOption(AgentPermissionOption option) async {
     if (isTurnRunning) {
-      return '当前回合执行中，请等待结束后再切换权限模式。';
+      return _textCatalog.cannotSwitchPermissionDuringTurn;
     }
     await _permissionSelectionController.selectOption(option);
     _publishUiChanges(
@@ -1426,7 +1427,7 @@ class AgentConversationViewModel {
       );
       _status = AgentProviderStatus(
         state: AgentProviderConnectionState.error,
-        message: 'Could not update session option',
+        message: _textCatalog.couldNotUpdateSessionOption,
         details: error.toString(),
       );
       _publishUiChanges(
@@ -1854,9 +1855,9 @@ class AgentConversationViewModel {
         localImagePaths: imagePaths,
       ),
     );
-    _status = const AgentProviderStatus(
+    _status = AgentProviderStatus(
       state: AgentProviderConnectionState.running,
-      message: 'Agent is working',
+      message: _textCatalog.agentIsWorking,
     );
     _syncElapsedTicker();
     _publishUiChanges(
@@ -2074,7 +2075,7 @@ class AgentConversationViewModel {
   }) {
     logStructuredFailure(
       _log,
-      message: 'Agent provider operation failed',
+      message: _textCatalog.providerOperationFailed,
       error: error,
       stackTrace: stackTrace,
       context: <String, Object?>{
@@ -2193,9 +2194,9 @@ class AgentConversationViewModel {
     );
     _timeline.clearConversation();
     _modelRerouteNotice = null;
-    _status = const AgentProviderStatus(
+    _status = AgentProviderStatus(
       state: AgentProviderConnectionState.connecting,
-      message: 'Loading history',
+      message: _textCatalog.loadingHistory,
     );
     _publishUiChanges(
       AgentUiUpdateRequest(
@@ -2277,7 +2278,7 @@ class AgentConversationViewModel {
       _threadOpenPhase = AgentThreadOpenPhase.idle;
       _status = AgentProviderStatus(
         state: AgentProviderConnectionState.ready,
-        message: '$activeProviderName ready',
+        message: _textCatalog.providerReady(activeProviderName),
       );
       _publishUiChanges(
         AgentUiUpdateRequest(
@@ -2492,9 +2493,9 @@ class AgentConversationViewModel {
     }
 
     final switchToken = _threadSwitchToken;
-    _status = const AgentProviderStatus(
+    _status = AgentProviderStatus(
       state: AgentProviderConnectionState.running,
-      message: 'Creating branch',
+      message: _textCatalog.creatingBranch,
     );
     _publishUiChanges(
       AgentUiUpdateRequest(
@@ -4096,7 +4097,9 @@ final class _AgentConversationEventStateTarget
             _viewModel._status.state == AgentProviderConnectionState.running) {
           _viewModel._status = AgentProviderStatus(
             state: AgentProviderConnectionState.ready,
-            message: '${_viewModel.activeProviderName} ready',
+            message: _viewModel._textCatalog.providerReady(
+              _viewModel.activeProviderName,
+            ),
           );
         }
         if (!_viewModel.isTurnRunning &&
