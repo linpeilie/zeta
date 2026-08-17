@@ -813,9 +813,11 @@ class _ThreadTileState extends State<_ThreadTile> {
           ),
           actions: [
             IdeDialogAction.cancel(
+              label: context.l10n.commonCancel,
               onPressed: () => Navigator.of(dialogContext).pop(),
             ),
             IdeDialogAction.confirm(
+              label: context.l10n.commonConfirm,
               onPressed: () {
                 Navigator.of(dialogContext).pop(controller.text.trim());
               },
@@ -853,6 +855,7 @@ class _ThreadTileState extends State<_ThreadTile> {
           ),
           actions: [
             IdeDialogAction.cancel(
+              label: context.l10n.commonCancel,
               onPressed: () => Navigator.of(dialogContext).pop(false),
             ),
             if (deletesProviderHistory)

@@ -14,6 +14,7 @@ import 'package:zeta/src/features/agent_management/presentation/agent_configurat
 import 'package:zeta/src/features/agent_management/presentation/agent_log_view.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_management_l10n.dart';
 import 'package:zeta/src/ui/localization/app_localizations_x.dart';
+import 'package:zeta/src/ui/localization/relative_time.dart';
 import 'package:zeta/src/ui/core/ide_button.dart';
 import 'package:zeta/src/ui/core/ide_chip.dart';
 import 'package:zeta/src/ui/core/ide_tabs.dart';
@@ -543,7 +544,7 @@ class AgentManagementPageState extends State<AgentManagementPage> {
           padding: IdeSpacing.all12,
           child: Text(
             '数据来源：${agent.modelSource ?? 'Codex app-server'} · '
-            '更新时间：${_relativeTime(agent.modelsUpdatedAt, notUpdated: context.l10n.mgmtNotUpdated)}',
+            '更新时间：${_relativeTime(agent.modelsUpdatedAt, notUpdated: context.l10n.mgmtNotUpdated, l10n: context.l10n)}',
             style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
           ),
         ),
@@ -634,6 +635,7 @@ class AgentManagementPageState extends State<AgentManagementPage> {
           content: Text(context.l10n.mgmtDisableWarning),
           actions: <IdeDialogAction>[
             IdeDialogAction.cancel(
+              label: context.l10n.commonCancel,
               onPressed: () => Navigator.of(context).pop(false),
             ),
             IdeDialogAction.destructive(
@@ -660,6 +662,7 @@ class AgentManagementPageState extends State<AgentManagementPage> {
           content: Text(context.l10n.mgmtTestClaudeBody),
           actions: <IdeDialogAction>[
             IdeDialogAction.cancel(
+              label: context.l10n.commonCancel,
               onPressed: () => Navigator.of(context).pop(false),
             ),
             IdeDialogAction.confirm(
@@ -1352,6 +1355,7 @@ class _AgentDiagnosticsCard extends StatelessWidget {
         value: _relativeTime(
           agent.lastDetectedAt,
           notUpdated: context.l10n.mgmtNotUpdated,
+          l10n: context.l10n,
         ),
       ),
       if (agent.connectionTest != null)
@@ -1498,7 +1502,9 @@ class _ModelCard extends StatelessWidget {
                     ),
                   ),
                   StateLabel(
-                    text: model.hidden ? '隐藏' : '可用',
+                    text: model.hidden
+                        ? context.l10n.mgmtHidden
+                        : context.l10n.mgmtAvailable,
                     color: model.hidden ? colors.textTertiary : colors.success,
                   ),
                 ],
@@ -1517,20 +1523,24 @@ class _ModelCard extends StatelessWidget {
                 spacing: IdeSpacing.space6,
                 runSpacing: IdeSpacing.space6,
                 children: [
-                  const IdeChip(label: '文本'),
-                  if (supportsImage) const IdeChip(label: '图片'),
-                  const IdeChip(label: '代码'),
-                  const IdeChip(label: '文件操作'),
-                  const IdeChip(label: '工具调用'),
-                  const IdeChip(label: '终端'),
-                  const IdeChip(label: '流式输出'),
+                  IdeChip(label: context.l10n.mgmtCapText),
+                  if (supportsImage) IdeChip(label: context.l10n.mgmtCapImage),
+                  IdeChip(label: context.l10n.mgmtCapCode),
+                  IdeChip(label: context.l10n.mgmtCapFileOps),
+                  IdeChip(label: context.l10n.mgmtCapToolCall),
+                  IdeChip(label: context.l10n.mgmtCapTerminal),
+                  IdeChip(label: context.l10n.mgmtCapStreaming),
                 ],
               ),
               const SizedBox(height: IdeSpacing.space8),
               Text(
                 model.supportedReasoningEfforts.isEmpty
-                    ? '思考能力：未知'
-                    : '思考能力：可调节（${orderedReasoningEffortsForDisplay(model.supportedReasoningEfforts).map((item) => item.effort).join('、')}）',
+                    ? context.l10n.mgmtReasoningUnknown
+                    : context.l10n.mgmtReasoningAdjustable(
+                        orderedReasoningEffortsForDisplay(
+                          model.supportedReasoningEfforts,
+                        ).map((item) => item.effort).join('、'),
+                      ),
                 style: textStyles.bodySmall.copyWith(
                   color: colors.textSecondary,
                 ),
@@ -1558,7 +1568,7 @@ class _ClaudeCodeAccountDataEnrichmentCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return IdeSection(
       title: context.l10n.mgmtQuotaEnrichmentTitle,
-      subtitle: 'OAuth 凭据 · Usage REST',
+      subtitle: context.l10n.mgmtQuotaEnrichmentSubtitle,
       child: IdeSettingsRow(
         key: const ValueKey('claude-account-data-enrichment-row'),
         label: context.l10n.mgmtQuotaEnrichmentLabel,
@@ -1588,33 +1598,28 @@ class _ClaudeCodeSetupGuideCard extends StatelessWidget {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     return IdeSection(
-      title: '接入指引',
-      subtitle: '安装 · 登录 · 文档',
+      title: context.l10n.mgmtSetupGuideTitle,
+      subtitle: context.l10n.mgmtSetupGuideSubtitle,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _SetupGuideStep(
-            title: '1. 安装 Claude Code CLI',
-            body:
-                '在终端执行 npm install -g @anthropic-ai/claude-code，'
-                '并确认 claude 已加入 PATH。',
+            title: context.l10n.mgmtSetupInstallTitle,
+            body: context.l10n.mgmtSetupInstallBody,
             textStyles: textStyles,
             colors: colors,
             showDivider: true,
           ),
           _SetupGuideStep(
-            title: '2. 登录账号',
-            body:
-                '运行 claude auth login 完成 Anthropic 账号登录。'
-                '自动检测不会读取凭据内容；额度详情增强只做上方说明的瞬时只读查询，'
-                '且绝不写回凭据文件。',
+            title: context.l10n.mgmtSetupLoginTitle,
+            body: context.l10n.mgmtSetupLoginBody,
             textStyles: textStyles,
             colors: colors,
             showDivider: true,
           ),
           _SetupGuideStep(
-            title: '3. 官方文档',
-            body: '完整能力与协议说明见 Anthropic Claude Code 文档：$_docsUrl',
+            title: context.l10n.mgmtSetupDocsTitle,
+            body: context.l10n.mgmtSetupDocsBody(_docsUrl),
             textStyles: textStyles,
             colors: colors,
             showDivider: false,
@@ -1689,19 +1694,13 @@ bool _hasSuccessfulConnectionTest(ManagedAgent agent) {
   return agent.connectionTest?.protocolReady == true;
 }
 
-String _relativeTime(DateTime? value, {required String notUpdated}) {
+String _relativeTime(
+  DateTime? value, {
+  required String notUpdated,
+  required AppLocalizations l10n,
+}) {
   if (value == null) {
     return notUpdated;
   }
-  final difference = DateTime.now().difference(value);
-  if (difference.inMinutes < 1) {
-    return '刚刚';
-  }
-  if (difference.inHours < 1) {
-    return '${difference.inMinutes} 分钟前';
-  }
-  if (difference.inDays < 1) {
-    return '${difference.inHours} 小时前';
-  }
-  return '${difference.inDays} 天前';
+  return formatLocalizedRelativeTime(value, DateTime.now(), l10n);
 }

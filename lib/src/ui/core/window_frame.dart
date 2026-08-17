@@ -252,7 +252,7 @@ class _WindowsTitleBarLogo extends StatelessWidget {
     return Semantics(
       key: const ValueKey('window-title-bar-logo'),
       image: true,
-      label: context.l10nOrNull?.workbenchLogoSemantics ?? 'Zeta Logo',
+      label: context.l10n.workbenchLogoSemantics,
       child: Padding(
         padding: const EdgeInsets.only(
           left: IdeSpacing.space8,
@@ -355,7 +355,7 @@ class _WindowMenuBar extends StatelessWidget {
                 ],
                 child: Semantics(
                   button: true,
-                  label: context.l10nOrNull?.commonMenu ?? '菜单',
+                  label: context.l10n.commonMenu,
                   child: Icon(
                     sf.LucideIcons.menu,
                     size: 16,

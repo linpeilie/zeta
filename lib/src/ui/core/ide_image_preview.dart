@@ -34,7 +34,7 @@ Future<bool> showIdeLocalImagePreview(
     if (context.mounted) {
       showIdeToast(
         context,
-        message: context.l10nOrNull?.imagePreviewUnavailable ?? '图片文件不可用',
+        message: context.l10n.imagePreviewUnavailable,
         tone: IdeToastTone.error,
       );
     }
@@ -49,7 +49,7 @@ Future<bool> showIdeLocalImagePreview(
     if (context.mounted) {
       showIdeToast(
         context,
-        message: context.l10nOrNull?.imagePreviewUnavailable ?? '图片文件不可用',
+        message: context.l10n.imagePreviewUnavailable,
         tone: IdeToastTone.error,
       );
     }
@@ -59,7 +59,7 @@ Future<bool> showIdeLocalImagePreview(
     if (context.mounted) {
       showIdeToast(
         context,
-        message: context.l10nOrNull?.imagePreviewUnavailable ?? '图片文件不可用',
+        message: context.l10n.imagePreviewUnavailable,
         tone: IdeToastTone.error,
       );
     }
@@ -93,7 +93,7 @@ Future<bool> showIdeLocalImagePreview(
             errorBuilder: (_, _, _) {
               return Center(
                 child: Text(
-                  context.l10nOrNull?.imagePreviewUnavailable ?? '图片文件不可用',
+                  context.l10n.imagePreviewUnavailable,
                   style: IdeTextStyles.of(dialogContext).bodySmall,
                 ),
               );
@@ -114,13 +114,16 @@ class IdeLocalImageThumbnail extends StatelessWidget {
     required this.size,
     this.borderRadius,
     this.enablePreview = true,
-    this.tooltip = '查看大图',
+    this.tooltip,
     this.semanticLabel,
     this.imageKey,
   });
 
   /// 本地绝对路径。
   final String path;
+
+  /// 悬停提示；为空时使用本地化默认值。
+  final String? tooltip;
 
   /// 缩略图边长。
   final double size;
@@ -130,9 +133,6 @@ class IdeLocalImageThumbnail extends StatelessWidget {
 
   /// 是否允许点击预览（失败态强制关闭）。
   final bool enablePreview;
-
-  /// 悬停提示。
-  final String tooltip;
 
   /// 无障碍标签。
   final String? semanticLabel;
@@ -179,9 +179,8 @@ class IdeLocalImageThumbnail extends StatelessWidget {
       borderRadius: radius,
       child: _PreviewTapTarget(
         path: path,
-        tooltip: tooltip,
-        semanticLabel:
-            semanticLabel ?? context.l10nOrNull?.imagePreviewView ?? '查看图片',
+        tooltip: tooltip ?? context.l10n.imagePreviewViewLarge,
+        semanticLabel: semanticLabel ?? context.l10n.imagePreviewView,
         child: image,
       ),
     );

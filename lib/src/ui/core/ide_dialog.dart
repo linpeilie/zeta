@@ -51,10 +51,10 @@ class IdeDialogAction {
     this.variant = IdeDialogActionVariant.secondary,
   });
 
-  const IdeDialogAction.cancel({this.label = '取消', required this.onPressed})
+  const IdeDialogAction.cancel({required this.label, required this.onPressed})
     : variant = IdeDialogActionVariant.secondary;
 
-  const IdeDialogAction.confirm({this.label = '确认', required this.onPressed})
+  const IdeDialogAction.confirm({required this.label, required this.onPressed})
     : variant = IdeDialogActionVariant.primary;
 
   const IdeDialogAction.destructive({

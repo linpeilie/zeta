@@ -1184,7 +1184,7 @@ abstract class AppLocalizations {
   /// **'Zeta Logo'**
   String get workbenchLogoSemantics;
 
-  /// Virtual scrollbar
+  /// Virtual timeline scrollbar semantics
   ///
   /// In en, this message translates to:
   /// **'Conversation scrollbar'**
@@ -3284,13 +3284,13 @@ abstract class AppLocalizations {
   /// **'Suggested action: {suggestion}'**
   String mgmtSuggestedAction(String suggestion);
 
-  /// Hidden
+  /// Hidden model chip
   ///
   /// In en, this message translates to:
   /// **'Hidden'**
   String get mgmtHidden;
 
-  /// Available
+  /// Available model chip
   ///
   /// In en, this message translates to:
   /// **'Available'**
@@ -3338,13 +3338,13 @@ abstract class AppLocalizations {
   /// **'Streaming'**
   String get mgmtChipStreaming;
 
-  /// Reasoning unknown
+  /// Unknown reasoning capability
   ///
   /// In en, this message translates to:
   /// **'Reasoning: unknown'**
   String get mgmtReasoningUnknown;
 
-  /// Reasoning adjustable
+  /// Adjustable reasoning capability
   ///
   /// In en, this message translates to:
   /// **'Reasoning: adjustable ({efforts})'**
@@ -5209,6 +5209,294 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Open Zeta'**
   String get desktopAttentionLinuxAction;
+
+  /// Scroll-to-end button semantics
+  ///
+  /// In en, this message translates to:
+  /// **'Scroll to the end of the conversation'**
+  String get timelineScrollToEnd;
+
+  /// Relative time under one minute
+  ///
+  /// In en, this message translates to:
+  /// **'Just now'**
+  String get relativeTimeJustNow;
+
+  /// Relative time in minutes
+  ///
+  /// In en, this message translates to:
+  /// **'{count} minutes ago'**
+  String relativeTimeMinutesAgo(String count);
+
+  /// Relative time in hours
+  ///
+  /// In en, this message translates to:
+  /// **'{count} hours ago'**
+  String relativeTimeHoursAgo(String count);
+
+  /// Relative time in days
+  ///
+  /// In en, this message translates to:
+  /// **'{count} days ago'**
+  String relativeTimeDaysAgo(String count);
+
+  /// Context panel user message kind
+  ///
+  /// In en, this message translates to:
+  /// **'User'**
+  String get contextRoleUser;
+
+  /// Context panel assistant message kind
+  ///
+  /// In en, this message translates to:
+  /// **'Assistant'**
+  String get contextRoleAssistant;
+
+  /// Context panel system message kind
+  ///
+  /// In en, this message translates to:
+  /// **'System'**
+  String get contextRoleSystem;
+
+  /// Context panel plan message kind
+  ///
+  /// In en, this message translates to:
+  /// **'Plan'**
+  String get contextRolePlan;
+
+  /// Context panel permission event
+  ///
+  /// In en, this message translates to:
+  /// **'Approval'**
+  String get contextEventPermission;
+
+  /// Context panel warning event
+  ///
+  /// In en, this message translates to:
+  /// **'Warning'**
+  String get contextEventWarning;
+
+  /// Empty usage statistic placeholder
+  ///
+  /// In en, this message translates to:
+  /// **'No data'**
+  String get usageNoData;
+
+  /// Unknown usage plan name
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown plan'**
+  String get usageUnknownPlan;
+
+  /// Model capability text
+  ///
+  /// In en, this message translates to:
+  /// **'Text'**
+  String get mgmtCapText;
+
+  /// Model capability image
+  ///
+  /// In en, this message translates to:
+  /// **'Image'**
+  String get mgmtCapImage;
+
+  /// Model capability code
+  ///
+  /// In en, this message translates to:
+  /// **'Code'**
+  String get mgmtCapCode;
+
+  /// Model capability file ops
+  ///
+  /// In en, this message translates to:
+  /// **'File operations'**
+  String get mgmtCapFileOps;
+
+  /// Model capability tools
+  ///
+  /// In en, this message translates to:
+  /// **'Tool calls'**
+  String get mgmtCapToolCall;
+
+  /// Model capability terminal
+  ///
+  /// In en, this message translates to:
+  /// **'Terminal'**
+  String get mgmtCapTerminal;
+
+  /// Model capability streaming
+  ///
+  /// In en, this message translates to:
+  /// **'Streaming'**
+  String get mgmtCapStreaming;
+
+  /// Claude quota enrichment subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'OAuth credentials · Usage REST'**
+  String get mgmtQuotaEnrichmentSubtitle;
+
+  /// Claude setup guide title
+  ///
+  /// In en, this message translates to:
+  /// **'Setup guide'**
+  String get mgmtSetupGuideTitle;
+
+  /// Claude setup guide subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Install · Sign in · Docs'**
+  String get mgmtSetupGuideSubtitle;
+
+  /// Claude setup install title
+  ///
+  /// In en, this message translates to:
+  /// **'1. Install the Claude Code CLI'**
+  String get mgmtSetupInstallTitle;
+
+  /// Claude setup install body
+  ///
+  /// In en, this message translates to:
+  /// **'Run npm install -g @anthropic-ai/claude-code in a terminal, and make sure claude is on PATH.'**
+  String get mgmtSetupInstallBody;
+
+  /// Claude setup login title
+  ///
+  /// In en, this message translates to:
+  /// **'2. Sign in'**
+  String get mgmtSetupLoginTitle;
+
+  /// Claude setup login body
+  ///
+  /// In en, this message translates to:
+  /// **'Run claude auth login to sign in to your Anthropic account. Auto-detect never reads credential contents; quota enrichment only does the read-only query described above and never writes the credential file.'**
+  String get mgmtSetupLoginBody;
+
+  /// Claude setup docs title
+  ///
+  /// In en, this message translates to:
+  /// **'3. Official docs'**
+  String get mgmtSetupDocsTitle;
+
+  /// Claude setup docs body
+  ///
+  /// In en, this message translates to:
+  /// **'See the Anthropic Claude Code docs for full capabilities and protocol details: {url}'**
+  String mgmtSetupDocsBody(String url);
+
+  /// Bundled Geist font label
+  ///
+  /// In en, this message translates to:
+  /// **'Geist (built-in default)'**
+  String get fontGeistBundled;
+
+  /// Search alias for system default font
+  ///
+  /// In en, this message translates to:
+  /// **'System default'**
+  String get fontSystemDefaultAlias;
+
+  /// Bundled JetBrains Mono label
+  ///
+  /// In en, this message translates to:
+  /// **'JetBrainsMono (built-in default)'**
+  String get fontJetBrainsBundled;
+
+  /// Conversation mode load error
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load conversation modes. Please retry.'**
+  String get agentModeLoadFailed;
+
+  /// Fast vs reasoning conflict
+  ///
+  /// In en, this message translates to:
+  /// **'Fast is incompatible with “{effort}”'**
+  String agentFastIncompatible(String effort);
+
+  /// Resolve Fast conflict by disabling Fast
+  ///
+  /// In en, this message translates to:
+  /// **'Turn off Fast and switch to {effort}'**
+  String agentFastDisableAndSwitch(String effort);
+
+  /// Resolve Fast conflict by lowering effort
+  ///
+  /// In en, this message translates to:
+  /// **'Switch to {effort} and turn on Fast'**
+  String agentFastSwitchAndEnable(String effort);
+
+  /// Model config save failure
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save the configuration. The last valid settings were restored.'**
+  String get agentModelSaveFailed;
+
+  /// Model fallback notice
+  ///
+  /// In en, this message translates to:
+  /// **'Model “{previous}” is unavailable. Switched to {current}.'**
+  String agentModelUnavailableSwitched(String previous, String current);
+
+  /// Permission apply scope next session
+  ///
+  /// In en, this message translates to:
+  /// **'Applies to the next session'**
+  String get agentPermNextSession;
+
+  /// Permission apply scope current turn
+  ///
+  /// In en, this message translates to:
+  /// **'Applies to this turn'**
+  String get agentPermCurrentTurn;
+
+  /// Permission selection unsupported
+  ///
+  /// In en, this message translates to:
+  /// **'The current Provider does not support permission selection'**
+  String get agentPermUnsupported;
+
+  /// Permission applies next send
+  ///
+  /// In en, this message translates to:
+  /// **'Applies the next time you send'**
+  String get agentPermNextSend;
+
+  /// Permission persist failed after update
+  ///
+  /// In en, this message translates to:
+  /// **'Permission preference updated, but saving failed. You can retry.'**
+  String get agentPermSavedButPersistFailed;
+
+  /// Permission persist failed after apply
+  ///
+  /// In en, this message translates to:
+  /// **'Permission preference applied, but saving failed. You can retry.'**
+  String get agentPermAppliedButPersistFailed;
+
+  /// Permission runtime stale
+  ///
+  /// In en, this message translates to:
+  /// **'The Provider runtime is no longer valid. Please retry.'**
+  String get agentPermRuntimeStale;
+
+  /// Permission mode switch failed
+  ///
+  /// In en, this message translates to:
+  /// **'Could not switch the permission mode'**
+  String get agentPermSwitchFailed;
+
+  /// Plan handoff provider default permission
+  ///
+  /// In en, this message translates to:
+  /// **'Provider default permission'**
+  String get agentProviderDefaultPermission;
+
+  /// Shell cannot mutate disabled provider thread
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is disabled or unavailable; the session cannot be modified.'**
+  String agentThreadDisabled(String name);
 }
 
 class _AppLocalizationsDelegate

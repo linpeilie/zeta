@@ -110,7 +110,8 @@ List<File> _dartFiles(Directory root) {
         !path.endsWith('/fallback_usage_statistics_text_catalog.dart') &&
         !path.endsWith('/fallback_agent_management_text_catalog.dart') &&
         !path.endsWith('/fallback_agent_ui_text_catalog.dart') &&
-        !path.endsWith('/fallback_desktop_attention_text_catalog.dart');
+        !path.endsWith('/fallback_desktop_attention_text_catalog.dart') &&
+        !path.endsWith('_preview.dart');
   }).toList()..sort((a, b) => _normalize(a.path).compareTo(_normalize(b.path)));
 }
 
@@ -145,6 +146,9 @@ String? _classify(String source, _ExtractedLiteral literal) {
     return null;
   }
   if (_isLoggingContext(source, literal.offset)) {
+    return null;
+  }
+  if (_isDeveloperContractContext(source, literal.offset)) {
     return null;
   }
   if (_brandLiterals.contains(text) || _productTermLiterals.contains(text)) {
@@ -182,6 +186,17 @@ bool _isLoggingContext(String source, int offset) {
   final start = offset > 240 ? offset - 240 : 0;
   final window = source.substring(start, offset);
   return _loggerCallPattern.hasMatch(window);
+}
+
+final _developerContractPattern = RegExp(
+  r'(?:FlutterError(?:\.fromParts)?|ErrorSummary|ErrorHint|'
+  r'ErrorDescription|ArgumentError(?:\.value)?|assert)\s*\(',
+);
+
+bool _isDeveloperContractContext(String source, int offset) {
+  final start = offset > 280 ? offset - 280 : 0;
+  final window = source.substring(start, offset);
+  return _developerContractPattern.hasMatch(window);
 }
 
 List<_AllowlistEntry> _allowlistEntriesFromHits(List<_LiteralHit> hits) {

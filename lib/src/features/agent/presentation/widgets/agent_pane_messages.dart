@@ -547,6 +547,7 @@ class _AgentBubbleMessage extends StatelessWidget {
           ),
           actions: [
             IdeDialogAction.cancel(
+              label: context.l10n.commonCancel,
               onPressed: () => Navigator.of(dialogContext).pop(false),
             ),
             IdeDialogAction.confirm(

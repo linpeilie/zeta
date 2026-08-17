@@ -49,6 +49,7 @@ class _AgentContextPanelState extends State<_AgentContextPanel> {
               timelineEntries: viewModel.timelineEntries,
               filterNonChat: _filterNonChatMessages,
               catalog: viewModel.textCatalog,
+              l10n: context.l10n,
             );
             return Container(
               key: const ValueKey('agent-context-panel'),
@@ -493,6 +494,7 @@ List<_ContextRawItem> _buildContextRawItems({
   required List<AgentTimelineEntry> timelineEntries,
   required bool filterNonChat,
   required AgentUiTextCatalog catalog,
+  required AppLocalizations l10n,
 }) {
   final items = <_ContextRawItem>[];
   for (final entry in timelineEntries) {
@@ -505,7 +507,7 @@ List<_ContextRawItem> _buildContextRawItems({
           _ContextRawItem(
             id: message.id,
             displayId: message.id,
-            kindLabel: _contextMessageKindLabel(message),
+            kindLabel: _contextMessageKindLabel(message, l10n),
             raw: message.raw,
           ),
         );
@@ -517,7 +519,7 @@ List<_ContextRawItem> _buildContextRawItems({
           _ContextRawItem(
             id: toolCall.id,
             displayId: toolCall.id,
-            kindLabel: _contextToolKindLabel(toolCall),
+            kindLabel: _contextToolKindLabel(toolCall, l10n),
             raw: _toolCallContextMap(toolCall, catalog),
           ),
         );
@@ -587,7 +589,7 @@ List<_ContextRawItem> _buildContextRawItems({
           _ContextRawItem(
             id: event.id,
             displayId: event.id,
-            kindLabel: _contextHistoryEventLabel(event),
+            kindLabel: _contextHistoryEventLabel(event, l10n),
             raw: event.raw.isNotEmpty
                 ? event.raw
                 : <String, Object?>{
@@ -628,37 +630,33 @@ bool _isMainConversationMessage(AgentConversationMessage message) {
       message.role == AgentMessageRole.agent;
 }
 
-String _contextMessageKindLabel(AgentConversationMessage message) {
+String _contextMessageKindLabel(
+  AgentConversationMessage message,
+  AppLocalizations l10n,
+) {
   if (message.isPlan) {
-    return '计划';
+    return l10n.contextRolePlan;
   }
   return switch (message.role) {
-    AgentMessageRole.user => '用户',
-    AgentMessageRole.agent => '助手',
-    AgentMessageRole.system => '系统',
+    AgentMessageRole.user => l10n.contextRoleUser,
+    AgentMessageRole.agent => l10n.contextRoleAssistant,
+    AgentMessageRole.system => l10n.contextRoleSystem,
   };
 }
 
-String _contextToolKindLabel(AgentToolCall toolCall) {
-  return switch (toolCall.kind) {
-    AgentToolKind.think => '思考',
-    AgentToolKind.read => '读取',
-    AgentToolKind.edit => '编辑',
-    AgentToolKind.delete => '删除',
-    AgentToolKind.move => '移动',
-    AgentToolKind.search => '搜索',
-    AgentToolKind.execute => '执行',
-    AgentToolKind.fetch => '拉取',
-    AgentToolKind.other => '工具',
-  };
+String _contextToolKindLabel(AgentToolCall toolCall, AppLocalizations l10n) {
+  return toolCall.kind.localizedLabel(l10n);
 }
 
-String _contextHistoryEventLabel(AgentHistoryEventEntry event) {
+String _contextHistoryEventLabel(
+  AgentHistoryEventEntry event,
+  AppLocalizations l10n,
+) {
   return switch (event.kind) {
-    AgentHistoryEventKind.permission => '审批',
-    AgentHistoryEventKind.warning => '警告',
-    AgentHistoryEventKind.search => '搜索',
-    AgentHistoryEventKind.system => '系统',
+    AgentHistoryEventKind.permission => l10n.contextEventPermission,
+    AgentHistoryEventKind.warning => l10n.contextEventWarning,
+    AgentHistoryEventKind.search => l10n.agentToolSearch,
+    AgentHistoryEventKind.system => l10n.contextRoleSystem,
   };
 }
 

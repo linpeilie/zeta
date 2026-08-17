@@ -2849,4 +2849,174 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get desktopAttentionLinuxAction => 'Open Zeta';
+
+  @override
+  String get timelineScrollToEnd => 'Scroll to the end of the conversation';
+
+  @override
+  String get relativeTimeJustNow => 'Just now';
+
+  @override
+  String relativeTimeMinutesAgo(String count) {
+    return '$count minutes ago';
+  }
+
+  @override
+  String relativeTimeHoursAgo(String count) {
+    return '$count hours ago';
+  }
+
+  @override
+  String relativeTimeDaysAgo(String count) {
+    return '$count days ago';
+  }
+
+  @override
+  String get contextRoleUser => 'User';
+
+  @override
+  String get contextRoleAssistant => 'Assistant';
+
+  @override
+  String get contextRoleSystem => 'System';
+
+  @override
+  String get contextRolePlan => 'Plan';
+
+  @override
+  String get contextEventPermission => 'Approval';
+
+  @override
+  String get contextEventWarning => 'Warning';
+
+  @override
+  String get usageNoData => 'No data';
+
+  @override
+  String get usageUnknownPlan => 'Unknown plan';
+
+  @override
+  String get mgmtCapText => 'Text';
+
+  @override
+  String get mgmtCapImage => 'Image';
+
+  @override
+  String get mgmtCapCode => 'Code';
+
+  @override
+  String get mgmtCapFileOps => 'File operations';
+
+  @override
+  String get mgmtCapToolCall => 'Tool calls';
+
+  @override
+  String get mgmtCapTerminal => 'Terminal';
+
+  @override
+  String get mgmtCapStreaming => 'Streaming';
+
+  @override
+  String get mgmtQuotaEnrichmentSubtitle => 'OAuth credentials · Usage REST';
+
+  @override
+  String get mgmtSetupGuideTitle => 'Setup guide';
+
+  @override
+  String get mgmtSetupGuideSubtitle => 'Install · Sign in · Docs';
+
+  @override
+  String get mgmtSetupInstallTitle => '1. Install the Claude Code CLI';
+
+  @override
+  String get mgmtSetupInstallBody =>
+      'Run npm install -g @anthropic-ai/claude-code in a terminal, and make sure claude is on PATH.';
+
+  @override
+  String get mgmtSetupLoginTitle => '2. Sign in';
+
+  @override
+  String get mgmtSetupLoginBody =>
+      'Run claude auth login to sign in to your Anthropic account. Auto-detect never reads credential contents; quota enrichment only does the read-only query described above and never writes the credential file.';
+
+  @override
+  String get mgmtSetupDocsTitle => '3. Official docs';
+
+  @override
+  String mgmtSetupDocsBody(String url) {
+    return 'See the Anthropic Claude Code docs for full capabilities and protocol details: $url';
+  }
+
+  @override
+  String get fontGeistBundled => 'Geist (built-in default)';
+
+  @override
+  String get fontSystemDefaultAlias => 'System default';
+
+  @override
+  String get fontJetBrainsBundled => 'JetBrainsMono (built-in default)';
+
+  @override
+  String get agentModeLoadFailed =>
+      'Could not load conversation modes. Please retry.';
+
+  @override
+  String agentFastIncompatible(String effort) {
+    return 'Fast is incompatible with “$effort”';
+  }
+
+  @override
+  String agentFastDisableAndSwitch(String effort) {
+    return 'Turn off Fast and switch to $effort';
+  }
+
+  @override
+  String agentFastSwitchAndEnable(String effort) {
+    return 'Switch to $effort and turn on Fast';
+  }
+
+  @override
+  String get agentModelSaveFailed =>
+      'Could not save the configuration. The last valid settings were restored.';
+
+  @override
+  String agentModelUnavailableSwitched(String previous, String current) {
+    return 'Model “$previous” is unavailable. Switched to $current.';
+  }
+
+  @override
+  String get agentPermNextSession => 'Applies to the next session';
+
+  @override
+  String get agentPermCurrentTurn => 'Applies to this turn';
+
+  @override
+  String get agentPermUnsupported =>
+      'The current Provider does not support permission selection';
+
+  @override
+  String get agentPermNextSend => 'Applies the next time you send';
+
+  @override
+  String get agentPermSavedButPersistFailed =>
+      'Permission preference updated, but saving failed. You can retry.';
+
+  @override
+  String get agentPermAppliedButPersistFailed =>
+      'Permission preference applied, but saving failed. You can retry.';
+
+  @override
+  String get agentPermRuntimeStale =>
+      'The Provider runtime is no longer valid. Please retry.';
+
+  @override
+  String get agentPermSwitchFailed => 'Could not switch the permission mode';
+
+  @override
+  String get agentProviderDefaultPermission => 'Provider default permission';
+
+  @override
+  String agentThreadDisabled(String name) {
+    return '$name is disabled or unavailable; the session cannot be modified.';
+  }
 }

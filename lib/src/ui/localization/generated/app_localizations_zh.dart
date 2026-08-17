@@ -2753,4 +2753,168 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get desktopAttentionLinuxAction => '打开 Zeta';
+
+  @override
+  String get timelineScrollToEnd => '滚动到对话底部';
+
+  @override
+  String get relativeTimeJustNow => '刚刚';
+
+  @override
+  String relativeTimeMinutesAgo(String count) {
+    return '$count 分钟前';
+  }
+
+  @override
+  String relativeTimeHoursAgo(String count) {
+    return '$count 小时前';
+  }
+
+  @override
+  String relativeTimeDaysAgo(String count) {
+    return '$count 天前';
+  }
+
+  @override
+  String get contextRoleUser => '用户';
+
+  @override
+  String get contextRoleAssistant => '助手';
+
+  @override
+  String get contextRoleSystem => '系统';
+
+  @override
+  String get contextRolePlan => '计划';
+
+  @override
+  String get contextEventPermission => '审批';
+
+  @override
+  String get contextEventWarning => '警告';
+
+  @override
+  String get usageNoData => '暂无数据';
+
+  @override
+  String get usageUnknownPlan => '未知套餐';
+
+  @override
+  String get mgmtCapText => '文本';
+
+  @override
+  String get mgmtCapImage => '图片';
+
+  @override
+  String get mgmtCapCode => '代码';
+
+  @override
+  String get mgmtCapFileOps => '文件操作';
+
+  @override
+  String get mgmtCapToolCall => '工具调用';
+
+  @override
+  String get mgmtCapTerminal => '终端';
+
+  @override
+  String get mgmtCapStreaming => '流式输出';
+
+  @override
+  String get mgmtQuotaEnrichmentSubtitle => 'OAuth 凭据 · Usage REST';
+
+  @override
+  String get mgmtSetupGuideTitle => '接入指引';
+
+  @override
+  String get mgmtSetupGuideSubtitle => '安装 · 登录 · 文档';
+
+  @override
+  String get mgmtSetupInstallTitle => '1. 安装 Claude Code CLI';
+
+  @override
+  String get mgmtSetupInstallBody =>
+      '在终端执行 npm install -g @anthropic-ai/claude-code，并确认 claude 已加入 PATH。';
+
+  @override
+  String get mgmtSetupLoginTitle => '2. 登录账号';
+
+  @override
+  String get mgmtSetupLoginBody =>
+      '运行 claude auth login 完成 Anthropic 账号登录。自动检测不会读取凭据内容；额度详情增强只做上方说明的瞬时只读查询，且绝不写回凭据文件。';
+
+  @override
+  String get mgmtSetupDocsTitle => '3. 官方文档';
+
+  @override
+  String mgmtSetupDocsBody(String url) {
+    return '完整能力与协议说明见 Anthropic Claude Code 文档：$url';
+  }
+
+  @override
+  String get fontGeistBundled => 'Geist（内置默认）';
+
+  @override
+  String get fontSystemDefaultAlias => '系统默认';
+
+  @override
+  String get fontJetBrainsBundled => 'JetBrainsMono（内置默认）';
+
+  @override
+  String get agentModeLoadFailed => '无法加载对话模式，请重试。';
+
+  @override
+  String agentFastIncompatible(String effort) {
+    return 'Fast 与“$effort”不兼容';
+  }
+
+  @override
+  String agentFastDisableAndSwitch(String effort) {
+    return '关闭 Fast 并切换到 $effort';
+  }
+
+  @override
+  String agentFastSwitchAndEnable(String effort) {
+    return '切换到 $effort 并开启 Fast';
+  }
+
+  @override
+  String get agentModelSaveFailed => '配置保存失败，已恢复上次有效设置。';
+
+  @override
+  String agentModelUnavailableSwitched(String previous, String current) {
+    return '模型“$previous”当前不可用，已切换到 $current。';
+  }
+
+  @override
+  String get agentPermNextSession => '下次会话生效';
+
+  @override
+  String get agentPermCurrentTurn => '本回合生效';
+
+  @override
+  String get agentPermUnsupported => '当前 Provider 不支持权限选择';
+
+  @override
+  String get agentPermNextSend => '下次发送时生效';
+
+  @override
+  String get agentPermSavedButPersistFailed => '权限偏好已更新，但保存失败；可重试';
+
+  @override
+  String get agentPermAppliedButPersistFailed => '权限偏好已应用，但保存失败；可重试';
+
+  @override
+  String get agentPermRuntimeStale => 'Provider 运行实例已失效，请重试';
+
+  @override
+  String get agentPermSwitchFailed => '权限模式切换失败';
+
+  @override
+  String get agentProviderDefaultPermission => 'Provider 默认权限';
+
+  @override
+  String agentThreadDisabled(String name) {
+    return '$name 已禁用或不可用；无法修改会话。';
+  }
 }

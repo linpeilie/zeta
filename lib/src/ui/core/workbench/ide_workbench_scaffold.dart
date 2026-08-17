@@ -227,9 +227,7 @@ class IdeWorkbenchScaffold extends StatelessWidget {
             Positioned.fill(
               child: Semantics(
                 button: true,
-                label:
-                    context.l10nOrNull?.workbenchCloseOverlay ??
-                    'Close workbench overlay',
+                label: context.l10n.workbenchCloseOverlay,
                 child: GestureDetector(
                   key: const ValueKey('workbench-overlay-scrim'),
                   behavior: HitTestBehavior.opaque,

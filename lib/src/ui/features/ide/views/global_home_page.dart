@@ -15,6 +15,7 @@ import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/core/rows/ide_list_row.dart';
 import 'package:zeta/src/ui/localization/app_localizations_x.dart';
+import 'package:zeta/src/ui/localization/relative_time.dart';
 
 const int globalHomeRecentItemLimit = 5;
 
@@ -442,7 +443,7 @@ class _RecentProjectRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final time = _relativeTime(project.lastOpenedAt, now);
+    final time = _relativeTime(project.lastOpenedAt, now, context.l10n);
     return IdeTooltip(
       message: project.path,
       child: IdeListRow(
@@ -478,7 +479,8 @@ class _RecentThreadRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final metadata = <String>[
       _fileName(thread.projectPath),
-      if (_relativeTime(thread.lastActiveAt, now) case final String value)
+      if (_relativeTime(thread.lastActiveAt, now, context.l10n)
+          case final String value)
         value,
     ];
     return IdeListRow(
@@ -692,19 +694,9 @@ String _fileName(String path) {
   return parts.isEmpty ? path : parts.last;
 }
 
-String? _relativeTime(DateTime? value, DateTime now) {
+String? _relativeTime(DateTime? value, DateTime now, AppLocalizations l10n) {
   if (value == null) {
     return null;
   }
-  final difference = now.difference(value);
-  if (difference.isNegative || difference.inMinutes < 1) {
-    return '刚刚';
-  }
-  if (difference.inHours < 1) {
-    return '${difference.inMinutes} 分钟前';
-  }
-  if (difference.inDays < 1) {
-    return '${difference.inHours} 小时前';
-  }
-  return '${difference.inDays} 天前';
+  return formatLocalizedRelativeTime(value, now, l10n);
 }

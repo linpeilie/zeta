@@ -12,6 +12,7 @@ import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/features/ide/views/new_thread_provider_popover.dart';
 import 'package:zeta/src/ui/localization/app_localizations_x.dart';
+import 'package:zeta/src/ui/localization/relative_time.dart';
 
 /// 活动项目未选中 Thread 时显示的中栏首页。
 class ProjectHomePage extends StatefulWidget {
@@ -320,6 +321,7 @@ class _RecentThreadRow extends StatelessWidget {
     final lastActiveLabel = _relativeThreadTime(
       thread.lastActiveAt,
       DateTime.now(),
+      context.l10n,
     );
     final preview = thread.preview.trim();
 
@@ -577,19 +579,13 @@ Color _threadStatusColor(
   };
 }
 
-String? _relativeThreadTime(DateTime? value, DateTime now) {
+String? _relativeThreadTime(
+  DateTime? value,
+  DateTime now,
+  AppLocalizations l10n,
+) {
   if (value == null) {
     return null;
   }
-  final difference = now.difference(value);
-  if (difference.isNegative || difference.inMinutes < 1) {
-    return '刚刚';
-  }
-  if (difference.inHours < 1) {
-    return '${difference.inMinutes} 分钟前';
-  }
-  if (difference.inDays < 1) {
-    return '${difference.inHours} 小时前';
-  }
-  return '${difference.inDays} 天前';
+  return formatLocalizedRelativeTime(value, now, l10n);
 }

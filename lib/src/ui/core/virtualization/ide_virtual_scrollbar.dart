@@ -133,8 +133,8 @@ class IdeScrollToEndButton extends StatelessWidget {
           const SizedBox(width: IdeSpacing.space6),
           Text(
             hasNewContent
-                ? (context.l10nOrNull?.timelineNewContent ?? '有新内容')
-                : (context.l10nOrNull?.timelineBackToBottom ?? '回到底部'),
+                ? context.l10n.timelineNewContent
+                : context.l10n.timelineBackToBottom,
             style: textStyles.bodySmall.copyWith(
               color: colors.textPrimary,
               fontWeight: FontWeight.w600,
