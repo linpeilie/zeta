@@ -12,6 +12,7 @@ import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_controller.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_management_page.dart';
+import 'package:zeta/src/ui/core/ide_button.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
@@ -851,19 +852,12 @@ class _FontSizeSettingRow extends StatelessWidget {
         children: [
           IdeTooltip(
             message: context.l10n.settingsDecreaseSomething(label),
-            child: Semantics(
-              button: true,
-              enabled: canDecrease,
-              label: context.l10n.settingsDecreaseSomething(label),
-              child: ExcludeSemantics(
-                child: sf.IconButton.outline(
-                  key: ValueKey<String>('$keyPrefix-decrease'),
-                  onPressed: canDecrease ? () => onChanged(value - 1) : null,
-                  size: sf.ButtonSize.small,
-                  density: sf.ButtonDensity.iconDense,
-                  icon: const Icon(Icons.remove_rounded, size: 16),
-                ),
-              ),
+            child: IdeIconButton(
+              key: ValueKey<String>('$keyPrefix-decrease'),
+              icon: Icons.remove_rounded,
+              semanticLabel: context.l10n.settingsDecreaseSomething(label),
+              onPressed: canDecrease ? () => onChanged(value - 1) : null,
+              controlSize: IdeControlSize.regular,
             ),
           ),
           const SizedBox(width: IdeSpacing.space8),
@@ -883,19 +877,12 @@ class _FontSizeSettingRow extends StatelessWidget {
           const SizedBox(width: IdeSpacing.space8),
           IdeTooltip(
             message: context.l10n.settingsIncreaseSomething(label),
-            child: Semantics(
-              button: true,
-              enabled: canIncrease,
-              label: context.l10n.settingsIncreaseSomething(label),
-              child: ExcludeSemantics(
-                child: sf.IconButton.outline(
-                  key: ValueKey<String>('$keyPrefix-increase'),
-                  onPressed: canIncrease ? () => onChanged(value + 1) : null,
-                  size: sf.ButtonSize.small,
-                  density: sf.ButtonDensity.iconDense,
-                  icon: const Icon(Icons.add_rounded, size: 16),
-                ),
-              ),
+            child: IdeIconButton(
+              key: ValueKey<String>('$keyPrefix-increase'),
+              icon: Icons.add_rounded,
+              semanticLabel: context.l10n.settingsIncreaseSomething(label),
+              onPressed: canIncrease ? () => onChanged(value + 1) : null,
+              controlSize: IdeControlSize.regular,
             ),
           ),
         ],

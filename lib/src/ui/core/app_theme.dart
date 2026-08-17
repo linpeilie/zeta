@@ -5,6 +5,8 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/core/constants/app_typography.dart';
 
 import 'ide_colors.dart';
+import 'ide_metrics.dart';
+import 'ide_text_styles.dart';
 
 /// IDE 运行时主题真源。
 ///
@@ -228,7 +230,20 @@ sf.ThemeData buildShadcnTheme(IdeThemeData ideTheme) {
     // 的 4 / 6 / 8 / 12 形成两套差 0.7~2px 的平行体系——差距不够大到像有意
     // 为之，只够大到让并排的 sf 控件和 Ide 控件看起来「圆角没对齐」。
     radius: 0.5,
-    density: sf.Density.defaultDensity,
+    // 圆角对齐（上面的 radius）解决了一半问题，尺寸是另一半：shadcn 控件
+    // 「内容撑高」，高度 = 2 × baseGap + 文字行盒。默认档的 8 配上 14px 的
+    // `typography.small`，算出来是 30——和走 [IdeMetrics] 档位的 Ide 控件
+    // （2 × 10 + 15 = 35）差 5px。把 baseGap 接到同一个 token 上，再由
+    // [_buildShadcnTypography] 把行盒也对齐，没有被 Ide 组件封装的裸 sf 控件
+    // 才会自然落在同一档，而不是靠 code review 一个个抓。
+    //
+    // baseContentPadding / baseContainerPadding 保持 16：它们管的是横向留白
+    // 与卡片内边距，不参与高度公式，改动只会平白扰动菜单、对话框的版式。
+    density: sf.Density(
+      baseContainerPadding: 16,
+      baseGap: IdeMetrics.controlPaddingYRegular,
+      baseContentPadding: 16,
+    ),
     scaling: 1,
     // Desktop IDE：固定桌面 platform，避免测试默认 android 时 popover 走 sheet。
     platform: TargetPlatform.windows,
@@ -362,12 +377,33 @@ sf.Typography _buildShadcnTypography(IdeThemeData ideTheme) {
     fontSizeFactor: codeFontSizeFactor,
   );
 
+  // 把 shadcn 的三档组件字号重映射到 IdeTextStyles。
+  //
+  // 只改 `fontSize` 不够，**必须连 `height` 一起给**：控件高度 = 2 × 内边距 +
+  // 文字行盒，而 geist 的档位没有显式行高，行盒由字体自身的度量决定，随字体
+  // 变化。把行高钉到 IDE 的档位，裸 sf 控件与 Ide 控件才会算出同一个高度。
+  //
+  // 只动 xSmall / small / base 这三档组件 chrome；标题与长文（h1..h4、p、
+  // lead 等）保持 shadcn 原值——应用的正文排版走自己的 Markdown 样式，
+  // 这里改了既没人消费，还会让 shadcn 内部的层级关系错位。
+  final ideStyles = IdeTextStyles.resolve(
+    colors: ideTheme.colors,
+    uiFontFamily: uiFontFamily,
+    uiFontFamilyFallback: ideTheme.uiFontFamilyFallback,
+    codeFontFamily: codeFontFamily,
+    uiFontSize: ideTheme.uiFontSize,
+    codeFontSize: ideTheme.codeFontSize,
+  );
+  TextStyle ideSized(TextStyle style, TextStyle ideStyle) => uiStyle(
+    style,
+  ).copyWith(fontSize: ideStyle.fontSize, height: ideStyle.height);
+
   return base.copyWith(
     sans: () => uiStyle(base.sans),
     mono: () => codeStyle(base.mono),
-    xSmall: () => uiStyle(base.xSmall),
-    small: () => uiStyle(base.small),
-    base: () => uiStyle(base.base),
+    xSmall: () => ideSized(base.xSmall, ideStyles.caption),
+    small: () => ideSized(base.small, ideStyles.bodySmall),
+    base: () => ideSized(base.base, ideStyles.bodyMedium),
     large: () => uiStyle(base.large),
     xLarge: () => uiStyle(base.xLarge),
     x2Large: () => uiStyle(base.x2Large),

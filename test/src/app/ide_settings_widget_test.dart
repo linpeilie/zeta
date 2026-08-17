@@ -73,6 +73,47 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  // 页面级护栏：单看组件测试都是绿的，页面上却可能因为某个控件绕过 ui/core
+  // 直接用了裸 sf 组件而参差不齐——设置页当初就是下拉 32、字号步进 22、
+  // Tabs 34 三种高度混排。这条断言盯的正是「同一屏里的交互控件必须等高」。
+  testWidgets('appearance settings controls all share one height', (
+    tester,
+  ) async {
+    await _pumpSettingsPage(
+      tester,
+      locale: ZetaLocalization.english,
+      activeSection: SettingsSection.appearance,
+    );
+
+    const controlKeys = <String>[
+      'settings-theme-tabs',
+      'settings-ui-font-select',
+      'settings-code-font-select',
+      'settings-ui-font-size-decrease',
+      'settings-ui-font-size-increase',
+      'settings-code-font-size-decrease',
+      'settings-code-font-size-increase',
+    ];
+
+    final expected = IdeMetrics.controlNaturalHeightFor(
+      IdeTextStyles.of(
+        tester.element(find.byKey(const ValueKey('settings-theme-tabs'))),
+      ).bodySmall,
+      size: IdeControlSize.regular,
+    );
+
+    for (final key in controlKeys) {
+      final finder = find.byKey(ValueKey<String>(key));
+      expect(finder, findsOneWidget, reason: '缺少控件 $key');
+      expect(
+        tester.getSize(finder).height,
+        closeTo(expected, 0.01),
+        reason: '$key 与其他设置控件不等高',
+      );
+    }
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('general settings defaults to Enter and updates shortcut', (
     tester,
   ) async {

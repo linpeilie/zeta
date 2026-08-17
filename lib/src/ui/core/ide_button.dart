@@ -160,7 +160,13 @@ class IdeButton extends StatelessWidget {
     final button = sf.Button(
       onPressed: isEnabled ? onPressed : null,
       enabled: isEnabled,
-      style: _resolveStyle(variant, controlSize),
+      style: _resolveStyle(
+        variant,
+        EdgeInsets.symmetric(
+          horizontal: IdeSpacing.space8,
+          vertical: IdeMetrics.controlPaddingYFor(controlSize),
+        ),
+      ),
       // 有 leading 时 shadcn 内部 Row 默认顶对齐，alignment 负责垂直居中。
       alignment: Alignment.centerLeft,
       // 图标一律走等高图标盒：拆掉固定高度后，15/16px 的裸图标会比 15px 的
@@ -212,7 +218,7 @@ class IdeButton extends StatelessWidget {
   /// 换成 [IdeMetrics] 的档位——控件高度从此只有一个出处。
   static sf.AbstractButtonStyle _resolveStyle(
     IdeButtonVariant variant,
-    IdeControlSize controlSize,
+    EdgeInsets padding,
   ) {
     const size = sf.ButtonSize.normal;
     const density = sf.ButtonDensity.dense;
@@ -248,12 +254,7 @@ class IdeButton extends StatelessWidget {
         density: density,
       ),
     };
-    return base.copyWith(
-      padding: (context, states, value) => EdgeInsets.symmetric(
-        horizontal: IdeSpacing.space8,
-        vertical: IdeMetrics.controlPaddingYFor(controlSize),
-      ),
-    );
+    return base.copyWith(padding: (context, states, value) => padding);
   }
 
   static Color _resolveForeground({
@@ -274,6 +275,96 @@ class IdeButton extends StatelessWidget {
       IdeButtonVariant.secondary ||
       IdeButtonVariant.ghost => colors.textPrimary,
     };
+  }
+}
+
+/// 统一 IDE 图标按钮（正方形，只有一个图标）。
+///
+/// 存在的理由：`sf.IconButton` 的尺寸由 `ButtonSize` × `ButtonDensity` 两个
+/// **乘法修饰符**决定（`small` + `iconDense` 会算出 23.5 这种既不落档、也无法
+/// 与任何文字控件对齐的数字），而调用点每换一组组合就凭空多一个高度。
+///
+/// 本组件把四边内边距统一到 [IdeMetrics.controlPaddingYFor]，图标走
+/// [IdeIconBox]——因为图标盒是正方形，按钮**自然就是正方形**，无需显式定尺寸，
+/// 且边长恰好等于同档位文字控件的高度，能和 Select / Tabs / Button 并排对齐。
+///
+/// 与 [IdeButton] 的分工：有文案走 [IdeButton]（它也能带图标），纯图标走这里。
+/// 无障碍上纯图标没有可读文本，因此 [semanticLabel] 是必填项。
+class IdeIconButton extends StatelessWidget {
+  /// 创建一个正方形图标按钮。
+  const IdeIconButton({
+    required this.icon,
+    required this.semanticLabel,
+    super.key,
+    this.onPressed,
+    this.enabled = true,
+    this.variant = IdeButtonVariant.outline,
+    this.controlSize = IdeControlSize.compact,
+  });
+
+  /// 按钮内的图标。
+  final IconData icon;
+
+  /// 无障碍名称；纯图标按钮没有可读文本，必须显式提供。
+  final String semanticLabel;
+
+  /// 点击回调；为 `null` 时按钮禁用。
+  final VoidCallback? onPressed;
+
+  /// 是否允许交互；与 [onPressed] 同时为真时才可点。
+  final bool enabled;
+
+  /// 视觉变体。
+  final IdeButtonVariant variant;
+
+  /// 密度档；与同排文字控件保持同一档才会等高。
+  final IdeControlSize controlSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
+    final isEnabled = enabled && onPressed != null;
+    final foreground = IdeButton._resolveForeground(
+      colors: colors,
+      enabled: isEnabled,
+      variant: variant,
+    );
+    // 实心档的图标必须与文字同色；描边/幽灵档退回次级灰，避免一排图标按钮
+    // 比旁边的文字控件更抢眼。
+    final iconColor = switch (variant) {
+      IdeButtonVariant.primary ||
+      IdeButtonVariant.destructive ||
+      IdeButtonVariant.accentOutline ||
+      IdeButtonVariant.dangerOutline => foreground,
+      IdeButtonVariant.outline ||
+      IdeButtonVariant.secondary ||
+      IdeButtonVariant.ghost =>
+        isEnabled ? colors.textSecondary : colors.textTertiary,
+    };
+    final padding = IdeMetrics.controlPaddingYFor(controlSize);
+    final minSide = IdeMetrics.controlMinHeightFor(controlSize);
+
+    return Semantics(
+      button: true,
+      enabled: isEnabled,
+      label: semanticLabel,
+      excludeSemantics: true,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minWidth: minSide, minHeight: minSide),
+        child: sf.Button(
+          onPressed: isEnabled ? onPressed : null,
+          enabled: isEnabled,
+          style: IdeButton._resolveStyle(variant, EdgeInsets.all(padding)),
+          alignment: Alignment.center,
+          child: IdeIconBox(
+            icon,
+            style: textStyles.bodySmall,
+            color: iconColor,
+          ),
+        ),
+      ),
+    );
   }
 }
 

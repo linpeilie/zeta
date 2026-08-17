@@ -164,11 +164,23 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 **禁止**：Material `ThemeData` / `ColorScheme.fromSeed`、裸 `Color(0x...)`、手写 `BoxShadow` 列表、临时拼的 `BorderRadius.circular(...)`、已移除的 `shadcn_ui` / `Shad*` / `showShadDialog` API。通知统一 `showIdeToast`（`lib/src/ui/core/ide_toast.dart`），不要在 feature 里散落 `sf.showToast`。
 
+**控件高度由内容撑开，容器高度由 token 固定。**
+
+- **控件**（Select / Tabs / Button / IconButton / 未来的 TextField）：高度 = `2 × IdeMetrics.controlPaddingYFor(size) + 内容`，下限走 `controlMinHeightFor`。**禁止**给控件套 `SizedBox(height:)` 或 `maxHeight` 把高度钉死——一旦钉死，各控件内边距的分歧就被藏起来，等哪天拆掉固定高度会一次性散成好几个高度（本项目曾经是 20/23/25/33 靠一个 34 的常数强行对齐）。需要一个具体数字（测试断言、骨架屏占位）时用 `controlNaturalHeightFor`，不要拿它回头去设高度。
+- **控件内的图标**必须过 `IdeIconBox`：图标比文字行盒高就会成为决定高度的那个内容，让带图标的控件比纯文字的高（shadcn 官网 Select 比 Button 高 2px 就是这么来的）。
+- **容器**（标题栏、pane 头、列表行、工具条）继续用固定 token，但要用 `minHeight` 而不是 `height`，且必须 ≥ 内部控件的自然高度，否则用户放大 UI 字号后直接溢出。
+- feature 里**不要**直接用 `sf.Button` / `sf.IconButton` / `sf.TextField` / `sf.Select`：它们的尺寸由 `ButtonSize` × `ButtonDensity` 两个乘法修饰符决定，落不到设计档位上。走 `ui/core` 的 Ide 封装；确实缺封装就先补组件。
+
 **自查**：
 
 ```sh
 grep -rnE "Color\(0x|BoxShadow\(|BorderRadius\.circular|ColorScheme\.fromSeed|Shad[A-Z]" lib/src/features
 grep -rn "import 'package:shadcn_flutter" lib | grep -v "as sf"
+# 控件级 sf 原件的存量清单：只增不减就是在制造新的高度分叉。
+# 当前基线是 10 处内嵌 `sf.IconButton.ghost`（行内小动作）+ 设置页 2 处需要
+# 搜索弹层的 `sf.Select`；新增一律要么走 Ide 封装，要么在调用点写明为什么
+# 封装满足不了，并显式对齐 IdeMetrics 的内边距。
+grep -rnE "sf\.(IconButton|TextField|Button)\." lib/src/features | wc -l
 ```
 
 > 正文：[工程规范 §6](docs/architecture/engineering_standards.md) · [开发者文档 §8](docs/guides/developer_guide.md)
