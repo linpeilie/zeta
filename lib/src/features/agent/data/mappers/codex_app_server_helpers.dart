@@ -44,25 +44,28 @@ bool _isErrorNotification(String method) {
 }
 
 /// 从 Codex item 中挑选最适合 UI 展示的标题。
-String _toolTitle(Map<String, Object?> item) {
+String _toolTitle(Map<String, Object?> item, AgentUiTextCatalog catalog) {
   final normalizedType = _normalizedAgentItemType(_string(item['type']));
   return switch (normalizedType) {
-    'reasoning' => '思考',
-    'websearch' => 'Web 搜索',
-    'imageview' => '查看图片',
-    'imagegeneration' => '生成图片',
+    'reasoning' => catalog.thinkingToolTitle,
+    'websearch' => catalog.webSearchTitle,
+    'imageview' => catalog.viewImageTitle,
+    'imagegeneration' => catalog.generateImageTitle,
     'collabagenttoolcall' => _toolPathTitle(
-      prefix: '协作',
+      prefix: catalog.collaboratePrefix,
       first: _string(item['tool']),
+      fallbackTitle: catalog.toolCallFallbackTitle,
     ),
     'mcptoolcall' => _toolPathTitle(
       prefix: 'MCP',
       first: _string(item['server']),
       second: _string(item['tool']),
+      fallbackTitle: catalog.toolCallFallbackTitle,
     ),
     'dynamictoolcall' => _toolPathTitle(
       first: _string(item['namespace']),
       second: _string(item['tool']),
+      fallbackTitle: catalog.toolCallFallbackTitle,
     ),
     'commandexecution' => _string(item['command']) ?? 'Command',
     'filechange' => 'File change',
@@ -72,7 +75,7 @@ String _toolTitle(Map<String, Object?> item) {
           _string(item['command']) ??
           _string(item['query']) ??
           _string(item['type']) ??
-          'Tool call',
+          catalog.toolCallFallbackTitle,
   };
 }
 
@@ -187,51 +190,53 @@ List<String> _toolLocationsFromThreadItem(Map<String, Object?> item) {
 AgentHistoryEventEntry? _systemHistoryEventFromThreadItem(
   Map<String, Object?> item, {
   required String id,
+  required AgentUiTextCatalog catalog,
 }) {
   final normalizedType = _normalizedAgentItemType(_string(item['type']));
   return switch (normalizedType) {
     'enteredreviewmode' => AgentHistoryEventEntry(
       id: id,
       kind: AgentHistoryEventKind.system,
-      title: '进入评审模式',
+      title: catalog.reviewModeEnteredTitle,
       description: _string(item['review']),
       raw: item,
     ),
     'exitedreviewmode' => AgentHistoryEventEntry(
       id: id,
       kind: AgentHistoryEventKind.system,
-      title: '退出评审模式',
+      title: catalog.reviewModeExitedTitle,
       description: _string(item['review']),
       raw: item,
     ),
     'contextcompaction' => AgentHistoryEventEntry(
       id: id,
       kind: AgentHistoryEventKind.system,
-      title: '上下文已压缩',
-      description: '会话上下文已压缩以腾出窗口空间。',
+      title: catalog.contextCompactedTitle,
+      description: catalog.contextCompactedDescription,
       raw: item,
     ),
     'hookprompt' => AgentHistoryEventEntry(
       id: id,
       kind: AgentHistoryEventKind.system,
-      title: 'Hook 提示',
+      title: catalog.hookPromptTitle,
       content: _hookPromptFragmentsText(item['fragments']),
       raw: item,
     ),
     'sleep' => AgentHistoryEventEntry(
       id: id,
       kind: AgentHistoryEventKind.system,
-      title: '等待中',
-      description: _sleepDurationLabel(item['durationMs']),
+      title: catalog.waitingTitle,
+      description: _sleepDurationLabel(item['durationMs'], catalog),
       raw: item,
     ),
     'subagentactivity' => AgentHistoryEventEntry(
       id: id,
       kind: AgentHistoryEventKind.system,
-      title: '子代理活动',
+      title: catalog.subAgentActivityTitle,
       description: _subAgentActivityLabel(
         kind: _string(item['kind']),
         agentPath: _string(item['agentPath']),
+        catalog: catalog,
       ),
       content: _string(item['agentThreadId']),
       raw: item,
@@ -255,7 +260,7 @@ String? _hookPromptFragmentsText(Object? value) {
   return parts.isEmpty ? null : parts.join('\n');
 }
 
-String? _sleepDurationLabel(Object? durationMs) {
+String? _sleepDurationLabel(Object? durationMs, AgentUiTextCatalog catalog) {
   final duration = _durationFromMilliseconds(durationMs);
   if (duration == null) {
     return null;
@@ -263,18 +268,22 @@ String? _sleepDurationLabel(Object? durationMs) {
   if (duration.inMinutes >= 1) {
     final seconds = duration.inSeconds % 60;
     return seconds == 0
-        ? '休眠 ${duration.inMinutes} 分钟'
-        : '休眠 ${duration.inMinutes} 分 $seconds 秒';
+        ? catalog.sleepMinutes('${duration.inMinutes}')
+        : catalog.sleepMinutesSeconds('${duration.inMinutes}', '$seconds');
   }
-  return '休眠 ${duration.inSeconds} 秒';
+  return catalog.sleepSeconds('${duration.inSeconds}');
 }
 
-String _subAgentActivityLabel({String? kind, String? agentPath}) {
+String _subAgentActivityLabel({
+  String? kind,
+  String? agentPath,
+  required AgentUiTextCatalog catalog,
+}) {
   final kindLabel = switch (kind) {
-    'started' => '已启动',
-    'interacted' => '已交互',
-    'interrupted' => '已中断',
-    _ => kind ?? '更新',
+    'started' => catalog.subAgentStarted,
+    'interacted' => catalog.subAgentInteracted,
+    'interrupted' => catalog.subAgentInterrupted,
+    _ => kind ?? catalog.subAgentUpdated,
   };
   if (agentPath == null || agentPath.isEmpty) {
     return kindLabel;
@@ -307,6 +316,7 @@ AgentToolCall? _toolCallFromThreadItem(
   Map<String, Object?> item, {
   required String id,
   required AgentToolStatus status,
+  required AgentUiTextCatalog catalog,
   String? sessionId,
   String? turnId,
   Map<String, Object?> raw = const <String, Object?>{},
@@ -324,7 +334,7 @@ AgentToolCall? _toolCallFromThreadItem(
 
   return AgentToolCall(
     id: id,
-    title: _toolTitle(item),
+    title: _toolTitle(item, catalog),
     kind: _toolKind(_string(item['type'])),
     status: status,
     content: _toolContentFromThreadItem(item),
@@ -580,9 +590,14 @@ List<String> _fileChangeLocations(Object? value) {
 }
 
 /// 拼接工具调用的路径式标题，如 "MCP: serverName: toolName" 或 "namespace: toolName"。
-String _toolPathTitle({String? prefix, String? first, String? second}) {
+String _toolPathTitle({
+  String? prefix,
+  String? first,
+  String? second,
+  String fallbackTitle = 'Tool call',
+}) {
   final parts = <String>[?prefix, ?first, ?second];
-  return parts.isEmpty ? 'Tool call' : parts.join(': ');
+  return parts.isEmpty ? fallbackTitle : parts.join(': ');
 }
 
 /// 去除字符串首尾空白，空字符串或 null 返回 null。
@@ -689,6 +704,7 @@ AgentToolKind _jsonlToolKind(String? name) {
 /// 根据 jsonl 历史中的工具名称和参数生成 UI 友好的工具卡片标题。
 String _jsonlToolTitle({
   required String? name,
+  required AgentUiTextCatalog catalog,
   Map<String, Object?> arguments = const <String, Object?>{},
   String? stringInput,
 }) {
@@ -702,7 +718,7 @@ String _jsonlToolTitle({
     return 'Apply patch';
   }
   if (name == null || name.isEmpty) {
-    return 'Tool call';
+    return catalog.toolCallFallbackTitle;
   }
   return _humanizeIdentifier(name);
 }

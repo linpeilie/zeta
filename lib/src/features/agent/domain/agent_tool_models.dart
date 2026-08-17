@@ -88,20 +88,11 @@ class AgentToolCall {
 
   /// Provider 原始/映射标题；可能是 opaque `call-...` id。
   ///
-  /// UI 与活动条应优先使用 [displayTitle]。
+  /// UI 与活动条应优先使用 [AgentToolCallUiText.displayTitle]。
   final String title;
 
   /// 中立工具分类。
   final AgentToolKind kind;
-
-  /// 面向用户的简短标题：优先可读 title，否则由类型 + 路径/命令合成。
-  String get displayTitle => buildAgentToolCallDisplayTitle(
-    toolCallId: id,
-    title: title,
-    kind: kind,
-    locations: locations,
-    rawInput: rawInput,
-  );
 
   /// 工具生命周期状态。
   final AgentToolStatus status;
@@ -240,21 +231,6 @@ bool isNonInformativeAgentToolCallTitle(String title, {String? toolCallId}) {
   };
 }
 
-/// 工具类型的简短中文标签（时间线标题、活动条用）。
-String agentToolKindLabel(AgentToolKind kind) {
-  return switch (kind) {
-    AgentToolKind.read => '读取',
-    AgentToolKind.edit => '编辑',
-    AgentToolKind.delete => '删除',
-    AgentToolKind.move => '移动',
-    AgentToolKind.search => '搜索',
-    AgentToolKind.execute => '执行',
-    AgentToolKind.think => '思考',
-    AgentToolKind.fetch => '获取',
-    AgentToolKind.other => '操作',
-  };
-}
-
 /// 从 ACP kind 字符串解析 [AgentToolKind]（兼容 PascalCase）。
 AgentToolKind parseAgentToolKind(String? kind) {
   final normalized = kind?.trim().toLowerCase();
@@ -280,6 +256,7 @@ AgentToolKind parseAgentToolKind(String? kind) {
 /// 4. 「操作」（绝不回退到 call- id）
 String buildAgentToolCallDisplayTitle({
   required String toolCallId,
+  required String Function(AgentToolKind kind) kindLabel,
   String? title,
   AgentToolKind kind = AgentToolKind.other,
   String? kindRaw,
@@ -297,16 +274,16 @@ String buildAgentToolCallDisplayTitle({
   }
 
   final detail = _toolCallDetail(locations: locations, rawInput: rawInput);
-  final kindLabel = agentToolKindLabel(resolvedKind);
+  final resolvedKindLabel = kindLabel(resolvedKind);
 
   if (detail != null && detail.isNotEmpty) {
     // other 类型时 detail 本身往往已足够（命令/路径）。
     if (resolvedKind == AgentToolKind.other) {
       return detail;
     }
-    return '$kindLabel · $detail';
+    return '$resolvedKindLabel · $detail';
   }
-  return kindLabel;
+  return resolvedKindLabel;
 }
 
 String? _toolCallDetail({

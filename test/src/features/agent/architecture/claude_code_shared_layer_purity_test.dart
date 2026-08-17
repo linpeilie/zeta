@@ -27,8 +27,8 @@ void main() {
   /// 接入 Claude Code 期间这些文件必须 `git diff` 为空；若实现不得不改共享层，
   /// 必须先停线取得明确批准并记录边界，批准后才能更新本基线。长度与指纹统一按
   /// LF 计算，避免不同平台的 checkout 行尾让守卫误报。
-  /// TimelineStore 基线已按 2026-08-16 多语言步骤 11（§4.1 批准，注入
-  /// `AgentUiTextCatalog` 思考 canary）刷新。
+  /// TimelineStore 基线已按 2026-08-17 多语言步骤 12（其余 context-free
+  /// 文案改走 `AgentUiTextCatalog`）刷新。
   const g1ContentBaselines = <String, _FileBaseline>{
     'lib/src/features/agent/application/agent_event_pipeline.dart':
         _FileBaseline(
@@ -56,9 +56,9 @@ void main() {
         ),
     'lib/src/features/agent/application/agent_conversation_timeline_store.dart':
         _FileBaseline(
-          lineCount: 2016,
+          lineCount: 2017,
           byteLength: 67491,
-          fingerprint: '4fec0b17891d9e6b',
+          fingerprint: '9a129dfe302117a4',
         ),
   };
 

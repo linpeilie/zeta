@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta/src/app/localization/zeta_text_catalogs.dart';
+import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
 
@@ -18,6 +19,14 @@ void main() {
     expect(
       const FallbackAgentUiTextCatalog().thinkingToolTitle,
       zh.thinkingToolTitle,
+    );
+    expect(zh.planReadyTitle, '计划就绪');
+    expect(en.planReadyTitle, 'Plan ready');
+    expect(zh.toolKindLabel(AgentToolKind.search), '搜索');
+    expect(en.toolKindLabel(AgentToolKind.search), 'Search');
+    expect(
+      const FallbackAgentUiTextCatalog().planReadyTitle,
+      zh.planReadyTitle,
     );
   });
 }

@@ -109,22 +109,3 @@ String? formatAgentDuration(
   }
   return '${seconds}s';
 }
-
-/// 标题栏主 segment 文案（不含时长）。
-String? agentActivitySegmentLabel(AgentTurnActivitySnapshot activity) {
-  return switch (activity.phase) {
-    AgentTurnActivityPhase.starting => '启动中',
-    AgentTurnActivityPhase.thinking => '思考中',
-    AgentTurnActivityPhase.responding => '回复中',
-    AgentTurnActivityPhase.toolRunning => () {
-      final label = activity.label?.trim();
-      if (label == null || label.isEmpty) {
-        return '执行中';
-      }
-      // 过长命令截断，避免头栏撑破布局。
-      final short = label.length > 28 ? '${label.substring(0, 28)}…' : label;
-      return '执行中 · $short';
-    }(),
-    AgentTurnActivityPhase.idle => null,
-  };
-}

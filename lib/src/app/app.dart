@@ -174,6 +174,12 @@ class MainAppState extends State<MainApp>
     }
     final useFilePersistence = _useFilePersistence;
     final dataPaths = widget.dataPaths;
+    _frozenDisplayLocale = ZetaLocalization.localeFor(
+      widget.displayLanguageOverride ?? AppLanguage.simplifiedChinese,
+    );
+    _agentUiTextCatalog = ZetaTextCatalogs(
+      lookupAppLocalizations(_frozenDisplayLocale),
+    ).agentUi;
     _defaultAgentProviderFactory = DefaultAgentProviderFactory(
       claudeCodeSessionDecisionStoreFactory: useFilePersistence
           ? (sessionId) => FileClaudeCodeSessionDecisionStore(
@@ -185,6 +191,7 @@ class MainAppState extends State<MainApp>
               file: _claudeCodeHiddenThreadsFile(dataPaths!),
             )
           : null,
+      textCatalog: _agentUiTextCatalog,
     );
     _agentProviderSettingsCodec = AgentProviderSettingsCodec(
       migrationRegistry: AgentProviderPermissionMigrationRegistry(
@@ -259,12 +266,6 @@ class MainAppState extends State<MainApp>
       _ownsGeneralSettingsController = true;
     }
     unawaited(_appearanceController.load());
-    _frozenDisplayLocale = ZetaLocalization.localeFor(
-      widget.displayLanguageOverride ?? AppLanguage.simplifiedChinese,
-    );
-    _agentUiTextCatalog = ZetaTextCatalogs(
-      lookupAppLocalizations(_frozenDisplayLocale),
-    ).agentUi;
     final loadGeneralSettings = _generalSettingsController.load();
     final shouldWait = widget.waitForGeneralSettings;
     if (shouldWait) {

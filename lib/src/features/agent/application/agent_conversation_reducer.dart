@@ -518,6 +518,7 @@ final class AgentConversationReducer {
             role: AgentMessageRole.system,
             text: AgentProviderErrorPresentation.formatUserVisibleText(
               message: errorMessage,
+              catalog: textCatalog,
               code: event.errorCode,
               prefixTurnFailed: true,
             ),
@@ -972,14 +973,16 @@ final class AgentConversationReducer {
     return AgentConversationMutation(
       accepted: true,
       stateChanges: <AgentConversationStateChange>[
-        AgentSetModelRerouteNoticeChange('已改道至 ${event.toModel}'),
+        AgentSetModelRerouteNoticeChange(
+          textCatalog.modelReroutedNotice(event.toModel),
+        ),
       ],
       timelineMutations: <AgentTimelineMutation>[
         AgentAddHistoryEventTimelineMutation(
           AgentHistoryEventEntry(
             id: _nextLocalTimelineId('model-reroute'),
             kind: AgentHistoryEventKind.system,
-            title: '模型已改道',
+            title: textCatalog.modelReroutedTitle,
             description: '${event.fromModel} → ${event.toModel}',
             content: _modelRerouteReasonLabel(event.reason),
             raw: event.raw,
@@ -1008,11 +1011,11 @@ final class AgentConversationReducer {
           AgentHistoryEventEntry(
             id: _nextLocalTimelineId('deprecation'),
             kind: AgentHistoryEventKind.warning,
-            title: '适配层弃用提示',
+            title: textCatalog.deprecationNoticeTitle,
             description: event.summary,
             content: event.details == null
-                ? '请升级 Codex 适配层以继续兼容协议变更。'
-                : '${event.details}\n请升级 Codex 适配层以继续兼容协议变更。',
+                ? textCatalog.deprecationUpgradeHint
+                : '${event.details}\n${textCatalog.deprecationUpgradeHint}',
             raw: event.raw,
           ),
         ),
@@ -1139,14 +1142,15 @@ final class AgentConversationReducer {
 
   String _modelRerouteReasonLabel(String reason) {
     return switch (reason) {
-      'highRiskCyberActivity' => '原因：高风险网络活动策略',
-      _ => '原因：$reason',
+      'highRiskCyberActivity' => textCatalog.rerouteReasonHighRisk,
+      _ => textCatalog.rerouteReasonUnknown(reason),
     };
   }
 
   String _errorMessageText(AgentErrorEvent event) {
     return AgentProviderErrorPresentation.formatUserVisibleText(
       message: event.message,
+      catalog: textCatalog,
       details: event.details,
       code: event.code,
       willRetry: event.willRetry,

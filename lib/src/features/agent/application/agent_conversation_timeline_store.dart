@@ -19,7 +19,7 @@ class AgentConversationTimelineStore {
   /// 回合外系统消息所属的 standby 分组 id。
   static const String standbyTurnId = '__standby__';
 
-  /// 当前进程的 Zeta 自有文案目录；步骤 11 仅思考卡 fallback 消费。
+  /// 当前进程的 Zeta 自有文案目录。
   final AgentUiTextCatalog textCatalog;
 
   final List<AgentConversationMessage> _messages = <AgentConversationMessage>[];
@@ -484,6 +484,7 @@ class AgentConversationTimelineStore {
     }
     final displayText = AgentProviderErrorPresentation.formatUserVisibleText(
       message: errorMessage,
+      catalog: textCatalog,
       code: turn.errorCode,
     );
     final existingSystem = turn.entries
@@ -1291,7 +1292,7 @@ class AgentConversationTimelineStore {
       return;
     }
     if (toolCall.isActiveStatus) {
-      final title = toolCall.displayTitle.trim();
+      final title = toolCall.displayTitle(textCatalog).trim();
       _setActivity(
         AgentTurnActivityPhase.toolRunning,
         label: title.isEmpty ? null : title,

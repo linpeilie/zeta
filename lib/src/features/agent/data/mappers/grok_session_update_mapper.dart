@@ -4,6 +4,7 @@ import 'package:zeta/src/features/agent/data/mappers/grok_error_normalizer.dart'
 import 'package:zeta/src/features/agent/data/mappers/grok_file_change_tracker.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_stream_identity.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 
 /// Grok typed ACP update 到领域事件的映射结果。
 class GrokAcpMappedUpdate {
@@ -38,12 +39,14 @@ final class GrokSessionUpdateMapper {
     this.decoder = const AcpSessionUpdateDecoder(),
     GrokStreamIdentity? identity,
     GrokFileChangeTracker? fileChangeTracker,
+    this.textCatalog = const FallbackAgentUiTextCatalog(),
   }) : identity = identity ?? GrokStreamIdentity(),
        fileChangeTracker = fileChangeTracker ?? GrokFileChangeTracker();
 
   final AcpSessionUpdateDecoder decoder;
   final GrokStreamIdentity identity;
   final GrokFileChangeTracker fileChangeTracker;
+  final AgentUiTextCatalog textCatalog;
 
   /// 当前 turn 内最新的上下文窗口占用（来自 `_meta.totalTokens`）。
   int? _latestContextTokens;
@@ -855,6 +858,7 @@ final class GrokSessionUpdateMapper {
     final status = _mapToolStatus(update.status);
     final title = buildAgentToolCallDisplayTitle(
       toolCallId: update.toolCallId,
+      kindLabel: textCatalog.toolKindLabel,
       title: update.title,
       kind: kind,
       kindRaw: update.toolKind,

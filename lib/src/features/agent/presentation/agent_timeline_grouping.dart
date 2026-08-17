@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 import 'package:zeta/src/features/agent/presentation/agent_file_change_projection.dart';
 import 'package:zeta/src/features/agent/presentation/agent_file_change_projection_cache.dart';
 
@@ -142,6 +143,7 @@ List<AgentTimelineRenderBlock> buildAgentTimelineRenderBlocks({
   required String turnId,
   required List<AgentTimelineEntry> entries,
   AgentFileChangeProjectionCache? fileChangeProjectionCache,
+  AgentUiTextCatalog textCatalog = const FallbackAgentUiTextCatalog(),
 }) {
   final fileChangeCache =
       fileChangeProjectionCache ?? AgentFileChangeProjectionCache();
@@ -208,6 +210,7 @@ List<AgentTimelineRenderBlock> buildAgentTimelineRenderBlocks({
     final operation = _pendingOperationFromEntry(
       entry,
       fileChangeCache: fileChangeCache,
+      textCatalog: textCatalog,
     );
     if (operation == null) {
       // 回合级 typed fallback 不与相邻 tool owner 合并。
@@ -265,6 +268,7 @@ class _PendingOperation {
 _PendingOperation? _pendingOperationFromEntry(
   AgentTimelineEntry entry, {
   required AgentFileChangeProjectionCache fileChangeCache,
+  required AgentUiTextCatalog textCatalog,
 }) {
   return switch (entry) {
     AgentToolTimelineEntry(:final toolCall)
@@ -282,7 +286,7 @@ _PendingOperation? _pendingOperationFromEntry(
       commandItem: AgentTimelineCommandGroupItem(
         id: entry.id,
         kind: toolCall.kind,
-        title: toolCall.displayTitle,
+        title: toolCall.displayTitle(textCatalog),
         entry: entry,
       ),
     ),

@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 
 void main() {
   group('AgentConversationTimelineStore', () {
@@ -45,6 +46,7 @@ void main() {
       const errorMessage = 'Grok rate limit reached. Please try again later.';
       final expectedText = AgentProviderErrorPresentation.formatUserVisibleText(
         message: errorMessage,
+        catalog: const FallbackAgentUiTextCatalog(),
       );
       final store = AgentConversationTimelineStore();
       addTearDown(store.dispose);
@@ -1530,7 +1532,7 @@ AgentThreadSummary _thread() {
   );
 }
 
-final class _EnglishThinkingCatalog implements AgentUiTextCatalog {
+final class _EnglishThinkingCatalog extends FallbackAgentUiTextCatalog {
   const _EnglishThinkingCatalog();
 
   @override

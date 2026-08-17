@@ -4,6 +4,7 @@ import 'package:zeta/src/features/agent/application/agent_conversation_mutation.
 import 'package:zeta/src/features/agent/application/agent_conversation_reducer.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 
 /// 步骤 11 canary：同一中立 fixture 在两种目录下结构相同，仅思考卡标题不同。
 const _zhThinkingCatalog = _FixedAgentUiTextCatalog('思考');
@@ -144,9 +145,11 @@ AgentConversationReducerContext _context() {
   );
 }
 
-final class _FixedAgentUiTextCatalog implements AgentUiTextCatalog {
-  const _FixedAgentUiTextCatalog(this.thinkingToolTitle);
+final class _FixedAgentUiTextCatalog extends FallbackAgentUiTextCatalog {
+  const _FixedAgentUiTextCatalog(this._thinkingToolTitle);
+
+  final String _thinkingToolTitle;
 
   @override
-  final String thinkingToolTitle;
+  String get thinkingToolTitle => _thinkingToolTitle;
 }

@@ -8,6 +8,7 @@ import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
+import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 
 /// 由已构造的 Codex adapter 组装原生 Bundle。
 AgentProviderBundle nativeBundleFromCodex(
@@ -78,12 +79,14 @@ AgentProviderBundle createCodexBundle(
   AgentProviderConfig config, {
   JsonRpcPeer? peer,
   JsonRpcPeerFactory? peerFactory,
+  AgentUiTextCatalog textCatalog = const FallbackAgentUiTextCatalog(),
 }) {
   return nativeBundleFromCodex(
     CodexAppServerAgentProvider(
       config: config,
       peer: peer,
       peerFactory: peerFactory,
+      textCatalog: textCatalog,
     ),
   );
 }
@@ -93,9 +96,15 @@ AgentProviderBundle createGrokBundle(
   AgentProviderConfig config, {
   JsonRpcPeer? peer,
   JsonRpcPeerFactory? peerFactory,
+  AgentUiTextCatalog textCatalog = const FallbackAgentUiTextCatalog(),
 }) {
   return nativeBundleFromGrok(
-    GrokAcpAgentProvider(config: config, peer: peer, peerFactory: peerFactory),
+    GrokAcpAgentProvider(
+      config: config,
+      peer: peer,
+      peerFactory: peerFactory,
+      textCatalog: textCatalog,
+    ),
   );
 }
 
@@ -106,6 +115,7 @@ AgentProviderBundle createClaudeCodeBundle(
   ClaudeCodeSessionDecisionStoreFactory? sessionDecisionStoreFactory,
   ClaudeCodeHiddenThreadStore? hiddenThreadStore,
   ProcessStarter? processStarter,
+  AgentUiTextCatalog textCatalog = const FallbackAgentUiTextCatalog(),
 }) {
   return nativeBundleFromClaudeCode(
     ClaudeCodeAgentProvider(
@@ -114,6 +124,7 @@ AgentProviderBundle createClaudeCodeBundle(
       sessionDecisionStoreFactory: sessionDecisionStoreFactory,
       hiddenThreadStore: hiddenThreadStore,
       processStarter: processStarter,
+      textCatalog: textCatalog,
     ),
   );
 }

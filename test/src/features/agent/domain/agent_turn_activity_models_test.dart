@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/domain/agent_turn_activity_models.dart';
+import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 
 void main() {
   group('resolveAgentElapsed', () {
@@ -55,10 +56,11 @@ void main() {
     });
   });
 
-  group('agentActivitySegmentLabel', () {
+  group('activitySegmentLabel', () {
     test('builds segment labels', () {
+      const catalog = FallbackAgentUiTextCatalog();
       expect(
-        agentActivitySegmentLabel(
+        catalog.activitySegmentLabel(
           const AgentTurnActivitySnapshot(
             phase: AgentTurnActivityPhase.thinking,
           ),
@@ -66,7 +68,7 @@ void main() {
         '思考中',
       );
       expect(
-        agentActivitySegmentLabel(
+        catalog.activitySegmentLabel(
           const AgentTurnActivitySnapshot(
             phase: AgentTurnActivityPhase.toolRunning,
             label: 'git status',

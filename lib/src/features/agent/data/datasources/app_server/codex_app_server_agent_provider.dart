@@ -14,6 +14,7 @@ import 'package:zeta/src/features/agent/data/agent_provider_static_capabilities.
 import 'package:zeta/src/features/agent/data/mappers/codex_permission_policy_codec.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 import 'package:zeta/src/features/agent/domain/agent_usage_window_labels.dart';
 
 part 'codex_app_server_client.dart';
@@ -67,6 +68,7 @@ class CodexAppServerAgentProvider
   /// [peerFactory] 用于在未提供 [peer] 时按 [config] 创建默认对等体。
   CodexAppServerAgentProvider({
     required this.config,
+    this.textCatalog = const FallbackAgentUiTextCatalog(),
     JsonRpcPeer? peer,
     JsonRpcPeerFactory? peerFactory,
   }) : _modelSelection = AgentModelSelection(
@@ -78,7 +80,9 @@ class CodexAppServerAgentProvider
       peer ?? (peerFactory ?? _defaultPeerFactory)(config),
       providerId: config.id,
     );
-    final threadHistoryReader = _CodexThreadHistoryReader();
+    final threadHistoryReader = _CodexThreadHistoryReader(
+      textCatalog: textCatalog,
+    );
     final modelListMapper = _CodexModelListMapper();
     final collaborationModeMapper = _CodexCollaborationModeMapper();
     final skillsMapper = _CodexSkillsMapper();
@@ -96,8 +100,12 @@ class CodexAppServerAgentProvider
       turnStartParamsEncoder: turnStartParamsEncoder,
       threadHistoryReader: threadHistoryReader,
       configPermissionFallback: configPermissionFallback,
+      textCatalog: textCatalog,
     );
-    _notificationMapper = _CodexNotificationMapper(providerId: config.id);
+    _notificationMapper = _CodexNotificationMapper(
+      providerId: config.id,
+      textCatalog: textCatalog,
+    );
     _approvalMapper = _CodexApprovalMapper();
     _questionMapper = _CodexQuestionMapper();
     _permissionPolicyAdapter = CodexPermissionPolicyAdapter(
@@ -190,6 +198,9 @@ class CodexAppServerAgentProvider
 
   @override
   final AgentProviderConfig config;
+
+  /// 当前进程的 Zeta 自有文案目录。
+  final AgentUiTextCatalog textCatalog;
 
   /// initialize 时请求服务端屏蔽的通知(协议要求精确 method 名)。
   ///

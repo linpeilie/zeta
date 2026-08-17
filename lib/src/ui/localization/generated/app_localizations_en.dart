@@ -2653,4 +2653,168 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get agentCannotLoadModes =>
       'The current Provider cannot load conversation modes';
+
+  @override
+  String get agentStarting => 'Starting';
+
+  @override
+  String get agentResponding => 'Responding';
+
+  @override
+  String get agentPlanReady => 'Plan ready';
+
+  @override
+  String get agentModelRerouted => 'Model rerouted';
+
+  @override
+  String agentModelReroutedTo(String model) {
+    return 'Rerouted to $model';
+  }
+
+  @override
+  String get agentDeprecationNotice => 'Adapter deprecation notice';
+
+  @override
+  String get agentDeprecationUpgradeHint =>
+      'Please upgrade the Codex adapter to stay compatible with protocol changes.';
+
+  @override
+  String get agentRerouteReasonHighRisk =>
+      'Reason: high-risk cyber activity policy';
+
+  @override
+  String agentRerouteReasonUnknown(String reason) {
+    return 'Reason: $reason';
+  }
+
+  @override
+  String get agentTurnFailedPrefix => 'Turn failed: ';
+
+  @override
+  String get agentUnknownProviderError => 'Unknown provider error';
+
+  @override
+  String get agentServerWillRetry => ' (the server will retry automatically)';
+
+  @override
+  String get agentErrorGuidanceServerOverloaded =>
+      '. The selected model is at capacity. Switch models or try again later.';
+
+  @override
+  String get agentErrorGuidanceUsageLimit =>
+      '. Usage or rate limit reached. Check your quota or try again later.';
+
+  @override
+  String get agentErrorGuidanceSessionBudget =>
+      '. Session budget is exhausted. Start a new session or adjust the budget.';
+
+  @override
+  String get agentErrorGuidanceUnauthorized =>
+      '. Authentication failed. Check sign-in or API credentials and retry.';
+
+  @override
+  String get agentErrorGuidanceInternalServer =>
+      '. The server reported an internal error. Retry later or switch models.';
+
+  @override
+  String get agentErrorGuidanceNetwork =>
+      '. Network connection failed. Check the network and retry.';
+
+  @override
+  String get agentErrorGuidanceTooManyAttempts =>
+      '. Too many failed retries. Try again later or switch models.';
+
+  @override
+  String get agentWebSearch => 'Web search';
+
+  @override
+  String get agentViewImage => 'View image';
+
+  @override
+  String get agentGenerateImage => 'Generate image';
+
+  @override
+  String get agentCollaboratePrefix => 'Collaborate';
+
+  @override
+  String get agentToolCallFallback => 'Tool call';
+
+  @override
+  String get agentReviewModeEntered => 'Entered review mode';
+
+  @override
+  String get agentReviewModeExited => 'Exited review mode';
+
+  @override
+  String get agentContextCompacted => 'Context compacted';
+
+  @override
+  String get agentContextCompactedDescription =>
+      'Session context was compacted to free window space.';
+
+  @override
+  String get agentHookPrompt => 'Hook prompt';
+
+  @override
+  String get agentWaiting => 'Waiting';
+
+  @override
+  String agentSleepMinutes(String minutes) {
+    return 'Slept $minutes minutes';
+  }
+
+  @override
+  String agentSleepMinutesSeconds(String minutes, String seconds) {
+    return 'Slept $minutes min $seconds s';
+  }
+
+  @override
+  String agentSleepSeconds(String seconds) {
+    return 'Slept $seconds seconds';
+  }
+
+  @override
+  String get agentSubAgentActivity => 'Sub-agent activity';
+
+  @override
+  String get agentSubAgentStarted => 'Started';
+
+  @override
+  String get agentSubAgentInteracted => 'Interacted';
+
+  @override
+  String get agentSubAgentInterrupted => 'Interrupted';
+
+  @override
+  String get agentSubAgentUpdated => 'Updated';
+
+  @override
+  String get agentUserCancelled => 'Cancelled by user';
+
+  @override
+  String get agentPermissionAskDescription => 'Ask before every high-risk tool';
+
+  @override
+  String get agentPermissionAcceptEditsDescription =>
+      'Allow edit tools automatically; still ask for others';
+
+  @override
+  String get agentPermissionPlanDescription =>
+      'Read-only planning; no side effects';
+
+  @override
+  String get agentPermissionBypassDescription =>
+      'Skip permission checks (high risk)';
+
+  @override
+  String get agentPlanQuota => 'Plan quota';
+
+  @override
+  String get agentOnDemandQuota => 'On-demand quota';
+
+  @override
+  String get agentPrimaryQuota => 'Primary quota';
+
+  @override
+  String get agentExtraQuota => 'Extra quota';
 }

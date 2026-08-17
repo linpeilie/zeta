@@ -1,4 +1,6 @@
 import 'package:zeta/src/features/agent/domain/agent_permission_policy_models.dart';
+import 'package:zeta/src/features/agent/domain/agent_ui_text_catalog.dart';
+import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 
 /// Claude Code CLI `--permission-mode` 枚举（协议私货，仅 CC data 层）。
 enum ClaudeCodePermissionMode { ask, acceptEdits, plan, bypass }
@@ -123,23 +125,29 @@ abstract final class ClaudeCodePermissionModeCodec {
     };
   }
 
-  static String displayDescription(ClaudeCodePermissionMode mode) {
+  static String displayDescription(
+    ClaudeCodePermissionMode mode, {
+    AgentUiTextCatalog catalog = const FallbackAgentUiTextCatalog(),
+  }) {
     return switch (mode) {
-      ClaudeCodePermissionMode.ask => '每个高风险工具都询问',
-      ClaudeCodePermissionMode.acceptEdits => '自动允许编辑类工具，其他仍询问',
-      ClaudeCodePermissionMode.plan => '只读并产出计划，不执行副作用',
-      ClaudeCodePermissionMode.bypass => '跳过权限检查（高风险）',
+      ClaudeCodePermissionMode.ask => catalog.permissionAskDescription,
+      ClaudeCodePermissionMode.acceptEdits =>
+        catalog.permissionAcceptEditsDescription,
+      ClaudeCodePermissionMode.plan => catalog.permissionPlanDescription,
+      ClaudeCodePermissionMode.bypass => catalog.permissionBypassDescription,
     };
   }
 
   /// 中立 [AgentPermissionCatalog]（port / adapter 使用）。
-  static AgentPermissionCatalog catalog() {
+  static AgentPermissionCatalog catalog({
+    AgentUiTextCatalog textCatalog = const FallbackAgentUiTextCatalog(),
+  }) {
     final options = catalogOrder
         .map(
           (mode) => AgentPermissionOption(
             id: optionId(mode),
             label: displayLabel(mode),
-            description: displayDescription(mode),
+            description: displayDescription(mode, catalog: textCatalog),
             allowed: true,
             planningOnly: mode == ClaudeCodePermissionMode.plan,
           ),

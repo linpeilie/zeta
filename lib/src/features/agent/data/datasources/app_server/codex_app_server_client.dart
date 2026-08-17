@@ -11,6 +11,7 @@ class _CodexAppServerClient {
     required this._turnStartParamsEncoder,
     required this._threadHistoryReader,
     required this._configPermissionFallback,
+    required this._textCatalog,
   });
 
   final JsonRpcPeer _peer;
@@ -21,6 +22,7 @@ class _CodexAppServerClient {
   final _CodexTurnStartParamsEncoder _turnStartParamsEncoder;
   final _CodexThreadHistoryReader _threadHistoryReader;
   final CodexPermissionRuntimeSnapshot _configPermissionFallback;
+  final AgentUiTextCatalog _textCatalog;
 
   Future<AgentModelList> fetchModelList({
     int limit = 20,
@@ -170,12 +172,12 @@ class _CodexAppServerClient {
     _appendUsageWindow(
       windows,
       value: rateLimits['primary'],
-      fallbackLabel: limitName ?? '主要额度',
+      fallbackLabel: limitName ?? _textCatalog.primaryQuotaLabel,
     );
     _appendUsageWindow(
       windows,
       value: rateLimits['secondary'],
-      fallbackLabel: '补充额度',
+      fallbackLabel: _textCatalog.extraQuotaLabel,
     );
     final creditsMap = _map(rateLimits['credits']);
     final credits = creditsMap.isEmpty

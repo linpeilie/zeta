@@ -2570,4 +2570,155 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get agentCannotLoadModes => '当前 Provider 无法加载对话模式';
+
+  @override
+  String get agentStarting => '启动中';
+
+  @override
+  String get agentResponding => '回复中';
+
+  @override
+  String get agentPlanReady => '计划就绪';
+
+  @override
+  String get agentModelRerouted => '模型已改道';
+
+  @override
+  String agentModelReroutedTo(String model) {
+    return '已改道至 $model';
+  }
+
+  @override
+  String get agentDeprecationNotice => '适配层弃用提示';
+
+  @override
+  String get agentDeprecationUpgradeHint => '请升级 Codex 适配层以继续兼容协议变更。';
+
+  @override
+  String get agentRerouteReasonHighRisk => '原因：高风险网络活动策略';
+
+  @override
+  String agentRerouteReasonUnknown(String reason) {
+    return '原因：$reason';
+  }
+
+  @override
+  String get agentTurnFailedPrefix => 'Turn failed: ';
+
+  @override
+  String get agentUnknownProviderError => 'Unknown provider error';
+
+  @override
+  String get agentServerWillRetry => '（服务端将自动重试）';
+
+  @override
+  String get agentErrorGuidanceServerOverloaded => '。当前模型容量已满，请切换其他模型或稍后重试。';
+
+  @override
+  String get agentErrorGuidanceUsageLimit => '。用量或速率额度已用尽，请检查账户额度或稍后重试。';
+
+  @override
+  String get agentErrorGuidanceSessionBudget => '。会话预算已用尽，请开启新会话或调整预算后继续。';
+
+  @override
+  String get agentErrorGuidanceUnauthorized => '。认证失败，请检查登录状态或 API 凭证后重试。';
+
+  @override
+  String get agentErrorGuidanceInternalServer => '。服务端内部错误，请稍后重试；若持续出现可切换模型。';
+
+  @override
+  String get agentErrorGuidanceNetwork => '。网络连接异常，请检查网络后重试。';
+
+  @override
+  String get agentErrorGuidanceTooManyAttempts => '。多次重试仍失败，请稍后重试或切换模型。';
+
+  @override
+  String get agentWebSearch => 'Web 搜索';
+
+  @override
+  String get agentViewImage => '查看图片';
+
+  @override
+  String get agentGenerateImage => '生成图片';
+
+  @override
+  String get agentCollaboratePrefix => '协作';
+
+  @override
+  String get agentToolCallFallback => 'Tool call';
+
+  @override
+  String get agentReviewModeEntered => '进入评审模式';
+
+  @override
+  String get agentReviewModeExited => '退出评审模式';
+
+  @override
+  String get agentContextCompacted => '上下文已压缩';
+
+  @override
+  String get agentContextCompactedDescription => '会话上下文已压缩以腾出窗口空间。';
+
+  @override
+  String get agentHookPrompt => 'Hook 提示';
+
+  @override
+  String get agentWaiting => '等待中';
+
+  @override
+  String agentSleepMinutes(String minutes) {
+    return '休眠 $minutes 分钟';
+  }
+
+  @override
+  String agentSleepMinutesSeconds(String minutes, String seconds) {
+    return '休眠 $minutes 分 $seconds 秒';
+  }
+
+  @override
+  String agentSleepSeconds(String seconds) {
+    return '休眠 $seconds 秒';
+  }
+
+  @override
+  String get agentSubAgentActivity => '子代理活动';
+
+  @override
+  String get agentSubAgentStarted => '已启动';
+
+  @override
+  String get agentSubAgentInteracted => '已交互';
+
+  @override
+  String get agentSubAgentInterrupted => '已中断';
+
+  @override
+  String get agentSubAgentUpdated => '更新';
+
+  @override
+  String get agentUserCancelled => '用户取消';
+
+  @override
+  String get agentPermissionAskDescription => '每个高风险工具都询问';
+
+  @override
+  String get agentPermissionAcceptEditsDescription => '自动允许编辑类工具，其他仍询问';
+
+  @override
+  String get agentPermissionPlanDescription => '只读并产出计划，不执行副作用';
+
+  @override
+  String get agentPermissionBypassDescription => '跳过权限检查（高风险）';
+
+  @override
+  String get agentPlanQuota => '套餐额度';
+
+  @override
+  String get agentOnDemandQuota => '按需额度';
+
+  @override
+  String get agentPrimaryQuota => '主要额度';
+
+  @override
+  String get agentExtraQuota => '补充额度';
 }

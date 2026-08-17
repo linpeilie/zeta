@@ -6,13 +6,18 @@ import 'package:zeta/src/features/agent/data/mappers/grok_error_normalizer.dart'
 import 'package:zeta/src/features/agent/data/mappers/grok_session_update_mapper.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_stream_identity.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 
 /// 从 Grok `updates.jsonl` 重建多回合历史快照。
 ///
 /// 每次 [parse] 都创建独立的 Grok mapper/reducer。History 与 live 只复用相同
 /// boundary 算法，不共享 current segment、seen event/tool 或 terminal 状态。
 class GrokUpdatesHistoryParser {
-  const GrokUpdatesHistoryParser();
+  const GrokUpdatesHistoryParser({
+    this.textCatalog = const FallbackAgentUiTextCatalog(),
+  });
+
+  final AgentUiTextCatalog textCatalog;
 
   /// 解析完整 JSONL 文本，不修改或重写来源文件。
   AgentThreadHistorySnapshot parse({
@@ -26,7 +31,7 @@ class GrokUpdatesHistoryParser {
 
     // History reducer 必须是本次 parse 私有实例；epoch 只用于状态隔离，
     // canonical 对比不要求它与 live 相同。
-    final mapper = GrokSessionUpdateMapper();
+    final mapper = GrokSessionUpdateMapper(textCatalog: textCatalog);
     const runtimeScope = AgentRuntimeScope(
       runtimeId: 'grok-history-parser',
       connectionEpoch: 0,

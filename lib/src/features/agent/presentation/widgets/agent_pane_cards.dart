@@ -414,7 +414,7 @@ class _AgentToolCallCard extends StatelessWidget {
 /// 思考/命令卡标题：进行中时用更明确的相位文案。
 String _toolCardTitle(AgentToolCall toolCall, AppLocalizations l10n) {
   // displayTitle 会把 call-... 合成成「类型 · 路径/命令」。
-  final resolved = toolCall.displayTitle.trim();
+  final resolved = toolCall.localizedDisplayTitle(l10n).trim();
   if (!toolCall.isActiveStatus) {
     return resolved;
   }
@@ -425,9 +425,7 @@ String _toolCardTitle(AgentToolCall toolCall, AppLocalizations l10n) {
     return l10n.agentRunning;
   }
   if (resolved.startsWith(l10n.agentRunning) ||
-      resolved.startsWith(l10n.agentThinking) ||
-      resolved.startsWith('执行中') ||
-      resolved.startsWith('思考中')) {
+      resolved.startsWith(l10n.agentThinking)) {
     return resolved;
   }
   return l10n.agentRunningPrefix(resolved);

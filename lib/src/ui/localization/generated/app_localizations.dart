@@ -4867,6 +4867,288 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The current Provider cannot load conversation modes'**
   String get agentCannotLoadModes;
+
+  /// Turn starting activity
+  ///
+  /// In en, this message translates to:
+  /// **'Starting'**
+  String get agentStarting;
+
+  /// Turn responding activity
+  ///
+  /// In en, this message translates to:
+  /// **'Responding'**
+  String get agentResponding;
+
+  /// Plan execution handoff title
+  ///
+  /// In en, this message translates to:
+  /// **'Plan ready'**
+  String get agentPlanReady;
+
+  /// Model reroute event title
+  ///
+  /// In en, this message translates to:
+  /// **'Model rerouted'**
+  String get agentModelRerouted;
+
+  /// Model reroute notice
+  ///
+  /// In en, this message translates to:
+  /// **'Rerouted to {model}'**
+  String agentModelReroutedTo(String model);
+
+  /// Deprecation event title
+  ///
+  /// In en, this message translates to:
+  /// **'Adapter deprecation notice'**
+  String get agentDeprecationNotice;
+
+  /// Deprecation upgrade hint
+  ///
+  /// In en, this message translates to:
+  /// **'Please upgrade the Codex adapter to stay compatible with protocol changes.'**
+  String get agentDeprecationUpgradeHint;
+
+  /// Known reroute reason
+  ///
+  /// In en, this message translates to:
+  /// **'Reason: high-risk cyber activity policy'**
+  String get agentRerouteReasonHighRisk;
+
+  /// Unknown reroute reason
+  ///
+  /// In en, this message translates to:
+  /// **'Reason: {reason}'**
+  String agentRerouteReasonUnknown(String reason);
+
+  /// Turn failed prefix
+  ///
+  /// In en, this message translates to:
+  /// **'Turn failed: '**
+  String get agentTurnFailedPrefix;
+
+  /// Unknown provider error
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown provider error'**
+  String get agentUnknownProviderError;
+
+  /// Automatic retry hint
+  ///
+  /// In en, this message translates to:
+  /// **' (the server will retry automatically)'**
+  String get agentServerWillRetry;
+
+  /// Overloaded guidance
+  ///
+  /// In en, this message translates to:
+  /// **'. The selected model is at capacity. Switch models or try again later.'**
+  String get agentErrorGuidanceServerOverloaded;
+
+  /// Usage limit guidance
+  ///
+  /// In en, this message translates to:
+  /// **'. Usage or rate limit reached. Check your quota or try again later.'**
+  String get agentErrorGuidanceUsageLimit;
+
+  /// Session budget guidance
+  ///
+  /// In en, this message translates to:
+  /// **'. Session budget is exhausted. Start a new session or adjust the budget.'**
+  String get agentErrorGuidanceSessionBudget;
+
+  /// Unauthorized guidance
+  ///
+  /// In en, this message translates to:
+  /// **'. Authentication failed. Check sign-in or API credentials and retry.'**
+  String get agentErrorGuidanceUnauthorized;
+
+  /// Internal error guidance
+  ///
+  /// In en, this message translates to:
+  /// **'. The server reported an internal error. Retry later or switch models.'**
+  String get agentErrorGuidanceInternalServer;
+
+  /// Network guidance
+  ///
+  /// In en, this message translates to:
+  /// **'. Network connection failed. Check the network and retry.'**
+  String get agentErrorGuidanceNetwork;
+
+  /// Too many attempts guidance
+  ///
+  /// In en, this message translates to:
+  /// **'. Too many failed retries. Try again later or switch models.'**
+  String get agentErrorGuidanceTooManyAttempts;
+
+  /// Web search tool title
+  ///
+  /// In en, this message translates to:
+  /// **'Web search'**
+  String get agentWebSearch;
+
+  /// View image tool title
+  ///
+  /// In en, this message translates to:
+  /// **'View image'**
+  String get agentViewImage;
+
+  /// Generate image tool title
+  ///
+  /// In en, this message translates to:
+  /// **'Generate image'**
+  String get agentGenerateImage;
+
+  /// Collaborate tool prefix
+  ///
+  /// In en, this message translates to:
+  /// **'Collaborate'**
+  String get agentCollaboratePrefix;
+
+  /// Opaque tool title fallback
+  ///
+  /// In en, this message translates to:
+  /// **'Tool call'**
+  String get agentToolCallFallback;
+
+  /// Review mode entered
+  ///
+  /// In en, this message translates to:
+  /// **'Entered review mode'**
+  String get agentReviewModeEntered;
+
+  /// Review mode exited
+  ///
+  /// In en, this message translates to:
+  /// **'Exited review mode'**
+  String get agentReviewModeExited;
+
+  /// Context compacted title
+  ///
+  /// In en, this message translates to:
+  /// **'Context compacted'**
+  String get agentContextCompacted;
+
+  /// Context compacted body
+  ///
+  /// In en, this message translates to:
+  /// **'Session context was compacted to free window space.'**
+  String get agentContextCompactedDescription;
+
+  /// Hook prompt title
+  ///
+  /// In en, this message translates to:
+  /// **'Hook prompt'**
+  String get agentHookPrompt;
+
+  /// Sleep waiting title
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting'**
+  String get agentWaiting;
+
+  /// Sleep minutes
+  ///
+  /// In en, this message translates to:
+  /// **'Slept {minutes} minutes'**
+  String agentSleepMinutes(String minutes);
+
+  /// Sleep minutes and seconds
+  ///
+  /// In en, this message translates to:
+  /// **'Slept {minutes} min {seconds} s'**
+  String agentSleepMinutesSeconds(String minutes, String seconds);
+
+  /// Sleep seconds
+  ///
+  /// In en, this message translates to:
+  /// **'Slept {seconds} seconds'**
+  String agentSleepSeconds(String seconds);
+
+  /// Sub-agent activity title
+  ///
+  /// In en, this message translates to:
+  /// **'Sub-agent activity'**
+  String get agentSubAgentActivity;
+
+  /// Sub-agent started
+  ///
+  /// In en, this message translates to:
+  /// **'Started'**
+  String get agentSubAgentStarted;
+
+  /// Sub-agent interacted
+  ///
+  /// In en, this message translates to:
+  /// **'Interacted'**
+  String get agentSubAgentInteracted;
+
+  /// Sub-agent interrupted
+  ///
+  /// In en, this message translates to:
+  /// **'Interrupted'**
+  String get agentSubAgentInterrupted;
+
+  /// Sub-agent updated
+  ///
+  /// In en, this message translates to:
+  /// **'Updated'**
+  String get agentSubAgentUpdated;
+
+  /// User cancelled turn
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled by user'**
+  String get agentUserCancelled;
+
+  /// Ask permission description
+  ///
+  /// In en, this message translates to:
+  /// **'Ask before every high-risk tool'**
+  String get agentPermissionAskDescription;
+
+  /// Accept edits description
+  ///
+  /// In en, this message translates to:
+  /// **'Allow edit tools automatically; still ask for others'**
+  String get agentPermissionAcceptEditsDescription;
+
+  /// Plan permission description
+  ///
+  /// In en, this message translates to:
+  /// **'Read-only planning; no side effects'**
+  String get agentPermissionPlanDescription;
+
+  /// Bypass permission description
+  ///
+  /// In en, this message translates to:
+  /// **'Skip permission checks (high risk)'**
+  String get agentPermissionBypassDescription;
+
+  /// Plan quota fallback
+  ///
+  /// In en, this message translates to:
+  /// **'Plan quota'**
+  String get agentPlanQuota;
+
+  /// On-demand quota fallback
+  ///
+  /// In en, this message translates to:
+  /// **'On-demand quota'**
+  String get agentOnDemandQuota;
+
+  /// Primary quota fallback
+  ///
+  /// In en, this message translates to:
+  /// **'Primary quota'**
+  String get agentPrimaryQuota;
+
+  /// Extra quota fallback
+  ///
+  /// In en, this message translates to:
+  /// **'Extra quota'**
+  String get agentExtraQuota;
 }
 
 class _AppLocalizationsDelegate

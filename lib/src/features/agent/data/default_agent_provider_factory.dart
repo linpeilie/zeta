@@ -4,6 +4,7 @@ import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code
 import 'package:zeta/src/features/agent/data/native_agent_provider_bundles.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
+import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 
 /// 生产环境默认 provider 工厂。
 ///
@@ -14,6 +15,7 @@ class DefaultAgentProviderFactory implements AgentProviderBundleFactory {
     this.claudeCodeSessionDecisionStoreFactory,
     this.claudeCodeHiddenThreadStore,
     this.claudeCodeMetadataLoader,
+    this.textCatalog = const FallbackAgentUiTextCatalog(),
   });
 
   /// Claude Code 会话级 always 决策存储；生产由 app 组合层注入具体文件。
@@ -26,6 +28,9 @@ class DefaultAgentProviderFactory implements AgentProviderBundleFactory {
   /// 测试或宿主注入的 Claude CLI metadata loader；生产默认创建独立 probe。
   final ClaudeCodeCliMetadataLoader? claudeCodeMetadataLoader;
 
+  /// 当前进程的 Zeta 自有文案目录。
+  final AgentUiTextCatalog textCatalog;
+
   /// 原生 Bundle 创建入口。
   @override
   AgentProviderBundle createBundle(AgentProviderConfig config) {
@@ -33,8 +38,14 @@ class DefaultAgentProviderFactory implements AgentProviderBundleFactory {
       throw UnsupportedError(CursorRetirementPolicy.unavailableMessage);
     }
     return switch (config.kind) {
-      AgentProviderKind.codexAppServer => createCodexBundle(config),
-      AgentProviderKind.acp => createGrokBundle(config),
+      AgentProviderKind.codexAppServer => createCodexBundle(
+        config,
+        textCatalog: textCatalog,
+      ),
+      AgentProviderKind.acp => createGrokBundle(
+        config,
+        textCatalog: textCatalog,
+      ),
       AgentProviderKind.cursorAcp => throw UnsupportedError(
         CursorRetirementPolicy.unavailableMessage,
       ),
@@ -43,6 +54,7 @@ class DefaultAgentProviderFactory implements AgentProviderBundleFactory {
         metadataLoader: claudeCodeMetadataLoader,
         sessionDecisionStoreFactory: claudeCodeSessionDecisionStoreFactory,
         hiddenThreadStore: claudeCodeHiddenThreadStore,
+        textCatalog: textCatalog,
       ),
     };
   }

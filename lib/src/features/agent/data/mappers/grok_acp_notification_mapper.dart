@@ -1,6 +1,7 @@
 import 'package:zeta/src/features/agent/data/mappers/grok_session_update_mapper.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_stream_identity.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 
 export 'package:zeta/src/features/agent/data/mappers/grok_session_update_mapper.dart'
     show GrokAcpMappedUpdate, GrokSessionUpdateMapper;
@@ -17,8 +18,12 @@ export 'package:zeta/src/features/agent/data/mappers/grok_stream_identity.dart'
 /// 标准 `session/update` 与 `_x.ai/session/update` 共用同一个有状态 Grok adapter，
 /// 叙事 identity 完全由 Grok 专属 mapper/reducer 决定。
 final class GrokAcpNotificationMapper {
-  GrokAcpNotificationMapper({GrokSessionUpdateMapper? sessionUpdateMapper})
-    : sessionUpdateMapper = sessionUpdateMapper ?? GrokSessionUpdateMapper();
+  GrokAcpNotificationMapper({
+    GrokSessionUpdateMapper? sessionUpdateMapper,
+    AgentUiTextCatalog textCatalog = const FallbackAgentUiTextCatalog(),
+  }) : sessionUpdateMapper =
+           sessionUpdateMapper ??
+           GrokSessionUpdateMapper(textCatalog: textCatalog);
 
   final GrokSessionUpdateMapper sessionUpdateMapper;
 

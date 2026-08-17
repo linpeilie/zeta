@@ -1,11 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_error_presentation.dart';
+import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 
 void main() {
   group('AgentProviderErrorPresentation', () {
     test('formats serverOverloaded with actionable guidance', () {
       final text = AgentProviderErrorPresentation.formatUserVisibleText(
         message: 'Selected model is at capacity. Please try a different model.',
+        catalog: const FallbackAgentUiTextCatalog(),
         code: 'serverOverloaded',
         willRetry: false,
       );
@@ -19,6 +21,7 @@ void main() {
     test('does not add manual compact guidance for context overflow', () {
       final text = AgentProviderErrorPresentation.formatUserVisibleText(
         message: 'Context window exceeded',
+        catalog: const FallbackAgentUiTextCatalog(),
         code: 'contextWindowExceeded',
       );
 
@@ -39,6 +42,7 @@ void main() {
     test('prefixes turn failure messages', () {
       final text = AgentProviderErrorPresentation.formatUserVisibleText(
         message: 'Selected model is at capacity. Please try a different model.',
+        catalog: const FallbackAgentUiTextCatalog(),
         code: 'serverOverloaded',
         prefixTurnFailed: true,
       );
@@ -50,6 +54,7 @@ void main() {
     test('localizes automatic retry hint', () {
       final text = AgentProviderErrorPresentation.formatUserVisibleText(
         message: 'Temporary upstream failure',
+        catalog: const FallbackAgentUiTextCatalog(),
         willRetry: true,
       );
 

@@ -48,6 +48,7 @@ class _AgentContextPanelState extends State<_AgentContextPanel> {
             final rawItems = _buildContextRawItems(
               timelineEntries: viewModel.timelineEntries,
               filterNonChat: _filterNonChatMessages,
+              catalog: viewModel.textCatalog,
             );
             return Container(
               key: const ValueKey('agent-context-panel'),
@@ -491,6 +492,7 @@ class _ContextRawItem {
 List<_ContextRawItem> _buildContextRawItems({
   required List<AgentTimelineEntry> timelineEntries,
   required bool filterNonChat,
+  required AgentUiTextCatalog catalog,
 }) {
   final items = <_ContextRawItem>[];
   for (final entry in timelineEntries) {
@@ -516,7 +518,7 @@ List<_ContextRawItem> _buildContextRawItems({
             id: toolCall.id,
             displayId: toolCall.id,
             kindLabel: _contextToolKindLabel(toolCall),
-            raw: _toolCallContextMap(toolCall),
+            raw: _toolCallContextMap(toolCall, catalog),
           ),
         );
       case AgentPermissionTimelineEntry(:final request):
@@ -660,12 +662,15 @@ String _contextHistoryEventLabel(AgentHistoryEventEntry event) {
   };
 }
 
-Map<String, Object?> _toolCallContextMap(AgentToolCall toolCall) {
+Map<String, Object?> _toolCallContextMap(
+  AgentToolCall toolCall,
+  AgentUiTextCatalog catalog,
+) {
   final fileChanges = toolCall.fileChanges;
   if (fileChanges != null) {
     return <String, Object?>{
       'id': toolCall.id,
-      'title': toolCall.displayTitle,
+      'title': toolCall.displayTitle(catalog),
       'kind': toolCall.kind.name,
       'status': toolCall.status.name,
       'fileChanges': _fileChangeSnapshotContextMap(fileChanges),
@@ -676,7 +681,7 @@ Map<String, Object?> _toolCallContextMap(AgentToolCall toolCall) {
   if (toolCall.kind == AgentToolKind.edit) {
     return <String, Object?>{
       'id': toolCall.id,
-      'title': toolCall.displayTitle,
+      'title': toolCall.displayTitle(catalog),
       'kind': toolCall.kind.name,
       'status': toolCall.status.name,
     };
@@ -686,7 +691,7 @@ Map<String, Object?> _toolCallContextMap(AgentToolCall toolCall) {
   }
   return <String, Object?>{
     'id': toolCall.id,
-    'title': toolCall.displayTitle,
+    'title': toolCall.displayTitle(catalog),
     'kind': toolCall.kind.name,
     'status': toolCall.status.name,
     'content': ?toolCall.content,

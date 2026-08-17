@@ -341,4 +341,174 @@ final class AppAgentUiTextCatalog implements AgentUiTextCatalog {
 
   @override
   String get thinkingToolTitle => _l10n.agentToolThink;
+
+  @override
+  String toolKindLabel(AgentToolKind kind) {
+    return switch (kind) {
+      AgentToolKind.read => _l10n.agentToolRead,
+      AgentToolKind.edit => _l10n.agentToolEdit,
+      AgentToolKind.delete => _l10n.agentToolDelete,
+      AgentToolKind.move => _l10n.agentToolMove,
+      AgentToolKind.search => _l10n.agentToolSearch,
+      AgentToolKind.execute => _l10n.agentToolExecute,
+      AgentToolKind.think => _l10n.agentToolThink,
+      AgentToolKind.fetch => _l10n.agentToolFetch,
+      AgentToolKind.other => _l10n.agentToolOther,
+    };
+  }
+
+  @override
+  String? activitySegmentLabel(AgentTurnActivitySnapshot activity) {
+    return switch (activity.phase) {
+      AgentTurnActivityPhase.starting => _l10n.agentStarting,
+      AgentTurnActivityPhase.thinking => _l10n.agentThinking,
+      AgentTurnActivityPhase.responding => _l10n.agentResponding,
+      AgentTurnActivityPhase.toolRunning => () {
+        final label = activity.label?.trim();
+        if (label == null || label.isEmpty) {
+          return _l10n.agentRunning;
+        }
+        final short = label.length > 28 ? '${label.substring(0, 28)}…' : label;
+        return _l10n.agentRunningPrefix(short);
+      }(),
+      AgentTurnActivityPhase.idle => null,
+    };
+  }
+
+  @override
+  String get planReadyTitle => _l10n.agentPlanReady;
+
+  @override
+  String get modelReroutedTitle => _l10n.agentModelRerouted;
+
+  @override
+  String modelReroutedNotice(String toModel) =>
+      _l10n.agentModelReroutedTo(toModel);
+
+  @override
+  String get deprecationNoticeTitle => _l10n.agentDeprecationNotice;
+
+  @override
+  String get deprecationUpgradeHint => _l10n.agentDeprecationUpgradeHint;
+
+  @override
+  String get rerouteReasonHighRisk => _l10n.agentRerouteReasonHighRisk;
+
+  @override
+  String rerouteReasonUnknown(String reason) =>
+      _l10n.agentRerouteReasonUnknown(reason);
+
+  @override
+  String get turnFailedPrefix => _l10n.agentTurnFailedPrefix;
+
+  @override
+  String get unknownProviderError => _l10n.agentUnknownProviderError;
+
+  @override
+  String get serverWillRetry => _l10n.agentServerWillRetry;
+
+  @override
+  String? errorGuidance(String code) {
+    return switch (code) {
+      'serverOverloaded' => _l10n.agentErrorGuidanceServerOverloaded,
+      'usageLimitExceeded' => _l10n.agentErrorGuidanceUsageLimit,
+      'sessionBudgetExceeded' => _l10n.agentErrorGuidanceSessionBudget,
+      'unauthorized' => _l10n.agentErrorGuidanceUnauthorized,
+      'internalServerError' => _l10n.agentErrorGuidanceInternalServer,
+      'httpConnectionFailed' ||
+      'responseStreamConnectionFailed' ||
+      'responseStreamDisconnected' => _l10n.agentErrorGuidanceNetwork,
+      'responseTooManyFailedAttempts' =>
+        _l10n.agentErrorGuidanceTooManyAttempts,
+      _ => null,
+    };
+  }
+
+  @override
+  String get webSearchTitle => _l10n.agentWebSearch;
+
+  @override
+  String get viewImageTitle => _l10n.agentViewImage;
+
+  @override
+  String get generateImageTitle => _l10n.agentGenerateImage;
+
+  @override
+  String get collaboratePrefix => _l10n.agentCollaboratePrefix;
+
+  @override
+  String get toolCallFallbackTitle => _l10n.agentToolCallFallback;
+
+  @override
+  String get reviewModeEnteredTitle => _l10n.agentReviewModeEntered;
+
+  @override
+  String get reviewModeExitedTitle => _l10n.agentReviewModeExited;
+
+  @override
+  String get contextCompactedTitle => _l10n.agentContextCompacted;
+
+  @override
+  String get contextCompactedDescription =>
+      _l10n.agentContextCompactedDescription;
+
+  @override
+  String get hookPromptTitle => _l10n.agentHookPrompt;
+
+  @override
+  String get waitingTitle => _l10n.agentWaiting;
+
+  @override
+  String sleepMinutes(String minutes) => _l10n.agentSleepMinutes(minutes);
+
+  @override
+  String sleepMinutesSeconds(String minutes, String seconds) =>
+      _l10n.agentSleepMinutesSeconds(minutes, seconds);
+
+  @override
+  String sleepSeconds(String seconds) => _l10n.agentSleepSeconds(seconds);
+
+  @override
+  String get subAgentActivityTitle => _l10n.agentSubAgentActivity;
+
+  @override
+  String get subAgentStarted => _l10n.agentSubAgentStarted;
+
+  @override
+  String get subAgentInteracted => _l10n.agentSubAgentInteracted;
+
+  @override
+  String get subAgentInterrupted => _l10n.agentSubAgentInterrupted;
+
+  @override
+  String get subAgentUpdated => _l10n.agentSubAgentUpdated;
+
+  @override
+  String get userCancelled => _l10n.agentUserCancelled;
+
+  @override
+  String get permissionAskDescription => _l10n.agentPermissionAskDescription;
+
+  @override
+  String get permissionAcceptEditsDescription =>
+      _l10n.agentPermissionAcceptEditsDescription;
+
+  @override
+  String get permissionPlanDescription => _l10n.agentPermissionPlanDescription;
+
+  @override
+  String get permissionBypassDescription =>
+      _l10n.agentPermissionBypassDescription;
+
+  @override
+  String get planQuotaLabel => _l10n.agentPlanQuota;
+
+  @override
+  String get onDemandQuotaLabel => _l10n.agentOnDemandQuota;
+
+  @override
+  String get primaryQuotaLabel => _l10n.agentPrimaryQuota;
+
+  @override
+  String get extraQuotaLabel => _l10n.agentExtraQuota;
 }

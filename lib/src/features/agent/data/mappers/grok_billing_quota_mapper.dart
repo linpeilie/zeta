@@ -1,5 +1,7 @@
+import 'package:zeta/src/features/agent/domain/agent_ui_text_catalog.dart';
 import 'package:zeta/src/features/agent/domain/agent_usage_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_usage_window_labels.dart';
+import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 
 /// 将 Grok ACP `_x.ai/billing` 响应映射为中立套餐快照。
 ///
@@ -9,6 +11,7 @@ AgentUsageQuotaSnapshot? mapGrokBillingQuota(
   Object? raw, {
   required String providerId,
   required String providerName,
+  AgentUiTextCatalog textCatalog = const FallbackAgentUiTextCatalog(),
 }) {
   final response = _asMap(raw);
   if (response == null) {
@@ -21,11 +24,11 @@ AgentUsageQuotaSnapshot? mapGrokBillingQuota(
       _nonEmptyString(config['subscription_tier']);
 
   final windows = <AgentUsageWindow>[];
-  final primary = _primaryWindow(config);
+  final primary = _primaryWindow(config, textCatalog);
   if (primary != null) {
     windows.add(primary);
   }
-  final onDemand = _onDemandWindow(config);
+  final onDemand = _onDemandWindow(config, textCatalog);
   if (onDemand != null) {
     windows.add(onDemand);
   }
@@ -46,7 +49,10 @@ AgentUsageQuotaSnapshot? mapGrokBillingQuota(
   );
 }
 
-AgentUsageWindow? _primaryWindow(Map<String, Object?> config) {
+AgentUsageWindow? _primaryWindow(
+  Map<String, Object?> config,
+  AgentUiTextCatalog textCatalog,
+) {
   final period = _asMap(config['currentPeriod']) ?? const <String, Object?>{};
   final periodType = _nonEmptyString(period['type']);
   final start =
@@ -71,7 +77,7 @@ AgentUsageWindow? _primaryWindow(Map<String, Object?> config) {
   final label =
       formatAgentUsageWindowLabelFromMinutes(windowDuration?.inMinutes) ??
       formatAgentUsageWindowLabelFromPeriodType(periodType) ??
-      '套餐额度';
+      textCatalog.planQuotaLabel;
 
   return AgentUsageWindow(
     label: label,
@@ -88,14 +94,20 @@ bool _isRecognizedUsagePeriod(String? periodType) => switch (periodType) {
   _ => false,
 };
 
-AgentUsageWindow? _onDemandWindow(Map<String, Object?> config) {
+AgentUsageWindow? _onDemandWindow(
+  Map<String, Object?> config,
+  AgentUiTextCatalog textCatalog,
+) {
   final cap = _moneyVal(config['onDemandCap']);
   if (cap == null || cap <= 0) {
     return null;
   }
   final used = _moneyVal(config['onDemandUsed']) ?? 0;
   final percent = ((used / cap) * 100).round().clamp(0, 100);
-  return AgentUsageWindow(label: '按需额度', usedPercent: percent);
+  return AgentUsageWindow(
+    label: textCatalog.onDemandQuotaLabel,
+    usedPercent: percent,
+  );
 }
 
 AgentUsageCredits? _credits(Map<String, Object?> config) {

@@ -109,7 +109,10 @@ class AgentConversationViewModel {
        _ownsSkillsCatalogController = skillsCatalogController == null,
        _skillsCatalogController =
            skillsCatalogController ?? AgentSkillsCatalogController(),
-       _permissionSelectionController = conversationBinding.permissions {
+       _permissionSelectionController = conversationBinding.permissions,
+       _planExecutionHandoffController = AgentPlanExecutionHandoffController(
+         textCatalog: textCatalog ?? const FallbackAgentUiTextCatalog(),
+       ) {
     final thread = initialThread;
     if (thread != null &&
         (thread.providerId != conversationBinding.providerId ||
@@ -228,8 +231,7 @@ class AgentConversationViewModel {
   final AgentSkillsCatalogController _skillsCatalogController;
   final AgentConversationPermissionSelectionController
   _permissionSelectionController;
-  final AgentPlanExecutionHandoffController _planExecutionHandoffController =
-      AgentPlanExecutionHandoffController();
+  final AgentPlanExecutionHandoffController _planExecutionHandoffController;
   String? _autoStartPlanExecutionRequestId;
   final AgentConversationLocalTimelineIdGenerator _localTimelineIds =
       AgentConversationLocalTimelineIdGenerator();
@@ -975,9 +977,12 @@ class AgentConversationViewModel {
   /// 当前 running turn 本地开始时间。
   DateTime? get currentTurnStartedAt => _timeline.currentTurnStartedAt;
 
+  /// 当前进程的 Zeta 自有文案目录。
+  AgentUiTextCatalog get textCatalog => _textCatalog;
+
   /// 标题栏主 segment 文案（不含时长）。
   String? get runningActivityLabel =>
-      agentActivitySegmentLabel(currentActivity);
+      _textCatalog.activitySegmentLabel(currentActivity);
 
   /// 当前 turn 总耗时（running 现算，结束后读 turn.duration）。
   Duration? turnElapsedAt(DateTime now) {
@@ -3867,7 +3872,7 @@ class AgentConversationViewModel {
       waitingOnApproval: _threadWaitingOnApproval,
       waitingOnUserInput: _threadWaitingOnUserInput,
       showRunningIndicator: showRunningIndicator,
-      runningActivityLabel: agentActivitySegmentLabel(activity),
+      runningActivityLabel: _textCatalog.activitySegmentLabel(activity),
       segmentStartedAt: activity.segmentStartedAt,
       turnStartedAt: _timeline.currentTurnStartedAt,
       tokenUsage: _timeline.currentThreadTokenUsage,
@@ -4127,7 +4132,9 @@ final class _AgentConversationEventStateTarget
         _viewModel._consumeActivityDirty();
         _viewModel._syncElapsedTicker();
       case AgentApplyToolStatusChange():
-        final title = change.toolCall.displayTitle.trim();
+        final title = change.toolCall
+            .displayTitle(_viewModel._textCatalog)
+            .trim();
         if (title.isNotEmpty) {
           _viewModel._status = AgentProviderStatus(
             state: AgentProviderConnectionState.running,

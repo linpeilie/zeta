@@ -1,5 +1,6 @@
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_identity.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 
 /// 本地执行请求冻结的权限来源与 runtime 门闩。
 final class AgentPlanExecutionPermissionSeed {
@@ -19,6 +20,11 @@ final class AgentPlanExecutionPermissionSeed {
 /// Controller 不依赖 Widget、时间线 Store 或 Provider 协议。调用方负责从当前
 /// live turn 提取最终计划，并在用户选择“执行”后发起新的 Default 回合。
 final class AgentPlanExecutionHandoffController {
+  AgentPlanExecutionHandoffController({
+    this.textCatalog = const FallbackAgentUiTextCatalog(),
+  });
+
+  final AgentUiTextCatalog textCatalog;
   AgentPlanExecutionRequest? _pendingRequest;
   AgentPlanExecutionPermissionSeed? _pendingPermissionSeed;
   AgentPlanExecutionPermissionOrigin? _pendingPermissionOrigin;
@@ -243,7 +249,7 @@ final class AgentPlanExecutionHandoffController {
     return _setPendingRequest(
       sessionId: sessionId,
       turnId: turnId,
-      title: '计划就绪',
+      title: textCatalog.planReadyTitle,
       markdown: markdown,
       messageId: hasProviderMarkdown ? planMessageId : null,
       executionPermission: executionPermission,
@@ -264,7 +270,7 @@ final class AgentPlanExecutionHandoffController {
       id: 'plan-execution:$sessionId:$turnId',
       sessionId: sessionId,
       turnId: turnId,
-      title: title.isEmpty ? '计划就绪' : title,
+      title: title.isEmpty ? textCatalog.planReadyTitle : title,
       markdown: markdown,
       // 正文由结构化步骤合成时没有对应的 plan 消息，不能让 UI 误升级别的消息。
       messageId: messageId,

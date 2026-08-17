@@ -1,3 +1,5 @@
+import 'package:zeta/src/features/agent/domain/agent_ui_text_catalog.dart';
+
 /// Provider 错误在时间线中的用户可见文案。
 ///
 /// 同时服务 live（[AgentErrorEvent] / turn.failed）与 history
@@ -8,9 +10,10 @@ abstract final class AgentProviderErrorPresentation {
   ///
   /// [message] 为 provider 原始概要；[code] 为归一化错误码
   /// （如 Codex `codexErrorInfo`）；[prefixTurnFailed] 为 true 时加
-  /// `Turn failed: ` 前缀（仅用于 turn 终态失败且未先收到 error 事件）。
+  /// turn-failed 前缀（仅用于 turn 终态失败且未先收到 error 事件）。
   static String formatUserVisibleText({
     required String message,
+    required AgentUiTextCatalog catalog,
     String? details,
     String? code,
     bool? willRetry,
@@ -20,17 +23,17 @@ abstract final class AgentProviderErrorPresentation {
     final effectiveCode = resolveCode(code: code, message: trimmed);
     final buffer = StringBuffer();
     if (prefixTurnFailed) {
-      buffer.write('Turn failed: ');
+      buffer.write(catalog.turnFailedPrefix);
     }
-    buffer.write(trimmed.isEmpty ? 'Unknown provider error' : trimmed);
+    buffer.write(trimmed.isEmpty ? catalog.unknownProviderError : trimmed);
     final trimmedDetails = details?.trim();
     if (trimmedDetails != null && trimmedDetails.isNotEmpty) {
       buffer.write(': $trimmedDetails');
     }
     if (willRetry ?? false) {
-      buffer.write('（服务端将自动重试）');
+      buffer.write(catalog.serverWillRetry);
     }
-    final guidance = guidanceForCode(effectiveCode);
+    final guidance = catalog.errorGuidance(effectiveCode ?? '');
     if (guidance != null) {
       buffer.write(guidance);
     }
@@ -63,21 +66,5 @@ abstract final class AgentProviderErrorPresentation {
       return 'sessionBudgetExceeded';
     }
     return null;
-  }
-
-  /// 按错误码返回可操作的中文引导；未知码返回 null。
-  static String? guidanceForCode(String? code) {
-    return switch (code) {
-      'serverOverloaded' => '。当前模型容量已满，请切换其他模型或稍后重试。',
-      'usageLimitExceeded' => '。用量或速率额度已用尽，请检查账户额度或稍后重试。',
-      'sessionBudgetExceeded' => '。会话预算已用尽，请开启新会话或调整预算后继续。',
-      'unauthorized' => '。认证失败，请检查登录状态或 API 凭证后重试。',
-      'internalServerError' => '。服务端内部错误，请稍后重试；若持续出现可切换模型。',
-      'httpConnectionFailed' ||
-      'responseStreamConnectionFailed' ||
-      'responseStreamDisconnected' => '。网络连接异常，请检查网络后重试。',
-      'responseTooManyFailedAttempts' => '。多次重试仍失败，请稍后重试或切换模型。',
-      _ => null,
-    };
   }
 }

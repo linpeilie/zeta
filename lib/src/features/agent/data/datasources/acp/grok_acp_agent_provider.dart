@@ -10,6 +10,7 @@ import 'package:zeta/src/features/agent/data/agent_provider_static_capabilities.
 import 'package:zeta/src/features/agent/data/datasources/acp/grok_models_cli.dart';
 import 'package:zeta/src/features/agent/data/datasources/acp/grok_process_starter.dart';
 import 'package:zeta/src/features/agent/data/datasources/local_history/grok_session_history_reader.dart';
+import 'package:zeta/src/features/agent/data/datasources/local_history/grok_updates_history_parser.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/provider_operation_scheduler.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/provider_runtime_json_rpc_peer.dart';
@@ -23,6 +24,7 @@ import 'package:zeta/src/features/agent/data/mappers/grok_permission_mode_codec.
 import 'package:zeta/src/features/agent/data/mappers/grok_question_mapper.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_skills_mapper.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 
 final _log = loggerFor('zeta.agent.grok_acp');
@@ -57,6 +59,7 @@ class GrokAcpAgentProvider
     JsonRpcPeerFactory? peerFactory,
     GrokSessionHistoryReader? sessionHistoryReader,
     GrokModelsCli? modelsCli,
+    this.textCatalog = const FallbackAgentUiTextCatalog(),
     GrokAcpNotificationMapper? notificationMapper,
     GrokQuestionMapper? questionMapper,
     List<Duration>? generatedTitlePollDelays,
@@ -69,9 +72,14 @@ class GrokAcpAgentProvider
          config.resolvedPermissionOptionId,
        ),
        _sessionHistoryReader =
-           sessionHistoryReader ?? GrokSessionHistoryReader(),
+           sessionHistoryReader ??
+           GrokSessionHistoryReader(
+             updatesParser: GrokUpdatesHistoryParser(textCatalog: textCatalog),
+           ),
        _modelsCli = modelsCli ?? const GrokModelsCli(),
-       _notificationMapper = notificationMapper ?? GrokAcpNotificationMapper(),
+       _notificationMapper =
+           notificationMapper ??
+           GrokAcpNotificationMapper(textCatalog: textCatalog),
        _questionMapper = questionMapper ?? const GrokQuestionMapper(),
        _generatedTitlePollDelays =
            generatedTitlePollDelays ?? _defaultGeneratedTitlePollDelays {
@@ -137,6 +145,7 @@ class GrokAcpAgentProvider
   final GrokAcpNotificationMapper _notificationMapper;
   final List<Duration> _generatedTitlePollDelays;
   final GrokQuestionMapper _questionMapper;
+  final AgentUiTextCatalog textCatalog;
 
   final StreamController<AgentEvent> _events =
       StreamController<AgentEvent>.broadcast();
@@ -633,6 +642,7 @@ class GrokAcpAgentProvider
       result,
       providerId: config.id,
       providerName: config.displayName,
+      textCatalog: textCatalog,
     );
   }
 

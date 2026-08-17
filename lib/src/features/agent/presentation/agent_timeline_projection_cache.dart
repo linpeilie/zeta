@@ -1,4 +1,6 @@
 import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
+import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 import 'package:zeta/src/features/agent/presentation/agent_file_change_projection_cache.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 
@@ -38,12 +40,14 @@ final class AgentTimelineProjectionCache {
   AgentTimelineProjectionCache({
     AgentTimelineRenderBlocksBuilder? buildBlocks,
     AgentFileChangeProjectionCache? fileChangeProjectionCache,
+    this.textCatalog = const FallbackAgentUiTextCatalog(),
   }) : _blockBuilder = buildBlocks,
        _fileChangeProjectionCache =
            fileChangeProjectionCache ?? AgentFileChangeProjectionCache();
 
   final AgentTimelineRenderBlocksBuilder? _blockBuilder;
   final AgentFileChangeProjectionCache _fileChangeProjectionCache;
+  final AgentUiTextCatalog textCatalog;
   final Map<String, AgentTurnProjection> _turns =
       <String, AgentTurnProjection>{};
 
@@ -68,6 +72,7 @@ final class AgentTimelineProjectionCache {
           turnId: turn.id,
           entries: turn.entries,
           fileChangeProjectionCache: _fileChangeProjectionCache,
+          textCatalog: textCatalog,
         );
     final projection = AgentTurnProjection(
       turnId: turn.id,

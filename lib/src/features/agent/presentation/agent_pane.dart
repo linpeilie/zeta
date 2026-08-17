@@ -231,8 +231,7 @@ class _AgentPaneState extends State<AgentPane> {
   double _panelHeight = 600;
 
   /// presentation 层 turn projection 缓存；不随窗口 constraints 失效。
-  final AgentTimelineProjectionCache _projectionCache =
-      AgentTimelineProjectionCache();
+  late final AgentTimelineProjectionCache _projectionCache;
 
   /// extent descriptor 复用缓存（流式仅重建尾部脏项）。
   final AgentTimelineExtentDescriptorFactory _descriptorFactory =
@@ -248,6 +247,9 @@ class _AgentPaneState extends State<AgentPane> {
   @override
   void initState() {
     super.initState();
+    _projectionCache = AgentTimelineProjectionCache(
+      textCatalog: widget.viewModel.textCatalog,
+    );
     _composerFocusNode = FocusNode(
       debugLabel: 'AgentMessageComposer',
       onKeyEvent: _handleComposerKeyEvent,

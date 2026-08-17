@@ -5,10 +5,12 @@ class _JsonlHistoryParser {
   _JsonlHistoryParser({
     required this.fallbackThreadId,
     required this.sessionPath,
+    required this.textCatalog,
   });
 
   final String fallbackThreadId;
   final String sessionPath;
+  final AgentUiTextCatalog textCatalog;
   static const _conversationModeCodec = _CodexConversationModeCodec();
 
   late final String _unscopedTurnId = '${fallbackThreadId}__unscoped__';
@@ -292,7 +294,7 @@ class _JsonlHistoryParser {
           turn.completedAt
       ..duration =
           _durationFromMilliseconds(payload['duration_ms']) ?? turn.duration
-      ..errorMessage = _string(payload['reason']) ?? '用户取消';
+      ..errorMessage = _string(payload['reason']) ?? textCatalog.userCancelled;
     turn.raw['turnAborted'] = payload;
   }
 
@@ -438,6 +440,7 @@ class _JsonlHistoryParser {
       id: callId,
       title: _jsonlToolTitle(
         name: name,
+        catalog: textCatalog,
         arguments: arguments,
         stringInput: _string(payload['arguments']),
       ),
@@ -527,6 +530,7 @@ class _JsonlHistoryParser {
       id: callId,
       title: _jsonlToolTitle(
         name: name,
+        catalog: textCatalog,
         arguments: arguments,
         stringInput: stringInput,
       ),

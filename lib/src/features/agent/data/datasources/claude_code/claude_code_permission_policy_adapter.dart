@@ -6,6 +6,7 @@ import 'package:zeta/src/core/storage/atomic_text_file.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_question_adapter.dart';
 import 'package:zeta/src/features/agent/data/mappers/claude_code_permission_mode_codec.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 
 final _log = loggerFor('zeta.agent.claude_code.permission_policy');
 
@@ -138,12 +139,14 @@ final class ClaudeCodePermissionPolicyAdapter
   ClaudeCodePermissionPolicyAdapter({
     required this.applyPermissionMode,
     ClaudeCodeSessionDecisionStoreFactory? sessionDecisionStoreFactory,
+    this.textCatalog = const FallbackAgentUiTextCatalog(),
   }) : _sessionDecisionStoreFactory =
            sessionDecisionStoreFactory ??
            ((_) => MemoryClaudeCodeSessionDecisionStore());
 
   final ClaudeCodePermissionModeApplier applyPermissionMode;
   final ClaudeCodeSessionDecisionStoreFactory _sessionDecisionStoreFactory;
+  final AgentUiTextCatalog textCatalog;
 
   ClaudeCodeSessionDecisionStore? _sessionDecisionStore;
   Map<String, ClaudeCodeSessionToolDecision> _sessionDecisions =
@@ -151,7 +154,7 @@ final class ClaudeCodePermissionPolicyAdapter
 
   @override
   Future<AgentPermissionCatalog> listPermissionOptions() async {
-    return ClaudeCodePermissionModeCodec.catalog();
+    return ClaudeCodePermissionModeCodec.catalog(textCatalog: textCatalog);
   }
 
   @override

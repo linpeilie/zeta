@@ -1,5 +1,7 @@
 import 'package:zeta/src/features/agent/domain/agent_permission_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_tool_models.dart';
+import 'package:zeta/src/features/agent/domain/agent_ui_text_catalog.dart';
+import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_navigation.dart';
 import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
 
@@ -15,6 +17,21 @@ extension AgentToolKindL10n on AgentToolKind {
     AgentToolKind.fetch => l10n.agentToolFetch,
     AgentToolKind.other => l10n.agentToolOther,
   };
+}
+
+extension AgentToolCallL10n on AgentToolCall {
+  String localizedDisplayTitle(AppLocalizations l10n) {
+    return displayTitle(_AppLocalizationsAgentUiCatalog(l10n));
+  }
+}
+
+final class _AppLocalizationsAgentUiCatalog extends FallbackAgentUiTextCatalog {
+  const _AppLocalizationsAgentUiCatalog(this._l10n);
+
+  final AppLocalizations _l10n;
+
+  @override
+  String toolKindLabel(AgentToolKind kind) => kind.localizedLabel(_l10n);
 }
 
 extension AgentPermissionKindL10n on AgentPermissionKind {

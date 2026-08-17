@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 
 void main() {
   group('buildAgentToolCallDisplayTitle', () {
@@ -7,6 +8,7 @@ void main() {
       expect(
         buildAgentToolCallDisplayTitle(
           toolCallId: 'call-1',
+          kindLabel: const FallbackAgentUiTextCatalog().toolKindLabel,
           title: 'Read file',
           kind: AgentToolKind.read,
         ),
@@ -18,6 +20,7 @@ void main() {
       expect(
         buildAgentToolCallDisplayTitle(
           toolCallId: 'call-abc123',
+          kindLabel: const FallbackAgentUiTextCatalog().toolKindLabel,
           title: null,
           kind: AgentToolKind.read,
           locations: const <String>[r'D:\repo\zeta\lib\main.dart'],
@@ -27,6 +30,7 @@ void main() {
       expect(
         buildAgentToolCallDisplayTitle(
           toolCallId: 'call-abc123',
+          kindLabel: const FallbackAgentUiTextCatalog().toolKindLabel,
           title: 'call-abc123',
           kind: AgentToolKind.read,
           locations: const <String>[r'D:\repo\zeta\lib\main.dart'],
@@ -39,6 +43,7 @@ void main() {
       expect(
         buildAgentToolCallDisplayTitle(
           toolCallId: 'call-9',
+          kindLabel: const FallbackAgentUiTextCatalog().toolKindLabel,
           kind: AgentToolKind.execute,
           rawInput: const <String, Object?>{'command': 'flutter test'},
         ),
@@ -50,6 +55,7 @@ void main() {
       expect(
         buildAgentToolCallDisplayTitle(
           toolCallId: 'call-empty',
+          kindLabel: const FallbackAgentUiTextCatalog().toolKindLabel,
           kind: AgentToolKind.search,
         ),
         '搜索',
@@ -63,7 +69,10 @@ void main() {
         kind: AgentToolKind.edit,
         locations: <String>['/workspace/src/app.dart'],
       );
-      expect(tool.displayTitle, '编辑 · src/app.dart');
+      expect(
+        tool.displayTitle(const FallbackAgentUiTextCatalog()),
+        '编辑 · src/app.dart',
+      );
     });
   });
 
