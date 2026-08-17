@@ -1,5 +1,8 @@
 // ignore_for_file: deprecated_member_use
 
+@Tags(['slow', 'shell'])
+library;
+
 import 'dart:io';
 
 import 'package:flutter/gestures.dart';
@@ -110,7 +113,7 @@ void main() {
       ),
     );
     await openConversationTestThread(tester);
-    await tester.pumpAndSettle();
+    await pumpAgentConversationUi(tester);
 
     // Assert
     final notice = find.byKey(
@@ -185,12 +188,12 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
     await tester.runAsync(waitForIo);
-    await tester.pumpAndSettle();
+    await pumpAgentConversationUi(tester);
 
     await tester.tap(
       find.byKey(ValueKey<String>('project-thread-${directory.path}-thread-a')),
     );
-    await tester.pumpAndSettle();
+    await pumpAgentConversationUi(tester);
 
     expect(find.text('Pending resume history'), findsOneWidget);
     expect(
@@ -206,7 +209,7 @@ void main() {
 
     expect(find.byKey(const ValueKey('agent-send-button')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('agent-send-button')));
-    await tester.pumpAndSettle();
+    await pumpAgentConversationUi(tester);
 
     expect(provider.resumedSessions, <String>['thread-a']);
     expect(provider.sentMessages, <String>['draft before first send']);
@@ -288,7 +291,7 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
     await tester.runAsync(waitForIo);
-    await tester.pumpAndSettle();
+    await pumpAgentConversationUi(tester);
 
     await tester.tap(
       find.byKey(ValueKey<String>('project-thread-${directory.path}-thread-a')),
@@ -381,14 +384,14 @@ void main() {
 
       await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
       await tester.runAsync(waitForIo);
-      await tester.pumpAndSettle();
+      await pumpAgentConversationUi(tester);
 
       await tester.tap(
         find.byKey(
           ValueKey<String>('project-thread-${directory.path}-thread-a'),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpAgentConversationUi(tester);
 
       // 先发一条消息进入本进程 live running，再验证 Cancel / Steer 切换。
       await tester.enterText(
@@ -493,14 +496,14 @@ void main() {
 
       await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
       await tester.runAsync(waitForIo);
-      await tester.pumpAndSettle();
+      await pumpAgentConversationUi(tester);
 
       await tester.tap(
         find.byKey(
           ValueKey<String>('project-thread-${directory.path}-thread-a'),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpAgentConversationUi(tester);
 
       expect(find.text('History survives failure'), findsOneWidget);
       expect(
@@ -514,7 +517,7 @@ void main() {
       );
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey('agent-send-button')));
-      await tester.pumpAndSettle();
+      await pumpAgentConversationUi(tester);
 
       expect(find.text('History survives failure'), findsOneWidget);
       expect(
@@ -528,7 +531,7 @@ void main() {
           ValueKey<String>('project-thread-${directory.path}-thread-a'),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpAgentConversationUi(tester);
 
       expect(find.text('History survives failure'), findsOneWidget);
       expect(
@@ -542,7 +545,7 @@ void main() {
       );
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey('agent-send-button')));
-      await tester.pumpAndSettle();
+      await pumpAgentConversationUi(tester);
 
       expect(resumeAttempts, 2);
       // 项目线程列表中的正式标题优先于 resume 返回的临时 session 标题。
@@ -630,7 +633,7 @@ void main() {
           ValueKey<String>('project-thread-${directory.path}-thread-a'),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpAgentConversationUi(tester);
 
       expect(find.text('命令集要把哪些条目合并进去？'), findsOneWidget);
       expect(find.text('所有工具调用和搜索事件'), findsOneWidget);
@@ -716,14 +719,14 @@ void main() {
 
       await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
       await tester.runAsync(waitForIo);
-      await tester.pumpAndSettle();
+      await pumpAgentConversationUi(tester);
 
       await tester.tap(
         find.byKey(
           ValueKey<String>('project-thread-${directory.path}-thread-a'),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpAgentConversationUi(tester);
 
       expect(find.text('1 次执行 · 1 次搜索'), findsOneWidget);
       expect(find.text('执行 · flutter test'), findsNothing);
@@ -738,7 +741,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpAgentConversationUi(tester);
 
       expect(find.text('执行 · flutter test'), findsOneWidget);
       expect(find.text('搜索 · Web search · OpenAI docs'), findsOneWidget);
@@ -966,7 +969,7 @@ void main() {
       );
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey('agent-send-button')));
-      await tester.pumpAndSettle();
+      await pumpAgentConversationUi(tester);
 
       final updatesBefore = provider.permissionApplyCount;
       await selectPermission('auto');
@@ -1021,7 +1024,7 @@ void main() {
     );
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('agent-send-button')));
-    await tester.pumpAndSettle();
+    await pumpAgentConversationUi(tester);
 
     expect(find.textContaining(errorMessage), findsOneWidget);
     expect(find.textContaining('用量或速率额度已用尽'), findsOneWidget);
@@ -1040,7 +1043,7 @@ void main() {
     );
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('agent-send-button')));
-    await tester.pumpAndSettle();
+    await pumpAgentConversationUi(tester);
     expect(provider.sentMessages, <String>[
       'Trigger the rate limit',
       'Retry manually',
@@ -1184,14 +1187,14 @@ void main() {
 
       await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
       await tester.runAsync(waitForIo);
-      await tester.pumpAndSettle();
+      await pumpAgentConversationUi(tester);
 
       await tester.tap(
         find.byKey(
           ValueKey<String>('project-thread-${directory.path}-thread-a'),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpAgentConversationUi(tester);
 
       expect(find.text('3 个文件 · +2 / -1', findRichText: true), findsOneWidget);
       expect(find.text('1 次执行'), findsOneWidget);
@@ -1204,7 +1207,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpAgentConversationUi(tester);
 
       expect(find.text('lib/main.dart'), findsOneWidget);
       expect(find.text('README.md'), findsOneWidget);
@@ -1240,7 +1243,7 @@ void main() {
       );
       await tester.ensureVisible(grokHeader);
       await tester.tap(grokHeader);
-      await tester.pumpAndSettle();
+      await pumpAgentConversationUi(tester);
       expect(find.text('替换前'), findsOneWidget);
       expect(find.text('替换后'), findsOneWidget);
       expect(
@@ -1248,7 +1251,7 @@ void main() {
         findsOneWidget,
       );
       await tester.tap(grokHeader);
-      await tester.pumpAndSettle();
+      await pumpAgentConversationUi(tester);
 
       final claudeHeader = find.byKey(
         agentFileChangeEvidenceKey(
@@ -1259,14 +1262,14 @@ void main() {
       );
       await tester.ensureVisible(claudeHeader);
       await tester.tap(claudeHeader);
-      await tester.pumpAndSettle();
+      await pumpAgentConversationUi(tester);
       expect(find.text('写入内容 · 已完成'), findsOneWidget);
       expect(
         find.textContaining('docs line', findRichText: true),
         findsOneWidget,
       );
       await tester.tap(claudeHeader);
-      await tester.pumpAndSettle();
+      await pumpAgentConversationUi(tester);
 
       final codexHeader = find.byKey(
         agentFileChangeEvidenceKey(
@@ -1277,7 +1280,7 @@ void main() {
       );
       await tester.ensureVisible(codexHeader);
       await tester.tap(codexHeader);
-      await tester.pumpAndSettle();
+      await pumpAgentConversationUi(tester);
       expect(find.text('统一差异'), findsWidgets);
       expect(
         find.textContaining('+release note', findRichText: true),
@@ -1355,12 +1358,12 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
     await tester.runAsync(waitForIo);
-    await tester.pumpAndSettle();
+    await pumpAgentConversationUi(tester);
 
     await tester.tap(
       find.byKey(ValueKey<String>('project-thread-${directory.path}-thread-a')),
     );
-    await tester.pumpAndSettle();
+    await pumpAgentConversationUi(tester);
 
     await tester.tap(
       find.byKey(
@@ -1369,7 +1372,7 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await pumpAgentConversationUi(tester);
 
     final toggleFinder = find.byKey(
       agentFileChangeEvidenceKey(
@@ -1390,7 +1393,7 @@ void main() {
       ),
       warnIfMissed: false,
     );
-    await tester.pumpAndSettle();
+    await pumpAgentConversationUi(tester);
 
     expect(
       find.byKey(
@@ -1817,7 +1820,7 @@ void main() {
     await tester.tap(
       find.byKey(const ValueKey('agent-context-raw-msg-user-1')),
     );
-    await tester.pumpAndSettle();
+    await pumpAgentConversationUi(tester);
     expect(
       find.byKey(const ValueKey('agent-context-raw-body-msg-user-1')),
       findsOneWidget,
@@ -1839,19 +1842,19 @@ void main() {
     await tester.pump();
     expect(copiedText, contains('ctx-user-raw'));
     await tester.pump(const Duration(seconds: 2));
-    await tester.pumpAndSettle();
+    await pumpAgentConversationUi(tester);
 
     // 文件编辑上下文只展示 typed snapshot；raw/wire sentinel 不得回流。
     await tester.tap(find.byKey(const ValueKey('agent-context-raw-filter')));
-    await tester.pumpAndSettle();
+    await pumpAgentConversationUi(tester);
     expect(find.text('ctx-edit-1'), findsOneWidget);
     final editHeader = find.byKey(
       const ValueKey('agent-context-raw-ctx-edit-1'),
     );
     await tester.ensureVisible(editHeader);
-    await tester.pumpAndSettle();
+    await pumpAgentConversationUi(tester);
     await tester.tap(editHeader);
-    await tester.pumpAndSettle();
+    await pumpAgentConversationUi(tester);
     final editContextBody = find.byKey(
       const ValueKey('agent-context-raw-body-ctx-edit-1'),
     );
@@ -2265,14 +2268,14 @@ void main() {
 
       await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
       await tester.runAsync(waitForIo);
-      await tester.pumpAndSettle();
+      await pumpAgentConversationUi(tester);
 
       await tester.tap(
         find.byKey(
           ValueKey<String>('project-thread-${directory.path}-thread-a'),
         ),
       );
-      await tester.pumpAndSettle();
+      await pumpAgentConversationUi(tester);
       final projectName = directory.path.replaceAll('\\', '/').split('/').last;
       expect(
         tester
@@ -2317,7 +2320,7 @@ void main() {
 
       await tester.tap(find.byKey(const ValueKey('agent-cancel-button')));
       await tester.pump();
-      await tester.pumpAndSettle();
+      await pumpAgentConversationUi(tester);
 
       expect(
         find.byKey(const ValueKey('agent-header-running-icon')),
@@ -2462,17 +2465,17 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
     await tester.runAsync(waitForIo);
-    await tester.pumpAndSettle();
+    await pumpAgentConversationUi(tester);
 
     await tester.tap(
       find.byKey(ValueKey<String>('project-thread-${directory.path}-thread-a')),
     );
-    await tester.pumpAndSettle();
+    await pumpAgentConversationUi(tester);
 
     final listFinder = find.byKey(const ValueKey('agent-message-list'));
     final controller = tester.widget<ScrollView>(listFinder).controller!;
     controller.jumpTo(0);
-    await tester.pumpAndSettle();
+    await pumpAgentConversationUi(tester);
     expect(controller.offset, 0);
 
     await tester.tap(
@@ -2482,7 +2485,7 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await pumpAgentConversationUi(tester);
 
     expect(controller.offset, lessThan(40));
     expect(
@@ -2580,17 +2583,17 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
     await tester.runAsync(waitForIo);
-    await tester.pumpAndSettle();
+    await pumpAgentConversationUi(tester);
 
     await tester.tap(
       find.byKey(ValueKey<String>('project-thread-${directory.path}-thread-a')),
     );
-    await tester.pumpAndSettle();
+    await pumpAgentConversationUi(tester);
 
     final listFinder = find.byKey(const ValueKey('agent-message-list'));
     final controller = tester.widget<ScrollView>(listFinder).controller!;
     controller.jumpTo(0);
-    await tester.pumpAndSettle();
+    await pumpAgentConversationUi(tester);
     expect(controller.offset, 0);
 
     await tester.tap(
@@ -2600,7 +2603,7 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await pumpAgentConversationUi(tester);
 
     expect(controller.offset, lessThan(40));
     expect(
@@ -2640,7 +2643,7 @@ void main() {
     await tester.pump();
 
     await tester.tap(find.byKey(const ValueKey('agent-send-button')));
-    await tester.pumpAndSettle();
+    await pumpAgentConversationUi(tester);
 
     expect(
       find.descendant(
@@ -2680,7 +2683,7 @@ void main() {
     await tester.pump();
 
     await tester.tap(find.byKey(const ValueKey('agent-send-button')));
-    await tester.pumpAndSettle();
+    await pumpAgentConversationUi(tester);
 
     // 用户消息走与 Agent 相同的 Markdown 渲染管线，可复制语义由 selectable 保留。
     expect(
@@ -2716,7 +2719,7 @@ void main() {
     await tester.pump();
 
     await tester.tap(find.byKey(const ValueKey('agent-send-button')));
-    await tester.pumpAndSettle();
+    await pumpAgentConversationUi(tester);
 
     // 原始 markdown 语法不应出现在 Markdown 渲染子树中（头栏标题为纯文本，已排除）。
     expect(
@@ -3246,7 +3249,7 @@ void main() {
     );
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('agent-send-button')));
-    await tester.pumpAndSettle();
+    await pumpAgentConversationUi(tester);
 
     expect(
       find.textContaining('Hidden commentary', findRichText: true),
@@ -3281,7 +3284,7 @@ void main() {
     );
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('agent-send-button')));
-    await tester.pumpAndSettle();
+    await pumpAgentConversationUi(tester);
 
     expect(
       find.byKey(const ValueKey('agent-final-answer-card-message-1')),
@@ -3338,7 +3341,7 @@ void main() {
     );
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('agent-send-button')));
-    await tester.pumpAndSettle();
+    await pumpAgentConversationUi(tester);
 
     expect(find.text('完成汇总'), findsNothing);
     expect(
@@ -3883,14 +3886,14 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.create_new_folder_outlined));
     await tester.runAsync(waitForIo);
-    await tester.pumpAndSettle();
+    await pumpAgentConversationUi(tester);
 
     await tester.tap(
       find.byKey(
         ValueKey<String>('project-thread-${directory.path}-thread-plan'),
       ),
     );
-    await tester.pumpAndSettle();
+    await pumpAgentConversationUi(tester);
 
     expect(
       find.byKey(const ValueKey<String>('agent-plan-card-turn-plan-plan')),
@@ -3910,7 +3913,7 @@ void main() {
     await tester.tap(
       find.byKey(const ValueKey<String>('agent-plan-toggle-turn-plan-plan')),
     );
-    await tester.pumpAndSettle();
+    await pumpAgentConversationUi(tester);
 
     expect(
       find.byKey(const ValueKey<String>('agent-plan-body-turn-plan-plan')),
@@ -3959,7 +3962,7 @@ void main() {
     );
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('agent-send-button')));
-    await tester.pumpAndSettle();
+    await pumpAgentConversationUi(tester);
 
     expect(find.text('1 次执行'), findsOneWidget);
     expect(find.text('Run tests'), findsNothing);
@@ -3989,7 +3992,7 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await pumpAgentConversationUi(tester);
 
     expect(
       find.byKey(
@@ -4117,7 +4120,7 @@ void main() {
     );
 
     await openConversationTestThread(tester);
-    await tester.pumpAndSettle();
+    await pumpAgentConversationUi(tester);
 
     expect(find.textContaining('codex missing'), findsWidgets);
   });
@@ -4168,6 +4171,13 @@ Future<void> pumpUntilAgentComposer(WidgetTester tester) async {
     () => input.hitTestable().evaluate().isNotEmpty,
     failureMessage: 'Agent composer did not become ready',
   );
+}
+
+/// 完整 Shell 含有常驻监听与动效，按有限帧推进普通交互，避免每次都扫描到 settle。
+Future<void> pumpAgentConversationUi(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(IdeMotion.durationSlow);
+  await tester.pump();
 }
 
 /// 运行中 turn 会持续播放 spinner；只推进足够渲染状态的有限帧。

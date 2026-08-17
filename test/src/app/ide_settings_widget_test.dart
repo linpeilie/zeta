@@ -17,6 +17,7 @@ import 'package:zeta/src/ui/core/ide_colors.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/ide_switch.dart';
 import 'package:zeta/src/ui/core/ide_tabs.dart';
+import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta/src/ui/core/rows/ide_row_divider.dart';
 
@@ -60,8 +61,15 @@ void main() {
         )
         .height;
 
-    expect(languageHeight, IdeMetrics.regularControlHeight);
-    expect(shortcutTabsHeight, languageHeight);
+    final expected = IdeMetrics.controlNaturalHeightFor(
+      IdeTextStyles.of(
+        tester.element(find.byKey(const ValueKey('settings-language-select'))),
+      ).bodySmall,
+      size: IdeControlSize.regular,
+    );
+
+    expect(languageHeight, closeTo(expected, 0.01));
+    expect(shortcutTabsHeight, closeTo(languageHeight, 0.01));
     expect(tester.takeException(), isNull);
   });
 

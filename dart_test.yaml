@@ -1,2 +1,9 @@
 # 大型 Widget 测试单个 worker 会加载完整 IDE Shell，限制并发以避免内存峰值。
 concurrency: 2
+
+# `tool/test_fast.*` 排除 slow；完整门禁仍由 `tool/test_full.*` 覆盖全部标签。
+tags:
+  slow:
+  shell:
+  perf:
+  tooling:

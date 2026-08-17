@@ -36,6 +36,12 @@ flutter gen-l10n
 dart run tool/check_localized_ui_strings.dart --check
 ```
 
+开发中的快速回归使用 `tool/test_fast.ps1`（Windows）或
+`bash tool/test_fast.sh`（macOS / Linux / Git Bash），它会排除 `slow` 标签。
+提交前使用 `tool/test_full.ps1` 或 `bash tool/test_full.sh` 覆盖全部测试；完整入口会
+生成 `.dart_tool/test-results/full.json`，并在终端列出最慢的测试文件与用例。
+`dart_test.yaml` 的 `concurrency: 2` 是内存保护门禁，不因提速而调整。
+
 重新导出 Codex app-server JSON Schema（协议升级 / 审计时）：
 
 ```sh

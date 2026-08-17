@@ -1,5 +1,8 @@
 // ignore_for_file: deprecated_member_use
 
+@Tags(['slow'])
+library;
+
 import 'dart:io';
 
 import 'package:flutter/gestures.dart';

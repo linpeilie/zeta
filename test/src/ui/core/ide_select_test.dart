@@ -38,7 +38,13 @@ void main() {
     expect(label.style?.fontSize, expectedSize);
     expect(
       tester.getSize(find.byKey(const ValueKey('sample-select'))).height,
-      IdeMetrics.toolbarHeight,
+      closeTo(
+        IdeMetrics.controlNaturalHeightFor(
+          IdeTextStyles.of(tester.element(find.text('Codex'))).bodySmall,
+          size: IdeControlSize.regular,
+        ),
+        0.01,
+      ),
     );
     expect(tester.takeException(), isNull);
   });

@@ -55,7 +55,15 @@ void main() {
 
     expect(
       tester.getSize(find.byKey(const ValueKey('toolbar-button'))).height,
-      IdeMetrics.regularControlHeight,
+      closeTo(
+        IdeMetrics.controlNaturalHeightFor(
+          IdeTextStyles.of(
+            tester.element(find.byKey(const ValueKey('toolbar-button'))),
+          ).bodySmall,
+          size: IdeControlSize.regular,
+        ),
+        0.01,
+      ),
     );
     expect(find.byIcon(Icons.calendar_month_rounded), findsOneWidget);
     expect(find.byIcon(Icons.keyboard_arrow_down_rounded), findsOneWidget);

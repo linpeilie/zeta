@@ -1,3 +1,6 @@
+@Tags(['slow', 'perf'])
+library;
+
 import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';

@@ -70,6 +70,27 @@ flutter test            # 行为变化时必跑
 flutter test test/src/features/agent/presentation/agent_conversation_widget_test.dart
 ```
 
+开发中的快速回归会排除标记为 `slow` 的完整 Shell、性能和工具链测试：
+
+```sh
+# Windows PowerShell
+./tool/test_fast.ps1
+
+# macOS / Linux / Git Bash
+bash tool/test_fast.sh
+```
+
+提交前仍跑完整门禁；该入口同时把 JSON 报告写入 `.dart_tool/test-results/full.json`，
+并输出最慢的测试文件和用例：
+
+```sh
+# Windows PowerShell
+./tool/test_full.ps1
+
+# macOS / Linux / Git Bash
+bash tool/test_full.sh
+```
+
 > `dart_test.yaml` 固定了 `concurrency: 2`。大 Widget 测试单个 worker 会加载完整 IDE Shell，放开并发容易触发内存峰值。**请不要为了跑得快而改掉它。**
 
 **Codex 协议升级时**（改适配层之前）：
