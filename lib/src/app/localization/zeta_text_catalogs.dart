@@ -1,5 +1,6 @@
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_text_catalog.dart';
+import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_text_catalog.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_text_catalog.dart';
 import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
@@ -17,6 +18,9 @@ final class ZetaTextCatalogs {
       AppAgentManagementTextCatalog(l10n);
 
   AgentUiTextCatalog get agentUi => AppAgentUiTextCatalog(l10n);
+
+  DesktopAttentionTextCatalog get desktopAttention =>
+      AppDesktopAttentionTextCatalog(l10n);
 }
 
 final class AppUsageStatisticsTextCatalog
@@ -511,4 +515,39 @@ final class AppAgentUiTextCatalog implements AgentUiTextCatalog {
 
   @override
   String get extraQuotaLabel => _l10n.agentExtraQuota;
+}
+
+final class AppDesktopAttentionTextCatalog
+    implements DesktopAttentionTextCatalog {
+  const AppDesktopAttentionTextCatalog(this._l10n);
+
+  final AppLocalizations _l10n;
+
+  @override
+  String titleFor(AgentAttentionKind kind) {
+    return switch (kind) {
+      AgentAttentionKind.turnCompleted => _l10n.desktopAttentionTurnCompleted,
+      AgentAttentionKind.turnFailed => _l10n.desktopAttentionTurnFailed,
+      AgentAttentionKind.turnInterrupted =>
+        _l10n.desktopAttentionTurnInterrupted,
+      AgentAttentionKind.permissionRequired =>
+        _l10n.desktopAttentionPermissionRequired,
+      AgentAttentionKind.questionRequired =>
+        _l10n.desktopAttentionQuestionRequired,
+      AgentAttentionKind.planApprovalRequired =>
+        _l10n.desktopAttentionPlanApprovalRequired,
+      AgentAttentionKind.planExecutionRequired =>
+        _l10n.desktopAttentionPlanExecutionRequired,
+    };
+  }
+
+  @override
+  String get currentProjectName => _l10n.desktopAttentionCurrentProject;
+
+  @override
+  String sessionBody(String projectName) =>
+      _l10n.desktopAttentionSessionBody(projectName);
+
+  @override
+  String get linuxAction => _l10n.desktopAttentionLinuxAction;
 }

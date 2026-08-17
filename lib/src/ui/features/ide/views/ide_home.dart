@@ -19,6 +19,8 @@ import 'package:zeta/src/features/desktop_notifications/application/desktop_atte
 import 'package:zeta/src/features/desktop_notifications/data/flutter_desktop_notification_service.dart';
 import 'package:zeta/src/features/desktop_notifications/data/method_channel_desktop_attention_indicator.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_models.dart';
+import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_text_catalog.dart';
+import 'package:zeta/src/features/desktop_notifications/domain/fallback_desktop_attention_text_catalog.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_controller.dart';
 import 'package:zeta/src/features/agent_management/data/claude_code_agent_management_repository.dart';
 import 'package:zeta/src/features/agent_management/data/codex_agent_management_repository.dart';
@@ -82,6 +84,8 @@ class IdeHome extends StatefulWidget {
     this.desktopAttentionIndicator,
     this.turnContextStore,
     this.agentUiTextCatalog = const FallbackAgentUiTextCatalog(),
+    this.desktopAttentionTextCatalog =
+        const FallbackDesktopAttentionTextCatalog(),
     super.key,
   });
 
@@ -106,6 +110,7 @@ class IdeHome extends StatefulWidget {
   final DesktopAttentionIndicator? desktopAttentionIndicator;
   final AgentTurnContextStore? turnContextStore;
   final AgentUiTextCatalog agentUiTextCatalog;
+  final DesktopAttentionTextCatalog desktopAttentionTextCatalog;
 
   @override
   State<IdeHome> createState() => _IdeHomeState();
@@ -123,6 +128,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   late final AgentUsageRefreshCoordinator _agentUsageRefreshCoordinator;
   late final DesktopAttentionController _desktopAttentionController;
   bool _windowFocused = true;
+  bool _nativeMenuConfigured = false;
 
   bool _rightSidebarVisible = false;
 
@@ -161,7 +167,9 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
     final notificationService =
         widget.desktopNotificationService ??
         (widget.enableNativeWindowFrame
-            ? FlutterDesktopNotificationService()
+            ? FlutterDesktopNotificationService(
+                linuxActionName: widget.desktopAttentionTextCatalog.linuxAction,
+              )
             : const NoopDesktopNotificationService());
     final attentionIndicator =
         widget.desktopAttentionIndicator ??
@@ -173,6 +181,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
       indicator: attentionIndicator,
       generalSettingsController: widget.generalSettingsController,
       activateTarget: _activateAttentionTarget,
+      textCatalog: widget.desktopAttentionTextCatalog,
     );
     _shellController = IdeShellController(
       directoryPicker: widget.directoryPicker,
@@ -223,6 +232,21 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
     // 生产环境注册原生菜单的「打开项目」回调，与工具栏按钮走同一逻辑。
     if (widget.enableNativeWindowFrame) {
       MenuActionBridge.instance.setOpenProject(_handleMenuOpenProject);
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_nativeMenuConfigured && widget.enableNativeWindowFrame) {
+      _nativeMenuConfigured = true;
+      final l10n = context.l10n;
+      unawaited(
+        MenuActionBridge.instance.configure(
+          fileMenuLabel: l10n.workbenchMenuFile,
+          openProjectLabel: l10n.workbenchMenuOpenProject,
+        ),
+      );
     }
   }
 

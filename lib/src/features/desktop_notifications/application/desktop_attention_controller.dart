@@ -4,6 +4,8 @@ import 'dart:convert';
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_models.dart';
+import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_text_catalog.dart';
+import 'package:zeta/src/features/desktop_notifications/domain/fallback_desktop_attention_text_catalog.dart';
 import 'package:zeta/src/features/settings/application/general_settings_controller.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 
@@ -14,6 +16,7 @@ final class DesktopAttentionController {
     required this.indicator,
     required this.generalSettingsController,
     required this.activateTarget,
+    this.textCatalog = const FallbackDesktopAttentionTextCatalog(),
   });
 
   static final _log = loggerFor('zeta.desktop_attention');
@@ -22,6 +25,7 @@ final class DesktopAttentionController {
   final DesktopAttentionIndicator indicator;
   final GeneralSettingsController generalSettingsController;
   final DesktopAttentionTargetActivator activateTarget;
+  final DesktopAttentionTextCatalog textCatalog;
 
   final Map<String, _UnreadAttention> _unread = <String, _UnreadAttention>{};
   DesktopAttentionVisibility _visibility = const DesktopAttentionVisibility();
@@ -272,15 +276,7 @@ final class DesktopAttentionController {
     };
   }
 
-  String _titleFor(AgentAttentionKind kind) => switch (kind) {
-    AgentAttentionKind.turnCompleted => '任务已完成',
-    AgentAttentionKind.turnFailed => '任务执行失败',
-    AgentAttentionKind.turnInterrupted => '任务已中断',
-    AgentAttentionKind.permissionRequired => '需要确认权限',
-    AgentAttentionKind.questionRequired => '需要回答问题',
-    AgentAttentionKind.planApprovalRequired => '需要确认计划',
-    AgentAttentionKind.planExecutionRequired => '计划可以执行',
-  };
+  String _titleFor(AgentAttentionKind kind) => textCatalog.titleFor(kind);
 
   String _safeBody(AgentWorkspaceAttention attention) {
     final normalized = attention.projectPath.replaceAll('\\', '/');
@@ -288,8 +284,10 @@ final class DesktopAttentionController {
         .split('/')
         .where((segment) => segment.trim().isNotEmpty)
         .toList(growable: false);
-    final projectName = segments.isEmpty ? '当前项目' : segments.last;
-    return '$projectName · Agent 会话';
+    final projectName = segments.isEmpty
+        ? textCatalog.currentProjectName
+        : segments.last;
+    return textCatalog.sessionBody(projectName);
   }
 }
 

@@ -2721,4 +2721,36 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get agentExtraQuota => '补充额度';
+
+  @override
+  String get desktopAttentionTurnCompleted => '任务已完成';
+
+  @override
+  String get desktopAttentionTurnFailed => '任务执行失败';
+
+  @override
+  String get desktopAttentionTurnInterrupted => '任务已中断';
+
+  @override
+  String get desktopAttentionPermissionRequired => '需要确认权限';
+
+  @override
+  String get desktopAttentionQuestionRequired => '需要回答问题';
+
+  @override
+  String get desktopAttentionPlanApprovalRequired => '需要确认计划';
+
+  @override
+  String get desktopAttentionPlanExecutionRequired => '计划可以执行';
+
+  @override
+  String get desktopAttentionCurrentProject => '当前项目';
+
+  @override
+  String desktopAttentionSessionBody(String project) {
+    return '$project · Agent 会话';
+  }
+
+  @override
+  String get desktopAttentionLinuxAction => '打开 Zeta';
 }

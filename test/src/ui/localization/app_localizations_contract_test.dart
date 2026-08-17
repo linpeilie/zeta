@@ -112,7 +112,7 @@ void main() {
   test('second flutter gen-l10n run does not change generated sources', () {
     expect(generatedDir.existsSync(), isTrue);
     final before = fingerprintDirectory(generatedDir);
-    final result = Process.runSync('flutter', ['gen-l10n']);
+    final result = Process.runSync('flutter', ['gen-l10n'], runInShell: true);
     expect(result.exitCode, 0, reason: '${result.stdout}\n${result.stderr}');
     expect(fingerprintDirectory(generatedDir), before);
   });

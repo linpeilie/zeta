@@ -5149,6 +5149,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Extra quota'**
   String get agentExtraQuota;
+
+  /// Desktop notification title for a finished turn
+  ///
+  /// In en, this message translates to:
+  /// **'Task completed'**
+  String get desktopAttentionTurnCompleted;
+
+  /// Desktop notification title for a failed turn
+  ///
+  /// In en, this message translates to:
+  /// **'Task failed'**
+  String get desktopAttentionTurnFailed;
+
+  /// Desktop notification title for an interrupted turn
+  ///
+  /// In en, this message translates to:
+  /// **'Task interrupted'**
+  String get desktopAttentionTurnInterrupted;
+
+  /// Desktop notification title for a permission request
+  ///
+  /// In en, this message translates to:
+  /// **'Permission required'**
+  String get desktopAttentionPermissionRequired;
+
+  /// Desktop notification title for a user question
+  ///
+  /// In en, this message translates to:
+  /// **'Question required'**
+  String get desktopAttentionQuestionRequired;
+
+  /// Desktop notification title for plan approval
+  ///
+  /// In en, this message translates to:
+  /// **'Plan approval required'**
+  String get desktopAttentionPlanApprovalRequired;
+
+  /// Desktop notification title for plan execution handoff
+  ///
+  /// In en, this message translates to:
+  /// **'Plan ready to execute'**
+  String get desktopAttentionPlanExecutionRequired;
+
+  /// Fallback project name in desktop notification body
+  ///
+  /// In en, this message translates to:
+  /// **'Current project'**
+  String get desktopAttentionCurrentProject;
+
+  /// Safe desktop notification body
+  ///
+  /// In en, this message translates to:
+  /// **'{project} · Agent session'**
+  String desktopAttentionSessionBody(String project);
+
+  /// Linux notification default action
+  ///
+  /// In en, this message translates to:
+  /// **'Open Zeta'**
+  String get desktopAttentionLinuxAction;
 }
 
 class _AppLocalizationsDelegate

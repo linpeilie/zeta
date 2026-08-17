@@ -9,11 +9,12 @@ import 'package:flutter_test/flutter_test.dart';
 /// 避免测试与 CLI 漂移。
 void main() {
   test('user-visible literals stay within the baseline allowlist', () async {
-    final result = await Process.run('dart', [
-      'run',
-      'tool/check_localized_ui_strings.dart',
-      '--check',
-    ], workingDirectory: Directory.current.path);
+    final result = await Process.run(
+      'dart',
+      ['run', 'tool/check_localized_ui_strings.dart', '--check'],
+      workingDirectory: Directory.current.path,
+      runInShell: true,
+    );
     expect(
       result.exitCode,
       0,
@@ -27,11 +28,12 @@ void main() {
   test(
     'literal report locates file, line and field without log payloads',
     () async {
-      final result = await Process.run('dart', [
-        'run',
-        'tool/check_localized_ui_strings.dart',
-        '--report',
-      ], workingDirectory: Directory.current.path);
+      final result = await Process.run(
+        'dart',
+        ['run', 'tool/check_localized_ui_strings.dart', '--report'],
+        workingDirectory: Directory.current.path,
+        runInShell: true,
+      );
       expect(result.exitCode, 0, reason: '${result.stderr}');
       final stdout = result.stdout.toString();
       expect(stdout, startsWith('file\tline\tfield\tclassification\ttext\n'));

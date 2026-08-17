@@ -2817,4 +2817,36 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentExtraQuota => 'Extra quota';
+
+  @override
+  String get desktopAttentionTurnCompleted => 'Task completed';
+
+  @override
+  String get desktopAttentionTurnFailed => 'Task failed';
+
+  @override
+  String get desktopAttentionTurnInterrupted => 'Task interrupted';
+
+  @override
+  String get desktopAttentionPermissionRequired => 'Permission required';
+
+  @override
+  String get desktopAttentionQuestionRequired => 'Question required';
+
+  @override
+  String get desktopAttentionPlanApprovalRequired => 'Plan approval required';
+
+  @override
+  String get desktopAttentionPlanExecutionRequired => 'Plan ready to execute';
+
+  @override
+  String get desktopAttentionCurrentProject => 'Current project';
+
+  @override
+  String desktopAttentionSessionBody(String project) {
+    return '$project · Agent session';
+  }
+
+  @override
+  String get desktopAttentionLinuxAction => 'Open Zeta';
 }

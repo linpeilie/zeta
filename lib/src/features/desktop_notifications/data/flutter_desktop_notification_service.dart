@@ -7,24 +7,27 @@ import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention
 /// 基于 flutter_local_notifications 的三桌面平台系统通知实现。
 final class FlutterDesktopNotificationService
     implements DesktopNotificationService {
-  FlutterDesktopNotificationService({FlutterLocalNotificationsPlugin? plugin})
-    : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
+  FlutterDesktopNotificationService({
+    FlutterLocalNotificationsPlugin? plugin,
+    this.linuxActionName = '打开 Zeta',
+  }) : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
 
   final FlutterLocalNotificationsPlugin _plugin;
+  final String linuxActionName;
 
   @override
   Future<String?> initialize({
     required DesktopNotificationActivation onActivate,
   }) async {
     await _plugin.initialize(
-      settings: const InitializationSettings(
-        macOS: DarwinInitializationSettings(
+      settings: InitializationSettings(
+        macOS: const DarwinInitializationSettings(
           requestAlertPermission: false,
           requestBadgePermission: false,
           requestSoundPermission: false,
         ),
-        linux: LinuxInitializationSettings(defaultActionName: '打开 Zeta'),
-        windows: WindowsInitializationSettings(
+        linux: LinuxInitializationSettings(defaultActionName: linuxActionName),
+        windows: const WindowsInitializationSettings(
           appName: 'Zeta',
           appUserModelId: 'io.github.linpeilie.zeta',
           guid: '9b5bb3b5-a44b-4f52-8a51-7991b7ab2831',
