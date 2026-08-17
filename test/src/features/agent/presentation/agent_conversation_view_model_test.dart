@@ -4342,6 +4342,34 @@ void main() {
           ]),
         );
         expect(grok.calls, isNot(contains('start')));
+        final projectedTurns = <AgentConversationTurnGroup>[
+          ...viewModel.historyState.visibleTurns,
+          if (viewModel.liveTurnState case final liveTurn?) liveTurn.snapshot(),
+        ];
+        final sentMessageCount = projectedTurns
+            .expand((turn) => turn.entries)
+            .whereType<AgentMessageTimelineEntry>()
+            .where(
+              (entry) => entry.message.text == 'continue this Grok session',
+            )
+            .length;
+        expect(
+          sentMessageCount,
+          1,
+          reason: 'dormant runtime 启动不能把同一条消息投影到 history 与 live 两次',
+        );
+        expect(
+          viewModel.historyState.visibleTurns.expand((turn) => turn.entries),
+          isNot(
+            contains(
+              isA<AgentMessageTimelineEntry>().having(
+                (entry) => entry.message.text,
+                'text',
+                'continue this Grok session',
+              ),
+            ),
+          ),
+        );
       },
     );
 

@@ -199,6 +199,9 @@ Provider 实例只由 app 组合层的 `AgentProviderRuntimeRegistry` 创建和�
 `thread(providerId, threadId)` 为稳定 key。Workspace 只持有 Binding lease；新建/打开
 和历史读取不创建 session runtime。只有用户第一次提交输入时调用 `beginTurn()`，随后
 start/resume/send；其他 session RPC 只能 `runCurrent()`，runtime 不存在时 fail-closed。
+Binding 生命周期必须显式区分 dormant、starting、attached 与 cleared；消费者不得根据
+`currentRuntime == null` 猜测断连。只有曾 attached 且匹配精确 runtime identity 的 cleared
+转换可以中断当前 turn，首次初始化失败继续走本次请求的失败收尾。
 Workspace 创建真实 thread entry 时必须同时注入匹配的 thread summary 与 Binding；一个
 ViewModel 的 thread 身份固定，不提供 `switchThread` 或带 restored session/provider 的通用
 workspace 更新入口。project/file context 更新不改变会话，选择另一 thread 就选择另一 entry。
@@ -253,7 +256,8 @@ Registry acquire 必须显式选择 global/session scope；使用统计面板只
 12. 增加 Binding 生命周期测试：创建/打开/读历史不启动 session，首次 `beginTurn` 才创建；
     同一 Binding 最多一个实例，不同 thread 各自独立。覆盖 draft 晋升、TTL、运行中 turn/RPC、
     重叠 sweep、ABA identity、dispose/acquire 屏障、配置失效、旧 generation 丢弃与 global
-    永不回收；任一 session 的恢复、发送或结束不得污染其他 session 的事件、权限或 reducer。
+    永不回收；同时断言 starting 不产生中断、初始化失败回到 dormant、只有匹配 identity 的
+    cleared 才结算中断。任一 session 的恢复、发送或结束不得污染其他 session 的事件、权限或 reducer。
     fork 必须覆盖真实 thread A → 新 thread B：返回的 session 通过 Shell 通用新 thread
     登记/选择流程进入列表，B 使用独立 Entry/Binding 并成为当前选择，A 不改绑，随后
     rename/send 只能作用于 B；普通 fork 不得提前创建 B 的 session runtime。

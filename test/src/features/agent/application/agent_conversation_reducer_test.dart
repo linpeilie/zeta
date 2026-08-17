@@ -862,6 +862,7 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
         timelineTypes: <Type>[AgentBeginLiveTurnTimelineMutation],
         afterStateTypes: <Type>[AgentFinalizeTurnStartedChange],
         uiRegions: <AgentUiRegion>{
+          AgentUiRegion.history,
           AgentUiRegion.liveTurnBinding,
           AgentUiRegion.liveTurn,
           AgentUiRegion.header,

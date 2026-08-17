@@ -99,6 +99,63 @@ final class AgentConversationBindingRuntimeSnapshot {
   final int activeOperationCount;
 }
 
+/// 会话 runtime 的显式生命周期阶段。
+enum AgentConversationRuntimeLifecyclePhase {
+  /// 尚未创建 runtime，且没有发生需要消费者处理的断开。
+  dormant,
+
+  /// [beginTurn] 正在创建或初始化 runtime。
+  starting,
+
+  /// runtime 已绑定且可以处理当前会话操作。
+  attached,
+
+  /// 曾绑定的 runtime 已按精确 identity 被清除。
+  cleared,
+}
+
+/// 已绑定 runtime 被清除的中立原因。
+enum AgentConversationRuntimeClearReason {
+  idleTimeout,
+  explicitInvalidation,
+  providerEventStreamClosed,
+  registryInvalidated,
+}
+
+/// Binding 当前 runtime 生命周期的只读快照。
+///
+/// [cleared] 只由曾经成功进入 [attached] 的同一 runtime identity 产生；首次
+/// 启动和初始化失败不会伪装成断连，消费者因此无需通过 `currentRuntime == null`
+/// 反推生命周期语义。
+@immutable
+final class AgentConversationRuntimeLifecycle {
+  const AgentConversationRuntimeLifecycle.dormant()
+    : phase = AgentConversationRuntimeLifecyclePhase.dormant,
+      runtimeIdentity = null,
+      clearReason = null;
+
+  const AgentConversationRuntimeLifecycle.starting()
+    : phase = AgentConversationRuntimeLifecyclePhase.starting,
+      runtimeIdentity = null,
+      clearReason = null;
+
+  const AgentConversationRuntimeLifecycle.attached(this.runtimeIdentity)
+    : phase = AgentConversationRuntimeLifecyclePhase.attached,
+      clearReason = null;
+
+  const AgentConversationRuntimeLifecycle.cleared(
+    this.runtimeIdentity,
+    this.clearReason,
+  ) : phase = AgentConversationRuntimeLifecyclePhase.cleared;
+
+  final AgentConversationRuntimeLifecyclePhase phase;
+
+  /// attached 时是当前 identity，cleared 时是刚被清除的 identity。
+  final AgentProviderRuntimeIdentity? runtimeIdentity;
+
+  final AgentConversationRuntimeClearReason? clearReason;
+}
+
 /// 从首次发送开始持有到 turn 终态的活动令牌。
 final class AgentConversationTurnActivity {
   AgentConversationTurnActivity._(this.runtime, this._binding);
@@ -186,6 +243,8 @@ final class AgentConversationBinding extends ChangeNotifier {
   int _activeOperationCount = 0;
   int _consumerCount = 0;
   DateTime _lastActiveAt;
+  AgentConversationRuntimeLifecycle _runtimeLifecycle =
+      const AgentConversationRuntimeLifecycle.dormant();
   bool _disposed = false;
 
   AgentConversationBindingKey get key => _key;
@@ -194,6 +253,7 @@ final class AgentConversationBinding extends ChangeNotifier {
   Stream<AgentEvent> get events => _events.stream;
   int get consumerCount => _consumerCount;
   bool get hasRuntime => currentRuntime != null;
+  AgentConversationRuntimeLifecycle get runtimeLifecycle => _runtimeLifecycle;
 
   AgentConversationRuntimeContext? get currentRuntime {
     final lease = _runtimeLease;
@@ -247,7 +307,6 @@ final class AgentConversationBinding extends ChangeNotifier {
   Future<AgentConversationTurnActivity> beginTurn() async {
     _activeOperationCount += 1;
     _touch();
-    notifyListeners();
     try {
       final runtime = await _ensureRuntime();
       return AgentConversationTurnActivity._(runtime, this);
@@ -334,7 +393,11 @@ final class AgentConversationBinding extends ChangeNotifier {
         snapshot.lastActiveAt.isAfter(idleCutoff)) {
       return false;
     }
-    return _detachRuntime(expectedIdentity: expectedIdentity, invalidate: true);
+    return _detachRuntime(
+      expectedIdentity: expectedIdentity,
+      invalidate: true,
+      clearReason: AgentConversationRuntimeClearReason.idleTimeout,
+    );
   }
 
   Future<void> invalidateRuntime() async {
@@ -342,7 +405,11 @@ final class AgentConversationBinding extends ChangeNotifier {
     if (identity == null) {
       return;
     }
-    await _detachRuntime(expectedIdentity: identity, invalidate: true);
+    await _detachRuntime(
+      expectedIdentity: identity,
+      invalidate: true,
+      clearReason: AgentConversationRuntimeClearReason.explicitInvalidation,
+    );
   }
 
   Future<AgentConversationRuntimeContext> _ensureRuntime() async {
@@ -357,10 +424,18 @@ final class AgentConversationBinding extends ChangeNotifier {
     if (creating != null) {
       return creating;
     }
+    _runtimeLifecycle = const AgentConversationRuntimeLifecycle.starting();
+    notifyListeners();
     final future = _createRuntime();
     _runtimeFuture = future;
     try {
       return await future;
+    } catch (_) {
+      if (identical(_runtimeFuture, future)) {
+        _runtimeLifecycle = const AgentConversationRuntimeLifecycle.dormant();
+        notifyListeners();
+      }
+      rethrow;
     } finally {
       if (identical(_runtimeFuture, future)) {
         _runtimeFuture = null;
@@ -406,6 +481,9 @@ final class AgentConversationBinding extends ChangeNotifier {
       }
       await _replaceProviderEvents(runtime);
       _touch();
+      _runtimeLifecycle = AgentConversationRuntimeLifecycle.attached(
+        runtime.runtimeIdentity,
+      );
       notifyListeners();
       return runtime;
     } catch (_) {
@@ -448,12 +526,18 @@ final class AgentConversationBinding extends ChangeNotifier {
   ) async {
     // CLI 的事件流关闭即表示该 session runtime 已不可继续使用。只按捕获的
     // identity 条件失效，避免旧流迟到的 onDone 误伤后来创建的新进程。
-    await _detachRuntime(expectedIdentity: identity, invalidate: true);
+    await _detachRuntime(
+      expectedIdentity: identity,
+      invalidate: true,
+      clearReason:
+          AgentConversationRuntimeClearReason.providerEventStreamClosed,
+    );
   }
 
   Future<bool> _detachRuntime({
     required AgentProviderRuntimeIdentity expectedIdentity,
     required bool invalidate,
+    required AgentConversationRuntimeClearReason clearReason,
   }) async {
     final lease = _runtimeLease;
     if (lease == null || lease.runtimeIdentity != expectedIdentity) {
@@ -463,6 +547,7 @@ final class AgentConversationBinding extends ChangeNotifier {
     final providerEvents = _providerEvents;
     _providerEvents = null;
     permissions.detachRuntime();
+    _recordRuntimeRemoved(expectedIdentity, clearReason);
     notifyListeners();
     // runtime 事后消失时复检「无消费者空壳」不变量；不能只靠 _release /
     // 带 runtime 的 idle sweep，否则外部 invalidate 会留下永久幽灵 Binding。
@@ -516,8 +601,24 @@ final class AgentConversationBinding extends ChangeNotifier {
     _providerEvents = null;
     permissions.detachRuntime();
     unawaited(lease.release());
+    _recordRuntimeRemoved(
+      lease.runtimeIdentity,
+      AgentConversationRuntimeClearReason.registryInvalidated,
+    );
     notifyListeners();
     _notifyRuntimeCleared();
+  }
+
+  void _recordRuntimeRemoved(
+    AgentProviderRuntimeIdentity identity,
+    AgentConversationRuntimeClearReason reason,
+  ) {
+    final lifecycle = _runtimeLifecycle;
+    _runtimeLifecycle =
+        lifecycle.phase == AgentConversationRuntimeLifecyclePhase.attached &&
+            lifecycle.runtimeIdentity == identity
+        ? AgentConversationRuntimeLifecycle.cleared(identity, reason)
+        : const AgentConversationRuntimeLifecycle.dormant();
   }
 
   @override

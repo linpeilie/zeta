@@ -46,6 +46,66 @@ void main() {
 
       expect(factory.providers, isEmpty);
       expect(lease.binding.hasRuntime, isFalse);
+      expect(
+        lease.binding.runtimeLifecycle.phase,
+        AgentConversationRuntimeLifecyclePhase.dormant,
+      );
+    });
+
+    test('beginTurn 明确区分 starting、attached 与 cleared', () async {
+      final lease = acquireDraft();
+
+      final activityFuture = lease.binding.beginTurn();
+
+      expect(
+        lease.binding.runtimeLifecycle.phase,
+        AgentConversationRuntimeLifecyclePhase.starting,
+      );
+
+      final activity = await activityFuture;
+      final identity = activity.runtime.runtimeIdentity;
+      expect(
+        lease.binding.runtimeLifecycle.phase,
+        AgentConversationRuntimeLifecyclePhase.attached,
+      );
+      expect(lease.binding.runtimeLifecycle.runtimeIdentity, identity);
+
+      await activity.release();
+      await lease.binding.invalidateRuntime();
+
+      expect(
+        lease.binding.runtimeLifecycle.phase,
+        AgentConversationRuntimeLifecyclePhase.cleared,
+      );
+      expect(lease.binding.runtimeLifecycle.runtimeIdentity, identity);
+      expect(
+        lease.binding.runtimeLifecycle.clearReason,
+        AgentConversationRuntimeClearReason.explicitInvalidation,
+      );
+    });
+
+    test('runtime 初始化失败回到 dormant，不伪造 cleared', () async {
+      final lease = acquireDraft();
+      factory.failNextInitialize = true;
+      final observedPhases = <AgentConversationRuntimeLifecyclePhase>[];
+      lease.binding.addListener(
+        () => observedPhases.add(lease.binding.runtimeLifecycle.phase),
+      );
+
+      await expectLater(lease.binding.beginTurn(), throwsStateError);
+
+      expect(
+        observedPhases,
+        contains(AgentConversationRuntimeLifecyclePhase.starting),
+      );
+      expect(
+        observedPhases,
+        isNot(contains(AgentConversationRuntimeLifecyclePhase.cleared)),
+      );
+      expect(
+        lease.binding.runtimeLifecycle.phase,
+        AgentConversationRuntimeLifecyclePhase.dormant,
+      );
     });
 
     test('dormant 权限选择只更新下次请求，不创建 session Provider', () async {
@@ -190,6 +250,15 @@ void main() {
       await manager.sweepNow();
 
       expect(lease.binding.hasRuntime, isFalse);
+      expect(
+        lease.binding.runtimeLifecycle.phase,
+        AgentConversationRuntimeLifecyclePhase.cleared,
+      );
+      expect(lease.binding.runtimeLifecycle.runtimeIdentity, firstIdentity);
+      expect(
+        lease.binding.runtimeLifecycle.clearReason,
+        AgentConversationRuntimeClearReason.idleTimeout,
+      );
       final replacement = await lease.binding.beginTurn();
       expect(factory.providers, hasLength(2));
       expect(replacement.runtime.runtimeIdentity, isNot(firstIdentity));
@@ -423,18 +492,31 @@ void main() {
 
 final class _BindingProviderFactory with LegacyBundleFactoryMixin {
   final List<_BindingProvider> providers = <_BindingProvider>[];
+  bool failNextInitialize = false;
 
   @override
   Object create(AgentProviderConfig config) {
-    final provider = _BindingProvider();
+    final provider = _BindingProvider(failInitialize: failNextInitialize);
+    failNextInitialize = false;
     providers.add(provider);
     return provider;
   }
 }
 
 final class _BindingProvider extends AgentPaneFakeProvider {
+  _BindingProvider({required this.failInitialize});
+
+  final bool failInitialize;
   int disposeCount = 0;
   Completer<void>? disposeGate;
+
+  @override
+  Future<void> initialize() async {
+    if (failInitialize) {
+      throw StateError('initialize failed');
+    }
+    await super.initialize();
+  }
 
   @override
   Future<void> dispose() async {

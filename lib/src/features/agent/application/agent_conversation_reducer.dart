@@ -483,6 +483,7 @@ final class AgentConversationReducer {
       ],
       uiUpdate: AgentUiUpdateRequest(
         regions: const <AgentUiRegion>{
+          AgentUiRegion.history,
           AgentUiRegion.liveTurnBinding,
           AgentUiRegion.liveTurn,
           AgentUiRegion.header,

@@ -197,6 +197,9 @@ main -> app -> presentation/application -> domain
 - `AgentConversationBinding.beginTurn()` 是创建 session runtime 的唯一入口；打开草稿、打开
   thread 和读取历史都不得调用它。cancel、steer、审批/提问回写与 session configuration
   只能通过 `runCurrent` 使用已存在实例，实例已回收时 fail-closed，不得为迟到操作重启 CLI。
+- Binding 必须显式发布 `dormant` / `starting` / `attached` / `cleared` runtime 生命周期。
+  `starting` 和首次初始化失败不得通过 `currentRuntime == null` 被推断为断连；只有曾进入
+  `attached`、且按精确 runtime identity 清除后产生的 `cleared` 才能结算当前 turn 为中断。
 - Binding Manager 每分钟执行 single-flight 扫描。session runtime 在没有运行中 turn/RPC 且
   最后活动满 10 分钟后回收，候选必须携带精确 runtime identity 防 ABA；同一 scope 的旧进程
   dispose 完成前，新 acquire 必须等待，禁止新旧 CLI 重叠。配置变化仍会失效该 Provider 的

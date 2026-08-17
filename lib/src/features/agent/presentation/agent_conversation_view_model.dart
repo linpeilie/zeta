@@ -1973,6 +1973,7 @@ class AgentConversationViewModel {
           _publishUiChanges(
             AgentUiUpdateRequest(
               regions: const <AgentUiRegion>{
+                AgentUiRegion.history,
                 AgentUiRegion.liveTurnBinding,
                 AgentUiRegion.liveTurn,
                 AgentUiRegion.header,
@@ -2922,7 +2923,11 @@ class AgentConversationViewModel {
     if (_disposed) {
       return;
     }
-    if (conversationBinding.currentRuntime != null) {
+    // ChangeNotifier 同时承载操作计数、starting、attached 与清除通知。只有 Binding
+    // 按精确 identity 确认的 cleared 转换才表示真实断开；dormant/starting 不能
+    // 通过 currentRuntime == null 反推为 Provider 中断。
+    if (conversationBinding.runtimeLifecycle.phase !=
+        AgentConversationRuntimeLifecyclePhase.cleared) {
       return;
     }
     if (_session != null || _eventPipeline != null) {

@@ -464,6 +464,10 @@ project/file context。打开另一个 thread 必须选择或创建另一个 ent
 调用 `Binding.beginTurn()` 后才启动，并在已有 thread 上 resume。草稿取得 threadId 后
 原子晋升，碰到已有 key 时 fail-closed。
 
+Binding 显式发布 dormant、starting、attached 与 cleared 生命周期。首次启动和初始化失败
+不能仅凭 `currentRuntime == null` 被解释成断连；只有曾 attached 且按精确 runtime identity
+清除后产生的 cleared 转换，才允许 ViewModel 将当前 turn 结算为中断。
+
 Binding 持有该逻辑会话的可选 runtime、generation 过滤后的事件流、权限状态和活跃操作
 计数。运行中 turn 与短 RPC 都阻止回收；终态/操作完成时间是新的 TTL 起点。Manager 每
 分钟 single-flight 扫描一次，空闲满 10 分钟后按精确 runtime identity 条件失效，避免
