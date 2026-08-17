@@ -722,17 +722,23 @@ class _FontChoiceSettingRowState extends State<_FontChoiceSettingRow> {
           widget.selectedLabel,
         ),
         container: true,
+        // 这里仍直接用 sf.Select（IdeSelect 尚不支持带搜索的弹层），因此文字档
+        // 与展开箭头都显式对齐 IdeSelect：交互控件一律 bodySmall，箭头走等高
+        // 图标盒，否则拆掉固定高度后这个下拉会比隔壁的语言下拉高一截。
         child: sf.Select<AppearanceFontChoice>(
           key: ValueKey<String>('${widget.keyPrefix}-select'),
           value: widget.selectedChoice,
           enabled: !_updating,
+          expandIcon: IdeSelectExpandIcon(
+            color: _updating ? colors.textTertiary : colors.textSecondary,
+          ),
           constraints: const BoxConstraints(minWidth: 220, maxWidth: 320),
           popupConstraints: const BoxConstraints(maxHeight: 360),
           itemBuilder: (context, choice) => Text(
             widget.selectedLabel,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: textStyles.bodyMedium.copyWith(
+            style: textStyles.bodySmall.copyWith(
               color: colors.textPrimary,
               fontWeight: FontWeight.w600,
             ),
@@ -795,7 +801,7 @@ class _FontChoiceSettingRowState extends State<_FontChoiceSettingRow> {
                         _fontOptionDisplayLabelFor(l10n, option),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: textStyles.bodyMedium.copyWith(
+                        style: textStyles.bodySmall.copyWith(
                           color: colors.textPrimary,
                         ),
                       ),

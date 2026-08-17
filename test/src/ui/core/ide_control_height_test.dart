@@ -9,6 +9,9 @@ import 'package:zeta/src/ui/core/ide_tabs.dart';
 import 'ide_component_test_harness.dart';
 
 void main() {
+  // TODO(step3): 控件改成内容撑高后，把这里的「等于 regularControlHeight」
+  // 换成「等于 2 × controlPaddingYFor + 内容行盒」，常量断言随
+  // IdeMetrics.regularControlHeight 一起删除。
   testWidgets('常规 Select、Tabs 与工具栏 Button 使用同一外框高度', (tester) async {
     await pumpIdeComponent(tester, child: const _RegularControls());
 
@@ -36,6 +39,54 @@ void main() {
     expect(selectHeight, greaterThan(IdeMetrics.regularControlHeight));
     expect(tabsHeight, closeTo(selectHeight, 0.01));
     expect(buttonHeight, closeTo(selectHeight, 0.01));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('常规控件在最小 UI 字号下仍然等高', (tester) async {
+    await pumpIdeComponent(
+      tester,
+      uiFontSize: minUiFontSize,
+      child: const _RegularControls(),
+    );
+
+    final selectHeight = _height(tester, 'regular-select');
+
+    expect(_height(tester, 'regular-tabs'), closeTo(selectHeight, 0.01));
+    expect(_height(tester, 'regular-button'), closeTo(selectHeight, 0.01));
+    expect(tester.takeException(), isNull);
+  });
+
+  // 图标一旦比文字行盒高，它就会成为决定控件高度的那个内容——shadcn 官网的
+  // Select 比 Button 高 2px 就是这么来的。控件改成内容撑高后，这条断言是唯一
+  // 拦得住它的护栏；在固定高度时期它平凡成立，属于提前埋好的回归网。
+  testWidgets('带图标的控件与纯文字控件等高', (tester) async {
+    await pumpIdeComponent(
+      tester,
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IdeButton(key: ValueKey('plain-button'), label: '刷新'),
+          IdeButton(
+            key: ValueKey('icon-button'),
+            label: '刷新',
+            leadingIcon: Icons.refresh_rounded,
+            trailingIcon: Icons.keyboard_arrow_down_rounded,
+          ),
+          IdeTab(key: ValueKey('plain-tab'), label: '模型', trailingIcon: null),
+          IdeTab(
+            key: ValueKey('icon-tab'),
+            label: '模型',
+            leadingIcon: Icons.tune_rounded,
+          ),
+        ],
+      ),
+    );
+
+    final plainButton = _height(tester, 'plain-button');
+    final plainTab = _height(tester, 'plain-tab');
+
+    expect(_height(tester, 'icon-button'), closeTo(plainButton, 0.01));
+    expect(_height(tester, 'icon-tab'), closeTo(plainTab, 0.01));
     expect(tester.takeException(), isNull);
   });
 

@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/painting.dart';
 
+import 'ide_spacing.dart';
+
 /// 交互控件的密度档位。
 ///
 /// `regular` 用于设置页和工具栏，`compact` 用于 Pane 内的独立 Tab 与紧凑动作。
@@ -49,11 +51,16 @@ abstract final class IdeMetrics {
   ///
   /// 设置页、工具栏里的 Select、Tabs 与 Button 都从这一档起步；字号增大时由
   /// [controlHeightFor] 在此基础上同步扩高。
+  ///
+  /// **迁移中**：这一档正在被「内容撑高 + [controlMinHeightFor] 兜底」取代，
+  /// 原因见 [controlHeightFor] 的注释。新代码不要再引用它。
   static const double regularControlHeight = 34;
 
   /// 紧凑交互控件的最小外框高度。
   ///
   /// 用于 Pane 内独立 Tab 和普通紧凑按钮，不与列表行高度混用。
+  ///
+  /// **迁移中**：同 [regularControlHeight]。
   static const double compactControlHeight = 28;
 
   /// 工具条最小高度。
@@ -71,6 +78,18 @@ abstract final class IdeMetrics {
   ///
   /// 返回值永远不小于对应密度档的基准高度；当 UI 字号放大时，各类控件使用
   /// 同一增长公式，避免固定高度的 Select 与内容自适应的 Tabs 再次分叉。
+  ///
+  /// **迁移中，新代码不要再用。** 这个函数有两个已知问题：
+  /// 1. 它的 chrome 常数是从 **Tabs 一个控件**的内边距反推出来的，Select 和
+  ///    Button 只是被告知了 Tabs 的答案——三者的竖向内边距（2 / 4 / 4+4）
+  ///    从未统一，是固定高度替它们盖住了 13px 的落差。
+  /// 2. 默认 UI 字号下公式永远输不过 34 这个下限（要 UI 字号 > 12.93 才轮到
+  ///    公式生效），所以它实际退化成了常数：用户从 12 调到 12.9，控件纹丝
+  ///    不动，过了阈值才突然开始长。
+  ///
+  /// 替代方案是「内容撑高 + 下限兜底」：竖向内边距取 [controlPaddingYFor]，
+  /// 图标盒取 [controlIconBoxFor]，最小点击目标取 [controlMinHeightFor]，
+  /// 高度由内容自然决定。控件迁移完成后本函数删除。
   static double controlHeightFor(
     TextStyle textStyle, {
     required IdeControlSize size,
@@ -88,6 +107,78 @@ abstract final class IdeMetrics {
       ),
     };
     return math.max(minimum, lineHeight + chromeHeight);
+  }
+
+  // ---------------------------------------------------------------------------
+  // 控件尺寸（内容撑高体系）
+  // ---------------------------------------------------------------------------
+  //
+  // 三个 token 合起来定义**唯一**的控件高度公式：
+  //
+  //     控件高度 = max(2 × controlPaddingYFor(size),
+  //                    controlMinHeightFor(size) − 内容高度) + 内容高度
+  //     内容高度 = max(文字行盒, controlIconBoxFor(文字样式))
+  //
+  // 也就是「竖向内边距 + 内容，低于点击目标下限时再抬到下限」。所有交互
+  // 控件——Select / Tabs / Button / 未来的 TextField 与 IconButton——都必须
+  // 走这一条公式，不允许再出现第二套内边距。
+  //
+  // 默认 UI 字号（12）下的落点：常规档 10×2 + 15 = 35，紧凑档 6×2 + 15 = 27，
+  // 与迁移前的 34 / 28 各差 1px——这是刻意的，让「拆掉固定高度」这次结构性
+  // 改动在视觉上几乎不可见，出问题时容易判断是结构错了还是数值错了。
+
+  /// 常规控件的竖向内边距（单侧）。
+  ///
+  /// 生效位置：迁移后的 `IdeSelect` / `IdeTabs` / `IdeButton`（常规档）。
+  static const double controlPaddingYRegular = IdeSpacing.space10;
+
+  /// 紧凑控件的竖向内边距（单侧）。
+  ///
+  /// 生效位置：迁移后的 `IdeTab` 与 Pane 内紧凑按钮。
+  static const double controlPaddingYCompact = IdeSpacing.space6;
+
+  /// 常规控件的最小外框高度（点击目标下限）。
+  ///
+  /// 与 [regularControlHeight] 的区别是**谁说了算**：这一档只在内容小到不
+  /// 好点时才生效（默认字号下不生效，UI 字号 ≤ 10 时才轮到它），不再决定
+  /// 正常状态下的控件高度。
+  static const double controlMinHeightRegular = 28;
+
+  /// 紧凑控件的最小外框高度（点击目标下限）。
+  ///
+  /// 图标按钮另有 [iconButtonHitSize]（28）作为点击区域下限，不共用这一档。
+  static const double controlMinHeightCompact = 24;
+
+  /// 按密度档解析竖向内边距（单侧）。
+  static double controlPaddingYFor(IdeControlSize size) {
+    return switch (size) {
+      IdeControlSize.compact => controlPaddingYCompact,
+      IdeControlSize.regular => controlPaddingYRegular,
+    };
+  }
+
+  /// 按密度档解析最小外框高度。
+  static double controlMinHeightFor(IdeControlSize size) {
+    return switch (size) {
+      IdeControlSize.compact => controlMinHeightCompact,
+      IdeControlSize.regular => controlMinHeightRegular,
+    };
+  }
+
+  /// 解析控件内图标的**方形外框**边长。
+  ///
+  /// 内容撑高体系里，控件高度由「最高的那个内容」决定。图标一旦比文字行盒
+  /// 高，带图标的控件就会比纯文字控件高一截——shadcn 官网自己的 Select(32)
+  /// 比 Button(30) 高 2px，原因就是里面那个 16px 的 chevron。所以图标不能
+  /// 直接摆进 Row，必须先套进一个**与文字行盒等高**的方框。
+  ///
+  /// 取整方式对齐 Flutter 对文字行盒的处理（四舍五入到整像素）：11 × 1.35 =
+  /// 14.85 排出来是 15，图标盒也取 15，图标控件与文字控件才严丝合缝等高。
+  ///
+  /// 生效位置：`IdeIconBox`；所有控件内图标都应经由它落地。
+  static double controlIconBoxFor(TextStyle textStyle) {
+    final fontSize = textStyle.fontSize ?? 0;
+    return (fontSize * (textStyle.height ?? 1)).roundToDouble();
   }
 
   // ---------------------------------------------------------------------------

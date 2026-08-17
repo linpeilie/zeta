@@ -3,6 +3,7 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'ide_colors.dart';
 import 'ide_effects.dart';
+import 'ide_icon_box.dart';
 import 'ide_metrics.dart';
 import 'ide_text_styles.dart';
 
@@ -98,6 +99,10 @@ class IdeButton extends StatelessWidget {
   /// `IdeLoadingIndicator`，如果只能传 [IconData]，调用方就只好退回裸
   /// `sf.Button` 自己拼——那正是本组件要消除的分叉。自定义组件的着色由调用方
   /// 负责，本组件不再套 [IconTheme]。
+  ///
+  /// **高度约束**：自定义组件不得高于 [IdeMetrics.controlIconBoxFor] 解析出的
+  /// 图标盒，否则它会成为决定按钮高度的那个内容，让这一个按钮比同排的其他
+  /// 控件高。拿不准就用 [IdeIconBox.custom] 包一层。
   final Widget? leading;
 
   /// 文案前可选图标。
@@ -127,9 +132,6 @@ class IdeButton extends StatelessWidget {
   /// 覆盖默认文案的无障碍名称。
   final String? semanticLabel;
 
-  static const double _leadingIconSize = 15;
-  static const double _trailingIconSize = 16;
-
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
@@ -153,25 +155,28 @@ class IdeButton extends StatelessWidget {
         isEnabled ? colors.textSecondary : colors.textTertiary,
     };
 
+    final labelStyle = textStyles.bodySmall.copyWith(color: foreground);
     final button = sf.Button(
       onPressed: isEnabled ? onPressed : null,
       enabled: isEnabled,
       style: _resolveStyle(variant),
       // 有 leading 时 shadcn 内部 Row 默认顶对齐，alignment 负责垂直居中。
       alignment: Alignment.centerLeft,
+      // 图标一律走等高图标盒：拆掉固定高度后，15/16px 的裸图标会比 15px 的
+      // 文字行盒高，带图标的按钮就会比纯文字按钮高一截。
       leading:
           leading ??
           (leadingIcon == null
               ? null
-              : Icon(leadingIcon, size: _leadingIconSize, color: iconColor)),
+              : IdeIconBox(leadingIcon!, style: labelStyle, color: iconColor)),
       trailing: trailingIcon == null
           ? null
-          : Icon(trailingIcon, size: _trailingIconSize, color: iconColor),
+          : IdeIconBox(trailingIcon!, style: labelStyle, color: iconColor),
       child: Text(
         label,
         maxLines: maxLines,
         overflow: TextOverflow.ellipsis,
-        style: textStyles.bodySmall.copyWith(color: foreground),
+        style: labelStyle,
       ),
     );
 

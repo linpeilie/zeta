@@ -3,6 +3,7 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'ide_colors.dart';
 import 'ide_effects.dart';
+import 'ide_icon_box.dart';
 import 'ide_metrics.dart';
 import 'ide_motion.dart';
 import 'ide_spacing.dart';
@@ -302,25 +303,30 @@ class _IdeTabContent extends StatelessWidget {
             child: child!,
           );
         },
+        // 图标一律走等高图标盒。这里的字形只有 13px，比 15px 的文字行盒矮，
+        // 今天不会撑高行；套盒是为了拆掉固定高度后，行高只由文字决定，不随
+        // 「这个 Tab 有没有图标」抖动。
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             if (leadingIcon != null) ...[
-              Icon(leadingIcon),
+              IdeIconBox.custom(child: Icon(leadingIcon)),
               const SizedBox(width: IdeSpacing.space4),
             ],
             _IdeTabLabel(label: label, loading: loading),
             if (trailingIcon != null) ...[
               const SizedBox(width: IdeSpacing.space4),
-              AnimatedRotation(
-                turns:
-                    selected &&
-                        trailingIcon == Icons.keyboard_arrow_down_rounded
-                    ? 0.5
-                    : 0,
-                duration: IdeMotion.durationNormal,
-                curve: IdeMotion.curveDefault,
-                child: Icon(trailingIcon),
+              IdeIconBox.custom(
+                child: AnimatedRotation(
+                  turns:
+                      selected &&
+                          trailingIcon == Icons.keyboard_arrow_down_rounded
+                      ? 0.5
+                      : 0,
+                  duration: IdeMotion.durationNormal,
+                  curve: IdeMotion.curveDefault,
+                  child: Icon(trailingIcon),
+                ),
               ),
             ],
           ],

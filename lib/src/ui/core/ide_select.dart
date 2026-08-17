@@ -1,12 +1,36 @@
 import 'dart:math' as math;
 
+import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/widgets.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'ide_colors.dart';
+import 'ide_icon_box.dart';
 import 'ide_metrics.dart';
 import 'ide_spacing.dart';
 import 'ide_text_styles.dart';
+
+/// Select 触发器右侧的展开箭头。
+///
+/// shadcn 默认的 `SelectExpandIcon` 是一个固定 16px 的 lucide `chevronsUpDown`
+/// ——它比 15px 的文字行盒高，是 shadcn 官网 Select（32）比 Button（30）高
+/// 2px 的**唯一**原因。本组件把它换成等高图标盒里的 Material `unfold_more`
+/// （与项目其余图标同族），保证下拉框拆掉固定高度后不会比按钮高一截。
+///
+/// 生效位置：[IdeSelect]；以及设置页仍直接使用 [sf.Select] 的字体选择器
+/// （通过 `expandIcon:` 传入），让两条路径落在同一个图标尺寸上。
+class IdeSelectExpandIcon extends StatelessWidget {
+  /// 创建一个等高的展开箭头。
+  const IdeSelectExpandIcon({super.key, this.color});
+
+  /// 字形颜色；为空时继承外层 `IconTheme`。
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    return IdeIconBox(Icons.unfold_more_rounded, color: color);
+  }
+}
 
 /// [IdeSelect] 的单个选项。
 @immutable
@@ -98,7 +122,11 @@ class IdeSelect<T> extends StatelessWidget {
   /// 无匹配值时的占位文案（当前实现仍要求 [value] 有对应项时优先）。
   final String? placeholder;
 
-  /// 与 OutlineButton small+dense 对齐：水平 16×0.75×0.5≈6，垂直 8×0.75×0.5≈3。
+  /// 触发器内边距。
+  ///
+  /// **迁移中**：竖向的 2 只是历史值——它比 Button 的 4、Tabs 的 4+4 都小，
+  /// 三者之所以现在还能等高，全靠外层 `minHeight = maxHeight` 把高度钉死。
+  /// 改成内容撑高时，这里要换成 [IdeMetrics.controlPaddingYFor]。
   static const EdgeInsets _contentPadding = EdgeInsets.symmetric(
     horizontal: IdeSpacing.space8,
     vertical: IdeSpacing.space2,
@@ -123,6 +151,9 @@ class IdeSelect<T> extends StatelessWidget {
     return sf.Select<T>(
       value: selected?.value ?? value,
       enabled: isEnabled,
+      expandIcon: IdeSelectExpandIcon(
+        color: isEnabled ? colors.textSecondary : colors.textTertiary,
+      ),
       constraints: BoxConstraints(
         minWidth: width ?? 0,
         maxWidth: width ?? double.infinity,
