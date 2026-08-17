@@ -39,7 +39,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('IdeButton.toolbar 固定为工具条高度', (tester) async {
+  testWidgets('IdeButton.toolbar 使用常规控件高度', (tester) async {
     await pumpIdeComponent(
       tester,
       child: const Align(
@@ -55,7 +55,7 @@ void main() {
 
     expect(
       tester.getSize(find.byKey(const ValueKey('toolbar-button'))).height,
-      IdeMetrics.toolbarHeight,
+      IdeMetrics.regularControlHeight,
     );
     expect(find.byIcon(Icons.calendar_month_rounded), findsOneWidget);
     expect(find.byIcon(Icons.keyboard_arrow_down_rounded), findsOneWidget);

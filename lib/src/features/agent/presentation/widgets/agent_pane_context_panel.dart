@@ -3,6 +3,14 @@ part of '../agent_pane.dart';
 /// 上下文详情面板的固定宽度。
 const double _agentContextPanelWidth = 360;
 
+/// 元数据区字段名列宽。
+///
+/// 比通用的 [IdeMetrics.keyValueLabelWidth] 更窄：这里的字段名走 `caption`
+/// （10px）而不是 `titleSmall`（12px），最长的「最后活跃时间」/「Context limit」
+/// 在 76px 内排得下，同时把省下的横向空间还给等宽的值列。固定宽度是这一块的
+/// 关键——所有行的值从同一条竖线起排，纵向扫视才能一眼比对。
+const double _agentContextKeyColumnWidth = 76;
+
 /// Agent 面板右侧的上下文详情面板。
 ///
 /// 由 thread 详情头栏「上下文」菜单触发，展示会话元信息（名称、会话 ID、
@@ -93,7 +101,9 @@ class _AgentContextPanelState extends State<_AgentContextPanel> {
                                 createdAt: viewModel.threadCreatedAt,
                                 lastActiveAt: viewModel.threadLastActiveAt,
                               ),
-                              const SizedBox(height: IdeSpacing.space20),
+                              // 元数据区与原始消息之间不画线：靠一整段留白
+                              // 把两个功能区分开，面板整体保持无框线。
+                              const SizedBox(height: IdeSpacing.space32),
                               _AgentContextRawMessageList(
                                 items: rawItems,
                                 filterNonChat: _filterNonChatMessages,
@@ -130,6 +140,9 @@ class _AgentContextPanelState extends State<_AgentContextPanel> {
 }
 
 /// 上下文面板标题栏：图标 + 标题 + 关闭按钮。
+///
+/// 刻意不画底部分割线：面板已经有左侧边框与自身底色，横贯左右的线只会把
+/// 标题从内容上「切」下来。标题与正文之间的层级由字重和留白表达。
 class _AgentContextPanelHeader extends StatelessWidget {
   const _AgentContextPanelHeader({required this.onClose});
 
@@ -143,14 +156,6 @@ class _AgentContextPanelHeader extends StatelessWidget {
       key: const ValueKey('agent-context-panel-header'),
       height: 42,
       padding: const EdgeInsets.symmetric(horizontal: IdeSpacing.space12),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(
-            color: colors.borderSubtle.withValues(alpha: 0.6),
-            width: 1,
-          ),
-        ),
-      ),
       child: Row(
         children: [
           Icon(
@@ -246,6 +251,12 @@ class _AgentContextSummaryCard extends StatelessWidget {
 }
 
 /// 概览区的单行键值对。
+///
+/// 排版分工按「仪表盘」来定：字段名走 UI 字体的次级浅灰小字，值一律走等宽
+/// 字体的主色 + 等宽数字——面板里所有值都是可复制的机器数据（会话 ID、
+/// Token 计数、时间戳），等宽让它们逐位对齐，也和字段名一眼分开。
+/// 行高压到 [IdeSpacing.space2]，让十余行元数据读起来是一块密集数据，
+/// 而不是十余个段落。
 class _ContextSummaryRow {
   const _ContextSummaryRow(this.label, this.value);
 
@@ -256,25 +267,31 @@ class _ContextSummaryRow {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: IdeSpacing.space4),
+      padding: const EdgeInsets.symmetric(vertical: IdeSpacing.space2),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        // 值可能折行，用首行基线对齐字段名，避免两列文字上下错开半个字。
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
         children: [
           SizedBox(
-            width: 96,
+            width: _agentContextKeyColumnWidth,
             child: Text(
               label,
-              style: textStyles.caption.copyWith(
-                color: colors.textSecondary.withValues(alpha: 0.72),
-              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: textStyles.caption.copyWith(color: colors.textSecondary),
             ),
           ),
+          const SizedBox(width: IdeSpacing.space8),
           Expanded(
             child: Text(
               value,
-              maxLines: 3,
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: textStyles.bodySmall.copyWith(color: colors.textPrimary),
+              style: textStyles.codeSmall.copyWith(
+                color: colors.textPrimary,
+                fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
+              ),
             ),
           ),
         ],
@@ -320,17 +337,9 @@ class _AgentContextRawMessageList extends StatelessWidget {
                   ),
                 ),
               ),
-              IdeTab(
-                key: const ValueKey('agent-context-raw-filter'),
-                label: filterNonChat
-                    ? context.l10n.agentChatOnly
-                    : context.l10n.agentAll,
-                selected: filterNonChat,
-                trailingIcon: Icons.filter_list_rounded,
-                semanticLabel: filterNonChat
-                    ? context.l10n.agentShowChatOnly
-                    : context.l10n.agentShowAllMessages,
-                onPressed: () => onFilterChanged(!filterNonChat),
+              _AgentContextRawFilterButton(
+                filterNonChat: filterNonChat,
+                onChanged: onFilterChanged,
               ),
             ],
           ),
@@ -357,6 +366,59 @@ class _AgentContextRawMessageList extends StatelessWidget {
             ),
           ],
       ],
+    );
+  }
+}
+
+/// 「原始消息」区的过滤控件：在「仅对话」与「全部」之间切换。
+///
+/// 刻意不用 [IdeTab]：那一档带选中下划线和 `bodySmall` 加粗标签，会和左边的
+/// 区块标题抢主次。这里按**次级操作**来定型——`caption` 字号、次级色文字、
+/// 极轻的灰底加 [IdeRadius.small]（6px）圆角、无边框，只在 hover / 按下时
+/// 加深底色告诉用户它可点。
+class _AgentContextRawFilterButton extends StatelessWidget {
+  const _AgentContextRawFilterButton({
+    required this.filterNonChat,
+    required this.onChanged,
+  });
+
+  final bool filterNonChat;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
+    return PaneInteractiveSurface(
+      key: const ValueKey('agent-context-raw-filter'),
+      onPressed: () => onChanged(!filterNonChat),
+      selected: filterNonChat,
+      semanticLabel: filterNonChat
+          ? context.l10n.agentShowChatOnly
+          : context.l10n.agentShowAllMessages,
+      padding: const EdgeInsets.symmetric(
+        horizontal: IdeSpacing.space8,
+        vertical: IdeSpacing.space4,
+      ),
+      borderRadius: IdeRadius.allSmall,
+      backgroundColor: colors.border.withValues(alpha: 0.16),
+      // 选中态（默认的「仅对话」）不另加高亮：当前档位已经写在标签上，
+      // 再上一层底色只会让这个次级控件重新抢眼。
+      selectedBackgroundColor: colors.border.withValues(alpha: 0.16),
+      hoverBackgroundColor: colors.border.withValues(alpha: 0.28),
+      selectedHoverBackgroundColor: colors.border.withValues(alpha: 0.28),
+      pressedBackgroundColor: colors.border.withValues(alpha: 0.36),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            filterNonChat ? context.l10n.agentChatOnly : context.l10n.agentAll,
+            style: textStyles.caption.copyWith(color: colors.textSecondary),
+          ),
+          const SizedBox(width: IdeSpacing.space4),
+          Icon(Icons.filter_list_rounded, size: 12, color: colors.textTertiary),
+        ],
+      ),
     );
   }
 }

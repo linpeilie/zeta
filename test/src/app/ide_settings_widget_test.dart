@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
@@ -13,6 +14,7 @@ import 'package:zeta/src/features/settings/domain/system_font_family.dart';
 import 'package:zeta/src/features/settings/presentation/settings_page.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta/src/ui/core/ide_metrics.dart';
 import 'package:zeta/src/ui/core/ide_switch.dart';
 import 'package:zeta/src/ui/core/ide_tabs.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
@@ -38,6 +40,29 @@ void main() {
     );
     expect(find.text('常规'), findsOneWidget);
     expect(find.text('Enter 发送'), findsOneWidget);
+  });
+
+  testWidgets('general settings regular controls share one outer height', (
+    tester,
+  ) async {
+    await _pumpSettingsPage(
+      tester,
+      locale: ZetaLocalization.english,
+      activeSection: SettingsSection.general,
+    );
+
+    final languageHeight = tester
+        .getSize(find.byKey(const ValueKey('settings-language-select')))
+        .height;
+    final shortcutTabsHeight = tester
+        .getSize(
+          find.byKey(const ValueKey('settings-send-message-shortcut-tabs')),
+        )
+        .height;
+
+    expect(languageHeight, IdeMetrics.regularControlHeight);
+    expect(shortcutTabsHeight, languageHeight);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('general settings defaults to Enter and updates shortcut', (
@@ -134,6 +159,38 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('settings-language-select')));
     await _pumpSelectOverlay(tester);
+    final languageTriggerWidth = tester
+        .getSize(find.byKey(const ValueKey('settings-language-select')))
+        .width;
+    final languagePopup = find.byWidgetPredicate(
+      (widget) => widget is sf.SelectPopup,
+    );
+    final languagePopupWidth = tester.getSize(languagePopup).width;
+    expect(languagePopupWidth, greaterThanOrEqualTo(180));
+    expect(languagePopupWidth, lessThanOrEqualTo(240));
+    expect(languagePopupWidth, greaterThan(languageTriggerWidth));
+    expect(
+      tester
+          .renderObject<RenderParagraph>(
+            find.descendant(
+              of: find.byKey(const ValueKey('settings-language-english')),
+              matching: find.text('English'),
+            ),
+          )
+          .didExceedMaxLines,
+      isFalse,
+    );
+    expect(
+      tester
+          .renderObject<RenderParagraph>(
+            find.descendant(
+              of: find.byKey(const ValueKey('settings-language-zh-hans')),
+              matching: find.text('简体中文'),
+            ),
+          )
+          .didExceedMaxLines,
+      isFalse,
+    );
     expect(find.text('English'), findsWidgets);
     await tester.tap(find.byKey(const ValueKey('settings-language-english')));
     await _pumpSelectOverlay(tester);

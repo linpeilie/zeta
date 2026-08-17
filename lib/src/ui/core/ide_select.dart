@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/widgets.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
@@ -30,11 +32,20 @@ class IdeSelectOption<T> {
   final Key? key;
 }
 
+/// [IdeSelect] 弹层相对触发器的宽度策略。
+enum IdeSelectPopupWidthPolicy {
+  /// 弹层宽度严格跟随触发器，保持紧凑选择器的默认行为。
+  matchTrigger,
+
+  /// 弹层按选项内容决定宽度，并继续服从显式的最小宽度约束。
+  fitContent,
+}
+
 /// 统一 IDE 紧凑下拉选择器。
 ///
 /// 封装 [sf.Select] 的默认规格差异，统一为：
 /// - 字号 [IdeTextStyles.bodySmall]（对齐工具栏 / [IdeButton]）
-/// - 默认高度 [IdeMetrics.toolbarHeight]
+/// - 默认最小高度 [IdeMetrics.regularControlHeight]，并随 UI 字号同步增长
 /// - small+dense 等效内边距（水平 [IdeSpacing.space6]，垂直 [IdeSpacing.space2]）
 ///
 /// feature 页面应优先使用本组件，而不是直接拼装 [sf.Select] 细节。
@@ -46,11 +57,13 @@ class IdeSelect<T> extends StatelessWidget {
     required this.onChanged,
     super.key,
     this.width,
-    this.height = IdeMetrics.toolbarHeight,
+    this.controlSize = IdeControlSize.regular,
     this.popupMaxHeight = 320,
+    this.popupMinWidth,
+    this.popupWidthPolicy = IdeSelectPopupWidthPolicy.matchTrigger,
     this.enabled = true,
     this.placeholder,
-  });
+  }) : assert(popupMinWidth == null || popupMinWidth >= 0);
 
   /// 当前选中值；应能在 [options] 中匹配，否则回退展示第一项。
   final T value;
@@ -64,11 +77,20 @@ class IdeSelect<T> extends StatelessWidget {
   /// 触发器宽度；为空时由 [sf.Select] 内容决定。
   final double? width;
 
-  /// 触发器高度；工具栏默认 [IdeMetrics.toolbarHeight]。
-  final double? height;
+  /// 触发器密度；设置页和工具栏默认使用常规档。
+  final IdeControlSize controlSize;
 
   /// 下拉弹层最大高度。
   final double popupMaxHeight;
+
+  /// 下拉弹层的额外最小宽度。
+  ///
+  /// 未设置时至少沿用触发器的显式 [width]；配合 [popupWidthPolicy] 的
+  /// [IdeSelectPopupWidthPolicy.fitContent] 可让长选项不受紧凑触发器挤压。
+  final double? popupMinWidth;
+
+  /// 下拉弹层相对触发器的宽度策略。
+  final IdeSelectPopupWidthPolicy popupWidthPolicy;
 
   /// 是否允许交互。
   final bool enabled;
@@ -90,19 +112,33 @@ class IdeSelect<T> extends StatelessWidget {
     final labelStyle = textStyles.bodySmall.copyWith(
       color: isEnabled ? colors.textPrimary : colors.textTertiary,
     );
+    final controlHeight = IdeMetrics.controlHeightFor(
+      labelStyle,
+      size: controlSize,
+    );
 
     final selected = _resolveSelectedOption();
-    final minWidth = width ?? 0.0;
+    final minWidth = math.max(width ?? 0.0, popupMinWidth ?? 0.0);
 
     return sf.Select<T>(
       value: selected?.value ?? value,
       enabled: isEnabled,
-      constraints: BoxConstraints.tightFor(width: width, height: height),
+      constraints: BoxConstraints(
+        minWidth: width ?? 0,
+        maxWidth: width ?? double.infinity,
+        minHeight: controlHeight,
+        maxHeight: controlHeight,
+      ),
       padding: _contentPadding,
       popupConstraints: BoxConstraints(
         maxHeight: popupMaxHeight,
         minWidth: minWidth,
       ),
+      popupWidthConstraint: switch (popupWidthPolicy) {
+        IdeSelectPopupWidthPolicy.matchTrigger =>
+          sf.PopoverConstraint.anchorFixedSize,
+        IdeSelectPopupWidthPolicy.fitContent => sf.PopoverConstraint.intrinsic,
+      },
       itemBuilder: (context, selectedValue) {
         final option = _findOption(selectedValue) ?? selected;
         final text = option?.label ?? placeholder ?? '$selectedValue';

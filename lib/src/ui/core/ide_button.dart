@@ -63,13 +63,14 @@ class IdeButton extends StatelessWidget {
     this.trailingIcon,
     this.enabled = true,
     this.variant = IdeButtonVariant.outline,
+    this.controlSize = IdeControlSize.compact,
     this.height,
     this.width,
     this.maxLines = 1,
     this.semanticLabel,
   });
 
-  /// 固定为工具条高度的按钮（[IdeMetrics.toolbarHeight]）。
+  /// 使用常规控件高度的工具栏按钮。
   const IdeButton.toolbar({
     required this.label,
     super.key,
@@ -82,7 +83,8 @@ class IdeButton extends StatelessWidget {
     this.width,
     this.maxLines = 1,
     this.semanticLabel,
-  }) : height = IdeMetrics.toolbarHeight;
+  }) : controlSize = IdeControlSize.regular,
+       height = null;
 
   /// 按钮文案。
   final String label;
@@ -109,6 +111,9 @@ class IdeButton extends StatelessWidget {
 
   /// 视觉变体。
   final IdeButtonVariant variant;
+
+  /// 按钮密度；普通按钮默认紧凑，工具栏构造器使用常规档。
+  final IdeControlSize controlSize;
 
   /// 外层固定高度；工具栏场景通常为 [IdeMetrics.toolbarHeight]。
   final double? height;
@@ -170,9 +175,16 @@ class IdeButton extends StatelessWidget {
       ),
     );
 
-    final content = height == null && width == null
-        ? button
-        : SizedBox(height: height, width: width, child: button);
+    final minHeight = IdeMetrics.controlHeightFor(
+      textStyles.bodySmall,
+      size: controlSize,
+    );
+    final minSizedButton = SizedBox(height: minHeight, child: button);
+    final content = height != null
+        ? SizedBox(height: height, width: width, child: button)
+        : width == null
+        ? minSizedButton
+        : SizedBox(width: width, child: minSizedButton);
 
     return Semantics(
       button: true,

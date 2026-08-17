@@ -294,6 +294,9 @@ class _GeneralSettingsPaneState extends State<_GeneralSettingsPane> {
                         child: IdeSelect<AppLanguage>(
                           key: const ValueKey('settings-language-select'),
                           value: settings.appLanguage,
+                          popupMinWidth: 180,
+                          popupWidthPolicy:
+                              IdeSelectPopupWidthPolicy.fitContent,
                           options: <IdeSelectOption<AppLanguage>>[
                             IdeSelectOption<AppLanguage>(
                               AppLanguage.english,

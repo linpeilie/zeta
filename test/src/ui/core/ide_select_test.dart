@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/ui/core/ide_metrics.dart';
@@ -72,6 +73,71 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(selected, 'codex');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('IdeSelect 可让弹层宽于紧凑触发器', (tester) async {
+    await pumpIdeComponent(
+      tester,
+      child: Align(
+        alignment: Alignment.center,
+        child: IdeSelect<String>(
+          key: const ValueKey('compact-select'),
+          value: 'en',
+          popupMinWidth: 180,
+          popupWidthPolicy: IdeSelectPopupWidthPolicy.fitContent,
+          options: const [
+            IdeSelectOption(
+              'en',
+              'English',
+              key: ValueKey('compact-select-english'),
+            ),
+            IdeSelectOption(
+              'zh-Hans',
+              '简体中文',
+              key: ValueKey('compact-select-zh-hans'),
+            ),
+          ],
+          onChanged: _noop,
+        ),
+      ),
+    );
+
+    final triggerWidth = tester
+        .getSize(find.byKey(const ValueKey('compact-select')))
+        .width;
+
+    await tester.tap(find.byKey(const ValueKey('compact-select')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final popup = find.byWidgetPredicate((widget) => widget is sf.SelectPopup);
+    final popupWidth = tester.getSize(popup).width;
+    expect(popupWidth, greaterThanOrEqualTo(180));
+    expect(popupWidth, lessThanOrEqualTo(240));
+    expect(popupWidth, greaterThan(triggerWidth));
+    expect(
+      tester
+          .renderObject<RenderParagraph>(
+            find.descendant(
+              of: find.byKey(const ValueKey('compact-select-english')),
+              matching: find.text('English'),
+            ),
+          )
+          .didExceedMaxLines,
+      isFalse,
+    );
+    expect(
+      tester
+          .renderObject<RenderParagraph>(
+            find.descendant(
+              of: find.byKey(const ValueKey('compact-select-zh-hans')),
+              matching: find.text('简体中文'),
+            ),
+          )
+          .didExceedMaxLines,
+      isFalse,
+    );
     expect(tester.takeException(), isNull);
   });
 }

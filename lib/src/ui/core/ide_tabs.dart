@@ -3,6 +3,7 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'ide_colors.dart';
 import 'ide_effects.dart';
+import 'ide_metrics.dart';
 import 'ide_motion.dart';
 import 'ide_spacing.dart';
 import 'ide_text_styles.dart';
@@ -53,6 +54,7 @@ class IdeTabs<T> extends StatelessWidget {
     required this.onChanged,
     super.key,
     this.expand = false,
+    this.controlSize = IdeControlSize.regular,
     this.semanticLabel,
     this.scrollContentAlignment = AlignmentDirectional.centerStart,
   }) : assert(items.length > 0, 'IdeTabs 至少需要一个选项。');
@@ -69,6 +71,9 @@ class IdeTabs<T> extends StatelessWidget {
   /// 是否让所有 Tab 等宽占满可用宽度。
   final bool expand;
 
+  /// Tab 组外框的密度；设置页和工具栏默认使用常规档。
+  final IdeControlSize controlSize;
+
   /// 整个 Tab 组的无障碍名称。
   final String? semanticLabel;
 
@@ -83,40 +88,47 @@ class IdeTabs<T> extends StatelessWidget {
     }
 
     final colors = IdeColors.of(context);
-    final tabs = DecoratedBox(
-      decoration: BoxDecoration(
-        border: Border.all(color: colors.borderSubtle),
-        borderRadius: IdeRadius.allMedium,
-      ),
-      child: sf.ComponentTheme(
-        data: sf.TabsTheme(
-          containerPadding: const EdgeInsets.all(IdeSpacing.space4),
-          tabPadding: const EdgeInsets.symmetric(
-            horizontal: IdeSpacing.space10,
-            vertical: IdeSpacing.space4,
-          ),
-          backgroundColor: colors.surfaceElevated,
-          // 内层选中态严格小于外框的 medium，遵守圆角递减规则；同时与
-          // IdeSwitch 轨道、列表行 hover 底共用同一档「小圆角」。
-          borderRadius: IdeRadius.allSmall,
+    final controlHeight = IdeMetrics.controlHeightFor(
+      IdeTextStyles.of(context).bodySmall,
+      size: controlSize,
+    );
+    final tabs = SizedBox(
+      height: controlHeight,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border.all(color: colors.borderSubtle),
+          borderRadius: IdeRadius.allMedium,
         ),
-        child: sf.Tabs(
-          index: selectedIndex,
-          expand: expand,
-          onChanged: (index) => onChanged(items[index].value),
-          children: [
-            for (var index = 0; index < items.length; index++)
-              sf.TabItem(
-                key: items[index].key,
-                child: _IdeTabContent(
-                  label: items[index].label,
-                  leadingIcon: items[index].leadingIcon,
-                  selected: index == selectedIndex,
-                  loading: items[index].loading,
-                  semanticLabel: _loadingSemanticLabel(context, items[index]),
+        child: sf.ComponentTheme(
+          data: sf.TabsTheme(
+            containerPadding: const EdgeInsets.all(IdeSpacing.space4),
+            tabPadding: const EdgeInsets.symmetric(
+              horizontal: IdeSpacing.space10,
+              vertical: IdeSpacing.space4,
+            ),
+            backgroundColor: colors.surfaceElevated,
+            // 内层选中态严格小于外框的 medium，遵守圆角递减规则；同时与
+            // IdeSwitch 轨道、列表行 hover 底共用同一档「小圆角」。
+            borderRadius: IdeRadius.allSmall,
+          ),
+          child: sf.Tabs(
+            index: selectedIndex,
+            expand: expand,
+            onChanged: (index) => onChanged(items[index].value),
+            children: [
+              for (var index = 0; index < items.length; index++)
+                sf.TabItem(
+                  key: items[index].key,
+                  child: _IdeTabContent(
+                    label: items[index].label,
+                    leadingIcon: items[index].leadingIcon,
+                    selected: index == selectedIndex,
+                    loading: items[index].loading,
+                    semanticLabel: _loadingSemanticLabel(context, items[index]),
+                  ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -125,25 +137,28 @@ class IdeTabs<T> extends StatelessWidget {
       container: true,
       explicitChildNodes: true,
       label: semanticLabel,
-      child: expand
-          ? tabs
-          : LayoutBuilder(
-              builder: (context, constraints) {
-                final minWidth = constraints.hasBoundedWidth
-                    ? constraints.maxWidth
-                    : 0.0;
-                return SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(minWidth: minWidth),
-                    child: Align(
-                      alignment: scrollContentAlignment,
-                      child: tabs,
+      child: SizedBox(
+        height: controlHeight,
+        child: expand
+            ? tabs
+            : LayoutBuilder(
+                builder: (context, constraints) {
+                  final minWidth = constraints.hasBoundedWidth
+                      ? constraints.maxWidth
+                      : 0.0;
+                  return SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(minWidth: minWidth),
+                      child: Align(
+                        alignment: scrollContentAlignment,
+                        child: tabs,
+                      ),
                     ),
-                  ),
-                );
-              },
-            ),
+                  );
+                },
+              ),
+      ),
     );
   }
 
@@ -169,6 +184,7 @@ class IdeTab extends StatelessWidget {
     this.trailingIcon = Icons.keyboard_arrow_down_rounded,
     this.selected = false,
     this.enabled = true,
+    this.controlSize = IdeControlSize.compact,
     this.onPressed,
     this.semanticLabel,
     this.focusNode,
@@ -189,6 +205,9 @@ class IdeTab extends StatelessWidget {
   /// 是否允许交互。
   final bool enabled;
 
+  /// 独立 Tab 的密度；Pane 内默认使用紧凑档。
+  final IdeControlSize controlSize;
+
   /// 点击或键盘激活时触发；为空时作为只读标签展示。
   final VoidCallback? onPressed;
 
@@ -201,30 +220,37 @@ class IdeTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
-    return PaneInteractiveSurface(
-      focusNode: focusNode,
-      onPressed: enabled ? onPressed : null,
-      enabled: enabled,
-      selected: selected,
-      button: onPressed != null,
-      semanticLabel: semanticLabel,
-      padding: const EdgeInsets.symmetric(
-        horizontal: IdeSpacing.space10,
-        vertical: IdeSpacing.space4,
-      ),
-      borderRadius: IdeRadius.allSmall,
-      backgroundColor: colors.surfaceElevated,
-      hoverBackgroundColor: colors.border.withValues(alpha: 0.28),
-      pressedBackgroundColor: colors.border.withValues(alpha: 0.4),
-      selectedBackgroundColor: colors.frame,
-      borderColor: colors.borderSubtle,
-      selectedBorderColor: colors.border,
-      child: _IdeTabContent(
-        label: label,
-        leadingIcon: leadingIcon,
-        trailingIcon: trailingIcon,
-        selected: selected,
+    final controlHeight = IdeMetrics.controlHeightFor(
+      IdeTextStyles.of(context).bodySmall,
+      size: controlSize,
+    );
+    return SizedBox(
+      height: controlHeight,
+      child: PaneInteractiveSurface(
+        focusNode: focusNode,
+        onPressed: enabled ? onPressed : null,
         enabled: enabled,
+        selected: selected,
+        button: onPressed != null,
+        semanticLabel: semanticLabel,
+        padding: const EdgeInsets.symmetric(
+          horizontal: IdeSpacing.space10,
+          vertical: IdeSpacing.space4,
+        ),
+        borderRadius: IdeRadius.allSmall,
+        backgroundColor: colors.surfaceElevated,
+        hoverBackgroundColor: colors.border.withValues(alpha: 0.28),
+        pressedBackgroundColor: colors.border.withValues(alpha: 0.4),
+        selectedBackgroundColor: colors.frame,
+        borderColor: colors.borderSubtle,
+        selectedBorderColor: colors.border,
+        child: _IdeTabContent(
+          label: label,
+          leadingIcon: leadingIcon,
+          trailingIcon: trailingIcon,
+          selected: selected,
+          enabled: enabled,
+        ),
       ),
     );
   }

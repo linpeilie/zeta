@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
+import 'package:zeta/src/core/constants/app_typography.dart';
 import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta/src/ui/core/ide_stable_overlay_handler.dart';
@@ -11,6 +12,7 @@ Future<void> pumpIdeComponent(
   required Widget child,
   Size size = const Size(800, 600),
   ThemeMode themeMode = ThemeMode.dark,
+  double uiFontSize = defaultUiFontSize,
 }) async {
   tester.view.devicePixelRatio = 1;
   await tester.binding.setSurfaceSize(size);
@@ -23,11 +25,13 @@ Future<void> pumpIdeComponent(
     brightness: Brightness.light,
     uiFontFamily: 'JetBrainsMono',
     codeFontFamily: 'JetBrainsMono',
+    uiFontSize: uiFontSize,
   );
   final darkTheme = buildIdeThemeData(
     brightness: Brightness.dark,
     uiFontFamily: 'JetBrainsMono',
     codeFontFamily: 'JetBrainsMono',
+    uiFontSize: uiFontSize,
   );
   final currentTheme = themeMode == ThemeMode.dark ? darkTheme : lightTheme;
   await tester.pumpWidget(

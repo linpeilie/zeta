@@ -1,3 +1,12 @@
+import 'dart:math' as math;
+
+import 'package:flutter/painting.dart';
+
+/// 交互控件的密度档位。
+///
+/// `regular` 用于设置页和工具栏，`compact` 用于 Pane 内的独立 Tab 与紧凑动作。
+enum IdeControlSize { compact, regular }
+
 /// IDE 布局与密度 Token。
 ///
 /// 与 [IdeSpacing] 不同，这些值描述**稳定的组件尺寸**和**响应式阈值**，
@@ -36,10 +45,50 @@ abstract final class IdeMetrics {
   /// 生效位置：`WindowFrame` 标题栏；仅 macOS 生效，且该区域不拦截点击。
   static const double macOSTrafficLightGutter = 76;
 
+  /// 常规交互控件的最小外框高度。
+  ///
+  /// 设置页、工具栏里的 Select、Tabs 与 Button 都从这一档起步；字号增大时由
+  /// [controlHeightFor] 在此基础上同步扩高。
+  static const double regularControlHeight = 34;
+
+  /// 紧凑交互控件的最小外框高度。
+  ///
+  /// 用于 Pane 内独立 Tab 和普通紧凑按钮，不与列表行高度混用。
+  static const double compactControlHeight = 28;
+
   /// 工具条最小高度。
   ///
   /// 生效位置：`IdeToolbar`；用量统计页筛选/操作条等复用该高度。
-  static const double toolbarHeight = 34;
+  static const double toolbarHeight = regularControlHeight;
+
+  // Tabs 的常规档有两层 4px 上下 inset，并为选中下划线预留 2px；紧凑档
+  // 只有一层 inset。把这段 chrome 纳入统一计算，Select/Button 才能在用户
+  // 放大 UI 字号后继续和 Tabs 外框等高，而不是只在默认字号下碰巧一致。
+  static const double _regularControlChromeHeight = 18;
+  static const double _compactControlChromeHeight = 10;
+
+  /// 按当前文字行框解析控件外框高度。
+  ///
+  /// 返回值永远不小于对应密度档的基准高度；当 UI 字号放大时，各类控件使用
+  /// 同一增长公式，避免固定高度的 Select 与内容自适应的 Tabs 再次分叉。
+  static double controlHeightFor(
+    TextStyle textStyle, {
+    required IdeControlSize size,
+  }) {
+    final fontSize = textStyle.fontSize ?? 0;
+    final lineHeight = fontSize * (textStyle.height ?? 1);
+    final (minimum, chromeHeight) = switch (size) {
+      IdeControlSize.compact => (
+        compactControlHeight,
+        _compactControlChromeHeight,
+      ),
+      IdeControlSize.regular => (
+        regularControlHeight,
+        _regularControlChromeHeight,
+      ),
+    };
+    return math.max(minimum, lineHeight + chromeHeight);
+  }
 
   // ---------------------------------------------------------------------------
   // 行与点击目标
