@@ -209,13 +209,15 @@ packages/<name>/
 
 ### 步骤 5 — Assets 与 l10n 基线
 
-- [ ] 迁 Geist、JetBrainsMono、branding 和 agent icons。
-- [ ] 三平台应用图标与资源 manifest 对齐。
-- [ ] 删除脚手架西班牙语 ARB。
-- [ ] 迁当前 `dev` en/zh ARB；以步骤 0 后重新统计的键数为准。
-- [ ] 合并 `l10n.yaml`：required attributes、escaping、generated coverage exclusion。
-- [ ] 迁 `l10n` / `l10nOrNull` 扩展。
-- [ ] 生成代码成功，en/zh key set 完全一致。
+**状态：已完成。** 已从冻结基线逐文件迁入 Geist、JetBrainsMono、branding、三种 Agent 图标和三平台应用图标，23 个资产文件的 SHA-256 均与旧仓库一致；macOS 全部配置统一使用 `AppIcon` asset catalog，Windows RC 与 Linux bundle/resource loader 均指向迁入图标。脚手架西班牙语 ARB 已删除，en/zh 各 1,035 个消息键且 metadata/placeholder 集合一致；`required-resource-attributes`、escaping、format 与生成代码覆盖排除已合并，`l10n` / `l10nOrNull` 可用，连续两次代码生成幂等。质量门：analyze 0 问题，format 112 files / 0 changed，26 个可测试 package root 共 104 tests 全绿，人工 Dart coverage 100%（134 / 134）；Windows production release 构建通过。
+
+- [x] 迁 Geist、JetBrainsMono、branding 和 agent icons。
+- [x] 三平台应用图标与资源 manifest 对齐。
+- [x] 删除脚手架西班牙语 ARB。
+- [x] 迁当前 `dev` en/zh ARB；以步骤 0 后重新统计的键数为准。
+- [x] 合并 `l10n.yaml`：required attributes、escaping、generated coverage exclusion。
+- [x] 迁 `l10n` / `l10nOrNull` 扩展。
+- [x] 生成代码成功，en/zh key set 完全一致。
 
 ### 步骤 6 — CI 与架构门禁
 

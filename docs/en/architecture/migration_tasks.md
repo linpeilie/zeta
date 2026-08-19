@@ -212,13 +212,15 @@ There are no released users, so no compatibility migration or legacy data upgrad
 
 ### Step 5 — Assets and l10n baseline
 
-- [ ] Migrate Geist, JetBrainsMono, branding, and agent icons.
-- [ ] Align application icons and resource manifests on all three platforms.
-- [ ] Remove scaffold Spanish ARB.
-- [ ] Migrate the current `dev` English and Chinese ARB files; use the post-Step-0 recount as the baseline.
-- [ ] Consolidate `l10n.yaml` for required attributes, escaping, and generated-code coverage exclusion.
-- [ ] Migrate `l10n` / `l10nOrNull` extensions.
-- [ ] Code generation succeeds and the English/Chinese key sets are identical.
+**Status: complete.** Geist, JetBrainsMono, branding, the three Agent icons, and all three platform application icons were migrated file-for-file from the frozen baseline; all 23 asset-file SHA-256 hashes match the legacy repository. Every macOS configuration now uses the `AppIcon` asset catalog, while the Windows RC and Linux bundle/resource loader reference the migrated icons. The scaffold Spanish ARB is removed; English and Chinese each contain 1,035 message keys with identical metadata/placeholder sets. Required resource attributes, escaping, formatting, and generated-code coverage exclusion are consolidated; `l10n` / `l10nOrNull` are available; and two consecutive localization generations are idempotent. Gates: zero analyze issues, format checked 112 files with 0 changed, 104 tests passed across 26 testable package roots, hand-written Dart coverage is 100% (134 / 134), and the Windows production release build passes.
+
+- [x] Migrate Geist, JetBrainsMono, branding, and agent icons.
+- [x] Align application icons and resource manifests on all three platforms.
+- [x] Remove scaffold Spanish ARB.
+- [x] Migrate the current `dev` English and Chinese ARB files; use the post-Step-0 recount as the baseline.
+- [x] Consolidate `l10n.yaml` for required attributes, escaping, and generated-code coverage exclusion.
+- [x] Migrate `l10n` / `l10nOrNull` extensions.
+- [x] Code generation succeeds and the English/Chinese key sets are identical.
 
 ### Step 6 — CI and architecture gates
 
