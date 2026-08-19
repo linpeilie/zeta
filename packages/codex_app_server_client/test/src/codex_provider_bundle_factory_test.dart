@@ -121,6 +121,64 @@ void main() {
         ],
       );
     });
+
+    test(
+      'discovers every Windows install source without host branching',
+      () async {
+        const localAppData = r'C:\Users\tester\AppData\Local';
+        const appData = r'C:\Users\tester\AppData\Roaming';
+        final checked = <String>[];
+        final locator = CodexCliLocator(
+          environment: const <String, String>{
+            'PATH': r'C:\tools;C:\secondary',
+            'LOCALAPPDATA': localAppData,
+            'APPDATA': appData,
+            'SystemRoot': r'C:\Windows',
+          },
+          isWindows: true,
+          fileExists: (path) async {
+            checked.add(path);
+            return path == '$appData\\npm\\codex.cmd';
+          },
+        );
+
+        final resolved = await locator.locate(
+          AgentProviderConfig.defaultCodex.copyWith(
+            command: r'C:\stale\codex.ps1',
+            extra: <String, Object?>{'cliPath': r'C:\also-stale\codex.exe'},
+          ),
+        );
+
+        expect(resolved?.displayPath, '$appData\\npm\\codex.cmd');
+        expect(resolved?.executable, r'C:\Windows\System32\cmd.exe');
+        expect(checked, contains(r'C:\tools\codex.exe'));
+        expect(checked, contains(r'C:\tools\codex.bat'));
+        expect(
+          checked,
+          contains('$localAppData\\Programs\\OpenAI\\Codex\\bin\\codex.exe'),
+        );
+        expect(
+          checked,
+          contains('$localAppData\\Programs\\codex\\codex.exe'),
+        );
+        expect(checked, contains('$localAppData\\npm\\codex.cmd'));
+      },
+    );
+
+    test(
+      'preserves a Windows UNC root when joining a PATH candidate',
+      () async {
+        final locator = CodexCliLocator(
+          environment: const <String, String>{'PATH': r'\\server\tools'},
+          isWindows: true,
+          fileExists: (path) async => path == r'\\server\tools\codex.exe',
+        );
+
+        final resolved = await locator.locate(AgentProviderConfig.defaultCodex);
+
+        expect(resolved?.displayPath, r'\\server\tools\codex.exe');
+      },
+    );
   });
 }
 

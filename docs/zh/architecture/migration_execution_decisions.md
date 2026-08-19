@@ -101,3 +101,20 @@ desktop matrix。
 
 **影响。** `flutter pub get --enforce-lockfile` 已能在与 CI 相同的源上通过。本次失败是提交
 锁文件的可复现性缺陷，不是依赖许可证例外。
+
+## 2026-08-19 — 步骤 12 与宿主无关的覆盖率
+
+**问题。** 锁文件可移植性修复后，`zeta` run `32269931378` 在 Linux 上通过了
+`codex_app_server_client` 全部 168 个测试，但覆盖率为 99.78%。本地 Windows 结果为 100%，
+原因是两个恢复测试在非 Windows runner 上提前返回。
+
+**证据。** 未覆盖行为属于 Windows CLI 发现与 launcher 恢复；`CodexCliLocator` 已提供明确的
+environment、platform 与 file-existence 注入缝。所有者此前仅豁免旧仓库覆盖率，不适用于新的
+VGV 目标仓库。
+
+**决策。** 保持 VGV package 的 100% 覆盖率阈值；通过已有 pure-Dart 注入缝，在所有宿主上
+覆盖 Windows PATH、LOCALAPPDATA、APPDATA、命令包装器和 UNC 路径。不添加 coverage 排除，
+也不降低 CI 门禁。
+
+**影响。** CLI 发现测试不再依赖 runner 操作系统；Linux 结果由下一次 push 验证。生产 API
+与共享 Provider port 均保持不变。

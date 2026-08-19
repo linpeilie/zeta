@@ -122,3 +122,20 @@ when the developer machine uses a mirror.
 
 **Impact.** `flutter pub get --enforce-lockfile` now succeeds against the same source used by CI. The
 failure was a reproducibility defect in the committed lockfile, not a dependency-license exception.
+
+## 2026-08-19 — Step 12 host-independent coverage
+
+**Problem.** After the lockfile portability fix, `zeta` run `32269931378` passed all 168
+`codex_app_server_client` tests on Linux but reported 99.78% coverage. The local Windows run had
+reported 100% because two recovery tests returned early on non-Windows hosts.
+
+**Evidence.** The uncovered behavior is Windows CLI discovery and launcher recovery, while
+`CodexCliLocator` already exposes explicit environment, platform, and file-existence seams. The
+earlier owner instruction exempted coverage only in the legacy repository, not in this VGV target.
+
+**Decision.** Keep the VGV package coverage threshold at 100%. Exercise all Windows PATH,
+LOCALAPPDATA, APPDATA, command-wrapper, and UNC-path behavior through the existing pure-Dart seams
+on every host. Do not add coverage exclusions or weaken the CI gate.
+
+**Impact.** CLI discovery tests no longer depend on the runner operating system. The Linux result is
+validated by the next pushed run while the production API and shared Provider ports remain unchanged.
