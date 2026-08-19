@@ -262,11 +262,23 @@ Bloc/Presentation。package 门禁：analyze 0 问题，format 52 files / 0 chan
 
 ### 步骤 8 — `zeta_logging` 与 `zeta_storage`
 
-- [ ] `zeta_logging` 迁 structured logging 和 sensitive-data redactor。
-- [ ] 所有日志出口默认脱敏；credential、prompt、Provider content 不进入结构化属性。
-- [ ] `zeta_storage` 只实现当前 schema 的原子读写、路径和 typed exception。
-- [ ] 不迁历史 SharedPreferences bridge 或旧版本升级逻辑。
-- [ ] 测临时目录、原子替换、失败不覆盖目标文件、路径错误与 close。
+- [x] `zeta_logging` 迁 structured logging 和 sensitive-data redactor。
+- [x] 所有日志出口默认脱敏；credential、prompt、Provider content 不进入结构化属性。
+- [x] `zeta_storage` 只实现当前 schema 的原子读写、路径和 typed exception。
+- [x] 不迁历史 SharedPreferences bridge 或旧版本升级逻辑。
+- [x] 测临时目录、原子替换、失败不覆盖目标文件、路径错误与 close。
+
+**状态：已完成。** `zeta_logging` 在 event 到达 listener、console 或 file sink
+之前统一脱敏 message、error 与 stack；file sink 为私有实现，调用方不能绕过
+`AppLogger`。structured prompt/content/payload/raw 字段整体遮挡，ignored-message
+诊断只保留稳定 shape metadata，异常正文替换为宽泛类别，从而关闭旧版 console/error
+原文输出的 **Critical** 风险。`zeta_storage` 已提供串行原子 UTF-8 替换、失败不覆盖、
+close 语义、不含 migration marker 的当前 schema 路径、canonical absolute directory
+解析，以及 sealed read/write/path/closed exception；旧版仅供 Presentation 使用的
+`formatBytes` 明确不进入本包。package 门禁：43 tests，人工 coverage 100%
+（399 / 399）。同一轮 workspace 最终门禁中，27/27 roots analyze 通过，format
+检查 177 files / 0 changed；26/26 个可测试 roots 共 253 tests，人工 coverage
+100%（1,601 / 1,601），Bloc lint 对 176 files 报告 0 issues。
 
 ### 步骤 9 — `json_rpc_transport`
 

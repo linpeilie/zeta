@@ -268,11 +268,26 @@ with no changes; 26/26 test roots ran 212 tests at 100% hand-written coverage
 
 ### Step 8 — `zeta_logging` and `zeta_storage`
 
-- [ ] Move structured logging and the sensitive-data redactor to `zeta_logging`.
-- [ ] Redact every log sink by default; credentials, prompts, and Provider content never enter structured fields.
-- [ ] `zeta_storage` implements only atomic IO, paths, and typed exceptions for the current schema.
-- [ ] Do not migrate the historical SharedPreferences bridge or old-version upgrade logic.
-- [ ] Test temporary directories, atomic replacement, non-overwrite on failure, path errors, and close.
+- [x] Move structured logging and the sensitive-data redactor to `zeta_logging`.
+- [x] Redact every log sink by default; credentials, prompts, and Provider content never enter structured fields.
+- [x] `zeta_storage` implements only atomic IO, paths, and typed exceptions for the current schema.
+- [x] Do not migrate the historical SharedPreferences bridge or old-version upgrade logic.
+- [x] Test temporary directories, atomic replacement, non-overwrite on failure, path errors, and close.
+
+**Status: complete.** `zeta_logging` sanitizes message, error, and stack data
+before an event reaches any listener, console, or file sink; the file sink is
+private so callers cannot bypass `AppLogger`. Structured prompt/content/payload/
+raw fields are masked wholesale, ignored-message diagnostics retain only stable
+shape metadata, and broad error categories replace exception text. This closes
+the **Critical** legacy risk of raw console/error output. `zeta_storage` now
+provides serial atomic UTF-8 replacement, non-overwrite on failure, close
+semantics, current-schema paths without migration markers, canonical absolute
+directory resolution, and sealed read/write/path/closed exceptions. The legacy
+Presentation-only `formatBytes` helper is deliberately excluded. Package gates:
+43 tests and 100% hand-written coverage (399 / 399). In the same final workspace
+iteration, 27/27 roots passed analyze, format checked 177 files with no changes,
+26/26 test roots ran 253 tests at 100% hand-written coverage (1,601 / 1,601),
+and Bloc lint reported 0 issues across 176 files.
 
 ### Step 9 — `json_rpc_transport`
 

@@ -283,12 +283,17 @@ export 'src/structured_error_logging.dart';
 export 'src/sensitive_data_redactor.dart';
 export 'src/ignored_message_logger.dart';
 
-Logger loggerFor(String name);
+AppLogger loggerFor(String name);
+void configureAppLogging({Level? level, Directory? logDirectory});
+Future<void> flushAppLogging();
+Future<void> shutdownAppLogging();
 ```
 
 **The redactor lives in the same package as the logger and every sink passes through it by default** —
-no API bypasses the redactor. Credentials, prompts and provider content must never enter structured
-attributes ([step 8](./migration_tasks.md)).
+no API bypasses the redactor. Message, error, and stack data are sanitized before a log event reaches
+the console, listener, or file sink. Errors retain only a broad category; structured prompt/content/
+payload/raw fields are masked wholesale. Credentials, prompts and provider content must never enter
+structured attributes ([step 8](./migration_tasks.md)).
 
 ### 2.3 `zeta_storage`
 
@@ -300,10 +305,19 @@ export 'src/storage_exception.dart';
 
 Future<void> writeAtomic(File target, String contents);
 sealed class StorageException {}
+final class StorageReadException extends StorageException {}
+final class StorageWriteException extends StorageException {}
+final class StoragePathException extends StorageException {}
+final class StorageClosedException extends StorageException {}
+
+String normalizePath(String value, {bool? isWindows});
+Future<String> canonicalDirectoryPath(String value);
 ```
 
 Implements atomic reads/writes for the **current schema only**. No SharedPreferences bridge, no version
-upgrades. A failed write **must not** clobber the target file ([step 8](./migration_tasks.md)).
+upgrades or migration-marker path. A failed write **must not** clobber the target file. Canonical
+directory resolution accepts only an existing absolute directory and fails closed with a typed path
+exception ([step 8](./migration_tasks.md)).
 
 ### 2.4 `desktop_platform_api`
 

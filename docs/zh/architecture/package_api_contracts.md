@@ -273,11 +273,16 @@ export 'src/structured_error_logging.dart';
 export 'src/sensitive_data_redactor.dart';
 export 'src/ignored_message_logger.dart';
 
-Logger loggerFor(String name);
+AppLogger loggerFor(String name);
+void configureAppLogging({Level? level, Directory? logDirectory});
+Future<void> flushAppLogging();
+Future<void> shutdownAppLogging();
 ```
 
 **redactor 与 logger 同包，且所有日志出口默认经过 redactor**——不提供绕过 redactor 的 API。
-credential、prompt、Provider content 不得进入结构化属性（[步骤 8](./migration_tasks.md)）。
+message、error 与 stack 在 log event 进入 console、listener 或 file sink 之前完成脱敏；error
+只保留宽泛类别，structured prompt/content/payload/raw 字段整体遮挡。credential、prompt、
+Provider content 不得进入结构化属性（[步骤 8](./migration_tasks.md)）。
 
 ### 2.3 `zeta_storage`
 
@@ -289,10 +294,18 @@ export 'src/storage_exception.dart';
 
 Future<void> writeAtomic(File target, String contents);
 sealed class StorageException {}
+final class StorageReadException extends StorageException {}
+final class StorageWriteException extends StorageException {}
+final class StoragePathException extends StorageException {}
+final class StorageClosedException extends StorageException {}
+
+String normalizePath(String value, {bool? isWindows});
+Future<String> canonicalDirectoryPath(String value);
 ```
 
-只实现**当前 schema**的原子读写。不迁移 SharedPreferences bridge，不做历史版本升级。
-写失败**不得**覆盖目标文件（[步骤 8](./migration_tasks.md)）。
+只实现**当前 schema**的原子读写。不迁移 SharedPreferences bridge，不做历史版本升级，
+也不保留 migration-marker 路径。写失败**不得**覆盖目标文件。canonical directory 只接受
+存在的绝对目录，失败时以 typed path exception fail closed（[步骤 8](./migration_tasks.md)）。
 
 ### 2.4 `desktop_platform_api`
 

@@ -173,7 +173,7 @@ The `lib/src/` prefix is stripped. `packages/` and `lib/` targets are relative t
 | `core/storage/atomic_text_file.dart` | rewrite | `packages/zeta_storage/lib/src/` | Atomic file operations and data paths; current schema only |
 | `core/storage/zeta_data_paths.dart` | rewrite | `packages/zeta_storage/lib/src/` | Atomic file operations and data paths; current schema only |
 | `core/utils/.gitkeep` | delete | — | Empty-directory placeholder; the new repo recreates directories from the VGV template |
-| `core/utils/path_utils.dart` | rewrite | `packages/zeta_storage/lib/src/` | Path normalization and canonical paths, the basis for deriving projectId (step 34) |
+| `core/utils/path_utils.dart` | rewrite | `packages/zeta_storage/lib/src/` | Path normalization and canonical paths, the basis for deriving projectId (step 34); the legacy presentation-only `formatBytes` helper is not admitted to storage and will be recreated at its future Presentation consumer if still needed |
 | `core/utils/system_file_manager.dart` | rewrite | `packages/desktop_platform_api/ + lib/app/platform/` | The pure Dart ports stay in desktop_platform_api; the file_selector/pasteboard implementations stay in the app |
 
 ### 6.3 agent · domain -> `agent_provider_contracts`

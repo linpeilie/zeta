@@ -159,7 +159,7 @@ schema 快照的生成入口。`test_fast/test_full` 四个脚本被 VGV 四门�
 | `core/storage/atomic_text_file.dart` | rewrite | `packages/zeta_storage/lib/src/` | 原子文件操作与数据路径；只支持当前 schema |
 | `core/storage/zeta_data_paths.dart` | rewrite | `packages/zeta_storage/lib/src/` | 原子文件操作与数据路径；只支持当前 schema |
 | `core/utils/.gitkeep` | delete | — | 空目录占位符；新仓库按 VGV 模板重建目录 |
-| `core/utils/path_utils.dart` | rewrite | `packages/zeta_storage/lib/src/` | 路径规范化与 canonical path，是 projectId 派生的基础（步骤 34） |
+| `core/utils/path_utils.dart` | rewrite | `packages/zeta_storage/lib/src/` | 路径规范化与 canonical path，是 projectId 派生的基础（步骤 34）；旧版仅供 Presentation 使用的 `formatBytes` 不进入 storage，如未来 Presentation consumer 仍需要则在其边界重建 |
 | `core/utils/system_file_manager.dart` | rewrite | `packages/desktop_platform_api/ + lib/app/platform/` | 纯 Dart 端口留 desktop_platform_api；file_selector/pasteboard 实现留 app |
 
 ### 6.3 agent · domain → `agent_provider_contracts`
