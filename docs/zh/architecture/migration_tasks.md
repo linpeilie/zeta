@@ -371,9 +371,20 @@ lifecycle recovery。包级门禁为 168 tests，人工 coverage 100%（3,601 / 
 
 ### 步骤 13 — `claude_code_client`
 
-- [ ] 迁 Claude provider、stream JSON peer、mappers/adapters、process starter、CLI locator。
-- [ ] 迁 history、quota、credential/keychain probe；凭据不落盘、不入日志。
-- [ ] contract tests 覆盖 permission/question/plan、identity、history 和 process lifecycle。
+- [x] 迁 Claude provider、stream JSON peer、mappers/adapters、process starter、CLI locator。
+- [x] 迁 history、quota、credential/keychain probe；凭据不落盘、不入日志。
+- [x] contract tests 覆盖 permission/question/plan、identity、history 和 process lifecycle。
+
+**状态：已完成。** `claude_code_client` 现独占 Claude stream-json provider、peer、协议
+mapper/codec、permission/question/plan adapter、进程启动与恢复、唯一 CLI locator、本地历史、
+模型/额度和只读 credential/keychain source。barrel 只导出 `ClaudeProviderBundleFactory`、
+`ClaudeStaticCapabilities` 与 `ClaudeCodeCliLocator`；应用 localization/global logger 未迁入，
+凭据只读、日志和异常均脱敏，且未修改共享适配层或 Provider port。Claude auth probe 仍归步骤 16，
+token metering source 仍归步骤 21。真实 Claude Code 2.1.227 的无 Prompt initialize smoke 通过，
+返回 5 个模型且唯一 default。包级四门为 264 tests，人工 coverage 100%（2,962 / 2,962）。
+同一轮最终 workspace 门禁中，27/27 roots analyze 通过，format 检查 295 个 Dart 文件且 0 变更；
+26/26 个 test roots 共 780 tests，人工 coverage 100%（9,317 / 9,317）；Bloc lint 对 294 个文件
+报告 0 issues。
 
 ### 步骤 14 — `grok_acp_client`
 

@@ -118,3 +118,66 @@ VGV 目标仓库。
 
 **影响。** CLI 发现测试不再依赖 runner 操作系统；Linux 结果由下一次 push 验证。生产 API
 与共享 Provider port 均保持不变。
+
+## 2026-08-20 — 步骤 13 Claude 包边界与延期能力
+
+**问题。** 旧 Claude adapter 同时引用应用 localization、全局日志、auth probe 和 token usage
+来源；若逐文件照搬会越过新的 Data package 边界，并把步骤 16/21 的职责提前混入步骤 13。
+
+**证据。** 已冻结的 `agent_provider_contracts` 足以表达 conversation、permission、question、
+plan、model、quota 与 history；无需新增 Provider 方法。迁移任务又明确把 Claude auth probe 归入
+`agent_management_client`，把 provider token metering source 归入用量步骤。
+
+**决策。** `claude_code_client` 只迁 stream-json runtime、vendor mapper/adapter、history、quota、
+credential/keychain 只读来源与唯一 CLI locator。应用文案改为 package-private 稳定英文 catalog，
+日志改为可注入的 scoped logger。auth probe 延至步骤 16，token metering source 延至步骤 21；
+不改共享适配层或 Provider port。barrel 只暴露 factory、static capabilities 与 locator。
+
+**影响。** 三方 vendor 隔离保持可由 pubspec 和 barrel 判定；凭据不由本包写盘，异常和日志不含
+token、stderr、路径或原始协议体。延期能力仍由后续步骤显式追踪，没有静默丢失。
+
+## 2026-08-20 — 步骤 13 覆盖收敛与状态恢复加固
+
+**问题。** 首次完整覆盖率为 85.51%。缺口既包含真实的 process/stream/filesystem 故障路径，
+也包含被更早会话校验、peer 清理或 mapper 规范化严格支配的重复分支。故障测试还发现：模型或
+权限切换的新 peer 启动失败、且旧配置恢复也失败时，provider 会残留一个已绑定但未启动的 peer。
+
+**证据。** 调用图证明 session id 与 working directory 同时安装，pending registry 在 peer 脱离前
+清空，history reducer 的 title/kind/location/input 已由同一 reader 内的 mapper/file tracker
+补全。反向注入则稳定复现 stdin/control response、filesystem、双重恢复和并发切换失败。
+
+**决策。** 保持 100% 门禁，不添加 coverage ignore、不降低阈值。为可达 I/O 与状态机故障增加
+内部注入缝和真实回归测试；删除仅由同一调用链前置不变量保证不可达的重复判断。双重恢复失败时
+立即 teardown 恢复 peer，provider 回到明确不可用状态，不保留半初始化 transport。
+
+**影响。** 264 个随机顺序测试覆盖 permission/question/plan、identity、history、process lifecycle、
+Windows/POSIX locator 与密钥链边界，人工 coverage 达到 100%（2,962 / 2,962）。测试缝未进入
+barrel，也未扩张共享契约。
+
+## 2026-08-20 — 步骤 13 metadata 异步泄漏与 smoke 路径
+
+**问题。** 正式随机门禁发现 metadata probe 在进程启动失败前就注册 timeout；主调用已经返回
+脱敏异常后，遗留计时器仍会稍后向测试 zone 抛错。随后 fixture smoke 又因脚本仍指向旧仓库
+`test/src/features/...` 路径而误报 fixture 无效。
+
+**证据。** 将启动失败测试 timeout 缩短后可稳定观察到“测试结束后失败”。当前 fixture 的真实
+归属是 `packages/claude_code_client/test/src/datasources/claude_code/fixtures/`，内容 contract
+测试已通过。
+
+**决策。** 仅在 peer 成功启动并发送 initialize 帧后创建 timeout future，所有更早失败不再留下
+异步任务；增加等待超过 timeout 的回归断言。smoke fixture 路径改为当前 package 归属，不复制
+第二份 fixture。真实 smoke 只执行无 Prompt、只读 initialize，不执行可能修改配置的操作。
+
+**影响。** 两轮随机 Very Good test/coverage 均稳定通过；fixture smoke 与本机 Claude Code
+2.1.227 initialize smoke 均通过，且输出只包含 OS/架构/版本、模型计数、default 计数和脱敏订阅名。
+
+## 2026-08-20 — 步骤 13 官方依赖源锁文件复验
+
+**问题。** 在官方 `pub.dev` 环境执行 `flutter pub get --enforce-lockfile` 时，工作区锁文件仍包含
+中国镜像 URL，因此工具报告 176 个依赖会发生变化；版本与校验和本身没有冲突。
+
+**决策。** 将官方源作为已批准 Flutter 3.47.0 / Dart 3.13.0 基线的一部分，先用官方源正常
+解析并恢复锁文件来源，再立即以 `--enforce-lockfile` 复验。不得把本机镜像 URL 提交进仓库。
+
+**影响。** 复验通过，锁定版本未改变，`pubspec.lock` 不再包含 `flutter-io.cn`；该处理不涉及
+共享适配层或 Provider 端口。

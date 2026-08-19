@@ -139,3 +139,78 @@ on every host. Do not add coverage exclusions or weaken the CI gate.
 
 **Impact.** CLI discovery tests no longer depend on the runner operating system. The Linux result is
 validated by the next pushed run while the production API and shared Provider ports remain unchanged.
+
+## 2026-08-20 — Step 13 Claude package boundary and deferred capabilities
+
+**Problem.** The legacy Claude adapter referenced application localization, global logging, the auth
+probe, and token-usage sources. A file-for-file copy would cross the new Data-package boundary and
+pull Step 16/21 responsibilities into Step 13.
+
+**Evidence.** The frozen `agent_provider_contracts` already expresses conversation, permission,
+question, plan, model, quota, and history behavior without another Provider method. The migration plan
+assigns the Claude auth probe to `agent_management_client` and Provider token-metering sources to the
+usage step.
+
+**Decision.** Limit `claude_code_client` to the stream-JSON runtime, vendor mappers/adapters, history,
+quota, read-only credential/keychain sources, and the single CLI locator. Replace application text with
+a package-private stable-English catalog and use an injectable scoped logger. Defer the auth probe to
+Step 16 and token metering to Step 21. Do not change the shared adaptation layer or Provider ports, and
+export only the factory, static capabilities, and locator.
+
+**Impact.** Pubspecs and barrels keep vendor isolation machine-checkable. This package does not write
+credentials, and exceptions/logs omit tokens, stderr, paths, and raw protocol bodies. Deferred work
+remains explicitly tracked rather than silently omitted.
+
+## 2026-08-20 — Step 13 coverage convergence and state-recovery hardening
+
+**Problem.** The first complete coverage run was 85.51%. Gaps mixed reachable process/stream/filesystem
+failures with duplicated branches strictly dominated by earlier session validation, peer cleanup, or
+mapper normalization. Fault injection also found that if a new peer failed during a model/permission
+switch and restoration failed too, the provider retained a bound but never-started peer.
+
+**Evidence.** The call graph shows that session id and working directory are installed together,
+pending registries clear before peer detachment, and the history reader's own mapper/file tracker has
+already normalized title, kind, locations, and input before reduction. In contrast, injected stdin,
+control-response, filesystem, double-restoration, and concurrent-switch failures were reproducible.
+
+**Decision.** Keep the 100% gate without coverage ignores or threshold reductions. Add internal seams
+and real regression tests for reachable I/O and state-machine failures, while removing only duplicated
+checks proven unreachable by same-chain invariants. Tear down a failed restoration peer immediately so
+the provider returns to an explicit unavailable state instead of retaining a half-initialized transport.
+
+**Impact.** 264 randomized tests cover permissions/questions/plans, identity, history, process
+lifecycle, Windows/POSIX locator behavior, and keychain boundaries at 100% hand-written coverage
+(2,962 / 2,962). Test seams stay out of the barrel and do not expand shared contracts.
+
+## 2026-08-20 — Step 13 metadata async leak and smoke path
+
+**Problem.** A formal randomized gate found that the metadata probe armed its timeout before process
+startup. After startup had already returned a sanitized failure, the orphaned timer later threw into
+the test zone. The fixture smoke then falsely rejected the valid fixture because its script still used
+the legacy `test/src/features/...` path.
+
+**Evidence.** Shortening the startup-failure timeout reliably reproduced a failure after test
+completion. The fixture's current owner is
+`packages/claude_code_client/test/src/datasources/claude_code/fixtures/`, and its contract tests pass.
+
+**Decision.** Create the timeout future only after the peer starts and the initialize frame is sent,
+so earlier failures leave no async task. Add a regression assertion that waits beyond the timeout.
+Point the smoke script at the package-owned fixture instead of copying it. Real smoke remains a
+no-prompt, read-only initialize and never runs configuration-changing operations.
+
+**Impact.** Two randomized Very Good test/coverage rounds are stable. Both the fixture smoke and a
+real Claude Code 2.1.227 initialize smoke pass, and output is limited to OS/architecture/version,
+model/default counts, and a sanitized subscription label.
+
+## 2026-08-20 — Step 13 official-source lockfile verification
+
+**Problem.** `flutter pub get --enforce-lockfile` under the official `pub.dev` environment found that
+the working lockfile still carried China-mirror URLs, so it reported 176 dependency changes even
+though versions and checksums were not in conflict.
+
+**Decision.** Treat the official source as part of the approved Flutter 3.47.0 / Dart 3.13.0 baseline:
+resolve once against the official source, then immediately verify with `--enforce-lockfile`. Never
+commit workstation mirror URLs to the repository.
+
+**Impact.** Verification passes with unchanged locked versions and no `flutter-io.cn` entries in
+`pubspec.lock`. No shared adaptation layer or Provider port is affected.

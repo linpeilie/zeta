@@ -385,9 +385,22 @@ hand-written coverage (6,356 / 6,356), and Bloc lint reported 0 issues across 24
 
 ### Step 13 — `claude_code_client`
 
-- [ ] Migrate the Claude provider, stream-JSON peer, mappers/adapters, process starter, and CLI locator.
-- [ ] Migrate history, quota, and credential/keychain probes; credentials never reach disk or logs.
-- [ ] Contract-test permissions/questions/plans, identity, history, and process lifecycle.
+- [x] Migrate the Claude provider, stream-JSON peer, mappers/adapters, process starter, and CLI locator.
+- [x] Migrate history, quota, and credential/keychain probes; credentials never reach disk or logs.
+- [x] Contract-test permissions/questions/plans, identity, history, and process lifecycle.
+
+**Status: complete.** `claude_code_client` now exclusively owns the Claude stream-JSON provider,
+peer, protocol mappers/codecs, permission/question/plan adapters, process startup and recovery, single
+CLI locator, local history, model/quota reads, and read-only credential/keychain sources. Its barrel
+exports only `ClaudeProviderBundleFactory`, `ClaudeStaticCapabilities`, and `ClaudeCodeCliLocator`.
+Application localization and global logging did not cross into the package; credentials are read-only,
+logs and exceptions are sanitized, and neither the shared adaptation layer nor Provider ports changed.
+The Claude auth probe remains in Step 16 and the token-metering source remains in Step 21. A no-prompt
+initialize smoke against real Claude Code 2.1.227 passed with five models and exactly one default.
+Package gates: 264 tests and 100% hand-written coverage (2,962 / 2,962). In the same final workspace
+iteration, 27/27 roots passed analyze, format checked 295 Dart files with no changes, 26/26 test roots
+ran 780 tests at 100% hand-written coverage (9,317 / 9,317), and Bloc lint reported 0 issues across
+294 files.
 
 ### Step 14 — `grok_acp_client`
 

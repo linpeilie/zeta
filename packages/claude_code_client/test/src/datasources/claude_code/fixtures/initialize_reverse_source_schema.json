@@ -1,0 +1,52 @@
+{
+  "_fixture": {
+    "formatVersion": 1,
+    "provider": "claude_code",
+    "sourceKind": "schemaConstructed",
+    "sourceVersion": "2.8.4",
+    "os": "source-independent",
+    "architecture": "source-independent",
+    "privacy": "Only protocol fields needed by the metadata mapper are retained."
+  },
+  "type": "control_response",
+  "response": {
+    "subtype": "success",
+    "request_id": "request_redacted",
+    "response": {
+      "models": [
+        {
+          "value": "default",
+          "displayName": "Default (recommended)",
+          "description": "Recommended model selected by Claude Code",
+          "supportsEffort": true,
+          "supportedEffortLevels": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "supportsAdaptiveThinking": true,
+          "supportsAutoMode": true
+        },
+        {
+          "value": "sonnet",
+          "displayName": "Sonnet",
+          "description": "Efficient for routine tasks"
+        },
+        {
+          "value": "opus",
+          "displayName": "Opus",
+          "description": "For complex tasks",
+          "supportsFastMode": true
+        },
+        {
+          "value": "haiku",
+          "displayName": "Haiku"
+        }
+      ],
+      "account": {
+        "subscriptionType": "Claude Pro",
+        "apiProvider": "firstParty"
+      }
+    }
+  }
+}
