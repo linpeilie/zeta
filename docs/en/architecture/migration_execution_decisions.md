@@ -558,3 +558,50 @@ green gate requires one final uninterrupted pass.
 **Impact.** The second workspace iteration passed all 1,107 tests and 13,380 / 13,380 hand-written lines.
 The transient fixture timing issue is recorded without contaminating the Step 19 patch or weakening a
 pre-existing security-sensitive timeout test.
+
+## 2026-08-20 — Step 19 desktop-build repeats the isolated apt timeout
+
+**Problem.** Step 19's desktop workflow again reached 8/9 green while Linux production spent the full
+30-minute job limit in `Install Linux desktop toolchain`. Flutter setup and repository code never ran;
+the other two Linux variants and every Windows/macOS matrix passed.
+
+**Decision.** Apply the existing infrastructure policy: rerun failed jobs only and make no source,
+timeout, or workflow change. The affected matrix differs from Step 18's Linux staging occurrence, so
+there is still no deterministic project or matrix-specific failure to remediate.
+
+**Impact.** Attempt 2 passed without a code change. Step 19 is green in zeta, desktop-build (9/9), OSV,
+and license workflows; both apt incidents remain visible for trend monitoring.
+
+## 2026-08-20 — Step 20 keeps session domain and restore policy above Data
+
+**Problem.** The legacy `IdeSessionState` combines persisted schema fields with domain objects, and the
+legacy snapshot helper combines codec projection with `ProjectThreadListState` restore planning. The
+manifest and ownership map instead assign the domain models to `project_session_repository`, restore
+plans to Cubit/Bloc, and only current-schema IO plus the codec to `project_session_client`.
+
+**Decision.** Define neutral `SessionSnapshotResponse`, `SessionThreadSummaryResponse`, and
+`SessionWorkbenchResponse` values in Data. Preserve the current v4 JSON projection, but do not copy
+domain conversion, filesystem pruning, selected-thread normalization, or restore sequencing. Accept
+v4 only: missing/blank means a clean install; malformed, unsupported, or invalid current documents
+raise content-free typed decode failures. No shared adapter or Provider port changes.
+
+**Impact.** The package has no Flutter, Bloc, Cubit, Repository, or provider-contract dependency. The
+later Repository can map these persistence responses into its domain without Data importing stateful
+application types, and corruption cannot silently become an empty restored session.
+
+## 2026-08-20 — Step 20 makes debounce cancellation and close flushing explicit
+
+**Problem.** The legacy persistence coordinator owns a timer but `dispose()` drops its pending snapshot.
+Moving that timer unchanged to a later Cubit would violate the package contract that debounced writes
+are cancellable and flush on close. A close-time atomic write can also fail and must not prevent storage
+teardown or disappear as an unobserved timer error.
+
+**Decision.** `ProjectSessionStore` coalesces the latest scheduled response, exposes
+`cancelScheduledSave()` for writes that have not started, and never interrupts an atomic write already
+in flight. Immediate saves cancel a pending debounce. `close()` rejects new work, flushes the latest
+pending response, waits for the serial write tail, always closes storage, then propagates any captured
+background, flush, or close failure.
+
+**Impact.** Close-time data is not dropped, superseded snapshots do not write, and write failures remain
+observable. Package tests separately cover timer-started background failure and a failure initiated by
+the close-time flush.

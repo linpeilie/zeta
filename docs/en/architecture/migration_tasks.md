@@ -509,9 +509,20 @@ issues across 367 files.
 
 ### Step 20 — `project_session_client`
 
-- [ ] Migrate the IDE session store and current snapshot codec.
-- [ ] Data models never refer to Bloc State.
-- [ ] Test current-schema round trip, corrupt files, debounced-write cancellation, and close-time flush.
+- [x] Migrate the IDE session store and current snapshot codec.
+- [x] Data models never refer to Bloc State.
+- [x] Test current-schema round trip, corrupt files, debounced-write cancellation, and close-time flush.
+
+**Completed 2026-08-20.** `project_session_client` now exposes neutral v4-only session, thread,
+and workbench responses, a strict content-free failure codec, injectable document storage backed by
+`zeta_storage`, and a serial store with cancellable/coalesced debounced writes. `close()` flushes the
+latest pending snapshot, waits for started writes, closes storage, and preserves background/flush/close
+failures. Domain conversion, path pruning, restore plans, and interaction sequencing remain above
+Data. All 20 package tests pass at 100% hand-written coverage (247 / 247), including malformed and
+invalid current documents, supersession/explicit cancellation, both close-time failure paths, and real
+atomic file IO. The final workspace iteration passes analyze/format in 27/27 roots and 1,126 tests in
+26/26 roots at 100% hand-written coverage (13,626 / 13,626); Bloc lint reports zero issues across 371
+files.
 
 ### Step 21 — `usage_statistics_storage_client`
 

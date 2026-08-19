@@ -532,6 +532,12 @@ document 与 recursive filesystem change stream。它不解析 gitignore pattern
 raw document 注入纯 include/skip/prune filter。root 与请求目录拒绝 symbolic link、canonical/词法
 逃逸；枚举出的 link 与消失实体被省略。filesystem failure 使用不含内容的 typed contract。
 
+`project_session_client` 只接受 IDE session schema v4。缺失或空文档表示 clean install；malformed
+JSON、非 v4 文档与非法 current field 抛出不含内容的 typed decode failure。
+`SessionSnapshotResponse` 及其嵌套 response 只保存持久化值；domain 转换、restore plan、路径清洗与
+交互时序留在 Data 之上。Store 串行执行 atomic write、合并最后一份 debounced snapshot、暴露写前
+显式取消、close 时 flush，并在传播 background/flush failure 前仍关闭底层 storage。
+
 三个 vendor client 提供 Provider 原始用量数据；`usage_statistics_storage_client` 只做缓存与派生索引
 （[步骤 21](./migration_tasks.md)）。
 

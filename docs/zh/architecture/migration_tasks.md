@@ -484,9 +484,18 @@ tests，人工 coverage 100%（13,380 / 13,380）；Bloc lint 对 367 文件报�
 
 ### 步骤 20 — `project_session_client`
 
-- [ ] 迁 IDE session store 和当前 snapshot codec。
-- [ ] Data model 不互引 Bloc State。
-- [ ] 测 current schema round-trip、损坏文件、debounced write cancel 和 close flush。
+- [x] 迁 IDE session store 和当前 snapshot codec。
+- [x] Data model 不互引 Bloc State。
+- [x] 测 current schema round-trip、损坏文件、debounced write cancel 和 close flush。
+
+**完成于 2026-08-20。** `project_session_client` 现已暴露中立、仅 v4 的 session/thread/workbench
+response、使用不含内容的 strict failure codec、由 `zeta_storage` 支撑的可注入 document storage，
+以及串行、可取消/合并 debounced write 的 store。`close()` 会 flush 最新 pending snapshot、等待已开始
+写入、关闭 storage，并保留 background/flush/close failure。domain 转换、路径清洗、restore plan 与交互
+时序均留在 Data 之上。包级 20 tests 全部通过，人工代码 coverage 100%（247 / 247），覆盖 malformed
+和非法 current document、替换/显式取消、两种 close-time failure path 与真实 atomic file IO。最终
+workspace 同轮 27/27 roots analyze/format 通过，26/26 test roots 共 1,126 tests，人工 coverage 100%
+（13,626 / 13,626）；Bloc lint 对 371 文件报告 0 issues。
 
 ### 步骤 21 — `usage_statistics_storage_client`
 

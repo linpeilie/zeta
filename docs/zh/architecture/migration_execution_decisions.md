@@ -478,3 +478,45 @@ input 与外部 change stream；index/query policy 和交互 progress 留给后�
 
 **影响。** 第二次 workspace 同轮全部 1,107 tests 与人工代码 13,380 / 13,380 通过。该瞬时时序
 问题得到记录，没有污染 Step 19 patch，也没有削弱既有 security-sensitive timeout 测试。
+
+## 2026-08-20 — 步骤 19 desktop-build 再次出现隔离的 apt 超时
+
+**问题。** 步骤 19 desktop workflow 再次达到 8/9 绿色，但 Linux production 把 30 分钟 job 上限
+全部耗在 `Install Linux desktop toolchain`。Flutter setup 与仓库代码都未开始；另两个 Linux variant
+以及全部 Windows/macOS matrix 均通过。
+
+**决策。** 沿用既有基础设施策略：只重跑失败 job，不改源码、timeout 或 workflow。本次受影响的是
+Linux production，与步骤 18 的 Linux staging 不同，仍没有可确定复现的项目或特定矩阵故障可修。
+
+**影响。** attempt 2 未改代码即通过。步骤 19 的 zeta、desktop-build（9/9）、OSV 与 license
+workflow 全绿；两次 apt 事件均保留记录，供后续观察趋势。
+
+## 2026-08-20 — 步骤 20 将 session domain 与恢复策略留在 Data 之上
+
+**问题。** 旧 `IdeSessionState` 把持久化 schema 字段与 domain object 混合；旧 snapshot helper 又把
+codec 投影与 `ProjectThreadListState` restore plan 混合。manifest 与 ownership map 则把 domain model
+分给 `project_session_repository`、restore plan 分给 Cubit/Bloc，仅把 current-schema IO 与 codec 分给
+`project_session_client`。
+
+**决策。** 在 Data 定义中立的 `SessionSnapshotResponse`、`SessionThreadSummaryResponse` 与
+`SessionWorkbenchResponse`。保留当前 v4 JSON 投影，但不复制 domain 转换、filesystem pruning、
+selected-thread 归一化或恢复时序。只接受 v4：缺失/空文档表示 clean install；malformed、不支持版本或
+非法 current document 抛出不含内容的 typed decode failure。不修改共享适配层或 Provider port。
+
+**影响。** 本包不依赖 Flutter、Bloc、Cubit、Repository 或 provider contract。后续 Repository 可把
+持久化 response 映射为自己的 domain，Data 无需导入有状态 application 类型；损坏文件也不会静默
+变成空恢复会话。
+
+## 2026-08-20 — 步骤 20 显式定义 debounce cancel 与 close flush
+
+**问题。** 旧 persistence coordinator 持有 timer，但 `dispose()` 会丢弃待写 snapshot。把该 timer
+原样留给后续 Cubit 会违反“debounced write 可取消且 close 时 flush”的 package contract。close-time
+atomic write 也可能失败，既不能阻止 storage teardown，也不能作为未观察 timer error 消失。
+
+**决策。** `ProjectSessionStore` 合并最后一份 scheduled response；对尚未开始的写提供
+`cancelScheduledSave()`，但不打断已经开始的 atomic write。immediate save 会取消 pending debounce。
+`close()` 先拒绝新操作，flush 最新 pending response，等待串行 write tail，始终关闭 storage，再传播
+已捕获的 background、flush 或 close failure。
+
+**影响。** close-time 数据不丢失，被替换的 snapshot 不落盘，写失败保持可观察。包级测试分别覆盖
+timer 已启动后的 background failure，以及由 close-time flush 发起的失败。

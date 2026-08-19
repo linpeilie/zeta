@@ -554,6 +554,13 @@ the Repository supplies a pure include/skip/prune filter over the active raw doc
 requested directories reject symbolic links and canonical/lexical escape; enumerated links and
 disappearing entries are omitted. Filesystem failures are typed and content-free.
 
+`project_session_client` accepts only IDE session schema v4. Missing or blank documents represent a
+clean install; malformed JSON, non-v4 documents, and invalid current fields raise content-free typed
+decode failures. `SessionSnapshotResponse` and its nested responses contain persistence values only;
+domain conversion, restore plans, path pruning, and interaction sequencing stay above Data. The store
+serializes atomic writes, coalesces the latest debounced snapshot, exposes explicit pre-write
+cancellation, flushes on close, and still closes storage before propagating background/flush failures.
+
 The three vendor clients supply raw provider usage data; `usage_statistics_storage_client` only handles
 caching and derived indexes ([step 21](./migration_tasks.md)).
 
