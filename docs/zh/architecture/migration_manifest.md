@@ -12,19 +12,17 @@
 | 项 | 值 |
 | --- | --- |
 | 源仓库 | `D:\Development\Workspace\zeta` |
-| 分析基线 SHA | `bfd42412c9c3a0b39bb93598f93f9e5eca471236` |
-| 工作区状态 | clean（唯一未跟踪项：`.workflow/feature/2026-08-18-PC端构建与版本检查/`） |
-| Git 跟踪文件总数 | **1,512** |
+| 最终迁移基线 SHA | `b5c2f3e8a9ac544e9832866e86ff633661c46053` |
+| 工作区状态 | tracked clean（唯一未跟踪项：`.workflow/feature/2026-08-18-PC端构建与版本检查/`，明确排除） |
+| Git 跟踪文件总数 | **1,507** |
+| Flutter / Dart | Flutter 3.44.4 stable / Dart 3.12.2 |
+| `pubspec.lock` SHA-256 | `70877b47b9097ac3449a5885b83faea073e4688a3c66187941f4bfd02728ec6f` |
 | 清单生成日期 | 2026-08-19 |
 | 目标仓库 | `D:\Development\Workspace\vgv\zeta`，版本 `1.0.0+1` |
 
 > [!IMPORTANT]
-> **本清单基于分析基线 `bfd4241`，不是最终迁移基线。** [步骤 0](./migration_tasks.md) 的 Cursor
-> 清退会改变旧仓库内容。执行 [步骤 1](./migration_tasks.md) 时必须：
-> 
-> 1. 重新运行本清单的生成脚本，得到清退后的最终 SHA 与文件数；
-> 2. 记录最终的 Flutter/Dart 版本与 `pubspec.lock` hash；
-> 3. 确认标记为 `delete` 的 Cursor 相关文件已在旧仓库消失（届时它们不再出现在本清单中）。
+> **这是 Step 0 清退完成后的最终迁移基线。** 清退提交中的 5 个 Cursor 源码、测试与 fixture
+> 已从 Git 索引消失，因此不再出现在本清单中。迁移执行期不得改用其他旧仓库提交。
 
 ## 2. 动作定义
 
@@ -43,17 +41,17 @@
 
 | 动作 | 文件数 | 占比 |
 | --- | ---: | ---: |
-| `move` | 300 | 19.8% |
-| `rewrite` | 740 | 48.9% |
+| `move` | 300 | 19.9% |
+| `rewrite` | 736 | 48.8% |
 | `regenerate` | 5 | 0.3% |
-| `delete` | 42 | 2.8% |
-| `out-of-scope` | 425 | 28.1% |
-| **合计** | **1512** | **100%** |
+| `delete` | 41 | 2.7% |
+| `out-of-scope` | 425 | 28.2% |
+| **合计** | **1507** | **100%** |
 
 | 区域 | 文件数 | 主要动作 |
 | --- | ---: | --- |
-| `lib/` | 378 | rewrite 335, delete 38, regenerate 3, move 2 |
-| `test/` | 305 | rewrite 305 |
+| `lib/` | 377 | rewrite 335, delete 37, regenerate 3, move 2 |
+| `test/` | 301 | rewrite 301 |
 | `third_party/` | 269 | move 269 |
 | `macos/ + windows/ + linux/` | 65 | rewrite 65 |
 | `assets/` | 13 | move 13 |
@@ -62,7 +60,7 @@
 | `.github/` | 6 | rewrite 6 |
 | `.claude/ + .agents/ + .workflow/` | 407 | out-of-scope 407 |
 | `根目录文件` | 19 | rewrite 12, move 4, regenerate 2, out-of-scope 1 |
-| **合计** | **1512** | 覆盖校验：1512 = 1512 |
+| **合计** | **1507** | 覆盖校验：1507 = 1507 |
 
 ## 4. 与拓扑文档的数字差异
 
@@ -126,7 +124,7 @@ schema 快照的生成入口。`test_fast/test_full` 四个脚本被 VGV 四门�
 
 ---
 
-## 6. `lib/` 逐文件（378）
+## 6. `lib/` 逐文件（377）
 
 路径已去掉 `lib/src/` 前缀。目标列的 `packages/` 与 `lib/` 都相对新仓库根目录。
 
@@ -201,7 +199,6 @@ schema 快照的生成入口。`test_fast/test_full` 四个脚本被 VGV 四门�
 | `features/agent/domain/agent_usage_models.dart` | rewrite | `packages/agent_provider_contracts/lib/src/` | ADR-001 模型例外：21 个 capability port 与中立不可变模型；零 vendor 字段 |
 | `features/agent/domain/agent_usage_window_labels.dart` | rewrite | `lib/l10n/ + packages/agent_provider_contracts/` | 窗口时长 typed code 留 contracts；展示文案入 ARB |
 | `features/agent/domain/agent_user_input_models.dart` | rewrite | `packages/agent_provider_contracts/lib/src/` | ADR-001 模型例外：21 个 capability port 与中立不可变模型；零 vendor 字段 |
-| `features/agent/domain/cursor_retirement_policy.dart` | delete | — | Cursor 清退（步骤 0），迁移前在旧仓库删除 |
 | `features/agent/domain/fallback_agent_ui_text_catalog.dart` | delete | — | Fallback catalog 删除（步骤 7 / 28） |
 
 ### 6.4 agent · data · transport 与 vendor client
@@ -580,19 +577,19 @@ schema 快照的生成入口。`test_fast/test_full` 四个脚本被 VGV 四门�
 | `ui/features/ide/views/project_home_page.dart` | rewrite | `lib/ide_shell/view/` | IDE shell 页面；导航改 typed route |
 | `ui/features/ide/views/project_list_pane.dart` | rewrite | `lib/ide_shell/view/` | IDE shell 页面；导航改 typed route |
 | `ui/localization/app_localizations_x.dart` | rewrite | `lib/l10n/l10n.dart` | l10n / l10nOrNull 扩展 |
-| `ui/localization/arb/app_en.arb` | move | `lib/l10n/arb/` | en/zh 各 1,040 键；删除脚手架 app_es.arb（步骤 5） |
-| `ui/localization/arb/app_zh.arb` | move | `lib/l10n/arb/` | en/zh 各 1,040 键；删除脚手架 app_es.arb（步骤 5） |
+| `ui/localization/arb/app_en.arb` | move | `lib/l10n/arb/` | en/zh 各 1,035 键；删除脚手架 app_es.arb（步骤 5） |
+| `ui/localization/arb/app_zh.arb` | move | `lib/l10n/arb/` | en/zh 各 1,035 键；删除脚手架 app_es.arb（步骤 5） |
 | `ui/localization/generated/app_localizations.dart` | regenerate | `lib/l10n/generated/` | 由 flutter gen-l10n 重新生成；不手工迁移（步骤 5） |
 | `ui/localization/generated/app_localizations_en.dart` | regenerate | `lib/l10n/generated/` | 由 flutter gen-l10n 重新生成；不手工迁移（步骤 5） |
 | `ui/localization/generated/app_localizations_zh.dart` | regenerate | `lib/l10n/generated/` | 由 flutter gen-l10n 重新生成；不手工迁移（步骤 5） |
 | `ui/localization/relative_time.dart` | rewrite | `lib/l10n/` | 相对时间文案依赖 ARB，留 app |
 | `ui/localization/zeta_shadcn_localizations.dart` | rewrite | `lib/l10n/` | 留在 app，不进 app_ui（拓扑 §8） |
 
-**`lib/` 覆盖校验**：378 / 378
+**`lib/` 覆盖校验**：377 / 377
 
 ---
 
-## 7. `test/`（305）— 按规则分组
+## 7. `test/`（301）— 按规则分组
 
 测试跟随其被测对象的归属，因此按规则分组而非逐文件列举；每条规则的命中数已核对，合计等于 `test/` 的全部跟踪文件。**规则按最长前缀优先匹配**：表中靠上的更具体规则先生效，靠下的通用规则只覆盖剩余文件。
 
@@ -606,13 +603,13 @@ schema 快照的生成入口。`test_fast/test_full` 四个脚本被 VGV 四门�
 | `test/tool/report_test_timings_test.dart` | 1 | rewrite | tool/ 的配套测试 | — |
 | `test/src/features/agent/application/**` | 25 | rewrite | 按 ownership_map 分配到 repository 包与 lib/agent_chat/ 的 blocTest | — |
 | `test/support/scroll_metrics_trace.dart` | 1 | rewrite | `test/helpers/` | pumpApp 等共享 widget 测试工具 |
-| `test/src/features/agent/domain/**` | 18 | rewrite | `packages/agent_provider_contracts/test/` | — |
+| `test/src/features/agent/domain/**` | 17 | rewrite | `packages/agent_provider_contracts/test/` | — |
 | `test/src/features/agent/data/**` | 33 | rewrite | 按 mapper 前缀分配到对应 vendor package | — |
 | `test/flutter_test_config.dart` | 1 | rewrite | `test/flutter_test_config.dart` | golden 字体加载与全局测试配置；workspace 内每个含 widget test 的包各一份 |
 | `test/src/architecture/**` | 3 | rewrite | `test/architecture/ + .architecture.yaml` | 架构门禁重写为读取 .architecture.yaml 的断言（步骤 6） |
 | `test/src/features/**` | 55 | rewrite | 对应 package/test 或 test/<feature>/ | 测试镜像 lib/；跟随其被测对象的归属 |
 | `test/src/testing/**` | 13 | rewrite | 各 package 的 test/helpers/ | 共享 harness 按包复制；禁止跨包 test import |
-| `test/fixtures/**` | 29 | rewrite | 按 Provider 分配到对应 vendor package 的 test/fixtures/ | — |
+| `test/fixtures/**` | 26 | rewrite | 按 Provider 分配到对应 vendor package 的 test/fixtures/ | — |
 | `test/src/core/**` | 4 | rewrite | packages/zeta_logging/test/ 与 packages/zeta_storage/test/ | — |
 | `test/src/app/**` | 11 | rewrite | `test/app/` | — |
 | `test/src/ui/**` | 42 | rewrite | packages/app_ui/test/ 与 test/ide_shell/ | — |
@@ -824,7 +821,7 @@ schema 快照的生成入口。`test_fast/test_full` 四个脚本被 VGV 四门�
 
 ---
 
-## 13. 删除清单（42）
+## 13. 删除清单（41）
 
 每一项都必须写明删除理由与验证方式，这是[步骤 1](./migration_tasks.md) 的硬要求。
 
@@ -849,7 +846,6 @@ schema 快照的生成入口。`test_fast/test_full` 四个脚本被 VGV 四门�
 | `lib/src/features/agent/data/repositories/.gitkeep` | delete | — | 空目录占位符；新仓库按 VGV 模板重建目录 |
 | `lib/src/features/agent/domain/.gitkeep` | delete | — | 空目录占位符；新仓库按 VGV 模板重建目录 |
 | `lib/src/features/agent/domain/agent_ui_text_catalog.dart` | delete | — | TextCatalog 删除（步骤 7 / 28） |
-| `lib/src/features/agent/domain/cursor_retirement_policy.dart` | delete | — | Cursor 清退（步骤 0），迁移前在旧仓库删除 |
 | `lib/src/features/agent/domain/fallback_agent_ui_text_catalog.dart` | delete | — | Fallback catalog 删除（步骤 7 / 28） |
 | `lib/src/features/agent_management/domain/agent_management_text_catalog.dart` | delete | — | TextCatalog 删除（步骤 28） |
 | `lib/src/features/agent_management/domain/fallback_agent_management_text_catalog.dart` | delete | — | Fallback TextCatalog 删除（步骤 28） |

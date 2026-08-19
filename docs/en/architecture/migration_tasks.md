@@ -144,33 +144,39 @@ Before checking a step:
 
 There are no released users, so no compatibility migration or legacy data upgrade is required. Remove only source, fixtures, and development-data assumptions.
 
-- [ ] Remove `cursor_retirement_policy.dart` and its barrel export.
-- [ ] Remove Cursor branches from provider factory, static capabilities, settings, turn context, management, and UI.
-- [ ] Remove Cursor l10n keys, tests, and fixtures.
-- [ ] Keep only currently required values in `AgentProviderKind`; do not preserve compatibility values for an unreleased schema.
-- [ ] Do not modify `zeta_storage_migrator` to process historical Cursor data.
-- [ ] Commit after all four legacy-repository gates pass; freeze feature development after this commit.
+**Status: complete.** Legacy-repository commit: `b5c2f3e8` (2026-08-19). By migration decision, legacy coverage is recorded but not gated: hand-written code coverage is 83.97% (35,075 / 41,771); analyze, format, and test pass. The new VGV workspace remains subject to the 100% coverage gate in §1.7.
+
+- [x] Remove `cursor_retirement_policy.dart` and its barrel export.
+- [x] Remove Cursor branches from provider factory, static capabilities, settings, turn context, management, and UI.
+- [x] Remove Cursor l10n keys, tests, and fixtures.
+- [x] Keep only currently required values in `AgentProviderKind`; do not preserve compatibility values for an unreleased schema.
+- [x] Do not modify `zeta_storage_migrator` to process historical Cursor data.
+- [x] Commit after legacy analyze, format, and test pass; freeze feature development after this commit. Legacy coverage is exempt under the decision above.
 
 ### Step 1 — Freeze the final baseline and source-to-target manifest
 
-- [ ] Record the final legacy commit SHA, clean status, Flutter/Dart versions, and `pubspec.lock` hash.
-- [ ] Recount hand-written Dart, generated Dart, tests, ARB, native files, and assets.
-- [ ] Create `docs/zh/architecture/migration_manifest.md` and `docs/en/architecture/migration_manifest.md`.
-- [ ] Classify every Git-tracked file exactly once as `move`, `rewrite`, `regenerate`, `delete`, or `out-of-scope`.
-- [ ] Include native Runners, MethodChannels, pubspecs, fonts/icons, and CI files.
-- [ ] Explicitly exclude the untracked `.workflow/feature/2026-08-18-PC端构建与版本检查/` directory from the input.
+**Status: complete.** Final baseline `b5c2f3e8a9ac544e9832866e86ff633661c46053`; all 1,507 tracked files are classified exactly once, the generator reports no `UNCLASSIFIED` entries, and both language renders are idempotent. Gates: zero analyze issues, format 0 changed, 8 tests, and 100% hand-written Dart coverage (30 / 30).
+
+- [x] Record the final legacy commit SHA, clean status, Flutter/Dart versions, and `pubspec.lock` hash.
+- [x] Recount hand-written Dart, generated Dart, tests, ARB, native files, and assets.
+- [x] Create `docs/zh/architecture/migration_manifest.md` and `docs/en/architecture/migration_manifest.md`.
+- [x] Classify every Git-tracked file exactly once as `move`, `rewrite`, `regenerate`, `delete`, or `out-of-scope`.
+- [x] Include native Runners, MethodChannels, pubspecs, fonts/icons, and CI files.
+- [x] Explicitly exclude the untracked `.workflow/feature/2026-08-18-PC端构建与版本检查/` directory from the input.
 
 ### Step 2 — ADRs and business-state ownership
 
-- [ ] ADR-001: the `agent_provider_contracts` model exception, allowed dependencies, and review criteria.
-- [ ] ADR-002: Flutter platform adapters exist only in `lib/app/platform/`; Repositories depend on pure-Dart ports.
-- [ ] ADR-003: the router is the navigation-identity source of truth; session restore only produces an initial location/redirect.
-- [ ] ADR-004: conversation reducer/effect boundary—domain snapshot aggregation remains in Repository; UI/interaction state belongs in Bloc.
-- [ ] Create a class-level ownership map: legacy Controller/Store/Service → Data/Repository/Bloc/Presentation.
-- [ ] Create machine-readable `.architecture.yaml` containing package layers, ADR-001, and the composition-root allowlist.
-- [ ] The open-decision register is empty and records the final WCAG 2.2 AA / macOS / Windows / Linux decision.
+**Status: complete.** ADR-001—004 are accepted; the ownership map is revalidated against all 24 final-baseline `ChangeNotifier/Listenable` declarations and 57 application files; `.architecture.yaml` parses and registers one contracts exception package, 14 Data packages, nine Repository packages, and zero open decisions. Gates: zero analyze issues, format 0 changed, 8 tests, and 100% hand-written Dart coverage (30 / 30).
 
-**P-1 exit:** the final SHA is frozen, the manifest has no unassigned file, and ADRs plus the ownership map are approved.
+- [x] ADR-001: the `agent_provider_contracts` model exception, allowed dependencies, and review criteria.
+- [x] ADR-002: Flutter platform adapters exist only in `lib/app/platform/`; Repositories depend on pure-Dart ports.
+- [x] ADR-003: the router is the navigation-identity source of truth; session restore only produces an initial location/redirect.
+- [x] ADR-004: conversation reducer/effect boundary—domain snapshot aggregation remains in Repository; UI/interaction state belongs in Bloc.
+- [x] Create a class-level ownership map: legacy Controller/Store/Service → Data/Repository/Bloc/Presentation.
+- [x] Create machine-readable `.architecture.yaml` containing package layers, ADR-001, and the composition-root allowlist.
+- [x] The open-decision register is empty and records the final WCAG 2.2 AA / macOS / Windows / Linux decision.
+
+**P-1 exit: passed.** The final SHA is frozen, the manifest has no unassigned file, and the bilingual ADRs plus ownership map pass machine validation.
 
 ---
 

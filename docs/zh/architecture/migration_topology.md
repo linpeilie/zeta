@@ -29,7 +29,7 @@ Presentation → Business Logic (Bloc/Cubit) → Repository → Data
 
 | 维度 | 决策 |
 | --- | --- |
-| 迁移源 | 旧仓库当前 `dev`；分析基线 `bfd42412c9c3a0b39bb93598f93f9e5eca471236`，Cursor 清退后再固定最终迁移 SHA |
+| 迁移源 | 旧仓库 `dev` 最终基线 `b5c2f3e8a9ac544e9832866e86ff633661c46053`；此提交之后停止功能开发 |
 | 状态管理 | 全量迁到 Bloc/Cubit |
 | 架构 | 严格 VGV 四层；Repository 之间零依赖 |
 | Provider 契约 | 接受 ADR-001：`agent_provider_contracts` 存放多 Provider 共用的中立契约与不可变模型 |
@@ -53,32 +53,32 @@ Presentation → Business Logic (Bloc/Cubit) → Repository → Data
 
 ## 2. 当前 `dev` 基线
 
-统计时间：2026-08-19。生成的 l10n Dart 文件单独列出，不计入人工迁移规模。
+最终基线：旧仓库 `b5c2f3e8a9ac544e9832866e86ff633661c46053`，统计时间 2026-08-19。生成的 l10n Dart 文件单独列出，不计入人工迁移规模。
 
 | 范围 | 文件 | 行数 |
 | --- | ---: | ---: |
-| `lib/src` 人工 Dart | 348 | 101,599 |
-| l10n generated Dart | 3 | 10,318 |
-| `test` Dart | 265 | 86,910 |
-| `package:zeta/src/...` import | 1,165 | — |
-| en / zh ARB | 每种语言 1,040 键 | — |
+| `lib/src` 人工 Dart | 347 | 111,157 |
+| l10n generated Dart | 3 | 13,384 |
+| `test` Dart | 263 | 94,264 |
+| `lib/` 中的 `package:zeta/src/...` import | 1,171 | — |
+| en / zh ARB | 每种语言 1,035 键 | — |
 
 旧仓库 feature：
 
 | Feature | 文件 | 行数 | 目标 |
 | --- | ---: | ---: | --- |
-| `agent` | 184 | 62,822 | Provider Data、Conversation/Provider Repository、`agent_chat` Bloc/UI |
-| `agent_management` | 14 | 6,449 | `agent_management_client`、Repository、Bloc/UI |
-| `desktop_notifications` | 6 | 494 | 平台端口、Repository、Bloc |
-| `ide_session` | 7 | 659 | session client、Repository、Cubit |
-| `project_threads` | 5 | 1,689 | 与 ide session 共用 Repository，状态进 Bloc |
-| `settings` | 13 | 2,047 | settings client、Repository、Cubit/UI |
-| `usage_statistics` | 35 | 8,785 | Provider 数据源、storage client、Repository、Bloc/UI |
-| `workspace` | 8 | 1,067 | file-system client、Repository、Cubit/UI |
+| `agent` | 183 | 68,446 | Provider Data、Conversation/Provider Repository、`agent_chat` Bloc/UI |
+| `agent_management` | 14 | 7,023 | `agent_management_client`、Repository、Bloc/UI |
+| `desktop_notifications` | 6 | 563 | 平台端口、Repository、Bloc |
+| `ide_session` | 7 | 749 | session client、Repository、Cubit |
+| `project_threads` | 5 | 1,829 | 与 ide session 共用 Repository，状态进 Bloc |
+| `settings` | 13 | 2,267 | settings client、Repository、Cubit/UI |
+| `usage_statistics` | 35 | 9,557 | Provider 数据源、storage client、Repository、Bloc/UI |
+| `workspace` | 8 | 1,167 | file-system client、Repository、Cubit/UI |
 
-平台与资源也属于迁移输入，不能被 Dart 拓扑遗漏：Linux 15 个文件、macOS 33 个文件、Windows 69 个文件、assets 13 个文件。生成的 plugin registrant 可重新生成；手写 Runner、MethodChannel、图标与字体必须进入 source→target 清单。
+平台与资源也属于迁移输入，不能被 Dart 拓扑遗漏：文件系统快照为 Linux 15 个文件、macOS 33 个文件、Windows 69 个文件、assets 13 个文件；其中 Git 跟踪数分别为 15、28、22、13。生成的 plugin registrant 可重新生成；手写 Runner、MethodChannel、图标与字体必须进入 source→target 清单。
 
-上述数字是分析快照。步骤 0 修改旧仓库后，P-1 必须重新生成最终数字和 SHA，不允许执行期继续引用本节的临时 SHA。
+上述数字是步骤 0 后的最终迁移基线；执行期不得改用其他旧仓库提交。完整环境版本与锁文件 hash 见[逐文件清单 §1](./migration_manifest.md)。
 
 ---
 
@@ -287,7 +287,7 @@ Conversation reducer/effect runner 的保留边界：Provider 事件到会话 do
 
 ## 8. 国际化
 
-- 迁入当前 `dev` 的 en/zh ARB，重新以 1,040 键为基线；Cursor 清退后再次计数。
+- 迁入最终 `dev` 基线的 en/zh ARB，每种语言 1,035 键。
 - ARB 是 Zeta 自有 UI 文案的唯一真源。
 - `app_ui` 文案由构造参数传入。
 - packages 不得创建需要本地化的 Zeta UI 文案；允许承载用户内容、Provider 原文和内部诊断字符串。

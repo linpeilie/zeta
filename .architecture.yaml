@@ -1,0 +1,216 @@
+version: 1
+
+baseline:
+  legacy_commit: b5c2f3e8a9ac544e9832866e86ff633661c46053
+  tracked_files: 1507
+  open_decisions: 0
+
+layers:
+  contracts:
+    packages:
+      - agent_provider_contracts
+    flutter_allowed: false
+    local_package_dependencies_allowed: false
+
+  data:
+    packages:
+      - json_rpc_transport
+      - zeta_logging
+      - zeta_storage
+      - desktop_platform_api
+      - codex_app_server_client
+      - claude_code_client
+      - grok_acp_client
+      - agent_history_client
+      - agent_config_client
+      - agent_management_client
+      - settings_client
+      - workspace_client
+      - project_session_client
+      - usage_statistics_storage_client
+    flutter_allowed: false
+    may_depend_on:
+      - contracts
+      - data
+    vendor_client_dependencies_allowed: false
+
+  repository:
+    packages:
+      - agent_provider_repository
+      - agent_conversation_repository
+      - agent_management_repository
+      - settings_repository
+      - workspace_repository
+      - project_session_repository
+      - usage_statistics_repository
+      - desktop_notifications_repository
+      - desktop_platform_repository
+    flutter_allowed: false
+    may_depend_on:
+      - contracts
+      - data
+    repository_dependencies_allowed: false
+    forbidden_state_name_patterns:
+      - expanded
+      - selected
+      - isLoading
+      - loadStatus
+      - errorMessage
+    forbidden_symbols:
+      - ChangeNotifier
+      - ValueNotifier
+      - Listenable
+
+  business_logic:
+    roots:
+      - lib/**/bloc/**
+      - lib/**/cubit/**
+    may_depend_on:
+      - contracts
+      - repository
+    forbidden_imports:
+      - package:flutter/widgets.dart
+      - package:go_router/go_router.dart
+      - package:flutter/services.dart
+      - dart:io
+    forbidden_symbols:
+      - BuildContext
+      - GoRouter
+      - MethodChannel
+
+  presentation:
+    roots:
+      - lib/**/view/**
+      - lib/**/widgets/**
+      - packages/app_ui/**
+    may_depend_on:
+      - business_logic
+    app_ui_forbidden_import_prefixes:
+      - package:zeta/l10n/
+      - package:app_localizations/
+      - package:*_repository/
+      - package:*_client/
+
+dependency_rules:
+  external_package_src_imports_allowed: false
+  packages_may_import_app_lib: false
+  repositories_may_import_repositories: false
+  vendor_clients_may_import_vendor_clients: false
+  blocs_may_construct_or_depend_on_blocs: false
+  widgets_may_call_repositories_directly: false
+
+adr_001:
+  package: agent_provider_contracts
+  allowed_dependency_packages:
+    - collection
+    - equatable
+    - meta
+  forbidden_imports:
+    - dart:io
+    - package:flutter/
+    - package:flutter_localizations/
+  allowed_content:
+    - capability_ports
+    - immutable_neutral_values
+    - typed_failures_and_codes
+    - pure_codecs
+    - resolved_cli_process_command
+  forbidden_content:
+    - business_state
+    - localized_copy
+    - vendor_wire_fields
+    - io_implementations
+    - platform_plugins
+  forbidden_field_name_patterns:
+    - selected
+    - expanded
+    - isLoading
+    - loadStatus
+    - errorMessage
+    - session_id
+    - tool_use_id
+    - _x.ai
+  minimum_independent_consumers: 2
+  required_properties:
+    - immutable
+    - frozen_collections
+    - value_equality
+  review_triggers:
+    - dependency_change
+    - port_count_change
+    - event_family_change
+    - flutter_or_io_request
+    - vendor_field_request
+    - single_consumer_type
+
+composition_root:
+  path: lib/bootstrap.dart
+  data_package_import_allowlist:
+    - lib/bootstrap.dart
+  repository_package_import_allowlist:
+    - lib/bootstrap.dart
+    - lib/**/bloc/**
+    - lib/**/cubit/**
+    - lib/**/view/*_page.dart
+  platform_adapter_roots:
+    - lib/app/platform/**
+  platform_adapter_allowed_imports:
+    - package:desktop_platform_api/
+    - package:flutter/services.dart
+    - package:file_selector/
+    - package:flutter_local_notifications/
+    - package:macos_window_utils/
+    - package:pasteboard/
+    - package:window_manager/
+  platform_adapter_forbidden_import_suffixes:
+    - _client/
+    - _repository/
+
+navigation:
+  source_of_truth: typed_go_router_location
+  stable_id_parameters_only: true
+  forbid_extra: true
+  forbid_raw_path_navigation: true
+  session_restore_output:
+    - initial_location
+    - redirect_input
+  bloc_mirrors_router_location: false
+
+conversation_boundary:
+  repository_owns:
+    - runtime_leases
+    - listener_generations
+    - event_pipeline
+    - deterministic_reducer
+    - timeline_and_domain_snapshots
+    - history_live_replay_scopes
+    - provider_storage_lifecycle_effects
+  bloc_owns:
+    - selection
+    - drafts
+    - expansion
+    - loading_and_failure
+    - conflict_confirmation
+    - cross_repository_orchestration
+  presentation_owns:
+    - scrolling
+    - focus
+    - dialogs_and_snackbars
+    - navigation
+
+accessibility:
+  standard: WCAG_2_2_AA
+  platforms:
+    macos:
+      screen_readers:
+        - VoiceOver
+    windows:
+      screen_readers:
+        - Narrator
+        - NVDA
+    linux:
+      screen_readers:
+        - Orca
+      known_limitations_must_be_recorded: true
+  keyboard_only_smoke_required: true
+  reduced_motion_is_additional_gate: true

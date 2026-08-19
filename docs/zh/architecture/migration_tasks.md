@@ -141,33 +141,39 @@ packages/<name>/
 
 当前没有发布用户，不做兼容迁移或旧数据升级。只清理源码、fixture 和开发数据假设。
 
-- [ ] 删除 `cursor_retirement_policy.dart` 及 barrel export。
-- [ ] 删除 provider factory/static capabilities/settings/turn-context/management/UI 的 Cursor 分支。
-- [ ] 删除 Cursor l10n 键、测试和 fixture。
-- [ ] `AgentProviderKind` 只保留当前产品需要的枚举；不为未发布 schema 保留兼容值。
-- [ ] 不修改 `zeta_storage_migrator` 去处理历史 Cursor 数据。
-- [ ] 旧仓库四门全绿后提交；此提交之后停止功能开发。
+**状态：已完成。** 旧仓库提交：`b5c2f3e8`（2026-08-19）。经迁移裁决，旧仓库覆盖率只记录不设门禁：人工代码覆盖率为 83.97%（35,075 / 41,771）；analyze、format、test 全绿。新 VGV workspace 仍按 §1.7 执行 100% 覆盖率门禁。
+
+- [x] 删除 `cursor_retirement_policy.dart` 及 barrel export。
+- [x] 删除 provider factory/static capabilities/settings/turn-context/management/UI 的 Cursor 分支。
+- [x] 删除 Cursor l10n 键、测试和 fixture。
+- [x] `AgentProviderKind` 只保留当前产品需要的枚举；不为未发布 schema 保留兼容值。
+- [x] 不修改 `zeta_storage_migrator` 去处理历史 Cursor 数据。
+- [x] 旧仓库 analyze、format、test 全绿后提交；此提交之后停止功能开发。旧仓库 coverage 按上述裁决豁免。
 
 ### 步骤 1 — 固定最终基线与 source→target manifest
 
-- [ ] 记录最终旧仓库 commit SHA、clean status、Flutter/Dart 版本和 `pubspec.lock` hash。
-- [ ] 重新统计人工 Dart、generated Dart、test、ARB、native 与 assets。
-- [ ] 建 `docs/zh/architecture/migration_manifest.md` 与 `docs/en/architecture/migration_manifest.md`。
-- [ ] 每个 Git 跟踪文件恰好标记为 `move`、`rewrite`、`regenerate`、`delete` 或 `out-of-scope`。
-- [ ] native Runner、MethodChannel、pubspec、fonts/icons、CI 文件必须在 manifest 中。
-- [ ] 未跟踪 `.workflow/feature/2026-08-18-PC端构建与版本检查/` 明确不属于输入。
+**状态：已完成。** 最终基线 `b5c2f3e8a9ac544e9832866e86ff633661c46053`；1,507 个跟踪文件全部唯一归类，生成器无 `UNCLASSIFIED` 且中英文渲染幂等。质量门：analyze 0 问题、format 0 changed、8 tests、人工 Dart coverage 100%（30 / 30）。
+
+- [x] 记录最终旧仓库 commit SHA、clean status、Flutter/Dart 版本和 `pubspec.lock` hash。
+- [x] 重新统计人工 Dart、generated Dart、test、ARB、native 与 assets。
+- [x] 建 `docs/zh/architecture/migration_manifest.md` 与 `docs/en/architecture/migration_manifest.md`。
+- [x] 每个 Git 跟踪文件恰好标记为 `move`、`rewrite`、`regenerate`、`delete` 或 `out-of-scope`。
+- [x] native Runner、MethodChannel、pubspec、fonts/icons、CI 文件必须在 manifest 中。
+- [x] 未跟踪 `.workflow/feature/2026-08-18-PC端构建与版本检查/` 明确不属于输入。
 
 ### 步骤 2 — ADR 与业务状态归属
 
-- [ ] ADR-001：`agent_provider_contracts` 的模型例外、允许依赖和复核条件。
-- [ ] ADR-002：Flutter platform adapter 只位于 `lib/app/platform/`，Repository 依赖纯 Dart port。
-- [ ] ADR-003：Router 是导航标识唯一真源，session restore 只产生 initial location/redirect。
-- [ ] ADR-004：Conversation reducer/effect 边界——domain snapshot 聚合留 Repository，UI/交互状态进 Bloc。
-- [ ] 建逐类 ownership 表：旧 Controller/Store/Service → Data/Repository/Bloc/Presentation。
-- [ ] 建机器可读 `.architecture.yaml`：package layer、ADR-001、composition-root allowlist。
-- [ ] open-decision register 已清零，并记录 WCAG 2.2 AA / macOS / Windows / Linux 的最终决策。
+**状态：已完成。** ADR-001—004 已接受；ownership map 已按最终基线复核 24 处 `ChangeNotifier/Listenable` 与 57 个 application 文件；`.architecture.yaml` 可解析并登记 1 个 contracts 例外包、14 个 Data 包、9 个 Repository 包，open decisions = 0。质量门：analyze 0 问题、format 0 changed、8 tests、人工 Dart coverage 100%（30 / 30）。
 
-**P-1 出口**：最终 SHA 固定；manifest 无未归属文件；ADR 和 ownership 表评审通过。
+- [x] ADR-001：`agent_provider_contracts` 的模型例外、允许依赖和复核条件。
+- [x] ADR-002：Flutter platform adapter 只位于 `lib/app/platform/`，Repository 依赖纯 Dart port。
+- [x] ADR-003：Router 是导航标识唯一真源，session restore 只产生 initial location/redirect。
+- [x] ADR-004：Conversation reducer/effect 边界——domain snapshot 聚合留 Repository，UI/交互状态进 Bloc。
+- [x] 建逐类 ownership 表：旧 Controller/Store/Service → Data/Repository/Bloc/Presentation。
+- [x] 建机器可读 `.architecture.yaml`：package layer、ADR-001、composition-root allowlist。
+- [x] open-decision register 已清零，并记录 WCAG 2.2 AA / macOS / Windows / Linux 的最终决策。
+
+**P-1 出口：已通过。** 最终 SHA 已固定；manifest 无未归属文件；ADR 和 ownership 表已同步中英文版本并通过机器校验。
 
 ---
 

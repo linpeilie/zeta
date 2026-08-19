@@ -89,7 +89,7 @@ the presentation layer, and do not enter Bloc State.
 
 ## 3. `features/agent/application/` (35) — file-by-file rulings
 
-The highest-risk directory in the migration: 35 `.dart` files, 11,888 lines (plus one `.gitkeep`),
+The highest-risk directory in the migration: 35 `.dart` files, 11,824 lines (plus one `.gitkeep`),
 mixing genuine domain orchestration with UI state disguised as "application".
 
 ### 3.1 → `agent_conversation_repository` (20)
@@ -114,7 +114,7 @@ correctly even with no UI at all.
 | `agent_provider_runtime_identity.dart` | 30 | stable runtime identity | value type; see §3.5 on placing it in contracts |
 | `agent_provider_runtime_registry.dart` | 305 | runtime lease registry | drop `ChangeNotifier` |
 | `agent_turn_context_overlay.dart` | 240 | overlays local turn context onto history snapshots | pure function |
-| `agent_turn_context_recorder.dart` | 147 | side-channel turn context writes | failures only log diagnostics, never rethrow |
+| `agent_turn_context_recorder.dart` | 143 | side-channel turn context writes | failures only log diagnostics, never rethrow |
 | `bounded_event_dispatcher.dart` | 183 | FIFO bounded dispatch + backpressure | the event-storm acceptance depends on it |
 | `coalescing_event_buffer.dart` | 163 | generic coalescing buffer | the generic container, separate from the policy |
 | `agent_conversation_permission_state.dart` | 360 | conversation permission facts | **partial**, see §5.3 |
@@ -128,8 +128,8 @@ correctly even with no UI at all.
 | `agent_permission_catalog_controller.dart` | 101 | permission catalog loading and stale retention | the catalog is external data; **the selection is not here** |
 | `agent_provider_config_store.dart` | 8 | config persistence port | IO implementation moves down to `agent_config_client` |
 | `agent_provider_global_runtime.dart` | 74 | unified entry point for pre-session operations | global scope never idles out |
-| `agent_provider_settings_controller.dart` | 453 | provider config / enablement / defaults persistence | drop `ChangeNotifier` |
-| `agent_provider_settings_port.dart` | 57 | settings port | **drop `implements Listenable`**, use Stream |
+| `agent_provider_settings_controller.dart` | 399 | provider config / enablement / defaults persistence | drop `ChangeNotifier` |
+| `agent_provider_settings_port.dart` | 51 | settings port | **drop `implements Listenable`**, use Stream |
 | `agent_skills_catalog_controller.dart` | 276 | skill catalog stale-while-revalidate | **partial**, see §5.4 |
 
 > **`agent_provider_repository` and `agent_conversation_repository` have zero dependency on each other.**
@@ -172,11 +172,11 @@ either.
 
 ## 4. The other features' `application/` (22)
 
-22 `.dart` files, 5,273 lines (plus three `.gitkeep`).
+22 `.dart` files, 5,263 lines (plus three `.gitkeep`).
 
 | File | Lines | Ruling | Reason |
 | --- | ---: | --- | --- |
-| `agent_management/agent_management_controller.dart` | 795 | **split**: detect/test/config/log calls → `agent_management_repository`; selected agent, progress, validation and log view state → `AgentManagementBloc` | step 24 explicitly forbids storing "selected agent, progress, loading" |
+| `agent_management/agent_management_controller.dart` | 785 | **split**: detect/test/config/log calls → `agent_management_repository`; selected agent, progress, validation and log view state → `AgentManagementBloc` | step 24 explicitly forbids storing "selected agent, progress, loading" |
 | `desktop_notifications/desktop_attention_controller.dart` | 302 | **Bloc** `DesktopNotificationsBloc` | merging attention/visibility/unread is cross-repository orchestration → step 29 |
 | `ide_session/ide_session_persistence_coordinator.dart` | 128 | **Cubit** `IdeSessionCubit` | restore/persist sequencing and cancellation tokens are interaction orchestration |
 | `ide_session/ide_session_restore_result.dart` | 29 | a field on the **Cubit** State | the restore result becomes step 30's initial route input |
@@ -339,7 +339,7 @@ The Repository **does not store** `expandedPaths` ([step 25](./migration_tasks.m
 | native menu command dispatch | `desktop_platform_repository` + typed routes |
 
 **`IdeShellBloc` must not hold a router location**, or it forms a second source of truth alongside
-GoRouter ([ADR-003](./migration_tasks.md)).
+GoRouter ([ADR-003](./architecture_decisions.md)).
 
 ---
 

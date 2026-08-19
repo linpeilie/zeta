@@ -55,8 +55,9 @@ The migration is in progress; documents listed below but not yet created are fil
 | --- | --- |
 | [Migration topology](./architecture/migration_topology.md) | Boundaries, layering rules, target package topology, gates, roadmap |
 | [Migration task list](./architecture/migration_tasks.md) | 37 checkable steps with a per-step definition of done |
-| [File-by-file manifest](./architecture/migration_manifest.md) | source→target classification of all 1,512 tracked files |
+| [File-by-file manifest](./architecture/migration_manifest.md) | source→target classification of all 1,507 tracked files |
 | [Ownership map](./architecture/ownership_map.md) | Which of the four layers each legacy class belongs to |
+| [Architecture decisions](./architecture/architecture_decisions.md) | ADR-001—004 and the cleared open-decision register |
 | [Package API contracts](./architecture/package_api_contracts.md) | Barrel exports and interface signatures |
 | [Conversation state design](./architecture/agent_conversation_state_design.md) | Field-level design of `AgentConversationBloc` |
 | [Three protocol baselines + token metering](#protocols) | The basis for provider adapters |
@@ -66,8 +67,9 @@ The migration is in progress; documents listed below but not yet created are fil
 - [**Architecture overview**](./architecture/overview.md)（[中文](../zh/architecture/overview.md)）⭐ — VGV four-layer architecture, package boundaries, event pipeline, capability negotiation. Start here
 - [**Migration topology**](./architecture/migration_topology.md)（[中文](../zh/architecture/migration_topology.md)）⭐ — Legacy module breakdown, dependency graph, P0–P7 roadmap
 - [**Migration task list**](./architecture/migration_tasks.md)（[中文](../zh/architecture/migration_tasks.md)）⭐ — 37 checkable steps from P-1 to P8, with a per-step definition of done
-- [**File-by-file manifest**](./architecture/migration_manifest.md)（[中文](../zh/architecture/migration_manifest.md)）⭐ — source→target classification of the old repo's 1,512 tracked files, each exactly once
+- [**File-by-file manifest**](./architecture/migration_manifest.md)（[中文](../zh/architecture/migration_manifest.md)）⭐ — source→target classification of the old repo's 1,507 tracked files, each exactly once
 - [**Ownership map**](./architecture/ownership_map.md)（[中文](../zh/architecture/ownership_map.md)）⭐ — Legacy controllers/stores/services ruled one by one into Data/Repository/Bloc/Presentation; where all 24 `ChangeNotifier`s go
+- [**Architecture decisions**](./architecture/architecture_decisions.md)（[中文](../zh/architecture/architecture_decisions.md)）⭐ — ADR-001—004, their review triggers, and the cleared open-decision register
 - [**Package API contracts**](./architecture/package_api_contracts.md)（[中文](../zh/architecture/package_api_contracts.md)）⭐ — Barrel exports and key interface signatures; the precondition for parallel P2 work
 - [**Conversation state design**](./architecture/agent_conversation_state_design.md)（[中文](../zh/architecture/agent_conversation_state_design.md)）⭐ — Field-level design of the five `AgentConversationBloc` slices, the event catalogue and cache ownership
 - [Layering design](./architecture/layering.md)（[中文](../zh/architecture/layering.md)）— Data / Repository / Bloc / Presentation responsibilities, injection, bloc scoping

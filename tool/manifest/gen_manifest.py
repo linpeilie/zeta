@@ -70,8 +70,6 @@ rule("eq", "lib/src/core/utils/system_file_manager.dart", "rewrite",
      "纯 Dart 端口留 desktop_platform_api；file_selector/pasteboard 实现留 app")
 
 # ---------------------------------------------------------------- agent domain
-rule("eq", "lib/src/features/agent/domain/cursor_retirement_policy.dart", "delete", "—",
-     "Cursor 清退（步骤 0），迁移前在旧仓库删除")
 rule("eq", "lib/src/features/agent/domain/agent_ui_text_catalog.dart", "delete", "—",
      "TextCatalog 删除（步骤 7 / 28）")
 rule("eq", "lib/src/features/agent/domain/fallback_agent_ui_text_catalog.dart", "delete", "—",
@@ -233,7 +231,7 @@ for feat, pkg, blocdir in [
 rule("pre", "lib/src/ui/localization/generated/", "regenerate", "lib/l10n/generated/",
      "由 flutter gen-l10n 重新生成；不手工迁移（步骤 5）")
 rule("pre", "lib/src/ui/localization/arb/", "move", "lib/l10n/arb/",
-     "en/zh 各 1,040 键；删除脚手架 app_es.arb（步骤 5）")
+     "en/zh 各 1,035 键；删除脚手架 app_es.arb（步骤 5）")
 rule("eq", "lib/src/ui/localization/app_localizations_x.dart", "rewrite", "lib/l10n/l10n.dart",
      "l10n / l10nOrNull 扩展")
 rule("eq", "lib/src/ui/localization/zeta_shadcn_localizations.dart", "rewrite", "lib/l10n/",

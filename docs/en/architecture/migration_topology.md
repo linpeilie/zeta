@@ -29,7 +29,7 @@ Zeta has not been released, so this migration does not support historical releas
 
 | Dimension | Decision |
 | --- | --- |
-| Migration source | Current `dev` of the old repository; analysis baseline `bfd42412c9c3a0b39bb93598f93f9e5eca471236`; pin the final migration SHA after Cursor removal |
+| Migration source | Final legacy `dev` baseline `b5c2f3e8a9ac544e9832866e86ff633661c46053`; feature development stops after this commit |
 | State management | Migrate all application state to Bloc/Cubit |
 | Architecture | Strict VGV four-layer architecture; zero repository-to-repository dependencies |
 | Provider contracts | Accept ADR-001: `agent_provider_contracts` owns provider-neutral contracts and immutable models shared by multiple providers |
@@ -53,32 +53,32 @@ Product, migration scope, and accessibility targets are all confirmed; no produc
 
 ## 2. Current `dev` Baseline
 
-Measured on 2026-08-19. Generated localization Dart is listed separately and excluded from manual migration size.
+Final baseline: legacy commit `b5c2f3e8a9ac544e9832866e86ff633661c46053`, measured on 2026-08-19. Generated localization Dart is listed separately and excluded from manual migration size.
 
 | Scope | Files | Lines |
 | --- | ---: | ---: |
-| Manual Dart under `lib/src` | 348 | 101,599 |
-| Generated l10n Dart | 3 | 10,318 |
-| Dart tests | 265 | 86,910 |
-| `package:zeta/src/...` imports | 1,165 | — |
-| en / zh ARB | 1,040 keys per locale | — |
+| Manual Dart under `lib/src` | 347 | 111,157 |
+| Generated l10n Dart | 3 | 13,384 |
+| Dart tests | 263 | 94,264 |
+| `package:zeta/src/...` imports under `lib/` | 1,171 | — |
+| en / zh ARB | 1,035 keys per locale | — |
 
 Old-repository features:
 
 | Feature | Files | Lines | Target |
 | --- | ---: | ---: | --- |
-| `agent` | 184 | 62,822 | Provider Data, Conversation/Provider repositories, `agent_chat` Bloc/UI |
-| `agent_management` | 14 | 6,449 | `agent_management_client`, repository, Bloc/UI |
-| `desktop_notifications` | 6 | 494 | Platform ports, repository, Bloc |
-| `ide_session` | 7 | 659 | Session client, repository, Cubit |
-| `project_threads` | 5 | 1,689 | Shared repository with IDE session; state moves to Bloc |
-| `settings` | 13 | 2,047 | Settings client, repository, Cubit/UI |
-| `usage_statistics` | 35 | 8,785 | Provider data sources, storage client, repository, Bloc/UI |
-| `workspace` | 8 | 1,067 | File-system client, repository, Cubit/UI |
+| `agent` | 183 | 68,446 | Provider Data, Conversation/Provider repositories, `agent_chat` Bloc/UI |
+| `agent_management` | 14 | 7,023 | `agent_management_client`, repository, Bloc/UI |
+| `desktop_notifications` | 6 | 563 | Platform ports, repository, Bloc |
+| `ide_session` | 7 | 749 | Session client, repository, Cubit |
+| `project_threads` | 5 | 1,829 | Shared repository with IDE session; state moves to Bloc |
+| `settings` | 13 | 2,267 | Settings client, repository, Cubit/UI |
+| `usage_statistics` | 35 | 9,557 | Provider data sources, storage client, repository, Bloc/UI |
+| `workspace` | 8 | 1,167 | File-system client, repository, Cubit/UI |
 
-Platform and asset files are migration inputs too: Linux has 15 files, macOS 33, Windows 69, and assets 13. Generated plugin registrants may be regenerated; handwritten runners, MethodChannels, icons, and fonts must appear in the source-to-target manifest.
+Platform and asset files are migration inputs too. The filesystem snapshot has 15 Linux files, 33 macOS files, 69 Windows files, and 13 assets; the Git-tracked counts are 15, 28, 22, and 13 respectively. Generated plugin registrants may be regenerated; handwritten runners, MethodChannels, icons, and fonts must appear in the source-to-target manifest.
 
-These numbers are an analysis snapshot. P-1 must regenerate the final counts and SHA after step 0 changes the old repository.
+These numbers are the final post-Step-0 migration baseline; execution must not switch to another legacy commit. See [manifest §1](./migration_manifest.md) for the complete environment versions and lockfile hash.
 
 ---
 
@@ -280,7 +280,7 @@ Every Bloc/Cubit must cancel subscriptions, timers, and cache leases in `close()
 
 ## 8. Internationalization
 
-- Import the current `dev` en/zh ARB with 1,040 keys as the temporary baseline; recount after Cursor removal.
+- Import the en/zh ARB from the final `dev` baseline, with 1,035 keys per locale.
 - ARB is the only source of Zeta-authored UI copy.
 - `app_ui` receives copy through constructor parameters.
 - Packages do not author localizable Zeta UI strings. User content, provider text, and internal diagnostics remain valid string data.

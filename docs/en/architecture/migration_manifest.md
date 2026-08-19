@@ -14,21 +14,18 @@ in the old repository is classified exactly once. Use it together with the
 | Item | Value |
 | --- | --- |
 | Source repository | `D:\Development\Workspace\zeta` |
-| Analysis baseline SHA | `bfd42412c9c3a0b39bb93598f93f9e5eca471236` |
-| Working tree | clean (only untracked path: `.workflow/feature/2026-08-18-PC端构建与版本检查/`) |
-| Git-tracked files | **1,512** |
+| Final migration baseline SHA | `b5c2f3e8a9ac544e9832866e86ff633661c46053` |
+| Working tree | tracked clean (the only untracked path, `.workflow/feature/2026-08-18-PC端构建与版本检查/`, is explicitly excluded) |
+| Git-tracked files | **1,507** |
+| Flutter / Dart | Flutter 3.44.4 stable / Dart 3.12.2 |
+| `pubspec.lock` SHA-256 | `70877b47b9097ac3449a5885b83faea073e4688a3c66187941f4bfd02728ec6f` |
 | Manifest generated | 2026-08-19 |
 | Target repository | `D:\Development\Workspace\vgv\zeta`, version `1.0.0+1` |
 
 > [!IMPORTANT]
-> **This manifest is based on analysis baseline `bfd4241`, which is not the final migration baseline.**
-> [Step 0](./migration_tasks.md) (Cursor retirement) changes the old repository. When executing
-> [step 1](./migration_tasks.md) you must:
-> 
-> 1. Re-run this manifest's generator to obtain the post-retirement SHA and file count;
-> 2. Record the final Flutter/Dart versions and the `pubspec.lock` hash;
-> 3. Confirm the Cursor-related files marked `delete` are gone from the old repo (at that point they
->    no longer appear in this manifest at all).
+> **This is the final migration baseline after Step 0.** The five retired Cursor source, test, and
+> fixture files are gone from the Git index and therefore no longer appear in this manifest. The
+> migration must not switch to another legacy-repository commit.
 
 ## 2. Action definitions
 
@@ -48,17 +45,17 @@ is divided across multiple destinations. Every such file must have a per-item ru
 
 | Action | Files | Share |
 | --- | ---: | ---: |
-| `move` | 300 | 19.8% |
-| `rewrite` | 740 | 48.9% |
+| `move` | 300 | 19.9% |
+| `rewrite` | 736 | 48.8% |
 | `regenerate` | 5 | 0.3% |
-| `delete` | 42 | 2.8% |
-| `out-of-scope` | 425 | 28.1% |
-| **Total** | **1512** | **100%** |
+| `delete` | 41 | 2.7% |
+| `out-of-scope` | 425 | 28.2% |
+| **Total** | **1507** | **100%** |
 
 | Area | Files | Actions |
 | --- | ---: | --- |
-| `lib/` | 378 | rewrite 335, delete 38, regenerate 3, move 2 |
-| `test/` | 305 | rewrite 305 |
+| `lib/` | 377 | rewrite 335, delete 37, regenerate 3, move 2 |
+| `test/` | 301 | rewrite 301 |
 | `third_party/` | 269 | move 269 |
 | `macos/ + windows/ + linux/` | 65 | rewrite 65 |
 | `assets/` | 13 | move 13 |
@@ -67,7 +64,7 @@ is divided across multiple destinations. Every such file must have a per-item ru
 | `.github/` | 6 | rewrite 6 |
 | `.claude/ + .agents/ + .workflow/` | 407 | out-of-scope 407 |
 | `root files` | 19 | rewrite 12, move 4, regenerate 2, out-of-scope 1 |
-| **Total** | **1512** | coverage check: 1512 = 1512 |
+| **Total** | **1507** | coverage check: 1507 = 1507 |
 
 ## 4. Differences from the topology document's counts
 
@@ -141,7 +138,7 @@ whose rules must be updated once [step 28](./migration_tasks.md) removes TextCat
 
 ---
 
-## 6. `lib/`, file by file (378)
+## 6. `lib/`, file by file (377)
 
 The `lib/src/` prefix is stripped. `packages/` and `lib/` targets are relative to the new repo root.
 
@@ -216,7 +213,6 @@ The `lib/src/` prefix is stripped. `packages/` and `lib/` targets are relative t
 | `features/agent/domain/agent_usage_models.dart` | rewrite | `packages/agent_provider_contracts/lib/src/` | ADR-001 model exception: 21 capability ports plus neutral immutable models; zero vendor fields |
 | `features/agent/domain/agent_usage_window_labels.dart` | rewrite | `lib/l10n/ + packages/agent_provider_contracts/` | Window-duration typed codes stay in contracts; display copy goes to ARB |
 | `features/agent/domain/agent_user_input_models.dart` | rewrite | `packages/agent_provider_contracts/lib/src/` | ADR-001 model exception: 21 capability ports plus neutral immutable models; zero vendor fields |
-| `features/agent/domain/cursor_retirement_policy.dart` | delete | — | Cursor retirement (step 0); deleted in the old repo before migration |
 | `features/agent/domain/fallback_agent_ui_text_catalog.dart` | delete | — | Fallback catalog deleted (steps 7 / 28) |
 
 ### 6.4 agent · data · transport and vendor clients
@@ -595,19 +591,19 @@ The `lib/src/` prefix is stripped. `packages/` and `lib/` targets are relative t
 | `ui/features/ide/views/project_home_page.dart` | rewrite | `lib/ide_shell/view/` | IDE shell pages; navigation switches to typed routes |
 | `ui/features/ide/views/project_list_pane.dart` | rewrite | `lib/ide_shell/view/` | IDE shell pages; navigation switches to typed routes |
 | `ui/localization/app_localizations_x.dart` | rewrite | `lib/l10n/l10n.dart` | The l10n / l10nOrNull extensions |
-| `ui/localization/arb/app_en.arb` | move | `lib/l10n/arb/` | 1,040 keys each for en/zh; the scaffold app_es.arb is deleted (step 5) |
-| `ui/localization/arb/app_zh.arb` | move | `lib/l10n/arb/` | 1,040 keys each for en/zh; the scaffold app_es.arb is deleted (step 5) |
+| `ui/localization/arb/app_en.arb` | move | `lib/l10n/arb/` | 1,035 keys each for en/zh; the scaffold app_es.arb is deleted (step 5) |
+| `ui/localization/arb/app_zh.arb` | move | `lib/l10n/arb/` | 1,035 keys each for en/zh; the scaffold app_es.arb is deleted (step 5) |
 | `ui/localization/generated/app_localizations.dart` | regenerate | `lib/l10n/generated/` | Regenerated by flutter gen-l10n; not migrated by hand (step 5) |
 | `ui/localization/generated/app_localizations_en.dart` | regenerate | `lib/l10n/generated/` | Regenerated by flutter gen-l10n; not migrated by hand (step 5) |
 | `ui/localization/generated/app_localizations_zh.dart` | regenerate | `lib/l10n/generated/` | Regenerated by flutter gen-l10n; not migrated by hand (step 5) |
 | `ui/localization/relative_time.dart` | rewrite | `lib/l10n/` | Relative-time copy depends on ARB, so it stays in the app |
 | `ui/localization/zeta_shadcn_localizations.dart` | rewrite | `lib/l10n/` | Stays in the app, not in app_ui (topology §8) |
 
-**`lib/` coverage check**: 378 / 378
+**`lib/` coverage check**: 377 / 377
 
 ---
 
-## 7. `test/` (305) — grouped by rule
+## 7. `test/` (301) — grouped by rule
 
 Tests follow the ownership of what they test, so they are grouped by rule rather than listed one by
 one; each rule's hit count is verified and the totals equal every tracked file under `test/`.
@@ -624,13 +620,13 @@ below only cover what is left.
 | `test/tool/report_test_timings_test.dart` | 1 | rewrite | companion tests for tool/ | — |
 | `test/src/features/agent/application/**` | 25 | rewrite | assigned per ownership_map to repository packages and blocTests under lib/agent_chat/ | — |
 | `test/support/scroll_metrics_trace.dart` | 1 | rewrite | `test/helpers/` | Shared widget test helpers such as pumpApp |
-| `test/src/features/agent/domain/**` | 18 | rewrite | `packages/agent_provider_contracts/test/` | — |
+| `test/src/features/agent/domain/**` | 17 | rewrite | `packages/agent_provider_contracts/test/` | — |
 | `test/src/features/agent/data/**` | 33 | rewrite | assigned by mapper prefix to the matching vendor package | — |
 | `test/flutter_test_config.dart` | 1 | rewrite | `test/flutter_test_config.dart` | Golden font loading and global test config; one copy per workspace package that has widget tests |
 | `test/src/architecture/**` | 3 | rewrite | `test/architecture/ + .architecture.yaml` | Architecture gates rewritten as assertions that read .architecture.yaml (step 6) |
 | `test/src/features/**` | 55 | rewrite | the matching package/test or test/<feature>/ | Tests mirror lib/ and follow the ownership of what they test |
 | `test/src/testing/**` | 13 | rewrite | test/helpers/ of each package | Shared harnesses are copied per package; cross-package test imports are forbidden |
-| `test/fixtures/**` | 29 | rewrite | assigned per provider to the matching vendor package's test/fixtures/ | — |
+| `test/fixtures/**` | 26 | rewrite | assigned per provider to the matching vendor package's test/fixtures/ | — |
 | `test/src/core/**` | 4 | rewrite | packages/zeta_logging/test/ and packages/zeta_storage/test/ | — |
 | `test/src/app/**` | 11 | rewrite | `test/app/` | — |
 | `test/src/ui/**` | 42 | rewrite | packages/app_ui/test/ and test/ide_shell/ | — |
@@ -846,7 +842,7 @@ migration input per the [topology appendix](./migration_topology.md).
 
 ---
 
-## 13. Deletion list (42)
+## 13. Deletion list (41)
 
 Every entry states a reason and a verification method — a hard requirement of
 [step 1](./migration_tasks.md).
@@ -872,7 +868,6 @@ Every entry states a reason and a verification method — a hard requirement of
 | `lib/src/features/agent/data/repositories/.gitkeep` | delete | — | Empty-directory placeholder; the new repo recreates directories from the VGV template |
 | `lib/src/features/agent/domain/.gitkeep` | delete | — | Empty-directory placeholder; the new repo recreates directories from the VGV template |
 | `lib/src/features/agent/domain/agent_ui_text_catalog.dart` | delete | — | TextCatalog deleted (steps 7 / 28) |
-| `lib/src/features/agent/domain/cursor_retirement_policy.dart` | delete | — | Cursor retirement (step 0); deleted in the old repo before migration |
 | `lib/src/features/agent/domain/fallback_agent_ui_text_catalog.dart` | delete | — | Fallback catalog deleted (steps 7 / 28) |
 | `lib/src/features/agent_management/domain/agent_management_text_catalog.dart` | delete | — | TextCatalog deleted (step 28) |
 | `lib/src/features/agent_management/domain/fallback_agent_management_text_catalog.dart` | delete | — | Fallback TextCatalog deleted (step 28) |

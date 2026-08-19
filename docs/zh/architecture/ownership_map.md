@@ -84,7 +84,7 @@ Presentation 迁移，不进入 Bloc State。
 
 ## 3. `features/agent/application/`（35）— 逐个裁决
 
-这是整个迁移风险最高的目录：35 个 `.dart` 文件、11,888 行（另有 1 个 `.gitkeep`），
+这是整个迁移风险最高的目录：35 个 `.dart` 文件、11,824 行（另有 1 个 `.gitkeep`），
 同时包含真正的领域编排和伪装成 "application" 的 UI 状态。
 
 ### 3.1 → `agent_conversation_repository`（20）
@@ -108,7 +108,7 @@ Presentation 迁移，不进入 Bloc State。
 | `agent_provider_runtime_identity.dart` | 30 | runtime 稳定身份 | 值类型；见 §3.5 关于放 contracts 的讨论 |
 | `agent_provider_runtime_registry.dart` | 305 | runtime lease 注册表 | 去 `ChangeNotifier` |
 | `agent_turn_context_overlay.dart` | 240 | 本地 turn context 覆盖历史快照 | 纯函数 |
-| `agent_turn_context_recorder.dart` | 147 | turn context 旁路写入 | 失败只记诊断，不回抛 |
+| `agent_turn_context_recorder.dart` | 143 | turn context 旁路写入 | 失败只记诊断，不回抛 |
 | `bounded_event_dispatcher.dart` | 183 | FIFO 有界分发 + 背压 | event-storm 验收依赖它 |
 | `coalescing_event_buffer.dart` | 163 | 通用合并缓冲 | 与 policy 分离的泛型容器 |
 | `agent_conversation_permission_state.dart` | 360 | 会话权限事实 | **部分**，见 §5.3 |
@@ -122,8 +122,8 @@ Presentation 迁移，不进入 Bloc State。
 | `agent_permission_catalog_controller.dart` | 101 | 权限目录加载与 stale retention | 目录是外部数据；**选中态不在这里** |
 | `agent_provider_config_store.dart` | 8 | 配置持久化端口 | IO 实现下沉 `agent_config_client` |
 | `agent_provider_global_runtime.dart` | 74 | 会话建立前的统一操作入口 | global scope 不参与空闲回收 |
-| `agent_provider_settings_controller.dart` | 453 | Provider 配置/启停/默认值持久化 | 去 `ChangeNotifier` |
-| `agent_provider_settings_port.dart` | 57 | 设置端口 | **去掉 `implements Listenable`**，改 Stream |
+| `agent_provider_settings_controller.dart` | 399 | Provider 配置/启停/默认值持久化 | 去 `ChangeNotifier` |
+| `agent_provider_settings_port.dart` | 51 | 设置端口 | **去掉 `implements Listenable`**，改 Stream |
 | `agent_skills_catalog_controller.dart` | 276 | Skill 目录 stale-while-revalidate | **部分**，见 §5.4 |
 
 > **`agent_provider_repository` 与 `agent_conversation_repository` 之间零依赖。**
@@ -162,11 +162,11 @@ Presentation 迁移，不进入 Bloc State。
 
 ## 4. 其他 feature 的 `application/`（22）
 
-22 个 `.dart` 文件、5,273 行（另有 3 个 `.gitkeep`）。
+22 个 `.dart` 文件、5,263 行（另有 3 个 `.gitkeep`）。
 
 | 文件 | 行数 | 裁决 | 理由 |
 | --- | ---: | --- | --- |
-| `agent_management/agent_management_controller.dart` | 795 | **拆分**：detect/test/config/log 调用 → `agent_management_repository`；selected agent、progress、validation、logs 视图状态 → `AgentManagementBloc` | 步骤 24 明确"不保存 selected agent、progress、loading" |
+| `agent_management/agent_management_controller.dart` | 785 | **拆分**：detect/test/config/log 调用 → `agent_management_repository`；selected agent、progress、validation、logs 视图状态 → `AgentManagementBloc` | 步骤 24 明确"不保存 selected agent、progress、loading" |
 | `desktop_notifications/desktop_attention_controller.dart` | 302 | **Bloc** `DesktopNotificationsBloc` | 合并 attention/可见性/未读，是跨 Repository 编排 → 步骤 29 |
 | `ide_session/ide_session_persistence_coordinator.dart` | 128 | **Cubit** `IdeSessionCubit` | 恢复/持久化时序与取消令牌是交互编排 |
 | `ide_session/ide_session_restore_result.dart` | 29 | **Cubit** State 的字段 | 恢复结果 → 步骤 30 的 initial route input |
@@ -325,7 +325,7 @@ Repository **不保存** `expandedPaths`（[步骤 25](./migration_tasks.md)）�
 | 原生菜单命令分发 | `desktop_platform_repository` + typed route |
 
 **`IdeShellBloc` 不得持有 router location**，否则会与 GoRouter 形成双真源
-（[ADR-003](./migration_tasks.md)）。
+（[ADR-003](./architecture_decisions.md)）。
 
 ---
 
