@@ -605,3 +605,102 @@ background, flush, or close failure.
 **Impact.** Close-time data is not dropped, superseded snapshots do not write, and write failures remain
 observable. Package tests separately cover timer-started background failure and a failure initiated by
 the close-time flush.
+
+## 2026-08-20 — Step 20 desktop apt stall was retried before the job limit
+
+**Problem.** Step 20's first desktop run reached 8/9 successful matrices while Linux development made
+no progress beyond Ubuntu package installation for more than twelve minutes. No Flutter setup,
+dependency resolution, or project build had begun, matching the isolated runner-side apt delays already
+recorded in Steps 18 and 19.
+
+**Decision.** Cancel only the still-running matrix and rerun failed jobs rather than waiting for the
+30-minute limit or rerunning the eight proven matrices. Keep the workflow unchanged: repeated apt delay
+has moved between Linux variants and still has no project-code failure signature.
+
+**Impact.** Attempt 2 spent about seven minutes in apt and then built successfully. Step 20 is green in
+zeta, desktop-build (9/9), OSV, and license workflows without a source or CI configuration change.
+
+## 2026-08-20 — Step 21 follows the specific storage/vendor topology over the generic manifest
+
+**Problem.** The generic per-file manifest maps every legacy usage data file into a nonexistent
+`packages/usage_statistics_client`, but Step 21, the topology, and the package API contract explicitly
+place cache/index IO in `usage_statistics_storage_client` and raw Codex/Claude/Grok readers in their
+vendor clients. The legacy vendor scanners also total roughly 2,600 lines, materially exceeding the
+placeholder package estimate.
+
+**Decision.** Follow the more specific architecture contract. Split the work into one shared-storage
+increment plus three independently gated vendor-reader increments. Do not create a fourth shared vendor
+client, change the shared adaptation layer, or add Provider ports. Keep repeated response shapes
+vendor-owned so one vendor format cannot become a cross-provider contract by accident.
+
+**Impact.** Vendor pubspecs remain mutually isolated, `usage_statistics_storage_client` has no vendor or
+provider-contract dependency, and the later Repository is the only place that will aggregate the four
+Data inputs. The larger implementation is explicit and testable rather than hidden in one oversized
+package change.
+
+## 2026-08-20 — Step 21 treats paths and damaged indexes as rebuildable private inputs
+
+**Problem.** The legacy cache persisted source paths and accepted multiple historical shapes. Copying it
+would retain local directory information and blur current-schema corruption with a cache miss. Review
+also found that the new root index model initially claimed defensive immutability while retaining the
+caller's mutable partition map.
+
+**Decision.** Accept root schema v4 only. Store provider-owned JSON-safe partitions behind a serialized,
+atomic `UsagePartitionStore`; on malformed, unsupported, or semantically invalid derived data, atomically
+write an empty v4 index and return a miss. Hash normalized source identifiers for cache keys and never
+persist the source path. Defensively copy and freeze both the root partition map and nested payloads.
+Propagate storage failures rather than reporting a successful clear.
+
+**Impact.** Corruption is recoverable without masquerading as valid cached data, path disclosure is
+removed from the index, concurrent writes cannot drop another provider partition, and mutation after
+construction cannot alter encoded state. Regression tests cover corruption, immutability, failure queue
+recovery, 1,000 concurrent inserts, and real atomic file IO.
+
+## 2026-08-20 — Step 21 reuses vendor history semantics without exposing private Provider code
+
+**Problem.** Claude and Grok already expose package-owned history readers/parsers suitable for a narrow
+usage projection. Codex's equivalent parser is a private `part` of the Provider implementation; making
+it public would expand the Provider surface. Initial Grok tests also found that a malformed percent-
+encoded project directory makes `Uri.decodeComponent` throw `ArgumentError`, and a fallback assertion
+incorrectly assumed project-name ordering instead of the documented source-path ordering.
+
+**Decision.** Project Claude and Grok usage from their existing vendor history models. Add a standalone
+Codex-owned reader that understands only session metadata, turn lifecycle/context, and token-count
+records, preserving exact last-usage, cumulative deltas, duplicate signatures, counter resets, and fork
+replay suppression. Do not expose prompt, response, error body, or raw frames. Keep malformed Grok
+directory names verbatim, inject file reads to test summary IO failure, and assert fallback values without
+overriding deterministic source-path order. All readers use half-open ranges and cooperative cancellation.
+
+**Impact.** No shared or Provider port changed. Large scans cancel at discovery, parse, load, and stat
+boundaries; damaged sources are counted without leaking content; and every vendor retains ownership of
+its on-disk format. The compatibility defects are covered by regression tests rather than hidden behind
+coverage exclusions.
+
+## 2026-08-20 — Step 21 final-gate root discovery excluded generated package assets
+
+**Problem.** The first analyze/format preflight recursively searched for every `pubspec.yaml` and counted
+28 roots because Flutter's generated `packages/app_ui/build/unit_test_assets/.../shadcn_flutter` copy
+also contains a pubspec. It is not declared by the workspace and carries upstream lint information.
+
+**Decision.** Do not edit or count generated assets. Build the authoritative root set from the root
+workspace, immediate `packages/*` members, and the explicitly nested `packages/app_ui/widgetbook`, then
+restart the formal analyze/format count.
+
+**Impact.** The formal result is 27/27 real roots and 383 source/test/tool Dart files with zero format
+changes. The generated copy remains untouched and cannot inflate later gate counts.
+
+## 2026-08-20 — Step 21 cache privacy is enforced at the write boundary
+
+**Problem.** A pre-commit static-security review found that `usageSourceId(path)` produced a path-free
+key, but `UsageScanCacheEntry` still accepted any string. A future caller could therefore pass the raw
+path directly and persist it despite the documented privacy contract; arbitrary fingerprint strings and
+invalid cache schemas were likewise accepted until a later operation.
+
+**Decision.** Require every persisted source id to be exactly the 16-character lowercase FNV-1a form
+and every fingerprint to use the numeric `size:mtime` form. Validate cache source keys and schema
+versions at construction, validate read/invalidate inputs, reject empty source paths and negative file
+sizes in helpers, and reject blank/whitespace partition keys in both models and decoding.
+
+**Impact.** Path secrecy is now enforced rather than conventional, invalid cache configuration fails at
+the API boundary, and malformed persisted identifiers still trigger clear/recompute. The hardened
+storage package remains at 100% hand-written coverage (222 / 222).

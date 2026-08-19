@@ -499,10 +499,20 @@ workspace 同轮 27/27 roots analyze/format 通过，26/26 test roots 共 1,126 
 
 ### 步骤 21 — `usage_statistics_storage_client`
 
-- [ ] 迁 usage partition/cache/index 的当前 schema。
-- [ ] Codex/Claude/Grok 原始数据 reader 留在各 vendor client。
-- [ ] cache 是可重建派生数据；损坏时清空并重算，不伪造成功。
-- [ ] 测时间边界、分区、空源、取消扫描、缓存失效和大 fixture。
+- [x] 迁 usage partition/cache/index 的当前 schema。
+- [x] Codex/Claude/Grok 原始数据 reader 留在各 vendor client。
+- [x] cache 是可重建派生数据；损坏时清空并重算，不伪造成功。
+- [x] 测时间边界、分区、空源、取消扫描、缓存失效和大 fixture。
+
+**完成于 2026-08-20。** `usage_statistics_storage_client` 现负责严格 root schema v4、provider 隔离的
+JSON-safe partition、串行原子 mutation、无路径 fingerprint cache 与 corruption clear/recompute；
+21 个随机测试覆盖 222 / 222 行人工代码。原始 reader 仍归 vendor：Claude 复用本地 history reader
+（包级 270 tests，3,037 / 3,037），Grok 复用 updates parser（243 tests，3,362 / 3,362），Codex 新增
+窄 rollout/token-count reader 而不暴露私有 Provider parser（178 tests，3,861 / 3,861）。三者都使用
+半开时间区间、可注入 pure-Dart seam、不含内容的 failure 与大扫描 cooperative cancellation；未修改
+共享适配层或 Provider port。最终 workspace 同轮 27/27 roots analyze/format 通过（383 Dart files），
+26/26 test roots 共 1,168 tests，人工 coverage 100%（14,287 / 14,287）；Bloc lint 对 382 文件报告
+0 issues。
 
 **P3 出口**：app feature 无 `dart:io`；所有外部数据入口可用纯 Dart fake 测试。
 

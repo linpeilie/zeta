@@ -4,3 +4,4 @@ library;
 export 'src/grok_cli_locator.dart' show GrokCliLocator;
 export 'src/grok_provider_bundle_factory.dart' show GrokProviderBundleFactory;
 export 'src/grok_static_capabilities.dart' show GrokStaticCapabilities;
+export 'src/grok_usage_reader.dart';

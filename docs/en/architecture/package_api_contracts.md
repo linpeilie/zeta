@@ -561,8 +561,14 @@ domain conversion, restore plans, path pruning, and interaction sequencing stay 
 serializes atomic writes, coalesces the latest debounced snapshot, exposes explicit pre-write
 cancellation, flushes on close, and still closes storage before propagating background/flush failures.
 
-The three vendor clients supply raw provider usage data; `usage_statistics_storage_client` only handles
-caching and derived indexes ([step 21](./migration_tasks.md)).
+The three vendor clients supply raw provider usage data through `CodexUsageReader`,
+`ClaudeCodeUsageReader`, and `GrokUsageReader`; `usage_statistics_storage_client` only handles caching
+and derived indexes ([step 21](./migration_tasks.md)). Each reader accepts injected discovery/parser/stat
+seams, applies a half-open time range, cooperatively cancels large scans, and returns content-free usage
+responses. Source paths are memory-only inputs: persisted cache keys use a deterministic path hash and
+never contain the path itself. The storage client accepts only root schema v4, serializes partition
+mutations, and atomically rewrites corrupt rebuildable data as an empty current-schema index; underlying
+read, write, and close failures still propagate.
 
 ---
 

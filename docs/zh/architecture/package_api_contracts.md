@@ -538,8 +538,12 @@ JSON、非 v4 文档与非法 current field 抛出不含内容的 typed decode f
 交互时序留在 Data 之上。Store 串行执行 atomic write、合并最后一份 debounced snapshot、暴露写前
 显式取消、close 时 flush，并在传播 background/flush failure 前仍关闭底层 storage。
 
-三个 vendor client 提供 Provider 原始用量数据；`usage_statistics_storage_client` 只做缓存与派生索引
-（[步骤 21](./migration_tasks.md)）。
+三个 vendor client 分别通过 `CodexUsageReader`、`ClaudeCodeUsageReader` 与 `GrokUsageReader` 提供
+Provider 原始用量；`usage_statistics_storage_client` 只做缓存与派生索引（[步骤 21](./migration_tasks.md)）。
+每个 reader 都接受可注入 discovery/parser/stat seam、使用半开时间区间、可协作取消大扫描，并只返回
+不含内容的 usage response。source path 仅作为内存输入；持久化 cache key 使用确定性路径 hash，绝不
+包含路径本身。storage client 只接受 root schema v4，串行执行 partition mutation；可重建数据损坏时
+原子改写为空的当前 schema index，但底层 read/write/close failure 仍原样传播。
 
 ---
 

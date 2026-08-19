@@ -526,10 +526,21 @@ files.
 
 ### Step 21 — `usage_statistics_storage_client`
 
-- [ ] Migrate the current schema for usage partitions, cache, and index.
-- [ ] Keep raw Codex/Claude/Grok readers in their vendor clients.
-- [ ] Treat cache as rebuildable derived data; clear and recompute corruption rather than pretending success.
-- [ ] Test time boundaries, partitioning, empty sources, scan cancellation, cache invalidation, and large fixtures.
+- [x] Migrate the current schema for usage partitions, cache, and index.
+- [x] Keep raw Codex/Claude/Grok readers in their vendor clients.
+- [x] Treat cache as rebuildable derived data; clear and recompute corruption rather than pretending success.
+- [x] Test time boundaries, partitioning, empty sources, scan cancellation, cache invalidation, and large fixtures.
+
+**Completed 2026-08-20.** `usage_statistics_storage_client` now owns strict root schema v4,
+provider-isolated JSON-safe partitions, serialized atomic mutations, a path-free fingerprint cache, and
+corruption clear/recompute behavior. Its 21 randomized tests cover 222 / 222 hand-written lines. Raw
+readers remain vendor-owned: Claude reuses its local history reader (270 package tests, 3,037 / 3,037),
+Grok reuses its updates parser (243 tests, 3,362 / 3,362), and Codex adds a narrow rollout/token-count
+reader without exposing the private Provider parser (178 tests, 3,861 / 3,861). All use half-open time
+ranges, injected pure-Dart seams, content-free failures, and cooperative large-scan cancellation; no
+shared adapter or Provider port changed. The final workspace iteration passes analyze/format in 27/27
+roots (383 Dart files), 1,168 tests in 26/26 roots at 100% hand-written coverage (14,287 / 14,287), and
+Bloc lint reports zero issues across 382 files.
 
 **P3 exit:** no app feature imports `dart:io` and every external data source can be tested with pure-Dart fakes.
 

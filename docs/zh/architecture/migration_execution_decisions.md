@@ -520,3 +520,87 @@ atomic write 也可能失败，既不能阻止 storage teardown，也不能作�
 
 **影响。** close-time 数据不丢失，被替换的 snapshot 不落盘，写失败保持可观察。包级测试分别覆盖
 timer 已启动后的 background failure，以及由 close-time flush 发起的失败。
+
+## 2026-08-20 — 步骤 20 desktop apt 停滞在 job 上限前重试
+
+**问题。** 步骤 20 首次 desktop run 已有 8/9 matrix 成功，Linux development 却在 Ubuntu 系统包
+安装阶段超过十二分钟没有进展；Flutter setup、依赖解析与项目构建均未开始，形态与步骤 18、19 已记录
+的隔离 runner-side apt 延迟一致。
+
+**决策。** 只取消仍运行的 matrix 并 rerun failed jobs，不等待 30 分钟上限，也不重跑已有证据通过的
+八个 matrix。workflow 保持不变：apt 延迟在不同 Linux variant 之间漂移，仍无项目代码失败特征。
+
+**影响。** attempt 2 的 apt 约七分钟后继续并构建成功。步骤 20 的 zeta、desktop-build（9/9）、
+OSV 与 license workflow 全绿，未修改源码或 CI 配置。
+
+## 2026-08-20 — 步骤 21 以具体 storage/vendor topology 覆盖泛化 manifest
+
+**问题。** 泛化的逐文件 manifest 把所有旧 usage data 文件映射到不存在的
+`packages/usage_statistics_client`；步骤 21、topology 与 package API contract 却明确把 cache/index
+IO 放入 `usage_statistics_storage_client`，把 Codex/Claude/Grok 原始 reader 留在各 vendor client。
+旧 vendor scanner 合计约 2,600 行，也明显超出 placeholder package 预估。
+
+**决策。** 服从更具体的架构契约，把工作拆成一个共享 storage increment 与三个独立门禁的 vendor
+reader increment。不创建第四个共享 vendor client，不修改共享适配层或 Provider port。重复的 response
+shape 仍由 vendor 自己拥有，避免某一方格式意外固化成跨 Provider contract。
+
+**影响。** vendor pubspec 继续互相隔离；`usage_statistics_storage_client` 不依赖 vendor 或 provider
+contract；后续 Repository 是唯一聚合四个 Data 输入的层。超出预估的实现量被显式拆分和验证，没有藏进
+一个过大的 package change。
+
+## 2026-08-20 — 步骤 21 将路径与损坏 index 视为可重建私有输入
+
+**问题。** 旧 cache 持久化 source path 并接受多个历史 shape；照搬会保留本地目录信息，还会混淆
+current-schema corruption 与 cache miss。复核同时发现新 root index model 起初声称防御性不可变，实际
+仍保留调用方可修改的 partition map。
+
+**决策。** 只接受 root schema v4。provider 自有 JSON-safe partition 由串行、原子的
+`UsagePartitionStore` 保存；malformed、不支持或语义非法的派生数据原子写为空 v4 index 后返回 miss。
+cache key 使用规范化 source identifier 的 hash，绝不持久化 source path。root partition map 与嵌套
+payload 都防御性复制并冻结；storage failure 原样传播，不伪装成成功清理。
+
+**影响。** corruption 可恢复但不会冒充有效 cache；index 不再泄漏路径；并发写不会丢掉其他 provider
+partition；构造后外部 mutation 无法改变编码状态。回归测试覆盖 corruption、不可变性、失败后的队列
+恢复、1,000 次并发 insert 与真实 atomic file IO。
+
+## 2026-08-20 — 步骤 21 复用 vendor history 语义但不暴露私有 Provider 代码
+
+**问题。** Claude 与 Grok 已有适合窄 usage 投影的 package-owned history reader/parser；Codex 对应
+parser 是 Provider 实现的私有 `part`，公开它会扩大 Provider surface。Grok 初测还发现损坏的百分号
+编码项目目录会使 `Uri.decodeComponent` 抛 `ArgumentError`，另一个 fallback 断言误把 project name
+顺序当成契约，而实际契约是 source path 确定性排序。
+
+**决策。** Claude/Grok 从已有 vendor history model 投影 usage；Codex 新增独立 vendor reader，只理解
+session metadata、turn lifecycle/context 与 token-count record，并保留 exact last-usage、累计差分、
+重复 signature、计数器重置和 fork replay suppression。不得暴露 prompt、response、error body 或 raw
+frame。损坏 Grok 目录名原样保留；file read 可注入以测试 summary IO failure；fallback value 使用无序
+断言，不覆盖 source-path 排序。所有 reader 使用半开区间与 cooperative cancellation。
+
+**影响。** 未修改共享或 Provider port。大扫描可在 discovery、parse、load 与 stat 边界取消；损坏源
+只计数不泄漏内容；每个 vendor 继续独占自己的落盘格式。兼容性缺陷由回归测试覆盖，没有用 coverage
+exclude 隐藏。
+
+## 2026-08-20 — 步骤 21 最终门禁排除生成的 package asset
+
+**问题。** analyze/format 首次预检递归搜索全部 `pubspec.yaml`，因此把 Flutter 生成的
+`packages/app_ui/build/unit_test_assets/.../shadcn_flutter` 副本也计入，得到 28 roots。它没有在
+workspace 中声明，并携带上游 lint info。
+
+**决策。** 不修改、不计数生成 asset。权威 root 集合只由 root workspace、直接 `packages/*` 成员和
+显式嵌套的 `packages/app_ui/widgetbook` 组成，并重启正式 analyze/format 计数。
+
+**影响。** 正式结果为 27/27 真实 roots，383 个 source/test/tool Dart files 且 format 零改动；生成
+副本保持原样，后续门禁计数不会被它放大。
+
+## 2026-08-20 — 步骤 21 在写入边界强制 cache 隐私
+
+**问题。** 提交前 static-security 复核发现，`usageSourceId(path)` 虽生成无路径 key，
+`UsageScanCacheEntry` 却仍接受任意字符串；后续 caller 仍可能直接传原始路径并持久化，违背文档隐私
+契约。任意 fingerprint 字符串与非法 cache schema 也要到更晚操作才失败。
+
+**决策。** 所有持久化 source id 必须严格为 16 位小写 FNV-1a，fingerprint 必须为数字
+`size:mtime`。cache source key 与 schema version 在构造时校验，read/invalidate 输入也校验；helper
+拒绝空 source path 与负 file size；model 与 decode 同时拒绝空白/带首尾空格的 partition key。
+
+**影响。** 路径保密从约定升级为入口强制，非法 cache 配置立即失败，落盘的非法 identifier 仍触发
+clear/recompute；加固后 storage 包人工 coverage 继续为 100%（222 / 222）。
