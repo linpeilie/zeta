@@ -48,6 +48,7 @@ void main() {
         ]),
         {
           'package:desktop_platform_api/',
+          'package:zeta/app/platform/',
           'package:flutter/services.dart',
           'package:file_selector/',
           'package:flutter_local_notifications/',

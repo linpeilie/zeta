@@ -314,21 +314,34 @@ with no changes, 26/26 test roots ran 290 tests at 100% hand-written coverage
 
 Pure-Dart ports:
 
-- [ ] `SystemFontCatalogApi`.
-- [ ] `DesktopNotificationApi` / `DesktopAttentionApi`.
-- [ ] `DirectoryPickerApi` / `ClipboardApi`.
-- [ ] `WindowCommandApi` / `MenuCommandApi`.
+- [x] `SystemFontCatalogApi` with structured immutable font values.
+- [x] `DesktopNotificationApi` / `DesktopAttentionApi`.
+- [x] `FilePickerApi` / `DirectoryPickerApi` / `ClipboardApi` / `SystemFileManagerApi`.
+- [x] `WindowBootstrapApi` / `WindowCommandApi` / `MenuCommandApi`.
 
 Flutter adapters, only under `lib/app/platform/`:
 
-- [ ] MethodChannel adapters for system fonts, attention, and native menus.
-- [ ] A `flutter_local_notifications` adapter.
-- [ ] Adapters for `file_selector`, pasteboard, `window_manager`, and `macos_window_utils`.
-- [ ] Every adapter constructor-injects its channel/plugin facade; Widgets and Blocs never import plugins directly.
-- [ ] Platform ports are consumed only by Repositories; an architecture test rejects any Bloc/Presentation import of `desktop_platform_api`.
-- [ ] Add Dart contract tests plus macOS/Windows/Linux native-channel contract tests.
+- [x] MethodChannel adapters for system fonts, attention, and native menus.
+- [x] A `flutter_local_notifications` adapter.
+- [x] Adapters for `file_selector`, pasteboard, `window_manager`, and `macos_window_utils`.
+- [x] Every adapter constructor-injects its channel/plugin facade; Widgets and Blocs never import plugins directly.
+- [x] Platform ports are consumed only by Repositories; an architecture test rejects any Bloc/Presentation import of `desktop_platform_api`.
+- [x] Add Dart contract tests plus macOS/Windows/Linux native-channel contract tests.
 
 **P1 exit:** shared packages are independently green and platform-plugin imports exist only in the allowlist.
+
+**Status: complete.** The approved contract reconciliation preserves structured font identity,
+multi-file image selection, image/file clipboard reads, system file-manager launching, localized
+native menu configuration, and pre-show window bootstrap without exporting Flutter or plugin
+types. All app adapters inject a channel/plugin facade; the source guard permits platform IO only
+inside `lib/app/platform/` and rejects `desktop_platform_api` imports from Bloc/Presentation.
+CoreText, DirectWrite, and Fontconfig runners expose the same frozen font schema, while all three
+runners implement badge/attention and macOS additionally implements versioned menu configure,
+enablement, and command callbacks. Step-specific tests comprise 4 pure-Dart package contracts and
+30 app/native-channel tests. The Windows Debug runner built successfully. In the final workspace
+iteration, 27/27 roots passed analyze, format checked 206 Dart files with no changes, 26/26 test
+roots ran 323 tests at 100% hand-written coverage (2,454 / 2,454), and Bloc lint reported 0 issues
+across 205 files.
 
 ---
 

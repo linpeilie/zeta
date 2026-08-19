@@ -303,21 +303,32 @@ Bloc lint 对 181 files 报告 0 issues。
 
 纯 Dart ports：
 
-- [ ] `SystemFontCatalogApi`。
-- [ ] `DesktopNotificationApi` / `DesktopAttentionApi`。
-- [ ] `DirectoryPickerApi` / `ClipboardApi`。
-- [ ] `WindowCommandApi` / `MenuCommandApi`。
+- [x] `SystemFontCatalogApi`，使用结构化不可变字体值。
+- [x] `DesktopNotificationApi` / `DesktopAttentionApi`。
+- [x] `FilePickerApi` / `DirectoryPickerApi` / `ClipboardApi` / `SystemFileManagerApi`。
+- [x] `WindowBootstrapApi` / `WindowCommandApi` / `MenuCommandApi`。
 
 Flutter adapters（仅 `lib/app/platform/`）：
 
-- [ ] MethodChannel system fonts、attention 和 native menu。
-- [ ] `flutter_local_notifications` adapter。
-- [ ] `file_selector`、pasteboard、window_manager、macos_window_utils adapter。
-- [ ] 每个 adapter 构造可注入 channel/plugin facade，widget/Bloc 不直接 import plugin。
-- [ ] platform port 只由 Repository 消费；Bloc/Presentation 直接 import `desktop_platform_api` 的架构测试为零容忍。
-- [ ] Dart contract test + macOS/Windows/Linux native channel contract test。
+- [x] MethodChannel system fonts、attention 和 native menu。
+- [x] `flutter_local_notifications` adapter。
+- [x] `file_selector`、pasteboard、window_manager、macos_window_utils adapter。
+- [x] 每个 adapter 构造可注入 channel/plugin facade，widget/Bloc 不直接 import plugin。
+- [x] platform port 只由 Repository 消费；Bloc/Presentation 直接 import `desktop_platform_api` 的架构测试为零容忍。
+- [x] Dart contract test + macOS/Windows/Linux native channel contract test。
 
 **P1 出口**：共享包独立全绿；平台插件 import 只存在于 allowlist。
+
+**状态：已完成。** 经批准的契约校正保留结构化字体 identity、多图片文件选择、图片/文件
+剪贴板读取、系统文件管理器启动、本地化原生菜单配置和窗口显示前 bootstrap，同时不向
+共享边界暴露 Flutter 或 plugin 类型。所有 app adapter 均注入 channel/plugin facade；
+source guard 只允许 `lib/app/platform/` 执行平台 IO，并禁止 Bloc/Presentation import
+`desktop_platform_api`。CoreText、DirectWrite 与 Fontconfig runner 输出同一冻结字体 schema；
+三平台均实现 badge/attention，macOS 额外实现版本化菜单 configure、enablement 与 command
+callback。Step 专项测试包括 4 项纯 Dart package contract 与 30 项 app/native-channel 测试；
+Windows Debug runner 已成功构建。最终 workspace 单轮门禁中，27/27 roots analyze 通过，
+format 检查 206 个 Dart 文件且 0 变更；26/26 个 test roots 共 323 tests，人工 coverage
+100%（2,454 / 2,454）；Bloc lint 对 205 个文件报告 0 issues。
 
 ---
 

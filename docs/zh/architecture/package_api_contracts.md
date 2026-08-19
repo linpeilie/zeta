@@ -313,7 +313,7 @@ Future<String> canonicalDirectoryPath(String value);
 
 ```dart
 abstract interface class SystemFontCatalogApi {
-  Future<List<String>> listFontFamilies();
+  Future<List<SystemFontFamily>> listFontFamilies({required String localeName});
 }
 
 abstract interface class DesktopNotificationApi {
@@ -330,9 +330,25 @@ abstract interface class DirectoryPickerApi {
   Future<String?> pickDirectory({String? initialDirectory});
 }
 
+abstract interface class FilePickerApi {
+  Future<List<String>> pickFiles({
+    List<FileTypeFilter> acceptedTypes = const <FileTypeFilter>[],
+  });
+}
+
 abstract interface class ClipboardApi {
   Future<void> writeText(String text);
   Future<String?> readText();
+  Future<Uint8List?> readImage();
+  Future<List<String>> readFilePaths();
+}
+
+abstract interface class SystemFileManagerApi {
+  Future<void> openDirectory(String path);
+}
+
+abstract interface class WindowBootstrapApi {
+  Future<void> initialize(WindowBootstrapConfiguration configuration);
 }
 
 abstract interface class WindowCommandApi {
@@ -344,12 +360,18 @@ abstract interface class WindowCommandApi {
 
 abstract interface class MenuCommandApi {
   Stream<MenuCommand> get commands;
+  Future<bool> configure(MenuConfiguration configuration);
   Future<void> setMenuEnabled({required String commandId, required bool enabled});
 }
 ```
 
-**平台端口只由 Repository 消费。** Bloc / Presentation 直接 import `desktop_platform_api`
-是零容忍门禁（[步骤 10](./migration_tasks.md)）。
+`SystemFontFamily`、`FileTypeFilter`、`WindowSize`、`WindowBootstrapConfiguration`
+与 `MenuConfiguration` 均为平台中立的不可变值，集合做防御性快照并具备 value equality。
+结构化字体 payload 保留 canonical/display name、alias 与 monospace 标记；Flutter `XFile`、
+`Size`、`Color` 及任何 plugin 类型均不得跨越此边界。
+
+**平台端口由 app adapter 实现，并经 composition root 交给 Repository 消费。** Bloc /
+Presentation 直接 import `desktop_platform_api` 是零容忍门禁（[步骤 10](./migration_tasks.md)）。
 
 ---
 

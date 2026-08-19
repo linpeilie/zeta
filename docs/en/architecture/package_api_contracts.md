@@ -325,7 +325,7 @@ Pure Dart ports with **zero implementation**. Flutter adapters live only in `lib
 
 ```dart
 abstract interface class SystemFontCatalogApi {
-  Future<List<String>> listFontFamilies();
+  Future<List<SystemFontFamily>> listFontFamilies({required String localeName});
 }
 
 abstract interface class DesktopNotificationApi {
@@ -342,9 +342,25 @@ abstract interface class DirectoryPickerApi {
   Future<String?> pickDirectory({String? initialDirectory});
 }
 
+abstract interface class FilePickerApi {
+  Future<List<String>> pickFiles({
+    List<FileTypeFilter> acceptedTypes = const <FileTypeFilter>[],
+  });
+}
+
 abstract interface class ClipboardApi {
   Future<void> writeText(String text);
   Future<String?> readText();
+  Future<Uint8List?> readImage();
+  Future<List<String>> readFilePaths();
+}
+
+abstract interface class SystemFileManagerApi {
+  Future<void> openDirectory(String path);
+}
+
+abstract interface class WindowBootstrapApi {
+  Future<void> initialize(WindowBootstrapConfiguration configuration);
 }
 
 abstract interface class WindowCommandApi {
@@ -356,12 +372,19 @@ abstract interface class WindowCommandApi {
 
 abstract interface class MenuCommandApi {
   Stream<MenuCommand> get commands;
+  Future<bool> configure(MenuConfiguration configuration);
   Future<void> setMenuEnabled({required String commandId, required bool enabled});
 }
 ```
 
-**Platform ports are consumed only by Repositories.** A Bloc or presentation file importing
-`desktop_platform_api` directly is a zero-tolerance gate failure ([step 10](./migration_tasks.md)).
+`SystemFontFamily`, `FileTypeFilter`, `WindowSize`, `WindowBootstrapConfiguration`, and
+`MenuConfiguration` are platform-neutral immutable values with defensive collection snapshots and
+value equality. The structured font payload preserves canonical/display names, aliases, and the
+monospace flag; no Flutter `XFile`, `Size`, `Color`, or plugin type crosses this boundary.
+
+**Platform ports are implemented by app adapters and consumed by Repositories through the
+composition root.** A Bloc or presentation file importing `desktop_platform_api` directly is a
+zero-tolerance gate failure ([step 10](./migration_tasks.md)).
 
 ---
 

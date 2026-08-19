@@ -48,10 +48,15 @@ void main() {
       final violations = <String>[];
       for (final file in _appDartFiles(workspace)) {
         final path = workspace.relativePath(file);
+        final isPlatformAdapter = workspace.matchesConfiguredPath(
+          path,
+          ['composition_root', 'platform_adapter_roots'],
+        );
         for (final uri in workspace.directives(file)) {
           final dependency = packageNameFromUri(uri);
           if (dependency != null &&
               dataPackages.contains(dependency) &&
+              !(dependency == 'desktop_platform_api' && isPlatformAdapter) &&
               !allowed.any((pattern) => matchesGlob(path, pattern))) {
             violations.add('$path -> $uri');
           }
@@ -66,6 +71,36 @@ void main() {
       );
     });
 
+    test('keeps desktop platform ports out of Bloc and Presentation', () {
+      final violations = <String>[];
+      for (final file in _appDartFiles(workspace)) {
+        final path = workspace.relativePath(file);
+        final isBusinessLogic = workspace.matchesConfiguredPath(
+          path,
+          ['layers', 'business_logic', 'roots'],
+        );
+        final isPresentation = workspace.matchesConfiguredPath(
+          path,
+          ['layers', 'presentation', 'roots'],
+        );
+        if (!isBusinessLogic && !isPresentation) {
+          continue;
+        }
+        for (final uri in workspace.directives(file)) {
+          if (packageNameFromUri(uri) == 'desktop_platform_api') {
+            violations.add('$path -> $uri');
+          }
+        }
+      }
+      expect(
+        violations,
+        isEmpty,
+        reason:
+            'Platform ports are consumed through Repositories only.\n'
+            '${violations.join('\n')}',
+      );
+    });
+
     test('keeps app IO and Flutter services inside their boundaries', () {
       final violations = <String>[];
       for (final file in _appDartFiles(workspace)) {
@@ -76,7 +111,7 @@ void main() {
           ['composition_root', 'platform_adapter_roots'],
         );
         for (final uri in workspace.directives(file)) {
-          if (uri == 'dart:io' && !isBootstrap) {
+          if (uri == 'dart:io' && !isBootstrap && !isPlatformAdapter) {
             violations.add('$path -> $uri');
           }
           if (uri == 'package:flutter/services.dart' && !isPlatformAdapter) {
