@@ -580,11 +580,13 @@ read, write, and close failures still propagate.
 final class AgentProviderRepository {
   AgentProviderRepository({
     required ProviderConfigStore configStore,
-    required ModelCatalogCacheStore modelCatalogCache,
+    required AgentModelCatalogCacheStore modelCatalogCache,
     required Map<AgentProviderKind, AgentProviderBundleFactory> bundleFactories,
     required AppLogger logger,
   });
 
+  /// Explicit constructor-started initialization barrier; await before bundleFor.
+  Future<void> get ready;
   Stream<ProviderConfigSnapshot> get configChanges;
   ProviderConfigSnapshot get configSnapshot;
 
@@ -613,6 +615,12 @@ final class AgentProviderRepository {
 The model catalog TTL is owned here: fresh for 1 hour, stale retained up to 7 days on failure, and the
 cache file is overwritten only on a successful refresh. On a first-read failure or an empty catalog,
 **no empty cache is written**.
+
+`ProviderConfigStore.read()` is asynchronous while `bundleFor` must remain synchronous, so construction
+starts the read and exposes `ready`. Async catalog APIs await the barrier automatically; `bundleFor`
+raises a content-free typed `repository_not_ready` failure before it completes instead of creating a
+temporary default runtime. A clean-install empty list expands to the Codex/Grok defaults in memory and
+is not written until an explicit persistence input arrives.
 
 ### 5.2 `agent_conversation_repository`
 

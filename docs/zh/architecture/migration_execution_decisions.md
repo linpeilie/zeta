@@ -604,3 +604,53 @@ workspace 中声明，并携带上游 lint info。
 
 **影响。** 路径保密从约定升级为入口强制，非法 cache 配置立即失败，落盘的非法 identifier 仍触发
 clear/recompute；加固后 storage 包人工 coverage 继续为 100%（222 / 222）。
+
+## 2026-08-20 — 步骤 22 显式解决异步配置与同步 bundle 契约
+
+**问题。** 文档构造函数接收异步 `ProviderConfigStore`，同一公共契约却要求同步
+`configSnapshot` 与 `bundleFor`，没有定义初始化。磁盘读取完成前创建默认 bundle 可能启动错误命令，
+然后 dispose 已交给消费者的 runtime。旧 controller 用可变默认值避免崩溃，但没有无竞态的 ready 边界。
+API 示例还把已导出的 `AgentModelCatalogCacheStore` 端口缩写成了不存在的
+`ModelCatalogCacheStore`。
+
+**决策。** 构造时立即启动 config read，并增加 `ready` Future。异步目录 API 自动等待；同步
+`bundleFor` 在完成前返回 typed `repository_not_ready` failure。clean install 的空 response 只在内存
+展开为既有 Codex/Grok defaults，不主动写盘。`persistDefaultModel` 解释为显式持久化命令：Repository
+保存 caller 提交的值，但不持有当前 model、permission、mode、loading 或 retry UI 状态。文档改用
+既有 cache port 的真实名称；不修改共享 contract 或 Provider port。
+
+**影响。** bootstrap 获得确定的 await 点，不会泄漏临时 process；snapshot 只发布成功加载或写入的
+外部数据，文档要求的同步 API 保持不变。
+
+## 2026-08-20 — 步骤 22 串行化全局目录所有权并保留诊断 cause
+
+**问题。** 直接包装 port 会重复 provider-local cache 生命周期，并让并发首次读取或 full-cache write
+竞争。某 Provider 的迟到写可能覆盖包含另一 Provider 新 snapshot 的文件。只映射为
+`AgentProviderFailure` 还会丢失 sanitized logging 所需的原 cause 与 stack。
+
+**决策。** 使用一个构造时启动的 cache-read Future；model refresh 按 canonical provider id 与不含
+secret 的 config fingerprint single-flight；完整 cache snapshot 进入串行写队列。fresh 为 1 小时；
+refresh 失败时 last-known-good 最多保留 7 天。空 refresh 不替换也不持久化目录，cache read/write
+failure 作为 best effort 记录。Repository 调用抛 `AgentProviderRepositoryException`，同时携带中立
+failure 与原 cause/stack；其字符串和 `AppLogger` 输出保持不含内容/经清洗。
+`runtime.initialize()` 返回 Future 前的同步抛错，以及持久化成功后的 `updateModelSelection()` failure
+都进入同一翻译边界；后者不会回滚已经成功的原子 config write。
+
+**影响。** 跨 Provider 的 global runtime/catalog 所有权无竞态；cache 不会因乱序完成倒退；application
+获得稳定 failure code 的同时保留诊断证据。回归测试覆盖 cache-read 与跨 Provider write 两类竞争。
+
+## 2026-08-20 — 步骤 22 最终门禁重试既有 Claude keychain 时序 flake
+
+**问题。** 26-root 随机门禁首次只在 seed `2572682378` 下失败于既有 Claude keychain process-runner
+测试，其余 Claude 测试继续成功。已批准的 VGC-only 测试策略无法做 named-test 诊断，因为
+`very_good test` 既不接受 `--plain-name`，也不接受位置型 test path；尝试命令在任何测试启动前即被
+参数解析拒绝。
+
+**决策。** 不绕过既定 runner 改用 `flutter test`，不放宽 timeout，也不修改无关 Claude 代码。用
+完全相同的 100% coverage VGC 门禁和新随机种子重跑整个 Claude 包，再从下一 root 继续被中断的
+workspace 序列。
+
+**影响。** seed `1621963295` 未改代码即通过全部 270 个 Claude tests 与 3,037 / 3,037 lines。
+继续后的 workspace 门禁完成 26/26 roots，并在 Repository 最终加固重跑后达到 14,552 / 14,552
+lines；该事件继续归类为已记录的
+Windows child-process 时序 flake，而非步骤 22 回归。

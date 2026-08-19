@@ -522,11 +522,22 @@ JSON-safe partition、串行原子 mutation、无路径 fingerprint cache 与 co
 
 ### 步骤 22 — `agent_provider_repository`
 
-- [ ] 构造注入 `agent_config_client` 和三方 bundle factory/catalog port。
-- [ ] 提供 config snapshot/changes、bundleFor、model/mode/skill/permission catalog。
-- [ ] 不依赖 conversation/management repository。
-- [ ] model/permission/mode selection 的 UI 状态不进 Repository；只持久化显式输入。
-- [ ] client exception → typed provider domain failure，保留 cause/stackTrace 供日志。
+- [x] 构造注入 `agent_config_client` 和三方 bundle factory/catalog port。
+- [x] 提供 config snapshot/changes、bundleFor、model/mode/skill/permission catalog。
+- [x] 不依赖 conversation/management repository。
+- [x] model/permission/mode selection 的 UI 状态不进 Repository；只持久化显式输入。
+- [x] client exception → typed provider domain failure，保留 cause/stackTrace 供日志。
+
+**完成记录（2026-08-20）**：新增显式 `ready` 屏障、不可变 config snapshot/Stream、按稳定 id
+缓存的 global bundle/runtime，以及带 last-known-good retention / skill invalidation 的
+model/mode/skill/permission 外部目录。模型目录由本包统一执行
+1 小时 fresh / 7 天 max-stale、single-flight refresh、单次 cache load 与跨 Provider 串行 full-cache
+write；首次失败/空结果不写空 cache。显式 model persistence 串行写盘且仅成功后发布 snapshot；
+permission apply 不落 UI 选中态。所有外部失败转换为保留原 cause/stackTrace 的 typed exception，日志
+只输出安全类别。未修改共享适配层或 Provider port；包独立 analyze/format 通过，28 次测试执行通过，
+人工 coverage 100%（266 / 266）。
+最终 workspace 同轮 27/27 roots analyze/format 通过（380 个权威 Dart 文件），26/26 test roots
+共 1,195 tests，人工 coverage 100%（14,552 / 14,552）；Bloc lint 对 382 文件报告 0 issues。
 
 ### 步骤 23 — `agent_conversation_repository`
 

@@ -550,11 +550,24 @@ Bloc lint reports zero issues across 382 files.
 
 ### Step 22 — `agent_provider_repository`
 
-- [ ] Constructor-inject `agent_config_client` plus the three bundle factory/catalog ports.
-- [ ] Expose config snapshot/changes, `bundleFor`, and model/mode/skill/permission catalogs.
-- [ ] Do not depend on conversation or management repositories.
-- [ ] Keep model/permission/mode UI selection out of Repository; persist only explicit inputs.
-- [ ] Translate client exceptions into typed provider domain failures while retaining cause/stackTrace for logging.
+- [x] Constructor-inject `agent_config_client` plus the three bundle factory/catalog ports.
+- [x] Expose config snapshot/changes, `bundleFor`, and model/mode/skill/permission catalogs.
+- [x] Do not depend on conversation or management repositories.
+- [x] Keep model/permission/mode UI selection out of Repository; persist only explicit inputs.
+- [x] Translate client exceptions into typed provider domain failures while retaining cause/stackTrace for logging.
+
+**Completion record (2026-08-20):** Added an explicit `ready` barrier, immutable config snapshots/stream,
+stable-id global bundle/runtime caching, and model/mode/skill/permission external catalogs with
+last-known-good retention and skill invalidation. This package
+now owns the model catalog's 1-hour fresh / 7-day max-stale policy, single-flight refresh, one cache read,
+and serialized cross-provider full-cache writes; first failures and empty results never write an empty
+cache. Explicit model persistence serializes disk writes and publishes only after success; permission
+apply stores no UI selection. Every external failure becomes a typed exception retaining its original
+cause/stack trace while logs expose only safe categories. No shared adapter or Provider port changed;
+package analyze/format pass, 28 test executions pass, and hand-written coverage is 100% (266 / 266).
+The final workspace iteration passes analyze/format in 27/27 roots (380 authoritative Dart files),
+1,195 tests in 26/26 roots at 100% hand-written coverage (14,552 / 14,552), and Bloc lint reports zero
+issues across 382 files.
 
 ### Step 23 — `agent_conversation_repository`
 

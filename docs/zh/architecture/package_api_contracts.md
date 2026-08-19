@@ -555,11 +555,13 @@ Provider 原始用量；`usage_statistics_storage_client` 只做缓存与派生�
 final class AgentProviderRepository {
   AgentProviderRepository({
     required ProviderConfigStore configStore,
-    required ModelCatalogCacheStore modelCatalogCache,
+    required AgentModelCatalogCacheStore modelCatalogCache,
     required Map<AgentProviderKind, AgentProviderBundleFactory> bundleFactories,
     required AppLogger logger,
   });
 
+  /// 构造时立即启动的显式初始化屏障；同步 bundleFor 前必须等待。
+  Future<void> get ready;
   Stream<ProviderConfigSnapshot> get configChanges;
   ProviderConfigSnapshot get configSnapshot;
 
@@ -586,6 +588,11 @@ final class AgentProviderRepository {
 
 模型目录 TTL 由本包持有：新鲜 1 小时，失败时最多保留 7 天 stale；刷新成功才覆盖缓存文件。
 首次读取失败或返回空目录时**不写空缓存**。
+
+`ProviderConfigStore.read()` 是异步端口，而 `bundleFor` 必须保持同步，因此 Repository 构造时启动
+读取并暴露 `ready`。异步目录 API 自动等待该屏障；`bundleFor` 在屏障完成前抛出不含配置内容的
+typed `repository_not_ready` failure，不先创建临时默认 runtime。clean install 的空列表只在内存中
+展开为 Codex/Grok 默认定义，直到收到显式持久化输入才写盘。
 
 ### 5.2 `agent_conversation_repository`
 

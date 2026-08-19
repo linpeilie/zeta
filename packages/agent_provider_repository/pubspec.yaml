@@ -19,6 +19,8 @@ dependencies:
   equatable: ^2.1.0
   grok_acp_client:
       path: ../grok_acp_client
+  zeta_logging:
+      path: ../zeta_logging
 
 dev_dependencies:
   mocktail: ^1.0.5

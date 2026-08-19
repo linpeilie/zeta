@@ -704,3 +704,60 @@ sizes in helpers, and reject blank/whitespace partition keys in both models and 
 **Impact.** Path secrecy is now enforced rather than conventional, invalid cache configuration fails at
 the API boundary, and malformed persisted identifiers still trigger clear/recompute. The hardened
 storage package remains at 100% hand-written coverage (222 / 222).
+
+## 2026-08-20 — Step 22 resolves the asynchronous config / synchronous bundle contract explicitly
+
+**Problem.** The documented constructor receives an asynchronous `ProviderConfigStore`, but the same
+public contract requires synchronous `configSnapshot` and `bundleFor` without defining initialization.
+Creating a default bundle before disk read completes can start the wrong command and then dispose a
+runtime already handed to a consumer. The legacy controller avoided a crash with mutable defaults but
+did not provide a race-free readiness boundary. The API example also shortened the already exported
+`AgentModelCatalogCacheStore` port name to the nonexistent `ModelCatalogCacheStore`.
+
+**Decision.** Construction immediately starts the config read and exposes an additive `ready` Future.
+Async catalog APIs await it; synchronous `bundleFor` returns a typed `repository_not_ready` failure until
+it completes. An empty clean-install response expands to the existing Codex/Grok defaults in memory and
+does not write them. `persistDefaultModel` is interpreted as an explicit persistence command: the
+Repository stores that submitted value but owns no current model, permission, mode, loading, or retry UI
+state. The documentation now uses the existing cache-port name; no shared contract or Provider port is
+changed.
+
+**Impact.** Bootstrap has a deterministic await point, no provisional process can escape, snapshots only
+publish successfully loaded or written external data, and the documented synchronous API remains intact.
+
+## 2026-08-20 — Step 22 serializes global catalog ownership and preserves diagnostic causes
+
+**Problem.** A direct port wrapper would duplicate provider-local cache lifetime and allow concurrent
+first reads or full-cache writes to race. A late cache write for one Provider could overwrite a newer
+snapshot containing another Provider. Mapping failures to `AgentProviderFailure` alone would also discard
+the original cause and stack required for sanitized logging.
+
+**Decision.** Keep one constructor-started cache-read Future, single-flight model refreshes keyed by
+canonical provider id plus secret-free config fingerprint, and a serialized queue of complete cache
+snapshots. Fresh entries last one hour; last-known-good entries remain eligible for seven days on refresh
+failure. Empty refreshes never replace or persist a catalog, and cache read/write failures are best effort.
+Repository calls throw `AgentProviderRepositoryException`, which contains the vendor-neutral failure plus
+the original cause/stack trace; its string form and `AppLogger` output remain content-free/sanitized.
+Both synchronous throws before `runtime.initialize()` returns a Future and post-persistence
+`updateModelSelection()` failures are inside the same translation boundary; the latter does not roll back
+an already successful atomic config write.
+
+**Impact.** Global runtime/catalog ownership is race-free across Providers, cache persistence cannot
+regress through out-of-order completion, and application code receives stable failure codes without
+losing diagnostic evidence. Regression tests cover both cache-read and cross-provider write races.
+
+## 2026-08-20 — Step 22 final gate retried the known Claude keychain timing flake
+
+**Problem.** The first 26-root randomized gate failed only the existing Claude keychain process-runner
+test under seed `2572682378`; the remaining Claude tests continued successfully. The approved VGC-only
+test policy prevents a named-test diagnosis because `very_good test` accepts neither `--plain-name` nor
+a positional test path; the attempted command was rejected by argument parsing before any test ran.
+
+**Decision.** Do not bypass the approved runner with `flutter test`, loosen the timeout, or modify
+unrelated Claude code. Rerun the complete Claude package through the exact 100%-coverage VGC gate with a
+new random seed, then continue the interrupted workspace sequence from the next root.
+
+**Impact.** Seed `1621963295` passed all 270 Claude tests and 3,037 / 3,037 lines without a code change.
+The continued workspace gate finished 26/26 roots and, after the final Repository hardening rerun,
+14,552 / 14,552 lines; this remains classified as
+the already documented Windows child-process timing flake rather than a Step 22 regression.
