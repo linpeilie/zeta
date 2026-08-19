@@ -184,14 +184,19 @@ There are no released users, so no compatibility migration or legacy data upgrad
 
 ### Step 3 — Platforms, identity, and version
 
-- [ ] Remove `android/`, `ios/`, and `web/` from the new repository.
-- [ ] Add the Linux desktop scaffold.
-- [ ] Use application/bundle ID `cn.easii.zeta` on macOS, Windows, and Linux.
-- [ ] Set every flavor product name to `Zeta`; remove `[DEV]` / `[STG]` and `.dev` / `.stg` identity suffixes.
-- [ ] Remove `my_app` / `com.example.myApp` remnants from `macos/Runner/Configs/AppInfo.xcconfig`.
-- [ ] Keep version `1.0.0+1`.
-- [ ] All flavors share `~/.zeta` and one schema; document that they cannot be installed side by side.
+**Status: in progress (blocked on build hosts).** Platform directories, all three desktop identities, flavor names, and the version are complete; the development/staging/production entrypoints all pass Windows debug and release builds. The current Windows host has neither a WSL distribution nor an available CI workflow, and Flutter cannot run Linux/macOS builds here, so Step 4 has not started. Gates: zero analyze issues, format 0 changed, 8 tests, and 100% Dart coverage (30 / 30).
+
+- [x] Remove `android/`, `ios/`, and `web/` from the new repository.
+- [x] Add the Linux desktop scaffold.
+- [x] Use application/bundle ID `cn.easii.zeta` on macOS, Windows, and Linux.
+- [x] Set every flavor product name to `Zeta`; remove `[DEV]` / `[STG]` and `.dev` / `.stg` identity suffixes.
+- [x] Remove `my_app` / `com.example.myApp` remnants from `macos/Runner/Configs/AppInfo.xcconfig`.
+- [x] Keep version `1.0.0+1`.
+- [x] All flavors share `~/.zeta` and one schema; document that they cannot be installed side by side.
 - [ ] Empty-shell builds pass for three platforms and three entrypoints.
+  - [x] Windows: development/staging/production, debug and release.
+  - [ ] Linux: requires a Linux build host.
+  - [ ] macOS: requires a macOS build host.
 
 ### Step 4 — Dart workspace and dependency baseline
 

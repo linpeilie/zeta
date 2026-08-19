@@ -407,7 +407,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = cn.easii.zeta.RunnerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/my_app.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/my_app";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Zeta.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Zeta";
 			};
 			name = "Debug-production";
 		};
@@ -421,7 +421,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = cn.easii.zeta.RunnerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/my_app.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/my_app";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Zeta.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Zeta";
 			};
 			name = "Release-production";
 		};
@@ -435,7 +435,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = cn.easii.zeta.RunnerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/my_app.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/my_app";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Zeta.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Zeta";
 			};
 			name = "Profile-production";
 		};
@@ -734,13 +734,13 @@
 				CODE_SIGN_ENTITLEMENTS = Runner/DebugProfile.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				FLAVOR_APP_NAME = "[STG] Zeta";
+				FLAVOR_APP_NAME = "Zeta";
 				INFOPLIST_FILE = Runner/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = cn.easii.zeta.stg;
+				PRODUCT_BUNDLE_IDENTIFIER = cn.easii.zeta;
 				PRODUCT_NAME = "$(FLAVOR_APP_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -758,7 +758,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = cn.easii.zeta.RunnerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/my_app.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/my_app";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Zeta.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Zeta";
 			};
 			name = "Debug-staging";
 		};
@@ -832,13 +832,13 @@
 				CODE_SIGN_ENTITLEMENTS = Runner/DebugProfile.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				FLAVOR_APP_NAME = "[DEV] Zeta";
+				FLAVOR_APP_NAME = "Zeta";
 				INFOPLIST_FILE = Runner/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = cn.easii.zeta.dev;
+				PRODUCT_BUNDLE_IDENTIFIER = cn.easii.zeta;
 				PRODUCT_NAME = "$(FLAVOR_APP_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -856,7 +856,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = cn.easii.zeta.RunnerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/my_app.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/my_app";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Zeta.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Zeta";
 			};
 			name = "Debug-development";
 		};
@@ -923,13 +923,13 @@
 				CODE_SIGN_ENTITLEMENTS = Runner/Release.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				FLAVOR_APP_NAME = "[DEV] Zeta";
+				FLAVOR_APP_NAME = "Zeta";
 				INFOPLIST_FILE = Runner/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = cn.easii.zeta.dev;
+				PRODUCT_BUNDLE_IDENTIFIER = cn.easii.zeta;
 				PRODUCT_NAME = "$(FLAVOR_APP_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_VERSION = 5.0;
@@ -946,7 +946,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = cn.easii.zeta.RunnerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/my_app.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/my_app";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Zeta.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Zeta";
 			};
 			name = "Release-development";
 		};
@@ -1013,13 +1013,13 @@
 				CODE_SIGN_ENTITLEMENTS = Runner/Release.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				FLAVOR_APP_NAME = "[STG] Zeta";
+				FLAVOR_APP_NAME = "Zeta";
 				INFOPLIST_FILE = Runner/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = cn.easii.zeta.stg;
+				PRODUCT_BUNDLE_IDENTIFIER = cn.easii.zeta;
 				PRODUCT_NAME = "$(FLAVOR_APP_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_VERSION = 5.0;
@@ -1036,7 +1036,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = cn.easii.zeta.RunnerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/my_app.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/my_app";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Zeta.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Zeta";
 			};
 			name = "Release-staging";
 		};
@@ -1103,13 +1103,13 @@
 				CODE_SIGN_ENTITLEMENTS = Runner/DebugProfile.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				FLAVOR_APP_NAME = "[DEV] Zeta";
+				FLAVOR_APP_NAME = "Zeta";
 				INFOPLIST_FILE = Runner/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = cn.easii.zeta.dev;
+				PRODUCT_BUNDLE_IDENTIFIER = cn.easii.zeta;
 				PRODUCT_NAME = "$(FLAVOR_APP_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_VERSION = 5.0;
@@ -1126,7 +1126,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = cn.easii.zeta.RunnerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/my_app.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/my_app";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Zeta.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Zeta";
 			};
 			name = "Profile-development";
 		};
@@ -1193,13 +1193,13 @@
 				CODE_SIGN_ENTITLEMENTS = Runner/DebugProfile.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				FLAVOR_APP_NAME = "[STG] Zeta";
+				FLAVOR_APP_NAME = "Zeta";
 				INFOPLIST_FILE = Runner/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = cn.easii.zeta.stg;
+				PRODUCT_BUNDLE_IDENTIFIER = cn.easii.zeta;
 				PRODUCT_NAME = "$(FLAVOR_APP_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_VERSION = 5.0;
@@ -1216,7 +1216,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = cn.easii.zeta.RunnerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/my_app.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/my_app";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Zeta.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Zeta";
 			};
 			name = "Profile-staging";
 		};

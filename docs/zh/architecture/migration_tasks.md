@@ -181,14 +181,19 @@ packages/<name>/
 
 ### 步骤 3 — 平台、身份与版本
 
-- [ ] 删除新仓库 `android/`、`ios/`、`web/`。
-- [ ] 补齐 Linux desktop scaffold。
-- [ ] macOS、Windows、Linux 统一 application/bundle ID `cn.easii.zeta`。
-- [ ] 三个 flavor 的 product name 都为 `Zeta`，移除 `[DEV]` / `[STG]` 与 `.dev` / `.stg` 身份后缀。
-- [ ] `macos/Runner/Configs/AppInfo.xcconfig` 不再保留 `my_app` / `com.example.myApp`。
-- [ ] version 保持 `1.0.0+1`。
-- [ ] 三个 flavor 共用 `~/.zeta` 与同一 schema；文档说明不能并存安装。
+**状态：进行中（受构建主机阻塞）。** 平台目录、三平台身份、flavor 名称和版本已完成；Windows 的 development/staging/production 三个 entrypoint 均通过 debug 与 release 构建。当前 Windows 主机没有 WSL 发行版或可用 CI workflow，Flutter 无法在此运行 Linux/macOS 构建，因此尚未进入步骤 4。质量门：analyze 0 问题、format 0 changed、8 tests、Dart coverage 100%（30 / 30）。
+
+- [x] 删除新仓库 `android/`、`ios/`、`web/`。
+- [x] 补齐 Linux desktop scaffold。
+- [x] macOS、Windows、Linux 统一 application/bundle ID `cn.easii.zeta`。
+- [x] 三个 flavor 的 product name 都为 `Zeta`，移除 `[DEV]` / `[STG]` 与 `.dev` / `.stg` 身份后缀。
+- [x] `macos/Runner/Configs/AppInfo.xcconfig` 不再保留 `my_app` / `com.example.myApp`。
+- [x] version 保持 `1.0.0+1`。
+- [x] 三个 flavor 共用 `~/.zeta` 与同一 schema；文档说明不能并存安装。
 - [ ] 三平台、三 entrypoint 的空壳 build 通过。
+  - [x] Windows：development/staging/production，debug 与 release。
+  - [ ] Linux：需要 Linux 构建主机。
+  - [ ] macOS：需要 macOS 构建主机。
 
 ### 步骤 4 — Dart workspace 与依赖基线
 
