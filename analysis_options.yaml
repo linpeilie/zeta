@@ -4,6 +4,13 @@ include:
 analyzer:
   exclude:
     - lib/l10n/gen/*
+    - build/**
+    - android/**
+    - ios/**
+    - web/**
+    - windows/**
+    - macos/**
+    - linux/**
 linter:
   rules:
     public_member_api_docs: false

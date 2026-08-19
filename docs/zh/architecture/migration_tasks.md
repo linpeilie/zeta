@@ -181,7 +181,7 @@ packages/<name>/
 
 ### 步骤 3 — 平台、身份与版本
 
-**状态：进行中（受构建主机阻塞）。** 平台目录、三平台身份、flavor 名称和版本已完成；Windows 的 development/staging/production 三个 entrypoint 均通过 debug 与 release 构建。当前 Windows 主机没有 WSL 发行版或可用 CI workflow，Flutter 无法在此运行 Linux/macOS 构建，因此尚未进入步骤 4。质量门：analyze 0 问题、format 0 changed、8 tests、Dart coverage 100%（30 / 30）。
+**状态：已完成。** 平台目录、三平台身份、flavor 名称和版本均已完成；Windows 本地 debug/release 构建通过，GitHub Actions `desktop-build` 运行 `32220262496` 的 macOS、Windows、Linux × development、staging、production 共 9 个 release build 全部通过。质量门：analyze 0 问题、format 0 changed、8 tests、Dart coverage 100%（30 / 30）。
 
 - [x] 删除新仓库 `android/`、`ios/`、`web/`。
 - [x] 补齐 Linux desktop scaffold。
@@ -190,20 +190,22 @@ packages/<name>/
 - [x] `macos/Runner/Configs/AppInfo.xcconfig` 不再保留 `my_app` / `com.example.myApp`。
 - [x] version 保持 `1.0.0+1`。
 - [x] 三个 flavor 共用 `~/.zeta` 与同一 schema；文档说明不能并存安装。
-- [ ] 三平台、三 entrypoint 的空壳 build 通过。
+- [x] 三平台、三 entrypoint 的空壳 build 通过。
   - [x] Windows：development/staging/production，debug 与 release。
-  - [ ] Linux：需要 Linux 构建主机。
-  - [ ] macOS：需要 macOS 构建主机。
+  - [x] Linux：development/staging/production，GitHub Actions release。
+  - [x] macOS：development/staging/production flavor，GitHub Actions release。
 
 ### 步骤 4 — Dart workspace 与依赖基线
 
-- [ ] 根 `pubspec.yaml` 声明 Dart workspace members；不引入 Melos。
-- [ ] 统一 SDK 为根仓库约束，所有 package 继承一致版本。
-- [ ] 引入 `go_router`、`go_router_builder`、`build_runner`、`bloc_concurrency`。
-- [ ] 迁入当前功能依赖；不添加 updater/Velopack 依赖。
-- [ ] 所有本地包使用 `path:`。
-- [ ] 根与各包统一 Very Good Analysis。
-- [ ] 提交最终 `pubspec.lock`；CI 固定 OSV scanner 和 license checker 版本。
+**状态：已完成。** 根 workspace 已登记 25 个迁移目标包与 1 个仅供开发的 Widgetbook 工具包；全部使用 Flutter 3.47.0 / Dart 3.13.0、一致的 Very Good Analysis 配置和本地 `path:` 依赖。最终质量门：workspace `pub get` 成功解析 `test 1.31.1` / `test_api 0.7.12`，analyze 0 问题，format 111 files / 0 changed，26 个可测试 package root 共 99 tests 全绿，人工 Dart coverage 100%（132 / 132）；许可证门扫描 166 个 package、168 个许可证并通过，OSV-Scanner 与 Very Good CLI 版本已固定在 CI。
+
+- [x] 根 `pubspec.yaml` 声明 Dart workspace members；不引入 Melos。
+- [x] 统一 SDK 为根仓库约束，所有 package 继承一致版本。
+- [x] 引入 `go_router`、`go_router_builder`、`build_runner`、`bloc_concurrency`。
+- [x] 迁入当前功能依赖；不添加 updater/Velopack 依赖。
+- [x] 所有本地包使用 `path:`。
+- [x] 根与各包统一 Very Good Analysis。
+- [x] 提交最终 `pubspec.lock`；CI 固定 OSV scanner 和 license checker 版本。
 
 ### 步骤 5 — Assets 与 l10n 基线
 

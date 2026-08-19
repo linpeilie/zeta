@@ -1,0 +1,17 @@
+name: settings_client
+description: Settings persistence data client for Zeta.
+version: 0.1.0+1
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.13.0
+
+dependencies:
+  zeta_storage:
+      path: ../zeta_storage
+
+dev_dependencies:
+  mocktail: ^1.0.5
+  test: ^1.31.1
+  very_good_analysis: ^10.3.0

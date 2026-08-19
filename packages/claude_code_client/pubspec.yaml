@@ -1,0 +1,27 @@
+name: claude_code_client
+description: Claude Code data client for Zeta.
+version: 0.1.0+1
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.13.0
+
+dependencies:
+  agent_history_client:
+      path: ../agent_history_client
+  agent_provider_contracts:
+      path: ../agent_provider_contracts
+  crypto: ^3.0.7
+  json_rpc_transport:
+      path: ../json_rpc_transport
+  unorm_dart: ^0.3.2
+  zeta_logging:
+      path: ../zeta_logging
+  zeta_storage:
+      path: ../zeta_storage
+
+dev_dependencies:
+  mocktail: ^1.0.5
+  test: ^1.31.1
+  very_good_analysis: ^10.3.0

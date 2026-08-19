@@ -61,6 +61,16 @@ layers:
       - ValueNotifier
       - Listenable
 
+  tooling:
+    packages:
+      - widgetbook_catalog
+    roots:
+      - packages/app_ui/widgetbook/**
+    flutter_allowed: true
+    production_dependency_allowed: false
+    may_depend_on_packages:
+      - app_ui
+
   business_logic:
     roots:
       - lib/**/bloc/**

@@ -9,17 +9,48 @@ on:
     branches:
       - main
     paths:
-      - "pubspec.yaml"
+      - "**/pubspec.yaml"
+      - "pubspec.lock"
       - ".github/workflows/license_check.yaml"
   push:
     branches:
       - main
     paths:
-      - "pubspec.yaml"
+      - "**/pubspec.yaml"
+      - "pubspec.lock"
       - ".github/workflows/license_check.yaml"
 
 jobs:
   license_check:
-    uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/license_check.yml@v1
-    with:
-      allowed: "MIT,BSD-3-Clause,BSD-2-Clause,Apache-2.0"
+    runs-on: ubuntu-24.04
+    env:
+      PUB_HOSTED_URL: https://pub.dev
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.x
+          cache: true
+
+      - name: Resolve locked workspace dependencies
+        run: flutter pub get --enforce-lockfile
+
+      - name: Install workspace-aware license checker
+        run: dart pub global activate very_good_cli 1.4.0
+
+      - name: Check dependency licenses
+        # dbus is an MPL-2.0 runtime transitive dependency of the dynamically
+        # linked Linux desktop notification plugin; explicitly approved.
+        # pubspec_lock_parse is an unlicensed dev-only transitive dependency of
+        # bloc_lint/bloc_tools; it is excluded from product builds and was
+        # explicitly approved as a narrow, documented exception.
+        run: >-
+          dart pub global run very_good_cli:very_good packages check licenses
+          --dependency-type=direct-main,transitive
+          --allowed=MIT,BSD-3-Clause,BSD-2-Clause,Apache-2.0,MPL-2.0
+          --skip-packages=pubspec_lock_parse
+          --reporter=csv

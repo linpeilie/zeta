@@ -184,7 +184,7 @@ There are no released users, so no compatibility migration or legacy data upgrad
 
 ### Step 3 — Platforms, identity, and version
 
-**Status: in progress (blocked on build hosts).** Platform directories, all three desktop identities, flavor names, and the version are complete; the development/staging/production entrypoints all pass Windows debug and release builds. The current Windows host has neither a WSL distribution nor an available CI workflow, and Flutter cannot run Linux/macOS builds here, so Step 4 has not started. Gates: zero analyze issues, format 0 changed, 8 tests, and 100% Dart coverage (30 / 30).
+**Status: complete.** Platform directories, all three desktop identities, flavor names, and the version are complete; local Windows debug/release builds pass, and all nine macOS/Windows/Linux × development/staging/production release builds pass in GitHub Actions `desktop-build` run `32220262496`. Gates: zero analyze issues, format 0 changed, 8 tests, and 100% Dart coverage (30 / 30).
 
 - [x] Remove `android/`, `ios/`, and `web/` from the new repository.
 - [x] Add the Linux desktop scaffold.
@@ -193,20 +193,22 @@ There are no released users, so no compatibility migration or legacy data upgrad
 - [x] Remove `my_app` / `com.example.myApp` remnants from `macos/Runner/Configs/AppInfo.xcconfig`.
 - [x] Keep version `1.0.0+1`.
 - [x] All flavors share `~/.zeta` and one schema; document that they cannot be installed side by side.
-- [ ] Empty-shell builds pass for three platforms and three entrypoints.
+- [x] Empty-shell builds pass for three platforms and three entrypoints.
   - [x] Windows: development/staging/production, debug and release.
-  - [ ] Linux: requires a Linux build host.
-  - [ ] macOS: requires a macOS build host.
+  - [x] Linux: development/staging/production, GitHub Actions release.
+  - [x] macOS: development/staging/production flavors, GitHub Actions release.
 
 ### Step 4 — Dart workspace and dependency baseline
 
-- [ ] Declare native Dart workspace members in the root `pubspec.yaml`; do not add Melos.
-- [ ] Use the root SDK constraint consistently across all packages.
-- [ ] Add `go_router`, `go_router_builder`, `build_runner`, and `bloc_concurrency`.
-- [ ] Bring in dependencies for current features only; add no updater/Velopack dependency.
-- [ ] Use `path:` for all local packages.
-- [ ] Align Very Good Analysis across root and packages.
-- [ ] Commit the final `pubspec.lock` and pin OSV-scanner/license-checker versions in CI.
+**Status: complete.** The root workspace registers 25 migration-target packages plus one development-only Widgetbook tooling package; all use Flutter 3.47.0 / Dart 3.13.0, aligned Very Good Analysis configuration, and local `path:` dependencies. Final gates: workspace `pub get` resolved `test 1.31.1` / `test_api 0.7.12`; analyze reported zero issues; format checked 111 files with 0 changed; 99 tests passed across 26 testable package roots with 100% hand-written Dart coverage (132 / 132); the license gate passed for 168 licenses from 166 packages; and OSV-Scanner plus Very Good CLI versions are pinned in CI.
+
+- [x] Declare native Dart workspace members in the root `pubspec.yaml`; do not add Melos.
+- [x] Use the root SDK constraint consistently across all packages.
+- [x] Add `go_router`, `go_router_builder`, `build_runner`, and `bloc_concurrency`.
+- [x] Bring in dependencies for current features only; add no updater/Velopack dependency.
+- [x] Use `path:` for all local packages.
+- [x] Align Very Good Analysis across root and packages.
+- [x] Commit the final `pubspec.lock` and pin OSV-scanner/license-checker versions in CI.
 
 ### Step 5 — Assets and l10n baseline
 
