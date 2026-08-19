@@ -464,12 +464,22 @@ Vendor-specific parsers stay in their own client ([step 15](./migration_tasks.md
 ```dart
 export 'src/history_merge.dart';
 
+final class HistoryReplayInput {
+  final String sourceId;
+  final Future<String> Function() read;
+  final AgentHistoryTurn? Function(Map<String, Object?> record) decode;
+}
+
 final class HistoryMergeResult {
   final List<AgentHistoryTurn> turns;
   /// A single corrupt record may be skipped with a warning; a whole-file IO failure
   /// must be thrown, never swallowed.
   final List<HistoryDecodeWarning> warnings;
 }
+
+Future<HistoryMergeResult> mergeHistoryInputs(
+  Iterable<HistoryReplayInput> inputs,
+);
 ```
 
 **Does not produce UI timeline cards or projections** — that is presentation's job.

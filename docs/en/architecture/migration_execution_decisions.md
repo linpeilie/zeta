@@ -314,3 +314,21 @@ diagnostic for every package.
 **Impact.** The Grok package now has 235 randomized tests and remains at 100% locally
 (3,257 / 3,257). The fix changes tests and CI diagnostics only, with no production implementation,
 shared adaptation layer, or Provider port change.
+
+## 2026-08-20 — Step 15 has no legacy aggregator and needs explicit merge semantics
+
+**Problem.** The plan calls for a provider-neutral history merge/replay input, but the legacy repository
+contains only Codex, Claude, and Grok parser/readers and no cross-provider aggregator to move. The target
+package is a template placeholder; copying any vendor parser would violate the Step 15 boundary.
+
+**Decision.** Implement the approved contract as a new generic JSON Lines framing boundary. Callers
+inject the whole-input reader and vendor decoder, so this package never understands vendor fields.
+Malformed JSON, non-object values, and explicit `HistoryRecordDecodeException` failures skip only that
+line and produce a typed warning. Reader IO failures and all other decoder failures escape. Inputs retain
+caller order, while a later duplicate turn id replaces content at its first-seen position. Warnings retain
+no raw line, exception, or user content.
+
+**Impact.** `agent_history_client` depends only on `agent_provider_contracts`; unused template logging,
+storage, and mocking dependencies are removed, and the barrel exports only `history_merge.dart`. It has
+no vendor, Flutter, Repository, or UI dependency and changes no shared Provider port. Five randomized
+tests reach 100% coverage (41 / 41).

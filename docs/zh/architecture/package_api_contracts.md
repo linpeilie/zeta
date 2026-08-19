@@ -448,11 +448,21 @@ final class CodexCliLocator {
 ```dart
 export 'src/history_merge.dart';
 
+final class HistoryReplayInput {
+  final String sourceId;
+  final Future<String> Function() read;
+  final AgentHistoryTurn? Function(Map<String, Object?> record) decode;
+}
+
 final class HistoryMergeResult {
   final List<AgentHistoryTurn> turns;
   /// 单条损坏可跳过并计入 warning；整体 IO failure 必须抛出，不得吞掉。
   final List<HistoryDecodeWarning> warnings;
 }
+
+Future<HistoryMergeResult> mergeHistoryInputs(
+  Iterable<HistoryReplayInput> inputs,
+);
 ```
 
 **不生成 UI timeline card / projection**——那是 Presentation 的事。

@@ -394,17 +394,25 @@ token metering source 仍归步骤 21。真实 Claude Code 2.1.227 的无 Prompt
 
 完成证据（2026-08-20）：barrel 只导出 bundle factory、静态 capability 与唯一 CLI locator；
 Grok 私有 history reader/parser 随 vendor package 一并迁入，步骤 15 仍只负责跨 Provider 聚合。
-包级门禁为 233 tests，人工 coverage 100%（3,257 / 3,257）；本机 Grok CLI 1.0.5 的真实 smoke
+包级门禁为 235 tests，人工 coverage 100%（3,257 / 3,257）；本机 Grok CLI 1.0.5 的真实 smoke
 验证两个独立进程并发会话与新进程 `session/load` 恢复均通过。未修改共享 Provider port。
-同一轮 workspace 门禁中，27/27 roots analyze/format 通过，26/26 test roots 共 1,012 tests，
+同一轮 workspace 门禁中，27/27 roots analyze/format 通过，26/26 test roots 共 1,014 tests，
 人工 coverage 100%（12,573 / 12,573），Bloc lint 对 339 个文件报告 0 issues。
 
-### 步骤 15 — `agent_history_client`
+### 步骤 15 — `agent_history_client`（已完成）
 
-- [ ] 只保留跨 Provider history merge/replay 输入和通用容错。
-- [ ] vendor-specific parser 留各 vendor client，禁止重复实现。
-- [ ] 单条损坏可跳过并返回 typed warning；不得吞掉整体 IO failure。
-- [ ] 不生成 UI timeline card/projection。
+- [x] 只保留跨 Provider history merge/replay 输入和通用容错。
+- [x] vendor-specific parser 留各 vendor client，禁止重复实现。
+- [x] 单条损坏可跳过并返回 typed warning；不得吞掉整体 IO failure。
+- [x] 不生成 UI timeline card/projection。
+
+完成证据（2026-08-20）：旧仓库没有可直接迁移的跨 Provider 聚合器，本包按既定契约新建
+JSON Lines 外壳与 vendor decoder 注入边界。单条 malformed JSON、非 object 或显式 typed decode
+failure 会被跳过并返回不含原始 payload 的 warning；整体 reader IO failure 与非预期 decoder
+failure 原样抛出。后输入的同 id turn 在首次位置确定性覆盖，barrel 只导出 `history_merge.dart`，
+且无 vendor、Flutter 或 Presentation 依赖。包级门禁为 5 tests，人工 coverage 100%（41 / 41）。
+同一轮最终 workspace 门禁中，27/27 roots analyze/format 通过，26/26 test roots 共 1,018 tests，
+人工 coverage 100%（12,613 / 12,613），Bloc lint 对 339 个文件报告 0 issues。
 
 ### 步骤 16 — `agent_management_client`
 

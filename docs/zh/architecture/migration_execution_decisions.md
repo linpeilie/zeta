@@ -272,3 +272,18 @@ locator 测试，以及不提供 project/session path 的递归历史查找测�
 
 **影响。** Grok 包现有 235 个随机顺序测试，本机仍为 100%（3,257 / 3,257）；修复只补测试与
 CI 诊断，不修改生产实现、共享适配层或 Provider 端口。
+
+## 2026-08-20 — 步骤 15 无旧聚合实现与合并语义
+
+**问题。** 文档要求迁移 Provider 中立的 history merge/replay 输入，但旧仓库只存在 Codex、Claude
+与 Grok 各自的 parser/reader，没有可直接搬迁的跨 Provider 聚合实现。目标 package 也只有模板
+占位类；若复制任一 vendor parser 会违反步骤 15 边界。
+
+**决策。** 按已批准契约新建通用 JSON Lines 外壳：caller 注入完整 reader 与 vendor decoder，
+本包不理解 vendor 字段。malformed JSON、非 object 与显式 `HistoryRecordDecodeException` 只跳过
+当前行并返回 typed warning；reader IO failure 和其他 decoder 异常不捕获。输入按 caller 顺序
+处理，重复 turn id 由后输入在首次位置覆盖。warning 不保存原始行、异常或用户内容。
+
+**影响。** `agent_history_client` 只依赖 `agent_provider_contracts`，删除模板遗留且未使用的 logging、
+storage 与 mock 依赖；barrel 只导出 `history_merge.dart`。没有 vendor、Flutter、Repository 或 UI
+依赖，也没有修改共享 Provider port。5 个随机顺序测试达到 100%（41 / 41）。

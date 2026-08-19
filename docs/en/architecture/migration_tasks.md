@@ -410,18 +410,28 @@ ran 780 tests at 100% hand-written coverage (9,317 / 9,317), and Bloc lint repor
 
 Completion evidence (2026-08-20): the barrel exports only the bundle factory, static capabilities, and
 single CLI locator. Grok-private history readers/parsers moved with the vendor package, while Step 15
-still owns only cross-provider aggregation. Package gates ran 233 tests at 100% hand-written coverage
+still owns only cross-provider aggregation. Package gates ran 235 tests at 100% hand-written coverage
 (3,257 / 3,257). A real smoke against local Grok CLI 1.0.5 passed two concurrent isolated-process sessions
 and a fresh-process `session/load` recovery. No shared Provider port changed.
-In the same workspace iteration, 27/27 roots passed analyze/format, 26/26 test roots ran 1,012 tests
+In the same workspace iteration, 27/27 roots passed analyze/format, 26/26 test roots ran 1,014 tests
 at 100% hand-written coverage (12,573 / 12,573), and Bloc lint reported zero issues across 339 files.
 
-### Step 15 — `agent_history_client`
+### Step 15 — `agent_history_client` (complete)
 
-- [ ] Retain only cross-provider history merge/replay input and generic fault tolerance.
-- [ ] Keep vendor-specific parsers in each vendor client; do not duplicate them.
-- [ ] A corrupt record may be skipped with a typed warning; never swallow an overall IO failure.
-- [ ] Do not produce UI timeline cards/projections.
+- [x] Retain only cross-provider history merge/replay input and generic fault tolerance.
+- [x] Keep vendor-specific parsers in each vendor client; do not duplicate them.
+- [x] A corrupt record may be skipped with a typed warning; never swallow an overall IO failure.
+- [x] Do not produce UI timeline cards/projections.
+
+Completion evidence (2026-08-20): the legacy repository contains no cross-provider aggregator to move,
+so this package implements the planned contract as a new JSON Lines framing boundary with injected
+vendor decoders. Malformed JSON, non-object records, and explicit typed decode failures are skipped
+with warnings that retain no raw payload. Whole-reader IO failures and unexpected decoder failures
+escape unchanged. Later turns with the same id deterministically replace content at the first-seen
+position. The barrel exports only `history_merge.dart`, with no vendor, Flutter, or Presentation
+dependency. Package gates run 5 tests at 100% hand-written coverage (41 / 41).
+In the same final workspace iteration, 27/27 roots pass analyze/format, 26/26 test roots run 1,018 tests
+at 100% hand-written coverage (12,613 / 12,613), and Bloc lint reports zero issues across 339 files.
 
 ### Step 16 — `agent_management_client`
 
