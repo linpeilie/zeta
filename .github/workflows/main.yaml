@@ -111,14 +111,31 @@ jobs:
         if: matrix.has_tests
         # Generated sources leave the coverage denominator via the exclude
         # glob below; the Flutter-backed command needs no ignore-comment flag.
-        run: >-
-          dart pub global run very_good_cli:very_good test
-          --coverage
-          --min-coverage 100
-          --exclude-coverage '**/*.{g,freezed,gen}.dart'
-          --report-on lib
-          --timeout 120
-          --test-randomize-ordering-seed random
+        shell: bash
+        run: |
+          set +e
+          dart pub global run very_good_cli:very_good test \
+            --coverage \
+            --min-coverage 100 \
+            --exclude-coverage '**/*.{g,freezed,gen}.dart' \
+            --report-on lib \
+            --timeout 120 \
+            --test-randomize-ordering-seed random
+          test_exit=$?
+          set -e
+
+          if (( test_exit != 0 )) && [[ -f coverage/lcov.info ]]; then
+            echo 'Uncovered source lines:'
+            awk '
+              /^SF:/ { source = substr($0, 4) }
+              /^DA:[0-9]+,0$/ {
+                split(substr($0, 4), data, ",")
+                print source ":" data[1]
+              }
+            ' coverage/lcov.info
+          fi
+
+          exit "$test_exit"
 
       - name: Report tooling-only package
         if: ${{ !matrix.has_tests }}
