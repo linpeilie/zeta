@@ -332,3 +332,72 @@ no raw line, exception, or user content.
 storage, and mocking dependencies are removed, and the barrel exports only `history_merge.dart`. It has
 no vendor, Flutter, Repository, or UI dependency and changes no shared Provider port. Five randomized
 tests reach 100% coverage (41 / 41).
+
+## 2026-08-20 — Step 16 legacy repositories exceed the new Data boundary
+
+**Problem.** The three legacy management repositories mix external IO with runtime-registry access,
+model catalog assembly, localized text, latest-version checks, and UI progress state. Copying them
+would violate the Step 16 contract. At the same time, each vendor package already owns its only valid
+CLI locator, so reimplementing path discovery here would create competing owners.
+
+**Decision.** Implement a fresh `AgentManagementDataSource` boundary rather than copy the legacy
+repositories wholesale. Inject vendor-owned path resolution, CLI location, prompt-free protocol
+probing, and account-evidence callbacks. Return stable neutral response objects and failure codes;
+leave runtime catalogs, localization, repository policy, and UI state for their later layers. Do not
+modify the shared adaptation layer or Provider ports.
+
+**Impact.** The three concrete management sources depend on contracts and shared IO utilities only;
+they do not import one another, any vendor client, Flutter, Repository, or Presentation code. Step 17
+can prove locator ownership without reconciling duplicate implementations.
+
+## 2026-08-20 — Step 16 configuration contract differs from legacy behavior
+
+**Problem.** The Step 16 API explicitly requires read/write configuration with only `contents` on
+save. Legacy Codex/Grok saves also accepted an original snapshot for optimistic conflict detection,
+while legacy Claude exposed metadata only and rejected every save. Preserving either behavior would
+contradict the approved public contract.
+
+**Decision.** Follow the new contract: support current-syntax TOML for Codex/Grok and a JSON object for
+Claude, refuse symbolic links, copy an existing backup, and delegate atomic replacement to
+`zeta_storage`. Keep the document signature as read evidence but do not invent an unused conflict
+exception that the save API cannot enforce. Convert only known parser `FormatException`s to safe typed
+validation codes; unexpected parser failures propagate. Retain asynchronous Data IO and disable the
+inapplicable `avoid_slow_async_io` lint for this package.
+
+**Impact.** Claude configuration editing becomes available for the current schema as the migration
+plan requires. Codex/Grok no longer claim an optimistic-concurrency guarantee absent from the new API;
+the later Repository/UI must reread after save and can propose a contract change separately if such a
+guarantee is required.
+
+## 2026-08-20 — Step 16 credential and log minimization
+
+**Problem.** The legacy Grok detector infers account state by reading `auth.json`, and raw CLI output,
+configuration, or logs can contain credentials. Returning those payloads from a generic management
+client would enlarge the secret-handling surface.
+
+**Decision.** Do not read Grok credential-file contents. Inject account evidence, and make the Claude
+probe run only `auth status --json`, accepting exit codes zero and one while retaining only four
+whitelisted non-secret fields. Bound process output and log tails, refuse unsafe log paths, and redact
+common token/key/password patterns before returning log entries. Never log raw auth JSON, stdout,
+stderr, configuration, or caught exceptions.
+
+**Impact.** Static security inspection finds no embedded secret, raw credential logging, or dependency
+on provider credential storage. Detection remains prompt-free, and unavailable evidence is represented
+as a neutral status rather than guessed from a credential filename.
+
+## 2026-08-20 — Step 16 cross-platform process fixture and official sources
+
+**Problem.** The first real-process test invoked `Platform.resolvedExecutable --version`; under
+`flutter test` that executable is the Flutter test host, not the Dart CLI, so the success assertion
+failed. One earlier `--no-pub` diagnostic also omitted scoped official-source variables and printed the
+workstation China-mirror warning, although it did not resolve dependencies or change the lockfile.
+
+**Decision.** Exercise the default process starter with a disposable cross-platform system shell and
+a bounded sleep command, while keeping deterministic process behavior behind injected fakes. Remove
+an unreachable catch-all parser branch instead of excluding it from coverage. Run final package and
+workspace gates with explicit `pub.dev`/Google storage variables, then verify the lockfile with
+`flutter pub get --enforce-lockfile`.
+
+**Impact.** The package has 35 randomized tests and reaches 100% CI-counted coverage (329 / 329) on
+Windows without coverage ignores. The final workspace iteration passes 1,052 tests at 12,941 / 12,941;
+the lockfile retains official sources and no mirror or test-host assumption enters production code.

@@ -287,3 +287,61 @@ CI 诊断，不修改生产实现、共享适配层或 Provider 端口。
 **影响。** `agent_history_client` 只依赖 `agent_provider_contracts`，删除模板遗留且未使用的 logging、
 storage 与 mock 依赖；barrel 只导出 `history_merge.dart`。没有 vendor、Flutter、Repository 或 UI
 依赖，也没有修改共享 Provider port。5 个随机顺序测试达到 100%（41 / 41）。
+
+## 2026-08-20 — 步骤 16 旧 Repository 超出新 Data 边界
+
+**问题。** 三个旧 management repository 把外部 IO 与 runtime registry、model catalog 组装、
+本地化文案、latest-version 检查和 UI progress 状态混在一起；整体复制会违反步骤 16 契约。同时
+每个 vendor package 已拥有唯一有效的 CLI locator，在本包重写路径发现会产生竞争归属。
+
+**决策。** 新建 `AgentManagementDataSource` 边界，不整体复制旧 repository。vendor 自有的路径解析、
+CLI 定位、无 Prompt protocol probe 与 account-evidence callback 全部通过注入复用；对外只返回稳定
+neutral response 与 failure code。runtime catalog、本地化、repository policy 和 UI 状态留给后续层。
+不修改共享适配层或 Provider port。
+
+**影响。** 三个具体 management source 只依赖 contracts 与共享 IO 工具，不互相导入，也不导入
+vendor client、Flutter、Repository 或 Presentation。步骤 17 可以直接验证 locator 唯一归属，
+无需再消解重复实现。
+
+## 2026-08-20 — 步骤 16 配置契约与旧行为不同
+
+**问题。** 步骤 16 API 明确要求配置可读写，且 save 只接收 `contents`。旧 Codex/Grok save 还接收
+original snapshot 来做乐观冲突检测；旧 Claude 则只返回 metadata 并拒绝所有 save。保留任一旧行为
+都会与已批准公共契约矛盾。
+
+**决策。** 服从新契约：Codex/Grok 支持当前语法 TOML，Claude 支持 JSON object；拒绝符号链接，
+复制既有备份，并委托 `zeta_storage` 原子替换。document signature 保留为读取证据，但不虚构 save
+API 无法执行的 conflict exception。只把已知 parser `FormatException` 转为安全 typed validation
+code，非预期 parser failure 原样抛出。Data 层继续使用异步 IO，因此本包关闭不适用的
+`avoid_slow_async_io` lint。
+
+**影响。** Claude current-schema 配置编辑按迁移计划可用；Codex/Grok 不再宣称新 API 不具备的
+乐观并发保证。后续 Repository/UI 在保存后重新读取；若以后确需该保证，应单独提出契约变更。
+
+## 2026-08-20 — 步骤 16 credential 与日志最小化
+
+**问题。** 旧 Grok detector 通过读取 `auth.json` 推断账户状态；CLI 原始输出、配置与日志都可能
+含凭据。让通用 management client 返回这些 payload 会扩大密钥处理面。
+
+**决策。** 不读取 Grok credential file 内容，账户证据通过注入获得。Claude probe 只执行
+`auth status --json`，只接受 exit code 0/1，并只保留四个非密钥白名单字段。限制 process output
+与 log tail 大小，拒绝不安全日志路径，在返回 log entry 前脱敏常见 token/key/password 模式；
+不记录 raw auth JSON、stdout、stderr、配置或捕获异常。
+
+**影响。** 静态安全审计未发现内嵌密钥、原始 credential 日志或 provider credential storage 依赖。
+detect 保持无 Prompt；证据不可用时返回 neutral status，不再根据 credential 文件名猜测登录态。
+
+## 2026-08-20 — 步骤 16 跨平台 process fixture 与官方依赖源
+
+**问题。** 首个真实 process 测试执行 `Platform.resolvedExecutable --version`；在 `flutter test`
+中该路径是 Flutter test host，不是 Dart CLI，所以成功断言失败。此前另一次 `--no-pub` 诊断忘记
+设置命令作用域官方源变量，打印了本机中国镜像警告，但未解析依赖、也未改动 lockfile。
+
+**决策。** 使用一次性跨平台 system shell 和有界 sleep 命令覆盖默认 process starter；其余 process
+行为继续用注入 fake 确定性测试。删除不可达 parser catch-all，而非将其排除出 coverage。最终包级
+与 workspace 门禁显式设置 `pub.dev`/Google storage，并用
+`flutter pub get --enforce-lockfile` 复验锁文件。
+
+**影响。** 本包 35 个随机顺序测试在 Windows 达到 CI 口径 100% coverage（329 / 329），未添加
+coverage ignore。最终 workspace 同轮 1,052 tests、12,941 / 12,941；lockfile 保持官方源，
+生产代码不带入镜像或 test-host 假设。

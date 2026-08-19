@@ -435,10 +435,19 @@ at 100% hand-written coverage (12,613 / 12,613), and Bloc lint reports zero issu
 
 ### Step 16 — `agent_management_client`
 
-- [ ] Migrate the three Agent management data sources, CLI process runner, and Claude auth probe.
-- [ ] Expose Data APIs for detect, test connection, read/write config, and read logs.
-- [ ] Do not depend on `agent_provider_repository` or store selected Agent/loading/progress UI state.
-- [ ] Test process, file, and credential branches with injected fakes.
+- [x] Migrate the three Agent management data sources, CLI process runner, and Claude auth probe.
+- [x] Expose Data APIs for detect, test connection, read/write config, and read logs.
+- [x] Do not depend on `agent_provider_repository` or store selected Agent/loading/progress UI state.
+- [x] Test process, file, and credential branches with injected fakes.
+
+**Completed 2026-08-20.** The package now owns vendor-neutral management responses, bounded CLI
+execution, injectable asynchronous filesystem IO, current-schema JSON/TOML configuration reads and
+atomic writes, redacted log tails, and a whitelist-only Claude auth-status projection. Vendor-owned
+CLI locators and prompt-free protocol probes are injected, so no locator is duplicated and no shared
+Provider port changes. Package gates run 35 randomized tests at 100% hand-written coverage under the
+CI exclusions (329 / 329). In the same final workspace iteration, 27/27 roots pass analyze/format,
+26/26 test roots run 1,052 tests at 100% hand-written coverage (12,941 / 12,941), and Bloc lint reports
+zero issues across 349 files.
 
 ### Step 17 — Provider Data integration gate
 

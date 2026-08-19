@@ -416,10 +416,18 @@ failure 原样抛出。后输入的同 id turn 在首次位置确定性覆盖，
 
 ### 步骤 16 — `agent_management_client`
 
-- [ ] 迁三个 Agent management datasource、CLI process runner、Claude auth probe。
-- [ ] 提供 detect/test connection/read-write config/read logs 的 Data API。
-- [ ] 不依赖 `agent_provider_repository`，不保存选中 Agent/loading/progress UI 状态。
-- [ ] process、文件与 credential 分支全部使用注入 fake 测试。
+- [x] 迁三个 Agent management datasource、CLI process runner、Claude auth probe。
+- [x] 提供 detect/test connection/read-write config/read logs 的 Data API。
+- [x] 不依赖 `agent_provider_repository`，不保存选中 Agent/loading/progress UI 状态。
+- [x] process、文件与 credential 分支全部使用注入 fake 测试。
+
+**完成于 2026-08-20。** 本包现已承载 vendor-neutral management response、有界 CLI 执行、
+可注入异步文件系统 IO、current-schema JSON/TOML 配置读取与原子写入、脱敏日志 tail，以及只保留
+白名单字段的 Claude auth-status projection。vendor 自有 CLI locator 与无 Prompt protocol probe 均
+通过注入复用，因此没有复制 locator，也没有修改共享 Provider port。包级门禁在 CI exclusion 下
+运行 35 个随机顺序测试，人工 coverage 100%（329 / 329）。同一轮最终 workspace 门禁中，27/27
+roots analyze/format 通过，26/26 test roots 共 1,052 tests，人工 coverage 100%（12,941 / 12,941），
+Bloc lint 对 349 个文件报告 0 issues。
 
 ### 步骤 17 — Provider Data 集成门
 

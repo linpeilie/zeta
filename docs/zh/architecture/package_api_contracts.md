@@ -487,7 +487,12 @@ abstract interface class ProviderConfigStore {
 
 ```dart
 export 'src/agent_management_data_source.dart';
+export 'src/agent_management_file_system.dart';
+export 'src/agent_management_responses.dart';
+export 'src/claude_code_auth_status_probe.dart';
 export 'src/cli_process_runner.dart';
+// barrel 还只从 managed_cli_data_source.dart 暴露 locator/probe 注入缝与
+// 三个具体 vendor management datasource。
 
 abstract interface class AgentManagementDataSource {
   Future<DetectResponse> detect({required String executablePath});
@@ -500,7 +505,11 @@ abstract interface class AgentManagementDataSource {
 ```
 
 返回 **vendor-neutral response**，不依赖 `agent_provider_repository`，不保存选中 Agent 或
-loading/progress UI 状态（[步骤 16](./migration_tasks.md)）。
+loading/progress UI 状态（[步骤 16](./migration_tasks.md)）。具体 vendor locator 和 protocol probe
+由其归属包通过构造注入；本包不实现第二份 locator，也不导入 vendor client。配置写入只校验当前
+JSON/TOML 语法，拒绝符号链接，使用 `zeta_storage` 原子替换，并在复制既有文件时返回备份路径。
+日志读取有界且在越过 Data 边界前脱敏；Claude auth decoder 只保留 `loggedIn`、`authMethod`、
+`apiProvider` 与 `subscriptionType`。
 
 ---
 

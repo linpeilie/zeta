@@ -505,7 +505,12 @@ no silent truncation.
 
 ```dart
 export 'src/agent_management_data_source.dart';
+export 'src/agent_management_file_system.dart';
+export 'src/agent_management_responses.dart';
+export 'src/claude_code_auth_status_probe.dart';
 export 'src/cli_process_runner.dart';
+// The barrel also shows only the locator/probe seams and three concrete
+// vendor management data sources from managed_cli_data_source.dart.
 
 abstract interface class AgentManagementDataSource {
   Future<DetectResponse> detect({required String executablePath});
@@ -518,7 +523,13 @@ abstract interface class AgentManagementDataSource {
 ```
 
 Returns **vendor-neutral responses**, does not depend on `agent_provider_repository`, and stores no
-selected agent or loading/progress UI state ([step 16](./migration_tasks.md)).
+selected agent or loading/progress UI state ([step 16](./migration_tasks.md)). Concrete vendor
+locators and protocol probes are constructor-injected from their owning packages; this package does
+not implement a second locator or import a vendor client. Configuration writes validate the current
+JSON/TOML syntax, refuse symbolic links, use `zeta_storage` atomic replacement, and return a backup
+path when an existing file was copied. Log reads are bounded and redacted before they cross the Data
+boundary; the Claude auth decoder retains only `loggedIn`, `authMethod`, `apiProvider`, and
+`subscriptionType`.
 
 ---
 
