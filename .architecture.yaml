@@ -28,6 +28,10 @@ layers:
       - workspace_client
       - project_session_client
       - usage_statistics_storage_client
+    vendor_packages:
+      - codex_app_server_client
+      - claude_code_client
+      - grok_acp_client
     flutter_allowed: false
     may_depend_on:
       - contracts
@@ -89,6 +93,8 @@ layers:
       - MethodChannel
 
   presentation:
+    packages:
+      - app_ui
     roots:
       - lib/**/view/**
       - lib/**/widgets/**

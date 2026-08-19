@@ -606,7 +606,7 @@ schema 快照的生成入口。`test_fast/test_full` 四个脚本被 VGV 四门�
 | `test/src/features/agent/domain/**` | 17 | rewrite | `packages/agent_provider_contracts/test/` | — |
 | `test/src/features/agent/data/**` | 33 | rewrite | 按 mapper 前缀分配到对应 vendor package | — |
 | `test/flutter_test_config.dart` | 1 | rewrite | `test/flutter_test_config.dart` | golden 字体加载与全局测试配置；workspace 内每个含 widget test 的包各一份 |
-| `test/src/architecture/**` | 3 | rewrite | `test/architecture/ + .architecture.yaml` | 架构门禁重写为读取 .architecture.yaml 的断言（步骤 6） |
+| `test/src/architecture/**` | 3 | rewrite | `test/architecture/ + .architecture.yaml` | 步骤 6 已完成：24 个断言覆盖配置、package 依赖、源码边界与 CI 契约 |
 | `test/src/features/**` | 55 | rewrite | 对应 package/test 或 test/<feature>/ | 测试镜像 lib/；跟随其被测对象的归属 |
 | `test/src/testing/**` | 13 | rewrite | 各 package 的 test/helpers/ | 共享 harness 按包复制；禁止跨包 test import |
 | `test/fixtures/**` | 26 | rewrite | 按 Provider 分配到对应 vendor package 的 test/fixtures/ | — |
@@ -735,8 +735,8 @@ schema 快照的生成入口。`test_fast/test_full` 四个脚本被 VGV 四门�
 | `.github/ISSUE_TEMPLATE/config.yml` | rewrite | `.github/` | 新仓库已有 VGV workflow；只迁移 OSV / license / 架构门禁增量（步骤 6） |
 | `.github/ISSUE_TEMPLATE/feature_request.yml` | rewrite | `.github/` | 新仓库已有 VGV workflow；只迁移 OSV / license / 架构门禁增量（步骤 6） |
 | `.github/PULL_REQUEST_TEMPLATE.md` | rewrite | `.github/` | 新仓库已有 VGV workflow；只迁移 OSV / license / 架构门禁增量（步骤 6） |
-| `.github/workflows/ci.yml` | rewrite | `.github/` | 新仓库已有 VGV workflow；只迁移 OSV / license / 架构门禁增量（步骤 6） |
-| `.github/workflows/release.yml` | rewrite | `.github/` | 新仓库已有 VGV workflow；只迁移 OSV / license / 架构门禁增量（步骤 6） |
+| `.github/workflows/ci.yml` | rewrite | `.github/workflows/main.yaml` | 步骤 6 已完成：27-root 质量矩阵、随机顺序、100% coverage 与 golden job |
+| `.github/workflows/release.yml` | rewrite | `.github/workflows/{desktop_build,osv_scan,license_check}.yaml` | 步骤 6 已完成：三平台矩阵、OSV、许可证与例外说明门禁 |
 
 ---
 
@@ -757,7 +757,7 @@ schema 快照的生成入口。`test_fast/test_full` 四个脚本被 VGV 四门�
 | `README.md` | rewrite | `README.md` | 按新架构重写；保留中英双版 |
 | `SECURITY.md` | move | `SECURITY.md` |  |
 | `analysis_options.yaml` | rewrite | `analysis_options.yaml` | 统一 very_good_analysis |
-| `dart_test.yaml` | rewrite | `dart_test.yaml` | random ordering + golden tag（步骤 6） |
+| `dart_test.yaml` | rewrite | `dart_test.yaml + packages/app_ui/dart_test.yaml` | 步骤 6 已完成：random ordering + golden tag |
 | `devtools_options.yaml` | move | `devtools_options.yaml` |  |
 | `l10n.yaml` | rewrite | `l10n.yaml` | 合并 required attributes / escaping / coverage exclusion |
 | `pubspec.lock` | regenerate | `pubspec.lock` | workspace 解析后重新生成并提交（步骤 4） |

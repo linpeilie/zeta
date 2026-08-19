@@ -8,8 +8,8 @@
 
 | 阶段 | 步骤 | 状态 |
 | --- | --- | --- |
-| P-1 基线与 ADR | 0–2 | ☐ |
-| P0 工程地基 | 3–6 | ☐ |
+| P-1 基线与 ADR | 0–2 | ☑ |
+| P0 工程地基 | 3–6 | ☑ |
 | P1 共享契约与基础设施 | 7–10 | ☐ |
 | P2 Provider 与 Management Data | 11–17 | ☐ |
 | P3 其余 Data | 18–21 | ☐ |
@@ -221,17 +221,19 @@ packages/<name>/
 
 ### 步骤 6 — CI 与架构门禁
 
-- [ ] 四门按 §1.7 固定顺序执行，workspace 每个 package 独立报告。
-- [ ] 架构测试读取 `.architecture.yaml` 并断言四层依赖。
-- [ ] 禁止 repository→repository、vendor client 互依、外部 `src/` import。
-- [ ] 禁止 `bootstrap.dart` 之外的业务代码 import Data；platform adapter 只允许 `desktop_platform_api` / Flutter services / 对应 plugin。
-- [ ] 禁止 `extra:`、裸路径导航、Bloc→Bloc 构造依赖。
-- [ ] 禁止 `app_ui` 依赖 Repository/Data/AppLocalizations。
-- [ ] CI 增加 test random ordering 和 golden tag job。
-- [ ] CI 增加 `pubspec.lock` OSV 扫描、依赖许可证检查和未解释 advisory 例外检查。
-- [ ] 三平台 CI 至少构建 production entrypoint。
+**状态：已完成。** `.architecture.yaml` 现已显式登记 contracts、Data、Repository、presentation、tooling 与三个 vendor client 集合；24 个架构契约测试覆盖 package/path 依赖、Flutter 隔离、composition root、platform adapter、外部 `src/`、typed navigation、Bloc 隔离、`app_ui` 和供应链例外。CI 按 27 个 workspace root 独立报告 analyze/format，并对 26 个含测试的 root 执行随机顺序 test + 100% coverage；Widgetbook 明确作为 tooling-only root 报告 analyze/format，无 test 目录。最终本地同轮门禁：27/27 roots analyze 0 问题，format 116 files / 0 changed，26 个可测试 roots 共 128 tests，人工 Dart coverage 100%（134 / 134）。三平台 production 构建由 `desktop-build` 最近全绿运行 `32229542327` 证明。
 
-**P0 出口**：空工程三平台可构建；身份一致；workspace 和架构门禁在 CI 生效。
+- [x] 四门按 §1.7 固定顺序执行，workspace 每个 package 独立报告。
+- [x] 架构测试读取 `.architecture.yaml` 并断言四层依赖。
+- [x] 禁止 repository→repository、vendor client 互依、外部 `src/` import。
+- [x] 禁止 `bootstrap.dart` 之外的业务代码 import Data；platform adapter 只允许 `desktop_platform_api` / Flutter services / 对应 plugin。
+- [x] 禁止 `extra:`、裸路径导航、Bloc→Bloc 构造依赖。
+- [x] 禁止 `app_ui` 依赖 Repository/Data/AppLocalizations。
+- [x] CI 增加 test random ordering 和 golden tag job。
+- [x] CI 增加 `pubspec.lock` OSV 扫描、依赖许可证检查和未解释 advisory 例外检查。
+- [x] 三平台 CI 至少构建 production entrypoint。
+
+**P0 出口：已通过。** 空工程三平台可构建；身份一致；workspace 和架构门禁在 CI 生效。
 
 ---
 

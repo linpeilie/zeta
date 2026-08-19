@@ -8,8 +8,8 @@ This checklist turns the [migration topology](./migration_topology.md) into exec
 
 | Phase | Steps | Status |
 | --- | --- | --- |
-| P-1 Baseline and ADRs | 0–2 | ☐ |
-| P0 Engineering foundation | 3–6 | ☐ |
+| P-1 Baseline and ADRs | 0–2 | ☑ |
+| P0 Engineering foundation | 3–6 | ☑ |
 | P1 Shared contracts and infrastructure | 7–10 | ☐ |
 | P2 Provider and Management Data | 11–17 | ☐ |
 | P3 Remaining Data | 18–21 | ☐ |
@@ -224,17 +224,19 @@ There are no released users, so no compatibility migration or legacy data upgrad
 
 ### Step 6 — CI and architecture gates
 
-- [ ] Run the four gates in §1.7 order and report each workspace package separately.
-- [ ] Architecture tests read `.architecture.yaml` and enforce the four-layer dependency graph.
-- [ ] Reject Repository-to-Repository dependencies, vendor-client cross-dependencies, and external `src/` imports.
-- [ ] Reject Data imports in business code outside `bootstrap.dart`; platform adapters allow only `desktop_platform_api` / Flutter services / their plugin.
-- [ ] Reject `extra:`, raw-path navigation, and Bloc-to-Bloc constructor dependencies.
-- [ ] Reject `app_ui` dependencies on Repository, Data, or AppLocalizations.
-- [ ] Add randomized test ordering and a golden-tag CI job.
-- [ ] Add `pubspec.lock` OSV scanning, dependency-license checking, and a gate for unexplained advisory suppressions.
-- [ ] CI builds at least the production entrypoint on all three platforms.
+**Status: complete.** `.architecture.yaml` now explicitly registers the contracts, Data, Repository, presentation, and tooling layers plus the three vendor clients. Twenty-four architecture contract tests cover package/path dependencies, Flutter isolation, the composition root, platform adapters, external `src/` imports, typed navigation, Bloc isolation, `app_ui`, and supply-chain exceptions. CI reports analyze/format independently for all 27 workspace roots and runs randomized tests plus 100% coverage for the 26 roots that contain tests; Widgetbook is explicitly reported as a tooling-only root with no test directory. The final local gate round observed 27/27 roots with zero analyze issues, 116 formatted files with 0 changed, 128 tests across 26 testable roots, and 100% hand-written Dart coverage (134 / 134). The latest fully green `desktop-build` run `32229542327` proves the production build on all three platforms.
 
-**P0 exit:** empty shells build on three platforms, identity is uniform, and workspace/architecture gates run in CI.
+- [x] Run the four gates in §1.7 order and report each workspace package separately.
+- [x] Architecture tests read `.architecture.yaml` and enforce the four-layer dependency graph.
+- [x] Reject Repository-to-Repository dependencies, vendor-client cross-dependencies, and external `src/` imports.
+- [x] Reject Data imports in business code outside `bootstrap.dart`; platform adapters allow only `desktop_platform_api` / Flutter services / their plugin.
+- [x] Reject `extra:`, raw-path navigation, and Bloc-to-Bloc constructor dependencies.
+- [x] Reject `app_ui` dependencies on Repository, Data, or AppLocalizations.
+- [x] Add randomized test ordering and a golden-tag CI job.
+- [x] Add `pubspec.lock` OSV scanning, dependency-license checking, and a gate for unexplained advisory suppressions.
+- [x] CI builds at least the production entrypoint on all three platforms.
+
+**P0 exit: passed.** Empty shells build on three platforms, identity is uniform, and workspace/architecture gates run in CI.
 
 ---
 

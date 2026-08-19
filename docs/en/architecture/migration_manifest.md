@@ -623,7 +623,7 @@ below only cover what is left.
 | `test/src/features/agent/domain/**` | 17 | rewrite | `packages/agent_provider_contracts/test/` | — |
 | `test/src/features/agent/data/**` | 33 | rewrite | assigned by mapper prefix to the matching vendor package | — |
 | `test/flutter_test_config.dart` | 1 | rewrite | `test/flutter_test_config.dart` | Golden font loading and global test config; one copy per workspace package that has widget tests |
-| `test/src/architecture/**` | 3 | rewrite | `test/architecture/ + .architecture.yaml` | Architecture gates rewritten as assertions that read .architecture.yaml (step 6) |
+| `test/src/architecture/**` | 3 | rewrite | `test/architecture/ + .architecture.yaml` | Step 6 complete: 24 assertions cover configuration, package dependencies, source boundaries, and the CI contract |
 | `test/src/features/**` | 55 | rewrite | the matching package/test or test/<feature>/ | Tests mirror lib/ and follow the ownership of what they test |
 | `test/src/testing/**` | 13 | rewrite | test/helpers/ of each package | Shared harnesses are copied per package; cross-package test imports are forbidden |
 | `test/fixtures/**` | 26 | rewrite | assigned per provider to the matching vendor package's test/fixtures/ | — |
@@ -755,8 +755,8 @@ Migrated as a single unit with `move`, same path. Rationale in §5.1.
 | `.github/ISSUE_TEMPLATE/config.yml` | rewrite | `.github/` | The new repo already has the VGV workflow; only the OSV / license / architecture-gate deltas migrate (step 6) |
 | `.github/ISSUE_TEMPLATE/feature_request.yml` | rewrite | `.github/` | The new repo already has the VGV workflow; only the OSV / license / architecture-gate deltas migrate (step 6) |
 | `.github/PULL_REQUEST_TEMPLATE.md` | rewrite | `.github/` | The new repo already has the VGV workflow; only the OSV / license / architecture-gate deltas migrate (step 6) |
-| `.github/workflows/ci.yml` | rewrite | `.github/` | The new repo already has the VGV workflow; only the OSV / license / architecture-gate deltas migrate (step 6) |
-| `.github/workflows/release.yml` | rewrite | `.github/` | The new repo already has the VGV workflow; only the OSV / license / architecture-gate deltas migrate (step 6) |
+| `.github/workflows/ci.yml` | rewrite | `.github/workflows/main.yaml` | Step 6 complete: 27-root quality matrix, randomized tests, 100% coverage, and a golden job |
+| `.github/workflows/release.yml` | rewrite | `.github/workflows/{desktop_build,osv_scan,license_check}.yaml` | Step 6 complete: three-platform matrix, OSV, license, and explained-exception gates |
 
 ---
 
@@ -777,7 +777,7 @@ Migrated as a single unit with `move`, same path. Rationale in §5.1.
 | `README.md` | rewrite | `README.md` | Rewritten for the new architecture; both language versions kept |
 | `SECURITY.md` | move | `SECURITY.md` | — |
 | `analysis_options.yaml` | rewrite | `analysis_options.yaml` | Unified very_good_analysis |
-| `dart_test.yaml` | rewrite | `dart_test.yaml` | Random ordering + golden tag (step 6) |
+| `dart_test.yaml` | rewrite | `dart_test.yaml + packages/app_ui/dart_test.yaml` | Step 6 complete: randomized ordering + golden tag |
 | `devtools_options.yaml` | move | `devtools_options.yaml` | — |
 | `l10n.yaml` | rewrite | `l10n.yaml` | Merge required attributes / escaping / coverage exclusion |
 | `pubspec.lock` | regenerate | `pubspec.lock` | Regenerated and committed after workspace resolution (step 4) |

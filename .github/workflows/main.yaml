@@ -16,8 +16,163 @@ jobs:
   semantic-pull-request:
     uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/semantic_pull_request.yml@v1
 
-  build:
-    uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/flutter_package.yml@v1
-    with:
-      flutter_version: "3.47.x"
-      run_bloc_lint: true
+  discover-packages:
+    name: discover workspace packages
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.packages.outputs.matrix }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Discover workspace package roots
+        id: packages
+        shell: bash
+        run: |
+          {
+            printf '{"directory":".","has_tests":true}\n'
+            while IFS= read -r pubspec; do
+              directory="${pubspec%/pubspec.yaml}"
+              has_tests=false
+              if [[ -d "$directory/test" ]]; then
+                has_tests=true
+              fi
+              printf \
+                '{"directory":"%s","has_tests":%s}\n' \
+                "$directory" \
+                "$has_tests"
+            done < <(
+              find packages \
+                \( -path '*/build' -o -path '*/.dart_tool' \) -prune \
+                -o -name pubspec.yaml -type f -print \
+                | sort
+            )
+          } | jq -sc '{include: .}' > workspace-matrix.json
+          echo "matrix=$(cat workspace-matrix.json)" >> "$GITHUB_OUTPUT"
+
+  quality:
+    name: quality (${{ matrix.directory }})
+    needs: discover-packages
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix: ${{ fromJSON(needs.discover-packages.outputs.matrix) }}
+    defaults:
+      run:
+        working-directory: ${{ matrix.directory }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.x
+          cache: true
+
+      - name: Resolve locked workspace dependencies
+        working-directory: ${{ github.workspace }}
+        run: flutter pub get --enforce-lockfile
+
+      - name: Install Very Good CLI
+        if: matrix.has_tests
+        run: dart pub global activate very_good_cli 1.4.0
+
+      - name: Install Bloc tools
+        if: matrix.directory == '.'
+        run: flutter pub global activate bloc_tools
+
+      - name: Analyze
+        shell: bash
+        run: |
+          targets=(lib)
+          if [[ -d test ]]; then
+            targets+=(test)
+          fi
+          flutter analyze --no-pub "${targets[@]}"
+
+      - name: Bloc lint
+        if: matrix.directory == '.'
+        run: bloc lint .
+
+      - name: Check formatting
+        shell: bash
+        run: |
+          targets=(lib)
+          if [[ -d test ]]; then
+            targets+=(test)
+          fi
+          dart format --output=none --set-exit-if-changed "${targets[@]}"
+
+      - name: Test and coverage
+        if: matrix.has_tests
+        run: >-
+          dart pub global run very_good_cli:very_good test
+          --coverage
+          --min-coverage 100
+          --check-ignore
+          --exclude-coverage '**/*.{g,freezed,gen}.dart'
+          --report-on lib
+          --test-randomize-ordering-seed random
+
+      - name: Report tooling-only package
+        if: ${{ !matrix.has_tests }}
+        run: >-
+          echo "No test directory: tooling-only package is limited to analyze
+          and format gates."
+
+  golden:
+    name: golden tests
+    needs: quality
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.x
+          cache: true
+
+      - name: Resolve locked workspace dependencies
+        run: flutter pub get --enforce-lockfile
+
+      - name: Run tagged golden tests
+        shell: bash
+        run: |
+          mapfile -t golden_files < <(
+            rg -l 'TestTag\.golden' test packages \
+              --glob '*_test.dart' \
+              --glob '!**/build/**' \
+              || true
+          )
+          if (( ${#golden_files[@]} == 0 )); then
+            echo 'No golden tests are present yet.'
+            exit 0
+          fi
+
+          roots=()
+          for file in "${golden_files[@]}"; do
+            directory=$(dirname "$file")
+            while [[ "$directory" != "." && ! -f "$directory/pubspec.yaml" ]]; do
+              directory=$(dirname "$directory")
+            done
+            roots+=("$directory")
+          done
+
+          while IFS= read -r directory; do
+            echo "::group::golden ($directory)"
+            (
+              cd "$directory"
+              flutter test \
+                --tags golden \
+                --test-randomize-ordering-seed random
+            )
+            echo '::endgroup::'
+          done < <(printf '%s\n' "${roots[@]}" | sort -u)
