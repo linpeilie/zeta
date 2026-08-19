@@ -54,6 +54,7 @@ docs/
 | [逐文件清单](./architecture/migration_manifest.md) | 1,507 个文件的 source→target 归类 |
 | [归属映射表](./architecture/ownership_map.md) | 旧类逐个裁决到四层中的哪一层 |
 | [架构决策记录](./architecture/architecture_decisions.md) | ADR-001—004 与已清零的 open-decision register |
+| [迁移执行决策日志](./architecture/migration_execution_decisions.md) | 实施偏差、证据、决策与影响 |
 | [包 API 契约](./architecture/package_api_contracts.md) | barrel 导出与接口签名 |
 | [会话状态设计](./architecture/agent_conversation_state_design.md) | `AgentConversationBloc` 字段级设计 |
 | [三份协议基线 + Token 计量](#protocols--协议) | Provider 适配依据 |
@@ -66,6 +67,7 @@ docs/
 - [**逐文件清单**](./architecture/migration_manifest.md)（[English](../en/architecture/migration_manifest.md)）⭐ — 旧仓库 1,507 个跟踪文件的 source→target 归类，每个恰好一次
 - [**归属映射表**](./architecture/ownership_map.md)（[English](../en/architecture/ownership_map.md)）⭐ — 旧 Controller/Store/Service 逐个裁决到 Data/Repository/Bloc/Presentation；24 处 `ChangeNotifier` 的去向
 - [**架构决策记录**](./architecture/architecture_decisions.md)（[English](../en/architecture/architecture_decisions.md)）⭐ — ADR-001—004、复核条件与已清零的 open-decision register
+- [**迁移执行决策日志**](./architecture/migration_execution_decisions.md)（[English](../en/architecture/migration_execution_decisions.md)）⭐ — 实施阶段的偏差、证据、决策与影响
 - [**包 API 契约**](./architecture/package_api_contracts.md)（[English](../en/architecture/package_api_contracts.md)）⭐ — 每个包的 barrel 导出与关键接口签名；P2 三方并行的前提
 - [**会话状态设计**](./architecture/agent_conversation_state_design.md)（[English](../en/architecture/agent_conversation_state_design.md)）⭐ — `AgentConversationBloc` 五个 slice 的字段级设计、Event 清单与缓存归属
 - [分层设计](./architecture/layering.md)（[English](../en/architecture/layering.md)）— Data / Repository / Bloc / Presentation 四层职责、注入方式、bloc 作用域

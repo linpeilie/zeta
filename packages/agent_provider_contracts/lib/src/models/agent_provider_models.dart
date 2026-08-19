@@ -321,8 +321,10 @@ final class AgentProviderSettings {
   /// 当前写入的 settings 结构版本（V2：权限仅 optionId）。
   static const int currentVersion = 2;
 
-  /// 可解码的 settings 外层版本；V1 权限迁移由 data codec 预处理。
-  static const Set<int> supportedVersions = <int>{1, 2};
+  /// 可解码的 settings 外层版本。
+  ///
+  /// 新架构只读取当前结构；历史升级留在迁移边界之外。
+  static const Set<int> supportedVersions = <int>{currentVersion};
 
   Map<String, Object?> toJson() {
     return <String, Object?>{

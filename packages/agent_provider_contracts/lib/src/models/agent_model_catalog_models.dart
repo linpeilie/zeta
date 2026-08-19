@@ -32,7 +32,10 @@ final class AgentModelCatalogSnapshot {
 
 /// 模型目录缓存的持久化端口。
 abstract interface class AgentModelCatalogCacheStore {
-  /// 宽容读取全部缓存；损坏或不兼容内容应返回空列表。
+  /// 读取全部缓存。
+  ///
+  /// 文件不存在时返回空列表；损坏或不兼容内容必须抛出类型化解码失败，
+  /// 由上层决定是否重建缓存。
   Future<List<AgentModelCatalogSnapshot>> load();
 
   /// 原子保存完整缓存快照。

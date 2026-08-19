@@ -477,6 +477,7 @@ final class HistoryMergeResult {
 ### 3.5 `agent_config_client`
 
 ```dart
+export 'src/agent_config_decode_exception.dart';
 export 'src/provider_config_store.dart';
 export 'src/model_catalog_cache_store.dart';
 export 'src/turn_context_store.dart';

@@ -121,7 +121,7 @@ void main() {
         containsPair('version', AgentProviderSettings.currentVersion),
       );
       expect(settings.providers.clear, throwsUnsupportedError);
-      expect(AgentProviderSettings.supportedVersions, <int>{1, 2});
+      expect(AgentProviderSettings.supportedVersions, <int>{2});
       expect(
         const AgentProviderStatus.idle().state,
         AgentProviderConnectionState.idle,

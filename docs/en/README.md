@@ -58,6 +58,7 @@ The migration is in progress; documents listed below but not yet created are fil
 | [File-by-file manifest](./architecture/migration_manifest.md) | source→target classification of all 1,507 tracked files |
 | [Ownership map](./architecture/ownership_map.md) | Which of the four layers each legacy class belongs to |
 | [Architecture decisions](./architecture/architecture_decisions.md) | ADR-001—004 and the cleared open-decision register |
+| [Migration execution decisions](./architecture/migration_execution_decisions.md) | Implementation mismatches, evidence, decisions, and impact |
 | [Package API contracts](./architecture/package_api_contracts.md) | Barrel exports and interface signatures |
 | [Conversation state design](./architecture/agent_conversation_state_design.md) | Field-level design of `AgentConversationBloc` |
 | [Three protocol baselines + token metering](#protocols) | The basis for provider adapters |
@@ -70,6 +71,7 @@ The migration is in progress; documents listed below but not yet created are fil
 - [**File-by-file manifest**](./architecture/migration_manifest.md)（[中文](../zh/architecture/migration_manifest.md)）⭐ — source→target classification of the old repo's 1,507 tracked files, each exactly once
 - [**Ownership map**](./architecture/ownership_map.md)（[中文](../zh/architecture/ownership_map.md)）⭐ — Legacy controllers/stores/services ruled one by one into Data/Repository/Bloc/Presentation; where all 24 `ChangeNotifier`s go
 - [**Architecture decisions**](./architecture/architecture_decisions.md)（[中文](../zh/architecture/architecture_decisions.md)）⭐ — ADR-001—004, their review triggers, and the cleared open-decision register
+- [**Migration execution decisions**](./architecture/migration_execution_decisions.md)（[中文](../zh/architecture/migration_execution_decisions.md)）⭐ — Implementation-time mismatches, evidence, decisions, and impact
 - [**Package API contracts**](./architecture/package_api_contracts.md)（[中文](../zh/architecture/package_api_contracts.md)）⭐ — Barrel exports and key interface signatures; the precondition for parallel P2 work
 - [**Conversation state design**](./architecture/agent_conversation_state_design.md)（[中文](../zh/architecture/agent_conversation_state_design.md)）⭐ — Field-level design of the five `AgentConversationBloc` slices, the event catalogue and cache ownership
 - [Layering design](./architecture/layering.md)（[中文](../zh/architecture/layering.md)）— Data / Repository / Bloc / Presentation responsibilities, injection, bloc scoping

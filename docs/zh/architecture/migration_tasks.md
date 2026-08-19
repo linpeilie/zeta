@@ -336,10 +336,21 @@ format 检查 206 个 Dart 文件且 0 变更；26/26 个 test roots 共 323 tes
 
 ### 步骤 11 — `agent_config_client`
 
-- [ ] 迁 provider config store/codec、model catalog cache、turn-context store/codec。
-- [ ] 只支持当前 schema；未知/损坏当前文件返回 typed decode failure，不做历史升级。
-- [ ] 不包含 CLI locator、选择状态或 Controller。
-- [ ] 临时目录测试全部读写/损坏/原子覆盖分支。
+- [x] 迁 provider config store/codec、model catalog cache、turn-context store/codec。
+- [x] 只支持当前 schema；未知/损坏当前文件返回 typed decode failure，不做历史升级。
+- [x] 不包含 CLI locator、选择状态或 Controller。
+- [x] 临时目录测试全部读写/损坏/原子覆盖分支。
+
+**状态：已完成。** 经批准的契约校正把 Provider settings 限定为 V2，并将损坏/不兼容
+model cache 的读取从静默空结果改为 typed decode failure；未新增或修改 Provider 方法签名。
+文件不存在仍按正常首次运行处理，返回空集合或 `null`。`agent_config_client` 现负责 Provider
+定义、model catalog snapshot 与 thread 级白名单 turn metadata 的严格当前 schema codec 和
+原子文件 store；非法 JSON、未知版本、字段结构错误、重复稳定 id、不安全路径片段与落盘
+thread identity 不匹配均失败关闭，且 exception 不暴露原始文件内容或路径。active Provider
+选择、CLI locator、历史迁移与 Controller 均未迁入。包级门禁为 25 tests，人工 coverage
+100%（303 / 303）。同一轮最终 workspace 门禁中，27/27 roots analyze 通过，format 检查
+212 个 Dart 文件且 0 变更；26/26 个 test roots 共 348 tests，人工 coverage 100%
+（2,756 / 2,756）；Bloc lint 对 211 个文件报告 0 issues。
 
 ### 步骤 12 — `codex_app_server_client`
 

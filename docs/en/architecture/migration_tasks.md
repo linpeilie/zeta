@@ -349,10 +349,22 @@ across 205 files.
 
 ### Step 11 — `agent_config_client`
 
-- [ ] Migrate provider config store/codec, model-catalog cache, and turn-context store/codec.
-- [ ] Support only the current schema; unknown or corrupt current files return a typed decode failure, with no historical upgrade.
-- [ ] Exclude CLI locators, selection state, and Controllers.
-- [ ] Test every read/write/corruption/atomic-overwrite branch using temporary directories.
+- [x] Migrate provider config store/codec, model-catalog cache, and turn-context store/codec.
+- [x] Support only the current schema; unknown or corrupt current files return a typed decode failure, with no historical upgrade.
+- [x] Exclude CLI locators, selection state, and Controllers.
+- [x] Test every read/write/corruption/atomic-overwrite branch using temporary directories.
+
+**Status: complete.** The approved contract correction limits Provider settings to V2 and changes
+corrupt/incompatible model-cache reads from silent empty results to a typed decode failure; it does
+not add or change a Provider method signature. Missing files remain a normal first-run empty/null
+state. `agent_config_client` now owns strict current-schema codecs and atomic file stores for
+Provider definitions, model-catalog snapshots, and per-thread allowlisted turn metadata. It rejects
+malformed JSON, unknown versions, invalid shapes, duplicate stable ids, unsafe path segments, and
+stored thread identity mismatches without exposing raw file contents or paths. Active Provider
+selection, CLI locators, historical migration, and Controllers remain excluded. Package gates:
+25 tests and 100% hand-written coverage (303 / 303). In the same final workspace iteration, 27/27
+roots passed analyze, format checked 212 Dart files with no changes, 26/26 test roots ran 348 tests
+at 100% hand-written coverage (2,756 / 2,756), and Bloc lint reported 0 issues across 211 files.
 
 ### Step 12 — `codex_app_server_client`
 
