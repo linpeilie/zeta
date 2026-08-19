@@ -401,3 +401,53 @@ workspace gates with explicit `pub.dev`/Google storage variables, then verify th
 **Impact.** The package has 35 randomized tests and reaches 100% CI-counted coverage (329 / 329) on
 Windows without coverage ignores. The final workspace iteration passes 1,052 tests at 12,941 / 12,941;
 the lockfile retains official sources and no mirror or test-host assumption enters production code.
+
+## 2026-08-20 — Step 17 was missing two ruled-in Codex smoke harnesses
+
+**Problem.** The migration manifest explicitly assigns five real-CLI smoke scripts to Steps 17/33/36,
+but the target repository contained only the two Claude scripts and the Grok script. Both Codex
+scripts remained in the legacy repository. The legacy app-server and Grok smokes also proceed into
+sessions and Prompts, which is broader than Step 17's read-only capability probe.
+
+**Decision.** Migrate both legacy Codex scripts byte-for-byte before making scoped additions. Add a
+`--capabilities-only` mode to the Codex app-server smoke that stops after initialize and `model/list`,
+and to the Grok smoke that performs initialize only, without authenticate, session creation, recovery,
+or Prompt. Keep the Codex plan-mode harness unexecuted until its later acceptance step. Do not replace
+the existing vendor locators or use a configuration-changing command.
+
+**Impact.** All five ruled-in harnesses are present. Step 17 can exercise current wire capabilities
+without model work, user content, session persistence, or configuration mutation, while Steps 33/36
+retain the full prompt/session harnesses they require.
+
+## 2026-08-20 — Step 17 makes Provider isolation and teardown executable
+
+**Problem.** Pubspec isolation was already covered generically, but the exact locator owners, fixture
+allocation, smoke inventory, and teardown evidence existed only as checklist prose. An initial guard
+also assumed every provider test must call `subscription.cancel`; Claude instead proves its listener
+completion at the `StreamJsonPeer` boundary when the peer closes.
+
+**Decision.** Declare locator owners and the five smoke scripts in `.architecture.yaml`. Add a root
+architecture test that finds exactly one class declaration at each owner path, rejects foreign-vendor
+package/path references in every vendor test and fixture, and binds lifecycle evidence to the real
+tests. Require explicit subscription cancellation for Codex/Grok; for Claude require provider disposal
+plus the peer's `emitsDone` and `close` process/stream assertions. This reflects the actual lifecycle
+contract instead of forcing a synthetic test-only subscription handle.
+
+**Impact.** Future duplicate locators, cross-package fixtures, missing harnesses, or removed teardown
+proof fail the normal root quality job. No production API or Provider port changes.
+
+## 2026-08-20 — Step 17 real capability-smoke baseline
+
+**Problem.** The gate needed fresh evidence from all three installed CLIs without leaking payloads or
+changing user state. A first wrapper that created and recursively removed a computed temporary
+directory was rejected by execution safety policy.
+
+**Decision.** Run only the bounded capability paths. Codex capability-only initialize and `model/list`
+do not inspect or create a thread, so rerun it from the repository cwd without cleanup mutation;
+Claude uses its existing temporary, no-Prompt metadata harness; Grok initialize omits authenticate and
+session creation. Report only versions and counts, then inspect the process table for residual protocol
+children.
+
+**Impact.** Codex 0.144.1 returns 7 models, Claude Code 2.1.227 returns 5 models with one default, and
+Grok 1.0.5 returns protocol v1 with 6 capability keys and 2 auth methods. All pass, no raw payload or
+identity is printed, and no Codex app-server, Claude stream-json, or Grok stdio child remains.

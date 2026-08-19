@@ -451,11 +451,21 @@ zero issues across 349 files.
 
 ### Step 17 — Provider Data integration gate
 
-- [ ] The three vendor packages are mutually absent from one another's pubspecs.
-- [ ] Each vendor has exactly one CLI-locator implementation and owner.
-- [ ] Allocate existing protocol fixtures by package, with no cross-package test import.
-- [ ] Smoke-test read-only capabilities of real CLIs; do not run operations that modify user configuration.
-- [ ] Prove that every process, stream, and subscription closes during test teardown.
+- [x] The three vendor packages are mutually absent from one another's pubspecs.
+- [x] Each vendor has exactly one CLI-locator implementation and owner.
+- [x] Allocate existing protocol fixtures by package, with no cross-package test import.
+- [x] Smoke-test read-only capabilities of real CLIs; do not run operations that modify user configuration.
+- [x] Prove that every process, stream, and subscription closes during test teardown.
+
+**Completed 2026-08-20.** A root architecture guard now enforces mutual vendor-package isolation,
+the declared single owner of each CLI locator, package-local tests/fixtures, all five real-CLI smoke
+harnesses, and explicit runtime/process/stream/subscription teardown evidence. The two missing Codex
+smoke scripts were migrated; Codex and Grok gained capability-only modes that stop after initialize
+(and Codex `model/list`) without authentication, session creation, or Prompt. Local read-only smokes
+passed against Codex 0.144.1 (7 models), Claude Code 2.1.227 (5 models, 1 default), and Grok 1.0.5
+(protocol v1, 6 capability keys, 2 auth methods), with no residual child process. The final workspace
+iteration passes analyze/format in 27/27 roots and 1,056 tests in 26/26 roots at 100% hand-written
+coverage (12,941 / 12,941); Bloc lint reports zero issues across 350 files.
 
 **P2 exit:** Provider Data contracts are green, and pubspecs plus tests enforce vendor isolation.
 

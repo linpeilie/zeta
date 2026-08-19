@@ -431,11 +431,20 @@ Bloc lint 对 349 个文件报告 0 issues。
 
 ### 步骤 17 — Provider Data 集成门
 
-- [ ] 三个 vendor package 的 pubspec 互不可见。
-- [ ] CLI locator 每个 vendor 恰好一个实现和一个归属。
-- [ ] 现有协议 fixture 按 package 分配，无跨包 test import。
-- [ ] 真实 CLI 的只读 capability probe 冒烟；不启动会修改用户配置的操作。
-- [ ] 所有 process、stream、subscription 在 test teardown 可证明关闭。
+- [x] 三个 vendor package 的 pubspec 互不可见。
+- [x] CLI locator 每个 vendor 恰好一个实现和一个归属。
+- [x] 现有协议 fixture 按 package 分配，无跨包 test import。
+- [x] 真实 CLI 的只读 capability probe 冒烟；不启动会修改用户配置的操作。
+- [x] 所有 process、stream、subscription 在 test teardown 可证明关闭。
+
+**完成于 2026-08-20。** root architecture guard 现已持续约束三个 vendor package 互相隔离、每个
+CLI locator 的声明唯一归属、test/fixture 只留在本包、5 个真实 CLI smoke harness 齐全，以及
+runtime/process/stream/subscription 的显式 teardown 证据。缺失的两个 Codex smoke 脚本已经迁入；
+Codex 与 Grok 新增 capability-only 模式，只执行 initialize（Codex 另执行 `model/list`），不认证、
+不建 session、不发送 Prompt。本机只读 smoke 均通过：Codex 0.144.1（7 models）、Claude Code
+2.1.227（5 models、1 default）、Grok 1.0.5（protocol v1、6 个 capability key、2 种 auth method），
+并确认没有残留子进程。最终 workspace 同轮 27/27 roots analyze/format 通过，26/26 test roots 共
+1,056 tests，人工 coverage 100%（12,941 / 12,941）；Bloc lint 对 350 个文件报告 0 issues。
 
 **P2 出口**：Provider Data contract 全绿，三方隔离由 pubspec 和测试共同保证。
 

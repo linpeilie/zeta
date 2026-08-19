@@ -215,6 +215,24 @@ conversation_boundary:
     - dialogs_and_snackbars
     - navigation
 
+provider_data_gate:
+  locator_owners:
+    codex_app_server_client:
+      symbol: CodexCliLocator
+      file: packages/codex_app_server_client/lib/src/codex_cli_locator.dart
+    claude_code_client:
+      symbol: ClaudeCodeCliLocator
+      file: packages/claude_code_client/lib/src/claude_code_cli_locator.dart
+    grok_acp_client:
+      symbol: GrokCliLocator
+      file: packages/grok_acp_client/lib/src/grok_cli_locator.dart
+  smoke_scripts:
+    - tool/smoke_codex_app_server.py
+    - tool/smoke_codex_plan_mode.py
+    - tool/smoke_claude_code_metadata.py
+    - tool/smoke_claude_code_stream_json.py
+    - tool/smoke_grok_acp.py
+
 accessibility:
   standard: WCAG_2_2_AA
   platforms:

@@ -243,6 +243,49 @@ def initialize_peer(peer: Peer, timeout: float) -> dict[str, Any] | None:
     return init
 
 
+def run_capability_probe(grok: Path, timeout: float) -> int:
+    """Run initialize only; do not authenticate, create a session, or prompt."""
+    peer: Peer | None = None
+    try:
+        peer = start_peer(grok, str(Path.cwd()), "capabilities")
+        init = peer.request(
+            "initialize",
+            {
+                "protocolVersion": 1,
+                "clientCapabilities": {
+                    "fs": {"readTextFile": False, "writeTextFile": False},
+                    "terminal": False,
+                },
+                "clientInfo": {
+                    "name": "zeta-capability-smoke",
+                    "title": "Zeta Capability Smoke",
+                    "version": "0.1.0",
+                },
+            },
+            timeout=timeout,
+        )
+        result = init.get("result")
+        if "error" in init or not isinstance(result, dict):
+            print("[FAIL] initialize - typed response unavailable")
+            return 1
+        capabilities = result.get("agentCapabilities")
+        capability_count = len(capabilities) if isinstance(capabilities, dict) else 0
+        auth_methods = result.get("authMethods")
+        auth_method_count = len(auth_methods) if isinstance(auth_methods, list) else 0
+        protocol_version = result.get("protocolVersion")
+        print("[PASS] initialize")
+        print(f"protocol_version={protocol_version}")
+        print(f"capability_count={capability_count}")
+        print(f"auth_method_count={auth_method_count}")
+        return 0
+    except (OSError, TimeoutError):
+        print("[FAIL] initialize - process or timeout failure")
+        return 1
+    finally:
+        if peer is not None:
+            peer.close()
+
+
 def run_session(
     grok: Path,
     cwd: str,
@@ -401,6 +444,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--grok-bin", default="")
     parser.add_argument("--timeout", type=float, default=120)
+    parser.add_argument(
+        "--capabilities-only",
+        action="store_true",
+        help="Run initialize only, without authentication, session creation, or prompt.",
+    )
     args = parser.parse_args()
 
     grok = resolve_grok(args.grok_bin or None)
@@ -410,6 +458,9 @@ def main() -> int:
     print(f"Grok: {grok}")
     print(f"Version: {version}")
     print(f"Platform: {platform.platform()}")
+
+    if args.capabilities_only:
+        return run_capability_probe(grok, args.timeout)
 
     checks: list[Check] = []
     # 非破坏性、极简、明确禁止工具调用——避免触发权限/计划/提问等交互分支。

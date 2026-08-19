@@ -345,3 +345,47 @@ detect 保持无 Prompt；证据不可用时返回 neutral status，不再根据
 **影响。** 本包 35 个随机顺序测试在 Windows 达到 CI 口径 100% coverage（329 / 329），未添加
 coverage ignore。最终 workspace 同轮 1,052 tests、12,941 / 12,941；lockfile 保持官方源，
 生产代码不带入镜像或 test-host 假设。
+
+## 2026-08-20 — 步骤 17 缺少两份已裁决迁入的 Codex smoke harness
+
+**问题。** migration manifest 明确把 5 个真实 CLI smoke 脚本分配给步骤 17/33/36，但新仓库只有
+Claude 两个和 Grok 一个，两个 Codex 脚本仍留在旧仓库。旧 app-server 与 Grok smoke 还会继续
+创建 session 并发送 Prompt，超出了步骤 17 的只读 capability probe。
+
+**决策。** 先逐字节迁入两份旧 Codex 脚本，再做有限增量。Codex app-server 新增
+`--capabilities-only`，在 initialize 与 `model/list` 后停止；Grok 同名模式只执行 initialize，
+不 authenticate、不建 session、不 recovery、不发 Prompt。Codex plan-mode harness 留到后续验收
+步骤再执行。不替换现有 vendor locator，也不调用会修改配置的命令。
+
+**影响。** 已裁决的 5 个 harness 全部到位。步骤 17 可在不执行模型任务、不传用户内容、不持久化
+session、不修改配置的前提下验证当前 wire capability；步骤 33/36 仍保留其所需完整 prompt/session
+harness。
+
+## 2026-08-20 — 步骤 17 将 Provider 隔离与 teardown 变成可执行约束
+
+**问题。** pubspec 隔离已有通用测试，但 locator 精确归属、fixture 分配、smoke 清单与 teardown
+证据仍只是 checklist 文案。首版 guard 还假定每个 provider test 都必须显式调用
+`subscription.cancel`；Claude 实际在 `StreamJsonPeer` 关闭时证明 listener 完成。
+
+**决策。** 在 `.architecture.yaml` 声明 locator owner 与 5 个 smoke 脚本；新增 root architecture
+test，要求每个 owner path 恰好一个 locator class declaration，拒绝所有 vendor test/fixture 的外部
+vendor package/path 引用，并绑定真实 lifecycle 测试。Codex/Grok 要求显式 subscription cancel；
+Claude 则要求 provider dispose 加上 peer 的 `emitsDone` 和 `close` process/stream 断言。按真实生命周期
+契约验证，不为测试制造无意义 subscription handle。
+
+**影响。** 今后重复 locator、跨包 fixture、缺失 harness 或删除 teardown 证据，都会让普通 root
+quality job 失败；没有修改生产 API 或 Provider port。
+
+## 2026-08-20 — 步骤 17 真实 capability smoke 基线
+
+**问题。** 集成门需要三个已安装 CLI 的新证据，但不能泄漏 payload 或改变用户状态。首次用于
+创建并递归清理计算型临时目录的 wrapper 被执行安全策略拒绝。
+
+**决策。** 只运行有界 capability 路径。Codex capability-only initialize 与 `model/list` 不检查或
+创建 thread，因此从仓库 cwd 复跑且不执行清理写操作；Claude 使用现有临时目录、无 Prompt metadata
+harness；Grok initialize 不 authenticate、不建 session。只报告版本与计数，随后检查进程表是否
+残留协议子进程。
+
+**影响。** Codex 0.144.1 返回 7 models；Claude Code 2.1.227 返回 5 models、1 default；Grok
+1.0.5 返回 protocol v1、6 个 capability key、2 种 auth method。三者均通过，未打印 raw payload
+或身份信息，也没有残留 Codex app-server、Claude stream-json 或 Grok stdio 子进程。
