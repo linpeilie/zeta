@@ -85,3 +85,19 @@ lifecycle 分支。
 desktop matrix。
 
 **影响。** 未针对不存在的失败修改代码；远端 desktop 验证顺延至步骤 12 push。
+
+## 2026-08-19 — 步骤 12 hosted source 锁文件可移植性
+
+**问题。** 步骤 12 的 `license_check` run `32269642148` 尚未进入许可证扫描，就因
+`flutter pub get --enforce-lockfile` 判定 176 个 hosted 依赖都会变化而失败。
+
+**证据。** 依赖版本和 SHA-256 均未变化；唯一的批量差异是本机
+`PUB_HOSTED_URL=https://pub.flutter-io.cn` 环境把 `pubspec.lock` 中所有 hosted URL 改成了
+镜像地址，而 GitHub Actions 按约定使用 `https://pub.dev`。
+
+**决策。** 用仅作用于当前命令的官方源环境变量重新生成并校验锁文件；依赖版本与校验和
+保持不变，不放宽 lockfile、CI 或许可证门禁。以后即使开发机使用镜像，提交的锁文件也必须
+规范化为 `https://pub.dev`。
+
+**影响。** `flutter pub get --enforce-lockfile` 已能在与 CI 相同的源上通过。本次失败是提交
+锁文件的可复现性缺陷，不是依赖许可证例外。

@@ -105,3 +105,20 @@ require the next pushed migration commit to run the complete desktop matrix agai
 
 **Impact.** No code was changed to accommodate an unobserved failure; remote desktop validation is
 carried forward to the Step 12 push.
+
+## 2026-08-19 — Step 12 hosted-source lockfile portability
+
+**Problem.** The Step 12 `license_check` run `32269642148` failed before license inspection because
+`flutter pub get --enforce-lockfile` reported that all 176 hosted dependencies would change.
+
+**Evidence.** Versions and SHA-256 values were unchanged. The only bulk difference was that the local
+`PUB_HOSTED_URL=https://pub.flutter-io.cn` environment had rewritten every hosted URL in
+`pubspec.lock`, while GitHub Actions intentionally resolves against `https://pub.dev`.
+
+**Decision.** Regenerate and verify the lockfile with scoped official-source environment variables.
+Keep the dependency versions and checksums unchanged; do not weaken the lockfile, CI, or license gate.
+Future dependency updates must similarly normalize the committed lockfile to `https://pub.dev` even
+when the developer machine uses a mirror.
+
+**Impact.** `flutter pub get --enforce-lockfile` now succeeds against the same source used by CI. The
+failure was a reproducibility defect in the committed lockfile, not a dependency-license exception.
