@@ -282,10 +282,22 @@ close 语义、不含 migration marker 的当前 schema 路径、canonical absol
 
 ### 步骤 9 — `json_rpc_transport`
 
-- [ ] 迁 stdio transport、operation scheduler、runtime peer。
-- [ ] 定义 `TransportException` sealed family。
-- [ ] 构造注入 process starter、clock、logger。
-- [ ] 测 partial line、malformed JSON、timeout、cancel、stderr、process exit、double close。
+**状态：已完成。** `json_rpc_transport` 现已拥有有界 JSONL stdio transport、
+按 key 的 shared/exclusive operation scheduler 与 Provider runtime 生命周期门控。
+`ProcessStarter`、`Clock` 和负责统一脱敏的 `AppLogger` 均可注入；测试不会启动
+真实进程。sealed transport failure 覆盖 malformed/oversized frame、timeout、
+process termination 与 closed connection。stderr 在离开包前脱敏，frame payload
+不会进入诊断，close 或 process exit 会确定性取消 pending work。本包只依赖
+`agent_provider_contracts` 已冻结的 runtime value type，不改任何 Provider port。
+package 门禁：38 tests，人工 coverage 100%（540 / 540）。同一轮 workspace
+最终门禁中，27/27 roots analyze 通过，format 检查 182 Dart files / 0 changed；
+26/26 个可测试 roots 共 290 tests，人工 coverage 100%（2,140 / 2,140），
+Bloc lint 对 181 files 报告 0 issues。
+
+- [x] 迁 stdio transport、operation scheduler、runtime peer。
+- [x] 定义 `TransportException` sealed family。
+- [x] 构造注入 process starter、clock、logger。
+- [x] 测 partial line、malformed JSON、timeout、cancel、stderr、process exit、double close。
 
 ### 步骤 10 — `desktop_platform_api` 与 app adapters
 

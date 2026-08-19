@@ -263,7 +263,7 @@ final class TransportProcessExited extends TransportException {}
 final class TransportClosed extends TransportException {}
 ```
 
-构造必须可注入 `ProcessStarter`、`Clock`、`Logger`（[步骤 9](./migration_tasks.md)），测试不启动真实进程。
+构造必须可注入 `ProcessStarter`、`Clock`、`AppLogger`（[步骤 9](./migration_tasks.md)），测试不启动真实进程。
 
 ### 2.2 `zeta_logging`
 
@@ -369,7 +369,7 @@ final class CodexProviderBundleFactory implements AgentProviderBundleFactory {
   CodexProviderBundleFactory({
     required JsonRpcPeerFactory peerFactory,
     required ProcessStarter processStarter,
-    required Logger logger,
+    required AppLogger logger,
     Clock clock = const Clock(),
   });
 
@@ -495,7 +495,7 @@ final class AgentProviderRepository {
     required ProviderConfigStore configStore,
     required ModelCatalogCacheStore modelCatalogCache,
     required Map<AgentProviderKind, AgentProviderBundleFactory> bundleFactories,
-    required Logger logger,
+    required AppLogger logger,
   });
 
   Stream<ProviderConfigSnapshot> get configChanges;
@@ -532,7 +532,7 @@ final class AgentConversationRepository {
   AgentConversationRepository({
     required AgentHistoryClient historyClient,
     required TurnContextStore turnContextStore,
-    required Logger logger,
+    required AppLogger logger,
     Clock clock = const Clock(),
   });
 
@@ -618,7 +618,7 @@ export 'src/virtualization/...';
 - [x] `agent_provider_contracts` 的 21 个端口签名冻结（§1.2）。
 - [x] `AgentEvent` 的 35 个子类字段冻结（§1.5）。
 - [x] `AgentProviderCapabilities` 的 27 个 flag 冻结（§1.3）。
-- [ ] `json_rpc_transport` 的 `ProcessStarter` 与 `TransportException` 冻结（§2.1）。
+- [x] `json_rpc_transport` 的 `ProcessStarter` 与 `TransportException` 冻结（§2.1）。
 - [x] bundle factory 的构造签名冻结（§3.1）。
 - [x] `ResolvedCliProcessCommand` 冻结（§3.3）。
 

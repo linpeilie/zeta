@@ -272,7 +272,7 @@ final class TransportProcessExited extends TransportException {}
 final class TransportClosed extends TransportException {}
 ```
 
-Constructors must accept an injectable `ProcessStarter`, `Clock` and `Logger`
+Constructors must accept an injectable `ProcessStarter`, `Clock` and `AppLogger`
 ([step 9](./migration_tasks.md)); tests never start a real process.
 
 ### 2.2 `zeta_logging`
@@ -381,7 +381,7 @@ final class CodexProviderBundleFactory implements AgentProviderBundleFactory {
   CodexProviderBundleFactory({
     required JsonRpcPeerFactory peerFactory,
     required ProcessStarter processStarter,
-    required Logger logger,
+    required AppLogger logger,
     Clock clock = const Clock(),
   });
 
@@ -512,7 +512,7 @@ final class AgentProviderRepository {
     required ProviderConfigStore configStore,
     required ModelCatalogCacheStore modelCatalogCache,
     required Map<AgentProviderKind, AgentProviderBundleFactory> bundleFactories,
-    required Logger logger,
+    required AppLogger logger,
   });
 
   Stream<ProviderConfigSnapshot> get configChanges;
@@ -551,7 +551,7 @@ final class AgentConversationRepository {
   AgentConversationRepository({
     required AgentHistoryClient historyClient,
     required TurnContextStore turnContextStore,
-    required Logger logger,
+    required AppLogger logger,
     Clock clock = const Clock(),
   });
 
@@ -639,7 +639,7 @@ The three vendor clients may proceed in parallel if and only if **all** of the f
 - [x] The 21 port signatures in `agent_provider_contracts` are frozen (§1.2).
 - [x] The fields of the 35 `AgentEvent` subtypes are frozen (§1.5).
 - [x] The 27 `AgentProviderCapabilities` flags are frozen (§1.3).
-- [ ] `ProcessStarter` and `TransportException` in `json_rpc_transport` are frozen (§2.1).
+- [x] `ProcessStarter` and `TransportException` in `json_rpc_transport` are frozen (§2.1).
 - [x] The bundle factory constructor signature is frozen (§3.1).
 - [x] `ResolvedCliProcessCommand` is frozen (§3.3).
 

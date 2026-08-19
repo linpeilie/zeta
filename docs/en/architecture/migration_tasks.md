@@ -291,10 +291,24 @@ and Bloc lint reported 0 issues across 176 files.
 
 ### Step 9 — `json_rpc_transport`
 
-- [ ] Migrate stdio transport, operation scheduler, and runtime peer.
-- [ ] Define a sealed `TransportException` family.
-- [ ] Constructor-inject process starter, clock, and logger.
-- [ ] Test partial lines, malformed JSON, timeouts, cancellation, stderr, process exit, and double close.
+**Status: complete.** `json_rpc_transport` now owns the bounded JSONL stdio
+transport, keyed shared/exclusive operation scheduler, and provider runtime
+lifecycle gate. `ProcessStarter`, `Clock`, and the sanitizing `AppLogger` are
+injectable; tests never launch a real process. The sealed transport failures
+cover malformed and oversized frames, timeouts, process termination, and closed
+connections. Stderr is redacted before leaving the package, frame payloads are
+never copied into diagnostics, and pending work is deterministically cancelled
+on close or process exit. The package depends only on the already-frozen runtime
+value types in `agent_provider_contracts` and changes no Provider port. Package
+gates: 38 tests and 100% hand-written coverage (540 / 540). In the same final
+workspace iteration, 27/27 roots passed analyze, format checked 182 Dart files
+with no changes, 26/26 test roots ran 290 tests at 100% hand-written coverage
+(2,140 / 2,140), and Bloc lint reported 0 issues across 181 files.
+
+- [x] Migrate stdio transport, operation scheduler, and runtime peer.
+- [x] Define a sealed `TransportException` family.
+- [x] Constructor-inject process starter, clock, and logger.
+- [x] Test partial lines, malformed JSON, timeouts, cancellation, stderr, process exit, and double close.
 
 ### Step 10 — `desktop_platform_api` and app adapters
 
