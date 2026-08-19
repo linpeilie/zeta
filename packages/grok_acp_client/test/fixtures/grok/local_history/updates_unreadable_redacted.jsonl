@@ -1,0 +1,3 @@
+not-json
+[]
+{"method":"session/update","params":{"sessionId":"sess-fixture","update":{"sessionUpdate":"session_info_update","modelId":"grok-4.5"}}}

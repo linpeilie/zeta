@@ -1,0 +1,43 @@
+{
+  "protocolVersion": 1,
+  "agentCapabilities": {
+    "loadSession": true
+  },
+  "authMethods": [
+    {
+      "id": "cached_token",
+      "name": "cached_token"
+    }
+  ],
+  "_meta": {
+    "agentVersion": "0.2.101",
+    "modelState": {
+      "currentModelId": "grok-4.5",
+      "availableModels": [
+        {
+          "modelId": "grok-4.5",
+          "name": "Grok 4.5",
+          "description": "Redacted frontier model",
+          "_meta": {
+            "totalContextTokens": 500000,
+            "supportsReasoningEffort": true,
+            "reasoningEffort": "high",
+            "reasoningEfforts": [
+              {
+                "value": "high",
+                "description": "High reasoning effort"
+              }
+            ]
+          }
+        },
+        {
+          "modelId": "grok-composer-2.5-fast",
+          "name": "Composer 2.5",
+          "_meta": {
+            "totalContextTokens": 200000
+          }
+        }
+      ]
+    }
+  }
+}

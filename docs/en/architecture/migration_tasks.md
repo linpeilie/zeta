@@ -402,11 +402,19 @@ iteration, 27/27 roots passed analyze, format checked 295 Dart files with no cha
 ran 780 tests at 100% hand-written coverage (9,317 / 9,317), and Bloc lint reported 0 issues across
 294 files.
 
-### Step 14 — `grok_acp_client`
+### Step 14 — `grok_acp_client` (complete)
 
-- [ ] Migrate the Grok provider, ACP codecs/mappers, process starter, and CLI locator.
-- [ ] ACP currently has one consumer, so do not extract a shared package yet.
-- [ ] Contract-test fail-closed permissions, questions/plans, identity, usage/history, and malformed updates.
+- [x] Migrate the Grok provider, ACP codecs/mappers, process starter, and CLI locator.
+- [x] ACP currently has one consumer, so do not extract a shared package yet.
+- [x] Contract-test fail-closed permissions, questions/plans, identity, usage/history, and malformed updates.
+
+Completion evidence (2026-08-20): the barrel exports only the bundle factory, static capabilities, and
+single CLI locator. Grok-private history readers/parsers moved with the vendor package, while Step 15
+still owns only cross-provider aggregation. Package gates ran 233 tests at 100% hand-written coverage
+(3,257 / 3,257). A real smoke against local Grok CLI 1.0.5 passed two concurrent isolated-process sessions
+and a fresh-process `session/load` recovery. No shared Provider port changed.
+In the same workspace iteration, 27/27 roots passed analyze/format, 26/26 test roots ran 1,012 tests
+at 100% hand-written coverage (12,573 / 12,573), and Bloc lint reported zero issues across 339 files.
 
 ### Step 15 — `agent_history_client`
 

@@ -181,3 +181,77 @@ barrel，也未扩张共享契约。
 
 **影响。** 复验通过，锁定版本未改变，`pubspec.lock` 不再包含 `flutter-io.cn`；该处理不涉及
 共享适配层或 Provider 端口。
+
+## 2026-08-20 — 步骤 14 Grok 契约与迁移顺序偏差
+
+**问题。** 任务要求覆盖 Grok usage/history，但共享契约中没有文档假定的 usage-window 类型；
+同时 manifest 把 vendor-specific Grok history reader/parser 标为步骤 15，而步骤 14 的出口又明确
+要求 history contract tests。照字面拆分会导致 `grok_acp_client` 无法独立闭环。
+
+**证据。** 现有 `agent_provider_contracts` 已能表达 quota、token usage 与 thread history，旧 Grok
+usage-window 标签只在 vendor 内部消费，无需新增 Provider 方法。步骤 15 的目标则明确只保留跨
+Provider merge/replay 和通用容错，禁止复制 vendor parser。
+
+**决策。** 不修改共享适配层或 Provider port；usage-window 文案保持 Grok package-private helper。
+将 Grok 私有 history reader/parser 随步骤 14 一并迁入，步骤 15 只迁跨 Provider 聚合。barrel 仍
+只导出 factory、static capabilities 与 locator。
+
+**影响。** 步骤 14 可独立完成 usage/history 契约，步骤 15 不会再复制 Grok 协议解析。迁移顺序
+偏差已显式记录，没有扩大共享 API。
+
+## 2026-08-20 — 步骤 14 覆盖率与运行时不变量收敛
+
+**问题。** 首轮完整覆盖只有 83.01%。大部分缺口是可达的 filesystem、permission/question/plan、
+prompt race、model merge、title polling 与 replay 前缀分支；另有少量检查与
+`ProviderRuntimeJsonRpcPeer` 或 pending registry 的前置保证重复。
+
+**证据。** 注入故障稳定覆盖了 malformed UTF-8、响应失败、late prompt error、dispose/cancel 与
+离线 history；调用链同时证明 initialize 成功后必有 runtime scope、只有非空 permission options
+会进入 pending、转发的 notification/server request 必带当前 runtime scope。
+
+**决策。** 保持 100% 门禁，不加 coverage ignore、不降阈值。为真实故障补 contract tests；只删除
+被同一调用链严格支配的重复防御分支，并把 scope/options 约束写成实现不变量。包内异步文件读取
+保留，关闭 `avoid_slow_async_io`；内部实现不逐符号承担公共 API 文档，关闭
+`public_member_api_docs`，三个 barrel 导出仍有文档。
+
+**影响。** 233 个随机顺序测试达到人工 coverage 100%（3,257 / 3,257），analyze 为 0 issues；没有
+测试专用符号进入 barrel，也没有修改共享 Provider port。
+
+## 2026-08-20 — 步骤 14 Grok 真实恢复烟测竞争
+
+**问题。** 首次 Grok CLI 1.0.4 smoke 中两个独立进程的 prompt 均成功，但原进程终态返回后立即
+回收，新进程恢复在合并的 `recovery/timeout` 标签下超时，无法判断具体阶段。两次运行之间 CLI
+又自动更新到 1.0.5。
+
+**证据。** 脚本未输出 session id、正文、payload、stderr 或凭据。增强阶段标签并在源进程关闭后
+增加 2 秒有界持久化窗口，再以 CLI 1.0.5 复跑，两个并发 session 与新进程 `session/load` 后的
+prompt 全部以 `end_turn` 完成。
+
+**决策。** 将首次失败视为终态与本地 session 异步持久化的回收竞争；保留 2 秒 flush window 和
+细粒度恢复阶段标签，不放宽超时、不重试 prompt，也不读取真实项目。协议基线以最终实测的
+Windows 11 / Grok 1.0.5 / 2026-08-20 为准。
+
+**影响。** AC1 进程隔离和回收后恢复均有真实 CLI 证据。烟测仍使用临时空目录、默认 Ask 与
+反向请求拒绝策略，未修改用户配置。
+
+## 2026-08-20 — 步骤 14 本机镜像再次改写锁文件
+
+**问题。** 单独诊断测试未显式覆盖官方源环境变量，Flutter 自动解析依赖时再次把 176 个 hosted
+URL 改成 `pub.flutter-io.cn`。
+
+**决策。** 仅机械恢复为 `pub.dev` 并确认锁文件最终无差异；正式门禁继续在命令作用域显式设置
+官方 pub 与 Flutter storage 源。依赖版本、SHA-256 与约束不变。
+
+**影响。** 没有镜像 URL 或无关 lockfile 噪声进入步骤 14 提交。
+
+## 2026-08-20 — 步骤 13 desktop-build Linux 工具链超时
+
+**问题。** 步骤 13 提交的 desktop-build run `32277823777` 在 30 分钟 workflow timeout 时被
+取消。macOS 三个 flavor、Windows 三个 flavor、Linux staging 均已成功；Linux development 与
+production 都停在 `Install Linux desktop toolchain`，尚未进入 Flutter 或构建步骤。
+
+**决策。** 判定为 runner apt/toolchain 阶段超时，不修改产品代码，也不把部分成功视为完整桌面门
+通过。步骤 14 push 后重新要求完整 desktop matrix；若同一 apt 阶段再次超时，再单独优化 workflow
+安装方式。
+
+**影响。** 步骤 13 的 zeta、license、OSV 均成功；桌面全矩阵证据顺延到步骤 14 远端验证。

@@ -2,7 +2,7 @@
 
 中文 ｜ [English](../../en/protocols/grok_acp_protocol.md)
 
-最后更新：2026-08-19
+最后更新：2026-08-20
 
 本文记录 Zeta Grok Provider 的实际协议边界、已验证消息形状和升级门禁。它是
 `packages/grok_acp_client` 的实现与维护基线。
@@ -24,6 +24,7 @@
 | 协议族 | Agent Client Protocol（ACP）+ xAI `_x.ai/` 扩展 |
 | 冒烟脚本 | `tool/smoke_grok_acp.py`（会话级独立进程 / 回收后恢复） |
 | 本地历史 | `~/.grok/sessions`（`GROK_HOME` 可覆盖） |
+| 实测平台 | Windows 11 10.0.26100，Grok CLI 1.0.5 (`5115b46bc9`)，2026-08-20 |
 
 当前基线覆盖：新建与恢复会话、连续多回合、文本/思考/工具时间线、结构化 diff 文件变更证据、
 取消、权限审批、Plan 模式与计划审批、结构化用户提问、只读历史、重命名与删除、模型目录、
@@ -252,19 +253,27 @@ Grok ACP 没有仓库内可生成的官方 schema pin。升级 Grok CLI 时：
 消息，校验两条 `session/prompt` 都返回终态；随后关闭其中一个，用新进程 `session/load`
 同一逻辑会话并再次发送。
 
-隔离约束：临时只读 workspace（每 session 一个空目录，不含真实项目文件）；默认 `ask` 模式，
+隔离约束：临时隔离 workspace（每 session 一个空目录，不含真实项目文件，交互只读）；默认 `ask` 模式，
 任何 `session/request_permission` 或其它服务端请求一律拒绝，保持非破坏性；prompt 极简且
 不触发工具调用。
 
 记录约束：只记录「哪个阶段成功/失败」，**不记录** prompt/回复原文、原始 payload、
 sessionId、stderr 原文或凭据。
 
-## 15. 待补基线
+## 15. 实测补充基线
 
-以下项目在迁移基线上没有留下可引用的实测记录，`grok_acp_client` 落地时必须补齐并回填本文：
+2026-08-20 在 Windows 11 / Grok CLI 1.0.5 上，以临时空目录和脱敏 smoke 取样：
 
-- [ ] 取样平台、Grok CLI 版本与取样日期（对齐 Claude/Codex 文档的 §1 表格）。
-- [ ] `initialize` 返回的 `authMethods` 实际形状与 best-effort 认证的成功/失败分支。
-- [ ] `_x.ai/` 与 `x.ai/` 前缀在当前 CLI 版本上的实际下发情况（哪个是主，哪个是兼容）。
-- [ ] `grok models` 文本输出的稳定格式样例（当前解析是宽容的，缺少形状冻结）。
-- [ ] `_x.ai/billing` 的 `config` 完整字段清单。
+- [x] `initialize.authMethods` 是对象数组；当前对象字段为 `id`、`name`、`description`。
+  `cached_token` best-effort 认证成功；认证失败继续初始化的分支由注入故障 contract test 固定。
+- [x] 当前 CLI 实际下发 `_x.ai/` 前缀；`x.ai/` 仅作为历史/兼容前缀继续由 decoder 接受。
+- [x] `grok models` 形状为登录状态行、`Default model: <id>`、空行、`Available models:`，
+  随后以 `* <id> (default)` 和 `- <id>` 列表展示。实测 default 为 `grok-4.6`，另有
+  `grok-4.5`；模型集合本身不作为静态 pin。
+- [x] `_x.ai/billing.config` 当前字段为 `creditUsagePercent`、`currentPeriod`、
+  `onDemandCap`、`onDemandUsed`、`prepaidBalance`、`isUnifiedBillingUser`、
+  `billingPeriodStart`、`billingPeriodEnd`。fixture 仅保留脱敏值。
+
+真实 smoke 最终为 5/5：两个独立进程并发 prompt、AC1 隔离、新进程 `session/load` 恢复和
+只记录字段名的协议 metadata 取样全部通过。首次运行在终态后立即回收时发生恢复超时；加入
+2 秒有界异步持久化窗口后连续复跑通过，详见迁移执行决策日志。

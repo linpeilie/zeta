@@ -2,7 +2,7 @@
 
 [中文](../../zh/protocols/grok_acp_protocol.md) ｜ English
 
-Last updated: 2026-08-19
+Last updated: 2026-08-20
 
 This document records the actual protocol boundary, verified message shapes and upgrade gates of Zeta's
 Grok provider. It is the implementation and maintenance baseline for `packages/grok_acp_client`.
@@ -24,6 +24,7 @@ Grok provider. It is the implementation and maintenance baseline for `packages/g
 | Protocol family | Agent Client Protocol (ACP) + xAI `_x.ai/` extensions |
 | Smoke script | `tool/smoke_grok_acp.py` (per-session isolated processes / recovery after reclaim) |
 | Local history | `~/.grok/sessions` (overridable via `GROK_HOME`) |
+| Live sample | Windows 11 10.0.26100, Grok CLI 1.0.5 (`5115b46bc9`), 2026-08-20 |
 
 The current baseline covers: creating and resuming sessions, consecutive turns, text/thinking/tool
 timelines, structured diff file-change evidence, cancellation, permission approval, plan mode and plan
@@ -268,21 +269,31 @@ sends one message concurrently on each, and checks that both `session/prompt` re
 state; it then closes one process, uses a new process to `session/load` the same logical session, and
 sends again.
 
-Isolation constraints: a temporary read-only workspace (one empty directory per session, containing no
-real project files); default `ask` mode with every `session/request_permission` or other server request
+Isolation constraints: a temporary isolated workspace (one empty directory per session, containing no
+real project files, with read-only interaction); default `ask` mode with every `session/request_permission` or other server request
 denied, keeping the run non-destructive; and a minimal prompt that triggers no tool calls.
 
 Recording constraints: it records only "which stage passed or failed" and **never** prompt/response text,
 raw payloads, session ids, raw stderr or credentials.
 
-## 15. Gaps to fill
+## 15. Live supplemental baseline
 
-The following left no citable measurement on the migration baseline. They must be completed and folded
-back into this document when `grok_acp_client` lands:
+Sampled on 2026-08-20 against Windows 11 / Grok CLI 1.0.5 in temporary empty directories with a
+sanitized smoke harness:
 
-- [ ] Sampling platform, Grok CLI version and sampling date (matching the §1 table of the Claude/Codex docs).
-- [ ] The actual shape of `authMethods` from `initialize`, plus the success/failure branches of
-      best-effort authentication.
-- [ ] Which of `_x.ai/` and `x.ai/` the current CLI actually emits (which is primary, which is compatibility).
-- [ ] A stable sample of `grok models` text output (parsing is currently tolerant; the shape is not frozen).
-- [ ] The complete field list of `_x.ai/billing`'s `config` object.
+- [x] `initialize.authMethods` is an object array; current object fields are `id`, `name`, and
+  `description`. Best-effort `cached_token` authentication succeeded; an injected-failure contract
+  test freezes the branch where authentication fails but initialization continues.
+- [x] The current CLI emitted the `_x.ai/` prefix. `x.ai/` remains a historical/compatibility prefix
+  accepted by the decoder.
+- [x] `grok models` prints a login-status line, `Default model: <id>`, a blank line,
+  `Available models:`, then `* <id> (default)` and `- <id>` entries. The sample default was
+  `grok-4.6` with `grok-4.5` also present; the model set itself is not a static pin.
+- [x] Current `_x.ai/billing.config` fields are `creditUsagePercent`, `currentPeriod`, `onDemandCap`,
+  `onDemandUsed`, `prepaidBalance`, `isUnifiedBillingUser`, `billingPeriodStart`, and
+  `billingPeriodEnd`. Fixtures retain redacted values only.
+
+The final real smoke passed 5/5 checks: two concurrent independent-process prompts, AC1 isolation,
+fresh-process `session/load` recovery, and field-name-only protocol metadata sampling. The first run
+timed out when reclaim happened immediately after the terminal; a bounded two-second asynchronous
+persistence window made consecutive reruns pass. See the migration execution decision log.

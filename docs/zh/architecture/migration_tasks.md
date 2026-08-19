@@ -386,11 +386,18 @@ token metering source 仍归步骤 21。真实 Claude Code 2.1.227 的无 Prompt
 26/26 个 test roots 共 780 tests，人工 coverage 100%（9,317 / 9,317）；Bloc lint 对 294 个文件
 报告 0 issues。
 
-### 步骤 14 — `grok_acp_client`
+### 步骤 14 — `grok_acp_client`（已完成）
 
-- [ ] 迁 Grok provider、ACP codecs/mappers、process starter、CLI locator。
-- [ ] ACP 当前只有一个消费者，暂不抽共享包。
-- [ ] contract tests 覆盖 permission fail-closed、question/plan、identity、usage/history 和 malformed updates。
+- [x] 迁 Grok provider、ACP codecs/mappers、process starter、CLI locator。
+- [x] ACP 当前只有一个消费者，暂不抽共享包。
+- [x] contract tests 覆盖 permission fail-closed、question/plan、identity、usage/history 和 malformed updates。
+
+完成证据（2026-08-20）：barrel 只导出 bundle factory、静态 capability 与唯一 CLI locator；
+Grok 私有 history reader/parser 随 vendor package 一并迁入，步骤 15 仍只负责跨 Provider 聚合。
+包级门禁为 233 tests，人工 coverage 100%（3,257 / 3,257）；本机 Grok CLI 1.0.5 的真实 smoke
+验证两个独立进程并发会话与新进程 `session/load` 恢复均通过。未修改共享 Provider port。
+同一轮 workspace 门禁中，27/27 roots analyze/format 通过，26/26 test roots 共 1,012 tests，
+人工 coverage 100%（12,573 / 12,573），Bloc lint 对 339 个文件报告 0 issues。
 
 ### 步骤 15 — `agent_history_client`
 

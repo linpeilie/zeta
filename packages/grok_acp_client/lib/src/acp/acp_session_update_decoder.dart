@@ -1,0 +1,605 @@
+import 'package:agent_provider_contracts/agent_provider_contracts.dart';
+
+/// 无状态解析标准 ACP `session/update` payload。
+///
+/// decoder 只识别协议字段，不保存 turn、segment 或去重状态，也不会生成
+/// message/reasoning entryId。Provider adapter 负责后续身份与叙事边界决策。
+final class AcpSessionUpdateDecoder {
+  const AcpSessionUpdateDecoder();
+
+  /// 将通知 envelope 或 `params` 对象解码为 typed update。
+  ///
+  /// 未知 kind、损坏对象或缺少必需字段时返回 [AcpUnknownUpdate]，不会抛出
+  /// 未处理异常。未知字段保留在 [AcpSessionUpdate.raw] 中供适配层诊断。
+  AcpSessionUpdate decode(Object? value) {
+    final envelope = _stringKeyedMap(value);
+    if (envelope == null) {
+      return const AcpUnknownUpdate(
+        kind: 'session/update:invalid',
+        diagnostic: 'params_not_object',
+      );
+    }
+
+    // 同时接受完整 JSON-RPC notification 和 provider 已拆出的 params。
+    final params = _stringKeyedMap(envelope['params']) ?? envelope;
+    final update = _stringKeyedMap(params['update']);
+    final sessionId = _nonEmptyString(params['sessionId']);
+    if (update == null) {
+      return AcpUnknownUpdate(
+        sessionId: sessionId,
+        kind: 'session/update:missing',
+        raw: _frozenMap(params),
+        diagnostic: 'update_not_object',
+      );
+    }
+
+    final raw = _frozenMap(update);
+    final kind = update['sessionUpdate']?.toString() ?? '';
+    final updateMeta = _stringKeyedMap(update['_meta']);
+    final paramsMeta = _stringKeyedMap(params['_meta']);
+    final promptId =
+        _nonEmptyString(updateMeta?['promptId']) ??
+        _nonEmptyString(paramsMeta?['promptId']) ??
+        _nonEmptyString(update['promptId']) ??
+        _nonEmptyString(update['prompt_id']);
+    final eventId =
+        _nonEmptyString(updateMeta?['eventId']) ??
+        _nonEmptyString(paramsMeta?['eventId']);
+
+    AcpUnknownUpdate invalid(String diagnostic) {
+      return AcpUnknownUpdate(
+        sessionId: sessionId,
+        kind: kind,
+        promptId: promptId,
+        eventId: eventId,
+        raw: raw,
+        diagnostic: diagnostic,
+      );
+    }
+
+    if (sessionId == null) {
+      return invalid('missing_session_id');
+    }
+
+    switch (kind) {
+      case 'user_message_chunk':
+        if (!update.containsKey('content') || update['content'] == null) {
+          return invalid('missing_content');
+        }
+        return AcpUserMessageChunk(
+          sessionId: sessionId,
+          content: update['content'],
+          sourceMessageId: _nonEmptyString(update['messageId']),
+          hideFromScrollback: updateMeta?['hideFromScrollback'] == true,
+          promptId: promptId,
+          eventId: eventId,
+          raw: raw,
+        );
+      case 'agent_message_chunk':
+        if (!update.containsKey('content') || update['content'] == null) {
+          return invalid('missing_content');
+        }
+        return AcpAgentMessageChunk(
+          sessionId: sessionId,
+          content: update['content'],
+          sourceMessageId: _nonEmptyString(update['messageId']),
+          promptId: promptId,
+          eventId: eventId,
+          raw: raw,
+        );
+      case 'agent_thought_chunk':
+        if (!update.containsKey('content') || update['content'] == null) {
+          return invalid('missing_content');
+        }
+        return AcpAgentThoughtChunk(
+          sessionId: sessionId,
+          content: update['content'],
+          sourceItemId:
+              _nonEmptyString(update['itemId']) ??
+              _nonEmptyString(update['messageId']),
+          promptId: promptId,
+          eventId: eventId,
+          raw: raw,
+        );
+      case 'tool_call':
+      case 'tool_call_update':
+        final toolCallId = _nonEmptyString(update['toolCallId']);
+        if (toolCallId == null) {
+          return invalid('missing_tool_call_id');
+        }
+        return AcpToolCallUpdate(
+          sessionId: sessionId,
+          kind: kind,
+          toolCallId: toolCallId,
+          title: _optionalString(update['title']),
+          toolKind: _optionalString(update['kind']),
+          status: _optionalString(update['status']),
+          content: update['content'],
+          locations: _locations(update['locations']),
+          rawInput: _frozenMap(_stringKeyedMap(update['rawInput'])),
+          rawOutput: _frozenMap(_stringKeyedMap(update['rawOutput'])),
+          promptId: promptId,
+          eventId: eventId,
+          raw: raw,
+        );
+      case 'plan':
+        return AcpPlanUpdate(
+          sessionId: sessionId,
+          entries: _planEntries(update['entries']),
+          promptId: promptId,
+          eventId: eventId,
+          raw: raw,
+        );
+      case 'usage_update':
+        final used = _intValue(update['used']);
+        if (used == null) {
+          return invalid('missing_usage');
+        }
+        return AcpUsageUpdate(
+          sessionId: sessionId,
+          used: used,
+          modelContextWindow: ContextWindowCodec.positiveWindow(update),
+          promptId: promptId,
+          eventId: eventId,
+          raw: raw,
+        );
+      case 'turn_completed':
+        return AcpTurnCompletedUpdate(
+          sessionId: sessionId,
+          stopReason:
+              _optionalString(update['stop_reason']) ??
+              _optionalString(update['stopReason']) ??
+              'end_turn',
+          usage: _turnUsage(update['usage']),
+          promptId: promptId,
+          eventId: eventId,
+          raw: raw,
+        );
+      case 'current_mode_update':
+        final modeId =
+            _optionalString(update['currentModeId']) ??
+            _optionalString(update['current_mode_id']);
+        if (modeId == null) {
+          return invalid('missing_mode_id');
+        }
+        return AcpCurrentModeUpdate(
+          sessionId: sessionId,
+          modeId: modeId,
+          promptId: promptId,
+          eventId: eventId,
+          raw: raw,
+        );
+      case 'retry_state':
+        // 传输层重试诊断（Grok xAI 扩展常见于 session_notification）；
+        // type / attempt / reason 缺失时仍给出 typed update，由 adapter 决定是否投影。
+        return AcpRetryStateUpdate(
+          sessionId: sessionId,
+          type: _nonEmptyString(update['type']) ?? 'unknown',
+          attempt: _intValue(update['attempt']),
+          maxRetries: _intValue(update['max_retries'] ?? update['maxRetries']),
+          attempts: _intValue(update['attempts']),
+          reason: _optionalString(update['reason']),
+          isRateLimited:
+              update['is_rate_limited'] == true ||
+              update['isRateLimited'] == true,
+          promptId: promptId,
+          eventId: eventId,
+          raw: raw,
+        );
+      case 'session_info_update':
+        // Grok 会话元数据更新；实时标题常随 `title` 下发（也可能只有 modelId）。
+        return AcpSessionInfoUpdate(
+          sessionId: sessionId,
+          title: _optionalString(update['title']),
+          modelId:
+              _optionalString(update['modelId']) ??
+              _optionalString(update['model_id']),
+          promptId: promptId,
+          eventId: eventId,
+          raw: raw,
+        );
+      case 'session_summary_generated':
+        // Grok 会话摘要生成完成；`session_summary` 与正式标题常同文。
+        return AcpSessionSummaryGenerated(
+          sessionId: sessionId,
+          sessionSummary:
+              _optionalString(update['session_summary']) ??
+              _optionalString(update['sessionSummary']),
+          promptId: promptId,
+          eventId: eventId,
+          raw: raw,
+        );
+      default:
+        return invalid(kind.isEmpty ? 'missing_update_kind' : 'unknown_kind');
+    }
+  }
+
+  static List<String> _locations(Object? value) {
+    if (value is! List) {
+      return const <String>[];
+    }
+    final locations = <String>[];
+    for (final item in value) {
+      final map = _stringKeyedMap(item);
+      final path = map == null
+          ? _nonEmptyString(item)
+          : _nonEmptyString(map['path']);
+      if (path != null) {
+        locations.add(path);
+      }
+    }
+    return List<String>.unmodifiable(locations);
+  }
+
+  static List<AcpPlanEntry> _planEntries(Object? value) {
+    if (value is! List) {
+      return const <AcpPlanEntry>[];
+    }
+    final entries = <AcpPlanEntry>[];
+    for (final item in value) {
+      final map = _stringKeyedMap(item);
+      if (map == null) {
+        continue;
+      }
+      final content = _optionalString(map['content']);
+      if (content == null || content.isEmpty) {
+        continue;
+      }
+      entries.add(
+        AcpPlanEntry(
+          content: content,
+          status: _optionalString(map['status']),
+          priority: _optionalString(map['priority']),
+          raw: _frozenMap(map),
+        ),
+      );
+    }
+    return List<AcpPlanEntry>.unmodifiable(entries);
+  }
+
+  static AcpTurnUsage? _turnUsage(Object? value) {
+    final map = _stringKeyedMap(value);
+    if (map == null) {
+      return null;
+    }
+    return AcpTurnUsage(
+      inputTokens: _intValue(map['inputTokens'] ?? map['input_tokens']),
+      outputTokens: _intValue(map['outputTokens'] ?? map['output_tokens']),
+      totalTokens: _intValue(map['totalTokens'] ?? map['total_tokens']),
+      cachedReadTokens: _intValue(
+        map['cachedReadTokens'] ?? map['cached_read_tokens'],
+      ),
+      reasoningTokens: _intValue(
+        map['reasoningTokens'] ?? map['reasoning_tokens'],
+      ),
+      modelContextWindow: ContextWindowCodec.positiveWindow(map),
+      apiDurationMs: _intValue(map['apiDurationMs'] ?? map['api_duration_ms']),
+      raw: _frozenMap(map),
+    );
+  }
+}
+
+/// decoder 输出的标准 ACP session update。
+sealed class AcpSessionUpdate {
+  const AcpSessionUpdate({
+    required this.sessionId,
+    required this.kind,
+    this.promptId,
+    this.eventId,
+    this.raw = const <String, Object?>{},
+  });
+
+  /// Provider 会话身份；损坏或未知输入中可能为空。
+  final String? sessionId;
+
+  /// 原始 `sessionUpdate` kind。
+  final String kind;
+
+  /// Provider prompt/turn 关联身份；不等同于规范化 entryId。
+  final String? promptId;
+
+  /// Provider 原始事件身份；只用于关联、去重或诊断。
+  final String? eventId;
+
+  /// 原始 update 字段；未知字段会保留。
+  final Map<String, Object?> raw;
+}
+
+/// 用户消息 content chunk。
+final class AcpUserMessageChunk extends AcpSessionUpdate {
+  const AcpUserMessageChunk({
+    required String sessionId,
+    required this.content,
+    this.sourceMessageId,
+    this.hideFromScrollback = false,
+    super.promptId,
+    super.eventId,
+    super.raw,
+  }) : super(sessionId: sessionId, kind: 'user_message_chunk');
+
+  final Object? content;
+  final String? sourceMessageId;
+
+  /// Provider 标记为仅供模型消费、不应进入客户端滚动区的用户回显。
+  final bool hideFromScrollback;
+}
+
+/// Agent 正文 content chunk。
+final class AcpAgentMessageChunk extends AcpSessionUpdate {
+  const AcpAgentMessageChunk({
+    required String sessionId,
+    required this.content,
+    this.sourceMessageId,
+    super.promptId,
+    super.eventId,
+    super.raw,
+  }) : super(sessionId: sessionId, kind: 'agent_message_chunk');
+
+  final Object? content;
+  final String? sourceMessageId;
+}
+
+/// Agent reasoning/thought content chunk。
+final class AcpAgentThoughtChunk extends AcpSessionUpdate {
+  const AcpAgentThoughtChunk({
+    required String sessionId,
+    required this.content,
+    this.sourceItemId,
+    super.promptId,
+    super.eventId,
+    super.raw,
+  }) : super(sessionId: sessionId, kind: 'agent_thought_chunk');
+
+  final Object? content;
+  final String? sourceItemId;
+}
+
+/// Tool start 或 update；[kind] 保留两者的原始差异。
+final class AcpToolCallUpdate extends AcpSessionUpdate {
+  const AcpToolCallUpdate({
+    required String sessionId,
+    required super.kind,
+    required this.toolCallId,
+    this.title,
+    this.toolKind,
+    this.status,
+    this.content,
+    this.locations = const <String>[],
+    this.rawInput = const <String, Object?>{},
+    this.rawOutput = const <String, Object?>{},
+    super.promptId,
+    super.eventId,
+    super.raw,
+  }) : assert(
+         kind == 'tool_call' || kind == 'tool_call_update',
+         'kind must describe a tool call update',
+       ),
+       super(sessionId: sessionId);
+
+  final String toolCallId;
+  final String? title;
+  final String? toolKind;
+  final String? status;
+  final Object? content;
+  final List<String> locations;
+  final Map<String, Object?> rawInput;
+  final Map<String, Object?> rawOutput;
+
+  bool get isUpdate => kind == 'tool_call_update';
+}
+
+/// ACP plan 条目。
+final class AcpPlanEntry {
+  const AcpPlanEntry({
+    required this.content,
+    this.status,
+    this.priority,
+    this.raw = const <String, Object?>{},
+  });
+
+  final String content;
+  final String? status;
+  final String? priority;
+  final Map<String, Object?> raw;
+}
+
+/// ACP plan update。
+final class AcpPlanUpdate extends AcpSessionUpdate {
+  const AcpPlanUpdate({
+    required String sessionId,
+    required this.entries,
+    super.promptId,
+    super.eventId,
+    super.raw,
+  }) : super(sessionId: sessionId, kind: 'plan');
+
+  final List<AcpPlanEntry> entries;
+}
+
+/// 会话级上下文用量快照。
+final class AcpUsageUpdate extends AcpSessionUpdate {
+  const AcpUsageUpdate({
+    required String sessionId,
+    required this.used,
+    this.modelContextWindow,
+    super.promptId,
+    super.eventId,
+    super.raw,
+  }) : super(sessionId: sessionId, kind: 'usage_update');
+
+  final int used;
+  final int? modelContextWindow;
+}
+
+/// ACP turn terminal usage。
+final class AcpTurnUsage {
+  const AcpTurnUsage({
+    this.inputTokens,
+    this.outputTokens,
+    this.totalTokens,
+    this.cachedReadTokens,
+    this.reasoningTokens,
+    this.modelContextWindow,
+    this.apiDurationMs,
+    this.raw = const <String, Object?>{},
+  });
+
+  final int? inputTokens;
+  final int? outputTokens;
+  final int? totalTokens;
+  final int? cachedReadTokens;
+  final int? reasoningTokens;
+  final int? modelContextWindow;
+  final int? apiDurationMs;
+  final Map<String, Object?> raw;
+}
+
+/// ACP turn completed 扩展。
+final class AcpTurnCompletedUpdate extends AcpSessionUpdate {
+  const AcpTurnCompletedUpdate({
+    required String sessionId,
+    required this.stopReason,
+    this.usage,
+    super.promptId,
+    super.eventId,
+    super.raw,
+  }) : super(sessionId: sessionId, kind: 'turn_completed');
+
+  final String stopReason;
+  final AcpTurnUsage? usage;
+}
+
+/// ACP 会话模式更新（如 Grok 的 `current_mode_update`）。
+final class AcpCurrentModeUpdate extends AcpSessionUpdate {
+  const AcpCurrentModeUpdate({
+    required String sessionId,
+    required this.modeId,
+    super.promptId,
+    super.eventId,
+    super.raw,
+  }) : super(sessionId: sessionId, kind: 'current_mode_update');
+
+  /// 服务端权威的会话模式标识（`default` / `plan` / `ask` 等）。
+  final String modeId;
+}
+
+/// 传输层重试状态（`retry_state`）。
+///
+/// 描述请求在传输/上游失败后的自动重试进度；不是 turn 叙事内容。
+/// 常见字段：`type`（`retrying` / `exhausted`）、`attempt`、`max_retries`、
+/// `reason`、`is_rate_limited`。
+final class AcpRetryStateUpdate extends AcpSessionUpdate {
+  const AcpRetryStateUpdate({
+    required String sessionId,
+    required this.type,
+    this.attempt,
+    this.maxRetries,
+    this.attempts,
+    this.reason,
+    this.isRateLimited = false,
+    super.promptId,
+    super.eventId,
+    super.raw,
+  }) : super(sessionId: sessionId, kind: 'retry_state');
+
+  /// 重试状态类型（如 `retrying`、`exhausted`）。
+  final String type;
+
+  /// 当前尝试序号（`retrying` 常见）。
+  final int? attempt;
+
+  /// 最大重试次数（`retrying` 常见）。
+  final int? maxRetries;
+
+  /// 已尝试总次数（`exhausted` 常见）。
+  final int? attempts;
+
+  /// 触发重试的诊断原因；仅供分类与日志，adapter 不得原样落盘敏感细节。
+  final String? reason;
+
+  /// 是否明确标记为限流。
+  final bool isRateLimited;
+}
+
+/// Grok `session_info_update`：会话元数据（标题、模型等）。
+///
+/// 实时改名优先读 [title]；无 title 时 adapter 可忽略，不伪造标题。
+final class AcpSessionInfoUpdate extends AcpSessionUpdate {
+  const AcpSessionInfoUpdate({
+    required String sessionId,
+    this.title,
+    this.modelId,
+    super.promptId,
+    super.eventId,
+    super.raw,
+  }) : super(sessionId: sessionId, kind: 'session_info_update');
+
+  /// 服务端下发的会话标题。
+  final String? title;
+
+  /// 可选模型 id；本类不投影模型目录。
+  final String? modelId;
+}
+
+/// Grok `session_summary_generated`：会话摘要已生成。
+///
+/// 常与 `session_info_update.title` 同文，经 adapter 映射为 thread 标题。
+final class AcpSessionSummaryGenerated extends AcpSessionUpdate {
+  const AcpSessionSummaryGenerated({
+    required String sessionId,
+    this.sessionSummary,
+    super.promptId,
+    super.eventId,
+    super.raw,
+  }) : super(sessionId: sessionId, kind: 'session_summary_generated');
+
+  /// 生成的会话摘要文案。
+  final String? sessionSummary;
+}
+
+/// 未知、暂不投影或损坏的 ACP update。
+final class AcpUnknownUpdate extends AcpSessionUpdate {
+  const AcpUnknownUpdate({
+    required super.kind,
+    super.sessionId,
+    super.promptId,
+    super.eventId,
+    super.raw,
+    this.diagnostic,
+  });
+
+  /// 不包含正文的稳定诊断原因。
+  final String? diagnostic;
+}
+
+Map<String, Object?>? _stringKeyedMap(Object? value) {
+  if (value is! Map) {
+    return null;
+  }
+  return <String, Object?>{
+    for (final entry in value.entries) entry.key.toString(): entry.value,
+  };
+}
+
+Map<String, Object?> _frozenMap(Map<String, Object?>? value) {
+  if (value == null || value.isEmpty) {
+    return const <String, Object?>{};
+  }
+  return Map<String, Object?>.unmodifiable(value);
+}
+
+String? _nonEmptyString(Object? value) {
+  final text = value?.toString().trim();
+  return text == null || text.isEmpty ? null : text;
+}
+
+String? _optionalString(Object? value) => value?.toString();
+
+int? _intValue(Object? value) {
+  return switch (value) {
+    final int number => number,
+    final num number => number.toInt(),
+    final String text => int.tryParse(text.trim()),
+    _ => null,
+  };
+}
