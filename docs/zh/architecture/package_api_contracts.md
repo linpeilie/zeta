@@ -83,7 +83,8 @@ library agent_provider_contracts;
 
 export 'src/bundle/agent_provider_bundle.dart';      // 21 个 port + bundle
 export 'src/bundle/agent_provider_capabilities.dart';
-export 'src/models/agent_event_models.dart';         // 36 个 AgentEvent 子类
+export 'src/models/agent_event_models.dart';         // 35 个 AgentEvent 子类
+export 'src/models/agent_attention_models.dart';
 export 'src/models/agent_session_models.dart';
 export 'src/models/agent_thread_models.dart';
 export 'src/models/agent_message_models.dart';
@@ -101,6 +102,7 @@ export 'src/models/agent_file_change_models.dart';
 export 'src/models/agent_usage_models.dart';
 export 'src/models/agent_turn_context_models.dart';
 export 'src/models/agent_turn_history_models.dart';
+export 'src/models/agent_turn_terminal_signal.dart';
 export 'src/models/agent_runtime_models.dart';
 export 'src/models/agent_user_input_models.dart';
 export 'src/failures/agent_provider_failure.dart';   // typed code，取代 TextCatalog
@@ -110,6 +112,10 @@ export 'src/cli/resolved_cli_process_command.dart';
 
 **不导出**：`AgentUiTextCatalog`、`FallbackAgentUiTextCatalog`、`ZetaTextCatalogs`、
 `cursor_retirement_policy`、`AgentProviderErrorPresentation`——全部删除（[步骤 7 / 28](./migration_tasks.md)）。
+
+`AgentTurnActivityPhase` / `AgentTurnActivitySnapshot` 同样不进入本包：它们是
+`AgentConversationBloc` 持有的 live interaction state；耗时计算与格式化留在 app
+Presentation/l10n。
 
 ### 1.2 端口计数：21 = 2 必需 + 19 可选
 
@@ -198,7 +204,7 @@ export 'src/cli/resolved_cli_process_command.dart';
 
 **迁移后此表必须与三个 client 的实际声明逐位相等**，由跨包测试断言。
 
-### 1.5 `AgentEvent` sealed family（36 个子类）
+### 1.5 `AgentEvent` sealed family（35 个子类）
 
 所有 Provider 事件归一化为同一族。分组如下（完整列表见源码）：
 
@@ -596,12 +602,12 @@ export 'src/virtualization/...';
 
 三个 vendor client 可以并行开发，当且仅当以下**全部**完成：
 
-- [ ] `agent_provider_contracts` 的 21 个端口签名冻结（§1.2）。
-- [ ] `AgentEvent` 的 36 个子类字段冻结（§1.5）。
-- [ ] `AgentProviderCapabilities` 的 27 个 flag 冻结（§1.3）。
+- [x] `agent_provider_contracts` 的 21 个端口签名冻结（§1.2）。
+- [x] `AgentEvent` 的 35 个子类字段冻结（§1.5）。
+- [x] `AgentProviderCapabilities` 的 27 个 flag 冻结（§1.3）。
 - [ ] `json_rpc_transport` 的 `ProcessStarter` 与 `TransportException` 冻结（§2.1）。
-- [ ] bundle factory 的构造签名冻结（§3.1）。
-- [ ] `ResolvedCliProcessCommand` 冻结（§3.3）。
+- [x] bundle factory 的构造签名冻结（§3.1）。
+- [x] `ResolvedCliProcessCommand` 冻结（§3.3）。
 
 在此之前并行 = 三方各写一套不兼容的适配层。
 

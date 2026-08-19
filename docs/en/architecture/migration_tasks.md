@@ -244,11 +244,27 @@ There are no released users, so no compatibility migration or legacy data upgrad
 
 ### Step 7 — `agent_provider_contracts`
 
-- [ ] Create a pure-Dart package implementing ADR-001.
-- [ ] Migrate 21 capability ports, Provider bundle/factory, and neutral event/session/thread/permission/plan/usage/input models.
-- [ ] Remove every TextCatalog/Fallback type and add typed failures/codes.
-- [ ] Verify zero vendor fields, IO, Flutter, or business state.
-- [ ] Test sealed families, codecs/pure models, Equatable, and `copyWith`.
+- [x] Create a pure-Dart package implementing ADR-001.
+- [x] Migrate 21 capability ports, Provider bundle/factory, and neutral event/session/thread/permission/plan/usage/input models.
+- [x] Remove every TextCatalog/Fallback type and add typed failures/codes.
+- [x] Verify zero vendor fields, IO, Flutter, or business state.
+- [x] Test sealed families, codecs/pure models, Equatable, and `copyWith`.
+
+**Status: complete.** The package freezes 21 Provider ports, 35 `AgentEvent`
+subtypes, 27 capability flags, the bundle/factory surface, and
+`ResolvedCliProcessCommand`. Public collection fields are defensive immutable
+snapshots, including nested diagnostic payloads. Provider-authored content may
+remain data, while Zeta-owned status/failure/warning copy is represented by
+typed codes and mapped by Presentation. The approved ownership split keeps
+attention and terminal signals in contracts, while turn-activity state and
+elapsed formatting remain with the later Bloc/Presentation work. Package gates:
+zero analyze issues, 52 formatted files with no changes, 85 tests, and 100%
+hand-written Dart coverage (1,071 / 1,071). The frozen-baseline reconciliation
+corrected the former count of 36 event types to 35; the extra count duplicated
+an `AgentTurnStartedEvent` construction path, not a subtype. In the same final
+workspace iteration, 27/27 roots passed analyze and formatting checked 165 files
+with no changes; 26/26 test roots ran 212 tests at 100% hand-written coverage
+(1,204 / 1,204), while Bloc lint reported 0 issues across 164 files.
 
 ### Step 8 — `zeta_logging` and `zeta_storage`
 

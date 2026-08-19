@@ -87,7 +87,8 @@ library agent_provider_contracts;
 
 export 'src/bundle/agent_provider_bundle.dart';      // 21 ports + bundle
 export 'src/bundle/agent_provider_capabilities.dart';
-export 'src/models/agent_event_models.dart';         // 36 AgentEvent subtypes
+export 'src/models/agent_event_models.dart';         // 35 AgentEvent subtypes
+export 'src/models/agent_attention_models.dart';
 export 'src/models/agent_session_models.dart';
 export 'src/models/agent_thread_models.dart';
 export 'src/models/agent_message_models.dart';
@@ -105,6 +106,7 @@ export 'src/models/agent_file_change_models.dart';
 export 'src/models/agent_usage_models.dart';
 export 'src/models/agent_turn_context_models.dart';
 export 'src/models/agent_turn_history_models.dart';
+export 'src/models/agent_turn_terminal_signal.dart';
 export 'src/models/agent_runtime_models.dart';
 export 'src/models/agent_user_input_models.dart';
 export 'src/failures/agent_provider_failure.dart';   // typed codes, replacing TextCatalog
@@ -115,6 +117,10 @@ export 'src/cli/resolved_cli_process_command.dart';
 **Not exported**: `AgentUiTextCatalog`, `FallbackAgentUiTextCatalog`, `ZetaTextCatalogs`,
 `cursor_retirement_policy`, `AgentProviderErrorPresentation` — all deleted
 ([steps 7 / 28](./migration_tasks.md)).
+
+`AgentTurnActivityPhase` / `AgentTurnActivitySnapshot` are also excluded: they are live interaction
+state owned by `AgentConversationBloc`. Elapsed-time calculation and formatting stay in app
+Presentation/l10n rather than this contracts package.
 
 ### 1.2 Port count: 21 = 2 required + 19 optional
 
@@ -207,7 +213,7 @@ runtime widen".
 **After migration this table must match the three clients' actual declarations bit for bit**, asserted
 by a cross-package test.
 
-### 1.5 The `AgentEvent` sealed family (36 subtypes)
+### 1.5 The `AgentEvent` sealed family (35 subtypes)
 
 All provider events normalize into one family. Grouped as follows (full list in the source):
 
@@ -616,12 +622,12 @@ indicators ≥3:1; interactive targets have an AA floor of 24×24 dp with a 48×
 
 The three vendor clients may proceed in parallel if and only if **all** of the following are done:
 
-- [ ] The 21 port signatures in `agent_provider_contracts` are frozen (§1.2).
-- [ ] The fields of the 36 `AgentEvent` subtypes are frozen (§1.5).
-- [ ] The 27 `AgentProviderCapabilities` flags are frozen (§1.3).
+- [x] The 21 port signatures in `agent_provider_contracts` are frozen (§1.2).
+- [x] The fields of the 35 `AgentEvent` subtypes are frozen (§1.5).
+- [x] The 27 `AgentProviderCapabilities` flags are frozen (§1.3).
 - [ ] `ProcessStarter` and `TransportException` in `json_rpc_transport` are frozen (§2.1).
-- [ ] The bundle factory constructor signature is frozen (§3.1).
-- [ ] `ResolvedCliProcessCommand` is frozen (§3.3).
+- [x] The bundle factory constructor signature is frozen (§3.1).
+- [x] `ResolvedCliProcessCommand` is frozen (§3.3).
 
 Parallelizing before that means three mutually incompatible adapter layers.
 

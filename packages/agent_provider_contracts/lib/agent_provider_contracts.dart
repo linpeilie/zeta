@@ -1,4 +1,33 @@
 /// Vendor-neutral agent provider contracts for Zeta.
 library;
 
-export 'src/agent_provider_contracts.dart';
+export 'src/bundle/agent_provider_bundle.dart';
+export 'src/bundle/agent_provider_capabilities.dart';
+export 'src/cli/resolved_cli_process_command.dart';
+export 'src/codecs/context_window_codec.dart';
+export 'src/failures/agent_provider_failure.dart';
+export 'src/models/agent_attention_models.dart';
+export 'src/models/agent_conversation_mode_models.dart';
+export 'src/models/agent_event_models.dart';
+export 'src/models/agent_file_change_models.dart';
+export 'src/models/agent_message_models.dart';
+export 'src/models/agent_model_catalog_models.dart';
+export 'src/models/agent_model_codec.dart';
+export 'src/models/agent_model_selection_models.dart';
+export 'src/models/agent_permission_models.dart';
+export 'src/models/agent_permission_policy_models.dart';
+export 'src/models/agent_plan_approval_models.dart';
+export 'src/models/agent_plan_execution_models.dart';
+export 'src/models/agent_provider_models.dart';
+export 'src/models/agent_question_models.dart';
+export 'src/models/agent_runtime_models.dart';
+export 'src/models/agent_session_config_models.dart';
+export 'src/models/agent_session_models.dart';
+export 'src/models/agent_skill_models.dart';
+export 'src/models/agent_thread_models.dart';
+export 'src/models/agent_tool_models.dart';
+export 'src/models/agent_turn_context_models.dart';
+export 'src/models/agent_turn_history_models.dart';
+export 'src/models/agent_turn_terminal_signal.dart';
+export 'src/models/agent_usage_models.dart';
+export 'src/models/agent_user_input_models.dart';

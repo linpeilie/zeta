@@ -241,11 +241,24 @@ packages/<name>/
 
 ### 步骤 7 — `agent_provider_contracts`
 
-- [ ] 创建纯 Dart package，执行 ADR-001。
-- [ ] 迁 21 个 capability port、Provider bundle/factory、neutral event/session/thread/permission/plan/usage/input models。
-- [ ] 删除所有 TextCatalog/Fallback 类型；增加 typed failure/code。
-- [ ] 核验零 vendor 字段、零 IO、零 Flutter、零业务状态。
-- [ ] 对 sealed family、codec/pure model、Equatable/copyWith 补齐测试。
+- [x] 创建纯 Dart package，执行 ADR-001。
+- [x] 迁 21 个 capability port、Provider bundle/factory、neutral event/session/thread/permission/plan/usage/input models。
+- [x] 删除所有 TextCatalog/Fallback 类型；增加 typed failure/code。
+- [x] 核验零 vendor 字段、零 IO、零 Flutter、零业务状态。
+- [x] 对 sealed family、codec/pure model、Equatable/copyWith 补齐测试。
+
+**状态：已完成。** package 已冻结 21 个 Provider port、35 个 `AgentEvent`
+子类、27 个 capability flag、bundle/factory 表面及
+`ResolvedCliProcessCommand`。所有公开集合字段均为防御性不可变快照，包含嵌套
+诊断 payload；Provider 提供的内容可作为数据保留，Zeta 自有 status/failure/warning
+文案则改为 typed code，由 Presentation 映射。按已批准的所有权拆分，attention 与
+terminal signal 留在 contracts，turn activity state 与 elapsed 格式化留给后续
+Bloc/Presentation。package 门禁：analyze 0 问题，format 52 files / 0 changed，
+85 tests，人工 Dart coverage 100%（1,071 / 1,071）。冻结基线复核将原先的
+36 个事件类型修正为 35 个；多计的一项是 `AgentTurnStartedEvent` 的重复构造路径，
+并非额外子类。同一轮 workspace 最终门禁中，27/27 roots analyze 通过，format
+检查 165 files / 0 changed；26/26 个可测试 roots 共 212 tests，人工 coverage
+100%（1,204 / 1,204），Bloc lint 对 164 files 报告 0 issues。
 
 ### 步骤 8 — `zeta_logging` 与 `zeta_storage`
 

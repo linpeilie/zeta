@@ -191,7 +191,7 @@ schema 快照的生成入口。`test_fast/test_full` 四个脚本被 VGV 四门�
 | `features/agent/domain/agent_skill_models.dart` | rewrite | `packages/agent_provider_contracts/lib/src/` | ADR-001 模型例外：21 个 capability port 与中立不可变模型；零 vendor 字段 |
 | `features/agent/domain/agent_thread_models.dart` | rewrite | `packages/agent_provider_contracts/lib/src/` | ADR-001 模型例外：21 个 capability port 与中立不可变模型；零 vendor 字段 |
 | `features/agent/domain/agent_tool_models.dart` | rewrite | `packages/agent_provider_contracts/lib/src/` | ADR-001 模型例外：21 个 capability port 与中立不可变模型；零 vendor 字段 |
-| `features/agent/domain/agent_turn_activity_models.dart` | rewrite | `packages/agent_provider_contracts/lib/src/` | ADR-001 模型例外：21 个 capability port 与中立不可变模型；零 vendor 字段 |
+| `features/agent/domain/agent_turn_activity_models.dart` | split | `lib/agent_chat/bloc/ + lib/l10n/` | live activity phase/snapshot 属 Bloc 交互状态；耗时格式化属 Presentation 文案，不进入 ADR-001 |
 | `features/agent/domain/agent_turn_context_models.dart` | rewrite | `packages/agent_provider_contracts/lib/src/` | ADR-001 模型例外：21 个 capability port 与中立不可变模型；零 vendor 字段 |
 | `features/agent/domain/agent_turn_history_models.dart` | rewrite | `packages/agent_provider_contracts/lib/src/` | ADR-001 模型例外：21 个 capability port 与中立不可变模型；零 vendor 字段 |
 | `features/agent/domain/agent_turn_terminal_signal.dart` | rewrite | `packages/agent_provider_contracts/lib/src/` | ADR-001 模型例外：21 个 capability port 与中立不可变模型；零 vendor 字段 |

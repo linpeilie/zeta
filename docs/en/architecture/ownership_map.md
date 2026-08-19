@@ -167,6 +167,10 @@ either.
   sealed key types.
 - **Counter-example**: do not push a class with behaviour into contracts just because two packages need
   it. Only **immutable value objects and pure functions** qualify.
+- **Turn activity ruling**: `AgentAttentionSignal`, `AgentWorkspaceAttention`, and
+  `AgentTurnTerminalSignal` are neutral immutable cross-package signals and belong in contracts.
+  `AgentTurnActivityPhase` / `AgentTurnActivitySnapshot` remain `AgentConversationBloc` state, while
+  elapsed-time formatting remains in app Presentation/l10n.
 
 ---
 

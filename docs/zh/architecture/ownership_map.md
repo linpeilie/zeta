@@ -157,6 +157,10 @@ Presentation 迁移，不进入 Bloc State。
 - **裁决**：放 `agent_provider_contracts`。它是不可变值对象、零 IO、零 vendor 字段，符合 ADR-001 的准入条件。
 - **同类处理**：`AgentThreadWorkspaceKey`、`AgentConversationBindingKey` 等跨包共享的 sealed key 类型同理。
 - **反例**：不要因为"两个包都要用"就把有行为的类塞进 contracts。只有**不可变值对象与纯函数**可以。
+- **Turn activity 裁决**：`AgentAttentionSignal`、`AgentWorkspaceAttention`、
+  `AgentTurnTerminalSignal` 是跨包共享的中立不可变信号，进入 contracts；
+  `AgentTurnActivityPhase` / `AgentTurnActivitySnapshot` 留在 `AgentConversationBloc` State，
+  耗时格式化留在 app Presentation/l10n。
 
 ---
 
