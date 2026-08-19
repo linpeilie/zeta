@@ -1,8 +1,8 @@
 # Migration Topology Analysis
 
-[中文](./migration_topology.md) ｜ English
+[中文](../../zh/architecture/migration_topology.md) ｜ English
 
-This document defines the migration boundary, target topology, and execution order from the current `dev` branch of `D:\Development\Workspace\zeta` to the new VGV repository. See [migration_tasks.en.md](./migration_tasks.en.md) for the executable checklist.
+This document defines the migration boundary, target topology, and execution order from the current `dev` branch of `D:\Development\Workspace\zeta` to the new VGV repository. See the [migration task list](./migration_tasks.md) for the executable checklist.
 
 ## 0. Conclusion
 
@@ -41,7 +41,8 @@ Zeta has not been released, so this migration does not support historical releas
 | Version | Use the new repository version `1.0.0+1` |
 | Data compatibility | No historical-version compatibility; validate clean installation and the current schema only |
 | Accessibility target | WCAG 2.2 AA across macOS / Windows / Linux |
-| Explicitly excluded | `app_update`, Velopack, `third_party/`, and the old repository's `tool/packaging/` |
+| Explicitly excluded | `app_update`, Velopack, and the old repository's `tool/packaging/` |
+| Explicitly migrated (ruled 2026-08-19) | `third_party/codex_app_server_schema/` and the smoke/gate scripts under `tool/`; rationale in [manifest §5](./migration_manifest.md) |
 | Old repository | Freeze after Cursor removal; no parallel feature work |
 
 No flavor isolation means development, staging, and production cannot be installed side by side and share the same local data. Entrypoints may change runtime configuration and logging level only; they must not change schema, application ID, or directories.

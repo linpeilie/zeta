@@ -1,6 +1,6 @@
 # VGV 分层迁移任务清单
 
-中文 ｜ [English](./migration_tasks.en.md)
+中文 ｜ [English](../../en/architecture/migration_tasks.md)
 
 本清单把 [migration_topology.md](./migration_topology.md) 转为可执行步骤。状态只有在本步骤代码、测试、架构门禁和中英文文档同一轮全部通过后才能勾选。
 
@@ -19,7 +19,12 @@
 | P7 Agent 会话 | 32–33 | ☐ |
 | P8 Shell、Router 与收口 | 34–36 | ☐ |
 
-明确不在任何阶段内：`app_update`、Velopack、更新 native channel、`third_party/`、旧仓库 `tool/packaging/`、历史版本数据迁移、OS 外部 deep link。
+明确不在任何阶段内：`app_update`、Velopack、更新 native channel、旧仓库 `tool/packaging/`、历史版本数据迁移、OS 外部 deep link。
+
+**明确在范围内**（2026-08-19 裁决，见[逐文件清单 §5](./migration_manifest.md)）：
+`third_party/codex_app_server_schema/`（269 个文件，Codex `0.144.5` stable schema pin，步骤 12 contract test 的基准）；
+`tool/` 下的 5 个 `smoke_*.py`、`gen_codex_schema.{sh,ps1}`、`check_localized_ui_strings.dart` 与其 allowlist
+（步骤 17 / 28 / 33 / 36 的验收直接依赖）。
 
 ---
 
@@ -120,6 +125,14 @@ packages/<name>/
 - 无障碍目标固定为 WCAG 2.2 AA，覆盖 macOS / Windows / Linux。
 - widget test 与 VoiceOver/Narrator/NVDA/Orca 手工 smoke 均按 AA 执行；reduce-motion 作为额外 VGV 平台门禁。
 
+### 1.9 文档双语目录约定
+
+- `docs/` 按语言分为 `docs/zh/` 与 `docs/en/` 两棵树。
+- 两棵树的**子目录结构与文件名完全一致**；文件名不带语言后缀，语言由所在目录决定。
+- 新增或修改文档时，两个语言版本必须在**同一个提交**里更新。
+- 唯一例外是 `history/`：归档文档保持原语言不补译，另一侧放指向它的说明。
+- 仓库根目录的 `README` / `CONTRIBUTING` 继续使用 `xxx.md` + `xxx.en.md` 后缀形式，不进 `docs/`。
+
 ---
 
 ## P-1 · 基线与 ADR
@@ -139,7 +152,7 @@ packages/<name>/
 
 - [ ] 记录最终旧仓库 commit SHA、clean status、Flutter/Dart 版本和 `pubspec.lock` hash。
 - [ ] 重新统计人工 Dart、generated Dart、test、ARB、native 与 assets。
-- [ ] 建 `docs/architecture/migration_manifest.md` + `.en.md`。
+- [ ] 建 `docs/zh/architecture/migration_manifest.md` 与 `docs/en/architecture/migration_manifest.md`。
 - [ ] 每个 Git 跟踪文件恰好标记为 `move`、`rewrite`、`regenerate`、`delete` 或 `out-of-scope`。
 - [ ] native Runner、MethodChannel、pubspec、fonts/icons、CI 文件必须在 manifest 中。
 - [ ] 未跟踪 `.workflow/feature/2026-08-18-PC端构建与版本检查/` 明确不属于输入。
@@ -537,7 +550,7 @@ Flutter adapters（仅 `lib/app/platform/`）：
 - [ ] secret scan、日志脱敏、process 参数化、路径/symlink 负向测试通过。
 - [ ] manifest 每个文件已闭环，无 `app_update`/Velopack/packaging 遗留。
 - [ ] 更新 `architecture/overview`、`layering`、`engineering_standards`、`design_document`、developer/internationalization/navigation guides 和 `CONTRIBUTING.md` 的中英文版本。
-- [ ] `docs/README.md` / `.en.md` 无死链，所有文档语言配对完整。
+- [ ] `docs/zh/` 与 `docs/en/` 子目录结构一致、同名文件成对存在（`history/` 除外），且无死链。
 
 ---
 

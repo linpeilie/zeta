@@ -1,8 +1,8 @@
 # VGV Layered Migration Task List
 
-[中文](./migration_tasks.md) ｜ English
+[中文](../../zh/architecture/migration_tasks.md) ｜ English
 
-This checklist turns [migration_topology.en.md](./migration_topology.en.md) into executable steps. A step may be checked only after its code, tests, architecture gates, and both document languages pass in the same iteration.
+This checklist turns the [migration topology](./migration_topology.md) into executable steps. A step may be checked only after its code, tests, architecture gates, and both document languages pass in the same iteration.
 
 ## 0. Progress Overview
 
@@ -19,7 +19,12 @@ This checklist turns [migration_topology.en.md](./migration_topology.en.md) into
 | P7 Agent conversation | 32–33 | ☐ |
 | P8 Shell, router, and close-out | 34–36 | ☐ |
 
-Explicitly outside every phase: `app_update`, Velopack, updater native channels, `third_party/`, the legacy repository's `tool/packaging/`, historical-version data migration, and external OS deep links.
+Explicitly outside every phase: `app_update`, Velopack, updater native channels, the legacy repository's `tool/packaging/`, historical-version data migration, and external OS deep links.
+
+**Explicitly in scope** (ruled 2026-08-19, see [manifest §5](./migration_manifest.md)):
+`third_party/codex_app_server_schema/` (269 files, the Codex `0.144.5` stable schema pin, the baseline for the step 12 contract test);
+and under `tool/`, the five `smoke_*.py` scripts, `gen_codex_schema.{sh,ps1}`, `check_localized_ui_strings.dart` and its allowlist
+(steps 17 / 28 / 33 / 36 depend on them directly).
 
 ---
 
@@ -120,6 +125,17 @@ Before checking a step:
 - The accessibility target is fixed at WCAG 2.2 AA across macOS / Windows / Linux.
 - Widget tests and VoiceOver/Narrator/NVDA/Orca manual smoke tests run against AA; reduced motion remains an additional VGV platform gate.
 
+### 1.9 Bilingual documentation layout
+
+- `docs/` is split by language into `docs/zh/` and `docs/en/`.
+- Both trees have **identical subdirectory structures and identical filenames**; filenames carry no
+  language suffix and the language is determined by the directory.
+- When adding or changing a document, both language versions must be updated in the **same commit**.
+- The sole exception is `history/`: archived documents keep their original language and the other side
+  carries a pointer to them.
+- The repository-root `README` / `CONTRIBUTING` keep the `xxx.md` + `xxx.en.md` suffix form and stay
+  outside `docs/`.
+
 ---
 
 ## P-1 · Baseline and ADRs
@@ -139,7 +155,7 @@ There are no released users, so no compatibility migration or legacy data upgrad
 
 - [ ] Record the final legacy commit SHA, clean status, Flutter/Dart versions, and `pubspec.lock` hash.
 - [ ] Recount hand-written Dart, generated Dart, tests, ARB, native files, and assets.
-- [ ] Create `docs/architecture/migration_manifest.md` and `.en.md`.
+- [ ] Create `docs/zh/architecture/migration_manifest.md` and `docs/en/architecture/migration_manifest.md`.
 - [ ] Classify every Git-tracked file exactly once as `move`, `rewrite`, `regenerate`, `delete`, or `out-of-scope`.
 - [ ] Include native Runners, MethodChannels, pubspecs, fonts/icons, and CI files.
 - [ ] Explicitly exclude the untracked `.workflow/feature/2026-08-18-PC端构建与版本检查/` directory from the input.
@@ -537,7 +553,7 @@ Flutter adapters, only under `lib/app/platform/`:
 - [ ] Secret scan, log redaction, parameterized process launch, and path/symlink negative tests pass.
 - [ ] Close every manifest file, with no `app_update`, Velopack, or packaging remnant.
 - [ ] Update bilingual `architecture/overview`, `layering`, `engineering_standards`, `design_document`, developer/internationalization/navigation guides, and `CONTRIBUTING.md`.
-- [ ] `docs/README.md` / `.en.md` have no dead link and every document has its language pair.
+- [ ] `docs/zh/` and `docs/en/` have identical subdirectory structures with paired same-name files (`history/` excepted), and no dead links.
 
 ---
 

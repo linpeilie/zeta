@@ -1,6 +1,6 @@
 # 迁移拓扑分析
 
-中文 ｜ [English](./migration_topology.en.md)
+中文 ｜ [English](../../en/architecture/migration_topology.md)
 
 本文件定义旧仓库 `D:\Development\Workspace\zeta` 当前 `dev` → 新 VGV 仓库的迁移边界、目标拓扑和执行顺序。逐步任务见 [migration_tasks.md](./migration_tasks.md)。
 
@@ -41,7 +41,8 @@ Presentation → Business Logic (Bloc/Cubit) → Repository → Data
 | 版本 | 采用新仓库 `1.0.0+1` |
 | 数据兼容 | 无历史版本兼容；仅验证干净安装和当前 schema |
 | 无障碍目标 | WCAG 2.2 AA；覆盖 macOS / Windows / Linux |
-| 明确不迁移 | `app_update`、Velopack、`third_party/`、旧仓库 `tool/packaging/` |
+| 明确不迁移 | `app_update`、Velopack、旧仓库 `tool/packaging/` |
+| 明确迁移（2026-08-19 裁决） | `third_party/codex_app_server_schema/`、`tool/` 的冒烟与门禁脚本；理由见[逐文件清单 §5](./migration_manifest.md) |
 | 旧仓库 | Cursor 清退完成后 freeze，不再并行开发功能 |
 
 “不做 flavor 隔离”意味着 development、staging、production 不能并存安装，且共享同一份本地数据。三个 entrypoint 只允许改变运行配置和日志级别，不得改变 schema、应用 ID 或目录。

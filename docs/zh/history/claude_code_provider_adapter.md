@@ -1,0 +1,1031 @@
+# Claude Code Provider 接入适配文档（历史提案）
+
+> [!IMPORTANT]
+> **归档文档，中文单语保留。** 本文自旧仓库 `bfd4241` 迁入 `docs/history/`，
+> 按[文档 README](../README.md)的约定，`history/` 只作为历史证据保留，
+> **不代表当前支持的能力**，因此不维护英文版。
+>
+> 迁移期仍有引用价值的部分：**§2 接入契约**、**§4 Data 层设计要点**、
+> **§6 Plan / Permission / History 语义映射详解**、**§7 CLI 检测与配置**——
+> 它们是 `packages/claude_code_client` 的设计输入。文中的目录结构、类名与
+> `lib/src/features/agent/...` 路径属于旧仓库，**不要照抄**；新拓扑见
+> [包 API 契约](../architecture/package_api_contracts.md)。
+
+> [!IMPORTANT]
+> 本文保留接入前的设计取舍、备选方案与后续增强设想，不再作为当前实现的事实源。
+> 已落地的 stream-json wire、能力边界与升级门禁以
+> [Claude Code stream-json 协议基线](../protocols/claude_code_stream_json_protocol.md) 为准。
+> 本提案原定的 OAuth `/v1/models` 与静态目录兜底已经被否决并删除。当前实现改为
+> 从无 Prompt 的 CLI initialize 读取模型和套餐名称；OAuth REST 只用于可关闭的额度详情。
+>
+> 2026-08-13 起，旧 `AgentProvider` 大接口、`AgentProviderBundle.adapt` 与 Domain 中的
+> `defaultsFor(kind)` 已删除。静态能力走 data 层 `AgentProviderStaticCapabilities`，
+> 工厂走 `AgentProviderBundleFactory.createBundle`。本文仍出现的旧符号只反映提案当时的
+> 骨架设计，不要照抄回 Shared Domain。
+
+> 目的：将 Anthropic 的 Claude Code CLI 作为 **第三个** Agent Provider 接入
+> Zeta（与 Codex app-server、Grok ACP 并列），复用 `~/.claude` 已登录态，覆盖
+> 基础对话 / 工具时间线 / 权限审批 / Plan 审批 / 会话历史 / 模型目录 /
+> MCP·hooks 透传等能力。本文档同时作为落地任务清单与评审基线。
+>
+> **约束基线**：本文档不重复 `CLAUDE.md`、`AGENTS.md`、
+> `docs/guides/developer_guide.md` 已固化的规则。凡涉及事件管线、共享适配层、feature
+> 目录约束、Git 提交格式的部分，仍以那三份文档为准。发生冲突时，本文档服从
+> 上述权威文档，同时在此登记差异并触发同步修订。
+
+## 0. 决策速览
+
+| 决策项 | 结论 | 依据 |
+| --- | --- | --- |
+| 接入形态 | Claude Code CLI 常驻子进程，`--print --input-format stream-json --output-format stream-json --verbose` | 与现有 Codex/Grok stdio 模型同构；零 SDK/Node 依赖；官方稳定支持（备选方案对比见 §0.1） |
+| 认证 | 会话复用 Claude CLI 自有认证；管理页以 `claude auth status --json` 显示认证证据 | 不通过凭据文件名猜登录态；认证证据与 initialize 可用性分开 |
+| 上架方式 | 独立第 3 个 Provider（`AgentProviderKind.claudeCode`） | 骨架已预留：枚举、`defaultsFor`、`DefaultAgentProviderFactory` 均已留分支 |
+| MVP 能力 | 对话/工具 + 权限审批 + Plan 审批 + 会话历史/resume + 模型目录 + 账号套餐用量 + MCP/hooks 透传 | 与用户澄清结论一致 |
+| Default provider | 保持 Codex 为默认，Claude Code 与 Grok 一样是可选项 | 降低回滚风险；`AgentDefinition.all` 追加即可 |
+| 数据边界 | Provider-local adapter 可只读 Claude 配置、历史、认证 metadata；Zeta 不保存凭据或 raw payload | 读取不授权刷新、迁移、改写或删除 Claude 数据；CLI 仍可能维护自己的状态 |
+| 模型列表数据源 | 独立无 Prompt CLI `control_request.initialize` 的 `response.models` | 表示当前 CLI 有效选项快照，不承诺实时远端全量；无 REST/静态 fallback（§2.4、§4.7） |
+| 套餐用量数据源 | `GET /api/oauth/usage`（同一 accessToken），实现既有 `AgentUsageQuotaProvider` 接口 | 五小时/周限额无法从 stream-json 拿到；接口对高频调用敏感需节流（§4.11） |
+| 额度详情增强开关 | 兼容保留 `claudeCode.accountDataEnrichment`，只控制 OAuth 凭据与 usage REST | 关闭后仍从 initialize 读取模型和套餐名称；额度面板显示 plan-only（§4.11、§7.2） |
+
+### 0.1 备选接入方式全景对比（本次评审新增）
+
+> 为便于评审追溯上表「接入形态」一行的取舍依据，本节列出基于 Claude Code
+> 现行文档体系（CLI / Agent SDK / 第三方 ACP 桥接 / 云端托管面）调研过的全部
+> 接入路径，逐项给出优缺点。除方式 A 外均为**不采用**，供二期重估时参考；
+> 结论不改变 §0 决策速览的既定结果。
+
+| 接入方式 | 技术形态摘要 | 结论 |
+| --- | --- | --- |
+| A. CLI 常驻子进程 + stream-json 交互输入 | `claude --print --input-format stream-json --output-format stream-json`，进程常驻，双向行分隔 JSON | **已选**（见 §0 决策速览） |
+| B. CLI 单次调用 / headless 非交互模式 | 每次 `-p`/`--print` 单条 prompt，靠 `--continue`/`--resume` 续接磁盘 session，无常驻管道 | 不适用于交互式会话；二期可评估批处理场景 |
+| C. Claude Agent SDK（TypeScript / Python） | 官方 SDK，底层仍是「spawn 一个 claude 子进程走 stdio」，SDK 包自带原生 CLI 二进制 | 不采用，违反零 Node/Python 依赖判据 |
+| D. 社区 ACP 桥接（如 `claude-code-acp` / `claude-agent-acp`） | Zed 团队维护，封装官方 TS SDK，对外暴露标准 Agent Client Protocol | 不采用，非 Anthropic 官方维护 + 额外 Node 依赖 |
+| E. Claude Code 作为 MCP Server（反向集成） | 让 Claude Code 反过来给 Codex/其他 Agent 提供工具，而非作为独立 Provider | 不适用，集成方向相反 |
+| F. 云端 / CI 托管面（Claude Code on the web、GitHub/GitLab CI、Slack、Claude Tag） | 会话跑在 Anthropic 云端或 CI runner 上，状态不落在本机 `~/.claude` | 不适用，交互模型与数据边界都对不上 |
+
+#### A. CLI 常驻子进程 + stream-json（已选）
+
+优点：
+
+- 与 Codex app-server、Grok ACP 现有 stdio 架构同构，只需新增
+  `StreamJsonPeer` 这一层 transport（§4.1），不用改共享管线；
+- 复用 `~/.claude` 已登录态，不强制切到 API Key；
+- 官方文档把「持续会话 + 消息排队 + 实时中断 + 权限/Plan 反向请求」的模式
+  列为推荐用法，覆盖 MVP 能力清单最完整；
+- 不引入 Node.js / Python 运行时依赖。
+
+缺点：
+
+- stream-json 是 Claude Code 私有协议，官方未做版本承诺，CLI 升级可能
+  变更事件形状（已登记在 §10 风险表，靠 mapper 对未知 `type` 兜底丢弃缓解）；
+- 要求用户本机已安装并登录 Claude Code CLI，Zeta 不能代为登录；
+- 新协议能力（比如新版本才有的 hook/事件类型）需要自行跟进 mapper，无法
+  像官方 SDK 那样随版本自动继承。
+
+#### B. CLI 单次调用 / headless 非交互模式
+
+优点：
+
+- 实现最简单，不用管理长生命周期子进程和 stdin 写队列；
+- 适合「一次性任务」场景，比如未来的批处理式代码审查；
+- `--bare` 参数可跳过 hooks/skills/plugins/MCP/CLAUDE.md 的自动发现，
+  启动更快，适合不需要完整上下文加载的轻量调用。
+
+缺点：
+
+- 不支持消息排队、实时中断、图片直传等——这些正是官方文档中明确写出
+  「Single Message 模式不具备」的能力，MVP 要求的实时工具时间线体验做不到；
+- 权限反向询问机制依赖长连接会话；单次调用场景基本只能预先固定
+  `--permission-mode`，实现不了「每次弹审批弹窗」（Ask 模式）；
+- 多轮对话退化成「重启进程 + 磁盘续接」（`--continue`/`--resume`），
+  时延和资源开销都比常驻进程高；
+- `--bare` 快速模式不读订阅登录态、也不读 OAuth 凭证或系统 keychain，
+  必须显式配置 `ANTHROPIC_API_KEY`，与 §7.2 认证策略「复用已登录态优先」
+  的姿态冲突。
+
+#### C. Claude Agent SDK（TypeScript / Python）
+
+优点：
+
+- 官方维护，类型化消息、Hook 回调（`canUseTool`）、Subagent、Skills、
+  Session 持久化（`SessionStore` 适配器）等能力比裸协议更完整，且随官方
+  版本自动演进；
+- SDK 包自带绑定的原生 Claude Code 二进制，理论上不需要用户机器单独装 CLI。
+
+缺点：
+
+- 只有 TS / Python 两种语言绑定，Zeta 是 Dart/Flutter 技术栈，接入必须
+  额外内嵌 Node.js 或 Python 运行时并做跨语言桥接（FFI/IPC），直接违反
+  决策速览「零 SDK/Node 依赖」的既定判据，且与 Codex/Grok 的 stdio 架构
+  不同构，等于第三套技术栈；
+- 官方明确建议第三方产品走 API Key 认证，而不是复用 CLI 交互式登录态
+  的订阅态登录，这与「检测并复用 `~/.claude` 已登录态」的现有策略存在
+  潜在冲突，需要额外合规确认；
+- 底层本质仍是「spawn 子进程走 stdio」，并没有绕开协议稳定性问题，只是
+  把风险转移给了 SDK 维护方。
+
+#### D. 社区 ACP 桥接（如 `claude-code-acp` / `claude-agent-acp`）
+
+优点：
+
+- 协议本身是有版本号的标准 Agent Client Protocol，比 Claude 私有
+  stream-json 的「无版本承诺」更可控；
+- 理论上可以直接复用 Zeta 现有 Grok Provider 的 `JsonRpcPeer` 传输层和
+  部分权限模型代码，新增代码量可能是几种方案里最小的。
+
+缺点：
+
+- 不是 Anthropic 官方产品，是 Zed 团队基于官方 TS SDK 封装的开源桥接，
+  功能对齐落后于 Claude Code 原生 CLI（官方博客明确提到不少内置 slash
+  command 尚未被适配层覆盖）；
+- 底层仍要跑 Node.js + npm 包，同样违反零 Node 依赖判据；
+- 多一跳中间进程（Zeta → 桥接进程 → SDK → CLI 子进程），增加延迟和故障
+  面；桥接层的修复节奏不受 Anthropic 控制；
+- 认证方式由桥接层自行处理（自带登录/计费），与 Zeta 现有「仅 stat
+  `~/.claude` 凭证文件」的探测逻辑（§7.1）不一定兼容。
+
+#### E. Claude Code 作为 MCP Server（反向集成）
+
+优点：让已接入的 Codex/Grok Provider 需要借用 Claude Code 能力时可以把它
+当工具调用，不用新增 Provider 抽象。
+
+缺点：与本文档目标——让用户在 UI 里把 Claude Code 选作一个独立的、拥有
+自己对话时间线/权限/Plan/历史的 Agent Provider——方向相反，无法满足核心
+诉求。
+
+结论：不适用；可作为 §11「MCP 透传」二期方向的延伸，单独立项评估，不
+影响本次接入。
+
+#### F. 云端 / CI 托管面
+
+Claude Code on the web、GitHub Actions、GitLab CI/CD、Slack、Claude Tag
+等都是官方支持的「离开终端也能跑」接入面，但会话状态在 Anthropic 云端或
+CI runner 上，不落在本机 `~/.claude`，认证、数据边界、「本地文件系统直接
+读写」的交互模型都要整套重做，且做不到 Zeta 需要的实时权限/Plan 审批体验。
+不适用，超出本次接入范围。
+
+## 1. 当前 Provider 全景
+
+### 1.1 已接入 Provider 能力对齐表
+
+| 能力 (`AgentProviderCapabilities`) | Codex app-server | Grok ACP | Claude Code（目标） |
+| --- | :-: | :-: | :-: |
+| canCreateSession | ✅ | ✅ | ✅ |
+| canResumeSession | ✅ | ✅ | ✅（`--resume <session-id>`） |
+| canListThreads / canReadHistory | ✅ | ✅ | ✅（读 `~/.claude/projects/<encoded-cwd>/*.jsonl`） |
+| canRenameThread | ✅ | ✅ | ⚠️ 本地重命名（只写 Zeta 侧索引，不改 Claude 文件） |
+| canArchiveThread / canUnarchiveThread | ✅ | ❌ | ❌（Claude Code 无归档语义） |
+| canDeleteThread | ✅ | ✅ | ⚠️ 仅 `removeThreadFromList`（不删 Claude jsonl；UI 明示保留） |
+| canForkThread / canForkThreadAtTurn | ✅ / 动态 | ❌ | ⚠️ MVP 关闭（可用 `--resume + --fork-session`，二期开） |
+| canCompactThread | ✅ | ❌ | ✅（透传 `/compact` slash 或 `compact`/`clear` 事件） |
+| canSteerTurn | ✅ | ❌ | ❌（CLI 无 mid-turn interject） |
+| canPrompt / canCancelTurn | ✅ / ✅ | ✅ / ✅ | ✅ / ✅（写 `{"type":"control","subtype":"interrupt"}`） |
+| supportsLocalImageInput | ✅ | ❌ | ✅（`content` 数组里携带 image block；工具调用与 attachments 遵循 SDK 契约） |
+| supportsResourceInput | ✅ | ✅ | ✅（`@file` mention 直接进 user message） |
+| supportsSkillInput | ✅ | ✅ | ⚠️ MVP 关闭；二期读 `~/.claude/agents/` |
+| supportsPermissionRequests | ✅ | ✅ | ✅（`can_use_tool` server request） |
+| supportsUserQuestions | ✅ | ✅ | ❌（Claude Code 无独立 ask_user_question 语义） |
+| supportsPlanApproval | ❌ | ✅ | ✅（ExitPlanMode 工具输出 → 独立审批） |
+| supportsModelSelection | ✅ | ✅ | ✅（Opus/Sonnet/Haiku + fallback） |
+| supportsReasoningOptions | ✅ | ✅ | ⚠️ 仅 `thinkingBudget`（数值化，非枚举 low/med/high） |
+| supportsServiceTierSelection | ✅ | ❌ | ⚠️ MVP 关闭（Claude 无对等档位；Bedrock/Vertex 走 kind 而非 tier） |
+| supportsUsage | ✅ | ✅ | ✅（stream-json 的 `usage` 字段，本回合 token 计数） |
+| 账号套餐/限额查询（`AgentUsageQuotaProvider`，非 `AgentProviderCapabilities` 字段，见 §1.2 说明） | ✅ | ✅（`_x.ai/billing`） | ✅（`GET /api/oauth/usage`，见 §4.11；API Key 模式下不适用，返回 `null`） |
+
+> 未列出的字段（如 `supportsTextInput`）沿用 Codex 相同默认。
+>
+> `AgentUsageQuotaProvider` 不是 `AgentProviderCapabilities` 里的字段，也不经过
+> `AgentProviderBundle.adapt` 的 switch；UI 用量面板直接对 `AgentProvider` 实例做
+> `provider is AgentUsageQuotaProvider` 判断（`provider_agent_usage_panel_repository.dart:190`
+> 的 `_readQuota` 已是这个姿态），Claude Code 只需实现该接口即可接入，无需改共享层。
+
+### 1.2 事件管线与端口地图（Zeta 侧现状）
+
+```
+CLI 子进程 stdout (行分隔 JSON)
+   │
+   ▼
+[peer / transport]  ── JsonRpcPeer 抽象（Codex/Grok 复用；Claude Code 需新增 StreamJsonPeer）
+   │                   • lib/src/features/agent/data/datasources/transport/*
+   ▼
+[provider adapter]  ── AgentProvider 实现（每种 CLI 一个）
+   │                   • codex_app_server_agent_provider.dart
+   │                   • grok_acp_agent_provider.dart
+   │                   • claude_code_agent_provider.dart  ← 新增
+   │                   通过 mixin 组合 AgentPlanApprovalProvider /
+   │                   AgentPermissionPolicyProvider / AgentSkillsCatalogProvider /
+   │                   AgentLocalThreadListProvider / AgentSessionConfigProvider
+   ▼
+[event mapper]      ── 每个 provider 私有；输出中立 AgentEvent（domain/agent_event_models.dart）
+   ▼
+[AgentEventPipeline] ── listener gate → coalescing → dispatcher（共享，禁 provider 分支）
+   ▼
+[AgentConversationEventProcessor] ── 纯同步 reducer（live/history/replay 各自独立实例）
+   ▼
+[AgentConversationTimelineStore] ── dumb merge，按规范化 id
+   ▼
+[AgentUiUpdatePort] ── 类型化 UI 更新
+```
+
+`AgentProviderBundle.adapt(provider)` 按 provider 是否实现可选接口自动挂载
+可选端口（见 `domain/agent_provider_bundle.dart:26-95`）。**这是 Claude Code
+新增能力的唯一装配途径**——不要在 registry / bundle / capabilities 里加
+`switch (kind)` 分支。
+
+### 1.3 已装配现状
+
+- Provider 工厂：`lib/src/features/agent/data/default_agent_provider_factory.dart`
+  第 25-27 行的 `claudeCode` 分支目前直接 `throw UnsupportedError`。**这是插入
+  实例化的位置**。
+- 枚举与 capabilities：
+    - `AgentProviderKind.claudeCode` 已存在
+      （`domain/agent_provider_models.dart:9`）
+    - `AgentProviderCapabilities.defaultsFor(claudeCode)` 目前落到
+      `unsupported`（`domain/agent_provider_capabilities.dart:237-244`）
+- `AgentDefinition.all` 目前只有 `codex, grok`
+  （`features/agent_management/domain/agent_management_models.dart:115`）。
+- Repository map：`agent_management_controller.dart` 的构造函数接受
+  `Map<String, AgentCliManagementRepository>`；应用组合层在
+  `lib/src/app/app.dart` 组装（`DefaultAgentProviderFactory` 有 2 个 caller
+  都在 `app.dart`）。
+
+## 2. Claude Code 接入契约
+
+### 2.1 启动命令（MVP）
+
+```
+claude \
+  --print \
+  --input-format stream-json \
+  --output-format stream-json \
+  --verbose \
+  [--session-id <uuid>]                 # 首次会话固定我们自己的 uuid
+  [--resume <session-id>]               # 恢复
+  [--fork-session]                      # 二期：resume 时分叉出新 session
+  [--model <id>]                        # opus / sonnet / haiku / 明确 id
+  [--effort <level>]                    # initialize 返回的 supportedEffortLevels
+  --permission-prompt-tool stdio        # 开启宿主 stdin control 审批通道
+  [--permission-mode default|acceptEdits|plan|bypassPermissions]
+  [--allowed-tools <csv>] [--disallowed-tools <csv>]
+  [--append-system-prompt <text>]
+  [--mcp-config <path>]                 # 二期：透传 Zeta 组装的 MCP 配置
+  [--add-dir <path>]                    # 追加允许访问的路径（thread cwd 之外）
+  [--dangerously-skip-permissions]      # 仅当权限模式选 bypass 时使用
+```
+
+- 工作目录：`AgentSession.workingDirectory`（Zeta 侧 thread 的 cwd）。
+- 环境：不显式注入 `ANTHROPIC_API_KEY` —— 依赖 Claude CLI 自有认证；仅在设置
+  页显式启用 API key 模式时把值放到子进程 env（**不落盘**，见 §7）。
+
+### 2.2 stream-json IO 帧
+
+**发送（stdin，每行一个 JSON）**：
+
+```json
+{"type":"user","session_id":"<session-id>","parent_tool_use_id":null,"message":{"role":"user","content":[{"type":"text","text":"..."}]}}
+{"type":"user","session_id":"<session-id>","parent_tool_use_id":null,"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"...","content":"..."}]}}
+{"type":"control","subtype":"interrupt"}
+```
+
+**接收（stdout，每行一个 JSON）**：常见 `type`：
+
+| type | subtype | 语义 | 映射到 AgentEvent |
+| --- | --- | --- | --- |
+| `system` | `init` | 会话就绪，携带 session_id / cwd / model | `AgentSessionStartedEvent` + `AgentThreadStatusChangedEvent(running=false)` |
+| `assistant` |  | 一段模型输出（文本 / thinking / tool_use） | `AgentMessageUpdatedEvent`（整帧）/ `AgentMessageDeltaEvent`（若启用 partial）/ `AgentReasoningDeltaEvent` / `AgentToolCallEvent(status: inProgress)` |
+| `user` |  | 模型回读的 tool_result 或用户消息回显 | `AgentToolCallEvent`（按 `tool_use_id` upsert，`status: completed`/`failed`）；用户回显通常静默丢弃 |
+| `result` | `success` / `error_max_turns` / `error_during_execution` | 一次 turn 结束 | `AgentTurnCompletedEvent`（必填本 Provider 自 mint 的 `turnId`）+ `AgentTokenUsageEvent(isSessionCumulative: false)` |
+| `control_request` |  | permission 询问、plan 审批等反向请求（携带 `request_id`） | 交给对应 adapter（§5、§6），最终产出 `AgentPermissionRequest` / `AgentPlanApprovalRequest` |
+| `control_response` |  | 我们回写 control 的确认（我们不消费，只做诊断） | 忽略 |
+
+> **MVP 不新增任何 `AgentEvent` 类型**。上表全部使用既有中立事件；工具生命周期靠
+> `AgentToolCall.status`（`inProgress` / `completed` / `failed`）表达，不发明
+> Started/Completed 独立事件类。`entryId` / segment / phase / turn 终态由
+> `claude_code_stream_identity.dart` 决定，不在共享层猜测。
+
+> stream-json schema 会随 CLI 版本演进。参照
+> `docs/protocols/codex_app_server_protocol.md` 的版本锁定流程，为 Claude Code 建立
+> 独立的 `docs/protocols/claude_code_stream_json_protocol.md` 与
+> `third_party/claude_code_stream_schema/`（后续任务，非 MVP 必须）。
+
+### 2.3 反向 control request（权限 / plan）
+
+CLI 端通过 `control_request` 让宿主决策：
+
+```json
+{"type":"control_request","request_id":"req_1","request":{"subtype":"can_use_tool","tool_use_id":"toolu_1","tool_name":"Bash","input":{...}}}
+```
+
+宿主回写：
+
+```json
+{"type":"control_response","response":{"subtype":"success","request_id":"req_1","response":{"behavior":"allow","updatedInput":{...}}}}
+{"type":"control_response","response":{"subtype":"success","request_id":"req_1","response":{"behavior":"deny","message":"..."}}}
+```
+
+`request_id` 只关联这次 control request/response；`tool_use_id` 关联 assistant
+`tool_use` 与后续 `tool_result`。两者语义不同，adapter 必须按字段配对，不能互相猜测。
+
+Plan 审批走 `ExitPlanMode` 工具（assistant tool_use）+ Zeta 侧独立
+Application 工作流（§6），不复用 permission 决策模型。
+
+### 2.4 当前模型 / 套餐 metadata 与额度旁路
+
+早期提案假设 stream-json 不提供结构化 catalog，因而设计了 `/v1/models` + 静态目录。
+逆向源码和 macOS 真机报文随后确认，短生命周期 stream-json 进程接受
+`control_request.initialize`，其成功响应包含 `models` 与 `account.subscriptionType`。
+当前实现因此分成两条 Provider-local 只读路径：
+
+1. 模型与套餐名称：独立进程固定带 `--no-session-persistence --setting-sources user`，
+   只发送 initialize control frame，不发送 Prompt。结果是当前 CLI 有效选项快照，可能受
+   CLI bootstrap/cache 影响，不是 Zeta 同步取得的实时远端全量目录。
+2. 额度详情：仅在增强开关开启且订阅 OAuth scope 满足要求时，以瞬时 Bearer token 请求
+   `GET https://api.anthropic.com/api/oauth/usage`。这条路径不参与模型目录。
+
+Zeta 不保存或刷新 token；macOS 的 Keychain 与跨平台 credentials 文件只由 Claude-local
+data adapter 按需读取。`--no-session-persistence` 只约束 Claude session，不能被描述为
+Claude CLI 对其自有认证/bootstrap/cache 绝对零写入。
+
+## 3. 新增/修改文件清单
+
+> 路径以 `lib/` 为根，除非另行注明。**新增**用 `+`，**修改**用 `~`。
+
+### 3.1 Data 层（Provider 与协议）
+
+```
++ src/features/agent/data/datasources/claude_code/
+    + stream_json_peer.dart                    # 行分隔 JSON transport（新 peer，不复用 JsonRpcPeer）
+    + claude_code_process_starter.dart         # PATH 探测 / bootstrap 参数拼装
+    + claude_code_agent_provider.dart          # AgentProvider 实现（组合 AgentPlanApprovalProvider / ...）
+    + claude_code_event_mapper.dart            # stream-json → AgentEvent（纯翻译；身份交给 stream_identity）
+    + claude_code_control_request_handler.dart # can_use_tool / ExitPlanMode 反向请求分发
+    + claude_code_permission_policy_adapter.dart
+    + claude_code_plan_approval_adapter.dart
+    + claude_code_model_catalog.dart           # initialize models → AgentModelList（§4.7）
+    + claude_code_cli_metadata.dart             # 模型 + subscriptionType 白名单快照
+    + claude_code_cli_metadata_probe.dart       # 独立无 Prompt initialize 探测
+    + claude_code_cli_metadata_coordinator.dart # in-flight single-flight；不持有长期模型 TTL
+    + claude_code_session_history_reader.dart  # 读 ~/.claude/projects/<encoded-cwd>/*.jsonl
+    + claude_code_usage_quota_adapter.dart     # AgentUsageQuotaProvider 实现（§4.11）
+    + claude_code_anthropic_api_client.dart    # 仅 /api/oauth/usage（§4.10）
+    + claude_code_oauth_credentials_reader.dart # Keychain/文件只读 accessToken；不刷新、不落盘（§4.10）
+    + claude_code_macos_keychain_source.dart   # 参数化 security 读取，可测试且不经 shell
++ src/features/agent/data/mappers/
+    + claude_code_stream_identity.dart         # G2 identity reducer：entryId / segment / phase / turn 终态（对齐 grok_stream_identity）
+    + claude_code_permission_mode_codec.dart   # 中立 optionId ↔ CLI --permission-mode
+    + claude_code_message_content_codec.dart   # content block ↔ AgentMessage segment
+    + claude_code_initialize_metadata_mapper.dart # initialize 白名单 → models/plan
+    + claude_code_usage_quota_mapper.dart      # GET /api/oauth/usage 响应 → AgentUsageQuotaSnapshot（§4.11）
++ src/features/agent/data/agent_provider_permission_migration.dart
+    # 追加 ClaudeCodePermissionPreferenceMigrator（若引入 legacy 字段迁移；否则不必）
+```
+
+### 3.2 Domain 层
+
+```
+~ src/features/agent/domain/agent_provider_capabilities.dart
+    # defaultsFor(claudeCode) 返回真实静态能力（见 §1.1 目标列）
+~ src/features/agent/domain/agent_provider_models.dart
+    # 追加 defaultClaudeCodeProviderId 常量与 AgentProviderConfig.defaultClaudeCode
++ src/features/agent/domain/claude_code_models.dart      # 若有 CC 专属只读模型（可选，避免污染共享 domain）
+```
+
+### 3.3 CLI 管理与设置
+
+```
++ src/features/agent_management/data/claude_code_agent_management_repository.dart
+    # 实现 AgentCliManagementRepository：detect / testConnection / readConfiguration / discoverLogPaths
+~ src/features/agent_management/domain/agent_management_models.dart
+    # 追加 AgentDefinition.claudeCode 并把 all = [codex, grok, claudeCode]
+~ src/features/agent_management/application/agent_management_controller.dart
+    # _sanitizeProviderConfig / _configForAgent / _pathBelongsToAgent 扩展分支
+```
+
+### 3.4 装配层（composition root）
+
+```
+~ src/features/agent/data/default_agent_provider_factory.dart
+    # AgentProviderKind.claudeCode => ClaudeCodeAgentProvider(config: config)
+~ src/app/app.dart
+    # 组装 Map<String, AgentCliManagementRepository> 时加入 claude_code 条目
+```
+
+### 3.5 UI（capability-driven，不按 kind 分支）
+
+```
+~ src/features/agent/presentation/widgets/agent_provider_icon.dart
+    # 追加 Claude Code 图标（AgentProviderKind.claudeCode 分支——图标是唯一允许的 kind 分支之一）
+~ src/features/agent_management/presentation/agent_management_page.dart
+    # 详情页文案：安装/登录/文档链接
+```
+
+其余 UI（新建 thread 选择器、模型选择器、权限模式条、Plan 卡片、消息渲
+染、工具时间线）**无需改动**——它们全部 capability 驱动，只要 §3.2 的
+`defaultsFor(claudeCode)` 声明真实能力，UI 会自动出现。
+
+### 3.6 测试
+
+```
++ test/src/features/agent/data/datasources/claude_code/
+    + stream_json_peer_test.dart
+    + claude_code_event_mapper_test.dart              # fixture-based, provider 无关 shape check
+    + claude_code_permission_policy_adapter_test.dart
+    + claude_code_plan_approval_adapter_test.dart
+    + claude_code_session_history_reader_test.dart
+    + claude_code_anthropic_api_client_test.dart      # 鉴权矩阵/401/429/超时/非法 JSON，fake HttpClient
+    + claude_code_oauth_credentials_reader_test.dart  # 缺失/损坏/过期文件降级；toString 不含 token
+    + claude_code_usage_quota_adapter_test.dart        # 节流、API Key 模式短路、增强开关关闭
++ test/src/features/agent/data/mappers/
+    + claude_code_stream_identity_test.dart            # G2：segment 边界 / first-terminal-wins / 去重
+    + claude_code_model_catalog_mapper_test.dart
+    + claude_code_usage_quota_mapper_test.dart
++ test/src/features/agent_management/data/
+    + claude_code_agent_management_repository_test.dart
++ test/src/features/agent/data/
+    + default_agent_provider_factory_test.dart        # 追加 claudeCode 分支断言
++ tool/smoke_claude_code_stream_json.py               # 真实 CLI 冒烟（可选，二期）
+```
+
+### 3.7 文档
+
+```
++ docs/protocols/claude_code_stream_json_protocol.md # 协议事实基线与升级门禁
+~ docs/guides/developer_guide.md                     # 追加 CC 特有的启动/权限章节；§7 的 16 条清单以 CC 为例补充
+~ docs/architecture/design_document.md                     # 更新 Provider 表
+~ CLAUDE.md                                   # 若 Zeta 默认 provider 或 default model 有变更再改
+```
+
+## 4. Data 层设计要点
+
+### 4.1 `StreamJsonPeer`（新增）
+
+**为什么不能复用 `JsonRpcPeer`**：JsonRpc peer 用 `id/method/params` 与
+`id/result|error` 的统一 pending 匹配；Claude Code stream-json 每行都是一个
+`type` 事件，普通事件没有这套请求—响应语义。只有 control 帧内嵌
+`request_id`，由对应 Provider adapter 定点关联。强行复用会污染共享 transport
+的语义并产生大量假 pending。
+
+**接口草案（放在 `stream_json_peer.dart`）**：
+
+```dart
+abstract class StreamJsonPeer {
+  Stream<StreamJsonEvent> get events;
+  Stream<String> get stderrLines;
+  Stream<StreamJsonProtocolException> get protocolErrors;
+
+  Future<void> start();
+  Future<void> sendUserMessage(Map<String, Object?> message);
+  Future<void> sendControl(Map<String, Object?> control);           // interrupt / permission response / ...
+  Future<void> close();
+}
+
+class StreamJsonEvent {
+  const StreamJsonEvent({required this.type, this.subtype, required this.raw});
+  final String type;
+  final String? subtype;
+  final Map<String, Object?> raw;
+}
+```
+
+**实现要点**（与 `JsonRpcStdioTransport` 一致的实现纪律）：
+
+- Dart `Process.start`，UTF-8 with `allowMalformed`（沿用 Codex 已验证选择）。
+- 严格串行化 stdin 写队列，`writeln` + `flush`；关闭时 kill + `SIGKILL`
+  兜底（沿用 `json_rpc_stdio_transport.dart:404-418`）。
+- `sendControl` 只串行写入调用方构造好的完整帧，不生成或改写
+  `request_id`，也不建立 transport 级 pending；相关 adapter 负责保留 CLI
+  请求里的 id 并构造响应。
+- 单行 payload 大小超阈值（比如 4 MB）拒收并触发 `protocolErrors`，避免
+  被极端 tool_result 撑爆内存。
+
+### 4.2 `ClaudeCodeProcessStarter`
+
+- 从 `AgentProviderConfig.command` 读 CLI 路径（默认 `claude`）。
+- 组装参数（§2.1）；args 顺序稳定，便于日志比对与冒烟脚本复现。
+- Windows 用 `where.exe` / macOS+Linux 用 `command -v` 解析；实测 CLI
+  可用性只通过 `AgentCliManagementRepository.detect` 做，不在 starter 里
+  提前失败（沿用 Codex/Grok「实际启动才报错」的现有姿态，见
+  `agent_management_controller.dart:117-128`）。
+
+### 4.3 `ClaudeCodeAgentProvider`
+
+组合与 mixin：
+
+```dart
+class ClaudeCodeAgentProvider extends AgentProvider
+    implements
+        AgentPlanApprovalProvider,
+        AgentPermissionPolicyProvider,
+        AgentLocalThreadListProvider,
+        AgentSessionConfigProvider,
+        AgentRefreshableModelCatalogProvider,  // 强制刷新 CLI 有效模型快照（§4.7）
+        AgentUsageQuotaProvider,               // 新增：套餐用量（§4.11）
+        // MVP 不实现：AgentSkillsCatalogProvider, AgentQuestionResponseProvider,
+        //           AgentConversationModeCatalogProvider（Claude 用 --permission-mode plan
+        //           就直接切换，不需要独立 mode catalog）
+{
+  ...
+}
+```
+
+对齐 `agent_provider_bundle.dart:26-95` 的 switch：
+
+- **实现 `AgentPermissionPolicyProvider`** → bundle 自动挂载 `permissionPolicy`；
+- **实现 `AgentPlanApprovalProvider`** → bundle 自动挂载 `planApproval`；
+- 通过 `capabilities.canListThreads/canReadHistory=true` → bundle 自动挂载
+  `threadCatalog`，Provider 只需实现 `AgentProvider.listThreads/readHistory`。
+- 通过 `capabilities.supportsModelSelection=true` → bundle 自动挂载
+  `modelCatalog`，Provider 需要实现 `listModels`（走 §4.7）；额外实现
+  `AgentRefreshableModelCatalogProvider.refreshModels` 支持强制刷新。
+- **实现 `AgentUsageQuotaProvider`** → bundle 自动挂载中立 `usageQuota` 端口；
+  用量仓储只消费该端口，不直接持有 Provider 或做 `is` 判断。Claude Code 只需实现
+  现有接口，无需修改 bundle/switch 或新增 Provider 端口。
+
+**运行时纪律**（与 Codex/Grok 对齐，`CLAUDE.md#Agent 事件管线`）：
+
+- provider 原始事件永不透出到共享层；`AgentEvent` 是唯一契约。
+- reducer 纯同步；副作用（thread rename 落盘、模型缓存写入等）走
+  `AgentConversationEffectRunner` 已有通道，不新造。
+- `sourceItemId/sourceMessageId` **只是协议 metadata**，不是 UI 合并键。
+  `entryId`、message segment、reasoning phase、narrative boundary、去重、
+  turn 终态判定全部由 `claude_code_stream_identity.dart` 决定；mapper 只做
+  纯翻译。`AgentConversationTimelineStore` 只 dumb merge。
+
+### 4.4 Identity 与 EventMapper
+
+职责拆分对齐 Grok：`grok_stream_identity.dart` + `grok_session_update_mapper.dart`。
+**MVP 不新增任何 `AgentEvent` 类型**——developer_guide §7 的 16 条清单在 PR
+描述中声明「未新增 AgentEvent」即可。
+
+#### `ClaudeCodeStreamIdentity`（G2 identity reducer）
+
+路径：`src/features/agent/data/mappers/claude_code_stream_identity.dart`。
+
+Claude Code 的 stream-json **不提供**宿主侧 turn id：`result` 帧无 turn 作用域
+字段，但 `AgentTurnCompletedEvent.turnId` 为必填，且
+`AgentEventCoalescingPolicy` 的 messageDelta / reasoningDelta / tokenSnapshot
+合并桶以 `turnId` 为键——跨回合串味会直接违反 G2。因此：
+
+1. **Provider 在写 stdin user 行之前自行 mint `turnId`**（稳定 UUID 或等价），
+   调用 `beginTurn(runtimeScope, sessionId, turnId)`；整个回合内该 id 不变。
+2. 后续所有出站 `AgentEvent`（含 `AgentTurnCompletedEvent`、
+   `AgentTokenUsageEvent`、message / reasoning / tool 事件）携带同一 `turnId`。
+3. live / history / replay **必须使用各自独立的 identity 实例**（G3），不共享
+   current segment、seen event/tool、terminal 或 generation 状态。
+
+公开 API（与 `GrokStreamIdentity` 对齐，名字可映射）：
+
+| 方法 | 职责 |
+| --- | --- |
+| `beginTurn` | 开启新 turn generation；同 session 旧 active state 失效 |
+| `resolveMessage` | 同 message source id 连续 text → 同一 entryId；tool/thinking 打断后新 segment |
+| `resolveReasoning` | thinking phase 分段；text/tool_use 关闭当前 phase |
+| `resolveTool` | 首见 tool id 时关闭可见 phase；终态后仍允许已知 tool 收尾 |
+| `resolveMetadata` | usage 等非叙事更新；terminal 后仍可幂等接受 |
+| `completeTurn` | first-terminal-wins；duplicate / conflicting 只记诊断 |
+| `invalidateTurn` / `invalidateRuntime` / `invalidateSession` | 丢弃旧 generation |
+| `snapshot` / `diagnostics` / `dispose` | 只读计数与状态；**不得**含正文、token、raw payload、source id 原文（G7） |
+
+#### `ClaudeCodeEventMapper`（纯翻译层）
+
+路径：`src/features/agent/data/datasources/claude_code/claude_code_event_mapper.dart`。
+
+映射目标：**永远输出中立 `AgentEvent`；共享层禁止再解析 CC 私有字段**。
+所有 `entryId` / `turnId` / phase 边界先问 identity，mapper 不自己猜。
+
+- `system.init` → `AgentSessionStartedEvent(AgentSession(id: session_id,
+  workingDirectory: cwd, model: model))` + `AgentThreadStatusChangedEvent`。
+- `assistant.message.content[]`：按 block type 分派（均带 identity 解析出的
+  entryId / turnId）
+    - `text` → 默认整帧下发时用 `AgentMessageUpdatedEvent`（`messageId` =
+      entryId，`text` = 完整可见文本）；若后续启用
+      `--include-partial-messages` 的字符级增量，改发
+      `AgentMessageDeltaEvent`（**同一 entryId**，由 identity 保证）
+    - `thinking` → `AgentReasoningDeltaEvent(kind: text)`（phase entryId 由
+      identity 分段）
+    - `tool_use` → `AgentToolCallEvent`（`AgentToolCall(id: tool_use.id,
+      status: inProgress, …)`）
+- `user.message.content[]`
+    - `tool_result` → `AgentToolCallEvent` 按 `tool_use_id` 原地 upsert：
+      `is_error == true` → `status: failed`，否则 `status: completed`
+    - 其他 role=user 消息（回显）：静默丢弃，避免 timeline 重复
+- `result` → `AgentTurnCompletedEvent` + 可选 `AgentTokenUsageEvent`
+    - `subtype=success` → `AgentHistoryTurnStatus.completed`
+    - `subtype=error_max_turns` → `interrupted`
+    - `subtype=error_during_execution` → `failed`（`errorCode` 用 subtype，
+      `errorMessage` 从 payload 提取）
+    - **`turnId`**：使用当前 active turn 上 identity 持有的 mint id（`result`
+      帧自身不带 turn id；缺失 active turn 时丢弃并记诊断，不 silent 编造）
+    - **`usage`** → `AgentTokenUsageEvent(isSessionCumulative: false)`：
+      `result.usage` 是**本回合绝对用量**（Grok 姿态），不得再相对上一 turn
+      做差分。字段：`input_tokens` + `output_tokens` +
+      `cache_creation_input_tokens` + `cache_read_input_tokens`
+- `control_request` → 交给 `ClaudeCodeControlRequestHandler`
+  （不产生 AgentEvent；handler 内部产生 permission/plan 请求事件）
+
+**关键守则**：mapper 对未识别 `type` 一律记录诊断日志并**丢弃**，绝不
+throw；这样 CLI 引入新事件类型时不会阻断整个 pipeline。
+
+### 4.5 `ClaudeCodePermissionPolicyAdapter`
+
+- 中立 optionId 目录（由 codec 生成）：
+
+  | Zeta optionId | Claude Code `--permission-mode` | 语义 |
+    | --- | --- | --- |
+  | `:ask` | `default` | 每个高风险工具都问 |
+  | `:accept-edits` | `acceptEdits` | 自动允许编辑类工具，其他仍问 |
+  | `:plan` | `plan` | 只允许读、只出 plan（不执行副作用） |
+  | `:bypass` | `bypassPermissions` | YOLO（要求二次确认；需检测 root 用户判定） |
+
+- `listPermissionOptions` 返回静态 4 项 catalog，`defaultOptionId=':ask'`。
+- `applyPermissionSelection`：
+    - `--permission-mode` 是启动参数，不能对既有 CLI peer 做 live 修改；
+    - **当前 session 没有执行中 turn、没有正在准入的新 turn、也没有待处理的
+      `control_request` 时**，Provider 关闭旧 peer，再用同一 session id 的
+      `--resume <sessionId>` 与新 `--permission-mode` 启动 peer；Binding、Provider
+      实例和 Zeta thread 不重建，返回 `AgentPermissionApplyScope.currentSession`；
+    - 当前 session 有执行中 turn 时 fail-closed 拒绝切换。Composer 同时禁用入口，
+      Provider 仍做权威校验，防止点击与 `sendMessage` 的竞态；
+    - 尚未创建 peer/session 时只更新 Provider 内存模式，下一次 `startSession`
+      使用新启动参数，返回 `AgentPermissionApplyScope.nextSession`；
+    - 重启失败时先恢复旧 mode，并 best-effort 以同一 session 恢复旧 peer；原始
+      切换错误继续向上抛出，不提交新的权限选择；
+    - 如果未来 CLI 暴露 live `permission_mode` control，可切到
+      `AgentPermissionApplyScope.runtime`；MVP 不做。
+- **不做** legacy 迁移（CC 新入，`AgentProviderPermissionMigrationRegistry`
+  不加分支）。
+- 反向 `can_use_tool` 询问：
+    - 生成中立 `AgentPermissionRequest`（`decisionOptions=[allow_once,
+    allow_always, deny_once, deny_always]`）；
+    - 用户决策 → `sendControl({type:"control_response",response:{subtype:"success",
+      request_id,response:{behavior:"allow"|"deny",updatedInput?,message?}}})`；
+    - `request.subtype` 必须为 `can_use_tool`，并同时校验 `tool_use_id`、
+      `tool_name` 和 `input`；缺字段或未知 subtype 一律回嵌套 error 响应；
+    - `allow_always` / `deny_always` 由 adapter 缓存到当前 session 的
+      tool allow-list，并落 `~/.zeta/state/claude_code/session_<id>.json`（
+      版本化 JSON；每项仅规范化字段 `toolName` + `decision`；**不存
+      input/prompt/cwd/raw payload**）；损坏、未知版本或未知条目宽容回退为空缓存；
+    - 同 session 后续相同 `toolName` 的 `can_use_tool` 由 Provider 直接按缓存
+      回写 control response，不再产生新的权限卡；当前请求的 input 只在内存中
+      原样回填 `updatedInput`，不会进入缓存文件。
+
+### 4.6 `ClaudeCodePlanApprovalAdapter`
+
+- 触发路径：assistant 输出 `tool_use.name = "ExitPlanMode"`。`input.plan`
+  可能是 Markdown，也可能缺省；缺省时只在当前 turn 内回退到最近一段 assistant
+  文本，再没有则使用空正文。
+- 后续 `control_request.request.subtype = "can_use_tool"` 时，必须用其中的
+  `tool_use_id` 与该 `ExitPlanMode` 的 tool id 配对；回写仍使用独立的
+  `control_request.request_id`。
+- Mapper 先登记 tool_use 并抑制其普通工具卡；只有 control request 精确配对后，
+  adapter 才生成 `AgentPlanApprovalRequest`（domain 已有类型）。对应的
+  `tool_result` 也必须抑制，避免时间线出现无头完成卡。Plan pending registry
+  **必须**与权限模型完全隔离（`CLAUDE.md#Provider 运行时` 硬性规则）。
+- 用户批准 → adapter 通过嵌套 `control_response`（behavior=allow，原样回填
+  `updatedInput`）放行；当前 Plan turn 成功终态后，Zeta application 层再展示一次
+  本地执行确认；用户第二次确认时才 **新建显式 Default
+  回合**（对齐 CLAUDE.md）：
+    1. 保持当前 session；
+    2. 默认恢复进入 Plan 前同 Binding/thread/runtime generation 仍有效且 catalog
+       中 allowed 的权限；失效时回落到 catalog 的 `:ask` 默认；
+    3. 用户可在卡内为该 turn 显式改选；该覆盖不调用 permission apply、不持久化，
+       也不预授权具体命令、文件或网络；
+    4. Provider planApproval、权限审批和本地执行交接使用互相不可见的 pending 状态。
+- 拒绝 → `control_response(deny, message)`；Claude 会在下一 assistant turn
+  收到 reason。
+- 取消 → `control_response(deny, message)` 后 interrupt 当前 turn；不会把取消
+  伪装成普通权限拒绝。
+- plan / planFilePath / control raw payload 仅保留在当前 peer 的内存状态中，
+  不写入日志或持久化 metadata。
+
+### 4.7 `ClaudeCodeModelCatalog`
+
+`Provider.listModels()` 从 §2.4 的 metadata coordinator 获取 initialize snapshot，
+`ClaudeCodeInitializeMetadataMapper` 只投影 `response.models`：
+
+- `value` 是稳定 id 和下一回合 `--model` 参数；旧响应没有 `value` 时才兼容 `name`。
+  CLI 返回顺序保持不变，但 Claude 专属的 `value=default` 别名不进入 Composer。
+- `resolvedModel` 投影为中立 `AgentModelInfo.model`，只用于把历史实际模型名归一化回
+  可写回的稳定 `value`；不保留模型原始 payload。
+- 只保留展示名与可选描述；`supportsEffort=true` 时把 `supportedEffortLevels` 按原顺序映射为
+  `supportedReasoningEfforts`，用户选择在下一回合通过 `--effort` 生效。
+- 账号身份、未知字段和尚未兑现的 Fast/auto 能力被丢弃，`AgentModelInfo.raw` 不保存
+  原始 payload。
+- 列表为空或 probe 失败时抛出稳定、脱敏的刷新异常；不调用 `/v1/models`，也没有静态
+  Claude 目录兜底。
+- Provider 只缓存最近一次**成功**结果。`refreshModels()` 总是要求新 probe，但可与同时
+  在途的套餐 metadata 读取 single-flight；已完成快照不能挡住显式刷新。
+- app 级 `AgentModelCatalogRepository` 是 1 小时 fresh / 7 天 max-stale 的唯一 TTL 真源。
+  刷新失败保留旧目录；首次失败不保存空目录并由 Composer 明确显示加载失败。
+- `claudeCode.accountDataEnrichment=false` 不影响模型或套餐名称。该 key 只控制额度 REST。
+
+这份列表是 CLI 当前有效选项，不是 Zeta 对 Anthropic 远端 catalog 的实时全量声明；
+也不得读取 Claude CLI 私有模型缓存再补项。
+
+### 4.8 `ClaudeCodeSessionHistoryReader`
+
+- Path：`~/.claude/projects/<encoded-cwd>/<session-id>.jsonl`。
+    - `<encoded-cwd>` = 把 workspace 绝对路径的 `/` 与 `\` 都替换成 `-`，
+      Windows 盘符 `C:` 变 `C-`（参照 CC CLI 现行编码；实现前用真实 CLI
+      生成一个会话，把编码规则做单测冻结在
+      `claude_code_session_history_reader_test.dart`）。
+- 读取契约：与 `codex_thread_history_reader.dart` 对齐：
+    - **只读**，绝不改写；
+    - 宽容 `tryDecode`：损坏行跳过并计数上报诊断；
+    - 输出 `AgentThreadPage`，条目使用现有中立 `AgentThreadSummary`（title 用首条
+      user message 前 60 字符生成，与 Codex/Grok 一致）。
+- 与 `AgentLocalThreadListProvider.removeThreadFromList` 的配合：
+    - Zeta 只维护自己的隐藏 list（`~/.zeta/state/claude_code/hidden_threads.json`），
+      hide 时把 `<encoded-cwd>/<session-id>` 加进去；
+    - UI 明示「远端会话文件仍保留在 `~/.claude/projects/...`，如需彻底删除
+      请手动」。**符合数据边界规则**。
+
+### 4.9 归档 / 删除 / fork（MVP 关闭）
+
+- `canArchiveThread=false`，`canDeleteThread=false`（协议不支持）。
+- `canRemoveThreadFromList=true`（走 §4.8 的 hidden list）。
+- 二期：`--fork-session` + 复制 jsonl 到新 session-id 可以实现本地 fork，
+  仍不动 Claude 内部 index。
+
+### 4.10 额度凭据与 `ClaudeCodeAnthropicApiClient`
+
+本节基础设施**只服务额度详情**。模型与套餐名称走 initialize，不读取 OAuth token，
+也不经过 `ClaudeCodeAnthropicApiClient`（背景见 §2.4）。
+
+**`ClaudeCodeOAuthCredentialsReader`**：
+
+- macOS 先通过参数数组调用 `security find-generic-password`，按 Claude Code service 与
+  `CLAUDE_CONFIG_DIR` hash 规则读取 Keychain；miss、拒绝、损坏或超时后回退 Claude
+  credentials 文件。Windows 与其他平台使用 Claude credentials 文件；
+- 只解析 `accessToken`、`expiresAt` 与 scopes 白名单。`subscriptionType` 即便存在也不作
+  套餐真源，套餐名称始终来自 initialize；
+- `expiresAt <= now`、token 为空或 scopes 不同时含 `user:inference` / `user:profile` 时
+  不请求 usage。**不做** token 刷新（不调用 `POST /v1/oauth/token`）；续期交给 Claude
+  CLI 自身，交互式登录指引为 `claude auth login`；
+- Keychain/文件缺失、损坏或读取失败只表示额度详情不可用，不改写 Agent 管理的认证状态；
+- `ClaudeCodeOAuthCredentials.toString()` **不含** token 原文；诊断日志只允许
+  记录 `hasCredentials: bool` 与 `expired: bool` 两个布尔字段，不记录前缀或全文；
+- 结果**不缓存到磁盘、不缓存到长生命周期内存**，只在单次请求 Future 中传递。
+
+**`ClaudeCodeAnthropicApiClient`**：
+
+- 只实现 `readUsageQuota()` → `GET /api/oauth/usage`，订阅 OAuth 使用
+  `Authorization: Bearer`；API key 模式在 adapter 层 fail-closed，客户端没有模型端点。
+- 连接、响应和 body 读取各使用 5 秒上限；401、429、其他非 200、超时、网络错误或非法
+  JSON 都返回 `null`，不重试、不记录响应正文。
+- `claudeCodeVersion` 来自 detect 阶段缓存的
+  `config.extra['detectedCurrentVersion']`（沿用 Codex 已有模式，见
+  `codex_app_server_agent_provider.dart:299`）；缺失时不带 `User-Agent` 头
+  （参考调研确认裸调用仍可 200，只是更易触发限流）。
+- **额度详情增强开关**：继续兼容读取
+  `AgentProviderConfig.extra['claudeCode.accountDataEnrichment']`（缺省 `true`）。关闭后不
+  读取凭据、不请求 usage，但 initialize 模型和套餐名称保持可用。
+
+### 4.11 `ClaudeCodeUsageQuotaAdapter`（套餐用量，`AgentUsageQuotaProvider`）
+
+`ClaudeCodeAgentProvider.readUsageQuota()` 实现步骤：
+
+1. 先从 metadata coordinator 读取 initialize 的 `account.subscriptionType`。失败时继续尝试
+   quota REST；成功时由 Claude mapper 归一化套餐展示名。
+2. 若增强关闭或 API key 模式，不读凭据、不发 HTTP，直接返回 plan-only snapshot；UI 显示
+   “额度详情暂不可用”，不构造 0% 窗口或 100% 剩余。
+3. usage 尝试按成功和失败统一节流 60 秒，并发调用复用同一 Future。凭据必须有效且同时含
+   `user:inference` / `user:profile` scope，否则零请求。
+4. REST 成功时映射 `five_hour`、`seven_day`、可选 `seven_day_sonnet` /
+   `seven_day_opus`；缺失字段保持缺失，不臆造重置时间。
+5. `extra_usage.is_enabled=true` 时才投影 credits；`monthly_limit=null` 映射
+   `unlimited=true`，有限额度只比较同单位数值，不猜币种或余额。
+6. REST 失败时仍返回 plan-only；metadata 失败但 REST 成功时可返回无套餐名的窗口快照。
+   原始响应和错误正文均不进入 domain、presentation、日志或持久化。
+- **不做**：不解析 `/usage` slash 的自由文本；不做 `/cost`（API Key 花费，语义
+  不同）；不做本地 JSONL token 历史聚合（"今日 Token" 沿用 stream-json
+  `result.usage` 走既有 `AgentTokenUsageEvent`，见 §4.4，与本 adapter 完全独立）。
+
+## 5. Application / UI 影响清单
+
+绝大多数改动**只需**开启 capability。列出的都是必须动的地方：
+
+1. `agent_management_controller.dart`
+    - `_sanitizeProviderConfig` / `_pathBelongsToAgent` / `_configForAgent`
+      追加 `claudeCode` 分支（沿用 Codex/Grok 的 sanitization 姿态）；
+    - `_persistDetectionSummary` 已 provider 无关，不必改；
+    - repository map 由 `app.dart` 传入，添加一项即可（§3.4）。
+2. `AgentProviderIcon`：新增 CC 图标资源与分支（UI 允许的少数 kind 分支之一）。
+3. 新 thread 选择器：`availableThreadProviders` 依赖 `providerController`
+   与 repository map，无需改。
+4. Provider 设置页：capability 驱动，无需改；只在**详情页**加安装 / 登录
+   / 文档指引文案（数据来自 `AgentDefinition.claudeCode`）。
+5. `agent_conversation_view_model.dart`：**禁止**为 CC 加任何 kind 分支；
+   任何看似需要「因为是 CC 所以特殊处理」的场景都要重新想能力抽象。
+6. 详情页把兼容配置 key `claudeCode.accountDataEnrichment` 呈现为「额度详情增强」：
+   只控制 §4.10 的凭据读取和 usage REST。关闭后模型与套餐名称仍来自 initialize，
+   套餐面板显示 plan-only；文案不得暗示它控制模型目录。
+
+## 6. Plan / Permission / History 语义映射详解
+
+### 6.1 权限映射决策表
+
+| Zeta UI 术语 | Zeta optionId | CC 启动参数 | can_use_tool 反向询问处理 |
+| --- | --- | --- | --- |
+| Ask（默认） | `:ask` | `default` | 每次弹审批弹窗 |
+| Accept edits | `:accept-edits` | `acceptEdits` | 编辑类自动 allow；其他弹 |
+| Plan only | `:plan` | `plan` | 只允许 read 类；写类一律 deny + 提示 |
+| Always approve | `:bypass` | `bypassPermissions` | 不发反向询问（CC 侧不 emit）；UI 二次确认后启动 |
+
+### 6.2 Plan 审批完整流程
+
+```
+用户选 :plan → 启动 (--permission-mode plan)
+      │
+      ▼
+assistant.tool_use = ExitPlanMode(input.plan="...")
+      │  (mapper 转 AgentPlanApprovalRequest；不产生 tool_call 时间线卡)
+      ▼
+UI 展示 plan Markdown → 用户 approve
+      │
+      ├── adapter.respondToPlanApproval(approved=true)
+      │       → sendControl(control_response{allow})   # 让 CLI 退出 plan mode
+      │       → 当前 Plan turn 成功终态
+      │       → Zeta 展示本地执行交接（第二次确认）
+      │            • 默认权限 = 仍有效的 Plan 前选择
+      │            • 失效则回落 catalog 默认 :ask
+      │            • 用户可只为本 turn 改选
+      │            • 不 apply / 不持久化 / 不预授权具体操作
+      │       → 新建 Default turn
+      │       → 同 session 按权限快照 --resume 后开始执行
+      │
+      └── 拒绝 → sendControl(deny, message=用户理由)
+```
+
+### 6.3 History 恢复
+
+- List：读 `~/.claude/projects/<cwd>/*.jsonl` 头 + 尾数行，输出
+  descriptor（title/时间/model/消息数）。
+- Read：整文件流式解析，同 mapper（关键）→ `AgentEvent` → `history`
+  reducer（**独立实例**，`CLAUDE.md#Agent 事件管线`）→ TimelineStore。
+- Resume：启动子进程时携带 `--resume <session-id>`；CLI 首个 `system.init`
+  会带来 session_id / cwd，验证是否与预期一致，否则视为 provider 拒绝
+  恢复（弹错，不静默）。
+- Compact：Claude Code 有 `/compact` slash command（触发方式：给 CLI 一条
+  `user` message with `{"type":"text","text":"/compact"}`）；`canCompactThread=true`，
+  Provider 侧实现 `compactThread` 即可，UI 无需改。
+
+## 7. CLI 检测与配置
+
+### 7.1 `ClaudeCodeAgentManagementRepository.detect`
+
+对齐 `codex_agent_management_repository.dart` 与
+`grok_agent_management_repository.dart` 的分阶段结构：
+
+1. **install**：`claude --version`（`AgentInstallationState.installed`）
+2. **account**：执行 `claude auth status --json`，只投影
+   `loggedIn/authMethod/apiProvider/subscriptionType`。合法 `loggedIn=false` 才是
+   `loggedOut`；命令缺失、输出损坏或执行失败返回 unavailable，不通过文件名猜测。
+3. **version**：解析 `--version`，与 `npm view` 或本地 `~/.claude/version` 对比
+   （沿用 Codex/Grok 的 `isNewerVersion` 已有逻辑；不引新增依赖）
+4. **runtime handshake**（testConnection）：短生命周期 metadata peer 只发送带随机 id 的
+   `control_request.initialize`，等待匹配 response；不创建 session、不发送 Prompt 或等待
+   模型 result。initialize 成功可与 `loggedIn=false` 并存，表示当前 CLI/自定义认证路径可用。
+5. **modelList**：模型选择器按需复用同一 metadata probe 机制，但 app 级 repository 独立
+   管理模型 TTL；detect 不保存模型 raw payload，也不以空列表覆盖旧缓存。
+
+**日志路径**：`discoverLogPaths` 返回 `~/.claude/logs/*.log`（若存在）。
+
+> `auth status`、initialize 可用性与 §4.10 的额度凭据是三类证据。前两者不读取 token；
+> 后者只在额度详情增强开启且 quota 被读取时触发。不得用任一结果伪造另一类状态。
+
+### 7.2 认证策略
+
+| 用户场景 | Zeta 行为 |
+| --- | --- |
+| `claude auth status --json` 显示已登录 | 会话直接复用 CLI 认证，不注入 env |
+| 明确未登录 | 详情页显示「运行 `claude auth login` 后重试」，Zeta 不代跑 |
+| 认证证据不可用 | 显示 unavailable；不 stat 凭据文件名猜 loggedOut，仍允许用户显式 initialize 测试 |
+| 设置页填 API Key（可选） | 值放入子进程 env `ANTHROPIC_API_KEY`；**Zeta 落盘时脱敏**（`extra` 里只存 `hasApiKey=true` 与 masked 后 4 位）；真值由 OS keychain 存（沿用现有 secure storage；如无现成通路则 MVP 不做，只显式提示不落盘）；此模式下 §4.10/§4.11 的 `/api/oauth/usage` 不适用，`readUsageQuota()` 直接返回 `null` |
+| Bedrock / Vertex | 二期；MVP 不做，UI 明确标注 |
+| 额度详情增强（默认开） | §4.10 按需把 OAuth token 读入单次 Future，仅用于 `GET /api/oauth/usage`；关闭后完全不触碰凭据来源，initialize 模型/套餐仍可用 |
+
+**硬性约束**（对齐 CLAUDE.md）：
+
+- **detect / testConnection / 模型目录**不读取 access token；分别只消费 auth status 或
+  initialize 白名单。
+- **§4.10 的额度详情通道**是唯一允许读取 OAuth token 的路径，且仅限单次 usage GET；
+  **不做**刷新、不写回、不落盘、不写日志，也不记录 token 前缀。macOS Keychain 与文件
+  fallback 语义都由 Provider-local data adapter 封装；
+- Zeta 侧配置文件 `~/.zeta/config/providers.json` 不落原始 key/token、
+  不落 prompt/回复/tool output/环境变量原文；
+- 会话 hidden list、tool allow-list 白名单字段可持久化。
+- Claude CLI 可能维护其自有认证/bootstrap/cache；不得把 Zeta 的不落盘承诺扩大成 CLI
+  绝对零写入。
+
+## 8. 分阶段落地计划
+
+| 阶段 | 交付物 | 完成判据 |
+| --- | --- | --- |
+| **M0 · 骨架** | `AgentDefinition.claudeCode` + `defaultsFor` 真实能力 + `DefaultAgentProviderFactory` 分支替换为**空 provider**（返回错误的 initialize） | `default_agent_provider_factory_test.dart` claude_code 分支不再 throw；`AgentProviderIcon` 出图；设置页出现 Claude Code 条目 |
+| **M1 · 联通** | StreamJsonPeer + ProcessStarter + Provider.initialize + mapper 覆盖 `system.init`/`assistant.text`/`user.tool_result`/`result` | 手工新建一条 thread，能发一句话拿到回复；`flutter analyze` + 新 mapper 单测通过 |
+| **M2 · 工具时间线** | mapper 覆盖 `thinking`/`tool_use` 完整生命周期 + `AgentTokenUsageEvent` + turn 状态归一化（identity 完整） | 工具卡片、reasoning phase、usage 全部出；CC fixture **只放** `test/.../claude_code/fixtures/` 与 Provider 自有测试，**不得**向 `agent_event_storm_fixture_test.dart` 或其他共享层测试追加 CC fixture（共享层 `git diff` 为空） |
+| **M3 · 权限 + Plan** | ControlRequestHandler + PermissionPolicyAdapter + PlanApprovalAdapter + 4 选项 catalog + 显式 Default 执行回合 | 权限模式条可切；plan → 审批 → 执行链路手工通；单测覆盖所有 4 个 optionId |
+| **M4 · 历史 / resume** | SessionHistoryReader + `--resume` 参数拼装 + hidden list | 重启 Zeta 后能看到历史 thread、点开恢复；损坏 jsonl 不阻断启动 |
+| **M5 · 打磨** | auth status + 无 Prompt initialize + 模型/套餐 metadata + 可选额度详情 + Keychain 边界 + 文档 | metadata/auth/usage fixtures 与 macOS/Windows 真机冒烟；模型失败保留 stale cache；增强关闭仍有模型/套餐名称；401/429 降级 plan-only；协议基线与架构文档同步 |
+| **M6+ · 二期** | fork、skills（`~/.claude/agents/`）、MCP config 透传、thinkingBudget、Bedrock/Vertex | 独立 PR，按需排 |
+
+每个阶段结束：`dart format .` → `flutter analyze` → `flutter test`（对齐
+CLAUDE.md「每次代码修改后」章节）。
+
+## 9. 测试策略
+
+对齐 `docs/architecture/engineering_standards.md` 与 CLAUDE.md：
+
+1. **共享层守卫**：新增架构测试，断言
+   `agent_event_coalescing_policy.dart`、`agent_event_pipeline.dart`、
+   `agent_conversation_timeline_store.dart` 等 G1 范围内文件不 import 任何
+   `datasources/claude_code/` 路径、不含 `claudeCode` 标识符（注释除外）。
+   **`agent_event_storm_fixture_test.dart` 等共享层测试一行不改**——CC fixture
+   不得进入共享层（否则违反「共享层测试必须用 Provider 无关 fixture」门禁）。
+2. **契约测试（Provider 自有）**：mapper / identity 用 golden fixtures
+   （`test/src/features/agent/data/datasources/claude_code/fixtures/*.jsonl`）
+   驱动，断言 → `AgentEvent` 序列的 canonical signature 逐位置匹配。fixture
+   从真实 CLI 生成一次后冻结，schema 演进时同步
+   `docs/protocols/claude_code_stream_json_protocol.md`。
+3. **单元测试**：`claude_code_stream_identity`、permission adapter / plan adapter /
+   session history reader 各自 A/A/A，用 fake `StreamJsonPeer`；不 mock。metadata probe /
+   coordinator、initialize mapper、auth status、Keychain source、usage client/mapper/adapter
+   使用 fake 进程、HTTP 和文件系统，覆盖 request id、无 Prompt、损坏响应、scope、401/429、
+   超时、凭据过期、增强关闭与 stale cache。
+4. **AgentEvent 16 条清单**：新增/改动 event 时逐项回答
+   `docs/guides/developer_guide.md §7`；MVP 若不新增 event，只需在 PR
+   描述中明示「未新增 AgentEvent」。
+5. **冒烟脚本**：`tool/smoke_claude_code_metadata.py` 与
+   `tool/smoke_claude_code_stream_json.py`；CI 不跑（需真实 CLI），发布前在 macOS 与
+   Windows 分别执行。缺设备或凭据时标记待执行/阻塞，不能由 fixture 推断通过。
+6. **回归**：`test/src/features/agent/domain/agent_provider_capabilities_test.dart`
+   追加 `defaultsFor(claudeCode)` 真实能力断言；`agent_provider_bundle_test.dart`
+   追加 CC provider fake 覆盖新挂载的 optional 端口。
+
+## 10. 风险与缓解
+
+| 风险 | 影响 | 缓解 |
+| --- | --- | --- |
+| stream-json schema 无版本承诺 | CLI 升级后事件形状变化，UI 空白/崩溃 | mapper 对未识别 `type` 一律记诊断并丢弃；fixture 冻结 + 冒烟脚本 + 独立协议 doc |
+| `<encoded-cwd>` 编码规则未文档化 | 历史读取错文件 / 空目录 | 首次接入时用真实 CLI 打样，把编码规则冻在单测里；后续 CLI 版本升级时冒烟 |
+| Plan 审批语义与 permission 混淆 | 用户被过度授权 | 硬性隔离 domain 类型（`AgentPlanApprovalRequest` vs `AgentPermissionRequest`）；文档反复强调「新建显式 Default 回合」 |
+| API key 落盘 | 凭证泄漏 | MVP 只做「已登录 CLI」；API key 通路默认关闭；开启需 secure storage |
+| Bedrock/Vertex 覆盖不到 | 企业内网用户不可用 | UI 显式标注 unsupported，走二期 |
+| 长 tool_result 阻塞 stdin | 子进程 hang | Peer 层 payload 上限 + `--dangerously-suppress-output` 兜底 kill |
+| Claude Code CLI 不在 PATH（Windows） | 启动失败但错误信息不友好 | detect 用 `where.exe` 明确报错并给安装 URL；provider initialize 失败时错误映射为「未安装」而非「协议错」 |
+| 直接用本机 OAuth accessToken 调用 usage REST（§4.10），非 Codex/Grok 那种「CLI 子进程代理鉴权」范式 | 用户不希望第三方壳层读取凭据，或账号侧策略变化 | 只用于额度详情、只读不刷新、不落盘不外传；详情页提供可关闭的「额度详情增强」，关闭后完全不读凭据且不影响模型/套餐名称 |
+| `GET /api/oauth/usage` 对高频调用敏感，易 429 | 套餐面板只剩 plan-only | 成功/失败统一 60 秒节流、并发 single-flight、5 秒超时且不重试；失败明确显示额度详情不可用，不伪造 0% |
+| initialize 目录可能受 CLI bootstrap/cache 影响 | 用户误以为它是实时远端全量 catalog | 文档定义为“当前 CLI 有效选项快照”；显式刷新启动新 probe，失败保留 app stale cache，不用 REST 或静态目录补项 |
+
+## 11. 明确不做（MVP 边界）
+
+- MCP server 透传给 CC（`--mcp-config`）
+- Hooks（Zeta 尚无 hook 抽象；不新增）
+- Custom slash commands 目录（`~/.claude/commands/`）
+- Skills / subagents（`~/.claude/agents/`）
+- `--fork-session` 分叉
+- thinkingBudget 数值调档 UI
+- Bedrock / Vertex 后端
+- Cursor 类共享 session；Cursor 已退役，不打通 CC ↔ Cursor 历史
+- accessToken 主动刷新（`POST /v1/oauth/token`）——续期完全由用户重新运行
+  `claude` 或 `claude auth login` 完成（§4.10）；若后续要接，需专项评估与 CLI 自身
+  续期逻辑的文件锁竞态及合规边界，不能顺手夹带
+- 本地 usage 历史聚合 / 导出（`ccusage` 类工具形态）——§4.11 只做当前快照
+  展示，不做跨会话统计
+- Bedrock/Vertex、`statusline rate_limits` 通道等其他余量获取方式（§4.10 只做
+  `GET /api/oauth/usage` 一条路径）
+
+上述项目全部走 §8 M6+ 独立 PR，不塞进本次接入。
+
+## 12. Checklist（PR 提交前）
+
+- [ ] `AgentProviderKind.claudeCode` 分支在 `DefaultAgentProviderFactory` /
+  `defaultsFor` / `AgentProviderIcon` / `_sanitizeProviderConfig` 全部覆盖
+- [ ] `AgentDefinition.all` 追加 `claudeCode`
+- [ ] `agent_provider_bundle.dart` **未新增** `switch(kind)` 分支
+- [ ] 共享 pipeline / coalescing / timeline store **未 import**
+  `datasources/claude_code/` 任何文件（架构测试通过）
+- [ ] `permissionPolicy` / `planApproval` / `threadCatalog` / `modelCatalog`
+  / `localThreadList` 端口通过 mixin 挂载
+- [ ] Plan 审批链路：`AgentPlanApprovalRequest` ↔ 显式 Default 回合
+  新建，权限与 plan 决策模型隔离
+- [ ] 未持久化任何 prompt / 回复 / tool output / env / API key 原文
+- [ ] auth status、initialize、历史与额度凭据都只在 Claude-local data adapter 读取；
+  未迁移、改写或删除 Claude 自有数据
+- [ ] 模型列表：initialize 成功按 CLI 顺序返回；失败保留 stale cache；首次失败显示错误，
+  不写空目录且没有 REST/静态 fallback
+- [ ] 套餐用量：增强关闭 / API Key / scope 缺失时零凭据或 HTTP 调用并返回 plan-only；
+  401 / 429 / 超时同样保留套餐名称且不抛未捕获异常
+- [ ] `ClaudeCodeAnthropicApiClient` / `ClaudeCodeOAuthCredentialsReader` 未被
+  日志、诊断、`providers.json` 持久化 accessToken 原文或前缀
+- [ ] 详情页「额度详情增强」关闭后不读凭据、不发 usage REST；模型与套餐名称仍从
+  initialize 正常显示
+- [ ] `dart format .` / `flutter analyze` / `flutter test` 干净
+- [ ] Git 提交格式：Conventional Commits，摘要 ≤50 字符，`sh` 代码块提供
+
+---
+
+**下一步动作建议**：先做 §8 M0（骨架），产出一份能通过 analyze / test 的
+最小改动 PR；再进入 M1（一次能跑起来的 hello turn）；之后按 M2-M4 顺序
+迭代，每个阶段独立 PR 便于回滚。
