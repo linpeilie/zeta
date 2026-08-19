@@ -99,7 +99,12 @@ void main() {
       expect(qualityWorkflow, contains('bloc lint .'));
       expect(qualityWorkflow, contains('--coverage'));
       expect(qualityWorkflow, contains('--min-coverage 100'));
-      expect(qualityWorkflow, contains('--check-ignore'));
+      expect(qualityWorkflow, isNot(contains('--check-ignore')));
+      expect(
+        qualityWorkflow,
+        contains("--exclude-coverage '**/*.{g,freezed,gen}.dart'"),
+      );
+      expect(qualityWorkflow, contains('--timeout 120'));
       expect(
         qualityWorkflow,
         contains('--test-randomize-ordering-seed random'),
@@ -109,6 +114,13 @@ void main() {
     test('runs tagged golden tests in a dedicated job', () {
       expect(qualityWorkflow, contains('\n  golden:\n'));
       expect(qualityWorkflow, contains('--tags golden'));
+      expect(qualityWorkflow, isNot(contains('flutter test')));
+      expect(
+        RegExp(
+          'dart pub global run very_good_cli:very_good test',
+        ).allMatches(qualityWorkflow).length,
+        greaterThanOrEqualTo(2),
+      );
       expect(
         File('${workspace.root.path}/dart_test.yaml').readAsStringSync(),
         allOf(

@@ -221,7 +221,7 @@ packages/<name>/
 
 ### 步骤 6 — CI 与架构门禁
 
-**状态：已完成。** `.architecture.yaml` 现已显式登记 contracts、Data、Repository、presentation、tooling 与三个 vendor client 集合；24 个架构契约测试覆盖 package/path 依赖、Flutter 隔离、composition root、platform adapter、外部 `src/`、typed navigation、Bloc 隔离、`app_ui` 和供应链例外。CI 按 27 个 workspace root 独立报告 analyze/format，并对 26 个含测试的 root 执行随机顺序 test + 100% coverage；Widgetbook 明确作为 tooling-only root 报告 analyze/format，无 test 目录。最终本地同轮门禁：27/27 roots analyze 0 问题，format 116 files / 0 changed，26 个可测试 roots 共 128 tests，人工 Dart coverage 100%（134 / 134）。三平台 production 构建由 `desktop-build` 最近全绿运行 `32229542327` 证明。
+**状态：已完成。** `.architecture.yaml` 现已显式登记 contracts、Data、Repository、presentation、tooling 与三个 vendor client 集合；24 个架构契约测试覆盖 package/path 依赖、Flutter 隔离、composition root、platform adapter、外部 `src/`、typed navigation、Bloc 隔离、`app_ui` 和供应链例外。CI 按 27 个 workspace root 独立报告 analyze/format，并对 26 个含测试的 root 执行随机顺序 test + 100% coverage；Widgetbook 明确作为 tooling-only root 报告 analyze/format，无 test 目录。包括独立 golden job 在内的全部 CI test 调用均使用 Flutter-backed `very_good test`，且不传该命令不支持的 `--check-ignore`；generated `*.g.dart`、`*.freezed.dart`、`*.gen.dart` 通过 `--exclude-coverage` 离开 coverage 分母。Agent/MCP green-gate 调用仍按 §1.7 保留 `check_ignore: true`。最终本地同轮门禁：27/27 roots analyze 0 问题，format 116 files / 0 changed，26 个可测试 roots 共 128 tests，人工 Dart coverage 100%（134 / 134）。三平台 production 构建由 `desktop-build` 最近全绿运行 `32229542327` 证明。
 
 - [x] 四门按 §1.7 固定顺序执行，workspace 每个 package 独立报告。
 - [x] 架构测试读取 `.architecture.yaml` 并断言四层依赖。

@@ -109,13 +109,15 @@ jobs:
 
       - name: Test and coverage
         if: matrix.has_tests
+        # Generated sources leave the coverage denominator via the exclude
+        # glob below; the Flutter-backed command needs no ignore-comment flag.
         run: >-
           dart pub global run very_good_cli:very_good test
           --coverage
           --min-coverage 100
-          --check-ignore
           --exclude-coverage '**/*.{g,freezed,gen}.dart'
           --report-on lib
+          --timeout 120
           --test-randomize-ordering-seed random
 
       - name: Report tooling-only package
@@ -142,6 +144,9 @@ jobs:
 
       - name: Resolve locked workspace dependencies
         run: flutter pub get --enforce-lockfile
+
+      - name: Install Very Good CLI
+        run: dart pub global activate very_good_cli 1.4.0
 
       - name: Run tagged golden tests
         shell: bash
@@ -170,8 +175,9 @@ jobs:
             echo "::group::golden ($directory)"
             (
               cd "$directory"
-              flutter test \
+              dart pub global run very_good_cli:very_good test \
                 --tags golden \
+                --timeout 120 \
                 --test-randomize-ordering-seed random
             )
             echo '::endgroup::'

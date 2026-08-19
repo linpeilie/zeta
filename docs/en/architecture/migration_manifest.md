@@ -755,7 +755,7 @@ Migrated as a single unit with `move`, same path. Rationale in §5.1.
 | `.github/ISSUE_TEMPLATE/config.yml` | rewrite | `.github/` | The new repo already has the VGV workflow; only the OSV / license / architecture-gate deltas migrate (step 6) |
 | `.github/ISSUE_TEMPLATE/feature_request.yml` | rewrite | `.github/` | The new repo already has the VGV workflow; only the OSV / license / architecture-gate deltas migrate (step 6) |
 | `.github/PULL_REQUEST_TEMPLATE.md` | rewrite | `.github/` | The new repo already has the VGV workflow; only the OSV / license / architecture-gate deltas migrate (step 6) |
-| `.github/workflows/ci.yml` | rewrite | `.github/workflows/main.yaml` | Step 6 complete: 27-root quality matrix, randomized tests, 100% coverage, and a golden job |
+| `.github/workflows/ci.yml` | rewrite | `.github/workflows/main.yaml` | Step 6 complete: 27-root quality matrix, uniform `very_good test`, generated-source coverage exclusion, randomized tests, 100% coverage, and a golden job |
 | `.github/workflows/release.yml` | rewrite | `.github/workflows/{desktop_build,osv_scan,license_check}.yaml` | Step 6 complete: three-platform matrix, OSV, license, and explained-exception gates |
 
 ---

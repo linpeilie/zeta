@@ -735,7 +735,7 @@ schema 快照的生成入口。`test_fast/test_full` 四个脚本被 VGV 四门�
 | `.github/ISSUE_TEMPLATE/config.yml` | rewrite | `.github/` | 新仓库已有 VGV workflow；只迁移 OSV / license / 架构门禁增量（步骤 6） |
 | `.github/ISSUE_TEMPLATE/feature_request.yml` | rewrite | `.github/` | 新仓库已有 VGV workflow；只迁移 OSV / license / 架构门禁增量（步骤 6） |
 | `.github/PULL_REQUEST_TEMPLATE.md` | rewrite | `.github/` | 新仓库已有 VGV workflow；只迁移 OSV / license / 架构门禁增量（步骤 6） |
-| `.github/workflows/ci.yml` | rewrite | `.github/workflows/main.yaml` | 步骤 6 已完成：27-root 质量矩阵、随机顺序、100% coverage 与 golden job |
+| `.github/workflows/ci.yml` | rewrite | `.github/workflows/main.yaml` | 步骤 6 已完成：27-root 质量矩阵、统一 `very_good test`、generated coverage 排除、随机顺序、100% coverage 与 golden job |
 | `.github/workflows/release.yml` | rewrite | `.github/workflows/{desktop_build,osv_scan,license_check}.yaml` | 步骤 6 已完成：三平台矩阵、OSV、许可证与例外说明门禁 |
 
 ---
