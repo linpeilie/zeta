@@ -39,3 +39,49 @@ decode failure；共享层 `AgentProviderSettings.supportedVersions` 与
 
 **影响。** 共享契约注释与支持版本常量收敛到当前 schema。`agent_config_client` 失败关闭，
 不做历史迁移或静默截断，使用原子替换，并排除 CLI locator、Controller 与选择状态。
+
+## 2026-08-19 — 步骤 12 Codex 协议基线与包边界
+
+**问题。** 步骤 12 的目标 package 只有占位实现；要求锁定的 Codex `0.144.5` schema
+快照及生成脚本仍只存在于旧仓库。旧 adapter 还依赖应用 localization 与全局日志，不能越过
+新的 Data/neutral-contract 边界。
+
+**证据。** 旧快照恰为 269 个文件，与文档 pin 完全一致。冻结的 package API 要求 barrel
+只暴露 bundle factory、静态 capability 与 CLI locator，并要求 peer、process、logger、clock
+注入缝；无需修改任何共享 Provider 签名。
+
+**决策。** 原字节迁入 schema 快照和两套生成脚本；contract test 固定文件数、版本、消息、
+终态通知、capability 与 server request。应用 localization 不进入 package：中立状态使用 typed
+code，仅对协议 item 必需的可读标签使用私有稳定英文 fallback catalog。只导出三个冻结入口；
+专项协议测试入口放在 `lib/src/testing/`，不进入 barrel。
+
+**影响。** Codex 实现及 schema 真相源由 `codex_app_server_client` 独立持有和测试；不 import
+Presentation/localization package，也未修改共享适配层或 Provider port。
+
+## 2026-08-19 — 步骤 12 CLI 路径与覆盖率加固
+
+**问题。** 兼容测试发现 Unix HOME fallback 的 join 会去掉开头 `/`，把 Codex 可执行路径变成
+相对路径。首次完整 package coverage 为 87.66%，缺口主要是旧 adapter 继承的宽容协议与
+lifecycle 分支。
+
+**证据。** Unix HOME locator 测试稳定复现相对路径。coverage 报告还定位到重复或不可达的
+防御分支（包括重复的 patch output fallback、validate 后不可能进入的 conversation-mode 分支），
+以及尚无专项用例的 malformed/future 协议形态。
+
+**决策。** 唯一 CLI locator 同时保留 Unix root 与 Windows UNC 前缀。100% 门禁不变；增加
+真实兼容/lifecycle 测试、非 barrel 的内部协议测试 harness 和可注入本地文件读取缝。只删除经
+当前调用图证明不可达或重复的分支，不添加 coverage ignore，也不降低阈值。
+
+**影响。** Unix fallback 始终为绝对路径，进程恢复覆盖 platform/config environment 组合；
+步骤 12 的 168 tests 达到人工 coverage 100%（3,601 / 3,601）。测试缝保持内部实现，不扩张
+受支持的 package API。
+
+## 2026-08-19 — 步骤 11 desktop run 被取消
+
+**问题。** 步骤 11 的 desktop-build workflow run `32262347277` 最终为 cancelled，且各 job
+没有报告 failure。
+
+**决策。** 按并发取消而不是产品失败处理，记录该事件，并要求下一次迁移提交重新跑完整
+desktop matrix。
+
+**影响。** 未针对不存在的失败修改代码；远端 desktop 验证顺延至步骤 12 push。

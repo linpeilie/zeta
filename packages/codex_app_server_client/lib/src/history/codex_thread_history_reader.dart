@@ -1,0 +1,605 @@
+part of '../datasources/app_server/codex_app_server_agent_provider.dart';
+
+/// 负责读取远端 thread/read 与本地 session jsonl 两类历史来源。
+class _CodexThreadHistoryReader {
+  _CodexThreadHistoryReader({
+    required this.textCatalog,
+    required this._log,
+    Stream<List<int>> Function(File file)? openRead,
+  }) : _openRead = openRead ?? _defaultOpenRead;
+
+  final _AgentUiTextCatalog textCatalog;
+  final AppLogger _log;
+  final Stream<List<int>> Function(File file) _openRead;
+  static const _conversationModeCodec = _CodexConversationModeCodec();
+
+  static Stream<List<int>> _defaultOpenRead(File file) => file.openRead();
+
+  Future<AgentThreadHistorySnapshot?> threadHistoryFromSessionFile(
+    String threadId,
+    String? sessionPath,
+  ) async {
+    final path = sessionPath?.trim();
+    if (path == null || path.isEmpty) {
+      return null;
+    }
+
+    final file = File(path);
+    if (!file.existsSync()) {
+      _log.t('Session file missing for thread $threadId: $path');
+      return null;
+    }
+
+    final parser = _JsonlHistoryParser(
+      fallbackThreadId: threadId,
+      sessionPath: path,
+      textCatalog: textCatalog,
+    );
+
+    try {
+      await _openRead(file)
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .forEach(parser.consumeLine);
+    } on FileSystemException catch (error, stackTrace) {
+      _log.w(
+        'Could not read Codex session file for thread $threadId: $path',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return null;
+    }
+
+    final snapshot = parser.build();
+    if (snapshot.turns.isEmpty) {
+      _log.t('Session file had no displayable history for thread $threadId');
+      return null;
+    }
+    return snapshot;
+  }
+
+  AgentThreadHistorySnapshot threadHistoryFromReadResult(
+    Object? value,
+    String fallbackThreadId,
+  ) {
+    final fileChangeTracker = CodexFileChangeTracker();
+    try {
+      final map = _map(value);
+      final thread = _map(map['thread']);
+      final threadId = _string(thread['id']) ?? fallbackThreadId;
+      final turns = <AgentHistoryTurn>[];
+      AgentHistoryTurn? currentTurn;
+      final turnsList = thread['turns'];
+
+      if (turnsList is List<Object?>) {
+        for (final turnValue in turnsList) {
+          final turn = _map(turnValue);
+          final turnId = _string(turn['id']) ?? threadId;
+          fileChangeTracker.beginTurn(runtimeScope: null, sessionId: threadId);
+          final turnEntries = <AgentHistoryEntry>[];
+          final items = turn['items'];
+          if (items is List<Object?>) {
+            for (final itemValue in items) {
+              final entry = _historyEntryFromItem(
+                itemValue,
+                sessionId: threadId,
+                turnId: turnId,
+                fileChangeTracker: fileChangeTracker,
+              );
+              if (entry != null) {
+                turnEntries.add(entry);
+              }
+            }
+          }
+          final startedAt = _dateTimeFromAny(
+            turn['startedAt'] ?? turn['startedAtMs'],
+          );
+          final completedAt = _dateTimeFromAny(
+            turn['completedAt'] ?? turn['completedAtMs'],
+          );
+          final error = _map(turn['error']);
+          final historyTurn = AgentHistoryTurn(
+            id: turnId,
+            entries: List<AgentHistoryEntry>.unmodifiable(turnEntries),
+            status: _historyTurnStatus(_string(turn['status']), completedAt),
+            startedAt: startedAt,
+            completedAt: completedAt,
+            duration: _durationFromMilliseconds(turn['durationMs']),
+            cwd: _string(turn['cwd']),
+            modelId: _codexHistoryModelId(turn),
+            reasoningEffort: _codexReadReasoningEffort(turn),
+            serviceTierId: _codexHistoryServiceTierId(turn),
+            explicitFast: _codexHistoryExplicitFast(turn),
+            modelContextWindow:
+                _numberToInt(turn['modelContextWindow']) ??
+                _numberToInt(turn['model_context_window']),
+            collaborationMode:
+                _conversationModeCodec.modeIdFromValue(
+                  turn['collaborationMode'],
+                ) ??
+                _conversationModeCodec.modeIdFromValue(
+                  turn['collaboration_mode'],
+                ),
+            tokenUsage: _tokenUsageFromTurnPayload(turn),
+            errorMessage: _string(error['message']),
+            errorCode: _codexErrorCode(error['codexErrorInfo']),
+            raw: turn,
+          );
+          turns.add(historyTurn);
+          currentTurn = historyTurn;
+        }
+      }
+
+      return AgentThreadHistorySnapshot(
+        threadId: threadId,
+        turns: List<AgentHistoryTurn>.unmodifiable(turns),
+        currentTurn: currentTurn,
+        raw: map,
+      );
+    } finally {
+      fileChangeTracker.dispose();
+    }
+  }
+
+  String? _codexErrorCode(Object? value) {
+    if (value is String) {
+      return value;
+    }
+    final map = _map(value);
+    return map.isEmpty ? null : map.keys.first;
+  }
+
+  /// 将 thread/read 中的补充元数据与终态错误叠到本地 JSONL 历史上。
+  ///
+  /// Codex session JSONL 通常不持久化 `error` 通知；live 时 `serverOverloaded`
+  /// 等失败只会经 JSON-RPC 到达客户端。优先使用内容更完整的本地条目，仅在
+  /// 本地 turn 缺少模型配置证据或 error/failed 状态时用远端补齐。
+  AgentThreadHistorySnapshot mergeRemoteTurnFailures({
+    required AgentThreadHistorySnapshot local,
+    required AgentThreadHistorySnapshot remote,
+  }) {
+    if (remote.turns.isEmpty) {
+      return local;
+    }
+    final remoteById = <String, AgentHistoryTurn>{
+      for (final turn in remote.turns) turn.id: turn,
+    };
+    var changed = false;
+    final mergedTurns = <AgentHistoryTurn>[];
+    for (final localTurn in local.turns) {
+      final remoteTurn = remoteById[localTurn.id];
+      if (remoteTurn == null) {
+        mergedTurns.add(localTurn);
+        continue;
+      }
+      final merged = _overlayRemoteTurn(localTurn, remoteTurn);
+      if (!identical(merged, localTurn)) {
+        changed = true;
+      }
+      mergedTurns.add(merged);
+    }
+    if (!changed) {
+      return local;
+    }
+    AgentHistoryTurn? currentTurn;
+    final currentId = local.currentTurn?.id;
+    if (currentId != null) {
+      for (final turn in mergedTurns) {
+        if (turn.id == currentId) {
+          currentTurn = turn;
+          break;
+        }
+      }
+    }
+    currentTurn ??= mergedTurns.isEmpty ? null : mergedTurns.last;
+    return AgentThreadHistorySnapshot(
+      threadId: local.threadId,
+      turns: List<AgentHistoryTurn>.unmodifiable(mergedTurns),
+      currentTurn: currentTurn,
+      raw: <String, Object?>{...local.raw, 'remoteFailureOverlay': true},
+    );
+  }
+
+  AgentHistoryTurn _overlayRemoteTurn(
+    AgentHistoryTurn local,
+    AgentHistoryTurn remote,
+  ) {
+    final remoteError = remote.errorMessage?.trim();
+    final hasRemoteFailure =
+        remote.status == AgentHistoryTurnStatus.failed &&
+        remoteError != null &&
+        remoteError.isNotEmpty;
+    final needsReasoningEffort =
+        !local.reasoningEffort.isKnown && remote.reasoningEffort.isKnown;
+    final needsModelId = local.modelId == null && remote.modelId != null;
+    final needsServiceTierId =
+        local.serviceTierId == null && remote.serviceTierId != null;
+    final needsExplicitFast =
+        local.explicitFast == null && remote.explicitFast != null;
+
+    final localError = local.errorMessage?.trim();
+    final needsStatus =
+        hasRemoteFailure &&
+        local.status != AgentHistoryTurnStatus.failed &&
+        local.status != AgentHistoryTurnStatus.interrupted;
+    final needsMessage =
+        hasRemoteFailure && (localError == null || localError.isEmpty);
+    final needsCode =
+        hasRemoteFailure &&
+        (local.errorCode == null || local.errorCode!.trim().isEmpty) &&
+        remote.errorCode != null &&
+        remote.errorCode!.trim().isNotEmpty;
+    if (!needsReasoningEffort &&
+        !needsModelId &&
+        !needsServiceTierId &&
+        !needsExplicitFast &&
+        !needsStatus &&
+        !needsMessage &&
+        !needsCode) {
+      return local;
+    }
+
+    return AgentHistoryTurn(
+      id: local.id,
+      entries: local.entries,
+      status: needsStatus ? AgentHistoryTurnStatus.failed : local.status,
+      startedAt: local.startedAt ?? remote.startedAt,
+      completedAt: local.completedAt ?? remote.completedAt,
+      duration: local.duration ?? remote.duration,
+      timeToFirstToken: local.timeToFirstToken ?? remote.timeToFirstToken,
+      cwd: local.cwd ?? remote.cwd,
+      modelId: local.modelId ?? remote.modelId,
+      reasoningEffort: needsReasoningEffort
+          ? remote.reasoningEffort
+          : local.reasoningEffort,
+      serviceTierId: local.serviceTierId ?? remote.serviceTierId,
+      explicitFast: local.explicitFast ?? remote.explicitFast,
+      modelContextWindow: local.modelContextWindow ?? remote.modelContextWindow,
+      collaborationMode: local.collaborationMode ?? remote.collaborationMode,
+      tokenUsage: local.tokenUsage ?? remote.tokenUsage,
+      tokenUsageIsSessionCumulative: local.tokenUsageIsSessionCumulative,
+      errorMessage: needsMessage ? remote.errorMessage : local.errorMessage,
+      errorCode: needsCode ? remote.errorCode : local.errorCode,
+      raw: <String, Object?>{
+        ...local.raw,
+        if (needsReasoningEffort ||
+            needsModelId ||
+            needsServiceTierId ||
+            needsExplicitFast)
+          'remoteModelConfigOverlay': true,
+        if (hasRemoteFailure)
+          'remoteFailureOverlay': <String, Object?>{
+            'status': remote.status.name,
+            'errorMessage': remote.errorMessage,
+            'errorCode': remote.errorCode,
+          },
+      },
+    );
+  }
+
+  AgentHistoryReasoningEffort _codexReadReasoningEffort(
+    Map<String, Object?> turn,
+  ) {
+    for (final key in const <String>[
+      'effort',
+      'reasoningEffort',
+      'reasoning_effort',
+    ]) {
+      if (!turn.containsKey(key)) {
+        continue;
+      }
+      final raw = turn[key];
+      if (raw == null) {
+        return const AgentHistoryReasoningEffort.providerDefault();
+      }
+      final effort = _string(raw);
+      return effort == null
+          ? const AgentHistoryReasoningEffort.unknown()
+          : AgentHistoryReasoningEffort.explicit(effort);
+    }
+    return const AgentHistoryReasoningEffort.unknown();
+  }
+
+  AgentHistoryEntry? _historyEntryFromItem(
+    Object? value, {
+    required String sessionId,
+    required String turnId,
+    required CodexFileChangeTracker fileChangeTracker,
+  }) {
+    final item = _map(value);
+    final type = _string(item['type']);
+    final normalizedType = _normalizedAgentItemType(type);
+    final id = _string(item['id']) ?? '$turnId-${type ?? 'item'}';
+
+    return switch (normalizedType) {
+      'usermessage' => _historyMessage(
+        id: id,
+        role: AgentMessageRole.user,
+        text: _userInputText(item['content']),
+        localImagePaths: _userInputLocalImagePaths(item['content']),
+        raw: item,
+      ),
+      'agentmessage' => _historyMessage(
+        id: id,
+        role: AgentMessageRole.agent,
+        text: _string(item['text']),
+        phase: _messagePhase(_string(item['phase'])),
+        status: _messageStatus(_string(item['status'])),
+        duration: _messageDuration(item),
+        raw: item,
+      ),
+      'plan' => _historyMessage(
+        id: id,
+        role: AgentMessageRole.agent,
+        text: _string(item['text']),
+        kind: AgentMessageKind.plan,
+        status: AgentMessageStatus.completed,
+        raw: item,
+      ),
+      final type when _isSystemThreadItemType(type) =>
+        _systemHistoryEventFromThreadItem(item, id: id, catalog: textCatalog),
+      _ => _historyToolEntryFromThreadItem(
+        item,
+        id: id,
+        sessionId: sessionId,
+        turnId: turnId,
+        fileChangeTracker: fileChangeTracker,
+      ),
+    };
+  }
+
+  AgentHistoryToolEntry? _historyToolEntryFromThreadItem(
+    Map<String, Object?> item, {
+    required String id,
+    required String sessionId,
+    required String turnId,
+    required CodexFileChangeTracker fileChangeTracker,
+  }) {
+    final fileProjection =
+        _normalizedAgentItemType(_string(item['type'])) == 'filechange'
+        ? fileChangeTracker.projectTool(
+            runtimeScope: null,
+            sessionId: sessionId,
+            turnId: turnId,
+            toolCallId: id,
+            hasStructuredChanges: item.containsKey('changes'),
+            changes: item['changes'],
+          )
+        : null;
+    final toolCall = _toolCallFromThreadItem(
+      item,
+      id: id,
+      catalog: textCatalog,
+      status: _historyToolStatus(_string(item['status'])),
+      sessionId: sessionId,
+      turnId: turnId,
+      fileChanges: fileProjection?.snapshot,
+      projectedLocations: fileProjection?.snapshot == null
+          ? null
+          : fileProjection!.locations,
+    );
+    return toolCall == null ? null : _historyTool(toolCall);
+  }
+
+  AgentHistoryMessageEntry? _historyMessage({
+    required String id,
+    required AgentMessageRole role,
+    required String? text,
+    required Map<String, Object?> raw,
+    AgentMessageKind kind = AgentMessageKind.regular,
+    AgentMessagePhase? phase,
+    AgentMessageStatus? status,
+    Duration? duration,
+    List<String> localImagePaths = const <String>[],
+  }) {
+    final trimmed = text?.trim() ?? '';
+    // 允许纯图片用户消息：无文本但有本地图片路径时仍保留条目。
+    if (trimmed.isEmpty && localImagePaths.isEmpty) {
+      return null;
+    }
+    return AgentHistoryMessageEntry(
+      id: id,
+      role: role,
+      text: trimmed,
+      kind: kind,
+      phase: phase,
+      status: status,
+      duration: duration,
+      localImagePaths: List<String>.unmodifiable(localImagePaths),
+      raw: raw,
+    );
+  }
+
+  AgentHistoryToolEntry _historyTool(AgentToolCall toolCall) {
+    return AgentHistoryToolEntry(toolCall: toolCall);
+  }
+
+  AgentTokenUsage? _tokenUsageFromTurnPayload(Map<String, Object?> turn) {
+    final container = _map(turn['tokenUsage']).isNotEmpty
+        ? _map(turn['tokenUsage'])
+        : _map(turn['token_usage']);
+
+    // 当前协议：tokenUsage 内嵌 total/last 两个 breakdown。
+    final nestedTotal = _map(container['total']);
+    if (nestedTotal.isNotEmpty) {
+      final nestedLast = _map(container['last']);
+      return AgentTokenUsage(
+        inputTokens: _breakdownInt(nestedTotal, 'inputTokens', 'input_tokens'),
+        cachedInputTokens: _breakdownInt(
+          nestedTotal,
+          'cachedInputTokens',
+          'cached_input_tokens',
+        ),
+        outputTokens: AgentTokenUsage.visibleOutputTokens(
+          _breakdownInt(nestedTotal, 'outputTokens', 'output_tokens'),
+          _breakdownInt(
+            nestedTotal,
+            'reasoningOutputTokens',
+            'reasoning_output_tokens',
+          ),
+        ),
+        reasoningOutputTokens: _breakdownInt(
+          nestedTotal,
+          'reasoningOutputTokens',
+          'reasoning_output_tokens',
+        ),
+        totalTokens: _breakdownInt(nestedTotal, 'totalTokens', 'total_tokens'),
+        lastInputTokens: _breakdownInt(
+          nestedLast,
+          'inputTokens',
+          'input_tokens',
+        ),
+        lastCachedInputTokens: _breakdownInt(
+          nestedLast,
+          'cachedInputTokens',
+          'cached_input_tokens',
+        ),
+        lastOutputTokens: AgentTokenUsage.visibleOutputTokens(
+          _breakdownInt(nestedLast, 'outputTokens', 'output_tokens'),
+          _breakdownInt(
+            nestedLast,
+            'reasoningOutputTokens',
+            'reasoning_output_tokens',
+          ),
+        ),
+        lastReasoningOutputTokens: _breakdownInt(
+          nestedLast,
+          'reasoningOutputTokens',
+          'reasoning_output_tokens',
+        ),
+        lastTotalTokens: _breakdownInt(
+          nestedLast,
+          'totalTokens',
+          'total_tokens',
+        ),
+        modelContextWindow: _breakdownInt(
+          container,
+          'modelContextWindow',
+          'model_context_window',
+        ),
+      );
+    }
+
+    // 旧结构：tokenUsage 本身就是 total breakdown 的平铺字段。
+    final total = container.isNotEmpty
+        ? container
+        : _map(turn['total_token_usage']);
+    if (total.isEmpty) {
+      return null;
+    }
+    final last = _map(turn['last_token_usage']);
+    return AgentTokenUsage(
+      inputTokens: _breakdownInt(total, 'inputTokens', 'input_tokens'),
+      cachedInputTokens: _breakdownInt(
+        total,
+        'cachedInputTokens',
+        'cached_input_tokens',
+      ),
+      outputTokens: AgentTokenUsage.visibleOutputTokens(
+        _breakdownInt(total, 'outputTokens', 'output_tokens'),
+        _breakdownInt(
+          total,
+          'reasoningOutputTokens',
+          'reasoning_output_tokens',
+        ),
+      ),
+      reasoningOutputTokens: _breakdownInt(
+        total,
+        'reasoningOutputTokens',
+        'reasoning_output_tokens',
+      ),
+      totalTokens: _breakdownInt(total, 'totalTokens', 'total_tokens'),
+      lastInputTokens: _breakdownInt(last, 'inputTokens', 'input_tokens'),
+      lastCachedInputTokens: _breakdownInt(
+        last,
+        'cachedInputTokens',
+        'cached_input_tokens',
+      ),
+      lastOutputTokens: AgentTokenUsage.visibleOutputTokens(
+        _breakdownInt(last, 'outputTokens', 'output_tokens'),
+        _breakdownInt(last, 'reasoningOutputTokens', 'reasoning_output_tokens'),
+      ),
+      lastReasoningOutputTokens: _breakdownInt(
+        last,
+        'reasoningOutputTokens',
+        'reasoning_output_tokens',
+      ),
+      lastTotalTokens: _breakdownInt(last, 'totalTokens', 'total_tokens'),
+      modelContextWindow: _breakdownInt(
+        turn,
+        'modelContextWindow',
+        'model_context_window',
+      ),
+    );
+  }
+}
+
+const _codexModelIdKeys = <String>['model', 'modelId', 'model_id'];
+const _codexServiceTierKeys = <String>[
+  'serviceTier',
+  'service_tier',
+  'serviceTierId',
+  'service_tier_id',
+];
+const _codexExplicitFastKeys = <String>[
+  'fast',
+  'fastMode',
+  'isFast',
+  'fast_enabled',
+];
+
+String? _codexHistoryModelId(Map<String, Object?> source) =>
+    _codexHistoryString(source, _codexModelIdKeys);
+
+String? _codexHistoryServiceTierId(Map<String, Object?> source) =>
+    _codexHistoryString(source, _codexServiceTierKeys);
+
+bool? _codexHistoryExplicitFast(Map<String, Object?> source) {
+  for (final key in _codexExplicitFastKeys) {
+    if (!source.containsKey(key)) {
+      continue;
+    }
+    final explicit = _codexHistoryBool(source[key]);
+    if (explicit != null) {
+      return explicit;
+    }
+  }
+  if (!_codexHistoryContainsAnyKey(source, _codexServiceTierKeys)) {
+    return null;
+  }
+  final serviceTierId = _codexHistoryServiceTierId(source);
+  if (serviceTierId == null) {
+    return false;
+  }
+  final normalized = serviceTierId.toLowerCase();
+  return normalized == 'fast' || normalized == 'priority';
+}
+
+String? _codexHistoryString(Map<String, Object?> source, List<String> keys) {
+  for (final key in keys) {
+    final value = _string(source[key])?.trim();
+    if (value != null && value.isNotEmpty) {
+      return value;
+    }
+  }
+  return null;
+}
+
+bool? _codexHistoryBool(Object? value) {
+  if (value is bool) {
+    return value;
+  }
+  if (value is String) {
+    return switch (value.trim().toLowerCase()) {
+      'true' || '1' || 'yes' => true,
+      'false' || '0' || 'no' => false,
+      _ => null,
+    };
+  }
+  return null;
+}
+
+bool _codexHistoryContainsAnyKey(
+  Map<String, Object?> source,
+  List<String> keys,
+) => keys.any(source.containsKey);

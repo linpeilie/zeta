@@ -368,9 +368,20 @@ at 100% hand-written coverage (2,756 / 2,756), and Bloc lint reported 0 issues a
 
 ### Step 12 — `codex_app_server_client`
 
-- [ ] Migrate the Codex provider, app-server client, mappers/codecs, process starter, and CLI locator.
-- [ ] Migrate raw Codex history/usage reads; return only Data models or neutral contracts.
-- [ ] Contract-test entryId, message chunks, terminal states, capabilities, and approval mapping.
+- [x] Migrate the Codex provider, app-server client, mappers/codecs, process starter, and CLI locator.
+- [x] Migrate raw Codex history/usage reads; return only Data models or neutral contracts.
+- [x] Contract-test entryId, message chunks, terminal states, capabilities, and approval mapping.
+
+**Status: complete.** `codex_app_server_client` now owns the Codex app-server provider,
+JSON-RPC client, protocol mappers/codecs, permission adapter, process recovery, single CLI locator,
+local JSONL/thread history, usage mapping, and the pinned `0.144.5` schema contract. Its barrel exports
+only `CodexProviderBundleFactory`, `CodexStaticCapabilities`, and `CodexCliLocator`; the factory keeps
+the required peer/process/logger/clock seams and no shared Provider port changed. Protocol tests cover
+stable entry identity, streaming chunks, terminal and error states, capabilities, approvals/questions,
+file evidence, malformed/future payloads, and lifecycle recovery. Package gates: 168 tests and 100%
+hand-written coverage (3,601 / 3,601). In the same final workspace iteration, 27/27 roots passed
+analyze, format checked 242 Dart files with no changes, 26/26 test roots ran 515 tests at 100%
+hand-written coverage (6,356 / 6,356), and Bloc lint reported 0 issues across 241 files.
 
 ### Step 13 — `claude_code_client`
 

@@ -1,0 +1,89 @@
+{
+  "_fixture": {
+    "formatVersion": 1,
+    "provider": "codex",
+    "protocol": "Codex app-server stable API",
+    "cliVersion": "0.144.1",
+    "sourceKind": "sanitizedRealShape",
+    "scenario": "A successful synthetic file mutation represented only by commandExecution.",
+    "provenance": "Sanitized real capture from the locally installed CLI in an ephemeral temporary workspace.",
+    "privacy": "Prompt, reply, command, identifiers, real paths, file content, credentials, approval details, and stderr are not retained."
+  },
+  "events": [
+    {
+      "direction": "serverRequest",
+      "requestId": "codex-request-redacted",
+      "method": "item/commandExecution/requestApproval",
+      "params": {
+        "threadId": "codex-thread-redacted",
+        "turnId": "codex-turn-redacted",
+        "itemId": "codex-item-redacted",
+        "command": "[COMMAND_REDACTED]",
+        "commandActions": [
+          {
+            "command": "[COMMAND_REDACTED]",
+            "type": "unknown"
+          }
+        ],
+        "cwd": "<WORKSPACE_REDACTED>"
+      }
+    },
+    {
+      "direction": "notification",
+      "method": "item/started",
+      "params": {
+        "threadId": "codex-thread-redacted",
+        "turnId": "codex-turn-redacted",
+        "item": {
+          "id": "codex-item-redacted",
+          "type": "commandExecution",
+          "command": "[COMMAND_REDACTED]",
+          "commandActions": [
+            {
+              "command": "[COMMAND_REDACTED]",
+              "type": "unknown"
+            }
+          ],
+          "cwd": "<WORKSPACE_REDACTED>",
+          "status": "inProgress",
+          "source": "agent"
+        }
+      }
+    },
+    {
+      "direction": "notification",
+      "method": "item/completed",
+      "params": {
+        "threadId": "codex-thread-redacted",
+        "turnId": "codex-turn-redacted",
+        "item": {
+          "id": "codex-item-redacted",
+          "type": "commandExecution",
+          "command": "[COMMAND_REDACTED]",
+          "commandActions": [
+            {
+              "command": "[COMMAND_REDACTED]",
+              "type": "unknown"
+            }
+          ],
+          "cwd": "<WORKSPACE_REDACTED>",
+          "status": "completed",
+          "aggregatedOutput": "[TOOL_OUTPUT_REDACTED]",
+          "exitCode": 0,
+          "source": "agent"
+        }
+      }
+    }
+  ],
+  "_captureChecks": {
+    "fileContentChanged": true,
+    "fileChangeStartedCount": 0,
+    "fileChangePatchUpdatedCount": 0,
+    "fileChangeCompletedCount": 0,
+    "turnDiffUpdatedCount": 0,
+    "commandActionTypes": [
+      "unknown"
+    ],
+    "temporaryWorkspaceCleaned": true
+  }
+}

@@ -1,0 +1,99 @@
+{
+  "_fixture": {
+    "formatVersion": 1,
+    "provider": "codex",
+    "protocol": "Codex app-server stable API",
+    "schemaVersion": "0.144.5",
+    "sourceKind": "schemaConstructed",
+    "scenario": "Schema-valid fileChange lifecycle plus turn-level aggregated diff.",
+    "provenance": "Constructed from the repository-pinned stable FileUpdateChange, FileChangePatchUpdatedNotification, ThreadItem, and TurnDiffUpdatedNotification schemas.",
+    "privacy": "All identifiers, paths, patch content, and timestamps are synthetic placeholders. This is not labelled as a real runtime capture."
+  },
+  "events": [
+    {
+      "method": "item/started",
+      "params": {
+        "threadId": "codex-thread-redacted",
+        "turnId": "codex-turn-redacted",
+        "item": {
+          "id": "codex-file-change-redacted",
+          "type": "fileChange",
+          "changes": [
+            {
+              "path": "<WORKSPACE_REDACTED>/sample.txt",
+              "kind": {
+                "type": "update",
+                "move_path": null
+              },
+              "diff": "*** Begin Patch\n*** Update File: <WORKSPACE_REDACTED>/sample.txt\n@@\n-[BEFORE_REDACTED]\n+[AFTER_REDACTED]\n*** End Patch"
+            }
+          ],
+          "status": "inProgress"
+        }
+      }
+    },
+    {
+      "method": "item/fileChange/patchUpdated",
+      "params": {
+        "threadId": "codex-thread-redacted",
+        "turnId": "codex-turn-redacted",
+        "itemId": "codex-file-change-redacted",
+        "changes": [
+          {
+            "path": "<WORKSPACE_REDACTED>/sample.txt",
+            "kind": {
+              "type": "update",
+              "move_path": null
+            },
+            "diff": "*** Begin Patch\n*** Update File: <WORKSPACE_REDACTED>/sample.txt\n@@\n-[BEFORE_REDACTED]\n+[AFTER_REDACTED]\n*** End Patch"
+          }
+        ]
+      }
+    },
+    {
+      "method": "item/completed",
+      "params": {
+        "threadId": "codex-thread-redacted",
+        "turnId": "codex-turn-redacted",
+        "item": {
+          "id": "codex-file-change-redacted",
+          "type": "fileChange",
+          "changes": [
+            {
+              "path": "<WORKSPACE_REDACTED>/sample.txt",
+              "kind": {
+                "type": "update",
+                "move_path": null
+              },
+              "diff": "*** Begin Patch\n*** Update File: <WORKSPACE_REDACTED>/sample.txt\n@@\n-[BEFORE_REDACTED]\n+[AFTER_REDACTED]\n*** End Patch"
+            }
+          ],
+          "status": "completed"
+        }
+      }
+    },
+    {
+      "method": "turn/diff/updated",
+      "params": {
+        "threadId": "codex-thread-redacted",
+        "turnId": "codex-turn-redacted",
+        "diff": "diff --git a/<FILE_REDACTED> b/<FILE_REDACTED>\n--- a/<FILE_REDACTED>\n+++ b/<FILE_REDACTED>\n@@ -1 +1 @@\n-[BEFORE_REDACTED]\n+[AFTER_REDACTED]"
+      }
+    }
+  ],
+  "threadReadItem": {
+    "id": "codex-file-change-redacted",
+    "type": "fileChange",
+    "changes": [
+      {
+        "path": "<WORKSPACE_REDACTED>/sample.txt",
+        "kind": {
+          "type": "update",
+          "move_path": null
+        },
+        "diff": "*** Begin Patch\n*** Update File: <WORKSPACE_REDACTED>/sample.txt\n@@\n-[BEFORE_REDACTED]\n+[AFTER_REDACTED]\n*** End Patch"
+      }
+    ],
+    "status": "completed"
+  }
+}

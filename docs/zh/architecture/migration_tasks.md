@@ -354,9 +354,20 @@ thread identity 不匹配均失败关闭，且 exception 不暴露原始文件�
 
 ### 步骤 12 — `codex_app_server_client`
 
-- [ ] 迁 Codex provider、app-server client、mappers/codecs、process starter、CLI locator。
-- [ ] 迁 Codex history/usage 原始数据读取；只返回 Data model/neutral contract。
-- [ ] contract tests 覆盖 entryId、message chunk、terminal state、capabilities 和 approval mapping。
+- [x] 迁 Codex provider、app-server client、mappers/codecs、process starter、CLI locator。
+- [x] 迁 Codex history/usage 原始数据读取；只返回 Data model/neutral contract。
+- [x] contract tests 覆盖 entryId、message chunk、terminal state、capabilities 和 approval mapping。
+
+**状态：已完成。** `codex_app_server_client` 现独占 Codex app-server provider、JSON-RPC
+client、协议 mapper/codec、permission adapter、进程恢复、唯一 CLI locator、本地 JSONL/thread
+history、usage 映射和锁定的 `0.144.5` schema contract。barrel 只导出
+`CodexProviderBundleFactory`、`CodexStaticCapabilities` 与 `CodexCliLocator`；factory 保留要求的
+peer/process/logger/clock 注入缝，且未改任何共享 Provider port。协议测试覆盖稳定 entry identity、
+流式 chunk、终态与错误、capability、approval/question、文件证据、malformed/future payload 和
+lifecycle recovery。包级门禁为 168 tests，人工 coverage 100%（3,601 / 3,601）。
+同一轮最终 workspace 门禁中，27/27 roots analyze 通过，format 检查 242 个 Dart 文件且
+0 变更；26/26 个 test roots 共 515 tests，人工 coverage 100%（6,356 / 6,356）；Bloc lint
+对 241 个文件报告 0 issues。
 
 ### 步骤 13 — `claude_code_client`
 
