@@ -542,6 +542,12 @@ boundary; the Claude auth decoder retains only `loggedIn`, `authMethod`, `apiPro
 | `project_session_client` | `ProjectSessionStore`, `SessionSnapshotCodec` | Data models never reference Bloc State; debounced writes are cancellable and flush on close |
 | `usage_statistics_storage_client` | `UsagePartitionStore`, `UsageScanCache`, `UsageIndexCodec` | The cache is **rebuildable derived data**: on corruption, clear and recompute — never fake success |
 
+`settings_client` accepts general schema v3 and appearance schema v1 only. Missing or blank documents
+use injected clean-install defaults; malformed, invalid, and unsupported documents raise typed,
+content-free decode failures, while storage failures propagate. Its production storage adapter uses
+`zeta_storage` atomic replacement. Domain conversion and `SystemFontCatalogApi` consumption belong to
+`settings_repository`, not this Data client.
+
 The three vendor clients supply raw provider usage data; `usage_statistics_storage_client` only handles
 caching and derived indexes ([step 21](./migration_tasks.md)).
 

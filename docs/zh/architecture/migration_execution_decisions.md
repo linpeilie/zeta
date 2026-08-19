@@ -389,3 +389,35 @@ harness；Grok initialize 不 authenticate、不建 session。只报告版本与
 **影响。** Codex 0.144.1 返回 7 models；Claude Code 2.1.227 返回 5 models、1 default；Grok
 1.0.5 返回 protocol v1、6 个 capability key、2 种 auth method。三者均通过，未打印 raw payload
 或身份信息，也没有残留 Codex app-server、Claude stream-json 或 Grok stdio 子进程。
+
+## 2026-08-20 — 步骤 18 的 system font 归属冲突
+
+**问题。** 逐文件 migration manifest 把旧 Flutter `MethodChannel` 实现
+`system_font_catalog_service.dart` 分给 `settings_client`；但更具体的步骤 18 checklist、package API
+contract、topology 与 ownership map 都明确禁止本 Data 包包含 system font concrete implementation，
+并把 font catalog 读取归给后续 `settings_repository`，通过 `desktop_platform_api` 中已经存在的
+`SystemFontCatalogApi` 端口完成。
+
+**决策。** 服从更具体的分层架构契约：不复制旧 service、不修改共享端口，也不为当前不使用的端口
+给 `settings_client` 增加 `desktop_platform_api` 依赖。后续 `settings_repository` 步骤消费现有端口，
+由 composition 注入平台实现。
+
+**影响。** `settings_client` 保持 pure Dart，只负责 general/appearance 文档 IO；不产生重复
+`MethodChannel`，不提前实现平台层，也没有修改共享适配层或 Provider port。
+
+## 2026-08-20 — 步骤 18 的 current-schema 与失败策略不同于旧实现
+
+**问题。** 旧 general codec 接受 schema v1/v2；两个旧 store 还经常把损坏文件或 IO failure 静默
+转成默认值。旧 appearance store 同时包含 SharedPreferences 迁移和 callback/domain model。
+保留这些行为会违反明确的 current-schema-only Data 契约，还会把权限拒绝或原子写失败伪装成持久化成功。
+
+**决策。** 只支持 general schema v3 与 appearance schema v1。持久化值改为 immutable、无 Flutter
+的 `Response` 对象；domain 转换、legacy migration 与 policy 留给后续 Repository。缺失、空或只有
+空白的 clean-install 文档返回注入默认值；malformed JSON、非法字段与不支持版本抛出不含原文的 typed
+decode failure。storage read/permission failure 与 atomic-write failure 通过可注入的
+`SettingsDocumentStorage` 原样传播；生产 adapter 委托 `zeta_storage.AtomicTextFile`。保留合理的异步
+文件 IO，并在本包关闭不适用的 `avoid_slow_async_io` lint。
+
+**影响。** 损坏文件不会被误认为 clean install，写入失败也不会伪装成功。测试覆盖两个 schema、
+缺失/空/损坏输入、IO 权限拒绝、close 行为，以及保留旧文档的真实 atomic replacement failure。
+本包没有 Flutter、SharedPreferences、Repository、Bloc、Cubit 或 system font 具体实现依赖。

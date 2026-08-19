@@ -522,6 +522,11 @@ JSON/TOML 语法，拒绝符号链接，使用 `zeta_storage` 原子替换，并
 | `project_session_client` | `ProjectSessionStore`、`SessionSnapshotCodec` | Data model 不引用 Bloc State；debounced write 可取消，close 时 flush |
 | `usage_statistics_storage_client` | `UsagePartitionStore`、`UsageScanCache`、`UsageIndexCodec` | cache 是**可重建派生数据**，损坏时清空重算，不伪造成功 |
 
+`settings_client` 只接受 general schema v3 与 appearance schema v1。缺失或空文档使用注入的
+clean-install 默认值；malformed、非法或不支持的文档抛出不含原文的 typed decode failure，storage
+failure 原样传播。生产 storage adapter 使用 `zeta_storage` 原子替换。domain 转换与
+`SystemFontCatalogApi` 消费归后续 `settings_repository`，不属于本 Data client。
+
 三个 vendor client 提供 Provider 原始用量数据；`usage_statistics_storage_client` 只做缓存与派生索引
 （[步骤 21](./migration_tasks.md)）。
 

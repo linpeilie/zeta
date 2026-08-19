@@ -451,3 +451,41 @@ children.
 **Impact.** Codex 0.144.1 returns 7 models, Claude Code 2.1.227 returns 5 models with one default, and
 Grok 1.0.5 returns protocol v1 with 6 capability keys and 2 auth methods. All pass, no raw payload or
 identity is printed, and no Codex app-server, Claude stream-json, or Grok stdio child remains.
+
+## 2026-08-20 — Step 18 system-font ownership conflict
+
+**Problem.** The file-by-file migration manifest assigns the legacy Flutter `MethodChannel`-based
+`system_font_catalog_service.dart` to `settings_client`. The more specific Step 18 checklist, package
+API contract, topology, and ownership map all prohibit a concrete system-font implementation in this
+Data package and assign catalog reads to `settings_repository` through the existing
+`SystemFontCatalogApi` in `desktop_platform_api`.
+
+**Decision.** Follow the specific layered-architecture contract. Do not copy the legacy service, do
+not modify the shared port, and do not add an otherwise-unused `desktop_platform_api` dependency to
+`settings_client`. The later `settings_repository` step will consume the existing port and receive a
+platform implementation from composition.
+
+**Impact.** `settings_client` remains pure Dart and owns only general/appearance document IO. There is
+no duplicated `MethodChannel`, no premature platform implementation, and no shared adapter or Provider
+port change.
+
+## 2026-08-20 — Step 18 current-schema and failure policy differs from legacy
+
+**Problem.** The legacy general codec accepted schema versions 1 and 2, and both legacy stores often
+converted corrupt files or IO failures into defaults. The appearance store also included
+SharedPreferences migration and callback/domain models. Preserving that behavior would violate the
+explicit current-schema-only Data contract and make permission or atomic-write failures look like
+successful persistence.
+
+**Decision.** Support general schema v3 and appearance schema v1 only. Represent persisted values as
+immutable Flutter-free `Response` objects; leave domain conversion, legacy migration, and policy to the
+later Repository. Missing, empty, or whitespace-only clean-install documents return an injected
+default. Malformed JSON, invalid fields, and unsupported versions throw content-free typed decode
+failures. Storage read/permission failures and atomic-write failures propagate unchanged through an
+injectable `SettingsDocumentStorage`; the production adapter delegates to `zeta_storage.AtomicTextFile`.
+Keep legitimate asynchronous file IO and disable the inapplicable `avoid_slow_async_io` lint locally.
+
+**Impact.** Corruption cannot be mistaken for a clean install, and failed writes cannot be reported as
+success. Tests cover both schemas, missing/empty/corrupt input, denied IO, close behavior, and a real
+atomic replacement failure that preserves the old document. The package has no Flutter,
+SharedPreferences, Repository, Bloc, Cubit, or concrete system-font dependency.

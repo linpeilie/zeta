@@ -454,9 +454,18 @@ Codex 与 Grok 新增 capability-only 模式，只执行 initialize（Codex 另�
 
 ### 步骤 18 — `settings_client`
 
-- [ ] 迁 general/appearance store 与 codec，只支持当前 schema。
-- [ ] system font concrete implementation 不在本包；使用 `desktop_platform_api`。
-- [ ] 测缺失、空、损坏、权限拒绝、原子写失败。
+- [x] 迁 general/appearance store 与 codec，只支持当前 schema。
+- [x] system font concrete implementation 不在本包；使用 `desktop_platform_api`。
+- [x] 测缺失、空、损坏、权限拒绝、原子写失败。
+
+**完成于 2026-08-20。** `settings_client` 现已提供 pure-Dart general schema v3 与 appearance
+schema v1 codec、immutable 持久化 response、可注入 store，以及由 `AtomicTextFile` 支撑的生产
+storage adapter。缺失/空白 clean-install 文档使用注入默认值；损坏或不支持的文档抛出不含原文的
+typed failure，权限拒绝与 atomic write failure 原样传播。旧 Flutter `MethodChannel` font service 与
+SharedPreferences migration 不进入本包；已有 `SystemFontCatalogApi` 端口保持不变，留给后续
+Repository 步骤。包级 24 tests 全部通过，人工代码 coverage 100%（201 / 201），其中真实替换失败
+测试证明旧文件保持不变。最终 workspace 同轮 27/27 roots analyze/format 通过，26/26 test roots 共
+1,079 tests，人工 coverage 100%（13,141 / 13,141）；Bloc lint 对 357 个文件报告 0 issues。
 
 ### 步骤 19 — `workspace_client`
 

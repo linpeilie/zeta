@@ -475,9 +475,20 @@ coverage (12,941 / 12,941); Bloc lint reports zero issues across 350 files.
 
 ### Step 18 — `settings_client`
 
-- [ ] Migrate the general/appearance store and codec for the current schema only.
-- [ ] Keep concrete system-font implementation out of this package; use `desktop_platform_api`.
-- [ ] Test missing, empty, corrupt, permission-denied, and atomic-write-failure cases.
+- [x] Migrate the general/appearance store and codec for the current schema only.
+- [x] Keep concrete system-font implementation out of this package; use `desktop_platform_api`.
+- [x] Test missing, empty, corrupt, permission-denied, and atomic-write-failure cases.
+
+**Completed 2026-08-20.** `settings_client` now owns pure-Dart general schema v3 and appearance
+schema v1 codecs, immutable persisted response values, injectable stores, and an
+`AtomicTextFile`-backed production storage adapter. Missing/blank clean-install documents use injected
+defaults; corrupt or unsupported documents raise content-free typed failures, and denied reads or
+failed atomic writes propagate. The legacy Flutter `MethodChannel` font service and SharedPreferences
+migration remain outside the package; the existing `SystemFontCatalogApi` port is unchanged for the
+later Repository step. All 24 package tests pass at 100% hand-written coverage (201 / 201), including a
+real failed replacement that preserves the original file. The final workspace iteration passes
+analyze/format in 27/27 roots and 1,079 tests in 26/26 roots at 100% hand-written coverage
+(13,141 / 13,141); Bloc lint reports zero issues across 357 files.
 
 ### Step 19 — `workspace_client`
 
