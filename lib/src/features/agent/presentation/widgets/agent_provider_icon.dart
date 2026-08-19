@@ -107,7 +107,6 @@ class AgentProviderIcon extends StatelessWidget {
 IconData _fallbackIcon(AgentProviderKind? kind) => switch (kind) {
   AgentProviderKind.codexAppServer => Icons.code_rounded,
   AgentProviderKind.acp => Icons.smart_toy_outlined,
-  AgentProviderKind.cursorAcp => Icons.block_rounded,
   AgentProviderKind.claudeCode => Icons.terminal_rounded,
   null => Icons.extension_outlined,
 };

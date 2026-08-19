@@ -42,9 +42,6 @@ class AgentProviderSettingsController extends ChangeNotifier
   final AgentProviderStaticCapabilitiesFor _staticCapabilitiesFor;
 
   AgentProviderSettings _settings = const AgentProviderSettings();
-  CursorRetirementResolution _runtimeSelection = CursorRetirementPolicy.resolve(
-    const AgentProviderSettings(),
-  );
   Future<AgentProviderSettings>? _settingsFuture;
   bool _disposed = false;
 
@@ -54,44 +51,30 @@ class AgentProviderSettingsController extends ChangeNotifier
 
   /// 当前 active provider id。
   @override
-  String get activeProviderId => _runtimeSelection.effectiveProvider.id;
+  String get activeProviderId => _settings.activeProvider.id;
 
   /// 当前 active provider 展示名称。
   @override
-  String get activeProviderName =>
-      _runtimeSelection.effectiveProvider.displayName;
+  String get activeProviderName => _settings.activeProvider.displayName;
 
   /// 当前 active provider 的配置。
   @override
-  AgentProviderConfig get activeProviderConfig =>
-      _runtimeSelection.effectiveProvider;
-
-  /// 当前是否存在可安全进入运行时的 Provider。
-  @override
-  bool get hasRuntimeProvider => _runtimeSelection.hasRuntimeProvider;
-
-  /// 旧 Cursor 选择触发 fallback 时展示给用户的原因。
-  @override
-  String? get unavailableSelectionReason => _runtimeSelection.unavailableReason;
+  AgentProviderConfig get activeProviderConfig => _settings.activeProvider;
 
   /// 已启用的 provider 配置（用于跨 provider thread 列表等）。
   @override
   List<AgentProviderConfig> get enabledProviders {
     return List<AgentProviderConfig>.unmodifiable(
-      CursorRetirementPolicy.enabledRuntimeProviders(_settings.providers),
+      _settings.providers.where((provider) => provider.enabled),
     );
   }
 
   /// 指定 provider 是否允许创建新的可写会话。
   @override
   bool isProviderEnabled(String providerId) {
-    if (CursorRetirementPolicy.isRetiredProviderId(providerId)) {
-      return false;
-    }
     for (final provider in _settings.providers) {
       if (provider.id == providerId) {
-        return provider.enabled &&
-            !CursorRetirementPolicy.isRetiredProvider(provider);
+        return provider.enabled;
       }
     }
     return false;
@@ -112,13 +95,6 @@ class AgentProviderSettingsController extends ChangeNotifier
   @override
   AgentProviderCapabilities capabilitiesForProviderId(String providerId) {
     final config = providerConfigById(providerId);
-    if (CursorRetirementPolicy.unavailableReasonFor(
-          providerId: providerId,
-          config: config,
-        ) !=
-        null) {
-      return AgentProviderCapabilities.unsupported;
-    }
     if (config == null) {
       return AgentProviderCapabilities.unsupported;
     }
@@ -151,7 +127,6 @@ class AgentProviderSettingsController extends ChangeNotifier
       providers: List<AgentProviderConfig>.unmodifiable(providers),
       activeProviderId: _settings.activeProviderId,
     );
-    _applyRuntimeSelection();
 
     final shouldRestartProvider = restartProvider;
     // Repository 会在首个 await 前推进 provider generation；立即发起失效，并让
@@ -181,10 +156,6 @@ class AgentProviderSettingsController extends ChangeNotifier
   @override
   Future<void> setProviderEnabled(String providerId, bool enabled) async {
     await loadSettings();
-    final unavailable = unavailableReasonForProviderId(providerId);
-    if (unavailable != null) {
-      throw UnsupportedError(unavailable);
-    }
     final current = _settings.providers.firstWhere(
       (provider) => provider.id == providerId,
       orElse: () => AgentProviderConfig.defaultCodex,
@@ -197,9 +168,9 @@ class AgentProviderSettingsController extends ChangeNotifier
       restartProvider: !enabled,
     );
     if (!enabled && _settings.activeProviderId == providerId) {
-      final fallbacks = CursorRetirementPolicy.enabledRuntimeProviders(
-        _settings.providers,
-      ).where((provider) => provider.id != providerId);
+      final fallbacks = _settings.providers.where(
+        (provider) => provider.enabled && provider.id != providerId,
+      );
       if (fallbacks.isNotEmpty) {
         await setActiveProvider(fallbacks.first.id);
       }
@@ -210,10 +181,6 @@ class AgentProviderSettingsController extends ChangeNotifier
   @override
   Future<void> setActiveProvider(String providerId) async {
     await loadSettings();
-    final unavailable = unavailableReasonForProviderId(providerId);
-    if (unavailable != null) {
-      throw UnsupportedError(unavailable);
-    }
     if (_settings.activeProviderId == providerId &&
         activeProviderId == providerId) {
       return;
@@ -230,7 +197,6 @@ class AgentProviderSettingsController extends ChangeNotifier
     }
 
     _settings = _settings.copyWith(activeProviderId: providerId);
-    _applyRuntimeSelection();
     await configStore.save(_settings);
     _log.i('Switched active Agent provider to $providerId');
     _notify();
@@ -261,7 +227,6 @@ class AgentProviderSettingsController extends ChangeNotifier
     try {
       await configStore.save(updatedSettings);
       _settings = updatedSettings;
-      _applyRuntimeSelection();
       _log.t('Persisted model selection for provider $providerId');
     } catch (error, stackTrace) {
       _log.w(
@@ -300,7 +265,6 @@ class AgentProviderSettingsController extends ChangeNotifier
       providers: List<AgentProviderConfig>.unmodifiable(updatedProviders),
       activeProviderId: _settings.activeProviderId,
     );
-    _applyRuntimeSelection();
     try {
       await configStore.save(_settings);
       _log.t('Persisted permission option for provider $providerId');
@@ -328,7 +292,6 @@ class AgentProviderSettingsController extends ChangeNotifier
       providers: List<AgentProviderConfig>.unmodifiable(updatedProviders),
       activeProviderId: _settings.activeProviderId,
     );
-    _applyRuntimeSelection();
     try {
       await configStore.save(_settings);
       _log.t('Cleared permission preference for provider $providerId');
@@ -353,11 +316,7 @@ class AgentProviderSettingsController extends ChangeNotifier
 
     final future = configStore.load().then((settings) {
       _settings = settings;
-      _applyRuntimeSelection();
-      _log.t(
-        'Loaded Agent provider selection ${settings.activeProviderId}; '
-        'effective=$activeProviderId',
-      );
+      _log.t('Loaded Agent provider selection $activeProviderId');
       _notify();
       return settings;
     });
@@ -398,19 +357,6 @@ class AgentProviderSettingsController extends ChangeNotifier
         });
       },
     );
-  }
-
-  /// 返回指定旧 Provider 无法进入运行时的原因。
-  @override
-  String? unavailableReasonForProviderId(String providerId) {
-    return CursorRetirementPolicy.unavailableReasonFor(
-      providerId: providerId,
-      config: providerConfigById(providerId),
-    );
-  }
-
-  void _applyRuntimeSelection() {
-    _runtimeSelection = CursorRetirementPolicy.resolve(_settings);
   }
 
   @override

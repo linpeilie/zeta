@@ -79,7 +79,7 @@ Does exactly three things: update on matching entryId, create on new entryId, up
 ## Provider abstraction
 
 **Provider**
-An integration with one agent CLI. Currently active: Codex (default) and Grok. Cursor is retired.
+An integration with one agent CLI. Currently active: Codex (default), Grok, and Claude Code. Cursor has been fully removed.
 
 **AgentProviderBundle**
 The strict neutral entry point to a provider's capabilities, created directly by `AgentProviderBundleFactory.createBundle`. Required ports: `runtime` and `conversation`. Everything else (`threadCatalog`, `threadSubscription`, `threadNaming`, `threadArchival`, `threadDeletion`, `threadCompaction`, `threadBranching`, `turnSteering`, `permissionResponses`, `questions`, `deniedActionOverride`, `modelCatalog`, `localThreadList`, `sessionConfiguration`, `planApproval`, `conversationModes`, `skills`, `permissionPolicy`, `usageQuota`) is optional. Unsupported ports must be `null`. The old `AgentProvider` facade has been deleted.

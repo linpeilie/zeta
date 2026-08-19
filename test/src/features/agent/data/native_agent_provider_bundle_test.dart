@@ -46,19 +46,6 @@ void main() {
   });
 
   group('create*Bundle', () {
-    test('factory createBundle fails closed for Cursor', () {
-      expect(
-        () => factory.createBundle(AgentProviderConfig.defaultCursor),
-        throwsA(isA<UnsupportedError>()),
-      );
-      expect(
-        () => factory.createBundle(
-          AgentProviderConfig.defaultCursor.copyWith(id: 'legacy-cursor-alias'),
-        ),
-        throwsUnsupportedError,
-      );
-    });
-
     test('createCodexBundle returns a distinct runtime owner each time', () {
       final first = createCodexBundle(AgentProviderConfig.defaultCodex);
       final second = createCodexBundle(AgentProviderConfig.defaultCodex);

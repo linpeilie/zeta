@@ -199,34 +199,6 @@ void main() {
       },
     );
 
-    test('never chooses Cursor through the fallback list index', () async {
-      // Arrange
-      final factory = _RuntimePathSpyFactory();
-      final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
-      addTearDown(registry.close);
-      final controller = AgentProviderSettingsController(
-        runtimeRegistry: registry,
-        configStore: MemoryAgentProviderConfigStore(
-          AgentProviderSettings(
-            providers: <AgentProviderConfig>[
-              AgentProviderConfig.defaultCodex,
-              AgentProviderConfig.defaultCursor.copyWith(enabled: true),
-              AgentProviderConfig.defaultGrok,
-            ],
-          ),
-        ),
-      );
-      addTearDown(controller.dispose);
-
-      // Act
-      await controller.setProviderEnabled(defaultAgentProviderId, false);
-
-      // Assert
-      expect(controller.activeProviderId, grokAgentProviderId);
-      expect(factory.createdProviderIds, isEmpty);
-      expect(factory.cursorProviderCreations, 0);
-    });
-
     test('loading settings never creates a provider runtime', () async {
       // Arrange
       final mismatchedProvider = _TrackingFakeAgentProvider(
@@ -251,96 +223,6 @@ void main() {
       expect(registry.debugProviderCount, 0);
       expect(mismatchedProvider.disposeCount, 0);
     });
-
-    test(
-      'falls back from legacy Cursor without saving or reaching Cursor paths',
-      () async {
-        // Arrange
-        final store = _RecordingConfigStore(
-          AgentProviderSettings(
-            providers: <AgentProviderConfig>[
-              AgentProviderConfig.defaultCodex,
-              AgentProviderConfig.defaultGrok,
-              AgentProviderConfig.defaultCursor.copyWith(
-                enabled: true,
-                extra: const <String, Object?>{'legacyMarker': 'keep-me'},
-              ),
-            ],
-            activeProviderId: cursorAgentProviderId,
-          ),
-        );
-        final factory = _RuntimePathSpyFactory();
-        final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
-        addTearDown(registry.close);
-        final controller = AgentProviderSettingsController(
-          runtimeRegistry: registry,
-          configStore: store,
-        );
-        addTearDown(controller.dispose);
-        final before = store.settings.toJson();
-
-        // Act
-        await controller.loadSettings();
-
-        // Assert
-        expect(controller.settings.activeProviderId, cursorAgentProviderId);
-        expect(controller.activeProviderId, defaultAgentProviderId);
-        expect(controller.unavailableSelectionReason, contains('已临时回退'));
-        expect(
-          controller.enabledProviders.map((provider) => provider.id),
-          isNot(contains(cursorAgentProviderId)),
-        );
-        expect(store.saveCount, 0);
-        expect(store.settings.toJson(), before);
-        expect(factory.createdProviderIds, isEmpty);
-        expect(factory.cursorProviderCreations, 0);
-        expect(factory.cursorCliLocatorCalls, 0);
-        expect(factory.cursorProcessStarts, 0);
-        expect(factory.cursorSessionIndexWrites, 0);
-        await expectLater(
-          controller.setActiveProvider(cursorAgentProviderId),
-          throwsUnsupportedError,
-        );
-      },
-    );
-
-    test(
-      'keeps a stable unavailable state when Cursor has no fallback',
-      () async {
-        // Arrange
-        final store = _RecordingConfigStore(
-          AgentProviderSettings(
-            providers: <AgentProviderConfig>[
-              AgentProviderConfig.defaultCodex.copyWith(enabled: false),
-              AgentProviderConfig.defaultGrok.copyWith(enabled: false),
-              AgentProviderConfig.defaultCursor.copyWith(enabled: true),
-            ],
-            activeProviderId: cursorAgentProviderId,
-          ),
-        );
-        final factory = _RuntimePathSpyFactory();
-        final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
-        addTearDown(registry.close);
-        final controller = AgentProviderSettingsController(
-          runtimeRegistry: registry,
-          configStore: store,
-        );
-        addTearDown(controller.dispose);
-
-        // Act
-        await controller.loadSettings();
-
-        // Assert
-        expect(controller.hasRuntimeProvider, isFalse);
-        expect(controller.enabledProviders, isEmpty);
-        expect(controller.unavailableSelectionReason, contains('没有已启用'));
-        expect(factory.createdProviderIds, isEmpty);
-        expect(factory.cursorCliLocatorCalls, 0);
-        expect(factory.cursorProcessStarts, 0);
-        expect(factory.cursorSessionIndexWrites, 0);
-        expect(store.saveCount, 0);
-      },
-    );
   });
 
   // 模型目录是会话建立前的信息，只允许走全局实例。
@@ -396,27 +278,6 @@ class _RecordingConfigStore implements AgentProviderConfigStore {
   Future<void> save(AgentProviderSettings settings) async {
     saveCount += 1;
     this.settings = settings;
-  }
-}
-
-class _RuntimePathSpyFactory with LegacyBundleFactoryMixin {
-  final List<String> createdProviderIds = <String>[];
-  int cursorProviderCreations = 0;
-  int cursorCliLocatorCalls = 0;
-  int cursorProcessStarts = 0;
-  int cursorSessionIndexWrites = 0;
-
-  @override
-  Object create(AgentProviderConfig config) {
-    createdProviderIds.add(config.id);
-    if (CursorRetirementPolicy.isRetiredProvider(config)) {
-      cursorProviderCreations += 1;
-      cursorCliLocatorCalls += 1;
-      cursorProcessStarts += 1;
-      cursorSessionIndexWrites += 1;
-      throw StateError('Cursor runtime path must remain unreachable');
-    }
-    return _TrackingFakeAgentProvider(config);
   }
 }
 

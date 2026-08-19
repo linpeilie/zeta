@@ -814,7 +814,6 @@ void main() {
               },
             ),
             AgentProviderConfig.defaultGrok,
-            AgentProviderConfig.defaultCursor,
           ],
         ),
       );
@@ -910,7 +909,6 @@ void main() {
               selectedReasoningEffort: 'medium',
             ),
             AgentProviderConfig.defaultGrok,
-            AgentProviderConfig.defaultCursor,
           ],
         ),
       );

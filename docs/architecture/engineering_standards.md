@@ -250,7 +250,7 @@ main -> app -> presentation/application -> domain
   segment/phase、去重和终态策略必须留在对应 Provider adapter/reducer，不得放回共享层。
 - 厂商阻塞请求必须覆盖成功、拒绝/跳过、取消、超时和 provider 清理路径；每条路径都要
   回包、释放 timer 并移除 presentation pending state，未知 request 明确返回 `-32601`。
-- 通用 CLI 名称（例如 Cursor 的 `agent`）不得只按 basename 判定产品身份；定位器必须
+- 通用 CLI 名称（例如 `agent`）不得只按 basename 判定产品身份；定位器必须
   组合无副作用版本/帮助探测，并在 ACP initialize 的 `agentInfo` 上二次校验。
 - workspace-scoped provider 的子进程 cwd 与 session cwd 必须一致；workspace 变化时关闭
   旧 peer、清理待响应请求并重新握手，禁止跨项目复用进程。
@@ -360,9 +360,8 @@ phase；被正文、tool、plan 或交互打断后的 reasoning 必须使用新 
   但不得从 patch header 反推路径、动作、owner 或 identity。
 - `replayable` 证据必须由 live/history/replay 的独立 tracker/reducer 重建并做 canonical 回归；
   `liveOnly` 只能明确展示为当前实时降级，不得冒充历史可恢复事实。
-- Cursor 已退役，不参与 catalog、UI、Provider 组合、live/replay/load、ACP 扩展或进程启动。
-  仅允许保留旧配置 decode/fallback、明确 unavailable、退役证据和用户数据未改写回归；
-  `~/.cursor`、项目 `.cursor` 与 `cursor_sessions.json` 不得读取、迁移、改写或删除。
+- Cursor 已彻底清退，不参与当前 schema、catalog、UI、Provider 组合、live/replay/load、
+  ACP 扩展、进程启动、测试或 fixture；不得为未发布数据保留 decode/fallback 兼容值。
 
 ### 4.2 共享适配层纯度门禁
 
@@ -417,8 +416,8 @@ Provider 契约测试。若 PR 因 Provider 差异修改 CoalescingPolicy/Buffer
 
 - Zeta 自有配置、状态、派生索引、日志和预留缓存统一位于 `~/.zeta`：
   `config/providers.json`、`config/appearance.json`、`config/general.json`、
-  `state/ide_session.json`、`state/cursor_sessions.json`、
-  `state/usage_statistics_index.json`、`state/migration_marker.json`、
+  `state/ide_session.json`、`state/usage_statistics_index.json`、
+  `state/migration_marker.json`、
   `logs/zeta-YYYY-MM-DD.log` 与 `cache/agent_models_v1.json`。
 - `config/general.json` 当前为 v3，用 `appLanguage` 持久化 `en` / `zh-Hans`。
   v1/v2 宽容升级时补简体中文并保留快捷键/通知字段；未知语言回退英语；损坏或
@@ -460,8 +459,7 @@ Provider 契约测试。若 PR 因 Provider 差异修改 CoalescingPolicy/Buffer
 - Provider 自有 data adapter 可以读取对应 CLI 的配置、会话、日志和账号 metadata；
   application/presentation 不得自行遍历 Provider 私有目录，也不得接收原始文件路径或
   payload。读取权限不自动授权迁移、复制、改写或删除；这些写操作必须有独立产品契约、
-  用户动作和失败恢复设计。退役遗留的 `cursor_sessions.json` 不再被运行时读取或写入，
-  只作为受保护用户数据保留。
+  用户动作和失败恢复设计。
 
 ## 6. UI 与交互
 

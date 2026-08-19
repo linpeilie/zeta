@@ -809,21 +809,6 @@ final class AppAgentUiTextCatalog implements AgentUiTextCatalog {
       _l10n.agentClaudeCodeSubscriptionQuota;
 
   @override
-  String get cursorRetired => _l10n.agentCursorRetired;
-
-  @override
-  String cursorNoEnabledProvider(String message) =>
-      _l10n.agentCursorNoEnabledProvider(message);
-
-  @override
-  String cursorFallbackTo(String message, String name) =>
-      _l10n.agentCursorFallbackTo(message, name);
-
-  @override
-  String cursorConfigPreserved(String message) =>
-      _l10n.agentCursorConfigPreserved(message);
-
-  @override
   String get couldNotLoadThreads => _l10n.agentCouldNotLoadThreads;
 
   @override

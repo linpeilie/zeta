@@ -89,7 +89,6 @@ abstract final class AgentProviderStaticCapabilities {
     return switch (kind) {
       AgentProviderKind.codexAppServer => codexAppServer,
       AgentProviderKind.acp => grokAcp,
-      AgentProviderKind.cursorAcp => AgentProviderCapabilities.unsupported,
       AgentProviderKind.claudeCode => claudeCode,
     };
   }

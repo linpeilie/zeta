@@ -5,7 +5,6 @@
 export 'package:zeta/src/features/agent/domain/agent_conversation_mode_models.dart';
 export 'package:zeta/src/features/agent/domain/agent_attention_models.dart';
 export 'package:zeta/src/features/agent/domain/agent_event_models.dart';
-export 'package:zeta/src/features/agent/domain/cursor_retirement_policy.dart';
 export 'package:zeta/src/features/agent/domain/agent_message_models.dart';
 export 'package:zeta/src/features/agent/domain/agent_model_catalog_models.dart';
 export 'package:zeta/src/features/agent/domain/agent_model_selection_models.dart';

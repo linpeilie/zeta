@@ -371,10 +371,6 @@ class AgentConversationViewModel {
 
   AgentProviderStatus get status => _status;
 
-  /// 旧 Cursor 选择被安全回退时需要持续展示的不可用原因。
-  String? get unavailableProviderReason =>
-      providerController.unavailableSelectionReason;
-
   /// 当前选中线程的运行时状态（来自 `thread/status/changed`）。
   AgentThreadRuntimeStatus? get threadRuntimeStatus => _threadRuntimeStatus;
 
@@ -852,12 +848,6 @@ class AgentConversationViewModel {
     if (providerId == activeProviderId) {
       return;
     }
-    final unavailable = providerController.unavailableReasonForProviderId(
-      providerId,
-    );
-    if (unavailable != null) {
-      throw UnsupportedError(unavailable);
-    }
     if (!providerController.isProviderEnabled(providerId)) {
       throw StateError('Provider $providerId is not enabled');
     }
@@ -1194,18 +1184,10 @@ class AgentConversationViewModel {
   Future<void> _loadSettings() async {
     try {
       await providerController.loadSettings();
-      final unavailableReason = providerController.unavailableSelectionReason;
-      if (unavailableReason != null) {
-        _markUnavailable(
-          'Cursor Agent unavailable',
-          details: unavailableReason,
-        );
-      } else {
-        _status = AgentProviderStatus(
-          state: AgentProviderConnectionState.idle,
-          message: _textCatalog.providerReady(activeProviderName),
-        );
-      }
+      _status = AgentProviderStatus(
+        state: AgentProviderConnectionState.idle,
+        message: _textCatalog.providerReady(activeProviderName),
+      );
       _log.t('Loaded Agent provider settings: $activeProviderId');
     } catch (error) {
       _log.w('Could not load Agent provider settings (${error.runtimeType})');
@@ -1226,17 +1208,6 @@ class AgentConversationViewModel {
   /// 使输入框下方的模型/思考/速率控件在用户发送消息前就可用。
   Future<void> loadModels({bool forceRefresh = false}) async {
     await loadSettings();
-    if (!providerController.hasRuntimeProvider) {
-      _modelsRefreshing = false;
-      _modelRefreshError = null;
-      _publishUiChanges(
-        AgentUiUpdateRequest(
-          regions: const <AgentUiRegion>{AgentUiRegion.composer},
-          urgency: AgentUiUpdateUrgency.immediate,
-        ),
-      );
-      return;
-    }
     final config = _boundProviderConfig;
     // 一个 ViewModel 永久绑定同一个 Provider/thread。Provider 默认值只用于首次
     // 初始化；历史或用户选择生效后，后续目录刷新必须保留该 thread 的当前配置。
@@ -2138,19 +2109,12 @@ class AgentConversationViewModel {
     _invalidateProviderEventListener();
     if (thread.providerId != conversationBinding.providerId) {
       _threadOpenPhase = AgentThreadOpenPhase.openFailed;
-      final unavailable = providerController.unavailableReasonForProviderId(
-        thread.providerId,
+      _markError(
+        'Could not open thread',
+        details:
+            'Conversation is bound to ${conversationBinding.providerId}; '
+            '${thread.providerId} requires a separate workspace entry.',
       );
-      if (unavailable != null) {
-        _markUnavailable('Cursor Agent unavailable', details: unavailable);
-      } else {
-        _markError(
-          'Could not open thread',
-          details:
-              'Conversation is bound to ${conversationBinding.providerId}; '
-              '${thread.providerId} requires a separate workspace entry.',
-        );
-      }
       return;
     }
     final boundThreadId = conversationBinding.threadId;
@@ -2165,14 +2129,6 @@ class AgentConversationViewModel {
     // 否则会先看到内置 Codex、随后却从磁盘加载出 Grok，并用错误后端读取历史。
     await loadSettings();
     if (!_isCurrentSwitch(switchToken)) {
-      return;
-    }
-    final unavailable = providerController.unavailableReasonForProviderId(
-      thread.providerId,
-    );
-    if (unavailable != null) {
-      _threadOpenPhase = AgentThreadOpenPhase.openFailed;
-      _markUnavailable('Cursor Agent unavailable', details: unavailable);
       return;
     }
     // 离开旧会话时先记下 id，切走后取消服务端订阅，减少无关通知。
@@ -3903,7 +3859,6 @@ class AgentConversationViewModel {
       threadOpenPhase: _threadOpenPhase,
       contextUsage: currentThreadLastTokenUsage,
       isReadOnly: isReadOnly,
-      unavailableProviderReason: unavailableProviderReason,
       canAttachImages: canAttachImages,
       canMentionResources: canMentionResources,
       canUseSkills: canUseSkills,

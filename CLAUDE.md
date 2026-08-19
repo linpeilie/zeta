@@ -4,7 +4,7 @@
 
 ## 项目一句话
 
-Zeta 是 Flutter Desktop 的本地 Agent IDE 壳层（macOS / Windows / Linux）：在持久三栏工作台（Projects / Agent / Files）中连接本地项目目录与 Agent thread，并保留可审计的工具时间线。默认 Provider 为 Codex CLI app-server，另支持 Grok ACP；Cursor 已退役，所有边界 fail-closed。
+Zeta 是 Flutter Desktop 的本地 Agent IDE 壳层（macOS / Windows / Linux）：在持久三栏工作台（Projects / Agent / Files）中连接本地项目目录与 Agent thread，并保留可审计的工具时间线。默认 Provider 为 Codex CLI app-server，另支持 Grok ACP 与 Claude Code stream-json；Cursor 已彻底清退。
 
 ## 动手前先读
 

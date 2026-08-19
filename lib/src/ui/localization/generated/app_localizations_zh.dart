@@ -3149,9 +3149,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get agentProviderOperationFailed => 'Agent provider operation failed';
 
   @override
-  String get agentCursorUnavailable => 'Cursor Agent unavailable';
-
-  @override
   String agentEvidenceReplaceSemantics(String before, String after) {
     return '替换片段，替换前 $before 行，替换后 $after 行';
   }
@@ -3352,24 +3349,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get agentClaudeCodeSubscriptionQuota => 'Claude Code 订阅额度';
-
-  @override
-  String get agentCursorRetired => 'Cursor Agent 已退役，当前版本不再支持启动或恢复 Cursor 会话。';
-
-  @override
-  String agentCursorNoEnabledProvider(String message) {
-    return '$message 当前没有已启用的可用 Provider；旧 Cursor 配置保持原样。';
-  }
-
-  @override
-  String agentCursorFallbackTo(String message, String name) {
-    return '$message 已临时回退到 $name；旧 Cursor 配置保持原样。';
-  }
-
-  @override
-  String agentCursorConfigPreserved(String message) {
-    return '$message 旧 Cursor 配置和会话数据保持原样。';
-  }
 
   @override
   String get agentCouldNotLoadThreads => 'Could not load threads';

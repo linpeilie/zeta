@@ -82,57 +82,6 @@ void main() {
     );
   });
 
-  testWidgets('shows unavailable reason for a retired Cursor selection', (
-    tester,
-  ) async {
-    // Arrange
-    final session = activeProjectSessionStore(tempDirectories);
-    final provider = FakeAgentProvider(
-      includeConversationTestThread: true,
-      conversationThreadProviderId: cursorAgentProviderId,
-    );
-    final configStore = MemoryAgentProviderConfigStore(
-      AgentProviderSettings(
-        providers: <AgentProviderConfig>[
-          AgentProviderConfig.defaultCodex,
-          AgentProviderConfig.defaultGrok,
-          AgentProviderConfig.defaultCursor.copyWith(enabled: true),
-        ],
-        activeProviderId: cursorAgentProviderId,
-      ),
-    );
-
-    // Act
-    await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: configStore,
-      ),
-    );
-    await openConversationTestThread(tester);
-    await pumpAgentConversationUi(tester);
-
-    // Assert
-    final notice = find.byKey(
-      const ValueKey('agent-provider-unavailable-notice'),
-    );
-    expect(notice, findsOneWidget);
-    expect(
-      find.descendant(
-        of: notice,
-        matching: find.text('Cursor Agent unavailable'),
-      ),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(of: notice, matching: find.textContaining('已临时回退')),
-      findsOneWidget,
-    );
-  });
-
   testWidgets('does not resume an existing thread until the first send', (
     tester,
   ) async {

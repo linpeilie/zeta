@@ -42,23 +42,6 @@ void main() {
       expect(capabilities.supportsPlanApproval, isTrue);
     });
 
-    test('treats the retired Cursor kind as unsupported', () {
-      final capabilities = AgentProviderStaticCapabilities.forKind(
-        AgentProviderKind.cursorAcp,
-      );
-
-      expect(capabilities.canCreateSession, isFalse);
-      expect(capabilities.canPrompt, isFalse);
-      expect(capabilities.canCancelTurn, isFalse);
-      expect(capabilities.canListThreads, isFalse);
-      expect(capabilities.canRemoveThreadFromList, isFalse);
-      expect(capabilities.canDeleteThread, isFalse);
-      expect(capabilities.canResumeSession, isFalse);
-      expect(capabilities.supportsLocalImageInput, isFalse);
-      expect(capabilities.supportsResourceInput, isFalse);
-      expect(capabilities.bootstrapPolicy.allowsEagerModelPreload, isTrue);
-    });
-
     test('exposes model, reasoning, and compact support for Claude Code', () {
       final capabilities = AgentProviderStaticCapabilities.forKind(
         AgentProviderKind.claudeCode,

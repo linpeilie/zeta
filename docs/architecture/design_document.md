@@ -521,10 +521,9 @@ identity/reducer；隐藏记录只写 Zeta 自有版本化列表，不改 Claude
 实际 wire 与升级门禁见
 [Claude Code stream-json 协议基线](../protocols/claude_code_stream_json_protocol.md)。
 
-Cursor 不再参与运行时组合。旧 `cursor` id 与 `cursorAcp` kind 只用于配置 decode、
-unavailable 展示和安全 fallback；`DefaultAgentProviderFactory` 对二者 fail-closed。
-catalog、设置、Agent 管理、deep link、workspace 恢复和历史入口都不能创建 Cursor
-provider 或启动进程。退役不会迁移或改写任何 Cursor 用户数据。
+Cursor 已从当前 schema、Provider 枚举、配置 codec、catalog、设置、Agent 管理、
+deep link、workspace 恢复、历史入口、运行时组合、测试与 fixture 中清退。
+任何重新支持都必须另立方案，不复用历史 synthetic fixture 或退役实现。
 
 ### 管理适配
 
@@ -553,7 +552,7 @@ result。认证证据与 initialize 可用性独立，CLI 仍可能维护自身�
 - `AgentConversationViewModel` 的会话、历史、steer、权限响应、独立用户提问响应、
   Guardian 放行、模型目录与计划审批路由。
 - `ProjectThreadsController` 的列表、重命名、归档、删除与分叉。
-- Codex / Grok / Claude Code 的 bundle 端口一致性契约测试，以及 Cursor 退役不可达性测试。
+- Codex / Grok / Claude Code 的 bundle 端口一致性契约测试。
 - Codex Default / Plan 运行时目录、逐 turn mode 快照、settings/history 回写与
   Composer 紧凑选择器；不支持 mode 的 Provider 保持原布局和普通发送路径。
 
@@ -668,7 +667,7 @@ data 精确编码”的单向流：
   `thread/settings/updated` JSON；显式 mode 与顶层 model / effort 互斥。
 - 本地 thread 快照是重启恢复的真源之一，服务端 settings 是确认态。`thread/read` 缺少
   mode 时不覆盖本地值；收到有效 settings 后收敛。未知 mode 可只读展示但不可主动选择。
-- experimental 探测失败只关闭 mode 入口；普通 Default 会话不依赖该端口，Grok/Cursor
+- experimental 探测失败只关闭 mode 入口；普通 Default 会话不依赖该端口，Grok/Claude Code
   不通过 Prompt 或全局 Provider 状态伪造 Plan。
 - “Plan 已生成，是否执行”是 Zeta application 层工作流，不是 App Server approval。
   只有成功终态、已确认 Plan 模式且存在非空 Plan 内容时才创建请求；失败、中断、空计划、
@@ -745,11 +744,10 @@ provider 原始 payload、环境变量值或凭证；文件变更的替换片段
 不再把这些状态写回 SharedPreferences。若迁移中途失败，本次运行改用内存 store，避免
 空启动状态抢先创建目标文件；marker 保持未完成并在下次启动重试。
 
-`~/.codex`、`~/.grok`、`~/.cursor`、项目 `.cursor/*` 和用户项目源码不属于 Zeta 自有
+`~/.codex`、`~/.grok`、`~/.claude` 和用户项目源码不属于 Zeta 自有
 存储。Provider 自有 data adapter 可按明确功能读取 Agent CLI 配置、session、日志和账号
 metadata；读取权限不自动授权迁移、复制、改写或删除，原始内容也不得进入 Zeta
-持久化。Agent CLI 配置及 session/rollout 正文保持原位；退役遗留的
-`state/cursor_sessions.json` 不再被运行时读取或写入，只作为受保护用户数据保留。
+持久化。Agent CLI 配置及 session/rollout 正文保持原位。
 
 ### IDE 会话快照
 
@@ -809,8 +807,6 @@ IDE 会话状态目前版本为 2，持久化内容包括：
   providerId/kind/type 分支，也不从 raw/source/eventId 推断 identity 或 narrative boundary。
 - Provider-local 序列契约：每个 Provider 在进入共享层前完成 source→entry、segment/phase、
   tool upsert、终态竞态和迟到事件决策；共享层 fixture 保持 Provider 无关。
-- Cursor 旧配置 fallback、运行时不可达、process spy 与用户数据未改写回归；历史证据
-  见 `docs/cursor_acp_release_validation.md`。
 - AgentConversationViewModel 状态机。
 - Agent 管理的版本比较、配置校验/冲突/备份、日志脱敏和禁用只读联动。
 - ProjectThreadsController 和 ProjectThreadsViewModel 的分页、缓存、选择和错误状态分工。

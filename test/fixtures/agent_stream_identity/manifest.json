@@ -20,16 +20,6 @@
       "provenance": "Sanitized synthesis from the existing 0.2.101 redacted capture shape and current mapper/provider/history tests."
     },
     {
-      "provider": "cursor",
-      "protocol": "ACP protocolVersion 1 plus Cursor extensions",
-      "fixtureVersion": "unknown; no real capture is available",
-      "localCliVersionChecked": "2026.07.09-a3815c0",
-      "versionEvidence": "Local cursor-agent --version output only; it does not establish payload semantics.",
-      "provenance": "Historical synthetic baseline copied from pre-retirement fake provider and replay collector test shapes.",
-      "status": "retired_historical_evidence_not_current_support",
-      "realFixtureAvailable": false
-    },
-    {
       "provider": "codex",
       "protocol": "Codex app-server stable API",
       "fixtureVersion": "0.144.1",
@@ -54,18 +44,6 @@
       "path": "grok_history.json",
       "provider": "grok",
       "scenario": "live/history canonical regression covering text-tool-text, thought-tool-thought, and repeated tool updates"
-    },
-    {
-      "path": "cursor_live_synthetic.json",
-      "provider": "cursor",
-      "status": "retired_historical_evidence_not_current_support",
-      "scenario": "synthetic live message chunks and tool update; event id evidence absent"
-    },
-    {
-      "path": "cursor_session_load_replay_synthetic.json",
-      "provider": "cursor",
-      "status": "retired_historical_evidence_not_current_support",
-      "scenario": "synthetic session/load notifications emitted before response; event id evidence absent"
     },
     {
       "path": "codex_agent_message_lifecycle.json",

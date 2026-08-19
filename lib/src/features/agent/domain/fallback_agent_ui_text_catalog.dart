@@ -373,21 +373,6 @@ class FallbackAgentUiTextCatalog implements AgentUiTextCatalog {
   String get claudeCodeSubscriptionQuota => 'Claude Code 订阅额度';
 
   @override
-  String get cursorRetired => 'Cursor Agent 已退役，当前版本不再支持启动或恢复 Cursor 会话。';
-
-  @override
-  String cursorNoEnabledProvider(String message) =>
-      '$message 当前没有已启用的可用 Provider；旧 Cursor 配置保持原样。';
-
-  @override
-  String cursorFallbackTo(String message, String name) =>
-      '$message 已临时回退到 $name；旧 Cursor 配置保持原样。';
-
-  @override
-  String cursorConfigPreserved(String message) =>
-      '$message 旧 Cursor 配置和会话数据保持原样。';
-
-  @override
   String get couldNotLoadThreads => 'Could not load threads';
 
   @override

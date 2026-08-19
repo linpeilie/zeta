@@ -112,12 +112,6 @@ Upgrade Grok CLI to **0.2.119 or newer**. That's Zeta's multi-session compatibil
 
 That thread is read-only. This usually happens after disabling Codex in settings: existing threads remain readable, but no new writable session can be created. Re-enable it to restore the composer.
 
-### An old Cursor config shows as unavailable
-
-Expected. Cursor is retired. Zeta falls back in memory to any enabled, non-retired provider
-(Codex, Grok, or Claude Code). It does **not** overwrite your old config and does not read or
-modify any Cursor session data.
-
 ---
 
 ## Conversation and timeline
@@ -259,15 +253,14 @@ Everything lives under `~/.zeta/` (`%USERPROFILE%\.zeta\` on Windows) as plain J
 │   ├── ide_session.json               Open projects, selected file, expansion, thread cache
 │   ├── usage_statistics_index.json    Derived usage index
 │   ├── session/<providerId>/          Turn context for Zeta-started turns (model, effort, timestamps)
-│   ├── migration_marker.json          One-time migration marker
-│   └── cursor_sessions.json           Retired leftover; never read or written at runtime
+│   └── migration_marker.json          One-time migration marker
 ├── logs/
 │   └── zeta-YYYY-MM-DD.log            Daily-rotated application log
 └── cache/
     └── agent_models_v1.json           Model catalog cache, safe to delete
 ```
 
-**Zeta reads private data owned by active agent CLIs when a feature requires it.** The corresponding Provider data adapter may read configuration, session history, logs, and account metadata for connection setup, history recovery, diagnostics, and usage statistics. Raw bodies, credentials, and private paths are not copied into Zeta's derived indexes. Read access does not imply automatic migration, rewriting, or deletion; configuration is written only when you explicitly use the configuration editor. Cursor is retired, so its session data remains outside runtime reads and writes.
+**Zeta reads private data owned by active agent CLIs when a feature requires it.** The corresponding Provider data adapter may read configuration, session history, logs, and account metadata for connection setup, history recovery, diagnostics, and usage statistics. Raw bodies, credentials, and private paths are not copied into Zeta's derived indexes. Read access does not imply automatic migration, rewriting, or deletion; configuration is written only when you explicitly use the configuration editor.
 
 Claude model probes and connection tests use `--no-session-persistence`, and Zeta does not store OAuth
 tokens. The Claude CLI may nevertheless maintain its own authentication, bootstrap, or cache files;

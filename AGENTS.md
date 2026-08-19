@@ -302,7 +302,7 @@ flutter test test/src/features/agent/presentation/agent_conversation_widget_test
 ## 5. 事实清单（容易记错的）
 
 - **活跃 Provider 是 Codex、Grok 和 Claude Code。** Claude Code 的当前协议事实以 `docs/protocols/claude_code_stream_json_protocol.md` 为准；`claude_code_provider_adapter.md` 只是历史提案。模型与套餐名称来自无 Prompt CLI initialize；`claudeCode.accountDataEnrichment` 只控制 Provider-local 的可选额度详情，不控制模型目录。
-- **Cursor 已退役。** 只允许保留旧配置 decode/fallback、明确 unavailable 和用户数据未改写回归；`CursorRetirementPolicy` 在 catalog、选择、恢复和 factory 边界 fail-closed。不参与 catalog、UI、运行时组合、live/replay/load、ACP 扩展或进程启动。相关代码不接受回流。
+- **Cursor 已彻底清退。** 当前 schema、Provider 枚举、catalog、UI、运行时组合、测试和 fixture 均不含 Cursor 兼容值；不为未发布数据保留 decode/fallback。任何重新支持都必须另立方案并重新取得真实协议证据，相关代码不得直接回流。
 - **Grok CLI 基线是 `0.2.119`**（grok-build）。更早版本不支持多会话，同时打开多个 Grok 会话时无法正确隔离会话状态和回合终态。
 - `desktop_notifications` 和 `ide_session` 两个 feature 只有 `domain/application/data`，没有 `presentation/`——这是有意的。
 - **界面语言只有英语与简体中文。** 首次启动只看系统首选语言第一项（显式繁体与其他语言回退英语）；已有安装保持中文。设置里切换后下次启动才生效，当前进程不跟随系统 locale。

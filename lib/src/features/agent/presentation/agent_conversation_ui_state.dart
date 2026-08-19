@@ -104,7 +104,6 @@ final class AgentComposerState {
     required this.threadOpenPhase,
     required this.contextUsage,
     required this.isReadOnly,
-    required this.unavailableProviderReason,
     required this.canAttachImages,
     required this.canMentionResources,
     required this.canUseSkills,
@@ -141,7 +140,6 @@ final class AgentComposerState {
   final AgentThreadOpenPhase threadOpenPhase;
   final AgentTokenUsage? contextUsage;
   final bool isReadOnly;
-  final String? unavailableProviderReason;
   final bool canAttachImages;
   final bool canMentionResources;
   final bool canUseSkills;
@@ -178,7 +176,6 @@ final class AgentComposerState {
             other.threadOpenPhase == threadOpenPhase &&
             _tokenUsageEquals(other.contextUsage, contextUsage) &&
             other.isReadOnly == isReadOnly &&
-            other.unavailableProviderReason == unavailableProviderReason &&
             other.canAttachImages == canAttachImages &&
             other.canMentionResources == canMentionResources &&
             other.canUseSkills == canUseSkills &&
@@ -213,7 +210,6 @@ final class AgentComposerState {
     threadOpenPhase,
     _tokenUsageHash(contextUsage),
     isReadOnly,
-    unavailableProviderReason,
     canAttachImages,
     canMentionResources,
     canUseSkills,

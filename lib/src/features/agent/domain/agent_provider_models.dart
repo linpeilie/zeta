@@ -6,7 +6,7 @@ const Object agentProviderConfigUnset = Object();
 /// Agent 后端的类型。
 ///
 /// UI 和会话状态只关心这个中立枚举，不直接绑定某个 CLI 的协议细节。
-enum AgentProviderKind { codexAppServer, acp, cursorAcp, claudeCode }
+enum AgentProviderKind { codexAppServer, acp, claudeCode }
 
 /// Provider 与当前回合的连接状态。
 ///
@@ -25,9 +25,6 @@ const String defaultAgentProviderId = 'codex';
 
 /// 内置 Grok ACP provider 的稳定配置 id。
 const String grokAgentProviderId = 'grok';
-
-/// 内置 Cursor ACP provider 的稳定配置 id。
-const String cursorAgentProviderId = 'cursor';
 
 /// 内置 Claude Code provider 的稳定配置 id。
 const String defaultClaudeCodeProviderId = 'claude_code';
@@ -143,18 +140,6 @@ class AgentProviderConfig {
       _ => displayName,
     };
   }
-
-  /// 旧 Cursor CLI ACP stdio 配置，仅供旧配置解码与退役回归测试。
-  ///
-  /// 该配置不加入产品目录，[DefaultAgentProviderFactory] 会拒绝创建其运行时。
-  static const AgentProviderConfig defaultCursor = AgentProviderConfig(
-    id: cursorAgentProviderId,
-    displayName: 'Cursor Agent',
-    kind: AgentProviderKind.cursorAcp,
-    command: 'agent',
-    arguments: <String>['acp'],
-    enabled: false,
-  );
 
   /// 默认 Claude Code CLI stream-json 配置。
   ///

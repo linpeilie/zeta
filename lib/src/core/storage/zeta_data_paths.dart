@@ -83,10 +83,6 @@ class ZetaDataPaths {
   File get ideSessionFile =>
       File(_joinPath(stateDirectory.path, 'ide_session.json'));
 
-  /// 退役 Cursor 遗留的受保护会话索引路径；运行时不得读写。
-  File get cursorSessionsFile =>
-      File(_joinPath(stateDirectory.path, 'cursor_sessions.json'));
-
   /// 可重建的使用统计派生索引文件。
   File get usageStatisticsIndexFile =>
       File(_joinPath(stateDirectory.path, 'usage_statistics_index.json'));

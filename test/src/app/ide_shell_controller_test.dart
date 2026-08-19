@@ -913,88 +913,6 @@ void main() {
     );
   });
 
-  test(
-    'workspace restore never reaches retired Cursor runtime paths',
-    () async {
-      // Arrange
-      final directory = Directory.systemTemp.createTempSync('zeta_shell_');
-      tempDirectories.add(directory);
-      File(
-        '${directory.path}${Platform.pathSeparator}sample.txt',
-      ).writeAsStringSync('hello');
-      final cursorThread = _thread(
-        id: 'cursor-restored',
-        providerId: cursorAgentProviderId,
-        projectPath: directory.path,
-      );
-      final restoredSession = IdeSessionState(
-        projectPaths: <String>[directory.path],
-        activeProjectPath: directory.path,
-        activeAgentProviderId: cursorAgentProviderId,
-        agentThreadIdsByProject: <String, String>{
-          directory.path: cursorThread.id,
-        },
-        projectThreadExpansionByProject: <String, bool>{directory.path: true},
-        cachedThreadsByProject: <String, List<AgentThreadSummary>>{
-          directory.path: <AgentThreadSummary>[cursorThread],
-        },
-        selectedThreadIdsByProject: <String, String>{
-          directory.path: cursorThread.id,
-        },
-      );
-      final configStore = _RecordingAgentProviderConfigStore(
-        AgentProviderSettings(
-          providers: <AgentProviderConfig>[
-            AgentProviderConfig.defaultCodex,
-            AgentProviderConfig.defaultCursor.copyWith(enabled: true),
-          ],
-          activeProviderId: cursorAgentProviderId,
-        ),
-      );
-      final configBefore = configStore.settings.toJson();
-      final codexBackend = _ProviderBackend(
-        config: AgentProviderConfig.defaultCodex,
-        threadPages: const <AgentThreadPage>[],
-      );
-      final factory = _RecordingAgentProviderFactory(<String, _ProviderBackend>{
-        defaultAgentProviderId: codexBackend,
-      });
-
-      // Act
-      final shell = IdeShellController(
-        agentUiFrameSchedulerFactory: _createUiFrameScheduler,
-        directoryPicker: () async => directory.path,
-        sessionStore: CallbackIdeSessionStore(
-          loadJson: () async => restoredSession.encode(),
-          saveJson: _saveDiscardedSession,
-        ),
-        agentProviderFactory: factory,
-        agentProviderConfigStore: configStore,
-      );
-      addTearDown(shell.dispose);
-      await _flushAsync();
-      await _flushAsync();
-
-      // Assert
-      expect(shell.activeProjectPath, directory.path);
-      expect(
-        shell.selectedAgentViewModel.status.state,
-        AgentProviderConnectionState.unavailable,
-      );
-      expect(shell.selectedAgentViewModel.status.details, contains('已退役'));
-      expect(
-        factory.createdProviderIds,
-        isNot(contains(cursorAgentProviderId)),
-      );
-      expect(factory.cursorProviderCreations, 0);
-      expect(factory.cursorCliLocatorCalls, 0);
-      expect(factory.cursorProcessStarts, 0);
-      expect(factory.cursorSessionIndexWrites, 0);
-      expect(configStore.saveCount, 0);
-      expect(configStore.settings.toJson(), configBefore);
-    },
-  );
-
   test('restored thread starts on project home', () async {
     // Arrange
     final directory = Directory.systemTemp.createTempSync('zeta_shell_');
@@ -1615,21 +1533,10 @@ class _RecordingAgentProviderFactory with LegacyBundleFactoryMixin {
 
   final Map<String, _ProviderBackend> backendsById;
   final List<String> createdProviderIds = <String>[];
-  int cursorProviderCreations = 0;
-  int cursorCliLocatorCalls = 0;
-  int cursorProcessStarts = 0;
-  int cursorSessionIndexWrites = 0;
 
   @override
   Object create(AgentProviderConfig config) {
     createdProviderIds.add(config.id);
-    if (CursorRetirementPolicy.isRetiredProvider(config)) {
-      cursorProviderCreations += 1;
-      cursorCliLocatorCalls += 1;
-      cursorProcessStarts += 1;
-      cursorSessionIndexWrites += 1;
-      throw StateError('Cursor runtime path must remain unreachable');
-    }
     final backend = backendsById[config.id];
     if (backend == null) {
       throw StateError('No backend configured for ${config.id}');
@@ -1637,22 +1544,6 @@ class _RecordingAgentProviderFactory with LegacyBundleFactoryMixin {
     final provider = _ShellTestAgentProvider(backend: backend);
     backend.instances.add(provider);
     return provider;
-  }
-}
-
-class _RecordingAgentProviderConfigStore implements AgentProviderConfigStore {
-  _RecordingAgentProviderConfigStore(this.settings);
-
-  AgentProviderSettings settings;
-  int saveCount = 0;
-
-  @override
-  Future<AgentProviderSettings> load() async => settings;
-
-  @override
-  Future<void> save(AgentProviderSettings settings) async {
-    saveCount += 1;
-    this.settings = settings;
   }
 }
 

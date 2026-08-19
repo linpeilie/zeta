@@ -181,38 +181,6 @@ void main() {
       },
     );
 
-    test('retired Cursor local removal path remains unreachable', () async {
-      // Arrange
-      final provider = _FakeAgentProvider(
-        config: AgentProviderConfig.defaultCursor.copyWith(enabled: true),
-        declaredCapabilities: AgentProviderCapabilities.unsupported,
-        pages: <AgentThreadPage>[
-          _page(<AgentThreadSummary>[
-            _thread(
-              id: 'cursor-local',
-              providerId: cursorAgentProviderId,
-              updatedAt: DateTime.utc(2026, 7, 14),
-            ),
-          ], nextCursor: null),
-        ],
-      );
-      final controller = _createController(provider);
-      controller.activateProject('/repo');
-      await _flushAsync();
-
-      // Act
-      await controller.deleteThread(
-        projectPath: '/repo',
-        threadId: 'cursor-local',
-      );
-
-      // Assert
-      expect(provider.listQueries, isEmpty);
-      expect(provider.removedLocalThreads, isEmpty);
-      expect(provider.deletedThreads, isEmpty);
-      expect(controller.stateFor('/repo').threads, isEmpty);
-    });
-
     test(
       'tracks running thread ids from conversation runtime snapshots',
       () async {
@@ -595,58 +563,6 @@ void main() {
       expect(codex.listQueries, isNotEmpty);
       expect(grok.listQueries, isNotEmpty);
     });
-
-    test(
-      'does not create or query retired Cursor during aggregation',
-      () async {
-        // Arrange
-        final codex = _FakeAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
-          pages: <AgentThreadPage>[_page(_threads(10), nextCursor: null)],
-        );
-        final grok = _FakeAgentProvider(
-          config: AgentProviderConfig.defaultGrok,
-          pages: <AgentThreadPage>[
-            _page(const <AgentThreadSummary>[], nextCursor: null),
-          ],
-        );
-        final cursor = _FakeAgentProvider(
-          config: AgentProviderConfig.defaultCursor.copyWith(enabled: true),
-          declaredCapabilities: AgentProviderCapabilities.unsupported,
-          pages: <AgentThreadPage>[
-            _page(<AgentThreadSummary>[
-              _thread(
-                id: 'cursor-old',
-                providerId: cursorAgentProviderId,
-                updatedAt: DateTime.fromMillisecondsSinceEpoch(-1),
-              ),
-            ], nextCursor: null),
-          ],
-        );
-        final createdProviderIds = <String>[];
-        final controller = _createMultiProviderController(
-          codex: codex,
-          grok: grok,
-          cursor: cursor,
-          createdProviderIds: createdProviderIds,
-        );
-
-        // Act
-        controller.activateProject('/repo');
-        await _flushAsync();
-
-        // Assert
-        final state = controller.stateFor('/repo');
-        expect(state.threads, hasLength(5));
-        expect(
-          state.threads.map((thread) => thread.providerId),
-          everyElement(defaultAgentProviderId),
-        );
-        expect(state.nextCursor, 'agg:5');
-        expect(cursor.listQueries, isEmpty);
-        expect(createdProviderIds, isNot(contains(cursorAgentProviderId)));
-      },
-    );
   });
 
   group('Project Threads session snapshot', () {
@@ -1319,7 +1235,6 @@ ProjectThreadsController _createController(
 ProjectThreadsController _createMultiProviderController({
   required _FakeAgentProvider codex,
   required _FakeAgentProvider grok,
-  _FakeAgentProvider? cursor,
   List<String>? createdProviderIds,
   ProjectThreadsViewModel? viewModel,
 }) {
@@ -1327,7 +1242,6 @@ ProjectThreadsController _createMultiProviderController({
     providerFactory: _MultiAgentProviderFactory(
       codex: codex,
       grok: grok,
-      cursor: cursor,
       createdProviderIds: createdProviderIds,
     ),
   );
@@ -1338,8 +1252,6 @@ ProjectThreadsController _createMultiProviderController({
         providers: <AgentProviderConfig>[
           AgentProviderConfig.defaultCodex,
           AgentProviderConfig.defaultGrok,
-          if (cursor != null)
-            AgentProviderConfig.defaultCursor.copyWith(enabled: true),
         ],
         activeProviderId: defaultAgentProviderId,
       ),
@@ -1416,13 +1328,11 @@ class _MultiAgentProviderFactory with LegacyBundleFactoryMixin {
   _MultiAgentProviderFactory({
     required this.codex,
     required this.grok,
-    this.cursor,
     List<String>? createdProviderIds,
   }) : createdProviderIds = createdProviderIds ?? <String>[];
 
   final _FakeAgentProvider codex;
   final _FakeAgentProvider grok;
-  final _FakeAgentProvider? cursor;
   final List<String> createdProviderIds;
 
   @override
@@ -1430,7 +1340,6 @@ class _MultiAgentProviderFactory with LegacyBundleFactoryMixin {
     createdProviderIds.add(config.id);
     return switch (config.id) {
       grokAgentProviderId => grok,
-      cursorAgentProviderId => cursor ?? codex,
       _ => codex,
     };
   }
@@ -1446,7 +1355,6 @@ class _FakeAgentProvider
   _FakeAgentProvider({
     required List<AgentThreadPage> pages,
     this.config = AgentProviderConfig.defaultCodex,
-    this.declaredCapabilities = AgentProviderStaticCapabilities.codexAppServer,
   }) : _pages = List<AgentThreadPage>.from(pages);
 
   final List<AgentThreadPage> _pages;
@@ -1460,10 +1368,9 @@ class _FakeAgentProvider
   @override
   final AgentProviderConfig config;
 
-  final AgentProviderCapabilities declaredCapabilities;
-
   @override
-  AgentProviderCapabilities get capabilities => declaredCapabilities;
+  AgentProviderCapabilities get capabilities =>
+      AgentProviderStaticCapabilities.codexAppServer;
 
   @override
   Stream<AgentEvent> get events => _events.stream;

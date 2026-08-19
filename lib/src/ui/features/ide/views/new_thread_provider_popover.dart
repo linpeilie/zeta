@@ -36,9 +36,7 @@ class _NewThreadProviderPopoverState extends State<NewThreadProviderPopover> {
     return FutureBuilder<List<AgentProviderConfig>>(
       future: _providersFuture,
       builder: (context, snapshot) {
-        final providers = CursorRetirementPolicy.supportedProviders(
-          snapshot.data ?? const <AgentProviderConfig>[],
-        );
+        final providers = snapshot.data ?? const <AgentProviderConfig>[];
         final selectedProvider = _selectedProvider(providers);
         final colors = IdeColors.of(context);
         final textStyles = IdeTextStyles.of(context);

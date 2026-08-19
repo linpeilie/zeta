@@ -87,7 +87,7 @@ class AgentThreadSummary {
 
   /// Provider 恢复历史所需的可选 locator。
   ///
-  /// Codex/Grok 通常保存本地 session 文件或目录；Cursor 使用 workspace 路径。
+  /// Provider 可保存本地 session 文件、目录或工作区路径。
   final String? sessionPath;
 
   /// 通常是首条用户消息。

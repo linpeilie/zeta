@@ -397,28 +397,6 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
   });
-
-  testWidgets('removes every Cursor Agent management entry', (tester) async {
-    final harness = _CursorManagementHarness.create();
-    addTearDown(harness.dispose);
-    await tester.runAsync(
-      () => harness.managementController.initialize(autoDetect: true),
-    );
-    await tester.pump();
-
-    await _pumpManagementPage(tester, controller: harness.managementController);
-    expect(find.byKey(const ValueKey('agent-row-cursor')), findsNothing);
-    expect(find.textContaining('Cursor'), findsNothing);
-    expect(find.text('Beta'), findsNothing);
-    expect(find.byKey(const ValueKey('agent-open-logs-button')), findsNothing);
-    expect(
-      find.byKey(const ValueKey('cursor-config-boundary-notice')),
-      findsNothing,
-    );
-    expect(harness.managementController.agents, isEmpty);
-    expect(harness.repository.detectCalls, 0);
-    expect(tester.takeException(), isNull);
-  });
 }
 
 class _ManagementHarness {
@@ -497,57 +475,6 @@ class _ManagementHarness {
   }
 }
 
-class _CursorManagementHarness {
-  _CursorManagementHarness({
-    required this.repository,
-    required this.providerController,
-    required this.managementController,
-    required this._registry,
-  });
-
-  final _FakeCursorManagementRepository repository;
-  final AgentProviderSettingsController providerController;
-  final AgentManagementController managementController;
-  final AgentProviderRuntimeRegistry _registry;
-
-  static _CursorManagementHarness create() {
-    final provider = FakeAgentProvider();
-    final repository = _FakeCursorManagementRepository();
-    final registry = AgentProviderRuntimeRegistry(
-      providerFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-    );
-    final providerController = AgentProviderSettingsController(
-      runtimeRegistry: registry,
-      configStore: MemoryAgentProviderConfigStore(
-        AgentProviderSettings(
-          providers: <AgentProviderConfig>[
-            AgentProviderConfig.defaultCursor.copyWith(enabled: true),
-          ],
-          activeProviderId: cursorAgentProviderId,
-        ),
-      ),
-    );
-    final managementController = AgentManagementController(
-      repositories: <String, AgentCliManagementRepository>{
-        cursorAgentProviderId: repository,
-      },
-      providerController: providerController,
-    );
-    return _CursorManagementHarness(
-      repository: repository,
-      providerController: providerController,
-      managementController: managementController,
-      registry: registry,
-    );
-  }
-
-  Future<void> dispose() async {
-    managementController.dispose();
-    providerController.dispose();
-    await _registry.close();
-  }
-}
-
 class _ClaudeManagementHarness {
   _ClaudeManagementHarness({
     required this.repository,
@@ -615,103 +542,6 @@ class _ClaudeManagementHarness {
     providerController.dispose();
     await _registry.close();
   }
-}
-
-class _FakeCursorManagementRepository implements AgentCliManagementRepository {
-  int detectCalls = 0;
-
-  @override
-  String get agentId => cursorAgentProviderId;
-
-  @override
-  String get configPath => '~/.cursor/cli-config.json';
-
-  @override
-  Future<ManagedAgent> detect({
-    required AgentProviderConfig providerConfig,
-    required bool enabled,
-    AgentDetectionProgressCallback? onProgress,
-  }) async {
-    detectCalls += 1;
-    return ManagedAgent.forDefinition(
-      definition: _retiredCursorDefinition,
-      enabled: enabled,
-    ).copyWith(
-      installationState: AgentInstallationState.installed,
-      accountState: AgentAccountState.loggedIn,
-      runtimeState: enabled
-          ? AgentRuntimeState.notRunning
-          : AgentRuntimeState.disabled,
-      currentVersion: '1.5.0',
-      executablePath: '/usr/local/bin/agent',
-      configPath: configPath,
-      connectionTest: AgentConnectionTestResult(
-        success: true,
-        testedAt: DateTime.utc(2026, 7, 14),
-        elapsed: const Duration(milliseconds: 10),
-        cliCallable: true,
-        accountValid: true,
-        protocolReady: true,
-        protocolVersion: '1',
-        agentName: 'Cursor Agent',
-      ),
-    );
-  }
-
-  @override
-  Future<(AgentConnectionTestResult, List<AgentModelInfo>)> testConnection({
-    required AgentProviderConfig providerConfig,
-  }) async {
-    return (
-      AgentConnectionTestResult(
-        success: true,
-        testedAt: DateTime.utc(2026, 7, 14),
-        elapsed: const Duration(milliseconds: 10),
-        cliCallable: true,
-        accountValid: true,
-        protocolReady: true,
-      ),
-      const <AgentModelInfo>[],
-    );
-  }
-
-  @override
-  Future<AgentProviderConfig> providerConfigForPath({
-    required AgentProviderConfig current,
-    required String path,
-  }) async => current.copyWith(command: path);
-
-  @override
-  Future<AgentConfigurationDocument> readConfiguration() async {
-    return AgentConfigurationDocument(
-      path: configPath,
-      format: 'JSON',
-      content: '{"mode":"ask"}',
-      maskedContent: '{"mode":"ask"}',
-      exists: true,
-      loadedAt: DateTime.utc(2026, 7, 14),
-      signature: 'test',
-    );
-  }
-
-  @override
-  String? validateConfiguration(String content) => null;
-
-  @override
-  Future<AgentConfigurationSaveResult> saveConfiguration({
-    required AgentConfigurationDocument original,
-    required String content,
-    bool overwriteExternalChanges = false,
-  }) async => AgentConfigurationSaveResult(document: original);
-
-  @override
-  Future<List<String>> discoverLogPaths() async => const <String>[];
-
-  @override
-  Future<List<AgentLogEntry>> readLogs(
-    List<String> paths, {
-    int maxLines = 1000,
-  }) async => const <AgentLogEntry>[];
 }
 
 class _FakeClaudeManagementRepository implements AgentCliManagementRepository {
@@ -804,18 +634,6 @@ class _FakeClaudeManagementRepository implements AgentCliManagementRepository {
     int maxLines = 1000,
   }) async => const <AgentLogEntry>[];
 }
-
-const _retiredCursorDefinition = AgentDefinition(
-  id: cursorAgentProviderId,
-  displayName: 'Retired Cursor Agent',
-  vendor: 'Retired',
-  commandName: '',
-  protocol: 'unsupported',
-  transport: 'none',
-  configFormat: 'none',
-  defaultConfigRelativePath: '',
-  npmPackage: '',
-);
 
 Future<void> _pumpManagementPage(
   WidgetTester tester, {

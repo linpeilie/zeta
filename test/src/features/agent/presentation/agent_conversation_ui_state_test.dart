@@ -333,7 +333,6 @@ AgentComposerState _composerState({
     threadOpenPhase: AgentThreadOpenPhase.idle,
     contextUsage: null,
     isReadOnly: false,
-    unavailableProviderReason: null,
     canAttachImages: true,
     canMentionResources: true,
     canUseSkills: false,

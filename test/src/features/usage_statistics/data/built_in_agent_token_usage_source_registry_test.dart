@@ -34,7 +34,6 @@ void main() {
       registry.createFor(AgentProviderConfig.defaultClaudeCode),
       isA<ClaudeCodeTokenUsageSource>(),
     );
-    expect(registry.createFor(AgentProviderConfig.defaultCursor), isNull);
   });
 
   test(

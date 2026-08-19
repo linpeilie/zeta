@@ -36,8 +36,8 @@
 - data 层负责把 provider 协议映射成中立领域事件。
 - Agent 上下文当前只传项目路径和当前文件路径，不自动读取文件内容；用户可附加本地图片（`localImage`）。
 - 默认 Codex 审批策略保持 `on-request`，不自动授权命令或文件修改。
-- Cursor 因缺少可验证的稳定协议契约而退役；旧接入计划、synthetic fixture 与发布门禁
-  只作为历史证据保留，不代表当前支持。
+- Cursor 因缺少可验证的稳定协议契约而退役；synthetic fixture 与当前兼容代码已删除，
+  旧接入计划只存在于 Git 历史，发布门禁文档仅作历史证据。
 - 文件树采用懒加载，不递归扫描整个仓库。
 - 会话恢复必须宽容失败，不能阻断应用启动。
 - `core` 统一解析 `~/.zeta` 与原子写入，feature data store 接收 app 注入的文件；
@@ -58,8 +58,7 @@
 - 当前迁移期内，`AgentProviderBundle` 是应用层能力入口，`AgentProvider` 是 provider
   中立兼容门面；capabilities 仍是入口显隐和执行校验的事实来源。
 - `CodexAppServerAgentProvider` 是当前默认 provider 实现；协议 pin 见 `third_party/codex_app_server_schema`。
-- `CursorRetirementPolicy` 保留旧配置 decode、unavailable 展示和内存 fallback；catalog、
-  factory、deep link、恢复和管理路径均不得创建 Cursor 运行时。
+- 当前 Provider schema、配置、catalog、factory、deep link、恢复和管理路径均不含 Cursor。
 - `JsonRpcPeer` 负责 stdio JSON-RPC 通信。
 - `IdeSessionState` 当前版本为 2。
 - Agent 时间线已消费流式 reasoning/plan、回合 diff、waiting 状态、系统提示与本地图片气泡。

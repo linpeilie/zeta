@@ -12,8 +12,8 @@
 
 | 范围 | 命令 | 结果 | 用例数 | 用时 |
 |------|------|------|--------|------|
-| ACP / Cursor mapper | `flutter test test/src/features/agent/data/mappers/` | PASS | 15 | 4.6s |
-| Grok/Cursor provider + replay collector | `flutter test test/src/features/agent/data/datasources/acp/` | PASS | 59 | 5.5s |
+| ACP mapper | `flutter test test/src/features/agent/data/mappers/` | PASS | 15 | 4.6s |
+| Grok provider + replay collector | `flutter test test/src/features/agent/data/datasources/acp/` | PASS | 59 | 5.5s |
 | Codex app-server provider | `flutter test test/src/features/agent/data/datasources/app_server/` | PASS | 71 | 4.9s |
 | Grok/Codex local history | `flutter test test/src/features/agent/data/datasources/local_history/` | PASS | 22 | 4.6s |
 | EventBuffer | `flutter test test/src/features/agent/application/agent_event_stream_buffer_test.dart` | PASS | 7 | 4.0s |
@@ -40,15 +40,6 @@
 - updates history 独立解析 messageId/eventId，并按 id 合并；其身份规则尚未与
   live 共用 reducer。
 
-### Cursor provider/replay
-
-- live `session/update` 直接使用共享 `AcpSessionUpdateMapper`。
-- `session/load` 请求期间，按 sessionId 将通知送入
-  `AcpSessionReplayCollector`；collector 当前接收 provider 的同一个
-  `_notificationMapper` 实例。
-- collector 对文本使用重复、后缀和前缀启发式 `_mergeText`，因此当前实现本身
-  不能证明输入是 delta 还是 snapshot。
-
 ### EventBuffer
 
 - 文本/reasoning 只在同 `(kind, sessionId, turnId, itemId, detail)` key 内批次合并。
@@ -71,7 +62,7 @@
 - reasoning 以协议 itemId、contentIndex、summaryIndex 聚合。
 
 这些行为是 Phase 0 基线，不代表 Phase 1–4 的目标行为。特别是 TimelineStore 的
-open/`#segN` 兜底在 Grok 与 Cursor identity 门禁完成前必须保留。
+open/`#segN` 兜底在 Grok identity 门禁完成前必须保留。
 
 ## Phase 0 产物验证
 

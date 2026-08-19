@@ -60,10 +60,6 @@ void main() {
         Directory(_join(homeDirectory.path, '.grok')).existsSync(),
         isFalse,
       );
-      expect(
-        Directory(_join(homeDirectory.path, '.cursor')).existsSync(),
-        isFalse,
-      );
     });
 
     test('resolves POSIX and Windows home environment variables', () {

@@ -852,7 +852,6 @@ void main() {
             const <AgentProviderConfig>[
               AgentProviderConfig.defaultCodex,
               AgentProviderConfig.defaultGrok,
-              AgentProviderConfig.defaultCursor,
             ],
       ),
     );
@@ -918,11 +917,6 @@ void main() {
         ),
       ),
       findsOneWidget,
-    );
-    expect(find.text('Cursor Agent'), findsNothing);
-    expect(
-      find.byKey(const ValueKey('new-thread-provider-option-cursor')),
-      findsNothing,
     );
     expect(headerTitleText(tester), 'Initial thread');
 
@@ -1335,98 +1329,6 @@ void main() {
     );
   });
 
-  testWidgets('keeps restored Cursor history unavailable and read-only', (
-    tester,
-  ) async {
-    // Arrange
-    final directory = Directory.systemTemp.createTempSync('zeta_test_');
-    tempDirectories.add(directory);
-    final cursorConfig = AgentProviderConfig.defaultCursor.copyWith(
-      enabled: true,
-    );
-    final cursorThread = agentThread(
-      id: 'cursor-thread',
-      projectPath: directory.path,
-      title: 'Cursor thread',
-    ).copyWith(providerId: cursorAgentProviderId);
-    final session = MemorySessionStore(
-      IdeSessionState(
-        projectPaths: <String>[directory.path],
-        activeProjectPath: directory.path,
-        activeAgentProviderId: cursorAgentProviderId,
-        agentThreadIdsByProject: <String, String>{
-          directory.path: cursorThread.id,
-        },
-        projectThreadExpansionByProject: <String, bool>{directory.path: false},
-        cachedThreadsByProject: <String, List<AgentThreadSummary>>{
-          directory.path: <AgentThreadSummary>[cursorThread],
-        },
-        selectedThreadIdsByProject: <String, String>{
-          directory.path: cursorThread.id,
-        },
-      ).encode(),
-    );
-    final provider = FakeAgentProvider(
-      threadPages: <AgentThreadPage>[
-        AgentThreadPage(
-          threads: <AgentThreadSummary>[cursorThread],
-          nextCursor: null,
-        ),
-      ],
-    );
-    await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        directoryPicker: () async => directory.path,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(
-          AgentProviderSettings(
-            providers: <AgentProviderConfig>[
-              AgentProviderConfig.defaultCodex,
-              cursorConfig,
-            ],
-            activeProviderId: cursorAgentProviderId,
-          ),
-        ),
-      ),
-    );
-    await tester.runAsync(waitForIo);
-    await tester.pumpAndSettle();
-
-    // Assert：项目首页仍显示缓存摘要，但入口不得读取 Cursor 历史。
-    final cachedThread = find.byKey(
-      const ValueKey<String>('project-home-thread-cursor-thread'),
-    );
-    expect(cachedThread, findsOneWidget);
-    expect(
-      find.descendant(
-        of: cachedThread,
-        matching: find.byKey(
-          const ValueKey<String>('agent-provider-icon-fallback-cursor'),
-        ),
-      ),
-      findsOneWidget,
-    );
-    await tester.tap(cachedThread);
-    await tester.pumpAndSettle();
-
-    expect(find.text('Cursor'), findsNothing);
-    expect(find.textContaining('Cursor Agent unavailable'), findsWidgets);
-    expect(provider.readHistories, isEmpty);
-    expect(provider.resumedSessions, isEmpty);
-    expect(
-      find.byKey(
-        ValueKey<String>(
-          'project-thread-more-menu-${directory.path}-cursor-thread',
-        ),
-      ),
-      findsNothing,
-    );
-    expect(provider.removedLocalThreads, isEmpty);
-  });
-
   testWidgets('shows only supported Grok thread lifecycle actions', (
     tester,
   ) async {
@@ -1585,7 +1487,6 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.textContaining('Cursor'), findsNothing);
   });
 }
 

@@ -21,8 +21,8 @@ Zeta 是一个 Flutter Desktop 项目，当前支持 macOS、Linux 和 Windows �
   `claude auth login`。当前 stream-json 取样基线为
   CLI `2.1.224`（不是最低版本承诺），详见
   [Claude Code stream-json 协议基线](../protocols/claude_code_stream_json_protocol.md)。
-- 当前活跃 Provider 为 Codex、Grok 与 Claude Code。Cursor 已退役，不参与 catalog、UI、
-  运行时组合、进程启动或会话恢复；旧配置仅用于 unavailable/fallback 兼容。
+- 当前活跃 Provider 为 Codex、Grok 与 Claude Code。Cursor 已彻底清退，不参与当前 schema、
+  catalog、UI、运行时组合、进程启动、会话恢复、测试或 fixture。
 
 ## 3. 常用命令
 
@@ -523,11 +523,9 @@ Claude Code 模型目录是 Provider-local 的特殊协议来源，但不改变�
 - `claudeCode.accountDataEnrichment` 只控制额度凭据与 usage REST；关闭时模型和套餐名称仍
   来自 initialize。
 
-当前活跃 Provider 是 Codex、Grok 与 Claude Code。Cursor 退役兼容必须遵守以下约束：旧 `cursor` id
-与 `cursorAcp` kind 可宽容解码，但
-`CursorRetirementPolicy` 必须在 catalog、选择、恢复和 factory 边界 fail-closed；fallback
-只存在内存，不得保存覆盖旧设置。Cursor 不参与 live/replay/load、ACP 扩展、进程启动或
-运行时组合；不得读取、迁移、改写或删除 Cursor 自有目录和遗留索引。
+当前活跃 Provider 是 Codex、Grok 与 Claude Code。当前 schema 不包含 Cursor provider id、
+kind 或兼容配置；重新支持必须另立方案并重新采集真实、脱敏的协议证据，不能恢复历史
+synthetic fixture 或退役实现。
 - 对话详情的 provider 事件订阅由 `AgentEventPipeline` 唯一拥有；Pipeline 组合
   `AgentProviderEventListenerGate`、`AgentEventCoalescingPolicy`、
   `CoalescingEventBuffer` 与 `BoundedEventDispatcher`。切换 Thread/Provider 时先废弃旧
@@ -791,7 +789,6 @@ Zeta 自有数据统一写入用户主目录下的以下结构：
     general.json
   state/
     ide_session.json
-    cursor_sessions.json  # 退役遗留数据，只读保护边界
     usage_statistics_index.json
     session/<providerId>/<threadId>.json
     migration_marker.json
@@ -834,14 +831,13 @@ v2：已有安装播种简体中文，真正的新安装按系统首选语言第
 Provider 历史；文件缺失或损坏时回落原解析逻辑。不保存 prompt、回复、工具输出或
 raw payload。
 
-Agent CLI 的数据不属于这套目录：Codex/Grok/Claude Code/Cursor 配置与 session 历史
-继续保留在各 CLI 自有目录（包括 `~/.codex`、`~/.grok`、`~/.claude`、`~/.cursor`
-与项目 `.cursor/*`）。Provider 自有 data adapter 可以按明确功能读取对应 CLI 的配置、
+Agent CLI 的数据不属于这套目录：Codex/Grok/Claude Code 配置与 session 历史
+继续保留在各 CLI 自有目录（包括 `~/.codex`、`~/.grok` 与 `~/.claude`）。
+Provider 自有 data adapter 可以按明确功能读取对应 CLI 的配置、
 会话、日志和账号 metadata；application/presentation 不自行遍历这些目录，也不接收原始
 路径或 payload。读取权限不自动授权迁移、复制、改写或删除；派生索引与隐藏列表仍只写
 `~/.zeta`。
-退役遗留的 `cursor_sessions.json` 不再参与恢复或运行时组合，仅作为受保护用户数据原样
-保留；Codex 使用统计仍只读原 rollout JSONL，并把可重建的派生索引写入
+Codex 使用统计仍只读原 rollout JSONL，并把可重建的派生索引写入
 `~/.zeta/state`。
 
 `AgentFileChangeSnapshot` 及其替换片段、写入内容、unified patch 只属于当前内存时间线。
@@ -931,12 +927,6 @@ codex app-server
 如果命令不存在或协议变更，应用会显示 provider 不可用或错误状态。
 协议字段变更时，按 [协议版本锁定文档](../protocols/codex_app_server_protocol.md)
 重新导出 schema 并 diff，再更新适配层。
-
-### 旧 Cursor 配置显示 unavailable
-
-这是退役后的预期行为。应用只在内存中回退到任一已启用且未退役的 Provider（Codex、
-Grok 或 Claude Code），不会自动保存覆盖旧配置，也不会读取或修改 Cursor 会话数据。历史背景见
-[Cursor Agent 退役历史说明](../history/cursor_agent_guide.md)。
 
 ### 会话恢复后项目消失
 

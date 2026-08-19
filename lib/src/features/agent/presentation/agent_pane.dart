@@ -483,12 +483,6 @@ class _AgentPaneState extends State<AgentPane> {
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            if (composerState.unavailableProviderReason
-                                case final reason?)
-                              _AgentProviderUnavailableNotice(
-                                reason: reason,
-                                pagePadding: pagePadding,
-                              ),
                             if (composerState.isReadOnly)
                               _AgentReadOnlyNotice(pagePadding: pagePadding)
                             else if (!pendingState.blocksComposer)
@@ -1286,37 +1280,6 @@ class _AgentPaneState extends State<AgentPane> {
     return _scrollCoordinator.requestFollowEnd(
       lastItemId: _lastTimelineItemId,
       animated: !MediaQuery.disableAnimationsOf(context),
-    );
-  }
-}
-
-class _AgentProviderUnavailableNotice extends StatelessWidget {
-  const _AgentProviderUnavailableNotice({
-    required this.reason,
-    required this.pagePadding,
-  });
-
-  final String reason;
-  final EdgeInsets pagePadding;
-
-  @override
-  Widget build(BuildContext context) {
-    final textStyles = IdeTextStyles.of(context);
-    final colors = IdeColors.of(context);
-    return _AgentContentAlign(
-      child: Padding(
-        padding: pagePadding.copyWith(top: IdeSpacing.space8),
-        child: IdeStatusCard(
-          key: const ValueKey('agent-provider-unavailable-notice'),
-          tone: IdeStatusCardTone.warning,
-          title: context.l10n.agentCursorUnavailable,
-          margin: EdgeInsets.zero,
-          body: Text(
-            reason,
-            style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
-          ),
-        ),
-      ),
     );
   }
 }

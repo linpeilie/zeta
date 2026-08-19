@@ -48,8 +48,7 @@ final class AgentProviderSettingsCodec {
     return AgentProviderSettings(
       providers: List<AgentProviderConfig>.unmodifiable(providers),
       activeProviderId:
-          providers.any((provider) => provider.id == activeProviderId) ||
-              activeProviderId == cursorAgentProviderId
+          providers.any((provider) => provider.id == activeProviderId)
           ? activeProviderId
           : providers.first.id,
     );

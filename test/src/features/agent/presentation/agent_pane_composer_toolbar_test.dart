@@ -41,7 +41,7 @@ void main() {
             sessionId: 'thread-mode',
             options: <AgentSessionConfigOption>[
               AgentSessionConfigOption(
-                id: 'cursor-model',
+                id: 'session-model',
                 name: 'Session model',
                 category: 'model',
                 kind: AgentSessionConfigOptionKind.select,
@@ -56,7 +56,7 @@ void main() {
         );
         await pumpUntilFinder(
           tester,
-          find.byKey(const ValueKey('agent-session-config-cursor-model')),
+          find.byKey(const ValueKey('agent-session-config-session-model')),
         );
         await pumpUntilFinder(
           tester,
@@ -67,7 +67,7 @@ void main() {
           const ValueKey('agent-composer-plan-badge'),
         );
         final sessionSelector = find.byKey(
-          const ValueKey('agent-session-config-cursor-model'),
+          const ValueKey('agent-session-config-session-model'),
         );
         final modelSelector = find.byKey(
           const ValueKey('agent-model-selector'),
@@ -737,7 +737,7 @@ void main() {
             sessionId: 'thread-narrow-mode',
             options: <AgentSessionConfigOption>[
               AgentSessionConfigOption(
-                id: 'cursor-model',
+                id: 'session-model',
                 name: 'Session model',
                 category: 'model',
                 kind: AgentSessionConfigOptionKind.select,
@@ -757,7 +757,7 @@ void main() {
         );
         await pumpUntilFinder(
           tester,
-          find.byKey(const ValueKey('agent-session-config-cursor-model')),
+          find.byKey(const ValueKey('agent-session-config-session-model')),
         );
         await pumpUntilFinder(
           tester,
@@ -791,7 +791,7 @@ void main() {
         // 仅左侧可裁切区；模型选择器在工具栏右侧，不参与 clip 组。
         final selectorControls = <Finder>[
           planBadge,
-          find.byKey(const ValueKey('agent-session-config-cursor-model')),
+          find.byKey(const ValueKey('agent-session-config-session-model')),
           find.byKey(const ValueKey('agent-permission-option-selector')),
         ];
         final wideSelectorsLeft = tester.getTopLeft(selectors).dx;
@@ -1087,7 +1087,7 @@ void main() {
             sessionId: 'thread-config',
             options: <AgentSessionConfigOption>[
               AgentSessionConfigOption(
-                id: 'cursor-model',
+                id: 'session-model',
                 name: 'Model',
                 category: 'model',
                 kind: AgentSessionConfigOptionKind.select,
@@ -1109,26 +1109,26 @@ void main() {
         await tester.pump();
 
         expect(
-          find.byKey(const ValueKey('agent-session-config-cursor-model')),
+          find.byKey(const ValueKey('agent-session-config-session-model')),
           findsOneWidget,
         );
         expect(find.text('Fast'), findsOneWidget);
         await tester.tap(
-          find.byKey(const ValueKey('agent-session-config-cursor-model')),
+          find.byKey(const ValueKey('agent-session-config-session-model')),
         );
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));
         expect(find.byType(sf.SelectPopup<Object>), findsOneWidget);
         await tester.tap(
           find.byKey(
-            const ValueKey('agent-session-config-cursor-model-option-smart'),
+            const ValueKey('agent-session-config-session-model-option-smart'),
           ),
         );
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));
 
         expect(provider.sessionConfigSelections, <(String, String, Object)>[
-          ('thread-config', 'cursor-model', 'smart'),
+          ('thread-config', 'session-model', 'smart'),
         ]);
         expect(
           FocusManager.instance.primaryFocus?.debugLabel,
@@ -1136,7 +1136,7 @@ void main() {
         );
 
         await tester.tap(
-          find.byKey(const ValueKey('agent-session-config-cursor-model')),
+          find.byKey(const ValueKey('agent-session-config-session-model')),
         );
         await tester.pump(const Duration(milliseconds: 300));
         await tester.pump();

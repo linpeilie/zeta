@@ -232,14 +232,6 @@ abstract interface class AgentUiTextCatalog {
 
   String get claudeCodeSubscriptionQuota;
 
-  String get cursorRetired;
-
-  String cursorNoEnabledProvider(String message);
-
-  String cursorFallbackTo(String message, String name);
-
-  String cursorConfigPreserved(String message);
-
   String get couldNotLoadThreads;
 
   String get noEnabledProviders;

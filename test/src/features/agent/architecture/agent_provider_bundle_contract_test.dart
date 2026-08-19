@@ -43,7 +43,6 @@ void main() {
         'AgentProviderKind.codexAppServer',
         'AgentProviderKind.acp',
         'AgentProviderKind.claudeCode',
-        'AgentProviderKind.cursorAcp',
         'codexAppServer',
         'grokAcp',
         'claudeCode',

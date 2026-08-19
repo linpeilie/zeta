@@ -27,13 +27,13 @@ class AgentManagementController extends ChangeNotifier {
     AgentManagementTextCatalog? textCatalog,
   }) : _textCatalog = textCatalog ?? const FallbackAgentManagementTextCatalog(),
        _repositories = Map<String, AgentCliManagementRepository>.unmodifiable(
-         _supportedRepositories(repositories),
+         repositories,
        ),
-       _selectedAgentId = _supportedRepositories(repositories).keys.isEmpty
+       _selectedAgentId = repositories.keys.isEmpty
            ? defaultAgentProviderId
-           : _supportedRepositories(repositories).keys.first,
+           : repositories.keys.first,
        _agents = <String, ManagedAgent>{
-         for (final entry in _supportedRepositories(repositories).entries)
+         for (final entry in repositories.entries)
            entry.key: ManagedAgent.forDefinition(
              definition:
                  AgentDefinition.byId(entry.key) ??
@@ -782,14 +782,4 @@ class AgentManagementController extends ChangeNotifier {
     runtimeListenable?.removeListener(refreshRuntimeState);
     super.dispose();
   }
-}
-
-Map<String, AgentCliManagementRepository> _supportedRepositories(
-  Map<String, AgentCliManagementRepository> repositories,
-) {
-  return <String, AgentCliManagementRepository>{
-    for (final entry in repositories.entries)
-      if (!CursorRetirementPolicy.isRetiredProviderId(entry.key))
-        entry.key: entry.value,
-  };
 }

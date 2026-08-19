@@ -228,7 +228,7 @@
 
 ### 移除
 
-- Cursor Provider 已退役：不出现在 catalog、设置与运行时组合中，不启动 Cursor 进程，也不读取或改写 `~/.cursor` 与项目 `.cursor`。遗留的 `cursor_sessions.json` 仅作为受保护用户数据原样保留
+- Cursor Provider 已彻底清退：移除当前 schema、配置兼容、catalog、UI、运行时组合、测试与 synthetic fixture
 
 ### 已知限制
 

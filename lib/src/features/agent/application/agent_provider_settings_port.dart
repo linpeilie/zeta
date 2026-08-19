@@ -18,10 +18,6 @@ abstract interface class AgentProviderSettingsPort implements Listenable {
 
   AgentProviderConfig get activeProviderConfig;
 
-  bool get hasRuntimeProvider;
-
-  String? get unavailableSelectionReason;
-
   List<AgentProviderConfig> get enabledProviders;
 
   bool isProviderEnabled(String providerId);
@@ -52,6 +48,4 @@ abstract interface class AgentProviderSettingsPort implements Listenable {
   );
 
   Future<AgentProviderSettings> loadSettings();
-
-  String? unavailableReasonForProviderId(String providerId);
 }

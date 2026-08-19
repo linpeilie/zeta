@@ -3263,9 +3263,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get agentProviderOperationFailed => 'Agent provider operation failed';
 
   @override
-  String get agentCursorUnavailable => 'Cursor Agent unavailable';
-
-  @override
   String agentEvidenceReplaceSemantics(String before, String after) {
     return 'Replacement snippet, $before lines before, $after lines after';
   }
@@ -3468,25 +3465,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get agentClaudeCodeSubscriptionQuota =>
       'Claude Code subscription quota';
-
-  @override
-  String get agentCursorRetired =>
-      'Cursor Agent has been retired. This version no longer starts or restores Cursor sessions.';
-
-  @override
-  String agentCursorNoEnabledProvider(String message) {
-    return '$message No enabled Provider is available; the old Cursor configuration is unchanged.';
-  }
-
-  @override
-  String agentCursorFallbackTo(String message, String name) {
-    return '$message Temporarily fell back to $name; the old Cursor configuration is unchanged.';
-  }
-
-  @override
-  String agentCursorConfigPreserved(String message) {
-    return '$message The old Cursor configuration and session data are unchanged.';
-  }
 
   @override
   String get agentCouldNotLoadThreads => 'Could not load threads';

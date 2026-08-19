@@ -5876,12 +5876,6 @@ abstract class AppLocalizations {
   /// **'Agent provider operation failed'**
   String get agentProviderOperationFailed;
 
-  /// Cursor unavailable card
-  ///
-  /// In en, this message translates to:
-  /// **'Cursor Agent unavailable'**
-  String get agentCursorUnavailable;
-
   /// Replacement evidence semantics
   ///
   /// In en, this message translates to:
@@ -6169,30 +6163,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Claude Code subscription quota'**
   String get agentClaudeCodeSubscriptionQuota;
-
-  /// Cursor retirement message
-  ///
-  /// In en, this message translates to:
-  /// **'Cursor Agent has been retired. This version no longer starts or restores Cursor sessions.'**
-  String get agentCursorRetired;
-
-  /// Cursor retirement no fallback
-  ///
-  /// In en, this message translates to:
-  /// **'{message} No enabled Provider is available; the old Cursor configuration is unchanged.'**
-  String agentCursorNoEnabledProvider(String message);
-
-  /// Cursor retirement fallback
-  ///
-  /// In en, this message translates to:
-  /// **'{message} Temporarily fell back to {name}; the old Cursor configuration is unchanged.'**
-  String agentCursorFallbackTo(String message, String name);
-
-  /// Cursor retirement config preserved
-  ///
-  /// In en, this message translates to:
-  /// **'{message} The old Cursor configuration and session data are unchanged.'**
-  String agentCursorConfigPreserved(String message);
 
   /// Thread list load failed
   ///

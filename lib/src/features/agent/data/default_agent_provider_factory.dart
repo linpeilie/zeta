@@ -8,8 +8,7 @@ import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.da
 
 /// 生产环境默认 provider 工厂。
 ///
-/// 已实现 Codex app-server、Grok ACP stdio 与 Claude Code stream-json；
-/// Cursor 已从运行时组合中断开。
+/// 已实现 Codex app-server、Grok ACP stdio 与 Claude Code stream-json。
 class DefaultAgentProviderFactory implements AgentProviderBundleFactory {
   const DefaultAgentProviderFactory({
     this.claudeCodeSessionDecisionStoreFactory,
@@ -34,11 +33,6 @@ class DefaultAgentProviderFactory implements AgentProviderBundleFactory {
   /// 原生 Bundle 创建入口。
   @override
   AgentProviderBundle createBundle(AgentProviderConfig config) {
-    if (CursorRetirementPolicy.isRetiredProvider(config)) {
-      throw UnsupportedError(
-        CursorRetirementPolicy.unavailableMessage(textCatalog),
-      );
-    }
     return switch (config.kind) {
       AgentProviderKind.codexAppServer => createCodexBundle(
         config,
@@ -47,9 +41,6 @@ class DefaultAgentProviderFactory implements AgentProviderBundleFactory {
       AgentProviderKind.acp => createGrokBundle(
         config,
         textCatalog: textCatalog,
-      ),
-      AgentProviderKind.cursorAcp => throw UnsupportedError(
-        CursorRetirementPolicy.unavailableMessage(textCatalog),
       ),
       AgentProviderKind.claudeCode => createClaudeCodeBundle(
         config,

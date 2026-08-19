@@ -10,8 +10,6 @@ import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
 import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partition_store.dart';
 
-const _legacyCursorSessionIndexStorageKey = 'zeta.agent.cursor.sessions.v1';
-
 void main() {
   group('SharedPreferencesLegacyZetaPreferences', () {
     test('prefers the async backend value', () async {
@@ -58,65 +56,49 @@ void main() {
       }
     });
 
-    test(
-      'migrates active Zeta preferences but never reads Cursor index',
-      () async {
-        final values = <String, String>{
-          agentProviderConfigStorageKey: '{"version":1,"providers":[]}',
-          appearanceSettingsStorageKey: '{"version":1,"themeMode":"dark"}',
-          sessionStorageKey: '{"version":2,"projectPaths":[]}',
-          _legacyCursorSessionIndexStorageKey: '{"version":1,"sessions":[]}',
-          usageStatisticsIndexStorageKey: '{"version":2,"sessions":[]}',
-        };
-        final preferences = _FakeLegacyZetaPreferences(values);
-        final migrator = ZetaStorageMigrator(
-          paths: paths,
-          preferences: preferences,
-          clock: () => DateTime.utc(2026, 7, 14, 8, 30),
-        );
+    test('migrates active Zeta preferences', () async {
+      final values = <String, String>{
+        agentProviderConfigStorageKey: '{"version":1,"providers":[]}',
+        appearanceSettingsStorageKey: '{"version":1,"themeMode":"dark"}',
+        sessionStorageKey: '{"version":2,"projectPaths":[]}',
+        usageStatisticsIndexStorageKey: '{"version":2,"sessions":[]}',
+      };
+      final preferences = _FakeLegacyZetaPreferences(values);
+      final migrator = ZetaStorageMigrator(
+        paths: paths,
+        preferences: preferences,
+        clock: () => DateTime.utc(2026, 7, 14, 8, 30),
+      );
 
-        final result = await migrator.migrate();
+      final result = await migrator.migrate();
 
-        expect(result.alreadyCompleted, isFalse);
-        expect(
-          result.migratedKeys,
-          unorderedEquals(
-            values.keys.where(
-              (key) => key != _legacyCursorSessionIndexStorageKey,
-            ),
-          ),
-        );
-        expect(
-          await paths.providersFile.readAsString(),
-          values[agentProviderConfigStorageKey],
-        );
-        expect(
-          await paths.appearanceFile.readAsString(),
-          values[appearanceSettingsStorageKey],
-        );
-        expect(
-          await paths.ideSessionFile.readAsString(),
-          values[sessionStorageKey],
-        );
-        expect(paths.cursorSessionsFile.existsSync(), isFalse);
-        expect(
-          preferences.readKeys,
-          isNot(contains(_legacyCursorSessionIndexStorageKey)),
-        );
-        // 迁移时归一到当前 v4 不透明分区，并保留 v2 的 Codex 空分区。
-        final usageIndex =
-            jsonDecode(await paths.usageStatisticsIndexFile.readAsString())
-                as Map<String, Object?>;
-        expect(usageIndex['version'], usageStatisticsPartitionIndexVersion);
-        expect((usageIndex['providers'] as Map).keys, <String>['codex']);
-        final marker =
-            jsonDecode(await paths.migrationMarkerFile.readAsString())
-                as Map<String, Object?>;
-        expect(marker['version'], zetaStorageMigrationVersion);
-        expect(marker['completedAt'], '2026-07-14T08:30:00.000Z');
-        expect(paths.cacheDirectory.existsSync(), isTrue);
-      },
-    );
+      expect(result.alreadyCompleted, isFalse);
+      expect(result.migratedKeys, unorderedEquals(values.keys));
+      expect(
+        await paths.providersFile.readAsString(),
+        values[agentProviderConfigStorageKey],
+      );
+      expect(
+        await paths.appearanceFile.readAsString(),
+        values[appearanceSettingsStorageKey],
+      );
+      expect(
+        await paths.ideSessionFile.readAsString(),
+        values[sessionStorageKey],
+      );
+      // 迁移时归一到当前 v4 不透明分区，并保留 v2 的 Codex 空分区。
+      final usageIndex =
+          jsonDecode(await paths.usageStatisticsIndexFile.readAsString())
+              as Map<String, Object?>;
+      expect(usageIndex['version'], usageStatisticsPartitionIndexVersion);
+      expect((usageIndex['providers'] as Map).keys, <String>['codex']);
+      final marker =
+          jsonDecode(await paths.migrationMarkerFile.readAsString())
+              as Map<String, Object?>;
+      expect(marker['version'], zetaStorageMigrationVersion);
+      expect(marker['completedAt'], '2026-07-14T08:30:00.000Z');
+      expect(paths.cacheDirectory.existsSync(), isTrue);
+    });
 
     test('converts the legacy theme value into appearance v1 JSON', () async {
       final migrator = ZetaStorageMigrator(
@@ -367,60 +349,6 @@ void main() {
       expect(paths.migrationMarkerFile.existsSync(), isFalse);
       blocker.deleteSync();
     });
-
-    test('does not inspect or modify protected Cursor data', () async {
-      final sentinels = <File>[];
-      for (final directoryName in <String>['.codex', '.grok', '.cursor']) {
-        final directory = Directory(_join(homeDirectory.path, directoryName))
-          ..createSync();
-        final sentinel = File(_join(directory.path, 'session-history.jsonl'))
-          ..writeAsStringSync('agent-owned-$directoryName');
-        sentinels.add(sentinel);
-      }
-      final projectCursorFile = File(
-        _join(
-          _join(_join(homeDirectory.path, 'workspace'), '.cursor'),
-          'rules.json',
-        ),
-      )..createSync(recursive: true);
-      projectCursorFile.writeAsStringSync('project-cursor-owned');
-      sentinels.add(projectCursorFile);
-      await paths.stateDirectory.create(recursive: true);
-      await paths.cursorSessionsFile.writeAsString(
-        '{"version":1,"sessions":[{"id":"keep-index"}]}',
-      );
-      sentinels.add(paths.cursorSessionsFile);
-      await paths.configDirectory.create(recursive: true);
-      await paths.providersFile.writeAsString(
-        '{"version":1,"activeProviderId":"cursor",'
-        '"providers":[{"id":"cursor","legacyMarker":"keep-config"}]}',
-      );
-      sentinels.add(paths.providersFile);
-      final before = <String, String>{
-        for (final sentinel in sentinels)
-          sentinel.path: sentinel.readAsStringSync(),
-      };
-      final preferences = _FakeLegacyZetaPreferences(<String, String>{
-        _legacyCursorSessionIndexStorageKey:
-            '{"version":1,"sessions":[{"id":"overwrite-attempt"}]}',
-        agentProviderConfigStorageKey:
-            '{"version":1,"activeProviderId":"codex","providers":[]}',
-      });
-
-      await ZetaStorageMigrator(
-        paths: paths,
-        preferences: preferences,
-      ).migrate();
-
-      for (final sentinel in sentinels) {
-        expect(sentinel.existsSync(), isTrue);
-        expect(sentinel.readAsStringSync(), before[sentinel.path]);
-      }
-      expect(
-        preferences.readKeys,
-        isNot(contains(_legacyCursorSessionIndexStorageKey)),
-      );
-    });
   });
 }
 
@@ -440,6 +368,3 @@ class _FakeLegacyZetaPreferences implements LegacyZetaPreferences {
     return values[key];
   }
 }
-
-String _join(String parent, String child) =>
-    '$parent${Platform.pathSeparator}$child';

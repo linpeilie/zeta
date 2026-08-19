@@ -1706,7 +1706,6 @@ AgentProviderKind? _kindForAgentId(String agentId) {
     defaultAgentProviderId => AgentProviderKind.codexAppServer,
     grokAgentProviderId => AgentProviderKind.acp,
     defaultClaudeCodeProviderId => AgentProviderKind.claudeCode,
-    cursorAgentProviderId => AgentProviderKind.cursorAcp,
     _ => null,
   };
 }

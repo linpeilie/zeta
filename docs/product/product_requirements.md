@@ -25,8 +25,7 @@ Zeta 是一个基于 Flutter Desktop 的本地 AI IDE 壳层。它面向需要�
 - 支持选择本地项目目录，并在右侧浏览项目文件树。
 - 支持将当前项目路径和选中文件路径作为 Agent 上下文传递给 provider。
 - 支持通过 Codex CLI app-server、Grok ACP 与 Claude Code stream-json 创建、恢复和继续
-  Agent thread，并按握手能力降级 UI；Cursor 已退役，旧配置只用于
-  unavailable/fallback 兼容。
+  Agent thread，并按握手能力降级 UI；Cursor 已从当前产品 schema 与代码中清退。
 - 支持展示 Agent 消息与工具调用状态，并把权限、提问和计划审批固定在输入框上方。
 - 支持持久化 IDE 会话状态，减少重启后的上下文丢失。
 
@@ -42,8 +41,7 @@ Zeta 是一个基于 Flutter Desktop 的本地 AI IDE 壳层。它面向需要�
 - 本地目录选择和文件树懒加载。
 - 忽略常见大目录：`.git`、`.dart_tool`、`build`、`node_modules` 等。
 - 使用 `~/.zeta` 下的版本化 JSON 文件保存 Zeta 自有 IDE 会话、Agent provider、外观设置与
-  使用统计派生索引；旧 SharedPreferences 仅用于一次性迁移。退役遗留的
-  `cursor_sessions.json` 仅作为受保护用户数据原样保留，不参与运行时。
+  使用统计派生索引；旧 SharedPreferences 仅用于一次性迁移。
 - 应用日志按日期写入 `~/.zeta/logs`；Agent CLI 自有配置和 session 历史保持原位，
   不迁入 `~/.zeta`。
 - 内置活跃 Provider 为 Codex CLI、Grok ACP 与 Claude Code stream-json；Codex 仍为默认
@@ -52,8 +50,6 @@ Zeta 是一个基于 Flutter Desktop 的本地 AI IDE 壳层。它面向需要�
 - Agent 事件统一映射为领域模型，UI 不直接绑定 Codex 或 xAI 原始协议细节。
 - 支持 capability 驱动的 thread 列表、历史、恢复、发送、取消、权限和动态 session 配置；
   不支持的 provider 操作不展示且不会静默成功。
-- 旧 Cursor 配置可宽容解码并在内存中安全回退；不会启动 Cursor 进程，也不会读取或改写
-  `~/.cursor`、项目 `.cursor` 或 `cursor_sessions.json`。
 - 界面支持英语与简体中文。首次安装按系统首选语言第一项选择（繁体中文与其他不受
   支持的语言回退英语）；已经使用过 Zeta 的安装继续中文。设置中切换语言后下次启动
   生效，当前进程不跟随系统语言。

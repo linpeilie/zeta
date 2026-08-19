@@ -111,12 +111,6 @@ Grok CLI 请升级到 **0.2.119 或更高**。这是 Zeta 的多会话兼容基�
 
 说明当前会话是只读的。常见于在设置里禁用了 Codex：已有会话仍可翻阅历史，但不再允许创建可写会话。重新启用即可。
 
-### 旧的 Cursor 配置显示 unavailable
-
-预期行为。Cursor 已退役，Zeta 会在内存中回退到任一已启用且未退役的 Provider
-（Codex、Grok 或 Claude Code），**不会**自动覆盖你的旧配置，也不会读取或修改任何
-Cursor 会话数据。
-
 ---
 
 ## 对话与时间线
@@ -254,15 +248,14 @@ credentials 文件。凭据只在一次只读请求期间留在内存，不写�
 │   ├── ide_session.json               打开的项目、选中文件、展开状态、会话缓存
 │   ├── usage_statistics_index.json    使用统计派生索引
 │   ├── session/<providerId>/          Zeta 发起 turn 的上下文（模型、思考程度、时间）
-│   ├── migration_marker.json          一次性迁移完成标记
-│   └── cursor_sessions.json           退役遗留，运行时不读不写
+│   └── migration_marker.json          一次性迁移完成标记
 ├── logs/
 │   └── zeta-YYYY-MM-DD.log            按天轮转的应用日志
 └── cache/
     └── agent_models_v1.json           模型目录缓存，可随时删除
 ```
 
-**Zeta 会按功能读取活跃 Agent CLI 的私有数据。** 对应 Provider 的 data adapter 可能读取配置、会话历史、日志和账号 metadata，用于连接、历史恢复、诊断与使用统计；原始正文、凭据和私有路径不会复制进 Zeta 的派生索引。读取权限不代表自动迁移、改写或删除；配置写入只发生在用户明确使用配置编辑功能时。Cursor 已退役，其会话数据仍不参与运行时读取或修改。
+**Zeta 会按功能读取活跃 Agent CLI 的私有数据。** 对应 Provider 的 data adapter 可能读取配置、会话历史、日志和账号 metadata，用于连接、历史恢复、诊断与使用统计；原始正文、凭据和私有路径不会复制进 Zeta 的派生索引。读取权限不代表自动迁移、改写或删除；配置写入只发生在用户明确使用配置编辑功能时。
 
 Claude 的模型探测和连接测试使用 `--no-session-persistence`，Zeta 也不保存 OAuth token；
 但 Claude CLI 可能维护其自有认证、bootstrap 或缓存文件，这些不属于 Zeta 的持久化目录。

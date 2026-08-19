@@ -38,7 +38,6 @@ final class BuiltInAgentTokenUsageSourceRegistry
         partitionStore: _partitionStore,
         textCatalog: _textCatalog,
       ),
-      AgentProviderKind.cursorAcp => null,
     };
   }
 }

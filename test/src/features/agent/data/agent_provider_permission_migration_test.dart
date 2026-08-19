@@ -215,7 +215,6 @@ void main() {
       expect(source, isNot(contains('File(')));
       expect(source, isNot(contains('.codex')));
       expect(source, isNot(contains('.grok')));
-      expect(source, isNot(contains('.cursor')));
     });
   });
 }

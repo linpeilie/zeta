@@ -4,7 +4,6 @@ import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/features/agent/data/agent_turn_context_store.dart';
 import 'package:zeta/src/features/agent/domain/agent_event_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_turn_context_models.dart';
-import 'package:zeta/src/features/agent/domain/cursor_retirement_policy.dart';
 
 final _log = loggerFor('zeta.agent.turn_context');
 
@@ -87,9 +86,6 @@ final class DefaultAgentTurnContextRecorder
     if (normalizedProviderId.isEmpty ||
         normalizedThreadId.isEmpty ||
         turnId.isEmpty) {
-      return Future<void>.value();
-    }
-    if (CursorRetirementPolicy.isRetiredProviderId(normalizedProviderId)) {
       return Future<void>.value();
     }
     final key = '$normalizedProviderId\u0000$normalizedThreadId';

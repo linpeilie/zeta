@@ -79,7 +79,7 @@ reducer 唯一的副作用出口。带作用域校验（generation / runtime / t
 ## Provider 抽象
 
 **Provider**
-一个 Agent CLI 的接入实现。当前活跃的是 Codex（默认）与 Grok。Cursor 已退役。
+一个 Agent CLI 的接入实现。当前活跃的是 Codex（默认）、Grok 与 Claude Code；Cursor 已彻底清退。
 
 **AgentProviderBundle（能力包）**
 Provider 能力的严格中立入口，由 `AgentProviderBundleFactory.createBundle` 直接创建。必选端口 `runtime` 和 `conversation`；其余（`threadCatalog`、`threadSubscription`、`threadNaming`、`threadArchival`、`threadDeletion`、`threadCompaction`、`threadBranching`、`turnSteering`、`permissionResponses`、`questions`、`deniedActionOverride`、`modelCatalog`、`localThreadList`、`sessionConfiguration`、`planApproval`、`conversationModes`、`skills`、`permissionPolicy`、`usageQuota`）都是可选的。不支持的端口必须为 `null`。旧 `AgentProvider` 大接口已删除。

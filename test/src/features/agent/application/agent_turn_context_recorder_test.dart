@@ -52,25 +52,6 @@ void main() {
       expect(turn.status, AgentHistoryTurnStatus.completed);
     });
 
-    test('skips retired Cursor provider ids', () async {
-      final store = MemoryAgentTurnContextStore();
-      final recorder = DefaultAgentTurnContextRecorder(store: store);
-
-      recorder.recordStarted(
-        providerId: cursorAgentProviderId,
-        event: const AgentTurnStartedEvent(
-          AgentTurn(id: 'turn-1', sessionId: 'sess-1'),
-          modelId: 'cursor-model',
-        ),
-      );
-      await recorder.flush();
-
-      expect(
-        await store.load(providerId: cursorAgentProviderId, threadId: 'sess-1'),
-        isNull,
-      );
-    });
-
     test('swallows store failures', () async {
       final recorder = DefaultAgentTurnContextRecorder(
         store: _ThrowingTurnContextStore(),
