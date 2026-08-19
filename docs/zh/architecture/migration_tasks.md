@@ -469,9 +469,18 @@ Repository 步骤。包级 24 tests 全部通过，人工代码 coverage 100%（
 
 ### 步骤 19 — `workspace_client`
 
-- [ ] 下沉所有 `dart:io` 文件扫描、目录读取和 gitignore 输入。
-- [ ] `WorkspaceNodeResponse` 只反映外部文件系统；不保存 expanded/selected。
-- [ ] 测 symlink、权限拒绝、消失文件、大目录取消和 gitignore 边界。
+- [x] 下沉所有 `dart:io` 文件扫描、目录读取和 gitignore 输入。
+- [x] `WorkspaceNodeResponse` 只反映外部文件系统；不保存 expanded/selected。
+- [x] 测 symlink、权限拒绝、消失文件、大目录取消和 gitignore 边界。
+
+**完成于 2026-08-20。** `workspace_client` 现已提供可注入的 pure-Dart filesystem boundary、可取消
+且有界的 recursive scan、排序单层 directory read、带作用域的 raw gitignore input，以及由 caller
+取消的 recursive watch stream。`WorkspaceNodeResponse` 只含 path/name/type。root/请求目录拒绝 link
+与词法/canonical 逃逸；枚举从不跟随 link，跳过消失/不支持实体，并传播不含内容的 denied/IO
+failure。gitignore matching policy 通过注入的 include/skip/prune filter 留给后续 Repository。包级
+29 tests 全部通过，人工代码 coverage 100%（240 / 240），包含 1,000-entry cooperative cancellation
+与 watch teardown。最终 workspace 同轮 27/27 roots analyze/format 通过，26/26 test roots 共 1,107
+tests，人工 coverage 100%（13,380 / 13,380）；Bloc lint 对 367 文件报告 0 issues。
 
 ### 步骤 20 — `project_session_client`
 

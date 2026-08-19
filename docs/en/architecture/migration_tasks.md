@@ -492,9 +492,20 @@ analyze/format in 27/27 roots and 1,079 tests in 26/26 roots at 100% hand-writte
 
 ### Step 19 — `workspace_client`
 
-- [ ] Move all `dart:io` file scanning, directory reads, and gitignore input into this package.
-- [ ] `WorkspaceNodeResponse` reflects only the external file system and does not store expanded/selected state.
-- [ ] Test symlinks, denied access, disappearing files, large-directory cancellation, and gitignore boundaries.
+- [x] Move all `dart:io` file scanning, directory reads, and gitignore input into this package.
+- [x] `WorkspaceNodeResponse` reflects only the external file system and does not store expanded/selected state.
+- [x] Test symlinks, denied access, disappearing files, large-directory cancellation, and gitignore boundaries.
+
+**Completed 2026-08-20.** `workspace_client` now provides an injectable pure-Dart filesystem boundary,
+cancellable bounded recursive scans, sorted one-level directory reads, raw scoped gitignore inputs,
+and caller-cancellable recursive watch streams. `WorkspaceNodeResponse` contains only path/name/type.
+Root/requested directories reject links and lexical/canonical escape; enumeration never follows links,
+skips disappearing/unsupported entries, and propagates content-free denied/IO failures. Gitignore
+matching policy remains in the later Repository through an injected include/skip/prune filter. All 29
+package tests pass at 100% hand-written coverage (240 / 240), including 1,000-entry cooperative
+cancellation and watch teardown. The final workspace iteration passes analyze/format in 27/27 roots
+and 1,107 tests in 26/26 roots at 100% hand-written coverage (13,380 / 13,380); Bloc lint reports zero
+issues across 367 files.
 
 ### Step 20 — `project_session_client`
 

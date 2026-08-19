@@ -548,6 +548,12 @@ content-free decode failures, while storage failures propagate. Its production s
 `zeta_storage` atomic replacement. Domain conversion and `SystemFontCatalogApi` consumption belong to
 `settings_repository`, not this Data client.
 
+`workspace_client` exposes cancellable bounded file scans, sorted one-level directory reads, raw
+gitignore documents, and recursive filesystem change streams. It does not parse gitignore patterns:
+the Repository supplies a pure include/skip/prune filter over the active raw documents. Roots and
+requested directories reject symbolic links and canonical/lexical escape; enumerated links and
+disappearing entries are omitted. Filesystem failures are typed and content-free.
+
 The three vendor clients supply raw provider usage data; `usage_statistics_storage_client` only handles
 caching and derived indexes ([step 21](./migration_tasks.md)).
 

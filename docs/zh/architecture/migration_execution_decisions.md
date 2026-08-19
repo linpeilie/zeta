@@ -421,3 +421,60 @@ decode failure。storage read/permission failure 与 atomic-write failure 通过
 **影响。** 损坏文件不会被误认为 clean install，写入失败也不会伪装成功。测试覆盖两个 schema、
 缺失/空/损坏输入、IO 权限拒绝、close 行为，以及保留旧文档的真实 atomic replacement failure。
 本包没有 Flutter、SharedPreferences、Repository、Bloc、Cubit 或 system font 具体实现依赖。
+
+## 2026-08-20 — 步骤 18 desktop-build runner 超时
+
+**问题。** desktop 9 个矩阵已有 8 个通过，Linux staging 却把 30 分钟 job 上限全部耗在 Ubuntu
+desktop 系统包安装，尚未开始 Flutter setup、依赖解析或项目编译便被取消。同一 workflow 的其余
+Linux variant 与全部代码质量 job 都是绿色。
+
+**决策。** 将首次结果视为 runner 基础设施延迟，只重跑失败 job；没有代码或构建证据支持修改项目、
+扩大 workflow timeout，或重跑已经成功的 8 个矩阵，因此均不做。
+
+**影响。** attempt 2 约两分钟即完成 Linux staging。步骤 18 commit 的 zeta、desktop-build（9/9）、
+OSV 与 license workflow 全绿；没有为一次性 apt 延迟引入 CI 配置变更。
+
+## 2026-08-20 — 步骤 19 拆分 gitignore 输入与匹配策略
+
+**问题。** 步骤 19 与 package API contract 把 gitignore input 分给 `workspace_client`，migration
+manifest 则把旧 `workspace_gitignore.dart` domain matcher 分给 `workspace_repository`。把 matcher
+复制进 Data 会违反该裁决；把所有 gitignore concern 留在 Repository 又会让外部文本 IO 越层。
+
+**决策。** `GitignoreReader` 精确读取 root `.git/info/exclude` 与各目录 `.gitignore` 原始文档；
+`WorkspaceScanner` 维护遍历作用域，并把 immutable active-document 列表交给注入的纯
+`WorkspaceEntryFilter`。include/skip/prune 是中立机制；pattern parse、last-match-wins、negation 与
+Zeta hard-ignore policy 留给后续 Repository。链接形式的 `.git`、`info` 或 ignore file 均不遍历。
+不修改共享适配层或 Provider port。
+
+**影响。** 所有 `dart:io` ignore input 留在 Data，domain policy 不下沉。嵌套文档不会泄漏到 sibling；
+忽略目录可为可能的 negation 继续遍历，也可直接 prune。`workspace_client` 不依赖 `glob` 或 Repository。
+
+## 2026-08-20 — 步骤 19 用可取消 async IO 取代同步 isolate walk
+
+**问题。** 旧 corpus builder 在 isolate 中执行同步文件系统调用，把 access failure 静默变成空/部分
+结果，且只能靠文件数上限停止。旧 tree builder 还把 `expandedPaths` 交互状态与目录 IO 混在一起。
+步骤 19 明确要求大目录取消、权限拒绝/文件消失行为，以及只反映文件系统的 response。
+
+**决策。** 使用异步 `Directory.list`/read/watch primitive，并全部放在可注入的
+`WorkspaceFileSystem` 后；async streaming 已避免 UI 路径阻塞，不再保留额外 isolate protocol。
+每个遍历边界检查 cooperative `WorkspaceScanCancellationToken`，取消抛 typed exception；达到
+`maxFiles` 时 response 明确标记 `truncated`。denied/list failure typed 传播；枚举期间消失的实体、
+不支持实体与 link child 跳过。`readDirectory` 只读一层并排序，不含 expanded/selected；recursive
+watch 由 caller 取消，底层 subscription 同步释放。
+
+**影响。** Data test 可完全绕过真实 IO。root/请求目录遇到 link、词法逃逸或 canonical 逃逸时
+fail closed；生产枚举从不跟随 child link。本 client 只暴露 file scan、directory read、gitignore
+input 与外部 change stream；index/query policy 和交互 progress 留给后续 Repository/Cubit。
+
+## 2026-08-20 — 步骤 19 最终门禁中的无关 keychain 时序 flake
+
+**问题。** 首次最终 workspace test 同轮在未改动的 `claude_code_client` compatibility test
+`keychain process runner covers success, timeout, and start failure` 出现一次失败。Step 19 包测试没有
+失败，且错误只在该次随机顺序聚合运行出现。
+
+**决策。** 先单独复现该 named test，再用新 random seed 与 100% coverage gate 重跑整个归属包。
+两者分别 1/1 与 264/264 通过，因此不修改无关 keychain 代码，也不放宽断言。由于 green gate 要求
+最后一次完整同轮无中断通过，从头重启 26-root test/coverage iteration。
+
+**影响。** 第二次 workspace 同轮全部 1,107 tests 与人工代码 13,380 / 13,380 通过。该瞬时时序
+问题得到记录，没有污染 Step 19 patch，也没有削弱既有 security-sensitive timeout 测试。

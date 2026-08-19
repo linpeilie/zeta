@@ -527,6 +527,11 @@ clean-install 默认值；malformed、非法或不支持的文档抛出不含原
 failure 原样传播。生产 storage adapter 使用 `zeta_storage` 原子替换。domain 转换与
 `SystemFontCatalogApi` 消费归后续 `settings_repository`，不属于本 Data client。
 
+`workspace_client` 暴露可取消、有界的 file scan、排序后的单层 directory read、raw gitignore
+document 与 recursive filesystem change stream。它不解析 gitignore pattern；Repository 针对 active
+raw document 注入纯 include/skip/prune filter。root 与请求目录拒绝 symbolic link、canonical/词法
+逃逸；枚举出的 link 与消失实体被省略。filesystem failure 使用不含内容的 typed contract。
+
 三个 vendor client 提供 Provider 原始用量数据；`usage_statistics_storage_client` 只做缓存与派生索引
 （[步骤 21](./migration_tasks.md)）。
 

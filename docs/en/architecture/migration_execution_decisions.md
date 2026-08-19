@@ -489,3 +489,72 @@ Keep legitimate asynchronous file IO and disable the inapplicable `avoid_slow_as
 success. Tests cover both schemas, missing/empty/corrupt input, denied IO, close behavior, and a real
 atomic replacement failure that preserves the old document. The package has no Flutter,
 SharedPreferences, Repository, Bloc, Cubit, or concrete system-font dependency.
+
+## 2026-08-20 — Step 18 desktop-build runner timeout
+
+**Problem.** Eight of nine desktop matrices passed, while Linux staging spent the entire 30-minute job
+limit installing Ubuntu desktop packages. It was cancelled before Flutter setup, dependency resolution,
+or project compilation began. The same workflow's other Linux variants and all code-quality jobs were
+green.
+
+**Decision.** Treat the first attempt as runner infrastructure delay and rerun failed jobs only. Do not
+change project code, widen the workflow timeout, or rerun the eight successful matrices without code or
+build evidence requiring it.
+
+**Impact.** Attempt 2 completed the Linux staging job successfully in about two minutes. The Step 18
+commit is green in zeta, desktop-build (9/9), OSV, and license workflows; no CI configuration change was
+introduced for a one-off apt delay.
+
+## 2026-08-20 — Step 19 separates gitignore input from matching policy
+
+**Problem.** Step 19 and the package API contract assign gitignore input to `workspace_client`, while
+the migration manifest assigns the legacy `workspace_gitignore.dart` domain matcher to
+`workspace_repository`. Copying the matcher into Data would contradict that ruling; leaving every
+gitignore concern in Repository would leave external text IO above the Data boundary.
+
+**Decision.** `GitignoreReader` reads exact, raw root `.git/info/exclude` and directory `.gitignore`
+documents. `WorkspaceScanner` maintains their traversal scope and passes an immutable active-document
+list to an injected pure `WorkspaceEntryFilter`. Include/skip/prune semantics are neutral; the later
+Repository owns pattern parsing, last-match-wins, negation, and Zeta's hard-ignore policy. A linked
+`.git`, `info`, or ignore file is never traversed. No shared adapter or Provider port changes.
+
+**Impact.** All `dart:io` ignore input stays in Data without moving domain policy down a layer. Nested
+documents do not leak into sibling traversal, ignored directories can either remain traversable for
+possible negation or be pruned, and `workspace_client` has no `glob` or Repository dependency.
+
+## 2026-08-20 — Step 19 replaces synchronous isolate walking with cancellable async IO
+
+**Problem.** The legacy corpus builder used synchronous filesystem calls in an isolate, silently
+converted access failures to empty/partial results, and stopped only at a file cap. The legacy tree
+builder also mixed `expandedPaths` interaction state into directory IO. Step 19 explicitly requires
+large-directory cancellation, denied/disappearing-file behavior, and filesystem-only responses.
+
+**Decision.** Use asynchronous `Directory.list`/read/watch primitives behind an injectable
+`WorkspaceFileSystem`; async streaming keeps blocking IO off the UI path without retaining a separate
+isolate protocol. Add cooperative `WorkspaceScanCancellationToken` checks around every traversal
+boundary, a typed cancellation exception, and an explicit `truncated` response at `maxFiles`. Propagate
+typed denied/list failures, skip entities that disappear during enumeration, and omit unsupported or
+linked children. `readDirectory` is one level only and returns sorted filesystem nodes with no
+expanded/selected state. Recursive watch streams remain caller-cancellable and release the underlying
+subscription.
+
+**Impact.** Data tests can exercise scans without real IO. Root/requested directories fail closed on
+links, lexical escape, or canonical escape; production enumeration never follows child links. The
+client exposes file scans, directory reads, gitignore inputs, and external change streams only—index
+query policy and interaction progress remain for later Repository/Cubit steps.
+
+## 2026-08-20 — Step 19 final-gate unrelated keychain timing flake
+
+**Problem.** The first final workspace test iteration reported one failure in the unchanged
+`claude_code_client` compatibility test `keychain process runner covers success, timeout, and start
+failure`. No workspace-client test failed, and the error appeared only under that randomized aggregate
+run.
+
+**Decision.** Reproduce the named test in isolation, then rerun the entire owning package with a fresh
+random seed and its 100% coverage gate. Both passed (1/1 and 264/264), so do not modify unrelated
+keychain code or relax its assertion. Restart the complete 26-root test/coverage iteration because the
+green gate requires one final uninterrupted pass.
+
+**Impact.** The second workspace iteration passed all 1,107 tests and 13,380 / 13,380 hand-written lines.
+The transient fixture timing issue is recorded without contaminating the Step 19 patch or weakening a
+pre-existing security-sensitive timeout test.
