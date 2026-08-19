@@ -79,6 +79,24 @@ void main() {
       );
     });
 
+    test('finds a Windows npm wrapper from APPDATA', () async {
+      const wrapper = r'C:\Users\me\AppData\Roaming\npm\grok.cmd';
+      final locator = GrokCliLocator(
+        environment: const <String, String>{
+          'PATH': '',
+          'APPDATA': r'C:\Users\me\AppData\Roaming',
+          'SystemRoot': r'C:\Windows',
+        },
+        isWindows: true,
+        fileExists: (path) async => path == wrapper,
+      );
+
+      final resolved = await locator.locate(AgentProviderConfig.defaultGrok);
+
+      expect(resolved?.displayPath, wrapper);
+      expect(resolved?.executable, r'C:\Windows\System32\cmd.exe');
+    });
+
     test('finds POSIX PATH and standard install candidates', () async {
       const pathCli = '/workspace/bin/grok';
       final fromPath = GrokCliLocator(

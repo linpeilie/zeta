@@ -255,3 +255,20 @@ production 都停在 `Install Linux desktop toolchain`，尚未进入 Flutter �
 安装方式。
 
 **影响。** 步骤 13 的 zeta、license、OSV 均成功；桌面全矩阵证据顺延到步骤 14 远端验证。
+
+## 2026-08-20 — 步骤 14 Linux 覆盖率平台偏差
+
+**问题。** 本机 Windows 门禁为 100%（3,257 / 3,257），但 GitHub Actions zeta run
+`32284769504` 连续两次在 233 个测试全部通过后报告 99.79%。同一提交的 desktop-build run
+`32284769075` 九个 OS/flavor 作业全部成功，步骤 13 的 Linux apt 超时未复现。
+
+**证据。** 为 CI 保留通用的失败行诊断后，run `32285470965` 精确报告 7 行未覆盖：Linux 没有
+走到 Windows `APPDATA/npm` locator 分支，也没有走到 history reader 的跨项目递归兜底扫描。
+这两条都是受宿主平台和 fixture 目录编码影响的真实兼容路径，不是无效代码。
+
+**决策。** 不降低 100% 阈值、不加 coverage ignore。新增显式注入 Windows 模式的 APPDATA
+locator 测试，以及不提供 project/session path 的递归历史查找测试，让每个 runner 都验证两条
+兼容路径。保留 CI 的未覆盖文件/行号输出，作为所有 package 的通用失败诊断。
+
+**影响。** Grok 包现有 235 个随机顺序测试，本机仍为 100%（3,257 / 3,257）；修复只补测试与
+CI 诊断，不修改生产实现、共享适配层或 Provider 端口。

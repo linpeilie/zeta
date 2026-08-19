@@ -294,3 +294,23 @@ only optimize workflow installation if the same apt stage times out again.
 
 **Impact.** Step 13 zeta, license, and OSV runs succeeded. Full desktop-matrix evidence carries forward
 to Step 14 remote verification.
+
+## 2026-08-20 — Step 14 Linux coverage platform divergence
+
+**Problem.** The local Windows gate reached 100% (3,257 / 3,257), while GitHub Actions zeta run
+`32284769504` twice reported 99.79% after all 233 tests passed. On the same commit, desktop-build run
+`32284769075` passed all nine OS/flavor jobs, and the Step 13 Linux apt timeout did not recur.
+
+**Evidence.** After retaining a generic uncovered-line diagnostic in CI, run `32285470965` identified
+exactly seven lines: Linux did not enter the Windows `APPDATA/npm` locator branch or the history
+reader's cross-project recursive fallback. Both are real compatibility paths whose prior coverage
+depended on host platform and fixture path encoding.
+
+**Decision.** Keep the 100% threshold and add neither coverage ignores nor exclusions. Add an explicit
+Windows-mode APPDATA locator test and a recursive history lookup test with no project/session path, so
+every runner verifies both compatibility paths. Retain uncovered file/line output as a generic failure
+diagnostic for every package.
+
+**Impact.** The Grok package now has 235 randomized tests and remains at 100% locally
+(3,257 / 3,257). The fix changes tests and CI diagnostics only, with no production implementation,
+shared adaptation layer, or Provider port change.

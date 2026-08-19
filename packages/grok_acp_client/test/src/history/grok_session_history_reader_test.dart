@@ -191,6 +191,39 @@ void main() {
       expect(entries[1].role, AgentMessageRole.agent);
     });
 
+    test('finds a session by recursively scanning all project dirs', () async {
+      const sessionId = 'grok-recursive-session-redacted';
+      final sessionsRoot = Directory(
+        '${tempRoot.path}${Platform.pathSeparator}sessions',
+      );
+      await sessionsRoot.create(recursive: true);
+      await File(
+        '${sessionsRoot.path}${Platform.pathSeparator}not-a-project',
+      ).writeAsString('fixture');
+      final sessionDir = Directory(
+        '${sessionsRoot.path}${Platform.pathSeparator}unknown-project'
+        '${Platform.pathSeparator}$sessionId',
+      );
+      await sessionDir.create(recursive: true);
+      await File(
+        '${sessionDir.path}${Platform.pathSeparator}chat_history.jsonl',
+      ).writeAsString(
+        '{"type":"user","content":"<user_query>scan</user_query>"}\n'
+        '{"type":"assistant","content":"found"}\n',
+      );
+
+      final snapshot =
+          await GrokSessionHistoryReader(
+            grokHome: tempRoot.path,
+          ).readThreadHistory(
+            threadId: sessionId,
+            providerId: 'grok',
+          );
+
+      expect(snapshot.raw['source'], 'chat_history.jsonl');
+      expect(snapshot.turns, hasLength(1));
+    });
+
     test(
       'falls back from unreadable updates fixture to legacy chat_history fixture',
       () async {
