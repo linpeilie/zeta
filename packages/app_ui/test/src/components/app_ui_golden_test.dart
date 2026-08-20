@@ -13,20 +13,24 @@ void main() {
   });
 
   for (final brightness in Brightness.values) {
-    testWidgets('component gallery renders ${brightness.name}', (tester) async {
-      final goldenKey = ValueKey<String>('gallery-${brightness.name}');
-      await tester.pumpShadcnApp(
-        _GoldenGallery(key: goldenKey),
-        brightness: brightness,
-        size: const Size(760, 560),
-      );
-      await tester.pumpAndSettle();
+    testWidgets(
+      'component gallery renders ${brightness.name}',
+      (tester) async {
+        final goldenKey = ValueKey<String>('gallery-${brightness.name}');
+        await tester.pumpShadcnApp(
+          _GoldenGallery(key: goldenKey),
+          brightness: brightness,
+          size: const Size(760, 560),
+        );
+        await tester.pumpAndSettle();
 
-      await expectLater(
-        find.byKey(goldenKey),
-        matchesGoldenFile('goldens/app_ui_gallery_${brightness.name}.png'),
-      );
-    });
+        await expectLater(
+          find.byKey(goldenKey),
+          matchesGoldenFile('goldens/app_ui_gallery_${brightness.name}.png'),
+        );
+      },
+      tags: TestTag.golden,
+    );
   }
 }
 

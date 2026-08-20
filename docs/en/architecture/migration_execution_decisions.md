@@ -1202,3 +1202,9 @@ official `flutter analyze` command while all test gates continue to use `very_go
 **Impact.** Behavior/coverage and platform visual gates now have distinct responsibilities. Normal matrix
 tests cannot be contaminated by a developer-host baseline, while golden mismatches remain hard failures
 with auditable image evidence rather than being hidden by tag exclusion.
+
+**Follow-up evidence.** The first isolation run showed that the Very Good optimizer also discards file-level
+metadata when `--exclude-tags golden` is used: the normal app_ui job still executed both visual tests and
+failed before the dedicated job could start. Attach `tags: TestTag.golden` directly to every `testWidgets`
+case while retaining the literal file annotation for direct Flutter discovery. Per-test metadata survives
+optimization, so the normal job can remain optimized and the dedicated job remains explicit and auditable.
