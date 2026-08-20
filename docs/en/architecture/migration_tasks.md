@@ -681,14 +681,14 @@ and all nine macOS/Windows/Linux desktop builds.
 
 ### Step 28 — Typed l10n mapping
 
-**Status: in progress (28A–28B complete).** The app-owned shadcn adapter and exhaustive mapping for all
-63 current cross-layer status/failure/warning/operation codes are green; frozen notification copy and
-provider-local catalog removal remain.
+**Status: in progress (28A–28C complete).** The app-owned shadcn adapter, exhaustive mapping for all
+63 current cross-layer status/failure/warning/operation codes, and bootstrap-injected frozen-locale
+notification copy are green; provider-local catalog removal remains.
 
 - [ ] Remove the four TextCatalog/Fallback families and `ZetaTextCatalogs`.
 - [ ] Replace lower-layer messages with typed failures/codes; map them exhaustively in `lib/l10n/failure_messages.dart`.
 - [x] Keep `ZetaShadcnLocalizations` and shadcn ARB keys in the app.
-- [ ] Create a no-BuildContext `DesktopNotificationCopyResolver`, injected by bootstrap for a frozen Locale.
+- [x] Create a no-BuildContext `DesktopNotificationCopyResolver`, injected by bootstrap for a frozen Locale.
 - [x] Verify identical English/Chinese keys, placeholder metadata, and escaping.
 - [ ] Packages importing `AppLocalizations` = 0.
 

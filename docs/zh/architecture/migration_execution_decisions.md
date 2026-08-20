@@ -1062,3 +1062,13 @@ job 可继续使用优化器，专用 job 的选择范围仍明确且可审计�
 分母。各 package 已在独立矩阵 job 中执行自己的 100% 门禁，因此只从根聚合排除 `packages/**`，继续保留
 generated source 排除；矩阵进入单个 package 工作目录时该 glob 不产生作用。不通过外部 `src` 导入操纵
 instrumentation。修正后根目录 79 项随机顺序测试全部通过，覆盖率 100%。
+
+**28C Locale 与边界决策。** bootstrap 通过 settings repository 既有 D1/D7 resolver 冻结首个系统 Locale：
+支持的简体中文映射为 `zh-Hans`，英文、不支持语言及繁体中文变体回退英文。由同一个同步
+`AppLocalizations` 实例创建 `FailureMessages` 和 `DesktopNotificationCopyResolver`，所有 flavor 都在
+`runApp` 前接收同一 `AppDependencies`，`MaterialApp.locale` 固定为该值，保证进程生命周期内稳定。首版
+resolver 直接返回 Repository `NotificationRequest`，被 source guard 正确拦截；现改用 app 自有 immutable
+`DesktopNotificationCopy`，Step 29 Bloc 再在既有允许的 Repository 边界转换。没有修改 Repository port 或
+共享 adapter。测试覆盖中英文全部 7 种 attention、Windows/POSIX/空项目路径、安全 body、稳定 tag、Linux
+action 文案、同步/异步 bootstrap builder、observer/error hook，以及显式与平台 Locale 两条路径。Analyze
+与 85 项随机顺序根测试均通过，覆盖率 100%。

@@ -1250,3 +1250,15 @@ unexecuted sibling-package lines in the root app denominator. Those packages alr
 100% jobs. Exclude only `packages/**` from the root aggregation while retaining generated-source exclusion;
 the same glob is inert when the matrix working directory is an individual package. Do not use external `src`
 imports to manipulate instrumentation. The corrected root run passes all 79 randomized tests at 100%.
+
+**28C locale and boundary decision.** Freeze the first platform locale in bootstrap through the existing
+settings-repository D1/D7 resolver: supported Simplified Chinese becomes `zh-Hans`; English, unsupported
+languages, and Traditional Chinese variants fall back to English. Construct `FailureMessages` and
+`DesktopNotificationCopyResolver` from the same synchronous `AppLocalizations` instance, inject the resulting
+`AppDependencies` into every flavor before `runApp`, and pin `MaterialApp.locale` to that value for process
+stability. The first resolver implementation returned Repository `NotificationRequest` directly, which the
+source guard correctly rejected. Replace that coupling with an app-owned immutable `DesktopNotificationCopy`;
+the Step 29 Bloc will translate it at its already-approved Repository boundary. No Repository port or shared
+adapter changes. Tests cover all seven attention kinds in both languages, Windows/POSIX/empty project paths,
+safe bodies, stable tags, Linux action copy, sync/async bootstrap builders, observer/error hooks, and both
+explicit and platform locale paths. Analyze and 85 randomized root tests pass at 100% coverage.
