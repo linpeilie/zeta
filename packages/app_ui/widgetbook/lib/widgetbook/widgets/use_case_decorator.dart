@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+import 'package:app_ui/app_ui.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 /// A decorator that wraps every use case with a consistent background.
 class UseCaseDecorator extends StatelessWidget {
@@ -11,9 +12,15 @@ class UseCaseDecorator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return ColoredBox(
-      color: colorScheme.surfaceContainerHighest,
-      child: SizedBox.expand(child: Material(child: child)),
+    final shadcnTheme = Theme.of(context).brightness == Brightness.dark
+        ? AppTheme.shadcnDark
+        : AppTheme.shadcnLight;
+    return sf.Theme(
+      data: shadcnTheme,
+      child: ColoredBox(
+        color: colorScheme.surfaceContainerHighest,
+        child: SizedBox.expand(child: Material(child: child)),
+      ),
     );
   }
 }

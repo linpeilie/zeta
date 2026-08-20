@@ -663,6 +663,10 @@ unchanged with a new random seed.
 
 ### Step 27 — `packages/app_ui`
 
+**Status: in progress.** Increments 27A (tokens/theme) and 27B (base components plus the pure-UI
+WindowFrame) are complete and independently green. Workbench, virtualization, and final accessibility /
+golden acceptance remain in 27C–27E.
+
 - [ ] The accessibility baseline is fixed at WCAG 2.2 AA / macOS / Windows / Linux.
 - [ ] Migrate design tokens, base components, Workbench primitives, virtual scrolling, and the pure-UI part of WindowFrame.
 - [ ] Keep `shadcn_flutter` and consistently import it `as sf`.

@@ -13,8 +13,55 @@
 import 'package:widgetbook/widgetbook.dart' as _widgetbook;
 import 'package:widgetbook_catalog/widgetbook/use_cases/app_button.dart'
     as _widgetbook_catalog_widgetbook_use_cases_app_button;
+import 'package:widgetbook_catalog/widgetbook/use_cases/ide_components.dart'
+    as _widgetbook_catalog_widgetbook_use_cases_ide_components;
 
 final directories = <_widgetbook.WidgetbookNode>[
+  _widgetbook.WidgetbookFolder(
+    name: 'components',
+    children: [
+      _widgetbook.WidgetbookComponent(
+        name: 'IdeButton',
+        useCases: [
+          _widgetbook.WidgetbookUseCase(
+            name: 'control gallery',
+            builder: _widgetbook_catalog_widgetbook_use_cases_ide_components
+                .controlGallery,
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookComponent(
+        name: 'IdeStatusCard',
+        useCases: [
+          _widgetbook.WidgetbookUseCase(
+            name: 'status tones',
+            builder: _widgetbook_catalog_widgetbook_use_cases_ide_components
+                .statusTones,
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookComponent(
+        name: 'IdeTabs',
+        useCases: [
+          _widgetbook.WidgetbookUseCase(
+            name: 'desktop tabs',
+            builder: _widgetbook_catalog_widgetbook_use_cases_ide_components
+                .desktopTabs,
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookComponent(
+        name: 'WindowFrame',
+        useCases: [
+          _widgetbook.WidgetbookUseCase(
+            name: 'Windows shell',
+            builder: _widgetbook_catalog_widgetbook_use_cases_ide_components
+                .windowsShell,
+          ),
+        ],
+      ),
+    ],
+  ),
   _widgetbook.WidgetbookFolder(
     name: 'widgets',
     children: [

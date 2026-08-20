@@ -870,3 +870,48 @@ WindowFrame 纯 UI 部分、27C Workbench 原语、27D 虚拟滚动、27E 无障
 **影响。** 既有 VGV consumer 保持源码兼容，后续 UI 增量可以逐组件迁移。步骤 27A 的 app_ui analyze、
 86 个随机顺序测试及手写 coverage 100% 全绿；Widgetbook analyze 与 root 72-test 架构门禁也通过，且没有
 任何禁止的下层依赖 import。
+
+## 2026-08-20 — 步骤 27B 将图片与窗口副作用改为 app 注入
+
+**问题。** 旧图片预览直接执行 `dart:io` 文件读取并从 `AppLocalizations` 获取文案；旧 WindowFrame 直接
+调用 `window_manager`、拥有 Zeta SVG asset、读取最大化状态并内嵌英文窗口按钮文案。照搬实现虽能保留
+视觉，却会违反文档规定的 `app_ui` 纯 UI 边界。
+
+**决策。** `IdeImageThumbnail` 与 `showIdeImagePreview` 接受 `ImageProvider` 以及全部可见/语义文案，文件
+校验、读取失败留给后续 app adapter。`WindowFrame` 接受视觉平台、app-owned Logo widget、本地化标签、
+拖拽区 wrapper、窗口状态与最小化/最大化/还原/关闭回调；包内不出现平台通道、应用 asset 路径、
+Repository、Data client 或 `AppLocalizations` import。紧凑控件统一守住 WCAG 2.2 AA 24 dp 命中下限，
+纯图标 action 强制可访问名称，进度/Toast 使用 live region，resize handle 提供方向键替代，动效尊重系统
+reduce-motion。
+
+**影响。** 共享包只拥有确定性渲染与交互，OS 副作用和本地化文案由后续 bootstrap/presentation 组合；
+全部 API 无需 `window_manager` 或文件系统 fake 即可跨主机测试，且没有修改 Provider port 或共享领域 adapter。
+
+## 2026-08-20 — 步骤 27B 将 shadcn 0.0.53 Overlay 限制封装在 UI 包内
+
+**问题。** 旧项目已有针对 `shadcn_flutter 0.0.53` anchor-follow 变换失败的兼容层。组件测试还发现同版本
+在主动关闭 Toast 后仍保留自动关闭 timer，且测试 Overlay 可能把 Toast paint 放到合成 viewport 之外。
+删除兼容层会重新引入桌面 MouseTracker 故障；直接修改依赖又会把本迁移扩成 vendor 变更。
+
+**决策。** 按原职责迁移 `IdeStablePopoverOverlayHandler`：委托全部 Overlay 生命周期，仅在打开及 live
+configuration 更新时强制关闭 anchor following。Popover/Toast wrapper 对正常 consumer 隐藏第三方句柄。
+Toast 测试使用短自动关闭时钟并推进 fake clock，以公开 overlay 状态为断言，不修改 shadcn 内部；Toast
+语义节点改为 explicit children，使 live message 与本地化关闭 action 保持独立。
+
+**影响。** 已知 vendor 行为被隔离并完整覆盖，无 Provider port 或 vendored source 改动。Widgetbook 现从
+`AppTheme` 同时应用 Material 与 shadcn 投影，并为生成的组件 gallery 显式声明相同 shadcn 版本。步骤 27B
+最终 app_ui analyze 零问题、192 个随机顺序测试、手写 coverage 100%；Widgetbook analyze 同样全绿。
+
+## 2026-08-20 — 步骤 27B 的 Widgetbook 依赖未新增许可证类别
+
+**问题。** Widgetbook 内应用 shadcn 投影需要显式声明 `shadcn_flutter`。依赖清单发生变化时必须基于完整
+解析树审计，不能因 app_ui 已使用该包或凭包名推断安全。
+
+**决策。** 从 Pub workspace root 使用 Very Good CLI 分别扫描 direct-main、direct-dev 与 transitive
+依赖。当前会话没有 skill 指定的 MCP scanner，已安装 CLI 也不再接受旧 `--licenses` 参数，因此按当前
+`--reporter text` 接口扫描三个解析集合；本 UI 增量不修改无关依赖。
+
+**影响。** 28 个 direct-main 与 10 个 direct-dev 全为 MIT/BSD/Apache；`shadcn_flutter` 是
+BSD-3-Clause，且没有增加新的解析包。138 个 transitive 的完整扫描仍保留两个既有人工复核项：`dbus`
+（MPL-2.0，medium/弱 copyleft）与 `pubspec_lock_parse`（unknown，high/需人工复核）。二者均非 27B 引入，
+继续作为显式供应链观察项，而不被静默判定为合规。

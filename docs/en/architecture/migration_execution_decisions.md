@@ -1007,3 +1007,59 @@ motion now share the same extension-backed source; shadcn imports remain consist
 **Impact.** Existing VGV consumers remain source-compatible and later UI increments can migrate one
 component at a time. Step 27A passes app_ui analyze, 86 randomized tests, and 100% hand-written coverage;
 Widgetbook analyze and the 72-test root architecture gate also pass with no forbidden lower-layer import.
+
+## 2026-08-20 — Step 27B makes image and window effects app-owned inputs
+
+**Problem.** The legacy image preview performs `dart:io` file reads and obtains copy through
+`AppLocalizations`; the legacy WindowFrame calls `window_manager`, owns the Zeta SVG asset, detects
+maximize state, and embeds English caption labels. Copying either implementation would violate the
+documented pure-UI `app_ui` boundary even though their visual layout belongs in the package.
+
+**Decision.** `IdeImageThumbnail` and `showIdeImagePreview` accept an `ImageProvider` plus all visible and
+semantic copy; file validation/read failures stay in the later app adapter. `WindowFrame` accepts a visual
+platform, an app-owned logo widget, localized labels, a drag-region wrapper, window state, and minimize /
+maximize / restore / close callbacks. It contains no platform channel, application asset path, Repository,
+Data client, or `AppLocalizations` import. Dense controls enforce the WCAG 2.2 AA 24 dp target floor,
+icon-only actions require accessible names, progress/toast output uses live regions, resize handles expose
+arrow-key alternatives, and motion respects the platform reduction setting.
+
+**Impact.** The shared package owns deterministic rendering and behavior while bootstrap/presentation will
+compose OS effects and localized copy in later steps. The API is testable on every host without
+`window_manager` or filesystem fakes, and no Provider port or shared domain adapter changed.
+
+## 2026-08-20 — Step 27B contains shadcn 0.0.53 overlay quirks inside the UI package
+
+**Problem.** The legacy project already works around a `shadcn_flutter 0.0.53` anchor-follow transform
+failure. Component tests also showed that the same release leaves a toast auto-close timer pending after
+programmatic close, and its test overlay can position toast paint beyond the synthetic viewport. Removing
+the compatibility layer would reintroduce a desktop MouseTracker failure; patching the dependency would
+expand this migration into a vendor change.
+
+**Decision.** Migrate `IdeStablePopoverOverlayHandler` unchanged in responsibility: it delegates overlay
+lifecycle while forcing anchor following off both at open and on live configuration updates. Popover and
+toast wrappers hide third-party handles from normal consumers. Toast tests advance a short configured
+auto-close clock and assert the public overlay state instead of patching shadcn internals; toast semantics
+use explicit child nodes so the live message and localized close action remain distinct.
+
+**Impact.** The known vendor behavior is isolated and exhaustively covered without changing a Provider
+port or vendored source. Widgetbook now applies both Material and shadcn projections from `AppTheme` and
+declares the same direct shadcn version for its generated component galleries. Step 27B finishes with zero
+app_ui analyze findings, 192 randomized tests, and 100% hand-written coverage; Widgetbook also analyzes
+cleanly.
+
+## 2026-08-20 — Step 27B's Widgetbook dependency adds no new license class
+
+**Problem.** Applying the shadcn projection inside Widgetbook requires a direct `shadcn_flutter`
+declaration. A dependency-manifest change must be evaluated from the resolved tree, not assumed safe from
+the package name or from app_ui's existing declaration.
+
+**Decision.** Run Very Good CLI license scans from the Pub workspace root for direct-main, direct-dev, and
+transitive dependencies. The requested MCP scanner was unavailable and the installed CLI no longer accepts
+the skill's obsolete `--licenses` flag, so the current `--reporter text` interface was used for all three
+resolved sets. Do not change unrelated dependencies in this UI increment.
+
+**Impact.** All 28 direct-main and 10 direct-dev packages are MIT, BSD, or Apache; `shadcn_flutter` is
+BSD-3-Clause and adds no resolved package. The full 138-package transitive scan retains two pre-existing
+review items: `dbus` (MPL-2.0, medium/weak-copyleft) and `pubspec_lock_parse` (unknown, high/manual review).
+Neither was introduced by 27B; they remain visible supply-chain observations rather than being silently
+classified compliant.
