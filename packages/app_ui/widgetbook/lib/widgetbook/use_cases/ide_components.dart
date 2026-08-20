@@ -208,3 +208,67 @@ Widget responsiveWorkbench(BuildContext context) => Center(
     ),
   ),
 );
+
+/// Dynamic-height list with shared metrics and caller-owned accessible copy.
+@widgetbook.UseCase(name: 'dynamic conversation', type: IdeVirtualScrollShell)
+Widget dynamicConversation(BuildContext context) => const Center(
+  child: SizedBox(
+    width: 560,
+    height: 520,
+    child: _VirtualizationPreview(),
+  ),
+);
+
+final class _VirtualizationPreview extends StatefulWidget {
+  const _VirtualizationPreview();
+
+  @override
+  State<_VirtualizationPreview> createState() => _VirtualizationPreviewState();
+}
+
+final class _VirtualizationPreviewState extends State<_VirtualizationPreview> {
+  final ScrollController _controller = ScrollController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IdeVirtualScrollShell(
+      controller: _controller,
+      scrollbarSemanticLabel: 'Conversation scrollbar',
+      scrollToEndSemanticLabel: 'Scroll to latest message',
+      newContentLabel: 'New content',
+      backToBottomLabel: 'Back to bottom',
+      showScrollToEndButton: true,
+      hasNewContent: true,
+      onScrollToEnd: () {
+        if (_controller.hasClients) {
+          _controller.jumpTo(_controller.position.maxScrollExtent);
+        }
+      },
+      child: ListView.builder(
+        controller: _controller,
+        itemCount: 200,
+        padding: context.appSpacing.panelPadding,
+        itemBuilder: (context, index) => Padding(
+          padding: EdgeInsets.only(bottom: context.appSpacing.xs),
+          child: IdeStatusCard(
+            tone: index.isEven
+                ? IdeStatusCardTone.neutral
+                : IdeStatusCardTone.info,
+            title: 'Virtual message ${index + 1}',
+            body: Text(
+              index % 3 == 0
+                  ? 'A variable-height message with additional detail.'
+                  : 'A compact message.',
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

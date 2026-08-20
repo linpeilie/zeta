@@ -664,8 +664,8 @@ unchanged with a new random seed.
 ### Step 27 — `packages/app_ui`
 
 **Status: in progress.** Increments 27A (tokens/theme), 27B (base components plus the pure-UI
-WindowFrame), and 27C (Workbench primitives) are complete and independently green. Virtualization and
-final accessibility / golden acceptance remain in 27D–27E.
+WindowFrame), 27C (Workbench primitives), and 27D (virtual scrolling) are complete and independently
+green. Final accessibility / golden acceptance remains in 27E.
 
 - [ ] The accessibility baseline is fixed at WCAG 2.2 AA / macOS / Windows / Linux.
 - [ ] Migrate design tokens, base components, Workbench primitives, virtual scrolling, and the pure-UI part of WindowFrame.

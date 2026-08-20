@@ -624,8 +624,8 @@ seed 重跑完整 270-test 包后通过。
 
 ### 步骤 27 — `packages/app_ui`
 
-**状态：进行中。** 27A（token/theme）、27B（基础组件及 WindowFrame 纯 UI 部分）与 27C（Workbench
-原语）已完成并各自全绿；虚拟滚动及最终无障碍/golden 总验收留在 27D–27E。
+**状态：进行中。** 27A（token/theme）、27B（基础组件及 WindowFrame 纯 UI 部分）、27C（Workbench
+原语）与 27D（虚拟滚动）已完成并各自全绿；最终无障碍/golden 总验收留在 27E。
 
 - [ ] 无障碍基线固定为 WCAG 2.2 AA / macOS / Windows / Linux。
 - [ ] 迁设计 token、基础组件、Workbench 原语、虚拟滚动与 WindowFrame 纯 UI 部分。

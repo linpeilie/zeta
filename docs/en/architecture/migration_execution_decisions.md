@@ -1102,3 +1102,45 @@ generation completed normally and refreshed the Widgetbook directory output.
 **Impact.** The final tests prove real wide, medium, compact, keyboard, focus, identity-retention, RTL-safe
 inset, and semantic paths without weakening the 100% gate. Production behavior changed only by deleting
 dead defensive code; no package boundary or public port changed.
+
+## 2026-08-20 — Step 27D keeps virtual scrolling as pure UI/render infrastructure
+
+**Problem.** The legacy virtualization directory contains about 2,180 production lines and 2,133 test
+lines. Its extent index, RenderSliver, list controller, and scroll coordinator fit the `app_ui` boundary,
+but the scrollbar reads `AppLocalizations` directly and one file exposes the scrollbar, scroll-to-end
+button, and composition shell together. The old shell's `coordinator` argument is never read; copying it
+would preserve a misleading API and import localization into the shared UI package.
+
+**Decision.** Migrate the pure algorithms and render infrastructure. Split the scrollbar, scroll-to-end
+button, and shell into separate files, with callers providing scrollbar, action, and visible-state copy.
+Remove the unused coordinator field from the shell; upper-layer state continues to decide button
+visibility. Add a bridge that accepts only a Flutter notification, controller, and generic coordinator.
+Resolve styling, radii, spacing, and motion from ThemeExtensions, use `PositionedDirectional`, and honor
+reduced motion through the motion tokens. Do not change a shared adapter, Repository, Data client, or
+Provider port.
+
+**Impact.** app_ui now owns stable-ID extent indexing, anchor correction, a dynamic-height RenderSliver,
+smooth desktop wheel input, the follow/free coordinator, and accessible scroll composition. Widgetbook
+adds a 200-item dynamic-conversation example. Step 27D passes app_ui analysis, 284 randomized tests, and
+100% hand-written coverage; Widgetbook also analyzes cleanly.
+
+## 2026-08-20 — Step 27D closes legacy coverage gaps through invariant review
+
+**Problem.** Moving the legacy implementation under VGV lint first produced 38 style findings;
+`dart fix --apply` mechanically fixed 15, with the remaining findings involving cascades, parameter
+assignment, public documentation, and import boundaries. The migrated behavior tests passed, but the
+first complete package run covered only 96.75%. Gaps included real driver lifecycle/notification-bridge
+contracts and redundant fallbacks made unreachable by Fenwick lower-bound, the non-empty-index epoch
+invariant, and pre-layout garbage collection. Reverse-sliver error detail lives in a debug-only assert;
+repeatedly pumping an invalid render tree causes recurring layout exceptions.
+
+**Decision.** Preserve the unified `very_good test` runner, randomization, and 100% threshold. Add
+contracts for value equality, pending sequences, anchor fallback, attached/detached drivers, default frame
+scheduling, animated offsets, the user-notification bridge, smooth-scroll correction, empty data,
+controller replacement, and missing delegate children. Remove provably unreachable epoch/index/trailing-
+garbage fallbacks. Apply one local coverage ignore only to the debug-only invalid-direction diagnostics
+while retaining the runtime assert; do not widen file or package exclusions.
+
+**Impact.** Coverage rises from 96.75% to 100% while every virtualization production file stays in the
+denominator. The cleanup removes only defenses duplicated by established invariants; valid layout,
+scroll-state behavior, public component behavior, and package boundaries do not change.

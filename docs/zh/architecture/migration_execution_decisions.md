@@ -945,3 +945,36 @@ Widgetbook analyze 以及 root 72-test/100%-coverage 架构门禁同样通过。
 
 **影响。** 最终测试真实覆盖 wide/medium/compact、键盘、焦点、身份保留、RTL-safe inset 与语义路径，
 且没有削弱 100% 门禁。生产行为只删除死防御代码，未改变任何包边界或公开 port。
+
+## 2026-08-20 — 步骤 27D 保持虚拟滚动为纯 UI/Render 基础设施
+
+**问题。** 旧虚拟化目录约 2,180 行生产代码和 2,133 行测试。Extent index、RenderSliver、列表控制器与
+滚动协调器符合 `app_ui` 边界，但旧 scrollbar 直接读取 `AppLocalizations`，一个文件还同时公开 scrollbar、
+滚到底部按钮和组合 Shell。旧 Shell 的 `coordinator` 参数从未被读取；照搬会保留误导 API，并把本地化依赖
+带入共享 UI 包。
+
+**决策。** 迁移纯算法与 render 基础设施；将 scrollbar、滚到底部按钮和 Shell 拆成三个文件，并要求调用方
+传入 scrollbar、action 与可见状态文案。Shell 不再携带未使用的 coordinator 字段，列表是否显示按钮仍由
+上层状态决定；另提供只接受 Flutter notification、controller 与通用 coordinator 的用户滚动桥接函数。
+样式、圆角、间距和动效全部读取 ThemeExtension，定位使用 `PositionedDirectional`，reduce-motion 由主题
+动效解析。没有修改共享 adapter、Repository、Data client 或 Provider port。
+
+**影响。** app_ui 现在拥有稳定 ID 高度索引、锚点修正、动态高度 RenderSliver、平滑桌面滚轮、follow/free
+协调器与可访问滚动组合；Widgetbook 新增 200 项动态会话示例。27D 的 app_ui analyze 零问题、284 个随机
+顺序测试和手写 coverage 100% 全绿；Widgetbook analyze 同样全绿。
+
+## 2026-08-20 — 步骤 27D 用不变量审计收敛旧代码覆盖缺口
+
+**问题。** 旧实现迁入 VGV lint 后先出现 38 个风格问题；`dart fix --apply` 机械修复其中 15 个，剩余为
+级联、参数赋值、公开文档和导入边界。旧测试迁入后行为全部通过，但新包首次完整覆盖率只有 96.75%。缺口
+包含真实的 driver 生命周期/通知桥接契约，也包含由 Fenwick lower-bound、非空索引必有 epoch、layout 前置
+garbage collection 等不变量保证不可达的重复 fallback。反向 sliver 的错误详情位于 debug-only assert 内，
+把非法 render tree 持续泵入测试会反复触发 layout exception。
+
+**决策。** 保留统一 `very_good test`、随机顺序和 100% 阈值。为 value equality、pending sequence、anchor
+fallback、driver attached/detached、默认 frame 调度、动画 offset、用户通知桥接、平滑滚动 correction、空数据、
+controller 替换与缺失 delegate child 增加契约测试。删除可证明不可达的 epoch/index/trailing-garbage fallback；
+仅对 debug-only 非法方向诊断块使用局部 coverage ignore，并保留运行时 assert，不扩大文件/包排除范围。
+
+**影响。** 覆盖率从 96.75% 提升到 100%，且分母仍包含全部虚拟化生产文件。清理只移除与既有不变量重复的
+死防御路径；有效布局、滚动状态机、公开组件行为及包边界均未改变。

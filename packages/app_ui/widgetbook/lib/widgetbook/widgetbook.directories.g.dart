@@ -51,6 +51,16 @@ final directories = <_widgetbook.WidgetbookNode>[
         ],
       ),
       _widgetbook.WidgetbookComponent(
+        name: 'IdeVirtualScrollShell',
+        useCases: [
+          _widgetbook.WidgetbookUseCase(
+            name: 'dynamic conversation',
+            builder: _widgetbook_catalog_widgetbook_use_cases_ide_components
+                .dynamicConversation,
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookComponent(
         name: 'IdeWorkbenchScaffold',
         useCases: [
           _widgetbook.WidgetbookUseCase(
