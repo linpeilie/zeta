@@ -2,3 +2,4 @@
 library;
 
 export 'src/agent_conversation_repository.dart';
+export 'src/conversation_models.dart';

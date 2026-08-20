@@ -9,10 +9,10 @@ environment:
   flutter: ^3.47.0
 
 dependencies:
-  flutter:
-    sdk: flutter
   app_ui:
     path: ..
+  flutter:
+    sdk: flutter
   widgetbook: ^3.24.0
   widgetbook_annotation: ^3.11.0
 

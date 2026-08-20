@@ -597,11 +597,17 @@ typed `repository_not_ready` failure，不先创建临时默认 runtime。clean 
 ### 5.2 `agent_conversation_repository`
 
 ```dart
+typedef ConversationHistoryInputFactory =
+    Future<Iterable<HistoryReplayInput>> Function({
+      required ConversationKey key,
+      required AgentProviderBundle bundle,
+    });
+
 final class AgentConversationRepository {
   AgentConversationRepository({
-    required AgentHistoryClient historyClient,
-    required TurnContextStore turnContextStore,
+    required AgentTurnContextStore turnContextStore,
     required AppLogger logger,
+    ConversationHistoryInputFactory? historyInputs,
     Clock clock = const Clock(),
   });
 
@@ -636,6 +642,11 @@ final class AgentConversationRepository {
 > 看起来像一次协议调用，模糊安全边界（[Codex 协议 §8.2](../protocols/codex_app_server_protocol.md)）。
 
 live / history / replay **必须使用独立 reducer 实例**（[步骤 23](./migration_tasks.md)）。
+
+`agent_history_client` 按步骤 15 有意只导出函数式 merge 边界，并不存在 `AgentHistoryClient` object。
+上面的可选 history-input factory 提供这些中立 replay inputs；Provider 自有 typed history 仍通过
+`bundle.threadCatalog` 进入。turn metadata 使用已经导出的 `AgentTurnContextStore`，因此无需修改 vendor
+parser 或共享 Provider port。
 
 ### 5.3 其余 Repository
 

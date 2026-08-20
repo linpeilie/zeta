@@ -571,12 +571,26 @@ issues across 382 files.
 
 ### Step 23 — `agent_conversation_repository`
 
-- [ ] Do not accept `agent_provider_repository` in the constructor.
-- [ ] `openConversation` accepts the `AgentProviderBundle` / key already resolved by Bloc.
-- [ ] Migrate event pipeline, coalescing, dispatcher, domain reducer/effects, timeline aggregate, runtime registry/lease, and turn context.
-- [ ] Streams expose domain timeline snapshots only and also provide a synchronous snapshot.
-- [ ] Live, history, and replay use separate reducer instances.
-- [ ] Test event storms, out-of-order rejection, stale runtime generations, backpressure, close, and lease release.
+- [x] Do not accept `agent_provider_repository` in the constructor.
+- [x] `openConversation` accepts the `AgentProviderBundle` / key already resolved by Bloc.
+- [x] Migrate event pipeline, coalescing, dispatcher, domain reducer/effects, timeline aggregate, runtime registry/lease, and turn context.
+- [x] Streams expose domain timeline snapshots only and also provide a synchronous snapshot.
+- [x] Live, history, and replay use separate reducer instances.
+- [x] Test event storms, out-of-order rejection, stale runtime generations, backpressure, close, and lease release.
+
+**Completion record (2026-08-20):** Implemented immutable draft/thread identities, complete synchronous
+domain snapshots plus a broadcast stream, keyed event coalescing, bounded event-loop dispatch, strict
+session/thread/turn routing, and three physically separate live/history/replay reducers. Provider history,
+generic replay inputs, and serialized best-effort turn-context persistence merge without vendor parsing
+in this package. Borrowed bundle runtimes use generation-checked conversation leases; close cancels the
+pipeline, drains turn-context writes, releases leases, and best-effort unsubscribes without double-owning
+runtime disposal. Permission, question, and plan approval remain separate fail-closed methods and pending
+registries. No shared adapter or Provider port changed. Package analyze/format pass; 27 randomized tests
+cover event storms, backpressure, out-of-order and stale-generation rejection, open/close races, security
+isolation, history overlay, and lease release at 100% hand-written coverage (1,121 / 1,121).
+The final workspace iteration passes analyze in 27/27 roots and format checks 389 authoritative Dart
+files with no changes; 26/26 test roots run 1,221 tests at 100% hand-written coverage
+(15,672 / 15,672), and Bloc lint reports zero issues across 391 files.
 
 ### Step 24 — `agent_management_repository`
 

@@ -625,11 +625,17 @@ is not written until an explicit persistence input arrives.
 ### 5.2 `agent_conversation_repository`
 
 ```dart
+typedef ConversationHistoryInputFactory =
+    Future<Iterable<HistoryReplayInput>> Function({
+      required ConversationKey key,
+      required AgentProviderBundle bundle,
+    });
+
 final class AgentConversationRepository {
   AgentConversationRepository({
-    required AgentHistoryClient historyClient,
-    required TurnContextStore turnContextStore,
+    required AgentTurnContextStore turnContextStore,
     required AppLogger logger,
+    ConversationHistoryInputFactory? historyInputs,
     Clock clock = const Clock(),
   });
 
@@ -665,6 +671,11 @@ final class AgentConversationRepository {
 > ([Codex protocol §8.2](../protocols/codex_app_server_protocol.md)).
 
 live / history / replay **must use separate reducer instances** ([step 23](./migration_tasks.md)).
+
+`agent_history_client` intentionally exports the Step 15 functional merge boundary rather than an
+`AgentHistoryClient` object. The optional history-input factory above supplies those neutral replay
+inputs; provider-owned typed history still enters through `bundle.threadCatalog`. Turn metadata uses the
+already exported `AgentTurnContextStore`. This keeps vendor parsers and shared Provider ports unchanged.
 
 ### 5.3 The remaining Repositories
 

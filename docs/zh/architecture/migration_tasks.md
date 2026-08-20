@@ -541,12 +541,24 @@ permission apply 不落 UI 选中态。所有外部失败转换为保留原 caus
 
 ### 步骤 23 — `agent_conversation_repository`
 
-- [ ] 构造函数不接收 `agent_provider_repository`。
-- [ ] `openConversation` 接收 Bloc 已解析的 `AgentProviderBundle` / key。
-- [ ] 迁 event pipeline、coalescing、dispatcher、domain reducer/effect、timeline aggregate、runtime registry/lease、turn context。
-- [ ] Stream 只暴露 domain timeline snapshot；提供同步 snapshot。
-- [ ] live/history/replay 使用独立 reducer 实例。
-- [ ] 测 event storm、乱序拒绝、旧 runtime generation、backpressure、close、lease release。
+- [x] 构造函数不接收 `agent_provider_repository`。
+- [x] `openConversation` 接收 Bloc 已解析的 `AgentProviderBundle` / key。
+- [x] 迁 event pipeline、coalescing、dispatcher、domain reducer/effect、timeline aggregate、runtime registry/lease、turn context。
+- [x] Stream 只暴露 domain timeline snapshot；提供同步 snapshot。
+- [x] live/history/replay 使用独立 reducer 实例。
+- [x] 测 event storm、乱序拒绝、旧 runtime generation、backpressure、close、lease release。
+
+**完成记录（2026-08-20）**：新增不可变 draft/thread identity、完整同步 domain snapshot 与 broadcast
+Stream、按 key 合并事件、有界 event-loop dispatch、严格 session/thread/turn 路由，以及物理隔离的
+live/history/replay 三个 reducer。Provider history、通用 replay input 与串行 best-effort turn-context
+持久化在本包中合并，但不解析 vendor 格式。借入的 bundle runtime 使用 generation-checked conversation
+lease；close 取消 pipeline、排空 turn-context write、释放 lease 并 best-effort unsubscribe，且不与
+Provider Repository 重复拥有 runtime dispose。permission、question、plan approval 继续使用独立的
+fail-closed 方法和 pending registry。未修改共享 adapter 或 Provider port；包级 analyze/format 通过，
+27 个随机顺序测试覆盖 event storm、backpressure、乱序与旧 generation 拒绝、open/close race、安全语义
+隔离、history overlay 与 lease release，人工 coverage 100%（1,121 / 1,121）。
+最终 workspace 同轮 27/27 roots analyze 通过，389 个权威 Dart 文件 format 零改动；26/26 test roots
+共 1,221 tests，人工 coverage 100%（15,672 / 15,672）；Bloc lint 对 391 文件报告 0 issues。
 
 ### 步骤 24 — `agent_management_repository`
 

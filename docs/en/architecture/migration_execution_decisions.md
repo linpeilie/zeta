@@ -761,3 +761,68 @@ new random seed, then continue the interrupted workspace sequence from the next 
 The continued workspace gate finished 26/26 roots and, after the final Repository hardening rerun,
 14,552 / 14,552 lines; this remains classified as
 the already documented Windows child-process timing flake rather than a Step 22 regression.
+
+## 2026-08-20 — Step 22/23 gate tooling uses authoritative roots and native command boundaries
+
+**Problem.** Formatting all authoritative Dart files in one Windows invocation exceeded the command-line
+length limit. A later GitHub query embedded a full SHA in a PowerShell-to-`gh --jq` expression and was
+rejected by argument parsing. At the start of Step 23, `format` and `analyze` were also mistakenly invoked
+as Very Good CLI top-level commands, which do not exist; no source operation ran in either rejected call.
+
+**Decision.** Keep the approved runner split: use Dart directly for analyze/format, process the
+authoritative workspace files in bounded chunks, and use `very_good test` for every test execution.
+Query Actions with `gh run list --commit <full-sha>` and parse returned JSON outside nested `--jq` shell
+quoting. Do not add `--check-ignore` or bypass VGC with `flutter test`.
+
+**Impact.** Tool argument limits cannot change the set of checked files, rejected commands make no
+workspace mutation, and Step 22's four workflows were verified successful for commit `8e5485c`.
+An initial Step 23 manual total read the stale workspace-root LCOV as 294 / 294; the authoritative
+package-local LCOV is 1,096 / 1,096. Only the reported count changed—the 100% package gate did not.
+The final analyze pass also surfaced one pre-existing alphabetical dependency-order info in
+`app_ui/widgetbook`; dependencies were mechanically reordered without changing versions or topology,
+and the isolated rerun reported no issues.
+After lifecycle hardening, a combined analyze/test shell block did not stop after analyze found a nullable
+promotion error, so VGC predictably reached compilation and failed without running business tests. The
+local was made explicitly non-null and all subsequent combined gates short-circuit on every nonzero
+preflight exit. Final package evidence supersedes the earlier count at 1,121 / 1,121.
+The first compact final-analyze script then enumerated only direct children of `packages/` and therefore
+reported 26 roots, omitting nested `app_ui/widgetbook`. The authoritative enumeration now derives every
+root from tracked `pubspec.yaml` files; its replacement run passed 27 / 27 roots. Test-root enumeration is
+unchanged at 26 because the nested widgetbook has no test directory.
+
+## 2026-08-20 — Step 23 follows completed history/config contracts instead of nonexistent types
+
+**Problem.** The Step 23 constructor sketch named `AgentHistoryClient` and `TurnContextStore`, but Step 15
+deliberately exports only `HistoryReplayInput` plus `mergeHistoryInputs`, and Step 17 exports
+`AgentTurnContextStore`. Adding the sketched objects would duplicate accepted Data boundaries.
+
+**Decision.** Inject the existing `AgentTurnContextStore` and an optional conversation-owned factory of
+neutral `HistoryReplayInput` values. Provider-owned typed history enters through the already available
+`bundle.threadCatalog`; generic inputs go through Step 15's merge function. Keep `ConversationKey` and the
+timeline aggregate in this Repository package because no current shared consumer requires a Provider
+contract change.
+
+**Impact.** The implementation uses every completed lower-layer contract as shipped, changes no shared
+adapter or Provider port, and retains vendor parser ownership. The bilingual API sketch now matches the
+executable signature.
+
+## 2026-08-20 — Step 23 leases borrowed bundles and rejects unbound identities fail-closed
+
+**Problem.** Step 22 owns and disposes stable global bundles, while the legacy conversation registry owned
+the runtimes it created. Copying that ownership would let both Repositories dispose the same runtime.
+Initial Step 23 tests also exposed that a draft with no session accepted a thread-scoped status because
+there was not yet an expected thread id to compare.
+
+**Decision.** Treat the bundle as borrowed. The conversation registry tracks identity-based lease counts
+and monotonic generations, but only cancels its event pipeline, releases its lease, and best-effort
+unsubscribes the thread; final runtime disposal stays with Step 22. Before a draft receives
+`AgentSessionStartedEvent`, reject every event carrying a session or thread identity. After binding,
+require exact session/thread identity and a known or active turn. Coalesce only normalized delta/snapshot
+keys; all other events are ordering barriers, and queued events recheck generation at dispatch.
+
+**Impact.** Close and open races cannot create ghost updates or double disposal. Security responses remain
+three separate pending registries and methods, event storms retain FIFO barrier order, and failures are
+typed while original causes/stacks remain available only to sanitized logging. Error, deprecation, and
+reroute timeline records retain only content-free typed signals, never the provider raw event.
+Natural completion of the current event stream now publishes a typed conversation failure, and every
+session/turn returned by start, resume, or send is identity-checked again before entering the aggregate.

@@ -14,6 +14,7 @@ dependencies:
       path: ../agent_history_client
   agent_provider_contracts:
       path: ../agent_provider_contracts
+  clock: ^1.1.2
   equatable: ^2.1.0
   zeta_logging:
       path: ../zeta_logging

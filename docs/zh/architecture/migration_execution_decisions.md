@@ -654,3 +654,60 @@ workspace 序列。
 继续后的 workspace 门禁完成 26/26 roots，并在 Repository 最终加固重跑后达到 14,552 / 14,552
 lines；该事件继续归类为已记录的
 Windows child-process 时序 flake，而非步骤 22 回归。
+
+## 2026-08-20 — 步骤 22/23 门禁工具使用权威 root 与原生命令边界
+
+**问题。** 在一次 Windows 调用中格式化全部权威 Dart 文件超过了命令行长度上限；随后把完整 SHA
+嵌入 PowerShell 到 `gh --jq` 的表达式也被参数解析拒绝。步骤 23 开始时还误把 `format`、`analyze`
+当作 Very Good CLI 顶层命令，而这些命令不存在；两次被拒调用都没有执行源码操作。
+
+**决策。** 保持已批准的 runner 分工：Dart 直接负责 analyze/format，workspace 权威文件集合按有界
+chunk 处理；所有测试继续使用 `very_good test`。Actions 使用
+`gh run list --commit <full-sha>` 查询，再在嵌套 `--jq` shell quoting 之外解析 JSON。不增加
+`--check-ignore`，也不改用 `flutter test` 绕过 VGC。
+
+**影响。** 工具参数上限不会改变实际检查文件集合；被拒命令不会修改 workspace；步骤 22 commit
+`8e5485c` 的四个 workflow 均已确认成功。
+步骤 23 首次人工汇总误读了 workspace root 的旧 LCOV，得到 294 / 294；权威 package-local LCOV 为
+1,096 / 1,096。更正的只有报告计数，包级 100% 门禁结果没有变化。
+最终 analyze 还发现 `app_ui/widgetbook` 一个既有的依赖字母序 info；仅机械调整顺序，不修改版本或
+topology，隔离重跑后无诊断。
+生命周期加固后，一段组合 analyze/test shell 没有在 analyze 发现 nullable promotion 错误时短路，导致
+VGC 预期地进入编译失败但没有运行业务测试。局部值已改为显式非空，后续组合门禁在任一 preflight
+非零时立即停止；最终包级证据以 1,121 / 1,121 为准。
+首次紧凑版 final-analyze 脚本只枚举 `packages/` 的直接子目录，因此报告 26 roots 并漏掉嵌套的
+`app_ui/widgetbook`。权威枚举已改为从所有受控 `pubspec.yaml` 推导 root；替代重跑 27 / 27 全部通过。
+test root 仍为 26，因为嵌套 widgetbook 没有 test 目录。
+
+## 2026-08-20 — 步骤 23 服从已完成 history/config 契约而非不存在的类型
+
+**问题。** 步骤 23 构造函数草案写了 `AgentHistoryClient` 和 `TurnContextStore`；但步骤 15 有意只导出
+`HistoryReplayInput` 与 `mergeHistoryInputs`，步骤 17 导出的是 `AgentTurnContextStore`。新增草案中的
+object 会重复已经验收的数据边界。
+
+**决策。** 注入既有 `AgentTurnContextStore` 与可选、由 conversation package 自己拥有的中立
+`HistoryReplayInput` factory。Provider 自有 typed history 通过现有 `bundle.threadCatalog` 进入；通用
+input 使用步骤 15 merge function。`ConversationKey` 与 timeline aggregate 暂留本 Repository package，
+因为当前没有共享 consumer 要求修改 Provider contract。
+
+**影响。** 实现原样使用已经完成的下层契约，不修改共享 adapter 或 Provider port，并保持 vendor parser
+所有权；中英文 API 草案已改为可执行签名。
+
+## 2026-08-20 — 步骤 23 租用借入 bundle，并对未绑定 identity fail-closed
+
+**问题。** 步骤 22 拥有并 dispose 稳定 global bundle，旧 conversation registry 则拥有自己创建的
+runtime；复制旧所有权会让两个 Repository dispose 同一 runtime。步骤 23 初测还发现，无 session 的
+draft 因没有 expected thread id 可比较，错误接收了一条 thread-scoped status。
+
+**决策。** bundle 视为借入资源。conversation registry 追踪 identity lease count 与单调 generation，
+但只取消自己的 event pipeline、释放 lease 并 best-effort unsubscribe；runtime 最终 dispose 继续归
+步骤 22。在 draft 收到 `AgentSessionStartedEvent` 前，拒绝所有携带 session/thread identity 的事件；
+绑定后要求 session/thread 精确一致，turn 必须已知或正 active。只合并规范化 delta/snapshot key；其他
+事件都是顺序 barrier，queue dispatch 时再次检查 generation。
+
+**影响。** close/open race 不会产生 ghost update 或 double dispose；三类安全响应保持独立 pending
+registry 与方法；event storm 保持 FIFO barrier 顺序；失败使用 typed code，原 cause/stack 只进入
+sanitized logging。error、deprecation 与 reroute 的 timeline record 只保留不含内容的 typed signal，
+不保存 Provider raw event。
+当前 event stream 自然结束时会发布 typed conversation failure；start/resume/send 返回的每个
+session/turn 在进入 aggregate 前都会再次校验 identity。
