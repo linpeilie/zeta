@@ -641,11 +641,14 @@ seed 重跑完整 270-test 包后通过。
 
 ### 步骤 28 — l10n typed mapping
 
+**状态：进行中（28A 已完成）。** app 自有 shadcn 适配器及其完整中英文契约测试已全绿；typed failure
+映射、冻结通知文案与 provider 本地目录清理仍待完成。
+
 - [ ] 删除 4 组 TextCatalog/Fallback 与 `ZetaTextCatalogs`。
 - [ ] 下层改为 typed failure/code；`lib/l10n/failure_messages.dart` 穷尽映射。
-- [ ] `ZetaShadcnLocalizations` 和 shadcn ARB keys 留 app。
+- [x] `ZetaShadcnLocalizations` 和 shadcn ARB keys 留 app。
 - [ ] 建无 BuildContext 的 `DesktopNotificationCopyResolver`，由 bootstrap 按冻结 Locale 注入。
-- [ ] 核验 en/zh keys、placeholder metadata、escaping 完全一致。
+- [x] 核验 en/zh keys、placeholder metadata、escaping 完全一致。
 - [ ] packages 的 `AppLocalizations` import = 0。
 
 **P5 出口**：app_ui 独立全绿；中英文 UI smoke；仓库无 TextCatalog 残留。

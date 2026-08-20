@@ -1214,3 +1214,24 @@ The existing images matched pixel-for-pixel on Ubuntu 24.04 once that job used F
 replacement was necessary. Runs 32333147860 and 32333147698 also passed OSV scanning and all nine desktop
 build variants. The observed 0.95%/0.96% mismatch was therefore a Flutter 3.47.1 renderer drift, not an
 intrinsic Windows-versus-Linux difference.
+
+## 2026-08-20 — Step 28 is split around the actual interim localization boundary
+
+**Problem.** The migration plan names four legacy TextCatalog/Fallback families plus `ZetaTextCatalogs`, but
+those legacy app files were already absent after the package extraction. The current code instead contains
+three interim provider-local English catalogs in the Codex, Claude, and Grok clients. Keeping or merely
+renaming them would violate the step's zero-TextCatalog exit criterion and the rule that packages do not
+author localizable Zeta UI copy. Removing them will require targeted changes to shared neutral model fields,
+which is a real provider-contract adjustment rather than the literal deletion described by the plan.
+
+**Decision.** Treat the mismatch as an evolved intermediate state and execute step 28 in four independently
+gated increments: 28A app-owned shadcn localization, 28B exhaustive typed failure mapping, 28C frozen-locale
+desktop notification copy, and 28D removal of every provider-local catalog with typed or provider-authored
+neutral data in its place. Do not move `AppLocalizations` into a package and do not preserve an English
+fallback catalog under another name.
+
+**28A evidence.** `ZetaShadcnLocalizations` now lives under `lib/l10n`, is first in the app and test delegate
+chains, and resolves all shadcn copy from the existing 1,035-key en/zh ARB pair. The legacy smoke suite alone
+left the adapter at 62.93% root coverage because it sampled only a few overrides; a complete surface-contract
+test now executes every getter, parameterized formatter, and delegate branch. Analyze and 77 randomized root
+tests pass with 100% hand-written coverage.

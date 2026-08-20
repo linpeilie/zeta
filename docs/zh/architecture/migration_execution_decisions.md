@@ -1035,3 +1035,19 @@ job 可继续使用优化器，专用 job 的选择范围仍明确且可审计�
 固定 Flutter 3.47.0 后，现有基准在 Ubuntu 24.04 上逐像素一致，因此无需替换图片。运行 32333147860 与
 32333147698 也分别通过 OSV 扫描和三平台九项桌面构建。此前 0.95%/0.96% 差异由 Flutter 3.47.1 渲染漂移
 引起，并非 Windows 与 Linux 平台必然不同。
+
+## 2026-08-20 — 步骤 28 按实际临时本地化边界拆分
+
+**问题。** 迁移计划点名四组旧 TextCatalog/Fallback 及 `ZetaTextCatalogs`，但 package 拆分后这些旧 app
+文件已经不存在；当前代码实际残留的是 Codex、Claude、Grok 三个 client 内的临时英文目录。保留或改名会
+同时违反“TextCatalog 为零”和“package 不编写 Zeta 可本地化 UI 文案”两项出口。删除它们需要定向调整共享
+中立模型字段，属于真实 Provider 契约调整，而非计划字面描述的简单删文件。
+
+**决策。** 将该偏差视为迁移过程形成的中间态，把步骤 28 拆为四个独立门禁增量：28A app 自有 shadcn
+本地化、28B typed failure 穷尽映射、28C 冻结 Locale 的桌面通知文案、28D 用 typed 或 provider 原生中立数据
+替换所有 provider 本地目录。`AppLocalizations` 不下沉 package，也不把英文 fallback 换名保留。
+
+**28A 证据。** `ZetaShadcnLocalizations` 已迁至 `lib/l10n`，排在 app 与测试 delegate 链首位，并从现有
+1,035-key en/zh ARB 读取全部 shadcn 文案。旧冒烟套件只抽查少量 override，首次使根覆盖率降至 62.93%；
+现已增加完整表面契约测试，执行每个 getter、参数化 formatter 与 delegate 分支。Analyze 与 77 项随机顺序
+根测试通过，手写覆盖率恢复 100%。
