@@ -15,6 +15,23 @@ void main() {
       expect(spacing.xxlg, 48);
     });
 
+    test('builds semantic insets', () {
+      expect(spacing.pagePadding, isA<EdgeInsets>());
+      expect(spacing.pagePaddingCompact, isA<EdgeInsets>());
+      expect(spacing.sectionPadding, isA<EdgeInsets>());
+      expect(spacing.panelPadding, isA<EdgeInsets>());
+      expect(spacing.cardPadding, isA<EdgeInsets>());
+      expect(spacing.dialogPadding, isA<EdgeInsets>());
+      expect(spacing.toolbarPadding, isA<EdgeInsets>());
+      expect(spacing.rowPadding, isA<EdgeInsets>());
+      expect(spacing.settingsRowPadding, isA<EdgeInsets>());
+      expect(spacing.settingsRowPaddingFlat, isA<EdgeInsets>());
+      expect(spacing.settingsGroupTitlePadding, isA<EdgeInsets>());
+      expect(spacing.composerPadding, isA<EdgeInsets>());
+      expect(spacing.compactControlPadding, isA<EdgeInsets>());
+      expect(spacing.inputContentPadding, isA<EdgeInsets>());
+    });
+
     test('copyWith returns a new instance with updated values', () {
       final updated = spacing.copyWith(xxs: 2, md: 20);
       expect(updated.xxs, 2);

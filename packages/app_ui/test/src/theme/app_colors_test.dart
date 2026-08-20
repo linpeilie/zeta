@@ -3,14 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('AppColors', () {
-    const colors = AppColors(
-      success: Color(0xFF16A34A),
-      onSuccess: Color(0xFFFFFFFF),
-      warning: Color(0xFFCA8A04),
-      onWarning: Color(0xFFFFFFFF),
-      info: Color(0xFF2563EB),
-      onInfo: Color(0xFFFFFFFF),
-    );
+    final colors = AppColors.light;
 
     test('copyWith returns a new instance with updated values', () {
       final updated = colors.copyWith(success: const Color(0xFF000000));
@@ -38,14 +31,7 @@ void main() {
     });
 
     test('lerp interpolates between two AppColors', () {
-      const other = AppColors(
-        success: Color(0xFF000000),
-        onSuccess: Color(0xFF000000),
-        warning: Color(0xFF000000),
-        onWarning: Color(0xFF000000),
-        info: Color(0xFF000000),
-        onInfo: Color(0xFF000000),
-      );
+      final other = AppColors.dark;
 
       final result = colors.lerp(other, 0.5);
       expect(result.success, isNotNull);
@@ -54,6 +40,35 @@ void main() {
       expect(result.onWarning, isNotNull);
       expect(result.info, isNotNull);
       expect(result.onInfo, isNotNull);
+    });
+
+    testWidgets('resolves configured and fallback palettes', (tester) async {
+      late AppColors configured;
+      late AppColors fallback;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: Builder(
+            builder: (context) {
+              configured = AppColors.of(context);
+              return Theme(
+                data: ThemeData.dark(),
+                child: Builder(
+                  builder: (context) {
+                    fallback = AppColors.of(context);
+                    return const SizedBox();
+                  },
+                ),
+              );
+            },
+          ),
+        ),
+      );
+
+      expect(configured, same(AppColors.light));
+      expect(fallback, same(AppColors.dark));
+      expect(colors.controlSurface, colors.surfaceElevated);
+      expect(colors.popoverSurface, colors.surfaceOverlay);
     });
   });
 }

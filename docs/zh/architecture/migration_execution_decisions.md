@@ -843,3 +843,30 @@ production/test 代码。使用新 seed 重跑完整 Claude package，通过后�
 
 **影响。** 未改代码的 Claude 重跑全部 270 tests 与 100% coverage 通过；恢复后的矩阵最终完成 27/27。
 该事件仍归类为已记录的 Windows cleanup race，而不是步骤 26 回归。
+
+## 2026-08-20 — 步骤 27 拆成五个独立门禁的 UI 增量
+
+**问题。** 迁移清单把 `app_ui` 描述为一个步骤，但旧 `ui/core` 实际包含 48 个 Dart 文件、约一万行，
+横跨主题 token、基础控件、WindowFrame、Workbench 布局与虚拟滚动。将该体量作为一次不可分割改动，
+明显超过占位估算，也难以隔离回归。
+
+**决策。** 保持步骤 27 契约不变，将实现拆成五个可回滚增量：27A token/theme、27B 基础组件与
+WindowFrame 纯 UI 部分、27C Workbench 原语、27D 虚拟滚动、27E 无障碍/golden 总验收。每个增量先做
+聚焦测试与本地门禁，最后再执行步骤 27 的 workspace 总矩阵；不修改共享 adapter 或 Provider port。
+
+**影响。** 用户目标与出口标准不变，但 review、回滚、coverage 与失败归因被限制在可控范围内。在五个
+增量及最终远端门禁全部通过前，步骤 27 始终保持进行中状态。
+
+## 2026-08-20 — 步骤 27A 新增语义排版且不破坏 scaffold API
+
+**问题。** VGV scaffold 已公开并完整测试 `AppTextStyles`，而旧桌面 UI 需要更丰富、感知语义颜色的
+排版表。若在 token 增量直接替换 scaffold 类型，会在其计划增量之前迫使无关 Widgetbook 与组件一起改动。
+
+**决策。** 将迁移后的 `AppTypography` 新增为 `ThemeExtension`，同时暂时保留 `AppTextStyles` 作为公开
+兼容 extension。`AppTheme` 同时安装两者，所有新迁组件统一使用 `AppTypography`。Material 与 shadcn
+投影、语义颜色、间距、尺寸、圆角、效果与动效均来自同一套 extension-backed 真源；shadcn import 始终
+限定为 `as sf`。
+
+**影响。** 既有 VGV consumer 保持源码兼容，后续 UI 增量可以逐组件迁移。步骤 27A 的 app_ui analyze、
+86 个随机顺序测试及手写 coverage 100% 全绿；Widgetbook analyze 与 root 72-test 架构门禁也通过，且没有
+任何禁止的下层依赖 import。

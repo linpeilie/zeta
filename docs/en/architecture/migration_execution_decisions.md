@@ -976,3 +976,34 @@ package with a new seed, then resume the authoritative matrix from Codex rather 
 
 **Impact.** The unchanged Claude package passed all 270 tests and 100% coverage on rerun. The resumed matrix
 then completed 27/27 roots; this remains the documented Windows cleanup race, not a Step 26 regression.
+
+## 2026-08-20 — Step 27 is delivered as five independently gated UI increments
+
+**Problem.** The migration checklist describes `app_ui` as one step, but the legacy `ui/core` surface is
+48 Dart files and roughly ten thousand lines spanning theme tokens, base controls, WindowFrame,
+Workbench layout, and virtualization. Treating that volume as one unreviewable change is materially larger
+than the placeholder estimate and would make regressions difficult to isolate.
+
+**Decision.** Preserve the Step 27 contract and split its implementation into five reversible increments:
+27A tokens/theme, 27B base components plus the pure-UI WindowFrame, 27C Workbench primitives, 27D
+virtualization, and 27E accessibility/golden total acceptance. Each increment receives its own focused
+tests and local gate before the final Step 27 workspace matrix. No shared adapter or Provider port changes.
+
+**Impact.** The user-visible objective and exit criteria do not change, while review, rollback, coverage,
+and failure attribution become bounded. The migration status remains Step 27 in progress until all five
+increments and the final remote gates pass.
+
+## 2026-08-20 — Step 27A adds semantic typography without breaking the scaffold API
+
+**Problem.** The VGV scaffold already exposes and exhaustively tests `AppTextStyles`, while the legacy
+desktop surface needs a much richer, color-aware semantic typography table. Replacing the scaffold type in
+the token increment would force unrelated Widgetbook and component churn before their scheduled increment.
+
+**Decision.** Add `AppTypography` as the migrated `ThemeExtension` and keep `AppTextStyles` as a temporary
+public compatibility extension. `AppTheme` installs both, while all migrated components use
+`AppTypography`. Material and shadcn projections, semantic colors, spacing, metrics, radii, effects, and
+motion now share the same extension-backed source; shadcn imports remain consistently qualified `as sf`.
+
+**Impact.** Existing VGV consumers remain source-compatible and later UI increments can migrate one
+component at a time. Step 27A passes app_ui analyze, 86 randomized tests, and 100% hand-written coverage;
+Widgetbook analyze and the 72-test root architecture gate also pass with no forbidden lower-layer import.

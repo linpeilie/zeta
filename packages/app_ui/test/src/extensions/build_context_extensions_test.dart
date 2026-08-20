@@ -48,5 +48,31 @@ void main() {
 
       expect(textStyles, isA<AppTextStyles>());
     });
+
+    testWidgets('returns every migrated desktop token', (tester) async {
+      late AppMetrics metrics;
+      late AppRadii radii;
+      late AppEffects effects;
+      late AppMotion motion;
+      late AppTypography typography;
+      await tester.pumpApp(
+        Builder(
+          builder: (context) {
+            metrics = context.appMetrics;
+            radii = context.appRadii;
+            effects = context.appEffects;
+            motion = context.appMotion;
+            typography = context.appTypography;
+            return const SizedBox();
+          },
+        ),
+      );
+
+      expect(metrics, isA<AppMetrics>());
+      expect(radii, isA<AppRadii>());
+      expect(effects, isA<AppEffects>());
+      expect(motion, isA<AppMotion>());
+      expect(typography, isA<AppTypography>());
+    });
   });
 }
