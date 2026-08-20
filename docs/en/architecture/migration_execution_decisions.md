@@ -926,3 +926,53 @@ the CLI filtering limitation as evidence.
 **Impact.** The Claude rerun passes 270 tests at 100%. The final result is 27/27 green roots, 16,840 / 16,840
 covered lines, and Bloc lint at 405 files / zero issues. This is classified as transient Windows handle
 cleanup, not a Step 25 product regression.
+
+## 2026-08-20 — Step 26 keeps vendor usage shapes private and caches report projections
+
+**Problem.** The three completed vendor readers deliberately expose different response shapes, and the
+shared usage store accepts only provider-owned JSON partitions. Introducing a common Data model or a new
+Provider port would contradict Step 21. A cache entry is also fingerprint-specific but not query-specific;
+reusing it for another time window would return incomplete records. The real aggregation, cache codec,
+partial-failure, and cancellation work is materially larger than the original placeholder estimate.
+
+**Decision.** Keep every vendor response private to `usage_statistics_repository`; map it directly into
+content-free domain records and store only a Repository-owned projection. Persist the half-open query
+bounds in every entry and reuse a fingerprint hit only when both bounds match; force refresh, a different
+window, malformed payload, or storage failure rebuilds from the current scan. Run all vendors in parallel,
+isolate unexpected provider failures as typed warnings, translate cooperative cancellation, deduplicate
+Codex replay samples, and resolve quota capabilities independently. Accept the larger Step 26 increment
+under the user's delegated decision authority rather than weakening the contract or modifying shared ports.
+
+**Impact.** Filter selection and loading remain Bloc state, local source paths are hashed by the existing
+storage boundary, a broken vendor/cache cannot erase peer results, and no cross-vendor Data contract was
+created. Cross-source fork replay uses the Provider sample key at the aggregate boundary. The package is
+independently green with 13 randomized tests and 348 / 348 covered lines.
+
+## 2026-08-20 — Step 26 exposes desktop capabilities through Repository facades
+
+**Problem.** Passing `desktop_platform_api` objects through a Repository would still let later Blocs depend
+on Data ports, while putting notification enablement or localized copy in the notification Repository would
+create either a Repository-to-Repository edge or a second settings state source.
+
+**Decision.** Wrap directory/file selection, clipboard, file-manager, window lifecycle/commands, and native
+menu commands in pure-Dart Repository methods/facades with typed, content-free failures. The notification
+Repository accepts only `NotificationRequest` values whose title/body are already localized, validates a
+non-negative badge, and forwards notification/attention operations. It never reads settings and neither
+package depends on another Repository.
+
+**Impact.** Later Blocs can consume one domain boundary without importing the platform API, adapters remain
+in `lib/app/platform`, and presentation policy has no duplicate owner. Notifications passes 6 randomized
+tests at 21 / 21 lines; Desktop Platform passes 7 at 44 / 44 lines.
+
+## 2026-08-20 — Step 26 retries the known Claude keychain cleanup race
+
+**Problem.** The first authoritative matrix again completed the keychain runner assertions but failed while
+Windows removed its temporary directory. The failing file and handle-sharing error match the Step 25 event;
+all roots before Claude and all Step 26 isolated gates were green.
+
+**Decision.** Preserve the unified `very_good test` runner, timeout, randomization, and coverage threshold.
+Do not modify unrelated Claude production/test code in this migration increment. Rerun the complete Claude
+package with a new seed, then resume the authoritative matrix from Codex rather than discarding proven roots.
+
+**Impact.** The unchanged Claude package passed all 270 tests and 100% coverage on rerun. The resumed matrix
+then completed 27/27 roots; this remains the documented Windows cleanup race, not a Step 26 regression.

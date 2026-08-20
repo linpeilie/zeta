@@ -798,3 +798,48 @@ random seed 重跑 Claude 全包，随后从下一个 root 继续 matrix；将 C
 
 **影响。** Claude 重跑 270 tests、100% 通过；最终 27/27 roots、16,840 / 16,840 covered lines 与
 Bloc lint 405 files / 0 issues 全绿。该事件判定为 Windows 临时句柄回收竞争，不构成步骤 25 产品回归。
+
+## 2026-08-20 — 步骤 26 保持 vendor usage shape 私有并缓存 report 投影
+
+**问题。** 三个已完成 vendor reader 有意导出不同 response shape，共享 usage store 也只接受 Provider 自有
+JSON partition；新增通用 Data model 或 Provider port 会违背步骤 21。cache entry 只按文件 fingerprint，
+不含 query identity；若直接用于另一时间窗会返回不完整记录。实际 aggregation、cache codec、部分失败与
+取消语义的工作量也明显超过最初 placeholder 估算。
+
+**决策。** 每种 vendor response 只在 `usage_statistics_repository` 内映射成不含内容的 domain record，
+cache 只存 Repository 自有投影。每个 entry 同时保存半开 query 边界，fingerprint 与两端边界都相同时才
+命中；force refresh、时间窗变化、payload 损坏或 storage 失败都从当前 scan 重建。三方并行执行，未知
+Provider 失败转为 typed warning 并与其它结果隔离；协作取消显式翻译，Codex replay sample 去重，quota
+能力逐 Provider 独立收敛。依据用户已授权的代理决策接受本步骤增量扩大，不以削弱契约或修改共享端口换取
+更小改动。
+
+**影响。** filter selection/loading 仍归 Bloc，源文件路径继续由既有 storage boundary 哈希；单个 vendor
+或 cache 损坏不会清除其它结果，也没有创建跨 vendor Data contract；跨源 fork replay 由聚合边界使用
+Provider sample key 去重。该包独立以 13 个随机顺序测试、348 / 348 covered lines 全绿。
+
+## 2026-08-20 — 步骤 26 用 Repository facade 暴露桌面能力
+
+**问题。** 如果 Repository 直接透传 `desktop_platform_api` object，后续 Bloc 仍会依赖 Data port；若把
+通知启用条件或本地化文案放进 notification Repository，又会产生 Repository→Repository 依赖或第二份
+settings 状态源。
+
+**决策。** directory/file picker、clipboard、file manager、window lifecycle/command 与 native menu
+全部包装为纯 Dart Repository 方法/facade，并统一转换为不含内容的 typed failure。notification Repository
+只接受 title/body 已本地化的 `NotificationRequest`，校验非负 badge，再转发 notification/attention；它不
+读取 settings，两个包也不依赖任何其它 Repository。
+
+**影响。** 后续 Bloc 只消费 domain boundary，无需 import platform API；具体 adapter 仍留在
+`lib/app/platform`，presentation policy 不产生双重 owner。Notifications 6 个随机顺序测试、21 / 21 行，
+Desktop Platform 7 个、44 / 44 行，均独立全绿。
+
+## 2026-08-20 — 步骤 26 重试已知 Claude keychain 回收竞态
+
+**问题。** 首轮权威矩阵再次完成 keychain runner 全部断言，但 Windows 删除临时目录时失败；失败文件与
+handle-sharing 错误和步骤 25 完全一致。Claude 之前的 root 及步骤 26 三包隔离门禁均已全绿。
+
+**决策。** 保持统一 `very_good test` runner、timeout、随机顺序与覆盖阈值；本迁移增量不修改无关 Claude
+production/test 代码。使用新 seed 重跑完整 Claude package，通过后从 Codex root 恢复权威矩阵，不丢弃
+已经证明成功的 roots。
+
+**影响。** 未改代码的 Claude 重跑全部 270 tests 与 100% coverage 通过；恢复后的矩阵最终完成 27/27。
+该事件仍归类为已记录的 Windows cleanup race，而不是步骤 26 回归。

@@ -596,19 +596,27 @@ coverage roots 合计 16,840 / 16,840 手写行，Bloc lint 对 405 个文件报
 
 ### 步骤 26 — Usage / Desktop Notifications / Desktop Platform Repository
 
-- [ ] `usage_statistics_repository` 聚合三方 Data 和 cache，返回 report domain model；filter selection 在 Bloc。
-- [ ] `desktop_notifications_repository` 只接受已本地化 copy 和中立 notification request。
-- [ ] notifications repository 不依赖 settings repository。
-- [ ] `desktop_platform_repository` 包装 directory picker、clipboard、window/menu ports，供 Bloc 使用，零 Flutter。
-- [ ] 所有包零 Flutter/ChangeNotifier/ValueNotifier。
+- [x] `usage_statistics_repository` 聚合三方 Data 和 cache，返回 report domain model；filter selection 在 Bloc。
+- [x] `desktop_notifications_repository` 只接受已本地化 copy 和中立 notification request。
+- [x] notifications repository 不依赖 settings repository。
+- [x] `desktop_platform_repository` 包装 directory picker、clipboard、window/menu ports，供 Bloc 使用，零 Flutter。
+- [x] 所有包零 Flutter/ChangeNotifier/ValueNotifier。
 
 **P4 客观出口**：
 
-- [ ] repository→repository dependency = 0。
-- [ ] Repository Flutter dependency = 0。
-- [ ] Repository 中 UI selection/loading/expanded 状态 = 0。
-- [ ] `bootstrap.dart` 外 app 业务代码的 Data/IO import = 0。
-- [ ] 每个 Repository package 独立四门全绿。
+- [x] repository→repository dependency = 0。
+- [x] Repository Flutter dependency = 0。
+- [x] Repository 中 UI selection/loading/expanded 状态 = 0。
+- [x] `bootstrap.dart` 外 app 业务代码的 Data/IO import = 0。
+- [x] 每个 Repository package 独立四门全绿。
+
+完成证据（2026-08-20）：Usage 13 个随机顺序测试、348 / 348 covered lines，Notifications 6 个、
+21 / 21，Desktop Platform 7 个、44 / 44。P4 架构套件 72 项全部通过：Repository→Repository 为 0，
+Contract/Data/Repository 的 Flutter 依赖为 0，platform port 未进入 Bloc/Presentation，app Data import
+仅允许 `bootstrap.dart`（具体 adapter 仍留在 `lib/app/platform`）。最终权威矩阵对 408 个 Dart 文件完成
+27/27 roots analyze/format/test/coverage；26 个 coverage roots 合计 17,250 / 17,250 手写行，Bloc lint
+对 407 个文件报告 0 issues。首轮矩阵命中一次已知 Windows Claude keychain 回收竞态，未改代码以新随机
+seed 重跑完整 270-test 包后通过。
 
 ---
 

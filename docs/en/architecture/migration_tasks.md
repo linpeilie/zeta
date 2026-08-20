@@ -633,19 +633,29 @@ zero issues across 405 files.
 
 ### Step 26 — Usage / Desktop Notifications / Desktop Platform Repositories
 
-- [ ] `usage_statistics_repository` aggregates the three vendor Data sources and cache into report domain models; filter selection belongs to Bloc.
-- [ ] `desktop_notifications_repository` accepts only already-localized copy and neutral notification requests.
-- [ ] The notifications repository does not depend on settings repository.
-- [ ] `desktop_platform_repository` wraps directory-picker, clipboard, and window/menu ports for Bloc consumption, with zero Flutter.
-- [ ] Every package has zero Flutter, ChangeNotifier, or ValueNotifier usage.
+- [x] `usage_statistics_repository` aggregates the three vendor Data sources and cache into report domain models; filter selection belongs to Bloc.
+- [x] `desktop_notifications_repository` accepts only already-localized copy and neutral notification requests.
+- [x] The notifications repository does not depend on settings repository.
+- [x] `desktop_platform_repository` wraps directory-picker, clipboard, and window/menu ports for Bloc consumption, with zero Flutter.
+- [x] Every package has zero Flutter, ChangeNotifier, or ValueNotifier usage.
 
 **Objective P4 exit:**
 
-- [ ] Repository-to-Repository dependencies = 0.
-- [ ] Repository Flutter dependencies = 0.
-- [ ] UI selection/loading/expanded state in Repository = 0.
-- [ ] Data/IO imports in app business code outside `bootstrap.dart` = 0.
-- [ ] Every Repository package independently passes all four gates.
+- [x] Repository-to-Repository dependencies = 0.
+- [x] Repository Flutter dependencies = 0.
+- [x] UI selection/loading/expanded state in Repository = 0.
+- [x] Data/IO imports in app business code outside `bootstrap.dart` = 0.
+- [x] Every Repository package independently passes all four gates.
+
+Completion evidence (2026-08-20): Usage has 13 randomized tests and 348 / 348 covered lines,
+Notifications has 6 and 21 / 21, and Desktop Platform has 7 and 44 / 44. The P4 architecture
+suite passes all 72 tests with zero Repository-to-Repository edges, zero Flutter dependencies in
+Contract/Data/Repository packages, platform ports absent from Bloc/Presentation, and app Data imports
+restricted to `bootstrap.dart` (concrete adapters remain in `lib/app/platform`). The final authoritative
+matrix passes analyze/format/test/coverage in 27/27 roots over 408 Dart files; 26 coverage roots total
+17,250 / 17,250 hand-written lines, and Bloc lint reports zero issues across 407 files. The known Windows
+Claude keychain cleanup race occurred once in the first matrix and the full 270-test package rerun passed
+unchanged with a new random seed.
 
 ---
 
