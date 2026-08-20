@@ -221,7 +221,8 @@ final class FailureMessages {
       _l10n.agentPermissionRequestDescription(providerName, toolName),
   };
 
-  /// Maps app-owned quota-window labels, formatting duration evidence when needed.
+  /// Maps app-owned quota-window labels, formatting duration evidence when
+  /// needed.
   String agentUsageWindowLabel(
     AgentUsageWindowLabelCode code, {
     Duration? windowDuration,

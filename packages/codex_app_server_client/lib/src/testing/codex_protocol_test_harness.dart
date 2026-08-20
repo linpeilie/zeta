@@ -177,7 +177,8 @@ final class CodexProtocolTestHarness {
     return Duration(minutes: minutes);
   }
 
-  /// Returns internal fallback failure codes that remain part of protocol behavior.
+  /// Returns internal fallback failure codes that remain part of protocol
+  /// behavior.
   static ({
     AgentProviderFailureCode cancelled,
     AgentProviderFailureCode startFailure,
