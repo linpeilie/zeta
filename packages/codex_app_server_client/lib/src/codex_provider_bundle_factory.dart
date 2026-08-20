@@ -76,6 +76,23 @@ final class CodexProviderBundleFactory implements AgentProviderBundleFactory {
     );
   }
 
+  /// Production peer constructor for composition roots.
+  static JsonRpcStdioTransport createPeer({
+    required AgentProviderConfig config,
+    required ProcessStarter processStarter,
+    required AppLogger logger,
+    required Clock clock,
+  }) {
+    return JsonRpcStdioTransport(
+      command: config.command,
+      arguments: config.arguments,
+      environment: config.environment,
+      processStarter: processStarter,
+      logger: logger,
+      clock: clock,
+    );
+  }
+
   /// Production raw process starter for composition roots.
   static Future<Process> startProcess(
     String executable,

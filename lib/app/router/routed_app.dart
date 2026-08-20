@@ -4,6 +4,7 @@ import 'package:agent_conversation_repository/agent_conversation_repository.dart
 import 'package:agent_management_repository/agent_management_repository.dart';
 import 'package:agent_provider_repository/agent_provider_repository.dart';
 import 'package:app_ui/app_ui.dart';
+import 'package:desktop_notifications_repository/desktop_notifications_repository.dart';
 import 'package:desktop_platform_repository/desktop_platform_repository.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -94,6 +95,9 @@ class _RoutedAppState extends State<RoutedApp> {
         ),
         RepositoryProvider<UsageStatisticsRepository>.value(
           value: repositories.usageStatisticsRepository,
+        ),
+        RepositoryProvider<DesktopNotificationsRepository>.value(
+          value: repositories.desktopNotificationsRepository,
         ),
         RepositoryProvider<AppDependencies>.value(
           value: widget.dependencies,

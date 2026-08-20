@@ -135,6 +135,38 @@ void main() {
     );
 
     blocTest<IdeShellBloc, IdeShellState>(
+      'opens the first project on a clean install without a snapshot',
+      build: build,
+      setUp: () {
+        when(() => sessions.snapshot).thenReturn(null);
+      },
+      act: (bloc) async {
+        bloc.add(const IdeShellStarted());
+        await Future<void>.delayed(Duration.zero);
+        bloc.add(const IdeShellOpenProjectRequested());
+      },
+      expect: () => <Matcher>[
+        isA<IdeShellState>().having(
+          (state) => state.status,
+          'status',
+          IdeShellStatus.ready,
+        ),
+        isA<IdeShellState>().having(
+          (state) => state.pickedProjectPath,
+          'picked',
+          '/picked',
+        ),
+      ],
+      verify: (bloc) {
+        final saved =
+            verify(() => sessions.save(captureAny())).captured.single
+                as ProjectSessionSnapshot;
+        expect(saved.projectPaths, <String>['/picked']);
+        expect(saved.activeProjectPath, '/picked');
+      },
+    );
+
+    blocTest<IdeShellBloc, IdeShellState>(
       'clears the one-shot picked project path',
       build: build,
       seed: () => const IdeShellState(pickedProjectPath: '/picked'),

@@ -5,6 +5,7 @@ import 'package:agent_management_repository/agent_management_repository.dart';
 import 'package:agent_provider_contracts/agent_provider_contracts.dart';
 import 'package:agent_provider_repository/agent_provider_repository.dart';
 import 'package:app_ui/app_ui.dart';
+import 'package:desktop_notifications_repository/desktop_notifications_repository.dart';
 import 'package:desktop_platform_repository/desktop_platform_repository.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -41,6 +42,9 @@ class _MockAgentConversationRepository extends Mock
 
 class _MockAgentManagementRepository extends Mock
     implements AgentManagementRepository {}
+
+class _MockDesktopNotificationsRepository extends Mock
+    implements DesktopNotificationsRepository {}
 
 class _MockUsageStatisticsRepository extends Mock
     implements UsageStatisticsRepository {}
@@ -95,6 +99,7 @@ void main() {
     late AgentConversationRepository conversations;
     late AgentManagementRepository management;
     late UsageStatisticsRepository usage;
+    late DesktopNotificationsRepository notifications;
     late DesktopWindowCommands window;
     late DesktopMenuCommands menu;
     late StreamController<MenuCommand> commands;
@@ -126,6 +131,7 @@ void main() {
       conversations = _MockAgentConversationRepository();
       management = _MockAgentManagementRepository();
       usage = _MockUsageStatisticsRepository();
+      notifications = _MockDesktopNotificationsRepository();
       window = _MockWindowCommands();
       menu = _MockMenuCommands();
       commands = StreamController<MenuCommand>.broadcast();
@@ -274,6 +280,7 @@ void main() {
         agentConversationRepository: conversations,
         agentManagementRepository: management,
         usageStatisticsRepository: usage,
+        desktopNotificationsRepository: notifications,
       );
     }
 
@@ -454,6 +461,29 @@ void main() {
       expect(find.byType(AgentConversationView), findsNothing);
     });
 
+    testWidgets('accepts a thread known only from the cached list', (
+      tester,
+    ) async {
+      when(() => sessions.snapshot).thenReturn(
+        ProjectSessionSnapshot(
+          projectPaths: const <String>[projectPath],
+          activeProjectPath: projectPath,
+          activeAgentProviderId: 'codex',
+          cachedThreadsByProject: <String, List<AgentThreadSummary>>{
+            projectPath: <AgentThreadSummary>[thread],
+          },
+        ),
+      );
+      await pumpRouter(
+        tester,
+        initialLocation: const ThreadRoute(
+          projectId: projectId,
+          threadId: threadId,
+        ).location,
+      );
+      expect(find.byType(AgentConversationView), findsOneWidget);
+    });
+
     testWidgets('pops a thread back to its project parent', (tester) async {
       final router = await pumpRouter(
         tester,
@@ -495,6 +525,23 @@ void main() {
       await tester.pump();
       await tester.pump();
       expect(locationOf(tester), '/home');
+    });
+
+    testWidgets('navigates to the project picked by the shell', (
+      tester,
+    ) async {
+      await pumpRouter(
+        tester,
+        initialLocation: const HomeRoute().location,
+      );
+
+      await tester.tap(find.byKey(const Key('ide-home-open-project')));
+      await tester.pump();
+      await tester.pump();
+      await tester.pump();
+
+      expect(locationOf(tester), '/projects/$projectId');
+      verify(() => workspace.projectIdFor(projectPath)).called(greaterThan(0));
     });
 
     testWidgets('opens a known agent route', (tester) async {

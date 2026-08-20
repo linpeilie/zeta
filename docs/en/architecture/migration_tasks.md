@@ -796,8 +796,20 @@ Chinese ARB files each have 1,041 matching keys. Packages import neither `AppLoc
 
 ### Step 35 — Bootstrap, platform, and flavor composition
 
-- [ ] `bootstrap.dart` constructs all clients, platform adapters, and repositories before passing them to App.
-- [ ] `MultiRepositoryProvider` exposes Repositories only; create Blocs at global/shell/route/conversation scope.
+**Status: 35A complete (2026-08-20); 35B/35C not started.** 35A delivers the
+composition root: `composeZeta` builds the four config/session/usage stores, the
+three provider bundle factories, the three management data sources, ten platform
+adapters, and all nine Repositories, registering shutdown hooks in reverse
+construction order. `App` drops its counter fallback, and `AppRepositories` and
+`RoutedApp` gain the previously missing `DesktopNotificationsRepository`. Gates:
+`flutter analyze lib test` reports 0 issues, `dart format` reports 134 files /
+0 changed, `bloc lint .` reports 0 issues, the root `very_good test` run passes
+343 randomly ordered tests, and hand-written coverage excluding `packages/**`
+and generated sources is 100% (4,037 / 4,037); `codex_app_server_client` passes
+179 tests and its 100% coverage gate in the same round.
+
+- [x] `bootstrap.dart` constructs all clients, platform adapters, and repositories before passing them to App.
+- [x] `MultiRepositoryProvider` exposes Repositories only; create Blocs at global/shell/route/conversation scope.
 - [ ] Use one AgentConversationBloc per workspace entry and close it with that entry.
 - [ ] All flavors use the same `cn.easii.zeta` / `Zeta` / `~/.zeta` / schema.
 - [ ] Migrate window bootstrap, native menu, fonts, notification/badge, file selector, and clipboard.

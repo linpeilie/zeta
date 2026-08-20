@@ -79,6 +79,25 @@ void main() {
       expect(bundle.permissionPolicy, isNotNull);
       expect(bundle.capabilities, CodexStaticCapabilities.value);
     });
+
+    test('production peer constructor preserves injected transport seams', () {
+      final logger = loggerFor('zeta.test.codex_peer');
+      final fixedClock = Clock.fixed(DateTime.utc(2026, 8, 20));
+      final config = AgentProviderConfig.defaultCodex;
+
+      final peer = CodexProviderBundleFactory.createPeer(
+        config: config,
+        processStarter: _unreachableProcessStarter,
+        logger: logger,
+        clock: fixedClock,
+      );
+      addTearDown(peer.close);
+
+      expect(peer.command, config.command);
+      expect(peer.arguments, config.arguments);
+      expect(peer.environment, config.environment);
+      expect(peer.clock, same(fixedClock));
+    });
   });
 
   group('CodexCliLocator', () {

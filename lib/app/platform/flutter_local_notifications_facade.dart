@@ -26,7 +26,7 @@ final class FlutterLocalNotificationsFacade
         ),
         windows: const WindowsInitializationSettings(
           appName: 'Zeta',
-          appUserModelId: 'io.github.linpeilie.zeta',
+          appUserModelId: 'cn.easii.zeta',
           guid: '9b5bb3b5-a44b-4f52-8a51-7991b7ab2831',
         ),
       ),

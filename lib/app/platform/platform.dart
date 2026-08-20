@@ -1,0 +1,16 @@
+export 'desktop_attention_adapter.dart';
+export 'desktop_notification_adapter.dart';
+export 'file_selector_adapter.dart';
+export 'flutter_file_selector_facade.dart';
+export 'flutter_local_notifications_facade.dart';
+export 'flutter_pasteboard_facade.dart';
+export 'flutter_window_manager_facade.dart';
+export 'io_system_file_manager_facade.dart';
+export 'macos_window_facade.dart';
+export 'menu_command_adapter.dart';
+export 'method_channel_facade.dart';
+export 'pasteboard_clipboard_adapter.dart';
+export 'system_file_manager_adapter.dart';
+export 'system_font_catalog_adapter.dart';
+export 'window_command_adapter.dart';
+export 'zeta_platform_facades.dart';

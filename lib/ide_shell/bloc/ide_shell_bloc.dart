@@ -317,9 +317,9 @@ class IdeShellBloc extends Bloc<IdeShellEvent, IdeShellState> {
 
 ProjectSessionSnapshot _snapshotWith(
   ProjectSessionSnapshot? snapshot, {
+  required ProjectWorkbenchSnapshot workbench,
   List<String>? projectPaths,
   String? activeProjectPath,
-  ProjectWorkbenchSnapshot? workbench,
 }) {
   final current = snapshot ?? ProjectSessionSnapshot();
   return ProjectSessionSnapshot(
@@ -335,7 +335,7 @@ ProjectSessionSnapshot _snapshotWith(
     selectedThreadIdsByProject: current.selectedThreadIdsByProject,
     projectLastOpenedAtByPath: current.projectLastOpenedAtByPath,
     projectHomeActive: current.projectHomeActive,
-    workbench: workbench ?? current.workbench,
+    workbench: workbench,
   );
 }
 

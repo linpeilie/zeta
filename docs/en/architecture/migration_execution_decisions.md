@@ -1461,3 +1461,51 @@ client/adapter wiring stays in step 35.
 reports 136 files / 0 changed; `bloc lint .` reports 0 issues; the root
 `very_good test` run passes 328 randomized tests at 100% hand-written coverage
 after excluding `packages/**`.
+
+## 2026-08-20 — Step 35A composition root
+
+**Problem.** Composing `AgentManagementDataSource` requires an injected
+`protocolProbe`, but no package ships a production one: the Step 16 decision
+assumed the vendor packages would export a prompt-free protocol probe, and they
+do not. `CodexProviderBundleFactory` also lacked the `createPeer` static that
+Claude already had. `AppRepositories` and `RoutedApp` were missing
+`DesktopNotificationsRepository` even though `DesktopNotificationsPage` already
+reads it from context. The Windows notification AUMID still carried the legacy
+`io.github.linpeilie.zeta` while `windows/runner/main.cpp` sets `cn.easii.zeta`,
+which makes toasts fail silently. Step 34's recorded 100% coverage did not hold
+locally: eleven hand-written lines in `lib` were uncovered.
+
+**Decision.** Per the owner's choice the probe belongs to the composition root
+and is built from the bundle factories (`probeAgentProtocol`: `createBundle` →
+`runtime.initialize()` → `modelCatalog` → `dispose()`) rather than routed
+through `AgentProviderRepository`, which would create a Data → Repository
+inversion. It uses contracts types only and changes no Provider port or shared
+adapter. To keep the two vendor packages symmetric, `codex_app_server_client`
+gains a `createPeer` static; `claude_code_client` is untouched. `capabilityIds`
+stays empty: nothing consumes it in the new architecture, and inventing stable
+ids in the app layer would be an unfounded mapping. The AUMID becomes
+`cn.easii.zeta`. Step 34's eleven lines split in two: reachable code (opening
+the first project on a clean install with no snapshot, the shell
+picked-project navigation listener, the cached-thread branch, the expanded
+usage label) gained tests; `_snapshotWith`'s `workbench ?? current.workbench`
+was unreachable because both call sites always pass a workbench, so the
+parameter became required and the branch was removed.
+
+**Impact.** `lib/bootstrap.dart` remains the only file that sees Data,
+Repository, and platform adapters at once, so the architecture gates need no new
+allowlist entries. Every `composeZeta` seam has a production default, letting
+tests compose the same graph against a temporary home directory without touching
+plugins or launching Provider CLIs. The legacy `ZetaStorageMigrator` history
+upgrade stays out of scope per Steps 35/36. Window bootstrap, the native menu,
+and flavor composition move to 35B; shutdown orchestration and Bloc scope
+acceptance move to 35C.
+
+**Evidence.** `flutter analyze lib test` reports 0 issues; `dart format` reports
+134 files / 0 changed; `bloc lint .` reports 0 issues; the root `very_good test`
+run passes 343 randomized tests with 100% hand-written coverage after excluding
+`packages/**` and generated sources (4,037 / 4,037);
+`codex_app_server_client` passes 179 tests and its 100% coverage gate in the same
+round. `--min-coverage 100` reports 98.55% locally only because lcov writes
+backslash paths on Windows, so `**/*.{g,freezed,gen}.dart` cannot match
+`app_router.g.dart`; the CI package gate runs on ubuntu-24.04 where the glob
+applies.

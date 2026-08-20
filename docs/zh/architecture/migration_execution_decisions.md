@@ -1236,3 +1236,39 @@ composition-root allowlist 增加 `lib/app/app_repositories.dart` 与
 **证据。** `flutter analyze lib test` 0 问题；`dart format` 136 files / 0
 changed；`bloc lint .` 0 issues；根目录 `very_good test` 328 项随机顺序测试
 通过，排除 `packages/**` 后手写覆盖率 100%。
+
+## 2026-08-20 — 步骤 35A Composition root
+
+**问题。** 装配 `AgentManagementDataSource` 需要注入 `protocolProbe`，但没有任何
+package 提供生产实现——步骤 16 决策假定 vendor 包会导出无 Prompt protocol probe，
+实际并未导出。`CodexProviderBundleFactory` 也缺少与 Claude 对称的
+`createPeer`。`AppRepositories` 与 `RoutedApp` 缺 `DesktopNotificationsRepository`，
+但 `DesktopNotificationsPage` 已从 context 读取它。Windows 通知 AUMID 仍是旧仓库的
+`io.github.linpeilie.zeta`，与 `windows/runner/main.cpp` 的 `cn.easii.zeta` 不一致，
+toast 会静默失败。步骤 34 记录的 100% 覆盖率与本机实测不符：`lib` 中有 11 行手写
+代码未被覆盖。
+
+**决策。** 经所有者选择：probe 归 composition root，用 bundle factory 自建
+（`probeAgentProtocol`：`createBundle` → `runtime.initialize()` → `modelCatalog`
+取模型 → `dispose()`），不路由到 `AgentProviderRepository`，避免 Data → Repository
+反向层边。只用 contracts 类型，不改 Provider port 或共享适配层。为保持两家 vendor
+对称，给 `codex_app_server_client` 补一个 `createPeer` 静态方法（Claude 已有）；
+`claude_code_client` 不改。`capabilityIds` 留空：新架构中无消费方，在 app 层杜撰
+稳定 id 会引入无依据的映射。AUMID 改为 `cn.easii.zeta`。步骤 34 遗留的 11 行分两
+类处理：可达代码（clean-install 无 snapshot 时首次开项目、shell picked-project
+导航监听、cached-thread 分支、usage 展开文案）补测试；`_snapshotWith` 的
+`workbench ?? current.workbench` 两个调用点都必传，属不可达防御分支，改为必填参数
+并删除该分支。
+
+**影响。** `lib/bootstrap.dart` 是唯一同时看到 Data、Repository 与 platform
+adapter 的文件，架构门禁不需要新增 allowlist。`composeZeta` 的每个缝都有生产默认
+值，测试可对临时 home 目录装配同一张图而不触发插件或启动 Provider CLI。旧仓库的
+`ZetaStorageMigrator` 历史升级不迁入，按步骤 35/36 范围裁决。window bootstrap、
+原生菜单与 flavor 装配留给 35B，关闭编排与 Bloc scope 验收留给 35C。
+
+**证据。** `flutter analyze lib test` 0 问题；`dart format` 134 files / 0
+changed；`bloc lint .` 0 issues；根目录 `very_good test` 343 项随机顺序测试通过，
+排除 `packages/**` 与生成代码后手写覆盖率 100%（4,037 / 4,037）；
+`codex_app_server_client` 179 项测试与 100% 覆盖率门同轮通过。`--min-coverage 100`
+在本机报 98.55% 仅因 lcov 在 Windows 写反斜杠路径，`**/*.{g,freezed,gen}.dart`
+无法匹配 `app_router.g.dart`；CI 的 package gate 跑在 ubuntu-24.04，该 glob 生效。

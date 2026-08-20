@@ -76,5 +76,23 @@ void main() {
       );
       expect(find.text(l10n.workbenchShowLeftSidebar), findsOneWidget);
     });
+
+    testWidgets('uses collapse copy when agent usage is expanded', (
+      tester,
+    ) async {
+      when(() => bloc.state).thenReturn(
+        const IdeShellState(
+          workbench: ProjectWorkbenchSnapshot(agentUsageExpanded: true),
+        ),
+      );
+      final l10n = lookupAppLocalizations(const Locale('en'));
+      await tester.pumpApp(
+        BlocProvider<IdeShellBloc>.value(
+          value: bloc,
+          child: const IdeShellView(child: SizedBox()),
+        ),
+      );
+      expect(find.text(l10n.usageCollapseAgentStats), findsOneWidget);
+    });
   });
 }
