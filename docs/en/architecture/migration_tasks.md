@@ -681,8 +681,9 @@ and all nine macOS/Windows/Linux desktop builds.
 
 ### Step 28 — Typed l10n mapping
 
-**Status: in progress (28A complete).** The app-owned shadcn adapter and its full English/Chinese contract
-suite are green; typed failure mapping, frozen notification copy, and provider-local catalog removal remain.
+**Status: in progress (28A–28B complete).** The app-owned shadcn adapter and exhaustive mapping for all
+63 current cross-layer status/failure/warning/operation codes are green; frozen notification copy and
+provider-local catalog removal remain.
 
 - [ ] Remove the four TextCatalog/Fallback families and `ZetaTextCatalogs`.
 - [ ] Replace lower-layer messages with typed failures/codes; map them exhaustively in `lib/l10n/failure_messages.dart`.

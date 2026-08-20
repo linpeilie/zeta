@@ -3,6 +3,7 @@ import 'package:zeta/l10n/gen/app_localizations.dart';
 
 export 'package:zeta/l10n/gen/app_localizations.dart';
 
+export 'failure_messages.dart';
 export 'zeta_shadcn_localizations.dart';
 
 extension AppLocalizationsX on BuildContext {

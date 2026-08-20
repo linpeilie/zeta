@@ -118,6 +118,7 @@ jobs:
             --coverage \
             --min-coverage 100 \
             --exclude-coverage '**/*.{g,freezed,gen}.dart' \
+            --exclude-coverage 'packages/**' \
             --exclude-tags golden \
             --report-on lib \
             --timeout 120 \

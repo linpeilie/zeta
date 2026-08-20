@@ -36,6 +36,7 @@ void main() {
         ]),
         {
           'lib/bootstrap.dart',
+          'lib/l10n/failure_messages.dart',
           'lib/**/bloc/**',
           'lib/**/cubit/**',
           'lib/**/view/*_page.dart',
@@ -105,6 +106,10 @@ void main() {
       expect(
         qualityWorkflow,
         contains("--exclude-coverage '**/*.{g,freezed,gen}.dart'"),
+      );
+      expect(
+        qualityWorkflow,
+        contains("--exclude-coverage 'packages/**'"),
       );
       expect(qualityWorkflow, contains('--timeout 120'));
       expect(

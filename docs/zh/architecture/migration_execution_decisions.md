@@ -1051,3 +1051,14 @@ job 可继续使用优化器，专用 job 的选择范围仍明确且可审计�
 1,035-key en/zh ARB 读取全部 shadcn 文案。旧冒烟套件只抽查少量 override，首次使根覆盖率降至 62.93%；
 现已增加完整表面契约测试，执行每个 getter、参数化 formatter 与 delegate 分支。Analyze 与 77 项随机顺序
 根测试通过，手写覆盖率恢复 100%。
+
+**28B 边界修正。** 原 source guard 仅允许 bootstrap、Bloc/Cubit 与 Page 引用 Repository，这与计划明确要求
+`lib/l10n/failure_messages.dart` 映射 Repository code 直接冲突。现只把这个精确文件加入 allowlist，并由架构
+配置测试锁定；其他 Presentation 路径不获得 Repository 权限。导入的 zh ARB 中 `agentRequestTimedOut` 现值
+本来就是英文；不静默改写已批准的 1,035-key 基线，测试记录该值，并通过其他已翻译 mapping 证明双语行为。
+
+**28B 覆盖率修正。** 首轮 79 项测试已执行新增 mapping 的全部 103/103 行，但覆盖率只报 4.23%；原因是
+8 个 workspace package barrel 被导入后，`--report-on lib` 把数千行未执行的兄弟 package 源码也计入根 app
+分母。各 package 已在独立矩阵 job 中执行自己的 100% 门禁，因此只从根聚合排除 `packages/**`，继续保留
+generated source 排除；矩阵进入单个 package 工作目录时该 glob 不产生作用。不通过外部 `src` 导入操纵
+instrumentation。修正后根目录 79 项随机顺序测试全部通过，覆盖率 100%。

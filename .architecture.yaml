@@ -165,6 +165,7 @@ composition_root:
     - lib/bootstrap.dart
   repository_package_import_allowlist:
     - lib/bootstrap.dart
+    - lib/l10n/failure_messages.dart
     - lib/**/bloc/**
     - lib/**/cubit/**
     - lib/**/view/*_page.dart

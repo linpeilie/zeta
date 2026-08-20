@@ -1235,3 +1235,18 @@ chains, and resolves all shadcn copy from the existing 1,035-key en/zh ARB pair.
 left the adapter at 62.93% root coverage because it sampled only a few overrides; a complete surface-contract
 test now executes every getter, parameterized formatter, and delegate branch. Analyze and 77 randomized root
 tests pass with 100% hand-written coverage.
+
+**28B boundary correction.** The source guard originally allowed Repository imports only from bootstrap,
+Bloc/Cubit, and Page files, which directly contradicted the planned app-owned Repository-code mapping in
+`lib/l10n/failure_messages.dart`. Add only that exact file to the allowlist and lock the exception in the
+architecture configuration test; no other Presentation path gains Repository access. The imported zh ARB
+also contains an existing English value for `agentRequestTimedOut`. Preserve the approved 1,035-key baseline
+instead of silently rewriting translation data, record the value in tests, and prove bilingual behavior with
+other translated mappings.
+
+**28B coverage correction.** The first 79-test run executed every new mapping branch (103/103 lines) but
+reported 4.23% because importing eight workspace package barrels made `--report-on lib` include thousands of
+unexecuted sibling-package lines in the root app denominator. Those packages already run their own isolated
+100% jobs. Exclude only `packages/**` from the root aggregation while retaining generated-source exclusion;
+the same glob is inert when the matrix working directory is an individual package. Do not use external `src`
+imports to manipulate instrumentation. The corrected root run passes all 79 randomized tests at 100%.
