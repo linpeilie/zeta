@@ -685,15 +685,15 @@ code 以及 28D 的 presentation code。ARB 现为 en/zh 各 1,041 个一致键�
 
 **ProjectThreadsBloc**
 
-- [ ] project activation、search、archived filter、load initial/more、rename/archive/delete、runtime sync。
-- [ ] search `restartable()`；load more `droppable()`；write operation `sequential()`。
+- [x] project activation、search、archived filter、load initial/more、rename/archive/delete、runtime sync。
+- [x] search `restartable()`；load more `droppable()`；write operation `sequential()`。
 
 **IdeSessionCubit**
 
-- [ ] restore/save/flush；只保存业务 snapshot，不保存 GoRouter 对象。
-- [ ] restore 产出 initial route input，由 app router redirect 消费。
+- [x] restore/save/flush；只保存业务 snapshot，不保存 GoRouter 对象。
+- [x] restore 产出 initial route input，由 app router redirect 消费。
 
-- [ ] 两者不互相依赖；联动在 app composition/BlocListener。
+- [x] 两者不互相依赖；联动在 app composition/BlocListener。
 
 ### 步骤 31 — Agent Management / Usage Statistics
 

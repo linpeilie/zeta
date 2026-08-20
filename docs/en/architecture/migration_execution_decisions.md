@@ -1326,3 +1326,27 @@ steps 34/35.
 72 files / 0 changed; `bloc lint .` reports 0 issues; the root `very_good test`
 run passes 167 randomized tests at 100% hand-written coverage after excluding
 `packages/**`.
+
+## 2026-08-20 — Step 30 Project Threads / IDE Session
+
+**Problem.** The plan asks ProjectThreadsBloc to rename/archive/delete, but the
+frozen `project_session_repository` only exposes `restore` / `save` /
+`threadCatalog` / `threadPage`. Writes live on `AgentProviderBundle` naming,
+archival, and deletion ports. The ownership map assigned missing-project
+pruning to the Repository, but step 25 never added existence checks, and the
+Cubit cannot use `dart:io`.
+
+**Decision.** With the owner's dual-repository choice, the Bloc injects
+`project_session_repository` for paging and `agent_provider_repository.bundleFor`
+for write ports; a missing capability fails closed with
+`AgentProviderFailure.unavailable`. No Repository method or Provider port
+changes. The two units do not depend on each other; selected-thread sync uses
+`snapshotChanges`, and app composition stays in steps 34/35. Restore does not
+prune the filesystem in this step; it maps a business
+`ProjectSessionSnapshot` into `IdeSessionInitialRoute`. Drop `final` on the two
+consumed repository classes so mocktail can implement them, following step 29.
+
+**Evidence.** `flutter analyze lib test` reports 0 issues; `dart format`
+reports 87 files / 0 changed; `bloc lint .` reports 0 issues; the root
+`very_good test` run passes 215 randomized tests at 100% hand-written coverage
+after excluding `packages/**`.

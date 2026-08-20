@@ -1124,3 +1124,22 @@ adapter 或 Provider port。App/router 接线留给步骤 34/35。
 **证据。** `flutter analyze lib test` 0 问题；`dart format` 72 files / 0 changed；
 `bloc lint .` 0 issues；根目录 `very_good test` 167 项随机顺序测试通过，排除
 `packages/**` 后手写覆盖率 100%。
+
+## 2026-08-20 — 步骤 30 Project Threads / IDE Session
+
+**问题。** 计划要求 ProjectThreadsBloc 处理 rename/archive/delete，但冻结的
+`project_session_repository` 只有 `restore` / `save` / `threadCatalog` /
+`threadPage`。写操作实际在 `AgentProviderBundle` 的 naming / archival / deletion
+port 上。ownership_map 把失效项目清洗分给 Repository，但步骤 25 未实现存在性检查，
+Cubit 也不能使用 `dart:io`。
+
+**决策。** 经所有者选择双 Repository：Bloc 注入 `project_session_repository` 做列表
+分页，注入 `agent_provider_repository.bundleFor` 取写 port；缺少能力时
+`AgentProviderFailure.unavailable` fail-closed。不改 Repository 方法或 Provider
+port。两者不互相依赖，通过 `snapshotChanges` 同步选中线程；app composition 留给
+步骤 34/35。restore 不在本步做文件系统剪枝，只把业务 `ProjectSessionSnapshot`
+变成 `IdeSessionInitialRoute`。沿步骤 29 去掉两个仓库类上的 `final` 以便 mocktail。
+
+**证据。** `flutter analyze lib test` 0 问题；`dart format` 87 files / 0 changed；
+`bloc lint .` 0 issues；根目录 `very_good test` 215 项随机顺序测试通过，排除
+`packages/**` 后手写覆盖率 100%。

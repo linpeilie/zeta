@@ -725,15 +725,15 @@ Chinese ARB files each have 1,041 matching keys. Packages import neither `AppLoc
 
 **ProjectThreadsBloc**
 
-- [ ] Handle project activation, search, archived filter, initial/more loading, rename/archive/delete, and runtime sync.
-- [ ] Search is `restartable()`, load-more is `droppable()`, and writes are `sequential()`.
+- [x] Handle project activation, search, archived filter, initial/more loading, rename/archive/delete, and runtime sync.
+- [x] Search is `restartable()`, load-more is `droppable()`, and writes are `sequential()`.
 
 **IdeSessionCubit**
 
-- [ ] Handle restore/save/flush and persist only a business snapshot, never GoRouter objects.
-- [ ] Restore produces initial-route input consumed by the app router's redirect.
+- [x] Handle restore/save/flush and persist only a business snapshot, never GoRouter objects.
+- [x] Restore produces initial-route input consumed by the app router's redirect.
 
-- [ ] The two Blocs do not depend on each other; coordinate them in app composition/BlocListener.
+- [x] The two Blocs do not depend on each other; coordinate them in app composition/BlocListener.
 
 ### Step 31 — Agent Management / Usage Statistics
 

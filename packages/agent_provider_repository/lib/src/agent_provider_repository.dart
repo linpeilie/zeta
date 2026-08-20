@@ -106,7 +106,7 @@ final class AgentProviderRepositoryException implements Exception {
 }
 
 /// Agent Provider configuration, global runtime, and external-catalog owner.
-final class AgentProviderRepository {
+class AgentProviderRepository {
   /// Creates the Repository and immediately starts loading configuration.
   AgentProviderRepository({
     required ProviderConfigStore configStore,

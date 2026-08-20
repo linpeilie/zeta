@@ -93,7 +93,7 @@ final class ProjectSessionRepositoryException implements Exception {
 }
 
 /// Owns current-schema snapshots and cross-Provider thread catalog data.
-final class ProjectSessionRepository {
+class ProjectSessionRepository {
   /// Creates a Repository over persistence and available thread ports.
   ProjectSessionRepository({
     required ProjectSessionStore store,
