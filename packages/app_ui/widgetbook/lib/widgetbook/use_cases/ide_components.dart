@@ -100,3 +100,111 @@ Widget windowsShell(BuildContext context) => Center(
     ),
   ),
 );
+
+/// Responsive workbench composed entirely from shared UI primitives.
+@widgetbook.UseCase(name: 'responsive workbench', type: IdeWorkbenchScaffold)
+Widget responsiveWorkbench(BuildContext context) => Center(
+  child: SizedBox(
+    width: 1100,
+    height: 640,
+    child: IdeWorkbenchScaffold(
+      closeOverlaySemanticLabel: 'Close side panel',
+      leadingRailBuilder: (context, mode) => IdeActivityRail(
+        leadingActions: <IdeRailAction>[
+          IdeRailAction(
+            icon: Icons.folder_outlined,
+            tooltip: 'Projects',
+            semanticLabel: 'Projects',
+            active: true,
+            onPressed: () {},
+          ),
+          IdeRailAction(
+            icon: Icons.chat_bubble_outline,
+            tooltip: 'Threads',
+            semanticLabel: 'Threads',
+            active: false,
+            onPressed: () {},
+          ),
+        ],
+      ),
+      navigationPane: const IdeSurface.pane(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            IdePageHeader(title: 'Workspace'),
+            IdeListRow(
+              title: 'Migration plan',
+              subtitle: 'Active now',
+              selected: true,
+              showDivider: false,
+            ),
+            IdeListRow(
+              title: 'Architecture review',
+              subtitle: 'Yesterday',
+              showDivider: false,
+            ),
+          ],
+        ),
+      ),
+      inspectorPane: const IdeSurface.pane(
+        child: IdePageBody(
+          child: IdeRowGroup(
+            title: 'SESSION',
+            dividers: false,
+            children: <Widget>[
+              IdeKeyValueRow(label: 'Model', value: 'gpt-5.6'),
+              IdeKeyValueRow(
+                label: 'Tokens',
+                value: '42,810',
+                tone: IdeKeyValueTone.numeric,
+              ),
+            ],
+          ),
+        ),
+      ),
+      canvas: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          const IdePageHeader(
+            title: 'Migration plan',
+            subtitle: 'VGV architecture',
+          ),
+          IdeToolbar(
+            child: Row(
+              children: <Widget>[
+                Text('Workbench', style: context.appTypography.toolbarLabel),
+                const Spacer(),
+                const IdeChip(label: 'Connected', selected: true),
+              ],
+            ),
+          ),
+          Expanded(
+            child: IdePageBody(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  const CompactMetricBar(
+                    items: <CompactMetricItem>[
+                      CompactMetricItem(label: 'Steps', value: '27'),
+                      CompactMetricItem(label: 'Passed', value: '26'),
+                      CompactMetricItem(label: 'Coverage', value: '100%'),
+                    ],
+                  ),
+                  SizedBox(height: context.appSpacing.md),
+                  const IdeSection(
+                    title: 'Current increment',
+                    subtitle: 'Workbench primitives',
+                    child: IdeStatusCard(
+                      tone: IdeStatusCardTone.success,
+                      title: 'Local gates are green',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  ),
+);

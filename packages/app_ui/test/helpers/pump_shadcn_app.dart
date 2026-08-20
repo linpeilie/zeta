@@ -8,9 +8,10 @@ extension PumpShadcnApp on WidgetTester {
   Future<void> pumpShadcnApp(
     Widget widget, {
     Brightness brightness = Brightness.light,
+    Size size = const Size(800, 600),
   }) async {
     view.devicePixelRatio = 1;
-    await binding.setSurfaceSize(const Size(800, 600));
+    await binding.setSurfaceSize(size);
     addTearDown(() async {
       view.resetDevicePixelRatio();
       await binding.setSurfaceSize(null);

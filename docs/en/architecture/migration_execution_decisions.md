@@ -1063,3 +1063,42 @@ BSD-3-Clause and adds no resolved package. The full 138-package transitive scan 
 review items: `dbus` (MPL-2.0, medium/weak-copyleft) and `pubspec_lock_parse` (unknown, high/manual review).
 Neither was introduced by 27B; they remain visible supply-chain observations rather than being silently
 classified compliant.
+
+## 2026-08-20 — Step 27C injects Workbench copy and keeps layout state caller-owned
+
+**Problem.** The legacy Workbench primitives are otherwise pure UI, but `IdeWorkbenchScaffold` reads the
+overlay-dismiss label from `AppLocalizations`. Copying that dependency would violate the `app_ui`
+contract. The increment also spans responsive rails, panes, modal overlays, retained page state, compact
+rows, metric bars, surfaces, and page composition; these behaviors need to remain independent from Bloc,
+Repository, and Provider ports.
+
+**Decision.** Make `closeOverlaySemanticLabel` a required non-empty constructor input and keep overlay
+visibility, pane widths, dismissal, and focus restoration caller-owned. Migrate the remaining Workbench
+primitives as one-public-component files with const constructors, public Dartdoc, barrel exports, and
+ThemeExtension-backed tokens. Non-interactive metric/data rows no longer advertise a button role;
+decorative dividers are excluded from semantics; page and group titles expose heading semantics; modal
+overlays retain a localized scrim action, Escape dismissal, and trigger-focus restoration. No shared
+adapter or Provider port changes.
+
+**Impact.** `app_ui` remains free of `AppLocalizations`, app assets, IO, repositories, and Data clients.
+The responsive Workbench is now available in Widgetbook. Step 27C passes app_ui analysis, 215 randomized
+tests, and 100% hand-written coverage; Widgetbook analysis and the root 72-test/100%-coverage architecture
+gate also pass.
+
+## 2026-08-20 — Step 27C verification separates harness faults from product behavior
+
+**Problem.** The first responsive tests requested 900–1400 px widgets inside a helper that always created
+an 800 px surface, so nominal wide/medium cases actually exercised compact mode. Retained-page probes also
+reused the same keys as PageView wrappers, making state lookups ambiguous. After correcting those tests,
+coverage reached 99.77%; the only structural gap was a second index clamp that cannot run because
+`didUpdateWidget` resolves the index before every non-empty build. The installed build runner also reports
+that `--delete-conflicting-outputs` is obsolete and ignores it.
+
+**Decision.** Add an optional surface size to the shared test pump, give probes distinct keys, and assert
+actual responsive geometry. Remove the unreachable duplicate clamp instead of suppressing coverage or
+writing a test that violates the widget's state invariants. Keep using the current build-runner behavior;
+generation completed normally and refreshed the Widgetbook directory output.
+
+**Impact.** The final tests prove real wide, medium, compact, keyboard, focus, identity-retention, RTL-safe
+inset, and semantic paths without weakening the 100% gate. Production behavior changed only by deleting
+dead defensive code; no package boundary or public port changed.

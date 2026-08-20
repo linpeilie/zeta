@@ -915,3 +915,33 @@ Toast 测试使用短自动关闭时钟并推进 fake clock，以公开 overlay 
 BSD-3-Clause，且没有增加新的解析包。138 个 transitive 的完整扫描仍保留两个既有人工复核项：`dbus`
 （MPL-2.0，medium/弱 copyleft）与 `pubspec_lock_parse`（unknown，high/需人工复核）。二者均非 27B 引入，
 继续作为显式供应链观察项，而不被静默判定为合规。
+
+## 2026-08-20 — 步骤 27C 注入 Workbench 文案并保持布局状态由调用方持有
+
+**问题。** 旧 Workbench 原语整体属于纯 UI，但 `IdeWorkbenchScaffold` 会直接从 `AppLocalizations`
+读取 Overlay 关闭标签；照搬会违反 `app_ui` 契约。本增量还覆盖响应式 Rail/Pane、模态 Overlay、保留式
+页面状态、紧凑行、指标条、Surface 与页面组合，这些行为必须继续与 Bloc、Repository、Provider port 解耦。
+
+**决策。** 将非空 `closeOverlaySemanticLabel` 设为必填构造参数；Overlay 可见性、Pane 宽度、关闭动作与
+焦点恢复继续由调用方持有。其余 Workbench 原语按“一文件一公开组件”、const constructor、公开 Dartdoc、
+barrel export、ThemeExtension token 迁移。非交互指标/数据行不再声明 button role；装饰分隔线从语义树排除；
+页面与分组标题声明 heading；模态 Overlay 保留本地化 scrim action、Esc 关闭和触发器焦点恢复。不修改共享
+adapter 或 Provider port。
+
+**影响。** `app_ui` 仍不依赖 `AppLocalizations`、应用 asset、IO、Repository 或 Data client；响应式
+Workbench 已加入 Widgetbook。步骤 27C 的 app_ui analyze、215 个随机顺序测试与手写 coverage 100% 全绿；
+Widgetbook analyze 以及 root 72-test/100%-coverage 架构门禁同样通过。
+
+## 2026-08-20 — 步骤 27C 验证区分测试宿主问题与产品行为
+
+**问题。** 首轮响应式测试在固定 800 px surface 的 helper 内请求 900–1400 px widget，名义 wide/medium
+场景实际走了 compact；保留页探针又与 PageView wrapper 复用了相同 key，导致 State 查找歧义。修正后覆盖率
+达到 99.77%，唯一结构缺口是第二次 index clamp；由于 `didUpdateWidget` 会在每次非空 build 前解析 index，
+该分支不可达。当前 build runner 还提示 `--delete-conflicting-outputs` 已废弃并忽略该参数。
+
+**决策。** 为共享测试 pump 增加可选 surface size，给探针独立 key，并断言真实响应式几何。删除不可达的
+重复 clamp，不降低覆盖率，也不编造破坏 widget 状态不变量的测试。继续使用当前 build-runner 行为；生成已
+正常完成并刷新 Widgetbook directory 输出。
+
+**影响。** 最终测试真实覆盖 wide/medium/compact、键盘、焦点、身份保留、RTL-safe inset 与语义路径，
+且没有削弱 100% 门禁。生产行为只删除死防御代码，未改变任何包边界或公开 port。

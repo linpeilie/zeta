@@ -51,6 +51,16 @@ final directories = <_widgetbook.WidgetbookNode>[
         ],
       ),
       _widgetbook.WidgetbookComponent(
+        name: 'IdeWorkbenchScaffold',
+        useCases: [
+          _widgetbook.WidgetbookUseCase(
+            name: 'responsive workbench',
+            builder: _widgetbook_catalog_widgetbook_use_cases_ide_components
+                .responsiveWorkbench,
+          ),
+        ],
+      ),
+      _widgetbook.WidgetbookComponent(
         name: 'WindowFrame',
         useCases: [
           _widgetbook.WidgetbookUseCase(
