@@ -641,9 +641,9 @@ seed 重跑完整 270-test 包后通过。
 
 ### 步骤 28 — l10n typed mapping
 
-**状态：进行中（28A–28C 已完成）。** app 自有 shadcn 适配器、当前 63 个跨层
+**状态：进行中（28A–28C 与 28D1 已完成）。** app 自有 shadcn 适配器、当前 63 个跨层
 status/failure/warning/operation code 的穷尽映射及 bootstrap 注入的冻结 Locale 通知文案已全绿；
-provider 本地目录清理仍待完成。
+Claude 已改为 typed presentation code 且不再有本地 catalog；Grok 与 Codex catalog 清理仍待完成。
 
 - [ ] 删除 4 组 TextCatalog/Fallback 与 `ZetaTextCatalogs`。
 - [ ] 下层改为 typed failure/code；`lib/l10n/failure_messages.dart` 穷尽映射。

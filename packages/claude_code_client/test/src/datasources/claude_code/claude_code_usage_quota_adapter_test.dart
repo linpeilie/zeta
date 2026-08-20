@@ -416,10 +416,12 @@ Map<String, Object?>? _snapshotShape(AgentUsageQuotaSnapshot? snapshot) {
     'providerName': snapshot.providerName,
     'planType': snapshot.planType,
     'limitName': snapshot.limitName,
+    'limitNameCode': snapshot.limitNameCode?.name,
     'windows': <Object?>[
       for (final window in snapshot.windows)
         <String, Object?>{
           'label': window.label,
+          'labelCode': window.labelCode?.name,
           'usedPercent': window.usedPercent,
           'resetsAt': window.resetsAt?.toIso8601String(),
           'durationSeconds': window.windowDuration?.inSeconds,

@@ -1,3 +1,4 @@
+import 'package:agent_provider_contracts/src/failures/agent_provider_failure.dart';
 import 'package:agent_provider_contracts/src/models/agent_conversation_mode_models.dart';
 import 'package:agent_provider_contracts/src/models/agent_message_models.dart';
 import 'package:agent_provider_contracts/src/models/agent_model_selection_models.dart';
@@ -291,6 +292,7 @@ final class AgentTurnCompletedEvent extends AgentEvent {
     this.status = AgentHistoryTurnStatus.completed,
     this.errorMessage,
     this.errorCode,
+    this.failureCode,
     this.duration,
     this.completedAt,
     Map<String, Object?> raw = const <String, Object?>{},
@@ -310,6 +312,9 @@ final class AgentTurnCompletedEvent extends AgentEvent {
 
   /// 稳定错误码（如 Codex `turn.error.codexErrorInfo`）；用于 UI 引导。
   final String? errorCode;
+
+  /// App-owned terminal failure category mapped by Presentation.
+  final AgentProviderFailureCode? failureCode;
 
   /// provider 上报的回合耗时（`turn.durationMs`）。
   final Duration? duration;
@@ -774,7 +779,8 @@ final class AgentSystemItemEvent extends AgentEvent {
 /// 协议错误、stderr 或 provider 运行错误。
 final class AgentErrorEvent extends AgentEvent {
   AgentErrorEvent({
-    required this.message,
+    this.message,
+    this.failureCode,
     this.details,
     this.code,
     this.willRetry,
@@ -783,10 +789,17 @@ final class AgentErrorEvent extends AgentEvent {
     this.exception,
     this.stackTrace,
     Map<String, Object?> raw = const <String, Object?>{},
-  }) : raw = immutableJsonMap(raw);
+  }) : assert(
+         message != null || failureCode != null,
+         'A provider message or app-owned failure code is required.',
+       ),
+       raw = immutableJsonMap(raw);
 
   /// 错误概要。
-  final String message;
+  final String? message;
+
+  /// App-owned failure category mapped by Presentation.
+  final AgentProviderFailureCode? failureCode;
 
   /// 错误详情。
   final String? details;

@@ -5,7 +5,6 @@ import 'dart:math';
 import 'package:agent_provider_contracts/agent_provider_contracts.dart';
 import 'package:claude_code_client/src/claude_code_cli_locator.dart';
 import 'package:claude_code_client/src/claude_static_capabilities.dart';
-import 'package:claude_code_client/src/claude_text_catalog.dart';
 import 'package:claude_code_client/src/datasources/claude_code/claude_code_cli_metadata_coordinator.dart';
 import 'package:claude_code_client/src/datasources/claude_code/claude_code_cli_metadata_probe.dart';
 import 'package:claude_code_client/src/datasources/claude_code/claude_code_control_request_handler.dart';
@@ -63,7 +62,6 @@ class ClaudeCodeAgentProvider
     ClaudeCodeSessionDecisionStoreFactory? sessionDecisionStoreFactory,
     ClaudeCodeSessionHistoryReader? sessionHistoryReader,
     ClaudeCodeHiddenThreadStore? hiddenThreadStore,
-    this.textCatalog = const ClaudeCodeTextCatalog(),
     String Function()? idFactory,
   }) : _processStarterDelegate = processStarter ?? Process.start,
        _peerFactory = peerFactory ?? _defaultPeerFactory,
@@ -73,16 +71,12 @@ class ClaudeCodeAgentProvider
            mapper ??
            ClaudeCodeEventMapper(
              providerId: config.id,
-             textCatalog: textCatalog,
              now: clock.now,
              logger: logger,
            ),
        _controlHandler =
            controlRequestHandler ??
-           ClaudeCodeControlRequestHandler(
-             textCatalog: textCatalog,
-             logger: logger,
-           ),
+           ClaudeCodeControlRequestHandler(logger: logger),
        _questionAdapter = questionAdapter ?? ClaudeCodeQuestionAdapter(),
        _sessionHistoryReader =
            sessionHistoryReader ??
@@ -123,7 +117,6 @@ class ClaudeCodeAgentProvider
         ClaudeCodeUsageQuotaAdapter(
           providerId: config.id,
           providerName: config.displayName,
-          textCatalog: textCatalog,
           metadataLoader: sharedMetadata.readForQuota,
           accountDataEnrichmentEnabled:
               config.extra[claudeCodeAccountDataEnrichmentKey] != false,
@@ -142,16 +135,12 @@ class ClaudeCodeAgentProvider
     _permissionPolicy = ClaudeCodePermissionPolicyAdapter(
       applyPermissionMode: _applyPermissionMode,
       sessionDecisionStoreFactory: sessionDecisionStoreFactory,
-      textCatalog: textCatalog,
       logger: logger,
     );
   }
 
   @override
   final AgentProviderConfig config;
-
-  /// The `textCatalog` value.
-  final ClaudeCodeTextCatalog textCatalog;
 
   /// The `clock` value.
   final Clock clock;
@@ -611,7 +600,7 @@ class ClaudeCodeAgentProvider
           sessionId: session.id,
           turnId: turnId,
           status: AgentHistoryTurnStatus.failed,
-          errorMessage: textCatalog.failedToSendPrompt,
+          failureCode: AgentProviderFailureCode.unknown,
           completedAt: clock.now(),
         ),
       );

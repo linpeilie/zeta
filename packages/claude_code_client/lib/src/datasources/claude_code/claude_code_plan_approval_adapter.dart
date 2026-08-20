@@ -1,5 +1,4 @@
 import 'package:agent_provider_contracts/agent_provider_contracts.dart';
-import 'package:claude_code_client/src/claude_text_catalog.dart';
 import 'package:zeta_logging/zeta_logging.dart';
 
 /// Claude Code Plan control request 的路由结果。
@@ -53,13 +52,8 @@ final class ClaudeCodePlanApprovalDecisionResult {
 /// [ClaudeCodePlanControlRequestResult.responseFrame]。
 final class ClaudeCodePlanApprovalAdapter {
   /// Creates a [ClaudeCodePlanApprovalAdapter].
-  ClaudeCodePlanApprovalAdapter({
-    this.textCatalog = const ClaudeCodeTextCatalog(),
-    AppLogger? logger,
-  }) : _log = logger ?? loggerFor('zeta.agent.claude_code.plan_approval');
-
-  /// The `textCatalog` value.
-  final ClaudeCodeTextCatalog textCatalog;
+  ClaudeCodePlanApprovalAdapter({AppLogger? logger})
+    : _log = logger ?? loggerFor('zeta.agent.claude_code.plan_approval');
   final AppLogger _log;
   final Map<String, _ObservedExitPlanTool> _observedByToolUseId =
       <String, _ObservedExitPlanTool>{};
@@ -190,7 +184,7 @@ final class ClaudeCodePlanApprovalAdapter {
     final controlPlan = _string(toolInput['plan']);
     final approval = AgentPlanApprovalRequest(
       id: toolUseId,
-      title: textCatalog.planApprovalTitle,
+      titleCode: AgentPlanApprovalTitleCode.planApproval,
       markdown: controlPlan ?? observed.markdown,
       sessionId: observed.sessionId,
       turnId: observed.turnId,

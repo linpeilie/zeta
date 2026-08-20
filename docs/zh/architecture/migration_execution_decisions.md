@@ -1072,3 +1072,12 @@ resolver 直接返回 Repository `NotificationRequest`，被 source guard 正确
 共享 adapter。测试覆盖中英文全部 7 种 attention、Windows/POSIX/空项目路径、安全 body、稳定 tag、Linux
 action 文案、同步/异步 bootstrap builder、observer/error hook，以及显式与平台 Locale 两条路径。Analyze
 与 85 项随机顺序根测试均通过，覆盖率 100%。
+
+**28D1 中立 code 调整。** Claude catalog 虽未导入 Flutter，但仍在 package 内编写权限 preset、权限请求说明、
+计划审批、额度标签及本地合成失败等 Zeta 文案。保留协议原生字符串作为可选数据，并给既有中立值模型增加
+范围明确的 presentation code：权限项、计划/问题标题或额度标签必须二选一携带 provider 原生文本或 app
+自有 code；`AgentErrorEvent` 同样二选一携带 provider 文本或 `AgentProviderFailureCode`。Claude 现在只提供
+typed code、provider/tool 模板参数与 duration 证据，不再提供英文。该变化是共享 immutable contract 调整，
+没有新增 capability 方法，也没有让 package 依赖本地化。直接删除 `claude_text_catalog.dart` 及全部构造透传，
+不改名保留。contracts 包 analyze、85 项随机测试与 100% coverage 全绿；Claude analyze、269 项随机测试与
+100% coverage 全绿；root、Grok、Codex 也都能基于兼容默认值通过 analyze。

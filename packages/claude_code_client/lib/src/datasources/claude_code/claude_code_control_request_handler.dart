@@ -1,5 +1,4 @@
 import 'package:agent_provider_contracts/agent_provider_contracts.dart';
-import 'package:claude_code_client/src/claude_text_catalog.dart';
 import 'package:zeta_logging/zeta_logging.dart';
 
 /// Claude Code `can_use_tool` 的四种宿主决策（设计文档 §4.5）。
@@ -100,13 +99,8 @@ final class ClaudeCodePendingToolPermission {
 /// 无 I/O 副作用；`StreamJsonPeer.send` 由 Provider 负责。
 final class ClaudeCodeControlRequestHandler {
   /// Creates a [ClaudeCodeControlRequestHandler].
-  ClaudeCodeControlRequestHandler({
-    this.textCatalog = const ClaudeCodeTextCatalog(),
-    AppLogger? logger,
-  }) : _log = logger ?? loggerFor('zeta.agent.claude_code.control_request');
-
-  /// The `textCatalog` value.
-  final ClaudeCodeTextCatalog textCatalog;
+  ClaudeCodeControlRequestHandler({AppLogger? logger})
+    : _log = logger ?? loggerFor('zeta.agent.claude_code.control_request');
   final AppLogger _log;
 
   final Map<String, ClaudeCodePendingToolPermission> _pending =
@@ -354,10 +348,10 @@ final class ClaudeCodeControlRequestHandler {
       id: pending.requestId,
       title: title,
       kind: kind,
-      description: textCatalog.permissionRequestDescription(
-        'Claude Code',
-        pending.toolName,
-      ),
+      descriptionCode:
+          AgentPermissionRequestDescriptionCode.providerRequestsTool,
+      providerName: 'Claude Code',
+      toolName: pending.toolName,
       command: command,
       cwd: cwd,
       sessionId: pending.sessionId,

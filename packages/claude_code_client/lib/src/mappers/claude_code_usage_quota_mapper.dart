@@ -1,5 +1,4 @@
 import 'package:agent_provider_contracts/agent_provider_contracts.dart';
-import 'package:claude_code_client/src/claude_text_catalog.dart';
 
 /// 将 Claude Code OAuth usage 响应映射为中立套餐快照。
 ///
@@ -9,29 +8,28 @@ AgentUsageQuotaSnapshot? mapClaudeCodeUsageQuota(
   required String providerId,
   required String providerName,
   String? subscriptionType,
-  ClaudeCodeTextCatalog textCatalog = const ClaudeCodeTextCatalog(),
 }) {
   final response = _asMap(raw) ?? const <String, Object?>{};
 
   final windows = <AgentUsageWindow>[
     ?_window(
       response['five_hour'],
-      label: textCatalog.quotaFiveHours,
+      labelCode: AgentUsageWindowLabelCode.fiveHours,
       duration: const Duration(hours: 5),
     ),
     ?_window(
       response['seven_day'],
-      label: textCatalog.quotaOneWeek,
+      labelCode: AgentUsageWindowLabelCode.oneWeek,
       duration: const Duration(days: 7),
     ),
     ?_window(
       response['seven_day_sonnet'],
-      label: textCatalog.quotaSonnetOneWeek,
+      labelCode: AgentUsageWindowLabelCode.sonnetOneWeek,
       duration: const Duration(days: 7),
     ),
     ?_window(
       response['seven_day_opus'],
-      label: textCatalog.quotaOpusOneWeek,
+      labelCode: AgentUsageWindowLabelCode.opusOneWeek,
       duration: const Duration(days: 7),
     ),
   ];
@@ -45,7 +43,7 @@ AgentUsageQuotaSnapshot? mapClaudeCodeUsageQuota(
     providerId: providerId,
     providerName: providerName,
     planType: planType,
-    limitName: textCatalog.claudeCodeSubscriptionQuota,
+    limitNameCode: AgentUsageLimitNameCode.claudeCodeSubscriptionQuota,
     windows: List<AgentUsageWindow>.unmodifiable(windows),
     credits: credits,
   );
@@ -64,7 +62,7 @@ String? _subscriptionDisplayName(Object? value) {
 
 AgentUsageWindow? _window(
   Object? raw, {
-  required String label,
+  required AgentUsageWindowLabelCode labelCode,
   required Duration duration,
 }) {
   final value = _asMap(raw);
@@ -73,7 +71,7 @@ AgentUsageWindow? _window(
     return null;
   }
   return AgentUsageWindow(
-    label: label,
+    labelCode: labelCode,
     usedPercent: usedPercent,
     resetsAt: _dateTime(value?['resets_at'])?.toLocal(),
     windowDuration: duration,

@@ -1,5 +1,4 @@
 import 'package:agent_provider_contracts/agent_provider_contracts.dart';
-import 'package:claude_code_client/src/claude_text_catalog.dart';
 import 'package:claude_code_client/src/datasources/claude_code/claude_code_file_change_tracker.dart';
 import 'package:claude_code_client/src/datasources/claude_code/claude_code_plan_approval_adapter.dart';
 import 'package:claude_code_client/src/mappers/claude_code_stream_identity.dart';
@@ -38,25 +37,17 @@ final class ClaudeCodeEventMapper {
     ClaudeCodeStreamIdentity? identity,
     ClaudeCodePlanApprovalAdapter? planApprovalAdapter,
     ClaudeCodeFileChangeTracker? fileChangeTracker,
-    this.textCatalog = const ClaudeCodeTextCatalog(),
     DateTime Function()? now,
     AppLogger? logger,
   }) : identity = identity ?? ClaudeCodeStreamIdentity(),
        planApprovalAdapter =
-           planApprovalAdapter ??
-           ClaudeCodePlanApprovalAdapter(
-             textCatalog: textCatalog,
-             logger: logger,
-           ),
+           planApprovalAdapter ?? ClaudeCodePlanApprovalAdapter(logger: logger),
        fileChangeTracker = fileChangeTracker ?? ClaudeCodeFileChangeTracker(),
        _now = now ?? DateTime.now,
        _log = logger ?? loggerFor('zeta.agent.claude_code.event_mapper');
 
   /// The `providerId` value.
   final String providerId;
-
-  /// The `textCatalog` value.
-  final ClaudeCodeTextCatalog textCatalog;
 
   /// The `identity` value.
   final ClaudeCodeStreamIdentity identity;
@@ -263,7 +254,7 @@ final class ClaudeCodeEventMapper {
       return ClaudeCodeMappedFrame(
         events: <AgentEvent>[
           AgentErrorEvent(
-            message: textCatalog.sessionIdentityChanged('Claude Code'),
+            failureCode: AgentProviderFailureCode.protocol,
             code: 'claudeCodeSessionMismatch',
             sessionId: expectedSessionId,
           ),
@@ -282,7 +273,7 @@ final class ClaudeCodeEventMapper {
       return ClaudeCodeMappedFrame(
         events: <AgentEvent>[
           AgentErrorEvent(
-            message: textCatalog.couldNotRestoreSession('Claude Code'),
+            failureCode: AgentProviderFailureCode.protocol,
             code: 'claudeCodeSessionMismatch',
             sessionId: expected,
           ),

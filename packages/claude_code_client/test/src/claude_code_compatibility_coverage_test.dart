@@ -4,7 +4,6 @@ import 'dart:io';
 
 import 'package:agent_provider_contracts/agent_provider_contracts.dart';
 import 'package:claude_code_client/src/claude_code_cli_locator.dart';
-import 'package:claude_code_client/src/claude_text_catalog.dart';
 import 'package:claude_code_client/src/datasources/claude_code/claude_code_control_request_handler.dart';
 import 'package:claude_code_client/src/datasources/claude_code/claude_code_hidden_thread_store.dart';
 import 'package:claude_code_client/src/datasources/claude_code/claude_code_macos_keychain_source.dart';
@@ -19,35 +18,6 @@ import 'package:claude_code_client/src/mappers/claude_code_usage_quota_mapper.da
 import 'package:test/test.dart';
 
 void main() {
-  group('provider-local text catalog', () {
-    test('exposes every stable pre-presentation label', () {
-      const text = ClaudeCodeTextCatalog();
-
-      expect(text.permissionAskDescription, isNotEmpty);
-      expect(text.permissionAcceptEditsDescription, isNotEmpty);
-      expect(text.permissionPlanDescription, isNotEmpty);
-      expect(text.permissionBypassDescription, isNotEmpty);
-      expect(text.providerReady('Claude'), 'Claude ready');
-      expect(text.startingProvider('Claude'), 'Starting Claude');
-      expect(text.preparingProvider('Claude'), 'Preparing Claude');
-      expect(text.processExited('Claude'), 'Claude process exited');
-      expect(text.agentIsWorking, isNotEmpty);
-      expect(text.failedToSendPrompt, isNotEmpty);
-      expect(text.planApprovalTitle, isNotEmpty);
-      expect(text.sessionIdentityChanged('Claude'), contains('Claude'));
-      expect(text.couldNotRestoreSession('Claude'), contains('Claude'));
-      expect(
-        text.permissionRequestDescription('Claude', 'Bash'),
-        contains('Bash'),
-      );
-      expect(text.quotaFiveHours, isNotEmpty);
-      expect(text.quotaOneWeek, isNotEmpty);
-      expect(text.quotaSonnetOneWeek, isNotEmpty);
-      expect(text.quotaOpusOneWeek, isNotEmpty);
-      expect(text.claudeCodeSubscriptionQuota, isNotEmpty);
-    });
-  });
-
   group('CLI locator compatibility branches', () {
     test(
       'covers configured, POSIX, common, duplicate, and missing paths',

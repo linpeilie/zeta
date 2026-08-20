@@ -1,5 +1,4 @@
 import 'package:agent_provider_contracts/agent_provider_contracts.dart';
-import 'package:claude_code_client/src/claude_text_catalog.dart';
 
 /// Claude Code CLI `--permission-mode` 枚举（协议私货，仅 CC data 层）。
 enum ClaudeCodePermissionMode {
@@ -142,40 +141,27 @@ abstract final class ClaudeCodePermissionModeCodec {
     };
   }
 
-  /// Runs `displayLabel`.
-  static String displayLabel(ClaudeCodePermissionMode mode) {
+  /// Maps one provider mode to app-owned presentation copy.
+  static AgentPermissionOptionCopyCode copyCode(
+    ClaudeCodePermissionMode mode,
+  ) {
     return switch (mode) {
-      ClaudeCodePermissionMode.ask => 'Ask',
-      ClaudeCodePermissionMode.acceptEdits => 'Accept edits',
-      ClaudeCodePermissionMode.plan => 'Plan',
-      ClaudeCodePermissionMode.bypass => 'Bypass permissions',
-    };
-  }
-
-  /// Runs `displayDescription`.
-  static String displayDescription(
-    ClaudeCodePermissionMode mode, {
-    ClaudeCodeTextCatalog catalog = const ClaudeCodeTextCatalog(),
-  }) {
-    return switch (mode) {
-      ClaudeCodePermissionMode.ask => catalog.permissionAskDescription,
+      ClaudeCodePermissionMode.ask => AgentPermissionOptionCopyCode.ask,
       ClaudeCodePermissionMode.acceptEdits =>
-        catalog.permissionAcceptEditsDescription,
-      ClaudeCodePermissionMode.plan => catalog.permissionPlanDescription,
-      ClaudeCodePermissionMode.bypass => catalog.permissionBypassDescription,
+        AgentPermissionOptionCopyCode.acceptEdits,
+      ClaudeCodePermissionMode.plan => AgentPermissionOptionCopyCode.plan,
+      ClaudeCodePermissionMode.bypass =>
+        AgentPermissionOptionCopyCode.bypassPermissions,
     };
   }
 
   /// 中立 [AgentPermissionCatalog]（port / adapter 使用）。
-  static AgentPermissionCatalog catalog({
-    ClaudeCodeTextCatalog textCatalog = const ClaudeCodeTextCatalog(),
-  }) {
+  static AgentPermissionCatalog catalog() {
     final options = catalogOrder
         .map(
           (mode) => AgentPermissionOption(
             id: optionId(mode),
-            label: displayLabel(mode),
-            description: displayDescription(mode, catalog: textCatalog),
+            copyCode: copyCode(mode),
             planningOnly: mode == ClaudeCodePermissionMode.plan,
           ),
         )

@@ -23,14 +23,18 @@ enum AgentPlanApprovalContinuation {
   localExecutionHandoff,
 }
 
+/// App-owned plan approval title variants.
+enum AgentPlanApprovalTitleCode { planApproval }
+
 /// Provider 发起的独立计划审批请求。
 ///
 /// 该模型刻意与命令权限审批分离，避免把“接受计划”误解为“允许执行命令”。
 final class AgentPlanApprovalRequest {
   AgentPlanApprovalRequest({
     required this.id,
-    required this.title,
     required this.markdown,
+    this.title,
+    this.titleCode,
     this.overview,
     List<AgentPlanEntry> todos = const <AgentPlanEntry>[],
     List<AgentPlanApprovalPhase> phases = const <AgentPlanApprovalPhase>[],
@@ -39,12 +43,17 @@ final class AgentPlanApprovalRequest {
     this.turnId,
     this.continuation = AgentPlanApprovalContinuation.providerManaged,
     Map<String, Object?> raw = const <String, Object?>{},
-  }) : todos = immutableList(todos),
+  }) : assert(
+         title != null || titleCode != null,
+         'A provider title or app-owned title code is required.',
+       ),
+       todos = immutableList(todos),
        phases = immutableList(phases),
        raw = immutableJsonMap(raw);
 
   final String id;
-  final String title;
+  final String? title;
+  final AgentPlanApprovalTitleCode? titleCode;
   final String markdown;
   final String? overview;
   final List<AgentPlanEntry> todos;

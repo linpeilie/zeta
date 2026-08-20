@@ -1,3 +1,4 @@
+import 'package:agent_provider_contracts/agent_provider_contracts.dart';
 import 'package:claude_code_client/src/mappers/claude_code_usage_quota_mapper.dart';
 import 'package:test/test.dart';
 
@@ -40,20 +41,24 @@ void main() {
       expect(result!.providerId, 'claude-personal');
       expect(result.providerName, 'Claude Code');
       expect(result.planType, 'Claude Max');
-      expect(result.limitName, 'Claude Code subscription quota');
+      expect(result.limitName, isNull);
+      expect(
+        result.limitNameCode,
+        AgentUsageLimitNameCode.claudeCodeSubscriptionQuota,
+      );
       expect(result.windows, hasLength(4));
-      expect(result.windows.first.label, '5 hours');
+      expect(result.windows.first.label, isNull);
       expect(result.windows.first.usedPercent, 13);
       expect(result.windows.first.windowDuration, const Duration(hours: 5));
       expect(
         result.windows.first.resetsAt,
         DateTime.parse('2026-08-12T09:30:00Z').toLocal(),
       );
-      expect(result.windows.map((window) => window.label), <String>[
-        '5 hours',
-        '1 week',
-        'Sonnet · 1 week',
-        'Opus · 1 week',
+      expect(result.windows.map((window) => window.labelCode), <Object?>[
+        AgentUsageWindowLabelCode.fiveHours,
+        AgentUsageWindowLabelCode.oneWeek,
+        AgentUsageWindowLabelCode.sonnetOneWeek,
+        AgentUsageWindowLabelCode.opusOneWeek,
       ]);
       expect(result.windows.map((window) => window.usedPercent), <int>[
         13,

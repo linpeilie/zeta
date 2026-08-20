@@ -1,26 +1,37 @@
 import 'package:agent_provider_contracts/src/models/agent_turn_history_models.dart';
 import 'package:agent_provider_contracts/src/models/immutable_collections.dart';
 
+/// App-owned question request title variants.
+enum AgentQuestionTitleCode { agentRequestsInput }
+
 /// Agent 向用户发出的独立提问请求。
 ///
 /// 该模型不表达 approve/deny 语义；用户可以提交结构化答案，或用空答案跳过。
 final class AgentQuestionRequest {
   AgentQuestionRequest({
     required this.id,
-    required this.title,
     required List<AgentUserInputQaPair> questions,
+    this.title,
+    this.titleCode,
     this.description,
     this.sessionId,
     this.turnId,
     Map<String, Object?> raw = const <String, Object?>{},
-  }) : questions = immutableList(questions),
+  }) : assert(
+         title != null || titleCode != null,
+         'A provider title or app-owned title code is required.',
+       ),
+       questions = immutableList(questions),
        raw = immutableJsonMap(raw);
 
   /// UI 和响应端口使用的稳定请求 id。
   final String id;
 
   /// 提问卡片标题。
-  final String title;
+  final String? title;
+
+  /// App-owned title variant mapped by Presentation.
+  final AgentQuestionTitleCode? titleCode;
 
   /// 可选的请求说明。
   final String? description;

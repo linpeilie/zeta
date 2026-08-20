@@ -11,17 +11,40 @@ enum AgentUsageLimitReasonCode {
   unknown,
 }
 
+/// App-owned quota-window label variants.
+enum AgentUsageWindowLabelCode {
+  duration,
+  fiveHours,
+  oneWeek,
+  sonnetOneWeek,
+  opusOneWeek,
+  planQuota,
+  onDemandQuota,
+  primaryQuota,
+  extraQuota,
+}
+
+/// App-owned quota-heading variants.
+enum AgentUsageLimitNameCode { claudeCodeSubscriptionQuota }
+
 /// Agent 账号的用量窗口。
 final class AgentUsageWindow {
   const AgentUsageWindow({
-    required this.label,
     required this.usedPercent,
+    this.label,
+    this.labelCode,
     this.resetsAt,
     this.windowDuration,
-  });
+  }) : assert(
+         label != null || labelCode != null,
+         'A provider label or app-owned label code is required.',
+       );
 
   /// provider 返回的窗口名称；缺失时由适配层提供稳定回退名称。
-  final String label;
+  final String? label;
+
+  /// App-owned fallback label mapped by Presentation.
+  final AgentUsageWindowLabelCode? labelCode;
 
   /// 当前窗口已使用百分比，范围为 0～100。
   final int usedPercent;
@@ -56,6 +79,7 @@ final class AgentUsageQuotaSnapshot {
     required List<AgentUsageWindow> windows,
     this.planType,
     this.limitName,
+    this.limitNameCode,
     this.credits,
     this.availableResetCreditCount,
     this.reachedReasonCode,
@@ -65,6 +89,7 @@ final class AgentUsageQuotaSnapshot {
   final String providerName;
   final String? planType;
   final String? limitName;
+  final AgentUsageLimitNameCode? limitNameCode;
   final List<AgentUsageWindow> windows;
   final AgentUsageCredits? credits;
 

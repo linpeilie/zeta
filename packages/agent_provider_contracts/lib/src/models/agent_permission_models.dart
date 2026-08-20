@@ -3,6 +3,9 @@ import 'package:agent_provider_contracts/src/models/immutable_collections.dart';
 /// Agent 向用户请求审批的中立分类。
 enum AgentPermissionKind { commandExecution, fileChange, permissions, other }
 
+/// App-owned permission request description variants.
+enum AgentPermissionRequestDescriptionCode { providerRequestsTool }
+
 /// 命令执行审批的决策变体（对应协议 `CommandExecutionApprovalDecision`）。
 enum AgentCommandApprovalDecisionKind {
   /// 同意本次命令。
@@ -30,6 +33,9 @@ final class AgentPermissionRequest {
     required this.title,
     required this.kind,
     this.description,
+    this.descriptionCode,
+    this.providerName,
+    this.toolName,
     this.command,
     this.cwd,
     this.sessionId,
@@ -56,6 +62,15 @@ final class AgentPermissionRequest {
 
   /// provider 给出的原因或说明。
   final String? description;
+
+  /// App-owned description variant mapped by Presentation.
+  final AgentPermissionRequestDescriptionCode? descriptionCode;
+
+  /// Provider display name used only as localized-template data.
+  final String? providerName;
+
+  /// Provider-authored tool name used only as localized-template data.
+  final String? toolName;
 
   /// 命令执行审批中的命令文本。
   final String? command;

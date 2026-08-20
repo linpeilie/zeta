@@ -1262,3 +1262,14 @@ the Step 29 Bloc will translate it at its already-approved Repository boundary. 
 adapter changes. Tests cover all seven attention kinds in both languages, Windows/POSIX/empty project paths,
 safe bodies, stable tags, Linux action copy, sync/async bootstrap builders, observer/error hooks, and both
 explicit and platform locale paths. Analyze and 85 randomized root tests pass at 100% coverage.
+
+**28D1 neutral-code adjustment.** Claude's catalog did not import Flutter, but it still authored Zeta copy for
+permission presets, permission-request descriptions, plan approval, quota labels, and locally synthesized
+failures. Preserve protocol-authored strings as optional data and add narrowly scoped presentation codes to
+the existing neutral value models. A permission option, plan/question title, or quota label must now contain
+either provider-authored text or an app-owned code; `AgentErrorEvent` similarly accepts provider text or an
+`AgentProviderFailureCode`. Claude supplies codes, provider/tool template values, and duration evidence rather
+than English. This is a shared immutable-contract adjustment, not a new capability method or a localization
+dependency. Delete `claude_text_catalog.dart` and all constructor plumbing instead of renaming it. The contract
+package passes analyze, 85 randomized tests, and 100% coverage; Claude passes analyze, 269 randomized tests,
+and 100% coverage. Root, Grok, and Codex analysis also remain clean against the compatible model defaults.

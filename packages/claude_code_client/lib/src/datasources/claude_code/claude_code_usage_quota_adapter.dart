@@ -1,5 +1,4 @@
 import 'package:agent_provider_contracts/agent_provider_contracts.dart';
-import 'package:claude_code_client/src/claude_text_catalog.dart';
 import 'package:claude_code_client/src/datasources/claude_code/claude_code_anthropic_api_client.dart';
 import 'package:claude_code_client/src/datasources/claude_code/claude_code_cli_metadata_coordinator.dart';
 import 'package:claude_code_client/src/datasources/claude_code/claude_code_oauth_credentials_reader.dart';
@@ -32,7 +31,6 @@ final class ClaudeCodeUsageQuotaAdapter {
     ClaudeCodeUsageCredentialsLoader? credentialsLoader,
     ClaudeCodeRemoteUsageLoader? remoteUsageLoader,
     DateTime Function()? clock,
-    this.textCatalog = const ClaudeCodeTextCatalog(),
     AppLogger? logger,
   }) : _loadMetadata = metadataLoader,
        _credentialsLoader =
@@ -63,9 +61,6 @@ final class ClaudeCodeUsageQuotaAdapter {
   final ClaudeCodeUsageCredentialsLoader _credentialsLoader;
   final ClaudeCodeRemoteUsageLoader _remoteUsageLoader;
   final DateTime Function() _clock;
-
-  /// The `textCatalog` value.
-  final ClaudeCodeTextCatalog textCatalog;
 
   DateTime? _lastAttemptAt;
   AgentUsageQuotaSnapshot? _lastResult;
@@ -127,7 +122,6 @@ final class ClaudeCodeUsageQuotaAdapter {
       providerId: providerId,
       providerName: providerName,
       subscriptionType: subscriptionType,
-      textCatalog: textCatalog,
     );
     _lastResult = result;
     return result;

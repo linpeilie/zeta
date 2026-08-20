@@ -136,7 +136,8 @@ void main() {
       ]);
       for (final option in catalog.options) {
         expect(option.allowed, isTrue);
-        expect(option.label, isNotEmpty);
+        expect(option.label, isNull);
+        expect(option.copyCode, isNotNull);
         expect(catalog.optionById(option.id), option);
       }
       expect(

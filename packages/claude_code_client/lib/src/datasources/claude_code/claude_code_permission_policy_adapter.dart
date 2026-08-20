@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:agent_provider_contracts/agent_provider_contracts.dart';
-import 'package:claude_code_client/src/claude_text_catalog.dart';
 import 'package:claude_code_client/src/datasources/claude_code/claude_code_question_adapter.dart';
 import 'package:claude_code_client/src/mappers/claude_code_permission_mode_codec.dart';
 import 'package:zeta_logging/zeta_logging.dart';
@@ -150,7 +149,6 @@ final class ClaudeCodePermissionPolicyAdapter
   ClaudeCodePermissionPolicyAdapter({
     required this.applyPermissionMode,
     ClaudeCodeSessionDecisionStoreFactory? sessionDecisionStoreFactory,
-    this.textCatalog = const ClaudeCodeTextCatalog(),
     AppLogger? logger,
   }) : _sessionDecisionStoreFactory =
            sessionDecisionStoreFactory ??
@@ -161,8 +159,6 @@ final class ClaudeCodePermissionPolicyAdapter
   final ClaudeCodePermissionModeApplier applyPermissionMode;
   final ClaudeCodeSessionDecisionStoreFactory _sessionDecisionStoreFactory;
 
-  /// The `textCatalog` value.
-  final ClaudeCodeTextCatalog textCatalog;
   final AppLogger _log;
 
   ClaudeCodeSessionDecisionStore? _sessionDecisionStore;
@@ -171,7 +167,7 @@ final class ClaudeCodePermissionPolicyAdapter
 
   @override
   Future<AgentPermissionCatalog> listPermissionOptions() async {
-    return ClaudeCodePermissionModeCodec.catalog(textCatalog: textCatalog);
+    return ClaudeCodePermissionModeCodec.catalog();
   }
 
   @override

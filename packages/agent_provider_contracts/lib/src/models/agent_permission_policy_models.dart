@@ -21,17 +21,24 @@ final class AgentPermissionOption {
   /// 创建权限选项。
   const AgentPermissionOption({
     required this.id,
-    required this.label,
+    this.label,
+    this.copyCode,
     this.description,
     this.allowed = true,
     this.planningOnly = false,
-  });
+  }) : assert(
+         label != null || copyCode != null,
+         'A provider label or app-owned copy code is required.',
+       );
 
   /// 稳定选项 id（不透明；不得由共享层解析协议语义）。
   final String id;
 
-  /// 用户可见主标签。
-  final String label;
+  /// Provider-authored display label, when the protocol supplies one.
+  final String? label;
+
+  /// App-owned label/description code mapped by Presentation.
+  final AgentPermissionOptionCopyCode? copyCode;
 
   /// 可选说明；仅用于展示，不承载协议 payload。
   final String? description;
@@ -48,6 +55,7 @@ final class AgentPermissionOption {
         other is AgentPermissionOption &&
             other.id == id &&
             other.label == label &&
+            other.copyCode == copyCode &&
             other.description == description &&
             other.allowed == allowed &&
             other.planningOnly == planningOnly;
@@ -55,12 +63,20 @@ final class AgentPermissionOption {
 
   @override
   int get hashCode =>
-      Object.hash(id, label, description, allowed, planningOnly);
+      Object.hash(id, label, copyCode, description, allowed, planningOnly);
 
   @override
   String toString() =>
       'AgentPermissionOption(id: $id, label: $label, allowed: $allowed, '
       'planningOnly: $planningOnly)';
+}
+
+/// App-owned permission option copy variants.
+enum AgentPermissionOptionCopyCode {
+  ask,
+  acceptEdits,
+  plan,
+  bypassPermissions,
 }
 
 /// Provider 暴露的权限选项目录。

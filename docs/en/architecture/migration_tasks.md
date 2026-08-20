@@ -681,9 +681,10 @@ and all nine macOS/Windows/Linux desktop builds.
 
 ### Step 28 — Typed l10n mapping
 
-**Status: in progress (28A–28C complete).** The app-owned shadcn adapter, exhaustive mapping for all
+**Status: in progress (28A–28C and 28D1 complete).** The app-owned shadcn adapter, exhaustive mapping for all
 63 current cross-layer status/failure/warning/operation codes, and bootstrap-injected frozen-locale
-notification copy are green; provider-local catalog removal remains.
+notification copy are green. Claude now emits typed presentation codes with no local catalog; Grok and Codex
+catalog removal remain.
 
 - [ ] Remove the four TextCatalog/Fallback families and `ZetaTextCatalogs`.
 - [ ] Replace lower-layer messages with typed failures/codes; map them exhaustively in `lib/l10n/failure_messages.dart`.
