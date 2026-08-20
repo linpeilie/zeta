@@ -1102,3 +1102,25 @@ labelCode；提问使用已有 `AgentQuestionTitleCode.agentRequestsInput`；本
 code。contracts 85 tests、1,078 / 1,078；Codex 178 tests、3,765 / 3,765；Claude 269 tests、
 2,994 / 2,994；Grok 242 tests、3,307 / 3,307；conversation repository 27 tests、1,121 / 1,121；
 root 85 tests 在排除 `packages/**` 后 100%。packages 无 TextCatalog 与 `AppLocalizations`。
+
+## 2026-08-20 — 步骤 29 Workspace / Settings / Desktop Notifications
+
+**问题。** Cubit 不能使用 `bloc_concurrency` transformer；`WorkspaceScanCancellationToken`
+是 Data 类型，Cubit 不得 import `workspace_client`。DesktopNotifications 必须同时读
+settings 与 notifications repository，但不能依赖 SettingsCubit。View 不得 import
+`*_repository`。四个仓库类标成 `final class`，根 app 的 mocktail `Mock implements`
+无法编译。
+
+**决策。** Workspace index/children 用 generation 计数丢弃过期结果，作为
+`restartable()` 等价取消；不改 Repository cancel API。Settings 用私有 `_writeQueue`
+串行 persist；外观变更写入 `_pendingAppearance` 并在队列中合并。DesktopNotificationsBloc
+直接注入两个 Repository 和冻结 Locale 的 `DesktopNotificationCopyResolver`，把
+`settingsChanges` 转成独立 `sequential()` 事件，而不把长订阅包进 sequential
+transformer。View 从 state 文件 re-export 领域类型。仅去掉步骤 29 消费的四个
+Repository 类上的 `final`（`SettingsRepository`、`WorkspaceRepository`、
+`DesktopNotificationsRepository`、`DesktopPlatformRepository`），不改方法签名、
+adapter 或 Provider port。App/router 接线留给步骤 34/35。
+
+**证据。** `flutter analyze lib test` 0 问题；`dart format` 72 files / 0 changed；
+`bloc lint .` 0 issues；根目录 `very_good test` 167 项随机顺序测试通过，排除
+`packages/**` 后手写覆盖率 100%。

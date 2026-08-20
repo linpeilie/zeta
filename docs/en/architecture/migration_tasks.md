@@ -705,21 +705,21 @@ Chinese ARB files each have 1,041 matching keys. Packages import neither `AppLoc
 
 **WorkspaceCubit**
 
-- [ ] Expose index/invalidate/toggle/select/reveal; expanded/selected exists only in State.
-- [ ] Indexing uses `restartable()`-equivalent cancellation; reveal/directory selection goes through `desktop_platform_repository`.
+- [x] Expose index/invalidate/toggle/select/reveal; expanded/selected exists only in State.
+- [x] Indexing uses `restartable()`-equivalent cancellation; reveal/directory selection goes through `desktop_platform_repository`.
 
 **SettingsCubit**
 
-- [ ] Handle load/persist/font catalog/language restart result.
-- [ ] Serialize persistence writes with `sequential()` and explicitly coalesce rapid appearance changes.
+- [x] Handle load/persist/font catalog/language restart result.
+- [x] Serialize persistence writes with `sequential()` and explicitly coalesce rapid appearance changes.
 
 **DesktopNotificationsBloc**
 
-- [ ] Inject settings and notification repositories directly; do not depend on SettingsCubit.
-- [ ] Keep attention stream, visibility, read state, and badge in one Bloc.
-- [ ] Use a no-BuildContext copy resolver and serialize notification side effects.
+- [x] Inject settings and notification repositories directly; do not depend on SettingsCubit.
+- [x] Keep attention stream, visibility, read state, and badge in one Bloc.
+- [x] Use a no-BuildContext copy resolver and serialize notification side effects.
 
-- [ ] Create Page/View/barrel, blocTest, and MockBloc widget tests for each feature.
+- [x] Create Page/View/barrel, blocTest, and MockBloc widget tests for each feature.
 
 ### Step 30 — Project Threads / IDE Session
 

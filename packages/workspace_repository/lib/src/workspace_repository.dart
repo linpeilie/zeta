@@ -105,7 +105,7 @@ final class WorkspaceRepositoryException implements Exception {
 ///
 /// Selection, expansion, loading, progress, retry, and user-visible failures
 /// intentionally remain in WorkspaceCubit.
-final class WorkspaceRepository {
+class WorkspaceRepository {
   /// Creates a workspace Repository over [scanner].
   WorkspaceRepository({required WorkspaceScanner scanner}) : _scanner = scanner;
 

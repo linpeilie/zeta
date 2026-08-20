@@ -665,21 +665,21 @@ code 以及 28D 的 presentation code。ARB 现为 en/zh 各 1,041 个一致键�
 
 **WorkspaceCubit**
 
-- [ ] index/invalidate/toggle/select/reveal 方法；expanded/selected 只在 State。
-- [ ] index 使用 `restartable()` 等价取消；reveal/目录选择走 `desktop_platform_repository`。
+- [x] index/invalidate/toggle/select/reveal 方法；expanded/selected 只在 State。
+- [x] index 使用 `restartable()` 等价取消；reveal/目录选择走 `desktop_platform_repository`。
 
 **SettingsCubit**
 
-- [ ] load/persist/font catalog/language restart result。
-- [ ] persistence 写按 `sequential()`；快速外观选择按明确策略合并。
+- [x] load/persist/font catalog/language restart result。
+- [x] persistence 写按 `sequential()`；快速外观选择按明确策略合并。
 
 **DesktopNotificationsBloc**
 
-- [ ] 同时注入 settings 与 notification repository，不依赖 SettingsCubit。
-- [ ] attention stream、visibility、read 状态和 badge 在一个 Bloc。
-- [ ] copy resolver 无 BuildContext；notification side effect 顺序化。
+- [x] 同时注入 settings 与 notification repository，不依赖 SettingsCubit。
+- [x] attention stream、visibility、read 状态和 badge 在一个 Bloc。
+- [x] copy resolver 无 BuildContext；notification side effect 顺序化。
 
-- [ ] 每个 feature 建 Page/View/barrel、blocTest、MockBloc widget test。
+- [x] 每个 feature 建 Page/View/barrel、blocTest、MockBloc widget test。
 
 ### 步骤 30 — Project Threads / IDE Session
 

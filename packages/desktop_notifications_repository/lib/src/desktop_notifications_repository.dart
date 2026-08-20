@@ -57,7 +57,7 @@ final class DesktopNotificationException implements Exception {
 }
 
 /// Domain boundary for already-localized desktop attention requests.
-final class DesktopNotificationsRepository {
+class DesktopNotificationsRepository {
   /// Creates a repository backed by platform-neutral ports.
   const DesktopNotificationsRepository({
     required DesktopNotificationApi notifications,

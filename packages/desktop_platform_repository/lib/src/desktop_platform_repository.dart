@@ -118,7 +118,7 @@ final class DesktopMenuCommands {
 }
 
 /// Pure-Dart domain boundary for picker, clipboard, window, and native-menu IO.
-final class DesktopPlatformRepository {
+class DesktopPlatformRepository {
   /// Creates a repository backed by platform-neutral ports.
   DesktopPlatformRepository({
     required DirectoryPickerApi directoryPicker,

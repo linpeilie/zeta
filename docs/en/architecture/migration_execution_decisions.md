@@ -1298,3 +1298,31 @@ become empty titles. Six permission-option label ARB keys were added, so English
 85 tests, 1,078 / 1,078; Codex: 178 tests, 3,765 / 3,765; Claude: 269 tests, 2,994 / 2,994; Grok:
 242 tests, 3,307 / 3,307; conversation repository: 27 tests, 1,121 / 1,121; root: 85 tests at 100%
 after excluding `packages/**`. Packages contain neither a TextCatalog nor an `AppLocalizations` import.
+
+## 2026-08-20 — Step 29 Workspace / Settings / Desktop Notifications
+
+**Problem.** Cubits cannot use `bloc_concurrency` transformers, and
+`WorkspaceScanCancellationToken` is a Data type, so WorkspaceCubit must not
+import `workspace_client`. Desktop notifications must read both the settings and
+notifications repositories without depending on SettingsCubit. Views must not
+import `*_repository` packages. The four repository types were `final class`,
+so root-app mocktail `Mock implements` did not compile.
+
+**Decision.** Workspace index/children use generation counters to drop stale
+results as the Cubit equivalent of `restartable()`; the Repository cancel API
+is unchanged. Settings persist through a private `_writeQueue`; appearance
+writes land in `_pendingAppearance` and coalesce in that queue.
+DesktopNotificationsBloc injects both repositories plus the frozen-locale
+`DesktopNotificationCopyResolver`, and turns `settingsChanges` into separate
+`sequential()` events instead of wrapping a long-lived subscription in a
+sequential transformer. Views re-export domain types from state files. Remove
+`final` only from the four Repository classes consumed by this step
+(`SettingsRepository`, `WorkspaceRepository`,
+`DesktopNotificationsRepository`, `DesktopPlatformRepository`); no method
+signatures, adapters, or Provider ports change. App/router wiring stays in
+steps 34/35.
+
+**Evidence.** `flutter analyze lib test` reports 0 issues; `dart format` reports
+72 files / 0 changed; `bloc lint .` reports 0 issues; the root `very_good test`
+run passes 167 randomized tests at 100% hand-written coverage after excluding
+`packages/**`.

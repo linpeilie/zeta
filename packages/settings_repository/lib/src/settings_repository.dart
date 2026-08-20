@@ -92,7 +92,7 @@ final class SettingsRepositoryException implements Exception {
 }
 
 /// Owns persisted settings snapshots and converts the external font catalog.
-final class SettingsRepository {
+class SettingsRepository {
   /// Creates the Repository and immediately starts loading both stores.
   SettingsRepository({
     required GeneralSettingsStore generalStore,

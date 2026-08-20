@@ -54,9 +54,14 @@ void main() {
   });
 
   test('observer forwards changes and errors', () async {
+    final previousObserver = Bloc.observer;
     const observer = AppBlocObserver();
     final cubit = CounterCubit();
     final error = StateError('expected');
+    Bloc.observer = observer;
+    addTearDown(() {
+      Bloc.observer = previousObserver;
+    });
 
     observer
       ..onChange(cubit, const Change<int>(currentState: 0, nextState: 1))

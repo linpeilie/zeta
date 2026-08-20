@@ -40,6 +40,7 @@ dependencies:
     path: packages/desktop_platform_api
   desktop_platform_repository:
     path: packages/desktop_platform_repository
+  equatable: ^2.0.7
   file_selector: ^1.1.0
   fl_chart: 1.2.0
   flutter:
