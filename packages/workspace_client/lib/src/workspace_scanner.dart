@@ -173,7 +173,7 @@ final class FileWorkspaceScanner implements WorkspaceScanner {
       rootPath: rootPath,
       directoryPath: directoryPath,
     );
-    final documents = await _readIgnoreDocuments(
+    final documents = await _readDirectoryIgnoreDocuments(
       validated.rootPath,
       validated.directoryPath,
     );
@@ -280,6 +280,37 @@ final class FileWorkspaceScanner implements WorkspaceScanner {
     );
     if (gitignore != null) {
       documents.add(gitignore);
+    }
+    return List<GitignoreDocumentResponse>.unmodifiable(documents);
+  }
+
+  Future<List<GitignoreDocumentResponse>> _readDirectoryIgnoreDocuments(
+    String rootPath,
+    String directoryPath,
+  ) async {
+    final context = WorkspacePathBoundary.contextFor(rootPath);
+    final documents = <GitignoreDocumentResponse>[];
+    final exclude = await gitignoreReader.readRepositoryExclude(rootPath);
+    if (exclude != null) {
+      documents.add(exclude);
+    }
+    var currentPath = rootPath;
+    final relative = context.relative(directoryPath, from: rootPath);
+    final directoryPaths = <String>[rootPath];
+    if (relative != '.') {
+      for (final segment in context.split(relative)) {
+        currentPath = context.join(currentPath, segment);
+        directoryPaths.add(currentPath);
+      }
+    }
+    for (final path in directoryPaths) {
+      final gitignore = await gitignoreReader.readDirectoryGitignore(
+        rootPath: rootPath,
+        directoryPath: path,
+      );
+      if (gitignore != null) {
+        documents.add(gitignore);
+      }
     }
     return List<GitignoreDocumentResponse>.unmodifiable(documents);
   }

@@ -581,11 +581,18 @@ analyze/format 通过，28 个随机顺序测试达到 100% 人工 coverage（29
 
 ### 步骤 25 — Settings / Workspace / Project Session Repository
 
-- [ ] `settings_repository`：domain settings、系统字体转换、current schema 持久化。
-- [ ] `workspace_repository`：index/query/tree 数据；expanded/selected 在 WorkspaceCubit。
-- [ ] `project_session_repository`：session snapshot 与 thread catalog；search/selection/load status 在 Bloc。
-- [ ] 三个包互不依赖，可共享 Data port 但不能共享 Repository。
-- [ ] 测所有 Data exception 转换和 external-data Stream。
+- [x] `settings_repository`：domain settings、系统字体转换、current schema 持久化。
+- [x] `workspace_repository`：index/query/tree 数据；expanded/selected 在 WorkspaceCubit。
+- [x] `project_session_repository`：session snapshot 与 thread catalog；search/selection/load status 在 Bloc。
+- [x] 三个包互不依赖，可共享 Data port 但不能共享 Repository。
+- [x] 测所有 Data exception 转换和 external-data Stream。
+
+完成证据（2026-08-20）：三个 Repository 的 analyze/format 独立通过；Settings 23 tests、262 / 262，
+Workspace 17 tests、330 / 330，Project Session 17 tests、275 / 275，随机顺序门禁均为 100%。因嵌套目录
+按需读取缺少祖先 ignore chain，补强后的 `workspace_client` 也独立以 30 tests、255 / 255 通过。三个
+Repository pubspec 之间零依赖，源码中没有 Flutter、ChangeNotifier、ValueNotifier 或 UI 交互状态。
+最终 workspace 同轮 27/27 roots analyze/format/test 门通过，406 个权威 Dart 文件格式零改动；26 个
+coverage roots 合计 16,840 / 16,840 手写行，Bloc lint 对 405 个文件报告 0 issues。
 
 ### 步骤 26 — Usage / Desktop Notifications / Desktop Platform Repository
 

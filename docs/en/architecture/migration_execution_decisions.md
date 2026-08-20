@@ -866,3 +866,63 @@ failures while retaining cause/stack only for sanitized diagnostics.
 composition, and localized copy without competing Repository state. Clean install remains usable, failed
 or partial operations cannot mutate global configuration, and output ordering/resource bounds are
 deterministic. The Repository has 28 randomized tests and 290 / 290 covered hand-written lines.
+
+## 2026-08-20 — Step 25 gives Settings single-document commit semantics
+
+**Problem.** General v3 and Appearance v1 are separate files. Pretending that one settings update is a
+cross-file transaction would make the in-memory snapshot lie after a partial write failure. The legacy
+controller also mixed system-font display options, current selection, and prompt state into persistence.
+
+**Decision.** Accept only a `GeneralSettingsUpdate` or `AppearanceSettingsUpdate` document replacement.
+Increment revision and publish the complete snapshot only after the corresponding store succeeds. Map the
+existing `SystemFontCatalogApi` into pure domain families, and keep locale resolution string-only. Change no
+desktop port and retain no UI options, loading state, or error copy.
+
+**Impact.** Failed writes never become effective settings, and the two schemas retain their real atomic
+boundaries. Settings is independently green with 23 tests and 262 / 262 covered lines.
+
+## 2026-08-20 — Step 25 corrects ancestor-ignore semantics for lazy directories
+
+**Problem.** Step 19 recursive scans carried root-to-current `.gitignore` documents, but `readDirectory`
+read only the target directory. Expanding a nested directory therefore missed root and ancestor rules. The
+migrated matcher also appended an extra level to `**/cache/**`, preventing deep matches.
+
+**Decision.** Keep `WorkspaceScanner` and `GitignoreReader` signatures unchanged. Build the full ancestor
+document chain inside the Data implementation, and add the correct full-relative-path glob for a leading
+`**/` in the Repository's pure matcher. The Repository owns immutable indices and shared watches and
+serializes scans per root; expansion, selection, loading, progress, and debounce orchestration remain in
+WorkspaceCubit.
+
+**Impact.** Recursive indexing and lazy tree reads now share ignore semantics. Workspace is green at 17
+tests and 330 / 330 lines, and the corrected client at 30 tests and 255 / 255. No port or shared adapter changed.
+
+## 2026-08-20 — Step 25 gives Project Session one aggregate cursor
+
+**Problem.** The legacy project-threads controller mixed search/selection/loading state with cross-Provider
+collection, deduplication, sorting, and paging. A Provider-native cursor cannot represent the merged catalog.
+Session schema v4 also must round-trip completely rather than preserving only navigation fields.
+
+**Decision.** Map all schema-v4 fields and publish a snapshot only after Data save succeeds. Inject an
+immutable `providerId → AgentThreadCatalogPort` registry, collect at most 50 entries per Provider, deduplicate
+ids within that Provider, sort globally by recency/provider/id, and page through `agg:<offset>`. Return
+content-free typed evidence for partial Provider failures; isolate identity mismatches and repeated cursors
+as invalid Data. Search text, selection, loading, and failure presentation stay in Bloc.
+
+**Impact.** Provider cursors do not escape the aggregation boundary, partial success remains usable, and
+ordering is reproducible. No shared thread port changed. Project Session is independently green with 17
+tests and 275 / 275 covered lines.
+
+## 2026-08-20 — Step 25 contains a Windows keychain-test cleanup race
+
+**Problem.** The first final matrix run reached the Claude keychain runner's success/timeout/start-failure
+assertions, but Windows still held the temporary directory handle during deletion and raised
+`PathAccessException` (errno 32). Very Good CLI 1.4.0 accepts neither a test path nor `--plain-name`, so a
+named-only reproduction is unavailable while preserving the unified runner rule.
+
+**Decision.** Do not bypass `very_good test`, modify untouched Claude source, or relax timeout/coverage.
+Rerun the complete Claude package with a new random seed, then resume the matrix at the next root, recording
+the CLI filtering limitation as evidence.
+
+**Impact.** The Claude rerun passes 270 tests at 100%. The final result is 27/27 green roots, 16,840 / 16,840
+covered lines, and Bloc lint at 405 files / zero issues. This is classified as transient Windows handle
+cleanup, not a Step 25 product regression.

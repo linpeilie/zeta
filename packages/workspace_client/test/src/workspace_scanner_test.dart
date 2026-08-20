@@ -316,6 +316,52 @@ void main() {
     );
   });
 
+  test('readDirectory supplies the complete ancestor ignore chain', () async {
+    fileSystem
+      ..types['/repo/src'] = WorkspaceFileSystemEntityType.directory
+      ..types['/repo/src/nested'] = WorkspaceFileSystemEntityType.directory
+      ..listings['/repo/src/nested'] = <WorkspaceFileSystemEntry>[
+        entry('/repo/src/nested/value.txt', WorkspaceFileSystemEntityType.file),
+      ];
+    gitignoreReader
+      ..excludes['/repo'] = const GitignoreDocumentResponse(
+        basePath: '/repo',
+        sourcePath: '/repo/.git/info/exclude',
+        contents: 'exclude',
+        kind: GitignoreDocumentKindResponse.repositoryExclude,
+      )
+      ..gitignores['/repo'] = const GitignoreDocumentResponse(
+        basePath: '/repo',
+        sourcePath: '/repo/.gitignore',
+        contents: 'root',
+        kind: GitignoreDocumentKindResponse.directoryGitignore,
+      )
+      ..gitignores['/repo/src'] = const GitignoreDocumentResponse(
+        basePath: '/repo/src',
+        sourcePath: '/repo/src/.gitignore',
+        contents: 'src',
+        kind: GitignoreDocumentKindResponse.directoryGitignore,
+      )
+      ..gitignores['/repo/src/nested'] = const GitignoreDocumentResponse(
+        basePath: '/repo/src/nested',
+        sourcePath: '/repo/src/nested/.gitignore',
+        contents: 'nested',
+        kind: GitignoreDocumentKindResponse.directoryGitignore,
+      );
+    late List<String> contents;
+
+    await scanner.readDirectory(
+      rootPath: '/repo',
+      directoryPath: '/repo/src/nested',
+      filter: (node, documents) {
+        contents = documents.map((document) => document.contents).toList();
+        return WorkspaceEntryDisposition.include;
+      },
+    );
+
+    expect(contents, <String>['exclude', 'root', 'src', 'nested']);
+  });
+
   test(
     'watch maps only in-root events and closes the source subscription',
     () async {

@@ -744,3 +744,57 @@ kind 错配、缺失与空 command 配置。redacted logs 按 path 串行合并�
 **影响。** 步骤 31 可独占 cancellation、selection、progress、editor validation state、runtime composition
 与本地化文案，不会和 Repository 形成双状态源。clean install 保持可用，失败或部分操作不会修改全局
 配置，输出顺序与资源上限确定。Repository 有 28 个随机顺序测试，覆盖 290 / 290 手写行。
+
+## 2026-08-20 — 步骤 25 Settings 采用单文档提交语义
+
+**问题。** general v3 与 appearance v1 是两个独立文件；把一次设置更新伪装成跨文件事务会让内存快照
+在部分写失败时失真。旧 controller 还把系统字体展示选项、当前选择和提示状态混在持久化路径中。
+
+**决策。** Repository 只接受 `GeneralSettingsUpdate` 或 `AppearanceSettingsUpdate` 单文档 replacement；
+对应 store 写成功后才递增 revision 并发布完整 snapshot。字体目录经已有 `SystemFontCatalogApi` 映射为
+纯 domain family，语言解析器只接收字符串 locale components。未修改 desktop port，也不保存 UI option、
+loading 或错误提示。
+
+**影响。** 失败写不会成为已生效设置，两个 schema 的真实原子边界得到保留。Settings Repository 以
+23 tests、262 / 262 covered lines 独立全绿。
+
+## 2026-08-20 — 步骤 25 修正按需目录的祖先 ignore 语义
+
+**问题。** 步骤 19 的递归扫描会携带 root→current `.gitignore`，但 `readDirectory` 只读取目标目录文档；
+展开嵌套目录会漏掉 root/ancestor 规则。迁入的旧 matcher 还把 `**/cache/**` 追加为多余层级，深层路径
+无法命中。
+
+**决策。** 不改 `WorkspaceScanner`/`GitignoreReader` 签名；仅在 Data 实现内为按需读取构造完整祖先
+document chain，并在 Repository 纯 matcher 中补上 leading-`**/` 的完整相对路径 glob。Repository 持有
+不可变 index 与共享 watch，按 root 串行扫描；expanded、selected、loading、progress 和 debounce 编排
+继续归 WorkspaceCubit。
+
+**影响。** 递归索引与惰性树读取使用一致 ignore 语义。Workspace Repository 17 tests、330 / 330，
+修正后的 client 30 tests、255 / 255，均独立 100%；端口和共享适配层未变化。
+
+## 2026-08-20 — 步骤 25 Project Session 统一聚合游标
+
+**问题。** 旧 project-threads controller 同时持有搜索/选择/加载状态与跨 Provider 拉取、去重、排序、分页；
+Provider 原生 cursor 不能直接作为合并目录的全局 cursor。session schema v4 又必须完整往返，不能只迁导航
+字段。
+
+**决策。** Repository 完整映射 schema v4，并在 Data save 成功后才发布 snapshot。注入不可变的
+`providerId → AgentThreadCatalogPort` registry，每个 Provider 最多收集 50 条，按 provider 内 id 去重，
+再按 recency/provider/id 稳定合并，以 `agg:<offset>` 分页。部分 Provider 失败随页面返回不含内容的 typed
+evidence；身份错配或重复 cursor 作为 invalid Data 隔离。搜索词、选择、加载和失败展示留给 Bloc。
+
+**影响。** Provider cursor 不越过聚合边界，部分成功可用且顺序可复现；没有修改共享 thread port。
+Project Session Repository 以 17 tests、275 / 275 covered lines 独立全绿。
+
+## 2026-08-20 — 步骤 25 Windows keychain 测试回收抖动
+
+**问题。** 最终逐包 matrix 第一次运行 `claude_code_client` 时，keychain runner 的 success/timeout/start
+failure 断言已执行，但 Windows 删除临时目录时仍有子进程短暂持有句柄，报 `PathAccessException`
+（errno 32）。当前 Very Good CLI 1.4.0 不接受 file path 或 `--plain-name`，因此不能在坚持统一 runner
+的同时只跑 named test。
+
+**决策。** 不绕过 `very_good test`、不修改未触及的 Claude 源码，也不放宽 timeout/coverage。直接用新
+random seed 重跑 Claude 全包，随后从下一个 root 继续 matrix；将 CLI 过滤能力限制一并记录。
+
+**影响。** Claude 重跑 270 tests、100% 通过；最终 27/27 roots、16,840 / 16,840 covered lines 与
+Bloc lint 405 files / 0 issues 全绿。该事件判定为 Windows 临时句柄回收竞争，不构成步骤 25 产品回归。

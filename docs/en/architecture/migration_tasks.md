@@ -616,11 +616,20 @@ Bloc lint reports zero issues across 394 files.
 
 ### Step 25 — Settings / Workspace / Project Session Repositories
 
-- [ ] `settings_repository`: domain settings, system-font conversion, and current-schema persistence.
-- [ ] `workspace_repository`: index/query/tree data; expanded/selected belongs to WorkspaceCubit.
-- [ ] `project_session_repository`: session snapshot and thread catalog; search/selection/load status belongs to Bloc.
-- [ ] These packages do not depend on one another. They may share Data ports, never a Repository.
-- [ ] Test all Data-exception translations and external-data streams.
+- [x] `settings_repository`: domain settings, system-font conversion, and current-schema persistence.
+- [x] `workspace_repository`: index/query/tree data; expanded/selected belongs to WorkspaceCubit.
+- [x] `project_session_repository`: session snapshot and thread catalog; search/selection/load status belongs to Bloc.
+- [x] These packages do not depend on one another. They may share Data ports, never a Repository.
+- [x] Test all Data-exception translations and external-data streams.
+
+Completion evidence (2026-08-20): all three Repositories independently pass analyze/format. Settings has
+23 tests and 262 / 262 covered lines, Workspace has 17 and 330 / 330, and Project Session has 17 and
+275 / 275; every randomized gate is 100%. The nested-directory ancestor-ignore correction is independently
+green in `workspace_client` with 30 tests and 255 / 255 lines. The three Repository pubspecs have no edges
+between them, and their sources contain no Flutter, ChangeNotifier, ValueNotifier, or UI interaction state.
+The final workspace iteration passes analyze/format/test in 27/27 roots with no changes across 406
+authoritative Dart files; 26 coverage roots total 16,840 / 16,840 hand-written lines, and Bloc lint reports
+zero issues across 405 files.
 
 ### Step 26 — Usage / Desktop Notifications / Desktop Platform Repositories
 
