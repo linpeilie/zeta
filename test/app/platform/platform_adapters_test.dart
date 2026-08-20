@@ -340,6 +340,7 @@ void main() {
         manager.maximized = true;
         await adapter.toggleMaximize();
         await adapter.minimize();
+        await adapter.setPreventClose(preventClose: false);
         await adapter.close();
         final lifecycle = expectLater(
           adapter.lifecycle,
@@ -355,6 +356,7 @@ void main() {
           'macInitialize',
           'prepare',
           'macConfigureTitleBar',
+          'setPreventClose(true)',
           'show',
           'focus',
           'isMaximized',
@@ -362,6 +364,7 @@ void main() {
           'isMaximized',
           'unmaximize',
           'minimize',
+          'setPreventClose(false)',
           'close',
           'dispose',
         ]);
@@ -554,6 +557,10 @@ final class _FakeWindowManagerFacade implements WindowManagerFacade {
 
   @override
   Future<void> ensureInitialized() async => calls.add('ensureInitialized');
+
+  @override
+  Future<void> setPreventClose({required bool preventClose}) async =>
+      calls.add('setPreventClose($preventClose)');
 
   @override
   Future<void> focus() async => calls.add('focus');

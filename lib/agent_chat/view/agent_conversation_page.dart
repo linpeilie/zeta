@@ -34,7 +34,11 @@ class AgentConversationPage extends StatelessWidget {
             providerId: providerId,
             threadId: threadId,
           );
+    // A different workspace entry is a different conversation: keying the
+    // provider on the conversation identity gives that entry its own Bloc and
+    // closes the previous one instead of silently reusing it.
     return BlocProvider(
+      key: ValueKey<ConversationKey>(key),
       create: (context) =>
           AgentConversationBloc(
             agentProviderRepository: context.read<AgentProviderRepository>(),

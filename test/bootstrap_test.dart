@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:agent_provider_contracts/agent_provider_contracts.dart';
+import 'package:agent_provider_repository/agent_provider_repository.dart';
 import 'package:app_ui/app_ui.dart';
 import 'package:bloc/bloc.dart';
 import 'package:codex_app_server_client/codex_app_server_client.dart';
@@ -240,6 +241,7 @@ void main() {
       expect(windowManager.calls, <String>[
         'ensureInitialized',
         'prepare',
+        'setPreventClose(true)',
         'show',
         'focus',
       ]);
@@ -380,6 +382,78 @@ void main() {
         'fileMenuLabel': 'File',
         'openProjectLabel': 'Open Project',
       });
+    });
+
+    test('releases the composition before the window really closes', () async {
+      final windowManager = _FakeWindowManagerFacade();
+      addTearDown(windowManager.lifecycleEvents.close);
+      final composition = await composeZeta(
+        _dependencies(),
+        dataPaths: ZetaDataPaths.fromHomeDirectory(
+          home.path,
+          isWindows: Platform.isWindows,
+        ),
+        environment: <String, String>{'HOME': home.path},
+        isWindows: false,
+        facades: _fakeFacades(windowManager: windowManager),
+        bundleFactories: _workingFactories(),
+        platformBrightness: Brightness.light,
+      );
+
+      windowManager.calls.clear();
+      windowManager.lifecycleEvents.add(WindowLifecycleEvent.closeRequested);
+      await _settleUntil(() => windowManager.calls.contains('close'));
+
+      expect(windowManager.calls, <String>[
+        'setPreventClose(false)',
+        'close',
+      ]);
+      expect(
+        () => composition.repositories.agentProviderRepository.bundleFor(
+          defaultAgentProviderId,
+        ),
+        throwsA(isA<AgentProviderRepositoryException>()),
+        reason: 'Repositories must be closed before the window closes.',
+      );
+
+      // A second request must not run shutdown again.
+      windowManager.calls.clear();
+      windowManager.lifecycleEvents.add(WindowLifecycleEvent.closeRequested);
+      await _settleUntil(() => false);
+      expect(windowManager.calls, isEmpty);
+    });
+
+    test('closes the window even when shutdown fails', () async {
+      final runtime = _MockRuntimePort();
+      when(runtime.initialize).thenAnswer((_) async {});
+      when(runtime.dispose).thenThrow(StateError('dispose failed'));
+      when(() => runtime.runtimeInfo).thenReturn(null);
+
+      final windowManager = _FakeWindowManagerFacade();
+      addTearDown(windowManager.lifecycleEvents.close);
+      await composeZeta(
+        _dependencies(),
+        dataPaths: ZetaDataPaths.fromHomeDirectory(
+          home.path,
+          isWindows: Platform.isWindows,
+        ),
+        environment: <String, String>{'HOME': home.path},
+        isWindows: false,
+        facades: _fakeFacades(windowManager: windowManager),
+        bundleFactories: _workingFactories(
+          codex: _StubBundleFactory(_bundleWith(runtime: runtime)),
+        ),
+        platformBrightness: Brightness.light,
+      );
+
+      windowManager.calls.clear();
+      windowManager.lifecycleEvents.add(WindowLifecycleEvent.closeRequested);
+      await _settleUntil(() => windowManager.calls.contains('close'));
+
+      expect(windowManager.calls, <String>[
+        'setPreventClose(false)',
+        'close',
+      ]);
     });
 
     test('closes every owned resource once', () async {
@@ -742,6 +816,14 @@ Future<ZetaComposition> _stubComposition(AppDependencies dependencies) async {
   return composition;
 }
 
+/// Yields the event loop until [done] holds, so shutdown assertions never
+/// depend on a fixed number of turns.
+Future<void> _settleUntil(bool Function() done) async {
+  for (var turn = 0; turn < 500 && !done(); turn++) {
+    await Future<void>.delayed(Duration.zero);
+  }
+}
+
 AppDependencies _dependencies() {
   final l10n = lookupAppLocalizations(const Locale('en'));
   return AppDependencies(
@@ -815,6 +897,8 @@ class _FakeSystemFileManagerFacade implements SystemFileManagerFacade {
 
 class _FakeWindowManagerFacade implements WindowManagerFacade {
   final List<String> calls = <String>[];
+  final StreamController<WindowLifecycleEvent> lifecycleEvents =
+      StreamController<WindowLifecycleEvent>.broadcast();
   WindowBootstrapConfiguration? preparedWith;
 
   @override
@@ -831,6 +915,11 @@ class _FakeWindowManagerFacade implements WindowManagerFacade {
   }
 
   @override
+  Future<void> setPreventClose({required bool preventClose}) async {
+    calls.add('setPreventClose($preventClose)');
+  }
+
+  @override
   Future<void> focus() async {
     calls.add('focus');
   }
@@ -839,8 +928,7 @@ class _FakeWindowManagerFacade implements WindowManagerFacade {
   Future<bool> isMaximized() async => false;
 
   @override
-  Stream<WindowLifecycleEvent> get lifecycle =>
-      const Stream<WindowLifecycleEvent>.empty();
+  Stream<WindowLifecycleEvent> get lifecycle => lifecycleEvents.stream;
 
   @override
   Future<void> maximize() async {}

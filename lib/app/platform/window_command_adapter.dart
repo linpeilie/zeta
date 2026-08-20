@@ -32,6 +32,9 @@ abstract interface class WindowManagerFacade {
   /// Closes the window.
   Future<void> close();
 
+  /// Holds or releases the native close request.
+  Future<void> setPreventClose({required bool preventClose});
+
   /// Releases plugin listeners.
   Future<void> dispose();
 }
@@ -65,9 +68,15 @@ final class WindowCommandAdapter
     await _macOsWindow.initialize();
     await _windowManager.prepare(configuration);
     await _macOsWindow.configureTitleBar();
+    // Held before the window is visible so no close can bypass shutdown.
+    await _windowManager.setPreventClose(preventClose: true);
     await _windowManager.show();
     await _windowManager.focus();
   }
+
+  @override
+  Future<void> setPreventClose({required bool preventClose}) =>
+      _windowManager.setPreventClose(preventClose: preventClose);
 
   @override
   Future<void> minimize() => _windowManager.minimize();

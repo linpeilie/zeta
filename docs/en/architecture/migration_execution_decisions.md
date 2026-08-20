@@ -1549,3 +1549,44 @@ The per-workspace-entry AgentConversationBloc lifecycle moves to 35C.
 136 files / 0 changed; `bloc lint .` reports 0 issues; the root `very_good test`
 run passes 353 randomized tests with 100% hand-written coverage after excluding
 `packages/**` and generated sources (4,068 / 4,068).
+
+## 2026-08-20 — Step 35C Bloc scope and shutdown orchestration
+
+**Problem.** Writing the test first exposed a real defect:
+`AgentConversationPage` created its Bloc through `BlocProvider(create:)`, and
+`create` runs once per element. GoRouter reuses that element when `threadId`
+changes under the same `ThreadRoute`, so the Bloc was never rebuilt: the URL
+pointed at the new thread while the view still showed the old conversation, and
+`openConversation` was called only once. Separately,
+`ZetaComposition.close()` had no production caller and
+`WindowLifecycleEvent.closeRequested` had no consumer, so quitting the app closed
+no Repository and orphaned the Provider CLI subprocesses. `window_manager` only
+raises `onWindowClose` while `setPreventClose(true)` is set, and
+`desktop_platform_api` exposed no such capability.
+
+**Decision.** Key the `BlocProvider` on the `ConversationKey` so a different
+entry becomes a different element with its own Bloc and the previous one closes
+with the entry. With the owner's approval the shared adapter layer grew
+`setPreventClose` on `WindowBootstrapApi` rather than `WindowCommandApi`, because
+the latter reaches Blocs through `DesktopWindowCommands` and a Bloc must never be
+able to hold the window open. `WindowCommandAdapter.initialize` takes the hold
+before `show()`, leaving no window in which a close could bypass shutdown. The
+composition root subscribes to `closeRequested`, runs `ZetaComposition.close()`,
+then releases the hold and closes the window; a throwing shutdown is logged and
+the close proceeds rather than trapping the user. The coordinator registers its
+own subscription as the last shutdown hook, so it is cancelled first and a second
+close request cannot re-enter shutdown.
+
+**Impact.** Quitting now releases repositories, subscriptions, timers, and
+Provider subprocesses in reverse construction order instead of orphaning them.
+The Bloc-facing `WindowCommandApi` surface is unchanged, so Blocs still cannot
+reach the close handshake. Tests settle on a condition through `_settleUntil`
+rather than a fixed turn count or a wall-clock wait, keeping them stable. All
+seven step 35 items are now checked.
+
+**Evidence.** `flutter analyze lib test packages/desktop_platform_api` reports 0
+issues; `dart format` reports 136 files / 0 changed; `bloc lint .` reports 0
+issues; the root `very_good test` run passes 356 randomized tests with 100%
+hand-written coverage after excluding `packages/**` and generated sources
+(4,090 / 4,090); `desktop_platform_api` passes 4 tests and its 100% coverage gate
+in the same round.

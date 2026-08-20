@@ -756,7 +756,7 @@ code 以及 28D 的 presentation code。ARB 现为 en/zh 各 1,041 个一致键�
 
 ### 步骤 35 — Bootstrap、平台与 flavor 装配
 
-**状态：35A、35B 已完成（2026-08-20），35C 未开始。** 35A 交付 composition root：
+**状态：已完成（2026-08-20），35A / 35B / 35C 三批全部通过。** 35A 交付 composition root：
 `composeZeta` 构造 4 个 config/session/usage store、3 个 provider bundle factory、
 3 个 management data source、10 个 platform adapter 与全部 9 个 Repository，并按
 逆序注册关闭钩子；`App` 去掉 counter 兜底路径，`AppRepositories` 与 `RoutedApp`
@@ -768,7 +768,7 @@ code 以及 28D 的 presentation code。ARB 现为 en/zh 各 1,041 个一致键�
 
 - [x] `bootstrap.dart` 构造全部 client、platform adapter、repository，再传给 App。
 - [x] `MultiRepositoryProvider` 只提供 Repository；Bloc 按 global/shell/route/conversation scope 创建。
-- [ ] AgentConversationBloc 每个 workspace entry 一个实例并随 entry 关闭。
+- [x] AgentConversationBloc 每个 workspace entry 一个实例并随 entry 关闭。
 - [x] 三个 flavor 使用同一 `cn.easii.zeta` / `Zeta` / `~/.zeta` / schema。
 - [x] 迁 window bootstrap、native menu、fonts、notification/badge、file selector、clipboard。
 - [x] 手写 macOS/Windows/Linux Runner 与 channel contract 全部从 manifest 勾销。
@@ -784,6 +784,18 @@ code 以及 28D 的 presentation code。ARB 现为 en/zh 各 1,041 个一致键�
 质量门：`flutter analyze lib test` 0 问题，`dart format` 136 files / 0 changed，
 `bloc lint .` 0 issues，根目录 `very_good test` 353 项随机顺序测试通过，排除
 `packages/**` 与生成代码后手写覆盖率 100%（4,068 / 4,068）。
+
+**35C 完成记录（2026-08-20）。** `AgentConversationPage` 的 `BlocProvider` 现按
+`ConversationKey` 加 `ValueKey`：此前 GoRouter 在 thread 间导航会复用同一个 element，
+`create` 不再执行，URL 已切到新 thread 而界面仍是旧会话；加 key 后每个 workspace
+entry 拿到自己的 Bloc，旧 Bloc 随 entry 关闭并释放 conversation handle。经所有者
+批准扩展 `WindowBootstrapApi`，新增 `setPreventClose`：窗口在可见之前就持有原生
+关闭请求，用户点关闭时先跑完 `ZetaComposition.close()` 释放全部 Repository 与
+Provider 子进程，再释放持有并真正关窗；shutdown 失败只记录日志，不会把用户困在
+关不掉的窗口里。质量门：`flutter analyze lib test packages/desktop_platform_api`
+0 问题，`dart format` 136 files / 0 changed，`bloc lint .` 0 issues，根目录
+`very_good test` 356 项随机顺序测试通过，手写覆盖率 100%（4,090 / 4,090）；
+`desktop_platform_api` 4 项测试与 100% 覆盖率门同轮通过。
 
 ### 步骤 36 — 最终验证与文档收口
 

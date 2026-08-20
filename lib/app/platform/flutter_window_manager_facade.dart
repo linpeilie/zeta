@@ -65,6 +65,10 @@ final class FlutterWindowManagerFacade
       );
 
   @override
+  Future<void> setPreventClose({required bool preventClose}) =>
+      _manager.setPreventClose(preventClose);
+
+  @override
   Future<void> show() => _manager.show();
 
   @override

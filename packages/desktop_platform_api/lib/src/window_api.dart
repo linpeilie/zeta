@@ -75,12 +75,24 @@ final class WindowBootstrapConfiguration extends Equatable {
   ];
 }
 
-/// Performs primary-window setup before it becomes visible.
-// A port intentionally groups this capability behind an injectable interface.
-// ignore: one_member_abstracts
+/// Performs primary-window setup and owns the native close handshake.
+///
+/// This surface stays separate from [WindowCommandApi] so the close handshake
+/// is reachable from the composition root only: a Bloc must never be able to
+/// hold the window open.
 abstract interface class WindowBootstrapApi {
   /// Initializes plugins, applies [configuration], then shows and focuses.
+  ///
+  /// Implementations must start holding the native close request before the
+  /// window becomes visible, so no close can bypass application shutdown.
   Future<void> initialize(WindowBootstrapConfiguration configuration);
+
+  /// Holds or releases the native close request.
+  ///
+  /// While held, a close request surfaces as
+  /// [WindowLifecycleEvent.closeRequested] instead of closing the window, which
+  /// lets the composition root release its resources first.
+  Future<void> setPreventClose({required bool preventClose});
 }
 
 /// Sends commands to and observes the primary window.

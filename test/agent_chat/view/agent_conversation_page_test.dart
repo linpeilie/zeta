@@ -108,6 +108,57 @@ void main() {
       expect(find.byType(AgentConversationView), findsOneWidget);
     });
 
+    testWidgets('gives each workspace entry its own conversation', (
+      tester,
+    ) async {
+      // Closing the replaced entry's conversation is covered directly against a
+      // real Bloc in agent_conversation_bloc_test.dart; here the released
+      // handle is what proves the previous entry's Bloc was closed rather than
+      // silently reused.
+      Widget pageFor(String threadId) {
+        return MultiRepositoryProvider(
+          providers: <RepositoryProvider<dynamic>>[
+            RepositoryProvider<AgentProviderRepository>.value(
+              value: providers,
+            ),
+            RepositoryProvider<AgentConversationRepository>.value(
+              value: conversations,
+            ),
+            RepositoryProvider<DesktopPlatformRepository>.value(
+              value: desktop,
+            ),
+          ],
+          child: AgentConversationPage(
+            providerId: 'codex',
+            threadId: threadId,
+          ),
+        );
+      }
+
+      await tester.pumpApp(pageFor('thread-1'));
+      await tester.pump();
+      await tester.pumpApp(pageFor('thread-2'));
+      await tester.pump();
+      // `close()` suspends on stream cancellation, so the replaced Bloc needs
+      // one real event-loop turn before its release is observable.
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await tester.pump();
+
+      final opened = verify(
+        () => conversations.openConversation(
+          bundle: any(named: 'bundle'),
+          key: captureAny(named: 'key'),
+          context: any(named: 'context'),
+        ),
+      ).captured.cast<ConversationKey>();
+
+      expect(opened, <ConversationKey>[
+        const ConversationKey.thread(providerId: 'codex', threadId: 'thread-1'),
+        const ConversationKey.thread(providerId: 'codex', threadId: 'thread-2'),
+      ]);
+      verify(handle.release).called(1);
+    });
+
     testWidgets('renders $AgentConversationView', (tester) async {
       await tester.pumpApp(
         MultiRepositoryProvider(

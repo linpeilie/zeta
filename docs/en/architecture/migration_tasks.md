@@ -796,7 +796,7 @@ Chinese ARB files each have 1,041 matching keys. Packages import neither `AppLoc
 
 ### Step 35 — Bootstrap, platform, and flavor composition
 
-**Status: 35A and 35B complete (2026-08-20); 35C not started.** 35A delivers the
+**Status: complete (2026-08-20); 35A, 35B and 35C all passed.** 35A delivers the
 composition root: `composeZeta` builds the four config/session/usage stores, the
 three provider bundle factories, the three management data sources, ten platform
 adapters, and all nine Repositories, registering shutdown hooks in reverse
@@ -810,7 +810,7 @@ and generated sources is 100% (4,037 / 4,037); `codex_app_server_client` passes
 
 - [x] `bootstrap.dart` constructs all clients, platform adapters, and repositories before passing them to App.
 - [x] `MultiRepositoryProvider` exposes Repositories only; create Blocs at global/shell/route/conversation scope.
-- [ ] Use one AgentConversationBloc per workspace entry and close it with that entry.
+- [x] Use one AgentConversationBloc per workspace entry and close it with that entry.
 - [x] All flavors use the same `cn.easii.zeta` / `Zeta` / `~/.zeta` / schema.
 - [x] Migrate window bootstrap, native menu, fonts, notification/badge, file selector, and clipboard.
 - [x] Close every hand-written macOS/Windows/Linux Runner and channel manifest entry.
@@ -830,6 +830,23 @@ this is guarded by `test/app/flavor_identity_test.dart`. Gates:
 0 changed, `bloc lint .` reports 0 issues, and the root `very_good test` run
 passes 353 randomized tests with 100% hand-written coverage after excluding
 `packages/**` and generated sources (4,068 / 4,068).
+
+**35C completion record (2026-08-20).** `AgentConversationPage` now keys its
+`BlocProvider` on the `ConversationKey`. Previously GoRouter reused the same
+element when navigating between threads, so `create` never ran again and the URL
+pointed at the new thread while the view still showed the old conversation. With
+the key, every workspace entry gets its own Bloc and the previous one closes with
+the entry, releasing its conversation handle. With the owner's approval
+`WindowBootstrapApi` gained `setPreventClose`: the window holds the native close
+request before it becomes visible, so closing runs `ZetaComposition.close()` to
+release every Repository and Provider subprocess before the hold is dropped and
+the window really closes. A failed shutdown is logged rather than trapping the
+user in a window that refuses to close. Gates:
+`flutter analyze lib test packages/desktop_platform_api` reports 0 issues,
+`dart format` reports 136 files / 0 changed, `bloc lint .` reports 0 issues, the
+root `very_good test` run passes 356 randomized tests at 100% hand-written
+coverage (4,090 / 4,090), and `desktop_platform_api` passes 4 tests and its 100%
+coverage gate in the same round.
 
 ### Step 36 — Final verification and documentation close-out
 

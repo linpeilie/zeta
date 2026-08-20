@@ -1302,3 +1302,34 @@ AgentConversationBloc 的 per-workspace-entry 生命周期留给 35C。
 **证据。** `flutter analyze lib test` 0 问题；`dart format` 136 files / 0 changed；
 `bloc lint .` 0 issues；根目录 `very_good test` 353 项随机顺序测试通过，排除
 `packages/**` 与生成代码后手写覆盖率 100%（4,068 / 4,068）。
+
+## 2026-08-20 — 步骤 35C Bloc scope 与关闭编排
+
+**问题。** 先写测试暴露出一个真缺陷：`AgentConversationPage` 用
+`BlocProvider(create:)` 建 Bloc，而 `create` 每个 element 只执行一次。GoRouter 在
+同一 `ThreadRoute` 下切换 `threadId` 时复用 element，Bloc 不会重建——URL 指向新
+thread，界面仍显示旧会话，`openConversation` 只被调用一次。另外
+`ZetaComposition.close()` 在生产代码里没有任何调用方，`WindowLifecycleEvent.closeRequested`
+也没有消费方：应用退出时不关闭任何 Repository，Provider CLI 子进程会被遗弃。而
+`window_manager` 的 `onWindowClose` 只有在 `setPreventClose(true)` 时才触发，
+`desktop_platform_api` 没有暴露该能力。
+
+**决策。** `BlocProvider` 按 `ConversationKey` 加 `ValueKey`，不同 entry 得到不同
+element 与各自的 Bloc，旧 Bloc 随 entry 关闭。经所有者批准扩展共享适配层：
+`setPreventClose` 加在 `WindowBootstrapApi` 而不是 `WindowCommandApi`，因为后者经
+`DesktopWindowCommands` 暴露给 Bloc，而 Bloc 绝不应能把窗口按住不放。
+`WindowCommandAdapter.initialize` 在 `show()` 之前就持有关闭请求，杜绝“窗口已可见
+但还没装上拦截”的空窗期。composition root 订阅 `closeRequested`，先跑
+`ZetaComposition.close()` 再释放持有并真正关窗；shutdown 抛错只记录日志后继续关窗，
+不把用户困在关不掉的窗口里。协调器自己的订阅注册为最后一个 shutdown hook，因而在
+关闭时最先取消，天然挡住重入的第二次关闭请求。
+
+**影响。** 退出时 Repository、订阅、计时器与 Provider 子进程按逆构造顺序释放，
+不再遗弃进程。`WindowCommandApi` 的 Bloc 面向表面未变，Bloc 仍然拿不到关闭握手。
+测试用条件式 `_settleUntil` 而不是固定轮数或墙钟等待，避免不稳定。步骤 35 至此
+七项全部勾选。
+
+**证据。** `flutter analyze lib test packages/desktop_platform_api` 0 问题；
+`dart format` 136 files / 0 changed；`bloc lint .` 0 issues；根目录 `very_good test`
+356 项随机顺序测试通过，排除 `packages/**` 与生成代码后手写覆盖率 100%
+（4,090 / 4,090）；`desktop_platform_api` 4 项测试与 100% 覆盖率门同轮通过。

@@ -288,7 +288,7 @@ Future<ZetaComposition> composeZeta(
     attention: MethodChannelDesktopAttentionAdapter(platform.attentionChannel),
   );
 
-  return ZetaComposition._(
+  final composition = ZetaComposition._(
     shutdownHooks,
     repositories: AppRepositories(
       workspaceRepository: workspaceRepository,
@@ -302,6 +302,68 @@ Future<ZetaComposition> composeZeta(
       desktopNotificationsRepository: desktopNotificationsRepository,
     ),
   );
+
+  // `shutdownHooks` is the same list the composition holds, so the coordinator
+  // can register its own teardown after the composition exists. Being last
+  // registered makes it the first hook to run, which stops a second close
+  // request from arriving while shutdown is in progress.
+  final windowShutdown = _WindowShutdown(
+    window: windowCommands,
+    composition: composition,
+  );
+  shutdownHooks.add(windowShutdown.dispose);
+  windowShutdown.listen();
+
+  return composition;
+}
+
+/// Releases the composition before the native window is allowed to close.
+///
+/// `WindowBootstrapApi.initialize` holds the close request, so a user-initiated
+/// close arrives here as an event instead of terminating the process. Resources
+/// are released first, then the hold is dropped and the window really closes.
+final class _WindowShutdown {
+  _WindowShutdown({required this.window, required this.composition});
+
+  /// Window bootstrap surface owning the native close handshake.
+  final WindowCommandAdapter window;
+
+  /// Graph released before the window closes.
+  final ZetaComposition composition;
+
+  StreamSubscription<WindowLifecycleEvent>? _subscription;
+  Future<void>? _closing;
+
+  /// Starts observing native close requests.
+  void listen() {
+    _subscription = window.lifecycle.listen((event) {
+      if (event == WindowLifecycleEvent.closeRequested) {
+        _closing ??= _close();
+      }
+    });
+  }
+
+  /// Cancels the lifecycle subscription.
+  Future<void> dispose() async {
+    await _subscription?.cancel();
+    _subscription = null;
+  }
+
+  Future<void> _close() async {
+    try {
+      await composition.close();
+    } on Object catch (error, stackTrace) {
+      // A failed shutdown must never trap the user in a window that refuses to
+      // close; the failure is recorded and the close continues.
+      loggerFor('zeta.app').e(
+        'Shutdown failed before closing the window',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+    await window.setPreventClose(preventClose: false);
+    await window.close();
+  }
 }
 
 /// Builds the plugin-backed platform facades used outside tests.
