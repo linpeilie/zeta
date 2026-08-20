@@ -562,10 +562,22 @@ fail-closed 方法和 pending registry。未修改共享 adapter 或 Provider po
 
 ### 步骤 24 — `agent_management_repository`
 
-- [ ] 构造注入 management/config clients，不依赖 provider repository。
-- [ ] detect/test/config/log response → management domain model。
-- [ ] configuration validation 是 Repository 的纯 domain 方法，但 UI 只能通过 Bloc event 调用。
-- [ ] 不保存 selected agent、progress、loading 或本地化 message。
+- [x] 构造注入 management/config clients，不依赖 provider repository。
+- [x] detect/test/config/log response → management domain model。
+- [x] configuration validation 是 Repository 的纯 domain 方法，但 UI 只能通过 Bloc event 调用。
+- [x] 不保存 selected agent、progress、loading 或本地化 message。
+
+**完成记录（2026-08-20）**：新增无状态、按 canonical Provider 路由的 Repository，构造注入不可变
+management-client registry 与 `ProviderConfigStore`。detect、无 prompt connection test、current-schema
+配置读/写/校验，以及有界且确定性排序的日志聚合，全部把 Data response 映射为不可变 Equatable domain
+model。Repository 每次操作读取 Provider config；clean install 使用默认值但不写盘；拒绝重复、非 canonical、
+kind 错配的配置，并严格拒绝由另一 Provider id 返回的响应。不保存 selection、progress、loading、editor、
+log-view、runtime 或本地化文案状态。前置 Data 修正把 Claude management response id 对齐 contracts 真源
+`claude_code`，并公开既有纯语法 validator；未修改共享 adapter 或 Provider port。Repository
+analyze/format 通过，28 个随机顺序测试达到 100% 人工 coverage（290 / 290）；修正后的 management client
+独立通过 35 个随机顺序测试，coverage 100%（329 / 329）。
+最终 workspace 同轮 27/27 roots analyze 通过，392 个权威 Dart 文件 format 零改动；26/26 test roots
+共 1,248 tests，人工 coverage 100%（15,961 / 15,961）；Bloc lint 对 394 文件报告 0 issues。
 
 ### 步骤 25 — Settings / Workspace / Project Session Repository
 

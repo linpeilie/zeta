@@ -663,6 +663,37 @@ parser 或共享 Provider port。
 `agent_management_repository.validateConfiguration()` 是 Repository 的**纯 domain 方法**，
 但 UI **只能通过 Bloc event 调用**，不得由 Widget 直接调（[步骤 24](./migration_tasks.md)）。
 
+步骤 24 验收后的接口为：
+
+```dart
+AgentManagementRepository({
+  required Map<String, AgentManagementDataSource> managementClients,
+  required ProviderConfigStore configStore,
+});
+
+Future<AgentDetection> detect(String providerId, {String? executablePath});
+Future<AgentConnectionTest> testConnection(String providerId);
+Future<AgentConfigurationDocument> readConfiguration(String providerId);
+Future<AgentConfigurationSaveResult> saveConfiguration(
+  String providerId, {
+  required String contents,
+});
+AgentConfigurationValidation validateConfiguration({
+  required String format,
+  required String contents,
+});
+Future<List<String>> discoverLogPaths(String providerId);
+Future<List<AgentLogEntry>> readLogs(
+  String providerId,
+  Iterable<String> paths, {
+  int maxLines = 1000,
+});
+```
+
+client map key 与 Data response id 都使用 Provider contract 的 canonical id。需要配置的操作每次读取
+Provider config；Repository 不保留可变 config snapshot，也不保留任何 Bloc/editor 状态。空 store 可使用
+内置默认值，但不会隐式持久化。
+
 ---
 
 ## 6. `app_ui`

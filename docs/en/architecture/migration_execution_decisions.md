@@ -826,3 +826,43 @@ typed while original causes/stacks remain available only to sanitized logging. E
 reroute timeline records retain only content-free typed signals, never the provider raw event.
 Natural completion of the current event stream now publishes a typed conversation failure, and every
 session/turn returned by start, resume, or send is identity-checked again before entering the aggregate.
+
+## 2026-08-20 — Step 24 canonicalizes management identity at the Data boundary
+
+**Problem.** The completed management Data client returned `claude-code` from Claude detection, while the
+shared Provider contract, persisted configuration, and every runtime route use `claude_code`. A Repository
+that copied the response id would silently create a second identity. The same Data implementation already
+contained the required pure JSON/TOML syntax validator, but its public barrel hid that function, forcing
+Step 24 either to duplicate parsers or import package `src/`.
+
+**Decision.** Configure all three concrete Data sources with the existing Provider-contract id constants,
+update the Claude Data test to the canonical value, and export only the existing pure validator from the
+management-client barrel. The Repository keys clients by canonical id and rejects any detection response
+whose id differs from its route. It exposes validation through its own typed, synchronous domain result;
+widgets still may reach that method only through the later Bloc event.
+
+**Impact.** There is one Provider identity from persistence through Data and Repository, cross-Provider
+misrouting fails closed, and no parser implementation is duplicated. This is a narrowly scoped Data API
+correction; no shared adapter, Provider port, runtime protocol, configuration schema, or vendor parser
+changed. The management client remains independently green at 35 tests and 329 / 329 covered lines.
+
+## 2026-08-20 — Step 24 keeps management orchestration stateless
+
+**Problem.** The legacy controller combines external detection/config/log calls with selected Agent,
+progress, loading, runtime, editor, log-view, localized-error, and cached-detection state. It also writes a
+detection summary back into global Provider configuration. Copying those policies would contradict both
+the Step 24 forbidden-state list and Step 31's explicit Bloc ownership. Conversely, the new config store can
+legitimately be empty on a clean install.
+
+**Decision.** Retain only an immutable client registry and the injected `ProviderConfigStore`. Resolve
+Provider configuration afresh for operations that need it; use the three contract defaults in memory when
+the store is empty, without writing. Explicit detection paths bypass the config read; otherwise use a
+nonblank stored `cliPath` and then the command. Do not persist detection summaries. Reject duplicate,
+non-canonical, wrong-kind, missing, and blank-command configurations. Merge redacted per-path log results
+sequentially, sort by timestamp/id, and enforce one global line bound. Translate exceptions to typed safe
+failures while retaining cause/stack only for sanitized diagnostics.
+
+**Impact.** Step 31 can own cancellation, selection, progress, editor validation state, runtime
+composition, and localized copy without competing Repository state. Clean install remains usable, failed
+or partial operations cannot mutate global configuration, and output ordering/resource bounds are
+deterministic. The Repository has 28 randomized tests and 290 / 290 covered hand-written lines.

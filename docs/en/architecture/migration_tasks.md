@@ -594,10 +594,25 @@ files with no changes; 26/26 test roots run 1,221 tests at 100% hand-written cov
 
 ### Step 24 — `agent_management_repository`
 
-- [ ] Constructor-inject management/config clients without depending on provider repository.
-- [ ] Map detect/test/config/log responses to management domain models.
-- [ ] Configuration validation is a pure Repository domain method, but UI invokes it only through Bloc events.
-- [ ] Do not store selected agent, progress, loading, or localized messages.
+- [x] Constructor-inject management/config clients without depending on provider repository.
+- [x] Map detect/test/config/log responses to management domain models.
+- [x] Configuration validation is a pure Repository domain method, but UI invokes it only through Bloc events.
+- [x] Do not store selected agent, progress, loading, or localized messages.
+
+**Completion record (2026-08-20):** Added a stateless, canonical-Provider-routed Repository over an
+immutable management-client registry and `ProviderConfigStore`. Detection, prompt-free connection tests,
+current-schema configuration read/save/validation, and bounded deterministic log aggregation map Data
+responses to immutable Equatable domain models. The Repository reads Provider configuration per operation,
+uses clean-install defaults without writing them, rejects duplicate/non-canonical/wrong-kind configuration,
+and strictly rejects a response routed under another Provider id. It stores no selection, progress,
+loading, editor, log-view, runtime, or localized-copy state. The prerequisite Data correction aligns the
+Claude management response id with the contracts value `claude_code` and publicly exposes the existing
+pure syntax validator; no shared adapter or Provider port changed. Repository analyze/format pass and 28
+randomized tests reach 100% hand-written coverage (290 / 290); the corrected management client independently
+passes 35 randomized tests at 100% (329 / 329).
+The final workspace iteration passes analyze in 27/27 roots and format checks 392 authoritative Dart files
+with no changes; 26/26 test roots run 1,248 tests at 100% hand-written coverage (15,961 / 15,961), and
+Bloc lint reports zero issues across 394 files.
 
 ### Step 25 — Settings / Workspace / Project Session Repositories
 

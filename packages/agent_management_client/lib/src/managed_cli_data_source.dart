@@ -392,7 +392,7 @@ final class CodexAgentManagementDataSource extends ManagedCliDataSource {
     super.fileSystem,
     super.now,
   }) : super(
-         providerId: 'codex',
+         providerId: defaultAgentProviderId,
          configFormat: 'toml',
          logDirectories: <String>[logDirectory],
          acceptsLogPath: _acceptsCodexLog,
@@ -413,7 +413,7 @@ final class GrokAgentManagementDataSource extends ManagedCliDataSource {
     super.fileSystem,
     super.now,
   }) : super(
-         providerId: 'grok',
+         providerId: grokAgentProviderId,
          configFormat: 'toml',
          logDirectories: <String>[logDirectory],
          acceptsLogPath: _acceptsGrokLog,
@@ -434,7 +434,7 @@ final class ClaudeCodeAgentManagementDataSource extends ManagedCliDataSource {
     super.fileSystem,
     super.now,
   }) : super(
-         providerId: 'claude-code',
+         providerId: defaultClaudeCodeProviderId,
          configFormat: 'json',
          logDirectories: <String>[logDirectory],
          acceptsLogPath: _acceptsClaudeLog,

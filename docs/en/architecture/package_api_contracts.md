@@ -693,6 +693,37 @@ already exported `AgentTurnContextStore`. This keeps vendor parsers and shared P
 the UI **may only invoke it through a Bloc event**, never directly from a widget
 ([step 24](./migration_tasks.md)).
 
+The accepted Step 24 surface is:
+
+```dart
+AgentManagementRepository({
+  required Map<String, AgentManagementDataSource> managementClients,
+  required ProviderConfigStore configStore,
+});
+
+Future<AgentDetection> detect(String providerId, {String? executablePath});
+Future<AgentConnectionTest> testConnection(String providerId);
+Future<AgentConfigurationDocument> readConfiguration(String providerId);
+Future<AgentConfigurationSaveResult> saveConfiguration(
+  String providerId, {
+  required String contents,
+});
+AgentConfigurationValidation validateConfiguration({
+  required String format,
+  required String contents,
+});
+Future<List<String>> discoverLogPaths(String providerId);
+Future<List<AgentLogEntry>> readLogs(
+  String providerId,
+  Iterable<String> paths, {
+  int maxLines = 1000,
+});
+```
+
+Client-map keys and Data response ids are the canonical Provider contract ids. Provider configuration is
+read for each operation that needs it; the Repository retains neither a mutable config snapshot nor any
+Bloc/editor state. Built-in defaults are eligible on an empty store but are not implicitly persisted.
+
 ---
 
 ## 6. `app_ui`

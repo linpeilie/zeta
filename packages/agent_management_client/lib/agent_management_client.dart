@@ -16,4 +16,5 @@ export 'src/managed_cli_data_source.dart'
         AgentProtocolProbeResponse,
         ClaudeCodeAgentManagementDataSource,
         CodexAgentManagementDataSource,
-        GrokAgentManagementDataSource;
+        GrokAgentManagementDataSource,
+        validateConfiguration;

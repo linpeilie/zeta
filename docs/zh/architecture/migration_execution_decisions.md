@@ -711,3 +711,36 @@ sanitized logging。error、deprecation 与 reroute 的 timeline record 只保�
 不保存 Provider raw event。
 当前 event stream 自然结束时会发布 typed conversation failure；start/resume/send 返回的每个
 session/turn 在进入 aggregate 前都会再次校验 identity。
+
+## 2026-08-20 — 步骤 24 在 Data 边界统一 management identity
+
+**问题。** 已完成的 management Data client 在 Claude detect response 中返回 `claude-code`，但共享
+Provider contract、持久化配置和全部 runtime route 使用 `claude_code`。Repository 若直接复制 response id，
+会静默产生第二套 identity。同一 Data 实现已经包含所需的纯 JSON/TOML 语法 validator，但 public barrel
+没有导出它，迫使步骤 24 重复 parser 或导入 package `src/`。
+
+**决策。** 三个具体 Data source 全部改用既有 Provider-contract id 常量，Claude Data test 同步改为
+canonical value；management-client barrel 只新增导出现有纯 validator。Repository 用 canonical id 作为
+client key，并拒绝 detect response id 与路由不一致的结果。对外验证仍由 Repository 以 typed 同步 domain
+result 暴露；Widget 以后只能通过 Bloc event 到达该方法。
+
+**影响。** 从持久化、Data 到 Repository 只有一套 Provider identity，跨 Provider 错误路由 fail closed，
+且没有复制 parser 实现。这是窄范围 Data API 修正；未修改共享 adapter、Provider port、runtime protocol、
+配置 schema 或 vendor parser。management client 继续独立全绿：35 tests、329 / 329 covered lines。
+
+## 2026-08-20 — 步骤 24 保持 management 编排无状态
+
+**问题。** 旧 controller 把外部 detect/config/log 调用与 selected Agent、progress、loading、runtime、
+editor、log-view、本地化错误和检测缓存状态混在一起，还把 detection summary 写回全局 Provider config。
+复制这些策略会同时违反步骤 24 的禁止状态清单和步骤 31 的明确 Bloc 归属；另一方面，新 config store
+在 clean install 合法为空。
+
+**决策。** Repository 只持有不可变 client registry 与注入的 `ProviderConfigStore`。需要 config 的操作
+每次重新解析；store 为空时只在内存使用三个 contract defaults，不写盘。显式 detection path 跳过 config
+读取；否则优先非空 `cliPath`，再回落 command。不持久化 detection summary。拒绝重复、非 canonical、
+kind 错配、缺失与空 command 配置。redacted logs 按 path 串行合并，以 timestamp/id 排序并执行单一全局
+行数上限。异常转换为 typed safe failure，cause/stack 只保留给 sanitized diagnostics。
+
+**影响。** 步骤 31 可独占 cancellation、selection、progress、editor validation state、runtime composition
+与本地化文案，不会和 Repository 形成双状态源。clean install 保持可用，失败或部分操作不会修改全局
+配置，输出顺序与资源上限确定。Repository 有 28 个随机顺序测试，覆盖 290 / 290 手写行。

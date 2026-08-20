@@ -147,7 +147,7 @@ void main() {
           <String>['logs/a.jsonl', 'logs/b.txt', 'logs/c.log'],
         );
         final claudeResult = await claude.detect(executablePath: 'claude');
-        expect(claudeResult.providerId, 'claude-code');
+        expect(claudeResult.providerId, defaultClaudeCodeProviderId);
         expect(claudeResult.accountStatus, AgentAccountStatus.loggedOut);
         expect(await claude.discoverLogPaths(), <String>['logs/c.log']);
       },
