@@ -15,7 +15,7 @@ This checklist turns the [migration topology](./migration_topology.md) into exec
 | P3 Remaining Data | 18–21 | ☐ |
 | P4 Repository | 22–26 | ☐ |
 | P5 app_ui and l10n | 27–28 | ☑ |
-| P6 Smaller Feature Blocs/Presentation | 29–31 | ☐ |
+| P6 Smaller Feature Blocs/Presentation | 29–31 | ☑ |
 | P7 Agent conversation | 32–33 | ☐ |
 | P8 Shell, router, and close-out | 34–36 | ☐ |
 
@@ -739,17 +739,17 @@ Chinese ARB files each have 1,041 matching keys. Packages import neither `AppLoc
 
 **AgentManagementBloc**
 
-- [ ] Put selected agent, detection progress, test status, config-editor validation, and logs in State.
-- [ ] Detection is `droppable()` or explicitly cancellable; loads after selection changes are `restartable()`; config writes are `sequential()`.
-- [ ] UI never calls a Repository validator directly.
+- [x] Put selected agent, detection progress, test status, config-editor validation, and logs in State.
+- [x] Detection is `droppable()` or explicitly cancellable; loads after selection changes are `restartable()`; config writes are `sequential()`.
+- [x] UI never calls a Repository validator directly.
 
 **UsageStatisticsBloc / AgentUsagePanelCubit**
 
-- [ ] Put filter/preset/project/provider/model/rank selection in app State.
-- [ ] Refresh is `restartable()`, repeated refresh is `droppable()`, and query generations reject stale results.
-- [ ] fl_chart widgets receive only precomputed domain points.
+- [x] Put filter/preset/project/provider/model/rank selection in app State.
+- [x] Refresh is `restartable()`, repeated refresh is `droppable()`, and query generations reject stale results.
+- [x] fl_chart widgets receive only precomputed domain points.
 
-**P6 exit:** smaller features establish one migration pattern, with no Bloc-to-Bloc dependency, Widget-to-Repository call, or implicit async concurrency.
+**P6 exit: passed.** Smaller features establish one migration pattern, with no Bloc-to-Bloc dependency, Widget-to-Repository call, or implicit async concurrency.
 
 ---
 

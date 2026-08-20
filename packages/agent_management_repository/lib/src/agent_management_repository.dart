@@ -110,7 +110,7 @@ final class AgentManagementRepositoryException implements Exception {
 
 /// Stateless domain boundary for Agent detection, diagnostics, configuration,
 /// and logs.
-final class AgentManagementRepository {
+class AgentManagementRepository {
   /// Creates a Repository from canonical Provider ids to management clients.
   AgentManagementRepository({
     required Map<String, client.AgentManagementDataSource> managementClients,

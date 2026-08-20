@@ -33,7 +33,7 @@ final class UsageProviderIdentity {
 }
 
 /// Aggregates vendor-owned usage readers and rebuildable storage projections.
-final class UsageStatisticsRepository {
+class UsageStatisticsRepository {
   /// Creates the repository.
   UsageStatisticsRepository({
     required CodexUsageReader codex,

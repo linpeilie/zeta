@@ -1143,3 +1143,28 @@ port。两者不互相依赖，通过 `snapshotChanges` 同步选中线程；app
 **证据。** `flutter analyze lib test` 0 问题；`dart format` 87 files / 0 changed；
 `bloc lint .` 0 issues；根目录 `very_good test` 215 项随机顺序测试通过，排除
 `packages/**` 后手写覆盖率 100%。
+
+## 2026-08-20 — 步骤 31 Agent Management / Usage Statistics
+
+**问题。** 计划要求 AgentManagementBloc 持有 selection / detect / test / editor /
+logs，UsageStatisticsBloc 持有 filter / preset / rank 与 query generation，
+AgentUsagePanelCubit 独立加载 quota。冻结仓库 API 与计划一致，无需改端口。
+两个仓库类是 `final class`，根 app mocktail 无法 `Mock implements`。在 build
+里 `new TextEditingController` 会泄漏。
+
+**决策。** 不改 Repository 方法或 Provider port。沿步骤 29/30 仅去掉
+`AgentManagementRepository` 与 `UsageStatisticsRepository` 上的 `final`。
+AgentManagementBloc：Started 与选中加载 `restartable()`，detect/test
+`droppable()`，config edit/save `sequential()`；validate 只经 Bloc event。
+UsageStatisticsBloc 与 AgentUsagePanelCubit 各自注入同一仓库，无 Bloc→Bloc。
+refresh `restartable()`，RepeatRefresh `droppable()`，report 带 query
+generation 与 `isCancelled`。图表点是 app 拥有的 `UsageChartPoint` doubles；
+View 才映射 `FlSpot`。配置编辑改用 document signature `ValueKey` 的
+`TextFormField`，`labelText` 用已有 `mgmtConfigFile`。State `toString` 不输出
+配置明文，避免 `AppBlocObserver` 把密钥打进日志。quota 开关包在
+`IdeSettingsRow`；趋势图使用已有 `usageTrendSemantic`。app/router 装配留给
+步骤 34/35。
+
+**证据。** `flutter analyze lib test` 0 问题；`dart format` 105 files / 0
+changed；`bloc lint .` 0 issues；根目录 `very_good test` 267 项随机顺序测试
+通过，排除 `packages/**` 后手写覆盖率 100%。

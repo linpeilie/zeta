@@ -1350,3 +1350,32 @@ consumed repository classes so mocktail can implement them, following step 29.
 reports 87 files / 0 changed; `bloc lint .` reports 0 issues; the root
 `very_good test` run passes 215 randomized tests at 100% hand-written coverage
 after excluding `packages/**`.
+
+## 2026-08-20 — Step 31 Agent Management / Usage Statistics
+
+**Problem.** The plan puts selection / detect / test / editor / logs in
+AgentManagementBloc, filter / preset / rank and query generation in
+UsageStatisticsBloc, and independent quota loading in AgentUsagePanelCubit.
+Frozen repository APIs match the plan, so no port change is required. Both
+repository classes were `final class`, so root-app mocktail `Mock implements`
+did not compile. Creating a `TextEditingController` in `build` leaks.
+
+**Decision.** Do not change Repository methods or Provider ports. Drop `final`
+only on `AgentManagementRepository` and `UsageStatisticsRepository`, following
+steps 29/30. AgentManagementBloc uses `restartable()` for Started and
+selection loads, `droppable()` for detect/test, and `sequential()` for config
+edit/save; validation reaches the repository only through a Bloc event.
+UsageStatisticsBloc and AgentUsagePanelCubit each inject the same repository
+and do not depend on each other. Refresh is `restartable()`, repeated refresh
+is `droppable()`, and `report` carries a query generation plus `isCancelled`.
+Chart points are app-owned `UsageChartPoint` doubles; the View maps them to
+`FlSpot`. Config editing uses a `TextFormField` keyed by document signature
+and labeled with the existing `mgmtConfigFile` string. State `toString`
+omits raw configuration so `AppBlocObserver` cannot log secrets. The quota
+switch sits in `IdeSettingsRow`; the trend chart uses existing
+`usageTrendSemantic`. App/router wiring stays in steps 34/35.
+
+**Evidence.** `flutter analyze lib test` reports 0 issues; `dart format`
+reports 105 files / 0 changed; `bloc lint .` reports 0 issues; the root
+`very_good test` run passes 267 randomized tests at 100% hand-written coverage
+after excluding `packages/**`.

@@ -15,7 +15,7 @@
 | P3 其余 Data | 18–21 | ☐ |
 | P4 Repository | 22–26 | ☐ |
 | P5 app_ui 与 l10n | 27–28 | ☑ |
-| P6 小 Feature Bloc/Presentation | 29–31 | ☐ |
+| P6 小 Feature Bloc/Presentation | 29–31 | ☑ |
 | P7 Agent 会话 | 32–33 | ☐ |
 | P8 Shell、Router 与收口 | 34–36 | ☐ |
 
@@ -699,17 +699,17 @@ code 以及 28D 的 presentation code。ARB 现为 en/zh 各 1,041 个一致键�
 
 **AgentManagementBloc**
 
-- [ ] selected agent、detect progress、test status、config editor validation、logs 全进 State。
-- [ ] detect `droppable()` 或显式 cancel；选中切换后的 load `restartable()`；写配置 `sequential()`。
-- [ ] UI 不直接调用 Repository validator。
+- [x] selected agent、detect progress、test status、config editor validation、logs 全进 State。
+- [x] detect `droppable()` 或显式 cancel；选中切换后的 load `restartable()`；写配置 `sequential()`。
+- [x] UI 不直接调用 Repository validator。
 
 **UsageStatisticsBloc / AgentUsagePanelCubit**
 
-- [ ] filter/preset/project/provider/model/rank selection 全进 app State。
-- [ ] refresh `restartable()`；重复 refresh `droppable()`；结果用 query generation 防旧值覆盖。
-- [ ] fl_chart widgets 只接收已计算 domain points。
+- [x] filter/preset/project/provider/model/rank selection 全进 app State。
+- [x] refresh `restartable()`；重复 refresh `droppable()`；结果用 query generation 防旧值覆盖。
+- [x] fl_chart widgets 只接收已计算 domain points。
 
-**P6 出口**：小 feature 形成统一迁移手法；无 Bloc→Bloc、Widget→Repository、隐式 async concurrency。
+**P6 出口：已通过。** 小 feature 形成统一迁移手法；无 Bloc→Bloc、Widget→Repository、隐式 async concurrency。
 
 ---
 
