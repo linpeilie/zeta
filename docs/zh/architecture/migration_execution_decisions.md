@@ -978,3 +978,34 @@ controller 替换与缺失 delegate child 增加契约测试。删除可证明�
 
 **影响。** 覆盖率从 96.75% 提升到 100%，且分母仍包含全部虚拟化生产文件。清理只移除与既有不变量重复的
 死防御路径；有效布局、滚动状态机、公开组件行为及包边界均未改变。
+
+## 2026-08-20 — 步骤 27E 用可执行验收关闭 WCAG 2.2 AA 缺口
+
+**问题。** 总验收首次把语义色、桌面控件和 200% 文字缩放放进同一套 AA 契约后，发现可点击
+`IdeChip` 的命中高度只有 20 dp，低于 24 dp 下限；固定 44 dp 高的 `IdePageHeader` 在 200% 字号且含
+副标题时向下溢出 21 px。两项都是 `app_ui` 内部布局缺口，不涉及共享 adapter 或 Provider port。
+
+**决策。** 仅对带点击或删除动作的 Chip 使用 `AppMetrics.minimumInteractiveTarget` 扩展命中盒；静态标签
+保持原视觉密度。页头的 `pageHeaderHeight` 改为最小高度，让内容在文字缩放时自然增高。增加明暗主题全部
+内容表面的普通文字 4.5:1、焦点环 3:1、四类交互控件 24×24 dp、200% 字号和 reduce-motion 可执行验收；
+既有组件测试继续证明 semantics、键盘/焦点、live region、方向键拖拽替代与 Overlay 焦点恢复。
+
+**影响。** 两个真实 AA 缺口被生产代码修复，未放宽断言或 token。修复后新增 7 项 AA 验收全部通过，
+app_ui 完整随机顺序测试增至 293 项，手写代码覆盖率保持 100%。
+
+## 2026-08-20 — 步骤 27E 固定 golden 扫描、布局与 Very Good 执行语义
+
+**问题。** Dart test 元数据解析器不接受 `@Tags([TestTag.golden])` 中的常量，只接受字符串字面量；首版
+画廊还把 stretch Row 放进纵向 `SingleChildScrollView`，产生无限高度约束。修正并生成基线后又发现 Very
+Good 的默认测试优化器合并套件时丢失文件级 tag，使普通 `--tags golden` 报告无匹配测试；更新 golden 的
+命令因自动关闭优化而未暴露此问题。当前 Very Good CLI 也没有 `analyze` 子命令，首轮 Flutter analyze
+另报告测试夹具 13 个 const 提示，`dart fix --apply` 合并为 8 项安全机械修复。
+
+**决策。** 元数据保留解析器要求的 `@Tags(['golden'])`，并在测试体引用 `TestTag.golden`，兼顾真实 tag 与
+工作流文件扫描。画廊在固定桌面画布内直接使用 token padding，不把 stretch 布局放进无界滚动轴。
+golden job 显式传 `--no-optimization`，架构测试锁定该参数；package 声明 golden/perf/slow 三类 tag。
+测试统一使用 `very_good test`，静态分析使用官方 `flutter analyze`。
+
+**影响。** 明暗两张 Linux 基准图由固定 760×560、device-pixel-ratio 1 的组件画廊产生并经目视检查；
+非更新 golden 门禁连续三次随机顺序通过，不再出现“零测试”假绿。工作流调整只修复测试发现语义，不改变
+生产依赖或架构边界。

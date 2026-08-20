@@ -29,8 +29,8 @@ class IdePageHeader extends StatelessWidget {
     final metrics = context.appMetrics;
     final spacing = context.appSpacing;
     final typography = context.appTypography;
-    return SizedBox(
-      height: metrics.pageHeaderHeight,
+    return ConstrainedBox(
+      constraints: BoxConstraints(minHeight: metrics.pageHeaderHeight),
       child: DecoratedBox(
         decoration: BoxDecoration(
           border: Border(bottom: BorderSide(color: colors.borderSubtle)),

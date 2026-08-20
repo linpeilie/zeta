@@ -663,20 +663,20 @@ unchanged with a new random seed.
 
 ### Step 27 — `packages/app_ui`
 
-**Status: in progress.** Increments 27A (tokens/theme), 27B (base components plus the pure-UI
-WindowFrame), 27C (Workbench primitives), and 27D (virtual scrolling) are complete and independently
-green. Final accessibility / golden acceptance remains in 27E.
+**Status: complete.** Increments 27A (tokens/theme), 27B (base components plus the pure-UI
+WindowFrame), 27C (Workbench primitives), 27D (virtual scrolling), and 27E (accessibility/golden total
+acceptance) are complete and independently green.
 
-- [ ] The accessibility baseline is fixed at WCAG 2.2 AA / macOS / Windows / Linux.
-- [ ] Migrate design tokens, base components, Workbench primitives, virtual scrolling, and the pure-UI part of WindowFrame.
-- [ ] Keep `shadcn_flutter` and consistently import it `as sf`.
-- [ ] Use one public component per file, barrels, const constructors, and Dartdoc on public APIs.
-- [ ] Put tokens in ThemeExtension; never depend on Repository, Data, or AppLocalizations.
-- [ ] Receive all component copy through constructors.
-- [ ] Give every public component a behavior widget test and tagged goldens for visual properties.
-- [ ] AA tests cover semantics, keyboard/focus, async live regions, non-drag alternatives, and unobscured focus.
-- [ ] Normal text contrast is ≥4.5:1, large text ≥3:1, and UI/focus indicators ≥3:1; 200% text scaling loses no content.
-- [ ] Targets meet the AA 24×24 dp minimum, with VGV 48×48 dp as the design target; reduced motion is an additional platform gate.
+- [x] The accessibility baseline is fixed at WCAG 2.2 AA / macOS / Windows / Linux.
+- [x] Migrate design tokens, base components, Workbench primitives, virtual scrolling, and the pure-UI part of WindowFrame.
+- [x] Keep `shadcn_flutter` and consistently import it `as sf`.
+- [x] Use one public component per file, barrels, const constructors, and Dartdoc on public APIs.
+- [x] Put tokens in ThemeExtension; never depend on Repository, Data, or AppLocalizations.
+- [x] Receive all component copy through constructors.
+- [x] Give every public component a behavior widget test and tagged goldens for visual properties.
+- [x] AA tests cover semantics, keyboard/focus, async live regions, non-drag alternatives, and unobscured focus.
+- [x] Normal text contrast is ≥4.5:1, large text ≥3:1, and UI/focus indicators ≥3:1; 200% text scaling loses no content.
+- [x] Targets meet the AA 24×24 dp minimum, with VGV 48×48 dp as the design target; reduced motion is an additional platform gate.
 
 ### Step 28 — Typed l10n mapping
 

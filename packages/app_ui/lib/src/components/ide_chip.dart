@@ -65,6 +65,7 @@ class IdeChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
+    final metrics = context.appMetrics;
     final foreground = _foreground(colors);
     final labelStyle = context.appTypography.bodySmall.copyWith(
       color: foreground,
@@ -94,13 +95,24 @@ class IdeChip extends StatelessWidget {
       ),
     );
 
+    final isInteractive = onPressed != null || onDeleted != null;
+    final content = isInteractive
+        ? ConstrainedBox(
+            constraints: BoxConstraints(
+              minWidth: metrics.minimumInteractiveTarget,
+              minHeight: metrics.minimumInteractiveTarget,
+            ),
+            child: chip,
+          )
+        : chip;
+
     return Semantics(
       button: onPressed != null,
-      enabled: enabled && (onPressed != null || onDeleted != null),
+      enabled: enabled && isInteractive,
       selected: selected,
       label: semanticLabel ?? label,
       excludeSemantics: onDeleted == null,
-      child: Opacity(opacity: enabled ? 1 : 0.48, child: chip),
+      child: Opacity(opacity: enabled ? 1 : 0.48, child: content),
     );
   }
 

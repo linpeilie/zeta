@@ -114,6 +114,7 @@ void main() {
 
     test('runs tagged golden tests in a dedicated job', () {
       expect(qualityWorkflow, contains('\n  golden:\n'));
+      expect(qualityWorkflow, contains('--no-optimization'));
       expect(qualityWorkflow, contains('--tags golden'));
       expect(qualityWorkflow, isNot(contains('flutter test')));
       expect(

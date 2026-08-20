@@ -193,6 +193,7 @@ jobs:
             (
               cd "$directory"
               dart pub global run very_good_cli:very_good test \
+                --no-optimization \
                 --tags golden \
                 --timeout 120 \
                 --test-randomize-ordering-seed random

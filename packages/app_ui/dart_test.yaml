@@ -2,3 +2,5 @@ test-randomize-ordering-seed: random
 
 tags:
   golden:
+  perf:
+  slow:

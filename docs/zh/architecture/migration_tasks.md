@@ -624,19 +624,19 @@ seed 重跑完整 270-test 包后通过。
 
 ### 步骤 27 — `packages/app_ui`
 
-**状态：进行中。** 27A（token/theme）、27B（基础组件及 WindowFrame 纯 UI 部分）、27C（Workbench
-原语）与 27D（虚拟滚动）已完成并各自全绿；最终无障碍/golden 总验收留在 27E。
+**状态：已完成。** 27A（token/theme）、27B（基础组件及 WindowFrame 纯 UI 部分）、27C（Workbench
+原语）、27D（虚拟滚动）与 27E（无障碍/golden 总验收）均已完成并通过独立门禁。
 
-- [ ] 无障碍基线固定为 WCAG 2.2 AA / macOS / Windows / Linux。
-- [ ] 迁设计 token、基础组件、Workbench 原语、虚拟滚动与 WindowFrame 纯 UI 部分。
-- [ ] 保留 shadcn_flutter，统一 `as sf` import。
-- [ ] 一文件一公开组件、barrel、const constructor、公开 API dartdoc。
-- [ ] token 走 ThemeExtension；不得依赖 Repository/Data/AppLocalizations。
-- [ ] 组件文案全部构造参数传入。
-- [ ] 每个公开组件有行为 widget test；视觉属性有 tagged golden。
-- [ ] AA 测试覆盖 semantics、键盘/焦点、async live region、拖拽替代与焦点不被遮挡。
-- [ ] 普通文本对比度 ≥4.5:1、大文本 ≥3:1、UI/焦点指示 ≥3:1；200% 文字缩放不丢失内容。
-- [ ] 交互目标 AA 下限为 24×24 dp，设计目标为 VGV 48×48 dp；reduce-motion 作为额外平台门禁。
+- [x] 无障碍基线固定为 WCAG 2.2 AA / macOS / Windows / Linux。
+- [x] 迁设计 token、基础组件、Workbench 原语、虚拟滚动与 WindowFrame 纯 UI 部分。
+- [x] 保留 shadcn_flutter，统一 `as sf` import。
+- [x] 一文件一公开组件、barrel、const constructor、公开 API dartdoc。
+- [x] token 走 ThemeExtension；不得依赖 Repository/Data/AppLocalizations。
+- [x] 组件文案全部构造参数传入。
+- [x] 每个公开组件有行为 widget test；视觉属性有 tagged golden。
+- [x] AA 测试覆盖 semantics、键盘/焦点、async live region、拖拽替代与焦点不被遮挡。
+- [x] 普通文本对比度 ≥4.5:1、大文本 ≥3:1、UI/焦点指示 ≥3:1；200% 文字缩放不丢失内容。
+- [x] 交互目标 AA 下限为 24×24 dp，设计目标为 VGV 48×48 dp；reduce-motion 作为额外平台门禁。
 
 ### 步骤 28 — l10n typed mapping
 

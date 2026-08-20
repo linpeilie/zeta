@@ -1144,3 +1144,42 @@ while retaining the runtime assert; do not widen file or package exclusions.
 **Impact.** Coverage rises from 96.75% to 100% while every virtualization production file stays in the
 denominator. The cleanup removes only defenses duplicated by established invariants; valid layout,
 scroll-state behavior, public component behavior, and package boundaries do not change.
+
+## 2026-08-20 — Step 27E closes WCAG 2.2 AA gaps with executable acceptance
+
+**Problem.** The first total acceptance put semantic colors, desktop controls, and 200% text scaling under
+one AA contract. It found that an actionable `IdeChip` had only a 20 dp hit height, below the 24 dp floor,
+and that the fixed 44 dp `IdePageHeader` overflowed downward by 21 px at 200% scaling with a subtitle.
+Both faults were internal to `app_ui`; neither involved a shared adapter or Provider port.
+
+**Decision.** Give only chips with press or delete actions a hit box constrained by
+`AppMetrics.minimumInteractiveTarget`, preserving the density of static labels. Treat `pageHeaderHeight`
+as a minimum so scaled content may grow naturally. Add executable acceptance for 4.5:1 normal text on
+every light/dark content surface, 3:1 focus rings, four 24×24 dp interactive-control classes, 200% text,
+and reduced motion. Existing component tests continue to prove semantics, keyboard/focus, live regions,
+arrow-key drag alternatives, and overlay focus restoration.
+
+**Impact.** Production code fixes both real AA gaps without weakening assertions or tokens. All seven new
+AA checks pass; the complete randomized app_ui suite grows to 293 tests and retains 100% hand-written
+coverage.
+
+## 2026-08-20 — Step 27E fixes golden discovery, layout, and Very Good execution semantics
+
+**Problem.** Dart's test metadata parser rejects the constant in `@Tags([TestTag.golden])` and requires a
+string literal. The first gallery also placed a stretched Row inside a vertical `SingleChildScrollView`,
+creating infinite-height constraints. After those fixes and baseline generation, Very Good's default test
+optimizer dropped the file-level tag while merging suites, so a normal `--tags golden` reported no matching
+tests; golden updates had hidden the fault by disabling optimization automatically. The current Very Good
+CLI also has no `analyze` command. The first Flutter analysis reported 13 const hints in the test fixture,
+which `dart fix --apply` consolidated into eight safe mechanical fixes.
+
+**Decision.** Keep parser-compatible `@Tags(['golden'])` metadata and reference `TestTag.golden` in the test
+body, satisfying both real tagging and workflow file discovery. Use token padding directly inside the fixed
+desktop canvas instead of stretching inside an unbounded scroll axis. Pass `--no-optimization` in the
+golden job and lock it with an architecture test; declare golden, perf, and slow package tags. Continue to
+run tests through `very_good test` and use the official `flutter analyze` for static analysis.
+
+**Impact.** Two light/dark Linux baselines come from a fixed 760×560, device-pixel-ratio-1 component gallery
+and pass visual inspection. The non-update golden gate passes three consecutive randomized runs and can no
+longer succeed with zero tests. The workflow change affects test discovery only, with no production
+dependency or architectural-boundary change.
