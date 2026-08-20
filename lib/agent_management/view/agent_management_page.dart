@@ -6,14 +6,16 @@ import 'package:zeta/agent_management/bloc/agent_management_event.dart';
 import 'package:zeta/agent_management/view/agent_management_view.dart';
 
 class AgentManagementPage extends StatelessWidget {
-  const AgentManagementPage({super.key});
+  const AgentManagementPage({this.providerId, super.key});
+
+  final String? providerId;
 
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
       create: (context) => AgentManagementBloc(
         agentManagementRepository: context.read<AgentManagementRepository>(),
-      )..add(const AgentManagementStarted()),
+      )..add(AgentManagementStarted(providerId: providerId)),
       child: const AgentManagementView(),
     );
   }

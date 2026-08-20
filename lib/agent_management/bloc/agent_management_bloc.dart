@@ -55,7 +55,11 @@ class AgentManagementBloc
       ),
     );
     if (definitions.isNotEmpty) {
-      add(AgentManagementAgentSelected(definitions.first.providerId));
+      add(
+        AgentManagementAgentSelected(
+          event.providerId ?? definitions.first.providerId,
+        ),
+      );
     }
   }
 

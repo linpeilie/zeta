@@ -526,6 +526,41 @@ void main() {
       },
     );
   });
+
+  group('project identity', () {
+    test('round-trips posix and windows canonical paths', () {
+      const posix = '/Users/dev/project';
+      const windows = r'C:\Users\dev\project';
+      final posixId = repository.projectIdFor(' $posix ');
+      final windowsId = repository.projectIdFor(windows);
+      expect(posixId.contains('/'), isFalse);
+      expect(posixId.contains(r'\'), isFalse);
+      expect(posixId.contains('='), isFalse);
+      expect(repository.resolveProjectPath(posixId), posix);
+      expect(repository.resolveProjectPath(windowsId), windows);
+      expect(repository.resolveProjectPath('not-base64!'), isNull);
+      expect(repository.resolveProjectPath('/abs/path'), isNull);
+    });
+
+    test('rejects empty paths and closed identity calls', () async {
+      expectFailure(
+        () => repository.projectIdFor('  '),
+        WorkspaceRepositoryOperation.resolveProject,
+        WorkspaceRepositoryFailureCode.invalidInput,
+      );
+      await repository.close();
+      expectFailure(
+        () => repository.projectIdFor('/repo'),
+        WorkspaceRepositoryOperation.resolveProject,
+        WorkspaceRepositoryFailureCode.closed,
+      );
+      expectFailure(
+        () => repository.resolveProjectPath('abc'),
+        WorkspaceRepositoryOperation.resolveProject,
+        WorkspaceRepositoryFailureCode.closed,
+      );
+    });
+  });
 }
 
 void expectFailure(

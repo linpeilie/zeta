@@ -410,7 +410,11 @@ void main() {
     );
 
     test('event equality uses value props', () {
-      expect(const AgentManagementStarted().props, isEmpty);
+      expect(const AgentManagementStarted().props, <Object?>[null]);
+      expect(
+        const AgentManagementStarted(providerId: 'codex').props,
+        <Object?>['codex'],
+      );
       expect(
         const AgentManagementAgentSelected('codex').props,
         <Object?>['codex'],

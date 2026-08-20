@@ -37,6 +37,8 @@ void main() {
         {
           'lib/bootstrap.dart',
           'lib/l10n/failure_messages.dart',
+          'lib/app/app_repositories.dart',
+          'lib/app/router/**',
           'lib/**/bloc/**',
           'lib/**/cubit/**',
           'lib/**/view/*_page.dart',

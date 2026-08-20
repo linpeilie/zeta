@@ -745,14 +745,14 @@ code 以及 28D 的 presentation code。ARB 现为 en/zh 各 1,041 个一致键�
 
 ### 步骤 34 — `IdeShellBloc` 与 typed GoRouter
 
-- [ ] `IdeShellBloc` 只保存 shell 业务状态，不保存另一个 Bloc 或 router location。
-- [ ] 建 `@TypedShellRoute` 与 `/home`、project、thread、settings、agent management、usage routes。
-- [ ] canonical project path → stable URL-safe projectId，并由 Repository 解析；URL 不直接放文件路径。
-- [ ] session restore 计算 initial location/redirect；invalid ID redirect `/home`。
-- [ ] menu action bridge 与 UI menu 使用生成 typed route。
-- [ ] window/menu 命令通过 `desktop_platform_repository`；Bloc 不直接 import platform API。
-- [ ] 禁止 `extra`、裸 path、Navigator push/pop。
-- [ ] 测 restore、redirect、back、invalid/deleted project/thread、menu navigation、Page Bloc scope。
+- [x] `IdeShellBloc` 只保存 shell 业务状态，不保存另一个 Bloc 或 router location。
+- [x] 建 `@TypedShellRoute` 与 `/home`、project、thread、settings、agent management、usage routes。
+- [x] canonical project path → stable URL-safe projectId，并由 Repository 解析；URL 不直接放文件路径。
+- [x] session restore 计算 initial location/redirect；invalid ID redirect `/home`。
+- [x] menu action bridge 与 UI menu 使用生成 typed route。
+- [x] window/menu 命令通过 `desktop_platform_repository`；Bloc 不直接 import platform API。
+- [x] 禁止 `extra`、裸 path、Navigator push/pop。
+- [x] 测 restore、redirect、back、invalid/deleted project/thread、menu navigation、Page Bloc scope。
 
 ### 步骤 35 — Bootstrap、平台与 flavor 装配
 

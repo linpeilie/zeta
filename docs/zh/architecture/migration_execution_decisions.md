@@ -1213,3 +1213,26 @@ render cache 仍不进 State。旧 `dev` 性能对比与 Codex/Claude/Grok 真�
 **证据。** `flutter analyze lib test` 0 问题；`dart format` 121 files / 0
 changed；`bloc lint .` 0 issues；根目录 `very_good test` 299 项随机顺序测试
 通过，排除 `packages/**` 后手写覆盖率 100%。
+
+## 2026-08-20 — 步骤 34 IdeShellBloc / typed GoRouter
+
+**问题。** 冻结仓库没有 canonical path → URL-safe `projectId` 解析 API。
+`IdeSessionInitialRoute` 仍是文件系统路径。拓扑 URL 不含 `providerId`，但
+`AgentConversationPage` 需要它。`MenuCommand` 只有 `openProject`。旧
+`IdeShellController` 1,467 行，整文件搬会超出本步。
+
+**决策。** 经所有者选择方案 A：不改 Provider 或 adapter 端口。只给
+`workspace_repository` 增加可逆 `projectIdFor` / `resolveProjectPath`
+（UTF-8 路径的无填充 base64url）。`IdeSessionCubit` 仍产出 `projectPath`；
+router restore/redirect 再编码。`IdeShellBloc` 只持 workbench 与
+window/menu 事件，不持 location。Thread 页用会话快照的
+`activeAgentProviderId`；缺则退回 project。失效 project → `/home`，失效
+thread → 父 project（ADR-003 可恢复父 route）。不扩 `MenuCommand`；原生
+`openProject` 走 pickDirectory，UI 菜单走 typed `goNamed`。去掉
+`DesktopWindowCommands` / `DesktopMenuCommands` 上的 `final` 以便 mocktail。
+composition-root allowlist 增加 `lib/app/app_repositories.dart` 与
+`lib/app/router/**`。Client/adapter 全量装配留给步骤 35。
+
+**证据。** `flutter analyze lib test` 0 问题；`dart format` 136 files / 0
+changed；`bloc lint .` 0 issues；根目录 `very_good test` 328 项随机顺序测试
+通过，排除 `packages/**` 后手写覆盖率 100%。

@@ -63,7 +63,7 @@ final class DesktopPlatformException implements Exception {
 }
 
 /// Window commands exposed without leaking the platform port to Bloc code.
-final class DesktopWindowCommands {
+class DesktopWindowCommands {
   /// Creates a window-command facade.
   const DesktopWindowCommands(this._api);
 
@@ -92,7 +92,7 @@ final class DesktopWindowCommands {
 }
 
 /// Native menu commands exposed without leaking the platform port to Bloc code.
-final class DesktopMenuCommands {
+class DesktopMenuCommands {
   /// Creates a native-menu facade.
   const DesktopMenuCommands(this._api);
 

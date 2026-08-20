@@ -4,6 +4,7 @@ import 'package:equatable/equatable.dart';
 import 'package:workspace_client/workspace_client.dart';
 import 'package:workspace_repository/src/workspace_ignore.dart';
 import 'package:workspace_repository/src/workspace_models.dart';
+import 'package:workspace_repository/src/workspace_project_id.dart';
 import 'package:workspace_repository/src/workspace_query.dart';
 
 // The public dependency name intentionally differs from the private field.
@@ -25,6 +26,9 @@ enum WorkspaceRepositoryOperation {
 
   /// Close owned watches and streams.
   close,
+
+  /// Encode or decode a URL-safe project identity.
+  resolveProject,
 }
 
 /// Stable workspace Repository failure categories.
@@ -130,6 +134,23 @@ class WorkspaceRepository {
 
   /// Returns the current index for [rootPath], when one exists.
   WorkspaceIndex? indexFor(String rootPath) => _indices[rootPath.trim()];
+
+  /// Encodes [canonicalPath] as a stable URL-safe project id.
+  String projectIdFor(String canonicalPath) {
+    _ensureOpen(WorkspaceRepositoryOperation.resolveProject);
+    final path = _requiredText(
+      canonicalPath,
+      operation: WorkspaceRepositoryOperation.resolveProject,
+      diagnosticCode: 'workspace_project_path_required',
+    );
+    return encodeWorkspaceProjectId(path);
+  }
+
+  /// Decodes [projectId]. Returns `null` when the id is malformed.
+  String? resolveProjectPath(String projectId) {
+    _ensureOpen(WorkspaceRepositoryOperation.resolveProject);
+    return decodeWorkspaceProjectId(projectId);
+  }
 
   /// Scans [rootPath], stores its immutable corpus, and starts one root watch.
   Future<WorkspaceIndex> index(

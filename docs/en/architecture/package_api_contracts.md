@@ -687,7 +687,7 @@ already exported `AgentTurnContextStore`. This keeps vendor parsers and shared P
 | --- | --- | --- | --- |
 | `agent_management_repository` | management client, config client | `detect()`, `testConnection()`, `readConfiguration()`, `saveConfiguration()`, `discoverLogPaths()`, `readLogs()`, `validateConfiguration()` | selected agent, progress, loading, localized messages |
 | `settings_repository` | settings client, `SystemFontCatalogApi` | `settings` / `settingsChanges`, `persist()`, `fontFamilies()` | UI display option models |
-| `workspace_repository` | workspace client | `index()`, `query()`, `loadChildren(path)`, `treeChanges` | `expanded` / `selected` |
+| `workspace_repository` | workspace client | `index()`, `query()`, `loadChildren(path)`, `treeChanges`, `projectIdFor(path)`, `resolveProjectPath(id)` | `expanded` / `selected` |
 | `project_session_repository` | project session client, vendor thread ports | `restore()`, `save()`, `threadCatalog()`, `threadPage(query)` | search terms, selection, load status |
 | `usage_statistics_repository` | three vendor clients, usage storage client | `report(query)`, `quotaSnapshots()` | filter selection |
 | `desktop_notifications_repository` | `DesktopNotificationApi`, `DesktopAttentionApi` | `notify(NotificationRequest)`, `setBadge(int)` | **no** dependency on `settings_repository`; accepts already-localized copy only |

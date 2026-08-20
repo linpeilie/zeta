@@ -4,6 +4,7 @@ include:
 analyzer:
   exclude:
     - lib/l10n/gen/*
+    - lib/**/*.g.dart
     - build/**
     - android/**
     - ios/**

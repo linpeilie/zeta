@@ -658,7 +658,7 @@ parser 或共享 Provider port。
 | --- | --- | --- | --- |
 | `agent_management_repository` | management client、config client | `detect()`、`testConnection()`、`readConfiguration()`、`saveConfiguration()`、`discoverLogPaths()`、`readLogs()`、`validateConfiguration()` | selected agent、progress、loading、本地化 message |
 | `settings_repository` | settings client、`SystemFontCatalogApi` | `settings` / `settingsChanges`、`persist()`、`fontFamilies()` | UI 展示选项模型 |
-| `workspace_repository` | workspace client | `index()`、`query()`、`loadChildren(path)`、`treeChanges` | `expanded` / `selected` |
+| `workspace_repository` | workspace client | `index()`、`query()`、`loadChildren(path)`、`treeChanges`、`projectIdFor(path)`、`resolveProjectPath(id)` | `expanded` / `selected` |
 | `project_session_repository` | project session client、vendor thread ports | `restore()`、`save()`、`threadCatalog()`、`threadPage(query)` | 搜索词、选中、加载状态 |
 | `usage_statistics_repository` | 三个 vendor client、usage storage client | `report(query)`、`quotaSnapshots()` | filter selection |
 | `desktop_notifications_repository` | `DesktopNotificationApi`、`DesktopAttentionApi` | `notify(NotificationRequest)`、`setBadge(int)` | **不依赖** `settings_repository`；只接受已本地化 copy |

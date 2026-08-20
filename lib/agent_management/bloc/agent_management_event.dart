@@ -8,7 +8,12 @@ sealed class AgentManagementEvent extends Equatable {
 }
 
 final class AgentManagementStarted extends AgentManagementEvent {
-  const AgentManagementStarted();
+  const AgentManagementStarted({this.providerId});
+
+  final String? providerId;
+
+  @override
+  List<Object?> get props => <Object?>[providerId];
 }
 
 final class AgentManagementAgentSelected extends AgentManagementEvent {

@@ -1433,3 +1433,31 @@ steps 34/35.
 reports 121 files / 0 changed; `bloc lint .` reports 0 issues; the root
 `very_good test` run passes 299 randomized tests at 100% hand-written coverage
 after excluding `packages/**`.
+
+## 2026-08-20 — Step 34 IdeShellBloc / typed GoRouter
+
+**Problem.** Frozen repositories had no canonical-path → URL-safe `projectId`
+API. `IdeSessionInitialRoute` still carries filesystem paths. Topology URLs
+omit `providerId`, but `AgentConversationPage` requires it. `MenuCommand`
+only has `openProject`. The old `IdeShellController` is 1,467 lines; cloning
+it would exceed this step.
+
+**Decision.** Owner chose option A. Do not change Provider or adapter ports.
+Add reversible `projectIdFor` / `resolveProjectPath` on
+`workspace_repository` only (unpadded base64url of the UTF-8 path).
+`IdeSessionCubit` still emits `projectPath`; the router encodes it for
+restore/redirect. `IdeShellBloc` holds workbench and window/menu events,
+never location. The thread page reads `activeAgentProviderId` from the
+session snapshot and falls back to the project route when missing. Deleted
+projects redirect to `/home`; deleted threads redirect to the parent project
+(ADR-003 recoverable parent). Do not expand `MenuCommand`; native
+`openProject` goes through `pickDirectory`, and UI menus use typed
+`goNamed`. Drop `final` only on `DesktopWindowCommands` and
+`DesktopMenuCommands` for mocktail. Extend the composition-root allowlist
+with `lib/app/app_repositories.dart` and `lib/app/router/**`. Full
+client/adapter wiring stays in step 35.
+
+**Evidence.** `flutter analyze lib test` reports 0 issues; `dart format`
+reports 136 files / 0 changed; `bloc lint .` reports 0 issues; the root
+`very_good test` run passes 328 randomized tests at 100% hand-written coverage
+after excluding `packages/**`.

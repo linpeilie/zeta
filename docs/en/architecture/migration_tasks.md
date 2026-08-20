@@ -785,14 +785,14 @@ Chinese ARB files each have 1,041 matching keys. Packages import neither `AppLoc
 
 ### Step 34 — `IdeShellBloc` and typed GoRouter
 
-- [ ] `IdeShellBloc` stores shell business state only, never another Bloc or router location.
-- [ ] Create `@TypedShellRoute` plus home, project, thread, settings, agent-management, and usage routes.
-- [ ] Convert canonical project paths to stable URL-safe projectId values resolved by Repository; URLs never expose file paths.
-- [ ] Session restore computes initial location/redirect; invalid IDs redirect to `/home`.
-- [ ] Menu-action bridge and UI menus use generated typed routes.
-- [ ] Window/menu commands go through `desktop_platform_repository`; Bloc never imports the platform API.
-- [ ] Reject `extra`, raw paths, and Navigator push/pop.
-- [ ] Test restore, redirect, back, invalid/deleted project/thread, menu navigation, and Page Bloc scope.
+- [x] `IdeShellBloc` stores shell business state only, never another Bloc or router location.
+- [x] Create `@TypedShellRoute` plus home, project, thread, settings, agent-management, and usage routes.
+- [x] Convert canonical project paths to stable URL-safe projectId values resolved by Repository; URLs never expose file paths.
+- [x] Session restore computes initial location/redirect; invalid IDs redirect to `/home`.
+- [x] Menu-action bridge and UI menus use generated typed routes.
+- [x] Window/menu commands go through `desktop_platform_repository`; Bloc never imports the platform API.
+- [x] Reject `extra`, raw paths, and Navigator push/pop.
+- [x] Test restore, redirect, back, invalid/deleted project/thread, menu navigation, and Page Bloc scope.
 
 ### Step 35 — Bootstrap, platform, and flavor composition
 
