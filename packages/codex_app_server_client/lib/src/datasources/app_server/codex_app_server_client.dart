@@ -11,7 +11,6 @@ class _CodexAppServerClient {
     required this._turnStartParamsEncoder,
     required this._threadHistoryReader,
     required this._configPermissionFallback,
-    required this._textCatalog,
     required this._log,
   });
 
@@ -23,7 +22,6 @@ class _CodexAppServerClient {
   final _CodexTurnStartParamsEncoder _turnStartParamsEncoder;
   final _CodexThreadHistoryReader _threadHistoryReader;
   final CodexPermissionRuntimeSnapshot _configPermissionFallback;
-  final _AgentUiTextCatalog _textCatalog;
   final AppLogger _log;
 
   Future<AgentModelList> fetchModelList({
@@ -174,12 +172,13 @@ class _CodexAppServerClient {
     _appendUsageWindow(
       windows,
       value: rateLimits['primary'],
-      fallbackLabel: limitName ?? _textCatalog.primaryQuotaLabel,
+      fallbackCode: AgentUsageWindowLabelCode.primaryQuota,
+      protocolLabel: limitName,
     );
     _appendUsageWindow(
       windows,
       value: rateLimits['secondary'],
-      fallbackLabel: _textCatalog.extraQuotaLabel,
+      fallbackCode: AgentUsageWindowLabelCode.extraQuota,
     );
     final creditsMap = _map(rateLimits['credits']);
     final credits = creditsMap.isEmpty
@@ -221,7 +220,8 @@ class _CodexAppServerClient {
   void _appendUsageWindow(
     List<AgentUsageWindow> target, {
     required Object? value,
-    required String fallbackLabel,
+    required AgentUsageWindowLabelCode fallbackCode,
+    String? protocolLabel,
   }) {
     final window = _map(value);
     final usedPercent = _numberToInt(window['usedPercent']);
@@ -230,15 +230,17 @@ class _CodexAppServerClient {
     }
     final resetsAtSeconds = _numberToInt(window['resetsAt']);
     final durationMinutes = _numberToInt(window['windowDurationMins']);
+    final windowDuration = durationMinutes == null || durationMinutes <= 0
+        ? null
+        : Duration(minutes: durationMinutes);
+    final protocolWindowLabel = _string(window['label']);
+    final label = protocolWindowLabel ?? protocolLabel;
     target.add(
       AgentUsageWindow(
-        // 优先用 windowDurationMins 生成可读时长；缺失时回退 limitName / 默认文案。
-        label:
-            _formatAgentUsageWindowLabelFromMinutes(
-              durationMinutes,
-              catalog: _textCatalog,
-            ) ??
-            fallbackLabel,
+        label: windowDuration == null ? label : null,
+        labelCode: windowDuration != null
+            ? AgentUsageWindowLabelCode.duration
+            : (label == null ? fallbackCode : null),
         usedPercent: usedPercent.clamp(0, 100),
         resetsAt: resetsAtSeconds == null
             ? null
@@ -246,9 +248,7 @@ class _CodexAppServerClient {
                 resetsAtSeconds * Duration.millisecondsPerSecond,
                 isUtc: true,
               ).toLocal(),
-        windowDuration: durationMinutes == null
-            ? null
-            : Duration(minutes: durationMinutes),
+        windowDuration: windowDuration,
       ),
     );
   }

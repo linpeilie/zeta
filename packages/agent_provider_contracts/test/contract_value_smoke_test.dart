@@ -251,7 +251,7 @@ void main() {
         entry: AgentHistoryEventEntry(
           id: 'event',
           kind: AgentHistoryEventKind.system,
-          title: 'System',
+          titleCode: AgentHistoryEventTitleCode.contextCompacted,
         ),
       ),
       AgentErrorEvent(message: 'error', raw: raw),

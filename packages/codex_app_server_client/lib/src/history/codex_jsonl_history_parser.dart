@@ -5,12 +5,10 @@ class _JsonlHistoryParser {
   _JsonlHistoryParser({
     required this.fallbackThreadId,
     required this.sessionPath,
-    required this.textCatalog,
   });
 
   final String fallbackThreadId;
   final String sessionPath;
-  final _AgentUiTextCatalog textCatalog;
   static const _conversationModeCodec = _CodexConversationModeCodec();
 
   late final String _unscopedTurnId = '${fallbackThreadId}__unscoped__';
@@ -294,7 +292,7 @@ class _JsonlHistoryParser {
           turn.completedAt
       ..duration =
           _durationFromMilliseconds(payload['duration_ms']) ?? turn.duration
-      ..errorMessage = _string(payload['reason']) ?? textCatalog.userCancelled;
+      ..errorMessage = _string(payload['reason']);
     turn.raw['turnAborted'] = payload;
   }
 
@@ -440,9 +438,7 @@ class _JsonlHistoryParser {
       id: callId,
       title: _jsonlToolTitle(
         name: name,
-        catalog: textCatalog,
         arguments: arguments,
-        stringInput: _string(payload['arguments']),
       ),
       kind: _jsonlToolKind(name),
       status: AgentToolStatus.completed,
@@ -509,8 +505,11 @@ class _JsonlHistoryParser {
       id: entry.id,
       kind: entry.kind,
       title: entry.title,
+      titleCode: entry.titleCode,
       description: entry.description,
+      descriptionCode: entry.descriptionCode,
       content: entry.content,
+      duration: entry.duration,
       qaPairs: updatedQaPairs,
       raw: entry.raw.isEmpty
           ? raw
@@ -530,9 +529,7 @@ class _JsonlHistoryParser {
       id: callId,
       title: _jsonlToolTitle(
         name: name,
-        catalog: textCatalog,
         arguments: arguments,
-        stringInput: stringInput,
       ),
       kind: _jsonlToolKind(name),
       status: _historyToolStatus(_string(payload['status'])),
@@ -584,7 +581,7 @@ class _JsonlHistoryParser {
     if (callId != null && _pendingToolsByCallId.containsKey(callId)) {
       _updatePendingTool(
         callId,
-        title: textCatalog.applyPatchTitle,
+        title: '',
         kind: AgentToolKind.edit,
         status: payload['success'] == false
             ? AgentToolStatus.failed
@@ -600,7 +597,7 @@ class _JsonlHistoryParser {
 
     final toolCall = AgentToolCall(
       id: toolCallId,
-      title: textCatalog.applyPatchTitle,
+      title: '',
       kind: AgentToolKind.edit,
       status: payload['success'] == false
           ? AgentToolStatus.failed
@@ -625,7 +622,6 @@ class _JsonlHistoryParser {
     final toolCall = AgentToolCall(
       id: _string(payload['call_id']) ?? _nextHistoryId('mcp'),
       title: _toolPathTitle(
-        prefix: 'MCP',
         first: _string(invocation['server']),
         second: toolName,
       ),
@@ -654,7 +650,7 @@ class _JsonlHistoryParser {
     final entry = AgentHistoryEventEntry(
       id: 'search-$callId',
       kind: AgentHistoryEventKind.search,
-      title: textCatalog.toolSearchTitle,
+      titleCode: AgentHistoryEventTitleCode.toolSearch,
       description: query,
       content: _toolSearchQueryPreview(arguments),
       raw: raw,
@@ -674,7 +670,7 @@ class _JsonlHistoryParser {
     final entry = AgentHistoryEventEntry(
       id: 'search-$callId',
       kind: AgentHistoryEventKind.search,
-      title: textCatalog.historyWebSearchTitle,
+      titleCode: AgentHistoryEventTitleCode.webSearch,
       description:
           _trimmedText(_string(action['query'])) ??
           _trimmedText(_string(payload['query'])),
@@ -695,10 +691,11 @@ class _JsonlHistoryParser {
     return AgentHistoryEventEntry(
       id: id,
       kind: AgentHistoryEventKind.permission,
-      title: switch (name) {
-        'request_user_input' => 'Requested user input',
-        'request_permissions' => 'Requested permissions',
-        _ => 'Permission request',
+      titleCode: switch (name) {
+        'request_user_input' => AgentHistoryEventTitleCode.requestedUserInput,
+        'request_permissions' =>
+          AgentHistoryEventTitleCode.requestedPermissions,
+        _ => AgentHistoryEventTitleCode.permissionRequest,
       },
       description: _permissionEventDescription(
         name: name,
@@ -739,7 +736,7 @@ class _JsonlHistoryParser {
       return AgentHistoryEventEntry(
         id: id,
         kind: AgentHistoryEventKind.warning,
-        title: _humanizeIdentifier(type!),
+        title: type,
         description: message,
         content: content,
         raw: raw,
@@ -752,7 +749,7 @@ class _JsonlHistoryParser {
       return AgentHistoryEventEntry(
         id: id,
         kind: AgentHistoryEventKind.system,
-        title: _humanizeIdentifier(type!),
+        title: type,
         description: message,
         content: content,
         raw: raw,

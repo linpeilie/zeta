@@ -4,12 +4,10 @@ part of '../datasources/app_server/codex_app_server_agent_provider.dart';
 class _CodexNotificationMapper {
   _CodexNotificationMapper({
     required this._providerId,
-    required this._textCatalog,
     CodexFileChangeTracker? fileChangeTracker,
   }) : _fileChangeTracker = fileChangeTracker ?? CodexFileChangeTracker();
 
   final String _providerId;
-  final _AgentUiTextCatalog _textCatalog;
   final CodexFileChangeTracker _fileChangeTracker;
   static const _conversationModeCodec = _CodexConversationModeCodec();
 
@@ -735,7 +733,6 @@ class _CodexNotificationMapper {
     return _toolCallFromThreadItem(
       item,
       id: id,
-      catalog: _textCatalog,
       // started 一律视为进行中；completed 再按 item.status 细分失败/取消。
       status: notification.method == 'item/completed'
           ? status
@@ -762,7 +759,6 @@ class _CodexNotificationMapper {
     final entry = _systemHistoryEventFromThreadItem(
       item,
       id: id,
-      catalog: _textCatalog,
     );
     if (entry == null) {
       return null;
@@ -826,7 +822,7 @@ class _CodexNotificationMapper {
       }
       return AgentToolCall(
         id: itemId,
-        title: _progressTitle(method),
+        title: '',
         status: AgentToolStatus.inProgress,
         content: message,
         sessionId: _string(notification.params['threadId']),
@@ -842,7 +838,7 @@ class _CodexNotificationMapper {
         method;
     return AgentToolCall(
       id: id,
-      title: _progressTitle(method),
+      title: '',
       kind: method.contains('fileChange')
           ? AgentToolKind.edit
           : AgentToolKind.execute,

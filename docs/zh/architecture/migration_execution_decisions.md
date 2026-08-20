@@ -1090,3 +1090,15 @@ typed duration 或日/周/套餐/on-demand code；工具调用只保留有信息
 value enum 仅兼容扩展 Grok 所需的 `auto`、`alwaysApprove` 与 one-day case；不改 capability method、adapter
 或 Repository port。contracts 包 analyze、85 项随机测试与 100% coverage 全绿；Grok analyze、242 项随机
 测试与 100% coverage 全绿，且 Grok catalog 与构造透传残留为零。
+
+**28D3 Codex catalog 清理与历史事件 code。** Codex `_AgentUiTextCatalog` 以及 JSONL/live 路径中的
+英文硬编码，会给系统历史卡、额度窗口、提问标题、工具卡和失败事件写入 Zeta 文案。经所有者批准，
+沿 28D1/28D2 口径给 `AgentHistoryEventEntry` 增加 `titleCode` / `descriptionCode` / `duration`，
+标题改为 provider 原文或 app code 二选一；不新增 capability method，不改 adapter 或 Repository
+port。工具卡只保留有信息量的协议标题，否则空标题 + `AgentToolKind`；额度窗口优先 `duration`
+labelCode；提问使用已有 `AgentQuestionTitleCode.agentRequestsInput`；本地合成失败改为
+`AgentProviderFailureCode`。Claude/Grok 残留的 `'Thinking'` 一并改为空标题。为权限选项短标签
+新增 6 个 ARB 键，en/zh 现为各 1,041 个一致键。`FailureMessages` 穷尽映射 28D 的 presentation
+code。contracts 85 tests、1,078 / 1,078；Codex 178 tests、3,765 / 3,765；Claude 269 tests、
+2,994 / 2,994；Grok 242 tests、3,307 / 3,307；conversation repository 27 tests、1,121 / 1,121；
+root 85 tests 在排除 `packages/**` 后 100%。packages 无 TextCatalog 与 `AppLocalizations`。

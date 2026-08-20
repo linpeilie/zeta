@@ -122,6 +122,10 @@ export 'src/cli/resolved_cli_process_command.dart';
 state owned by `AgentConversationBloc`. Elapsed-time calculation and formatting stay in app
 Presentation/l10n rather than this contracts package.
 
+`AgentHistoryEventEntry` titles follow the step-28D either-or rule: a provider-authored `title` or
+an app-owned `titleCode` is required. Sleep windows use `duration` evidence and sub-agent states use
+`descriptionCode`; Data layers do not synthesize Zeta copy.
+
 ### 1.2 Port count: 21 = 2 required + 19 optional
 
 The fields of `AgentProviderBundle` *are* the port list. **Whether an operation exists is determined

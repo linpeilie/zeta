@@ -156,7 +156,9 @@ abstract final class GrokCanonicalComparator {
                 normalizedText: _normalizeText(
                   <String?>[
                     entry.title,
+                    entry.titleCode?.name,
                     entry.description,
+                    entry.descriptionCode?.name,
                     entry.content,
                   ].whereType<String>().join('\n'),
                 ),

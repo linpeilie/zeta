@@ -1284,3 +1284,17 @@ diagnostic data. Extend only the compatible immutable value enums with Grok's `a
 one-day cases; no capability method, adapter, or Repository port changes. Contracts pass analyze, 85 randomized
 tests, and 100% coverage; Grok passes analyze, 242 randomized tests, and 100% coverage, with zero Grok catalog
 or constructor-plumbing remnants.
+
+**28D3 Codex catalog removal and history-event codes.** Codex's `_AgentUiTextCatalog` and additional
+English literals on JSONL/live paths authored Zeta copy for system history cards, quota windows,
+question titles, tool cards, and failures. With owner approval, follow the 28D1/28D2 pattern:
+add `titleCode` / `descriptionCode` / `duration` to `AgentHistoryEventEntry` so a title is either
+provider-authored or an app-owned code. No capability method, adapter, or Repository port changes.
+Tool cards keep informative protocol titles, otherwise an empty title plus `AgentToolKind`; quota
+windows prefer the `duration` label code; questions reuse `AgentQuestionTitleCode.agentRequestsInput`;
+locally synthesized failures use `AgentProviderFailureCode`. Leftover Claude/Grok `'Thinking'` titles
+become empty titles. Six permission-option label ARB keys were added, so English and Chinese each have
+1,041 matching keys. `FailureMessages` now maps the 28D presentation codes exhaustively. Contracts:
+85 tests, 1,078 / 1,078; Codex: 178 tests, 3,765 / 3,765; Claude: 269 tests, 2,994 / 2,994; Grok:
+242 tests, 3,307 / 3,307; conversation repository: 27 tests, 1,121 / 1,121; root: 85 tests at 100%
+after excluding `packages/**`. Packages contain neither a TextCatalog nor an `AppLocalizations` import.

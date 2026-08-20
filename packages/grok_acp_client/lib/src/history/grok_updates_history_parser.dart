@@ -474,7 +474,7 @@ class _TurnBuilder {
       AgentHistoryToolEntry(
         toolCall: AgentToolCall(
           id: id,
-          title: 'Thinking',
+          title: '',
           kind: AgentToolKind.think,
           status: AgentToolStatus.completed,
           content: text,

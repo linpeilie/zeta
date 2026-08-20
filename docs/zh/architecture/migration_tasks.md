@@ -14,7 +14,7 @@
 | P2 Provider 与 Management Data | 11–17 | ☐ |
 | P3 其余 Data | 18–21 | ☐ |
 | P4 Repository | 22–26 | ☐ |
-| P5 app_ui 与 l10n | 27–28 | ☐ |
+| P5 app_ui 与 l10n | 27–28 | ☑ |
 | P6 小 Feature Bloc/Presentation | 29–31 | ☐ |
 | P7 Agent 会话 | 32–33 | ☐ |
 | P8 Shell、Router 与收口 | 34–36 | ☐ |
@@ -641,18 +641,21 @@ seed 重跑完整 270-test 包后通过。
 
 ### 步骤 28 — l10n typed mapping
 
-**状态：进行中（28A–28C 与 28D1–28D2 已完成）。** app 自有 shadcn 适配器、当前 63 个跨层
-status/failure/warning/operation code 的穷尽映射及 bootstrap 注入的冻结 Locale 通知文案已全绿；
-Claude 与 Grok 已改为 typed presentation code 且不再有本地 catalog；Codex catalog 清理仍待完成。
+**状态：已完成（2026-08-20）。** 28A–28C 与 28D1–28D3 全部通过。Codex 本地 catalog 已删除；
+`AgentHistoryEventEntry` 改为 provider 原文或 `titleCode` 二选一，sleep 使用 `duration` 证据，
+子代理状态使用 `descriptionCode`。Claude/Grok 残留的 `'Thinking'` 标题已改为空标题 +
+`AgentToolKind.think`。`FailureMessages` 穷尽映射现有跨层 status/failure/warning/operation
+code 以及 28D 的 presentation code。ARB 现为 en/zh 各 1,041 个一致键。packages 无
+`AppLocalizations` 或 TextCatalog 残留。
 
-- [ ] 删除 4 组 TextCatalog/Fallback 与 `ZetaTextCatalogs`。
-- [ ] 下层改为 typed failure/code；`lib/l10n/failure_messages.dart` 穷尽映射。
+- [x] 删除 4 组 TextCatalog/Fallback 与 `ZetaTextCatalogs`。
+- [x] 下层改为 typed failure/code；`lib/l10n/failure_messages.dart` 穷尽映射。
 - [x] `ZetaShadcnLocalizations` 和 shadcn ARB keys 留 app。
 - [x] 建无 BuildContext 的 `DesktopNotificationCopyResolver`，由 bootstrap 按冻结 Locale 注入。
 - [x] 核验 en/zh keys、placeholder metadata、escaping 完全一致。
-- [ ] packages 的 `AppLocalizations` import = 0。
+- [x] packages 的 `AppLocalizations` import = 0。
 
-**P5 出口**：app_ui 独立全绿；中英文 UI smoke；仓库无 TextCatalog 残留。
+**P5 出口：已通过。** app_ui 独立全绿；中英文 mapping/smoke 测试通过；仓库无 TextCatalog 残留。
 
 ---
 

@@ -120,7 +120,7 @@ class GrokChatHistoryParser {
           current!.addTool(
             AgentToolCall(
               id: 'grok-hist-thought-$threadId-$thoughtSeq',
-              title: 'Thinking',
+              title: '',
               kind: AgentToolKind.think,
               status: AgentToolStatus.completed,
               content: cleaned,

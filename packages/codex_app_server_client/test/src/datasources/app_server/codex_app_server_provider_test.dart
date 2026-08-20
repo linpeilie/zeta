@@ -747,7 +747,7 @@ void main() {
         final tool = events.whereType<AgentToolCallEvent>().single.toolCall;
         expect(tool.id, 'reasoning-1');
         expect(tool.kind, AgentToolKind.think);
-        expect(tool.title, 'Thinking');
+        expect(tool.title, isEmpty);
         expect(tool.content, 'final summary');
 
         await subscription.cancel();
@@ -1583,7 +1583,7 @@ void main() {
 
         final toolEvent = events.whereType<AgentToolCallEvent>().single;
         expect(toolEvent.toolCall.id, 'mcp-1');
-        expect(toolEvent.toolCall.title, 'MCP tool');
+        expect(toolEvent.toolCall.title, isEmpty);
         expect(toolEvent.toolCall.kind, AgentToolKind.other);
         expect(toolEvent.toolCall.status, AgentToolStatus.inProgress);
         expect(toolEvent.toolCall.content, 'Fetching resources?');
@@ -1711,27 +1711,49 @@ void main() {
         final tools = events.whereType<AgentToolCallEvent>().toList();
         expect(tools, hasLength(4));
         expect(tools[0].toolCall.kind, AgentToolKind.search);
-        expect(tools[0].toolCall.title, 'Web search');
+        expect(tools[0].toolCall.title, isEmpty);
         expect(tools[0].toolCall.content, 'https://example.com/docs');
         expect(tools[1].toolCall.kind, AgentToolKind.read);
         expect(tools[1].toolCall.content, '/tmp/preview.png');
         expect(tools[2].toolCall.kind, AgentToolKind.fetch);
         expect(tools[2].toolCall.status, AgentToolStatus.completed);
         expect(tools[2].toolCall.locations, <String>['/tmp/out.png']);
-        expect(tools[3].toolCall.title, 'Collaborate: spawnAgent');
+        expect(tools[3].toolCall.title, 'spawnAgent');
         expect(tools[3].toolCall.content, 'Investigate auth');
 
         final systemItems = events.whereType<AgentSystemItemEvent>().toList();
         expect(systemItems, hasLength(5));
-        expect(systemItems[0].entry.title, 'Review mode entered');
+        expect(
+          systemItems[0].entry.titleCode,
+          AgentHistoryEventTitleCode.reviewModeEntered,
+        );
         expect(systemItems[0].entry.description, 'Review uncommitted changes');
-        expect(systemItems[1].entry.title, 'Context compacted');
-        expect(systemItems[2].entry.title, 'Hook prompt');
+        expect(
+          systemItems[1].entry.titleCode,
+          AgentHistoryEventTitleCode.contextCompacted,
+        );
+        expect(
+          systemItems[2].entry.titleCode,
+          AgentHistoryEventTitleCode.hookPrompt,
+        );
         expect(systemItems[2].entry.content, 'Pre-commit checks');
-        expect(systemItems[3].entry.title, 'Waiting');
-        expect(systemItems[3].entry.description, 'Sleep for 1 seconds');
-        expect(systemItems[4].entry.title, 'Sub-agent activity');
-        expect(systemItems[4].entry.description, 'Started · worker/auth');
+        expect(
+          systemItems[3].entry.titleCode,
+          AgentHistoryEventTitleCode.waiting,
+        );
+        expect(
+          systemItems[3].entry.duration,
+          const Duration(milliseconds: 1500),
+        );
+        expect(
+          systemItems[4].entry.titleCode,
+          AgentHistoryEventTitleCode.subAgentActivity,
+        );
+        expect(
+          systemItems[4].entry.descriptionCode,
+          AgentHistoryEventDescriptionCode.subAgentStarted,
+        );
+        expect(systemItems[4].entry.description, 'worker/auth');
 
         await subscription.cancel();
         await provider.dispose();
@@ -2306,12 +2328,20 @@ void main() {
       expect(quota!.planType, 'plus');
       expect(quota.limitName, 'Codex');
       expect(quota.windows, hasLength(2));
-      // primary 300min / secondary 10080min：标签走 windowDuration，limitName 仍用套餐名
-      expect(quota.windows.first.label, '5 hours');
+      // primary 300min / secondary 10080min：时长走 typed duration，文案留给 Presentation。
+      expect(quota.windows.first.label, isNull);
+      expect(
+        quota.windows.first.labelCode,
+        AgentUsageWindowLabelCode.duration,
+      );
       expect(quota.windows.first.usedPercent, 36);
       expect(quota.windows.first.resetsAt, isNotNull);
       expect(quota.windows.first.windowDuration, const Duration(minutes: 300));
-      expect(quota.windows.last.label, '1 week');
+      expect(quota.windows.last.label, isNull);
+      expect(
+        quota.windows.last.labelCode,
+        AgentUsageWindowLabelCode.duration,
+      );
       expect(quota.windows.last.usedPercent, 72);
       expect(quota.windows.last.windowDuration, const Duration(minutes: 10080));
       expect(quota.credits?.unlimited, isFalse);
@@ -2793,17 +2823,23 @@ void main() {
 
       final webSearch = _historyEntries(history)[5] as AgentHistoryToolEntry;
       expect(webSearch.toolCall.kind, AgentToolKind.search);
-      expect(webSearch.toolCall.title, 'Web search');
+      expect(webSearch.toolCall.title, isEmpty);
       expect(webSearch.toolCall.content, 'zeta design system');
 
       final review = _historyEntries(history)[6] as AgentHistoryEventEntry;
       expect(review.kind, AgentHistoryEventKind.system);
-      expect(review.title, 'Review mode entered');
+      expect(
+        review.titleCode,
+        AgentHistoryEventTitleCode.reviewModeEntered,
+      );
       expect(review.description, 'Review branch diff');
 
       final compact = _historyEntries(history)[7] as AgentHistoryEventEntry;
       expect(compact.kind, AgentHistoryEventKind.system);
-      expect(compact.title, 'Context compacted');
+      expect(
+        compact.titleCode,
+        AgentHistoryEventTitleCode.contextCompacted,
+      );
       await provider.dispose();
     });
 
@@ -3076,7 +3112,7 @@ void main() {
       expect(command.toolCall.locations, <String>['/repo']);
 
       final patch = _historyEntries(history)[3] as AgentHistoryToolEntry;
-      expect(patch.toolCall.title, 'Apply patch');
+      expect(patch.toolCall.title, isEmpty);
       expect(patch.toolCall.kind, AgentToolKind.edit);
       expect(patch.toolCall.locations, <String>['lib/main.dart']);
 
@@ -3109,12 +3145,12 @@ void main() {
             .toList(growable: false);
 
         expect(tools, hasLength(4));
-        expect(tools.first.title, 'Exec');
+        expect(tools.first.title, 'exec');
         expect(tools.first.kind, AgentToolKind.other);
         expect(tools.first.fileChanges, isNull);
 
         final patches = tools.skip(1).toList(growable: false);
-        expect(patches.map((tool) => tool.title), everyElement('Apply patch'));
+        expect(patches.map((tool) => tool.title), everyElement(''));
         expect(
           patches.map((tool) => tool.status),
           everyElement(AgentToolStatus.completed),
@@ -3435,21 +3471,24 @@ void main() {
 
         final permission =
             _historyEntries(history)[0] as AgentHistoryEventEntry;
-        expect(permission.title, 'Requested user input');
+        expect(
+          permission.titleCode,
+          AgentHistoryEventTitleCode.requestedUserInput,
+        );
         expect(permission.description, 'Which data source should we use?');
         expect(permission.content, contains('Mock data'));
 
         final toolSearch =
             _historyEntries(history)[1] as AgentHistoryEventEntry;
-        expect(toolSearch.title, 'Tool search');
+        expect(toolSearch.titleCode, AgentHistoryEventTitleCode.toolSearch);
         expect(toolSearch.content, 'rip_grep_packages\nlimit=8');
 
         final warning = _historyEntries(history)[2] as AgentHistoryEventEntry;
-        expect(warning.title, 'Config Warning');
+        expect(warning.title, 'config_warning');
         expect(warning.description, 'History may be incomplete');
 
         final webSearch = _historyEntries(history)[3] as AgentHistoryEventEntry;
-        expect(webSearch.title, 'Web search');
+        expect(webSearch.titleCode, AgentHistoryEventTitleCode.webSearch);
         expect(webSearch.description, 'OpenAI docs');
         expect(webSearch.content, contains('Codex app-server'));
 
@@ -3522,7 +3561,10 @@ void main() {
         );
 
         final entry = _historyEntries(history).single as AgentHistoryEventEntry;
-        expect(entry.title, 'Requested user input');
+        expect(
+          entry.titleCode,
+          AgentHistoryEventTitleCode.requestedUserInput,
+        );
         expect(entry.qaPairs, isNotNull);
         expect(entry.qaPairs, hasLength(2));
 
@@ -3579,7 +3621,7 @@ void main() {
         );
 
         final entry = _historyEntries(history).single as AgentHistoryToolEntry;
-        expect(entry.toolCall.title, 'Apply patch');
+        expect(entry.toolCall.title, isEmpty);
         expect(entry.toolCall.content, 'lib/main.dart');
         expect(entry.toolCall.locations, <String>['lib/main.dart']);
 

@@ -11,7 +11,7 @@ void main() {
   group(AppLocalizations, () {
     group('ARB resources', () {
       test(
-        'contain only en and zh with exactly 1035 matching message keys',
+        'contain only en and zh with exactly 1041 matching message keys',
         () {
           final arbDirectory = Directory('lib/l10n/arb');
           final names = arbDirectory
@@ -29,7 +29,7 @@ void main() {
 
           expect(en['@@locale'], 'en');
           expect(zh['@@locale'], 'zh');
-          expect(enKeys, hasLength(1035));
+          expect(enKeys, hasLength(1041));
           expect(zhKeys, enKeys);
 
           for (final key in enKeys) {

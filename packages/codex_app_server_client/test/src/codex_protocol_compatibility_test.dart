@@ -96,8 +96,10 @@ void main() {
           .map(CodexProtocolTestHarness.mapSystemItem)
           .toList();
       expect(events, everyElement(isNotNull));
-      expect(events[1]!.description, contains('1 minutes'));
-      expect(events[2]!.description, contains('1 seconds'));
+      expect(events[1]!.titleCode, AgentHistoryEventTitleCode.waiting);
+      expect(events[1]!.duration, const Duration(minutes: 1));
+      expect(events[2]!.titleCode, AgentHistoryEventTitleCode.waiting);
+      expect(events[2]!.duration, const Duration(minutes: 1, seconds: 1));
 
       expect(
         CodexProtocolTestHarness.userInputText(<Object?>[
@@ -132,14 +134,27 @@ void main() {
         ]),
         hasLength(8),
       );
-      expect(CodexProtocolTestHarness.usageWindowLabel(10080), '1 week');
-      expect(CodexProtocolTestHarness.usageWindowLabel(2880), '2 days');
-      expect(CodexProtocolTestHarness.usageWindowLabel(60), '1 hour');
       expect(
-        CodexProtocolTestHarness.usageWindowLabel(90),
-        '1 hours 30 minutes',
+        CodexProtocolTestHarness.usageWindowDuration(10080),
+        const Duration(days: 7),
       );
-      expect(CodexProtocolTestHarness.usageWindowLabel(1), '1 minute');
+      expect(
+        CodexProtocolTestHarness.usageWindowDuration(2880),
+        const Duration(days: 2),
+      );
+      expect(
+        CodexProtocolTestHarness.usageWindowDuration(60),
+        const Duration(hours: 1),
+      );
+      expect(
+        CodexProtocolTestHarness.usageWindowDuration(90),
+        const Duration(hours: 1, minutes: 30),
+      );
+      expect(
+        CodexProtocolTestHarness.usageWindowDuration(1),
+        const Duration(minutes: 1),
+      );
+      expect(CodexProtocolTestHarness.usageWindowDuration(0), isNull);
     });
 
     test('maps approval request and response variants', () {
@@ -705,10 +720,10 @@ void main() {
     });
 
     test('covers runtime fallback and failure classification contracts', () {
-      final labels = CodexProtocolTestHarness.fallbackLabels('Codex');
-      expect(labels.cancelled, 'User cancelled');
-      expect(labels.startFailure, contains('Codex'));
-      expect(labels.warning, contains('Codex'));
+      final labels = CodexProtocolTestHarness.fallbackFailureCodes();
+      expect(labels.cancelled, AgentProviderFailureCode.cancelled);
+      expect(labels.startFailure, AgentProviderFailureCode.unavailable);
+      expect(labels.warning, AgentProviderFailureCode.protocol);
 
       final runtime = CodexProtocolTestHarness.runtimeInfo(
         const <String, Object?>{},

@@ -14,7 +14,6 @@ import 'package:zeta_logging/zeta_logging.dart';
 part 'codex_app_server_client.dart';
 part 'codex_collaboration_mode_catalog_failure.dart';
 part 'codex_app_server_runtime_info.dart';
-part '../../codex_text_catalog.dart';
 part '../../mappers/codex_app_server_helpers.dart';
 part '../../mappers/codex_approval_mapper.dart';
 part '../../mappers/codex_collaboration_mode_mapper.dart';
@@ -71,7 +70,6 @@ class CodexAppServerAgentProvider
       providerId: config.id,
     );
     final threadHistoryReader = _CodexThreadHistoryReader(
-      textCatalog: _textCatalog,
       log: _log,
     );
     final modelListMapper = _CodexModelListMapper();
@@ -91,15 +89,13 @@ class CodexAppServerAgentProvider
       turnStartParamsEncoder: turnStartParamsEncoder,
       threadHistoryReader: threadHistoryReader,
       configPermissionFallback: configPermissionFallback,
-      textCatalog: _textCatalog,
       log: _log,
     );
     _notificationMapper = _CodexNotificationMapper(
       providerId: config.id,
-      textCatalog: _textCatalog,
     );
     _approvalMapper = _CodexApprovalMapper();
-    _questionMapper = _CodexQuestionMapper(_textCatalog);
+    _questionMapper = const _CodexQuestionMapper();
     _permissionPolicyAdapter = CodexPermissionPolicyAdapter(
       ensureInitialized: initialize,
       logger: _log,
@@ -192,8 +188,6 @@ class CodexAppServerAgentProvider
 
   @override
   final AgentProviderConfig config;
-
-  static const _textCatalog = _AgentUiTextCatalog();
 
   /// initialize 时请求服务端屏蔽的通知(协议要求精确 method 名)。
   ///
@@ -334,7 +328,10 @@ class CodexAppServerAgentProvider
         'Could not start Agent provider process ${config.id} '
         '(errorCode=${error.errorCode})',
       );
-      _emitUnavailable(error.message, details: error.toString());
+      _emitUnavailable(
+        failureCode: AgentProviderFailureCode.unavailable,
+        details: error.toString(),
+      );
       rethrow;
     } catch (error) {
       _peer.markFailed();
@@ -351,7 +348,7 @@ class CodexAppServerAgentProvider
       );
       _events.add(
         AgentErrorEvent(
-          message: _textCatalog.couldNotStart(config.displayName),
+          failureCode: AgentProviderFailureCode.unavailable,
           details: error.toString(),
         ),
       );
@@ -960,7 +957,7 @@ class CodexAppServerAgentProvider
       );
       _events.add(
         AgentErrorEvent(
-          message: _textCatalog.protocolWarning(config.displayName),
+          failureCode: AgentProviderFailureCode.protocol,
           details: error.toString(),
         ),
       );
@@ -1141,7 +1138,7 @@ class CodexAppServerAgentProvider
     _runningTurnIdsBySessionId.clear();
     _resolvePendingInteractionsOnConnectionClosed();
     _emitUnavailable(
-      _textCatalog.appServerConnectionClosed(config.displayName),
+      failureCode: AgentProviderFailureCode.processExited,
     );
   }
 
@@ -1190,7 +1187,15 @@ class CodexAppServerAgentProvider
   }
 
   /// 发出 unavailable 状态事件和错误事件。
-  void _emitUnavailable(String message, {String? details}) {
+  void _emitUnavailable({
+    String? message,
+    AgentProviderFailureCode? failureCode,
+    String? details,
+  }) {
+    assert(
+      message != null || failureCode != null,
+      'A provider message or app-owned failure code is required.',
+    );
     final status = AgentProviderStatus(
       state: AgentProviderConnectionState.unavailable,
       code: AgentProviderStatusCode.unavailable,
@@ -1198,7 +1203,13 @@ class CodexAppServerAgentProvider
     );
     _events
       ..add(AgentStatusEvent(status))
-      ..add(AgentErrorEvent(message: message, details: details));
+      ..add(
+        AgentErrorEvent(
+          message: message,
+          failureCode: failureCode,
+          details: details,
+        ),
+      );
   }
 
   void _markRunningTurn(String sessionId, String turnId) {

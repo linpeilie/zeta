@@ -43,39 +43,29 @@ bool _isErrorNotification(String method) {
   };
 }
 
-/// 从 Codex item 中挑选最适合 UI 展示的标题。
-String _toolTitle(Map<String, Object?> item, _AgentUiTextCatalog catalog) {
+/// 从 Codex item 中挑选有信息量的 provider 标题；否则留空由 [AgentToolKind] 展示。
+String _toolTitle(Map<String, Object?> item) {
   final normalizedType = _normalizedAgentItemType(_string(item['type']));
   return switch (normalizedType) {
-    'reasoning' => catalog.thinkingToolTitle,
-    'websearch' => catalog.webSearchTitle,
-    'imageview' => catalog.viewImageTitle,
-    'imagegeneration' => catalog.generateImageTitle,
-    'collabagenttoolcall' => _toolPathTitle(
-      prefix: catalog.collaboratePrefix,
-      first: _string(item['tool']),
-      fallbackTitle: catalog.toolCallFallbackTitle,
-    ),
+    'reasoning' || 'imagegeneration' || 'filechange' || 'websearch' => '',
+    'imageview' => _informativeToolTitle(_string(item['path'])),
+    'collabagenttoolcall' => _toolPathTitle(first: _string(item['tool'])),
     'mcptoolcall' => _toolPathTitle(
-      prefix: 'MCP',
       first: _string(item['server']),
       second: _string(item['tool']),
-      fallbackTitle: catalog.toolCallFallbackTitle,
     ),
     'dynamictoolcall' => _toolPathTitle(
       first: _string(item['namespace']),
       second: _string(item['tool']),
-      fallbackTitle: catalog.toolCallFallbackTitle,
     ),
-    'commandexecution' => _string(item['command']) ?? 'Command',
-    'filechange' => 'File change',
-    _ =>
+    'commandexecution' => _informativeToolTitle(_string(item['command'])),
+    _ => _informativeToolTitle(
       _string(item['title']) ??
           _string(item['name']) ??
           _string(item['command']) ??
           _string(item['query']) ??
-          _string(item['type']) ??
-          catalog.toolCallFallbackTitle,
+          _string(item['type']),
+    ),
   };
 }
 
@@ -86,20 +76,6 @@ String? _reasoningItemContent(Map<String, Object?> item) {
   return _joinedContentItems(item['summary']) ??
       _joinedContentItems(item['content']) ??
       _string(item['text']);
-}
-
-/// 根据进度通知方法名生成标题。
-String _progressTitle(String method) {
-  if (method.contains('mcpToolCall')) {
-    return 'MCP tool';
-  }
-  if (method.contains('fileChange')) {
-    return 'File change';
-  }
-  if (method.contains('command')) {
-    return 'Command output';
-  }
-  return 'Tool progress';
 }
 
 /// 将 Codex 工具类型映射到统一工具分类。
@@ -190,54 +166,50 @@ List<String> _toolLocationsFromThreadItem(Map<String, Object?> item) {
 AgentHistoryEventEntry? _systemHistoryEventFromThreadItem(
   Map<String, Object?> item, {
   required String id,
-  required _AgentUiTextCatalog catalog,
 }) {
   final normalizedType = _normalizedAgentItemType(_string(item['type']));
   return switch (normalizedType) {
     'enteredreviewmode' => AgentHistoryEventEntry(
       id: id,
       kind: AgentHistoryEventKind.system,
-      title: catalog.reviewModeEnteredTitle,
+      titleCode: AgentHistoryEventTitleCode.reviewModeEntered,
       description: _string(item['review']),
       raw: item,
     ),
     'exitedreviewmode' => AgentHistoryEventEntry(
       id: id,
       kind: AgentHistoryEventKind.system,
-      title: catalog.reviewModeExitedTitle,
+      titleCode: AgentHistoryEventTitleCode.reviewModeExited,
       description: _string(item['review']),
       raw: item,
     ),
     'contextcompaction' => AgentHistoryEventEntry(
       id: id,
       kind: AgentHistoryEventKind.system,
-      title: catalog.contextCompactedTitle,
-      description: catalog.contextCompactedDescription,
+      titleCode: AgentHistoryEventTitleCode.contextCompacted,
+      descriptionCode: AgentHistoryEventDescriptionCode.contextCompacted,
       raw: item,
     ),
     'hookprompt' => AgentHistoryEventEntry(
       id: id,
       kind: AgentHistoryEventKind.system,
-      title: catalog.hookPromptTitle,
+      titleCode: AgentHistoryEventTitleCode.hookPrompt,
       content: _hookPromptFragmentsText(item['fragments']),
       raw: item,
     ),
     'sleep' => AgentHistoryEventEntry(
       id: id,
       kind: AgentHistoryEventKind.system,
-      title: catalog.waitingTitle,
-      description: _sleepDurationLabel(item['durationMs'], catalog),
+      titleCode: AgentHistoryEventTitleCode.waiting,
+      duration: _durationFromMilliseconds(item['durationMs']),
       raw: item,
     ),
     'subagentactivity' => AgentHistoryEventEntry(
       id: id,
       kind: AgentHistoryEventKind.system,
-      title: catalog.subAgentActivityTitle,
-      description: _subAgentActivityLabel(
-        kind: _string(item['kind']),
-        agentPath: _string(item['agentPath']),
-        catalog: catalog,
-      ),
+      titleCode: AgentHistoryEventTitleCode.subAgentActivity,
+      descriptionCode: _subAgentActivityDescriptionCode(_string(item['kind'])),
+      description: _string(item['agentPath']),
       content: _string(item['agentThreadId']),
       raw: item,
     ),
@@ -260,35 +232,15 @@ String? _hookPromptFragmentsText(Object? value) {
   return parts.isEmpty ? null : parts.join('\n');
 }
 
-String? _sleepDurationLabel(Object? durationMs, _AgentUiTextCatalog catalog) {
-  final duration = _durationFromMilliseconds(durationMs);
-  if (duration == null) {
-    return null;
-  }
-  if (duration.inMinutes >= 1) {
-    final seconds = duration.inSeconds % 60;
-    return seconds == 0
-        ? catalog.sleepMinutes('${duration.inMinutes}')
-        : catalog.sleepMinutesSeconds('${duration.inMinutes}', '$seconds');
-  }
-  return catalog.sleepSeconds('${duration.inSeconds}');
-}
-
-String _subAgentActivityLabel({
-  required _AgentUiTextCatalog catalog,
+AgentHistoryEventDescriptionCode _subAgentActivityDescriptionCode(
   String? kind,
-  String? agentPath,
-}) {
-  final kindLabel = switch (kind) {
-    'started' => catalog.subAgentStarted,
-    'interacted' => catalog.subAgentInteracted,
-    'interrupted' => catalog.subAgentInterrupted,
-    _ => kind ?? catalog.subAgentUpdated,
+) {
+  return switch (kind) {
+    'started' => AgentHistoryEventDescriptionCode.subAgentStarted,
+    'interacted' => AgentHistoryEventDescriptionCode.subAgentInteracted,
+    'interrupted' => AgentHistoryEventDescriptionCode.subAgentInterrupted,
+    _ => AgentHistoryEventDescriptionCode.subAgentUpdated,
   };
-  if (agentPath == null || agentPath.isEmpty) {
-    return kindLabel;
-  }
-  return '$kindLabel · $agentPath';
 }
 
 String? _webSearchActionPreview(Object? value) {
@@ -316,7 +268,6 @@ AgentToolCall? _toolCallFromThreadItem(
   Map<String, Object?> item, {
   required String id,
   required AgentToolStatus status,
-  required _AgentUiTextCatalog catalog,
   String? sessionId,
   String? turnId,
   Map<String, Object?> raw = const <String, Object?>{},
@@ -334,7 +285,7 @@ AgentToolCall? _toolCallFromThreadItem(
 
   return AgentToolCall(
     id: id,
-    title: _toolTitle(item, catalog),
+    title: _toolTitle(item),
     kind: _toolKind(_string(item['type'])),
     status: status,
     content: _toolContentFromThreadItem(item),
@@ -587,15 +538,28 @@ List<String> _fileChangeLocations(Object? value) {
       .toList();
 }
 
-/// 拼接工具调用的路径式标题，如 "MCP: serverName: toolName" 或 "namespace: toolName"。
+/// 拼接协议提供的路径式标题，如 "serverName: toolName"。
 String _toolPathTitle({
-  String? prefix,
   String? first,
   String? second,
-  String fallbackTitle = 'Tool call',
 }) {
-  final parts = <String>[?prefix, ?first, ?second];
-  return parts.isEmpty ? fallbackTitle : parts.join(': ');
+  final parts = <String>[
+    if (_informativeToolTitle(first) case final firstTitle
+        when firstTitle.isNotEmpty)
+      firstTitle,
+    if (_informativeToolTitle(second) case final secondTitle
+        when secondTitle.isNotEmpty)
+      secondTitle,
+  ];
+  return parts.isEmpty ? '' : parts.join(': ');
+}
+
+String _informativeToolTitle(String? value) {
+  final trimmed = value?.trim() ?? '';
+  if (trimmed.isEmpty || isNonInformativeAgentToolCallTitle(trimmed)) {
+    return '';
+  }
+  return trimmed;
 }
 
 /// 去除字符串首尾空白，空字符串或 null 返回 null。
@@ -699,26 +663,21 @@ AgentToolKind _jsonlToolKind(String? name) {
   };
 }
 
-/// 根据 jsonl 历史中的工具名称和参数生成 UI 友好的工具卡片标题。
+/// 根据 jsonl 历史中的工具名称和参数生成有信息量的 provider 标题。
 String _jsonlToolTitle({
   required String? name,
-  required _AgentUiTextCatalog catalog,
   Map<String, Object?> arguments = const <String, Object?>{},
-  String? stringInput,
 }) {
   if (name == 'exec_command') {
-    return _trimmedText(_string(arguments['cmd'])) ?? 'Run command';
+    return _informativeToolTitle(_string(arguments['cmd']));
   }
   if (name == 'shell_command') {
-    return _trimmedText(_string(arguments['command'])) ?? 'Run shell command';
+    return _informativeToolTitle(_string(arguments['command']));
   }
-  if (name == 'apply_patch') {
-    return 'Apply patch';
+  if (name == 'apply_patch' || name == null || name.isEmpty) {
+    return '';
   }
-  if (name == null || name.isEmpty) {
-    return catalog.toolCallFallbackTitle;
-  }
-  return _humanizeIdentifier(name);
+  return _informativeToolTitle(name);
 }
 
 /// 根据 jsonl 历史中的工具名称和参数生成工具卡片的内容预览。
@@ -732,7 +691,7 @@ String? _jsonlToolInvocationContent({
   }
   if (name == 'apply_patch') {
     final paths = _patchPathsFromText(stringInput);
-    return paths.isEmpty ? 'Patch prepared' : paths.join('\n');
+    return paths.isEmpty ? null : paths.join('\n');
   }
   return _trimmedText(_objectPreview(arguments)) ?? _trimmedText(stringInput);
 }
@@ -1240,23 +1199,6 @@ String? _specialEventContent(Map<String, Object?> payload) {
   }
 
   return null;
-}
-
-/// 将标识符转换为 UI 友好的标题文字。
-String _humanizeIdentifier(String value) {
-  final cleaned = value.replaceAll(RegExp(r'[_\-]+'), ' ').trim();
-  if (cleaned.isEmpty) {
-    return value;
-  }
-  return cleaned
-      .split(RegExp(r'\s+'))
-      .map((part) {
-        if (part.isEmpty) {
-          return part;
-        }
-        return '${part[0].toUpperCase()}${part.substring(1)}';
-      })
-      .join(' ');
 }
 
 /// 将 provider 原始消息 phase 映射到领域枚举。

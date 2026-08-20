@@ -3,12 +3,10 @@ part of '../datasources/app_server/codex_app_server_agent_provider.dart';
 /// 负责读取远端 thread/read 与本地 session jsonl 两类历史来源。
 class _CodexThreadHistoryReader {
   _CodexThreadHistoryReader({
-    required this.textCatalog,
     required this._log,
     Stream<List<int>> Function(File file)? openRead,
   }) : _openRead = openRead ?? _defaultOpenRead;
 
-  final _AgentUiTextCatalog textCatalog;
   final AppLogger _log;
   final Stream<List<int>> Function(File file) _openRead;
   static const _conversationModeCodec = _CodexConversationModeCodec();
@@ -33,7 +31,6 @@ class _CodexThreadHistoryReader {
     final parser = _JsonlHistoryParser(
       fallbackThreadId: threadId,
       sessionPath: path,
-      textCatalog: textCatalog,
     );
 
     try {
@@ -337,7 +334,7 @@ class _CodexThreadHistoryReader {
         raw: item,
       ),
       final type when _isSystemThreadItemType(type) =>
-        _systemHistoryEventFromThreadItem(item, id: id, catalog: textCatalog),
+        _systemHistoryEventFromThreadItem(item, id: id),
       _ => _historyToolEntryFromThreadItem(
         item,
         id: id,
@@ -369,7 +366,6 @@ class _CodexThreadHistoryReader {
     final toolCall = _toolCallFromThreadItem(
       item,
       id: id,
-      catalog: textCatalog,
       status: _historyToolStatus(_string(item['status'])),
       sessionId: sessionId,
       turnId: turnId,

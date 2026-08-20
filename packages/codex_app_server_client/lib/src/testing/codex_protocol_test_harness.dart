@@ -23,7 +23,6 @@ final class CodexProtocolTestHarness {
   }) {
     final mapper = _CodexNotificationMapper(
       providerId: 'codex',
-      textCatalog: const _AgentUiTextCatalog(),
     );
     try {
       final mapping = mapper.map(
@@ -50,7 +49,6 @@ final class CodexProtocolTestHarness {
   ) {
     final mapper = _CodexNotificationMapper(
       providerId: 'codex',
-      textCatalog: const _AgentUiTextCatalog(),
     );
     try {
       return notifications
@@ -112,7 +110,6 @@ final class CodexProtocolTestHarness {
     final parser = _JsonlHistoryParser(
       fallbackThreadId: fallbackThreadId,
       sessionPath: 'memory.jsonl',
-      textCatalog: const _AgentUiTextCatalog(),
     );
     lines.forEach(parser.consumeLine);
     return parser.build();
@@ -123,7 +120,6 @@ final class CodexProtocolTestHarness {
     Object? value, {
     String fallbackThreadId = 'thread',
   }) => _CodexThreadHistoryReader(
-    textCatalog: const _AgentUiTextCatalog(),
     log: loggerFor('codex.protocol.test'),
   ).threadHistoryFromReadResult(value, fallbackThreadId);
 
@@ -133,7 +129,6 @@ final class CodexProtocolTestHarness {
     String? path, {
     bool failRead = false,
   }) => _CodexThreadHistoryReader(
-    textCatalog: const _AgentUiTextCatalog(),
     log: loggerFor('codex.protocol.test'),
     openRead: failRead
         ? (_) => throw const FileSystemException('forced read failure')
@@ -145,7 +140,6 @@ final class CodexProtocolTestHarness {
     required AgentThreadHistorySnapshot local,
     required AgentThreadHistorySnapshot remote,
   }) => _CodexThreadHistoryReader(
-    textCatalog: const _AgentUiTextCatalog(),
     log: loggerFor('codex.protocol.test'),
   ).mergeRemoteTurnFailures(local: local, remote: remote);
 
@@ -155,7 +149,6 @@ final class CodexProtocolTestHarness {
         item,
         id: _string(item['id']) ?? 'item',
         status: AgentToolStatus.completed,
-        catalog: const _AgentUiTextCatalog(),
       );
 
   /// Maps a system ThreadItem into a history event.
@@ -163,7 +156,6 @@ final class CodexProtocolTestHarness {
       _systemHistoryEventFromThreadItem(
         item,
         id: _string(item['id']) ?? 'item',
-        catalog: const _AgentUiTextCatalog(),
       );
 
   /// Extracts user-visible text from Codex input items.
@@ -177,20 +169,25 @@ final class CodexProtocolTestHarness {
   static List<String> commandActionSummaries(Object? value) =>
       _commandActionSummaries(value);
 
-  /// Formats a usage window label.
-  static String? usageWindowLabel(int? minutes) =>
-      _formatAgentUsageWindowLabelFromMinutes(minutes);
+  /// Returns the duration evidence used for usage-window presentation.
+  static Duration? usageWindowDuration(int? minutes) {
+    if (minutes == null || minutes <= 0) {
+      return null;
+    }
+    return Duration(minutes: minutes);
+  }
 
-  /// Returns internal fallback labels that remain part of protocol behavior.
-  static ({String cancelled, String startFailure, String warning})
-  fallbackLabels(
-    String providerName,
-  ) {
-    const catalog = _AgentUiTextCatalog();
+  /// Returns internal fallback failure codes that remain part of protocol behavior.
+  static ({
+    AgentProviderFailureCode cancelled,
+    AgentProviderFailureCode startFailure,
+    AgentProviderFailureCode warning,
+  })
+  fallbackFailureCodes() {
     return (
-      cancelled: catalog.userCancelled,
-      startFailure: catalog.couldNotStart(providerName),
-      warning: catalog.protocolWarning(providerName),
+      cancelled: AgentProviderFailureCode.cancelled,
+      startFailure: AgentProviderFailureCode.unavailable,
+      warning: AgentProviderFailureCode.protocol,
     );
   }
 
@@ -221,7 +218,6 @@ final class CodexProtocolTestHarness {
 
   /// Runs representative samples for tolerant pure protocol helpers.
   static List<Object?> helperCompatibilitySamples() {
-    const catalog = _AgentUiTextCatalog();
     final firstQa = AgentUserInputQaPair(
       questionId: 'q',
       question: 'Question',
@@ -235,7 +231,7 @@ final class CodexProtocolTestHarness {
       answers: const <String>['b'],
     );
     return <Object?>[
-      _toolTitle(const <String, Object?>{}, catalog),
+      _toolTitle(const <String, Object?>{}),
       _reasoningItemContent(const <String, Object?>{
         'content': <Object?>[
           <String, Object?>{'text': 'reason'},
@@ -263,7 +259,6 @@ final class CodexProtocolTestHarness {
         },
         id: 'raw-output',
         status: AgentToolStatus.completed,
-        catalog: catalog,
       ),
       _pathsFromImageMarkup('[Local image: /tmp/bracket.png]').toList(),
       _joinedStrings(<Object?>['a', null, 'b']),
@@ -283,10 +278,9 @@ final class CodexProtocolTestHarness {
       }),
       _jsonlToolTitle(
         name: 'shell_command',
-        catalog: catalog,
         arguments: const <String, Object?>{'command': 'pwd'},
       ),
-      _jsonlToolTitle(name: null, catalog: catalog),
+      _jsonlToolTitle(name: null),
       _jsonlToolLocations(
         name: 'read_mcp_resource',
         arguments: const <String, Object?>{

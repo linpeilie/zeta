@@ -117,6 +117,10 @@ export 'src/cli/resolved_cli_process_command.dart';
 `AgentConversationBloc` 持有的 live interaction state；耗时计算与格式化留在 app
 Presentation/l10n。
 
+`AgentHistoryEventEntry` 的标题遵循 28D 二选一口径：provider 原生 `title` 或
+app-owned `titleCode` 必须至少提供一个；sleep 等时长证据使用 `duration`，
+子代理状态使用 `descriptionCode`，不在 Data 层合成 Zeta 文案。
+
 ### 1.2 端口计数：21 = 2 必需 + 19 可选
 
 `AgentProviderBundle` 的字段就是端口清单。**操作是否存在，以端口是否非空为唯一真源**。

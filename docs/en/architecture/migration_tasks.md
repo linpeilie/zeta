@@ -14,7 +14,7 @@ This checklist turns the [migration topology](./migration_topology.md) into exec
 | P2 Provider and Management Data | 11–17 | ☐ |
 | P3 Remaining Data | 18–21 | ☐ |
 | P4 Repository | 22–26 | ☐ |
-| P5 app_ui and l10n | 27–28 | ☐ |
+| P5 app_ui and l10n | 27–28 | ☑ |
 | P6 Smaller Feature Blocs/Presentation | 29–31 | ☐ |
 | P7 Agent conversation | 32–33 | ☐ |
 | P8 Shell, router, and close-out | 34–36 | ☐ |
@@ -681,19 +681,21 @@ and all nine macOS/Windows/Linux desktop builds.
 
 ### Step 28 — Typed l10n mapping
 
-**Status: in progress (28A–28C and 28D1–28D2 complete).** The app-owned shadcn adapter, exhaustive mapping for all
-63 current cross-layer status/failure/warning/operation codes, and bootstrap-injected frozen-locale
-notification copy are green. Claude and Grok now emit typed presentation codes with no local catalogs; Codex
-catalog removal remains.
+**Status: complete (2026-08-20).** Increments 28A–28C and 28D1–28D3 are green. The Codex local catalog is
+removed. `AgentHistoryEventEntry` now requires a provider-authored `title` or an app-owned `titleCode`;
+sleep windows carry `duration` evidence and sub-agent states carry `descriptionCode`. Leftover Claude/Grok
+`'Thinking'` titles are now empty titles plus `AgentToolKind.think`. `FailureMessages` exhaustively maps
+the existing cross-layer status/failure/warning/operation codes and the 28D presentation codes. English and
+Chinese ARB files each have 1,041 matching keys. Packages import neither `AppLocalizations` nor a TextCatalog.
 
-- [ ] Remove the four TextCatalog/Fallback families and `ZetaTextCatalogs`.
-- [ ] Replace lower-layer messages with typed failures/codes; map them exhaustively in `lib/l10n/failure_messages.dart`.
+- [x] Remove the four TextCatalog/Fallback families and `ZetaTextCatalogs`.
+- [x] Replace lower-layer messages with typed failures/codes; map them exhaustively in `lib/l10n/failure_messages.dart`.
 - [x] Keep `ZetaShadcnLocalizations` and shadcn ARB keys in the app.
 - [x] Create a no-BuildContext `DesktopNotificationCopyResolver`, injected by bootstrap for a frozen Locale.
 - [x] Verify identical English/Chinese keys, placeholder metadata, and escaping.
-- [ ] Packages importing `AppLocalizations` = 0.
+- [x] Packages importing `AppLocalizations` = 0.
 
-**P5 exit:** app_ui is independently green, English/Chinese UI smoke tests pass, and no TextCatalog remains.
+**P5 exit: passed.** app_ui is independently green, English/Chinese mapping/smoke tests pass, and no TextCatalog remains.
 
 ---
 

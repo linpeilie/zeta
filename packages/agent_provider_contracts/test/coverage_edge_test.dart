@@ -224,5 +224,26 @@ void main() {
     );
     expect(event.qaPairs, <AgentUserInputQaPair>[qa]);
     expect(() => event.qaPairs!.clear(), throwsUnsupportedError);
+    final coded = AgentHistoryEventEntry(
+      id: 'coded',
+      kind: AgentHistoryEventKind.system,
+      titleCode: AgentHistoryEventTitleCode.waiting,
+      descriptionCode: AgentHistoryEventDescriptionCode.subAgentStarted,
+      duration: const Duration(seconds: 2),
+    );
+    expect(coded.title, isNull);
+    expect(coded.titleCode, AgentHistoryEventTitleCode.waiting);
+    expect(
+      coded.descriptionCode,
+      AgentHistoryEventDescriptionCode.subAgentStarted,
+    );
+    expect(coded.duration, const Duration(seconds: 2));
+    expect(
+      () => AgentHistoryEventEntry(
+        id: 'invalid',
+        kind: AgentHistoryEventKind.system,
+      ),
+      throwsA(isA<AssertionError>()),
+    );
   });
 }

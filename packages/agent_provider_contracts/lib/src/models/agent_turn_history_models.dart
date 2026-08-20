@@ -517,6 +517,30 @@ final class AgentHistoryToolEntry extends AgentHistoryEntry {
 /// 历史事件分类。
 enum AgentHistoryEventKind { permission, warning, search, system }
 
+/// App-owned history event title variants.
+enum AgentHistoryEventTitleCode {
+  reviewModeEntered,
+  reviewModeExited,
+  contextCompacted,
+  hookPrompt,
+  waiting,
+  subAgentActivity,
+  toolSearch,
+  webSearch,
+  permissionRequest,
+  requestedUserInput,
+  requestedPermissions,
+}
+
+/// App-owned history event description variants.
+enum AgentHistoryEventDescriptionCode {
+  contextCompacted,
+  subAgentStarted,
+  subAgentInteracted,
+  subAgentInterrupted,
+  subAgentUpdated,
+}
+
 /// 用户输入问题的结构化可选项。
 final class AgentUserInputOption {
   const AgentUserInputOption({
@@ -598,24 +622,40 @@ final class AgentHistoryEventEntry extends AgentHistoryEntry {
   AgentHistoryEventEntry({
     required super.id,
     required this.kind,
-    required this.title,
+    this.title,
+    this.titleCode,
     this.description,
+    this.descriptionCode,
     this.content,
+    this.duration,
     List<AgentUserInputQaPair>? qaPairs,
     super.raw,
-  }) : qaPairs = qaPairs == null ? null : immutableList(qaPairs);
+  }) : assert(
+         title != null || titleCode != null,
+         'A provider title or app-owned title code is required.',
+       ),
+       qaPairs = qaPairs == null ? null : immutableList(qaPairs);
 
   /// 事件类型。
   final AgentHistoryEventKind kind;
 
-  /// 事件标题。
-  final String title;
+  /// Provider-authored event title, when the protocol supplies one.
+  final String? title;
 
-  /// 事件描述。
+  /// App-owned title variant mapped by Presentation.
+  final AgentHistoryEventTitleCode? titleCode;
+
+  /// Provider-authored event description, when the protocol supplies one.
   final String? description;
+
+  /// App-owned description variant mapped by Presentation.
+  final AgentHistoryEventDescriptionCode? descriptionCode;
 
   /// 事件正文，例如命令、查询或 URL。
   final String? content;
+
+  /// Typed duration evidence, such as a sleep window. Presentation formats it.
+  final Duration? duration;
 
   /// 结构化用户输入问答对；仅 `request_user_input` 事件会填充，
   /// UI 优先按此字段渲染问答样式。

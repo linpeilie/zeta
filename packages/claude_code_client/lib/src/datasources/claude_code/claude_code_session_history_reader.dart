@@ -933,7 +933,7 @@ final class _MutableHistoryTurn {
       AgentHistoryToolEntry(
         toolCall: AgentToolCall(
           id: event.itemId,
-          title: 'Thinking',
+          title: '',
           kind: AgentToolKind.think,
           status: AgentToolStatus.completed,
           content: content,

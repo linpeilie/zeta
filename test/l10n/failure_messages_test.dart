@@ -46,6 +46,42 @@ void main() {
           messages.agentPermissionWarning(code),
         for (final operation in DesktopNotificationOperation.values)
           messages.desktopNotificationFailure(operation),
+        for (final code in AgentPermissionOptionCopyCode.values)
+          messages.agentPermissionOption(code),
+        for (final code in AgentQuestionTitleCode.values)
+          messages.agentQuestionTitle(code),
+        for (final code in AgentPlanApprovalTitleCode.values)
+          messages.agentPlanApprovalTitle(code),
+        for (final code in AgentPermissionRequestDescriptionCode.values)
+          messages.agentPermissionRequestDescription(
+            code,
+            providerName: 'Codex',
+            toolName: 'Bash',
+          ),
+        for (final code in AgentUsageWindowLabelCode.values)
+          messages.agentUsageWindowLabel(
+            code,
+            windowDuration: const Duration(hours: 5),
+          ),
+        for (final code in AgentUsageLimitNameCode.values)
+          messages.agentUsageLimitName(code),
+        for (final code in AgentHistoryEventTitleCode.values)
+          messages.agentHistoryEventTitle(code),
+        for (final code in AgentHistoryEventDescriptionCode.values)
+          messages.agentHistoryEventDescription(code),
+        messages.agentSleepDuration(const Duration(minutes: 2)),
+        messages.agentSleepDuration(const Duration(minutes: 1, seconds: 5)),
+        messages.agentSleepDuration(const Duration(seconds: 12)),
+        messages.agentUsageWindowDuration(const Duration(days: 7)),
+        messages.agentUsageWindowDuration(const Duration(days: 14)),
+        messages.agentUsageWindowDuration(const Duration(days: 1)),
+        messages.agentUsageWindowDuration(const Duration(days: 2)),
+        messages.agentUsageWindowDuration(const Duration(hours: 3)),
+        messages.agentUsageWindowDuration(
+          const Duration(hours: 1, minutes: 30),
+        ),
+        messages.agentUsageWindowDuration(const Duration(minutes: 5)),
+        messages.agentUsageWindowDuration(Duration.zero),
       ];
 
       expect(resolved, everyElement(isNotEmpty));
