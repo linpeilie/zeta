@@ -1030,3 +1030,8 @@ Ubuntu 24.04 的专用 job 执行。该 job 单独钉死已批准的 Flutter 3.4
 元数据：app_ui 普通 job 仍执行两项视觉测试并先于专用 job 失败。现将 `tags: TestTag.golden` 直接挂到每个
 `testWidgets` 用例，同时保留供 Flutter 直接发现的字面量文件注解。单测级元数据可穿过优化过程，因此普通
 job 可继续使用优化器，专用 job 的选择范围仍明确且可审计。
+
+**最终证据。** 运行 32333147922 的 29 个普通 quality job 与 Ubuntu 专用 golden job 全部通过；专用 job
+固定 Flutter 3.47.0 后，现有基准在 Ubuntu 24.04 上逐像素一致，因此无需替换图片。运行 32333147860 与
+32333147698 也分别通过 OSV 扫描和三平台九项桌面构建。此前 0.95%/0.96% 差异由 Flutter 3.47.1 渲染漂移
+引起，并非 Windows 与 Linux 平台必然不同。

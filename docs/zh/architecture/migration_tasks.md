@@ -624,9 +624,9 @@ seed 重跑完整 270-test 包后通过。
 
 ### 步骤 27 — `packages/app_ui`
 
-**状态：进行中（27E 远端复验）。** 27A（token/theme）、27B（基础组件及 WindowFrame 纯 UI 部分）、
-27C（Workbench 原语）与 27D（虚拟滚动）均已完成；27E 本地门禁全绿，正在固定 Ubuntu golden 基线并
-复验专用远端门禁。
+**状态：已完成。** 27A（token/theme）、27B（基础组件及 WindowFrame 纯 UI 部分）、27C（Workbench
+原语）、27D（虚拟滚动）与 27E（无障碍/golden 总验收）均已完成并通过独立门禁。最终远端运行通过全部
+30 个 quality/golden job、OSV 扫描及 macOS/Windows/Linux 三平台九项桌面构建。
 
 - [x] 无障碍基线固定为 WCAG 2.2 AA / macOS / Windows / Linux。
 - [x] 迁设计 token、基础组件、Workbench 原语、虚拟滚动与 WindowFrame 纯 UI 部分。

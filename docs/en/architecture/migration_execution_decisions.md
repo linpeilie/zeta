@@ -1208,3 +1208,9 @@ metadata when `--exclude-tags golden` is used: the normal app_ui job still execu
 failed before the dedicated job could start. Attach `tags: TestTag.golden` directly to every `testWidgets`
 case while retaining the literal file annotation for direct Flutter discovery. Per-test metadata survives
 optimization, so the normal job can remain optimized and the dedicated job remains explicit and auditable.
+
+**Final evidence.** Run 32333147922 passed all 29 normal quality jobs and the dedicated Ubuntu golden job.
+The existing images matched pixel-for-pixel on Ubuntu 24.04 once that job used Flutter 3.47.0, so no baseline
+replacement was necessary. Runs 32333147860 and 32333147698 also passed OSV scanning and all nine desktop
+build variants. The observed 0.95%/0.96% mismatch was therefore a Flutter 3.47.1 renderer drift, not an
+intrinsic Windows-versus-Linux difference.
