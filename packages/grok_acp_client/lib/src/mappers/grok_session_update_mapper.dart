@@ -1,7 +1,6 @@
 import 'package:agent_provider_contracts/agent_provider_contracts.dart';
 import 'package:grok_acp_client/src/acp/acp_content_codec.dart';
 import 'package:grok_acp_client/src/acp/acp_session_update_decoder.dart';
-import 'package:grok_acp_client/src/grok_text_catalog.dart';
 import 'package:grok_acp_client/src/mappers/grok_error_normalizer.dart';
 import 'package:grok_acp_client/src/mappers/grok_file_change_tracker.dart';
 import 'package:grok_acp_client/src/mappers/grok_stream_identity.dart';
@@ -39,14 +38,12 @@ final class GrokSessionUpdateMapper {
     this.decoder = const AcpSessionUpdateDecoder(),
     GrokStreamIdentity? identity,
     GrokFileChangeTracker? fileChangeTracker,
-    this.textCatalog = const GrokTextCatalog(),
   }) : identity = identity ?? GrokStreamIdentity(),
        fileChangeTracker = fileChangeTracker ?? GrokFileChangeTracker();
 
   final AcpSessionUpdateDecoder decoder;
   final GrokStreamIdentity identity;
   final GrokFileChangeTracker fileChangeTracker;
-  final GrokTextCatalog textCatalog;
 
   /// 当前 turn 内最新的上下文窗口占用（来自 `_meta.totalTokens`）。
   int? _latestContextTokens;
@@ -177,6 +174,7 @@ final class GrokSessionUpdateMapper {
     required String stopReason,
     required GrokTerminalSource source,
     String? errorMessage,
+    AgentProviderFailureCode? failureCode,
     Map<String, Object?> raw = const <String, Object?>{},
   }) {
     // 正常 prompt RPC 可能先于带 usage 的 turn_completed 通知返回。
@@ -214,7 +212,10 @@ final class GrokSessionUpdateMapper {
           turnId: terminal.turnId,
           status: terminal.status,
           errorMessage: terminal.status == AgentHistoryTurnStatus.failed
-              ? errorMessage ?? stopReason
+              ? errorMessage
+              : null,
+          failureCode: terminal.status == AgentHistoryTurnStatus.failed
+              ? failureCode
               : null,
           completedAt: DateTime.now(),
           raw: raw,
@@ -854,15 +855,13 @@ final class GrokSessionUpdateMapper {
   }) {
     final kind = parseAgentToolKind(update.toolKind);
     final status = _mapToolStatus(update.status);
-    final title = buildAgentToolCallDisplayTitle(
-      toolCallId: update.toolCallId,
-      kindLabel: textCatalog.toolKindLabel,
-      title: update.title,
-      kind: kind,
-      kindRaw: update.toolKind,
-      locations: update.locations,
-      rawInput: update.rawInput,
-    );
+    final title =
+        isNonInformativeAgentToolCallTitle(
+          update.title ?? '',
+          toolCallId: update.toolCallId,
+        )
+        ? ''
+        : update.title!.trim();
     final projection = fileChangeTracker.project(
       update: update,
       toolKind: kind,

@@ -77,6 +77,8 @@ enum AgentPermissionOptionCopyCode {
   acceptEdits,
   plan,
   bypassPermissions,
+  auto,
+  alwaysApprove,
 }
 
 /// Provider 暴露的权限选项目录。

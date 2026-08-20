@@ -2,7 +2,6 @@ import 'dart:convert';
 
 import 'package:agent_provider_contracts/agent_provider_contracts.dart';
 import 'package:grok_acp_client/src/acp/acp_session_update_decoder.dart';
-import 'package:grok_acp_client/src/grok_text_catalog.dart';
 import 'package:grok_acp_client/src/history/grok_user_content_parser.dart';
 import 'package:grok_acp_client/src/mappers/grok_error_normalizer.dart';
 import 'package:grok_acp_client/src/mappers/grok_session_update_mapper.dart';
@@ -13,11 +12,7 @@ import 'package:grok_acp_client/src/mappers/grok_stream_identity.dart';
 /// 每次 [parse] 都创建独立的 Grok mapper/reducer。History 与 live 只复用相同
 /// boundary 算法，不共享 current segment、seen event/tool 或 terminal 状态。
 class GrokUpdatesHistoryParser {
-  const GrokUpdatesHistoryParser({
-    this.textCatalog = const GrokTextCatalog(),
-  });
-
-  final GrokTextCatalog textCatalog;
+  const GrokUpdatesHistoryParser();
 
   /// 解析完整 JSONL 文本，不修改或重写来源文件。
   AgentThreadHistorySnapshot parse({
@@ -31,7 +26,7 @@ class GrokUpdatesHistoryParser {
 
     // History reducer 必须是本次 parse 私有实例；epoch 只用于状态隔离，
     // canonical 对比不要求它与 live 相同。
-    final mapper = GrokSessionUpdateMapper(textCatalog: textCatalog);
+    final mapper = GrokSessionUpdateMapper();
     const runtimeScope = AgentRuntimeScope(
       runtimeId: 'grok-history-parser',
       connectionEpoch: 0,

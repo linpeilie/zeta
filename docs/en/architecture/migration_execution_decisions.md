@@ -1273,3 +1273,14 @@ than English. This is a shared immutable-contract adjustment, not a new capabili
 dependency. Delete `claude_text_catalog.dart` and all constructor plumbing instead of renaming it. The contract
 package passes analyze, 85 randomized tests, and 100% coverage; Claude passes analyze, 269 randomized tests,
 and 100% coverage. Root, Grok, and Codex analysis also remain clean against the compatible model defaults.
+
+**28D2 Grok neutral-data adjustment.** Grok's catalog and usage-window helper synthesized English permission
+labels, quota labels, tool titles, and failures inside the provider package. Delete both files instead of
+moving the strings. Permission modes now carry stable copy codes; quota snapshots carry a typed duration or
+daily/weekly/plan/on-demand code; and tool calls retain an informative provider title only, otherwise exposing
+their existing `AgentToolKind` and evidence for app presentation. Locally synthesized prompt/startup failures
+now use `AgentProviderFailureCode`, while a non-empty JSON-RPC server message remains provider-authored
+diagnostic data. Extend only the compatible immutable value enums with Grok's `auto`, `alwaysApprove`, and
+one-day cases; no capability method, adapter, or Repository port changes. Contracts pass analyze, 85 randomized
+tests, and 100% coverage; Grok passes analyze, 242 randomized tests, and 100% coverage, with zero Grok catalog
+or constructor-plumbing remnants.

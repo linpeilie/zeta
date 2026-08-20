@@ -1081,3 +1081,12 @@ typed code、provider/tool 模板参数与 duration 证据，不再提供英文�
 没有新增 capability 方法，也没有让 package 依赖本地化。直接删除 `claude_text_catalog.dart` 及全部构造透传，
 不改名保留。contracts 包 analyze、85 项随机测试与 100% coverage 全绿；Claude analyze、269 项随机测试与
 100% coverage 全绿；root、Grok、Codex 也都能基于兼容默认值通过 analyze。
+
+**28D2 Grok 中立数据调整。** Grok catalog 与 usage-window helper 在 provider package 内合成权限标签、额度
+标签、工具标题与错误英文；现直接删除两文件，不转移字符串。权限模式改携带稳定 copy code；额度快照携带
+typed duration 或日/周/套餐/on-demand code；工具调用只保留有信息量的 provider 标题，否则暴露既有
+`AgentToolKind` 与 evidence 交给 app 展示。本地合成的 prompt/startup 错误改用
+`AgentProviderFailureCode`，非空 JSON-RPC server message 仍作为 provider 原生诊断数据保留。共享 immutable
+value enum 仅兼容扩展 Grok 所需的 `auto`、`alwaysApprove` 与 one-day case；不改 capability method、adapter
+或 Repository port。contracts 包 analyze、85 项随机测试与 100% coverage 全绿；Grok analyze、242 项随机
+测试与 100% coverage 全绿，且 Grok catalog 与构造透传残留为零。

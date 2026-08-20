@@ -235,10 +235,10 @@ void main() {
           'auto',
           'always-approve',
         ]);
-        expect(options.map((o) => o.description).toList(), <String>[
-          'Ask',
-          'Auto',
-          'Always approve',
+        expect(options.map((o) => o.copyCode).toList(), <Object?>[
+          AgentPermissionOptionCopyCode.ask,
+          AgentPermissionOptionCopyCode.auto,
+          AgentPermissionOptionCopyCode.alwaysApprove,
         ]);
       },
     );
@@ -257,7 +257,10 @@ void main() {
       expect(quota!.planType, 'SuperGrok');
       expect(quota.windows, hasLength(1));
       expect(quota.windows.single.usedPercent, 35);
-      expect(quota.windows.single.label, '1 week');
+      expect(
+        quota.windows.single.labelCode,
+        AgentUsageWindowLabelCode.duration,
+      );
       expect(
         quota.windows.single.resetsAt,
         DateTime.parse('2026-08-01T08:38:01.643958+00:00').toLocal(),
@@ -2447,7 +2450,15 @@ void main() {
     );
 
     for (final scenario
-        in <({String name, Object error, String message, bool connectionLost})>[
+        in <
+          ({
+            String name,
+            Object error,
+            String? message,
+            AgentProviderFailureCode failureCode,
+            bool connectionLost,
+          })
+        >[
           (
             name: 'rate-limit JSON-RPC error',
             error: const JsonRpcException(
@@ -2457,7 +2468,8 @@ void main() {
                 data: <String, Object?>{'retryAfterSeconds': 30},
               ),
             ),
-            message: 'Grok rate limit reached. Please try again later.',
+            message: null,
+            failureCode: AgentProviderFailureCode.rateLimited,
             connectionLost: false,
           ),
           (
@@ -2465,7 +2477,8 @@ void main() {
             error: const JsonRpcException(
               JsonRpcError(code: -32603, message: 'Provider rejected request'),
             ),
-            message: 'Grok request failed: Provider rejected request',
+            message: 'Provider rejected request',
+            failureCode: AgentProviderFailureCode.protocol,
             connectionLost: false,
           ),
           (
@@ -2474,19 +2487,22 @@ void main() {
               'JSON-RPC request timed out: session/prompt',
               const Duration(seconds: 30),
             ),
-            message: 'Grok request timed out. Please try again.',
+            message: null,
+            failureCode: AgentProviderFailureCode.timeout,
             connectionLost: false,
           ),
           (
             name: 'connection close',
             error: const TransportClosed('JSON-RPC process exited'),
-            message: 'Grok connection closed. Reconnect and try again.',
+            message: null,
+            failureCode: AgentProviderFailureCode.unavailable,
             connectionLost: true,
           ),
           (
             name: 'unknown exception',
             error: StateError('redacted failure'),
-            message: 'Grok request failed. Please try again.',
+            message: null,
+            failureCode: AgentProviderFailureCode.unknown,
             connectionLost: false,
           ),
         ]) {
@@ -2526,8 +2542,10 @@ void main() {
         expect(turn.id, started.turn.id);
         expect(completed.status, AgentHistoryTurnStatus.failed);
         expect(completed.errorMessage, scenario.message);
+        expect(completed.failureCode, scenario.failureCode);
         expect(completed.raw['operation'], 'session/prompt');
         expect(visibleError.message, scenario.message);
+        expect(visibleError.failureCode, scenario.failureCode);
         expect(visibleError.details, isNull);
         expect(visibleError.sessionId, session.id);
         expect(visibleError.turnId, started.turn.id);
@@ -2638,6 +2656,10 @@ void main() {
           AgentProviderLifecycleState.failed,
         );
         expect(processEvents.whereType<AgentErrorEvent>(), isNotEmpty);
+        expect(
+          processEvents.whereType<AgentErrorEvent>().single.failureCode,
+          AgentProviderFailureCode.unavailable,
+        );
         await processProvider.dispose();
 
         final genericPeer = _FakeJsonRpcPeer()
@@ -2652,10 +2674,9 @@ void main() {
         await _waitUntil(
           () => genericEvents.whereType<AgentErrorEvent>().isNotEmpty,
         );
-        expect(
-          genericEvents.whereType<AgentErrorEvent>().single.message,
-          contains('Could not start'),
-        );
+        final genericError = genericEvents.whereType<AgentErrorEvent>().single;
+        expect(genericError.message, isNull);
+        expect(genericError.failureCode, AgentProviderFailureCode.unknown);
         await genericProvider.dispose();
 
         final authPeer = _FakeJsonRpcPeer()

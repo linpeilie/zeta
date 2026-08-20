@@ -69,11 +69,13 @@ abstract final class GrokPermissionModeCodec {
     };
   }
 
-  static String displayLabel(GrokPermissionMode mode) {
+  /// Maps one provider mode to app-owned presentation copy.
+  static AgentPermissionOptionCopyCode copyCode(GrokPermissionMode mode) {
     return switch (mode) {
-      GrokPermissionMode.ask => 'Ask',
-      GrokPermissionMode.auto => 'Auto',
-      GrokPermissionMode.alwaysApprove => 'Always approve',
+      GrokPermissionMode.ask => AgentPermissionOptionCopyCode.ask,
+      GrokPermissionMode.auto => AgentPermissionOptionCopyCode.auto,
+      GrokPermissionMode.alwaysApprove =>
+        AgentPermissionOptionCopyCode.alwaysApprove,
     };
   }
 
@@ -126,8 +128,7 @@ abstract final class GrokPermissionModeCodec {
         .map(
           (mode) => AgentPermissionOption(
             id: wireId(mode),
-            label: displayLabel(mode),
-            description: displayLabel(mode),
+            copyCode: copyCode(mode),
           ),
         )
         .toList(growable: false);

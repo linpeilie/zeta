@@ -16,6 +16,7 @@ enum AgentUsageWindowLabelCode {
   duration,
   fiveHours,
   oneWeek,
+  oneDay,
   sonnetOneWeek,
   opusOneWeek,
   planQuota,

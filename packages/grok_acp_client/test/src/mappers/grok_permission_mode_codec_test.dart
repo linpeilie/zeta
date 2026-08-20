@@ -1,6 +1,7 @@
 // Wire-level expectation names intentionally spell out the full behavior.
 // ignore_for_file: lines_longer_than_80_chars
 
+import 'package:agent_provider_contracts/agent_provider_contracts.dart';
 import 'package:grok_acp_client/src/mappers/grok_permission_mode_codec.dart';
 import 'package:test/test.dart';
 
@@ -119,10 +120,10 @@ void main() {
         'auto',
         'always-approve',
       ]);
-      expect(catalog.map((item) => item.label).toList(), <String>[
-        'Ask',
-        'Auto',
-        'Always approve',
+      expect(catalog.map((item) => item.copyCode).toList(), <Object?>[
+        AgentPermissionOptionCopyCode.ask,
+        AgentPermissionOptionCopyCode.auto,
+        AgentPermissionOptionCopyCode.alwaysApprove,
       ]);
       expect(catalog, hasLength(3));
       expect(catalog.every((item) => item.allowed), isTrue);

@@ -1,5 +1,4 @@
 import 'package:agent_provider_contracts/agent_provider_contracts.dart';
-import 'package:grok_acp_client/src/grok_text_catalog.dart';
 import 'package:grok_acp_client/src/mappers/grok_session_update_mapper.dart';
 import 'package:grok_acp_client/src/mappers/grok_stream_identity.dart';
 
@@ -18,12 +17,8 @@ export 'package:grok_acp_client/src/mappers/grok_stream_identity.dart'
 /// 标准 `session/update` 与 `_x.ai/session/update` 共用同一个有状态 Grok adapter，
 /// 叙事 identity 完全由 Grok 专属 mapper/reducer 决定。
 final class GrokAcpNotificationMapper {
-  GrokAcpNotificationMapper({
-    GrokSessionUpdateMapper? sessionUpdateMapper,
-    GrokTextCatalog textCatalog = const GrokTextCatalog(),
-  }) : sessionUpdateMapper =
-           sessionUpdateMapper ??
-           GrokSessionUpdateMapper(textCatalog: textCatalog);
+  GrokAcpNotificationMapper({GrokSessionUpdateMapper? sessionUpdateMapper})
+    : sessionUpdateMapper = sessionUpdateMapper ?? GrokSessionUpdateMapper();
 
   final GrokSessionUpdateMapper sessionUpdateMapper;
 
@@ -69,6 +64,7 @@ final class GrokAcpNotificationMapper {
     required String stopReason,
     required GrokTerminalSource source,
     String? errorMessage,
+    AgentProviderFailureCode? failureCode,
     Map<String, Object?> raw = const <String, Object?>{},
   }) => sessionUpdateMapper.mapPromptTerminal(
     runtimeScope: runtimeScope,
@@ -77,6 +73,7 @@ final class GrokAcpNotificationMapper {
     stopReason: stopReason,
     source: source,
     errorMessage: errorMessage,
+    failureCode: failureCode,
     raw: raw,
   );
 

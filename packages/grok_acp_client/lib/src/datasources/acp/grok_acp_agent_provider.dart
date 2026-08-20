@@ -10,12 +10,9 @@ import 'package:grok_acp_client/src/datasources/acp/grok_models_cli.dart';
 import 'package:grok_acp_client/src/datasources/acp/grok_permission_policy_adapter.dart';
 import 'package:grok_acp_client/src/datasources/acp/grok_process_starter.dart';
 import 'package:grok_acp_client/src/grok_static_capabilities.dart';
-import 'package:grok_acp_client/src/grok_text_catalog.dart';
 import 'package:grok_acp_client/src/history/grok_session_history_reader.dart';
-import 'package:grok_acp_client/src/history/grok_updates_history_parser.dart';
 import 'package:grok_acp_client/src/mappers/grok_acp_notification_mapper.dart';
 import 'package:grok_acp_client/src/mappers/grok_billing_quota_mapper.dart';
-import 'package:grok_acp_client/src/mappers/grok_error_normalizer.dart';
 import 'package:grok_acp_client/src/mappers/grok_permission_mode_codec.dart';
 import 'package:grok_acp_client/src/mappers/grok_question_mapper.dart';
 import 'package:grok_acp_client/src/mappers/grok_skills_mapper.dart';
@@ -52,7 +49,6 @@ class GrokAcpAgentProvider
     JsonRpcPeerFactory? peerFactory,
     GrokSessionHistoryReader? sessionHistoryReader,
     GrokModelsCli? modelsCli,
-    this.textCatalog = const GrokTextCatalog(),
     GrokAcpNotificationMapper? notificationMapper,
     GrokQuestionMapper? questionMapper,
     List<Duration>? generatedTitlePollDelays,
@@ -68,14 +64,9 @@ class GrokAcpAgentProvider
          config.resolvedPermissionOptionId,
        ),
        _sessionHistoryReader =
-           sessionHistoryReader ??
-           GrokSessionHistoryReader(
-             updatesParser: GrokUpdatesHistoryParser(textCatalog: textCatalog),
-           ),
+           sessionHistoryReader ?? GrokSessionHistoryReader(),
        _modelsCli = modelsCli ?? const GrokModelsCli(),
-       _notificationMapper =
-           notificationMapper ??
-           GrokAcpNotificationMapper(textCatalog: textCatalog),
+       _notificationMapper = notificationMapper ?? GrokAcpNotificationMapper(),
        _questionMapper = questionMapper ?? const GrokQuestionMapper(),
        _generatedTitlePollDelays =
            generatedTitlePollDelays ?? _defaultGeneratedTitlePollDelays {
@@ -148,7 +139,6 @@ class GrokAcpAgentProvider
   final GrokAcpNotificationMapper _notificationMapper;
   final List<Duration> _generatedTitlePollDelays;
   final GrokQuestionMapper _questionMapper;
-  final GrokTextCatalog textCatalog;
 
   final StreamController<AgentEvent> _events =
       StreamController<AgentEvent>.broadcast();
@@ -330,7 +320,7 @@ class GrokAcpAgentProvider
     } on ProcessException catch (error) {
       _peer.markFailed();
       _log.w('Could not start Grok CLI (errorCode=${error.errorCode})');
-      _emitUnavailable(error.message, details: error.toString());
+      _emitUnavailable(details: error.toString());
       rethrow;
     } on Object catch (error) {
       _peer.markFailed();
@@ -344,7 +334,7 @@ class GrokAcpAgentProvider
       );
       _addEvent(
         AgentErrorEvent(
-          message: textCatalog.couldNotStart(config.displayName),
+          failureCode: AgentProviderFailureCode.unknown,
           details: error.toString(),
         ),
       );
@@ -645,7 +635,6 @@ class GrokAcpAgentProvider
       result,
       providerId: config.id,
       providerName: config.displayName,
-      textCatalog: textCatalog,
     );
   }
 
@@ -1196,7 +1185,7 @@ class GrokAcpAgentProvider
       );
       _addEvent(
         AgentErrorEvent(
-          message: textCatalog.protocolWarning(config.displayName),
+          failureCode: AgentProviderFailureCode.protocol,
           details: error.toString(),
         ),
       );
@@ -1480,6 +1469,7 @@ class GrokAcpAgentProvider
       stopReason: 'prompt_error',
       source: GrokTerminalSource.promptError,
       errorMessage: failure.message,
+      failureCode: failure.failureCode,
       raw: failure.raw,
     );
     final accepted = mapped.events.any(
@@ -1494,6 +1484,7 @@ class GrokAcpAgentProvider
     _addEvent(
       AgentErrorEvent(
         message: failure.message,
+        failureCode: failure.failureCode,
         sessionId: sessionId,
         turnId: turnId,
         exception: error,
@@ -1515,19 +1506,21 @@ class GrokAcpAgentProvider
         'jsonRpcError': rpcError.toJson(),
       };
       if (rpcError.code == -32003) {
-        return _GrokPromptFailure(message: grokRateLimitErrorMessage, raw: raw);
+        return _GrokPromptFailure(
+          failureCode: AgentProviderFailureCode.rateLimited,
+          raw: raw,
+        );
       }
       final serverMessage = rpcError.message.trim();
       return _GrokPromptFailure(
-        message: serverMessage.isEmpty
-            ? grokRequestFailedErrorMessage
-            : 'Grok request failed: $serverMessage',
+        message: serverMessage.isEmpty ? null : serverMessage,
+        failureCode: AgentProviderFailureCode.protocol,
         raw: raw,
       );
     }
     if (error is TimeoutException) {
       return _GrokPromptFailure(
-        message: textCatalog.requestTimedOut(config.displayName),
+        failureCode: AgentProviderFailureCode.timeout,
         raw: <String, Object?>{
           'operation': 'session/prompt',
           'exceptionType': exceptionType,
@@ -1539,7 +1532,7 @@ class GrokAcpAgentProvider
     }
     if (error is TransportClosed || error is TransportProcessExited) {
       return _GrokPromptFailure(
-        message: textCatalog.connectionClosedRetry(config.displayName),
+        failureCode: AgentProviderFailureCode.unavailable,
         raw: <String, Object?>{
           'operation': 'session/prompt',
           'exceptionType': exceptionType,
@@ -1549,7 +1542,7 @@ class GrokAcpAgentProvider
       );
     }
     return _GrokPromptFailure(
-      message: grokRequestFailedErrorMessage,
+      failureCode: AgentProviderFailureCode.unknown,
       raw: <String, Object?>{
         'operation': 'session/prompt',
         'exceptionType': exceptionType,
@@ -1968,7 +1961,7 @@ class GrokAcpAgentProvider
     final planContent = params['planContent']?.toString();
     final approval = AgentPlanApprovalRequest(
       id: toolCallId,
-      title: textCatalog.planApprovalTitle,
+      titleCode: AgentPlanApprovalTitleCode.planApproval,
       markdown: planContent ?? '',
       sessionId: sessionId,
       turnId: _runningTurnIdsBySessionId[sessionId],
@@ -2467,7 +2460,7 @@ class GrokAcpAgentProvider
     );
   }
 
-  void _emitUnavailable(String message, {String? details}) {
+  void _emitUnavailable({String? details}) {
     _emitStatus(
       AgentProviderStatus(
         state: AgentProviderConnectionState.unavailable,
@@ -2475,7 +2468,12 @@ class GrokAcpAgentProvider
         diagnosticDetails: details,
       ),
     );
-    _addEvent(AgentErrorEvent(message: message, details: details));
+    _addEvent(
+      AgentErrorEvent(
+        failureCode: AgentProviderFailureCode.unavailable,
+        details: details,
+      ),
+    );
   }
 
   /// provider 切换时异步任务可能晚于 dispose 返回；关闭后禁止再写事件流。
@@ -2527,12 +2525,14 @@ class _PendingPlanApproval {
 
 final class _GrokPromptFailure {
   const _GrokPromptFailure({
-    required this.message,
+    required this.failureCode,
     required this.raw,
+    this.message,
     this.connectionLost = false,
   });
 
-  final String message;
+  final String? message;
+  final AgentProviderFailureCode failureCode;
   final Map<String, Object?> raw;
   final bool connectionLost;
 }

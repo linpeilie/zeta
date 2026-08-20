@@ -1,3 +1,4 @@
+import 'package:agent_provider_contracts/agent_provider_contracts.dart';
 import 'package:grok_acp_client/src/mappers/grok_billing_quota_mapper.dart';
 import 'package:test/test.dart';
 
@@ -22,7 +23,10 @@ void main() {
       expect(quota.planType, 'SuperGrok');
       expect(quota.limitName, 'SuperGrok');
       expect(quota.windows, hasLength(1));
-      expect(quota.windows.single.label, '1 week');
+      expect(
+        quota.windows.single.labelCode,
+        AgentUsageWindowLabelCode.duration,
+      );
       expect(quota.windows.single.usedPercent, 35);
       expect(
         quota.windows.single.resetsAt,
@@ -60,10 +64,15 @@ void main() {
 
       expect(quota, isNotNull);
       expect(quota!.windows, hasLength(2));
-      // Data emits stable English; Presentation owns localization.
-      expect(quota.windows.first.label, '31 days');
+      expect(
+        quota.windows.first.labelCode,
+        AgentUsageWindowLabelCode.duration,
+      );
       expect(quota.windows.first.usedPercent, 10);
-      expect(quota.windows.last.label, 'On-demand quota');
+      expect(
+        quota.windows.last.labelCode,
+        AgentUsageWindowLabelCode.onDemandQuota,
+      );
       expect(quota.windows.last.usedPercent, 25);
       expect(quota.credits?.hasCredits, isTrue);
       expect(quota.credits?.balance, '12.5');
@@ -119,7 +128,10 @@ void main() {
         expect(quota, isNotNull);
         expect(quota!.limitName, 'SuperGrok');
         expect(quota.windows, hasLength(1));
-        expect(quota.windows.single.label, '1 week');
+        expect(
+          quota.windows.single.labelCode,
+          AgentUsageWindowLabelCode.duration,
+        );
         expect(quota.windows.single.usedPercent, 0);
         expect(
           quota.windows.single.resetsAt,

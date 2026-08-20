@@ -14,10 +14,10 @@ void main() {
         'always-approve',
       ]);
       expect(catalog.defaultOptionId, 'ask');
-      expect(catalog.options.map((o) => o.label).toList(), <String>[
-        'Ask',
-        'Auto',
-        'Always approve',
+      expect(catalog.options.map((o) => o.copyCode).toList(), <Object?>[
+        AgentPermissionOptionCopyCode.ask,
+        AgentPermissionOptionCopyCode.auto,
+        AgentPermissionOptionCopyCode.alwaysApprove,
       ]);
     });
 

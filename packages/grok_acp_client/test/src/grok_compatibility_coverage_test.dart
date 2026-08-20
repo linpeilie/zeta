@@ -13,8 +13,6 @@ import 'package:grok_acp_client/src/datasources/acp/grok_models_cli.dart';
 import 'package:grok_acp_client/src/datasources/acp/grok_permission_policy_adapter.dart';
 import 'package:grok_acp_client/src/datasources/acp/grok_process_starter.dart';
 import 'package:grok_acp_client/src/grok_cli_locator.dart';
-import 'package:grok_acp_client/src/grok_text_catalog.dart';
-import 'package:grok_acp_client/src/grok_usage_window_labels.dart';
 import 'package:grok_acp_client/src/history/grok_chat_history_parser.dart';
 import 'package:grok_acp_client/src/history/grok_session_history_reader.dart';
 import 'package:grok_acp_client/src/history/grok_updates_history_parser.dart';
@@ -390,46 +388,6 @@ void main() {
     });
   });
 
-  test('usage labels and provider text expose all stable branches', () {
-    const text = GrokTextCatalog();
-    for (final kind in AgentToolKind.values) {
-      expect(text.toolKindLabel(kind), isNotEmpty);
-    }
-    expect(text.providerReady('Grok'), 'Grok ready');
-    expect(text.agentIsWorking, isNotEmpty);
-    expect(text.startingProvider('Grok'), contains('Grok'));
-    expect(text.couldNotStart('Grok'), contains('Grok'));
-    expect(text.protocolWarning('Grok'), contains('Grok'));
-    expect(text.requestTimedOut('Grok'), contains('Grok'));
-    expect(text.connectionClosedRetry('Grok'), contains('Grok'));
-    expect(text.waitingApprovalFor('Edit'), contains('Edit'));
-    expect(text.waitingAnswersFor('Question'), contains('Question'));
-    expect(text.waitingPlanApproval, isNotEmpty);
-    expect(text.planApprovalTitle, isNotEmpty);
-    expect(text.planQuotaLabel, isNotEmpty);
-    expect(text.onDemandQuotaLabel, isNotEmpty);
-
-    expect(formatGrokUsageWindowLabelFromMinutes(null), isNull);
-    expect(formatGrokUsageWindowLabelFromMinutes(0), isNull);
-    expect(formatGrokUsageWindowLabelFromMinutes(7 * 24 * 60), '1 week');
-    expect(formatGrokUsageWindowLabelFromMinutes(2 * 7 * 24 * 60), '2 weeks');
-    expect(formatGrokUsageWindowLabelFromMinutes(24 * 60), '1 day');
-    expect(formatGrokUsageWindowLabelFromMinutes(2 * 24 * 60), '2 days');
-    expect(formatGrokUsageWindowLabelFromMinutes(60), '1 hour');
-    expect(formatGrokUsageWindowLabelFromMinutes(120), '2 hours');
-    expect(formatGrokUsageWindowLabelFromMinutes(90), '1 h 30 min');
-    expect(formatGrokUsageWindowLabelFromMinutes(15), '15 min');
-    expect(
-      formatGrokUsageWindowLabelFromPeriodType('USAGE_PERIOD_TYPE_WEEKLY'),
-      '1 week',
-    );
-    expect(
-      formatGrokUsageWindowLabelFromPeriodType('USAGE_PERIOD_TYPE_DAILY'),
-      '1 day',
-    );
-    expect(formatGrokUsageWindowLabelFromPeriodType('unknown'), isNull);
-  });
-
   test('permission mapper chooses every allow and reject fallback', () {
     AcpPermissionMapping mapping(List<Map<String, Object?>> options) {
       return AcpPermissionMapper.mapRequest(
@@ -580,7 +538,10 @@ void main() {
       providerId: 'grok',
       providerName: 'Grok',
     );
-    expect(billing?.windows.first.label, 'Plan quota');
+    expect(
+      billing?.windows.first.labelCode,
+      AgentUsageWindowLabelCode.planQuota,
+    );
     expect(billing?.windows.first.usedPercent, 28);
     expect(billing?.credits?.balance, '3.25');
     expect(billing?.windows.last.usedPercent, 25);
