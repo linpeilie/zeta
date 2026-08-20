@@ -100,6 +100,7 @@ void main() {
       expect(qualityWorkflow, contains('bloc lint .'));
       expect(qualityWorkflow, contains('--coverage'));
       expect(qualityWorkflow, contains('--min-coverage 100'));
+      expect(qualityWorkflow, contains('--exclude-tags golden'));
       expect(qualityWorkflow, isNot(contains('--check-ignore')));
       expect(
         qualityWorkflow,
@@ -116,6 +117,9 @@ void main() {
       expect(qualityWorkflow, contains('\n  golden:\n'));
       expect(qualityWorkflow, contains('--no-optimization'));
       expect(qualityWorkflow, contains('--tags golden'));
+      expect(qualityWorkflow, contains('flutter-version: 3.47.0'));
+      expect(qualityWorkflow, contains('actions/upload-artifact@v7'));
+      expect(qualityWorkflow, contains("'**/test/failures/*.png'"));
       expect(qualityWorkflow, isNot(contains('flutter test')));
       expect(
         RegExp(

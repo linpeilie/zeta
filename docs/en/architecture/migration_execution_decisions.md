@@ -1179,7 +1179,26 @@ desktop canvas instead of stretching inside an unbounded scroll axis. Pass `--no
 golden job and lock it with an architecture test; declare golden, perf, and slow package tags. Continue to
 run tests through `very_good test` and use the official `flutter analyze` for static analysis.
 
-**Impact.** Two light/dark Linux baselines come from a fixed 760×560, device-pixel-ratio-1 component gallery
-and pass visual inspection. The non-update golden gate passes three consecutive randomized runs and can no
-longer succeed with zero tests. The workflow change affects test discovery only, with no production
-dependency or architectural-boundary change.
+**Impact.** Two candidate light/dark baselines come from a fixed 760×560, device-pixel-ratio-1 component
+gallery and pass visual inspection. The non-update gate passes three consecutive randomized runs on Windows
+and can no longer succeed with zero tests. The workflow change affects discovery only, with no production
+dependency or architectural-boundary change; remote revalidation determines the authoritative Linux images.
+
+## 2026-08-20 — Step 27E isolates goldens from the normal matrix and freezes the renderer
+
+**Problem.** The first remote revalidation ran Windows/Flutter 3.47.0 baselines inside the normal app_ui
+quality job on Ubuntu/Flutter 3.47.1. The dark and light images differed by 0.95% and 0.96%, respectively,
+so normal tests failed and the dependent dedicated golden job was skipped. The three earlier passes proved
+Windows stability only; they did not establish Linux baselines. The installed Very Good CLI also has no
+top-level `analyze` command, so static analysis cannot be routed through that executable.
+
+**Decision.** Add `--exclude-tags golden` to the normal analyze/format/test/coverage matrix and run visual
+tests only in the dedicated Ubuntu 24.04 job. Pin that job alone to the approved Flutter 3.47.0 so normal
+`3.47.x` patch movement cannot silently alter pixels. On failure, retain Flutter's feedback images through
+`actions/upload-artifact@v7` so the authoritative Ubuntu baseline can be bootstrapped once. Architecture
+tests lock the separation, exact renderer version, and artifact evidence. Keep static analysis on the
+official `flutter analyze` command while all test gates continue to use `very_good test`.
+
+**Impact.** Behavior/coverage and platform visual gates now have distinct responsibilities. Normal matrix
+tests cannot be contaminated by a developer-host baseline, while golden mismatches remain hard failures
+with auditable image evidence rather than being hidden by tag exclusion.

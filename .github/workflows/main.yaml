@@ -118,6 +118,7 @@ jobs:
             --coverage \
             --min-coverage 100 \
             --exclude-coverage '**/*.{g,freezed,gen}.dart' \
+            --exclude-tags golden \
             --report-on lib \
             --timeout 120 \
             --test-randomize-ordering-seed random
@@ -156,7 +157,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: 3.47.x
+          flutter-version: 3.47.0
           cache: true
 
       - name: Resolve locked workspace dependencies
@@ -200,3 +201,11 @@ jobs:
             )
             echo '::endgroup::'
           done < <(printf '%s\n' "${roots[@]}" | sort -u)
+
+      - name: Upload golden failure feedback
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: golden-failures-${{ github.run_attempt }}
+          path: '**/test/failures/*.png'
+          if-no-files-found: error

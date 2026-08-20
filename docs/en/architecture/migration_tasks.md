@@ -663,9 +663,9 @@ unchanged with a new random seed.
 
 ### Step 27 — `packages/app_ui`
 
-**Status: complete.** Increments 27A (tokens/theme), 27B (base components plus the pure-UI
-WindowFrame), 27C (Workbench primitives), 27D (virtual scrolling), and 27E (accessibility/golden total
-acceptance) are complete and independently green.
+**Status: in progress (27E remote revalidation).** Increments 27A (tokens/theme), 27B (base components
+plus the pure-UI WindowFrame), 27C (Workbench primitives), and 27D (virtual scrolling) are complete. 27E
+is locally green while its Ubuntu golden baseline and dedicated remote gate are being fixed and rerun.
 
 - [x] The accessibility baseline is fixed at WCAG 2.2 AA / macOS / Windows / Linux.
 - [x] Migrate design tokens, base components, Workbench primitives, virtual scrolling, and the pure-UI part of WindowFrame.

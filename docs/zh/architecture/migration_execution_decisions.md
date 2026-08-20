@@ -1006,6 +1006,22 @@ Good 的默认测试优化器合并套件时丢失文件级 tag，使普通 `--t
 golden job 显式传 `--no-optimization`，架构测试锁定该参数；package 声明 golden/perf/slow 三类 tag。
 测试统一使用 `very_good test`，静态分析使用官方 `flutter analyze`。
 
-**影响。** 明暗两张 Linux 基准图由固定 760×560、device-pixel-ratio 1 的组件画廊产生并经目视检查；
-非更新 golden 门禁连续三次随机顺序通过，不再出现“零测试”假绿。工作流调整只修复测试发现语义，不改变
-生产依赖或架构边界。
+**影响。** 明暗两张候选基准图由固定 760×560、device-pixel-ratio 1 的组件画廊产生并经目视检查；
+非更新 golden 门禁在 Windows 连续三次随机顺序通过，不再出现“零测试”假绿。工作流调整只修复测试发现
+语义，不改变生产依赖或架构边界；后续远端复验再决定 Linux 权威基线。
+
+## 2026-08-20 — 步骤 27E 将 golden 从普通矩阵隔离并冻结渲染工具链
+
+**问题。** 首次远端复验中，app_ui 普通 quality job 在 Ubuntu/Flutter 3.47.1 上执行了 Windows/Flutter
+3.47.0 生成的 golden，两张图分别出现 0.95% 与 0.96% 的栅格差异，导致普通测试失败，专用 golden job
+因依赖 quality 而被跳过。这证明前述三次通过只证明 Windows 本机稳定，不能称为 Linux 基线。当前安装的
+Very Good CLI 也不提供顶层 `analyze` 子命令，静态分析不能经由该可执行文件运行。
+
+**决策。** 普通 analyze/format/test/coverage 矩阵增加 `--exclude-tags golden`，视觉测试只由固定
+Ubuntu 24.04 的专用 job 执行。该 job 单独钉死已批准的 Flutter 3.47.0，避免普通 `3.47.x` 补丁漂移改变
+像素；失败时用 `actions/upload-artifact@v7` 保存 Flutter 生成的 failure feedback，供一次性提取权威 Ubuntu
+基线。架构测试锁定隔离、版本和 artifact 三项配置。静态分析继续使用官方 `flutter analyze`，所有测试
+门禁仍统一使用 `very_good test`。
+
+**影响。** 行为/覆盖门禁与平台视觉门禁拥有互不重复的职责，普通矩阵不再被开发主机基线污染；golden
+失败仍保持硬失败并留下可审计图像，不会因排除 tag 形成假绿。
