@@ -1,14 +1,15 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:agent_provider_contracts/agent_provider_contracts.dart';
+import 'package:app_ui/app_ui.dart';
 import 'package:bloc/bloc.dart';
 import 'package:codex_app_server_client/codex_app_server_client.dart';
 import 'package:desktop_platform_api/desktop_platform_api.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:settings_client/settings_client.dart';
 import 'package:zeta/app/app.dart';
 import 'package:zeta/app/platform/platform.dart';
 import 'package:zeta/bootstrap.dart';
@@ -220,6 +221,167 @@ void main() {
       },
     );
 
+    test('shows the primary window before the first frame', () async {
+      final windowManager = _FakeWindowManagerFacade();
+      final composition = await composeZeta(
+        _dependencies(),
+        dataPaths: ZetaDataPaths.fromHomeDirectory(
+          home.path,
+          isWindows: Platform.isWindows,
+        ),
+        environment: <String, String>{'HOME': home.path},
+        isWindows: false,
+        facades: _fakeFacades(windowManager: windowManager),
+        bundleFactories: _workingFactories(),
+        platformBrightness: Brightness.light,
+      );
+      addTearDown(composition.close);
+
+      expect(windowManager.calls, <String>[
+        'ensureInitialized',
+        'prepare',
+        'show',
+        'focus',
+      ]);
+      final configuration = windowManager.preparedWith!;
+      expect(configuration.title, 'Zeta');
+      expect(configuration.size, const WindowSize(width: 1280, height: 800));
+      expect(
+        configuration.minimumSize,
+        const WindowSize(width: 900, height: 560),
+      );
+      expect(configuration.center, isTrue);
+      expect(
+        configuration.backgroundColorArgb,
+        AppColors.light.frame.toARGB32(),
+      );
+    });
+
+    test('paints the launch frame with the persisted dark theme', () async {
+      final paths = ZetaDataPaths.fromHomeDirectory(
+        home.path,
+        isWindows: Platform.isWindows,
+      );
+      await paths.ensureDirectories();
+      await FileAppearanceSettingsStore(
+        storage: AtomicSettingsDocumentStorage.fromFile(paths.appearanceFile),
+      ).save(
+        const AppearanceSettingsResponse(
+          themeMode: AppearanceThemeModeResponse.dark,
+        ),
+      );
+
+      final windowManager = _FakeWindowManagerFacade();
+      final composition = await composeZeta(
+        _dependencies(),
+        dataPaths: paths,
+        environment: <String, String>{'HOME': home.path},
+        isWindows: false,
+        facades: _fakeFacades(windowManager: windowManager),
+        bundleFactories: _workingFactories(),
+        platformBrightness: Brightness.light,
+      );
+      addTearDown(composition.close);
+
+      expect(
+        windowManager.preparedWith!.backgroundColorArgb,
+        AppColors.dark.frame.toARGB32(),
+      );
+    });
+
+    test('paints the launch frame with the persisted light theme', () async {
+      final paths = ZetaDataPaths.fromHomeDirectory(
+        home.path,
+        isWindows: Platform.isWindows,
+      );
+      await paths.ensureDirectories();
+      await FileAppearanceSettingsStore(
+        storage: AtomicSettingsDocumentStorage.fromFile(paths.appearanceFile),
+      ).save(
+        const AppearanceSettingsResponse(
+          themeMode: AppearanceThemeModeResponse.light,
+        ),
+      );
+
+      final windowManager = _FakeWindowManagerFacade();
+      final composition = await composeZeta(
+        _dependencies(),
+        dataPaths: paths,
+        environment: <String, String>{'HOME': home.path},
+        isWindows: false,
+        facades: _fakeFacades(windowManager: windowManager),
+        bundleFactories: _workingFactories(),
+        platformBrightness: Brightness.dark,
+      );
+      addTearDown(composition.close);
+
+      expect(
+        windowManager.preparedWith!.backgroundColorArgb,
+        AppColors.light.frame.toARGB32(),
+      );
+    });
+
+    test(
+      'falls back to the system brightness for unreadable settings',
+      () async {
+        final paths = ZetaDataPaths.fromHomeDirectory(
+          home.path,
+          isWindows: Platform.isWindows,
+        );
+        await paths.ensureDirectories();
+        await paths.appearanceFile.writeAsString('{ not json');
+
+        final windowManager = _FakeWindowManagerFacade();
+        final composition = await composeZeta(
+          _dependencies(),
+          dataPaths: paths,
+          environment: <String, String>{'HOME': home.path},
+          isWindows: false,
+          facades: _fakeFacades(windowManager: windowManager),
+          bundleFactories: _workingFactories(),
+          platformBrightness: Brightness.dark,
+        );
+        addTearDown(() async {
+          try {
+            await composition.close();
+          } on Object {
+            // The corrupted settings document also fails on close.
+          }
+        });
+
+        expect(
+          windowManager.preparedWith!.backgroundColorArgb,
+          AppColors.dark.frame.toARGB32(),
+        );
+      },
+    );
+
+    test('installs the native menu with the frozen locale copy', () async {
+      final menuChannel = _FakeMethodChannelFacade();
+      final composition = await composeZeta(
+        _dependencies(),
+        dataPaths: ZetaDataPaths.fromHomeDirectory(
+          home.path,
+          isWindows: Platform.isWindows,
+        ),
+        environment: <String, String>{'HOME': home.path},
+        isWindows: false,
+        facades: _fakeFacades(menuChannel: menuChannel),
+        bundleFactories: _workingFactories(),
+        platformBrightness: Brightness.light,
+      );
+      addTearDown(composition.close);
+
+      final configure = menuChannel.calls.singleWhere(
+        (call) => call.method == 'configure',
+      );
+      expect(configure.arguments, <String, Object?>{
+        'version': MethodChannelMenuCommandAdapter.schemaVersion,
+        'fileMenuLabel': 'File',
+        'openProjectLabel': 'Open Project',
+      });
+    });
+
     test('closes every owned resource once', () async {
       final composition = await compose();
 
@@ -287,7 +449,53 @@ void main() {
       expect(composition.repositories.usageStatisticsRepository, isNotNull);
     });
 
-    test('builds production platform facades when none are injected', () async {
+    test('drives the real plugin facades when none are injected', () async {
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      const windowChannel = MethodChannel('window_manager');
+      const screenChannel = MethodChannel(
+        'dev.leanflutter.plugins/screen_retriever',
+      );
+      addTearDown(() {
+        messenger
+          ..setMockMethodCallHandler(windowChannel, null)
+          ..setMockMethodCallHandler(screenChannel, null);
+      });
+      messenger
+        ..setMockMethodCallHandler(windowChannel, (call) async {
+          if (call.method.startsWith('is')) {
+            return false;
+          }
+          if (call.method.startsWith('get')) {
+            return <String, double>{
+              'x': 0,
+              'y': 0,
+              'width': 1280,
+              'height': 800,
+            };
+          }
+          return null;
+        })
+        ..setMockMethodCallHandler(screenChannel, (call) async {
+          const display = <String, Object?>{
+            'id': 'primary',
+            'name': 'primary',
+            'size': <String, double>{'width': 1920, 'height': 1080},
+            'visiblePosition': <String, double>{'dx': 0, 'dy': 0},
+            'visibleSize': <String, double>{'width': 1920, 'height': 1080},
+            'scaleFactor': 1.0,
+          };
+          if (call.method == 'getAllDisplays') {
+            return <String, Object?>{
+              'displays': <Map<String, Object?>>[display],
+            };
+          }
+          if (call.method == 'getCursorScreenPoint') {
+            return <String, double>{'dx': 0, 'dy': 0};
+          }
+          return display;
+        });
+
       final composition = await composeZeta(
         _dependencies(),
         dataPaths: ZetaDataPaths.fromHomeDirectory(
@@ -297,6 +505,7 @@ void main() {
         environment: <String, String>{'HOME': home.path},
         isWindows: false,
         bundleFactories: _workingFactories(),
+        platformBrightness: Brightness.light,
       );
       addTearDown(composition.close);
 
@@ -366,6 +575,23 @@ void main() {
       expect(composition.repositories.usageStatisticsRepository, isNotNull);
     });
   });
+  group('productionPlatformFacades', () {
+    test('binds every plugin seam the composition root needs', () {
+      final facades = productionPlatformFacades(_dependencies());
+
+      expect(facades.fileSelector, isA<FlutterFileSelectorFacade>());
+      expect(facades.pasteboard, isA<FlutterPasteboardFacade>());
+      expect(facades.fileManager, isA<IoSystemFileManagerFacade>());
+      expect(facades.windowManager, isA<FlutterWindowManagerFacade>());
+      expect(facades.macOsWindow, isA<MacOsWindowManipulatorFacade>());
+      expect(facades.notifications, isA<FlutterLocalNotificationsFacade>());
+      expect(facades.menuChannel, isA<FlutterMethodChannelFacade>());
+      expect(facades.fontChannel, isA<FlutterMethodChannelFacade>());
+      expect(facades.attentionChannel, isA<FlutterMethodChannelFacade>());
+      addTearDown(facades.windowManager.dispose);
+    });
+  });
+
   group('probeAgentProtocol', () {
     test('binds composition factories to the management probe seam', () async {
       final runtime = _MockRuntimePort();
@@ -522,18 +748,22 @@ AppDependencies _dependencies() {
     locale: const Locale('en'),
     failureMessages: FailureMessages(l10n),
     desktopNotificationCopyResolver: DesktopNotificationCopyResolver(l10n),
+    desktopChromeCopyResolver: DesktopChromeCopyResolver(l10n),
   );
 }
 
-ZetaPlatformFacades _fakeFacades() {
+ZetaPlatformFacades _fakeFacades({
+  _FakeWindowManagerFacade? windowManager,
+  _FakeMethodChannelFacade? menuChannel,
+}) {
   return ZetaPlatformFacades(
     fileSelector: _FakeFileSelectorFacade(),
     pasteboard: _FakePasteboardFacade(),
     fileManager: _FakeSystemFileManagerFacade(),
-    windowManager: _FakeWindowManagerFacade(),
+    windowManager: windowManager ?? _FakeWindowManagerFacade(),
     macOsWindow: _FakeMacOsWindowFacade(),
     notifications: _FakeNotificationPluginFacade(),
-    menuChannel: _FakeMethodChannelFacade(),
+    menuChannel: menuChannel ?? _FakeMethodChannelFacade(),
     fontChannel: _FakeMethodChannelFacade(),
     attentionChannel: _FakeMethodChannelFacade(),
   );
@@ -584,17 +814,26 @@ class _FakeSystemFileManagerFacade implements SystemFileManagerFacade {
 }
 
 class _FakeWindowManagerFacade implements WindowManagerFacade {
+  final List<String> calls = <String>[];
+  WindowBootstrapConfiguration? preparedWith;
+
   @override
-  Future<void> close() async {}
+  Future<void> close() async {
+    calls.add('close');
+  }
 
   @override
   Future<void> dispose() async {}
 
   @override
-  Future<void> ensureInitialized() async {}
+  Future<void> ensureInitialized() async {
+    calls.add('ensureInitialized');
+  }
 
   @override
-  Future<void> focus() async {}
+  Future<void> focus() async {
+    calls.add('focus');
+  }
 
   @override
   Future<bool> isMaximized() async => false;
@@ -610,10 +849,15 @@ class _FakeWindowManagerFacade implements WindowManagerFacade {
   Future<void> minimize() async {}
 
   @override
-  Future<void> prepare(WindowBootstrapConfiguration configuration) async {}
+  Future<void> prepare(WindowBootstrapConfiguration configuration) async {
+    calls.add('prepare');
+    preparedWith = configuration;
+  }
 
   @override
-  Future<void> show() async {}
+  Future<void> show() async {
+    calls.add('show');
+  }
 
   @override
   Future<void> unmaximize() async {}
@@ -640,8 +884,14 @@ class _FakeNotificationPluginFacade implements DesktopNotificationPluginFacade {
 }
 
 class _FakeMethodChannelFacade implements PlatformMethodChannelFacade {
+  final List<({String method, Object? arguments})> calls =
+      <({String method, Object? arguments})>[];
+
   @override
-  Future<T?> invokeMethod<T>(String method, [Object? arguments]) async => null;
+  Future<T?> invokeMethod<T>(String method, [Object? arguments]) async {
+    calls.add((method: method, arguments: arguments));
+    return null;
+  }
 
   @override
   void setMethodCallHandler(PlatformMethodCallHandler? handler) {}

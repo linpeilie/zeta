@@ -1272,3 +1272,33 @@ changed；`bloc lint .` 0 issues；根目录 `very_good test` 343 项随机顺�
 `codex_app_server_client` 179 项测试与 100% 覆盖率门同轮通过。`--min-coverage 100`
 在本机报 98.55% 仅因 lcov 在 Windows 写反斜杠路径，`**/*.{g,freezed,gen}.dart`
 无法匹配 `app_router.g.dart`；CI 的 package gate 跑在 ubuntu-24.04，该 glob 生效。
+
+## 2026-08-20 — 步骤 35B 窗口、原生菜单与 flavor
+
+**问题。** 窗口标题与 File 菜单文案必须在第一帧之前拿到，但 §1.5 禁止 Bloc 与
+composition root 使用 `BuildContext`，`AppDependencies` 也只带 failure 与通知文案。
+启动底色需要已持久化的外观偏好，而 `SettingsRepository.ready` 在配置损坏时会抛异常。
+覆盖 `facades ?? ZetaPlatformFacades.production(...)` 这条默认路径时，`composeZeta`
+会真正驱动 `window_manager`，测试里抛 `MissingPluginException`。
+
+**决策。** 按 `DesktopNotificationCopyResolver` 的既有模式新增
+`DesktopChromeCopyResolver`，从冻结 locale 提供 `appTitle`、`workbenchMenuFile`
+与 `workbenchMenuOpenProject`。窗口参数沿用旧仓库常量：1280×800、最小 900×560、
+居中、隐藏原生标题栏；底色由 `AppColors.light/dark.frame` 提供，主题模式为
+`system` 时跟随平台亮度。`SettingsRepository.ready` 抛异常时回退到平台亮度而不是
+阻断启动——启动窗口不应该因为一份坏配置而打不开。Windows/Linux 不安装原生菜单
+通道，`configure` 返回 false 不算失败，沿用适配器已有的 fail-open 语义。
+把生产 facade 构造抽成 `productionPlatformFacades` 单行调用，使 `??` 只占一行，
+默认路径由一个 mock 掉 `window_manager` 与 `screen_retriever` 通道的测试覆盖，
+不必为了覆盖率放宽阈值。flavor 只由 `--target lib/main_<flavor>.dart` 区分，
+不引入任何 flavor 专属身份、数据目录或 schema。
+
+**影响。** 窗口在显示前就是正确主题色，不会先闪一下反色。三个 flavor 的身份、
+`~/.zeta` 与 schema 由 `test/app/flavor_identity_test.dart` 守护，任何一处漂移都会
+让测试失败。原生 Runner 与三个 channel contract 已全部有对应实现与契约测试，
+manifest 相应条目闭环。仓库中无 updater/Velopack channel、依赖或 packaging hook。
+AgentConversationBloc 的 per-workspace-entry 生命周期留给 35C。
+
+**证据。** `flutter analyze lib test` 0 问题；`dart format` 136 files / 0 changed；
+`bloc lint .` 0 issues；根目录 `very_good test` 353 项随机顺序测试通过，排除
+`packages/**` 与生成代码后手写覆盖率 100%（4,068 / 4,068）。

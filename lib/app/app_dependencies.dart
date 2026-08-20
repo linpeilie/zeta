@@ -8,6 +8,7 @@ final class AppDependencies {
     required this.locale,
     required this.failureMessages,
     required this.desktopNotificationCopyResolver,
+    required this.desktopChromeCopyResolver,
   });
 
   /// Display locale frozen for the lifetime of this process.
@@ -18,4 +19,7 @@ final class AppDependencies {
 
   /// App-owned safe desktop notification copy mapping.
   final DesktopNotificationCopyResolver desktopNotificationCopyResolver;
+
+  /// App-owned native window and menu copy mapping.
+  final DesktopChromeCopyResolver desktopChromeCopyResolver;
 }

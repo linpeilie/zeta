@@ -1509,3 +1509,43 @@ round. `--min-coverage 100` reports 98.55% locally only because lcov writes
 backslash paths on Windows, so `**/*.{g,freezed,gen}.dart` cannot match
 `app_router.g.dart`; the CI package gate runs on ubuntu-24.04 where the glob
 applies.
+
+## 2026-08-20 — Step 35B window, native menu, and flavors
+
+**Problem.** The window title and File menu labels must exist before the first
+frame, but §1.5 forbids `BuildContext` in Blocs and the composition root, and
+`AppDependencies` only carried failure and notification copy. The launch frame
+colour needs the persisted appearance, yet `SettingsRepository.ready` throws when
+that document is corrupt. Covering the `facades ?? ZetaPlatformFacades.production(...)`
+default made `composeZeta` drive the real `window_manager`, which throws
+`MissingPluginException` under test.
+
+**Decision.** Add `DesktopChromeCopyResolver` following the existing
+`DesktopNotificationCopyResolver` pattern, exposing `appTitle`,
+`workbenchMenuFile`, and `workbenchMenuOpenProject` from the frozen locale. The
+window keeps the legacy constants: 1280x800, a 900x560 minimum, centred, with the
+native title bar hidden; the frame colour comes from `AppColors.light/dark.frame`
+and follows the platform brightness when the theme mode is `system`. A throwing
+`SettingsRepository.ready` falls back to the platform brightness instead of
+blocking startup, because one bad settings document must not stop the window from
+opening. Windows and Linux do not install the native menu channel, so a
+`configure` call returning false is not a failure and keeps the adapter's
+existing fail-open semantics. Production facade construction moves into a
+single-line `productionPlatformFacades` call so the `??` occupies one line, and
+the default path is covered by a test that mocks the `window_manager` and
+`screen_retriever` channels rather than by relaxing the coverage gate. Flavors
+differ only by `--target lib/main_<flavor>.dart`, with no flavor-specific
+identity, data directory, or schema.
+
+**Impact.** The window carries the correct theme colour before it appears, so it
+never flashes the opposite theme. `test/app/flavor_identity_test.dart` guards the
+shared identity, `~/.zeta`, and schema across all three flavors, so any drift
+fails the suite. The native Runners and all three channel contracts now have
+implementations and contract tests, closing their manifest entries. The
+repository contains no updater/Velopack channel, dependency, or packaging hook.
+The per-workspace-entry AgentConversationBloc lifecycle moves to 35C.
+
+**Evidence.** `flutter analyze lib test` reports 0 issues; `dart format` reports
+136 files / 0 changed; `bloc lint .` reports 0 issues; the root `very_good test`
+run passes 353 randomized tests with 100% hand-written coverage after excluding
+`packages/**` and generated sources (4,068 / 4,068).

@@ -75,6 +75,7 @@ void main() {
             desktopNotificationCopyResolver: DesktopNotificationCopyResolver(
               l10n,
             ),
+            desktopChromeCopyResolver: DesktopChromeCopyResolver(l10n),
           ),
           repositories: repositories,
         ),

@@ -756,7 +756,7 @@ code 以及 28D 的 presentation code。ARB 现为 en/zh 各 1,041 个一致键�
 
 ### 步骤 35 — Bootstrap、平台与 flavor 装配
 
-**状态：35A 已完成（2026-08-20），35B/35C 未开始。** 35A 交付 composition root：
+**状态：35A、35B 已完成（2026-08-20），35C 未开始。** 35A 交付 composition root：
 `composeZeta` 构造 4 个 config/session/usage store、3 个 provider bundle factory、
 3 个 management data source、10 个 platform adapter 与全部 9 个 Repository，并按
 逆序注册关闭钩子；`App` 去掉 counter 兜底路径，`AppRepositories` 与 `RoutedApp`
@@ -769,10 +769,21 @@ code 以及 28D 的 presentation code。ARB 现为 en/zh 各 1,041 个一致键�
 - [x] `bootstrap.dart` 构造全部 client、platform adapter、repository，再传给 App。
 - [x] `MultiRepositoryProvider` 只提供 Repository；Bloc 按 global/shell/route/conversation scope 创建。
 - [ ] AgentConversationBloc 每个 workspace entry 一个实例并随 entry 关闭。
-- [ ] 三个 flavor 使用同一 `cn.easii.zeta` / `Zeta` / `~/.zeta` / schema。
-- [ ] 迁 window bootstrap、native menu、fonts、notification/badge、file selector、clipboard。
-- [ ] 手写 macOS/Windows/Linux Runner 与 channel contract 全部从 manifest 勾销。
-- [ ] 无 updater/Velopack channel、dependency 或 packaging hook。
+- [x] 三个 flavor 使用同一 `cn.easii.zeta` / `Zeta` / `~/.zeta` / schema。
+- [x] 迁 window bootstrap、native menu、fonts、notification/badge、file selector、clipboard。
+- [x] 手写 macOS/Windows/Linux Runner 与 channel contract 全部从 manifest 勾销。
+- [x] 无 updater/Velopack channel、dependency 或 packaging hook。
+
+**35B 完成记录（2026-08-20）。** `composeZeta` 在第一帧前读取已持久化的外观偏好，
+按 `AppColors.light/dark.frame` 计算启动窗口底色，再以 1280×800 / 最小 900×560 /
+标题 `Zeta` / 居中调用 `WindowBootstrapApi.initialize`，随后用冻结 locale 的文案
+装配原生 File 菜单。新增 `DesktopChromeCopyResolver` 让 composition root 在无
+`BuildContext` 的情况下拿到窗口标题与菜单文案。三个 entrypoint 逐字节相同，
+`cn.easii.zeta` / `Zeta` 在 macOS xcconfig、Linux CMake 与 Windows runner 三处一致，
+且没有 flavor 覆盖 `~/.zeta` 或 schema，由 `test/app/flavor_identity_test.dart` 守护。
+质量门：`flutter analyze lib test` 0 问题，`dart format` 136 files / 0 changed，
+`bloc lint .` 0 issues，根目录 `very_good test` 353 项随机顺序测试通过，排除
+`packages/**` 与生成代码后手写覆盖率 100%（4,068 / 4,068）。
 
 ### 步骤 36 — 最终验证与文档收口
 

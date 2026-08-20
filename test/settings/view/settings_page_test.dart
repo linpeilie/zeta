@@ -51,6 +51,9 @@ void main() {
                 failureMessages: FailureMessages(l10n),
                 desktopNotificationCopyResolver:
                     DesktopNotificationCopyResolver(l10n),
+                desktopChromeCopyResolver: DesktopChromeCopyResolver(
+                  l10n,
+                ),
               ),
             ),
           ],

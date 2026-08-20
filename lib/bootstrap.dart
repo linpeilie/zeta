@@ -8,12 +8,13 @@ import 'package:agent_management_client/agent_management_client.dart';
 import 'package:agent_management_repository/agent_management_repository.dart';
 import 'package:agent_provider_contracts/agent_provider_contracts.dart';
 import 'package:agent_provider_repository/agent_provider_repository.dart';
+import 'package:app_ui/app_ui.dart';
 import 'package:bloc/bloc.dart';
 import 'package:claude_code_client/claude_code_client.dart';
 import 'package:codex_app_server_client/codex_app_server_client.dart';
 import 'package:desktop_notifications_repository/desktop_notifications_repository.dart';
+import 'package:desktop_platform_api/desktop_platform_api.dart';
 import 'package:desktop_platform_repository/desktop_platform_repository.dart';
-import 'package:flutter/widgets.dart';
 import 'package:grok_acp_client/grok_acp_client.dart';
 import 'package:json_rpc_transport/json_rpc_transport.dart';
 import 'package:project_session_client/project_session_client.dart';
@@ -120,6 +121,7 @@ Future<void> bootstrap(
     locale: frozenLocale,
     failureMessages: FailureMessages(l10n),
     desktopNotificationCopyResolver: DesktopNotificationCopyResolver(l10n),
+    desktopChromeCopyResolver: DesktopChromeCopyResolver(l10n),
   );
 
   final composition = await compose(dependencies);
@@ -142,6 +144,7 @@ Future<ZetaComposition> composeZeta(
   ProcessStarter? claudeProcessStarter,
   ProcessStarter? grokProcessStarter,
   Map<AgentProviderKind, AgentProviderBundleFactory>? bundleFactories,
+  Brightness? platformBrightness,
 }) async {
   final hostEnvironment = environment ?? Platform.environment;
   final windows = isWindows ?? Platform.isWindows;
@@ -154,12 +157,7 @@ Future<ZetaComposition> composeZeta(
   await paths.ensureDirectories();
   configureAppLogging(logDirectory: paths.logsDirectory);
 
-  final platform =
-      facades ??
-      ZetaPlatformFacades.production(
-        linuxNotificationActionName:
-            dependencies.desktopNotificationCopyResolver.linuxActionName,
-      );
+  final platform = facades ?? productionPlatformFacades(dependencies);
   final shutdownHooks = <Future<void> Function()>[shutdownAppLogging];
 
   final providerHomes = _ProviderHomes.resolve(
@@ -226,6 +224,16 @@ Future<ZetaComposition> composeZeta(
     fontCatalog: MethodChannelSystemFontCatalogAdapter(platform.fontChannel),
   );
   shutdownHooks.add(settingsRepository.close);
+
+  await _showPrimaryWindow(
+    window: windowCommands,
+    menu: menuCommands,
+    settings: settingsRepository,
+    copy: dependencies.desktopChromeCopyResolver,
+    platformBrightness:
+        platformBrightness ??
+        WidgetsBinding.instance.platformDispatcher.platformBrightness,
+  );
 
   final agentProviderRepository = AgentProviderRepository(
     configStore: configStore,
@@ -294,6 +302,68 @@ Future<ZetaComposition> composeZeta(
       desktopNotificationsRepository: desktopNotificationsRepository,
     ),
   );
+}
+
+/// Builds the plugin-backed platform facades used outside tests.
+ZetaPlatformFacades productionPlatformFacades(AppDependencies dependencies) {
+  return ZetaPlatformFacades.production(
+    linuxNotificationActionName:
+        dependencies.desktopNotificationCopyResolver.linuxActionName,
+  );
+}
+
+/// Applies the persisted appearance, shows the window, installs the menu.
+///
+/// The frame colour is read before the first frame so the native window never
+/// flashes the opposite theme; unreadable settings fall back to the system
+/// brightness rather than blocking startup. Windows and Linux do not install
+/// the native menu channel, so a refused configuration is not a failure.
+Future<void> _showPrimaryWindow({
+  required WindowBootstrapApi window,
+  required MenuCommandApi menu,
+  required SettingsRepository settings,
+  required DesktopChromeCopyResolver copy,
+  required Brightness platformBrightness,
+}) async {
+  await window.initialize(
+    WindowBootstrapConfiguration(
+      size: const WindowSize(width: 1280, height: 800),
+      minimumSize: const WindowSize(width: 900, height: 560),
+      title: copy.windowTitle,
+      backgroundColorArgb: _frameColorArgb(
+        await _launchBrightness(settings, platformBrightness),
+      ),
+    ),
+  );
+  await menu.configure(
+    MenuConfiguration(
+      fileMenuLabel: copy.fileMenuLabel,
+      openProjectLabel: copy.openProjectLabel,
+    ),
+  );
+}
+
+Future<Brightness> _launchBrightness(
+  SettingsRepository settings,
+  Brightness platformBrightness,
+) async {
+  try {
+    await settings.ready;
+  } on Object {
+    return platformBrightness;
+  }
+  return switch (settings.settings.appearance.themeMode) {
+    SettingsThemeMode.light => Brightness.light,
+    SettingsThemeMode.dark => Brightness.dark,
+    SettingsThemeMode.system => platformBrightness,
+  };
+}
+
+int _frameColorArgb(Brightness brightness) {
+  final colors = brightness == Brightness.dark
+      ? AppColors.dark
+      : AppColors.light;
+  return colors.frame.toARGB32();
 }
 
 UsageProviderIdentity _identityFor(AgentProviderConfig config) =>

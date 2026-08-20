@@ -3,6 +3,7 @@ import 'package:zeta/l10n/gen/app_localizations.dart';
 
 export 'package:zeta/l10n/gen/app_localizations.dart';
 
+export 'desktop_chrome_copy_resolver.dart';
 export 'desktop_notification_copy_resolver.dart';
 export 'failure_messages.dart';
 export 'zeta_shadcn_localizations.dart';
