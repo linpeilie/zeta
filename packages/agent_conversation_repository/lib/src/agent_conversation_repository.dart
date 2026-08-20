@@ -21,7 +21,7 @@ typedef ConversationHistoryInputFactory =
     });
 
 /// A releasable reference to one open conversation.
-final class ConversationHandle {
+class ConversationHandle {
   ConversationHandle._(this.key, this.generation, this._release);
 
   final ConversationKey key;
@@ -40,7 +40,7 @@ final class ConversationHandle {
 }
 
 /// Provider-neutral conversation aggregate and lifecycle owner.
-final class AgentConversationRepository {
+class AgentConversationRepository {
   AgentConversationRepository({
     required AgentTurnContextStore turnContextStore,
     required AppLogger logger,

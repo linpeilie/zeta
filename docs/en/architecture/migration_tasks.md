@@ -757,14 +757,14 @@ Chinese ARB files each have 1,041 matching keys. Packages import neither `AppLoc
 
 ### Step 32 — `AgentConversationBloc`
 
-- [ ] State retains five Equatable slices: header, composer, pending, expansion, and history.
-- [ ] Inject both provider and conversation repositories; resolve the bundle before opening a conversation.
-- [ ] Key/generation-guard the timeline subscription and cancel the old source on switch.
-- [ ] Eventize message submit/cancel/steer, model/mode/skill/permission selection, and thread operations.
-- [ ] Use distinct events and repository methods for permission response, question response, plan approval, and plan-execution handoff.
-- [ ] Process the four safety semantics with `sequential()` and test that none preauthorizes another.
-- [ ] Keep expansion and UI-derived getters in Bloc State/selectors; do not store Markdown/render cache in State.
-- [ ] `close()` releases subscriptions, conversation key, cache lease, and timers.
+- [x] State retains five Equatable slices: header, composer, pending, expansion, and history.
+- [x] Inject both provider and conversation repositories; resolve the bundle before opening a conversation.
+- [x] Key/generation-guard the timeline subscription and cancel the old source on switch.
+- [x] Eventize message submit/cancel/steer, model/mode/skill/permission selection, and thread operations.
+- [x] Use distinct events and repository methods for permission response, question response, plan approval, and plan-execution handoff.
+- [x] Process the four safety semantics with `sequential()` and test that none preauthorizes another.
+- [x] Keep expansion and UI-derived getters in Bloc State/selectors; do not store Markdown/render cache in State.
+- [x] `close()` releases subscriptions, conversation key, cache lease, and timers.
 
 ### Step 33 — Agent Presentation, capabilities, and performance
 

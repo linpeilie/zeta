@@ -1379,3 +1379,29 @@ switch sits in `IdeSettingsRow`; the trend chart uses existing
 reports 105 files / 0 changed; `bloc lint .` reports 0 issues; the root
 `very_good test` run passes 267 randomized tests at 100% hand-written coverage
 after excluding `packages/**`.
+
+## 2026-08-20 — Step 32 AgentConversationBloc
+
+**Problem.** State design §5.1 marks `AgentConversationOpened` as
+`sequential()`, while §8.1 requires `restartable()` so a thread switch cancels
+an in-flight open. Thread rename / archive / fork / compact and
+`approveDeniedAction` live on bundle ports in the frozen repositories, not on
+`agent_conversation_repository`. Both conversation types were `final class`,
+so root-app mocktail `Mock implements` did not compile.
+
+**Decision.** Do not change Repository methods or Provider ports. Open uses
+`restartable()` plus a generation guard per §8.1: `bundleFor` then
+`openConversation`. The four safety semantics each have a `sequential()` event
+and repository method: permission / question / plan approval on the
+conversation repository, plan execution via `submit()`, and the local handoff
+only in Bloc State. Thread writes and denied-action approval use ports on the
+resolved bundle and fail closed with `operationUnsupported` when missing.
+The elapsed ticker stays out of the Bloc. Drop `final` only on
+`AgentConversationRepository` and `ConversationHandle`. Markdown cache is not
+in State. Full presentation and the 19 capability widget tests stay in step
+33; app/router wiring stays in 34/35.
+
+**Evidence.** `flutter analyze lib test` reports 0 issues; `dart format`
+reports 113 files / 0 changed; `bloc lint .` reports 0 issues; the root
+`very_good test` run passes 291 randomized tests at 100% hand-written coverage
+after excluding `packages/**`.

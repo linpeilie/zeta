@@ -1168,3 +1168,25 @@ View 才映射 `FlSpot`。配置编辑改用 document signature `ValueKey` 的
 **证据。** `flutter analyze lib test` 0 问题；`dart format` 105 files / 0
 changed；`bloc lint .` 0 issues；根目录 `very_good test` 267 项随机顺序测试
 通过，排除 `packages/**` 后手写覆盖率 100%。
+
+## 2026-08-20 — 步骤 32 AgentConversationBloc
+
+**问题。** 状态设计 §5.1 把 `AgentConversationOpened` 标成 `sequential()`，§8.1
+要求 `restartable()` 以便切换 thread 时取消进行中的 open。thread rename /
+archive / fork / compact 与 `approveDeniedAction` 在冻结仓库里属于 bundle
+port，不在 `agent_conversation_repository`。两个会话类型是 `final class`，
+根 app mocktail 无法 `Mock implements`。
+
+**决策。** 不改 Repository 方法或 Provider port。Opened 按 §8.1 用
+`restartable()` + generation；先 `bundleFor` 再 `openConversation`。四种安全
+语义各自 `sequential()` 事件与 repository 方法：permission / question / plan
+approval 走 conversation repo，plan 执行走 `submit()`，本地 handoff 只在
+Bloc State。thread 写操作与 denied-action 走已解析 bundle 的 port，缺能力
+`operationUnsupported` fail-closed。elapsed ticker 不进 Bloc。去掉
+`AgentConversationRepository` 与 `ConversationHandle` 上的 `final`。Markdown
+cache 不进 State。完整 presentation 与 19 个 capability widget test 留给步骤
+33；app/router 装配留给 34/35。
+
+**证据。** `flutter analyze lib test` 0 问题；`dart format` 113 files / 0
+changed；`bloc lint .` 0 issues；根目录 `very_good test` 291 项随机顺序测试
+通过，排除 `packages/**` 后手写覆盖率 100%。

@@ -717,14 +717,14 @@ code 以及 28D 的 presentation code。ARB 现为 en/zh 各 1,041 个一致键�
 
 ### 步骤 32 — `AgentConversationBloc`
 
-- [ ] State 保留 header/composer/pending/expansion/history 五个 slice，全部 Equatable。
-- [ ] Bloc 同时注入 provider 与 conversation repositories；先解析 bundle，再 open conversation。
-- [ ] timeline subscription 使用 key/generation，切换时取消旧源。
-- [ ] message submit/cancel/steer、model/mode/skill/permission selection、thread 操作全部事件化。
-- [ ] permission response、question response、plan approval、plan execution handoff 使用独立 event 和 repository method。
-- [ ] 四种安全语义按 `sequential()` 处理，测试任一事件不会预授权其他语义。
-- [ ] 展开态和 UI 派生 getter 留 Bloc State/selector；Markdown/render cache 不进 State。
-- [ ] `close()` 释放 subscription、conversation key、cache lease 和 timer。
+- [x] State 保留 header/composer/pending/expansion/history 五个 slice，全部 Equatable。
+- [x] Bloc 同时注入 provider 与 conversation repositories；先解析 bundle，再 open conversation。
+- [x] timeline subscription 使用 key/generation，切换时取消旧源。
+- [x] message submit/cancel/steer、model/mode/skill/permission selection、thread 操作全部事件化。
+- [x] permission response、question response、plan approval、plan execution handoff 使用独立 event 和 repository method。
+- [x] 四种安全语义按 `sequential()` 处理，测试任一事件不会预授权其他语义。
+- [x] 展开态和 UI 派生 getter 留 Bloc State/selector；Markdown/render cache 不进 State。
+- [x] `close()` 释放 subscription、conversation key、cache lease 和 timer。
 
 ### 步骤 33 — Agent Presentation、Capability 与性能
 
