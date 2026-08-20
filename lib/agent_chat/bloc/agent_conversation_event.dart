@@ -340,3 +340,35 @@ final class AgentHistoryWindowChanged extends AgentConversationEvent {
   @override
   List<Object?> get props => <Object?>[visibleLimit];
 }
+
+final class AgentThreadUnarchived extends AgentConversationEvent {
+  const AgentThreadUnarchived();
+}
+
+final class AgentThreadDeleted extends AgentConversationEvent {
+  const AgentThreadDeleted();
+}
+
+final class AgentThreadRemovedFromList extends AgentConversationEvent {
+  const AgentThreadRemovedFromList();
+}
+
+final class AgentThreadUnsubscribed extends AgentConversationEvent {
+  const AgentThreadUnsubscribed();
+}
+
+final class AgentImagesAttachRequested extends AgentConversationEvent {
+  const AgentImagesAttachRequested();
+}
+
+final class AgentFilesMentionRequested extends AgentConversationEvent {
+  const AgentFilesMentionRequested();
+}
+
+final class AgentClipboardPasteRequested extends AgentConversationEvent {
+  const AgentClipboardPasteRequested();
+}
+
+final class AgentQuotaRequested extends AgentConversationEvent {
+  const AgentQuotaRequested();
+}

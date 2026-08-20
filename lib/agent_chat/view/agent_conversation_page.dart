@@ -1,6 +1,7 @@
 import 'package:agent_conversation_repository/agent_conversation_repository.dart';
 import 'package:agent_provider_contracts/agent_provider_contracts.dart';
 import 'package:agent_provider_repository/agent_provider_repository.dart';
+import 'package:desktop_platform_repository/desktop_platform_repository.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:zeta/agent_chat/bloc/agent_conversation_bloc.dart';
@@ -39,6 +40,8 @@ class AgentConversationPage extends StatelessWidget {
             agentProviderRepository: context.read<AgentProviderRepository>(),
             agentConversationRepository: context
                 .read<AgentConversationRepository>(),
+            desktopPlatformRepository: context
+                .read<DesktopPlatformRepository>(),
           )..add(
             AgentConversationOpened(
               key: key,

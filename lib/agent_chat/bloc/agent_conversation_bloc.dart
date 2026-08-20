@@ -6,6 +6,7 @@ import 'package:agent_provider_contracts/agent_provider_contracts.dart'
 import 'package:agent_provider_repository/agent_provider_repository.dart';
 import 'package:bloc/bloc.dart';
 import 'package:bloc_concurrency/bloc_concurrency.dart';
+import 'package:desktop_platform_repository/desktop_platform_repository.dart';
 import 'package:zeta/agent_chat/bloc/agent_conversation_event.dart';
 import 'package:zeta/agent_chat/bloc/agent_conversation_state.dart';
 
@@ -17,8 +18,10 @@ class AgentConversationBloc
   AgentConversationBloc({
     required AgentProviderRepository agentProviderRepository,
     required AgentConversationRepository agentConversationRepository,
+    required DesktopPlatformRepository desktopPlatformRepository,
   }) : _agentProviderRepository = agentProviderRepository,
        _agentConversationRepository = agentConversationRepository,
+       _desktopPlatformRepository = desktopPlatformRepository,
        super(const AgentConversationState()) {
     on<AgentConversationOpened>(_onOpened, transformer: restartable());
     on<AgentProviderSwitched>(_onOpenedFromSwitch, transformer: restartable());
@@ -39,6 +42,29 @@ class AgentConversationBloc
     on<AgentThreadRenamed>(_onThreadRenamed, transformer: sequential());
     on<AgentThreadArchived>(_onThreadArchived, transformer: sequential());
     on<AgentThreadCompacted>(_onThreadCompacted, transformer: sequential());
+    on<AgentThreadUnarchived>(_onThreadUnarchived, transformer: sequential());
+    on<AgentThreadDeleted>(_onThreadDeleted, transformer: sequential());
+    on<AgentThreadRemovedFromList>(
+      _onThreadRemovedFromList,
+      transformer: sequential(),
+    );
+    on<AgentThreadUnsubscribed>(
+      _onThreadUnsubscribed,
+      transformer: sequential(),
+    );
+    on<AgentImagesAttachRequested>(
+      _onImagesAttachRequested,
+      transformer: droppable(),
+    );
+    on<AgentFilesMentionRequested>(
+      _onFilesMentionRequested,
+      transformer: droppable(),
+    );
+    on<AgentClipboardPasteRequested>(
+      _onClipboardPasteRequested,
+      transformer: droppable(),
+    );
+    on<AgentQuotaRequested>(_onQuotaRequested, transformer: droppable());
     on<AgentPermissionResponded>(
       _onPermissionResponded,
       transformer: sequential(),
@@ -117,6 +143,7 @@ class AgentConversationBloc
 
   final AgentProviderRepository _agentProviderRepository;
   final AgentConversationRepository _agentConversationRepository;
+  final DesktopPlatformRepository _desktopPlatformRepository;
   StreamSubscription<ConversationSnapshot>? _snapshotSubscription;
   StreamSubscription<ProviderConfigSnapshot>? _configSubscription;
   ConversationHandle? _handle;
@@ -361,6 +388,113 @@ class AgentConversationBloc
         );
       }
       return port.compactThread(threadId);
+    });
+  }
+
+  Future<void> _onThreadUnarchived(
+    AgentThreadUnarchived event,
+    Emitter<AgentConversationState> emit,
+  ) {
+    return _runPort(emit, (bundle, threadId) {
+      final port = bundle.threadArchival;
+      if (port == null) {
+        throw const AgentConversationRepositoryException(
+          failure: AgentConversationFailure(
+            AgentConversationFailureCode.operationUnsupported,
+          ),
+        );
+      }
+      return port.unarchiveThread(threadId);
+    });
+  }
+
+  Future<void> _onThreadDeleted(
+    AgentThreadDeleted event,
+    Emitter<AgentConversationState> emit,
+  ) {
+    return _runPort(emit, (bundle, threadId) {
+      final port = bundle.threadDeletion;
+      if (port == null) {
+        throw const AgentConversationRepositoryException(
+          failure: AgentConversationFailure(
+            AgentConversationFailureCode.operationUnsupported,
+          ),
+        );
+      }
+      return port.deleteThread(threadId);
+    });
+  }
+
+  Future<void> _onThreadRemovedFromList(
+    AgentThreadRemovedFromList event,
+    Emitter<AgentConversationState> emit,
+  ) {
+    return _runPort(emit, (bundle, threadId) {
+      final port = bundle.localThreadList;
+      if (port == null) {
+        throw const AgentConversationRepositoryException(
+          failure: AgentConversationFailure(
+            AgentConversationFailureCode.operationUnsupported,
+          ),
+        );
+      }
+      return port.removeThreadFromList(threadId);
+    });
+  }
+
+  Future<void> _onThreadUnsubscribed(
+    AgentThreadUnsubscribed event,
+    Emitter<AgentConversationState> emit,
+  ) {
+    return _runPort(emit, (bundle, threadId) {
+      final port = bundle.threadSubscription;
+      if (port == null) {
+        throw const AgentConversationRepositoryException(
+          failure: AgentConversationFailure(
+            AgentConversationFailureCode.operationUnsupported,
+          ),
+        );
+      }
+      return port.unsubscribeThread(threadId);
+    });
+  }
+
+  Future<void> _onImagesAttachRequested(
+    AgentImagesAttachRequested event,
+    Emitter<AgentConversationState> emit,
+  ) {
+    return _run(emit, _desktopPlatformRepository.pickFiles);
+  }
+
+  Future<void> _onFilesMentionRequested(
+    AgentFilesMentionRequested event,
+    Emitter<AgentConversationState> emit,
+  ) {
+    return _run(emit, _desktopPlatformRepository.pickFiles);
+  }
+
+  Future<void> _onClipboardPasteRequested(
+    AgentClipboardPasteRequested event,
+    Emitter<AgentConversationState> emit,
+  ) {
+    return _run(emit, _desktopPlatformRepository.readText);
+  }
+
+  Future<void> _onQuotaRequested(
+    AgentQuotaRequested event,
+    Emitter<AgentConversationState> emit,
+  ) {
+    return _run(emit, () async {
+      final port = _bundle?.usageQuota;
+      if (port == null) {
+        throw const AgentConversationRepositoryException(
+          failure: AgentConversationFailure(
+            AgentConversationFailureCode.operationUnsupported,
+          ),
+        );
+      }
+      await port.readUsageQuota();
+      return null;
     });
   }
 
@@ -1026,6 +1160,7 @@ class AgentConversationBloc
           ? AgentConversationStatus.failure
           : AgentConversationStatus.ready,
       generation: generation,
+      capabilities: _presence(_bundle),
       failure: snapshot?.failure,
       clearFailure: snapshot?.failure == null,
       header: AgentHeaderState(
@@ -1096,6 +1231,30 @@ class AgentConversationBloc
         visibleLimit: limit,
         clearStandby: snapshot?.activeTurn != null,
       ),
+    );
+  }
+
+  AgentCapabilityPresence _presence(AgentProviderBundle? bundle) {
+    return AgentCapabilityPresence(
+      threadCatalog: bundle?.threadCatalog != null,
+      threadSubscription: bundle?.threadSubscription != null,
+      threadNaming: bundle?.threadNaming != null,
+      threadArchival: bundle?.threadArchival != null,
+      threadDeletion: bundle?.threadDeletion != null,
+      threadCompaction: bundle?.threadCompaction != null,
+      threadBranching: bundle?.threadBranching != null,
+      turnSteering: bundle?.turnSteering != null,
+      permissionResponses: bundle?.permissionResponses != null,
+      questions: bundle?.questions != null,
+      deniedActionOverride: bundle?.deniedActionOverride != null,
+      modelCatalog: bundle?.modelCatalog != null,
+      conversationModes: bundle?.conversationModes != null,
+      skills: bundle?.skills != null,
+      localThreadList: bundle?.localThreadList != null,
+      sessionConfiguration: bundle?.sessionConfiguration != null,
+      planApproval: bundle?.planApproval != null,
+      permissionPolicy: bundle?.permissionPolicy != null,
+      usageQuota: bundle?.usageQuota != null,
     );
   }
 

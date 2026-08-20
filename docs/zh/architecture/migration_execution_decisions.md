@@ -1190,3 +1190,26 @@ cache 不进 State。完整 presentation 与 19 个 capability widget test 留�
 **证据。** `flutter analyze lib test` 0 问题；`dart format` 113 files / 0
 changed；`bloc lint .` 0 issues；根目录 `very_good test` 291 项随机顺序测试
 通过，排除 `packages/**` 后手写覆盖率 100%。
+
+## 2026-08-20 — 步骤 33 Agent Presentation / Capability
+
+**问题。** 契约第 3–21 号 optional port 的入口必须按 presence 隐藏，误调用必须
+typed fail-closed。`FileTypeFilter` 属于 Data 层，Bloc 不得 import
+`desktop_platform_api`。旧 `agent_pane_*` 文件 1.5k–2k 行，按视觉克隆会明显超出
+本步预估。P7 §9 要求先记录旧 `dev` 的长 timeline 基线，但本环境没有旧基线，也没有
+三套真实 CLI。
+
+**决策。** 不改 Repository 方法或 Provider port。`AgentCapabilityPresence` 的 19
+个 bool 由已解析 `bundle.port != null` 推导（对应契约 3–21）；入口缺失时不渲染，
+误调用 `operationUnsupported` / `providerOperationFailed` fail-closed。
+`pickFiles()` / `readText()` 走 `desktop_platform_repository` 默认参数，避免
+Bloc 接触 Data 类型。Presentation 拆成 header / history / pending /
+capabilities / composer 小 `BlocSelector` 组件，timeline 用 `ListView.builder`
+与 `projectTimelineItems`；不做旧 pane 视觉重设计。elapsed ticker、Markdown /
+render cache 仍不进 State。旧 `dev` 性能对比与 Codex/Claude/Grok 真实 CLI 冒烟
+两项保持未勾，留给步骤 36 或所有者提供环境后再做。P7 总览与出口不勾。app/router
+装配留给步骤 34/35。
+
+**证据。** `flutter analyze lib test` 0 问题；`dart format` 121 files / 0
+changed；`bloc lint .` 0 issues；根目录 `very_good test` 299 项随机顺序测试
+通过，排除 `packages/**` 后手写覆盖率 100%。

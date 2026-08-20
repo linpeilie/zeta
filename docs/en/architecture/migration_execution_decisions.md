@@ -1405,3 +1405,31 @@ in State. Full presentation and the 19 capability widget tests stay in step
 reports 113 files / 0 changed; `bloc lint .` reports 0 issues; the root
 `very_good test` run passes 291 randomized tests at 100% hand-written coverage
 after excluding `packages/**`.
+
+## 2026-08-20 — Step 33 Agent Presentation / capabilities
+
+**Problem.** Entries for contract ports 3–21 must hide when absent and fail
+closed when invoked unsupported. `FileTypeFilter` is a Data-layer type, so the
+Bloc must not import `desktop_platform_api`. The old `agent_pane_*` files are
+1.5k–2k lines; a visual clone would exceed this step's estimate. P7 §9 required
+an old-`dev` long-timeline baseline before the phase, but this environment has
+neither that baseline nor live Codex/Claude/Grok CLIs.
+
+**Decision.** Do not change Repository methods or Provider ports.
+`AgentCapabilityPresence` maps 19 bools from resolved `bundle.port != null`
+(ports 3–21). Missing entries are not rendered; unsupported invoke fail-closes
+with `operationUnsupported` / `providerOperationFailed`. File picker and
+pasteboard go through `desktop_platform_repository.pickFiles()` /
+`readText()` with defaults so the Bloc never sees Data types. Presentation is
+split into small `BlocSelector` widgets (header / history / pending /
+capabilities / composer) with `ListView.builder` plus `projectTimelineItems`;
+no visual redesign of the old panes. Elapsed ticker, Markdown, and render
+cache stay out of State. Leave the old-`dev` performance comparison and the
+real three-CLI smoke unchecked for step 36 or until the owner provides the
+environment. Do not check the P7 overview or exit. App/router wiring stays in
+steps 34/35.
+
+**Evidence.** `flutter analyze lib test` reports 0 issues; `dart format`
+reports 121 files / 0 changed; `bloc lint .` reports 0 issues; the root
+`very_good test` run passes 299 randomized tests at 100% hand-written coverage
+after excluding `packages/**`.

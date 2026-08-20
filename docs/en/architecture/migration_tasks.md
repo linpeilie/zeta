@@ -768,12 +768,12 @@ Chinese ARB files each have 1,041 matching keys. Packages import neither `AppLoc
 
 ### Step 33 — Agent Presentation, capabilities, and performance
 
-- [ ] The Page creates the Bloc; widgets use BlocBuilder/BlocSelector and subscribe only to required slices.
-- [ ] File selector, pasteboard, and similar services flow through Bloc events and `desktop_platform_repository`, never direct plugin or Data-port imports.
-- [ ] Split the three presentation files larger than 1.5k lines without a visual redesign.
-- [ ] Add an “entry is absent” widget test for each of 19 optional capabilities.
-- [ ] An unsupported capability invoked erroneously produces a typed fail-closed state.
-- [ ] Migrate harness, event-storm, timeline-projection, and virtual-scroll tests.
+- [x] The Page creates the Bloc; widgets use BlocBuilder/BlocSelector and subscribe only to required slices.
+- [x] File selector, pasteboard, and similar services flow through Bloc events and `desktop_platform_repository`, never direct plugin or Data-port imports.
+- [x] Split the three presentation files larger than 1.5k lines without a visual redesign.
+- [x] Add an “entry is absent” widget test for each of 19 optional capabilities.
+- [x] An unsupported capability invoked erroneously produces a typed fail-closed state.
+- [x] Migrate harness, event-storm, timeline-projection, and virtual-scroll tests.
 - [ ] Compare long-timeline frame time, memory peak, and high-frequency-delta coalescing against old `dev`; no regression is allowed.
 - [ ] Smoke-test real Codex, Claude, and Grok CLI conversations.
 

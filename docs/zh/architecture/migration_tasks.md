@@ -728,12 +728,12 @@ code 以及 28D 的 presentation code。ARB 现为 en/zh 各 1,041 个一致键�
 
 ### 步骤 33 — Agent Presentation、Capability 与性能
 
-- [ ] Page 创建 Bloc；所有 widgets 改 BlocBuilder/BlocSelector，只订阅所需 slice。
-- [ ] file selector、pasteboard 等通过 Bloc event + `desktop_platform_repository`，不直接 import plugin 或 Data port。
-- [ ] 拆分 >1.5k 行的三个 presentation 文件；不做视觉重设计。
-- [ ] 19 个 optional capability 各有“入口不出现”widget test。
-- [ ] UI 误调用 unsupported capability 得到 typed fail-closed state。
-- [ ] 迁 harness、event-storm、timeline projection、virtual scroll tests。
+- [x] Page 创建 Bloc；所有 widgets 改 BlocBuilder/BlocSelector，只订阅所需 slice。
+- [x] file selector、pasteboard 等通过 Bloc event + `desktop_platform_repository`，不直接 import plugin 或 Data port。
+- [x] 拆分 >1.5k 行的三个 presentation 文件；不做视觉重设计。
+- [x] 19 个 optional capability 各有“入口不出现”widget test。
+- [x] UI 误调用 unsupported capability 得到 typed fail-closed state。
+- [x] 迁 harness、event-storm、timeline projection、virtual scroll tests。
 - [ ] 记录旧 `dev` 与新实现的长 timeline frame time、memory peak、高频 delta 合并指标；不得回退。
 - [ ] Codex/Claude/Grok 真实 CLI 会话冒烟。
 

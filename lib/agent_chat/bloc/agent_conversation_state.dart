@@ -488,6 +488,73 @@ final class AgentConversationHistoryState extends Equatable {
   ];
 }
 
+final class AgentCapabilityPresence extends Equatable {
+  const AgentCapabilityPresence({
+    this.threadCatalog = false,
+    this.threadSubscription = false,
+    this.threadNaming = false,
+    this.threadArchival = false,
+    this.threadDeletion = false,
+    this.threadCompaction = false,
+    this.threadBranching = false,
+    this.turnSteering = false,
+    this.permissionResponses = false,
+    this.questions = false,
+    this.deniedActionOverride = false,
+    this.modelCatalog = false,
+    this.conversationModes = false,
+    this.skills = false,
+    this.localThreadList = false,
+    this.sessionConfiguration = false,
+    this.planApproval = false,
+    this.permissionPolicy = false,
+    this.usageQuota = false,
+  });
+
+  final bool threadCatalog;
+  final bool threadSubscription;
+  final bool threadNaming;
+  final bool threadArchival;
+  final bool threadDeletion;
+  final bool threadCompaction;
+  final bool threadBranching;
+  final bool turnSteering;
+  final bool permissionResponses;
+  final bool questions;
+  final bool deniedActionOverride;
+  final bool modelCatalog;
+  final bool conversationModes;
+  final bool skills;
+  final bool localThreadList;
+  final bool sessionConfiguration;
+  final bool planApproval;
+  final bool permissionPolicy;
+  final bool usageQuota;
+
+  @override
+  List<Object?> get props => <Object?>[
+    threadCatalog,
+    threadSubscription,
+    threadNaming,
+    threadArchival,
+    threadDeletion,
+    threadCompaction,
+    threadBranching,
+    turnSteering,
+    permissionResponses,
+    questions,
+    deniedActionOverride,
+    modelCatalog,
+    conversationModes,
+    skills,
+    localThreadList,
+    sessionConfiguration,
+    planApproval,
+    permissionPolicy,
+    usageQuota,
+  ];
+}
+
 final class AgentConversationState extends Equatable {
   const AgentConversationState({
     this.key = const ConversationKey.draft(providerId: '', entryId: ''),
@@ -497,6 +564,7 @@ final class AgentConversationState extends Equatable {
     this.pending = const AgentPendingInteractionState(),
     this.expansion = const AgentExpansionState(),
     this.history = const AgentConversationHistoryState(),
+    this.capabilities = const AgentCapabilityPresence(),
     this.failure,
     this.generation = 0,
   });
@@ -508,6 +576,7 @@ final class AgentConversationState extends Equatable {
   final AgentPendingInteractionState pending;
   final AgentExpansionState expansion;
   final AgentConversationHistoryState history;
+  final AgentCapabilityPresence capabilities;
   final AgentConversationFailure? failure;
   final int generation;
 
@@ -519,6 +588,7 @@ final class AgentConversationState extends Equatable {
     AgentPendingInteractionState? pending,
     AgentExpansionState? expansion,
     AgentConversationHistoryState? history,
+    AgentCapabilityPresence? capabilities,
     AgentConversationFailure? failure,
     int? generation,
     bool clearFailure = false,
@@ -531,6 +601,7 @@ final class AgentConversationState extends Equatable {
       pending: pending ?? this.pending,
       expansion: expansion ?? this.expansion,
       history: history ?? this.history,
+      capabilities: capabilities ?? this.capabilities,
       failure: clearFailure ? null : (failure ?? this.failure),
       generation: generation ?? this.generation,
     );
@@ -545,6 +616,7 @@ final class AgentConversationState extends Equatable {
     pending,
     expansion,
     history,
+    capabilities,
     failure,
     generation,
   ];

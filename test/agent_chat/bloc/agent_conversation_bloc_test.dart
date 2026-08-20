@@ -4,6 +4,7 @@ import 'package:agent_conversation_repository/agent_conversation_repository.dart
 import 'package:agent_provider_contracts/agent_provider_contracts.dart';
 import 'package:agent_provider_repository/agent_provider_repository.dart';
 import 'package:bloc_test/bloc_test.dart';
+import 'package:desktop_platform_repository/desktop_platform_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:zeta/agent_chat/agent_chat.dart';
@@ -32,6 +33,19 @@ class _MockThreadArchivalPort extends Mock implements AgentThreadArchivalPort {}
 
 class _MockThreadCompactionPort extends Mock
     implements AgentThreadCompactionPort {}
+
+class _MockDesktopPlatformRepository extends Mock
+    implements DesktopPlatformRepository {}
+
+class _MockThreadDeletionPort extends Mock implements AgentThreadDeletionPort {}
+
+class _MockLocalThreadListPort extends Mock
+    implements AgentLocalThreadListPort {}
+
+class _MockThreadSubscriptionPort extends Mock
+    implements AgentThreadSubscriptionPort {}
+
+class _MockUsageQuotaPort extends Mock implements AgentUsageQuotaProvider {}
 
 void main() {
   const key = ConversationKey.thread(
@@ -85,6 +99,7 @@ void main() {
   group(AgentConversationBloc, () {
     late AgentProviderRepository providers;
     late AgentConversationRepository conversations;
+    late DesktopPlatformRepository desktop;
     late ConversationHandle handle;
     late AgentRuntimePort runtime;
     late AgentProviderBundle bundle;
@@ -121,6 +136,7 @@ void main() {
     setUp(() {
       providers = _MockAgentProviderRepository();
       conversations = _MockAgentConversationRepository();
+      desktop = _MockDesktopPlatformRepository();
       handle = _MockConversationHandle();
       runtime = _MockRuntimePort();
       bundle = AgentProviderBundle(
@@ -130,7 +146,11 @@ void main() {
         threadArchival: _MockThreadArchivalPort(),
         threadCompaction: _MockThreadCompactionPort(),
         threadBranching: _MockThreadBranchingPort(),
+        threadDeletion: _MockThreadDeletionPort(),
+        localThreadList: _MockLocalThreadListPort(),
+        threadSubscription: _MockThreadSubscriptionPort(),
         deniedActionOverride: _MockDeniedActionPort(),
+        usageQuota: _MockUsageQuotaPort(),
       );
       when(() => runtime.config).thenReturn(AgentProviderConfig.defaultCodex);
       when(() => runtime.capabilities).thenReturn(
@@ -233,12 +253,34 @@ void main() {
       when(
         () => bundle.deniedActionOverride!.approveDeniedAction(any()),
       ).thenAnswer((_) async {});
+      when(
+        () => desktop.pickFiles(
+          acceptedTypes: any(named: 'acceptedTypes'),
+        ),
+      ).thenAnswer((_) async => const <String>[]);
+      when(() => desktop.readText()).thenAnswer((_) async => '');
+      when(
+        () => bundle.threadDeletion!.deleteThread(any()),
+      ).thenAnswer((_) async {});
+      when(
+        () => bundle.localThreadList!.removeThreadFromList(any()),
+      ).thenAnswer((_) async {});
+      when(
+        () => bundle.threadSubscription!.unsubscribeThread(any()),
+      ).thenAnswer((_) async {});
+      when(
+        () => bundle.threadArchival!.unarchiveThread(any()),
+      ).thenAnswer((_) async {});
+      when(
+        () => bundle.usageQuota!.readUsageQuota(),
+      ).thenAnswer((_) async => null);
     });
 
     AgentConversationBloc build() {
       return AgentConversationBloc(
         agentProviderRepository: providers,
         agentConversationRepository: conversations,
+        desktopPlatformRepository: desktop,
       );
     }
 
@@ -669,6 +711,14 @@ void main() {
         const AgentContextPanelToggled(visible: true).props,
         <Object?>[true],
       );
+      expect(const AgentThreadUnarchived().props, isEmpty);
+      expect(const AgentThreadDeleted().props, isEmpty);
+      expect(const AgentThreadRemovedFromList().props, isEmpty);
+      expect(const AgentThreadUnsubscribed().props, isEmpty);
+      expect(const AgentImagesAttachRequested().props, isEmpty);
+      expect(const AgentFilesMentionRequested().props, isEmpty);
+      expect(const AgentClipboardPasteRequested().props, isEmpty);
+      expect(const AgentQuotaRequested().props, isEmpty);
     });
 
     blocTest<AgentConversationBloc, AgentConversationState>(
@@ -686,6 +736,14 @@ void main() {
         bloc
           ..add(const AgentThreadForked())
           ..add(const AgentThreadCompacted())
+          ..add(const AgentThreadUnarchived())
+          ..add(const AgentThreadDeleted())
+          ..add(const AgentThreadRemovedFromList())
+          ..add(const AgentThreadUnsubscribed())
+          ..add(const AgentImagesAttachRequested())
+          ..add(const AgentFilesMentionRequested())
+          ..add(const AgentClipboardPasteRequested())
+          ..add(const AgentQuotaRequested())
           ..add(const AgentLastUserMessageEdited('retry'))
           ..add(
             const AgentDeniedActionApproved(
@@ -893,5 +951,86 @@ void main() {
       expect(withStandby.standbyTurn?.id, 's');
       expect(withStandby.copyWith(clearStandby: true).standbyTurn, isNull);
     });
+
+    blocTest<AgentConversationBloc, AgentConversationState>(
+      'fails closed when quota is requested without a usage port',
+      build: build,
+      seed: ready,
+      act: (bloc) {
+        bloc.add(const AgentQuotaRequested());
+      },
+      wait: const Duration(milliseconds: 10),
+      verify: (bloc) {
+        expect(
+          bloc.state.failure?.code,
+          AgentConversationFailureCode.operationUnsupported,
+        );
+      },
+    );
+
+    blocTest<AgentConversationBloc, AgentConversationState>(
+      'fails closed when an unsupported platform capability is invoked',
+      build: () {
+        when(
+          () => desktop.pickFiles(
+            acceptedTypes: any(named: 'acceptedTypes'),
+          ),
+        ).thenThrow(
+          const DesktopPlatformException(
+            operation: DesktopPlatformOperation.pickFiles,
+            cause: 'missing',
+          ),
+        );
+        return build();
+      },
+      seed: ready,
+      act: (bloc) {
+        bloc.add(const AgentImagesAttachRequested());
+      },
+      wait: const Duration(milliseconds: 10),
+      verify: (bloc) {
+        expect(
+          bloc.state.failure?.code,
+          AgentConversationFailureCode.providerOperationFailed,
+        );
+      },
+    );
+
+    blocTest<AgentConversationBloc, AgentConversationState>(
+      'keeps timeline order across an event storm of snapshots',
+      build: build,
+      seed: ready,
+      act: (bloc) {
+        for (var index = 0; index < 40; index++) {
+          bloc.add(
+            AgentConversationSnapshotUpdated(
+              snapshot: ConversationSnapshot(
+                key: key,
+                phase: ConversationPhase.ready,
+                generation: 1,
+                revision: index + 1,
+                turns: <ConversationTurnSnapshot>[
+                  ConversationTurnSnapshot(
+                    id: 'turn-$index',
+                    entries: const <ConversationTimelineEntry>[],
+                  ),
+                ],
+                pendingPermissions: const <AgentPermissionRequest>[],
+                pendingQuestions: const <AgentQuestionRequest>[],
+                pendingPlanApprovals: const <AgentPlanApprovalRequest>[],
+                autoReviewsByTurnId:
+                    const <String, AgentAutoApprovalReviewEvent>{},
+              ),
+              generation: 0,
+            ),
+          );
+        }
+      },
+      wait: const Duration(milliseconds: 20),
+      verify: (bloc) {
+        expect(bloc.state.history.visibleTurns, hasLength(1));
+        expect(bloc.state.history.visibleTurns.single.id, 'turn-39');
+      },
+    );
   });
 }

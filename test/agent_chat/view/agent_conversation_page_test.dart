@@ -4,6 +4,7 @@ import 'package:agent_conversation_repository/agent_conversation_repository.dart
 import 'package:agent_provider_contracts/agent_provider_contracts.dart';
 import 'package:agent_provider_repository/agent_provider_repository.dart';
 import 'package:bloc_test/bloc_test.dart';
+import 'package:desktop_platform_repository/desktop_platform_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -29,6 +30,9 @@ class _MockRuntimePort extends Mock implements AgentRuntimePort {}
 
 class _MockConversationPort extends Mock implements AgentConversationPort {}
 
+class _MockDesktopPlatformRepository extends Mock
+    implements DesktopPlatformRepository {}
+
 void main() {
   const key = ConversationKey.thread(
     providerId: 'codex',
@@ -38,12 +42,14 @@ void main() {
   group(AgentConversationPage, () {
     late AgentProviderRepository providers;
     late AgentConversationRepository conversations;
+    late DesktopPlatformRepository desktop;
     late ConversationHandle handle;
     late AgentRuntimePort runtime;
 
     setUp(() {
       providers = _MockAgentProviderRepository();
       conversations = _MockAgentConversationRepository();
+      desktop = _MockDesktopPlatformRepository();
       handle = _MockConversationHandle();
       runtime = _MockRuntimePort();
       final bundle = AgentProviderBundle(
@@ -88,6 +94,9 @@ void main() {
             RepositoryProvider<AgentConversationRepository>.value(
               value: conversations,
             ),
+            RepositoryProvider<DesktopPlatformRepository>.value(
+              value: desktop,
+            ),
           ],
           child: const AgentConversationPage(
             providerId: 'codex',
@@ -108,6 +117,9 @@ void main() {
             ),
             RepositoryProvider<AgentConversationRepository>.value(
               value: conversations,
+            ),
+            RepositoryProvider<DesktopPlatformRepository>.value(
+              value: desktop,
             ),
           ],
           child: const AgentConversationPage(providerId: 'codex'),
@@ -130,6 +142,27 @@ void main() {
           composer: AgentComposerState(canSubmitMessage: true),
         ),
       );
+    });
+
+    testWidgets('requests image attach and file mention', (tester) async {
+      when(() => bloc.state).thenReturn(
+        const AgentConversationState(
+          status: AgentConversationStatus.ready,
+          composer: AgentComposerState(
+            canAttachImages: true,
+            canMentionResources: true,
+          ),
+        ),
+      );
+      await tester.pumpApp(
+        BlocProvider.value(value: bloc, child: const AgentConversationView()),
+      );
+      final l10n = lookupAppLocalizations(const Locale('en'));
+      await tester.tap(find.text(l10n.agentAttachImage));
+      await tester.tap(find.text(l10n.agentMentionFile));
+      await tester.pump();
+      verify(() => bloc.add(const AgentImagesAttachRequested())).called(1);
+      verify(() => bloc.add(const AgentFilesMentionRequested())).called(1);
     });
 
     testWidgets('submits a message from the composer', (tester) async {
@@ -226,6 +259,25 @@ void main() {
       ).called(1);
       verify(() => bloc.add(const AgentPlanExecutionStarted())).called(1);
       verify(() => bloc.add(const AgentTurnCancelled())).called(1);
+    });
+
+    testWidgets('virtualizes a long timeline window', (tester) async {
+      when(() => bloc.state).thenReturn(
+        AgentConversationState(
+          status: AgentConversationStatus.ready,
+          history: AgentConversationHistoryState(
+            visibleTurns: <AgentConversationTurnGroup>[
+              for (var index = 0; index < 80; index++)
+                AgentConversationTurnGroup(id: 'turn-$index'),
+            ],
+          ),
+        ),
+      );
+      await tester.pumpApp(
+        BlocProvider.value(value: bloc, child: const AgentConversationView()),
+      );
+      expect(find.byType(ListView), findsOneWidget);
+      expect(find.text('turn-0'), findsOneWidget);
     });
 
     testWidgets('renders a conversation failure message', (tester) async {
