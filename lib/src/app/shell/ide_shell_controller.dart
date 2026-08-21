@@ -61,23 +61,6 @@ final class IdeShellUsageStatisticsDependencies {
   final AgentUsagePanelRepository? agentUsagePanelRepository;
 }
 
-int _compareThreadRecency(AgentThreadSummary left, AgentThreadSummary right) {
-  final leftTime = left.lastActiveAt;
-  final rightTime = right.lastActiveAt;
-  if (leftTime != null && rightTime != null) {
-    final byTime = rightTime.compareTo(leftTime);
-    if (byTime != 0) {
-      return byTime;
-    }
-  } else if (leftTime != null) {
-    return -1;
-  } else if (rightTime != null) {
-    return 1;
-  }
-  final byProvider = left.providerId.compareTo(right.providerId);
-  return byProvider != 0 ? byProvider : left.id.compareTo(right.id);
-}
-
 /// IDE shell 的应用级协调器。
 ///
 /// 它承接项目打开、文件树状态、会话恢复/保存以及 Agent thread 选择同步，
@@ -338,43 +321,6 @@ class IdeShellController extends ChangeNotifier {
     );
   }
 
-  /// 所有已知项目缓存中的近期未归档会话，按最近活跃时间降序。
-  List<AgentThreadSummary> get recentThreads {
-    final byIdentity = <String, AgentThreadSummary>{};
-    for (final projectPath in _projects) {
-      final state = projectThreadsController.stateFor(projectPath);
-      if (state.archived) {
-        continue;
-      }
-      for (final thread in state.threads) {
-        final key = '${thread.providerId}\u0000${thread.id}';
-        final existing = byIdentity[key];
-        if (existing == null || _compareThreadRecency(thread, existing) < 0) {
-          byIdentity[key] = thread;
-        }
-      }
-    }
-    final threads = byIdentity.values.toList(growable: false)
-      ..sort(_compareThreadRecency);
-    return List<AgentThreadSummary>.unmodifiable(threads);
-  }
-
-  /// 首页近期会话是否仍在后台刷新。
-  bool get isRefreshingRecentHomeData => recentProjects
-      .take(5)
-      .any((project) => projectThreadStateFor(project.path).isLoadingInitial);
-
-  /// 首页近期项目刷新中最后一个非阻断错误。
-  String? get recentHomeRefreshError {
-    for (final project in recentProjects.take(5)) {
-      final error = projectThreadStateFor(project.path).errorMessage;
-      if (error != null && error.isNotEmpty) {
-        return error;
-      }
-    }
-    return null;
-  }
-
   String? get activeProjectPath => _projectPath;
 
   List<WorkspaceNode> get workspaceTree =>
@@ -409,16 +355,11 @@ class IdeShellController extends ChangeNotifier {
     await _loadProject(path);
   }
 
-  /// 从全局首页打开一个已知项目，不改变左侧项目树的展开状态。
-  Future<void> openRecentProject(String path) async {
-    if (!_projects.contains(path)) {
-      return;
-    }
-    _sessionCoordinator.cancelPendingRestore();
-    await _loadProject(path, activateThreads: false);
-  }
-
-  /// 使用缓存先显策略，顺序刷新首页可见的近期项目会话。
+  /// 无活动项目时预热近期项目的会话列表，供左侧 Projects 栏直接取用。
+  ///
+  /// 预热的是 `projectThreadsController` 的缓存：项目卡片靠它显示运行中会话
+  /// 的徽标，展开时也不用再等一次加载。一旦有项目被打开（`_projectPath`
+  /// 不再为空）就立即停下，把带宽让给当前项目。
   Future<void> refreshRecentHomeData({int projectLimit = 5}) async {
     final token = ++_homeRefreshToken;
     final paths = recentProjects

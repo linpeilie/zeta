@@ -944,53 +944,13 @@
   "@homeOpenProject": {
     "description": "Open project"
   },
-  "homeRecentProjects": "Recent projects",
-  "@homeRecentProjects": {
-    "description": "Recent projects"
-  },
-  "homeReadingRecentProjects": "Reading recent projects…",
-  "@homeReadingRecentProjects": {
-    "description": "Reading projects"
-  },
-  "homeNoRecentProjects": "No recent projects",
-  "@homeNoRecentProjects": {
-    "description": "Empty projects"
-  },
-  "homeRecentProjectsAfterRestore": "Recent projects will appear here after restore finishes.",
-  "@homeRecentProjectsAfterRestore": {
-    "description": "Projects restoring"
-  },
-  "homeRecentProjectsAfterOpen": "After you open a project, it will appear here.",
-  "@homeRecentProjectsAfterOpen": {
-    "description": "Projects empty"
-  },
   "homeRecentSessions": "Recent sessions",
   "@homeRecentSessions": {
     "description": "Recent sessions"
   },
-  "homeRefreshFailed": "Refresh failed",
-  "@homeRefreshFailed": {
-    "description": "Refresh failed"
-  },
-  "homeCannotRefreshSessions": "Could not refresh recent sessions",
-  "@homeCannotRefreshSessions": {
-    "description": "Cannot refresh"
-  },
   "homeLoadingRecentSessions": "Loading recent sessions…",
   "@homeLoadingRecentSessions": {
     "description": "Loading sessions"
-  },
-  "homeNoRecentSessions": "No recent sessions",
-  "@homeNoRecentSessions": {
-    "description": "Empty sessions"
-  },
-  "homeSessionsCacheHint": "Cached sessions show first; newer ones fill in in the background.",
-  "@homeSessionsCacheHint": {
-    "description": "Sessions cache"
-  },
-  "homeSessionsEmptyHint": "After you create a session, it appears by last activity.",
-  "@homeSessionsEmptyHint": {
-    "description": "Sessions empty"
   },
   "homeInstalledProviders": "Installed providers",
   "@homeInstalledProviders": {
@@ -1019,26 +979,6 @@
   "homeProvidersAfterInstall": "After you install and configure a supported Agent, it appears here.",
   "@homeProvidersAfterInstall": {
     "description": "Providers after install"
-  },
-  "homeOpenRecentProject": "Open recent project {name}",
-  "@homeOpenRecentProject": {
-    "description": "Open recent project",
-    "placeholders": {
-      "name": {
-        "type": "String",
-        "example": "zeta"
-      }
-    }
-  },
-  "homeOpenRecentSession": "Open recent session {title}",
-  "@homeOpenRecentSession": {
-    "description": "Open recent session",
-    "placeholders": {
-      "title": {
-        "type": "String",
-        "example": "Fix layout"
-      }
-    }
   },
   "homeCommaJoin": "{left}, {right}",
   "@homeCommaJoin": {
@@ -1073,10 +1013,6 @@
   "homeProviderError": "Error",
   "@homeProviderError": {
     "description": "Provider error"
-  },
-  "homeProviderUpdateAvailable": "Update available",
-  "@homeProviderUpdateAvailable": {
-    "description": "Provider update"
   },
   "homeProviderDetecting": "Detecting",
   "@homeProviderDetecting": {

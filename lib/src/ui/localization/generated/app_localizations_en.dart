@@ -666,44 +666,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get homeOpenProject => 'Open project';
 
   @override
-  String get homeRecentProjects => 'Recent projects';
-
-  @override
-  String get homeReadingRecentProjects => 'Reading recent projects…';
-
-  @override
-  String get homeNoRecentProjects => 'No recent projects';
-
-  @override
-  String get homeRecentProjectsAfterRestore =>
-      'Recent projects will appear here after restore finishes.';
-
-  @override
-  String get homeRecentProjectsAfterOpen =>
-      'After you open a project, it will appear here.';
-
-  @override
   String get homeRecentSessions => 'Recent sessions';
 
   @override
-  String get homeRefreshFailed => 'Refresh failed';
-
-  @override
-  String get homeCannotRefreshSessions => 'Could not refresh recent sessions';
-
-  @override
   String get homeLoadingRecentSessions => 'Loading recent sessions…';
-
-  @override
-  String get homeNoRecentSessions => 'No recent sessions';
-
-  @override
-  String get homeSessionsCacheHint =>
-      'Cached sessions show first; newer ones fill in in the background.';
-
-  @override
-  String get homeSessionsEmptyHint =>
-      'After you create a session, it appears by last activity.';
 
   @override
   String get homeInstalledProviders => 'Installed providers';
@@ -729,16 +695,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'After you install and configure a supported Agent, it appears here.';
 
   @override
-  String homeOpenRecentProject(String name) {
-    return 'Open recent project $name';
-  }
-
-  @override
-  String homeOpenRecentSession(String title) {
-    return 'Open recent session $title';
-  }
-
-  @override
   String homeCommaJoin(String left, String right) {
     return '$left, $right';
   }
@@ -757,9 +713,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get homeProviderError => 'Error';
-
-  @override
-  String get homeProviderUpdateAvailable => 'Update available';
 
   @override
   String get homeProviderDetecting => 'Detecting';

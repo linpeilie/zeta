@@ -944,53 +944,13 @@
   "@homeOpenProject": {
     "description": "Open project"
   },
-  "homeRecentProjects": "近期项目",
-  "@homeRecentProjects": {
-    "description": "Recent projects"
-  },
-  "homeReadingRecentProjects": "正在读取近期项目…",
-  "@homeReadingRecentProjects": {
-    "description": "Reading projects"
-  },
-  "homeNoRecentProjects": "暂无近期项目",
-  "@homeNoRecentProjects": {
-    "description": "Empty projects"
-  },
-  "homeRecentProjectsAfterRestore": "恢复完成后会在这里显示最近访问的项目。",
-  "@homeRecentProjectsAfterRestore": {
-    "description": "Projects restoring"
-  },
-  "homeRecentProjectsAfterOpen": "打开一个项目后，它会显示在这里。",
-  "@homeRecentProjectsAfterOpen": {
-    "description": "Projects empty"
-  },
   "homeRecentSessions": "近期会话",
   "@homeRecentSessions": {
     "description": "Recent sessions"
   },
-  "homeRefreshFailed": "刷新失败",
-  "@homeRefreshFailed": {
-    "description": "Refresh failed"
-  },
-  "homeCannotRefreshSessions": "无法刷新近期会话",
-  "@homeCannotRefreshSessions": {
-    "description": "Cannot refresh"
-  },
   "homeLoadingRecentSessions": "正在加载近期会话…",
   "@homeLoadingRecentSessions": {
     "description": "Loading sessions"
-  },
-  "homeNoRecentSessions": "暂无近期会话",
-  "@homeNoRecentSessions": {
-    "description": "Empty sessions"
-  },
-  "homeSessionsCacheHint": "缓存会先显示，最新会话将在后台补齐。",
-  "@homeSessionsCacheHint": {
-    "description": "Sessions cache"
-  },
-  "homeSessionsEmptyHint": "创建会话后，它会按最近活跃时间显示。",
-  "@homeSessionsEmptyHint": {
-    "description": "Sessions empty"
   },
   "homeInstalledProviders": "已安装 Provider",
   "@homeInstalledProviders": {
@@ -1019,26 +979,6 @@
   "homeProvidersAfterInstall": "安装并配置受支持的 Agent 后，它会显示在这里。",
   "@homeProvidersAfterInstall": {
     "description": "Providers after install"
-  },
-  "homeOpenRecentProject": "打开近期项目 {name}",
-  "@homeOpenRecentProject": {
-    "description": "Open recent project",
-    "placeholders": {
-      "name": {
-        "type": "String",
-        "example": "zeta"
-      }
-    }
-  },
-  "homeOpenRecentSession": "打开近期会话 {title}",
-  "@homeOpenRecentSession": {
-    "description": "Open recent session",
-    "placeholders": {
-      "title": {
-        "type": "String",
-        "example": "Fix layout"
-      }
-    }
   },
   "homeCommaJoin": "{left}，{right}",
   "@homeCommaJoin": {
@@ -1073,10 +1013,6 @@
   "homeProviderError": "异常",
   "@homeProviderError": {
     "description": "Provider error"
-  },
-  "homeProviderUpdateAvailable": "可更新",
-  "@homeProviderUpdateAvailable": {
-    "description": "Provider update"
   },
   "homeProviderDetecting": "检测中",
   "@homeProviderDetecting": {

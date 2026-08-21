@@ -1260,107 +1260,75 @@ void main() {
     },
   );
 
-  test(
-    'sorts recent projects and aggregates cached threads across projects',
-    () async {
-      final firstDirectory = Directory.systemTemp.createTempSync(
-        'zeta_recent_',
-      );
-      final secondDirectory = Directory.systemTemp.createTempSync(
-        'zeta_recent_',
-      );
-      tempDirectories.addAll(<Directory>[firstDirectory, secondDirectory]);
-      final older = DateTime.utc(2026, 7, 20, 9);
-      final newer = DateTime.utc(2026, 7, 21, 9);
-      final openedNow = DateTime.utc(2026, 7, 21, 15);
-      final duplicateOlder = _thread(
-        id: 'shared-thread',
-        providerId: defaultAgentProviderId,
-        projectPath: firstDirectory.path,
-        updatedAt: older,
-      );
-      final duplicateNewer = _thread(
-        id: 'shared-thread',
-        providerId: defaultAgentProviderId,
-        projectPath: secondDirectory.path,
-        updatedAt: newer,
-      );
-      final unique = _thread(
-        id: 'unique-thread',
-        providerId: grokAgentProviderId,
-        projectPath: firstDirectory.path,
-        updatedAt: newer.subtract(const Duration(hours: 1)),
-      );
-      final restoredSession = IdeSessionState(
-        projectPaths: <String>[firstDirectory.path, secondDirectory.path],
-        projectLastOpenedAtByPath: <String, DateTime>{
-          firstDirectory.path: older,
-          secondDirectory.path: newer,
-        },
-        projectThreadExpansionByProject: <String, bool>{
-          firstDirectory.path: false,
-          secondDirectory.path: false,
-        },
-        cachedThreadsByProject: <String, List<AgentThreadSummary>>{
-          firstDirectory.path: <AgentThreadSummary>[duplicateOlder, unique],
-          secondDirectory.path: <AgentThreadSummary>[duplicateNewer],
-        },
-      );
-      String? savedJson;
-      final backend = _ProviderBackend(
-        config: AgentProviderConfig.defaultCodex,
-        threadPages: <AgentThreadPage>[
-          const AgentThreadPage(
-            threads: <AgentThreadSummary>[],
-            nextCursor: null,
-          ),
-        ],
-      );
-      final shell = IdeShellController(
-        agentUiFrameSchedulerFactory: _createUiFrameScheduler,
-        directoryPicker: () async => firstDirectory.path,
-        sessionStore: CallbackIdeSessionStore(
-          loadJson: () async => restoredSession.encode(),
-          saveJson: (value) async {
-            savedJson = value;
-          },
+  test('sorts recent projects by last opened time', () async {
+    final firstDirectory = Directory.systemTemp.createTempSync('zeta_recent_');
+    final secondDirectory = Directory.systemTemp.createTempSync('zeta_recent_');
+    tempDirectories.addAll(<Directory>[firstDirectory, secondDirectory]);
+    final older = DateTime.utc(2026, 7, 20, 9);
+    final newer = DateTime.utc(2026, 7, 21, 9);
+    final openedNow = DateTime.utc(2026, 7, 21, 15);
+    final restoredSession = IdeSessionState(
+      projectPaths: <String>[firstDirectory.path, secondDirectory.path],
+      projectLastOpenedAtByPath: <String, DateTime>{
+        firstDirectory.path: older,
+        secondDirectory.path: newer,
+      },
+      projectThreadExpansionByProject: <String, bool>{
+        firstDirectory.path: false,
+        secondDirectory.path: false,
+      },
+    );
+    String? savedJson;
+    final backend = _ProviderBackend(
+      config: AgentProviderConfig.defaultCodex,
+      threadPages: <AgentThreadPage>[
+        const AgentThreadPage(
+          threads: <AgentThreadSummary>[],
+          nextCursor: null,
         ),
-        agentProviderFactory: _RecordingAgentProviderFactory(
-          <String, _ProviderBackend>{defaultAgentProviderId: backend},
+      ],
+    );
+    final shell = IdeShellController(
+      agentUiFrameSchedulerFactory: _createUiFrameScheduler,
+      directoryPicker: () async => firstDirectory.path,
+      sessionStore: CallbackIdeSessionStore(
+        loadJson: () async => restoredSession.encode(),
+        saveJson: (value) async {
+          savedJson = value;
+        },
+      ),
+      agentProviderFactory: _RecordingAgentProviderFactory(
+        <String, _ProviderBackend>{defaultAgentProviderId: backend},
+      ),
+      agentProviderConfigStore: MemoryAgentProviderConfigStore(
+        const AgentProviderSettings(
+          providers: <AgentProviderConfig>[AgentProviderConfig.defaultCodex],
         ),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(
-          const AgentProviderSettings(
-            providers: <AgentProviderConfig>[AgentProviderConfig.defaultCodex],
-          ),
-        ),
-        now: () => openedNow,
-      );
-      addTearDown(shell.dispose);
+      ),
+      now: () => openedNow,
+    );
+    addTearDown(shell.dispose);
 
-      await _flushAsync();
-      await _flushAsync();
+    await _flushAsync();
+    await _flushAsync();
 
-      expect(shell.initialRestoreCompleted, isTrue);
-      expect(shell.recentProjects.map((project) => project.path), <String>[
-        secondDirectory.path,
-        firstDirectory.path,
-      ]);
-      expect(shell.recentThreads.map((thread) => thread.id), <String>[
-        'shared-thread',
-        'unique-thread',
-      ]);
-      expect(shell.recentThreads.first.projectPath, secondDirectory.path);
+    expect(shell.initialRestoreCompleted, isTrue);
+    expect(shell.recentProjects.map((project) => project.path), <String>[
+      secondDirectory.path,
+      firstDirectory.path,
+    ]);
 
-      await shell.openRecentProject(firstDirectory.path);
-      expect(shell.activeProjectPath, firstDirectory.path);
-      expect(shell.isProjectHomeActive, isTrue);
-      expect(shell.recentProjects.first.path, firstDirectory.path);
+    // directoryPicker 返回 firstDirectory：打开它应把它顶到近期列表最前，
+    // 并把新的打开时间写进会话。
+    await shell.openProject();
+    expect(shell.activeProjectPath, firstDirectory.path);
+    expect(shell.isProjectHomeActive, isTrue);
+    expect(shell.recentProjects.first.path, firstDirectory.path);
 
-      await shell.saveNow();
-      final saved = IdeSessionState.tryDecode(savedJson);
-      expect(saved?.projectLastOpenedAtByPath[firstDirectory.path], openedNow);
-    },
-  );
+    await shell.saveNow();
+    final saved = IdeSessionState.tryDecode(savedJson);
+    expect(saved?.projectLastOpenedAtByPath[firstDirectory.path], openedNow);
+  });
 }
 
 Future<String?> _loadEmptySession() async => null;

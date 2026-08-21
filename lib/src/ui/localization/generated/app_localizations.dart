@@ -1292,77 +1292,17 @@ abstract class AppLocalizations {
   /// **'Open project'**
   String get homeOpenProject;
 
-  /// Recent projects
-  ///
-  /// In en, this message translates to:
-  /// **'Recent projects'**
-  String get homeRecentProjects;
-
-  /// Reading projects
-  ///
-  /// In en, this message translates to:
-  /// **'Reading recent projects…'**
-  String get homeReadingRecentProjects;
-
-  /// Empty projects
-  ///
-  /// In en, this message translates to:
-  /// **'No recent projects'**
-  String get homeNoRecentProjects;
-
-  /// Projects restoring
-  ///
-  /// In en, this message translates to:
-  /// **'Recent projects will appear here after restore finishes.'**
-  String get homeRecentProjectsAfterRestore;
-
-  /// Projects empty
-  ///
-  /// In en, this message translates to:
-  /// **'After you open a project, it will appear here.'**
-  String get homeRecentProjectsAfterOpen;
-
   /// Recent sessions
   ///
   /// In en, this message translates to:
   /// **'Recent sessions'**
   String get homeRecentSessions;
 
-  /// Refresh failed
-  ///
-  /// In en, this message translates to:
-  /// **'Refresh failed'**
-  String get homeRefreshFailed;
-
-  /// Cannot refresh
-  ///
-  /// In en, this message translates to:
-  /// **'Could not refresh recent sessions'**
-  String get homeCannotRefreshSessions;
-
   /// Loading sessions
   ///
   /// In en, this message translates to:
   /// **'Loading recent sessions…'**
   String get homeLoadingRecentSessions;
-
-  /// Empty sessions
-  ///
-  /// In en, this message translates to:
-  /// **'No recent sessions'**
-  String get homeNoRecentSessions;
-
-  /// Sessions cache
-  ///
-  /// In en, this message translates to:
-  /// **'Cached sessions show first; newer ones fill in in the background.'**
-  String get homeSessionsCacheHint;
-
-  /// Sessions empty
-  ///
-  /// In en, this message translates to:
-  /// **'After you create a session, it appears by last activity.'**
-  String get homeSessionsEmptyHint;
 
   /// Installed providers
   ///
@@ -1406,18 +1346,6 @@ abstract class AppLocalizations {
   /// **'After you install and configure a supported Agent, it appears here.'**
   String get homeProvidersAfterInstall;
 
-  /// Open recent project
-  ///
-  /// In en, this message translates to:
-  /// **'Open recent project {name}'**
-  String homeOpenRecentProject(String name);
-
-  /// Open recent session
-  ///
-  /// In en, this message translates to:
-  /// **'Open recent session {title}'**
-  String homeOpenRecentSession(String title);
-
   /// Join two labels
   ///
   /// In en, this message translates to:
@@ -1453,12 +1381,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Error'**
   String get homeProviderError;
-
-  /// Provider update
-  ///
-  /// In en, this message translates to:
-  /// **'Update available'**
-  String get homeProviderUpdateAvailable;
 
   /// Provider detecting
   ///

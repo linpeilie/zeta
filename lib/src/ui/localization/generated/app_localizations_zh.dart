@@ -649,40 +649,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get homeOpenProject => '打开项目';
 
   @override
-  String get homeRecentProjects => '近期项目';
-
-  @override
-  String get homeReadingRecentProjects => '正在读取近期项目…';
-
-  @override
-  String get homeNoRecentProjects => '暂无近期项目';
-
-  @override
-  String get homeRecentProjectsAfterRestore => '恢复完成后会在这里显示最近访问的项目。';
-
-  @override
-  String get homeRecentProjectsAfterOpen => '打开一个项目后，它会显示在这里。';
-
-  @override
   String get homeRecentSessions => '近期会话';
 
   @override
-  String get homeRefreshFailed => '刷新失败';
-
-  @override
-  String get homeCannotRefreshSessions => '无法刷新近期会话';
-
-  @override
   String get homeLoadingRecentSessions => '正在加载近期会话…';
-
-  @override
-  String get homeNoRecentSessions => '暂无近期会话';
-
-  @override
-  String get homeSessionsCacheHint => '缓存会先显示，最新会话将在后台补齐。';
-
-  @override
-  String get homeSessionsEmptyHint => '创建会话后，它会按最近活跃时间显示。';
 
   @override
   String get homeInstalledProviders => '已安装 Provider';
@@ -706,16 +676,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get homeProvidersAfterInstall => '安装并配置受支持的 Agent 后，它会显示在这里。';
 
   @override
-  String homeOpenRecentProject(String name) {
-    return '打开近期项目 $name';
-  }
-
-  @override
-  String homeOpenRecentSession(String title) {
-    return '打开近期会话 $title';
-  }
-
-  @override
   String homeCommaJoin(String left, String right) {
     return '$left，$right';
   }
@@ -734,9 +694,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get homeProviderError => '异常';
-
-  @override
-  String get homeProviderUpdateAvailable => '可更新';
 
   @override
   String get homeProviderDetecting => '检测中';
