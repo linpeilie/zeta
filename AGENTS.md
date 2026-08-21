@@ -276,6 +276,7 @@ lint 已经覆盖的不再重复，这里只写 `flutter analyze` 抓不到的�
 - `ChangeNotifier` / `ValueNotifier` / timer 持有者必须在 `dispose` 中释放。
 - 对外暴露集合默认返回不可变列表或 unmodifiable view，除非 API 明确要求可变。
 - 为可测试性优先构造函数注入。**不引入第三方状态管理**，除非明确要求或有充分理由。
+- **`flutter_riverpod` 已作为依赖引入**（`pubspec.yaml` + `lib/main.dart` 根节点 `ProviderScope`），但目前只是接入点，**不是标准方案**：现有 `ChangeNotifier` application controller 不需要迁移，也不得因为“顺手”而迁移。新代码要不要用 Riverpod provider，按上一条的豁免条件（明确要求 / 有充分理由）逐次判断；采用时仍遵守 G6——`Provider`/`Notifier` 定义放对应 feature 的 `application` 层，`domain` 不得 import `riverpod`，UI 只消费。
 
 **UI**
 
