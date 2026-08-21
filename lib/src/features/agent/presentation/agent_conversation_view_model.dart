@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:zeta/src/core/utils/path_utils.dart';
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/core/logging/structured_error_logging.dart';
+import 'package:zeta/src/core/observability/zeta_metrics_port.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_effect.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_binding.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_effect_runner.dart';
@@ -31,6 +32,7 @@ import 'package:zeta/src/features/agent/application/bounded_event_dispatcher.dar
 import 'package:zeta/src/features/agent/data/agent_turn_context_store.dart';
 import 'package:zeta/src/features/agent/application/coalescing_event_buffer.dart';
 import 'package:zeta/src/features/agent/application/agent_event_pipeline.dart';
+import 'package:zeta/src/features/agent/application/agent_pipeline_metrics_reporter.dart';
 import 'package:zeta/src/features/agent/application/agent_ui_update_port.dart';
 import 'package:zeta/src/features/agent/application/agent_ui_update_request.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
@@ -91,6 +93,7 @@ class AgentConversationViewModel {
     String? initialContextFilePath,
     AgentThreadSummary? initialThread,
     AgentFrameScheduler? uiFrameScheduler,
+    this.metrics = noopZetaMetricsPort,
   }) : _textCatalog = textCatalog ?? const FallbackAgentUiTextCatalog(),
        _timeline =
            timelineStore ??
@@ -142,9 +145,15 @@ class AgentConversationViewModel {
       buildHistoryState: _buildHistoryState,
       isDisposed: () => _disposed,
     );
+    _pipelineMetrics = AgentPipelineMetricsReporter(
+      metrics: metrics,
+      providerId: conversationBinding.providerId,
+    );
     _uiUpdateScheduler = AgentUiUpdateScheduler(
       _publishScheduledUiChanges,
       frameScheduler: uiFrameScheduler,
+      metrics: metrics,
+      providerId: conversationBinding.providerId,
     );
     _uiUpdates = _uiUpdateScheduler;
     _eventStateTarget = _AgentConversationEventStateTarget(this);
@@ -193,6 +202,12 @@ class AgentConversationViewModel {
   static const String planExecutionPrompt =
       'Execute the plan from the previous turn. Work through it step by step '
       'and run the relevant verification before finishing.';
+
+  /// app 组合层注入的脱敏指标端口；默认 no-op。
+  final ZetaMetricsPort metrics;
+
+  /// 按边界采样事件管线诊断的指标上报器（共享层零改动）。
+  late final AgentPipelineMetricsReporter _pipelineMetrics;
 
   /// 可选：从 shell 注入工作区文件列表，供 @mention 选择器使用。
   final List<WorkspaceNode> Function()? workspaceFilesProvider;
@@ -3333,8 +3348,13 @@ class AgentConversationViewModel {
           'Flushing Agent event buffer after backpressure '
           '(pending keys: $pendingEventCount)',
         );
+        _pipelineMetrics.report(pipeline.diagnostics);
       },
     );
+    // 每个 Pipeline 实例的诊断计数独立，换实例前先归零增量基准。
+    _pipelineMetrics
+      ..report(previous?.diagnostics)
+      ..resetForNewPipeline();
     _eventPipeline = pipeline;
   }
 
@@ -3346,6 +3366,7 @@ class AgentConversationViewModel {
     if (pipeline == null) {
       return;
     }
+    _pipelineMetrics.report(pipeline.diagnostics);
     unawaited(pipeline.close(reason: reason));
   }
 
@@ -3943,6 +3964,8 @@ class AgentConversationViewModel {
       _syncThreadSnapshotListenable();
     }
     _uiStateStore.publish(request);
+    // 帧边界采样：管线热路径本身不埋点，指标只在这里按增量上报。
+    _pipelineMetrics.report(_eventPipeline?.diagnostics);
   }
 
   /// 将当前 isTurnRunning / runtimeStatus 等推到 [threadSnapshotListenable]。

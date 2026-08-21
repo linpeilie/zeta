@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'package:zeta/src/app/app.dart';
+import 'package:zeta/src/app/observability/zeta_observability.dart';
 import 'package:zeta/src/app/window_bootstrap.dart';
 import 'package:zeta/src/app/zeta_startup_bootstrap.dart';
 import 'package:zeta/src/core/logging/app_logging.dart';
@@ -66,13 +67,17 @@ void main() {
           appearance.themeMode,
         ),
       );
+      // 阶段 0：只挂脱敏观察器与指标端口，不迁移任何业务状态到 Riverpod。
+      final observability = ZetaObservability.fromEnvironment();
       runApp(
         ProviderScope(
+          observers: observability.providerObservers,
           child: MainApp(
             dataPaths: dataPaths,
             initialAppearanceSettings: appearance,
             fallbackLanguage: fallbackLanguage,
             waitForGeneralSettings: true,
+            observability: observability,
           ),
         ),
       );

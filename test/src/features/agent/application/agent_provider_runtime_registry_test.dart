@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:zeta/src/core/observability/in_memory_zeta_metrics_port.dart';
+import 'package:zeta/src/core/observability/zeta_metric.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
@@ -542,6 +544,96 @@ void main() {
         isFalse,
       );
       expect(replacement.isCurrent, isTrue);
+    });
+  });
+
+  group('AgentProviderRuntimeRegistry 指标', () {
+    test('创建、复用、失效与关闭都进入白名单指标', () async {
+      final metrics = InMemoryZetaMetricsPort();
+      final factory = _CountingProviderFactory();
+      final registry = AgentProviderRuntimeRegistry(
+        providerFactory: factory,
+        metrics: metrics,
+      );
+      final codexTags = ZetaMetricTags(providerId: defaultAgentProviderId);
+
+      final first = await registry.acquire(
+        AgentProviderConfig.defaultCodex,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
+      final second = await registry.acquire(
+        AgentProviderConfig.defaultCodex,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
+
+      expect(
+        metrics.totalOf(ZetaMetric.agentRuntimeCreated, tags: codexTags),
+        1,
+      );
+      expect(
+        metrics.totalOf(ZetaMetric.agentRuntimeLeaseReused, tags: codexTags),
+        1,
+      );
+      expect(metrics.lastValueOf(ZetaMetric.agentRuntimeActiveCount), 1);
+      expect(metrics.maxValueOf(ZetaMetric.agentRuntimeActiveLeases), 2);
+
+      await first.release();
+      await second.release();
+      expect(metrics.lastValueOf(ZetaMetric.agentRuntimeActiveLeases), 0);
+
+      await registry.invalidateProvider(defaultAgentProviderId);
+      expect(
+        metrics.totalOf(ZetaMetric.agentRuntimeInvalidated, tags: codexTags),
+        1,
+      );
+      expect(metrics.lastValueOf(ZetaMetric.agentRuntimeActiveCount), 0);
+
+      await registry.close();
+      expect(metrics.totalOf(ZetaMetric.agentRuntimeRegistryClosed), 1);
+    });
+
+    test('指标只携带 Provider ID，不含命令行、环境变量或路径', () async {
+      final metrics = InMemoryZetaMetricsPort();
+      final registry = AgentProviderRuntimeRegistry(
+        providerFactory: _CountingProviderFactory(),
+        metrics: metrics,
+      );
+      addTearDown(registry.close);
+
+      final lease = await registry.acquire(
+        AgentProviderConfig.defaultCodex.copyWith(
+          command: '/Users/tester/bin/secret-codex',
+          environment: const <String, String>{'API_KEY': 'sk-should-not-leak'},
+        ),
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
+      addTearDown(lease.release);
+
+      final text = metrics
+          .snapshot()
+          .map((series) => series.toString())
+          .join('\n');
+      expect(text, isNot(contains('secret-codex')));
+      expect(text, isNot(contains('sk-should-not-leak')));
+      expect(text, isNot(contains('/Users/')));
+      expect(text, contains(defaultAgentProviderId));
+    });
+
+    test('默认 no-op 端口不产生任何采样', () async {
+      final metrics = InMemoryZetaMetricsPort(enabled: false);
+      final registry = AgentProviderRuntimeRegistry(
+        providerFactory: _CountingProviderFactory(),
+        metrics: metrics,
+      );
+      addTearDown(registry.close);
+
+      final lease = await registry.acquire(
+        AgentProviderConfig.defaultCodex,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
+      await lease.release();
+
+      expect(metrics.seriesCount, 0);
     });
   });
 }

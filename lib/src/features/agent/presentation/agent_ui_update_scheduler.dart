@@ -1,4 +1,6 @@
 import 'package:flutter/scheduler.dart';
+import 'package:zeta/src/core/observability/zeta_metric.dart';
+import 'package:zeta/src/core/observability/zeta_metrics_port.dart';
 import 'package:zeta/src/features/agent/application/agent_ui_update_port.dart';
 import 'package:zeta/src/features/agent/application/agent_ui_update_request.dart';
 
@@ -105,12 +107,22 @@ final class AgentUiUpdateSchedulerDiagnostics {
 /// [AgentUiUpdateUrgency.immediate] 请求吸收 pending 请求并使旧 frame callback
 /// 失效；若当前处于 build phase，则延迟到下一 frame，避免同步通知重入构建。
 final class AgentUiUpdateScheduler implements AgentUiUpdatePort {
-  AgentUiUpdateScheduler(this._onPublish, {AgentFrameScheduler? frameScheduler})
-    : _frameScheduler =
-          frameScheduler ?? const SchedulerBindingAgentFrameScheduler();
+  AgentUiUpdateScheduler(
+    this._onPublish, {
+    AgentFrameScheduler? frameScheduler,
+    ZetaMetricsPort metrics = noopZetaMetricsPort,
+    String? providerId,
+  }) : _frameScheduler =
+           frameScheduler ?? const SchedulerBindingAgentFrameScheduler(),
+       _metrics = metrics,
+       _metricTags = metrics.isEnabled
+           ? ZetaMetricTags(providerId: providerId)
+           : ZetaMetricTags.none;
 
   final void Function(AgentUiUpdateRequest request) _onPublish;
   final AgentFrameScheduler _frameScheduler;
+  final ZetaMetricsPort _metrics;
+  final ZetaMetricTags _metricTags;
 
   AgentUiUpdateRequest _pendingRequest = AgentUiUpdateRequest.none;
   bool _frameScheduled = false;
@@ -158,6 +170,10 @@ final class AgentUiUpdateScheduler implements AgentUiUpdatePort {
   void publish(AgentUiUpdateRequest request) {
     if (_disposed) {
       _requestsIgnoredAfterDispose += 1;
+      _metrics.counter(
+        ZetaMetric.agentUiRequestsAfterDispose,
+        tags: _metricTags,
+      );
       return;
     }
     switch (request.urgency) {
@@ -200,6 +216,10 @@ final class AgentUiUpdateScheduler implements AgentUiUpdatePort {
     }
     if (_frameScheduler.isInBuildPhase) {
       _buildPhaseDeferrals += 1;
+      _metrics.counter(
+        ZetaMetric.agentUiBuildPhaseDeferrals,
+        tags: _metricTags,
+      );
       _pendingRequest = combined;
       _ensureFrameScheduled();
       return;
@@ -261,9 +281,21 @@ final class AgentUiUpdateScheduler implements AgentUiUpdatePort {
     _publishedEffects += request.effects.length;
     if (immediate) {
       _immediatePublishes += 1;
+      _metrics.counter(ZetaMetric.agentUiImmediatePublishes, tags: _metricTags);
     } else {
       _framePublishes += 1;
+      _metrics.counter(ZetaMetric.agentUiFramePublishes, tags: _metricTags);
     }
+    _metrics.counter(
+      ZetaMetric.agentUiPublishedRegions,
+      increment: request.regions.length,
+      tags: _metricTags,
+    );
+    _metrics.counter(
+      ZetaMetric.agentUiPublishedEffects,
+      increment: request.effects.length,
+      tags: _metricTags,
+    );
     _onPublish(request);
   }
 }

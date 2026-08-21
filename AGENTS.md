@@ -151,6 +151,7 @@ Zeta 自有数据全部在 `~/.zeta/`：`config/` · `state/` · `logs/` · `cac
 - 派生索引、缓存、日志、系统通知 payload **只保存规范化白名单字段**。
 - **禁止落盘**：prompt、回复正文、工具输出、文件变更 evidence 正文（替换片段、写入内容、patch）、原始错误文本、session 文件路径、环境变量值、凭证、Provider raw payload、localized UI copy（ARB 字符串、文本目录输出）。
 - JSON-RPC transport 日志不得记录 prompt、文件内容、认证参数或 stderr 原文；Agent 日志进 UI 前必须在 data 层完成脱敏。
+- **指标同样受此约束**：只能通过 `ZetaMetricsPort`（`lib/src/core/observability/`）上报，指标名必须登记进 `ZetaMetric` 白名单枚举，标签只有 `providerId` / `component` / `outcome` 三个规范化维度。采集实现只在 `lib/src/app/observability` 组合，业务层一律只见端口且默认 no-op；Riverpod `ProviderObserver` 不得读取 provider state 或 family 参数。
 
 > 正文：[工程规范 §5](docs/architecture/engineering_standards.md) · [开发者文档 §9](docs/guides/developer_guide.md)
 

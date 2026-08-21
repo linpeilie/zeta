@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta/src/core/observability/zeta_metric.dart';
+import 'package:zeta/src/core/observability/zeta_metrics_port.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_identity.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
@@ -16,9 +18,15 @@ typedef _RuntimeKey = ({String providerId, AgentProviderRuntimeScopeKey scope});
 /// 同一 (providerId, scope) 只会有一个。调用方必须显式声明 global 或 session scope，
 /// 避免遗漏参数时意外借用永不空闲回收的 global runtime。
 class AgentProviderRuntimeRegistry extends ChangeNotifier {
-  AgentProviderRuntimeRegistry({required this.providerFactory});
+  AgentProviderRuntimeRegistry({
+    required this.providerFactory,
+    this.metrics = noopZetaMetricsPort,
+  });
 
   final AgentProviderBundleFactory providerFactory;
+
+  /// 脱敏指标端口；只记录生命周期计数与实例/租约水位。
+  final ZetaMetricsPort metrics;
 
   final Map<_RuntimeKey, _AgentProviderRuntimeEntry> _entries =
       <_RuntimeKey, _AgentProviderRuntimeEntry>{};
@@ -60,7 +68,13 @@ class AgentProviderRuntimeRegistry extends ChangeNotifier {
           await _invalidateEntry(key, existing);
           continue;
         }
-        return _createLease(existing);
+        metrics.counter(
+          ZetaMetric.agentRuntimeLeaseReused,
+          tags: _tagsFor(config.id),
+        );
+        final lease = _createLease(existing);
+        _publishRuntimeGauges();
+        return lease;
       }
 
       _log.t('Creating application Agent provider: ${config.id} ($scope)');
@@ -104,8 +118,14 @@ class AgentProviderRuntimeRegistry extends ChangeNotifier {
       }
       _generationByProviderId[config.id] = generation;
       _entries[key] = entry;
+      metrics.counter(
+        ZetaMetric.agentRuntimeCreated,
+        tags: _tagsFor(config.id),
+      );
       notifyListeners();
-      return _createLease(entry);
+      final lease = _createLease(entry);
+      _publishRuntimeGauges();
+      return lease;
     }
   }
 
@@ -195,6 +215,22 @@ class AgentProviderRuntimeRegistry extends ChangeNotifier {
     if (entry.leaseCount > 0) {
       entry.leaseCount -= 1;
     }
+    _publishRuntimeGauges();
+  }
+
+  /// Provider ID 只作为标签透传；registry 不按 Provider 分支。
+  ZetaMetricTags _tagsFor(String providerId) {
+    return metrics.isEnabled
+        ? ZetaMetricTags(providerId: providerId)
+        : ZetaMetricTags.none;
+  }
+
+  void _publishRuntimeGauges() {
+    if (!metrics.isEnabled) {
+      return;
+    }
+    metrics.gauge(ZetaMetric.agentRuntimeActiveCount, _entries.length);
+    metrics.gauge(ZetaMetric.agentRuntimeActiveLeases, debugLeaseCount);
   }
 
   Future<void> _invalidateEntry(
@@ -206,6 +242,11 @@ class AgentProviderRuntimeRegistry extends ChangeNotifier {
     }
     _entries.remove(key);
     expected.invalidated = true;
+    metrics.counter(
+      ZetaMetric.agentRuntimeInvalidated,
+      tags: _tagsFor(key.providerId),
+    );
+    _publishRuntimeGauges();
     notifyListeners();
     final disposing = _disposeEntry(expected);
     _closingByKey[key] = disposing;
@@ -228,6 +269,8 @@ class AgentProviderRuntimeRegistry extends ChangeNotifier {
     for (final entry in entries) {
       entry.invalidated = true;
     }
+    metrics.counter(ZetaMetric.agentRuntimeRegistryClosed);
+    _publishRuntimeGauges();
     notifyListeners();
     await Future.wait(<Future<void>>[
       ...entries.map(_disposeEntry),

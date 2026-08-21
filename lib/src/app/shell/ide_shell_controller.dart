@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta/src/core/observability/zeta_metrics_port.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_thread_snapshot.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_global_runtime.dart';
@@ -84,6 +85,7 @@ class IdeShellController extends ChangeNotifier {
     IdeShellUsageStatisticsDependencies? usageStatistics,
     AgentTurnContextStore? turnContextStore,
     this.agentUiTextCatalog = const FallbackAgentUiTextCatalog(),
+    this.metrics = noopZetaMetricsPort,
     DateTime Function()? now,
   }) : projectThreadsViewModel = ProjectThreadsViewModel(),
        _sessionCoordinator = IdeSessionPersistenceCoordinator(
@@ -93,7 +95,10 @@ class IdeShellController extends ChangeNotifier {
        _now = now ?? DateTime.now {
     this.agentProviderRuntimeRegistry =
         agentProviderRuntimeRegistry ??
-        AgentProviderRuntimeRegistry(providerFactory: agentProviderFactory);
+        AgentProviderRuntimeRegistry(
+          providerFactory: agentProviderFactory,
+          metrics: metrics,
+        );
     agentProviderGlobalRuntime = AgentProviderGlobalRuntime(
       runtimeRegistry: this.agentProviderRuntimeRegistry,
     );
@@ -161,6 +166,7 @@ class IdeShellController extends ChangeNotifier {
       uiFrameSchedulerFactory: agentUiFrameSchedulerFactory,
       turnContextStore: turnContextStore,
       textCatalog: agentUiTextCatalog,
+      metrics: metrics,
     );
     _bootstrapAgentEntry = agentWorkspaceController.ensureDraftEntry(
       projectPath: _bootstrapProjectPath,
@@ -214,6 +220,9 @@ class IdeShellController extends ChangeNotifier {
   late final ProjectThreadsController projectThreadsController;
   final ProjectThreadsViewModel projectThreadsViewModel;
   final AgentUiTextCatalog agentUiTextCatalog;
+
+  /// app 组合层注入的脱敏指标端口；默认 no-op，探针只剩常量分支。
+  final ZetaMetricsPort metrics;
   final Map<String, ({AgentThreadWorkspaceEntry entry, VoidCallback listener})>
   _workspaceEntryListeners =
       <String, ({AgentThreadWorkspaceEntry entry, VoidCallback listener})>{};

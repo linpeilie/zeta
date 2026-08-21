@@ -8,9 +8,11 @@ import 'package:window_manager/window_manager.dart';
 
 import 'package:zeta/src/app/app_constants.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
+import 'package:zeta/src/app/observability/zeta_observability.dart';
 import 'package:zeta/src/app/localization/zeta_text_catalogs.dart';
 import 'package:zeta/src/app/shell/ide_shell_controller.dart';
 import 'package:zeta/src/app/window_bootstrap.dart';
+import 'package:zeta/src/core/observability/zeta_metrics_port.dart';
 import 'package:zeta/src/core/storage/zeta_data_paths.dart';
 import 'package:zeta/src/core/utils/system_file_manager.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
@@ -75,6 +77,7 @@ class MainApp extends StatefulWidget {
     this.desktopNotificationService,
     this.desktopAttentionIndicator,
     this.turnContextStore,
+    this.observability,
   });
 
   final Future<String?> Function()? directoryPicker;
@@ -111,6 +114,9 @@ class MainApp extends StatefulWidget {
   ///
   /// 生产 `main` 传 true；Widget 测试默认 false，避免多等一帧。
   final bool waitForGeneralSettings;
+
+  /// app 级可观测性组合；默认关闭采集，探针退化为 no-op。
+  final ZetaObservability? observability;
 
   /// 生产启动阶段解析并初始化的 Zeta 自有数据路径。
   ///
@@ -167,6 +173,10 @@ class MainAppState extends State<MainApp>
   GeneralSettingsController get generalSettingsController =>
       _generalSettingsController;
 
+  /// 当前生效的脱敏指标端口；未注入 [MainApp.observability] 时为 no-op。
+  ZetaMetricsPort get _metrics =>
+      widget.observability?.metrics ?? noopZetaMetricsPort;
+
   @override
   void initState() {
     super.initState();
@@ -201,6 +211,7 @@ class MainAppState extends State<MainApp>
     } else if (injectedFactory != null) {
       _agentProviderRuntimeRegistry = AgentProviderRuntimeRegistry(
         providerFactory: injectedFactory,
+        metrics: _metrics,
       );
       _ownsAgentProviderRuntimeRegistry = true;
       _providerRuntimeShutdownHook = _agentProviderRuntimeRegistry.close;
@@ -319,6 +330,7 @@ class MainAppState extends State<MainApp>
         !_localeRuntimeReady) {
       _agentProviderRuntimeRegistry = AgentProviderRuntimeRegistry(
         providerFactory: _agentProviderFactory,
+        metrics: _metrics,
       );
       _ownsAgentProviderRuntimeRegistry = true;
       _providerRuntimeShutdownHook = _agentProviderRuntimeRegistry.close;
@@ -488,6 +500,7 @@ class MainAppState extends State<MainApp>
                       agentModelCatalogRepository: _agentModelCatalogRepository,
                       turnContextStore: _turnContextStore,
                       agentUiTextCatalog: _agentUiTextCatalog,
+                      metrics: _metrics,
                       desktopAttentionTextCatalog: _desktopAttentionTextCatalog,
                       // 回调存储用于测试/嵌入宿主；未显式注入统计仓储时不读取本机 CLI 历史。
                       enableAgentUsageAutoRefresh:

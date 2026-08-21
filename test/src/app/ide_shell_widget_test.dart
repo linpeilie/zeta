@@ -31,6 +31,16 @@ import '../testing/agent_event_storm_fixture.dart';
 import '../testing/ide_test_harness.dart';
 import '../testing/widget_build_counter.dart';
 
+/// 阶段 0 固定风暴 fixture 的 UI 侧预算。
+///
+/// 预算不是精确值，而是「不许再退化」的上界：当前观测值远低于它们
+/// （Shell 骨架各 1 次重建、227 次 region 发布、队列水位 2、pending key 1）。
+/// 迁移到 Riverpod slice 后仍必须满足这些上界，否则说明发布频率被放大。
+const int kStormShellRebuildBudget = 2;
+const int kStormUiPublishBudget = 400;
+const int kStormDispatcherQueueBudget = 64;
+const int kStormPendingKeyBudget = 64;
+
 void main() {
   testWidgets('starts with the compact IDE panes', (tester) async {
     await _pumpIde(tester, enableNativeWindowFrame: true);
@@ -960,6 +970,31 @@ void main() {
     expect(
       afterUiScheduler.publishedEffects - beforeUiScheduler.publishedEffects,
       greaterThan(0),
+    );
+
+    // 阶段 0 基线：整场风暴只允许常驻 Shell/Pane 骨架各构建一次，
+    // 流式内容重建收敛在局部时间线里（见同文件后两个 phase1 测试）。
+    for (final target in AgentBuildTarget.all) {
+      expect(
+        buildCounts[target],
+        lessThanOrEqualTo(kStormShellRebuildBudget),
+        reason: '$target 在一场事件风暴中超出重建预算',
+      );
+    }
+    expect(
+      afterUi.publishCount - beforeUi.publishCount,
+      lessThanOrEqualTo(kStormUiPublishBudget),
+      reason: 'UI region 发布次数超出阶段 0 预算',
+    );
+    expect(
+      afterScheduler.maxQueueDepth,
+      lessThanOrEqualTo(kStormDispatcherQueueBudget),
+      reason: '有界 dispatcher 队列水位超出阶段 0 预算',
+    );
+    expect(
+      afterBuffer.maxPendingKeys,
+      lessThanOrEqualTo(kStormPendingKeyBudget),
+      reason: 'coalescing buffer pending key 水位超出阶段 0 预算',
     );
 
     debugPrint(

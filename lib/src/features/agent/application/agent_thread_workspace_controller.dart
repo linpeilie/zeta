@@ -3,6 +3,7 @@ import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
 
+import 'package:zeta/src/core/observability/zeta_metrics_port.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_binding.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_binding_manager.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_thread_snapshot.dart';
@@ -209,6 +210,7 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
     this.uiFrameSchedulerFactory,
     this.turnContextStore,
     AgentUiTextCatalog? textCatalog,
+    this.metrics = noopZetaMetricsPort,
   }) : bindingManager =
            bindingManager ??
            AgentConversationBindingManager(
@@ -240,6 +242,9 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
 
   /// Zeta 自有 turn 上下文存储，注入到每个常驻 ViewModel。
   final AgentTurnContextStore? turnContextStore;
+
+  /// 脱敏指标端口，转交给每个常驻 ViewModel 的事件管线与 UI 调度器。
+  final ZetaMetricsPort metrics;
 
   final AgentUiTextCatalog _textCatalog;
 
@@ -473,6 +478,7 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
       initialProjectPath: projectPath,
       initialThread: initialThread,
       turnContextStore: turnContextStore,
+      metrics: metrics,
       onAttention: (signal) {
         final threadId = signal.threadId ?? entry.threadId;
         if (threadId == null || threadId.trim().isEmpty) {
