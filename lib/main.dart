@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/widgets.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'package:zeta/src/app/app.dart';
@@ -66,11 +67,13 @@ void main() {
         ),
       );
       runApp(
-        MainApp(
-          dataPaths: dataPaths,
-          initialAppearanceSettings: appearance,
-          fallbackLanguage: fallbackLanguage,
-          waitForGeneralSettings: true,
+        ProviderScope(
+          child: MainApp(
+            dataPaths: dataPaths,
+            initialAppearanceSettings: appearance,
+            fallbackLanguage: fallbackLanguage,
+            waitForGeneralSettings: true,
+          ),
         ),
       );
     },
