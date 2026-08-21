@@ -367,6 +367,17 @@ List<String> _locations(Map<String, Object?> item) {
   }).toList();
 }
 
+/// 从 Agent 消息 item 提取正文，兼容两种 ThreadItem 形状。
+///
+/// - `thread/read` 与旧版会话 JSONL：正文平铺在 `text`；
+/// - 新版会话 JSONL（Codex 0.148 起的部分 rollout）：正文在 `content[].text`。
+///
+/// 两种形状会同时存在于线上，因为 rollout 文件是历史存档——用户机器上一定
+/// 躺着一堆旧格式会话。任何一边写死都会让另一边整段消息消失。
+String? _agentMessageTextFromItem(Map<String, Object?> item) {
+  return _string(item['text']) ?? _userInputText(item['content']);
+}
+
 /// 将用户输入数组转成历史消息文本。
 ///
 /// 本地/远程图片不写入文本（由 [_userInputLocalImagePaths] 单独提取），
@@ -379,18 +390,21 @@ String? _userInputText(Object? value) {
   final parts = <String>[];
   for (final itemValue in value) {
     final item = _map(itemValue);
-    final type = _string(item['type']);
+    // 元素类型走归一化而不是裸字符串比较：同样是 content 数组，用户消息的元素
+    // 是小写 `text`，Agent 消息的元素却是大写 `Text`（新版会话 JSONL 的
+    // ThreadItem 形状）。按字面量匹配会让 Agent 正文整段落到 default 分支。
+    final type = _normalizedAgentItemType(_string(item['type']));
     switch (type) {
       case 'text':
-      case 'input_text':
+      case 'inputtext':
         final text = _string(item['text']);
         // 跳过纯图片标记行；路径由 [_userInputLocalImagePaths] 提取。
         if (text != null && !_isImageMarkupText(text)) {
           parts.add(text);
         }
       case 'image':
-      case 'localImage':
-      case 'input_image':
+      case 'localimage':
+      case 'inputimage':
         // 图片走独立路径字段，不拼进文本。
         break;
       case 'skill':
@@ -439,13 +453,14 @@ List<String> _userInputLocalImagePaths(Object? value) {
 
   for (final itemValue in value) {
     final item = _map(itemValue);
-    final type = _string(item['type']);
+    // 与 [_userInputText] 同源：大小写与下划线差异只是同一类型的不同写法。
+    final type = _normalizedAgentItemType(_string(item['type']));
     switch (type) {
-      case 'localImage':
+      case 'localimage':
       case 'image':
         addPath(_string(item['path']));
       case 'text':
-      case 'input_text':
+      case 'inputtext':
         for (final path in _pathsFromImageMarkup(_string(item['text']))) {
           addPath(path);
         }
