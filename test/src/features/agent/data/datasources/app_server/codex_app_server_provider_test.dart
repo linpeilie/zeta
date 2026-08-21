@@ -3750,6 +3750,195 @@ void main() {
       },
     );
 
+    test(
+      'rebuilds messages from the item_completed ThreadItem stream',
+      () async {
+        // Codex 0.148 起的部分 rollout 不再写 event_msg.user_message /
+        // agent_message，整条会话改由 item_completed 的 ThreadItem 流承载，
+        // item.type 是大驼峰。之前这条分支只放行 plan，于是这类会话的历史里
+        // 只剩工具卡，用户看到的就是「打开会话没有内容」。
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        final sessionFile = await _writeJsonlFile(<Object?>[
+          <String, Object?>{
+            'type': 'event_msg',
+            'payload': <String, Object?>{
+              'type': 'task_started',
+              'turn_id': 'turn-items',
+              'started_at': 1787275917,
+            },
+          },
+          <String, Object?>{
+            'type': 'event_msg',
+            'payload': <String, Object?>{
+              'type': 'item_completed',
+              'turn_id': 'turn-items',
+              'item': <String, Object?>{
+                'type': 'UserMessage',
+                'id': 'item-user-1',
+                'client_id': 'client-user-1',
+                // 用户消息的 content 元素是小写 text。
+                'content': <Object?>[
+                  <String, Object?>{
+                    'type': 'text',
+                    'text': 'Explain the architecture',
+                    'text_elements': <Object?>[],
+                  },
+                ],
+              },
+            },
+          },
+          <String, Object?>{
+            'type': 'event_msg',
+            'payload': <String, Object?>{
+              'type': 'item_completed',
+              'turn_id': 'turn-items',
+              'item': <String, Object?>{
+                'type': 'Reasoning',
+                'id': 'item-reasoning-1',
+                'summary_text': <Object?>[],
+                'raw_content': <Object?>[],
+              },
+            },
+          },
+          <String, Object?>{
+            'type': 'response_item',
+            'payload': <String, Object?>{
+              'type': 'custom_tool_call',
+              'name': 'shell',
+              'call_id': 'call_abc',
+              'input': jsonEncode(<String, Object?>{
+                'command': <String>['ls'],
+              }),
+            },
+          },
+          <String, Object?>{
+            'type': 'event_msg',
+            'payload': <String, Object?>{
+              'type': 'item_completed',
+              'turn_id': 'turn-items',
+              // 同一次调用在 ThreadItem 流里还会再出现一次，且 id 与
+              // custom_tool_call 的 call_id 不同；两边都收就会是双份工具卡。
+              'item': <String, Object?>{
+                'type': 'CommandExecution',
+                'id': 'exec-abc',
+                'command': <String>['ls'],
+                'status': 'completed',
+                'aggregated_output': 'lib\n',
+              },
+            },
+          },
+          <String, Object?>{
+            'type': 'event_msg',
+            'payload': <String, Object?>{
+              'type': 'item_completed',
+              'turn_id': 'turn-items',
+              'item': <String, Object?>{
+                'type': 'AgentMessage',
+                'id': 'msg-agent-1',
+                // Agent 消息的 content 元素是大写 Text，且正文不在 item.text。
+                'content': <Object?>[
+                  <String, Object?>{'type': 'Text', 'text': 'It is layered.'},
+                ],
+                'phase': 'commentary',
+              },
+            },
+          },
+          <String, Object?>{
+            'type': 'event_msg',
+            'payload': <String, Object?>{
+              'type': 'task_complete',
+              'turn_id': 'turn-items',
+              'completed_at': 1787275999,
+            },
+          },
+        ]);
+        addTearDown(() => sessionFile.parent.delete(recursive: true));
+
+        final history = await provider.readThreadHistory(
+          threadId: 'thread-items',
+          sessionPath: sessionFile.path,
+        );
+
+        final entries = _historyEntries(history);
+        final messages = entries.whereType<AgentHistoryMessageEntry>().toList();
+        final tools = entries.whereType<AgentHistoryToolEntry>().toList();
+
+        expect(messages, hasLength(2));
+        expect(messages[0].role, AgentMessageRole.user);
+        expect(messages[0].text, 'Explain the architecture');
+        expect(messages[0].id, 'item-user-1');
+        expect(messages[1].role, AgentMessageRole.agent);
+        expect(messages[1].text, 'It is layered.');
+        expect(messages[1].phase, AgentMessagePhase.commentary);
+        // 时间线顺序必须是「提问 → 工具 → 回复」，不能被重排。
+        expect(
+          entries.indexOf(messages[0]),
+          lessThan(entries.indexOf(tools.single)),
+        );
+        expect(
+          entries.indexOf(tools.single),
+          lessThan(entries.indexOf(messages[1])),
+        );
+        // 工具只从 response_item 来一次；CommandExecution 不得再造一张卡。
+        expect(tools, hasLength(1));
+        expect(tools.single.id, 'call_abc');
+        // Reasoning 与旧格式的 agent_reasoning 保持一致：历史里不渲染。
+        expect(entries, hasLength(3));
+
+        await provider.dispose();
+      },
+    );
+
+    test(
+      'keeps legacy user_message and agent_message events working',
+      () async {
+        // 用户机器上躺着的绝大多数 rollout 仍是旧格式，两条路必须都通。
+        final peer = _FakeJsonRpcPeer();
+        final provider = CodexAppServerAgentProvider(
+          config: AgentProviderConfig.defaultCodex,
+          peer: peer,
+        );
+        final sessionFile = await _writeJsonlFile(<Object?>[
+          <String, Object?>{
+            'type': 'event_msg',
+            'payload': <String, Object?>{
+              'type': 'user_message',
+              'client_id': 'legacy-user-1',
+              'message': 'Legacy question',
+            },
+          },
+          <String, Object?>{
+            'type': 'event_msg',
+            'payload': <String, Object?>{
+              'type': 'agent_message',
+              'id': 'legacy-agent-1',
+              'message': 'Legacy answer',
+            },
+          },
+        ]);
+        addTearDown(() => sessionFile.parent.delete(recursive: true));
+
+        final history = await provider.readThreadHistory(
+          threadId: 'thread-legacy',
+          sessionPath: sessionFile.path,
+        );
+
+        final messages = _historyEntries(
+          history,
+        ).whereType<AgentHistoryMessageEntry>().toList();
+        expect(messages.map((entry) => entry.text), <String>[
+          'Legacy question',
+          'Legacy answer',
+        ]);
+
+        await provider.dispose();
+      },
+    );
+
     test('thread/read extracts path from input_text image markup', () async {
       // thread/read 偶发把路径写在 <image path="…"> 标记里，而不是 localImage 字段。
       final peer = _FakeJsonRpcPeer(

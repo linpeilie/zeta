@@ -207,28 +207,80 @@ class _JsonlHistoryParser {
     }
   }
 
+  /// 消费 `event_msg.item_completed`（ThreadItem 流）里的**消息**。
+  ///
+  /// Codex 0.148 起的部分 rollout 不再写 `event_msg.user_message` /
+  /// `agent_message`，整条会话改由 ThreadItem 流承载，`item.type` 是大驼峰
+  /// （`UserMessage` / `AgentMessage` / `CommandExecution`…）。这条分支之前只
+  /// 放行 `plan`，于是这类会话的每一条用户提问和 Agent 回复都被丢掉，历史里
+  /// 只剩下从 `response_item` 单独重建出来的工具卡——看上去就是「没有历史」。
+  ///
+  /// 这里刻意**只接消息**，另外两类各有不接的理由：
+  ///
+  /// - **工具卡不接**。同一批调用在 `response_item.custom_tool_call` 里还会再
+  ///   出现一次，两条流的 id 互不相同（`exec-…` vs `call_…`），都收就会渲染出
+  ///   双份工具卡。工具的唯一来源仍然是 response_item。
+  /// - **Reasoning 不接**。旧格式的 `agent_reasoning` 事件在历史里同样是丢弃的
+  ///   （落到 [_historyEventFromSpecialPayload] 后返回 null）。这里单独接上会让
+  ///   同一段会话按新旧格式渲染出不同的内容，先保持两边一致。
   void _consumeCompletedItem(
     Map<String, Object?> payload, {
     required Map<String, Object?> raw,
   }) {
     final item = _map(payload['item']);
-    if (_normalizedAgentItemType(_string(item['type'])) != 'plan') {
-      return;
+    switch (_normalizedAgentItemType(_string(item['type']))) {
+      case 'usermessage':
+        final localImagePaths = _userInputLocalImagePaths(item['content']);
+        final text = _trimmedText(_userInputText(item['content'])) ?? '';
+        // 允许纯图消息：无正文但有本地路径时仍保留条目。
+        if (text.isEmpty && localImagePaths.isEmpty) {
+          return;
+        }
+        _appendEntry(
+          AgentHistoryMessageEntry(
+            id:
+                _string(item['id']) ??
+                _string(item['client_id']) ??
+                _nextHistoryId('history-user'),
+            role: AgentMessageRole.user,
+            text: text,
+            localImagePaths: localImagePaths,
+            raw: raw,
+          ),
+        );
+      case 'agentmessage':
+        final text = _trimmedText(_agentMessageTextFromItem(item));
+        if (text == null) {
+          return;
+        }
+        _appendEntry(
+          AgentHistoryMessageEntry(
+            id: _string(item['id']) ?? _nextHistoryId('history-agent'),
+            role: AgentMessageRole.agent,
+            text: text,
+            phase: _messagePhase(_string(item['phase'])),
+            status: AgentMessageStatus.completed,
+            raw: raw,
+          ),
+        );
+      case 'plan':
+        final text = _trimmedText(_agentMessageTextFromItem(item));
+        if (text == null) {
+          return;
+        }
+        _appendEntry(
+          AgentHistoryMessageEntry(
+            id: _string(item['id']) ?? _nextHistoryId('history-plan'),
+            role: AgentMessageRole.agent,
+            text: text,
+            kind: AgentMessageKind.plan,
+            status: AgentMessageStatus.completed,
+            raw: raw,
+          ),
+        );
+      case _:
+        return;
     }
-    final text = _trimmedText(_string(item['text']));
-    if (text == null) {
-      return;
-    }
-    _appendEntry(
-      AgentHistoryMessageEntry(
-        id: _string(item['id']) ?? _nextHistoryId('history-plan'),
-        role: AgentMessageRole.agent,
-        text: text,
-        kind: AgentMessageKind.plan,
-        status: AgentMessageStatus.completed,
-        raw: raw,
-      ),
-    );
   }
 
   void _consumeTaskStarted(
