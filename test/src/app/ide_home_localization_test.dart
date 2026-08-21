@@ -1,12 +1,8 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/app/app.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
-import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 import 'package:zeta/src/ui/features/ide/views/ide_home.dart';
@@ -22,10 +18,10 @@ void main() {
 
     expect(find.byType(IdeHome), findsOneWidget);
     expect(find.text('欢迎使用 Zeta'), findsOneWidget);
-    expect(find.text('近期项目'), findsOneWidget);
-    expect(find.text('暂无近期项目'), findsOneWidget);
+    expect(find.text('已安装 Provider'), findsOneWidget);
+    expect(find.text('打开项目'), findsOneWidget);
     expect(find.text('Welcome to Zeta'), findsNothing);
-    expect(find.text('Recent projects'), findsNothing);
+    expect(find.text('Installed providers'), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('titlebar-settings-action')));
     await tester.pump();
@@ -56,11 +52,11 @@ void main() {
     await tester.pump();
 
     expect(find.text('Welcome to Zeta'), findsOneWidget);
-    expect(find.text('Recent projects'), findsOneWidget);
-    expect(find.text('No recent projects'), findsOneWidget);
+    expect(find.text('Installed providers'), findsOneWidget);
+    expect(find.text('Open project'), findsOneWidget);
     expect(find.text('欢迎使用 Zeta'), findsNothing);
-    expect(find.text('近期项目'), findsNothing);
-    expect(find.text('暂无近期项目'), findsNothing);
+    expect(find.text('已安装 Provider'), findsNothing);
+    expect(find.text('打开项目'), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('titlebar-settings-action')));
     await tester.pump();
@@ -84,90 +80,57 @@ void main() {
     expect(find.text('自动检测 Agent'), findsNothing);
   });
 
-  testWidgets(
-    'recent project names stay literal while relative time follows locale',
-    (tester) async {
-      final directory = Directory.systemTemp.createTempSync('zeta_l10n_home_');
-      addTearDown(() {
-        if (directory.existsSync()) {
-          directory.deleteSync(recursive: true);
-        }
-      });
-      final now = DateTime.now();
-      final thread = agentThread(
-        id: 'l10n-recent-thread',
-        projectPath: directory.path,
-        title: 'Provider thread title',
-        lastActiveAt: now,
-      );
-      final session = IdeSessionState(
-        projectPaths: <String>[directory.path],
-        projectLastOpenedAtByPath: <String, DateTime>{directory.path: now},
-        cachedThreadsByProject: <String, List<AgentThreadSummary>>{
-          directory.path: <AgentThreadSummary>[thread],
-        },
-      );
-      final projectKey = ValueKey<String>(
-        'global-home-project-${directory.path}',
-      );
-      final threadKey = ValueKey<String>(
-        'global-home-thread-${thread.providerId}-${thread.id}',
-      );
-      final projectName = _fileName(directory.path);
+  testWidgets('provider names stay literal while status labels follow locale', (
+    tester,
+  ) async {
+    final providerKey = const ValueKey<String>('global-home-provider-codex');
 
-      await _pumpIdeHome(
-        tester,
-        initialSessionJson: session.encode(),
-        homeProviderDetectionLoader: () async => <ManagedAgent>[
-          _installedAgent(AgentDefinition.codex),
-        ],
-      );
-      await pumpUntilCondition(
-        tester,
-        () => find.byKey(projectKey).evaluate().isNotEmpty,
-        failureMessage: 'Recent project did not appear on Chinese home',
-      );
+    await _pumpIdeHome(
+      tester,
+      homeProviderDetectionLoader: () async => <ManagedAgent>[
+        _installedAgent(AgentDefinition.codex),
+      ],
+    );
+    await pumpUntilCondition(
+      tester,
+      () => find.byKey(providerKey).evaluate().isNotEmpty,
+      failureMessage: 'Installed provider did not appear on Chinese home',
+    );
 
-      expect(find.text('欢迎使用 Zeta'), findsOneWidget);
-      expect(find.text(projectName), findsWidgets);
-      expect(find.text('Provider thread title'), findsOneWidget);
-      expect(find.textContaining('刚刚'), findsWidgets);
-      expect(find.textContaining('Just now'), findsNothing);
-      expect(find.text('Codex'), findsOneWidget);
+    expect(find.text('欢迎使用 Zeta'), findsOneWidget);
+    // 品牌名与厂商名是标识符，不随语言变；状态标签才走 ARB。
+    expect(find.text('Codex'), findsOneWidget);
+    expect(find.textContaining('OpenAI'), findsOneWidget);
+    expect(find.text('可用'), findsOneWidget);
+    expect(find.text('Available'), findsNothing);
 
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump();
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
 
-      await _pumpIdeHome(
-        tester,
-        language: AppLanguage.english,
-        initialSessionJson: session.encode(),
-        homeProviderDetectionLoader: () async => <ManagedAgent>[
-          _installedAgent(AgentDefinition.codex),
-        ],
-      );
-      await pumpUntilCondition(
-        tester,
-        () =>
-            find.byKey(projectKey).evaluate().isNotEmpty &&
-            find.byKey(threadKey).evaluate().isNotEmpty,
-        failureMessage: 'Recent project did not appear on English home',
-      );
+    await _pumpIdeHome(
+      tester,
+      language: AppLanguage.english,
+      homeProviderDetectionLoader: () async => <ManagedAgent>[
+        _installedAgent(AgentDefinition.codex),
+      ],
+    );
+    await pumpUntilCondition(
+      tester,
+      () => find.byKey(providerKey).evaluate().isNotEmpty,
+      failureMessage: 'Installed provider did not appear on English home',
+    );
 
-      expect(find.text('Welcome to Zeta'), findsOneWidget);
-      expect(find.text(projectName), findsWidgets);
-      expect(find.text('Provider thread title'), findsOneWidget);
-      expect(find.textContaining('Just now'), findsWidgets);
-      expect(find.textContaining('刚刚'), findsNothing);
-      expect(find.text('Codex'), findsOneWidget);
-    },
-  );
+    expect(find.text('Welcome to Zeta'), findsOneWidget);
+    expect(find.text('Codex'), findsOneWidget);
+    expect(find.textContaining('OpenAI'), findsOneWidget);
+    expect(find.text('Available'), findsOneWidget);
+    expect(find.text('可用'), findsNothing);
+  });
 }
 
 Future<void> _pumpIdeHome(
   WidgetTester tester, {
   AppLanguage? language,
-  String? initialSessionJson,
   Future<List<ManagedAgent>> Function()? homeProviderDetectionLoader,
 }) async {
   tester.view
@@ -179,7 +142,7 @@ Future<void> _pumpIdeHome(
       ..resetDevicePixelRatio();
   });
 
-  final session = MemorySessionStore(initialSessionJson);
+  final session = MemorySessionStore(null);
   await tester.pumpWidget(
     MainApp(
       enableNativeWindowFrame: true,
@@ -209,15 +172,6 @@ ManagedAgent _installedAgent(AgentDefinition definition) {
     runtimeState: AgentRuntimeState.idle,
     currentVersion: '1.0.0',
   );
-}
-
-String _fileName(String path) {
-  final parts = path
-      .replaceAll('\\', '/')
-      .split('/')
-      .where((part) => part.isNotEmpty)
-      .toList(growable: false);
-  return parts.isEmpty ? path : parts.last;
 }
 
 class _EmptyAgentUsageRepository implements AgentUsagePanelRepository {

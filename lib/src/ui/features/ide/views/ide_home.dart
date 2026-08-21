@@ -525,20 +525,8 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
         return _buildGlobalHomeRestoringState();
       }
       return GlobalHomePage(
-        recentProjects: _shellController.recentProjects,
-        recentThreads: _shellController.recentThreads,
         installedProviders: _installedHomeProviders,
         onOpenProject: _openProject,
-        onSelectProject: (path) {
-          unawaited(_shellController.openRecentProject(path));
-        },
-        onSelectThread: (thread) {
-          unawaited(
-            _shellController.selectProjectThread(thread.projectPath, thread),
-          );
-        },
-        isLoadingRecentThreads: _shellController.isRefreshingRecentHomeData,
-        recentThreadsError: _shellController.recentHomeRefreshError,
         isLoadingProviders: _homeProvidersLoading,
         providerError: _homeProviderError,
       );

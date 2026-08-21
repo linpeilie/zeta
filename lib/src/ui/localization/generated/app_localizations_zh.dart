@@ -640,7 +640,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get homeWelcomeTitle => '欢迎使用 Zeta';
 
   @override
-  String get homeWelcomeSubtitle => '继续最近的工作，或打开一个项目开始。';
+  String get homeWelcomeSubtitle => '打开一个本地项目，开始与 Agent 协作。';
 
   @override
   String get homeOpenProjectFolder => '打开项目文件夹';

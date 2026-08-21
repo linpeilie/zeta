@@ -2,28 +2,65 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
-import 'package:zeta/src/features/ide_session/domain/recent_project_summary.dart';
+import 'package:zeta/src/ui/core/rows/ide_row_divider.dart';
 import 'package:zeta/src/ui/features/ide/views/global_home_page.dart';
 
 import '../../../core/ide_component_test_harness.dart';
 
 void main() {
-  testWidgets('renders five recent items and dispatches homepage actions', (
+  testWidgets('stacks title, subtitle and open action into one column', (
     tester,
   ) async {
-    final now = DateTime.utc(2026, 7, 21, 15);
-    final projects = _projects(now, count: 6);
-    final threads = _threads(now, projects: projects, count: 6);
     var openProjectCount = 0;
-    String? selectedProject;
-    AgentThreadSummary? selectedThread;
 
     await pumpIdeComponent(
       tester,
       size: const Size(1100, 900),
       child: GlobalHomePage(
-        recentProjects: projects,
-        recentThreads: threads,
+        installedProviders: const <HomeProviderSummary>[],
+        onOpenProject: () {
+          openProjectCount += 1;
+        },
+      ),
+    );
+
+    expect(find.text('欢迎使用 Zeta'), findsOneWidget);
+    // 近期项目 / 近期会话已从首页移除，入口只剩左侧 Projects 栏。
+    expect(find.text('近期项目'), findsNothing);
+    expect(find.text('近期会话'), findsNothing);
+
+    final title = tester.getRect(
+      find.byKey(const ValueKey<String>('global-home-title')),
+    );
+    final subtitle = tester.getRect(
+      find.byKey(const ValueKey<String>('global-home-subtitle')),
+    );
+    final button = tester.getRect(
+      find.byKey(const ValueKey<String>('global-home-open-project')),
+    );
+    // 打开项目压在副标题正下方，而不是与标题并排在右端。
+    expect(subtitle.top, greaterThan(title.top));
+    expect(button.top, greaterThan(subtitle.bottom - 0.5));
+    expect(button.left, closeTo(title.left, 0.5));
+    // 标题必须明显大于副标题，才撑得住「绝对视觉中心」。
+    expect(title.height, greaterThan(subtitle.height));
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('global-home-open-project')),
+    );
+    await tester.pump();
+
+    expect(openProjectCount, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('renders providers as one flat list with indented dividers', (
+    tester,
+  ) async {
+    await pumpIdeComponent(
+      tester,
+      size: const Size(1100, 900),
+      child: GlobalHomePage(
         installedProviders: const <HomeProviderSummary>[
           HomeProviderSummary(
             id: defaultAgentProviderId,
@@ -39,44 +76,19 @@ void main() {
             status: HomeProviderStatus.needsLogin,
           ),
         ],
-        now: now,
-        onOpenProject: () {
-          openProjectCount += 1;
-        },
-        onSelectProject: (path) {
-          selectedProject = path;
-        },
-        onSelectThread: (thread) {
-          selectedThread = thread;
-        },
+        onOpenProject: () {},
       ),
     );
 
-    expect(find.text('欢迎使用 Zeta'), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey<String>('global-home-project-/workspace/p0')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey<String>('global-home-project-/workspace/p5')),
-      findsNothing,
-    );
-    expect(
-      find.byKey(const ValueKey<String>('global-home-thread-codex-thread-0')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey<String>('global-home-thread-grok-thread-5')),
-      findsNothing,
-    );
-    expect(find.text('Codex'), findsOneWidget);
-    expect(find.text('需登录'), findsOneWidget);
     final codexProvider = find.byKey(
       const ValueKey<String>('global-home-provider-codex'),
     );
     final grokProvider = find.byKey(
       const ValueKey<String>('global-home-provider-grok'),
     );
+    expect(find.text('Codex'), findsOneWidget);
+    expect(find.text('可用'), findsOneWidget);
+    expect(find.text('需登录'), findsOneWidget);
     expect(
       find.descendant(
         of: codexProvider,
@@ -95,134 +107,37 @@ void main() {
       ),
       findsOneWidget,
     );
-    final firstRecentThread = find.byKey(
-      const ValueKey<String>('global-home-thread-codex-thread-0'),
-    );
+
+    // 最后一行不画线，行间那条线缩进到标题左边缘。
     expect(
-      find.descendant(
-        of: firstRecentThread,
-        matching: find.byKey(
-          const ValueKey<String>('agent-provider-icon-svg-codex'),
-        ),
-      ),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(
-        of: firstRecentThread,
-        matching: find.textContaining('Codex'),
-      ),
+      find.descendant(of: grokProvider, matching: find.byType(IdeRowDivider)),
       findsNothing,
     );
-
-    final projectsTopLeft = tester.getTopLeft(
-      find.byKey(const ValueKey<String>('global-home-projects-section')),
-    );
-    final threadsTopLeft = tester.getTopLeft(
-      find.byKey(const ValueKey<String>('global-home-threads-section')),
-    );
-    expect(threadsTopLeft.dx, greaterThan(projectsTopLeft.dx));
-    expect(threadsTopLeft.dy, closeTo(projectsTopLeft.dy, 0.5));
-
-    await tester.tap(
-      find.byKey(const ValueKey<String>('global-home-open-project')),
-    );
-    await tester.tap(
-      find.byKey(const ValueKey<String>('global-home-project-/workspace/p0')),
-    );
-    await tester.tap(
-      find.byKey(const ValueKey<String>('global-home-thread-codex-thread-0')),
-    );
-    await tester.pump();
-
-    expect(openProjectCount, 1);
-    expect(selectedProject, '/workspace/p0');
-    expect(selectedThread?.id, 'thread-0');
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('stacks sections in a narrow large-text viewport', (
-    tester,
-  ) async {
-    final now = DateTime.utc(2026, 7, 21, 15);
-    final projects = <RecentProjectSummary>[
-      RecentProjectSummary(
-        path:
-            '/workspace/a-project-with-an-extremely-long-name-that-must-truncate',
-        lastOpenedAt: now,
-      ),
-    ];
-
-    await pumpIdeComponent(
-      tester,
-      size: const Size(520, 760),
-      child: MediaQuery(
-        data: const MediaQueryData(textScaler: TextScaler.linear(1.6)),
-        child: GlobalHomePage(
-          recentProjects: projects,
-          recentThreads: _threads(now, projects: projects, count: 1),
-          installedProviders: const <HomeProviderSummary>[
-            HomeProviderSummary(
-              id: defaultAgentProviderId,
-              displayName: 'Codex With A Very Long Display Name',
-              vendor: 'OpenAI',
-              version: '0.42.0',
-              status: HomeProviderStatus.updateAvailable,
-            ),
-          ],
-          now: now,
-          onOpenProject: () {},
-          onSelectProject: (_) {},
-          onSelectThread: (_) {},
+    // 量的是线本身，不是 IdeRowDivider 那层带缩进 padding 的盒子。
+    final line = tester.getRect(
+      find.descendant(
+        of: find.descendant(
+          of: codexProvider,
+          matching: find.byType(IdeRowDivider),
         ),
+        matching: find.byType(ColoredBox),
       ),
     );
-
-    final projectsTopLeft = tester.getTopLeft(
-      find.byKey(const ValueKey<String>('global-home-projects-section')),
+    final codexTitle = tester.getRect(
+      find.descendant(of: codexProvider, matching: find.text('Codex')),
     );
-    final threadsTopLeft = tester.getTopLeft(
-      find.byKey(const ValueKey<String>('global-home-threads-section')),
-    );
-    expect(threadsTopLeft.dy, greaterThan(projectsTopLeft.dy));
-    expect(threadsTopLeft.dx, closeTo(projectsTopLeft.dx, 0.5));
+    expect(line.left, closeTo(codexTitle.left, 0.5));
+    expect(line.height, 1);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('shows loading and non-blocking failure states', (tester) async {
-    await pumpIdeComponent(
-      tester,
-      size: const Size(700, 760),
-      child: GlobalHomePage(
-        recentProjects: const <RecentProjectSummary>[],
-        recentThreads: const <AgentThreadSummary>[],
-        installedProviders: const <HomeProviderSummary>[],
-        isLoadingRecentProjects: true,
-        isLoadingRecentThreads: true,
-        isLoadingProviders: true,
-        onOpenProject: () {},
-        onSelectProject: (_) {},
-        onSelectThread: (_) {},
-      ),
-    );
-
-    expect(find.text('正在读取近期项目…'), findsOneWidget);
-    expect(find.text('正在加载近期会话…'), findsOneWidget);
-    expect(find.text('正在检测 Provider…'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('keeps cached rows while reporting refresh failures', (
+  testWidgets('keeps cached providers while reporting detection failures', (
     tester,
   ) async {
-    final now = DateTime.utc(2026, 7, 21, 15);
-    final projects = _projects(now, count: 1);
     await pumpIdeComponent(
       tester,
       size: const Size(900, 760),
       child: GlobalHomePage(
-        recentProjects: projects,
-        recentThreads: _threads(now, projects: projects, count: 1),
         installedProviders: const <HomeProviderSummary>[
           HomeProviderSummary(
             id: defaultAgentProviderId,
@@ -231,19 +146,59 @@ void main() {
             status: HomeProviderStatus.available,
           ),
         ],
-        recentThreadsError: 'thread refresh failed',
         providerError: 'provider refresh failed',
-        now: now,
         onOpenProject: () {},
-        onSelectProject: (_) {},
-        onSelectThread: (_) {},
       ),
     );
 
-    expect(find.text('Thread 0'), findsOneWidget);
     expect(find.text('Codex'), findsOneWidget);
-    expect(find.text('刷新失败'), findsOneWidget);
     expect(find.text('检测失败'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('shows the detecting placeholder before providers arrive', (
+    tester,
+  ) async {
+    await pumpIdeComponent(
+      tester,
+      size: const Size(700, 760),
+      child: GlobalHomePage(
+        installedProviders: const <HomeProviderSummary>[],
+        isLoadingProviders: true,
+        onOpenProject: () {},
+      ),
+    );
+
+    expect(find.text('正在检测 Provider…'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('global-home-providers-loading')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('survives a narrow large-text viewport', (tester) async {
+    await pumpIdeComponent(
+      tester,
+      size: const Size(520, 760),
+      child: MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(1.6)),
+        child: GlobalHomePage(
+          installedProviders: const <HomeProviderSummary>[
+            HomeProviderSummary(
+              id: defaultAgentProviderId,
+              displayName: 'Codex With A Very Long Display Name',
+              vendor: 'OpenAI',
+              version: '0.42.0',
+              status: HomeProviderStatus.available,
+            ),
+          ],
+          onOpenProject: () {},
+        ),
+      ),
+    );
+
+    expect(find.text('欢迎使用 Zeta'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -277,42 +232,12 @@ void main() {
       ).status,
       HomeProviderStatus.error,
     );
+    // 「可更新」不再是首页状态：能用就是能用，升级归 Agent 管理页管。
     expect(
       HomeProviderSummary.fromManagedAgent(
         installed.copyWith(versionState: AgentVersionState.updateAvailable),
       ).status,
-      HomeProviderStatus.updateAvailable,
+      HomeProviderStatus.available,
     );
   });
-}
-
-List<RecentProjectSummary> _projects(DateTime now, {required int count}) {
-  return <RecentProjectSummary>[
-    for (var index = 0; index < count; index += 1)
-      RecentProjectSummary(
-        path: '/workspace/p$index',
-        lastOpenedAt: now.subtract(Duration(hours: index)),
-      ),
-  ];
-}
-
-List<AgentThreadSummary> _threads(
-  DateTime now, {
-  required List<RecentProjectSummary> projects,
-  required int count,
-}) {
-  return <AgentThreadSummary>[
-    for (var index = 0; index < count; index += 1)
-      AgentThreadSummary(
-        id: 'thread-$index',
-        providerId: index.isEven ? defaultAgentProviderId : grokAgentProviderId,
-        projectPath: projects[index % projects.length].path,
-        title: 'Thread $index',
-        preview: 'Preview $index',
-        createdAt: now.subtract(Duration(days: index + 1)),
-        updatedAt: now.subtract(Duration(hours: index + 1)),
-        recencyAt: now.subtract(Duration(hours: index + 1)),
-        status: AgentThreadRuntimeStatus.idle,
-      ),
-  ];
 }

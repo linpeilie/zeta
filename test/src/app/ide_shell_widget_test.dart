@@ -1827,44 +1827,14 @@ void main() {
     expect(_agentMessageInput().hitTestable(), findsOneWidget);
   });
 
-  testWidgets('opens a recent project from the global home', (tester) async {
-    final directory = Directory.systemTemp.createTempSync(
-      'zeta_global_home_project_',
-    );
-    addTearDown(() {
-      if (directory.existsSync()) {
-        directory.deleteSync(recursive: true);
-      }
-    });
-    final thread = agentThread(
-      id: 'recent-project-thread',
-      projectPath: directory.path,
-      title: 'Recent project thread',
-      lastActiveAt: DateTime.utc(2026, 7, 21, 12),
-    );
-    final session = IdeSessionState(
-      projectPaths: <String>[directory.path],
-      projectLastOpenedAtByPath: <String, DateTime>{
-        directory.path: DateTime.utc(2026, 7, 21, 13),
-      },
-      projectThreadExpansionByProject: <String, bool>{directory.path: false},
-      cachedThreadsByProject: <String, List<AgentThreadSummary>>{
-        directory.path: <AgentThreadSummary>[thread],
-      },
-    );
-    final provider = FakeAgentProvider(
-      threadPages: <AgentThreadPage>[
-        AgentThreadPage(
-          threads: <AgentThreadSummary>[thread],
-          nextCursor: null,
-        ),
-      ],
-    );
-
+  testWidgets('lists only installed providers on the global home', (
+    tester,
+  ) async {
     await _pumpIde(
       tester,
-      initialSessionJson: session.encode(),
-      agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
+      agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
+        FakeAgentProvider(),
+      ),
       agentProviderConfigStore: MemoryAgentProviderConfigStore(
         const AgentProviderSettings(
           providers: <AgentProviderConfig>[AgentProviderConfig.defaultCodex],
@@ -1881,109 +1851,17 @@ void main() {
     await pumpUntilCondition(
       tester,
       () => find
-          .byKey(ValueKey<String>('global-home-project-${directory.path}'))
+          .byKey(const ValueKey<String>('global-home-provider-codex'))
           .evaluate()
           .isNotEmpty,
-      failureMessage: 'Global home recent project did not become ready',
+      failureMessage: 'Global home provider list did not become ready',
     );
 
+    // 未安装的 Provider 不进首页列表：首页回答的是「现在能用什么」。
     expect(find.text('Codex'), findsOneWidget);
     expect(find.text('Grok'), findsNothing);
-    await tester.tap(
-      find.byKey(ValueKey<String>('global-home-project-${directory.path}')),
-    );
-    await tester.runAsync(waitForIo);
-    await pumpUntilCondition(
-      tester,
-      () => find
-          .byKey(const ValueKey<String>('project-home-header'))
-          .evaluate()
-          .isNotEmpty,
-      failureMessage: 'Recent project did not open its project home',
-    );
-
-    expect(find.text(directory.path), findsOneWidget);
-    expect(find.byKey(const ValueKey('agent-header-title')), findsNothing);
-  });
-
-  testWidgets('opens a recent thread from the global home', (tester) async {
-    final directory = Directory.systemTemp.createTempSync(
-      'zeta_global_home_thread_',
-    );
-    addTearDown(() {
-      if (directory.existsSync()) {
-        directory.deleteSync(recursive: true);
-      }
-    });
-    final thread = agentThread(
-      id: 'recent-home-thread',
-      projectPath: directory.path,
-      title: 'Recent home thread',
-      lastActiveAt: DateTime.utc(2026, 7, 21, 14),
-    );
-    final session = IdeSessionState(
-      projectPaths: <String>[directory.path],
-      projectThreadExpansionByProject: <String, bool>{directory.path: false},
-      cachedThreadsByProject: <String, List<AgentThreadSummary>>{
-        directory.path: <AgentThreadSummary>[thread],
-      },
-    );
-    final provider = FakeAgentProvider(
-      threadPages: <AgentThreadPage>[
-        AgentThreadPage(
-          threads: <AgentThreadSummary>[thread],
-          nextCursor: null,
-        ),
-      ],
-      threadHistories: <String, AgentThreadHistorySnapshot>{
-        thread.id: AgentThreadHistorySnapshot(
-          threadId: thread.id,
-          turns: <AgentHistoryTurn>[
-            AgentHistoryTurn(
-              id: 'recent-home-turn',
-              status: AgentHistoryTurnStatus.completed,
-              entries: const <AgentHistoryEntry>[],
-            ),
-          ],
-        ),
-      },
-    );
-
-    await _pumpIde(
-      tester,
-      initialSessionJson: session.encode(),
-      agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-      agentProviderConfigStore: MemoryAgentProviderConfigStore(
-        const AgentProviderSettings(
-          providers: <AgentProviderConfig>[AgentProviderConfig.defaultCodex],
-        ),
-      ),
-    );
-    final recentThread = find.byKey(
-      const ValueKey<String>('global-home-thread-codex-recent-home-thread'),
-    );
-    await pumpUntilCondition(
-      tester,
-      () => recentThread.evaluate().isNotEmpty,
-      failureMessage: 'Global home recent thread did not become ready',
-    );
-
-    await tester.tap(recentThread);
-    await tester.runAsync(waitForIo);
-    await pumpUntilCondition(
-      tester,
-      () =>
-          find
-              .byKey(const ValueKey('agent-header-title'))
-              .evaluate()
-              .isNotEmpty &&
-          headerTitleText(tester) == 'Recent home thread',
-      failureMessage: 'Recent thread did not open its Agent canvas',
-    );
-
-    expect(_agentMessageInput().hitTestable(), findsOneWidget);
     expect(
-      find.byKey(const ValueKey<String>('global-home-page')),
+      find.byKey(const ValueKey<String>('global-home-provider-grok')),
       findsNothing,
     );
   });

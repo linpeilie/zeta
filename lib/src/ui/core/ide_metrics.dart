@@ -277,6 +277,16 @@ abstract final class IdeMetrics {
   /// 生效位置：`IdePageBody` 默认 `maxWidth`；Agent 管理页内容约束。
   static const double settingsContentMaxWidth = 960;
 
+  /// 全局首页单列内容的最大宽度。
+  ///
+  /// 比 [settingsContentMaxWidth] 窄一大截，因为首页只有「一个标题 + 一个动作
+  /// + 一列 Provider」。把这点内容铺到 960，标题右侧会拖出一大片空白、Provider
+  /// 行也会变成横跨屏幕的长条，两者都在削弱标题的中心感。这一档按单列可读
+  /// 行宽取值，多出来的宽度全部还给两侧留白。
+  ///
+  /// 生效位置：`GlobalHomePage` 内容 `ConstrainedBox`。
+  static const double homeContentMaxWidth = 560;
+
   /// 用量统计等数据密集页的内容最大宽度。
   ///
   /// 生效位置：`UsageStatisticsPage` 主内容 `ConstrainedBox`。

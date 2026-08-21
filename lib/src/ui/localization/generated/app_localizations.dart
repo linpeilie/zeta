@@ -1277,7 +1277,7 @@ abstract class AppLocalizations {
   /// Global home subtitle
   ///
   /// In en, this message translates to:
-  /// **'Continue recent work, or open a project to start.'**
+  /// **'Open a local project to start working with an Agent.'**
   String get homeWelcomeSubtitle;
 
   /// Open folder CTA

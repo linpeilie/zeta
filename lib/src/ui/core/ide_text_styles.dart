@@ -17,6 +17,7 @@ import 'ide_colors.dart';
 @immutable
 class IdeTextStyles {
   const IdeTextStyles({
+    required this.displayHero,
     required this.displayLarge,
     required this.displaySmall,
     required this.titleLarge,
@@ -38,6 +39,19 @@ class IdeTextStyles {
     required this.metricValue,
     required this.placeholder,
   });
+
+  /// 英雄标题（基准 28 / w700 / 字距 -0.4）。
+  ///
+  /// 全表唯一一档「盖过页面上其他一切」的字号，只给**整页仅有一个焦点**的场景。
+  /// 目前只有全局首页的「欢迎使用 Zeta」符合：那一页没有列表要扫、没有工具栏
+  /// 要用，标题就是内容本身。在有第二块内容的页面上用它，页面立刻出现两个视觉
+  /// 中心——那种地方应该退回 [displayLarge] 或 [pageTitle]。
+  ///
+  /// 字距收紧 0.4：字号越大，字母间的默认空隙看起来越松，负字距把大标题重新
+  /// 收成一个整体。这也是与 [displayLarge] 的区别之一——18px 还不需要补偿。
+  ///
+  /// 生效位置：`GlobalHomePage` 欢迎标题。
+  final TextStyle displayHero;
 
   /// 最大展示标题（基准 18 / w700）。
   ///
@@ -216,6 +230,15 @@ class IdeTextStyles {
     final uiScale = uiFontSize / defaultUiFontSize;
     final codeScale = codeFontSize / defaultCodeFontSize;
     return IdeTextStyles(
+      displayHero: _textStyle(
+        color: colors.textPrimary,
+        fontFamily: uiFontFamily,
+        fontFamilyFallback: uiFontFamilyFallback,
+        fontSize: 28 * uiScale,
+        height: 1.2,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.4,
+      ),
       displayLarge: _textStyle(
         color: colors.textPrimary,
         fontFamily: uiFontFamily,

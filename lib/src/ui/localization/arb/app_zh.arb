@@ -932,7 +932,7 @@
   "@homeWelcomeTitle": {
     "description": "Global home welcome"
   },
-  "homeWelcomeSubtitle": "继续最近的工作，或打开一个项目开始。",
+  "homeWelcomeSubtitle": "打开一个本地项目，开始与 Agent 协作。",
   "@homeWelcomeSubtitle": {
     "description": "Global home subtitle"
   },

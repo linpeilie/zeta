@@ -1,23 +1,30 @@
 import 'package:flutter/material.dart';
-import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
-import 'package:zeta/src/features/ide_session/domain/recent_project_summary.dart';
-import 'package:zeta/src/ui/core/ide_chip.dart';
+import 'package:zeta/src/ui/core/ide_button.dart';
 import 'package:zeta/src/ui/core/ide_colors.dart';
-import 'package:zeta/src/ui/core/ide_effects.dart';
 import 'package:zeta/src/ui/core/ide_metrics.dart';
-import 'package:zeta/src/ui/core/rows/ide_row_divider.dart';
 import 'package:zeta/src/ui/core/ide_spacing.dart';
 import 'package:zeta/src/ui/core/ide_text_styles.dart';
 import 'package:zeta/src/ui/core/pane_widgets.dart';
 import 'package:zeta/src/ui/core/rows/ide_list_row.dart';
 import 'package:zeta/src/ui/localization/app_localizations_x.dart';
-import 'package:zeta/src/ui/localization/relative_time.dart';
 
-const int globalHomeRecentItemLimit = 5;
+/// 首页 Provider 行左侧图标的边长。
+const double _providerLogoSize = 18;
+
+/// 状态圆点的直径。
+///
+/// 小到只在余光里提供一点颜色：状态是「扫一眼确认没出事」的信息，不该像药丸
+/// 徽章那样在右侧拉出一排色块，把注意力从 Provider 名字上夺走。
+const double _statusDotSize = 6;
+
+/// 标题区上方的留白（宽屏）。
+///
+/// 直接取两档 [IdeSpacing.space32]：这一页只有一个焦点，标题得先被空白托起来
+/// 才立得住，页面级 padding 的 12px 远远不够。窄屏回落到一档。
+const double _heroTopSpace = IdeSpacing.space32 * 2;
 
 /// 首页 Provider 的归一化状态。
 enum HomeProviderStatus {
@@ -26,7 +33,6 @@ enum HomeProviderStatus {
   disabled,
   needsLogin,
   error,
-  updateAvailable,
   detecting,
 }
 
@@ -59,37 +65,26 @@ final class HomeProviderSummary {
 
 /// 没有活动项目时显示的全局软件首页。
 ///
+/// 整页只有三样东西：一个被留白托起来的标题、一个打开项目的入口，以及一列
+/// 已安装的 Provider。刻意**不做卡片**——首页没有需要互相区隔的并列区块，
+/// 再画一圈描边只会凭空造出「这里有两个容器」的层级。近期项目与近期会话也
+/// 不在这里重复：左侧 Projects 栏已经是它们的常驻入口。
+///
 /// 本组件只消费不可变快照与回调，不负责文件系统、Provider 检测或会话刷新，
 /// 因此可以安全运行在 Flutter Widget Previewer 中。
 class GlobalHomePage extends StatelessWidget {
   const GlobalHomePage({
-    required this.recentProjects,
-    required this.recentThreads,
     required this.installedProviders,
     required this.onOpenProject,
-    required this.onSelectProject,
-    required this.onSelectThread,
     super.key,
-    this.isLoadingRecentProjects = false,
-    this.isLoadingRecentThreads = false,
-    this.recentThreadsError,
     this.isLoadingProviders = false,
     this.providerError,
-    this.now,
   });
 
-  final List<RecentProjectSummary> recentProjects;
-  final List<AgentThreadSummary> recentThreads;
   final List<HomeProviderSummary> installedProviders;
   final VoidCallback onOpenProject;
-  final ValueChanged<String> onSelectProject;
-  final ValueChanged<AgentThreadSummary> onSelectThread;
-  final bool isLoadingRecentProjects;
-  final bool isLoadingRecentThreads;
-  final String? recentThreadsError;
   final bool isLoadingProviders;
   final String? providerError;
-  final DateTime? now;
 
   @override
   Widget build(BuildContext context) {
@@ -100,45 +95,25 @@ class GlobalHomePage extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final compact = constraints.maxWidth < IdeMetrics.mediumBreakpoint;
-          final padding = compact
-              ? IdeSpacing.pagePaddingCompact
-              : IdeSpacing.pagePadding;
           return SingleChildScrollView(
             key: const ValueKey<String>('global-home-scroll-view'),
-            padding: padding,
+            padding: compact
+                ? IdeSpacing.pagePaddingCompact
+                : IdeSpacing.pagePadding,
             child: Align(
               alignment: Alignment.topCenter,
               child: ConstrainedBox(
                 constraints: const BoxConstraints(
-                  maxWidth: IdeMetrics.settingsContentMaxWidth,
+                  maxWidth: IdeMetrics.homeContentMaxWidth,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _WelcomeHeader(
-                      compact: compact,
-                      onOpenProject: onOpenProject,
+                    SizedBox(
+                      height: compact ? IdeSpacing.space32 : _heroTopSpace,
                     ),
-                    const SizedBox(height: IdeSpacing.space20),
-                    if (compact)
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _buildProjectsSection(context),
-                          const SizedBox(height: IdeSpacing.space16),
-                          _buildThreadsSection(context),
-                        ],
-                      )
-                    else
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(child: _buildProjectsSection(context)),
-                          const SizedBox(width: IdeSpacing.space16),
-                          Expanded(child: _buildThreadsSection(context)),
-                        ],
-                      ),
-                    const SizedBox(height: IdeSpacing.space16),
+                    _WelcomeHeader(onOpenProject: onOpenProject),
+                    const SizedBox(height: IdeSpacing.space32),
                     _buildProvidersSection(context),
                   ],
                 ),
@@ -150,437 +125,222 @@ class GlobalHomePage extends StatelessWidget {
     );
   }
 
-  Widget _buildProjectsSection(BuildContext context) {
-    final projects = recentProjects
-        .take(globalHomeRecentItemLimit)
-        .toList(growable: false);
-    return _HomeSection(
-      key: const ValueKey<String>('global-home-projects-section'),
-      title: context.l10n.homeRecentProjects,
-      loading: isLoadingRecentProjects,
-      child: projects.isEmpty
-          ? _HomeSectionState(
-              key: const ValueKey<String>('global-home-projects-empty'),
-              icon: Icons.folder_open_rounded,
-              title: isLoadingRecentProjects
-                  ? context.l10n.homeReadingRecentProjects
-                  : context.l10n.homeNoRecentProjects,
-              body: isLoadingRecentProjects
-                  ? context.l10n.homeRecentProjectsAfterRestore
-                  : context.l10n.homeRecentProjectsAfterOpen,
-              loading: isLoadingRecentProjects,
-            )
-          : Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (var index = 0; index < projects.length; index += 1)
-                  _RecentProjectRow(
-                    key: ValueKey<String>(
-                      'global-home-project-${projects[index].path}',
-                    ),
-                    project: projects[index],
-                    now: now ?? DateTime.now(),
-                    showDivider: index < projects.length - 1,
-                    onPressed: () => onSelectProject(projects[index].path),
-                  ),
-              ],
-            ),
-    );
-  }
-
-  Widget _buildThreadsSection(BuildContext context) {
-    final threads = recentThreads
-        .take(globalHomeRecentItemLimit)
-        .toList(growable: false);
-    return _HomeSection(
-      key: const ValueKey<String>('global-home-threads-section'),
-      title: context.l10n.homeRecentSessions,
-      loading: isLoadingRecentThreads,
-      warning: recentThreadsError == null
-          ? null
-          : context.l10n.homeRefreshFailed,
-      warningTooltip: recentThreadsError,
-      child: threads.isEmpty
-          ? _HomeSectionState(
-              key: const ValueKey<String>('global-home-threads-empty'),
-              icon: recentThreadsError == null
-                  ? Icons.forum_outlined
-                  : Icons.error_outline_rounded,
-              title: recentThreadsError != null
-                  ? context.l10n.homeCannotRefreshSessions
-                  : isLoadingRecentThreads
-                  ? context.l10n.homeLoadingRecentSessions
-                  : context.l10n.homeNoRecentSessions,
-              body:
-                  recentThreadsError ??
-                  (isLoadingRecentThreads
-                      ? context.l10n.homeSessionsCacheHint
-                      : context.l10n.homeSessionsEmptyHint),
-              loading: isLoadingRecentThreads,
-              error: recentThreadsError != null,
-            )
-          : Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (var index = 0; index < threads.length; index += 1)
-                  _RecentThreadRow(
-                    key: ValueKey<String>(
-                      'global-home-thread-${threads[index].providerId}-${threads[index].id}',
-                    ),
-                    thread: threads[index],
-                    now: now ?? DateTime.now(),
-                    showDivider: index < threads.length - 1,
-                    onPressed: () => onSelectThread(threads[index]),
-                  ),
-              ],
-            ),
-    );
-  }
-
   Widget _buildProvidersSection(BuildContext context) {
-    return _HomeSection(
+    final providers = installedProviders;
+    return Column(
       key: const ValueKey<String>('global-home-providers-section'),
-      title: context.l10n.homeInstalledProviders,
-      loading: isLoadingProviders,
-      warning: providerError == null ? null : context.l10n.homeDetectionFailed,
-      warningTooltip: providerError,
-      child: installedProviders.isEmpty
-          ? _HomeSectionState(
-              key: const ValueKey<String>('global-home-providers-empty'),
-              icon: providerError == null
-                  ? Icons.extension_off_outlined
-                  : Icons.error_outline_rounded,
-              title: providerError != null
-                  ? context.l10n.homeProviderDetectionFailedTitle
-                  : isLoadingProviders
-                  ? context.l10n.homeDetectingProviders
-                  : context.l10n.homeNoInstalledProviders,
-              body:
-                  providerError ??
-                  (isLoadingProviders
-                      ? context.l10n.homeProvidersAfterDetect
-                      : context.l10n.homeProvidersAfterInstall),
-              loading: isLoadingProviders,
-              error: providerError != null,
-            )
-          : LayoutBuilder(
-              builder: (context, constraints) {
-                final split =
-                    constraints.maxWidth >= IdeMetrics.stackedRowBreakpoint;
-                final itemWidth = split
-                    ? (constraints.maxWidth - IdeSpacing.space12) / 2
-                    : constraints.maxWidth;
-                return Padding(
-                  padding: IdeSpacing.all12,
-                  child: Wrap(
-                    spacing: IdeSpacing.space12,
-                    runSpacing: IdeSpacing.space8,
-                    children: [
-                      for (final provider in installedProviders)
-                        SizedBox(
-                          width: itemWidth,
-                          child: _ProviderStatusItem(
-                            key: ValueKey<String>(
-                              'global-home-provider-${provider.id}',
-                            ),
-                            provider: provider,
-                          ),
-                        ),
-                    ],
-                  ),
-                );
-              },
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _ProvidersGroupHeader(
+          loading: isLoadingProviders,
+          error: providerError,
+        ),
+        if (providers.isEmpty)
+          _ProvidersPlaceholder(
+            key: const ValueKey<String>('global-home-providers-empty'),
+            title: providerError != null
+                ? context.l10n.homeProviderDetectionFailedTitle
+                : isLoadingProviders
+                ? context.l10n.homeDetectingProviders
+                : context.l10n.homeNoInstalledProviders,
+            body:
+                providerError ??
+                (isLoadingProviders
+                    ? context.l10n.homeProvidersAfterDetect
+                    : context.l10n.homeProvidersAfterInstall),
+            error: providerError != null,
+          )
+        else
+          for (var index = 0; index < providers.length; index += 1)
+            _ProviderRow(
+              key: ValueKey<String>(
+                'global-home-provider-${providers[index].id}',
+              ),
+              provider: providers[index],
+              showDivider: index < providers.length - 1,
             ),
+      ],
     );
   }
 }
 
 class _WelcomeHeader extends StatelessWidget {
-  const _WelcomeHeader({required this.compact, required this.onOpenProject});
+  const _WelcomeHeader({required this.onOpenProject});
 
-  final bool compact;
   final VoidCallback onOpenProject;
 
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    final copy = Column(
+    // 标题 → 副标题 → 动作，三件事排成一条从上往下的读取路径。按钮压在副标题
+    // 正下方而不是甩到右端：它是这句话的下一步，不是与标题并列的第二个焦点。
+    return Column(
+      key: const ValueKey<String>('global-home-welcome'),
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           context.l10n.homeWelcomeTitle,
           key: const ValueKey<String>('global-home-title'),
-          style: textStyles.displayLarge,
+          style: textStyles.displayHero,
         ),
-        const SizedBox(height: IdeSpacing.space6),
+        const SizedBox(height: IdeSpacing.space8),
         Text(
           context.l10n.homeWelcomeSubtitle,
           key: const ValueKey<String>('global-home-subtitle'),
-          style: textStyles.bodyMedium.copyWith(color: colors.textSecondary),
+          style: textStyles.proseBody.copyWith(color: colors.textSecondary),
+        ),
+        const SizedBox(height: IdeSpacing.space16),
+        // 主色描边而不是实心大按钮：整页已经有一个绝对视觉中心（标题），实心
+        // 蓝块会立刻变成第二个，还会把「欢迎」那句话压成它的说明文字。
+        IdeButton.toolbar(
+          key: const ValueKey<String>('global-home-open-project'),
+          label: context.l10n.homeOpenProject,
+          leadingIcon: Icons.folder_open_rounded,
+          variant: IdeButtonVariant.accentOutline,
+          semanticLabel: context.l10n.homeOpenProjectFolder,
+          onPressed: onOpenProject,
         ),
       ],
-    );
-    final button = Semantics(
-      button: true,
-      label: context.l10n.homeOpenProjectFolder,
-      child: sf.PrimaryButton(
-        key: const ValueKey<String>('global-home-open-project'),
-        onPressed: onOpenProject,
-        size: sf.ButtonSize.small,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.folder_open_rounded, size: 16),
-            const SizedBox(width: IdeSpacing.space6),
-            Text(context.l10n.homeOpenProject),
-          ],
-        ),
-      ),
-    );
-
-    return PanelCard(
-      key: const ValueKey<String>('global-home-welcome'),
-      color: colors.surfaceElevated,
-      child: Padding(
-        padding: IdeSpacing.all20,
-        child: compact
-            ? Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  copy,
-                  const SizedBox(height: IdeSpacing.space16),
-                  button,
-                ],
-              )
-            : Row(
-                children: [
-                  Expanded(child: copy),
-                  const SizedBox(width: IdeSpacing.space20),
-                  button,
-                ],
-              ),
-      ),
     );
   }
 }
 
-class _HomeSection extends StatelessWidget {
-  const _HomeSection({
-    required this.title,
-    required this.child,
-    super.key,
-    this.loading = false,
-    this.warning,
-    this.warningTooltip,
-  });
+/// Provider 列表的眉标题，右端挂检测中 / 检测失败两个非阻断提示。
+class _ProvidersGroupHeader extends StatelessWidget {
+  const _ProvidersGroupHeader({required this.loading, required this.error});
 
-  final String title;
-  final Widget child;
   final bool loading;
-  final String? warning;
-  final String? warningTooltip;
+  final String? error;
 
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    return PanelCard(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Padding(
+      padding: IdeSpacing.settingsGroupTitlePadding,
+      child: Row(
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: IdeSpacing.space12,
-              vertical: IdeSpacing.space10,
-            ),
-            child: Row(
-              children: [
-                Expanded(child: Text(title, style: textStyles.sectionTitle)),
-                if (warning != null)
-                  IdeTooltip(
-                    message: warningTooltip ?? warning!,
-                    child: IdeChip(
-                      label: warning!,
-                      leadingIcon: Icons.warning_amber_rounded,
-                      variant: IdeChipVariant.outline,
-                    ),
-                  ),
-                if (loading) ...[
-                  if (warning != null) const SizedBox(width: IdeSpacing.space8),
-                  IdeBusySpinner(
-                    key: ValueKey<String>('global-home-loading-$title'),
-                    size: 14,
-                    color: colors.accent,
-                  ),
-                ],
-              ],
+          Expanded(
+            child: Text(
+              context.l10n.homeInstalledProviders,
+              style: textStyles.groupTitle,
             ),
           ),
-          const IdeRowDivider(),
-          child,
+          if (error case final String message)
+            IdeTooltip(
+              message: message,
+              child: Text(
+                context.l10n.homeDetectionFailed,
+                style: textStyles.meta.copyWith(color: colors.warning),
+              ),
+            ),
+          if (loading) ...[
+            if (error != null) const SizedBox(width: IdeSpacing.space8),
+            IdeBusySpinner(
+              key: const ValueKey<String>('global-home-providers-loading'),
+              size: 12,
+              color: colors.accent,
+            ),
+          ],
         ],
       ),
     );
   }
 }
 
-class _RecentProjectRow extends StatelessWidget {
-  const _RecentProjectRow({
-    required this.project,
-    required this.now,
+class _ProviderRow extends StatelessWidget {
+  const _ProviderRow({
+    required this.provider,
     required this.showDivider,
-    required this.onPressed,
     super.key,
   });
 
-  final RecentProjectSummary project;
-  final DateTime now;
+  final HomeProviderSummary provider;
   final bool showDivider;
-  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    final time = _relativeTime(project.lastOpenedAt, now, context.l10n);
-    return IdeTooltip(
-      message: project.path,
-      child: IdeListRow(
-        title: _fileName(project.path),
-        subtitle: time == null ? project.path : '${project.path} · $time',
-        leading: const Icon(Icons.folder_outlined),
-        trailing: const Icon(Icons.chevron_right_rounded, size: 16),
-        showDivider: showDivider,
-        semanticLabel: context.l10n.homeOpenRecentProject(
-          _fileName(project.path),
+    final colors = IdeColors.of(context);
+    final version = provider.version?.trim();
+    final statusLabel = _providerStatusLabel(context, provider.status);
+    return IdeListRow(
+      title: provider.displayName,
+      subtitle: version == null || version.isEmpty
+          ? provider.vendor
+          : '${provider.vendor} · $version',
+      // 图标锁进一个正方形槽：品牌 SVG 按高度缩放后，宽度会随各家 logo 的比例
+      // 浮动（Codex 在 18 高时是 19.1 宽）。槽一旦不定宽，下面那条分隔线的缩进
+      // 就对不上标题左边缘——那正是这条线唯一要做对的事。
+      leading: SizedBox.square(
+        dimension: _providerLogoSize,
+        child: FittedBox(
+          child: AgentProviderIcon(
+            providerId: provider.id,
+            size: _providerLogoSize,
+            color: colors.textSecondary,
+          ),
         ),
-        onPressed: onPressed,
+      ),
+      trailing: _ProviderStatusIndicator(
+        status: provider.status,
+        label: statusLabel,
+      ),
+      showDivider: showDivider,
+      // 线的起点推到标题左边缘：行内边距 + 图标宽 + 图标与文字的间隙。用 token
+      // 相加而不是写死，改图标尺寸时对齐会自己跟上。
+      dividerIndent: IdeSpacing.space10 + _providerLogoSize + IdeSpacing.space8,
+      semanticLabel: context.l10n.homeCommaJoin(
+        provider.displayName,
+        statusLabel,
       ),
     );
   }
 }
 
-class _RecentThreadRow extends StatelessWidget {
-  const _RecentThreadRow({
-    required this.thread,
-    required this.now,
-    required this.showDivider,
-    required this.onPressed,
-    super.key,
-  });
+/// 状态圆点 + 灰色文字。
+///
+/// 取代原来的药丸徽章：一列全是「可用」的时候，色块面积等于噪音面积。圆点只
+/// 在真出问题（需登录 / 错误）时才把颜色带到文字上，其余状态一律留在
+/// [IdeTextStyles.meta] 的三级灰里。
+class _ProviderStatusIndicator extends StatelessWidget {
+  const _ProviderStatusIndicator({required this.status, required this.label});
 
-  final AgentThreadSummary thread;
-  final DateTime now;
-  final bool showDivider;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final metadata = <String>[
-      _fileName(thread.projectPath),
-      if (_relativeTime(thread.lastActiveAt, now, context.l10n)
-          case final String value)
-        value,
-    ];
-    return IdeListRow(
-      title: thread.displayName,
-      subtitle: metadata.join(' · '),
-      leading: AgentProviderIcon(providerId: thread.providerId, size: 18),
-      trailing: const Icon(Icons.chevron_right_rounded, size: 16),
-      showDivider: showDivider,
-      semanticLabel: context.l10n.homeOpenRecentSession(thread.displayName),
-      onPressed: onPressed,
-    );
-  }
-}
-
-class _ProviderStatusItem extends StatelessWidget {
-  const _ProviderStatusItem({required this.provider, super.key});
-
-  final HomeProviderSummary provider;
+  final HomeProviderStatus status;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    final version = provider.version?.trim();
-    return Semantics(
-      label: context.l10n.homeCommaJoin(
-        provider.displayName,
-        _providerStatusLabel(context, provider.status),
-      ),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: colors.controlSurface,
-          border: Border.all(color: colors.borderSubtle),
-          borderRadius: IdeRadius.allMedium,
+    final tone = _providerStatusTone(colors, status);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: _statusDotSize,
+          height: _statusDotSize,
+          decoration: BoxDecoration(color: tone.dot, shape: BoxShape.circle),
         ),
-        child: Padding(
-          padding: IdeSpacing.all12,
-          child: Row(
-            children: [
-              AgentProviderIcon(
-                providerId: provider.id,
-                size: 18,
-                color: colors.textSecondary,
-              ),
-              const SizedBox(width: IdeSpacing.space10),
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      provider.displayName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: textStyles.identifier,
-                    ),
-                    Text(
-                      version == null || version.isEmpty
-                          ? provider.vendor
-                          : '${provider.vendor} · $version',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: textStyles.meta.copyWith(
-                        color: colors.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: IdeSpacing.space8),
-              IdeChip(
-                label: _providerStatusLabel(context, provider.status),
-                leadingIcon: _providerStatusIcon(provider.status),
-                variant: _providerChipVariant(provider.status),
-                selected:
-                    provider.status == HomeProviderStatus.available ||
-                    provider.status == HomeProviderStatus.running,
-              ),
-            ],
-          ),
-        ),
-      ),
+        const SizedBox(width: IdeSpacing.space6),
+        Text(label, style: textStyles.meta.copyWith(color: tone.label)),
+      ],
     );
   }
 }
 
-class _HomeSectionState extends StatelessWidget {
-  const _HomeSectionState({
-    required this.icon,
+/// Provider 列表为空 / 检测失败时的平铺占位，不套卡片。
+class _ProvidersPlaceholder extends StatelessWidget {
+  const _ProvidersPlaceholder({
     required this.title,
     required this.body,
     super.key,
-    this.loading = false,
     this.error = false,
   });
 
-  final IconData icon;
   final String title;
   final String body;
-  final bool loading;
   final bool error;
 
   @override
@@ -589,34 +349,17 @@ class _HomeSectionState extends StatelessWidget {
     final textStyles = IdeTextStyles.of(context);
     final foreground = error ? colors.error : colors.textSecondary;
     return Padding(
-      padding: IdeSpacing.all20,
-      child: Row(
+      padding: IdeSpacing.vertical8,
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (loading)
-            IdeBusySpinner(size: 18, color: colors.accent)
-          else
-            Icon(icon, size: 18, color: foreground),
-          const SizedBox(width: IdeSpacing.space10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: textStyles.rowTitle.copyWith(color: foreground),
-                ),
-                const SizedBox(height: IdeSpacing.space4),
-                Text(
-                  body,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: textStyles.bodySmall.copyWith(
-                    color: colors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
+          Text(title, style: textStyles.rowTitle.copyWith(color: foreground)),
+          const SizedBox(height: IdeSpacing.space4),
+          Text(
+            body,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: textStyles.bodySmall.copyWith(color: colors.textTertiary),
           ),
         ],
       ),
@@ -645,9 +388,8 @@ HomeProviderStatus _resolveProviderStatus(ManagedAgent agent) {
       agent.runtimeState == AgentRuntimeState.stopping) {
     return HomeProviderStatus.running;
   }
-  if (agent.versionState == AgentVersionState.updateAvailable) {
-    return HomeProviderStatus.updateAvailable;
-  }
+  // 「有新版本」不在首页出现：升级是 Agent 管理页的事，首页只回答「现在能不能
+  // 用」。可更新的 Provider 依然是可用的，就按可用显示。
   return HomeProviderStatus.available;
 }
 
@@ -659,44 +401,26 @@ String _providerStatusLabel(BuildContext context, HomeProviderStatus status) {
     HomeProviderStatus.disabled => l10n.homeProviderDisabled,
     HomeProviderStatus.needsLogin => l10n.homeProviderNeedsLogin,
     HomeProviderStatus.error => l10n.homeProviderError,
-    HomeProviderStatus.updateAvailable => l10n.homeProviderUpdateAvailable,
     HomeProviderStatus.detecting => l10n.homeProviderDetecting,
   };
 }
 
-IconData _providerStatusIcon(HomeProviderStatus status) => switch (status) {
-  HomeProviderStatus.available => Icons.check_circle_outline_rounded,
-  HomeProviderStatus.running => Icons.sync_rounded,
-  HomeProviderStatus.disabled => Icons.pause_circle_outline_rounded,
-  HomeProviderStatus.needsLogin => Icons.person_off_outlined,
-  HomeProviderStatus.error => Icons.error_outline_rounded,
-  HomeProviderStatus.updateAvailable => Icons.system_update_alt_rounded,
-  HomeProviderStatus.detecting => Icons.search_rounded,
+({Color dot, Color label}) _providerStatusTone(
+  IdeColors colors,
+  HomeProviderStatus status,
+) => switch (status) {
+  HomeProviderStatus.available => (
+    dot: colors.success,
+    label: colors.textTertiary,
+  ),
+  HomeProviderStatus.running => (
+    dot: colors.accent,
+    label: colors.textTertiary,
+  ),
+  HomeProviderStatus.disabled || HomeProviderStatus.detecting => (
+    dot: colors.textTertiary,
+    label: colors.textTertiary,
+  ),
+  HomeProviderStatus.needsLogin => (dot: colors.warning, label: colors.warning),
+  HomeProviderStatus.error => (dot: colors.error, label: colors.error),
 };
-
-IdeChipVariant _providerChipVariant(HomeProviderStatus status) =>
-    switch (status) {
-      HomeProviderStatus.error => IdeChipVariant.destructive,
-      HomeProviderStatus.needsLogin ||
-      HomeProviderStatus.updateAvailable => IdeChipVariant.outline,
-      HomeProviderStatus.disabled ||
-      HomeProviderStatus.detecting => IdeChipVariant.ghost,
-      HomeProviderStatus.available ||
-      HomeProviderStatus.running => IdeChipVariant.primary,
-    };
-
-String _fileName(String path) {
-  final parts = path
-      .replaceAll('\\', '/')
-      .split('/')
-      .where((part) => part.isNotEmpty)
-      .toList(growable: false);
-  return parts.isEmpty ? path : parts.last;
-}
-
-String? _relativeTime(DateTime? value, DateTime now, AppLocalizations l10n) {
-  if (value == null) {
-    return null;
-  }
-  return formatLocalizedRelativeTime(value, now, l10n);
-}

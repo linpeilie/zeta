@@ -12,6 +12,7 @@ void main() {
     );
 
     expect(styles.bodyMedium.fontSize, 14);
+    expect(styles.displayHero.fontSize, closeTo(32.6667, 0.0001));
     expect(styles.displayLarge.fontSize, 21);
     expect(styles.codeMedium.fontSize, 18);
     expect(styles.codeSmall.fontSize, 16.5);
@@ -78,6 +79,20 @@ void main() {
     expect(styles.meta.color, IdeColors.dark.textTertiary);
     expect(styles.metricValue.fontWeight, FontWeight.w600);
     expect(styles.placeholder.color, IdeColors.dark.textTertiary);
+  });
+
+  test('英雄标题是全表唯一压过 displayLarge 的一档，并收紧字距', () {
+    final styles = IdeTextStyles.resolve(colors: IdeColors.light);
+
+    // 首页标题要当「绝对视觉中心」，必须明显大于原本的最大展示标题。
+    expect(
+      styles.displayHero.fontSize,
+      greaterThan(styles.displayLarge.fontSize!),
+    );
+    expect(styles.displayHero.fontWeight, FontWeight.w700);
+    // 大字号下默认字间距显得松，负字距把标题收成一个整体。
+    expect(styles.displayHero.letterSpacing, -0.4);
+    expect(styles.displayHero.color, IdeColors.light.textPrimary);
   });
 
   test('分组眉标题压到全表最小字号，并靠字重与次级色站住索引位', () {

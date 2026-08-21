@@ -657,7 +657,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get homeWelcomeSubtitle =>
-      'Continue recent work, or open a project to start.';
+      'Open a local project to start working with an Agent.';
 
   @override
   String get homeOpenProjectFolder => 'Open project folder';
