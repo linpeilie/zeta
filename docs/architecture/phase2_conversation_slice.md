@@ -335,7 +335,7 @@ app 级 feature flag 二选一；新 adapter 是现有 store 的只读消费者�
 | B | `AgentConversationSliceStore`（铸造 `OperationId`、状态不变不发布、迟到结果计数、dispose 关闭） | ✅ 10 条 store 测试 |
 | C | `AgentConversationSliceBinding`：region ingress 合并 + effect 打到现有 ViewModel port | ✅ 3 条对真实 ViewModel 的接线测试 |
 | D | Riverpod family：`agentConversationSliceProvider` + 五个 region selector + fail-closed 覆盖 + 开关 | ✅ 6 条 provider 测试 |
-| E | `AgentPane` 子树改用 selector 订阅、workspace entry 按 flag 创建 binding | ⚠️ 部分完成，见 §9.6 |
+| E | `AgentPane` 子树改用 selector 订阅、workspace entry 按 flag 创建 binding | ✅ 见 §9.6 |
 | F | 两 thread 并存 / UiEffect exactly-once / 性能预算等验收测试（§8 表） | ⏳ 未开始 |
 
 已落地的关键不变量（都有测试钉住）：
@@ -542,14 +542,27 @@ draft 与 thread 不串、`invalidate` 一个不影响另一个。
   pump `MainApp` 的测试都要自己补一层，漏掉就是运行期 "No ProviderScope found"
   而不是编译期错误。移进去之后生产与测试共用同一套接线。
 
-**未完成（明确留作后续，不算在 E 里）**
+**深层组件也已迁完（第二批）**
 
-深层卡片与消息组件里还有 13 处 `expansionStateListenable` /
-`pendingInteractionStateListenable` 订阅（`agent_pane_cards.dart`、
-`agent_pane_messages.dart`、`agent_pane_sections.dart`、`agent_pane_plan_panel.dart`、
-`agent_pane_context_panel.dart`），它们多数与 `liveTurnListenable` 合并订阅。这些
-继续走 listenable 路径——**功能正确但还不是 selector 订阅**，不要因为 §9.5 的表格
-写了"E"就以为整棵子树都迁完了。
+`agent_pane_cards.dart`、`agent_pane_messages.dart`、`agent_pane_sections.dart`、
+`agent_pane_plan_panel.dart`、`agent_pane_context_panel.dart` 里剩下的 13 处订阅
+全部改走接缝。几处合并订阅顺带拆开了：
+
+| 原来 | 现在 |
+| --- | --- |
+| 时间线：history + liveTurn + expansion + pending + 浮层高度一把 merge | 三个 region 各订各的，嵌一层 listenable 只管 live turn 与浮层高度 |
+| Plan 浮层：liveTurn + header + pending + expansion 一把 merge | 同上 |
+| 上下文面板：header + history + threadSnapshot + providerController merge | 两个 region 走 selector，thread 快照与 Provider 目录仍是 listenable |
+| 工具卡：expansion + elapsed 时钟条件 merge | expansion 走 selector，elapsed 时钟单独订阅 |
+
+结果是**pending 变化不再重建 history 那层**，反之亦然——原来任何一个 region 变都会
+重建整棵合并子树。
+
+**守卫**：`agent_region_subscription_guard_test` 断言 presentation 下不得直接订阅
+`<region>StateListenable`，只有三处豁免——接缝自己、ViewModel（定义方）、切片
+binding（ingress）。做过 mutation 验证：把任意一处改回 `ListenableBuilder` 立刻红。
+这条守卫存在的理由是这种偏差**看起来是对的**（两条路径给的是同一批对象，功能正常），
+只是那个组件永远停在旧路径上，flag 打开也不走 selector。
 
 **验收测试**：`agent_pane_slice_wiring_test`
 
@@ -560,7 +573,8 @@ draft 与 thread 不串、`invalidate` 一个不影响另一个。
 
 **F 步（§8 验收表剩余项）仍未开始**：两 thread 并存的 Widget 级隔离、UiEffect
 exactly-once、canonical signature 回归、Phase 0 帧预算复测。注意帧预算测试目前跑的是
-**flag 关闭**的旧路径，切片开启下的帧预算还没有测过。
+**flag 关闭**的旧路径，切片开启下的帧预算还没有测过——嵌套 selector 理论上只会减少
+重建，但"理论上"不是基线，F 步必须实测。
 
 ---
 

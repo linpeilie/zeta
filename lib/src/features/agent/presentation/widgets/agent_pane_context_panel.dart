@@ -41,90 +41,115 @@ class _AgentContextPanelState extends State<_AgentContextPanel> {
       builder: (context, liveTurnState, _) {
         // 上下文面板只组合已有 typed slice；live binding 改变时重绑稳定 turn
         // notifier，避免重新引入完整 ViewModel ChangeNotifier。
-        return ListenableBuilder(
-          listenable: Listenable.merge(<Listenable>[
-            viewModel.headerStateListenable,
-            viewModel.historyStateListenable,
-            viewModel.threadSnapshotListenable,
-            viewModel.providerController,
-            ?liveTurnState,
-          ]),
-          builder: (context, _) {
-            final colors = IdeColors.of(context);
-            final usage = viewModel.currentThreadTokenUsage;
-            final messages = viewModel.messages;
-            final rawItems = _buildContextRawItems(
-              timelineEntries: viewModel.timelineEntries,
-              filterNonChat: _filterNonChatMessages,
-              catalog: viewModel.textCatalog,
-              l10n: context.l10n,
-            );
-            return Container(
-              key: const ValueKey('agent-context-panel'),
-              width: _agentContextPanelWidth,
-              decoration: BoxDecoration(
-                color: colors.surface,
-                border: Border(
-                  left: BorderSide(color: colors.borderSubtle, width: 1),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _AgentContextPanelHeader(onClose: viewModel.hideContextPanel),
-                  // SelectionArea 覆盖概览与原始消息区，支持拖选 / 右键复制；
-                  // 关闭按钮留在区外，避免与选择手势争用。
-                  Expanded(
-                    child: SelectionArea(
-                      key: const ValueKey('agent-context-panel-selection'),
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.fromLTRB(
-                          IdeSpacing.space16,
-                          IdeSpacing.space8,
-                          IdeSpacing.space16,
-                          IdeSpacing.space20,
-                        ),
-                        child: RepaintBoundary(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              _AgentContextSummaryCard(
-                                title: viewModel.currentThreadTitle,
-                                sessionId: viewModel.sessionId,
-                                messageCount: messages.length,
-                                providerName: viewModel.activeProviderName,
-                                contextLimit: usage?.displayModelContextWindow,
-                                totalTokens: usage?.displayTotalTokens,
-                                inputTokens: usage?.displayInputTokens,
-                                outputTokens: usage?.displayOutputTokens,
-                                cachedTokens: usage?.displayCachedInputTokens,
-                                createdAt: viewModel.threadCreatedAt,
-                                lastActiveAt: viewModel.threadLastActiveAt,
-                              ),
-                              // 元数据区与原始消息之间不画线：靠一整段留白
-                              // 把两个功能区分开，面板整体保持无框线。
-                              const SizedBox(height: IdeSpacing.space32),
-                              _AgentContextRawMessageList(
-                                items: rawItems,
-                                filterNonChat: _filterNonChatMessages,
-                                expandedIds: _expandedRawMessageIds,
-                                onToggle: _toggleRawMessage,
-                                onFilterChanged: (value) {
-                                  setState(() {
-                                    _filterNonChatMessages = value;
-                                  });
-                                },
-                              ),
-                            ],
+        return AgentRegionBuilder<AgentHeaderState>(
+          viewModel: viewModel,
+          selector: agentConversationHeaderProvider.call,
+          legacyListenable: viewModel.headerStateListenable,
+          builder: (context, _) =>
+              AgentRegionBuilder<AgentConversationHistoryState>(
+                viewModel: viewModel,
+                selector: agentConversationHistoryProvider.call,
+                legacyListenable: viewModel.historyStateListenable,
+                builder: (context, _) => ListenableBuilder(
+                  // thread 快照与 Provider 目录不属于 region，仍走 listenable。
+                  listenable: Listenable.merge(<Listenable>[
+                    viewModel.threadSnapshotListenable,
+                    viewModel.providerController,
+                    ?liveTurnState,
+                  ]),
+                  builder: (context, _) {
+                    final colors = IdeColors.of(context);
+                    final usage = viewModel.currentThreadTokenUsage;
+                    final messages = viewModel.messages;
+                    final rawItems = _buildContextRawItems(
+                      timelineEntries: viewModel.timelineEntries,
+                      filterNonChat: _filterNonChatMessages,
+                      catalog: viewModel.textCatalog,
+                      l10n: context.l10n,
+                    );
+                    return Container(
+                      key: const ValueKey('agent-context-panel'),
+                      width: _agentContextPanelWidth,
+                      decoration: BoxDecoration(
+                        color: colors.surface,
+                        border: Border(
+                          left: BorderSide(
+                            color: colors.borderSubtle,
+                            width: 1,
                           ),
                         ),
                       ),
-                    ),
-                  ),
-                ],
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _AgentContextPanelHeader(
+                            onClose: viewModel.hideContextPanel,
+                          ),
+                          // SelectionArea 覆盖概览与原始消息区，支持拖选 / 右键复制；
+                          // 关闭按钮留在区外，避免与选择手势争用。
+                          Expanded(
+                            child: SelectionArea(
+                              key: const ValueKey(
+                                'agent-context-panel-selection',
+                              ),
+                              child: SingleChildScrollView(
+                                padding: const EdgeInsets.fromLTRB(
+                                  IdeSpacing.space16,
+                                  IdeSpacing.space8,
+                                  IdeSpacing.space16,
+                                  IdeSpacing.space20,
+                                ),
+                                child: RepaintBoundary(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      _AgentContextSummaryCard(
+                                        title: viewModel.currentThreadTitle,
+                                        sessionId: viewModel.sessionId,
+                                        messageCount: messages.length,
+                                        providerName:
+                                            viewModel.activeProviderName,
+                                        contextLimit:
+                                            usage?.displayModelContextWindow,
+                                        totalTokens: usage?.displayTotalTokens,
+                                        inputTokens: usage?.displayInputTokens,
+                                        outputTokens:
+                                            usage?.displayOutputTokens,
+                                        cachedTokens:
+                                            usage?.displayCachedInputTokens,
+                                        createdAt: viewModel.threadCreatedAt,
+                                        lastActiveAt:
+                                            viewModel.threadLastActiveAt,
+                                      ),
+                                      // 元数据区与原始消息之间不画线：靠一整段留白
+                                      // 把两个功能区分开，面板整体保持无框线。
+                                      const SizedBox(
+                                        height: IdeSpacing.space32,
+                                      ),
+                                      _AgentContextRawMessageList(
+                                        items: rawItems,
+                                        filterNonChat: _filterNonChatMessages,
+                                        expandedIds: _expandedRawMessageIds,
+                                        onToggle: _toggleRawMessage,
+                                        onFilterChanged: (value) {
+                                          setState(() {
+                                            _filterNonChatMessages = value;
+                                          });
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
               ),
-            );
-          },
         );
       },
     );

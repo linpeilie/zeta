@@ -336,259 +336,281 @@ class _AgentConversationTimeline extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // 非前台：不挂 live 高频信号，后台 thread 流式输出不重建此 canvas。
-    // pending 状态进入时间线信号：计划卡在流内渲染，pending 变化必须重建。
-    final timelineListenable = isActive
+    // live turn 与浮层高度不属于任何 region（§2.7），继续走 listenable。
+    final liveListenable = isActive
         ? Listenable.merge(<Listenable>[
-            viewModel.historyStateListenable,
             viewModel.liveTurnListenable,
-            viewModel.expansionStateListenable,
-            viewModel.pendingInteractionStateListenable,
             floatingPanelExtent,
             ?viewModel.liveTurnState,
           ])
-        : Listenable.merge(<Listenable>[
-            viewModel.historyStateListenable,
-            viewModel.expansionStateListenable,
-            viewModel.pendingInteractionStateListenable,
-            floatingPanelExtent,
-          ]);
+        : floatingPanelExtent;
 
     // 导航轨贴 AgentPanel 全宽左侧；对话流仍经 _AgentContentAlign 居中限宽。
-    return ListenableBuilder(
-      listenable: timelineListenable,
-      builder: (context, _) {
-        final historyState = viewModel.historyState;
-        final standbySnapshot = historyState.standbyTurn;
-        final historyTurns = historyState.visibleTurns;
-        final liveTurnState = viewModel.liveTurnState;
-        final liveSnapshot = liveTurnState?.snapshot();
-        final expansionState = viewModel.expansionState;
-        final pendingState = viewModel.pendingInteractionState;
-        // 阻塞式计划文档自身已承载等待决策的反馈；仅在它展示时隐藏 live
-        // 活动条。实时步骤进度浮层不等价于活动状态，两者应同时保留。
-        final items = projectAgentTimelineViewportItems(
-          standbyTurn: standbySnapshot,
-          visibleHistoryTurns: historyTurns,
-          liveTurn: liveSnapshot,
-          resolveBlocks: projectionCache.resolve,
-          showLiveActivity: !pendingState.hasBlockingPlanDocument,
-        );
-        // 仅保留当前可见 turn 的投影缓存，避免历史窗口滑动后无限增长。
-        projectionCache.retainOnly(<String>{
-          if (standbySnapshot != null) standbySnapshot.id,
-          for (final turn in historyTurns) turn.id,
-          if (liveSnapshot != null) liveSnapshot.id,
-        });
-        // 计划请求消失即释放草稿，避免长会话里控制器无限累积。
-        planRevisionDrafts.retainOnly(<String>{
-          for (final request in pendingState.planApprovals) request.id,
-          if (pendingState.planExecutionHandoff case final handoff?) handoff.id,
-        });
+    // 三个 region 各订各的：pending 变化不再重建 history 那层。
+    return AgentRegionBuilder<AgentConversationHistoryState>(
+      viewModel: viewModel,
+      selector: agentConversationHistoryProvider.call,
+      legacyListenable: viewModel.historyStateListenable,
+      builder: (context, historyState) => AgentRegionBuilder<AgentExpansionState>(
+        viewModel: viewModel,
+        selector: agentConversationExpansionProvider.call,
+        legacyListenable: viewModel.expansionStateListenable,
+        builder: (context, expansionState) =>
+            AgentRegionBuilder<AgentPendingInteractionState>(
+              viewModel: viewModel,
+              selector: agentConversationPendingInteractionProvider.call,
+              legacyListenable: viewModel.pendingInteractionStateListenable,
+              builder: (context, pendingState) => ListenableBuilder(
+                listenable: liveListenable,
+                builder: (context, _) {
+                  final standbySnapshot = historyState.standbyTurn;
+                  final historyTurns = historyState.visibleTurns;
+                  final liveTurnState = viewModel.liveTurnState;
+                  final liveSnapshot = liveTurnState?.snapshot();
+                  // 阻塞式计划文档自身已承载等待决策的反馈；仅在它展示时隐藏 live
+                  // 活动条。实时步骤进度浮层不等价于活动状态，两者应同时保留。
+                  final items = projectAgentTimelineViewportItems(
+                    standbyTurn: standbySnapshot,
+                    visibleHistoryTurns: historyTurns,
+                    liveTurn: liveSnapshot,
+                    resolveBlocks: projectionCache.resolve,
+                    showLiveActivity: !pendingState.hasBlockingPlanDocument,
+                  );
+                  // 仅保留当前可见 turn 的投影缓存，避免历史窗口滑动后无限增长。
+                  projectionCache.retainOnly(<String>{
+                    if (standbySnapshot != null) standbySnapshot.id,
+                    for (final turn in historyTurns) turn.id,
+                    if (liveSnapshot != null) liveSnapshot.id,
+                  });
+                  // 计划请求消失即释放草稿，避免长会话里控制器无限累积。
+                  planRevisionDrafts.retainOnly(<String>{
+                    for (final request in pendingState.planApprovals)
+                      request.id,
+                    if (pendingState.planExecutionHandoff case final handoff?)
+                      handoff.id,
+                  });
 
-        onLastItemIdChanged(items.isEmpty ? null : items.last.id);
+                  onLastItemIdChanged(items.isEmpty ? null : items.last.id);
 
-        // Plan 浮层叠在时间线之上：viewport 不缩短，只在滚动内容底部加
-        // inset，使 stick-to-bottom / 手动滑到底时末项停在浮层上方。
-        final listPadding = pagePadding.copyWith(
-          bottom: pagePadding.bottom + floatingPanelExtent.value,
-        );
-        final navigationEntries = buildAgentConversationNavigationEntries(
-          visibleHistoryTurns: historyTurns,
-          liveTurn: liveSnapshot,
-          resolveBlocks: projectionCache.resolve,
-        );
-        final showNavigationRail = shouldShowAgentConversationNavigation(
-          navigationEntries,
-        );
+                  // Plan 浮层叠在时间线之上：viewport 不缩短，只在滚动内容底部加
+                  // inset，使 stick-to-bottom / 手动滑到底时末项停在浮层上方。
+                  final listPadding = pagePadding.copyWith(
+                    bottom: pagePadding.bottom + floatingPanelExtent.value,
+                  );
+                  final navigationEntries =
+                      buildAgentConversationNavigationEntries(
+                        visibleHistoryTurns: historyTurns,
+                        liveTurn: liveSnapshot,
+                        resolveBlocks: projectionCache.resolve,
+                      );
+                  final showNavigationRail =
+                      shouldShowAgentConversationNavigation(navigationEntries);
 
-        final itemIndexes = <String, int>{
-          for (var index = 0; index < items.length; index++)
-            items[index].id: index,
-        };
-        final delegate = SliverChildBuilderDelegate(
-          (context, index) {
-            final item = items[index];
-            final itemKey = ValueKey<String>(
-              agentTimelineViewportItemKey(item),
-            );
-            final content = IndexedSemantics(
-              index: index,
-              child: RepaintBoundary(
-                child: _buildViewportItem(
-                  item,
-                  pendingState,
-                  previousItem: index > 0 ? items[index - 1] : null,
-                  nextItem: index + 1 < items.length ? items[index + 1] : null,
-                ),
-              ),
-            );
-            final keepAliveListenable = _prepareMarkdownWarmEntry(item);
-            if (keepAliveListenable == null) {
-              return KeyedSubtree(key: itemKey, child: content);
-            }
-            return ValueListenableBuilder<bool>(
-              key: itemKey,
-              valueListenable: keepAliveListenable,
-              child: content,
-              builder: (context, keepAlive, child) {
-                return KeepAlive(keepAlive: keepAlive, child: child!);
-              },
-            );
-          },
-          childCount: items.length,
-          findChildIndexCallback: (Key key) {
-            if (key is! ValueKey<String>) {
-              return null;
-            }
-            final value = key.value;
-            const prefix = 'timeline-viewport-';
-            if (!value.startsWith(prefix)) {
-              return null;
-            }
-            final id = value.substring(prefix.length);
-            return itemIndexes[id];
-          },
-          // Markdown 在根节点使用显式 KeepAlive；禁止嵌套子树发送 ParentData 通知。
-          addAutomaticKeepAlives: false,
-          // KeepAlive 必须直接控制 Sliver child 的 ParentData，因此在上方按
-          // KeepAlive → IndexedSemantics → RepaintBoundary 的顺序显式包装。
-          addRepaintBoundaries: false,
-          addSemanticIndexes: false,
-        );
+                  final itemIndexes = <String, int>{
+                    for (var index = 0; index < items.length; index++)
+                      items[index].id: index,
+                  };
+                  final delegate = SliverChildBuilderDelegate(
+                    (context, index) {
+                      final item = items[index];
+                      final itemKey = ValueKey<String>(
+                        agentTimelineViewportItemKey(item),
+                      );
+                      final content = IndexedSemantics(
+                        index: index,
+                        child: RepaintBoundary(
+                          child: _buildViewportItem(
+                            item,
+                            pendingState,
+                            previousItem: index > 0 ? items[index - 1] : null,
+                            nextItem: index + 1 < items.length
+                                ? items[index + 1]
+                                : null,
+                          ),
+                        ),
+                      );
+                      final keepAliveListenable = _prepareMarkdownWarmEntry(
+                        item,
+                      );
+                      if (keepAliveListenable == null) {
+                        return KeyedSubtree(key: itemKey, child: content);
+                      }
+                      return ValueListenableBuilder<bool>(
+                        key: itemKey,
+                        valueListenable: keepAliveListenable,
+                        child: content,
+                        builder: (context, keepAlive, child) {
+                          return KeepAlive(keepAlive: keepAlive, child: child!);
+                        },
+                      );
+                    },
+                    childCount: items.length,
+                    findChildIndexCallback: (Key key) {
+                      if (key is! ValueKey<String>) {
+                        return null;
+                      }
+                      final value = key.value;
+                      const prefix = 'timeline-viewport-';
+                      if (!value.startsWith(prefix)) {
+                        return null;
+                      }
+                      final id = value.substring(prefix.length);
+                      return itemIndexes[id];
+                    },
+                    // Markdown 在根节点使用显式 KeepAlive；禁止嵌套子树发送 ParentData 通知。
+                    addAutomaticKeepAlives: false,
+                    // KeepAlive 必须直接控制 Sliver child 的 ParentData，因此在上方按
+                    // KeepAlive → IndexedSemantics → RepaintBoundary 的顺序显式包装。
+                    addRepaintBoundaries: false,
+                    addSemanticIndexes: false,
+                  );
 
-        final scrollView = CustomScrollView(
-          key: const ValueKey('agent-message-list'),
-          controller: scrollController,
-          // 默认 cacheExtent 保留少量视口外 block，兼顾滚动流畅与虚拟化收益。
-          slivers: [
-            // 保留 pagePadding；内容最大宽由 _AgentContentAlign 约束。
-            // 底部额外 inset = Plan 浮层高度；两侧仍可透出对话流。
-            SliverPadding(
-              padding: listPadding,
-              sliver: IdeAnchoredDynamicSliverList(
-                controller: virtualListController,
-                delegate: delegate,
+                  final scrollView = CustomScrollView(
+                    key: const ValueKey('agent-message-list'),
+                    controller: scrollController,
+                    // 默认 cacheExtent 保留少量视口外 block，兼顾滚动流畅与虚拟化收益。
+                    slivers: [
+                      // 保留 pagePadding；内容最大宽由 _AgentContentAlign 约束。
+                      // 底部额外 inset = Plan 浮层高度；两侧仍可透出对话流。
+                      SliverPadding(
+                        padding: listPadding,
+                        sliver: IdeAnchoredDynamicSliverList(
+                          controller: virtualListController,
+                          delegate: delegate,
+                        ),
+                      ),
+                    ],
+                  );
+
+                  return LayoutBuilder(
+                    builder: (context, panelConstraints) {
+                      final compactRail =
+                          panelConstraints.maxWidth <
+                          IdeMetrics.stackedRowBreakpoint;
+                      return Stack(
+                        children: [
+                          // 对话流：仍居中限宽（contentMaxWidth）。
+                          Positioned.fill(
+                            child: _AgentContentAlign(
+                              child: LayoutBuilder(
+                                builder: (context, contentConstraints) {
+                                  final media = MediaQuery.of(context);
+                                  final layoutContext =
+                                      AgentTimelineLayoutContext(
+                                        // 必须使用 920px 内容轴内的真实局部宽度；窗口宽度会让
+                                        // 高度估算和 layout epoch 在多面板/窗口 resize 时失真。
+                                        crossAxisExtent: math.max(
+                                          0,
+                                          contentConstraints.maxWidth -
+                                              pagePadding.horizontal,
+                                        ),
+                                        devicePixelRatio:
+                                            media.devicePixelRatio,
+                                        textScale: media.textScaler.scale(1),
+                                        localeKey: Localizations.localeOf(
+                                          context,
+                                        ).toString(),
+                                      );
+
+                                  virtualListController.setItems(
+                                    descriptorFactory.describeAll(
+                                      items,
+                                      expansion: (
+                                        isCommandGroupExpanded: expansionState
+                                            .isCommandGroupExpanded,
+                                        isFileEditItemExpanded: expansionState
+                                            .isFileEditItemExpanded,
+                                        isPlanMessageInteractive: (messageId) =>
+                                            pendingState
+                                                .planExecutionHandoff
+                                                ?.messageId ==
+                                            messageId,
+                                      ),
+                                      layoutContext: layoutContext,
+                                    ),
+                                    epoch: layoutContext.toEpoch(),
+                                  );
+
+                                  return NotificationListener<
+                                    ScrollNotification
+                                  >(
+                                    onNotification: (notification) {
+                                      return dispatchUserScrollToCoordinator(
+                                        coordinator: scrollCoordinator,
+                                        notification: notification,
+                                        controller: scrollController,
+                                      );
+                                    },
+                                    child: ListenableBuilder(
+                                      listenable: scrollChromeTick,
+                                      builder: (context, _) {
+                                        final showButton =
+                                            _shouldShowScrollToEndButton();
+                                        return IdeVirtualScrollShell(
+                                          controller: scrollController,
+                                          semanticLabel:
+                                              context.l10n.timelineScrollbar,
+                                          showScrollToEndButton: showButton,
+                                          hasNewContent:
+                                              showButton &&
+                                              viewModel.liveTurnState != null,
+                                          onScrollToEnd: () {
+                                            unawaited(onScrollToEndPressed());
+                                          },
+                                          child: scrollView,
+                                        );
+                                      },
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                          // 导航轨：贴 AgentPanel 最左侧，不跟 920 内容轴走。
+                          if (showNavigationRail)
+                            Positioned(
+                              left: IdeSpacing.space4,
+                              top: 0,
+                              bottom: 0,
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: ListenableBuilder(
+                                  listenable: scrollChromeTick,
+                                  builder: (context, _) {
+                                    final activeTurnId =
+                                        _resolveActiveNavigationTurnId(
+                                          entries: navigationEntries,
+                                          items: items,
+                                          contentTopInset: listPadding.top,
+                                        );
+                                    return _AgentConversationNavigationRail(
+                                      key: const ValueKey(
+                                        'agent-conversation-navigation-rail',
+                                      ),
+                                      entries: navigationEntries,
+                                      activeTurnId: activeTurnId,
+                                      compact: compactRail,
+                                      onSelectTurn: (entry) {
+                                        unawaited(
+                                          _scrollToNavigationEntry(
+                                            entry: entry,
+                                            contentTopInset: listPadding.top,
+                                          ),
+                                        );
+                                      },
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                        ],
+                      );
+                    },
+                  );
+                },
               ),
             ),
-          ],
-        );
-
-        return LayoutBuilder(
-          builder: (context, panelConstraints) {
-            final compactRail =
-                panelConstraints.maxWidth < IdeMetrics.stackedRowBreakpoint;
-            return Stack(
-              children: [
-                // 对话流：仍居中限宽（contentMaxWidth）。
-                Positioned.fill(
-                  child: _AgentContentAlign(
-                    child: LayoutBuilder(
-                      builder: (context, contentConstraints) {
-                        final media = MediaQuery.of(context);
-                        final layoutContext = AgentTimelineLayoutContext(
-                          // 必须使用 920px 内容轴内的真实局部宽度；窗口宽度会让
-                          // 高度估算和 layout epoch 在多面板/窗口 resize 时失真。
-                          crossAxisExtent: math.max(
-                            0,
-                            contentConstraints.maxWidth -
-                                pagePadding.horizontal,
-                          ),
-                          devicePixelRatio: media.devicePixelRatio,
-                          textScale: media.textScaler.scale(1),
-                          localeKey: Localizations.localeOf(context).toString(),
-                        );
-
-                        virtualListController.setItems(
-                          descriptorFactory.describeAll(
-                            items,
-                            expansion: (
-                              isCommandGroupExpanded:
-                                  expansionState.isCommandGroupExpanded,
-                              isFileEditItemExpanded:
-                                  expansionState.isFileEditItemExpanded,
-                              isPlanMessageInteractive: (messageId) =>
-                                  pendingState
-                                      .planExecutionHandoff
-                                      ?.messageId ==
-                                  messageId,
-                            ),
-                            layoutContext: layoutContext,
-                          ),
-                          epoch: layoutContext.toEpoch(),
-                        );
-
-                        return NotificationListener<ScrollNotification>(
-                          onNotification: (notification) {
-                            return dispatchUserScrollToCoordinator(
-                              coordinator: scrollCoordinator,
-                              notification: notification,
-                              controller: scrollController,
-                            );
-                          },
-                          child: ListenableBuilder(
-                            listenable: scrollChromeTick,
-                            builder: (context, _) {
-                              final showButton = _shouldShowScrollToEndButton();
-                              return IdeVirtualScrollShell(
-                                controller: scrollController,
-                                semanticLabel: context.l10n.timelineScrollbar,
-                                showScrollToEndButton: showButton,
-                                hasNewContent:
-                                    showButton &&
-                                    viewModel.liveTurnState != null,
-                                onScrollToEnd: () {
-                                  unawaited(onScrollToEndPressed());
-                                },
-                                child: scrollView,
-                              );
-                            },
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-                // 导航轨：贴 AgentPanel 最左侧，不跟 920 内容轴走。
-                if (showNavigationRail)
-                  Positioned(
-                    left: IdeSpacing.space4,
-                    top: 0,
-                    bottom: 0,
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: ListenableBuilder(
-                        listenable: scrollChromeTick,
-                        builder: (context, _) {
-                          final activeTurnId = _resolveActiveNavigationTurnId(
-                            entries: navigationEntries,
-                            items: items,
-                            contentTopInset: listPadding.top,
-                          );
-                          return _AgentConversationNavigationRail(
-                            key: const ValueKey(
-                              'agent-conversation-navigation-rail',
-                            ),
-                            entries: navigationEntries,
-                            activeTurnId: activeTurnId,
-                            compact: compactRail,
-                            onSelectTurn: (entry) {
-                              unawaited(
-                                _scrollToNavigationEntry(
-                                  entry: entry,
-                                  contentTopInset: listPadding.top,
-                                ),
-                              );
-                            },
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-              ],
-            );
-          },
-        );
-      },
+      ),
     );
   }
 
@@ -874,9 +896,11 @@ class _AgentPendingInteractionSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<AgentPendingInteractionState>(
-      valueListenable: viewModel.pendingInteractionStateListenable,
-      builder: (context, state, _) => _buildDock(context, state),
+    return AgentRegionBuilder<AgentPendingInteractionState>(
+      viewModel: viewModel,
+      selector: agentConversationPendingInteractionProvider.call,
+      legacyListenable: viewModel.pendingInteractionStateListenable,
+      builder: _buildDock,
     );
   }
 

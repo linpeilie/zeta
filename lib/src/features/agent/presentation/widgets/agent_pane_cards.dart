@@ -1,5 +1,9 @@
 part of '../agent_pane.dart';
 
+/// 永不通知的 [Listenable]：用于"本次不需要 elapsed 时钟"的分支，
+/// 避免为了条件订阅去改变 widget 树形状。
+final Listenable _neverNotifies = ChangeNotifier();
+
 /// 命令集折叠卡片。
 ///
 /// 连续工具调用和搜索事件会先规约成命令集，在这里统一展示摘要与展开列表。
@@ -12,12 +16,12 @@ class _AgentCommandGroupCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
-    return ListenableBuilder(
-      listenable: viewModel.expansionStateListenable,
-      builder: (context, _) {
-        final expanded = viewModel.expansionState.isCommandGroupExpanded(
-          group.id,
-        );
+    return AgentRegionBuilder<AgentExpansionState>(
+      viewModel: viewModel,
+      selector: agentConversationExpansionProvider.call,
+      legacyListenable: viewModel.expansionStateListenable,
+      builder: (context, expansion) {
+        final expanded = expansion.isCommandGroupExpanded(group.id);
         return IdeCollapsibleCard(
           headerKey: ValueKey<String>('agent-command-group-header-${group.id}'),
           bodyKey: ValueKey<String>('agent-command-group-body-${group.id}'),
@@ -171,12 +175,12 @@ class _AgentFileEditItemRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: viewModel.expansionStateListenable,
-      builder: (context, _) {
-        final expanded = viewModel.expansionState.isFileEditItemExpanded(
-          item.id,
-        );
+    return AgentRegionBuilder<AgentExpansionState>(
+      viewModel: viewModel,
+      selector: agentConversationExpansionProvider.call,
+      legacyListenable: viewModel.expansionStateListenable,
+      builder: (context, expansion) {
+        final expanded = expansion.isFileEditItemExpanded(item.id);
         return AgentFileChangeEvidenceCard(
           item: item.projection,
           status: item.status,
@@ -334,79 +338,81 @@ class _AgentToolCallCard extends StatelessWidget {
         toolCall.duration == null &&
         toolCall.startedAt != null &&
         toolCall.isActiveStatus;
-    final listenables = <Listenable>[viewModel.expansionStateListenable];
-    if (needsElapsedTick) {
-      listenables.add(viewModel.elapsedClockListenable);
-    }
-    return ListenableBuilder(
-      listenable: Listenable.merge(listenables),
-      builder: (context, _) {
-        final canExpand =
-            toolCall.content != null && toolCall.content!.isNotEmpty;
-        final expanded = viewModel.expansionState.isToolCallExpanded(
-          toolCall.id,
-        );
-        final elapsedLabel = _toolElapsedLabel(
-          viewModel,
-          toolCall,
-          viewModel.elapsedNow,
-        );
-        return IdeCollapsibleCard(
-          headerKey: ValueKey<String>('agent-tool-header-${toolCall.id}'),
-          bodyKey: ValueKey<String>('agent-tool-body-${toolCall.id}'),
-          expanded: expanded,
-          canExpand: canExpand,
-          onToggle: canExpand
-              ? () => viewModel.toggleToolCall(toolCall.id)
-              : () {},
-          titleWidget: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  _toolCardTitle(toolCall, context.l10n),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: _agentItemTextStyle(context),
-                ),
-              ),
-              if (elapsedLabel != null) ...[
-                const SizedBox(width: IdeSpacing.space8),
-                Text(
-                  elapsedLabel,
-                  key: ValueKey<String>('agent-tool-elapsed-${toolCall.id}'),
-                  style: textStyles.caption.copyWith(
-                    color: colors.textTertiary,
-                    fontWeight: FontWeight.w500,
+    return AgentRegionBuilder<AgentExpansionState>(
+      viewModel: viewModel,
+      selector: agentConversationExpansionProvider.call,
+      legacyListenable: viewModel.expansionStateListenable,
+      // elapsed 是本地时钟 tick，不属于任何 region：只在需要时单独订阅。
+      builder: (context, expansion) => ListenableBuilder(
+        listenable: needsElapsedTick
+            ? viewModel.elapsedClockListenable
+            : _neverNotifies,
+        builder: (context, _) {
+          final canExpand =
+              toolCall.content != null && toolCall.content!.isNotEmpty;
+          final expanded = expansion.isToolCallExpanded(toolCall.id);
+          final elapsedLabel = _toolElapsedLabel(
+            viewModel,
+            toolCall,
+            viewModel.elapsedNow,
+          );
+          return IdeCollapsibleCard(
+            headerKey: ValueKey<String>('agent-tool-header-${toolCall.id}'),
+            bodyKey: ValueKey<String>('agent-tool-body-${toolCall.id}'),
+            expanded: expanded,
+            canExpand: canExpand,
+            onToggle: canExpand
+                ? () => viewModel.toggleToolCall(toolCall.id)
+                : () {},
+            titleWidget: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _toolCardTitle(toolCall, context.l10n),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _agentItemTextStyle(context),
                   ),
                 ),
+                if (elapsedLabel != null) ...[
+                  const SizedBox(width: IdeSpacing.space8),
+                  Text(
+                    elapsedLabel,
+                    key: ValueKey<String>('agent-tool-elapsed-${toolCall.id}'),
+                    style: textStyles.caption.copyWith(
+                      color: colors.textTertiary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ],
-            ],
-          ),
-          leading: toolCall.isActiveStatus
-              ? IdeBusySpinner(
-                  size: 12,
-                  strokeWidth: 1.8,
-                  semanticsLabel: context.l10n.agentToolRunning,
-                )
-              : Icon(
-                  _toolIcon(toolCall.kind),
-                  size: 14,
-                  color: colors.textTertiary,
-                ),
-          margin: const EdgeInsets.only(bottom: IdeSpacing.space10),
-          bodyPadding: const EdgeInsets.only(top: IdeSpacing.space8),
-          hoverBackgroundColor: _agentHoverBackground(context),
-          semanticLabel: context.l10n.agentToolCall,
-          body: toolCall.content == null
-              ? null
-              : SelectableText(
-                  toolCall.content!,
-                  style: _agentCodeTextStyle(context).copyWith(
-                    color: colors.textSecondary.withValues(alpha: 0.8),
+            ),
+            leading: toolCall.isActiveStatus
+                ? IdeBusySpinner(
+                    size: 12,
+                    strokeWidth: 1.8,
+                    semanticsLabel: context.l10n.agentToolRunning,
+                  )
+                : Icon(
+                    _toolIcon(toolCall.kind),
+                    size: 14,
+                    color: colors.textTertiary,
                   ),
-                ),
-        );
-      },
+            margin: const EdgeInsets.only(bottom: IdeSpacing.space10),
+            bodyPadding: const EdgeInsets.only(top: IdeSpacing.space8),
+            hoverBackgroundColor: _agentHoverBackground(context),
+            semanticLabel: context.l10n.agentToolCall,
+            body: toolCall.content == null
+                ? null
+                : SelectableText(
+                    toolCall.content!,
+                    style: _agentCodeTextStyle(context).copyWith(
+                      color: colors.textSecondary.withValues(alpha: 0.8),
+                    ),
+                  ),
+          );
+        },
+      ),
     );
   }
 }
@@ -677,8 +683,10 @@ class _AgentPlanDocumentCard extends StatelessWidget {
                   ),
                   const Spacer(),
                   // 模型可在卡内直接切换；跟随 composer 状态刷新标签。
-                  ListenableBuilder(
-                    listenable: viewModel.composerStateListenable,
+                  AgentRegionBuilder<AgentComposerState>(
+                    viewModel: viewModel,
+                    selector: agentConversationComposerProvider.call,
+                    legacyListenable: viewModel.composerStateListenable,
                     builder: (context, _) {
                       final selector = _buildModelSelector();
                       if (selector == null) {

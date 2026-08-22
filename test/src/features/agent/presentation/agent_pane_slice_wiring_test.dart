@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_intent.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
@@ -83,6 +84,54 @@ void main() {
       await pumpAgentPaneUi(tester);
 
       expect(find.text('只存在于切片里的标题'), findsWidgets);
+    });
+
+    testWidgets('深层组件也走 selector：只推 store 的 pending 会渲染出来', (tester) async {
+      final viewModel = createAgentPaneViewModel(
+        AgentPaneFakeProvider(),
+        initialThread: agentPaneThread(id: 'thread-1', title: '会话一'),
+      );
+      addTearDown(viewModel.dispose);
+      final binding = AgentConversationSliceBinding(viewModel: viewModel);
+      addTearDown(binding.dispose);
+
+      await tester.pumpWidget(
+        AgentPaneTestApp(
+          viewModel: viewModel,
+          sliceStores:
+              <AgentConversationBindingKey, AgentConversationSliceStore>{
+                viewModel.conversationBinding.key: binding.store,
+              },
+        ),
+      );
+      await viewModel.initialization;
+      await pumpAgentPaneUi(tester);
+      expect(
+        find.byKey(const ValueKey<String>('agent-pending-permission-perm-1')),
+        findsNothing,
+      );
+
+      // pending dock 在 `agent_pane_sections.dart` 深处，只往切片推：
+      // 走旧路径的话它不会出现。
+      binding.store.refreshRegions(
+        AgentConversationRegionsRefreshed(
+          pendingInteractions: agentPendingInteractionStateFixture(
+            permissions: const <AgentPermissionRequest>[
+              AgentPermissionRequest(
+                id: 'perm-1',
+                title: '允许执行命令',
+                kind: AgentPermissionKind.commandExecution,
+              ),
+            ],
+          ),
+        ),
+      );
+      await pumpAgentPaneUi(tester);
+
+      expect(
+        find.byKey(const ValueKey<String>('agent-pending-permission-perm-1')),
+        findsOneWidget,
+      );
     });
   });
 }

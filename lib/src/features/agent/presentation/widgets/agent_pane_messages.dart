@@ -112,9 +112,11 @@ class _AgentLiveActivityStatus extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<AgentHeaderState>(
-      valueListenable: viewModel.headerStateListenable,
-      builder: (context, state, _) {
+    return AgentRegionBuilder<AgentHeaderState>(
+      viewModel: viewModel,
+      selector: agentConversationHeaderProvider.call,
+      legacyListenable: viewModel.headerStateListenable,
+      builder: (context, state) {
         Widget content(DateTime now) {
           if (!state.isTurnRunning) {
             return const SizedBox.shrink();
@@ -787,12 +789,12 @@ class _AgentPlanMessageCard extends StatelessWidget {
     final textStyles = IdeTextStyles.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: IdeSpacing.space12),
-      child: ListenableBuilder(
-        listenable: viewModel.expansionStateListenable,
-        builder: (context, _) {
-          final expanded = viewModel.expansionState.isPlanMessageExpanded(
-            message.id,
-          );
+      child: AgentRegionBuilder<AgentExpansionState>(
+        viewModel: viewModel,
+        selector: agentConversationExpansionProvider.call,
+        legacyListenable: viewModel.expansionStateListenable,
+        builder: (context, expansion) {
+          final expanded = expansion.isPlanMessageExpanded(message.id);
           return RepaintBoundary(
             child: IdeCollapsibleCard(
               headerKey: ValueKey<String>('agent-plan-card-${message.id}'),
