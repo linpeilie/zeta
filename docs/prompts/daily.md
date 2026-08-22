@@ -2,7 +2,7 @@
 
 四类任务 × 三档复杂度。判档标准见 [README](README.md#三档复杂度)。
 
-所有模板默认 AI 已读 `AGENTS.md`。收尾三件套（`dart format .` → `flutter analyze` → `flutter test` + 提交信息）是 AGENTS.md §0 的常驻要求，模板里只在需要强调时重复。
+所有模板默认 AI 已读 `AGENTS.md`。收尾三件套（`dart format .` → `flutter analyze` → `bash tool/test_affected.sh` + 提交信息）是 AGENTS.md §0 的常驻要求，模板里只在需要强调时重复。
 
 ---
 
@@ -235,7 +235,7 @@ Zeta 是三端桌面应用（macOS / Windows / Linux），任务栏未读、Dock
 
 ## 七、CI 失败排查
 
-CI 跑的是 `dart format --set-exit-if-changed`、`flutter analyze`、`flutter test`，外加 `--enforce-lockfile`。
+CI 分三类 Job：`static`（`dart format --set-exit-if-changed` + `flutter analyze` + `--enforce-lockfile`）、`test`（6 个分片矩阵并行，`fail-fast: false`）、`packages`（内部 Package 的 analyze + test）。本地复现某个红掉的分片用 `bash tool/test_shard.sh <id>`。
 
 ```text
 CI 失败了：
@@ -313,7 +313,7 @@ CI 失败了：
 把 <包> 升到 <版本>。
 
 先看 changelog 找 breaking change，列出本项目实际用到的 API 里哪些受影响。
-改完跑完整 flutter test（不只是相关测试），widget 测试全绿才算通过。
+依赖升级会横扫整棵树，import 图圈不住影响面 —— 改完跑 bash tool/test_full.sh（不是受影响测试），widget 测试全绿才算通过。
 ```
 
 ### 文档同步

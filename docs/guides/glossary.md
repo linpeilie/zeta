@@ -183,3 +183,17 @@ Zeta 自有数据根目录：`config/`（配置）、`state/`（会话状态与�
 
 **Smoke（真实 CLI 冒烟）**
 `tool/smoke_codex_app_server.py` 与 `tool/smoke_codex_plan_mode.py`，对真实 CLI 跑核心链路。使用临时只读 workspace，输出不含任何业务内容。
+
+## 测试执行
+
+**受影响测试（affected tests）**
+从 git 变更集出发、沿 import 图做**反向闭包**算出的、可能因本次改动而改变行为的测试集合。`bash tool/test_affected.sh` 是开发循环的默认档；选择逻辑在 `tool/test_select.dart`，设计上只允许"多选"不允许"漏选"。全量的强制点在 CI，不在本地终端。
+
+**分片（shard / runner）**
+根 `test/` 被 `tool/test_shards.dart` 的 `kRootTestShards` 切成的 6 组，CI 每组一个并行 Job（`fail-fast: false`）。分片按**语义分组**且按目录前缀匹配——测试落进已有目录自动归片，不用登记。本地跑单片用 `bash tool/test_shard.sh <id>`。
+
+**分片覆盖守卫**
+`test/src/architecture/test_shard_coverage_guard_test.dart`：断言每个测试文件恰好属于一个分片、清单路径真实存在、CI 矩阵与清单一致。没有它，新增测试可能不属于任何分片而永远不被执行。
+
+**全量兜底触发（full-run trigger）**
+`pubspec.yaml`、`dart_test.yaml`、`analysis_options.yaml`、`.github/workflows/`、选择器自身——这些"地基"文件一变，import 图算不出影响面，`tool/test_affected.sh` 直接退化成全量。

@@ -142,8 +142,11 @@ flutter run -d macos    # 或 -d windows / -d linux
 ```sh
 dart format .
 flutter analyze
-flutter test
+bash tool/test_affected.sh   # 只跑受本次改动影响的测试
 ```
+
+不要在开发循环里跑全量——全量的强制点在 CI（6 个测试分片并行 + 内部 Package）。
+完整档位表见 [`AGENTS.md` §0](AGENTS.md#0-收尾协议每次改完代码必做)。
 
 架构约定、Provider 接入流程、事件管线不变量和评审门禁，见 [`docs/`](docs/README.md)：
 

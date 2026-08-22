@@ -21,7 +21,7 @@ Provider wire 参数与状态 owner 全部保持原样。
 | Agent Provider 贡献 + 兼容插件 | `lib/src/features/agent/data/agent_provider_plugin_contribution.dart`、`compatibility_agent_provider_plugin.dart` |
 | 应用级依赖 Provider / 覆盖点 | [`lib/src/app/composition/app_dependencies.dart`](../../lib/src/app/composition/app_dependencies.dart) |
 | Package 依赖图守卫（含跨包 `/src` 禁令） | `test/src/architecture/package_boundary_candidate_graph_test.dart` |
-| Package 独立测试入口 | [`tool/test_packages.sh`](../../tool/test_packages.sh)（已接入 `tool/test_full.sh` / `.ps1`） |
+| Package 独立测试入口 | [`tool/test_packages.sh`](../../tool/test_packages.sh)（已接入 `tool/test_full.sh` / `.ps1`，CI 里是独立的 `packages` Job） |
 | `zeta_ui`（Graphite 设计系统） | [`packages/zeta_ui`](../../packages/zeta_ui) |
 | 设计系统文案注入端口 | `packages/zeta_ui/lib/src/zeta_ui_text_catalog.dart` + `AppZetaUiTextCatalog` 适配器 |
 | `zeta_agent_core`（中立 Agent 内核） | [`packages/zeta_agent_core`](../../packages/zeta_agent_core) |
@@ -188,12 +188,16 @@ Plan、文件树、设置的领域类型差异很大，强行统一只会造出�
 ## 4. 命令
 
 ```sh
-flutter analyze          # 根 Package
+flutter analyze              # 根 Package
+bash tool/test_affected.sh   # 日常默认档：只跑受改动影响的测试
 bash tool/test_packages.sh   # 每个内部 Package 的 analyze + test（Flutter 包自动走 flutter 工具链）
 bash tool/test_full.sh       # 根测试 + 计时报告 + 上面这一步
 ```
 
-Windows 用 `tool/test_full.ps1`（同样包含 Package 循环）。
+Windows 用 `tool/test_affected.ps1` / `tool/test_full.ps1`（后者同样包含 Package 循环）。
+
+动了 `packages/` 下的代码时，`tool/test_affected.sh` 会自动把 `tool/test_packages.sh`
+带上——内部 Package 的 barrel `export` 会让反向闭包把依赖方一并圈进来。
 
 ---
 
@@ -353,7 +357,7 @@ Review 后的补漏（同批）：
 | **P1** 异步激活与 `close()` 竞态导致句柄永久泄漏 | `close()` 先 `await` 在途激活；激活循环每步重新检查 `_closed`；迟到句柄在 `_adoptHandle` 里就地释放并登记进 `_lateHandleCloses`，`close()` 等它们收尾；已关闭的 registry 的 `contributions()` 返回空 |
 | **P2** 重复激活覆盖旧句柄、贡献翻倍 | 一个 registry 只能激活一次，两个入口都 fail-closed 抛 `StateError`；换代请重建 registry。原先把该行为当预期的测试已改写 |
 | **P2** 标签"脱敏"仍留下可读路径 | 标签改为白名单：只接受 `^[A-Za-z][A-Za-z0-9_.-]{0,31}$`，其余**整体丢弃**而不是替换字符；观察器给未命名 provider 去掉泛型参数以保持合法 |
-| **P2** CI 没有门禁到 Package 测试 | CI 的 Test 步骤改跑 `bash tool/test_full.sh`；`test_full.ps1` 的 Package 循环补上 analyze，与 shell 版对齐 |
+| **P2** CI 没有门禁到 Package 测试 | ~~CI 的 Test 步骤改跑 `bash tool/test_full.sh`~~ → 已收口：CI 拆分片之后，Package 测试是独立的 `packages` Job；`release.yml` 也从裸 `flutter test` 改成 `tool/test_full.sh`，发版不再漏测内部 Package |
 | **P2** 退出顺序没有保证 runtime → plugin | 抽出可测的 `shutdownAgentResourcesInOrder`；窗口关闭 hook 与 `dispose` 共用同一入口，严格串行 |
 | **P2** 设计系统文案未全部注入 | `ZetaUiTextCatalog` 补 `loading` / `running` / 四个窗口按钮文案，ARB 与适配器同步；窗口按钮补 `Semantics(button: true)`；新增守卫禁止包内出现字面量 tooltip / 无障碍标签 |
 | **P2** `zeta_ui` 隐式依赖根 app 资产 | `WindowFrame` 改为接受注入的 `brandLogo`，包不再依赖 `flutter_svg`、不再读 `assets/branding/*`；包 pubspec 补 `uses-material-design: true`，消除 Material Icons 警告 |

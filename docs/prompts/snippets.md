@@ -122,10 +122,10 @@ controller 的分页、恢复、竞态、错误路径走单测，用户可见行
 无 kind/id 分支、无 raw identity 推断。参考 test/src/features/agent/architecture/。
 ```
 
-**只跑相关测试**（迭代期提速用；合并前仍要跑全量）
+**收窄测试范围**（`bash tool/test_affected.sh` 已经是默认档；这条用于进一步收窄到单个文件）
 
 ```text
-这一轮只跑 <测试文件路径>，不用跑全量。
+这一轮只跑 <测试文件路径>，连受影响测试都不用跑。
 ```
 
 ---

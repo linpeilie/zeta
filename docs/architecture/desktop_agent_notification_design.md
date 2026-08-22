@@ -285,7 +285,7 @@ Dart 端通过 `zeta/desktop_attention` MethodChannel 调用：
 | settings unit | version 1 迁移；version 2 容错解码；三个开关持久化 |
 | widget | 设置组可见；开关调用 controller；窄视口不溢出 |
 | 静态检查 | `dart format .` 与 `flutter analyze` |
-| 回归 | `flutter test` |
+| 回归 | `bash tool/test_affected.sh` |
 | 原生构建 | 当前宿主 `flutter build windows`；macOS/Linux 在对应 CI 或实机构建 |
 
 手工验收至少覆盖：

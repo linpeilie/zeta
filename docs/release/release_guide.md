@@ -28,7 +28,7 @@ Windows、macOS 和 Linux 桌面安装包。工作流只监听推送到 GitHub �
    ```sh
    flutter pub get --enforce-lockfile
    flutter analyze
-   flutter test
+   bash tool/test_full.sh   # 发版走完整门禁，不是 tool/test_affected.sh
    ```
 
 ## 3. Tag 规则
@@ -149,7 +149,7 @@ SHA-256，然后使用 Tag 创建 Release 并自动生成 Release Notes。任何
 
 - [ ] `pubspec.yaml` 的 build name 和 build number 已更新。
 - [ ] 版本提交已合并并推送到默认分支。
-- [ ] `flutter analyze` 和 `flutter test` 已通过。
+- [ ] `flutter analyze` 和 `bash tool/test_full.sh`（含内部 Package）已通过。
 - [ ] Tag 核心版本与 build name 一致。
 - [ ] GitHub Actions 全部成功。
 - [ ] Release 类型、Release Notes 和 12 个附件正确。

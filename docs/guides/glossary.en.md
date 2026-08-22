@@ -183,3 +183,17 @@ The Codex app-server JSON Schema snapshot under `third_party/codex_app_server_sc
 
 **Smoke**
 `tool/smoke_codex_app_server.py` and `tool/smoke_codex_plan_mode.py`, which exercise the core path against a real CLI. They use a temporary read-only workspace and emit no business content.
+
+## Test execution
+
+**Affected tests**
+The set of tests that could change behavior because of the current change, computed by starting from the git change set and walking the import graph **backwards**. `bash tool/test_affected.sh` is the default rung of the dev loop; the selection logic lives in `tool/test_select.dart` and is designed to over-select rather than ever under-select. The full suite is enforced in CI, not in your terminal.
+
+**Shard (runner)**
+One of the 6 groups the root `test/` tree is split into by `kRootTestShards` in `tool/test_shards.dart`, each running as its own parallel CI job (`fail-fast: false`). Shards are grouped **semantically** and matched by directory prefix, so a test dropped into an existing directory is picked up automatically. Run one locally with `bash tool/test_shard.sh <id>`.
+
+**Shard coverage guard**
+`test/src/architecture/test_shard_coverage_guard_test.dart`: asserts every test file belongs to exactly one shard, that every manifest path exists, and that the CI matrix matches the manifest. Without it, a new test file can silently belong to no shard and never run.
+
+**Full-run trigger**
+`pubspec.yaml`, `dart_test.yaml`, `analysis_options.yaml`, `.github/workflows/`, and the selector's own files. When one of these foundation files changes, the import graph cannot bound the blast radius, so `tool/test_affected.sh` falls back to the full suite.

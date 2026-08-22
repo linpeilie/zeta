@@ -33,22 +33,27 @@ Zeta 是 Flutter Desktop 的本地 Agent IDE 壳层（macOS / Windows / Linux）
 
 ```sh
 flutter pub get
-dart format .          # 编辑 Dart 文件后必跑
-flutter analyze        # 结束改动前必跑（只覆盖根 Package）
-flutter test           # 行为变化时必跑；dart_test.yaml 固定并发 2，不要改
-bash tool/test_packages.sh  # 动过 packages/ 就必跑
-flutter run -d macos   # 或 -d windows / -d linux
+dart format .              # 编辑 Dart 文件后必跑
+flutter analyze            # 结束改动前必跑（只覆盖根 Package）
+bash tool/test_affected.sh # 行为变化时必跑：只跑受影响的测试，不要跑全量
+bash tool/test_packages.sh # 只动了 packages/ 时的定向入口
+bash tool/test_full.sh     # 完整门禁：重构收尾 / 发版 / 改测试基础设施才用
+flutter run -d macos       # 或 -d windows / -d linux
 ```
+
+`dart_test.yaml` 固定并发 2，不要改。全量的强制点在 CI（6 个分片并行 + 内部 Package），本地默认只跑受影响的那一档。完整档位表见 [`AGENTS.md` §0](AGENTS.md#0-收尾协议每次改完代码必做)。
 
 仓库是 pub workspace：根 Flutter 应用 + `packages/zeta_foundation`、`packages/zeta_plugin_kernel`、`packages/zeta_ui`（Graphite 设计系统）、`packages/zeta_agent_core`（中立 Agent 内核）、`packages/zeta_agent_providers`（Provider 协议适配）。
 
 单个测试文件：`flutter test test/src/features/agent/presentation/agent_conversation_widget_test.dart`
 
+只跑某一片：`bash tool/test_affected.sh --shards` 拿分片 id，再 `bash tool/test_shard.sh <id>`。分片清单在 [`tool/test_shards.dart`](tool/test_shards.dart)。
+
 Codex 协议升级、真实 CLI 冒烟的完整流程见 [`AGENTS.md` §2](AGENTS.md#codex-协议升级流程)。
 
 ## 每次改完代码
 
-`dart format .` → `flutter analyze` →（行为变化时）`flutter test`，然后在回复末尾附【Git 提交信息】模块。完整格式与示例见 [`AGENTS.md` §0](AGENTS.md#0-收尾协议每次改完代码必做)。
+`dart format .` → `flutter analyze` →（行为变化时）`bash tool/test_affected.sh`，然后在回复末尾附【Git 提交信息】模块。完整格式与示例见 [`AGENTS.md` §0](AGENTS.md#0-收尾协议每次改完代码必做)。
 
 ## 定位代码
 

@@ -557,4 +557,38 @@ Zeta 是桌面工具，不是营销页。界面应紧凑、克制、可扫描。
   Debug、估算或主观手感代替。固定场景记录 UI/Raster p95 与慢帧率；如未达 16.7ms /
   5%，只能在同构基线和结构计数均满足时引用相对改善，缺失基线不得补值。
 
+### 8.1 测试选择与分片
+
+**门禁强度没有下降，只是全量的强制点从本地终端搬到了 CI。**
+
+开发循环的默认档是 `bash tool/test_affected.sh`：从 git 变更集出发，沿 import 图
+做反向闭包算出受影响的测试，再追加架构守卫。选择逻辑在 `tool/test_select.dart`，
+设计上只允许一个方向的误差——**宁可多选，不可漏选**：
+
+- 地基文件（`pubspec.yaml`、`dart_test.yaml`、`analysis_options.yaml`、
+  `.github/workflows/`、选择器自身）变更直接退化成全量；
+- 内部 Package 的 barrel `export` 会把整包展开，改 `zeta_agent_core` 一个文件就
+  拉起全部依赖方，这是保守但正确的行为；
+- 架构守卫（`test/src/architecture/`，以及改 Agent 代码时的
+  `test/src/features/agent/architecture/`）扫全树而不走 import 依赖，import 图
+  看不见它们与改动的关系，所以无条件追加；
+- import 指令用行扫描而不是 analyzer AST：注释掉的 import 只会让结果**多选**，
+  方向安全，而整图解析保持在百毫秒级。
+
+根 `test/` 按 `tool/test_shards.dart` 切成 6 片，CI 每片一个并行 Job，
+`fail-fast: false`。分片按语义分组而不是贪心装箱，且清单按目录前缀匹配——新增
+测试落进已有目录自动归片。
+
+两条硬性约束：
+
+- **CI 必须跑满全部分片 + `tool/test_packages.sh`。** 分片是并行手段，不是取样
+  手段；任何"只在 CI 跑受影响分片"的提议都是把门禁降级。
+- **重构必须跑完整门禁。** 重构会搬文件、改 import，import 图本身失真，而
+  "测试断言零修改 + 全量绿"是重构唯一的正确性证据。
+
+`test/src/architecture/test_shard_coverage_guard_test.dart` 守住这套结构：每个测试
+文件恰好属于一片、清单路径真实存在、CI 矩阵与清单一致。没有这层守卫，新增测试
+文件会静默地不属于任何一片而永远不被执行——AppFlowy 的 `integration_test/` 下就
+有 15 个测试文件因此从未运行过。
+
 评审时优先检查依赖方向、协议泄漏、异步竞态、持久化兼容性、文件系统性能和 UI 溢出风险。

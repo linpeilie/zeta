@@ -130,7 +130,7 @@ Zeta 是一个基于 Flutter Desktop 的本地 AI IDE 壳层。它面向需要�
 - Agent 状态、工具调用和审批请求能被清晰展示。
 - 应用重启后能恢复最近工作区上下文。
 - 用户能在英语与简体中文之间选择界面语言，并在重启后得到一致的 Zeta 自有文案。
-- `flutter analyze` 和 `flutter test` 在主干保持通过。
+- `flutter analyze` 与全部测试（CI 的 6 个分片 + 内部 Package）在主干保持通过。
 
 ## 9. 开放问题
 

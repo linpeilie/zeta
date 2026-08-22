@@ -142,8 +142,12 @@ Before submitting, run in order:
 ```sh
 dart format .
 flutter analyze
-flutter test
+bash tool/test_affected.sh   # runs only the tests affected by your change
 ```
+
+Don't run the full suite in your dev loop — it is enforced in CI (6 test shards
+in parallel plus the internal packages). See
+[`CONTRIBUTING.en.md`](CONTRIBUTING.en.md#everyday-commands) for the full ladder.
 
 Architecture rules, provider onboarding, event-pipeline invariants, and review gates live in [`docs/`](docs/README.md) (Chinese):
 

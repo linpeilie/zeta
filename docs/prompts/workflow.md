@@ -113,7 +113,7 @@
 
 **产出物：** `03-任务拆解.md` —— 有序步骤表（含状态列）
 
-**阶段门：** 每步都能独立通过 `flutter analyze` + `flutter test`。做不到就继续拆细。
+**阶段门：** 每步都能独立通过 `flutter analyze` + `bash tool/test_affected.sh`。做不到就继续拆细。
 
 ---
 
@@ -125,7 +125,7 @@
 按 03-任务拆解.md 执行第 <N> 步。
 
 做完这一步就停下来：
-1. 跑 dart format . && flutter analyze && flutter test
+1. 跑 dart format . && flutter analyze && bash tool/test_affected.sh
 2. 把 03-任务拆解.md 里这一步的状态改成「完成」
 3. 有偏离方案的地方（改了别的文件、发现方案不对、临时决策），
    追加到 04-实现记录.md，一行一条，没有就不写
@@ -137,7 +137,7 @@
 连续推进时用这个：
 
 ```text
-按 03-任务拆解.md 往下做，每完成一步跑一次 format + analyze + 相关测试，
+按 03-任务拆解.md 往下做，每完成一步跑一次 format + analyze + tool/test_affected.sh，
 并更新该步状态。
 
 遇到以下情况**立刻停下来问我**，不要自己拍板：
@@ -158,7 +158,7 @@
 - 新代码优先中文注释，重点覆盖协议适配、状态机、错误处理和不直观分支
 - 行为变了就改测试；测试不该为了「让它过」而保留兼容分支
 
-**阶段门：** 全部步骤完成，`flutter test` 全绿。
+**阶段门：** 全部步骤完成，`bash tool/test_affected.sh` 全绿（全量交给 CI）。
 
 ---
 

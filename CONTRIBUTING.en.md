@@ -59,16 +59,62 @@ flutter run -d macos    # or -d windows / -d linux
 ## Everyday commands
 
 ```sh
-dart format .           # required after editing Dart files
-flutter analyze         # required before wrapping up a change
-flutter test            # required when behavior changes
+dart format .              # required after editing Dart files
+flutter analyze            # required before wrapping up a change
+bash tool/test_affected.sh # required when behavior changes: runs only affected tests
 ```
 
-Run a single test file:
+### Don't run the full suite in your dev loop
+
+The full suite is 2114 tests, about 4m10s wall clock, while a single change
+usually touches a few dozen. `tool/test_affected.sh` starts from the git change
+set, walks the import graph backwards to find the tests that could be affected,
+adds the architecture guards, and typically finishes in 10–40s. It prints how
+many tests it picked and why:
 
 ```sh
-flutter test test/src/features/agent/presentation/agent_conversation_widget_test.dart
+# Windows PowerShell
+./tool/test_affected.ps1
+
+# macOS / Linux / Git Bash
+bash tool/test_affected.sh
+
+bash tool/test_affected.sh --print   # list what would run, don't execute
+bash tool/test_affected.sh --shards  # list which shards are affected
+bash tool/test_affected.sh --base origin/dev   # diff a branch, not just the working tree
 ```
+
+**The full suite is enforced in CI, not in your terminal.** Every PR runs all 6
+test shards plus the internal packages, so anything the local selector misses is
+caught before merge.
+
+### Widen the scope as needed
+
+```sh
+# A single test file
+flutter test test/src/features/agent/presentation/agent_conversation_widget_test.dart
+
+# Reproduce one case by name
+flutter test test/src/features/agent --plain-name "<test name>"
+
+# Run a whole shard (manifest in tool/test_shards.dart; get ids via --shards)
+bash tool/test_shard.sh 3          # Windows: ./tool/test_shard.ps1 3
+
+# Only touched packages/: analyze + test each internal package
+bash tool/test_packages.sh
+
+# Quick full run: excludes the `slow` full-shell, performance, and tooling tests
+bash tool/test_fast.sh             # Windows: ./tool/test_fast.ps1
+
+# Complete gate: root tests + timing report + every internal package.
+# Also writes a JSON report to .dart_tool/test-results/full.json
+bash tool/test_full.sh             # Windows: ./tool/test_full.ps1
+```
+
+**Refactoring is the exception and must run the complete gate**: refactors move
+files and rewrite imports, so the import graph itself is unreliable — "zero
+changes to test assertions plus a green full suite" is the only evidence a
+refactor is correct.
 
 > `dart_test.yaml` pins `concurrency: 2`. A single worker running the large widget tests loads the full IDE shell, and raising concurrency triggers memory spikes. **Please don't change it to speed up local runs.**
 
@@ -94,10 +140,20 @@ Run all three, in order:
 ```sh
 dart format .
 flutter analyze
-flutter test
+bash tool/test_affected.sh
 ```
 
-CI runs the same checks (plus `dart format --set-exit-if-changed` and `--enforce-lockfile`), so a local pass saves a round trip.
+CI runs the complete version (`dart format --set-exit-if-changed`,
+`flutter analyze`, `--enforce-lockfile`, all 6 test shards in parallel, and
+analyze + test for every internal package), so a narrow local pass saves a round
+trip.
+
+**When adding a test file**: the root `test/` tree is sharded by directory, so a
+test dropped into an existing directory is picked up automatically — no
+registration needed. Only a brand-new top-level test directory needs an entry in
+[`tool/test_shards.dart`](tool/test_shards.dart), and
+`test/src/architecture/test_shard_coverage_guard_test.dart` fails the build if
+you forget.
 
 Also:
 

@@ -30,17 +30,50 @@ Zeta 是一个 Flutter Desktop 项目，当前支持 macOS、Linux 和 Windows �
 flutter pub get
 dart format .
 flutter analyze
-flutter test
+bash tool/test_affected.sh
 flutter run -d macos
 flutter gen-l10n
 dart run tool/check_localized_ui_strings.dart --check
 ```
 
-开发中的快速回归使用 `tool/test_fast.ps1`（Windows）或
-`bash tool/test_fast.sh`（macOS / Linux / Git Bash），它会排除 `slow` 标签。
-提交前使用 `tool/test_full.ps1` 或 `bash tool/test_full.sh` 覆盖全部测试；完整入口会
-生成 `.dart_tool/test-results/full.json`，并在终端列出最慢的测试文件与用例。
+### 3.1 测试档位
+
+**开发循环里不跑全量。** 全量 2114 条、墙钟约 4m10s，而一次改动通常只碰得到几十条。
+
+| 档位 | 命令（Windows 用同名 `.ps1`） | 什么时候用 |
+| --- | --- | --- |
+| 单文件 | `flutter test <路径>` | 正在写某个测试 |
+| **受影响** | `bash tool/test_affected.sh` | **默认档，每次改完代码** |
+| 受影响分片 | `bash tool/test_affected.sh --shards` → `bash tool/test_shard.sh <id>` | 改动跨层 / 跨 feature |
+| 按 Package | `bash tool/test_packages.sh` | 只动了 `packages/` |
+| 按名称 | `flutter test <目录> --plain-name "<用例名>"` | 定向复现单条用例 |
+| 快速全量 | `bash tool/test_fast.sh` | 本地过一遍准全量（排除 `slow` 标签） |
+| 完整门禁 | `bash tool/test_full.sh` | 重构收尾、发版、改测试基础设施 |
+
+`tool/test_affected.sh` 的选择逻辑在 `tool/test_select.dart`：从 git 变更集出发，
+沿 import 图做**反向闭包**找出可能受影响的测试，再追加架构守卫。所有启发式都往
+"多跑几个"的方向兜底——**宁可多选，不可漏选**。地基文件（`pubspec.yaml`、
+`dart_test.yaml`、`.github/workflows/`、选择器自身）变更时直接退化成全量。
+
+`tool/test_full.sh` 生成 `.dart_tool/test-results/full.json`，并在终端列出最慢的
+测试文件与用例；`tool/test_shard.sh` 每片生成 `shard-<id>.json`，同样打印摘要——
+这是重平衡分片时唯一该看的数据。
+
+**全量的强制点在 CI，不在本地终端。** 每个 PR 跑满 6 个分片 + 内部 Package。
+
 `dart_test.yaml` 的 `concurrency: 2` 是内存保护门禁，不因提速而调整。
+
+### 3.2 分片
+
+根 `test/` 按 `tool/test_shards.dart` 的 `kRootTestShards` 切成 6 片，CI 每片一个
+并行 Job。分片按**语义分组**（`agent-presentation` / `ui` / `features` /
+`app-shell` / `agent-data` / `agent-logic`）而不是贪心装箱——开发者要能一眼判断
+改动落在哪片，完美均衡的清单没人记得住。
+
+清单按**目录前缀**匹配，所以新增测试放进已有目录就自动归片。只有新建顶层测试
+目录时才要回 `tool/test_shards.dart` 加一条；`test/src/architecture/
+test_shard_coverage_guard_test.dart` 会拦住漏登记的孤儿文件，并比对 CI 矩阵与
+清单是否一致。
 
 重新导出 Codex app-server JSON Schema（协议升级 / 审计时）：
 
@@ -177,7 +210,7 @@ windows/
 1. 修改前先理解目标模块的现有职责和依赖方向。
 2. Dart 文件改动后运行 `dart format .`。
 3. 完成代码改动后运行 `flutter analyze`。
-4. 修改行为或新增逻辑时运行 `flutter test`，并补充对应测试。
+4. 修改行为或新增逻辑时运行 `bash tool/test_affected.sh`，并补充对应测试；重构收尾改跑 `bash tool/test_full.sh`。
 5. 如果平台生成文件发生变化，确认是否由 Flutter 工具产生，并在提交说明中解释原因。
 
 ## 6. 编码约定

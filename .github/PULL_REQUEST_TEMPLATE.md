@@ -22,7 +22,8 @@ Chinese first, English second. For items that don't apply, tick them and note "N
 
 - [ ] `dart format .`
 - [ ] `flutter analyze`
-- [ ] `flutter test`（行为有变化时必跑 / required when behavior changed）
+- [ ] `bash tool/test_affected.sh`（行为有变化时必跑 / required when behavior changed）
+- [ ] 重构 PR 额外跑 `bash tool/test_full.sh` / Refactors additionally run the complete gate
 - [ ] 手动验证过实际界面 / Manually verified in the running app
 
 手动验证说明 / Manual verification notes:

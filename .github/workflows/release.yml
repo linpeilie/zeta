@@ -80,8 +80,11 @@ jobs:
       - name: Analyze
         run: flutter analyze
 
+      # 走 test_full.sh 而不是裸 flutter test：根 `flutter test` 不覆盖
+      # packages/ 下 5 个内部 Package 的 test/，发版门禁不能比 CI 还松。
+      # 发版一个 tag 只跑一次，不分片。
       - name: Test
-        run: flutter test
+        run: bash tool/test_full.sh
 
   windows:
     name: Build Windows x64

@@ -24,9 +24,26 @@ Zeta 是 Flutter Desktop 的本地 Agent IDE 壳层（macOS / Windows / Linux）
 ```sh
 dart format .            # 编辑过 Dart 文件就必跑
 flutter analyze          # 结束改动前必跑（只覆盖根 Package）
-flutter test             # 行为有变化时必跑
-bash tool/test_packages.sh   # 动过 packages/ 就必跑：逐个 dart analyze + dart test
+bash tool/test_affected.sh   # 行为有变化时必跑：只跑受本次改动影响的测试
 ```
+
+**不要在开发循环里跑全量。** 全量是 2114 条、墙钟约 4m10s；一次改动通常只碰得到几十条。`tool/test_affected.sh` 从 git 变更集出发，沿 import 图做反向闭包算出受影响的测试，再自动追加架构守卫，通常 10–40s 出结果。它会打印选中了多少、为什么选中。
+
+**全量的强制点在 CI，不在你的终端。** CI 每个 PR 都会跑满 6 个分片 + 内部 Package，本地选择器漏了，合并前一定会被抓到。所以本地放心用窄的那一档。
+
+按需要往上加档：
+
+| 档位 | 命令 | 什么时候用 |
+|---|---|---|
+| 单文件 | `flutter test <路径>` | 正在写某个测试 |
+| **受影响** | `bash tool/test_affected.sh` | **默认档，每次改完代码** |
+| 受影响分片 | `bash tool/test_affected.sh --shards` 拿到 id，再 `bash tool/test_shard.sh <id>` | 改动跨层 / 跨 feature，想把整片跑干净 |
+| 按 Package | `bash tool/test_packages.sh` | 只动了 `packages/` |
+| 按名称 | `flutter test <目录> --plain-name "<用例名>"` | 定向复现单条用例 |
+| 快速全量 | `bash tool/test_fast.sh` | 想本地过一遍准全量（排除 `slow` 标签） |
+| 完整门禁 | `bash tool/test_full.sh` | **重构收尾**、发版、改测试基础设施本身 |
+
+**重构是例外，必须跑全量**：重构会搬文件、改 import，import 图本身就失真，而"测试断言零修改 + 全量绿"正是重构唯一的正确性证据。详见 `docs/prompts/refactoring.md`。
 
 `dart_test.yaml` 固定 `concurrency: 2`——单个 worker 跑大 Widget 测试会加载完整 IDE Shell，放开并发会触发内存峰值。**不要为了跑得快改掉它。**
 
@@ -289,6 +306,10 @@ lint 已经覆盖的不再重复，这里只写 `flutter analyze` 抓不到的�
 ```sh
 flutter test test/src/features/agent/presentation/agent_conversation_widget_test.dart
 ```
+
+**新增测试文件时**：根 `test/` 被 `tool/test_shards.dart` 的 `kRootTestShards` 切成 6 片，CI 每片一个并行 Job。清单按**目录**匹配，所以测试放进已有目录就自动归片，不用登记。只有新建顶层测试目录时才要回 `tool/test_shards.dart` 加一条——`test/src/architecture/test_shard_coverage_guard_test.dart` 会拦住漏登记的孤儿文件（AppFlowy 就因为没有这层守卫，有 15 个测试文件从来没被执行过）。
+
+分片重平衡看 `tool/test_shard.sh` 每片打印的耗时摘要，不要凭感觉挪目录。
 
 ---
 

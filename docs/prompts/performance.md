@@ -108,7 +108,7 @@ flutter run -d windows --profile
 
 只针对主因改，一次改一处。行为不变 —— 现有测试断言一行都不改。
 
-改完先跑 flutter analyze + flutter test 确认没改坏行为，再进复测。
+改完先跑 flutter analyze + bash tool/test_affected.sh 确认没改坏行为，再进复测。
 不要顺手优化你觉得也慢的其他地方 —— 一次改多处，复测就分不清是哪个起了作用。
 
 改了什么、为什么这样改，写入 03-改动.md。

@@ -19,10 +19,10 @@ env:
   FLUTTER_VERSION: 3.44.4
 
 jobs:
-  quality:
-    name: Format, analyze, and test
+  static:
+    name: Format and analyze
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - name: Check out repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
@@ -44,8 +44,59 @@ jobs:
       - name: Analyze
         run: flutter analyze
 
+  # 根测试按 tool/test_shards.dart 的清单分片并行。分片是**语义分组**而不是贪心
+  # 装箱，开发者要能一眼判断改动落在哪片；本地只跑受影响的分片见
+  # `bash tool/test_affected.sh --shards`。
+  #
+  # 往 kRootTestShards 里加/删分片时，下面的矩阵要一起改——
+  # test/src/architecture/test_shard_coverage_guard_test.dart 会比对两边。
+  test:
+    name: Test shard ${{ matrix.shard }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      # 一片红不掐掉其它片：一次就能看全所有失败，不用反复 push 试探。
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get --enforce-lockfile
+
       # dart_test.yaml 固定 concurrency: 2，避免大 Widget 测试的内存峰值。
-      # 走 test_full.sh：根测试 + 耗时报告 + packages/ 下每个内部 Package 的
-      # analyze/test（根 `flutter test` 不会覆盖它们）。
+      # 每片跑完打印一份耗时摘要，是后续重平衡分片的唯一数据来源。
       - name: Test
-        run: bash tool/test_full.sh
+        run: bash tool/test_shard.sh ${{ matrix.shard }}
+
+  # packages/ 下的内部 Package 有各自的 test/ 入口，根 `flutter test` 不会覆盖，
+  # 而且要用各自的 dart/flutter 工具链跑 analyze + test。数量小，不进分片矩阵。
+  packages:
+    name: Internal packages
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get --enforce-lockfile
+
+      - name: Test packages
+        run: bash tool/test_packages.sh
