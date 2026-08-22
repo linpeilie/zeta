@@ -1,5 +1,6 @@
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_agent_providers/src/mappers/agent_provider_payload.dart';
 
 final _log = zetaLoggerFor('zeta.agent.claude_code.control_request');
 
@@ -337,7 +338,7 @@ final class ClaudeCodeControlRequestHandler {
       cwd: cwd,
       sessionId: pending.sessionId,
       turnId: pending.turnId,
-      raw: AgentProviderRawPayload.wrap(<String, Object?>{
+      raw: wrapAgentProviderPayload(<String, Object?>{
         'tool_name': pending.toolName,
         'source': 'claude_code.can_use_tool',
       }),

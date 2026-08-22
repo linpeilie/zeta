@@ -39,6 +39,8 @@ AgentThreadHistorySnapshot overlayThreadTurnContext(
     threadId: snapshot.threadId,
     turns: List<AgentHistoryTurn>.unmodifiable(turns),
     currentTurn: currentTurn,
+    sourceLabel: snapshot.sourceLabel,
+    sessionPath: snapshot.sessionPath,
   );
 }
 

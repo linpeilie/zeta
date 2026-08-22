@@ -254,6 +254,7 @@ class ClaudeCodeSessionHistoryReader {
       threadId: threadId,
       providerId: providerId,
       projectPath: projectPath,
+      sessionPath: file.path,
       runtimeScope: runtimeScope,
     );
   }
@@ -386,6 +387,7 @@ class ClaudeCodeSessionHistoryReader {
     required String providerId,
     required String projectPath,
     required AgentRuntimeScope runtimeScope,
+    String? sessionPath,
   }) {
     final sessionId = _firstNonEmpty(<String?>[
       for (final frame in frames)
@@ -633,7 +635,7 @@ class ClaudeCodeSessionHistoryReader {
       }
       return ClaudeCodeHistoryReadResult(
         events: List<AgentEvent>.unmodifiable(events),
-        snapshot: reducer.build(),
+        snapshot: reducer.build(sessionPath: sessionPath),
         identitySnapshots:
             Map<String, ClaudeCodeTurnIdentitySnapshot>.unmodifiable(snapshots),
       );
@@ -796,7 +798,7 @@ final class _ClaudeCodeHistoryEventReducer {
       ..observeReasoningEffort(reasoningEffort);
   }
 
-  AgentThreadHistorySnapshot build() {
+  AgentThreadHistorySnapshot build({String? sessionPath}) {
     final turns = <AgentHistoryTurn>[
       for (final turnId in _turnOrder) _turns[turnId]!.build(),
     ];
@@ -804,6 +806,8 @@ final class _ClaudeCodeHistoryEventReducer {
       threadId: threadId,
       turns: List<AgentHistoryTurn>.unmodifiable(turns),
       currentTurn: turns.isEmpty ? null : turns.last,
+      sourceLabel: 'claude_code_history',
+      sessionPath: sessionPath,
     );
   }
 }

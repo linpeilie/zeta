@@ -1,4 +1,5 @@
 import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_agent_providers/src/mappers/agent_provider_payload.dart';
 
 /// ACP permission response option。
 class AcpPermissionOption {
@@ -94,7 +95,7 @@ class AcpPermissionMapper {
         description: description,
         sessionId: sessionId,
         turnId: runningTurnId,
-        raw: AgentProviderRawPayload.wrap(params),
+        raw: wrapAgentProviderPayload(params),
       ),
       options: List<AcpPermissionOption>.unmodifiable(options),
     );

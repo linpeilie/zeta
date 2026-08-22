@@ -88,7 +88,9 @@ grep -rnE "(codex|grok|claude|cursor)" \
 
 文件变更也遵守同一边界：Provider-local tracker 必须在进入共享 pipeline 前产出完整的 `AgentFileChangeSnapshot`。Store 只机械替换 typed snapshot；presentation 只按中立 evidence 变体渲染，不得读取 raw/wire key、解析命令或访问工作区补算 diff。
 
-**协议原文不可取值。** 中立模型里的原文一律是不透明的 `AgentProviderRawPayload`：没有 `operator []` / `keys` / `toMap()`，唯一内容出口 `toPrettyJson()` 只允许上下文面板调用，`AgentProviderRawPayload.wrap` 只允许 `zeta_agent_providers` 调用。需要原文里的某个语义，就让 adapter 显式声明成 typed 字段（`appendsProgress` / `inputDetail` / `sourceLabel` / `sessionPath` / `sourceItemId` …），不要在共享层翻 payload。守卫：`agent_core_raw_payload_freeze_test`。
+**协议原文不可取值。** 中立模型里的原文一律是不透明的 `AgentProviderRawPayload`：没有 `operator []` / `keys` / `toMap()`，包装时递归冻结（值类型语义），唯一内容出口 `toPrettyJson()` 只允许上下文面板调用。适配层统一用 `wrapAgentProviderPayload(...)` 包装（它顺带推导报文时间 `capturedAt`，面板的时间列靠它），不要直接调 `AgentProviderRawPayload.wrap`。
+
+需要原文里的某个语义，就让 adapter 显式声明成 typed 字段（`appendsProgress` / `inputDetail` / `sourceLabel` / `sessionPath` / `sourceItemId` …），不要在共享层翻 payload。**加 typed 字段时记得同时覆盖所有逐字段重建点**（`AgentConversationTimelineStore._mergeToolCall`、history snapshot 的 enrich / overlay 重建）——新字段有默认值，编译器不会提醒你漏了哪一处。守卫：`agent_core_raw_payload_freeze_test`。
 
 **新增 Provider 不应该需要改 TimelineStore 或 CoalescingPolicy。** 如果你发现非改不可，先停下来开 Issue：那通常意味着抽象没做对。
 

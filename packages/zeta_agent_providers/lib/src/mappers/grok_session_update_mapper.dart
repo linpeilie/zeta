@@ -5,6 +5,7 @@ import 'package:zeta_agent_providers/src/mappers/grok_file_change_tracker.dart';
 import 'package:zeta_agent_providers/src/mappers/grok_stream_identity.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_agent_providers/src/mappers/agent_tool_input_detail.dart';
+import 'package:zeta_agent_providers/src/mappers/agent_provider_payload.dart';
 
 /// Grok typed ACP update 到领域事件的映射结果。
 class GrokAcpMappedUpdate {
@@ -401,7 +402,7 @@ final class GrokSessionUpdateMapper {
           status: AgentMessageStatus.streaming,
           sessionId: resolved.sessionId,
           turnId: resolved.turnId,
-          raw: AgentProviderRawPayload.wrap(update.raw),
+          raw: wrapAgentProviderPayload(update.raw),
         ),
       ],
     );
@@ -442,7 +443,7 @@ final class GrokSessionUpdateMapper {
           delta: text,
           sessionId: resolved.sessionId,
           turnId: resolved.turnId,
-          raw: AgentProviderRawPayload.wrap(update.raw),
+          raw: wrapAgentProviderPayload(update.raw),
         ),
       ],
     );
@@ -865,10 +866,10 @@ final class GrokSessionUpdateMapper {
       locations: update.locations,
       sessionId: sessionId,
       turnId: turnId,
-      rawInput: AgentProviderRawPayload.wrap(update.rawInput),
+      rawInput: wrapAgentProviderPayload(update.rawInput),
       inputDetail: deriveAgentToolInputDetail(update.rawInput),
-      rawOutput: AgentProviderRawPayload.wrap(update.rawOutput),
-      raw: AgentProviderRawPayload.wrap(update.raw),
+      rawOutput: wrapAgentProviderPayload(update.rawOutput),
+      raw: wrapAgentProviderPayload(update.raw),
       fileChanges: projection.fileChanges,
     );
   }

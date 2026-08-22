@@ -1713,7 +1713,7 @@ void main() {
 
       await viewModel.sendMessage('hello');
       provider.emit(
-        const AgentMessageDeltaEvent(
+        AgentMessageDeltaEvent(
           messageId: 'plan-1',
           delta: '# Plan\n',
           role: AgentMessageRole.agent,
@@ -1727,7 +1727,7 @@ void main() {
         ),
       );
       provider.emit(
-        const AgentMessageDeltaEvent(
+        AgentMessageDeltaEvent(
           messageId: 'plan-1',
           delta: '- Step one',
           role: AgentMessageRole.agent,
@@ -1752,7 +1752,7 @@ void main() {
 
       // completed item 用权威全文覆盖拼接结果。
       provider.emit(
-        const AgentMessageUpdatedEvent(
+        AgentMessageUpdatedEvent(
           messageId: 'plan-1',
           kind: AgentMessageKind.plan,
           text: '# Final Plan\n\n- Step one\n- Step two',

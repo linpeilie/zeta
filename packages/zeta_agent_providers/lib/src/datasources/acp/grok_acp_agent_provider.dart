@@ -24,6 +24,7 @@ import 'package:zeta_agent_providers/src/mappers/grok_permission_mode_codec.dart
 import 'package:zeta_agent_providers/src/mappers/grok_question_mapper.dart';
 import 'package:zeta_agent_providers/src/mappers/grok_skills_mapper.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_agent_providers/src/mappers/agent_provider_payload.dart';
 
 final _log = zetaLoggerFor('zeta.agent.grok_acp');
 
@@ -1973,7 +1974,7 @@ class GrokAcpAgentProvider
       sessionId: sessionId,
       turnId: _runningTurnIdsBySessionId[sessionId],
       isProject: false,
-      raw: AgentProviderRawPayload.wrap(
+      raw: wrapAgentProviderPayload(
         _asStringKeyedMap(params) ?? const <String, Object?>{},
       ),
     );
@@ -2290,6 +2291,9 @@ class GrokAcpAgentProvider
       threadId: snapshot.threadId,
       turns: List<AgentHistoryTurn>.unmodifiable(turns),
       currentTurn: currentTurn,
+      // 缓存命中判定比较 sessionPath；enrichment 丢了它就等于缓存永不命中。
+      sourceLabel: snapshot.sourceLabel,
+      sessionPath: snapshot.sessionPath,
     );
   }
 

@@ -70,19 +70,13 @@ class _JsonlHistoryParser {
 
     switch (recordType) {
       case 'event_msg':
-        _consumeEventMessage(
-          payload,
-          raw: AgentProviderRawPayload.wrap(record),
-        );
+        _consumeEventMessage(payload, raw: wrapAgentProviderPayload(record));
         return;
       case 'turn_context':
-        _consumeTurnContext(payload, raw: AgentProviderRawPayload.wrap(record));
+        _consumeTurnContext(payload, raw: wrapAgentProviderPayload(record));
         return;
       case 'response_item':
-        _consumeResponseItem(
-          payload,
-          raw: AgentProviderRawPayload.wrap(record),
-        );
+        _consumeResponseItem(payload, raw: wrapAgentProviderPayload(record));
         return;
       case _:
         return;
@@ -517,7 +511,7 @@ class _JsonlHistoryParser {
         arguments: arguments,
         stringInput: _string(payload['arguments']),
       ),
-      rawInput: AgentProviderRawPayload.wrap(
+      rawInput: wrapAgentProviderPayload(
         _jsonlRawInputMap(
           arguments: arguments,
           stringInput: _string(payload['arguments']),
@@ -607,7 +601,7 @@ class _JsonlHistoryParser {
         arguments: arguments,
         stringInput: stringInput,
       ),
-      rawInput: AgentProviderRawPayload.wrap(
+      rawInput: wrapAgentProviderPayload(
         _jsonlRawInputMap(arguments: arguments, stringInput: stringInput),
       ),
       raw: raw,
@@ -654,7 +648,7 @@ class _JsonlHistoryParser {
             : AgentToolStatus.completed,
         content: content,
         locations: locations,
-        rawOutput: AgentProviderRawPayload.wrap(payload),
+        rawOutput: wrapAgentProviderPayload(payload),
         raw: raw,
         fileChanges: fileProjection.snapshot,
       );
@@ -670,7 +664,7 @@ class _JsonlHistoryParser {
           : AgentToolStatus.completed,
       content: content,
       locations: locations,
-      rawOutput: AgentProviderRawPayload.wrap(payload),
+      rawOutput: wrapAgentProviderPayload(payload),
       raw: raw,
       fileChanges: fileProjection.snapshot,
     );
@@ -700,8 +694,8 @@ class _JsonlHistoryParser {
           _mcpResultPreview(result) ??
           _jsonlToolInvocationContent(name: toolName, arguments: arguments),
       locations: _jsonlToolLocations(name: toolName, arguments: arguments),
-      rawInput: AgentProviderRawPayload.wrap(arguments),
-      rawOutput: AgentProviderRawPayload.wrap(result),
+      rawInput: wrapAgentProviderPayload(arguments),
+      rawOutput: wrapAgentProviderPayload(result),
       raw: raw,
     );
     _appendEntry(AgentHistoryToolEntry(toolCall: toolCall));

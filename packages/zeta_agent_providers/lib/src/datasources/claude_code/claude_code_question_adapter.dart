@@ -1,4 +1,5 @@
 import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_agent_providers/src/mappers/agent_provider_payload.dart';
 
 /// Claude Code 交互提问工具的协议名称。
 const claudeCodeAskUserQuestionToolName = 'AskUserQuestion';
@@ -125,7 +126,7 @@ final class ClaudeCodeQuestionAdapter {
             questions: questions,
             sessionId: sessionId,
             turnId: turnId,
-            raw: AgentProviderRawPayload.wrap(<String, Object?>{
+            raw: wrapAgentProviderPayload(<String, Object?>{
               'tool_name': claudeCodeAskUserQuestionToolName,
               'tool_use_id': toolUseId,
               'source': 'claude_code.can_use_tool',

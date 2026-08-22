@@ -63,7 +63,7 @@ void main() {
     });
 
     test(
-      'context routes edit tools through typed data before raw fallback',
+      'context routes edit tools through typed data and keeps raw separate',
       () {
         final source = File(contextPath).readAsStringSync();
         final typedIndex = source.indexOf(
@@ -72,16 +72,25 @@ void main() {
         final editGuardIndex = source.indexOf(
           'if (toolCall.kind == AgentToolKind.edit)',
         );
-        // 原文只作为 typed 证据之后的兜底诊断，且只对非 edit 工具生效。
-        final rawFallbackIndex = source.indexOf(
-          'if (toolCall.rawInput.isNotEmpty)',
-        );
-
         expect(typedIndex, isNonNegative);
         expect(editGuardIndex, greaterThan(typedIndex));
-        expect(rawFallbackIndex, greaterThan(editGuardIndex));
         expect(source, contains('_fileChangeSnapshotContextMap'));
         expect(source, isNot(contains('_toolCallRawMap')));
+        // 原文只以独立段落附在 typed 摘要之后，且 edit 工具一律不附。
+        expect(source, contains("_appendRawSection(buffer, 'rawInput'"));
+        expect(source, contains('if (toolCall.kind != AgentToolKind.edit) {'));
+        // 摘要 map 里不得再出现原文键：那会把报文二次转义塞进 JSON。
+        final summaryStart = source.indexOf(
+          'Map<String, Object?> _toolCallContextMap(',
+        );
+        final summaryEnd = source.indexOf(
+          'Map<String, Object?> _fileChangeSnapshotContextMap(',
+        );
+        expect(summaryStart, isNonNegative);
+        expect(summaryEnd, greaterThan(summaryStart));
+        final summarySource = source.substring(summaryStart, summaryEnd);
+        expect(summarySource, isNot(contains('rawInput')));
+        expect(summarySource, isNot(contains('rawOutput')));
       },
     );
   });

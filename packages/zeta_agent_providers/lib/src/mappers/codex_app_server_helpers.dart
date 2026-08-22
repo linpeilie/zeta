@@ -199,35 +199,35 @@ AgentHistoryEventEntry? _systemHistoryEventFromThreadItem(
       kind: AgentHistoryEventKind.system,
       title: catalog.reviewModeEnteredTitle,
       description: _string(item['review']),
-      raw: AgentProviderRawPayload.wrap(item),
+      raw: wrapAgentProviderPayload(item),
     ),
     'exitedreviewmode' => AgentHistoryEventEntry(
       id: id,
       kind: AgentHistoryEventKind.system,
       title: catalog.reviewModeExitedTitle,
       description: _string(item['review']),
-      raw: AgentProviderRawPayload.wrap(item),
+      raw: wrapAgentProviderPayload(item),
     ),
     'contextcompaction' => AgentHistoryEventEntry(
       id: id,
       kind: AgentHistoryEventKind.system,
       title: catalog.contextCompactedTitle,
       description: catalog.contextCompactedDescription,
-      raw: AgentProviderRawPayload.wrap(item),
+      raw: wrapAgentProviderPayload(item),
     ),
     'hookprompt' => AgentHistoryEventEntry(
       id: id,
       kind: AgentHistoryEventKind.system,
       title: catalog.hookPromptTitle,
       content: _hookPromptFragmentsText(item['fragments']),
-      raw: AgentProviderRawPayload.wrap(item),
+      raw: wrapAgentProviderPayload(item),
     ),
     'sleep' => AgentHistoryEventEntry(
       id: id,
       kind: AgentHistoryEventKind.system,
       title: catalog.waitingTitle,
       description: _sleepDurationLabel(item['durationMs'], catalog),
-      raw: AgentProviderRawPayload.wrap(item),
+      raw: wrapAgentProviderPayload(item),
     ),
     'subagentactivity' => AgentHistoryEventEntry(
       id: id,
@@ -239,7 +239,7 @@ AgentHistoryEventEntry? _systemHistoryEventFromThreadItem(
         catalog: catalog,
       ),
       content: _string(item['agentThreadId']),
-      raw: AgentProviderRawPayload.wrap(item),
+      raw: wrapAgentProviderPayload(item),
     ),
     _ => null,
   };
@@ -341,17 +341,17 @@ AgentToolCall? _toolCallFromThreadItem(
     locations: projectedLocations ?? _toolLocationsFromThreadItem(item),
     sessionId: sessionId,
     turnId: turnId,
-    rawInput: AgentProviderRawPayload.wrap(
+    rawInput: wrapAgentProviderPayload(
       _map(item['arguments']).isNotEmpty
           ? _map(item['arguments'])
           : _map(item['rawInput']),
     ),
-    rawOutput: AgentProviderRawPayload.wrap(
+    rawOutput: wrapAgentProviderPayload(
       _map(item['result']).isNotEmpty
           ? _map(item['result'])
           : _map(item['rawOutput']),
     ),
-    raw: AgentProviderRawPayload.wrap(raw.isEmpty ? item : raw),
+    raw: wrapAgentProviderPayload(raw.isEmpty ? item : raw),
     fileChanges: fileChanges,
   );
 }

@@ -939,6 +939,11 @@ class AgentConversationTimelineStore {
           : existing.rawOutput,
       raw: incoming.raw.isNotEmpty ? incoming.raw : existing.raw,
       fileChanges: incoming.fileChanges,
+      // adapter 产出的 typed metadata：状态型 update 通常不重复携带，
+      // 合并时必须保留既有值，否则 raw 删除后语义就断在这里（G2）。
+      appendsProgress: incoming.appendsProgress || existing.appendsProgress,
+      inputDetail: incoming.inputDetail ?? existing.inputDetail,
+      sourceItemId: incoming.sourceItemId ?? existing.sourceItemId,
     );
   }
 
@@ -1048,6 +1053,8 @@ class AgentConversationTimelineStore {
           ? (existing?.raw ?? const AgentProviderRawPayload.empty())
           : event.raw,
       fileChanges: existing?.fileChanges,
+      inputDetail: existing?.inputDetail,
+      sourceItemId: event.sourceItemId ?? existing?.sourceItemId,
     );
 
     if (existingIndex == -1) {

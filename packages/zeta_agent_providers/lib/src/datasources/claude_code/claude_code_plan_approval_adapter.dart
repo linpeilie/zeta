@@ -1,5 +1,6 @@
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_agent_providers/src/mappers/agent_provider_payload.dart';
 
 final _log = zetaLoggerFor('zeta.agent.claude_code.plan_approval');
 
@@ -186,7 +187,7 @@ final class ClaudeCodePlanApprovalAdapter {
       isProject: false,
       continuation: AgentPlanApprovalContinuation.localExecutionHandoff,
       // 不把 plan/path/input/raw payload 复制到诊断 metadata（G7）。
-      raw: AgentProviderRawPayload.wrap(const <String, Object?>{
+      raw: wrapAgentProviderPayload(const <String, Object?>{
         'source': 'claude_code.exit_plan_mode',
         'tool_name': 'ExitPlanMode',
       }),

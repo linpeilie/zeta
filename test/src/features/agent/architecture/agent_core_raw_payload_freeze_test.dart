@@ -125,6 +125,28 @@ void main() {
     );
   });
 
+  test('适配层统一经 wrapAgentProviderPayload 包装原文', () {
+    // 直接调构造会绕过报文时间推导，面板的时间列就会退回 '—'。
+    final offenders = <String>[];
+    for (final file in dartFilesIn('packages/zeta_agent_providers/lib')) {
+      final path = normalize(file.path);
+      if (path.endsWith('mappers/agent_provider_payload.dart')) {
+        continue;
+      }
+      if (file.readAsStringSync().contains('AgentProviderRawPayload.wrap')) {
+        offenders.add(path);
+      }
+    }
+
+    expect(
+      offenders,
+      isEmpty,
+      reason:
+          '请改用 wrapAgentProviderPayload(...)，它会顺带算出 capturedAt：\n'
+          '${offenders.join('\n')}',
+    );
+  });
+
   test('原文的唯一渲染出口是上下文面板', () {
     final offenders = <String>[];
     for (final root in const <String>[

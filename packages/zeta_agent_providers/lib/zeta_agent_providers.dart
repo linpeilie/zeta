@@ -61,6 +61,7 @@ export 'src/grok_cli_locator.dart';
 export 'src/mappers/acp_content_codec.dart';
 export 'src/mappers/acp_permission_mapper.dart';
 export 'src/mappers/acp_session_config_mapper.dart';
+export 'src/mappers/agent_provider_payload.dart';
 export 'src/mappers/agent_tool_input_detail.dart';
 export 'src/mappers/acp_session_update_decoder.dart';
 export 'src/mappers/claude_code_initialize_metadata_mapper.dart';

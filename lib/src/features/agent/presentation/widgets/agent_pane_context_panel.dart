@@ -751,15 +751,40 @@ String _contextHistoryEventLabel(
   };
 }
 
-/// 工具条目**只展示 typed 摘要**。
+/// 工具条目的展示契约：**typed 摘要在前，不可取值的原文作为独立段落附在后面**。
 ///
-/// 文件变更证据必须来自 `fileChanges` 快照；raw / wire 字段不得回流到这里
-/// （见 `agent_file_change_presentation_purity_test`）。
+/// - 文件变更证据只能来自 `fileChanges` 快照，raw / wire 字段不得回流成证据
+///   （见 `agent_file_change_presentation_purity_test`）；
+/// - 其余工具保留 `rawInput` / `rawOutput` 的诊断价值，但它们是**独立文本段**，
+///   不再作为字符串塞进摘要 JSON——那会把整份报文二次转义成一行 `\n`。
 String _toolCallContextText(
   AgentToolCall toolCall,
   AgentUiTextCatalog catalog,
 ) {
-  return _prettyJson(_toolCallContextMap(toolCall, catalog));
+  final buffer = StringBuffer(
+    _prettyJson(_toolCallContextMap(toolCall, catalog)),
+  );
+  if (toolCall.kind != AgentToolKind.edit) {
+    _appendRawSection(buffer, 'rawInput', toolCall.rawInput);
+    _appendRawSection(buffer, 'rawOutput', toolCall.rawOutput);
+  }
+  return buffer.toString();
+}
+
+/// 追加一段带标题的原文；空原文不占位。
+void _appendRawSection(
+  StringBuffer buffer,
+  String label,
+  AgentProviderRawPayload payload,
+) {
+  if (payload.isEmpty) {
+    return;
+  }
+  buffer
+    ..write('\n\n// ')
+    ..write(label)
+    ..write('\n')
+    ..write(payload.toPrettyJson());
 }
 
 Map<String, Object?> _toolCallContextMap(
@@ -793,11 +818,6 @@ Map<String, Object?> _toolCallContextMap(
     'status': toolCall.status.name,
     'content': ?toolCall.content,
     if (toolCall.locations.isNotEmpty) 'locations': toolCall.locations,
-    // rawInput / rawOutput 是不可取值的原文：只在有内容时以文本形式附上。
-    if (toolCall.rawInput.isNotEmpty)
-      'rawInput': toolCall.rawInput.toPrettyJson(),
-    if (toolCall.rawOutput.isNotEmpty)
-      'rawOutput': toolCall.rawOutput.toPrettyJson(),
   };
 }
 
@@ -857,8 +877,6 @@ String _formatContextDateTime(DateTime? dateTime) {
       '${two(dateTime.minute)}';
 }
 
-/// 从 raw payload 宽容提取消息时间；兼容记录级 timestamp、started/createdAt
-/// 以及内嵌 payload 内的同名字段。缺失时返回占位符。
 /// 报文时间：直接用适配层给出的 typed 时间戳。
 ///
 /// 早期这里会去 raw payload 里逐个试 `timestamp` / `started_at` / `createdAt`

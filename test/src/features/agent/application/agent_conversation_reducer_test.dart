@@ -1175,7 +1175,7 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
         uiUrgency: AgentUiUpdateUrgency.immediate,
         uiEffectTypes: <Type>[AgentRequestAutoScroll],
       ),
-      const _ReductionCase(
+      _ReductionCase(
         name: 'system item',
         event: AgentSystemItemEvent(
           entry: AgentHistoryEventEntry(

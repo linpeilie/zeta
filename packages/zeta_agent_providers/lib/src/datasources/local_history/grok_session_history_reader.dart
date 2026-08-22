@@ -227,6 +227,7 @@ class GrokSessionHistoryReader {
     return AgentThreadHistorySnapshot(
       threadId: threadId,
       turns: const <AgentHistoryTurn>[],
+      sessionPath: sessionDir.path,
     );
   }
 

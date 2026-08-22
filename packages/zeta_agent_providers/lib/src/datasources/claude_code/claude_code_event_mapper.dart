@@ -4,6 +4,7 @@ import 'package:zeta_agent_providers/src/datasources/claude_code/claude_code_pla
 import 'package:zeta_agent_providers/src/mappers/claude_code_stream_identity.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_agent_providers/src/mappers/agent_tool_input_detail.dart';
+import 'package:zeta_agent_providers/src/mappers/agent_provider_payload.dart';
 
 final _log = zetaLoggerFor('zeta.agent.claude_code.event_mapper');
 
@@ -370,7 +371,7 @@ final class ClaudeCodeEventMapper {
               status: AgentMessageStatus.completed,
               sessionId: resolved.sessionId,
               turnId: resolved.turnId,
-              raw: AgentProviderRawPayload.wrap(const <String, Object?>{}),
+              raw: wrapAgentProviderPayload(const <String, Object?>{}),
             ),
           );
         }
@@ -384,7 +385,7 @@ final class ClaudeCodeEventMapper {
             status: AgentMessageStatus.completed,
             sessionId: resolved.sessionId,
             turnId: resolved.turnId,
-            raw: AgentProviderRawPayload.wrap(const <String, Object?>{}),
+            raw: wrapAgentProviderPayload(const <String, Object?>{}),
           ),
         );
         continue;
@@ -416,7 +417,7 @@ final class ClaudeCodeEventMapper {
             delta: thinking,
             sessionId: resolved.sessionId,
             turnId: resolved.turnId,
-            raw: AgentProviderRawPayload.wrap(const <String, Object?>{}),
+            raw: wrapAgentProviderPayload(const <String, Object?>{}),
           ),
         );
         continue;
@@ -475,8 +476,8 @@ final class ClaudeCodeEventMapper {
               locations: tracked.locations,
               sessionId: resolved.sessionId,
               turnId: resolved.turnId,
-              rawInput: AgentProviderRawPayload.wrap(tracked.rawInput),
-              raw: AgentProviderRawPayload.wrap(const <String, Object?>{}),
+              rawInput: wrapAgentProviderPayload(tracked.rawInput),
+              raw: wrapAgentProviderPayload(const <String, Object?>{}),
               fileChanges: tracked.fileChanges,
 
               inputDetail: deriveAgentToolInputDetail(tracked.rawInput),
@@ -574,15 +575,15 @@ final class ClaudeCodeEventMapper {
             locations: tracked?.locations ?? const <String>[],
             sessionId: resolved.sessionId,
             turnId: resolved.turnId,
-            rawOutput: AgentProviderRawPayload.wrap(
+            rawOutput: wrapAgentProviderPayload(
               resultContent == null
                   ? const <String, Object?>{}
                   : <String, Object?>{'content': resultContent},
             ),
-            rawInput: AgentProviderRawPayload.wrap(
+            rawInput: wrapAgentProviderPayload(
               tracked?.rawInput ?? const <String, Object?>{},
             ),
-            raw: AgentProviderRawPayload.wrap(const <String, Object?>{}),
+            raw: wrapAgentProviderPayload(const <String, Object?>{}),
             fileChanges: tracked?.fileChanges,
             inputDetail: deriveAgentToolInputDetail(
               tracked?.rawInput ?? const <String, Object?>{},

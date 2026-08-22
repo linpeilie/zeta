@@ -316,6 +316,25 @@ providers 包 + 一行注册」直接冲突。
 - `toPrettyJson()` 的唯一生产调用点是上下文面板；
 - 原文不进持久化与指标序列（G7）。
 
+Review 后的补漏（同批）：
+
+- **报文时间**：面板改读 `capturedAt` 后一度没有生产者，时间列全变 `—`。现由
+  `wrapAgentProviderPayload` 统一包装并推导（`timestamp` / `created_at` /
+  `started_at` / 内嵌 `payload` 与 `_meta.agentTimestampMs`），统一转本地时区；
+  推不出就是 null，不编造"现在"。守卫钉住"适配层不得直接调 `wrap`"。
+- **typed 字段要贯穿重建路径**：`sourceLabel` / `sessionPath` 在 grok enrichment、
+  turn-context overlay、claude 历史 reducer、空历史返回路径都补齐了。grok 的历史
+  缓存命中判定比较 `sessionPath`，enrichment 丢掉它会让缓存永不命中（已加回归测试）。
+- **工具卡合并要保 typed metadata**：`_mergeToolCall` 与 reasoning→think 构造
+  补上 `appendsProgress` / `inputDetail` / `sourceItemId`，否则状态型 update 一到
+  就把 adapter 算好的语义清成默认值。T18 baseline 随之刷新。
+- **原文不可变**：`AgentProviderRawPayload.wrap` 改成 factory 并**递归冻结**传入的
+  Map / List。payload 会进 UI snapshot 并参与相等性判定，适配层保留原 Map 引用继续
+  改它会让已展示内容无声漂移。
+- **工具条目的展示契约写清楚了**：typed 摘要在前，`rawInput` / `rawOutput` 作为
+  **独立文本段**附在后面（edit 工具一律不附）。之前把 `toPrettyJson()` 字符串塞进
+  摘要 JSON，会二次转义成一行 `\n`。
+
 遗留：`AgentThreadSummary.tryDecode` 保留一次性的旧缓存迁移读取
 （`raw['path']` → `sessionPath`），让升级前落盘的条目仍能恢复会话路径。这是对**自家
 持久化格式**的宽容解码，不是运行期原文取值。

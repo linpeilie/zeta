@@ -356,6 +356,59 @@ void main() {
       expect(liveGroup.modelConfig?.fastEnabled, isTrue);
     });
 
+    test('状态型 update 不冲掉 adapter 产出的 typed metadata', () {
+      final store = AgentConversationTimelineStore();
+
+      store.upsertToolCall(
+        AgentToolCall(
+          id: 'call-1',
+          title: 'shell',
+          kind: AgentToolKind.execute,
+          status: AgentToolStatus.inProgress,
+          content: 'line 1',
+          appendsProgress: true,
+          inputDetail: 'git status',
+          sourceItemId: 'item-1',
+          rawInput: AgentProviderRawPayload.wrap(const <String, Object?>{
+            'command': 'git status',
+          }),
+        ),
+      );
+
+      // 后续只带状态的 update：adapter 通常不重复携带 typed metadata。
+      store.upsertToolCall(
+        const AgentToolCall(
+          id: 'call-1',
+          title: 'shell',
+          kind: AgentToolKind.execute,
+          status: AgentToolStatus.completed,
+        ),
+      );
+
+      final merged = store.toolCalls.singleWhere((tool) => tool.id == 'call-1');
+      expect(merged.status, AgentToolStatus.completed);
+      expect(merged.appendsProgress, isTrue);
+      expect(merged.inputDetail, 'git status');
+      expect(merged.sourceItemId, 'item-1');
+      expect(merged.rawInput.isNotEmpty, isTrue);
+    });
+
+    test('reasoning 转 think tool 带上事件的 sourceItemId', () {
+      final store = AgentConversationTimelineStore();
+
+      store.appendReasoningDelta(
+        const AgentReasoningDeltaEvent(
+          itemId: 'think-1',
+          sourceItemId: 'source-think-1',
+          kind: AgentReasoningDeltaKind.summaryText,
+          delta: 'planning',
+        ),
+      );
+
+      final think = store.toolCalls.singleWhere((tool) => tool.id == 'think-1');
+      expect(think.sourceItemId, 'source-think-1');
+    });
+
     test('stamps tool startedAt, tracks activity phase, freezes duration', () {
       final store = AgentConversationTimelineStore();
       addTearDown(store.dispose);
@@ -984,7 +1037,7 @@ void main() {
         const AgentTurn(id: 'turn-1', sessionId: 'thread-1'),
       );
       store.upsertToolCall(
-        const AgentToolCall(
+        AgentToolCall(
           id: 'call-abc-0',
           title: 'sessionUpdate',
           kind: AgentToolKind.search,
@@ -1284,7 +1337,7 @@ void main() {
       addTearDown(store.dispose);
 
       store.appendMessageDelta(
-        const AgentMessageDeltaEvent(
+        AgentMessageDeltaEvent(
           messageId: 'message-a',
           sourceMessageId: 'provider-message-a',
           delta: 'partial',
@@ -1336,7 +1389,7 @@ void main() {
       addTearDown(store.dispose);
 
       store.appendMessageDelta(
-        const AgentMessageDeltaEvent(
+        AgentMessageDeltaEvent(
           messageId: 'regular-message',
           delta: 'regular',
           role: AgentMessageRole.agent,
@@ -1344,7 +1397,7 @@ void main() {
         ),
       );
       store.appendMessageDelta(
-        const AgentMessageDeltaEvent(
+        AgentMessageDeltaEvent(
           messageId: 'plan-message',
           delta: 'plan',
           role: AgentMessageRole.agent,

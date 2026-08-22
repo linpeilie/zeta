@@ -30,6 +30,12 @@ void main() {
   /// TimelineStore 基线已按 2026-08-17 多语言步骤 12（其余 context-free
   /// 文案改走 `AgentUiTextCatalog`）刷新。
   ///
+  /// 2026-08-22（四）：TimelineStore 基线因 review 修复刷新——工具卡合并与
+  /// reasoning→think 构造漏带 adapter 产出的 typed metadata
+  /// （`appendsProgress` / `inputDetail` / `sourceItemId`），状态型 update 一到
+  /// 就把它们清成默认值。这是（二）(三) 那批改动的补漏：删掉 raw 之后，typed
+  /// 替代必须端到端保真，否则等于语义丢失。同一批架构批准。
+  ///
   /// 2026-08-22（三）：CoalescingPolicy 与 TimelineStore 基线随 raw payload 变成
   /// 不可取值的 `AgentProviderRawPayload` 刷新：策略层不再 `raw['_progressAppend']`
   /// 也不再手动 spread 合并原文（改为内容盲的 `mergedWith`），Store 不再作者化
@@ -71,9 +77,9 @@ void main() {
         ),
     'packages/zeta_agent_core/lib/src/application/agent_conversation_timeline_store.dart':
         _FileBaseline(
-          lineCount: 2016,
-          byteLength: 67713,
-          fingerprint: '3c5fda26fa76def6',
+          lineCount: 2023,
+          byteLength: 68212,
+          fingerprint: '438f67ddffb1df8b',
         ),
   };
 

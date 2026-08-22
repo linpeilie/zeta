@@ -1006,6 +1006,50 @@ void main() {
       },
     );
 
+    test(
+      'enriched history keeps sessionPath so the cache still hits',
+      () async {
+        final sessionDir = await Directory.systemTemp.createTemp(
+          'zeta-grok-history-cache-',
+        );
+        addTearDown(() async {
+          if (await sessionDir.exists()) {
+            await sessionDir.delete(recursive: true);
+          }
+        });
+        final updates = File(
+          '${sessionDir.path}${Platform.pathSeparator}updates.jsonl',
+        );
+        await updates.writeAsString(r'''
+{"method":"session/update","params":{"sessionId":"sess-cache","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"hello"}},"_meta":{"eventId":"u1"}}}
+{"method":"_x.ai/session/update","params":{"sessionId":"sess-cache","update":{"sessionUpdate":"turn_completed","stop_reason":"end_turn"},"_meta":{"eventId":"done"}}}
+''');
+
+        final provider = GrokAcpAgentProvider(
+          config: AgentProviderConfig.defaultGrok,
+          peer: _FakeJsonRpcPeer(),
+        );
+        addTearDown(provider.dispose);
+
+        final first = await provider.readThreadHistory(
+          threadId: 'sess-cache',
+          sessionPath: sessionDir.path,
+        );
+        expect(first.turns, hasLength(1));
+        expect(first.sessionPath, sessionDir.path);
+
+        // 缓存命中判定比较 sessionPath；enrichment 若把它丢了就会每次重读磁盘。
+        await updates.delete();
+        final second = await provider.readThreadHistory(
+          threadId: 'sess-cache',
+          sessionPath: sessionDir.path,
+        );
+
+        expect(second.turns, hasLength(1));
+        expect(second.sessionPath, sessionDir.path);
+      },
+    );
+
     test('ignores a late model list after provider disposal', () async {
       final peer = _FakeJsonRpcPeer()..includeModelState = false;
       final modelsCompleter = Completer<AgentModelList>();

@@ -6,6 +6,7 @@ import 'package:zeta_agent_providers/src/mappers/grok_error_normalizer.dart';
 import 'package:zeta_agent_providers/src/mappers/grok_session_update_mapper.dart';
 import 'package:zeta_agent_providers/src/mappers/grok_stream_identity.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_agent_providers/src/mappers/agent_provider_payload.dart';
 
 /// 从 Grok `updates.jsonl` 重建多回合历史快照。
 ///
@@ -197,7 +198,7 @@ class GrokUpdatesHistoryParser {
               sourceMessageId: user.sourceMessageId,
               text: parsed.text,
               localImagePaths: parsed.localImagePaths,
-              raw: AgentProviderRawPayload.wrap(user.raw),
+              raw: wrapAgentProviderPayload(user.raw, capturedAt: eventAt),
             );
           }
           continue;
@@ -232,21 +233,21 @@ class GrokUpdatesHistoryParser {
                 id: event.messageId,
                 sourceMessageId: event.sourceMessageId,
                 text: event.delta,
-                raw: event.raw,
+                raw: event.raw.capturedAtOr(eventAt),
               );
             case AgentReasoningDeltaEvent():
               current!.addOrMergeThought(
                 id: event.itemId,
                 sourceItemId: event.sourceItemId,
                 text: event.delta,
-                raw: event.raw,
+                raw: event.raw.capturedAtOr(eventAt),
               );
             case AgentToolCallEvent():
               current!.upsertTool(event.toolCall);
             case AgentPlanUpdatedEvent():
               current!.addPlan(
                 event.entries,
-                raw: AgentProviderRawPayload.wrap(update),
+                raw: wrapAgentProviderPayload(update, capturedAt: eventAt),
               );
             case AgentTokenUsageEvent():
               // Grok turn_completed usage 是本回合绝对用量；usage_update 则是
@@ -519,7 +520,7 @@ class _TurnBuilder {
       text: text,
       kind: AgentMessageKind.plan,
       status: AgentMessageStatus.completed,
-      raw: AgentProviderRawPayload.wrap(const <String, Object?>{
+      raw: wrapAgentProviderPayload(const <String, Object?>{
         'type': 'plan',
       }).mergedWith(raw),
     );

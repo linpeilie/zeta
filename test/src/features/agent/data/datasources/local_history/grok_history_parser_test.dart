@@ -36,6 +36,11 @@ void main() {
           .whereType<AgentHistoryMessageEntry>()
           .firstWhere((e) => e.role == AgentMessageRole.user);
       expect(user.text, 'first question');
+      // 报文时间由适配层写进 payload，面板据此展示（不再由 UI 翻 JSON）。
+      expect(
+        user.raw.capturedAt,
+        DateTime.fromMillisecondsSinceEpoch(1000 * 1000, isUtc: true).toLocal(),
+      );
 
       final agent = first.entries
           .whereType<AgentHistoryMessageEntry>()

@@ -1561,7 +1561,7 @@ void main() {
                   id: 'msg-user-1',
                   role: AgentMessageRole.user,
                   text: 'Hello',
-                  raw: AgentProviderRawPayload.wrap(<String, Object?>{
+                  raw: wrapAgentProviderPayload(<String, Object?>{
                     'type': 'response_item',
                     'timestamp': 1700000000,
                     'marker': 'ctx-user-raw',
@@ -1571,7 +1571,7 @@ void main() {
                   id: 'msg-agent-1',
                   role: AgentMessageRole.agent,
                   text: 'Hi there',
-                  raw: AgentProviderRawPayload.wrap(<String, Object?>{
+                  raw: wrapAgentProviderPayload(<String, Object?>{
                     'type': 'event_msg',
                     'timestamp': 1700000005,
                     'marker': 'ctx-agent-raw',
@@ -1579,19 +1579,30 @@ void main() {
                 ),
                 AgentHistoryToolEntry(
                   toolCall: AgentToolCall(
+                    id: 'ctx-search-1',
+                    title: 'Search context',
+                    kind: AgentToolKind.search,
+                    status: AgentToolStatus.completed,
+                    rawInput: wrapAgentProviderPayload(const <String, Object?>{
+                      'pattern': 'SEARCH_RAW_SENTINEL',
+                    }),
+                  ),
+                ),
+                AgentHistoryToolEntry(
+                  toolCall: AgentToolCall(
                     id: 'ctx-edit-1',
                     title: 'Replace context file',
                     kind: AgentToolKind.edit,
                     status: AgentToolStatus.completed,
-                    raw: AgentProviderRawPayload.wrap(const <String, Object?>{
+                    raw: wrapAgentProviderPayload(const <String, Object?>{
                       'sentinel': 'FILE_RAW_SENTINEL',
                     }),
-                    rawInput: AgentProviderRawPayload.wrap(
-                      const <String, Object?>{'oldText': 'WIRE_OLD_SENTINEL'},
-                    ),
-                    rawOutput: AgentProviderRawPayload.wrap(
-                      const <String, Object?>{'newText': 'WIRE_NEW_SENTINEL'},
-                    ),
+                    rawInput: wrapAgentProviderPayload(const <String, Object?>{
+                      'oldText': 'WIRE_OLD_SENTINEL',
+                    }),
+                    rawOutput: wrapAgentProviderPayload(const <String, Object?>{
+                      'newText': 'WIRE_NEW_SENTINEL',
+                    }),
                     fileChanges: AgentFileChangeSnapshot(
                       revision: 4,
                       replayability: AgentFileChangeReplayability.replayable,
@@ -1762,6 +1773,26 @@ void main() {
       find.byKey(const ValueKey('agent-context-raw-body-msg-user-1')),
       findsNothing,
     );
+    // 报文时间来自适配层算好的 capturedAt（wire `timestamp`），不是 UI 翻 JSON。
+    final expectedCapturedAt = DateTime.fromMillisecondsSinceEpoch(
+      1700000000 * 1000,
+      isUtc: true,
+    ).toLocal();
+    String two(int value) => value.toString().padLeft(2, '0');
+    final expectedTimeText =
+        '${expectedCapturedAt.year}-'
+        '${two(expectedCapturedAt.month)}-'
+        '${two(expectedCapturedAt.day)} '
+        '${two(expectedCapturedAt.hour)}:'
+        '${two(expectedCapturedAt.minute)}';
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('agent-context-raw-msg-user-1')),
+        matching: find.text(expectedTimeText),
+      ),
+      findsOneWidget,
+    );
+
     // 展开后渲染 raw 原文区。
     await tester.tap(
       find.byKey(const ValueKey('agent-context-raw-msg-user-1')),
@@ -1830,6 +1861,44 @@ void main() {
       find.descendant(
         of: editContextBody,
         matching: find.textContaining('WIRE_OLD_SENTINEL', findRichText: true),
+      ),
+      findsNothing,
+    );
+
+    // 非 edit 工具：原文作为独立段落附在 typed 摘要之后，不做二次转义。
+    final searchHeader = find.byKey(
+      const ValueKey('agent-context-raw-ctx-search-1'),
+    );
+    await tester.ensureVisible(searchHeader);
+    await pumpAgentConversationUi(tester);
+    await tester.tap(searchHeader);
+    await pumpAgentConversationUi(tester);
+    final searchBody = find.byKey(
+      const ValueKey('agent-context-raw-body-ctx-search-1'),
+    );
+    expect(searchBody, findsOneWidget);
+    expect(
+      find.descendant(
+        of: searchBody,
+        matching: find.textContaining('// rawInput', findRichText: true),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: searchBody,
+        matching: find.textContaining(
+          '"pattern": "SEARCH_RAW_SENTINEL"',
+          findRichText: true,
+        ),
+      ),
+      findsOneWidget,
+    );
+    // 二次转义会把整段原文压成一行 `\n`。
+    expect(
+      find.descendant(
+        of: searchBody,
+        matching: find.textContaining(r'\n', findRichText: true),
       ),
       findsNothing,
     );

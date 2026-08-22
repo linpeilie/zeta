@@ -201,7 +201,7 @@ class _CodexNotificationMapper {
                     _string(item['status']),
               ),
               duration: _messageDuration(item, notification.params),
-              raw: AgentProviderRawPayload.wrap(notification.params),
+              raw: wrapAgentProviderPayload(notification.params),
               sessionId: _string(notification.params['threadId']),
               turnId: _string(notification.params['turnId']),
             ),
@@ -243,7 +243,7 @@ class _CodexNotificationMapper {
               delta: delta,
               role: AgentMessageRole.agent,
               status: AgentMessageStatus.streaming,
-              raw: AgentProviderRawPayload.wrap(notification.params),
+              raw: wrapAgentProviderPayload(notification.params),
               sessionId: _string(notification.params['threadId']),
               turnId: _string(notification.params['turnId']),
             ),
@@ -697,7 +697,7 @@ class _CodexNotificationMapper {
           summaryIndex: _numberToInt(notification.params['summaryIndex']),
           sessionId: _string(notification.params['threadId']),
           turnId: _string(notification.params['turnId']),
-          raw: AgentProviderRawPayload.wrap(notification.params),
+          raw: wrapAgentProviderPayload(notification.params),
         ),
       ],
     );
@@ -787,7 +787,7 @@ class _CodexNotificationMapper {
               _string(item['status']) ?? _string(notification.params['status']),
             ),
       duration: _messageDuration(item, notification.params),
-      raw: AgentProviderRawPayload.wrap(notification.params),
+      raw: wrapAgentProviderPayload(notification.params),
       sessionId: _string(notification.params['threadId']),
       turnId: _string(notification.params['turnId']),
     );
@@ -814,7 +814,7 @@ class _CodexNotificationMapper {
         sessionId: _string(notification.params['threadId']),
         turnId: _string(notification.params['turnId']),
         // 标记进度追加，供 timeline 合并时保留既有标题并追加 content。
-        raw: AgentProviderRawPayload.wrap(<String, Object?>{
+        raw: wrapAgentProviderPayload(<String, Object?>{
           ...notification.params,
         }),
         // 进度追加是语义，不是原文：显式声明，不再借 raw 传私有标记（G1/G2）。
@@ -843,7 +843,7 @@ class _CodexNotificationMapper {
           : fileProjection!.locations,
       sessionId: _string(notification.params['threadId']),
       turnId: _string(notification.params['turnId']),
-      raw: AgentProviderRawPayload.wrap(notification.params),
+      raw: wrapAgentProviderPayload(notification.params),
       fileChanges: fileProjection?.snapshot,
     );
   }
