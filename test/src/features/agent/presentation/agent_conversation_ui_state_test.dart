@@ -1,22 +1,21 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_mode_controller.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_ui_state.dart';
-import 'package:zeta/src/features/agent/presentation/model_config_ui_state.dart';
+import 'agent_conversation_ui_state_fixtures.dart';
 
 void main() {
   group('typed Agent conversation UI state', () {
     test('header uses structural token equality and stable hashCode', () {
-      final first = _headerState(
+      final first = agentHeaderStateFixture(
         tokenUsage: const AgentTokenUsage(totalTokens: 42),
       );
-      final second = _headerState(
+      final second = agentHeaderStateFixture(
         tokenUsage: const AgentTokenUsage(totalTokens: 42),
       );
 
       expect(first, second);
       expect(first.hashCode, second.hashCode);
-      expect(_headerState(title: 'Other'), isNot(first));
+      expect(agentHeaderStateFixture(title: 'Other'), isNot(first));
     });
 
     test('composer snapshots collections and compares nested model state', () {
@@ -36,11 +35,11 @@ void main() {
           ],
         ),
       ];
-      final first = _composerState(
+      final first = agentComposerStateFixture(
         conversationModes: modes,
         sessionConfigOptions: configs,
       );
-      final second = _composerState(
+      final second = agentComposerStateFixture(
         conversationModes: List<AgentConversationModePreset>.of(modes),
         sessionConfigOptions: List<AgentSessionConfigOption>.of(configs),
       );
@@ -62,11 +61,11 @@ void main() {
         kind: AgentPermissionKind.commandExecution,
         proposedExecpolicyAmendment: amendment,
       );
-      final first = _pendingState(
+      final first = agentPendingInteractionStateFixture(
         permissions: <AgentPermissionRequest>[request],
       );
       amendment.add('git diff');
-      final second = _pendingState(
+      final second = agentPendingInteractionStateFixture(
         permissions: <AgentPermissionRequest>[
           AgentPermissionRequest(
             id: 'permission-1',
@@ -114,8 +113,11 @@ void main() {
           ),
         ),
       ];
-      final first = _historyState(entries: entries, contentRevision: 1);
-      final second = _historyState(
+      final first = agentConversationHistoryStateFixture(
+        entries: entries,
+        contentRevision: 1,
+      );
+      final second = agentConversationHistoryStateFixture(
         entries: List<AgentTimelineEntry>.of(entries),
         contentRevision: 1,
       );
@@ -123,7 +125,13 @@ void main() {
       expect(first, second);
       expect(first.hashCode, second.hashCode);
       expect(() => first.visibleTurns.clear(), throwsUnsupportedError);
-      expect(_historyState(entries: entries, contentRevision: 2), isNot(first));
+      expect(
+        agentConversationHistoryStateFixture(
+          entries: entries,
+          contentRevision: 2,
+        ),
+        isNot(first),
+      );
     });
 
     test('thread snapshot equality remains structural', () {
@@ -163,9 +171,9 @@ void main() {
 
     setUp(() {
       timeline = AgentConversationTimelineStore();
-      header = _headerState();
-      composer = _composerState();
-      pending = _pendingState();
+      header = agentHeaderStateFixture();
+      composer = agentComposerStateFixture();
+      pending = agentPendingInteractionStateFixture();
       expansion = AgentExpansionState(
         toolCallIds: const <String>[],
         planMessageIds: const <String>[],
@@ -173,7 +181,7 @@ void main() {
         commandGroupIds: const <String>[],
         fileEditItemIds: const <String>[],
       );
-      history = _historyState();
+      history = agentConversationHistoryStateFixture();
       disposed = false;
       store = AgentConversationUiStateStore(
         timeline: timeline,
@@ -223,7 +231,7 @@ void main() {
         expect(expansionNotifications, 0);
         expect(historyNotifications, 0);
 
-        header = _headerState(title: 'Renamed');
+        header = agentHeaderStateFixture(title: 'Renamed');
         store.publish(
           AgentUiUpdateRequest(
             regions: const <AgentUiRegion>{AgentUiRegion.header},
@@ -278,7 +286,7 @@ void main() {
 
     test('disposed owner rejects scheduler callbacks', () {
       disposed = true;
-      header = _headerState(title: 'Ignored');
+      header = agentHeaderStateFixture(title: 'Ignored');
 
       store.publish(
         AgentUiUpdateRequest(
@@ -291,114 +299,4 @@ void main() {
       expect(store.diagnostics.publishCount, 0);
     });
   });
-}
-
-AgentHeaderState _headerState({
-  String title = 'Thread',
-  AgentTokenUsage? tokenUsage,
-}) {
-  return AgentHeaderState(
-    title: title,
-    threadOpenPhase: AgentThreadOpenPhase.idle,
-    systemNoticeLabel: null,
-    statusCapsuleLabel: null,
-    waitingOnApproval: false,
-    waitingOnUserInput: false,
-    showRunningIndicator: false,
-    runningActivityLabel: null,
-    segmentStartedAt: null,
-    turnStartedAt: null,
-    tokenUsage: tokenUsage,
-    isTurnRunning: false,
-    isReadOnly: false,
-    canFork: false,
-    canRename: false,
-    canArchive: false,
-    isPlanMode: false,
-  );
-}
-
-AgentComposerState _composerState({
-  Iterable<AgentConversationModePreset> conversationModes =
-      const <AgentConversationModePreset>[],
-  Iterable<AgentSessionConfigOption> sessionConfigOptions =
-      const <AgentSessionConfigOption>[],
-}) {
-  return AgentComposerState(
-    canSubmitMessage: true,
-    isTurnRunning: false,
-    threadOpenPhase: AgentThreadOpenPhase.idle,
-    contextUsage: null,
-    isReadOnly: false,
-    canAttachImages: true,
-    canMentionResources: true,
-    canUseSkills: false,
-    conversationModeStatus: AgentConversationModeLoadStatus.ready,
-    conversationModeOptions: conversationModes,
-    selectedConversationMode: AgentConversationModeId.defaultMode,
-    conversationModeAppliesToNextTurn: false,
-    conversationModeStatusMessage: null,
-    conversationModeContextId: const (providerId: 'provider', threadId: 't'),
-    showModelSelection: true,
-    modelConfigState: AgentModelConfigUiState(
-      models: const <AgentModelInfo>[],
-      selectedModelId: null,
-      expandedModelId: null,
-      selectedReasoningEffort: null,
-      selectedServiceTierId: null,
-      preferences: const <String, AgentModelPreference>{},
-      savingModelIds: const <String>{},
-      isRefreshing: false,
-      appliesNextTurn: false,
-      supportsReasoningOptions: true,
-      supportsServiceTierSelection: true,
-    ),
-    showPermissionPolicy: true,
-    permissionPolicyLabel: 'Workspace write',
-    permissionOptions: const <AgentPermissionOption>[
-      AgentPermissionOption(
-        id: ':workspace',
-        label: 'Workspace write',
-        description: 'Workspace write',
-      ),
-    ],
-    selectedPermissionOptionId: ':workspace',
-    sessionConfigOptions: sessionConfigOptions,
-  );
-}
-
-AgentPendingInteractionState _pendingState({
-  Iterable<AgentPermissionRequest> permissions =
-      const <AgentPermissionRequest>[],
-}) {
-  return AgentPendingInteractionState(
-    permissions: permissions,
-    questions: const <AgentQuestionRequest>[],
-    planApprovals: const <AgentPlanApprovalRequest>[],
-    planExecutionHandoff: null,
-    isReadOnly: false,
-    autoReviewsByTurnId: const <String, AgentAutoApprovalReviewEvent>{},
-    latestDeniedAutoReview: null,
-  );
-}
-
-AgentConversationHistoryState _historyState({
-  List<AgentTimelineEntry> entries = const <AgentTimelineEntry>[],
-  int contentRevision = 0,
-}) {
-  return AgentConversationHistoryState(
-    standbyTurn: null,
-    visibleTurns: <AgentConversationTurnGroup>[
-      AgentConversationTurnGroup(
-        id: 'turn-1',
-        entries: List<AgentTimelineEntry>.unmodifiable(entries),
-        isStandby: false,
-        contentRevision: contentRevision,
-      ),
-    ],
-    threadOpenPhase: AgentThreadOpenPhase.idle,
-    providerId: 'provider',
-    providerKind: AgentProviderKind.codexAppServer,
-    providerName: 'Provider',
-  );
 }

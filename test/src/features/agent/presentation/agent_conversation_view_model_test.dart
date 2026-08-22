@@ -9,6 +9,8 @@ import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_intent.dart';
+import 'package:zeta/src/features/agent/presentation/agent_conversation_slice_binding.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 
@@ -4643,6 +4645,78 @@ void main() {
           urgency: AgentUiUpdateUrgency.immediate,
           effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
         );
+      });
+    });
+
+    group('Phase 2 切片接线', () {
+      test('同一批 region 变化只合并成一次切片发布', () async {
+        final viewModel = _createViewModel(_FakeAgentProvider());
+        addTearDown(viewModel.dispose);
+        final pendingFlushes = <void Function()>[];
+        final binding = AgentConversationSliceBinding(
+          viewModel: viewModel,
+          scheduleFlush: pendingFlushes.add,
+        );
+        addTearDown(binding.dispose);
+
+        viewModel.toggleToolCall('call-1');
+        viewModel.toggleToolCall('call-2');
+        await _drainTypedUiUpdate();
+
+        // 两次 region 变化只排一次合并刷新。
+        expect(pendingFlushes, hasLength(1));
+        pendingFlushes.single();
+        expect(binding.flushCount, 1);
+        expect(binding.store.diagnostics.publishCount, 1);
+        expect(binding.store.state.expansion.toolCallIds, <String>{
+          'call-1',
+          'call-2',
+        });
+      });
+
+      test('切片命令经 effect 打到现有 port，状态由 region 回流', () async {
+        final viewModel = _createViewModel(_FakeAgentProvider());
+        addTearDown(viewModel.dispose);
+        final pendingFlushes = <void Function()>[];
+        final binding = AgentConversationSliceBinding(
+          viewModel: viewModel,
+          scheduleFlush: pendingFlushes.add,
+        );
+        addTearDown(binding.dispose);
+
+        binding.store.toggleExpansion(
+          AgentConversationExpansionTarget.toolCall,
+          'call-from-slice',
+        );
+        await _drainTypedUiUpdate();
+        for (final flush in pendingFlushes) {
+          flush();
+        }
+
+        // 展开集合的 owner 仍是 TimelineStore：切片只是把结果投影回来。
+        expect(viewModel.isToolCallExpanded('call-from-slice'), isTrue);
+        expect(
+          binding.store.state.expansion.toolCallIds,
+          contains('call-from-slice'),
+        );
+      });
+
+      test('binding dispose 后 ViewModel 再变不再流进切片', () async {
+        final viewModel = _createViewModel(_FakeAgentProvider());
+        addTearDown(viewModel.dispose);
+        final pendingFlushes = <void Function()>[];
+        final binding = AgentConversationSliceBinding(
+          viewModel: viewModel,
+          scheduleFlush: pendingFlushes.add,
+        );
+
+        binding.dispose();
+        viewModel.toggleToolCall('after-dispose');
+        await _drainTypedUiUpdate();
+
+        expect(pendingFlushes, isEmpty);
+        expect(binding.store.isClosed, isTrue);
+        expect(binding.store.state.expansion.toolCallIds, isEmpty);
       });
     });
   });

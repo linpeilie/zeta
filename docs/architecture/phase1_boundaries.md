@@ -161,6 +161,8 @@ presentation 与 shell 组合。
 
 ---
 
+> Phase 2 的字段映射与门禁答卷见 [`phase2_conversation_slice.md`](phase2_conversation_slice.md)。
+
 ## 3. MVI 命名规范（Phase 2 起强制）
 
 阶段 1 只定契约与命名，不建通用基类框架。每个 feature 切片按下面这套命名：
