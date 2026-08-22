@@ -58,6 +58,24 @@ final class AppZetaUiTextCatalog implements ZetaUiTextCatalog {
 
   @override
   String tabsLoadingSuffix(String label) => _l10n.tabsLoadingSuffix(label);
+
+  @override
+  String get loading => _l10n.uiLoading;
+
+  @override
+  String get running => _l10n.uiRunning;
+
+  @override
+  String get windowMinimize => _l10n.windowMinimize;
+
+  @override
+  String get windowRestore => _l10n.windowRestore;
+
+  @override
+  String get windowMaximize => _l10n.windowMaximize;
+
+  @override
+  String get windowClose => _l10n.windowClose;
 }
 
 final class AppUsageStatisticsTextCatalog

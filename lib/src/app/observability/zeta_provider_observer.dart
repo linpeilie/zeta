@@ -66,7 +66,8 @@ final class ZetaProviderObserver extends ProviderObserver {
   /// 只使用声明期就固定的 provider 名或其实现类型名。
   ///
   /// `provider.name` 由代码里的 `name:` 常量给出；缺省时退回 `runtimeType`，
-  /// 它是 Dart 类型名而不是运行期数据。两者都会再过一次标签规范化。
+  /// 它是 Dart 类型名而不是运行期数据。泛型参数会被去掉（`Impl<Foo>` → `Impl`），
+  /// 否则尖括号不符合标签白名单形态，会被整体丢弃。
   ZetaMetricTags _tagsFor(
     ProviderBase<Object?> provider, {
     ZetaMetricOutcome? outcome,
@@ -74,9 +75,17 @@ final class ZetaProviderObserver extends ProviderObserver {
     if (!metrics.isEnabled) {
       return ZetaMetricTags.none;
     }
+    final name = provider.name ?? _typeLabel(provider);
+    // provider 名与类型名都是声明期常量；形态异常时会自动降级成 hash。
     return ZetaMetricTags(
-      component: provider.name ?? provider.runtimeType.toString(),
+      component: ZetaMetricLabel.declaredIdentifier(name),
       outcome: outcome,
     );
+  }
+
+  String _typeLabel(ProviderBase<Object?> provider) {
+    final runtimeType = provider.runtimeType.toString();
+    final generic = runtimeType.indexOf('<');
+    return generic < 0 ? runtimeType : runtimeType.substring(0, generic);
   }
 }

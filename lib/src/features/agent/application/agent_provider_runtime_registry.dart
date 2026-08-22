@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_identity.dart';
+import 'package:zeta/src/features/agent/domain/agent_metric_labels.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 
@@ -220,7 +221,9 @@ class AgentProviderRuntimeRegistry extends ChangeNotifier {
   /// Provider ID 只作为标签透传；registry 不按 Provider 分支。
   ZetaMetricTags _tagsFor(String providerId) {
     return metrics.isEnabled
-        ? ZetaMetricTags(providerId: providerId)
+        ? ZetaMetricTags(
+            providerId: AgentMetricLabels.forProviderId(providerId),
+          )
         : ZetaMetricTags.none;
   }
 

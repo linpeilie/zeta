@@ -1106,6 +1106,42 @@ abstract class AppLocalizations {
   /// **'Remove'**
   String get commonRemove;
 
+  /// Loading indicator semantics
+  ///
+  /// In en, this message translates to:
+  /// **'Loading'**
+  String get uiLoading;
+
+  /// Busy spinner semantics
+  ///
+  /// In en, this message translates to:
+  /// **'Running'**
+  String get uiRunning;
+
+  /// Window minimize button
+  ///
+  /// In en, this message translates to:
+  /// **'Minimize'**
+  String get windowMinimize;
+
+  /// Window restore button
+  ///
+  /// In en, this message translates to:
+  /// **'Restore'**
+  String get windowRestore;
+
+  /// Window maximize button
+  ///
+  /// In en, this message translates to:
+  /// **'Maximize'**
+  String get windowMaximize;
+
+  /// Window close button
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get windowClose;
+
   /// Window menu semantics
   ///
   /// In en, this message translates to:

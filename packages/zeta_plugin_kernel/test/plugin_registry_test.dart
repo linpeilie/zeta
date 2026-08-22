@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:test/test.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_plugin_kernel/zeta_plugin_kernel.dart';
@@ -50,17 +51,30 @@ void main() {
       expect(report.isDegraded, isFalse);
     });
 
-    test('激活代数每次递增', () async {
+    test('重复激活 fail-closed，不覆盖旧句柄也不重复贡献', () async {
       final registry = ZetaPluginRegistry(
         factories: <ZetaPluginFactory>[_FakePluginFactory(id: 'a')],
       );
 
       final first = await registry.activateAll();
-      final second = await registry.activateAll();
 
       expect(first.generation, 1);
-      expect(second.generation, 2);
-      expect(registry.activationGeneration, 2);
+      expect(registry.activateAll, throwsStateError);
+      expect(registry.activateAllSynchronously, throwsStateError);
+      expect(registry.contributions<_FakeContribution>(), hasLength(1));
+      expect(registry.activationGeneration, 1);
+    });
+
+    test('同步激活后同样禁止再次激活', () {
+      final registry = ZetaPluginRegistry(
+        factories: <ZetaPluginFactory>[_FakePluginFactory(id: 'a')],
+      );
+
+      registry.activateAllSynchronously();
+
+      expect(registry.activateAllSynchronously, throwsStateError);
+      expect(registry.activateAll, throwsStateError);
+      expect(registry.contributions<_FakeContribution>(), hasLength(1));
     });
   });
 
@@ -193,6 +207,80 @@ void main() {
     });
   });
 
+  group('ZetaPluginRegistry 关闭与激活的竞态', () {
+    test('关闭期间到达的激活结果不会被登记，且立刻释放', () async {
+      final plugin = _GatedPluginFactory(id: 'slow');
+      final registry = ZetaPluginRegistry(
+        factories: <ZetaPluginFactory>[plugin],
+      );
+
+      final activating = registry.activateAll();
+      await Future<void>.delayed(Duration.zero);
+      final closing = registry.close();
+      plugin.release();
+      await activating;
+      await closing;
+
+      expect(plugin.closedHandles, 1, reason: '迟到句柄必须就地释放，否则永远没人关它');
+      expect(
+        registry.stateOf('slow')!.status,
+        ZetaPluginStatus.stopped,
+        reason: '已关闭的 registry 不能把插件标成 active',
+      );
+      expect(registry.contributions<_FakeContribution>(), isEmpty);
+    });
+
+    test('close 会等待在途激活收尾，且不再启动后续插件', () async {
+      final first = _GatedPluginFactory(id: 'first');
+      final second = _GatedPluginFactory(id: 'second');
+      final registry = ZetaPluginRegistry(
+        factories: <ZetaPluginFactory>[first, second],
+      );
+
+      final activating = registry.activateAll();
+      await Future<void>.delayed(Duration.zero);
+      first.release();
+      final closing = registry.close();
+      second.release();
+      await activating;
+      await closing;
+
+      // 第一个插件的激活在关闭之后才落地 → 就地释放，不登记。
+      expect(first.closedHandles, 1);
+      expect(registry.stateOf('first')!.status, ZetaPluginStatus.stopped);
+      // 第二个插件在关闭后根本不该被启动：关闭中的 registry 不再拉新资源。
+      expect(second.closedHandles, 0);
+      expect(registry.stateOf('second')!.status, ZetaPluginStatus.registered);
+      expect(registry.contributions<_FakeContribution>(), isEmpty);
+    });
+
+    test('并发 close 返回同一个任务，都等到句柄真正释放', () async {
+      final plugin = _SlowClosingPluginFactory(id: 'slow');
+      final registry = ZetaPluginRegistry(
+        factories: <ZetaPluginFactory>[plugin],
+      );
+      registry.activateAllSynchronously();
+
+      final first = registry.close();
+      final second = registry.close();
+      await second;
+
+      expect(plugin.closedHandles, 1, reason: '第二个调用方拿到"已完成"时，句柄必须真的已经释放');
+      await first;
+      expect(plugin.closedHandles, 1);
+    });
+
+    test('关闭后不允许再次激活（同步入口同样）', () async {
+      final registry = ZetaPluginRegistry(
+        factories: <ZetaPluginFactory>[_FakePluginFactory(id: 'a')],
+      );
+      await registry.close();
+
+      expect(registry.activateAll, throwsStateError);
+      expect(registry.activateAllSynchronously, throwsStateError);
+    });
+  });
+
   group('ZetaPluginRegistry 同步激活', () {
     test('同步入口立刻返回可用贡献，无需等待 microtask', () {
       final registry = ZetaPluginRegistry(
@@ -220,6 +308,47 @@ void main() {
         ZetaPluginFailureReason.requiresSynchronousActivation,
       );
       expect(report.activeIds, isEmpty);
+    });
+  });
+
+  group('ZetaPluginRegistry 贡献快照', () {
+    test('贡献 getter 抛异常只拖垮该插件，且句柄立即释放', () async {
+      final bad = _BadContributionPluginFactory(id: 'bad');
+      final registry = ZetaPluginRegistry(
+        factories: <ZetaPluginFactory>[
+          bad,
+          _FakePluginFactory(id: 'good'),
+        ],
+      );
+
+      final report = await registry.activateAll();
+
+      expect(
+        registry.stateOf('bad')!.failureReason,
+        ZetaPluginFailureReason.activationThrew,
+      );
+      expect(bad.closedHandles, 1, reason: '坏插件的句柄不能留在 registry 里');
+      expect(report.activeIds, <String>['good']);
+      // 关键：坏插件不能阻断整个 catalog——多次读取都不该抛异常。
+      expect(registry.contributions<_FakeContribution>(), hasLength(1));
+      expect(registry.contributions<_FakeContribution>(), hasLength(1));
+    });
+
+    test('贡献是激活时冻结的快照，之后不再回调插件 getter', () async {
+      final plugin = _CountingContributionPluginFactory(id: 'counting');
+      final registry = ZetaPluginRegistry(
+        factories: <ZetaPluginFactory>[plugin],
+      );
+      await registry.activateAll();
+
+      registry.contributions<_FakeContribution>();
+      registry.contributions<_FakeContribution>();
+
+      expect(
+        plugin.contributionReads,
+        1,
+        reason: 'contributions() 必须是无副作用的纯读操作',
+      );
     });
   });
 
@@ -299,6 +428,150 @@ final class _FakeContribution extends ZetaPluginContribution {
 
   @override
   String get contributionKind => 'fake.contribution';
+}
+
+/// 句柄关闭需要跨越一次 event loop，用来暴露"close 提前返回"。
+final class _SlowClosingPluginFactory implements ZetaSynchronousPluginFactory {
+  _SlowClosingPluginFactory({required String id})
+    : descriptor = ZetaPluginDescriptor(
+        id: id,
+        apiVersion: ZetaPluginApiVersion.current,
+      );
+
+  @override
+  final ZetaPluginDescriptor descriptor;
+
+  int closedHandles = 0;
+
+  @override
+  Future<ZetaPluginHandle> activate(ZetaPluginContext context) async =>
+      activateSynchronously(context);
+
+  @override
+  ZetaPluginHandle activateSynchronously(ZetaPluginContext context) =>
+      _SlowClosingHandle(this);
+}
+
+final class _SlowClosingHandle implements ZetaPluginHandle {
+  _SlowClosingHandle(this.owner);
+
+  final _SlowClosingPluginFactory owner;
+
+  @override
+  List<ZetaPluginContribution> get contributions => <ZetaPluginContribution>[
+    _FakeContribution(owner.descriptor.id),
+  ];
+
+  @override
+  Future<void> close() async {
+    await Future<void>.delayed(Duration.zero);
+    owner.closedHandles += 1;
+  }
+}
+
+/// 贡献 getter 直接抛异常的坏插件。
+final class _BadContributionPluginFactory implements ZetaPluginFactory {
+  _BadContributionPluginFactory({required String id})
+    : descriptor = ZetaPluginDescriptor(
+        id: id,
+        apiVersion: ZetaPluginApiVersion.current,
+      );
+
+  @override
+  final ZetaPluginDescriptor descriptor;
+
+  int closedHandles = 0;
+
+  @override
+  Future<ZetaPluginHandle> activate(ZetaPluginContext context) async =>
+      _BadContributionHandle(this);
+}
+
+final class _BadContributionHandle implements ZetaPluginHandle {
+  _BadContributionHandle(this.owner);
+
+  final _BadContributionPluginFactory owner;
+
+  @override
+  List<ZetaPluginContribution> get contributions =>
+      throw StateError('contributions exploded');
+
+  @override
+  Future<void> close() async => owner.closedHandles += 1;
+}
+
+/// 统计 `contributions` getter 被读了几次。
+final class _CountingContributionPluginFactory implements ZetaPluginFactory {
+  _CountingContributionPluginFactory({required String id})
+    : descriptor = ZetaPluginDescriptor(
+        id: id,
+        apiVersion: ZetaPluginApiVersion.current,
+      );
+
+  @override
+  final ZetaPluginDescriptor descriptor;
+
+  int contributionReads = 0;
+
+  @override
+  Future<ZetaPluginHandle> activate(ZetaPluginContext context) async =>
+      _CountingContributionHandle(this);
+}
+
+final class _CountingContributionHandle implements ZetaPluginHandle {
+  _CountingContributionHandle(this.owner);
+
+  final _CountingContributionPluginFactory owner;
+
+  @override
+  List<ZetaPluginContribution> get contributions {
+    owner.contributionReads += 1;
+    return <ZetaPluginContribution>[_FakeContribution(owner.descriptor.id)];
+  }
+
+  @override
+  Future<void> close() async {}
+}
+
+/// 激活会一直挂起，直到测试显式 [release]，用来构造关闭/激活竞态。
+final class _GatedPluginFactory implements ZetaPluginFactory {
+  _GatedPluginFactory({required String id})
+    : descriptor = ZetaPluginDescriptor(
+        id: id,
+        apiVersion: ZetaPluginApiVersion.current,
+      );
+
+  @override
+  final ZetaPluginDescriptor descriptor;
+
+  final Completer<void> _gate = Completer<void>();
+  int closedHandles = 0;
+
+  void release() {
+    if (!_gate.isCompleted) {
+      _gate.complete();
+    }
+  }
+
+  @override
+  Future<ZetaPluginHandle> activate(ZetaPluginContext context) async {
+    await _gate.future;
+    return _GatedPluginHandle(this);
+  }
+}
+
+final class _GatedPluginHandle implements ZetaPluginHandle {
+  _GatedPluginHandle(this.owner);
+
+  final _GatedPluginFactory owner;
+
+  @override
+  List<ZetaPluginContribution> get contributions => <ZetaPluginContribution>[
+    _FakeContribution(owner.descriptor.id),
+  ];
+
+  @override
+  Future<void> close() async => owner.closedHandles += 1;
 }
 
 final class _AsyncOnlyPluginFactory implements ZetaPluginFactory {

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:zeta_foundation/zeta_foundation.dart';
 
 import 'package:zeta_plugin_kernel/src/plugin_contracts.dart';
@@ -74,10 +76,22 @@ final class ZetaPluginRegistry {
       <String, ZetaPluginFactory>{};
   final Map<String, ZetaPluginState> _states = <String, ZetaPluginState>{};
   final Map<String, ZetaPluginHandle> _handles = <String, ZetaPluginHandle>{};
+
+  /// 激活时**一次性冻结**的贡献快照。
+  ///
+  /// 不保存快照、每次回调插件 getter 的话，一个 getter 抛异常的坏插件会在每次
+  /// `contributions()` 时把异常抛给调用方，等于用一个插件阻断整个 catalog。
+  final Map<String, List<ZetaPluginContribution>> _contributions =
+      <String, List<ZetaPluginContribution>>{};
   final List<String> _activationOrder = <String>[];
 
   int _generation = 0;
   bool _closed = false;
+  Future<void>? _closeFuture;
+  Future<ZetaPluginActivationReport>? _activation;
+
+  /// 关闭期间到达、需要就地释放的迟到句柄；`close()` 必须等它们收尾。
+  final List<Future<void>> _lateHandleCloses = <Future<void>>[];
 
   /// 当前激活代数；每次 [activateAll] 递增。
   int get activationGeneration => _generation;
@@ -93,27 +107,51 @@ final class ZetaPluginRegistry {
   ///
   /// 调用方按类型取自己认识的贡献；内核不解释贡献语义。
   List<T> contributions<T extends ZetaPluginContribution>() {
+    if (_closed) {
+      // 已关闭的内核不再对外供货：宁可让调用方 fail-closed，也不给出可能
+      // 已经释放资源的贡献。
+      return const [];
+    }
     final result = <T>[];
     for (final id in _activationOrder) {
-      final handle = _handles[id];
-      if (handle == null) {
+      final snapshot = _contributions[id];
+      if (snapshot == null) {
         continue;
       }
-      result.addAll(handle.contributions.whereType<T>());
+      result.addAll(snapshot.whereType<T>());
     }
     return List<T>.unmodifiable(result);
   }
 
   /// 按拓扑序激活全部插件。
-  Future<ZetaPluginActivationReport> activateAll() async {
-    if (_closed) {
-      throw StateError('ZetaPluginRegistry is closed');
+  ///
+  /// 每个 registry 只能激活一次：编译期目录没有"重新激活"的语义，而重复激活会
+  /// 覆盖旧句柄（旧句柄再也关不掉）并让同一个插件的贡献出现两遍。需要换代时应
+  /// 关闭本实例、重建一个新的 registry。
+  Future<ZetaPluginActivationReport> activateAll() {
+    final inFlight = _activation;
+    if (inFlight != null) {
+      throw StateError(
+        'ZetaPluginRegistry has already been activated; '
+        'create a new registry instead of re-activating',
+      );
     }
+    _assertNotClosed();
+    final activation = _activateAllOnce();
+    _activation = activation;
+    return activation;
+  }
+
+  Future<ZetaPluginActivationReport> _activateAllOnce() async {
     _generation += 1;
     metrics.gauge(ZetaMetric.pluginActivationGeneration, _generation);
 
     final order = _resolveActivationOrder();
     for (final id in order) {
+      // 每一步都重新检查：close() 可能在上一次 await 期间跑完。
+      if (_closed) {
+        break;
+      }
       await _activateOne(id);
     }
     metrics.gauge(ZetaMetric.pluginActiveCount, _handles.length);
@@ -130,9 +168,13 @@ final class ZetaPluginRegistry {
   /// 标记为 [ZetaPluginFailureReason.requiresSynchronousActivation]，而不是被
   /// 静默跳过。启动关键路径（例如首帧就要拿到 Agent Provider 工厂）用这个入口。
   ZetaPluginActivationReport activateAllSynchronously() {
-    if (_closed) {
-      throw StateError('ZetaPluginRegistry is closed');
+    if (_activation != null) {
+      throw StateError(
+        'ZetaPluginRegistry has already been activated; '
+        'create a new registry instead of re-activating',
+      );
     }
+    _assertNotClosed();
     _generation += 1;
     metrics.gauge(ZetaMetric.pluginActivationGeneration, _generation);
 
@@ -151,20 +193,45 @@ final class ZetaPluginRegistry {
       _activateSynchronously(id, factory);
     }
     metrics.gauge(ZetaMetric.pluginActiveCount, _handles.length);
-    return ZetaPluginActivationReport(
+    final report = ZetaPluginActivationReport(
       generation: _generation,
       states: _states.values,
       activationOrder: _activationOrder,
     );
+    _activation = Future<ZetaPluginActivationReport>.value(report);
+    return report;
   }
 
   /// 按激活反序关闭全部插件。
-  Future<void> close() async {
-    if (_closed) {
-      return;
+  ///
+  /// 并发调用返回**同一个**关闭任务：只看 `_closed` 标志会让第二个调用方在句柄
+  /// 还没释放时就拿到"已完成"，从而以为资源全放完了。`MainApp.dispose` 与桌面
+  /// 窗口关闭 hook 就可能同时触发这里。
+  Future<void> close() {
+    final existing = _closeFuture;
+    if (existing != null) {
+      return existing;
     }
+    final future = _closeOnce();
+    _closeFuture = future;
+    return future;
+  }
+
+  Future<void> _closeOnce() async {
+    // 同步置位：激活循环靠它提前退出，不能等到第一个 await 之后。
     _closed = true;
+    // 在途激活必须先结束，否则它恢复后会把句柄写进已关闭的 registry 并永久泄漏。
+    // 激活循环自己会看到 _closed 提前退出，这里只等它收尾。
+    final activation = _activation;
+    if (activation != null) {
+      try {
+        await activation;
+      } catch (_) {
+        // 激活失败不影响关闭流程；失败分类已经记在插件状态里。
+      }
+    }
     for (final id in _activationOrder.reversed) {
+      _contributions.remove(id);
       final handle = _handles.remove(id);
       if (handle == null) {
         continue;
@@ -179,6 +246,12 @@ final class ZetaPluginRegistry {
         descriptor: _states[id]!.descriptor,
         status: ZetaPluginStatus.stopped,
       );
+    }
+    // 迟到句柄的释放同样属于关闭流程：close() 返回时不能还有句柄在半路。
+    if (_lateHandleCloses.isNotEmpty) {
+      final pending = List<Future<void>>.of(_lateHandleCloses);
+      _lateHandleCloses.clear();
+      await Future.wait(pending);
     }
     _activationOrder.clear();
     metrics.gauge(ZetaMetric.pluginActiveCount, 0);
@@ -245,16 +318,42 @@ final class ZetaPluginRegistry {
     ZetaPluginHandle handle,
     DateTime startedAt,
   ) {
+    if (_closed) {
+      // 迟到的激活结果：registry 已经关闭，句柄不能登记（登记了就再也不会被
+      // 关闭），直接就地释放并把状态标成 stopped。
+      _states[id] = ZetaPluginState(
+        descriptor: descriptor,
+        status: ZetaPluginStatus.stopped,
+      );
+      _lateHandleCloses.add(_closeQuietly(handle, id));
+      return;
+    }
+    // 先把贡献读成不可变快照：读取过程仍属于"激活"，失败必须落在该插件头上，
+    // 而不是等到别人调用 contributions() 时才炸。
+    final List<ZetaPluginContribution> snapshot;
+    final Set<String> kinds;
+    try {
+      snapshot = List<ZetaPluginContribution>.unmodifiable(
+        handle.contributions,
+      );
+      kinds = <String>{
+        for (final contribution in snapshot) contribution.contributionKind,
+      };
+    } catch (_) {
+      // 坏插件不能留在 registry 里：句柄就地释放，状态标 failed，其余插件不受影响。
+      _markFailed(id, ZetaPluginFailureReason.activationThrew);
+      _lateHandleCloses.add(_closeQuietly(handle, id));
+      return;
+    }
+
+    // 快照成功后才原子登记，三张表要么一起写、要么都不写。
     _handles[id] = handle;
+    _contributions[id] = snapshot;
     _activationOrder.add(id);
     _states[id] = ZetaPluginState(
       descriptor: descriptor,
       status: ZetaPluginStatus.active,
-      contributionKinds: List<String>.unmodifiable(
-        handle.contributions
-            .map((contribution) => contribution.contributionKind)
-            .toSet(),
-      ),
+      contributionKinds: List<String>.unmodifiable(kinds),
     );
     metrics
       ..counter(ZetaMetric.pluginActivated, tags: _tagsFor(id))
@@ -263,6 +362,21 @@ final class ZetaPluginRegistry {
         clock().difference(startedAt),
         tags: _tagsFor(id),
       );
+  }
+
+  Future<void> _closeQuietly(ZetaPluginHandle handle, String id) async {
+    try {
+      await handle.close();
+    } catch (_) {
+      // 关闭失败不能冒泡到业务路径；异常文本不进日志/指标（G7）。
+    }
+    metrics.counter(ZetaMetric.pluginClosed, tags: _tagsFor(id));
+  }
+
+  void _assertNotClosed() {
+    if (_closed) {
+      throw StateError('ZetaPluginRegistry is closed');
+    }
   }
 
   /// 激活前的静态阻断判定，全部 fail-closed。
@@ -290,7 +404,10 @@ final class ZetaPluginRegistry {
     );
     metrics.counter(
       ZetaMetric.pluginActivationFailed,
-      tags: ZetaMetricTags(component: id, outcome: ZetaMetricOutcome.failure),
+      tags: ZetaMetricTags(
+        component: ZetaMetricLabel.declaredIdentifier(id),
+        outcome: ZetaMetricOutcome.failure,
+      ),
     );
   }
 
@@ -356,7 +473,8 @@ final class ZetaPluginRegistry {
     return order;
   }
 
+  /// 插件 ID 来自编译期目录；形态异常时 [ZetaMetricLabel] 会自动降级为 hash。
   ZetaMetricTags _tagsFor(String pluginId) => metrics.isEnabled
-      ? ZetaMetricTags(component: pluginId)
+      ? ZetaMetricTags(component: ZetaMetricLabel.declaredIdentifier(pluginId))
       : ZetaMetricTags.none;
 }

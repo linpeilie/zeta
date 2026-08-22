@@ -13,9 +13,9 @@ Phase 1–4 的每一步都要回到这里比对：数字变差就是回归，�
 
 | 交付物 | 位置 |
 | --- | --- |
-| 白名单指标定义 | [`lib/src/core/observability/zeta_metric.dart`](../../lib/src/core/observability/zeta_metric.dart) |
-| 统一指标端口 + no-op 默认实现 | [`zeta_metrics_port.dart`](../../lib/src/core/observability/zeta_metrics_port.dart) |
-| 进程内有界聚合器 | [`in_memory_zeta_metrics_port.dart`](../../lib/src/core/observability/in_memory_zeta_metrics_port.dart) |
+| 白名单指标定义 | [`zeta_metric.dart`](../../packages/zeta_foundation/lib/src/observability/zeta_metric.dart)（阶段 1 迁入 `zeta_foundation`） |
+| 统一指标端口 + no-op 默认实现 | [`zeta_metrics_port.dart`](../../packages/zeta_foundation/lib/src/observability/zeta_metrics_port.dart) |
+| 进程内有界聚合器 | [`in_memory_zeta_metrics_port.dart`](../../packages/zeta_foundation/lib/src/observability/in_memory_zeta_metrics_port.dart) |
 | 脱敏 Riverpod 观察器 | [`lib/src/app/observability/zeta_provider_observer.dart`](../../lib/src/app/observability/zeta_provider_observer.dart) |
 | app 级可观测性组合根 | [`zeta_observability.dart`](../../lib/src/app/observability/zeta_observability.dart) |
 | 事件管线指标采样器 | [`agent_pipeline_metrics_reporter.dart`](../../lib/src/features/agent/application/agent_pipeline_metrics_reporter.dart) |
@@ -45,8 +45,13 @@ flutter run -d macos --dart-define=ZETA_METRICS=true
 ### 1.3 隐私约束
 
 - 指标名是封闭枚举，端口签名不接受 `String`；
-- 标签只有 `providerId` / `component` / `outcome` 三个维度，且统一过 `sanitizeLabel`
-  （只保留 `[A-Za-z0-9_.-]`，截断 48 字符），即使误传路径也不会留下可读片段；
+- 标签只有 `providerId` / `component` / `outcome` 三个维度，且**类型是
+  `ZetaMetricLabel` 而不是 `String`**——运行期字符串在类型层面就进不来。标签只有
+  三个入口：`constant`（源码字面量，架构守卫强制实参为字面量）、
+  `declaredIdentifier`（声明期常量，形态异常自动降级为 hash）、
+  `hashed`（会话内不可逆短 hash）。Provider ID 来自 `~/.zeta` 的自由 JSON，
+  因此走 `AgentMetricLabels.forProviderId`：三个内置 Provider 映射常量，
+  其余一律 `h.xxxxxxxx`。形态正则只做格式校验，不承担隐私职责；
 - Riverpod 观察器不读取 `value` / `newValue` / `previousValue`，也不读 family 的 `argument`；
 - 聚合器按 `maxSeries` 封顶，超出只累加 `droppedSeriesSamples`，不会无界增长。
 

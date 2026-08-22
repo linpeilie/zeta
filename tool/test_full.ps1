@@ -28,6 +28,9 @@ try {
       try {
         # Flutter Package 必须用 flutter 工具链跑。
         $isFlutterPackage = Select-String -Path 'pubspec.yaml' -Pattern '^\s+sdk:\s+flutter$' -Quiet
+        # analyze 与 shell 版对齐：根 `flutter analyze` 只分析根 Package。
+        if ($isFlutterPackage) { & flutter analyze } else { & dart analyze }
+        if ($LASTEXITCODE -ne 0) { $packagesExitCode = $LASTEXITCODE }
         if ($isFlutterPackage) { & flutter test } else { & dart test }
         if ($LASTEXITCODE -ne 0) { $packagesExitCode = $LASTEXITCODE }
       } finally {

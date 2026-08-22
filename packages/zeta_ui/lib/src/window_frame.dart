@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:window_manager/window_manager.dart';
 
@@ -71,11 +70,19 @@ class WindowFrame extends StatelessWidget {
     this.titleBarLeadingActions = const <WindowTitleBarAction>[],
     this.titleBarActions = const <WindowTitleBarAction>[],
     this.showWindowControls = true,
+    this.brandLogo,
     super.key,
   });
 
   final Widget child;
   final bool enableNativeWindowFrame;
+
+  /// Windows 标题栏最左侧的品牌 Logo。
+  ///
+  /// **品牌属于产品，不属于设计系统**：`zeta_ui` 不声明也不读取任何品牌资产，
+  /// 由宿主传入现成 Widget（例如 `SvgPicture.asset`）。为空时该位置留空，
+  /// 标题栏其余布局不变。
+  final Widget? brandLogo;
 
   /// 标题栏顶部菜单；菜单内容由上层 feature 决定。
   final List<WindowMenu> menus;
@@ -102,6 +109,7 @@ class WindowFrame extends StatelessWidget {
             titleBarLeadingActions: titleBarLeadingActions,
             titleBarActions: titleBarActions,
             showWindowControls: showWindowControls,
+            brandLogo: brandLogo,
           ),
         Expanded(child: child),
       ],
@@ -130,12 +138,14 @@ class _TitleBar extends StatelessWidget {
     required this.titleBarLeadingActions,
     required this.titleBarActions,
     required this.showWindowControls,
+    required this.brandLogo,
   });
 
   final List<WindowMenu> menus;
   final List<WindowTitleBarAction> titleBarLeadingActions;
   final List<WindowTitleBarAction> titleBarActions;
   final bool showWindowControls;
+  final Widget? brandLogo;
 
   @override
   Widget build(BuildContext context) {
@@ -159,7 +169,8 @@ class _TitleBar extends StatelessWidget {
               if (isMac)
                 const SizedBox(width: IdeMetrics.macOSTrafficLightGutter),
               // Windows 下 Logo 固定在最左侧，折叠等 leading action 紧随其后。
-              if (isWindows) const _WindowsTitleBarLogo(),
+              if (isWindows && brandLogo != null)
+                _WindowsTitleBarLogo(logo: brandLogo!),
               if (titleBarLeadingActions.isNotEmpty)
                 _TitleBarActionGroup(
                   actions: titleBarLeadingActions,
@@ -243,9 +254,12 @@ class _TitleBarActionGroup extends StatelessWidget {
 /// 布局契约：左侧外边距 [IdeSpacing.space8]、右侧 [IdeSpacing.space4]，
 /// 图标 22×22，与下方 Workbench 左侧 rail 视觉对齐。
 class _WindowsTitleBarLogo extends StatelessWidget {
-  const _WindowsTitleBarLogo();
+  const _WindowsTitleBarLogo({required this.logo});
 
-  static const double _logoSize = 22;
+  /// 宿主注入的品牌图形；设计系统只负责尺寸盒、边距与无障碍标签。
+  final Widget logo;
+
+  static const double logoSize = 22;
 
   @override
   Widget build(BuildContext context) {
@@ -258,11 +272,7 @@ class _WindowsTitleBarLogo extends StatelessWidget {
           left: IdeSpacing.space8,
           right: IdeSpacing.space4,
         ),
-        child: SvgPicture.asset(
-          'assets/branding/zeta_logo.svg',
-          width: _logoSize,
-          height: _logoSize,
-        ),
+        child: SizedBox(width: logoSize, height: logoSize, child: logo),
       ),
     );
   }
@@ -409,17 +419,18 @@ class _WindowButtonsState extends State<_WindowButtons> with WindowListener {
 
   @override
   Widget build(BuildContext context) {
+    final text = IdeUiText.of(context);
     return Row(
       children: [
         _WindowButton(
           icon: sf.LucideIcons.minus,
-          tooltip: 'Minimize',
+          tooltip: text.windowMinimize,
           onPressed: () => windowManager.minimize(),
         ),
         _WindowButton(
           // 未最大化：maximize；已最大化：minimize（还原）
           icon: _maximized ? sf.LucideIcons.minimize : sf.LucideIcons.maximize,
-          tooltip: _maximized ? 'Restore' : 'Maximize',
+          tooltip: _maximized ? text.windowRestore : text.windowMaximize,
           onPressed: () async {
             if (_maximized) {
               await windowManager.unmaximize();
@@ -430,7 +441,7 @@ class _WindowButtonsState extends State<_WindowButtons> with WindowListener {
         ),
         _WindowButton(
           icon: sf.LucideIcons.x,
-          tooltip: 'Close',
+          tooltip: text.windowClose,
           isClose: true,
           onPressed: () => windowManager.close(),
         ),
@@ -519,25 +530,29 @@ class _WindowButtonState extends State<_WindowButton> {
     const buttonHeight = IdeMetrics.titleBarHeight - IdeSpacing.space4;
     return IdeTooltip(
       message: widget.tooltip,
-      child: MouseRegion(
-        onEnter: (_) => setState(() => _hover = true),
-        onExit: (_) => setState(() => _hover = false),
-        child: GestureDetector(
-          onTap: widget.onPressed,
-          child: AnimatedContainer(
-            duration: IdeMotion.durationFast,
-            curve: IdeMotion.curveDefault,
-            width: 46,
-            height: buttonHeight,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: _hover ? hoverColor : Colors.transparent,
-              borderRadius: IdeRadius.allSmall,
-            ),
-            child: Icon(
-              widget.icon,
-              size: 14,
-              color: _hover ? hoverIcon : idleIcon,
+      child: Semantics(
+        button: true,
+        label: widget.tooltip,
+        child: MouseRegion(
+          onEnter: (_) => setState(() => _hover = true),
+          onExit: (_) => setState(() => _hover = false),
+          child: GestureDetector(
+            onTap: widget.onPressed,
+            child: AnimatedContainer(
+              duration: IdeMotion.durationFast,
+              curve: IdeMotion.curveDefault,
+              width: 46,
+              height: buttonHeight,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: _hover ? hoverColor : Colors.transparent,
+                borderRadius: IdeRadius.allSmall,
+              ),
+              child: Icon(
+                widget.icon,
+                size: 14,
+                color: _hover ? hoverIcon : idleIcon,
+              ),
             ),
           ),
         ),

@@ -808,6 +808,30 @@
   "@commonRemove": {
     "description": "Common remove"
   },
+  "uiLoading": "加载中",
+  "@uiLoading": {
+    "description": "Loading indicator semantics"
+  },
+  "uiRunning": "运行中",
+  "@uiRunning": {
+    "description": "Busy spinner semantics"
+  },
+  "windowMinimize": "最小化",
+  "@windowMinimize": {
+    "description": "Window minimize button"
+  },
+  "windowRestore": "还原",
+  "@windowRestore": {
+    "description": "Window restore button"
+  },
+  "windowMaximize": "最大化",
+  "@windowMaximize": {
+    "description": "Window maximize button"
+  },
+  "windowClose": "关闭",
+  "@windowClose": {
+    "description": "Window close button"
+  },
   "commonMenu": "菜单",
   "@commonMenu": {
     "description": "Window menu semantics"

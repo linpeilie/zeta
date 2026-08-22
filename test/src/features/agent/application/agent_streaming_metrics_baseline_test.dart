@@ -83,7 +83,9 @@ void main() {
       await pipeline.close();
       await source.close();
 
-      final tags = ZetaMetricTags(providerId: 'provider-neutral');
+      final tags = ZetaMetricTags(
+        providerId: ZetaMetricLabel.hashed('provider-neutral'),
+      );
       expect(processed, isEmpty);
       expect(
         metrics.totalOf(ZetaMetric.agentPipelineEventsReceived, tags: tags),
@@ -170,7 +172,9 @@ void main() {
         metrics: metrics,
         providerId: 'provider-neutral',
       );
-      final tags = ZetaMetricTags(providerId: 'provider-neutral');
+      final tags = ZetaMetricTags(
+        providerId: ZetaMetricLabel.hashed('provider-neutral'),
+      );
       final source = StreamController<AgentEvent>.broadcast(sync: true);
       final pipeline = AgentEventPipeline(
         source: source.stream,
@@ -244,7 +248,9 @@ Future<_StormPipelineMetrics> _runStormPipeline() async {
   final fixture = AgentEventStormFixture();
   final metrics = InMemoryZetaMetricsPort();
   final source = StreamController<AgentEvent>(sync: true);
-  final tags = ZetaMetricTags(providerId: 'provider-neutral');
+  final tags = ZetaMetricTags(
+    providerId: ZetaMetricLabel.hashed('provider-neutral'),
+  );
   final reporter = AgentPipelineMetricsReporter(
     metrics: metrics,
     providerId: 'provider-neutral',

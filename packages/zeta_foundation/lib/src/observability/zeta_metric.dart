@@ -1,9 +1,12 @@
 /// 阶段 0 可观测性的白名单指标定义。
 ///
 /// 指标标识、维度和取值全部是编译期封闭集合：调用方无法用自由文本把 prompt、
-/// 回复正文、文件路径、raw payload 或原始错误塞进指标流（G7）。这里是纯 Dart，
-/// 不依赖 Flutter、Riverpod、`dart:io` 或任何 Provider 协议类型。
+/// 回复正文、文件路径、raw payload 或原始错误塞进指标流（G7）——指标名是枚举，
+/// 维度值是 [ZetaMetricLabel]。这里是纯 Dart，不依赖 Flutter、Riverpod、
+/// `dart:io` 或任何 Provider 协议类型。
 library;
+
+import 'package:zeta_foundation/src/observability/zeta_metric_label.dart';
 
 /// 指标的取值语义。
 enum ZetaMetricKind {
@@ -184,68 +187,29 @@ enum ZetaMetricOutcome { success, failure, cancelled, stale, unsupported }
 
 /// 指标维度。
 ///
-/// 所有字段都会经过 [ZetaMetricTags.sanitizeLabel] 规范化：只保留
-/// `[A-Za-z0-9_.-]`，其余字符替换为 `_`，长度截断到 [maxLabelLength]。
-/// 这样即使调用方误传路径或标题，也不会有可读的敏感片段进入指标流。
+/// 维度值的类型是 [ZetaMetricLabel] 而不是 `String`：**运行期字符串在类型层面
+/// 就进不来**。想打标签就必须显式声明它的来源——源码字面量、声明期标识符，
+/// 还是需要 hash 的用户数据。形态正则只在 [ZetaMetricLabel] 内部作为格式校验，
+/// 不再承担隐私职责。
 final class ZetaMetricTags {
-  factory ZetaMetricTags({
-    String? providerId,
-    String? component,
-    ZetaMetricOutcome? outcome,
-  }) {
-    if (providerId == null && component == null && outcome == null) {
-      return none;
-    }
-    return ZetaMetricTags._(
-      providerId: sanitizeLabel(providerId),
-      component: sanitizeLabel(component),
-      outcome: outcome,
-    );
-  }
-
-  const ZetaMetricTags._({this.providerId, this.component, this.outcome});
+  const ZetaMetricTags({this.providerId, this.component, this.outcome});
 
   /// 无维度采样。
-  static const ZetaMetricTags none = ZetaMetricTags._();
+  static const ZetaMetricTags none = ZetaMetricTags();
 
-  /// 单个标签的最大长度。
-  static const int maxLabelLength = 48;
-
-  /// Provider 标识（`codex` / `grok` / `claude_code` 之类的稳定内部 ID）。
-  final String? providerId;
+  /// Provider 标识。内置 Provider 用常量，其余一律 hash。
+  final ZetaMetricLabel? providerId;
 
   /// 组件或子区域标识，例如 Riverpod provider 名、`live` / `history`。
-  final String? component;
+  final ZetaMetricLabel? component;
 
   /// 结果分类。
   final ZetaMetricOutcome? outcome;
 
-  /// 把任意输入压成安全标签；`null`、空串和纯分隔符统一返回 `null`。
-  static String? sanitizeLabel(String? value) {
-    if (value == null) {
-      return null;
-    }
-    final buffer = StringBuffer();
-    for (final rune in value.runes) {
-      if (buffer.length >= maxLabelLength) {
-        break;
-      }
-      final char = String.fromCharCode(rune);
-      buffer.write(_safeLabelCharacter.hasMatch(char) ? char : '_');
-    }
-    final sanitized = buffer.toString();
-    if (sanitized.isEmpty || !sanitized.contains(_labelSignal)) {
-      return null;
-    }
-    return sanitized;
-  }
-
-  static final RegExp _safeLabelCharacter = RegExp(r'[A-Za-z0-9_.\-]');
-  static final RegExp _labelSignal = RegExp(r'[A-Za-z0-9]');
-
   /// 稳定的序列键，用于聚合与导出。
   String get seriesKey =>
-      '${providerId ?? '-'}|${component ?? '-'}|${outcome?.name ?? '-'}';
+      '${providerId?.value ?? '-'}|${component?.value ?? '-'}'
+      '|${outcome?.name ?? '-'}';
 
   @override
   bool operator ==(Object other) {

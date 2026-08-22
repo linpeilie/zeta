@@ -3,7 +3,6 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/app/app_constants.dart';
 import 'package:zeta_ui/zeta_ui.dart';
@@ -132,6 +131,7 @@ void main() {
         child: WindowFrame(
           enableNativeWindowFrame: true,
           showWindowControls: false,
+          brandLogo: _brandLogo,
           menus: const [
             WindowMenu(
               key: ValueKey('window-menu-file'),
@@ -163,11 +163,12 @@ void main() {
           right: IdeSpacing.space4,
         ),
       );
-      final logoSvg = tester.widget<SvgPicture>(
-        find.descendant(of: logoFinder, matching: find.byType(SvgPicture)),
+      // 尺寸盒由设计系统提供；图形本身是宿主注入的，zeta_ui 不认识它。
+      final logoBox = tester.widget<SizedBox>(
+        find.descendant(of: logoFinder, matching: find.byType(SizedBox)).first,
       );
-      expect(logoSvg.width, 22);
-      expect(logoSvg.height, 22);
+      expect(logoBox.width, 22);
+      expect(logoBox.height, 22);
       expect(tester.takeException(), isNull);
     });
   });
@@ -263,6 +264,7 @@ void main() {
           child: WindowFrame(
             enableNativeWindowFrame: true,
             showWindowControls: false,
+            brandLogo: _brandLogo,
             titleBarLeadingActions: [
               WindowTitleBarAction(
                 key: const ValueKey('window-leading-action'),
@@ -314,6 +316,7 @@ void main() {
         child: WindowFrame(
           enableNativeWindowFrame: true,
           showWindowControls: false,
+          brandLogo: _brandLogo,
           titleBarLeadingActions: [
             WindowTitleBarAction(
               key: const ValueKey('window-leading-action'),
@@ -374,6 +377,7 @@ void main() {
         child: const WindowFrame(
           enableNativeWindowFrame: true,
           showWindowControls: false,
+          brandLogo: _brandLogo,
           menus: menus,
           child: ColoredBox(color: Colors.black),
         ),
@@ -392,6 +396,7 @@ void main() {
         child: const WindowFrame(
           enableNativeWindowFrame: true,
           showWindowControls: false,
+          brandLogo: _brandLogo,
           menus: menus,
           titleBarLeadingActions: <WindowTitleBarAction>[],
           child: ColoredBox(color: Colors.black),
@@ -423,6 +428,7 @@ void main() {
         child: WindowFrame(
           enableNativeWindowFrame: true,
           showWindowControls: false,
+          brandLogo: _brandLogo,
           titleBarLeadingActions: [
             WindowTitleBarAction(
               key: const ValueKey('window-leading-action'),
@@ -526,3 +532,12 @@ Future<void> _withTargetPlatform(
     debugDefaultTargetPlatformOverride = null;
   }
 }
+
+/// 宿主注入的品牌图形占位。
+///
+/// `zeta_ui` 不拥有品牌资产（`assets/branding/*` 由根 app 声明），
+/// 因此测试里用一个不依赖资产的占位 Widget 代替真实 Logo。
+const Widget _brandLogo = SizedBox.square(
+  dimension: 22,
+  key: ValueKey('test-brand-logo'),
+);

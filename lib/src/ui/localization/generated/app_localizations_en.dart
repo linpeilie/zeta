@@ -566,6 +566,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get commonRemove => 'Remove';
 
   @override
+  String get uiLoading => 'Loading';
+
+  @override
+  String get uiRunning => 'Running';
+
+  @override
+  String get windowMinimize => 'Minimize';
+
+  @override
+  String get windowRestore => 'Restore';
+
+  @override
+  String get windowMaximize => 'Maximize';
+
+  @override
+  String get windowClose => 'Close';
+
+  @override
   String get commonMenu => 'Menu';
 
   @override

@@ -1,6 +1,7 @@
 import 'package:flutter/scheduler.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta/src/features/agent/application/agent_ui_update_port.dart';
+import 'package:zeta/src/features/agent/domain/agent_metric_labels.dart';
 import 'package:zeta/src/features/agent/application/agent_ui_update_request.dart';
 
 /// 基于 [SchedulerBinding] 的生产 frame 调度实现。
@@ -114,8 +115,10 @@ final class AgentUiUpdateScheduler implements AgentUiUpdatePort {
   }) : _frameScheduler =
            frameScheduler ?? const SchedulerBindingAgentFrameScheduler(),
        _metrics = metrics,
-       _metricTags = metrics.isEnabled
-           ? ZetaMetricTags(providerId: providerId)
+       _metricTags = metrics.isEnabled && providerId != null
+           ? ZetaMetricTags(
+               providerId: AgentMetricLabels.forProviderId(providerId),
+             )
            : ZetaMetricTags.none;
 
   final void Function(AgentUiUpdateRequest request) _onPublish;

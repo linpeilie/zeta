@@ -3,30 +3,62 @@ import 'package:zeta_foundation/zeta_foundation.dart';
 
 void main() {
   group('ZetaMetricTags', () {
-    test('把不安全字符替换成下划线并截断长度', () {
-      final tags = ZetaMetricTags(
-        component: '/Users/somebody/projects/secret plan.md',
-      );
+    test('运行期内容只能经 hash 入口，序列键里不留可读片段', () {
+      const path = '/Users/somebody/projects/secret plan.md';
+      final tags = ZetaMetricTags(component: ZetaMetricLabel.hashed(path));
 
-      expect(tags.component, isNotNull);
-      expect(tags.component, isNot(contains('/')));
-      expect(tags.component, isNot(contains(' ')));
-      expect(tags.component!.length, lessThanOrEqualTo(48));
-      expect(tags.providerId, isNull);
-      expect(tags.outcome, isNull);
+      expect(tags.component!.value, startsWith('h.'));
+      for (final fragment in const <String>[
+        'Users',
+        'somebody',
+        'projects',
+        'secret',
+        'plan',
+      ]) {
+        expect(tags.seriesKey, isNot(contains(fragment)));
+      }
     });
 
-    test('空标签和无字母数字的标签统一归一为 null', () {
-      expect(ZetaMetricTags(component: '').component, isNull);
-      expect(ZetaMetricTags(component: '   ').component, isNull);
-      expect(ZetaMetricTags(component: '///').component, isNull);
-      expect(ZetaMetricTags(), same(ZetaMetricTags.none));
+    test('声明期入口遇到非法形态自动降级为 hash', () {
+      for (final invalid in <String>[
+        '',
+        '   ',
+        '///',
+        '9leading-digit',
+        'has space',
+        r'C:\Users\me',
+        'a' * 33,
+      ]) {
+        final label = ZetaMetricLabel.declaredIdentifier(invalid);
+        expect(label.value, startsWith('h.'), reason: '非法输入：$invalid');
+        expect(ZetaMetricLabel.isValidLiteral(label.value), isTrue);
+      }
+      expect(const ZetaMetricTags(), same(ZetaMetricTags.none));
+    });
+
+    test('稳定标识符原样保留', () {
+      expect(ZetaMetricLabel.declaredIdentifier('codex').value, 'codex');
+      expect(
+        ZetaMetricLabel.declaredIdentifier('zeta.agent.pipeline').value,
+        'zeta.agent.pipeline',
+      );
+      expect(ZetaMetricLabel.isValidLiteral('claude_code'), isTrue);
+      expect(ZetaMetricLabel.isValidLiteral('/Users/me'), isFalse);
+    });
+
+    test('同一进程内 hash 稳定，不同取值不相撞', () {
+      final first = ZetaMetricLabel.hashed('/Users/a/project');
+      final second = ZetaMetricLabel.hashed('/Users/a/project');
+      final other = ZetaMetricLabel.hashed('/Users/b/project');
+
+      expect(first, second);
+      expect(first, isNot(other));
     });
 
     test('序列键只由三个封闭维度组成', () {
-      final tags = ZetaMetricTags(
-        providerId: 'codex',
-        component: 'live',
+      const tags = ZetaMetricTags(
+        providerId: ZetaMetricLabel.constant('codex'),
+        component: ZetaMetricLabel.constant('live'),
         outcome: ZetaMetricOutcome.failure,
       );
 
@@ -35,8 +67,14 @@ void main() {
     });
 
     test('相同维度的标签相等且哈希一致', () {
-      final first = ZetaMetricTags(providerId: 'grok', component: 'history');
-      final second = ZetaMetricTags(providerId: 'grok', component: 'history');
+      const first = ZetaMetricTags(
+        providerId: ZetaMetricLabel.constant('grok'),
+        component: ZetaMetricLabel.constant('history'),
+      );
+      const second = ZetaMetricTags(
+        providerId: ZetaMetricLabel.constant('grok'),
+        component: ZetaMetricLabel.constant('history'),
+      );
 
       expect(first, second);
       expect(first.hashCode, second.hashCode);
@@ -95,8 +133,12 @@ void main() {
 
     test('按标签分序列聚合，也可按指标汇总', () {
       final port = InMemoryZetaMetricsPort();
-      final codex = ZetaMetricTags(providerId: 'codex');
-      final grok = ZetaMetricTags(providerId: 'grok');
+      final codex = const ZetaMetricTags(
+        providerId: ZetaMetricLabel.constant('codex'),
+      );
+      final grok = const ZetaMetricTags(
+        providerId: ZetaMetricLabel.constant('grok'),
+      );
 
       port
         ..counter(ZetaMetric.agentRuntimeCreated, tags: codex)
@@ -115,15 +157,15 @@ void main() {
       port
         ..counter(
           ZetaMetric.agentRuntimeCreated,
-          tags: ZetaMetricTags(providerId: 'a'),
+          tags: const ZetaMetricTags(providerId: ZetaMetricLabel.constant('a')),
         )
         ..counter(
           ZetaMetric.agentRuntimeCreated,
-          tags: ZetaMetricTags(providerId: 'b'),
+          tags: const ZetaMetricTags(providerId: ZetaMetricLabel.constant('b')),
         )
         ..counter(
           ZetaMetric.agentRuntimeCreated,
-          tags: ZetaMetricTags(providerId: 'c'),
+          tags: const ZetaMetricTags(providerId: ZetaMetricLabel.constant('c')),
         );
 
       expect(port.seriesCount, 2);

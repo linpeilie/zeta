@@ -19,6 +19,8 @@ void main() {
       expect(resolved, isA<FallbackZetaUiTextCatalog>());
       expect(resolved.timelineBackToBottom, 'Back to bottom');
       expect(resolved.tabsLoadingSuffix('Codex'), 'Codex, loading');
+      expect(resolved.loading, 'Loading');
+      expect(resolved.windowClose, 'Close');
     });
 
     testWidgets('注入宿主目录后控件读到宿主文案', (tester) async {
@@ -112,4 +114,22 @@ final class _StubCatalog implements ZetaUiTextCatalog {
 
   @override
   String tabsLoadingSuffix(String label) => 'stub:$label';
+
+  @override
+  String get loading => 'stub:loading';
+
+  @override
+  String get running => 'stub:running';
+
+  @override
+  String get windowMinimize => 'stub:minimize';
+
+  @override
+  String get windowRestore => 'stub:restore';
+
+  @override
+  String get windowMaximize => 'stub:maximize';
+
+  @override
+  String get windowClose => 'stub:close';
 }

@@ -174,10 +174,15 @@ void main() {
     expect(foundationFiles, isNotEmpty);
     for (final path in foundationFiles) {
       final imports = _externalImports(File(path).readAsStringSync());
+      final offenders = imports
+          .where((import) => !_platformNeutralCoreLibraries.contains(import))
+          .toList(growable: false);
       expect(
-        imports,
+        offenders,
         isEmpty,
-        reason: '$path 属于 zeta_foundation，不得依赖任何外部库：$imports',
+        reason:
+            '$path 属于 zeta_foundation：除平台中立的核心库外不得依赖任何外部库，'
+            '命中 $offenders',
       );
     }
   });
@@ -212,6 +217,27 @@ void main() {
         reason: '$path 直接用了 generated l10n；控件文案必须走 ZetaUiTextCatalog',
       );
     }
+  });
+
+  test('zeta_ui 不硬编码用户可见文案', () {
+    final offenders = <String>[];
+    for (final path in files.where(
+      (path) => path.startsWith('packages/zeta_ui/lib/'),
+    )) {
+      final source = File(path).readAsStringSync();
+      for (final match in _literalCopyPattern.allMatches(source)) {
+        final line = source.substring(0, match.start).split('\n').length;
+        offenders.add('$path:$line ${match.group(0)}');
+      }
+    }
+
+    expect(
+      offenders,
+      isEmpty,
+      reason:
+          '控件自有文案必须走注入的 ZetaUiTextCatalog，否则中文界面下读屏仍是英文：'
+          '\n${offenders.join('\n')}',
+    );
   });
 
   test('设计系统已整体移出 lib/src/ui/core', () {
@@ -326,6 +352,19 @@ const Map<String, List<String>> _bannedExternalPrefixes =
       ],
       _ui: <String>['package:flutter_riverpod/', 'dart:io'],
     };
+
+/// 纯 Dart Package 允许使用的核心库。
+///
+/// "纯 Dart"指的是**能在任何宿主上跑**，不是"零 import"：`dart:math` /
+/// `dart:convert` 这类库在 VM、Web、Flutter 上都存在。`dart:io` 与 `dart:ui`
+/// 不在此列——它们把 Package 钉死在特定宿主上。
+const Set<String> _platformNeutralCoreLibraries = <String>{
+  'dart:async',
+  'dart:collection',
+  'dart:convert',
+  'dart:math',
+  'dart:typed_data',
+};
 
 /// Phase 1 的燃尽清单：现存的候选 Package 反向依赖。
 const Set<String> _knownEdgeViolations = <String>{
@@ -457,6 +496,13 @@ String? _findCycle(Map<String, Set<String>> edges) {
   }
   return null;
 }
+
+/// 直接写死在 tooltip / 无障碍标签上的字面量文案。
+///
+/// `ValueKey('...')` 之类的标识符不在此列——只匹配会被用户读到的参数名。
+final RegExp _literalCopyPattern = RegExp(
+  r"(?:tooltip|semanticLabel|semanticsLabel|message)\s*:\s*'[^']+'",
+);
 
 final RegExp _importPattern = RegExp(
   r"""^\s*import\s+['"]([^'"]+)['"]""",

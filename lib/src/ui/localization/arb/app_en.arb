@@ -808,6 +808,30 @@
   "@commonRemove": {
     "description": "Common remove"
   },
+  "uiLoading": "Loading",
+  "@uiLoading": {
+    "description": "Loading indicator semantics"
+  },
+  "uiRunning": "Running",
+  "@uiRunning": {
+    "description": "Busy spinner semantics"
+  },
+  "windowMinimize": "Minimize",
+  "@windowMinimize": {
+    "description": "Window minimize button"
+  },
+  "windowRestore": "Restore",
+  "@windowRestore": {
+    "description": "Window restore button"
+  },
+  "windowMaximize": "Maximize",
+  "@windowMaximize": {
+    "description": "Window maximize button"
+  },
+  "windowClose": "Close",
+  "@windowClose": {
+    "description": "Window close button"
+  },
   "commonMenu": "Menu",
   "@commonMenu": {
     "description": "Window menu semantics"

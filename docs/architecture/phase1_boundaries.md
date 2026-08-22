@@ -2,7 +2,7 @@
 
 最后更新：2026-08-22
 
-状态：第二个增量（`zeta_ui`）已落地。对应 [目标架构 §14 Phase 1](./target_architecture_riverpod_mvi_plugins_packages.md#phase-1建立边界但不改变行为)。
+状态：第二个增量（`zeta_ui`）已落地，review 提出的 8 条问题已全部修复。对应 [目标架构 §14 Phase 1](./target_architecture_riverpod_mvi_plugins_packages.md#phase-1建立边界但不改变行为)。
 
 阶段 1 的规矩是**只搬边界，不动行为**：没有新功能、没有 UI 变化、没有持久化格式变化，
 Provider wire 参数与状态 owner 全部保持原样。
@@ -142,9 +142,9 @@ Windows 用 `tool/test_full.ps1`（同样包含 Package 循环）。
 
 | 指标 | 阶段 0 | 本增量 |
 | --- | ---: | ---: |
-| 根测试 | 2114 passed / 0 failed | 2116 passed / 0 failed |
-| Package 测试 | — | 42 passed（foundation 22 + kernel 16 + ui 4） |
-| 聚合测试耗时 | 248.4s | 241.6s（同机波动范围内） |
+| 根测试 | 2114 passed / 0 failed | 2122 passed / 0 failed |
+| Package 测试 | — | 47 passed（foundation 23 + kernel 20 + ui 4） |
+| 聚合测试耗时 | 248.4s | 244.0s（同机波动范围内） |
 | `flutter analyze` | 0 issue | 0 issue |
 | 流式 fixture 基线 | received 10 825 / accepted 309 / coalesced 10 516 / dispatched 309 | 未变（同一断言通过） |
 | Widget 重建预算 | Shell 骨架各 1 次 | 未变 |
@@ -181,3 +181,34 @@ Windows 用 `tool/test_full.ps1`（同样包含 Package 循环）。
 
 **待执行**：三桌面平台（macOS / Windows / Linux）的实际构建验证。workspace 只影响依赖解析，
 不改 Flutter 构建配置，但按 `AGENTS.md` 的规矩，没有跑过就不能推断通过。
+
+---
+
+## 8. Review 修复记录
+
+第二个增量的 review 提出 8 条问题，全部已修复并补了回归测试。
+
+| 问题 | 修复 |
+| --- | --- |
+| **P1** 异步激活与 `close()` 竞态导致句柄永久泄漏 | `close()` 先 `await` 在途激活；激活循环每步重新检查 `_closed`；迟到句柄在 `_adoptHandle` 里就地释放并登记进 `_lateHandleCloses`，`close()` 等它们收尾；已关闭的 registry 的 `contributions()` 返回空 |
+| **P2** 重复激活覆盖旧句柄、贡献翻倍 | 一个 registry 只能激活一次，两个入口都 fail-closed 抛 `StateError`；换代请重建 registry。原先把该行为当预期的测试已改写 |
+| **P2** 标签"脱敏"仍留下可读路径 | 标签改为白名单：只接受 `^[A-Za-z][A-Za-z0-9_.-]{0,31}$`，其余**整体丢弃**而不是替换字符；观察器给未命名 provider 去掉泛型参数以保持合法 |
+| **P2** CI 没有门禁到 Package 测试 | CI 的 Test 步骤改跑 `bash tool/test_full.sh`；`test_full.ps1` 的 Package 循环补上 analyze，与 shell 版对齐 |
+| **P2** 退出顺序没有保证 runtime → plugin | 抽出可测的 `shutdownAgentResourcesInOrder`；窗口关闭 hook 与 `dispose` 共用同一入口，严格串行 |
+| **P2** 设计系统文案未全部注入 | `ZetaUiTextCatalog` 补 `loading` / `running` / 四个窗口按钮文案，ARB 与适配器同步；窗口按钮补 `Semantics(button: true)`；新增守卫禁止包内出现字面量 tooltip / 无障碍标签 |
+| **P2** `zeta_ui` 隐式依赖根 app 资产 | `WindowFrame` 改为接受注入的 `brandLogo`，包不再依赖 `flutter_svg`、不再读 `assets/branding/*`；包 pubspec 补 `uses-material-design: true`，消除 Material Icons 警告 |
+| **P1** 分支门禁与文档口径不一致 | 根因是 `ide_session_restore_widget_test` 有一处 `MainApp` 没注入 fake 工厂，会真的拉起本机 Codex CLI 并留下 30 秒 JSON-RPC Timer（机器越快越不容易复现）。已注入 fake，并加守卫 `widget_test_hygiene_guard_test.dart` 断言测试里构造 `MainApp` 必须显式传 `agentProviderFactory` |
+
+修复前 review 报告里"9 处裸 `MainApp` pump"是扫描口径问题（正则窗口没有做括号配对，把
+`_pumpMainApp(` 和相邻用例一起算了进去）。**实际只有 1 处**。
+
+### 第二轮 review 修复
+
+| 问题 | 修复 |
+| --- | --- |
+| **P1** 并发 `close()` 提前返回，调用方误以为资源已释放 | 改成 `AgentProviderRuntimeRegistry` 同款 `_closeFuture`：并发调用返回同一个关闭任务；补"两个并发 close 都等到句柄真正释放"的回归测试 |
+| **P2** 贡献 getter 抛异常会污染 registry，一个坏插件阻断整个 catalog | 激活时**先冻结贡献快照再原子登记**；快照失败即 `failed` + 就地关闭句柄，不进任何表。`contributions()` 改读快照，不再回调插件 getter（顺带变成无副作用纯读） |
+| **P1** 指标标签只校验形态，判断不了来源 | 标签类型化为 `ZetaMetricLabel`（`constant` / `declaredIdentifier` / `hashed` 三个入口），`ZetaMetricTags` 不再接受 `String`；Provider ID 经 `AgentMetricLabels.forProviderId` 映射（内置→常量，其余→会话 hash）；新增守卫强制 `constant` 实参为字面量 |
+| **P3** Widget 测试守卫能被注释绕过 | 改用 `package:analyzer` 的 AST：注释与字符串天然不参与判定；同时统计扫描到的构造点数量，防止守卫空转。守卫自带"注释伪装"回归用例，并做过一次变异验证（去掉真实注入后确实报错） |
+
+新增 dev 依赖：`analyzer ^12.1.0`（此前是 transitive），仅用于架构守卫的 AST 解析。

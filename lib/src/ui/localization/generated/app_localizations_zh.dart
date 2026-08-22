@@ -551,6 +551,24 @@ class AppLocalizationsZh extends AppLocalizations {
   String get commonRemove => '移除';
 
   @override
+  String get uiLoading => '加载中';
+
+  @override
+  String get uiRunning => '运行中';
+
+  @override
+  String get windowMinimize => '最小化';
+
+  @override
+  String get windowRestore => '还原';
+
+  @override
+  String get windowMaximize => '最大化';
+
+  @override
+  String get windowClose => '关闭';
+
+  @override
   String get commonMenu => '菜单';
 
   @override

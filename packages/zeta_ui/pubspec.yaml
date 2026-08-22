@@ -10,7 +10,6 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_svg: ^2.3.0
   shadcn_flutter: ^0.0.53
   window_manager: ^0.5.1
   zeta_foundation: ^0.1.0
@@ -18,3 +17,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+
+flutter:
+  # 包内大量使用 Material `Icons.*`，缺这行独立跑包测试会有字体缺失警告。
+  uses-material-design: true

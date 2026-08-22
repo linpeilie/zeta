@@ -42,6 +42,9 @@ dependencies:
   zeta_ui: ^0.1.0
 
 dev_dependencies:
+  # 架构守卫用它做 AST 解析：正则会被注释和字符串骗过去
+  # （见 test/src/architecture/widget_test_hygiene_guard_test.dart）。
+  analyzer: ^12.1.0
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0

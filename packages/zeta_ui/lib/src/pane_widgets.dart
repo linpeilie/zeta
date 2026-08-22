@@ -9,6 +9,7 @@ import 'ide_metrics.dart';
 import 'ide_motion.dart';
 import 'ide_spacing.dart';
 import 'ide_text_styles.dart';
+import 'zeta_ui_text_catalog.dart';
 
 Color resolvePanelSurfaceColor(BuildContext context, {Color? baseColor}) {
   return baseColor ?? IdeColors.of(context).surface;
@@ -158,20 +159,22 @@ class IdeLoadingIndicator extends StatelessWidget {
     this.width = 20,
     this.height = 10,
     this.barHeight = 3,
-    this.semanticsLabel = 'Loading',
+    this.semanticsLabel,
   });
 
   final double width;
   final double height;
   final double barHeight;
-  final String semanticsLabel;
+
+  /// 无障碍标签；为空时取宿主注入的 [ZetaUiTextCatalog]。
+  final String? semanticsLabel;
 
   @override
   Widget build(BuildContext context) {
     final theme = sf.Theme.of(context);
     final radius = BorderRadius.circular(barHeight);
     return Semantics(
-      label: semanticsLabel,
+      label: semanticsLabel ?? IdeUiText.of(context).loading,
       child: SizedBox(
         width: width,
         height: height,
@@ -208,7 +211,7 @@ class IdeBusySpinner extends StatelessWidget {
     this.color,
     this.backgroundColor,
     this.value,
-    this.semanticsLabel = 'Running',
+    this.semanticsLabel,
   });
 
   final double size;
@@ -221,14 +224,15 @@ class IdeBusySpinner extends StatelessWidget {
   /// 进度值 `0..1`。为空时是不确定态并持续旋转；传值则渲染静态进度环。
   final double? value;
 
-  final String semanticsLabel;
+  /// 无障碍标签；为空时取宿主注入的 [ZetaUiTextCatalog]。
+  final String? semanticsLabel;
 
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final indicatorColor = color ?? colors.accent;
     return Semantics(
-      label: semanticsLabel,
+      label: semanticsLabel ?? IdeUiText.of(context).running,
       child: RepaintBoundary(
         child: SizedBox(
           width: size,

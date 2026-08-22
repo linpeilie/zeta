@@ -5,6 +5,7 @@ import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
+import 'package:zeta/src/features/agent/domain/agent_metric_labels.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
@@ -141,8 +142,12 @@ void main() {
     expect(secondProvider.calls, <String>['start', 'send:thread-2']);
 
     // 指标按 Provider 分序列；正文与路径不出现在任何序列里。
-    final firstTags = ZetaMetricTags(providerId: defaultAgentProviderId);
-    final secondTags = ZetaMetricTags(providerId: grokAgentProviderId);
+    final firstTags = ZetaMetricTags(
+      providerId: AgentMetricLabels.forProviderId(defaultAgentProviderId),
+    );
+    final secondTags = ZetaMetricTags(
+      providerId: AgentMetricLabels.forProviderId(grokAgentProviderId),
+    );
     expect(
       metrics.totalOf(ZetaMetric.agentPipelineEventsAccepted, tags: firstTags),
       greaterThan(0),

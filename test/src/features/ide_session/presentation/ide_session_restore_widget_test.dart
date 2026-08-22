@@ -212,6 +212,12 @@ void main() {
         showWindowControls: false,
         sessionLoader: session.load,
         sessionSaver: session.save,
+        // 必须注入 fake：不注入时 MainApp 会构造真实工厂并拉起本机 Codex CLI，
+        // 模型目录预热的 30 秒 JSON-RPC Timer 会挂到 widget 树销毁之后。
+        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
+          FakeAgentProvider(),
+        ),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
       ),
     );
     await tester.runAsync(waitForIo);

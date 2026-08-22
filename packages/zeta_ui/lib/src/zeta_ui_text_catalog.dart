@@ -31,6 +31,24 @@ abstract interface class ZetaUiTextCatalog {
 
   /// Tab 处于加载态时追加到无障碍标签后的说明。
   String tabsLoadingSuffix(String label);
+
+  /// 线性加载指示器的默认无障碍标签。
+  String get loading;
+
+  /// 忙碌指示器的默认无障碍标签。
+  String get running;
+
+  /// 窗口最小化按钮。
+  String get windowMinimize;
+
+  /// 窗口还原按钮（已最大化时）。
+  String get windowRestore;
+
+  /// 窗口最大化按钮。
+  String get windowMaximize;
+
+  /// 窗口关闭按钮。
+  String get windowClose;
 }
 
 /// 未注入宿主目录时使用的英文回退。
@@ -63,6 +81,24 @@ final class FallbackZetaUiTextCatalog implements ZetaUiTextCatalog {
 
   @override
   String tabsLoadingSuffix(String label) => '$label, loading';
+
+  @override
+  String get loading => 'Loading';
+
+  @override
+  String get running => 'Running';
+
+  @override
+  String get windowMinimize => 'Minimize';
+
+  @override
+  String get windowRestore => 'Restore';
+
+  @override
+  String get windowMaximize => 'Maximize';
+
+  @override
+  String get windowClose => 'Close';
 }
 
 /// 把 [ZetaUiTextCatalog] 注入 Widget 子树。

@@ -59,7 +59,9 @@ void main() {
       expect(
         metrics.totalOf(
           ZetaMetric.riverpodProviderUpdated,
-          tags: ZetaMetricTags(component: 'zeta.test.counter'),
+          tags: const ZetaMetricTags(
+            component: ZetaMetricLabel.constant('zeta.test.counter'),
+          ),
         ),
         2,
       );
@@ -71,8 +73,8 @@ void main() {
       expect(
         metrics.totalOf(
           ZetaMetric.riverpodProviderFailed,
-          tags: ZetaMetricTags(
-            component: 'zeta.test.throwing',
+          tags: const ZetaMetricTags(
+            component: ZetaMetricLabel.constant('zeta.test.throwing'),
             outcome: ZetaMetricOutcome.failure,
           ),
         ),
@@ -115,6 +117,21 @@ void main() {
       observed.read(_plainProvider);
 
       expect(disabled.seriesCount, 0);
+    });
+
+    test('未命名 provider 退回去掉泛型的类型名', () {
+      final unnamed = Provider<int>((ref) => 1);
+      container.read(unnamed);
+
+      final components = metrics
+          .snapshot()
+          .map((series) => series.tags.component)
+          .whereType<ZetaMetricLabel>();
+      expect(components, isNotEmpty);
+      for (final component in components) {
+        expect(component.value, isNot(contains('<')));
+        expect(ZetaMetricLabel.isValidLiteral(component.value), isTrue);
+      }
     });
 
     test('默认构造使用 no-op 端口', () {

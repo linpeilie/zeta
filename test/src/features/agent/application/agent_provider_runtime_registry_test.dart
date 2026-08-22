@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
+import 'package:zeta/src/features/agent/domain/agent_metric_labels.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 
@@ -554,7 +555,9 @@ void main() {
         providerFactory: factory,
         metrics: metrics,
       );
-      final codexTags = ZetaMetricTags(providerId: defaultAgentProviderId);
+      final codexTags = ZetaMetricTags(
+        providerId: AgentMetricLabels.forProviderId(defaultAgentProviderId),
+      );
 
       final first = await registry.acquire(
         AgentProviderConfig.defaultCodex,

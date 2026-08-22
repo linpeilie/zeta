@@ -13,6 +13,7 @@ library;
 export 'src/mvi/transition.dart';
 export 'src/observability/in_memory_zeta_metrics_port.dart';
 export 'src/observability/zeta_metric.dart';
+export 'src/observability/zeta_metric_label.dart';
 export 'src/observability/zeta_metrics_port.dart';
 export 'src/operation/operation_id.dart';
 export 'src/time/clock.dart';

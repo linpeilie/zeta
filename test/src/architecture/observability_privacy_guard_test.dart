@@ -96,6 +96,53 @@ void main() {
     );
   });
 
+  test('ZetaMetricLabel.constant 只接受源码字面量', () {
+    final offenders = <String>[];
+    for (final file in <File>[
+      ..._dartFilesUnder('lib'),
+      ..._dartFilesUnder('packages'),
+    ]) {
+      final path = _posix(file.path);
+      if (!path.startsWith('lib/') && !path.contains('/lib/')) {
+        continue;
+      }
+      // 声明自身（`const ZetaMetricLabel.constant(this.value)`）不是调用点。
+      if (path.endsWith('zeta_metric_label.dart')) {
+        continue;
+      }
+      final source = file.readAsStringSync();
+      for (final match in _constantLabelPattern.allMatches(source)) {
+        // 去掉 dart format 可能补上的尾逗号后再判定。
+        final argument = match.group(1)!.trim().replaceFirst(RegExp(r',$'), '');
+        // 字面量常量是唯一被允许的形态；变量必须走 declaredIdentifier / hashed。
+        if (RegExp(r"^'[^'$]*'$").hasMatch(argument)) {
+          continue;
+        }
+        final line = source.substring(0, match.start).split('\n').length;
+        offenders.add('$path:$line ZetaMetricLabel.constant($argument)');
+      }
+    }
+
+    expect(
+      offenders,
+      isEmpty,
+      reason:
+          'constant 入口代表"这个值写死在源码里"。运行期取值请用 '
+          'ZetaMetricLabel.declaredIdentifier 或 .hashed：\n${offenders.join('\n')}',
+    );
+  });
+
+  test('指标标签维度不接受裸 String', () {
+    final tagsSource = File(
+      'packages/zeta_foundation/lib/src/observability/zeta_metric.dart',
+    ).readAsStringSync();
+
+    expect(tagsSource, contains('final ZetaMetricLabel? providerId'));
+    expect(tagsSource, contains('final ZetaMetricLabel? component'));
+    expect(tagsSource, isNot(contains('String? providerId')));
+    expect(tagsSource, isNot(contains('String? component')));
+  });
+
   test('指标端口签名不接受 String 指标名', () {
     final portSource = File(
       'packages/zeta_foundation/lib/src/observability/zeta_metrics_port.dart',
@@ -124,6 +171,10 @@ Iterable<File> _dartFilesUnder(String directory) {
       .whereType<File>()
       .where((file) => file.path.endsWith('.dart'));
 }
+
+final RegExp _constantLabelPattern = RegExp(
+  r'ZetaMetricLabel\.constant\(\s*([^)]*)\)',
+);
 
 final RegExp _metricCallPattern = RegExp(
   r'\.(counter|gauge|duration)\(\s*([^,)\n]+)',

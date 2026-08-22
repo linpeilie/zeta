@@ -7,6 +7,7 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:window_manager/window_manager.dart';
 
 import 'package:zeta/src/app/app_constants.dart';
+import 'package:zeta/src/app/composition/agent_resource_shutdown.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta/src/app/observability/zeta_observability.dart';
 import 'package:zeta/src/app/plugins/zeta_plugin_catalog.dart';
@@ -176,6 +177,24 @@ class MainAppState extends State<MainApp>
   GeneralSettingsController get generalSettingsController =>
       _generalSettingsController;
 
+  /// 按依赖反序关闭本实例拥有的 Agent 资源。
+  ///
+  /// 顺序是硬要求：**runtime registry 先、plugin catalog 后**。插件贡献出的
+  /// 工厂是 runtime 的上游依赖，先关插件会让仍在退出中的 runtime 失去依赖；
+  /// 窗口关闭 hook 与 `dispose` 共用这一个入口，避免两条路径顺序不一致。
+  ///
+  /// 幂等：registry 与 catalog 的 `close()` 本身都可重复调用。
+  Future<void> _shutdownOwnedAgentResources() {
+    final pluginCatalog = _pluginCatalog;
+    _pluginCatalog = null;
+    return shutdownAgentResourcesInOrder(
+      closeRuntimeRegistry: _ownsAgentProviderRuntimeRegistry
+          ? _agentProviderRuntimeRegistry.close
+          : null,
+      closePluginCatalog: pluginCatalog?.close,
+    );
+  }
+
   /// 当前生效的脱敏指标端口；未注入 [MainApp.observability] 时为 no-op。
   ZetaMetricsPort get _metrics =>
       widget.observability?.metrics ?? noopZetaMetricsPort;
@@ -210,16 +229,16 @@ class MainAppState extends State<MainApp>
     if (injectedRuntimeRegistry != null) {
       _agentProviderRuntimeRegistry = injectedRuntimeRegistry;
       _ownsAgentProviderRuntimeRegistry = false;
-      _providerRuntimeShutdownHook = _agentProviderRuntimeRegistry.close;
+      _providerRuntimeShutdownHook = _shutdownOwnedAgentResources;
     } else if (injectedFactory != null) {
       _agentProviderRuntimeRegistry = AgentProviderRuntimeRegistry(
         providerFactory: injectedFactory,
         metrics: _metrics,
       );
       _ownsAgentProviderRuntimeRegistry = true;
-      _providerRuntimeShutdownHook = _agentProviderRuntimeRegistry.close;
+      _providerRuntimeShutdownHook = _shutdownOwnedAgentResources;
       if (widget.enableNativeWindowFrame) {
-        addDesktopWindowShutdownHook(_agentProviderRuntimeRegistry.close);
+        addDesktopWindowShutdownHook(_providerRuntimeShutdownHook!);
       }
     }
     _usageStatisticsPartitionStore =
@@ -344,7 +363,7 @@ class MainAppState extends State<MainApp>
         metrics: _metrics,
       );
       _ownsAgentProviderRuntimeRegistry = true;
-      _providerRuntimeShutdownHook = _agentProviderRuntimeRegistry.close;
+      _providerRuntimeShutdownHook = _shutdownOwnedAgentResources;
       if (widget.enableNativeWindowFrame) {
         addDesktopWindowShutdownHook(_providerRuntimeShutdownHook!);
       }
@@ -384,15 +403,7 @@ class MainAppState extends State<MainApp>
         removeDesktopWindowShutdownHook(hook);
       }
     }
-    if (_ownsAgentProviderRuntimeRegistry) {
-      unawaited(_agentProviderRuntimeRegistry.close());
-    }
-    // runtime 进程由 registry 拥有；插件目录只需按激活反序释放插件句柄。
-    final pluginCatalog = _pluginCatalog;
-    if (pluginCatalog != null) {
-      _pluginCatalog = null;
-      unawaited(pluginCatalog.close());
-    }
+    unawaited(_shutdownOwnedAgentResources());
     if (_ownsAppearanceController) {
       _appearanceController.dispose();
     }

@@ -1,10 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:window_manager/window_manager.dart';
 
 import 'package:zeta_foundation/zeta_foundation.dart';
+import 'package:zeta/src/app/app_constants.dart';
 import 'package:zeta/src/app/menu_action_bridge.dart';
 import 'package:zeta/src/app/shell/ide_shell_controller.dart';
 import 'package:zeta/src/core/utils/system_file_manager.dart';
@@ -290,6 +292,8 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
         (!rightSidebarUsesOverlay ||
             _activeOverlay == IdeWorkbenchOverlay.inspector);
     final body = WindowFrame(
+      // 品牌资产由根 app 拥有并声明；zeta_ui 只负责尺寸盒与无障碍标签。
+      brandLogo: SvgPicture.asset(brandingLogoAsset),
       key: const ValueKey('ide-window-frame'),
       enableNativeWindowFrame: widget.enableNativeWindowFrame,
       menus: _windowMenus(context),
