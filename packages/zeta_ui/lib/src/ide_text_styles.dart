@@ -1,6 +1,6 @@
 import 'package:flutter/widgets.dart';
 
-import 'package:zeta/src/core/constants/app_typography.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
 
 import 'app_theme.dart';
 import 'ide_colors.dart';

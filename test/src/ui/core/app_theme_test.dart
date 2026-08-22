@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/core/constants/app_typography.dart';
-import 'package:zeta/src/ui/core/app_theme.dart';
-import 'package:zeta/src/ui/core/ide_text_styles.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 
 void main() {
   group('平台 UI 字体栈', () {

@@ -13,7 +13,7 @@ import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
-import 'package:zeta/src/ui/core/ide_tabs.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 
 import '../../../testing/ide_test_harness.dart';
 

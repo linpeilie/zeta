@@ -155,7 +155,7 @@ chore: bump flutter action pin
 
 **分层与依赖方向**
 
-- 依赖单向：`main → app → presentation/application → domain`，`app → data → domain`，`presentation → ui/core`。
+- 依赖单向：`main → app → presentation/application → domain`，`app → data → domain`，`presentation → zeta_ui`（`packages/zeta_ui` 设计系统）。
 - 新代码进对应的 `features/<feature>/{domain,application,data,presentation}`，不要回到顶层宽泛目录。
 - `main.dart` 只做启动；`lib/src/app` 是唯一装配点。
 

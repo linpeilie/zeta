@@ -2,7 +2,7 @@
 
 最后更新：2026-08-22
 
-状态：第一个增量已落地。对应 [目标架构 §14 Phase 1](./target_architecture_riverpod_mvi_plugins_packages.md#phase-1建立边界但不改变行为)。
+状态：第二个增量（`zeta_ui`）已落地。对应 [目标架构 §14 Phase 1](./target_architecture_riverpod_mvi_plugins_packages.md#phase-1建立边界但不改变行为)。
 
 阶段 1 的规矩是**只搬边界，不动行为**：没有新功能、没有 UI 变化、没有持久化格式变化，
 Provider wire 参数与状态 owner 全部保持原样。
@@ -21,25 +21,41 @@ Provider wire 参数与状态 owner 全部保持原样。
 | 应用级依赖 Provider / 覆盖点 | [`lib/src/app/composition/app_dependencies.dart`](../../lib/src/app/composition/app_dependencies.dart) |
 | Package 依赖图守卫（含跨包 `/src` 禁令） | `test/src/architecture/package_boundary_candidate_graph_test.dart` |
 | Package 独立测试入口 | [`tool/test_packages.sh`](../../tool/test_packages.sh)（已接入 `tool/test_full.sh` / `.ps1`） |
+| `zeta_ui`（Graphite 设计系统） | [`packages/zeta_ui`](../../packages/zeta_ui) |
+| 设计系统文案注入端口 | `packages/zeta_ui/lib/src/zeta_ui_text_catalog.dart` + `AppZetaUiTextCatalog` 适配器 |
 
 ### 1.1 已物理拆出的 Package
 
 ```text
 packages/
-  zeta_foundation/        # 纯 Dart：Clock、OperationId、Transition、指标端口与聚合器
+  zeta_foundation/        # 纯 Dart：Clock、OperationId、Transition、排版常量、指标端口
   zeta_plugin_kernel/     # 纯 Dart：descriptor / contribution / registry / 生命周期
+  zeta_ui/                # Flutter：Graphite token、Ide* 控件、Workbench 骨架、虚拟滚动
 ```
 
 依赖方向（守卫强制）：
 
 ```text
 zeta_plugin_kernel ──> zeta_foundation
-root app ──────────> 两者
+zeta_ui ───────────> zeta_foundation
+root app ──────────> 三者
 ```
 
 `zeta_foundation` 不 import 任何外部库（连 Flutter 都没有）；`zeta_plugin_kernel` 只依赖
 `zeta_foundation`，且源码里不允许出现 `codex` / `grok` / `claude` / `Agent` / `package:zeta/`
 任一标识——内核认识"插件"，不认识"Agent Provider"。
+
+`zeta_ui` 依赖 Flutter / shadcn_flutter / flutter_svg / window_manager，但守卫禁止它出现
+`dart:io`、`flutter_riverpod`、`package:zeta/` 与 generated l10n：
+
+- **文案**：控件自有文案（无障碍标签、滚动条提示、Tab 加载后缀等 8 条）改走注入的
+  `ZetaUiTextCatalog`。宿主用 `AppZetaUiTextCatalog` 把 ARB 投影进去，未注入时回退英文，
+  保证设计系统可以脱离宿主独立渲染与测试。
+- **本机 IO**：`ide_image_preview.dart`（读本地图片并预览）**留在 app 侧**
+  `lib/src/ui/core/`——它本质是宿主能力封装，不是设计系统原语。公开 API
+  （`IdeLocalImageThumbnail` / `showIdeLocalImagePreview`）与行为一字未改。
+- 47 个设计系统文件整体 `git mv` 进包，372 处 `package:zeta/src/ui/core/...` import
+  统一改成 `package:zeta_ui/zeta_ui.dart` 顶层 barrel。
 
 ### 1.2 插件微内核
 
@@ -71,16 +87,16 @@ root app ──────────> 两者
 
 ## 2. 没有搬的部分（Phase 1 后续增量）
 
-目标 Package 图里还有三个候选包**没有**物理拆出：`zeta_ui`、`zeta_agent_core`、
-`zeta_agent_providers`。这是有意的：目标架构自己写了"一次只迁一个叶子边界"，而这三个
-候选包目前都还有反向依赖，直接搬会把循环依赖搬进编译期。
+目标 Package 图里还有两个候选包**没有**物理拆出：`zeta_agent_core` 与
+`zeta_agent_providers`。这是有意的：目标架构自己写了"一次只迁一个叶子边界"，这两个
+候选包目前仍有反向依赖（application → data / presentation），直接搬会把循环依赖搬进编译期。
 
 燃尽清单（守卫里的 `_knownEdgeViolations` / `_knownExternalViolations`，只允许变小）：
 
 | 待修边界 | 数量 | 修法 |
 | --- | ---: | --- |
-| `ui/core` → generated l10n | 5 | 文案改成注入的 labels/token，或下沉到 `ui/features` |
-| `ui/core` → `dart:io`（图片预览） | 1 | 改为注入的字节流端口 |
+| ~~`ui/core` → generated l10n~~ | ~~5~~ → 0 | ✅ 已改为注入 `ZetaUiTextCatalog` |
+| ~~`ui/core` → `dart:io`~~ | ~~1~~ → 0 | ✅ 图片预览封装留在 app 侧 |
 | agent `application` → agent `data` | 3 | 改为 app 注入端口（turn context store、静态能力） |
 | agent `application` → presentation / workspace feature | 2 | Phase 2/3 拆解 `IdeShellController` 时处理 |
 | `core/` → `dart:io` / Flutter | 8 | IO 部分下沉到 app 或独立适配层，`core/` 只留纯契约 |
@@ -114,7 +130,7 @@ Plan、文件树、设置的领域类型差异很大，强行统一只会造出�
 
 ```sh
 flutter analyze          # 根 Package
-bash tool/test_packages.sh   # 每个内部 Package 的 dart analyze + dart test
+bash tool/test_packages.sh   # 每个内部 Package 的 analyze + test（Flutter 包自动走 flutter 工具链）
 bash tool/test_full.sh       # 根测试 + 计时报告 + 上面这一步
 ```
 
@@ -126,26 +142,30 @@ Windows 用 `tool/test_full.ps1`（同样包含 Package 循环）。
 
 | 指标 | 阶段 0 | 本增量 |
 | --- | ---: | ---: |
-| 根测试 | 2114 passed / 0 failed | 2114 passed / 0 failed |
-| Package 测试 | — | 38 passed（foundation 22 + kernel 16） |
-| 聚合测试耗时 | 248.4s | 233.6s（同机波动范围内） |
+| 根测试 | 2114 passed / 0 failed | 2116 passed / 0 failed |
+| Package 测试 | — | 42 passed（foundation 22 + kernel 16 + ui 4） |
+| 聚合测试耗时 | 248.4s | 241.6s（同机波动范围内） |
 | `flutter analyze` | 0 issue | 0 issue |
 | 流式 fixture 基线 | received 10 825 / accepted 309 / coalesced 10 516 / dispatched 309 | 未变（同一断言通过） |
 | Widget 重建预算 | Shell 骨架各 1 次 | 未变 |
 
 ---
 
-## 6. 与计划的三处偏差
+## 6. 与计划的偏差
 
 1. **内核增加了同步激活入口**。目标架构 §5.2 只写了 `Future<ZetaPluginHandle> activate()`。
    首帧就需要 Agent Provider 工厂，纯异步激活会引入一个"还没有工厂"的中间态，
    属于行为变化。因此增加 `ZetaSynchronousPluginFactory` 与 `activateAllSynchronously()`：
    只支持异步的插件在同步入口上 **fail-closed**，不会被静默跳过。异步入口原样保留。
-2. **移动的三个文件没有保留旧路径兼容 barrel**。计划的回滚手段是"保留原路径 barrel"，
-   但本次只移动了 3 个新增文件（阶段 0 刚建的指标端口），调用点 15 处、全部在本仓库内，
-   回滚就是 revert 一个提交。留 barrel 反而会给 Phase 4 增加要删的东西。
-   后续搬 `zeta_ui` / `zeta_agent_*` 这种有大量外部调用点的模块时，仍按计划保留 barrel。
+2. **移动的文件一律不保留旧路径兼容 barrel**。计划的回滚手段是"保留原路径 barrel"。
+   两个增量都没有这么做：第一个增量只移动 3 个文件（15 处调用点），`zeta_ui` 增量是
+   47 个文件、372 处调用点，都选择直接改写 import——改写是一次脚本化操作，`flutter analyze` 与 2116 个
+   测试立刻验证；保留 47 个 shim 反而要再加一条守卫防止新代码继续引用旧路径，且全部
+   要在 Phase 4 删除。两次的回滚方式都是 revert 单个提交。
 3. **`Failure` / `Result` / `CancellationToken` 未落地**，理由见 §3。
+4. **`zeta_ui` 的 36 个 Widget 测试留在根测试树**（通过 `package:zeta_ui/...` 引用），
+   因为它们依赖应用侧的本地化宿主与主题 harness。包内另有独立的契约测试入口
+   （文案注入 + token 解析）。把这批 Widget 测试迁进包内是后续增量。
 
 ---
 

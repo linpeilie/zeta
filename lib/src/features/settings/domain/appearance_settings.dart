@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'package:zeta/src/core/constants/app_typography.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
 
 /// 界面字号允许的最小值。
 const double minUiFontSize = 10;

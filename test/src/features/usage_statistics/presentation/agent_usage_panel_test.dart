@@ -13,14 +13,9 @@ import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_model
 import 'package:zeta/src/features/usage_statistics/presentation/agent_usage_panel.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/agent_usage_quota_gallery.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
-import 'package:zeta/src/ui/core/app_theme.dart';
-import 'package:zeta/src/ui/core/ide_colors.dart';
-import 'package:zeta/src/ui/core/ide_effects.dart';
-import 'package:zeta/src/ui/core/ide_motion.dart';
-import 'package:zeta/src/ui/core/ide_skeleton.dart';
-import 'package:zeta/src/ui/core/ide_spacing.dart';
-import 'package:zeta/src/ui/core/ide_text_styles.dart';
-import 'package:zeta/src/ui/core/pane_widgets.dart';
+import 'package:zeta/src/app/localization/zeta_text_catalogs.dart';
+import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 
 /// 展开态弹层的根节点；折叠摘要仍留在锚点上，断言需按弹层限定范围。
 final _popover = find.byKey(const ValueKey('agent-usage-popover'));
@@ -1148,30 +1143,35 @@ Future<void> _pumpPanel(
     codeFontFamily: 'JetBrainsMono',
   );
   await tester.pumpWidget(
-    IdeThemeScope(
-      themeMode: ThemeMode.light,
-      lightTheme: ideTheme,
-      darkTheme: buildIdeThemeData(
-        brightness: Brightness.dark,
-        codeFontFamily: 'JetBrainsMono',
+    IdeUiTextScope(
+      catalog: AppZetaUiTextCatalog(
+        lookupAppLocalizations(ZetaLocalization.simplifiedChinese),
       ),
-      child: sf.ShadcnApp(
-        locale: ZetaLocalization.simplifiedChinese,
-        supportedLocales: ZetaLocalization.supportedLocales,
-        localizationsDelegates: ZetaLocalization.delegates,
-        theme: buildShadcnTheme(ideTheme),
-        materialTheme: buildMaterialTheme(ideTheme),
-        home: sf.Scaffold(
-          // 统计区在真实左栏中贴底且横向撑满，弹层才有向上展开的空间与宽度。
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Spacer(),
-              AgentUsagePanelContent(
-                controller: controller,
-                mode: AgentUsagePanelMode.expanded,
-              ),
-            ],
+      child: IdeThemeScope(
+        themeMode: ThemeMode.light,
+        lightTheme: ideTheme,
+        darkTheme: buildIdeThemeData(
+          brightness: Brightness.dark,
+          codeFontFamily: 'JetBrainsMono',
+        ),
+        child: sf.ShadcnApp(
+          locale: ZetaLocalization.simplifiedChinese,
+          supportedLocales: ZetaLocalization.supportedLocales,
+          localizationsDelegates: ZetaLocalization.delegates,
+          theme: buildShadcnTheme(ideTheme),
+          materialTheme: buildMaterialTheme(ideTheme),
+          home: sf.Scaffold(
+            // 统计区在真实左栏中贴底且横向撑满，弹层才有向上展开的空间与宽度。
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Spacer(),
+                AgentUsagePanelContent(
+                  controller: controller,
+                  mode: AgentUsagePanelMode.expanded,
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1210,30 +1210,35 @@ Future<void> _pumpPanelContent(
     codeFontFamily: 'JetBrainsMono',
   );
   await tester.pumpWidget(
-    IdeThemeScope(
-      themeMode: ThemeMode.light,
-      lightTheme: ideTheme,
-      darkTheme: buildIdeThemeData(
-        brightness: Brightness.dark,
-        codeFontFamily: 'JetBrainsMono',
+    IdeUiTextScope(
+      catalog: AppZetaUiTextCatalog(
+        lookupAppLocalizations(ZetaLocalization.simplifiedChinese),
       ),
-      child: sf.ShadcnApp(
-        locale: ZetaLocalization.simplifiedChinese,
-        supportedLocales: ZetaLocalization.supportedLocales,
-        localizationsDelegates: ZetaLocalization.delegates,
-        theme: buildShadcnTheme(ideTheme),
-        materialTheme: buildMaterialTheme(ideTheme),
-        home: sf.Scaffold(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Spacer(),
-              AgentUsagePanelContent(
-                controller: controller,
-                mode: mode,
-                onModeChanged: onModeChanged,
-              ),
-            ],
+      child: IdeThemeScope(
+        themeMode: ThemeMode.light,
+        lightTheme: ideTheme,
+        darkTheme: buildIdeThemeData(
+          brightness: Brightness.dark,
+          codeFontFamily: 'JetBrainsMono',
+        ),
+        child: sf.ShadcnApp(
+          locale: ZetaLocalization.simplifiedChinese,
+          supportedLocales: ZetaLocalization.supportedLocales,
+          localizationsDelegates: ZetaLocalization.delegates,
+          theme: buildShadcnTheme(ideTheme),
+          materialTheme: buildMaterialTheme(ideTheme),
+          home: sf.Scaffold(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Spacer(),
+                AgentUsagePanelContent(
+                  controller: controller,
+                  mode: mode,
+                  onModeChanged: onModeChanged,
+                ),
+              ],
+            ),
           ),
         ),
       ),

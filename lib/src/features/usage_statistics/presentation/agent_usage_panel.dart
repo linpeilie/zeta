@@ -12,18 +12,7 @@ import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_model
 import 'package:zeta/src/features/usage_statistics/presentation/agent_usage_quota_gallery.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_formatters.dart';
 import 'package:zeta/src/ui/localization/app_localizations_x.dart';
-import 'package:zeta/src/ui/core/ide_colors.dart';
-import 'package:zeta/src/ui/core/ide_effects.dart';
-import 'package:zeta/src/ui/core/ide_metrics.dart';
-import 'package:zeta/src/ui/core/ide_motion.dart';
-import 'package:zeta/src/ui/core/ide_popover.dart';
-import 'package:zeta/src/ui/core/ide_skeleton.dart';
-import 'package:zeta/src/ui/core/rows/ide_row_divider.dart';
-import 'package:zeta/src/ui/core/ide_spacing.dart';
-import 'package:zeta/src/ui/core/ide_tabs.dart';
-import 'package:zeta/src/ui/core/ide_text_styles.dart';
-import 'package:zeta/src/ui/core/pane_widgets.dart';
-import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 
 /// Agent 统计在合并左栏中的显示模式。
 enum AgentUsagePanelMode { collapsed, expanded }

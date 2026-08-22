@@ -4,6 +4,7 @@ import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_text_catalog.dart';
 import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 
 /// 把同一份 [AppLocalizations] 拆成各 feature 文本目录的组合对象。
 final class ZetaTextCatalogs {
@@ -21,6 +22,42 @@ final class ZetaTextCatalogs {
 
   DesktopAttentionTextCatalog get desktopAttention =>
       AppDesktopAttentionTextCatalog(l10n);
+
+  ZetaUiTextCatalog get zetaUi => AppZetaUiTextCatalog(l10n);
+}
+
+/// 把 ARB 文案投影成 `zeta_ui` 的设计系统文案目录。
+///
+/// 设计系统不认识 generated l10n；这里是唯一的映射点，新增控件文案时
+/// 两边一起改。
+final class AppZetaUiTextCatalog implements ZetaUiTextCatalog {
+  const AppZetaUiTextCatalog(this._l10n);
+
+  final AppLocalizations _l10n;
+
+  @override
+  String get commonMenu => _l10n.commonMenu;
+
+  @override
+  String get workbenchLogoSemantics => _l10n.workbenchLogoSemantics;
+
+  @override
+  String get workbenchCloseOverlay => _l10n.workbenchCloseOverlay;
+
+  @override
+  String get timelineScrollbar => _l10n.timelineScrollbar;
+
+  @override
+  String get timelineScrollToEnd => _l10n.timelineScrollToEnd;
+
+  @override
+  String get timelineNewContent => _l10n.timelineNewContent;
+
+  @override
+  String get timelineBackToBottom => _l10n.timelineBackToBottom;
+
+  @override
+  String tabsLoadingSuffix(String label) => _l10n.tabsLoadingSuffix(label);
 }
 
 final class AppUsageStatisticsTextCatalog

@@ -53,7 +53,7 @@ lib/
 - `features/<feature>/application` 放用例协调、恢复计划、分页加载、状态编排和跨对象协作。
 - `features/<feature>/data` 放外部协议、存储、datasource、mapper 和 codec。
 - `features/<feature>/presentation` 放 feature 私有 view model、pane、widget 和 UI 分组逻辑。
-- `ui/core` 放跨 feature 可复用的主题、窗口框架、pane、panel 和状态展示组件。
+- `zeta_ui`（`packages/zeta_ui`）放跨 feature 可复用的主题、窗口框架、pane、panel 和状态展示组件；它不依赖业务模型、Riverpod、`dart:io` 或 generated l10n。
 - `agent_management` 负责 CLI 检测、版本/账号/模型诊断、配置文件安全写入、
   磁盘日志读取与管理页面；它复用 `agent` 的 provider 抽象，不复制会话协议实现。
 
@@ -66,7 +66,7 @@ lib/
 ```text
 main -> app -> presentation/application -> domain
                        app -> data -> domain
-                       presentation -> ui/core
+                       presentation -> zeta_ui
 ```
 
 - presentation 可以读取 view model、controller 暴露的状态并触发动作，但不直接解析 provider 原始协议。
@@ -504,7 +504,7 @@ Zeta 是桌面工具，不是营销页。界面应紧凑、克制、可扫描。
   `settings.appLanguage`，当前进程不监听设置选择或系统 locale，也不因语言字段
   重挂 `IdeHome`。首次启动只解析系统首选语言第一项：显式简体与无 script/region
   的 `zh` 选简体中文，显式繁体与其他语言回退英语；已有安装保持中文。
-- Widget 与 `ui/core` 通过 `context.l10n` 读取 `AppLocalizations`。application /
+- 应用侧 Widget 通过 `context.l10n` 读取 `AppLocalizations`；`zeta_ui` 控件自有文案走注入的 `ZetaUiTextCatalog`。application /
   data / reducer 只注入该 feature 的不可变文本目录 port
   （`AgentUiTextCatalog`、`AgentManagementTextCatalog`、
   `UsageStatisticsTextCatalog`、`DesktopAttentionTextCatalog`），禁止下沉

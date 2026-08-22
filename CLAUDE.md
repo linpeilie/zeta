@@ -40,7 +40,7 @@ bash tool/test_packages.sh  # 动过 packages/ 就必跑
 flutter run -d macos   # 或 -d windows / -d linux
 ```
 
-仓库是 pub workspace：根 Flutter 应用 + `packages/zeta_foundation`、`packages/zeta_plugin_kernel`。
+仓库是 pub workspace：根 Flutter 应用 + `packages/zeta_foundation`、`packages/zeta_plugin_kernel`、`packages/zeta_ui`（Graphite 设计系统）。
 
 单个测试文件：`flutter test test/src/features/agent/presentation/agent_conversation_widget_test.dart`
 

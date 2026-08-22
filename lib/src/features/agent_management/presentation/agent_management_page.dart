@@ -15,28 +15,7 @@ import 'package:zeta/src/features/agent_management/presentation/agent_log_view.d
 import 'package:zeta/src/features/agent_management/presentation/agent_management_l10n.dart';
 import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 import 'package:zeta/src/ui/localization/relative_time.dart';
-import 'package:zeta/src/ui/core/ide_button.dart';
-import 'package:zeta/src/ui/core/ide_chip.dart';
-import 'package:zeta/src/ui/core/ide_tabs.dart';
-import 'package:zeta/src/ui/core/ide_colors.dart';
-import 'package:zeta/src/ui/core/ide_dialog.dart';
-import 'package:zeta/src/ui/core/ide_effects.dart';
-import 'package:zeta/src/ui/core/ide_metrics.dart';
-import 'package:zeta/src/ui/core/ide_spacing.dart';
-import 'package:zeta/src/ui/core/ide_status_card.dart';
-import 'package:zeta/src/ui/core/ide_switch.dart';
-import 'package:zeta/src/ui/core/ide_text_styles.dart';
-import 'package:zeta/src/ui/core/ide_toast.dart';
-import 'package:zeta/src/ui/core/pane_widgets.dart';
-import 'package:zeta/src/ui/core/rows/ide_key_value_row.dart';
-import 'package:zeta/src/ui/core/rows/ide_list_row.dart';
-import 'package:zeta/src/ui/core/rows/ide_row_divider.dart';
-import 'package:zeta/src/ui/core/rows/ide_row_group.dart';
-import 'package:zeta/src/ui/core/rows/ide_settings_row.dart';
-import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
-import 'package:zeta/src/ui/core/workbench/ide_page_header.dart';
-import 'package:zeta/src/ui/core/workbench/ide_section.dart';
-import 'package:zeta/src/ui/core/workbench/ide_toolbar.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 
 /// 列表筛选条中搜索框的固定宽度。
 const double _searchFieldWidth = 280;

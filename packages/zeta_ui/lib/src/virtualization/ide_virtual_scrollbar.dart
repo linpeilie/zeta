@@ -12,7 +12,7 @@ import '../ide_motion.dart';
 import '../ide_spacing.dart';
 import '../ide_text_styles.dart';
 import '../pane_widgets.dart';
-import 'package:zeta/src/ui/localization/app_localizations_x.dart';
+import '../zeta_ui_text_catalog.dart';
 import 'ide_virtual_scroll_coordinator.dart';
 
 /// 项目级 RawScrollbar 包装：绑定同一 [ScrollController]，关闭自动双条。
@@ -54,7 +54,7 @@ class IdeVirtualScrollbar extends StatelessWidget {
 
     return Semantics(
       container: true,
-      label: semanticLabel ?? context.l10n.timelineScrollbar,
+      label: semanticLabel ?? IdeUiText.of(context).timelineScrollbar,
       child: RawScrollbar(
         controller: controller,
         thumbVisibility: true,
@@ -106,7 +106,7 @@ class IdeScrollToEndButton extends StatelessWidget {
     return PaneInteractiveSurface(
       onPressed: onPressed,
       button: true,
-      semanticLabel: semanticLabel ?? context.l10n.timelineScrollToEnd,
+      semanticLabel: semanticLabel ?? IdeUiText.of(context).timelineScrollToEnd,
       borderRadius: IdeRadius.allMedium,
       backgroundColor: colors.surfaceElevated,
       hoverBackgroundColor: colors.hoverSurface,
@@ -127,8 +127,8 @@ class IdeScrollToEndButton extends StatelessWidget {
           const SizedBox(width: IdeSpacing.space6),
           Text(
             hasNewContent
-                ? context.l10n.timelineNewContent
-                : context.l10n.timelineBackToBottom,
+                ? IdeUiText.of(context).timelineNewContent
+                : IdeUiText.of(context).timelineBackToBottom,
             style: textStyles.bodySmall.copyWith(
               color: colors.textPrimary,
               fontWeight: FontWeight.w600,

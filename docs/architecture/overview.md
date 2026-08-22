@@ -26,7 +26,7 @@ flowchart TD
     pres --> domain
     appl --> domain["domain<br/><i>纯模型与契约 · 不依赖 UI</i>"]
     data --> domain
-    pres --> uicore["ui/core<br/><i>主题 token · 工作台原语</i>"]
+    pres --> uicore["zeta_ui<br/><i>主题 token · 工作台原语</i>"]
 
     classDef pure fill:#1B84FF22,stroke:#1B84FF
     class domain pure
@@ -235,7 +235,7 @@ feature store 也不得在 presentation / application 里自己拼 `File('~/.zet
 
 | 你想做的事 | 主要涉及 |
 | --- | --- |
-| 调整时间线某种卡片的外观 | `features/agent/presentation` + `ui/core` token |
+| 调整时间线某种卡片的外观 | `features/agent/presentation` + `zeta_ui` token |
 | 修某个 Provider 的流式显示异常 | 该 Provider 的 `data/` adapter / reducer |
 | 接入或修复 Provider 文件变更证据 | 该 Provider 的 `data/` tracker + 中立 domain/presentation；共享 Store 只机械透传 |
 | 加一个 Provider 已支持但 UI 没露出的能力 | domain 端口与 capability → application → presentation |

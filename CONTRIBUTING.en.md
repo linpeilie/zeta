@@ -134,7 +134,7 @@ Common types: `feat` / `fix` / `docs` / `refactor` / `test` / `chore` / `perf`.
 
 **Layering and dependency direction**
 
-- One-way: `main → app → presentation/application → domain`, `app → data → domain`, `presentation → ui/core`.
+- One-way: `main → app → presentation/application → domain`, `app → data → domain`, `presentation → zeta_ui` (the design system in `packages/zeta_ui`).
 - New code goes into the matching `features/<feature>/{domain,application,data,presentation}` — not back into broad top-level directories.
 - `main.dart` only bootstraps; `lib/src/app` is the single composition point.
 

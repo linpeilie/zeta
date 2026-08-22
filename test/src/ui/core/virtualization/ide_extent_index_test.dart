@@ -2,8 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/ui/core/virtualization/ide_extent_index.dart';
-import 'package:zeta/src/ui/core/virtualization/ide_virtual_item.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 
 void main() {
   const epochA = IdeLayoutEpoch(

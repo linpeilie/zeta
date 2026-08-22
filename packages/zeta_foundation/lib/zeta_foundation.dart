@@ -16,3 +16,4 @@ export 'src/observability/zeta_metric.dart';
 export 'src/observability/zeta_metrics_port.dart';
 export 'src/operation/operation_id.dart';
 export 'src/time/clock.dart';
+export 'src/typography/app_typography.dart';

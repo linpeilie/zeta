@@ -1,7 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/app/window_bootstrap.dart';
-import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 
 void main() {
   group('launchWindowFrameColor', () {

@@ -26,7 +26,9 @@ try {
       Write-Host "==> packages/$($_.Name)"
       Push-Location $_.FullName
       try {
-        & dart test
+        # Flutter Package 必须用 flutter 工具链跑。
+        $isFlutterPackage = Select-String -Path 'pubspec.yaml' -Pattern '^\s+sdk:\s+flutter$' -Quiet
+        if ($isFlutterPackage) { & flutter test } else { & dart test }
         if ($LASTEXITCODE -ne 0) { $packagesExitCode = $LASTEXITCODE }
       } finally {
         Pop-Location

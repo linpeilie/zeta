@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/ui/core/metrics/compact_metric_bar.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 
 import 'ide_component_test_harness.dart';
 

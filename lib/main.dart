@@ -16,7 +16,7 @@ import 'package:zeta/src/features/settings/application/app_language_resolver.dar
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
 import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
-import 'package:zeta/src/ui/core/app_theme.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 
 export 'package:zeta/src/app/app.dart' show MainApp;
 

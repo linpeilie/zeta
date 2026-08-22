@@ -6,14 +6,14 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:window_manager/window_manager.dart';
 
-import 'package:zeta/src/ui/core/ide_colors.dart';
-import 'package:zeta/src/ui/core/ide_effects.dart';
-import 'package:zeta/src/ui/core/ide_metrics.dart';
-import 'package:zeta/src/ui/core/ide_motion.dart';
-import 'package:zeta/src/ui/core/ide_spacing.dart';
-import 'package:zeta/src/ui/core/ide_text_styles.dart';
-import 'package:zeta/src/ui/core/pane_widgets.dart';
-import 'package:zeta/src/ui/localization/app_localizations_x.dart';
+import 'package:zeta_ui/src/ide_colors.dart';
+import 'package:zeta_ui/src/ide_effects.dart';
+import 'package:zeta_ui/src/ide_metrics.dart';
+import 'package:zeta_ui/src/ide_motion.dart';
+import 'package:zeta_ui/src/ide_spacing.dart';
+import 'package:zeta_ui/src/ide_text_styles.dart';
+import 'package:zeta_ui/src/pane_widgets.dart';
+import 'zeta_ui_text_catalog.dart';
 
 /// 包裹主内容的窗口外框。
 ///
@@ -252,7 +252,7 @@ class _WindowsTitleBarLogo extends StatelessWidget {
     return Semantics(
       key: const ValueKey('window-title-bar-logo'),
       image: true,
-      label: context.l10n.workbenchLogoSemantics,
+      label: IdeUiText.of(context).workbenchLogoSemantics,
       child: Padding(
         padding: const EdgeInsets.only(
           left: IdeSpacing.space8,
@@ -355,7 +355,7 @@ class _WindowMenuBar extends StatelessWidget {
                 ],
                 child: Semantics(
                   button: true,
-                  label: context.l10n.commonMenu,
+                  label: IdeUiText.of(context).commonMenu,
                   child: Icon(
                     sf.LucideIcons.menu,
                     size: 16,

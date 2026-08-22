@@ -7,7 +7,7 @@ import 'package:window_manager/window_manager.dart';
 
 import 'package:zeta/src/app/app_constants.dart';
 import 'package:zeta/src/core/logging/app_logging.dart';
-import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 
 final _loggingWindowCloseListener = _LoggingWindowCloseListener();
 final Set<Future<void> Function()> _desktopWindowShutdownHooks =

@@ -11,6 +11,7 @@ environment:
 workspace:
   - packages/zeta_foundation
   - packages/zeta_plugin_kernel
+  - packages/zeta_ui
 
 dependencies:
   crypto: ^3.0.7
@@ -38,6 +39,7 @@ dependencies:
   window_manager: ^0.5.1
   zeta_foundation: ^0.1.0
   zeta_plugin_kernel: ^0.1.0
+  zeta_ui: ^0.1.0
 
 dev_dependencies:
   flutter_test:

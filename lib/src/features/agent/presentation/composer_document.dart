@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:zeta/src/features/agent/domain/agent_skill_models.dart';
-import 'package:zeta/src/ui/core/ide_chip.dart';
-import 'package:zeta/src/ui/core/ide_colors.dart';
-import 'package:zeta/src/ui/core/ide_spacing.dart';
-import 'package:zeta/src/ui/core/ide_text_styles.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 
 /// Composer 内联 token（skill / mention 共用）的单字符对象替换符。
 const String kComposerSkillSentinel = '\uFFFC';

@@ -10,7 +10,7 @@ import 'package:zeta/src/features/agent/application/agent_conversation_timeline_
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection.dart';
-import 'package:zeta/src/ui/core/virtualization/ide_virtual_item.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 
 /// 展开态查询，避免 descriptor 工厂依赖完整 ViewModel。
 typedef AgentTimelineExpansionLookup = ({

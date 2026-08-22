@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
-import 'package:zeta/src/ui/core/app_theme.dart';
-import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 
 void main() {
   test('深浅主题为全部交互状态提供独立颜色', () {

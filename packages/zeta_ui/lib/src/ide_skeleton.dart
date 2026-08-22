@@ -1,8 +1,8 @@
 import 'package:flutter/widgets.dart';
 
-import 'package:zeta/src/ui/core/ide_colors.dart';
-import 'package:zeta/src/ui/core/ide_effects.dart';
-import 'package:zeta/src/ui/core/ide_motion.dart';
+import 'package:zeta_ui/src/ide_colors.dart';
+import 'package:zeta_ui/src/ide_effects.dart';
+import 'package:zeta_ui/src/ide_motion.dart';
 
 /// 呼吸感骨架骨块：用于冷加载占位，替代不定进度条。
 ///

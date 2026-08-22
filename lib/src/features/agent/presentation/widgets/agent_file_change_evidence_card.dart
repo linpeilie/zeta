@@ -3,10 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/presentation/agent_file_change_projection.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_file_change_evidence_views.dart';
-import 'package:zeta/src/ui/core/ide_collapsible_card.dart';
-import 'package:zeta/src/ui/core/ide_colors.dart';
-import 'package:zeta/src/ui/core/ide_spacing.dart';
-import 'package:zeta/src/ui/core/ide_text_styles.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/features/agent/presentation/agent_presentation_l10n.dart';
 import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 

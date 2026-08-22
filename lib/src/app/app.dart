@@ -41,8 +41,7 @@ import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partition_store.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
-import 'package:zeta/src/ui/core/app_theme.dart';
-import 'package:zeta/src/ui/core/ide_stable_overlay_handler.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/ui/features/ide/views/ide_home.dart';
 import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
 
@@ -166,6 +165,7 @@ class MainAppState extends State<MainApp>
   var _localeRuntimeReady = false;
   late Locale _frozenDisplayLocale;
   late AgentUiTextCatalog _agentUiTextCatalog;
+  ZetaUiTextCatalog _zetaUiTextCatalog = const FallbackZetaUiTextCatalog();
   late DesktopAttentionTextCatalog _desktopAttentionTextCatalog;
 
   /// 全局外观控制器引用，供设置面板和主题构建共享。
@@ -309,6 +309,7 @@ class MainAppState extends State<MainApp>
       );
       _agentUiTextCatalog = textCatalogs.agentUi;
       _desktopAttentionTextCatalog = textCatalogs.desktopAttention;
+      _zetaUiTextCatalog = textCatalogs.zetaUi;
     }
     if (widget.agentProviderFactory == null && !_localeRuntimeReady) {
       final dataPaths = widget.dataPaths;
@@ -460,73 +461,82 @@ class MainAppState extends State<MainApp>
             : lightIdeTheme;
         return TickerMode(
           enabled: _tickersEnabled,
-          child: IdeThemeScope(
-            themeMode: settings.themeMode,
-            lightTheme: lightIdeTheme,
-            darkTheme: darkIdeTheme,
-            child: sf.ShadcnApp(
-              debugShowCheckedModeBanner: false,
-              title: appTitle,
-              locale: _frozenDisplayLocale,
-              supportedLocales: ZetaLocalization.supportedLocales,
-              localizationsDelegates: ZetaLocalization.delegates,
-              popoverHandler: ideStablePopoverOverlayHandler,
-              tooltipHandler: ideStablePopoverOverlayHandler,
-              menuHandler: ideStablePopoverOverlayHandler,
-              theme: buildShadcnTheme(lightIdeTheme),
-              darkTheme: buildShadcnTheme(darkIdeTheme),
-              materialTheme: buildMaterialTheme(materialIdeTheme),
-              themeMode: resolveShadcnThemeMode(settings.themeMode),
-              home: _generalSettingsReady
-                  ? IdeHome(
-                      key: const ValueKey<String>('zeta.ide-home'),
-                      directoryPicker:
-                          widget.directoryPicker ?? getDirectoryPath,
-                      enableNativeWindowFrame: widget.enableNativeWindowFrame,
-                      showWindowControls: widget.showWindowControls,
-                      sessionStore: _createSessionStore(),
-                      agentProviderFactory: _agentProviderFactory,
-                      agentProviderRuntimeRegistry:
-                          _agentProviderRuntimeRegistry,
-                      desktopNotificationService:
-                          widget.desktopNotificationService,
-                      desktopAttentionIndicator:
-                          widget.desktopAttentionIndicator,
-                      agentProviderConfigStore:
-                          widget.agentProviderConfigStore ??
-                          _createAgentProviderConfigStore(),
-                      agentProviderAvailabilityLoader:
-                          widget.agentProviderAvailabilityLoader,
-                      homeProviderDetectionLoader:
-                          widget.homeProviderDetectionLoader ??
-                          (_usesCallbackPersistence
-                              ? _loadNoInstalledHomeProviders
-                              : null),
-                      projectLocationOpener:
-                          widget.projectLocationOpener ??
-                          openPathInSystemFileManager,
-                      appearanceController: _appearanceController,
-                      generalSettingsController: _generalSettingsController,
-                      usageStatisticsDependencies:
-                          IdeShellUsageStatisticsDependencies(
-                            partitionStore: _usageStatisticsPartitionStore,
-                            agentUsagePanelRepository:
-                                widget.agentUsagePanelRepository,
-                          ),
-                      agentModelCatalogRepository: _agentModelCatalogRepository,
-                      turnContextStore: _turnContextStore,
-                      agentUiTextCatalog: _agentUiTextCatalog,
-                      metrics: _metrics,
-                      desktopAttentionTextCatalog: _desktopAttentionTextCatalog,
-                      // 回调存储用于测试/嵌入宿主；未显式注入统计仓储时不读取本机 CLI 历史。
-                      enableAgentUsageAutoRefresh:
-                          !_usesCallbackPersistence ||
-                          widget.agentUsagePanelRepository != null,
-                    )
-                  : ColoredBox(
-                      key: const ValueKey<String>('zeta.localization-loading'),
-                      color: materialIdeTheme.colors.frame,
-                    ),
+          // 设计系统自有文案（无障碍标签、滚动条提示等）不经 generated l10n，
+          // 由组合层在这里注入一次；未注入时 zeta_ui 回退英文。
+          child: IdeUiTextScope(
+            catalog: _zetaUiTextCatalog,
+            child: IdeThemeScope(
+              themeMode: settings.themeMode,
+              lightTheme: lightIdeTheme,
+              darkTheme: darkIdeTheme,
+              child: sf.ShadcnApp(
+                debugShowCheckedModeBanner: false,
+                title: appTitle,
+                locale: _frozenDisplayLocale,
+                supportedLocales: ZetaLocalization.supportedLocales,
+                localizationsDelegates: ZetaLocalization.delegates,
+                popoverHandler: ideStablePopoverOverlayHandler,
+                tooltipHandler: ideStablePopoverOverlayHandler,
+                menuHandler: ideStablePopoverOverlayHandler,
+                theme: buildShadcnTheme(lightIdeTheme),
+                darkTheme: buildShadcnTheme(darkIdeTheme),
+                materialTheme: buildMaterialTheme(materialIdeTheme),
+                themeMode: resolveShadcnThemeMode(settings.themeMode),
+                home: _generalSettingsReady
+                    ? IdeHome(
+                        key: const ValueKey<String>('zeta.ide-home'),
+                        directoryPicker:
+                            widget.directoryPicker ?? getDirectoryPath,
+                        enableNativeWindowFrame: widget.enableNativeWindowFrame,
+                        showWindowControls: widget.showWindowControls,
+                        sessionStore: _createSessionStore(),
+                        agentProviderFactory: _agentProviderFactory,
+                        agentProviderRuntimeRegistry:
+                            _agentProviderRuntimeRegistry,
+                        desktopNotificationService:
+                            widget.desktopNotificationService,
+                        desktopAttentionIndicator:
+                            widget.desktopAttentionIndicator,
+                        agentProviderConfigStore:
+                            widget.agentProviderConfigStore ??
+                            _createAgentProviderConfigStore(),
+                        agentProviderAvailabilityLoader:
+                            widget.agentProviderAvailabilityLoader,
+                        homeProviderDetectionLoader:
+                            widget.homeProviderDetectionLoader ??
+                            (_usesCallbackPersistence
+                                ? _loadNoInstalledHomeProviders
+                                : null),
+                        projectLocationOpener:
+                            widget.projectLocationOpener ??
+                            openPathInSystemFileManager,
+                        appearanceController: _appearanceController,
+                        generalSettingsController: _generalSettingsController,
+                        usageStatisticsDependencies:
+                            IdeShellUsageStatisticsDependencies(
+                              partitionStore: _usageStatisticsPartitionStore,
+                              agentUsagePanelRepository:
+                                  widget.agentUsagePanelRepository,
+                            ),
+                        agentModelCatalogRepository:
+                            _agentModelCatalogRepository,
+                        turnContextStore: _turnContextStore,
+                        agentUiTextCatalog: _agentUiTextCatalog,
+                        metrics: _metrics,
+                        desktopAttentionTextCatalog:
+                            _desktopAttentionTextCatalog,
+                        // 回调存储用于测试/嵌入宿主；未显式注入统计仓储时不读取本机 CLI 历史。
+                        enableAgentUsageAutoRefresh:
+                            !_usesCallbackPersistence ||
+                            widget.agentUsagePanelRepository != null,
+                      )
+                    : ColoredBox(
+                        key: const ValueKey<String>(
+                          'zeta.localization-loading',
+                        ),
+                        color: materialIdeTheme.colors.frame,
+                      ),
+              ),
             ),
           ),
         );

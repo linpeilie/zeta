@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/ui/core/workbench/ide_retained_page_view.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 
 import 'ide_component_test_harness.dart';
 

@@ -5,9 +5,7 @@ import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/ui/core/virtualization/ide_dynamic_sliver_list.dart';
-import 'package:zeta/src/ui/core/virtualization/ide_virtual_item.dart';
-import 'package:zeta/src/ui/core/virtualization/ide_virtual_list_controller.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 
 import '../../../../support/scroll_metrics_trace.dart';
 

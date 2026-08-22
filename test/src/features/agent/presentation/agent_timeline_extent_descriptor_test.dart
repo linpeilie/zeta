@@ -4,7 +4,7 @@ import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_extent_descriptor.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection.dart';
-import 'package:zeta/src/ui/core/virtualization/ide_virtual_item.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 
 void main() {
   final factory = AgentTimelineExtentDescriptorFactory();

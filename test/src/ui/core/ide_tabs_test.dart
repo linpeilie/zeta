@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/app/localization/zeta_localization.dart';
-import 'package:zeta/src/ui/core/app_theme.dart';
-import 'package:zeta/src/ui/core/ide_tabs.dart';
+import 'package:zeta/src/app/localization/zeta_text_catalogs.dart';
+import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 
 void main() {
   testWidgets('IdeTabs 使用 Shad Tabs 并切换选中项', (tester) async {
@@ -235,21 +236,26 @@ class _ThemeHarness extends StatelessWidget {
       brightness: Brightness.dark,
       codeFontFamily: 'CodeFont',
     );
-    return IdeThemeScope(
-      themeMode: ThemeMode.light,
-      lightTheme: lightIdeTheme,
-      darkTheme: darkIdeTheme,
-      child: sf.ShadcnApp(
-        locale: ZetaLocalization.simplifiedChinese,
-        supportedLocales: ZetaLocalization.supportedLocales,
-        localizationsDelegates: ZetaLocalization.delegates,
-        theme: buildShadcnTheme(lightIdeTheme),
-        darkTheme: buildShadcnTheme(darkIdeTheme),
-        materialTheme: buildMaterialTheme(lightIdeTheme),
-        themeMode: sf.ThemeMode.light,
-        home: _MotionHarness(
-          disableAnimations: disableAnimations,
-          child: sf.Scaffold(child: Center(child: child)),
+    return IdeUiTextScope(
+      catalog: AppZetaUiTextCatalog(
+        lookupAppLocalizations(ZetaLocalization.simplifiedChinese),
+      ),
+      child: IdeThemeScope(
+        themeMode: ThemeMode.light,
+        lightTheme: lightIdeTheme,
+        darkTheme: darkIdeTheme,
+        child: sf.ShadcnApp(
+          locale: ZetaLocalization.simplifiedChinese,
+          supportedLocales: ZetaLocalization.supportedLocales,
+          localizationsDelegates: ZetaLocalization.delegates,
+          theme: buildShadcnTheme(lightIdeTheme),
+          darkTheme: buildShadcnTheme(darkIdeTheme),
+          materialTheme: buildMaterialTheme(lightIdeTheme),
+          themeMode: sf.ThemeMode.light,
+          home: _MotionHarness(
+            disableAnimations: disableAnimations,
+            child: sf.Scaffold(child: Center(child: child)),
+          ),
         ),
       ),
     );

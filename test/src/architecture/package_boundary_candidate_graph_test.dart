@@ -182,6 +182,47 @@ void main() {
     }
   });
 
+  test('zeta_ui 不认识业务，也不碰本机 IO', () {
+    final uiFiles = files
+        .where((path) => path.startsWith('packages/zeta_ui/lib/'))
+        .toList(growable: false);
+
+    expect(uiFiles, isNotEmpty);
+    for (final path in uiFiles) {
+      final source = File(path).readAsStringSync();
+      final imports = _externalImports(source).toList(growable: false);
+      for (final banned in const <String>[
+        'dart:io',
+        'package:flutter_riverpod/',
+      ]) {
+        expect(
+          imports.any((import) => import.startsWith(banned)),
+          isFalse,
+          reason: '$path 引入了 $banned；设计系统必须与宿主 IO / 状态管理解耦',
+        );
+      }
+      expect(
+        source.contains('package:zeta/'),
+        isFalse,
+        reason: '$path 反向依赖了根 app',
+      );
+      expect(
+        source.contains('app_localizations'),
+        isFalse,
+        reason: '$path 直接用了 generated l10n；控件文案必须走 ZetaUiTextCatalog',
+      );
+    }
+  });
+
+  test('设计系统已整体移出 lib/src/ui/core', () {
+    final remaining = files
+        .where((path) => path.startsWith('lib/src/ui/core/'))
+        .toList(growable: false);
+
+    // 只允许留下确实需要宿主能力（本机文件读取 + generated l10n）的封装。
+    expect(remaining, <String>['lib/src/ui/core/ide_image_preview.dart']);
+  });
+
   test('zeta_plugin_kernel 不认识任何具体插件或 Provider', () {
     final kernelFiles = files
         .where((path) => path.startsWith('packages/zeta_plugin_kernel/lib/'))
@@ -234,7 +275,11 @@ const Set<String> _candidatePackages = <String>{
 ///
 /// 这些名字既是目录名，也是 `package:` scheme 名；跨 Package 只能 import 对方
 /// 的顶层 barrel，禁止 `package:<name>/src/...`。
-const Set<String> _materializedPackages = <String>{_foundation, _pluginKernel};
+const Set<String> _materializedPackages = <String>{
+  _foundation,
+  _pluginKernel,
+  _ui,
+};
 
 /// 目标架构 §3.1 的依赖方向；根 app 是唯一可以看到所有 Package 的组合点。
 const Map<String, Set<String>> _allowedEdges = <String, Set<String>>{
@@ -284,12 +329,6 @@ const Map<String, List<String>> _bannedExternalPrefixes =
 
 /// Phase 1 的燃尽清单：现存的候选 Package 反向依赖。
 const Set<String> _knownEdgeViolations = <String>{
-  // ui/core 直接用 generated l10n 扩展；拆包时需要把文案改成注入的 token/labels。
-  'lib/src/ui/core/ide_image_preview.dart -> lib/src/ui/localization/app_localizations_x.dart',
-  'lib/src/ui/core/ide_tabs.dart -> lib/src/ui/localization/app_localizations_x.dart',
-  'lib/src/ui/core/virtualization/ide_virtual_scrollbar.dart -> lib/src/ui/localization/app_localizations_x.dart',
-  'lib/src/ui/core/window_frame.dart -> lib/src/ui/localization/app_localizations_x.dart',
-  'lib/src/ui/core/workbench/ide_workbench_scaffold.dart -> lib/src/ui/localization/app_localizations_x.dart',
   // application 直接构造 data 层存储/静态能力；拆包时改为 app 注入端口。
   'lib/src/features/agent/application/agent_provider_settings_controller.dart -> lib/src/features/agent/data/agent_provider_static_capabilities.dart',
   'lib/src/features/agent/application/agent_thread_workspace_controller.dart -> lib/src/features/agent/data/agent_turn_context_store.dart',
@@ -310,8 +349,6 @@ const Set<String> _knownExternalViolations = <String>{
   'lib/src/core/storage/zeta_data_paths.dart -> dart:io',
   'lib/src/core/utils/path_utils.dart -> dart:io',
   'lib/src/core/utils/system_file_manager.dart -> dart:io',
-  // 图片预览直接读本机文件；拆包时改为注入的字节流端口。
-  'lib/src/ui/core/ide_image_preview.dart -> dart:io',
 };
 
 /// 当前 `zeta_agent_core` 候选层里依赖 `package:flutter/foundation.dart` 的文件数。
@@ -330,9 +367,6 @@ String _candidatePackageFor(String path) {
   }
   if (path.startsWith('lib/src/core/')) {
     return _foundation;
-  }
-  if (path.startsWith('lib/src/ui/core/')) {
-    return _ui;
   }
   if (path.startsWith('lib/src/features/agent/domain/') ||
       path.startsWith('lib/src/features/agent/application/')) {

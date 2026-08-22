@@ -132,7 +132,7 @@ Plan 执行交接是 Zeta 自己的 application 工作流，不持久化。执�
 ```
 main → app → presentation/application → domain
               app → data → domain
-              presentation → ui/core
+              presentation → zeta_ui（packages/）
 ```
 
 - `domain` 是纯的：无 Flutter、无 `dart:io`、无任何 Provider 协议字段。想在 domain 里 import Codex 类型，说明放错层了。
@@ -140,8 +140,8 @@ main → app → presentation/application → domain
 - Provider 自有 data adapter 可按明确功能读取对应 CLI 的配置、会话、日志、账号 metadata 等私有数据；原始结构和路径不得泄漏到 domain、application 或 presentation。读取权限不自动授权迁移、改写或删除，写操作仍须由明确的产品能力和用户动作约束。
 - Flutter `Locale`、`BuildContext` 和 generated `AppLocalizations` 只允许出现在 `app` 组合层、presentation 和 `ui/`。application / data / domain 若必须产出即时文案，只依赖该 feature 的纯 Dart 文本目录 port。
 - `lib/main.dart` 只做 Flutter 绑定、窗口启动、全局错误日志和 `runApp`；`lib/src/app` 是唯一装配点。
-- 新代码进 `lib/src/features/<feature>/{domain,application,data,presentation}`，**不要新建顶层宽泛目录**。现有 feature：`agent`、`agent_management`、`desktop_notifications`、`ide_session`、`project_threads`、`settings`、`usage_statistics`、`workspace`。跨 feature 基础设施才进 `lib/src/core`，跨 feature 复用 UI 原语才进 `lib/src/ui/core`。
-- 已物理拆出的内部 Package 在 `packages/`：`zeta_foundation`（纯 Dart 公共契约：Clock / OperationId / Transition / 指标端口）与 `zeta_plugin_kernel`（可信插件微内核）。依赖方向单向：`kernel → foundation`，两者都不依赖 Flutter、Riverpod、`dart:io` 或任何 Provider。**跨 Package 只能 import 对方顶层 barrel**，禁止 `package:<name>/src/...`。新增 Package 要先在[目标架构 §3.2](docs/architecture/target_architecture_riverpod_mvi_plugins_packages.md) 的判据下论证，不按页面或团队机械拆包。
+- 新代码进 `lib/src/features/<feature>/{domain,application,data,presentation}`，**不要新建顶层宽泛目录**。现有 feature：`agent`、`agent_management`、`desktop_notifications`、`ide_session`、`project_threads`、`settings`、`usage_statistics`、`workspace`。跨 feature 基础设施才进 `lib/src/core`；**跨 feature 复用的 UI 原语进 `packages/zeta_ui`**（设计系统已整体拆包，`lib/src/ui/core` 只剩需要本机 IO 的宿主侧封装）。
+- 已物理拆出的内部 Package 在 `packages/`：`zeta_foundation`（纯 Dart 公共契约：Clock / OperationId / Transition / 排版常量 / 指标端口）、`zeta_plugin_kernel`（可信插件微内核）与 `zeta_ui`（Graphite 设计系统）。依赖方向单向：`kernel → foundation`、`ui → foundation`；前两者不依赖 Flutter，`zeta_ui` 依赖 Flutter/shadcn 但**不依赖** Riverpod、`dart:io`、generated l10n 或任何业务模型（控件自有文案走 `ZetaUiTextCatalog` 注入）。**跨 Package 只能 import 对方顶层 barrel**，禁止 `package:<name>/src/...`。新增 Package 要先在[目标架构 §3.2](docs/architecture/target_architecture_riverpod_mvi_plugins_packages.md) 的判据下论证，不按页面或团队机械拆包。
 
 > 正文：[工程规范 §1–2](docs/architecture/engineering_standards.md) · [架构总览「分层」](docs/architecture/overview.md)
 
@@ -165,14 +165,14 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 语义真源是 `IdeThemeScope` 下的 Graphite token：`IdeColors.of(context)`、`IdeTextStyles.of(context)`、`IdeRadius` / `IdeEffects` / `IdeSpacing` / `IdeMotion`。`sf.ThemeData` 仅作为第三方 Widget 的投影。
 
-**禁止**：Material `ThemeData` / `ColorScheme.fromSeed`、裸 `Color(0x...)`、手写 `BoxShadow` 列表、临时拼的 `BorderRadius.circular(...)`、已移除的 `shadcn_ui` / `Shad*` / `showShadDialog` API。通知统一 `showIdeToast`（`lib/src/ui/core/ide_toast.dart`），不要在 feature 里散落 `sf.showToast`。
+**禁止**：Material `ThemeData` / `ColorScheme.fromSeed`、裸 `Color(0x...)`、手写 `BoxShadow` 列表、临时拼的 `BorderRadius.circular(...)`、已移除的 `shadcn_ui` / `Shad*` / `showShadDialog` API。通知统一 `showIdeToast`（`packages/zeta_ui/lib/src/ide_toast.dart`），不要在 feature 里散落 `sf.showToast`。
 
 **控件高度由内容撑开，容器高度由 token 固定。**
 
 - **控件**（Select / Tabs / Button / IconButton / 未来的 TextField）：高度 = `2 × IdeMetrics.controlPaddingYFor(size) + 内容`，下限走 `controlMinHeightFor`。**禁止**给控件套 `SizedBox(height:)` 或 `maxHeight` 把高度钉死——一旦钉死，各控件内边距的分歧就被藏起来，等哪天拆掉固定高度会一次性散成好几个高度（本项目曾经是 20/23/25/33 靠一个 34 的常数强行对齐）。需要一个具体数字（测试断言、骨架屏占位）时用 `controlNaturalHeightFor`，不要拿它回头去设高度。
 - **控件内的图标**必须过 `IdeIconBox`：图标比文字行盒高就会成为决定高度的那个内容，让带图标的控件比纯文字的高（shadcn 官网 Select 比 Button 高 2px 就是这么来的）。
 - **容器**（标题栏、pane 头、列表行、工具条）继续用固定 token，但要用 `minHeight` 而不是 `height`，且必须 ≥ 内部控件的自然高度，否则用户放大 UI 字号后直接溢出。
-- feature 里**不要**直接用 `sf.Button` / `sf.IconButton` / `sf.TextField` / `sf.Select`：它们的尺寸由 `ButtonSize` × `ButtonDensity` 两个乘法修饰符决定，落不到设计档位上。走 `ui/core` 的 Ide 封装；确实缺封装就先补组件。
+- feature 里**不要**直接用 `sf.Button` / `sf.IconButton` / `sf.TextField` / `sf.Select`：它们的尺寸由 `ButtonSize` × `ButtonDensity` 两个乘法修饰符决定，落不到设计档位上。走 `zeta_ui` 的 Ide 封装；确实缺封装就先补组件。
 
 **自查**：
 
@@ -255,7 +255,7 @@ lint 已经覆盖的不再重复，这里只写 `flutter analyze` 抓不到的�
 
 **UI**
 
-- 新增面板或重复项优先复用 `ui/core` 已有原语：`Pane`、`PanelCard`、`PaneInteractiveSurface`、`IdeTabs`/`IdeTab`、`IdeChip`、`IdeButton`、`IdeSelect`、`IdeContextMenu`、`IdeStatusCard`、`IdeCollapsibleCard`、`WindowFrame`。工具栏和筛选控件用 `IdeButton`/`IdeSelect`，不要直接拼裸 `sf.OutlineButton` / `sf.Select`。
+- 新增面板或重复项优先复用 `zeta_ui` 已有原语：`Pane`、`PanelCard`、`PaneInteractiveSurface`、`IdeTabs`/`IdeTab`、`IdeChip`、`IdeButton`、`IdeSelect`、`IdeContextMenu`、`IdeStatusCard`、`IdeCollapsibleCard`、`WindowFrame`。工具栏和筛选控件用 `IdeButton`/`IdeSelect`，不要直接拼裸 `sf.OutlineButton` / `sf.Select`。
 - 保持信息密度但文本必须可读：长文件路径、thread 标题、工具摘要、状态文本一律有界布局 + 省略号。
 - 用 `LayoutBuilder` / `Flexible` / `Expanded` / `Wrap` / 滚动视图避免溢出；桌面宽窗和窄视口都要能看。
 - 重复的交互行用稳定 `ValueKey`；流式 turn、语法高亮、diff 明细加 `RepaintBoundary`。

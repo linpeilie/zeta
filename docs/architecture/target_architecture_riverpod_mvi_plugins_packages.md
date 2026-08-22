@@ -726,10 +726,10 @@ Phase 0 先采基线，再固定阈值。至少要能检测：
 
 ### Phase 1：建立边界但不改变行为
 
-**状态：第一个增量已落地（2026-08-22）。** 已拆出 `zeta_foundation` 与 `zeta_plugin_kernel`，
-建立 pub workspace、编译期插件目录与依赖守卫；`zeta_ui` / `zeta_agent_core` /
+**状态：进行中（2026-08-22）。** 已拆出 `zeta_foundation`、`zeta_plugin_kernel` 与
+`zeta_ui`，建立 pub workspace、编译期插件目录与依赖守卫；`zeta_agent_core` /
 `zeta_agent_providers` 按"一次一个叶子边界"留到后续增量。交付内容、燃尽清单、MVI 命名
-规范与三处计划偏差见 [阶段 1：建立边界但不改变行为](./phase1_boundaries.md)。
+规范与计划偏差见 [阶段 1：建立边界但不改变行为](./phase1_boundaries.md)。
 
 **改动范围**
 

@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
-import 'package:zeta/src/ui/core/ide_stable_overlay_handler.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 
 void main() {
   testWidgets('stable overlay handler disables initial anchor following', (

@@ -9,8 +9,7 @@ import 'package:zeta/src/features/agent/application/agent_conversation_timeline_
 import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection.dart';
-import 'package:zeta/src/ui/core/virtualization/ide_extent_index.dart';
-import 'package:zeta/src/ui/core/virtualization/ide_virtual_list_controller.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
 
 /// 少于该数量时隐藏导航轨，避免短对话视觉噪声。

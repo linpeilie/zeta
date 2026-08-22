@@ -13,9 +13,15 @@ for package_dir in packages/*/; do
   [[ -f "${package_dir}pubspec.yaml" ]] || continue
   [[ -d "${package_dir}test" ]] || continue
   echo "==> ${package_dir}"
+  # Flutter Package 必须用 flutter 工具链跑，否则解析不到 sdk: flutter 依赖。
+  if grep -qE '^\s+sdk:\s+flutter$' "${package_dir}pubspec.yaml"; then
+    runner=(flutter)
+  else
+    runner=(dart)
+  fi
   # analyze 也要跑：根目录的 `flutter analyze` 只分析根 Package。
-  (cd "$package_dir" && dart analyze) || exit_code=1
-  (cd "$package_dir" && dart test "$@") || exit_code=1
+  (cd "$package_dir" && "${runner[@]}" analyze) || exit_code=1
+  (cd "$package_dir" && "${runner[@]}" test "$@") || exit_code=1
 done
 
 exit "$exit_code"

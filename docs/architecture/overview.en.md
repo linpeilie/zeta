@@ -26,7 +26,7 @@ flowchart TD
     pres --> domain
     appl --> domain["domain<br/><i>pure models and contracts</i>"]
     data --> domain
-    pres --> uicore["ui/core<br/><i>theme tokens · workbench primitives</i>"]
+    pres --> uicore["zeta_ui<br/><i>theme tokens · workbench primitives</i>"]
 
     classDef pure fill:#1B84FF22,stroke:#1B84FF
     class domain pure
@@ -235,7 +235,7 @@ For the user-facing file listing and cleanup instructions, see the [data referen
 
 | What you want to do | Mainly touches |
 | --- | --- |
-| Restyle a timeline card | `features/agent/presentation` + `ui/core` tokens |
+| Restyle a timeline card | `features/agent/presentation` + `zeta_ui` tokens |
 | Fix a streaming glitch in one provider | that provider's `data/` adapter / reducer |
 | Add or fix provider file-change evidence | that provider's `data/` tracker + neutral domain/presentation; the shared Store only carries it mechanically |
 | Surface a capability the provider already supports | domain port and capability → application → presentation |

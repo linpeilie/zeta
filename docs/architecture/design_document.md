@@ -22,7 +22,7 @@ Zeta 的设计目标是让 Flutter UI、Agent provider、会话持久化和本�
 - features/usage_statistics：跨项目调用记录、统计口径、Codex 历史索引、套餐限额与
   使用统计页面。
 - features/workspace：文件树规则、树构建、文件节点映射和文件 pane。
-- ui/core：窗口框架、主题、通用面板和共享 UI primitives。
+- `zeta_ui`（`packages/zeta_ui`）：窗口框架、主题、通用面板和共享 UI primitives。
 - ui/features/ide：IDE shell 视图；Provider 设置控制器位于 agent/application。
 
 依赖方向保持为 presentation/application 依赖 domain 接口，data 实现 domain 接口，app 负责组合默认实现。UI 不直接处理 Codex 原始协议或持久化 JSON。Provider 自有 data adapter 可以按明确功能读取对应 CLI 的私有数据，但只向上返回中立模型，不暴露原始路径或 payload。
@@ -242,7 +242,7 @@ projection 与 unified diff 以 turn render revision 缓存，代码高亮复用
   不允许手写 `BoxShadow`，也不允许 Material `elevation`。唯一豁免是脱离文档流的
   浮层（菜单 / popover / toast / 窄屏浮层面板），它们用 `IdeEffects.overlayShadow`
   的极淡投影做兜底，主分层手段仍是更亮的 popover 表面加描边。
-  守卫见 `test/src/ui/core/ide_visual_token_guard_test.dart`。
+  守卫见 `test/src/ui/core/ide_visual_token_guard_test.dart`（控件实现已在 `packages/zeta_ui`）。
 - **描边与交互态是半透明叠加**而非不透明色：`white @ 8%` 叠在炭黑上是一条发丝线，
   换成不透明灰就变成一条灰带。同理 hover 是「把背景提亮 5%」，因此它必须能叠在
   任意表面上，元素自身颜色不变。
@@ -254,7 +254,7 @@ projection 与 unified diff 以 turn render revision 缓存，代码高亮复用
 - 前景色守 WCAG AA：`textPrimary` / `textSecondary` / `textTertiary` 在四档表面上
   都必须 ≥ 4.5:1。10px 的时间戳用的就是 `textTertiary`，最容易踩线——层级弱化靠
   字号和字重，不靠压对比度。回归断言在 `test/src/ui/core/ide_colors_test.dart`。
-- 全部视觉取值集中在 `lib/src/ui/core/` 的 token 类：`IdeColors`（语义色）、
+- 全部视觉取值集中在 `packages/zeta_ui` 的 token 类：`IdeColors`（语义色）、
   `IdeRadius`/`IdeShapes`/`IdeEffects`（圆角四档、容器形状与浮层阴影、scrim）、
   `IdeSpacing`（4px 基准间距）、`IdeTextStyles`（语义字号）、
   `IdeMetrics`（组件尺寸与响应式断点）、`IdeMotion`（动效）。
@@ -288,7 +288,7 @@ projection 与 unified diff 以 turn render revision 缓存，代码高亮复用
 - Graphite token 通过 `IdeThemeScope` / `IdeThemeData` 成为运行时真源；
   `buildShadcnTheme` 只把项目 token 投影到 `shadcn_flutter` 的 `sf.ThemeData`，
   不再反向从第三方 theme 回读语义色。
-- 第三方组件统一 `import ... as sf;`；业务页面优先消费 `ui/core` primitives
+- 第三方组件统一 `import ... as sf;`；业务页面优先消费 `zeta_ui` primitives
   （`Pane` / `PanelCard` / `IdeTabs` / `IdeTab` / `IdeChip` / `IdeButton` /
   `IdeSelect` / `IdeContextMenu` / `showIdeToast` 等）。
 - 业务代码禁止硬编码颜色、圆角、阴影和字号；需要新字号时加 token，

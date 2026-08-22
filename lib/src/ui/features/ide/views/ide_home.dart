@@ -40,16 +40,8 @@ import 'package:zeta/src/features/usage_statistics/presentation/agent_usage_pane
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_page.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/workspace/presentation/file_tree_pane.dart';
-import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/ui/localization/app_localizations_x.dart';
-import 'package:zeta/src/ui/core/ide_metrics.dart';
-import 'package:zeta/src/ui/core/ide_resize_handle.dart';
-import 'package:zeta/src/ui/core/ide_spacing.dart';
-import 'package:zeta/src/ui/core/ide_toast.dart';
-import 'package:zeta/src/ui/core/pane_widgets.dart';
-import 'package:zeta/src/ui/core/window_frame.dart';
-import 'package:zeta/src/ui/core/workbench/ide_retained_page_view.dart';
-import 'package:zeta/src/ui/core/workbench/ide_workbench_scaffold.dart';
 import 'package:zeta/src/ui/features/ide/views/global_home_page.dart';
 import 'package:zeta/src/ui/features/ide/views/project_home_page.dart';
 import 'package:zeta/src/ui/features/ide/views/project_agent_sidebar.dart';

@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
-import 'package:zeta/src/core/constants/app_typography.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
 
 import 'ide_colors.dart';
 import 'ide_metrics.dart';
