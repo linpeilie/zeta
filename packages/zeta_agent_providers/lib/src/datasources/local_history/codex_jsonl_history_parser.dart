@@ -70,13 +70,13 @@ class _JsonlHistoryParser {
 
     switch (recordType) {
       case 'event_msg':
-        _consumeEventMessage(payload, raw: wrapAgentProviderPayload(record));
+        _consumeEventMessage(payload, raw: _wrapCodexProviderEnvelope(record));
         return;
       case 'turn_context':
-        _consumeTurnContext(payload, raw: wrapAgentProviderPayload(record));
+        _consumeTurnContext(payload, raw: _wrapCodexProviderEnvelope(record));
         return;
       case 'response_item':
-        _consumeResponseItem(payload, raw: wrapAgentProviderPayload(record));
+        _consumeResponseItem(payload, raw: _wrapCodexProviderEnvelope(record));
         return;
       case _:
         return;

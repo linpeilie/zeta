@@ -23,7 +23,7 @@ class _CodexQuestionMapper {
           questions: _userInputQaPairs(request.params),
           sessionId: _string(request.params['threadId']),
           turnId: _string(request.params['turnId']),
-          raw: wrapAgentProviderPayload(request.params),
+          raw: _wrapCodexProviderEnvelope(request.params),
         ),
       ),
     );

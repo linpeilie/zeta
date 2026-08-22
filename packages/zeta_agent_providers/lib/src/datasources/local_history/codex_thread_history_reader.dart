@@ -386,7 +386,7 @@ class _CodexThreadHistoryReader {
       status: status,
       duration: duration,
       localImagePaths: List<String>.unmodifiable(localImagePaths),
-      raw: wrapAgentProviderPayload(raw),
+      raw: _wrapCodexProviderEnvelope(raw),
     );
   }
 

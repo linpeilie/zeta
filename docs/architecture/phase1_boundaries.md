@@ -318,10 +318,11 @@ providers 包 + 一行注册」直接冲突。
 
 Review 后的补漏（同批）：
 
-- **报文时间**：面板改读 `capturedAt` 后一度没有生产者，时间列全变 `—`。现由
-  `wrapAgentProviderPayload` 统一包装并推导（`timestamp` / `created_at` /
-  `started_at` / 内嵌 `payload` 与 `_meta.agentTimestampMs`），统一转本地时区；
-  推不出就是 null，不编造"现在"。守卫钉住"适配层不得直接调 `wrap`"。
+- **报文时间**：面板改读 `capturedAt` 后一度没有生产者，时间列全变 `—`。现在
+  `wrapAgentProviderPayload` 只负责内容盲冻结；Codex / Grok 各自的 envelope mapper
+  按协议字段提取并显式传入时间，工具参数里的同名业务字段不会被误判。数值解析对
+  非有限值和越界值 fail-closed，推不出就是 null，不编造"现在"。守卫钉住共享包装器
+  不扫描 wire key，且适配层不得直接调 `AgentProviderRawPayload.wrap`。
 - **typed 字段要贯穿重建路径**：`sourceLabel` / `sessionPath` 在 grok enrichment、
   turn-context overlay、claude 历史 reducer、空历史返回路径都补齐了。grok 的历史
   缓存命中判定比较 `sessionPath`，enrichment 丢掉它会让缓存永不命中（已加回归测试）。

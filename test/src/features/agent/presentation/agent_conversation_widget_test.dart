@@ -1540,6 +1540,10 @@ void main() {
     );
     final createdAt = DateTime(2024, 1, 15, 10, 30);
     final lastActiveAt = DateTime(2024, 6, 20, 14, 5);
+    final providerRawCapturedAt = DateTime.fromMillisecondsSinceEpoch(
+      1700000000 * 1000,
+      isUtc: true,
+    ).toLocal();
     final provider = FakeAgentProvider(
       threadHistories: <String, AgentThreadHistorySnapshot>{
         'thread-ctx': AgentThreadHistorySnapshot(
@@ -1565,17 +1569,22 @@ void main() {
                     'type': 'response_item',
                     'timestamp': 1700000000,
                     'marker': 'ctx-user-raw',
-                  }),
+                  }, capturedAt: providerRawCapturedAt),
                 ),
                 AgentHistoryMessageEntry(
                   id: 'msg-agent-1',
                   role: AgentMessageRole.agent,
                   text: 'Hi there',
-                  raw: wrapAgentProviderPayload(<String, Object?>{
-                    'type': 'event_msg',
-                    'timestamp': 1700000005,
-                    'marker': 'ctx-agent-raw',
-                  }),
+                  raw: wrapAgentProviderPayload(
+                    <String, Object?>{
+                      'type': 'event_msg',
+                      'timestamp': 1700000005,
+                      'marker': 'ctx-agent-raw',
+                    },
+                    capturedAt: providerRawCapturedAt.add(
+                      const Duration(seconds: 5),
+                    ),
+                  ),
                 ),
                 AgentHistoryToolEntry(
                   toolCall: AgentToolCall(
@@ -1774,10 +1783,7 @@ void main() {
       findsNothing,
     );
     // 报文时间来自适配层算好的 capturedAt（wire `timestamp`），不是 UI 翻 JSON。
-    final expectedCapturedAt = DateTime.fromMillisecondsSinceEpoch(
-      1700000000 * 1000,
-      isUtc: true,
-    ).toLocal();
+    final expectedCapturedAt = providerRawCapturedAt;
     String two(int value) => value.toString().padLeft(2, '0');
     final expectedTimeText =
         '${expectedCapturedAt.year}-'

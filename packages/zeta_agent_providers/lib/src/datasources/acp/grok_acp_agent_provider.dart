@@ -25,6 +25,7 @@ import 'package:zeta_agent_providers/src/mappers/grok_question_mapper.dart';
 import 'package:zeta_agent_providers/src/mappers/grok_skills_mapper.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_agent_providers/src/mappers/agent_provider_payload.dart';
+import 'package:zeta_agent_providers/src/mappers/grok_provider_payload.dart';
 
 final _log = zetaLoggerFor('zeta.agent.grok_acp');
 
@@ -1974,7 +1975,7 @@ class GrokAcpAgentProvider
       sessionId: sessionId,
       turnId: _runningTurnIdsBySessionId[sessionId],
       isProject: false,
-      raw: wrapAgentProviderPayload(
+      raw: _wrapGrokProviderEnvelope(
         _asStringKeyedMap(params) ?? const <String, Object?>{},
       ),
     );
@@ -2509,6 +2510,15 @@ class GrokAcpAgentProvider
     }
     return value.map((key, item) => MapEntry(key.toString(), item as Object?));
   }
+}
+
+AgentProviderRawPayload _wrapGrokProviderEnvelope(
+  Map<String, Object?> envelope,
+) {
+  return wrapAgentProviderPayload(
+    envelope,
+    capturedAt: grokProviderEnvelopeCapturedAt(envelope),
+  );
 }
 
 class _PendingAcpPermission {

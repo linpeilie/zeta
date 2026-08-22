@@ -125,8 +125,8 @@ void main() {
     );
   });
 
-  test('适配层统一经 wrapAgentProviderPayload 包装原文', () {
-    // 直接调构造会绕过报文时间推导，面板的时间列就会退回 '—'。
+  test('适配层统一经内容盲的 wrapAgentProviderPayload 包装原文', () {
+    // 直接调构造会绕过递归冻结与统一的 payload 边界。
     final offenders = <String>[];
     for (final file in dartFilesIn('packages/zeta_agent_providers/lib')) {
       final path = normalize(file.path);
@@ -142,8 +142,24 @@ void main() {
       offenders,
       isEmpty,
       reason:
-          '请改用 wrapAgentProviderPayload(...)，它会顺带算出 capturedAt：\n'
+          '请改用内容盲的 wrapAgentProviderPayload(...) 统一冻结原文；'
+          '报文时间由 Provider envelope mapper 显式传入：\n'
           '${offenders.join('\n')}',
+    );
+  });
+
+  test('共享 raw 包装器不扫描 wire 键名', () {
+    final source = File(
+      'packages/zeta_agent_providers/lib/src/mappers/'
+      'agent_provider_payload.dart',
+    ).readAsStringSync();
+
+    expect(
+      source,
+      isNot(contains("json[")),
+      reason:
+          'wrapAgentProviderPayload 必须保持内容盲；时间键由 Codex/Grok/Claude '
+          '各自的 envelope mapper 解释（G1/G2）',
     );
   });
 

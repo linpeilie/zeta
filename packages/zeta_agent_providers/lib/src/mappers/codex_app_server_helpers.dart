@@ -14,6 +14,16 @@ Map<String, Object?> _map(Object? value) {
   return const <String, Object?>{};
 }
 
+/// 只在调用点已确认是 Codex envelope 时附加报文时间。
+AgentProviderRawPayload _wrapCodexProviderEnvelope(
+  Map<String, Object?> envelope,
+) {
+  return wrapAgentProviderPayload(
+    envelope,
+    capturedAt: codexProviderEnvelopeCapturedAt(envelope),
+  );
+}
+
 /// 非空字符串读取。
 String? _string(Object? value) {
   if (value is String && value.isNotEmpty) {
@@ -199,35 +209,35 @@ AgentHistoryEventEntry? _systemHistoryEventFromThreadItem(
       kind: AgentHistoryEventKind.system,
       title: catalog.reviewModeEnteredTitle,
       description: _string(item['review']),
-      raw: wrapAgentProviderPayload(item),
+      raw: _wrapCodexProviderEnvelope(item),
     ),
     'exitedreviewmode' => AgentHistoryEventEntry(
       id: id,
       kind: AgentHistoryEventKind.system,
       title: catalog.reviewModeExitedTitle,
       description: _string(item['review']),
-      raw: wrapAgentProviderPayload(item),
+      raw: _wrapCodexProviderEnvelope(item),
     ),
     'contextcompaction' => AgentHistoryEventEntry(
       id: id,
       kind: AgentHistoryEventKind.system,
       title: catalog.contextCompactedTitle,
       description: catalog.contextCompactedDescription,
-      raw: wrapAgentProviderPayload(item),
+      raw: _wrapCodexProviderEnvelope(item),
     ),
     'hookprompt' => AgentHistoryEventEntry(
       id: id,
       kind: AgentHistoryEventKind.system,
       title: catalog.hookPromptTitle,
       content: _hookPromptFragmentsText(item['fragments']),
-      raw: wrapAgentProviderPayload(item),
+      raw: _wrapCodexProviderEnvelope(item),
     ),
     'sleep' => AgentHistoryEventEntry(
       id: id,
       kind: AgentHistoryEventKind.system,
       title: catalog.waitingTitle,
       description: _sleepDurationLabel(item['durationMs'], catalog),
-      raw: wrapAgentProviderPayload(item),
+      raw: _wrapCodexProviderEnvelope(item),
     ),
     'subagentactivity' => AgentHistoryEventEntry(
       id: id,
@@ -239,7 +249,7 @@ AgentHistoryEventEntry? _systemHistoryEventFromThreadItem(
         catalog: catalog,
       ),
       content: _string(item['agentThreadId']),
-      raw: wrapAgentProviderPayload(item),
+      raw: _wrapCodexProviderEnvelope(item),
     ),
     _ => null,
   };
@@ -351,7 +361,7 @@ AgentToolCall? _toolCallFromThreadItem(
           ? _map(item['result'])
           : _map(item['rawOutput']),
     ),
-    raw: wrapAgentProviderPayload(raw.isEmpty ? item : raw),
+    raw: _wrapCodexProviderEnvelope(raw.isEmpty ? item : raw),
     fileChanges: fileChanges,
   );
 }

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:zeta_agent_providers/src/datasources/local_history/grok_user_content_parser.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_agent_providers/src/mappers/agent_provider_payload.dart';
+import 'package:zeta_agent_providers/src/mappers/grok_provider_payload.dart';
 
 /// 从 Grok `chat_history.jsonl` 降级重建多回合历史。
 ///
@@ -92,7 +93,7 @@ class GrokChatHistoryParser {
               text: userContent.text,
               status: AgentMessageStatus.completed,
               localImagePaths: userContent.localImagePaths,
-              raw: wrapAgentProviderPayload(map),
+              raw: _wrapGrokHistoryEnvelope(map),
             ),
           );
 
@@ -108,7 +109,7 @@ class GrokChatHistoryParser {
               role: AgentMessageRole.agent,
               text: cleaned,
               status: AgentMessageStatus.completed,
-              raw: wrapAgentProviderPayload(map),
+              raw: _wrapGrokHistoryEnvelope(map),
             ),
           );
 
@@ -126,7 +127,7 @@ class GrokChatHistoryParser {
               kind: AgentToolKind.think,
               status: AgentToolStatus.completed,
               content: cleaned,
-              raw: wrapAgentProviderPayload(map),
+              raw: _wrapGrokHistoryEnvelope(map),
             ),
           );
 
@@ -150,7 +151,7 @@ class GrokChatHistoryParser {
               kind: AgentToolKind.other,
               status: AgentToolStatus.completed,
               content: cleaned,
-              raw: wrapAgentProviderPayload(map),
+              raw: _wrapGrokHistoryEnvelope(map),
             ),
           );
 
@@ -167,7 +168,7 @@ class GrokChatHistoryParser {
               role: AgentMessageRole.agent,
               text: cleaned,
               status: AgentMessageStatus.completed,
-              raw: wrapAgentProviderPayload(map),
+              raw: _wrapGrokHistoryEnvelope(map),
             ),
           );
       }
@@ -186,6 +187,15 @@ class GrokChatHistoryParser {
       sessionPath: sessionPath,
     );
   }
+}
+
+AgentProviderRawPayload _wrapGrokHistoryEnvelope(
+  Map<String, Object?> envelope,
+) {
+  return wrapAgentProviderPayload(
+    envelope,
+    capturedAt: grokProviderEnvelopeCapturedAt(envelope),
+  );
 }
 
 class _ChatTurnBuilder {

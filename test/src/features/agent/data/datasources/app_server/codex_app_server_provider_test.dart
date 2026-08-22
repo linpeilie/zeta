@@ -501,6 +501,10 @@ void main() {
         events.whereType<AgentToolCallEvent>().single.toolCall.kind,
         AgentToolKind.execute,
       );
+      expect(
+        events.whereType<AgentToolCallEvent>().single.toolCall.raw.capturedAt,
+        DateTime.fromMillisecondsSinceEpoch(1, isUtc: true).toLocal(),
+      );
 
       await subscription.cancel();
       await provider.dispose();
