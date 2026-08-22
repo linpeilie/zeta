@@ -634,6 +634,11 @@ Phase 0 先采基线，再固定阈值。至少要能检测：
 8. 禁止 kernel import 具体插件；禁止按 plugin/provider 显示名 switch。
 9. 禁止运行时扫描目录注册 Dart 插件、动态下载/执行插件代码。
 10. 禁止全局 service locator、全局 EventBus、无 scope 广播 stream 或可变 singleton state。
+    **唯一登记例外：日志 sink**（`ZetaLogging.install` / `zetaLoggerFor`，2026-08-22 评审通过）。
+    豁免范围严格限定为"往哪写"：sink 不承载任何业务状态、身份或可观测以外的行为，
+    未安装时默认全部丢弃，且 `zetaLoggerFor` 返回**延迟代理**（每次写日志才解析工厂），
+    避免早于安装的首次访问永久缓存 no-op。指标端口不在此例外内——它按构造函数注入。
+    取消条件：Phase 2/3 把内核里用日志的类转成 MVI store 时，改为构造注入并删除本例外。
 11. 禁止用 `autoDispose` 决定 Agent CLI 进程、Binding lease 或 runtime registry 生命周期。
 12. 禁止插件直接访问任意 `~/.zeta` 路径；必须使用 app 注入的 namespace/文件端口。
 13. 禁止 capability 缺失时 no-op、空答案、空列表或默认成功。

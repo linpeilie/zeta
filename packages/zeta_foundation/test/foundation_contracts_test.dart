@@ -93,10 +93,25 @@ void main() {
       ZetaLogging.reset();
       final logger = zetaLoggerFor('zeta.test');
 
-      expect(logger, isA<NoopZetaLogger>());
+      // 未安装实现时写日志既不抛异常也不产生任何输出。
       logger
         ..t('trace')
         ..w('warn', error: StateError('x'));
+    });
+
+    test('install 之前拿到的 logger 在 install 之后也能写出日志', () {
+      // 回归：顶层 `final _log = zetaLoggerFor(...)` 会在首次访问时求值。
+      // 早期实现直接返回实例，一旦首次访问早于 install，该 scope 永久变成
+      // no-op，之后所有日志静默消失。
+      ZetaLogging.reset();
+      final early = zetaLoggerFor('zeta.test.early');
+      early.w('dropped before install');
+
+      final written = <String>[];
+      ZetaLogging.install((scope) => _RecordingLogger(scope, written));
+      early.w('after install');
+
+      expect(written, <String>['zeta.test.early:after install']);
     });
 
     test('安装后按 scope 分发', () {
@@ -106,7 +121,11 @@ void main() {
         return const NoopZetaLogger();
       });
 
-      zetaLoggerFor('zeta.agent.pipeline');
+      // 代理在**写日志时**才解析工厂，取 logger 本身不触发。
+      final logger = zetaLoggerFor('zeta.agent.pipeline');
+      expect(scopes, isEmpty);
+
+      logger.i('ready');
 
       expect(scopes, <String>['zeta.agent.pipeline']);
     });
@@ -143,3 +162,40 @@ void main() {
 
 OperationIdGenerator generatorFor(String scope) =>
     OperationIdGenerator(scope: scope);
+
+final class _RecordingLogger implements ZetaLogger {
+  _RecordingLogger(this.scope, this.written);
+
+  final String scope;
+  final List<String> written;
+
+  void _record(String message) => written.add('$scope:$message');
+
+  @override
+  void t(String message, {Object? error, StackTrace? stackTrace}) =>
+      _record(message);
+
+  @override
+  void d(String message, {Object? error, StackTrace? stackTrace}) =>
+      _record(message);
+
+  @override
+  void i(String message, {Object? error, StackTrace? stackTrace}) =>
+      _record(message);
+
+  @override
+  void w(String message, {Object? error, StackTrace? stackTrace}) =>
+      _record(message);
+
+  @override
+  void e(String message, {Object? error, StackTrace? stackTrace}) =>
+      _record(message);
+
+  @override
+  void failure(
+    String message, {
+    Map<String, Object?> context = const <String, Object?>{},
+    Object? error,
+    StackTrace? stackTrace,
+  }) => _record(message);
+}

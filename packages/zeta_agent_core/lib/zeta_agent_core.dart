@@ -6,10 +6,27 @@
 ///
 /// 明确不做的事：
 ///
-/// - 不认识任何具体 Provider，不按 providerId / kind / 显示名分支；
 /// - 不含 Provider 协议类型（JSON-RPC / ACP / stream-json 只存在于 data 层）；
 /// - 不读文件、不起进程（无 `dart:io`）；不依赖 Riverpod、Flutter widgets 或根 app；
-/// - 不产出本地化文案：需要用户可见文案时只接受注入的 `AgentUiTextCatalog`。
+/// - 不产出本地化文案：需要用户可见文案时只接受注入的 `AgentUiTextCatalog`；
+/// - 事件管线、合并策略、缓冲、分发与 TimelineStore 五个 G1 文件里不出现任何
+///   具体 Provider 标识（由 `claude_code_shared_layer_purity_test` 强制）。
+///
+/// ## 已知欠债：内置 Provider 目录仍在内核里
+///
+/// `agent_provider_models.dart` 目前持有 `AgentProviderKind` 三个枚举值、三个内置
+/// Provider 的稳定 ID、默认 CLI 命令/参数，以及按 ID 归一化显示名的 switch。
+/// 这是一张**集中式 Provider 类型表**，与"新增 Provider 只动 providers 包 + 一行
+/// 注册"的目标（§9.3）冲突：加一种协议要改这里的枚举，并牵动 factory、usage
+/// statistics、settings、presentation 等 exhaustive switch。
+///
+/// 现状是拆包前就有的设计，本包只是把它原样搬了进来。**它被
+/// `agent_provider_catalog_freeze_test` 冻结**：枚举值与内置 ID 只要有增删就会
+/// 失败，逼迫回到架构讨论，而不是顺手加一个 case。
+///
+/// 收口计划：Phase 3 第 6 批把 Codex / Grok / Claude Code 拆成三个显式插件贡献时，
+/// 内置配置与显示名归一化随之移入 data 层，`AgentProviderKind` 让位给插件
+/// descriptor 提供的开放注册表。
 library;
 
 export 'src/domain/agent_attention_models.dart';

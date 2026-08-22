@@ -181,13 +181,13 @@ void ensureLoggingDefaults() {
   // ConsoleOutput 保持默认；Printer 用无框线、整行按级别着色的控制台格式。
   // Filter 替换 DevelopmentFilter，保证 release 仍按级别输出。
   logger.Logger.defaultFilter = () => _ZetaLogFilter();
-  logger.Logger.defaultPrinter = () => _ZetaConsolePrinter();
+  logger.Logger.defaultPrinter = () => ZetaConsolePrinter();
   logger.Logger.addOutputListener(_writeFileLog);
 }
 
 /// 配置应用日志。
 ///
-/// 控制台使用 [_ZetaConsolePrinter]（无框、整行着色）；当 [logDirectory]
+/// 控制台使用 [ZetaConsolePrinter]（无框、整行着色、同样脱敏）；当 [logDirectory]
 /// 非空时，同时按本地日期追加脱敏文件日志。未传入 [level] 时，debug/profile
 /// 保留全部日志，release 默认只保留 warning 及以上级别。
 void configureAppLogging({logger.Level? level, Directory? logDirectory}) {
@@ -259,7 +259,12 @@ class _ZetaLogFilter extends logger.LogFilter {
 }
 
 /// 无框控制台输出：整行按日志级别着色（不只是级别前缀）。
-final class _ZetaConsolePrinter extends logger.LogPrinter {
+///
+/// **控制台与文件输出使用同一条脱敏链路**：`event.error` 是原始异常对象，
+/// `toString()` 里经常带 token、密码或本机路径。早期实现只脱敏文件输出，
+/// 控制台把原文直接打出来——同一条日志两种保护强度，等于没有保护。
+@visibleForTesting
+final class ZetaConsolePrinter extends logger.LogPrinter {
   static const _levelPrefixes = <logger.Level, String>{
     logger.Level.trace: '[T]',
     logger.Level.debug: '[D]',
@@ -281,8 +286,13 @@ final class _ZetaConsolePrinter extends logger.LogPrinter {
   @override
   List<String> log(logger.LogEvent event) {
     final prefix = _levelPrefixes[event.level] ?? '[?]';
-    final error = event.error == null ? '' : '  ERROR: ${event.error}';
-    final line = '$prefix ${event.message}$error';
+    // 类型必须保留（诊断的主要价值），文本必须脱敏（原始异常常带 token/路径）。
+    final error = event.error == null
+        ? ''
+        : '  ERROR: ${event.error.runtimeType}: '
+              '${redactSensitiveText(event.error.toString())}';
+    final message = redactSensitiveText('${event.message}');
+    final line = '$prefix $message$error';
     final color = _levelColors[event.level] ?? const logger.AnsiColor.none();
     return <String>[color(line)];
   }

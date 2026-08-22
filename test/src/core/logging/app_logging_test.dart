@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:logger/logger.dart';
+import 'package:logger/logger.dart' as logger;
 import 'package:zeta/src/core/logging/app_logging.dart';
 
 void main() {
@@ -125,6 +126,33 @@ void main() {
       expect(secondRun, contains('first record'));
       expect(secondRun, contains('third record'));
       expect(secondRun.length, greaterThan(firstRun.length));
+    });
+
+    test('控制台渲染与文件输出走同一条脱敏链路', () {
+      final home =
+          Platform.environment[Platform.isWindows ? 'USERPROFILE' : 'HOME'];
+      expect(home, isNotNull);
+
+      final rendered = ZetaConsolePrinter()
+          .log(
+            logger.LogEvent(
+              logger.Level.warning,
+              'token=message-secret path=$home/project\n'
+              'Authorization: Basic dXNlcjpwYXNz',
+              error: StateError('password=error-secret'),
+            ),
+          )
+          .join('\n');
+
+      // 控制台曾经直接打 `ERROR: ${event.error}`，把原始异常文本原样泄露。
+      expect(rendered, isNot(contains('message-secret')));
+      expect(rendered, isNot(contains('error-secret')));
+      expect(rendered, isNot(contains('dXNlcjpwYXNz')));
+      expect(rendered, contains('token=••••••'));
+      expect(rendered, contains('Authorization: ••••••'));
+      expect(rendered, contains('path=~/project'));
+      // 异常类型仍要看得见，否则控制台失去诊断价值。
+      expect(rendered, contains('StateError'));
     });
 
     test('redacts file messages and stores only the error type', () async {

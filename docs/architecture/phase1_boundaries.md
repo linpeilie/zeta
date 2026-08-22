@@ -2,7 +2,7 @@
 
 最后更新：2026-08-22
 
-状态：第三个增量（`zeta_agent_core`）已落地；前两轮 review 的 12 条问题已全部修复。对应 [目标架构 §14 Phase 1](./target_architecture_riverpod_mvi_plugins_packages.md#phase-1建立边界但不改变行为)。
+状态：第三个增量（`zeta_agent_core`）已落地；三轮 review 的 16 条问题已处理完毕。对应 [目标架构 §14 Phase 1](./target_architecture_riverpod_mvi_plugins_packages.md#phase-1建立边界但不改变行为)。
 
 阶段 1 的规矩是**只搬边界，不动行为**：没有新功能、没有 UI 变化、没有持久化格式变化，
 Provider wire 参数与状态 owner 全部保持原样。
@@ -224,7 +224,40 @@ Windows 用 `tool/test_full.ps1`（同样包含 Package 循环）。
 
 ---
 
-## 8. Review 修复记录
+## 8. 拆 `zeta_agent_providers` 之前必须先结论的两笔欠债
+
+这两条都是**拆包前就有的设计**，被本轮拆包正式化成了包公开 API，因此在继续迁移前
+必须有结论，而不是继续往下搬。当前状态：**已冻结、已立项、未清算**。
+
+### 8.1 内核里的集中式 Provider 目录
+
+`agent_provider_models.dart` 持有 `AgentProviderKind` 三个枚举值、三个内置 Provider 的
+稳定 ID 与默认 CLI 配置、按 ID 归一化显示名的 switch。全仓库有 29 个文件按 kind 分支，
+新增一种协议要改内核枚举并牵动一串 exhaustive switch——与 §9.3「新增 Provider 只动
+providers 包 + 一行注册」直接冲突。
+
+- **冻结**：`agent_provider_catalog_freeze_test` 精确断言枚举值、内置 ID、默认命令，
+  并断言"内核里出现内置 Provider 身份的文件只有这一个"。任何增删都会失败。
+- **收口**：Phase 3 第 6 批。三个 Provider 转成显式插件贡献时，内置配置与显示名归一化
+  移入 data 层，`AgentProviderKind` 让位给插件 descriptor 的开放注册表。
+
+### 8.2 中立事件上的 Provider raw payload
+
+36 个中立模型字段携带协议原文（21 个事件的 `raw`，工具的 `rawInput` / `rawOutput` 等），
+与 §4.1「Core 不拥有 Provider raw payload」冲突。风险已经兑现：presentation 有 21 处直接
+读 `.raw`，上下文面板还把它转成 JSON 渲染。
+
+- **冻结**：`agent_core_raw_payload_freeze_test` 让字段总数只减不增，并复核 raw 不进入
+  持久化与指标序列。
+- **收口**：按仓库已验证的范式逐类替换成 typed evidence（文件变更证据已经从 raw 演进成
+  `AgentFileChangeSnapshot`，是现成样板）。
+- **待你决定的产品问题**：上下文面板的"原始消息"是真实能力。建议改成由 Provider adapter
+  按需提供的 typed 诊断通道（可开关、不进缓存/日志），而不是每个中立事件常驻一份原文。
+  这一条改的是产品行为，需要你拍板后再动。
+
+---
+
+## 9. Review 修复记录
 
 第二个增量的 review 提出 8 条问题，全部已修复并补了回归测试。
 
@@ -252,3 +285,12 @@ Windows 用 `tool/test_full.ps1`（同样包含 Package 循环）。
 | **P3** Widget 测试守卫能被注释绕过 | 改用 `package:analyzer` 的 AST：注释与字符串天然不参与判定；同时统计扫描到的构造点数量，防止守卫空转。守卫自带"注释伪装"回归用例，并做过一次变异验证（去掉真实注入后确实报错） |
 
 新增 dev 依赖：`analyzer ^12.1.0`（此前是 transitive），仅用于架构守卫的 AST 解析。
+
+### 第三轮 review 修复
+
+| 问题 | 性质 | 修复 |
+| --- | --- | --- |
+| **高** 控制台日志不脱敏，与端口契约矛盾 | 控制台实现是既有的（`c16fb729`），矛盾由本轮新写的端口契约引入 | 控制台与文件走同一条脱敏链路：message 与 `error.toString()` 都过 `redactSensitiveText`，同时保留异常类型；端口契约改成如实描述"实现方负责脱敏"；补控制台渲染的回归断言 |
+| **高** 新增全局可变日志 service locator | 本轮新引入的临时方案 | `zetaLoggerFor` 改返回**延迟代理**（每次写日志才解析工厂），消除"首次访问早于 install 就永久缓存 no-op"的陷阱（已有回归测试）；豁免本身从源码注释升级为目标架构 §12 的**登记例外**，写明范围与取消条件 |
+| **高** 内核仍认识具体 Provider | 既有设计被搬入包；barrel 文档过度声明是本轮的账 | 改掉"不认识任何具体 Provider"的错误声明，如实写明欠债与收口计划；新增冻结守卫（见 §8.1） |
+| **高** raw payload 成为内核稳定 API | 既有设计被搬入包并正式化；Phase 1 计划遗漏 | 新增冻结守卫 + 立项（见 §8.2）；产品取舍留给 owner |
