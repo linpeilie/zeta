@@ -6,7 +6,9 @@ import 'package:flutter/foundation.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_binding.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 
 /// Agent Canvas 中单个常驻线程/草稿的逻辑标识。
@@ -78,6 +80,7 @@ class AgentThreadWorkspaceEntry extends ChangeNotifier {
     required this.providerController,
     required this.bindingLease,
     required this.viewModel,
+    this.sliceBinding,
   }) : _threadSnapshot = viewModel.threadSnapshot {
     viewModel.threadSnapshotListenable.addListener(_handleRuntimeChanged);
     providerController.addListener(_handleRuntimeChanged);
@@ -87,6 +90,14 @@ class AgentThreadWorkspaceEntry extends ChangeNotifier {
   final AgentProviderSettingsPort providerController;
   final AgentConversationBindingLease bindingLease;
   final AgentConversationViewModel viewModel;
+
+  /// Phase 2 切片接线；为 null 表示这个 entry 仍走旧 ViewModel 直连路径。
+  ///
+  /// **按 entry 生效**：某个会话出问题时只撤掉它的 binding，其余不受影响。
+  final AgentConversationSliceBinding? sliceBinding;
+
+  /// 该 entry 的切片 store；未启用时为 null。
+  AgentConversationSliceStore? get sliceStore => sliceBinding?.store;
 
   AgentConversationBinding get binding => bindingLease.binding;
 
@@ -173,6 +184,8 @@ class AgentThreadWorkspaceEntry extends ChangeNotifier {
     _disposed = true;
     viewModel.threadSnapshotListenable.removeListener(_handleRuntimeChanged);
     providerController.removeListener(_handleRuntimeChanged);
+    // 切片先于 ViewModel 释放：它订阅了 ViewModel 的 region listenable。
+    sliceBinding?.dispose();
     viewModel.dispose();
     unawaited(bindingLease.release());
     super.dispose();
@@ -202,6 +215,7 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
     this.turnContextStore,
     AgentUiTextCatalog? textCatalog,
     this.metrics = noopZetaMetricsPort,
+    this.conversationSliceEnabled,
   }) : bindingManager =
            bindingManager ??
            AgentConversationBindingManager(
@@ -221,6 +235,12 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
   final bool Function()? _workspaceFilesIndexReady;
   final AgentProviderRuntimeRegistry runtimeRegistry;
   final AgentProviderSettingsPort providerController;
+
+  /// Phase 2 切片的 feature flag：判定某个 workspace entry 是否走切片路径。
+  ///
+  /// null 或返回 false = 该 entry 仍走旧 ViewModel 直连路径。**按 entry 生效**，
+  /// 回退颗粒是一个会话而不是整个应用。
+  final bool Function(AgentThreadWorkspaceKey key)? conversationSliceEnabled;
   final AgentConversationBindingManager bindingManager;
   final AgentProviderGlobalRuntime globalRuntime;
   final bool _ownsBindingManager;
@@ -400,6 +420,20 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
     return removeEntry(entry.entryId);
   }
 
+  /// 按 Binding 身份解析该会话的切片 store；未启用切片的 entry 返回 null。
+  ///
+  /// 组合根用它覆盖 `agentConversationSliceStoreResolverProvider`。
+  AgentConversationSliceStore? sliceStoreForBinding(
+    AgentConversationBindingKey key,
+  ) {
+    for (final entry in _entries) {
+      if (entry.binding.key == key) {
+        return entry.sliceStore;
+      }
+    }
+    return null;
+  }
+
   @override
   void dispose() {
     if (_disposed) {
@@ -449,6 +483,8 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
     };
     late final AgentThreadWorkspaceEntry entry;
     late final AgentConversationViewModel viewModel;
+    // 切片是否为这个 entry 启用（Phase 2 feature flag，按会话生效）。
+    final sliceEnabled = conversationSliceEnabled?.call(key) ?? false;
     viewModel = AgentConversationViewModel(
       providerController: providerController,
       conversationBinding: bindingLease.binding,
@@ -493,6 +529,9 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
       providerController: providerController,
       bindingLease: bindingLease,
       viewModel: viewModel,
+      sliceBinding: sliceEnabled
+          ? AgentConversationSliceBinding(viewModel: viewModel)
+          : null,
     );
     entry.addListener(_handleEntryChanged);
     _entries.add(entry);

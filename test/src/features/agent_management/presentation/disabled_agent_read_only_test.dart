@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
@@ -154,20 +155,22 @@ Future<void> _pumpAgentPane(
     codeFontFamily: 'JetBrainsMono',
   );
   await tester.pumpWidget(
-    IdeThemeScope(
-      themeMode: ThemeMode.light,
-      lightTheme: ideTheme,
-      darkTheme: buildIdeThemeData(
-        brightness: Brightness.dark,
-        codeFontFamily: 'JetBrainsMono',
-      ),
-      child: sf.ShadcnApp(
-        locale: ZetaLocalization.simplifiedChinese,
-        supportedLocales: ZetaLocalization.supportedLocales,
-        localizationsDelegates: ZetaLocalization.delegates,
-        theme: buildShadcnTheme(ideTheme),
-        materialTheme: buildMaterialTheme(ideTheme),
-        home: sf.Scaffold(child: AgentPane(viewModel: viewModel)),
+    ProviderScope(
+      child: IdeThemeScope(
+        themeMode: ThemeMode.light,
+        lightTheme: ideTheme,
+        darkTheme: buildIdeThemeData(
+          brightness: Brightness.dark,
+          codeFontFamily: 'JetBrainsMono',
+        ),
+        child: sf.ShadcnApp(
+          locale: ZetaLocalization.simplifiedChinese,
+          supportedLocales: ZetaLocalization.supportedLocales,
+          localizationsDelegates: ZetaLocalization.delegates,
+          theme: buildShadcnTheme(ideTheme),
+          materialTheme: buildMaterialTheme(ideTheme),
+          home: sf.Scaffold(child: AgentPane(viewModel: viewModel)),
+        ),
       ),
     ),
   );

@@ -4,10 +4,13 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/features/agent/application/agent_conversation_mode_controller.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
@@ -34,6 +37,8 @@ class AgentPaneTestApp extends StatelessWidget {
     this.disableAnimations = false,
     this.messageSendShortcut = MessageSendShortcut.enter,
     this.platform,
+    this.sliceStores =
+        const <AgentConversationBindingKey, AgentConversationSliceStore>{},
   });
 
   final AgentConversationViewModel viewModel;
@@ -46,6 +51,12 @@ class AgentPaneTestApp extends StatelessWidget {
   final bool disableAnimations;
   final MessageSendShortcut messageSendShortcut;
   final TargetPlatform? platform;
+
+  /// 为哪些 Binding 提供 Phase 2 切片 store。
+  ///
+  /// 默认空 = 切片关闭，AgentPane 走旧 ViewModel 直连路径（feature flag 的回退侧）。
+  final Map<AgentConversationBindingKey, AgentConversationSliceStore>
+  sliceStores;
 
   @override
   Widget build(BuildContext context) {
@@ -62,30 +73,37 @@ class AgentPaneTestApp extends StatelessWidget {
     final activeIdeTheme = themeMode == ThemeMode.light
         ? lightIdeTheme
         : darkIdeTheme;
-    return IdeThemeScope(
-      themeMode: themeMode,
-      lightTheme: lightIdeTheme,
-      darkTheme: darkIdeTheme,
-      child: sf.ShadcnApp(
-        locale: ZetaLocalization.simplifiedChinese,
-        supportedLocales: ZetaLocalization.supportedLocales,
-        localizationsDelegates: ZetaLocalization.delegates,
-        theme: buildShadcnTheme(lightIdeTheme),
-        darkTheme: buildShadcnTheme(darkIdeTheme),
-        materialTheme: buildMaterialTheme(
-          activeIdeTheme,
-        ).copyWith(platform: platform),
-        themeMode: resolveShadcnThemeMode(themeMode),
-        home: Builder(
-          builder: (context) => MediaQuery(
-            data: MediaQuery.of(
-              context,
-            ).copyWith(disableAnimations: disableAnimations),
-            child: sf.Scaffold(
-              child: AgentPane(
-                key: agentPaneKey,
-                viewModel: viewModel,
-                messageSendShortcut: messageSendShortcut,
+    return ProviderScope(
+      overrides: [
+        agentConversationSliceStoreResolverProvider.overrideWithValue(
+          (key) => sliceStores[key],
+        ),
+      ],
+      child: IdeThemeScope(
+        themeMode: themeMode,
+        lightTheme: lightIdeTheme,
+        darkTheme: darkIdeTheme,
+        child: sf.ShadcnApp(
+          locale: ZetaLocalization.simplifiedChinese,
+          supportedLocales: ZetaLocalization.supportedLocales,
+          localizationsDelegates: ZetaLocalization.delegates,
+          theme: buildShadcnTheme(lightIdeTheme),
+          darkTheme: buildShadcnTheme(darkIdeTheme),
+          materialTheme: buildMaterialTheme(
+            activeIdeTheme,
+          ).copyWith(platform: platform),
+          themeMode: resolveShadcnThemeMode(themeMode),
+          home: Builder(
+            builder: (context) => MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(disableAnimations: disableAnimations),
+              child: sf.Scaffold(
+                child: AgentPane(
+                  key: agentPaneKey,
+                  viewModel: viewModel,
+                  messageSendShortcut: messageSendShortcut,
+                ),
               ),
             ),
           ),

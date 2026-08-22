@@ -10,6 +10,8 @@ import 'package:window_manager/window_manager.dart';
 import 'package:zeta/src/app/app_constants.dart';
 import 'package:zeta/src/app/composition/agent_resource_shutdown.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:zeta/src/app/composition/app_dependencies.dart';
 import 'package:zeta/src/app/observability/zeta_observability.dart';
 import 'package:zeta/src/app/plugins/zeta_plugin_catalog.dart';
 import 'package:zeta/src/app/localization/zeta_text_catalogs.dart';
@@ -449,6 +451,17 @@ class MainAppState extends State<MainApp>
 
   @override
   Widget build(BuildContext context) {
+    // 根 `ProviderScope` 由 MainApp 自己提供，而不是放在 `main.dart`：
+    // 那样每个 pump MainApp 的测试都要自己补一层，接线一旦漏掉就是运行期
+    // "No ProviderScope found"，而不是编译期错误。
+    return ProviderScope(
+      observers: widget.observability?.providerObservers,
+      overrides: [zetaMetricsPortProvider.overrideWithValue(_metrics)],
+      child: _buildApp(context),
+    );
+  }
+
+  Widget _buildApp(BuildContext context) {
     return ValueListenableBuilder<AppearanceSettings>(
       valueListenable: _appearanceController.listenable,
       builder: (context, settings, _) {

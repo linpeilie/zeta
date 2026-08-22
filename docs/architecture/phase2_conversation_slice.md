@@ -335,7 +335,7 @@ app 级 feature flag 二选一；新 adapter 是现有 store 的只读消费者�
 | B | `AgentConversationSliceStore`（铸造 `OperationId`、状态不变不发布、迟到结果计数、dispose 关闭） | ✅ 10 条 store 测试 |
 | C | `AgentConversationSliceBinding`：region ingress 合并 + effect 打到现有 ViewModel port | ✅ 3 条对真实 ViewModel 的接线测试 |
 | D | Riverpod family：`agentConversationSliceProvider` + 五个 region selector + fail-closed 覆盖 + 开关 | ✅ 6 条 provider 测试 |
-| E | `AgentPane` 子树改用 selector 订阅、workspace entry 按 flag 创建 binding | ⏳ 未开始 |
+| E | `AgentPane` 子树改用 selector 订阅、workspace entry 按 flag 创建 binding | ⚠️ 部分完成，见 §9.6 |
 | F | 两 thread 并存 / UiEffect exactly-once / 性能预算等验收测试（§8 表） | ⏳ 未开始 |
 
 已落地的关键不变量（都有测试钉住）：
@@ -520,6 +520,47 @@ reviewer 对测试的判断也是对的。
 
 测试重写成**同一个容器、两个 key**：两个 entry 各读各的、只推一个另一个纹丝不动、
 draft 与 thread 不串、`invalidate` 一个不影响另一个。
+
+---
+
+## 9.6 E 步进度（2026-08-22）
+
+**已完成**
+
+- `AgentRegionBuilder`：订阅一个 region 的**唯一接缝**。切片为该 entry 启用时走
+  Riverpod selector，否则回退到 ViewModel 的 `ValueListenable`。两条路径给出的是
+  同一批不可变 region 对象，所以切换只换订阅机制，不换渲染结果。
+- `AgentPane` 顶层四个订阅点已切过去：header / history / composer /
+  pendingInteraction。live turn 仍是 `ListenableBuilder`（§2.7：它刻意不进切片）。
+- 合并订阅拆成了嵌套：原来 composer + pending + 草稿图片挤在一个
+  `Listenable.merge` 里，现在各订各的——pending 变化不再重建 composer 那层。
+- `AgentThreadWorkspaceEntry` 按 flag 创建 `AgentConversationSliceBinding`
+  （`conversationSliceEnabled(key)`，默认 false），`dispose` 时**先释放切片再释放
+  ViewModel**（切片订阅了 ViewModel 的 listenable）。控制器提供
+  `sliceStoreForBinding(key)` 给 Riverpod resolver。
+- **根 `ProviderScope` 从 `main.dart` 移进 `MainApp`**。原来放在外面，导致每个
+  pump `MainApp` 的测试都要自己补一层，漏掉就是运行期 "No ProviderScope found"
+  而不是编译期错误。移进去之后生产与测试共用同一套接线。
+
+**未完成（明确留作后续，不算在 E 里）**
+
+深层卡片与消息组件里还有 13 处 `expansionStateListenable` /
+`pendingInteractionStateListenable` 订阅（`agent_pane_cards.dart`、
+`agent_pane_messages.dart`、`agent_pane_sections.dart`、`agent_pane_plan_panel.dart`、
+`agent_pane_context_panel.dart`），它们多数与 `liveTurnListenable` 合并订阅。这些
+继续走 listenable 路径——**功能正确但还不是 selector 订阅**，不要因为 §9.5 的表格
+写了"E"就以为整棵子树都迁完了。
+
+**验收测试**：`agent_pane_slice_wiring_test`
+
+- 切片开启时渲染与旧路径一致；
+- 未注册 store 的 entry 走旧路径且仍然渲染（回退侧可用）；
+- **只往 store 推、不碰 ViewModel** 的 header 也能渲染出来——这条能区分"真的接上了
+  selector"和"看起来接上了"，做过 mutation 验证：撤掉该 entry 的 store，它立刻红。
+
+**F 步（§8 验收表剩余项）仍未开始**：两 thread 并存的 Widget 级隔离、UiEffect
+exactly-once、canonical signature 回归、Phase 0 帧预算复测。注意帧预算测试目前跑的是
+**flag 关闭**的旧路径，切片开启下的帧预算还没有测过。
 
 ---
 

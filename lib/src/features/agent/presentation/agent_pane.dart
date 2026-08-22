@@ -21,6 +21,8 @@ import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 import 'package:zeta/src/ui/core/ide_image_preview.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_region_builder.dart';
 import 'package:zeta/src/features/agent/presentation/agent_presentation_l10n.dart';
 import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_region_state.dart';
@@ -378,114 +380,138 @@ class _AgentPaneState extends State<AgentPane> {
         _AgentContentAlign(
           child: Padding(
             padding: pagePadding,
-            child: ValueListenableBuilder<AgentHeaderState>(
-              valueListenable: widget.viewModel.headerStateListenable,
-              builder: (context, state, _) {
+            child: AgentRegionBuilder<AgentHeaderState>(
+              viewModel: widget.viewModel,
+              selector: agentConversationHeaderProvider.call,
+              legacyListenable: widget.viewModel.headerStateListenable,
+              builder: (context, state) {
                 return _AgentHeader(viewModel: widget.viewModel, state: state);
               },
             ),
           ),
         ),
         Expanded(
-          child: ListenableBuilder(
-            listenable: Listenable.merge(<Listenable>[
-              widget.viewModel.historyStateListenable,
-              widget.viewModel.liveTurnListenable,
-            ]),
-            builder: (context, _) {
-              final historyState = widget.viewModel.historyState;
-              final liveTurnState = widget.viewModel.liveTurnState;
-              final hasConversation =
-                  historyState.visibleTurns.isNotEmpty || liveTurnState != null;
-              final isLoadingHistory = historyState.isLoading;
-              // 加载历史时输入框固定底部（与已有对话一致），空草稿仍居中。
-              final pinFooterToBottom = hasConversation || isLoadingHistory;
-              return _AgentConversationLayout(
-                pinFooterToBottom: pinFooterToBottom,
-                reduceMotion: MediaQuery.disableAnimationsOf(context),
-                timeline: isLoadingHistory
-                    ? _AgentThreadHistoryLoading(
-                        providerId: historyState.providerId,
-                        providerKind: historyState.providerKind,
-                        providerName: historyState.providerName,
-                      )
-                    : _AgentConversationTimeline(
+          child: AgentRegionBuilder<AgentConversationHistoryState>(
+            viewModel: widget.viewModel,
+            selector: agentConversationHistoryProvider.call,
+            legacyListenable: widget.viewModel.historyStateListenable,
+            builder: (context, historyState) => ListenableBuilder(
+              // live turn 刻意不进切片（§2.7）：每个 token 触发一次切片发布会
+              // 直接撞穿帧预算，它继续走局部重建路径。
+              listenable: widget.viewModel.liveTurnListenable,
+              builder: (context, _) {
+                final liveTurnState = widget.viewModel.liveTurnState;
+                final hasConversation =
+                    historyState.visibleTurns.isNotEmpty ||
+                    liveTurnState != null;
+                final isLoadingHistory = historyState.isLoading;
+                // 加载历史时输入框固定底部（与已有对话一致），空草稿仍居中。
+                final pinFooterToBottom = hasConversation || isLoadingHistory;
+                return _AgentConversationLayout(
+                  pinFooterToBottom: pinFooterToBottom,
+                  reduceMotion: MediaQuery.disableAnimationsOf(context),
+                  timeline: isLoadingHistory
+                      ? _AgentThreadHistoryLoading(
+                          providerId: historyState.providerId,
+                          providerKind: historyState.providerKind,
+                          providerName: historyState.providerName,
+                        )
+                      : _AgentConversationTimeline(
+                          viewModel: widget.viewModel,
+                          isActive: widget.isActive,
+                          scrollController: _scrollController,
+                          pagePadding: pagePadding,
+                          floatingPanelExtent: _activePlanPanelExtent,
+                          projectionCache: _projectionCache,
+                          descriptorFactory: _descriptorFactory,
+                          markdownCache: _markdownCache,
+                          planRevisionDrafts: _planRevisionDrafts,
+                          virtualListController: _virtualListController,
+                          scrollCoordinator: _scrollCoordinator,
+                          scrollChromeTick: _scrollChromeTick,
+                          onLastItemIdChanged: (id) {
+                            _lastTimelineItemId = id;
+                          },
+                          onScrollToEndPressed: _requestScrollToEndFromButton,
+                        ),
+                  floatingPanel: _AgentActivePlanSection(
+                    viewModel: widget.viewModel,
+                    pagePadding: pagePadding,
+                    onExtentChanged: _handleActivePlanPanelExtentChanged,
+                  ),
+                  footer: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // panelHeight 由 selectBucket 旁路缓存，不进入 bucket 身份。
+                      _AgentPendingInteractionSection(
                         viewModel: widget.viewModel,
-                        isActive: widget.isActive,
-                        scrollController: _scrollController,
+                        panelHeight: _panelHeight,
                         pagePadding: pagePadding,
-                        floatingPanelExtent: _activePlanPanelExtent,
-                        projectionCache: _projectionCache,
-                        descriptorFactory: _descriptorFactory,
-                        markdownCache: _markdownCache,
-                        planRevisionDrafts: _planRevisionDrafts,
-                        virtualListController: _virtualListController,
-                        scrollCoordinator: _scrollCoordinator,
-                        scrollChromeTick: _scrollChromeTick,
-                        onLastItemIdChanged: (id) {
-                          _lastTimelineItemId = id;
-                        },
-                        onScrollToEndPressed: _requestScrollToEndFromButton,
                       ),
-                floatingPanel: _AgentActivePlanSection(
-                  viewModel: widget.viewModel,
-                  pagePadding: pagePadding,
-                  onExtentChanged: _handleActivePlanPanelExtentChanged,
-                ),
-                footer: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // panelHeight 由 selectBucket 旁路缓存，不进入 bucket 身份。
-                    _AgentPendingInteractionSection(
-                      viewModel: widget.viewModel,
-                      panelHeight: _panelHeight,
-                      pagePadding: pagePadding,
-                    ),
-                    ListenableBuilder(
-                      listenable: Listenable.merge(<Listenable>[
-                        widget.viewModel.composerStateListenable,
-                        widget.viewModel.pendingInteractionStateListenable,
-                        _draftImagePaths,
-                      ]),
-                      builder: (context, _) {
-                        final composerState = widget.viewModel.composerState;
-                        final pendingState =
-                            widget.viewModel.pendingInteractionState;
-                        final draftImagePaths = _draftImagePaths.value;
-                        return Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            if (composerState.isReadOnly)
-                              _AgentReadOnlyNotice(pagePadding: pagePadding)
-                            else if (!pendingState.blocksComposer)
-                              // 提问卡 / 权限卡占用底部交互时隐藏 Composer，
-                              // 与 pending dock 互斥，避免双焦点与误发送。
-                              _AgentComposerSection(
-                                key: const ValueKey('agent-composer-section'),
-                                anchorKey: _composerAnchorKey,
-                                viewModel: widget.viewModel,
-                                state: composerState,
-                                inputController: _inputController,
-                                composerFocusNode: _composerFocusNode,
-                                canSendListenable: _canSendNotifier,
-                                draftImagePaths: draftImagePaths,
-                                pagePadding: pagePadding,
-                                onAttachImages: _pickImages,
-                                onRemoveImage: _removeDraftImage,
-                                onSend: _sendMessage,
-                                onOpenMentionPicker: _openMentionPickerFromMenu,
-                                onInsertSkill: _openSkillPickerFromMenu,
-                              ),
-                          ],
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              );
-            },
+                      AgentRegionBuilder<AgentComposerState>(
+                        viewModel: widget.viewModel,
+                        selector: agentConversationComposerProvider.call,
+                        legacyListenable:
+                            widget.viewModel.composerStateListenable,
+                        builder: (context, composerState) =>
+                            AgentRegionBuilder<AgentPendingInteractionState>(
+                              viewModel: widget.viewModel,
+                              selector:
+                                  agentConversationPendingInteractionProvider
+                                      .call,
+                              legacyListenable: widget
+                                  .viewModel
+                                  .pendingInteractionStateListenable,
+                              builder: (context, pendingState) =>
+                                  ValueListenableBuilder<List<String>>(
+                                    valueListenable: _draftImagePaths,
+                                    builder: (context, draftImagePaths, _) {
+                                      return Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          if (composerState.isReadOnly)
+                                            _AgentReadOnlyNotice(
+                                              pagePadding: pagePadding,
+                                            )
+                                          else if (!pendingState.blocksComposer)
+                                            // 提问卡 / 权限卡占用底部交互时隐藏 Composer，
+                                            // 与 pending dock 互斥，避免双焦点与误发送。
+                                            _AgentComposerSection(
+                                              key: const ValueKey(
+                                                'agent-composer-section',
+                                              ),
+                                              anchorKey: _composerAnchorKey,
+                                              viewModel: widget.viewModel,
+                                              state: composerState,
+                                              inputController: _inputController,
+                                              composerFocusNode:
+                                                  _composerFocusNode,
+                                              canSendListenable:
+                                                  _canSendNotifier,
+                                              draftImagePaths: draftImagePaths,
+                                              pagePadding: pagePadding,
+                                              onAttachImages: _pickImages,
+                                              onRemoveImage: _removeDraftImage,
+                                              onSend: _sendMessage,
+                                              onOpenMentionPicker:
+                                                  _openMentionPickerFromMenu,
+                                              onInsertSkill:
+                                                  _openSkillPickerFromMenu,
+                                            ),
+                                        ],
+                                      );
+                                    },
+                                  ),
+                            ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
           ),
         ),
       ],

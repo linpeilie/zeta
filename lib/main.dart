@@ -2,11 +2,9 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/widgets.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'package:zeta/src/app/app.dart';
-import 'package:zeta/src/app/composition/app_dependencies.dart';
 import 'package:zeta/src/app/observability/zeta_observability.dart';
 import 'package:zeta/src/app/window_bootstrap.dart';
 import 'package:zeta/src/app/zeta_startup_bootstrap.dart';
@@ -70,20 +68,14 @@ void main() {
       );
       // 阶段 0：只挂脱敏观察器与指标端口，不迁移任何业务状态到 Riverpod。
       final observability = ZetaObservability.fromEnvironment();
+      // 根 `ProviderScope` 在 MainApp 内部，测试 pump MainApp 时无需重复接线。
       runApp(
-        ProviderScope(
-          observers: observability.providerObservers,
-          // 阶段 1：Riverpod 只承担组合根与覆盖点，业务状态仍由现有 controller 拥有。
-          overrides: [
-            zetaMetricsPortProvider.overrideWithValue(observability.metrics),
-          ],
-          child: MainApp(
-            dataPaths: dataPaths,
-            initialAppearanceSettings: appearance,
-            fallbackLanguage: fallbackLanguage,
-            waitForGeneralSettings: true,
-            observability: observability,
-          ),
+        MainApp(
+          dataPaths: dataPaths,
+          initialAppearanceSettings: appearance,
+          fallbackLanguage: fallbackLanguage,
+          waitForGeneralSettings: true,
+          observability: observability,
         ),
       );
     },

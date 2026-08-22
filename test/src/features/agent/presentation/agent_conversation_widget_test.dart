@@ -8,6 +8,7 @@ import 'dart:io';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
@@ -1389,19 +1390,21 @@ void main() {
         codeFontFamily: 'CodeFont',
       );
       await tester.pumpWidget(
-        IdeThemeScope(
-          themeMode: ThemeMode.dark,
-          lightTheme: lightIdeTheme,
-          darkTheme: darkIdeTheme,
-          child: sf.ShadcnApp(
-            locale: ZetaLocalization.simplifiedChinese,
-            supportedLocales: ZetaLocalization.supportedLocales,
-            localizationsDelegates: ZetaLocalization.delegates,
-            theme: buildShadcnTheme(lightIdeTheme),
-            darkTheme: buildShadcnTheme(darkIdeTheme),
-            materialTheme: buildMaterialTheme(darkIdeTheme),
-            themeMode: sf.ThemeMode.dark,
-            home: sf.Scaffold(child: AgentPane(viewModel: viewModel)),
+        ProviderScope(
+          child: IdeThemeScope(
+            themeMode: ThemeMode.dark,
+            lightTheme: lightIdeTheme,
+            darkTheme: darkIdeTheme,
+            child: sf.ShadcnApp(
+              locale: ZetaLocalization.simplifiedChinese,
+              supportedLocales: ZetaLocalization.supportedLocales,
+              localizationsDelegates: ZetaLocalization.delegates,
+              theme: buildShadcnTheme(lightIdeTheme),
+              darkTheme: buildShadcnTheme(darkIdeTheme),
+              materialTheme: buildMaterialTheme(darkIdeTheme),
+              themeMode: sf.ThemeMode.dark,
+              home: sf.Scaffold(child: AgentPane(viewModel: viewModel)),
+            ),
           ),
         ),
       );
@@ -1473,19 +1476,21 @@ void main() {
       codeFontFamily: 'CodeFont',
     );
     await tester.pumpWidget(
-      IdeThemeScope(
-        themeMode: ThemeMode.dark,
-        lightTheme: lightIdeTheme,
-        darkTheme: darkIdeTheme,
-        child: sf.ShadcnApp(
-          locale: ZetaLocalization.simplifiedChinese,
-          supportedLocales: ZetaLocalization.supportedLocales,
-          localizationsDelegates: ZetaLocalization.delegates,
-          theme: buildShadcnTheme(lightIdeTheme),
-          darkTheme: buildShadcnTheme(darkIdeTheme),
-          materialTheme: buildMaterialTheme(darkIdeTheme),
-          themeMode: sf.ThemeMode.dark,
-          home: sf.Scaffold(child: AgentPane(viewModel: viewModel)),
+      ProviderScope(
+        child: IdeThemeScope(
+          themeMode: ThemeMode.dark,
+          lightTheme: lightIdeTheme,
+          darkTheme: darkIdeTheme,
+          child: sf.ShadcnApp(
+            locale: ZetaLocalization.simplifiedChinese,
+            supportedLocales: ZetaLocalization.supportedLocales,
+            localizationsDelegates: ZetaLocalization.delegates,
+            theme: buildShadcnTheme(lightIdeTheme),
+            darkTheme: buildShadcnTheme(darkIdeTheme),
+            materialTheme: buildMaterialTheme(darkIdeTheme),
+            themeMode: sf.ThemeMode.dark,
+            home: sf.Scaffold(child: AgentPane(viewModel: viewModel)),
+          ),
         ),
       ),
     );
@@ -1684,19 +1689,21 @@ void main() {
       codeFontFamily: 'CodeFont',
     );
     await tester.pumpWidget(
-      IdeThemeScope(
-        themeMode: ThemeMode.dark,
-        lightTheme: lightIdeTheme,
-        darkTheme: darkIdeTheme,
-        child: sf.ShadcnApp(
-          locale: ZetaLocalization.simplifiedChinese,
-          supportedLocales: ZetaLocalization.supportedLocales,
-          localizationsDelegates: ZetaLocalization.delegates,
-          theme: buildShadcnTheme(lightIdeTheme),
-          darkTheme: buildShadcnTheme(darkIdeTheme),
-          materialTheme: buildMaterialTheme(darkIdeTheme),
-          themeMode: sf.ThemeMode.dark,
-          home: sf.Scaffold(child: AgentPane(viewModel: viewModel)),
+      ProviderScope(
+        child: IdeThemeScope(
+          themeMode: ThemeMode.dark,
+          lightTheme: lightIdeTheme,
+          darkTheme: darkIdeTheme,
+          child: sf.ShadcnApp(
+            locale: ZetaLocalization.simplifiedChinese,
+            supportedLocales: ZetaLocalization.supportedLocales,
+            localizationsDelegates: ZetaLocalization.delegates,
+            theme: buildShadcnTheme(lightIdeTheme),
+            darkTheme: buildShadcnTheme(darkIdeTheme),
+            materialTheme: buildMaterialTheme(darkIdeTheme),
+            themeMode: sf.ThemeMode.dark,
+            home: sf.Scaffold(child: AgentPane(viewModel: viewModel)),
+          ),
         ),
       ),
     );
@@ -1994,19 +2001,21 @@ void main() {
       codeFontFamily: 'CodeFont',
     );
     await tester.pumpWidget(
-      IdeThemeScope(
-        themeMode: ThemeMode.dark,
-        lightTheme: lightIdeTheme,
-        darkTheme: darkIdeTheme,
-        child: sf.ShadcnApp(
-          locale: ZetaLocalization.simplifiedChinese,
-          supportedLocales: ZetaLocalization.supportedLocales,
-          localizationsDelegates: ZetaLocalization.delegates,
-          theme: buildShadcnTheme(lightIdeTheme),
-          darkTheme: buildShadcnTheme(darkIdeTheme),
-          materialTheme: buildMaterialTheme(darkIdeTheme),
-          themeMode: sf.ThemeMode.dark,
-          home: sf.Scaffold(child: AgentPane(viewModel: viewModel)),
+      ProviderScope(
+        child: IdeThemeScope(
+          themeMode: ThemeMode.dark,
+          lightTheme: lightIdeTheme,
+          darkTheme: darkIdeTheme,
+          child: sf.ShadcnApp(
+            locale: ZetaLocalization.simplifiedChinese,
+            supportedLocales: ZetaLocalization.supportedLocales,
+            localizationsDelegates: ZetaLocalization.delegates,
+            theme: buildShadcnTheme(lightIdeTheme),
+            darkTheme: buildShadcnTheme(darkIdeTheme),
+            materialTheme: buildMaterialTheme(darkIdeTheme),
+            themeMode: sf.ThemeMode.dark,
+            home: sf.Scaffold(child: AgentPane(viewModel: viewModel)),
+          ),
         ),
       ),
     );
