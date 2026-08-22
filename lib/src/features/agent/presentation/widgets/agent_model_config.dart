@@ -4,6 +4,47 @@ const double _composerSelectorPopoverPreferredWidth = 288;
 const double _composerSelectorPopoverMaxHeight = 360;
 const double _composerSelectorRowHeight = 32;
 
+/// Popover 展开态 + 模型配置快照。
+///
+/// `expandedModelId`（哪一行的配置卡展开着）是**纯 presentation 状态**：
+/// 目标架构 §7.3 把 popover 归到 Widget/page scope，它不该混进 application 的
+/// `AgentModelConfigUiState`。这里用组合而不是继承，也刻意不做字段转发——
+/// 让"这是两层状态"在每个读取点都看得见。
+@immutable
+class _AgentModelConfigPopoverState {
+  const _AgentModelConfigPopoverState({
+    required this.snapshot,
+    this.expandedModelId,
+  });
+
+  /// application 产出的模型配置快照。
+  final AgentModelConfigUiState snapshot;
+
+  /// 当前展开配置卡的模型 id；null 表示都收起。
+  final String? expandedModelId;
+
+  _AgentModelConfigPopoverState withSnapshot(AgentModelConfigUiState next) =>
+      _AgentModelConfigPopoverState(
+        snapshot: next,
+        expandedModelId: expandedModelId,
+      );
+
+  _AgentModelConfigPopoverState withExpanded(String? modelId) =>
+      _AgentModelConfigPopoverState(
+        snapshot: snapshot,
+        expandedModelId: modelId,
+      );
+
+  @override
+  bool operator ==(Object other) =>
+      other is _AgentModelConfigPopoverState &&
+      other.snapshot == snapshot &&
+      other.expandedModelId == expandedModelId;
+
+  @override
+  int get hashCode => Object.hash(snapshot, expandedModelId);
+}
+
 /// Composer 中统一的模型配置入口与 Popover 协调器。
 class _AgentModelConfig extends StatefulWidget {
   const _AgentModelConfig({
@@ -29,7 +70,7 @@ class _AgentModelConfig extends StatefulWidget {
 }
 
 class _AgentModelConfigState extends State<_AgentModelConfig> {
-  late final ValueNotifier<AgentModelConfigUiState> _popoverState;
+  late final ValueNotifier<_AgentModelConfigPopoverState> _popoverState;
   final FocusNode _triggerFocusNode = FocusNode(
     debugLabel: 'agent-model-config-trigger',
   );
@@ -40,8 +81,8 @@ class _AgentModelConfigState extends State<_AgentModelConfig> {
   @override
   void initState() {
     super.initState();
-    _popoverState = ValueNotifier<AgentModelConfigUiState>(
-      widget.state.copyWith(expandedModelId: null),
+    _popoverState = ValueNotifier<_AgentModelConfigPopoverState>(
+      _AgentModelConfigPopoverState(snapshot: widget.state),
     );
   }
 
@@ -67,7 +108,8 @@ class _AgentModelConfigState extends State<_AgentModelConfig> {
     // 避免 ValueListenableBuilder 在祖先之外被同步标脏。
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && syncRevision == _runtimeSyncRevision) {
-        _popoverState.value = widget.state.copyWith(
+        _popoverState.value = _AgentModelConfigPopoverState(
+          snapshot: widget.state,
           expandedModelId: _popoverEntry == null
               ? null
               : _desiredExpandedModelId,
@@ -121,7 +163,10 @@ class _AgentModelConfigState extends State<_AgentModelConfig> {
     // 打开时直接展开当前已选模型的额外配置（思考程度、Fast 等），
     // 避免用户还要再点一次已选项才能看到。
     _setPopoverState(
-      widget.state.copyWith(expandedModelId: widget.state.selectedModelId),
+      _AgentModelConfigPopoverState(
+        snapshot: widget.state,
+        expandedModelId: widget.state.selectedModelId,
+      ),
     );
     final entry = showIdePopover<void>(
       context: context,
@@ -170,7 +215,9 @@ class _AgentModelConfigState extends State<_AgentModelConfig> {
       }
       _popoverEntry = null;
       _desiredExpandedModelId = null;
-      _popoverState.value = widget.state.copyWith(expandedModelId: null);
+      _popoverState.value = _AgentModelConfigPopoverState(
+        snapshot: widget.state,
+      );
       widget.onPopoverClosed();
       setState(() {});
       _triggerFocusNode.requestFocus();
@@ -179,26 +226,29 @@ class _AgentModelConfigState extends State<_AgentModelConfig> {
 
   void _selectModel(AgentModelInfo model) {
     final state = _popoverState.value;
+    final snapshot = state.snapshot;
     if (!model.enabled) {
       return;
     }
-    if (state.selectedModelId == model.id) {
-      _setPopoverState(state.copyWith(expandedModelId: model.id));
+    if (snapshot.selectedModelId == model.id) {
+      _setPopoverState(state.withExpanded(model.id));
       return;
     }
-    final preference = state.effectivePreference(model);
+    final preference = snapshot.effectivePreference(model);
     _setPopoverState(
-      state.copyWith(
-        selectedModelId: model.id,
+      _AgentModelConfigPopoverState(
+        snapshot: snapshot.copyWith(
+          selectedModelId: model.id,
+          selectedReasoningEffort: preference.reasoningEffort,
+          selectedServiceTierId: preference.serviceTierId,
+          preferences: <String, AgentModelPreference>{
+            ...snapshot.preferences,
+            model.id: preference,
+          },
+          compatibilityConflict: null,
+          saveError: null,
+        ),
         expandedModelId: model.id,
-        selectedReasoningEffort: preference.reasoningEffort,
-        selectedServiceTierId: preference.serviceTierId,
-        preferences: <String, AgentModelPreference>{
-          ...state.preferences,
-          model.id: preference,
-        },
-        compatibilityConflict: null,
-        saveError: null,
       ),
     );
     unawaited(_commitModelSelection(model.id));
@@ -215,22 +265,26 @@ class _AgentModelConfigState extends State<_AgentModelConfig> {
       return;
     }
     _setPopoverState(
-      widget.state.copyWith(expandedModelId: widget.state.selectedModelId),
+      _AgentModelConfigPopoverState(
+        snapshot: widget.state,
+        expandedModelId: widget.state.selectedModelId,
+      ),
     );
   }
 
   void _selectReasoningEffort(String effort) {
     final state = _popoverState.value;
-    if (state.selectedFastEnabled && effort.toLowerCase() == 'xhigh') {
+    final snapshot = state.snapshot;
+    if (snapshot.selectedFastEnabled && effort.toLowerCase() == 'xhigh') {
       unawaited(widget.onSelectReasoningEffort(effort));
       return;
     }
-    final model = state.selectedModel;
+    final model = snapshot.selectedModel;
     final preferences = Map<String, AgentModelPreference>.from(
-      state.preferences,
+      snapshot.preferences,
     );
     if (model != null) {
-      final current = state.effectivePreference(model);
+      final current = snapshot.effectivePreference(model);
       preferences[model.id] = AgentModelPreference(
         modelId: model.id,
         reasoningEffort: effort,
@@ -240,11 +294,13 @@ class _AgentModelConfigState extends State<_AgentModelConfig> {
       );
     }
     _setPopoverState(
-      state.copyWith(
-        selectedReasoningEffort: effort,
-        preferences: preferences,
-        compatibilityConflict: null,
-        saveError: null,
+      state.withSnapshot(
+        snapshot.copyWith(
+          selectedReasoningEffort: effort,
+          preferences: preferences,
+          compatibilityConflict: null,
+          saveError: null,
+        ),
       ),
     );
     unawaited(widget.onSelectReasoningEffort(effort));
@@ -252,17 +308,18 @@ class _AgentModelConfigState extends State<_AgentModelConfig> {
 
   void _selectFastEnabled(bool enabled) {
     final state = _popoverState.value;
-    if (enabled && state.selectedReasoningEffort?.toLowerCase() == 'xhigh') {
+    final snapshot = state.snapshot;
+    if (enabled && snapshot.selectedReasoningEffort?.toLowerCase() == 'xhigh') {
       unawaited(widget.onSelectFastEnabled(true));
       return;
     }
-    final model = state.selectedModel;
+    final model = snapshot.selectedModel;
     final fastTier = model == null ? null : agentFastServiceTier(model);
     final preferences = Map<String, AgentModelPreference>.from(
-      state.preferences,
+      snapshot.preferences,
     );
     if (model != null) {
-      final current = state.effectivePreference(model);
+      final current = snapshot.effectivePreference(model);
       preferences[model.id] = AgentModelPreference(
         modelId: model.id,
         reasoningEffort: current.reasoningEffort,
@@ -272,17 +329,19 @@ class _AgentModelConfigState extends State<_AgentModelConfig> {
       );
     }
     _setPopoverState(
-      state.copyWith(
-        selectedServiceTierId: enabled ? fastTier?.id : null,
-        preferences: preferences,
-        compatibilityConflict: null,
-        saveError: null,
+      state.withSnapshot(
+        snapshot.copyWith(
+          selectedServiceTierId: enabled ? fastTier?.id : null,
+          preferences: preferences,
+          compatibilityConflict: null,
+          saveError: null,
+        ),
       ),
     );
     unawaited(widget.onSelectFastEnabled(enabled));
   }
 
-  void _setPopoverState(AgentModelConfigUiState state) {
+  void _setPopoverState(_AgentModelConfigPopoverState state) {
     _desiredExpandedModelId = state.expandedModelId;
     _popoverState.value = state;
     if (mounted) {
@@ -294,7 +353,7 @@ class _AgentModelConfigState extends State<_AgentModelConfig> {
   Widget build(BuildContext context) {
     final displayState = _popoverEntry == null
         ? widget.state
-        : _popoverState.value;
+        : _popoverState.value.snapshot;
     return _ModelConfigTrigger(
       state: displayState,
       open: _popoverEntry != null,
@@ -516,7 +575,7 @@ class _ModelConfigPopover extends StatefulWidget {
     required this.onDismiss,
   });
 
-  final ValueListenable<AgentModelConfigUiState> stateListenable;
+  final ValueListenable<_AgentModelConfigPopoverState> stateListenable;
   final double width;
   final double maxHeight;
   final Alignment expansionAlignment;
@@ -544,7 +603,7 @@ class _ModelConfigPopoverState extends State<_ModelConfigPopover> {
   void initState() {
     super.initState();
     widget.stateListenable.addListener(_handleStateChanged);
-    _syncModelFocusNodes(widget.stateListenable.value);
+    _syncModelFocusNodes(widget.stateListenable.value.snapshot);
     // 打开时若已有展开目标（通常为当前选中模型），首帧后滚入视野。
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
@@ -572,7 +631,7 @@ class _ModelConfigPopoverState extends State<_ModelConfigPopover> {
 
   void _handleStateChanged() {
     final state = widget.stateListenable.value;
-    _syncModelFocusNodes(state);
+    _syncModelFocusNodes(state.snapshot);
     if (state.expandedModelId != _lastExpandedModelId) {
       _lastExpandedModelId = state.expandedModelId;
       _ensureExpandedConfigVisible(state.expandedModelId);
@@ -647,7 +706,7 @@ class _ModelConfigPopoverState extends State<_ModelConfigPopover> {
   }
 
   void _moveModelFocus(String currentId, int delta, {bool? toEnd}) {
-    final enabled = widget.stateListenable.value.models
+    final enabled = widget.stateListenable.value.snapshot.models
         .where((model) => model.enabled)
         .toList(growable: false);
     if (enabled.isEmpty) {
@@ -724,9 +783,10 @@ class _ModelConfigPopoverState extends State<_ModelConfigPopover> {
         container: true,
         explicitChildNodes: true,
         label: context.l10n.agentModelConfig,
-        child: ValueListenableBuilder<AgentModelConfigUiState>(
+        child: ValueListenableBuilder<_AgentModelConfigPopoverState>(
           valueListenable: widget.stateListenable,
-          builder: (context, state, _) {
+          builder: (context, popoverState, _) {
+            final state = popoverState.snapshot;
             return AnimatedSize(
               key: const ValueKey('agent-model-config-popover'),
               duration: reduceMotion
@@ -788,7 +848,8 @@ class _ModelConfigPopoverState extends State<_ModelConfigPopover> {
                                           selected:
                                               state.selectedModelId == model.id,
                                           expanded:
-                                              state.expandedModelId == model.id,
+                                              popoverState.expandedModelId ==
+                                              model.id,
                                           saving: state.savingModelIds.contains(
                                             model.id,
                                           ),

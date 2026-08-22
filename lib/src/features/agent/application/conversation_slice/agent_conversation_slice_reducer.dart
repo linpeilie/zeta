@@ -37,8 +37,9 @@ abstract final class AgentConversationOperationScopes {
 
 /// Agent Conversation 切片的 reducer。
 ///
-/// **纯同步、无副作用**（G3）：不碰时钟、不发请求、不铸造 id。命令意图携带的
-/// `OperationId` 由 store 在 dispatch 前生成。
+/// **纯同步、无副作用**（G3）：不碰时钟、不发请求、不铸造 id、不读 runtime。
+/// 命令意图携带的 `OperationId` 与作用域快照都由 store 在 dispatch 前拍好，
+/// reducer 只负责把它们原样传给 effect。
 ///
 /// 切片对会话事实是**只读投影**：命令不直接改 region 状态，只登记在途身份并
 /// 产出 effect；真实变化经 `AgentConversationRegionsRefreshed` 回流。这样同一
@@ -80,6 +81,7 @@ agentConversationSliceReduce(
         intent.operationId,
         AgentConversationSendMessageEffect(
           intent.operationId,
+          intent.scope,
           text: intent.text,
           localImagePaths: intent.localImagePaths,
           mentions: intent.mentions,
@@ -91,7 +93,7 @@ agentConversationSliceReduce(
       return _command(
         state,
         intent.operationId,
-        AgentConversationCancelTurnEffect(intent.operationId),
+        AgentConversationCancelTurnEffect(intent.operationId, intent.scope),
       );
 
     case AgentConversationLastUserMessageEditRequested():
@@ -100,6 +102,7 @@ agentConversationSliceReduce(
         intent.operationId,
         AgentConversationEditLastUserMessageEffect(
           intent.operationId,
+          intent.scope,
           text: intent.text,
         ),
       );
@@ -108,7 +111,10 @@ agentConversationSliceReduce(
       return _command(
         state,
         intent.operationId,
-        AgentConversationRetryOpenThreadEffect(intent.operationId),
+        AgentConversationRetryOpenThreadEffect(
+          intent.operationId,
+          intent.scope,
+        ),
       );
 
     case AgentConversationPermissionResponded():
@@ -117,6 +123,7 @@ agentConversationSliceReduce(
         intent.operationId,
         AgentConversationRespondPermissionEffect(
           intent.operationId,
+          intent.scope,
           request: intent.request,
           approved: intent.approved,
           cancelTurn: intent.cancelTurn,
@@ -131,6 +138,7 @@ agentConversationSliceReduce(
         intent.operationId,
         AgentConversationRespondQuestionEffect(
           intent.operationId,
+          intent.scope,
           request: intent.request,
           answers: intent.answers,
         ),
@@ -142,6 +150,7 @@ agentConversationSliceReduce(
         intent.operationId,
         AgentConversationRespondPlanApprovalEffect(
           intent.operationId,
+          intent.scope,
           request: intent.request,
           decision: intent.decision,
           reason: intent.reason,
@@ -154,6 +163,7 @@ agentConversationSliceReduce(
         intent.operationId,
         AgentConversationPlanExecutionEffect(
           intent.operationId,
+          intent.scope,
           request: intent.request,
         ),
       );
@@ -164,6 +174,7 @@ agentConversationSliceReduce(
         intent.operationId,
         AgentConversationPlanExecutionEffect(
           intent.operationId,
+          intent.scope,
           request: intent.request,
           revisionFeedback: intent.feedback,
         ),
@@ -173,7 +184,10 @@ agentConversationSliceReduce(
       return _command(
         state,
         intent.operationId,
-        AgentConversationApproveGuardianDeniedActionEffect(intent.operationId),
+        AgentConversationApproveGuardianDeniedActionEffect(
+          intent.operationId,
+          intent.scope,
+        ),
       );
 
     case AgentConversationThreadMutationRequested():
@@ -182,6 +196,7 @@ agentConversationSliceReduce(
         intent.operationId,
         AgentConversationThreadMutationEffect(
           intent.operationId,
+          intent.scope,
           kind: intent.kind,
           name: intent.name,
         ),
@@ -193,6 +208,7 @@ agentConversationSliceReduce(
         intent.operationId,
         AgentConversationLoadCatalogEffect(
           intent.operationId,
+          intent.scope,
           kind: intent.kind,
           forceRefresh: intent.forceRefresh,
         ),

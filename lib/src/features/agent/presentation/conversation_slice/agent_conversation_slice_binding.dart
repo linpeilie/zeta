@@ -1,12 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_command_scope.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_effect.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_intent.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_state.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
-import 'package:zeta_foundation/zeta_foundation.dart';
 
 /// 把切片接到现有 `AgentConversationViewModel` 上的组合对象。
 ///
@@ -23,8 +24,10 @@ final class AgentConversationSliceBinding {
   AgentConversationSliceBinding({
     required AgentConversationViewModel viewModel,
     void Function(void Function())? scheduleFlush,
+    AgentConversationCommandScope Function()? scopeSnapshot,
   }) : _viewModel = viewModel,
-       _scheduleFlush = scheduleFlush ?? scheduleMicrotask {
+       _scheduleFlush = scheduleFlush ?? scheduleMicrotask,
+       _scopeSnapshot = scopeSnapshot ?? viewModel.currentCommandScope {
     _store = AgentConversationSliceStore(
       initialState: AgentConversationSliceState(
         header: viewModel.headerState,
@@ -36,7 +39,9 @@ final class AgentConversationSliceBinding {
       effectRunner: _AgentConversationViewModelEffectRunner(
         viewModel: viewModel,
         store: () => _store,
+        scopeSnapshot: () => _scopeSnapshot(),
       ),
+      scopeSnapshot: _scopeSnapshot,
     );
 
     viewModel.headerStateListenable.addListener(_onHeaderChanged);
@@ -48,6 +53,9 @@ final class AgentConversationSliceBinding {
 
   final AgentConversationViewModel _viewModel;
   final void Function(void Function()) _scheduleFlush;
+
+  /// 当前作用域读取器；测试可注入以模拟 runtime 换代。
+  final AgentConversationCommandScope Function() _scopeSnapshot;
 
   late final AgentConversationSliceStore _store;
 
@@ -144,10 +152,12 @@ final class _AgentConversationViewModelEffectRunner
   _AgentConversationViewModelEffectRunner({
     required this._viewModel,
     required this._store,
+    required this._scopeSnapshot,
   });
 
   final AgentConversationViewModel _viewModel;
   final AgentConversationSliceStore Function() _store;
+  final AgentConversationCommandScope Function() _scopeSnapshot;
 
   @override
   void run(AgentConversationSliceEffect effect) {
@@ -173,23 +183,53 @@ final class _AgentConversationViewModelEffectRunner
   }
 
   void _runCommand(AgentConversationCommandEffect effect) {
-    unawaited(_awaitCommand(effect.operationId, () => _invoke(effect)));
+    unawaited(_awaitCommand(effect, () => _invoke(effect)));
   }
 
+  /// 只接受 port **显式给出**的结果。
+  ///
+  /// 这里刻意不再用"Future 正常结束"推断成功：Agent 的命令 port 会吞异常、提前
+  /// return、或用 `null` 表示失败，靠 try/catch 判定会把真实失败记成成功。
   Future<void> _awaitCommand(
-    OperationId operationId,
-    Future<void> Function() invoke,
+    AgentConversationCommandEffect effect,
+    Future<AgentCommandOutcome> Function() invoke,
   ) async {
+    final operationId = effect.operationId;
+
+    // 校验一：执行前。世界已经换代就不要再打这一枪。
+    if (!effect.scope.matchesForExecution(_scopeSnapshot())) {
+      _store().failCommand(operationId, AgentCommandFailureKind.staleTarget);
+      return;
+    }
+
+    AgentCommandOutcome outcome;
     try {
-      await invoke();
-      _store().completeCommand(operationId);
+      outcome = await invoke();
     } on Object catch (error) {
-      // 失败文案沿用 port 已经产出的中立描述；不带原文、prompt 或路径（G7）。
-      _store().failCommand(operationId, error.toString());
+      // port 直接抛出的异常仍要归类，诊断只进日志不进 UI。
+      outcome = AgentCommandOutcome.failed(
+        AgentCommandFailureKind.requestFailed,
+        diagnostic: error.toString(),
+      );
+    }
+
+    // 校验二：结果回写前。await 期间 Provider 可能重启、Binding 可能换代，
+    // 那样这个结果属于另一个世界，不能写进当前切片。
+    if (!effect.scope.matchesForCommit(_scopeSnapshot())) {
+      _store().failCommand(operationId, AgentCommandFailureKind.staleTarget);
+      return;
+    }
+
+    switch (outcome) {
+      // 被忽略的命令（空输入、状态不允许）没有可展示的错误，按完成收口。
+      case AgentCommandSucceeded() || AgentCommandIgnored():
+        _store().completeCommand(operationId);
+      case AgentCommandFailed(:final kind):
+        _store().failCommand(operationId, kind);
     }
   }
 
-  Future<void> _invoke(AgentConversationCommandEffect effect) {
+  Future<AgentCommandOutcome> _invoke(AgentConversationCommandEffect effect) {
     return switch (effect) {
       AgentConversationSendMessageEffect() => _viewModel.sendMessage(
         effect.text,
@@ -231,8 +271,15 @@ final class _AgentConversationViewModelEffectRunner
       AgentConversationApproveGuardianDeniedActionEffect() =>
         _viewModel.approveGuardianDeniedAction(),
       AgentConversationThreadMutationEffect() => switch (effect.kind) {
+        // fork 用 `null` 表示失败，这里显式翻译，不让它冒充成功。
         AgentConversationThreadMutationKind.fork =>
-          _viewModel.forkCurrentThread(),
+          _viewModel.forkCurrentThread().then<AgentCommandOutcome>(
+            (session) => session == null
+                ? const AgentCommandOutcome.failed(
+                    AgentCommandFailureKind.requestFailed,
+                  )
+                : const AgentCommandOutcome.succeeded(),
+          ),
         AgentConversationThreadMutationKind.rename =>
           _viewModel.renameCurrentThread(effect.name ?? ''),
         AgentConversationThreadMutationKind.archive =>

@@ -1,6 +1,6 @@
-import 'package:flutter/foundation.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_state.dart';
-import 'package:zeta/src/features/agent/presentation/agent_conversation_ui_state.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_command_scope.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_region_state.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 
@@ -8,7 +8,7 @@ import 'package:zeta_foundation/zeta_foundation.dart';
 ///
 /// 命名按 Phase 1 §3：变体用**发生的事**命名，不用 `SetXxx`。意图分三族：
 ///
-/// 1. **ingress**：现有 `AgentConversationUiStateStore` 的 region 更新流进切片；
+/// 1. **ingress**：presentation 的 region 发布流进切片；
 /// 2. **command**：用户动作，reducer 只登记在途身份并产出 effect 描述；
 /// 3. **result**：effect 完成后回写状态的唯一通道。
 sealed class AgentConversationSliceIntent {
@@ -22,7 +22,6 @@ sealed class AgentConversationSliceIntent {
 /// 同一帧内变化的 region 合并成一次切片转移。
 ///
 /// 每个字段为 null 表示"该 region 本帧没变"，据此避免无谓的对象重建。
-@immutable
 final class AgentConversationRegionsRefreshed
     extends AgentConversationSliceIntent {
   const AgentConversationRegionsRefreshed({
@@ -52,21 +51,27 @@ final class AgentConversationRegionsRefreshed
 // 2. command
 // ---------------------------------------------------------------------------
 
-/// 携带操作身份的命令意图。
+/// 携带操作身份与作用域的命令意图。
 ///
-/// [operationId] 由 store 在 dispatch 前铸造，reducer 保持纯同步。
+/// [operationId] 与 [scope] 都由 store 在 dispatch 前拍好，reducer 保持纯同步。
+/// 两者缺一不可：id 回答"是不是同一次操作"，scope 回答"这次操作所属的 Binding /
+/// runtime 还在不在"。
 sealed class AgentConversationCommandIntent
     extends AgentConversationSliceIntent {
-  const AgentConversationCommandIntent(this.operationId);
+  const AgentConversationCommandIntent(this.operationId, this.scope);
 
   final OperationId operationId;
+
+  /// 发起时的作用域快照。
+  final AgentConversationCommandScope scope;
 }
 
 /// 会话主流程。
 final class AgentConversationSendMessageRequested
     extends AgentConversationCommandIntent {
   const AgentConversationSendMessageRequested(
-    super.operationId, {
+    super.operationId,
+    super.scope, {
     required this.text,
     this.localImagePaths = const <String>[],
     this.mentions = const <({String name, String path})>[],
@@ -81,13 +86,17 @@ final class AgentConversationSendMessageRequested
 
 final class AgentConversationActiveTurnCancelRequested
     extends AgentConversationCommandIntent {
-  const AgentConversationActiveTurnCancelRequested(super.operationId);
+  const AgentConversationActiveTurnCancelRequested(
+    super.operationId,
+    super.scope,
+  );
 }
 
 final class AgentConversationLastUserMessageEditRequested
     extends AgentConversationCommandIntent {
   const AgentConversationLastUserMessageEditRequested(
-    super.operationId, {
+    super.operationId,
+    super.scope, {
     required this.text,
   });
 
@@ -96,14 +105,15 @@ final class AgentConversationLastUserMessageEditRequested
 
 final class AgentConversationThreadOpenRetried
     extends AgentConversationCommandIntent {
-  const AgentConversationThreadOpenRetried(super.operationId);
+  const AgentConversationThreadOpenRetried(super.operationId, super.scope);
 }
 
 /// 四种审批语义（G5）：四条独立链路，禁止互相复用已授权状态。
 final class AgentConversationPermissionResponded
     extends AgentConversationCommandIntent {
   const AgentConversationPermissionResponded(
-    super.operationId, {
+    super.operationId,
+    super.scope, {
     required this.request,
     required this.approved,
     this.cancelTurn = false,
@@ -121,7 +131,8 @@ final class AgentConversationPermissionResponded
 final class AgentConversationQuestionResponded
     extends AgentConversationCommandIntent {
   const AgentConversationQuestionResponded(
-    super.operationId, {
+    super.operationId,
+    super.scope, {
     required this.request,
     this.answers = const <String, List<String>>{},
   });
@@ -133,7 +144,8 @@ final class AgentConversationQuestionResponded
 final class AgentConversationPlanApprovalResponded
     extends AgentConversationCommandIntent {
   const AgentConversationPlanApprovalResponded(
-    super.operationId, {
+    super.operationId,
+    super.scope, {
     required this.request,
     required this.decision,
     this.reason,
@@ -147,7 +159,8 @@ final class AgentConversationPlanApprovalResponded
 final class AgentConversationPlanExecutionStarted
     extends AgentConversationCommandIntent {
   const AgentConversationPlanExecutionStarted(
-    super.operationId, {
+    super.operationId,
+    super.scope, {
     required this.request,
   });
 
@@ -157,7 +170,8 @@ final class AgentConversationPlanExecutionStarted
 final class AgentConversationPlanExecutionRevised
     extends AgentConversationCommandIntent {
   const AgentConversationPlanExecutionRevised(
-    super.operationId, {
+    super.operationId,
+    super.scope, {
     required this.request,
     required this.feedback,
   });
@@ -168,7 +182,10 @@ final class AgentConversationPlanExecutionRevised
 
 final class AgentConversationGuardianDeniedActionApproved
     extends AgentConversationCommandIntent {
-  const AgentConversationGuardianDeniedActionApproved(super.operationId);
+  const AgentConversationGuardianDeniedActionApproved(
+    super.operationId,
+    super.scope,
+  );
 }
 
 /// thread 管理。
@@ -177,7 +194,8 @@ enum AgentConversationThreadMutationKind { fork, rename, archive, compact }
 final class AgentConversationThreadMutationRequested
     extends AgentConversationCommandIntent {
   const AgentConversationThreadMutationRequested(
-    super.operationId, {
+    super.operationId,
+    super.scope, {
     required this.kind,
     this.name,
   });
@@ -194,7 +212,8 @@ enum AgentConversationCatalogKind { models, skills, conversationModes }
 final class AgentConversationCatalogLoadRequested
     extends AgentConversationCommandIntent {
   const AgentConversationCatalogLoadRequested(
-    super.operationId, {
+    super.operationId,
+    super.scope, {
     required this.kind,
     this.forceRefresh = false,
   });
@@ -219,7 +238,6 @@ enum AgentConversationExpansionTarget {
   fileEditItem,
 }
 
-@immutable
 final class AgentConversationExpansionToggled
     extends AgentConversationSliceIntent {
   const AgentConversationExpansionToggled({
@@ -232,7 +250,6 @@ final class AgentConversationExpansionToggled
 }
 
 /// 计划执行交接被用户忽略。
-@immutable
 final class AgentConversationPlanExecutionDismissed
     extends AgentConversationSliceIntent {
   const AgentConversationPlanExecutionDismissed(this.request);
@@ -249,7 +266,6 @@ final class AgentConversationPlanExecutionDismissed
 /// 结果意图刻意**不按命令种类拆成十几个空壳类**：`OperationId.scope` 已经带了
 /// 是哪一类命令（`conversation.send` / `conversation.permission` …），再拆一层
 /// 只是重复。
-@immutable
 final class AgentConversationCommandSucceeded
     extends AgentConversationSliceIntent {
   const AgentConversationCommandSucceeded(this.operationId);
@@ -258,7 +274,6 @@ final class AgentConversationCommandSucceeded
 }
 
 /// 命令失败。
-@immutable
 final class AgentConversationCommandFailed
     extends AgentConversationSliceIntent {
   const AgentConversationCommandFailed(this.failure);

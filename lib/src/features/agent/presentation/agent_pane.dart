@@ -23,7 +23,7 @@ import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent/presentation/agent_presentation_l10n.dart';
 import 'package:zeta/src/ui/localization/app_localizations_x.dart';
-import 'package:zeta/src/features/agent/presentation/agent_conversation_ui_state.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_region_state.dart';
 import 'package:zeta/src/features/agent/presentation/agent_markdown_cache.dart';
 import 'package:zeta/src/features/agent/presentation/agent_plan_revision_drafts.dart';
 import 'package:zeta/src/features/agent/presentation/composer_document.dart';
@@ -32,7 +32,7 @@ import 'package:zeta/src/features/agent/presentation/agent_timeline_extent_descr
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection_cache.dart';
-import 'package:zeta/src/features/agent/presentation/model_config_ui_state.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_model_config_ui_state.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_file_change_evidence_card.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon.dart';
 

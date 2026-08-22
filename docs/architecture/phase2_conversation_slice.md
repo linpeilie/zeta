@@ -197,11 +197,25 @@ Phase 0 基线里"普通流式更新不超过一帧一次"和"Shell / Header / C
 
 规则：**reducer 纯同步**（G3），effect 只是描述；执行由 scope-aware runner 负责，回写状态只能经 result intent。
 
-### 4.3 复用现有 scope 校验
+### 4.3 scope-aware 执行（已落地）
 
-`DefaultAgentConversationEffectRunner` 已经在每个 effect 前校验 `listenerGeneration` /
-`runtimeId` / `connectionEpoch` / thread scope，且同一 effect 实例最多执行一次。切片 effect
-沿用同一套 scope 语义，不另造一份。
+每个命令 effect 都携带 `AgentConversationCommandScope`——发起时的
+**Binding key + runtimeId + connectionEpoch + listenerGeneration + threadId**
+快照，由 store 在铸造 `OperationId` 的同一时刻拍下（组合层注入读取器，复用 ViewModel
+已有的 `_currentEffectScope()`）。runner 校验两次：
+
+| 时机 | 规则 | 理由 |
+| --- | --- | --- |
+| 执行前 | `matchesForExecution`：身份 + listener 代数全比 | 命令还没开始跑，代数没有理由变化 |
+| 结果回写前 | `matchesForCommit`：只比身份，不比代数 | 命令自己就可能建立/重挂 listener（草稿首发要创建 session），据此判失效会把正常流程判成 `staleTarget` |
+
+身份比对的三条容让规则，每条都对应一个真实生命周期，且都有测试：
+
+- **draft → thread 是同一个世界**：`promoteToThread` 是同一 Binding 的一次性晋升，
+  草稿发第一条消息时必然发生；内核禁止 thread key 再改绑，所以这是唯一合法迁移；
+- **发起时没有 runtime**：草稿首发时 runtime 还不存在，命令的职责之一就是把它建起来；
+- **当前没有 runtime**：失败后 runtime 被拆掉是"现在没有世界"，不是"换了个世界"——
+  否则命令自己造成的失败会被改判成 `staleTarget`，真实失败原因就丢了。
 
 ---
 
@@ -251,7 +265,10 @@ thread 级 UI 事实（title / openPhase / waiting 标志 / 通知）归切片�
 见 §6。plugin 由编译期 catalog 注册、`PluginRegistry` 统一 `close()`，本阶段不变。
 
 **5. 迟到结果用什么 operation / generation 判断？**
-见 §5：命令类用 `OperationId`，事件流用 `listenerGeneration` + runtime epoch，两套不混用。
+**两者都要**（§6.2 原文是"operation ID、Binding、runtime identity/generation 和 disposed
+状态"，是并列不是选择）：命令携带 `OperationId` **加** 作用域快照，runner 在执行前与回写
+前各校验一次，见 §4.3；事件流沿用 `listenerGeneration` + runtime epoch；disposed 由 store
+随 workspace entry 关闭兜住。
 
 **6. 是否复制了大正文或提高了流式 publish / rebuild 频率？**
 没有复制正文（§2.8）。流式路径不进切片（§2.7），普通更新仍由 `AgentUiUpdateScheduler` 合并到一帧一次。
@@ -335,6 +352,174 @@ app 级 feature flag 二选一；新 adapter 是现有 store 的只读消费者�
 
 E 之前不把 binding 接进 `AgentThreadWorkspaceEntry`：没有消费者就先创建对象，
 等于在生产路径上挂一个没人用的监听。
+
+### review 修复：分层方向（2026-08-22）
+
+第一版把五个 region state 从 presentation import 进 application，和
+`agent_conversation_ui_state.dart → application/agent_conversation_mode_controller.dart`
+形成闭环（G6）。动机是"零新增业务事实"——复用现有 region 类，避免第二份字段定义；
+但这个动机不需要靠反向依赖实现。已按下面四步修正：
+
+1. **拆 `agent_conversation_ui_state.dart`**：五个 region state 类 +
+   `AgentModelConfigUiState` 移到 `application/conversation_slice/`，
+   `AgentConversationUiStateStore`（`ValueNotifier` + 帧调度发布）留在 presentation。
+   前者是**状态契约**，后者是**发布机制**，这条线才是分层该切的地方。
+2. **Riverpod providers 移到 presentation**：目标架构 §6.2 把「Riverpod adapter」
+   单列成一层，provider 不该和 reducer 挤在 application。
+3. **切片核心去 Flutter 化**：state / intent / effect / reducer 四个文件现在是
+   **纯 Dart**（`final class` + 全 final 字段保证不可变，相等性用
+   `zeta_foundation` 的 `zetaSetEquals`）。将来要下沉 `zeta_agent_core` 不用返工。
+   ~~store 仍用 `ChangeNotifier`，region state 仍用 `@immutable`——application 允许
+   依赖 `flutter/foundation`~~ —— **这句话是错的**，见下一节。
+4. **补 `feature_layering_guard_test`**：断言 application 不得 import
+   presentation、Riverpod 只能在 presentation/app、domain 保持纯 Dart。
+   两处既有反向依赖（agent / project_threads 的 workspace controller，它们负责
+   构造 ViewModel）进燃尽清单，只允许变少。守卫做过 mutation 验证：把 import 加
+   回去、把 riverpod 塞进 application，两条都会红。
+
+**根因记录**：这不是留待以后处理的临时方案，是遗漏。仓库此前只有 Package 边界
+守卫，没有 feature 内部分层守卫，`analyze` 和全量测试都拦不住；而既有的
+`agent_thread_workspace_controller` 早就 import presentation，让这个方向看起来
+像仓库常态。守卫补上后，同类问题会在 CI 上直接红。
+
+### review 修复：application 的 Flutter 依赖与 popover 状态（2026-08-22）
+
+上一节写的"application 允许依赖 `flutter/foundation`"**是错的**。依据是目标架构
+§6.2 的分层要点（那里只点了 Domain 的纯度），但 §12「必须禁止的依赖或编码模式」
+第 5 条写得很明确：
+
+> 禁止 domain/**application** import Flutter、Riverpod、`dart:io`、generated l10n
+> 或具体协议类型。
+
+这是禁止清单里的条款，没有解释空间。**架构文档不改，改代码。**
+
+修正内容：
+
+1. **切片全层去 Flutter**。三个文件都是上一轮从 presentation 搬进 application 时
+   把 Flutter 依赖一起带过界的（搬家前它们住 presentation，那边完全合法）：
+
+   | 文件 | 原来的 Flutter API | 现在 |
+   | --- | --- | --- |
+   | `agent_model_config_ui_state.dart` | `@immutable` | `package:meta` |
+   | `agent_conversation_region_state.dart` | `@immutable` / `listEquals` / `setEquals` | `package:meta` + `zetaListEquals` / `zetaSetEquals` |
+   | `agent_conversation_slice_store.dart` | `ChangeNotifier` / `ValueListenable` | 自己的 listener 列表（通知前复制快照，语义与 `ChangeNotifier` 对齐） |
+
+   根 `pubspec.yaml` 新增 `meta` 直接依赖（纯 Dart 包，不在 §12.5 的禁止之列）。
+
+2. **popover 展开态回到 presentation**。`AgentModelConfigUiState.expandedModelId`
+   按 §7.3 属于 Widget/page scope。核对后发现它在 application 侧**永远是 null**
+   （ViewModel 硬编码 `expandedModelId: null`），真正赋值只发生在 popover widget
+   内部——所以这是"字段定义在错误的层"，不是状态真被 application 拥有。现在拆成
+   presentation 私有的 `_AgentModelConfigPopoverState { snapshot, expandedModelId }`：
+   用**组合**而不是继承，且刻意不做字段转发，让"这是两层状态"在每个读取点都看得见。
+
+3. **守卫扩到 Flutter**：`feature_layering_guard_test` 新增"application 不得 import
+   Flutter"，12 个既有 `ChangeNotifier` controller 进燃尽清单（只减不增，随 Phase 2/3
+   转 MVI 切片清掉）。同样做了 mutation 验证。
+
+**根因记录**：这次不是遗漏，是**读规则读漏了一层**——只看了 §6.2 的分层要点，没有
+去对 §12 的显式禁止清单，并且据此在文档里写下了一条与架构冲突的"豁免"。教训是
+分层结论必须以 §12 为准，§6.2 只是解释。
+
+### review 修复：effect 补上作用域身份（2026-08-22）
+
+§4.3 原文声明"切片 effect 沿用内核那套 scope 校验"，**但代码里一次校验都没有**：
+命令 effect 只带 `OperationId`，runner 执行前后都不看 Binding / runtime。文档描述的是
+意图，不是代码。
+
+修法见改写后的 §4.3 与门禁答卷第 5 条。三点根因记在这里：
+
+1. **文档先写、实现没回头对**，而文档断言没有任何守卫；
+2. **把并列条件读成了选择条件**：§6.2 说的是 operation ID **和** Binding **和** runtime
+   identity/generation **和** disposed，我在门禁答卷里写成了"命令类用 OperationId、
+   事件流用 generation，两套不混用"；
+3. **`OperationId` 的唯一性给了虚假的安全感**：它只能回答"是不是同一次操作"，
+   回答不了"这次操作所属的世界还在不在"。
+
+新增 `agent_conversation_slice_scope_guard_test`：断言命令 effect 带 scope 字段、
+runner 在 `await` 前后各有一次校验、快照覆盖四个维度。守卫做过 mutation 验证——删掉
+回写前那次校验，守卫与端到端测试同时红。
+
+**这是连续第三次同一模式的问题**（声明分层单向 / 声明 result intent 唯一 / 声明
+scope-aware），共同缺口都是"Phase 2 文档里的断言没有守卫"。三次分别补了
+`feature_layering_guard_test`、失败路径测试、本守卫。后续在文档里写下"已经做了 X"之前，
+先问一句：**有什么会在 X 被破坏时变红？**
+
+---
+
+### review 修复：命令结果改成 typed outcome（2026-08-22）
+
+第一版 runner 用"`Future` 有没有抛异常"判断成败。这个前提**不成立**——逐个打开被
+调用方核对后：
+
+| ViewModel 方法 | 真实失败时 | 旧 runner 看到 |
+| --- | --- | --- |
+| `sendMessage` | 4 处校验早退 + 3 个 catch 块吞异常 → `_markError` → 正常返回 | 成功 |
+| `renameCurrentThread` | catch → 回滚标题 → `_markError` → 正常返回 | 成功 |
+| `forkCurrentThread` | 失败与"不允许"都 `return null` | 成功（根本没读返回值） |
+| `archiveCurrentThread` / `compactCurrentThread` | 早退 + catch 吞 | 成功 |
+
+也就是说**每一个命令 effect 都可能把失败记成成功**。根因：我在一批没有结果契约的
+port 之上发明了一个结果契约——`Future<void>` 在这些 port 里的含义是"这个动作我接下
+了"，不是"这个动作成了"，它们表达失败靠的是回滚、`_markError`、`AgentErrorEvent`、
+返回 `null`。
+
+修法：
+
+1. **新增 `AgentCommandOutcome`**（application，纯 Dart）：`succeeded` /
+   `ignored(reason)` / `failed(kind, diagnostic?)`。
+   - `ignored` 是必需的第三态：空输入、状态不允许这类**无操作**不该走失败分支，
+     否则正常操作会弹错误提示；
+   - `failed` **只有分类没有文案**，用户可见文字由 presentation 按 kind 取，
+     `diagnostic` 只进日志（早期是 `error.toString()` 直接当 UI 文案，既不可
+     本地化又会泄露路径/命令行，G7）。
+2. **16 个命令 port 改为返回 outcome**，每个失败分支显式覆盖，不留"靠没抛异常"
+   的推断。纯增量：`Future<void>` → `Future<AgentCommandOutcome>` 对现有调用方
+   源码兼容。`forkCurrentThread` 保留 `AgentSession?`（它本来就带结果），由 runner
+   把 `null` 翻译成失败。
+3. **切片失败字段换成 typed kind**：`AgentConversationOperationFailure.message`
+   → `kind`。
+4. **补失败路径测试**：让 provider 抛错走进 `sendMessage` 的 catch，断言切片记的是
+   失败而不是成功；空输入断言"不留在途也不报错"。反向验证过——把 runner 改回
+   无条件 `completeCommand`，这条测试立刻红。
+
+**根因记录**：不是临时方案，是三件事叠加——(a) 在没有结果契约的 port 上假设了结果
+契约；(b) 写统一的 `_awaitCommand` 时一次都没打开被调用方看失败怎么处理；(c) 失败
+路径没有任何测试经过（store 测试里的失败是手工调 `failCommand` 造的，测的是 reducer
+不是接线）。2184 条测试全绿也拦不住，因为那条路径根本没被走过。
+
+---
+
+### review 修复：Provider 改成 BindingKey family（2026-08-22）
+
+第一版把 store 用「子树 `ProviderScope` override」注入，selector 是普通
+`Provider`。§6.2 要求的是 **`family` 按 `BindingKey` 隔离实例**，而且这不只是形式
+问题——实测过：
+
+```
+root header: root
+child header: root      // ← 子 scope 覆盖了 store，却读到父容器的会话
+```
+
+原因是不带 `dependencies` 的 provider 在**根容器**解析，嵌套 scope 里覆盖它的依赖
+对它无效。也就是说同一个应用容器里开两个 workspace entry 时，**第二个会渲染第一个
+的会话**。原来的测试用两个独立 `ProviderContainer`，恰好绕开了这条会出错的路径——
+reviewer 对测试的判断也是对的。
+
+改法：
+
+- 全部 provider 改成 `Provider.family` / `NotifierProvider.family`，键是
+  `AgentConversationBindingKey`（draft / thread 两种身份都覆盖）；
+- 新增 `agentConversationSliceStoreResolverProvider`：组合层注入
+  `BindingKey → store?` 的解析函数。它是**容器作用域的注入点**，不是全局
+  service locator（§12.10）——默认实现对所有 key 返回 null；
+- 启用开关不再单独维护：`agentConversationSliceEnabledProvider(key)` 的判据就是
+  组合层有没有为这个 key 建 store，消掉了两处状态对不齐的可能；
+- UI 镜像类 provider 打开 `autoDispose`。它们释放时只摘监听，不碰 Binding lease、
+  CLI runtime 或 store 本身，因此不触犯 §12.11。
+
+测试重写成**同一个容器、两个 key**：两个 entry 各读各的、只推一个另一个纹丝不动、
+draft 与 thread 不串、`invalidate` 一个不影响另一个。
 
 ---
 

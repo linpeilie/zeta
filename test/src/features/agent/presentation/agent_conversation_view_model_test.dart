@@ -9,8 +9,10 @@ import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
+import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_command_scope.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_intent.dart';
-import 'package:zeta/src/features/agent/presentation/agent_conversation_slice_binding.dart';
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_binding.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 
@@ -4698,6 +4700,107 @@ void main() {
         expect(
           binding.store.state.expansion.toolCallIds,
           contains('call-from-slice'),
+        );
+      });
+
+      test('port 吞掉的失败必须记成失败，而不是成功', () async {
+        final viewModel = _createViewModel(
+          _FakeAgentProvider(sendError: StateError('send failed')),
+        );
+        addTearDown(viewModel.dispose);
+        final binding = AgentConversationSliceBinding(
+          viewModel: viewModel,
+          scheduleFlush: (flush) {},
+        );
+        addTearDown(binding.dispose);
+
+        final operation = binding.store.sendMessage(text: 'hello');
+        await _drainTypedUiUpdate();
+        await pumpEventQueue();
+
+        // ViewModel 的 sendMessage 会 catch 掉异常并正常返回；靠"没抛异常"
+        // 判定就会把这次失败记成成功。
+        expect(binding.store.state.pendingOperations, isEmpty);
+        expect(binding.store.state.lastFailure?.operationId, operation);
+        expect(
+          binding.store.state.lastFailure?.kind,
+          AgentCommandFailureKind.requestFailed,
+        );
+      });
+
+      test('空输入被忽略：不留在途，也不报错', () async {
+        final viewModel = _createViewModel(_FakeAgentProvider());
+        addTearDown(viewModel.dispose);
+        final binding = AgentConversationSliceBinding(
+          viewModel: viewModel,
+          scheduleFlush: (flush) {},
+        );
+        addTearDown(binding.dispose);
+
+        binding.store.sendMessage(text: '   ');
+        await _drainTypedUiUpdate();
+        await pumpEventQueue();
+
+        expect(binding.store.state.pendingOperations, isEmpty);
+        expect(binding.store.state.lastFailure, isNull);
+      });
+
+      test('能力缺失的 thread 操作记成失败', () async {
+        final viewModel = _createViewModel(_FakeAgentProvider());
+        addTearDown(viewModel.dispose);
+        final binding = AgentConversationSliceBinding(
+          viewModel: viewModel,
+          scheduleFlush: (flush) {},
+        );
+        addTearDown(binding.dispose);
+
+        // 草稿会话没有 threadId：rename 属于"当前不允许"，按忽略处理，
+        // 不该冒充成功、也不该报错给用户。
+        binding.store.mutateThread(
+          AgentConversationThreadMutationKind.rename,
+          name: '新名字',
+        );
+        await _drainTypedUiUpdate();
+        await pumpEventQueue();
+
+        expect(binding.store.state.pendingOperations, isEmpty);
+        expect(binding.store.state.lastFailure, isNull);
+      });
+
+      test('runtime 换代后旧命令不执行，也不写回结果', () async {
+        final viewModel = _createViewModel(_FakeAgentProvider());
+        addTearDown(viewModel.dispose);
+        final bindingKey = viewModel.conversationBinding.key;
+        // 发起时：绑在 runtime-1 / epoch 1 上。
+        var scope = AgentConversationCommandScope(
+          bindingKey: bindingKey,
+          runtimeId: 'runtime-1',
+          connectionEpoch: 1,
+          listenerGeneration: 1,
+        );
+        final binding = AgentConversationSliceBinding(
+          viewModel: viewModel,
+          scheduleFlush: (flush) {},
+          scopeSnapshot: () => scope,
+        );
+        addTearDown(binding.dispose);
+
+        final operation = binding.store.sendMessage(text: 'hello');
+        // 命令在途期间 Provider 重启：runtime 换代。
+        scope = AgentConversationCommandScope(
+          bindingKey: bindingKey,
+          runtimeId: 'runtime-1',
+          connectionEpoch: 2,
+          listenerGeneration: 2,
+        );
+        await _drainTypedUiUpdate();
+        await pumpEventQueue();
+
+        expect(binding.store.state.pendingOperations, isEmpty);
+        expect(binding.store.state.lastFailure?.operationId, operation);
+        expect(
+          binding.store.state.lastFailure?.kind,
+          AgentCommandFailureKind.staleTarget,
         );
       });
 

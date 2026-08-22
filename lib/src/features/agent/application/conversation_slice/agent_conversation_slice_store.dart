@@ -1,4 +1,6 @@
-import 'package:flutter/foundation.dart';
+import 'package:meta/meta.dart';
+import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_command_scope.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_effect.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_intent.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_reducer.dart';
@@ -52,11 +54,11 @@ final class AgentConversationSliceDiagnostics {
 ///
 /// 它**不拥有**任何会话事实：region 状态由 ingress 意图带进来，owner 仍是
 /// `AgentConversationTimelineStore` 与既有 controller。
-final class AgentConversationSliceStore extends ChangeNotifier
-    implements ValueListenable<AgentConversationSliceState> {
+final class AgentConversationSliceStore {
   AgentConversationSliceStore({
     required AgentConversationSliceState initialState,
     required this._effectRunner,
+    required this._scopeSnapshot,
     OperationIdGenerator Function(String scope)? operationIdGeneratorFactory,
   }) : _state = initialState,
        _generatorFactory =
@@ -64,9 +66,21 @@ final class AgentConversationSliceStore extends ChangeNotifier
            ((scope) => OperationIdGenerator(scope: scope));
 
   final AgentConversationSliceEffectRunner _effectRunner;
+
+  /// 拍下"此刻的 Binding / runtime / thread"。
+  ///
+  /// 由组合层注入：store 在 application 层，读不到 runtime。
+  final AgentConversationCommandScope Function() _scopeSnapshot;
   final OperationIdGenerator Function(String scope) _generatorFactory;
   final Map<String, OperationIdGenerator> _generators =
       <String, OperationIdGenerator>{};
+
+  /// 监听器列表。
+  ///
+  /// 这里刻意**不用 `ChangeNotifier`**：application 层禁止 import Flutter
+  /// （目标架构 §12.5）。语义与 `ChangeNotifier` 对齐——通知期间允许增删监听，
+  /// 因此遍历前先复制一份快照。
+  final List<void Function()> _listeners = <void Function()>[];
 
   AgentConversationSliceState _state;
   bool _closed = false;
@@ -74,9 +88,6 @@ final class AgentConversationSliceStore extends ChangeNotifier
   int _publishCount = 0;
   int _effectCount = 0;
   int _staleResultCount = 0;
-
-  @override
-  AgentConversationSliceState get value => _state;
 
   /// 当前切片状态。
   AgentConversationSliceState get state => _state;
@@ -106,7 +117,7 @@ final class AgentConversationSliceStore extends ChangeNotifier
     if (!identical(transition.state, before) && transition.state != before) {
       _state = transition.state;
       _publishCount += 1;
-      notifyListeners();
+      _notifyListeners();
     } else if (_isStaleResult(before, intent)) {
       _staleResultCount += 1;
     }
@@ -137,6 +148,13 @@ final class AgentConversationSliceStore extends ChangeNotifier
     return generator.next();
   }
 
+  /// 命令身份 = 操作 id + 发起时的作用域快照。两者在同一时刻拍下。
+  ({OperationId operationId, AgentConversationCommandScope scope}) _identity(
+    String scope,
+  ) {
+    return (operationId: _nextOperationId(scope), scope: _scopeSnapshot());
+  }
+
   OperationId sendMessage({
     required String text,
     List<String> localImagePaths = const <String>[],
@@ -144,43 +162,51 @@ final class AgentConversationSliceStore extends ChangeNotifier
         const <({String name, String path})>[],
     List<AgentSkillRef> skills = const <AgentSkillRef>[],
   }) {
-    final operationId = _nextOperationId(AgentConversationOperationScopes.send);
+    final identity = _identity(AgentConversationOperationScopes.send);
     dispatch(
       AgentConversationSendMessageRequested(
-        operationId,
+        identity.operationId,
+        identity.scope,
         text: text,
         localImagePaths: localImagePaths,
         mentions: mentions,
         skills: skills,
       ),
     );
-    return operationId;
+    return identity.operationId;
   }
 
   OperationId cancelActiveTurn() {
-    final operationId = _nextOperationId(
-      AgentConversationOperationScopes.cancel,
+    final identity = _identity(AgentConversationOperationScopes.cancel);
+    dispatch(
+      AgentConversationActiveTurnCancelRequested(
+        identity.operationId,
+        identity.scope,
+      ),
     );
-    dispatch(AgentConversationActiveTurnCancelRequested(operationId));
-    return operationId;
+    return identity.operationId;
   }
 
   OperationId editLastUserMessage(String text) {
-    final operationId = _nextOperationId(
+    final identity = _identity(
       AgentConversationOperationScopes.editLastMessage,
     );
     dispatch(
-      AgentConversationLastUserMessageEditRequested(operationId, text: text),
+      AgentConversationLastUserMessageEditRequested(
+        identity.operationId,
+        identity.scope,
+        text: text,
+      ),
     );
-    return operationId;
+    return identity.operationId;
   }
 
   OperationId retryOpenThread() {
-    final operationId = _nextOperationId(
-      AgentConversationOperationScopes.retryOpen,
+    final identity = _identity(AgentConversationOperationScopes.retryOpen);
+    dispatch(
+      AgentConversationThreadOpenRetried(identity.operationId, identity.scope),
     );
-    dispatch(AgentConversationThreadOpenRetried(operationId));
-    return operationId;
+    return identity.operationId;
   }
 
   /// 权限决定。**独立链路**：不复用提问 / Plan 的任何已授权状态（G5）。
@@ -191,12 +217,11 @@ final class AgentConversationSliceStore extends ChangeNotifier
     AgentCommandApprovalDecisionKind? commandDecision,
     List<String> execpolicyAmendment = const <String>[],
   }) {
-    final operationId = _nextOperationId(
-      AgentConversationOperationScopes.permission,
-    );
+    final identity = _identity(AgentConversationOperationScopes.permission);
     dispatch(
       AgentConversationPermissionResponded(
-        operationId,
+        identity.operationId,
+        identity.scope,
         request: request,
         approved: approved,
         cancelTurn: cancelTurn,
@@ -204,7 +229,7 @@ final class AgentConversationSliceStore extends ChangeNotifier
         execpolicyAmendment: execpolicyAmendment,
       ),
     );
-    return operationId;
+    return identity.operationId;
   }
 
   /// 提问回答。**独立链路**。
@@ -212,17 +237,16 @@ final class AgentConversationSliceStore extends ChangeNotifier
     AgentQuestionRequest request, {
     Map<String, List<String>> answers = const <String, List<String>>{},
   }) {
-    final operationId = _nextOperationId(
-      AgentConversationOperationScopes.question,
-    );
+    final identity = _identity(AgentConversationOperationScopes.question);
     dispatch(
       AgentConversationQuestionResponded(
-        operationId,
+        identity.operationId,
+        identity.scope,
         request: request,
         answers: answers,
       ),
     );
-    return operationId;
+    return identity.operationId;
   }
 
   /// Plan 审批。**独立链路**。
@@ -231,91 +255,94 @@ final class AgentConversationSliceStore extends ChangeNotifier
     AgentPlanApprovalDecisionKind decision, {
     String? reason,
   }) {
-    final operationId = _nextOperationId(
-      AgentConversationOperationScopes.planApproval,
-    );
+    final identity = _identity(AgentConversationOperationScopes.planApproval);
     dispatch(
       AgentConversationPlanApprovalResponded(
-        operationId,
+        identity.operationId,
+        identity.scope,
         request: request,
         decision: decision,
         reason: reason,
       ),
     );
-    return operationId;
+    return identity.operationId;
   }
 
   /// Plan 本地执行交接。**独立链路**。
   OperationId startPlanExecution(AgentPlanExecutionRequest request) {
-    final operationId = _nextOperationId(
-      AgentConversationOperationScopes.planExecution,
-    );
+    final identity = _identity(AgentConversationOperationScopes.planExecution);
     dispatch(
-      AgentConversationPlanExecutionStarted(operationId, request: request),
+      AgentConversationPlanExecutionStarted(
+        identity.operationId,
+        identity.scope,
+        request: request,
+      ),
     );
-    return operationId;
+    return identity.operationId;
   }
 
   OperationId revisePlanExecution(
     AgentPlanExecutionRequest request, {
     required String feedback,
   }) {
-    final operationId = _nextOperationId(
-      AgentConversationOperationScopes.planExecution,
-    );
+    final identity = _identity(AgentConversationOperationScopes.planExecution);
     dispatch(
       AgentConversationPlanExecutionRevised(
-        operationId,
+        identity.operationId,
+        identity.scope,
         request: request,
         feedback: feedback,
       ),
     );
-    return operationId;
+    return identity.operationId;
   }
 
   void dismissPlanExecution(AgentPlanExecutionRequest request) =>
       dispatch(AgentConversationPlanExecutionDismissed(request));
 
   OperationId approveGuardianDeniedAction() {
-    final operationId = _nextOperationId(
+    final identity = _identity(
       AgentConversationOperationScopes.guardianOverride,
     );
-    dispatch(AgentConversationGuardianDeniedActionApproved(operationId));
-    return operationId;
+    dispatch(
+      AgentConversationGuardianDeniedActionApproved(
+        identity.operationId,
+        identity.scope,
+      ),
+    );
+    return identity.operationId;
   }
 
   OperationId mutateThread(
     AgentConversationThreadMutationKind kind, {
     String? name,
   }) {
-    final operationId = _nextOperationId(
-      AgentConversationOperationScopes.threadMutation,
-    );
+    final identity = _identity(AgentConversationOperationScopes.threadMutation);
     dispatch(
       AgentConversationThreadMutationRequested(
-        operationId,
+        identity.operationId,
+        identity.scope,
         kind: kind,
         name: name,
       ),
     );
-    return operationId;
+    return identity.operationId;
   }
 
   OperationId loadCatalog(
     AgentConversationCatalogKind kind, {
     bool forceRefresh = false,
   }) {
-    final operationId = _nextOperationId(
-      AgentConversationOperationScopes.catalog,
-    );
+    final identity = _identity(AgentConversationOperationScopes.catalog);
     dispatch(
       AgentConversationCatalogLoadRequested(
-        operationId,
+        identity.operationId,
+        identity.scope,
         kind: kind,
         forceRefresh: forceRefresh,
       ),
     );
-    return operationId;
+    return identity.operationId;
   }
 
   void toggleExpansion(AgentConversationExpansionTarget target, String id) =>
@@ -330,19 +357,41 @@ final class AgentConversationSliceStore extends ChangeNotifier
       dispatch(AgentConversationCommandSucceeded(operationId));
 
   /// 命令失败。
-  void failCommand(OperationId operationId, String message) => dispatch(
-    AgentConversationCommandFailed(
-      AgentConversationOperationFailure(
-        operationId: operationId,
-        message: message,
-      ),
-    ),
-  );
+  ///
+  /// 只收**分类**：调用方不得把原始错误文本传进来当 UI 文案。
+  void failCommand(OperationId operationId, AgentCommandFailureKind kind) =>
+      dispatch(
+        AgentConversationCommandFailed(
+          AgentConversationOperationFailure(
+            operationId: operationId,
+            kind: kind,
+          ),
+        ),
+      );
 
-  @override
+  /// 订阅状态变化。
+  void addListener(void Function() listener) {
+    if (_closed) {
+      return;
+    }
+    _listeners.add(listener);
+  }
+
+  /// 取消订阅；未注册过的监听器会被忽略。
+  void removeListener(void Function() listener) {
+    _listeners.remove(listener);
+  }
+
+  void _notifyListeners() {
+    // 通知期间可能有监听器增删，先复制快照再遍历。
+    for (final listener in List<void Function()>.of(_listeners)) {
+      listener();
+    }
+  }
+
   void dispose() {
     _closed = true;
-    super.dispose();
+    _listeners.clear();
   }
 
   bool _isStaleResult(

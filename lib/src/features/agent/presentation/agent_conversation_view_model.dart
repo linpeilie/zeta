@@ -9,7 +9,9 @@ import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/core/logging/structured_error_logging.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_mode_controller.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_command_scope.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/application/agent_plan_execution_handoff_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
@@ -17,9 +19,10 @@ import 'package:zeta/src/features/agent/application/agent_conversation_model_sel
 import 'package:zeta/src/features/agent/application/agent_skills_catalog_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_turn_context_overlay.dart';
 import 'package:zeta/src/features/agent/application/agent_pipeline_metrics_reporter.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_region_state.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_ui_state.dart';
 import 'package:zeta/src/features/agent/presentation/agent_ui_update_scheduler.dart';
-import 'package:zeta/src/features/agent/presentation/model_config_ui_state.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_model_config_ui_state.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_file_query.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 
@@ -558,15 +561,21 @@ class AgentConversationViewModel {
   }
 
   /// 确认上一 Plan 回合，并用 Default 模式启动新的执行回合。
-  Future<void> startPlanExecution(AgentPlanExecutionRequest request) async {
+  Future<AgentCommandOutcome> startPlanExecution(
+    AgentPlanExecutionRequest request,
+  ) async {
     if (!_canResolvePlanExecution(request) ||
         isTurnRunning ||
         !canSubmitMessage) {
-      return;
+      return const AgentCommandOutcome.ignored(
+        AgentCommandIgnoreReason.notAllowed,
+      );
     }
     final currentRequest = planExecutionRequest;
     if (currentRequest == null || currentRequest.id != request.id) {
-      return;
+      return const AgentCommandOutcome.ignored(
+        AgentCommandIgnoreReason.notAllowed,
+      );
     }
     final validatedRequest = _reconcilePlanExecutionPermission(currentRequest);
     final executionPermission = validatedRequest?.executionPermission;
@@ -577,7 +586,9 @@ class AgentConversationViewModel {
           urgency: AgentUiUpdateUrgency.immediate,
         ),
       );
-      return;
+      return const AgentCommandOutcome.ignored(
+        AgentCommandIgnoreReason.notAllowed,
+      );
     }
     if (executionPermission.selection != null &&
         _isPlanningOnlyPermission(executionPermission.selection!.optionId)) {
@@ -587,10 +598,14 @@ class AgentConversationViewModel {
           urgency: AgentUiUpdateUrgency.immediate,
         ),
       );
-      return;
+      return const AgentCommandOutcome.ignored(
+        AgentCommandIgnoreReason.notAllowed,
+      );
     }
     if (!_planExecutionHandoffController.resolve(validatedRequest)) {
-      return;
+      return const AgentCommandOutcome.ignored(
+        AgentCommandIgnoreReason.notAllowed,
+      );
     }
     _resolvePlanExecutionAttention(validatedRequest);
     _conversationModeController.selectMode(AgentConversationModeId.defaultMode);
@@ -611,7 +626,8 @@ class AgentConversationViewModel {
         urgency: AgentUiUpdateUrgency.immediate,
       ),
     );
-    await sendMessage(
+    // 交接的成败就是这次发送的成败，直接透传，不再自己编造结果。
+    return sendMessage(
       planExecutionPrompt,
       permissionSnapshotOverride: executionPermission.toRequestSnapshot(),
     );
@@ -654,13 +670,15 @@ class AgentConversationViewModel {
   ///
   /// [revisionMessage] 非空时在关闭交接后立即以 Plan 模式发送；
   /// 为空时仅关闭交接卡，恢复主 Composer 供用户继续输入。
-  Future<void> revisePlanExecution(
+  Future<AgentCommandOutcome> revisePlanExecution(
     AgentPlanExecutionRequest request, {
     String? revisionMessage,
   }) async {
     if (!_canResolvePlanExecution(request) ||
         !_planExecutionHandoffController.resolve(request)) {
-      return;
+      return const AgentCommandOutcome.ignored(
+        AgentCommandIgnoreReason.notAllowed,
+      );
     }
     _resolvePlanExecutionAttention(request);
     _conversationModeController.selectMode(AgentConversationModeId.plan);
@@ -675,12 +693,15 @@ class AgentConversationViewModel {
     );
     final text = revisionMessage?.trim();
     if (text == null || text.isEmpty) {
-      return;
+      // 只关交接卡、不发消息，本身就是完成态。
+      return const AgentCommandOutcome.succeeded();
     }
     if (isTurnRunning || !canSubmitMessage) {
-      return;
+      return const AgentCommandOutcome.ignored(
+        AgentCommandIgnoreReason.notAllowed,
+      );
     }
-    await sendMessage(text);
+    return sendMessage(text);
   }
 
   /// 关闭本地执行提示，不向 Provider 回写任何审批结果。
@@ -702,8 +723,15 @@ class AgentConversationViewModel {
   }
 
   /// 重试当前 Provider 的模式目录探测。
-  Future<void> retryConversationModes() {
-    return _conversationModeController.retryCatalog();
+  Future<AgentCommandOutcome> retryConversationModes() async {
+    await _conversationModeController.retryCatalog();
+    // 目录状态本身就是结果：失败会停在 failed 状态，不靠"没抛异常"判定。
+    return _conversationModeController.state.status ==
+            AgentConversationModeLoadStatus.error
+        ? const AgentCommandOutcome.failed(
+            AgentCommandFailureKind.requestFailed,
+          )
+        : const AgentCommandOutcome.succeeded();
   }
 
   List<AgentModelInfo> get models => _modelSelectionController.models;
@@ -733,7 +761,6 @@ class AgentConversationViewModel {
   AgentModelConfigUiState get modelConfigUiState => AgentModelConfigUiState(
     models: models,
     selectedModelId: selectedModelId,
-    expandedModelId: null,
     selectedReasoningEffort: selectedReasoningEffort,
     selectedServiceTierId: selectedServiceTierId,
     preferences: _modelSelectionController.preferences,
@@ -815,15 +842,19 @@ class AgentConversationViewModel {
   }
 
   /// 预热 skill 目录（打开 picker 前调用）。
-  Future<void> ensureSkillsCatalog() async {
+  Future<AgentCommandOutcome> ensureSkillsCatalog() async {
     if (!canUseSkills) {
-      return;
+      return const AgentCommandOutcome.ignored(
+        AgentCommandIgnoreReason.notAllowed,
+      );
     }
     // catalog：skill 目录属于「会话之前的信息」（04 §0.4），不建立订阅。
+    // `_runGlobalBundle` 不吞异常，失败会往上抛。
     await _runGlobalBundle(
       _ensureSkillsCatalog,
       preferredProviderId: _selectedProviderId,
     );
+    return const AgentCommandOutcome.succeeded();
   }
 
   bool get canRenameCurrentThread =>
@@ -1215,7 +1246,7 @@ class AgentConversationViewModel {
   ///
   /// 在 IDE 启动时调用，触发 provider initialize 握手并拉取 `model/list`，
   /// 使输入框下方的模型/思考/速率控件在用户发送消息前就可用。
-  Future<void> loadModels({bool forceRefresh = false}) async {
+  Future<AgentCommandOutcome> loadModels({bool forceRefresh = false}) async {
     await loadSettings();
     final config = _boundProviderConfig;
     // 一个 ViewModel 永久绑定同一个 Provider/thread。Provider 默认值只用于首次
@@ -1239,7 +1270,9 @@ class AgentConversationViewModel {
           urgency: AgentUiUpdateUrgency.immediate,
         ),
       );
-      return;
+      return const AgentCommandOutcome.ignored(
+        AgentCommandIgnoreReason.notAllowed,
+      );
     }
     final hasWorkspace = _projectPath?.trim().isNotEmpty ?? false;
     if (bootstrapPolicy.requiresWorkspace && !hasWorkspace) {
@@ -1252,7 +1285,9 @@ class AgentConversationViewModel {
           urgency: AgentUiUpdateUrgency.immediate,
         ),
       );
-      return;
+      return const AgentCommandOutcome.ignored(
+        AgentCommandIgnoreReason.notAllowed,
+      );
     }
     _modelsRefreshing = true;
     _modelRefreshError = null;
@@ -1285,7 +1320,7 @@ class AgentConversationViewModel {
       }
       await _runGlobalBundle((_) async {}, hydrateCatalogs: true);
       await _permissionSelectionController.refreshOptions();
-    } catch (error) {
+    } on Object catch (error) {
       _log.w('Could not preload Agent models (${error.runtimeType})');
       _modelRefreshError = _textCatalog.modelListRefreshFailed;
     } finally {
@@ -1297,6 +1332,13 @@ class AgentConversationViewModel {
         ),
       );
     }
+    // 目录刷新失败会写进 composer region 的 refreshError，这里据此归类，
+    // 而不是靠"没抛异常"。
+    return _modelRefreshError == null
+        ? const AgentCommandOutcome.succeeded()
+        : const AgentCommandOutcome.failed(
+            AgentCommandFailureKind.requestFailed,
+          );
   }
 
   Future<bool> selectModel(String modelId) =>
@@ -1338,12 +1380,15 @@ class AgentConversationViewModel {
   }
 
   /// Guardian 拒绝后的人工放行。
-  Future<void> approveGuardianDeniedAction() async {
+  Future<AgentCommandOutcome> approveGuardianDeniedAction() async {
     final review = _latestDeniedAutoReview;
     final threadId = review?.threadId ?? sessionId;
     if (review == null || threadId == null) {
-      return;
+      return const AgentCommandOutcome.ignored(
+        AgentCommandIgnoreReason.notAllowed,
+      );
     }
+    var delivered = false;
     try {
       await _runCurrentBundle<void>((bundle) async {
         final override = bundle.deniedActionOverride;
@@ -1356,6 +1401,7 @@ class AgentConversationViewModel {
             requestId: review.reviewId,
           ),
         );
+        delivered = true;
       });
       _latestDeniedAutoReview = null;
       _publishUiChanges(
@@ -1367,9 +1413,16 @@ class AgentConversationViewModel {
           urgency: AgentUiUpdateUrgency.immediate,
         ),
       );
-    } catch (error) {
+    } on Object catch (error) {
       _log.w('Could not approve guardian-denied action (${error.runtimeType})');
+      return AgentCommandOutcome.failed(
+        AgentCommandFailureKind.requestFailed,
+        diagnostic: error.toString(),
+      );
     }
+    return delivered
+        ? const AgentCommandOutcome.succeeded()
+        : const AgentCommandOutcome.failed(AgentCommandFailureKind.unsupported);
   }
 
   Future<bool> selectServiceTier(String? tierId) =>
@@ -1774,7 +1827,7 @@ class AgentConversationViewModel {
   /// 没有 active turn 时创建新回合；已有 active turn 时发送 steer，保持完整工具循环。
   /// [localImagePaths] 为随文本一并发送的本地图片绝对路径。
   /// [mentions] 为 composer 中选中的 @文件引用。
-  Future<void> sendMessage(
+  Future<AgentCommandOutcome> sendMessage(
     String text, {
     List<String> localImagePaths = const <String>[],
     List<({String name, String path})> mentions =
@@ -1792,18 +1845,28 @@ class AgentConversationViewModel {
         ? mentions
         : const <({String name, String path})>[];
     final resolvedSkills = canUseSkills ? skills : const <AgentSkillRef>[];
-    if ((trimmed.isEmpty &&
-            imagePaths.isEmpty &&
-            resolvedMentions.isEmpty &&
-            resolvedSkills.isEmpty) ||
-        !canSubmitMessage) {
-      return;
+    if (trimmed.isEmpty &&
+        imagePaths.isEmpty &&
+        resolvedMentions.isEmpty &&
+        resolvedSkills.isEmpty) {
+      return const AgentCommandOutcome.ignored(
+        AgentCommandIgnoreReason.emptyInput,
+      );
+    }
+    if (!canSubmitMessage) {
+      return const AgentCommandOutcome.ignored(
+        AgentCommandIgnoreReason.notAllowed,
+      );
     }
 
     if (_requiresResumedSelectedThread && _selectedThreadId == null) {
-      return;
+      return const AgentCommandOutcome.ignored(
+        AgentCommandIgnoreReason.notAllowed,
+      );
     }
 
+    // 默认成功；下面每个失败分支显式覆盖，绝不靠"没抛异常"推断结果。
+    var outcome = const AgentCommandOutcome.succeeded();
     final switchToken = _threadSwitchToken;
     final selectedThreadId = _selectedThreadId;
     final runningTurnId = _timeline.selectedRunningTurnId;
@@ -1996,10 +2059,16 @@ class AgentConversationViewModel {
         },
       );
       if (!_isStillSelectedThread(switchToken, selectedThreadId)) {
-        return;
+        return const AgentCommandOutcome.failed(
+          AgentCommandFailureKind.staleTarget,
+        );
       }
       _failPendingLiveTurn();
       _markUnavailable(error.message, details: error.toString());
+      outcome = AgentCommandOutcome.failed(
+        AgentCommandFailureKind.providerUnavailable,
+        diagnostic: error.toString(),
+      );
     } on UnsupportedError catch (error, stackTrace) {
       _logProviderOperationFailure(
         error: error,
@@ -2012,10 +2081,16 @@ class AgentConversationViewModel {
         extra: const <String, Object?>{'category': 'unsupported'},
       );
       if (!_isStillSelectedThread(switchToken, selectedThreadId)) {
-        return;
+        return const AgentCommandOutcome.failed(
+          AgentCommandFailureKind.staleTarget,
+        );
       }
       _failPendingLiveTurn();
       _markError(error.message ?? 'Provider is not supported');
+      outcome = AgentCommandOutcome.failed(
+        AgentCommandFailureKind.unsupported,
+        diagnostic: error.toString(),
+      );
     } catch (error, stackTrace) {
       _logProviderOperationFailure(
         error: error,
@@ -2028,10 +2103,16 @@ class AgentConversationViewModel {
         extra: const <String, Object?>{'category': 'request'},
       );
       if (!_isStillSelectedThread(switchToken, selectedThreadId)) {
-        return;
+        return const AgentCommandOutcome.failed(
+          AgentCommandFailureKind.staleTarget,
+        );
       }
       _failPendingLiveTurn();
       _markError('Agent request failed', details: error.toString());
+      outcome = AgentCommandOutcome.failed(
+        AgentCommandFailureKind.requestFailed,
+        diagnostic: error.toString(),
+      );
     } finally {
       if (isNewTurn && !modeRequestAccepted && requestSession != null) {
         _conversationModeController.markTurnFailed(
@@ -2045,6 +2126,7 @@ class AgentConversationViewModel {
       }
       _timeline.clearPendingTurnGroupId();
     }
+    return outcome;
   }
 
   /// 记录任意 Provider 调用抛出的异常；不包含本次用户输入正文。
@@ -2074,30 +2156,42 @@ class AgentConversationViewModel {
   }
 
   /// 取消正在运行的回合。
-  Future<void> cancelActiveTurn() async {
+  Future<AgentCommandOutcome> cancelActiveTurn() async {
     final turnId = _timeline.selectedCancelableTurnId();
     final sessionId = _selectedThreadId;
     if (turnId == null || sessionId == null) {
-      return;
+      return const AgentCommandOutcome.ignored(
+        AgentCommandIgnoreReason.notAllowed,
+      );
     }
     _log.i('Cancelling Agent turn $turnId');
+    // `_runCurrentBundle` 不吞异常：失败会往上抛，由调用方归类。
     await _runCurrentBundle<void>(
       (bundle) => bundle.conversation.cancelTurn(
         AgentTurn(id: turnId, sessionId: sessionId),
       ),
     );
+    return const AgentCommandOutcome.succeeded();
   }
 
   /// 重新加载当前 Entry 唯一绑定的 thread；只用于首次打开失败后的显式重试。
-  Future<void> retryOpenThread() {
+  Future<AgentCommandOutcome> retryOpenThread() async {
     final thread = _boundThreadSummary;
     if (thread == null) {
       throw StateError('Draft conversation has no thread to reopen');
     }
     if (_threadOpenPhase != AgentThreadOpenPhase.openFailed) {
-      return Future<void>.value();
+      return const AgentCommandOutcome.ignored(
+        AgentCommandIgnoreReason.notAllowed,
+      );
     }
-    return _openBoundThread(thread);
+    await _openBoundThread(thread);
+    // `_openBoundThread` 自己吞异常并把结果写进 openPhase，据此判定成败。
+    return _threadOpenPhase == AgentThreadOpenPhase.openFailed
+        ? const AgentCommandOutcome.failed(
+            AgentCommandFailureKind.requestFailed,
+          )
+        : const AgentCommandOutcome.succeeded();
   }
 
   /// 加载 Entry 创建时已经冻结的 thread 身份。
@@ -2278,7 +2372,7 @@ class AgentConversationViewModel {
   /// 处理审批卡片的 approve/deny。
   ///
   /// UI 先移除卡片，再异步回写 provider，避免按钮点击后卡片停留造成重复提交。
-  Future<void> respondToPermission(
+  Future<AgentCommandOutcome> respondToPermission(
     AgentPermissionRequest request, {
     required bool approved,
     bool cancelTurn = false,
@@ -2305,6 +2399,7 @@ class AgentConversationViewModel {
     _log.i(
       'Responding to Agent permission ${request.kind.name}: approved=$approved',
     );
+    var delivered = false;
     await _runCurrentBundle<void>((bundle) async {
       final permissionResponses = bundle.permissionResponses;
       if (permissionResponses == null) {
@@ -2319,13 +2414,18 @@ class AgentConversationViewModel {
           execpolicyAmendment: execpolicyAmendment,
         ),
       );
+      delivered = true;
     });
+    // 决定没送达 Provider 就是失败：用户以为批过了，实际没有。
+    return delivered
+        ? const AgentCommandOutcome.succeeded()
+        : const AgentCommandOutcome.failed(AgentCommandFailureKind.unsupported);
   }
 
   /// 回答或跳过独立用户提问。
   ///
   /// UI 先移除卡片，再通过 question 响应方法回写结构化 answers。
-  Future<void> respondToQuestion(
+  Future<AgentCommandOutcome> respondToQuestion(
     AgentQuestionRequest request, {
     Map<String, List<String>> answers = const <String, List<String>>{},
   }) async {
@@ -2350,6 +2450,7 @@ class AgentConversationViewModel {
       'Responding to Agent question '
       '(${answers.length} answered questions)',
     );
+    var delivered = false;
     await _runCurrentBundle<void>((bundle) async {
       final questions = bundle.questions;
       if (questions == null) {
@@ -2358,14 +2459,18 @@ class AgentConversationViewModel {
       await questions.respondToQuestion(
         AgentQuestionResponse(requestId: request.id, answers: answers),
       );
+      delivered = true;
     });
+    return delivered
+        ? const AgentCommandOutcome.succeeded()
+        : const AgentCommandOutcome.failed(AgentCommandFailureKind.unsupported);
   }
 
   /// 回写 Provider 计划审批结果。
   ///
   /// [reason] 承载用户对计划的修改意见：审批是阻塞请求、回合仍在运行，
   /// 修改意见不能走 `sendMessage`，只能随决定一起回传给 Provider。
-  Future<void> respondToPlanApproval(
+  Future<AgentCommandOutcome> respondToPlanApproval(
     AgentPlanApprovalRequest request,
     AgentPlanApprovalDecisionKind kind, {
     String? reason,
@@ -2440,26 +2545,42 @@ class AgentConversationViewModel {
         clearPendingTurn: true,
       );
     }
+    return responded
+        ? const AgentCommandOutcome.succeeded()
+        : const AgentCommandOutcome.failed(AgentCommandFailureKind.unsupported);
   }
 
   /// 从上一历史 turn 创建新分支，并用编辑后的文本开启新回合。
   ///
   /// 原 thread 保持不变；分支也不会回滚 Agent 已写入工作区的文件。
-  Future<void> editLastUserMessageAndRetry(String newText) async {
+  Future<AgentCommandOutcome> editLastUserMessageAndRetry(
+    String newText,
+  ) async {
     final trimmed = newText.trim();
-    if (trimmed.isEmpty || !canEditLastUserMessage) {
-      return;
+    if (trimmed.isEmpty) {
+      return const AgentCommandOutcome.ignored(
+        AgentCommandIgnoreReason.emptyInput,
+      );
+    }
+    if (!canEditLastUserMessage) {
+      return const AgentCommandOutcome.ignored(
+        AgentCommandIgnoreReason.notAllowed,
+      );
     }
     final threadId = sessionId;
     if (threadId == null) {
-      return;
+      return const AgentCommandOutcome.ignored(
+        AgentCommandIgnoreReason.notAllowed,
+      );
     }
     final message = _lastEditableUserMessage();
     final boundaryTurnId = message == null
         ? null
         : _timeline.forkBoundaryBeforeMessage(message.id);
     if (boundaryTurnId == null) {
-      return;
+      return const AgentCommandOutcome.ignored(
+        AgentCommandIgnoreReason.notAllowed,
+      );
     }
 
     final switchToken = _threadSwitchToken;
@@ -2501,13 +2622,18 @@ class AgentConversationViewModel {
         );
       });
       if (!_isCurrentSwitch(switchToken)) {
-        return;
+        return const AgentCommandOutcome.failed(
+          AgentCommandFailureKind.staleTarget,
+        );
       }
       await _openCreatedThread(session, initialMessage: trimmed);
       _restoreSourceAfterBranchCreated();
-    } catch (error) {
+      return const AgentCommandOutcome.succeeded();
+    } on Object catch (error) {
       if (!_isCurrentSwitch(switchToken)) {
-        return;
+        return const AgentCommandOutcome.failed(
+          AgentCommandFailureKind.staleTarget,
+        );
       }
       _log.w(
         'Could not create branch and retry thread $threadId '
@@ -2516,6 +2642,10 @@ class AgentConversationViewModel {
       _markError(
         'Could not create branch and retry message',
         details: error.toString(),
+      );
+      return AgentCommandOutcome.failed(
+        AgentCommandFailureKind.requestFailed,
+        diagnostic: error.toString(),
       );
     }
   }
@@ -2609,14 +2739,23 @@ class AgentConversationViewModel {
   }
 
   /// 重命名当前 thread；先乐观更新标题，再以 `thread/name/updated` 为准。
-  Future<void> renameCurrentThread(String name) async {
+  Future<AgentCommandOutcome> renameCurrentThread(String name) async {
     final trimmed = name.trim();
     final threadId = sessionId;
-    if (trimmed.isEmpty || threadId == null || !canRenameCurrentThread) {
-      return;
+    if (trimmed.isEmpty) {
+      return const AgentCommandOutcome.ignored(
+        AgentCommandIgnoreReason.emptyInput,
+      );
+    }
+    if (threadId == null || !canRenameCurrentThread) {
+      return const AgentCommandOutcome.ignored(
+        AgentCommandIgnoreReason.notAllowed,
+      );
     }
     if (trimmed == _currentThreadTitle) {
-      return;
+      return const AgentCommandOutcome.ignored(
+        AgentCommandIgnoreReason.unchanged,
+      );
     }
     final previousTitle = _currentThreadTitle;
     _applyThreadTitle(trimmed);
@@ -2637,7 +2776,8 @@ class AgentConversationViewModel {
         }
         return threadNaming.renameThread(threadId: threadId, name: trimmed);
       });
-    } catch (error) {
+      return const AgentCommandOutcome.succeeded();
+    } on Object catch (error) {
       if (sessionId == threadId && _currentThreadTitle == trimmed) {
         _applyThreadTitle(previousTitle);
         _publishUiChanges(
@@ -2649,14 +2789,22 @@ class AgentConversationViewModel {
       }
       _log.w('Could not rename thread $threadId (${error.runtimeType})');
       _markError('Could not rename thread', details: error.toString());
+      return AgentCommandOutcome.failed(
+        error is UnsupportedError
+            ? AgentCommandFailureKind.unsupported
+            : AgentCommandFailureKind.requestFailed,
+        diagnostic: error.toString(),
+      );
     }
   }
 
   /// 归档当前 thread；事件订阅会负责同步左侧列表。
-  Future<void> archiveCurrentThread() async {
+  Future<AgentCommandOutcome> archiveCurrentThread() async {
     final threadId = sessionId;
     if (threadId == null || !canArchiveCurrentThread) {
-      return;
+      return const AgentCommandOutcome.ignored(
+        AgentCommandIgnoreReason.notAllowed,
+      );
     }
     try {
       await _runGlobalBundle((bundle) {
@@ -2669,9 +2817,16 @@ class AgentConversationViewModel {
         }
         return threadArchival.archiveThread(threadId);
       });
-    } catch (error) {
+      return const AgentCommandOutcome.succeeded();
+    } on Object catch (error) {
       _log.w('Could not archive thread $threadId (${error.runtimeType})');
       _markError('Could not archive thread', details: error.toString());
+      return AgentCommandOutcome.failed(
+        error is UnsupportedError
+            ? AgentCommandFailureKind.unsupported
+            : AgentCommandFailureKind.requestFailed,
+        diagnostic: error.toString(),
+      );
     }
   }
 
@@ -2679,10 +2834,12 @@ class AgentConversationViewModel {
   ///
   /// Claude 的 compact 是一个真实 `/compact` 回合，因此不能走 global runtime；
   /// Codex 等 Provider 也继续消费同一个中立 [AgentThreadCompactionPort]。
-  Future<void> compactCurrentThread() async {
+  Future<AgentCommandOutcome> compactCurrentThread() async {
     final threadId = sessionId;
     if (threadId == null || !canCompactCurrentThread) {
-      return;
+      return const AgentCommandOutcome.ignored(
+        AgentCommandIgnoreReason.notAllowed,
+      );
     }
 
     final switchToken = _threadSwitchToken;
@@ -2698,6 +2855,8 @@ class AgentConversationViewModel {
     AgentRuntimePort? requestRuntime;
     AgentSession? requestSession;
     var providerOperation = 'provider/settings';
+    // 默认成功；每个失败分支显式覆盖。
+    var outcome = const AgentCommandOutcome.succeeded();
     try {
       await loadSettings();
       providerOperation = 'provider/ensure';
@@ -2726,7 +2885,9 @@ class AgentConversationViewModel {
       );
       requestSession = session;
       if (!_isStillSelectedThread(switchToken, threadId)) {
-        return;
+        return const AgentCommandOutcome.failed(
+          AgentCommandFailureKind.staleTarget,
+        );
       }
       if (session.id != threadId) {
         throw StateError(
@@ -2761,6 +2922,10 @@ class AgentConversationViewModel {
       if (_isStillSelectedThread(switchToken, threadId)) {
         _markUnavailable(error.message, details: error.toString());
       }
+      outcome = AgentCommandOutcome.failed(
+        AgentCommandFailureKind.providerUnavailable,
+        diagnostic: error.toString(),
+      );
     } on UnsupportedError catch (error, stackTrace) {
       _logProviderOperationFailure(
         error: error,
@@ -2775,7 +2940,11 @@ class AgentConversationViewModel {
       if (_isStillSelectedThread(switchToken, threadId)) {
         _markError(error.message ?? 'Provider is not supported');
       }
-    } catch (error, stackTrace) {
+      outcome = AgentCommandOutcome.failed(
+        AgentCommandFailureKind.unsupported,
+        diagnostic: error.toString(),
+      );
+    } on Object catch (error, stackTrace) {
       _logProviderOperationFailure(
         error: error,
         stackTrace: stackTrace,
@@ -2789,6 +2958,10 @@ class AgentConversationViewModel {
       if (_isStillSelectedThread(switchToken, threadId)) {
         _markError('Could not compact thread', details: error.toString());
       }
+      outcome = AgentCommandOutcome.failed(
+        AgentCommandFailureKind.requestFailed,
+        diagnostic: error.toString(),
+      );
     } finally {
       await activity?.release();
       _compactRequestInProgress = false;
@@ -2801,6 +2974,7 @@ class AgentConversationViewModel {
         );
       }
     }
+    return outcome;
   }
 
   /// 从列表侧同步当前 thread 标题（刷新列表 / 服务端改名后保持详情头栏一致）。
@@ -3731,6 +3905,17 @@ class AgentConversationViewModel {
       activeProviderName: activeProviderName,
       activeProviderConfig: _boundProviderConfig,
       effectScope: effectScope,
+    );
+  }
+
+  /// 当前命令作用域快照：Binding 身份 + runtime identity/epoch + thread。
+  ///
+  /// 切片的 effect runner 用它在执行前与结果回写前各校验一次，避免 Provider
+  /// 重启 / runtime 换代之后旧命令仍被执行或写回（目标架构 §6.2）。
+  AgentConversationCommandScope currentCommandScope() {
+    return AgentConversationCommandScope.fromEffectScope(
+      bindingKey: conversationBinding.key,
+      scope: _currentEffectScope(),
     );
   }
 

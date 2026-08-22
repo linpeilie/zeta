@@ -32,3 +32,19 @@ bool zetaMapEquals<K, V>(Map<K, V>? a, Map<K, V>? b) {
   }
   return true;
 }
+
+/// Set 的浅层结构相等：元素个数相同且逐元素 `contains`。
+bool zetaSetEquals<T>(Set<T>? a, Set<T>? b) {
+  if (identical(a, b)) {
+    return true;
+  }
+  if (a == null || b == null || a.length != b.length) {
+    return false;
+  }
+  for (final value in a) {
+    if (!b.contains(value)) {
+      return false;
+    }
+  }
+  return true;
+}

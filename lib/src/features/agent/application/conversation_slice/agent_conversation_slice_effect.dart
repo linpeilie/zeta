@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_command_scope.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_intent.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
@@ -12,19 +12,26 @@ sealed class AgentConversationSliceEffect {
 }
 
 /// 需要回报成败的命令副作用。
+///
+/// 每个命令副作用都带着**发起时的作用域快照**：runner 在执行前和结果回写前各校验
+/// 一次，Provider 重启 / runtime 换代 / Binding 变化之后的旧 effect 不会被执行，
+/// 也不会把结果写回当前世界（G3 的 scope-aware EffectRunner 要求）。
 sealed class AgentConversationCommandEffect
     extends AgentConversationSliceEffect {
-  const AgentConversationCommandEffect(this.operationId);
+  const AgentConversationCommandEffect(this.operationId, this.scope);
 
   /// 与发起它的命令意图共享同一个身份，用于判定迟到结果。
   final OperationId operationId;
+
+  /// 发起时的 Binding / runtime / thread 作用域。
+  final AgentConversationCommandScope scope;
 }
 
-@immutable
 final class AgentConversationSendMessageEffect
     extends AgentConversationCommandEffect {
   const AgentConversationSendMessageEffect(
-    super.operationId, {
+    super.operationId,
+    super.scope, {
     required this.text,
     required this.localImagePaths,
     required this.mentions,
@@ -37,35 +44,33 @@ final class AgentConversationSendMessageEffect
   final List<AgentSkillRef> skills;
 }
 
-@immutable
 final class AgentConversationCancelTurnEffect
     extends AgentConversationCommandEffect {
-  const AgentConversationCancelTurnEffect(super.operationId);
+  const AgentConversationCancelTurnEffect(super.operationId, super.scope);
 }
 
-@immutable
 final class AgentConversationEditLastUserMessageEffect
     extends AgentConversationCommandEffect {
   const AgentConversationEditLastUserMessageEffect(
-    super.operationId, {
+    super.operationId,
+    super.scope, {
     required this.text,
   });
 
   final String text;
 }
 
-@immutable
 final class AgentConversationRetryOpenThreadEffect
     extends AgentConversationCommandEffect {
-  const AgentConversationRetryOpenThreadEffect(super.operationId);
+  const AgentConversationRetryOpenThreadEffect(super.operationId, super.scope);
 }
 
 /// 权限决定回传。**独立链路**，不与提问 / Plan 共用（G5）。
-@immutable
 final class AgentConversationRespondPermissionEffect
     extends AgentConversationCommandEffect {
   const AgentConversationRespondPermissionEffect(
-    super.operationId, {
+    super.operationId,
+    super.scope, {
     required this.request,
     required this.approved,
     required this.cancelTurn,
@@ -81,11 +86,11 @@ final class AgentConversationRespondPermissionEffect
 }
 
 /// 提问回答回传。**独立链路**。
-@immutable
 final class AgentConversationRespondQuestionEffect
     extends AgentConversationCommandEffect {
   const AgentConversationRespondQuestionEffect(
-    super.operationId, {
+    super.operationId,
+    super.scope, {
     required this.request,
     required this.answers,
   });
@@ -95,11 +100,11 @@ final class AgentConversationRespondQuestionEffect
 }
 
 /// Plan 审批回传。**独立链路**。
-@immutable
 final class AgentConversationRespondPlanApprovalEffect
     extends AgentConversationCommandEffect {
   const AgentConversationRespondPlanApprovalEffect(
-    super.operationId, {
+    super.operationId,
+    super.scope, {
     required this.request,
     required this.decision,
     required this.reason,
@@ -111,11 +116,11 @@ final class AgentConversationRespondPlanApprovalEffect
 }
 
 /// Plan 本地执行交接。**独立链路**。
-@immutable
 final class AgentConversationPlanExecutionEffect
     extends AgentConversationCommandEffect {
   const AgentConversationPlanExecutionEffect(
-    super.operationId, {
+    super.operationId,
+    super.scope, {
     required this.request,
     this.revisionFeedback,
   });
@@ -126,17 +131,19 @@ final class AgentConversationPlanExecutionEffect
   final String? revisionFeedback;
 }
 
-@immutable
 final class AgentConversationApproveGuardianDeniedActionEffect
     extends AgentConversationCommandEffect {
-  const AgentConversationApproveGuardianDeniedActionEffect(super.operationId);
+  const AgentConversationApproveGuardianDeniedActionEffect(
+    super.operationId,
+    super.scope,
+  );
 }
 
-@immutable
 final class AgentConversationThreadMutationEffect
     extends AgentConversationCommandEffect {
   const AgentConversationThreadMutationEffect(
-    super.operationId, {
+    super.operationId,
+    super.scope, {
     required this.kind,
     this.name,
   });
@@ -145,11 +152,11 @@ final class AgentConversationThreadMutationEffect
   final String? name;
 }
 
-@immutable
 final class AgentConversationLoadCatalogEffect
     extends AgentConversationCommandEffect {
   const AgentConversationLoadCatalogEffect(
-    super.operationId, {
+    super.operationId,
+    super.scope, {
     required this.kind,
     required this.forceRefresh,
   });
@@ -164,7 +171,6 @@ sealed class AgentConversationFireAndForgetEffect
   const AgentConversationFireAndForgetEffect();
 }
 
-@immutable
 final class AgentConversationToggleExpansionEffect
     extends AgentConversationFireAndForgetEffect {
   const AgentConversationToggleExpansionEffect({
@@ -176,7 +182,6 @@ final class AgentConversationToggleExpansionEffect
   final String id;
 }
 
-@immutable
 final class AgentConversationDismissPlanExecutionEffect
     extends AgentConversationFireAndForgetEffect {
   const AgentConversationDismissPlanExecutionEffect(this.request);

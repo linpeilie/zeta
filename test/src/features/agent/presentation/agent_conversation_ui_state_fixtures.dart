@@ -1,6 +1,6 @@
 import 'package:zeta/src/features/agent/application/agent_conversation_mode_controller.dart';
-import 'package:zeta/src/features/agent/presentation/agent_conversation_ui_state.dart';
-import 'package:zeta/src/features/agent/presentation/model_config_ui_state.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_region_state.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_model_config_ui_state.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// 五个 region state 的共享测试夹具。
@@ -57,7 +57,6 @@ AgentComposerState agentComposerStateFixture({
     modelConfigState: AgentModelConfigUiState(
       models: const <AgentModelInfo>[],
       selectedModelId: null,
-      expandedModelId: null,
       selectedReasoningEffort: null,
       selectedServiceTierId: null,
       preferences: const <String, AgentModelPreference>{},

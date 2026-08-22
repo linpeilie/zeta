@@ -1,36 +1,39 @@
-import 'package:flutter/foundation.dart';
-import 'package:zeta/src/features/agent/presentation/agent_conversation_ui_state.dart';
+import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_region_state.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 
 /// 一次命令类操作的失败描述。
 ///
-/// 只承载**已经可以展示给用户的中立文本**与操作身份：不带 Provider 原文、
-/// 不带 prompt、不带路径（G7）。
-@immutable
+/// 本文件与 intent / effect / reducer 一样是**纯 Dart**：不 import Flutter，
+/// 不可变性由 `final class` + 全 final 字段保证，相等性用 `zeta_foundation`
+/// 的集合助手。这样切片核心将来要下沉 `zeta_agent_core` 不用返工。
+///
+/// **只有分类，没有文案**：用户可见文字由 presentation 按 [kind] 从文本目录取。
+/// 早期这里放的是 `error.toString()`——既不可本地化，又会把路径、命令行、
+/// Provider 原文当成 UI 内容（G7）。
 final class AgentConversationOperationFailure {
   const AgentConversationOperationFailure({
     required this.operationId,
-    required this.message,
+    required this.kind,
   });
 
   /// 失败所属的操作身份。
   final OperationId operationId;
 
-  /// 已本地化、可直接展示的失败说明。
-  final String message;
+  /// 失败分类；文案由 presentation 决定。
+  final AgentCommandFailureKind kind;
 
   @override
   bool operator ==(Object other) =>
       other is AgentConversationOperationFailure &&
       other.operationId == operationId &&
-      other.message == message;
+      other.kind == kind;
 
   @override
-  int get hashCode => Object.hash(operationId, message);
+  int get hashCode => Object.hash(operationId, kind);
 
   @override
-  String toString() =>
-      'AgentConversationOperationFailure($operationId, $message)';
+  String toString() => 'AgentConversationOperationFailure($operationId, $kind)';
 }
 
 /// 单个 Agent Conversation 的完整可渲染切片。
@@ -43,7 +46,6 @@ final class AgentConversationOperationFailure {
 /// 流式 turn 的局部内容**不在这里**：`AgentUiRegion.liveTurn` /
 /// `liveTurnBinding` 继续走 TimelineStore 的局部重建路径（同文档 §2.7），
 /// 否则每个 token 都会触发一次切片发布，直接撞穿 Phase 0 的帧预算。
-@immutable
 final class AgentConversationSliceState {
   const AgentConversationSliceState({
     required this.header,
@@ -118,7 +120,7 @@ final class AgentConversationSliceState {
             other.pendingInteractions == pendingInteractions &&
             other.expansion == expansion &&
             other.history == history &&
-            setEquals(other.pendingOperations, pendingOperations) &&
+            zetaSetEquals(other.pendingOperations, pendingOperations) &&
             other.lastFailure == lastFailure;
   }
 

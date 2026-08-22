@@ -1,15 +1,18 @@
-import 'package:flutter/foundation.dart';
+import 'package:meta/meta.dart';
 
 import 'package:zeta/src/features/agent/application/agent_conversation_model_selection_controller.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
-/// Composer 模型 Popover 的不可变渲染快照。
+/// Composer 模型配置的不可变快照（application 状态）。
+///
+/// **不含 popover 展开态**：`expandedModelId` 属于 Widget/page scope 的
+/// presentation 状态（目标架构 §7.3），由 popover 自己的
+/// `_AgentModelConfigPopoverState` 持有。
 @immutable
 class AgentModelConfigUiState {
   AgentModelConfigUiState({
     required List<AgentModelInfo> models,
     required this.selectedModelId,
-    required this.expandedModelId,
     required this.selectedReasoningEffort,
     required this.selectedServiceTierId,
     required Map<String, AgentModelPreference> preferences,
@@ -30,7 +33,6 @@ class AgentModelConfigUiState {
 
   final List<AgentModelInfo> models;
   final String? selectedModelId;
-  final String? expandedModelId;
   final String? selectedReasoningEffort;
   final String? selectedServiceTierId;
   final Map<String, AgentModelPreference> preferences;
@@ -90,7 +92,6 @@ class AgentModelConfigUiState {
 
   AgentModelConfigUiState copyWith({
     Object? selectedModelId = _uiStateUnset,
-    Object? expandedModelId = _uiStateUnset,
     Object? selectedReasoningEffort = _uiStateUnset,
     Object? selectedServiceTierId = _uiStateUnset,
     List<AgentModelInfo>? models,
@@ -110,9 +111,6 @@ class AgentModelConfigUiState {
       selectedModelId: identical(selectedModelId, _uiStateUnset)
           ? this.selectedModelId
           : selectedModelId as String?,
-      expandedModelId: identical(expandedModelId, _uiStateUnset)
-          ? this.expandedModelId
-          : expandedModelId as String?,
       selectedReasoningEffort: identical(selectedReasoningEffort, _uiStateUnset)
           ? this.selectedReasoningEffort
           : selectedReasoningEffort as String?,

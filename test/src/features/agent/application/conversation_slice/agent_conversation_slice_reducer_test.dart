@@ -1,8 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_command_scope.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_effect.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_intent.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_reducer.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_state.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 
 import '../../presentation/agent_conversation_ui_state_fixtures.dart';
@@ -46,7 +49,11 @@ void main() {
 
       final transition = agentConversationSliceReduce(
         state,
-        const AgentConversationSendMessageRequested(operationId, text: 'hi'),
+        const AgentConversationSendMessageRequested(
+          operationId,
+          _testScope,
+          text: 'hi',
+        ),
       );
 
       expect(transition.state.pendingOperations, <OperationId>{operationId});
@@ -67,7 +74,7 @@ void main() {
       final state = _initialState().copyWith(
         lastFailure: const AgentConversationOperationFailure(
           operationId: failed,
-          message: '发送失败',
+          kind: AgentCommandFailureKind.requestFailed,
         ),
       );
       const next = OperationId(
@@ -77,7 +84,11 @@ void main() {
 
       final transition = agentConversationSliceReduce(
         state,
-        const AgentConversationSendMessageRequested(next, text: 'retry'),
+        const AgentConversationSendMessageRequested(
+          next,
+          _testScope,
+          text: 'retry',
+        ),
       );
 
       expect(transition.state.lastFailure, isNull);
@@ -115,13 +126,16 @@ void main() {
         const AgentConversationCommandFailed(
           AgentConversationOperationFailure(
             operationId: operationId,
-            message: '发送失败',
+            kind: AgentCommandFailureKind.requestFailed,
           ),
         ),
       );
 
       expect(transition.state.pendingOperations, isEmpty);
-      expect(transition.state.lastFailure?.message, '发送失败');
+      expect(
+        transition.state.lastFailure?.kind,
+        AgentCommandFailureKind.requestFailed,
+      );
     });
 
     test('迟到结果因身份对不上被丢弃，不写回状态', () {
@@ -146,7 +160,7 @@ void main() {
         const AgentConversationCommandFailed(
           AgentConversationOperationFailure(
             operationId: stale,
-            message: '不该出现',
+            kind: AgentCommandFailureKind.requestFailed,
           ),
         ),
       );
@@ -208,3 +222,14 @@ AgentConversationSliceState _initialState() {
     history: agentConversationHistoryStateFixture(),
   );
 }
+
+const _testScope = AgentConversationCommandScope(
+  bindingKey: AgentConversationBindingKey.thread(
+    providerId: 'codex',
+    threadId: 'thread-1',
+  ),
+  runtimeId: 'runtime-1',
+  connectionEpoch: 1,
+  listenerGeneration: 1,
+  threadId: 'thread-1',
+);

@@ -1,9 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_command_scope.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_effect.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_intent.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_reducer.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_state.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 import '../../presentation/agent_conversation_ui_state_fixtures.dart';
 
@@ -68,7 +71,7 @@ void main() {
       );
 
       expect(notifications, 1);
-      expect(store.value.header.title, '新标题');
+      expect(store.state.header.title, '新标题');
     });
 
     test('迟到结果被丢弃并计数', () {
@@ -91,11 +94,57 @@ void main() {
       addTearDown(store.dispose);
 
       final first = store.sendMessage(text: 'one');
-      store.failCommand(first, '发送失败');
-      expect(store.state.lastFailure?.message, '发送失败');
+      store.failCommand(first, AgentCommandFailureKind.requestFailed);
+      expect(
+        store.state.lastFailure?.kind,
+        AgentCommandFailureKind.requestFailed,
+      );
 
       store.sendMessage(text: 'two');
       expect(store.state.lastFailure, isNull);
+    });
+
+    test('命令带上发起时的作用域快照', () {
+      final runner = _RecordingRunner();
+      final store = _store(runner);
+      addTearDown(store.dispose);
+
+      store.sendMessage(text: 'one');
+
+      final effect = runner.effects.single as AgentConversationCommandEffect;
+      expect(effect.scope, _testScope);
+    });
+
+    test('作用域变化后发起的命令带的是新快照', () {
+      final runner = _RecordingRunner();
+      var scope = _testScope;
+      final store = AgentConversationSliceStore(
+        initialState: _initialSliceState(),
+        effectRunner: runner,
+        scopeSnapshot: () => scope,
+      );
+      addTearDown(store.dispose);
+
+      store.sendMessage(text: 'before restart');
+      scope = const AgentConversationCommandScope(
+        bindingKey: AgentConversationBindingKey.thread(
+          providerId: 'codex',
+          threadId: 'thread-1',
+        ),
+        runtimeId: 'runtime-1',
+        connectionEpoch: 2,
+        listenerGeneration: 2,
+        threadId: 'thread-1',
+      );
+      store.sendMessage(text: 'after restart');
+
+      final effects = runner.effects
+          .cast<AgentConversationCommandEffect>()
+          .toList();
+      expect(effects.first.scope.connectionEpoch, 1);
+      expect(effects.last.scope.connectionEpoch, 2);
+      // 旧 effect 的快照不会被后来的世界改写。
+      expect(effects.first.scope.matchesForCommit(effects.last.scope), isFalse);
     });
 
     test('dispose 后拒绝一切写入', () {
@@ -178,6 +227,16 @@ void main() {
   });
 }
 
+AgentConversationSliceState _initialSliceState() {
+  return AgentConversationSliceState(
+    header: agentHeaderStateFixture(),
+    composer: agentComposerStateFixture(),
+    pendingInteractions: agentPendingInteractionStateFixture(),
+    expansion: agentExpansionStateFixture(),
+    history: agentConversationHistoryStateFixture(),
+  );
+}
+
 AgentConversationSliceStore _store(AgentConversationSliceEffectRunner runner) {
   return AgentConversationSliceStore(
     initialState: AgentConversationSliceState(
@@ -188,6 +247,7 @@ AgentConversationSliceStore _store(AgentConversationSliceEffectRunner runner) {
       history: agentConversationHistoryStateFixture(),
     ),
     effectRunner: runner,
+    scopeSnapshot: () => _testScope,
   );
 }
 
@@ -198,3 +258,14 @@ final class _RecordingRunner implements AgentConversationSliceEffectRunner {
   @override
   void run(AgentConversationSliceEffect effect) => effects.add(effect);
 }
+
+const _testScope = AgentConversationCommandScope(
+  bindingKey: AgentConversationBindingKey.thread(
+    providerId: 'codex',
+    threadId: 'thread-1',
+  ),
+  runtimeId: 'runtime-1',
+  connectionEpoch: 1,
+  listenerGeneration: 1,
+  threadId: 'thread-1',
+);

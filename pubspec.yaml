@@ -32,6 +32,7 @@ dependencies:
   intl: any
   logger: ^2.7.0
   macos_window_utils: ^1.9.1
+  meta: ^1.16.0
   mixin_markdown_widget: 0.3.1
   pasteboard: ^0.5.0
   shadcn_flutter: ^0.0.53
