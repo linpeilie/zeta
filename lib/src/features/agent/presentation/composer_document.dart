@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:zeta/src/features/agent/domain/agent_skill_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 
 /// Composer 内联 token（skill / mention 共用）的单字符对象替换符。

@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:zeta/src/features/agent/data/cli_command_locator.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// 在已保存路径、PATH 与常见安装目录中定位 Claude Code CLI。
 class ClaudeCodeCliLocator {

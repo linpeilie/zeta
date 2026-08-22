@@ -12,10 +12,7 @@ import 'package:zeta/src/features/agent/data/datasources/transport/provider_oper
 import 'package:zeta/src/features/agent/data/datasources/transport/provider_runtime_json_rpc_peer.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_static_capabilities.dart';
 import 'package:zeta/src/features/agent/data/mappers/codex_permission_policy_codec.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
-import 'package:zeta/src/features/agent/domain/agent_usage_window_labels.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 part 'codex_app_server_client.dart';
 part 'codex_collaboration_mode_catalog_failure.dart';

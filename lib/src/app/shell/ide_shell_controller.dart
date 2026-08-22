@@ -5,21 +5,13 @@ import 'package:flutter/foundation.dart';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_thread_snapshot.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_global_runtime.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_thread_workspace_controller.dart';
-import 'package:zeta/src/features/agent/application/agent_ui_update_port.dart';
 import 'package:zeta/src/core/utils/system_file_manager.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
+import 'package:zeta/src/features/agent/data/agent_metric_labels.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_static_capabilities.dart';
-import 'package:zeta/src/features/agent/data/agent_turn_context_store.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
-import 'package:zeta/src/features/agent/domain/agent_turn_terminal_signal.dart';
-import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_persistence_coordinator.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_restore_result.dart';
@@ -98,6 +90,7 @@ class IdeShellController extends ChangeNotifier {
         AgentProviderRuntimeRegistry(
           providerFactory: agentProviderFactory,
           metrics: metrics,
+          providerMetricLabel: AgentMetricLabels.forProviderId,
         );
     agentProviderGlobalRuntime = AgentProviderGlobalRuntime(
       runtimeRegistry: this.agentProviderRuntimeRegistry,

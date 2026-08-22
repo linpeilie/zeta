@@ -1,6 +1,6 @@
 import 'dart:collection';
 
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// Grok 时间线中会关闭当前正文与 reasoning 的可见叙事边界。
 enum GrokNarrativeBoundaryKind {

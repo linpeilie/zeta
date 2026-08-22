@@ -1,15 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:zeta/src/features/agent/application/agent_conversation_effect.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_effect_runner.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_event_processor.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_mutation.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_reducer.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
-import 'package:zeta/src/features/agent/application/agent_turn_context_recorder.dart';
-import 'package:zeta/src/features/agent/application/agent_ui_update_port.dart';
-import 'package:zeta/src/features/agent/application/agent_ui_update_request.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 void main() {
   group('AgentConversationEventProcessor', () {

@@ -4,8 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/app/plugins/zeta_plugin_catalog.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_plugin_contribution.dart';
 import 'package:zeta/src/features/agent/data/compatibility_agent_provider_plugin.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_plugin_kernel/zeta_plugin_kernel.dart';
 

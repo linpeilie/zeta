@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/provider_runtime_json_rpc_peer.dart';
-import 'package:zeta/src/features/agent/domain/agent_runtime_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 void main() {
   group('ProviderRuntimeJsonRpcPeer', () {

@@ -1,7 +1,4 @@
-import 'package:zeta/src/features/agent/domain/agent_permission_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_tool_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_ui_text_catalog.dart';
-import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_navigation.dart';
 import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
 

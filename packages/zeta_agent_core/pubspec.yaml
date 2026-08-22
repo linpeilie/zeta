@@ -1,0 +1,20 @@
+name: zeta_agent_core
+description: Zeta 的中立 Agent 内核：领域模型与端口、Binding/runtime 契约、事件管线、纯 reducer、TimelineStore 与 Effect 描述。
+publish_to: 'none'
+version: 0.1.0
+resolution: workspace
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  # 仅用 foundation（ChangeNotifier / listEquals 等），不依赖 widgets/material。
+  # 这是本阶段的已知偏差，见 docs/architecture/phase1_boundaries.md。
+  flutter:
+    sdk: flutter
+  meta: ^1.18.0
+  zeta_foundation: ^0.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter

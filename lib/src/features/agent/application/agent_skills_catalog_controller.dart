@@ -1,8 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
-import 'package:zeta/src/features/agent/domain/agent_skill_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// Skill 目录加载状态。
 enum AgentSkillsLoadStatus {

@@ -1,4 +1,4 @@
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// Claude Code CLI `initialize` 返回的 Provider-local 白名单快照。
 ///

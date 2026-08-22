@@ -1,11 +1,10 @@
 import 'dart:io';
 
 import 'package:zeta/src/core/storage/atomic_text_file.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_codec.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
-export 'package:zeta/src/features/agent/application/agent_provider_config_store.dart'
+export 'package:zeta_agent_core/zeta_agent_core.dart'
     show AgentProviderConfigStore;
 
 /// 全局 provider 配置的旧版 shared_preferences key。

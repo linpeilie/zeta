@@ -4,17 +4,8 @@ import 'dart:collection';
 import 'package:flutter/foundation.dart';
 
 import 'package:zeta_foundation/zeta_foundation.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_binding.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_binding_manager.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_thread_snapshot.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_global_runtime.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
-import 'package:zeta/src/features/agent/application/agent_ui_update_port.dart';
-import 'package:zeta/src/features/agent/data/agent_turn_context_store.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_turn_terminal_signal.dart';
-import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 

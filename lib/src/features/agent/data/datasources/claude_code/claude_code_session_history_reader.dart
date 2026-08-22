@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_event_mapper.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_hidden_thread_store.dart';
 import 'package:zeta/src/features/agent/data/mappers/claude_code_stream_identity.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 typedef ClaudeCodeHistoryTurnIdFactory =
     String Function(String sessionId, String sourceTurnId, int ordinal);

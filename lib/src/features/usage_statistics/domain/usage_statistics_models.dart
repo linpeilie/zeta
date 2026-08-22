@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 
-import 'package:zeta/src/features/agent/domain/agent_provider_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_usage_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/usage_statistics/domain/fallback_usage_statistics_text_catalog.dart';
 
 /// 使用统计支持的时间范围。

@@ -23,9 +23,7 @@ import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdi
     show ProcessStarter;
 import 'package:zeta/src/features/agent/data/mappers/claude_code_permission_mode_codec.dart';
 import 'package:zeta/src/features/agent/data/mappers/claude_code_stream_identity.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 final _log = loggerFor('zeta.agent.claude_code.provider');
 

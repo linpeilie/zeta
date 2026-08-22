@@ -1,6 +1,6 @@
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_permission_mode_codec.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 final _log = loggerFor('zeta.agent.grok_permission_policy');
 

@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
-import 'package:zeta/src/features/agent/domain/agent_runtime_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// Provider 已进入关闭阶段或请求属于旧连接。
 class ProviderConnectionClosedException implements Exception {

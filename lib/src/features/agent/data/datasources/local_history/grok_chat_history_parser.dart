@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:zeta/src/features/agent/data/datasources/local_history/grok_user_content_parser.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// 从 Grok `chat_history.jsonl` 降级重建多回合历史。
 ///

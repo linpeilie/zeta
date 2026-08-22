@@ -18,7 +18,8 @@ import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta/src/core/storage/zeta_data_paths.dart';
 import 'package:zeta/src/core/utils/system_file_manager.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta/src/features/agent/data/agent_metric_labels.dart';
 import 'package:zeta/src/features/agent/data/agent_model_catalog_cache_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_codec.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
@@ -27,8 +28,6 @@ import 'package:zeta/src/features/agent/data/agent_provider_permission_migration
 import 'package:zeta/src/features/agent/data/default_agent_provider_factory.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_hidden_thread_store.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_permission_policy_adapter.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_models.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_text_catalog.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
@@ -234,6 +233,7 @@ class MainAppState extends State<MainApp>
       _agentProviderRuntimeRegistry = AgentProviderRuntimeRegistry(
         providerFactory: injectedFactory,
         metrics: _metrics,
+        providerMetricLabel: AgentMetricLabels.forProviderId,
       );
       _ownsAgentProviderRuntimeRegistry = true;
       _providerRuntimeShutdownHook = _shutdownOwnedAgentResources;
@@ -361,6 +361,7 @@ class MainAppState extends State<MainApp>
       _agentProviderRuntimeRegistry = AgentProviderRuntimeRegistry(
         providerFactory: _agentProviderFactory,
         metrics: _metrics,
+        providerMetricLabel: AgentMetricLabels.forProviderId,
       );
       _ownsAgentProviderRuntimeRegistry = true;
       _providerRuntimeShutdownHook = _shutdownOwnedAgentResources;

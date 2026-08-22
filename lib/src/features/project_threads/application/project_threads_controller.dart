@@ -1,14 +1,8 @@
 import 'dart:async';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
-import 'package:zeta/src/features/agent/application/agent_permission_request_resolver.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_thread_snapshot.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_binding_manager.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_global_runtime.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
-import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
 import 'package:zeta/src/features/project_threads/domain/project_threads_session_snapshot.dart';
 import 'package:zeta/src/features/project_threads/presentation/project_threads_view_model.dart';

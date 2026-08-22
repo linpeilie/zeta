@@ -14,12 +14,12 @@ void main() {
   /// Dispatcher / TimelineStore，外加 capability 端口装配的 `AgentProviderBundle`
   /// （禁止按 kind 分支）。
   const sharedLayerFiles = <String>[
-    'lib/src/features/agent/application/agent_event_pipeline.dart',
-    'lib/src/features/agent/application/agent_event_coalescing_policy.dart',
-    'lib/src/features/agent/application/coalescing_event_buffer.dart',
-    'lib/src/features/agent/application/bounded_event_dispatcher.dart',
-    'lib/src/features/agent/application/agent_conversation_timeline_store.dart',
-    'lib/src/features/agent/domain/agent_provider_bundle.dart',
+    'packages/zeta_agent_core/lib/src/application/agent_event_pipeline.dart',
+    'packages/zeta_agent_core/lib/src/application/agent_event_coalescing_policy.dart',
+    'packages/zeta_agent_core/lib/src/application/coalescing_event_buffer.dart',
+    'packages/zeta_agent_core/lib/src/application/bounded_event_dispatcher.dart',
+    'packages/zeta_agent_core/lib/src/application/agent_conversation_timeline_store.dart',
+    'packages/zeta_agent_core/lib/src/domain/agent_provider_bundle.dart',
   ];
 
   /// T18：G1 五文件内容基线（lineCount + 规范化 byteLength + FNV-1a 指纹）。
@@ -29,40 +29,46 @@ void main() {
   /// LF 计算，避免不同平台的 checkout 行尾让守卫误报。
   /// TimelineStore 基线已按 2026-08-17 多语言步骤 12（其余 context-free
   /// 文案改走 `AgentUiTextCatalog`）刷新。
+  ///
+  /// 2026-08-22：G1 五文件随 `zeta_agent_core` 拆包移动到
+  /// `packages/zeta_agent_core/lib/src/`。**逐字比对确认只有 import URI 变化**
+  /// （`package:zeta/src/features/agent/...` → `package:zeta_agent_core/src/...`），
+  /// 语义零改动，因此按新内容重算基线。
   const g1ContentBaselines = <String, _FileBaseline>{
-    'lib/src/features/agent/application/agent_event_pipeline.dart':
+    'packages/zeta_agent_core/lib/src/application/agent_event_pipeline.dart':
         _FileBaseline(
           lineCount: 349,
-          byteLength: 11823,
-          fingerprint: '77d81121c8b9d9fd',
+          byteLength: 11803,
+          fingerprint: '37c52abd0f2b39df',
         ),
-    'lib/src/features/agent/application/agent_event_coalescing_policy.dart':
+    'packages/zeta_agent_core/lib/src/application/agent_event_coalescing_policy.dart':
         _FileBaseline(
           lineCount: 143,
-          byteLength: 4569,
-          fingerprint: '53fcea25bd7a52d0',
+          byteLength: 4561,
+          fingerprint: '9f4b150879bd4c8c',
         ),
-    'lib/src/features/agent/application/coalescing_event_buffer.dart':
+    'packages/zeta_agent_core/lib/src/application/coalescing_event_buffer.dart':
         _FileBaseline(
           lineCount: 163,
           byteLength: 4407,
           fingerprint: '82eff5df2bcc5047',
         ),
-    'lib/src/features/agent/application/bounded_event_dispatcher.dart':
+    'packages/zeta_agent_core/lib/src/application/bounded_event_dispatcher.dart':
         _FileBaseline(
           lineCount: 183,
           byteLength: 4779,
           fingerprint: 'fbbeb5ecb3de50e3',
         ),
-    'lib/src/features/agent/application/agent_conversation_timeline_store.dart':
+    'packages/zeta_agent_core/lib/src/application/agent_conversation_timeline_store.dart':
         _FileBaseline(
           lineCount: 2017,
-          byteLength: 67491,
-          fingerprint: '9a129dfe302117a4',
+          byteLength: 67483,
+          fingerprint: '5b3da65992b1f838',
         ),
   };
 
-  const bundlePath = 'lib/src/features/agent/domain/agent_provider_bundle.dart';
+  const bundlePath =
+      'packages/zeta_agent_core/lib/src/domain/agent_provider_bundle.dart';
 
   /// 基线：bundle 当前不出现 `AgentProviderKind`（端口装配只靠 interface/`is`）。
   /// 接入 Claude Code 后此计数仍须保持；若上升说明有人加了 kind 分支。

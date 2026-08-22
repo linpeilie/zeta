@@ -4,10 +4,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:logger/logger.dart';
 
-import 'package:zeta/src/features/agent/application/agent_conversation_effect.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_effect_runner.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_turn_terminal_signal.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 void main() {
   group('DefaultAgentConversationEffectRunner', () {

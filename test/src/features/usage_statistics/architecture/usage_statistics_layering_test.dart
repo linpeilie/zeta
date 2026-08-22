@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/usage_statistics/data/providers/claude_code/claude_code_usage_partition_codec.dart';
 import 'package:zeta/src/features/usage_statistics/data/providers/codex/codex_usage_log_scanner.dart';
 import 'package:zeta/src/features/usage_statistics/data/providers/codex/codex_usage_partition_codec.dart';
@@ -14,11 +14,11 @@ void main() {
     'lib/src/features/usage_statistics/data/usage_statistics_partition_store.dart',
   ];
   const g1SharedFiles = <String>[
-    'lib/src/features/agent/application/agent_event_pipeline.dart',
-    'lib/src/features/agent/application/agent_event_coalescing_policy.dart',
-    'lib/src/features/agent/application/coalescing_event_buffer.dart',
-    'lib/src/features/agent/application/bounded_event_dispatcher.dart',
-    'lib/src/features/agent/application/agent_conversation_timeline_store.dart',
+    'packages/zeta_agent_core/lib/src/application/agent_event_pipeline.dart',
+    'packages/zeta_agent_core/lib/src/application/agent_event_coalescing_policy.dart',
+    'packages/zeta_agent_core/lib/src/application/coalescing_event_buffer.dart',
+    'packages/zeta_agent_core/lib/src/application/bounded_event_dispatcher.dart',
+    'packages/zeta_agent_core/lib/src/application/agent_conversation_timeline_store.dart',
   ];
 
   group('usage statistics layering', () {

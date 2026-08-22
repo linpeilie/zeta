@@ -4,7 +4,7 @@ import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/features/agent/data/cli_command_locator.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
 import 'package:zeta/src/features/agent/data/grok_cli_locator.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 final _log = loggerFor('zeta.agent.grok_process_starter');
 

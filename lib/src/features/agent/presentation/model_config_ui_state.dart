@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import 'package:zeta/src/features/agent/application/agent_conversation_model_selection_controller.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// Composer 模型 Popover 的不可变渲染快照。
 @immutable

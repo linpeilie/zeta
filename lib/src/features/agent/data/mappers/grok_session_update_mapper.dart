@@ -3,8 +3,7 @@ import 'package:zeta/src/features/agent/data/mappers/acp_session_update_decoder.
 import 'package:zeta/src/features/agent/data/mappers/grok_error_normalizer.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_file_change_tracker.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_stream_identity.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// Grok typed ACP update 到领域事件的映射结果。
 class GrokAcpMappedUpdate {

@@ -60,6 +60,58 @@ void main() {
     });
   });
 
+  group('集合相等', () {
+    test('列表逐元素比较，长度或元素不同即不等', () {
+      expect(zetaListEquals(<int>[1, 2], <int>[1, 2]), isTrue);
+      expect(zetaListEquals(<int>[1, 2], <int>[2, 1]), isFalse);
+      expect(zetaListEquals(<int>[1], <int>[1, 2]), isFalse);
+      expect(zetaListEquals<int>(null, null), isTrue);
+      expect(zetaListEquals(<int>[1], null), isFalse);
+    });
+
+    test('Map 比较键集合与逐键值', () {
+      expect(
+        zetaMapEquals(<String, int>{'a': 1}, <String, int>{'a': 1}),
+        isTrue,
+      );
+      expect(
+        zetaMapEquals(<String, int>{'a': 1}, <String, int>{'a': 2}),
+        isFalse,
+      );
+      expect(
+        zetaMapEquals(<String, int>{'a': 1}, <String, int>{'b': 1}),
+        isFalse,
+      );
+      expect(zetaMapEquals<String, int>(null, null), isTrue);
+    });
+  });
+
+  group('日志端口', () {
+    tearDown(ZetaLogging.reset);
+
+    test('未安装实现时全部丢弃且不抛异常', () {
+      ZetaLogging.reset();
+      final logger = zetaLoggerFor('zeta.test');
+
+      expect(logger, isA<NoopZetaLogger>());
+      logger
+        ..t('trace')
+        ..w('warn', error: StateError('x'));
+    });
+
+    test('安装后按 scope 分发', () {
+      final scopes = <String>[];
+      ZetaLogging.install((scope) {
+        scopes.add(scope);
+        return const NoopZetaLogger();
+      });
+
+      zetaLoggerFor('zeta.agent.pipeline');
+
+      expect(scopes, <String>['zeta.agent.pipeline']);
+    });
+  });
+
   group('Transition', () {
     test('stateOnly 不携带副作用', () {
       final transition = Transition<int, String>.stateOnly(1);

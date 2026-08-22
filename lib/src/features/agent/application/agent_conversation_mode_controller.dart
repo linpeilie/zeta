@@ -1,10 +1,6 @@
 import 'package:flutter/foundation.dart';
 
-import 'package:zeta/src/features/agent/domain/agent_conversation_mode_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_event_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
-import 'package:zeta/src/features/agent/domain/agent_ui_text_catalog.dart';
-import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// 对话模式目录的加载状态。
 enum AgentConversationModeLoadStatus {

@@ -1,5 +1,4 @@
-import 'package:zeta/src/features/agent/domain/agent_turn_context_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_turn_history_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// 将 [AgentThreadTurnContext] 编码为版本化白名单 JSON。
 Map<String, Object?> encodeAgentThreadTurnContext(

@@ -4,7 +4,7 @@ import 'dart:io';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/core/logging/structured_error_logging.dart';
-import 'package:zeta/src/features/agent/domain/agent_runtime_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 final _log = loggerFor('zeta.agent.json_rpc_stdio');
 

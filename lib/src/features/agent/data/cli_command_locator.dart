@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// CLI 路径是否指向普通文件的可替换检查入口。
 typedef CliFileExists = Future<bool> Function(String path);

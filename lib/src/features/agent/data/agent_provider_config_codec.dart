@@ -1,9 +1,7 @@
 import 'dart:convert';
 
 import 'package:zeta/src/features/agent/data/agent_provider_permission_migration.dart';
-import 'package:zeta/src/features/agent/domain/agent_model_codec.dart';
-import 'package:zeta/src/features/agent/domain/agent_model_selection_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// Provider settings 的版本化 data codec。
 ///

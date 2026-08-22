@@ -1,7 +1,7 @@
 import 'package:zeta_plugin_kernel/zeta_plugin_kernel.dart';
 
 import 'package:zeta/src/features/agent/data/agent_provider_plugin_contribution.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// 过渡插件：把**现有**的 `DefaultAgentProviderFactory` 原样包成单个贡献。
 ///

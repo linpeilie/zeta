@@ -1,8 +1,7 @@
 import 'package:flutter/scheduler.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
-import 'package:zeta/src/features/agent/application/agent_ui_update_port.dart';
-import 'package:zeta/src/features/agent/domain/agent_metric_labels.dart';
-import 'package:zeta/src/features/agent/application/agent_ui_update_request.dart';
+import 'package:zeta/src/features/agent/data/agent_metric_labels.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// 基于 [SchedulerBinding] 的生产 frame 调度实现。
 final class SchedulerBindingAgentFrameScheduler implements AgentFrameScheduler {

@@ -1,6 +1,4 @@
-import 'package:zeta/src/features/agent/domain/agent_permission_policy_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_ui_text_catalog.dart';
-import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// Claude Code CLI `--permission-mode` 枚举（协议私货，仅 CC data 层）。
 enum ClaudeCodePermissionMode { ask, acceptEdits, plan, bypass }

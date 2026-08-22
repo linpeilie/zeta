@@ -1,4 +1,4 @@
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// Claude Code 交互提问工具的协议名称。
 const claudeCodeAskUserQuestionToolName = 'AskUserQuestion';

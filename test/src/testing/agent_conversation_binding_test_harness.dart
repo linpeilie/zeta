@@ -1,8 +1,5 @@
-import 'package:zeta/src/features/agent/application/agent_conversation_binding_manager.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_global_runtime.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 /// 测试中为 ViewModel 提供与生产一致的 Binding + global runtime 组合。
 final class AgentConversationBindingTestHarness {

@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// 测试用的中立文件变更 envelope。
 ///

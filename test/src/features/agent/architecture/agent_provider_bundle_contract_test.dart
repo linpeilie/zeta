@@ -18,7 +18,7 @@ void main() {
 
     test('domain capabilities stay vendor-neutral', () {
       final source = File(
-        'lib/src/features/agent/domain/agent_provider_capabilities.dart',
+        'packages/zeta_agent_core/lib/src/domain/agent_provider_capabilities.dart',
       ).readAsStringSync();
 
       expect(source, isNot(contains('defaultsFor')));
@@ -30,13 +30,15 @@ void main() {
 
     test('shared bundle has no adapt path or provider-kind branches', () {
       final source = File(
-        'lib/src/features/agent/domain/agent_provider_bundle.dart',
+        'packages/zeta_agent_core/lib/src/domain/agent_provider_bundle.dart',
       ).readAsStringSync();
 
       expect(source, isNot(contains('factory AgentProviderBundle.adapt')));
       expect(source, isNot(contains('_LegacyAgent')));
       expect(
-        File('lib/src/features/agent/domain/agent_provider.dart').existsSync(),
+        File(
+          'packages/zeta_agent_core/lib/src/domain/agent_provider.dart',
+        ).existsSync(),
         isFalse,
       );
       for (final token in const <String>[

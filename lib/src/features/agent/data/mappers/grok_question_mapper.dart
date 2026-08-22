@@ -1,4 +1,4 @@
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// 映射 Grok ACP 扩展 `_x.ai/ask_user_question` / `x.ai/ask_user_question`。
 ///

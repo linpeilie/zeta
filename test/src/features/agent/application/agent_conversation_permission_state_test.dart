@@ -1,8 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:zeta/src/features/agent/application/agent_conversation_permission_state.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_runtime_identity.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 void main() {
   group('AgentConversationPermissionState', () {

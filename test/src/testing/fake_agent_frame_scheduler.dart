@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:zeta/src/features/agent/application/agent_ui_update_port.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// 可确定性推进 frame callback 的测试调度器。
 final class FakeAgentFrameScheduler implements AgentFrameScheduler {

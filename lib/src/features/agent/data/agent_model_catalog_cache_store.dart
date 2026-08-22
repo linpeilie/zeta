@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:zeta/src/core/storage/atomic_text_file.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// `~/.zeta/cache/agent_models_v1.json` 的文件缓存实现。
 class FileAgentModelCatalogCacheStore implements AgentModelCatalogCacheStore {

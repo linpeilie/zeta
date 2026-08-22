@@ -9,7 +9,7 @@ import 'package:zeta/src/features/agent/data/codex_cli_locator.dart'
 import 'package:zeta/src/features/agent/data/grok_cli_locator.dart'
     show looksLikeGrokCliPath;
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent_management/data/codex_agent_management_repository.dart'
     show isNewerVersion;
 import 'package:zeta/src/features/agent_management/domain/agent_cli_management_repository.dart';

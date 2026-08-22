@@ -2,9 +2,7 @@ import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_cli_metadata_coordinator.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_oauth_credentials_reader.dart';
 import 'package:zeta/src/features/agent/data/mappers/claude_code_usage_quota_mapper.dart';
-import 'package:zeta/src/features/agent/domain/agent_ui_text_catalog.dart';
-import 'package:zeta/src/features/agent/domain/agent_usage_models.dart';
-import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 typedef ClaudeCodeUsageCredentialsLoader =
     Future<ClaudeCodeOAuthCredentials?> Function();

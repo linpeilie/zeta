@@ -4,42 +4,9 @@ import 'dart:io';
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/core/storage/atomic_text_file.dart';
 import 'package:zeta/src/features/agent/data/agent_turn_context_codec.dart';
-import 'package:zeta/src/features/agent/domain/agent_turn_context_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 final _log = loggerFor('zeta.agent.turn_context');
-
-/// Zeta 发起 turn 时记录的会话上下文存储边界。
-abstract interface class AgentTurnContextStore {
-  Future<AgentThreadTurnContext?> load({
-    required String providerId,
-    required String threadId,
-  });
-
-  Future<void> save(AgentThreadTurnContext context);
-}
-
-/// 不落盘的会话上下文，供测试和无文件持久化宿主使用。
-final class MemoryAgentTurnContextStore implements AgentTurnContextStore {
-  MemoryAgentTurnContextStore({
-    Map<String, AgentThreadTurnContext> contexts =
-        const <String, AgentThreadTurnContext>{},
-  }) : _contexts = <String, AgentThreadTurnContext>{...contexts};
-
-  final Map<String, AgentThreadTurnContext> _contexts;
-
-  @override
-  Future<AgentThreadTurnContext?> load({
-    required String providerId,
-    required String threadId,
-  }) async {
-    return _contexts[_key(providerId, threadId)];
-  }
-
-  @override
-  Future<void> save(AgentThreadTurnContext context) async {
-    _contexts[_key(context.providerId, context.threadId)] = context;
-  }
-}
 
 /// `~/.zeta/state/session/<providerId>/<threadId>.json` 的版本化文件存储。
 ///
@@ -109,9 +76,6 @@ final class FileAgentTurnContextStore implements AgentTurnContextStore {
     return _files.putIfAbsent(path, () => AtomicTextFile(File(path)));
   }
 }
-
-String _key(String providerId, String threadId) =>
-    '${providerId.trim()}\u0000${threadId.trim()}';
 
 /// 将 providerId / threadId 编码为安全文件名片段。
 String? encodeAgentTurnContextPathSegment(String value) {

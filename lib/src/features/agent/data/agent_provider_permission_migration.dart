@@ -1,5 +1,5 @@
 import 'package:zeta/src/features/agent/data/mappers/grok_permission_mode_codec.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// 旧 Provider 权限偏好到中立 optionId 的迁移端口。
 ///

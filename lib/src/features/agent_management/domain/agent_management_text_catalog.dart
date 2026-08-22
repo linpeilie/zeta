@@ -1,4 +1,4 @@
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// Zeta 产生的 Agent 管理文案。不暴露 ARB key、Locale 或 Provider raw payload。
 abstract interface class AgentManagementTextCatalog {

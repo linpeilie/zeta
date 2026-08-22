@@ -5,8 +5,7 @@ import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/core/storage/atomic_text_file.dart';
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_question_adapter.dart';
 import 'package:zeta/src/features/agent/data/mappers/claude_code_permission_mode_codec.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 final _log = loggerFor('zeta.agent.claude_code.permission_policy');
 

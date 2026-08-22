@@ -1,6 +1,6 @@
 import 'dart:collection';
 
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 
 /// Provider 中立的 Token 历史查询。

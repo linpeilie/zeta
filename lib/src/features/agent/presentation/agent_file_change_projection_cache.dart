@@ -1,4 +1,4 @@
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/presentation/agent_file_change_projection.dart';
 
 /// 单项投影函数；测试可注入计数实现验证缓存行为。

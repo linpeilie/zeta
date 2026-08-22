@@ -2,9 +2,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_model_selection_controller.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
 
 import '../../../testing/agent_provider_stub_base.dart';
 

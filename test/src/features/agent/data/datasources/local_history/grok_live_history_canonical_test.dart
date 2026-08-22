@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/data/datasources/local_history/grok_updates_history_parser.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_session_update_mapper.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_stream_identity.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 import '../../../../../testing/agent_file_change_canonical.dart';
 import '../../../../../testing/fixture_reader.dart';

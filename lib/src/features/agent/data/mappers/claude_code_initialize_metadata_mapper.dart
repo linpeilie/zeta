@@ -1,5 +1,5 @@
 import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_cli_metadata.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// 将 Claude Code `control_response.initialize` 投影为最小元数据快照。
 ///

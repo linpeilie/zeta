@@ -1,4 +1,4 @@
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_query_models.dart';
 
 /// 单个 Provider 的 Token 历史查询边界。

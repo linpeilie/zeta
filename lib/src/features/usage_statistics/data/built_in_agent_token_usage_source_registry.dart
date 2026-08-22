@@ -1,4 +1,4 @@
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/usage_statistics/data/providers/claude_code/claude_code_token_usage_source.dart';
 import 'package:zeta/src/features/usage_statistics/data/providers/codex/codex_token_usage_source.dart';
 import 'package:zeta/src/features/usage_statistics/data/providers/grok/grok_token_usage_source.dart';

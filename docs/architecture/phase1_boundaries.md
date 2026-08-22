@@ -2,7 +2,7 @@
 
 最后更新：2026-08-22
 
-状态：第二个增量（`zeta_ui`）已落地，review 提出的 8 条问题已全部修复。对应 [目标架构 §14 Phase 1](./target_architecture_riverpod_mvi_plugins_packages.md#phase-1建立边界但不改变行为)。
+状态：第三个增量（`zeta_agent_core`）已落地；前两轮 review 的 12 条问题已全部修复。对应 [目标架构 §14 Phase 1](./target_architecture_riverpod_mvi_plugins_packages.md#phase-1建立边界但不改变行为)。
 
 阶段 1 的规矩是**只搬边界，不动行为**：没有新功能、没有 UI 变化、没有持久化格式变化，
 Provider wire 参数与状态 owner 全部保持原样。
@@ -23,14 +23,18 @@ Provider wire 参数与状态 owner 全部保持原样。
 | Package 独立测试入口 | [`tool/test_packages.sh`](../../tool/test_packages.sh)（已接入 `tool/test_full.sh` / `.ps1`） |
 | `zeta_ui`（Graphite 设计系统） | [`packages/zeta_ui`](../../packages/zeta_ui) |
 | 设计系统文案注入端口 | `packages/zeta_ui/lib/src/zeta_ui_text_catalog.dart` + `AppZetaUiTextCatalog` 适配器 |
+| `zeta_agent_core`（中立 Agent 内核） | [`packages/zeta_agent_core`](../../packages/zeta_agent_core) |
+| 日志端口 + 集合相等工具 | `packages/zeta_foundation/lib/src/logging/zeta_logger.dart`、`src/collections/zeta_equality.dart` |
 
 ### 1.1 已物理拆出的 Package
 
 ```text
 packages/
-  zeta_foundation/        # 纯 Dart：Clock、OperationId、Transition、排版常量、指标端口
+  zeta_foundation/        # 纯 Dart：Clock、OperationId、Transition、排版常量、日志与指标端口
   zeta_plugin_kernel/     # 纯 Dart：descriptor / contribution / registry / 生命周期
   zeta_ui/                # Flutter：Graphite token、Ide* 控件、Workbench 骨架、虚拟滚动
+  zeta_agent_core/        # Flutter(foundation)：中立 Agent 领域模型与端口、Binding/runtime
+                          # 契约、事件管线、纯 reducer、TimelineStore、Effect 描述
 ```
 
 依赖方向（守卫强制）：
@@ -38,7 +42,8 @@ packages/
 ```text
 zeta_plugin_kernel ──> zeta_foundation
 zeta_ui ───────────> zeta_foundation
-root app ──────────> 三者
+zeta_agent_core ───> zeta_foundation
+root app ──────────> 四者
 ```
 
 `zeta_foundation` 不 import 任何外部库（连 Flutter 都没有）；`zeta_plugin_kernel` 只依赖
@@ -56,6 +61,29 @@ root app ──────────> 三者
   （`IdeLocalImageThumbnail` / `showIdeLocalImagePreview`）与行为一字未改。
 - 47 个设计系统文件整体 `git mv` 进包，372 处 `package:zeta/src/ui/core/...` import
   统一改成 `package:zeta_ui/zeta_ui.dart` 顶层 barrel。
+
+### 1.1.1 `zeta_agent_core` 的边界
+
+搬进包的是**中立机制**：34 个 domain 文件 + 27 个 application 文件（事件管线四件套、
+TimelineStore、reducer/mutation/effect/effect runner/event processor、Binding 与
+BindingManager、runtime identity/registry/global runtime、listener gate、UI 更新端口与
+请求、权限状态与目录、turn 上下文端口与记录器、elapsed ticker、配置存储端口）。
+
+留在根 app 的 `lib/src/features/agent/application`（10 个文件）是 **ChangeNotifier 形态的
+feature controller**：settings / mode / model selection / skills 目录 / 模型目录仓储 /
+plan 执行交接 / turn 上下文叠加 / 指标采样器 / workspace 组合。它们不是"中立机制"，
+而是等着在 Phase 2/3 变成 MVI 切片的业务编排。
+
+为拆包做的三处**接口下沉**（不是行为改动）：
+
+| 原来 | 现在 |
+| --- | --- |
+| 内核直接 `loggerFor(...)`（根 app 的 logger） | `ZetaLogger` 端口 + `zetaLoggerFor`；`AppLogger` 实现它，`configureAppLogging` 安装。结构化失败改走端口的 `failure(...)`，脱敏仍在 app 侧 |
+| `AgentTurnContextStore` 端口与文件实现同在 data 层 | 端口 + 内存实现进内核，`FileAgentTurnContextStore` 留 data（键格式逐字保持不变） |
+| `AgentProviderRuntimeRegistry` 直接 import Provider 身份映射 | 改为注入 `providerMetricLabel`；**未注入时默认 hash**，内核不认识任何 Provider（G1） |
+
+`AgentMetricLabels`（provider ID → 指标标签）按 G1/G4 同款判定放回 data 层：它按 Provider
+身份分支，属于 Provider 语义。
 
 ### 1.2 插件微内核
 
@@ -97,10 +125,10 @@ root app ──────────> 三者
 | --- | ---: | --- |
 | ~~`ui/core` → generated l10n~~ | ~~5~~ → 0 | ✅ 已改为注入 `ZetaUiTextCatalog` |
 | ~~`ui/core` → `dart:io`~~ | ~~1~~ → 0 | ✅ 图片预览封装留在 app 侧 |
-| agent `application` → agent `data` | 3 | 改为 app 注入端口（turn context store、静态能力） |
-| agent `application` → presentation / workspace feature | 2 | Phase 2/3 拆解 `IdeShellController` 时处理 |
+| ~~agent `application` → agent `data`~~ | ~~3~~ → 0 | ✅ turn context 端口下沉；静态能力随 settings controller 留在 app |
+| ~~agent `application` → presentation / workspace~~ | ~~2~~ → 0 | ✅ `agent_thread_workspace_controller` 本就是 app 级组合对象，不进内核 |
 | `core/` → `dart:io` / Flutter | 8 | IO 部分下沉到 app 或独立适配层，`core/` 只留纯契约 |
-| `zeta_agent_core` 候选层依赖 Flutter | 17 个文件 | `ChangeNotifier` 依赖，随 Phase 2/3 的 MVI 切片逐步移除 |
+| `zeta_agent_core` 依赖 `flutter/foundation` | 17 个文件 | `ChangeNotifier` / `ValueListenable`，随 Phase 2/3 的 MVI 切片移除（见 §6 偏差 5） |
 
 ---
 
@@ -165,7 +193,19 @@ Windows 用 `tool/test_full.ps1`（同样包含 Package 循环）。
 3. **`Failure` / `Result` / `CancellationToken` 未落地**，理由见 §3。
 4. **`zeta_ui` 的 36 个 Widget 测试留在根测试树**（通过 `package:zeta_ui/...` 引用），
    因为它们依赖应用侧的本地化宿主与主题 harness。包内另有独立的契约测试入口
-   （文案注入 + token 解析）。把这批 Widget 测试迁进包内是后续增量。
+   （文案注入 + token 解析）。把这批 Widget 测试迁进包内是后续增量；
+   `zeta_agent_core` 的既有 reducer/pipeline/timeline 测试同理。
+5. **`zeta_agent_core` 目前依赖 `flutter/foundation`**，与目标架构 §3.1「不依赖 Flutter」
+   不符。原因是 17 个文件用 `ChangeNotifier` / `ValueListenable`，其中包括 **G1 内容冻结的
+   `AgentConversationTimelineStore`**；要做到纯 Dart 必须同时（a）把 10 个 controller 换成
+   MVI store、（b）为 Flutter 侧监听补桥接、（c）动 G1 冻结文件——那是 Phase 2/3 的工作，
+   放在"只搬边界不改行为"的 Phase 1 里做既超范围又高风险。
+   本增量的处理：把 `widgets` / `material` / `services` / Riverpod / `dart:io` / 根 app
+   全部**守卫禁止**，只留 `foundation`，并冻结文件数（只允许变少）。
+6. **G1 五文件的 T18 内容基线已刷新**。它们随包移动，`import` URI 必然变化。已逐字比对
+   确认**只有 import 行变化**（`package:zeta/src/features/agent/...` →
+   `package:zeta_agent_core/src/...`），语义零改动，因此按新内容重算 lineCount /
+   byteLength / fingerprint，并在测试注释里记录了这次刷新的原因。
 
 ---
 

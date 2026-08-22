@@ -3,10 +3,8 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zeta_foundation/zeta_foundation.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
-import 'package:zeta/src/features/agent/domain/agent_metric_labels.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
+import 'package:zeta/src/features/agent/data/agent_metric_labels.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 void main() {
   group('AgentProviderRuntimeRegistry', () {
@@ -554,6 +552,8 @@ void main() {
       final registry = AgentProviderRuntimeRegistry(
         providerFactory: factory,
         metrics: metrics,
+        // 生产由组合层注入；内核自己不认识 Provider 身份。
+        providerMetricLabel: AgentMetricLabels.forProviderId,
       );
       final codexTags = ZetaMetricTags(
         providerId: AgentMetricLabels.forProviderId(defaultAgentProviderId),
@@ -599,6 +599,7 @@ void main() {
       final registry = AgentProviderRuntimeRegistry(
         providerFactory: _CountingProviderFactory(),
         metrics: metrics,
+        providerMetricLabel: AgentMetricLabels.forProviderId,
       );
       addTearDown(registry.close);
 
@@ -619,6 +620,25 @@ void main() {
       expect(text, isNot(contains('sk-should-not-leak')));
       expect(text, isNot(contains('/Users/')));
       expect(text, contains(defaultAgentProviderId));
+    });
+
+    test('未注入解析函数时 Provider ID 只以 hash 进指标', () async {
+      final metrics = InMemoryZetaMetricsPort();
+      final registry = AgentProviderRuntimeRegistry(
+        providerFactory: _CountingProviderFactory(),
+        metrics: metrics,
+      );
+      addTearDown(registry.close);
+
+      final lease = await registry.acquire(
+        AgentProviderConfig.defaultCodex,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
+      addTearDown(lease.release);
+
+      final text = metrics.snapshot().map((series) => '$series').join('\n');
+      expect(text, isNot(contains('codex')));
+      expect(text, contains('h.'));
     });
 
     test('默认 no-op 端口不产生任何采样', () async {

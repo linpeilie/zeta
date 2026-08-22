@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/usage_statistics/data/providers/codex/codex_usage_log_scanner.dart';
 import 'package:zeta/src/features/usage_statistics/data/providers/codex/codex_usage_partition_codec.dart';
 import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partition_store.dart';

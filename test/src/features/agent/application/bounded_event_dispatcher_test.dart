@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/application/bounded_event_dispatcher.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 void main() {
   group('BoundedEventDispatcher', () {

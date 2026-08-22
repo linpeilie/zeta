@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/domain/agent_usage_window_labels.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 void main() {
   group('formatAgentUsageWindowLabelFromMinutes', () {

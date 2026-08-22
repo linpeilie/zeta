@@ -10,7 +10,7 @@ import 'package:zeta/src/features/agent/data/datasources/claude_code/stream_json
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart'
     show ProcessStarter;
 import 'package:zeta/src/features/agent/data/mappers/claude_code_initialize_metadata_mapper.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// Metadata 探测失败的稳定分类；不携带 stderr、路径或 Provider 原始响应。
 enum ClaudeCodeCliMetadataProbeFailure {

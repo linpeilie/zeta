@@ -4,6 +4,9 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:logger/logger.dart' as logger;
 
+import 'package:zeta_foundation/zeta_foundation.dart';
+
+import 'package:zeta/src/core/logging/structured_error_logging.dart';
 import 'package:zeta/src/core/security/sensitive_data_redactor.dart';
 
 /// 统一的应用日志器。
@@ -11,7 +14,7 @@ import 'package:zeta/src/core/security/sensitive_data_redactor.dart';
 /// 业务代码不直接依赖第三方 `logger` 实例；日志级别、格式化器、输出和
 /// 文件落盘策略都由 [configureAppLogging] 统一配置。每个实例只携带一个
 /// 稳定的 scope，方便在默认终端输出和文件日志中定位来源。
-final class AppLogger {
+final class AppLogger implements ZetaLogger {
   AppLogger._(this.name) : _logger = logger.Logger();
 
   /// 当前日志器的稳定 scope。
@@ -19,6 +22,7 @@ final class AppLogger {
   final logger.Logger _logger;
 
   /// 记录 trace 级别日志。
+  @override
   void t(
     dynamic message, {
     DateTime? time,
@@ -34,6 +38,7 @@ final class AppLogger {
   }
 
   /// 记录 debug 级别日志。
+  @override
   void d(
     dynamic message, {
     DateTime? time,
@@ -49,6 +54,7 @@ final class AppLogger {
   }
 
   /// 记录 info 级别日志。
+  @override
   void i(
     dynamic message, {
     DateTime? time,
@@ -64,6 +70,7 @@ final class AppLogger {
   }
 
   /// 记录 warning 级别日志。
+  @override
   void w(
     dynamic message, {
     DateTime? time,
@@ -79,6 +86,7 @@ final class AppLogger {
   }
 
   /// 记录 error 级别日志。
+  @override
   void e(
     dynamic message, {
     DateTime? time,
@@ -120,6 +128,23 @@ final class AppLogger {
       level,
       _messageWithScope(message),
       time: time,
+      error: error,
+      stackTrace: stackTrace,
+    );
+  }
+
+  /// 记录带结构化脱敏上下文的失败（[ZetaLogger.failure] 的应用实现）。
+  @override
+  void failure(
+    String message, {
+    Map<String, Object?> context = const <String, Object?>{},
+    Object? error,
+    StackTrace? stackTrace,
+  }) {
+    logStructuredFailure(
+      this,
+      message: message,
+      context: context,
       error: error,
       stackTrace: stackTrace,
     );
@@ -167,6 +192,8 @@ void ensureLoggingDefaults() {
 /// 保留全部日志，release 默认只保留 warning 及以上级别。
 void configureAppLogging({logger.Level? level, Directory? logDirectory}) {
   ensureLoggingDefaults();
+  // 内部 Package 只依赖 zeta_foundation 的日志端口；这里把实现接上去。
+  ZetaLogging.install(loggerFor);
   logger.Logger.level =
       level ?? (kReleaseMode ? logger.Level.warning : logger.Level.all);
   _retireFileLogOutput();

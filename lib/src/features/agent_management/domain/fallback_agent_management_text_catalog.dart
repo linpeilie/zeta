@@ -1,4 +1,4 @@
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_text_catalog.dart';
 
 /// 测试与未注入目录时的简体中文等价文案，与当前 zh ARB 逐字一致。

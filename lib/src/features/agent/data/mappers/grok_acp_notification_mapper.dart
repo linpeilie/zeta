@@ -1,7 +1,6 @@
 import 'package:zeta/src/features/agent/data/mappers/grok_session_update_mapper.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_stream_identity.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 export 'package:zeta/src/features/agent/data/mappers/grok_session_update_mapper.dart'
     show GrokAcpMappedUpdate, GrokSessionUpdateMapper;

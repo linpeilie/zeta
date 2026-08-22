@@ -6,7 +6,9 @@ void main() {
   group('conversation binding architecture contracts', () {
     test('legacy AgentProvider interface and adapter files stay deleted', () {
       expect(
-        File('lib/src/features/agent/domain/agent_provider.dart').existsSync(),
+        File(
+          'packages/zeta_agent_core/lib/src/domain/agent_provider.dart',
+        ).existsSync(),
         isFalse,
       );
       expect(
@@ -39,26 +41,32 @@ void main() {
     });
 
     test('registry remains the only runtime factory caller', () {
-      final callers = Directory('lib/src')
-          .listSync(recursive: true)
-          .whereType<File>()
-          .where((file) => file.path.endsWith('.dart'))
-          .where(
-            (file) => file.readAsStringSync().contains(
-              'providerFactory.createBundle(',
-            ),
-          )
-          .map((file) => file.path.replaceAll(Platform.pathSeparator, '/'))
-          .toList(growable: false);
+      final callers =
+          <File>[
+                ...Directory(
+                  'lib/src',
+                ).listSync(recursive: true).whereType<File>(),
+                ...Directory(
+                  'packages',
+                ).listSync(recursive: true).whereType<File>(),
+              ]
+              .where((file) => file.path.endsWith('.dart'))
+              .where(
+                (file) => file.readAsStringSync().contains(
+                  'providerFactory.createBundle(',
+                ),
+              )
+              .map((file) => file.path.replaceAll(Platform.pathSeparator, '/'))
+              .toList(growable: false);
 
       expect(callers, <String>[
-        'lib/src/features/agent/application/agent_provider_runtime_registry.dart',
+        'packages/zeta_agent_core/lib/src/application/agent_provider_runtime_registry.dart',
       ]);
     });
 
     test('application lifecycle code has no UI controller dependency', () {
       const roots = <String>[
-        'lib/src/features/agent/application',
+        'packages/zeta_agent_core/lib/src/application',
         'lib/src/features/agent_management/application',
         'lib/src/features/project_threads/application',
       ];
@@ -126,7 +134,7 @@ void main() {
 
     test('runtime scope and neutral ports have no compatibility defaults', () {
       final registry = File(
-        'lib/src/features/agent/application/agent_provider_runtime_registry.dart',
+        'packages/zeta_agent_core/lib/src/application/agent_provider_runtime_registry.dart',
       ).readAsStringSync();
       final modelSelection = File(
         'lib/src/features/agent/application/'
@@ -163,10 +171,10 @@ void main() {
 
     test('Binding and Bundle do not expose the raw provider', () {
       final binding = File(
-        'lib/src/features/agent/application/agent_conversation_binding.dart',
+        'packages/zeta_agent_core/lib/src/application/agent_conversation_binding.dart',
       ).readAsStringSync();
       final bundle = File(
-        'lib/src/features/agent/domain/agent_provider_bundle.dart',
+        'packages/zeta_agent_core/lib/src/domain/agent_provider_bundle.dart',
       ).readAsStringSync();
 
       expect(binding, isNot(contains('AgentProvider get provider')));
@@ -175,7 +183,7 @@ void main() {
       expect(bundle, isNot(contains('runtime.provider')));
       expect(
         File(
-          'lib/src/features/agent/application/agent_provider_runtime_registry.dart',
+          'packages/zeta_agent_core/lib/src/application/agent_provider_runtime_registry.dart',
         ).readAsStringSync(),
         isNot(contains('AgentProvider get provider')),
       );
@@ -189,10 +197,10 @@ void main() {
         isFalse,
       );
       final state = File(
-        'lib/src/features/agent/application/agent_conversation_permission_state.dart',
+        'packages/zeta_agent_core/lib/src/application/agent_conversation_permission_state.dart',
       ).readAsStringSync();
       final controller = File(
-        'lib/src/features/agent/application/'
+        'packages/zeta_agent_core/lib/src/application/'
         'agent_conversation_permission_selection_controller.dart',
       ).readAsStringSync();
 
@@ -244,10 +252,10 @@ void main() {
         isFalse,
       );
       final manager = File(
-        'lib/src/features/agent/application/agent_conversation_binding_manager.dart',
+        'packages/zeta_agent_core/lib/src/application/agent_conversation_binding_manager.dart',
       ).readAsStringSync();
       final registry = File(
-        'lib/src/features/agent/application/agent_provider_runtime_registry.dart',
+        'packages/zeta_agent_core/lib/src/application/agent_provider_runtime_registry.dart',
       ).readAsStringSync();
 
       expect(manager, contains('Timer.periodic'));

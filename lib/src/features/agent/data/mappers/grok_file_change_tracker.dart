@@ -1,6 +1,6 @@
 import 'package:zeta/src/features/agent/data/mappers/acp_content_codec.dart';
 import 'package:zeta/src/features/agent/data/mappers/acp_session_update_decoder.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// Grok 工具 content 的 Provider-local 投影。
 ///

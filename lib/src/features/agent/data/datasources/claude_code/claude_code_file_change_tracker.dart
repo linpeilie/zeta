@@ -1,4 +1,4 @@
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// Claude Code tool_use 的累计投影；tool_result 用同一记录补全终态工具事件。
 final class ClaudeCodeTrackedTool {

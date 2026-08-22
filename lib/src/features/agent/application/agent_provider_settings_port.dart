@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// Provider 设置与全局目录能力的 application 边界。
 ///

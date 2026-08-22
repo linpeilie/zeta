@@ -1,4 +1,4 @@
-import 'package:zeta/src/features/agent/domain/agent_permission_policy_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// Grok ACP 权限模式编解码（协议私货，仅 Grok data 层使用）。
 ///

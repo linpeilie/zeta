@@ -1,6 +1,6 @@
 import 'dart:collection';
 
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// Claude Code identity 状态失效原因。
 enum ClaudeCodeIdentityInvalidationReason {

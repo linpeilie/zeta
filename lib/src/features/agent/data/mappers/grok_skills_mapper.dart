@@ -1,4 +1,4 @@
-import 'package:zeta/src/features/agent/domain/agent_skill_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// 将 Grok ACP `_x.ai/skills/list` 响应宽容映射为中立 [AgentSkillsCatalog]。
 ///

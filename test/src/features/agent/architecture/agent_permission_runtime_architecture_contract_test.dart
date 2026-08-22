@@ -1,17 +1,13 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_permission_state.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_permission_selection_controller.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_runtime_identity.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_codec.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_permission_migration.dart';
 import 'package:zeta/src/features/agent/data/datasources/acp/grok_permission_policy_adapter.dart';
 import 'package:zeta/src/features/agent/data/datasources/app_server/codex_app_server_agent_provider.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_permission_mode_codec.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
 
@@ -497,7 +493,7 @@ void main() {
 
     test('thread settings domain event exposes neutral permission only', () {
       final source = File(
-        'lib/src/features/agent/domain/agent_event_models.dart',
+        'packages/zeta_agent_core/lib/src/domain/agent_event_models.dart',
       ).readAsStringSync();
       final classStart = source.indexOf(
         'class AgentThreadSettingsUpdatedEvent',
@@ -524,7 +520,7 @@ void main() {
       'shared application and presentation do not decode Codex settings',
       () {
         for (final rootPath in const <String>[
-          'lib/src/features/agent/application',
+          'packages/zeta_agent_core/lib/src/application',
           'lib/src/features/agent/presentation',
         ]) {
           final files = Directory(rootPath)
@@ -588,10 +584,10 @@ void main() {
 
     test('provider-specific permission migration is data-owned and registered', () {
       final providerModelSource = File(
-        'lib/src/features/agent/domain/agent_provider_models.dart',
+        'packages/zeta_agent_core/lib/src/domain/agent_provider_models.dart',
       ).readAsStringSync();
       final legacyDomainMigration = File(
-        'lib/src/features/agent/domain/agent_permission_preference_migration.dart',
+        'packages/zeta_agent_core/lib/src/domain/agent_permission_preference_migration.dart',
       );
       final dataMigration = File(
         'lib/src/features/agent/data/agent_provider_permission_migration.dart',
@@ -619,14 +615,16 @@ void main() {
 
     test('legacy permission facades and domain config decoders are absent', () {
       expect(
-        File('lib/src/features/agent/domain/agent_provider.dart').existsSync(),
+        File(
+          'packages/zeta_agent_core/lib/src/domain/agent_provider.dart',
+        ).existsSync(),
         isFalse,
       );
       final turnConfiguration = File(
-        'lib/src/features/agent/domain/agent_conversation_mode_models.dart',
+        'packages/zeta_agent_core/lib/src/domain/agent_conversation_mode_models.dart',
       ).readAsStringSync();
       final providerModels = File(
-        'lib/src/features/agent/domain/agent_provider_models.dart',
+        'packages/zeta_agent_core/lib/src/domain/agent_provider_models.dart',
       ).readAsStringSync();
       final codexProvider = File(
         'lib/src/features/agent/data/datasources/app_server/'
@@ -665,8 +663,8 @@ void main() {
         'permission protocol', () {
       final sharedFiles =
           <String>[
-            'lib/src/features/agent/application',
-            'lib/src/features/agent/domain',
+            'packages/zeta_agent_core/lib/src/application',
+            'packages/zeta_agent_core/lib/src/domain',
             'lib/src/features/agent/presentation',
             'lib/src/features/project_threads/application',
             'lib/src/features/project_threads/domain',

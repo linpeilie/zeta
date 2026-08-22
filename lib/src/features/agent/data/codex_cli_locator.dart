@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:zeta/src/features/agent/data/cli_command_locator.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 export 'package:zeta/src/features/agent/data/cli_command_locator.dart'
     show ResolvedCliCommand;

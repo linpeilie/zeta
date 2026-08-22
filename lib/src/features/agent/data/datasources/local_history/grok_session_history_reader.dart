@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/features/agent/data/datasources/local_history/grok_chat_history_parser.dart';
 import 'package:zeta/src/features/agent/data/datasources/local_history/grok_updates_history_parser.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 final _log = loggerFor('zeta.agent.grok_session_history');
 

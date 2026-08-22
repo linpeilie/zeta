@@ -11,7 +11,7 @@ import 'package:zeta/src/features/agent/data/datasources/acp/grok_models_cli.dar
 import 'package:zeta/src/features/agent/data/datasources/local_history/grok_session_history_reader.dart';
 import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
 import 'package:zeta/src/features/agent/data/mappers/grok_acp_notification_mapper.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 import '../../../../../testing/fixture_reader.dart';
 

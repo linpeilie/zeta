@@ -8,43 +8,37 @@ import 'package:zeta/src/core/utils/path_utils.dart';
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/core/logging/structured_error_logging.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_effect.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_binding.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_effect_runner.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_event_processor.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_mutation.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_reducer.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_mode_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/application/agent_plan_execution_handoff_controller.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_global_runtime.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_runtime_identity.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_thread_snapshot.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_model_selection_controller.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_permission_selection_controller.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
-import 'package:zeta/src/features/agent/application/agent_elapsed_ticker.dart';
 import 'package:zeta/src/features/agent/application/agent_skills_catalog_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_turn_context_overlay.dart';
-import 'package:zeta/src/features/agent/application/agent_turn_context_recorder.dart';
-import 'package:zeta/src/features/agent/application/bounded_event_dispatcher.dart';
-import 'package:zeta/src/features/agent/data/agent_turn_context_store.dart';
-import 'package:zeta/src/features/agent/application/coalescing_event_buffer.dart';
-import 'package:zeta/src/features/agent/application/agent_event_pipeline.dart';
 import 'package:zeta/src/features/agent/application/agent_pipeline_metrics_reporter.dart';
-import 'package:zeta/src/features/agent/application/agent_ui_update_port.dart';
-import 'package:zeta/src/features/agent/application/agent_ui_update_request.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
-import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_ui_state.dart';
 import 'package:zeta/src/features/agent/presentation/agent_ui_update_scheduler.dart';
 import 'package:zeta/src/features/agent/presentation/model_config_ui_state.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_file_query.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 
-export 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
+// 兼容既有调用点：ViewModel 过去 re-export TimelineStore 所在库，这里保持同样的
+// 公开面，但显式列出类型，避免把整个内核 barrel 透传出去。
+export 'package:zeta_agent_core/zeta_agent_core.dart'
+    show
+        AgentConversationMessage,
+        AgentConversationTimelineStore,
+        AgentConversationTurnGroup,
+        AgentConversationTurnState,
+        AgentHistoryEventTimelineEntry,
+        AgentMessageTimelineEntry,
+        AgentPermissionTimelineEntry,
+        AgentPlanApprovalTimelineEntry,
+        AgentQuestionTimelineEntry,
+        AgentThreadOpenPhase,
+        AgentToolTimelineEntry,
+        AgentTurnFileChangesTimelineEntry;
 
 final _log = loggerFor('zeta.agent.conversation');
 

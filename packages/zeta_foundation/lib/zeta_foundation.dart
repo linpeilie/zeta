@@ -10,6 +10,8 @@
 /// 3. 不承载用户内容——这里的类型会进日志和指标。
 library;
 
+export 'src/collections/zeta_equality.dart';
+export 'src/logging/zeta_logger.dart';
 export 'src/mvi/transition.dart';
 export 'src/observability/in_memory_zeta_metrics_port.dart';
 export 'src/observability/zeta_metric.dart';

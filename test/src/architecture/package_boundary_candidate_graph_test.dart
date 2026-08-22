@@ -99,29 +99,6 @@ void main() {
     );
   });
 
-  test('zeta_agent_core 候选文件对 Flutter foundation 的依赖不再增长', () {
-    final dependents = <String>{};
-    for (final path in files) {
-      if (_candidatePackageFor(path) != _agentCore) {
-        continue;
-      }
-      final imports = _externalImports(File(path).readAsStringSync());
-      if (imports.any((import) => import.startsWith('package:flutter/'))) {
-        dependents.add(path);
-      }
-    }
-
-    // 这些文件用 ChangeNotifier / listEquals 等 foundation 能力；Phase 1 之前
-    // 不强制拆除，但数量只允许减少，避免共享内核继续被 Flutter 绑定拖住。
-    expect(
-      dependents.length,
-      lessThanOrEqualTo(_agentCoreFlutterFoundationBaseline),
-      reason:
-          'zeta_agent_core 候选层新增了 Flutter 依赖：\n'
-          '${dependents.join('\n')}',
-    );
-  });
-
   test('候选依赖图（已知违规除外）无环', () {
     final edges = <String, Set<String>>{
       for (final package in _candidatePackages) package: <String>{},
@@ -249,6 +226,50 @@ void main() {
     expect(remaining, <String>['lib/src/ui/core/ide_image_preview.dart']);
   });
 
+  test('zeta_agent_core 不反向依赖根 app，也不碰本机 IO', () {
+    final coreFiles = files
+        .where((path) => path.startsWith('packages/zeta_agent_core/lib/'))
+        .toList(growable: false);
+
+    expect(coreFiles, isNotEmpty);
+    for (final path in coreFiles) {
+      final source = File(path).readAsStringSync();
+      expect(
+        source.contains('package:zeta/'),
+        isFalse,
+        reason: '$path 反向依赖了根 app',
+      );
+      expect(
+        _externalImports(source).any((import) => import.startsWith('dart:io')),
+        isFalse,
+        reason: '$path 引入了 dart:io；中立内核不碰本机 IO',
+      );
+    }
+    // Provider 协议与身份分支的纯度由 G1 守卫单独管（五文件 + ACP mapper），
+    // 见 claude_code_shared_layer_purity_test；内核 domain 里的
+    // `AgentProviderKind` / 默认配置常量是既有中立设计，不在此列。
+  });
+
+  test('zeta_agent_core 对 Flutter 的依赖只允许收缩', () {
+    final dependents = files
+        .where((path) => path.startsWith('packages/zeta_agent_core/lib/'))
+        .where(
+          (path) => _externalImports(
+            File(path).readAsStringSync(),
+          ).any((import) => import.startsWith('package:flutter/')),
+        )
+        .toList(growable: false);
+
+    // 这些文件用 ChangeNotifier / ValueListenable；目标态要求纯 Dart，但去掉它们
+    // 需要把 10 个 controller 换成 MVI store（Phase 2/3），且会触碰 G1 冻结文件。
+    // 阶段 1 只冻结数量：只能变少。
+    expect(
+      dependents.length,
+      lessThanOrEqualTo(_agentCoreFlutterBaseline),
+      reason: 'zeta_agent_core 新增了 Flutter 依赖：\n${dependents.join('\n')}',
+    );
+  });
+
   test('zeta_plugin_kernel 不认识任何具体插件或 Provider', () {
     final kernelFiles = files
         .where((path) => path.startsWith('packages/zeta_plugin_kernel/lib/'))
@@ -305,6 +326,7 @@ const Set<String> _materializedPackages = <String>{
   _foundation,
   _pluginKernel,
   _ui,
+  _agentCore,
 };
 
 /// 目标架构 §3.1 的依赖方向；根 app 是唯一可以看到所有 Package 的组合点。
@@ -340,6 +362,7 @@ const Map<String, List<String>> _bannedExternalPrefixes =
       _agentCore: <String>[
         'package:flutter/material',
         'package:flutter/widgets',
+        'package:flutter/services',
         'package:flutter_riverpod/',
         'package:shadcn_flutter/',
         'dart:io',
@@ -367,16 +390,7 @@ const Set<String> _platformNeutralCoreLibraries = <String>{
 };
 
 /// Phase 1 的燃尽清单：现存的候选 Package 反向依赖。
-const Set<String> _knownEdgeViolations = <String>{
-  // application 直接构造 data 层存储/静态能力；拆包时改为 app 注入端口。
-  'lib/src/features/agent/application/agent_provider_settings_controller.dart -> lib/src/features/agent/data/agent_provider_static_capabilities.dart',
-  'lib/src/features/agent/application/agent_thread_workspace_controller.dart -> lib/src/features/agent/data/agent_turn_context_store.dart',
-  'lib/src/features/agent/application/agent_turn_context_recorder.dart -> lib/src/features/agent/data/agent_turn_context_store.dart',
-  // Workspace controller 直接持有 presentation ViewModel 与 workspace feature 模型；
-  // 目标态由 root app 组合（Phase 2/3 拆解 IdeShellController 时处理）。
-  'lib/src/features/agent/application/agent_thread_workspace_controller.dart -> lib/src/features/agent/presentation/agent_conversation_view_model.dart',
-  'lib/src/features/agent/application/agent_thread_workspace_controller.dart -> lib/src/features/workspace/domain/workspace_node.dart',
-};
+const Set<String> _knownEdgeViolations = <String>{};
 
 /// Phase 1 的燃尽清单：现存的外部依赖越界。
 const Set<String> _knownExternalViolations = <String>{
@@ -390,8 +404,8 @@ const Set<String> _knownExternalViolations = <String>{
   'lib/src/core/utils/system_file_manager.dart -> dart:io',
 };
 
-/// 当前 `zeta_agent_core` 候选层里依赖 `package:flutter/foundation.dart` 的文件数。
-const int _agentCoreFlutterFoundationBaseline = 17;
+/// 当前 `zeta_agent_core` 里依赖 `package:flutter/foundation.dart` 的文件数。
+const int _agentCoreFlutterBaseline = 17;
 
 /// 把仓库内路径映射到候选 Package。
 ///
@@ -406,10 +420,6 @@ String _candidatePackageFor(String path) {
   }
   if (path.startsWith('lib/src/core/')) {
     return _foundation;
-  }
-  if (path.startsWith('lib/src/features/agent/domain/') ||
-      path.startsWith('lib/src/features/agent/application/')) {
-    return _agentCore;
   }
   if (path.startsWith('lib/src/features/agent/data/')) {
     return _agentProviders;

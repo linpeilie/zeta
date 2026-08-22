@@ -1,5 +1,4 @@
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// 测试用：把实现了中立端口的 host 收成 Bundle。
 ///

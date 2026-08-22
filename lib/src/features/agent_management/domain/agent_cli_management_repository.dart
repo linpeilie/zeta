@@ -1,4 +1,4 @@
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 
 /// 单个 Agent CLI 的检测、配置与日志仓库契约。

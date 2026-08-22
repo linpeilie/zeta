@@ -1,6 +1,6 @@
 import 'package:zeta_plugin_kernel/zeta_plugin_kernel.dart';
 
-import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// Agent Provider 插件贡献：向宿主提供一个中立的 [AgentProviderBundleFactory]。
 ///

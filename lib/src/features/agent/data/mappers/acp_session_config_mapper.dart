@@ -1,4 +1,4 @@
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// ACP session 创建/加载返回的动态配置快照。
 class AcpSessionConfigSnapshot {

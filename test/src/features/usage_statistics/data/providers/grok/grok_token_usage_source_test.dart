@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/usage_statistics/data/providers/grok/grok_token_usage_source.dart';
 import 'package:zeta/src/features/usage_statistics/data/providers/grok/grok_usage_log_scanner.dart';
 import 'package:zeta/src/features/usage_statistics/data/providers/grok/grok_usage_partition_codec.dart';

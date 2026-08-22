@@ -4,7 +4,7 @@ import 'dart:io';
 
 import 'package:zeta/src/features/agent/data/claude_code_cli_locator.dart';
 import 'package:zeta/src/features/agent/data/cli_command_locator.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent_management/data/cli_process_runner.dart';
 
 /// Claude Code `auth status --json` 的白名单投影。

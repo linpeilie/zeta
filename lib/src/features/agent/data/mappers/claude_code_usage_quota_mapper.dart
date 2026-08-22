@@ -1,6 +1,4 @@
-import 'package:zeta/src/features/agent/domain/agent_ui_text_catalog.dart';
-import 'package:zeta/src/features/agent/domain/agent_usage_models.dart';
-import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// 将 Claude Code OAuth usage 响应映射为中立套餐快照。
 ///
