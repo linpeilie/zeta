@@ -75,8 +75,10 @@ class AgentPaneTestApp extends StatelessWidget {
         : darkIdeTheme;
     return ProviderScope(
       overrides: [
-        agentConversationSliceStoreResolverProvider.overrideWithValue(
-          (key) => sliceStores[key],
+        agentConversationSliceStoreResolverProvider.overrideWith(
+          () => AgentConversationSliceStoreResolverNotifier(
+            (key) => sliceStores[key],
+          ),
         ),
       ],
       child: IdeThemeScope(

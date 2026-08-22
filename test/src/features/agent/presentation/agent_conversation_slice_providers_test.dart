@@ -238,8 +238,8 @@ ProviderContainer _container(
 ) {
   final container = ProviderContainer(
     overrides: [
-      agentConversationSliceStoreResolverProvider.overrideWithValue(
-        (key) => stores[key],
+      agentConversationSliceStoreResolverProvider.overrideWith(
+        () => AgentConversationSliceStoreResolverNotifier((key) => stores[key]),
       ),
     ],
   );

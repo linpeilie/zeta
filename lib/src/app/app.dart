@@ -12,7 +12,6 @@ import 'package:zeta/src/app/composition/agent_resource_shutdown.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:zeta/src/app/composition/app_dependencies.dart';
-import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
 import 'package:zeta/src/app/observability/zeta_observability.dart';
 import 'package:zeta/src/app/plugins/zeta_plugin_catalog.dart';
 import 'package:zeta/src/app/localization/zeta_text_catalogs.dart';
@@ -202,10 +201,6 @@ class MainAppState extends State<MainApp>
   }
 
   /// 当前生效的脱敏指标端口；未注入 [MainApp.observability] 时为 no-op。
-  /// Phase 2 切片的 store 注册表；`IdeHome` 建好 controller 后填入解析函数。
-  final AgentConversationSliceStoreRegistry _sliceStoreRegistry =
-      AgentConversationSliceStoreRegistry();
-
   ZetaMetricsPort get _metrics =>
       widget.observability?.metrics ?? noopZetaMetricsPort;
 
@@ -468,13 +463,7 @@ class MainAppState extends State<MainApp>
     // "No ProviderScope found"，而不是编译期错误。
     return ProviderScope(
       observers: widget.observability?.providerObservers,
-      overrides: [
-        zetaMetricsPortProvider.overrideWithValue(_metrics),
-        // 注册表在这里就位，解析函数等 IdeHome 建好 workspace controller 再填。
-        agentConversationSliceStoreResolverProvider.overrideWithValue(
-          _sliceStoreRegistry.resolve,
-        ),
-      ],
+      overrides: [zetaMetricsPortProvider.overrideWithValue(_metrics)],
       child: _buildApp(context),
     );
   }
@@ -567,7 +556,6 @@ class MainAppState extends State<MainApp>
                         turnContextStore: _turnContextStore,
                         agentUiTextCatalog: _agentUiTextCatalog,
                         metrics: _metrics,
-                        sliceStoreRegistry: _sliceStoreRegistry,
                         conversationSliceEnabled:
                             widget.conversationSliceEnabled,
                         desktopAttentionTextCatalog:

@@ -179,8 +179,9 @@ class _TwoPaneApp extends StatelessWidget {
     );
     return ProviderScope(
       overrides: [
-        agentConversationSliceStoreResolverProvider.overrideWithValue(
-          (key) => stores[key],
+        agentConversationSliceStoreResolverProvider.overrideWith(
+          () =>
+              AgentConversationSliceStoreResolverNotifier((key) => stores[key]),
         ),
       ],
       child: IdeThemeScope(

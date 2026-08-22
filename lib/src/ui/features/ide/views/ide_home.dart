@@ -42,6 +42,7 @@ import 'package:zeta/src/ui/features/ide/views/global_home_page.dart';
 import 'package:zeta/src/ui/features/ide/views/project_home_page.dart';
 import 'package:zeta/src/ui/features/ide/views/project_agent_sidebar.dart';
 import 'package:zeta/src/ui/features/ide/views/project_list_pane.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:zeta/src/features/agent/application/agent_thread_workspace_controller.dart';
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
 
@@ -79,7 +80,6 @@ class IdeHome extends StatefulWidget {
         const FallbackDesktopAttentionTextCatalog(),
     this.metrics = noopZetaMetricsPort,
     this.conversationSliceEnabled,
-    this.sliceStoreRegistry,
     super.key,
   });
 
@@ -110,8 +110,6 @@ class IdeHome extends StatefulWidget {
   /// Phase 2 切片的 feature flag（按 workspace entry 生效）。
   final bool Function(AgentThreadWorkspaceKey key)? conversationSliceEnabled;
 
-  /// 组合根提供的切片 store 注册表；controller 就绪后由本 widget 填入解析函数。
-  final AgentConversationSliceStoreRegistry? sliceStoreRegistry;
   final AgentUiTextCatalog agentUiTextCatalog;
   final DesktopAttentionTextCatalog desktopAttentionTextCatalog;
 
@@ -205,9 +203,14 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
       metrics: widget.metrics,
       conversationSliceEnabled: widget.conversationSliceEnabled,
     )..addListener(_handleShellChanged);
-    // 切片 store 的解析器要等 workspace controller 建好才能给出。
-    widget.sliceStoreRegistry?.resolver =
-        _shellController.agentWorkspaceController.sliceStoreForBinding;
+    // Riverpod 禁止在 initState 里改 provider，因此推到首帧之后。
+    // 首帧读到"未启用"没有关系：解析器是 NotifierProvider，bind 会让依赖它的
+    // family 失效重算，区域随即切到切片路径（两条路径渲染结果一致）。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _bindConversationSliceStoreResolver();
+      }
+    });
     if (widget.enableNativeWindowFrame) {
       windowManager.addListener(this);
     }
@@ -254,6 +257,41 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
         ),
       );
     }
+  }
+
+  /// 把 workspace controller 的 store 解析器 bind 进 Riverpod。
+  ///
+  /// 必须在 controller 建好之后：根 `ProviderScope` 在 `MainApp` 就位，那时还
+  /// 没有 controller。bind 会让依赖它的 family 失效重算，因此 bind 之前的读取
+  /// 不会把"未启用"缓存住。
+  void _bindConversationSliceStoreResolver() {
+    final workspace = _shellController.agentWorkspaceController;
+    ProviderScope.containerOf(context, listen: false)
+        .read(agentConversationSliceStoreResolverProvider.notifier)
+        .bind(workspace.sliceStoreForBinding);
+    assert(
+      _conversationSliceResolvesWhenEnabled(workspace),
+      '切片已为某个 workspace entry 启用，但解析不到它的 store：'
+      '组合根与切片之间的接线断了。删掉这行 bind 或改坏 sliceStoreForBinding '
+      '都会走到这里——切片会静默退回旧路径，功能看起来正常。',
+    );
+  }
+
+  /// 已启用切片的 entry 必须解析得到 store。
+  ///
+  /// 只在 debug 断言里跑：这是一条**静默失效**的接线，没有护栏时坏了也不报错。
+  bool _conversationSliceResolvesWhenEnabled(
+    AgentThreadWorkspaceController workspace,
+  ) {
+    for (final entry in workspace.entries) {
+      if (entry.sliceStore == null) {
+        continue;
+      }
+      if (workspace.sliceStoreForBinding(entry.binding.key) == null) {
+        return false;
+      }
+    }
+    return true;
   }
 
   @override

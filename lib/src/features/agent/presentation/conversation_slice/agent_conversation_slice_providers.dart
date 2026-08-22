@@ -24,19 +24,39 @@ import 'package:zeta_agent_core/zeta_agent_core.dart';
 typedef AgentConversationSliceStoreResolver =
     AgentConversationSliceStore? Function(AgentConversationBindingKey key);
 
-/// 默认解析器：任何 key 都没有 store。
+/// store 解析器。
 ///
-/// 也就是**默认整个应用都不启用切片**，由组合层显式为某个 entry 打开。
-///
-/// 组合根用 [AgentConversationSliceStoreRegistry] 覆盖它——注册表由 `MainApp`
-/// 创建、向下注入，`IdeHome` 在建好 workspace controller 后填入解析函数。
-/// 它是**容器作用域的注入点**，不是全局 service locator（§12.10）。
+/// **是 `NotifierProvider` 而不是 `Provider`**：解析器的值在运行期确实会变——
+/// 根 scope 在 `MainApp` 建立，而 workspace controller 要等 `IdeHome` 才存在，
+/// 组合根必须在之后把真正的解析函数 bind 进来。用不可变 `Provider` 建模会让
+/// 依赖它的 family **缓存住"尚未就绪"时的否定答案**：某个会话一旦在 bind 之前
+/// 被读过一次，就会永久停在旧路径，而且不报任何错。
 final agentConversationSliceStoreResolverProvider =
-    Provider<AgentConversationSliceStoreResolver>(
-      (ref) =>
-          (_) => null,
+    NotifierProvider<
+      AgentConversationSliceStoreResolverNotifier,
+      AgentConversationSliceStoreResolver
+    >(
+      AgentConversationSliceStoreResolverNotifier.new,
       name: 'agentConversationSliceStoreResolver',
     );
+
+/// 持有 store 解析器；由组合根在 controller 就绪后 [bind]。
+final class AgentConversationSliceStoreResolverNotifier
+    extends Notifier<AgentConversationSliceStoreResolver> {
+  AgentConversationSliceStoreResolverNotifier([this._initial]);
+
+  final AgentConversationSliceStoreResolver? _initial;
+
+  /// 默认：任何 key 都没有 store，也就是**默认整个应用不启用切片**。
+  @override
+  AgentConversationSliceStoreResolver build() => _initial ?? (_) => null;
+
+  /// 组合根在 workspace controller 就绪后调用。
+  ///
+  /// 写 `state` 会让依赖它的 family 失效重算，因此 bind 之前读到的否定答案
+  /// 不会被永久缓存。
+  void bind(AgentConversationSliceStoreResolver resolver) => state = resolver;
+}
 
 /// 该 entry 是否启用 Phase 2 切片。
 ///
@@ -167,20 +187,3 @@ final agentConversationHistoryProvider =
       name: 'agentConversationHistory',
       isAutoDispose: true,
     );
-
-/// 组合根填写的 store 注册表。
-///
-/// 存在的理由是时序：根 `ProviderScope` 在 `MainApp` 建立，而 workspace
-/// controller 要等 `IdeHome` 才存在。注册表让 override 在建容器时就能给出一个
-/// **稳定的函数**，真正的解析器随后填入，不需要重建容器，也不需要嵌套 scope
-/// （实测嵌套 scope 对已有 family 无效）。
-final class AgentConversationSliceStoreRegistry {
-  AgentConversationSliceStoreResolver? _resolver;
-
-  /// 由组合根在 controller 就绪后填入。
-  set resolver(AgentConversationSliceStoreResolver? value) => _resolver = value;
-
-  /// 稳定的解析入口：未填入时对所有 key 返回 null（= 切片关闭）。
-  AgentConversationSliceStore? resolve(AgentConversationBindingKey key) =>
-      _resolver?.call(key);
-}

@@ -581,10 +581,20 @@ exactly-once、canonical signature 回归、Phase 0 帧预算复测。注意帧�
 ## 9.7 F 步：验收测试（2026-08-22）
 
 先补上一个 E 步遗留的**接线缺口**：切片在生产路径上原本无人可达——entry 会按 flag
-建 binding，但没有任何地方覆盖 `agentConversationSliceStoreResolverProvider`。现在
-`MainApp` 建 `AgentConversationSliceStoreRegistry` 并用它覆盖 provider，`IdeHome` 在
-workspace controller 就绪后填入 `sliceStoreForBinding`。注册表存在的理由是**时序**：
-根 scope 在 MainApp 建立，controller 要等 IdeHome 才有。
+建 binding，但没有任何地方把 store 解析器接进 Riverpod。
+
+解析器做成 **`NotifierProvider`**，`IdeHome` 在首帧之后 `bind` workspace controller 的
+`sliceStoreForBinding`。三个设计点各自对应一个具体问题：
+
+| 选择 | 为什么 |
+| --- | --- |
+| `NotifierProvider` 而不是 `Provider` | 解析器的值**运行期确实会变**（根 scope 在 `MainApp`，controller 要等 `IdeHome`）。用不可变 `Provider` 建模会让依赖它的 family **缓存住 bind 之前的否定答案**——某个会话一旦被提前读过一次就永久停在旧路径，且不报错 |
+| 首帧之后 bind，而不是 `initState` | Riverpod 禁止在 widget 生命周期里改 provider。首帧读到"未启用"无妨：写 `state` 会让 family 失效重算，区域随即切过去，且两条路径渲染结果一致 |
+| debug 断言"已启用的 entry 必须解析得到 store" | 这条接线**坏了不会报错**，只会静默退回旧路径。删掉 bind 或改坏 `sliceStoreForBinding` 现在会直接断言失败 |
+
+> 顺带记一个实测结论：给 family 补 `dependencies:` **并不能**让嵌套 `ProviderScope`
+> 覆盖依赖后重新解析（flutter_riverpod 3.4.2）。写了个 parent/child 容器探针验证，
+> 子容器仍读到父容器的 store。所以隔离靠 key，store 来源靠根级注入，两者都不靠 scope。
 
 > 顺带记一个实测结论：给 family 补 `dependencies:` **并不能**让嵌套 `ProviderScope`
 > 覆盖依赖后重新解析（flutter_riverpod 3.4.2）。写了个 parent/child 容器探针验证，
@@ -603,7 +613,7 @@ workspace controller 就绪后填入 `sliceStoreForBinding`。注册表存在的
 | 7 | 四语义 wire 参数 | ✅ 既有 provider 契约测试；切片命令打的是同一批 port，未新增 wire 路径 |
 | 8 | Phase 0 帧预算 | ✅ **两条路径各测一次**，见下 |
 | 9 | 架构守卫 | ✅ 分层 / raw payload / scope-aware / region 订阅四组守卫全绿 |
-| 10 | feature flag 双路径 | ✅ 渲染等价、未注册 store 时回退可用 |
+| 10 | feature flag 双路径 | ✅ 渲染等价、未注册 store 时回退可用；**并断言生产接线下 flag 真的激活切片**（含 flag 关闭的反向对照） |
 
 ### 帧预算：切片开启也不退化
 
@@ -615,6 +625,17 @@ workspace controller 就绪后填入 `sliceStoreForBinding`。注册表存在的
   **0**，只允许局部时间线重建）：两条路径都通过。
 
 这是 E 步里我特意标出"理论上只会减少重建，但理论不是基线"的那一条，现在有实测了。
+
+### 为什么单独测"激活"
+
+帧预算那两条 `slice=true` 只看重建次数——**生产接线断了它们照样全绿**，因为切片会
+静默退回旧路径而渲染结果不变。所以另加一条断言：走完整的
+`MainApp → IdeHome → controller → entry` 流程后，直接读容器确认
+`agentConversationSliceEnabledProvider(key)` 与 flag 一致，且能解析到 store；
+flag 关闭时必须是 false。两条都做过 mutation 验证（删掉 bind、让解析器返回 null）。
+
+这条测试补的是本阶段反复出现的同一类漏洞：**断言结果指标，而不是断言那条路径真的
+被走到了**。
 
 ### 诚实的边界
 

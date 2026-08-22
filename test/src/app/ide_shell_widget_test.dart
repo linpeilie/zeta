@@ -5,6 +5,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/main.dart';
@@ -21,6 +22,7 @@ import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
 import '../testing/agent_event_storm_fixture.dart';
 import '../testing/ide_test_harness.dart';
 import '../testing/widget_build_counter.dart';
@@ -802,6 +804,41 @@ void main() {
     expect(find.byKey(const ValueKey('agent-pane-host')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  // 生产接线断了也不会让帧预算测试变红——那两条只看重建次数。
+  // 这里直接断言"切片有没有真的被打开"，并配一条 flag 关闭的反向对照。
+  for (final sliceEnabled in const <bool>[false, true]) {
+    testWidgets('生产接线下切片按 flag 激活 (slice=$sliceEnabled)', (tester) async {
+      final fixture = AgentEventStormFixture();
+      await _prepareEventStormAgentPane(
+        tester,
+        fixture: fixture,
+        directoryPrefix: 'zeta_slice_activation_',
+        enableConversationSlice: sliceEnabled,
+      );
+
+      final paneElement = find.byType(AgentPane).evaluate().first;
+      final key =
+          (paneElement.widget as AgentPane).viewModel.conversationBinding.key;
+      final container = ProviderScope.containerOf(paneElement);
+
+      expect(
+        container.read(agentConversationSliceEnabledProvider(key)),
+        sliceEnabled,
+        reason: sliceEnabled
+            ? 'flag 打开却没激活：MainApp → IdeHome → controller → entry 这条'
+                  '接线断了，而帧预算测试发现不了'
+            : 'flag 关闭时不得启用切片',
+      );
+      if (sliceEnabled) {
+        // 真的能解析到 store，而不只是"开关为 true"。
+        expect(
+          container.read(agentConversationSliceStoreProvider(key)),
+          isNotNull,
+        );
+      }
+    });
+  }
 
   // 整场事件风暴的聚合预算同样两条路径各测一次。
   for (final sliceEnabled in const <bool>[false, true]) {
