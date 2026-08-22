@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/app/observability/zeta_observability.dart';
 import 'package:zeta/src/app/observability/zeta_provider_observer.dart';
@@ -68,7 +69,10 @@ void main() {
     });
 
     test('provider 失败只记分类，不记错误文本', () {
-      expect(() => container.read(_throwingProvider), throwsStateError);
+      expect(
+        () => container.read(_throwingProvider),
+        throwsA(isA<ProviderException>()),
+      );
 
       expect(
         metrics.totalOf(

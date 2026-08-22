@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/app/composition/app_dependencies.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
@@ -17,7 +18,7 @@ void main() {
       final metrics = InMemoryZetaMetricsPort();
       final instant = DateTime.utc(2026, 8, 21, 9);
       final container = ProviderContainer(
-        overrides: <Override>[
+        overrides: [
           zetaMetricsPortProvider.overrideWithValue(metrics),
           zetaClockProvider.overrideWithValue(fixedClock(instant)),
         ],
@@ -33,13 +34,16 @@ void main() {
       final container = ProviderContainer();
       addTearDown(container.dispose);
 
-      expect(() => container.read(dependency), throwsStateError);
+      expect(
+        () => container.read(dependency),
+        throwsA(isA<ProviderException>()),
+      );
     });
 
     test('覆盖后必需依赖正常读取', () {
       final dependency = requiredDependency<String>('zeta.test.required');
       final container = ProviderContainer(
-        overrides: <Override>[dependency.overrideWithValue('injected')],
+        overrides: [dependency.overrideWithValue('injected')],
       );
       addTearDown(container.dispose);
 

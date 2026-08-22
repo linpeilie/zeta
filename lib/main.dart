@@ -74,7 +74,7 @@ void main() {
         ProviderScope(
           observers: observability.providerObservers,
           // 阶段 1：Riverpod 只承担组合根与覆盖点，业务状态仍由现有 controller 拥有。
-          overrides: <Override>[
+          overrides: [
             zetaMetricsPortProvider.overrideWithValue(observability.metrics),
           ],
           child: MainApp(

@@ -18,48 +18,39 @@ final class ZetaProviderObserver extends ProviderObserver {
   final ZetaMetricsPort metrics;
 
   @override
-  void didAddProvider(
-    ProviderBase<Object?> provider,
-    Object? value,
-    ProviderContainer container,
-  ) {
-    metrics.counter(ZetaMetric.riverpodProviderAdded, tags: _tagsFor(provider));
+  void didAddProvider(ProviderObserverContext context, Object? value) {
+    metrics.counter(ZetaMetric.riverpodProviderAdded, tags: _tagsFor(context));
   }
 
   @override
   void didUpdateProvider(
-    ProviderBase<Object?> provider,
+    ProviderObserverContext context,
     Object? previousValue,
     Object? newValue,
-    ProviderContainer container,
   ) {
     metrics.counter(
       ZetaMetric.riverpodProviderUpdated,
-      tags: _tagsFor(provider),
+      tags: _tagsFor(context),
     );
   }
 
   @override
-  void didDisposeProvider(
-    ProviderBase<Object?> provider,
-    ProviderContainer container,
-  ) {
+  void didDisposeProvider(ProviderObserverContext context) {
     metrics.counter(
       ZetaMetric.riverpodProviderDisposed,
-      tags: _tagsFor(provider),
+      tags: _tagsFor(context),
     );
   }
 
   @override
   void providerDidFail(
-    ProviderBase<Object?> provider,
+    ProviderObserverContext context,
     Object error,
     StackTrace stackTrace,
-    ProviderContainer container,
   ) {
     metrics.counter(
       ZetaMetric.riverpodProviderFailed,
-      tags: _tagsFor(provider, outcome: ZetaMetricOutcome.failure),
+      tags: _tagsFor(context, outcome: ZetaMetricOutcome.failure),
     );
   }
 
@@ -69,12 +60,13 @@ final class ZetaProviderObserver extends ProviderObserver {
   /// 它是 Dart 类型名而不是运行期数据。泛型参数会被去掉（`Impl<Foo>` → `Impl`），
   /// 否则尖括号不符合标签白名单形态，会被整体丢弃。
   ZetaMetricTags _tagsFor(
-    ProviderBase<Object?> provider, {
+    ProviderObserverContext context, {
     ZetaMetricOutcome? outcome,
   }) {
     if (!metrics.isEnabled) {
       return ZetaMetricTags.none;
     }
+    final provider = context.provider;
     final name = provider.name ?? _typeLabel(provider);
     // provider 名与类型名都是声明期常量；形态异常时会自动降级成 hash。
     return ZetaMetricTags(
@@ -83,7 +75,7 @@ final class ZetaProviderObserver extends ProviderObserver {
     );
   }
 
-  String _typeLabel(ProviderBase<Object?> provider) {
+  String _typeLabel(Object provider) {
     final runtimeType = provider.runtimeType.toString();
     final generic = runtimeType.indexOf('<');
     return generic < 0 ? runtimeType : runtimeType.substring(0, generic);
