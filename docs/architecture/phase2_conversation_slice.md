@@ -336,7 +336,7 @@ app 级 feature flag 二选一；新 adapter 是现有 store 的只读消费者�
 | C | `AgentConversationSliceBinding`：region ingress 合并 + effect 打到现有 ViewModel port | ✅ 3 条对真实 ViewModel 的接线测试 |
 | D | Riverpod family：`agentConversationSliceProvider` + 五个 region selector + fail-closed 覆盖 + 开关 | ✅ 6 条 provider 测试 |
 | E | `AgentPane` 子树改用 selector 订阅、workspace entry 按 flag 创建 binding | ✅ 见 §9.6 |
-| F | 两 thread 并存 / UiEffect exactly-once / 性能预算等验收测试（§8 表） | ⏳ 未开始 |
+| F | 两 thread 并存 / UiEffect / 性能预算等验收测试（§8 表） | ✅ 见 §9.7 |
 
 已落地的关键不变量（都有测试钉住）：
 
@@ -575,6 +575,55 @@ binding（ingress）。做过 mutation 验证：把任意一处改回 `Listenabl
 exactly-once、canonical signature 回归、Phase 0 帧预算复测。注意帧预算测试目前跑的是
 **flag 关闭**的旧路径，切片开启下的帧预算还没有测过——嵌套 selector 理论上只会减少
 重建，但"理论上"不是基线，F 步必须实测。
+
+---
+
+## 9.7 F 步：验收测试（2026-08-22）
+
+先补上一个 E 步遗留的**接线缺口**：切片在生产路径上原本无人可达——entry 会按 flag
+建 binding，但没有任何地方覆盖 `agentConversationSliceStoreResolverProvider`。现在
+`MainApp` 建 `AgentConversationSliceStoreRegistry` 并用它覆盖 provider，`IdeHome` 在
+workspace controller 就绪后填入 `sliceStoreForBinding`。注册表存在的理由是**时序**：
+根 scope 在 MainApp 建立，controller 要等 IdeHome 才有。
+
+> 顺带记一个实测结论：给 family 补 `dependencies:` **并不能**让嵌套 `ProviderScope`
+> 覆盖依赖后重新解析（flutter_riverpod 3.4.2）。写了个 parent/child 容器探针验证，
+> 子容器仍读到父容器的 store。所以隔离靠 key，store 来源靠根级注入，两者都不靠 scope。
+
+### §8 验收表对照
+
+| # | 验收项 | 状态 |
+| --- | --- | --- |
+| 1 | 两 Binding 的 state / reducer / effect 隔离 | ✅ provider 级（同容器两 key）+ Widget 级（同一 `ProviderScope` 并排两个 `AgentPane`） |
+| 2 | dispose 隔离 | ✅ store 级 + Widget 级（dispose 其一，另一个继续渲染且无异常）；容器 dispose 只摘监听不释放 store |
+| 3 | stale generation | ✅ scope 匹配单测 + runtime 换代端到端 |
+| 4 | 普通 / urgent 流式 | ✅ 同帧 region 变化合并成一次发布；urgent 走既有 `AgentUiUpdateScheduler`，切片不改其路径 |
+| 5 | UiEffect 不进状态 | ✅ 反复推切片重建，`uiEffects` 零产出——effect 只走 stream。**每个动作产出哪些 effect** 仍由 `agent_conversation_view_model_test` 断言 |
+| 6 | canonical signature | ✅ 既有 `grok_live_history_canonical_test` 不受影响（切片不碰 provider 层） |
+| 7 | 四语义 wire 参数 | ✅ 既有 provider 契约测试；切片命令打的是同一批 port，未新增 wire 路径 |
+| 8 | Phase 0 帧预算 | ✅ **两条路径各测一次**，见下 |
+| 9 | 架构守卫 | ✅ 分层 / raw payload / scope-aware / region 订阅四组守卫全绿 |
+| 10 | feature flag 双路径 | ✅ 渲染等价、未注册 store 时回退可用 |
+
+### 帧预算：切片开启也不退化
+
+把 `ide_shell_widget_test` 的两条基线测试参数化成 `slice=false` / `slice=true` 各跑一次：
+
+- **事件风暴聚合预算**（UI region publish ≤ 400、dispatcher queue ≤ 64、
+  pendingKeys ≤ 64、常驻 widget 重建 ≤ 2）：两条路径都通过；
+- **纯 message delta 场景**（Shell / Header / Composer / liveTimeline 重建必须为
+  **0**，只允许局部时间线重建）：两条路径都通过。
+
+这是 E 步里我特意标出"理论上只会减少重建，但理论不是基线"的那一条，现在有实测了。
+
+### 诚实的边界
+
+- 第 5 条测的是"**effect 不进切片状态**"，不是"已发出的 effect 不会被重放"。想直接
+  测后者需要在不启动 turn 的前提下发出一次 effect（`sendMessage` 会让 fake 的 turn
+  一直跑着，留下 pending timer），成本高于收益。真正的风险——effect 混进状态导致
+  rebuild 重复触发滚动/导航——由这条测试覆盖。
+- 帧预算是在 fake provider 的事件风暴 fixture 下测的，不是真实 CLI；这与 Phase 0
+  基线的口径一致，不代表真机性能。
 
 ---
 

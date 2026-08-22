@@ -12,6 +12,7 @@ import 'package:zeta/src/app/composition/agent_resource_shutdown.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:zeta/src/app/composition/app_dependencies.dart';
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
 import 'package:zeta/src/app/observability/zeta_observability.dart';
 import 'package:zeta/src/app/plugins/zeta_plugin_catalog.dart';
 import 'package:zeta/src/app/localization/zeta_text_catalogs.dart';
@@ -43,6 +44,7 @@ import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_mode
 import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/ui/features/ide/views/ide_home.dart';
 import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
+import 'package:zeta/src/features/agent/application/agent_thread_workspace_controller.dart';
 
 /// 应用根组件。
 ///
@@ -77,6 +79,7 @@ class MainApp extends StatefulWidget {
     this.desktopAttentionIndicator,
     this.turnContextStore,
     this.observability,
+    this.conversationSliceEnabled,
   });
 
   final Future<String?> Function()? directoryPicker;
@@ -116,6 +119,11 @@ class MainApp extends StatefulWidget {
 
   /// app 级可观测性组合；默认关闭采集，探针退化为 no-op。
   final ZetaObservability? observability;
+
+  /// Phase 2 切片的 feature flag（按 workspace entry 生效）。
+  ///
+  /// null = 全应用走旧 ViewModel 直连路径。测试与灰度用它单独打开某个会话。
+  final bool Function(AgentThreadWorkspaceKey key)? conversationSliceEnabled;
 
   /// 生产启动阶段解析并初始化的 Zeta 自有数据路径。
   ///
@@ -194,6 +202,10 @@ class MainAppState extends State<MainApp>
   }
 
   /// 当前生效的脱敏指标端口；未注入 [MainApp.observability] 时为 no-op。
+  /// Phase 2 切片的 store 注册表；`IdeHome` 建好 controller 后填入解析函数。
+  final AgentConversationSliceStoreRegistry _sliceStoreRegistry =
+      AgentConversationSliceStoreRegistry();
+
   ZetaMetricsPort get _metrics =>
       widget.observability?.metrics ?? noopZetaMetricsPort;
 
@@ -456,7 +468,13 @@ class MainAppState extends State<MainApp>
     // "No ProviderScope found"，而不是编译期错误。
     return ProviderScope(
       observers: widget.observability?.providerObservers,
-      overrides: [zetaMetricsPortProvider.overrideWithValue(_metrics)],
+      overrides: [
+        zetaMetricsPortProvider.overrideWithValue(_metrics),
+        // 注册表在这里就位，解析函数等 IdeHome 建好 workspace controller 再填。
+        agentConversationSliceStoreResolverProvider.overrideWithValue(
+          _sliceStoreRegistry.resolve,
+        ),
+      ],
       child: _buildApp(context),
     );
   }
@@ -549,6 +567,9 @@ class MainAppState extends State<MainApp>
                         turnContextStore: _turnContextStore,
                         agentUiTextCatalog: _agentUiTextCatalog,
                         metrics: _metrics,
+                        sliceStoreRegistry: _sliceStoreRegistry,
+                        conversationSliceEnabled:
+                            widget.conversationSliceEnabled,
                         desktopAttentionTextCatalog:
                             _desktopAttentionTextCatalog,
                         // 回调存储用于测试/嵌入宿主；未显式注入统计仓储时不读取本机 CLI 历史。

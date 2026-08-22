@@ -803,340 +803,355 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('records the current Agent event storm rebuild baseline', (
-    tester,
-  ) async {
-    final fixture = AgentEventStormFixture();
-    final directory = Directory.systemTemp.createTempSync(
-      'zeta_agent_storm_baseline_',
-    );
-    addTearDown(() {
-      if (directory.existsSync()) {
-        directory.deleteSync(recursive: true);
-      }
-    });
-    final provider = FakeAgentProvider(
-      completeTurns: false,
-      // warmup 发送不能往 timeline 注入正文，否则污染 storm 字符基线。
-      responseText: '',
-      threadPages: <AgentThreadPage>[
-        AgentThreadPage(
-          threads: <AgentThreadSummary>[
-            agentThread(
-              id: fixture.sessionId,
-              projectPath: directory.path,
-              title: 'Storm baseline thread',
-            ),
-          ],
-          nextCursor: null,
-        ),
-      ],
-      threadHistories: <String, AgentThreadHistorySnapshot>{
-        fixture.sessionId: AgentThreadHistorySnapshot(
-          threadId: fixture.sessionId,
-          turns: const <AgentHistoryTurn>[],
-        ),
-      },
-    );
-    await _pumpIde(
-      tester,
-      directoryPicker: () async => directory.path,
-      agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-      agentProviderConfigStore: MemoryAgentProviderConfigStore(),
-    );
-
-    await openProjectFromMenu(tester);
-    await tester.runAsync(waitForIo);
-    final threadRow = find.byKey(
-      ValueKey<String>('project-thread-${directory.path}-${fixture.sessionId}'),
-    );
-    await pumpUntilCondition(
-      tester,
-      () => threadRow.evaluate().isNotEmpty,
-      failureMessage: 'Storm baseline thread did not become ready',
-    );
-    await tester.tap(threadRow);
-    await pumpUntilCondition(
-      tester,
-      () =>
-          find.byType(AgentPane).evaluate().isNotEmpty &&
-          find
-              .byKey(const ValueKey('agent-message-list'))
-              .evaluate()
-              .isNotEmpty,
-      failureMessage: 'Storm baseline AgentPane did not become ready',
-    );
-
-    final viewModel = tester
-        .widget<AgentPane>(find.byType(AgentPane))
-        .viewModel;
-    // Binding 架构：打开历史 thread 不挂 live Pipeline；先发一条消息附着 runtime。
-    await _attachLiveEventPipelineForStorm(
-      tester,
-      provider: provider,
-      viewModel: viewModel,
-      sessionId: fixture.sessionId,
-    );
-    final beforeBuffer = viewModel.eventCoalescingBufferDiagnostics;
-    final beforeScheduler = viewModel.eventDispatcherDiagnostics;
-    final beforeUi = viewModel.uiStateDiagnostics;
-    final beforeUiScheduler = viewModel.uiUpdateSchedulerDiagnostics;
-    expect(beforeBuffer, isNotNull);
-    expect(beforeScheduler, isNotNull);
-
-    var shellSnapshotNotifyCount = 0;
-    void handleShellSnapshotChanged() {
-      shellSnapshotNotifyCount += 1;
-    }
-
-    viewModel.threadSnapshotListenable.addListener(handleShellSnapshotChanged);
-    addTearDown(
-      () => viewModel.threadSnapshotListenable.removeListener(
-        handleShellSnapshotChanged,
-      ),
-    );
-
-    final buildCounter = TestWidgetBuildCounter()..start();
-    addTearDown(buildCounter.dispose);
-    for (final event in fixture.events) {
-      provider.emit(event);
-    }
-
-    var drained = false;
-    for (var pumpCount = 0; pumpCount < 50; pumpCount += 1) {
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 16));
-      final buffer = viewModel.eventCoalescingBufferDiagnostics;
-      final scheduler = viewModel.eventDispatcherDiagnostics;
-      if (buffer != null &&
-          buffer.receivedEvents - beforeBuffer!.receivedEvents ==
-              fixture.expectedInputEventCount &&
-          scheduler?.currentQueueDepth == 0 &&
-          !viewModel.isTurnRunning) {
-        drained = true;
-        break;
-      }
-    }
-    expect(drained, isTrue, reason: 'Agent event storm did not drain');
-    await tester.pump(const Duration(milliseconds: 32));
-    await tester.pump();
-
-    final afterBuffer = viewModel.eventCoalescingBufferDiagnostics!;
-    final afterScheduler = viewModel.eventDispatcherDiagnostics!;
-    final afterUi = viewModel.uiStateDiagnostics;
-    final afterUiScheduler = viewModel.uiUpdateSchedulerDiagnostics;
-    final buildCounts = buildCounter.snapshot();
-    buildCounter.dispose();
-
-    final messageCharacters = viewModel.timelineEntries
-        .whereType<AgentMessageTimelineEntry>()
-        .where((entry) => entry.message.role == AgentMessageRole.agent)
-        .fold<int>(0, (sum, entry) => sum + entry.message.text.length);
-    final reasoningCharacters = viewModel.timelineEntries
-        .whereType<AgentToolTimelineEntry>()
-        .where((entry) => entry.toolCall.kind == AgentToolKind.think)
-        .fold<int>(
-          0,
-          (sum, entry) => sum + (entry.toolCall.content?.length ?? 0),
-        );
-
-    expect(messageCharacters, fixture.expectedMessageCharacters);
-    expect(reasoningCharacters, fixture.expectedReasoningCharacters);
-    expect(viewModel.permissionRequests, isEmpty);
-    expect(viewModel.isTurnRunning, isFalse);
-    expect(
-      viewModel.visibleHistoryTurns.map((turn) => turn.id),
-      contains(fixture.turnId),
-    );
-    expect(
-      viewModel.timelineEntries.whereType<AgentMessageTimelineEntry>().map(
-        (entry) => entry.message.text,
-      ),
-      contains(AgentEventStormFixture.errorMessage),
-    );
-    expect(shellSnapshotNotifyCount, 2);
-    expect(afterUiScheduler.hasPendingRequest, isFalse);
-    expect(afterUiScheduler.hasScheduledFrame, isFalse);
-    expect(
-      afterUiScheduler.publishCount - beforeUiScheduler.publishCount,
-      afterUi.publishCount - beforeUi.publishCount,
-    );
-    expect(
-      afterUiScheduler.publishedEffects - beforeUiScheduler.publishedEffects,
-      greaterThan(0),
-    );
-
-    // 阶段 0 基线：整场风暴只允许常驻 Shell/Pane 骨架各构建一次，
-    // 流式内容重建收敛在局部时间线里（见同文件后两个 phase1 测试）。
-    for (final target in AgentBuildTarget.all) {
-      expect(
-        buildCounts[target],
-        lessThanOrEqualTo(kStormShellRebuildBudget),
-        reason: '$target 在一场事件风暴中超出重建预算',
-      );
-    }
-    expect(
-      afterUi.publishCount - beforeUi.publishCount,
-      lessThanOrEqualTo(kStormUiPublishBudget),
-      reason: 'UI region 发布次数超出阶段 0 预算',
-    );
-    expect(
-      afterScheduler.maxQueueDepth,
-      lessThanOrEqualTo(kStormDispatcherQueueBudget),
-      reason: '有界 dispatcher 队列水位超出阶段 0 预算',
-    );
-    expect(
-      afterBuffer.maxPendingKeys,
-      lessThanOrEqualTo(kStormPendingKeyBudget),
-      reason: 'coalescing buffer pending key 水位超出阶段 0 预算',
-    );
-
-    debugPrint(
-      'agent-event-widget-baseline '
-      'fixture=${fixture.expectedInputEventCount} '
-      'buffer={received:${afterBuffer.receivedEvents - beforeBuffer!.receivedEvents},'
-      'coalesced:${afterBuffer.coalescedEvents - beforeBuffer.coalescedEvents},'
-      'barrier:${afterBuffer.barrierEvents - beforeBuffer.barrierEvents},'
-      'direct:${afterBuffer.directPassThroughEvents - beforeBuffer.directPassThroughEvents},'
-      'backpressure:${afterBuffer.backpressureFlushes - beforeBuffer.backpressureFlushes},'
-      'maxPending:${afterBuffer.maxPendingKeys}} '
-      'scheduler={delivered:${afterScheduler.deliveredEvents - beforeScheduler!.deliveredEvents},'
-      'batches:${afterScheduler.batchCount - beforeScheduler.batchCount},'
-      'yields:${afterScheduler.yieldCount - beforeScheduler.yieldCount},'
-      'maxQueue:${afterScheduler.maxQueueDepth}} '
-      'uiState={published:${afterUi.publishCount - beforeUi.publishCount}} '
-      'uiFrame={scheduledFrames:${afterUiScheduler.scheduledFrames - beforeUiScheduler.scheduledFrames},'
-      'framePublish:${afterUiScheduler.framePublishes - beforeUiScheduler.framePublishes},'
-      'immediatePublish:${afterUiScheduler.immediatePublishes - beforeUiScheduler.immediatePublishes},'
-      'invalidated:${afterUiScheduler.invalidatedFrameCallbacks - beforeUiScheduler.invalidatedFrameCallbacks},'
-      'effects:${afterUiScheduler.publishedEffects - beforeUiScheduler.publishedEffects}} '
-      'shellSnapshotNotify=$shellSnapshotNotifyCount '
-      'builds=$buildCounts',
-    );
-  });
-
-  testWidgets(
-    'pure message deltas rebuild live timeline without notifying the Shell',
-    (tester) async {
+  // 整场事件风暴的聚合预算同样两条路径各测一次。
+  for (final sliceEnabled in const <bool>[false, true]) {
+    testWidgets('records the current Agent event storm rebuild baseline '
+        '(slice=$sliceEnabled)', (tester) async {
       final fixture = AgentEventStormFixture();
-      final prepared = await _prepareEventStormAgentPane(
-        tester,
-        fixture: fixture,
-        directoryPrefix: 'zeta_message_delta_phase1_',
+      final directory = Directory.systemTemp.createTempSync(
+        'zeta_agent_storm_baseline_',
       );
-      final provider = prepared.provider;
-      final viewModel = prepared.viewModel;
+      addTearDown(() {
+        if (directory.existsSync()) {
+          directory.deleteSync(recursive: true);
+        }
+      });
+      final provider = FakeAgentProvider(
+        completeTurns: false,
+        // warmup 发送不能往 timeline 注入正文，否则污染 storm 字符基线。
+        responseText: '',
+        threadPages: <AgentThreadPage>[
+          AgentThreadPage(
+            threads: <AgentThreadSummary>[
+              agentThread(
+                id: fixture.sessionId,
+                projectPath: directory.path,
+                title: 'Storm baseline thread',
+              ),
+            ],
+            nextCursor: null,
+          ),
+        ],
+        threadHistories: <String, AgentThreadHistorySnapshot>{
+          fixture.sessionId: AgentThreadHistorySnapshot(
+            threadId: fixture.sessionId,
+            turns: const <AgentHistoryTurn>[],
+          ),
+        },
+      );
+      await _pumpIde(
+        tester,
+        directoryPicker: () async => directory.path,
+        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        enableConversationSlice: sliceEnabled,
+      );
 
-      final beforeStart = viewModel.eventCoalescingBufferDiagnostics!;
-      provider.emit(fixture.events.whereType<AgentTurnStartedEvent>().single);
-      await _drainAgentEventSubset(
-        tester,
-        viewModel: viewModel,
-        beforeReceivedEvents: beforeStart.receivedEvents,
-        expectedInputEventCount: 1,
+      await openProjectFromMenu(tester);
+      await tester.runAsync(waitForIo);
+      final threadRow = find.byKey(
+        ValueKey<String>(
+          'project-thread-${directory.path}-${fixture.sessionId}',
+        ),
       );
-      expect(viewModel.isTurnRunning, isTrue);
-      await tester.pump(const Duration(milliseconds: 32));
-      await tester.pump();
+      await pumpUntilCondition(
+        tester,
+        () => threadRow.evaluate().isNotEmpty,
+        failureMessage: 'Storm baseline thread did not become ready',
+      );
+      await tester.tap(threadRow);
+      await pumpUntilCondition(
+        tester,
+        () =>
+            find.byType(AgentPane).evaluate().isNotEmpty &&
+            find
+                .byKey(const ValueKey('agent-message-list'))
+                .evaluate()
+                .isNotEmpty,
+        failureMessage: 'Storm baseline AgentPane did not become ready',
+      );
 
-      final messageEvents = fixture.events
-          .whereType<AgentMessageDeltaEvent>()
-          .toList(growable: false);
-      expect(
-        messageEvents,
-        hasLength(AgentEventStormFixture.messageDeltaCount),
-      );
-      final beforeWarmup = viewModel.eventCoalescingBufferDiagnostics!;
-      provider.emit(messageEvents.first);
-      await _drainAgentEventSubset(
+      final viewModel = tester
+          .widget<AgentPane>(find.byType(AgentPane))
+          .viewModel;
+      // Binding 架构：打开历史 thread 不挂 live Pipeline；先发一条消息附着 runtime。
+      await _attachLiveEventPipelineForStorm(
         tester,
+        provider: provider,
         viewModel: viewModel,
-        beforeReceivedEvents: beforeWarmup.receivedEvents,
-        expectedInputEventCount: 1,
+        sessionId: fixture.sessionId,
       );
-      await tester.pump(const Duration(milliseconds: 32));
-      await tester.pump();
+      final beforeBuffer = viewModel.eventCoalescingBufferDiagnostics;
+      final beforeScheduler = viewModel.eventDispatcherDiagnostics;
+      final beforeUi = viewModel.uiStateDiagnostics;
+      final beforeUiScheduler = viewModel.uiUpdateSchedulerDiagnostics;
+      expect(beforeBuffer, isNotNull);
+      expect(beforeScheduler, isNotNull);
 
       var shellSnapshotNotifyCount = 0;
-      var headerStateNotifyCount = 0;
-      var composerStateNotifyCount = 0;
       void handleShellSnapshotChanged() {
         shellSnapshotNotifyCount += 1;
-      }
-
-      void handleHeaderStateChanged() {
-        headerStateNotifyCount += 1;
-      }
-
-      void handleComposerStateChanged() {
-        composerStateNotifyCount += 1;
       }
 
       viewModel.threadSnapshotListenable.addListener(
         handleShellSnapshotChanged,
       );
-      viewModel.headerStateListenable.addListener(handleHeaderStateChanged);
-      viewModel.composerStateListenable.addListener(handleComposerStateChanged);
-      addTearDown(() {
-        viewModel.threadSnapshotListenable.removeListener(
+      addTearDown(
+        () => viewModel.threadSnapshotListenable.removeListener(
           handleShellSnapshotChanged,
-        );
-        viewModel.headerStateListenable.removeListener(
-          handleHeaderStateChanged,
-        );
-        viewModel.composerStateListenable.removeListener(
-          handleComposerStateChanged,
-        );
-      });
+        ),
+      );
 
-      final beforeBuffer = viewModel.eventCoalescingBufferDiagnostics!;
       final buildCounter = TestWidgetBuildCounter()..start();
-      final localTimelineBuildCounter = _LocalTimelineBuildCounter()..start();
       addTearDown(buildCounter.dispose);
-      addTearDown(localTimelineBuildCounter.dispose);
-      for (final event in messageEvents.skip(1)) {
+      for (final event in fixture.events) {
         provider.emit(event);
       }
 
-      await _drainAgentEventSubset(
-        tester,
-        viewModel: viewModel,
-        beforeReceivedEvents: beforeBuffer.receivedEvents,
-        expectedInputEventCount: AgentEventStormFixture.messageDeltaCount - 1,
-      );
+      var drained = false;
+      for (var pumpCount = 0; pumpCount < 50; pumpCount += 1) {
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 16));
+        final buffer = viewModel.eventCoalescingBufferDiagnostics;
+        final scheduler = viewModel.eventDispatcherDiagnostics;
+        if (buffer != null &&
+            buffer.receivedEvents - beforeBuffer!.receivedEvents ==
+                fixture.expectedInputEventCount &&
+            scheduler?.currentQueueDepth == 0 &&
+            !viewModel.isTurnRunning) {
+          drained = true;
+          break;
+        }
+      }
+      expect(drained, isTrue, reason: 'Agent event storm did not drain');
       await tester.pump(const Duration(milliseconds: 32));
       await tester.pump();
 
+      final afterBuffer = viewModel.eventCoalescingBufferDiagnostics!;
+      final afterScheduler = viewModel.eventDispatcherDiagnostics!;
+      final afterUi = viewModel.uiStateDiagnostics;
+      final afterUiScheduler = viewModel.uiUpdateSchedulerDiagnostics;
       final buildCounts = buildCounter.snapshot();
-      final localTimelineBuildCount = localTimelineBuildCounter.count;
-      localTimelineBuildCounter.dispose();
       buildCounter.dispose();
+
       final messageCharacters = viewModel.timelineEntries
           .whereType<AgentMessageTimelineEntry>()
           .where((entry) => entry.message.role == AgentMessageRole.agent)
           .fold<int>(0, (sum, entry) => sum + entry.message.text.length);
+      final reasoningCharacters = viewModel.timelineEntries
+          .whereType<AgentToolTimelineEntry>()
+          .where((entry) => entry.toolCall.kind == AgentToolKind.think)
+          .fold<int>(
+            0,
+            (sum, entry) => sum + (entry.toolCall.content?.length ?? 0),
+          );
 
       expect(messageCharacters, fixture.expectedMessageCharacters);
-      expect(shellSnapshotNotifyCount, 0);
-      expect(headerStateNotifyCount, 0);
-      expect(composerStateNotifyCount, 0);
-      expect(buildCounts[AgentBuildTarget.ideHome], 0);
-      expect(buildCounts[AgentBuildTarget.agentPane], 0);
-      expect(buildCounts[AgentBuildTarget.header], 0);
-      expect(buildCounts[AgentBuildTarget.composer], 0);
-      expect(buildCounts[AgentBuildTarget.liveTimeline], 0);
-      expect(localTimelineBuildCount, greaterThan(0));
+      expect(reasoningCharacters, fixture.expectedReasoningCharacters);
+      expect(viewModel.permissionRequests, isEmpty);
+      expect(viewModel.isTurnRunning, isFalse);
+      expect(
+        viewModel.visibleHistoryTurns.map((turn) => turn.id),
+        contains(fixture.turnId),
+      );
+      expect(
+        viewModel.timelineEntries.whereType<AgentMessageTimelineEntry>().map(
+          (entry) => entry.message.text,
+        ),
+        contains(AgentEventStormFixture.errorMessage),
+      );
+      expect(shellSnapshotNotifyCount, 2);
+      expect(afterUiScheduler.hasPendingRequest, isFalse);
+      expect(afterUiScheduler.hasScheduledFrame, isFalse);
+      expect(
+        afterUiScheduler.publishCount - beforeUiScheduler.publishCount,
+        afterUi.publishCount - beforeUi.publishCount,
+      );
+      expect(
+        afterUiScheduler.publishedEffects - beforeUiScheduler.publishedEffects,
+        greaterThan(0),
+      );
+
+      // 阶段 0 基线：整场风暴只允许常驻 Shell/Pane 骨架各构建一次，
+      // 流式内容重建收敛在局部时间线里（见同文件后两个 phase1 测试）。
+      for (final target in AgentBuildTarget.all) {
+        expect(
+          buildCounts[target],
+          lessThanOrEqualTo(kStormShellRebuildBudget),
+          reason: '$target 在一场事件风暴中超出重建预算',
+        );
+      }
+      expect(
+        afterUi.publishCount - beforeUi.publishCount,
+        lessThanOrEqualTo(kStormUiPublishBudget),
+        reason: 'UI region 发布次数超出阶段 0 预算',
+      );
+      expect(
+        afterScheduler.maxQueueDepth,
+        lessThanOrEqualTo(kStormDispatcherQueueBudget),
+        reason: '有界 dispatcher 队列水位超出阶段 0 预算',
+      );
+      expect(
+        afterBuffer.maxPendingKeys,
+        lessThanOrEqualTo(kStormPendingKeyBudget),
+        reason: 'coalescing buffer pending key 水位超出阶段 0 预算',
+      );
 
       debugPrint(
-        'agent-event-phase1-message '
+        'agent-event-widget-baseline '
+        'fixture=${fixture.expectedInputEventCount} '
+        'buffer={received:${afterBuffer.receivedEvents - beforeBuffer!.receivedEvents},'
+        'coalesced:${afterBuffer.coalescedEvents - beforeBuffer.coalescedEvents},'
+        'barrier:${afterBuffer.barrierEvents - beforeBuffer.barrierEvents},'
+        'direct:${afterBuffer.directPassThroughEvents - beforeBuffer.directPassThroughEvents},'
+        'backpressure:${afterBuffer.backpressureFlushes - beforeBuffer.backpressureFlushes},'
+        'maxPending:${afterBuffer.maxPendingKeys}} '
+        'scheduler={delivered:${afterScheduler.deliveredEvents - beforeScheduler!.deliveredEvents},'
+        'batches:${afterScheduler.batchCount - beforeScheduler.batchCount},'
+        'yields:${afterScheduler.yieldCount - beforeScheduler.yieldCount},'
+        'maxQueue:${afterScheduler.maxQueueDepth}} '
+        'uiState={published:${afterUi.publishCount - beforeUi.publishCount}} '
+        'uiFrame={scheduledFrames:${afterUiScheduler.scheduledFrames - beforeUiScheduler.scheduledFrames},'
+        'framePublish:${afterUiScheduler.framePublishes - beforeUiScheduler.framePublishes},'
+        'immediatePublish:${afterUiScheduler.immediatePublishes - beforeUiScheduler.immediatePublishes},'
+        'invalidated:${afterUiScheduler.invalidatedFrameCallbacks - beforeUiScheduler.invalidatedFrameCallbacks},'
+        'effects:${afterUiScheduler.publishedEffects - beforeUiScheduler.publishedEffects}} '
         'shellSnapshotNotify=$shellSnapshotNotifyCount '
-        'headerStateNotify=$headerStateNotifyCount '
-        'composerStateNotify=$composerStateNotifyCount '
-        'localTimelineBuild=$localTimelineBuildCount '
         'builds=$buildCounts',
       );
-    },
-  );
+    });
+  }
+
+  // 同一组帧预算断言在两条路径各跑一次：切片开启不得让 Shell / Header /
+  // Composer 多重建哪怕一次（Phase 0 §2.2 的"纯 delta 场景重建为 0"）。
+  for (final sliceEnabled in const <bool>[false, true]) {
+    testWidgets(
+      'pure message deltas rebuild live timeline without notifying the Shell '
+      '(slice=$sliceEnabled)',
+      (tester) async {
+        final fixture = AgentEventStormFixture();
+        final prepared = await _prepareEventStormAgentPane(
+          tester,
+          fixture: fixture,
+          directoryPrefix: 'zeta_message_delta_phase1_',
+          enableConversationSlice: sliceEnabled,
+        );
+        final provider = prepared.provider;
+        final viewModel = prepared.viewModel;
+
+        final beforeStart = viewModel.eventCoalescingBufferDiagnostics!;
+        provider.emit(fixture.events.whereType<AgentTurnStartedEvent>().single);
+        await _drainAgentEventSubset(
+          tester,
+          viewModel: viewModel,
+          beforeReceivedEvents: beforeStart.receivedEvents,
+          expectedInputEventCount: 1,
+        );
+        expect(viewModel.isTurnRunning, isTrue);
+        await tester.pump(const Duration(milliseconds: 32));
+        await tester.pump();
+
+        final messageEvents = fixture.events
+            .whereType<AgentMessageDeltaEvent>()
+            .toList(growable: false);
+        expect(
+          messageEvents,
+          hasLength(AgentEventStormFixture.messageDeltaCount),
+        );
+        final beforeWarmup = viewModel.eventCoalescingBufferDiagnostics!;
+        provider.emit(messageEvents.first);
+        await _drainAgentEventSubset(
+          tester,
+          viewModel: viewModel,
+          beforeReceivedEvents: beforeWarmup.receivedEvents,
+          expectedInputEventCount: 1,
+        );
+        await tester.pump(const Duration(milliseconds: 32));
+        await tester.pump();
+
+        var shellSnapshotNotifyCount = 0;
+        var headerStateNotifyCount = 0;
+        var composerStateNotifyCount = 0;
+        void handleShellSnapshotChanged() {
+          shellSnapshotNotifyCount += 1;
+        }
+
+        void handleHeaderStateChanged() {
+          headerStateNotifyCount += 1;
+        }
+
+        void handleComposerStateChanged() {
+          composerStateNotifyCount += 1;
+        }
+
+        viewModel.threadSnapshotListenable.addListener(
+          handleShellSnapshotChanged,
+        );
+        viewModel.headerStateListenable.addListener(handleHeaderStateChanged);
+        viewModel.composerStateListenable.addListener(
+          handleComposerStateChanged,
+        );
+        addTearDown(() {
+          viewModel.threadSnapshotListenable.removeListener(
+            handleShellSnapshotChanged,
+          );
+          viewModel.headerStateListenable.removeListener(
+            handleHeaderStateChanged,
+          );
+          viewModel.composerStateListenable.removeListener(
+            handleComposerStateChanged,
+          );
+        });
+
+        final beforeBuffer = viewModel.eventCoalescingBufferDiagnostics!;
+        final buildCounter = TestWidgetBuildCounter()..start();
+        final localTimelineBuildCounter = _LocalTimelineBuildCounter()..start();
+        addTearDown(buildCounter.dispose);
+        addTearDown(localTimelineBuildCounter.dispose);
+        for (final event in messageEvents.skip(1)) {
+          provider.emit(event);
+        }
+
+        await _drainAgentEventSubset(
+          tester,
+          viewModel: viewModel,
+          beforeReceivedEvents: beforeBuffer.receivedEvents,
+          expectedInputEventCount: AgentEventStormFixture.messageDeltaCount - 1,
+        );
+        await tester.pump(const Duration(milliseconds: 32));
+        await tester.pump();
+
+        final buildCounts = buildCounter.snapshot();
+        final localTimelineBuildCount = localTimelineBuildCounter.count;
+        localTimelineBuildCounter.dispose();
+        buildCounter.dispose();
+        final messageCharacters = viewModel.timelineEntries
+            .whereType<AgentMessageTimelineEntry>()
+            .where((entry) => entry.message.role == AgentMessageRole.agent)
+            .fold<int>(0, (sum, entry) => sum + entry.message.text.length);
+
+        expect(messageCharacters, fixture.expectedMessageCharacters);
+        expect(shellSnapshotNotifyCount, 0);
+        expect(headerStateNotifyCount, 0);
+        expect(composerStateNotifyCount, 0);
+        expect(buildCounts[AgentBuildTarget.ideHome], 0);
+        expect(buildCounts[AgentBuildTarget.agentPane], 0);
+        expect(buildCounts[AgentBuildTarget.header], 0);
+        expect(buildCounts[AgentBuildTarget.composer], 0);
+        expect(buildCounts[AgentBuildTarget.liveTimeline], 0);
+        expect(localTimelineBuildCount, greaterThan(0));
+
+        debugPrint(
+          'agent-event-phase1-message '
+          'shellSnapshotNotify=$shellSnapshotNotifyCount '
+          'headerStateNotify=$headerStateNotifyCount '
+          'composerStateNotify=$composerStateNotifyCount '
+          'localTimelineBuild=$localTimelineBuildCount '
+          'builds=$buildCounts',
+        );
+      },
+    );
+  }
 
   testWidgets(
     'reasoning and tool progress rebuild live timeline without notifying Shell',
@@ -1909,6 +1924,7 @@ Future<void> _pumpIde(
   MemorySessionStore? sessionStore,
   Future<List<ManagedAgent>> Function()? homeProviderDetectionLoader,
   bool flushInitialUsageRefresh = true,
+  bool enableConversationSlice = false,
 }) async {
   tester.view
     ..physicalSize = size
@@ -1934,6 +1950,8 @@ Future<void> _pumpIde(
       homeProviderDetectionLoader: homeProviderDetectionLoader,
       agentUsagePanelRepository:
           agentUsagePanelRepository ?? const _EmptyAgentUsageRepository(),
+      // Phase 2 切片按 entry 生效；这里要么全开要么全关，用于两条路径的对照。
+      conversationSliceEnabled: enableConversationSlice ? (_) => true : null,
     ),
   );
   if (flushInitialUsageRefresh) {
@@ -1959,6 +1977,7 @@ _prepareEventStormAgentPane(
   WidgetTester tester, {
   required AgentEventStormFixture fixture,
   required String directoryPrefix,
+  bool enableConversationSlice = false,
 }) async {
   final directory = Directory.systemTemp.createTempSync(directoryPrefix);
   addTearDown(() {
@@ -1994,6 +2013,7 @@ _prepareEventStormAgentPane(
     directoryPicker: () async => directory.path,
     agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
     agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+    enableConversationSlice: enableConversationSlice,
   );
 
   await openProjectFromMenu(tester);

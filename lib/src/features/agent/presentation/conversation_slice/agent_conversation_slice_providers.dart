@@ -5,10 +5,10 @@
 /// [AgentConversationBindingKey] 分键的 family——隔离靠 key，不靠嵌套
 /// `ProviderScope`。
 ///
-/// 为什么不用「子树 override」：不带 `dependencies` 的 provider 会在**根容器**
-/// 解析，嵌套 scope 里覆盖依赖对它无效。同一个应用容器里开两个 workspace entry
-/// 时，第二个会读到第一个的会话状态。family 让隔离是结构性的，不依赖谁记得声明
-/// `dependencies`。
+/// 为什么不用「子树 override」：实测（flutter_riverpod 3.4.2）嵌套 `ProviderScope`
+/// 覆盖依赖**不会**让已有 family 重新解析——补 `dependencies:` 也不行。同一个应用
+/// 容器里开两个 workspace entry 时，第二个会读到第一个的会话状态。因此隔离靠 key，
+/// 不靠 scope；store 的来源是根级注入的 resolver。
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -27,6 +27,10 @@ typedef AgentConversationSliceStoreResolver =
 /// 默认解析器：任何 key 都没有 store。
 ///
 /// 也就是**默认整个应用都不启用切片**，由组合层显式为某个 entry 打开。
+///
+/// 组合根用 [AgentConversationSliceStoreRegistry] 覆盖它——注册表由 `MainApp`
+/// 创建、向下注入，`IdeHome` 在建好 workspace controller 后填入解析函数。
+/// 它是**容器作用域的注入点**，不是全局 service locator（§12.10）。
 final agentConversationSliceStoreResolverProvider =
     Provider<AgentConversationSliceStoreResolver>(
       (ref) =>
@@ -163,3 +167,20 @@ final agentConversationHistoryProvider =
       name: 'agentConversationHistory',
       isAutoDispose: true,
     );
+
+/// 组合根填写的 store 注册表。
+///
+/// 存在的理由是时序：根 `ProviderScope` 在 `MainApp` 建立，而 workspace
+/// controller 要等 `IdeHome` 才存在。注册表让 override 在建容器时就能给出一个
+/// **稳定的函数**，真正的解析器随后填入，不需要重建容器，也不需要嵌套 scope
+/// （实测嵌套 scope 对已有 family 无效）。
+final class AgentConversationSliceStoreRegistry {
+  AgentConversationSliceStoreResolver? _resolver;
+
+  /// 由组合根在 controller 就绪后填入。
+  set resolver(AgentConversationSliceStoreResolver? value) => _resolver = value;
+
+  /// 稳定的解析入口：未填入时对所有 key 返回 null（= 切片关闭）。
+  AgentConversationSliceStore? resolve(AgentConversationBindingKey key) =>
+      _resolver?.call(key);
+}

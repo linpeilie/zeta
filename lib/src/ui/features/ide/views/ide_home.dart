@@ -42,6 +42,8 @@ import 'package:zeta/src/ui/features/ide/views/global_home_page.dart';
 import 'package:zeta/src/ui/features/ide/views/project_home_page.dart';
 import 'package:zeta/src/ui/features/ide/views/project_agent_sidebar.dart';
 import 'package:zeta/src/ui/features/ide/views/project_list_pane.dart';
+import 'package:zeta/src/features/agent/application/agent_thread_workspace_controller.dart';
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
 
 typedef AgentProviderAvailabilityLoader =
     Future<List<AgentProviderConfig>> Function();
@@ -76,6 +78,8 @@ class IdeHome extends StatefulWidget {
     this.desktopAttentionTextCatalog =
         const FallbackDesktopAttentionTextCatalog(),
     this.metrics = noopZetaMetricsPort,
+    this.conversationSliceEnabled,
+    this.sliceStoreRegistry,
     super.key,
   });
 
@@ -102,6 +106,12 @@ class IdeHome extends StatefulWidget {
 
   /// app 组合层注入的脱敏指标端口；默认 no-op。
   final ZetaMetricsPort metrics;
+
+  /// Phase 2 切片的 feature flag（按 workspace entry 生效）。
+  final bool Function(AgentThreadWorkspaceKey key)? conversationSliceEnabled;
+
+  /// 组合根提供的切片 store 注册表；controller 就绪后由本 widget 填入解析函数。
+  final AgentConversationSliceStoreRegistry? sliceStoreRegistry;
   final AgentUiTextCatalog agentUiTextCatalog;
   final DesktopAttentionTextCatalog desktopAttentionTextCatalog;
 
@@ -193,7 +203,11 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
       turnContextStore: widget.turnContextStore,
       agentUiTextCatalog: widget.agentUiTextCatalog,
       metrics: widget.metrics,
+      conversationSliceEnabled: widget.conversationSliceEnabled,
     )..addListener(_handleShellChanged);
+    // 切片 store 的解析器要等 workspace controller 建好才能给出。
+    widget.sliceStoreRegistry?.resolver =
+        _shellController.agentWorkspaceController.sliceStoreForBinding;
     if (widget.enableNativeWindowFrame) {
       windowManager.addListener(this);
     }
