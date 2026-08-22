@@ -22,9 +22,10 @@ Zeta 是 Flutter Desktop 的本地 Agent IDE 壳层（macOS / Windows / Linux）
 按顺序执行，缺一不可：
 
 ```sh
-dart format .      # 编辑过 Dart 文件就必跑
-flutter analyze    # 结束改动前必跑
-flutter test       # 行为有变化时必跑
+dart format .            # 编辑过 Dart 文件就必跑
+flutter analyze          # 结束改动前必跑（只覆盖根 Package）
+flutter test             # 行为有变化时必跑
+bash tool/test_packages.sh   # 动过 packages/ 就必跑：逐个 dart analyze + dart test
 ```
 
 `dart_test.yaml` 固定 `concurrency: 2`——单个 worker 跑大 Widget 测试会加载完整 IDE Shell，放开并发会触发内存峰值。**不要为了跑得快改掉它。**
@@ -140,6 +141,7 @@ main → app → presentation/application → domain
 - Flutter `Locale`、`BuildContext` 和 generated `AppLocalizations` 只允许出现在 `app` 组合层、presentation 和 `ui/`。application / data / domain 若必须产出即时文案，只依赖该 feature 的纯 Dart 文本目录 port。
 - `lib/main.dart` 只做 Flutter 绑定、窗口启动、全局错误日志和 `runApp`；`lib/src/app` 是唯一装配点。
 - 新代码进 `lib/src/features/<feature>/{domain,application,data,presentation}`，**不要新建顶层宽泛目录**。现有 feature：`agent`、`agent_management`、`desktop_notifications`、`ide_session`、`project_threads`、`settings`、`usage_statistics`、`workspace`。跨 feature 基础设施才进 `lib/src/core`，跨 feature 复用 UI 原语才进 `lib/src/ui/core`。
+- 已物理拆出的内部 Package 在 `packages/`：`zeta_foundation`（纯 Dart 公共契约：Clock / OperationId / Transition / 指标端口）与 `zeta_plugin_kernel`（可信插件微内核）。依赖方向单向：`kernel → foundation`，两者都不依赖 Flutter、Riverpod、`dart:io` 或任何 Provider。**跨 Package 只能 import 对方顶层 barrel**，禁止 `package:<name>/src/...`。新增 Package 要先在[目标架构 §3.2](docs/architecture/target_architecture_riverpod_mvi_plugins_packages.md) 的判据下论证，不按页面或团队机械拆包。
 
 > 正文：[工程规范 §1–2](docs/architecture/engineering_standards.md) · [架构总览「分层」](docs/architecture/overview.md)
 

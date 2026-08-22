@@ -45,10 +45,17 @@ void main() {
 
   test('采集实现只在 app 组合层被构造', () {
     final offenders = <String>[];
-    for (final file in _dartFilesUnder('lib')) {
+    for (final file in <File>[
+      ..._dartFilesUnder('lib'),
+      ..._dartFilesUnder('packages'),
+    ]) {
       final path = _posix(file.path);
-      if (path.startsWith('lib/src/app/observability/') ||
-          path.startsWith('lib/src/core/observability/')) {
+      // 只看生产源码：Package 自己的测试当然可以构造采集实现。
+      final isProductionSource =
+          path.startsWith('lib/') || path.contains('/lib/');
+      if (!isProductionSource ||
+          path.startsWith('lib/src/app/observability/') ||
+          path.startsWith('packages/zeta_foundation/')) {
         continue;
       }
       final source = file.readAsStringSync();
@@ -91,7 +98,7 @@ void main() {
 
   test('指标端口签名不接受 String 指标名', () {
     final portSource = File(
-      'lib/src/core/observability/zeta_metrics_port.dart',
+      'packages/zeta_foundation/lib/src/observability/zeta_metrics_port.dart',
     ).readAsStringSync();
 
     expect(portSource, contains('void record(ZetaMetricSample sample)'));
@@ -100,7 +107,9 @@ void main() {
   });
 
   test('指标枚举与端口不引入日志或序列化依赖', () {
-    for (final file in _dartFilesUnder('lib/src/core/observability')) {
+    for (final file in _dartFilesUnder(
+      'packages/zeta_foundation/lib/src/observability',
+    )) {
       final source = file.readAsStringSync();
       expect(source, isNot(contains('print(')));
       expect(source, isNot(contains('jsonEncode')));

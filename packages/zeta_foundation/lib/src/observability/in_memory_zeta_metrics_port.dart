@@ -1,5 +1,5 @@
-import 'package:zeta/src/core/observability/zeta_metric.dart';
-import 'package:zeta/src/core/observability/zeta_metrics_port.dart';
+import 'package:zeta_foundation/src/observability/zeta_metric.dart';
+import 'package:zeta_foundation/src/observability/zeta_metrics_port.dart';
 
 /// 单个指标序列（指标 + 标签组合）的聚合结果。
 final class ZetaMetricSeriesSnapshot {

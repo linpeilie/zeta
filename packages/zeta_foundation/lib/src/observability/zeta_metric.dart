@@ -20,6 +20,7 @@ enum ZetaMetricKind {
 /// 指标所属区域，对应目标架构文档 §11.1 的最小指标表。
 enum ZetaMetricDomain {
   appStartup,
+  plugin,
   riverpod,
   agentPipeline,
   agentUi,
@@ -34,6 +35,25 @@ enum ZetaMetric {
   // ---- app 启动 ----
   /// bootstrap 阶段耗时。
   appBootstrapDuration(ZetaMetricDomain.appStartup, ZetaMetricKind.duration),
+
+  // ---- 插件微内核 ----
+  /// 插件激活成功次数。
+  pluginActivated(ZetaMetricDomain.plugin, ZetaMetricKind.counter),
+
+  /// 插件激活失败次数（按失败分类打标签，不记异常文本）。
+  pluginActivationFailed(ZetaMetricDomain.plugin, ZetaMetricKind.counter),
+
+  /// 单个插件的激活耗时。
+  pluginActivationDuration(ZetaMetricDomain.plugin, ZetaMetricKind.duration),
+
+  /// 插件关闭次数。
+  pluginClosed(ZetaMetricDomain.plugin, ZetaMetricKind.counter),
+
+  /// 采样时刻处于 active 状态的插件数量。
+  pluginActiveCount(ZetaMetricDomain.plugin, ZetaMetricKind.gauge),
+
+  /// 当前激活代数；每次 activateAll 递增。
+  pluginActivationGeneration(ZetaMetricDomain.plugin, ZetaMetricKind.gauge),
 
   // ---- Riverpod ----
   /// Provider 初始化次数。

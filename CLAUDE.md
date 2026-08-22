@@ -34,10 +34,13 @@ Zeta 是 Flutter Desktop 的本地 Agent IDE 壳层（macOS / Windows / Linux）
 ```sh
 flutter pub get
 dart format .          # 编辑 Dart 文件后必跑
-flutter analyze        # 结束改动前必跑
+flutter analyze        # 结束改动前必跑（只覆盖根 Package）
 flutter test           # 行为变化时必跑；dart_test.yaml 固定并发 2，不要改
+bash tool/test_packages.sh  # 动过 packages/ 就必跑
 flutter run -d macos   # 或 -d windows / -d linux
 ```
+
+仓库是 pub workspace：根 Flutter 应用 + `packages/zeta_foundation`、`packages/zeta_plugin_kernel`。
 
 单个测试文件：`flutter test test/src/features/agent/presentation/agent_conversation_widget_test.dart`
 

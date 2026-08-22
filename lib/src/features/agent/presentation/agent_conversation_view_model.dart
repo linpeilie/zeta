@@ -7,7 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:zeta/src/core/utils/path_utils.dart';
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/core/logging/structured_error_logging.dart';
-import 'package:zeta/src/core/observability/zeta_metrics_port.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_effect.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_binding.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_effect_runner.dart';

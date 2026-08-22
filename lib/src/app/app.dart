@@ -9,10 +9,11 @@ import 'package:window_manager/window_manager.dart';
 import 'package:zeta/src/app/app_constants.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta/src/app/observability/zeta_observability.dart';
+import 'package:zeta/src/app/plugins/zeta_plugin_catalog.dart';
 import 'package:zeta/src/app/localization/zeta_text_catalogs.dart';
 import 'package:zeta/src/app/shell/ide_shell_controller.dart';
 import 'package:zeta/src/app/window_bootstrap.dart';
-import 'package:zeta/src/core/observability/zeta_metrics_port.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta/src/core/storage/zeta_data_paths.dart';
 import 'package:zeta/src/core/utils/system_file_manager.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
@@ -146,7 +147,9 @@ class MainAppState extends State<MainApp>
     with WidgetsBindingObserver, WindowListener {
   late final AppearanceSettingsController _appearanceController;
   late final GeneralSettingsController _generalSettingsController;
-  late final AgentProviderBundleFactory _defaultAgentProviderFactory;
+
+  /// 编译期插件目录；仅在应用自己构造 Provider 工厂时创建。
+  ZetaPluginCatalog? _pluginCatalog;
   late AgentProviderBundleFactory _agentProviderFactory;
   late AgentProviderRuntimeRegistry _agentProviderRuntimeRegistry;
   late final AgentProviderSettingsCodec _agentProviderSettingsCodec;
@@ -310,7 +313,7 @@ class MainAppState extends State<MainApp>
     if (widget.agentProviderFactory == null && !_localeRuntimeReady) {
       final dataPaths = widget.dataPaths;
       final useFilePersistence = _useFilePersistence;
-      _defaultAgentProviderFactory = DefaultAgentProviderFactory(
+      final defaultFactory = DefaultAgentProviderFactory(
         claudeCodeSessionDecisionStoreFactory: useFilePersistence
             ? (sessionId) => FileClaudeCodeSessionDecisionStore(
                 file: _claudeCodeSessionDecisionFile(dataPaths!, sessionId),
@@ -323,7 +326,14 @@ class MainAppState extends State<MainApp>
             : null,
         textCatalog: _agentUiTextCatalog,
       );
-      _agentProviderFactory = _defaultAgentProviderFactory;
+      // 阶段 1：工厂改由编译期插件目录交付，内部分派逻辑一字未动。
+      final catalog = ZetaPluginCatalog.compatibility(
+        bundleFactory: defaultFactory,
+        metrics: _metrics,
+      );
+      catalog.activate();
+      _pluginCatalog = catalog;
+      _agentProviderFactory = catalog.resolveAgentProviderBundleFactory();
     }
     if (widget.agentProviderRuntimeRegistry == null &&
         widget.agentProviderFactory == null &&
@@ -375,6 +385,12 @@ class MainAppState extends State<MainApp>
     }
     if (_ownsAgentProviderRuntimeRegistry) {
       unawaited(_agentProviderRuntimeRegistry.close());
+    }
+    // runtime 进程由 registry 拥有；插件目录只需按激活反序释放插件句柄。
+    final pluginCatalog = _pluginCatalog;
+    if (pluginCatalog != null) {
+      _pluginCatalog = null;
+      unawaited(pluginCatalog.close());
     }
     if (_ownsAppearanceController) {
       _appearanceController.dispose();

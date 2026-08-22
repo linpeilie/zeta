@@ -6,6 +6,12 @@ version: 0.1.0+1
 environment:
   sdk: ^3.12.2
 
+# Pub workspace：根 Flutter 应用 + 内部 Package 共用一份依赖解析与 lock。
+# 目标 Package 图见 docs/architecture/target_architecture_riverpod_mvi_plugins_packages.md §3.1。
+workspace:
+  - packages/zeta_foundation
+  - packages/zeta_plugin_kernel
+
 dependencies:
   crypto: ^3.0.7
   file_selector: ^1.1.0
@@ -30,6 +36,8 @@ dependencies:
   toml: ^0.18.0
   unorm_dart: ^0.3.2
   window_manager: ^0.5.1
+  zeta_foundation: ^0.1.0
+  zeta_plugin_kernel: ^0.1.0
 
 dev_dependencies:
   flutter_test:

@@ -18,7 +18,23 @@ try {
     & dart run tool/report_test_timings.dart $reportPath
   }
 
-  exit $testExitCode
+  # 内部 Package 有各自的 test/ 入口，根 flutter test 不会覆盖。
+  $packagesExitCode = 0
+  Get-ChildItem -Path (Join-Path $repositoryRoot 'packages') -Directory |
+    Where-Object { Test-Path (Join-Path $_.FullName 'test') } |
+    ForEach-Object {
+      Write-Host "==> packages/$($_.Name)"
+      Push-Location $_.FullName
+      try {
+        & dart test
+        if ($LASTEXITCODE -ne 0) { $packagesExitCode = $LASTEXITCODE }
+      } finally {
+        Pop-Location
+      }
+    }
+
+  if ($testExitCode -ne 0) { exit $testExitCode }
+  exit $packagesExitCode
 } finally {
   Pop-Location
 }

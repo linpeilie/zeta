@@ -2,8 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/app/observability/zeta_observability.dart';
 import 'package:zeta/src/app/observability/zeta_provider_observer.dart';
-import 'package:zeta/src/core/observability/in_memory_zeta_metrics_port.dart';
-import 'package:zeta/src/core/observability/zeta_metric.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
 
 /// 观察器不得读取的“敏感”状态；测试用它证明正文不会进入指标流。
 const String _secretBody = 'prompt body /Users/tester/private/plan.md';

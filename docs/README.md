@@ -34,6 +34,7 @@ docs/
 - [AppFlowy 设计迁移决策矩阵](./architecture/appflowy_migration_decision_matrix.md) — 按 Adopt / Adapt / Avoid / Defer 评估外部架构设计及迁移触发条件
 - [Feature-First DDD / Riverpod / MVI / 微内核 / 多 Package 目标架构](./architecture/target_architecture_riverpod_mvi_plugins_packages.md) — 目标边界、状态与插件模型，以及 Phase 0–4 渐进迁移计划
 - [阶段 0：测试与可观测性基线](./architecture/phase0_observability_baseline.md) — 指标端口、脱敏观察器、流式 fixture 与 Package 候选依赖图的基线数值
+- [阶段 1：建立边界但不改变行为](./architecture/phase1_boundaries.md) — pub workspace、`zeta_foundation` / `zeta_plugin_kernel`、插件目录与 MVI 命名规范
 - [Agent 桌面通知与任务栏未读提醒详细设计](./architecture/desktop_agent_notification_design.md)
 
 ## guides — 开发

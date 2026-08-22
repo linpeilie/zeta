@@ -1,4 +1,4 @@
-import 'package:zeta/src/core/observability/zeta_metric.dart';
+import 'package:zeta_foundation/src/observability/zeta_metric.dart';
 
 /// 应用统一的指标出口。
 ///

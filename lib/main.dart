@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'package:zeta/src/app/app.dart';
+import 'package:zeta/src/app/composition/app_dependencies.dart';
 import 'package:zeta/src/app/observability/zeta_observability.dart';
 import 'package:zeta/src/app/window_bootstrap.dart';
 import 'package:zeta/src/app/zeta_startup_bootstrap.dart';
@@ -72,6 +73,10 @@ void main() {
       runApp(
         ProviderScope(
           observers: observability.providerObservers,
+          // 阶段 1：Riverpod 只承担组合根与覆盖点，业务状态仍由现有 controller 拥有。
+          overrides: <Override>[
+            zetaMetricsPortProvider.overrideWithValue(observability.metrics),
+          ],
           child: MainApp(
             dataPaths: dataPaths,
             initialAppearanceSettings: appearance,

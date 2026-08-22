@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:window_manager/window_manager.dart';
 
-import 'package:zeta/src/core/observability/zeta_metrics_port.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta/src/app/menu_action_bridge.dart';
 import 'package:zeta/src/app/shell/ide_shell_controller.dart';
 import 'package:zeta/src/core/utils/system_file_manager.dart';

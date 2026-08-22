@@ -1,6 +1,5 @@
 import 'package:flutter/scheduler.dart';
-import 'package:zeta/src/core/observability/zeta_metric.dart';
-import 'package:zeta/src/core/observability/zeta_metrics_port.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta/src/features/agent/application/agent_ui_update_port.dart';
 import 'package:zeta/src/features/agent/application/agent_ui_update_request.dart';
 

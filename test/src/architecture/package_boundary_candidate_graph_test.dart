@@ -15,16 +15,14 @@ import 'package:flutter_test/flutter_test.dart';
 ///
 /// 这样 Phase 1 的物理拆包有一份可燃尽的清单，而不是搬完文件才发现循环依赖。
 void main() {
-  final files =
-      Directory('lib')
-          .listSync(recursive: true)
-          .whereType<File>()
-          .where((file) => file.path.endsWith('.dart'))
-          .map((file) => _posix(file.path))
-          .toList(growable: false)
-        ..sort();
+  final files = <String>[
+    ..._dartFilesUnder('lib'),
+    // 已经物理拆出的 Package 也纳入同一张依赖图，
+    // 保证"已拆"和"待拆"用同一套规则。
+    ..._dartFilesUnder('packages'),
+  ]..sort();
 
-  test('候选 Package 覆盖 lib 下全部 Dart 文件', () {
+  test('候选 Package 覆盖 lib 与 packages 下全部 Dart 文件', () {
     expect(files, isNotEmpty);
     for (final path in files) {
       expect(
@@ -143,24 +141,81 @@ void main() {
     expect(_findCycle(edges), isNull, reason: '候选 Package 之间出现循环依赖');
   });
 
-  test('可观测性核心保持纯 Dart 且只被 app 注入', () {
-    final metricsFiles = files
-        .where((path) => path.startsWith('lib/src/core/observability/'))
+  test('已拆出的 Package 之间只 import 顶层 barrel', () {
+    final offenders = <String>[];
+    for (final path in files) {
+      final owner = _candidatePackageFor(path);
+      final source = File(path).readAsStringSync();
+      for (final match in _importPattern.allMatches(source)) {
+        final uri = match.group(1)!;
+        for (final package in _materializedPackages) {
+          if (package == owner) {
+            continue; // 包内允许引用自己的 src。
+          }
+          if (uri.startsWith('package:$package/src/')) {
+            offenders.add('$path -> $uri');
+          }
+        }
+      }
+    }
+
+    expect(
+      offenders,
+      isEmpty,
+      reason: '跨 Package 只能 import 对方的顶层 barrel：\n${offenders.join('\n')}',
+    );
+  });
+
+  test('zeta_foundation 保持纯 Dart', () {
+    final foundationFiles = files
+        .where((path) => path.startsWith('packages/zeta_foundation/lib/'))
         .toList(growable: false);
 
-    expect(metricsFiles, isNotEmpty);
-    for (final path in metricsFiles) {
+    expect(foundationFiles, isNotEmpty);
+    for (final path in foundationFiles) {
       final imports = _externalImports(File(path).readAsStringSync());
       expect(
         imports,
         isEmpty,
-        reason: '$path 是 zeta_foundation 候选文件，不得依赖外部库：$imports',
+        reason: '$path 属于 zeta_foundation，不得依赖任何外部库：$imports',
       );
+    }
+  });
+
+  test('zeta_plugin_kernel 不认识任何具体插件或 Provider', () {
+    final kernelFiles = files
+        .where((path) => path.startsWith('packages/zeta_plugin_kernel/lib/'))
+        .toList(growable: false);
+
+    expect(kernelFiles, isNotEmpty);
+    for (final path in kernelFiles) {
+      final source = File(path).readAsStringSync();
+      final codeOnly = source
+          .split('\n')
+          .where((line) {
+            final trimmed = line.trimLeft();
+            return !trimmed.startsWith('//') && !trimmed.startsWith('///');
+          })
+          .join('\n');
+      for (final token in const <String>[
+        'codex',
+        'grok',
+        'claude',
+        'Agent',
+        'package:zeta/',
+      ]) {
+        expect(
+          codeOnly.contains(token),
+          isFalse,
+          reason: '$path 出现了具体插件/Provider 标识：$token',
+        );
+      }
     }
   });
 }
 
 const String _foundation = 'zeta_foundation';
+const String _pluginKernel = 'zeta_plugin_kernel';
 const String _agentCore = 'zeta_agent_core';
 const String _agentProviders = 'zeta_agent_providers';
 const String _ui = 'zeta_ui';
@@ -168,17 +223,30 @@ const String _app = 'app';
 
 const Set<String> _candidatePackages = <String>{
   _foundation,
+  _pluginKernel,
   _agentCore,
   _agentProviders,
   _ui,
   _app,
 };
 
+/// 已经物理拆出的 Package（`packages/<name>`）。
+///
+/// 这些名字既是目录名，也是 `package:` scheme 名；跨 Package 只能 import 对方
+/// 的顶层 barrel，禁止 `package:<name>/src/...`。
+const Set<String> _materializedPackages = <String>{_foundation, _pluginKernel};
+
 /// 目标架构 §3.1 的依赖方向；根 app 是唯一可以看到所有 Package 的组合点。
 const Map<String, Set<String>> _allowedEdges = <String, Set<String>>{
   _foundation: <String>{_foundation},
+  _pluginKernel: <String>{_pluginKernel, _foundation},
   _agentCore: <String>{_agentCore, _foundation},
-  _agentProviders: <String>{_agentProviders, _agentCore, _foundation},
+  _agentProviders: <String>{
+    _agentProviders,
+    _agentCore,
+    _pluginKernel,
+    _foundation,
+  },
   _ui: <String>{_ui, _foundation},
   _app: _candidatePackages,
 };
@@ -187,6 +255,12 @@ const Map<String, Set<String>> _allowedEdges = <String, Set<String>>{
 const Map<String, List<String>> _bannedExternalPrefixes =
     <String, List<String>>{
       _foundation: <String>[
+        'package:flutter/',
+        'package:flutter_riverpod/',
+        'package:shadcn_flutter/',
+        'dart:io',
+      ],
+      _pluginKernel: <String>[
         'package:flutter/',
         'package:flutter_riverpod/',
         'package:shadcn_flutter/',
@@ -249,6 +323,11 @@ const int _agentCoreFlutterFoundationBaseline = 17;
 /// 是业务组合页，属于根 app；Agent 的 domain/application 是中立内核，data 是
 /// Provider 适配层。
 String _candidatePackageFor(String path) {
+  for (final package in _materializedPackages) {
+    if (path.startsWith('packages/$package/')) {
+      return package;
+    }
+  }
   if (path.startsWith('lib/src/core/')) {
     return _foundation;
   }
@@ -265,11 +344,20 @@ String _candidatePackageFor(String path) {
   return _app;
 }
 
+/// 把仓库内 import 归一成"仓库相对路径"，便于统一判定所属 Package。
 Iterable<String> _zetaImports(String source) sync* {
   for (final match in _importPattern.allMatches(source)) {
     final uri = match.group(1)!;
     if (uri.startsWith('package:zeta/')) {
       yield 'lib/${uri.substring('package:zeta/'.length)}';
+      continue;
+    }
+    for (final package in _materializedPackages) {
+      if (uri.startsWith('package:$package/')) {
+        yield 'packages/$package/lib/'
+            '${uri.substring('package:$package/'.length)}';
+        break;
+      }
     }
   }
 }
@@ -277,10 +365,32 @@ Iterable<String> _zetaImports(String source) sync* {
 Iterable<String> _externalImports(String source) sync* {
   for (final match in _importPattern.allMatches(source)) {
     final uri = match.group(1)!;
-    if (!uri.startsWith('package:zeta/') && !uri.startsWith('.')) {
-      yield uri;
+    if (uri.startsWith('.')) {
+      continue;
     }
+    if (uri.startsWith('package:zeta/')) {
+      continue;
+    }
+    if (_materializedPackages.any(
+      (package) => uri.startsWith('package:$package/'),
+    )) {
+      continue;
+    }
+    yield uri;
   }
+}
+
+List<String> _dartFilesUnder(String directory) {
+  final root = Directory(directory);
+  if (!root.existsSync()) {
+    return const <String>[];
+  }
+  return root
+      .listSync(recursive: true)
+      .whereType<File>()
+      .where((file) => file.path.endsWith('.dart'))
+      .map((file) => _posix(file.path))
+      .toList(growable: false);
 }
 
 String? _findCycle(Map<String, Set<String>> edges) {

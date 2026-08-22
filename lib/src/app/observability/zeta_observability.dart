@@ -1,8 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:zeta/src/app/observability/zeta_provider_observer.dart';
-import 'package:zeta/src/core/observability/in_memory_zeta_metrics_port.dart';
-import 'package:zeta/src/core/observability/zeta_metrics_port.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
 
 /// 应用级可观测性组合根。
 ///

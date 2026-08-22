@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:zeta/src/core/observability/zeta_metric.dart';
-import 'package:zeta/src/core/observability/zeta_metrics_port.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
 
 /// 根 `ProviderScope` 使用的脱敏 Riverpod 观察器。
 ///
