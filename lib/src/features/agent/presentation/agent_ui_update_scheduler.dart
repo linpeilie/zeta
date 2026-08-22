@@ -1,6 +1,6 @@
 import 'package:flutter/scheduler.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
-import 'package:zeta/src/features/agent/data/agent_metric_labels.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// 基于 [SchedulerBinding] 的生产 frame 调度实现。

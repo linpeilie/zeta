@@ -10,6 +10,7 @@ environment:
 # 目标 Package 图见 docs/architecture/target_architecture_riverpod_mvi_plugins_packages.md §3.1。
 workspace:
   - packages/zeta_agent_core
+  - packages/zeta_agent_providers
   - packages/zeta_foundation
   - packages/zeta_plugin_kernel
   - packages/zeta_ui
@@ -39,6 +40,7 @@ dependencies:
   unorm_dart: ^0.3.2
   window_manager: ^0.5.1
   zeta_agent_core: ^0.1.0
+  zeta_agent_providers: ^0.1.0
   zeta_foundation: ^0.1.0
   zeta_plugin_kernel: ^0.1.0
   zeta_ui: ^0.1.0

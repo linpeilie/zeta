@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/data/mappers/claude_code_usage_quota_mapper.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 
 void main() {
   group('mapClaudeCodeUsageQuota', () {

@@ -1,9 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/data/datasources/app_server/codex_permission_policy_adapter.dart';
-import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
-import 'package:zeta/src/features/agent/data/mappers/codex_permission_policy_codec.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 void main() {

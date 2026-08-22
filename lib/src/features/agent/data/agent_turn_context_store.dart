@@ -1,12 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta/src/core/storage/atomic_text_file.dart';
 import 'package:zeta/src/features/agent/data/agent_turn_context_codec.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
-final _log = loggerFor('zeta.agent.turn_context');
+final _log = zetaLoggerFor('zeta.agent.turn_context');
 
 /// `~/.zeta/state/session/<providerId>/<threadId>.json` 的版本化文件存储。
 ///

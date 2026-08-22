@@ -2,8 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_cli_metadata.dart';
-import 'package:zeta/src/features/agent/data/mappers/claude_code_initialize_metadata_mapper.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 
 const _fixtureRoot =
     'test/src/features/agent/data/datasources/claude_code/fixtures';

@@ -6,11 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:logger/logger.dart';
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_codec.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_permission_migration.dart';
-import 'package:zeta/src/features/agent/data/datasources/app_server/codex_app_server_agent_provider.dart';
-import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
-import 'package:zeta/src/features/agent/data/datasources/transport/provider_operation_scheduler.dart';
-import 'package:zeta/src/features/agent/data/native_agent_provider_bundles.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 import '../../../../../testing/agent_file_change_canonical.dart';

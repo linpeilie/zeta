@@ -270,6 +270,66 @@ void main() {
     );
   });
 
+  test('zeta_agent_providers 不反向依赖根 app 与 UI', () {
+    final providerFiles = files
+        .where((path) => path.startsWith('packages/zeta_agent_providers/lib/'))
+        .toList(growable: false);
+
+    expect(providerFiles, isNotEmpty);
+    for (final path in providerFiles) {
+      final source = File(path).readAsStringSync();
+      expect(
+        source.contains('package:zeta/'),
+        isFalse,
+        reason: '$path 反向依赖了根 app',
+      );
+      for (final banned in const <String>[
+        'package:zeta_ui/',
+        'package:flutter_riverpod/',
+        'package:flutter/material',
+        'package:flutter/widgets',
+      ]) {
+        expect(
+          _externalImports(source).any((import) => import.startsWith(banned)),
+          isFalse,
+          reason: '$path 引入了 $banned；适配层不认识 UI 与状态管理',
+        );
+      }
+    }
+  });
+
+  test('Provider 协议原文只出现在 zeta_agent_providers 里', () {
+    // wire 层标识（JSON-RPC method、ACP session/update、stream-json 事件名）
+    // 一旦出现在内核或 app，就说明协议细节又漏出了适配层。
+    // 只列 **wire 标识**：`stream-json` 之类的协议名会出现在管理页文案与 ARB 里，
+    // 那是产品文案不是协议使用，不能当泄漏证据。
+    const protocolTokens = <String>['jsonrpc', 'session/update'];
+    final offenders = <String>[];
+    for (final path in files) {
+      if (path.startsWith('packages/zeta_agent_providers/')) {
+        continue;
+      }
+      if (path.startsWith('test/')) {
+        continue;
+      }
+      final source = File(path).readAsStringSync();
+      final codeOnly = source
+          .split('\n')
+          .where((line) {
+            final trimmed = line.trimLeft();
+            return !trimmed.startsWith('//') && !trimmed.startsWith('///');
+          })
+          .join('\n');
+      for (final token in protocolTokens) {
+        if (codeOnly.contains(token)) {
+          offenders.add('$path: $token');
+        }
+      }
+    }
+
+    expect(offenders, isEmpty, reason: '协议原文泄漏：\n${offenders.join('\n')}');
+  });
+
   test('zeta_plugin_kernel 不认识任何具体插件或 Provider', () {
     final kernelFiles = files
         .where((path) => path.startsWith('packages/zeta_plugin_kernel/lib/'))
@@ -327,6 +387,7 @@ const Set<String> _materializedPackages = <String>{
   _pluginKernel,
   _ui,
   _agentCore,
+  _agentProviders,
 };
 
 /// 目标架构 §3.1 的依赖方向；根 app 是唯一可以看到所有 Package 的组合点。
@@ -420,9 +481,6 @@ String _candidatePackageFor(String path) {
   }
   if (path.startsWith('lib/src/core/')) {
     return _foundation;
-  }
-  if (path.startsWith('lib/src/features/agent/data/')) {
-    return _agentProviders;
   }
   return _app;
 }

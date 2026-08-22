@@ -1,0 +1,25 @@
+name: zeta_agent_providers
+description: Zeta 的 Agent Provider 适配层：Codex app-server / Grok ACP / Claude Code stream-json 的协议 transport、data adapter、Provider-local tracker 与插件入口。
+publish_to: 'none'
+version: 0.1.0
+resolution: workspace
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  crypto: ^3.0.7
+  # 适配层要拉起本机 CLI、读 Provider 私有配置与会话文件，因此允许 dart:io。
+  flutter:
+    sdk: flutter
+  glob: ^2.1.2
+  meta: ^1.18.0
+  toml: ^0.18.0
+  unorm_dart: ^0.3.2
+  zeta_agent_core: ^0.1.0
+  zeta_foundation: ^0.1.0
+  zeta_plugin_kernel: ^0.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter

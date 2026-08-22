@@ -40,6 +40,14 @@ abstract interface class ZetaLogger {
   });
 }
 
+/// 异常可实现此接口，为 [ZetaLogger.failure] 补充协议诊断字段。
+///
+/// 契约与 [ZetaLogger] 一致：`logDiagnostic` 只放分类、状态码、identity
+/// 是否匹配这类脱敏信息，不放 payload 正文。
+abstract interface class StructuredLogDiagnostic {
+  Object? get logDiagnostic;
+}
+
 /// 按 scope 创建 logger 的工厂。
 typedef ZetaLoggerFactory = ZetaLogger Function(String scope);
 

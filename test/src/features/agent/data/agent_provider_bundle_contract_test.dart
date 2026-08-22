@@ -1,9 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta/src/features/agent/data/datasources/app_server/codex_app_server_agent_provider.dart';
-import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_cli_metadata.dart';
-import 'package:zeta/src/features/agent/data/default_agent_provider_factory.dart';
-import 'package:zeta/src/features/agent/data/native_agent_provider_bundles.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 
 import '../../../testing/recording_json_rpc_peer.dart';
 

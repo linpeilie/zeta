@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:logger/logger.dart';
 import 'package:zeta/src/core/logging/app_logging.dart';

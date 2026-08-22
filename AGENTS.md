@@ -76,7 +76,7 @@ grep -rnE "(codex|grok|claude|cursor)" \
   packages/zeta_agent_core/lib/src/application/coalescing_event_buffer.dart \
   packages/zeta_agent_core/lib/src/application/bounded_event_dispatcher.dart \
   packages/zeta_agent_core/lib/src/application/agent_conversation_timeline_store.dart \
-  lib/src/features/agent/data/mappers/acp_*.dart \
+  packages/zeta_agent_providers/lib/src/mappers/acp_*.dart \
   | grep -viE "^\S+:[0-9]+:\s*(///|//|\*)"
 ```
 
@@ -141,8 +141,8 @@ main → app → presentation/application → domain
 - Flutter `Locale`、`BuildContext` 和 generated `AppLocalizations` 只允许出现在 `app` 组合层、presentation 和 `ui/`。application / data / domain 若必须产出即时文案，只依赖该 feature 的纯 Dart 文本目录 port。
 - `lib/main.dart` 只做 Flutter 绑定、窗口启动、全局错误日志和 `runApp`；`lib/src/app` 是唯一装配点。
 - 新代码进 `lib/src/features/<feature>/{domain,application,data,presentation}`，**不要新建顶层宽泛目录**。现有 feature：`agent`、`agent_management`、`desktop_notifications`、`ide_session`、`project_threads`、`settings`、`usage_statistics`、`workspace`。跨 feature 基础设施才进 `lib/src/core`；**跨 feature 复用的 UI 原语进 `packages/zeta_ui`**（设计系统已整体拆包，`lib/src/ui/core` 只剩需要本机 IO 的宿主侧封装）。
-- 已物理拆出的内部 Package 在 `packages/`：`zeta_foundation`（纯 Dart 公共契约：Clock / OperationId / Transition / 排版常量 / 日志与指标端口）、`zeta_plugin_kernel`（可信插件微内核）、`zeta_ui`（Graphite 设计系统）与 `zeta_agent_core`（中立 Agent 内核：领域模型与端口、Binding/runtime 契约、事件管线、纯 reducer、TimelineStore、Effect 描述）。依赖方向单向：`kernel → foundation`、`ui → foundation`、`agent_core → foundation`；`zeta_foundation` / `zeta_plugin_kernel` 不依赖 Flutter；`zeta_ui` 依赖 Flutter/shadcn 但**不依赖** Riverpod、`dart:io`、generated l10n 或任何业务模型（控件自有文案走 `ZetaUiTextCatalog` 注入）；`zeta_agent_core` 目前只依赖 `flutter/foundation`（ChangeNotifier），**不依赖** widgets/material、Riverpod、`dart:io`、Provider 协议或根 app——日志走 `ZetaLogger` 端口，Provider 身份映射由组合层注入。
-- **Agent feature 的分层现状**：中立内核在 `packages/zeta_agent_core`；Provider 协议适配仍在 `lib/src/features/agent/data`；ChangeNotifier 形态的 feature controller（settings / mode / model selection / skills / 目录 / workspace 组合）仍在 `lib/src/features/agent/application`，等 Phase 2/3 转成 MVI 切片。新代码按这条边界放：中立机制进包，Provider 语义进 data，UI 编排进 app。**跨 Package 只能 import 对方顶层 barrel**，禁止 `package:<name>/src/...`。新增 Package 要先在[目标架构 §3.2](docs/architecture/target_architecture_riverpod_mvi_plugins_packages.md) 的判据下论证，不按页面或团队机械拆包。
+- 已物理拆出的内部 Package 在 `packages/`：`zeta_foundation`（纯 Dart 公共契约：Clock / OperationId / Transition / 排版常量 / 日志与指标端口）、`zeta_plugin_kernel`（可信插件微内核）、`zeta_ui`（Graphite 设计系统）、`zeta_agent_core`（中立 Agent 内核：领域模型与端口、Binding/runtime 契约、事件管线、纯 reducer、TimelineStore、Effect 描述）与 `zeta_agent_providers`（Codex / Grok / Claude Code 的协议 transport、data adapter、Provider-local tracker、插件入口）。依赖方向单向：`kernel → foundation`、`ui → foundation`、`agent_core → foundation`、`agent_providers → {agent_core, kernel, foundation}`；`zeta_foundation` / `zeta_plugin_kernel` 不依赖 Flutter；`zeta_ui` 依赖 Flutter/shadcn 但**不依赖** Riverpod、`dart:io`、generated l10n 或任何业务模型（控件自有文案走 `ZetaUiTextCatalog` 注入）；`zeta_agent_core` 目前只依赖 `flutter/foundation`（ChangeNotifier），**不依赖** widgets/material、Riverpod、`dart:io`、Provider 协议或根 app——日志走 `ZetaLogger` 端口，Provider 身份映射由组合层注入。
+- **Agent feature 的分层现状**：中立内核在 `packages/zeta_agent_core`；**Provider 协议适配在 `packages/zeta_agent_providers`**（wire 字段、CLI 参数、会话文件格式只能出现在这里）；Zeta 自有持久化（provider 配置、模型目录缓存、turn 上下文文件）与 ChangeNotifier 形态的 feature controller 仍在 `lib/src/features/agent/{data,application}`，等 Phase 2/3 转成 MVI 切片。新代码按这条边界放：中立机制进 core，Provider 语义进 providers，Zeta 自有状态与 UI 编排进 app。**跨 Package 只能 import 对方顶层 barrel**，禁止 `package:<name>/src/...`。新增 Package 要先在[目标架构 §3.2](docs/architecture/target_architecture_riverpod_mvi_plugins_packages.md) 的判据下论证，不按页面或团队机械拆包。
 
 > 正文：[工程规范 §1–2](docs/architecture/engineering_standards.md) · [架构总览「分层」](docs/architecture/overview.md)
 

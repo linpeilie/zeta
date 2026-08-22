@@ -1,7 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_agent_provider.dart';
-import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_cli_metadata.dart';
-import 'package:zeta/src/features/agent/data/default_agent_provider_factory.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 void main() {

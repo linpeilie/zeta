@@ -1,13 +1,10 @@
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:zeta_foundation/zeta_foundation.dart';
+
 import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/core/security/sensitive_data_redactor.dart';
-
-/// 异常可实现此接口，为通用结构化日志补充协议诊断字段。
-abstract interface class StructuredLogDiagnostic {
-  Object? get logDiagnostic;
-}
 
 /// 写入带结构化、脱敏上下文的异常日志。
 ///

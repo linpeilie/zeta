@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/data/mappers/acp_session_update_decoder.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 
 void main() {
   group('AcpSessionUpdateDecoder', () {

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:zeta/src/core/storage/atomic_text_file.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/widgets.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
@@ -19,15 +20,11 @@ import 'package:zeta/src/core/storage/zeta_data_paths.dart';
 import 'package:zeta/src/core/utils/system_file_manager.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta/src/features/agent/data/agent_metric_labels.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta/src/features/agent/data/agent_model_catalog_cache_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_codec.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/data/agent_turn_context_store.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_permission_migration.dart';
-import 'package:zeta/src/features/agent/data/default_agent_provider_factory.dart';
-import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_hidden_thread_store.dart';
-import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_permission_policy_adapter.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_models.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_text_catalog.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
@@ -336,12 +333,16 @@ class MainAppState extends State<MainApp>
       final defaultFactory = DefaultAgentProviderFactory(
         claudeCodeSessionDecisionStoreFactory: useFilePersistence
             ? (sessionId) => FileClaudeCodeSessionDecisionStore(
-                file: _claudeCodeSessionDecisionFile(dataPaths!, sessionId),
+                storage: AtomicTextFile(
+                  _claudeCodeSessionDecisionFile(dataPaths!, sessionId),
+                ),
               )
             : null,
         claudeCodeHiddenThreadStore: useFilePersistence
             ? FileClaudeCodeHiddenThreadStore(
-                file: _claudeCodeHiddenThreadsFile(dataPaths!),
+                storage: AtomicTextFile(
+                  _claudeCodeHiddenThreadsFile(dataPaths!),
+                ),
               )
             : null,
         textCatalog: _agentUiTextCatalog,

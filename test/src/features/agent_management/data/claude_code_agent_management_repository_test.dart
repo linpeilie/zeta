@@ -2,9 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/data/claude_code_cli_locator.dart';
-import 'package:zeta/src/features/agent/data/cli_command_locator.dart';
-import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_cli_metadata_probe.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent_management/data/claude_code_agent_management_repository.dart';
 import 'package:zeta/src/features/agent_management/data/claude_code_auth_status_probe.dart';

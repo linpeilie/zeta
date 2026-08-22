@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:zeta/src/core/storage/atomic_text_file.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_permission_policy_adapter.dart';
-import 'package:zeta/src/features/agent/data/mappers/claude_code_permission_mode_codec.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 void main() {
@@ -37,7 +37,9 @@ void main() {
       final file = File(
         '${directory.path}${Platform.pathSeparator}session.json',
       );
-      final store = FileClaudeCodeSessionDecisionStore(file: file);
+      final store = FileClaudeCodeSessionDecisionStore(
+        storage: AtomicTextFile(file),
+      );
       final adapter = ClaudeCodePermissionPolicyAdapter(
         applyPermissionMode: (_) async => AgentPermissionApplyScope.nextSession,
         sessionDecisionStoreFactory: (_) => store,
@@ -67,7 +69,7 @@ void main() {
       final reloaded = ClaudeCodePermissionPolicyAdapter(
         applyPermissionMode: (_) async => AgentPermissionApplyScope.nextSession,
         sessionDecisionStoreFactory: (_) =>
-            FileClaudeCodeSessionDecisionStore(file: file),
+            FileClaudeCodeSessionDecisionStore(storage: AtomicTextFile(file)),
       );
       await reloaded.bindSession('session-sensitive-id');
       expect(
@@ -84,7 +86,9 @@ void main() {
       final file = File(
         '${directory.path}${Platform.pathSeparator}session.json',
       );
-      final store = FileClaudeCodeSessionDecisionStore(file: file);
+      final store = FileClaudeCodeSessionDecisionStore(
+        storage: AtomicTextFile(file),
+      );
 
       await file.writeAsString('{damaged');
       expect(await store.load(), isEmpty);
@@ -126,7 +130,7 @@ void main() {
           applyPermissionMode: (_) async =>
               AgentPermissionApplyScope.nextSession,
           sessionDecisionStoreFactory: (_) =>
-              FileClaudeCodeSessionDecisionStore(file: file),
+              FileClaudeCodeSessionDecisionStore(storage: AtomicTextFile(file)),
         );
 
         await adapter.bindSession('session-question-cache');

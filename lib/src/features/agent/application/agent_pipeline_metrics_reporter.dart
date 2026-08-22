@@ -1,5 +1,5 @@
 import 'package:zeta_foundation/zeta_foundation.dart';
-import 'package:zeta/src/features/agent/data/agent_metric_labels.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// 把 [AgentEventPipelineDiagnostics] 增量翻译成白名单指标的采样器。

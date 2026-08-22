@@ -1,8 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:zeta/src/core/storage/atomic_text_file.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_hidden_thread_store.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 
 void main() {
   group('FileClaudeCodeHiddenThreadStore', () {
@@ -24,7 +25,9 @@ void main() {
     });
 
     test('missing fields and corrupt JSON decode as empty', () async {
-      final store = FileClaudeCodeHiddenThreadStore(file: storeFile);
+      final store = FileClaudeCodeHiddenThreadStore(
+        storage: AtomicTextFile(storeFile),
+      );
 
       await storeFile.parent.create(recursive: true);
       await storeFile.writeAsString('{broken-json');
@@ -37,7 +40,9 @@ void main() {
     });
 
     test('migrates version zero entries and ignores damaged values', () async {
-      final store = FileClaudeCodeHiddenThreadStore(file: storeFile);
+      final store = FileClaudeCodeHiddenThreadStore(
+        storage: AtomicTextFile(storeFile),
+      );
       await storeFile.parent.create(recursive: true);
       await storeFile.writeAsString(
         jsonEncode(<String, Object?>{
@@ -51,7 +56,9 @@ void main() {
     });
 
     test('writes only the versioned key whitelist', () async {
-      final store = FileClaudeCodeHiddenThreadStore(file: storeFile);
+      final store = FileClaudeCodeHiddenThreadStore(
+        storage: AtomicTextFile(storeFile),
+      );
 
       await store.save(<String>{
         '-workspace-zeta/session-2',

@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/data/datasources/local_history/grok_chat_history_parser.dart';
-import 'package:zeta/src/features/agent/data/datasources/local_history/grok_updates_history_parser.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 import '../../../../../testing/fixture_reader.dart';

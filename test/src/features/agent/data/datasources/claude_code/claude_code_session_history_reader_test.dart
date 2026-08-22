@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:zeta/src/core/storage/atomic_text_file.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_hidden_thread_store.dart';
-import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_session_history_reader.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 void main() {
@@ -788,7 +788,9 @@ void main() {
       );
       final reader = ClaudeCodeSessionHistoryReader(
         claudeHome: tempRoot.path,
-        hiddenThreadStore: FileClaudeCodeHiddenThreadStore(file: hiddenFile),
+        hiddenThreadStore: FileClaudeCodeHiddenThreadStore(
+          storage: AtomicTextFile(hiddenFile),
+        ),
       );
 
       final visible = await reader.listThreads(

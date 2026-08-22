@@ -1,4 +1,4 @@
-import 'package:zeta/src/features/agent/data/agent_provider_static_capabilities.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// 为测试 Fake 提供 thread 生命周期端口的默认空实现。

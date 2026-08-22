@@ -10,8 +10,7 @@ import 'package:zeta/src/features/agent/application/agent_model_catalog_reposito
 import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_thread_workspace_controller.dart';
 import 'package:zeta/src/core/utils/system_file_manager.dart';
-import 'package:zeta/src/features/agent/data/agent_metric_labels.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_static_capabilities.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_persistence_coordinator.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_restore_result.dart';

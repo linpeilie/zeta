@@ -2,7 +2,8 @@
 
 最后更新：2026-08-22
 
-状态：第三个增量（`zeta_agent_core`）已落地；三轮 review 的 16 条问题已处理完毕。对应 [目标架构 §14 Phase 1](./target_architecture_riverpod_mvi_plugins_packages.md#phase-1建立边界但不改变行为)。
+状态：第四个增量（`zeta_agent_providers`）已落地，目标 Package 图的 5 个包全部拆出；
+三轮 review 的 16 条问题已处理完毕。对应 [目标架构 §14 Phase 1](./target_architecture_riverpod_mvi_plugins_packages.md#phase-1建立边界但不改变行为)。
 
 阶段 1 的规矩是**只搬边界，不动行为**：没有新功能、没有 UI 变化、没有持久化格式变化，
 Provider wire 参数与状态 owner 全部保持原样。
@@ -24,7 +25,8 @@ Provider wire 参数与状态 owner 全部保持原样。
 | `zeta_ui`（Graphite 设计系统） | [`packages/zeta_ui`](../../packages/zeta_ui) |
 | 设计系统文案注入端口 | `packages/zeta_ui/lib/src/zeta_ui_text_catalog.dart` + `AppZetaUiTextCatalog` 适配器 |
 | `zeta_agent_core`（中立 Agent 内核） | [`packages/zeta_agent_core`](../../packages/zeta_agent_core) |
-| 日志端口 + 集合相等工具 | `packages/zeta_foundation/lib/src/logging/zeta_logger.dart`、`src/collections/zeta_equality.dart` |
+| `zeta_agent_providers`（Provider 适配层） | [`packages/zeta_agent_providers`](../../packages/zeta_agent_providers) |
+| 日志端口 + 集合相等工具 + 文本文件端口 | `packages/zeta_foundation/lib/src/logging/zeta_logger.dart`、`src/collections/zeta_equality.dart`、`src/storage/zeta_text_file.dart` |
 
 ### 1.1 已物理拆出的 Package
 
@@ -35,6 +37,8 @@ packages/
   zeta_ui/                # Flutter：Graphite token、Ide* 控件、Workbench 骨架、虚拟滚动
   zeta_agent_core/        # Flutter(foundation)：中立 Agent 领域模型与端口、Binding/runtime
                           # 契约、事件管线、纯 reducer、TimelineStore、Effect 描述
+  zeta_agent_providers/   # Codex app-server / Grok ACP / Claude Code stream-json 的协议
+                          # transport、data adapter、Provider-local tracker、插件入口
 ```
 
 依赖方向（守卫强制）：
@@ -43,7 +47,8 @@ packages/
 zeta_plugin_kernel ──> zeta_foundation
 zeta_ui ───────────> zeta_foundation
 zeta_agent_core ───> zeta_foundation
-root app ──────────> 四者
+zeta_agent_providers ──> zeta_agent_core, zeta_plugin_kernel, zeta_foundation
+root app ──────────> 五者
 ```
 
 `zeta_foundation` 不 import 任何外部库（连 Flutter 都没有）；`zeta_plugin_kernel` 只依赖
@@ -85,6 +90,30 @@ plan 执行交接 / turn 上下文叠加 / 指标采样器 / workspace 组合。
 `AgentMetricLabels`（provider ID → 指标标签）按 G1/G4 同款判定放回 data 层：它按 Provider
 身份分支，属于 Provider 语义。
 
+### 1.1.2 `zeta_agent_providers` 的边界
+
+搬进包的是 **79 个协议适配文件**：`datasources/**`（Codex app-server、Grok ACP、
+Claude Code stream-json、JSON-RPC transport、本地历史解析）、`mappers/**`、三个 CLI
+定位器、静态能力表、权限迁移、`DefaultAgentProviderFactory`、插件贡献与兼容插件、
+Provider 指标标签映射。
+
+**留在根 app 的 `lib/src/features/agent/data`（5 个文件）是 Zeta 自有持久化**：provider
+配置存储与 codec、模型目录缓存、turn 上下文文件存储与 codec。它们写的是 `~/.zeta`，
+按 §7.5「文件实例由 app 注入」本来就属于 app 侧，不是 Provider 适配。
+
+为拆包做的一处**接口下沉**：两个 Claude Code 侧的状态文件适配器
+（`FileClaudeCodeHiddenThreadStore` / `FileClaudeCodeSessionDecisionStore`）原先直接
+`AtomicTextFile(File)`，现在接受注入的 `ZetaTextFile` 端口（foundation 纯 Dart 契约，
+`AtomicTextFile` 在 app 侧实现）。适配层因此不必为了写一个 JSON 文件而依赖根 app 的
+存储工具类；`dart:io` 本身在这个包里是允许的（要拉起 CLI、读 Provider 私有配置）。
+
+同时 `StructuredLogDiagnostic` 从 app 的结构化日志模块下沉到 `zeta_foundation`：
+`JsonRpcException` 需要它来补充协议诊断字段，而异常类本身在适配层。
+
+新增两条守卫：适配层不得反向依赖根 app / `zeta_ui` / Riverpod / Flutter widgets；
+**wire 标识（`jsonrpc`、`session/update`）只允许出现在这个包里**——一旦漏进内核或 app
+就会失败。
+
 ### 1.2 插件微内核
 
 内核只做四件事：登记、按拓扑序激活、按类型汇总贡献、按反序关闭。全部边界 fail-closed：
@@ -115,9 +144,9 @@ plan 执行交接 / turn 上下文叠加 / 指标采样器 / workspace 组合。
 
 ## 2. 没有搬的部分（Phase 1 后续增量）
 
-目标 Package 图里还有两个候选包**没有**物理拆出：`zeta_agent_core` 与
-`zeta_agent_providers`。这是有意的：目标架构自己写了"一次只迁一个叶子边界"，这两个
-候选包目前仍有反向依赖（application → data / presentation），直接搬会把循环依赖搬进编译期。
+目标 Package 图的 5 个包已全部拆出。仍留在根 app 的是**业务编排与 Zeta 自有状态**：
+feature controller（ChangeNotifier 形态，等 Phase 2/3 转 MVI 切片）、Zeta 自有持久化、
+presentation 与 shell 组合。
 
 燃尽清单（守卫里的 `_knownEdgeViolations` / `_knownExternalViolations`，只允许变小）：
 

@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_codec.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_permission_migration.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 import '../../../testing/fixture_reader.dart';
@@ -207,7 +207,7 @@ void main() {
 
     test('migration boundary is pure and has no Agent home IO', () {
       final source = File(
-        'lib/src/features/agent/data/agent_provider_permission_migration.dart',
+        'packages/zeta_agent_providers/lib/src/agent_provider_permission_migration.dart',
       ).readAsStringSync();
 
       expect(source, isNot(contains("import 'dart:io'")));

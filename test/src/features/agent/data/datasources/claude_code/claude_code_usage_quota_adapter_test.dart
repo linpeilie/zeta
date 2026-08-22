@@ -2,10 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_cli_metadata.dart';
-import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_macos_keychain_source.dart';
-import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_oauth_credentials_reader.dart';
-import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_usage_quota_adapter.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 void main() {

@@ -5,7 +5,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:logger/logger.dart';
 import 'package:zeta/src/core/logging/app_logging.dart';
-import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 
 void main() {
   group('JsonRpcStdioTransport', () {

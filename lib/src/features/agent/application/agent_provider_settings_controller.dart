@@ -4,7 +4,7 @@ import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_static_capabilities.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 
 final _log = loggerFor('zeta.agent.provider_controller');
 

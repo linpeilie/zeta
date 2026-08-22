@@ -35,7 +35,7 @@ void main() {
       final files = <File>[
         for (final path in _g1ApplicationFiles) File(path),
         ...Directory(
-          'lib/src/features/agent/data/mappers',
+          'packages/zeta_agent_providers/lib/src/mappers',
         ).listSync().whereType<File>().where((file) {
           final name = file.uri.pathSegments.last;
           return name.startsWith('acp_') && name.endsWith('.dart');

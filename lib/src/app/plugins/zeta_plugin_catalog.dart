@@ -2,8 +2,7 @@ import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_plugin_kernel/zeta_plugin_kernel.dart';
 
 import 'package:zeta/src/core/logging/app_logging.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_plugin_contribution.dart';
-import 'package:zeta/src/features/agent/data/compatibility_agent_provider_plugin.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 final _log = loggerFor('zeta.app.plugin_catalog');

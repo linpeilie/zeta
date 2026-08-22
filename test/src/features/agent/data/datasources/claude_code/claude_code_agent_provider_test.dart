@@ -2,19 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:zeta/src/core/storage/atomic_text_file.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/data/claude_code_cli_locator.dart';
-import 'package:zeta/src/features/agent/data/cli_command_locator.dart';
-import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_agent_provider.dart';
-import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_cli_metadata.dart';
-import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_model_catalog.dart';
-import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_oauth_credentials_reader.dart';
-import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_permission_policy_adapter.dart';
-import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_session_history_reader.dart';
-import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_usage_quota_adapter.dart';
-import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart'
-    show ProcessStarter;
-import 'package:zeta/src/features/agent/data/native_agent_provider_bundles.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 void main() {
@@ -1117,7 +1107,9 @@ void main() {
           processStarter: _starter(process),
           locator: const _FakeClaudeCodeCliLocator(),
           sessionDecisionStoreFactory: (_) =>
-              FileClaudeCodeSessionDecisionStore(file: cacheFile),
+              FileClaudeCodeSessionDecisionStore(
+                storage: AtomicTextFile(cacheFile),
+              ),
           idFactory: _sequenceIds(<String>['session-cache-1', 'turn-cache-1']),
         );
         addTearDown(provider.dispose);
@@ -1161,7 +1153,7 @@ void main() {
 
     test('source has no 尚未接入 failure branch', () {
       final source = File(
-        'lib/src/features/agent/data/datasources/claude_code/'
+        'packages/zeta_agent_providers/lib/src/datasources/claude_code/'
         'claude_code_agent_provider.dart',
       ).readAsStringSync();
       expect(source, isNot(contains('尚未接入')));

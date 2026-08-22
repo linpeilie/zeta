@@ -4,10 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_codec.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_permission_migration.dart';
-import 'package:zeta/src/features/agent/data/datasources/acp/grok_permission_policy_adapter.dart';
-import 'package:zeta/src/features/agent/data/datasources/app_server/codex_app_server_agent_provider.dart';
-import 'package:zeta/src/features/agent/data/mappers/grok_permission_mode_codec.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
 
@@ -590,7 +587,7 @@ void main() {
         'packages/zeta_agent_core/lib/src/domain/agent_permission_preference_migration.dart',
       );
       final dataMigration = File(
-        'lib/src/features/agent/data/agent_provider_permission_migration.dart',
+        'packages/zeta_agent_providers/lib/src/agent_provider_permission_migration.dart',
       );
       final appSource = File('lib/src/app/app.dart').readAsStringSync();
 
@@ -627,7 +624,7 @@ void main() {
         'packages/zeta_agent_core/lib/src/domain/agent_provider_models.dart',
       ).readAsStringSync();
       final codexProvider = File(
-        'lib/src/features/agent/data/datasources/app_server/'
+        'packages/zeta_agent_providers/lib/src/datasources/app_server/'
         'codex_app_server_agent_provider.dart',
       ).readAsStringSync();
 
