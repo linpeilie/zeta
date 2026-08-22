@@ -1,3 +1,4 @@
+import 'package:zeta_agent_core/src/domain/agent_provider_raw_payload.dart';
 import 'package:zeta_agent_core/src/domain/agent_file_change_models.dart';
 
 export 'package:zeta_agent_core/src/domain/agent_file_change_models.dart';
@@ -77,10 +78,13 @@ class AgentToolCall {
     this.startedAt,
     this.completedAt,
     this.duration,
-    this.rawInput = const <String, Object?>{},
-    this.rawOutput = const <String, Object?>{},
-    this.raw = const <String, Object?>{},
+    this.rawInput = const AgentProviderRawPayload.empty(),
+    this.rawOutput = const AgentProviderRawPayload.empty(),
+    this.raw = const AgentProviderRawPayload.empty(),
     this.fileChanges,
+    this.appendsProgress = false,
+    this.inputDetail,
+    this.sourceItemId,
   });
 
   /// 工具调用 id。
@@ -119,18 +123,37 @@ class AgentToolCall {
   final Duration? duration;
 
   /// 原始输入 payload。
-  final Map<String, Object?> rawInput;
+  final AgentProviderRawPayload rawInput;
 
   /// 原始输出 payload。
-  final Map<String, Object?> rawOutput;
+  final AgentProviderRawPayload rawOutput;
 
   /// 完整原始事件 payload。
-  final Map<String, Object?> raw;
+  final AgentProviderRawPayload raw;
 
   /// Provider adapter 产出的完整、累计文件变更快照。
   ///
   /// `null` 表示本次工具事件没有结构化文件变更证据；空快照表示权威清空。
   final AgentFileChangeSnapshot? fileChanges;
+
+  /// 本次更新是否为"进度追加"（内容按行累加而不是整体替换）。
+  ///
+  /// 由 Provider adapter 判定并显式声明（例如 Codex 的
+  /// `item/mcpToolCall/progress`）。**共享层不得从 raw payload 里读私有标记来改
+  /// 行为**（G1/G2）——那等于让适配层通过原文遥控内核。
+  final bool appendsProgress;
+
+  /// 由 Provider adapter 推导的一句展示用输入细节（命令 / 路径 / 查询）。
+  ///
+  /// 之前这一段是中立层直接翻 `rawInput` 猜键名得到的；那是对 wire 形状的解析，
+  /// 属于 Provider 语义（G2）。现在由适配层的 `deriveAgentToolInputDetail` 算好传入。
+  final String? inputDetail;
+
+  /// Provider 侧的来源 item id，**仅作 metadata**（G2）。
+  ///
+  /// 身份始终是 [id]；这个字段只用于 live / history 溯源与一致性校验，
+  /// 任何合并、去重、路由都不得改用它。
+  final String? sourceItemId;
 
   bool get isTerminalStatus =>
       status == AgentToolStatus.completed ||
@@ -152,10 +175,13 @@ class AgentToolCall {
     DateTime? startedAt,
     DateTime? completedAt,
     Duration? duration,
-    Map<String, Object?>? rawInput,
-    Map<String, Object?>? rawOutput,
-    Map<String, Object?>? raw,
+    AgentProviderRawPayload? rawInput,
+    AgentProviderRawPayload? rawOutput,
+    AgentProviderRawPayload? raw,
     AgentFileChangeSnapshot? fileChanges,
+    bool? appendsProgress,
+    String? inputDetail,
+    String? sourceItemId,
     bool clearContent = false,
     bool clearFileChanges = false,
   }) {
@@ -175,6 +201,9 @@ class AgentToolCall {
       rawOutput: rawOutput ?? this.rawOutput,
       raw: raw ?? this.raw,
       fileChanges: clearFileChanges ? null : (fileChanges ?? this.fileChanges),
+      appendsProgress: appendsProgress ?? this.appendsProgress,
+      inputDetail: inputDetail ?? this.inputDetail,
+      sourceItemId: sourceItemId ?? this.sourceItemId,
     );
   }
 }
@@ -261,7 +290,7 @@ String buildAgentToolCallDisplayTitle({
   AgentToolKind kind = AgentToolKind.other,
   String? kindRaw,
   List<String> locations = const <String>[],
-  Map<String, Object?> rawInput = const <String, Object?>{},
+  String? inputDetail,
 }) {
   final resolvedKind = kind != AgentToolKind.other
       ? kind
@@ -273,7 +302,12 @@ String buildAgentToolCallDisplayTitle({
     return explicit;
   }
 
-  final detail = _toolCallDetail(locations: locations, rawInput: rawInput);
+  // detail 由 Provider adapter 预先算好（`deriveAgentToolInputDetail`）：
+  // 从 wire payload 里猜命令/路径属于 Provider 语义，中立层不做形状解析（G2）。
+  final detail = _toolCallDetail(
+    inputDetail: inputDetail,
+    locations: locations,
+  );
   final resolvedKindLabel = kindLabel(resolvedKind);
 
   if (detail != null && detail.isNotEmpty) {
@@ -287,105 +321,21 @@ String buildAgentToolCallDisplayTitle({
 }
 
 String? _toolCallDetail({
+  required String? inputDetail,
   required List<String> locations,
-  required Map<String, Object?> rawInput,
 }) {
-  final fromInput = _detailFromRawInput(rawInput);
-  if (fromInput != null) {
-    return fromInput;
+  final detail = inputDetail?.trim();
+  if (detail != null && detail.isNotEmpty) {
+    return detail;
   }
   if (locations.isEmpty) {
     return null;
   }
-  return _shortenPath(locations.first);
+  return shortenAgentToolPath(locations.first);
 }
 
-String? _detailFromRawInput(Map<String, Object?> rawInput) {
-  if (rawInput.isEmpty) {
-    return null;
-  }
-
-  const preferredKeys = <String>[
-    'command',
-    'cmd',
-    'shell',
-    'script',
-    'query',
-    'pattern',
-    'search',
-    'url',
-    'uri',
-    'path',
-    'file',
-    'file_path',
-    'filePath',
-    'target',
-    'target_path',
-    'targetPath',
-    'name',
-    'tool',
-    'toolName',
-    'tool_name',
-    'description',
-  ];
-
-  for (final key in preferredKeys) {
-    final value = rawInput[key];
-    final text = _nonEmptyString(value);
-    if (text != null) {
-      return _isPathLikeKey(key) ? _shortenPath(text) : _shortenText(text);
-    }
-  }
-
-  // 常见嵌套：{ arguments: { path: ... } } 或 JSON 字符串参数。
-  final nested =
-      rawInput['arguments'] ?? rawInput['input'] ?? rawInput['params'];
-  if (nested is Map) {
-    final nestedMap = nested.map(
-      (key, value) => MapEntry(key.toString(), value as Object?),
-    );
-    final nestedDetail = _detailFromRawInput(nestedMap);
-    if (nestedDetail != null) {
-      return nestedDetail;
-    }
-  } else {
-    final nestedText = _nonEmptyString(nested);
-    if (nestedText != null) {
-      return _shortenText(nestedText);
-    }
-  }
-
-  return null;
-}
-
-bool _isPathLikeKey(String key) {
-  final lower = key.toLowerCase();
-  return lower.contains('path') || lower == 'file' || lower == 'target';
-}
-
-String? _nonEmptyString(Object? value) {
-  if (value == null) {
-    return null;
-  }
-  if (value is String) {
-    final trimmed = value.trim();
-    return trimmed.isEmpty ? null : trimmed;
-  }
-  if (value is List) {
-    final parts = value
-        .map((item) => item?.toString().trim() ?? '')
-        .where((item) => item.isNotEmpty)
-        .toList(growable: false);
-    if (parts.isEmpty) {
-      return null;
-    }
-    return parts.join(' ');
-  }
-  final text = value.toString().trim();
-  return text.isEmpty ? null : text;
-}
-
-String _shortenPath(String path) {
+/// 展示用路径缩短：保留末两段。
+String shortenAgentToolPath(String path) {
   final normalized = path.replaceAll('\\', '/').trim();
   if (normalized.isEmpty) {
     return path;
@@ -395,19 +345,20 @@ String _shortenPath(String path) {
       .where((segment) => segment.isNotEmpty)
       .toList(growable: false);
   if (segments.isEmpty) {
-    return _shortenText(path);
+    return shortenAgentToolText(path);
   }
   if (segments.length == 1) {
-    return _shortenText(segments.single);
+    return shortenAgentToolText(segments.single);
   }
   // 保留末两段，便于区分同名文件。
   final tail = segments.length >= 2
       ? '${segments[segments.length - 2]}/${segments.last}'
       : segments.last;
-  return _shortenText(tail);
+  return shortenAgentToolText(tail);
 }
 
-String _shortenText(String text, {int maxChars = 72}) {
+/// 展示用文本截断。
+String shortenAgentToolText(String text, {int maxChars = 72}) {
   final collapsed = text.replaceAll(RegExp(r'\s+'), ' ').trim();
   if (collapsed.length <= maxChars) {
     return collapsed;

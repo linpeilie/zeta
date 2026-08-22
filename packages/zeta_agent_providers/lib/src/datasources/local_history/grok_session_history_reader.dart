@@ -176,11 +176,6 @@ class GrokSessionHistoryReader {
       );
     }
 
-    final meta = <String, Object?>{
-      'sessionPath': sessionDir.path,
-      'providerId': providerId,
-    };
-
     final updatesFile = File(
       '${sessionDir.path}${Platform.pathSeparator}updates.jsonl',
     );
@@ -190,7 +185,8 @@ class GrokSessionHistoryReader {
         final snapshot = updatesParser.parse(
           threadId: threadId,
           content: content,
-          raw: <String, Object?>{...meta, 'source': 'updates.jsonl'},
+          sourceLabel: 'updates.jsonl',
+          sessionPath: sessionDir.path,
         );
         if (snapshot.turns.isNotEmpty) {
           return snapshot;
@@ -216,7 +212,8 @@ class GrokSessionHistoryReader {
         return chatHistoryParser.parse(
           threadId: threadId,
           content: content,
-          raw: <String, Object?>{...meta, 'source': 'chat_history.jsonl'},
+          sourceLabel: 'chat_history.jsonl',
+          sessionPath: sessionDir.path,
         );
       } catch (error, stackTrace) {
         _log.w(
@@ -230,7 +227,6 @@ class GrokSessionHistoryReader {
     return AgentThreadHistorySnapshot(
       threadId: threadId,
       turns: const <AgentHistoryTurn>[],
-      raw: meta,
     );
   }
 
@@ -420,7 +416,6 @@ class GrokSessionHistoryReader {
       updatedAt: updatedAt ?? lastActiveAt ?? fallbackTime,
       recencyAt: lastActiveAt ?? updatedAt ?? fallbackTime,
       status: AgentThreadRuntimeStatus.idle,
-      raw: raw,
     );
   }
 

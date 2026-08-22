@@ -414,11 +414,7 @@ class GrokAcpAgentProvider
     _applyModelsFromSessionPayload(map);
     await _applyModelSelectionIfNeeded(sessionId);
 
-    final session = AgentSession(
-      id: sessionId,
-      providerId: config.id,
-      raw: map,
-    );
+    final session = AgentSession(id: sessionId, providerId: config.id);
     _rememberProjectPath(sessionId, cwd);
     _addEvent(AgentSessionStartedEvent(session));
     _log.i('Started Grok ACP session $sessionId');
@@ -460,11 +456,7 @@ class GrokAcpAgentProvider
           final map = _asStringKeyedMap(result) ?? const <String, Object?>{};
           _applyModelsFromSessionPayload(map);
           await _applyModelSelectionIfNeeded(sessionId);
-          final session = AgentSession(
-            id: sessionId,
-            providerId: config.id,
-            raw: map,
-          );
+          final session = AgentSession(id: sessionId, providerId: config.id);
           if (cwd != null && cwd.isNotEmpty) {
             _rememberProjectPath(sessionId, cwd);
           }
@@ -549,7 +541,7 @@ class GrokAcpAgentProvider
         cached.turns.isNotEmpty &&
         (sessionPath == null ||
             sessionPath.isEmpty ||
-            cached.raw['sessionPath'] == sessionPath)) {
+            cached.sessionPath == sessionPath)) {
       return _enrichHistorySnapshot(cached);
     }
 
@@ -1146,7 +1138,6 @@ class GrokAcpAgentProvider
           AgentQuestionResolvedEvent(
             requestId: pending.id,
             threadId: pending.sessionId ?? '',
-            raw: const <String, Object?>{'reason': 'disposed'},
           ),
         );
       }
@@ -1433,11 +1424,7 @@ class GrokAcpAgentProvider
       '(${summary.length} characters)',
     );
     _addEvent(
-      AgentThreadPreviewUpdatedEvent(
-        threadId: sessionId,
-        preview: summary,
-        raw: params,
-      ),
+      AgentThreadPreviewUpdatedEvent(threadId: sessionId, preview: summary),
     );
   }
 
@@ -1515,7 +1502,6 @@ class GrokAcpAgentProvider
         turnId: turnId,
         exception: error,
         stackTrace: stackTrace,
-        raw: failure.raw,
       ),
     );
     _noteTurnCompletedFromMapped(sessionId: sessionId, mapped: mapped);
@@ -1789,7 +1775,6 @@ class GrokAcpAgentProvider
         AgentPermissionResolvedEvent(
           requestId: pending.requestKey,
           threadId: pending.mapping.request.sessionId ?? '',
-          raw: const <String, Object?>{'reason': 'connectionClosed'},
         ),
       );
     }
@@ -1803,7 +1788,6 @@ class GrokAcpAgentProvider
         AgentQuestionResolvedEvent(
           requestId: pending.id,
           threadId: pending.sessionId ?? '',
-          raw: const <String, Object?>{'reason': 'connectionClosed'},
         ),
       );
     }
@@ -1909,7 +1893,6 @@ class GrokAcpAgentProvider
         AgentQuestionResolvedEvent(
           requestId: existing.id,
           threadId: existing.sessionId ?? '',
-          raw: const <String, Object?>{'reason': 'replaced'},
         ),
       );
     }
@@ -1990,7 +1973,9 @@ class GrokAcpAgentProvider
       sessionId: sessionId,
       turnId: _runningTurnIdsBySessionId[sessionId],
       isProject: false,
-      raw: _asStringKeyedMap(params) ?? const <String, Object?>{},
+      raw: AgentProviderRawPayload.wrap(
+        _asStringKeyedMap(params) ?? const <String, Object?>{},
+      ),
     );
     _pendingPlanApprovals[toolCallId] = _PendingPlanApproval(
       requestId: request.id,
@@ -2136,7 +2121,6 @@ class GrokAcpAgentProvider
       AgentQuestionResolvedEvent(
         requestId: pending.id,
         threadId: pending.sessionId ?? '',
-        raw: <String, Object?>{'reason': reason},
       ),
     );
   }
@@ -2197,7 +2181,6 @@ class GrokAcpAgentProvider
                 model.defaultServiceTier ?? previous.defaultServiceTier,
             isDefault: model.isDefault,
             contextWindowTokens: previous.contextWindowTokens,
-            raw: model.raw,
           );
         }),
         for (final previous in previousById.values)
@@ -2238,7 +2221,6 @@ class GrokAcpAgentProvider
         modelContextWindow: window,
         sessionId: event.sessionId,
         turnId: event.turnId,
-        raw: event.raw,
       );
     }
     if (event is! AgentTokenUsageEvent ||
@@ -2254,7 +2236,6 @@ class GrokAcpAgentProvider
       turnId: event.turnId,
       isSessionCumulative: event.isSessionCumulative,
       tokenUsage: _withContextWindow(event.tokenUsage, window),
-      raw: event.raw,
     );
   }
 
@@ -2292,7 +2273,6 @@ class GrokAcpAgentProvider
           tokenUsageIsSessionCumulative: turn.tokenUsageIsSessionCumulative,
           errorMessage: turn.errorMessage,
           errorCode: turn.errorCode,
-          raw: turn.raw,
         ),
       );
     }
@@ -2310,7 +2290,6 @@ class GrokAcpAgentProvider
       threadId: snapshot.threadId,
       turns: List<AgentHistoryTurn>.unmodifiable(turns),
       currentTurn: currentTurn,
-      raw: snapshot.raw,
     );
   }
 

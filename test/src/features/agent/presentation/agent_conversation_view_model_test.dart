@@ -1719,7 +1719,9 @@ void main() {
           role: AgentMessageRole.agent,
           kind: AgentMessageKind.plan,
           status: AgentMessageStatus.streaming,
-          raw: <String, Object?>{'type': 'agentMessage'},
+          raw: AgentProviderRawPayload.wrap(<String, Object?>{
+            'type': 'agentMessage',
+          }),
           sessionId: 'thread-1',
           turnId: 'turn-1',
         ),
@@ -1731,7 +1733,9 @@ void main() {
           role: AgentMessageRole.agent,
           kind: AgentMessageKind.plan,
           status: AgentMessageStatus.streaming,
-          raw: <String, Object?>{'type': 'agentMessage'},
+          raw: AgentProviderRawPayload.wrap(<String, Object?>{
+            'type': 'agentMessage',
+          }),
           sessionId: 'thread-1',
           turnId: 'turn-1',
         ),
@@ -1754,7 +1758,9 @@ void main() {
           text: '# Final Plan\n\n- Step one\n- Step two',
           role: AgentMessageRole.agent,
           status: AgentMessageStatus.completed,
-          raw: <String, Object?>{'type': 'agentMessage'},
+          raw: AgentProviderRawPayload.wrap(<String, Object?>{
+            'type': 'agentMessage',
+          }),
           sessionId: 'thread-1',
           turnId: 'turn-1',
         ),
@@ -2223,7 +2229,7 @@ void main() {
             content: 'Fetching resources…',
             sessionId: 'thread-1',
             turnId: 'turn-1',
-            raw: <String, Object?>{'_progressAppend': true},
+            appendsProgress: true,
           ),
         ),
       );
@@ -3036,12 +3042,6 @@ void main() {
           willRetry: false,
           sessionId: 'thread-1',
           turnId: 'turn-1',
-          raw: <String, Object?>{
-            'jsonRpcError': <String, Object?>{
-              'code': -32003,
-              'accessToken': 'event-secret',
-            },
-          },
         ),
       );
       await _drainTypedUiScheduling();
@@ -3058,10 +3058,8 @@ void main() {
       expect(context['sessionId'], 'thread-1');
       expect(context['turnId'], 'turn-1');
       expect(context['code'], 'rateLimited');
-      final diagnostic = context['diagnostic']! as Map<String, Object?>;
-      final rpc = diagnostic['jsonRpcError']! as Map<String, Object?>;
-      expect(rpc['code'], -32003);
-      expect(rpc['accessToken'], '••••••');
+      // 原文不再随事件传播，也就不会进日志：比"先落日志再脱敏"更强的保证。
+      expect(context.containsKey('diagnostic'), isFalse);
       expect(record.message, isNot(contains('event-secret')));
       expect(record.message, isNot(contains('private user prompt')));
     });
@@ -3609,13 +3607,6 @@ void main() {
                   reasoningEffort: AgentHistoryReasoningEffort.explicit('low'),
                   serviceTierId: 'priority',
                   explicitFast: true,
-                  raw: <String, Object?>{
-                    'turnContext': <String, Object?>{
-                      'model': 'ignored-model',
-                      'serviceTier': 'ignored-tier',
-                      'fast': false,
-                    },
-                  },
                 ),
                 AgentHistoryTurn(id: 'turn-2'),
               ],
@@ -3859,16 +3850,7 @@ void main() {
             'thread-1': const AgentThreadHistorySnapshot(
               threadId: 'thread-1',
               turns: <AgentHistoryTurn>[
-                AgentHistoryTurn(
-                  id: 'turn-1',
-                  modelId: 'gpt-5.5',
-                  raw: <String, Object?>{
-                    'turnContext': <String, Object?>{
-                      'model': 'gpt-5.5',
-                      'effort': 'low',
-                    },
-                  },
-                ),
+                AgentHistoryTurn(id: 'turn-1', modelId: 'gpt-5.5'),
               ],
             ),
           },

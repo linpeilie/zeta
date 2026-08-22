@@ -57,11 +57,13 @@ void main() {
         question.optionItems.first.description,
         'Use a versioned model table',
       );
-      expect(event.request.raw, <String, Object?>{
-        'tool_name': claudeCodeAskUserQuestionToolName,
-        'tool_use_id': 'toolu-req-question-1',
-        'source': 'claude_code.can_use_tool',
-      });
+      expect(
+        event.request.raw.toPrettyJson(),
+        allOf(<Matcher>[
+          contains('"tool_use_id": "toolu-req-question-1"'),
+          contains('"source": "claude_code.can_use_tool"'),
+        ]),
+      );
     });
 
     test('encodes single and multi answers into updatedInput', () {

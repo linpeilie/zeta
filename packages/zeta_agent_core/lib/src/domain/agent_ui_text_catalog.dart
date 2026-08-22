@@ -246,7 +246,7 @@ extension AgentToolCallUiText on AgentToolCall {
       title: title,
       kind: kind,
       locations: locations,
-      rawInput: rawInput,
+      inputDetail: inputDetail,
     );
   }
 }

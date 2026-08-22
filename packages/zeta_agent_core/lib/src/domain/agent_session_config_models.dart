@@ -9,13 +9,11 @@ class AgentSessionConfigValue {
     required this.id,
     required this.label,
     this.description,
-    this.raw = const <String, Object?>{},
   });
 
   final Object id;
   final String label;
   final String? description;
-  final Map<String, Object?> raw;
 }
 
 /// Provider 暴露的单个 session 配置项。
@@ -30,7 +28,6 @@ class AgentSessionConfigOption {
     this.category,
     this.currentValue,
     this.values = const <AgentSessionConfigValue>[],
-    this.raw = const <String, Object?>{},
   });
 
   final String id;
@@ -40,7 +37,6 @@ class AgentSessionConfigOption {
   final String? category;
   final Object? currentValue;
   final List<AgentSessionConfigValue> values;
-  final Map<String, Object?> raw;
 
   AgentSessionConfigOption copyWith({
     String? id,
@@ -62,7 +58,6 @@ class AgentSessionConfigOption {
           ? this.currentValue
           : currentValue,
       values: values ?? this.values,
-      raw: raw ?? this.raw,
     );
   }
 
@@ -105,7 +100,6 @@ class AgentSessionConfigOption {
             id: optionId,
             label: label,
             description: decodeOptionalString(option['description']),
-            raw: option,
           ),
         );
       }
@@ -118,7 +112,6 @@ class AgentSessionConfigOption {
       category: decodeOptionalString(map['category']),
       currentValue: map['currentValue'] ?? map['current_value'],
       values: List<AgentSessionConfigValue>.unmodifiable(decodedValues),
-      raw: map,
     );
   }
 }

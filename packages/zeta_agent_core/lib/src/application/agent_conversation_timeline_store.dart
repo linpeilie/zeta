@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'package:flutter/foundation.dart';
 
 import 'package:zeta_agent_core/src/domain/agent_models.dart';
+import 'package:zeta_agent_core/src/domain/agent_provider_raw_payload.dart';
 import 'package:zeta_agent_core/src/domain/fallback_agent_ui_text_catalog.dart';
 
 /// Agent 对话时间线与 turn 分组的运行时状态仓库。
@@ -510,11 +511,9 @@ class AgentConversationTimelineStore {
           id: entry.id,
           role: AgentMessageRole.system,
           text: displayText,
-          raw: <String, Object?>{
-            ...entry.raw,
-            'historyTurnError': true,
-            if (turn.errorCode != null) 'errorCode': turn.errorCode,
-          },
+          // 原始报文只呈现 Provider 的原文；Zeta 自有的错误标记不再混进去
+          // （内核不再作者化 payload 内容）。错误语义已由消息本身表达。
+          raw: entry.raw,
         ),
       );
       return;
@@ -524,10 +523,7 @@ class AgentConversationTimelineStore {
         id: 'history-turn-error:${turn.id}',
         role: AgentMessageRole.system,
         text: displayText,
-        raw: <String, Object?>{
-          'historyTurnError': true,
-          if (turn.errorCode != null) 'errorCode': turn.errorCode,
-        },
+        // 同上：内核不作者化"原始报文"内容。
       ),
     );
   }
@@ -968,8 +964,11 @@ class AgentConversationTimelineStore {
   }
 
   /// MCP `item/mcpToolCall/progress` 等进度通知：content 按行追加。
+  ///
+  /// 追加语义由 Provider adapter 在 [AgentToolCall.appendsProgress] 上显式声明；
+  /// 共享层不读 raw payload 里的私有标记。
   bool _isToolProgressAppend(AgentToolCall toolCall) {
-    return toolCall.raw['_progressAppend'] == true;
+    return toolCall.appendsProgress;
   }
 
   String? _appendToolProgressContent(String? existing, String? incoming) {
@@ -1043,10 +1042,10 @@ class AgentConversationTimelineStore {
       startedAt: startedAt,
       completedAt: existing?.completedAt,
       duration: existing?.duration,
-      rawInput: existing?.rawInput ?? const <String, Object?>{},
-      rawOutput: existing?.rawOutput ?? const <String, Object?>{},
+      rawInput: existing?.rawInput ?? const AgentProviderRawPayload.empty(),
+      rawOutput: existing?.rawOutput ?? const AgentProviderRawPayload.empty(),
       raw: event.raw.isEmpty
-          ? (existing?.raw ?? const <String, Object?>{})
+          ? (existing?.raw ?? const AgentProviderRawPayload.empty())
           : event.raw,
       fileChanges: existing?.fileChanges,
     );
@@ -1619,7 +1618,7 @@ class AgentConversationMessage {
     this.status,
     this.duration,
     this.localImagePaths = const <String>[],
-    this.raw = const <String, Object?>{},
+    this.raw = const AgentProviderRawPayload.empty(),
   });
 
   final String id;
@@ -1636,7 +1635,7 @@ class AgentConversationMessage {
 
   /// 本条消息附带的本地图片路径（发送时预览 / 历史回填）。
   final List<String> localImagePaths;
-  final Map<String, Object?> raw;
+  final AgentProviderRawPayload raw;
 
   bool get isPlan => kind == AgentMessageKind.plan;
 
@@ -1662,7 +1661,7 @@ class AgentConversationMessage {
     AgentMessageStatus? status,
     Duration? duration,
     List<String>? localImagePaths,
-    Map<String, Object?>? raw,
+    AgentProviderRawPayload? raw,
   }) {
     return AgentConversationMessage(
       id: id,

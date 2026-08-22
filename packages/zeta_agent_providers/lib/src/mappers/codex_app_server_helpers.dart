@@ -199,35 +199,35 @@ AgentHistoryEventEntry? _systemHistoryEventFromThreadItem(
       kind: AgentHistoryEventKind.system,
       title: catalog.reviewModeEnteredTitle,
       description: _string(item['review']),
-      raw: item,
+      raw: AgentProviderRawPayload.wrap(item),
     ),
     'exitedreviewmode' => AgentHistoryEventEntry(
       id: id,
       kind: AgentHistoryEventKind.system,
       title: catalog.reviewModeExitedTitle,
       description: _string(item['review']),
-      raw: item,
+      raw: AgentProviderRawPayload.wrap(item),
     ),
     'contextcompaction' => AgentHistoryEventEntry(
       id: id,
       kind: AgentHistoryEventKind.system,
       title: catalog.contextCompactedTitle,
       description: catalog.contextCompactedDescription,
-      raw: item,
+      raw: AgentProviderRawPayload.wrap(item),
     ),
     'hookprompt' => AgentHistoryEventEntry(
       id: id,
       kind: AgentHistoryEventKind.system,
       title: catalog.hookPromptTitle,
       content: _hookPromptFragmentsText(item['fragments']),
-      raw: item,
+      raw: AgentProviderRawPayload.wrap(item),
     ),
     'sleep' => AgentHistoryEventEntry(
       id: id,
       kind: AgentHistoryEventKind.system,
       title: catalog.waitingTitle,
       description: _sleepDurationLabel(item['durationMs'], catalog),
-      raw: item,
+      raw: AgentProviderRawPayload.wrap(item),
     ),
     'subagentactivity' => AgentHistoryEventEntry(
       id: id,
@@ -239,7 +239,7 @@ AgentHistoryEventEntry? _systemHistoryEventFromThreadItem(
         catalog: catalog,
       ),
       content: _string(item['agentThreadId']),
-      raw: item,
+      raw: AgentProviderRawPayload.wrap(item),
     ),
     _ => null,
   };
@@ -341,13 +341,17 @@ AgentToolCall? _toolCallFromThreadItem(
     locations: projectedLocations ?? _toolLocationsFromThreadItem(item),
     sessionId: sessionId,
     turnId: turnId,
-    rawInput: _map(item['arguments']).isNotEmpty
-        ? _map(item['arguments'])
-        : _map(item['rawInput']),
-    rawOutput: _map(item['result']).isNotEmpty
-        ? _map(item['result'])
-        : _map(item['rawOutput']),
-    raw: raw.isEmpty ? item : raw,
+    rawInput: AgentProviderRawPayload.wrap(
+      _map(item['arguments']).isNotEmpty
+          ? _map(item['arguments'])
+          : _map(item['rawInput']),
+    ),
+    rawOutput: AgentProviderRawPayload.wrap(
+      _map(item['result']).isNotEmpty
+          ? _map(item['result'])
+          : _map(item['rawOutput']),
+    ),
+    raw: AgentProviderRawPayload.wrap(raw.isEmpty ? item : raw),
     fileChanges: fileChanges,
   );
 }

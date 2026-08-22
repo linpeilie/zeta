@@ -13,7 +13,8 @@ class GrokChatHistoryParser {
   AgentThreadHistorySnapshot parse({
     required String threadId,
     required String content,
-    Map<String, Object?> raw = const <String, Object?>{},
+    String? sourceLabel,
+    String? sessionPath,
   }) {
     final turns = <_ChatTurnBuilder>[];
     _ChatTurnBuilder? current;
@@ -90,7 +91,7 @@ class GrokChatHistoryParser {
               text: userContent.text,
               status: AgentMessageStatus.completed,
               localImagePaths: userContent.localImagePaths,
-              raw: map,
+              raw: AgentProviderRawPayload.wrap(map),
             ),
           );
 
@@ -106,7 +107,7 @@ class GrokChatHistoryParser {
               role: AgentMessageRole.agent,
               text: cleaned,
               status: AgentMessageStatus.completed,
-              raw: map,
+              raw: AgentProviderRawPayload.wrap(map),
             ),
           );
 
@@ -124,7 +125,7 @@ class GrokChatHistoryParser {
               kind: AgentToolKind.think,
               status: AgentToolStatus.completed,
               content: cleaned,
-              raw: map,
+              raw: AgentProviderRawPayload.wrap(map),
             ),
           );
 
@@ -148,7 +149,7 @@ class GrokChatHistoryParser {
               kind: AgentToolKind.other,
               status: AgentToolStatus.completed,
               content: cleaned,
-              raw: map,
+              raw: AgentProviderRawPayload.wrap(map),
             ),
           );
 
@@ -165,7 +166,7 @@ class GrokChatHistoryParser {
               role: AgentMessageRole.agent,
               text: cleaned,
               status: AgentMessageStatus.completed,
-              raw: map,
+              raw: AgentProviderRawPayload.wrap(map),
             ),
           );
       }
@@ -180,7 +181,8 @@ class GrokChatHistoryParser {
       threadId: threadId,
       turns: List<AgentHistoryTurn>.unmodifiable(built),
       currentTurn: built.isEmpty ? null : built.last,
-      raw: raw,
+      sourceLabel: sourceLabel,
+      sessionPath: sessionPath,
     );
   }
 }

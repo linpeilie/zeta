@@ -51,7 +51,6 @@ void main() {
                     AgentModelServiceTier(id: 'priority', name: 'Fast'),
                   ],
                   contextWindowTokens: 128000,
-                  raw: <String, Object?>{'secret': 'do-not-write'},
                 ),
               ],
             ),
@@ -68,7 +67,6 @@ void main() {
         expect(model.supportedReasoningEfforts.single.effort, 'high');
         expect(model.serviceTiers.single.id, 'priority');
         expect(model.contextWindowTokens, 128000);
-        expect(model.raw, isEmpty);
       },
     );
 

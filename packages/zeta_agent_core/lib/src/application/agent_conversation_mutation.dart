@@ -1,6 +1,7 @@
 import 'package:zeta_agent_core/src/application/agent_conversation_effect.dart';
 import 'package:zeta_agent_core/src/application/agent_ui_update_request.dart';
 import 'package:zeta_agent_core/src/domain/agent_models.dart';
+import 'package:zeta_agent_core/src/domain/agent_provider_raw_payload.dart';
 
 /// reducer 产生的类型化会话状态变化。
 sealed class AgentConversationStateChange {
@@ -179,7 +180,7 @@ final class AgentConversationMessageMutationData {
     this.status,
     this.duration,
     this.localImagePaths = const <String>[],
-    this.raw = const <String, Object?>{},
+    this.raw = const AgentProviderRawPayload.empty(),
   });
 
   final String id;
@@ -191,7 +192,7 @@ final class AgentConversationMessageMutationData {
   final AgentMessageStatus? status;
   final Duration? duration;
   final List<String> localImagePaths;
-  final Map<String, Object?> raw;
+  final AgentProviderRawPayload raw;
 }
 
 final class AgentAddConversationMessageTimelineMutation

@@ -308,11 +308,8 @@ class FileSystemGrokUsageLogScanner implements GrokUsageLogScanner {
         final history = parser.parse(
           threadId: threadId,
           content: await file.readAsString(),
-          raw: <String, Object?>{
-            'source': 'updates.jsonl',
-            'sourcePath': file.path,
-            'projectPath': projectPath,
-          },
+          sourceLabel: 'updates.jsonl',
+          sessionPath: sessionDirectory.path,
         );
         sessions[file.path] = GrokUsageIndexedSession(
           sourcePath: file.path,

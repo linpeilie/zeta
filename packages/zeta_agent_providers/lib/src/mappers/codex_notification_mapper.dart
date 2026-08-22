@@ -57,7 +57,6 @@ class _CodexNotificationMapper {
               status: _threadRuntimeStatus(statusMap),
               waitingOnApproval: flags.waitingOnApproval,
               waitingOnUserInput: flags.waitingOnUserInput,
-              raw: notification.params,
             ),
           ],
         );
@@ -71,41 +70,28 @@ class _CodexNotificationMapper {
             AgentThreadNameUpdatedEvent(
               threadId: threadId,
               threadName: _string(notification.params['threadName']),
-              raw: notification.params,
             ),
           ],
         );
       case 'thread/archived':
         return _threadIdEventMapping(
           notification,
-          (threadId) => AgentThreadArchivedEvent(
-            threadId: threadId,
-            raw: notification.params,
-          ),
+          (threadId) => AgentThreadArchivedEvent(threadId: threadId),
         );
       case 'thread/unarchived':
         return _threadIdEventMapping(
           notification,
-          (threadId) => AgentThreadUnarchivedEvent(
-            threadId: threadId,
-            raw: notification.params,
-          ),
+          (threadId) => AgentThreadUnarchivedEvent(threadId: threadId),
         );
       case 'thread/deleted':
         return _threadIdEventMapping(
           notification,
-          (threadId) => AgentThreadDeletedEvent(
-            threadId: threadId,
-            raw: notification.params,
-          ),
+          (threadId) => AgentThreadDeletedEvent(threadId: threadId),
         );
       case 'thread/closed':
         return _threadIdEventMapping(
           notification,
-          (threadId) => AgentThreadClosedEvent(
-            threadId: threadId,
-            raw: notification.params,
-          ),
+          (threadId) => AgentThreadClosedEvent(threadId: threadId),
         );
       case 'thread/compacted':
         final threadId = _string(notification.params['threadId']);
@@ -117,7 +103,6 @@ class _CodexNotificationMapper {
             AgentThreadCompactedEvent(
               threadId: threadId,
               turnId: _string(notification.params['turnId']),
-              raw: notification.params,
             ),
           ],
         );
@@ -187,7 +172,6 @@ class _CodexNotificationMapper {
               errorCode: _codexErrorCode(_map(turn['error'])['codexErrorInfo']),
               duration: _durationFromMilliseconds(turn['durationMs']),
               completedAt: DateTime.now(),
-              raw: notification.params,
             ),
           ],
         );
@@ -217,7 +201,7 @@ class _CodexNotificationMapper {
                     _string(item['status']),
               ),
               duration: _messageDuration(item, notification.params),
-              raw: notification.params,
+              raw: AgentProviderRawPayload.wrap(notification.params),
               sessionId: _string(notification.params['threadId']),
               turnId: _string(notification.params['turnId']),
             ),
@@ -259,7 +243,7 @@ class _CodexNotificationMapper {
               delta: delta,
               role: AgentMessageRole.agent,
               status: AgentMessageStatus.streaming,
-              raw: notification.params,
+              raw: AgentProviderRawPayload.wrap(notification.params),
               sessionId: _string(notification.params['threadId']),
               turnId: _string(notification.params['turnId']),
             ),
@@ -383,7 +367,6 @@ class _CodexNotificationMapper {
                   _string(notification.params['turnId']) ??
                   (threadId == null ? null : runningTurnIdForSession(threadId)),
               tokenUsage: usage,
-              raw: notification.params,
             ),
           ],
         );
@@ -402,7 +385,6 @@ class _CodexNotificationMapper {
             AgentPermissionResolvedEvent(
               requestId: requestId,
               threadId: threadId,
-              raw: notification.params,
             ),
           ],
         );
@@ -430,7 +412,6 @@ class _CodexNotificationMapper {
               fromModel: fromModel,
               toModel: toModel,
               reason: reason,
-              raw: notification.params,
             ),
           ],
         );
@@ -445,7 +426,6 @@ class _CodexNotificationMapper {
             AgentDeprecationNoticeEvent(
               summary: summary,
               details: _string(notification.params['details']),
-              raw: notification.params,
             ),
           ],
         );
@@ -467,7 +447,6 @@ class _CodexNotificationMapper {
               details: _string(notification.params['details']),
               sessionId: _string(notification.params['threadId']),
               turnId: _string(notification.params['turnId']),
-              raw: notification.params,
             ),
           ],
         );
@@ -498,7 +477,6 @@ class _CodexNotificationMapper {
               rationale: _string(review['rationale']),
               riskLevel: _string(review['riskLevel']),
               targetItemId: _string(notification.params['targetItemId']),
-              raw: notification.params,
             ),
           ],
         );
@@ -589,7 +567,6 @@ class _CodexNotificationMapper {
         details: _string(params['details']),
         sessionId: _string(params['threadId']),
         turnId: _string(params['turnId']),
-        raw: params,
       );
     }
 
@@ -601,7 +578,6 @@ class _CodexNotificationMapper {
       willRetry: willRetry is bool ? willRetry : null,
       sessionId: _string(params['threadId']),
       turnId: _string(params['turnId']),
-      raw: params,
     );
   }
 
@@ -642,7 +618,6 @@ class _CodexNotificationMapper {
       id: id,
       providerId: _providerId,
       title: _string(thread['title']) ?? _string(thread['name']),
-      raw: params,
     );
   }
 
@@ -653,7 +628,7 @@ class _CodexNotificationMapper {
     if (id == null || sessionId == null) {
       return null;
     }
-    return AgentTurn(id: id, sessionId: sessionId, raw: params);
+    return AgentTurn(id: id, sessionId: sessionId);
   }
 
   List<AgentPlanEntry> _planEntries(Map<String, Object?> params) {
@@ -722,7 +697,7 @@ class _CodexNotificationMapper {
           summaryIndex: _numberToInt(notification.params['summaryIndex']),
           sessionId: _string(notification.params['threadId']),
           turnId: _string(notification.params['turnId']),
-          raw: notification.params,
+          raw: AgentProviderRawPayload.wrap(notification.params),
         ),
       ],
     );
@@ -812,7 +787,7 @@ class _CodexNotificationMapper {
               _string(item['status']) ?? _string(notification.params['status']),
             ),
       duration: _messageDuration(item, notification.params),
-      raw: notification.params,
+      raw: AgentProviderRawPayload.wrap(notification.params),
       sessionId: _string(notification.params['threadId']),
       turnId: _string(notification.params['turnId']),
     );
@@ -839,7 +814,11 @@ class _CodexNotificationMapper {
         sessionId: _string(notification.params['threadId']),
         turnId: _string(notification.params['turnId']),
         // 标记进度追加，供 timeline 合并时保留既有标题并追加 content。
-        raw: <String, Object?>{...notification.params, '_progressAppend': true},
+        raw: AgentProviderRawPayload.wrap(<String, Object?>{
+          ...notification.params,
+        }),
+        // 进度追加是语义，不是原文：显式声明，不再借 raw 传私有标记（G1/G2）。
+        appendsProgress: true,
       );
     }
 
@@ -864,7 +843,7 @@ class _CodexNotificationMapper {
           : fileProjection!.locations,
       sessionId: _string(notification.params['threadId']),
       turnId: _string(notification.params['turnId']),
-      raw: notification.params,
+      raw: AgentProviderRawPayload.wrap(notification.params),
       fileChanges: fileProjection?.snapshot,
     );
   }

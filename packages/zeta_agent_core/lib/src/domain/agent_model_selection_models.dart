@@ -59,7 +59,7 @@ class AgentModelInfo {
     this.enabled = true,
     this.unavailableReason,
     this.contextWindowTokens,
-    this.raw = const <String, Object?>{},
+    this.supportsImageInput = false,
   });
 
   /// 模型稳定 id。
@@ -107,7 +107,11 @@ class AgentModelInfo {
   final int? contextWindowTokens;
 
   /// 原始 provider payload。
-  final Map<String, Object?> raw;
+  /// 该模型是否接受图片输入。
+  ///
+  /// 由 Provider 的模型目录 adapter 声明；presentation 不再翻 `raw` 里的
+  /// `inputModalities` 猜（那是 wire 形状解析，属于 Provider 语义，G2）。
+  final bool supportsImageInput;
 
   /// 诊断日志用摘要；不含 raw payload，避免刷屏与泄露内部字段。
   String describeForLog() {

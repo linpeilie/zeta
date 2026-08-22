@@ -1,3 +1,4 @@
+import 'package:zeta_agent_core/src/domain/agent_provider_raw_payload.dart';
 import 'package:zeta_agent_core/src/domain/agent_turn_history_models.dart';
 
 /// Agent 向用户发出的独立提问请求。
@@ -11,7 +12,7 @@ final class AgentQuestionRequest {
     this.description,
     this.sessionId,
     this.turnId,
-    this.raw = const <String, Object?>{},
+    this.raw = const AgentProviderRawPayload.empty(),
   });
 
   /// UI 和响应端口使用的稳定请求 id。
@@ -33,7 +34,7 @@ final class AgentQuestionRequest {
   final String? turnId;
 
   /// Provider 原始请求，仅用于 data/application 诊断。
-  final Map<String, Object?> raw;
+  final AgentProviderRawPayload raw;
 }
 
 /// 用户对独立提问请求的结构化回答。

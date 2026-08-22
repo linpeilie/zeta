@@ -1,3 +1,4 @@
+import 'package:zeta_agent_core/src/domain/agent_provider_raw_payload.dart';
 import 'package:zeta_agent_core/src/domain/agent_tool_models.dart';
 
 /// 计划审批中的阶段分组。
@@ -37,7 +38,7 @@ class AgentPlanApprovalRequest {
     this.sessionId,
     this.turnId,
     this.continuation = AgentPlanApprovalContinuation.providerManaged,
-    this.raw = const <String, Object?>{},
+    this.raw = const AgentProviderRawPayload.empty(),
   });
 
   final String id;
@@ -53,7 +54,7 @@ class AgentPlanApprovalRequest {
   /// 接受审批后的中立续接语义。
   final AgentPlanApprovalContinuation continuation;
 
-  final Map<String, Object?> raw;
+  final AgentProviderRawPayload raw;
 }
 
 /// 计划审批结果。

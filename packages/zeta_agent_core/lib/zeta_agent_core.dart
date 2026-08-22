@@ -46,6 +46,7 @@ export 'src/domain/agent_provider_bundle.dart';
 export 'src/domain/agent_provider_capabilities.dart';
 export 'src/domain/agent_provider_error_presentation.dart';
 export 'src/domain/agent_provider_models.dart';
+export 'src/domain/agent_provider_raw_payload.dart';
 export 'src/domain/agent_question_models.dart';
 export 'src/domain/agent_runtime_models.dart';
 export 'src/domain/agent_session_config_models.dart';

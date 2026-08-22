@@ -94,7 +94,7 @@ class _CodexApprovalMapper {
         fileChanges: _map(request.params['fileChanges']),
         commandActions: commandActions,
         proposedExecpolicyAmendment: proposedAmendment,
-        raw: request.params,
+        raw: AgentProviderRawPayload.wrap(request.params),
       ),
     );
     return _MappedApprovalRequest(

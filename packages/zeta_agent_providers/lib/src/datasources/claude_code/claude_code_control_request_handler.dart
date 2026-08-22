@@ -337,10 +337,10 @@ final class ClaudeCodeControlRequestHandler {
       cwd: cwd,
       sessionId: pending.sessionId,
       turnId: pending.turnId,
-      raw: <String, Object?>{
+      raw: AgentProviderRawPayload.wrap(<String, Object?>{
         'tool_name': pending.toolName,
         'source': 'claude_code.can_use_tool',
-      },
+      }),
     );
   }
 

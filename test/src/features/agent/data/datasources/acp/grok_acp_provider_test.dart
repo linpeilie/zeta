@@ -2517,18 +2517,12 @@ void main() {
         expect(turn.id, started.turn.id);
         expect(completed.status, AgentHistoryTurnStatus.failed);
         expect(completed.errorMessage, scenario.message);
-        expect(completed.raw['operation'], 'session/prompt');
         expect(visibleError.message, scenario.message);
         expect(visibleError.details, isNull);
         expect(visibleError.sessionId, session.id);
         expect(visibleError.turnId, started.turn.id);
         expect(visibleError.exception, same(scenario.error));
         expect(visibleError.stackTrace, isNotNull);
-        expect(visibleError.raw, completed.raw);
-        expect(
-          visibleError.raw['exceptionType'],
-          scenario.error.runtimeType.toString(),
-        );
         final finalStatus = events.whereType<AgentStatusEvent>().last.status;
         expect(
           finalStatus.state,
@@ -2550,11 +2544,11 @@ void main() {
           );
         }
         if (scenario.error case JsonRpcException(:final error)) {
-          final rawRpcError =
-              visibleError.raw['jsonRpcError']! as Map<String, Object?>;
-          expect(rawRpcError['code'], error.code);
-          expect(rawRpcError['message'], error.message);
-          expect(rawRpcError['data'], error.data);
+          // 原文不再随事件传播：改从 typed `exception` 断言 JSON-RPC 细节。
+          final rpcError = (visibleError.exception! as JsonRpcException).error;
+          expect(rpcError.code, error.code);
+          expect(rpcError.message, error.message);
+          expect(rpcError.data, error.data);
         }
       });
     }

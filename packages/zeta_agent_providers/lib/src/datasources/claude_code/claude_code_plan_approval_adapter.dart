@@ -186,10 +186,10 @@ final class ClaudeCodePlanApprovalAdapter {
       isProject: false,
       continuation: AgentPlanApprovalContinuation.localExecutionHandoff,
       // 不把 plan/path/input/raw payload 复制到诊断 metadata（G7）。
-      raw: const <String, Object?>{
+      raw: AgentProviderRawPayload.wrap(const <String, Object?>{
         'source': 'claude_code.exit_plan_mode',
         'tool_name': 'ExitPlanMode',
-      },
+      }),
     );
     _log.t('Plan approval requested (pending=${_pendingByToolUseId.length})');
     return ClaudeCodePlanControlRequestResult(

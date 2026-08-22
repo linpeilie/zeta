@@ -469,9 +469,9 @@ AgentToolTimelineEntry _toolEntry({
       status: AgentToolStatus.completed,
       content: content,
       locations: locations,
-      rawInput: rawInput,
-      rawOutput: rawOutput,
-      raw: raw,
+      rawInput: AgentProviderRawPayload.wrap(rawInput),
+      rawOutput: AgentProviderRawPayload.wrap(rawOutput),
+      raw: AgentProviderRawPayload.wrap(raw),
       fileChanges: fileChanges,
     ),
   );

@@ -404,12 +404,7 @@ class _FailingModelCatalogStore implements AgentModelCatalogCacheStore {
 AgentModelList _models(String id) {
   return AgentModelList(
     models: <AgentModelInfo>[
-      AgentModelInfo(
-        id: id,
-        model: id,
-        displayName: id,
-        raw: const <String, Object?>{'secret': 'must-not-be-persisted'},
-      ),
+      AgentModelInfo(id: id, model: id, displayName: id),
     ],
   );
 }

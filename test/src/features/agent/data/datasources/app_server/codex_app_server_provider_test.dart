@@ -1201,7 +1201,7 @@ void main() {
       expect(deltas[0].kind, AgentMessageKind.plan);
       expect(deltas[0].delta, '# Plan\n');
       expect(deltas[0].status, AgentMessageStatus.streaming);
-      expect(deltas[0].raw['type'], isNull);
+      expect(deltas[0].raw.toPrettyJson(), isNot(contains('"type"')));
       expect(deltas[0].sessionId, 'thread-1');
       expect(deltas[0].turnId, 'turn-1');
       expect(deltas[1].delta, '- Step one');
@@ -1583,7 +1583,7 @@ void main() {
         expect(toolEvent.toolCall.content, 'Fetching resources?');
         expect(toolEvent.toolCall.sessionId, 'thread-1');
         expect(toolEvent.toolCall.turnId, 'turn-1');
-        expect(toolEvent.toolCall.raw['_progressAppend'], isTrue);
+        expect(toolEvent.toolCall.appendsProgress, isTrue);
 
         await subscription.cancel();
         await provider.dispose();
@@ -5489,7 +5489,6 @@ void main() {
       expect(provider.lifecycleState, AgentProviderLifecycleState.closed);
       final resolved = events.whereType<AgentPermissionResolvedEvent>().single;
       expect(resolved.requestId, 'approval-closing');
-      expect(resolved.raw['reason'], 'connectionClosed');
       final requestCount = peer.requestMethods.length;
       await expectLater(
         provider.listThreads(
@@ -5529,7 +5528,6 @@ void main() {
       expect(provider.lifecycleState, AgentProviderLifecycleState.failed);
       final resolved = events.whereType<AgentPermissionResolvedEvent>().single;
       expect(resolved.requestId, 'approval-disconnected');
-      expect(resolved.raw['reason'], 'connectionClosed');
       expect(
         events.whereType<AgentStatusEvent>().last.status.state,
         AgentProviderConnectionState.unavailable,

@@ -761,7 +761,8 @@ AgentPermissionRequest _snapshotPermissionRequest(
     proposedExecpolicyAmendment: List<String>.unmodifiable(
       request.proposedExecpolicyAmendment,
     ),
-    raw: Map<String, Object?>.unmodifiable(request.raw),
+    // payload 本身不可变，无需再复制一层。
+    raw: request.raw,
   );
 }
 
@@ -775,7 +776,8 @@ AgentQuestionRequest _snapshotQuestionRequest(AgentQuestionRequest request) {
     ),
     sessionId: request.sessionId,
     turnId: request.turnId,
-    raw: Map<String, Object?>.unmodifiable(request.raw),
+    // payload 本身不可变，无需再复制一层。
+    raw: request.raw,
   );
 }
 
@@ -826,7 +828,8 @@ AgentPlanApprovalRequest _snapshotPlanApprovalRequest(
     sessionId: request.sessionId,
     turnId: request.turnId,
     continuation: request.continuation,
-    raw: Map<String, Object?>.unmodifiable(request.raw),
+    // payload 本身不可变，无需再复制一层。
+    raw: request.raw,
   );
 }
 
@@ -848,7 +851,6 @@ AgentAutoApprovalReviewEvent _snapshotAutoReview(
     rationale: review.rationale,
     riskLevel: review.riskLevel,
     targetItemId: review.targetItemId,
-    raw: Map<String, Object?>.unmodifiable(review.raw),
   );
 }
 

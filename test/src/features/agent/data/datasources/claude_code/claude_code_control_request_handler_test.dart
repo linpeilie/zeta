@@ -47,9 +47,12 @@ void main() {
         expect(event.request.kind, AgentPermissionKind.commandExecution);
         expect(event.request.command, 'echo hi');
         expect(event.request.cwd, r'C:\tmp\proj');
-        expect(event.request.raw['tool_name'], 'Bash');
+        expect(
+          event.request.raw.toPrettyJson(),
+          contains('"tool_name": "Bash"'),
+        );
         // G7: raw 不含 input 正文。
-        expect(event.request.raw.containsKey('input'), isFalse);
+        expect(event.request.raw.toPrettyJson(), isNot(contains('"input"')));
         expect(handler.pendingCount, 1);
         expect(handler.pending['req_42']!.toolUseId, 'toolu_req_42');
         expect(handler.permissionRequestedCount, 1);

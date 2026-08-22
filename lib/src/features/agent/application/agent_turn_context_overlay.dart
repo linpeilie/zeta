@@ -39,7 +39,6 @@ AgentThreadHistorySnapshot overlayThreadTurnContext(
     threadId: snapshot.threadId,
     turns: List<AgentHistoryTurn>.unmodifiable(turns),
     currentTurn: currentTurn,
-    raw: snapshot.raw,
   );
 }
 
@@ -215,7 +214,6 @@ AgentHistoryTurn _overlayTurn(
     tokenUsageIsSessionCumulative: turn.tokenUsageIsSessionCumulative,
     errorMessage: turn.errorMessage,
     errorCode: turn.errorCode,
-    raw: turn.raw,
   );
 }
 

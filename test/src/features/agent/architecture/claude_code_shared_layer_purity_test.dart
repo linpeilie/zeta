@@ -30,6 +30,16 @@ void main() {
   /// TimelineStore 基线已按 2026-08-17 多语言步骤 12（其余 context-free
   /// 文案改走 `AgentUiTextCatalog`）刷新。
   ///
+  /// 2026-08-22（三）：CoalescingPolicy 与 TimelineStore 基线随 raw payload 变成
+  /// 不可取值的 `AgentProviderRawPayload` 刷新：策略层不再 `raw['_progressAppend']`
+  /// 也不再手动 spread 合并原文（改为内容盲的 `mergedWith`），Store 不再作者化
+  /// "原始报文"内容。同一批架构批准。
+  ///
+  /// 2026-08-22（二）：TimelineStore 基线因**语义改动**刷新——进度追加不再从
+  /// `toolCall.raw['_progressAppend']` 读私有标记，改读 adapter 显式声明的
+  /// `AgentToolCall.appendsProgress`。这是修复一处 G1 违规（适配层借 raw payload
+  /// 遥控共享层），已获架构 owner 批准。
+  ///
   /// 2026-08-22：G1 五文件随 `zeta_agent_core` 拆包移动到
   /// `packages/zeta_agent_core/lib/src/`。**逐字比对确认只有 import URI 变化**
   /// （`package:zeta/src/features/agent/...` → `package:zeta_agent_core/src/...`），
@@ -43,9 +53,9 @@ void main() {
         ),
     'packages/zeta_agent_core/lib/src/application/agent_event_coalescing_policy.dart':
         _FileBaseline(
-          lineCount: 143,
-          byteLength: 4561,
-          fingerprint: '9f4b150879bd4c8c',
+          lineCount: 141,
+          byteLength: 4505,
+          fingerprint: 'aa08191562e5b0ae',
         ),
     'packages/zeta_agent_core/lib/src/application/coalescing_event_buffer.dart':
         _FileBaseline(
@@ -61,9 +71,9 @@ void main() {
         ),
     'packages/zeta_agent_core/lib/src/application/agent_conversation_timeline_store.dart':
         _FileBaseline(
-          lineCount: 2017,
-          byteLength: 67483,
-          fingerprint: '5b3da65992b1f838',
+          lineCount: 2016,
+          byteLength: 67713,
+          fingerprint: '3c5fda26fa76def6',
         ),
   };
 

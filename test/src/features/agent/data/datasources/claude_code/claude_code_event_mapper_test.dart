@@ -331,7 +331,7 @@ void main() {
       expect(startOk.kind, AgentToolKind.read);
       expect(startOk.status, AgentToolStatus.inProgress);
       expect(startOk.turnId, 'turn-tools');
-      expect(startOk.rawInput['file_path'], isA<String>());
+      expect(startOk.rawInput.toPrettyJson(), contains('file_path'));
 
       final doneOk = toolEvents[1].toolCall;
       expect(doneOk.id, 'toolu_fixture_read_ok');

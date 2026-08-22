@@ -280,11 +280,7 @@ class ClaudeCodeAgentProvider
     _sessionId = sessionId;
     _workingDirectory = cwd;
 
-    return AgentSession(
-      id: sessionId,
-      providerId: config.id,
-      raw: <String, Object?>{'cwd': cwd},
-    );
+    return AgentSession(id: sessionId, providerId: config.id);
   }
 
   @override
@@ -321,11 +317,7 @@ class ClaudeCodeAgentProvider
     _sessionId = normalizedSessionId;
     _workingDirectory = cwd;
 
-    return AgentSession(
-      id: normalizedSessionId,
-      providerId: config.id,
-      raw: <String, Object?>{'cwd': cwd},
-    );
+    return AgentSession(id: normalizedSessionId, providerId: config.id);
   }
 
   @override
@@ -419,11 +411,7 @@ class ClaudeCodeAgentProvider
     // Claude 没有独立 compact 控制帧；斜杠命令仍是普通用户回合，必须复用
     // sendMessage 的并发、权限、模型与 session 绑定检查。
     final turn = await sendMessage(
-      session: AgentSession(
-        id: normalizedThreadId,
-        providerId: config.id,
-        raw: <String, Object?>{'cwd': workingDirectory},
-      ),
+      session: AgentSession(id: normalizedThreadId, providerId: config.id),
       context: AgentContext(projectPath: workingDirectory),
       message: '/compact',
     );

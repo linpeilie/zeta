@@ -617,9 +617,11 @@ void main() {
                       kind: AgentToolKind.execute,
                       status: AgentToolStatus.completed,
                       content: 'flutter test\nhidden log line',
-                      rawInput: const <String, Object?>{
-                        'command': 'flutter test',
-                      },
+                      rawInput: AgentProviderRawPayload.wrap(
+                        const <String, Object?>{'command': 'flutter test'},
+                      ),
+                      // 展示细节现在由适配层算好传入，中立层不再解析 wire 形状。
+                      inputDetail: 'flutter test',
                     ),
                   ),
                   const AgentHistoryEventEntry(
@@ -1559,21 +1561,21 @@ void main() {
                   id: 'msg-user-1',
                   role: AgentMessageRole.user,
                   text: 'Hello',
-                  raw: <String, Object?>{
+                  raw: AgentProviderRawPayload.wrap(<String, Object?>{
                     'type': 'response_item',
                     'timestamp': 1700000000,
                     'marker': 'ctx-user-raw',
-                  },
+                  }),
                 ),
                 AgentHistoryMessageEntry(
                   id: 'msg-agent-1',
                   role: AgentMessageRole.agent,
                   text: 'Hi there',
-                  raw: <String, Object?>{
+                  raw: AgentProviderRawPayload.wrap(<String, Object?>{
                     'type': 'event_msg',
                     'timestamp': 1700000005,
                     'marker': 'ctx-agent-raw',
-                  },
+                  }),
                 ),
                 AgentHistoryToolEntry(
                   toolCall: AgentToolCall(
@@ -1581,15 +1583,15 @@ void main() {
                     title: 'Replace context file',
                     kind: AgentToolKind.edit,
                     status: AgentToolStatus.completed,
-                    raw: const <String, Object?>{
+                    raw: AgentProviderRawPayload.wrap(const <String, Object?>{
                       'sentinel': 'FILE_RAW_SENTINEL',
-                    },
-                    rawInput: const <String, Object?>{
-                      'oldText': 'WIRE_OLD_SENTINEL',
-                    },
-                    rawOutput: const <String, Object?>{
-                      'newText': 'WIRE_NEW_SENTINEL',
-                    },
+                    }),
+                    rawInput: AgentProviderRawPayload.wrap(
+                      const <String, Object?>{'oldText': 'WIRE_OLD_SENTINEL'},
+                    ),
+                    rawOutput: AgentProviderRawPayload.wrap(
+                      const <String, Object?>{'newText': 'WIRE_NEW_SENTINEL'},
+                    ),
                     fileChanges: AgentFileChangeSnapshot(
                       revision: 4,
                       replayability: AgentFileChangeReplayability.replayable,
@@ -3795,7 +3797,9 @@ void main() {
                       '# 命令集折叠分组\n\n## Summary\n\n- 第一项\n\n```dart\nvoid main() {}\n```',
                   kind: AgentMessageKind.plan,
                   status: AgentMessageStatus.completed,
-                  raw: <String, Object?>{'type': 'plan'},
+                  raw: AgentProviderRawPayload.wrap(<String, Object?>{
+                    'type': 'plan',
+                  }),
                 ),
               ],
             ),

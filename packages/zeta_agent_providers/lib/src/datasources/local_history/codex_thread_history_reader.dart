@@ -118,7 +118,6 @@ class _CodexThreadHistoryReader {
             tokenUsage: _tokenUsageFromTurnPayload(turn),
             errorMessage: _string(error['message']),
             errorCode: _codexErrorCode(error['codexErrorInfo']),
-            raw: turn,
           );
           turns.add(historyTurn);
           currentTurn = historyTurn;
@@ -129,7 +128,6 @@ class _CodexThreadHistoryReader {
         threadId: threadId,
         turns: List<AgentHistoryTurn>.unmodifiable(turns),
         currentTurn: currentTurn,
-        raw: map,
       );
     } finally {
       fileChangeTracker.dispose();
@@ -191,7 +189,8 @@ class _CodexThreadHistoryReader {
       threadId: local.threadId,
       turns: List<AgentHistoryTurn>.unmodifiable(mergedTurns),
       currentTurn: currentTurn,
-      raw: <String, Object?>{...local.raw, 'remoteFailureOverlay': true},
+      sourceLabel: local.sourceLabel,
+      sessionPath: local.sessionPath,
     );
   }
 
@@ -255,20 +254,6 @@ class _CodexThreadHistoryReader {
       tokenUsageIsSessionCumulative: local.tokenUsageIsSessionCumulative,
       errorMessage: needsMessage ? remote.errorMessage : local.errorMessage,
       errorCode: needsCode ? remote.errorCode : local.errorCode,
-      raw: <String, Object?>{
-        ...local.raw,
-        if (needsReasoningEffort ||
-            needsModelId ||
-            needsServiceTierId ||
-            needsExplicitFast)
-          'remoteModelConfigOverlay': true,
-        if (hasRemoteFailure)
-          'remoteFailureOverlay': <String, Object?>{
-            'status': remote.status.name,
-            'errorMessage': remote.errorMessage,
-            'errorCode': remote.errorCode,
-          },
-      },
     );
   }
 
@@ -401,7 +386,7 @@ class _CodexThreadHistoryReader {
       status: status,
       duration: duration,
       localImagePaths: List<String>.unmodifiable(localImagePaths),
-      raw: raw,
+      raw: AgentProviderRawPayload.wrap(raw),
     );
   }
 

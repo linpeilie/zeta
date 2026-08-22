@@ -125,11 +125,11 @@ final class ClaudeCodeQuestionAdapter {
             questions: questions,
             sessionId: sessionId,
             turnId: turnId,
-            raw: <String, Object?>{
+            raw: AgentProviderRawPayload.wrap(<String, Object?>{
               'tool_name': claudeCodeAskUserQuestionToolName,
               'tool_use_id': toolUseId,
               'source': 'claude_code.can_use_tool',
-            },
+            }),
           ),
         ),
       ],

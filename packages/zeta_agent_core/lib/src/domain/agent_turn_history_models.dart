@@ -1,3 +1,4 @@
+import 'package:zeta_agent_core/src/domain/agent_provider_raw_payload.dart';
 import 'package:zeta_agent_core/src/domain/agent_conversation_mode_models.dart';
 import 'package:zeta_agent_core/src/domain/agent_message_models.dart';
 import 'package:zeta_agent_core/src/domain/agent_tool_models.dart';
@@ -11,7 +12,8 @@ class AgentThreadHistorySnapshot {
     required this.threadId,
     required this.turns,
     this.currentTurn,
-    this.raw = const <String, Object?>{},
+    this.sourceLabel,
+    this.sessionPath,
   });
 
   /// provider thread id。
@@ -23,8 +25,15 @@ class AgentThreadHistorySnapshot {
   /// 当前或最近一次出现的 turn。
   final AgentHistoryTurn? currentTurn;
 
-  /// 原始 provider payload，便于调试和未来补齐字段。
-  final Map<String, Object?> raw;
+  /// 这份历史来自哪个数据源的稳定标签（例如 `updates.jsonl`）。
+  ///
+  /// 由 Provider 的历史读取器声明；调用方不再从 `raw['source']` 里翻。
+  final String? sourceLabel;
+
+  /// 这份历史对应的本地会话文件路径（如果 Provider 有）。
+  ///
+  /// 缓存命中校验用；同样是 adapter 显式声明的 typed 字段，不从原文里翻。
+  final String? sessionPath;
 
   /// 从当前 turn 开始向历史回溯得到的最新有效协作模式。
   ///
@@ -96,7 +105,6 @@ class AgentHistoryTurn {
     this.tokenUsageIsSessionCumulative = true,
     this.errorMessage,
     this.errorCode,
-    this.raw = const <String, Object?>{},
   });
 
   /// provider turn id。
@@ -157,9 +165,6 @@ class AgentHistoryTurn {
 
   /// provider 稳定错误码；用于错误分类和下一步操作提示。
   final String? errorCode;
-
-  /// 原始 turn 相关 payload 摘要。
-  final Map<String, Object?> raw;
 }
 
 /// 单个 turn 实际使用的模型配置摘要，供 turn footer 等 UI 展示。
@@ -456,14 +461,14 @@ enum AgentHistoryTurnStatus { unknown, running, completed, interrupted, failed }
 sealed class AgentHistoryEntry {
   const AgentHistoryEntry({
     required this.id,
-    this.raw = const <String, Object?>{},
+    this.raw = const AgentProviderRawPayload.empty(),
   });
 
   /// 历史条目的稳定 id。
   final String id;
 
   /// 原始 provider item payload。
-  final Map<String, Object?> raw;
+  final AgentProviderRawPayload raw;
 }
 
 /// 历史消息条目。
@@ -508,7 +513,7 @@ class AgentHistoryMessageEntry extends AgentHistoryEntry {
 
 /// 历史工具调用条目。
 class AgentHistoryToolEntry extends AgentHistoryEntry {
-  AgentHistoryToolEntry({required this.toolCall, Map<String, Object?>? raw})
+  AgentHistoryToolEntry({required this.toolCall, AgentProviderRawPayload? raw})
     : super(id: toolCall.id, raw: raw ?? toolCall.raw);
 
   /// 可复用现有工具卡渲染的工具调用摘要。

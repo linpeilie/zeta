@@ -92,7 +92,6 @@ class GrokModelsCli {
           model: id,
           displayName: id,
           isDefault: isDefault,
-          raw: <String, Object?>{'source': 'grok models', 'line': line},
         ),
       );
     }
@@ -104,7 +103,6 @@ class GrokModelsCli {
           model: defaultModel,
           displayName: defaultModel,
           isDefault: true,
-          raw: const <String, Object?>{'source': 'grok models'},
         ),
       );
     }
@@ -206,7 +204,6 @@ AgentModelList? parseAcpModelsPayload(Object? value) {
         contextWindowTokens:
             ContextWindowCodec.positiveWindow(entry) ??
             ContextWindowCodec.positiveWindow(metaMap),
-        raw: Map<String, Object?>.from(entry),
       ),
     );
   }

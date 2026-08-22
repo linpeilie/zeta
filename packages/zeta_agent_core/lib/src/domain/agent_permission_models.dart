@@ -1,3 +1,5 @@
+import 'package:zeta_agent_core/src/domain/agent_provider_raw_payload.dart';
+
 /// Agent 向用户请求审批的中立分类。
 enum AgentPermissionKind { commandExecution, fileChange, permissions, other }
 
@@ -35,7 +37,7 @@ class AgentPermissionRequest {
     this.fileChanges = const <String, Object?>{},
     this.commandActions = const <String>[],
     this.proposedExecpolicyAmendment = const <String>[],
-    this.raw = const <String, Object?>{},
+    this.raw = const AgentProviderRawPayload.empty(),
   });
 
   /// 审批请求 id，UI 用它作为稳定 key。
@@ -72,7 +74,7 @@ class AgentPermissionRequest {
   final List<String> proposedExecpolicyAmendment;
 
   /// 原始审批请求 payload。
-  final Map<String, Object?> raw;
+  final AgentProviderRawPayload raw;
 }
 
 /// 用户对审批请求的决定。

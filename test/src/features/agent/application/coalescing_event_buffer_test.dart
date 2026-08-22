@@ -472,7 +472,7 @@ AgentToolCallEvent _toolEvent({
       content: content,
       sessionId: 'thread-1',
       turnId: 'turn-1',
-      raw: const <String, Object?>{'_progressAppend': true},
+      appendsProgress: true,
       fileChanges: fileChanges,
     ),
   );

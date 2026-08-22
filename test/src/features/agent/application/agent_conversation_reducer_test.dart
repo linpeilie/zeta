@@ -479,7 +479,6 @@ void main() {
         details: 'details',
         sessionId: _threadId,
         turnId: _turnId,
-        raw: <String, Object?>{'providerSecret': 'must-not-leak'},
       );
 
       final mutation = AgentConversationReducer.live(
@@ -1183,7 +1182,9 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
             id: 'system-1',
             kind: AgentHistoryEventKind.system,
             title: '上下文已压缩',
-            raw: <String, Object?>{'type': 'contextCompaction'},
+            raw: AgentProviderRawPayload.wrap(<String, Object?>{
+              'type': 'contextCompaction',
+            }),
           ),
           sessionId: _threadId,
           turnId: _turnId,

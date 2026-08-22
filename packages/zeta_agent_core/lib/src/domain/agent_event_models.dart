@@ -1,3 +1,4 @@
+import 'package:zeta_agent_core/src/domain/agent_provider_raw_payload.dart';
 import 'package:zeta_agent_core/src/domain/agent_message_models.dart';
 import 'package:zeta_agent_core/src/domain/agent_conversation_mode_models.dart';
 import 'package:zeta_agent_core/src/domain/agent_model_selection_models.dart';
@@ -42,7 +43,6 @@ class AgentThreadStatusChangedEvent extends AgentEvent {
     required this.status,
     this.waitingOnApproval = false,
     this.waitingOnUserInput = false,
-    this.raw = const <String, Object?>{},
   });
 
   /// 状态变化的线程 id。
@@ -56,27 +56,17 @@ class AgentThreadStatusChangedEvent extends AgentEvent {
 
   /// 是否在等待用户输入。
   final bool waitingOnUserInput;
-
-  /// 原始通知 payload。
-  final Map<String, Object?> raw;
 }
 
 /// 线程标题已更新（`thread/name/updated`）。
 class AgentThreadNameUpdatedEvent extends AgentEvent {
-  const AgentThreadNameUpdatedEvent({
-    required this.threadId,
-    this.threadName,
-    this.raw = const <String, Object?>{},
-  });
+  const AgentThreadNameUpdatedEvent({required this.threadId, this.threadName});
 
   /// 线程 id。
   final String threadId;
 
   /// 新标题；为空表示清除自定义标题。
   final String? threadName;
-
-  /// 原始通知 payload。
-  final Map<String, Object?> raw;
 }
 
 /// 线程列表旁文案（preview）已更新。
@@ -87,7 +77,6 @@ class AgentThreadPreviewUpdatedEvent extends AgentEvent {
   const AgentThreadPreviewUpdatedEvent({
     required this.threadId,
     required this.preview,
-    this.raw = const <String, Object?>{},
   });
 
   /// 线程 id。
@@ -95,87 +84,53 @@ class AgentThreadPreviewUpdatedEvent extends AgentEvent {
 
   /// 新的列表旁文案；空串表示清除。
   final String preview;
-
-  /// 原始通知 payload。
-  final Map<String, Object?> raw;
 }
 
 /// 线程已归档（`thread/archived`）。
 class AgentThreadArchivedEvent extends AgentEvent {
-  const AgentThreadArchivedEvent({
-    required this.threadId,
-    this.raw = const <String, Object?>{},
-  });
+  const AgentThreadArchivedEvent({required this.threadId});
 
   /// 线程 id。
   final String threadId;
-
-  /// 原始通知 payload。
-  final Map<String, Object?> raw;
 }
 
 /// 线程已取消归档（`thread/unarchived`）。
 class AgentThreadUnarchivedEvent extends AgentEvent {
-  const AgentThreadUnarchivedEvent({
-    required this.threadId,
-    this.raw = const <String, Object?>{},
-  });
+  const AgentThreadUnarchivedEvent({required this.threadId});
 
   /// 线程 id。
   final String threadId;
-
-  /// 原始通知 payload。
-  final Map<String, Object?> raw;
 }
 
 /// 线程已删除（`thread/deleted`）。
 class AgentThreadDeletedEvent extends AgentEvent {
-  const AgentThreadDeletedEvent({
-    required this.threadId,
-    this.raw = const <String, Object?>{},
-  });
+  const AgentThreadDeletedEvent({required this.threadId});
 
   /// 线程 id。
   final String threadId;
-
-  /// 原始通知 payload。
-  final Map<String, Object?> raw;
 }
 
 /// 线程已关闭（`thread/closed`）。
 ///
 /// 客户端应释放本地运行态并 best-effort 取消订阅。
 class AgentThreadClosedEvent extends AgentEvent {
-  const AgentThreadClosedEvent({
-    required this.threadId,
-    this.raw = const <String, Object?>{},
-  });
+  const AgentThreadClosedEvent({required this.threadId});
 
   /// 线程 id。
   final String threadId;
-
-  /// 原始通知 payload。
-  final Map<String, Object?> raw;
 }
 
 /// 上下文压缩已完成通知（`thread/compacted`，协议已 deprecated）。
 ///
 /// 保留该事件用于协议兼容；上下文压缩状态由 Provider 自行处理，不驱动手动压缩 UI。
 class AgentThreadCompactedEvent extends AgentEvent {
-  const AgentThreadCompactedEvent({
-    required this.threadId,
-    this.turnId,
-    this.raw = const <String, Object?>{},
-  });
+  const AgentThreadCompactedEvent({required this.threadId, this.turnId});
 
   /// 线程 id。
   final String threadId;
 
   /// 可选回合 id。
   final String? turnId;
-
-  /// 原始通知 payload。
-  final Map<String, Object?> raw;
 }
 
 /// 线程设置已变更（`thread/settings/updated`）。
@@ -218,7 +173,6 @@ class AgentAutoApprovalReviewEvent extends AgentEvent {
     this.rationale,
     this.riskLevel,
     this.targetItemId,
-    this.raw = const <String, Object?>{},
   });
 
   final String threadId;
@@ -230,7 +184,6 @@ class AgentAutoApprovalReviewEvent extends AgentEvent {
   final String? rationale;
   final String? riskLevel;
   final String? targetItemId;
-  final Map<String, Object?> raw;
 }
 
 /// 新回合已开始。
@@ -292,7 +245,6 @@ class AgentTurnCompletedEvent extends AgentEvent {
     this.errorCode,
     this.duration,
     this.completedAt,
-    this.raw = const <String, Object?>{},
   });
 
   /// 完成回合所属会话 id。
@@ -315,9 +267,6 @@ class AgentTurnCompletedEvent extends AgentEvent {
 
   /// Zeta 观测到的回合结束时间。
   final DateTime? completedAt;
-
-  /// 原始完成事件 payload。
-  final Map<String, Object?> raw;
 }
 
 String? _nonEmptyEventString(String? value) {
@@ -346,7 +295,6 @@ class AgentTokenUsageEvent extends AgentEvent {
     this.sessionId,
     this.turnId,
     this.isSessionCumulative = true,
-    this.raw = const <String, Object?>{},
   });
 
   /// 所属会话 id。
@@ -360,9 +308,6 @@ class AgentTokenUsageEvent extends AgentEvent {
 
   /// 为 true 时 [tokenUsage] 是会话累计（Codex）；为 false 时为本回合绝对用量（Grok）。
   final bool isSessionCumulative;
-
-  /// 原始通知 payload。
-  final Map<String, Object?> raw;
 }
 
 /// 当前请求的上下文窗口占用快照。
@@ -375,7 +320,6 @@ class AgentContextWindowUsageEvent extends AgentEvent {
     this.modelContextWindow,
     this.sessionId,
     this.turnId,
-    this.raw = const <String, Object?>{},
   });
 
   /// 当前上下文已经占用的 token。
@@ -389,9 +333,6 @@ class AgentContextWindowUsageEvent extends AgentEvent {
 
   /// 所属回合 id。
   final String? turnId;
-
-  /// 原始通知 payload。
-  final Map<String, Object?> raw;
 }
 
 /// Agent 消息的流式增量。
@@ -405,7 +346,7 @@ class AgentMessageDeltaEvent extends AgentEvent {
     this.phase,
     this.status,
     this.duration,
-    this.raw = const <String, Object?>{},
+    this.raw = const AgentProviderRawPayload.empty(),
     this.sessionId,
     this.turnId,
   });
@@ -437,7 +378,7 @@ class AgentMessageDeltaEvent extends AgentEvent {
   final Duration? duration;
 
   /// 原始 provider payload。
-  final Map<String, Object?> raw;
+  final AgentProviderRawPayload raw;
 
   /// 可选会话 id。
   final String? sessionId;
@@ -468,7 +409,7 @@ class AgentReasoningDeltaEvent extends AgentEvent {
     this.summaryIndex,
     this.sessionId,
     this.turnId,
-    this.raw = const <String, Object?>{},
+    this.raw = const AgentProviderRawPayload.empty(),
   });
 
   /// Zeta 规范化 reasoning entryId，用于合并同一思考卡片的多个 delta。
@@ -496,7 +437,7 @@ class AgentReasoningDeltaEvent extends AgentEvent {
   final String? turnId;
 
   /// 原始通知 payload。
-  final Map<String, Object?> raw;
+  final AgentProviderRawPayload raw;
 }
 
 /// Agent 消息 metadata 或最终文本更新。
@@ -510,7 +451,7 @@ class AgentMessageUpdatedEvent extends AgentEvent {
     this.phase,
     this.status,
     this.duration,
-    this.raw = const <String, Object?>{},
+    this.raw = const AgentProviderRawPayload.empty(),
     this.sessionId,
     this.turnId,
   });
@@ -542,7 +483,7 @@ class AgentMessageUpdatedEvent extends AgentEvent {
   final Duration? duration;
 
   /// 原始 provider payload。
-  final Map<String, Object?> raw;
+  final AgentProviderRawPayload raw;
 
   /// 可选会话 id。
   final String? sessionId;
@@ -588,12 +529,10 @@ class AgentConversationModeUpdatedEvent extends AgentEvent {
   const AgentConversationModeUpdatedEvent({
     required this.sessionId,
     required this.modeId,
-    this.raw = const <String, Object?>{},
   });
 
   final String sessionId;
   final AgentConversationModeId modeId;
-  final Map<String, Object?> raw;
 }
 
 /// Provider 请求用户独立审批计划。
@@ -658,7 +597,6 @@ class AgentPermissionResolvedEvent extends AgentEvent {
   const AgentPermissionResolvedEvent({
     required this.requestId,
     required this.threadId,
-    this.raw = const <String, Object?>{},
   });
 
   /// 被解决的 JSON-RPC 请求 id，与 [AgentPermissionRequest.id] 对齐。
@@ -666,9 +604,6 @@ class AgentPermissionResolvedEvent extends AgentEvent {
 
   /// 所属线程 id。
   final String threadId;
-
-  /// 原始通知 payload。
-  final Map<String, Object?> raw;
 }
 
 /// Provider 请求用户回答一个或多个问题。
@@ -684,7 +619,6 @@ class AgentQuestionResolvedEvent extends AgentEvent {
   const AgentQuestionResolvedEvent({
     required this.requestId,
     required this.threadId,
-    this.raw = const <String, Object?>{},
   });
 
   /// 被解决的请求 id，与 [AgentQuestionRequest.id] 对齐。
@@ -692,9 +626,6 @@ class AgentQuestionResolvedEvent extends AgentEvent {
 
   /// 所属线程 id。
   final String threadId;
-
-  /// 原始通知 payload。
-  final Map<String, Object?> raw;
 }
 
 /// 服务端将本回合模型改道到另一模型。
@@ -707,7 +638,6 @@ class AgentModelReroutedEvent extends AgentEvent {
     required this.fromModel,
     required this.toModel,
     required this.reason,
-    this.raw = const <String, Object?>{},
   });
 
   /// 所属线程 id。
@@ -724,29 +654,19 @@ class AgentModelReroutedEvent extends AgentEvent {
 
   /// 改道原因（协议枚举字符串，如 `highRiskCyberActivity`）。
   final String reason;
-
-  /// 原始通知 payload。
-  final Map<String, Object?> raw;
 }
 
 /// Codex API / 适配层弃用提示。
 ///
 /// 对应 `deprecationNotice`；应记日志并在 UI 一次性展示，提示升级适配层。
 class AgentDeprecationNoticeEvent extends AgentEvent {
-  const AgentDeprecationNoticeEvent({
-    required this.summary,
-    this.details,
-    this.raw = const <String, Object?>{},
-  });
+  const AgentDeprecationNoticeEvent({required this.summary, this.details});
 
   /// 弃用概要。
   final String summary;
 
   /// 可选迁移说明或细节。
   final String? details;
-
-  /// 原始通知 payload。
-  final Map<String, Object?> raw;
 }
 
 /// ThreadItem 中的系统类条目（评审模式、压缩、hook、sleep 等）。
@@ -781,7 +701,6 @@ class AgentErrorEvent extends AgentEvent {
     this.turnId,
     this.exception,
     this.stackTrace,
-    this.raw = const <String, Object?>{},
   });
 
   /// 错误概要。
@@ -811,9 +730,6 @@ class AgentErrorEvent extends AgentEvent {
 
   /// 捕获异常时的堆栈；仅用于通用诊断日志。
   final StackTrace? stackTrace;
-
-  /// 原始错误 payload。
-  final Map<String, Object?> raw;
 }
 
 /// provider 拉取到模型列表后推送的事件。

@@ -129,7 +129,8 @@ abstract final class GrokCanonicalComparator {
                   entryOrdinal: entryOrdinal,
                   entryType: 'reasoning',
                   phaseOrdinal: reasoningOrdinal,
-                  sourceId: _reasoningSourceId(tool.raw),
+                  // 原文不可取值：改用 adapter 显式声明的 typed 溯源字段（G2）。
+                  sourceId: tool.sourceItemId ?? tool.id,
                   normalizedText: _normalizeText(tool.content ?? ''),
                 ),
               );
@@ -340,15 +341,4 @@ String _normalizeText(String value) {
       .replaceAll('\r', '\n')
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
-}
-
-String? _reasoningSourceId(Map<String, Object?> raw) {
-  return _nonEmptyString(raw['sourceItemId']) ??
-      _nonEmptyString(raw['itemId']) ??
-      _nonEmptyString(raw['messageId']);
-}
-
-String? _nonEmptyString(Object? value) {
-  final text = value?.toString().trim();
-  return text == null || text.isEmpty ? null : text;
 }

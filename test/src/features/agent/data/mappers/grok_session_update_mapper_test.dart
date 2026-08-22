@@ -324,10 +324,6 @@ void main() {
         completed.errorMessage,
         'Grok rate limit reached. Please try again later.',
       );
-      expect(completed.raw['jsonRpcError'], const <String, Object?>{
-        'code': -32003,
-        'message': 'Rate limited',
-      });
       expect(duplicate.events, isEmpty);
       expect(mapper.diagnostics.terminalAccepted, 1);
       expect(mapper.diagnostics.duplicateTerminalIgnored, 1);

@@ -65,11 +65,16 @@ void main() {
           approval.continuation,
           AgentPlanApprovalContinuation.localExecutionHandoff,
         );
-        expect(approval.raw, <String, Object?>{
-          'source': 'claude_code.exit_plan_mode',
-          'tool_name': 'ExitPlanMode',
-        });
-        expect(approval.raw, isNot(contains('input')));
+        expect(
+          approval.raw.toPrettyJson(),
+          allOf(<Matcher>[
+            contains('"source": "claude_code.exit_plan_mode"'),
+            contains('"tool_name": "ExitPlanMode"'),
+          ]),
+        );
+        expect(approval.raw.entryCount, 2);
+        // G7：原文里不得带 input 正文。
+        expect(approval.raw.toPrettyJson(), isNot(contains('"input"')));
         expect(adapter.pendingCount, 0, reason: 'result terminal clears turn');
       },
     );

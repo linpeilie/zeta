@@ -683,15 +683,6 @@ class ClaudeCodeSessionHistoryReader {
       final updatedAt = timestamps.isEmpty
           ? stat.modified
           : timestamps.reduce((a, b) => a.isAfter(b) ? a : b);
-      final model = _firstNonEmpty(<String?>[
-        for (final frame in frames.reversed) _model(frame),
-      ]);
-      final messageCount = frames
-          .where(
-            (frame) => frame['type'] == 'user' || frame['type'] == 'assistant',
-          )
-          .length;
-
       return AgentThreadSummary(
         id: sessionId,
         providerId: providerId,
@@ -703,11 +694,6 @@ class ClaudeCodeSessionHistoryReader {
         updatedAt: updatedAt,
         recencyAt: updatedAt,
         status: AgentThreadRuntimeStatus.idle,
-        raw: <String, Object?>{
-          'source': 'claude_code_history',
-          'model': ?model,
-          'sampledMessageCount': messageCount,
-        },
       );
     } on FileSystemException {
       return null;
@@ -818,7 +804,6 @@ final class _ClaudeCodeHistoryEventReducer {
       threadId: threadId,
       turns: List<AgentHistoryTurn>.unmodifiable(turns),
       currentTurn: turns.isEmpty ? null : turns.last,
-      raw: const <String, Object?>{'source': 'claude_code_history'},
     );
   }
 }
@@ -979,7 +964,6 @@ final class _MutableHistoryTurn {
       tokenUsageIsSessionCumulative: tokenUsageIsSessionCumulative,
       errorMessage: errorMessage,
       errorCode: errorCode,
-      raw: const <String, Object?>{'source': 'claude_code_history'},
     );
   }
 }

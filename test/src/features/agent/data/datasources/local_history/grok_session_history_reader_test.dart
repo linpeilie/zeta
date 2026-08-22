@@ -144,7 +144,7 @@ void main() {
         sessionPath: sessionDir.path,
       );
 
-      expect(snapshot.raw['source'], 'updates.jsonl');
+      expect(snapshot.sourceLabel, 'updates.jsonl');
       expect(snapshot.turns, hasLength(1));
       final texts = snapshot.turns.single.entries
           .whereType<AgentHistoryMessageEntry>()
@@ -178,7 +178,7 @@ void main() {
         sessionPath: sessionDir.path,
       );
 
-      expect(snapshot.raw['source'], 'chat_history.jsonl');
+      expect(snapshot.sourceLabel, 'chat_history.jsonl');
       expect(snapshot.turns, hasLength(1));
       final entries = snapshot.turns.single.entries
           .whereType<AgentHistoryMessageEntry>()
@@ -221,7 +221,7 @@ void main() {
           sessionPath: sessionDir.path,
         );
 
-        expect(snapshot.raw['source'], 'chat_history.jsonl');
+        expect(snapshot.sourceLabel, 'chat_history.jsonl');
         expect(snapshot.turns, hasLength(1));
         final entries = snapshot.turns.single.entries
             .whereType<AgentHistoryMessageEntry>()

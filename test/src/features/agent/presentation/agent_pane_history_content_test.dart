@@ -204,12 +204,6 @@ void main() {
                     outputTokens: 240,
                     totalTokens: 1240,
                   ),
-                  raw: const <String, Object?>{
-                    'turnContext': <String, Object?>{
-                      'model': 'gpt-5.5',
-                      'serviceTier': 'ignored',
-                    },
-                  },
                   entries: const <AgentHistoryEntry>[
                     AgentHistoryMessageEntry(
                       id: 'history-user-footer-1',
@@ -325,7 +319,9 @@ void main() {
                       role: AgentMessageRole.agent,
                       text: '- [x] Inspect timeline\n- [ ] Split cards',
                       kind: AgentMessageKind.plan,
-                      raw: const <String, Object?>{'type': 'plan'},
+                      raw: AgentProviderRawPayload.wrap(const <String, Object?>{
+                        'type': 'plan',
+                      }),
                     ),
                   ],
                 ),

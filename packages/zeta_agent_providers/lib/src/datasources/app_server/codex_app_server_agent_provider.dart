@@ -1069,7 +1069,6 @@ class CodexAppServerAgentProvider
             AgentQuestionResolvedEvent(
               requestId: event.requestId,
               threadId: event.threadId,
-              raw: event.raw,
             ),
           );
           continue;
@@ -1087,7 +1086,7 @@ class CodexAppServerAgentProvider
           );
         }
       } else if (event is AgentAutoApprovalReviewEvent) {
-        _trackDeniedActionOverride(event);
+        _trackDeniedActionOverride(event, notification.params);
       } else if (event is AgentThreadDeletedEvent ||
           event is AgentThreadClosedEvent) {
         // 线程关闭/删除：清理该 thread 的运行态与服务端订阅。
@@ -1155,7 +1154,6 @@ class CodexAppServerAgentProvider
         AgentPermissionResolvedEvent(
           requestId: pending.id,
           threadId: _string(pending.params['threadId']) ?? '',
-          raw: const <String, Object?>{'reason': 'connectionClosed'},
         ),
       );
     }
@@ -1166,17 +1164,23 @@ class CodexAppServerAgentProvider
         AgentQuestionResolvedEvent(
           requestId: pending.id,
           threadId: _string(pending.params['threadId']) ?? '',
-          raw: const <String, Object?>{'reason': 'connectionClosed'},
         ),
       );
     }
     _pendingQuestions.clear();
   }
 
-  void _trackDeniedActionOverride(AgentAutoApprovalReviewEvent event) {
+  /// guardian 拒绝的动作需要把**原始通知**原样回传给 app-server 覆盖。
+  ///
+  /// 原文由本 Provider 自己留存（never leaves `zeta_agent_providers`），
+  /// 中立事件模型不再携带 raw。
+  void _trackDeniedActionOverride(
+    AgentAutoApprovalReviewEvent event,
+    Map<String, Object?> notificationParams,
+  ) {
     switch (event.status) {
       case 'denied':
-        _deniedActionEventsByRequestId[event.reviewId] = event.raw;
+        _deniedActionEventsByRequestId[event.reviewId] = notificationParams;
       case 'approved' || 'timedOut' || 'aborted':
         _deniedActionEventsByRequestId.remove(event.reviewId);
     }

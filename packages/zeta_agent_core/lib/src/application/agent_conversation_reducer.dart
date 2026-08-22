@@ -986,7 +986,6 @@ final class AgentConversationReducer {
             title: textCatalog.modelReroutedTitle,
             description: '${event.fromModel} → ${event.toModel}',
             content: _modelRerouteReasonLabel(event.reason),
-            raw: event.raw,
           ),
         ),
       ],
@@ -1017,7 +1016,6 @@ final class AgentConversationReducer {
             content: event.details == null
                 ? textCatalog.deprecationUpgradeHint
                 : '${event.details}\n${textCatalog.deprecationUpgradeHint}',
-            raw: event.raw,
           ),
         ),
       ],

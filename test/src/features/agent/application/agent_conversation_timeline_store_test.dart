@@ -323,9 +323,6 @@ void main() {
               explicitFast: true,
               status: AgentHistoryTurnStatus.completed,
               duration: Duration(seconds: 12),
-              raw: <String, Object?>{
-                'turnContext': <String, Object?>{'serviceTier': 'ignored'},
-              },
             ),
           ],
         ),
@@ -736,7 +733,7 @@ void main() {
           content: 'Fetching resources…',
           sessionId: 'thread-1',
           turnId: 'turn-1',
-          raw: <String, Object?>{'_progressAppend': true},
+          appendsProgress: true,
         ),
       );
       store.upsertToolCall(
@@ -748,7 +745,7 @@ void main() {
           content: 'Parsing results…',
           sessionId: 'thread-1',
           turnId: 'turn-1',
-          raw: <String, Object?>{'_progressAppend': true},
+          appendsProgress: true,
         ),
       );
 
@@ -994,7 +991,9 @@ void main() {
           status: AgentToolStatus.inProgress,
           sessionId: 'thread-1',
           turnId: 'turn-1',
-          rawInput: <String, Object?>{'pattern': 'sessionUpdate'},
+          rawInput: AgentProviderRawPayload.wrap(<String, Object?>{
+            'pattern': 'sessionUpdate',
+          }),
         ),
       );
       store.upsertToolCall(
@@ -1012,7 +1011,7 @@ void main() {
       final tool = store.toolCalls.single;
       expect(tool.title, 'sessionUpdate');
       expect(tool.kind, AgentToolKind.search);
-      expect(tool.rawInput['pattern'], 'sessionUpdate');
+      expect(tool.rawInput.toPrettyJson(), contains('sessionUpdate'));
       expect(tool.content, 'found 42 matches');
     });
 
@@ -1294,7 +1293,9 @@ void main() {
           phase: AgentMessagePhase.commentary,
           status: AgentMessageStatus.streaming,
           duration: Duration(seconds: 1),
-          raw: <String, Object?>{'type': 'not-a-plan'},
+          raw: AgentProviderRawPayload.wrap(<String, Object?>{
+            'type': 'not-a-plan',
+          }),
         ),
       );
       store.updateMessage(
@@ -1339,7 +1340,7 @@ void main() {
           messageId: 'regular-message',
           delta: 'regular',
           role: AgentMessageRole.agent,
-          raw: <String, Object?>{'type': 'plan'},
+          raw: AgentProviderRawPayload.wrap(<String, Object?>{'type': 'plan'}),
         ),
       );
       store.appendMessageDelta(
@@ -1348,7 +1349,9 @@ void main() {
           delta: 'plan',
           role: AgentMessageRole.agent,
           kind: AgentMessageKind.plan,
-          raw: <String, Object?>{'type': 'agentMessage'},
+          raw: AgentProviderRawPayload.wrap(<String, Object?>{
+            'type': 'agentMessage',
+          }),
         ),
       );
 

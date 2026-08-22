@@ -3786,7 +3786,6 @@ class AgentConversationViewModel {
         id: session.id,
         providerId: session.providerId,
         title: title,
-        raw: session.raw,
       );
     }
   }

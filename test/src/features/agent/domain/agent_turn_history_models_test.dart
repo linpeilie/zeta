@@ -141,13 +141,6 @@ void main() {
         reasoningEffort: AgentHistoryReasoningEffort.explicit('high'),
         serviceTierId: 'priority',
         explicitFast: true,
-        raw: <String, Object?>{
-          'turnContext': <String, Object?>{
-            'model': 'ignored-model',
-            'serviceTier': 'ignored-tier',
-            'fast': false,
-          },
-        },
       );
 
       final config = AgentTurnModelConfig.fromHistoryTurn(turn);
@@ -163,14 +156,6 @@ void main() {
         modelId: 'claude-opus-5',
         reasoningEffort: AgentHistoryReasoningEffort.explicit('xhigh'),
         explicitFast: false,
-        raw: <String, Object?>{
-          'turnContext': <String, Object?>{
-            'model': 'raw-model',
-            'effort': 'low',
-            'serviceTier': 'priority',
-            'fast': true,
-          },
-        },
       );
 
       final config = AgentTurnModelConfig.fromHistoryTurn(turn);
@@ -198,15 +183,7 @@ void main() {
     });
 
     test('returns null when only raw model config exists', () {
-      const turn = AgentHistoryTurn(
-        id: 'turn-empty',
-        raw: <String, Object?>{
-          'modelId': 'raw-model',
-          'reasoning_effort': 'high',
-          'service_tier_id': 'priority',
-          'fast_enabled': true,
-        },
-      );
+      const turn = AgentHistoryTurn(id: 'turn-empty');
       expect(AgentTurnModelConfig.fromHistoryTurn(turn), isNull);
     });
 

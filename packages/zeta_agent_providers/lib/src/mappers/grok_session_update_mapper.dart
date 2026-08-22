@@ -4,6 +4,7 @@ import 'package:zeta_agent_providers/src/mappers/grok_error_normalizer.dart';
 import 'package:zeta_agent_providers/src/mappers/grok_file_change_tracker.dart';
 import 'package:zeta_agent_providers/src/mappers/grok_stream_identity.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_agent_providers/src/mappers/agent_tool_input_detail.dart';
 
 /// Grok typed ACP update 到领域事件的映射结果。
 class GrokAcpMappedUpdate {
@@ -160,7 +161,6 @@ final class GrokSessionUpdateMapper {
           usedTokens: changedContextTokens,
           sessionId: decoded.sessionId,
           turnId: runningTurnId,
-          raw: decoded.raw,
         ),
       ],
       unmatchedKind: mapped.unmatchedKind,
@@ -216,7 +216,6 @@ final class GrokSessionUpdateMapper {
               ? errorMessage ?? stopReason
               : null,
           completedAt: DateTime.now(),
-          raw: raw,
         ),
       ],
     );
@@ -402,7 +401,7 @@ final class GrokSessionUpdateMapper {
           status: AgentMessageStatus.streaming,
           sessionId: resolved.sessionId,
           turnId: resolved.turnId,
-          raw: update.raw,
+          raw: AgentProviderRawPayload.wrap(update.raw),
         ),
       ],
     );
@@ -443,7 +442,7 @@ final class GrokSessionUpdateMapper {
           delta: text,
           sessionId: resolved.sessionId,
           turnId: resolved.turnId,
-          raw: update.raw,
+          raw: AgentProviderRawPayload.wrap(update.raw),
         ),
       ],
     );
@@ -542,11 +541,7 @@ final class GrokSessionUpdateMapper {
     }
     return GrokAcpMappedUpdate(
       events: <AgentEvent>[
-        AgentConversationModeUpdatedEvent(
-          sessionId: sessionId,
-          modeId: modeId,
-          raw: update.raw,
-        ),
+        AgentConversationModeUpdatedEvent(sessionId: sessionId, modeId: modeId),
       ],
     );
   }
@@ -570,11 +565,7 @@ final class GrokSessionUpdateMapper {
     }
     return GrokAcpMappedUpdate(
       events: <AgentEvent>[
-        AgentThreadNameUpdatedEvent(
-          threadId: sessionId,
-          threadName: trimmed,
-          raw: raw,
-        ),
+        AgentThreadNameUpdatedEvent(threadId: sessionId, threadName: trimmed),
       ],
     );
   }
@@ -669,7 +660,6 @@ final class GrokSessionUpdateMapper {
             willRetry: false,
             sessionId: terminal.sessionId,
             turnId: terminal.turnId,
-            raw: update.raw,
           ),
           AgentTurnCompletedEvent(
             sessionId: terminal.sessionId,
@@ -677,7 +667,6 @@ final class GrokSessionUpdateMapper {
             status: AgentHistoryTurnStatus.failed,
             errorMessage: message,
             completedAt: DateTime.now(),
-            raw: update.raw,
           ),
         ],
       );
@@ -704,7 +693,6 @@ final class GrokSessionUpdateMapper {
           willRetry: true,
           sessionId: resolved.sessionId,
           turnId: resolved.turnId,
-          raw: update.raw,
         ),
       ],
     );
@@ -746,7 +734,6 @@ final class GrokSessionUpdateMapper {
             lastInputTokens: update.used > 0 ? update.used : null,
             modelContextWindow: update.modelContextWindow,
           ),
-          raw: update.raw,
         ),
       ],
     );
@@ -826,7 +813,6 @@ final class GrokSessionUpdateMapper {
             turnId: terminal.turnId,
             isSessionCumulative: false,
             tokenUsage: tokenUsage,
-            raw: usage?.raw ?? const <String, Object?>{},
           ),
         if (shouldEmitCompletion)
           AgentTurnCompletedEvent(
@@ -841,7 +827,6 @@ final class GrokSessionUpdateMapper {
                   )
                 : null,
             completedAt: DateTime.now(),
-            raw: update.raw,
           ),
       ],
     );
@@ -862,7 +847,7 @@ final class GrokSessionUpdateMapper {
       kind: kind,
       kindRaw: update.toolKind,
       locations: update.locations,
-      rawInput: update.rawInput,
+      inputDetail: deriveAgentToolInputDetail(update.rawInput),
     );
     final projection = fileChangeTracker.project(
       update: update,
@@ -880,9 +865,10 @@ final class GrokSessionUpdateMapper {
       locations: update.locations,
       sessionId: sessionId,
       turnId: turnId,
-      rawInput: update.rawInput,
-      rawOutput: update.rawOutput,
-      raw: update.raw,
+      rawInput: AgentProviderRawPayload.wrap(update.rawInput),
+      inputDetail: deriveAgentToolInputDetail(update.rawInput),
+      rawOutput: AgentProviderRawPayload.wrap(update.rawOutput),
+      raw: AgentProviderRawPayload.wrap(update.raw),
       fileChanges: projection.fileChanges,
     );
   }

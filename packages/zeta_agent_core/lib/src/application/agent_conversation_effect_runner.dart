@@ -152,7 +152,6 @@ final class DefaultAgentConversationEffectRunner
         'details': event.details,
         'code': event.code,
         'willRetry': event.willRetry,
-        'diagnostic': event.raw,
       },
     );
   }

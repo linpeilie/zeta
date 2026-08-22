@@ -256,7 +256,8 @@ Windows 用 `tool/test_full.ps1`（同样包含 Package 循环）。
 ## 8. 拆 `zeta_agent_providers` 之前必须先结论的两笔欠债
 
 这两条都是**拆包前就有的设计**，被本轮拆包正式化成了包公开 API，因此在继续迁移前
-必须有结论，而不是继续往下搬。当前状态：**已冻结、已立项、未清算**。
+必须有结论，而不是继续往下搬。当前状态：§8.1 **已冻结、已立项、未清算**（收口排在
+Phase 3 第 6 批）；§8.2 **已决并已落地**。
 
 ### 8.1 内核里的集中式 Provider 目录
 
@@ -270,19 +271,54 @@ providers 包 + 一行注册」直接冲突。
 - **收口**：Phase 3 第 6 批。三个 Provider 转成显式插件贡献时，内置配置与显示名归一化
   移入 data 层，`AgentProviderKind` 让位给插件 descriptor 的开放注册表。
 
-### 8.2 中立事件上的 Provider raw payload
+### 8.2 中立事件上的 Provider raw payload —— **已决 + 已落地（2026-08-21）**
 
-36 个中立模型字段携带协议原文（21 个事件的 `raw`，工具的 `rawInput` / `rawOutput` 等），
-与 §4.1「Core 不拥有 Provider raw payload」冲突。风险已经兑现：presentation 有 21 处直接
-读 `.raw`，上下文面板还把它转成 JSON 渲染。
+原状：36 个中立模型字段携带协议原文（21 个事件的 `raw`，工具的 `rawInput` / `rawOutput`
+等），与 §4.1「Core 不拥有 Provider raw payload」冲突；presentation 有 21 处直接读 `.raw`，
+上下文面板还把它转成 JSON 渲染。
 
-- **冻结**：`agent_core_raw_payload_freeze_test` 让字段总数只减不增，并复核 raw 不进入
-  持久化与指标序列。
-- **收口**：按仓库已验证的范式逐类替换成 typed evidence（文件变更证据已经从 raw 演进成
-  `AgentFileChangeSnapshot`，是现成样板）。
-- **待你决定的产品问题**：上下文面板的"原始消息"是真实能力。建议改成由 Provider adapter
-  按需提供的 typed 诊断通道（可开关、不进缓存/日志），而不是每个中立事件常驻一份原文。
-  这一条改的是产品行为，需要你拍板后再动。
+**产品结论**：上下文面板的"原始消息"卡片**保留**，但原文**只能看，不能取值**。
+
+落地方式：
+
+1. **不透明值类型**。原文类型换成 `AgentProviderRawPayload`（`zeta_agent_core`）：
+   没有 `operator []`、没有 `keys`、没有 `toMap()`，唯一内容出口是 `toPrettyJson()`。
+   任何 `raw['x']` 现在是**编译错误**，不再靠 review 盯。`toString()` 只输出条目数，
+   避免误插值把整份 payload 写进日志。
+2. **面板不展示的原文直接删掉**。中立内核里 Map 形态的 raw 字段清零（36 → 0），
+   仍带原文的 12 个字段全部是不透明类型，且都是面板真正会渲染的那几类
+   （message / permission / question / planApproval / historyEvent 的 `raw`，
+   工具的 `rawInput` / `rawOutput`）。
+3. **删掉后仍要的语义改成 typed 字段**，由 adapter 显式声明，而不是让内核翻原文：
+
+   | 原来从原文里翻 | 现在的 typed 字段 | 归属 |
+   | --- | --- | --- |
+   | `raw['_progressAppend']` | `AgentToolCall.appendsProgress` | Codex mapper 声明 |
+   | `rawInput` 里猜命令/路径/查询（~20 个键名） | `AgentToolCall.inputDetail` | `deriveAgentToolInputDetail`（providers 包） |
+   | `raw['sourceItemId']` | `AgentToolCall.sourceItemId`（**仅 metadata**，身份仍是 `id`） | history parser |
+   | `snapshot.raw['source']` | `AgentThreadHistorySnapshot.sourceLabel` | history reader |
+   | `snapshot.raw['sessionPath']` | `AgentThreadHistorySnapshot.sessionPath` | history reader |
+   | `item['inputModalities']` | `AgentModelInfo.supportsImageInput` | model list mapper |
+   | guardian 拒绝动作的回传原文 | Provider 自己留存 `notification.params` | 不出 providers 包 |
+
+4. **两处隐藏的 G1 违规同时清掉**：`AgentConversationTimelineStore` 和
+   `AgentEventCoalescingPolicy` 都在读 Codex mapper 注入的 `raw['_progressAppend']`——
+   等于适配层通过原文遥控内核。两个 G1 冻结文件的 baseline 已按批准刷新。
+5. **原文不再进日志**：`AgentConversationEffectRunner` 里 `'diagnostic': event.raw`
+   已删除。之前是"先落日志再脱敏"，现在是原文根本不到日志链路，保证更强。
+
+守卫（`agent_core_raw_payload_freeze_test`，6 条）：
+
+- 中立内核里 Map 形态原文字段必须为 0；
+- 不透明字段数只减不增（baseline 12）；
+- `AgentProviderRawPayload` 不得长出 `operator []` / `keys` / `toMap()`；
+- `AgentProviderRawPayload.wrap` 只能在 `zeta_agent_providers` 里调用；
+- `toPrettyJson()` 的唯一生产调用点是上下文面板；
+- 原文不进持久化与指标序列（G7）。
+
+遗留：`AgentThreadSummary.tryDecode` 保留一次性的旧缓存迁移读取
+（`raw['path']` → `sessionPath`），让升级前落盘的条目仍能恢复会话路径。这是对**自家
+持久化格式**的宽容解码，不是运行期原文取值。
 
 ---
 

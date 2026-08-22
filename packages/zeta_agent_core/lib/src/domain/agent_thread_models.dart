@@ -70,7 +70,6 @@ class AgentThreadSummary {
     this.recencyAt,
     this.waitingOnApproval = false,
     this.waitingOnUserInput = false,
-    this.raw = const <String, Object?>{},
   });
 
   /// provider thread id。
@@ -110,9 +109,6 @@ class AgentThreadSummary {
 
   /// 是否在等待用户输入（仅 `active` 时有意义）。
   final bool waitingOnUserInput;
-
-  /// 原始 provider payload，便于调试和未来补齐字段。
-  final Map<String, Object?> raw;
 
   /// 摘要字段是否带有忙碌/等待标记。
   ///
@@ -156,7 +152,6 @@ class AgentThreadSummary {
     AgentThreadRuntimeStatus? status,
     bool? waitingOnApproval,
     bool? waitingOnUserInput,
-    Map<String, Object?>? raw,
   }) {
     return AgentThreadSummary(
       id: id ?? this.id,
@@ -177,7 +172,6 @@ class AgentThreadSummary {
       status: status ?? this.status,
       waitingOnApproval: waitingOnApproval ?? this.waitingOnApproval,
       waitingOnUserInput: waitingOnUserInput ?? this.waitingOnUserInput,
-      raw: raw ?? this.raw,
     );
   }
 
@@ -195,7 +189,6 @@ class AgentThreadSummary {
       'status': status.name,
       'waitingOnApproval': waitingOnApproval,
       'waitingOnUserInput': waitingOnUserInput,
-      'raw': raw,
     };
   }
 
@@ -211,7 +204,6 @@ class AgentThreadSummary {
     final projectPath = decodeOptionalString(map['projectPath']);
     final createdAt = decodeDateTimeFromMilliseconds(map['createdAt']);
     final updatedAt = decodeDateTimeFromMilliseconds(map['updatedAt']);
-    final raw = decodeObjectMap(map['raw']);
     if (id == null ||
         providerId == null ||
         projectPath == null ||
@@ -225,9 +217,11 @@ class AgentThreadSummary {
       providerId: providerId,
       projectPath: projectPath,
       title: decodeOptionalString(map['title']),
+      // `raw` 已不再写盘；这里只保留一次性的**旧缓存**迁移读取，让升级前
+      // 落盘的条目仍能恢复 sessionPath。不是运行期原文取值。
       sessionPath:
           decodeOptionalString(map['sessionPath']) ??
-          decodeOptionalString(raw['path']),
+          decodeOptionalString(decodeObjectMap(map['raw'])['path']),
       preview: decodeOptionalString(map['preview']) ?? '',
       createdAt: createdAt,
       updatedAt: updatedAt,
@@ -235,7 +229,6 @@ class AgentThreadSummary {
       status: _threadRuntimeStatus(map['status']),
       waitingOnApproval: map['waitingOnApproval'] == true,
       waitingOnUserInput: map['waitingOnUserInput'] == true,
-      raw: raw,
     );
   }
 }

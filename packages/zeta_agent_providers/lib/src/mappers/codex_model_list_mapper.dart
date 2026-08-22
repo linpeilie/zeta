@@ -75,7 +75,12 @@ class _CodexModelListMapper {
       serviceTiers: tiers,
       defaultServiceTier: _string(item['defaultServiceTier']),
       isDefault: item['isDefault'] == true,
-      raw: item,
+      supportsImageInput: _acceptsImageInput(item['inputModalities']),
     );
   }
+}
+
+/// Codex 模型目录里的 `inputModalities` 是否包含图片。
+bool _acceptsImageInput(Object? modalities) {
+  return modalities is List && modalities.contains('image');
 }

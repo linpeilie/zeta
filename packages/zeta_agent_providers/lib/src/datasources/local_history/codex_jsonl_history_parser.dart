@@ -27,6 +27,9 @@ class _JsonlHistoryParser {
   final CodexFileChangeTracker _fileChangeTracker = CodexFileChangeTracker();
 
   String? _currentTurnId;
+
+  /// 当前 JSONL 记录的时间戳（记录级 metadata，不是原文内容）。
+  DateTime? _currentRecordTimestamp;
   int _lineNumber = 0;
 
   void consumeLine(String line) {
@@ -49,6 +52,7 @@ class _JsonlHistoryParser {
     }
 
     final recordType = _string(record['type']);
+    _currentRecordTimestamp = _dateTimeFromAny(record['timestamp']);
     final payload = _map(record['payload']);
     if (recordType == 'session_meta') {
       _consumeSessionMeta(payload);
@@ -66,13 +70,19 @@ class _JsonlHistoryParser {
 
     switch (recordType) {
       case 'event_msg':
-        _consumeEventMessage(payload, raw: record);
+        _consumeEventMessage(
+          payload,
+          raw: AgentProviderRawPayload.wrap(record),
+        );
         return;
       case 'turn_context':
-        _consumeTurnContext(payload, raw: record);
+        _consumeTurnContext(payload, raw: AgentProviderRawPayload.wrap(record));
         return;
       case 'response_item':
-        _consumeResponseItem(payload, raw: record);
+        _consumeResponseItem(
+          payload,
+          raw: AgentProviderRawPayload.wrap(record),
+        );
         return;
       case _:
         return;
@@ -115,11 +125,8 @@ class _JsonlHistoryParser {
       threadId: _threadId,
       turns: List<AgentHistoryTurn>.unmodifiable(turns),
       currentTurn: currentTurn,
-      raw: <String, Object?>{
-        'source': 'sessionFile',
-        'sessionPath': sessionPath,
-        'turnIds': turns.map((turn) => turn.id).toList(),
-      },
+      sourceLabel: 'sessionFile',
+      sessionPath: sessionPath,
     );
   }
 
@@ -132,7 +139,7 @@ class _JsonlHistoryParser {
 
   void _consumeEventMessage(
     Map<String, Object?> payload, {
-    required Map<String, Object?> raw,
+    required AgentProviderRawPayload raw,
   }) {
     final type = _string(payload['type']);
     switch (type) {
@@ -197,6 +204,7 @@ class _JsonlHistoryParser {
       default:
         final historyEvent = _historyEventFromSpecialPayload(
           type: type,
+          payload: payload,
           raw: raw,
           id: _nextHistoryId('history-event'),
         );
@@ -225,7 +233,7 @@ class _JsonlHistoryParser {
   ///   同一段会话按新旧格式渲染出不同的内容，先保持两边一致。
   void _consumeCompletedItem(
     Map<String, Object?> payload, {
-    required Map<String, Object?> raw,
+    required AgentProviderRawPayload raw,
   }) {
     final item = _map(payload['item']);
     switch (_normalizedAgentItemType(_string(item['type']))) {
@@ -285,7 +293,7 @@ class _JsonlHistoryParser {
 
   void _consumeTaskStarted(
     Map<String, Object?> payload, {
-    required Map<String, Object?> raw,
+    required AgentProviderRawPayload raw,
   }) {
     final turn = _currentTurn();
     if (turn == null) {
@@ -295,7 +303,7 @@ class _JsonlHistoryParser {
       ..status = AgentHistoryTurnStatus.running
       ..startedAt =
           _dateTimeFromAny(payload['started_at']) ??
-          _dateTimeFromAny(raw['timestamp']) ??
+          _currentRecordTimestamp ??
           turn.startedAt
       ..modelContextWindow =
           _numberToInt(payload['model_context_window']) ??
@@ -310,7 +318,7 @@ class _JsonlHistoryParser {
 
   void _consumeTaskComplete(
     Map<String, Object?> payload, {
-    required Map<String, Object?> raw,
+    required AgentProviderRawPayload raw,
   }) {
     final turn = _currentTurn();
     if (turn == null) {
@@ -320,7 +328,7 @@ class _JsonlHistoryParser {
       ..status = AgentHistoryTurnStatus.completed
       ..completedAt =
           _dateTimeFromAny(payload['completed_at']) ??
-          _dateTimeFromAny(raw['timestamp']) ??
+          _currentRecordTimestamp ??
           turn.completedAt
       ..duration =
           _durationFromMilliseconds(payload['duration_ms']) ?? turn.duration
@@ -332,7 +340,7 @@ class _JsonlHistoryParser {
 
   void _consumeTurnAborted(
     Map<String, Object?> payload, {
-    required Map<String, Object?> raw,
+    required AgentProviderRawPayload raw,
   }) {
     final turn = _currentTurn();
     if (turn == null) {
@@ -342,7 +350,7 @@ class _JsonlHistoryParser {
       ..status = AgentHistoryTurnStatus.interrupted
       ..completedAt =
           _dateTimeFromAny(payload['completed_at']) ??
-          _dateTimeFromAny(raw['timestamp']) ??
+          _currentRecordTimestamp ??
           turn.completedAt
       ..duration =
           _durationFromMilliseconds(payload['duration_ms']) ?? turn.duration
@@ -352,7 +360,7 @@ class _JsonlHistoryParser {
 
   void _consumeTurnContext(
     Map<String, Object?> payload, {
-    required Map<String, Object?> raw,
+    required AgentProviderRawPayload raw,
   }) {
     final turn = _currentTurn();
     if (turn == null) {
@@ -384,7 +392,7 @@ class _JsonlHistoryParser {
 
   void _consumeTokenCount(
     Map<String, Object?> payload, {
-    required Map<String, Object?> raw,
+    required AgentProviderRawPayload raw,
   }) {
     final turn = _currentTurn();
     if (turn == null) {
@@ -425,7 +433,7 @@ class _JsonlHistoryParser {
 
   void _consumeResponseItem(
     Map<String, Object?> payload, {
-    required Map<String, Object?> raw,
+    required AgentProviderRawPayload raw,
   }) {
     final type = _string(payload['type']);
     switch (type) {
@@ -457,6 +465,7 @@ class _JsonlHistoryParser {
       default:
         final historyEvent = _historyEventFromSpecialPayload(
           type: type,
+          payload: payload,
           raw: raw,
           id: _nextHistoryId('history-event'),
         );
@@ -469,7 +478,7 @@ class _JsonlHistoryParser {
 
   void _consumeFunctionCall(
     Map<String, Object?> payload, {
-    required Map<String, Object?> raw,
+    required AgentProviderRawPayload raw,
   }) {
     final name = _string(payload['name']);
     final callId = _responseCallId(payload) ?? _nextHistoryId('tool-call');
@@ -508,9 +517,11 @@ class _JsonlHistoryParser {
         arguments: arguments,
         stringInput: _string(payload['arguments']),
       ),
-      rawInput: _jsonlRawInputMap(
-        arguments: arguments,
-        stringInput: _string(payload['arguments']),
+      rawInput: AgentProviderRawPayload.wrap(
+        _jsonlRawInputMap(
+          arguments: arguments,
+          stringInput: _string(payload['arguments']),
+        ),
       ),
       raw: raw,
     );
@@ -520,7 +531,7 @@ class _JsonlHistoryParser {
 
   void _consumeFunctionCallOutput(
     Map<String, Object?> payload, {
-    required Map<String, Object?> raw,
+    required AgentProviderRawPayload raw,
   }) {
     final callId = _responseCallId(payload);
     if (callId == null) {
@@ -564,15 +575,13 @@ class _JsonlHistoryParser {
       description: entry.description,
       content: entry.content,
       qaPairs: updatedQaPairs,
-      raw: entry.raw.isEmpty
-          ? raw
-          : <String, Object?>{...entry.raw, 'functionCallOutput': raw},
+      raw: entry.raw.mergedWith(raw),
     );
   }
 
   void _consumeCustomToolCall(
     Map<String, Object?> payload, {
-    required Map<String, Object?> raw,
+    required AgentProviderRawPayload raw,
   }) {
     final name = _string(payload['name']);
     final callId = _responseCallId(payload) ?? _nextHistoryId('tool-call');
@@ -598,9 +607,8 @@ class _JsonlHistoryParser {
         arguments: arguments,
         stringInput: stringInput,
       ),
-      rawInput: _jsonlRawInputMap(
-        arguments: arguments,
-        stringInput: stringInput,
+      rawInput: AgentProviderRawPayload.wrap(
+        _jsonlRawInputMap(arguments: arguments, stringInput: stringInput),
       ),
       raw: raw,
     );
@@ -612,7 +620,7 @@ class _JsonlHistoryParser {
 
   void _consumePatchApplyEnd(
     Map<String, Object?> payload, {
-    required Map<String, Object?> raw,
+    required AgentProviderRawPayload raw,
   }) {
     final callId = _string(payload['call_id']);
     final toolCallId = callId ?? _nextHistoryId('patch');
@@ -646,7 +654,7 @@ class _JsonlHistoryParser {
             : AgentToolStatus.completed,
         content: content,
         locations: locations,
-        rawOutput: payload,
+        rawOutput: AgentProviderRawPayload.wrap(payload),
         raw: raw,
         fileChanges: fileProjection.snapshot,
       );
@@ -662,7 +670,7 @@ class _JsonlHistoryParser {
           : AgentToolStatus.completed,
       content: content,
       locations: locations,
-      rawOutput: payload,
+      rawOutput: AgentProviderRawPayload.wrap(payload),
       raw: raw,
       fileChanges: fileProjection.snapshot,
     );
@@ -671,7 +679,7 @@ class _JsonlHistoryParser {
 
   void _consumeMcpToolCallEnd(
     Map<String, Object?> payload, {
-    required Map<String, Object?> raw,
+    required AgentProviderRawPayload raw,
   }) {
     final invocation = _map(payload['invocation']);
     final arguments = _map(invocation['arguments']);
@@ -692,8 +700,8 @@ class _JsonlHistoryParser {
           _mcpResultPreview(result) ??
           _jsonlToolInvocationContent(name: toolName, arguments: arguments),
       locations: _jsonlToolLocations(name: toolName, arguments: arguments),
-      rawInput: arguments,
-      rawOutput: result,
+      rawInput: AgentProviderRawPayload.wrap(arguments),
+      rawOutput: AgentProviderRawPayload.wrap(result),
       raw: raw,
     );
     _appendEntry(AgentHistoryToolEntry(toolCall: toolCall));
@@ -701,7 +709,7 @@ class _JsonlHistoryParser {
 
   void _consumeToolSearchCall(
     Map<String, Object?> payload, {
-    required Map<String, Object?> raw,
+    required AgentProviderRawPayload raw,
   }) {
     final arguments = _map(payload['arguments']);
     final callId = _responseCallId(payload) ?? _nextHistoryId('search');
@@ -722,7 +730,7 @@ class _JsonlHistoryParser {
 
   void _consumeWebSearchCall(
     Map<String, Object?> payload, {
-    required Map<String, Object?> raw,
+    required AgentProviderRawPayload raw,
   }) {
     final callId = _responseCallId(payload) ?? _nextHistoryId('search');
     final action = _map(payload['action']);
@@ -745,7 +753,7 @@ class _JsonlHistoryParser {
     required String? name,
     required Map<String, Object?> arguments,
     required String? stringInput,
-    required Map<String, Object?> raw,
+    required AgentProviderRawPayload raw,
   }) {
     return AgentHistoryEventEntry(
       id: id,
@@ -774,10 +782,10 @@ class _JsonlHistoryParser {
 
   AgentHistoryEventEntry? _historyEventFromSpecialPayload({
     required String? type,
-    required Map<String, Object?> raw,
+    required Map<String, Object?> payload,
+    required AgentProviderRawPayload raw,
     required String id,
   }) {
-    final payload = _map(raw['payload']);
     final normalizedType = type?.toLowerCase();
     if (normalizedType == null || normalizedType.isEmpty) {
       return null;
@@ -832,9 +840,9 @@ class _JsonlHistoryParser {
     AgentToolStatus? status,
     String? content,
     List<String>? locations,
-    Map<String, Object?>? rawInput,
-    Map<String, Object?>? rawOutput,
-    Map<String, Object?>? raw,
+    AgentProviderRawPayload? rawInput,
+    AgentProviderRawPayload? rawOutput,
+    AgentProviderRawPayload? raw,
     AgentFileChangeSnapshot? fileChanges,
   }) {
     final pending = _pendingToolsByCallId[callId];
@@ -940,7 +948,6 @@ class _JsonlTurnBuilder {
       tokenUsage: tokenUsage,
       errorMessage: errorMessage,
       errorCode: errorCode,
-      raw: Map<String, Object?>.unmodifiable(raw),
     );
   }
 }

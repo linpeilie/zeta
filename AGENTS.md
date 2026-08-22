@@ -88,6 +88,8 @@ grep -rnE "(codex|grok|claude|cursor)" \
 
 文件变更也遵守同一边界：Provider-local tracker 必须在进入共享 pipeline 前产出完整的 `AgentFileChangeSnapshot`。Store 只机械替换 typed snapshot；presentation 只按中立 evidence 变体渲染，不得读取 raw/wire key、解析命令或访问工作区补算 diff。
 
+**协议原文不可取值。** 中立模型里的原文一律是不透明的 `AgentProviderRawPayload`：没有 `operator []` / `keys` / `toMap()`，唯一内容出口 `toPrettyJson()` 只允许上下文面板调用，`AgentProviderRawPayload.wrap` 只允许 `zeta_agent_providers` 调用。需要原文里的某个语义，就让 adapter 显式声明成 typed 字段（`appendsProgress` / `inputDetail` / `sourceLabel` / `sessionPath` / `sourceItemId` …），不要在共享层翻 payload。守卫：`agent_core_raw_payload_freeze_test`。
+
 **新增 Provider 不应该需要改 TimelineStore 或 CoalescingPolicy。** 如果你发现非改不可，先停下来开 Issue：那通常意味着抽象没做对。
 
 > 正文：[工程规范 §4.1](docs/architecture/engineering_standards.md)

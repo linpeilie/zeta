@@ -238,7 +238,6 @@ class ProjectThreadsController {
       createdAt: now,
       updatedAt: now,
       status: AgentThreadRuntimeStatus.idle,
-      raw: session.raw,
     );
     viewModel.prependThread(projectPath: projectPath, thread: thread);
     if (formalTitle != null) {

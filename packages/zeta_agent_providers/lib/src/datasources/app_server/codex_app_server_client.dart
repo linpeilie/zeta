@@ -440,7 +440,6 @@ class _CodexAppServerClient {
       id: id,
       providerId: _config.id,
       title: _string(thread['title']) ?? _string(thread['name']),
-      raw: map,
     );
   }
 
@@ -488,7 +487,6 @@ class _CodexAppServerClient {
       status: _threadRuntimeStatus(statusMap),
       waitingOnApproval: flags.waitingOnApproval,
       waitingOnUserInput: flags.waitingOnUserInput,
-      raw: thread,
     );
   }
 
@@ -498,7 +496,6 @@ class _CodexAppServerClient {
     return AgentTurn(
       id: _string(turn['id']) ?? 'codex-turn',
       sessionId: sessionId,
-      raw: map,
     );
   }
 }

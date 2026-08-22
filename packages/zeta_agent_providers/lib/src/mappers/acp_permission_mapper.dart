@@ -94,7 +94,7 @@ class AcpPermissionMapper {
         description: description,
         sessionId: sessionId,
         turnId: runningTurnId,
-        raw: params,
+        raw: AgentProviderRawPayload.wrap(params),
       ),
       options: List<AcpPermissionOption>.unmodifiable(options),
     );

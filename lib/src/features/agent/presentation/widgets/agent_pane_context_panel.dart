@@ -439,8 +439,8 @@ class _AgentContextRawMessageRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    final hasRaw = item.raw.isNotEmpty;
-    final rawText = hasRaw ? _prettyJson(item.raw) : '';
+    final rawText = item.rawText;
+    final hasRaw = rawText.isNotEmpty;
     return IdeCollapsibleCard(
       headerKey: ValueKey<String>('agent-context-raw-${item.id}'),
       bodyKey: ValueKey<String>('agent-context-raw-body-${item.id}'),
@@ -473,7 +473,7 @@ class _AgentContextRawMessageRow extends StatelessWidget {
           ),
           const SizedBox(width: IdeSpacing.space8),
           Text(
-            _extractRawTimestamp(item.raw),
+            _formatContextTimestamp(item.capturedAt),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: textStyles.caption.copyWith(
@@ -550,7 +550,8 @@ class _ContextRawItem {
     required this.id,
     required this.displayId,
     required this.kindLabel,
-    required this.raw,
+    required this.rawText,
+    this.capturedAt,
   });
 
   /// 展开态与 ValueKey 使用的稳定 id。
@@ -562,7 +563,15 @@ class _ContextRawItem {
   /// 类型标签（用户 / 助手 / 工具 / …）。
   final String kindLabel;
 
-  final Map<String, Object?> raw;
+  /// 已渲染好的 JSON 文本。
+  ///
+  /// 面板只展示原始报文，**不从中取值**：所以这里存的是文本，不是可索引的 Map。
+  /// 时间来自 [capturedAt]（由适配层在包装 payload 时给出），不再靠翻 JSON 猜
+  /// `timestamp` / `created_at` 之类的键。
+  final String rawText;
+
+  /// 报文时间；协议未提供时为 null。
+  final DateTime? capturedAt;
 }
 
 /// 从时间线构建原始消息列表；[filterNonChat] 为 true 时仅保留主对话。
@@ -584,7 +593,8 @@ List<_ContextRawItem> _buildContextRawItems({
             id: message.id,
             displayId: message.id,
             kindLabel: _contextMessageKindLabel(message, l10n),
-            raw: message.raw,
+            rawText: message.raw.toPrettyJson(),
+            capturedAt: message.raw.capturedAt,
           ),
         );
       case AgentToolTimelineEntry(:final toolCall):
@@ -596,7 +606,8 @@ List<_ContextRawItem> _buildContextRawItems({
             id: toolCall.id,
             displayId: toolCall.id,
             kindLabel: _contextToolKindLabel(toolCall, l10n),
-            raw: _toolCallContextMap(toolCall, catalog),
+            rawText: _toolCallContextText(toolCall, catalog),
+            capturedAt: toolCall.raw.capturedAt ?? toolCall.startedAt,
           ),
         );
       case AgentPermissionTimelineEntry(:final request):
@@ -608,15 +619,16 @@ List<_ContextRawItem> _buildContextRawItems({
             id: request.id,
             displayId: request.id,
             kindLabel: l10n.agentKindApproval,
-            raw: request.raw.isNotEmpty
-                ? request.raw
-                : <String, Object?>{
+            capturedAt: request.raw.capturedAt,
+            rawText: request.raw.isNotEmpty
+                ? request.raw.toPrettyJson()
+                : _prettyJson(<String, Object?>{
                     'id': request.id,
                     'title': request.title,
                     'kind': request.kind.name,
                     'description': ?request.description,
                     'command': ?request.command,
-                  },
+                  }),
           ),
         );
       case AgentQuestionTimelineEntry(:final request):
@@ -628,9 +640,10 @@ List<_ContextRawItem> _buildContextRawItems({
             id: request.id,
             displayId: request.id,
             kindLabel: l10n.agentKindQuestion,
-            raw: request.raw.isNotEmpty
-                ? request.raw
-                : <String, Object?>{
+            capturedAt: request.raw.capturedAt,
+            rawText: request.raw.isNotEmpty
+                ? request.raw.toPrettyJson()
+                : _prettyJson(<String, Object?>{
                     'id': request.id,
                     'title': request.title,
                     'description': ?request.description,
@@ -642,7 +655,7 @@ List<_ContextRawItem> _buildContextRawItems({
                           },
                         )
                         .toList(growable: false),
-                  },
+                  }),
           ),
         );
       case AgentPlanApprovalTimelineEntry(:final request):
@@ -654,7 +667,8 @@ List<_ContextRawItem> _buildContextRawItems({
             id: request.id,
             displayId: request.id,
             kindLabel: l10n.agentKindPlanApproval,
-            raw: request.raw,
+            rawText: request.raw.toPrettyJson(),
+            capturedAt: request.raw.capturedAt,
           ),
         );
       case AgentHistoryEventTimelineEntry(:final event):
@@ -666,15 +680,16 @@ List<_ContextRawItem> _buildContextRawItems({
             id: event.id,
             displayId: event.id,
             kindLabel: _contextHistoryEventLabel(event, l10n),
-            raw: event.raw.isNotEmpty
-                ? event.raw
-                : <String, Object?>{
+            capturedAt: event.raw.capturedAt,
+            rawText: event.raw.isNotEmpty
+                ? event.raw.toPrettyJson()
+                : _prettyJson(<String, Object?>{
                     'id': event.id,
                     'kind': event.kind.name,
                     'title': event.title,
                     'description': ?event.description,
                     'content': ?event.content,
-                  },
+                  }),
           ),
         );
       case AgentTurnFileChangesTimelineEntry(:final turnId, :final snapshot):
@@ -686,10 +701,10 @@ List<_ContextRawItem> _buildContextRawItems({
             id: entry.id,
             displayId: turnId,
             kindLabel: l10n.agentKindFileChange,
-            raw: <String, Object?>{
+            rawText: _prettyJson(<String, Object?>{
               'turnId': turnId,
               'fileChanges': _fileChangeSnapshotContextMap(snapshot),
-            },
+            }),
           ),
         );
     }
@@ -736,6 +751,17 @@ String _contextHistoryEventLabel(
   };
 }
 
+/// 工具条目**只展示 typed 摘要**。
+///
+/// 文件变更证据必须来自 `fileChanges` 快照；raw / wire 字段不得回流到这里
+/// （见 `agent_file_change_presentation_purity_test`）。
+String _toolCallContextText(
+  AgentToolCall toolCall,
+  AgentUiTextCatalog catalog,
+) {
+  return _prettyJson(_toolCallContextMap(toolCall, catalog));
+}
+
 Map<String, Object?> _toolCallContextMap(
   AgentToolCall toolCall,
   AgentUiTextCatalog catalog,
@@ -760,9 +786,6 @@ Map<String, Object?> _toolCallContextMap(
       'status': toolCall.status.name,
     };
   }
-  if (toolCall.raw.isNotEmpty) {
-    return toolCall.raw;
-  }
   return <String, Object?>{
     'id': toolCall.id,
     'title': toolCall.displayTitle(catalog),
@@ -770,8 +793,11 @@ Map<String, Object?> _toolCallContextMap(
     'status': toolCall.status.name,
     'content': ?toolCall.content,
     if (toolCall.locations.isNotEmpty) 'locations': toolCall.locations,
-    if (toolCall.rawInput.isNotEmpty) 'rawInput': toolCall.rawInput,
-    if (toolCall.rawOutput.isNotEmpty) 'rawOutput': toolCall.rawOutput,
+    // rawInput / rawOutput 是不可取值的原文：只在有内容时以文本形式附上。
+    if (toolCall.rawInput.isNotEmpty)
+      'rawInput': toolCall.rawInput.toPrettyJson(),
+    if (toolCall.rawOutput.isNotEmpty)
+      'rawOutput': toolCall.rawOutput.toPrettyJson(),
   };
 }
 
@@ -833,52 +859,12 @@ String _formatContextDateTime(DateTime? dateTime) {
 
 /// 从 raw payload 宽容提取消息时间；兼容记录级 timestamp、started/createdAt
 /// 以及内嵌 payload 内的同名字段。缺失时返回占位符。
-String _extractRawTimestamp(Map<String, Object?> raw) {
-  for (final key in const <String>[
-    'timestamp',
-    'startedAt',
-    'started_at',
-    'completedAt',
-    'completed_at',
-    'createdAt',
-    'created_at',
-  ]) {
-    final parsed = _rawToDateTime(raw[key]);
-    if (parsed != null) {
-      return _formatContextDateTime(parsed);
-    }
-  }
-  // 部分协议把时间戳放在内嵌 payload 中。
-  final payload = raw['payload'];
-  if (payload is Map<String, Object?>) {
-    for (final key in const <String>[
-      'timestamp',
-      'started_at',
-      'completed_at',
-    ]) {
-      final parsed = _rawToDateTime(payload[key]);
-      if (parsed != null) {
-        return _formatContextDateTime(parsed);
-      }
-    }
-  }
-  return '—';
-}
-
-/// 把 raw 中的时间字段解析为本地 DateTime；兼容秒/毫秒整数与 ISO 字符串。
-DateTime? _rawToDateTime(Object? value) {
-  if (value == null) {
-    return null;
-  }
-  if (value is int) {
-    // 小于 10^12 视为秒级时间戳，统一换算到毫秒。
-    final millis = value < 1000000000000 ? value * 1000 : value;
-    return DateTime.fromMillisecondsSinceEpoch(millis, isUtc: true).toLocal();
-  }
-  if (value is String) {
-    return DateTime.tryParse(value)?.toLocal();
-  }
-  return null;
+/// 报文时间：直接用适配层给出的 typed 时间戳。
+///
+/// 早期这里会去 raw payload 里逐个试 `timestamp` / `started_at` / `createdAt`
+/// 等键名——那是从原文取值，正是本次要消灭的模式。
+String _formatContextTimestamp(DateTime? capturedAt) {
+  return _formatContextDateTime(capturedAt);
 }
 
 /// 把 raw Map 序列化为带缩进的 JSON 字符串；失败时回退到 toString。

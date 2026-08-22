@@ -53,7 +53,9 @@ final class GrokQuestionMapper {
           questions: questions,
           sessionId: sessionId,
           turnId: runningTurnId,
-          raw: Map<String, Object?>.unmodifiable(params),
+          raw: AgentProviderRawPayload.wrap(
+            Map<String, Object?>.unmodifiable(params),
+          ),
         ),
       ),
     );

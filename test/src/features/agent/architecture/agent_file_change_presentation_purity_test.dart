@@ -72,7 +72,10 @@ void main() {
         final editGuardIndex = source.indexOf(
           'if (toolCall.kind == AgentToolKind.edit)',
         );
-        final rawFallbackIndex = source.indexOf('if (toolCall.raw.isNotEmpty)');
+        // 原文只作为 typed 证据之后的兜底诊断，且只对非 edit 工具生效。
+        final rawFallbackIndex = source.indexOf(
+          'if (toolCall.rawInput.isNotEmpty)',
+        );
 
         expect(typedIndex, isNonNegative);
         expect(editGuardIndex, greaterThan(typedIndex));

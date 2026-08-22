@@ -113,16 +113,14 @@ AgentToolCallEvent _mergeToolProgress(
 ) {
   final previousCall = previous.toolCall;
   final nextCall = next.toolCall;
-  final shouldAppend =
-      previousCall.raw['_progressAppend'] == true &&
-      nextCall.raw['_progressAppend'] == true;
+  final shouldAppend = previousCall.appendsProgress && nextCall.appendsProgress;
   if (!shouldAppend) {
     return next;
   }
   return AgentToolCallEvent(
     nextCall.copyWith(
       content: _appendProgress(previousCall.content, nextCall.content),
-      raw: <String, Object?>{...previousCall.raw, ...nextCall.raw},
+      raw: previousCall.raw.mergedWith(nextCall.raw),
     ),
   );
 }

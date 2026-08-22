@@ -1482,8 +1482,7 @@ class _ModelCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    final modalities = model.raw['inputModalities'];
-    final supportsImage = modalities is List && modalities.contains('image');
+    final supportsImage = model.supportsImageInput;
     return Padding(
       padding: const EdgeInsets.only(bottom: IdeSpacing.space8),
       child: PanelCard(

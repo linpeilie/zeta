@@ -117,7 +117,6 @@ void main() {
       );
 
       for (final model in result.models.models) {
-        expect(model.raw, isEmpty);
         expect(model.defaultReasoningEffort, isNull);
         expect(model.serviceTiers, isEmpty);
         expect(model.defaultServiceTier, isNull);

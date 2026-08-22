@@ -22,7 +22,8 @@ class GrokUpdatesHistoryParser {
   AgentThreadHistorySnapshot parse({
     required String threadId,
     required String content,
-    Map<String, Object?> raw = const <String, Object?>{},
+    String? sourceLabel,
+    String? sessionPath,
   }) {
     final turns = <_TurnBuilder>[];
     _TurnBuilder? current;
@@ -196,7 +197,7 @@ class GrokUpdatesHistoryParser {
               sourceMessageId: user.sourceMessageId,
               text: parsed.text,
               localImagePaths: parsed.localImagePaths,
-              raw: user.raw,
+              raw: AgentProviderRawPayload.wrap(user.raw),
             );
           }
           continue;
@@ -243,7 +244,10 @@ class GrokUpdatesHistoryParser {
             case AgentToolCallEvent():
               current!.upsertTool(event.toolCall);
             case AgentPlanUpdatedEvent():
-              current!.addPlan(event.entries, raw: update);
+              current!.addPlan(
+                event.entries,
+                raw: AgentProviderRawPayload.wrap(update),
+              );
             case AgentTokenUsageEvent():
               // Grok turn_completed usage 是本回合绝对用量；usage_update 则是
               // session 累计进度，不能冒充当前 turn 用量。
@@ -259,7 +263,6 @@ class GrokUpdatesHistoryParser {
 
         if (terminal != null) {
           current!.identityTerminal = true;
-          current!.noteTerminalRaw(terminal.raw);
           closeTurn(
             status: terminal.status,
             duration: terminal.duration,
@@ -279,9 +282,10 @@ class GrokUpdatesHistoryParser {
           .toList(growable: false);
       return AgentThreadHistorySnapshot(
         threadId: threadId,
+        sourceLabel: sourceLabel,
+        sessionPath: sessionPath,
         turns: List<AgentHistoryTurn>.unmodifiable(built),
         currentTurn: built.isEmpty ? null : built.last,
-        raw: raw,
       );
     } finally {
       mapper.dispose();
@@ -310,7 +314,6 @@ class _TurnBuilder {
   AgentTokenUsage? tokenUsage;
   String? errorMessage;
   Map<String, Object?>? retryStateRaw;
-  Map<String, Object?>? terminalRaw;
   DateTime? startedAt;
   DateTime? completedAt;
   Duration? duration;
@@ -355,10 +358,6 @@ class _TurnBuilder {
     );
   }
 
-  void noteTerminalRaw(Map<String, Object?> raw) {
-    terminalRaw = Map<String, Object?>.unmodifiable(raw);
-  }
-
   /// 记录事件时间；首次出现作为 [startedAt]。
   void noteTime(DateTime? at) {
     if (at != null) {
@@ -389,7 +388,7 @@ class _TurnBuilder {
     required String? sourceMessageId,
     required String text,
     required List<String> localImagePaths,
-    required Map<String, Object?> raw,
+    required AgentProviderRawPayload raw,
   }) {
     final existingIndex = _userMessageIndex;
     if (existingIndex != null) {
@@ -429,7 +428,7 @@ class _TurnBuilder {
     required String id,
     required String? sourceMessageId,
     required String text,
-    required Map<String, Object?> raw,
+    required AgentProviderRawPayload raw,
   }) {
     final existingIndex = _messageIndexById[id];
     if (existingIndex != null) {
@@ -461,18 +460,16 @@ class _TurnBuilder {
     required String id,
     required String? sourceItemId,
     required String text,
-    required Map<String, Object?> raw,
+    required AgentProviderRawPayload raw,
   }) {
-    final historyRaw = sourceItemId == null
-        ? raw
-        : <String, Object?>{...raw, 'sourceItemId': sourceItemId};
     final existingIndex = _toolIndexById[id];
     if (existingIndex != null) {
       final existing = entries[existingIndex] as AgentHistoryToolEntry;
       entries[existingIndex] = AgentHistoryToolEntry(
         toolCall: existing.toolCall.copyWith(
           content: _mergeStreamText(existing.toolCall.content ?? '', text),
-          raw: historyRaw,
+          raw: raw,
+          sourceItemId: sourceItemId,
         ),
       );
       return;
@@ -488,7 +485,8 @@ class _TurnBuilder {
           content: text,
           sessionId: sessionId,
           turnId: this.id,
-          raw: historyRaw,
+          raw: raw,
+          sourceItemId: sourceItemId,
         ),
       ),
     );
@@ -509,7 +507,7 @@ class _TurnBuilder {
 
   void addPlan(
     List<AgentPlanEntry> planEntries, {
-    required Map<String, Object?> raw,
+    required AgentProviderRawPayload raw,
   }) {
     final text = _planText(planEntries);
     if (text.isEmpty) {
@@ -521,7 +519,9 @@ class _TurnBuilder {
       text: text,
       kind: AgentMessageKind.plan,
       status: AgentMessageStatus.completed,
-      raw: <String, Object?>{'type': 'plan', ...raw},
+      raw: AgentProviderRawPayload.wrap(const <String, Object?>{
+        'type': 'plan',
+      }).mergedWith(raw),
     );
     final existingIndex = _planMessageIndex;
     if (existingIndex != null) {
@@ -545,10 +545,6 @@ class _TurnBuilder {
       // Grok turn_completed.usage 是本回合绝对用量，不是会话累计。
       tokenUsageIsSessionCumulative: false,
       errorMessage: errorMessage,
-      raw: Map<String, Object?>.unmodifiable(<String, Object?>{
-        if (retryStateRaw != null) 'retryState': retryStateRaw,
-        if (terminalRaw != null) 'turnCompleted': terminalRaw,
-      }),
     );
   }
 }

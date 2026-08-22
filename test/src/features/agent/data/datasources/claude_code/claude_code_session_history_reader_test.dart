@@ -578,11 +578,6 @@ void main() {
       expect(summary.createdAt, DateTime.utc(2026, 8, 10, 2));
       expect(summary.updatedAt, DateTime.utc(2026, 8, 10, 2, 1));
       expect(summary.status, AgentThreadRuntimeStatus.idle);
-      expect(summary.raw, <String, Object?>{
-        'source': 'claude_code_history',
-        'model': 'claude-test-model',
-        'sampledMessageCount': 2,
-      });
       expect(reader.malformedLineCount, 1);
       expect((await projectDirectory.stat()).modified, beforeDirectoryMtime);
     });
@@ -685,7 +680,6 @@ void main() {
 
       expect(page.threads.single.title, 'Large history task');
       expect(page.threads.single.updatedAt, DateTime.utc(2026, 8, 10, 2));
-      expect(page.threads.single.raw['model'], 'tail-model');
     });
 
     test(
