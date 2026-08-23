@@ -20,6 +20,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_state.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_store.dart';
 import 'package:zeta/src/features/settings/presentation/settings_slice/settings_slice_providers.dart';
+import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_mapping.dart';
+import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_state.dart';
+import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_store.dart';
 
 enum SettingsSection { general, appearance, agents }
 
@@ -508,10 +511,201 @@ Widget _generalSettingsBody({
   );
 }
 
-class _AppearanceSettingsPane extends StatelessWidget {
+/// appearance 设置面板的写操作与异步查询集。
+///
+/// **必须按 store 实例缓存**：`_FontChoiceSettingRow` 用 `choicesLoader` 的闭包
+/// 身份判断要不要重置 `_choicesFuture`，每次 build 造新闭包会让字体目录反复重载。
+typedef _AppearanceWriteOps = ({
+  void Function(ZetaThemeModePreference mode) setThemeMode,
+  void Function(double value) setUiFontSize,
+  void Function(double value) setCodeFontSize,
+  Future<List<AppearanceFontOption>> Function() loadUiFontChoices,
+  Future<List<AppearanceFontOption>> Function() loadCodeFontChoices,
+  Future<bool> Function(AppearanceFontChoice choice) setUiFontChoice,
+  Future<bool> Function(AppearanceFontChoice choice) setCodeFontChoice,
+  String Function(AppearanceFontChoice choice) displayNameFor,
+});
+
+class _AppearanceSettingsPane extends ConsumerStatefulWidget {
   const _AppearanceSettingsPane({required this.appearanceController});
 
   final AppearanceSettingsController appearanceController;
+
+  @override
+  ConsumerState<_AppearanceSettingsPane> createState() =>
+      _AppearanceSettingsPaneState();
+}
+
+class _AppearanceSettingsPaneState
+    extends ConsumerState<_AppearanceSettingsPane> {
+  /// 缓存的写操作集与它所属的来源身份（切片 store 或旧 controller）。
+  Object? _opsOwner;
+  _AppearanceWriteOps? _ops;
+
+  _AppearanceWriteOps _opsFor(
+    Object owner,
+    _AppearanceWriteOps Function() build,
+  ) {
+    if (!identical(_opsOwner, owner) || _ops == null) {
+      _opsOwner = owner;
+      _ops = build();
+    }
+    return _ops!;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final store = ref.watch(appearanceSettingsSliceStoreProvider);
+    if (store == null) {
+      return _buildLegacy(context);
+    }
+    return _buildSlice(context, store);
+  }
+
+  Widget _buildLegacy(BuildContext context) {
+    final controller = widget.appearanceController;
+    final ops = _opsFor(
+      controller,
+      () => (
+        setThemeMode: (mode) => unawaited(controller.setThemeMode(mode)),
+        setUiFontSize: (value) => unawaited(controller.setUiFontSize(value)),
+        setCodeFontSize: (value) =>
+            unawaited(controller.setCodeFontSize(value)),
+        loadUiFontChoices: controller.loadUiFontChoices,
+        loadCodeFontChoices: controller.loadCodeFontChoices,
+        setUiFontChoice: controller.setUiFontChoice,
+        setCodeFontChoice: controller.setCodeFontChoice,
+        displayNameFor: controller.displayNameFor,
+      ),
+    );
+    return IdeSurface.canvas(
+      key: const ValueKey('settings-detail-panel'),
+      child: ValueListenableBuilder<AppearanceSettings>(
+        valueListenable: controller.listenable,
+        builder: (context, settings, _) => _appearanceSettingsBody(
+          context: context,
+          settings: appearanceSliceFromSettings(settings),
+          tabs: _tabs(context),
+          ops: ops,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSlice(BuildContext context, AppearanceSettingsSliceStore store) {
+    final ops = _opsFor(store, () => _sliceOps(store));
+    final settings = ref.watch(appearanceSettingsSliceValueProvider);
+    return IdeSurface.canvas(
+      key: const ValueKey('settings-detail-panel'),
+      child: _appearanceSettingsBody(
+        context: context,
+        settings: settings,
+        tabs: _tabs(context),
+        ops: ops,
+      ),
+    );
+  }
+
+  _AppearanceWriteOps _sliceOps(AppearanceSettingsSliceStore store) {
+    return (
+      setThemeMode: store.selectThemeMode,
+      setUiFontSize: store.adjustUiFontSize,
+      setCodeFontSize: store.adjustCodeFontSize,
+      loadUiFontChoices: () => _loadFontChoices(store, forCodeFont: false),
+      loadCodeFontChoices: () => _loadFontChoices(store, forCodeFont: true),
+      setUiFontChoice: (choice) =>
+          _selectFontChoice(store, choice, forCodeFont: false),
+      setCodeFontChoice: (choice) =>
+          _selectFontChoice(store, choice, forCodeFont: true),
+      displayNameFor: (choice) => _displayNameFor(store, choice),
+    );
+  }
+
+  /// 目录已在切片里就直接返回，否则请求一次并等回流。
+  Future<List<AppearanceFontOption>> _loadFontChoices(
+    AppearanceSettingsSliceStore store, {
+    required bool forCodeFont,
+  }) {
+    List<AppearanceFontOption>? current() => forCodeFont
+        ? store.state.catalog.codeOptions
+        : store.state.catalog.uiOptions;
+
+    final loaded = current();
+    if (loaded != null) {
+      return Future<List<AppearanceFontOption>>.value(loaded);
+    }
+    final completer = Completer<List<AppearanceFontOption>>();
+    late final void Function() unsubscribe;
+    unsubscribe = store.subscribe(() {
+      final options = current();
+      if (options == null || completer.isCompleted) {
+        return;
+      }
+      unsubscribe();
+      completer.complete(options);
+    });
+    store.requestFontCatalog(forCodeFont: forCodeFont);
+    // 请求可能同步回流；这种情况下上面的订阅不会触发。
+    final afterRequest = current();
+    if (afterRequest != null && !completer.isCompleted) {
+      unsubscribe();
+      completer.complete(afterRequest);
+    }
+    return completer.future;
+  }
+
+  /// 派发字体选择并等这次操作收口。
+  ///
+  /// 成功的判据是**值真的变了**：被拒绝时切片会回滚到原值，行据此弹错误 toast，
+  /// 与旧路径的 `Future<bool>` 语义一致。行级 `_updating` 已保证单飞。
+  Future<bool> _selectFontChoice(
+    AppearanceSettingsSliceStore store,
+    AppearanceFontChoice choice, {
+    required bool forCodeFont,
+  }) {
+    final operationId = forCodeFont
+        ? store.selectCodeFontChoice(choice)
+        : store.selectUiFontChoice(choice);
+
+    bool stillPending() {
+      final pending = forCodeFont
+          ? store.state.pendingCodeFontChoiceOperationId
+          : store.state.pendingUiFontChoiceOperationId;
+      return pending == operationId;
+    }
+
+    bool applied() {
+      final value = forCodeFont
+          ? store.state.value.codeFontChoice
+          : store.state.value.uiFontChoice;
+      return value == choice;
+    }
+
+    if (!stillPending()) {
+      return Future<bool>.value(applied());
+    }
+    final completer = Completer<bool>();
+    late final void Function() unsubscribe;
+    unsubscribe = store.subscribe(() {
+      if (stillPending() || completer.isCompleted) {
+        return;
+      }
+      unsubscribe();
+      completer.complete(applied());
+    });
+    return completer.future;
+  }
+
+  String _displayNameFor(
+    AppearanceSettingsSliceStore store,
+    AppearanceFontChoice choice,
+  ) {
+    final family = choice.fontFamily;
+    if (family == null) {
+      return '';
+    }
+    return store.state.catalog.displayNames[family.toLowerCase()] ?? family;
+  }
 
   List<_ThemeModeTabSpec> _tabs(BuildContext context) {
     final l10n = context.l10n;
@@ -539,112 +733,108 @@ class _AppearanceSettingsPane extends StatelessWidget {
       ),
     ];
   }
+}
 
-  @override
-  Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    return IdeSurface.canvas(
-      key: const ValueKey('settings-detail-panel'),
-      child: ValueListenableBuilder<AppearanceSettings>(
-        valueListenable: appearanceController.listenable,
-        builder: (context, settings, _) {
-          return IdePageBody(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                IdeRowGroup(
-                  key: const ValueKey('settings-appearance-group'),
-                  title: l10n.settingsTheme,
-                  children: [
-                    _ThemeModeSection(
-                      tabs: _tabs(context),
-                      groupValue: themeModeForPreference(settings.themeMode),
-                      onSelected: (value) {
-                        unawaited(
-                          appearanceController.setThemeMode(
-                            preferenceForThemeMode(value),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-                const SizedBox(height: IdeSpacing.space32),
-                IdeRowGroup(
-                  key: const ValueKey('settings-appearance-font-group'),
-                  title: l10n.settingsFonts,
-                  children: [
-                    _FontChoiceSettingRow(
-                      key: const ValueKey('settings-ui-font-row'),
-                      keyPrefix: 'settings-ui-font',
-                      label: l10n.settingsUiFont,
-                      description: l10n.settingsUiFontHint,
-                      selectedChoice: settings.uiFontChoice,
-                      selectedLabel: _fontChoiceLabel(
-                        context,
-                        settings.uiFontChoice,
-                        systemFontDisplayName: appearanceController
-                            .displayNameFor(settings.uiFontChoice),
-                      ),
-                      choicesLoader: appearanceController.loadUiFontChoices,
-                      onChanged: appearanceController.setUiFontChoice,
-                      errorMessage: l10n.settingsUiFontLoadError,
-                    ),
-                    _FontSizeSettingRow(
-                      key: const ValueKey('settings-ui-font-size-row'),
-                      keyPrefix: 'settings-ui-font-size',
-                      label: l10n.settingsUiFontSize,
-                      description: l10n.settingsUiFontSizeHint(
-                        '${minUiFontSize.toInt()}',
-                        '${maxUiFontSize.toInt()}',
-                      ),
-                      value: settings.uiFontSize,
-                      min: minUiFontSize,
-                      max: maxUiFontSize,
-                      onChanged: (value) {
-                        unawaited(appearanceController.setUiFontSize(value));
-                      },
-                    ),
-                    _FontChoiceSettingRow(
-                      key: const ValueKey('settings-code-font-row'),
-                      keyPrefix: 'settings-code-font',
-                      label: l10n.settingsCodeFont,
-                      description: l10n.settingsCodeFontHint,
-                      selectedChoice: settings.codeFontChoice,
-                      selectedLabel: _fontChoiceLabel(
-                        context,
-                        settings.codeFontChoice,
-                        systemFontDisplayName: appearanceController
-                            .displayNameFor(settings.codeFontChoice),
-                      ),
-                      choicesLoader: appearanceController.loadCodeFontChoices,
-                      onChanged: appearanceController.setCodeFontChoice,
-                      errorMessage: l10n.settingsCodeFontLoadError,
-                    ),
-                    _FontSizeSettingRow(
-                      key: const ValueKey('settings-code-font-size-row'),
-                      keyPrefix: 'settings-code-font-size',
-                      label: l10n.settingsCodeFontSize,
-                      description: l10n.settingsCodeFontSizeHint(
-                        '${minCodeFontSize.toInt()}',
-                        '${maxCodeFontSize.toInt()}',
-                      ),
-                      value: settings.codeFontSize,
-                      min: minCodeFontSize,
-                      max: maxCodeFontSize,
-                      onChanged: (value) {
-                        unawaited(appearanceController.setCodeFontSize(value));
-                      },
-                    ),
-                  ],
-                ),
-              ],
+/// appearance 设置面板正文；新旧路径共用，值类型统一为切片的
+/// [AppearanceSettingsSlice]（旧路径经 `appearanceSliceFromSettings` 转换）。
+Widget _appearanceSettingsBody({
+  required BuildContext context,
+  required AppearanceSettingsSlice settings,
+  required List<_ThemeModeTabSpec> tabs,
+  required _AppearanceWriteOps ops,
+}) {
+  final l10n = context.l10n;
+  return IdePageBody(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        IdeRowGroup(
+          key: const ValueKey('settings-appearance-group'),
+          title: l10n.settingsTheme,
+          children: [
+            _ThemeModeSection(
+              tabs: tabs,
+              groupValue: themeModeForPreference(settings.themeMode),
+              onSelected: (value) {
+                ops.setThemeMode(preferenceForThemeMode(value));
+              },
             ),
-          );
-        },
-      ),
-    );
-  }
+          ],
+        ),
+        const SizedBox(height: IdeSpacing.space32),
+        IdeRowGroup(
+          key: const ValueKey('settings-appearance-font-group'),
+          title: l10n.settingsFonts,
+          children: [
+            _FontChoiceSettingRow(
+              key: const ValueKey('settings-ui-font-row'),
+              keyPrefix: 'settings-ui-font',
+              label: l10n.settingsUiFont,
+              description: l10n.settingsUiFontHint,
+              selectedChoice: settings.uiFontChoice,
+              selectedLabel: _fontChoiceLabel(
+                context,
+                settings.uiFontChoice,
+                systemFontDisplayName: ops.displayNameFor(
+                  settings.uiFontChoice,
+                ),
+              ),
+              choicesLoader: ops.loadUiFontChoices,
+              onChanged: ops.setUiFontChoice,
+              errorMessage: l10n.settingsUiFontLoadError,
+            ),
+            _FontSizeSettingRow(
+              key: const ValueKey('settings-ui-font-size-row'),
+              keyPrefix: 'settings-ui-font-size',
+              label: l10n.settingsUiFontSize,
+              description: l10n.settingsUiFontSizeHint(
+                '${minUiFontSize.toInt()}',
+                '${maxUiFontSize.toInt()}',
+              ),
+              value: settings.uiFontSize,
+              min: minUiFontSize,
+              max: maxUiFontSize,
+              onChanged: (value) {
+                ops.setUiFontSize(value);
+              },
+            ),
+            _FontChoiceSettingRow(
+              key: const ValueKey('settings-code-font-row'),
+              keyPrefix: 'settings-code-font',
+              label: l10n.settingsCodeFont,
+              description: l10n.settingsCodeFontHint,
+              selectedChoice: settings.codeFontChoice,
+              selectedLabel: _fontChoiceLabel(
+                context,
+                settings.codeFontChoice,
+                systemFontDisplayName: ops.displayNameFor(
+                  settings.codeFontChoice,
+                ),
+              ),
+              choicesLoader: ops.loadCodeFontChoices,
+              onChanged: ops.setCodeFontChoice,
+              errorMessage: l10n.settingsCodeFontLoadError,
+            ),
+            _FontSizeSettingRow(
+              key: const ValueKey('settings-code-font-size-row'),
+              keyPrefix: 'settings-code-font-size',
+              label: l10n.settingsCodeFontSize,
+              description: l10n.settingsCodeFontSizeHint(
+                '${minCodeFontSize.toInt()}',
+                '${maxCodeFontSize.toInt()}',
+              ),
+              value: settings.codeFontSize,
+              min: minCodeFontSize,
+              max: maxCodeFontSize,
+              onChanged: (value) {
+                ops.setCodeFontSize(value);
+              },
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
 }
 
 class _ThemeModeTabSpec {
