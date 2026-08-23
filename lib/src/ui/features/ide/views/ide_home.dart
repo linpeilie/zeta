@@ -79,7 +79,7 @@ class IdeHome extends StatefulWidget {
     this.desktopAttentionTextCatalog =
         const FallbackDesktopAttentionTextCatalog(),
     this.metrics = noopZetaMetricsPort,
-    this.conversationSliceEnabled,
+    this.conversationSliceEnabled = false,
     super.key,
   });
 
@@ -107,8 +107,10 @@ class IdeHome extends StatefulWidget {
   /// app 组合层注入的脱敏指标端口；默认 no-op。
   final ZetaMetricsPort metrics;
 
-  /// Phase 2 切片的 feature flag（按 workspace entry 生效）。
-  final bool Function(AgentThreadWorkspaceKey key)? conversationSliceEnabled;
+  /// Phase 2 切片的 feature flag（全局生效）。
+  ///
+  /// false = 走旧 ViewModel 直连路径（测试默认）；生产由 `main` 显式传 true。
+  final bool conversationSliceEnabled;
 
   final AgentUiTextCatalog agentUiTextCatalog;
   final DesktopAttentionTextCatalog desktopAttentionTextCatalog;

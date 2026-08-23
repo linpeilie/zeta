@@ -43,7 +43,6 @@ import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_mode
 import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/ui/features/ide/views/ide_home.dart';
 import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
-import 'package:zeta/src/features/agent/application/agent_thread_workspace_controller.dart';
 
 /// 应用根组件。
 ///
@@ -78,7 +77,7 @@ class MainApp extends StatefulWidget {
     this.desktopAttentionIndicator,
     this.turnContextStore,
     this.observability,
-    this.conversationSliceEnabled,
+    this.conversationSliceEnabled = false,
   });
 
   final Future<String?> Function()? directoryPicker;
@@ -119,10 +118,11 @@ class MainApp extends StatefulWidget {
   /// app 级可观测性组合；默认关闭采集，探针退化为 no-op。
   final ZetaObservability? observability;
 
-  /// Phase 2 切片的 feature flag（按 workspace entry 生效）。
+  /// Phase 2 切片的 feature flag（全局生效）。
   ///
-  /// null = 全应用走旧 ViewModel 直连路径。测试与灰度用它单独打开某个会话。
-  final bool Function(AgentThreadWorkspaceKey key)? conversationSliceEnabled;
+  /// false = 全应用走旧 ViewModel 直连路径（测试默认）；生产由 `main` 显式传 true，
+  /// 回退时改回 false 即可。
+  final bool conversationSliceEnabled;
 
   /// 生产启动阶段解析并初始化的 Zeta 自有数据路径。
   ///

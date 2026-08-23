@@ -1987,8 +1987,8 @@ Future<void> _pumpIde(
       homeProviderDetectionLoader: homeProviderDetectionLoader,
       agentUsagePanelRepository:
           agentUsagePanelRepository ?? const _EmptyAgentUsageRepository(),
-      // Phase 2 切片按 entry 生效；这里要么全开要么全关，用于两条路径的对照。
-      conversationSliceEnabled: enableConversationSlice ? (_) => true : null,
+      // Phase 2 切片全局生效；这里要么全开要么全关，用于两条路径的对照。
+      conversationSliceEnabled: enableConversationSlice,
     ),
   );
   if (flushInitialUsageRefresh) {

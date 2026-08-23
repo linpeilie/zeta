@@ -215,7 +215,7 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
     this.turnContextStore,
     AgentUiTextCatalog? textCatalog,
     this.metrics = noopZetaMetricsPort,
-    this.conversationSliceEnabled,
+    this.conversationSliceEnabled = false,
   }) : bindingManager =
            bindingManager ??
            AgentConversationBindingManager(
@@ -236,11 +236,10 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
   final AgentProviderRuntimeRegistry runtimeRegistry;
   final AgentProviderSettingsPort providerController;
 
-  /// Phase 2 切片的 feature flag：判定某个 workspace entry 是否走切片路径。
+  /// Phase 2 切片的 feature flag（全局）：workspace entry 是否走切片路径。
   ///
-  /// null 或返回 false = 该 entry 仍走旧 ViewModel 直连路径。**按 entry 生效**，
-  /// 回退颗粒是一个会话而不是整个应用。
-  final bool Function(AgentThreadWorkspaceKey key)? conversationSliceEnabled;
+  /// false = 走旧 ViewModel 直连路径。回退时把组合层的开关拨回 false 即可。
+  final bool conversationSliceEnabled;
   final AgentConversationBindingManager bindingManager;
   final AgentProviderGlobalRuntime globalRuntime;
   final bool _ownsBindingManager;
@@ -483,8 +482,8 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
     };
     late final AgentThreadWorkspaceEntry entry;
     late final AgentConversationViewModel viewModel;
-    // 切片是否为这个 entry 启用（Phase 2 feature flag，按会话生效）。
-    final sliceEnabled = conversationSliceEnabled?.call(key) ?? false;
+    // 切片是否启用（Phase 2 feature flag，全局生效）。
+    final sliceEnabled = conversationSliceEnabled;
     viewModel = AgentConversationViewModel(
       providerController: providerController,
       conversationBinding: bindingLease.binding,

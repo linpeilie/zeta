@@ -1,6 +1,6 @@
 # Zeta 目标架构：Feature-First DDD、Riverpod、MVI、微内核与多 Package
 
-最后更新：2026-08-21
+最后更新：2026-08-23
 
 状态：目标设计，待按 Phase 0–4 渐进实施
 
@@ -731,10 +731,12 @@ Phase 0 先采基线，再固定阈值。至少要能检测：
 
 ### Phase 1：建立边界但不改变行为
 
-**状态：进行中（2026-08-22）。** 已拆出 `zeta_foundation`、`zeta_plugin_kernel`、
-`zeta_ui` 与 `zeta_agent_core`，建立 pub workspace、编译期插件目录与依赖守卫；
-`zeta_agent_providers` 按"一次一个叶子边界"留到后续增量。交付内容、燃尽清单、MVI 命名
-规范与计划偏差（含 `zeta_agent_core` 暂留 `flutter/foundation` 的原因）见
+**状态：已落地（2026-08-22 拆完最后一个 Package），燃尽余项随 Phase 2/3 消化。**
+五个目标 Package（`zeta_foundation`、`zeta_plugin_kernel`、`zeta_ui`、
+`zeta_agent_core`、`zeta_agent_providers`）已全部拆出，建立 pub workspace、编译期
+插件目录与依赖守卫。交付内容、燃尽清单（`core/` 的 `dart:io`/Flutter 依赖、
+`zeta_agent_core` 暂留 `flutter/foundation` 的 17 个文件）、MVI 命名
+规范与计划偏差见
 [阶段 1：建立边界但不改变行为](./phase1_boundaries.md)。
 
 **改动范围**
@@ -780,6 +782,12 @@ Phase 0 先采基线，再固定阈值。至少要能检测：
 - 将三个 Provider 同时拆成独立 Package。
 
 ### Phase 2：迁移一个代表性业务纵切
+
+**状态：已落地（2026-08-22）。** 切片骨架、Riverpod family、`AgentPane` selector
+接缝与 §14 Phase 2 验收要求的测试全部完成；2026-08-23 起生产**全局启用**切片路径
+（`main` 传 `conversationSliceEnabled: true`），开始积累真实使用证据——这是
+Phase 3 前置条件的计时起点。字段映射、门禁答卷、验收对照、flag 粒度变更与
+计划偏差见 [阶段 2：Agent Conversation 切片](./phase2_conversation_slice.md)。
 
 代表性纵切选择：**单个 Agent Conversation 的 presentation/application 外壳**。它覆盖 family scope、流式投影、发送/取消 Intent、UiEffect、Binding lifecycle 和 Provider capability，但不重写底层 event pipeline。
 

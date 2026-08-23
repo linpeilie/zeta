@@ -312,8 +312,8 @@ app 级 feature flag 二选一；新 adapter 是现有 store 的只读消费者�
 ## 9. 需要你拍板的两个点
 
 1. **feature flag 的粒度**：按 workspace entry（只有被选中的那个 conversation 走新路径）还是全局开关？
-   建议前者——Phase 2 的验收标准本来就是"只迁一个 conversation workspace entry"，全局开关会让
-   回退颗粒太粗。
+   初版选择前者——Phase 2 的验收标准本来就是"只迁一个 conversation workspace entry"，全局开关会让
+   回退颗粒太粗。**2026-08-23 改为全局开关并在生产开启**，理由与影响见 §9.8。
 
 2. **切片放哪个包**：`AgentConversationSliceState` + reducer 是放 `zeta_agent_core`（纯 Dart 语义，
    与 UI 无关），还是先落在根 app 的 `features/agent/application/`？
@@ -325,8 +325,8 @@ app 级 feature flag 二选一；新 adapter 是现有 store 的只读消费者�
 
 ## 9.5 实施进度
 
-两个待拍板点已定：**feature flag 按 workspace entry**、**切片先落在根 app 的
-`features/agent/application/conversation_slice/`**（不下沉 `zeta_agent_core`，
+两个待拍板点已定：**feature flag 初版按 workspace entry（2026-08-23 改为全局，见 §9.8）**、
+**切片先落在根 app 的 `features/agent/application/conversation_slice/`**（不下沉 `zeta_agent_core`，
 避免给它增加新的 `flutter/foundation` 依赖面）。
 
 | 增量 | 内容 | 状态 |
@@ -535,7 +535,8 @@ draft 与 thread 不串、`invalidate` 一个不影响另一个。
 - 合并订阅拆成了嵌套：原来 composer + pending + 草稿图片挤在一个
   `Listenable.merge` 里，现在各订各的——pending 变化不再重建 composer 那层。
 - `AgentThreadWorkspaceEntry` 按 flag 创建 `AgentConversationSliceBinding`
-  （`conversationSliceEnabled(key)`，默认 false），`dispose` 时**先释放切片再释放
+  （全局 `conversationSliceEnabled`，默认 false；2026-08-23 起生产为 true，见 §9.8），
+  `dispose` 时**先释放切片再释放
   ViewModel**（切片订阅了 ViewModel 的 listenable）。控制器提供
   `sliceStoreForBinding(key)` 给 Riverpod resolver。
 - **根 `ProviderScope` 从 `main.dart` 移进 `MainApp`**。原来放在外面，导致每个
@@ -645,6 +646,28 @@ flag 关闭时必须是 false。两条都做过 mutation 验证（删掉 bind、
   rebuild 重复触发滚动/导航——由这条测试覆盖。
 - 帧预算是在 fake provider 的事件风暴 fixture 下测的，不是真实 CLI；这与 Phase 0
   基线的口径一致，不代表真机性能。
+
+---
+
+## 9.8 flag 改为全局并在生产开启（2026-08-23）
+
+按 entry 的函数开关在生产从未打开过——`main` 不传就是全 false，灰度时钟没有开始走。
+而 Phase 3 的前置条件是"Phase 2 稳定一个发布周期或等价真实使用证据"，证据只能从
+真实使用里来。因此做了一次收紧：
+
+- **机制**：`conversationSliceEnabled` 从 `bool Function(AgentThreadWorkspaceKey)`
+  改为全局 `bool`，沿 `main → MainApp → IdeShellController →
+  AgentThreadWorkspaceController` 注入，默认 false（既有测试路径不变），
+  `main.dart` 显式传 true；
+- **回退**：`main.dart` 一行改回 false 即回到旧 ViewModel 直连路径，无数据迁移；
+- **为什么不保留按 entry 函数**：§8 十条验收已含"两 thread 并存隔离"与"flag 双路径
+  渲染等价"，按 entry 灰度防御的风险（单会话粒度回退）在测试覆盖后剩余价值变小，
+  而函数签名让"生产到底开没开"的答案分散在每个 key 上。全局 bool 让生产状态只有
+  一个事实源，`main.dart` 一眼可查。
+
+Riverpod 侧的 `agentConversationSliceEnabledProvider(key)` **仍是按 key 的**：判据是
+"组合层有没有为这个 key 建 store"（resolver 机制，§9.7），这条不动——变的只是
+"要不要为 entry 建 binding"的入口决策从逐 key 变成全局。
 
 ---
 

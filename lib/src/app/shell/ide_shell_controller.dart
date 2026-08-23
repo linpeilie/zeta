@@ -77,7 +77,7 @@ class IdeShellController extends ChangeNotifier {
     AgentTurnContextStore? turnContextStore,
     this.agentUiTextCatalog = const FallbackAgentUiTextCatalog(),
     this.metrics = noopZetaMetricsPort,
-    this.conversationSliceEnabled,
+    this.conversationSliceEnabled = false,
     DateTime Function()? now,
   }) : projectThreadsViewModel = ProjectThreadsViewModel(),
        _sessionCoordinator = IdeSessionPersistenceCoordinator(
@@ -218,10 +218,10 @@ class IdeShellController extends ChangeNotifier {
   /// app 组合层注入的脱敏指标端口；默认 no-op，探针只剩常量分支。
   final ZetaMetricsPort metrics;
 
-  /// Phase 2 切片的 feature flag：判定某个 workspace entry 是否走切片路径。
+  /// Phase 2 切片的 feature flag（全局）：所有 workspace entry 是否走切片路径。
   ///
-  /// null = 全部走旧 ViewModel 直连路径（默认）。
-  final bool Function(AgentThreadWorkspaceKey key)? conversationSliceEnabled;
+  /// false = 走旧 ViewModel 直连路径（测试默认）。
+  final bool conversationSliceEnabled;
   final Map<String, ({AgentThreadWorkspaceEntry entry, VoidCallback listener})>
   _workspaceEntryListeners =
       <String, ({AgentThreadWorkspaceEntry entry, VoidCallback listener})>{};
