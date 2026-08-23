@@ -43,7 +43,13 @@
 > 观察期，`main.dart` 已传 `settingsSliceEnabled: true`，第 1 批进入至少三天的
 > 生产观察，最早于 2026-08-26 关批。观察期出现需回退的问题时一行拨回 false，
 > 修复复测后重新起算。原计划关批前不进入第 2 批；本文件 §4 后续记录的显式确认
-> 只覆盖“默认关闭 flag 的开工接缝”，不授权第 2 批生产翻旗。
+> 只覆盖“默认关闭 flag 的开工接缝”，当时不授权第 2 批生产翻旗。
+>
+> **第 2 批显式翻旗确认（2026-08-23）**：2a–2c 双路径与完整重构门禁通过后，
+> 经再次显式确认接受第 1、2 批生产观察窗口重叠的风险，`main.dart` 已传
+> `providerManagementSliceEnabled: true`。第 2 批风险为中高，取至少 7 天观察期，
+> 最早于 2026-08-30 关批；第 1 批仍按原窗口独立观察。任一批发生问题只回退自身
+> flag，修复复测后重新起算该批观察期。
 
 **关门标准（每批合入的条件）**，逐条来自目标架构 Phase 3 验收标准：
 
@@ -338,8 +344,12 @@ capability 位与 UI 入口的 G4 对照表、`AgentProviderSettingsPort` 消费
 >
 > **执行记录（2026-08-23）**：2a Provider settings store/runner 与 2b 模型目录
 > keyed Riverpod 投影已落地；目录 repository、TTL、single-flight、generation、缓存
-> schema 与 Composer selection owner 均未改动，生产 flag 仍为 false。下一步是 2c
-> Agent management 页面切片。
+> schema 与 Composer selection owner 均未改动。2c management page
+> store/runner/Riverpod 接缝随后完成，配置草稿仍归 Widget；双路径与完整重构门禁通过。
+>
+> **生产翻旗记录（2026-08-23）**：经再次显式确认接受与第 1 批观察重叠，生产入口
+> 已传 `providerManagementSliceEnabled: true`，进入至少 7 天观察；旧路径只作为独立
+> flag 回滚面保留，未创建双 owner 或双写。
 
 ---
 

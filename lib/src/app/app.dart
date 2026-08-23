@@ -142,8 +142,8 @@ class MainApp extends StatefulWidget {
 
   /// Phase 3 第 2 批 Provider 配置/管理切片的 feature flag。
   ///
-  /// true 时 app 根创建 Provider settings store/runner；默认 false，旧
-  /// controller 路径完整保留，生产翻旗需另行确认。
+  /// true 时 app 根创建 Provider settings store/runner；构造默认 false，旧
+  /// controller 路径完整保留。生产入口自 2026-08-23 起显式传 true。
   final bool providerManagementSliceEnabled;
 
   /// 生产启动阶段解析并初始化的 Zeta 自有数据路径。

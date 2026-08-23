@@ -2117,7 +2117,7 @@ Future<void> _pumpIde(
       conversationSliceEnabled: enableConversationSlice,
       // Phase 3 第 1 批同样使用 app-level 全局 flag 做双路径对照。
       settingsSliceEnabled: enableSettingsSlice,
-      // Phase 3 第 2 批：默认关闭，验证 settings + management owner 原子切换。
+      // Phase 3 第 2 批：测试参数控制，验证 settings + management owner 原子切换。
       providerManagementSliceEnabled: enableProviderManagementSlice,
     ),
   );

@@ -3,9 +3,9 @@
 > 对应 [Phase 3 开工文档 §4](phase3_slice_expansion.md) 与 §9 模板。
 > 本文件是第 2 批的字段级执行契约；框架文档只保留批次边界与顺序。
 >
-> 开工确认：2026-08-23。第 1 批仍在生产观察，第 2 批只先推进 flag 默认
-> false 的“挂 flag / 对照验证”，生产翻旗需要单独确认，不与第 1 批同时扩大
-> 生产风险面。
+> 开工确认：2026-08-23。第 1 批仍在生产观察，第 2 批先完成 flag 默认 false 的
+> “挂 flag / 对照验证”。同日经再次显式确认，接受两批观察窗口重叠的风险，生产入口
+> 已翻至新路径；第 2 批按中高风险取至少 7 天观察期，最早于 2026-08-30 关批。
 
 ## 1. 范围与不迁清单
 
@@ -272,7 +272,8 @@ MainApp (flag + composition owner)
 
 ## 11. 回滚与四步节奏
 
-- 批内 flag：`providerManagementSliceEnabled`，构造默认 false，生产保持 false；
+- 批内 flag：`providerManagementSliceEnabled`，构造默认 false；生产入口自
+  2026-08-23 起显式传 true；
 - flag true 后异常：一行拨回 false，旧 controller 路径仍完整，无数据迁移和双写；
 - 关批后：revert 关批提交，从 git 历史恢复旧路径；
 - 任何回滚不得恢复静默 capability 成功或改写 v2 配置。
@@ -281,8 +282,11 @@ MainApp (flag + composition owner)
 
 1. **挂 flag**：✅ 2a Provider settings store/runner、2b keyed 模型目录投影与
    2c management page store/runner/Riverpod 接缝均已落地（2026-08-23）；旧/new
-   owner 由同一 app flag 二选一，生产仍保持 false；
+   owner 由同一 app flag 二选一；
 2. **对照验证**：✅ 已覆盖 management 检测、连接测试、配置签名与冲突、日志、
-   账号增强、迟到结果、dispose 结算和 MainApp/IdeHome flag 双路径；
-3. **翻 flag**：需另行显式确认，且不得与第 1 批同时扩大生产风险；
+   账号增强、迟到结果、dispose 结算和 MainApp/IdeHome flag 双路径；受影响测试与
+   完整重构门禁均通过；
+3. **翻 flag**：🟡 经再次显式确认，`main.dart` 已于 2026-08-23 传
+   `providerManagementSliceEnabled: true`；确认同时接受与第 1 批观察窗口重叠，
+   第 2 批进入至少 7 天观察，最早于 2026-08-30 关批；若回退则修复复测后重新起算；
 4. **关批**：观察通过后执行 §10，再启动第 3 批。
