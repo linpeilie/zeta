@@ -33,6 +33,12 @@
 允许提前开门，但必须回到本文档记录理由（问题已修复且复测通过 / 显式接受更短
 观察期）。宁可推迟，不降标准。
 
+> **提前开门记录（2026-08-23）**：经拍板，提前开门到第 1 批的"挂 flag"阶段
+> （四步节奏第 1–2 步）。理由：settings 是低风险 context（无 Provider 协议、
+> 消费面小），且 flag 默认 false，**生产行为零变化**；翻 flag 仍等窗口期满
+> 或另行显式确认。批次文档见
+> [phase3_batch1_settings.md](phase3_batch1_settings.md)。
+
 **关门标准（每批合入的条件）**，逐条来自目标架构 Phase 3 验收标准：
 
 - 该批业务事实唯一 owner 已迁移，无 controller/notifier 双写；
@@ -228,9 +234,10 @@ general：`GeneralSettingsLoadRequested / Loaded / LoadFailed(kind)`、
 | Effect | result intent | 语义 |
 | --- | --- | --- |
 | `LoadAppearanceSettingsEffect` | `AppearanceSettingsLoaded` / `LoadFailed` | 经 data store 端口读文件；损坏/version≠1 回落默认（现状） |
-| `PersistAppearanceSettingsEffect(settings)` | `AppearanceSettingsPersisted` / `PersistFailed(kind)` | **语义 A**：reducer 收到 Intent 即应用新值，持久化失败只产出诊断 result（不改状态、不弹错——现状如此） |
+| `PersistAppearanceSettingsEffect(settings)` | `AppearanceSettingsPersisted` / `PersistFailed(kind)` | **语义 A**（主题 / 字号）：reducer 收到 Intent 即应用新值，持久化失败只产出诊断 result（不改状态、不弹错——现状如此） |
+| `ResolveAppearanceFontChoiceEffect` | `AppearanceFontChoiceResolved` / `Rejected` | **字体选择是先解析后应用**（实现时核对 controller 原文修正）：系统字体须经字体目录异步解析、代码字体要求等宽、槽位 kind 规则由 runner 执行；解析成功才应用+持久化，被拒绝则不应用不落盘。槽位在途身份独立追踪（界面/代码各一），迟到解析结果丢弃 |
 | `LoadGeneralSettingsEffect` | `GeneralSettingsLoaded` / `LoadFailed` | codec 宽容解码 v1/v2/v3（现状） |
-| `PersistGeneralSettingsEffect(settings)` | `GeneralSettingsPersisted(outcome)` / `GeneralSettingsPersistFailed(kind)` | **语义 B**：reducer 只登记 in-flight；`Persisted` 才写状态；失败保持旧值并暴露给 UI 弹 toast（现状 `persistenceFailed` → `settingsLanguageSaveFailed`） |
+| `PersistGeneralSettingsEffect(settings)` | `GeneralSettingsPersisted(outcome)` / `GeneralSettingsPersistFailed(kind)` | **语义 B**：reducer 只登记在途（身份 + **在途值**——后续修改基于在途值计算，复刻串行队列，否则丢未应用的修改）；`Persisted` 才写状态；失败保持旧值并暴露给 UI 弹 toast（现状 `persistenceFailed` → `settingsLanguageSaveFailed`） |
 
 `OperationId` scope：`settings.appearance.persist` / `settings.general.persist`
 （general 的串行队列 `_enqueue` 语义搬到 effect runner，保持单写者）。
@@ -407,6 +414,9 @@ capability 位与 UI 入口的 G4 对照表、`AgentProviderSettingsPort` 消费
 ## 9. 批次开工文档模板（每批开工前必填）
 
 新文件 `phase3_batch<N>_<名称>.md`，至少包含：
+
+> 第 1 批的批次文档已备：[phase3_batch1_settings.md](phase3_batch1_settings.md)
+> （2026-08-23 按本模板起草，含消费方依赖图与切换顺序）。
 
 1. 范围与不迁清单（对应目标架构 Phase 3"不应该同时进行"）；
 2. 字段映射表：现状字段 → 切片字段，逐条标注事实 owner；**新增业务事实 = 0**；
