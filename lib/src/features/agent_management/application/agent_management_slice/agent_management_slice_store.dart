@@ -177,8 +177,10 @@ final class AgentManagementSliceStore implements AgentManagementOperations {
     final completer = Completer<void>();
     _initializeCompleter = completer;
     _initializeFuture = completer.future;
-    _dispatch(ManagementInitializeRequested(operationId));
     try {
+      // listener 属于 presentation 边界，异常不能把共享初始化 Future 永久留在
+      // pending。把同步 dispatch 也纳入清理区间，下一次请求即可重新初始化。
+      _dispatch(ManagementInitializeRequested(operationId));
       await completer.future;
     } finally {
       if (identical(_initializeCompleter, completer)) {

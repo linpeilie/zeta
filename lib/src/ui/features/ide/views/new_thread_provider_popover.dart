@@ -23,9 +23,19 @@ class NewThreadProviderPopover extends StatefulWidget {
 }
 
 class _NewThreadProviderPopoverState extends State<NewThreadProviderPopover> {
-  late final Future<List<AgentProviderConfig>> _providersFuture = widget
-      .loadAvailableProviders();
+  late final Future<List<AgentProviderConfig>> _providersFuture;
   String? _selectedProviderId;
+
+  @override
+  void initState() {
+    super.initState();
+    // Overlay 子树在当前帧构建时，loader 可能冷启动 Agent management store 并
+    // 发布状态。推迟到下一事件，避免从弹层 build 反向标脏 Workbench 祖先。
+    _providersFuture = Future<List<AgentProviderConfig>>.delayed(
+      Duration.zero,
+      widget.loadAvailableProviders,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {

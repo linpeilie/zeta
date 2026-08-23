@@ -280,6 +280,7 @@ class AgentProviderSettings {
     this.providers = const <AgentProviderConfig>[
       AgentProviderConfig.defaultCodex,
       AgentProviderConfig.defaultGrok,
+      AgentProviderConfig.defaultClaudeCode,
     ],
     this.activeProviderId = defaultAgentProviderId,
   });

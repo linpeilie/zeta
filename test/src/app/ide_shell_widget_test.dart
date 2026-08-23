@@ -878,18 +878,6 @@ void main() {
           container
               .read(enabledAgentProviderConfigsProvider)
               .map((provider) => provider.id),
-          <String>[defaultAgentProviderId, grokAgentProviderId],
-        );
-        await sliceStore!.updateProviderConfig(
-          AgentProviderConfig.defaultClaudeCode,
-        );
-        await tester.pump();
-        await tester.pump();
-
-        expect(
-          container
-              .read(enabledAgentProviderConfigsProvider)
-              .map((provider) => provider.id),
           <String>[
             defaultAgentProviderId,
             grokAgentProviderId,
@@ -909,6 +897,113 @@ void main() {
       expect(managementPage.controller != null, !sliceEnabled);
     });
   }
+
+  testWidgets('恢复项目后首次打开 Agent 管理可完成冷初始化', (tester) async {
+    final directory = Directory.systemTemp.createTempSync(
+      'zeta_agent_management_cold_start_',
+    );
+    addTearDown(() {
+      if (directory.existsSync()) {
+        directory.deleteSync(recursive: true);
+      }
+    });
+
+    await _pumpIde(
+      tester,
+      enableNativeWindowFrame: true,
+      initialSessionJson: sessionJson(projectPath: directory.path),
+      agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
+        FakeAgentProvider(),
+      ),
+      agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      enableProviderManagementSlice: true,
+    );
+    await pumpUntilCondition(
+      tester,
+      () => find
+          .byKey(const ValueKey<String>('project-home-scroll-view'))
+          .evaluate()
+          .isNotEmpty,
+      failureMessage: 'Restored project did not become ready',
+    );
+
+    await tester.tap(find.byKey(const ValueKey('titlebar-settings-action')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('settings-nav-agents')));
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    final managementPage = tester.widget<AgentManagementPage>(
+      find.byType(AgentManagementPage),
+    );
+    final store = managementPage.sliceStore!;
+    await pumpUntilCondition(
+      tester,
+      () => store.initialized,
+      failureMessage: 'Agent management slice did not initialize',
+    );
+
+    expect(tester.takeException(), isNull);
+    expect(store.initialized, isTrue);
+    expect(find.byKey(const ValueKey('agent-management-page')), findsOneWidget);
+  });
+
+  testWidgets('项目首页首次打开新 Thread 弹层列出全部内置 Agent', (tester) async {
+    final directory = Directory.systemTemp.createTempSync(
+      'zeta_new_thread_provider_cold_start_',
+    );
+    addTearDown(() {
+      if (directory.existsSync()) {
+        directory.deleteSync(recursive: true);
+      }
+    });
+
+    await _pumpIde(
+      tester,
+      enableNativeWindowFrame: true,
+      initialSessionJson: sessionJson(projectPath: directory.path),
+      agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
+        FakeAgentProvider(),
+      ),
+      agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      enableProviderManagementSlice: true,
+    );
+    await pumpUntilCondition(
+      tester,
+      () => find
+          .byKey(const ValueKey<String>('project-home-new-thread-button'))
+          .hitTestable()
+          .evaluate()
+          .isNotEmpty,
+      failureMessage: 'Restored project home did not become ready',
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('project-home-new-thread-button')),
+    );
+    await pumpUntilCondition(
+      tester,
+      () => find
+          .byKey(
+            const ValueKey<String>('new-thread-provider-option-claude_code'),
+          )
+          .evaluate()
+          .isNotEmpty,
+      failureMessage: 'Enabled Agent providers did not finish loading',
+    );
+
+    expect(tester.takeException(), isNull);
+    for (final providerId in const <String>[
+      defaultAgentProviderId,
+      grokAgentProviderId,
+      defaultClaudeCodeProviderId,
+    ]) {
+      expect(
+        find.byKey(ValueKey<String>('new-thread-provider-option-$providerId')),
+        findsOneWidget,
+      );
+    }
+  });
 
   for (final sliceEnabled in const <bool>[false, true]) {
     testWidgets('Project Threads 根组合按 flag 二选一 (slice=$sliceEnabled)', (

@@ -28,7 +28,7 @@ void main() {
       }
     });
 
-    test('loads the default Codex provider when storage is empty', () async {
+    test('loads every built-in provider when storage is empty', () async {
       final store = _fileStore(settingsFile);
 
       final settings = await store.load();
@@ -39,6 +39,7 @@ void main() {
       expect(settings.providers.map((provider) => provider.id), <String>[
         defaultAgentProviderId,
         grokAgentProviderId,
+        defaultClaudeCodeProviderId,
       ]);
     });
 
@@ -75,6 +76,11 @@ void main() {
       final settings = await store.load();
 
       expect(settings.activeProvider.id, defaultAgentProviderId);
+      expect(settings.providers.map((provider) => provider.id), <String>[
+        defaultAgentProviderId,
+        grokAgentProviderId,
+        defaultClaudeCodeProviderId,
+      ]);
     });
 
     test('falls back to defaults when the file is not valid UTF-8', () async {
@@ -149,12 +155,16 @@ void main() {
             ...AgentProviderConfig.defaultGrok.toJson(),
             'displayName': 'Grok CLI',
           },
+          <String, Object?>{
+            ...AgentProviderConfig.defaultClaudeCode.toJson(),
+            'displayName': 'Claude Code',
+          },
         ],
       });
 
       expect(
         settings.providers.map((provider) => provider.displayName),
-        <String>['Codex', 'Grok'],
+        <String>['Codex', 'Grok', 'Claude'],
       );
     });
 

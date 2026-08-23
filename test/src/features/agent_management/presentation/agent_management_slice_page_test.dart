@@ -17,6 +17,57 @@ import 'package:zeta_ui/zeta_ui.dart';
 
 void main() {
   testWidgets(
+    'cold slice initialization does not invalidate an ancestor during build',
+    (tester) async {
+      // Arrange
+      final runner = _ColdInitializationRunner();
+      final providerConfig = AgentProviderConfig.defaultClaudeCode.copyWith(
+        extra: const <String, Object?>{},
+      );
+      final store = AgentManagementSliceStore(
+        initialState: AgentManagementSliceState.initial(
+          agentsById: <String, ManagedAgent>{
+            defaultClaudeCodeProviderId: ManagedAgent.claudeCode(enabled: true)
+                .copyWith(
+                  installationState: AgentInstallationState.installed,
+                  currentVersion: '2.1.224',
+                ),
+          },
+          orderedAgentIds: const <String>[defaultClaudeCodeProviderId],
+          capabilitiesByAgentId:
+              const <String, AgentCliManagementCapabilities>{},
+          providerSettings: AgentProviderSettings(
+            providers: <AgentProviderConfig>[providerConfig],
+            activeProviderId: defaultClaudeCodeProviderId,
+          ),
+        ),
+        effectRunner: runner,
+        configurationNotLoadedMessage: '配置文件尚未加载',
+      );
+      runner.store = store;
+      addTearDown(store.close);
+
+      // Act
+      await _pumpSlicePage(
+        tester,
+        store,
+        child: _ManagementListenerHost(store: store),
+      );
+      await tester.pumpAndSettle();
+
+      // Assert
+      expect(tester.takeException(), isNull);
+      expect(runner.initializationCalls, 1);
+      expect(runner.detectionCalls, 1);
+      expect(store.initialized, isTrue);
+      expect(
+        find.byKey(const ValueKey('agent-row-claude_code')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
     'slice path preserves detection, connection, logs and typed account option',
     (tester) async {
       // Arrange
@@ -310,10 +361,92 @@ final class _InteractiveRunner implements AgentManagementSliceEffectRunner {
   String? validateConfiguration(String agentId, String content) => null;
 }
 
+final class _ColdInitializationRunner
+    implements AgentManagementSliceEffectRunner {
+  late AgentManagementSliceStore store;
+  int initializationCalls = 0;
+  int detectionCalls = 0;
+
+  @override
+  void run(AgentManagementSliceEffect effect) {
+    switch (effect) {
+      case ManagementInitializeEffect():
+        initializationCalls += 1;
+        store.initializationSucceeded(
+          effect.operationId,
+          store.state.providerSettings,
+          store.state.agentsById,
+        );
+      case DetectAgentsEffect():
+        detectionCalls += 1;
+        final agent = store.state.agentsById[defaultClaudeCodeProviderId]!;
+        store.detectionStarted(effect.operationId, defaultClaudeCodeProviderId);
+        store.agentDetected(
+          effect.operationId,
+          defaultClaudeCodeProviderId,
+          agent,
+        );
+        store.detectionCompleted(effect.operationId);
+      case UpdateProviderEnabledEffect() ||
+          UpdateAccountDataEnrichmentEffect() ||
+          TestAgentConnectionEffect() ||
+          LoadAgentConfigurationEffect() ||
+          SaveAgentConfigurationEffect() ||
+          LoadAgentLogsEffect():
+        throw StateError('Unexpected effect: $effect');
+    }
+  }
+
+  @override
+  String? validateConfiguration(String agentId, String content) => null;
+}
+
+final class _ManagementListenerHost extends StatefulWidget {
+  const _ManagementListenerHost({required this.store});
+
+  final AgentManagementSliceStore store;
+
+  @override
+  State<_ManagementListenerHost> createState() =>
+      _ManagementListenerHostState();
+}
+
+final class _ManagementListenerHostState
+    extends State<_ManagementListenerHost> {
+  int _notificationCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.store.addListener(_handleManagementChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.store.removeListener(_handleManagementChanged);
+    super.dispose();
+  }
+
+  void _handleManagementChanged() {
+    setState(() {
+      _notificationCount += 1;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      value: '$_notificationCount',
+      child: AgentManagementPage(sliceStore: widget.store),
+    );
+  }
+}
+
 Future<void> _pumpSlicePage(
   WidgetTester tester,
-  AgentManagementSliceStore store,
-) async {
+  AgentManagementSliceStore store, {
+  Widget? child,
+}) async {
   tester.view
     ..physicalSize = const Size(1200, 820)
     ..devicePixelRatio = 1;
@@ -342,7 +475,9 @@ Future<void> _pumpSlicePage(
           theme: buildShadcnTheme(ideTheme),
           materialTheme: buildMaterialTheme(ideTheme),
           home: sf.Scaffold(
-            child: AgentManagementPage(sliceStore: store, autoDetect: false),
+            child:
+                child ??
+                AgentManagementPage(sliceStore: store, autoDetect: false),
           ),
         ),
       ),

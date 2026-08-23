@@ -82,7 +82,14 @@ class AgentManagementPageState extends State<AgentManagementPage> {
   void initState() {
     super.initState();
     _searchController = TextEditingController()..addListener(_refreshView);
-    unawaited(_operations.initialize(autoDetect: widget.autoDetect));
+    // slice 初始化会同步发布 pending state；首帧中直接执行会让仍在构建的
+    // Workbench 祖先收到通知并反向 setState。等页面挂载完成后再启动副作用。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      unawaited(_operations.initialize(autoDetect: widget.autoDetect));
+    });
   }
 
   @override

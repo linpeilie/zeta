@@ -8,6 +8,37 @@ import 'package:zeta/src/features/agent_management/domain/agent_management_model
 
 void main() {
   group('AgentManagementSliceStore', () {
+    test('cold initialization can retry after a listener throws', () async {
+      // Arrange
+      final runner = _RecordingRunner();
+      final store = _createStore(runner: runner, initialized: false);
+      addTearDown(store.close);
+      var throwOnNextNotification = true;
+      store.addListener(() {
+        if (throwOnNextNotification) {
+          throwOnNextNotification = false;
+          throw StateError('listener failed during build');
+        }
+      });
+
+      // Act / Assert
+      await expectLater(store.initialize(), throwsStateError);
+      expect(runner.effects, isEmpty);
+
+      // Act
+      final retry = store.initialize();
+      final effect = runner.take<ManagementInitializeEffect>();
+      store.initializationSucceeded(
+        effect.operationId,
+        store.state.providerSettings,
+        store.state.agentsById,
+      );
+
+      // Assert
+      await retry.timeout(const Duration(milliseconds: 100));
+      expect(store.initialized, isTrue);
+    });
+
     test(
       'accepts only matching detection progress and completes the request',
       () async {
@@ -193,7 +224,10 @@ void main() {
   });
 }
 
-AgentManagementSliceStore _createStore({required _RecordingRunner runner}) {
+AgentManagementSliceStore _createStore({
+  required _RecordingRunner runner,
+  bool initialized = true,
+}) {
   final settings = AgentProviderSettings(
     providers: <AgentProviderConfig>[
       AgentProviderConfig.defaultCodex,
@@ -216,7 +250,7 @@ AgentManagementSliceStore _createStore({required _RecordingRunner runner}) {
         grokAgentProviderId: AgentCliManagementCapabilities.none,
       },
       providerSettings: settings,
-      initialized: true,
+      initialized: initialized,
     ),
     effectRunner: runner,
     configurationNotLoadedMessage: 'not loaded',

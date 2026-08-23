@@ -221,8 +221,7 @@ void main() {
     await tester.tap(
       find.byKey(const ValueKey<String>('project-home-new-thread-button')),
     );
-    await tester.pump();
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(
       find.byKey(const ValueKey<String>('new-thread-provider-popover')),

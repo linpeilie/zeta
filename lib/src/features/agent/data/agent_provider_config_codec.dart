@@ -151,6 +151,7 @@ List<AgentProviderConfig> _decodeProviderList(
     return const <AgentProviderConfig>[
       AgentProviderConfig.defaultCodex,
       AgentProviderConfig.defaultGrok,
+      AgentProviderConfig.defaultClaudeCode,
     ];
   }
   final providers = <AgentProviderConfig>[];
@@ -174,6 +175,9 @@ List<AgentProviderConfig> _ensureBuiltinProviders(
   }
   if (!ids.contains(grokAgentProviderId)) {
     result.add(AgentProviderConfig.defaultGrok);
+  }
+  if (!ids.contains(defaultClaudeCodeProviderId)) {
+    result.add(AgentProviderConfig.defaultClaudeCode);
   }
   return result;
 }

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:window_manager/window_manager.dart';
@@ -178,6 +179,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   bool _usageStatisticsPageMounted = false;
   bool _globalHomeLoadRequested = false;
   bool _homeProvidersLoading = false;
+  bool _agentManagementHomeRefreshScheduled = false;
   List<HomeProviderSummary> _installedHomeProviders =
       const <HomeProviderSummary>[];
   String? _homeProviderError;
@@ -1237,6 +1239,35 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
     if (!mounted ||
         _homeProvidersLoading ||
         widget.homeProviderDetectionLoader != null) {
+      return;
+    }
+    if (_page != _IdeHomePage.home) {
+      // 设置页会自行监听同一状态；这里只刷新隐藏首页的缓存，回到首页时
+      // 页面切换本身会触发重建，无需让 Workbench 根节点在子页构建期标脏。
+      _setInstalledHomeProviders(_agentManagementOperations.agents);
+      return;
+    }
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      if (_agentManagementHomeRefreshScheduled) {
+        return;
+      }
+      _agentManagementHomeRefreshScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _agentManagementHomeRefreshScheduled = false;
+        if (!mounted ||
+            _homeProvidersLoading ||
+            widget.homeProviderDetectionLoader != null) {
+          return;
+        }
+        if (_page != _IdeHomePage.home) {
+          _setInstalledHomeProviders(_agentManagementOperations.agents);
+          return;
+        }
+        setState(() {
+          _setInstalledHomeProviders(_agentManagementOperations.agents);
+        });
+      });
       return;
     }
     setState(() {
