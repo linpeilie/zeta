@@ -45,10 +45,10 @@ void main() {
   };
 
   /// domain 纯度的既有例外（**只允许变少**）。
+  ///
+  /// settings ×3 已于 2026-08-23 清零（Phase 3 第 1 批：`ThemeMode` 换纯枚举
+  /// `ZetaThemeModePreference`，`@immutable` 换 `package:meta`）。
   const knownDomainImpurities = <String>{
-    'lib/src/features/settings/domain/appearance_settings.dart',
-    'lib/src/features/settings/domain/general_settings.dart',
-    'lib/src/features/settings/domain/system_font_family.dart',
     'lib/src/features/workspace/domain/workspace_directory_rules.dart',
   };
 

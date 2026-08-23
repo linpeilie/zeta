@@ -35,6 +35,7 @@ import 'package:zeta/src/features/settings/application/appearance_settings_contr
 import 'package:zeta/src/features/settings/application/general_settings_controller.dart';
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
 import 'package:zeta/src/features/settings/data/general_settings_store.dart';
+import 'package:zeta/src/features/settings/presentation/appearance_theme_mode_mapper.dart';
 import 'package:zeta/src/features/settings/data/system_font_catalog_service.dart';
 import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
@@ -493,8 +494,9 @@ class MainAppState extends State<MainApp>
           uiFontSize: settings.uiFontSize,
           codeFontSize: settings.codeFontSize,
         );
+        final flutterThemeMode = themeModeForPreference(settings.themeMode);
         final materialBrightness = resolveBrightnessForThemeMode(
-          settings.themeMode,
+          flutterThemeMode,
         );
         final materialIdeTheme = materialBrightness == Brightness.dark
             ? darkIdeTheme
@@ -506,7 +508,7 @@ class MainAppState extends State<MainApp>
           child: IdeUiTextScope(
             catalog: _zetaUiTextCatalog,
             child: IdeThemeScope(
-              themeMode: settings.themeMode,
+              themeMode: flutterThemeMode,
               lightTheme: lightIdeTheme,
               darkTheme: darkIdeTheme,
               child: sf.ShadcnApp(
@@ -521,7 +523,7 @@ class MainAppState extends State<MainApp>
                 theme: buildShadcnTheme(lightIdeTheme),
                 darkTheme: buildShadcnTheme(darkIdeTheme),
                 materialTheme: buildMaterialTheme(materialIdeTheme),
-                themeMode: resolveShadcnThemeMode(settings.themeMode),
+                themeMode: resolveShadcnThemeMode(flutterThemeMode),
                 home: _generalSettingsReady
                     ? IdeHome(
                         key: const ValueKey<String>('zeta.ide-home'),

@@ -3,15 +3,13 @@ import 'package:zeta_foundation/zeta_foundation.dart';
 
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 
-/// 主题模式偏好的纯 Dart 枚举（Phase 3 第 1 批决策点 A）。
-///
-/// domain 的 `AppearanceSettings.themeMode` 目前仍是 Flutter `ThemeMode`；
-/// 切片状态在 application 层，不得持有 Flutter 类型（§12.5）。两个方向的
-/// 映射由组合层完成；本批第 3 步 domain 纯化时此枚举迁入 domain。
-enum ZetaThemeModePreference { system, light, dark }
+export 'package:zeta/src/features/settings/domain/appearance_settings.dart'
+    show ZetaThemeModePreference;
 
-/// 外观偏好的纯切片值，与 `AppearanceSettings` 字段一一对应（`ThemeMode`
-/// 换成 [ZetaThemeModePreference]，其余复用 domain 纯类型）。
+/// 外观偏好的纯切片值，与 `AppearanceSettings` 字段一一对应。
+///
+/// 主题模式复用 domain 的 [ZetaThemeModePreference]（domain 已纯化），
+/// 其余字段同样复用 domain 纯类型。
 @immutable
 final class AppearanceSettingsSlice {
   const AppearanceSettingsSlice({

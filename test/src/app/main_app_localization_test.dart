@@ -122,7 +122,9 @@ void main() {
     final appearance = AppearanceSettingsController(
       store: MemoryAppearanceSettingsStore(),
       fontCatalog: const _FakeSystemFontCatalogService(),
-      initialSettings: const AppearanceSettings(themeMode: ThemeMode.dark),
+      initialSettings: const AppearanceSettings(
+        themeMode: ZetaThemeModePreference.dark,
+      ),
     );
     addTearDown(appearance.dispose);
 
@@ -135,7 +137,7 @@ void main() {
 
     final first = tester.element(find.byType(IdeHome));
     await general.setAppLanguage(AppLanguage.english);
-    await appearance.setThemeMode(ThemeMode.light);
+    await appearance.setThemeMode(ZetaThemeModePreference.light);
     await tester.pump();
 
     expect(tester.element(find.byType(IdeHome)), same(first));

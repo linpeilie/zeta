@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
+import 'package:zeta/src/features/settings/presentation/appearance_theme_mode_mapper.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
 import 'package:zeta/src/features/settings/application/general_settings_controller.dart';
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
@@ -408,7 +409,7 @@ void main() {
     Color? headingColor() =>
         tester.widget<Text>(find.text('主题模式')).style?.color;
 
-    expect(controller.settings.themeMode, ThemeMode.system);
+    expect(controller.settings.themeMode, ZetaThemeModePreference.system);
     expect(
       tester
           .widget<IdeTabs<ThemeMode>>(
@@ -422,7 +423,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('settings-theme-dark')));
     await tester.pumpAndSettle();
 
-    expect(controller.settings.themeMode, ThemeMode.dark);
+    expect(controller.settings.themeMode, ZetaThemeModePreference.dark);
     expect(
       tester
           .widget<IdeTabs<ThemeMode>>(
@@ -437,7 +438,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('settings-theme-light')));
     await tester.pumpAndSettle();
 
-    expect(controller.settings.themeMode, ThemeMode.light);
+    expect(controller.settings.themeMode, ZetaThemeModePreference.light);
     expect(
       tester
           .widget<IdeTabs<ThemeMode>>(
@@ -758,13 +759,13 @@ Future<void> _pumpSettingsPage(
           codeFontSize: settings.codeFontSize,
         );
         final materialBrightness = resolveBrightnessForThemeMode(
-          settings.themeMode,
+          themeModeForPreference(settings.themeMode),
         );
         final materialIdeTheme = materialBrightness == Brightness.dark
             ? darkIdeTheme
             : lightIdeTheme;
         return IdeThemeScope(
-          themeMode: settings.themeMode,
+          themeMode: themeModeForPreference(settings.themeMode),
           lightTheme: lightIdeTheme,
           darkTheme: darkIdeTheme,
           child: sf.ShadcnApp(
@@ -776,7 +777,9 @@ Future<void> _pumpSettingsPage(
             materialTheme: buildMaterialTheme(
               materialIdeTheme,
             ).copyWith(platform: platform),
-            themeMode: resolveShadcnThemeMode(settings.themeMode),
+            themeMode: resolveShadcnThemeMode(
+              themeModeForPreference(settings.themeMode),
+            ),
             home: sf.Scaffold(
               child: SettingsPage(
                 activeSection: activeSection,

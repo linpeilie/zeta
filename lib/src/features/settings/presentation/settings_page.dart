@@ -8,6 +8,7 @@ import 'package:zeta/src/features/settings/application/appearance_settings_contr
 import 'package:zeta/src/features/settings/application/general_settings_controller.dart';
 import 'package:zeta/src/features/settings/application/general_settings_update_result.dart';
 import 'package:zeta/src/features/settings/domain/app_language.dart';
+import 'package:zeta/src/features/settings/presentation/appearance_theme_mode_mapper.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_controller.dart';
@@ -489,9 +490,13 @@ class _AppearanceSettingsPane extends StatelessWidget {
                   children: [
                     _ThemeModeSection(
                       tabs: _tabs(context),
-                      groupValue: settings.themeMode,
+                      groupValue: themeModeForPreference(settings.themeMode),
                       onSelected: (value) {
-                        unawaited(appearanceController.setThemeMode(value));
+                        unawaited(
+                          appearanceController.setThemeMode(
+                            preferenceForThemeMode(value),
+                          ),
+                        );
                       },
                     ),
                   ],

@@ -1,6 +1,12 @@
-import 'package:flutter/material.dart';
+import 'package:meta/meta.dart';
 
 import 'package:zeta_foundation/zeta_foundation.dart';
+
+/// 主题模式偏好（纯 Dart）。
+///
+/// presentation / app 层负责与 Flutter `ThemeMode` 的双向映射；持久化沿用
+/// 既有字符串（`system` / `light` / `dark`），格式零变化。
+enum ZetaThemeModePreference { system, light, dark }
 
 /// 界面字号允许的最小值。
 const double minUiFontSize = 10;
@@ -95,7 +101,7 @@ class AppearanceFontChoice {
 @immutable
 class AppearanceSettings {
   const AppearanceSettings({
-    this.themeMode = ThemeMode.system,
+    this.themeMode = ZetaThemeModePreference.system,
     this.uiFontChoice = const AppearanceFontChoice.systemDefault(),
     this.codeFontChoice = const AppearanceFontChoice.bundledJetBrainsMono(),
     this.uiFontSize = defaultUiFontSize,
@@ -105,7 +111,7 @@ class AppearanceSettings {
          codeFontSize >= minCodeFontSize && codeFontSize <= maxCodeFontSize,
        );
 
-  final ThemeMode themeMode;
+  final ZetaThemeModePreference themeMode;
   final AppearanceFontChoice uiFontChoice;
   final AppearanceFontChoice codeFontChoice;
 
@@ -123,7 +129,7 @@ class AppearanceSettings {
       : bundledCodeFontFamily;
 
   AppearanceSettings copyWith({
-    ThemeMode? themeMode,
+    ZetaThemeModePreference? themeMode,
     AppearanceFontChoice? uiFontChoice,
     AppearanceFontChoice? codeFontChoice,
     double? uiFontSize,
@@ -142,9 +148,9 @@ class AppearanceSettings {
     return <String, Object?>{
       'version': 1,
       'themeMode': switch (themeMode) {
-        ThemeMode.system => 'system',
-        ThemeMode.light => 'light',
-        ThemeMode.dark => 'dark',
+        ZetaThemeModePreference.system => 'system',
+        ZetaThemeModePreference.light => 'light',
+        ZetaThemeModePreference.dark => 'dark',
       },
       'uiFontChoice': uiFontChoice.toJson(),
       'codeFontChoice': codeFontChoice.toJson(),
@@ -190,12 +196,12 @@ class AppearanceSettings {
     return AppearanceSettings(themeMode: _parseThemeMode(rawThemeMode));
   }
 
-  static ThemeMode _parseThemeMode(Object? raw) {
+  static ZetaThemeModePreference _parseThemeMode(Object? raw) {
     return switch (raw) {
-      'light' => ThemeMode.light,
-      'dark' => ThemeMode.dark,
-      'system' => ThemeMode.system,
-      _ => ThemeMode.system,
+      'light' => ZetaThemeModePreference.light,
+      'dark' => ZetaThemeModePreference.dark,
+      'system' => ZetaThemeModePreference.system,
+      _ => ZetaThemeModePreference.system,
     };
   }
 

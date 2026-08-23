@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
@@ -32,19 +31,26 @@ void main() {
   test('uses initial settings before load completes', () {
     final controller = AppearanceSettingsController(
       store: MemoryAppearanceSettingsStore(
-        const AppearanceSettings(themeMode: ThemeMode.dark),
+        const AppearanceSettings(themeMode: ZetaThemeModePreference.dark),
       ),
       fontCatalog: const _FakeSystemFontCatalogService(),
-      initialSettings: const AppearanceSettings(themeMode: ThemeMode.light),
+      initialSettings: const AppearanceSettings(
+        themeMode: ZetaThemeModePreference.light,
+      ),
     );
     addTearDown(controller.dispose);
 
-    expect(controller.settings.themeMode, ThemeMode.light);
-    expect(controller.listenable.value.themeMode, ThemeMode.light);
+    expect(controller.settings.themeMode, ZetaThemeModePreference.light);
+    expect(
+      controller.listenable.value.themeMode,
+      ZetaThemeModePreference.light,
+    );
   });
 
   test('does not notify when load matches the preloaded settings', () async {
-    const settings = AppearanceSettings(themeMode: ThemeMode.light);
+    const settings = AppearanceSettings(
+      themeMode: ZetaThemeModePreference.light,
+    );
     final controller = AppearanceSettingsController(
       store: MemoryAppearanceSettingsStore(settings),
       fontCatalog: const _FakeSystemFontCatalogService(),
@@ -65,7 +71,7 @@ void main() {
     final controller = AppearanceSettingsController(
       store: MemoryAppearanceSettingsStore(
         const AppearanceSettings(
-          themeMode: ThemeMode.dark,
+          themeMode: ZetaThemeModePreference.dark,
           uiFontChoice: AppearanceFontChoice.system('Maple UI'),
           codeFontChoice: AppearanceFontChoice.system('Cascadia Mono'),
           uiFontSize: 14,
@@ -81,7 +87,7 @@ void main() {
     expect(
       await controller.load(),
       const AppearanceSettings(
-        themeMode: ThemeMode.dark,
+        themeMode: ZetaThemeModePreference.dark,
         uiFontChoice: AppearanceFontChoice.system('Maple UI'),
         codeFontChoice: AppearanceFontChoice.system('Cascadia Mono'),
         uiFontSize: 14,
@@ -103,10 +109,10 @@ void main() {
     });
 
     await controller.load();
-    final updated = await controller.setThemeMode(ThemeMode.dark);
+    final updated = await controller.setThemeMode(ZetaThemeModePreference.dark);
 
     expect(updated, isTrue);
-    expect(controller.settings.themeMode, ThemeMode.dark);
+    expect(controller.settings.themeMode, ZetaThemeModePreference.dark);
     expect(notifications, 1);
   });
 

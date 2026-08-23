@@ -16,6 +16,7 @@ import 'package:zeta/src/features/settings/application/app_language_resolver.dar
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
 import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
+import 'package:zeta/src/features/settings/presentation/appearance_theme_mode_mapper.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 
 export 'package:zeta/src/app/app.dart' show MainApp;
@@ -72,7 +73,7 @@ void main() {
       final appearance = await _loadLaunchAppearance(dataPaths);
       await bootstrapDesktopWindow(
         preferredBrightness: resolveBrightnessForThemeMode(
-          appearance.themeMode,
+          themeModeForPreference(appearance.themeMode),
         ),
       );
       // 阶段 0：只挂脱敏观察器与指标端口，不迁移任何业务状态到 Riverpod。

@@ -1,5 +1,4 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
@@ -121,7 +120,7 @@ class AppearanceSettingsController extends ChangeNotifier {
     return _fontDisplayNames[fontFamily.toLowerCase()] ?? fontFamily;
   }
 
-  Future<bool> setThemeMode(ThemeMode mode) async {
+  Future<bool> setThemeMode(ZetaThemeModePreference mode) async {
     await load();
     if (_settings.themeMode == mode) {
       return true;

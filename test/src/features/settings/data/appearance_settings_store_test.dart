@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/app/storage/atomic_text_file.dart';
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
@@ -42,7 +41,7 @@ void main() {
 
       await store.save(
         const AppearanceSettings(
-          themeMode: ThemeMode.dark,
+          themeMode: ZetaThemeModePreference.dark,
           uiFontChoice: AppearanceFontChoice.system('Maple UI'),
           codeFontChoice: AppearanceFontChoice.system('Cascadia Mono'),
           uiFontSize: 14,
@@ -67,7 +66,7 @@ void main() {
       expect(
         await store.load(),
         const AppearanceSettings(
-          themeMode: ThemeMode.dark,
+          themeMode: ZetaThemeModePreference.dark,
           uiFontChoice: AppearanceFontChoice.system('Maple UI'),
           codeFontChoice: AppearanceFontChoice.system('Cascadia Mono'),
           uiFontSize: 14,
@@ -91,7 +90,7 @@ void main() {
 
       expect(
         await store.load(),
-        const AppearanceSettings(themeMode: ThemeMode.dark),
+        const AppearanceSettings(themeMode: ZetaThemeModePreference.dark),
       );
     });
 
@@ -140,7 +139,7 @@ void main() {
 
     expect(
       await store.load(),
-      const AppearanceSettings(themeMode: ThemeMode.dark),
+      const AppearanceSettings(themeMode: ZetaThemeModePreference.dark),
     );
   });
 }
