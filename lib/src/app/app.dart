@@ -34,6 +34,7 @@ import 'package:zeta/src/features/agent/presentation/provider_settings_slice/age
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_models.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_text_catalog.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
+import 'package:zeta/src/features/agent_management/domain/agent_management_text_catalog.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
 import 'package:zeta/src/features/settings/application/general_settings_controller.dart';
@@ -199,6 +200,7 @@ class MainAppState extends State<MainApp>
   var _localeRuntimeReady = false;
   late Locale _frozenDisplayLocale;
   late AgentUiTextCatalog _agentUiTextCatalog;
+  late AgentManagementTextCatalog _agentManagementTextCatalog;
   ZetaUiTextCatalog _zetaUiTextCatalog = const FallbackZetaUiTextCatalog();
   late DesktopAttentionTextCatalog _desktopAttentionTextCatalog;
 
@@ -380,6 +382,7 @@ class MainAppState extends State<MainApp>
         lookupAppLocalizations(_frozenDisplayLocale),
       );
       _agentUiTextCatalog = textCatalogs.agentUi;
+      _agentManagementTextCatalog = textCatalogs.agentManagement;
       _desktopAttentionTextCatalog = textCatalogs.desktopAttention;
       _zetaUiTextCatalog = textCatalogs.zetaUi;
     }
@@ -658,6 +661,9 @@ class MainAppState extends State<MainApp>
                       agentUiTextCatalog: _agentUiTextCatalog,
                       metrics: _metrics,
                       conversationSliceEnabled: widget.conversationSliceEnabled,
+                      providerManagementSliceEnabled:
+                          widget.providerManagementSliceEnabled,
+                      agentManagementTextCatalog: _agentManagementTextCatalog,
                       desktopAttentionTextCatalog: _desktopAttentionTextCatalog,
                       // 回调存储用于测试/嵌入宿主；未显式注入统计仓储时不读取本机 CLI 历史。
                       enableAgentUsageAutoRefresh:

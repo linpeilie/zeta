@@ -94,7 +94,7 @@ final class IoClaudeCodeMetadataFileSystem
 /// stream-json peer；只有用户显式调用 [testConnection] 才验证 CLI 实际可用性。
 /// 认证证据与 CLI 可用性是两个独立结果。
 class ClaudeCodeAgentManagementRepository
-    implements AgentCliManagementRepository {
+    implements AgentCliManagementRepository, AgentCliManagementDescriptor {
   ClaudeCodeAgentManagementRepository({
     ClaudeCodeCliProcessRun? processRunner,
     ClaudeCodeAuthStatusLoader? authStatusLoader,
@@ -147,6 +147,20 @@ class ClaudeCodeAgentManagementRepository
 
   @override
   String get agentId => AgentDefinition.claudeCode.id;
+
+  @override
+  AgentCliManagementCapabilities get managementCapabilities =>
+      const AgentCliManagementCapabilities(supportsAccountDataEnrichment: true);
+
+  @override
+  AgentProviderConfig get defaultProviderConfig =>
+      AgentProviderConfig.defaultClaudeCode;
+
+  @override
+  bool acceptsExecutablePath(String path) => looksLikeClaudeCodeCliPath(path);
+
+  @override
+  String get connectionModelSourceLabel => 'Claude Code';
 
   @override
   Future<ManagedAgent> detect({

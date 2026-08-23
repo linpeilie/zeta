@@ -26,7 +26,8 @@ typedef GrokCliProcessRun =
     });
 
 /// Grok CLI 的检测、配置与日志数据仓库。
-class GrokAgentManagementRepository implements AgentCliManagementRepository {
+class GrokAgentManagementRepository
+    implements AgentCliManagementRepository, AgentCliManagementDescriptor {
   GrokAgentManagementRepository({
     required this.runtimeRegistry,
     GrokCliProcessRun? processRunner,
@@ -68,6 +69,20 @@ class GrokAgentManagementRepository implements AgentCliManagementRepository {
 
   @override
   String get agentId => AgentDefinition.grok.id;
+
+  @override
+  AgentCliManagementCapabilities get managementCapabilities =>
+      AgentCliManagementCapabilities.none;
+
+  @override
+  AgentProviderConfig get defaultProviderConfig =>
+      AgentProviderConfig.defaultGrok;
+
+  @override
+  bool acceptsExecutablePath(String path) => looksLikeGrokCliPath(path);
+
+  @override
+  String get connectionModelSourceLabel => 'Grok ACP';
 
   @override
   Future<ManagedAgent> detect({

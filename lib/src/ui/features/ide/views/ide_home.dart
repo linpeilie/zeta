@@ -6,6 +6,8 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:window_manager/window_manager.dart';
 
 import 'package:zeta_foundation/zeta_foundation.dart';
+import 'package:zeta/src/app/agent_management_slice/agent_management_slice_composition.dart';
+import 'package:zeta/src/app/agent_management_slice/agent_management_slice_runner.dart';
 import 'package:zeta/src/app/app_constants.dart';
 import 'package:zeta/src/app/menu_action_bridge.dart';
 import 'package:zeta/src/app/shell/ide_shell_controller.dart';
@@ -20,11 +22,14 @@ import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_text_catalog.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/fallback_desktop_attention_text_catalog.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_controller.dart';
+import 'package:zeta/src/features/agent_management/application/agent_management_operations.dart';
 import 'package:zeta/src/features/agent_management/data/claude_code_agent_management_repository.dart';
 import 'package:zeta/src/features/agent_management/data/codex_agent_management_repository.dart';
 import 'package:zeta/src/features/agent_management/data/grok_agent_management_repository.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_cli_management_repository.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
+import 'package:zeta/src/features/agent_management/domain/agent_management_text_catalog.dart';
+import 'package:zeta/src/features/agent_management/domain/fallback_agent_management_text_catalog.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
 import 'package:zeta/src/features/settings/application/agent_notification_settings_source.dart';
@@ -86,6 +91,9 @@ class IdeHome extends StatefulWidget {
         const FallbackDesktopAttentionTextCatalog(),
     this.metrics = noopZetaMetricsPort,
     this.conversationSliceEnabled = false,
+    this.providerManagementSliceEnabled = false,
+    this.agentManagementTextCatalog =
+        const FallbackAgentManagementTextCatalog(),
     super.key,
   });
 
@@ -129,7 +137,12 @@ class IdeHome extends StatefulWidget {
   /// false = 走旧 ViewModel 直连路径（测试默认）；生产由 `main` 显式传 true。
   final bool conversationSliceEnabled;
 
+  /// Phase 3 第 2 批：true 时只创建 management page store，false 时只创建旧
+  /// controller。生产翻旗由 app 根统一控制。
+  final bool providerManagementSliceEnabled;
+
   final AgentUiTextCatalog agentUiTextCatalog;
+  final AgentManagementTextCatalog agentManagementTextCatalog;
   final DesktopAttentionTextCatalog desktopAttentionTextCatalog;
 
   @override
@@ -142,7 +155,8 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   static const double _maxPanelWidth = IdeMetrics.sidePaneMaxWidth;
 
   late final IdeShellController _shellController;
-  late final AgentManagementController _agentManagementController;
+  late final AgentManagementController? _agentManagementController;
+  late final AgentManagementSliceComposition? _agentManagementComposition;
   late final UsageStatisticsController _usageStatisticsController;
   late final AgentUsagePanelController _agentUsagePanelController;
   late final AgentUsageRefreshCoordinator _agentUsageRefreshCoordinator;
@@ -178,6 +192,9 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   );
   final GlobalKey<SettingsPageCanvasState> _settingsCanvasKey =
       GlobalKey<SettingsPageCanvasState>();
+
+  AgentManagementOperations get _agentManagementOperations =>
+      _agentManagementController ?? _agentManagementComposition!.store;
 
   @override
   void initState() {
@@ -242,22 +259,49 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
       windowManager.addListener(this);
     }
     unawaited(_desktopAttentionController.initialize());
-    _agentManagementController = AgentManagementController(
-      repositories: <String, AgentCliManagementRepository>{
-        AgentDefinition.codex.id: CodexAgentManagementRepository(
-          modelCatalogRepository: widget.agentModelCatalogRepository,
-          runtimeRegistry: widget.agentProviderRuntimeRegistry,
-        ),
-        AgentDefinition.grok.id: GrokAgentManagementRepository(
-          modelCatalogRepository: widget.agentModelCatalogRepository,
-          runtimeRegistry: widget.agentProviderRuntimeRegistry,
-        ),
-        AgentDefinition.claudeCode.id: ClaudeCodeAgentManagementRepository(),
-      },
-      providerController: _shellController.agentProviderController,
-      runtimeStateProvider: _managementRuntimeState,
-      runtimeListenable: _shellController,
-    )..addListener(_handleAgentManagementChanged);
+    final managementRepositories = <String, AgentCliManagementRepository>{
+      AgentDefinition.codex.id: CodexAgentManagementRepository(
+        modelCatalogRepository: widget.agentModelCatalogRepository,
+        runtimeRegistry: widget.agentProviderRuntimeRegistry,
+        textCatalog: widget.agentManagementTextCatalog,
+      ),
+      AgentDefinition.grok.id: GrokAgentManagementRepository(
+        modelCatalogRepository: widget.agentModelCatalogRepository,
+        runtimeRegistry: widget.agentProviderRuntimeRegistry,
+        textCatalog: widget.agentManagementTextCatalog,
+      ),
+      AgentDefinition.claudeCode.id: ClaudeCodeAgentManagementRepository(
+        textCatalog: widget.agentManagementTextCatalog,
+      ),
+    };
+    if (widget.providerManagementSliceEnabled) {
+      final settingsPort = widget.agentProviderSettingsPort;
+      if (settingsPort == null) {
+        throw StateError(
+          'providerManagementSliceEnabled requires agentProviderSettingsPort',
+        );
+      }
+      _agentManagementController = null;
+      _agentManagementComposition = AgentManagementSliceComposition.create(
+        repositories: managementRepositories,
+        providerSettings: settingsPort,
+        runtimeListenable: _shellController,
+        runtimeSnapshotProvider: _managementRuntimeSnapshot,
+        textCatalog: widget.agentManagementTextCatalog,
+      );
+      _agentManagementComposition!.store.addListener(
+        _handleAgentManagementChanged,
+      );
+    } else {
+      _agentManagementComposition = null;
+      _agentManagementController = AgentManagementController(
+        repositories: managementRepositories,
+        providerController: _shellController.agentProviderController,
+        runtimeStateProvider: _managementRuntimeState,
+        runtimeListenable: _shellController,
+        textCatalog: widget.agentManagementTextCatalog,
+      )..addListener(_handleAgentManagementChanged);
+    }
     _usageStatisticsController = _shellController.usageStatisticsController;
     _agentUsagePanelController = _shellController.agentUsagePanelController;
     _agentUsageRefreshCoordinator = AgentUsageRefreshCoordinator(
@@ -329,8 +373,16 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
     }
     _shellController.removeListener(_handleShellChanged);
     _agentUsageRefreshCoordinator.dispose();
-    _agentManagementController.removeListener(_handleAgentManagementChanged);
-    _agentManagementController.dispose();
+    final legacyManagement = _agentManagementController;
+    if (legacyManagement != null) {
+      legacyManagement.removeListener(_handleAgentManagementChanged);
+      legacyManagement.dispose();
+    }
+    final managementComposition = _agentManagementComposition;
+    if (managementComposition != null) {
+      managementComposition.store.removeListener(_handleAgentManagementChanged);
+      managementComposition.close();
+    }
     _shellController.dispose();
     _desktopAttentionController.dispose();
     _leftSidebarFocusNode.dispose();
@@ -570,6 +622,8 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
                     appearanceController: widget.appearanceController,
                     generalSettingsController: widget.generalSettingsController,
                     agentManagementController: _agentManagementController,
+                    agentManagementSliceStore:
+                        _agentManagementComposition?.store,
                   )
                 : const SizedBox.shrink(),
           ),
@@ -854,7 +908,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
     if (injectedLoader != null) {
       return injectedLoader();
     }
-    return _agentManagementController.loadAvailableThreadProviders();
+    return _agentManagementOperations.loadAvailableThreadProviders();
   }
 
   void _scheduleInitialAgentUsageRefresh() {
@@ -1082,23 +1136,23 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
         }
         _setInstalledHomeProviders(agents);
       } else {
-        await _agentManagementController.initialize();
+        await _agentManagementOperations.initialize();
         if (!mounted || token != _globalHomeLoadToken) {
           return;
         }
-        _setInstalledHomeProviders(_agentManagementController.agents);
+        _setInstalledHomeProviders(_agentManagementOperations.agents);
         cachedProviders
           ..clear()
           ..addAll(_installedHomeProviders);
         setState(() {});
 
-        await _agentManagementController.detect();
+        await _agentManagementOperations.detect();
         if (!mounted || token != _globalHomeLoadToken) {
           return;
         }
-        final detectionError = _agentManagementController.operationError;
+        final detectionError = _agentManagementOperations.operationError;
         if (detectionError == null) {
-          _setInstalledHomeProviders(_agentManagementController.agents);
+          _setInstalledHomeProviders(_agentManagementOperations.agents);
         } else {
           _installedHomeProviders = List<HomeProviderSummary>.unmodifiable(
             cachedProviders,
@@ -1143,7 +1197,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
       return;
     }
     setState(() {
-      _setInstalledHomeProviders(_agentManagementController.agents);
+      _setInstalledHomeProviders(_agentManagementOperations.agents);
     });
   }
 
@@ -1170,6 +1224,11 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
       AgentProviderConnectionState.error => AgentRuntimeState.error,
     };
   }
+
+  AgentManagementRuntimeSnapshot _managementRuntimeSnapshot() => (
+    activeAgentId: _shellController.agentProviderController.activeProviderId,
+    runtimeState: _managementRuntimeState(),
+  );
 
   void _openSettingsPage() {
     if (_page == _IdeHomePage.settings) {

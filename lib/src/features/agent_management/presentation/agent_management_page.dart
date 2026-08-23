@@ -3,16 +3,20 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'package:zeta/src/ui/core/system_file_manager.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_controller.dart';
+import 'package:zeta/src/features/agent_management/application/agent_management_operations.dart';
+import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_store.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_configuration_editor.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_log_view.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_management_l10n.dart';
+import 'package:zeta/src/features/agent_management/presentation/agent_management_slice/agent_management_slice_providers.dart';
 import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 import 'package:zeta/src/ui/localization/relative_time.dart';
 import 'package:zeta_ui/zeta_ui.dart';
@@ -42,12 +46,17 @@ const double _overviewTwoColumnBreakpoint = 780;
 /// 设置中的 Agent 管理列表、详情、配置和日志页面。
 class AgentManagementPage extends StatefulWidget {
   const AgentManagementPage({
-    required this.controller,
+    this.controller,
+    this.sliceStore,
     this.autoDetect = true,
     super.key,
-  });
+  }) : assert(
+         (controller == null) != (sliceStore == null),
+         'Exactly one Agent management state source is required',
+       );
 
-  final AgentManagementController controller;
+  final AgentManagementController? controller;
+  final AgentManagementSliceStore? sliceStore;
   final bool autoDetect;
 
   @override
@@ -63,11 +72,17 @@ class AgentManagementPageState extends State<AgentManagementPage> {
   _AgentListTab _listTab = _AgentListTab.installed;
   _AgentDetailTab _detailTab = _AgentDetailTab.overview;
 
+  AgentManagementOperations get _operations =>
+      widget.controller ?? widget.sliceStore!;
+
+  Listenable get _managementListenable =>
+      widget.controller ?? const _InertManagementListenable();
+
   @override
   void initState() {
     super.initState();
     _searchController = TextEditingController()..addListener(_refreshView);
-    unawaited(widget.controller.initialize(autoDetect: widget.autoDetect));
+    unawaited(_operations.initialize(autoDetect: widget.autoDetect));
   }
 
   @override
@@ -84,13 +99,27 @@ class AgentManagementPageState extends State<AgentManagementPage> {
 
   @override
   Widget build(BuildContext context) {
+    final sliceStore = widget.sliceStore;
+    if (sliceStore != null) {
+      return Consumer(
+        builder: (context, ref, _) {
+          ref.watch(agentManagementSliceProvider(sliceStore));
+          return _buildPage(context);
+        },
+      );
+    }
+    return _buildPage(context);
+  }
+
+  Widget _buildPage(BuildContext context) {
     return IdeSurface.canvas(
       key: const ValueKey('agent-management-page'),
       child: switch (_view) {
         _ManagementView.list => _buildListPage(context),
         _ManagementView.detail => _buildDetailPage(context),
         _ManagementView.logs => AgentLogView(
-          controller: widget.controller,
+          operations: _operations,
+          listenable: _managementListenable,
           onBack: () {
             setState(() {
               _view = _ManagementView.detail;
@@ -105,19 +134,18 @@ class AgentManagementPageState extends State<AgentManagementPage> {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     return ListenableBuilder(
-      listenable: widget.controller,
+      listenable: _managementListenable,
       builder: (context, _) {
-        final allAgents = widget.controller.agents;
+        final allAgents = _operations.agents;
         final visibleAgents = allAgents
             .where(_matchesList)
             .toList(growable: false);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (widget.controller.detecting &&
-                widget.controller.detectionProgress != null)
+            if (_operations.detecting && _operations.detectionProgress != null)
               _DetectionProgressBanner(
-                progress: widget.controller.detectionProgress!,
+                progress: _operations.detectionProgress!,
               ),
             Expanded(
               child: LayoutBuilder(
@@ -137,7 +165,7 @@ class AgentManagementPageState extends State<AgentManagementPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            if (widget.controller.operationError
+                            if (_operations.operationError
                                 case final String error) ...[
                               IdeStatusCard(
                                 tone: IdeStatusCardTone.error,
@@ -200,7 +228,7 @@ class AgentManagementPageState extends State<AgentManagementPage> {
   /// 容器边界，反而更显眼。筛选条直接坐在 canvas 底色上，只靠下方那条
   /// `IdeRowDivider` 与数据区分界。
   Widget _buildListToolbar(BuildContext context) {
-    final detecting = widget.controller.detecting;
+    final detecting = _operations.detecting;
     final tabs = IdeTabs<_AgentListTab>(
       value: _listTab,
       semanticLabel: context.l10n.mgmtListScope,
@@ -239,7 +267,7 @@ class AgentManagementPageState extends State<AgentManagementPage> {
           ? context.l10n.mgmtDetecting
           : context.l10n.mgmtAutoDetect,
       variant: IdeButtonVariant.accentOutline,
-      onPressed: detecting ? null : widget.controller.detect,
+      onPressed: detecting ? null : _operations.detect,
       leading: detecting
           ? const IdeLoadingIndicator(width: 18, height: 10)
           : null,
@@ -291,7 +319,7 @@ class AgentManagementPageState extends State<AgentManagementPage> {
         title: context.l10n.mgmtEmptyInstalledTitle,
         description: context.l10n.mgmtEmptyInstalledBody,
         primaryLabel: context.l10n.mgmtAutoDetect,
-        onPrimary: widget.controller.detect,
+        onPrimary: _operations.detect,
         secondaryLabel: context.l10n.mgmtViewAllSupported,
         onSecondary: () {
           setState(() {
@@ -311,9 +339,9 @@ class AgentManagementPageState extends State<AgentManagementPage> {
 
   Widget _buildDetailPage(BuildContext context) {
     return ListenableBuilder(
-      listenable: widget.controller,
+      listenable: _managementListenable,
       builder: (context, _) {
-        final agent = widget.controller.agent;
+        final agent = _operations.agent;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -334,10 +362,10 @@ class AgentManagementPageState extends State<AgentManagementPage> {
               actions: [
                 IdeButton(
                   key: const ValueKey('agent-test-connection-button'),
-                  label: widget.controller.testing
+                  label: _operations.testing
                       ? context.l10n.mgmtTesting
                       : context.l10n.mgmtTestConnection,
-                  onPressed: agent.installed && !widget.controller.testing
+                  onPressed: agent.installed && !_operations.testing
                       ? _testConnection
                       : null,
                 ),
@@ -399,7 +427,8 @@ class AgentManagementPageState extends State<AgentManagementPage> {
                 _AgentDetailTab.models => _buildModels(context, agent),
                 _AgentDetailTab.configuration => AgentConfigurationEditor(
                   key: _configurationKey,
-                  controller: widget.controller,
+                  operations: _operations,
+                  listenable: _managementListenable,
                 ),
               },
             ),
@@ -416,7 +445,7 @@ class AgentManagementPageState extends State<AgentManagementPage> {
         builder: (context, constraints) {
           final information = _AgentInformationCard(
             agent: agent,
-            onDetect: widget.controller.detect,
+            onDetect: _operations.detect,
             onOpenExecutableDirectory: _openExecutableDirectory,
             onCopyCommand: () => _copyText(
               agent.definition.commandName,
@@ -425,21 +454,19 @@ class AgentManagementPageState extends State<AgentManagementPage> {
           );
           final diagnostics = _AgentDiagnosticsCard(
             agent: agent,
-            onDetect: widget.controller.detect,
+            onDetect: _operations.detect,
           );
           final setupGuide = agent.definition.id == defaultClaudeCodeProviderId
               ? const _ClaudeCodeSetupGuideCard()
               : null;
           final accountDataEnrichment =
-              agent.definition.id == defaultClaudeCodeProviderId
+              _operations.supportsAccountDataEnrichment
               ? _ClaudeCodeAccountDataEnrichmentCard(
-                  enabled:
-                      widget.controller.claudeCodeAccountDataEnrichmentEnabled,
-                  updating: widget.controller.updatingAccountDataEnrichment,
+                  enabled: _operations.accountDataEnrichmentEnabled,
+                  updating: _operations.updatingAccountDataEnrichment,
                   onChanged: (value) {
                     unawaited(
-                      widget.controller
-                          .setClaudeCodeAccountDataEnrichmentEnabled(value),
+                      _operations.setAccountDataEnrichmentEnabled(value),
                     );
                   },
                 )
@@ -562,7 +589,7 @@ class AgentManagementPageState extends State<AgentManagementPage> {
   }
 
   void _openDetail(String agentId) {
-    widget.controller.selectAgent(agentId);
+    _operations.selectAgent(agentId);
     setState(() {
       _view = _ManagementView.detail;
       _detailTab = _AgentDetailTab.overview;
@@ -609,8 +636,8 @@ class AgentManagementPageState extends State<AgentManagementPage> {
   }
 
   Future<void> _setEnabled(String agentId, bool enabled) async {
-    widget.controller.selectAgent(agentId);
-    final agent = widget.controller.agent;
+    _operations.selectAgent(agentId);
+    final agent = _operations.agent;
     if (!enabled && agent.runtimeState == AgentRuntimeState.running) {
       final confirmed = await showIdeDialog<bool>(
         context: context,
@@ -638,11 +665,11 @@ class AgentManagementPageState extends State<AgentManagementPage> {
         return;
       }
     }
-    await widget.controller.setEnabled(enabled);
+    await _operations.setEnabled(enabled);
   }
 
   Future<void> _testConnection() async {
-    if (widget.controller.selectedAgentId == defaultClaudeCodeProviderId) {
+    if (_operations.selectedAgentId == defaultClaudeCodeProviderId) {
       final confirmed = await showIdeDialog<bool>(
         context: context,
         barrierDismissible: false,
@@ -665,7 +692,7 @@ class AgentManagementPageState extends State<AgentManagementPage> {
         return;
       }
     }
-    final result = await widget.controller.testConnection();
+    final result = await _operations.testConnection();
     if (!mounted || result == null) {
       return;
     }
@@ -683,7 +710,7 @@ class AgentManagementPageState extends State<AgentManagementPage> {
   }
 
   Future<void> _openExecutableDirectory() async {
-    final path = widget.controller.agent.executablePath;
+    final path = _operations.agent.executablePath;
     if (path == null) {
       return;
     }
@@ -712,6 +739,18 @@ class AgentManagementPageState extends State<AgentManagementPage> {
       setState(() {});
     }
   }
+}
+
+/// slice 路径由页面最外层 Riverpod 镜像驱动；内层旧 ListenableBuilder 只需
+/// 一个不发布事件的占位对象，避免建立第二条 store 订阅。
+final class _InertManagementListenable implements Listenable {
+  const _InertManagementListenable();
+
+  @override
+  void addListener(VoidCallback listener) {}
+
+  @override
+  void removeListener(VoidCallback listener) {}
 }
 
 enum _ManagementView { list, detail, logs }

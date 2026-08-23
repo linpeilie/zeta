@@ -18,6 +18,7 @@ import 'package:zeta/src/features/agent/presentation/agent_conversation_view_mod
 import 'package:zeta/src/features/agent/presentation/provider_settings_slice/agent_model_catalog_projection_providers.dart';
 import 'package:zeta/src/features/agent/presentation/provider_settings_slice/agent_provider_settings_slice_providers.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
+import 'package:zeta/src/features/agent_management/presentation/agent_management_page.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
@@ -849,6 +850,7 @@ void main() {
     ) async {
       await _pumpIde(
         tester,
+        enableNativeWindowFrame: true,
         agentProviderConfigStore: MemoryAgentProviderConfigStore(),
         enableProviderManagementSlice: sliceEnabled,
       );
@@ -869,31 +871,39 @@ void main() {
         container.read(activeAgentModelCatalogQueryProvider) != null,
         sliceEnabled,
       );
-      if (!sliceEnabled) {
-        return;
+      if (sliceEnabled) {
+        expect(
+          container
+              .read(enabledAgentProviderConfigsProvider)
+              .map((provider) => provider.id),
+          <String>[defaultAgentProviderId, grokAgentProviderId],
+        );
+        await sliceStore!.updateProviderConfig(
+          AgentProviderConfig.defaultClaudeCode,
+        );
+        await tester.pump();
+
+        expect(
+          container
+              .read(enabledAgentProviderConfigsProvider)
+              .map((provider) => provider.id),
+          <String>[
+            defaultAgentProviderId,
+            grokAgentProviderId,
+            defaultClaudeCodeProviderId,
+          ],
+        );
       }
 
-      expect(
-        container
-            .read(enabledAgentProviderConfigsProvider)
-            .map((provider) => provider.id),
-        <String>[defaultAgentProviderId, grokAgentProviderId],
-      );
-      await sliceStore!.updateProviderConfig(
-        AgentProviderConfig.defaultClaudeCode,
-      );
+      await tester.tap(find.byKey(const ValueKey('titlebar-settings-action')));
       await tester.pump();
-
-      expect(
-        container
-            .read(enabledAgentProviderConfigsProvider)
-            .map((provider) => provider.id),
-        <String>[
-          defaultAgentProviderId,
-          grokAgentProviderId,
-          defaultClaudeCodeProviderId,
-        ],
+      await tester.tap(find.byKey(const ValueKey('settings-nav-agents')));
+      await tester.pump();
+      final managementPage = tester.widget<AgentManagementPage>(
+        find.byType(AgentManagementPage),
       );
+      expect(managementPage.sliceStore != null, sliceEnabled);
+      expect(managementPage.controller != null, !sliceEnabled);
     });
   }
 
@@ -2107,7 +2117,7 @@ Future<void> _pumpIde(
       conversationSliceEnabled: enableConversationSlice,
       // Phase 3 第 1 批同样使用 app-level 全局 flag 做双路径对照。
       settingsSliceEnabled: enableSettingsSlice,
-      // Phase 3 第 2 批 2a：默认关闭，仅测试新旧 owner 二选一接线。
+      // Phase 3 第 2 批：默认关闭，验证 settings + management owner 原子切换。
       providerManagementSliceEnabled: enableProviderManagementSlice,
     ),
   );

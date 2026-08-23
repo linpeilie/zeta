@@ -9,6 +9,7 @@ import 'package:zeta_agent_providers/zeta_agent_providers.dart'
 import 'package:zeta_agent_providers/zeta_agent_providers.dart'
     show looksLikeGrokCliPath;
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
+import 'package:zeta/src/features/agent_management/application/agent_management_operations.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent_management/data/codex_agent_management_repository.dart'
     show isNewerVersion;
@@ -18,7 +19,8 @@ import 'package:zeta/src/features/agent_management/domain/agent_management_text_
 import 'package:zeta/src/features/agent_management/domain/fallback_agent_management_text_catalog.dart';
 
 /// Agent 管理页面的应用层协调器（支持多 Agent CLI）。
-class AgentManagementController extends ChangeNotifier {
+class AgentManagementController extends ChangeNotifier
+    implements AgentManagementOperations {
   AgentManagementController({
     required Map<String, AgentCliManagementRepository> repositories,
     required this.providerController,
@@ -77,6 +79,7 @@ class AgentManagementController extends ChangeNotifier {
   String? _operationError;
 
   /// 全部受管 Agent 快照（定义顺序优先）。
+  @override
   List<ManagedAgent> get agents {
     final ordered = <ManagedAgent>[];
     for (final definition in AgentDefinition.all) {
@@ -94,12 +97,14 @@ class AgentManagementController extends ChangeNotifier {
   }
 
   /// 详情页当前选中的 Agent。
+  @override
   ManagedAgent get agent =>
       _agents[_selectedAgentId] ??
       ManagedAgent.codex(
         enabled: providerController.isProviderEnabled(defaultAgentProviderId),
       );
 
+  @override
   String get selectedAgentId => _selectedAgentId;
 
   /// 当前选中 Agent 的仓库（配置/日志/检测）。
@@ -111,16 +116,27 @@ class AgentManagementController extends ChangeNotifier {
     return _repositories.values.first;
   }
 
+  @override
   AgentDetectionProgress? get detectionProgress => _detectionProgress;
+  @override
   AgentConfigurationDocument? get configuration => _configuration;
+  @override
   List<AgentLogEntry> get logs => List<AgentLogEntry>.unmodifiable(_logs);
+  @override
   bool get initialized => _initialized;
+  @override
   bool get detecting => _detecting;
+  @override
   bool get testing => _testing;
+  @override
   bool get loadingConfiguration => _loadingConfiguration;
+  @override
   bool get savingConfiguration => _savingConfiguration;
+  @override
   bool get loadingLogs => _loadingLogs;
+  @override
   bool get updatingAccountDataEnrichment => _updatingAccountDataEnrichment;
+  @override
   String? get operationError => _operationError;
 
   /// Claude Code 额度详情增强是否开启；沿用旧配置 key，缺省按开启处理。
@@ -134,10 +150,19 @@ class AgentManagementController extends ChangeNotifier {
         false;
   }
 
+  @override
+  bool get supportsAccountDataEnrichment =>
+      _selectedAgentId == defaultClaudeCodeProviderId;
+
+  @override
+  bool get accountDataEnrichmentEnabled =>
+      claudeCodeAccountDataEnrichmentEnabled;
+
   /// 配置中已启用、且 Zeta 已实现 CLI 适配的 provider。
   ///
   /// 创建 thread 的选择器只判断产品是否支持该 provider，不执行安装、登录、
   /// 版本、运行态或协议握手检测。真正启动失败时由会话创建流程报告错误。
+  @override
   List<AgentProviderConfig> get availableThreadProviders {
     final supportedIds = _repositories.keys.toSet();
     return List<AgentProviderConfig>.unmodifiable(
@@ -148,12 +173,14 @@ class AgentManagementController extends ChangeNotifier {
   }
 
   /// 加载配置并返回创建新 thread 时可选择的 provider，不触发 Agent 检测。
+  @override
   Future<List<AgentProviderConfig>> loadAvailableThreadProviders() async {
     await initialize();
     return availableThreadProviders;
   }
 
   /// 切换详情页选中的 Agent。
+  @override
   void selectAgent(String agentId) {
     if (!_repositories.containsKey(agentId) || _selectedAgentId == agentId) {
       return;
@@ -166,6 +193,7 @@ class AgentManagementController extends ChangeNotifier {
   }
 
   /// 加载持久化 provider 配置和上一次检测摘要。
+  @override
   Future<void> initialize({bool autoDetect = false}) async {
     if (_initialized) {
       if (autoDetect && !_detecting) {
@@ -190,6 +218,7 @@ class AgentManagementController extends ChangeNotifier {
   }
 
   /// 自动检测全部已注册 Agent。
+  @override
   Future<void> detect() async {
     if (_detecting) {
       return;
@@ -249,6 +278,7 @@ class AgentManagementController extends ChangeNotifier {
   }
 
   /// 启用或禁用当前选中 Agent。
+  @override
   Future<void> setEnabled(bool enabled) async {
     final current = agent;
     if (current.enabled == enabled) {
@@ -313,7 +343,12 @@ class AgentManagementController extends ChangeNotifier {
     }
   }
 
+  @override
+  Future<void> setAccountDataEnrichmentEnabled(bool enabled) =>
+      setClaudeCodeAccountDataEnrichmentEnabled(enabled);
+
   /// 执行当前 Provider 的显式连接测试。
+  @override
   Future<AgentConnectionTestResult?> testConnection() async {
     if (_testing) {
       return null;
@@ -358,6 +393,7 @@ class AgentManagementController extends ChangeNotifier {
   }
 
   /// 加载当前选中 Agent 的配置文件。
+  @override
   Future<AgentConfigurationDocument?> loadConfiguration() async {
     if (_loadingConfiguration) {
       return _configuration;
@@ -377,11 +413,13 @@ class AgentManagementController extends ChangeNotifier {
     }
   }
 
+  @override
   String? validateConfiguration(String content) {
     return repository.validateConfiguration(content);
   }
 
   /// 安全保存配置；外部修改冲突由页面决定是否覆盖。
+  @override
   Future<AgentConfigurationSaveResult> saveConfiguration(
     String content, {
     bool overwriteExternalChanges = false,
@@ -412,6 +450,7 @@ class AgentManagementController extends ChangeNotifier {
   }
 
   /// 刷新当前 Agent 磁盘日志。
+  @override
   Future<List<AgentLogEntry>> loadLogs() async {
     if (_loadingLogs) {
       return logs;

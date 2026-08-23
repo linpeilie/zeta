@@ -16,7 +16,8 @@ import 'package:zeta/src/features/agent_management/domain/agent_management_text_
 import 'package:zeta/src/features/agent_management/domain/fallback_agent_management_text_catalog.dart';
 
 /// Codex CLI 的检测、配置与日志数据仓库。
-class CodexAgentManagementRepository implements AgentCliManagementRepository {
+class CodexAgentManagementRepository
+    implements AgentCliManagementRepository, AgentCliManagementDescriptor {
   CodexAgentManagementRepository({
     required this.runtimeRegistry,
     CliProcessRunner? processRunner,
@@ -47,6 +48,20 @@ class CodexAgentManagementRepository implements AgentCliManagementRepository {
 
   @override
   String get agentId => AgentDefinition.codex.id;
+
+  @override
+  AgentCliManagementCapabilities get managementCapabilities =>
+      AgentCliManagementCapabilities.none;
+
+  @override
+  AgentProviderConfig get defaultProviderConfig =>
+      AgentProviderConfig.defaultCodex;
+
+  @override
+  bool acceptsExecutablePath(String path) => looksLikeCodexCliPath(path);
+
+  @override
+  String get connectionModelSourceLabel => 'Codex app-server';
 
   /// 执行完整但不产生模型费用的 Codex 自动检测。
   @override

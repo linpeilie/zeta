@@ -279,8 +279,10 @@ MainApp (flag + composition owner)
 
 四步状态：
 
-1. **挂 flag**：🟡 2a Provider settings store/runner 与 2b keyed 模型目录
-   Riverpod 投影、app 根二选一接缝已落地（2026-08-23）；2c 待执行；
-2. **对照验证**：待 2a/2b/2c 接缝全部落地；
+1. **挂 flag**：✅ 2a Provider settings store/runner、2b keyed 模型目录投影与
+   2c management page store/runner/Riverpod 接缝均已落地（2026-08-23）；旧/new
+   owner 由同一 app flag 二选一，生产仍保持 false；
+2. **对照验证**：✅ 已覆盖 management 检测、连接测试、配置签名与冲突、日志、
+   账号增强、迟到结果、dispose 结算和 MainApp/IdeHome flag 双路径；
 3. **翻 flag**：需另行显式确认，且不得与第 1 批同时扩大生产风险；
 4. **关批**：观察通过后执行 §10，再启动第 3 批。

@@ -52,6 +52,20 @@ abstract class AgentCliManagementRepository {
   });
 }
 
+/// repository 可选实现的 typed management 描述。
+///
+/// 与主 IO 契约分离，既有第三方/fake repository 无需为新增展示能力补成员；
+/// 未实现时 management runner 按 fail-closed 的无可选能力处理。
+abstract interface class AgentCliManagementDescriptor {
+  AgentCliManagementCapabilities get managementCapabilities;
+
+  AgentProviderConfig get defaultProviderConfig;
+
+  bool acceptsExecutablePath(String path);
+
+  String get connectionModelSourceLabel;
+}
+
 /// 检测进度回调。
 typedef AgentDetectionProgressCallback =
     void Function(AgentDetectionProgress progress, ManagedAgent partial);

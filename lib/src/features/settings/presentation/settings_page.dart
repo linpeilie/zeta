@@ -13,6 +13,7 @@ import 'package:zeta/src/features/settings/presentation/appearance_theme_mode_ma
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_controller.dart';
+import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_store.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_management_page.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/ui/localization/app_localizations_x.dart';
@@ -53,6 +54,7 @@ class SettingsPage extends StatefulWidget {
     required this.generalSettingsController,
     required this.onSectionSelected,
     this.agentManagementController,
+    this.agentManagementSliceStore,
     super.key,
   });
 
@@ -60,6 +62,7 @@ class SettingsPage extends StatefulWidget {
   final AppearanceSettingsController appearanceController;
   final GeneralSettingsController generalSettingsController;
   final AgentManagementController? agentManagementController;
+  final AgentManagementSliceStore? agentManagementSliceStore;
   final ValueChanged<SettingsSection> onSectionSelected;
 
   @override
@@ -81,7 +84,9 @@ class _SettingsPageState extends State<SettingsPage> {
           width: _navigationWidth,
           child: SettingsNavigationPane(
             activeSection: widget.activeSection,
-            showAgentManagement: widget.agentManagementController != null,
+            showAgentManagement:
+                widget.agentManagementController != null ||
+                widget.agentManagementSliceStore != null,
             onSectionSelected: (section) {
               unawaited(_handleSectionSelected(section));
             },
@@ -95,6 +100,7 @@ class _SettingsPageState extends State<SettingsPage> {
             appearanceController: widget.appearanceController,
             generalSettingsController: widget.generalSettingsController,
             agentManagementController: widget.agentManagementController,
+            agentManagementSliceStore: widget.agentManagementSliceStore,
           ),
         ),
       ],
@@ -176,6 +182,7 @@ class SettingsPageCanvas extends StatefulWidget {
     required this.appearanceController,
     required this.generalSettingsController,
     required this.agentManagementController,
+    this.agentManagementSliceStore,
     super.key,
   });
 
@@ -183,6 +190,7 @@ class SettingsPageCanvas extends StatefulWidget {
   final AppearanceSettingsController appearanceController;
   final GeneralSettingsController generalSettingsController;
   final AgentManagementController? agentManagementController;
+  final AgentManagementSliceStore? agentManagementSliceStore;
 
   @override
   State<SettingsPageCanvas> createState() => SettingsPageCanvasState();
@@ -211,13 +219,15 @@ class SettingsPageCanvasState extends State<SettingsPageCanvas> {
         appearanceController: widget.appearanceController,
       ),
       SettingsSection.agents =>
-        widget.agentManagementController == null
+        widget.agentManagementController == null &&
+                widget.agentManagementSliceStore == null
             ? IdeSurface.canvas(
                 child: EmptyState(text: context.l10n.settingsAgentsUnavailable),
               )
             : AgentManagementPage(
                 key: _agentManagementKey,
-                controller: widget.agentManagementController!,
+                controller: widget.agentManagementController,
+                sliceStore: widget.agentManagementSliceStore,
               ),
     };
   }

@@ -8,7 +8,7 @@ import 'package:highlight/highlight.dart' show Node, highlight;
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'package:zeta/src/ui/core/system_file_manager.dart';
-import 'package:zeta/src/features/agent_management/application/agent_management_controller.dart';
+import 'package:zeta/src/features/agent_management/application/agent_management_operations.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/ui/localization/app_localizations_x.dart';
@@ -16,12 +16,14 @@ import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 /// Codex TOML 配置编辑器。
 class AgentConfigurationEditor extends StatefulWidget {
   const AgentConfigurationEditor({
-    required this.controller,
+    required this.operations,
+    required this.listenable,
     this.onDirtyChanged,
     super.key,
   });
 
-  final AgentManagementController controller;
+  final AgentManagementOperations operations;
+  final Listenable listenable;
   final ValueChanged<bool>? onDirtyChanged;
 
   @override
@@ -51,7 +53,7 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
       if (!mounted) {
         return;
       }
-      final existing = widget.controller.configuration;
+      final existing = widget.operations.configuration;
       if (existing != null) {
         _setEditorContent(
           _revealed ? existing.content : existing.maskedContent,
@@ -106,10 +108,10 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
       ..baseStyle = textStyles.codeSmall.copyWith(color: colors.textPrimary);
 
     return ListenableBuilder(
-      listenable: widget.controller,
+      listenable: widget.listenable,
       builder: (context, _) {
-        final document = widget.controller.configuration;
-        if (widget.controller.loadingConfiguration && document == null) {
+        final document = widget.operations.configuration;
+        if (widget.operations.loadingConfiguration && document == null) {
           return Center(
             child: IdeLoadingIndicator(
               width: 32,
@@ -121,7 +123,7 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
         if (document == null) {
           return EmptyState(
             text:
-                widget.controller.operationError ??
+                widget.operations.operationError ??
                 context.l10n.mgmtConfigNotLoadedYet,
           );
         }
@@ -342,12 +344,12 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
             sf.PrimaryButton(
               key: const ValueKey('agent-config-save-button'),
               onPressed:
-                  _dirty && valid && !widget.controller.savingConfiguration
+                  _dirty && valid && !widget.operations.savingConfiguration
                   ? _save
                   : null,
               size: sf.ButtonSize.small,
               child: Text(
-                widget.controller.savingConfiguration
+                widget.operations.savingConfiguration
                     ? context.l10n.mgmtSaving
                     : context.l10n.mgmtSaveConfig,
               ),
@@ -359,7 +361,7 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
   }
 
   Future<void> _load() async {
-    final document = await widget.controller.loadConfiguration();
+    final document = await widget.operations.loadConfiguration();
     if (document == null || !mounted) {
       return;
     }
@@ -370,7 +372,7 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
   }
 
   void _toggleReveal() {
-    final document = widget.controller.configuration;
+    final document = widget.operations.configuration;
     if (document == null || _dirty) {
       return;
     }
@@ -381,7 +383,7 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
           : document.maskedContent;
       _editingController.selection = const TextSelection.collapsed(offset: 0);
       _validationError = _revealed
-          ? widget.controller.validateConfiguration(document.content)
+          ? widget.operations.validateConfiguration(document.content)
           : null;
     });
   }
@@ -390,9 +392,9 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
     if (!_revealed) {
       return;
     }
-    final document = widget.controller.configuration;
+    final document = widget.operations.configuration;
     final dirty = document != null && content != document.content;
-    final error = widget.controller.validateConfiguration(content);
+    final error = widget.operations.validateConfiguration(content);
     if (dirty == _dirty && error == _validationError) {
       return;
     }
@@ -403,7 +405,7 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
   }
 
   void _discardChanges() {
-    final document = widget.controller.configuration;
+    final document = widget.operations.configuration;
     if (document == null) {
       return;
     }
@@ -412,7 +414,7 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
 
   Future<void> _save({bool overwriteExternalChanges = false}) async {
     try {
-      final result = await widget.controller.saveConfiguration(
+      final result = await widget.operations.saveConfiguration(
         _editingController.text,
         overwriteExternalChanges: overwriteExternalChanges,
       );
@@ -500,7 +502,7 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
       _editingController.text = content;
       _editingController.selection = const TextSelection.collapsed(offset: 0);
       _validationError = _revealed
-          ? widget.controller.validateConfiguration(content)
+          ? widget.operations.validateConfiguration(content)
           : null;
       _setDirty(dirty);
     });

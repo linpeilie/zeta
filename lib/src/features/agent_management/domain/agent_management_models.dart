@@ -57,6 +57,18 @@ enum AgentDiagnosticStage {
 /// 统一日志级别。
 enum AgentLogLevel { debug, info, warning, error }
 
+/// 单个 CLI management repository 可选提供的中立管理能力。
+class AgentCliManagementCapabilities {
+  const AgentCliManagementCapabilities({
+    this.supportsAccountDataEnrichment = false,
+  });
+
+  static const AgentCliManagementCapabilities none =
+      AgentCliManagementCapabilities();
+
+  final bool supportsAccountDataEnrichment;
+}
+
 /// 应用内置的 Agent 支持定义。
 class AgentDefinition {
   const AgentDefinition({

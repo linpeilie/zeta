@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
-import 'package:zeta/src/features/agent_management/application/agent_management_controller.dart';
+import 'package:zeta/src/features/agent_management/application/agent_management_operations.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/ui/localization/app_localizations_x.dart';
@@ -13,12 +13,14 @@ import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 /// Agent 磁盘日志或受控内存诊断的查看、搜索、复制和刷新页面。
 class AgentLogView extends StatefulWidget {
   const AgentLogView({
-    required this.controller,
+    required this.operations,
+    required this.listenable,
     required this.onBack,
     super.key,
   });
 
-  final AgentManagementController controller;
+  final AgentManagementOperations operations;
+  final Listenable listenable;
   final VoidCallback onBack;
 
   @override
@@ -33,7 +35,7 @@ class _AgentLogViewState extends State<AgentLogView> {
   void initState() {
     super.initState();
     _searchController = TextEditingController()..addListener(_refreshView);
-    unawaited(widget.controller.loadLogs());
+    unawaited(widget.operations.loadLogs());
   }
 
   @override
@@ -49,9 +51,9 @@ class _AgentLogViewState extends State<AgentLogView> {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     return ListenableBuilder(
-      listenable: widget.controller,
+      listenable: widget.listenable,
       builder: (context, _) {
-        final entries = _filteredEntries(widget.controller.logs);
+        final entries = _filteredEntries(widget.operations.logs);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -79,14 +81,14 @@ class _AgentLogViewState extends State<AgentLogView> {
                           children: [
                             Text(
                               context.l10n.mgmtRuntimeLogsTitle(
-                                widget.controller.agent.definition.displayName,
+                                widget.operations.agent.definition.displayName,
                               ),
                               style: textStyles.pageTitle,
                             ),
                             Text(
                               context.l10n.mgmtLogSourcesLoaded(
-                                '${widget.controller.agent.logPaths.length}',
-                                '${widget.controller.logs.length}',
+                                '${widget.operations.agent.logPaths.length}',
+                                '${widget.operations.logs.length}',
                               ),
                               style: textStyles.caption.copyWith(
                                 color: colors.textSecondary,
@@ -96,12 +98,12 @@ class _AgentLogViewState extends State<AgentLogView> {
                         ),
                       ),
                       sf.OutlineButton(
-                        onPressed: widget.controller.loadingLogs
+                        onPressed: widget.operations.loadingLogs
                             ? null
-                            : widget.controller.loadLogs,
+                            : widget.operations.loadLogs,
                         size: sf.ButtonSize.small,
                         child: Text(
-                          widget.controller.loadingLogs
+                          widget.operations.loadingLogs
                               ? context.l10n.mgmtRefreshing
                               : context.l10n.mgmtRefresh,
                         ),
@@ -184,8 +186,8 @@ class _AgentLogViewState extends State<AgentLogView> {
             ),
             Expanded(
               child:
-                  widget.controller.loadingLogs &&
-                      widget.controller.logs.isEmpty
+                  widget.operations.loadingLogs &&
+                      widget.operations.logs.isEmpty
                   ? Center(
                       child: IdeLoadingIndicator(
                         width: 32,
