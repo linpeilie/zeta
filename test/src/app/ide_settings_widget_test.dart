@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
@@ -741,56 +742,59 @@ Future<void> _pumpSettingsPage(
   await resolvedGeneralController.load();
 
   await tester.pumpWidget(
-    ValueListenableBuilder<AppearanceSettings>(
-      valueListenable: appearanceController.listenable,
-      builder: (context, settings, _) {
-        final lightIdeTheme = buildIdeThemeData(
-          brightness: Brightness.light,
-          uiFontFamily: settings.uiFontFamily,
-          codeFontFamily: settings.codeFontFamily,
-          uiFontSize: settings.uiFontSize,
-          codeFontSize: settings.codeFontSize,
-        );
-        final darkIdeTheme = buildIdeThemeData(
-          brightness: Brightness.dark,
-          uiFontFamily: settings.uiFontFamily,
-          codeFontFamily: settings.codeFontFamily,
-          uiFontSize: settings.uiFontSize,
-          codeFontSize: settings.codeFontSize,
-        );
-        final materialBrightness = resolveBrightnessForThemeMode(
-          themeModeForPreference(settings.themeMode),
-        );
-        final materialIdeTheme = materialBrightness == Brightness.dark
-            ? darkIdeTheme
-            : lightIdeTheme;
-        return IdeThemeScope(
-          themeMode: themeModeForPreference(settings.themeMode),
-          lightTheme: lightIdeTheme,
-          darkTheme: darkIdeTheme,
-          child: sf.ShadcnApp(
-            locale: locale,
-            supportedLocales: ZetaLocalization.supportedLocales,
-            localizationsDelegates: ZetaLocalization.delegates,
-            theme: buildShadcnTheme(lightIdeTheme),
-            darkTheme: buildShadcnTheme(darkIdeTheme),
-            materialTheme: buildMaterialTheme(
-              materialIdeTheme,
-            ).copyWith(platform: platform),
-            themeMode: resolveShadcnThemeMode(
-              themeModeForPreference(settings.themeMode),
-            ),
-            home: sf.Scaffold(
-              child: SettingsPage(
-                activeSection: activeSection,
-                appearanceController: appearanceController,
-                generalSettingsController: resolvedGeneralController,
-                onSectionSelected: (_) {},
+    // 生产由 MainApp 的根 ProviderScope 提供；测试镜像同一套接线。
+    ProviderScope(
+      child: ValueListenableBuilder<AppearanceSettings>(
+        valueListenable: appearanceController.listenable,
+        builder: (context, settings, _) {
+          final lightIdeTheme = buildIdeThemeData(
+            brightness: Brightness.light,
+            uiFontFamily: settings.uiFontFamily,
+            codeFontFamily: settings.codeFontFamily,
+            uiFontSize: settings.uiFontSize,
+            codeFontSize: settings.codeFontSize,
+          );
+          final darkIdeTheme = buildIdeThemeData(
+            brightness: Brightness.dark,
+            uiFontFamily: settings.uiFontFamily,
+            codeFontFamily: settings.codeFontFamily,
+            uiFontSize: settings.uiFontSize,
+            codeFontSize: settings.codeFontSize,
+          );
+          final materialBrightness = resolveBrightnessForThemeMode(
+            themeModeForPreference(settings.themeMode),
+          );
+          final materialIdeTheme = materialBrightness == Brightness.dark
+              ? darkIdeTheme
+              : lightIdeTheme;
+          return IdeThemeScope(
+            themeMode: themeModeForPreference(settings.themeMode),
+            lightTheme: lightIdeTheme,
+            darkTheme: darkIdeTheme,
+            child: sf.ShadcnApp(
+              locale: locale,
+              supportedLocales: ZetaLocalization.supportedLocales,
+              localizationsDelegates: ZetaLocalization.delegates,
+              theme: buildShadcnTheme(lightIdeTheme),
+              darkTheme: buildShadcnTheme(darkIdeTheme),
+              materialTheme: buildMaterialTheme(
+                materialIdeTheme,
+              ).copyWith(platform: platform),
+              themeMode: resolveShadcnThemeMode(
+                themeModeForPreference(settings.themeMode),
+              ),
+              home: sf.Scaffold(
+                child: SettingsPage(
+                  activeSection: activeSection,
+                  appearanceController: appearanceController,
+                  generalSettingsController: resolvedGeneralController,
+                  onSectionSelected: (_) {},
+                ),
               ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     ),
   );
   await tester.pump();
