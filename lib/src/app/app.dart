@@ -528,14 +528,24 @@ class MainAppState extends State<MainApp>
 
   @override
   Widget build(BuildContext context) {
+    final settingsComposition = _settingsSliceComposition;
+    final providerSettingsComposition = _providerSettingsSliceComposition;
+
     // 根 `ProviderScope` 由 MainApp 自己提供，而不是放在 `main.dart`：
     // 那样每个 pump MainApp 的测试都要自己补一层，接线一旦漏掉就是运行期
     // "No ProviderScope found"，而不是编译期错误。
     return ProviderScope(
+      // Riverpod 只允许原地更新等长的 overrides。等待持久化语言时，Provider
+      // 管理切片会在首帧之后才完成组合；此时用新 key 替换仍处于启动页的容器，
+      // 避免对旧容器追加 overrides。IdeHome 尚未挂载，因此不会丢失工作区状态。
+      key: ValueKey<(bool, bool)>((
+        settingsComposition != null,
+        providerSettingsComposition != null,
+      )),
       observers: widget.observability?.providerObservers,
       overrides: [
         zetaMetricsPortProvider.overrideWithValue(_metrics),
-        if (_settingsSliceComposition case final composition?) ...[
+        if (settingsComposition case final composition?) ...[
           appearanceSettingsSliceStoreProvider.overrideWithValue(
             composition.appearanceStore,
           ),
@@ -543,7 +553,7 @@ class MainAppState extends State<MainApp>
             composition.generalStore,
           ),
         ],
-        if (_providerSettingsSliceComposition case final composition?) ...[
+        if (providerSettingsComposition case final composition?) ...[
           agentProviderSettingsSliceStoreProvider.overrideWithValue(
             composition.store,
           ),

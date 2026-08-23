@@ -53,6 +53,38 @@ void main() {
     expect(WidgetsLocalizations.of(context), isNotNull);
   });
 
+  testWidgets('production slice flags survive deferred locale bootstrap', (
+    tester,
+  ) async {
+    final store = _DeferredGeneralSettingsStore();
+    final controller = GeneralSettingsController(store: store);
+    addTearDown(controller.dispose);
+
+    await _pumpMainApp(
+      tester,
+      generalSettingsController: controller,
+      waitForGeneralSettings: true,
+      conversationSliceEnabled: true,
+      settingsSliceEnabled: true,
+      providerManagementSliceEnabled: true,
+      projectThreadsSliceEnabled: true,
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey<String>('zeta.localization-loading')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+
+    store.complete();
+    await tester.pump();
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    expect(find.byType(IdeHome), findsOneWidget);
+  });
+
   testWidgets('wait path freezes the persisted app language', (tester) async {
     final englishStore = _DeferredGeneralSettingsStore(
       const GeneralSettings(appLanguage: AppLanguage.english),
@@ -244,6 +276,10 @@ Future<void> _pumpMainApp(
   AppearanceSettingsController? appearanceController,
   AppLanguage? displayLanguageOverride,
   bool waitForGeneralSettings = false,
+  bool conversationSliceEnabled = false,
+  bool settingsSliceEnabled = false,
+  bool providerManagementSliceEnabled = false,
+  bool projectThreadsSliceEnabled = false,
 }) async {
   tester.view
     ..physicalSize = const Size(1400, 900)
@@ -268,6 +304,10 @@ Future<void> _pumpMainApp(
       appearanceController: appearanceController,
       displayLanguageOverride: displayLanguageOverride,
       waitForGeneralSettings: waitForGeneralSettings,
+      conversationSliceEnabled: conversationSliceEnabled,
+      settingsSliceEnabled: settingsSliceEnabled,
+      providerManagementSliceEnabled: providerManagementSliceEnabled,
+      projectThreadsSliceEnabled: projectThreadsSliceEnabled,
     ),
   );
 }
