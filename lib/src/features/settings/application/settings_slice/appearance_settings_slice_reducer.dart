@@ -141,6 +141,23 @@ appearanceSettingsSliceReduce(
       }
       return Transition.none(state);
 
+    case AppearanceFontCatalogRequested():
+      return Transition(state, <AppearanceSettingsSliceEffect>[
+        AppearanceFontCatalogLoadEffect(forCodeFont: intent.forCodeFont),
+      ]);
+
+    case AppearanceFontCatalogLoaded():
+      final nextCatalog = intent.forCodeFont
+          ? state.catalog.copyWith(codeOptions: intent.options)
+          : state.catalog.copyWith(uiOptions: intent.options);
+      final mergedDisplayNames = <String, String>{...nextCatalog.displayNames}
+        ..addAll(intent.displayNames);
+      return Transition.stateOnly(
+        state.copyWith(
+          catalog: nextCatalog.copyWith(displayNames: mergedDisplayNames),
+        ),
+      );
+
     case AppearanceSettingsPersisted():
     case AppearanceSettingsPersistFailed():
       // 语义 A：值在发起时已应用，回执不改变状态。

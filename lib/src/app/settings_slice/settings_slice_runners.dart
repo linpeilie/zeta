@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:zeta_foundation/zeta_foundation.dart';
 
+import 'package:zeta/src/features/settings/application/appearance_font_option.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_effect.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_mapping.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_state.dart';
@@ -45,6 +46,44 @@ final class AppearanceSettingsSliceRunnerAdapter
         unawaited(_persist(effect));
       case AppearanceFontChoiceResolveEffect():
         unawaited(_resolve(effect));
+      case AppearanceFontCatalogLoadEffect():
+        unawaited(_loadCatalog(effect));
+    }
+  }
+
+  /// 字体目录投影：界面槽位「跟随默认」在前、代码槽位 bundled 在前，
+  /// 其余按系统目录——与现有 controller 的选项构造一致。
+  /// 失败以空列表回执（弹层显示为空而非报错）。
+  Future<void> _loadCatalog(AppearanceFontCatalogLoadEffect effect) async {
+    try {
+      final families = effect.forCodeFont
+          ? await _fontCatalog.codeFontFamilies()
+          : await _fontCatalog.uiFontFamilies();
+      _sliceStore.fontCatalogLoaded(
+        forCodeFont: effect.forCodeFont,
+        options: <AppearanceFontOption>[
+          if (effect.forCodeFont)
+            const AppearanceFontOption.bundledJetBrainsMono()
+          else
+            const AppearanceFontOption.systemDefault(),
+          ...families.map(AppearanceFontOption.system),
+        ],
+        displayNames: <String, String>{
+          for (final family in families)
+            family.familyName.toLowerCase(): family.displayName,
+        },
+      );
+    } catch (error, stackTrace) {
+      _log.w(
+        'Could not load system font catalog via slice',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      _sliceStore.fontCatalogLoaded(
+        forCodeFont: effect.forCodeFont,
+        options: const <AppearanceFontOption>[],
+        displayNames: const <String, String>{},
+      );
     }
   }
 

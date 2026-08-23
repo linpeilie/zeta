@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 
+import 'package:zeta/src/features/settings/application/appearance_font_option.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_effect.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_intent.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_reducer.dart';
@@ -171,6 +172,32 @@ void main() {
 
       expect(state.pendingUiFontChoiceOperationId, _id(1, 's.f'));
       expect(state.pendingCodeFontChoiceOperationId, _id(2, 's.f'));
+    });
+  });
+
+  group('appearance reducer · 字体目录投影', () {
+    test('请求产出目录 effect；载入替换对应槽位并合并展示名', () {
+      final requested = appearanceSettingsSliceReduce(
+        const AppearanceSettingsSliceState(),
+        const AppearanceFontCatalogRequested(forCodeFont: false),
+      );
+      expect(requested.effects.single, isA<AppearanceFontCatalogLoadEffect>());
+
+      const uiOption = AppearanceFontOption.systemDefault();
+      final loaded = appearanceSettingsSliceReduce(
+        requested.state,
+        AppearanceFontCatalogLoaded(
+          forCodeFont: false,
+          options: const <AppearanceFontOption>[uiOption],
+          displayNames: const <String, String>{'maple ui': 'Maple UI'},
+        ),
+      );
+      expect(loaded.state.catalog.uiOptions, const <AppearanceFontOption>[
+        uiOption,
+      ]);
+      expect(loaded.state.catalog.displayNames['maple ui'], 'Maple UI');
+      // 代码槽位不受界面槽位载入影响。
+      expect(loaded.state.catalog.codeOptions, isNull);
     });
   });
 

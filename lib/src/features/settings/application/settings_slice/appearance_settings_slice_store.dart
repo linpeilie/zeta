@@ -1,6 +1,7 @@
 import 'package:meta/meta.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 
+import 'package:zeta/src/features/settings/application/appearance_font_option.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_effect.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_intent.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_reducer.dart';
@@ -175,6 +176,11 @@ final class AppearanceSettingsSliceStore {
     return id;
   }
 
+  /// 请求字体目录选项（幂等；结果经 runner 回流 `fontCatalogLoaded`）。
+  void requestFontCatalog({required bool forCodeFont}) {
+    dispatch(AppearanceFontCatalogRequested(forCodeFont: forCodeFont));
+  }
+
   // -------------------------------------------------------------------------
   // 结果入口：effect runner / ingress 回流
   // -------------------------------------------------------------------------
@@ -199,6 +205,21 @@ final class AppearanceSettingsSliceStore {
 
   void fontChoiceRejected(OperationId operationId) {
     dispatch(AppearanceFontChoiceRejected(operationId));
+  }
+
+  /// 字体目录载入回流（runner 调）。
+  void fontCatalogLoaded({
+    required bool forCodeFont,
+    required List<AppearanceFontOption> options,
+    required Map<String, String> displayNames,
+  }) {
+    dispatch(
+      AppearanceFontCatalogLoaded(
+        forCodeFont: forCodeFont,
+        options: options,
+        displayNames: displayNames,
+      ),
+    );
   }
 
   void persisted(OperationId operationId) {

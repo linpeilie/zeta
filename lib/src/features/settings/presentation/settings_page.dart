@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'package:zeta/src/app/localization/zeta_localization.dart';
+import 'package:zeta/src/features/settings/application/appearance_font_option.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
 import 'package:zeta/src/features/settings/application/general_settings_controller.dart';
 import 'package:zeta/src/features/settings/application/general_settings_update_result.dart';

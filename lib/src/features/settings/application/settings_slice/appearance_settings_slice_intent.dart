@@ -1,5 +1,6 @@
 import 'package:zeta_foundation/zeta_foundation.dart';
 
+import 'package:zeta/src/features/settings/application/appearance_font_option.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_state.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 
@@ -88,6 +89,29 @@ final class AppearanceFontChoiceRejected extends AppearanceSettingsSliceIntent {
   const AppearanceFontChoiceRejected(this.operationId);
 
   final OperationId operationId;
+}
+
+/// 请求载入字体目录选项（界面 / 代码槽位）。
+///
+/// 目录是 OS 只读投影：请求幂等、可重复发起，最后一次结果生效。
+final class AppearanceFontCatalogRequested
+    extends AppearanceSettingsSliceIntent {
+  const AppearanceFontCatalogRequested({required this.forCodeFont});
+
+  final bool forCodeFont;
+}
+
+/// 字体目录载入完成；失败时 runner 以空列表回执（弹层显示为空而非报错）。
+final class AppearanceFontCatalogLoaded extends AppearanceSettingsSliceIntent {
+  const AppearanceFontCatalogLoaded({
+    required this.forCodeFont,
+    required this.options,
+    required this.displayNames,
+  });
+
+  final bool forCodeFont;
+  final List<AppearanceFontOption> options;
+  final Map<String, String> displayNames;
 }
 
 /// persist 成功回执。语义 A 下不改变状态（值早已应用）。

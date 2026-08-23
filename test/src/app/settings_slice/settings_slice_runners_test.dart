@@ -210,6 +210,23 @@ void main() {
       expect(systemDefault.scope, SettingsOperationScopes.appearanceFontChoice);
     });
 
+    test('字体目录投影：界面槽位默认项在前，展示名进映射', () async {
+      final store = _appearanceStoreWith(
+        dataStore: MemoryAppearanceSettingsStore(),
+        fontCatalog: _FakeFontCatalog(families: const [_systemFont]),
+      );
+
+      store.requestFontCatalog(forCodeFont: false);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(store.state.catalog.uiOptions?.length, 2);
+      expect(
+        store.state.catalog.uiOptions?.first.choice.kind,
+        AppearanceFontChoiceKind.systemDefault,
+      );
+      expect(store.state.catalog.displayNames['maple ui'], 'Maple UI');
+    });
+
     test('系统字体经目录解析成功后应用并持久化', () async {
       final dataStore = MemoryAppearanceSettingsStore();
       final store = _appearanceStoreWith(

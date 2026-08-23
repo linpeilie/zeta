@@ -31,6 +31,17 @@ final class AppearanceSettingsPersistEffect
   final AppearanceSettingsSlice value;
 }
 
+/// 载入字体目录选项（界面 / 代码槽位）。
+///
+/// runner 经 `SystemFontCatalogService` 读取；失败时以空列表回执
+/// `AppearanceFontCatalogLoaded`，弹层显示为空而非报错。
+final class AppearanceFontCatalogLoadEffect
+    extends AppearanceSettingsSliceEffect {
+  const AppearanceFontCatalogLoadEffect({required this.forCodeFont});
+
+  final bool forCodeFont;
+}
+
 /// 经系统字体目录解析字体选择（代码槽位要求等宽）。
 ///
 /// kind 规则由 runner 执行，与现状一致：界面槽位拒绝 bundled、代码槽位
