@@ -73,6 +73,12 @@
 > 接受缩短 3a/3b 原定观察余量并直接执行四步节奏第 4 步。三个旧
 > `ChangeNotifier` owner、两个批内 flag、Shell usage 装配链和 false-path 已删除；
 > 第 3 批固定为 MVI 单一路径。该授权不改变第 1、2 批独立的观察与回滚边界。
+>
+> **第 4 批 4a 默认关闭路径落地记录（2026-08-23）**：经“继续进行第 4 批”显式确认，
+> 先迁 Workspace context；`workspaceSliceEnabled` 默认并在生产入口显式保持
+> `false`。新 store dormant 时不接收业务写入，旧 Shell 字段仍是唯一 owner；完整
+> 重构门禁已通过。4b IDE Session、4a 翻旗和关批均未获授权。字段契约见
+> [第 4 批开工文档](phase3_batch4_workspace_ide_session.md)。
 
 **关门标准（每批合入的条件）**，逐条来自目标架构 Phase 3 验收标准：
 
@@ -189,13 +195,13 @@ Widget 禁止订阅（§11.3 告警项 + 守卫）。
 | --- | --- | --- |
 | `knownApplicationToPresentation`（当前 1，基线 2） | ~~`project_threads_controller`~~ | ✅ 第 3 批 3a 已清零 |
 | | `agent_thread_workspace_controller` | 第 5 批 |
-| `knownApplicationFlutterImports`（当前 10，基线 12） | settings ×2（appearance / general controller） | 第 1 批 |
+| `knownApplicationFlutterImports`（4a 后当前 9，基线 12） | settings ×2（appearance / general controller） | 第 1 批 |
 | | `agent_provider_settings_controller`、`agent_provider_settings_port`、`agent_management_controller` | 第 2 批 |
 | | ~~`usage_statistics_controller`、`agent_usage_panel_controller`~~ | ✅ 第 3 批已清零 |
-| | `workspace_file_index_controller` | 第 4 批 |
+| | ~~`workspace_file_index_controller`~~ | ✅ 第 4 批 4a 已清零 |
 | | `agent_conversation_mode_controller`、`agent_conversation_model_selection_controller`、`agent_skills_catalog_controller`、`agent_thread_workspace_controller` | 第 5 批 |
-| `knownDomainImpurities`（当前 1，基线 4） | ~~settings domain ×3（`appearance_settings` / `general_settings` / `system_font_family`）~~ | ✅ 第 1 批已清零（§3.2 决策点 A） |
-| | `workspace_directory_rules` | 第 4 批 |
+| `knownDomainImpurities`（4a 后当前 0，基线 4） | ~~settings domain ×3（`appearance_settings` / `general_settings` / `system_font_family`）~~ | ✅ 第 1 批已清零（§3.2 决策点 A） |
+| | ~~`workspace_directory_rules`~~ | ✅ 第 4 批 4a 清理过期清单项 |
 | ~~`_knownExternalViolations`（7，全在 `core/`）~~ | ~~`app_logging` ×2、`sensitive_data_redactor`、`atomic_text_file`、`zeta_data_paths`、`path_utils`、`system_file_manager`~~ | ✅ 2026-08-23 已清零（开工文档起草当天，独立于任何迁移批）：IO 下沉 `app/storage` / `app/logging` / `ui/core`，路径与脱敏注入化 |
 | `_agentCoreFlutterBaseline = 17` | `zeta_agent_core` 的 `flutter/foundation` 依赖 | 不绑单批：随相关监听方改造递减，Phase 4 前清零；日志 sink 单例例外（§12.10）在其取消条件满足（内核用日志的类改构造注入）时一并删除 |
 
@@ -398,7 +404,7 @@ capability 位与 UI 入口的 G4 对照表、`AgentProviderSettingsPort` 消费
 
 ---
 
-## 6. 第 4 批：workspace + ide session（框架级）
+## 6. 第 4 批：workspace + ide session（4a 默认关闭路径已落地）
 
 - **workspace**：文件树/展开/选择状态的 owner 现在是 `IdeShellController`
   本身（`_workspaceTree`、`_expandedDirectoryPaths`、`_selectedTreePath`、

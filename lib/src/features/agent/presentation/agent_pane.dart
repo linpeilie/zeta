@@ -17,6 +17,7 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/features/agent/application/agent_conversation_mode_controller.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
+import 'package:zeta/src/features/workspace/application/workspace_file_corpus_port.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 import 'package:zeta/src/ui/core/ide_image_preview.dart';
 import 'package:zeta_ui/zeta_ui.dart';
@@ -1179,7 +1180,7 @@ class _AgentPaneState extends State<AgentPane> {
           listController: _mentionFileListController,
           candidatesFor: (query) =>
               widget.viewModel.mentionCandidateFiles(query: query),
-          filesListenable: widget.viewModel.workspaceFilesListenable,
+          fileCorpus: widget.viewModel.workspaceFileCorpus,
           isIndexReady: () => widget.viewModel.isWorkspaceFileIndexReady,
           onSelect: _selectMentionFromPicker,
           onRequestClose: _mentionPopoverController.dismiss,

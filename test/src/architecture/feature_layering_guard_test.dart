@@ -24,7 +24,7 @@ void main() {
 
   /// application 仍 import Flutter 的既有文件（**只允许变少**）。
   ///
-  /// 目标架构 §12.5 明确禁止 application import Flutter。这 10 个都是
+  /// 目标架构 §12.5 明确禁止 application import Flutter。剩余项都是
   /// `ChangeNotifier` 形态的既有 controller，属于拆包前的设计，随 Phase 2/3
   /// 转成 MVI 切片时清掉。新增一律不允许——Phase 2 切片就因为搬家时把
   /// `@immutable` / `setEquals` 一起带进来踩过一次。
@@ -38,16 +38,13 @@ void main() {
     'lib/src/features/agent_management/application/agent_management_controller.dart',
     'lib/src/features/settings/application/appearance_settings_controller.dart',
     'lib/src/features/settings/application/general_settings_controller.dart',
-    'lib/src/features/workspace/application/workspace_file_index_controller.dart',
   };
 
   /// domain 纯度的既有例外（**只允许变少**）。
   ///
   /// settings ×3 已于 2026-08-23 清零（Phase 3 第 1 批：`ThemeMode` 换纯枚举
   /// `ZetaThemeModePreference`，`@immutable` 换 `package:meta`）。
-  const knownDomainImpurities = <String>{
-    'lib/src/features/workspace/domain/workspace_directory_rules.dart',
-  };
+  const knownDomainImpurities = <String>{};
 
   final featuresRoot = Directory('lib/src/features');
 

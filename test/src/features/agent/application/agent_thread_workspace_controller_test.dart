@@ -5,6 +5,7 @@ import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/application/agent_thread_workspace_controller.dart';
 import 'package:zeta/src/features/agent/data/agent_model_catalog_cache_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
+import 'package:zeta/src/features/workspace/application/workspace_file_corpus_port.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
 
@@ -133,7 +134,7 @@ void main() {
       final schedulers = <FakeAgentFrameScheduler>[];
       final controller = AgentThreadWorkspaceController(
         providerController: providerController,
-        workspaceFilesProvider: () => const <WorkspaceNode>[],
+        workspaceFileCorpus: _emptyWorkspaceFileCorpus(),
         runtimeRegistry: registry,
         onTurnTerminal: signals.add,
         uiFrameSchedulerFactory: () {
@@ -197,7 +198,7 @@ final class _WorkspaceHarness {
     );
     controller = AgentThreadWorkspaceController(
       providerController: providerController,
-      workspaceFilesProvider: () => const <WorkspaceNode>[],
+      workspaceFileCorpus: _emptyWorkspaceFileCorpus(),
       runtimeRegistry: registry,
       uiFrameSchedulerFactory: () {
         final scheduler = FakeAgentFrameScheduler();
@@ -250,6 +251,15 @@ final class _WorkspaceHarness {
     providerController.dispose();
     await registry.close();
   }
+}
+
+WorkspaceFileCorpusPort _emptyWorkspaceFileCorpus() {
+  return CallbackWorkspaceFileCorpusPort(
+    filesProvider: () => const <WorkspaceNode>[],
+    isReadyProvider: () => true,
+    addListenerCallback: (_) {},
+    removeListenerCallback: (_) {},
+  );
 }
 
 /// 与 [AgentPaneFakeProviderFactory] 不同：每次 create 返回**新**实例，

@@ -22,6 +22,7 @@ import 'package:zeta/src/features/agent/application/conversation_slice/agent_con
 import 'package:zeta/src/features/agent/presentation/agent_conversation_ui_state.dart';
 import 'package:zeta/src/features/agent/presentation/agent_ui_update_scheduler.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_model_config_ui_state.dart';
+import 'package:zeta/src/features/workspace/application/workspace_file_corpus_port.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_file_query.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 
@@ -77,9 +78,7 @@ class AgentConversationViewModel {
     AgentConversationModelSelectionController? modelSelectionController,
     AgentConversationModeController? conversationModeController,
     AgentSkillsCatalogController? skillsCatalogController,
-    this.workspaceFilesProvider,
-    this.workspaceFilesListenable,
-    this.workspaceFilesIndexReady,
+    this.workspaceFileCorpus,
     this.onTurnTerminal,
     this.onAttention,
     this.onProviderSwitchRequested,
@@ -205,14 +204,8 @@ class AgentConversationViewModel {
   /// 按边界采样事件管线诊断的指标上报器（共享层零改动）。
   late final AgentPipelineMetricsReporter _pipelineMetrics;
 
-  /// 可选：从 shell 注入工作区文件列表，供 @mention 选择器使用。
-  final List<WorkspaceNode> Function()? workspaceFilesProvider;
-
-  /// 可选：工作区文件语料就绪/失效时通知（例如后台索引完成），供 @mention 刷新。
-  final Listenable? workspaceFilesListenable;
-
-  /// 可选：后台完整语料是否已就绪；未注入时视为就绪（直接使用 provider 结果）。
-  final bool Function()? workspaceFilesIndexReady;
+  /// 可选的工作区文件查询端口，供 @mention 读取与订阅。
+  final WorkspaceFileCorpusPort? workspaceFileCorpus;
 
   /// 当前会话的回合进入终态后，将已校验的白名单身份通知应用组合层。
   final AgentTurnTerminalCallback? onTurnTerminal;
@@ -230,8 +223,7 @@ class AgentConversationViewModel {
   final AgentTurnContextStore? turnContextStore;
 
   /// 后台文件索引是否已就绪；无注入时恒为 true。
-  bool get isWorkspaceFileIndexReady =>
-      workspaceFilesIndexReady?.call() ?? true;
+  bool get isWorkspaceFileIndexReady => workspaceFileCorpus?.isReady ?? true;
 
   final AgentProviderSettingsPort providerController;
   final AgentConversationBinding conversationBinding;
@@ -931,7 +923,7 @@ class AgentConversationViewModel {
 
   /// 供 @mention 选择器使用的工作区文件（已扁平化 + 模糊子序列排序）。
   List<WorkspaceNode> mentionCandidateFiles({String query = ''}) {
-    final source = workspaceFilesProvider?.call() ?? const <WorkspaceNode>[];
+    final source = workspaceFileCorpus?.files ?? const <WorkspaceNode>[];
     return fuzzyRankWorkspaceFiles(
       _flattenFileNodes(source),
       query: query,

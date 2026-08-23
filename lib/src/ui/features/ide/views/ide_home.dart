@@ -48,6 +48,7 @@ import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_slice/usage_statistics_slice_providers.dart';
 import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_slice_composition.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
+import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 import 'package:zeta/src/features/workspace/presentation/file_tree_pane.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/ui/localization/app_localizations_x.dart';
@@ -58,6 +59,7 @@ import 'package:zeta/src/ui/features/ide/views/project_list_pane.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:zeta/src/features/agent/application/agent_thread_workspace_controller.dart';
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
+import 'package:zeta/src/features/workspace/presentation/workspace_slice/workspace_slice_providers.dart';
 
 typedef AgentProviderAvailabilityLoader =
     Future<List<AgentProviderConfig>> Function();
@@ -96,6 +98,7 @@ class IdeHome extends StatefulWidget {
         const FallbackDesktopAttentionTextCatalog(),
     this.metrics = noopZetaMetricsPort,
     this.conversationSliceEnabled = false,
+    this.workspaceSliceEnabled = false,
     this.providerManagementSliceEnabled = false,
     this.agentManagementTextCatalog =
         const FallbackAgentManagementTextCatalog(),
@@ -141,6 +144,9 @@ class IdeHome extends StatefulWidget {
   ///
   /// false = 走旧 ViewModel 直连路径（测试默认）；生产由 `main` 显式传 true。
   final bool conversationSliceEnabled;
+
+  /// Phase 3 第 4 批 4a Workspace 切片 flag。
+  final bool workspaceSliceEnabled;
 
   /// Phase 3 第 2 批：true 时只创建 management page store，false 时只创建旧
   /// controller。生产翻旗由 app 根统一控制。
@@ -255,6 +261,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
       agentUiTextCatalog: widget.agentUiTextCatalog,
       metrics: widget.metrics,
       conversationSliceEnabled: widget.conversationSliceEnabled,
+      workspaceSliceEnabled: widget.workspaceSliceEnabled,
       agentProviderSettingsPort: widget.agentProviderSettingsPort,
       activeModelCatalogLoader: widget.activeModelCatalogLoader,
     )..addListener(_handleShellChanged);
@@ -546,6 +553,9 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
       overrides: [
         projectThreadsSliceStoreProvider.overrideWithValue(
           _shellController.projectThreadsSliceStore,
+        ),
+        workspaceSliceStoreProvider.overrideWithValue(
+          _shellController.workspaceSliceStore,
         ),
       ],
       child: body,
@@ -962,17 +972,47 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   }
 
   Widget _buildFilesPanel() {
-    return PanelCard(
-      key: const ValueKey('files-panel-card'),
-      child: FileTreePane(
+    Widget buildPanel({
+      required List<WorkspaceNode> nodes,
+      required Set<String> expandedPaths,
+      required String? selectedPath,
+      required String? projectPath,
+      required bool isLoading,
+    }) {
+      return PanelCard(
+        key: const ValueKey('files-panel-card'),
+        child: FileTreePane(
+          nodes: nodes,
+          expandedPaths: expandedPaths,
+          selectedPath: selectedPath,
+          projectPath: projectPath,
+          isLoading: isLoading,
+          onNodeTap: _shellController.handleTreeNodeTap,
+          onExpansionChanged: _shellController.handleTreeExpansionChanged,
+        ),
+      );
+    }
+
+    if (!widget.workspaceSliceEnabled) {
+      return buildPanel(
         nodes: _shellController.workspaceTree,
         expandedPaths: _shellController.expandedDirectoryPaths,
         selectedPath: _shellController.selectedTreePath,
         projectPath: _shellController.activeProjectPath,
         isLoading: _shellController.isLoadingProject,
-        onNodeTap: _shellController.handleTreeNodeTap,
-        onExpansionChanged: _shellController.handleTreeExpansionChanged,
-      ),
+      );
+    }
+    return Consumer(
+      builder: (context, ref, _) {
+        final state = ref.watch(workspaceSliceProvider);
+        return buildPanel(
+          nodes: state.tree,
+          expandedPaths: state.expandedDirectoryPaths,
+          selectedPath: state.selectedTreePath,
+          projectPath: state.activeProjectPath,
+          isLoading: state.isLoadingProject,
+        );
+      },
     );
   }
 

@@ -62,7 +62,7 @@ class _AgentMentionFilePickerPopover extends StatefulWidget {
     required this.candidatesFor,
     required this.onSelect,
     required this.onRequestClose,
-    this.filesListenable,
+    this.fileCorpus,
     this.isIndexReady,
   });
 
@@ -75,7 +75,7 @@ class _AgentMentionFilePickerPopover extends StatefulWidget {
   final VoidCallback onRequestClose;
 
   /// 后台语料就绪时通知，用于在 popover 打开期间刷新候选。
-  final Listenable? filesListenable;
+  final WorkspaceFileCorpusPort? fileCorpus;
 
   /// 完整文件索引是否已就绪；未注入时视为就绪。
   final bool Function()? isIndexReady;
@@ -92,16 +92,16 @@ class _AgentMentionFilePickerPopoverState
     super.initState();
     widget.documentController.addListener(_handleDocumentChanged);
     widget.listController.addListener(_handleListChanged);
-    widget.filesListenable?.addListener(_handleFilesChanged);
+    widget.fileCorpus?.addListener(_handleFilesChanged);
     _refreshCandidates();
   }
 
   @override
   void didUpdateWidget(covariant _AgentMentionFilePickerPopover oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.filesListenable != widget.filesListenable) {
-      oldWidget.filesListenable?.removeListener(_handleFilesChanged);
-      widget.filesListenable?.addListener(_handleFilesChanged);
+    if (!identical(oldWidget.fileCorpus, widget.fileCorpus)) {
+      oldWidget.fileCorpus?.removeListener(_handleFilesChanged);
+      widget.fileCorpus?.addListener(_handleFilesChanged);
       _refreshCandidates();
     }
   }
@@ -110,7 +110,7 @@ class _AgentMentionFilePickerPopoverState
   void dispose() {
     widget.documentController.removeListener(_handleDocumentChanged);
     widget.listController.removeListener(_handleListChanged);
-    widget.filesListenable?.removeListener(_handleFilesChanged);
+    widget.fileCorpus?.removeListener(_handleFilesChanged);
     super.dispose();
   }
 

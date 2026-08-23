@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/main.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
+import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 
 import '../../../testing/ide_test_harness.dart';
 
@@ -130,6 +131,65 @@ void main() {
     await tester.tap(find.byKey(fileNodeKey('lib')));
     await tester.pumpAndSettle();
 
+    expect(find.text('main.dart'), findsOneWidget);
+  });
+
+  testWidgets('workspace slice opens, selects, persists and restores lazily', (
+    tester,
+  ) async {
+    _useWideWindow(tester);
+    final session = MemorySessionStore();
+    final directory = Directory.systemTemp.createTempSync('zeta_slice_test_');
+    tempDirectories.add(directory);
+    final folder = Directory('${directory.path}${Platform.pathSeparator}lib')
+      ..createSync();
+    final file = File('${folder.path}${Platform.pathSeparator}main.dart')
+      ..writeAsStringSync('void main() {}');
+
+    MainApp buildApp({Future<String?> Function()? directoryPicker}) {
+      return MainApp(
+        enableNativeWindowFrame: true,
+        showWindowControls: false,
+        workspaceSliceEnabled: true,
+        directoryPicker: directoryPicker,
+        sessionLoader: session.load,
+        sessionSaver: session.save,
+        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
+          FakeAgentProvider(),
+        ),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      );
+    }
+
+    await tester.pumpWidget(
+      buildApp(directoryPicker: () async => directory.path),
+    );
+    await openProjectFromMenu(tester);
+    await tester.runAsync(waitForIo);
+    await tester.pumpAndSettle();
+    await _openFilesPanel(tester);
+
+    expect(find.text('main.dart'), findsNothing);
+    await tester.tap(find.byKey(fileNodeKey('lib')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(fileNodeKey('main.dart')));
+    await tester.pumpAndSettle();
+    await pumpSessionSave(tester);
+
+    final persisted = IdeSessionState.tryDecode(session.value)!;
+    expect(persisted.activeProjectPath, directory.path);
+    expect(persisted.expandedDirectoryPaths, contains(folder.path));
+    expect(persisted.selectedTreeKey, file.path);
+    expect(persisted.currentFilePath, file.path);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await tester.pumpWidget(buildApp());
+    await tester.runAsync(waitForIo);
+    await tester.pumpAndSettle();
+    await _openFilesPanel(tester);
+
+    expect(find.text('lib'), findsOneWidget);
     expect(find.text('main.dart'), findsOneWidget);
   });
 }

@@ -9,7 +9,7 @@ import 'package:zeta/src/features/agent/application/agent_provider_settings_port
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_binding.dart';
-import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
+import 'package:zeta/src/features/workspace/application/workspace_file_corpus_port.dart';
 
 /// Agent Canvas 中单个常驻线程/草稿的逻辑标识。
 sealed class AgentThreadWorkspaceKey {
@@ -202,12 +202,10 @@ class AgentThreadWorkspaceEntry extends ChangeNotifier {
 class AgentThreadWorkspaceController extends ChangeNotifier {
   AgentThreadWorkspaceController({
     required this.providerController,
-    required this._workspaceFilesProvider,
+    required this.workspaceFileCorpus,
     required this.runtimeRegistry,
     AgentConversationBindingManager? bindingManager,
     AgentProviderGlobalRuntime? globalRuntime,
-    this._workspaceFilesListenable,
-    this._workspaceFilesIndexReady,
     this._onTurnTerminal,
     this._onAttention,
     this.onCreatedThread,
@@ -230,9 +228,8 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
     this.bindingManager.start();
   }
 
-  final List<WorkspaceNode> Function() _workspaceFilesProvider;
-  final Listenable? _workspaceFilesListenable;
-  final bool Function()? _workspaceFilesIndexReady;
+  /// @mention 只经 workspace 查询端口取语料，不拼接索引实现或 Flutter listener。
+  final WorkspaceFileCorpusPort workspaceFileCorpus;
   final AgentProviderRuntimeRegistry runtimeRegistry;
   final AgentProviderSettingsPort providerController;
 
@@ -489,9 +486,7 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
       conversationBinding: bindingLease.binding,
       globalRuntime: globalRuntime,
       textCatalog: _textCatalog,
-      workspaceFilesProvider: _workspaceFilesProvider,
-      workspaceFilesListenable: _workspaceFilesListenable,
-      workspaceFilesIndexReady: _workspaceFilesIndexReady,
+      workspaceFileCorpus: workspaceFileCorpus,
       onTurnTerminal: _onTurnTerminal,
       onProviderSwitchRequested: (providerId) async {
         final draft = ensureDraftEntry(

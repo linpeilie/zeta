@@ -17,6 +17,7 @@ import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
+import 'package:zeta/src/features/workspace/application/workspace_file_corpus_port.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta_ui/zeta_ui.dart';
@@ -253,9 +254,16 @@ AgentConversationViewModel createAgentPaneViewModelWithStore(
     conversationBinding: bindingLease.binding,
     globalRuntime: bindingHarness.globalRuntime,
     conversationModeController: conversationModeController,
-    workspaceFilesProvider: workspaceFilesProvider,
-    workspaceFilesListenable: workspaceFilesListenable,
-    workspaceFilesIndexReady: workspaceFilesIndexReady,
+    workspaceFileCorpus: workspaceFilesProvider == null
+        ? null
+        : CallbackWorkspaceFileCorpusPort(
+            filesProvider: workspaceFilesProvider,
+            isReadyProvider: workspaceFilesIndexReady ?? () => true,
+            addListenerCallback: (listener) =>
+                workspaceFilesListenable?.addListener(listener),
+            removeListenerCallback: (listener) =>
+                workspaceFilesListenable?.removeListener(listener),
+          ),
     initialProjectPath: initialThread?.projectPath ?? '/repo',
     initialThread: initialThread,
   );

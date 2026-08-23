@@ -2,8 +2,6 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
 
-import 'package:flutter/foundation.dart';
-
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta/src/features/workspace/application/workspace_file_indexer.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_directory_rules.dart';
@@ -31,9 +29,9 @@ typedef WorkspaceDirectoryWatchFactory =
 /// - **join 后补跑**：若 await 到的 walk 因 invalidate/失败/脏标记未提交最终语料，
 ///   后续 `index` 会重新发起 walk。
 /// - **Directory.watch**：`index` 后对 root 递归监听 create/delete/move；
-///   防抖后全量重扫，并经 [ChangeNotifier] 通知 @mention 等监听者。
+///   防抖后全量重扫，并经纯 Dart listener 通知 @mention 等监听者。
 /// - 遍历失败仅记日志，语料保持未就绪，调用方回退惰性目录树。
-class WorkspaceFileIndexController extends ChangeNotifier {
+class WorkspaceFileIndexController {
   WorkspaceFileIndexController({
     WorkspaceFileWalkRunner? runWalk,
     WorkspaceDirectoryWatchFactory? watchDirectory,
@@ -54,6 +52,7 @@ class WorkspaceFileIndexController extends ChangeNotifier {
   final Map<String, StreamSubscription<FileSystemEvent>> _watches =
       <String, StreamSubscription<FileSystemEvent>>{};
   final Map<String, Timer> _reindexTimers = <String, Timer>{};
+  final List<void Function()> _listeners = <void Function()>[];
 
   /// 在途 walk 期间或防抖窗口内又收到相关 FS 事件时置位，walk 结束后再扫一轮。
   final Set<String> _dirtyRoots = <String>{};
@@ -148,6 +147,18 @@ class WorkspaceFileIndexController extends ChangeNotifier {
 
   /// 该 root 的语料是否已就绪。
   bool isReady(String root) => _corpora.containsKey(root);
+
+  /// 订阅语料就绪/失效；通知期间增删 listener 从下一轮开始生效。
+  void addListener(void Function() listener) {
+    if (_disposed || _listeners.contains(listener)) {
+      return;
+    }
+    _listeners.add(listener);
+  }
+
+  void removeListener(void Function() listener) {
+    _listeners.remove(listener);
+  }
 
   void _ensureWatching(String root) {
     if (_disposed || _watches.containsKey(root)) {
@@ -247,13 +258,20 @@ class WorkspaceFileIndexController extends ChangeNotifier {
   }
 
   void _notifyChanged() {
-    if (!_disposed) {
-      notifyListeners();
+    if (_disposed) {
+      return;
+    }
+    for (final listener in List<void Function()>.of(_listeners)) {
+      if (_listeners.contains(listener)) {
+        listener();
+      }
     }
   }
 
-  @override
   void dispose() {
+    if (_disposed) {
+      return;
+    }
     _disposed = true;
     for (final timer in _reindexTimers.values) {
       timer.cancel();
@@ -267,6 +285,6 @@ class WorkspaceFileIndexController extends ChangeNotifier {
     _inFlight.clear();
     _corpora.clear();
     _generations.clear();
-    super.dispose();
+    _listeners.clear();
   }
 }
