@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
@@ -8,7 +8,7 @@ import 'package:zeta/src/features/project_threads/domain/project_threads_session
 import 'package:zeta/src/features/project_threads/presentation/project_threads_view_model.dart';
 import 'package:zeta/src/features/project_threads/application/project_threads_session_snapshot_codec.dart';
 
-final _log = loggerFor('zeta.project_threads.controller');
+final _log = zetaLoggerFor('zeta.project_threads.controller');
 
 /// 搜索输入防抖时长。
 const Duration projectThreadSearchDebounce = Duration(milliseconds: 300);

@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:zeta/src/core/storage/atomic_text_file.dart';
+import 'package:zeta/src/app/storage/atomic_text_file.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';

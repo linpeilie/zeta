@@ -1,7 +1,7 @@
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_plugin_kernel/zeta_plugin_kernel.dart';
 
-import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta/src/app/logging/app_logging.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 

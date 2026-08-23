@@ -265,7 +265,7 @@ lint 已经覆盖的不再重复，这里只写 `flutter analyze` 抓不到的�
 - 现代空安全 Dart；优先 `const` 构造函数和不可变 Widget。
 - `build` 变大就拆私有 Widget 类；函数保持简短、职责单一。
 - 成员 `camelCase`，类 `PascalCase`，文件 `snake_case.dart`。
-- 不用 `print`。需要保留的诊断走 `dart:developer` 或 `lib/src/core/logging`。
+- 不用 `print`。需要保留的诊断走 `dart:developer` 或 `zetaLoggerFor`（`zeta_foundation`；宿主实现在 `lib/src/app/logging`，feature 层不得直接 import 它）。
 - 公共 API 写 `///`。**新代码优先中文注释**，重点覆盖协议适配、状态机、错误处理和不直观分支；不要写只复述代码字面行为的空注释。
 
 **状态与异步**

@@ -1,11 +1,9 @@
-import 'dart:io';
-
-import 'package:zeta/src/core/storage/zeta_data_paths.dart';
-
 /// 遮挡可能出现在诊断文本中的凭证、认证头和本机用户目录。
 ///
 /// 此函数只处理准备展示或记录的文本，不应把返回值用于协议请求或配置保存。
-String redactSensitiveText(String value) {
+/// 本模块保持纯 Dart：需要遮挡用户主目录的调用方必须显式传入
+/// [homeDirectory]（由宿主侧解析，如 app 组合层或 feature data 层）。
+String redactSensitiveText(String value, {String? homeDirectory}) {
   var result = value
       .replaceAllMapped(
         RegExp(
@@ -28,10 +26,7 @@ String redactSensitiveText(String value) {
         ),
         (match) => '${match.group(1)}${match.group(2)}••••••',
       );
-  final home = resolveUserHomeDirectory(
-    environment: Platform.environment,
-    isWindows: Platform.isWindows,
-  );
+  final home = homeDirectory;
   if (home != null && home.isNotEmpty) {
     result = result.replaceAll(home, '~');
   }

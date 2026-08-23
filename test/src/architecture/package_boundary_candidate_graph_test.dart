@@ -222,8 +222,11 @@ void main() {
         .where((path) => path.startsWith('lib/src/ui/core/'))
         .toList(growable: false);
 
-    // 只允许留下确实需要宿主能力（本机文件读取 + generated l10n）的封装。
-    expect(remaining, <String>['lib/src/ui/core/ide_image_preview.dart']);
+    // 只允许留下确实需要宿主能力（本机 IO）的封装。
+    expect(remaining, const <String>[
+      'lib/src/ui/core/ide_image_preview.dart',
+      'lib/src/ui/core/system_file_manager.dart',
+    ]);
   });
 
   test('zeta_agent_core 不反向依赖根 app，也不碰本机 IO', () {
@@ -454,16 +457,12 @@ const Set<String> _platformNeutralCoreLibraries = <String>{
 const Set<String> _knownEdgeViolations = <String>{};
 
 /// Phase 1 的燃尽清单：现存的外部依赖越界。
-const Set<String> _knownExternalViolations = <String>{
-  // core/ 目前同时承担纯契约与本机 IO；拆包时 IO 部分应下沉到 app 或独立适配层。
-  'lib/src/core/logging/app_logging.dart -> package:flutter/',
-  'lib/src/core/logging/app_logging.dart -> dart:io',
-  'lib/src/core/security/sensitive_data_redactor.dart -> dart:io',
-  'lib/src/core/storage/atomic_text_file.dart -> dart:io',
-  'lib/src/core/storage/zeta_data_paths.dart -> dart:io',
-  'lib/src/core/utils/path_utils.dart -> dart:io',
-  'lib/src/core/utils/system_file_manager.dart -> dart:io',
-};
+///
+/// 2026-08-23 清零：core/ 已只留纯契约与纯逻辑——IO 实现分别下沉到
+/// `lib/src/app/storage`（AtomicTextFile / 目录创建）、`lib/src/app/logging`
+/// （宿主日志实现）、`lib/src/ui/core`（系统文件管理器宿主封装）；
+/// `ZetaDataPaths` / 脱敏 / 目录过滤改为注入参数。新增条目必须先过架构评审。
+const Set<String> _knownExternalViolations = <String>{};
 
 /// 当前 `zeta_agent_core` 里依赖 `package:flutter/foundation.dart` 的文件数。
 const int _agentCoreFlutterBaseline = 17;

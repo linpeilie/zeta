@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:toml/toml.dart';
 
 import 'package:zeta/src/core/security/sensitive_data_redactor.dart';
+import 'package:zeta/src/core/storage/zeta_data_paths.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
@@ -733,7 +734,13 @@ String maskSensitiveConfiguration(String content) {
 
 /// 在日志进入 UI 前遮挡凭证、Authorization 值和用户目录。
 String redactLogLine(String line) {
-  return redactSensitiveText(line);
+  return redactSensitiveText(
+    line,
+    homeDirectory: resolveUserHomeDirectory(
+      environment: Platform.environment,
+      isWindows: Platform.isWindows,
+    ),
+  );
 }
 
 String _defaultCodexHome() {

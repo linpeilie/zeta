@@ -1,7 +1,8 @@
 import 'dart:io';
 
+import 'package:zeta/src/app/storage/zeta_data_file_system.dart';
 import 'package:zeta/src/app/zeta_storage_migrator.dart';
-import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta/src/app/logging/app_logging.dart';
 import 'package:zeta/src/core/storage/zeta_data_paths.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
@@ -49,7 +50,7 @@ class ZetaStartupBootstrap {
     var cohort = ZetaStorageCohort.fresh;
     var fallback = firstSystemLanguage;
     try {
-      await paths.ensureDirectories();
+      await ensureZetaDataDirectories(paths);
       cohort = await inspectZetaStorageCohort(
         paths: paths,
         preferences: _preferences,
@@ -94,14 +95,14 @@ Future<ZetaStorageCohort> inspectZetaStorageCohort({
     return ZetaStorageCohort.existing;
   }
 
-  for (final file in <File>[
-    paths.providersFile,
-    paths.appearanceFile,
-    paths.generalSettingsFile,
-    paths.ideSessionFile,
-    paths.usageStatisticsIndexFile,
+  for (final path in <String>[
+    paths.providersFilePath,
+    paths.appearanceFilePath,
+    paths.generalSettingsFilePath,
+    paths.ideSessionFilePath,
+    paths.usageStatisticsIndexFilePath,
   ]) {
-    if (await file.exists()) {
+    if (await File(path).exists()) {
       return ZetaStorageCohort.existing;
     }
   }

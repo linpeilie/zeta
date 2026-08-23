@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:zeta/src/core/utils/path_utils.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
@@ -62,9 +60,17 @@ IdeSessionState buildIdeSessionState({
 /// 清洗从持久化层恢复出的 IDE 会话快照。
 ///
 /// 这里会剔除不存在的项目、文件和目录，并收敛项目级缓存映射，
-/// 避免这些脏数据继续回流到页面层。
-IdeSessionState sanitizeIdeSessionState(IdeSessionState state) {
-  final existingProjects = existingDirectoryPaths(state.projectPaths);
+/// 避免这些脏数据继续回流到页面层。文件/目录存在性由宿主注入的探针
+/// 判定（application 层不直接 import `dart:io`）。
+IdeSessionState sanitizeIdeSessionState(
+  IdeSessionState state, {
+  required bool Function(String path) fileExists,
+  required bool Function(String path) directoryExists,
+}) {
+  final existingProjects = existingDirectoryPaths(
+    state.projectPaths,
+    directoryExists: directoryExists,
+  );
   final existingProjectSet = existingProjects.toSet();
   final activeProjectPath = existingProjectSet.contains(state.activeProjectPath)
       ? state.activeProjectPath
@@ -72,11 +78,11 @@ IdeSessionState sanitizeIdeSessionState(IdeSessionState state) {
   final currentFilePath =
       activeProjectPath != null &&
           state.currentFilePath != null &&
-          File(state.currentFilePath!).existsSync()
+          fileExists(state.currentFilePath!)
       ? state.currentFilePath
       : null;
   final expandedDirectoryPaths = state.expandedDirectoryPaths
-      .where((path) => Directory(path).existsSync())
+      .where(directoryExists)
       .toSet();
 
   final agentThreadIdsByProject = _filterProjectMap(

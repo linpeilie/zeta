@@ -15,7 +15,10 @@ void main() {
 
     setUp(() {
       homeDirectory = Directory.systemTemp.createTempSync('zeta_bootstrap_');
-      paths = ZetaDataPaths.fromHomeDirectory(homeDirectory.path);
+      paths = ZetaDataPaths.fromHomeDirectory(
+        homeDirectory.path,
+        isWindows: Platform.isWindows,
+      );
     });
 
     tearDown(() {
@@ -35,20 +38,22 @@ void main() {
       expect(result.cohort, ZetaStorageCohort.fresh);
       expect(result.fallbackLanguage, AppLanguage.english);
       final general =
-          jsonDecode(await paths.generalSettingsFile.readAsString())
+          jsonDecode(await File(paths.generalSettingsFilePath).readAsString())
               as Map<String, Object?>;
       expect(general['appLanguage'], 'en');
       expect(
-        jsonDecode(await paths.migrationMarkerFile.readAsString())['version'],
+        jsonDecode(
+          await File(paths.migrationMarkerFilePath).readAsString(),
+        )['version'],
         zetaStorageMigrationVersion,
       );
     });
 
     test('v1 marker is existing and seeds Chinese', () async {
-      await paths.stateDirectory.create(recursive: true);
-      await paths.migrationMarkerFile.writeAsString(
-        jsonEncode(<String, Object?>{'version': 1}),
-      );
+      await Directory(paths.stateDirectoryPath).create(recursive: true);
+      await File(
+        paths.migrationMarkerFilePath,
+      ).writeAsString(jsonEncode(<String, Object?>{'version': 1}));
 
       final result = await ZetaStartupBootstrap(
         paths: paths,
@@ -59,7 +64,7 @@ void main() {
       expect(result.cohort, ZetaStorageCohort.existing);
       expect(result.fallbackLanguage, AppLanguage.simplifiedChinese);
       final general =
-          jsonDecode(await paths.generalSettingsFile.readAsString())
+          jsonDecode(await File(paths.generalSettingsFilePath).readAsString())
               as Map<String, Object?>;
       expect(general['appLanguage'], 'zh-Hans');
     });
@@ -78,8 +83,8 @@ void main() {
     });
 
     test('keeps valid v3 language and upgrades marker', () async {
-      await paths.configDirectory.create(recursive: true);
-      await paths.generalSettingsFile.writeAsString(
+      await Directory(paths.configDirectoryPath).create(recursive: true);
+      await File(paths.generalSettingsFilePath).writeAsString(
         jsonEncode(<String, Object?>{
           'version': 3,
           'sendMessageShortcut': 'enter',
@@ -100,15 +105,15 @@ void main() {
 
       expect(result.cohort, ZetaStorageCohort.existing);
       final general =
-          jsonDecode(await paths.generalSettingsFile.readAsString())
+          jsonDecode(await File(paths.generalSettingsFilePath).readAsString())
               as Map<String, Object?>;
       expect(general['appLanguage'], 'en');
       expect(result.filePersistenceEnabled, isTrue);
     });
 
     test('write failure disables file persistence and skips marker', () async {
-      await paths.configDirectory.create(recursive: true);
-      Directory(paths.generalSettingsFile.path).createSync();
+      await Directory(paths.configDirectoryPath).create(recursive: true);
+      Directory(paths.generalSettingsFilePath).createSync();
 
       final result = await ZetaStartupBootstrap(
         paths: paths,
@@ -117,7 +122,7 @@ void main() {
       ).run();
 
       expect(result.filePersistenceEnabled, isFalse);
-      expect(paths.migrationMarkerFile.existsSync(), isFalse);
+      expect(File(paths.migrationMarkerFilePath).existsSync(), isFalse);
       expect(result.fallbackLanguage, AppLanguage.english);
     });
 
@@ -128,12 +133,17 @@ void main() {
         preferences: _EmptyPreferences(),
       );
       final first = await bootstrap.run();
-      final firstGeneral = await paths.generalSettingsFile.readAsString();
+      final firstGeneral = await File(
+        paths.generalSettingsFilePath,
+      ).readAsString();
       final second = await bootstrap.run();
 
       expect(first.filePersistenceEnabled, isTrue);
       expect(second.filePersistenceEnabled, isTrue);
-      expect(await paths.generalSettingsFile.readAsString(), firstGeneral);
+      expect(
+        await File(paths.generalSettingsFilePath).readAsString(),
+        firstGeneral,
+      );
     });
   });
 }

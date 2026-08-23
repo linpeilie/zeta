@@ -1,12 +1,12 @@
 import 'dart:async';
 
-import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_restore_result.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_state_builder.dart';
 
-final _log = loggerFor('zeta.ide_session.persistence_coordinator');
+final _log = zetaLoggerFor('zeta.ide_session.persistence_coordinator');
 
 /// 协调 IDE 会话的恢复与持久化时序。
 ///
@@ -18,10 +18,16 @@ class IdeSessionPersistenceCoordinator {
   IdeSessionPersistenceCoordinator({
     required this.store,
     required this.saveDelay,
+    required this.fileExists,
+    required this.directoryExists,
   });
 
   final IdeSessionStore store;
   final Duration saveDelay;
+
+  /// 宿主注入的文件系统探针；清洗恢复快照时剔除不存在的项目/文件/目录。
+  final bool Function(String path) fileExists;
+  final bool Function(String path) directoryExists;
 
   Timer? _saveTimer;
   int _restoreToken = 0;
@@ -43,7 +49,11 @@ class IdeSessionPersistenceCoordinator {
         return const IdeSessionRestoreResult.empty();
       }
       return IdeSessionRestoreResult.restored(
-        sanitizeIdeSessionState(snapshot),
+        sanitizeIdeSessionState(
+          snapshot,
+          fileExists: fileExists,
+          directoryExists: directoryExists,
+        ),
       );
     } catch (error, stackTrace) {
       _log.w(

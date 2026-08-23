@@ -9,7 +9,7 @@ import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta/src/app/app_constants.dart';
 import 'package:zeta/src/app/menu_action_bridge.dart';
 import 'package:zeta/src/app/shell/ide_shell_controller.dart';
-import 'package:zeta/src/core/utils/system_file_manager.dart';
+import 'package:zeta/src/ui/core/system_file_manager.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/desktop_notifications/application/desktop_attention_controller.dart';

@@ -1,7 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:zeta/src/core/storage/atomic_text_file.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
+
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 
 /// 外观设置的旧版 shared_preferences key。
@@ -18,11 +19,12 @@ abstract class AppearanceSettingsStore {
 }
 
 /// 基于 JSON 文件的生产外观设置仓库。
+///
+/// 具体文件实例（[ZetaTextFile]）由 app 组合层注入；本类只做编解码与宽容回退。
 class FileAppearanceSettingsStore implements AppearanceSettingsStore {
-  FileAppearanceSettingsStore({required File file})
-    : _storage = AtomicTextFile(file);
+  FileAppearanceSettingsStore({required this._storage});
 
-  final AtomicTextFile _storage;
+  final ZetaTextFile _storage;
 
   @override
   Future<AppearanceSettings> load() async {

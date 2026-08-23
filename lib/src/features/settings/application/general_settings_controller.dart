@@ -2,13 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
-import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta/src/features/settings/application/general_settings_update_result.dart';
 import 'package:zeta/src/features/settings/data/general_settings_store.dart';
 import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 
-final _log = loggerFor('zeta.settings.general_controller');
+final _log = zetaLoggerFor('zeta.settings.general_controller');
 
 /// 加载、发布并持久化全局常规设置。
 class GeneralSettingsController extends ChangeNotifier {

@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_models.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_text_catalog.dart';
@@ -19,7 +19,7 @@ final class DesktopAttentionController {
     this.textCatalog = const FallbackDesktopAttentionTextCatalog(),
   });
 
-  static final _log = loggerFor('zeta.desktop_attention');
+  static final _log = zetaLoggerFor('zeta.desktop_attention');
 
   final DesktopNotificationService notificationService;
   final DesktopAttentionIndicator indicator;

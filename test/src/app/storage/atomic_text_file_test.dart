@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/core/storage/atomic_text_file.dart';
+import 'package:zeta/src/app/storage/atomic_text_file.dart';
 
 void main() {
   group('AtomicTextFile', () {

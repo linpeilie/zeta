@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/app/storage/atomic_text_file.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_codec.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
@@ -91,8 +92,8 @@ void main() {
       );
       await blockedParent.writeAsString('not a directory');
       final store = FileAgentProviderConfigStore(
-        file: File(
-          '${blockedParent.path}${Platform.pathSeparator}providers.json',
+        storage: AtomicTextFile(
+          File('${blockedParent.path}${Platform.pathSeparator}providers.json'),
         ),
         codec: _codec(),
       );
@@ -208,7 +209,10 @@ void main() {
 }
 
 FileAgentProviderConfigStore _fileStore(File file) {
-  return FileAgentProviderConfigStore(file: file, codec: _codec());
+  return FileAgentProviderConfigStore(
+    storage: AtomicTextFile(file),
+    codec: _codec(),
+  );
 }
 
 AgentProviderSettingsCodec _codec() {

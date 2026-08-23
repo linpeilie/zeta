@@ -1,12 +1,12 @@
 import 'package:flutter/foundation.dart';
 
-import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 
-final _log = loggerFor('zeta.agent.provider_controller');
+final _log = zetaLoggerFor('zeta.agent.provider_controller');
 
 /// IDE 内共享的 Provider 设置控制器。
 ///

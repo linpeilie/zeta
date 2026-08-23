@@ -2,7 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:zeta/src/core/storage/atomic_text_file.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
+
 import 'package:zeta/src/features/usage_statistics/data/legacy_usage_statistics_index_decoder.dart';
 
 /// Provider 不透明分区索引的根版本。
@@ -70,10 +71,9 @@ abstract interface class UsageStatisticsPartitionStore {
 /// 基于同一使用统计索引文件的 v4 分区 Store。
 final class FileUsageStatisticsPartitionStore
     implements UsageStatisticsPartitionStore {
-  FileUsageStatisticsPartitionStore({required File file})
-    : _storage = AtomicTextFile(file);
+  FileUsageStatisticsPartitionStore({required this._storage});
 
-  final AtomicTextFile _storage;
+  final ZetaTextFile _storage;
   final _AsyncMutex _mutex = _AsyncMutex();
 
   @override

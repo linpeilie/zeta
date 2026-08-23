@@ -1,13 +1,13 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
 import 'package:zeta/src/features/settings/data/system_font_catalog_service.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/features/settings/domain/system_font_family.dart';
 
-final _log = loggerFor('zeta.settings.appearance_controller');
+final _log = zetaLoggerFor('zeta.settings.appearance_controller');
 
 /// 字体选择弹窗使用的展示选项。
 @immutable

@@ -3,7 +3,8 @@ import 'dart:io';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:zeta/src/core/storage/atomic_text_file.dart';
+import 'package:zeta/src/app/storage/atomic_text_file.dart';
+import 'package:zeta/src/app/storage/zeta_data_file_system.dart';
 import 'package:zeta/src/core/storage/zeta_data_paths.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
@@ -107,13 +108,13 @@ class ZetaStorageMigrator {
       return const ZetaStorageMigrationResult(alreadyCompleted: true);
     }
 
-    await paths.ensureDirectories();
+    await ensureZetaDataDirectories(paths);
     final migratedKeys = <String>[];
     final existingTargetKeys = <String>[];
 
     await _copyJsonPreference(
       key: agentProviderConfigStorageKey,
-      target: AtomicTextFile(paths.providersFile),
+      target: _textFile(paths.providersFilePath),
       migratedKeys: migratedKeys,
       existingTargetKeys: existingTargetKeys,
     );
@@ -123,7 +124,7 @@ class ZetaStorageMigrator {
     );
     await _copyJsonPreference(
       key: sessionStorageKey,
-      target: AtomicTextFile(paths.ideSessionFile),
+      target: _textFile(paths.ideSessionFilePath),
       migratedKeys: migratedKeys,
       existingTargetKeys: existingTargetKeys,
     );
@@ -139,7 +140,7 @@ class ZetaStorageMigrator {
       'migratedKeys': migratedKeys,
       'existingTargetKeys': existingTargetKeys,
     };
-    await AtomicTextFile(paths.migrationMarkerFile).write(jsonEncode(marker));
+    await _textFile(paths.migrationMarkerFilePath).write(jsonEncode(marker));
 
     return ZetaStorageMigrationResult(
       alreadyCompleted: false,
@@ -152,7 +153,7 @@ class ZetaStorageMigrator {
     required List<String> migratedKeys,
     required List<String> existingTargetKeys,
   }) async {
-    final target = AtomicTextFile(paths.appearanceFile);
+    final target = _textFile(paths.appearanceFilePath);
     if (await target.file.exists()) {
       existingTargetKeys.add(appearanceSettingsStorageKey);
       return;
@@ -200,7 +201,7 @@ class ZetaStorageMigrator {
     required List<String> migratedKeys,
     required List<String> existingTargetKeys,
   }) async {
-    final target = AtomicTextFile(paths.usageStatisticsIndexFile);
+    final target = _textFile(paths.usageStatisticsIndexFilePath);
     if (await target.file.exists()) {
       existingTargetKeys.add(usageStatisticsIndexStorageKey);
       return;
@@ -227,7 +228,7 @@ class ZetaStorageMigrator {
 
   Future<void> _ensureGeneralSettings() async {
     const codec = GeneralSettingsCodec();
-    final target = AtomicTextFile(paths.generalSettingsFile);
+    final target = _textFile(paths.generalSettingsFilePath);
     String? raw;
     try {
       raw = await target.read();
@@ -270,7 +271,7 @@ class ZetaStorageMigrator {
 Future<int?> readZetaStorageMarkerVersion(ZetaDataPaths paths) async {
   String? encoded;
   try {
-    encoded = await AtomicTextFile(paths.migrationMarkerFile).read();
+    encoded = await _textFile(paths.migrationMarkerFilePath).read();
   } on FileSystemException {
     return null;
   } on FormatException {
@@ -300,3 +301,6 @@ String? _nonEmpty(String? value) {
   final normalized = value?.trim();
   return normalized == null || normalized.isEmpty ? null : value;
 }
+
+/// 路径集合只存 String；文件实例在 app 层用 `AtomicTextFile` 包装。
+AtomicTextFile _textFile(String path) => AtomicTextFile(File(path));

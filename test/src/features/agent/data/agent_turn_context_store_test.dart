@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/app/storage/atomic_text_file.dart';
 import 'package:zeta/src/features/agent/data/agent_turn_context_store.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
@@ -20,7 +21,10 @@ void main() {
     });
 
     test('upserts start then complete into one encoded thread file', () async {
-      final store = FileAgentTurnContextStore(rootDirectory: tempRoot);
+      final store = FileAgentTurnContextStore(
+        rootDirectory: tempRoot,
+        createStorage: (path) => AtomicTextFile(File(path)),
+      );
       const started = AgentThreadTurnContext(
         providerId: 'grok',
         threadId: 'sess-1',
@@ -62,7 +66,10 @@ void main() {
     });
 
     test('does not let a later null overwrite an existing effort', () async {
-      final store = FileAgentTurnContextStore(rootDirectory: tempRoot);
+      final store = FileAgentTurnContextStore(
+        rootDirectory: tempRoot,
+        createStorage: (path) => AtomicTextFile(File(path)),
+      );
       await store.save(
         const AgentThreadTurnContext(
           providerId: 'codex',
@@ -88,7 +95,10 @@ void main() {
     });
 
     test('keeps different threads in different files', () async {
-      final store = FileAgentTurnContextStore(rootDirectory: tempRoot);
+      final store = FileAgentTurnContextStore(
+        rootDirectory: tempRoot,
+        createStorage: (path) => AtomicTextFile(File(path)),
+      );
       await store.save(
         const AgentThreadTurnContext(
           providerId: 'grok',
@@ -127,7 +137,10 @@ void main() {
     test(
       'encodes unsafe thread ids and treats corrupt files as missing',
       () async {
-        final store = FileAgentTurnContextStore(rootDirectory: tempRoot);
+        final store = FileAgentTurnContextStore(
+          rootDirectory: tempRoot,
+          createStorage: (path) => AtomicTextFile(File(path)),
+        );
         await store.save(
           const AgentThreadTurnContext(
             providerId: 'claude_code',

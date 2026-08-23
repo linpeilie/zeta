@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:zeta/src/core/storage/atomic_text_file.dart';
+import 'package:zeta/src/app/storage/atomic_text_file.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/widgets.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
@@ -19,7 +19,7 @@ import 'package:zeta/src/app/shell/ide_shell_controller.dart';
 import 'package:zeta/src/app/window_bootstrap.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta/src/core/storage/zeta_data_paths.dart';
-import 'package:zeta/src/core/utils/system_file_manager.dart';
+import 'package:zeta/src/ui/core/system_file_manager.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
@@ -251,7 +251,9 @@ class MainAppState extends State<MainApp>
         widget.usageStatisticsPartitionStore ??
         (useFilePersistence
             ? FileUsageStatisticsPartitionStore(
-                file: dataPaths!.usageStatisticsIndexFile,
+                storage: AtomicTextFile(
+                  File(dataPaths!.usageStatisticsIndexFilePath),
+                ),
               )
             : MemoryUsageStatisticsPartitionStore());
     _agentModelCatalogRepository =
@@ -259,7 +261,9 @@ class MainAppState extends State<MainApp>
         AgentModelCatalogRepository(
           store: useFilePersistence
               ? FileAgentModelCatalogCacheStore(
-                  file: dataPaths!.agentModelCatalogCacheFile,
+                  storage: AtomicTextFile(
+                    File(dataPaths!.agentModelCatalogCacheFilePath),
+                  ),
                 )
               : MemoryAgentModelCatalogCacheStore(),
         );
@@ -267,7 +271,8 @@ class MainAppState extends State<MainApp>
         widget.turnContextStore ??
         (useFilePersistence
             ? FileAgentTurnContextStore(
-                rootDirectory: dataPaths!.sessionStateDirectory,
+                rootDirectory: Directory(dataPaths!.sessionStateDirectoryPath),
+                createStorage: (path) => AtomicTextFile(File(path)),
               )
             : MemoryAgentTurnContextStore());
     if (widget.appearanceController != null) {
@@ -277,7 +282,9 @@ class MainAppState extends State<MainApp>
       // 测试通过 sessionLoader/sessionSaver 注入会话回调时，避免读写真实
       // ~/.zeta；生产环境走默认文件持久化。
       final store = useFilePersistence
-          ? FileAppearanceSettingsStore(file: dataPaths!.appearanceFile)
+          ? FileAppearanceSettingsStore(
+              storage: AtomicTextFile(File(dataPaths!.appearanceFilePath)),
+            )
           : MemoryAppearanceSettingsStore();
       _appearanceController = AppearanceSettingsController(
         store: store,
@@ -292,7 +299,7 @@ class MainAppState extends State<MainApp>
     } else {
       final store = useFilePersistence
           ? FileGeneralSettingsStore(
-              file: dataPaths!.generalSettingsFile,
+              storage: AtomicTextFile(File(dataPaths!.generalSettingsFilePath)),
               fallbackLanguage: widget.fallbackLanguage,
             )
           : MemoryGeneralSettingsStore(null, widget.fallbackLanguage);
@@ -610,7 +617,9 @@ class MainAppState extends State<MainApp>
     }
     final dataPaths = widget.dataPaths;
     if (_useFilePersistence && dataPaths != null) {
-      return FileIdeSessionStore(file: dataPaths.ideSessionFile);
+      return FileIdeSessionStore(
+        storage: AtomicTextFile(File(dataPaths.ideSessionFilePath)),
+      );
     }
     return const CallbackIdeSessionStore(
       loadJson: _loadEmptySession,
@@ -629,7 +638,7 @@ class MainAppState extends State<MainApp>
     final dataPaths = widget.dataPaths;
     if (_useFilePersistence && dataPaths != null) {
       return FileAgentProviderConfigStore(
-        file: dataPaths.providersFile,
+        storage: AtomicTextFile(File(dataPaths.providersFilePath)),
         codec: _agentProviderSettingsCodec,
       );
     }
@@ -655,14 +664,14 @@ Future<List<ManagedAgent>> _loadNoInstalledHomeProviders() async =>
 File _claudeCodeSessionDecisionFile(ZetaDataPaths dataPaths, String sessionId) {
   final encodedSessionId = Uri.encodeComponent(sessionId);
   return File(
-    '${dataPaths.stateDirectory.path}${Platform.pathSeparator}'
+    '${dataPaths.stateDirectoryPath}${Platform.pathSeparator}'
     'claude_code${Platform.pathSeparator}session_$encodedSessionId.json',
   );
 }
 
 File _claudeCodeHiddenThreadsFile(ZetaDataPaths dataPaths) {
   return File(
-    '${dataPaths.stateDirectory.path}${Platform.pathSeparator}'
+    '${dataPaths.stateDirectoryPath}${Platform.pathSeparator}'
     'claude_code${Platform.pathSeparator}hidden_threads.json',
   );
 }

@@ -1,7 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:zeta/src/core/storage/atomic_text_file.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
+
 import 'package:zeta/src/features/settings/data/general_settings_codec.dart';
 import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
@@ -16,12 +17,12 @@ abstract class GeneralSettingsStore {
 /// 基于版本化 JSON 文件的常规设置仓库。
 class FileGeneralSettingsStore implements GeneralSettingsStore {
   FileGeneralSettingsStore({
-    required File file,
+    required this._storage,
     required this.fallbackLanguage,
     this.codec = const GeneralSettingsCodec(),
-  }) : _storage = AtomicTextFile(file);
+  });
 
-  final AtomicTextFile _storage;
+  final ZetaTextFile _storage;
   final AppLanguage fallbackLanguage;
   final GeneralSettingsCodec codec;
 

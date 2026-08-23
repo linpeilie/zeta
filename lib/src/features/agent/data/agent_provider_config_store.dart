@@ -1,6 +1,7 @@
 import 'dart:io';
 
-import 'package:zeta/src/core/storage/atomic_text_file.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
+
 import 'package:zeta/src/features/agent/data/agent_provider_config_codec.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
@@ -13,13 +14,13 @@ const String agentProviderConfigStorageKey = 'zeta.agent.providers.v1';
 /// 基于 JSON 文件的生产配置仓库。
 class FileAgentProviderConfigStore implements AgentProviderConfigStore {
   factory FileAgentProviderConfigStore({
-    required File file,
+    required ZetaTextFile storage,
     required AgentProviderSettingsCodec codec,
-  }) => FileAgentProviderConfigStore._(AtomicTextFile(file), codec);
+  }) => FileAgentProviderConfigStore._(storage, codec);
 
   FileAgentProviderConfigStore._(this._storage, this._codec);
 
-  final AtomicTextFile _storage;
+  final ZetaTextFile _storage;
   final AgentProviderSettingsCodec _codec;
 
   @override

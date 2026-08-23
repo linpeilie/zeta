@@ -4,12 +4,12 @@ import 'dart:isolate';
 
 import 'package:flutter/foundation.dart';
 
-import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta/src/features/workspace/application/workspace_file_indexer.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_directory_rules.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 
-final _log = loggerFor('zeta.workspace.file_index');
+final _log = zetaLoggerFor('zeta.workspace.file_index');
 
 /// 执行一次工作区遍历并返回扁平文件语料。
 ///

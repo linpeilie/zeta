@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/app/storage/atomic_text_file.dart';
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 
@@ -27,13 +28,17 @@ void main() {
     });
 
     test('loads default appearance settings when storage is empty', () async {
-      final store = FileAppearanceSettingsStore(file: settingsFile);
+      final store = FileAppearanceSettingsStore(
+        storage: AtomicTextFile(settingsFile),
+      );
 
       expect(await store.load(), const AppearanceSettings());
     });
 
     test('saves versioned appearance settings json', () async {
-      final store = FileAppearanceSettingsStore(file: settingsFile);
+      final store = FileAppearanceSettingsStore(
+        storage: AtomicTextFile(settingsFile),
+      );
 
       await store.save(
         const AppearanceSettings(
@@ -80,7 +85,9 @@ void main() {
           'codeFontSize': 'large',
         }),
       );
-      final store = FileAppearanceSettingsStore(file: settingsFile);
+      final store = FileAppearanceSettingsStore(
+        storage: AtomicTextFile(settingsFile),
+      );
 
       expect(
         await store.load(),
@@ -90,14 +97,18 @@ void main() {
 
     test('falls back to defaults on invalid json', () async {
       await settingsFile.writeAsString('{not-json');
-      final store = FileAppearanceSettingsStore(file: settingsFile);
+      final store = FileAppearanceSettingsStore(
+        storage: AtomicTextFile(settingsFile),
+      );
 
       expect(await store.load(), const AppearanceSettings());
     });
 
     test('falls back to defaults on invalid UTF-8', () async {
       await settingsFile.writeAsBytes(<int>[0xff]);
-      final store = FileAppearanceSettingsStore(file: settingsFile);
+      final store = FileAppearanceSettingsStore(
+        storage: AtomicTextFile(settingsFile),
+      );
 
       expect(await store.load(), const AppearanceSettings());
     });
@@ -108,8 +119,8 @@ void main() {
       );
       await blockedParent.writeAsString('not a directory');
       final store = FileAppearanceSettingsStore(
-        file: File(
-          '${blockedParent.path}${Platform.pathSeparator}appearance.json',
+        storage: AtomicTextFile(
+          File('${blockedParent.path}${Platform.pathSeparator}appearance.json'),
         ),
       );
 

@@ -132,6 +132,8 @@ void main() {
     );
     final coordinator = IdeSessionPersistenceCoordinator(
       store: store,
+      fileExists: (path) => File(path).existsSync(),
+      directoryExists: (path) => Directory(path).existsSync(),
       saveDelay: const Duration(milliseconds: 1),
     );
     coordinators.add(coordinator);
@@ -177,6 +179,8 @@ void main() {
       final store = _FakeIdeSessionStore(loadFuture: restoreCompleter.future);
       final coordinator = IdeSessionPersistenceCoordinator(
         store: store,
+        fileExists: (path) => File(path).existsSync(),
+        directoryExists: (path) => Directory(path).existsSync(),
         saveDelay: const Duration(milliseconds: 5),
       );
       coordinators.add(coordinator);
@@ -224,6 +228,8 @@ void main() {
       final store = _FakeIdeSessionStore();
       final coordinator = IdeSessionPersistenceCoordinator(
         store: store,
+        fileExists: (path) => File(path).existsSync(),
+        directoryExists: (path) => Directory(path).existsSync(),
         saveDelay: const Duration(milliseconds: 10),
       );
       coordinators.add(coordinator);
@@ -261,6 +267,8 @@ void main() {
     final store = _FakeIdeSessionStore(loadFuture: restoreCompleter.future);
     final coordinator = IdeSessionPersistenceCoordinator(
       store: store,
+      fileExists: (path) => File(path).existsSync(),
+      directoryExists: (path) => Directory(path).existsSync(),
       saveDelay: const Duration(milliseconds: 1),
     );
     coordinators.add(coordinator);

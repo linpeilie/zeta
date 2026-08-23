@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
-final _log = loggerFor('zeta.agent.model_catalog');
+final _log = zetaLoggerFor('zeta.agent.model_catalog');
 
 /// 从 Provider 权威来源刷新模型目录。
 ///

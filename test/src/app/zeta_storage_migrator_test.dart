@@ -47,7 +47,10 @@ void main() {
 
     setUp(() {
       homeDirectory = Directory.systemTemp.createTempSync('zeta_migration_');
-      paths = ZetaDataPaths.fromHomeDirectory(homeDirectory.path);
+      paths = ZetaDataPaths.fromHomeDirectory(
+        homeDirectory.path,
+        isWindows: Platform.isWindows,
+      );
     });
 
     tearDown(() {
@@ -75,29 +78,31 @@ void main() {
       expect(result.alreadyCompleted, isFalse);
       expect(result.migratedKeys, unorderedEquals(values.keys));
       expect(
-        await paths.providersFile.readAsString(),
+        await File(paths.providersFilePath).readAsString(),
         values[agentProviderConfigStorageKey],
       );
       expect(
-        await paths.appearanceFile.readAsString(),
+        await File(paths.appearanceFilePath).readAsString(),
         values[appearanceSettingsStorageKey],
       );
       expect(
-        await paths.ideSessionFile.readAsString(),
+        await File(paths.ideSessionFilePath).readAsString(),
         values[sessionStorageKey],
       );
       // 迁移时归一到当前 v4 不透明分区，并保留 v2 的 Codex 空分区。
       final usageIndex =
-          jsonDecode(await paths.usageStatisticsIndexFile.readAsString())
+          jsonDecode(
+                await File(paths.usageStatisticsIndexFilePath).readAsString(),
+              )
               as Map<String, Object?>;
       expect(usageIndex['version'], usageStatisticsPartitionIndexVersion);
       expect((usageIndex['providers'] as Map).keys, <String>['codex']);
       final marker =
-          jsonDecode(await paths.migrationMarkerFile.readAsString())
+          jsonDecode(await File(paths.migrationMarkerFilePath).readAsString())
               as Map<String, Object?>;
       expect(marker['version'], zetaStorageMigrationVersion);
       expect(marker['completedAt'], '2026-07-14T08:30:00.000Z');
-      expect(paths.cacheDirectory.existsSync(), isTrue);
+      expect(Directory(paths.cacheDirectoryPath).existsSync(), isTrue);
     });
 
     test('converts the legacy theme value into appearance v1 JSON', () async {
@@ -111,7 +116,7 @@ void main() {
       final result = await migrator.migrate();
 
       final appearance =
-          jsonDecode(await paths.appearanceFile.readAsString())
+          jsonDecode(await File(paths.appearanceFilePath).readAsString())
               as Map<String, Object?>;
       expect(result.migratedKeys, <String>[legacyThemeModeStorageKey]);
       expect(appearance['version'], 1);
@@ -155,7 +160,9 @@ void main() {
 
         await migrator.migrate();
 
-        final migrated = await paths.usageStatisticsIndexFile.readAsString();
+        final migrated = await File(
+          paths.usageStatisticsIndexFilePath,
+        ).readAsString();
         expect(migrated, contains('sourceId'));
         expect(migrated, isNot(contains('sourcePath')));
         expect(migrated, isNot(contains(sourcePath)));
@@ -168,8 +175,8 @@ void main() {
     test(
       'keeps existing target files and marker makes reruns read-free',
       () async {
-        await paths.configDirectory.create(recursive: true);
-        await paths.providersFile.writeAsString('{"new":true}');
+        await Directory(paths.configDirectoryPath).create(recursive: true);
+        await File(paths.providersFilePath).writeAsString('{"new":true}');
         final preferences = _FakeLegacyZetaPreferences(<String, String>{
           agentProviderConfigStorageKey: '{"old":true}',
         });
@@ -182,7 +189,10 @@ void main() {
         final readsAfterFirstRun = preferences.readKeys.length;
         final second = await migrator.migrate();
 
-        expect(await paths.providersFile.readAsString(), '{"new":true}');
+        expect(
+          await File(paths.providersFilePath).readAsString(),
+          '{"new":true}',
+        );
         expect(
           first.existingTargetKeys,
           contains(agentProviderConfigStorageKey),
@@ -195,8 +205,8 @@ void main() {
     test(
       'does not mark a partial migration complete and retries safely',
       () async {
-        await paths.configDirectory.create(recursive: true);
-        final appearanceBlocker = Directory(paths.appearanceFile.path)
+        await Directory(paths.configDirectoryPath).create(recursive: true);
+        final appearanceBlocker = Directory(paths.appearanceFilePath)
           ..createSync();
         final preferences = _FakeLegacyZetaPreferences(<String, String>{
           agentProviderConfigStorageKey: '{"version":1,"providers":[]}',
@@ -212,8 +222,8 @@ void main() {
           throwsA(isA<FileSystemException>()),
         );
 
-        expect(paths.providersFile.existsSync(), isTrue);
-        expect(paths.migrationMarkerFile.existsSync(), isFalse);
+        expect(File(paths.providersFilePath).existsSync(), isTrue);
+        expect(File(paths.migrationMarkerFilePath).existsSync(), isFalse);
 
         appearanceBlocker.deleteSync();
         final retry = await migrator.migrate();
@@ -223,8 +233,8 @@ void main() {
           retry.existingTargetKeys,
           contains(agentProviderConfigStorageKey),
         );
-        expect(paths.appearanceFile.existsSync(), isTrue);
-        expect(paths.migrationMarkerFile.existsSync(), isTrue);
+        expect(File(paths.appearanceFilePath).existsSync(), isTrue);
+        expect(File(paths.migrationMarkerFilePath).existsSync(), isTrue);
       },
     );
 
@@ -241,23 +251,23 @@ void main() {
 
       await expectLater(migrator.migrate(), throwsStateError);
 
-      expect(paths.providersFile.existsSync(), isTrue);
-      expect(paths.appearanceFile.existsSync(), isFalse);
-      expect(paths.ideSessionFile.existsSync(), isFalse);
-      expect(paths.migrationMarkerFile.existsSync(), isFalse);
+      expect(File(paths.providersFilePath).existsSync(), isTrue);
+      expect(File(paths.appearanceFilePath).existsSync(), isFalse);
+      expect(File(paths.ideSessionFilePath).existsSync(), isFalse);
+      expect(File(paths.migrationMarkerFilePath).existsSync(), isFalse);
 
       preferences.throwOnKey = null;
       final retry = await migrator.migrate();
 
       expect(retry.existingTargetKeys, contains(agentProviderConfigStorageKey));
-      expect(paths.appearanceFile.existsSync(), isTrue);
-      expect(paths.ideSessionFile.existsSync(), isTrue);
-      expect(paths.migrationMarkerFile.existsSync(), isTrue);
+      expect(File(paths.appearanceFilePath).existsSync(), isTrue);
+      expect(File(paths.ideSessionFilePath).existsSync(), isTrue);
+      expect(File(paths.migrationMarkerFilePath).existsSync(), isTrue);
     });
 
     test('replaces an invalid UTF-8 marker and reruns migration', () async {
-      await paths.stateDirectory.create(recursive: true);
-      await paths.migrationMarkerFile.writeAsBytes(<int>[0xff]);
+      await Directory(paths.stateDirectoryPath).create(recursive: true);
+      await File(paths.migrationMarkerFilePath).writeAsBytes(<int>[0xff]);
       final preferences = _FakeLegacyZetaPreferences(<String, String>{
         sessionStorageKey: '{"version":2,"projectPaths":[]}',
       });
@@ -268,16 +278,16 @@ void main() {
       ).migrate();
 
       expect(result.alreadyCompleted, isFalse);
-      expect(paths.ideSessionFile.existsSync(), isTrue);
+      expect(File(paths.ideSessionFilePath).existsSync(), isTrue);
       final marker =
-          jsonDecode(await paths.migrationMarkerFile.readAsString())
+          jsonDecode(await File(paths.migrationMarkerFilePath).readAsString())
               as Map<String, Object?>;
       expect(marker['version'], zetaStorageMigrationVersion);
     });
 
     test('upgrades v1 general.json and writes marker v2 last', () async {
-      await paths.configDirectory.create(recursive: true);
-      await paths.generalSettingsFile.writeAsString(
+      await Directory(paths.configDirectoryPath).create(recursive: true);
+      await File(paths.generalSettingsFilePath).writeAsString(
         jsonEncode(<String, Object?>{
           'version': 1,
           'sendMessageShortcut': 'primaryModifierEnter',
@@ -290,13 +300,13 @@ void main() {
 
       expect(result.alreadyCompleted, isFalse);
       final general =
-          jsonDecode(await paths.generalSettingsFile.readAsString())
+          jsonDecode(await File(paths.generalSettingsFilePath).readAsString())
               as Map<String, Object?>;
       expect(general['version'], 3);
       expect(general['appLanguage'], 'zh-Hans');
       expect(general['sendMessageShortcut'], 'primaryModifierEnter');
       final marker =
-          jsonDecode(await paths.migrationMarkerFile.readAsString())
+          jsonDecode(await File(paths.migrationMarkerFilePath).readAsString())
               as Map<String, Object?>;
       expect(marker['version'], 2);
     });
@@ -311,7 +321,7 @@ void main() {
         ).migrate();
 
         final general =
-            jsonDecode(await paths.generalSettingsFile.readAsString())
+            jsonDecode(await File(paths.generalSettingsFilePath).readAsString())
                 as Map<String, Object?>;
         expect(general['version'], 3);
         expect(general['appLanguage'], 'en');
@@ -321,22 +331,25 @@ void main() {
     test(
       'leaves damaged general.json untouched and still writes marker',
       () async {
-        await paths.configDirectory.create(recursive: true);
-        await paths.generalSettingsFile.writeAsString('{not-json');
+        await Directory(paths.configDirectoryPath).create(recursive: true);
+        await File(paths.generalSettingsFilePath).writeAsString('{not-json');
 
         await ZetaStorageMigrator(
           paths: paths,
           preferences: _FakeLegacyZetaPreferences(const <String, String>{}),
         ).migrate();
 
-        expect(await paths.generalSettingsFile.readAsString(), '{not-json');
-        expect(paths.migrationMarkerFile.existsSync(), isTrue);
+        expect(
+          await File(paths.generalSettingsFilePath).readAsString(),
+          '{not-json',
+        );
+        expect(File(paths.migrationMarkerFilePath).existsSync(), isTrue);
       },
     );
 
     test('does not write marker when general.json cannot be created', () async {
-      await paths.configDirectory.create(recursive: true);
-      final blocker = Directory(paths.generalSettingsFile.path)..createSync();
+      await Directory(paths.configDirectoryPath).create(recursive: true);
+      final blocker = Directory(paths.generalSettingsFilePath)..createSync();
 
       await expectLater(
         ZetaStorageMigrator(
@@ -346,7 +359,7 @@ void main() {
         throwsA(isA<FileSystemException>()),
       );
 
-      expect(paths.migrationMarkerFile.existsSync(), isFalse);
+      expect(File(paths.migrationMarkerFilePath).existsSync(), isFalse);
       blocker.deleteSync();
     });
   });

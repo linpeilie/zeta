@@ -7,7 +7,7 @@ import 'package:flutter_highlight/themes/vs2015.dart';
 import 'package:highlight/highlight.dart' show Node, highlight;
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
-import 'package:zeta/src/core/utils/system_file_manager.dart';
+import 'package:zeta/src/ui/core/system_file_manager.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_controller.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta_ui/zeta_ui.dart';

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/app/storage/zeta_data_file_system.dart';
 import 'package:zeta/src/core/storage/zeta_data_paths.dart';
 
 void main() {
@@ -18,25 +19,28 @@ void main() {
     });
 
     test('creates only the Zeta-owned directory layout', () async {
-      final paths = ZetaDataPaths.fromHomeDirectory(homeDirectory.path);
+      final paths = ZetaDataPaths.fromHomeDirectory(
+        homeDirectory.path,
+        isWindows: Platform.isWindows,
+      );
 
-      await paths.ensureDirectories();
+      await ensureZetaDataDirectories(paths);
 
-      expect(paths.rootDirectory.path, _join(homeDirectory.path, '.zeta'));
-      expect(paths.configDirectory.existsSync(), isTrue);
-      expect(paths.stateDirectory.existsSync(), isTrue);
-      expect(paths.logsDirectory.existsSync(), isTrue);
-      expect(paths.cacheDirectory.existsSync(), isTrue);
+      expect(paths.rootPath, _join(homeDirectory.path, '.zeta'));
+      expect(Directory(paths.configDirectoryPath).existsSync(), isTrue);
+      expect(Directory(paths.stateDirectoryPath).existsSync(), isTrue);
+      expect(Directory(paths.logsDirectoryPath).existsSync(), isTrue);
+      expect(Directory(paths.cacheDirectoryPath).existsSync(), isTrue);
       expect(
-        paths.providersFile.path,
+        paths.providersFilePath,
         _join(homeDirectory.path, '.zeta', 'config', 'providers.json'),
       );
       expect(
-        paths.generalSettingsFile.path,
+        paths.generalSettingsFilePath,
         _join(homeDirectory.path, '.zeta', 'config', 'general.json'),
       );
       expect(
-        paths.usageStatisticsIndexFile.path,
+        paths.usageStatisticsIndexFilePath,
         _join(
           homeDirectory.path,
           '.zeta',
@@ -45,11 +49,11 @@ void main() {
         ),
       );
       expect(
-        paths.sessionStateDirectory.path,
+        paths.sessionStateDirectoryPath,
         _join(homeDirectory.path, '.zeta', 'state', 'session'),
       );
       expect(
-        paths.agentModelCatalogCacheFile.path,
+        paths.agentModelCatalogCacheFilePath,
         _join(homeDirectory.path, '.zeta', 'cache', 'agent_models_v1.json'),
       );
       expect(
@@ -101,7 +105,8 @@ void main() {
         throwsStateError,
       );
       expect(
-        () => ZetaDataPaths.fromHomeDirectory('relative/home'),
+        () =>
+            ZetaDataPaths.fromHomeDirectory('relative/home', isWindows: false),
         throwsArgumentError,
       );
     });

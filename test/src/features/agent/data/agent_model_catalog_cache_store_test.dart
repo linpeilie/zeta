@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/app/storage/atomic_text_file.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/data/agent_model_catalog_cache_store.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
@@ -15,7 +16,7 @@ void main() {
     setUp(() {
       directory = Directory.systemTemp.createTempSync('zeta_model_catalog_');
       file = File('${directory.path}/agent_models_v1.json');
-      store = FileAgentModelCatalogCacheStore(file: file);
+      store = FileAgentModelCatalogCacheStore(storage: AtomicTextFile(file));
     });
 
     tearDown(() async {

@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:logger/logger.dart';
 import 'package:logger/logger.dart' as logger;
-import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta/src/app/logging/app_logging.dart';
 
 void main() {
   group('app logging', () {

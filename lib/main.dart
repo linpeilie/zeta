@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter/widgets.dart';
@@ -6,9 +7,10 @@ import 'package:window_manager/window_manager.dart';
 
 import 'package:zeta/src/app/app.dart';
 import 'package:zeta/src/app/observability/zeta_observability.dart';
+import 'package:zeta/src/app/storage/atomic_text_file.dart';
 import 'package:zeta/src/app/window_bootstrap.dart';
 import 'package:zeta/src/app/zeta_startup_bootstrap.dart';
-import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta/src/app/logging/app_logging.dart';
 import 'package:zeta/src/core/storage/zeta_data_paths.dart';
 import 'package:zeta/src/features/settings/application/app_language_resolver.dart';
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
@@ -35,12 +37,19 @@ void main() {
       Object? pathError;
       StackTrace? pathStackTrace;
       try {
-        dataPaths = ZetaDataPaths.fromEnvironment();
+        dataPaths = ZetaDataPaths.fromEnvironment(
+          environment: Platform.environment,
+          isWindows: Platform.isWindows,
+        );
       } catch (error, stackTrace) {
         pathError = error;
         pathStackTrace = stackTrace;
       }
-      configureAppLogging(logDirectory: dataPaths?.logsDirectory);
+      configureAppLogging(
+        logDirectory: dataPaths == null
+            ? null
+            : Directory(dataPaths.logsDirectoryPath),
+      );
       _installGlobalErrorLogging();
       if (pathError != null) {
         loggerFor('zeta.storage').w(
@@ -95,7 +104,9 @@ Future<AppearanceSettings> _loadLaunchAppearance(ZetaDataPaths? paths) async {
     return const AppearanceSettings();
   }
   try {
-    return await FileAppearanceSettingsStore(file: paths.appearanceFile).load();
+    return await FileAppearanceSettingsStore(
+      storage: AtomicTextFile(File(paths.appearanceFilePath)),
+    ).load();
   } catch (error, stackTrace) {
     loggerFor('zeta.storage').w(
       'Could not load appearance settings before showing the window',

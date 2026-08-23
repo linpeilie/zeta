@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/app/storage/atomic_text_file.dart';
 import 'package:zeta/src/features/settings/data/general_settings_store.dart';
 import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
@@ -28,7 +29,7 @@ void main() {
 
     test('loads fallback language when storage is empty', () async {
       final store = FileGeneralSettingsStore(
-        file: settingsFile,
+        storage: AtomicTextFile(settingsFile),
         fallbackLanguage: AppLanguage.english,
       );
 
@@ -40,7 +41,7 @@ void main() {
 
     test('round trips v3 including language', () async {
       final store = FileGeneralSettingsStore(
-        file: settingsFile,
+        storage: AtomicTextFile(settingsFile),
         fallbackLanguage: AppLanguage.simplifiedChinese,
       );
       const settings = GeneralSettings(
@@ -78,7 +79,7 @@ void main() {
         }),
       );
       final store = FileGeneralSettingsStore(
-        file: settingsFile,
+        storage: AtomicTextFile(settingsFile),
         fallbackLanguage: AppLanguage.english,
       );
 
@@ -95,7 +96,7 @@ void main() {
     test('falls back to explicit language for damaged json', () async {
       await settingsFile.writeAsString('{not-json');
       final store = FileGeneralSettingsStore(
-        file: settingsFile,
+        storage: AtomicTextFile(settingsFile),
         fallbackLanguage: AppLanguage.english,
       );
 

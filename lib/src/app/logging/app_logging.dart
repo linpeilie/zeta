@@ -8,6 +8,7 @@ import 'package:zeta_foundation/zeta_foundation.dart';
 
 import 'package:zeta/src/core/logging/structured_error_logging.dart';
 import 'package:zeta/src/core/security/sensitive_data_redactor.dart';
+import 'package:zeta/src/core/storage/zeta_data_paths.dart';
 
 /// 统一的应用日志器。
 ///
@@ -287,16 +288,31 @@ final class ZetaConsolePrinter extends logger.LogPrinter {
   List<String> log(logger.LogEvent event) {
     final prefix = _levelPrefixes[event.level] ?? '[?]';
     // 类型必须保留（诊断的主要价值），文本必须脱敏（原始异常常带 token/路径）。
+    final home = _redactionHomeDirectory();
     final error = event.error == null
         ? ''
         : '  ERROR: ${event.error.runtimeType}: '
-              '${redactSensitiveText(event.error.toString())}';
-    final message = redactSensitiveText('${event.message}');
+              '${redactSensitiveText(event.error.toString(), homeDirectory: home)}';
+    final message = redactSensitiveText(
+      '${event.message}',
+      homeDirectory: home,
+    );
     final line = '$prefix $message$error';
     final color = _levelColors[event.level] ?? const logger.AnsiColor.none();
     return <String>[color(line)];
   }
 }
+
+/// 宿主侧解析一次用户主目录，供输出端脱敏使用（core 的纯脱敏函数不再读平台）。
+String? _redactionHomeDirectory() {
+  _redactionHome ??= resolveUserHomeDirectory(
+    environment: Platform.environment,
+    isWindows: Platform.isWindows,
+  );
+  return _redactionHome;
+}
+
+String? _redactionHome;
 
 void _writeFileLog(logger.OutputEvent event) {
   _fileLogOutput?.add(event);
@@ -355,8 +371,11 @@ String _dailyLogFileName(DateTime localTime) {
 
 String _formatFileLogRecord(logger.OutputEvent event) {
   final origin = event.origin;
+  final home = _redactionHomeDirectory();
   final rendered = '${_formatLogHeader(origin)} ${origin.message}';
-  final message = _escapeLogValue(redactSensitiveText(rendered));
+  final message = _escapeLogValue(
+    redactSensitiveText(rendered, homeDirectory: home),
+  );
   final buffer = StringBuffer(message);
   final error = origin.error;
   if (error != null) {
@@ -369,7 +388,11 @@ String _formatFileLogRecord(logger.OutputEvent event) {
   if (stackTrace != null) {
     buffer
       ..write(' stack=')
-      ..write(_escapeLogValue(redactSensitiveText(stackTrace.toString())));
+      ..write(
+        _escapeLogValue(
+          redactSensitiveText(stackTrace.toString(), homeDirectory: home),
+        ),
+      );
   }
   return buffer.toString();
 }

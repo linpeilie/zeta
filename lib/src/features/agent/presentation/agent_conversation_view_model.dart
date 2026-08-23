@@ -5,9 +5,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import 'package:zeta/src/core/utils/path_utils.dart';
-import 'package:zeta/src/core/logging/app_logging.dart';
-import 'package:zeta/src/core/logging/structured_error_logging.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
+import 'package:zeta/src/core/logging/structured_error_logging.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_mode_controller.dart';
@@ -43,7 +42,7 @@ export 'package:zeta_agent_core/zeta_agent_core.dart'
         AgentToolTimelineEntry,
         AgentTurnFileChangesTimelineEntry;
 
-final _log = loggerFor('zeta.agent.conversation');
+final _log = zetaLoggerFor('zeta.agent.conversation');
 
 String _modelCatalogSource(AgentProviderConfig config) {
   return switch (config.kind) {

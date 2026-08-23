@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/app/storage/atomic_text_file.dart';
 import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partition_store.dart';
 
 void main() {
@@ -39,7 +40,9 @@ void main() {
             'unknownRootField': true,
           }),
         );
-        final store = FileUsageStatisticsPartitionStore(file: file);
+        final store = FileUsageStatisticsPartitionStore(
+          storage: AtomicTextFile(file),
+        );
         final codex = UsageStatisticsIndexPartition(
           schemaVersion: 1,
           payload: <String, Object?>{
@@ -50,10 +53,10 @@ void main() {
         await store.writePartition('codex-work', codex);
 
         final reloaded = await FileUsageStatisticsPartitionStore(
-          file: file,
+          storage: AtomicTextFile(file),
         ).readPartition('codex-work');
         final unknown = await FileUsageStatisticsPartitionStore(
-          file: file,
+          storage: AtomicTextFile(file),
         ).readPartition('future-agent');
         final encoded = jsonDecode(await file.readAsString()) as Map;
         expect(encoded['version'], usageStatisticsPartitionIndexVersion);
@@ -95,7 +98,9 @@ void main() {
             ],
           }),
         );
-        final store = FileUsageStatisticsPartitionStore(file: file);
+        final store = FileUsageStatisticsPartitionStore(
+          storage: AtomicTextFile(file),
+        );
 
         final migrated = await store.readPartition('codex');
         await store.writePartition('codex', migrated!);
@@ -121,7 +126,9 @@ void main() {
         final file = _indexFile(tempDirectory);
         await file.parent.create(recursive: true);
         await file.writeAsString(jsonEncode(_legacyV3()));
-        final store = FileUsageStatisticsPartitionStore(file: file);
+        final store = FileUsageStatisticsPartitionStore(
+          storage: AtomicTextFile(file),
+        );
 
         final codex = await store.readPartition('codex');
         final grok = await store.readPartition('grok');
@@ -145,7 +152,9 @@ void main() {
         final file = _indexFile(tempDirectory);
         await file.parent.create(recursive: true);
         await file.writeAsString('{damaged');
-        final store = FileUsageStatisticsPartitionStore(file: file);
+        final store = FileUsageStatisticsPartitionStore(
+          storage: AtomicTextFile(file),
+        );
         expect(await store.readPartition('codex'), isNull);
 
         await file.writeAsString(
@@ -181,7 +190,7 @@ void main() {
 
       expect(
         await FileUsageStatisticsPartitionStore(
-          file: file,
+          storage: AtomicTextFile(file),
         ).readPartition('codex'),
         isNull,
       );
@@ -191,7 +200,9 @@ void main() {
       final file = _indexFile(tempDirectory);
       await file.parent.create(recursive: true);
       await file.writeAsString(jsonEncode(_legacyV3()));
-      final store = FileUsageStatisticsPartitionStore(file: file);
+      final store = FileUsageStatisticsPartitionStore(
+        storage: AtomicTextFile(file),
+      );
       final partition = await store.readPartition('codex');
 
       await store.writePartition('codex', partition!);
@@ -204,7 +215,7 @@ void main() {
 
     test('parallel partition writes do not drop either source', () async {
       final store = FileUsageStatisticsPartitionStore(
-        file: _indexFile(tempDirectory),
+        storage: AtomicTextFile(_indexFile(tempDirectory)),
       );
 
       await Future.wait(<Future<void>>[
@@ -234,9 +245,11 @@ void main() {
       );
       await blockingParent.writeAsString('blocked');
       final store = FileUsageStatisticsPartitionStore(
-        file: File.fromUri(
-          tempDirectory.uri.resolve(
-            'not-a-directory/usage_statistics_index.json',
+        storage: AtomicTextFile(
+          File.fromUri(
+            tempDirectory.uri.resolve(
+              'not-a-directory/usage_statistics_index.json',
+            ),
           ),
         ),
       );

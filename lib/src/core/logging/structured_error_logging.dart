@@ -3,7 +3,6 @@ import 'dart:math' as math;
 
 import 'package:zeta_foundation/zeta_foundation.dart';
 
-import 'package:zeta/src/core/logging/app_logging.dart';
 import 'package:zeta/src/core/security/sensitive_data_redactor.dart';
 
 /// 写入带结构化、脱敏上下文的异常日志。
@@ -12,7 +11,7 @@ import 'package:zeta/src/core/security/sensitive_data_redactor.dart';
 /// 进入结构化消息前完成遮挡；原始异常仍作为 error/stackTrace 连同事件输出，
 /// 应用文件日志只持久化其类型。
 void logStructuredFailure(
-  AppLogger logger, {
+  ZetaLogger logger, {
   required String message,
   Map<String, Object?> context = const <String, Object?>{},
   Object? error,

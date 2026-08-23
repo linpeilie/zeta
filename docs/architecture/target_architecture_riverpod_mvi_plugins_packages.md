@@ -837,6 +837,10 @@ Phase 3 前置条件的计时起点。字段映射、门禁答卷、验收对照
 
 ### Phase 3：扩大迁移范围
 
+**状态：开工文档已起草（2026-08-23），迁移未开始。** Phase 2 真实使用证据计时进行中
+（2026-08-23 起生产全量启用切片路径）；开门/关门标准、六批的 owner 映射与删除清单、
+燃尽清单联动表见 [Phase 3 开工文档](./phase3_slice_expansion.md)。
+
 按风险从低到高分批，不做一次性“大爆炸”：
 
 1. settings/appearance/general；
@@ -850,7 +854,7 @@ Phase 3 前置条件的计时起点。字段映射、门禁答卷、验收对照
 
 - 每批建立 feature intent/state/effect/selectors，迁移唯一 owner 后删除该 feature 的旧写路径。
 - 拆解 `IdeShellController`：保留跨 feature workflow coordinator，移出 feature state 和 Repository 构造。
-- 将 `zeta_agent_core`、`zeta_agent_providers` 移入目标 Package，保持共享层与 Provider-local 边界。
+- ~~将 `zeta_agent_core`、`zeta_agent_providers` 移入目标 Package~~ 已在 Phase 1 提前完成（2026-08-22），本阶段不再涉及包搬迁。
 - app 通过 plugin catalog 组装 Provider；runtime registry 继续是 factory 唯一调用者和 CLI 唯一 owner。
 - 建立只读 root `ZetaStateSnapshot`，仅供诊断/恢复测试，不供生产 Widget watch。
 
