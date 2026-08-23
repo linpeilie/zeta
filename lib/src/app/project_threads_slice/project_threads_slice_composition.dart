@@ -16,7 +16,7 @@ final class ProjectThreadsSliceComposition {
 
   final ProjectThreadsSliceStore store;
 
-  /// 迁移期 effect/query runner，供契约测试确认它不再拥有列表状态。
+  /// Provider 查询、能力校验与防抖 runner；不拥有列表状态。
   final ProjectThreadsController controller;
 
   factory ProjectThreadsSliceComposition.create({

@@ -772,7 +772,8 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
 
 ### 使用统计开发约束
 
-- 合并左栏的折叠/展开内容只消费中立 `AgentUsagePanelController` / `AgentUsagePanelEntry`；
+- 合并左栏的折叠/展开内容只消费中立 `AgentUsagePanelOperations` /
+  `AgentUsagePanelEntry`；
   不得按 Provider id、kind 或显示名分支，也不得把原始配额 payload 带入 presentation。
 - 左栏只发现完整 Provider 目录，并按需读取当前选中项；首次启动、Tab 切换与配置目录
   更新不得顺带加载未选中的套餐或 Token。完整使用统计页仍通过全量查询聚合所有 Provider。

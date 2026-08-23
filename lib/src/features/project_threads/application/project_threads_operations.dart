@@ -3,10 +3,7 @@ import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
 import 'package:zeta/src/features/project_threads/domain/project_threads_session_snapshot.dart';
 
-/// Project Threads 对 Shell 暴露的稳定操作面。
-///
-/// 迁移期间旧 controller 与新 MVI store 分别实现该端口；Shell 只持有其中一个，
-/// 从类型层阻止 flag 两侧同时写入列表状态。
+/// Project Threads MVI store 对 Shell 暴露的稳定操作面。
 abstract interface class ProjectThreadsOperations {
   ProjectThreadListState stateFor(String projectPath);
 

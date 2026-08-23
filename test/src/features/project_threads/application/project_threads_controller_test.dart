@@ -6,9 +6,11 @@ import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta/src/features/project_threads/application/project_threads_controller.dart';
 import 'package:zeta/src/features/project_threads/application/project_threads_session_snapshot_codec.dart';
+import 'package:zeta/src/features/project_threads/application/project_threads_slice/project_threads_slice_effect.dart';
+import 'package:zeta/src/features/project_threads/application/project_threads_slice/project_threads_slice_state.dart';
+import 'package:zeta/src/features/project_threads/application/project_threads_slice/project_threads_slice_store.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
 import 'package:zeta/src/features/project_threads/domain/project_threads_session_snapshot.dart';
-import 'package:zeta/src/features/project_threads/presentation/project_threads_view_model.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
 
 import '../../../testing/agent_provider_stub_base.dart';
@@ -402,9 +404,9 @@ void main() {
 
     test('setThreadRunning promotes mapped thread on idle-to-running edge', () {
       final provider = _FakeAgentProvider(pages: const <AgentThreadPage>[]);
-      final viewModel = ProjectThreadsViewModel();
+      final viewModel = _createProjectThreadsStateOwner();
       final controller = _createController(provider, viewModel: viewModel);
-      viewModel.setStateFor(
+      viewModel.applyProjectState(
         '/repo',
         ProjectThreadListState(
           hasLoaded: true,
@@ -500,7 +502,7 @@ void main() {
         );
         final controller = _createController(
           provider,
-          viewModel: ProjectThreadsViewModel(),
+          viewModel: _createProjectThreadsStateOwner(),
         );
 
         final firstLoad = controller.loadInitial('/repo');
@@ -970,9 +972,9 @@ void main() {
       'setThreadRunning false clears sticky active status on list summary',
       () {
         final provider = _FakeAgentProvider(pages: const <AgentThreadPage>[]);
-        final viewModel = ProjectThreadsViewModel();
+        final viewModel = _createProjectThreadsStateOwner();
         final controller = _createController(provider, viewModel: viewModel);
-        viewModel.setStateFor(
+        viewModel.applyProjectState(
           '/repo',
           ProjectThreadListState(
             hasLoaded: true,
@@ -1097,7 +1099,7 @@ void main() {
       final controller = ProjectThreadsController(
         providerController: providerController,
         globalRuntime: AgentProviderGlobalRuntime(runtimeRegistry: registry),
-        stateOwner: ProjectThreadsViewModel(),
+        stateOwner: _createProjectThreadsStateOwner(),
       );
       addTearDown(() {
         controller.dispose();
@@ -1164,7 +1166,7 @@ void main() {
         providerController: providerController,
         globalRuntime: AgentProviderGlobalRuntime(runtimeRegistry: registry),
         bindingManager: bindingManager,
-        stateOwner: ProjectThreadsViewModel(),
+        stateOwner: _createProjectThreadsStateOwner(),
       );
       addTearDown(() async {
         controller.dispose();
@@ -1199,9 +1201,27 @@ void main() {
   });
 }
 
+ProjectThreadsSliceStore _createProjectThreadsStateOwner() {
+  return ProjectThreadsSliceStore(
+    initialState: ProjectThreadsSliceState(),
+    effectRunner: const _NoopProjectThreadsEffectRunner(),
+  );
+}
+
+final class _NoopProjectThreadsEffectRunner
+    implements ProjectThreadsSliceEffectRunner {
+  const _NoopProjectThreadsEffectRunner();
+
+  @override
+  void run(ProjectThreadsSliceEffect effect) {}
+
+  @override
+  void close() {}
+}
+
 ProjectThreadsController _createController(
   _FakeAgentProvider provider, {
-  ProjectThreadsViewModel? viewModel,
+  ProjectThreadsSliceStore? viewModel,
 }) {
   // 单 provider 配置，避免默认 Codex+Grok 下同一 fake 被聚合调用两次。
   final registry = AgentProviderRuntimeRegistry(
@@ -1219,7 +1239,7 @@ ProjectThreadsController _createController(
   final controller = ProjectThreadsController(
     providerController: providerController,
     globalRuntime: AgentProviderGlobalRuntime(runtimeRegistry: registry),
-    stateOwner: viewModel ?? ProjectThreadsViewModel(),
+    stateOwner: viewModel ?? _createProjectThreadsStateOwner(),
   );
   addTearDown(() {
     controller.dispose();
@@ -1233,7 +1253,7 @@ ProjectThreadsController _createMultiProviderController({
   required _FakeAgentProvider codex,
   required _FakeAgentProvider grok,
   List<String>? createdProviderIds,
-  ProjectThreadsViewModel? viewModel,
+  ProjectThreadsSliceStore? viewModel,
 }) {
   final registry = AgentProviderRuntimeRegistry(
     providerFactory: _MultiAgentProviderFactory(
@@ -1257,7 +1277,7 @@ ProjectThreadsController _createMultiProviderController({
   final controller = ProjectThreadsController(
     providerController: providerController,
     globalRuntime: AgentProviderGlobalRuntime(runtimeRegistry: registry),
-    stateOwner: viewModel ?? ProjectThreadsViewModel(),
+    stateOwner: viewModel ?? _createProjectThreadsStateOwner(),
   );
   addTearDown(() {
     controller.dispose();

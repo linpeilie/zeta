@@ -2,16 +2,21 @@ import 'dart:async';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_slice_runner.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon.dart';
-import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_controller.dart';
+import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_slice/agent_usage_panel_slice_state.dart';
+import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_slice/agent_usage_panel_slice_store.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
+import 'package:zeta/src/features/usage_statistics/domain/fallback_usage_statistics_text_catalog.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/agent_usage_panel.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/agent_usage_quota_gallery.dart';
+import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_slice/usage_statistics_slice_providers.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta/src/app/localization/zeta_text_catalogs.dart';
 import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
@@ -57,7 +62,7 @@ Future<void> _pumpQuotaWindows(
   WidgetTester tester,
   List<AgentUsageWindow> windows,
 ) async {
-  final controller = AgentUsagePanelController(
+  final controller = _createPanelStore(
     repository: _ImmediatePanelRepository(<AgentUsagePanelEntry>[
       AgentUsagePanelEntry(
         providerId: 'codex',
@@ -77,7 +82,7 @@ Future<void> _pumpQuotaWindows(
 
 void main() {
   testWidgets('默认 Provider Tab 仅展示 Codex 和 Grok', (tester) async {
-    final controller = AgentUsagePanelController(
+    final controller = _createPanelStore(
       repository: _ImmediatePanelRepository(const <AgentUsagePanelEntry>[
         AgentUsagePanelEntry(providerId: 'codex', providerName: 'Codex'),
         AgentUsagePanelEntry(providerId: 'grok', providerName: 'Grok'),
@@ -93,7 +98,7 @@ void main() {
   });
 
   testWidgets('按 Provider Tab 展示今日 Token，并只展示可用套餐', (tester) async {
-    final controller = AgentUsagePanelController(
+    final controller = _createPanelStore(
       repository: _ImmediatePanelRepository(_usageEntries),
     );
     addTearDown(controller.dispose);
@@ -164,7 +169,7 @@ void main() {
   });
 
   testWidgets('今日 Token 子项按 2×2 网格排布在浅灰圆角容器中', (tester) async {
-    final controller = AgentUsagePanelController(
+    final controller = _createPanelStore(
       repository: _ImmediatePanelRepository(_usageEntries),
     );
     addTearDown(controller.dispose);
@@ -240,7 +245,7 @@ void main() {
 
   testWidgets('目录到达即展示 Tabs，只有选中项按需显示加载动画', (tester) async {
     final repository = _ControlledPanelRepository();
-    final controller = AgentUsagePanelController(repository: repository);
+    final controller = _createPanelStore(repository: repository);
     addTearDown(controller.dispose);
     await _pumpPanel(tester, controller);
 
@@ -299,7 +304,7 @@ void main() {
   });
 
   testWidgets('Provider Tabs 与右侧刷新操作保持同一行', (tester) async {
-    final controller = AgentUsagePanelController(
+    final controller = _createPanelStore(
       repository: _ImmediatePanelRepository(_usageEntries),
     );
     addTearDown(controller.dispose);
@@ -322,7 +327,7 @@ void main() {
           providerName: 'Provider $index Very Long Name',
         ),
     ];
-    final controller = AgentUsagePanelController(
+    final controller = _createPanelStore(
       repository: _ImmediatePanelRepository(entries),
     );
     addTearDown(controller.dispose);
@@ -346,7 +351,7 @@ void main() {
 
   testWidgets('刷新保留旧内容，并在失败后附加局部错误', (tester) async {
     final repository = _RefreshPanelRepository(_usageEntries.first);
-    final controller = AgentUsagePanelController(repository: repository);
+    final controller = _createPanelStore(repository: repository);
     addTearDown(controller.dispose);
     await _pumpPanel(tester, controller);
     expect(_inPopover(find.text('1.6K')), findsOneWidget);
@@ -374,7 +379,7 @@ void main() {
 
   testWidgets('静默刷新保留旧内容且不展示加载 Skeleton', (tester) async {
     final repository = _RefreshPanelRepository(_usageEntries.first);
-    final controller = AgentUsagePanelController(repository: repository);
+    final controller = _createPanelStore(repository: repository);
     addTearDown(controller.dispose);
     await _pumpPanel(tester, controller);
     expect(_inPopover(find.text('1.6K')), findsOneWidget);
@@ -403,7 +408,7 @@ void main() {
 
   testWidgets('冷加载展示呼吸 Skeleton 而非进度条', (tester) async {
     final repository = _ControlledPanelRepository();
-    final controller = AgentUsagePanelController(repository: repository);
+    final controller = _createPanelStore(repository: repository);
     addTearDown(controller.dispose);
     await _pumpPanel(tester, controller);
 
@@ -417,7 +422,7 @@ void main() {
   });
 
   testWidgets('单 Provider 不显示 Tabs', (tester) async {
-    final controller = AgentUsagePanelController(
+    final controller = _createPanelStore(
       repository: _ImmediatePanelRepository(<AgentUsagePanelEntry>[
         _usageEntries.first,
       ]),
@@ -431,7 +436,7 @@ void main() {
 
   testWidgets('目录加载失败时提供重试入口', (tester) async {
     final repository = _RetryRepository();
-    final controller = AgentUsagePanelController(repository: repository);
+    final controller = _createPanelStore(repository: repository);
     addTearDown(controller.dispose);
 
     await _pumpPanel(tester, controller);
@@ -448,7 +453,7 @@ void main() {
   });
 
   testWidgets('plan-only 展开态隐藏套餐区，只保留 Token 统计', (tester) async {
-    final controller = AgentUsagePanelController(
+    final controller = _createPanelStore(
       repository: _ImmediatePanelRepository(const <AgentUsagePanelEntry>[
         AgentUsagePanelEntry(
           providerId: 'claude-code',
@@ -486,7 +491,7 @@ void main() {
   });
 
   testWidgets('Claude 套餐按 API 顺序展示通用及模型周窗口', (tester) async {
-    final controller = AgentUsagePanelController(
+    final controller = _createPanelStore(
       repository: const _ImmediatePanelRepository(<AgentUsagePanelEntry>[
         AgentUsagePanelEntry(
           providerId: 'claude-code',
@@ -624,7 +629,7 @@ void main() {
   });
 
   testWidgets('展开态不展示零张或缺失的重置卡数量', (tester) async {
-    final controller = AgentUsagePanelController(
+    final controller = _createPanelStore(
       repository: const _ImmediatePanelRepository(<AgentUsagePanelEntry>[
         AgentUsagePanelEntry(
           providerId: 'provider-zero',
@@ -695,7 +700,7 @@ void main() {
         ],
       ),
     );
-    final controller = AgentUsagePanelController(
+    final controller = _createPanelStore(
       repository: const _ImmediatePanelRepository(<AgentUsagePanelEntry>[
         entry,
       ]),
@@ -743,7 +748,7 @@ void main() {
   });
 
   testWidgets('折叠态 plan-only 隐藏套餐行且不伪造进度', (tester) async {
-    final controller = AgentUsagePanelController(
+    final controller = _createPanelStore(
       repository: const _ImmediatePanelRepository(<AgentUsagePanelEntry>[
         AgentUsagePanelEntry(
           providerId: 'claude-code',
@@ -785,7 +790,7 @@ void main() {
   });
 
   testWidgets('折叠态无套餐时显示 Provider 与 Token 横线两行', (tester) async {
-    final controller = AgentUsagePanelController(
+    final controller = _createPanelStore(
       repository: const _ImmediatePanelRepository(<AgentUsagePanelEntry>[
         AgentUsagePanelEntry(
           providerId: 'provider-free',
@@ -820,7 +825,7 @@ void main() {
 
   testWidgets('折叠态冷加载使用三行呼吸 Skeleton 并保留展开按钮', (tester) async {
     final repository = _ControlledPanelRepository();
-    final controller = AgentUsagePanelController(repository: repository);
+    final controller = _createPanelStore(repository: repository);
     addTearDown(controller.dispose);
     AgentUsagePanelMode? requestedMode;
 
@@ -851,7 +856,7 @@ void main() {
 
   testWidgets('折叠态 Provider 读取失败保持单行错误和重试入口', (tester) async {
     final repository = _ControlledPanelRepository();
-    final controller = AgentUsagePanelController(repository: repository);
+    final controller = _createPanelStore(repository: repository);
     addTearDown(controller.dispose);
 
     await _pumpPanelContent(
@@ -892,7 +897,7 @@ void main() {
   testWidgets('折叠态长文本在紧凑高度内省略且不溢出', (tester) async {
     const longName =
         'A very long provider display name that must stay inside the sidebar';
-    final controller = AgentUsagePanelController(
+    final controller = _createPanelStore(
       repository: const _ImmediatePanelRepository(<AgentUsagePanelEntry>[
         AgentUsagePanelEntry(
           providerId: 'provider-long',
@@ -921,7 +926,7 @@ void main() {
   });
 
   testWidgets('展开态在折叠摘要上方弹出 Popover 并保留摘要锚点', (tester) async {
-    final controller = AgentUsagePanelController(
+    final controller = _createPanelStore(
       repository: _ImmediatePanelRepository(_usageEntries),
     );
     addTearDown(controller.dispose);
@@ -1019,7 +1024,7 @@ void main() {
   });
 
   testWidgets('展开态点击摘要开合按钮请求折叠', (tester) async {
-    final controller = AgentUsagePanelController(
+    final controller = _createPanelStore(
       repository: _ImmediatePanelRepository(_usageEntries),
     );
     addTearDown(controller.dispose);
@@ -1051,7 +1056,7 @@ void main() {
   });
 
   testWidgets('展开态点击弹层外部收敛回折叠态', (tester) async {
-    final controller = AgentUsagePanelController(
+    final controller = _createPanelStore(
       repository: _ImmediatePanelRepository(_usageEntries),
     );
     addTearDown(controller.dispose);
@@ -1107,6 +1112,21 @@ final _usageEntries = <AgentUsagePanelEntry>[
   ),
 ];
 
+AgentUsagePanelSliceStore _createPanelStore({
+  required AgentUsagePanelRepository repository,
+}) {
+  final runner = AgentUsagePanelSliceRunnerAdapter(
+    repository: repository,
+    textCatalog: const FallbackUsageStatisticsTextCatalog(),
+  );
+  final store = AgentUsagePanelSliceStore(
+    initialState: AgentUsagePanelSliceState(),
+    effectRunner: runner,
+  );
+  runner.store = store;
+  return store;
+}
+
 List<AgentUsagePanelProvider> _directoryFor(
   List<AgentUsagePanelEntry> entries,
 ) {
@@ -1126,7 +1146,7 @@ AgentUsagePanelProviderResult _panelResult(
 
 Future<void> _pumpPanel(
   WidgetTester tester,
-  AgentUsagePanelController controller, {
+  AgentUsagePanelSliceStore controller, {
   double width = 320,
 }) async {
   unawaited(controller.refresh());
@@ -1143,34 +1163,44 @@ Future<void> _pumpPanel(
     codeFontFamily: 'JetBrainsMono',
   );
   await tester.pumpWidget(
-    IdeUiTextScope(
-      catalog: AppZetaUiTextCatalog(
-        lookupAppLocalizations(ZetaLocalization.simplifiedChinese),
-      ),
-      child: IdeThemeScope(
-        themeMode: ThemeMode.light,
-        lightTheme: ideTheme,
-        darkTheme: buildIdeThemeData(
-          brightness: Brightness.dark,
-          codeFontFamily: 'JetBrainsMono',
+    ProviderScope(
+      overrides: [
+        agentUsagePanelSliceStoreProvider.overrideWithValue(controller),
+      ],
+      child: IdeUiTextScope(
+        catalog: AppZetaUiTextCatalog(
+          lookupAppLocalizations(ZetaLocalization.simplifiedChinese),
         ),
-        child: sf.ShadcnApp(
-          locale: ZetaLocalization.simplifiedChinese,
-          supportedLocales: ZetaLocalization.supportedLocales,
-          localizationsDelegates: ZetaLocalization.delegates,
-          theme: buildShadcnTheme(ideTheme),
-          materialTheme: buildMaterialTheme(ideTheme),
-          home: sf.Scaffold(
-            // 统计区在真实左栏中贴底且横向撑满，弹层才有向上展开的空间与宽度。
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Spacer(),
-                AgentUsagePanelContent(
-                  controller: controller,
-                  mode: AgentUsagePanelMode.expanded,
-                ),
-              ],
+        child: IdeThemeScope(
+          themeMode: ThemeMode.light,
+          lightTheme: ideTheme,
+          darkTheme: buildIdeThemeData(
+            brightness: Brightness.dark,
+            codeFontFamily: 'JetBrainsMono',
+          ),
+          child: sf.ShadcnApp(
+            locale: ZetaLocalization.simplifiedChinese,
+            supportedLocales: ZetaLocalization.supportedLocales,
+            localizationsDelegates: ZetaLocalization.delegates,
+            theme: buildShadcnTheme(ideTheme),
+            materialTheme: buildMaterialTheme(ideTheme),
+            home: Consumer(
+              builder: (context, ref, _) {
+                ref.watch(agentUsagePanelSliceProvider);
+                return sf.Scaffold(
+                  // 统计区在真实左栏中贴底且横向撑满，弹层才有向上展开的空间与宽度。
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Spacer(),
+                      AgentUsagePanelContent(
+                        controller: controller,
+                        mode: AgentUsagePanelMode.expanded,
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
           ),
         ),
@@ -1190,7 +1220,7 @@ Future<void> _settlePopover(WidgetTester tester) async {
 
 Future<void> _pumpPanelContent(
   WidgetTester tester,
-  AgentUsagePanelController controller, {
+  AgentUsagePanelSliceStore controller, {
   required AgentUsagePanelMode mode,
   required ValueChanged<AgentUsagePanelMode> onModeChanged,
   double width = 320,
@@ -1210,34 +1240,44 @@ Future<void> _pumpPanelContent(
     codeFontFamily: 'JetBrainsMono',
   );
   await tester.pumpWidget(
-    IdeUiTextScope(
-      catalog: AppZetaUiTextCatalog(
-        lookupAppLocalizations(ZetaLocalization.simplifiedChinese),
-      ),
-      child: IdeThemeScope(
-        themeMode: ThemeMode.light,
-        lightTheme: ideTheme,
-        darkTheme: buildIdeThemeData(
-          brightness: Brightness.dark,
-          codeFontFamily: 'JetBrainsMono',
+    ProviderScope(
+      overrides: [
+        agentUsagePanelSliceStoreProvider.overrideWithValue(controller),
+      ],
+      child: IdeUiTextScope(
+        catalog: AppZetaUiTextCatalog(
+          lookupAppLocalizations(ZetaLocalization.simplifiedChinese),
         ),
-        child: sf.ShadcnApp(
-          locale: ZetaLocalization.simplifiedChinese,
-          supportedLocales: ZetaLocalization.supportedLocales,
-          localizationsDelegates: ZetaLocalization.delegates,
-          theme: buildShadcnTheme(ideTheme),
-          materialTheme: buildMaterialTheme(ideTheme),
-          home: sf.Scaffold(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Spacer(),
-                AgentUsagePanelContent(
-                  controller: controller,
-                  mode: mode,
-                  onModeChanged: onModeChanged,
-                ),
-              ],
+        child: IdeThemeScope(
+          themeMode: ThemeMode.light,
+          lightTheme: ideTheme,
+          darkTheme: buildIdeThemeData(
+            brightness: Brightness.dark,
+            codeFontFamily: 'JetBrainsMono',
+          ),
+          child: sf.ShadcnApp(
+            locale: ZetaLocalization.simplifiedChinese,
+            supportedLocales: ZetaLocalization.supportedLocales,
+            localizationsDelegates: ZetaLocalization.delegates,
+            theme: buildShadcnTheme(ideTheme),
+            materialTheme: buildMaterialTheme(ideTheme),
+            home: Consumer(
+              builder: (context, ref, _) {
+                ref.watch(agentUsagePanelSliceProvider);
+                return sf.Scaffold(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Spacer(),
+                      AgentUsagePanelContent(
+                        controller: controller,
+                        mode: mode,
+                        onModeChanged: onModeChanged,
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
           ),
         ),

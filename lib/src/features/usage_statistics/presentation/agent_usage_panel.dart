@@ -9,7 +9,6 @@ import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon.dart';
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_operations.dart';
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_slice/agent_usage_panel_slice_state.dart';
-import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_slice/agent_usage_panel_slice_store.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/agent_usage_quota_gallery.dart';
@@ -31,13 +30,11 @@ class AgentUsagePanelContent extends StatefulWidget {
     required this.mode,
     super.key,
     this.onModeChanged,
-    this.sliceStore,
   });
 
   final AgentUsagePanelOperations controller;
   final AgentUsagePanelMode mode;
   final ValueChanged<AgentUsagePanelMode>? onModeChanged;
-  final AgentUsagePanelSliceStore? sliceStore;
 
   @override
   State<AgentUsagePanelContent> createState() => _AgentUsagePanelContentState();
@@ -80,21 +77,10 @@ class _AgentUsagePanelContentState extends State<AgentUsagePanelContent> {
 
   @override
   Widget build(BuildContext context) {
-    final controller = widget.controller;
-    if (controller is! Listenable) {
-      return _CompactAgentUsage(
-        controller: controller,
-        expanded: widget.mode == AgentUsagePanelMode.expanded,
-        onToggle: widget.onModeChanged == null ? null : _toggleMode,
-      );
-    }
-    return ListenableBuilder(
-      listenable: controller as Listenable,
-      builder: (context, _) => _CompactAgentUsage(
-        controller: widget.controller,
-        expanded: widget.mode == AgentUsagePanelMode.expanded,
-        onToggle: widget.onModeChanged == null ? null : _toggleMode,
-      ),
+    return _CompactAgentUsage(
+      controller: widget.controller,
+      expanded: widget.mode == AgentUsagePanelMode.expanded,
+      onToggle: widget.onModeChanged == null ? null : _toggleMode,
     );
   }
 
@@ -166,7 +152,6 @@ class _AgentUsagePanelContentState extends State<AgentUsagePanelContent> {
       dismissDuration: duration,
       builder: (_) => _AgentUsagePopover(
         controller: widget.controller,
-        sliceStore: widget.sliceStore,
         width: width,
         maxHeight: maxHeight,
       ),
@@ -193,13 +178,11 @@ class _AgentUsagePanelContentState extends State<AgentUsagePanelContent> {
 class _AgentUsagePopover extends StatelessWidget {
   const _AgentUsagePopover({
     required this.controller,
-    required this.sliceStore,
     required this.width,
     required this.maxHeight,
   });
 
   final AgentUsagePanelOperations controller;
-  final AgentUsagePanelSliceStore? sliceStore;
 
   /// 锚点宽度左右各内缩后的弹层宽度。
   final double width;
@@ -208,15 +191,12 @@ class _AgentUsagePopover extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (sliceStore != null) {
-      return Consumer(
-        builder: (context, ref, _) {
-          ref.watch(agentUsagePanelSliceProvider);
-          return _buildPopover();
-        },
-      );
-    }
-    return _buildPopover();
+    return Consumer(
+      builder: (context, ref, _) {
+        ref.watch(agentUsagePanelSliceProvider);
+        return _buildPopover();
+      },
+    );
   }
 
   Widget _buildPopover() {
@@ -228,13 +208,7 @@ class _AgentUsagePopover extends StatelessWidget {
       ),
       child: IdeSurface.popover(
         key: const ValueKey('agent-usage-popover'),
-        child: controller is Listenable
-            ? ListenableBuilder(
-                listenable: controller as Listenable,
-                builder: (context, _) =>
-                    _AgentUsagePanelBody(controller: controller),
-              )
-            : _AgentUsagePanelBody(controller: controller),
+        child: _AgentUsagePanelBody(controller: controller),
       ),
     );
   }

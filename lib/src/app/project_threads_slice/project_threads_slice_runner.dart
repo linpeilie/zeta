@@ -8,8 +8,8 @@ import 'package:zeta/src/features/project_threads/application/project_threads_sl
 
 /// Project Threads MVI 的 app 组合层 effect runner。
 ///
-/// 既有 controller 在迁移期降为 Provider 查询/能力校验/Timer 执行器；所有状态写入
-/// 都经构造时注入的 slice store typed ingress 回流。
+/// controller 只执行 Provider 查询、能力校验和 Timer；所有状态写入都经构造时
+/// 注入的 slice store typed ingress 回流。
 final class ProjectThreadsSliceRunnerAdapter
     implements ProjectThreadsSliceEffectRunner {
   ProjectThreadsSliceRunnerAdapter(this._controller, this._store);

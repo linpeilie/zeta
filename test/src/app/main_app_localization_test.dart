@@ -67,7 +67,6 @@ void main() {
       conversationSliceEnabled: true,
       settingsSliceEnabled: true,
       providerManagementSliceEnabled: true,
-      projectThreadsSliceEnabled: true,
     );
     await tester.pump();
 
@@ -279,7 +278,6 @@ Future<void> _pumpMainApp(
   bool conversationSliceEnabled = false,
   bool settingsSliceEnabled = false,
   bool providerManagementSliceEnabled = false,
-  bool projectThreadsSliceEnabled = false,
 }) async {
   tester.view
     ..physicalSize = const Size(1400, 900)
@@ -307,7 +305,6 @@ Future<void> _pumpMainApp(
       conversationSliceEnabled: conversationSliceEnabled,
       settingsSliceEnabled: settingsSliceEnabled,
       providerManagementSliceEnabled: providerManagementSliceEnabled,
-      projectThreadsSliceEnabled: projectThreadsSliceEnabled,
     ),
   );
 }

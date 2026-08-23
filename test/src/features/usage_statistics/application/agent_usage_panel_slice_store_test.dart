@@ -2,13 +2,16 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_controller.dart';
+import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_slice_runner.dart';
+import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_slice/agent_usage_panel_slice_state.dart';
+import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_slice/agent_usage_panel_slice_store.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
+import 'package:zeta/src/features/usage_statistics/domain/fallback_usage_statistics_text_catalog.dart';
 
 void main() {
   test('首次只加载默认选中的 Provider', () async {
     final repository = _ControlledPanelRepository();
-    final controller = AgentUsagePanelController(repository: repository);
+    final controller = _createPanelStore(repository: repository);
     addTearDown(controller.dispose);
 
     final refresh = controller.refresh(forceRefresh: false);
@@ -38,7 +41,7 @@ void main() {
 
   test('切换到未加载 Tab 时按需加载，快速切换保留各自结果', () async {
     final repository = _ControlledPanelRepository();
-    final controller = AgentUsagePanelController(repository: repository);
+    final controller = _createPanelStore(repository: repository);
     addTearDown(controller.dispose);
 
     final initialRefresh = controller.refresh();
@@ -74,7 +77,7 @@ void main() {
 
   test('已加载 Tab 再次选中不会重复查询', () async {
     final repository = _ControlledPanelRepository();
-    final controller = AgentUsagePanelController(repository: repository);
+    final controller = _createPanelStore(repository: repository);
     addTearDown(controller.dispose);
 
     final refresh = controller.refresh();
@@ -90,7 +93,7 @@ void main() {
 
   test('手动刷新只强制刷新当前 Provider，并保留旧数据', () async {
     final repository = _ControlledPanelRepository();
-    final controller = AgentUsagePanelController(repository: repository);
+    final controller = _createPanelStore(repository: repository);
     addTearDown(controller.dispose);
 
     final initialRefresh = controller.refresh();
@@ -121,7 +124,7 @@ void main() {
 
   test('静默刷新保留旧数据且不进入当前 Tab 加载态', () async {
     final repository = _ControlledPanelRepository();
-    final controller = AgentUsagePanelController(repository: repository);
+    final controller = _createPanelStore(repository: repository);
     addTearDown(controller.dispose);
 
     final initialRefresh = controller.refresh();
@@ -142,7 +145,7 @@ void main() {
 
   test('目录同步只增加未加载 Tab，切换后才读取新增 Provider', () async {
     final repository = _ControlledPanelRepository();
-    final controller = AgentUsagePanelController(repository: repository);
+    final controller = _createPanelStore(repository: repository);
     addTearDown(controller.dispose);
 
     final initialRefresh = controller.refresh();
@@ -174,7 +177,7 @@ void main() {
 
   test('目录移除 Provider 后丢弃它的迟到结果', () async {
     final repository = _ControlledPanelRepository();
-    final controller = AgentUsagePanelController(repository: repository);
+    final controller = _createPanelStore(repository: repository);
     addTearDown(controller.dispose);
 
     final staleRefresh = controller.refresh();
@@ -199,7 +202,7 @@ void main() {
 
   test('单 Provider 失败局部展示错误，并可独立重试', () async {
     final repository = _ControlledPanelRepository();
-    final controller = AgentUsagePanelController(repository: repository);
+    final controller = _createPanelStore(repository: repository);
     addTearDown(controller.dispose);
 
     final initialRefresh = controller.refresh();
@@ -230,7 +233,7 @@ void main() {
   test('恢复偏好后首次只加载恢复的 Provider 且不回写', () async {
     final repository = _ControlledPanelRepository();
     final selectionChanges = <String?>[];
-    final controller = AgentUsagePanelController(
+    final controller = _createPanelStore(
       repository: repository,
       initialPreferredProviderId: ' grok ',
       onSelectionChanged: selectionChanges.add,
@@ -251,7 +254,7 @@ void main() {
   test('目录到达前保留最后一个 Turn 终态偏好并按需加载', () async {
     final repository = _ControlledPanelRepository();
     final selectionChanges = <String?>[];
-    final controller = AgentUsagePanelController(
+    final controller = _createPanelStore(
       repository: repository,
       onSelectionChanged: selectionChanges.add,
     );
@@ -274,7 +277,7 @@ void main() {
 
   test('目录读取失败时提供目录级错误并允许重试', () async {
     final repository = _ControlledPanelRepository()..failNextDiscovery = true;
-    final controller = AgentUsagePanelController(repository: repository);
+    final controller = _createPanelStore(repository: repository);
     addTearDown(controller.dispose);
 
     await controller.refresh();
@@ -289,6 +292,26 @@ void main() {
     expect(controller.errorMessage, isNull);
     expect(controller.selectedEntry?.providerId, 'codex');
   });
+}
+
+AgentUsagePanelSliceStore _createPanelStore({
+  required AgentUsagePanelRepository repository,
+  String? initialPreferredProviderId,
+  void Function(String? providerId)? onSelectionChanged,
+}) {
+  final runner = AgentUsagePanelSliceRunnerAdapter(
+    repository: repository,
+    textCatalog: const FallbackUsageStatisticsTextCatalog(),
+  );
+  final store = AgentUsagePanelSliceStore(
+    initialState: AgentUsagePanelSliceState(),
+    effectRunner: runner,
+  );
+  runner
+    ..store = store
+    ..selectionPersistenceHandler = onSelectionChanged;
+  store.restorePreferredProviderId(initialPreferredProviderId);
+  return store;
 }
 
 const _directory = <AgentUsagePanelProvider>[

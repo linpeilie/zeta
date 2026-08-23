@@ -108,18 +108,19 @@ AgentManagementController
     -> Claude 认证证据走 auth status；显式连接测试只发无 Prompt initialize
     -> provider 对应配置与脱敏诊断
 
-UsageStatisticsController
-  -> UsageStatisticsRepository
-    -> CompositeUsageStatisticsRepository
-      -> CodexUsageStatisticsRepository
+UsageStatisticsSliceStore
+  -> UsageStatisticsSliceRunnerAdapter
+    -> AgentUsageQueryService
+      -> BuiltInAgentTokenUsageSourceRegistry
+        -> CodexUsageStatisticsRepository
         -> 本地 Codex rollout JSONL 历史
         -> 版本化派生索引（providers.codex 分区）
         -> 可选 account/rateLimits/read（套餐）
-      -> GrokUsageStatisticsRepository
+        -> GrokUsageStatisticsRepository
         -> 本地 Grok updates.jsonl 历史
         -> 版本化派生索引（providers.grok 分区）
         -> 可选 AgentUsageQuotaProvider / `_x.ai/billing`
-      -> ClaudeCode AgentUsageQuotaProvider
+        -> ClaudeCode AgentUsageQuotaProvider
         -> initialize account metadata（套餐名称）
         -> 可关闭的 OAuth usage REST（额度窗口）
 
@@ -809,7 +810,7 @@ IDE 会话状态目前版本为 2，持久化内容包括：
   tool upsert、终态竞态和迟到事件决策；共享层 fixture 保持 Provider 无关。
 - AgentConversationViewModel 状态机。
 - Agent 管理的版本比较、配置校验/冲突/备份、日志脱敏和禁用只读联动。
-- ProjectThreadsController 和 ProjectThreadsViewModel 的分页、缓存、选择和错误状态分工。
+- ProjectThreadsSliceStore 与 effect/query runner 的分页、缓存、选择和错误状态分工。
 - App 或关键 Pane 的 widget 行为。
 
 新增功能应优先选择最靠近风险点的测试层级，避免为了简单 UI 调整引入过重测试。

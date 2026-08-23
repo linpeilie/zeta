@@ -2,9 +2,6 @@ import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 
 /// 左栏 Agent 用量对 Shell/presentation 暴露的稳定操作面。
-///
-/// 目录发现、按需加载与选择偏好只有构造时选中的一个实现负责，禁止 legacy 与
-/// slice 双写。
 abstract interface class AgentUsagePanelOperations {
   AgentUsagePanelRepository get repository;
 

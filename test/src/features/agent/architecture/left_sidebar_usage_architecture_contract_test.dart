@@ -60,9 +60,9 @@ void main() {
     });
 
     test('统计选择不会改写会话 active Provider', () {
-      final controller = File(
+      final panelStore = File(
         'lib/src/features/usage_statistics/application/'
-        'agent_usage_panel_controller.dart',
+        'agent_usage_panel_slice/agent_usage_panel_slice_store.dart',
       ).readAsStringSync();
       final home = File(
         'lib/src/ui/features/ide/views/ide_home.dart',
@@ -71,8 +71,8 @@ void main() {
         'lib/src/app/shell/ide_shell_controller.dart',
       ).readAsStringSync();
 
-      expect(controller, isNot(contains('AgentProviderSettingsController')));
-      expect(controller, isNot(contains('activeProviderId')));
+      expect(panelStore, isNot(contains('AgentProviderSettingsController')));
+      expect(panelStore, isNot(contains('activeProviderId')));
 
       final terminalHandler = _slice(
         home,

@@ -47,22 +47,10 @@ class _UsageStatisticsPageState extends State<UsageStatisticsPage> {
             title: context.l10n.usagePageTitle,
             subtitle: context.l10n.usagePageSubtitle,
           ),
-          Expanded(child: _buildReactiveBody(context)),
+          Expanded(child: _buildBody(context)),
         ],
       ),
     );
-  }
-
-  Widget _buildReactiveBody(BuildContext context) {
-    final controller = widget.controller;
-    if (controller is Listenable) {
-      return ListenableBuilder(
-        listenable: controller as Listenable,
-        builder: (context, _) => _buildBody(context),
-      );
-    }
-    // slice 路径由外层 Riverpod 镜像驱动重建；operations 本身保持纯 Dart。
-    return _buildBody(context);
   }
 
   Widget _buildBody(BuildContext context) {

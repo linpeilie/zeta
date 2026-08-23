@@ -68,6 +68,11 @@
 > 通过后，经后续“继续下一步”显式确认，`main.dart` 已传
 > `usageStatisticsSliceEnabled: true`。3b 风险为中，取至少 5 天观察期，最早于
 > 2026-08-28 关批；3a 与 3b 独立回滚、独立计时。
+>
+> **第 3 批提前关批记录（2026-08-23）**：用户随后明确要求“直接进行下一阶段”，
+> 接受缩短 3a/3b 原定观察余量并直接执行四步节奏第 4 步。三个旧
+> `ChangeNotifier` owner、两个批内 flag、Shell usage 装配链和 false-path 已删除；
+> 第 3 批固定为 MVI 单一路径。该授权不改变第 1、2 批独立的观察与回滚边界。
 
 **关门标准（每批合入的条件）**，逐条来自目标架构 Phase 3 验收标准：
 
@@ -85,7 +90,7 @@
 | --- | --- | --- | --- | --- |
 | 1 | settings（appearance / general） | `AppearanceSettingsController`、`GeneralSettingsController` | 低：消费面小，无 Provider 协议 | 两个 ChangeNotifier controller、settings domain 的 Flutter 类型 |
 | 2 | provider 配置 / 管理 / 模型目录 | `AgentProviderSettingsController`（实现 `AgentProviderSettingsPort`）、`AgentManagementController`（785 行）、`AgentModelCatalogRepository` | 中高：port 被 agent / project_threads / agent_management 多处消费；G4 能力位 | provider settings 的 ChangeNotifier 形态、management 的 controller 形态 |
-| 3 | project threads + usage statistics | `ProjectThreadsViewModel`（ChangeNotifier，放在 presentation）、`ProjectThreadsController`（application 反向依赖 presentation）、`UsageStatisticsController`、`AgentUsagePanelController` | 中：跨 provider 聚合、分页、防抖、恢复 | 三个 ChangeNotifier + usage 组装链从 `IdeShellController` 构造器移出 |
+| 3（已关批） | project threads + usage statistics | 迁移源 `ProjectThreadsViewModel`、`UsageStatisticsController`、`AgentUsagePanelController` 均已删除；当前 owner 为三个纯 Dart store | 中：跨 provider 聚合、分页、防抖、恢复 | ✅ 三个 ChangeNotifier、两个 flag 已删；usage 组装链已移出 Shell |
 | 4 | workspace + ide session | 文件树/项目状态直接长在 `IdeShellController`（1416 行）上、`WorkspaceFileIndexController`、`IdeSessionPersistenceCoordinator` | 中高：启动恢复流程、文件树热路径 | `IdeShellController` 的树/项目/会话状态字段与 repository 构造 |
 | 5 | desktop attention + conversation workspace 外壳 | `DesktopAttentionController`、`IdeShellController` 的 entry↔列表同步管线、三个 conversation 级 controller（mode / model selection / skills） | 中高：G5 审批语义、entry 生命周期、Binding lease | conversation 级 ChangeNotifier ×3、`agent_thread_workspace_controller` 的反向依赖 |
 | 6 | 三个显式 Provider 插件 | `CompatibilityAgentProviderPlugin`（使用点计数 1，测试断言）+ `DefaultAgentProviderFactory` 的 kind switch | 低：kernel 契约测试齐全（665 行 registry 测试） | 兼容层账本兑现：`CompatibilityAgentProviderPlugin`、`ZetaPluginCatalog.compatibility` |
@@ -184,12 +189,12 @@ Widget 禁止订阅（§11.3 告警项 + 守卫）。
 | --- | --- | --- |
 | `knownApplicationToPresentation`（当前 1，基线 2） | ~~`project_threads_controller`~~ | ✅ 第 3 批 3a 已清零 |
 | | `agent_thread_workspace_controller` | 第 5 批 |
-| `knownApplicationFlutterImports`（12） | settings ×2（appearance / general controller） | 第 1 批 |
+| `knownApplicationFlutterImports`（当前 10，基线 12） | settings ×2（appearance / general controller） | 第 1 批 |
 | | `agent_provider_settings_controller`、`agent_provider_settings_port`、`agent_management_controller` | 第 2 批 |
-| | `usage_statistics_controller`、`agent_usage_panel_controller` | 第 3 批 |
+| | ~~`usage_statistics_controller`、`agent_usage_panel_controller`~~ | ✅ 第 3 批已清零 |
 | | `workspace_file_index_controller` | 第 4 批 |
 | | `agent_conversation_mode_controller`、`agent_conversation_model_selection_controller`、`agent_skills_catalog_controller`、`agent_thread_workspace_controller` | 第 5 批 |
-| `knownDomainImpurities`（4） | settings domain ×3（`appearance_settings` / `general_settings` / `system_font_family`） | 第 1 批（§3.2 决策点 A） |
+| `knownDomainImpurities`（当前 1，基线 4） | ~~settings domain ×3（`appearance_settings` / `general_settings` / `system_font_family`）~~ | ✅ 第 1 批已清零（§3.2 决策点 A） |
 | | `workspace_directory_rules` | 第 4 批 |
 | ~~`_knownExternalViolations`（7，全在 `core/`）~~ | ~~`app_logging` ×2、`sensitive_data_redactor`、`atomic_text_file`、`zeta_data_paths`、`path_utils`、`system_file_manager`~~ | ✅ 2026-08-23 已清零（开工文档起草当天，独立于任何迁移批）：IO 下沉 `app/storage` / `app/logging` / `ui/core`，路径与脱敏注入化 |
 | `_agentCoreFlutterBaseline = 17` | `zeta_agent_core` 的 `flutter/foundation` 依赖 | 不绑单批：随相关监听方改造递减，Phase 4 前清零；日志 sink 单例例外（§12.10）在其取消条件满足（内核用日志的类改构造注入）时一并删除 |
@@ -371,38 +376,25 @@ capability 位与 UI 入口的 G4 对照表、`AgentProviderSettingsPort` 消费
 
 ---
 
-## 5. 第 3 批：project threads + usage statistics（框架级)
+## 5. 第 3 批：project threads + usage statistics（已关批）
 
-- **project threads**：现状是 ViewModel（状态容器，ChangeNotifier）在
-  presentation、Controller 在 application 且反向 import presentation（燃尽条目）。
-  切片化一并修正：`ProjectThreadsSliceState`（按 project 的
-  `Map<String, ProjectThreadListState>` 形状保持，已是规范化结构）进
-  application，presentation 走 selector。搜索防抖（300ms）留 adapter；
-  跨 provider 聚合（单 provider 上限 50、`agg:` 游标）留在 controller
-  迁移后的 effect/查询服务；thread 写操作按 capability 门控（G4）不变。
-  会话恢复快照编解码（`project_threads_session_snapshot_codec`）不动。
-- **usage statistics**：`UsageStatisticsController`（筛选 + 报表）与
-  `AgentUsagePanelController`（侧栏面板）各自切片；**usage 组装链
-  （QueryService / 两个 Query repository / quota source / source registry）
-  从 `IdeShellController` 构造器移到 app 组合层**（§2.6）。这些服务本身非
-  ChangeNotifier、形状健康，只换装配点。分区索引 v4 与 fingerprint 增量机制
-  原样（G7）。
+- **Project Threads**：`ProjectThreadsSliceStore` 是按项目列表状态的唯一 owner；
+  `ProjectThreadsController` 只保留 Provider 查询、能力校验、写操作与 300 ms 搜索
+  防抖。presentation 只读 Riverpod selector，application→presentation 反向依赖已清零。
+  跨 Provider 上限 50、`agg:` 游标、session snapshot codec 与 G4 行为均未改变。
+- **Usage Statistics**：`UsageStatisticsSliceStore` 与
+  `AgentUsagePanelSliceStore` 分别拥有页面和侧栏状态。QueryService、两个 query
+  repository、quota source 与 source registry 已从 `IdeShellController` 移到 app
+  composition；分区索引 v4、fingerprint 和 Provider 私有 parser 未改变。
+- **删除完成**：`ProjectThreadsViewModel`、`UsageStatisticsController`、
+  `AgentUsagePanelController`、`projectThreadsSliceEnabled`、
+  `usageStatisticsSliceEnabled` 及所有 false-path 均已删除。Riverpod store provider
+  改为非空、漏装配即抛错。
 
-> **3a 执行记录（2026-08-23）**：Project Threads 的纯 Dart
-> state/intent/effect/reducer/store、app runner 与 presentation Riverpod adapter
-> 已落地；flag 开/关只创建一个 owner。既有 controller 降为
-> effect/query runner，application→presentation 燃尽基线减少一项。Projects Pane
-> 的 11 个真实根组合场景和 Project Home 已完成同体 flag=false/true 对照，第 1–2 步
-> 完成；经后续显式确认，生产入口已翻为 true，进入至少 5 天观察，第 3 步进行中。
-> 字段映射、生命周期、§15 答卷与删除清单见
-> [第 3 批开工文档](phase3_batch3_project_threads_usage_statistics.md)。
->
-> **3b 执行记录（2026-08-23）**：两个 usage context 已分别建立
-> state/intent/effect/reducer/store，健康的 QueryService/repository/source registry
-> 仅从 Shell 上移到 app composition；迁移期 operations port 保证 flag 开关只创建
-> legacy controller 或 store 其中之一。迟到 load、扩窗、报表等价、目录 coalescing、
-> Provider single-flight、选择恢复、关闭取消和真实根组合双路径已有回归证据。
-> 当前完成四步节奏第 1–2 步，生产 flag 仍为 false。
+3a/3b 均先完成默认关闭实现、双路径等价验证和生产翻旗；用户随后显式要求直接进入
+下一阶段，接受缩短原定观察余量并授权关批。字段映射、生命周期、竞态、测试证据与
+回滚规则见
+[第 3 批关批文档](phase3_batch3_project_threads_usage_statistics.md)。
 
 ---
 

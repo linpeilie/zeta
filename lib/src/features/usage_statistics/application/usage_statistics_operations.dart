@@ -2,9 +2,6 @@ import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_model
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_repository.dart';
 
 /// 完整使用统计页对 presentation 暴露的稳定操作面。
-///
-/// 迁移期间 legacy controller 与 MVI store 分别实现本端口；Widget 不感知
-/// owner 形态，也不会同时写入两条路径。
 abstract interface class UsageStatisticsOperations {
   UsageStatisticsRepository get repository;
 

@@ -7,15 +7,15 @@ import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel
 import 'package:zeta/src/features/usage_statistics/application/usage_statistics_slice/usage_statistics_slice_state.dart';
 import 'package:zeta/src/features/usage_statistics/application/usage_statistics_slice/usage_statistics_slice_store.dart';
 
-/// app 组合层注入的完整统计页 store；null 表示 legacy 路径。
-final usageStatisticsSliceStoreProvider = Provider<UsageStatisticsSliceStore?>(
-  (ref) => null,
+/// app 组合层必须注入的完整统计页 store。
+final usageStatisticsSliceStoreProvider = Provider<UsageStatisticsSliceStore>(
+  (ref) => throw StateError('UsageStatisticsSliceStore is not bound'),
   name: 'usageStatisticsSliceStore',
 );
 
-/// app 组合层注入的侧栏 store；null 表示 legacy 路径。
-final agentUsagePanelSliceStoreProvider = Provider<AgentUsagePanelSliceStore?>(
-  (ref) => null,
+/// app 组合层必须注入的侧栏 store。
+final agentUsagePanelSliceStoreProvider = Provider<AgentUsagePanelSliceStore>(
+  (ref) => throw StateError('AgentUsagePanelSliceStore is not bound'),
   name: 'agentUsagePanelSliceStore',
 );
 
@@ -32,9 +32,6 @@ final class UsageStatisticsSliceNotifier
   @override
   UsageStatisticsSliceState build() {
     final store = ref.watch(usageStatisticsSliceStoreProvider);
-    if (store == null) {
-      return const UsageStatisticsSliceState();
-    }
     var active = true;
     var scheduled = false;
     final unsubscribe = store.subscribe(() {
@@ -70,9 +67,6 @@ final class AgentUsagePanelSliceNotifier
   @override
   AgentUsagePanelSliceState build() {
     final store = ref.watch(agentUsagePanelSliceStoreProvider);
-    if (store == null) {
-      return AgentUsagePanelSliceState();
-    }
     var active = true;
     var scheduled = false;
     final unsubscribe = store.subscribe(() {

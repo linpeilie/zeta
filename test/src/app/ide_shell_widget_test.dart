@@ -1009,90 +1009,68 @@ void main() {
     }
   });
 
-  for (final sliceEnabled in const <bool>[false, true]) {
-    testWidgets('Project Threads 根组合按 flag 二选一 (slice=$sliceEnabled)', (
+  testWidgets('Project Threads 根组合固定使用切片 owner', (tester) async {
+    await _pumpIde(tester, enableNativeWindowFrame: true);
+    final frameContext = tester.element(
+      find.byKey(const ValueKey('ide-window-frame')),
+    );
+    final container = ProviderScope.containerOf(frameContext, listen: false);
+    final store = container.read(projectThreadsSliceStoreProvider);
+
+    store.applyProjectState(
+      '/slice-probe',
+      const ProjectThreadListState(isExpanded: true),
+    );
+    await tester.pump();
+
+    expect(
+      container
+          .read(projectThreadsSliceProvider)
+          .stateFor('/slice-probe')
+          .isExpanded,
+      isTrue,
+    );
+  });
+
+  testWidgets('Usage Statistics 根组合固定使用两个切片 owner', (tester) async {
+    final usageRepository = _TrackedAgentUsageRepository();
+    await _pumpIde(
       tester,
-    ) async {
-      await _pumpIde(
-        tester,
-        enableNativeWindowFrame: true,
-        enableProjectThreadsSlice: sliceEnabled,
-      );
-      final frameContext = tester.element(
-        find.byKey(const ValueKey('ide-window-frame')),
-      );
-      final container = ProviderScope.containerOf(frameContext, listen: false);
-      final store = container.read(projectThreadsSliceStoreProvider);
+      enableNativeWindowFrame: true,
+      agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      agentUsagePanelRepository: usageRepository,
+    );
+    final homeContext = tester.element(
+      find.byKey(const ValueKey<String>('zeta.ide-home')),
+    );
+    final container = ProviderScope.containerOf(homeContext, listen: false);
+    final statisticsStore = container.read(usageStatisticsSliceStoreProvider);
+    final panelStore = container.read(agentUsagePanelSliceStoreProvider);
 
-      expect(store != null, sliceEnabled);
-      if (store != null) {
-        store.applyProjectState(
-          '/slice-probe',
-          const ProjectThreadListState(isExpanded: true),
-        );
-        await tester.pump();
+    final panel = tester.widget<AgentUsagePanelContent>(
+      find.byType(AgentUsagePanelContent),
+    );
+    expect(identical(panel.controller, panelStore), isTrue);
+    expect(panel.controller.selectedEntry?.providerId, 'codex');
+    expect(usageRepository.forceRefreshValues, isNotEmpty);
 
-        expect(
-          container
-              .read(projectThreadsSliceProvider)
-              .stateFor('/slice-probe')
-              .isExpanded,
-          isTrue,
-        );
-      }
-    });
-  }
+    statisticsStore.selectRankSort(UsageRankSort.totalTokens);
+    await tester.pump();
+    expect(
+      container.read(usageStatisticsSliceProvider).rankSort,
+      UsageRankSort.totalTokens,
+    );
 
-  for (final sliceEnabled in const <bool>[false, true]) {
-    testWidgets('Usage Statistics 根组合按 flag 二选一 (slice=$sliceEnabled)', (
-      tester,
-    ) async {
-      final usageRepository = _TrackedAgentUsageRepository();
-      await _pumpIde(
-        tester,
-        enableNativeWindowFrame: true,
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
-        agentUsagePanelRepository: usageRepository,
-        enableProviderManagementSlice: sliceEnabled,
-        enableUsageStatisticsSlice: sliceEnabled,
-      );
-      final homeContext = tester.element(
-        find.byKey(const ValueKey<String>('zeta.ide-home')),
-      );
-      final container = ProviderScope.containerOf(homeContext, listen: false);
-      final statisticsStore = container.read(usageStatisticsSliceStoreProvider);
-      final panelStore = container.read(agentUsagePanelSliceStoreProvider);
-
-      expect(statisticsStore != null, sliceEnabled);
-      expect(panelStore != null, sliceEnabled);
-      final panel = tester.widget<AgentUsagePanelContent>(
-        find.byType(AgentUsagePanelContent),
-      );
-      expect(panel.sliceStore != null, sliceEnabled);
-      expect(identical(panel.controller, panelStore), sliceEnabled);
-      expect(panel.controller.selectedEntry?.providerId, 'codex');
-      expect(usageRepository.forceRefreshValues, isNotEmpty);
-
-      if (statisticsStore != null) {
-        statisticsStore.selectRankSort(UsageRankSort.totalTokens);
-        await tester.pump();
-        expect(
-          container.read(usageStatisticsSliceProvider).rankSort,
-          UsageRankSort.totalTokens,
-        );
-      }
-
-      await tester.tap(
-        find.byKey(const ValueKey('titlebar-usage-statistics-action')),
-      );
-      await tester.pump();
-      final page = tester.widget<UsageStatisticsPage>(
-        find.byType(UsageStatisticsPage),
-      );
-      expect(identical(page.controller, statisticsStore), sliceEnabled);
-      expect(tester.takeException(), isNull);
-    });
-  }
+    await tester.tap(
+      find.byKey(const ValueKey('titlebar-usage-statistics-action')),
+    );
+    await tester.pump();
+    final page = tester.widget<UsageStatisticsPage>(
+      find.byType(UsageStatisticsPage),
+    );
+    expect(identical(page.controller, statisticsStore), isTrue);
+    expect(tester.takeException(), isNull);
+  });
 
   // 整场事件风暴的聚合预算同样两条路径各测一次。
   for (final sliceEnabled in const <bool>[false, true]) {
@@ -2128,98 +2106,96 @@ void main() {
     );
   });
 
-  for (final sliceEnabled in const <bool>[false, true]) {
-    testWidgets('selected project without a thread shows the project home '
-        '(slice=$sliceEnabled)', (tester) async {
-      final directory = Directory.systemTemp.createTempSync(
-        'zeta_project_home_test_',
-      );
-      addTearDown(() {
-        if (directory.existsSync()) {
-          directory.deleteSync(recursive: true);
-        }
-      });
-      final threads = <AgentThreadSummary>[
-        for (var index = 0; index < 6; index += 1)
-          agentThread(
-            id: 'home-thread-$index',
-            projectPath: directory.path,
-            title: 'Home thread $index',
-            lastActiveAt: DateTime.utc(
-              2026,
-              7,
-              21,
-            ).subtract(Duration(hours: index)),
-          ),
-      ];
-      final provider = FakeAgentProvider(
-        threadPages: <AgentThreadPage>[
-          AgentThreadPage(threads: threads, nextCursor: null),
-        ],
-      );
-      await _pumpIde(
-        tester,
-        enableProjectThreadsSlice: sliceEnabled,
-        directoryPicker: () async => directory.path,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
-      );
-
-      await openProjectFromMenu(tester);
-      await tester.runAsync(waitForIo);
-      await pumpUntilCondition(
-        tester,
-        () =>
-            find
-                .byKey(const ValueKey<String>('project-home-header'))
-                .hitTestable()
-                .evaluate()
-                .isNotEmpty &&
-            find
-                .byKey(
-                  const ValueKey<String>('project-home-thread-home-thread-0'),
-                )
-                .evaluate()
-                .isNotEmpty,
-        failureMessage: 'Project home did not become ready',
-      );
-
-      expect(find.text(directory.path), findsOneWidget);
-      expect(
-        find
-            .byKey(const ValueKey<String>('project-home-new-thread-button'))
-            .hitTestable(),
-        findsOneWidget,
-      );
-      expect(_agentMessageInput().hitTestable(), findsNothing);
-      expect(
-        find.byKey(const ValueKey<String>('project-home-thread-home-thread-4')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey<String>('project-home-thread-home-thread-5')),
-        findsNothing,
-      );
-
-      await tester.tap(
-        find.byKey(const ValueKey<String>('project-home-thread-home-thread-0')),
-      );
-      await pumpUntilCondition(
-        tester,
-        () =>
-            headerTitleText(tester) == 'Home thread 0' &&
-            _agentMessageInput().hitTestable().evaluate().isNotEmpty,
-        failureMessage: 'Recent thread did not open its Agent pane',
-      );
-
-      await tester.tap(
-        find.byKey(ValueKey<String>('project-tile-${directory.path}')),
-      );
-      await tester.pump();
-      expect(headerTitleText(tester), 'Home thread 0');
-      expect(_agentMessageInput().hitTestable(), findsOneWidget);
+  testWidgets('selected project without a thread shows the project home', (
+    tester,
+  ) async {
+    final directory = Directory.systemTemp.createTempSync(
+      'zeta_project_home_test_',
+    );
+    addTearDown(() {
+      if (directory.existsSync()) {
+        directory.deleteSync(recursive: true);
+      }
     });
-  }
+    final threads = <AgentThreadSummary>[
+      for (var index = 0; index < 6; index += 1)
+        agentThread(
+          id: 'home-thread-$index',
+          projectPath: directory.path,
+          title: 'Home thread $index',
+          lastActiveAt: DateTime.utc(
+            2026,
+            7,
+            21,
+          ).subtract(Duration(hours: index)),
+        ),
+    ];
+    final provider = FakeAgentProvider(
+      threadPages: <AgentThreadPage>[
+        AgentThreadPage(threads: threads, nextCursor: null),
+      ],
+    );
+    await _pumpIde(
+      tester,
+      directoryPicker: () async => directory.path,
+      agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
+      agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+    );
+
+    await openProjectFromMenu(tester);
+    await tester.runAsync(waitForIo);
+    await pumpUntilCondition(
+      tester,
+      () =>
+          find
+              .byKey(const ValueKey<String>('project-home-header'))
+              .hitTestable()
+              .evaluate()
+              .isNotEmpty &&
+          find
+              .byKey(
+                const ValueKey<String>('project-home-thread-home-thread-0'),
+              )
+              .evaluate()
+              .isNotEmpty,
+      failureMessage: 'Project home did not become ready',
+    );
+
+    expect(find.text(directory.path), findsOneWidget);
+    expect(
+      find
+          .byKey(const ValueKey<String>('project-home-new-thread-button'))
+          .hitTestable(),
+      findsOneWidget,
+    );
+    expect(_agentMessageInput().hitTestable(), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('project-home-thread-home-thread-4')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('project-home-thread-home-thread-5')),
+      findsNothing,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('project-home-thread-home-thread-0')),
+    );
+    await pumpUntilCondition(
+      tester,
+      () =>
+          headerTitleText(tester) == 'Home thread 0' &&
+          _agentMessageInput().hitTestable().evaluate().isNotEmpty,
+      failureMessage: 'Recent thread did not open its Agent pane',
+    );
+
+    await tester.tap(
+      find.byKey(ValueKey<String>('project-tile-${directory.path}')),
+    );
+    await tester.pump();
+    expect(headerTitleText(tester), 'Home thread 0');
+    expect(_agentMessageInput().hitTestable(), findsOneWidget);
+  });
 
   testWidgets('lists only installed providers on the global home', (
     tester,
@@ -2277,8 +2253,6 @@ Future<void> _pumpIde(
   bool enableConversationSlice = false,
   bool enableSettingsSlice = false,
   bool enableProviderManagementSlice = false,
-  bool enableProjectThreadsSlice = false,
-  bool enableUsageStatisticsSlice = false,
 }) async {
   tester.view
     ..physicalSize = size
@@ -2310,10 +2284,6 @@ Future<void> _pumpIde(
       settingsSliceEnabled: enableSettingsSlice,
       // Phase 3 第 2 批：测试参数控制，验证 settings + management owner 原子切换。
       providerManagementSliceEnabled: enableProviderManagementSlice,
-      // Phase 3 第 3 批 3a：验证旧 ViewModel / 新 store 只创建其一。
-      projectThreadsSliceEnabled: enableProjectThreadsSlice,
-      // Phase 3 第 3 批 3b：两个 usage owner 同时从 Shell 上移到 app 组合层。
-      usageStatisticsSliceEnabled: enableUsageStatisticsSlice,
     ),
   );
   if (flushInitialUsageRefresh) {

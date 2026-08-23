@@ -9,7 +9,7 @@ sealed class ProjectThreadsSliceIntent {
   const ProjectThreadsSliceIntent();
 }
 
-/// 迁移期稳定 facade 发出的命令；reducer 只把 typed effect 交给 runner。
+/// 稳定操作 facade 发出的命令；reducer 只把 typed effect 交给 runner。
 final class ProjectThreadsEffectRequested extends ProjectThreadsSliceIntent {
   const ProjectThreadsEffectRequested(this.effect);
 

@@ -1,7 +1,6 @@
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_slice_runner.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_slice/agent_usage_panel_slice_state.dart';
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_slice/agent_usage_panel_slice_store.dart';
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_query_service.dart';
@@ -33,7 +32,7 @@ final class UsageStatisticsSliceComposition {
   final AgentUsagePanelSliceRunnerAdapter _panelRunner;
 
   factory UsageStatisticsSliceComposition.create({
-    required AgentProviderSettingsPort providerSettings,
+    required EnabledAgentUsageProviderLoader loadEnabledProviders,
     required AgentProviderRuntimeRegistry runtimeRegistry,
     required UsageStatisticsPartitionStore partitionStore,
     required UsageStatisticsTextCatalog textCatalog,
@@ -42,10 +41,7 @@ final class UsageStatisticsSliceComposition {
   }) {
     final now = clock ?? DateTime.now;
     final queryService = AgentUsageQueryService(
-      () async {
-        await providerSettings.loadSettings();
-        return providerSettings.enabledProviders;
-      },
+      loadEnabledProviders,
       GlobalRuntimeAgentUsageQuotaSource(
         AgentProviderGlobalRuntime(runtimeRegistry: runtimeRegistry),
       ),

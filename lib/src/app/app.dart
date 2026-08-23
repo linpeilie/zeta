@@ -18,7 +18,6 @@ import 'package:zeta/src/app/composition/app_dependencies.dart';
 import 'package:zeta/src/app/observability/zeta_observability.dart';
 import 'package:zeta/src/app/plugins/zeta_plugin_catalog.dart';
 import 'package:zeta/src/app/localization/zeta_text_catalogs.dart';
-import 'package:zeta/src/app/shell/ide_shell_controller.dart';
 import 'package:zeta/src/app/window_bootstrap.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta/src/core/storage/zeta_data_paths.dart';
@@ -91,8 +90,6 @@ class MainApp extends StatefulWidget {
     this.conversationSliceEnabled = false,
     this.settingsSliceEnabled = false,
     this.providerManagementSliceEnabled = false,
-    this.projectThreadsSliceEnabled = false,
-    this.usageStatisticsSliceEnabled = false,
   });
 
   final Future<String?> Function()? directoryPicker;
@@ -151,18 +148,6 @@ class MainApp extends StatefulWidget {
   /// controller 路径完整保留。生产入口自 2026-08-23 起显式传 true。
   final bool providerManagementSliceEnabled;
 
-  /// Phase 3 第 3 批 3a Project Threads 切片 flag；默认 false。
-  ///
-  /// true 时 Shell 只创建纯 Dart MVI store，旧 ViewModel 不实例化。生产入口自
-  /// 2026-08-23 起显式传 true。
-  final bool projectThreadsSliceEnabled;
-
-  /// Phase 3 第 3 批 3b Usage Statistics 切片 flag；默认 false。
-  ///
-  /// true 时完整统计页与左栏分别只创建一个纯 Dart MVI owner；生产入口由
-  /// `main.dart` 显式决定。该切片依赖已启用的 Provider settings 切片读取目录。
-  final bool usageStatisticsSliceEnabled;
-
   /// 生产启动阶段解析并初始化的 Zeta 自有数据路径。
   ///
   /// 未传入时使用内存/回调存储，避免测试或嵌入式宿主意外写入真实 HOME。
@@ -198,7 +183,7 @@ class MainAppState extends State<MainApp>
   /// Phase 3 第 2 批 2a 组合；null = flag 关，shell 创建旧 controller。
   ProviderSettingsSliceComposition? _providerSettingsSliceComposition;
 
-  /// Phase 3 第 3 批 3b 组合；null = legacy Shell owner。
+  /// Phase 3 第 3 批 3b 组合；本地化运行时就绪后创建并成为唯一 owner。
   UsageStatisticsSliceComposition? _usageStatisticsSliceComposition;
 
   /// 编译期插件目录；仅在应用自己构造 Provider 工厂时创建。
@@ -460,23 +445,13 @@ class MainAppState extends State<MainApp>
             runtimeRegistry: _agentProviderRuntimeRegistry,
           );
     }
-    if (widget.usageStatisticsSliceEnabled &&
-        _usageStatisticsSliceComposition == null) {
-      final providerSettings = _providerSettingsSliceComposition?.store;
-      if (providerSettings == null) {
-        throw StateError(
-          'usageStatisticsSliceEnabled requires '
-          'providerManagementSliceEnabled',
-        );
-      }
-      _usageStatisticsSliceComposition = UsageStatisticsSliceComposition.create(
-        providerSettings: providerSettings,
-        runtimeRegistry: _agentProviderRuntimeRegistry,
-        partitionStore: _usageStatisticsPartitionStore,
-        agentUsagePanelRepository: widget.agentUsagePanelRepository,
-        textCatalog: _usageStatisticsTextCatalog,
-      );
-    }
+    _usageStatisticsSliceComposition ??= UsageStatisticsSliceComposition.create(
+      loadEnabledProviders: _loadEnabledAgentUsageProviders,
+      runtimeRegistry: _agentProviderRuntimeRegistry,
+      partitionStore: _usageStatisticsPartitionStore,
+      agentUsagePanelRepository: widget.agentUsagePanelRepository,
+      textCatalog: _usageStatisticsTextCatalog,
+    );
     _localeRuntimeReady = true;
   }
 
@@ -711,14 +686,8 @@ class MainAppState extends State<MainApp>
                       generalSettingsController: _generalSettingsController,
                       notificationSettingsSource:
                           _settingsSliceComposition?.notificationSettingsSource,
-                      usageStatisticsDependencies:
-                          IdeShellUsageStatisticsDependencies(
-                            partitionStore: _usageStatisticsPartitionStore,
-                            agentUsagePanelRepository:
-                                widget.agentUsagePanelRepository,
-                          ),
                       usageStatisticsSliceComposition:
-                          _usageStatisticsSliceComposition,
+                          _requiredUsageStatisticsComposition,
                       agentModelCatalogRepository: _agentModelCatalogRepository,
                       turnContextStore: _turnContextStore,
                       agentUiTextCatalog: _agentUiTextCatalog,
@@ -726,8 +695,6 @@ class MainAppState extends State<MainApp>
                       conversationSliceEnabled: widget.conversationSliceEnabled,
                       providerManagementSliceEnabled:
                           widget.providerManagementSliceEnabled,
-                      projectThreadsSliceEnabled:
-                          widget.projectThreadsSliceEnabled,
                       agentManagementTextCatalog: _agentManagementTextCatalog,
                       desktopAttentionTextCatalog: _desktopAttentionTextCatalog,
                       // 回调存储用于测试/嵌入宿主；未显式注入统计仓储时不读取本机 CLI 历史。
@@ -753,6 +720,22 @@ class MainAppState extends State<MainApp>
         state == AppLifecycleState.resumed ||
         state == AppLifecycleState.inactive;
     return lifecycleAllowsTickers && !_nativeWindowSuspended;
+  }
+
+  UsageStatisticsSliceComposition get _requiredUsageStatisticsComposition =>
+      _usageStatisticsSliceComposition ??
+      (throw StateError('Usage Statistics composition is not ready'));
+
+  Future<List<AgentProviderConfig>> _loadEnabledAgentUsageProviders() async {
+    final providerSettings = _providerSettingsSliceComposition?.store;
+    if (providerSettings != null) {
+      await providerSettings.loadSettings();
+      return providerSettings.enabledProviders;
+    }
+    final settings = await _agentProviderConfigStore.load();
+    return List<AgentProviderConfig>.unmodifiable(
+      settings.providers.where((provider) => provider.enabled),
+    );
   }
 
   void _resumeNativeWindowTickers() {

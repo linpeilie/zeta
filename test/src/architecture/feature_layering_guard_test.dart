@@ -24,7 +24,7 @@ void main() {
 
   /// application 仍 import Flutter 的既有文件（**只允许变少**）。
   ///
-  /// 目标架构 §12.5 明确禁止 application import Flutter。这 12 个都是
+  /// 目标架构 §12.5 明确禁止 application import Flutter。这 10 个都是
   /// `ChangeNotifier` 形态的既有 controller，属于拆包前的设计，随 Phase 2/3
   /// 转成 MVI 切片时清掉。新增一律不允许——Phase 2 切片就因为搬家时把
   /// `@immutable` / `setEquals` 一起带进来踩过一次。
@@ -38,8 +38,6 @@ void main() {
     'lib/src/features/agent_management/application/agent_management_controller.dart',
     'lib/src/features/settings/application/appearance_settings_controller.dart',
     'lib/src/features/settings/application/general_settings_controller.dart',
-    'lib/src/features/usage_statistics/application/agent_usage_panel_controller.dart',
-    'lib/src/features/usage_statistics/application/usage_statistics_controller.dart',
     'lib/src/features/workspace/application/workspace_file_index_controller.dart',
   };
 

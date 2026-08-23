@@ -75,7 +75,7 @@ class IdeHome extends StatefulWidget {
     required this.sessionStore,
     required this.agentProviderFactory,
     required this.agentProviderConfigStore,
-    required this.usageStatisticsDependencies,
+    required this.usageStatisticsSliceComposition,
     required this.projectLocationOpener,
     required this.appearanceController,
     required this.generalSettingsController,
@@ -97,8 +97,6 @@ class IdeHome extends StatefulWidget {
     this.metrics = noopZetaMetricsPort,
     this.conversationSliceEnabled = false,
     this.providerManagementSliceEnabled = false,
-    this.projectThreadsSliceEnabled = false,
-    this.usageStatisticsSliceComposition,
     this.agentManagementTextCatalog =
         const FallbackAgentManagementTextCatalog(),
     super.key,
@@ -109,7 +107,7 @@ class IdeHome extends StatefulWidget {
   final IdeSessionStore sessionStore;
   final AgentProviderBundleFactory agentProviderFactory;
   final AgentProviderConfigStore agentProviderConfigStore;
-  final IdeShellUsageStatisticsDependencies usageStatisticsDependencies;
+  final UsageStatisticsSliceComposition usageStatisticsSliceComposition;
   final ProjectLocationOpener projectLocationOpener;
   final AppearanceSettingsController appearanceController;
   final GeneralSettingsController generalSettingsController;
@@ -147,12 +145,6 @@ class IdeHome extends StatefulWidget {
   /// Phase 3 第 2 批：true 时只创建 management page store，false 时只创建旧
   /// controller。生产翻旗由 app 根统一控制。
   final bool providerManagementSliceEnabled;
-
-  /// Phase 3 第 3 批 3a：true 时 Project Threads 只创建 MVI owner。
-  final bool projectThreadsSliceEnabled;
-
-  /// Phase 3 第 3 批 3b：非空时 Shell/UI 只消费两个外部 MVI owner。
-  final UsageStatisticsSliceComposition? usageStatisticsSliceComposition;
 
   final AgentUiTextCatalog agentUiTextCatalog;
   final AgentManagementTextCatalog agentManagementTextCatalog;
@@ -240,6 +232,10 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
       activateTarget: _activateAttentionTarget,
       textCatalog: widget.desktopAttentionTextCatalog,
     );
+    _usageStatisticsController =
+        widget.usageStatisticsSliceComposition.usageStatisticsStore;
+    _agentUsagePanelController =
+        widget.usageStatisticsSliceComposition.agentUsagePanelStore;
     _shellController = IdeShellController(
       directoryPicker: widget.directoryPicker,
       sessionStore: widget.sessionStore,
@@ -253,16 +249,21 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
       onAgentAttention: (attention) {
         unawaited(_desktopAttentionController.handleAttention(attention));
       },
-      usageStatistics: widget.usageStatisticsDependencies,
-      usageStatisticsSlice: widget.usageStatisticsSliceComposition,
+      onAgentUsageProviderRestored:
+          _agentUsagePanelController.restorePreferredProviderId,
       turnContextStore: widget.turnContextStore,
       agentUiTextCatalog: widget.agentUiTextCatalog,
       metrics: widget.metrics,
       conversationSliceEnabled: widget.conversationSliceEnabled,
-      projectThreadsSliceEnabled: widget.projectThreadsSliceEnabled,
       agentProviderSettingsPort: widget.agentProviderSettingsPort,
       activeModelCatalogLoader: widget.activeModelCatalogLoader,
     )..addListener(_handleShellChanged);
+    widget.usageStatisticsSliceComposition.bindSelectionPersistence(
+      _shellController.setSelectedAgentUsageProviderId,
+    );
+    _shellController.agentProviderController.addListener(
+      _handleAgentProviderSettingsUsageChanged,
+    );
     // Riverpod 禁止在 initState 里改 provider，因此推到首帧之后。
     // 首帧读到"未启用"没有关系：解析器是 NotifierProvider，bind 会让依赖它的
     // family 失效重算，区域随即切到切片路径（两条路径渲染结果一致）。
@@ -318,8 +319,6 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
         textCatalog: widget.agentManagementTextCatalog,
       )..addListener(_handleAgentManagementChanged);
     }
-    _usageStatisticsController = _shellController.usageStatisticsController;
-    _agentUsagePanelController = _shellController.agentUsagePanelController;
     _agentUsageRefreshCoordinator = AgentUsageRefreshCoordinator(
       // turn 完成 / 启动预热走静默刷新：已有数据时不闪加载横条。
       refresh: () => _agentUsagePanelController.refresh(showLoading: false),
@@ -388,6 +387,10 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
       windowManager.removeListener(this);
     }
     _shellController.removeListener(_handleShellChanged);
+    _shellController.agentProviderController.removeListener(
+      _handleAgentProviderSettingsUsageChanged,
+    );
+    widget.usageStatisticsSliceComposition.bindSelectionPersistence(null);
     _agentUsageRefreshCoordinator.dispose();
     final legacyManagement = _agentManagementController;
     if (legacyManagement != null) {
@@ -404,6 +407,14 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
     _leftSidebarFocusNode.dispose();
     _rightSidebarFocusNode.dispose();
     super.dispose();
+  }
+
+  /// Provider 配置更新可能增删侧栏目录；只在目录已发现后做无闪烁同步。
+  void _handleAgentProviderSettingsUsageChanged() {
+    if (!_agentUsagePanelController.hasDiscoveredProviders) {
+      return;
+    }
+    unawaited(_agentUsagePanelController.synchronizeProviders());
   }
 
   @override
@@ -689,10 +700,9 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
 
     return Consumer(
       builder: (context, ref, _) {
-        final projectThreadsStore = ref.watch(projectThreadsSliceStoreProvider);
-        final projectThreadState = projectThreadsStore == null
-            ? _shellController.projectThreadStateFor(projectPath)
-            : ref.watch(projectThreadListStateProvider(projectPath));
+        final projectThreadState = ref.watch(
+          projectThreadListStateProvider(projectPath),
+        );
         final sliceStore = ref.watch(generalSettingsSliceStoreProvider);
         if (sliceStore != null) {
           final generalSettings = ref.watch(generalSettingsSliceValueProvider);
@@ -837,16 +847,11 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   Widget _buildProjectsContent() {
     return Consumer(
       builder: (context, ref, _) {
-        final projectThreadsStore = ref.watch(projectThreadsSliceStoreProvider);
-        final projectThreadsState = projectThreadsStore == null
-            ? null
-            : ref.watch(projectThreadsSliceProvider);
+        final projectThreadsState = ref.watch(projectThreadsSliceProvider);
         return ProjectListPane(
           projects: _shellController.projects,
           activeProject: _shellController.activeProjectPath,
-          threadStateFor:
-              projectThreadsState?.stateFor ??
-              _shellController.projectThreadStateFor,
+          threadStateFor: projectThreadsState.stateFor,
           onSelectProject: (path) {
             unawaited(_shellController.selectKnownProject(path));
           },
@@ -928,9 +933,6 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
       controller: _usageStatisticsController,
       onOpenAgentManagement: _openAgentManagementFromUsage,
     );
-    if (widget.usageStatisticsSliceComposition == null) {
-      return page;
-    }
     return Consumer(
       builder: (context, ref, _) {
         ref.watch(usageStatisticsSliceProvider);
@@ -942,7 +944,6 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   Widget _buildAgentUsagePanel() {
     Widget buildPanel() => AgentUsagePanelContent(
       controller: _agentUsagePanelController,
-      sliceStore: widget.usageStatisticsSliceComposition?.agentUsagePanelStore,
       mode: _agentUsageExpanded
           ? AgentUsagePanelMode.expanded
           : AgentUsagePanelMode.collapsed,
@@ -952,9 +953,6 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
         });
       },
     );
-    if (widget.usageStatisticsSliceComposition == null) {
-      return buildPanel();
-    }
     return Consumer(
       builder: (context, ref, _) {
         ref.watch(agentUsagePanelSliceProvider);

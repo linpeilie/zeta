@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart';
 
 import 'package:zeta/src/app/logging/app_logging.dart';
 import 'package:zeta/src/app/project_threads_slice/project_threads_slice_composition.dart';
-import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_slice_composition.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
@@ -22,24 +21,10 @@ import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
 import 'package:zeta/src/features/ide_session/domain/recent_project_summary.dart';
-import 'package:zeta/src/features/project_threads/application/project_threads_controller.dart';
 import 'package:zeta/src/features/project_threads/application/project_threads_operations.dart';
 import 'package:zeta/src/features/project_threads/application/project_threads_slice/project_threads_slice_store.dart';
-import 'package:zeta/src/features/project_threads/application/project_threads_state_owner.dart';
 import 'package:zeta/src/features/project_threads/application/project_threads_session_snapshot_codec.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
-import 'package:zeta/src/features/project_threads/presentation/project_threads_view_model.dart';
-import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_controller.dart';
-import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_operations.dart';
-import 'package:zeta/src/features/usage_statistics/application/agent_usage_query_service.dart';
-import 'package:zeta/src/features/usage_statistics/application/query_agent_usage_panel_repository.dart';
-import 'package:zeta/src/features/usage_statistics/application/query_usage_statistics_repository.dart';
-import 'package:zeta/src/features/usage_statistics/application/usage_statistics_controller.dart';
-import 'package:zeta/src/features/usage_statistics/application/usage_statistics_operations.dart';
-import 'package:zeta/src/features/usage_statistics/data/built_in_agent_token_usage_source_registry.dart';
-import 'package:zeta/src/features/usage_statistics/data/global_runtime_agent_usage_quota_source.dart';
-import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partition_store.dart';
-import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 import 'package:zeta/src/features/workspace/application/workspace_file_index_controller.dart';
 import 'package:zeta/src/features/workspace/application/workspace_tree_builder.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
@@ -49,17 +34,6 @@ final _log = loggerFor('zeta.app.ide_shell_controller');
 
 typedef IdeDirectoryPicker = Future<String?> Function();
 typedef IdeShellStatusReporter = void Function(String message);
-
-/// app 组合点注入 Shell 的使用统计依赖，避免 UI import 或构造 data 实现。
-final class IdeShellUsageStatisticsDependencies {
-  const IdeShellUsageStatisticsDependencies({
-    required this.partitionStore,
-    this.agentUsagePanelRepository,
-  });
-
-  final UsageStatisticsPartitionStore partitionStore;
-  final AgentUsagePanelRepository? agentUsagePanelRepository;
-}
 
 /// IDE shell 的应用级协调器。
 ///
@@ -81,20 +55,15 @@ class IdeShellController extends ChangeNotifier {
     AgentFrameScheduler Function()? agentUiFrameSchedulerFactory,
     ValueChanged<AgentTurnTerminalSignal>? onAgentTurnTerminal,
     ValueChanged<AgentWorkspaceAttention>? onAgentAttention,
-    IdeShellUsageStatisticsDependencies? usageStatistics,
-    UsageStatisticsSliceComposition? usageStatisticsSlice,
+    this._onAgentUsageProviderRestored,
     AgentTurnContextStore? turnContextStore,
     this.agentUiTextCatalog = const FallbackAgentUiTextCatalog(),
     this.metrics = noopZetaMetricsPort,
     this.conversationSliceEnabled = false,
-    this.projectThreadsSliceEnabled = false,
     AgentProviderSettingsPort? agentProviderSettingsPort,
     Future<AgentModelCatalogLoadResult> Function()? activeModelCatalogLoader,
     DateTime Function()? now,
-  }) : _projectThreadsViewModel = projectThreadsSliceEnabled
-           ? null
-           : ProjectThreadsViewModel(),
-       _sessionCoordinator = IdeSessionPersistenceCoordinator(
+  }) : _sessionCoordinator = IdeSessionPersistenceCoordinator(
          store: sessionStore,
          saveDelay: sessionSaveDelay,
          fileExists: (path) => File(path).existsSync(),
@@ -138,41 +107,6 @@ class IdeShellController extends ChangeNotifier {
       _disposeAgentProviderController = null;
       _loadActiveModelCatalog = activeModelCatalogLoader;
     }
-    if (usageStatisticsSlice != null) {
-      usageStatisticsController = usageStatisticsSlice.usageStatisticsStore;
-      agentUsagePanelController = usageStatisticsSlice.agentUsagePanelStore;
-      _usageStatisticsSliceComposition = usageStatisticsSlice;
-      _ownsUsageStatisticsOperations = false;
-      usageStatisticsSlice.bindSelectionPersistence(
-        setSelectedAgentUsageProviderId,
-      );
-    } else {
-      final partitionStore =
-          usageStatistics?.partitionStore ??
-          MemoryUsageStatisticsPartitionStore();
-      final usageQueryService = AgentUsageQueryService(
-        _loadEnabledAgentUsageProviders,
-        GlobalRuntimeAgentUsageQuotaSource(agentProviderGlobalRuntime),
-        BuiltInAgentTokenUsageSourceRegistry(partitionStore),
-        clock: _now,
-      );
-      usageStatisticsController = UsageStatisticsController(
-        repository: QueryUsageStatisticsRepository(
-          usageQueryService,
-          clock: _now,
-        ),
-        clock: _now,
-      );
-      agentUsagePanelController = AgentUsagePanelController(
-        repository:
-            usageStatistics?.agentUsagePanelRepository ??
-            QueryAgentUsagePanelRepository(usageQueryService, clock: _now),
-        onSelectionChanged: setSelectedAgentUsageProviderId,
-      );
-      _usageStatisticsSliceComposition = null;
-      _ownsUsageStatisticsOperations = true;
-    }
-    agentProviderController.addListener(_handleAgentProviderSettingsChanged);
     agentWorkspaceController = AgentThreadWorkspaceController(
       providerController: agentProviderController,
       workspaceFilesProvider: () {
@@ -210,33 +144,18 @@ class IdeShellController extends ChangeNotifier {
       providerId: defaultAgentProviderId,
     );
     agentWorkspaceController.selectEntry(_bootstrapAgentEntry.entryId);
-    late final ProjectThreadsStateOwner projectThreadsStateOwner;
-    if (projectThreadsSliceEnabled) {
-      final composition = ProjectThreadsSliceComposition.create(
-        providerController: agentProviderController,
-        globalRuntime: agentProviderGlobalRuntime,
-        bindingManager: agentWorkspaceController.bindingManager,
-        textCatalog: agentUiTextCatalog,
-        now: _now,
-      );
-      projectThreadsController = composition.store;
-      projectThreadsSliceStore = composition.store;
-      projectThreadsStateOwner = composition.store;
-    } else {
-      final viewModel = _projectThreadsViewModel!;
-      projectThreadsController = ProjectThreadsController(
-        providerController: agentProviderController,
-        globalRuntime: agentProviderGlobalRuntime,
-        bindingManager: agentWorkspaceController.bindingManager,
-        stateOwner: viewModel,
-        textCatalog: agentUiTextCatalog,
-      );
-      projectThreadsSliceStore = null;
-      projectThreadsStateOwner = viewModel;
-    }
+    final projectThreadsComposition = ProjectThreadsSliceComposition.create(
+      providerController: agentProviderController,
+      globalRuntime: agentProviderGlobalRuntime,
+      bindingManager: agentWorkspaceController.bindingManager,
+      textCatalog: agentUiTextCatalog,
+      now: _now,
+    );
+    projectThreadsController = projectThreadsComposition.store;
+    projectThreadsSliceStore = projectThreadsComposition.store;
     projectThreadsController.onActiveThreadCleared = _handleActiveThreadCleared;
     agentWorkspaceController.addListener(_handleAgentWorkspaceChanged);
-    _unsubscribeProjectThreads = projectThreadsStateOwner.subscribe(
+    _unsubscribeProjectThreads = projectThreadsSliceStore.subscribe(
       _handleProjectThreadsChanged,
     );
     _refreshWorkspaceEntryBindings();
@@ -260,6 +179,7 @@ class IdeShellController extends ChangeNotifier {
   final IdeDirectoryPicker _directoryPicker;
   final ProjectLocationOpener _projectLocationOpener;
   final IdeShellStatusReporter? _statusReporter;
+  final ValueChanged<String?>? _onAgentUsageProviderRestored;
   final IdeSessionPersistenceCoordinator _sessionCoordinator;
   final DateTime Function() _now;
 
@@ -272,23 +192,12 @@ class IdeShellController extends ChangeNotifier {
   late final VoidCallback? _disposeAgentProviderController;
   late final Future<AgentModelCatalogLoadResult> Function()
   _loadActiveModelCatalog;
-  late final UsageStatisticsOperations usageStatisticsController;
-  late final AgentUsagePanelOperations agentUsagePanelController;
-  late final UsageStatisticsSliceComposition? _usageStatisticsSliceComposition;
-  late final bool _ownsUsageStatisticsOperations;
   late final AgentThreadWorkspaceController agentWorkspaceController;
   late final AgentThreadWorkspaceEntry _bootstrapAgentEntry;
   late final ProjectThreadsOperations projectThreadsController;
-  late final ProjectThreadsSliceStore? projectThreadsSliceStore;
-  final ProjectThreadsViewModel? _projectThreadsViewModel;
+  late final ProjectThreadsSliceStore projectThreadsSliceStore;
   late final void Function() _unsubscribeProjectThreads;
   final AgentUiTextCatalog agentUiTextCatalog;
-
-  /// 仅供 legacy 对照测试读取；切片路径不会创建旧 owner。
-  ProjectThreadsViewModel get projectThreadsViewModel {
-    return _projectThreadsViewModel ??
-        (throw StateError('ProjectThreadsViewModel is disabled'));
-  }
 
   /// app 组合层注入的脱敏指标端口；默认 no-op，探针只剩常量分支。
   final ZetaMetricsPort metrics;
@@ -298,8 +207,6 @@ class IdeShellController extends ChangeNotifier {
   /// false = 走旧 ViewModel 直连路径（测试默认）。
   final bool conversationSliceEnabled;
 
-  /// Phase 3 第 3 批 3a flag；true 时列表事实只由 MVI store 持有。
-  final bool projectThreadsSliceEnabled;
   final Map<String, ({AgentThreadWorkspaceEntry entry, VoidCallback listener})>
   _workspaceEntryListeners =
       <String, ({AgentThreadWorkspaceEntry entry, VoidCallback listener})>{};
@@ -325,11 +232,6 @@ class IdeShellController extends ChangeNotifier {
   final Completer<void> _initialRestoreCompleter = Completer<void>();
   int _homeRefreshToken = 0;
   bool _isDisposed = false;
-
-  Future<List<AgentProviderConfig>> _loadEnabledAgentUsageProviders() async {
-    await agentProviderController.loadSettings();
-    return agentProviderController.enabledProviders;
-  }
 
   List<AgentThreadWorkspaceEntry> get agentWorkspaceEntries =>
       agentWorkspaceController.entries;
@@ -861,7 +763,7 @@ class IdeShellController extends ChangeNotifier {
         ..clear()
         ..addAll(session.projectLastOpenedAtByPath);
       _workbenchLayout = session.workbenchLayout;
-      agentUsagePanelController.restorePreferredProviderId(
+      _onAgentUsageProviderRestored?.call(
         session.workbenchLayout.selectedAgentUsageProviderId,
       );
 
@@ -1372,9 +1274,6 @@ class IdeShellController extends ChangeNotifier {
   void _handleProjectThreadsChanged() {
     // 列表标题可能因 thread/name/updated 或刷新而变化；详情头栏需同步。
     _syncSelectedThreadTitleFromList();
-    if (!projectThreadsSliceEnabled) {
-      _notifyStateChanged();
-    }
     _requestSessionSave();
   }
 
@@ -1450,14 +1349,6 @@ class IdeShellController extends ChangeNotifier {
     _notifyStateChanged();
   }
 
-  /// 检测或配置更新可能增删 Provider；只同步侧栏目录并补载当前未加载项。
-  void _handleAgentProviderSettingsChanged() {
-    if (_isDisposed || !agentUsagePanelController.hasDiscoveredProviders) {
-      return;
-    }
-    unawaited(agentUsagePanelController.synchronizeProviders());
-  }
-
   @override
   void dispose() {
     if (_isDisposed) {
@@ -1477,17 +1368,7 @@ class IdeShellController extends ChangeNotifier {
       _selectedWorkspaceThreadSnapshotBinding = null;
     }
     projectThreadsController.dispose();
-    _projectThreadsViewModel?.dispose();
     agentWorkspaceController.dispose();
-    if (_ownsUsageStatisticsOperations) {
-      usageStatisticsController.dispose();
-    }
-    agentProviderController.removeListener(_handleAgentProviderSettingsChanged);
-    if (_ownsUsageStatisticsOperations) {
-      agentUsagePanelController.dispose();
-    } else {
-      _usageStatisticsSliceComposition?.bindSelectionPersistence(null);
-    }
     _disposeAgentProviderController?.call();
     // 在 workspace 条目释放后再拆索引监听，避免 popover 仍挂在 listenable 上。
     _fileIndexController.removeListener(_handleFileIndexChanged);

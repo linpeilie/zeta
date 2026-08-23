@@ -6,9 +6,9 @@ import 'package:zeta/src/features/project_threads/application/project_threads_sl
 import 'package:zeta/src/features/project_threads/application/project_threads_slice/project_threads_slice_store.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
 
-/// IdeHome 内层 ProviderScope 注入的页面 store；null 表示完整走 legacy 路径。
-final projectThreadsSliceStoreProvider = Provider<ProjectThreadsSliceStore?>(
-  (ref) => null,
+/// IdeHome 内层 ProviderScope 必须注入唯一的页面 store。
+final projectThreadsSliceStoreProvider = Provider<ProjectThreadsSliceStore>(
+  (ref) => throw StateError('ProjectThreadsSliceStore is not bound'),
   name: 'projectThreadsSliceStore',
 );
 
@@ -26,9 +26,6 @@ final class ProjectThreadsSliceNotifier
   @override
   ProjectThreadsSliceState build() {
     final store = ref.watch(projectThreadsSliceStoreProvider);
-    if (store == null) {
-      return ProjectThreadsSliceState();
-    }
     var active = true;
     var publishScheduled = false;
     final unsubscribe = store.subscribe(() {
@@ -51,7 +48,7 @@ final class ProjectThreadsSliceNotifier
   }
 }
 
-/// 单项目 selector，未启用切片时只返回空状态，调用方应走 legacy source。
+/// 单项目只读 selector。
 final projectThreadListStateProvider =
     Provider.family<ProjectThreadListState, String>(
       (ref, projectPath) => ref.watch(

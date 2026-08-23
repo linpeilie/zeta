@@ -79,7 +79,8 @@ main -> app -> presentation/application -> domain
 
 当前重构后的核心模式是“状态容器 + 应用控制器 + 类型化 UI state”。
 
-- 纯状态容器只暴露状态和同步更新方法，例如 `ProjectThreadsViewModel`。
+- 纯状态容器只暴露不可变状态和同步 intent 入口，例如
+  `ProjectThreadsSliceStore`。
 - 应用控制器收敛分页、恢复、缓存、provider 调用和竞态处理，例如 `ProjectThreadsController`。
 - 高吞吐 UI 使用结构相等的不可变 state slice 与分区 `ValueListenable`，不得用整数
   version/revision 作为主要刷新协议。Timeline 的 live turn 保留稳定对象和增量 mutation，

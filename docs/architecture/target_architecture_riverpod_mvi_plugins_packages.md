@@ -2,7 +2,7 @@
 
 最后更新：2026-08-23
 
-状态：Phase 0–2 已落地；Phase 3 第 1、2 批与第 3 批 3a 均在生产观察中
+状态：Phase 0–2 已落地；Phase 3 第 3 批已关批，第 1、2 批仍独立观察
 
 ## 决策摘要
 
@@ -837,21 +837,17 @@ Phase 3 前置条件的计时起点。字段映射、门禁答卷、验收对照
 
 ### Phase 3：扩大迁移范围
 
-**状态：第 1、2 批与第 3 批 3a 已于 2026-08-23 生产翻旗并独立观察；3b 已完成
-默认关闭路径的实现与双路径对照，尚未生产翻旗。**
+**状态：第 3 批已于 2026-08-23 关批；第 1、2 批仍按各自窗口独立观察。**
 Phase 2 真实使用证据仍在计时（2026-08-23 起生产全量启用 conversation 切片路径）；
 第 1 批经另行显式确认推进到四步节奏第 3 步，最早于 2026-08-26 满足观察下限。
 第 2 批 2a–2c 双路径与完整重构门禁通过后，经再次显式确认接受两批观察窗口重叠，
 生产入口已切到新路径；第 2 批为中高风险，观察期至少 7 天，最早于
 2026-08-30 关批。
-同日经显式要求提前启动第 3 批；Project Threads 的字段级契约、纯 Dart 切片、
-Projects Pane 的 11 个真实根组合双路径场景与 Project Home 对照均已完成，
-经后续显式确认，`projectThreadsSliceEnabled` 在生产入口已翻为 true，按中风险进入
-至少 5 天观察，最早于 2026-08-28 关批。后续继续指令已启动 Usage Statistics 3b：
-两个纯 Dart store、app effect runner/组合、Riverpod 只读镜像与 legacy/slice 根组合
-对照均已落地；经后续显式确认，`usageStatisticsSliceEnabled` 构造默认仍为 false，
-生产入口已于 2026-08-23 显式翻为 true，进入至少 5 天观察，最早于 2026-08-28
-关批；3a 与 3b 独立回滚、独立计时。
+同日经显式要求提前启动第 3 批；3a Project Threads 与 3b Usage Statistics 依次完成
+字段级契约、纯 Dart store、app runner/组合、Riverpod 只读镜像、双路径对照和生产
+翻旗。用户随后明确要求直接进入下一阶段，接受缩短 3a/3b 原定观察余量并执行关批：
+三个旧 `ChangeNotifier` owner、两个批内 flag、Shell usage 装配链和所有 false-path
+均已删除，生产固定为 MVI 单一路径。该授权不改变第 1、2 批的观察与回滚边界。
 开门/关门标准、六批的 owner 映射与删除清单、燃尽清单联动表见
 [Phase 3 开工文档](./phase3_slice_expansion.md)。
 
@@ -860,8 +856,8 @@ Projects Pane 的 11 个真实根组合双路径场景与 Project Home 对照均
 字段级执行契约见
 [Provider 配置、管理与模型目录开工文档](./phase3_batch2_provider_management.md)。
 
-第 3 批字段级契约与 3a 执行记录见
-[Project Threads 与 Usage Statistics 开工文档](./phase3_batch3_project_threads_usage_statistics.md)。
+第 3 批字段级契约与关批记录见
+[Project Threads 与 Usage Statistics 关批文档](./phase3_batch3_project_threads_usage_statistics.md)。
 
 按风险从低到高分批，不做一次性“大爆炸”：
 

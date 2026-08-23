@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_slice_runner.dart';
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_slice/agent_usage_panel_slice_state.dart';
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_slice/agent_usage_panel_slice_store.dart';
-import 'package:zeta/src/features/usage_statistics/application/usage_statistics_controller.dart';
+import 'package:zeta/src/features/usage_statistics/application/usage_statistics_report_builder.dart';
 import 'package:zeta/src/features/usage_statistics/application/usage_statistics_slice/usage_statistics_slice_state.dart';
 import 'package:zeta/src/features/usage_statistics/application/usage_statistics_slice/usage_statistics_slice_store.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
@@ -91,14 +91,9 @@ void main() {
       expect(repository.requests, hasLength(2));
     });
 
-    test('筛选、报表和失效选项清理与 legacy controller 等价', () async {
-      final legacyRepository = _ControlledUsageStatisticsRepository();
+    test('筛选、报表和失效选项清理保持既有语义', () async {
       final sliceRepository = _ControlledUsageStatisticsRepository();
       final now = DateTime(2026, 8, 23, 12);
-      final legacy = UsageStatisticsController(
-        repository: legacyRepository,
-        clock: () => now,
-      );
       final runner = UsageStatisticsSliceRunnerAdapter(
         repository: sliceRepository,
         textCatalog: const FallbackUsageStatisticsTextCatalog(),
@@ -109,34 +104,38 @@ void main() {
         clock: () => now,
       );
       runner.store = store;
-      addTearDown(legacy.dispose);
       addTearDown(store.close);
 
-      final legacyInitialize = legacy.initialize();
       final sliceInitialize = store.initialize();
       await _flushEvents();
       final source = _usageSourceWithRecords(now);
-      legacyRepository.requests.single.complete(source);
       sliceRepository.requests.single.complete(source);
-      await Future.wait(<Future<void>>[legacyInitialize, sliceInitialize]);
+      await sliceInitialize;
 
-      legacy
-        ..selectProject('/workspace/zeta')
-        ..selectProvider('codex')
-        ..selectModel('gpt-5')
-        ..selectRankSort(UsageRankSort.totalTokens);
       store
         ..selectProject('/workspace/zeta')
         ..selectProvider('codex')
         ..selectModel('gpt-5')
         ..selectRankSort(UsageRankSort.totalTokens);
 
-      _expectEquivalentReports(store.report!, legacy.report!);
-      expect(store.projectPath, legacy.projectPath);
-      expect(store.providerId, legacy.providerId);
-      expect(store.model, legacy.model);
+      _expectEquivalentReports(
+        store.report!,
+        buildUsageStatisticsReport(
+          source: source,
+          window: store.window,
+          filter: const UsageStatisticsFilter(
+            projectPath: '/workspace/zeta',
+            providerId: 'codex',
+            model: 'gpt-5',
+          ),
+          trendMetric: UsageTrendMetric.totalTokens,
+          rankSort: UsageRankSort.totalTokens,
+        ),
+      );
+      expect(store.projectPath, '/workspace/zeta');
+      expect(store.providerId, 'codex');
+      expect(store.model, 'gpt-5');
 
-      final legacyRefresh = legacy.refresh();
       final sliceRefresh = store.refresh();
       await _flushEvents();
       final replacement = UsageStatisticsSourceSnapshot(
@@ -152,14 +151,22 @@ void main() {
         ],
         refreshedAt: now,
       );
-      legacyRepository.requests.last.complete(replacement);
       sliceRepository.requests.last.complete(replacement);
-      await Future.wait(<Future<void>>[legacyRefresh, sliceRefresh]);
+      await sliceRefresh;
 
       expect(store.projectPath, isNull);
       expect(store.providerId, isNull);
       expect(store.model, isNull);
-      _expectEquivalentReports(store.report!, legacy.report!);
+      _expectEquivalentReports(
+        store.report!,
+        buildUsageStatisticsReport(
+          source: replacement,
+          window: store.window,
+          filter: const UsageStatisticsFilter(),
+          trendMetric: UsageTrendMetric.totalTokens,
+          rankSort: UsageRankSort.totalTokens,
+        ),
+      );
     });
 
     test('关闭 store 会正常结算在途 Future，迟到结果不再回流', () async {

@@ -4,9 +4,8 @@ import 'package:zeta/src/features/project_threads/domain/project_thread_list_sta
 
 /// Project Threads controller 写入列表事实所依赖的纯 application 端口。
 ///
-/// controller 只负责 Provider 查询、能力校验和防抖；具体状态由迁移 flag 选中的
-/// legacy ViewModel 或 MVI store 独占。application 因而不再反向 import
-/// presentation。
+/// controller 只负责 Provider 查询、能力校验和防抖；具体状态由 MVI store 独占。
+/// application 因而不反向 import presentation。
 abstract interface class ProjectThreadsStateOwner {
   Map<String, ProjectThreadListState> get states;
 

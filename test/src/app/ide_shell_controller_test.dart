@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/app/app_constants.dart';
 import 'package:zeta/src/app/shell/ide_shell_controller.dart';
+import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_slice_composition.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
@@ -15,6 +16,7 @@ import 'package:zeta/src/features/usage_statistics/application/query_agent_usage
 import 'package:zeta/src/features/usage_statistics/application/query_usage_statistics_repository.dart';
 import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partition_store.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
+import 'package:zeta/src/features/usage_statistics/domain/fallback_usage_statistics_text_catalog.dart';
 
 import '../testing/agent_event_storm_fixture.dart';
 import '../testing/agent_provider_stub_base.dart';
@@ -38,37 +40,37 @@ void main() {
     tempDirectories.clear();
   });
 
-  test('composes both usage controllers from the shared query service', () {
-    final shell = IdeShellController(
-      agentUiFrameSchedulerFactory: _createUiFrameScheduler,
-      directoryPicker: () async => null,
-      sessionStore: const CallbackIdeSessionStore(
-        loadJson: _loadEmptySession,
-        saveJson: _saveDiscardedSession,
-      ),
-      agentProviderFactory:
-          _RecordingAgentProviderFactory(<String, _ProviderBackend>{
-            defaultAgentProviderId: _ProviderBackend(
-              config: AgentProviderConfig.defaultCodex,
-              threadHistories: const <String, AgentThreadHistorySnapshot>{},
-              threadPages: const <AgentThreadPage>[],
-            ),
-          }),
-      agentProviderConfigStore: MemoryAgentProviderConfigStore(
-        const AgentProviderSettings(
-          providers: <AgentProviderConfig>[AgentProviderConfig.defaultCodex],
-          activeProviderId: defaultAgentProviderId,
-        ),
-      ),
+  test('app composition exposes both usage stores from one query service', () {
+    final providerFactory =
+        _RecordingAgentProviderFactory(<String, _ProviderBackend>{
+          defaultAgentProviderId: _ProviderBackend(
+            config: AgentProviderConfig.defaultCodex,
+            threadHistories: const <String, AgentThreadHistorySnapshot>{},
+            threadPages: const <AgentThreadPage>[],
+          ),
+        });
+    final runtimeRegistry = AgentProviderRuntimeRegistry(
+      providerFactory: providerFactory,
     );
-    addTearDown(shell.dispose);
+    final composition = UsageStatisticsSliceComposition.create(
+      loadEnabledProviders: () async => const <AgentProviderConfig>[
+        AgentProviderConfig.defaultCodex,
+      ],
+      runtimeRegistry: runtimeRegistry,
+      partitionStore: MemoryUsageStatisticsPartitionStore(),
+      textCatalog: const FallbackUsageStatisticsTextCatalog(),
+    );
+    addTearDown(() async {
+      composition.dispose();
+      await runtimeRegistry.close();
+    });
 
     expect(
-      shell.usageStatisticsController.repository,
+      composition.usageStatisticsStore.repository,
       isA<QueryUsageStatisticsRepository>(),
     );
     expect(
-      shell.agentUsagePanelController.repository,
+      composition.agentUsagePanelStore.repository,
       isA<QueryAgentUsagePanelRepository>(),
     );
   });
@@ -77,6 +79,17 @@ void main() {
     'provider settings changes resync usage directory without loading siblings',
     () async {
       final usageRepository = _DirectoryTrackingUsageRepository();
+      final providerFactory =
+          _RecordingAgentProviderFactory(<String, _ProviderBackend>{
+            defaultAgentProviderId: _ProviderBackend(
+              config: AgentProviderConfig.defaultCodex,
+              threadHistories: const <String, AgentThreadHistorySnapshot>{},
+              threadPages: const <AgentThreadPage>[],
+            ),
+          });
+      final runtimeRegistry = AgentProviderRuntimeRegistry(
+        providerFactory: providerFactory,
+      );
       final shell = IdeShellController(
         agentUiFrameSchedulerFactory: _createUiFrameScheduler,
         directoryPicker: () async => null,
@@ -84,23 +97,35 @@ void main() {
           loadJson: _loadEmptySession,
           saveJson: _saveDiscardedSession,
         ),
-        agentProviderFactory:
-            _RecordingAgentProviderFactory(<String, _ProviderBackend>{
-              defaultAgentProviderId: _ProviderBackend(
-                config: AgentProviderConfig.defaultCodex,
-                threadHistories: const <String, AgentThreadHistorySnapshot>{},
-                threadPages: const <AgentThreadPage>[],
-              ),
-            }),
+        agentProviderFactory: providerFactory,
+        agentProviderRuntimeRegistry: runtimeRegistry,
         agentProviderConfigStore: MemoryAgentProviderConfigStore(),
-        usageStatistics: IdeShellUsageStatisticsDependencies(
-          partitionStore: MemoryUsageStatisticsPartitionStore(),
-          agentUsagePanelRepository: usageRepository,
-        ),
       );
-      addTearDown(shell.dispose);
+      final composition = UsageStatisticsSliceComposition.create(
+        loadEnabledProviders: () async {
+          await shell.agentProviderController.loadSettings();
+          return shell.agentProviderController.enabledProviders;
+        },
+        runtimeRegistry: runtimeRegistry,
+        partitionStore: MemoryUsageStatisticsPartitionStore(),
+        agentUsagePanelRepository: usageRepository,
+        textCatalog: const FallbackUsageStatisticsTextCatalog(),
+      );
+      void synchronizeUsageDirectory() {
+        if (composition.agentUsagePanelStore.hasDiscoveredProviders) {
+          unawaited(composition.agentUsagePanelStore.synchronizeProviders());
+        }
+      }
 
-      await shell.agentUsagePanelController.refresh(forceRefresh: false);
+      shell.agentProviderController.addListener(synchronizeUsageDirectory);
+      addTearDown(() async {
+        shell.agentProviderController.removeListener(synchronizeUsageDirectory);
+        composition.dispose();
+        shell.dispose();
+        await runtimeRegistry.close();
+      });
+
+      await composition.agentUsagePanelStore.refresh(forceRefresh: false);
       expect(usageRepository.loadedProviderIds, <String>['codex']);
 
       usageRepository.directory = const <AgentUsagePanelProvider>[
@@ -117,7 +142,7 @@ void main() {
       await _flushAsync();
 
       expect(
-        shell.agentUsagePanelController.providers.map(
+        composition.agentUsagePanelStore.providers.map(
           (state) => state.provider.providerId,
         ),
         <String>['codex', 'grok', 'claude_code'],
@@ -1104,7 +1129,7 @@ void main() {
       expect(shell.isProjectHomeActive, isTrue);
       expect(shell.selectedAgentWorkspaceEntryId, isNull);
       expect(
-        shell.projectThreadsViewModel.states.values.every(
+        shell.projectThreadsSliceStore.states.values.every(
           (state) => state.selectedThreadId == null,
         ),
         isTrue,

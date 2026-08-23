@@ -97,8 +97,7 @@ class _UsageTimeRangeFilterState extends State<UsageTimeRangeFilter> {
   @override
   Widget build(BuildContext context) {
     final isOpen = _popover != null && !_popover!.isCompleted;
-
-    final button = IdeButton.toolbar(
+    return IdeButton.toolbar(
       key: const ValueKey('usage-time-range-filter'),
       label: _triggerLabel,
       width: widget.width,
@@ -108,23 +107,6 @@ class _UsageTimeRangeFilterState extends State<UsageTimeRangeFilter> {
           ? Icons.keyboard_arrow_up_rounded
           : Icons.keyboard_arrow_down_rounded,
     );
-    final controller = widget.controller;
-    if (controller is Listenable) {
-      return ListenableBuilder(
-        listenable: controller as Listenable,
-        builder: (context, _) => IdeButton.toolbar(
-          key: const ValueKey('usage-time-range-filter'),
-          label: _triggerLabel,
-          width: widget.width,
-          onPressed: _togglePopover,
-          leadingIcon: Icons.calendar_month_rounded,
-          trailingIcon: isOpen
-              ? Icons.keyboard_arrow_up_rounded
-              : Icons.keyboard_arrow_down_rounded,
-        ),
-      );
-    }
-    return button;
   }
 }
 
