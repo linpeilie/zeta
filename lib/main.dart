@@ -89,6 +89,9 @@ void main() {
           // Phase 2：生产全量启用 conversation 切片路径，开始积累真实使用证据。
           // 回退时改回 false 即回到旧 ViewModel 直连路径，无需数据迁移。
           conversationSliceEnabled: true,
+          // Phase 3 第 1 批：经显式确认后生产启用 settings 切片，进入三天观察。
+          // 回退时改回 false 即恢复旧 controller 直连路径，无需数据迁移。
+          settingsSliceEnabled: true,
         ),
       );
     },

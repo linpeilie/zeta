@@ -135,7 +135,8 @@ DesktopAttentionController (desktop_notifications/application)
 
 ## 8. 回滚方式
 
-- 批内：`settingsSliceEnabled` 全局 bool，默认 false，生产行为不变；
+- 批内：`settingsSliceEnabled` 全局 bool 仍保留；构造默认 false，生产入口自
+  2026-08-23 起显式传 true；
 - 翻 flag 后发现问题：一行拨回 false，回到旧 controller 直连路径；
 - 关批后：revert 关批提交（旧 controller 在 git 历史里完整可恢复）。
 
@@ -144,7 +145,8 @@ DesktopAttentionController (desktop_notifications/application)
 1. **挂 flag**：✅ 步骤 1–4 已在 flag 默认 false 下落地（2026-08-23）；
 2. **对照验证**：✅ §6 双路径对照、`flutter analyze` 与 `test_affected` 已通过
    （2026-08-23）；
-3. **翻 flag**：`main.dart` 传 `settingsSliceEnabled: true`，观察窗口 ≥ 3 天
-   （本批风险为低，取下限）；当前等待 Phase 3 的 14 天开门窗口或显式确认；
+3. **翻 flag**：🟡 经显式确认，`main.dart` 已于 2026-08-23 传
+   `settingsSliceEnabled: true`，进入 ≥ 3 天观察窗口（本批风险为低，取下限）；
+   最早于 2026-08-26 关批，若回退则修复复测后重新起算；
 4. **关批**：执行 §7 删除，更新守卫基线与燃尽表，Phase 3 开工文档 §2.11
    的 settings 行标记清零。
