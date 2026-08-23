@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:zeta/src/app/settings_slice/settings_slice_composition.dart';
 import 'package:zeta/src/app/storage/atomic_text_file.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/widgets.dart';
@@ -36,6 +37,8 @@ import 'package:zeta/src/features/settings/application/general_settings_controll
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
 import 'package:zeta/src/features/settings/data/general_settings_store.dart';
 import 'package:zeta/src/features/settings/presentation/appearance_theme_mode_mapper.dart';
+import 'package:zeta/src/features/settings/presentation/settings_slice/settings_slice_providers.dart';
+import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_mapping.dart';
 import 'package:zeta/src/features/settings/data/system_font_catalog_service.dart';
 import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
@@ -79,6 +82,7 @@ class MainApp extends StatefulWidget {
     this.turnContextStore,
     this.observability,
     this.conversationSliceEnabled = false,
+    this.settingsSliceEnabled = false,
   });
 
   final Future<String?> Function()? directoryPicker;
@@ -125,6 +129,12 @@ class MainApp extends StatefulWidget {
   /// 回退时改回 false 即可。
   final bool conversationSliceEnabled;
 
+  /// Phase 3 第 1 批 settings 切片的 feature flag（全局生效，默认 false）。
+  ///
+  /// true 时创建切片组合（两个 store + runner + 迁移期 ingress），主题构建
+  /// 改由切片镜像 provider 驱动；写入路径在步骤 4 之前仍走旧 controller。
+  final bool settingsSliceEnabled;
+
   /// 生产启动阶段解析并初始化的 Zeta 自有数据路径。
   ///
   /// 未传入时使用内存/回调存储，避免测试或嵌入式宿主意外写入真实 HOME。
@@ -153,6 +163,9 @@ class MainAppState extends State<MainApp>
     with WidgetsBindingObserver, WindowListener {
   late final AppearanceSettingsController _appearanceController;
   late final GeneralSettingsController _generalSettingsController;
+
+  /// Phase 3 第 1 批切片组合；null = flag 关（默认，生产行为不变）。
+  SettingsSliceComposition? _settingsSliceComposition;
 
   /// 编译期插件目录；仅在应用自己构造 Provider 工厂时创建。
   ZetaPluginCatalog? _pluginCatalog;
@@ -307,6 +320,16 @@ class MainAppState extends State<MainApp>
       _generalSettingsController = GeneralSettingsController(store: store);
       _ownsGeneralSettingsController = true;
     }
+    if (widget.settingsSliceEnabled) {
+      _settingsSliceComposition = SettingsSliceComposition.create(
+        useFilePersistence: _useFilePersistence,
+        dataPaths: widget.dataPaths,
+        fallbackLanguage: widget.fallbackLanguage,
+        appearanceController: _appearanceController,
+        generalController: _generalSettingsController,
+        fontCatalog: DesktopSystemFontCatalogService(),
+      );
+    }
     unawaited(_appearanceController.load());
     final loadGeneralSettings = _generalSettingsController.load();
     final overrideLanguage = widget.displayLanguageOverride;
@@ -423,6 +446,8 @@ class MainAppState extends State<MainApp>
       }
     }
     unawaited(_shutdownOwnedAgentResources());
+    _settingsSliceComposition?.dispose();
+    _settingsSliceComposition = null;
     if (_ownsAppearanceController) {
       _appearanceController.dispose();
     }
@@ -471,121 +496,141 @@ class MainAppState extends State<MainApp>
     // "No ProviderScope found"，而不是编译期错误。
     return ProviderScope(
       observers: widget.observability?.providerObservers,
-      overrides: [zetaMetricsPortProvider.overrideWithValue(_metrics)],
+      overrides: [
+        zetaMetricsPortProvider.overrideWithValue(_metrics),
+        if (_settingsSliceComposition case final composition?) ...[
+          appearanceSettingsSliceStoreProvider.overrideWithValue(
+            composition.appearanceStore,
+          ),
+          generalSettingsSliceStoreProvider.overrideWithValue(
+            composition.generalStore,
+          ),
+        ],
+      ],
       child: _buildApp(context),
     );
   }
 
   Widget _buildApp(BuildContext context) {
+    // Phase 3 第 1 批：切片路径（flag 开）由镜像 provider 驱动主题构建；
+    // 迁移期写入仍走旧 controller，ingress 负责把变化镜像进切片。
+    if (_settingsSliceComposition != null) {
+      return Consumer(
+        builder: (context, ref, _) => _buildThemedApp(
+          appearanceSettingsFromSlice(
+            ref.watch(appearanceSettingsSliceValueProvider),
+          ),
+        ),
+      );
+    }
     return ValueListenableBuilder<AppearanceSettings>(
       valueListenable: _appearanceController.listenable,
-      builder: (context, settings, _) {
-        final lightIdeTheme = buildIdeThemeData(
-          brightness: Brightness.light,
-          uiFontFamily: settings.uiFontFamily,
-          codeFontFamily: settings.codeFontFamily,
-          uiFontSize: settings.uiFontSize,
-          codeFontSize: settings.codeFontSize,
-        );
-        final darkIdeTheme = buildIdeThemeData(
-          brightness: Brightness.dark,
-          uiFontFamily: settings.uiFontFamily,
-          codeFontFamily: settings.codeFontFamily,
-          uiFontSize: settings.uiFontSize,
-          codeFontSize: settings.codeFontSize,
-        );
-        final flutterThemeMode = themeModeForPreference(settings.themeMode);
-        final materialBrightness = resolveBrightnessForThemeMode(
-          flutterThemeMode,
-        );
-        final materialIdeTheme = materialBrightness == Brightness.dark
-            ? darkIdeTheme
-            : lightIdeTheme;
-        return TickerMode(
-          enabled: _tickersEnabled,
-          // 设计系统自有文案（无障碍标签、滚动条提示等）不经 generated l10n，
-          // 由组合层在这里注入一次；未注入时 zeta_ui 回退英文。
-          child: IdeUiTextScope(
-            catalog: _zetaUiTextCatalog,
-            child: IdeThemeScope(
-              themeMode: flutterThemeMode,
-              lightTheme: lightIdeTheme,
-              darkTheme: darkIdeTheme,
-              child: sf.ShadcnApp(
-                debugShowCheckedModeBanner: false,
-                title: appTitle,
-                locale: _frozenDisplayLocale,
-                supportedLocales: ZetaLocalization.supportedLocales,
-                localizationsDelegates: ZetaLocalization.delegates,
-                popoverHandler: ideStablePopoverOverlayHandler,
-                tooltipHandler: ideStablePopoverOverlayHandler,
-                menuHandler: ideStablePopoverOverlayHandler,
-                theme: buildShadcnTheme(lightIdeTheme),
-                darkTheme: buildShadcnTheme(darkIdeTheme),
-                materialTheme: buildMaterialTheme(materialIdeTheme),
-                themeMode: resolveShadcnThemeMode(flutterThemeMode),
-                home: _generalSettingsReady
-                    ? IdeHome(
-                        key: const ValueKey<String>('zeta.ide-home'),
-                        directoryPicker:
-                            widget.directoryPicker ?? getDirectoryPath,
-                        enableNativeWindowFrame: widget.enableNativeWindowFrame,
-                        showWindowControls: widget.showWindowControls,
-                        sessionStore: _createSessionStore(),
-                        agentProviderFactory: _agentProviderFactory,
-                        agentProviderRuntimeRegistry:
-                            _agentProviderRuntimeRegistry,
-                        desktopNotificationService:
-                            widget.desktopNotificationService,
-                        desktopAttentionIndicator:
-                            widget.desktopAttentionIndicator,
-                        agentProviderConfigStore:
-                            widget.agentProviderConfigStore ??
-                            _createAgentProviderConfigStore(),
-                        agentProviderAvailabilityLoader:
-                            widget.agentProviderAvailabilityLoader,
-                        homeProviderDetectionLoader:
-                            widget.homeProviderDetectionLoader ??
-                            (_usesCallbackPersistence
-                                ? _loadNoInstalledHomeProviders
-                                : null),
-                        projectLocationOpener:
-                            widget.projectLocationOpener ??
-                            openPathInSystemFileManager,
-                        appearanceController: _appearanceController,
-                        generalSettingsController: _generalSettingsController,
-                        usageStatisticsDependencies:
-                            IdeShellUsageStatisticsDependencies(
-                              partitionStore: _usageStatisticsPartitionStore,
-                              agentUsagePanelRepository:
-                                  widget.agentUsagePanelRepository,
-                            ),
-                        agentModelCatalogRepository:
-                            _agentModelCatalogRepository,
-                        turnContextStore: _turnContextStore,
-                        agentUiTextCatalog: _agentUiTextCatalog,
-                        metrics: _metrics,
-                        conversationSliceEnabled:
-                            widget.conversationSliceEnabled,
-                        desktopAttentionTextCatalog:
-                            _desktopAttentionTextCatalog,
-                        // 回调存储用于测试/嵌入宿主；未显式注入统计仓储时不读取本机 CLI 历史。
-                        enableAgentUsageAutoRefresh:
-                            !_usesCallbackPersistence ||
-                            widget.agentUsagePanelRepository != null,
-                      )
-                    : ColoredBox(
-                        key: const ValueKey<String>(
-                          'zeta.localization-loading',
-                        ),
-                        color: materialIdeTheme.colors.frame,
-                      ),
-              ),
+      builder: (context, settings, _) => _buildThemedApp(settings),
+    );
+  }
+
+  Widget _buildThemedApp(AppearanceSettings settings) {
+    {
+      final lightIdeTheme = buildIdeThemeData(
+        brightness: Brightness.light,
+        uiFontFamily: settings.uiFontFamily,
+        codeFontFamily: settings.codeFontFamily,
+        uiFontSize: settings.uiFontSize,
+        codeFontSize: settings.codeFontSize,
+      );
+      final darkIdeTheme = buildIdeThemeData(
+        brightness: Brightness.dark,
+        uiFontFamily: settings.uiFontFamily,
+        codeFontFamily: settings.codeFontFamily,
+        uiFontSize: settings.uiFontSize,
+        codeFontSize: settings.codeFontSize,
+      );
+      final flutterThemeMode = themeModeForPreference(settings.themeMode);
+      final materialBrightness = resolveBrightnessForThemeMode(
+        flutterThemeMode,
+      );
+      final materialIdeTheme = materialBrightness == Brightness.dark
+          ? darkIdeTheme
+          : lightIdeTheme;
+      return TickerMode(
+        enabled: _tickersEnabled,
+        // 设计系统自有文案（无障碍标签、滚动条提示等）不经 generated l10n，
+        // 由组合层在这里注入一次；未注入时 zeta_ui 回退英文。
+        child: IdeUiTextScope(
+          catalog: _zetaUiTextCatalog,
+          child: IdeThemeScope(
+            themeMode: flutterThemeMode,
+            lightTheme: lightIdeTheme,
+            darkTheme: darkIdeTheme,
+            child: sf.ShadcnApp(
+              debugShowCheckedModeBanner: false,
+              title: appTitle,
+              locale: _frozenDisplayLocale,
+              supportedLocales: ZetaLocalization.supportedLocales,
+              localizationsDelegates: ZetaLocalization.delegates,
+              popoverHandler: ideStablePopoverOverlayHandler,
+              tooltipHandler: ideStablePopoverOverlayHandler,
+              menuHandler: ideStablePopoverOverlayHandler,
+              theme: buildShadcnTheme(lightIdeTheme),
+              darkTheme: buildShadcnTheme(darkIdeTheme),
+              materialTheme: buildMaterialTheme(materialIdeTheme),
+              themeMode: resolveShadcnThemeMode(flutterThemeMode),
+              home: _generalSettingsReady
+                  ? IdeHome(
+                      key: const ValueKey<String>('zeta.ide-home'),
+                      directoryPicker:
+                          widget.directoryPicker ?? getDirectoryPath,
+                      enableNativeWindowFrame: widget.enableNativeWindowFrame,
+                      showWindowControls: widget.showWindowControls,
+                      sessionStore: _createSessionStore(),
+                      agentProviderFactory: _agentProviderFactory,
+                      agentProviderRuntimeRegistry:
+                          _agentProviderRuntimeRegistry,
+                      desktopNotificationService:
+                          widget.desktopNotificationService,
+                      desktopAttentionIndicator:
+                          widget.desktopAttentionIndicator,
+                      agentProviderConfigStore:
+                          widget.agentProviderConfigStore ??
+                          _createAgentProviderConfigStore(),
+                      agentProviderAvailabilityLoader:
+                          widget.agentProviderAvailabilityLoader,
+                      homeProviderDetectionLoader:
+                          widget.homeProviderDetectionLoader ??
+                          (_usesCallbackPersistence
+                              ? _loadNoInstalledHomeProviders
+                              : null),
+                      projectLocationOpener:
+                          widget.projectLocationOpener ??
+                          openPathInSystemFileManager,
+                      appearanceController: _appearanceController,
+                      generalSettingsController: _generalSettingsController,
+                      usageStatisticsDependencies:
+                          IdeShellUsageStatisticsDependencies(
+                            partitionStore: _usageStatisticsPartitionStore,
+                            agentUsagePanelRepository:
+                                widget.agentUsagePanelRepository,
+                          ),
+                      agentModelCatalogRepository: _agentModelCatalogRepository,
+                      turnContextStore: _turnContextStore,
+                      agentUiTextCatalog: _agentUiTextCatalog,
+                      metrics: _metrics,
+                      conversationSliceEnabled: widget.conversationSliceEnabled,
+                      desktopAttentionTextCatalog: _desktopAttentionTextCatalog,
+                      // 回调存储用于测试/嵌入宿主；未显式注入统计仓储时不读取本机 CLI 历史。
+                      enableAgentUsageAutoRefresh:
+                          !_usesCallbackPersistence ||
+                          widget.agentUsagePanelRepository != null,
+                    )
+                  : ColoredBox(
+                      key: const ValueKey<String>('zeta.localization-loading'),
+                      color: materialIdeTheme.colors.frame,
+                    ),
             ),
           ),
-        );
-      },
-    );
+        ),
+      );
+    }
   }
 
   bool get _tickersEnabled {

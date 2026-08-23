@@ -154,8 +154,12 @@ final class GeneralSettingsSliceStore {
   }
 
   // -------------------------------------------------------------------------
-  // 结果入口：effect runner 回流
+  // 结果入口：effect runner / ingress 回流
   // -------------------------------------------------------------------------
+
+  void loaded(GeneralSettings settings) {
+    dispatch(GeneralSettingsLoaded(settings));
+  }
 
   void persisted(OperationId operationId, GeneralSettings settings) {
     dispatch(GeneralSettingsPersisted(operationId, settings));

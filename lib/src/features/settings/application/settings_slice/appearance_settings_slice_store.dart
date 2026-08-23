@@ -176,8 +176,12 @@ final class AppearanceSettingsSliceStore {
   }
 
   // -------------------------------------------------------------------------
-  // 结果入口：effect runner 回流
+  // 结果入口：effect runner / ingress 回流
   // -------------------------------------------------------------------------
+
+  void loaded(AppearanceSettingsSlice value) {
+    dispatch(AppearanceSettingsLoaded(value));
+  }
 
   void fontChoiceResolved(
     OperationId operationId, {
