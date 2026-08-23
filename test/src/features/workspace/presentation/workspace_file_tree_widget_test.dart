@@ -150,7 +150,6 @@ void main() {
       return MainApp(
         enableNativeWindowFrame: true,
         showWindowControls: false,
-        workspaceSliceEnabled: true,
         directoryPicker: directoryPicker,
         sessionLoader: session.load,
         sessionSaver: session.save,

@@ -86,6 +86,12 @@
 > `workspaceSliceEnabled: true`、`ideSessionSliceEnabled: true`。两个 flag 保持独立
 > 回滚，第 4 批按中高风险取至少 7 天观察期，最早于 2026-08-30 关批；任一路径回退
 > 只重置自身观察窗口。root snapshot、旧路径删除和关批仍未获授权。
+>
+> **第 4 批提前关批记录（2026-08-23）**：用户随后明确要求“执行关批和旧路径
+> 删除”，接受缩短原定观察余量并直接执行四步节奏第 4 步。两个批内 flag、Shell
+> Workspace 八个旧字段、直接目录树构造、Session coordinator false-path 与旧恢复/保存
+> 入口已删除；只读 `ZetaStateSnapshot` 已建立。第 4 批固定为 MVI 单一路径，该授权
+> 不改变第 1、2 批独立的观察与回滚边界。
 
 **关门标准（每批合入的条件）**，逐条来自目标架构 Phase 3 验收标准：
 
@@ -104,7 +110,7 @@
 | 1 | settings（appearance / general） | `AppearanceSettingsController`、`GeneralSettingsController` | 低：消费面小，无 Provider 协议 | 两个 ChangeNotifier controller、settings domain 的 Flutter 类型 |
 | 2 | provider 配置 / 管理 / 模型目录 | `AgentProviderSettingsController`（实现 `AgentProviderSettingsPort`）、`AgentManagementController`（785 行）、`AgentModelCatalogRepository` | 中高：port 被 agent / project_threads / agent_management 多处消费；G4 能力位 | provider settings 的 ChangeNotifier 形态、management 的 controller 形态 |
 | 3（已关批） | project threads + usage statistics | 迁移源 `ProjectThreadsViewModel`、`UsageStatisticsController`、`AgentUsagePanelController` 均已删除；当前 owner 为三个纯 Dart store | 中：跨 provider 聚合、分页、防抖、恢复 | ✅ 三个 ChangeNotifier、两个 flag 已删；usage 组装链已移出 Shell |
-| 4 | workspace + ide session | 文件树/项目状态直接长在 `IdeShellController`（1416 行）上、`WorkspaceFileIndexController`、`IdeSessionPersistenceCoordinator` | 中高：启动恢复流程、文件树热路径 | `IdeShellController` 的树/项目/会话状态字段与 repository 构造 |
+| 4（已关批） | workspace + ide session | 迁移源 Shell Workspace 字段与 Session false-path 已删除；当前 owner 为 `WorkspaceSliceStore`、`IdeSessionSliceStore` | 中高：启动恢复流程、文件树热路径 | ✅ 两个 flag、八个 Workspace 字段、直接树构造与 Session false-path 已删 |
 | 5 | desktop attention + conversation workspace 外壳 | `DesktopAttentionController`、`IdeShellController` 的 entry↔列表同步管线、三个 conversation 级 controller（mode / model selection / skills） | 中高：G5 审批语义、entry 生命周期、Binding lease | conversation 级 ChangeNotifier ×3、`agent_thread_workspace_controller` 的反向依赖 |
 | 6 | 三个显式 Provider 插件 | `CompatibilityAgentProviderPlugin`（使用点计数 1，测试断言）+ `DefaultAgentProviderFactory` 的 kind switch | 低：kernel 契约测试齐全（665 行 registry 测试） | 兼容层账本兑现：`CompatibilityAgentProviderPlugin`、`ZetaPluginCatalog.compatibility` |
 
@@ -168,9 +174,10 @@ feature）。本阶段规则：
 
 ### 2.7 `ZetaStateSnapshot`（只读根投影）
 
-目标架构 Phase 3 要求的只读 root snapshot，排在**第 4 批之后**建立：它聚合的是
-各 feature 切片的只读投影，太早建只是空壳。约束：仅供诊断与恢复测试，生产
-Widget 禁止订阅（§11.3 告警项 + 守卫）。
+目标架构 Phase 3 要求的只读 root snapshot 已在**第 4 批关批时**建立：它聚合各
+feature 切片的只读投影，仅供诊断与恢复测试，生产 Widget 禁止订阅（§11.3 告警项 +
+守卫）。Conversation/Management 只进入无正文安全摘要；第 1、2 批尚未关批时对应节点
+允许为空，后续关批再收敛为必选。
 
 ### 2.8 兼容层纪律
 
@@ -411,22 +418,22 @@ capability 位与 UI 入口的 G4 对照表、`AgentProviderSettingsPort` 消费
 
 ---
 
-## 6. 第 4 批：workspace + ide session（生产观察中）
+## 6. 第 4 批：workspace + ide session（已关批）
 
-- **workspace**：文件树/展开/选择状态的 owner 现在是 `IdeShellController`
-  本身（`_workspaceTree`、`_expandedDirectoryPaths`、`_selectedTreePath`、
-  `_currentFilePath`），不是 workspace feature——本批把它迁成
-  `WorkspaceSliceState`，懒加载展开（`WorkspaceNode.updateNode` + 按需读子层）
-  机制原样，索引就绪信号从 `WorkspaceFileIndexController`（本批去
-  ChangeNotifier 化，改自维护 listener 列表）注入。
+- **workspace**：文件树/展开/选择状态已由 `WorkspaceSliceStore` 唯一持有；懒加载
+  展开（`WorkspaceNode.updateNode` + 按需读子层）机制原样，索引就绪信号由已纯化的
+  `WorkspaceFileIndexController` 注入。
   `@mention` 语料链（index controller → workspace controller → ViewModel）
   改走 port，不在 presentation 拼装。
 - **ide session**：`IdeSessionPersistenceCoordinator`（防抖保存 + restore
   token）语义原样；`IdeSessionState` v4 与 `state builder` / `sanitize` 不动。
   切片的持久化 effect 调用现有 coordinator，**不重写保存流程**。
-- 本批结束后建只读 `ZetaStateSnapshot`（§2.7）。
-- 这是 `IdeShellController` 拆解的主菜：树/项目/会话状态全部移出后，shell
-  只剩跨 feature workflow。
+- **删除完成**：两个 flag、Shell 八个 Workspace 字段、直接目录树构造、Session
+  coordinator false-path 与旧恢复/保存入口均已删除。
+- **根投影**：`ZetaStateSnapshot` 已建立为无监听按需读取对象，Conversation 与
+  Management 只保存无正文摘要，生产 Widget 继续只 watch feature selector。
+- `IdeShellController` 已不再拥有 Workspace/Session feature 状态，只保留项目、thread
+  与 conversation 的跨 feature workflow；后者继续在第 5 批迁移。
 
 ---
 

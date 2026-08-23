@@ -4,7 +4,7 @@ import 'package:zeta/src/features/workspace/application/workspace_slice/workspac
 import 'package:zeta/src/features/workspace/application/workspace_slice/workspace_slice_state.dart';
 import 'package:zeta/src/features/workspace/application/workspace_slice/workspace_slice_store.dart';
 
-/// Workspace 切片组合；store 是 flag 开启路径的唯一业务状态 owner。
+/// Workspace 切片组合；store 是项目与文件树业务状态的唯一 owner。
 final class WorkspaceSliceComposition {
   WorkspaceSliceComposition._(this.store);
 

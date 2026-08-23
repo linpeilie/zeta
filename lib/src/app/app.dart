@@ -13,6 +13,7 @@ import 'package:window_manager/window_manager.dart';
 
 import 'package:zeta/src/app/app_constants.dart';
 import 'package:zeta/src/app/composition/agent_resource_shutdown.dart';
+import 'package:zeta/src/app/composition/zeta_state_snapshot.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:zeta/src/app/composition/app_dependencies.dart';
@@ -92,8 +93,6 @@ class MainApp extends StatefulWidget {
     this.conversationSliceEnabled = false,
     this.settingsSliceEnabled = false,
     this.providerManagementSliceEnabled = false,
-    this.workspaceSliceEnabled = false,
-    this.ideSessionSliceEnabled = false,
   });
 
   final Future<String?> Function()? directoryPicker;
@@ -152,12 +151,6 @@ class MainApp extends StatefulWidget {
   /// controller 路径完整保留。生产入口自 2026-08-23 起显式传 true。
   final bool providerManagementSliceEnabled;
 
-  /// Phase 3 第 4 批 4a Workspace 切片 flag（默认关闭）。
-  final bool workspaceSliceEnabled;
-
-  /// Phase 3 第 4 批 4b IDE Session 切片 flag（默认关闭）。
-  final bool ideSessionSliceEnabled;
-
   /// 生产启动阶段解析并初始化的 Zeta 自有数据路径。
   ///
   /// 未传入时使用内存/回调存储，避免测试或嵌入式宿主意外写入真实 HOME。
@@ -196,9 +189,12 @@ class MainAppState extends State<MainApp>
   /// Phase 3 第 3 批 3b 组合；本地化运行时就绪后创建并成为唯一 owner。
   UsageStatisticsSliceComposition? _usageStatisticsSliceComposition;
 
-  /// Phase 3 第 4 批 4b 组合；始终稳定创建，flag 关闭时保持 dormant。
+  /// Phase 3 第 4 批 4b 组合；IDE Session 的唯一运行态 owner。
   late final IdeSessionSliceComposition _ideSessionSliceComposition;
-  late final IdeSessionStore _ideSessionStore;
+
+  /// 诊断/恢复测试按需读取 Shell 投影的桥；没有 listener，不参与 Widget rebuild。
+  final ZetaShellStateSnapshotRelay _shellStateSnapshotRelay =
+      ZetaShellStateSnapshotRelay();
 
   /// 编译期插件目录；仅在应用自己构造 Provider 工厂时创建。
   ZetaPluginCatalog? _pluginCatalog;
@@ -232,6 +228,20 @@ class MainAppState extends State<MainApp>
   GeneralSettingsController get generalSettingsController =>
       _generalSettingsController;
 
+  /// 按需读取当前逻辑状态树；生产 Widget 不得订阅或在 build 中调用。
+  ZetaStateSnapshot takeStateSnapshot() {
+    final usageComposition = _requiredUsageStatisticsComposition;
+    return ZetaStateSnapshot(
+      shell: _shellStateSnapshotRelay.read(),
+      ideSession: _ideSessionSliceComposition.store.state,
+      usageStatistics: usageComposition.usageStatisticsStore.state,
+      agentUsagePanel: usageComposition.agentUsagePanelStore.state,
+      appearanceSettings: _settingsSliceComposition?.appearanceStore.state,
+      generalSettings: _settingsSliceComposition?.generalStore.state,
+      providerSettings: _providerSettingsSliceComposition?.store.state,
+    );
+  }
+
   /// 按依赖反序关闭本实例拥有的 Agent 资源。
   ///
   /// 顺序是硬要求：**runtime registry 先、plugin catalog 后**。插件贡献出的
@@ -264,9 +274,9 @@ class MainAppState extends State<MainApp>
     }
     final useFilePersistence = _useFilePersistence;
     final dataPaths = widget.dataPaths;
-    _ideSessionStore = _createSessionStore();
+    final ideSessionStore = _createSessionStore();
     _ideSessionSliceComposition = IdeSessionSliceComposition.create(
-      sessionStore: _ideSessionStore,
+      sessionStore: ideSessionStore,
     );
     _frozenDisplayLocale = ZetaLocalization.localeFor(
       widget.displayLanguageOverride ?? widget.fallbackLanguage,
@@ -678,8 +688,8 @@ class MainAppState extends State<MainApp>
                           widget.directoryPicker ?? getDirectoryPath,
                       enableNativeWindowFrame: widget.enableNativeWindowFrame,
                       showWindowControls: widget.showWindowControls,
-                      sessionStore: _ideSessionStore,
                       ideSessionOperations: _ideSessionSliceComposition.store,
+                      shellStateSnapshotRelay: _shellStateSnapshotRelay,
                       agentProviderFactory: _agentProviderFactory,
                       agentProviderRuntimeRegistry:
                           _agentProviderRuntimeRegistry,
@@ -718,8 +728,6 @@ class MainAppState extends State<MainApp>
                       conversationSliceEnabled: widget.conversationSliceEnabled,
                       providerManagementSliceEnabled:
                           widget.providerManagementSliceEnabled,
-                      workspaceSliceEnabled: widget.workspaceSliceEnabled,
-                      ideSessionSliceEnabled: widget.ideSessionSliceEnabled,
                       agentManagementTextCatalog: _agentManagementTextCatalog,
                       desktopAttentionTextCatalog: _desktopAttentionTextCatalog,
                       // 回调存储用于测试/嵌入宿主；未显式注入统计仓储时不读取本机 CLI 历史。

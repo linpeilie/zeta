@@ -42,9 +42,26 @@ void main() {
     }
   });
 
-  test('batch 4 session and workspace production entries remain enabled', () {
-    final mainSource = File('lib/main.dart').readAsStringSync();
-    expect(mainSource, contains('workspaceSliceEnabled: true'));
-    expect(mainSource, contains('ideSessionSliceEnabled: true'));
+  test('batch 4b is closed and Shell only uses the slice operations port', () {
+    for (final path in const <String>[
+      'lib/main.dart',
+      'lib/src/app/app.dart',
+      'lib/src/app/shell/ide_shell_controller.dart',
+      'lib/src/ui/features/ide/views/ide_home.dart',
+    ]) {
+      final source = File(path).readAsStringSync();
+      expect(source, isNot(contains('ideSessionSliceEnabled')), reason: path);
+    }
+
+    final shell = File(
+      'lib/src/app/shell/ide_shell_controller.dart',
+    ).readAsStringSync();
+    expect(shell, isNot(contains('IdeSessionStore')));
+    expect(shell, isNot(contains('IdeSessionPersistenceCoordinator')));
+    expect(shell, isNot(contains('_sessionCoordinator')));
+    expect(shell, isNot(contains('_workbenchLayout')));
+    expect(shell, isNot(contains('_initialRestoreCompleted')));
+    expect(shell, isNot(contains('_initialRestoreCompleter')));
+    expect(shell, contains('required this.ideSessionOperations'));
   });
 }

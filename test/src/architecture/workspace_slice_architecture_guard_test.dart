@@ -46,8 +46,35 @@ void main() {
     }
   });
 
-  test('batch 4a production entry remains explicitly enabled', () {
-    final mainSource = File('lib/main.dart').readAsStringSync();
-    expect(mainSource, contains('workspaceSliceEnabled: true'));
+  test('batch 4a is closed and Shell cannot regain workspace ownership', () {
+    for (final path in const <String>[
+      'lib/main.dart',
+      'lib/src/app/app.dart',
+      'lib/src/app/shell/ide_shell_controller.dart',
+      'lib/src/ui/features/ide/views/ide_home.dart',
+    ]) {
+      final source = File(path).readAsStringSync();
+      expect(source, isNot(contains('workspaceSliceEnabled')), reason: path);
+    }
+
+    final shell = File(
+      'lib/src/app/shell/ide_shell_controller.dart',
+    ).readAsStringSync();
+    for (final legacyOwner in const <String>[
+      '_workspaceTree',
+      '_expandedDirectoryPaths',
+      '_projects',
+      '_projectLastOpenedAtByPath',
+      '_projectPath',
+      '_currentFilePath',
+      '_selectedTreePath',
+      '_isLoadingProject',
+    ]) {
+      expect(shell, isNot(contains(legacyOwner)), reason: legacyOwner);
+    }
+    expect(shell, isNot(contains("import 'dart:io'")));
+    expect(shell, isNot(contains('workspace_tree_builder.dart')));
+    expect(shell, isNot(contains('buildWorkspaceDirectoryChildren(')));
+    expect(shell, contains('workspaceSliceStore.loadProject(path)'));
   });
 }

@@ -1641,10 +1641,7 @@ void main() {
   testWidgets('IDE Session slice keeps Agent state retained across Settings', (
     tester,
   ) async {
-    final retained = await _prepareRetainedAgentState(
-      tester,
-      enableIdeSessionSlice: true,
-    );
+    final retained = await _prepareRetainedAgentState(tester);
 
     await tester.tap(find.byKey(const ValueKey('titlebar-settings-action')));
     await tester.pump();
@@ -1656,6 +1653,89 @@ void main() {
     await tester.pump();
 
     _expectRetainedAgentState(tester, retained);
+  });
+
+  testWidgets('root snapshot reconstructs slice identities without UI watch', (
+    tester,
+  ) async {
+    final directory = Directory.systemTemp.createTempSync(
+      'zeta_root_snapshot_',
+    );
+    addTearDown(() {
+      if (directory.existsSync()) {
+        directory.deleteSync(recursive: true);
+      }
+    });
+    File(
+      '${directory.path}${Platform.pathSeparator}sample.txt',
+    ).writeAsStringSync('snapshot fixture');
+    final provider = FakeAgentProvider(
+      threadPages: <AgentThreadPage>[
+        AgentThreadPage(
+          threads: <AgentThreadSummary>[
+            agentThread(
+              id: 'snapshot-thread',
+              projectPath: directory.path,
+              title: 'Snapshot thread',
+            ),
+          ],
+          nextCursor: null,
+        ),
+      ],
+    );
+    await _pumpIde(
+      tester,
+      directoryPicker: () async => directory.path,
+      agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
+      agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      enableConversationSlice: true,
+      enableSettingsSlice: true,
+      enableProviderManagementSlice: true,
+    );
+
+    await openProjectFromMenu(tester);
+    await tester.runAsync(waitForIo);
+    final threadRow = find.byKey(
+      ValueKey<String>('project-thread-${directory.path}-snapshot-thread'),
+    );
+    await pumpUntilCondition(
+      tester,
+      () => threadRow.evaluate().isNotEmpty,
+      failureMessage: 'Snapshot thread did not become ready',
+    );
+    await tester.tap(threadRow);
+    await pumpUntilCondition(
+      tester,
+      () => _agentMessageInput().hitTestable().evaluate().isNotEmpty,
+      failureMessage: 'Snapshot Agent canvas did not become ready',
+    );
+
+    final appState = tester.state<MainAppState>(find.byType(MainApp));
+    final snapshot = appState.takeStateSnapshot();
+    final selectedEntryId = snapshot.shell.selectedConversationEntryId;
+
+    expect(snapshot.shell.workspace.activeProjectPath, directory.path);
+    expect(snapshot.ideSession.initialRestoreCompleted, isTrue);
+    expect(snapshot.appearanceSettings, isNotNull);
+    expect(snapshot.generalSettings, isNotNull);
+    expect(snapshot.providerSettings, isNotNull);
+    expect(snapshot.shell.agentManagement, isNotNull);
+    expect(
+      snapshot
+          .shell
+          .projectThreadsByProjectPath[directory.path]
+          ?.orderedThreadIds,
+      contains('snapshot-thread'),
+    );
+    expect(selectedEntryId, isNotNull);
+    expect(
+      snapshot.shell.conversationsByEntryId[selectedEntryId]?.threadId,
+      'snapshot-thread',
+    );
+    expect(
+      snapshot.shell.conversationsByEntryId[selectedEntryId]?.sliceAvailable,
+      isTrue,
+    );
   });
 
   testWidgets('settings 切片更新 AgentPane 快捷键且不回写旧 controller', (tester) async {
@@ -2273,7 +2353,6 @@ Future<void> _pumpIde(
   bool enableConversationSlice = false,
   bool enableSettingsSlice = false,
   bool enableProviderManagementSlice = false,
-  bool enableIdeSessionSlice = false,
 }) async {
   tester.view
     ..physicalSize = size
@@ -2305,8 +2384,6 @@ Future<void> _pumpIde(
       settingsSliceEnabled: enableSettingsSlice,
       // Phase 3 第 2 批：测试参数控制，验证 settings + management owner 原子切换。
       providerManagementSliceEnabled: enableProviderManagementSlice,
-      // Phase 3 第 4 批 4b：默认关闭，显式开启用来做真实 IdeHome 对照。
-      ideSessionSliceEnabled: enableIdeSessionSlice,
     ),
   );
   if (flushInitialUsageRefresh) {
@@ -2541,7 +2618,6 @@ class _TrackedDirectoryAgentUsageRepository
 Future<_RetainedAgentState> _prepareRetainedAgentState(
   WidgetTester tester, {
   bool enableSettingsSlice = false,
-  bool enableIdeSessionSlice = false,
 }) async {
   final directory = Directory.systemTemp.createTempSync('zeta_workbench_test_');
   addTearDown(() {
@@ -2597,7 +2673,6 @@ Future<_RetainedAgentState> _prepareRetainedAgentState(
     agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
     agentProviderConfigStore: MemoryAgentProviderConfigStore(),
     enableSettingsSlice: enableSettingsSlice,
-    enableIdeSessionSlice: enableIdeSessionSlice,
   );
 
   await openProjectFromMenu(tester);

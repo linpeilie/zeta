@@ -4,12 +4,14 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/app/app_constants.dart';
+import 'package:zeta/src/app/ide_session_slice/ide_session_slice_composition.dart';
 import 'package:zeta/src/app/shell/ide_shell_controller.dart';
 import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_slice_composition.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
+import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_session_slice_operations.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
 import 'package:zeta/src/features/usage_statistics/application/query_agent_usage_panel_repository.dart';
@@ -93,9 +95,11 @@ void main() {
       final shell = IdeShellController(
         agentUiFrameSchedulerFactory: _createUiFrameScheduler,
         directoryPicker: () async => null,
-        sessionStore: const CallbackIdeSessionStore(
-          loadJson: _loadEmptySession,
-          saveJson: _saveDiscardedSession,
+        ideSessionOperations: _createIdeSessionOperations(
+          const CallbackIdeSessionStore(
+            loadJson: _loadEmptySession,
+            saveJson: _saveDiscardedSession,
+          ),
         ),
         agentProviderFactory: providerFactory,
         agentProviderRuntimeRegistry: runtimeRegistry,
@@ -187,9 +191,11 @@ void main() {
       final shell = IdeShellController(
         agentUiFrameSchedulerFactory: _createUiFrameScheduler,
         directoryPicker: () async => directory.path,
-        sessionStore: const CallbackIdeSessionStore(
-          loadJson: _loadEmptySession,
-          saveJson: _saveDiscardedSession,
+        ideSessionOperations: _createIdeSessionOperations(
+          const CallbackIdeSessionStore(
+            loadJson: _loadEmptySession,
+            saveJson: _saveDiscardedSession,
+          ),
         ),
         agentProviderFactory: _RecordingAgentProviderFactory(
           <String, _ProviderBackend>{defaultAgentProviderId: codexBackend},
@@ -401,9 +407,11 @@ void main() {
       final shell = IdeShellController(
         agentUiFrameSchedulerFactory: _createUiFrameScheduler,
         directoryPicker: () async => null,
-        sessionStore: const CallbackIdeSessionStore(
-          loadJson: _loadEmptySession,
-          saveJson: _saveDiscardedSession,
+        ideSessionOperations: _createIdeSessionOperations(
+          const CallbackIdeSessionStore(
+            loadJson: _loadEmptySession,
+            saveJson: _saveDiscardedSession,
+          ),
         ),
         agentProviderFactory: _RecordingAgentProviderFactory(
           <String, _ProviderBackend>{defaultAgentProviderId: backend},
@@ -888,9 +896,11 @@ void main() {
     final shell = IdeShellController(
       agentUiFrameSchedulerFactory: _createUiFrameScheduler,
       directoryPicker: () async => directory.path,
-      sessionStore: const CallbackIdeSessionStore(
-        loadJson: _loadEmptySession,
-        saveJson: _saveDiscardedSession,
+      ideSessionOperations: _createIdeSessionOperations(
+        const CallbackIdeSessionStore(
+          loadJson: _loadEmptySession,
+          saveJson: _saveDiscardedSession,
+        ),
       ),
       agentProviderFactory: _RecordingAgentProviderFactory(
         <String, _ProviderBackend>{
@@ -984,9 +994,11 @@ void main() {
     final shell = IdeShellController(
       agentUiFrameSchedulerFactory: _createUiFrameScheduler,
       directoryPicker: () async => directory.path,
-      sessionStore: CallbackIdeSessionStore(
-        loadJson: () async => restoredSession.encode(),
-        saveJson: _saveDiscardedSession,
+      ideSessionOperations: _createIdeSessionOperations(
+        CallbackIdeSessionStore(
+          loadJson: () async => restoredSession.encode(),
+          saveJson: _saveDiscardedSession,
+        ),
       ),
       agentProviderFactory: _RecordingAgentProviderFactory(
         <String, _ProviderBackend>{
@@ -1086,9 +1098,11 @@ void main() {
       final shell = IdeShellController(
         agentUiFrameSchedulerFactory: _createUiFrameScheduler,
         directoryPicker: () async => firstDirectory.path,
-        sessionStore: const CallbackIdeSessionStore(
-          loadJson: _loadEmptySession,
-          saveJson: _saveDiscardedSession,
+        ideSessionOperations: _createIdeSessionOperations(
+          const CallbackIdeSessionStore(
+            loadJson: _loadEmptySession,
+            saveJson: _saveDiscardedSession,
+          ),
         ),
         agentProviderFactory: _RecordingAgentProviderFactory(
           <String, _ProviderBackend>{defaultAgentProviderId: backend},
@@ -1179,11 +1193,13 @@ void main() {
     final shell = IdeShellController(
       agentUiFrameSchedulerFactory: _createUiFrameScheduler,
       directoryPicker: () async => directory.path,
-      sessionStore: CallbackIdeSessionStore(
-        loadJson: () async => restoredSession.encode(),
-        saveJson: (value) async {
-          savedJson = value;
-        },
+      ideSessionOperations: _createIdeSessionOperations(
+        CallbackIdeSessionStore(
+          loadJson: () async => restoredSession.encode(),
+          saveJson: (value) async {
+            savedJson = value;
+          },
+        ),
       ),
       agentProviderFactory: _RecordingAgentProviderFactory(
         <String, _ProviderBackend>{defaultAgentProviderId: backend},
@@ -1223,13 +1239,15 @@ void main() {
       final shell = IdeShellController(
         agentUiFrameSchedulerFactory: _createUiFrameScheduler,
         directoryPicker: () async => null,
-        sessionStore: CallbackIdeSessionStore(
-          loadJson: () async => const IdeSessionState(
-            workbenchLayout: restoredWorkbench,
-          ).encode(),
-          saveJson: (value) async {
-            savedJson = value;
-          },
+        ideSessionOperations: _createIdeSessionOperations(
+          CallbackIdeSessionStore(
+            loadJson: () async => const IdeSessionState(
+              workbenchLayout: restoredWorkbench,
+            ).encode(),
+            saveJson: (value) async {
+              savedJson = value;
+            },
+          ),
         ),
         agentProviderFactory:
             _RecordingAgentProviderFactory(<String, _ProviderBackend>{
@@ -1313,11 +1331,13 @@ void main() {
     final shell = IdeShellController(
       agentUiFrameSchedulerFactory: _createUiFrameScheduler,
       directoryPicker: () async => firstDirectory.path,
-      sessionStore: CallbackIdeSessionStore(
-        loadJson: () async => restoredSession.encode(),
-        saveJson: (value) async {
-          savedJson = value;
-        },
+      ideSessionOperations: _createIdeSessionOperations(
+        CallbackIdeSessionStore(
+          loadJson: () async => restoredSession.encode(),
+          saveJson: (value) async {
+            savedJson = value;
+          },
+        ),
       ),
       agentProviderFactory: _RecordingAgentProviderFactory(
         <String, _ProviderBackend>{defaultAgentProviderId: backend},
@@ -1356,6 +1376,16 @@ void main() {
 Future<String?> _loadEmptySession() async => null;
 
 Future<void> _saveDiscardedSession(String value) async {}
+
+IdeSessionSliceOperations _createIdeSessionOperations(
+  IdeSessionStore sessionStore,
+) {
+  final composition = IdeSessionSliceComposition.create(
+    sessionStore: sessionStore,
+  );
+  addTearDown(composition.dispose);
+  return composition.store;
+}
 
 Future<void> _flushAsync() async {
   await Future<void>.delayed(const Duration(milliseconds: 20));
@@ -1406,9 +1436,11 @@ Future<_SelectedThreadShellHarness> _openShellWithSelectedThread({
   final shell = IdeShellController(
     agentUiFrameSchedulerFactory: _createUiFrameScheduler,
     directoryPicker: () async => directory.path,
-    sessionStore: CallbackIdeSessionStore(
-      loadJson: _loadEmptySession,
-      saveJson: sessionSaves.save,
+    ideSessionOperations: _createIdeSessionOperations(
+      CallbackIdeSessionStore(
+        loadJson: _loadEmptySession,
+        saveJson: sessionSaves.save,
+      ),
     ),
     agentProviderFactory: _RecordingAgentProviderFactory(
       <String, _ProviderBackend>{defaultAgentProviderId: backend},

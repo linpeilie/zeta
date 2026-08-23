@@ -290,7 +290,6 @@ void main() {
             FakeAgentProvider(),
           ),
           agentProviderConfigStore: MemoryAgentProviderConfigStore(),
-          ideSessionSliceEnabled: true,
         ),
       );
       await tester.runAsync(waitForIo);
@@ -321,7 +320,6 @@ void main() {
             FakeAgentProvider(),
           ),
           agentProviderConfigStore: MemoryAgentProviderConfigStore(),
-          ideSessionSliceEnabled: true,
         ),
       );
       await tester.pump();
@@ -545,7 +543,6 @@ void main() {
             FakeAgentProvider(),
           ),
           agentProviderConfigStore: MemoryAgentProviderConfigStore(),
-          ideSessionSliceEnabled: true,
         ),
       );
 

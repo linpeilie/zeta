@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
@@ -15,11 +14,9 @@ import 'package:zeta/src/features/agent/application/agent_thread_workspace_contr
 import 'package:zeta/src/ui/core/system_file_manager.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
-import 'package:zeta/src/features/ide_session/application/ide_session_persistence_coordinator.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_restore_result.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_session_slice_operations.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_state_builder.dart';
-import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
 import 'package:zeta/src/features/ide_session/domain/recent_project_summary.dart';
@@ -31,9 +28,7 @@ import 'package:zeta/src/features/workspace/application/workspace_file_index_con
 import 'package:zeta/src/features/workspace/application/workspace_file_corpus_port.dart';
 import 'package:zeta/src/features/workspace/application/workspace_slice/workspace_slice_state.dart';
 import 'package:zeta/src/features/workspace/application/workspace_slice/workspace_slice_store.dart';
-import 'package:zeta/src/features/workspace/application/workspace_tree_builder.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
-import 'package:zeta/src/app/app_constants.dart';
 
 final _log = loggerFor('zeta.app.ide_shell_controller');
 
@@ -49,7 +44,7 @@ class IdeShellController extends ChangeNotifier {
 
   IdeShellController({
     required this._directoryPicker,
-    required IdeSessionStore sessionStore,
+    required this.ideSessionOperations,
     required AgentProviderBundleFactory agentProviderFactory,
     required AgentProviderConfigStore agentProviderConfigStore,
     this._projectLocationOpener = openPathInSystemFileManager,
@@ -65,29 +60,10 @@ class IdeShellController extends ChangeNotifier {
     this.agentUiTextCatalog = const FallbackAgentUiTextCatalog(),
     this.metrics = noopZetaMetricsPort,
     this.conversationSliceEnabled = false,
-    this.workspaceSliceEnabled = false,
-    this.ideSessionSliceEnabled = false,
-    IdeSessionSliceOperations? ideSessionOperations,
     AgentProviderSettingsPort? agentProviderSettingsPort,
     Future<AgentModelCatalogLoadResult> Function()? activeModelCatalogLoader,
     DateTime Function()? now,
-  }) : _sessionCoordinator = ideSessionSliceEnabled
-           ? null
-           : IdeSessionPersistenceCoordinator(
-               store: sessionStore,
-               saveDelay: sessionSaveDelay,
-               fileExists: (path) => File(path).existsSync(),
-               directoryExists: (path) => Directory(path).existsSync(),
-             ),
-       _ideSessionOperations = ideSessionSliceEnabled
-           ? ideSessionOperations
-           : null,
-       _now = now ?? DateTime.now {
-    if (ideSessionSliceEnabled && ideSessionOperations == null) {
-      throw ArgumentError(
-        'ideSessionOperations is required when ideSessionSliceEnabled is true',
-      );
-    }
+  }) : _now = now ?? DateTime.now {
     this.agentProviderRuntimeRegistry =
         agentProviderRuntimeRegistry ??
         AgentProviderRuntimeRegistry(
@@ -108,9 +84,7 @@ class IdeShellController extends ChangeNotifier {
       now: _now,
     );
     workspaceSliceStore = _workspaceSliceComposition.store;
-    if (workspaceSliceEnabled) {
-      workspaceSliceStore.addListener(_handleWorkspaceSliceChanged);
-    }
+    workspaceSliceStore.addListener(_handleWorkspaceSliceChanged);
     if (agentProviderSettingsPort == null) {
       final controller = AgentProviderSettingsController(
         configStore: agentProviderConfigStore,
@@ -207,8 +181,7 @@ class IdeShellController extends ChangeNotifier {
   final ProjectLocationOpener _projectLocationOpener;
   final IdeShellStatusReporter? _statusReporter;
   final ValueChanged<String?>? _onAgentUsageProviderRestored;
-  final IdeSessionPersistenceCoordinator? _sessionCoordinator;
-  final IdeSessionSliceOperations? _ideSessionOperations;
+  final IdeSessionSliceOperations ideSessionOperations;
   final DateTime Function() _now;
 
   late final AgentProviderRuntimeRegistry agentProviderRuntimeRegistry;
@@ -238,12 +211,6 @@ class IdeShellController extends ChangeNotifier {
   /// false = 走旧 ViewModel 直连路径（测试默认）。
   final bool conversationSliceEnabled;
 
-  /// Phase 3 第 4 批 4a flag；false 时旧字段仍是唯一 owner。
-  final bool workspaceSliceEnabled;
-
-  /// Phase 3 第 4 批 4b flag；false 时旧 coordinator/字段仍是唯一 owner。
-  final bool ideSessionSliceEnabled;
-
   final Map<String, ({AgentThreadWorkspaceEntry entry, VoidCallback listener})>
   _workspaceEntryListeners =
       <String, ({AgentThreadWorkspaceEntry entry, VoidCallback listener})>{};
@@ -254,19 +221,8 @@ class IdeShellController extends ChangeNotifier {
   })?
   _selectedWorkspaceThreadSnapshotBinding;
 
-  List<WorkspaceNode> _workspaceTree = const <WorkspaceNode>[];
-  Set<String> _expandedDirectoryPaths = <String>{};
-  final List<String> _projects = <String>[];
   final Map<String, String> _agentThreadIdsByProject = <String, String>{};
-  final Map<String, DateTime> _projectLastOpenedAtByPath = <String, DateTime>{};
-  String? _projectPath;
-  String? _currentFilePath;
-  String? _selectedTreePath;
-  bool _isLoadingProject = false;
   bool _projectHomeActive = false;
-  IdeWorkbenchLayoutState _workbenchLayout = const IdeWorkbenchLayoutState();
-  bool _initialRestoreCompleted = false;
-  final Completer<void> _initialRestoreCompleter = Completer<void>();
   int _homeRefreshToken = 0;
   bool _isDisposed = false;
 
@@ -287,14 +243,11 @@ class IdeShellController extends ChangeNotifier {
   /// 兼容旧调用点；请优先改用 [selectedAgentViewModel]。
   AgentConversationViewModel get agentViewModel => selectedAgentViewModel;
 
-  List<String> get projects => workspaceSliceEnabled
-      ? workspaceSliceStore.state.projects
-      : List<String>.unmodifiable(_projects);
+  List<String> get projects => workspaceSliceStore.state.projects;
 
   /// 当前应用级 Workbench 布局偏好。
-  IdeWorkbenchLayoutState get workbenchLayout => ideSessionSliceEnabled
-      ? _requiredIdeSessionOperations.state.workbenchLayout
-      : _workbenchLayout;
+  IdeWorkbenchLayoutState get workbenchLayout =>
+      ideSessionOperations.state.workbenchLayout;
 
   /// 提交整个合并左栏的显隐偏好。
   void setLeftSidebarVisible(bool visible) {
@@ -314,21 +267,18 @@ class IdeShellController extends ChangeNotifier {
   }
 
   /// 初始会话恢复已完成；此后无活动项目时可以稳定展示全局首页。
-  bool get initialRestoreCompleted => ideSessionSliceEnabled
-      ? _requiredIdeSessionOperations.state.initialRestoreCompleted
-      : _initialRestoreCompleted;
+  bool get initialRestoreCompleted =>
+      ideSessionOperations.state.initialRestoreCompleted;
 
   /// 等待启动会话恢复收敛，供冷启动通知定位避免与恢复竞态。
-  Future<void> get initialRestoreDone => ideSessionSliceEnabled
-      ? _requiredIdeSessionOperations.initialRestoreDone
-      : _initialRestoreCompleter.future;
+  Future<void> get initialRestoreDone =>
+      ideSessionOperations.initialRestoreDone;
 
   /// 近期项目按最后访问时间排序；旧数据没有时间时保持原项目顺序。
   List<RecentProjectSummary> get recentProjects {
     final projectPaths = projects;
-    final lastOpenedAtByPath = workspaceSliceEnabled
-        ? workspaceSliceStore.state.projectLastOpenedAtByPath
-        : _projectLastOpenedAtByPath;
+    final lastOpenedAtByPath =
+        workspaceSliceStore.state.projectLastOpenedAtByPath;
     final indexed = <({int index, RecentProjectSummary project})>[
       for (final (index, path) in projectPaths.indexed)
         (
@@ -359,29 +309,19 @@ class IdeShellController extends ChangeNotifier {
     );
   }
 
-  String? get activeProjectPath => workspaceSliceEnabled
-      ? workspaceSliceStore.state.activeProjectPath
-      : _projectPath;
+  String? get activeProjectPath => workspaceSliceStore.state.activeProjectPath;
 
-  List<WorkspaceNode> get workspaceTree => workspaceSliceEnabled
-      ? workspaceSliceStore.state.tree
-      : List<WorkspaceNode>.unmodifiable(_workspaceTree);
+  List<WorkspaceNode> get workspaceTree => workspaceSliceStore.state.tree;
 
-  Set<String> get expandedDirectoryPaths => workspaceSliceEnabled
-      ? workspaceSliceStore.state.expandedDirectoryPaths
-      : Set<String>.unmodifiable(_expandedDirectoryPaths);
+  Set<String> get expandedDirectoryPaths =>
+      workspaceSliceStore.state.expandedDirectoryPaths;
 
-  String? get selectedTreePath => workspaceSliceEnabled
-      ? workspaceSliceStore.state.selectedTreePath
-      : _selectedTreePath;
+  String? get selectedTreePath => workspaceSliceStore.state.selectedTreePath;
 
-  bool get isLoadingProject => workspaceSliceEnabled
-      ? workspaceSliceStore.state.isLoadingProject
-      : _isLoadingProject;
+  bool get isLoadingProject => workspaceSliceStore.state.isLoadingProject;
 
-  String? get _currentWorkspaceFilePath => workspaceSliceEnabled
-      ? workspaceSliceStore.state.currentFilePath
-      : _currentFilePath;
+  String? get _currentWorkspaceFilePath =>
+      workspaceSliceStore.state.currentFilePath;
 
   ProjectThreadListState projectThreadStateFor(String projectPath) {
     return projectThreadsController.stateFor(projectPath);
@@ -408,8 +348,8 @@ class IdeShellController extends ChangeNotifier {
   /// 无活动项目时预热近期项目的会话列表，供左侧 Projects 栏直接取用。
   ///
   /// 预热的是 `projectThreadsController` 的缓存：项目卡片靠它显示运行中会话
-  /// 的徽标，展开时也不用再等一次加载。一旦有项目被打开（`_projectPath`
-  /// 不再为空）就立即停下，把带宽让给当前项目。
+  /// 的徽标，展开时也不用再等一次加载。一旦有活动项目就立即停下，把带宽让给
+  /// 当前项目。
   Future<void> refreshRecentHomeData({int projectLimit = 5}) async {
     final token = ++_homeRefreshToken;
     final paths = recentProjects
@@ -580,12 +520,7 @@ class IdeShellController extends ChangeNotifier {
         ? currentProjects[index + 1]
         : null;
 
-    if (workspaceSliceEnabled) {
-      workspaceSliceStore.removeProject(path);
-    } else {
-      _projects.removeAt(index);
-      _projectLastOpenedAtByPath.remove(path);
-    }
+    workspaceSliceStore.removeProject(path);
     _agentThreadIdsByProject.remove(path);
     projectThreadsController.retainProjects(projects);
     agentWorkspaceController.removeEntriesForProject(path);
@@ -679,11 +614,7 @@ class IdeShellController extends ChangeNotifier {
     if (node == null || !node.isDirectory) {
       return;
     }
-    if (workspaceSliceEnabled) {
-      workspaceSliceStore.setDirectoryExpanded(key, expanded);
-    } else {
-      _setDirectoryExpanded(key, expanded);
-    }
+    workspaceSliceStore.setDirectoryExpanded(key, expanded);
     _notifyStateChanged();
     _requestSessionSave();
   }
@@ -694,95 +625,40 @@ class IdeShellController extends ChangeNotifier {
       return;
     }
 
-    if (workspaceSliceEnabled) {
-      workspaceSliceStore.selectTreeNode(key);
-    } else {
-      _selectedTreePath = key;
-    }
+    workspaceSliceStore.selectTreeNode(key);
     if (node.isDirectory) {
-      if (!workspaceSliceEnabled) {
-        _setDirectoryExpanded(key, !_expandedDirectoryPaths.contains(key));
-      }
       _notifyStateChanged();
       _requestSessionSave();
       return;
     }
 
-    if (!workspaceSliceEnabled) {
-      _currentFilePath = node.path;
-    }
     _syncProjectEntryContexts(activeProjectPath);
     _notifyStateChanged();
     _requestSessionSave();
   }
 
-  IdeSessionSliceOperations get _requiredIdeSessionOperations =>
-      _ideSessionOperations ??
-      (throw StateError('IDE Session slice operations are not bound'));
-
   void _cancelPendingSessionRestore() {
-    if (ideSessionSliceEnabled) {
-      _requiredIdeSessionOperations.cancelPendingRestore();
-    } else {
-      _sessionCoordinator!.cancelPendingRestore();
-    }
+    ideSessionOperations.cancelPendingRestore();
   }
 
   void _releaseInitialRestoreWait() {
-    if (ideSessionSliceEnabled) {
-      _requiredIdeSessionOperations.releaseInitialRestoreWait();
-      return;
-    }
-    if (!_initialRestoreCompleter.isCompleted) {
-      _initialRestoreCompleter.complete();
-    }
+    ideSessionOperations.releaseInitialRestoreWait();
   }
 
   Future<void> saveNow() {
     final snapshot = _currentSessionState();
-    return ideSessionSliceEnabled
-        ? _requiredIdeSessionOperations.saveNow(snapshot)
-        : _sessionCoordinator!.saveNow(snapshot);
+    return ideSessionOperations.saveNow(snapshot);
   }
 
   Future<void> _loadProject(String path, {bool activateThreads = true}) async {
     _homeRefreshToken += 1;
     _log.i('Opening project folder: $path');
-    if (!workspaceSliceEnabled) {
-      _isLoadingProject = true;
-    }
     _notifyStateChanged();
 
     try {
-      if (workspaceSliceEnabled) {
-        final loaded = await workspaceSliceStore.loadProject(path);
-        if (!loaded || _isDisposed || activeProjectPath != path) {
-          return;
-        }
-      } else {
-        final directory = Directory(path);
-        if (!await directory.exists()) {
-          throw FileSystemException('Directory does not exist', path);
-        }
-        if (_isDisposed) {
-          return;
-        }
-
-        final projectChildren = buildWorkspaceDirectoryChildren(directory);
-        if (_isDisposed) {
-          return;
-        }
-
-        _projectPath = path;
-        _currentFilePath = null;
-        _selectedTreePath = null;
-        _expandedDirectoryPaths = <String>{};
-        _workspaceTree = projectChildren;
-        if (!_projects.contains(path)) {
-          _projects.insert(0, path);
-        }
-        _markProjectOpened(path);
-        unawaited(_fileIndexController.index(path));
+      final loaded = await workspaceSliceStore.loadProject(path);
+      if (!loaded || _isDisposed || activeProjectPath != path) {
+        return;
       }
 
       projectThreadsController.retainProjects(projects);
@@ -803,9 +679,6 @@ class IdeShellController extends ChangeNotifier {
     } finally {
       _releaseInitialRestoreWait();
       if (!_isDisposed) {
-        if (!workspaceSliceEnabled) {
-          _isLoadingProject = false;
-        }
         _notifyStateChanged();
       }
     }
@@ -813,9 +686,7 @@ class IdeShellController extends ChangeNotifier {
 
   Future<void> _restoreSession() async {
     try {
-      final result = ideSessionSliceEnabled
-          ? await _requiredIdeSessionOperations.restore()
-          : await _sessionCoordinator!.restore();
+      final result = await ideSessionOperations.restore();
       if (_isDisposed) {
         return;
       }
@@ -825,11 +696,7 @@ class IdeShellController extends ChangeNotifier {
         case IdeSessionRestoreStatus.empty:
           return;
         case IdeSessionRestoreStatus.failed:
-          if (workspaceSliceEnabled) {
-            workspaceSliceStore.clearCurrentFile();
-          } else {
-            _currentFilePath = null;
-          }
+          workspaceSliceStore.clearCurrentFile();
           await _syncSelectedAgentWorkspace();
           _notifyStateChanged();
           if (result.shouldRequestSave) {
@@ -845,64 +712,20 @@ class IdeShellController extends ChangeNotifier {
         return;
       }
 
-      if (workspaceSliceEnabled) {
-        await workspaceSliceStore.restore(
-          WorkspaceRestoreSnapshot(
-            projects: session.projectPaths,
-            activeProjectPath: session.activeProjectPath,
-            currentFilePath: session.currentFilePath,
-            expandedDirectoryPaths: session.expandedDirectoryPaths,
-            selectedTreePath: session.selectedTreeKey,
-            projectLastOpenedAtByPath: session.projectLastOpenedAtByPath,
-          ),
-        );
-      } else {
-        var tree = const <WorkspaceNode>[];
-        var selectedTreePath = session.selectedTreeKey;
-        if (session.activeProjectPath != null) {
-          // 文件树按需加载，只恢复用户已经展开过的目录。
-          final projectChildren = buildWorkspaceDirectoryChildren(
-            Directory(session.activeProjectPath!),
-            expandedPaths: session.expandedDirectoryPaths,
-          );
-          tree = projectChildren;
-
-          if (selectedTreePath == session.activeProjectPath) {
-            selectedTreePath = null;
-          } else if (selectedTreePath != null &&
-              WorkspaceNode.findByPath(projectChildren, selectedTreePath) ==
-                  null) {
-            selectedTreePath = null;
-          }
-        }
-
-        _projects
-          ..clear()
-          ..addAll(session.projectPaths);
-        _projectPath = session.activeProjectPath;
-        if (session.activeProjectPath != null) {
-          unawaited(_fileIndexController.index(session.activeProjectPath!));
-        }
-        _workspaceTree = tree;
-        _expandedDirectoryPaths = Set<String>.from(
-          session.expandedDirectoryPaths,
-        );
-        _currentFilePath = session.currentFilePath;
-        _selectedTreePath = selectedTreePath;
-        _projectLastOpenedAtByPath
-          ..clear()
-          ..addAll(session.projectLastOpenedAtByPath);
-      }
+      await workspaceSliceStore.restore(
+        WorkspaceRestoreSnapshot(
+          projects: session.projectPaths,
+          activeProjectPath: session.activeProjectPath,
+          currentFilePath: session.currentFilePath,
+          expandedDirectoryPaths: session.expandedDirectoryPaths,
+          selectedTreePath: session.selectedTreeKey,
+          projectLastOpenedAtByPath: session.projectLastOpenedAtByPath,
+        ),
+      );
       _agentThreadIdsByProject
         ..clear()
         ..addAll(session.agentThreadIdsByProject);
-      if (ideSessionSliceEnabled) {
-        _requiredIdeSessionOperations.setWorkbenchLayout(
-          session.workbenchLayout,
-        );
-      } else {
-        _workbenchLayout = session.workbenchLayout;
-      }
+      ideSessionOperations.setWorkbenchLayout(session.workbenchLayout);
       _onAgentUsageProviderRestored?.call(
         session.workbenchLayout.selectedAgentUsageProviderId,
       );
@@ -941,70 +764,20 @@ class IdeShellController extends ChangeNotifier {
     } finally {
       _releaseInitialRestoreWait();
       if (!_isDisposed) {
-        if (ideSessionSliceEnabled) {
-          _requiredIdeSessionOperations.completeInitialRestore();
-        } else {
-          _initialRestoreCompleted = true;
-        }
+        ideSessionOperations.completeInitialRestore();
         _notifyStateChanged();
       }
     }
   }
 
-  void _setDirectoryExpanded(String path, bool expanded) {
-    if (expanded) {
-      _expandedDirectoryPaths = <String>{..._expandedDirectoryPaths, path};
-      _workspaceTree = WorkspaceNode.updateNode(
-        _workspaceTree,
-        path,
-        _loadDirectoryChildrenIfNeeded,
-      );
-      return;
-    }
-
-    final nextExpandedPaths = <String>{..._expandedDirectoryPaths};
-    nextExpandedPaths.remove(path);
-    _expandedDirectoryPaths = nextExpandedPaths;
-  }
-
-  WorkspaceNode _loadDirectoryChildrenIfNeeded(WorkspaceNode node) {
-    if (!node.isDirectory || node.childrenLoaded) {
-      return node;
-    }
-    // 首次展开目录时才读取下一层，避免打开项目时递归扫描整个仓库。
-    return node.copyWith(
-      childrenLoaded: true,
-      children: buildWorkspaceDirectoryChildren(
-        Directory(node.path),
-        expandedPaths: _expandedDirectoryPaths,
-      ),
-    );
-  }
-
   void _requestSessionSave() {
     final snapshot = _currentSessionState();
-    if (ideSessionSliceEnabled) {
-      _requiredIdeSessionOperations.requestSave(snapshot);
-    } else {
-      _sessionCoordinator!.requestSave(snapshot);
-    }
+    ideSessionOperations.requestSave(snapshot);
   }
 
   void _clearActiveWorkspace() {
     _homeRefreshToken += 1;
-    if (workspaceSliceEnabled) {
-      workspaceSliceStore.clearActiveWorkspace();
-    } else {
-      final root = _projectPath;
-      if (root != null) {
-        _fileIndexController.invalidate(root);
-      }
-      _projectPath = null;
-      _currentFilePath = null;
-      _selectedTreePath = null;
-      _expandedDirectoryPaths = <String>{};
-      _workspaceTree = const <WorkspaceNode>[];
-    }
+    workspaceSliceStore.clearActiveWorkspace();
     _projectHomeActive = false;
     agentWorkspaceController.selectEntry(_bootstrapAgentEntry.entryId);
     _bootstrapAgentEntry.viewModel.updateContext(
@@ -1017,9 +790,7 @@ class IdeShellController extends ChangeNotifier {
 
   IdeSessionState _currentSessionState() {
     final selectedAgentViewModel = this.selectedAgentViewModel;
-    final workspaceState = workspaceSliceEnabled
-        ? workspaceSliceStore.state
-        : null;
+    final workspaceState = workspaceSliceStore.state;
     return buildIdeSessionState(
       projectPaths: projects,
       activeProjectPath: activeProjectPath,
@@ -1028,9 +799,7 @@ class IdeShellController extends ChangeNotifier {
       selectedTreeKey: selectedTreePath,
       activeAgentProviderId: selectedAgentViewModel.activeProviderId,
       agentThreadIdsByProject: _agentThreadIdsByProject,
-      projectLastOpenedAtByPath:
-          workspaceState?.projectLastOpenedAtByPath ??
-          _projectLastOpenedAtByPath,
+      projectLastOpenedAtByPath: workspaceState.projectLastOpenedAtByPath,
       projectThreadsSessionSnapshot: projectThreadsController.sessionSnapshot,
       currentProjectPath: activeProjectPath,
       currentSessionId: isProjectHomeActive
@@ -1045,11 +814,7 @@ class IdeShellController extends ChangeNotifier {
     if (next == workbenchLayout) {
       return;
     }
-    if (ideSessionSliceEnabled) {
-      _requiredIdeSessionOperations.setWorkbenchLayout(next);
-    } else {
-      _workbenchLayout = next;
-    }
+    ideSessionOperations.setWorkbenchLayout(next);
     _notifyStateChanged();
     _requestSessionSave();
   }
@@ -1074,11 +839,7 @@ class IdeShellController extends ChangeNotifier {
   }
 
   void _markProjectOpened(String path) {
-    if (workspaceSliceEnabled) {
-      workspaceSliceStore.markProjectOpened(path, _now());
-    } else {
-      _projectLastOpenedAtByPath[path] = _now();
-    }
+    workspaceSliceStore.markProjectOpened(path, _now());
   }
 
   WorkspaceNode? _findTreeNode(String path) {
@@ -1513,7 +1274,7 @@ class IdeShellController extends ChangeNotifier {
     _notifyStateChanged();
   }
 
-  /// 4a 新 owner 的只读变化继续由 Shell 向尚未迁完的跨 feature 消费方投影。
+  /// Workspace owner 的只读变化继续由 Shell 向跨 feature 消费方投影。
   void _handleWorkspaceSliceChanged() {
     _notifyStateChanged();
   }
@@ -1526,10 +1287,7 @@ class IdeShellController extends ChangeNotifier {
     unawaited(saveNow());
     _isDisposed = true;
     _homeRefreshToken += 1;
-    _sessionCoordinator?.dispose();
-    if (workspaceSliceEnabled) {
-      workspaceSliceStore.removeListener(_handleWorkspaceSliceChanged);
-    }
+    workspaceSliceStore.removeListener(_handleWorkspaceSliceChanged);
     agentWorkspaceController.removeListener(_handleAgentWorkspaceChanged);
     _unsubscribeProjectThreads();
     final selectedSnapshotBinding = _selectedWorkspaceThreadSnapshotBinding;

@@ -10,6 +10,7 @@ import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_composition.dart';
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_runner.dart';
 import 'package:zeta/src/app/app_constants.dart';
+import 'package:zeta/src/app/composition/zeta_state_snapshot.dart';
 import 'package:zeta/src/app/menu_action_bridge.dart';
 import 'package:zeta/src/app/shell/ide_shell_controller.dart';
 import 'package:zeta/src/ui/core/system_file_manager.dart';
@@ -31,7 +32,6 @@ import 'package:zeta/src/features/agent_management/domain/agent_cli_management_r
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_text_catalog.dart';
 import 'package:zeta/src/features/agent_management/domain/fallback_agent_management_text_catalog.dart';
-import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_session_slice_operations.dart';
 import 'package:zeta/src/features/ide_session/presentation/ide_session_slice/ide_session_slice_providers.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
@@ -76,8 +76,8 @@ class IdeHome extends ConsumerStatefulWidget {
   const IdeHome({
     required this.directoryPicker,
     required this.enableNativeWindowFrame,
-    required this.sessionStore,
     required this.ideSessionOperations,
+    required this.shellStateSnapshotRelay,
     required this.agentProviderFactory,
     required this.agentProviderConfigStore,
     required this.usageStatisticsSliceComposition,
@@ -101,8 +101,6 @@ class IdeHome extends ConsumerStatefulWidget {
         const FallbackDesktopAttentionTextCatalog(),
     this.metrics = noopZetaMetricsPort,
     this.conversationSliceEnabled = false,
-    this.workspaceSliceEnabled = false,
-    this.ideSessionSliceEnabled = false,
     this.providerManagementSliceEnabled = false,
     this.agentManagementTextCatalog =
         const FallbackAgentManagementTextCatalog(),
@@ -111,8 +109,8 @@ class IdeHome extends ConsumerStatefulWidget {
 
   final Future<String?> Function() directoryPicker;
   final bool enableNativeWindowFrame;
-  final IdeSessionStore sessionStore;
   final IdeSessionSliceOperations ideSessionOperations;
+  final ZetaShellStateSnapshotRelay shellStateSnapshotRelay;
   final AgentProviderBundleFactory agentProviderFactory;
   final AgentProviderConfigStore agentProviderConfigStore;
   final UsageStatisticsSliceComposition usageStatisticsSliceComposition;
@@ -150,12 +148,6 @@ class IdeHome extends ConsumerStatefulWidget {
   /// false = 走旧 ViewModel 直连路径（测试默认）；生产由 `main` 显式传 true。
   final bool conversationSliceEnabled;
 
-  /// Phase 3 第 4 批 4a Workspace 切片 flag。
-  final bool workspaceSliceEnabled;
-
-  /// Phase 3 第 4 批 4b IDE Session 切片 flag。
-  final bool ideSessionSliceEnabled;
-
   /// Phase 3 第 2 批：true 时只创建 management page store，false 时只创建旧
   /// controller。生产翻旗由 app 根统一控制。
   final bool providerManagementSliceEnabled;
@@ -180,6 +172,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
   late final AgentUsagePanelOperations _agentUsagePanelController;
   late final AgentUsageRefreshCoordinator _agentUsageRefreshCoordinator;
   late final DesktopAttentionController _desktopAttentionController;
+  late final ZetaShellStateSnapshotReader _shellStateSnapshotReader;
   bool _windowFocused = true;
   bool _nativeMenuConfigured = false;
 
@@ -252,7 +245,6 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
         widget.usageStatisticsSliceComposition.agentUsagePanelStore;
     _shellController = IdeShellController(
       directoryPicker: widget.directoryPicker,
-      sessionStore: widget.sessionStore,
       ideSessionOperations: widget.ideSessionOperations,
       agentProviderFactory: widget.agentProviderFactory,
       agentProviderConfigStore: widget.agentProviderConfigStore,
@@ -270,8 +262,6 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
       agentUiTextCatalog: widget.agentUiTextCatalog,
       metrics: widget.metrics,
       conversationSliceEnabled: widget.conversationSliceEnabled,
-      workspaceSliceEnabled: widget.workspaceSliceEnabled,
-      ideSessionSliceEnabled: widget.ideSessionSliceEnabled,
       agentProviderSettingsPort: widget.agentProviderSettingsPort,
       activeModelCatalogLoader: widget.activeModelCatalogLoader,
     )..addListener(_handleShellChanged);
@@ -340,6 +330,8 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
       // turn 完成 / 启动预热走静默刷新：已有数据时不闪加载横条。
       refresh: () => _agentUsagePanelController.refresh(showLoading: false),
     );
+    _shellStateSnapshotReader = _takeShellStateSnapshot;
+    widget.shellStateSnapshotRelay.bind(_shellStateSnapshotReader);
     if (widget.enableAgentUsageAutoRefresh) {
       _scheduleInitialAgentUsageRefresh();
     }
@@ -397,9 +389,69 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
     return true;
   }
 
+  /// 诊断与恢复测试使用的无正文 Shell 投影。
+  ///
+  /// 这里刻意同步读取各唯一 owner，既不缓存也不注册 listener；生产 Widget 仍只
+  /// watch 各自的 feature selector。
+  ZetaShellStateSnapshot _takeShellStateSnapshot() {
+    final threadStates = _shellController.projectThreadsSliceStore.state;
+    final projectThreads = <String, ZetaProjectThreadsStateSnapshot>{
+      for (final entry in threadStates.statesByProject.entries)
+        entry.key: ZetaProjectThreadsStateSnapshot.fromState(
+          entry.key,
+          entry.value,
+        ),
+    };
+    final entries = _shellController.agentWorkspaceEntries;
+    final selectedEntryId = _shellController.selectedAgentWorkspaceEntryId;
+    final conversations = <String, ZetaConversationStateSnapshot>{};
+    for (final entry in entries) {
+      final slice = entry.sliceStore?.state;
+      final pendingInteractions = slice?.pendingInteractions;
+      conversations[entry.entryId] = ZetaConversationStateSnapshot(
+        entryId: entry.entryId,
+        projectPath: entry.projectPath,
+        providerId: entry.providerId,
+        threadId: entry.threadId,
+        isDraft: entry.isDraft,
+        isSelected: entry.entryId == selectedEntryId,
+        sliceAvailable: slice != null,
+        threadOpenPhase:
+            slice?.header.threadOpenPhase ?? entry.viewModel.threadOpenPhase,
+        runtimeStatus: entry.threadSnapshot.runtimeStatus,
+        isTurnRunning:
+            slice?.header.isTurnRunning ?? entry.viewModel.isTurnRunning,
+        isReadOnly: slice?.header.isReadOnly ?? entry.viewModel.isReadOnly,
+        visibleTurnCount: slice?.history.visibleTurns.length ?? 0,
+        pendingInteractionCount: pendingInteractions == null
+            ? 0
+            : pendingInteractions.permissions.length +
+                  pendingInteractions.questions.length +
+                  pendingInteractions.planApprovals.length +
+                  (pendingInteractions.planExecutionHandoff == null ? 0 : 1),
+        pendingOperationCount: slice?.pendingOperations.length ?? 0,
+      );
+    }
+    final managementState = _agentManagementComposition?.store.state;
+    return ZetaShellStateSnapshot(
+      workspace: _shellController.workspaceSliceStore.state,
+      projectThreadsByProjectPath: projectThreads,
+      orderedConversationEntryIds: <String>[
+        for (final entry in entries) entry.entryId,
+      ],
+      conversationsByEntryId: conversations,
+      selectedConversationEntryId: selectedEntryId,
+      projectHomeActive: _shellController.isProjectHomeActive,
+      agentManagement: managementState == null
+          ? null
+          : ZetaAgentManagementStateSnapshot.fromState(managementState),
+    );
+  }
+
   @override
   void dispose() {
     MenuActionBridge.instance.setOpenProject(null);
+    widget.shellStateSnapshotRelay.unbind(_shellStateSnapshotReader);
     if (widget.enableNativeWindowFrame) {
       windowManager.removeListener(this);
     }
@@ -436,14 +488,12 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.ideSessionSliceEnabled) {
-      // 只订阅 IDE Session 的轻量 UI 投影；持久化 DTO 不进入 Riverpod。
-      ref.watch(
-        ideSessionSliceProvider.select(
-          (state) => (state.workbenchLayout, state.initialRestoreCompleted),
-        ),
-      );
-    }
+    // 只订阅 IDE Session 的轻量 UI 投影；持久化 DTO 不进入 Riverpod。
+    ref.watch(
+      ideSessionSliceProvider.select(
+        (state) => (state.workbenchLayout, state.initialRestoreCompleted),
+      ),
+    );
     final homePage = _page == _IdeHomePage.home;
     final leftSidebarVisible =
         homePage && _shellController.workbenchLayout.leftSidebarVisible;
@@ -1011,15 +1061,6 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
       );
     }
 
-    if (!widget.workspaceSliceEnabled) {
-      return buildPanel(
-        nodes: _shellController.workspaceTree,
-        expandedPaths: _shellController.expandedDirectoryPaths,
-        selectedPath: _shellController.selectedTreePath,
-        projectPath: _shellController.activeProjectPath,
-        isLoading: _shellController.isLoadingProject,
-      );
-    }
     return Consumer(
       builder: (context, ref, _) {
         final state = ref.watch(workspaceSliceProvider);
