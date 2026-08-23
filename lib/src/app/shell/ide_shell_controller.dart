@@ -17,6 +17,7 @@ import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_persistence_coordinator.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_restore_result.dart';
+import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_session_slice_operations.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_state_builder.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
@@ -65,16 +66,28 @@ class IdeShellController extends ChangeNotifier {
     this.metrics = noopZetaMetricsPort,
     this.conversationSliceEnabled = false,
     this.workspaceSliceEnabled = false,
+    this.ideSessionSliceEnabled = false,
+    IdeSessionSliceOperations? ideSessionOperations,
     AgentProviderSettingsPort? agentProviderSettingsPort,
     Future<AgentModelCatalogLoadResult> Function()? activeModelCatalogLoader,
     DateTime Function()? now,
-  }) : _sessionCoordinator = IdeSessionPersistenceCoordinator(
-         store: sessionStore,
-         saveDelay: sessionSaveDelay,
-         fileExists: (path) => File(path).existsSync(),
-         directoryExists: (path) => Directory(path).existsSync(),
-       ),
+  }) : _sessionCoordinator = ideSessionSliceEnabled
+           ? null
+           : IdeSessionPersistenceCoordinator(
+               store: sessionStore,
+               saveDelay: sessionSaveDelay,
+               fileExists: (path) => File(path).existsSync(),
+               directoryExists: (path) => Directory(path).existsSync(),
+             ),
+       _ideSessionOperations = ideSessionSliceEnabled
+           ? ideSessionOperations
+           : null,
        _now = now ?? DateTime.now {
+    if (ideSessionSliceEnabled && ideSessionOperations == null) {
+      throw ArgumentError(
+        'ideSessionOperations is required when ideSessionSliceEnabled is true',
+      );
+    }
     this.agentProviderRuntimeRegistry =
         agentProviderRuntimeRegistry ??
         AgentProviderRuntimeRegistry(
@@ -194,7 +207,8 @@ class IdeShellController extends ChangeNotifier {
   final ProjectLocationOpener _projectLocationOpener;
   final IdeShellStatusReporter? _statusReporter;
   final ValueChanged<String?>? _onAgentUsageProviderRestored;
-  final IdeSessionPersistenceCoordinator _sessionCoordinator;
+  final IdeSessionPersistenceCoordinator? _sessionCoordinator;
+  final IdeSessionSliceOperations? _ideSessionOperations;
   final DateTime Function() _now;
 
   late final AgentProviderRuntimeRegistry agentProviderRuntimeRegistry;
@@ -226,6 +240,9 @@ class IdeShellController extends ChangeNotifier {
 
   /// Phase 3 第 4 批 4a flag；false 时旧字段仍是唯一 owner。
   final bool workspaceSliceEnabled;
+
+  /// Phase 3 第 4 批 4b flag；false 时旧 coordinator/字段仍是唯一 owner。
+  final bool ideSessionSliceEnabled;
 
   final Map<String, ({AgentThreadWorkspaceEntry entry, VoidCallback listener})>
   _workspaceEntryListeners =
@@ -275,30 +292,36 @@ class IdeShellController extends ChangeNotifier {
       : List<String>.unmodifiable(_projects);
 
   /// 当前应用级 Workbench 布局偏好。
-  IdeWorkbenchLayoutState get workbenchLayout => _workbenchLayout;
+  IdeWorkbenchLayoutState get workbenchLayout => ideSessionSliceEnabled
+      ? _requiredIdeSessionOperations.state.workbenchLayout
+      : _workbenchLayout;
 
   /// 提交整个合并左栏的显隐偏好。
   void setLeftSidebarVisible(bool visible) {
-    _setWorkbenchLayout(_workbenchLayout.copyWith(leftSidebarVisible: visible));
+    _setWorkbenchLayout(workbenchLayout.copyWith(leftSidebarVisible: visible));
   }
 
   /// 提交左栏逻辑像素宽度；传空恢复 UI 默认宽度。
   void setLeftSidebarWidth(double? width) {
-    _setWorkbenchLayout(_workbenchLayout.copyWith(leftSidebarWidth: width));
+    _setWorkbenchLayout(workbenchLayout.copyWith(leftSidebarWidth: width));
   }
 
   /// 提交统计面板关注的 Provider id；传空清除偏好。
   void setSelectedAgentUsageProviderId(String? providerId) {
     _setWorkbenchLayout(
-      _workbenchLayout.copyWith(selectedAgentUsageProviderId: providerId),
+      workbenchLayout.copyWith(selectedAgentUsageProviderId: providerId),
     );
   }
 
   /// 初始会话恢复已完成；此后无活动项目时可以稳定展示全局首页。
-  bool get initialRestoreCompleted => _initialRestoreCompleted;
+  bool get initialRestoreCompleted => ideSessionSliceEnabled
+      ? _requiredIdeSessionOperations.state.initialRestoreCompleted
+      : _initialRestoreCompleted;
 
   /// 等待启动会话恢复收敛，供冷启动通知定位避免与恢复竞态。
-  Future<void> get initialRestoreDone => _initialRestoreCompleter.future;
+  Future<void> get initialRestoreDone => ideSessionSliceEnabled
+      ? _requiredIdeSessionOperations.initialRestoreDone
+      : _initialRestoreCompleter.future;
 
   /// 近期项目按最后访问时间排序；旧数据没有时间时保持原项目顺序。
   List<RecentProjectSummary> get recentProjects {
@@ -378,7 +401,7 @@ class IdeShellController extends ChangeNotifier {
       return;
     }
 
-    _sessionCoordinator.cancelPendingRestore();
+    _cancelPendingSessionRestore();
     await _loadProject(path);
   }
 
@@ -404,7 +427,7 @@ class IdeShellController extends ChangeNotifier {
   }
 
   Future<void> selectKnownProject(String path) async {
-    _sessionCoordinator.cancelPendingRestore();
+    _cancelPendingSessionRestore();
     if (path != activeProjectPath) {
       await _loadProject(path, activateThreads: false);
     }
@@ -511,7 +534,7 @@ class IdeShellController extends ChangeNotifier {
     if (!_canMutateAgentHistory(providerId: providerId)) {
       return;
     }
-    _sessionCoordinator.cancelPendingRestore();
+    _cancelPendingSessionRestore();
 
     // workspace-scoped provider 在切换时不能先于项目上下文初始化。
     if (projectPath != activeProjectPath) {
@@ -551,7 +574,7 @@ class IdeShellController extends ChangeNotifier {
       return;
     }
 
-    _sessionCoordinator.cancelPendingRestore();
+    _cancelPendingSessionRestore();
     final wasActive = path == activeProjectPath;
     final nextProjectPath = wasActive && index + 1 < currentProjects.length
         ? currentProjects[index + 1]
@@ -693,8 +716,33 @@ class IdeShellController extends ChangeNotifier {
     _requestSessionSave();
   }
 
+  IdeSessionSliceOperations get _requiredIdeSessionOperations =>
+      _ideSessionOperations ??
+      (throw StateError('IDE Session slice operations are not bound'));
+
+  void _cancelPendingSessionRestore() {
+    if (ideSessionSliceEnabled) {
+      _requiredIdeSessionOperations.cancelPendingRestore();
+    } else {
+      _sessionCoordinator!.cancelPendingRestore();
+    }
+  }
+
+  void _releaseInitialRestoreWait() {
+    if (ideSessionSliceEnabled) {
+      _requiredIdeSessionOperations.releaseInitialRestoreWait();
+      return;
+    }
+    if (!_initialRestoreCompleter.isCompleted) {
+      _initialRestoreCompleter.complete();
+    }
+  }
+
   Future<void> saveNow() {
-    return _sessionCoordinator.saveNow(_currentSessionState());
+    final snapshot = _currentSessionState();
+    return ideSessionSliceEnabled
+        ? _requiredIdeSessionOperations.saveNow(snapshot)
+        : _sessionCoordinator!.saveNow(snapshot);
   }
 
   Future<void> _loadProject(String path, {bool activateThreads = true}) async {
@@ -753,9 +801,7 @@ class IdeShellController extends ChangeNotifier {
       );
       _statusReporter?.call('Could not open folder: $error');
     } finally {
-      if (!_initialRestoreCompleter.isCompleted) {
-        _initialRestoreCompleter.complete();
-      }
+      _releaseInitialRestoreWait();
       if (!_isDisposed) {
         if (!workspaceSliceEnabled) {
           _isLoadingProject = false;
@@ -767,7 +813,9 @@ class IdeShellController extends ChangeNotifier {
 
   Future<void> _restoreSession() async {
     try {
-      final result = await _sessionCoordinator.restore();
+      final result = ideSessionSliceEnabled
+          ? await _requiredIdeSessionOperations.restore()
+          : await _sessionCoordinator!.restore();
       if (_isDisposed) {
         return;
       }
@@ -848,7 +896,13 @@ class IdeShellController extends ChangeNotifier {
       _agentThreadIdsByProject
         ..clear()
         ..addAll(session.agentThreadIdsByProject);
-      _workbenchLayout = session.workbenchLayout;
+      if (ideSessionSliceEnabled) {
+        _requiredIdeSessionOperations.setWorkbenchLayout(
+          session.workbenchLayout,
+        );
+      } else {
+        _workbenchLayout = session.workbenchLayout;
+      }
       _onAgentUsageProviderRestored?.call(
         session.workbenchLayout.selectedAgentUsageProviderId,
       );
@@ -885,11 +939,13 @@ class IdeShellController extends ChangeNotifier {
       }
       _notifyStateChanged();
     } finally {
-      if (!_initialRestoreCompleter.isCompleted) {
-        _initialRestoreCompleter.complete();
-      }
+      _releaseInitialRestoreWait();
       if (!_isDisposed) {
-        _initialRestoreCompleted = true;
+        if (ideSessionSliceEnabled) {
+          _requiredIdeSessionOperations.completeInitialRestore();
+        } else {
+          _initialRestoreCompleted = true;
+        }
         _notifyStateChanged();
       }
     }
@@ -926,7 +982,12 @@ class IdeShellController extends ChangeNotifier {
   }
 
   void _requestSessionSave() {
-    _sessionCoordinator.requestSave(_currentSessionState());
+    final snapshot = _currentSessionState();
+    if (ideSessionSliceEnabled) {
+      _requiredIdeSessionOperations.requestSave(snapshot);
+    } else {
+      _sessionCoordinator!.requestSave(snapshot);
+    }
   }
 
   void _clearActiveWorkspace() {
@@ -976,15 +1037,19 @@ class IdeShellController extends ChangeNotifier {
           ? null
           : selectedAgentViewModel.sessionId,
       projectHomeActive: isProjectHomeActive,
-      workbenchLayout: _workbenchLayout,
+      workbenchLayout: workbenchLayout,
     );
   }
 
   void _setWorkbenchLayout(IdeWorkbenchLayoutState next) {
-    if (next == _workbenchLayout) {
+    if (next == workbenchLayout) {
       return;
     }
-    _workbenchLayout = next;
+    if (ideSessionSliceEnabled) {
+      _requiredIdeSessionOperations.setWorkbenchLayout(next);
+    } else {
+      _workbenchLayout = next;
+    }
     _notifyStateChanged();
     _requestSessionSave();
   }
@@ -1461,7 +1526,7 @@ class IdeShellController extends ChangeNotifier {
     unawaited(saveNow());
     _isDisposed = true;
     _homeRefreshToken += 1;
-    _sessionCoordinator.dispose();
+    _sessionCoordinator?.dispose();
     if (workspaceSliceEnabled) {
       workspaceSliceStore.removeListener(_handleWorkspaceSliceChanged);
     }

@@ -97,6 +97,8 @@ void main() {
           providerManagementSliceEnabled: true,
           // Phase 3 第 4 批 4a：先挂默认关闭路径，生产行为保持不变。
           workspaceSliceEnabled: false,
+          // Phase 3 第 4 批 4b：稳定组合已挂入根作用域，业务路径仍默认关闭。
+          ideSessionSliceEnabled: false,
         ),
       );
     },

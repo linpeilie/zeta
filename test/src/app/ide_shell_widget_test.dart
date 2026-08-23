@@ -1638,6 +1638,26 @@ void main() {
     },
   );
 
+  testWidgets('IDE Session slice keeps Agent state retained across Settings', (
+    tester,
+  ) async {
+    final retained = await _prepareRetainedAgentState(
+      tester,
+      enableIdeSessionSlice: true,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('titlebar-settings-action')));
+    await tester.pump();
+
+    expect(retained.agentPaneElement.mounted, isTrue);
+    expect(find.byKey(const ValueKey('settings-nav-panel')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('titlebar-back-action')));
+    await tester.pump();
+
+    _expectRetainedAgentState(tester, retained);
+  });
+
   testWidgets('settings 切片更新 AgentPane 快捷键且不回写旧 controller', (tester) async {
     final retained = await _prepareRetainedAgentState(
       tester,
@@ -2253,6 +2273,7 @@ Future<void> _pumpIde(
   bool enableConversationSlice = false,
   bool enableSettingsSlice = false,
   bool enableProviderManagementSlice = false,
+  bool enableIdeSessionSlice = false,
 }) async {
   tester.view
     ..physicalSize = size
@@ -2284,6 +2305,8 @@ Future<void> _pumpIde(
       settingsSliceEnabled: enableSettingsSlice,
       // Phase 3 第 2 批：测试参数控制，验证 settings + management owner 原子切换。
       providerManagementSliceEnabled: enableProviderManagementSlice,
+      // Phase 3 第 4 批 4b：默认关闭，显式开启用来做真实 IdeHome 对照。
+      ideSessionSliceEnabled: enableIdeSessionSlice,
     ),
   );
   if (flushInitialUsageRefresh) {
@@ -2518,6 +2541,7 @@ class _TrackedDirectoryAgentUsageRepository
 Future<_RetainedAgentState> _prepareRetainedAgentState(
   WidgetTester tester, {
   bool enableSettingsSlice = false,
+  bool enableIdeSessionSlice = false,
 }) async {
   final directory = Directory.systemTemp.createTempSync('zeta_workbench_test_');
   addTearDown(() {
@@ -2573,6 +2597,7 @@ Future<_RetainedAgentState> _prepareRetainedAgentState(
     agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
     agentProviderConfigStore: MemoryAgentProviderConfigStore(),
     enableSettingsSlice: enableSettingsSlice,
+    enableIdeSessionSlice: enableIdeSessionSlice,
   );
 
   await openProjectFromMenu(tester);

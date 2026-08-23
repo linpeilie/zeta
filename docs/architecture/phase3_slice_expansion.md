@@ -74,10 +74,11 @@
 > `ChangeNotifier` owner、两个批内 flag、Shell usage 装配链和 false-path 已删除；
 > 第 3 批固定为 MVI 单一路径。该授权不改变第 1、2 批独立的观察与回滚边界。
 >
-> **第 4 批 4a 默认关闭路径落地记录（2026-08-23）**：经“继续进行第 4 批”显式确认，
-> 先迁 Workspace context；`workspaceSliceEnabled` 默认并在生产入口显式保持
-> `false`。新 store dormant 时不接收业务写入，旧 Shell 字段仍是唯一 owner；完整
-> 重构门禁已通过。4b IDE Session、4a 翻旗和关批均未获授权。字段契约见
+> **第 4 批 4a/4b 默认关闭路径落地记录（2026-08-23）**：经“继续进行第 4 批”和
+> 后续“继续”显式确认，依次迁移 Workspace 与 IDE Session context；
+> `workspaceSliceEnabled`、`ideSessionSliceEnabled` 均在生产入口显式保持 `false`。
+> 新 store dormant 时不接收业务写入，旧 Shell 字段仍是生产唯一 owner；两批完整
+> 重构门禁均已通过。生产翻旗、root snapshot 和关批均未获授权。字段契约见
 > [第 4 批开工文档](phase3_batch4_workspace_ide_session.md)。
 
 **关门标准（每批合入的条件）**，逐条来自目标架构 Phase 3 验收标准：

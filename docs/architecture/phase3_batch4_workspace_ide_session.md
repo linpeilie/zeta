@@ -3,8 +3,9 @@
 > 对应 [Phase 3 开工文档 §6](phase3_slice_expansion.md) 与
 > [目标架构 §15](target_architecture_riverpod_mvi_plugins_packages.md#15-迁移决策门禁)。
 >
-> 开工日期：2026-08-23。当前状态：**4a Workspace 默认关闭路径已落地并通过完整
-> 门禁**；4b IDE Session 尚未切换，生产 `workspaceSliceEnabled` 保持 `false`。
+> 开工日期：2026-08-23。当前状态：**4a Workspace 与 4b IDE Session 默认关闭路径
+> 均已落地并通过完整门禁**。生产 `workspaceSliceEnabled` 与
+> `ideSessionSliceEnabled` 均保持 `false`。
 
 ## 1. 范围与不迁清单
 
@@ -38,14 +39,20 @@ owner；前两项属于第 5 批 conversation workspace，layout 与恢复 lifec
 flag false 时只有旧字段接收写入；flag true 时只有 store 接收 intent。Shell 仅通过只读
 getter 与操作 facade 编排跨 feature workflow。
 
-### 2.2 4b IDE Session（后续）
+### 2.2 4b IDE Session
 
 | 当前事实 | 目标 owner |
 | --- | --- |
-| restore operation / initial completion | `IdeSessionSliceState` |
+| coordinator `isRestoring` / restore result | `IdeSessionSliceState.isRestoring` / `restoreStatus` |
+| Shell `_initialRestoreCompleted` | `IdeSessionSliceState.initialRestoreCompleted` |
+| Shell `_initialRestoreCompleter` | `IdeSessionSliceStore.initialRestoreDone` 兼容等待口 |
+| Shell `_workbenchLayout` | `IdeSessionSliceState.workbenchLayout` |
 | debounce timer / restore token / pending snapshot | 既有 coordinator，由 app runner 持有 |
 | v4 persistent snapshot | 各 feature owner 的白名单投影，不作为第二份运行态 owner |
-| Workbench layout 持久化入口 | ide-session slice；presentation 临时弹层状态不进入 |
+
+flag false 时 Shell 只构造旧 coordinator 并写旧字段；flag true 时 Shell 只消费
+`IdeSessionSliceOperations`，旧 coordinator 不构造、旧字段不写。`MainApp` 始终创建稳定
+composition，关闭 flag 时 store dormant，避免 Riverpod override 数量在 rebuild 中变化。
 
 ## 3. Intent、Effect 与结果
 
@@ -54,8 +61,9 @@ opened/removed、active workspace cleared、tree expansion changed、directory l
 selected、current file cleared。Effect：读取项目顶层、按需读取单目录、启动/失效文件索引。
 结果 intent 携带同一个 `OperationId`；raw `Directory`/`FileSystemException` 不进入 state。
 
-4b 计划 Intent：restore requested/result received/completed、save requested/save-now requested、
-workbench layout changed。Effect 只调用现有 coordinator；result 继续使用
+4b Intent：restore requested/result received/cancellation requested/initial completed、save
+requested/save-now requested/completed、workbench layout changed。Effect 只调用现有
+coordinator；result 继续使用
 `IdeSessionRestoreResult` typed 状态，不重写 store/codec。
 
 ## 4. 操作身份、缓存与生命周期
@@ -67,7 +75,8 @@ workbench layout changed。Effect 只调用现有 coordinator；result 继续使
   invalidation=project clear/invalidate/watch structural event，budget=50,000 文件；
 - Shell 创建/释放 workspace composition 和 index controller；Riverpod adapter 只订阅，
   不拥有 store、watch、runtime 或 Binding；
-- 4b 后 app 根创建 session composition，Shell 只消费操作 port。
+- 4b app 根创建 session composition，Shell 只消费操作 port；composition 生命周期不由
+  Riverpod 或 Shell 拥有。
 
 ## 5. §15 门禁答卷
 
@@ -90,8 +99,9 @@ workbench layout changed。Effect 只调用现有 coordinator；result 继续使
 4a 必须证明：顶层读取、惰性展开、目录优先排序、忽略项、symlink、选择/context、MRU、
 移除项目、恢复树、索引 single-flight/generation/debounce、mention fallback 在两路径等价。
 
-4b 必须证明：restore empty/failed/cancelled/restored、防抖保存、restore 期间排队保存、
-关闭前 saveNow、损坏/旧版 session 与真实 IdeHome 跨页保活等价。
+4b 默认关闭路径必须证明：restore empty/failed/cancelled/restored、防抖保存、restore 期间
+排队保存、关闭前 saveNow、损坏/旧版 session 与真实 IdeHome 跨页保活等价。生产翻旗、
+观察、旧路径删除和 root `ZetaStateSnapshot` 仍是独立后续步骤。
 
 关批删除：Shell 的八个 workspace 字段及直接 repository/tree 构造、
 `workspaceSliceEnabled`、session coordinator 构造与旧恢复/保存入口、两条 false-path；同步
@@ -99,6 +109,6 @@ workbench layout changed。Effect 只调用现有 coordinator；result 继续使
 
 ## 7. 回滚
 
-4a 观察前保持 `workspaceSliceEnabled: false`；翻旗后可独立拨回，不影响第 1/2 批或
-conversation slice。关批后通过提交 revert/tag 回退，不恢复双写。4b 使用独立接缝，只有
-4a 稳定后才开工。
+生产翻旗前保持 `workspaceSliceEnabled: false` 与 `ideSessionSliceEnabled: false`；翻旗后
+两条路径可独立拨回，不影响第 1/2 批或 conversation slice。关批后通过提交 revert/tag
+回退，不恢复双写。root `ZetaStateSnapshot` 等待第 4 批关批时统一建立。

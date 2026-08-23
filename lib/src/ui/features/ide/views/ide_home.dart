@@ -32,6 +32,8 @@ import 'package:zeta/src/features/agent_management/domain/agent_management_model
 import 'package:zeta/src/features/agent_management/domain/agent_management_text_catalog.dart';
 import 'package:zeta/src/features/agent_management/domain/fallback_agent_management_text_catalog.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
+import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_session_slice_operations.dart';
+import 'package:zeta/src/features/ide_session/presentation/ide_session_slice/ide_session_slice_providers.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
 import 'package:zeta/src/features/project_threads/presentation/project_threads_slice/project_threads_slice_providers.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
@@ -70,11 +72,12 @@ typedef HomeProviderDetectionLoader = Future<List<ManagedAgent>> Function();
 ///
 /// 首页由标题栏入口控制 Projects / Agent 统计合并栏，中央保留 Agent 主编辑区；
 /// 具体项目、会话和 Agent thread 编排由 [IdeShellController] 承接。
-class IdeHome extends StatefulWidget {
+class IdeHome extends ConsumerStatefulWidget {
   const IdeHome({
     required this.directoryPicker,
     required this.enableNativeWindowFrame,
     required this.sessionStore,
+    required this.ideSessionOperations,
     required this.agentProviderFactory,
     required this.agentProviderConfigStore,
     required this.usageStatisticsSliceComposition,
@@ -99,6 +102,7 @@ class IdeHome extends StatefulWidget {
     this.metrics = noopZetaMetricsPort,
     this.conversationSliceEnabled = false,
     this.workspaceSliceEnabled = false,
+    this.ideSessionSliceEnabled = false,
     this.providerManagementSliceEnabled = false,
     this.agentManagementTextCatalog =
         const FallbackAgentManagementTextCatalog(),
@@ -108,6 +112,7 @@ class IdeHome extends StatefulWidget {
   final Future<String?> Function() directoryPicker;
   final bool enableNativeWindowFrame;
   final IdeSessionStore sessionStore;
+  final IdeSessionSliceOperations ideSessionOperations;
   final AgentProviderBundleFactory agentProviderFactory;
   final AgentProviderConfigStore agentProviderConfigStore;
   final UsageStatisticsSliceComposition usageStatisticsSliceComposition;
@@ -148,6 +153,9 @@ class IdeHome extends StatefulWidget {
   /// Phase 3 第 4 批 4a Workspace 切片 flag。
   final bool workspaceSliceEnabled;
 
+  /// Phase 3 第 4 批 4b IDE Session 切片 flag。
+  final bool ideSessionSliceEnabled;
+
   /// Phase 3 第 2 批：true 时只创建 management page store，false 时只创建旧
   /// controller。生产翻旗由 app 根统一控制。
   final bool providerManagementSliceEnabled;
@@ -157,10 +165,10 @@ class IdeHome extends StatefulWidget {
   final DesktopAttentionTextCatalog desktopAttentionTextCatalog;
 
   @override
-  State<IdeHome> createState() => _IdeHomeState();
+  ConsumerState<IdeHome> createState() => _IdeHomeState();
 }
 
-class _IdeHomeState extends State<IdeHome> with WindowListener {
+class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
   static const double _initialPanelWidth = IdeMetrics.sidePaneDefaultWidth;
   static const double _minPanelWidth = IdeMetrics.sidePaneMinWidth;
   static const double _maxPanelWidth = IdeMetrics.sidePaneMaxWidth;
@@ -245,6 +253,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
     _shellController = IdeShellController(
       directoryPicker: widget.directoryPicker,
       sessionStore: widget.sessionStore,
+      ideSessionOperations: widget.ideSessionOperations,
       agentProviderFactory: widget.agentProviderFactory,
       agentProviderConfigStore: widget.agentProviderConfigStore,
       projectLocationOpener: widget.projectLocationOpener,
@@ -262,6 +271,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
       metrics: widget.metrics,
       conversationSliceEnabled: widget.conversationSliceEnabled,
       workspaceSliceEnabled: widget.workspaceSliceEnabled,
+      ideSessionSliceEnabled: widget.ideSessionSliceEnabled,
       agentProviderSettingsPort: widget.agentProviderSettingsPort,
       activeModelCatalogLoader: widget.activeModelCatalogLoader,
     )..addListener(_handleShellChanged);
@@ -426,6 +436,14 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.ideSessionSliceEnabled) {
+      // 只订阅 IDE Session 的轻量 UI 投影；持久化 DTO 不进入 Riverpod。
+      ref.watch(
+        ideSessionSliceProvider.select(
+          (state) => (state.workbenchLayout, state.initialRestoreCompleted),
+        ),
+      );
+    }
     final homePage = _page == _IdeHomePage.home;
     final leftSidebarVisible =
         homePage && _shellController.workbenchLayout.leftSidebarVisible;

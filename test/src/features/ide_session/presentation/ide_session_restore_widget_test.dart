@@ -265,6 +265,75 @@ void main() {
     );
   });
 
+  testWidgets(
+    'IDE Session slice restores and resaves the same workbench projection',
+    (tester) async {
+      _useWideWindow(tester);
+      const workbench = IdeWorkbenchLayoutState(
+        leftSidebarVisible: false,
+        agentUsageExpanded: true,
+        leftSidebarWidth: 315,
+        agentUsageHeightFraction: 0.48,
+        selectedAgentUsageProviderId: 'grok',
+      );
+      final session = MemorySessionStore(
+        const IdeSessionState(workbenchLayout: workbench).encode(),
+      );
+
+      await tester.pumpWidget(
+        MainApp(
+          enableNativeWindowFrame: true,
+          showWindowControls: false,
+          sessionLoader: session.load,
+          sessionSaver: session.save,
+          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
+            FakeAgentProvider(),
+          ),
+          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+          ideSessionSliceEnabled: true,
+        ),
+      );
+      await tester.runAsync(waitForIo);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('workbench-navigation-inline')),
+        findsNothing,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('titlebar-left-sidebar-action')),
+      );
+      await pumpSessionSave(tester);
+
+      expect(
+        IdeSessionState.tryDecode(session.value)?.workbenchLayout,
+        workbench.copyWith(leftSidebarVisible: true),
+      );
+
+      // 同一个 MainApp State rebuild 时 override 数量与 store identity 都保持稳定。
+      await tester.pumpWidget(
+        MainApp(
+          enableNativeWindowFrame: true,
+          showWindowControls: false,
+          sessionLoader: session.load,
+          sessionSaver: session.save,
+          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
+            FakeAgentProvider(),
+          ),
+          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+          ideSessionSliceEnabled: true,
+        ),
+      );
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+      expect(
+        find.byKey(const ValueKey('workbench-navigation-inline')),
+        findsOneWidget,
+      );
+    },
+  );
+
   testWidgets('restores active workbench preferences after user interactions', (
     tester,
   ) async {
@@ -427,6 +496,65 @@ void main() {
       expect(find.text('chosen.txt'), findsOneWidget);
       expect(find.text('restored.txt'), findsNothing);
 
+      restoreCompleter.complete(
+        sessionJson(
+          projectPath: restoredDirectory.path,
+          currentFilePath: restoredFile.path,
+        ),
+      );
+      await tester.runAsync(waitForIo);
+      await tester.pumpAndSettle();
+      await pumpSessionSave(tester);
+
+      expect(find.text('chosen.txt'), findsOneWidget);
+      expect(find.text('restored.txt'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'IDE Session slice cancels a slow restore after the user opens a folder',
+    (tester) async {
+      _useWideWindow(tester);
+      final restoreCompleter = Completer<String?>();
+      final savedSession = MemorySessionStore();
+      final restoredDirectory = Directory.systemTemp.createTempSync(
+        'zeta_restore_slice_',
+      );
+      final chosenDirectory = Directory.systemTemp.createTempSync(
+        'zeta_chosen_slice_',
+      );
+      tempDirectories
+        ..add(restoredDirectory)
+        ..add(chosenDirectory);
+
+      final restoredFile = File(
+        '${restoredDirectory.path}${Platform.pathSeparator}restored.txt',
+      )..writeAsStringSync('restored');
+      File(
+        '${chosenDirectory.path}${Platform.pathSeparator}chosen.txt',
+      ).writeAsStringSync('chosen');
+
+      await tester.pumpWidget(
+        MainApp(
+          enableNativeWindowFrame: true,
+          showWindowControls: false,
+          directoryPicker: () async => chosenDirectory.path,
+          sessionLoader: () => restoreCompleter.future,
+          sessionSaver: savedSession.save,
+          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
+            FakeAgentProvider(),
+          ),
+          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+          ideSessionSliceEnabled: true,
+        ),
+      );
+
+      await openProjectFromMenu(tester);
+      await tester.runAsync(waitForIo);
+      await tester.pumpAndSettle();
+      await _openFilesPanel(tester);
+
+      expect(find.text('chosen.txt'), findsOneWidget);
       restoreCompleter.complete(
         sessionJson(
           projectPath: restoredDirectory.path,
