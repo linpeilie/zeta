@@ -6,7 +6,7 @@ import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_models.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_text_catalog.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/fallback_desktop_attention_text_catalog.dart';
-import 'package:zeta/src/features/settings/application/general_settings_controller.dart';
+import 'package:zeta/src/features/settings/application/agent_notification_settings_source.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 
 /// 合并 Agent 提醒、应用可见性、系统通知和任务栏未读状态。
@@ -14,7 +14,7 @@ final class DesktopAttentionController {
   DesktopAttentionController({
     required this.notificationService,
     required this.indicator,
-    required this.generalSettingsController,
+    required this.notificationSettingsSource,
     required this.activateTarget,
     this.textCatalog = const FallbackDesktopAttentionTextCatalog(),
   });
@@ -23,7 +23,9 @@ final class DesktopAttentionController {
 
   final DesktopNotificationService notificationService;
   final DesktopAttentionIndicator indicator;
-  final GeneralSettingsController generalSettingsController;
+
+  /// 通知设置来源（纯 Dart 端口；不依赖 settings 的 controller 形态）。
+  final AgentNotificationSettingsSource notificationSettingsSource;
   final DesktopAttentionTargetActivator activateTarget;
   final DesktopAttentionTextCatalog textCatalog;
 
@@ -32,6 +34,7 @@ final class DesktopAttentionController {
   int _nextNotificationId = 1000;
   bool _initialized = false;
   bool _disposed = false;
+  void Function()? _unsubscribeSettings;
   AgentNotificationSettings _lastNotificationSettings =
       const AgentNotificationSettings();
 
@@ -42,10 +45,10 @@ final class DesktopAttentionController {
       return;
     }
     _initialized = true;
-    await generalSettingsController.load();
-    _lastNotificationSettings =
-        generalSettingsController.settings.notifications;
-    generalSettingsController.addListener(_handleSettingsChanged);
+    _lastNotificationSettings = await notificationSettingsSource.load();
+    _unsubscribeSettings = notificationSettingsSource.addListener(
+      _handleSettingsChanged,
+    );
     try {
       final initialPayload = await notificationService.initialize(
         onActivate: (payload) {
@@ -88,7 +91,7 @@ final class DesktopAttentionController {
       await _removeIdentity(attention.identity);
       return;
     }
-    final settings = generalSettingsController.settings.notifications;
+    final settings = notificationSettingsSource.notifications;
     if (!_isEnabled(attention.signal.kind, settings) ||
         _visibility.shows(attention)) {
       return;
@@ -181,7 +184,8 @@ final class DesktopAttentionController {
       return;
     }
     _disposed = true;
-    generalSettingsController.removeListener(_handleSettingsChanged);
+    _unsubscribeSettings?.call();
+    _unsubscribeSettings = null;
     notificationService.dispose();
   }
 
@@ -189,7 +193,7 @@ final class DesktopAttentionController {
     if (_disposed) {
       return;
     }
-    final settings = generalSettingsController.settings.notifications;
+    final settings = notificationSettingsSource.notifications;
     final wasEnabled = _lastNotificationSettings.enabled;
     _lastNotificationSettings = settings;
     if (!wasEnabled && settings.enabled) {

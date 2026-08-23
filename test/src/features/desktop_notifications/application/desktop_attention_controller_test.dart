@@ -9,6 +9,7 @@ import 'package:zeta/src/features/desktop_notifications/application/desktop_atte
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_models.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_text_catalog.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/fallback_desktop_attention_text_catalog.dart';
+import 'package:zeta/src/features/settings/application/agent_notification_settings_source.dart';
 import 'package:zeta/src/features/settings/application/general_settings_controller.dart';
 import 'package:zeta/src/features/settings/data/general_settings_store.dart';
 import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
@@ -225,7 +226,9 @@ Future<_Harness> _createHarness({
   final controller = DesktopAttentionController(
     notificationService: notifications,
     indicator: indicator,
-    generalSettingsController: settings,
+    notificationSettingsSource: GeneralSettingsControllerNotificationSource(
+      settings,
+    ),
     activateTarget: activateTarget ?? (_, _) async => true,
     textCatalog: textCatalog,
   );

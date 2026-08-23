@@ -26,6 +26,7 @@ import 'package:zeta/src/features/agent_management/domain/agent_cli_management_r
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
+import 'package:zeta/src/features/settings/application/agent_notification_settings_source.dart';
 import 'package:zeta/src/features/settings/application/general_settings_controller.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/settings/presentation/settings_page.dart';
@@ -182,7 +183,10 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
     _desktopAttentionController = DesktopAttentionController(
       notificationService: notificationService,
       indicator: attentionIndicator,
-      generalSettingsController: widget.generalSettingsController,
+      // 旧路径桥：切片路径接通后由组合层按 flag 换成切片 store 的适配实现。
+      notificationSettingsSource: GeneralSettingsControllerNotificationSource(
+        widget.generalSettingsController,
+      ),
       activateTarget: _activateAttentionTarget,
       textCatalog: widget.desktopAttentionTextCatalog,
     );
