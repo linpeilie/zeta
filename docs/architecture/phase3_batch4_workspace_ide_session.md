@@ -3,9 +3,9 @@
 > 对应 [Phase 3 开工文档 §6](phase3_slice_expansion.md) 与
 > [目标架构 §15](target_architecture_riverpod_mvi_plugins_packages.md#15-迁移决策门禁)。
 >
-> 开工日期：2026-08-23。当前状态：**4a Workspace 与 4b IDE Session 默认关闭路径
-> 均已落地并通过完整门禁**。生产 `workspaceSliceEnabled` 与
-> `ideSessionSliceEnabled` 均保持 `false`。
+> 开工日期：2026-08-23。当前状态：**4a Workspace 与 4b IDE Session 已通过完整
+> 双路径门禁并进入生产观察**。生产 `workspaceSliceEnabled` 与
+> `ideSessionSliceEnabled` 均为 `true`，可独立回退。
 
 ## 1. 范围与不迁清单
 
@@ -100,8 +100,8 @@ coordinator；result 继续使用
 移除项目、恢复树、索引 single-flight/generation/debounce、mention fallback 在两路径等价。
 
 4b 默认关闭路径必须证明：restore empty/failed/cancelled/restored、防抖保存、restore 期间
-排队保存、关闭前 saveNow、损坏/旧版 session 与真实 IdeHome 跨页保活等价。生产翻旗、
-观察、旧路径删除和 root `ZetaStateSnapshot` 仍是独立后续步骤。
+排队保存、关闭前 saveNow、损坏/旧版 session 与真实 IdeHome 跨页保活等价。生产翻旗已
+完成；观察、旧路径删除和 root `ZetaStateSnapshot` 仍是独立后续步骤。
 
 关批删除：Shell 的八个 workspace 字段及直接 repository/tree 构造、
 `workspaceSliceEnabled`、session coordinator 构造与旧恢复/保存入口、两条 false-path；同步
@@ -109,6 +109,7 @@ coordinator；result 继续使用
 
 ## 7. 回滚
 
-生产翻旗前保持 `workspaceSliceEnabled: false` 与 `ideSessionSliceEnabled: false`；翻旗后
-两条路径可独立拨回，不影响第 1/2 批或 conversation slice。关批后通过提交 revert/tag
-回退，不恢复双写。root `ZetaStateSnapshot` 等待第 4 批关批时统一建立。
+观察期间 `workspaceSliceEnabled` 与 `ideSessionSliceEnabled` 可分别拨回 `false`，不影响
+第 1/2 批或 conversation slice；任一路径回退并修复复测后，只重新起算自身观察窗口。
+关批后通过提交 revert/tag 回退，不恢复双写。root `ZetaStateSnapshot` 等待第 4 批关批时
+统一建立。

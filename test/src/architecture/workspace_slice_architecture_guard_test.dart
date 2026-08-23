@@ -46,8 +46,8 @@ void main() {
     }
   });
 
-  test('batch 4a production entry remains explicitly disabled', () {
+  test('batch 4a production entry remains explicitly enabled', () {
     final mainSource = File('lib/main.dart').readAsStringSync();
-    expect(mainSource, contains('workspaceSliceEnabled: false'));
+    expect(mainSource, contains('workspaceSliceEnabled: true'));
   });
 }

@@ -95,10 +95,9 @@ void main() {
           // Phase 3 第 2 批：经显式确认后生产启用 Provider 配置/管理切片，
           // 进入中高风险批次观察；回退时改回 false，无需数据迁移。
           providerManagementSliceEnabled: true,
-          // Phase 3 第 4 批 4a：先挂默认关闭路径，生产行为保持不变。
-          workspaceSliceEnabled: false,
-          // Phase 3 第 4 批 4b：稳定组合已挂入根作用域，业务路径仍默认关闭。
-          ideSessionSliceEnabled: false,
+          // Phase 3 第 4 批：经显式确认，4a/4b 进入独立可回退的生产观察。
+          workspaceSliceEnabled: true,
+          ideSessionSliceEnabled: true,
         ),
       );
     },

@@ -80,6 +80,12 @@
 > 新 store dormant 时不接收业务写入，旧 Shell 字段仍是生产唯一 owner；两批完整
 > 重构门禁均已通过。生产翻旗、root snapshot 和关批均未获授权。字段契约见
 > [第 4 批开工文档](phase3_batch4_workspace_ide_session.md)。
+>
+> **第 4 批 4a/4b 显式翻旗确认（2026-08-23）**：默认关闭双路径与完整重构门禁
+> 通过后，经后续“继续”显式确认，生产入口同时传
+> `workspaceSliceEnabled: true`、`ideSessionSliceEnabled: true`。两个 flag 保持独立
+> 回滚，第 4 批按中高风险取至少 7 天观察期，最早于 2026-08-30 关批；任一路径回退
+> 只重置自身观察窗口。root snapshot、旧路径删除和关批仍未获授权。
 
 **关门标准（每批合入的条件）**，逐条来自目标架构 Phase 3 验收标准：
 
@@ -405,7 +411,7 @@ capability 位与 UI 入口的 G4 对照表、`AgentProviderSettingsPort` 消费
 
 ---
 
-## 6. 第 4 批：workspace + ide session（4a 默认关闭路径已落地）
+## 6. 第 4 批：workspace + ide session（生产观察中）
 
 - **workspace**：文件树/展开/选择状态的 owner 现在是 `IdeShellController`
   本身（`_workspaceTree`、`_expandedDirectoryPaths`、`_selectedTreePath`、

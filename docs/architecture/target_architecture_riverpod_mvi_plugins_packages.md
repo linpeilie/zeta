@@ -2,7 +2,7 @@
 
 最后更新：2026-08-23
 
-状态：Phase 0–2 已落地；Phase 3 第 3 批已关批，第 1、2 批仍独立观察
+状态：Phase 0–2 已落地；Phase 3 第 3 批已关批，第 1、2、4 批独立观察
 
 ## 决策摘要
 
@@ -837,7 +837,7 @@ Phase 3 前置条件的计时起点。字段映射、门禁答卷、验收对照
 
 ### Phase 3：扩大迁移范围
 
-**状态：第 3 批已于 2026-08-23 关批；第 4 批 4a/4b 默认关闭路径均已落地并通过完整门禁；第 1、2 批仍按各自窗口独立观察。**
+**状态：第 3 批已于 2026-08-23 关批；第 4 批 4a/4b 已翻旗进入生产观察；第 1、2 批仍按各自窗口独立观察。**
 Phase 2 真实使用证据仍在计时（2026-08-23 起生产全量启用 conversation 切片路径）；
 第 1 批经另行显式确认推进到四步节奏第 3 步，最早于 2026-08-26 满足观察下限。
 第 2 批 2a–2c 双路径与完整重构门禁通过后，经再次显式确认接受两批观察窗口重叠，
@@ -860,8 +860,9 @@ Phase 2 真实使用证据仍在计时（2026-08-23 起生产全量启用 conver
 [Project Threads 与 Usage Statistics 关批文档](./phase3_batch3_project_threads_usage_statistics.md)。
 
 同日经后续显式确认依次启动第 4 批 4a Workspace 与 4b IDE Session：两套纯 Dart
-store、app effect runner/composition 与 Riverpod 只读镜像均已落地，两个生产 flag
-保持 false；生产翻旗、root snapshot 与关批尚未开始。字段级契约见
+store、app effect runner/composition 与 Riverpod 只读镜像均已落地；完整双路径门禁
+通过后再次确认，两个生产 flag 已切为 true，进入至少 7 天的独立可回退观察。root
+snapshot 与关批尚未开始。字段级契约见
 [Workspace 与 IDE Session 开工文档](./phase3_batch4_workspace_ide_session.md)。
 
 按风险从低到高分批，不做一次性“大爆炸”：

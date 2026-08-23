@@ -42,9 +42,9 @@ void main() {
     }
   });
 
-  test('batch 4 session and workspace production entries remain disabled', () {
+  test('batch 4 session and workspace production entries remain enabled', () {
     final mainSource = File('lib/main.dart').readAsStringSync();
-    expect(mainSource, contains('workspaceSliceEnabled: false'));
-    expect(mainSource, contains('ideSessionSliceEnabled: false'));
+    expect(mainSource, contains('workspaceSliceEnabled: true'));
+    expect(mainSource, contains('ideSessionSliceEnabled: true'));
   });
 }
