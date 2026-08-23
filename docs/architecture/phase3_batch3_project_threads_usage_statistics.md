@@ -5,9 +5,12 @@
 >
 > 开工日期：2026-08-23。
 >
-> 当前状态：**3a Project Threads 已进入四步节奏第 1–2 步**。新 MVI 路径与
-> 双路径对照已落地，`projectThreadsSliceEnabled` 构造默认 false，生产入口显式
-> false；3b Usage Statistics 尚未迁移。第 1、2 批仍各自处于生产观察期。
+> 当前状态：**3a Project Threads 已推进到四步节奏第 3 步**。新 MVI 路径、
+> Projects Pane 的 11 个完整交互双路径对照和 Project Home 的真实组合对照均已
+> 落地；经后续显式确认，`projectThreadsSliceEnabled` 构造默认仍为 false，生产
+> 入口已于 2026-08-23 显式翻为 true，进入至少 5 天的中风险观察，最早于
+> 2026-08-28 关批。旧路径仅作为独立回退保留。3b Usage Statistics 尚未迁移。
+> 第 1、2 批仍各自处于生产观察期。
 
 ---
 
@@ -279,13 +282,19 @@ Riverpod `autoDispose` 绝不关闭 store、runtime、Binding 或 plugin。
 
 - reducer/store：全局唯一选择、running→completed、置顶、Map 不可变、同步 session
   登记、typed effect、OperationId 结算、dispose 与迟到 ingress；
-- runner：真实 fake Provider 列表查询、300 ms 搜索防抖；
+- runner：真实 fake Provider 列表查询、300 ms 搜索防抖，以及 rename / archive /
+  unarchive / delete / fork 五类 lifecycle effect 的参数转发与 Future 结算；
 - legacy controller：既有 33 条分页、聚合、恢复、runtime、写操作、fork 权限测试；
 - Widget：`MainApp → IdeHome → Shell → inner ProviderScope` 在 flag 开/关下分别解析
   store/null，切片 publish 可被 Riverpod 读取；
+- Projects Pane：11 个真实根组合场景使用同一套断言在 flag=false/true 下逐一运行，
+  覆盖分页与历史加载、展开/收起、运行与后台完成、多项目指示、hover/key 稳定性、
+  新建与 session 持久化、打开位置、刷新、移除项目、重命名及 G4 capability 菜单；
+- Project Home：真实 `IdeHome` 在两条路径都覆盖项目首页、最近五条、选择 thread 与
+  返回当前项目且不重置 Agent pane；
 - 架构：`feature_layering_guard_test` 将 application→presentation 基线从 2 减到 1；
-- 关批前还需在 production flag=true 下补 Project Home / Projects Pane 完整交互对照与
-  观察窗口记录。
+- 生产入口已为 flag=true；关批前只剩至少 5 天的真实使用观察与记录，最早于
+  2026-08-28 执行删除清单。
 
 3b 必补：时间窗口与扩窗加载、过滤选项保留、报告等价、目录 refresh 合并、Tab
 single-flight、静默刷新、Provider 移除迟到结果、选择持久化 exactly-once、v4 索引与
@@ -324,7 +333,8 @@ fingerprint 回归、Usage 页面/侧栏双路径 Widget 测试。
 
 批内 flag：
 
-- 3a：`projectThreadsSliceEnabled`；构造默认 false，生产入口当前显式 false；
+- 3a：`projectThreadsSliceEnabled`；构造默认 false，生产入口自 2026-08-23 起显式
+  true；
 - 3b：开工时新增独立 `usageStatisticsSliceEnabled`，不得借用 3a flag 原子切换两个
   context。
 
@@ -338,5 +348,13 @@ fingerprint 回归、Usage 页面/侧栏双路径 Widget 测试。
 
 **3a 执行记录（2026-08-23）**：纯 Dart state/intent/effect/reducer/store、app runner
 与 presentation Riverpod adapter 已落地；controller 的 application→presentation
-反向依赖已清除；生产 flag 保持 false。下一步是扩充 3a 完整交互对照，随后另行确认
-是否翻旗；3b 在 3a 接缝稳定后单独开工。
+反向依赖已清除；初始落地时生产 flag 保持 false。
+
+**3a 对照补全记录（2026-08-23）**：Projects Pane 的 11 个真实根组合场景已改为
+flag=false/true 同体测试，Project Home 的真实 `IdeHome` 场景也完成双路径验证；第 2
+步因此完成。当时下一步必须先取得显式确认，再把 3a flag 翻为 true 进入生产观察。
+
+**3a 生产翻旗记录（2026-08-23）**：完整双路径对照、受影响测试与完整重构门禁通过
+后，经后续显式确认，`main.dart` 已传 `projectThreadsSliceEnabled: true`。3a 按
+中风险取至少 5 天观察期，最早于 2026-08-28 关批；若回退则一行拨回 false，修复并
+复测后重新起算。3b 仍在 3a 接缝取得真实使用稳定证据后单独开工。

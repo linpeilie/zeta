@@ -149,7 +149,8 @@ class MainApp extends StatefulWidget {
 
   /// Phase 3 第 3 批 3a Project Threads 切片 flag；默认 false。
   ///
-  /// true 时 Shell 只创建纯 Dart MVI store，旧 ViewModel 不实例化。
+  /// true 时 Shell 只创建纯 Dart MVI store，旧 ViewModel 不实例化。生产入口自
+  /// 2026-08-23 起显式传 true。
   final bool projectThreadsSliceEnabled;
 
   /// 生产启动阶段解析并初始化的 Zeta 自有数据路径。

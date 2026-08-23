@@ -57,6 +57,11 @@
 > `projectThreadsSliceEnabled: false`，因此不扩大生产路径风险。3a 翻旗与 3b Usage
 > Statistics 开工分别另行推进。批次契约见
 > [第 3 批开工文档](phase3_batch3_project_threads_usage_statistics.md)。
+>
+> **第 3 批 3a 显式翻旗确认（2026-08-23）**：完整双路径与重构门禁通过后，经
+> 后续显式确认，`main.dart` 已传 `projectThreadsSliceEnabled: true`。3a 风险为中，
+> 取至少 5 天观察期，最早于 2026-08-28 关批；第 1、2、3a 的观察窗口独立计时，
+> 任一批回退不连带切换其他 flag。3b 仍需等待 3a 接缝取得真实使用稳定证据。
 
 **关门标准（每批合入的条件）**，逐条来自目标架构 Phase 3 验收标准：
 
@@ -379,9 +384,11 @@ capability 位与 UI 入口的 G4 对照表、`AgentProviderSettingsPort` 消费
 
 > **3a 执行记录（2026-08-23）**：Project Threads 的纯 Dart
 > state/intent/effect/reducer/store、app runner 与 presentation Riverpod adapter
-> 已落地；flag 开/关只创建一个 owner，生产入口仍为 false。既有 controller 降为
-> effect/query runner，application→presentation 燃尽基线减少一项。字段映射、
-> 生命周期、§15 答卷与删除清单见
+> 已落地；flag 开/关只创建一个 owner。既有 controller 降为
+> effect/query runner，application→presentation 燃尽基线减少一项。Projects Pane
+> 的 11 个真实根组合场景和 Project Home 已完成同体 flag=false/true 对照，第 1–2 步
+> 完成；经后续显式确认，生产入口已翻为 true，进入至少 5 天观察，第 3 步进行中。
+> 字段映射、生命周期、§15 答卷与删除清单见
 > [第 3 批开工文档](phase3_batch3_project_threads_usage_statistics.md)。
 
 ---

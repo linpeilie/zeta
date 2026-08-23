@@ -95,9 +95,9 @@ void main() {
           // Phase 3 第 2 批：经显式确认后生产启用 Provider 配置/管理切片，
           // 进入中高风险批次观察；回退时改回 false，无需数据迁移。
           providerManagementSliceEnabled: true,
-          // Phase 3 第 3 批 3a：先挂默认关闭的 Project Threads 双路径接缝；
-          // 对照与显式翻旗完成前生产仍走旧 ViewModel。
-          projectThreadsSliceEnabled: false,
+          // Phase 3 第 3 批 3a：经显式确认后生产启用 Project Threads 切片，
+          // 进入中风险观察；回退时改回 false，无需数据迁移。
+          projectThreadsSliceEnabled: true,
         ),
       );
     },

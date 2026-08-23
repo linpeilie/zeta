@@ -110,4 +110,108 @@ void main() {
       expect(provider.listQueries.single.searchTerm, 'needle');
     },
   );
+
+  test(
+    'runner forwards every thread lifecycle effect and settles its Future',
+    () async {
+      final provider = FakeAgentProvider(
+        threadPages: <AgentThreadPage>[
+          AgentThreadPage(
+            threads: <AgentThreadSummary>[
+              for (final id in const <String>[
+                'rename',
+                'archive',
+                'unarchive',
+                'delete',
+                'fork',
+              ])
+                agentThread(id: id, projectPath: '/repo', title: '$id thread'),
+            ],
+            nextCursor: null,
+          ),
+        ],
+      );
+      final registry = AgentProviderRuntimeRegistry(
+        providerFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
+      );
+      final settings = AgentProviderSettingsController(
+        runtimeRegistry: registry,
+        configStore: MemoryAgentProviderConfigStore(
+          const AgentProviderSettings(
+            providers: <AgentProviderConfig>[AgentProviderConfig.defaultCodex],
+            activeProviderId: defaultAgentProviderId,
+          ),
+        ),
+      );
+      final bindingManager = AgentConversationBindingManager(
+        runtimeRegistry: registry,
+      );
+      final composition = ProjectThreadsSliceComposition.create(
+        providerController: settings,
+        globalRuntime: AgentProviderGlobalRuntime(runtimeRegistry: registry),
+        bindingManager: bindingManager,
+        textCatalog: const FallbackAgentUiTextCatalog(),
+      );
+      addTearDown(() async {
+        composition.store.dispose();
+        settings.dispose();
+        await bindingManager.close();
+        await registry.close();
+      });
+
+      await composition.store.loadInitial('/repo');
+      await composition.store.renameThread(
+        projectPath: '/repo',
+        threadId: 'rename',
+        name: 'Renamed',
+      );
+      await composition.store.archiveThread(
+        projectPath: '/repo',
+        threadId: 'archive',
+      );
+      await composition.store.unarchiveThread(
+        projectPath: '/repo',
+        threadId: 'unarchive',
+      );
+      await composition.store.deleteThread(
+        projectPath: '/repo',
+        threadId: 'delete',
+      );
+      final forked = await composition.store.forkThread(
+        projectPath: '/repo',
+        threadId: 'fork',
+      );
+
+      expect(provider.renamedThreads, <({String threadId, String name})>[
+        (threadId: 'rename', name: 'Renamed'),
+      ]);
+      expect(provider.archivedThreads, <String>['archive']);
+      expect(provider.unarchivedThreads, <String>['unarchive']);
+      expect(provider.deletedThreads, <String>['delete']);
+      expect(provider.forkedThreads, <String>['fork']);
+      expect(forked?.id, 'forked-fork');
+      expect(
+        composition.store
+            .stateFor('/repo')
+            .threads
+            .where((thread) => thread.id == 'rename')
+            .single
+            .title,
+        'Renamed',
+      );
+      final remainingIds = composition.store
+          .stateFor('/repo')
+          .threads
+          .map((thread) => thread.id)
+          .toSet();
+      expect(
+        remainingIds.intersection(const <String>{
+          'archive',
+          'unarchive',
+          'delete',
+        }),
+        isEmpty,
+      );
+    },
+  );
 }

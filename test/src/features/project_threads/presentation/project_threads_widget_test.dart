@@ -40,8 +40,21 @@ void main() {
     tempDirectories.clear();
   });
 
-  testWidgets('shows project threads and switches selected thread', (
+  void testProjectThreadsPaths(
+    String description,
+    Future<void> Function(WidgetTester tester, bool sliceEnabled) body,
+  ) {
+    for (final sliceEnabled in const <bool>[false, true]) {
+      testWidgets(
+        '$description (slice=$sliceEnabled)',
+        (tester) => body(tester, sliceEnabled),
+      );
+    }
+  }
+
+  testProjectThreadsPaths('shows project threads and switches selected thread', (
     tester,
+    sliceEnabled,
   ) async {
     final session = MemorySessionStore();
     final directory = Directory.systemTemp.createTempSync('zeta_test_');
@@ -166,7 +179,7 @@ void main() {
         sessionSaver: session.save,
         agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
         agentProviderConfigStore: singleFakeProviderConfigStore(),
-        projectThreadsSliceEnabled: true,
+        projectThreadsSliceEnabled: sliceEnabled,
       ),
     );
 
@@ -344,9 +357,9 @@ void main() {
     );
   });
 
-  testWidgets(
+  testProjectThreadsPaths(
     'shows a running icon instead of relative time for active threads',
-    (tester) async {
+    (tester, sliceEnabled) async {
       final session = MemorySessionStore();
       final directory = Directory.systemTemp.createTempSync('zeta_test_');
       tempDirectories.add(directory);
@@ -381,6 +394,7 @@ void main() {
       await tester.pumpWidget(
         MainApp(
           enableNativeWindowFrame: false,
+          projectThreadsSliceEnabled: sliceEnabled,
           directoryPicker: () async => directory.path,
           sessionLoader: session.load,
           sessionSaver: session.save,
@@ -519,152 +533,161 @@ void main() {
     },
   );
 
-  testWidgets('shows running indicators for each collapsed project', (
-    tester,
-  ) async {
-    final firstDirectory = Directory.systemTemp.createTempSync('zeta_test_');
-    final secondDirectory = Directory.systemTemp.createTempSync('zeta_test_');
-    tempDirectories.addAll(<Directory>[firstDirectory, secondDirectory]);
-    File(
-      '${firstDirectory.path}${Platform.pathSeparator}first.txt',
-    ).writeAsStringSync('first');
-    File(
-      '${secondDirectory.path}${Platform.pathSeparator}second.txt',
-    ).writeAsStringSync('second');
+  testProjectThreadsPaths(
+    'shows running indicators for each collapsed project',
+    (tester, sliceEnabled) async {
+      final firstDirectory = Directory.systemTemp.createTempSync('zeta_test_');
+      final secondDirectory = Directory.systemTemp.createTempSync('zeta_test_');
+      tempDirectories.addAll(<Directory>[firstDirectory, secondDirectory]);
+      File(
+        '${firstDirectory.path}${Platform.pathSeparator}first.txt',
+      ).writeAsStringSync('first');
+      File(
+        '${secondDirectory.path}${Platform.pathSeparator}second.txt',
+      ).writeAsStringSync('second');
 
-    final firstThread = agentThread(
-      id: 'thread-first',
-      projectPath: firstDirectory.path,
-      title: 'First running thread',
-    );
-    final secondThread = agentThread(
-      id: 'thread-second',
-      projectPath: secondDirectory.path,
-      title: 'Second running thread',
-    );
-    final session = MemorySessionStore(
-      IdeSessionState(
-        projectPaths: <String>[firstDirectory.path, secondDirectory.path],
-        activeProjectPath: firstDirectory.path,
-        projectHomeActive: true,
-        projectThreadExpansionByProject: <String, bool>{
-          firstDirectory.path: true,
-          secondDirectory.path: true,
-        },
-        cachedThreadsByProject: <String, List<AgentThreadSummary>>{
-          firstDirectory.path: <AgentThreadSummary>[firstThread],
-          secondDirectory.path: <AgentThreadSummary>[secondThread],
-        },
-      ).encode(),
-    );
-    final provider = _ProjectScopedFakeAgentProvider(
-      threads: <AgentThreadSummary>[firstThread, secondThread],
-    );
-
-    await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
-      ),
-    );
-    await tester.runAsync(waitForIo);
-    await tester.pumpAndSettle();
-
-    final firstProjectRunning = find.byKey(
-      ValueKey<String>('project-tile-running-icon-${firstDirectory.path}'),
-    );
-    final secondProjectRunning = find.byKey(
-      ValueKey<String>('project-tile-running-icon-${secondDirectory.path}'),
-    );
-
-    Future<void> startTurnOnThread({
-      required String projectPath,
-      required String threadId,
-      required String threadTitle,
-      required String message,
-    }) async {
-      final threadFinder = find.byKey(
-        ValueKey<String>('project-thread-$projectPath-$threadId'),
+      final firstThread = agentThread(
+        id: 'thread-first',
+        projectPath: firstDirectory.path,
+        title: 'First running thread',
       );
-      if (threadFinder.evaluate().isEmpty) {
+      final secondThread = agentThread(
+        id: 'thread-second',
+        projectPath: secondDirectory.path,
+        title: 'Second running thread',
+      );
+      final session = MemorySessionStore(
+        IdeSessionState(
+          projectPaths: <String>[firstDirectory.path, secondDirectory.path],
+          activeProjectPath: firstDirectory.path,
+          projectHomeActive: true,
+          projectThreadExpansionByProject: <String, bool>{
+            firstDirectory.path: true,
+            secondDirectory.path: true,
+          },
+          cachedThreadsByProject: <String, List<AgentThreadSummary>>{
+            firstDirectory.path: <AgentThreadSummary>[firstThread],
+            secondDirectory.path: <AgentThreadSummary>[secondThread],
+          },
+        ).encode(),
+      );
+      final provider = _ProjectScopedFakeAgentProvider(
+        threads: <AgentThreadSummary>[firstThread, secondThread],
+      );
+
+      await tester.pumpWidget(
+        MainApp(
+          enableNativeWindowFrame: false,
+          projectThreadsSliceEnabled: sliceEnabled,
+          sessionLoader: session.load,
+          sessionSaver: session.save,
+          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
+            provider,
+          ),
+          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        ),
+      );
+      await tester.runAsync(waitForIo);
+      await tester.pumpAndSettle();
+
+      final firstProjectRunning = find.byKey(
+        ValueKey<String>('project-tile-running-icon-${firstDirectory.path}'),
+      );
+      final secondProjectRunning = find.byKey(
+        ValueKey<String>('project-tile-running-icon-${secondDirectory.path}'),
+      );
+
+      Future<void> startTurnOnThread({
+        required String projectPath,
+        required String threadId,
+        required String threadTitle,
+        required String message,
+      }) async {
+        final threadFinder = find.byKey(
+          ValueKey<String>('project-thread-$projectPath-$threadId'),
+        );
+        if (threadFinder.evaluate().isEmpty) {
+          await tester.tap(
+            find.byKey(ValueKey<String>('project-tile-$projectPath')),
+          );
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 300));
+        }
+        await tester.tap(threadFinder);
+        // 跨项目 selectProjectThread 会走真实 IO 的 _loadProject。
+        await tester.runAsync(waitForIo);
+        await pumpUntilCondition(
+          tester,
+          () {
+            final title = find
+                .byKey(const ValueKey('agent-header-title'))
+                .hitTestable();
+            if (title.evaluate().length != 1) {
+              return false;
+            }
+            return tester.widget<Text>(title).data == threadTitle;
+          },
+          maxPumps: 80,
+          failureMessage: 'Thread $threadId did not become selected',
+        );
+        await tester.enterText(
+          find.byKey(const ValueKey('agent-message-input')),
+          message,
+        );
+        await tester.pump();
+        await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+        final listRunning = find.byKey(
+          ValueKey<String>(
+            'project-thread-running-icon-$projectPath-$threadId',
+          ),
+        );
+        await pumpUntilCondition(
+          tester,
+          () => listRunning.evaluate().isNotEmpty,
+          failureMessage: 'Thread $threadId did not enter running state',
+        );
+        // 收起项目，验证折叠态 running 指示。
         await tester.tap(
           find.byKey(ValueKey<String>('project-tile-$projectPath')),
         );
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));
       }
-      await tester.tap(threadFinder);
-      // 跨项目 selectProjectThread 会走真实 IO 的 _loadProject。
-      await tester.runAsync(waitForIo);
-      await pumpUntilCondition(
-        tester,
-        () {
-          final title = find
-              .byKey(const ValueKey('agent-header-title'))
-              .hitTestable();
-          if (title.evaluate().length != 1) {
-            return false;
-          }
-          return tester.widget<Text>(title).data == threadTitle;
-        },
-        maxPumps: 80,
-        failureMessage: 'Thread $threadId did not become selected',
+
+      await startTurnOnThread(
+        projectPath: firstDirectory.path,
+        threadId: 'thread-first',
+        threadTitle: 'First running thread',
+        message: 'run first',
       );
-      await tester.enterText(
-        find.byKey(const ValueKey('agent-message-input')),
-        message,
+      await startTurnOnThread(
+        projectPath: secondDirectory.path,
+        threadId: 'thread-second',
+        threadTitle: 'Second running thread',
+        message: 'run second',
       );
-      await tester.pump();
-      await tester.tap(find.byKey(const ValueKey('agent-send-button')));
-      final listRunning = find.byKey(
-        ValueKey<String>('project-thread-running-icon-$projectPath-$threadId'),
-      );
-      await pumpUntilCondition(
-        tester,
-        () => listRunning.evaluate().isNotEmpty,
-        failureMessage: 'Thread $threadId did not enter running state',
-      );
-      // 收起项目，验证折叠态 running 指示。
-      await tester.tap(
-        find.byKey(ValueKey<String>('project-tile-$projectPath')),
+
+      expect(firstProjectRunning, findsOneWidget);
+      expect(secondProjectRunning, findsOneWidget);
+
+      provider.emit(
+        const AgentTurnCompletedEvent(
+          sessionId: 'thread-first',
+          turnId: 'turn-1',
+        ),
       );
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-    }
+      await tester.pump();
 
-    await startTurnOnThread(
-      projectPath: firstDirectory.path,
-      threadId: 'thread-first',
-      threadTitle: 'First running thread',
-      message: 'run first',
-    );
-    await startTurnOnThread(
-      projectPath: secondDirectory.path,
-      threadId: 'thread-second',
-      threadTitle: 'Second running thread',
-      message: 'run second',
-    );
+      expect(firstProjectRunning, findsNothing);
+      expect(secondProjectRunning, findsOneWidget);
+    },
+  );
 
-    expect(firstProjectRunning, findsOneWidget);
-    expect(secondProjectRunning, findsOneWidget);
-
-    provider.emit(
-      const AgentTurnCompletedEvent(
-        sessionId: 'thread-first',
-        turnId: 'turn-1',
-      ),
-    );
-    await tester.pump();
-    await tester.pump();
-
-    expect(firstProjectRunning, findsNothing);
-    expect(secondProjectRunning, findsOneWidget);
-  });
-
-  testWidgets('shows project actions only while hovered', (tester) async {
+  testProjectThreadsPaths('shows project actions only while hovered', (
+    tester,
+    sliceEnabled,
+  ) async {
     final session = MemorySessionStore();
     final directory = Directory.systemTemp.createTempSync('zeta_test_');
     tempDirectories.add(directory);
@@ -690,6 +713,7 @@ void main() {
     await tester.pumpWidget(
       MainApp(
         enableNativeWindowFrame: false,
+        projectThreadsSliceEnabled: sliceEnabled,
         directoryPicker: () async => directory.path,
         sessionLoader: session.load,
         sessionSaver: session.save,
@@ -730,70 +754,75 @@ void main() {
     );
   });
 
-  testWidgets('does not duplicate keys when thread actions toggle quickly', (
-    tester,
-  ) async {
-    final session = MemorySessionStore();
-    final directory = Directory.systemTemp.createTempSync('zeta_test_');
-    tempDirectories.add(directory);
-    File(
-      '${directory.path}${Platform.pathSeparator}sample.txt',
-    ).writeAsStringSync('hello from zeta');
+  testProjectThreadsPaths(
+    'does not duplicate keys when thread actions toggle quickly',
+    (tester, sliceEnabled) async {
+      final session = MemorySessionStore();
+      final directory = Directory.systemTemp.createTempSync('zeta_test_');
+      tempDirectories.add(directory);
+      File(
+        '${directory.path}${Platform.pathSeparator}sample.txt',
+      ).writeAsStringSync('hello from zeta');
 
-    final provider = FakeAgentProvider(
-      threadPages: <AgentThreadPage>[
-        AgentThreadPage(
-          threads: <AgentThreadSummary>[
-            agentThread(
-              id: 'thread-a',
-              projectPath: directory.path,
-              title: 'Hover thread',
-            ),
-          ],
-          nextCursor: null,
+      final provider = FakeAgentProvider(
+        threadPages: <AgentThreadPage>[
+          AgentThreadPage(
+            threads: <AgentThreadSummary>[
+              agentThread(
+                id: 'thread-a',
+                projectPath: directory.path,
+                title: 'Hover thread',
+              ),
+            ],
+            nextCursor: null,
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MainApp(
+          enableNativeWindowFrame: false,
+          projectThreadsSliceEnabled: sliceEnabled,
+          directoryPicker: () async => directory.path,
+          sessionLoader: session.load,
+          sessionSaver: session.save,
+          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
+            provider,
+          ),
+          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
         ),
-      ],
-    );
+      );
 
-    await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        directoryPicker: () async => directory.path,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
-      ),
-    );
+      await openProjectFromMenu(tester);
+      await tester.runAsync(waitForIo);
+      await tester.pumpAndSettle();
 
-    await openProjectFromMenu(tester);
-    await tester.runAsync(waitForIo);
-    await tester.pumpAndSettle();
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      addTearDown(mouse.removePointer);
+      await mouse.addPointer(location: Offset.zero);
+      await tester.pump();
 
-    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
-    addTearDown(mouse.removePointer);
-    await mouse.addPointer(location: Offset.zero);
-    await tester.pump();
+      final threadFinder = find.byKey(
+        ValueKey<String>('project-thread-${directory.path}-thread-a'),
+      );
 
-    final threadFinder = find.byKey(
-      ValueKey<String>('project-thread-${directory.path}-thread-a'),
-    );
+      await mouse.moveTo(tester.getCenter(threadFinder));
+      await tester.pump(const Duration(milliseconds: 40));
+      expect(tester.takeException(), isNull);
 
-    await mouse.moveTo(tester.getCenter(threadFinder));
-    await tester.pump(const Duration(milliseconds: 40));
-    expect(tester.takeException(), isNull);
+      await mouse.moveTo(Offset.zero);
+      await tester.pump(const Duration(milliseconds: 40));
+      expect(tester.takeException(), isNull);
 
-    await mouse.moveTo(Offset.zero);
-    await tester.pump(const Duration(milliseconds: 40));
-    expect(tester.takeException(), isNull);
+      await mouse.moveTo(tester.getCenter(threadFinder));
+      await tester.pump(const Duration(milliseconds: 40));
+      expect(tester.takeException(), isNull);
+    },
+  );
 
-    await mouse.moveTo(tester.getCenter(threadFinder));
-    await tester.pump(const Duration(milliseconds: 40));
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('starts a blank new thread from the project action', (
+  testProjectThreadsPaths('starts a blank new thread from the project action', (
     tester,
+    sliceEnabled,
   ) async {
     final session = MemorySessionStore();
     final directory = Directory.systemTemp.createTempSync('zeta_test_');
@@ -842,6 +871,7 @@ void main() {
     await tester.pumpWidget(
       MainApp(
         enableNativeWindowFrame: false,
+        projectThreadsSliceEnabled: sliceEnabled,
         directoryPicker: () async => directory.path,
         sessionLoader: session.load,
         sessionSaver: session.save,
@@ -976,7 +1006,10 @@ void main() {
     expect(createdThread.providerId, defaultAgentProviderId);
   });
 
-  testWidgets('opens the project location from the more menu', (tester) async {
+  testProjectThreadsPaths('opens the project location from the more menu', (
+    tester,
+    sliceEnabled,
+  ) async {
     final session = MemorySessionStore();
     final directory = Directory.systemTemp.createTempSync('zeta_test_');
     tempDirectories.add(directory);
@@ -1003,6 +1036,7 @@ void main() {
     await tester.pumpWidget(
       MainApp(
         enableNativeWindowFrame: false,
+        projectThreadsSliceEnabled: sliceEnabled,
         directoryPicker: () async => directory.path,
         sessionLoader: session.load,
         sessionSaver: session.save,
@@ -1037,102 +1071,108 @@ void main() {
     expect(openedPaths, <String>[directory.path]);
   });
 
-  testWidgets('refreshes the project thread list from the more menu', (
-    tester,
-  ) async {
-    final session = MemorySessionStore();
-    final directory = Directory.systemTemp.createTempSync('zeta_test_');
-    tempDirectories.add(directory);
-    File(
-      '${directory.path}${Platform.pathSeparator}sample.txt',
-    ).writeAsStringSync('hello from zeta');
+  testProjectThreadsPaths(
+    'refreshes the project thread list from the more menu',
+    (tester, sliceEnabled) async {
+      final session = MemorySessionStore();
+      final directory = Directory.systemTemp.createTempSync('zeta_test_');
+      tempDirectories.add(directory);
+      File(
+        '${directory.path}${Platform.pathSeparator}sample.txt',
+      ).writeAsStringSync('hello from zeta');
 
-    final provider = FakeAgentProvider(
-      threadPages: <AgentThreadPage>[
-        AgentThreadPage(
-          threads: <AgentThreadSummary>[
-            agentThread(
-              id: 'thread-a',
-              projectPath: directory.path,
-              title: 'Initial thread',
-            ),
-          ],
-          nextCursor: null,
+      final provider = FakeAgentProvider(
+        threadPages: <AgentThreadPage>[
+          AgentThreadPage(
+            threads: <AgentThreadSummary>[
+              agentThread(
+                id: 'thread-a',
+                projectPath: directory.path,
+                title: 'Initial thread',
+              ),
+            ],
+            nextCursor: null,
+          ),
+          AgentThreadPage(
+            threads: <AgentThreadSummary>[
+              agentThread(
+                id: 'thread-b',
+                projectPath: directory.path,
+                title: 'Refreshed thread',
+              ),
+            ],
+            nextCursor: null,
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MainApp(
+          enableNativeWindowFrame: false,
+          projectThreadsSliceEnabled: sliceEnabled,
+          directoryPicker: () async => directory.path,
+          sessionLoader: session.load,
+          sessionSaver: session.save,
+          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
+            provider,
+          ),
+          agentProviderConfigStore: singleFakeProviderConfigStore(),
         ),
-        AgentThreadPage(
-          threads: <AgentThreadSummary>[
-            agentThread(
-              id: 'thread-b',
-              projectPath: directory.path,
-              title: 'Refreshed thread',
-            ),
-          ],
-          nextCursor: null,
+      );
+
+      await openProjectFromMenu(tester);
+      await tester.runAsync(waitForIo);
+      await tester.pumpAndSettle();
+
+      expect(provider.listQueries, hasLength(1));
+      expect(
+        find.descendant(
+          of: find.byKey(
+            ValueKey<String>('project-thread-${directory.path}-thread-a'),
+          ),
+          matching: find.text('Initial thread'),
         ),
-      ],
-    );
+        findsOneWidget,
+      );
 
-    await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        directoryPicker: () async => directory.path,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: singleFakeProviderConfigStore(),
-      ),
-    );
-
-    await openProjectFromMenu(tester);
-    await tester.runAsync(waitForIo);
-    await tester.pumpAndSettle();
-
-    expect(provider.listQueries, hasLength(1));
-    expect(
-      find.descendant(
-        of: find.byKey(
-          ValueKey<String>('project-thread-${directory.path}-thread-a'),
+      final mouse = await hoverProjectTile(tester, directory.path);
+      addTearDown(mouse.removePointer);
+      await tester.tap(
+        find.byKey(
+          ValueKey<String>('project-tile-more-menu-${directory.path}'),
         ),
-        matching: find.text('Initial thread'),
-      ),
-      findsOneWidget,
-    );
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
-    final mouse = await hoverProjectTile(tester, directory.path);
-    addTearDown(mouse.removePointer);
-    await tester.tap(
-      find.byKey(ValueKey<String>('project-tile-more-menu-${directory.path}')),
-    );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-
-    await tester.tap(
-      find.byKey(
-        ValueKey<String>('project-tile-refresh-threads-${directory.path}'),
-      ),
-    );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-
-    expect(provider.listQueries, hasLength(2));
-    expect(provider.listQueries.last.projectPath, directory.path);
-    expect(provider.listQueries.last.limit, 10);
-    expect(provider.listQueries.last.cursor, isNull);
-    expect(find.text('Initial thread'), findsNothing);
-    expect(
-      find.descendant(
-        of: find.byKey(
-          ValueKey<String>('project-thread-${directory.path}-thread-b'),
+      await tester.tap(
+        find.byKey(
+          ValueKey<String>('project-tile-refresh-threads-${directory.path}'),
         ),
-        matching: find.text('Refreshed thread'),
-      ),
-      findsOneWidget,
-    );
-  });
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
-  testWidgets(
+      expect(provider.listQueries, hasLength(2));
+      expect(provider.listQueries.last.projectPath, directory.path);
+      expect(provider.listQueries.last.limit, 10);
+      expect(provider.listQueries.last.cursor, isNull);
+      expect(find.text('Initial thread'), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byKey(
+            ValueKey<String>('project-thread-${directory.path}-thread-b'),
+          ),
+          matching: find.text('Refreshed thread'),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testProjectThreadsPaths(
     'removes the active project from the list and clears the workspace when no next project exists',
-    (tester) async {
+    (tester, sliceEnabled) async {
       final session = MemorySessionStore();
       final directory = Directory.systemTemp.createTempSync('zeta_test_');
       tempDirectories.add(directory);
@@ -1175,6 +1215,7 @@ void main() {
       await tester.pumpWidget(
         MainApp(
           enableNativeWindowFrame: false,
+          projectThreadsSliceEnabled: sliceEnabled,
           directoryPicker: () async => directory.path,
           sessionLoader: session.load,
           sessionSaver: session.save,
@@ -1230,7 +1271,10 @@ void main() {
     },
   );
 
-  testWidgets('renames a project thread from the more menu', (tester) async {
+  testProjectThreadsPaths('renames a project thread from the more menu', (
+    tester,
+    sliceEnabled,
+  ) async {
     final session = MemorySessionStore();
     final directory = Directory.systemTemp.createTempSync('zeta_test_');
     tempDirectories.add(directory);
@@ -1256,6 +1300,7 @@ void main() {
     await tester.pumpWidget(
       MainApp(
         enableNativeWindowFrame: false,
+        projectThreadsSliceEnabled: sliceEnabled,
         directoryPicker: () async => directory.path,
         sessionLoader: session.load,
         sessionSaver: session.save,
@@ -1328,91 +1373,103 @@ void main() {
     );
   });
 
-  testWidgets('shows only supported Grok thread lifecycle actions', (
-    tester,
-  ) async {
-    final session = MemorySessionStore();
-    final directory = Directory.systemTemp.createTempSync('zeta_test_');
-    tempDirectories.add(directory);
-    final provider = FakeAgentProvider(
-      threadPages: <AgentThreadPage>[
-        AgentThreadPage(
-          threads: <AgentThreadSummary>[
-            agentThread(
-              id: 'grok-thread',
-              projectPath: directory.path,
-              title: 'Grok thread',
-            ).copyWith(providerId: grokAgentProviderId),
-          ],
-          nextCursor: null,
+  testProjectThreadsPaths(
+    'shows only supported Grok thread lifecycle actions',
+    (tester, sliceEnabled) async {
+      final session = MemorySessionStore();
+      final directory = Directory.systemTemp.createTempSync('zeta_test_');
+      tempDirectories.add(directory);
+      final provider = FakeAgentProvider(
+        threadPages: <AgentThreadPage>[
+          AgentThreadPage(
+            threads: <AgentThreadSummary>[
+              agentThread(
+                id: 'grok-thread',
+                projectPath: directory.path,
+                title: 'Grok thread',
+              ).copyWith(providerId: grokAgentProviderId),
+            ],
+            nextCursor: null,
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MainApp(
+          enableNativeWindowFrame: false,
+          projectThreadsSliceEnabled: sliceEnabled,
+          directoryPicker: () async => directory.path,
+          sessionLoader: session.load,
+          sessionSaver: session.save,
+          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
+            provider,
+          ),
+          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
         ),
-      ],
-    );
+      );
 
-    await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        directoryPicker: () async => directory.path,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
-      ),
-    );
+      await openProjectFromMenu(tester);
+      await tester.runAsync(waitForIo);
+      await tester.pumpAndSettle();
 
-    await openProjectFromMenu(tester);
-    await tester.runAsync(waitForIo);
-    await tester.pumpAndSettle();
+      final mouse = await hoverThreadTile(
+        tester,
+        directory.path,
+        'grok-thread',
+      );
+      addTearDown(mouse.removePointer);
 
-    final mouse = await hoverThreadTile(tester, directory.path, 'grok-thread');
-    addTearDown(mouse.removePointer);
-
-    expect(
-      find.byKey(
-        ValueKey<String>(
-          'project-thread-more-menu-${directory.path}-grok-thread',
+      expect(
+        find.byKey(
+          ValueKey<String>(
+            'project-thread-more-menu-${directory.path}-grok-thread',
+          ),
         ),
-      ),
-      findsOneWidget,
-    );
+        findsOneWidget,
+      );
 
-    await tester.tap(
-      find.byKey(
-        ValueKey<String>(
-          'project-thread-more-menu-${directory.path}-grok-thread',
+      await tester.tap(
+        find.byKey(
+          ValueKey<String>(
+            'project-thread-more-menu-${directory.path}-grok-thread',
+          ),
         ),
-      ),
-    );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
-    expect(
-      find.byKey(
-        ValueKey<String>('project-thread-rename-${directory.path}-grok-thread'),
-      ),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(
-        ValueKey<String>('project-thread-delete-${directory.path}-grok-thread'),
-      ),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(
-        ValueKey<String>(
-          'project-thread-archive-${directory.path}-grok-thread',
+      expect(
+        find.byKey(
+          ValueKey<String>(
+            'project-thread-rename-${directory.path}-grok-thread',
+          ),
         ),
-      ),
-      findsNothing,
-    );
-    expect(
-      find.byKey(
-        ValueKey<String>('project-thread-fork-${directory.path}-grok-thread'),
-      ),
-      findsNothing,
-    );
-  });
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          ValueKey<String>(
+            'project-thread-delete-${directory.path}-grok-thread',
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          ValueKey<String>(
+            'project-thread-archive-${directory.path}-grok-thread',
+          ),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.byKey(
+          ValueKey<String>('project-thread-fork-${directory.path}-grok-thread'),
+        ),
+        findsNothing,
+      );
+    },
+  );
 
   testWidgets('local removal dialog says Provider history is retained', (
     tester,
