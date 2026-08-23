@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import 'package:zeta/src/app/logging/app_logging.dart';
+import 'package:zeta/src/app/project_threads_slice/project_threads_slice_composition.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
@@ -21,6 +22,9 @@ import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
 import 'package:zeta/src/features/ide_session/domain/recent_project_summary.dart';
 import 'package:zeta/src/features/project_threads/application/project_threads_controller.dart';
+import 'package:zeta/src/features/project_threads/application/project_threads_operations.dart';
+import 'package:zeta/src/features/project_threads/application/project_threads_slice/project_threads_slice_store.dart';
+import 'package:zeta/src/features/project_threads/application/project_threads_state_owner.dart';
 import 'package:zeta/src/features/project_threads/application/project_threads_session_snapshot_codec.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
 import 'package:zeta/src/features/project_threads/presentation/project_threads_view_model.dart';
@@ -79,10 +83,13 @@ class IdeShellController extends ChangeNotifier {
     this.agentUiTextCatalog = const FallbackAgentUiTextCatalog(),
     this.metrics = noopZetaMetricsPort,
     this.conversationSliceEnabled = false,
+    this.projectThreadsSliceEnabled = false,
     AgentProviderSettingsPort? agentProviderSettingsPort,
     Future<AgentModelCatalogLoadResult> Function()? activeModelCatalogLoader,
     DateTime Function()? now,
-  }) : projectThreadsViewModel = ProjectThreadsViewModel(),
+  }) : _projectThreadsViewModel = projectThreadsSliceEnabled
+           ? null
+           : ProjectThreadsViewModel(),
        _sessionCoordinator = IdeSessionPersistenceCoordinator(
          store: sessionStore,
          saveDelay: sessionSaveDelay,
@@ -187,16 +194,35 @@ class IdeShellController extends ChangeNotifier {
       providerId: defaultAgentProviderId,
     );
     agentWorkspaceController.selectEntry(_bootstrapAgentEntry.entryId);
-    projectThreadsController = ProjectThreadsController(
-      providerController: agentProviderController,
-      globalRuntime: agentProviderGlobalRuntime,
-      bindingManager: agentWorkspaceController.bindingManager,
-      viewModel: projectThreadsViewModel,
-      textCatalog: agentUiTextCatalog,
-    );
+    late final ProjectThreadsStateOwner projectThreadsStateOwner;
+    if (projectThreadsSliceEnabled) {
+      final composition = ProjectThreadsSliceComposition.create(
+        providerController: agentProviderController,
+        globalRuntime: agentProviderGlobalRuntime,
+        bindingManager: agentWorkspaceController.bindingManager,
+        textCatalog: agentUiTextCatalog,
+        now: _now,
+      );
+      projectThreadsController = composition.store;
+      projectThreadsSliceStore = composition.store;
+      projectThreadsStateOwner = composition.store;
+    } else {
+      final viewModel = _projectThreadsViewModel!;
+      projectThreadsController = ProjectThreadsController(
+        providerController: agentProviderController,
+        globalRuntime: agentProviderGlobalRuntime,
+        bindingManager: agentWorkspaceController.bindingManager,
+        stateOwner: viewModel,
+        textCatalog: agentUiTextCatalog,
+      );
+      projectThreadsSliceStore = null;
+      projectThreadsStateOwner = viewModel;
+    }
     projectThreadsController.onActiveThreadCleared = _handleActiveThreadCleared;
     agentWorkspaceController.addListener(_handleAgentWorkspaceChanged);
-    projectThreadsViewModel.addListener(_handleProjectThreadsChanged);
+    _unsubscribeProjectThreads = projectThreadsStateOwner.subscribe(
+      _handleProjectThreadsChanged,
+    );
     _refreshWorkspaceEntryBindings();
     _bindSelectedWorkspaceRuntime();
     unawaited(agentProviderController.loadSettings());
@@ -234,9 +260,17 @@ class IdeShellController extends ChangeNotifier {
   late final AgentUsagePanelController agentUsagePanelController;
   late final AgentThreadWorkspaceController agentWorkspaceController;
   late final AgentThreadWorkspaceEntry _bootstrapAgentEntry;
-  late final ProjectThreadsController projectThreadsController;
-  final ProjectThreadsViewModel projectThreadsViewModel;
+  late final ProjectThreadsOperations projectThreadsController;
+  late final ProjectThreadsSliceStore? projectThreadsSliceStore;
+  final ProjectThreadsViewModel? _projectThreadsViewModel;
+  late final void Function() _unsubscribeProjectThreads;
   final AgentUiTextCatalog agentUiTextCatalog;
+
+  /// 仅供 legacy 对照测试读取；切片路径不会创建旧 owner。
+  ProjectThreadsViewModel get projectThreadsViewModel {
+    return _projectThreadsViewModel ??
+        (throw StateError('ProjectThreadsViewModel is disabled'));
+  }
 
   /// app 组合层注入的脱敏指标端口；默认 no-op，探针只剩常量分支。
   final ZetaMetricsPort metrics;
@@ -245,6 +279,9 @@ class IdeShellController extends ChangeNotifier {
   ///
   /// false = 走旧 ViewModel 直连路径（测试默认）。
   final bool conversationSliceEnabled;
+
+  /// Phase 3 第 3 批 3a flag；true 时列表事实只由 MVI store 持有。
+  final bool projectThreadsSliceEnabled;
   final Map<String, ({AgentThreadWorkspaceEntry entry, VoidCallback listener})>
   _workspaceEntryListeners =
       <String, ({AgentThreadWorkspaceEntry entry, VoidCallback listener})>{};
@@ -1317,7 +1354,9 @@ class IdeShellController extends ChangeNotifier {
   void _handleProjectThreadsChanged() {
     // 列表标题可能因 thread/name/updated 或刷新而变化；详情头栏需同步。
     _syncSelectedThreadTitleFromList();
-    _notifyStateChanged();
+    if (!projectThreadsSliceEnabled) {
+      _notifyStateChanged();
+    }
     _requestSessionSave();
   }
 
@@ -1411,7 +1450,7 @@ class IdeShellController extends ChangeNotifier {
     _homeRefreshToken += 1;
     _sessionCoordinator.dispose();
     agentWorkspaceController.removeListener(_handleAgentWorkspaceChanged);
-    projectThreadsViewModel.removeListener(_handleProjectThreadsChanged);
+    _unsubscribeProjectThreads();
     final selectedSnapshotBinding = _selectedWorkspaceThreadSnapshotBinding;
     if (selectedSnapshotBinding != null) {
       selectedSnapshotBinding.snapshotListenable.removeListener(
@@ -1420,7 +1459,7 @@ class IdeShellController extends ChangeNotifier {
       _selectedWorkspaceThreadSnapshotBinding = null;
     }
     projectThreadsController.dispose();
-    projectThreadsViewModel.dispose();
+    _projectThreadsViewModel?.dispose();
     agentWorkspaceController.dispose();
     usageStatisticsController.dispose();
     agentProviderController.removeListener(_handleAgentProviderSettingsChanged);

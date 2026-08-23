@@ -3,9 +3,10 @@ import 'dart:async';
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
+import 'package:zeta/src/features/project_threads/application/project_threads_operations.dart';
+import 'package:zeta/src/features/project_threads/application/project_threads_state_owner.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
 import 'package:zeta/src/features/project_threads/domain/project_threads_session_snapshot.dart';
-import 'package:zeta/src/features/project_threads/presentation/project_threads_view_model.dart';
 import 'package:zeta/src/features/project_threads/application/project_threads_session_snapshot_codec.dart';
 
 final _log = zetaLoggerFor('zeta.project_threads.controller');
@@ -23,20 +24,19 @@ const String _aggregateCursorPrefix = 'agg:';
 ///
 /// 分页、恢复、缓存快照和 provider 交互都收敛到这里，页面层只触发动作并读取
 /// [viewModel] 暴露的状态。
-class ProjectThreadsController {
+class ProjectThreadsController implements ProjectThreadsOperations {
   ProjectThreadsController({
     required this.providerController,
     required this.globalRuntime,
     this.bindingManager,
-    ProjectThreadsViewModel? viewModel,
+    required this.stateOwner,
     AgentUiTextCatalog? textCatalog,
-  }) : viewModel = viewModel ?? ProjectThreadsViewModel(),
-       _textCatalog = textCatalog ?? const FallbackAgentUiTextCatalog();
+  }) : _textCatalog = textCatalog ?? const FallbackAgentUiTextCatalog();
 
   final AgentProviderSettingsPort providerController;
   final AgentProviderGlobalRuntime globalRuntime;
   final AgentConversationBindingManager? bindingManager;
-  final ProjectThreadsViewModel viewModel;
+  final ProjectThreadsStateOwner stateOwner;
   final AgentUiTextCatalog _textCatalog;
 
   final Map<String, int> _loadTokens = <String, int>{};
@@ -46,17 +46,21 @@ class ProjectThreadsController {
   bool _disposed = false;
 
   /// 当前会话因删除/归档/关闭而被清空时回调（projectPath, threadId）。
+  @override
   void Function(String projectPath, String threadId)? onActiveThreadCleared;
 
+  @override
   ProjectThreadListState stateFor(String projectPath) {
-    return viewModel.stateFor(projectPath);
+    return stateOwner.stateFor(projectPath);
   }
 
+  @override
   ProjectThreadsSessionSnapshot get sessionSnapshot {
-    return buildProjectThreadsSessionSnapshot(viewModel.states);
+    return buildProjectThreadsSessionSnapshot(stateOwner.states);
   }
 
   /// 从 IDE 会话恢复项目 thread 状态。
+  @override
   void restoreSession({
     required List<String> projectPaths,
     required String? activeProjectPath,
@@ -67,7 +71,7 @@ class ProjectThreadsController {
       activeProjectPath: activeProjectPath,
       snapshot: snapshot,
     );
-    viewModel.replaceStates(plan.states);
+    stateOwner.applyStatesReplacement(plan.states);
     for (final entry in plan.states.entries) {
       _registerStateThreadMappings(entry.key, entry.value);
     }
@@ -77,19 +81,24 @@ class ProjectThreadsController {
   }
 
   /// 记录或激活一个项目；新项目默认展开并加载首屏。
+  @override
   void activateProject(String projectPath) {
     final current = stateFor(projectPath);
-    viewModel.setStateFor(projectPath, current.copyWith(isExpanded: true));
+    stateOwner.applyProjectState(
+      projectPath,
+      current.copyWith(isExpanded: true),
+    );
     unawaited(loadInitial(projectPath));
   }
 
   /// 清理已经不在项目列表中的状态。
+  @override
   void retainProjects(List<String> projectPaths) {
     final allowed = projectPaths.toSet();
-    final removed = viewModel.states.keys
+    final removed = stateOwner.states.keys
         .where((path) => !allowed.contains(path))
         .toList();
-    viewModel.retainProjects(projectPaths);
+    stateOwner.applyProjectsRetention(projectPaths);
     for (final path in removed) {
       _loadTokens.remove(path);
       _searchDebounceTimers.remove(path)?.cancel();
@@ -100,16 +109,18 @@ class ProjectThreadsController {
   }
 
   /// 点击项目时切换展开状态；展开时自动加载首屏。
+  @override
   Future<void> toggleProject(String projectPath) async {
     final current = stateFor(projectPath);
     final next = current.copyWith(isExpanded: !current.isExpanded);
-    viewModel.setStateFor(projectPath, next);
+    stateOwner.applyProjectState(projectPath, next);
     if (next.isExpanded && !next.hasLoaded) {
       await loadInitial(projectPath);
     }
   }
 
   /// 切换活动/已归档视图并重新加载。
+  @override
   Future<void> setArchivedView({
     required String projectPath,
     required bool archived,
@@ -118,7 +129,7 @@ class ProjectThreadsController {
     if (current.archived == archived) {
       return;
     }
-    viewModel.setStateFor(
+    stateOwner.applyProjectState(
       projectPath,
       current.copyWith(
         archived: archived,
@@ -132,6 +143,7 @@ class ProjectThreadsController {
   }
 
   /// 更新搜索词；防抖后重新加载首屏。
+  @override
   void setSearchTerm({
     required String projectPath,
     required String searchTerm,
@@ -140,7 +152,7 @@ class ProjectThreadsController {
     if (current.searchTerm == searchTerm) {
       return;
     }
-    viewModel.setStateFor(
+    stateOwner.applyProjectState(
       projectPath,
       current.copyWith(searchTerm: searchTerm),
     );
@@ -155,6 +167,7 @@ class ProjectThreadsController {
   }
 
   /// 重新加载首屏，保留旧缓存直到新数据返回。
+  @override
   Future<void> loadInitial(String projectPath) {
     return _loadPage(
       projectPath: projectPath,
@@ -165,6 +178,7 @@ class ProjectThreadsController {
   }
 
   /// 追加加载下一页。
+  @override
   Future<void> loadMore(String projectPath) async {
     final current = stateFor(projectPath);
     final cursor = current.nextCursor;
@@ -180,28 +194,33 @@ class ProjectThreadsController {
   }
 
   /// 选中某条 thread，并写入全局唯一选择状态（跨项目互斥高亮）。
+  @override
   void selectThread(String projectPath, AgentThreadSummary thread) {
     _registerThreadMapping(projectPath, thread.id);
     selectThreadId(projectPath, thread.id);
   }
 
   /// 更新选中 id 并同步高亮；会清除其他项目的选中态。
+  @override
   void selectThreadId(String projectPath, String threadId) {
     _registerThreadMapping(projectPath, threadId);
-    viewModel.selectThreadId(projectPath, threadId);
+    stateOwner.applyThreadSelection(projectPath, threadId);
   }
 
   /// 清空指定项目的 thread 选中态，用于切换到全新的会话草稿。
+  @override
   void clearSelectedThread(String projectPath) {
-    viewModel.clearSelectedThreadId(projectPath);
+    stateOwner.applyThreadSelectionClear(projectPath);
   }
 
   /// 进入项目首页时清除全局唯一的 thread 高亮。
+  @override
   void clearAllSelectedThreads() {
-    viewModel.clearAllSelectedThreadIds();
+    stateOwner.applyAllThreadSelectionsClear();
   }
 
   /// 显式登记 thread 所属项目，供实时事件反查列表分组。
+  @override
   void registerThreadMapping(String projectPath, String threadId) {
     _registerThreadMapping(projectPath, threadId);
   }
@@ -215,6 +234,7 @@ class ProjectThreadsController {
   ///
   /// [markRunning] 为 true 时乐观写入执行中指示（新建 thread 首条消息场景），
   /// 避免 active provider 事件订阅尚未跟上时侧栏无转圈动画。
+  @override
   AgentThreadSummary registerSession(
     String projectPath,
     AgentSession session, {
@@ -239,9 +259,9 @@ class ProjectThreadsController {
       updatedAt: now,
       status: AgentThreadRuntimeStatus.idle,
     );
-    viewModel.prependThread(projectPath: projectPath, thread: thread);
+    stateOwner.applyThreadPrepend(projectPath: projectPath, thread: thread);
     if (formalTitle != null) {
-      viewModel.updateThreadTitle(
+      stateOwner.applyThreadTitle(
         projectPath: projectPath,
         threadId: session.id,
         title: formalTitle,
@@ -255,16 +275,18 @@ class ProjectThreadsController {
   }
 
   /// 由详情侧 turn 状态同步列表执行中指示（不依赖 provider 事件是否已送达）。
+  @override
   void setThreadRunning(String threadId, {required bool isRunning}) {
     _setThreadRunning(threadId, isRunning: isRunning);
   }
 
   /// 清除列表上「后台执行完毕」绿色提示（用户点击完成 icon）。
+  @override
   void dismissCompletedThread({
     required String projectPath,
     required String threadId,
   }) {
-    viewModel.dismissCompletedThread(
+    stateOwner.applyCompletedThreadDismissal(
       projectPath: projectPath,
       threadId: threadId,
     );
@@ -278,6 +300,7 @@ class ProjectThreadsController {
   /// 标题同步对 **全部 Provider** 生效：仅当 snapshot 携带非占位正式标题时
   /// 才 `updateThreadTitle`。新建会话的「New thread」/空串若写进列表 title，
   /// 会被当成正式名，后续首条消息临时标题与 generated_title 都可能被挡住。
+  @override
   void syncRuntimeSnapshot({
     required String projectPath,
     required AgentConversationThreadSnapshot snapshot,
@@ -294,7 +317,7 @@ class ProjectThreadsController {
         .firstOrNull;
     if (!isAgentThreadTitlePlaceholder(threadTitle) &&
         currentTitle != threadTitle) {
-      viewModel.updateThreadTitle(
+      stateOwner.applyThreadTitle(
         projectPath: projectPath,
         threadId: sessionId,
         title: threadTitle,
@@ -307,7 +330,7 @@ class ProjectThreadsController {
           .map((thread) => thread.preview)
           .firstOrNull;
       if (currentPreview != threadPreview) {
-        viewModel.updateThreadPreview(
+        stateOwner.applyThreadPreview(
           projectPath: projectPath,
           threadId: sessionId,
           preview: threadPreview,
@@ -316,7 +339,7 @@ class ProjectThreadsController {
     }
     final runtimeStatus = _effectiveListRuntimeStatus(snapshot);
     if (runtimeStatus != null) {
-      viewModel.updateThreadRuntimeStatus(
+      stateOwner.applyThreadRuntimeStatus(
         projectPath: projectPath,
         threadId: sessionId,
         status: runtimeStatus,
@@ -350,13 +373,14 @@ class ProjectThreadsController {
   }
 
   /// 更新列表中某条 thread 的标题（供 shell 从详情侧回写）。
+  @override
   void updateThreadTitle({
     required String projectPath,
     required String threadId,
     required String? title,
   }) {
     _registerThreadMapping(projectPath, threadId);
-    viewModel.updateThreadTitle(
+    stateOwner.applyThreadTitle(
       projectPath: projectPath,
       threadId: threadId,
       title: title,
@@ -364,13 +388,14 @@ class ProjectThreadsController {
   }
 
   /// 更新列表中某条 thread 的旁文案（供 shell 从详情侧回写）。
+  @override
   void updateThreadPreview({
     required String projectPath,
     required String threadId,
     required String preview,
   }) {
     _registerThreadMapping(projectPath, threadId);
-    viewModel.updateThreadPreview(
+    stateOwner.applyThreadPreview(
       projectPath: projectPath,
       threadId: threadId,
       preview: preview,
@@ -378,6 +403,7 @@ class ProjectThreadsController {
   }
 
   /// 重命名 thread；乐观更新标题，以 `thread/name/updated` 为准。
+  @override
   Future<void> renameThread({
     required String projectPath,
     required String threadId,
@@ -403,7 +429,7 @@ class ProjectThreadsController {
             'missing thread naming port',
           );
         }
-        viewModel.updateThreadTitle(
+        stateOwner.applyThreadTitle(
           projectPath: projectPath,
           threadId: threadId,
           title: trimmed,
@@ -414,6 +440,7 @@ class ProjectThreadsController {
   }
 
   /// 归档 thread。
+  @override
   Future<void> archiveThread({
     required String projectPath,
     required String threadId,
@@ -445,6 +472,7 @@ class ProjectThreadsController {
   }
 
   /// 取消归档 thread。
+  @override
   Future<void> unarchiveThread({
     required String projectPath,
     required String threadId,
@@ -476,6 +504,7 @@ class ProjectThreadsController {
   }
 
   /// 删除 provider 端 thread；若只支持本地索引，则仅从 Zeta 列表移除。
+  @override
   Future<void> deleteThread({
     required String projectPath,
     required String threadId,
@@ -521,6 +550,7 @@ class ProjectThreadsController {
   }
 
   /// 分叉 thread，返回 Provider 创建的新会话；调用方负责登记并切换 Agent 面板。
+  @override
   Future<AgentSession?> forkThread({
     required String projectPath,
     required String threadId,
@@ -599,6 +629,7 @@ class ProjectThreadsController {
     );
   }
 
+  @override
   void dispose() {
     if (_disposed) {
       return;
@@ -625,7 +656,7 @@ class ProjectThreadsController {
 
     final token = (_loadTokens[projectPath] ?? 0) + 1;
     _loadTokens[projectPath] = token;
-    viewModel.setStateFor(
+    stateOwner.applyProjectState(
       projectPath,
       current.copyWith(
         isLoadingInitial: !append,
@@ -652,7 +683,7 @@ class ProjectThreadsController {
       if (page.threads.isEmpty &&
           page.errorMessage != null &&
           latest.threads.isNotEmpty) {
-        viewModel.setStateFor(
+        stateOwner.applyProjectState(
           projectPath,
           latest.copyWith(
             isLoadingInitial: false,
@@ -682,7 +713,7 @@ class ProjectThreadsController {
         threads: displayMerged,
         runningThreadIds: latest.runningThreadIds,
       );
-      viewModel.setStateFor(
+      stateOwner.applyProjectState(
         projectPath,
         latest.copyWith(
           hasLoaded: true,
@@ -703,7 +734,7 @@ class ProjectThreadsController {
         return;
       }
       final latest = stateFor(projectPath);
-      viewModel.setStateFor(
+      stateOwner.applyProjectState(
         projectPath,
         latest.copyWith(
           isLoadingInitial: false,
@@ -923,7 +954,7 @@ class ProjectThreadsController {
     required String threadId,
     required bool notifyCleared,
   }) {
-    final cleared = viewModel.removeThread(
+    final cleared = stateOwner.applyThreadRemoval(
       projectPath: projectPath,
       threadId: threadId,
     );
@@ -938,7 +969,7 @@ class ProjectThreadsController {
     if (projectPath == null) {
       return;
     }
-    viewModel.setThreadRunning(
+    stateOwner.applyThreadRunning(
       projectPath: projectPath,
       threadId: threadId,
       isRunning: isRunning,

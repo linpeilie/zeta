@@ -3,20 +3,140 @@ import 'dart:collection';
 import 'package:flutter/foundation.dart';
 
 import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta/src/features/project_threads/application/project_threads_state_owner.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
 
 /// Project Threads 列表的纯状态容器。
 ///
 /// 它只负责暴露和更新列表状态本身，不再直接处理会话恢复编排或分页请求策略。
-class ProjectThreadsViewModel extends ChangeNotifier {
+class ProjectThreadsViewModel extends ChangeNotifier
+    implements ProjectThreadsStateOwner {
   final Map<String, ProjectThreadListState> _states =
       <String, ProjectThreadListState>{};
   bool _disposed = false;
 
   /// 所有项目的 thread 状态快照。
+  @override
   Map<String, ProjectThreadListState> get states =>
       UnmodifiableMapView<String, ProjectThreadListState>(_states);
 
+  @override
+  void Function() subscribe(void Function() listener) {
+    addListener(listener);
+    return () => removeListener(listener);
+  }
+
+  @override
+  void applyStatesReplacement(Map<String, ProjectThreadListState> states) {
+    replaceStates(states);
+  }
+
+  @override
+  void applyProjectsRetention(List<String> projectPaths) {
+    retainProjects(projectPaths);
+  }
+
+  @override
+  void applyProjectState(String projectPath, ProjectThreadListState state) {
+    setStateFor(projectPath, state);
+  }
+
+  @override
+  void applyThreadSelection(String projectPath, String threadId) {
+    selectThreadId(projectPath, threadId);
+  }
+
+  @override
+  void applyThreadSelectionClear(String projectPath) {
+    clearSelectedThreadId(projectPath);
+  }
+
+  @override
+  void applyAllThreadSelectionsClear() {
+    clearAllSelectedThreadIds();
+  }
+
+  @override
+  void applyThreadRunning({
+    required String projectPath,
+    required String threadId,
+    required bool isRunning,
+  }) {
+    setThreadRunning(
+      projectPath: projectPath,
+      threadId: threadId,
+      isRunning: isRunning,
+    );
+  }
+
+  @override
+  void applyCompletedThreadDismissal({
+    required String projectPath,
+    required String threadId,
+  }) {
+    dismissCompletedThread(projectPath: projectPath, threadId: threadId);
+  }
+
+  @override
+  void applyThreadRuntimeStatus({
+    required String projectPath,
+    required String threadId,
+    required AgentThreadRuntimeStatus status,
+    required bool waitingOnApproval,
+    required bool waitingOnUserInput,
+  }) {
+    updateThreadRuntimeStatus(
+      projectPath: projectPath,
+      threadId: threadId,
+      status: status,
+      waitingOnApproval: waitingOnApproval,
+      waitingOnUserInput: waitingOnUserInput,
+    );
+  }
+
+  @override
+  void applyThreadTitle({
+    required String projectPath,
+    required String threadId,
+    required String? title,
+  }) {
+    updateThreadTitle(
+      projectPath: projectPath,
+      threadId: threadId,
+      title: title,
+    );
+  }
+
+  @override
+  void applyThreadPreview({
+    required String projectPath,
+    required String threadId,
+    required String preview,
+  }) {
+    updateThreadPreview(
+      projectPath: projectPath,
+      threadId: threadId,
+      preview: preview,
+    );
+  }
+
+  @override
+  bool applyThreadRemoval({
+    required String projectPath,
+    required String threadId,
+  }) {
+    return removeThread(projectPath: projectPath, threadId: threadId);
+  }
+
+  @override
+  void applyThreadPrepend({
+    required String projectPath,
+    required AgentThreadSummary thread,
+  }) {
+    prependThread(projectPath: projectPath, thread: thread);
+  }
+
+  @override
   ProjectThreadListState stateFor(String projectPath) {
     return _states[projectPath] ?? const ProjectThreadListState();
   }

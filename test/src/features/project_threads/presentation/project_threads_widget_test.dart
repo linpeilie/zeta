@@ -166,6 +166,7 @@ void main() {
         sessionSaver: session.save,
         agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
         agentProviderConfigStore: singleFakeProviderConfigStore(),
+        projectThreadsSliceEnabled: true,
       ),
     );
 

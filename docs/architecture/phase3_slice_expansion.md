@@ -50,6 +50,13 @@
 > `providerManagementSliceEnabled: true`。第 2 批风险为中高，取至少 7 天观察期，
 > 最早于 2026-08-30 关批；第 1 批仍按原窗口独立观察。任一批发生问题只回退自身
 > flag，修复复测后重新起算该批观察期。
+>
+> **第 3 批提前开工记录（2026-08-23）**：经显式要求，接受第 1、2 批仍在生产
+> 观察时启动第 3 批。当前授权只覆盖字段级契约与 3a Project Threads 的默认关闭
+> flag、切片实现和双路径对照；`main.dart` 显式保持
+> `projectThreadsSliceEnabled: false`，因此不扩大生产路径风险。3a 翻旗与 3b Usage
+> Statistics 开工分别另行推进。批次契约见
+> [第 3 批开工文档](phase3_batch3_project_threads_usage_statistics.md)。
 
 **关门标准（每批合入的条件）**，逐条来自目标架构 Phase 3 验收标准：
 
@@ -164,7 +171,7 @@ Widget 禁止订阅（§11.3 告警项 + 守卫）。
 
 | 燃尽清单 | 条目 | 随哪批清零 |
 | --- | --- | --- |
-| `knownApplicationToPresentation`（2） | `project_threads_controller` | 第 3 批 |
+| `knownApplicationToPresentation`（当前 1，基线 2） | ~~`project_threads_controller`~~ | ✅ 第 3 批 3a 已清零 |
 | | `agent_thread_workspace_controller` | 第 5 批 |
 | `knownApplicationFlutterImports`（12） | settings ×2（appearance / general controller） | 第 1 批 |
 | | `agent_provider_settings_controller`、`agent_provider_settings_port`、`agent_management_controller` | 第 2 批 |
@@ -369,6 +376,13 @@ capability 位与 UI 入口的 G4 对照表、`AgentProviderSettingsPort` 消费
   从 `IdeShellController` 构造器移到 app 组合层**（§2.6）。这些服务本身非
   ChangeNotifier、形状健康，只换装配点。分区索引 v4 与 fingerprint 增量机制
   原样（G7）。
+
+> **3a 执行记录（2026-08-23）**：Project Threads 的纯 Dart
+> state/intent/effect/reducer/store、app runner 与 presentation Riverpod adapter
+> 已落地；flag 开/关只创建一个 owner，生产入口仍为 false。既有 controller 降为
+> effect/query runner，application→presentation 燃尽基线减少一项。字段映射、
+> 生命周期、§15 答卷与删除清单见
+> [第 3 批开工文档](phase3_batch3_project_threads_usage_statistics.md)。
 
 ---
 

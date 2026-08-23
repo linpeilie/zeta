@@ -1097,6 +1097,7 @@ void main() {
       final controller = ProjectThreadsController(
         providerController: providerController,
         globalRuntime: AgentProviderGlobalRuntime(runtimeRegistry: registry),
+        stateOwner: ProjectThreadsViewModel(),
       );
       addTearDown(() {
         controller.dispose();
@@ -1163,6 +1164,7 @@ void main() {
         providerController: providerController,
         globalRuntime: AgentProviderGlobalRuntime(runtimeRegistry: registry),
         bindingManager: bindingManager,
+        stateOwner: ProjectThreadsViewModel(),
       );
       addTearDown(() async {
         controller.dispose();
@@ -1217,7 +1219,7 @@ ProjectThreadsController _createController(
   final controller = ProjectThreadsController(
     providerController: providerController,
     globalRuntime: AgentProviderGlobalRuntime(runtimeRegistry: registry),
-    viewModel: viewModel,
+    stateOwner: viewModel ?? ProjectThreadsViewModel(),
   );
   addTearDown(() {
     controller.dispose();
@@ -1255,7 +1257,7 @@ ProjectThreadsController _createMultiProviderController({
   final controller = ProjectThreadsController(
     providerController: providerController,
     globalRuntime: AgentProviderGlobalRuntime(runtimeRegistry: registry),
-    viewModel: viewModel,
+    stateOwner: viewModel ?? ProjectThreadsViewModel(),
   );
   addTearDown(() {
     controller.dispose();

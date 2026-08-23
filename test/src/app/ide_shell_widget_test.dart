@@ -21,6 +21,8 @@ import 'package:zeta/src/features/agent_management/domain/agent_management_model
 import 'package:zeta/src/features/agent_management/presentation/agent_management_page.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
+import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
+import 'package:zeta/src/features/project_threads/presentation/project_threads_slice/project_threads_slice_providers.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/settings/presentation/settings_slice/settings_slice_providers.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
@@ -882,6 +884,7 @@ void main() {
           AgentProviderConfig.defaultClaudeCode,
         );
         await tester.pump();
+        await tester.pump();
 
         expect(
           container
@@ -904,6 +907,40 @@ void main() {
       );
       expect(managementPage.sliceStore != null, sliceEnabled);
       expect(managementPage.controller != null, !sliceEnabled);
+    });
+  }
+
+  for (final sliceEnabled in const <bool>[false, true]) {
+    testWidgets('Project Threads 根组合按 flag 二选一 (slice=$sliceEnabled)', (
+      tester,
+    ) async {
+      await _pumpIde(
+        tester,
+        enableNativeWindowFrame: true,
+        enableProjectThreadsSlice: sliceEnabled,
+      );
+      final frameContext = tester.element(
+        find.byKey(const ValueKey('ide-window-frame')),
+      );
+      final container = ProviderScope.containerOf(frameContext, listen: false);
+      final store = container.read(projectThreadsSliceStoreProvider);
+
+      expect(store != null, sliceEnabled);
+      if (store != null) {
+        store.applyProjectState(
+          '/slice-probe',
+          const ProjectThreadListState(isExpanded: true),
+        );
+        await tester.pump();
+
+        expect(
+          container
+              .read(projectThreadsSliceProvider)
+              .stateFor('/slice-probe')
+              .isExpanded,
+          isTrue,
+        );
+      }
     });
   }
 
@@ -2088,6 +2125,7 @@ Future<void> _pumpIde(
   bool enableConversationSlice = false,
   bool enableSettingsSlice = false,
   bool enableProviderManagementSlice = false,
+  bool enableProjectThreadsSlice = false,
 }) async {
   tester.view
     ..physicalSize = size
@@ -2119,6 +2157,8 @@ Future<void> _pumpIde(
       settingsSliceEnabled: enableSettingsSlice,
       // Phase 3 第 2 批：测试参数控制，验证 settings + management owner 原子切换。
       providerManagementSliceEnabled: enableProviderManagementSlice,
+      // Phase 3 第 3 批 3a：验证旧 ViewModel / 新 store 只创建其一。
+      projectThreadsSliceEnabled: enableProjectThreadsSlice,
     ),
   );
   if (flushInitialUsageRefresh) {

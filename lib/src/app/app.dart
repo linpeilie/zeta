@@ -88,6 +88,7 @@ class MainApp extends StatefulWidget {
     this.conversationSliceEnabled = false,
     this.settingsSliceEnabled = false,
     this.providerManagementSliceEnabled = false,
+    this.projectThreadsSliceEnabled = false,
   });
 
   final Future<String?> Function()? directoryPicker;
@@ -145,6 +146,11 @@ class MainApp extends StatefulWidget {
   /// true 时 app 根创建 Provider settings store/runner；构造默认 false，旧
   /// controller 路径完整保留。生产入口自 2026-08-23 起显式传 true。
   final bool providerManagementSliceEnabled;
+
+  /// Phase 3 第 3 批 3a Project Threads 切片 flag；默认 false。
+  ///
+  /// true 时 Shell 只创建纯 Dart MVI store，旧 ViewModel 不实例化。
+  final bool projectThreadsSliceEnabled;
 
   /// 生产启动阶段解析并初始化的 Zeta 自有数据路径。
   ///
@@ -663,6 +669,8 @@ class MainAppState extends State<MainApp>
                       conversationSliceEnabled: widget.conversationSliceEnabled,
                       providerManagementSliceEnabled:
                           widget.providerManagementSliceEnabled,
+                      projectThreadsSliceEnabled:
+                          widget.projectThreadsSliceEnabled,
                       agentManagementTextCatalog: _agentManagementTextCatalog,
                       desktopAttentionTextCatalog: _desktopAttentionTextCatalog,
                       // 回调存储用于测试/嵌入宿主；未显式注入统计仓储时不读取本机 CLI 历史。

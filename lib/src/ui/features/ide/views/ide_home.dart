@@ -31,6 +31,8 @@ import 'package:zeta/src/features/agent_management/domain/agent_management_model
 import 'package:zeta/src/features/agent_management/domain/agent_management_text_catalog.dart';
 import 'package:zeta/src/features/agent_management/domain/fallback_agent_management_text_catalog.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
+import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
+import 'package:zeta/src/features/project_threads/presentation/project_threads_slice/project_threads_slice_providers.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
 import 'package:zeta/src/features/settings/application/agent_notification_settings_source.dart';
 import 'package:zeta/src/features/settings/application/general_settings_controller.dart';
@@ -92,6 +94,7 @@ class IdeHome extends StatefulWidget {
     this.metrics = noopZetaMetricsPort,
     this.conversationSliceEnabled = false,
     this.providerManagementSliceEnabled = false,
+    this.projectThreadsSliceEnabled = false,
     this.agentManagementTextCatalog =
         const FallbackAgentManagementTextCatalog(),
     super.key,
@@ -140,6 +143,9 @@ class IdeHome extends StatefulWidget {
   /// Phase 3 第 2 批：true 时只创建 management page store，false 时只创建旧
   /// controller。生产翻旗由 app 根统一控制。
   final bool providerManagementSliceEnabled;
+
+  /// Phase 3 第 3 批 3a：true 时 Project Threads 只创建 MVI owner。
+  final bool projectThreadsSliceEnabled;
 
   final AgentUiTextCatalog agentUiTextCatalog;
   final AgentManagementTextCatalog agentManagementTextCatalog;
@@ -244,6 +250,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
       agentUiTextCatalog: widget.agentUiTextCatalog,
       metrics: widget.metrics,
       conversationSliceEnabled: widget.conversationSliceEnabled,
+      projectThreadsSliceEnabled: widget.projectThreadsSliceEnabled,
       agentProviderSettingsPort: widget.agentProviderSettingsPort,
       activeModelCatalogLoader: widget.activeModelCatalogLoader,
     )..addListener(_handleShellChanged);
@@ -515,7 +522,14 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
       ),
     );
 
-    return body;
+    return ProviderScope(
+      overrides: [
+        projectThreadsSliceStoreProvider.overrideWithValue(
+          _shellController.projectThreadsSliceStore,
+        ),
+      ],
+      child: body,
+    );
   }
 
   List<WindowMenu> _windowMenus(BuildContext context) {
@@ -670,6 +684,10 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
 
     return Consumer(
       builder: (context, ref, _) {
+        final projectThreadsStore = ref.watch(projectThreadsSliceStoreProvider);
+        final projectThreadState = projectThreadsStore == null
+            ? _shellController.projectThreadStateFor(projectPath)
+            : ref.watch(projectThreadListStateProvider(projectPath));
         final sliceStore = ref.watch(generalSettingsSliceStoreProvider);
         if (sliceStore != null) {
           final generalSettings = ref.watch(generalSettingsSliceValueProvider);
@@ -679,6 +697,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
             projectHomeId: projectHomeId,
             selectedId: selectedId,
             generalSettings: generalSettings,
+            projectThreadState: projectThreadState,
           );
         }
         return ValueListenableBuilder<GeneralSettings>(
@@ -689,6 +708,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
             projectHomeId: projectHomeId,
             selectedId: selectedId,
             generalSettings: generalSettings,
+            projectThreadState: projectThreadState,
           ),
         );
       },
@@ -701,6 +721,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
     required String projectHomeId,
     required String selectedId,
     required GeneralSettings generalSettings,
+    required ProjectThreadListState projectThreadState,
   }) {
     return IdeRetainedPageView(
       key: const ValueKey('agent-pane-entry-stack'),
@@ -714,9 +735,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
                   key: ValueKey<String>('project-home-$projectPath'),
                   child: ProjectHomePage(
                     projectPath: projectPath,
-                    threadState: _shellController.projectThreadStateFor(
-                      projectPath,
-                    ),
+                    threadState: projectThreadState,
                     loadAvailableProviders: _loadAvailableAgentProviders,
                     onNewThread: (providerId) {
                       unawaited(
@@ -811,58 +830,82 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   }
 
   Widget _buildProjectsContent() {
-    return ProjectListPane(
-      projects: _shellController.projects,
-      activeProject: _shellController.activeProjectPath,
-      threadStateFor: _shellController.projectThreadStateFor,
-      onSelectProject: (path) {
-        unawaited(_shellController.selectKnownProject(path));
-      },
-      onSelectThread: (projectPath, thread) {
-        unawaited(_shellController.selectProjectThread(projectPath, thread));
-      },
-      onLoadMoreThreads: (projectPath) {
-        unawaited(_shellController.loadMoreThreads(projectPath));
-      },
-      onRetryThreads: (projectPath) {
-        unawaited(_shellController.retryThreads(projectPath));
-      },
-      loadAvailableProviders: _loadAvailableAgentProviders,
-      capabilitiesForProvider:
-          _shellController.agentProviderController.capabilitiesForProviderId,
-      onNewThread: (projectPath, providerId) {
-        unawaited(
-          _shellController.startNewThreadForProject(
-            projectPath,
-            providerId: providerId,
-          ),
+    return Consumer(
+      builder: (context, ref, _) {
+        final projectThreadsStore = ref.watch(projectThreadsSliceStoreProvider);
+        final projectThreadsState = projectThreadsStore == null
+            ? null
+            : ref.watch(projectThreadsSliceProvider);
+        return ProjectListPane(
+          projects: _shellController.projects,
+          activeProject: _shellController.activeProjectPath,
+          threadStateFor:
+              projectThreadsState?.stateFor ??
+              _shellController.projectThreadStateFor,
+          onSelectProject: (path) {
+            unawaited(_shellController.selectKnownProject(path));
+          },
+          onSelectThread: (projectPath, thread) {
+            unawaited(
+              _shellController.selectProjectThread(projectPath, thread),
+            );
+          },
+          onLoadMoreThreads: (projectPath) {
+            unawaited(_shellController.loadMoreThreads(projectPath));
+          },
+          onRetryThreads: (projectPath) {
+            unawaited(_shellController.retryThreads(projectPath));
+          },
+          loadAvailableProviders: _loadAvailableAgentProviders,
+          capabilitiesForProvider: _shellController
+              .agentProviderController
+              .capabilitiesForProviderId,
+          onNewThread: (projectPath, providerId) {
+            unawaited(
+              _shellController.startNewThreadForProject(
+                projectPath,
+                providerId: providerId,
+              ),
+            );
+          },
+          onOpenProjectLocation: (projectPath) {
+            unawaited(
+              _shellController.openProjectInSystemFileManager(projectPath),
+            );
+          },
+          onRemoveProject: (projectPath) {
+            unawaited(_shellController.removeProject(projectPath));
+          },
+          onRenameThread: (projectPath, threadId, name) {
+            unawaited(
+              _shellController.renameProjectThread(projectPath, threadId, name),
+            );
+          },
+          onArchiveThread: (projectPath, thread) {
+            unawaited(
+              _shellController.archiveProjectThread(projectPath, thread),
+            );
+          },
+          onUnarchiveThread: (projectPath, thread) {
+            unawaited(
+              _shellController.unarchiveProjectThread(projectPath, thread),
+            );
+          },
+          onDeleteThread: (projectPath, thread) {
+            unawaited(
+              _shellController.deleteProjectThread(projectPath, thread),
+            );
+          },
+          onForkThread: (projectPath, thread) {
+            unawaited(_shellController.forkProjectThread(projectPath, thread));
+          },
+          onDismissCompletedThread: (projectPath, threadId) {
+            _shellController.dismissCompletedProjectThread(
+              projectPath,
+              threadId,
+            );
+          },
         );
-      },
-      onOpenProjectLocation: (projectPath) {
-        unawaited(_shellController.openProjectInSystemFileManager(projectPath));
-      },
-      onRemoveProject: (projectPath) {
-        unawaited(_shellController.removeProject(projectPath));
-      },
-      onRenameThread: (projectPath, threadId, name) {
-        unawaited(
-          _shellController.renameProjectThread(projectPath, threadId, name),
-        );
-      },
-      onArchiveThread: (projectPath, thread) {
-        unawaited(_shellController.archiveProjectThread(projectPath, thread));
-      },
-      onUnarchiveThread: (projectPath, thread) {
-        unawaited(_shellController.unarchiveProjectThread(projectPath, thread));
-      },
-      onDeleteThread: (projectPath, thread) {
-        unawaited(_shellController.deleteProjectThread(projectPath, thread));
-      },
-      onForkThread: (projectPath, thread) {
-        unawaited(_shellController.forkProjectThread(projectPath, thread));
-      },
-      onDismissCompletedThread: (projectPath, threadId) {
-        _shellController.dismissCompletedProjectThread(projectPath, threadId);
       },
     );
   }

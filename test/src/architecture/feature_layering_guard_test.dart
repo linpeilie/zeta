@@ -16,11 +16,10 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   /// 允许存在的既有反向依赖（**只允许变少**）。
   ///
-  /// 这两个 controller 负责构造并持有对应 feature 的 ViewModel，属于拆包前就
-  /// 有的组合职责；随 Phase 2/3 把 ViewModel 换成切片后清掉。新增一律不允许。
+  /// 剩余 controller 负责构造并持有对应 feature 的 ViewModel，属于拆包前就
+  /// 有的组合职责；随 Phase 3 把 ViewModel 换成切片后清掉。新增一律不允许。
   const knownApplicationToPresentation = <String>{
     'lib/src/features/agent/application/agent_thread_workspace_controller.dart',
-    'lib/src/features/project_threads/application/project_threads_controller.dart',
   };
 
   /// application 仍 import Flutter 的既有文件（**只允许变少**）。
