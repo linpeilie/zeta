@@ -63,11 +63,11 @@
 > 取至少 5 天观察期，最早于 2026-08-28 关批；第 1、2、3a 的观察窗口独立计时，
 > 任一批回退不连带切换其他 flag。
 >
-> **第 3 批 3b 开工记录（2026-08-23）**：后续继续指令已推进 Usage Statistics
-> 的默认关闭切片路径。完整统计页与 Agent Usage Panel 的两个纯 Dart owner、app
-> effect runner/组合、Riverpod 只读镜像和根组合双路径对照已落地；生产入口显式
-> 保持 `usageStatisticsSliceEnabled: false`，不与 3a 共用 flag，生产翻旗仍需另行
-> 确认。
+> **第 3 批 3b 显式翻旗确认（2026-08-23）**：完整统计页与 Agent Usage Panel 的
+> 两个纯 Dart owner、app effect runner/组合、Riverpod 只读镜像和根组合双路径对照
+> 通过后，经后续“继续下一步”显式确认，`main.dart` 已传
+> `usageStatisticsSliceEnabled: true`。3b 风险为中，取至少 5 天观察期，最早于
+> 2026-08-28 关批；3a 与 3b 独立回滚、独立计时。
 
 **关门标准（每批合入的条件）**，逐条来自目标架构 Phase 3 验收标准：
 

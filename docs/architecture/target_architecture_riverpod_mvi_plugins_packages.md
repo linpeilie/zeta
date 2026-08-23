@@ -849,8 +849,9 @@ Projects Pane 的 11 个真实根组合双路径场景与 Project Home 对照均
 经后续显式确认，`projectThreadsSliceEnabled` 在生产入口已翻为 true，按中风险进入
 至少 5 天观察，最早于 2026-08-28 关批。后续继续指令已启动 Usage Statistics 3b：
 两个纯 Dart store、app effect runner/组合、Riverpod 只读镜像与 legacy/slice 根组合
-对照均已落地；`usageStatisticsSliceEnabled` 在构造默认与生产入口均保持 false，
-生产翻旗仍需另行确认。
+对照均已落地；经后续显式确认，`usageStatisticsSliceEnabled` 构造默认仍为 false，
+生产入口已于 2026-08-23 显式翻为 true，进入至少 5 天观察，最早于 2026-08-28
+关批；3a 与 3b 独立回滚、独立计时。
 开门/关门标准、六批的 owner 映射与删除清单、燃尽清单联动表见
 [Phase 3 开工文档](./phase3_slice_expansion.md)。
 

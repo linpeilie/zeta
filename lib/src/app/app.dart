@@ -159,8 +159,8 @@ class MainApp extends StatefulWidget {
 
   /// Phase 3 第 3 批 3b Usage Statistics 切片 flag；默认 false。
   ///
-  /// true 时完整统计页与左栏分别只创建一个纯 Dart MVI owner；开工阶段不改变
-  /// 生产入口。该切片依赖已启用的 Provider settings 切片读取目录。
+  /// true 时完整统计页与左栏分别只创建一个纯 Dart MVI owner；生产入口由
+  /// `main.dart` 显式决定。该切片依赖已启用的 Provider settings 切片读取目录。
   final bool usageStatisticsSliceEnabled;
 
   /// 生产启动阶段解析并初始化的 Zeta 自有数据路径。

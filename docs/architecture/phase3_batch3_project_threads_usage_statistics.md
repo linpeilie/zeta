@@ -5,15 +5,16 @@
 >
 > 开工日期：2026-08-23。
 >
-> 当前状态：**3a Project Threads 已推进到四步节奏第 3 步；3b Usage
-> Statistics 已完成第 1–2 步**。3a 新 MVI 路径、
+> 当前状态：**3a Project Threads 与 3b Usage Statistics 均已推进到四步节奏第 3
+> 步**。3a 新 MVI 路径、
 > Projects Pane 的 11 个完整交互双路径对照和 Project Home 的真实组合对照均已
 > 落地；经后续显式确认，`projectThreadsSliceEnabled` 构造默认仍为 false，生产
 > 入口已于 2026-08-23 显式翻为 true，进入至少 5 天的中风险观察，最早于
 > 2026-08-28 关批。3b 的两个纯 Dart owner、app runner/组合、Riverpod 只读镜像与
-> 根组合双路径已落地；`usageStatisticsSliceEnabled` 构造默认和生产入口均保持
-> false，尚未授权生产翻旗。旧路径仅作为独立回退保留。第 1、2 批仍各自处于
-> 生产观察期。
+> 根组合双路径已落地；经本轮显式确认，`usageStatisticsSliceEnabled` 构造默认仍为
+> false，生产入口已于 2026-08-23 显式翻为 true，同样进入至少 5 天的中风险观察，
+> 最早于 2026-08-28 关批。旧路径仅作为独立回退保留。第 1、2 批仍各自处于生产
+> 观察期。
 
 ---
 
@@ -348,8 +349,8 @@ Riverpod `autoDispose` 绝不关闭 store、runtime、Binding 或 plugin。
 
 - 3a：`projectThreadsSliceEnabled`；构造默认 false，生产入口自 2026-08-23 起显式
   true；
-- 3b：开工时新增独立 `usageStatisticsSliceEnabled`，不得借用 3a flag 原子切换两个
-  context。
+- 3b：`usageStatisticsSliceEnabled`；构造默认 false，生产入口自 2026-08-23 起显式
+  true；不得借用 3a flag 原子切换两个 context。
 
 回滚只切对应 flag，不回滚 Provider 配置、runtime、session 或持久化数据。关批后的
 回滚依赖提交 revert / 发布 tag，不恢复双写。
@@ -378,5 +379,11 @@ Riverpod adapter 已落地；QueryService、两个 query repository、quota sour
 registry 只在 slice 路径上移到 app 组合，legacy Shell 链仍作为 flag=false 回退。
 双路径只创建一个 owner，关闭时正常取消在途 `Future<void>`，Riverpod autoDispose
 只摘 listener。本轮已通过格式化、静态分析、245 项受影响测试，以及根包 2347 项与
-内部 Package 70 项完整测试。`main.dart` 显式保持
-`usageStatisticsSliceEnabled: false`；生产翻旗仍需再次取得显式确认。
+内部 Package 70 项完整测试。初始落地时 `main.dart` 显式保持
+`usageStatisticsSliceEnabled: false`，当时尚未授权生产翻旗。
+
+**3b 生产翻旗记录（2026-08-23）**：完成双路径对照与完整门禁后，经本轮“继续下一步”
+显式确认，`main.dart` 已传 `usageStatisticsSliceEnabled: true`。3b 按中风险取至少 5
+天观察期，最早于 2026-08-28 关批；若回退则只把该 flag 拨回 false，修复并复测后
+重新起算，不连带切换 3a 或其他批次。翻旗后格式化、静态分析与 167 项受影响测试
+均通过，其中包含 Usage Statistics 根组合的 legacy/slice 双路径对照。

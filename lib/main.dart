@@ -98,8 +98,8 @@ void main() {
           // Phase 3 第 3 批 3a：经显式确认后生产启用 Project Threads 切片，
           // 进入中风险观察；回退时改回 false，无需数据迁移。
           projectThreadsSliceEnabled: true,
-          // Phase 3 第 3 批 3b：先挂默认关闭 flag 做双路径对照；尚未授权生产翻旗。
-          usageStatisticsSliceEnabled: false,
+          // Phase 3 第 3 批 3b：经显式确认切到新路径，进入中风险观察；回退时改回 false。
+          usageStatisticsSliceEnabled: true,
         ),
       );
     },
