@@ -7,6 +7,7 @@ import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
 
 import '../../../testing/fixture_reader.dart';
 import '../../../testing/agent_conversation_binding_test_harness.dart';
@@ -242,6 +243,9 @@ void main() {
           providerController: providerController,
           conversationBinding: firstBinding.binding,
           globalRuntime: bindingHarness.globalRuntime,
+          composerStateOwner: AgentConversationComposerStateOwner.create(
+            providerController: providerController,
+          ),
           initialProjectPath: '/repo',
           initialThread: firstThread,
           uiFrameScheduler: FakeAgentFrameScheduler(),
@@ -250,6 +254,9 @@ void main() {
           providerController: providerController,
           conversationBinding: secondBinding.binding,
           globalRuntime: bindingHarness.globalRuntime,
+          composerStateOwner: AgentConversationComposerStateOwner.create(
+            providerController: providerController,
+          ),
           initialProjectPath: '/repo',
           initialThread: secondThread,
           uiFrameScheduler: FakeAgentFrameScheduler(),
@@ -348,6 +355,9 @@ void main() {
           providerController: providerController,
           conversationBinding: firstBinding.binding,
           globalRuntime: bindingHarness.globalRuntime,
+          composerStateOwner: AgentConversationComposerStateOwner.create(
+            providerController: providerController,
+          ),
           initialProjectPath: '/repo',
           initialThread: firstThread,
           uiFrameScheduler: FakeAgentFrameScheduler(),
@@ -356,6 +366,9 @@ void main() {
           providerController: providerController,
           conversationBinding: secondBinding.binding,
           globalRuntime: bindingHarness.globalRuntime,
+          composerStateOwner: AgentConversationComposerStateOwner.create(
+            providerController: providerController,
+          ),
           initialProjectPath: '/repo',
           initialThread: secondThread,
           uiFrameScheduler: FakeAgentFrameScheduler(),
@@ -451,6 +464,9 @@ void main() {
           providerController: providerController,
           conversationBinding: bindingLease.binding,
           globalRuntime: bindingHarness.globalRuntime,
+          composerStateOwner: AgentConversationComposerStateOwner.create(
+            providerController: providerController,
+          ),
           initialProjectPath: '/repo',
           initialThread: thread,
           onCreatedThread:

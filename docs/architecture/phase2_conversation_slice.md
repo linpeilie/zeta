@@ -6,6 +6,12 @@
 >
 > 规则优先级：`AGENTS.md` > `engineering_standards.md` > 本文件。
 
+> **后续状态（2026-08-23）**：本文件 §1、§9 记录的是 Phase 2 当时的灰度方案。
+> Phase 3 第 5 批已直接关批：所有 workspace entry 必建 SliceBinding，旧 ViewModel
+> UI 直连、`conversationSliceEnabled`、enabled provider 与 nullable resolver 均已删除。
+> 当前契约以
+> [第 5 批关批文档](phase3_batch5_desktop_attention_conversation_workspace.md) 为准。
+
 ---
 
 ## 0. 前置条件对照

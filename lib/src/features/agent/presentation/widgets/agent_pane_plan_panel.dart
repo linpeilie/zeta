@@ -25,16 +25,13 @@ class _AgentActivePlanSection extends StatelessWidget {
       child: AgentRegionBuilder<AgentHeaderState>(
         viewModel: viewModel,
         selector: agentConversationHeaderProvider.call,
-        legacyListenable: viewModel.headerStateListenable,
         builder: (context, _) =>
             AgentRegionBuilder<AgentPendingInteractionState>(
               viewModel: viewModel,
               selector: agentConversationPendingInteractionProvider.call,
-              legacyListenable: viewModel.pendingInteractionStateListenable,
               builder: (context, _) => AgentRegionBuilder<AgentExpansionState>(
                 viewModel: viewModel,
                 selector: agentConversationExpansionProvider.call,
-                legacyListenable: viewModel.expansionStateListenable,
                 builder: (context, _) => ListenableBuilder(
                   listenable: viewModel.liveTurnListenable,
                   builder: (context, _) {

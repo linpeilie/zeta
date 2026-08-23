@@ -1,6 +1,6 @@
 # Agent 桌面通知与任务栏未读提醒详细设计
 
-最后更新：2026-08-04
+最后更新：2026-08-24
 
 ## 1. 背景与目标
 
@@ -79,19 +79,22 @@ Provider data adapter
       -> AgentTurnCompletedEffect / AgentAttentionEffect
         -> AgentConversationEffectRunner
           -> AgentConversationViewModel
-            -> AgentThreadWorkspaceController（补 provider/project/thread 上下文）
+            -> AgentConversationWorkspaceStore（补 provider/project/thread 上下文）
               -> IdeShellController callback
-                -> DesktopAttentionController
-                   |-- GeneralSettingsController
-                   |-- DesktopNotificationService
-                   |     -> flutter_local_notifications
-                   |-- DesktopAttentionIndicator
-                   |     -> zeta/desktop_attention MethodChannel
-                   `-- IdeHome visibility + target activator
+                -> DesktopAttentionSliceStore + pure reducer
+                   -> typed effect
+                     -> app DesktopAttentionSliceRunner
+                        |-- AgentNotificationSettingsSource
+                        |-- DesktopNotificationService
+                        |     -> flutter_local_notifications
+                        |-- DesktopAttentionIndicator
+                        |     -> zeta/desktop_attention MethodChannel
+                        `-- IdeHome target activator relay
 ```
 
 依赖方向为 `presentation/application -> domain`、`data -> domain`、`app -> data`。
-`DesktopAttentionController` 只依赖端口，既不依赖 Widget，也不识别 Codex/Grok 原始协议。
+feature reducer/store 不依赖 Widget、系统通知实现或 Provider 原始协议；系统端口只在 app
+runner 组装。Riverpod provider 只镜像 store，不拥有未读状态。
 
 ## 5. 核心模型
 
@@ -151,7 +154,8 @@ Unread -- duplicate identity --> Unread（no-op）
 Unread -- category disabled --> Absent + cancel system notification
 ```
 
-`DesktopAttentionController` 以 `Map<String, _UnreadAttention>` 保存进程内未读：
+`DesktopAttentionSliceStore` 以不可变 `DesktopAttentionSliceState` 保存进程内未读，
+纯 reducer 负责状态转移并产出 typed effect，app 组合层的 runner 独占系统端口：
 
 1. `resolved` 优先处理，不受开关和可见性影响；
 2. 关闭总开关或对应分类时不接受新信号；

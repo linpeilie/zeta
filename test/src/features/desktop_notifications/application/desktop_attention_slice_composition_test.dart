@@ -4,8 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta/src/app/localization/zeta_text_catalogs.dart';
+import 'package:zeta/src/app/desktop_attention_slice/desktop_attention_slice_composition.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta/src/features/desktop_notifications/application/desktop_attention_controller.dart';
+import 'package:zeta/src/features/desktop_notifications/application/desktop_attention_slice_store.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_models.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_text_catalog.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/fallback_desktop_attention_text_catalog.dart';
@@ -21,7 +22,7 @@ void main() {
       final harness = await _createHarness();
       addTearDown(harness.dispose);
       final attention = _attention();
-      harness.controller.updateVisibility(
+      await harness.store.updateVisibility(
         const DesktopAttentionVisibility(
           windowFocused: true,
           agentCanvasVisible: true,
@@ -30,16 +31,16 @@ void main() {
         ),
       );
 
-      await harness.controller.handleAttention(attention);
+      await harness.store.handleAttention(attention);
 
       expect(harness.notifications.shown, isEmpty);
-      expect(harness.controller.unreadCount, 0);
+      expect(harness.store.unreadCount, 0);
 
-      harness.controller.updateVisibility(
+      await harness.store.updateVisibility(
         const DesktopAttentionVisibility(windowFocused: false),
       );
-      await harness.controller.handleAttention(attention);
-      await harness.controller.handleAttention(attention);
+      await harness.store.handleAttention(attention);
+      await harness.store.handleAttention(attention);
 
       expect(harness.notifications.shown, hasLength(1));
       expect(harness.notifications.shown.single.title, '任务已完成');
@@ -48,7 +49,7 @@ void main() {
         harness.notifications.shown.single.body,
         isNot(contains('secret')),
       );
-      expect(harness.controller.unreadCount, 1);
+      expect(harness.store.unreadCount, 1);
       expect(harness.indicator.counts.last, 1);
       expect(harness.indicator.attentionRequests, 1);
     },
@@ -57,15 +58,15 @@ void main() {
   test('resolved signal cancels the notification and clears unread', () async {
     final harness = await _createHarness();
     addTearDown(harness.dispose);
-    await harness.controller.handleAttention(_attention());
+    await harness.store.handleAttention(_attention());
     final shownId = harness.notifications.shown.single.id;
 
-    await harness.controller.handleAttention(
+    await harness.store.handleAttention(
       _attention(phase: AgentAttentionPhase.resolved),
     );
 
     expect(harness.notifications.cancelledIds, <int>[shownId]);
-    expect(harness.controller.unreadCount, 0);
+    expect(harness.store.unreadCount, 0);
     expect(harness.indicator.counts.last, 0);
   });
 
@@ -78,14 +79,14 @@ void main() {
       },
     );
     addTearDown(harness.dispose);
-    await harness.controller.handleAttention(
+    await harness.store.handleAttention(
       _attention(kind: AgentAttentionKind.permissionRequired),
     );
 
     await harness.notifications.activateLast();
 
     expect(activations, <(String, String)>[('codex', 'thread-1')]);
-    expect(harness.controller.unreadCount, 0);
+    expect(harness.store.unreadCount, 0);
     expect(harness.notifications.cancelledIds, hasLength(1));
   });
 
@@ -112,17 +113,17 @@ void main() {
   test('category switches clear and suppress matching notifications', () async {
     final harness = await _createHarness();
     addTearDown(harness.dispose);
-    await harness.controller.handleAttention(_attention());
-    expect(harness.controller.unreadCount, 1);
+    await harness.store.handleAttention(_attention());
+    expect(harness.store.unreadCount, 1);
 
     await harness.settings.setTurnTerminalNotificationsEnabled(false);
     await pumpEventQueue();
 
-    expect(harness.controller.unreadCount, 0);
-    await harness.controller.handleAttention(_attention(sourceId: 'turn-2'));
+    expect(harness.store.unreadCount, 0);
+    await harness.store.handleAttention(_attention(sourceId: 'turn-2'));
     expect(harness.notifications.shown, hasLength(1));
 
-    await harness.controller.handleAttention(
+    await harness.store.handleAttention(
       _attention(
         kind: AgentAttentionKind.questionRequired,
         sourceId: 'question-1',
@@ -169,8 +170,8 @@ void main() {
         addTearDown(zhHarness.dispose);
         addTearDown(enHarness.dispose);
 
-        await zhHarness.controller.handleAttention(_attention(kind: kind));
-        await enHarness.controller.handleAttention(_attention(kind: kind));
+        await zhHarness.store.handleAttention(_attention(kind: kind));
+        await enHarness.store.handleAttention(_attention(kind: kind));
 
         final zhRequest = zhHarness.notifications.shown.single;
         final enRequest = enHarness.notifications.shown.single;
@@ -201,7 +202,7 @@ void main() {
     );
     addTearDown(enHarness.dispose);
 
-    await enHarness.controller.handleAttention(_attention(projectPath: ''));
+    await enHarness.store.handleAttention(_attention(projectPath: ''));
 
     expect(
       enHarness.notifications.shown.single.body,
@@ -223,7 +224,7 @@ Future<_Harness> _createHarness({
   final settings = GeneralSettingsController(
     store: MemoryGeneralSettingsStore(),
   );
-  final controller = DesktopAttentionController(
+  final composition = DesktopAttentionSliceComposition.create(
     notificationService: notifications,
     indicator: indicator,
     notificationSettingsSource: GeneralSettingsControllerNotificationSource(
@@ -232,9 +233,9 @@ Future<_Harness> _createHarness({
     activateTarget: activateTarget ?? (_, _) async => true,
     textCatalog: textCatalog,
   );
-  await controller.initialize();
+  await composition.initialize();
   return _Harness(
-    controller: controller,
+    composition: composition,
     notifications: notifications,
     indicator: indicator,
     settings: settings,
@@ -263,19 +264,20 @@ AgentWorkspaceAttention _attention({
 
 final class _Harness {
   const _Harness({
-    required this.controller,
+    required this.composition,
     required this.notifications,
     required this.indicator,
     required this.settings,
   });
 
-  final DesktopAttentionController controller;
+  final DesktopAttentionSliceComposition composition;
+  DesktopAttentionSliceStore get store => composition.store;
   final _FakeNotificationService notifications;
   final _FakeAttentionIndicator indicator;
   final GeneralSettingsController settings;
 
   void dispose() {
-    controller.dispose();
+    composition.dispose();
     settings.dispose();
   }
 }

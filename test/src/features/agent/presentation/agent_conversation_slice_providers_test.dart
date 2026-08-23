@@ -5,6 +5,7 @@ import 'package:zeta/src/features/agent/application/conversation_slice/agent_con
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_intent.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_state.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
@@ -26,25 +27,17 @@ const _draftKey = AgentConversationBindingKey.draft(
 
 void main() {
   group('Agent conversation slice providers', () {
-    test('默认关闭：任何 key 都没有 store', () {
+    test('组合根未注入注册表时 fail-closed', () {
       final container = ProviderContainer();
       addTearDown(container.dispose);
 
       expect(
-        container.read(agentConversationSliceEnabledProvider(_firstKey)),
-        isFalse,
-      );
-      expect(
         () => container.read(agentConversationSliceProvider(_firstKey)),
-        throwsA(
-          predicate<Object>(
-            (error) => error.toString().contains('No conversation slice store'),
-          ),
-        ),
+        throwsA(isA<Object>()),
       );
     });
 
-    test('开关按 workspace entry 生效，同一容器里可以只开一个', () {
+    test('未知 BindingKey 不会静默走旧路径', () {
       final store = _store('会话一');
       addTearDown(store.dispose);
       final container = _container(
@@ -54,12 +47,12 @@ void main() {
       );
 
       expect(
-        container.read(agentConversationSliceEnabledProvider(_firstKey)),
-        isTrue,
+        container.read(agentConversationHeaderProvider(_firstKey)).title,
+        '会话一',
       );
       expect(
-        container.read(agentConversationSliceEnabledProvider(_secondKey)),
-        isFalse,
+        () => container.read(agentConversationSliceProvider(_secondKey)),
+        throwsA(isA<Object>()),
       );
     });
 
@@ -236,11 +229,15 @@ void main() {
 ProviderContainer _container(
   Map<AgentConversationBindingKey, AgentConversationSliceStore> stores,
 ) {
+  final registry = AgentConversationSliceStoreRegistry()
+    ..bind(
+      (key) =>
+          stores[key] ??
+          (throw StateError('No conversation slice store registered for $key')),
+    );
   final container = ProviderContainer(
     overrides: [
-      agentConversationSliceStoreResolverProvider.overrideWith(
-        () => AgentConversationSliceStoreResolverNotifier((key) => stores[key]),
-      ),
+      agentConversationSliceStoreRegistryProvider.overrideWithValue(registry),
     ],
   );
   addTearDown(container.dispose);

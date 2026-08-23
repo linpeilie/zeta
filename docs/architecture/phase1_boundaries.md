@@ -155,7 +155,7 @@ presentation 与 shell 组合。
 | ~~`ui/core` → generated l10n~~ | ~~5~~ → 0 | ✅ 已改为注入 `ZetaUiTextCatalog` |
 | ~~`ui/core` → `dart:io`~~ | ~~1~~ → 0 | ✅ 图片预览封装留在 app 侧 |
 | ~~agent `application` → agent `data`~~ | ~~3~~ → 0 | ✅ turn context 端口下沉；静态能力随 settings controller 留在 app |
-| ~~agent `application` → presentation / workspace~~ | ~~2~~ → 0 | ✅ `agent_thread_workspace_controller` 本就是 app 级组合对象，不进内核 |
+| ~~agent `application` → presentation / workspace~~ | ~~2~~ → 0 | ✅ 第 5 批将 workspace runtime composition 迁入 `app/conversation_workspace_slice`，旧 application 文件已删除 |
 | ~~`core/` → `dart:io` / Flutter~~ | ~~8~~ → 0 | ✅ 2026-08-23 清零：IO 实现下沉到 `app/storage`（AtomicTextFile、目录创建）、`app/logging`（宿主日志）、`ui/core`（系统文件管理器）；`ZetaDataPaths` 纯 String 化，脱敏与目录过滤改为注入参数，feature 层日志改走 `zetaLoggerFor` |
 | `zeta_agent_core` 依赖 `flutter/foundation` | 17 个文件 | `ChangeNotifier` / `ValueListenable`，随 Phase 2/3 的 MVI 切片移除（见 §6 偏差 5） |
 

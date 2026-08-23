@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:meta/meta.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// Skill 目录加载状态。
@@ -54,7 +54,7 @@ final class AgentSkillsCatalogState {
 }
 
 /// 编排 Skill 目录的 stale-while-revalidate 与失效刷新。
-final class AgentSkillsCatalogController extends ChangeNotifier {
+final class AgentSkillsCatalogController {
   AgentSkillsCatalogState _state = AgentSkillsCatalogState(
     status: AgentSkillsLoadStatus.unavailable,
     catalog: AgentSkillsCatalog.empty,
@@ -66,6 +66,15 @@ final class AgentSkillsCatalogController extends ChangeNotifier {
   String? _inFlightKey;
   int _generation = 0;
   bool _disposed = false;
+  final List<void Function()> _listeners = <void Function()>[];
+
+  void addListener(void Function() listener) {
+    if (!_disposed && !_listeners.contains(listener)) {
+      _listeners.add(listener);
+    }
+  }
+
+  void removeListener(void Function() listener) => _listeners.remove(listener);
 
   AgentSkillsCatalogState get state => _state;
 
@@ -244,7 +253,9 @@ final class AgentSkillsCatalogController extends ChangeNotifier {
       return;
     }
     _state = next;
-    notifyListeners();
+    for (final listener in List<void Function()>.of(_listeners)) {
+      listener();
+    }
   }
 
   static String _cacheKey({
@@ -263,13 +274,15 @@ final class AgentSkillsCatalogController extends ChangeNotifier {
     return trimmed;
   }
 
-  @override
   void dispose() {
+    if (_disposed) {
+      return;
+    }
     _disposed = true;
     _generation += 1;
     unawaited(_changedSubscription?.cancel());
     _changedSubscription = null;
     _port = null;
-    super.dispose();
+    _listeners.clear();
   }
 }

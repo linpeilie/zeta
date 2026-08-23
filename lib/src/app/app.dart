@@ -14,6 +14,8 @@ import 'package:window_manager/window_manager.dart';
 import 'package:zeta/src/app/app_constants.dart';
 import 'package:zeta/src/app/composition/agent_resource_shutdown.dart';
 import 'package:zeta/src/app/composition/zeta_state_snapshot.dart';
+import 'package:zeta/src/app/desktop_attention_slice/desktop_attention_slice_composition.dart';
+import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_workspace_providers.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:zeta/src/app/composition/app_dependencies.dart';
@@ -32,14 +34,20 @@ import 'package:zeta/src/features/agent/data/agent_provider_config_codec.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/data/agent_turn_context_store.dart';
 import 'package:zeta/src/features/agent/presentation/provider_settings_slice/agent_model_catalog_projection_providers.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
 import 'package:zeta/src/features/agent/presentation/provider_settings_slice/agent_provider_settings_slice_providers.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_models.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_text_catalog.dart';
+import 'package:zeta/src/features/desktop_notifications/data/flutter_desktop_notification_service.dart';
+import 'package:zeta/src/features/desktop_notifications/data/method_channel_desktop_attention_indicator.dart';
+import 'package:zeta/src/features/desktop_notifications/presentation/desktop_attention_slice_providers.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_text_catalog.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/ide_session/presentation/ide_session_slice/ide_session_slice_providers.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
+import 'package:zeta/src/features/settings/application/agent_notification_settings_source.dart';
 import 'package:zeta/src/features/settings/application/general_settings_controller.dart';
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
 import 'package:zeta/src/features/settings/data/general_settings_store.dart';
@@ -90,7 +98,6 @@ class MainApp extends StatefulWidget {
     this.desktopAttentionIndicator,
     this.turnContextStore,
     this.observability,
-    this.conversationSliceEnabled = false,
     this.settingsSliceEnabled = false,
     this.providerManagementSliceEnabled = false,
   });
@@ -132,12 +139,6 @@ class MainApp extends StatefulWidget {
 
   /// app 级可观测性组合；默认关闭采集，探针退化为 no-op。
   final ZetaObservability? observability;
-
-  /// Phase 2 切片的 feature flag（全局生效）。
-  ///
-  /// false = 全应用走旧 ViewModel 直连路径（测试默认）；生产由 `main` 显式传 true，
-  /// 回退时改回 false 即可。
-  final bool conversationSliceEnabled;
 
   /// Phase 3 第 1 批 settings 切片的 feature flag（全局生效，默认 false）。
   ///
@@ -192,6 +193,19 @@ class MainAppState extends State<MainApp>
   /// Phase 3 第 4 批 4b 组合；IDE Session 的唯一运行态 owner。
   late final IdeSessionSliceComposition _ideSessionSliceComposition;
 
+  /// Phase 3 第 5 批：Desktop Attention 的唯一状态与副作用组合。
+  DesktopAttentionSliceComposition? _desktopAttentionSliceComposition;
+  final DesktopAttentionTargetActivatorRelay
+  _desktopAttentionTargetActivatorRelay =
+      DesktopAttentionTargetActivatorRelay();
+
+  /// 在 `IdeHome.initState` 同步接入 Workspace，保证首个会话 build 只有新路径。
+  final AgentConversationSliceStoreRegistry _conversationSliceStoreRegistry =
+      AgentConversationSliceStoreRegistry();
+  final AgentConversationWorkspaceStoreRegistry
+  _conversationWorkspaceStoreRegistry =
+      AgentConversationWorkspaceStoreRegistry();
+
   /// 诊断/恢复测试按需读取 Shell 投影的桥；没有 listener，不参与 Widget rebuild。
   final ZetaShellStateSnapshotRelay _shellStateSnapshotRelay =
       ZetaShellStateSnapshotRelay();
@@ -236,6 +250,9 @@ class MainAppState extends State<MainApp>
       ideSession: _ideSessionSliceComposition.store.state,
       usageStatistics: usageComposition.usageStatisticsStore.state,
       agentUsagePanel: usageComposition.agentUsagePanelStore.state,
+      desktopAttention: ZetaDesktopAttentionStateSnapshot.fromState(
+        _requiredDesktopAttentionComposition.store.state,
+      ),
       appearanceSettings: _settingsSliceComposition?.appearanceStore.state,
       generalSettings: _settingsSliceComposition?.generalStore.state,
       providerSettings: _providerSettingsSliceComposition?.store.state,
@@ -480,6 +497,28 @@ class MainAppState extends State<MainApp>
       agentUsagePanelRepository: widget.agentUsagePanelRepository,
       textCatalog: _usageStatisticsTextCatalog,
     );
+    _desktopAttentionSliceComposition ??=
+        DesktopAttentionSliceComposition.create(
+          notificationService:
+              widget.desktopNotificationService ??
+              (widget.enableNativeWindowFrame
+                  ? FlutterDesktopNotificationService(
+                      linuxActionName: _desktopAttentionTextCatalog.linuxAction,
+                    )
+                  : const NoopDesktopNotificationService()),
+          indicator:
+              widget.desktopAttentionIndicator ??
+              (widget.enableNativeWindowFrame
+                  ? MethodChannelDesktopAttentionIndicator()
+                  : const NoopDesktopAttentionIndicator()),
+          notificationSettingsSource:
+              _settingsSliceComposition?.notificationSettingsSource ??
+              GeneralSettingsControllerNotificationSource(
+                _generalSettingsController,
+              ),
+          activateTarget: _desktopAttentionTargetActivatorRelay.call,
+          textCatalog: _desktopAttentionTextCatalog,
+        );
     _localeRuntimeReady = true;
   }
 
@@ -517,6 +556,8 @@ class MainAppState extends State<MainApp>
     }
     _usageStatisticsSliceComposition?.dispose();
     _usageStatisticsSliceComposition = null;
+    _desktopAttentionSliceComposition?.dispose();
+    _desktopAttentionSliceComposition = null;
     _providerSettingsSliceComposition?.dispose();
     _providerSettingsSliceComposition = null;
     unawaited(_shutdownOwnedAgentResources());
@@ -569,6 +610,7 @@ class MainAppState extends State<MainApp>
     final settingsComposition = _settingsSliceComposition;
     final providerSettingsComposition = _providerSettingsSliceComposition;
     final usageStatisticsComposition = _usageStatisticsSliceComposition;
+    final desktopAttentionComposition = _desktopAttentionSliceComposition;
 
     // 根 `ProviderScope` 由 MainApp 自己提供，而不是放在 `main.dart`：
     // 那样每个 pump MainApp 的测试都要自己补一层，接线一旦漏掉就是运行期
@@ -577,16 +619,23 @@ class MainAppState extends State<MainApp>
       // Riverpod 只允许原地更新等长的 overrides。等待持久化语言时，Provider
       // 管理切片会在首帧之后才完成组合；此时用新 key 替换仍处于启动页的容器，
       // 避免对旧容器追加 overrides。IdeHome 尚未挂载，因此不会丢失工作区状态。
-      key: ValueKey<(bool, bool, bool)>((
+      key: ValueKey<(bool, bool, bool, bool)>((
         settingsComposition != null,
         providerSettingsComposition != null,
         usageStatisticsComposition != null,
+        desktopAttentionComposition != null,
       )),
       observers: widget.observability?.providerObservers,
       overrides: [
         zetaMetricsPortProvider.overrideWithValue(_metrics),
         ideSessionSliceStoreProvider.overrideWithValue(
           _ideSessionSliceComposition.store,
+        ),
+        agentConversationSliceStoreRegistryProvider.overrideWithValue(
+          _conversationSliceStoreRegistry,
+        ),
+        agentConversationWorkspaceStoreRegistryProvider.overrideWithValue(
+          _conversationWorkspaceStoreRegistry,
         ),
         if (settingsComposition case final composition?) ...[
           appearanceSettingsSliceStoreProvider.overrideWithValue(
@@ -612,6 +661,10 @@ class MainAppState extends State<MainApp>
             composition.agentUsagePanelStore,
           ),
         ],
+        if (desktopAttentionComposition case final composition?)
+          desktopAttentionSliceStoreProvider.overrideWithValue(
+            composition.store,
+          ),
       ],
       child: _buildApp(context),
     );
@@ -693,10 +746,14 @@ class MainAppState extends State<MainApp>
                       agentProviderFactory: _agentProviderFactory,
                       agentProviderRuntimeRegistry:
                           _agentProviderRuntimeRegistry,
-                      desktopNotificationService:
-                          widget.desktopNotificationService,
-                      desktopAttentionIndicator:
-                          widget.desktopAttentionIndicator,
+                      desktopAttentionSliceComposition:
+                          _requiredDesktopAttentionComposition,
+                      desktopAttentionTargetActivatorRelay:
+                          _desktopAttentionTargetActivatorRelay,
+                      conversationSliceStoreRegistry:
+                          _conversationSliceStoreRegistry,
+                      conversationWorkspaceStoreRegistry:
+                          _conversationWorkspaceStoreRegistry,
                       agentProviderConfigStore: _agentProviderConfigStore,
                       agentProviderSettingsPort:
                           _providerSettingsSliceComposition?.store,
@@ -717,19 +774,15 @@ class MainAppState extends State<MainApp>
                           openPathInSystemFileManager,
                       appearanceController: _appearanceController,
                       generalSettingsController: _generalSettingsController,
-                      notificationSettingsSource:
-                          _settingsSliceComposition?.notificationSettingsSource,
                       usageStatisticsSliceComposition:
                           _requiredUsageStatisticsComposition,
                       agentModelCatalogRepository: _agentModelCatalogRepository,
                       turnContextStore: _turnContextStore,
                       agentUiTextCatalog: _agentUiTextCatalog,
                       metrics: _metrics,
-                      conversationSliceEnabled: widget.conversationSliceEnabled,
                       providerManagementSliceEnabled:
                           widget.providerManagementSliceEnabled,
                       agentManagementTextCatalog: _agentManagementTextCatalog,
-                      desktopAttentionTextCatalog: _desktopAttentionTextCatalog,
                       // 回调存储用于测试/嵌入宿主；未显式注入统计仓储时不读取本机 CLI 历史。
                       enableAgentUsageAutoRefresh:
                           !_usesCallbackPersistence ||
@@ -758,6 +811,10 @@ class MainAppState extends State<MainApp>
   UsageStatisticsSliceComposition get _requiredUsageStatisticsComposition =>
       _usageStatisticsSliceComposition ??
       (throw StateError('Usage Statistics composition is not ready'));
+
+  DesktopAttentionSliceComposition get _requiredDesktopAttentionComposition =>
+      _desktopAttentionSliceComposition ??
+      (throw StateError('Desktop Attention composition is not ready'));
 
   Future<List<AgentProviderConfig>> _loadEnabledAgentUsageProviders() async {
     final providerSettings = _providerSettingsSliceComposition?.store;

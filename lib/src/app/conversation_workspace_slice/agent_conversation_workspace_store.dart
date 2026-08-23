@@ -1,11 +1,12 @@
 import 'dart:async';
-import 'dart:collection';
 
-import 'package:flutter/foundation.dart';
-
+import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_workspace_intent.dart';
+import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_workspace_reducer.dart';
+import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_workspace_state.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_binding.dart';
@@ -72,7 +73,7 @@ final class AgentThreadWorkspaceDraftKey extends AgentThreadWorkspaceKey {
 ///
 /// 一个 entry 对应独立的 Binding 与 conversation view model；Provider 设置由
 /// Workspace 共享，entryId 在草稿晋升为真实 thread 后保持不变。
-class AgentThreadWorkspaceEntry extends ChangeNotifier {
+final class AgentThreadWorkspaceEntry {
   AgentThreadWorkspaceEntry({
     required this.entryId,
     required this._key,
@@ -80,7 +81,7 @@ class AgentThreadWorkspaceEntry extends ChangeNotifier {
     required this.providerController,
     required this.bindingLease,
     required this.viewModel,
-    this.sliceBinding,
+    required this.sliceBinding,
   }) : _threadSnapshot = viewModel.threadSnapshot {
     viewModel.threadSnapshotListenable.addListener(_handleRuntimeChanged);
     providerController.addListener(_handleRuntimeChanged);
@@ -91,13 +92,10 @@ class AgentThreadWorkspaceEntry extends ChangeNotifier {
   final AgentConversationBindingLease bindingLease;
   final AgentConversationViewModel viewModel;
 
-  /// Phase 2 切片接线；为 null 表示这个 entry 仍走旧 ViewModel 直连路径。
-  ///
-  /// **按 entry 生效**：某个会话出问题时只撤掉它的 binding，其余不受影响。
-  final AgentConversationSliceBinding? sliceBinding;
+  /// Conversation Slice 是每个 entry 的必选接线，不存在旧 ViewModel 回退路径。
+  final AgentConversationSliceBinding sliceBinding;
 
-  /// 该 entry 的切片 store；未启用时为 null。
-  AgentConversationSliceStore? get sliceStore => sliceBinding?.store;
+  AgentConversationSliceStore get sliceStore => sliceBinding.store;
 
   AgentConversationBinding get binding => bindingLease.binding;
 
@@ -105,6 +103,15 @@ class AgentThreadWorkspaceEntry extends ChangeNotifier {
   AgentThreadWorkspaceKey _key;
   AgentConversationThreadSnapshot _threadSnapshot;
   bool _disposed = false;
+  final List<void Function()> _listeners = <void Function()>[];
+
+  void addListener(void Function() listener) {
+    if (!_disposed && !_listeners.contains(listener)) {
+      _listeners.add(listener);
+    }
+  }
+
+  void removeListener(void Function() listener) => _listeners.remove(listener);
 
   AgentThreadWorkspaceKey get key => _key;
 
@@ -121,6 +128,16 @@ class AgentThreadWorkspaceEntry extends ChangeNotifier {
   };
 
   bool get isDraft => _key is AgentThreadWorkspaceDraftKey;
+
+  AgentConversationWorkspaceEntryState get state =>
+      AgentConversationWorkspaceEntryState(
+        entryId: entryId,
+        projectPath: projectPath,
+        providerId: providerId,
+        threadId: threadId,
+        bindingKey: binding.key,
+        threadSnapshot: threadSnapshot,
+      );
 
   /// 将 entry 绑定到新的项目草稿身份。
   void applyDraftIdentity({
@@ -176,7 +193,6 @@ class AgentThreadWorkspaceEntry extends ChangeNotifier {
     }
   }
 
-  @override
   void dispose() {
     if (_disposed) {
       return;
@@ -185,22 +201,27 @@ class AgentThreadWorkspaceEntry extends ChangeNotifier {
     viewModel.threadSnapshotListenable.removeListener(_handleRuntimeChanged);
     providerController.removeListener(_handleRuntimeChanged);
     // 切片先于 ViewModel 释放：它订阅了 ViewModel 的 region listenable。
-    sliceBinding?.dispose();
+    sliceBinding.dispose();
     viewModel.dispose();
     unawaited(bindingLease.release());
-    super.dispose();
+    _listeners.clear();
   }
 
   void _notify() {
     if (!_disposed) {
-      notifyListeners();
+      for (final listener in List<void Function()>.of(_listeners)) {
+        listener();
+      }
     }
   }
 }
 
-/// 管理 Agent Canvas 中多个常驻 thread/draft 运行时。
-class AgentThreadWorkspaceController extends ChangeNotifier {
-  AgentThreadWorkspaceController({
+/// Conversation Workspace 的唯一运行时与状态 owner。
+///
+/// reducer 只处理不可变状态；Binding、ViewModel 与 SliceBinding 的创建/释放留在
+/// 本 app 组合层 store。Shell 只订阅这个 owner，不再逐 entry 维护镜像监听表。
+final class AgentConversationWorkspaceStore {
+  AgentConversationWorkspaceStore({
     required this.providerController,
     required this.workspaceFileCorpus,
     required this.runtimeRegistry,
@@ -213,7 +234,7 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
     this.turnContextStore,
     AgentUiTextCatalog? textCatalog,
     this.metrics = noopZetaMetricsPort,
-    this.conversationSliceEnabled = false,
+    this._reducer = const AgentConversationWorkspaceReducer(),
   }) : bindingManager =
            bindingManager ??
            AgentConversationBindingManager(
@@ -233,15 +254,11 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
   final AgentProviderRuntimeRegistry runtimeRegistry;
   final AgentProviderSettingsPort providerController;
 
-  /// Phase 2 切片的 feature flag（全局）：workspace entry 是否走切片路径。
-  ///
-  /// false = 走旧 ViewModel 直连路径。回退时把组合层的开关拨回 false 即可。
-  final bool conversationSliceEnabled;
   final AgentConversationBindingManager bindingManager;
   final AgentProviderGlobalRuntime globalRuntime;
   final bool _ownsBindingManager;
-  final ValueChanged<AgentTurnTerminalSignal>? _onTurnTerminal;
-  final ValueChanged<AgentWorkspaceAttention>? _onAttention;
+  final void Function(AgentTurnTerminalSignal)? _onTurnTerminal;
+  final void Function(AgentWorkspaceAttention)? _onAttention;
   final AgentCreatedThreadCallback? onCreatedThread;
 
   /// 为每个常驻 ViewModel 创建独立 frame 端口；生产环境为空时使用 Flutter 实现。
@@ -254,20 +271,52 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
   final ZetaMetricsPort metrics;
 
   final AgentUiTextCatalog _textCatalog;
+  final AgentConversationWorkspaceReducer _reducer;
 
   final List<AgentThreadWorkspaceEntry> _entries =
       <AgentThreadWorkspaceEntry>[];
+  final Map<String, void Function()> _entryListeners =
+      <String, void Function()>{};
+  final List<void Function()> _listeners = <void Function()>[];
+  final List<void Function(AgentThreadWorkspaceEntry)> _entryChangedListeners =
+      <void Function(AgentThreadWorkspaceEntry)>[];
+  AgentConversationWorkspaceState _state = AgentConversationWorkspaceState();
   int _nextEntryId = 0;
-  String? _selectedEntryId;
   bool _disposed = false;
 
-  List<AgentThreadWorkspaceEntry> get entries =>
-      UnmodifiableListView<AgentThreadWorkspaceEntry>(_entries);
+  AgentConversationWorkspaceState get state => _state;
 
-  String? get selectedEntryId => _selectedEntryId;
+  List<AgentThreadWorkspaceEntry> get entries =>
+      List<AgentThreadWorkspaceEntry>.unmodifiable(_entries);
+
+  String? get selectedEntryId => _state.selectedEntryId;
+
+  bool get projectHomeActive => _state.projectHomeActive;
+
+  Map<String, String> get threadIdsByProject => _state.threadIdsByProject;
+
+  void addListener(void Function() listener) {
+    if (!_disposed && !_listeners.contains(listener)) {
+      _listeners.add(listener);
+    }
+  }
+
+  void removeListener(void Function() listener) => _listeners.remove(listener);
+
+  void addEntryChangedListener(
+    void Function(AgentThreadWorkspaceEntry) listener,
+  ) {
+    if (!_disposed && !_entryChangedListeners.contains(listener)) {
+      _entryChangedListeners.add(listener);
+    }
+  }
+
+  void removeEntryChangedListener(
+    void Function(AgentThreadWorkspaceEntry) listener,
+  ) => _entryChangedListeners.remove(listener);
 
   AgentThreadWorkspaceEntry? get selectedEntry {
-    final selectedEntryId = _selectedEntryId;
+    final selectedEntryId = _state.selectedEntryId;
     if (selectedEntryId == null) {
       return null;
     }
@@ -277,6 +326,15 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
       }
     }
     return null;
+  }
+
+  AgentThreadWorkspaceEntry entryById(String entryId) {
+    for (final entry in _entries) {
+      if (entry.entryId == entryId) {
+        return entry;
+      }
+    }
+    throw StateError('Unknown conversation workspace entry $entryId');
   }
 
   AgentThreadWorkspaceEntry ensureDraftEntry({
@@ -351,27 +409,39 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
   }
 
   void selectEntry(String entryId) {
-    if (_selectedEntryId == entryId) {
+    if (_state.selectedEntryId == entryId && !_state.projectHomeActive) {
       return;
     }
     final exists = _entries.any((entry) => entry.entryId == entryId);
     if (!exists) {
       return;
     }
-    _selectedEntryId = entryId;
-    _notify();
+    _dispatch(AgentConversationWorkspaceEntrySelected(entryId));
   }
 
-  /// 清除当前画布选择，但保留所有 workspace 条目及其运行时状态。
-  ///
-  /// 项目首页使用该状态暂时隐藏 Agent 画布；再次选中原条目时，草稿、滚动位置
-  /// 和进行中的会话仍可继续复用。
-  void clearSelection() {
-    if (_selectedEntryId == null) {
+  /// 进入项目首页并清除画布选择，但保留所有常驻运行时。
+  void enterProjectHome() {
+    if (_state.projectHomeActive && _state.selectedEntryId == null) {
       return;
     }
-    _selectedEntryId = null;
-    _notify();
+    _dispatch(const AgentConversationWorkspaceHomeEntered());
+  }
+
+  void setThreadMapping(String projectPath, String threadId) {
+    _dispatch(
+      AgentConversationWorkspaceThreadMappingSet(
+        projectPath: projectPath,
+        threadId: threadId,
+      ),
+    );
+  }
+
+  void removeThreadMapping(String projectPath) {
+    _dispatch(AgentConversationWorkspaceThreadMappingRemoved(projectPath));
+  }
+
+  void restoreThreadMappings(Map<String, String> mappings) {
+    _dispatch(AgentConversationWorkspaceThreadMappingsRestored(mappings));
   }
 
   bool removeEntry(String entryId) {
@@ -380,13 +450,18 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
       if (entry.entryId != entryId) {
         continue;
       }
-      entry.removeListener(_handleEntryChanged);
+      final listener = _entryListeners.remove(entry.entryId);
+      if (listener != null) {
+        entry.removeListener(listener);
+      }
       entry.dispose();
       _entries.removeAt(index);
-      if (_selectedEntryId == entryId) {
-        _selectedEntryId = _entries.isEmpty ? null : _entries.last.entryId;
-      }
-      _notify();
+      _dispatch(
+        AgentConversationWorkspaceEntryRemoved(
+          entryId: entryId,
+          fallbackEntryId: _entries.isEmpty ? null : _entries.last.entryId,
+        ),
+      );
       return true;
     }
     return false;
@@ -416,10 +491,8 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
     return removeEntry(entry.entryId);
   }
 
-  /// 按 Binding 身份解析该会话的切片 store；未启用切片的 entry 返回 null。
-  ///
-  /// 组合根用它覆盖 `agentConversationSliceStoreResolverProvider`。
-  AgentConversationSliceStore? sliceStoreForBinding(
+  /// 按 Binding 身份解析该会话唯一的切片 store；未知身份 fail-closed。
+  AgentConversationSliceStore sliceStoreForBinding(
     AgentConversationBindingKey key,
   ) {
     for (final entry in _entries) {
@@ -427,24 +500,27 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
         return entry.sliceStore;
       }
     }
-    return null;
+    throw StateError('No conversation workspace entry registered for $key');
   }
 
-  @override
   void dispose() {
     if (_disposed) {
       return;
     }
     _disposed = true;
     for (final entry in _entries.toList(growable: false)) {
-      entry.removeListener(_handleEntryChanged);
+      final listener = _entryListeners.remove(entry.entryId);
+      if (listener != null) {
+        entry.removeListener(listener);
+      }
       entry.dispose();
     }
     _entries.clear();
     if (_ownsBindingManager) {
       unawaited(bindingManager.close());
     }
-    super.dispose();
+    _listeners.clear();
+    _entryChangedListeners.clear();
   }
 
   AgentThreadWorkspaceEntry _createEntry({
@@ -479,12 +555,14 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
     };
     late final AgentThreadWorkspaceEntry entry;
     late final AgentConversationViewModel viewModel;
-    // 切片是否启用（Phase 2 feature flag，全局生效）。
-    final sliceEnabled = conversationSliceEnabled;
     viewModel = AgentConversationViewModel(
       providerController: providerController,
       conversationBinding: bindingLease.binding,
       globalRuntime: globalRuntime,
+      composerStateOwner: AgentConversationComposerStateOwner.create(
+        providerController: providerController,
+        textCatalog: _textCatalog,
+      ),
       textCatalog: _textCatalog,
       workspaceFileCorpus: workspaceFileCorpus,
       onTurnTerminal: _onTurnTerminal,
@@ -523,24 +601,37 @@ class AgentThreadWorkspaceController extends ChangeNotifier {
       providerController: providerController,
       bindingLease: bindingLease,
       viewModel: viewModel,
-      sliceBinding: sliceEnabled
-          ? AgentConversationSliceBinding(viewModel: viewModel)
-          : null,
+      sliceBinding: AgentConversationSliceBinding(viewModel: viewModel),
     );
-    entry.addListener(_handleEntryChanged);
+    void listener() => _handleEntryChanged(entry);
+    entry.addListener(listener);
+    _entryListeners[entry.entryId] = listener;
     _entries.add(entry);
+    _dispatch(AgentConversationWorkspaceEntryRegistered(entry.state));
     unawaited(viewModel.loadSettings());
-    _notify();
     return entry;
   }
 
-  void _handleEntryChanged() {
-    _notify();
+  void _handleEntryChanged(AgentThreadWorkspaceEntry entry) {
+    _dispatch(AgentConversationWorkspaceEntryUpdated(entry.state));
+    for (final listener in List<void Function(AgentThreadWorkspaceEntry)>.of(
+      _entryChangedListeners,
+    )) {
+      listener(entry);
+    }
   }
 
-  void _notify() {
-    if (!_disposed) {
-      notifyListeners();
+  void _dispatch(AgentConversationWorkspaceIntent intent) {
+    if (_disposed) {
+      return;
+    }
+    final next = _reducer.reduce(_state, intent);
+    if (next == _state) {
+      return;
+    }
+    _state = next;
+    for (final listener in List<void Function()>.of(_listeners)) {
+      listener();
     }
   }
 }

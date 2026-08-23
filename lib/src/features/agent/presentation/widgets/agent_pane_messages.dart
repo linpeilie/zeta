@@ -115,7 +115,6 @@ class _AgentLiveActivityStatus extends StatelessWidget {
     return AgentRegionBuilder<AgentHeaderState>(
       viewModel: viewModel,
       selector: agentConversationHeaderProvider.call,
-      legacyListenable: viewModel.headerStateListenable,
       builder: (context, state) {
         Widget content(DateTime now) {
           if (!state.isTurnRunning) {
@@ -792,7 +791,6 @@ class _AgentPlanMessageCard extends StatelessWidget {
       child: AgentRegionBuilder<AgentExpansionState>(
         viewModel: viewModel,
         selector: agentConversationExpansionProvider.call,
-        legacyListenable: viewModel.expansionStateListenable,
         builder: (context, expansion) {
           final expanded = expansion.isPlanMessageExpanded(message.id);
           return RepaintBoundary(

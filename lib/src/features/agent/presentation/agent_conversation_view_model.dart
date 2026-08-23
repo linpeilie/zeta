@@ -10,6 +10,7 @@ import 'package:zeta/src/core/logging/structured_error_logging.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_mode_controller.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_command_scope.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/application/agent_plan_execution_handoff_controller.dart';
@@ -73,11 +74,9 @@ class AgentConversationViewModel {
     required this.providerController,
     required this.conversationBinding,
     required this.globalRuntime,
+    required AgentConversationComposerStateOwner composerStateOwner,
     AgentUiTextCatalog? textCatalog,
     AgentConversationTimelineStore? timelineStore,
-    AgentConversationModelSelectionController? modelSelectionController,
-    AgentConversationModeController? conversationModeController,
-    AgentSkillsCatalogController? skillsCatalogController,
     this.workspaceFileCorpus,
     this.onTurnTerminal,
     this.onAttention,
@@ -95,22 +94,10 @@ class AgentConversationViewModel {
            AgentConversationTimelineStore(
              textCatalog: textCatalog ?? const FallbackAgentUiTextCatalog(),
            ),
-       _ownsModelSelectionController = modelSelectionController == null,
-       _modelSelectionController =
-           modelSelectionController ??
-           AgentConversationModelSelectionController(
-             persistSelection: providerController.persistModelSelection,
-             textCatalog: textCatalog ?? const FallbackAgentUiTextCatalog(),
-           ),
-       _ownsConversationModeController = conversationModeController == null,
-       _conversationModeController =
-           conversationModeController ??
-           AgentConversationModeController(
-             textCatalog: textCatalog ?? const FallbackAgentUiTextCatalog(),
-           ),
-       _ownsSkillsCatalogController = skillsCatalogController == null,
-       _skillsCatalogController =
-           skillsCatalogController ?? AgentSkillsCatalogController(),
+       _composerStateOwner = composerStateOwner,
+       _modelSelectionController = composerStateOwner.modelSelection,
+       _conversationModeController = composerStateOwner.mode,
+       _skillsCatalogController = composerStateOwner.skills,
        _permissionSelectionController = conversationBinding.permissions,
        _planExecutionHandoffController = AgentPlanExecutionHandoffController(
          textCatalog: textCatalog ?? const FallbackAgentUiTextCatalog(),
@@ -230,11 +217,9 @@ class AgentConversationViewModel {
   final AgentProviderGlobalRuntime globalRuntime;
   final AgentUiTextCatalog _textCatalog;
   final AgentConversationTimelineStore _timeline;
-  final bool _ownsModelSelectionController;
+  final AgentConversationComposerStateOwner _composerStateOwner;
   final AgentConversationModelSelectionController _modelSelectionController;
-  final bool _ownsConversationModeController;
   final AgentConversationModeController _conversationModeController;
-  final bool _ownsSkillsCatalogController;
   final AgentSkillsCatalogController _skillsCatalogController;
   final AgentConversationPermissionSelectionController
   _permissionSelectionController;
@@ -3008,15 +2993,7 @@ class AgentConversationViewModel {
     _permissionSelectionController.removeListener(
       _handlePermissionStateChanged,
     );
-    if (_ownsModelSelectionController) {
-      _modelSelectionController.dispose();
-    }
-    if (_ownsConversationModeController) {
-      _conversationModeController.dispose();
-    }
-    if (_ownsSkillsCatalogController) {
-      _skillsCatalogController.dispose();
-    }
+    _composerStateOwner.dispose();
     _elapsedTicker.dispose();
     _effectRunner.dispose();
     _uiUpdateScheduler.dispose();

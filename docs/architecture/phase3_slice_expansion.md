@@ -93,6 +93,12 @@
 > 入口已删除；只读 `ZetaStateSnapshot` 已建立。第 4 批固定为 MVI 单一路径，该授权
 > 不改变第 1、2 批独立的观察与回滚边界。
 
+> **第 5 批直接关批记录（2026-08-23）**：用户明确要求直接采用新方案，不先保留
+> 旧方案再逐步修改。因此本批没有建立新 flag 或双轨 owner；Desktop Attention、
+> Conversation Workspace 与 Composer owner 一次迁入目标结构，同时删除 Phase 2
+> Conversation fallback。字段级契约与验收见
+> [第 5 批关批文档](phase3_batch5_desktop_attention_conversation_workspace.md)。
+
 **关门标准（每批合入的条件）**，逐条来自目标架构 Phase 3 验收标准：
 
 - 该批业务事实唯一 owner 已迁移，无 controller/notifier 双写；
@@ -111,7 +117,7 @@
 | 2 | provider 配置 / 管理 / 模型目录 | `AgentProviderSettingsController`（实现 `AgentProviderSettingsPort`）、`AgentManagementController`（785 行）、`AgentModelCatalogRepository` | 中高：port 被 agent / project_threads / agent_management 多处消费；G4 能力位 | provider settings 的 ChangeNotifier 形态、management 的 controller 形态 |
 | 3（已关批） | project threads + usage statistics | 迁移源 `ProjectThreadsViewModel`、`UsageStatisticsController`、`AgentUsagePanelController` 均已删除；当前 owner 为三个纯 Dart store | 中：跨 provider 聚合、分页、防抖、恢复 | ✅ 三个 ChangeNotifier、两个 flag 已删；usage 组装链已移出 Shell |
 | 4（已关批） | workspace + ide session | 迁移源 Shell Workspace 字段与 Session false-path 已删除；当前 owner 为 `WorkspaceSliceStore`、`IdeSessionSliceStore` | 中高：启动恢复流程、文件树热路径 | ✅ 两个 flag、八个 Workspace 字段、直接树构造与 Session false-path 已删 |
-| 5 | desktop attention + conversation workspace 外壳 | `DesktopAttentionController`、`IdeShellController` 的 entry↔列表同步管线、三个 conversation 级 controller（mode / model selection / skills） | 中高：G5 审批语义、entry 生命周期、Binding lease | conversation 级 ChangeNotifier ×3、`agent_thread_workspace_controller` 的反向依赖 |
+| 5（已关批） | desktop attention + conversation workspace 外壳 | 迁移源 `DesktopAttentionController`、`AgentThreadWorkspaceController` 与 Shell 重复状态均已删除；当前 owner 为 `DesktopAttentionSliceStore`、`AgentConversationWorkspaceStore`、`AgentConversationComposerStateOwner` | 中高：G5 审批语义、entry 生命周期、Binding lease | ✅ 三个 application Flutter 燃尽项、旧 workspace controller、Conversation flag/fallback 已删 |
 | 6 | 三个显式 Provider 插件 | `CompatibilityAgentProviderPlugin`（使用点计数 1，测试断言）+ `DefaultAgentProviderFactory` 的 kind switch | 低：kernel 契约测试齐全（665 行 registry 测试） | 兼容层账本兑现：`CompatibilityAgentProviderPlugin`、`ZetaPluginCatalog.compatibility` |
 
 批次内部可再拆小步（如第 2 批拆 2a/2b/2c），但**一次只迁一个 context**，不合并
@@ -207,13 +213,13 @@ feature 切片的只读投影，仅供诊断与恢复测试，生产 Widget 禁�
 
 | 燃尽清单 | 条目 | 随哪批清零 |
 | --- | --- | --- |
-| `knownApplicationToPresentation`（当前 1，基线 2） | ~~`project_threads_controller`~~ | ✅ 第 3 批 3a 已清零 |
-| | `agent_thread_workspace_controller` | 第 5 批 |
-| `knownApplicationFlutterImports`（4a 后当前 9，基线 12） | settings ×2（appearance / general controller） | 第 1 批 |
+| `knownApplicationToPresentation`（第 5 批后当前 0，基线 2） | ~~`project_threads_controller`~~ | ✅ 第 3 批 3a 已清零 |
+| | ~~`agent_thread_workspace_controller`~~ | ✅ 第 5 批迁到 app 组合层并删除旧文件 |
+| `knownApplicationFlutterImports`（第 5 批后当前 5，基线 12） | settings ×2（appearance / general controller） | 第 1 批 |
 | | `agent_provider_settings_controller`、`agent_provider_settings_port`、`agent_management_controller` | 第 2 批 |
 | | ~~`usage_statistics_controller`、`agent_usage_panel_controller`~~ | ✅ 第 3 批已清零 |
 | | ~~`workspace_file_index_controller`~~ | ✅ 第 4 批 4a 已清零 |
-| | `agent_conversation_mode_controller`、`agent_conversation_model_selection_controller`、`agent_skills_catalog_controller`、`agent_thread_workspace_controller` | 第 5 批 |
+| | ~~`agent_conversation_mode_controller`、`agent_conversation_model_selection_controller`、`agent_skills_catalog_controller`、`agent_thread_workspace_controller`~~ | ✅ 第 5 批清零：前三者改为纯 Dart listener，workspace 迁到 app store |
 | `knownDomainImpurities`（4a 后当前 0，基线 4） | ~~settings domain ×3（`appearance_settings` / `general_settings` / `system_font_family`）~~ | ✅ 第 1 批已清零（§3.2 决策点 A） |
 | | ~~`workspace_directory_rules`~~ | ✅ 第 4 批 4a 清理过期清单项 |
 | ~~`_knownExternalViolations`（7，全在 `core/`）~~ | ~~`app_logging` ×2、`sensitive_data_redactor`、`atomic_text_file`、`zeta_data_paths`、`path_utils`、`system_file_manager`~~ | ✅ 2026-08-23 已清零（开工文档起草当天，独立于任何迁移批）：IO 下沉 `app/storage` / `app/logging` / `ui/core`，路径与脱敏注入化 |
@@ -341,7 +347,7 @@ general：`GeneralSettingsLoadRequested / Loaded / LoadFailed(kind)`、
 | 1 | settings 两 pane 渲染等价（批内 flag 双路径对照） | 迁移是搬家不是重造 |
 | 2 | 语义 A/B 保持：appearance 保存失败内存仍更新；general 语言保存失败弹 toast 且状态不变 | 两条持久化语义如实迁移 |
 | 3 | 宽容解码回归：appearance version≠1 回落默认；general v1/v2/v3 迁移 | 既有 codec 测试保留全绿 |
-| 4 | 桌面通知联动：通知开关变化仍触发 `DesktopAttentionController` 门控行为 | 订阅点改造（§3.5）无遗漏 |
+| 4 | 桌面通知联动：通知开关变化仍触发 `DesktopAttentionSliceStore` 门控行为 | 订阅点改造（§3.5）无遗漏 |
 | 5 | 全局主题构建：appearance 变化驱动主题；general 变化不触发主题重建 | selector 隔离 |
 | 6 | 守卫基线：`knownApplicationFlutterImports` −2、`knownDomainImpurities` −3 | 燃尽联动兑现 |
 | 7 | 关批删除验证：两个旧 controller 全仓无引用 | 旧入口当批删除 |
@@ -439,18 +445,22 @@ capability 位与 UI 入口的 G4 对照表、`AgentProviderSettingsPort` 消费
 
 ## 7. 第 5 批：desktop attention + conversation workspace 外壳（框架级）
 
-- **desktop attention**：`DesktopAttentionController` 已是良好形状（final、
-  非 ChangeNotifier、纯端口依赖）。切片 = attention 状态（未读 identity 表、
-  可见性）的只读投影 + Intent（`AttentionMarkedRead`、
-  `AttentionVisibilityChanged`）；系统通知与任务栏 indicator 仍是 data 端口
-  的 effect。信号流（ViewModel → workspace → shell 回调 → attention）不变。
-- **conversation workspace 外壳**：`IdeShellController` 的 entry↔列表同步管线
-  （`_handleAgentWorkspaceChanged`、`_refreshWorkspaceEntryBindings` 等）与
-  entry 列表/选择状态迁成 workspace 外壳切片；三个 conversation 级
-  ChangeNotifier controller（conversation mode / model selection / skills
-  catalog）并入 Phase 2 切片的 composer region 管辖（字段映射在 Phase 2
-  §2.3 已预留）。`agent_thread_workspace_controller` 的 application→presentation
-  燃尽条目在此清零。G5 四种审批语义的隔离由既有测试 + 切片 Intent 命名守卫。
+**状态：已关批（2026-08-24，直接目标态）。**
+
+- **desktop attention**：`DesktopAttentionSliceStore` 独占未读 identity、可见性与
+  notification id；纯 reducer 只返回 typed effect，app runner 独占系统通知、任务栏
+  indicator、设置订阅与 activation。旧 controller 已删除。
+- **conversation workspace 外壳**：`AgentConversationWorkspaceStore` 独占 entry、选择、
+  project home 与 project→thread 映射，并在内部统一订阅 runtime entry；Shell 只做
+  Project Threads / Session 跨 feature 协调。旧 application controller、Shell 的
+  listener 表与重复字段已删除。
+- **composer**：mode / model selection / skills 保留原有迟到判定，改为纯 Dart listener，
+  并由 `AgentConversationComposerStateOwner` 按 Conversation 生命周期统一创建与释放。
+- **Conversation UI**：每个 entry 必建 `AgentConversationSliceBinding`；注册表在
+  `IdeHome.initState` 同步绑定。`conversationSliceEnabled`、enabled provider、nullable
+  store 与 `legacyListenable` 分支均已删除，未知 BindingKey fail-closed。
+- G5 四种审批模型、Provider wire、TimelineStore、IDE Session v4 与 live delta 局部刷新
+  均未改变。完整十问、删除项与验证记录见本节开头链接。
 
 ---
 

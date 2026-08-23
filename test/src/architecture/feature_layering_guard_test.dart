@@ -18,9 +18,7 @@ void main() {
   ///
   /// 剩余 controller 负责构造并持有对应 feature 的 ViewModel，属于拆包前就
   /// 有的组合职责；随 Phase 3 把 ViewModel 换成切片后清掉。新增一律不允许。
-  const knownApplicationToPresentation = <String>{
-    'lib/src/features/agent/application/agent_thread_workspace_controller.dart',
-  };
+  const knownApplicationToPresentation = <String>{};
 
   /// application 仍 import Flutter 的既有文件（**只允许变少**）。
   ///
@@ -29,12 +27,8 @@ void main() {
   /// 转成 MVI 切片时清掉。新增一律不允许——Phase 2 切片就因为搬家时把
   /// `@immutable` / `setEquals` 一起带进来踩过一次。
   const knownApplicationFlutterImports = <String>{
-    'lib/src/features/agent/application/agent_conversation_mode_controller.dart',
-    'lib/src/features/agent/application/agent_conversation_model_selection_controller.dart',
     'lib/src/features/agent/application/agent_provider_settings_controller.dart',
     'lib/src/features/agent/application/agent_provider_settings_port.dart',
-    'lib/src/features/agent/application/agent_skills_catalog_controller.dart',
-    'lib/src/features/agent/application/agent_thread_workspace_controller.dart',
     'lib/src/features/agent_management/application/agent_management_controller.dart',
     'lib/src/features/settings/application/appearance_settings_controller.dart',
     'lib/src/features/settings/application/general_settings_controller.dart',

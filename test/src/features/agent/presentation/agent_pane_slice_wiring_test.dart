@@ -8,13 +8,12 @@ import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'agent_conversation_ui_state_fixtures.dart';
 import 'harness/agent_pane_test_harness.dart';
 
-/// Phase 2 E 步验收：AgentPane 通过 selector 订阅切片。
+/// Conversation 单一路径验收：AgentPane 只通过 selector 订阅切片。
 ///
-/// 两条路径给出的是**同一批 region 对象**，所以这里主要证明三件事：
-/// 渲染等价、按 entry 生效、切片确实是数据来源（撤掉 store 就回退）。
+/// 这里主要证明三件事：渲染正确、每个 entry 都必建 binding、切片确实是唯一数据来源。
 void main() {
-  group('AgentPane 切片接线', () {
-    testWidgets('切片开启时渲染与旧路径一致', (tester) async {
+  group('AgentPane 切片单一路径接线', () {
+    testWidgets('显式注入的切片 store 正常渲染', (tester) async {
       final provider = AgentPaneFakeProvider();
       final viewModel = createAgentPaneViewModel(
         provider,
@@ -38,7 +37,7 @@ void main() {
       expect(find.text('会话一'), findsWidgets);
     });
 
-    testWidgets('未注册 store 的 entry 走旧路径，仍然渲染', (tester) async {
+    testWidgets('Harness 未注入 store 时仍强制创建 binding', (tester) async {
       final provider = AgentPaneFakeProvider();
       final viewModel = createAgentPaneViewModel(
         provider,
@@ -46,7 +45,7 @@ void main() {
       );
       addTearDown(viewModel.dispose);
 
-      // sliceStores 为空 = 切片对这个 entry 关闭。
+      // sliceStores 为空时 Harness 创建必选 binding，不存在关闭或回退语义。
       await tester.pumpWidget(AgentPaneTestApp(viewModel: viewModel));
       await pumpAgentPaneUi(tester);
 
@@ -74,8 +73,7 @@ void main() {
       );
       await pumpAgentPaneUi(tester);
 
-      // **只**往切片 store 里推，不碰 ViewModel：走旧路径的话这个标题不会出现，
-      // 因此这条断言能区分"真的接上了 selector"和"看起来接上了"。
+      // **只**往切片 store 里推，不碰 ViewModel，证明 Widget 唯一读取 selector。
       binding.store.refreshRegions(
         AgentConversationRegionsRefreshed(
           header: agentHeaderStateFixture(title: '只存在于切片里的标题'),
@@ -111,8 +109,7 @@ void main() {
         findsNothing,
       );
 
-      // pending dock 在 `agent_pane_sections.dart` 深处，只往切片推：
-      // 走旧路径的话它不会出现。
+      // pending dock 在 `agent_pane_sections.dart` 深处，只往切片推以固定唯一读取面。
       binding.store.refreshRegions(
         AgentConversationRegionsRefreshed(
           pendingInteractions: agentPendingInteractionStateFixture(

@@ -44,12 +44,10 @@ class _AgentContextPanelState extends State<_AgentContextPanel> {
         return AgentRegionBuilder<AgentHeaderState>(
           viewModel: viewModel,
           selector: agentConversationHeaderProvider.call,
-          legacyListenable: viewModel.headerStateListenable,
           builder: (context, _) =>
               AgentRegionBuilder<AgentConversationHistoryState>(
                 viewModel: viewModel,
                 selector: agentConversationHistoryProvider.call,
-                legacyListenable: viewModel.historyStateListenable,
                 builder: (context, _) => ListenableBuilder(
                   // thread 快照与 Provider 目录不属于 region，仍走 listenable。
                   listenable: Listenable.merge(<Listenable>[

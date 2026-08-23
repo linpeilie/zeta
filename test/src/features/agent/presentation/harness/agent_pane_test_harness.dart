@@ -9,7 +9,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/features/agent/application/agent_conversation_mode_controller.dart';
+import 'package:zeta/src/features/agent/application/agent_conversation_model_selection_controller.dart';
+import 'package:zeta/src/features/agent/application/agent_skills_catalog_controller.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_binding.dart';
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
@@ -27,7 +32,7 @@ import '../../../../testing/agent_provider_stub_base.dart';
 import '../../../../testing/legacy_bundle_factory_mixin.dart';
 import '../../../../testing/agent_conversation_binding_test_harness.dart';
 
-class AgentPaneTestApp extends StatelessWidget {
+class AgentPaneTestApp extends StatefulWidget {
   const AgentPaneTestApp({
     super.key,
     required this.viewModel,
@@ -53,37 +58,68 @@ class AgentPaneTestApp extends StatelessWidget {
   final MessageSendShortcut messageSendShortcut;
   final TargetPlatform? platform;
 
-  /// 为哪些 Binding 提供 Phase 2 切片 store。
-  ///
-  /// 默认空 = 切片关闭，AgentPane 走旧 ViewModel 直连路径（feature flag 的回退侧）。
+  /// 可注入已经由测试显式驱动的切片 store；默认由本 Harness 创建必选 binding。
   final Map<AgentConversationBindingKey, AgentConversationSliceStore>
   sliceStores;
+
+  @override
+  State<AgentPaneTestApp> createState() => _AgentPaneTestAppState();
+}
+
+class _AgentPaneTestAppState extends State<AgentPaneTestApp> {
+  late final AgentConversationSliceBinding? _ownedBinding;
+  late final AgentConversationSliceStoreRegistry _registry;
+
+  @override
+  void initState() {
+    super.initState();
+    final key = widget.viewModel.conversationBinding.key;
+    _ownedBinding = widget.sliceStores.containsKey(key)
+        ? null
+        : AgentConversationSliceBinding(viewModel: widget.viewModel);
+    _registry = AgentConversationSliceStoreRegistry()
+      ..bind((requestedKey) {
+        final injected = widget.sliceStores[requestedKey];
+        if (injected != null) {
+          return injected;
+        }
+        if (requestedKey == widget.viewModel.conversationBinding.key) {
+          return _ownedBinding!.store;
+        }
+        throw StateError('No test conversation slice for $requestedKey');
+      });
+  }
+
+  @override
+  void dispose() {
+    _registry.unbind();
+    _ownedBinding?.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final lightIdeTheme = buildIdeThemeData(
       brightness: Brightness.light,
-      uiFontFamily: uiFontFamily,
-      codeFontFamily: codeFontFamily,
+      uiFontFamily: widget.uiFontFamily,
+      codeFontFamily: widget.codeFontFamily,
     );
     final darkIdeTheme = buildIdeThemeData(
       brightness: Brightness.dark,
-      uiFontFamily: uiFontFamily,
-      codeFontFamily: codeFontFamily,
+      uiFontFamily: widget.uiFontFamily,
+      codeFontFamily: widget.codeFontFamily,
     );
-    final activeIdeTheme = themeMode == ThemeMode.light
+    final activeIdeTheme = widget.themeMode == ThemeMode.light
         ? lightIdeTheme
         : darkIdeTheme;
     return ProviderScope(
       overrides: [
-        agentConversationSliceStoreResolverProvider.overrideWith(
-          () => AgentConversationSliceStoreResolverNotifier(
-            (key) => sliceStores[key],
-          ),
+        agentConversationSliceStoreRegistryProvider.overrideWithValue(
+          _registry,
         ),
       ],
       child: IdeThemeScope(
-        themeMode: themeMode,
+        themeMode: widget.themeMode,
         lightTheme: lightIdeTheme,
         darkTheme: darkIdeTheme,
         child: sf.ShadcnApp(
@@ -94,18 +130,18 @@ class AgentPaneTestApp extends StatelessWidget {
           darkTheme: buildShadcnTheme(darkIdeTheme),
           materialTheme: buildMaterialTheme(
             activeIdeTheme,
-          ).copyWith(platform: platform),
-          themeMode: resolveShadcnThemeMode(themeMode),
+          ).copyWith(platform: widget.platform),
+          themeMode: resolveShadcnThemeMode(widget.themeMode),
           home: Builder(
             builder: (context) => MediaQuery(
               data: MediaQuery.of(
                 context,
-              ).copyWith(disableAnimations: disableAnimations),
+              ).copyWith(disableAnimations: widget.disableAnimations),
               child: sf.Scaffold(
                 child: AgentPane(
-                  key: agentPaneKey,
-                  viewModel: viewModel,
-                  messageSendShortcut: messageSendShortcut,
+                  key: widget.agentPaneKey,
+                  viewModel: widget.viewModel,
+                  messageSendShortcut: widget.messageSendShortcut,
                 ),
               ),
             ),
@@ -253,7 +289,13 @@ AgentConversationViewModel createAgentPaneViewModelWithStore(
     providerController: controller,
     conversationBinding: bindingLease.binding,
     globalRuntime: bindingHarness.globalRuntime,
-    conversationModeController: conversationModeController,
+    composerStateOwner: AgentConversationComposerStateOwner(
+      modelSelection: AgentConversationModelSelectionController(
+        persistSelection: controller.persistModelSelection,
+      ),
+      mode: conversationModeController ?? AgentConversationModeController(),
+      skills: AgentSkillsCatalogController(),
+    ),
     workspaceFileCorpus: workspaceFilesProvider == null
         ? null
         : CallbackWorkspaceFileCorpusPort(

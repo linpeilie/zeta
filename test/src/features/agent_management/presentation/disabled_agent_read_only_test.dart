@@ -12,6 +12,10 @@ import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_binding.dart';
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
 
 import '../../../testing/ide_test_harness.dart';
 import '../../../testing/agent_conversation_binding_test_harness.dart';
@@ -54,6 +58,9 @@ void main() {
       providerController: providerController,
       conversationBinding: bindingLease.binding,
       globalRuntime: bindingHarness.globalRuntime,
+      composerStateOwner: AgentConversationComposerStateOwner.create(
+        providerController: providerController,
+      ),
       initialProjectPath: thread.projectPath,
       initialThread: thread,
     );
@@ -112,6 +119,9 @@ void main() {
       providerController: providerController,
       conversationBinding: bindingLease.binding,
       globalRuntime: bindingHarness.globalRuntime,
+      composerStateOwner: AgentConversationComposerStateOwner.create(
+        providerController: providerController,
+      ),
     );
     addTearDown(() {
       viewModel.dispose();
@@ -154,8 +164,25 @@ Future<void> _pumpAgentPane(
     brightness: Brightness.light,
     codeFontFamily: 'JetBrainsMono',
   );
+  final sliceBinding = AgentConversationSliceBinding(viewModel: viewModel);
+  final sliceRegistry = AgentConversationSliceStoreRegistry()
+    ..bind((requestedKey) {
+      if (requestedKey == viewModel.conversationBinding.key) {
+        return sliceBinding.store;
+      }
+      throw StateError('No test conversation slice for $requestedKey');
+    });
+  addTearDown(() {
+    sliceRegistry.unbind();
+    sliceBinding.dispose();
+  });
   await tester.pumpWidget(
     ProviderScope(
+      overrides: [
+        agentConversationSliceStoreRegistryProvider.overrideWithValue(
+          sliceRegistry,
+        ),
+      ],
       child: IdeThemeScope(
         themeMode: ThemeMode.light,
         lightTheme: ideTheme,

@@ -1,4 +1,5 @@
-import 'package:flutter/foundation.dart';
+import 'package:meta/meta.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
 
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
@@ -55,7 +56,7 @@ final class AgentConversationModeState {
   bool operator ==(Object other) =>
       other is AgentConversationModeState &&
       other.status == status &&
-      listEquals(other.presets, presets) &&
+      zetaListEquals(other.presets, presets) &&
       other.confirmedMode == confirmedMode &&
       other.draftMode == draftMode &&
       other.pendingTurnMode == pendingTurnMode &&
@@ -78,7 +79,7 @@ final class AgentConversationModeState {
 ///
 /// Controller 仅依赖 Provider 中立的 domain 端口和事件。JSON-RPC、Codex mask
 /// 解析与 Widget 展示均留在各自层中，ViewModel 只需要转交生命周期事件。
-final class AgentConversationModeController extends ChangeNotifier {
+final class AgentConversationModeController {
   AgentConversationModeController({AgentUiTextCatalog? textCatalog})
     : _textCatalog = textCatalog ?? const FallbackAgentUiTextCatalog();
 
@@ -99,6 +100,15 @@ final class AgentConversationModeController extends ChangeNotifier {
   int _selectionRevision = 0;
   int _draftAuthorityRevision = 0;
   bool _disposed = false;
+  final List<void Function()> _listeners = <void Function()>[];
+
+  void addListener(void Function() listener) {
+    if (!_disposed && !_listeners.contains(listener)) {
+      _listeners.add(listener);
+    }
+  }
+
+  void removeListener(void Function() listener) => _listeners.remove(listener);
 
   /// 当前不可变 UI 状态。
   AgentConversationModeState get state => _state;
@@ -588,11 +598,12 @@ final class AgentConversationModeController extends ChangeNotifier {
     final changed = next != _state;
     _state = next;
     if (changed) {
-      notifyListeners();
+      for (final listener in List<void Function()>.of(_listeners)) {
+        listener();
+      }
     }
   }
 
-  @override
   void dispose() {
     if (_disposed) {
       return;
@@ -601,7 +612,7 @@ final class AgentConversationModeController extends ChangeNotifier {
     _providerGeneration += 1;
     _threadGeneration += 1;
     _pendingTurn = null;
-    super.dispose();
+    _listeners.clear();
   }
 }
 

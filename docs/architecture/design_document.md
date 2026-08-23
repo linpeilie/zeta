@@ -1,6 +1,6 @@
 # 设计文档
 
-最后更新：2026-08-12
+最后更新：2026-08-24
 
 ## 1. 设计目标
 
@@ -55,8 +55,10 @@ main()
 IdeShellController
   -> IdeSessionStore
   -> AgentProviderSettingsController
-  -> AgentThreadWorkspaceController -> 每个 Pane 持有 ConversationBinding lease
-  -> AgentConversationViewModel -> 固定 Binding（不持有 Provider lease/scope/pin）
+  -> AgentConversationWorkspaceStore（entry / 选择 / project home / project→thread 唯一 owner）
+    -> 每个 runtime entry 持有 ConversationBinding lease
+    -> AgentConversationSliceBinding（每个 entry 必建，未知 BindingKey fail-closed）
+    -> AgentConversationViewModel -> 固定 Binding（不持有 Provider lease/scope/pin）
   -> ProjectThreadsController
 
 AgentConversationViewModel
@@ -76,8 +78,10 @@ AgentConversationViewModel
       -> AgentConversationUiStateStore
         -> header/composer/pending/expansion/history typed listenable
         -> live turn 增量通知 + AgentUiEffect stream
-  -> AgentConversationModelSelectionController
-  -> AgentConversationModeController
+  -> AgentConversationComposerStateOwner
+    -> AgentConversationModelSelectionController
+    -> AgentConversationModeController
+    -> AgentSkillsCatalogController
   -> AgentPlanExecutionHandoffController
   -> Binding / GlobalRuntime 提供的 AgentProviderBundle 端口
     -> AgentRuntimePort / AgentConversationPort
@@ -124,11 +128,13 @@ UsageStatisticsSliceStore
         -> initialize account metadata（套餐名称）
         -> 可关闭的 OAuth usage REST（额度窗口）
 
-DesktopAttentionController
-  -> GeneralSettingsController
-  -> DesktopNotificationService -> flutter_local_notifications
-  -> DesktopAttentionIndicator -> Windows taskbar flash / macOS Dock badge / Linux urgency
-  -> IdeHome visibility + IdeShellController thread activation
+DesktopAttentionSliceStore（未读 identity / 可见性唯一 owner）
+  -> DesktopAttentionSliceReducer -> typed effects
+  -> app effect runner
+    -> GeneralSettingsSliceStore
+    -> DesktopNotificationService -> flutter_local_notifications
+    -> DesktopAttentionIndicator -> Windows taskbar flash / macOS Dock badge / Linux urgency
+    -> IdeHome visibility + IdeShellController thread activation
 ```
 
 Agent turn 终态、权限、问题、Provider 计划审批和本地 Plan 执行交接统一转换为
@@ -660,8 +666,10 @@ data 精确编码”的单向流：
 
 - Domain 用 `AgentConversationModeId`、preset、selection 和 catalog 表达 Provider 中立
   语义；`AgentProviderBundle.conversationModes` 是可选能力端口。
-- `AgentConversationModeController` 按 Provider/thread scope 管理 draft、confirmed、
-  pending、错误和 generation。快速切换 Provider/thread 时，旧异步结果不得覆盖新上下文。
+- `AgentConversationComposerStateOwner` 按 Conversation 生命周期统一创建与释放 mode、
+  model 和 skills 三个纯 Dart 状态引擎；其中 mode 引擎按 Provider/thread scope 管理
+  draft、confirmed、pending、错误和 generation。快速切换 Provider/thread 时，旧异步结果
+  不得覆盖新上下文。
 - `AgentConversationViewModel` 在发送前冻结 mode 与有效模型配置到
   `AgentTurnConfiguration`。活动 turn 中改变选择只更新下一回合 draft，不修改当前 turn。
 - Codex data 层独占 `collaborationMode/list`、`turn/start.collaborationMode` 和
@@ -687,9 +695,9 @@ data 精确编码”的单向流：
   `reasoningEffort`、`serviceTierId` 和 `explicitFast`；reasoning effort 区分 unknown、
   Provider default 与 explicit value，Fast 的 service tier 映射由 Provider 自己决定。
   共享 Store/ViewModel/UI 不读取 raw payload 猜测。
-- `AgentConversationModelSelectionController` 是配置真源，负责 capability 归一化、
-  Fast / `xhigh` 冲突解决、provider 运行态更新及持久化。快速连续修改串行合并，
-  过期请求不得覆盖新快照。
+- Composer owner 内的 model selection 引擎是配置真源，负责 capability 归一化、Fast /
+  `xhigh` 冲突解决、provider 运行态更新及持久化。快速连续修改串行合并，过期请求不得
+  覆盖新快照。
 - 保存采用乐观更新；失败时同步回滚 selection、模型偏好和 provider 运行态，
   并保留失败快照供卡片内原子重试。
 - `AgentModelConfigUiState` 只是不可变渲染快照。`selectedModelId` 属于持久业务状态；

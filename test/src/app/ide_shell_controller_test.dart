@@ -284,7 +284,7 @@ void main() {
     final shell = harness.shell;
     final backend = harness.backend;
     addTearDown(shell.dispose);
-    final sourceEntry = shell.agentWorkspaceController.selectedEntry!;
+    final sourceEntry = shell.agentConversationWorkspaceStore.selectedEntry!;
 
     final session = await sourceEntry.viewModel.forkCurrentThread();
     await _flushAsync();
@@ -294,7 +294,7 @@ void main() {
       shell.projectThreadStateFor(directory.path).selectedThreadId,
       'forked-thread-a',
     );
-    final selectedEntry = shell.agentWorkspaceController.selectedEntry!;
+    final selectedEntry = shell.agentConversationWorkspaceStore.selectedEntry!;
     expect(selectedEntry, isNot(same(sourceEntry)));
     expect(selectedEntry.binding.threadId, 'forked-thread-a');
     expect(sourceEntry.binding.threadId, 'thread-a');
@@ -363,13 +363,13 @@ void main() {
     final shell = harness.shell;
     final backend = harness.backend;
     addTearDown(shell.dispose);
-    final sourceEntry = shell.agentWorkspaceController.selectedEntry!;
+    final sourceEntry = shell.agentConversationWorkspaceStore.selectedEntry!;
     expect(sourceEntry.viewModel.canEditLastUserMessage, isTrue);
 
     await sourceEntry.viewModel.editLastUserMessageAndRetry('new prompt');
     await _flushAsync();
 
-    final selectedEntry = shell.agentWorkspaceController.selectedEntry!;
+    final selectedEntry = shell.agentConversationWorkspaceStore.selectedEntry!;
     expect(selectedEntry, isNot(same(sourceEntry)));
     expect(selectedEntry.binding.threadId, 'forked-thread-a');
     expect(sourceEntry.binding.threadId, 'thread-a');

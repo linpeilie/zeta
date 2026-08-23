@@ -13,80 +13,31 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_region_state.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_state.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
-/// 把 Binding 身份解析成该会话的切片 store。
-///
-/// 由 app / workspace 组合层在建容器时注入（`overrideWithValue`）。返回 null 表示
-/// 这个 entry 没有启用切片，仍走旧 ViewModel 直连路径。
-typedef AgentConversationSliceStoreResolver =
-    AgentConversationSliceStore? Function(AgentConversationBindingKey key);
-
-/// store 解析器。
-///
-/// **是 `NotifierProvider` 而不是 `Provider`**：解析器的值在运行期确实会变——
-/// 根 scope 在 `MainApp` 建立，而 workspace controller 要等 `IdeHome` 才存在，
-/// 组合根必须在之后把真正的解析函数 bind 进来。用不可变 `Provider` 建模会让
-/// 依赖它的 family **缓存住"尚未就绪"时的否定答案**：某个会话一旦在 bind 之前
-/// 被读过一次，就会永久停在旧路径，而且不报任何错。
-final agentConversationSliceStoreResolverProvider =
-    NotifierProvider<
-      AgentConversationSliceStoreResolverNotifier,
-      AgentConversationSliceStoreResolver
-    >(
-      AgentConversationSliceStoreResolverNotifier.new,
-      name: 'agentConversationSliceStoreResolver',
-    );
-
-/// 持有 store 解析器；由组合根在 controller 就绪后 [bind]。
-final class AgentConversationSliceStoreResolverNotifier
-    extends Notifier<AgentConversationSliceStoreResolver> {
-  AgentConversationSliceStoreResolverNotifier([this._initial]);
-
-  final AgentConversationSliceStoreResolver? _initial;
-
-  /// 默认：任何 key 都没有 store，也就是**默认整个应用不启用切片**。
-  @override
-  AgentConversationSliceStoreResolver build() => _initial ?? (_) => null;
-
-  /// 组合根在 workspace controller 就绪后调用。
-  ///
-  /// 写 `state` 会让依赖它的 family 失效重算，因此 bind 之前读到的否定答案
-  /// 不会被永久缓存。
-  void bind(AgentConversationSliceStoreResolver resolver) => state = resolver;
-}
-
-/// 该 entry 是否启用 Phase 2 切片。
-///
-/// **按 workspace entry 生效**：判据就是组合层有没有为这个 key 建 store，
-/// 不再单独维护一个开关，省掉两处状态对不齐的可能。
-final agentConversationSliceEnabledProvider =
-    Provider.family<bool, AgentConversationBindingKey>(
-      (ref, key) =>
-          ref.watch(agentConversationSliceStoreResolverProvider)(key) != null,
-      name: 'agentConversationSliceEnabled',
+/// 组合根注入的同步 store 注册表。
+final agentConversationSliceStoreRegistryProvider =
+    Provider<AgentConversationSliceStoreRegistry>(
+      (ref) => throw StateError(
+        'agentConversationSliceStoreRegistryProvider must be overridden',
+      ),
+      name: 'agentConversationSliceStoreRegistry',
     );
 
 /// 指定会话的切片 store。
 ///
-/// 没有解析到就**直接抛错**：静默降级会让"切片没生效"变成线上才发现的问题。
-/// 调用方应先看 [agentConversationSliceEnabledProvider]。
+/// 未注册身份直接抛错，禁止静默降级到旧 ViewModel 监听路径。
 final agentConversationSliceStoreProvider =
     Provider.family<AgentConversationSliceStore, AgentConversationBindingKey>((
       ref,
       key,
     ) {
-      final store = ref.watch(agentConversationSliceStoreResolverProvider)(key);
-      if (store == null) {
-        throw StateError(
-          'No conversation slice store registered for $key. '
-          'The composition root must override '
-          'agentConversationSliceStoreResolverProvider for this entry.',
-        );
-      }
-      return store;
+      return ref
+          .watch(agentConversationSliceStoreRegistryProvider)
+          .resolve(key);
     }, name: 'agentConversationSliceStore');
 
 /// 指定会话的切片状态。

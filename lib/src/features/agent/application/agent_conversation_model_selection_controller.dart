@@ -1,7 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
-
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 typedef AgentModelSelectionPersistCallback =
@@ -48,7 +46,7 @@ class AgentModelSelectionSaveError {
 /// UI 只消费规范化后的中立状态；provider 的 `serviceTier` 精确值仍保留在
 /// [AgentModelPreference] 中。快速连续修改通过串行保存循环合并，最终一次写入
 /// 始终覆盖过期快照。
-class AgentConversationModelSelectionController extends ChangeNotifier {
+class AgentConversationModelSelectionController {
   AgentConversationModelSelectionController({
     required this.persistSelection,
     DateTime Function()? clock,
@@ -85,6 +83,15 @@ class AgentConversationModelSelectionController extends ChangeNotifier {
   String _latestModelId = '';
   bool _needsPreferenceMigration = false;
   bool _disposed = false;
+  final List<void Function()> _listeners = <void Function()>[];
+
+  void addListener(void Function() listener) {
+    if (!_disposed && !_listeners.contains(listener)) {
+      _listeners.add(listener);
+    }
+  }
+
+  void removeListener(void Function() listener) => _listeners.remove(listener);
 
   List<AgentModelInfo> get models =>
       _modelList?.models ?? const <AgentModelInfo>[];
@@ -745,16 +752,20 @@ class AgentConversationModelSelectionController extends ChangeNotifier {
 
   void _notify() {
     if (!_disposed) {
-      notifyListeners();
+      for (final listener in List<void Function()>.of(_listeners)) {
+        listener();
+      }
     }
   }
 
-  @override
   void dispose() {
+    if (_disposed) {
+      return;
+    }
     _disposed = true;
     _generation += 1;
     _completeAllWaiters(false);
-    super.dispose();
+    _listeners.clear();
   }
 }
 

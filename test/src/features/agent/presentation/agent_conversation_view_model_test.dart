@@ -4,6 +4,9 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:logger/logger.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_mode_controller.dart';
+import 'package:zeta/src/features/agent/application/agent_conversation_model_selection_controller.dart';
+import 'package:zeta/src/features/agent/application/agent_skills_catalog_controller.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
@@ -3943,6 +3946,9 @@ void main() {
         providerController: controller,
         conversationBinding: bindingLease.binding,
         globalRuntime: bindingHarness.globalRuntime,
+        composerStateOwner: AgentConversationComposerStateOwner.create(
+          providerController: controller,
+        ),
         uiFrameScheduler: _createUiFrameScheduler(),
       );
       addTearDown(viewModel.dispose);
@@ -4028,6 +4034,9 @@ void main() {
           providerController: controller,
           conversationBinding: bindingLease.binding,
           globalRuntime: bindingHarness.globalRuntime,
+          composerStateOwner: AgentConversationComposerStateOwner.create(
+            providerController: controller,
+          ),
           onProviderSwitchRequested: (providerId) async {
             requestedProviderId = providerId;
           },
@@ -4111,6 +4120,9 @@ void main() {
           providerController: controller,
           conversationBinding: bindingLease.binding,
           globalRuntime: bindingHarness.globalRuntime,
+          composerStateOwner: AgentConversationComposerStateOwner.create(
+            providerController: controller,
+          ),
           initialProjectPath: '/repo',
           initialThread: thread,
           uiFrameScheduler: _createUiFrameScheduler(),
@@ -4212,6 +4224,9 @@ void main() {
         providerController: controller,
         conversationBinding: bindingLease.binding,
         globalRuntime: bindingHarness.globalRuntime,
+        composerStateOwner: AgentConversationComposerStateOwner.create(
+          providerController: controller,
+        ),
         initialProjectPath: '/repo',
         initialThread: thread,
         uiFrameScheduler: _createUiFrameScheduler(),
@@ -4889,7 +4904,13 @@ AgentConversationViewModel _createViewModel(
     providerController: controller,
     conversationBinding: bindingLease.binding,
     globalRuntime: bindingHarness.globalRuntime,
-    conversationModeController: conversationModeController,
+    composerStateOwner: AgentConversationComposerStateOwner(
+      modelSelection: AgentConversationModelSelectionController(
+        persistSelection: controller.persistModelSelection,
+      ),
+      mode: conversationModeController ?? AgentConversationModeController(),
+      skills: AgentSkillsCatalogController(),
+    ),
     onTurnTerminal: onTurnTerminal,
     onAttention: onAttention,
     onCreatedThread: onCreatedThread,

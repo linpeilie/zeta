@@ -18,8 +18,8 @@ import 'package:zeta/src/features/agent/presentation/agent_conversation_view_mod
 /// - **egress**：切片产出的 effect 描述交给 ViewModel 的现有 application port
 ///   执行，完成后经 result intent 回写。
 ///
-/// 因此**不存在双写 owner**：会话事实的唯一 owner 仍是 TimelineStore 与既有
-/// controller，切片只是它们的只读投影 + 命令入口（迁移门禁第 1、9 条）。
+/// 因此不存在双写 owner：TimelineStore 与 ComposerStateOwner 持有领域事实，
+/// Slice Store 是 UI 唯一读取面与命令入口；两者只经这个 binding 单向同步。
 final class AgentConversationSliceBinding {
   AgentConversationSliceBinding({
     required AgentConversationViewModel viewModel,

@@ -4,6 +4,7 @@ import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
 
 import '../../../testing/fake_agent_frame_scheduler.dart';
 import '../../../testing/legacy_bundle_factory_mixin.dart';
@@ -103,6 +104,9 @@ final class _RecycleHarness {
       providerController: controller,
       conversationBinding: bindingLease.binding,
       globalRuntime: bindingHarness.globalRuntime,
+      composerStateOwner: AgentConversationComposerStateOwner.create(
+        providerController: controller,
+      ),
       uiFrameScheduler: scheduler,
     )..updateContext(projectPath: '/repo', contextFilePath: null);
   }

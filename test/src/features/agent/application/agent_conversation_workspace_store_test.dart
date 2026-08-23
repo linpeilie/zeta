@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_workspace_store.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta/src/features/agent/application/agent_thread_workspace_controller.dart';
 import 'package:zeta/src/features/agent/data/agent_model_catalog_cache_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/workspace/application/workspace_file_corpus_port.dart';
@@ -17,7 +17,7 @@ import '../presentation/harness/agent_pane_test_harness.dart';
 /// Workspace 只维护 Binding 租约：两个 thread 运行时隔离，历史读取严格惰性，
 /// 单个 Binding 失效不会影响其他会话。
 void main() {
-  group('AgentThreadWorkspaceController conversation binding', () {
+  group('AgentConversationWorkspaceStore conversation binding', () {
     test('AC1：两个 workspace entry 各自发一条消息，各自拿到独立实例、两条都完成', () async {
       final harness = _WorkspaceHarness();
       addTearDown(harness.dispose);
@@ -132,7 +132,7 @@ void main() {
       await providerController.loadSettings();
       final signals = <AgentTurnTerminalSignal>[];
       final schedulers = <FakeAgentFrameScheduler>[];
-      final controller = AgentThreadWorkspaceController(
+      final controller = AgentConversationWorkspaceStore(
         providerController: providerController,
         workspaceFileCorpus: _emptyWorkspaceFileCorpus(),
         runtimeRegistry: registry,
@@ -196,7 +196,7 @@ final class _WorkspaceHarness {
       ),
       runtimeRegistry: registry,
     );
-    controller = AgentThreadWorkspaceController(
+    controller = AgentConversationWorkspaceStore(
       providerController: providerController,
       workspaceFileCorpus: _emptyWorkspaceFileCorpus(),
       runtimeRegistry: registry,
@@ -212,7 +212,7 @@ final class _WorkspaceHarness {
   final List<FakeAgentFrameScheduler> _schedulers = <FakeAgentFrameScheduler>[];
   late final AgentProviderRuntimeRegistry registry;
   late final AgentProviderSettingsController providerController;
-  late final AgentThreadWorkspaceController controller;
+  late final AgentConversationWorkspaceStore controller;
 
   Future<AgentThreadWorkspaceEntry> createEntry({
     required String threadId,

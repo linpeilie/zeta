@@ -64,7 +64,6 @@ void main() {
       tester,
       generalSettingsController: controller,
       waitForGeneralSettings: true,
-      conversationSliceEnabled: true,
       settingsSliceEnabled: true,
       providerManagementSliceEnabled: true,
     );
@@ -275,7 +274,6 @@ Future<void> _pumpMainApp(
   AppearanceSettingsController? appearanceController,
   AppLanguage? displayLanguageOverride,
   bool waitForGeneralSettings = false,
-  bool conversationSliceEnabled = false,
   bool settingsSliceEnabled = false,
   bool providerManagementSliceEnabled = false,
 }) async {
@@ -302,7 +300,6 @@ Future<void> _pumpMainApp(
       appearanceController: appearanceController,
       displayLanguageOverride: displayLanguageOverride,
       waitForGeneralSettings: waitForGeneralSettings,
-      conversationSliceEnabled: conversationSliceEnabled,
       settingsSliceEnabled: settingsSliceEnabled,
       providerManagementSliceEnabled: providerManagementSliceEnabled,
     ),

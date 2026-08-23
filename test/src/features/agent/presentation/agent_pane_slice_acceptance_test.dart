@@ -5,6 +5,7 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_intent.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_binding.dart';
@@ -173,16 +174,19 @@ class _TwoPaneApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final registry = AgentConversationSliceStoreRegistry()
+      ..bind(
+        (key) =>
+            stores[key] ??
+            (throw StateError('No test conversation slice for $key')),
+      );
     final ideTheme = buildIdeThemeData(
       brightness: Brightness.dark,
       codeFontFamily: 'CodeFont',
     );
     return ProviderScope(
       overrides: [
-        agentConversationSliceStoreResolverProvider.overrideWith(
-          () =>
-              AgentConversationSliceStoreResolverNotifier((key) => stores[key]),
-        ),
+        agentConversationSliceStoreRegistryProvider.overrideWithValue(registry),
       ],
       child: IdeThemeScope(
         themeMode: ThemeMode.dark,

@@ -116,8 +116,8 @@ void main() {
         'lib/src/features/agent/presentation/agent_conversation_view_model.dart',
       ).readAsStringSync();
       final workspace = File(
-        'lib/src/features/agent/application/'
-        'agent_thread_workspace_controller.dart',
+        'lib/src/app/conversation_workspace_slice/'
+        'agent_conversation_workspace_store.dart',
       ).readAsStringSync();
 
       for (final legacy in const <String>[

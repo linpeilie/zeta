@@ -11,18 +11,18 @@ import 'package:zeta/src/app/agent_management_slice/agent_management_slice_compo
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_runner.dart';
 import 'package:zeta/src/app/app_constants.dart';
 import 'package:zeta/src/app/composition/zeta_state_snapshot.dart';
+import 'package:zeta/src/app/desktop_attention_slice/desktop_attention_slice_composition.dart';
+import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_workspace_providers.dart';
+import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_workspace_store.dart';
 import 'package:zeta/src/app/menu_action_bridge.dart';
 import 'package:zeta/src/app/shell/ide_shell_controller.dart';
 import 'package:zeta/src/ui/core/system_file_manager.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta/src/features/desktop_notifications/application/desktop_attention_controller.dart';
-import 'package:zeta/src/features/desktop_notifications/data/flutter_desktop_notification_service.dart';
-import 'package:zeta/src/features/desktop_notifications/data/method_channel_desktop_attention_indicator.dart';
+import 'package:zeta/src/features/desktop_notifications/application/desktop_attention_slice_store.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_models.dart';
-import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_text_catalog.dart';
-import 'package:zeta/src/features/desktop_notifications/domain/fallback_desktop_attention_text_catalog.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_controller.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_operations.dart';
 import 'package:zeta/src/features/agent_management/data/claude_code_agent_management_repository.dart';
@@ -37,7 +37,6 @@ import 'package:zeta/src/features/ide_session/presentation/ide_session_slice/ide
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
 import 'package:zeta/src/features/project_threads/presentation/project_threads_slice/project_threads_slice_providers.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
-import 'package:zeta/src/features/settings/application/agent_notification_settings_source.dart';
 import 'package:zeta/src/features/settings/application/general_settings_controller.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/settings/presentation/settings_page.dart';
@@ -59,8 +58,6 @@ import 'package:zeta/src/ui/features/ide/views/project_home_page.dart';
 import 'package:zeta/src/ui/features/ide/views/project_agent_sidebar.dart';
 import 'package:zeta/src/ui/features/ide/views/project_list_pane.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:zeta/src/features/agent/application/agent_thread_workspace_controller.dart';
-import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
 import 'package:zeta/src/features/workspace/presentation/workspace_slice/workspace_slice_providers.dart';
 
 typedef AgentProviderAvailabilityLoader =
@@ -84,6 +81,10 @@ class IdeHome extends ConsumerStatefulWidget {
     required this.projectLocationOpener,
     required this.appearanceController,
     required this.generalSettingsController,
+    required this.desktopAttentionSliceComposition,
+    required this.desktopAttentionTargetActivatorRelay,
+    required this.conversationSliceStoreRegistry,
+    required this.conversationWorkspaceStoreRegistry,
     required this.agentModelCatalogRepository,
     required this.agentProviderRuntimeRegistry,
     this.agentProviderSettingsPort,
@@ -92,15 +93,9 @@ class IdeHome extends ConsumerStatefulWidget {
     this.agentProviderAvailabilityLoader,
     this.homeProviderDetectionLoader,
     this.showWindowControls = true,
-    this.desktopNotificationService,
-    this.desktopAttentionIndicator,
-    this.notificationSettingsSource,
     this.turnContextStore,
     this.agentUiTextCatalog = const FallbackAgentUiTextCatalog(),
-    this.desktopAttentionTextCatalog =
-        const FallbackDesktopAttentionTextCatalog(),
     this.metrics = noopZetaMetricsPort,
-    this.conversationSliceEnabled = false,
     this.providerManagementSliceEnabled = false,
     this.agentManagementTextCatalog =
         const FallbackAgentManagementTextCatalog(),
@@ -117,6 +112,12 @@ class IdeHome extends ConsumerStatefulWidget {
   final ProjectLocationOpener projectLocationOpener;
   final AppearanceSettingsController appearanceController;
   final GeneralSettingsController generalSettingsController;
+  final DesktopAttentionSliceComposition desktopAttentionSliceComposition;
+  final DesktopAttentionTargetActivatorRelay
+  desktopAttentionTargetActivatorRelay;
+  final AgentConversationSliceStoreRegistry conversationSliceStoreRegistry;
+  final AgentConversationWorkspaceStoreRegistry
+  conversationWorkspaceStoreRegistry;
   final AgentModelCatalogRepository agentModelCatalogRepository;
   final AgentProviderRuntimeRegistry agentProviderRuntimeRegistry;
 
@@ -132,21 +133,10 @@ class IdeHome extends ConsumerStatefulWidget {
   final AgentProviderAvailabilityLoader? agentProviderAvailabilityLoader;
   final HomeProviderDetectionLoader? homeProviderDetectionLoader;
   final bool showWindowControls;
-  final DesktopNotificationService? desktopNotificationService;
-  final DesktopAttentionIndicator? desktopAttentionIndicator;
-
-  /// settings 切片启用时由 app 组合层注入；null 时完整回退旧 controller。
-  final AgentNotificationSettingsSource? notificationSettingsSource;
-
   final AgentTurnContextStore? turnContextStore;
 
   /// app 组合层注入的脱敏指标端口；默认 no-op。
   final ZetaMetricsPort metrics;
-
-  /// Phase 2 切片的 feature flag（全局生效）。
-  ///
-  /// false = 走旧 ViewModel 直连路径（测试默认）；生产由 `main` 显式传 true。
-  final bool conversationSliceEnabled;
 
   /// Phase 3 第 2 批：true 时只创建 management page store，false 时只创建旧
   /// controller。生产翻旗由 app 根统一控制。
@@ -154,7 +144,6 @@ class IdeHome extends ConsumerStatefulWidget {
 
   final AgentUiTextCatalog agentUiTextCatalog;
   final AgentManagementTextCatalog agentManagementTextCatalog;
-  final DesktopAttentionTextCatalog desktopAttentionTextCatalog;
 
   @override
   ConsumerState<IdeHome> createState() => _IdeHomeState();
@@ -171,7 +160,8 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
   late final UsageStatisticsOperations _usageStatisticsController;
   late final AgentUsagePanelOperations _agentUsagePanelController;
   late final AgentUsageRefreshCoordinator _agentUsageRefreshCoordinator;
-  late final DesktopAttentionController _desktopAttentionController;
+  late final DesktopAttentionSliceStore _desktopAttentionStore;
+  late final DesktopAttentionTargetActivator _desktopAttentionTargetActivator;
   late final ZetaShellStateSnapshotReader _shellStateSnapshotReader;
   bool _windowFocused = true;
   bool _nativeMenuConfigured = false;
@@ -212,32 +202,10 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
   @override
   void initState() {
     super.initState();
-    if (widget.notificationSettingsSource == null) {
-      unawaited(widget.appearanceController.load());
-      unawaited(widget.generalSettingsController.load());
-    }
-    final notificationService =
-        widget.desktopNotificationService ??
-        (widget.enableNativeWindowFrame
-            ? FlutterDesktopNotificationService(
-                linuxActionName: widget.desktopAttentionTextCatalog.linuxAction,
-              )
-            : const NoopDesktopNotificationService());
-    final attentionIndicator =
-        widget.desktopAttentionIndicator ??
-        (widget.enableNativeWindowFrame
-            ? MethodChannelDesktopAttentionIndicator()
-            : const NoopDesktopAttentionIndicator());
-    _desktopAttentionController = DesktopAttentionController(
-      notificationService: notificationService,
-      indicator: attentionIndicator,
-      notificationSettingsSource:
-          widget.notificationSettingsSource ??
-          GeneralSettingsControllerNotificationSource(
-            widget.generalSettingsController,
-          ),
-      activateTarget: _activateAttentionTarget,
-      textCatalog: widget.desktopAttentionTextCatalog,
+    _desktopAttentionStore = widget.desktopAttentionSliceComposition.store;
+    _desktopAttentionTargetActivator = _activateAttentionTarget;
+    widget.desktopAttentionTargetActivatorRelay.bind(
+      _desktopAttentionTargetActivator,
     );
     _usageStatisticsController =
         widget.usageStatisticsSliceComposition.usageStatisticsStore;
@@ -254,35 +222,32 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
       agentProviderRuntimeRegistry: widget.agentProviderRuntimeRegistry,
       onAgentTurnTerminal: _handleAgentTurnTerminal,
       onAgentAttention: (attention) {
-        unawaited(_desktopAttentionController.handleAttention(attention));
+        unawaited(_desktopAttentionStore.handleAttention(attention));
       },
       onAgentUsageProviderRestored:
           _agentUsagePanelController.restorePreferredProviderId,
       turnContextStore: widget.turnContextStore,
       agentUiTextCatalog: widget.agentUiTextCatalog,
       metrics: widget.metrics,
-      conversationSliceEnabled: widget.conversationSliceEnabled,
       agentProviderSettingsPort: widget.agentProviderSettingsPort,
       activeModelCatalogLoader: widget.activeModelCatalogLoader,
     )..addListener(_handleShellChanged);
+    widget.conversationWorkspaceStoreRegistry.bind(
+      _shellController.agentConversationWorkspaceStore,
+    );
+    widget.conversationSliceStoreRegistry.bind(
+      _shellController.agentConversationWorkspaceStore.sliceStoreForBinding,
+    );
     widget.usageStatisticsSliceComposition.bindSelectionPersistence(
       _shellController.setSelectedAgentUsageProviderId,
     );
     _shellController.agentProviderController.addListener(
       _handleAgentProviderSettingsUsageChanged,
     );
-    // Riverpod 禁止在 initState 里改 provider，因此推到首帧之后。
-    // 首帧读到"未启用"没有关系：解析器是 NotifierProvider，bind 会让依赖它的
-    // family 失效重算，区域随即切到切片路径（两条路径渲染结果一致）。
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _bindConversationSliceStoreResolver();
-      }
-    });
     if (widget.enableNativeWindowFrame) {
       windowManager.addListener(this);
     }
-    unawaited(_desktopAttentionController.initialize());
+    unawaited(widget.desktopAttentionSliceComposition.initialize());
     final managementRepositories = <String, AgentCliManagementRepository>{
       AgentDefinition.codex.id: CodexAgentManagementRepository(
         modelCatalogRepository: widget.agentModelCatalogRepository,
@@ -354,41 +319,6 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
     }
   }
 
-  /// 把 workspace controller 的 store 解析器 bind 进 Riverpod。
-  ///
-  /// 必须在 controller 建好之后：根 `ProviderScope` 在 `MainApp` 就位，那时还
-  /// 没有 controller。bind 会让依赖它的 family 失效重算，因此 bind 之前的读取
-  /// 不会把"未启用"缓存住。
-  void _bindConversationSliceStoreResolver() {
-    final workspace = _shellController.agentWorkspaceController;
-    ProviderScope.containerOf(context, listen: false)
-        .read(agentConversationSliceStoreResolverProvider.notifier)
-        .bind(workspace.sliceStoreForBinding);
-    assert(
-      _conversationSliceResolvesWhenEnabled(workspace),
-      '切片已为某个 workspace entry 启用，但解析不到它的 store：'
-      '组合根与切片之间的接线断了。删掉这行 bind 或改坏 sliceStoreForBinding '
-      '都会走到这里——切片会静默退回旧路径，功能看起来正常。',
-    );
-  }
-
-  /// 已启用切片的 entry 必须解析得到 store。
-  ///
-  /// 只在 debug 断言里跑：这是一条**静默失效**的接线，没有护栏时坏了也不报错。
-  bool _conversationSliceResolvesWhenEnabled(
-    AgentThreadWorkspaceController workspace,
-  ) {
-    for (final entry in workspace.entries) {
-      if (entry.sliceStore == null) {
-        continue;
-      }
-      if (workspace.sliceStoreForBinding(entry.binding.key) == null) {
-        return false;
-      }
-    }
-    return true;
-  }
-
   /// 诊断与恢复测试使用的无正文 Shell 投影。
   ///
   /// 这里刻意同步读取各唯一 owner，既不缓存也不注册 listener；生产 Widget 仍只
@@ -406,8 +336,8 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
     final selectedEntryId = _shellController.selectedAgentWorkspaceEntryId;
     final conversations = <String, ZetaConversationStateSnapshot>{};
     for (final entry in entries) {
-      final slice = entry.sliceStore?.state;
-      final pendingInteractions = slice?.pendingInteractions;
+      final slice = entry.sliceStore.state;
+      final pendingInteractions = slice.pendingInteractions;
       conversations[entry.entryId] = ZetaConversationStateSnapshot(
         entryId: entry.entryId,
         projectPath: entry.projectPath,
@@ -415,21 +345,18 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
         threadId: entry.threadId,
         isDraft: entry.isDraft,
         isSelected: entry.entryId == selectedEntryId,
-        sliceAvailable: slice != null,
-        threadOpenPhase:
-            slice?.header.threadOpenPhase ?? entry.viewModel.threadOpenPhase,
+        sliceAvailable: true,
+        threadOpenPhase: slice.header.threadOpenPhase,
         runtimeStatus: entry.threadSnapshot.runtimeStatus,
-        isTurnRunning:
-            slice?.header.isTurnRunning ?? entry.viewModel.isTurnRunning,
-        isReadOnly: slice?.header.isReadOnly ?? entry.viewModel.isReadOnly,
-        visibleTurnCount: slice?.history.visibleTurns.length ?? 0,
-        pendingInteractionCount: pendingInteractions == null
-            ? 0
-            : pendingInteractions.permissions.length +
-                  pendingInteractions.questions.length +
-                  pendingInteractions.planApprovals.length +
-                  (pendingInteractions.planExecutionHandoff == null ? 0 : 1),
-        pendingOperationCount: slice?.pendingOperations.length ?? 0,
+        isTurnRunning: slice.header.isTurnRunning,
+        isReadOnly: slice.header.isReadOnly,
+        visibleTurnCount: slice.history.visibleTurns.length,
+        pendingInteractionCount:
+            pendingInteractions.permissions.length +
+            pendingInteractions.questions.length +
+            pendingInteractions.planApprovals.length +
+            (pendingInteractions.planExecutionHandoff == null ? 0 : 1),
+        pendingOperationCount: slice.pendingOperations.length,
       );
     }
     final managementState = _agentManagementComposition?.store.state;
@@ -471,8 +398,14 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
       managementComposition.store.removeListener(_handleAgentManagementChanged);
       managementComposition.close();
     }
+    widget.conversationSliceStoreRegistry.unbind();
+    widget.conversationWorkspaceStoreRegistry.unbind(
+      _shellController.agentConversationWorkspaceStore,
+    );
     _shellController.dispose();
-    _desktopAttentionController.dispose();
+    widget.desktopAttentionTargetActivatorRelay.unbind(
+      _desktopAttentionTargetActivator,
+    );
     _leftSidebarFocusNode.dispose();
     _rightSidebarFocusNode.dispose();
     super.dispose();
@@ -755,7 +688,6 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
 
   /// 会话级保留容器：Project Home + 各 Agent 会话，仅布局当前选中项。
   Widget _buildRetainedAgentPaneStack() {
-    final entries = _shellController.agentWorkspaceEntries;
     final projectPath = _shellController.activeProjectPath;
     if (projectPath == null) {
       if (!_shellController.initialRestoreCompleted) {
@@ -769,15 +701,21 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
       );
     }
 
-    const projectHomeId = 'project-home';
-    final selectedEntryId = _shellController.selectedAgentWorkspaceEntryId;
-    final selectedId = _shellController.isProjectHomeActive
-        ? projectHomeId
-        : (selectedEntryId ??
-              (entries.isNotEmpty ? entries.first.entryId : projectHomeId));
-
     return Consumer(
       builder: (context, ref, _) {
+        final workspaceState = ref.watch(agentConversationWorkspaceProvider);
+        final workspaceStore = ref.watch(
+          agentConversationWorkspaceStoreProvider,
+        );
+        final entries = <AgentThreadWorkspaceEntry>[
+          for (final entryState in workspaceState.entries)
+            workspaceStore.entryById(entryState.entryId),
+        ];
+        const projectHomeId = 'project-home';
+        final selectedId = workspaceState.projectHomeActive
+            ? projectHomeId
+            : (workspaceState.selectedEntryId ??
+                  (entries.isNotEmpty ? entries.first.entryId : projectHomeId));
         final projectThreadState = ref.watch(
           projectThreadListStateProvider(projectPath),
         );
@@ -789,6 +727,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
             projectPath: projectPath,
             projectHomeId: projectHomeId,
             selectedId: selectedId,
+            projectHomeActive: workspaceState.projectHomeActive,
             generalSettings: generalSettings,
             projectThreadState: projectThreadState,
           );
@@ -800,6 +739,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
             projectPath: projectPath,
             projectHomeId: projectHomeId,
             selectedId: selectedId,
+            projectHomeActive: workspaceState.projectHomeActive,
             generalSettings: generalSettings,
             projectThreadState: projectThreadState,
           ),
@@ -813,6 +753,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
     required String projectPath,
     required String projectHomeId,
     required String selectedId,
+    required bool projectHomeActive,
     required GeneralSettings generalSettings,
     required ProjectThreadListState projectThreadState,
   }) {
@@ -822,7 +763,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
       pages: <IdeRetainedPage>[
         IdeRetainedPage(
           id: projectHomeId,
-          child: !_shellController.isProjectHomeActive
+          child: !projectHomeActive
               ? const SizedBox.shrink()
               : KeyedSubtree(
                   key: ValueKey<String>('project-home-$projectPath'),
@@ -1221,14 +1162,18 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
   }
 
   void _updateDesktopAttentionVisibility() {
-    final entry = _shellController.agentWorkspaceController.selectedEntry;
-    _desktopAttentionController.updateVisibility(
-      DesktopAttentionVisibility(
-        windowFocused: _windowFocused,
-        agentCanvasVisible:
-            _page == _IdeHomePage.home && !_shellController.isProjectHomeActive,
-        providerId: entry?.providerId,
-        threadId: entry?.threadId,
+    final entry =
+        _shellController.agentConversationWorkspaceStore.selectedEntry;
+    unawaited(
+      _desktopAttentionStore.updateVisibility(
+        DesktopAttentionVisibility(
+          windowFocused: _windowFocused,
+          agentCanvasVisible:
+              _page == _IdeHomePage.home &&
+              !_shellController.isProjectHomeActive,
+          providerId: entry?.providerId,
+          threadId: entry?.threadId,
+        ),
       ),
     );
   }

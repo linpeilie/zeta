@@ -19,7 +19,6 @@ class _AgentCommandGroupCard extends StatelessWidget {
     return AgentRegionBuilder<AgentExpansionState>(
       viewModel: viewModel,
       selector: agentConversationExpansionProvider.call,
-      legacyListenable: viewModel.expansionStateListenable,
       builder: (context, expansion) {
         final expanded = expansion.isCommandGroupExpanded(group.id);
         return IdeCollapsibleCard(
@@ -178,7 +177,6 @@ class _AgentFileEditItemRow extends StatelessWidget {
     return AgentRegionBuilder<AgentExpansionState>(
       viewModel: viewModel,
       selector: agentConversationExpansionProvider.call,
-      legacyListenable: viewModel.expansionStateListenable,
       builder: (context, expansion) {
         final expanded = expansion.isFileEditItemExpanded(item.id);
         return AgentFileChangeEvidenceCard(
@@ -341,7 +339,6 @@ class _AgentToolCallCard extends StatelessWidget {
     return AgentRegionBuilder<AgentExpansionState>(
       viewModel: viewModel,
       selector: agentConversationExpansionProvider.call,
-      legacyListenable: viewModel.expansionStateListenable,
       // elapsed 是本地时钟 tick，不属于任何 region：只在需要时单独订阅。
       builder: (context, expansion) => ListenableBuilder(
         listenable: needsElapsedTick
@@ -686,7 +683,6 @@ class _AgentPlanDocumentCard extends StatelessWidget {
                   AgentRegionBuilder<AgentComposerState>(
                     viewModel: viewModel,
                     selector: agentConversationComposerProvider.call,
-                    legacyListenable: viewModel.composerStateListenable,
                     builder: (context, _) {
                       final selector = _buildModelSelector();
                       if (selector == null) {

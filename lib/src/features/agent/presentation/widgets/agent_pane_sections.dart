@@ -350,16 +350,13 @@ class _AgentConversationTimeline extends StatelessWidget {
     return AgentRegionBuilder<AgentConversationHistoryState>(
       viewModel: viewModel,
       selector: agentConversationHistoryProvider.call,
-      legacyListenable: viewModel.historyStateListenable,
       builder: (context, historyState) => AgentRegionBuilder<AgentExpansionState>(
         viewModel: viewModel,
         selector: agentConversationExpansionProvider.call,
-        legacyListenable: viewModel.expansionStateListenable,
         builder: (context, expansionState) =>
             AgentRegionBuilder<AgentPendingInteractionState>(
               viewModel: viewModel,
               selector: agentConversationPendingInteractionProvider.call,
-              legacyListenable: viewModel.pendingInteractionStateListenable,
               builder: (context, pendingState) => ListenableBuilder(
                 listenable: liveListenable,
                 builder: (context, _) {
@@ -899,7 +896,6 @@ class _AgentPendingInteractionSection extends StatelessWidget {
     return AgentRegionBuilder<AgentPendingInteractionState>(
       viewModel: viewModel,
       selector: agentConversationPendingInteractionProvider.call,
-      legacyListenable: viewModel.pendingInteractionStateListenable,
       builder: _buildDock,
     );
   }

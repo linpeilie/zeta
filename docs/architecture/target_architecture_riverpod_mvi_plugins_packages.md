@@ -783,11 +783,12 @@ Phase 0 先采基线，再固定阈值。至少要能检测：
 
 ### Phase 2：迁移一个代表性业务纵切
 
-**状态：已落地（2026-08-22）。** 切片骨架、Riverpod family、`AgentPane` selector
-接缝与 §14 Phase 2 验收要求的测试全部完成；2026-08-23 起生产**全局启用**切片路径
-（`main` 传 `conversationSliceEnabled: true`），开始积累真实使用证据——这是
-Phase 3 前置条件的计时起点。字段映射、门禁答卷、验收对照、flag 粒度变更与
-计划偏差见 [阶段 2：Agent Conversation 切片](./phase2_conversation_slice.md)。
+**状态：已落地并于 Phase 3 第 5 批关掉回退（2026-08-24）。** 切片骨架、Riverpod
+family、`AgentPane` selector 与 §14 验收测试均已完成；第 5 批已删除全局 flag、nullable
+store 和 ViewModel 直连路径，所有 Conversation 固定走按 BindingKey 隔离的 Slice。
+字段映射与历史迁移记录见
+[阶段 2：Agent Conversation 切片](./phase2_conversation_slice.md)，关批契约见
+[Phase 3 第 5 批](./phase3_batch5_desktop_attention_conversation_workspace.md)。
 
 代表性纵切选择：**单个 Agent Conversation 的 presentation/application 外壳**。它覆盖 family scope、流式投影、发送/取消 Intent、UiEffect、Binding lifecycle 和 Provider capability，但不重写底层 event pipeline。
 
@@ -797,7 +798,8 @@ Phase 3 前置条件的计时起点。字段映射、门禁答卷、验收对照
 - 新建 keyed `AgentConversationIntent` 和薄 `AgentConversationStore`/Riverpod family adapter。
 - adapter 消费现有 `AgentConversationUiStateStore` 的 region 更新，把同一帧变化合并为一个轻量 slice transition。
 - `AgentPane` 子树改用 selector；发送、取消、审批/提问仍调用现有 application ports，但统一通过 Intent/effect path。
-- 只迁一个 conversation workspace entry；保留旧 ViewModel adapter 作为可切换回退路径。
+- 每个 conversation workspace entry 必建独立 SliceBinding；旧 ViewModel adapter
+  回退已于 Phase 3 第 5 批删除。
 - 增加两 thread、dispose、stale generation、普通/urgent stream、UiEffect exactly-once 契约测试。
 
 **前置条件**
@@ -813,12 +815,12 @@ Phase 3 前置条件的计时起点。字段映射、门禁答卷、验收对照
 - 两个 Binding 的 state/reducer/effect 完全隔离；dispose 一个不影响另一个。
 - 发送、取消、审批、提问、Plan 四类语义和真实 wire 参数不变。
 - canonical timeline signature、Widget 行为和 Phase 0 性能预算通过。
-- 旧/新路径可由 app-level feature flag 二选一；生产运行时不存在双写 owner。
+- 未注册 BindingKey fail-closed；生产运行时不存在双写 owner 或 fallback。
 
 **回滚方式**
 
-- feature flag 切回旧 `AgentConversationViewModel` 直连 UI。
-- 新 adapter 是现有 store 的只读消费者，回滚不涉及数据迁移。
+- 第 5 批关批后只支持整体 revert；没有运行时回退开关。
+- adapter 不涉及持久化数据迁移，版本控制回滚无需数据降级。
 - 保留 fixture 和行为测试，用于定位新路径差异。
 
 **风险**
@@ -872,7 +874,7 @@ store、app effect runner/composition 与 Riverpod 只读镜像均已落地；�
 2. provider settings/management/model catalog；
 3. project threads 与 usage statistics；
 4. workspace 与 ide session；
-5. desktop attention 与完整 conversation workspace；
+5. ~~desktop attention 与完整 conversation workspace~~（✅ 2026-08-23 已关批）；
 6. 将 Codex/Grok/Claude 从 compatibility factory 转为三个显式 compile-time plugin contribution。
 
 **改动范围**

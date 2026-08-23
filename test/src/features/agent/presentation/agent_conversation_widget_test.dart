@@ -24,6 +24,10 @@ import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.
 import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_binding.dart';
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
 
 import '../../../testing/ide_test_harness.dart';
 import '../../../testing/agent_conversation_binding_test_harness.dart';
@@ -1377,8 +1381,12 @@ void main() {
         providerController: controller,
         conversationBinding: bindingLease.binding,
         globalRuntime: bindingHarness.globalRuntime,
+        composerStateOwner: AgentConversationComposerStateOwner.create(
+          providerController: controller,
+        ),
       );
       addTearDown(viewModel.dispose);
+      final sliceRegistry = _registerConversationSlice(viewModel);
       viewModel.updateContext(projectPath: '/repo', contextFilePath: null);
 
       final lightIdeTheme = buildIdeThemeData(
@@ -1391,6 +1399,11 @@ void main() {
       );
       await tester.pumpWidget(
         ProviderScope(
+          overrides: [
+            agentConversationSliceStoreRegistryProvider.overrideWithValue(
+              sliceRegistry,
+            ),
+          ],
           child: IdeThemeScope(
             themeMode: ThemeMode.dark,
             lightTheme: lightIdeTheme,
@@ -1461,10 +1474,14 @@ void main() {
       providerController: controller,
       conversationBinding: bindingLease.binding,
       globalRuntime: bindingHarness.globalRuntime,
+      composerStateOwner: AgentConversationComposerStateOwner.create(
+        providerController: controller,
+      ),
       initialProjectPath: '/repo',
       initialThread: thread,
     );
     addTearDown(viewModel.dispose);
+    final sliceRegistry = _registerConversationSlice(viewModel);
     await viewModel.initialization;
 
     final lightIdeTheme = buildIdeThemeData(
@@ -1477,6 +1494,11 @@ void main() {
     );
     await tester.pumpWidget(
       ProviderScope(
+        overrides: [
+          agentConversationSliceStoreRegistryProvider.overrideWithValue(
+            sliceRegistry,
+          ),
+        ],
         child: IdeThemeScope(
           themeMode: ThemeMode.dark,
           lightTheme: lightIdeTheme,
@@ -1674,10 +1696,14 @@ void main() {
       providerController: controller,
       conversationBinding: bindingLease.binding,
       globalRuntime: bindingHarness.globalRuntime,
+      composerStateOwner: AgentConversationComposerStateOwner.create(
+        providerController: controller,
+      ),
       initialProjectPath: '/repo',
       initialThread: thread,
     );
     addTearDown(viewModel.dispose);
+    final sliceRegistry = _registerConversationSlice(viewModel);
     await viewModel.initialization;
 
     final lightIdeTheme = buildIdeThemeData(
@@ -1690,6 +1716,11 @@ void main() {
     );
     await tester.pumpWidget(
       ProviderScope(
+        overrides: [
+          agentConversationSliceStoreRegistryProvider.overrideWithValue(
+            sliceRegistry,
+          ),
+        ],
         child: IdeThemeScope(
           themeMode: ThemeMode.dark,
           lightTheme: lightIdeTheme,
@@ -1982,6 +2013,9 @@ void main() {
       providerController: controller,
       conversationBinding: bindingLease.binding,
       globalRuntime: bindingHarness.globalRuntime,
+      composerStateOwner: AgentConversationComposerStateOwner.create(
+        providerController: controller,
+      ),
       initialProjectPath: '/repo',
       initialThread: thread,
       onCreatedThread:
@@ -1990,6 +2024,7 @@ void main() {
           },
     );
     addTearDown(viewModel.dispose);
+    final sliceRegistry = _registerConversationSlice(viewModel);
     await viewModel.initialization;
 
     final lightIdeTheme = buildIdeThemeData(
@@ -2002,6 +2037,11 @@ void main() {
     );
     await tester.pumpWidget(
       ProviderScope(
+        overrides: [
+          agentConversationSliceStoreRegistryProvider.overrideWithValue(
+            sliceRegistry,
+          ),
+        ],
         child: IdeThemeScope(
           themeMode: ThemeMode.dark,
           lightTheme: lightIdeTheme,
@@ -4203,6 +4243,19 @@ Future<void> pumpUntilAgentComposer(WidgetTester tester) async {
     () => input.hitTestable().evaluate().isNotEmpty,
     failureMessage: 'Agent composer did not become ready',
   );
+}
+
+AgentConversationSliceStoreRegistry _registerConversationSlice(
+  AgentConversationViewModel viewModel,
+) {
+  final binding = AgentConversationSliceBinding(viewModel: viewModel);
+  addTearDown(binding.dispose);
+  return AgentConversationSliceStoreRegistry()..bind((requestedKey) {
+    if (requestedKey != viewModel.conversationBinding.key) {
+      throw StateError('No test conversation slice for $requestedKey');
+    }
+    return binding.store;
+  });
 }
 
 /// 完整 Shell 含有常驻监听与动效，按有限帧推进普通交互，避免每次都扫描到 settle。

@@ -1,6 +1,6 @@
 # 阶段 0：测试与可观测性基线
 
-最后更新：2026-08-21
+最后更新：2026-08-24
 
 状态：阶段 0 已落地。对应 [目标架构 §14 Phase 0](./target_architecture_riverpod_mvi_plugins_packages.md#phase-0增加测试与可观测性)。
 
@@ -33,7 +33,7 @@ flutter run -d macos --dart-define=ZETA_METRICS=true
 ```
 
 开启后 `ZetaObservability.inMemory()` 接管，同时给根 `ProviderScope` 挂上 `ZetaProviderObserver`，并把同一个端口注入
-`IdeShellController → AgentThreadWorkspaceController → AgentConversationViewModel → 事件管线采样器 / UI 帧调度器`
+`IdeShellController → AgentConversationWorkspaceStore → AgentConversationViewModel → 事件管线采样器 / UI 帧调度器`
 以及 `AgentProviderRuntimeRegistry`。回退方式就是不传这个 define。
 
 ### 1.2 共享层零改动

@@ -384,7 +384,6 @@ class _AgentPaneState extends State<AgentPane> {
             child: AgentRegionBuilder<AgentHeaderState>(
               viewModel: widget.viewModel,
               selector: agentConversationHeaderProvider.call,
-              legacyListenable: widget.viewModel.headerStateListenable,
               builder: (context, state) {
                 return _AgentHeader(viewModel: widget.viewModel, state: state);
               },
@@ -395,7 +394,6 @@ class _AgentPaneState extends State<AgentPane> {
           child: AgentRegionBuilder<AgentConversationHistoryState>(
             viewModel: widget.viewModel,
             selector: agentConversationHistoryProvider.call,
-            legacyListenable: widget.viewModel.historyStateListenable,
             builder: (context, historyState) => ListenableBuilder(
               // live turn 刻意不进切片（§2.7）：每个 token 触发一次切片发布会
               // 直接撞穿帧预算，它继续走局部重建路径。
@@ -453,17 +451,12 @@ class _AgentPaneState extends State<AgentPane> {
                       AgentRegionBuilder<AgentComposerState>(
                         viewModel: widget.viewModel,
                         selector: agentConversationComposerProvider.call,
-                        legacyListenable:
-                            widget.viewModel.composerStateListenable,
                         builder: (context, composerState) =>
                             AgentRegionBuilder<AgentPendingInteractionState>(
                               viewModel: widget.viewModel,
                               selector:
                                   agentConversationPendingInteractionProvider
                                       .call,
-                              legacyListenable: widget
-                                  .viewModel
-                                  .pendingInteractionStateListenable,
                               builder: (context, pendingState) =>
                                   ValueListenableBuilder<List<String>>(
                                     valueListenable: _draftImagePaths,

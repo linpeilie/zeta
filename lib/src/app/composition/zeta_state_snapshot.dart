@@ -4,6 +4,7 @@ import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_provider_settings_slice_state.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_state.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
+import 'package:zeta/src/features/desktop_notifications/application/desktop_attention_slice_state.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_session_slice_state.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_state.dart';
@@ -25,6 +26,7 @@ final class ZetaStateSnapshot {
     required this.ideSession,
     required this.usageStatistics,
     required this.agentUsagePanel,
+    required this.desktopAttention,
     this.appearanceSettings,
     this.generalSettings,
     this.providerSettings,
@@ -34,11 +36,45 @@ final class ZetaStateSnapshot {
   final IdeSessionSliceState ideSession;
   final UsageStatisticsSliceState usageStatistics;
   final AgentUsagePanelSliceState agentUsagePanel;
+  final ZetaDesktopAttentionStateSnapshot desktopAttention;
 
   /// 第 1、2 批仍在独立观察时允许为空；各批关批后会收敛为必选节点。
   final AppearanceSettingsSliceState? appearanceSettings;
   final GeneralSettingsSliceState? generalSettings;
   final AgentProviderSettingsSliceState? providerSettings;
+}
+
+/// Desktop Attention 的无路径、无正文根投影。
+@immutable
+final class ZetaDesktopAttentionStateSnapshot {
+  const ZetaDesktopAttentionStateSnapshot({
+    required this.initialized,
+    required this.unreadCount,
+    required this.windowFocused,
+    required this.agentCanvasVisible,
+    required this.visibleProviderId,
+    required this.visibleThreadId,
+  });
+
+  factory ZetaDesktopAttentionStateSnapshot.fromState(
+    DesktopAttentionSliceState state,
+  ) {
+    return ZetaDesktopAttentionStateSnapshot(
+      initialized: state.initialized,
+      unreadCount: state.unreadCount,
+      windowFocused: state.visibility.windowFocused,
+      agentCanvasVisible: state.visibility.agentCanvasVisible,
+      visibleProviderId: state.visibility.providerId,
+      visibleThreadId: state.visibility.threadId,
+    );
+  }
+
+  final bool initialized;
+  final int unreadCount;
+  final bool windowFocused;
+  final bool agentCanvasVisible;
+  final String? visibleProviderId;
+  final String? visibleThreadId;
 }
 
 /// Shell 组合边界可见的只读逻辑关系。
