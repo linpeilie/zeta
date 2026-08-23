@@ -132,7 +132,7 @@ class MainApp extends StatefulWidget {
   /// Phase 3 第 1 批 settings 切片的 feature flag（全局生效，默认 false）。
   ///
   /// true 时创建切片组合（两个 store + runner + 迁移期 ingress），主题构建
-  /// 改由切片镜像 provider 驱动；写入路径在步骤 4 之前仍走旧 controller。
+  /// 与 settings/Agent Pane/桌面通知投影都改由切片驱动。
   final bool settingsSliceEnabled;
 
   /// 生产启动阶段解析并初始化的 Zeta 自有数据路径。
@@ -513,7 +513,7 @@ class MainAppState extends State<MainApp>
 
   Widget _buildApp(BuildContext context) {
     // Phase 3 第 1 批：切片路径（flag 开）由镜像 provider 驱动主题构建；
-    // 迁移期写入仍走旧 controller，ingress 负责把变化镜像进切片。
+    // flag 关闭时仍完整回退到旧 controller。
     if (_settingsSliceComposition != null) {
       return Consumer(
         builder: (context, ref, _) => _buildThemedApp(
@@ -605,6 +605,8 @@ class MainAppState extends State<MainApp>
                           openPathInSystemFileManager,
                       appearanceController: _appearanceController,
                       generalSettingsController: _generalSettingsController,
+                      notificationSettingsSource:
+                          _settingsSliceComposition?.notificationSettingsSource,
                       usageStatisticsDependencies:
                           IdeShellUsageStatisticsDependencies(
                             partitionStore: _usageStatisticsPartitionStore,

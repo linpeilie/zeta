@@ -19,6 +19,7 @@ import 'package:zeta/src/features/agent_management/domain/agent_management_model
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
+import 'package:zeta/src/features/settings/presentation/settings_slice/settings_slice_providers.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 
@@ -1406,6 +1407,63 @@ void main() {
     },
   );
 
+  testWidgets('settings 切片更新 AgentPane 快捷键且不回写旧 controller', (tester) async {
+    final retained = await _prepareRetainedAgentState(
+      tester,
+      enableSettingsSlice: true,
+    );
+    final appState = tester.state<MainAppState>(find.byType(MainApp));
+
+    expect(
+      (retained.agentPaneElement.widget as AgentPane).messageSendShortcut,
+      MessageSendShortcut.enter,
+    );
+    expect(
+      appState.generalSettingsController.settings.sendMessageShortcut,
+      MessageSendShortcut.enter,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('titlebar-settings-action')));
+    await tester.pump();
+    await tester.tap(
+      find.byKey(const ValueKey('settings-send-message-shortcut-modifier')),
+    );
+    await tester.pump();
+    await tester.pump();
+    final container = ProviderScope.containerOf(retained.agentPaneElement);
+    final sliceStore = container.read(generalSettingsSliceStoreProvider);
+    expect(sliceStore, isNotNull);
+    expect(
+      sliceStore!.state.settings.sendMessageShortcut,
+      MessageSendShortcut.primaryModifierEnter,
+      reason: '设置页操作必须先落到 general settings 切片',
+    );
+    expect(
+      container.read(generalSettingsSliceValueProvider).sendMessageShortcut,
+      MessageSendShortcut.primaryModifierEnter,
+      reason: 'Riverpod selector 必须发布已经持久化的切片值',
+    );
+    expect(retained.agentPaneElement.mounted, isTrue);
+
+    // 离屏 keep-alive 子树在重新激活时消费新配置；Element 本身不能被替换。
+    await tester.tap(find.byKey(const ValueKey('titlebar-back-action')));
+    await tester.pump();
+    await pumpUntilCondition(
+      tester,
+      () =>
+          (retained.agentPaneElement.widget as AgentPane).messageSendShortcut ==
+          MessageSendShortcut.primaryModifierEnter,
+      failureMessage: 'AgentPane did not receive the settings slice shortcut',
+    );
+    expect(retained.agentPaneElement.mounted, isTrue);
+
+    expect(
+      appState.generalSettingsController.settings.sendMessageShortcut,
+      MessageSendShortcut.enter,
+      reason: '切片路径不能回写旧 controller，否则会形成双写 owner',
+    );
+  });
+
   testWidgets('Agent to Usage and back retains the workbench and Agent state', (
     tester,
   ) async {
@@ -1962,6 +2020,7 @@ Future<void> _pumpIde(
   Future<List<ManagedAgent>> Function()? homeProviderDetectionLoader,
   bool flushInitialUsageRefresh = true,
   bool enableConversationSlice = false,
+  bool enableSettingsSlice = false,
 }) async {
   tester.view
     ..physicalSize = size
@@ -1989,6 +2048,8 @@ Future<void> _pumpIde(
           agentUsagePanelRepository ?? const _EmptyAgentUsageRepository(),
       // Phase 2 切片全局生效；这里要么全开要么全关，用于两条路径的对照。
       conversationSliceEnabled: enableConversationSlice,
+      // Phase 3 第 1 批同样使用 app-level 全局 flag 做双路径对照。
+      settingsSliceEnabled: enableSettingsSlice,
     ),
   );
   if (flushInitialUsageRefresh) {
@@ -2221,8 +2282,9 @@ class _TrackedDirectoryAgentUsageRepository
 }
 
 Future<_RetainedAgentState> _prepareRetainedAgentState(
-  WidgetTester tester,
-) async {
+  WidgetTester tester, {
+  bool enableSettingsSlice = false,
+}) async {
   final directory = Directory.systemTemp.createTempSync('zeta_workbench_test_');
   addTearDown(() {
     if (directory.existsSync()) {
@@ -2276,6 +2338,7 @@ Future<_RetainedAgentState> _prepareRetainedAgentState(
     directoryPicker: () async => directory.path,
     agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
     agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+    enableSettingsSlice: enableSettingsSlice,
   );
 
   await openProjectFromMenu(tester);

@@ -30,6 +30,7 @@ import 'package:zeta/src/features/settings/application/agent_notification_settin
 import 'package:zeta/src/features/settings/application/general_settings_controller.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/settings/presentation/settings_page.dart';
+import 'package:zeta/src/features/settings/presentation/settings_slice/settings_slice_providers.dart';
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_controller.dart';
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_refresh_coordinator.dart';
 import 'package:zeta/src/features/usage_statistics/application/usage_statistics_controller.dart';
@@ -75,6 +76,7 @@ class IdeHome extends StatefulWidget {
     this.showWindowControls = true,
     this.desktopNotificationService,
     this.desktopAttentionIndicator,
+    this.notificationSettingsSource,
     this.turnContextStore,
     this.agentUiTextCatalog = const FallbackAgentUiTextCatalog(),
     this.desktopAttentionTextCatalog =
@@ -103,6 +105,10 @@ class IdeHome extends StatefulWidget {
   final bool showWindowControls;
   final DesktopNotificationService? desktopNotificationService;
   final DesktopAttentionIndicator? desktopAttentionIndicator;
+
+  /// settings 切片启用时由 app 组合层注入；null 时完整回退旧 controller。
+  final AgentNotificationSettingsSource? notificationSettingsSource;
+
   final AgentTurnContextStore? turnContextStore;
 
   /// app 组合层注入的脱敏指标端口；默认 no-op。
@@ -166,8 +172,10 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   @override
   void initState() {
     super.initState();
-    unawaited(widget.appearanceController.load());
-    unawaited(widget.generalSettingsController.load());
+    if (widget.notificationSettingsSource == null) {
+      unawaited(widget.appearanceController.load());
+      unawaited(widget.generalSettingsController.load());
+    }
     final notificationService =
         widget.desktopNotificationService ??
         (widget.enableNativeWindowFrame
@@ -183,10 +191,11 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
     _desktopAttentionController = DesktopAttentionController(
       notificationService: notificationService,
       indicator: attentionIndicator,
-      // 旧路径桥：切片路径接通后由组合层按 flag 换成切片 store 的适配实现。
-      notificationSettingsSource: GeneralSettingsControllerNotificationSource(
-        widget.generalSettingsController,
-      ),
+      notificationSettingsSource:
+          widget.notificationSettingsSource ??
+          GeneralSettingsControllerNotificationSource(
+            widget.generalSettingsController,
+          ),
       activateTarget: _activateAttentionTarget,
       textCatalog: widget.desktopAttentionTextCatalog,
     );
@@ -593,62 +602,91 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
         : (selectedEntryId ??
               (entries.isNotEmpty ? entries.first.entryId : projectHomeId));
 
-    return ValueListenableBuilder<GeneralSettings>(
-      valueListenable: widget.generalSettingsController.listenable,
-      builder: (context, generalSettings, _) {
-        return IdeRetainedPageView(
-          key: const ValueKey('agent-pane-entry-stack'),
-          selectedId: selectedId,
-          pages: <IdeRetainedPage>[
-            IdeRetainedPage(
-              id: projectHomeId,
-              child: !_shellController.isProjectHomeActive
-                  ? const SizedBox.shrink()
-                  : KeyedSubtree(
-                      key: ValueKey<String>('project-home-$projectPath'),
-                      child: ProjectHomePage(
-                        projectPath: projectPath,
-                        threadState: _shellController.projectThreadStateFor(
-                          projectPath,
-                        ),
-                        loadAvailableProviders: _loadAvailableAgentProviders,
-                        onNewThread: (providerId) {
-                          unawaited(
-                            _shellController.startNewThreadForProject(
-                              projectPath,
-                              providerId: providerId,
-                            ),
-                          );
-                        },
-                        onSelectThread: (thread) {
-                          unawaited(
-                            _shellController.selectProjectThread(
-                              projectPath,
-                              thread,
-                            ),
-                          );
-                        },
-                        onRetryThreads: () {
-                          unawaited(_shellController.retryThreads(projectPath));
-                        },
-                      ),
-                    ),
-            ),
-            for (final entry in entries)
-              IdeRetainedPage(
-                id: entry.entryId,
-                child: KeyedSubtree(
-                  key: ValueKey<String>('agent-pane-entry-${entry.entryId}'),
-                  child: AgentPane(
-                    viewModel: entry.viewModel,
-                    isActive: entry.entryId == selectedId,
-                    messageSendShortcut: generalSettings.sendMessageShortcut,
-                  ),
-                ),
-              ),
-          ],
+    return Consumer(
+      builder: (context, ref, _) {
+        final sliceStore = ref.watch(generalSettingsSliceStoreProvider);
+        if (sliceStore != null) {
+          final generalSettings = ref.watch(generalSettingsSliceValueProvider);
+          return _buildAgentEntryPages(
+            entries: entries,
+            projectPath: projectPath,
+            projectHomeId: projectHomeId,
+            selectedId: selectedId,
+            generalSettings: generalSettings,
+          );
+        }
+        return ValueListenableBuilder<GeneralSettings>(
+          valueListenable: widget.generalSettingsController.listenable,
+          builder: (context, generalSettings, _) => _buildAgentEntryPages(
+            entries: entries,
+            projectPath: projectPath,
+            projectHomeId: projectHomeId,
+            selectedId: selectedId,
+            generalSettings: generalSettings,
+          ),
         );
       },
+    );
+  }
+
+  Widget _buildAgentEntryPages({
+    required List<AgentThreadWorkspaceEntry> entries,
+    required String projectPath,
+    required String projectHomeId,
+    required String selectedId,
+    required GeneralSettings generalSettings,
+  }) {
+    return IdeRetainedPageView(
+      key: const ValueKey('agent-pane-entry-stack'),
+      selectedId: selectedId,
+      pages: <IdeRetainedPage>[
+        IdeRetainedPage(
+          id: projectHomeId,
+          child: !_shellController.isProjectHomeActive
+              ? const SizedBox.shrink()
+              : KeyedSubtree(
+                  key: ValueKey<String>('project-home-$projectPath'),
+                  child: ProjectHomePage(
+                    projectPath: projectPath,
+                    threadState: _shellController.projectThreadStateFor(
+                      projectPath,
+                    ),
+                    loadAvailableProviders: _loadAvailableAgentProviders,
+                    onNewThread: (providerId) {
+                      unawaited(
+                        _shellController.startNewThreadForProject(
+                          projectPath,
+                          providerId: providerId,
+                        ),
+                      );
+                    },
+                    onSelectThread: (thread) {
+                      unawaited(
+                        _shellController.selectProjectThread(
+                          projectPath,
+                          thread,
+                        ),
+                      );
+                    },
+                    onRetryThreads: () {
+                      unawaited(_shellController.retryThreads(projectPath));
+                    },
+                  ),
+                ),
+        ),
+        for (final entry in entries)
+          IdeRetainedPage(
+            id: entry.entryId,
+            child: KeyedSubtree(
+              key: ValueKey<String>('agent-pane-entry-${entry.entryId}'),
+              child: AgentPane(
+                viewModel: entry.viewModel,
+                isActive: entry.entryId == selectedId,
+                messageSendShortcut: generalSettings.sendMessageShortcut,
+              ),
+            ),
+          ),
+      ],
     );
   }
 

@@ -38,6 +38,10 @@
 > 消费面小），且 flag 默认 false，**生产行为零变化**；翻 flag 仍等窗口期满
 > 或另行显式确认。批次文档见
 > [phase3_batch1_settings.md](phase3_batch1_settings.md)。
+>
+> **执行进度（2026-08-23）**：第 1 批步骤 1–4 接缝与 flag 开/关对照已落地，
+> `settingsSliceEnabled` 继续保持生产默认 false。下一状态变更仍是等上述 14 天
+> 开门窗口期满或另行显式确认后翻 flag，不提前进入第 2 批。
 
 **关门标准（每批合入的条件）**，逐条来自目标架构 Phase 3 验收标准：
 

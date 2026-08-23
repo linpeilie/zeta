@@ -1,7 +1,9 @@
 import 'dart:io';
 
+import 'package:zeta/src/app/settings_slice/settings_slice_notification_source.dart';
 import 'package:zeta/src/app/storage/atomic_text_file.dart';
 import 'package:zeta/src/app/settings_slice/settings_slice_runners.dart';
+import 'package:zeta/src/features/settings/application/agent_notification_settings_source.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_effect.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_effect.dart';
 import 'package:zeta/src/core/storage/zeta_data_paths.dart';
@@ -20,20 +22,22 @@ import 'package:zeta/src/features/settings/presentation/settings_slice/settings_
 /// Phase 3 第 1 批的 settings 切片组合（app session 寿命）。
 ///
 /// flag 开启时由 `MainApp` 创建：两个切片 store、各自的 runner 适配器，
-/// 以及迁移期 ingress——**写入仍走旧 controller**（设置页要到步骤 4 才切），
-/// ingress 把旧 controller 的变化镜像进切片，主题构建因此能立即读切片。
+/// 通知设置窄端口与迁移期 ingress。设置页与 `IdeHome` 在 flag 开启时写入、读取
+/// 切片；ingress 只承接仍由启动/测试入口注入的旧 controller 快照。
 ///
-/// 与旧 controller 的文件读写共享同一批底层文件；过渡期只有旧 controller
-/// 一个写入方（用户操作都还从设置页走旧路径），不存在双写竞争。
+/// 新旧路径由 flag 二选一，生产默认仍关闭；关批时会连同 ingress 和旧 controller
+/// 一起删除。
 final class SettingsSliceComposition {
   SettingsSliceComposition._({
     required this.appearanceStore,
     required this.generalStore,
+    required this.notificationSettingsSource,
     required this._ingress,
   });
 
   final AppearanceSettingsSliceStore appearanceStore;
   final GeneralSettingsSliceStore generalStore;
+  final AgentNotificationSettingsSource notificationSettingsSource;
   final SettingsSliceIngress _ingress;
 
   factory SettingsSliceComposition.create({
@@ -62,24 +66,29 @@ final class SettingsSliceComposition {
       sliceStore: appearanceStore,
     );
 
+    final generalDataStore = filePersistence
+        ? FileGeneralSettingsStore(
+            storage: AtomicTextFile(File(dataPaths.generalSettingsFilePath)),
+            fallbackLanguage: fallbackLanguage,
+          )
+        : MemoryGeneralSettingsStore(null, fallbackLanguage);
     final deferredGeneralRunner = _DeferredGeneralRunner();
     final generalStore = GeneralSettingsSliceStore(
       initialState: const GeneralSettingsSliceState(),
       effectRunner: deferredGeneralRunner,
     );
     deferredGeneralRunner.delegate = GeneralSettingsSliceRunnerAdapter(
-      store: filePersistence
-          ? FileGeneralSettingsStore(
-              storage: AtomicTextFile(File(dataPaths.generalSettingsFilePath)),
-              fallbackLanguage: fallbackLanguage,
-            )
-          : MemoryGeneralSettingsStore(null, fallbackLanguage),
+      store: generalDataStore,
       sliceStore: generalStore,
     );
 
     final composition = SettingsSliceComposition._(
       appearanceStore: appearanceStore,
       generalStore: generalStore,
+      notificationSettingsSource: GeneralSettingsSliceNotificationSource(
+        dataStore: generalDataStore,
+        sliceStore: generalStore,
+      ),
       ingress: SettingsSliceIngress(
         appearanceController: appearanceController,
         generalController: generalController,

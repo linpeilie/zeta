@@ -54,7 +54,7 @@ effect / reducer / store）与 `presentation/settings_slice/`（Riverpod provide
 
 ## 3. 消费方依赖图与切换顺序
 
-> **步骤 4 实施要点（2026-08-23 已定设计，待实施）**：
+> **步骤 4 实施记录（2026-08-23 已完成）**：
 >
 > 1. **单一 body + 写操作集**：两个 pane 各提取一个共享 body 函数（外观以
 >    `AppearanceSettingsSlice` 为值类型，旧路径经 `appearanceSliceFromSettings`
@@ -141,9 +141,10 @@ DesktopAttentionController (desktop_notifications/application)
 
 ## 9. 四步节奏锚点
 
-1. **挂 flag**：步骤 1–4 全部在 flag 默认 false 下落地；
-2. **对照验证**：§6 双路径对照全绿 + `flutter analyze` + `test_affected`；
+1. **挂 flag**：✅ 步骤 1–4 已在 flag 默认 false 下落地（2026-08-23）；
+2. **对照验证**：✅ §6 双路径对照、`flutter analyze` 与 `test_affected` 已通过
+   （2026-08-23）；
 3. **翻 flag**：`main.dart` 传 `settingsSliceEnabled: true`，观察窗口 ≥ 3 天
-   （本批风险为低，取下限）；
+   （本批风险为低，取下限）；当前等待 Phase 3 的 14 天开门窗口或显式确认；
 4. **关批**：执行 §7 删除，更新守卫基线与燃尽表，Phase 3 开工文档 §2.11
    的 settings 行标记清零。

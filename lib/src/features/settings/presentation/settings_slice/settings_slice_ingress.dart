@@ -10,10 +10,9 @@ import 'package:zeta/src/features/settings/domain/general_settings.dart';
 
 /// 迁移期 ingress：把旧 controller 的状态变化镜像进切片。
 ///
-/// 第 1 批步骤 3–4 之间，**写入仍走旧 controller**（设置页未切换），而主题
-/// 构建已经读切片——没有这座桥，用户改主题时切片不会跟着动。这与 Phase 2
-/// 的「adapter 消费现有 store 的 region 更新」是同一模式；关批时随旧入口
-/// 一起删除。
+/// flag 关闭时组合根不会创建本对象；flag 开启时，设置页与 `IdeHome` 已读写切片，
+/// 本桥只承接启动阶段和测试注入仍可能发布的旧 controller 快照。它会在第 1 批
+/// 关批时随旧入口一起删除。
 ///
 /// 镜像是幂等的：`loaded(...)` 在 reducer 里按值相等去重，echo 不产生发布。
 final class SettingsSliceIngress {
