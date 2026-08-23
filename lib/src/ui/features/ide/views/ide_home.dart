@@ -11,6 +11,7 @@ import 'package:zeta/src/app/menu_action_bridge.dart';
 import 'package:zeta/src/app/shell/ide_shell_controller.dart';
 import 'package:zeta/src/ui/core/system_file_manager.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/desktop_notifications/application/desktop_attention_controller.dart';
 import 'package:zeta/src/features/desktop_notifications/data/flutter_desktop_notification_service.dart';
@@ -70,6 +71,8 @@ class IdeHome extends StatefulWidget {
     required this.generalSettingsController,
     required this.agentModelCatalogRepository,
     required this.agentProviderRuntimeRegistry,
+    this.agentProviderSettingsPort,
+    this.activeModelCatalogLoader,
     this.enableAgentUsageAutoRefresh = true,
     this.agentProviderAvailabilityLoader,
     this.homeProviderDetectionLoader,
@@ -97,6 +100,13 @@ class IdeHome extends StatefulWidget {
   final GeneralSettingsController generalSettingsController;
   final AgentModelCatalogRepository agentModelCatalogRepository;
   final AgentProviderRuntimeRegistry agentProviderRuntimeRegistry;
+
+  /// 第 2 批 flag 开启时由 app 根注入；null 时 shell 创建旧 controller。
+  final AgentProviderSettingsPort? agentProviderSettingsPort;
+
+  /// 与 [agentProviderSettingsPort] 成对注入的 active 模型目录查询入口。
+  final Future<AgentModelCatalogLoadResult> Function()?
+  activeModelCatalogLoader;
 
   /// 是否在启动及每个回合结束后通过事件消息刷新 Agent 用量。
   final bool enableAgentUsageAutoRefresh;
@@ -217,6 +227,8 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
       agentUiTextCatalog: widget.agentUiTextCatalog,
       metrics: widget.metrics,
       conversationSliceEnabled: widget.conversationSliceEnabled,
+      agentProviderSettingsPort: widget.agentProviderSettingsPort,
+      activeModelCatalogLoader: widget.activeModelCatalogLoader,
     )..addListener(_handleShellChanged);
     // Riverpod 禁止在 initState 里改 provider，因此推到首帧之后。
     // 首帧读到"未启用"没有关系：解析器是 NotifierProvider，bind 会让依赖它的

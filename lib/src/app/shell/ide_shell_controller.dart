@@ -8,6 +8,7 @@ import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
 import 'package:zeta/src/features/agent/application/agent_thread_workspace_controller.dart';
 import 'package:zeta/src/ui/core/system_file_manager.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
@@ -78,6 +79,8 @@ class IdeShellController extends ChangeNotifier {
     this.agentUiTextCatalog = const FallbackAgentUiTextCatalog(),
     this.metrics = noopZetaMetricsPort,
     this.conversationSliceEnabled = false,
+    AgentProviderSettingsPort? agentProviderSettingsPort,
+    Future<AgentModelCatalogLoadResult> Function()? activeModelCatalogLoader,
     DateTime Function()? now,
   }) : projectThreadsViewModel = ProjectThreadsViewModel(),
        _sessionCoordinator = IdeSessionPersistenceCoordinator(
@@ -102,13 +105,28 @@ class IdeShellController extends ChangeNotifier {
     _fileIndexController =
         workspaceFileIndexController ?? WorkspaceFileIndexController();
     _fileIndexController.addListener(_handleFileIndexChanged);
-    agentProviderController = AgentProviderSettingsController(
-      configStore: agentProviderConfigStore,
-      modelCatalogRepository: agentModelCatalogRepository,
-      runtimeRegistry: this.agentProviderRuntimeRegistry,
-      globalRuntime: agentProviderGlobalRuntime,
-      staticCapabilitiesFor: AgentProviderStaticCapabilities.forKind,
-    );
+    if (agentProviderSettingsPort == null) {
+      final controller = AgentProviderSettingsController(
+        configStore: agentProviderConfigStore,
+        modelCatalogRepository: agentModelCatalogRepository,
+        runtimeRegistry: this.agentProviderRuntimeRegistry,
+        globalRuntime: agentProviderGlobalRuntime,
+        staticCapabilitiesFor: AgentProviderStaticCapabilities.forKind,
+      );
+      agentProviderController = controller;
+      _disposeAgentProviderController = controller.dispose;
+      _loadActiveModelCatalog = controller.loadActiveModelCatalog;
+    } else {
+      if (activeModelCatalogLoader == null) {
+        throw ArgumentError(
+          'activeModelCatalogLoader is required with '
+          'agentProviderSettingsPort',
+        );
+      }
+      agentProviderController = agentProviderSettingsPort;
+      _disposeAgentProviderController = null;
+      _loadActiveModelCatalog = activeModelCatalogLoader;
+    }
     final partitionStore =
         usageStatistics?.partitionStore ??
         MemoryUsageStatisticsPartitionStore();
@@ -189,7 +207,7 @@ class IdeShellController extends ChangeNotifier {
 
   Future<void> _prewarmActiveModelCatalog() async {
     try {
-      await agentProviderController.loadActiveModelCatalog();
+      await _loadActiveModelCatalog();
     } catch (error) {
       _log.t(
         'Could not prewarm active Agent model catalog (${error.runtimeType})',
@@ -208,7 +226,10 @@ class IdeShellController extends ChangeNotifier {
   late final bool _ownsAgentProviderRuntimeRegistry;
   late final WorkspaceFileIndexController _fileIndexController;
   late final bool _ownsFileIndexController;
-  late final AgentProviderSettingsController agentProviderController;
+  late final AgentProviderSettingsPort agentProviderController;
+  late final VoidCallback? _disposeAgentProviderController;
+  late final Future<AgentModelCatalogLoadResult> Function()
+  _loadActiveModelCatalog;
   late final UsageStatisticsController usageStatisticsController;
   late final AgentUsagePanelController agentUsagePanelController;
   late final AgentThreadWorkspaceController agentWorkspaceController;
@@ -1404,7 +1425,7 @@ class IdeShellController extends ChangeNotifier {
     usageStatisticsController.dispose();
     agentProviderController.removeListener(_handleAgentProviderSettingsChanged);
     agentUsagePanelController.dispose();
-    agentProviderController.dispose();
+    _disposeAgentProviderController?.call();
     // 在 workspace 条目释放后再拆索引监听，避免 popover 仍挂在 listenable 上。
     _fileIndexController.removeListener(_handleFileIndexChanged);
     if (_ownsFileIndexController) {

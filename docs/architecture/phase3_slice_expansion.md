@@ -42,7 +42,8 @@
 > **显式翻旗确认（2026-08-23）**：双路径门禁通过后，经另行显式确认接受较短
 > 观察期，`main.dart` 已传 `settingsSliceEnabled: true`，第 1 批进入至少三天的
 > 生产观察，最早于 2026-08-26 关批。观察期出现需回退的问题时一行拨回 false，
-> 修复复测后重新起算；关批前不进入第 2 批。
+> 修复复测后重新起算。原计划关批前不进入第 2 批；本文件 §4 后续记录的显式确认
+> 只覆盖“默认关闭 flag 的开工接缝”，不授权第 2 批生产翻旗。
 
 **关门标准（每批合入的条件）**，逐条来自目标架构 Phase 3 验收标准：
 
@@ -325,9 +326,15 @@ general：`GeneralSettingsLoadRequested / Loaded / LoadFailed(kind)`、
   编辑、日志、连接测试）按页面 scope 的 application state 切片化，TOML 编辑器
   的草稿态留 presentation（§7.3 Widget scope）。
 
-开工前须按 §9 模板补齐：字段映射（`AgentProviderConfig` 18 个字段逐一对照）、
+开工前须按 §9 模板补齐：字段映射（当前 `AgentProviderConfig` 14 个存储字段 +
+settings 外层/派生 4 项逐一对照）、
 capability 位与 UI 入口的 G4 对照表、`AgentProviderSettingsPort` 消费方清单与
 切换顺序、删除清单。
+
+> **开工记录（2026-08-23）**：经显式确认，第 1 批观察期间启动第 2 批；当前只推进
+> flag 默认 false 的挂旗与对照阶段，生产行为不变。字段级契约、依赖图、生命周期与
+> 删除清单见 [第 2 批开工文档](phase3_batch2_provider_management.md)。第 2 批生产翻旗
+> 仍需另行确认。
 
 ---
 

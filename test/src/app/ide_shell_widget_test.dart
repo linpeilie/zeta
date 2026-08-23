@@ -15,6 +15,7 @@ import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
+import 'package:zeta/src/features/agent/presentation/provider_settings_slice/agent_provider_settings_slice_providers.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
@@ -838,6 +839,52 @@ void main() {
           isNotNull,
         );
       }
+    });
+  }
+
+  for (final sliceEnabled in const <bool>[false, true]) {
+    testWidgets('Provider settings 根组合按 flag 二选一 (slice=$sliceEnabled)', (
+      tester,
+    ) async {
+      await _pumpIde(
+        tester,
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        enableProviderManagementSlice: sliceEnabled,
+      );
+      final context = tester.element(
+        find.byKey(const ValueKey<String>('zeta.ide-home')),
+      );
+      final container = ProviderScope.containerOf(context, listen: false);
+      final sliceStore = container.read(
+        agentProviderSettingsSliceStoreProvider,
+      );
+
+      expect(sliceStore != null, sliceEnabled);
+      if (!sliceEnabled) {
+        return;
+      }
+
+      expect(
+        container
+            .read(enabledAgentProviderConfigsProvider)
+            .map((provider) => provider.id),
+        <String>[defaultAgentProviderId, grokAgentProviderId],
+      );
+      await sliceStore!.updateProviderConfig(
+        AgentProviderConfig.defaultClaudeCode,
+      );
+      await tester.pump();
+
+      expect(
+        container
+            .read(enabledAgentProviderConfigsProvider)
+            .map((provider) => provider.id),
+        <String>[
+          defaultAgentProviderId,
+          grokAgentProviderId,
+          defaultClaudeCodeProviderId,
+        ],
+      );
     });
   }
 
@@ -2021,6 +2068,7 @@ Future<void> _pumpIde(
   bool flushInitialUsageRefresh = true,
   bool enableConversationSlice = false,
   bool enableSettingsSlice = false,
+  bool enableProviderManagementSlice = false,
 }) async {
   tester.view
     ..physicalSize = size
@@ -2050,6 +2098,8 @@ Future<void> _pumpIde(
       conversationSliceEnabled: enableConversationSlice,
       // Phase 3 第 1 批同样使用 app-level 全局 flag 做双路径对照。
       settingsSliceEnabled: enableSettingsSlice,
+      // Phase 3 第 2 批 2a：默认关闭，仅测试新旧 owner 二选一接线。
+      providerManagementSliceEnabled: enableProviderManagementSlice,
     ),
   );
   if (flushInitialUsageRefresh) {

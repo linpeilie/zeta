@@ -25,8 +25,8 @@ import 'package:zeta/src/features/settings/presentation/settings_slice/settings_
 /// 通知设置窄端口与迁移期 ingress。设置页与 `IdeHome` 在 flag 开启时写入、读取
 /// 切片；ingress 只承接仍由启动/测试入口注入的旧 controller 快照。
 ///
-/// 新旧路径由 flag 二选一，生产默认仍关闭；关批时会连同 ingress 和旧 controller
-/// 一起删除。
+/// 新旧路径由 flag 二选一；生产已于 2026-08-23 翻旗并处于观察期。关批时会连同
+/// ingress 和旧 controller 一起删除。
 final class SettingsSliceComposition {
   SettingsSliceComposition._({
     required this.appearanceStore,

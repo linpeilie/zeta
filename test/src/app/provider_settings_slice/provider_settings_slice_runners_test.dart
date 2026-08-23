@@ -1,0 +1,145 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/app/provider_settings_slice/provider_settings_slice_composition.dart';
+import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
+import 'package:zeta/src/features/agent/data/agent_model_catalog_cache_store.dart';
+import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+
+import '../../testing/ide_test_harness.dart';
+
+void main() {
+  group('ProviderSettingsSliceComposition', () {
+    test('environment changes invalidate the shared model catalog', () async {
+      final initial = AgentProviderConfig.defaultCodex.copyWith(
+        environment: const <String, String>{'ZETA_TOKEN': 'old'},
+      );
+      final updated = initial.copyWith(
+        environment: const <String, String>{'ZETA_TOKEN': 'new'},
+      );
+      final catalog = AgentModelCatalogRepository(
+        store: MemoryAgentModelCatalogCacheStore(),
+      );
+      await catalog.record(
+        config: initial,
+        models: _modelList('cached'),
+        source: 'test',
+      );
+      final provider = FakeAgentProvider(config: initial);
+      final registry = AgentProviderRuntimeRegistry(
+        providerFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
+      );
+      addTearDown(registry.close);
+      final composition = ProviderSettingsSliceComposition.create(
+        configStore: MemoryAgentProviderConfigStore(
+          AgentProviderSettings(providers: <AgentProviderConfig>[initial]),
+        ),
+        modelCatalogRepository: catalog,
+        runtimeRegistry: registry,
+      );
+      addTearDown(composition.dispose);
+      await composition.store.loadSettings();
+
+      await composition.store.updateProviderConfig(updated);
+      var refreshCount = 0;
+      final result = await catalog.load(
+        config: updated,
+        source: 'test',
+        refreshLoader: () async {
+          refreshCount += 1;
+          return _modelList('remote');
+        },
+      );
+
+      expect(refreshCount, 1);
+      expect(result.models.models.single.id, 'remote');
+    });
+
+    test('serializes full settings writes through one runner', () async {
+      final configStore = _SlowConfigStore();
+      final provider = FakeAgentProvider();
+      final registry = AgentProviderRuntimeRegistry(
+        providerFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
+      );
+      addTearDown(registry.close);
+      final composition = ProviderSettingsSliceComposition.create(
+        configStore: configStore,
+        modelCatalogRepository: AgentModelCatalogRepository(
+          store: MemoryAgentModelCatalogCacheStore(),
+        ),
+        runtimeRegistry: registry,
+      );
+      addTearDown(composition.dispose);
+      await composition.store.loadSettings();
+
+      final first = composition.store.updateProviderConfig(
+        AgentProviderConfig.defaultCodex.copyWith(command: 'first'),
+      );
+      final second = composition.store.updateProviderConfig(
+        AgentProviderConfig.defaultCodex.copyWith(command: 'second'),
+      );
+      await Future.wait<void>(<Future<void>>[first, second]);
+
+      expect(configStore.maxConcurrentSaves, 1);
+      expect(configStore.saved, hasLength(2));
+      expect(configStore.settings.activeProvider.command, 'second');
+    });
+
+    test(
+      'missing model catalog port fails closed and releases the lease',
+      () async {
+        final provider = FakeAgentProvider();
+        final registry = AgentProviderRuntimeRegistry(
+          providerFactory: FakeAgentProviderBundleBuilder(
+            runtime: provider,
+            conversation: provider,
+          ),
+        );
+        addTearDown(registry.close);
+        final composition = ProviderSettingsSliceComposition.create(
+          configStore: MemoryAgentProviderConfigStore(),
+          modelCatalogRepository: AgentModelCatalogRepository(
+            store: MemoryAgentModelCatalogCacheStore(),
+          ),
+          runtimeRegistry: registry,
+        );
+        addTearDown(composition.dispose);
+
+        await expectLater(
+          composition.loadActiveModelCatalog(forceRefresh: true),
+          throwsA(isA<UnsupportedError>()),
+        );
+        expect(registry.debugLeaseCount, 0);
+      },
+    );
+  });
+}
+
+final class _SlowConfigStore implements AgentProviderConfigStore {
+  AgentProviderSettings settings = const AgentProviderSettings();
+  final List<AgentProviderSettings> saved = <AgentProviderSettings>[];
+  int concurrentSaves = 0;
+  int maxConcurrentSaves = 0;
+
+  @override
+  Future<AgentProviderSettings> load() async => settings;
+
+  @override
+  Future<void> save(AgentProviderSettings value) async {
+    concurrentSaves += 1;
+    if (concurrentSaves > maxConcurrentSaves) {
+      maxConcurrentSaves = concurrentSaves;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 1));
+    saved.add(value);
+    settings = value;
+    concurrentSaves -= 1;
+  }
+}
+
+AgentModelList _modelList(String id) {
+  return AgentModelList(
+    models: <AgentModelInfo>[
+      AgentModelInfo(id: id, model: id, displayName: id),
+    ],
+  );
+}

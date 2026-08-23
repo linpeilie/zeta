@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:zeta/src/app/provider_settings_slice/provider_settings_slice_composition.dart';
 import 'package:zeta/src/app/settings_slice/settings_slice_composition.dart';
 import 'package:zeta/src/app/storage/atomic_text_file.dart';
 import 'package:file_selector/file_selector.dart';
@@ -28,6 +29,7 @@ import 'package:zeta/src/features/agent/data/agent_model_catalog_cache_store.dar
 import 'package:zeta/src/features/agent/data/agent_provider_config_codec.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/data/agent_turn_context_store.dart';
+import 'package:zeta/src/features/agent/presentation/provider_settings_slice/agent_provider_settings_slice_providers.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_models.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_text_catalog.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
@@ -83,6 +85,7 @@ class MainApp extends StatefulWidget {
     this.observability,
     this.conversationSliceEnabled = false,
     this.settingsSliceEnabled = false,
+    this.providerManagementSliceEnabled = false,
   });
 
   final Future<String?> Function()? directoryPicker;
@@ -135,6 +138,12 @@ class MainApp extends StatefulWidget {
   /// 与 settings/Agent Pane/桌面通知投影都改由切片驱动。
   final bool settingsSliceEnabled;
 
+  /// Phase 3 第 2 批 Provider 配置/管理切片的 feature flag。
+  ///
+  /// true 时 app 根创建 Provider settings store/runner；默认 false，旧
+  /// controller 路径完整保留，生产翻旗需另行确认。
+  final bool providerManagementSliceEnabled;
+
   /// 生产启动阶段解析并初始化的 Zeta 自有数据路径。
   ///
   /// 未传入时使用内存/回调存储，避免测试或嵌入式宿主意外写入真实 HOME。
@@ -167,11 +176,15 @@ class MainAppState extends State<MainApp>
   /// Phase 3 第 1 批切片组合；null = flag 关（默认，生产行为不变）。
   SettingsSliceComposition? _settingsSliceComposition;
 
+  /// Phase 3 第 2 批 2a 组合；null = flag 关，shell 创建旧 controller。
+  ProviderSettingsSliceComposition? _providerSettingsSliceComposition;
+
   /// 编译期插件目录；仅在应用自己构造 Provider 工厂时创建。
   ZetaPluginCatalog? _pluginCatalog;
   late AgentProviderBundleFactory _agentProviderFactory;
   late AgentProviderRuntimeRegistry _agentProviderRuntimeRegistry;
   late final AgentProviderSettingsCodec _agentProviderSettingsCodec;
+  late final AgentProviderConfigStore _agentProviderConfigStore;
   Future<void> Function()? _providerRuntimeShutdownHook;
   late final UsageStatisticsPartitionStore _usageStatisticsPartitionStore;
   late final AgentModelCatalogRepository _agentModelCatalogRepository;
@@ -240,6 +253,8 @@ class MainAppState extends State<MainApp>
         },
       ),
     );
+    _agentProviderConfigStore =
+        widget.agentProviderConfigStore ?? _createAgentProviderConfigStore();
     final injectedFactory = widget.agentProviderFactory;
     if (injectedFactory != null) {
       _agentProviderFactory = injectedFactory;
@@ -410,6 +425,15 @@ class MainAppState extends State<MainApp>
         addDesktopWindowShutdownHook(_providerRuntimeShutdownHook!);
       }
     }
+    if (widget.providerManagementSliceEnabled &&
+        _providerSettingsSliceComposition == null) {
+      _providerSettingsSliceComposition =
+          ProviderSettingsSliceComposition.create(
+            configStore: _agentProviderConfigStore,
+            modelCatalogRepository: _agentModelCatalogRepository,
+            runtimeRegistry: _agentProviderRuntimeRegistry,
+          );
+    }
     _localeRuntimeReady = true;
   }
 
@@ -445,6 +469,8 @@ class MainAppState extends State<MainApp>
         removeDesktopWindowShutdownHook(hook);
       }
     }
+    _providerSettingsSliceComposition?.dispose();
+    _providerSettingsSliceComposition = null;
     unawaited(_shutdownOwnedAgentResources());
     _settingsSliceComposition?.dispose();
     _settingsSliceComposition = null;
@@ -506,6 +532,10 @@ class MainAppState extends State<MainApp>
             composition.generalStore,
           ),
         ],
+        if (_providerSettingsSliceComposition case final composition?)
+          agentProviderSettingsSliceStoreProvider.overrideWithValue(
+            composition.store,
+          ),
       ],
       child: _buildApp(context),
     );
@@ -590,9 +620,14 @@ class MainAppState extends State<MainApp>
                           widget.desktopNotificationService,
                       desktopAttentionIndicator:
                           widget.desktopAttentionIndicator,
-                      agentProviderConfigStore:
-                          widget.agentProviderConfigStore ??
-                          _createAgentProviderConfigStore(),
+                      agentProviderConfigStore: _agentProviderConfigStore,
+                      agentProviderSettingsPort:
+                          _providerSettingsSliceComposition?.store,
+                      activeModelCatalogLoader:
+                          _providerSettingsSliceComposition == null
+                          ? null
+                          : () => _providerSettingsSliceComposition!
+                                .loadActiveModelCatalog(),
                       agentProviderAvailabilityLoader:
                           widget.agentProviderAvailabilityLoader,
                       homeProviderDetectionLoader:
