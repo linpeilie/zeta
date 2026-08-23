@@ -837,8 +837,8 @@ Phase 3 前置条件的计时起点。字段映射、门禁答卷、验收对照
 
 ### Phase 3：扩大迁移范围
 
-**状态：第 1、2 批与第 3 批 3a 已于 2026-08-23 生产翻旗并独立观察；3b 尚未
-开工。**
+**状态：第 1、2 批与第 3 批 3a 已于 2026-08-23 生产翻旗并独立观察；3b 已完成
+默认关闭路径的实现与双路径对照，尚未生产翻旗。**
 Phase 2 真实使用证据仍在计时（2026-08-23 起生产全量启用 conversation 切片路径）；
 第 1 批经另行显式确认推进到四步节奏第 3 步，最早于 2026-08-26 满足观察下限。
 第 2 批 2a–2c 双路径与完整重构门禁通过后，经再次显式确认接受两批观察窗口重叠，
@@ -847,7 +847,10 @@ Phase 2 真实使用证据仍在计时（2026-08-23 起生产全量启用 conver
 同日经显式要求提前启动第 3 批；Project Threads 的字段级契约、纯 Dart 切片、
 Projects Pane 的 11 个真实根组合双路径场景与 Project Home 对照均已完成，
 经后续显式确认，`projectThreadsSliceEnabled` 在生产入口已翻为 true，按中风险进入
-至少 5 天观察，最早于 2026-08-28 关批；Usage Statistics 仍尚未迁移。
+至少 5 天观察，最早于 2026-08-28 关批。后续继续指令已启动 Usage Statistics 3b：
+两个纯 Dart store、app effect runner/组合、Riverpod 只读镜像与 legacy/slice 根组合
+对照均已落地；`usageStatisticsSliceEnabled` 在构造默认与生产入口均保持 false，
+生产翻旗仍需另行确认。
 开门/关门标准、六批的 owner 映射与删除清单、燃尽清单联动表见
 [Phase 3 开工文档](./phase3_slice_expansion.md)。
 

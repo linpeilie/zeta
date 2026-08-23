@@ -26,6 +26,10 @@ import 'package:zeta/src/features/project_threads/presentation/project_threads_s
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/settings/presentation/settings_slice/settings_slice_providers.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
+import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
+import 'package:zeta/src/features/usage_statistics/presentation/agent_usage_panel.dart';
+import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_page.dart';
+import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_slice/usage_statistics_slice_providers.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
@@ -1036,6 +1040,57 @@ void main() {
           isTrue,
         );
       }
+    });
+  }
+
+  for (final sliceEnabled in const <bool>[false, true]) {
+    testWidgets('Usage Statistics 根组合按 flag 二选一 (slice=$sliceEnabled)', (
+      tester,
+    ) async {
+      final usageRepository = _TrackedAgentUsageRepository();
+      await _pumpIde(
+        tester,
+        enableNativeWindowFrame: true,
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        agentUsagePanelRepository: usageRepository,
+        enableProviderManagementSlice: sliceEnabled,
+        enableUsageStatisticsSlice: sliceEnabled,
+      );
+      final homeContext = tester.element(
+        find.byKey(const ValueKey<String>('zeta.ide-home')),
+      );
+      final container = ProviderScope.containerOf(homeContext, listen: false);
+      final statisticsStore = container.read(usageStatisticsSliceStoreProvider);
+      final panelStore = container.read(agentUsagePanelSliceStoreProvider);
+
+      expect(statisticsStore != null, sliceEnabled);
+      expect(panelStore != null, sliceEnabled);
+      final panel = tester.widget<AgentUsagePanelContent>(
+        find.byType(AgentUsagePanelContent),
+      );
+      expect(panel.sliceStore != null, sliceEnabled);
+      expect(identical(panel.controller, panelStore), sliceEnabled);
+      expect(panel.controller.selectedEntry?.providerId, 'codex');
+      expect(usageRepository.forceRefreshValues, isNotEmpty);
+
+      if (statisticsStore != null) {
+        statisticsStore.selectRankSort(UsageRankSort.totalTokens);
+        await tester.pump();
+        expect(
+          container.read(usageStatisticsSliceProvider).rankSort,
+          UsageRankSort.totalTokens,
+        );
+      }
+
+      await tester.tap(
+        find.byKey(const ValueKey('titlebar-usage-statistics-action')),
+      );
+      await tester.pump();
+      final page = tester.widget<UsageStatisticsPage>(
+        find.byType(UsageStatisticsPage),
+      );
+      expect(identical(page.controller, statisticsStore), sliceEnabled);
+      expect(tester.takeException(), isNull);
     });
   }
 
@@ -2223,6 +2278,7 @@ Future<void> _pumpIde(
   bool enableSettingsSlice = false,
   bool enableProviderManagementSlice = false,
   bool enableProjectThreadsSlice = false,
+  bool enableUsageStatisticsSlice = false,
 }) async {
   tester.view
     ..physicalSize = size
@@ -2256,6 +2312,8 @@ Future<void> _pumpIde(
       providerManagementSliceEnabled: enableProviderManagementSlice,
       // Phase 3 第 3 批 3a：验证旧 ViewModel / 新 store 只创建其一。
       projectThreadsSliceEnabled: enableProjectThreadsSlice,
+      // Phase 3 第 3 批 3b：两个 usage owner 同时从 Shell 上移到 app 组合层。
+      usageStatisticsSliceEnabled: enableUsageStatisticsSlice,
     ),
   );
   if (flushInitialUsageRefresh) {

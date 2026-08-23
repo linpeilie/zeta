@@ -5,12 +5,15 @@
 >
 > 开工日期：2026-08-23。
 >
-> 当前状态：**3a Project Threads 已推进到四步节奏第 3 步**。新 MVI 路径、
+> 当前状态：**3a Project Threads 已推进到四步节奏第 3 步；3b Usage
+> Statistics 已完成第 1–2 步**。3a 新 MVI 路径、
 > Projects Pane 的 11 个完整交互双路径对照和 Project Home 的真实组合对照均已
 > 落地；经后续显式确认，`projectThreadsSliceEnabled` 构造默认仍为 false，生产
 > 入口已于 2026-08-23 显式翻为 true，进入至少 5 天的中风险观察，最早于
-> 2026-08-28 关批。旧路径仅作为独立回退保留。3b Usage Statistics 尚未迁移。
-> 第 1、2 批仍各自处于生产观察期。
+> 2026-08-28 关批。3b 的两个纯 Dart owner、app runner/组合、Riverpod 只读镜像与
+> 根组合双路径已落地；`usageStatisticsSliceEnabled` 构造默认和生产入口均保持
+> false，尚未授权生产翻旗。旧路径仅作为独立回退保留。第 1、2 批仍各自处于
+> 生产观察期。
 
 ---
 
@@ -69,7 +72,7 @@ IdeHome 内层 ProviderScope
 不创建另一个 owner，也没有镜像双写。`ProjectThreadsStateOwner` 是 runner 的 typed
 回流端口，因此 application 不再 import presentation，燃尽清单减少一项。
 
-### 2.2 3b 目标装配
+### 2.2 3b 当前装配
 
 ```text
 MainApp / app composition
@@ -88,7 +91,10 @@ presentation Riverpod adapters
 ```
 
 组装链移出 Shell，但健康的 QueryService、repository、source registry 与 partition
-store 不重写，只换创建与 dispose 位置。
+store 不重写，只换创建与 dispose 位置。迁移期 presentation/Shell 只依赖
+`UsageStatisticsOperations` 与 `AgentUsagePanelOperations`；flag=false 才由 Shell
+创建两个 legacy controller，flag=true 则只注入 app composition 的两个 store，
+不存在双 owner 或双写。
 
 ---
 
@@ -241,7 +247,7 @@ provider query 与 selection persistence；不建立通用 usage command 基类�
 | `ProjectThreadsSliceStore` | `ProjectThreadsSliceComposition`（flag=true） | Shell 经 operations port | Provider runtime、Binding |
 | Project Threads runner/controller | composition | store close 反序关闭 | state owner |
 | Riverpod adapter | `IdeHome` 内层 ProviderScope | autoDispose 只摘 listener | store / CLI 生命周期 |
-| 3b 两个 usage store | app composition | IdeHome/app composition | partition store / runtime registry |
+| 3b 两个 usage store | app composition | MainApp app composition | partition store / runtime registry |
 | 3b query services/repositories | app composition | 无资源者随组合释放 | Provider CLI 进程 |
 | usage partition store | MainApp | 现有 owner | UI 状态 |
 
@@ -270,9 +276,9 @@ Riverpod `autoDispose` 绝不关闭 store、runtime、Binding 或 plugin。
    v4 partition codec 不动。
 9. **回滚与删除**：见 §9–10；无双写。flag=false 一行回退。观察关批后删除旧 owner
    和 flag。
-10. **证据**：纯 reducer/store 单测、runner Provider 查询与防抖测试、真实
-    `IdeHome` flag 双路径 Widget 测试、既有 Project Threads controller 回归、G6
-    分层守卫、affected/full 门禁。
+10. **证据**：纯 reducer/store 单测、runner Provider 查询与防抖测试、usage
+    报表与 legacy 等价测试、真实 `MainApp → IdeHome` flag 双路径 Widget 测试、
+    既有 controller/页面/侧栏回归、G6 分层守卫、affected/full 门禁。
 
 ---
 
@@ -296,9 +302,16 @@ Riverpod `autoDispose` 绝不关闭 store、runtime、Binding 或 plugin。
 - 生产入口已为 flag=true；关批前只剩至少 5 天的真实使用观察与记录，最早于
   2026-08-28 执行删除清单。
 
-3b 必补：时间窗口与扩窗加载、过滤选项保留、报告等价、目录 refresh 合并、Tab
-single-flight、静默刷新、Provider 移除迟到结果、选择持久化 exactly-once、v4 索引与
-fingerprint 回归、Usage 页面/侧栏双路径 Widget 测试。
+3b 已建立：
+
+- 完整统计页：最新 load 获胜且旧调用方正常结算、扩窗补读而已覆盖窗口不重复查询、
+  筛选/报表/失效选项清理与 legacy controller 等价、关闭取消与迟到结果丢弃；
+- Agent Usage Panel：恢复偏好不重复回写、Provider keyed single-flight、快速 Tab
+  切换、在途目录刷新合并为尾随一轮、Provider 移除后丢弃迟到结果；
+- 根组合：`MainApp → IdeHome → Shell → Riverpod` 在 flag=false/true 下分别解析
+  legacy/store 唯一 owner，侧栏真实 Provider 数据、page owner 与只读镜像均有断言；
+- 既有 controller、Usage 页面、侧栏 Widget、v4 分区索引与 fingerprint 回归继续
+  原样保留，不修改 Provider 私有历史解析或持久化 schema。
 
 热路径预算：Project Threads 不消费 raw stream，只接列表/运行态摘要；观察期若 Shell
 或 Project Pane rebuild 超 Phase 0 基线，再以证据细化 selector，不预先拆碎 provider。
@@ -357,4 +370,13 @@ flag=false/true 同体测试，Project Home 的真实 `IdeHome` 场景也完成�
 **3a 生产翻旗记录（2026-08-23）**：完整双路径对照、受影响测试与完整重构门禁通过
 后，经后续显式确认，`main.dart` 已传 `projectThreadsSliceEnabled: true`。3a 按
 中风险取至少 5 天观察期，最早于 2026-08-28 关批；若回退则一行拨回 false，修复并
-复测后重新起算。3b 仍在 3a 接缝取得真实使用稳定证据后单独开工。
+复测后重新起算。
+
+**3b 执行记录（2026-08-23）**：后续“继续接下来的任务”指令启动 3b 默认关闭路径。
+两个 feature-local state/intent/effect/reducer/store、app runner/组合与 presentation
+Riverpod adapter 已落地；QueryService、两个 query repository、quota source 与 source
+registry 只在 slice 路径上移到 app 组合，legacy Shell 链仍作为 flag=false 回退。
+双路径只创建一个 owner，关闭时正常取消在途 `Future<void>`，Riverpod autoDispose
+只摘 listener。本轮已通过格式化、静态分析、245 项受影响测试，以及根包 2347 项与
+内部 Package 70 项完整测试。`main.dart` 显式保持
+`usageStatisticsSliceEnabled: false`；生产翻旗仍需再次取得显式确认。

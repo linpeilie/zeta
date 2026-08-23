@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:zeta/src/app/provider_settings_slice/provider_settings_slice_composition.dart';
 import 'package:zeta/src/app/settings_slice/settings_slice_composition.dart';
+import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_slice_composition.dart';
 import 'package:zeta/src/app/storage/atomic_text_file.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/widgets.dart';
@@ -48,6 +49,8 @@ import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partition_store.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
+import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_text_catalog.dart';
+import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_slice/usage_statistics_slice_providers.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/ui/features/ide/views/ide_home.dart';
 import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
@@ -89,6 +92,7 @@ class MainApp extends StatefulWidget {
     this.settingsSliceEnabled = false,
     this.providerManagementSliceEnabled = false,
     this.projectThreadsSliceEnabled = false,
+    this.usageStatisticsSliceEnabled = false,
   });
 
   final Future<String?> Function()? directoryPicker;
@@ -153,6 +157,12 @@ class MainApp extends StatefulWidget {
   /// 2026-08-23 起显式传 true。
   final bool projectThreadsSliceEnabled;
 
+  /// Phase 3 第 3 批 3b Usage Statistics 切片 flag；默认 false。
+  ///
+  /// true 时完整统计页与左栏分别只创建一个纯 Dart MVI owner；开工阶段不改变
+  /// 生产入口。该切片依赖已启用的 Provider settings 切片读取目录。
+  final bool usageStatisticsSliceEnabled;
+
   /// 生产启动阶段解析并初始化的 Zeta 自有数据路径。
   ///
   /// 未传入时使用内存/回调存储，避免测试或嵌入式宿主意外写入真实 HOME。
@@ -188,6 +198,9 @@ class MainAppState extends State<MainApp>
   /// Phase 3 第 2 批 2a 组合；null = flag 关，shell 创建旧 controller。
   ProviderSettingsSliceComposition? _providerSettingsSliceComposition;
 
+  /// Phase 3 第 3 批 3b 组合；null = legacy Shell owner。
+  UsageStatisticsSliceComposition? _usageStatisticsSliceComposition;
+
   /// 编译期插件目录；仅在应用自己构造 Provider 工厂时创建。
   ZetaPluginCatalog? _pluginCatalog;
   late AgentProviderBundleFactory _agentProviderFactory;
@@ -210,6 +223,7 @@ class MainAppState extends State<MainApp>
   late AgentManagementTextCatalog _agentManagementTextCatalog;
   ZetaUiTextCatalog _zetaUiTextCatalog = const FallbackZetaUiTextCatalog();
   late DesktopAttentionTextCatalog _desktopAttentionTextCatalog;
+  late UsageStatisticsTextCatalog _usageStatisticsTextCatalog;
 
   /// 全局外观控制器引用，供设置面板和主题构建共享。
   AppearanceSettingsController get appearanceController =>
@@ -391,6 +405,7 @@ class MainAppState extends State<MainApp>
       _agentUiTextCatalog = textCatalogs.agentUi;
       _agentManagementTextCatalog = textCatalogs.agentManagement;
       _desktopAttentionTextCatalog = textCatalogs.desktopAttention;
+      _usageStatisticsTextCatalog = textCatalogs.usageStatistics;
       _zetaUiTextCatalog = textCatalogs.zetaUi;
     }
     if (widget.agentProviderFactory == null && !_localeRuntimeReady) {
@@ -445,6 +460,23 @@ class MainAppState extends State<MainApp>
             runtimeRegistry: _agentProviderRuntimeRegistry,
           );
     }
+    if (widget.usageStatisticsSliceEnabled &&
+        _usageStatisticsSliceComposition == null) {
+      final providerSettings = _providerSettingsSliceComposition?.store;
+      if (providerSettings == null) {
+        throw StateError(
+          'usageStatisticsSliceEnabled requires '
+          'providerManagementSliceEnabled',
+        );
+      }
+      _usageStatisticsSliceComposition = UsageStatisticsSliceComposition.create(
+        providerSettings: providerSettings,
+        runtimeRegistry: _agentProviderRuntimeRegistry,
+        partitionStore: _usageStatisticsPartitionStore,
+        agentUsagePanelRepository: widget.agentUsagePanelRepository,
+        textCatalog: _usageStatisticsTextCatalog,
+      );
+    }
     _localeRuntimeReady = true;
   }
 
@@ -480,6 +512,8 @@ class MainAppState extends State<MainApp>
         removeDesktopWindowShutdownHook(hook);
       }
     }
+    _usageStatisticsSliceComposition?.dispose();
+    _usageStatisticsSliceComposition = null;
     _providerSettingsSliceComposition?.dispose();
     _providerSettingsSliceComposition = null;
     unawaited(_shutdownOwnedAgentResources());
@@ -530,6 +564,7 @@ class MainAppState extends State<MainApp>
   Widget build(BuildContext context) {
     final settingsComposition = _settingsSliceComposition;
     final providerSettingsComposition = _providerSettingsSliceComposition;
+    final usageStatisticsComposition = _usageStatisticsSliceComposition;
 
     // 根 `ProviderScope` 由 MainApp 自己提供，而不是放在 `main.dart`：
     // 那样每个 pump MainApp 的测试都要自己补一层，接线一旦漏掉就是运行期
@@ -538,9 +573,10 @@ class MainAppState extends State<MainApp>
       // Riverpod 只允许原地更新等长的 overrides。等待持久化语言时，Provider
       // 管理切片会在首帧之后才完成组合；此时用新 key 替换仍处于启动页的容器，
       // 避免对旧容器追加 overrides。IdeHome 尚未挂载，因此不会丢失工作区状态。
-      key: ValueKey<(bool, bool)>((
+      key: ValueKey<(bool, bool, bool)>((
         settingsComposition != null,
         providerSettingsComposition != null,
+        usageStatisticsComposition != null,
       )),
       observers: widget.observability?.providerObservers,
       overrides: [
@@ -559,6 +595,14 @@ class MainAppState extends State<MainApp>
           ),
           agentModelCatalogProjectionSourceProvider.overrideWithValue(
             composition,
+          ),
+        ],
+        if (usageStatisticsComposition case final composition?) ...[
+          usageStatisticsSliceStoreProvider.overrideWithValue(
+            composition.usageStatisticsStore,
+          ),
+          agentUsagePanelSliceStoreProvider.overrideWithValue(
+            composition.agentUsagePanelStore,
           ),
         ],
       ],
@@ -673,6 +717,8 @@ class MainAppState extends State<MainApp>
                             agentUsagePanelRepository:
                                 widget.agentUsagePanelRepository,
                           ),
+                      usageStatisticsSliceComposition:
+                          _usageStatisticsSliceComposition,
                       agentModelCatalogRepository: _agentModelCatalogRepository,
                       turnContextStore: _turnContextStore,
                       agentUiTextCatalog: _agentUiTextCatalog,

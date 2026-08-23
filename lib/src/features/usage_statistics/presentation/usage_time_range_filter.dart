@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
-import 'package:zeta/src/features/usage_statistics/application/usage_statistics_controller.dart';
+import 'package:zeta/src/features/usage_statistics/application/usage_statistics_operations.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_formatters.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_l10n.dart';
@@ -18,7 +18,7 @@ class UsageTimeRangeFilter extends StatefulWidget {
     super.key,
   });
 
-  final UsageStatisticsController controller;
+  final UsageStatisticsOperations controller;
   final double width;
 
   @override
@@ -98,10 +98,21 @@ class _UsageTimeRangeFilterState extends State<UsageTimeRangeFilter> {
   Widget build(BuildContext context) {
     final isOpen = _popover != null && !_popover!.isCompleted;
 
-    return ListenableBuilder(
-      listenable: widget.controller,
-      builder: (context, _) {
-        return IdeButton.toolbar(
+    final button = IdeButton.toolbar(
+      key: const ValueKey('usage-time-range-filter'),
+      label: _triggerLabel,
+      width: widget.width,
+      onPressed: _togglePopover,
+      leadingIcon: Icons.calendar_month_rounded,
+      trailingIcon: isOpen
+          ? Icons.keyboard_arrow_up_rounded
+          : Icons.keyboard_arrow_down_rounded,
+    );
+    final controller = widget.controller;
+    if (controller is Listenable) {
+      return ListenableBuilder(
+        listenable: controller as Listenable,
+        builder: (context, _) => IdeButton.toolbar(
           key: const ValueKey('usage-time-range-filter'),
           label: _triggerLabel,
           width: widget.width,
@@ -110,9 +121,10 @@ class _UsageTimeRangeFilterState extends State<UsageTimeRangeFilter> {
           trailingIcon: isOpen
               ? Icons.keyboard_arrow_up_rounded
               : Icons.keyboard_arrow_down_rounded,
-        );
-      },
-    );
+        ),
+      );
+    }
+    return button;
   }
 }
 
@@ -123,7 +135,7 @@ class _UsageTimeRangePopover extends StatefulWidget {
     required this.onCustomRangeSelected,
   });
 
-  final UsageStatisticsController controller;
+  final UsageStatisticsOperations controller;
   final ValueChanged<UsageTimeRangePreset> onPresetSelected;
   final void Function(DateTime start, DateTime endInclusive)
   onCustomRangeSelected;

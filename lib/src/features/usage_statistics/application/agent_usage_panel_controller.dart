@@ -1,39 +1,19 @@
 import 'dart:async';
 
+export 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_slice/agent_usage_panel_slice_state.dart'
+    show AgentUsagePanelProviderLoadStatus, AgentUsagePanelProviderState;
+
 import 'package:flutter/foundation.dart';
 
+import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_operations.dart';
+import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_slice/agent_usage_panel_slice_state.dart';
 import 'package:zeta/src/features/usage_statistics/domain/fallback_usage_statistics_text_catalog.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_text_catalog.dart';
 
-/// 单个 Provider 的侧栏加载阶段。
-enum AgentUsagePanelProviderLoadStatus { notLoaded, loading, loaded, failed }
-
-/// 单个 Provider 在 Agent 用量面板中的不可变加载状态。
-@immutable
-class AgentUsagePanelProviderState {
-  const AgentUsagePanelProviderState({
-    required this.provider,
-    required this.status,
-    this.entry,
-    this.loadError,
-  });
-
-  final AgentUsagePanelProvider provider;
-
-  /// 最近一次成功数据；刷新失败或刷新期间继续保留。
-  final AgentUsagePanelEntry? entry;
-
-  final AgentUsagePanelProviderLoadStatus status;
-
-  /// 仅影响当前 Provider 的加载错误。
-  final String? loadError;
-
-  bool get isLoading => status == AgentUsagePanelProviderLoadStatus.loading;
-}
-
 /// 编排 Provider Tab、按需加载状态与局部错误的轻量控制器。
-class AgentUsagePanelController extends ChangeNotifier {
+class AgentUsagePanelController extends ChangeNotifier
+    implements AgentUsagePanelOperations {
   AgentUsagePanelController({
     required this.repository,
     String? initialPreferredProviderId,
@@ -42,6 +22,7 @@ class AgentUsagePanelController extends ChangeNotifier {
   }) : _preferredProviderId = _normalizeProviderId(initialPreferredProviderId),
        _textCatalog = textCatalog ?? const FallbackUsageStatisticsTextCatalog();
 
+  @override
   final AgentUsagePanelRepository repository;
   final UsageStatisticsTextCatalog _textCatalog;
 
@@ -64,24 +45,32 @@ class AgentUsagePanelController extends ChangeNotifier {
   bool _disposed = false;
 
   /// 按 Provider 配置目录顺序排列的状态快照。
+  @override
   List<AgentUsagePanelProviderState> get providers => _providers;
 
   /// 最近的恢复、手动或 Turn 终态选择意图；目录到达前也会保留。
+  @override
   String? get preferredProviderId => _preferredProviderId;
 
   /// 当前 Provider 目录中真实有效的选择。
+  @override
   String? get selectedProviderId => _selectedProviderId;
+  @override
   DateTime? get lastUpdated => _lastUpdated;
 
   /// Provider 目录级错误；单 Provider 错误保存在对应状态中。
+  @override
   String? get errorMessage => _errorMessage;
 
   /// 首次显式刷新是否已经建立过目录；宿主用它过滤设置加载自身的启动通知。
+  @override
   bool get hasDiscoveredProviders => _directoryDiscovered;
 
   /// 顶部刷新状态只跟随目录或当前 Tab，不被后台 Tab 阻塞。
+  @override
   bool get isLoading => _discovering || (selectedProvider?.isLoading ?? false);
 
+  @override
   AgentUsagePanelProviderState? get selectedProvider {
     if (_providers.isEmpty) {
       return null;
@@ -93,6 +82,7 @@ class AgentUsagePanelController extends ChangeNotifier {
   }
 
   /// 兼容只消费成功数据的调用方；新 UI 应优先使用 [providers]。
+  @override
   List<AgentUsagePanelEntry> get entries =>
       List<AgentUsagePanelEntry>.unmodifiable(
         _providers
@@ -100,12 +90,14 @@ class AgentUsagePanelController extends ChangeNotifier {
             .whereType<AgentUsagePanelEntry>(),
       );
 
+  @override
   AgentUsagePanelEntry? get selectedEntry => selectedProvider?.entry;
 
   /// 刷新当前选中 Provider；首次调用会先发现完整目录。
   ///
   /// [showLoading] 为 false 时做静默刷新：已有内容继续展示且不点亮当前
   /// Tab；尚无数据时仍展示首屏加载态，避免空白闪烁。
+  @override
   Future<void> refresh({
     bool forceRefresh = true,
     bool showLoading = true,
@@ -125,6 +117,7 @@ class AgentUsagePanelController extends ChangeNotifier {
   }
 
   /// Provider 配置变化后同步目录，并只补载当前尚未读取的 Tab。
+  @override
   Future<void> synchronizeProviders({bool showLoading = false}) async {
     await _reloadProviderDirectory(showLoading: showLoading);
     final providerId = _selectedProviderId;
@@ -138,6 +131,7 @@ class AgentUsagePanelController extends ChangeNotifier {
     );
   }
 
+  @override
   void selectProvider(String providerId) {
     final normalized = _normalizeProviderId(providerId);
     if (normalized == null ||
@@ -156,6 +150,7 @@ class AgentUsagePanelController extends ChangeNotifier {
   }
 
   /// 应用恢复偏好但不回调，避免恢复值再次触发持久化循环。
+  @override
   void restorePreferredProviderId(String? providerId) {
     final normalized = _normalizeProviderId(providerId);
     if (_preferredProviderId == normalized &&
@@ -178,6 +173,7 @@ class AgentUsagePanelController extends ChangeNotifier {
   }
 
   /// 记录 Turn 终态所属 Provider；自动选择覆盖此前手动偏好。
+  @override
   void selectProviderFromTurn(String providerId) {
     final normalized = _normalizeProviderId(providerId);
     if (normalized == null) {

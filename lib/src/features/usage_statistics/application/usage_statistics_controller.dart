@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import 'package:zeta/src/features/usage_statistics/domain/fallback_usage_statistics_text_catalog.dart';
 import 'package:zeta/src/features/usage_statistics/application/usage_statistics_report_builder.dart';
+import 'package:zeta/src/features/usage_statistics/application/usage_statistics_operations.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_repository.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_text_catalog.dart';
@@ -11,7 +12,8 @@ import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_text_
 typedef UsageStatisticsClock = DateTime Function();
 
 /// 使用统计页面的异步编排与筛选状态。
-class UsageStatisticsController extends ChangeNotifier {
+class UsageStatisticsController extends ChangeNotifier
+    implements UsageStatisticsOperations {
   UsageStatisticsController({
     required this.repository,
     UsageStatisticsClock? clock,
@@ -19,6 +21,7 @@ class UsageStatisticsController extends ChangeNotifier {
   }) : _clock = clock ?? DateTime.now,
        _textCatalog = textCatalog ?? const FallbackUsageStatisticsTextCatalog();
 
+  @override
   final UsageStatisticsRepository repository;
   final UsageStatisticsTextCatalog _textCatalog;
   final UsageStatisticsClock _clock;
@@ -39,20 +42,34 @@ class UsageStatisticsController extends ChangeNotifier {
   int _loadToken = 0;
   String? _errorMessage;
 
+  @override
   UsageTimeRangePreset get timePreset => _timePreset;
+  @override
   DateTime? get customStart => _customStart;
+  @override
   DateTime? get customEndInclusive => _customEndInclusive;
+  @override
   String? get projectPath => _projectPath;
+  @override
   String? get providerId => _providerId;
+  @override
   String? get model => _model;
+  @override
   UsageRankSort get rankSort => _rankSort;
+  @override
   UsageStatisticsReport? get report => _report;
+  @override
   UsageStatisticsSourceSnapshot? get source => _source;
+  @override
   bool get loading => _loading;
+  @override
   String? get errorMessage => _errorMessage;
+  @override
   DateTime? get lastUpdated => _source?.refreshedAt;
+  @override
   List<String> get warnings => _source?.warnings ?? const <String>[];
 
+  @override
   UsageDateWindow get window => UsageDateWindow.resolve(
     preset: _timePreset,
     now: _clock(),
@@ -60,6 +77,7 @@ class UsageStatisticsController extends ChangeNotifier {
     customEndInclusive: _customEndInclusive,
   );
 
+  @override
   Future<void> initialize() async {
     if (_initialized) {
       return;
@@ -68,8 +86,10 @@ class UsageStatisticsController extends ChangeNotifier {
     await _load(forceRefresh: false);
   }
 
+  @override
   Future<void> refresh() => _load(forceRefresh: true);
 
+  @override
   Future<void> selectTimePreset(UsageTimeRangePreset value) async {
     if (_timePreset == value) {
       return;
@@ -80,6 +100,7 @@ class UsageStatisticsController extends ChangeNotifier {
     await _ensureWindowLoaded();
   }
 
+  @override
   Future<void> selectCustomRange(DateTime start, DateTime endInclusive) async {
     _customStart = start;
     _customEndInclusive = endInclusive;
@@ -89,6 +110,7 @@ class UsageStatisticsController extends ChangeNotifier {
     await _ensureWindowLoaded();
   }
 
+  @override
   void selectProject(String? value) {
     if (_projectPath == value) {
       return;
@@ -98,6 +120,7 @@ class UsageStatisticsController extends ChangeNotifier {
     _notify();
   }
 
+  @override
   void selectProvider(String? value) {
     if (_providerId == value) {
       return;
@@ -107,6 +130,7 @@ class UsageStatisticsController extends ChangeNotifier {
     _notify();
   }
 
+  @override
   void selectModel(String? value) {
     if (_model == value) {
       return;
@@ -116,6 +140,7 @@ class UsageStatisticsController extends ChangeNotifier {
     _notify();
   }
 
+  @override
   void selectRankSort(UsageRankSort value) {
     if (_rankSort == value) {
       return;

@@ -2,15 +2,19 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon.dart';
-import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_controller.dart';
+import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_operations.dart';
+import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_slice/agent_usage_panel_slice_state.dart';
+import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_slice/agent_usage_panel_slice_store.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/agent_usage_quota_gallery.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_formatters.dart';
+import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_slice/usage_statistics_slice_providers.dart';
 import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 
@@ -27,11 +31,13 @@ class AgentUsagePanelContent extends StatefulWidget {
     required this.mode,
     super.key,
     this.onModeChanged,
+    this.sliceStore,
   });
 
-  final AgentUsagePanelController controller;
+  final AgentUsagePanelOperations controller;
   final AgentUsagePanelMode mode;
   final ValueChanged<AgentUsagePanelMode>? onModeChanged;
+  final AgentUsagePanelSliceStore? sliceStore;
 
   @override
   State<AgentUsagePanelContent> createState() => _AgentUsagePanelContentState();
@@ -74,8 +80,16 @@ class _AgentUsagePanelContentState extends State<AgentUsagePanelContent> {
 
   @override
   Widget build(BuildContext context) {
+    final controller = widget.controller;
+    if (controller is! Listenable) {
+      return _CompactAgentUsage(
+        controller: controller,
+        expanded: widget.mode == AgentUsagePanelMode.expanded,
+        onToggle: widget.onModeChanged == null ? null : _toggleMode,
+      );
+    }
     return ListenableBuilder(
-      listenable: widget.controller,
+      listenable: controller as Listenable,
       builder: (context, _) => _CompactAgentUsage(
         controller: widget.controller,
         expanded: widget.mode == AgentUsagePanelMode.expanded,
@@ -152,6 +166,7 @@ class _AgentUsagePanelContentState extends State<AgentUsagePanelContent> {
       dismissDuration: duration,
       builder: (_) => _AgentUsagePopover(
         controller: widget.controller,
+        sliceStore: widget.sliceStore,
         width: width,
         maxHeight: maxHeight,
       ),
@@ -178,11 +193,13 @@ class _AgentUsagePanelContentState extends State<AgentUsagePanelContent> {
 class _AgentUsagePopover extends StatelessWidget {
   const _AgentUsagePopover({
     required this.controller,
+    required this.sliceStore,
     required this.width,
     required this.maxHeight,
   });
 
-  final AgentUsagePanelController controller;
+  final AgentUsagePanelOperations controller;
+  final AgentUsagePanelSliceStore? sliceStore;
 
   /// 锚点宽度左右各内缩后的弹层宽度。
   final double width;
@@ -191,6 +208,18 @@ class _AgentUsagePopover extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (sliceStore != null) {
+      return Consumer(
+        builder: (context, ref, _) {
+          ref.watch(agentUsagePanelSliceProvider);
+          return _buildPopover();
+        },
+      );
+    }
+    return _buildPopover();
+  }
+
+  Widget _buildPopover() {
     return ConstrainedBox(
       constraints: BoxConstraints(
         minWidth: width,
@@ -199,10 +228,13 @@ class _AgentUsagePopover extends StatelessWidget {
       ),
       child: IdeSurface.popover(
         key: const ValueKey('agent-usage-popover'),
-        child: ListenableBuilder(
-          listenable: controller,
-          builder: (context, _) => _AgentUsagePanelBody(controller: controller),
-        ),
+        child: controller is Listenable
+            ? ListenableBuilder(
+                listenable: controller as Listenable,
+                builder: (context, _) =>
+                    _AgentUsagePanelBody(controller: controller),
+              )
+            : _AgentUsagePanelBody(controller: controller),
       ),
     );
   }
@@ -211,7 +243,7 @@ class _AgentUsagePopover extends StatelessWidget {
 class _AgentUsageRefreshButton extends StatelessWidget {
   const _AgentUsageRefreshButton({required this.controller});
 
-  final AgentUsagePanelController controller;
+  final AgentUsagePanelOperations controller;
 
   @override
   Widget build(BuildContext context) {
@@ -269,7 +301,7 @@ class _CompactAgentUsage extends StatelessWidget {
     required this.onToggle,
   });
 
-  final AgentUsagePanelController controller;
+  final AgentUsagePanelOperations controller;
   final bool expanded;
   final VoidCallback? onToggle;
 
@@ -595,7 +627,7 @@ class _CompactAgentUsageMessage extends StatelessWidget {
 class _AgentUsagePanelBody extends StatelessWidget {
   const _AgentUsagePanelBody({required this.controller});
 
-  final AgentUsagePanelController controller;
+  final AgentUsagePanelOperations controller;
 
   @override
   Widget build(BuildContext context) {
@@ -682,7 +714,7 @@ class _AgentUsageTabsToolbar extends StatelessWidget {
     required this.selectedProviderId,
   });
 
-  final AgentUsagePanelController controller;
+  final AgentUsagePanelOperations controller;
   final String? selectedProviderId;
 
   @override
@@ -734,7 +766,7 @@ class _SelectedProviderBody extends StatelessWidget {
   const _SelectedProviderBody({required this.state, required this.controller});
 
   final AgentUsagePanelProviderState state;
-  final AgentUsagePanelController controller;
+  final AgentUsagePanelOperations controller;
 
   @override
   Widget build(BuildContext context) {

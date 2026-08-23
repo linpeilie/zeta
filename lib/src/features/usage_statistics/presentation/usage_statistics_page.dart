@@ -5,7 +5,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
-import 'package:zeta/src/features/usage_statistics/application/usage_statistics_controller.dart';
+import 'package:zeta/src/features/usage_statistics/application/usage_statistics_operations.dart';
 import 'package:zeta/src/features/usage_statistics/application/usage_statistics_report_builder.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_formatters.dart';
@@ -22,7 +22,7 @@ class UsageStatisticsPage extends StatefulWidget {
     super.key,
   });
 
-  final UsageStatisticsController controller;
+  final UsageStatisticsOperations controller;
   final VoidCallback onOpenAgentManagement;
 
   @override
@@ -47,15 +47,22 @@ class _UsageStatisticsPageState extends State<UsageStatisticsPage> {
             title: context.l10n.usagePageTitle,
             subtitle: context.l10n.usagePageSubtitle,
           ),
-          Expanded(
-            child: ListenableBuilder(
-              listenable: widget.controller,
-              builder: (context, _) => _buildBody(context),
-            ),
-          ),
+          Expanded(child: _buildReactiveBody(context)),
         ],
       ),
     );
+  }
+
+  Widget _buildReactiveBody(BuildContext context) {
+    final controller = widget.controller;
+    if (controller is Listenable) {
+      return ListenableBuilder(
+        listenable: controller as Listenable,
+        builder: (context, _) => _buildBody(context),
+      );
+    }
+    // slice 路径由外层 Riverpod 镜像驱动重建；operations 本身保持纯 Dart。
+    return _buildBody(context);
   }
 
   Widget _buildBody(BuildContext context) {
@@ -157,7 +164,7 @@ class _UsageFilters extends StatelessWidget {
 
   static const String _all = '__all__';
 
-  final UsageStatisticsController controller;
+  final UsageStatisticsOperations controller;
   final UsageStatisticsReport? report;
 
   @override
@@ -513,7 +520,7 @@ class _UsageDetailTabs extends StatefulWidget {
     required this.onProjectSelected,
   });
 
-  final UsageStatisticsController controller;
+  final UsageStatisticsOperations controller;
   final UsageStatisticsReport report;
   final ValueChanged<AgentUsageRecord> onTaskPressed;
   final ValueChanged<String?> onProjectSelected;
@@ -616,7 +623,7 @@ class _UsageDetailTabsState extends State<_UsageDetailTabs> {
 class _AgentStatsPanel extends StatelessWidget {
   const _AgentStatsPanel({required this.controller, required this.entries});
 
-  final UsageStatisticsController controller;
+  final UsageStatisticsOperations controller;
   final List<UsageAgentRankEntry> entries;
 
   @override

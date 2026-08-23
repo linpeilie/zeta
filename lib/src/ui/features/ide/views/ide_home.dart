@@ -40,11 +40,13 @@ import 'package:zeta/src/features/settings/application/general_settings_controll
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/settings/presentation/settings_page.dart';
 import 'package:zeta/src/features/settings/presentation/settings_slice/settings_slice_providers.dart';
-import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_controller.dart';
+import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_operations.dart';
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_refresh_coordinator.dart';
-import 'package:zeta/src/features/usage_statistics/application/usage_statistics_controller.dart';
+import 'package:zeta/src/features/usage_statistics/application/usage_statistics_operations.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/agent_usage_panel.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_page.dart';
+import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_slice/usage_statistics_slice_providers.dart';
+import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_slice_composition.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/workspace/presentation/file_tree_pane.dart';
 import 'package:zeta_ui/zeta_ui.dart';
@@ -96,6 +98,7 @@ class IdeHome extends StatefulWidget {
     this.conversationSliceEnabled = false,
     this.providerManagementSliceEnabled = false,
     this.projectThreadsSliceEnabled = false,
+    this.usageStatisticsSliceComposition,
     this.agentManagementTextCatalog =
         const FallbackAgentManagementTextCatalog(),
     super.key,
@@ -148,6 +151,9 @@ class IdeHome extends StatefulWidget {
   /// Phase 3 第 3 批 3a：true 时 Project Threads 只创建 MVI owner。
   final bool projectThreadsSliceEnabled;
 
+  /// Phase 3 第 3 批 3b：非空时 Shell/UI 只消费两个外部 MVI owner。
+  final UsageStatisticsSliceComposition? usageStatisticsSliceComposition;
+
   final AgentUiTextCatalog agentUiTextCatalog;
   final AgentManagementTextCatalog agentManagementTextCatalog;
   final DesktopAttentionTextCatalog desktopAttentionTextCatalog;
@@ -164,8 +170,8 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   late final IdeShellController _shellController;
   late final AgentManagementController? _agentManagementController;
   late final AgentManagementSliceComposition? _agentManagementComposition;
-  late final UsageStatisticsController _usageStatisticsController;
-  late final AgentUsagePanelController _agentUsagePanelController;
+  late final UsageStatisticsOperations _usageStatisticsController;
+  late final AgentUsagePanelOperations _agentUsagePanelController;
   late final AgentUsageRefreshCoordinator _agentUsageRefreshCoordinator;
   late final DesktopAttentionController _desktopAttentionController;
   bool _windowFocused = true;
@@ -248,6 +254,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
         unawaited(_desktopAttentionController.handleAttention(attention));
       },
       usageStatistics: widget.usageStatisticsDependencies,
+      usageStatisticsSlice: widget.usageStatisticsSliceComposition,
       turnContextStore: widget.turnContextStore,
       agentUiTextCatalog: widget.agentUiTextCatalog,
       metrics: widget.metrics,
@@ -649,11 +656,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
           child: TickerMode(
             enabled: _page == _IdeHomePage.usageStatistics,
             child: _usageStatisticsPageMounted
-                ? UsageStatisticsPage(
-                    key: const ValueKey('usage-statistics-page-host'),
-                    controller: _usageStatisticsController,
-                    onOpenAgentManagement: _openAgentManagementFromUsage,
-                  )
+                ? _buildUsageStatisticsPage()
                 : const SizedBox.shrink(),
           ),
         ),
@@ -915,17 +918,48 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   Widget _buildLeftPanel() {
     return ProjectAgentSidebar(
       projects: _buildProjectsContent(),
-      agentUsage: AgentUsagePanelContent(
-        controller: _agentUsagePanelController,
-        mode: _agentUsageExpanded
-            ? AgentUsagePanelMode.expanded
-            : AgentUsagePanelMode.collapsed,
-        onModeChanged: (mode) {
-          setState(() {
-            _agentUsageExpanded = mode == AgentUsagePanelMode.expanded;
-          });
-        },
-      ),
+      agentUsage: _buildAgentUsagePanel(),
+    );
+  }
+
+  Widget _buildUsageStatisticsPage() {
+    final page = UsageStatisticsPage(
+      key: const ValueKey('usage-statistics-page-host'),
+      controller: _usageStatisticsController,
+      onOpenAgentManagement: _openAgentManagementFromUsage,
+    );
+    if (widget.usageStatisticsSliceComposition == null) {
+      return page;
+    }
+    return Consumer(
+      builder: (context, ref, _) {
+        ref.watch(usageStatisticsSliceProvider);
+        return page;
+      },
+    );
+  }
+
+  Widget _buildAgentUsagePanel() {
+    Widget buildPanel() => AgentUsagePanelContent(
+      controller: _agentUsagePanelController,
+      sliceStore: widget.usageStatisticsSliceComposition?.agentUsagePanelStore,
+      mode: _agentUsageExpanded
+          ? AgentUsagePanelMode.expanded
+          : AgentUsagePanelMode.collapsed,
+      onModeChanged: (mode) {
+        setState(() {
+          _agentUsageExpanded = mode == AgentUsagePanelMode.expanded;
+        });
+      },
+    );
+    if (widget.usageStatisticsSliceComposition == null) {
+      return buildPanel();
+    }
+    return Consumer(
+      builder: (context, ref, _) {
+        ref.watch(agentUsagePanelSliceProvider);
+        return buildPanel();
+      },
     );
   }
 

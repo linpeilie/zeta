@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import 'package:zeta/src/app/logging/app_logging.dart';
 import 'package:zeta/src/app/project_threads_slice/project_threads_slice_composition.dart';
+import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_slice_composition.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
@@ -29,10 +30,12 @@ import 'package:zeta/src/features/project_threads/application/project_threads_se
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
 import 'package:zeta/src/features/project_threads/presentation/project_threads_view_model.dart';
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_controller.dart';
+import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_operations.dart';
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_query_service.dart';
 import 'package:zeta/src/features/usage_statistics/application/query_agent_usage_panel_repository.dart';
 import 'package:zeta/src/features/usage_statistics/application/query_usage_statistics_repository.dart';
 import 'package:zeta/src/features/usage_statistics/application/usage_statistics_controller.dart';
+import 'package:zeta/src/features/usage_statistics/application/usage_statistics_operations.dart';
 import 'package:zeta/src/features/usage_statistics/data/built_in_agent_token_usage_source_registry.dart';
 import 'package:zeta/src/features/usage_statistics/data/global_runtime_agent_usage_quota_source.dart';
 import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partition_store.dart';
@@ -79,6 +82,7 @@ class IdeShellController extends ChangeNotifier {
     ValueChanged<AgentTurnTerminalSignal>? onAgentTurnTerminal,
     ValueChanged<AgentWorkspaceAttention>? onAgentAttention,
     IdeShellUsageStatisticsDependencies? usageStatistics,
+    UsageStatisticsSliceComposition? usageStatisticsSlice,
     AgentTurnContextStore? turnContextStore,
     this.agentUiTextCatalog = const FallbackAgentUiTextCatalog(),
     this.metrics = noopZetaMetricsPort,
@@ -134,28 +138,40 @@ class IdeShellController extends ChangeNotifier {
       _disposeAgentProviderController = null;
       _loadActiveModelCatalog = activeModelCatalogLoader;
     }
-    final partitionStore =
-        usageStatistics?.partitionStore ??
-        MemoryUsageStatisticsPartitionStore();
-    final usageQueryService = AgentUsageQueryService(
-      _loadEnabledAgentUsageProviders,
-      GlobalRuntimeAgentUsageQuotaSource(agentProviderGlobalRuntime),
-      BuiltInAgentTokenUsageSourceRegistry(partitionStore),
-      clock: _now,
-    );
-    usageStatisticsController = UsageStatisticsController(
-      repository: QueryUsageStatisticsRepository(
-        usageQueryService,
+    if (usageStatisticsSlice != null) {
+      usageStatisticsController = usageStatisticsSlice.usageStatisticsStore;
+      agentUsagePanelController = usageStatisticsSlice.agentUsagePanelStore;
+      _usageStatisticsSliceComposition = usageStatisticsSlice;
+      _ownsUsageStatisticsOperations = false;
+      usageStatisticsSlice.bindSelectionPersistence(
+        setSelectedAgentUsageProviderId,
+      );
+    } else {
+      final partitionStore =
+          usageStatistics?.partitionStore ??
+          MemoryUsageStatisticsPartitionStore();
+      final usageQueryService = AgentUsageQueryService(
+        _loadEnabledAgentUsageProviders,
+        GlobalRuntimeAgentUsageQuotaSource(agentProviderGlobalRuntime),
+        BuiltInAgentTokenUsageSourceRegistry(partitionStore),
         clock: _now,
-      ),
-      clock: _now,
-    );
-    agentUsagePanelController = AgentUsagePanelController(
-      repository:
-          usageStatistics?.agentUsagePanelRepository ??
-          QueryAgentUsagePanelRepository(usageQueryService, clock: _now),
-      onSelectionChanged: setSelectedAgentUsageProviderId,
-    );
+      );
+      usageStatisticsController = UsageStatisticsController(
+        repository: QueryUsageStatisticsRepository(
+          usageQueryService,
+          clock: _now,
+        ),
+        clock: _now,
+      );
+      agentUsagePanelController = AgentUsagePanelController(
+        repository:
+            usageStatistics?.agentUsagePanelRepository ??
+            QueryAgentUsagePanelRepository(usageQueryService, clock: _now),
+        onSelectionChanged: setSelectedAgentUsageProviderId,
+      );
+      _usageStatisticsSliceComposition = null;
+      _ownsUsageStatisticsOperations = true;
+    }
     agentProviderController.addListener(_handleAgentProviderSettingsChanged);
     agentWorkspaceController = AgentThreadWorkspaceController(
       providerController: agentProviderController,
@@ -256,8 +272,10 @@ class IdeShellController extends ChangeNotifier {
   late final VoidCallback? _disposeAgentProviderController;
   late final Future<AgentModelCatalogLoadResult> Function()
   _loadActiveModelCatalog;
-  late final UsageStatisticsController usageStatisticsController;
-  late final AgentUsagePanelController agentUsagePanelController;
+  late final UsageStatisticsOperations usageStatisticsController;
+  late final AgentUsagePanelOperations agentUsagePanelController;
+  late final UsageStatisticsSliceComposition? _usageStatisticsSliceComposition;
+  late final bool _ownsUsageStatisticsOperations;
   late final AgentThreadWorkspaceController agentWorkspaceController;
   late final AgentThreadWorkspaceEntry _bootstrapAgentEntry;
   late final ProjectThreadsOperations projectThreadsController;
@@ -1461,9 +1479,15 @@ class IdeShellController extends ChangeNotifier {
     projectThreadsController.dispose();
     _projectThreadsViewModel?.dispose();
     agentWorkspaceController.dispose();
-    usageStatisticsController.dispose();
+    if (_ownsUsageStatisticsOperations) {
+      usageStatisticsController.dispose();
+    }
     agentProviderController.removeListener(_handleAgentProviderSettingsChanged);
-    agentUsagePanelController.dispose();
+    if (_ownsUsageStatisticsOperations) {
+      agentUsagePanelController.dispose();
+    } else {
+      _usageStatisticsSliceComposition?.bindSelectionPersistence(null);
+    }
     _disposeAgentProviderController?.call();
     // 在 workspace 条目释放后再拆索引监听，避免 popover 仍挂在 listenable 上。
     _fileIndexController.removeListener(_handleFileIndexChanged);
