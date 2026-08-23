@@ -71,7 +71,13 @@ void main() {
       ).state;
       expect(state.settings.appLanguage, AppLanguage.simplifiedChinese);
       expect(state.pendingOperationId, isNull);
-      expect(state.lastPersistFailure, SettingsPersistFailureKind.persistence);
+      expect(
+        state.lastPersistFailure,
+        const GeneralSettingsSlicePersistFailure(
+          kind: SettingsPersistFailureKind.persistence,
+          operation: GeneralSettingsPersistOperation.language,
+        ),
+      );
 
       state = generalSettingsSliceReduce(
         state,

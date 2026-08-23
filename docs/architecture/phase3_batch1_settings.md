@@ -54,6 +54,29 @@ effect / reducer / store）与 `presentation/settings_slice/`（Riverpod provide
 
 ## 3. 消费方依赖图与切换顺序
 
+> **步骤 4 实施要点（2026-08-23 已定设计，待实施）**：
+>
+> 1. **单一 body + 写操作集**：两个 pane 各提取一个共享 body 函数（外观以
+>    `AppearanceSettingsSlice` 为值类型，旧路径经 `appearanceSliceFromSettings`
+>    转换；general 两侧同为 `GeneralSettings`），写操作收进 facade 记录，
+>    新旧路径各提供一份实现，杜绝 body 复制。
+> 2. **facade 必须按 store 实例缓存**（pane 转 `ConsumerStatefulWidget`）：
+>    `_FontChoiceSettingRow.didUpdateWidget` 按 loader 闭包身份重置
+>    `_choicesFuture`，闭包每次 build 变身份会导致目录反复重载。
+> 3. **字体选择 facade 的 `Future<bool>`**：dispatch 后一次性订阅等 pending
+>    槽位清空，成功 = 值发生变化（行级 `_updating` 已保证单飞；被拒绝 →
+>    值不变 → false → 行弹错误 toast，对齐现状）。`choicesLoader`：已加载
+>    直接返回，否则 `requestFontCatalog` + 等回流。
+> 4. **语言失败 toast 保真**：失败回执已带 `operation`（general 切片新增
+>    `GeneralSettingsPersistOperation` 维度，2026-08-23 落地）；pane 用
+>    `ref.listen` 观察 `lastPersistFailure`，**仅 `operation == language`
+>    弹 toast**（其余失败静默 = 现状），随后 `acknowledgeFailure()`。
+> 5. **通知源切换**：组合层提供切片版 `AgentNotificationSettingsSource`
+>    （`load` 直读 data store 保持可等待语义；`notifications` 读切片状态；
+>    订阅接切片 store），`MainApp → IdeHome` 新可选参数注入，null = 旧桥。
+> 6. **ide_home general builder**：`Consumer` 分支 `generalSettingsSliceValueProvider`
+>    vs 旧 `ValueListenableBuilder`。
+
 当前消费方（迁移源 = 两个 controller；★ = 本批要改造的订阅点）：
 
 ```

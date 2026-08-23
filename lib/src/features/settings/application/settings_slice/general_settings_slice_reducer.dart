@@ -31,6 +31,7 @@ generalSettingsSliceReduce(
       return _submit(
         state,
         intent.operationId,
+        GeneralSettingsPersistOperation.shortcut,
         (base) => base.copyWith(sendMessageShortcut: intent.shortcut),
         equalsCurrent: state.settings.sendMessageShortcut == intent.shortcut,
       );
@@ -39,6 +40,7 @@ generalSettingsSliceReduce(
       return _submit(
         state,
         intent.operationId,
+        GeneralSettingsPersistOperation.language,
         (base) => base.copyWith(appLanguage: intent.language),
         equalsCurrent: state.settings.appLanguage == intent.language,
       );
@@ -73,6 +75,7 @@ generalSettingsSliceReduce(
           settings: intent.settings,
           pendingOperationId: null,
           pendingValue: null,
+          pendingOperation: null,
           lastPersistFailure: null,
         ),
       );
@@ -83,11 +86,16 @@ generalSettingsSliceReduce(
       }
       // 已应用值保持不变；清掉在途，让下一次修改从未应用值重新出发
       // （与串行队列里「失败的保存不阻断后续命令」等价）。
+      // pendingOperation 与 pendingOperationId 成对登记，此处必非空。
       return Transition.stateOnly(
         state.copyWith(
           pendingOperationId: null,
           pendingValue: null,
-          lastPersistFailure: intent.kind,
+          pendingOperation: null,
+          lastPersistFailure: GeneralSettingsSlicePersistFailure(
+            kind: intent.kind,
+            operation: state.pendingOperation!,
+          ),
         ),
       );
 
@@ -102,6 +110,7 @@ generalSettingsSliceReduce(
 Transition<GeneralSettingsSliceState, GeneralSettingsSliceEffect> _submit(
   GeneralSettingsSliceState state,
   OperationId operationId,
+  GeneralSettingsPersistOperation operation,
   GeneralSettings Function(GeneralSettings base) update, {
   required bool equalsCurrent,
 }) {
@@ -112,7 +121,11 @@ Transition<GeneralSettingsSliceState, GeneralSettingsSliceEffect> _submit(
   final base = state.pendingValue ?? state.settings;
   final next = update(base);
   return Transition(
-    state.copyWith(pendingOperationId: operationId, pendingValue: next),
+    state.copyWith(
+      pendingOperationId: operationId,
+      pendingValue: next,
+      pendingOperation: operation,
+    ),
     <GeneralSettingsSliceEffect>[
       GeneralSettingsPersistEffect(operationId: operationId, value: next),
     ],
@@ -132,7 +145,11 @@ _submitNotification(
   }
   final next = base.copyWith(notifications: nextNotifications);
   return Transition(
-    state.copyWith(pendingOperationId: operationId, pendingValue: next),
+    state.copyWith(
+      pendingOperationId: operationId,
+      pendingValue: next,
+      pendingOperation: GeneralSettingsPersistOperation.notifications,
+    ),
     <GeneralSettingsSliceEffect>[
       GeneralSettingsPersistEffect(operationId: operationId, value: next),
     ],

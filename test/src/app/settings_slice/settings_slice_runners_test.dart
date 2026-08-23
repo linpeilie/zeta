@@ -284,7 +284,10 @@ void main() {
       );
       expect(
         failing.state.lastPersistFailure,
-        SettingsPersistFailureKind.persistence,
+        const GeneralSettingsSlicePersistFailure(
+          kind: SettingsPersistFailureKind.persistence,
+          operation: GeneralSettingsPersistOperation.shortcut,
+        ),
       );
       expect(id.scope, SettingsOperationScopes.generalPersist);
       expect(failId.scope, SettingsOperationScopes.generalPersist);
