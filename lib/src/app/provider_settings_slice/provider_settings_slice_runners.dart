@@ -4,6 +4,7 @@ import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
+import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_model_catalog_projection.dart';
 import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_provider_settings_slice_effect.dart';
 import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_provider_settings_slice_store.dart';
 
@@ -108,16 +109,49 @@ final class AgentProviderSettingsSliceRunnerAdapter
     }
   }
 
-  /// 使用现有共享仓储读取 active Provider 的模型目录。
-  Future<AgentModelCatalogLoadResult> loadActiveModelCatalog({
+  /// 为 Riverpod family 生成不含环境值的稳定查询键。
+  AgentModelCatalogQuery queryForConfig(
+    AgentProviderConfig config, {
+    bool includeHidden = false,
+  }) {
+    return AgentModelCatalogQuery(
+      providerId: config.id,
+      configFingerprint: _modelCatalogRepository.configFingerprint(config),
+      includeHidden: includeHidden,
+    );
+  }
+
+  /// 使用现有共享仓储读取查询指定的 Provider 模型目录。
+  Future<AgentModelCatalogLoadResult> loadModelCatalog(
+    AgentModelCatalogQuery query, {
     bool forceRefresh = false,
     void Function(AgentModelCatalogSnapshot snapshot)? onCacheHit,
   }) async {
     await _sliceStore.loadSettings();
-    final config = _sliceStore.activeProviderConfig;
+    final config = _sliceStore.providerConfigById(query.providerId);
+    if (config == null) {
+      throw AgentModelCatalogQueryRejected(
+        providerId: query.providerId,
+        reason: AgentModelCatalogQueryRejectionReason.unknownProvider,
+      );
+    }
+    if (queryForConfig(config, includeHidden: query.includeHidden) != query) {
+      throw AgentModelCatalogQueryRejected(
+        providerId: query.providerId,
+        reason: AgentModelCatalogQueryRejectionReason.configChanged,
+      );
+    }
+    if (!_sliceStore
+        .capabilitiesForProviderId(config.id)
+        .supportsModelSelection) {
+      throw UnsupportedError(
+        'Provider ${config.id} does not support model catalogs',
+      );
+    }
     return _modelCatalogRepository.load(
       config: config,
       source: config.displayName,
+      includeHidden: query.includeHidden,
       forceRefresh: forceRefresh,
       onCacheHit: onCacheHit,
       refreshLoader: () {
@@ -128,9 +162,26 @@ final class AgentProviderSettingsSliceRunnerAdapter
               'Provider ${config.id} does not support model catalogs',
             );
           }
-          return fetchAgentProviderModels(modelCatalog, forceRefresh: true);
+          return fetchAgentProviderModels(
+            modelCatalog,
+            forceRefresh: true,
+            includeHidden: query.includeHidden,
+          );
         });
       },
+    );
+  }
+
+  /// 兼容 shell 预热入口：把 active Provider 转成同一个 keyed 查询。
+  Future<AgentModelCatalogLoadResult> loadActiveModelCatalog({
+    bool forceRefresh = false,
+    void Function(AgentModelCatalogSnapshot snapshot)? onCacheHit,
+  }) async {
+    await _sliceStore.loadSettings();
+    return loadModelCatalog(
+      queryForConfig(_sliceStore.activeProviderConfig),
+      forceRefresh: forceRefresh,
+      onCacheHit: onCacheHit,
     );
   }
 }

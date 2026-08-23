@@ -15,6 +15,7 @@ import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
+import 'package:zeta/src/features/agent/presentation/provider_settings_slice/agent_model_catalog_projection_providers.dart';
 import 'package:zeta/src/features/agent/presentation/provider_settings_slice/agent_provider_settings_slice_providers.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
@@ -858,8 +859,16 @@ void main() {
       final sliceStore = container.read(
         agentProviderSettingsSliceStoreProvider,
       );
+      final catalogSource = container.read(
+        agentModelCatalogProjectionSourceProvider,
+      );
 
       expect(sliceStore != null, sliceEnabled);
+      expect(catalogSource != null, sliceEnabled);
+      expect(
+        container.read(activeAgentModelCatalogQueryProvider) != null,
+        sliceEnabled,
+      );
       if (!sliceEnabled) {
         return;
       }

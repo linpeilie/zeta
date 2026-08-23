@@ -3,15 +3,17 @@ import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 
 import 'package:zeta/src/app/provider_settings_slice/provider_settings_slice_runners.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
+import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_model_catalog_projection.dart';
 import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_provider_settings_slice_effect.dart';
 import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_provider_settings_slice_state.dart';
 import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_provider_settings_slice_store.dart';
 
-/// Phase 3 第 2 批 2a 的 app-session 组合。
+/// Phase 3 第 2 批 2a/2b 的 app-session 组合。
 ///
 /// store 是唯一运行态 owner；runner 持有 IO/runtime 端口；Riverpod 只镜像 store。
 /// flag 关闭时不创建本对象，确保与旧 controller 二选一、无双写。
-final class ProviderSettingsSliceComposition {
+final class ProviderSettingsSliceComposition
+    implements AgentModelCatalogProjectionSource {
   ProviderSettingsSliceComposition._({
     required this.store,
     required this._runner,
@@ -50,6 +52,27 @@ final class ProviderSettingsSliceComposition {
     void Function(AgentModelCatalogSnapshot snapshot)? onCacheHit,
   }) {
     return _runner.loadActiveModelCatalog(
+      forceRefresh: forceRefresh,
+      onCacheHit: onCacheHit,
+    );
+  }
+
+  @override
+  AgentModelCatalogQuery queryForConfig(
+    AgentProviderConfig config, {
+    bool includeHidden = false,
+  }) {
+    return _runner.queryForConfig(config, includeHidden: includeHidden);
+  }
+
+  @override
+  Future<AgentModelCatalogLoadResult> loadModelCatalog(
+    AgentModelCatalogQuery query, {
+    bool forceRefresh = false,
+    void Function(AgentModelCatalogSnapshot snapshot)? onCacheHit,
+  }) {
+    return _runner.loadModelCatalog(
+      query,
       forceRefresh: forceRefresh,
       onCacheHit: onCacheHit,
     );

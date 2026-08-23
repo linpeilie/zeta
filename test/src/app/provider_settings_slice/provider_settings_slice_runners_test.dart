@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/app/provider_settings_slice/provider_settings_slice_composition.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
+import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_model_catalog_projection.dart';
 import 'package:zeta/src/features/agent/data/agent_model_catalog_cache_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
@@ -38,8 +39,14 @@ void main() {
       );
       addTearDown(composition.dispose);
       await composition.store.loadSettings();
+      final initialQuery = composition.queryForConfig(initial);
 
       await composition.store.updateProviderConfig(updated);
+      expect(
+        composition.queryForConfig(updated),
+        initialQuery,
+        reason: 'family key 不得包含环境变量值；失效由 repository generation 保证',
+      );
       var refreshCount = 0;
       final result = await catalog.load(
         config: updated,
@@ -84,6 +91,70 @@ void main() {
       expect(configStore.settings.activeProvider.command, 'second');
     });
 
+    test('keyed load forwards visibility and force refresh', () async {
+      final provider = _RecordingModelCatalogProvider();
+      final registry = AgentProviderRuntimeRegistry(
+        providerFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
+      );
+      addTearDown(registry.close);
+      final composition = ProviderSettingsSliceComposition.create(
+        configStore: MemoryAgentProviderConfigStore(),
+        modelCatalogRepository: AgentModelCatalogRepository(
+          store: MemoryAgentModelCatalogCacheStore(),
+        ),
+        runtimeRegistry: registry,
+      );
+      addTearDown(composition.dispose);
+      await composition.store.loadSettings();
+
+      final result = await composition.loadModelCatalog(
+        composition.queryForConfig(
+          AgentProviderConfig.defaultCodex,
+          includeHidden: true,
+        ),
+        forceRefresh: true,
+      );
+
+      expect(result.models.models.single.id, 'recorded');
+      expect(provider.includeHiddenValues, <bool>[true]);
+      expect(provider.forceRefreshValues, <bool>[true]);
+    });
+
+    test('rejects a query whose safe config fingerprint changed', () async {
+      final provider = FakeAgentProvider();
+      final registry = AgentProviderRuntimeRegistry(
+        providerFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
+      );
+      addTearDown(registry.close);
+      final composition = ProviderSettingsSliceComposition.create(
+        configStore: MemoryAgentProviderConfigStore(),
+        modelCatalogRepository: AgentModelCatalogRepository(
+          store: MemoryAgentModelCatalogCacheStore(),
+        ),
+        runtimeRegistry: registry,
+      );
+      addTearDown(composition.dispose);
+      await composition.store.loadSettings();
+      final staleQuery = composition.queryForConfig(
+        AgentProviderConfig.defaultCodex,
+      );
+      await composition.store.updateProviderConfig(
+        AgentProviderConfig.defaultCodex.copyWith(command: 'codex-next'),
+      );
+
+      await expectLater(
+        composition.loadModelCatalog(staleQuery),
+        throwsA(
+          isA<AgentModelCatalogQueryRejected>().having(
+            (error) => error.reason,
+            'reason',
+            AgentModelCatalogQueryRejectionReason.configChanged,
+          ),
+        ),
+      );
+      expect(registry.debugLeaseCount, 0);
+    });
+
     test(
       'missing model catalog port fails closed and releases the lease',
       () async {
@@ -112,6 +183,22 @@ void main() {
       },
     );
   });
+}
+
+final class _RecordingModelCatalogProvider extends FakeAgentProvider {
+  final List<bool> includeHiddenValues = <bool>[];
+  final List<bool> forceRefreshValues = <bool>[];
+
+  @override
+  Future<AgentModelList> listModels({
+    int limit = 20,
+    bool includeHidden = false,
+    bool forceRefresh = false,
+  }) async {
+    includeHiddenValues.add(includeHidden);
+    forceRefreshValues.add(forceRefresh);
+    return _modelList('recorded');
+  }
 }
 
 final class _SlowConfigStore implements AgentProviderConfigStore {

@@ -335,6 +335,11 @@ capability 位与 UI 入口的 G4 对照表、`AgentProviderSettingsPort` 消费
 > flag 默认 false 的挂旗与对照阶段，生产行为不变。字段级契约、依赖图、生命周期与
 > 删除清单见 [第 2 批开工文档](phase3_batch2_provider_management.md)。第 2 批生产翻旗
 > 仍需另行确认。
+>
+> **执行记录（2026-08-23）**：2a Provider settings store/runner 与 2b 模型目录
+> keyed Riverpod 投影已落地；目录 repository、TTL、single-flight、generation、缓存
+> schema 与 Composer selection owner 均未改动，生产 flag 仍为 false。下一步是 2c
+> Agent management 页面切片。
 
 ---
 

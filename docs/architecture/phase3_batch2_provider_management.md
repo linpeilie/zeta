@@ -69,7 +69,7 @@
 | 现状 | 迁移后 | owner |
 | --- | --- | --- |
 | `AgentModelCatalogRepository` snapshots / refreshes / generations | 原类原样保留 | app session 级 repository |
-| `AgentModelCatalogLoadResult` | Riverpod async selector 的只读结果 | repository 结果投影 |
+| `AgentModelCatalogLoadResult` | 脱敏的 `AgentModelCatalogProjectionState` | repository 结果的 autoDispose 只读投影 |
 | Composer `AgentModelConfigUiState` | 原 selection controller，直到第 5 批并入 conversation composer | conversation model selection owner |
 | 管理页连接测试返回的模型列表 | management state 的诊断快照 | management page store |
 
@@ -81,6 +81,12 @@
   或 Provider generation 推进；
 - `budget`：fresh 1 小时、max-stale 7 天，每个 Provider/可见性槽只留最近一次
   last-known-good；single-flight 不形成长期缓存。
+
+Riverpod family 自身只用 `providerId + includeHidden + configFingerprint` 作为安全
+查询键，不把 `AgentProviderConfig`、环境变量值或原始异常放进 family 参数/state。
+它同时监听 Provider settings 快照，因此仅环境变量**值**变化（安全指纹刻意不包含
+值）也会重新查询；缓存是否可接受仍由 repository 的私有 provider/slot generation
+裁决，Riverpod 不另造缓存 generation。
 
 ### 2.3 Agent management 页面状态
 
@@ -128,6 +134,12 @@ state 只保留稳定失败分类，不保存原始错误文本。配置写入�
 ModelCatalogLoaded / ModelCatalogRefreshFailed`。已有 stale 快照时失败结果保留旧列表并
 登记中立 refresh failure；无缓存时才显示首次加载错误。仓储内部 generation 仍是目录
 结果是否可接受的唯一依据。
+
+2b 落地形态是这个状态机的 Riverpod adapter：初次订阅与显式 `refresh()` 分别对应
+普通读取/force refresh，repository 的 `onCacheHit` 先发布 last-known-good，完成后再
+发布最终投影。投影只保留 `sourceUnavailable / invalidQuery / unsupported / load /
+refresh` 五种稳定分类，不保存 `refreshError` 或抛出的原始异常。family autoDispose
+只释放 UI 投影，不释放 repository、global runtime 或 registry。
 
 ### 3.3 Agent management
 
@@ -179,7 +191,7 @@ MainApp (flag + composition owner)
   │    └─ AgentManagement page store
   ├─ Riverpod mirror
   │    ├─ settings/management selectors
-  │    └─ model catalog async selector
+  │    └─ keyed model catalog async projection
   └─ EffectRunner
        ├─ AgentProviderConfigStore
        ├─ AgentModelCatalogRepository
@@ -192,7 +204,8 @@ MainApp (flag + composition owner)
 2. store 实现现有 port，先让 shell 与 application 消费方在 flag true 下整体切换，
    flag false 继续旧 controller；
 3. 加 Riverpod 镜像与只读 selectors，presentation 不持有第二份 settings；
-4. 模型目录 UI 改读 selector，仓储保持原样；
+4. 新 presentation 消费方改读模型目录 selector，仓储保持原样；现有 Composer
+   selection owner 按 §2.2 留到第 5 批，不在 2b 双写模型选择状态；
 5. management controller 迁成 page store，配置草稿留 Widget；
 6. 双路径验证后生产翻旗；观察通过才执行删除清单。
 
@@ -201,7 +214,7 @@ MainApp (flag + composition owner)
 | 对象 | 创建者 | 生命周期 | dispose / close |
 | --- | --- | --- | --- |
 | Provider settings store/runner | `MainApp` app 组合层 | app session | `MainApp.dispose` 关闭 store；不关闭注入的 repository/registry |
-| Riverpod mirror | 根 `ProviderScope` | app session | Riverpod 取消 store subscription；不拥有 store |
+| Riverpod mirror | 根 `ProviderScope` | app session / query subscription | Riverpod 取消 store subscription 与目录投影；不拥有 store/repository |
 | `AgentModelCatalogRepository` | `MainApp` | app session | 无独立进程；runtime registry 关闭前停止新请求 |
 | management page store/runner | `IdeHome` management page composition | 页面保活寿命 | 页面销毁时取消 ingress/关闭 store；repository 不归它所有 |
 | old controllers | flag false 路径 owner | 观察期 | 仅创建者 dispose；flag true 时不得同时创建/双写 |
@@ -236,6 +249,8 @@ MainApp (flag + composition owner)
 - 权限只持久化规范化 V2 optionId；模型选择整体保存与失败传播等价；
 - flag false/true 下 shell、thread、usage directory 与 management 渲染/行为等价；
 - 模型目录 fresh/stale/force/single-flight/generation 既有测试保持全绿；
+- 模型目录 safe key、cache-first、force refresh、stale 保留、typed failure、flag
+  双路径根注入均有 Riverpod/runner 测试；
 - management 检测、连接测试、启停、配置冲突、日志与账号增强 Widget 测试双路径；
 - 关批时 `knownApplicationFlutterImports` −3，并删除对应燃尽条目；
 - 本批无流式/resize 热路径变化，无需新增 Phase 0 帧预算；若实际改到热路径则补测。
@@ -264,8 +279,8 @@ MainApp (flag + composition owner)
 
 四步状态：
 
-1. **挂 flag**：🟡 2a Provider settings store/runner、Riverpod 镜像与 app 根
-   二选一接缝已落地（2026-08-23）；2b/2c 待执行；
+1. **挂 flag**：🟡 2a Provider settings store/runner 与 2b keyed 模型目录
+   Riverpod 投影、app 根二选一接缝已落地（2026-08-23）；2c 待执行；
 2. **对照验证**：待 2a/2b/2c 接缝全部落地；
 3. **翻 flag**：需另行显式确认，且不得与第 1 批同时扩大生产风险；
 4. **关批**：观察通过后执行 §10，再启动第 3 批。

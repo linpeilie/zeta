@@ -29,6 +29,7 @@ import 'package:zeta/src/features/agent/data/agent_model_catalog_cache_store.dar
 import 'package:zeta/src/features/agent/data/agent_provider_config_codec.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/data/agent_turn_context_store.dart';
+import 'package:zeta/src/features/agent/presentation/provider_settings_slice/agent_model_catalog_projection_providers.dart';
 import 'package:zeta/src/features/agent/presentation/provider_settings_slice/agent_provider_settings_slice_providers.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_models.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_text_catalog.dart';
@@ -532,10 +533,14 @@ class MainAppState extends State<MainApp>
             composition.generalStore,
           ),
         ],
-        if (_providerSettingsSliceComposition case final composition?)
+        if (_providerSettingsSliceComposition case final composition?) ...[
           agentProviderSettingsSliceStoreProvider.overrideWithValue(
             composition.store,
           ),
+          agentModelCatalogProjectionSourceProvider.overrideWithValue(
+            composition,
+          ),
+        ],
       ],
       child: _buildApp(context),
     );
