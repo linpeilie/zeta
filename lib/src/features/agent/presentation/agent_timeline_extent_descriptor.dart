@@ -203,7 +203,7 @@ final class AgentTimelineExtentDescriptorFactory {
   /// 布局失效指纹。
   ///
   /// 流式更新只让**变化 entry** 的 revision 改变，
-  /// 禁止用整 turn 的 [AgentConversationTurnGroup.renderRevision] 绑死所有 block，
+  /// 禁止用整 turn 的 [AgentConversationTurnGroup.contentRevision] 绑死所有 block，
   /// 否则 live turn 内每个字符都会把 sibling tool card 标成 measurement stale。
   Object _layoutRevision(
     AgentTimelineViewportItem item,
@@ -245,7 +245,7 @@ final class AgentTimelineExtentDescriptorFactory {
     };
   }
 
-  /// 单个 render block 的内容指纹（不含 turn 级 renderRevision）。
+  /// 单个 render block 的内容指纹（不含 turn 级 contentRevision）。
   Object _blockContentRevision(AgentTimelineRenderBlock block) {
     return switch (block) {
       AgentTimelineCommandGroupRenderBlock(:final group) => Object.hashAll([

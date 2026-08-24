@@ -21,23 +21,6 @@ const double kIdeScrollCorrectionEpsilon = 0.5;
 /// 单 frame 内允许的最大 correction 次数。
 const int kIdeMaxCorrectionsPerFrame = 2;
 
-/// 在 feature flag 下构建动态高度 sliver 或普通 [SliverList]。
-///
-/// 仅通用层/测试层使用，便于与默认 [SliverList] 并存对照。
-Widget buildIdeVirtualSliver({
-  required bool useAnchoredDynamic,
-  required IdeVirtualListController controller,
-  required SliverChildDelegate delegate,
-}) {
-  if (useAnchoredDynamic) {
-    return IdeAnchoredDynamicSliverList(
-      controller: controller,
-      delegate: delegate,
-    );
-  }
-  return SliverList(delegate: delegate);
-}
-
 /// 动态高度、锚点稳定的虚拟列表 sliver。
 ///
 /// child 按自然高度布局；未显示项高度来自 [IdeExtentIndex] 的

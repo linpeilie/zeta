@@ -142,7 +142,7 @@ class _AgentHeader extends StatelessWidget {
                             state.threadOpenPhase ==
                                 AgentThreadOpenPhase.openFailed
                             ? colors.warning
-                            : colors.mutedText.withValues(alpha: 0.82),
+                            : colors.textSecondary.withValues(alpha: 0.82),
                       ),
                     ),
                   ],
@@ -160,7 +160,7 @@ class _AgentHeader extends StatelessWidget {
                     Icon(
                       Icons.bolt_outlined,
                       size: 12,
-                      color: colors.mutedText.withValues(alpha: 0.65),
+                      color: colors.textSecondary.withValues(alpha: 0.65),
                     ),
                     const SizedBox(width: 3),
                     Text(
@@ -168,7 +168,7 @@ class _AgentHeader extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: textStyles.caption.copyWith(
-                        color: colors.mutedText.withValues(alpha: 0.78),
+                        color: colors.textSecondary.withValues(alpha: 0.78),
                         fontWeight: FontWeight.w500,
                       ),
                     ),

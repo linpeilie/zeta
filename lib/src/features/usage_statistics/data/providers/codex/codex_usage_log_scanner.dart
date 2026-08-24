@@ -232,11 +232,6 @@ class CodexUsageSessionSnapshot {
   }
 }
 
-/// 为 Codex rollout 路径生成稳定的 64-bit FNV-1a 标识。
-///
-/// 兼容旧调用点；新代码请直接使用 [usageSourceId]。
-String codexUsageSourceId(String sourcePath) => usageSourceId(sourcePath);
-
 /// 将 Codex turn 错误归一为不含原始内容的稳定分类标识。
 String? codexUsageErrorCategoryHint({
   required AgentHistoryTurnStatus status,

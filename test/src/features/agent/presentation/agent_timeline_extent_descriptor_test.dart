@@ -26,7 +26,7 @@ void main() {
         status: AgentHistoryTurnStatus.completed,
         isStandby: false,
         entries: const <AgentTimelineEntry>[],
-        renderRevision: 3,
+        contentRevision: 3,
       ),
       isLive: false,
     );
@@ -36,7 +36,7 @@ void main() {
         status: AgentHistoryTurnStatus.running,
         isStandby: false,
         entries: const <AgentTimelineEntry>[],
-        renderRevision: 1,
+        contentRevision: 1,
       ),
     );
     final user = AgentBlockViewportItem(
@@ -45,7 +45,7 @@ void main() {
         status: AgentHistoryTurnStatus.completed,
         isStandby: false,
         entries: const <AgentTimelineEntry>[],
-        renderRevision: 2,
+        contentRevision: 2,
       ),
       block: AgentTimelineEntryRenderBlock(
         entry: AgentMessageTimelineEntry(

@@ -35,7 +35,6 @@ void main() {
       isStandby: false,
       entries: <AgentTimelineEntry>[entry],
       contentRevision: 1,
-      renderRevision: 1,
     );
     final historyItem = AgentBlockViewportItem(
       turn: turn,

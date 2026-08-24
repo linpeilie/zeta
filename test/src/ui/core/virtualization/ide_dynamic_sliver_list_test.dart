@@ -278,41 +278,6 @@ void main() {
       expect(_position(tester).pixels.isFinite, isTrue);
     });
 
-    testWidgets('feature flag 可回退到普通 SliverList', (tester) async {
-      final controller = IdeVirtualListController();
-      final items = List<_Item>.generate(
-        10,
-        (i) => _Item(id: 'i-$i', height: 40),
-      );
-      controller.synchronizeNow(_descriptors(items), epoch: epoch);
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: CustomScrollView(
-              slivers: [
-                buildIdeVirtualSliver(
-                  useAnchoredDynamic: false,
-                  controller: controller,
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) => SizedBox(
-                      key: ValueKey(items[index].id),
-                      height: items[index].height,
-                      child: Text(items[index].id),
-                    ),
-                    childCount: items.length,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.byType(SliverList), findsOneWidget);
-      expect(find.byType(IdeAnchoredDynamicSliverList), findsNothing);
-    });
-
     testWidgets('geometry.scrollExtent 跟踪 index.totalExtent', (tester) async {
       final items = List<_Item>.generate(
         12,

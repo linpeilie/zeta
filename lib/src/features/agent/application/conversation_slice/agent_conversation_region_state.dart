@@ -837,7 +837,6 @@ AgentConversationTurnGroup _snapshotTurnGroup(AgentConversationTurnGroup turn) {
     duration: turn.duration,
     tokenUsage: turn.tokenUsage,
     modelConfig: turn.modelConfig,
-    renderRevision: turn.renderRevision,
     contentRevision: turn.contentRevision,
     metaRevision: turn.metaRevision,
   );

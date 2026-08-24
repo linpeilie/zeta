@@ -4,9 +4,6 @@ import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta/src/features/settings/application/appearance_font_option.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 
-export 'package:zeta/src/features/settings/domain/appearance_settings.dart'
-    show ZetaThemeModePreference;
-
 /// 字体目录的只读投影（source of truth 是 `SystemFontCatalogService`）。
 ///
 /// 缓存四元组：source of truth = 系统字体目录服务；key = 目录槽位

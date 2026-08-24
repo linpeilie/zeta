@@ -1773,7 +1773,6 @@ class AgentConversationTurnGroup {
     this.duration,
     this.tokenUsage,
     this.modelConfig,
-    this.renderRevision = 0,
     this.contentRevision = 0,
     this.metaRevision = 0,
   });
@@ -1789,11 +1788,6 @@ class AgentConversationTurnGroup {
 
   /// 本回合使用的模型 / 思考程度 / Fast 配置（若有）。
   final AgentTurnModelConfig? modelConfig;
-
-  /// 与 [contentRevision] 同义的兼容字段（projection 旧调用点）。
-  ///
-  /// 新代码请优先使用 [contentRevision] / [metaRevision]。
-  final int renderRevision;
 
   /// 正文/条目/计划变更修订号；projection 缓存命中键。
   ///
@@ -1845,9 +1839,6 @@ class AgentConversationTurnState extends AgentChangeNotifier {
   AgentTokenUsage? get tokenUsage => _tokenUsage;
 
   AgentTurnModelConfig? get modelConfig => _modelConfig;
-
-  /// 兼容别名：等于 [contentRevision]（projection 语义）。
-  int get renderRevision => _contentRevision;
 
   /// 正文/条目/计划变更修订号。
   int get contentRevision => _contentRevision;
@@ -1981,7 +1972,6 @@ class AgentConversationTurnState extends AgentChangeNotifier {
       duration: _duration,
       tokenUsage: _tokenUsage,
       modelConfig: _modelConfig,
-      renderRevision: _contentRevision,
       contentRevision: _contentRevision,
       metaRevision: _metaRevision,
     );

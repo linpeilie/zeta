@@ -353,35 +353,6 @@ class AgentConversationModelSelectionController {
     return _applyPreference(preference, field: AgentModelConfigField.fast);
   }
 
-  /// 兼容旧调用点的通用 service tier 更新。
-  Future<bool> selectServiceTier(String? tierId) {
-    final model = selectedModel;
-    if (model == null) {
-      return Future<bool>.value(false);
-    }
-    final tier = tierId == null
-        ? null
-        : model.serviceTiers.where((item) => item.id == tierId).firstOrNull;
-    if (tierId != null && (tier == null || !tier.enabled)) {
-      return Future<bool>.value(false);
-    }
-    final fastTier = agentFastServiceTier(model);
-    if (tierId != null && tierId == fastTier?.id) {
-      return selectFastEnabled(true);
-    }
-    final current = _preferenceForSelectedModel(model);
-    return _applyPreference(
-      AgentModelPreference(
-        modelId: model.id,
-        reasoningEffort: current.reasoningEffort,
-        fastEnabled: false,
-        serviceTierId: tierId,
-        updatedAt: _clock().toUtc(),
-      ),
-      field: AgentModelConfigField.fast,
-    );
-  }
-
   /// 按提示一次提交 Fast 与思考程度的兼容调整。
   Future<bool> resolveCompatibilityConflict() {
     final conflict = _compatibilityConflict;

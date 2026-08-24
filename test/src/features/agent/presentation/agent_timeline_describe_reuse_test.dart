@@ -48,14 +48,14 @@ void main() {
       status: AgentHistoryTurnStatus.running,
       isStandby: false,
       entries: <AgentTimelineEntry>[toolEntry, msgV1],
-      renderRevision: 1,
+      contentRevision: 1,
     );
     final turnV2 = AgentConversationTurnGroup(
       id: 'live',
       status: AgentHistoryTurnStatus.running,
       isStandby: false,
       entries: <AgentTimelineEntry>[toolEntry, msgV2],
-      renderRevision: 2,
+      contentRevision: 2,
     );
 
     final itemsV1 = <AgentTimelineViewportItem>[

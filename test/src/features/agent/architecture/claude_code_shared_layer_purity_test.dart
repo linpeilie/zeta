@@ -55,6 +55,17 @@ void main() {
   /// 只把 Flutter `ValueNotifier` / `ChangeNotifier` 换成等价的内核
   /// `AgentValueNotifier` / `AgentChangeNotifier`，并替换 import；合并、身份和
   /// Provider 语义未改。按这次已授权的边界清算刷新基线。
+  ///
+  /// 2026-08-24（Phase 4 / P4-1）：TimelineStore 基线随**纯删除**刷新——去掉
+  /// `renderRevision` 这个与 `contentRevision` 同义的兼容别名，共 4 处：
+  /// `AgentConversationTurnGroup` 的 ctor 参数与 final 字段、
+  /// `AgentConversationTurnState` 的转发 getter、`snapshot()` 的传参。
+  /// 删除前已确认三处别名全是纯转发（`=> _contentRevision`），且唯一构造点给两个
+  /// 字段赋的是同一个值，因此 presentation 侧
+  /// `contentRevision != 0 ? contentRevision : renderRevision` 的兜底恒等于
+  /// `contentRevision`。**合并逻辑、entryId 身份、dumb merge、Provider 分支与
+  /// 任何 typed metadata 均未触碰**，本次没有新增或修改一行可执行语句。
+  /// 触发 T18 后按守卫要求停线取得明确批准，边界记录于此。
   const g1ContentBaselines = <String, _FileBaseline>{
     'packages/zeta_agent_core/lib/src/application/agent_event_pipeline.dart':
         _FileBaseline(
@@ -82,9 +93,9 @@ void main() {
         ),
     'packages/zeta_agent_core/lib/src/application/agent_conversation_timeline_store.dart':
         _FileBaseline(
-          lineCount: 2022,
-          byteLength: 68261,
-          fingerprint: 'c5dae1dc034f5873',
+          lineCount: 2012,
+          byteLength: 67887,
+          fingerprint: 'bd6bd5a988733b38',
         ),
   };
 

@@ -45,35 +45,6 @@ class FileAppearanceSettingsStore implements AppearanceSettingsStore {
   }
 }
 
-/// 通过回调读写 JSON 的外观设置仓库。
-class CallbackAppearanceSettingsStore implements AppearanceSettingsStore {
-  const CallbackAppearanceSettingsStore({
-    required this.loadJson,
-    required this.saveJson,
-    this.loadLegacyThemeMode,
-  });
-
-  final Future<String?> Function() loadJson;
-  final Future<void> Function(String value) saveJson;
-  final Future<String?> Function()? loadLegacyThemeMode;
-
-  @override
-  Future<AppearanceSettings> load() async {
-    final value = await loadJson();
-    if (value == null || value.isEmpty) {
-      return AppearanceSettings.fromLegacyThemeMode(
-        await loadLegacyThemeMode?.call(),
-      );
-    }
-    return _decodeAppearanceSettings(value);
-  }
-
-  @override
-  Future<void> save(AppearanceSettings settings) {
-    return saveJson(jsonEncode(settings.toJson()));
-  }
-}
-
 /// 内存版外观设置仓库。
 class MemoryAppearanceSettingsStore implements AppearanceSettingsStore {
   MemoryAppearanceSettingsStore([AppearanceSettings? settings])

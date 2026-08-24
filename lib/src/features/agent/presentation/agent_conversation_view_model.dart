@@ -30,21 +30,6 @@ import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 
 // 兼容既有调用点：ViewModel 过去 re-export TimelineStore 所在库，这里保持同样的
 // 公开面，但显式列出类型，避免把整个内核 barrel 透传出去。
-export 'package:zeta_agent_core/zeta_agent_core.dart'
-    show
-        AgentConversationMessage,
-        AgentConversationTimelineStore,
-        AgentConversationTurnGroup,
-        AgentConversationTurnState,
-        AgentHistoryEventTimelineEntry,
-        AgentMessageTimelineEntry,
-        AgentPermissionTimelineEntry,
-        AgentPlanApprovalTimelineEntry,
-        AgentQuestionTimelineEntry,
-        AgentThreadOpenPhase,
-        AgentToolTimelineEntry,
-        AgentTurnFileChangesTimelineEntry;
-
 final _log = zetaLoggerFor('zeta.agent.conversation');
 
 /// Provider 创建 thread 后，由 Shell 使用通用新会话流程登记并选中。
@@ -1398,9 +1383,6 @@ class AgentConversationViewModel {
         ? const AgentCommandOutcome.succeeded()
         : const AgentCommandOutcome.failed(AgentCommandFailureKind.unsupported);
   }
-
-  Future<bool> selectServiceTier(String? tierId) =>
-      _modelSelectionController.selectServiceTier(tierId);
 
   Future<bool> selectFastEnabled(bool enabled) =>
       _modelSelectionController.selectFastEnabled(enabled);

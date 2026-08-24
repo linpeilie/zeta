@@ -136,9 +136,6 @@ class AgentThreadSummary {
   /// 上次活跃时间，优先使用 provider 的 recency 排序时间。
   DateTime? get lastActiveAt => recencyAt ?? updatedAt;
 
-  /// 旧展示标题入口，保留给尚未迁移的调用点。
-  String get displayTitle => displayName;
-
   AgentThreadSummary copyWith({
     String? id,
     String? providerId,

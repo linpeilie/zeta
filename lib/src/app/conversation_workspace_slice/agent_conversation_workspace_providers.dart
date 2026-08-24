@@ -62,27 +62,3 @@ final class AgentConversationWorkspaceNotifier
     return store.state;
   }
 }
-
-final agentConversationWorkspaceEntriesProvider =
-    Provider<List<AgentConversationWorkspaceEntryState>>(
-      (ref) => ref.watch(
-        agentConversationWorkspaceProvider.select((state) => state.entries),
-      ),
-      name: 'agentConversationWorkspaceEntries',
-    );
-
-final agentConversationWorkspaceSelectedEntryIdProvider = Provider<String?>(
-  (ref) => ref.watch(
-    agentConversationWorkspaceProvider.select((state) => state.selectedEntryId),
-  ),
-  name: 'agentConversationWorkspaceSelectedEntryId',
-);
-
-final agentConversationWorkspaceProjectHomeProvider = Provider<bool>(
-  (ref) => ref.watch(
-    agentConversationWorkspaceProvider.select(
-      (state) => state.projectHomeActive,
-    ),
-  ),
-  name: 'agentConversationWorkspaceProjectHome',
-);

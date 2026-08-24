@@ -12,12 +12,6 @@ import 'package:flutter/foundation.dart';
 import 'ide_extent_index.dart';
 import 'ide_virtual_item.dart';
 
-/// 通用层 feature flag：是否使用锚定动态高度 sliver。
-///
-/// 仅用于开发/回滚与测试对照；关闭时应回退到普通 `SliverList`。
-/// 不作为长期用户配置。
-const bool kIdeUseAnchoredDynamicSliver = true;
-
 /// 视口锚点：以稳定 item ID 记录用户当前阅读位置。
 @immutable
 final class IdeScrollAnchor {

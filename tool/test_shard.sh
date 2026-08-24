@@ -25,8 +25,16 @@ report_directory="$repository_root/.dart_tool/test-results"
 report_path="$report_directory/shard-$shard_id.json"
 mkdir -p "$report_directory"
 
+# git-bash/MSYS 下 `pwd` 给出 /d/... 形式的路径。MSYS 只会把**以 / 开头**的参数
+# 自动转成原生路径，`json:/d/...` 不在转换范围内，Windows 版 flutter 拿到后无法
+# 解析，会静默不写报告——耗时摘要于是读到上一次的旧文件。这里显式转一次。
+reporter_path="$report_path"
+if command -v cygpath >/dev/null 2>&1; then
+  reporter_path="$(cygpath -w "$report_path")"
+fi
+
 # shellcheck disable=SC2086  # shard_paths 是空格分隔的多个路径，需要分词。
-flutter test $shard_paths --file-reporter "json:$report_path" "$@"
+flutter test $shard_paths --file-reporter "json:$reporter_path" "$@"
 test_exit_code=$?
 
 # 每片各自打印耗时摘要——重平衡分片时不用拍脑袋，直接看这份数据。

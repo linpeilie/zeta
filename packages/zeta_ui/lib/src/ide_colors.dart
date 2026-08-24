@@ -24,7 +24,6 @@ class IdeColors {
     required this.editor,
     required this.border,
     required this.borderSubtle,
-    required this.mutedText,
     required this.textPrimary,
     required this.textSecondary,
     required this.textTertiary,
@@ -96,7 +95,6 @@ class IdeColors {
         panel: neutral[900],
         border: overlayBase.withValues(alpha: 0.08),
         borderSubtle: overlayBase.withValues(alpha: 0.05),
-        mutedText: neutral[400],
         textPrimary: neutral[50],
         textSecondary: neutral[400],
         // 三级前景不能再压暗：10px 的时间戳落在最亮的 popover 档（#262626）上时，
@@ -135,7 +133,6 @@ class IdeColors {
       panel: neutral[50],
       border: overlayBase.withValues(alpha: 0.12),
       borderSubtle: overlayBase.withValues(alpha: 0.07),
-      mutedText: zinc[600],
       textPrimary: zinc[950],
       textSecondary: zinc[600],
       // 与深色同理：zinc.500 落在最暗的 control 档（zinc.100）上只有 4.4:1，
@@ -213,13 +210,6 @@ class IdeColors {
   /// 生效位置：上下文菜单分隔线、页头/侧栏内分隔线、Markdown 表格和
   /// 代码块边界、模型/权限选择弹层、图片草稿边框，并投影为 shadcn input。
   final Color borderSubtle;
-
-  /// 旧版的弱化前景别名，语义与 [textSecondary] 保持同步。
-  ///
-  /// 生效位置：Agent 头部的 provider/token/时间元数据、项目 Thread 辅助文字、
-  /// 空面板 trailing 图标。新代码应优先使用 [textSecondary]；[copyWith] 会保证
-  /// 两个字段的兼容同步行为。
-  final Color mutedText;
 
   /// 最高对比度的内容前景色。
   ///
@@ -382,9 +372,6 @@ class IdeColors {
   }
 
   /// 复制当前调色板并替换指定语义颜色。
-  ///
-  /// [mutedText] 是 [textSecondary] 的历史兼容别名；仅覆盖其中任意一个时，
-  /// 本方法会同步另一个，避免新旧调用点出现不一致的辅助前景色。
   IdeColors copyWith({
     Color? frame,
     Color? surface,
@@ -394,7 +381,6 @@ class IdeColors {
     Color? editor,
     Color? border,
     Color? borderSubtle,
-    Color? mutedText,
     Color? textPrimary,
     Color? textSecondary,
     Color? textTertiary,
@@ -416,9 +402,6 @@ class IdeColors {
     Color? selectedHoverSurface,
     Color? focusRing,
   }) {
-    final resolvedTextSecondary =
-        textSecondary ?? mutedText ?? this.textSecondary;
-    final resolvedMutedText = mutedText ?? textSecondary ?? this.mutedText;
     return IdeColors(
       frame: frame ?? this.frame,
       surface: surface ?? this.surface,
@@ -428,9 +411,8 @@ class IdeColors {
       editor: editor ?? this.editor,
       border: border ?? this.border,
       borderSubtle: borderSubtle ?? this.borderSubtle,
-      mutedText: resolvedMutedText,
       textPrimary: textPrimary ?? this.textPrimary,
-      textSecondary: resolvedTextSecondary,
+      textSecondary: textSecondary ?? this.textSecondary,
       textTertiary: textTertiary ?? this.textTertiary,
       accent: accent ?? this.accent,
       intelligenceAccent: intelligenceAccent ?? this.intelligenceAccent,
@@ -463,7 +445,6 @@ class IdeColors {
       editor: Color.lerp(editor, other.editor, t)!,
       border: Color.lerp(border, other.border, t)!,
       borderSubtle: Color.lerp(borderSubtle, other.borderSubtle, t)!,
-      mutedText: Color.lerp(mutedText, other.mutedText, t)!,
       textPrimary: Color.lerp(textPrimary, other.textPrimary, t)!,
       textSecondary: Color.lerp(textSecondary, other.textSecondary, t)!,
       textTertiary: Color.lerp(textTertiary, other.textTertiary, t)!,

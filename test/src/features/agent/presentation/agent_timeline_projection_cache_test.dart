@@ -32,7 +32,7 @@ void main() {
 
       expect(cache.computeCount, 2);
       expect(identical(first, second), isFalse);
-      expect(cache.resolveProjection(v2).renderRevision, 2);
+      expect(cache.resolveProjection(v2).contentRevision, 2);
     });
 
     test('只更新 live turn 时历史 turn 不重算', () {
@@ -109,7 +109,6 @@ void main() {
       expect(state.contentRevision, 2, reason: 'meta 不推进 content');
       expect(state.metaRevision, 1);
       expect(state.snapshot().metaRevision, 1);
-      expect(state.renderRevision, 2, reason: 'renderRevision 别名 content');
     });
 
     test('token 元数据更新不使 projection 缓存失效', () {
@@ -152,8 +151,8 @@ void main() {
           ),
         ),
       );
-      expect(live.renderRevision, 1);
-      expect(history.renderRevision, 0);
+      expect(live.contentRevision, 1);
+      expect(history.contentRevision, 0);
 
       history.appendEntry(
         AgentMessageTimelineEntry(
@@ -164,8 +163,8 @@ void main() {
           ),
         ),
       );
-      expect(live.renderRevision, 1);
-      expect(history.renderRevision, 1);
+      expect(live.contentRevision, 1);
+      expect(history.contentRevision, 1);
     });
   });
 }
@@ -178,7 +177,6 @@ AgentConversationTurnGroup _turn({
   return AgentConversationTurnGroup(
     id: id,
     isStandby: false,
-    renderRevision: revision,
     contentRevision: revision,
     entries: <AgentTimelineEntry>[
       AgentMessageTimelineEntry(

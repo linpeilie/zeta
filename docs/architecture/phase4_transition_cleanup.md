@@ -2,7 +2,7 @@
 
 最后更新：2026-08-24
 
-状态：**P4-0 已关批（2026-08-24），尚未开始代码批次**
+状态：**P4-0 / P4-1 已关批（2026-08-24），下一批为 P4-2**
 
 > P4-0 的现状测绘、基线与安全网决策落在
 > [`.workflow/refactor/2026-08-24-phase4-transition-cleanup/`](../../.workflow/refactor/2026-08-24-phase4-transition-cleanup/)。
@@ -200,10 +200,11 @@ allowlist，而这与本批关批标准和 §1.3 直接冲突。**据此确定�
 3. mutation check 结论（mutate 了哪个符号、哪条守卫变红）记进该批执行记录；
 4. 高风险批 P4-3b / P4-4 / P4-5 的 mutation check 由 §6 的独立 reviewer 复查。
 
-已知证据链缺陷（未修）：`tool/test_full.sh` 用 `pwd` 推导的 MSYS 路径
-（`/d/...`）传给 `flutter test --file-reporter`，Windows 下 `flutter` 无法解析而
-静默不写报告，随后的耗时报告读到的是上一次的旧文件。**exit code 与用例数可信，
-打印出的分片耗时不属于本次运行**；Phase 4 各批不要引用该耗时输出作为性能证据。
+顺带修复了一处证据链缺陷：`tool/test_full.sh` 与 `tool/test_shard.sh` 把 `pwd` 推导的
+MSYS 路径以 `json:/d/...` 形式传给 `flutter test --file-reporter`。MSYS 只自动转换
+**以 `/` 开头**的参数，该形式不在转换范围内，Windows 版 `flutter` 无法解析便静默
+不写报告，随后的耗时摘要一直读的是上一次的旧文件。两个脚本现在在 `cygpath` 可用时
+先转原生路径（Linux/macOS 与 CI 行为不变）。
 
 ### P4-1：零调用与机械过渡 API 清理
 
@@ -220,6 +221,34 @@ allowlist，而这与本批关批标准和 §1.3 直接冲突。**据此确定�
 
 **关批**：旧符号 `rg` 为 0；Timeline 内容/meta revision 行为、virtual list 与三 Provider
 ignored-message 脱敏测试保持通过。
+
+**执行结论（2026-08-24，已关批）**
+
+九个过渡符号（`agentViewModel` / `CallbackAgentProviderConfigStore` /
+`CallbackAppearanceSettingsStore` / `codexUsageSourceId` / `selectServiceTier` /
+`kIdeUseAnchoredDynamicSliver` / `buildIdeVirtualSliver` / `renderRevision` /
+`mutedText`）、`AgentThreadSummary.displayTitle`、3 条过渡 re-export 与 3 个零读取者
+Riverpod provider 已物理删除。`lib/src` 现在只剩 `app_localizations_x.dart` 一条 `export`。
+新增零 allowlist 守卫 `test/src/architecture/deleted_transition_api_guard_test.dart`
+（不带阶段命名），mutation check 已验证其会红。
+
+门禁：根测试 **2371 passed / 0 failed**，五个 Package analyze + test 全绿。
+用例数与基线持平且账目可核：基线 2371 − 删除 2 条用例（都是只证明被删符号存在的）
++ 守卫新增 2 条 = 2371。
+
+**本批触发过一次停线**：删 `renderRevision` 动到 G1 冻结文件
+`agent_conversation_timeline_store.dart`，T18 基线守卫按设计拦下。已按守卫要求停线取得
+明确批准后刷新基线，边界记录在该守卫的文档注释与
+`.workflow/refactor/2026-08-24-phase4-transition-cleanup/05-执行记录.md` §5。
+改动是纯删除（ctor 参数 / final 字段 / 转发 getter / snapshot 传参各一处），
+合并语义、entryId 身份与 Provider 分支未触碰。
+
+`zetaClockProvider` / `zetaMetricsPortProvider` / `requiredDependency` 生产读取者虽为 0，
+但**留给 P4-2** 与 app composition 重建一并决定，避免删了再建。
+
+> ⚠️ 后续批次注意：本批发现 GNU grep 的 `\b` 在符号紧邻中文全角标点时**不匹配**
+> （Dart `RegExp` 会匹配），`renderRevision` 因此在测绘时被少数了一处。
+> 销账以 Dart 守卫为准，用 grep 复查时不要带 `\b`。
 
 ### P4-2：App / Workbench 组合根目标化
 

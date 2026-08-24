@@ -50,7 +50,7 @@ void main() {
         status: AgentHistoryTurnStatus.running,
         isStandby: false,
         entries: <AgentTimelineEntry>[toolEntry, messageV1],
-        renderRevision: 10,
+        contentRevision: 10,
       );
       final turnV2 = AgentConversationTurnGroup(
         id: 'live',
@@ -58,7 +58,7 @@ void main() {
         isStandby: false,
         entries: <AgentTimelineEntry>[toolEntry, messageV2],
         // 整 turn 修订号继续涨，但 sibling tool 的 layoutRevision 不得跟涨。
-        renderRevision: 11,
+        contentRevision: 11,
       );
 
       final toolBlock = AgentTimelineEntryRenderBlock(entry: toolEntry);

@@ -129,17 +129,4 @@ void main() {
       );
     });
   });
-
-  test('callback store falls back to the legacy theme mode', () async {
-    final store = CallbackAppearanceSettingsStore(
-      loadJson: () async => null,
-      saveJson: (_) async {},
-      loadLegacyThemeMode: () async => 'dark',
-    );
-
-    expect(
-      await store.load(),
-      const AppearanceSettings(themeMode: ZetaThemeModePreference.dark),
-    );
-  });
 }

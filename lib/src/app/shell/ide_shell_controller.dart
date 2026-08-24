@@ -204,9 +204,6 @@ class IdeShellController extends ChangeNotifier {
       agentConversationWorkspaceStore.selectedEntry?.viewModel ??
       _bootstrapAgentEntry.viewModel;
 
-  /// 兼容旧调用点；请优先改用 [selectedAgentViewModel]。
-  AgentConversationViewModel get agentViewModel => selectedAgentViewModel;
-
   List<String> get projects => workspaceSliceStore.state.projects;
 
   /// 当前应用级 Workbench 布局偏好。
