@@ -1,70 +1,63 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:zeta/src/app/ide_session_slice/ide_session_slice_composition.dart';
+import 'package:zeta/src/app/ide_session_slice/ide_session_slice_overrides.dart';
+import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_session_slice_notifier.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_restore_result.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
 
 void main() {
-  test(
-    'composition routes restored and failed results back to state',
-    () async {
-      final restoredStore = _FakeIdeSessionStore(
-        initialSnapshot: const IdeSessionState(projectPaths: <String>['/repo']),
-      );
-      final restored = IdeSessionSliceComposition.create(
-        sessionStore: restoredStore,
-        fileExists: (_) => true,
-        directoryExists: (_) => true,
-      );
-      addTearDown(restored.dispose);
+  test('overrides route restored and failed results back to state', () async {
+    final restoredStore = _FakeIdeSessionStore(
+      initialSnapshot: const IdeSessionState(projectPaths: <String>['/repo']),
+    );
+    final restored = _createSlice(
+      sessionStore: restoredStore,
+      fileExists: (_) => true,
+      directoryExists: (_) => true,
+    );
 
-      final restoredResult = await restored.store.restore();
+    final restoredResult = await restored.restore();
 
-      expect(restoredResult.status, IdeSessionRestoreStatus.restored);
-      expect(restoredResult.snapshot?.projectPaths, <String>['/repo']);
-      expect(
-        restored.store.state.restoreStatus,
-        IdeSessionRestoreStatus.restored,
-      );
+    expect(restoredResult.status, IdeSessionRestoreStatus.restored);
+    expect(restoredResult.snapshot?.projectPaths, <String>['/repo']);
+    expect(restored.state.restoreStatus, IdeSessionRestoreStatus.restored);
 
-      final failed = IdeSessionSliceComposition.create(
-        sessionStore: _FakeIdeSessionStore(loadError: StateError('fixture')),
-        fileExists: (_) => true,
-        directoryExists: (_) => true,
-      );
-      addTearDown(failed.dispose);
+    final failed = _createSlice(
+      sessionStore: _FakeIdeSessionStore(loadError: StateError('fixture')),
+      fileExists: (_) => true,
+      directoryExists: (_) => true,
+    );
 
-      final failedResult = await failed.store.restore();
+    final failedResult = await failed.restore();
 
-      expect(failedResult.status, IdeSessionRestoreStatus.failed);
-      expect(failed.store.state.restoreStatus, IdeSessionRestoreStatus.failed);
-    },
-  );
+    expect(failedResult.status, IdeSessionRestoreStatus.failed);
+    expect(failed.state.restoreStatus, IdeSessionRestoreStatus.failed);
+  });
 
-  test('composition preserves latest save queued during restore', () async {
+  test('overrides preserve latest save queued during restore', () async {
     final loadCompleter = Completer<IdeSessionState?>();
     final sessionStore = _FakeIdeSessionStore(loadFuture: loadCompleter.future);
-    final composition = IdeSessionSliceComposition.create(
+    final slice = _createSlice(
       sessionStore: sessionStore,
       saveDelay: const Duration(milliseconds: 1),
       fileExists: (_) => true,
       directoryExists: (_) => true,
     );
-    addTearDown(composition.dispose);
 
-    final restoreFuture = composition.store.restore();
-    composition.store.requestSave(
+    final restoreFuture = slice.restore();
+    slice.requestSave(
       const IdeSessionState(
         workbenchLayout: IdeWorkbenchLayoutState(
           selectedAgentUsageProviderId: 'older',
         ),
       ),
     );
-    composition.store.requestSave(
+    slice.requestSave(
       const IdeSessionState(
         workbenchLayout: IdeWorkbenchLayoutState(
           selectedAgentUsageProviderId: 'latest',
@@ -87,33 +80,32 @@ void main() {
     );
   });
 
-  test('composition forwards cancellation and saveNow semantics', () async {
+  test('overrides forward cancellation and saveNow semantics', () async {
     final loadCompleter = Completer<IdeSessionState?>();
     final sessionStore = _FakeIdeSessionStore(loadFuture: loadCompleter.future);
-    final composition = IdeSessionSliceComposition.create(
+    final slice = _createSlice(
       sessionStore: sessionStore,
       saveDelay: const Duration(milliseconds: 20),
       fileExists: (_) => true,
       directoryExists: (_) => true,
     );
-    addTearDown(composition.dispose);
 
-    final restoreFuture = composition.store.restore();
-    composition.store.cancelPendingRestore();
+    final restoreFuture = slice.restore();
+    slice.cancelPendingRestore();
     loadCompleter.complete(
       const IdeSessionState(projectPaths: <String>['/stale']),
     );
 
     expect((await restoreFuture).status, IdeSessionRestoreStatus.cancelled);
 
-    composition.store.requestSave(
+    slice.requestSave(
       const IdeSessionState(
         workbenchLayout: IdeWorkbenchLayoutState(
           selectedAgentUsageProviderId: 'delayed',
         ),
       ),
     );
-    await composition.store.saveNow(
+    await slice.saveNow(
       const IdeSessionState(
         workbenchLayout: IdeWorkbenchLayoutState(
           selectedAgentUsageProviderId: 'now',
@@ -132,6 +124,25 @@ void main() {
       'now',
     );
   });
+}
+
+/// 按组合根的方式装配切片：容器持有所有权，`addTearDown` 只需要释放容器。
+IdeSessionSliceNotifier _createSlice({
+  required IdeSessionStore sessionStore,
+  Duration saveDelay = const Duration(milliseconds: 1),
+  bool Function(String path)? fileExists,
+  bool Function(String path)? directoryExists,
+}) {
+  final container = ProviderContainer(
+    overrides: ideSessionSliceOverrides(
+      sessionStore: sessionStore,
+      saveDelay: saveDelay,
+      fileExists: fileExists,
+      directoryExists: directoryExists,
+    ),
+  );
+  addTearDown(container.dispose);
+  return container.read(ideSessionSliceProvider.notifier);
 }
 
 final class _FakeIdeSessionStore implements IdeSessionStore {

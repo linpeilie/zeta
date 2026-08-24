@@ -9,7 +9,8 @@ import 'package:flutter_test/flutter_test.dart';
 /// 本守卫断言三件事：
 ///
 /// - 依赖方向只能沿 [_allowedEdges]；
-/// - 纯 Dart 层不得引入 Flutter / Riverpod / `dart:io`；
+/// - 核心纯 Dart 层不得引入 Flutter / Riverpod / `dart:io`；
+///   `zeta_foundation/src/platform` 只允许宿主平台适配器依赖对应插件；
 /// - 依赖图无环。
 ///
 /// 曾经的燃尽清单（`_knownEdgeViolations` / `_knownExternalViolations`）在
@@ -163,7 +164,7 @@ void main() {
     );
   });
 
-  test('zeta_foundation 保持纯 Dart', () {
+  test('zeta_foundation 的核心契约保持平台中立', () {
     final foundationFiles = files
         .where((path) => path.startsWith('packages/zeta_foundation/lib/'))
         .toList(growable: false);
@@ -172,14 +173,19 @@ void main() {
     for (final path in foundationFiles) {
       final imports = _externalImports(File(path).readAsStringSync());
       final offenders = imports
-          .where((import) => !_platformNeutralCoreLibraries.contains(import))
+          .where(
+            (import) =>
+                !_platformNeutralCoreLibraries.contains(import) &&
+                !(path.endsWith('/src/platform/user_directory.dart') &&
+                    import.startsWith('package:path_provider/')),
+          )
           .toList(growable: false);
       expect(
         offenders,
         isEmpty,
         reason:
-            '$path 属于 zeta_foundation：除平台中立的核心库外不得依赖任何外部库，'
-            '命中 $offenders',
+            '$path 属于 zeta_foundation：核心契约只能依赖平台中立库；'
+            '宿主路径工具只允许 path_provider，命中 $offenders',
       );
     }
   });
@@ -546,8 +552,13 @@ List<String> _dartFilesUnder(String directory) {
   return root
       .listSync(recursive: true)
       .whereType<File>()
-      .where((file) => file.path.endsWith('.dart'))
       .map((file) => _posix(file.path))
+      .where(
+        (path) =>
+            path.endsWith('.dart') &&
+            !path.contains('/.dart_tool/') &&
+            !path.contains('/build/'),
+      )
       .toList(growable: false);
 }
 

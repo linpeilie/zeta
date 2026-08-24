@@ -3,19 +3,29 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('workspace reducer/store stay pure and Riverpod stays presentation-only', () {
-    const applicationFiles = <String>[
+  test('workspace reducer/store stay pure and Flutter stays out', () {
+    // intent / effect / state / reducer 是纯数据与纯函数：它们不发布状态，
+    // 因此连纯 Dart 的 package:riverpod 都不该出现（工程规范 §3.0）。
+    const pureFiles = <String>[
       'lib/src/features/workspace/application/workspace_file_corpus_port.dart',
       'lib/src/features/workspace/application/workspace_slice/workspace_slice_effect.dart',
       'lib/src/features/workspace/application/workspace_slice/workspace_slice_intent.dart',
       'lib/src/features/workspace/application/workspace_slice/workspace_slice_reducer.dart',
       'lib/src/features/workspace/application/workspace_slice/workspace_slice_state.dart',
+    ];
+    // store 是状态 owner：允许 flutter_riverpod。
+    const ownerFiles = <String>[
       'lib/src/features/workspace/application/workspace_slice/workspace_slice_store.dart',
     ];
-    for (final path in applicationFiles) {
+    for (final path in pureFiles) {
       final source = File(path).readAsStringSync();
       expect(source, isNot(contains('package:flutter/')), reason: path);
       expect(source, isNot(contains('riverpod')), reason: path);
+      expect(source, isNot(contains("import 'dart:io'")), reason: path);
+    }
+    for (final path in ownerFiles) {
+      final source = File(path).readAsStringSync();
+      expect(source, isNot(contains('package:flutter/')), reason: path);
       expect(source, isNot(contains("import 'dart:io'")), reason: path);
     }
 

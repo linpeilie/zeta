@@ -77,7 +77,83 @@ main -> app -> presentation/application -> domain
 
 ## 3. 状态与异步编排
 
-当前重构后的核心模式是“状态容器 + 应用控制器 + 类型化 UI state”。
+### 3.0 状态所有权与 Riverpod 边界
+
+核心模式是 MVI：**不可变 state + 同步 reducer + effect runner**。Riverpod 承担其中的
+**发布机制与依赖装配**，MVI 的三段式本身不变。
+
+**为什么把 `Notifier` 放进 application 层。** 这条边界曾经写成「application 不许 import
+riverpod」，实际约束的目标是 application 不依赖 Flutter。但那个写法让每个切片都要付三份税：
+
+1. application 里手写一份 `List<void Function()> _listeners` 复刻 `ChangeNotifier` 的语义；
+2. presentation 里再写一个零状态的 `Notifier`，`build()` 只做 `state = store.state`；
+3. 组合层再写一个 `Provider` 占位 + `overrideWithValue` 把已构造的对象塞进去。
+
+三份代码描述的是同一件事，却制造了**两个 owner**（store 和镜像 notifier）和一条只为绕开
+边界而存在的反向绑定链路。现在切片的 `Notifier` 直接住在 application：
+
+| 层 | Riverpod |
+|---|---|
+| `domain` | 禁止 |
+| `application` | **允许**（slice `Notifier` / `AsyncNotifier` 住在这里） |
+| `data` | 禁止 |
+| `presentation` / `app` / `ui/` | 允许 |
+| `packages/*` 内部 Package | 禁止（`zeta_agent_core` 继续用 `AgentListenable`） |
+
+`domain` 禁：只有不可变模型和端口，没有状态所有权。`data` 禁：仓储和 codec 由 application
+装配，自己不订阅、不发布。
+
+**只用 `flutter_riverpod` 一个包。** `riverpod` 核心包是纯 Dart，理论上可以让 application
+彻底不碰 Flutter；实践上收益不足以抵消成本。理由有三条：
+
+- 整个 `lib/` 本来就是 Flutter 包。`package_boundary_candidate_graph_test` 把 `lib/` 划成
+  单个候选包 `_app`，`_bannedExternalPrefixes` 里没有 `_app` 条目——现有架构并没有把 feature
+  application 层拆成 Flutter-free 包的计划。真正平台中立的是已拆出的 `zeta_foundation` /
+  `zeta_plugin_kernel` / `zeta_agent_core`。
+- 测试也没差别：仓库全部走 `flutter test`。
+- 两个包同时存在会让「该 import 哪个」变成反复的临时判断。它们导出的是**同一批声明**
+  （`flutter_riverpod/lib/src/internals.dart` 第一行就是
+  `export 'package:riverpod/src/internals.dart';`），因此混用不会类型不匹配、Dart 也不报歧义
+  ——纯粹是可读性成本，不值得付。
+
+所以根 `pubspec.yaml` 只声明 `flutter_riverpod`；`riverpod` 只作为传递依赖存在，代码里不得
+直接 import 它（那属于未声明依赖）。需要 `Override` 这类只在 `misc.dart` 导出的类型时，用
+`package:flutter_riverpod/misc.dart`。守卫：`feature_layering_guard_test` 的
+「Riverpod 只用 flutter_riverpod 一个 barrel」。
+
+**这条选择的已知代价，写在这里免得下次有人当 bug 报。** `flutter_riverpod` 的 barrel 会带进
+`ConsumerWidget` / `ConsumerStatefulWidget` / `WidgetRef` / `ProviderScope`，而
+`'package:flutter_riverpod/'` 并不匹配 `'package:flutter/'` 前缀，所以「application 不得
+import Flutter」那条守卫**拦不住它们**。也就是说 application 与 Flutter 的解耦从此是约定而
+非物理边界：切片只暴露不可变 state 与命令入口，Widget 与 `WidgetRef` 属于 presentation。
+真要重新拉紧，两条路——恢复核心包依赖并按包禁，或者加一条符号级黑名单守卫；后者漏一个符号
+就开一个口子，比按包禁脆。
+
+**依赖注入同样归 Riverpod。** 没有安全默认值的依赖用会抛错的 `Provider` 声明保持 fail-closed，
+由组合根 override；测试用 `ProviderContainer(overrides: ...)`。这取代了两种旧写法：把几十个
+可空依赖挂在根 Widget 构造函数上向下钻，以及用可变注册表把运行期才造出来的对象反向 `bind()`
+回 provider。后者尤其危险——它让「谁拥有这个对象」在编译期不可见，读到未绑定状态只能靠运行期
+抛错兜底。
+
+**`autoDispose` 的适用范围是硬边界。** 它只能决定**纯 UI 镜像**的存活：selector、投影、派生视图。
+Binding lease、CLI runtime、子进程、文件句柄的生命周期永远由显式的 application 逻辑决定，
+绝不能由「当前有没有 Widget 在看」决定——否则用户切个面板就会杀掉一个正在跑的 turn。
+
+**构造环用工厂注入解，不用延迟绑定。** store 需要 runner 执行副作用、runner 需要 store 回流结果，
+这不是真的循环依赖，只是构造顺序问题。解法是注入一个 `Runner Function(Notifier)` 工厂 provider：
+notifier 在 `build()` 里用 `this` 把 runner 造出来，runner 拿到的是普通构造参数，环从此不存在。
+
+反过来「runner provider 持 `Ref`，在回调里 `ref.read(xxxProvider.notifier)`」是**行不通的**：
+notifier 依赖了 runner provider，runner 再读 notifier 就构成 Riverpod 眼中的
+`CircularDependencyError`，把 read 推迟到异步回调里也一样会被判定。同样不要再写
+`_DeferredXxxRunner` 这类空壳转发器。
+
+**不引入 codegen。** `riverpod_generator` / `build_runner` 的产物会让直接读源码 AST 的架构守卫
+（`test/src/architecture/`）和 review diff 都变噪。provider 一律手写声明。
+
+守卫：`feature_layering_guard_test`。
+
+### 3.1 容器与控制器
 
 - 纯状态容器只暴露不可变状态和同步 intent 入口，例如
   `ProjectThreadsSliceStore`。
@@ -104,7 +180,8 @@ main -> app -> presentation/application -> domain
   合并或取消过期请求，保存失败时整体回滚关联字段并保留可重试快照。
 - 业务选择态与短生命周期的 UI 展开态必须分离；例如 Composer 的
   `selectedModelId` 可持久化，`expandedModelId` 只由 Popover 持有。
-- `ChangeNotifier`、`ValueNotifier` 和 timer 持有者必须在 `dispose` 中释放资源；通知前应检查 disposed 状态。
+- Riverpod 管理的资源用 `ref.onDispose` 释放。provider 之外仍持有 `ChangeNotifier`、
+  `ValueNotifier` 或 timer 的，必须在 `dispose` 中释放；通知前应检查 disposed 状态。
 - 对外暴露的集合默认使用不可变列表、不可变 map 或 unmodifiable view。
 
 ## 4. Provider 与协议边界

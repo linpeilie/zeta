@@ -161,13 +161,15 @@ main → app → presentation/application → domain
 - Provider 自有 data adapter 可按明确功能读取对应 CLI 的配置、会话、日志、账号 metadata 等私有数据；原始结构和路径不得泄漏到 domain、application 或 presentation。读取权限不自动授权迁移、改写或删除，写操作仍须由明确的产品能力和用户动作约束。
 - Flutter `Locale`、`BuildContext` 和 generated `AppLocalizations` 只允许出现在 `app` 组合层、presentation 和 `ui/`。application / data / domain 若必须产出即时文案，只依赖该 feature 的纯 Dart 文本目录 port。
 - `lib/main.dart` 只做 Flutter 绑定、窗口启动、全局错误日志和 `runApp`；`lib/src/app` 是唯一装配点。
-- **application 与 presentation 是平级，谁都不许反向依赖对方。** UI 状态契约（不可变 region state）放 application，发布机制（`ValueNotifier` / 帧调度）留 presentation；popover / hover / 输入法 composing 这类 Widget scope 的临时状态留 presentation，不得混进 application 快照（目标架构 §7.3）。
-- **application 与 domain 都不许 import Flutter**（目标架构 §12.5）：`@immutable` 走 `package:meta`，集合相等走 `zeta_foundation` 的 `zeta*Equals`，监听自己维护 listener 列表而不是 `ChangeNotifier`。Riverpod 是独立的 adapter 层，`Provider` / `Notifier` 只能出现在 presentation 或 `app` 组合层。守卫：`feature_layering_guard_test`（历史燃尽项已清零，当前零容忍）。
+- **application 与 presentation 是平级，谁都不许反向依赖对方。** UI 状态契约（不可变 region state）与承载它的 `Notifier` 放 application；popover / hover / 输入法 composing 这类 Widget scope 的临时状态留 presentation，不得混进 application 快照。presentation 只做订阅与渲染。
+- **application 与 domain 不许直接 import `package:flutter/`**：`@immutable` 走 `package:meta`，集合相等走 `zeta_foundation` 的 `zeta*Equals`，禁止 `ChangeNotifier` / `ValueNotifier` / `BuildContext`。
+- **Riverpod 只用 `flutter_riverpod` 一个包**，允许出现在 application 及以上；`data` 与 `domain` 两层都禁——它们不持有状态。不要从传递依赖 `package:riverpod/` 导入；需要 `Override` 这类只在 `misc.dart` 导出的类型时用 `package:flutter_riverpod/misc.dart`。
+- **注意这让 application 的 Flutter 边界只剩约定**：`flutter_riverpod` 的 barrel 会带进 `ConsumerWidget` / `WidgetRef` / `ProviderScope`，而它们不匹配 `package:flutter/` 前缀，守卫拦不住。**application 里不准出现这些符号**——Widget 与 `WidgetRef` 是 presentation 的东西，切片只暴露不可变 state 与命令入口。守卫：`feature_layering_guard_test`（零容忍）。
 - 新代码进 `lib/src/features/<feature>/{domain,application,data,presentation}`，**不要新建顶层宽泛目录**。现有 feature：`agent`、`agent_management`、`desktop_notifications`、`ide_session`、`project_threads`、`settings`、`usage_statistics`、`workspace`。跨 feature 基础设施才进 `lib/src/core`；**跨 feature 复用的 UI 原语进 `packages/zeta_ui`**（设计系统已整体拆包，`lib/src/ui/core` 只剩需要本机 IO 的宿主侧封装）。
-- 已物理拆出的内部 Package 在 `packages/`：`zeta_foundation`（纯 Dart 公共契约：Clock / OperationId / Transition / 排版常量 / 日志与指标端口）、`zeta_plugin_kernel`（可信插件微内核）、`zeta_ui`（Graphite 设计系统）、`zeta_agent_core`（中立 Agent 内核：领域模型与端口、Binding/runtime 契约、事件管线、纯 reducer、TimelineStore、Effect 描述）与 `zeta_agent_providers`（Codex / Grok / Claude Code 的协议 transport、data adapter、Provider-local tracker、插件入口）。依赖方向单向：`kernel → foundation`、`ui → foundation`、`agent_core → foundation`、`agent_providers → {agent_core, kernel, foundation}`；`zeta_foundation` / `zeta_plugin_kernel` / `zeta_agent_core` 均不依赖 Flutter；`zeta_ui` 依赖 Flutter/shadcn 但**不依赖** Riverpod、`dart:io`、generated l10n 或任何业务模型（控件自有文案走 `ZetaUiTextCatalog` 注入）。`zeta_agent_core` 的状态通知走纯 Dart `AgentListenable`，Flutter 投影只在 presentation adapter；日志走 `ZetaLogger` 端口，Provider 身份映射由组合层注入。
-- **Agent feature 的分层现状**：中立内核在 `packages/zeta_agent_core`；**Provider 协议适配在 `packages/zeta_agent_providers`**（wire 字段、CLI 参数、会话文件格式只能出现在这里）；Zeta 自有持久化（provider 配置、模型目录缓存、turn 上下文文件）仍在 `lib/src/features/agent/data`，运行态事实由纯 Dart MVI slice store 独占，Riverpod 只在 presentation/app 组合层镜像。新代码按这条边界放：中立机制进 core，Provider 语义进 providers，Zeta 自有状态与 UI 编排进 app。**application/domain 不得 import `zeta_agent_providers`**；厂商 identity、私有配置 key 与指标标签由 data/app 组合层投影。**跨 Package 只能 import 对方顶层 barrel**，禁止 `package:<name>/src/...`。新增 Package 要先在[目标架构 §3.2](docs/architecture/target_architecture_riverpod_mvi_plugins_packages.md) 的判据下论证，不按页面或团队机械拆包。
+- 已物理拆出的内部 Package 在 `packages/`：`zeta_foundation`（平台中立公共契约：Clock / OperationId / Transition / 排版常量 / 日志与指标端口，以及集中在 `src/platform/` 的宿主路径工具）、`zeta_plugin_kernel`（可信插件微内核）、`zeta_ui`（Graphite 设计系统）、`zeta_agent_core`（中立 Agent 内核：领域模型与端口、Binding/runtime 契约、事件管线、纯 reducer、TimelineStore、Effect 描述）与 `zeta_agent_providers`（Codex / Grok / Claude Code 的协议 transport、data adapter、Provider-local tracker、插件入口）。依赖方向单向：`kernel → foundation`、`ui → foundation`、`agent_core → foundation`、`agent_providers → {agent_core, kernel, foundation}`；`zeta_foundation` 的核心契约、`zeta_plugin_kernel` 与 `zeta_agent_core` 不依赖 Flutter，只有 `zeta_foundation/src/platform/` 的宿主工具可依赖明确的 Flutter 插件；`zeta_ui` 依赖 Flutter/shadcn 但**不依赖** Riverpod、`dart:io`、generated l10n 或任何业务模型（控件自有文案走 `ZetaUiTextCatalog` 注入）。`zeta_agent_core` 的状态通知走纯 Dart `AgentListenable`，Flutter 投影只在 presentation adapter；日志走 `ZetaLogger` 端口，Provider 身份映射由组合层注入。
+- **Agent feature 的分层现状**：中立内核在 `packages/zeta_agent_core`；**Provider 协议适配在 `packages/zeta_agent_providers`**（wire 字段、CLI 参数、会话文件格式只能出现在这里）；Zeta 自有持久化（provider 配置、模型目录缓存、turn 上下文文件）仍在 `lib/src/features/agent/data`，运行态事实由 application 层的 slice `Notifier` 独占，presentation 只订阅。新代码按这条边界放：中立机制进 core，Provider 语义进 providers，Zeta 自有状态与 UI 编排进 app。**application/domain 不得 import `zeta_agent_providers`**；厂商 identity、私有配置 key 与指标标签由 data/app 组合层投影。**跨 Package 只能 import 对方顶层 barrel**，禁止 `package:<name>/src/...`。新增 Package 要先按[工程规范 §1](docs/architecture/engineering_standards.md) 的判据论证，不按页面或团队机械拆包。
 
-> 正文：[工程规范 §1–2](docs/architecture/engineering_standards.md) · [架构总览「分层」](docs/architecture/overview.md)
+> 正文：[工程规范 §1–2](docs/architecture/engineering_standards.md) · 状态所有权与 Riverpod 边界：[工程规范 §3.0](docs/architecture/engineering_standards.md#30-状态所有权与-riverpod-边界) · [架构总览「分层」](docs/architecture/overview.md)
 
 ### G7 · 不落盘敏感内容，JSON 版本化且宽容
 
@@ -270,13 +272,18 @@ lint 已经覆盖的不再重复，这里只写 `flutter analyze` 抓不到的�
 
 **状态与异步**
 
-- 简单本地 UI 状态用 Flutter 内建能力（`StatefulWidget` / `ValueNotifier` / `ValueListenableBuilder` / `FutureBuilder` / `StreamBuilder`）。
-- 状态变共享或复杂时拆成：不可变 domain state + application controller（异步编排）+ presentation view model / listenable signal（渲染）。
-- 可能被后续请求覆盖的异步加载必须有 **token/version guard**，旧结果返回时丢弃；通知监听者前检查 disposed。
-- `ChangeNotifier` / `ValueNotifier` / timer 持有者必须在 `dispose` 中释放。
+**Riverpod 是本项目的状态管理与依赖注入方案，不是可选的投影层。** 能用它表达的东西就用它表达，不要再手写等价物。
+
+- **跨 Widget 共享的状态一律是 application 层的 `Notifier` / `AsyncNotifier`**（`package:riverpod`，纯 Dart）。不要再手写 `List<void Function()> _listeners` + `addListener` / `removeListener` / `notifyListeners`，也不要写只做 `state = store.state` 的镜像 `Notifier`——**一份状态只能有一个 owner**。
+- **只属于单个 Widget 的临时状态继续用 `StatefulWidget`**（hover、popover 开合、输入法 composing、动画控制器）。不要为它们建 provider。
+- **依赖注入走 `ProviderScope` / `ProviderContainer` 的 overrides，不走构造参数向下钻。** 没有安全默认值的依赖用会抛错的 `Provider` 声明（fail-closed），由组合根覆盖；测试用 `ProviderContainer(overrides: ...)` 注入 fake。**禁止**用可变注册表 / relay 把对象反向 `bind()` 回 provider——那是所有权放错层的信号。
+- **生命周期交给 Riverpod**：清理写 `ref.onDispose`，不要手写 `dispose()` 链；跨 provider 的联动用 `ref.listen` / `ref.watch`，不要手写订阅回调再自己取消。**但 `autoDispose` 只用于纯 UI 镜像**：Binding lease、CLI runtime、进程和文件句柄的生命周期永远由显式的 application 逻辑决定，绝不能由「有没有 Widget 在看」决定。
+- **异步用 `AsyncNotifier` + `AsyncValue`**，靠 `ref` 的自动取消与 `ref.mounted` 处理竞态，不要再手写 token/version guard。仍然手写异步编排时（例如 provider 之外的 controller），token/version guard 与 disposed 检查照旧是硬要求。
+- **构造环用工厂注入解，不用延迟绑定。** store 与 effect runner 互相需要时，注入一个 `Runner Function(Notifier)` 工厂 provider，让 notifier 在 `build()` 里用 `this` 把 runner 造出来。不要造 `_DeferredXxxRunner` 这类空壳，也**不要**让 runner 持 `Ref` 反向 `ref.read(xxxProvider.notifier)`——Riverpod 会判定成 `CircularDependencyError`，deferred read 也救不了。
+- reducer 仍然是纯同步的（G3），副作用仍然走 EffectRunner。Riverpod 换掉的是**发布机制与装配方式**，不是 MVI 的 intent / reducer / effect 三段式。
 - 对外暴露集合默认返回不可变列表或 unmodifiable view，除非 API 明确要求可变。
-- 为可测试性优先构造函数注入。**不引入第三方状态管理**，除非明确要求或有充分理由。
-- **`flutter_riverpod` 是只读投影适配层，不是业务 owner**：现有纯 Dart MVI store 与 presentation listenable 不得因为“顺手”迁成 Riverpod 状态。新代码要不要增加 provider，按上一条的豁免条件（明确要求 / 有充分理由）逐次判断；采用时仍遵守 G6——`Provider`/`Notifier` 只能放 presentation 或 `app` 组合层，`application` / `domain` 不得 import `riverpod`，UI 只消费。
+- **除 Riverpod 外不引入第三方状态管理**，除非明确要求或有充分理由。
+- 不引入 `riverpod_generator` / `build_runner`：本仓库的架构守卫直接读源码 AST，codegen 产物会让守卫和 diff 都变噪。provider 一律手写声明。
 
 **UI**
 

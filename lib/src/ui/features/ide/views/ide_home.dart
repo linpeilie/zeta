@@ -28,8 +28,7 @@ import 'package:zeta/src/features/agent_management/application/agent_management_
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_text_catalog.dart';
 import 'package:zeta/src/features/agent_management/domain/fallback_agent_management_text_catalog.dart';
-import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_session_slice_operations.dart';
-import 'package:zeta/src/features/ide_session/presentation/ide_session_slice/ide_session_slice_providers.dart';
+import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_session_slice_notifier.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
 import 'package:zeta/src/features/project_threads/presentation/project_threads_slice/project_threads_slice_providers.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
@@ -67,7 +66,6 @@ class IdeHome extends ConsumerStatefulWidget {
   const IdeHome({
     required this.directoryPicker,
     required this.enableNativeWindowFrame,
-    required this.ideSessionOperations,
     required this.shellStateSnapshotRelay,
     required this.agentProviderFactory,
     required this.agentProviderSettingsPort,
@@ -95,7 +93,6 @@ class IdeHome extends ConsumerStatefulWidget {
 
   final Future<String?> Function() directoryPicker;
   final bool enableNativeWindowFrame;
-  final IdeSessionSliceOperations ideSessionOperations;
   final ZetaShellStateSnapshotRelay shellStateSnapshotRelay;
   final AgentProviderBundleFactory agentProviderFactory;
   final AgentProviderSettingsPort agentProviderSettingsPort;
@@ -142,7 +139,6 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
   AgentManagementSliceComposition get _agentManagementComposition =>
       _workbenchComposition.agentManagementComposition;
   late final void Function() _unsubscribeProviderSettings;
-  late final void Function() _unsubscribeIdeSession;
   late final UsageStatisticsOperations _usageStatisticsController;
   late final AgentUsagePanelOperations _agentUsagePanelController;
   late final AgentUsageRefreshCoordinator _agentUsageRefreshCoordinator;
@@ -199,7 +195,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
         widget.usageStatisticsSliceComposition.agentUsagePanelStore;
     _shellController = IdeShellController(
       directoryPicker: widget.directoryPicker,
-      ideSessionOperations: widget.ideSessionOperations,
+      ideSessionOperations: ref.read(ideSessionSliceProvider.notifier),
       agentProviderFactory: widget.agentProviderFactory,
       agentProviderSettingsPort: widget.agentProviderSettingsPort,
       activeModelCatalogLoader: widget.activeModelCatalogLoader,
@@ -217,15 +213,15 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
       metrics: widget.metrics,
       providerMetricLabel: widget.providerMetricLabel,
     );
-    // 定向订阅三个 slice store，而不是监听整个 Shell。
+    // 定向订阅三个切片，而不是监听整个 Shell。
+    //
+    // IDE Session 走 Riverpod：订阅与取消都由 `ref.listen` 在 build 里管，
+    // 不需要自己存一个取消回调再在 dispose 里调。
     //
     // IdeHome 从 Shell 读的每一项都是这三个 store 的投影：
     // workbenchLayout / initialRestoreCompleted ← IDE Session；
     // projects / activeProjectPath ← Workspace；
     // selectedEntry / projectHomeActive ← Conversation Workspace。
-    _unsubscribeIdeSession = _shellController.ideSessionOperations.subscribe(
-      _handleIdeSessionChanged,
-    );
     _shellController.workspaceSliceStore.addListener(_handleWorkspaceChanged);
     _shellController.agentConversationWorkspaceStore.addListener(
       _handleConversationWorkspaceChanged,
@@ -342,7 +338,6 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
     if (widget.enableNativeWindowFrame) {
       windowManager.removeListener(this);
     }
-    _unsubscribeIdeSession();
     _shellController.workspaceSliceStore.removeListener(
       _handleWorkspaceChanged,
     );
@@ -385,6 +380,8 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
         (state) => (state.workbenchLayout, state.initialRestoreCompleted),
       ),
     );
+    // 侧栏宽度与首页预热是状态变化的副作用，不是渲染输入，因此走 listen。
+    ref.listen(ideSessionSliceProvider, (_, _) => _handleIdeSessionChanged());
     final homePage = _page == _IdeHomePage.home;
     final leftSidebarVisible =
         homePage && _shellController.workbenchLayout.leftSidebarVisible;

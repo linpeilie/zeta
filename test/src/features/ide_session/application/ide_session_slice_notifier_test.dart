@@ -1,11 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:zeta/src/features/ide_session/application/ide_session_restore_result.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_session_slice_effect.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_session_slice_intent.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_session_slice_reducer.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_session_slice_state.dart';
-import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_session_slice_store.dart';
+import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_session_slice_notifier.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
 
@@ -63,15 +64,12 @@ void main() {
     expect(layoutChanged.state.workbenchLayout, layout);
   });
 
-  test('store exposes typed restore and save operation futures', () async {
+  test('notifier exposes typed restore and save operation futures', () async {
     final runner = _RecordingIdeSessionRunner();
-    final store = IdeSessionSliceStore(
-      initialState: const IdeSessionSliceState(),
-      effectRunner: runner,
-    );
-    addTearDown(store.dispose);
+    final container = _createContainer(runner);
+    final store = container.read(ideSessionSliceProvider.notifier);
     var notifications = 0;
-    store.addListener(() => notifications += 1);
+    container.listen(ideSessionSliceProvider, (_, _) => notifications += 1);
 
     final restoreFuture = store.restore();
     expect(runner.effects.single, isA<RestoreIdeSessionEffect>());
@@ -93,16 +91,25 @@ void main() {
     store.saveNowCompleted(saveEffect.operationId);
     await saveFuture;
 
+    // 保存不改运行态，因此从 restore 开始到这里只提交过两次状态，且都落在同一个
+    // microtask 窗口内——广播被合并成一次。
+    expect(notifications, 1);
+
+    store.setWorkbenchLayout(
+      const IdeWorkbenchLayoutState(selectedAgentUsageProviderId: 'codex'),
+    );
+    expect(
+      store.state.workbenchLayout.selectedAgentUsageProviderId,
+      'codex',
+      reason: '命令入口读到的必须是已提交值，不受广播调度影响',
+    );
+    await Future<void>.microtask(() {});
     expect(notifications, 2);
   });
 
   test('initial wait can release before restore lifecycle completes', () async {
-    final runner = _RecordingIdeSessionRunner();
-    final store = IdeSessionSliceStore(
-      initialState: const IdeSessionSliceState(),
-      effectRunner: runner,
-    );
-    addTearDown(store.dispose);
+    final container = _createContainer(_RecordingIdeSessionRunner());
+    final store = container.read(ideSessionSliceProvider.notifier);
 
     store.releaseInitialRestoreWait();
     await store.initialRestoreDone;
@@ -112,16 +119,20 @@ void main() {
     expect(store.state.initialRestoreCompleted, isTrue);
   });
 
-  test('dispose settles pending operations and closes runner', () async {
+  test('container dispose settles every pending operation', () async {
     final runner = _RecordingIdeSessionRunner();
-    final store = IdeSessionSliceStore(
-      initialState: const IdeSessionSliceState(),
-      effectRunner: runner,
+    final container = ProviderContainer(
+      overrides: [
+        ideSessionSliceEffectRunnerFactoryProvider.overrideWithValue(
+          (_) => runner,
+        ),
+      ],
     );
+    final store = container.read(ideSessionSliceProvider.notifier);
     final restoreFuture = store.restore();
     final saveFuture = store.saveNow(const IdeSessionState());
 
-    store.dispose();
+    container.dispose();
 
     expect((await restoreFuture).status, IdeSessionRestoreStatus.cancelled);
     await saveFuture;
@@ -129,6 +140,20 @@ void main() {
     expect(runner.closed, isTrue);
     expect(() => store.restore(), throwsStateError);
   });
+}
+
+/// 纯 Dart 容器：application 层用 `package:riverpod`，因此这里不需要 widget
+/// binding 就能把切片完整跑起来（工程规范 §3.0）。
+ProviderContainer _createContainer(IdeSessionSliceEffectRunner runner) {
+  final container = ProviderContainer(
+    overrides: [
+      ideSessionSliceEffectRunnerFactoryProvider.overrideWithValue(
+        (_) => runner,
+      ),
+    ],
+  );
+  addTearDown(container.dispose);
+  return container;
 }
 
 final class _RecordingIdeSessionRunner implements IdeSessionSliceEffectRunner {

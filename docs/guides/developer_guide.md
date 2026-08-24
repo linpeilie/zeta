@@ -217,12 +217,21 @@ windows/
 
 - 使用现代空安全 Dart。
 - 优先使用 `const` 和不可变 widget。
-- UI 状态简单时使用 Flutter 内建机制，例如 `StatefulWidget`、`ChangeNotifier`、`ValueListenableBuilder`。
-- 复杂状态按“不可变 domain state + application controller + presentation view model/listenable signal”拆分。
-- `flutter_riverpod` 只镜像纯 Dart slice store，不拥有业务状态。新代码是否增加 Riverpod
-  投影见 `AGENTS.md` §3；`Provider`/`Notifier` 只能落在 presentation 或 `app` 组合层，
-  `application` / `domain` 不得 import `riverpod`。
-- 对可能被后续请求覆盖的异步流程使用 token 或版本号隔离旧结果。
+- 只属于单个 Widget 的临时状态（hover、popover 开合、动画控制器）继续用 `StatefulWidget`。
+- **跨 Widget 共享的状态是 application 层的 `Notifier` / `AsyncNotifier`**，用纯 Dart 的
+  `package:riverpod`。不要手写 listener 列表，也不要写只做 `state = store.state` 的镜像
+  notifier——一份状态只能有一个 owner。
+- **依赖注入走 `ProviderScope` / `ProviderContainer` overrides**，不用构造参数向下钻，也不用
+  可变注册表反向 `bind()`。没有安全默认值的依赖声明成会抛错的 `Provider`，由组合根覆盖。
+- Riverpod 只用 `flutter_riverpod` 一个包，允许出现在 `application` 及以上；`domain` / `data`
+  两层都禁。不要从传递依赖 `package:riverpod/` 导入。application 里也不要出现
+  `ConsumerWidget` / `WidgetRef`——那是 presentation 的东西。正文见
+  [工程规范 §3.0](../architecture/engineering_standards.md#30-状态所有权与-riverpod-边界)，
+  规则索引见 `AGENTS.md` §1 G6 与 §3。
+- `autoDispose` 只用于纯 UI 镜像；Binding lease、CLI runtime、进程与文件句柄的生命周期由显式
+  application 逻辑决定。
+- 异步优先 `AsyncNotifier` + `AsyncValue`；provider 之外手写异步编排时，仍必须用 token 或版本号
+  隔离旧结果。
 - 对外暴露集合时优先返回不可变集合或 unmodifiable view。
 - 公共 API 添加 `///` 文档。
 - 新实现中，对公共 API、协议适配、状态机、错误处理和不直观分支优先补充中文注释。

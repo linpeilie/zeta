@@ -4,6 +4,9 @@ import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
 
 /// Shell 可消费的 IDE Session application 操作口。
+///
+/// 只有命令入口和当前状态：状态订阅走 Riverpod（`ideSessionSliceProvider`），
+/// 端口不再自带 `subscribe`（工程规范 §3.0）。
 abstract interface class IdeSessionSliceOperations {
   IdeSessionSliceState get state;
 
@@ -24,10 +27,4 @@ abstract interface class IdeSessionSliceOperations {
   void completeInitialRestore();
 
   Future<void> get initialRestoreDone;
-
-  /// 订阅状态变化；返回取消订阅的回调。
-  ///
-  /// 纯 Dart 端口：presentation 因此能定向监听 IDE Session，而不必去监听
-  /// 整个 Shell。
-  void Function() subscribe(void Function() listener);
 }

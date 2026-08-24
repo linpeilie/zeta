@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:zeta/src/app/provider_settings_slice/provider_settings_slice_composition.dart';
-import 'package:zeta/src/app/ide_session_slice/ide_session_slice_composition.dart';
+import 'package:zeta/src/app/ide_session_slice/ide_session_slice_overrides.dart';
 import 'package:zeta/src/app/settings_slice/settings_slice_composition.dart';
 import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_slice_composition.dart';
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_composition.dart';
@@ -21,6 +21,7 @@ import 'package:zeta/src/app/desktop_attention_slice/desktop_attention_slice_com
 import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_workspace_providers.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:zeta/src/app/composition/app_dependencies.dart';
 import 'package:zeta/src/app/observability/zeta_observability.dart';
 import 'package:zeta/src/app/plugins/zeta_plugin_catalog.dart';
@@ -45,7 +46,7 @@ import 'package:zeta/src/features/desktop_notifications/presentation/desktop_att
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_text_catalog.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
-import 'package:zeta/src/features/ide_session/presentation/ide_session_slice/ide_session_slice_providers.dart';
+import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_session_slice_notifier.dart';
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
 import 'package:zeta/src/features/settings/data/general_settings_store.dart';
 import 'package:zeta/src/features/settings/presentation/appearance_theme_mode_mapper.dart';
@@ -176,7 +177,13 @@ class MainAppState extends State<MainApp>
   UsageStatisticsSliceComposition? _usageStatisticsSliceComposition;
 
   /// Phase 3 第 4 批 4b 组合；IDE Session 的唯一运行态 owner。
-  late final IdeSessionSliceComposition _ideSessionSliceComposition;
+  /// MainApp 自持的 Riverpod 容器。
+  ///
+  /// 用 `UncontrolledProviderScope` 而不是 `ProviderScope`：组合根需要在 Widget
+  /// 树之外读切片状态（见 [takeStateSnapshot]），这是 Riverpod 给组合根准备的
+  /// 标准做法。overrides 定长且只在 `initState` 装配一次，容器整个 app session
+  /// 存活，不再靠替换 ProviderScope 的 key 来换容器。
+  late final ProviderContainer _container;
 
   /// Phase 3 第 5 批：Desktop Attention 的唯一状态与副作用组合。
   DesktopAttentionSliceComposition? _desktopAttentionSliceComposition;
@@ -221,7 +228,7 @@ class MainAppState extends State<MainApp>
     final usageComposition = _requiredUsageStatisticsComposition;
     return ZetaStateSnapshot(
       shell: _shellStateSnapshotRelay.read(),
-      ideSession: _ideSessionSliceComposition.store.state,
+      ideSession: _container.read(ideSessionSliceProvider),
       usageStatistics: usageComposition.usageStatisticsStore.state,
       agentUsagePanel: usageComposition.agentUsagePanelStore.state,
       desktopAttention: ZetaDesktopAttentionStateSnapshot.fromState(
@@ -289,9 +296,6 @@ class MainAppState extends State<MainApp>
       turnContextStore: widget.turnContextStore,
       agentProviderConfigStore: widget.agentProviderConfigStore,
     );
-    _ideSessionSliceComposition = IdeSessionSliceComposition.create(
-      sessionStore: _appComposition.ideSessionStore,
-    );
     _frozenDisplayLocale = ZetaLocalization.localeFor(
       widget.displayLanguageOverride ?? widget.fallbackLanguage,
     );
@@ -324,6 +328,10 @@ class MainAppState extends State<MainApp>
       generalSettingsStore: widget.generalSettingsStore,
       fontCatalog: widget.systemFontCatalogService,
       initialAppearanceSettings: widget.initialAppearanceSettings,
+    );
+    _container = ProviderContainer(
+      observers: widget.observability?.providerObservers,
+      overrides: _composeOverrides(),
     );
     final loadGeneralSettings = _settingsSliceComposition.generalSettingsReady;
     final overrideLanguage = widget.displayLanguageOverride;
@@ -474,7 +482,7 @@ class MainAppState extends State<MainApp>
     _providerSettingsSliceComposition = null;
     unawaited(_shutdownOwnedAgentResources());
     _settingsSliceComposition.dispose();
-    _ideSessionSliceComposition.dispose();
+    _container.dispose();
     super.dispose();
   }
 
@@ -512,64 +520,55 @@ class MainAppState extends State<MainApp>
 
   @override
   Widget build(BuildContext context) {
-    final settingsComposition = _settingsSliceComposition;
-    final providerSettingsComposition = _providerSettingsSliceComposition;
-    final usageStatisticsComposition = _usageStatisticsSliceComposition;
-    final desktopAttentionComposition = _desktopAttentionSliceComposition;
-
-    // 根 `ProviderScope` 由 MainApp 自己提供，而不是放在 `main.dart`：
-    // 那样每个 pump MainApp 的测试都要自己补一层，接线一旦漏掉就是运行期
-    // "No ProviderScope found"，而不是编译期错误。
-    return ProviderScope(
-      // Riverpod 只允许原地更新等长的 overrides。等待持久化语言时，Provider
-      // 管理切片会在首帧之后才完成组合；此时用新 key 替换仍处于启动页的容器，
-      // 避免对旧容器追加 overrides。IdeHome 尚未挂载，因此不会丢失工作区状态。
-      key: ValueKey<(bool, bool, bool)>((
-        providerSettingsComposition != null,
-        usageStatisticsComposition != null,
-        desktopAttentionComposition != null,
-      )),
-      observers: widget.observability?.providerObservers,
-      overrides: [
-        zetaMetricsPortProvider.overrideWithValue(_metrics),
-        ideSessionSliceStoreProvider.overrideWithValue(
-          _ideSessionSliceComposition.store,
-        ),
-        agentConversationSliceStoreRegistryProvider.overrideWithValue(
-          _conversationSliceStoreRegistry,
-        ),
-        agentConversationWorkspaceStoreRegistryProvider.overrideWithValue(
-          _conversationWorkspaceStoreRegistry,
-        ),
-        appearanceSettingsSliceStoreProvider.overrideWithValue(
-          settingsComposition.appearanceStore,
-        ),
-        generalSettingsSliceStoreProvider.overrideWithValue(
-          settingsComposition.generalStore,
-        ),
-        if (providerSettingsComposition case final composition?) ...[
-          agentProviderSettingsSliceStoreProvider.overrideWithValue(
-            composition.store,
-          ),
-          agentModelCatalogProjectionSourceProvider.overrideWithValue(
-            composition,
-          ),
-        ],
-        if (usageStatisticsComposition case final composition?) ...[
-          usageStatisticsSliceStoreProvider.overrideWithValue(
-            composition.usageStatisticsStore,
-          ),
-          agentUsagePanelSliceStoreProvider.overrideWithValue(
-            composition.agentUsagePanelStore,
-          ),
-        ],
-        if (desktopAttentionComposition case final composition?)
-          desktopAttentionSliceStoreProvider.overrideWithValue(
-            composition.store,
-          ),
-      ],
+    // 容器由 MainApp 自己持有，而不是放在 `main.dart`：那样每个 pump MainApp 的
+    // 测试都要自己补一层 scope，接线一旦漏掉就是运行期 "No ProviderScope found"，
+    // 而不是编译期错误。
+    return UncontrolledProviderScope(
+      container: _container,
       child: _buildApp(context),
     );
+  }
+
+  /// 组合根的全部 override。
+  ///
+  /// **定长且只装配一次。** 依赖延迟到 `overrideWith` 的闭包里读，因此语言持久化
+  /// 完成后才建出来的三个切片组合不会改变 override 的数量——旧实现靠替换
+  /// ProviderScope 的 key 来换容器，那会连带丢掉容器里已有的全部状态。
+  /// 尚未组合就被读到时，`_requiredXxx` 会 fail-closed 抛错。
+  List<Override> _composeOverrides() {
+    return <Override>[
+      zetaMetricsPortProvider.overrideWith((ref) => _metrics),
+      ...ideSessionSliceOverrides(
+        sessionStore: _appComposition.ideSessionStore,
+      ),
+      agentConversationSliceStoreRegistryProvider.overrideWithValue(
+        _conversationSliceStoreRegistry,
+      ),
+      agentConversationWorkspaceStoreRegistryProvider.overrideWithValue(
+        _conversationWorkspaceStoreRegistry,
+      ),
+      appearanceSettingsSliceStoreProvider.overrideWith(
+        (ref) => _settingsSliceComposition.appearanceStore,
+      ),
+      generalSettingsSliceStoreProvider.overrideWith(
+        (ref) => _settingsSliceComposition.generalStore,
+      ),
+      agentProviderSettingsSliceStoreProvider.overrideWith(
+        (ref) => _requiredProviderSettingsComposition.store,
+      ),
+      agentModelCatalogProjectionSourceProvider.overrideWith(
+        (ref) => _requiredProviderSettingsComposition,
+      ),
+      usageStatisticsSliceStoreProvider.overrideWith(
+        (ref) => _requiredUsageStatisticsComposition.usageStatisticsStore,
+      ),
+      agentUsagePanelSliceStoreProvider.overrideWith(
+        (ref) => _requiredUsageStatisticsComposition.agentUsagePanelStore,
+      ),
+      desktopAttentionSliceStoreProvider.overrideWith(
+        (ref) => _requiredDesktopAttentionComposition.store,
+      ),
+    ];
   }
 
   Widget _buildApp(BuildContext context) {
@@ -635,7 +634,6 @@ class MainAppState extends State<MainApp>
                           widget.directoryPicker ?? getDirectoryPath,
                       enableNativeWindowFrame: widget.enableNativeWindowFrame,
                       showWindowControls: widget.showWindowControls,
-                      ideSessionOperations: _ideSessionSliceComposition.store,
                       shellStateSnapshotRelay: _shellStateSnapshotRelay,
                       agentProviderFactory: _agentProviderFactory,
                       agentProviderRuntimeRegistry:

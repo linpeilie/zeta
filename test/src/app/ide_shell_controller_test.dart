@@ -3,8 +3,10 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:zeta/src/app/app_constants.dart';
-import 'package:zeta/src/app/ide_session_slice/ide_session_slice_composition.dart';
+import 'package:zeta/src/app/ide_session_slice/ide_session_slice_overrides.dart';
+import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_session_slice_notifier.dart';
 import 'package:zeta/src/app/shell/ide_shell_controller.dart';
 import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_slice_composition.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
@@ -1411,11 +1413,11 @@ void main() {
 IdeSessionSliceOperations _createIdeSessionOperations(
   IdeSessionStore sessionStore,
 ) {
-  final composition = IdeSessionSliceComposition.create(
-    sessionStore: sessionStore,
+  final container = ProviderContainer(
+    overrides: ideSessionSliceOverrides(sessionStore: sessionStore),
   );
-  addTearDown(composition.dispose);
-  return composition.store;
+  addTearDown(container.dispose);
+  return container.read(ideSessionSliceProvider.notifier);
 }
 
 Future<void> _flushAsync() async {

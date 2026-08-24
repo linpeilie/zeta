@@ -32,7 +32,7 @@ docs/
 - [设计文档](./architecture/design_document.md) — 完整的分层结构、运行时组合、UI 骨架与流式适配职责矩阵
 - [工程规范](./architecture/engineering_standards.md) — 架构评审规范与门禁
 - [AppFlowy 设计迁移决策矩阵](./architecture/appflowy_migration_decision_matrix.md) — 按 Adopt / Adapt / Avoid / Defer 评估外部架构设计及迁移触发条件
-- [Feature-First DDD / Riverpod / MVI / 微内核 / 多 Package 目标架构](./architecture/target_architecture_riverpod_mvi_plugins_packages.md) — 目标边界、状态与插件模型，以及 Phase 0–4 渐进迁移计划
+- [工程规范 §3.0 状态所有权与 Riverpod 边界](./architecture/engineering_standards.md#30-状态所有权与-riverpod-边界) — MVI 切片、Riverpod 分层边界与依赖注入约定
 - [阶段 0：测试与可观测性基线](./architecture/phase0_observability_baseline.md) — 指标端口、脱敏观察器、流式 fixture 与 Package 候选依赖图的基线数值
 - [阶段 1：建立边界但不改变行为](./architecture/phase1_boundaries.md) — pub workspace、`zeta_foundation` / `zeta_plugin_kernel`、插件目录与 MVI 命名规范
 - [阶段 2 开工文档：Conversation 切片](./architecture/phase2_conversation_slice.md) — UiStateStore → slice 字段映射、Intent/Effect 清单与 §15 门禁答卷

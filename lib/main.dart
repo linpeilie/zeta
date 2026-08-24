@@ -4,6 +4,7 @@ import 'dart:ui';
 
 import 'package:flutter/widgets.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:zeta_foundation/platform.dart';
 
 import 'package:zeta/src/app/app.dart';
 import 'package:zeta/src/app/observability/zeta_observability.dart';
@@ -33,39 +34,19 @@ void main() {
         scriptCode: firstLocale?.scriptCode,
         countryCode: firstLocale?.countryCode,
       );
-      ZetaDataPaths? dataPaths;
-      Object? pathError;
-      StackTrace? pathStackTrace;
-      try {
-        dataPaths = ZetaDataPaths.fromEnvironment(
-          environment: Platform.environment,
-          isWindows: Platform.isWindows,
-        );
-      } catch (error, stackTrace) {
-        pathError = error;
-        pathStackTrace = stackTrace;
-      }
-      configureAppLogging(
-        logDirectory: dataPaths == null
-            ? null
-            : Directory(dataPaths.logsDirectoryPath),
+      ZetaDataPaths? dataPaths = ZetaDataPaths.fromHomeDirectory(
+        await ZetaUserDirectory.getUserDirectory(),
+        isWindows: Platform.isWindows,
       );
+      configureAppLogging(logDirectory: Directory(dataPaths.logsDirectoryPath));
       _installGlobalErrorLogging();
-      if (pathError != null) {
-        loggerFor('zeta.storage').w(
-          'Could not resolve the Zeta data directory; persistence is disabled',
-          error: pathError,
-          stackTrace: pathStackTrace,
-        );
-      } else if (dataPaths != null) {
-        final bootstrap = await _prepareZetaStorage(
-          dataPaths,
-          firstSystemLanguage,
-        );
-        if (!bootstrap.filePersistenceEnabled) {
-          // 避免迁移半途失败后，本次运行用空状态覆盖尚未迁入的旧偏好。
-          dataPaths = null;
-        }
+      final bootstrap = await _prepareZetaStorage(
+        dataPaths,
+        firstSystemLanguage,
+      );
+      if (!bootstrap.filePersistenceEnabled) {
+        // 避免迁移半途失败后，本次运行用空状态覆盖尚未迁入的旧偏好。
+        dataPaths = null;
       }
       await windowManager.ensureInitialized();
       final appearance = await _loadLaunchAppearance(dataPaths);

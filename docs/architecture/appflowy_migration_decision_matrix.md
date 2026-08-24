@@ -26,7 +26,7 @@ Zeta 不应进行一次“AppFlowy 化”重构。两者都是 Flutter 桌面应
 4. 保留并强化 Zeta 已有的 `AgentProviderBundle`、Provider-local adapter/reducer、Binding 生命周期、纯 reducer + EffectRunner、Workbench slot、帧级 UI 合并和架构守卫。
 
 后续用户明确选择在这些边界内试点 Riverpod、MVI、编译期微内核和多 Package，目标方案见
-[Feature-First DDD / Riverpod / MVI / 微内核 / 多 Package 目标架构](./target_architecture_riverpod_mvi_plugins_packages.md)。该方案不推翻本矩阵对“全面迁移”和“一次拆很多包”的 Avoid 判断：Riverpod 只承载业务切片与 UI 订阅，微内核只承载可信编译期插件，Package 按 Phase 0–4 逐个建立。
+[工程规范 §3.0 状态所有权与 Riverpod 边界](./engineering_standards.md#30-状态所有权与-riverpod-边界)。该方案不推翻本矩阵对“全面迁移”和“一次拆很多包”的 Avoid 判断：Riverpod 只承载业务切片与 UI 订阅，微内核只承载可信编译期插件，Package 按 Phase 0–4 逐个建立。
 
 ## 2. 证据范围与判定口径
 

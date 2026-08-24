@@ -4,24 +4,32 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('IDE Session reducer/store stay pure and persistence stays in runner', () {
-    const applicationFiles = <String>[
+    // intent / effect / state / reducer / 端口是纯数据与纯函数：它们不发布状态，
+    // 因此连纯 Dart 的 package:riverpod 都不该出现（工程规范 §3.0）。
+    const pureFiles = <String>[
       'lib/src/features/ide_session/application/ide_session_slice/ide_session_slice_effect.dart',
       'lib/src/features/ide_session/application/ide_session_slice/ide_session_slice_intent.dart',
       'lib/src/features/ide_session/application/ide_session_slice/ide_session_slice_operations.dart',
       'lib/src/features/ide_session/application/ide_session_slice/ide_session_slice_reducer.dart',
       'lib/src/features/ide_session/application/ide_session_slice/ide_session_slice_state.dart',
-      'lib/src/features/ide_session/application/ide_session_slice/ide_session_slice_store.dart',
     ];
-    for (final path in applicationFiles) {
+    // notifier 是状态 owner：允许 flutter_riverpod。
+    const ownerFiles = <String>[
+      'lib/src/features/ide_session/application/ide_session_slice/ide_session_slice_notifier.dart',
+    ];
+    for (final path in <String>[...pureFiles, ...ownerFiles]) {
       final source = File(path).readAsStringSync();
       expect(source, isNot(contains('package:flutter/')), reason: path);
-      expect(source, isNot(contains('riverpod')), reason: path);
       expect(source, isNot(contains("import 'dart:io'")), reason: path);
       expect(
         source,
         isNot(contains('/features/ide_session/data/')),
         reason: path,
       );
+    }
+    for (final path in pureFiles) {
+      final source = File(path).readAsStringSync();
+      expect(source, isNot(contains('riverpod')), reason: path);
     }
 
     final reducer = File(
@@ -56,6 +64,8 @@ void main() {
     final shell = File(
       'lib/src/app/shell/ide_shell_controller.dart',
     ).readAsStringSync();
+    // 切片所有权归容器：不得再出现手工组合对象或反向绑定的注册表。
+    expect(shell, isNot(contains('IdeSessionSliceComposition')));
     expect(shell, isNot(contains('IdeSessionStore')));
     expect(shell, isNot(contains('IdeSessionPersistenceCoordinator')));
     expect(shell, isNot(contains('_sessionCoordinator')));

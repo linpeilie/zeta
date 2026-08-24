@@ -90,8 +90,9 @@ void main() {
     ]) {
       final source = File(path).readAsStringSync();
       expect(source, isNot(contains('package:flutter/')), reason: path);
+      // 这些是 application 层的状态 owner：发布机制走 Riverpod 的 Notifier，
+      // 不再手写 ChangeNotifier 语义（工程规范 §3.0）。
       expect(source, isNot(contains('ChangeNotifier')), reason: path);
-      expect(source, isNot(contains('riverpod')), reason: path);
     }
 
     final attentionStore = File(
