@@ -2,7 +2,8 @@
 
 最后更新：2026-08-24
 
-状态：Phase 0–2 已落地；Phase 3 第 3–6 批已关批，第 1、2 批独立观察；尚未准入 Phase 4
+状态：Phase 0–2 已落地；Phase 3 六批代码均已关批，但长时间真实使用证据未完成；
+尚未准入 Phase 4
 
 ## 决策摘要
 
@@ -734,8 +735,8 @@ Phase 0 先采基线，再固定阈值。至少要能检测：
 **状态：已落地（2026-08-22 拆完最后一个 Package），燃尽余项随 Phase 2/3 消化。**
 五个目标 Package（`zeta_foundation`、`zeta_plugin_kernel`、`zeta_ui`、
 `zeta_agent_core`、`zeta_agent_providers`）已全部拆出，建立 pub workspace、编译期
-插件目录与依赖守卫。交付内容、燃尽清单（`core/` 的 `dart:io`/Flutter 依赖、
-`zeta_agent_core` 暂留 `flutter/foundation` 的 17 个文件）、MVI 命名
+插件目录与依赖守卫。交付内容、当时的燃尽清单（`core/` 的 `dart:io`/Flutter 依赖、
+`zeta_agent_core` 曾暂留 `flutter/foundation` 的 17 个文件，已于 2026-08-24 清零）、MVI 命名
 规范与计划偏差见
 [阶段 1：建立边界但不改变行为](./phase1_boundaries.md)。
 
@@ -839,17 +840,20 @@ store 和 ViewModel 直连路径，所有 Conversation 固定走按 BindingKey �
 
 ### Phase 3：扩大迁移范围
 
-**状态：第 3–6 批已关批；第 1、2 批仍按各自窗口独立观察。**
-Phase 2 真实使用证据仍在计时（2026-08-23 起生产全量启用 conversation 切片路径）；
-第 1 批经另行显式确认推进到四步节奏第 3 步，最早于 2026-08-26 满足观察下限。
-第 2 批 2a–2c 双路径与完整重构门禁通过后，经再次显式确认接受两批观察窗口重叠，
-生产入口已切到新路径；第 2 批为中高风险，观察期至少 7 天，最早于
-2026-08-30 关批。
+**状态：第 1–6 批代码均已关批；Phase 2 长时间真实使用证据仍在计时。**
+2026-08-24 用户明确接受不等待第 1、2 批原定日期并授权关批：五个旧 controller、
+两个 flag、ingress/Flutter Listenable 与全部 false-path 已删除，application Flutter
+燃尽项和 `zeta_agent_core` Flutter 依赖清零，root snapshot 节点全部必选。该授权没有
+选择 Phase 2 连续 14 天证据，也不豁免 Phase 4 的迁移窗口、回退锚、三平台真实 Provider
+smoke 与 Profile 前置条件。
+
+此前第 2 批 2a–2c 双路径与完整重构门禁通过后，生产入口已切到新路径；第 1、2 批
+原先分别设置 3/7 天观察窗口，现由上述显式风险接受提前结束。
 同日经显式要求提前启动第 3 批；3a Project Threads 与 3b Usage Statistics 依次完成
 字段级契约、纯 Dart store、app runner/组合、Riverpod 只读镜像、双路径对照和生产
 翻旗。用户随后明确要求直接进入下一阶段，接受缩短 3a/3b 原定观察余量并执行关批：
 三个旧 `ChangeNotifier` owner、两个批内 flag、Shell usage 装配链和所有 false-path
-均已删除，生产固定为 MVI 单一路径。该授权不改变第 1、2 批的观察与回滚边界。
+均已删除，生产固定为 MVI 单一路径。
 开门/关门标准、六批的 owner 映射与删除清单、燃尽清单联动表见
 [Phase 3 开工文档](./phase3_slice_expansion.md)。
 
@@ -873,13 +877,13 @@ fallback；第 6 批按 2026-08-24 明确要求直接进入目标态，三个 es
 插件取代 compatibility/default factory，core 的封闭 Provider enum/默认配置目录同步
 清零。两批记录分别见
 [第 5 批](./phase3_batch5_desktop_attention_conversation_workspace.md) 与
-[第 6 批](./phase3_batch6_provider_plugins.md)。这些提前关批授权不豁免第 1、2 批观察、
-Phase 2 连续 14 天证据或 Phase 4 三平台/发布前置条件。
+[第 6 批](./phase3_batch6_provider_plugins.md)。第 1、2 批随后于 2026-08-24 经显式确认
+缩短观察余量并关批；该授权不豁免 Phase 2 连续 14 天证据或 Phase 4 三平台/发布前置条件。
 
 按风险从低到高分批，不做一次性“大爆炸”：
 
-1. settings/appearance/general；
-2. provider settings/management/model catalog；
+1. ~~settings/appearance/general~~（✅ 2026-08-24 已关批）；
+2. ~~provider settings/management/model catalog~~（✅ 2026-08-24 已关批）；
 3. project threads 与 usage statistics；
 4. workspace 与 ide session；
 5. ~~desktop attention 与完整 conversation workspace~~（✅ 2026-08-23 已关批）；

@@ -253,7 +253,7 @@ void main() {
     // `AgentProviderTypeId` / 默认配置常量是既有中立设计，不在此列。
   });
 
-  test('zeta_agent_core 对 Flutter 的依赖只允许收缩', () {
+  test('zeta_agent_core 不得依赖 Flutter', () {
     final dependents = files
         .where((path) => path.startsWith('packages/zeta_agent_core/lib/'))
         .where(
@@ -263,13 +263,22 @@ void main() {
         )
         .toList(growable: false);
 
-    // 这些文件用 ChangeNotifier / ValueListenable；目标态要求纯 Dart，但去掉它们
-    // 需要把 10 个 controller 换成 MVI store（Phase 2/3），且会触碰 G1 冻结文件。
-    // 阶段 1 只冻结数量：只能变少。
     expect(
-      dependents.length,
-      lessThanOrEqualTo(_agentCoreFlutterBaseline),
-      reason: 'zeta_agent_core 新增了 Flutter 依赖：\n${dependents.join('\n')}',
+      dependents,
+      isEmpty,
+      reason: 'zeta_agent_core 必须保持纯 Dart：\n${dependents.join('\n')}',
+    );
+
+    final pubspec = File(
+      'packages/zeta_agent_core/pubspec.yaml',
+    ).readAsStringSync();
+    expect(
+      RegExp(
+        r'^\s*(?:flutter|flutter_test):\s*$',
+        multiLine: true,
+      ).hasMatch(pubspec),
+      isFalse,
+      reason: 'zeta_agent_core pubspec 不得声明 Flutter SDK/flutter_test 依赖',
     );
   });
 
@@ -463,9 +472,6 @@ const Set<String> _knownEdgeViolations = <String>{};
 /// （宿主日志实现）、`lib/src/ui/core`（系统文件管理器宿主封装）；
 /// `ZetaDataPaths` / 脱敏 / 目录过滤改为注入参数。新增条目必须先过架构评审。
 const Set<String> _knownExternalViolations = <String>{};
-
-/// 当前 `zeta_agent_core` 里依赖 `package:flutter/foundation.dart` 的文件数。
-const int _agentCoreFlutterBaseline = 17;
 
 /// 把仓库内路径映射到候选 Package。
 ///

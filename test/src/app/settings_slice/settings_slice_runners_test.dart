@@ -1,9 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:zeta/src/app/settings_slice/settings_slice_composition.dart';
 import 'package:zeta/src/app/settings_slice/settings_slice_runners.dart';
-import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
-import 'package:zeta/src/features/settings/application/general_settings_controller.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_effect.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_state.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_store.dart';
@@ -18,14 +19,17 @@ import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/settings/domain/system_font_family.dart';
-import 'package:zeta/src/features/settings/presentation/settings_slice/settings_slice_ingress.dart';
 import 'package:zeta/src/features/settings/presentation/settings_slice/settings_slice_providers.dart';
 
 /// 可编程字体目录：按 familyName 解析。
 final class _FakeFontCatalog implements SystemFontCatalogService {
-  _FakeFontCatalog({this.families = const <SystemFontFamily>[]});
+  _FakeFontCatalog({
+    this.families = const <SystemFontFamily>[],
+    this.throwOnResolve = false,
+  });
 
   final List<SystemFontFamily> families;
+  final bool throwOnResolve;
 
   @override
   Future<List<SystemFontFamily>> uiFontFamilies() async => families;
@@ -35,8 +39,13 @@ final class _FakeFontCatalog implements SystemFontCatalogService {
 
   @override
   Future<SystemFontFamily?> resolveFontFamily(String name) async {
+    if (throwOnResolve) {
+      throw StateError('font catalog unavailable');
+    }
+    final normalized = name.toLowerCase();
     for (final family in families) {
-      if (family.familyName == name) {
+      if (family.familyName.toLowerCase() == normalized ||
+          family.aliases.any((alias) => alias.toLowerCase() == normalized)) {
         return family;
       }
     }
@@ -65,6 +74,66 @@ final class _FailingGeneralStore implements GeneralSettingsStore {
   }
 }
 
+final class _RecordingGeneralStore implements GeneralSettingsStore {
+  GeneralSettings _settings = const GeneralSettings();
+  final List<GeneralSettings> savedSnapshots = <GeneralSettings>[];
+
+  @override
+  Future<GeneralSettings> load() async => _settings;
+
+  @override
+  Future<void> save(GeneralSettings settings) async {
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+    _settings = settings;
+    savedSnapshots.add(settings);
+  }
+}
+
+final class _DelayedAppearanceStore implements AppearanceSettingsStore {
+  final Completer<AppearanceSettings> _loadCompleter =
+      Completer<AppearanceSettings>();
+  final Completer<AppearanceSettings> firstSave =
+      Completer<AppearanceSettings>();
+  final List<AppearanceSettings> savedSnapshots = <AppearanceSettings>[];
+
+  @override
+  Future<AppearanceSettings> load() => _loadCompleter.future;
+
+  void completeLoad(AppearanceSettings settings) {
+    _loadCompleter.complete(settings);
+  }
+
+  @override
+  Future<void> save(AppearanceSettings settings) async {
+    savedSnapshots.add(settings);
+    if (!firstSave.isCompleted) {
+      firstSave.complete(settings);
+    }
+  }
+}
+
+final class _DelayedGeneralStore implements GeneralSettingsStore {
+  final Completer<GeneralSettings> _loadCompleter =
+      Completer<GeneralSettings>();
+  final Completer<GeneralSettings> firstSave = Completer<GeneralSettings>();
+  final List<GeneralSettings> savedSnapshots = <GeneralSettings>[];
+
+  @override
+  Future<GeneralSettings> load() => _loadCompleter.future;
+
+  void completeLoad(GeneralSettings settings) {
+    _loadCompleter.complete(settings);
+  }
+
+  @override
+  Future<void> save(GeneralSettings settings) async {
+    savedSnapshots.add(settings);
+    if (!firstSave.isCompleted) {
+      firstSave.complete(settings);
+    }
+  }
+}
+
 const _systemFont = SystemFontFamily(
   id: 'maple-ui',
   familyName: 'Maple UI',
@@ -79,6 +148,14 @@ const _monoFont = SystemFontFamily(
   displayName: 'Cascadia Mono',
   aliases: <String>[],
   isMonospace: true,
+);
+
+const _localizedFont = SystemFontFamily(
+  id: 'fangsong',
+  familyName: 'FangSong',
+  displayName: '仿宋',
+  aliases: <String>['simfang'],
+  isMonospace: false,
 );
 
 /// 与组合层同款的延迟绑定装配。
@@ -123,6 +200,23 @@ GeneralSettingsSliceStore _generalStoreWith(GeneralSettingsStore dataStore) {
   return store;
 }
 
+GeneralSettingsSliceStore _unloadedGeneralStoreWith(
+  GeneralSettingsStore dataStore,
+) {
+  final deferred = _DeferredGeneralRunner();
+  final store = GeneralSettingsSliceStore(
+    initialState: const GeneralSettingsSliceState(),
+    effectRunner: deferred,
+    initiallyLoaded: false,
+  );
+  deferred.self = store;
+  deferred.delegate = GeneralSettingsSliceRunnerAdapter(
+    store: dataStore,
+    sliceStore: store,
+  );
+  return store;
+}
+
 final class _DeferredGeneralRunner implements GeneralSettingsSliceEffectRunner {
   GeneralSettingsSliceEffectRunner? delegate;
   GeneralSettingsSliceStore? self;
@@ -133,6 +227,43 @@ final class _DeferredGeneralRunner implements GeneralSettingsSliceEffectRunner {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  group('settings composition · 唯一 owner', () {
+    test('构造期外观快照同步可见，general ready 等持久化加载', () async {
+      final composition = SettingsSliceComposition.create(
+        useFilePersistence: false,
+        dataPaths: null,
+        fallbackLanguage: AppLanguage.simplifiedChinese,
+        initialAppearanceSettings: const AppearanceSettings(
+          themeMode: ZetaThemeModePreference.light,
+        ),
+        appearanceSettingsStore: MemoryAppearanceSettingsStore(
+          const AppearanceSettings(themeMode: ZetaThemeModePreference.dark),
+        ),
+        generalSettingsStore: MemoryGeneralSettingsStore(
+          const GeneralSettings(appLanguage: AppLanguage.english),
+        ),
+        fontCatalog: _FakeFontCatalog(),
+      );
+      addTearDown(composition.dispose);
+
+      expect(
+        composition.appearanceStore.state.value.themeMode,
+        ZetaThemeModePreference.light,
+        reason: '首帧必须使用启动阶段已读快照',
+      );
+
+      final general = await composition.generalSettingsReady;
+
+      expect(general.appLanguage, AppLanguage.english);
+      expect(composition.generalStore.state.settings, general);
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        composition.appearanceStore.state.value.themeMode,
+        ZetaThemeModePreference.dark,
+      );
+    });
+  });
 
   group('appearance runner · 载入归一化', () {
     test('存储的系统字体不可解析时回落默认并回写', () async {
@@ -178,6 +309,50 @@ void main() {
         store.state.value.codeFontChoice.kind,
         AppearanceFontChoiceKind.bundledJetBrainsMono,
       );
+    });
+
+    test('旧别名迁移为 canonical family，目录保留本地化展示名', () async {
+      final dataStore = MemoryAppearanceSettingsStore(
+        const AppearanceSettings(
+          uiFontChoice: AppearanceFontChoice.system('simfang'),
+        ),
+      );
+      final store = _appearanceStoreWith(
+        dataStore: dataStore,
+        fontCatalog: _FakeFontCatalog(families: const [_localizedFont]),
+      );
+
+      store.load();
+      await Future<void>.delayed(Duration.zero);
+      store.requestFontCatalog(forCodeFont: false);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(
+        store.state.value.uiFontChoice,
+        const AppearanceFontChoice.system('FangSong'),
+      );
+      expect(store.state.catalog.displayNames['fangsong'], '仿宋');
+      expect(
+        (await dataStore.load()).uiFontChoice,
+        const AppearanceFontChoice.system('FangSong'),
+      );
+    });
+
+    test('原生字体目录暂时不可用时保留已存选择', () async {
+      const persisted = AppearanceSettings(
+        uiFontChoice: AppearanceFontChoice.system('Maple UI'),
+      );
+      final dataStore = MemoryAppearanceSettingsStore(persisted);
+      final store = _appearanceStoreWith(
+        dataStore: dataStore,
+        fontCatalog: _FakeFontCatalog(throwOnResolve: true),
+      );
+
+      store.load();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(store.state.value.uiFontChoice, persisted.uiFontChoice);
+      expect(await dataStore.load(), persisted);
     });
   });
 
@@ -250,6 +425,38 @@ void main() {
   });
 
   group('appearance runner · persist 回执', () {
+    test('写入等待首次 load，并把用户改动叠加到加载快照', () async {
+      final dataStore = _DelayedAppearanceStore();
+      final store = _appearanceStoreWith(
+        dataStore: dataStore,
+        fontCatalog: _FakeFontCatalog(),
+      );
+
+      store.load();
+      store.selectThemeMode(ZetaThemeModePreference.dark);
+      await Future<void>.delayed(Duration.zero);
+      expect(dataStore.savedSnapshots, isEmpty);
+
+      dataStore.completeLoad(
+        const AppearanceSettings(
+          themeMode: ZetaThemeModePreference.light,
+          uiFontSize: 18,
+        ),
+      );
+      final saved = await dataStore.firstSave.future;
+      await Future<void>.delayed(Duration.zero);
+
+      expect(
+        saved,
+        const AppearanceSettings(
+          themeMode: ZetaThemeModePreference.dark,
+          uiFontSize: 18,
+        ),
+      );
+      expect(store.state.value.themeMode, ZetaThemeModePreference.dark);
+      expect(store.state.value.uiFontSize, 18);
+    });
+
     test('失败回执不改已应用值（语义 A）', () async {
       final store = _appearanceStoreWith(
         dataStore: _FailingAppearanceStore(),
@@ -261,9 +468,56 @@ void main() {
 
       expect(store.state.value.themeMode, ZetaThemeModePreference.dark);
     });
+
+    test('字号四舍五入、夹取后持久化，非有限值拒绝', () async {
+      final dataStore = MemoryAppearanceSettingsStore();
+      final store = _appearanceStoreWith(
+        dataStore: dataStore,
+        fontCatalog: _FakeFontCatalog(),
+      );
+
+      store.adjustUiFontSize(14.4);
+      store.adjustCodeFontSize(99);
+      store.adjustUiFontSize(double.nan);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(
+        await dataStore.load(),
+        const AppearanceSettings(uiFontSize: 14, codeFontSize: maxCodeFontSize),
+      );
+    });
   });
 
   group('general runner', () {
+    test('写入等待首次 load，并从加载完成的快照计算', () async {
+      final dataStore = _DelayedGeneralStore();
+      final store = _unloadedGeneralStoreWith(dataStore);
+
+      store.load();
+      store.setAppLanguage(AppLanguage.english);
+      await Future<void>.delayed(Duration.zero);
+      expect(dataStore.savedSnapshots, isEmpty);
+
+      dataStore.completeLoad(
+        const GeneralSettings(
+          sendMessageShortcut: MessageSendShortcut.primaryModifierEnter,
+          notifications: AgentNotificationSettings(enabled: false),
+        ),
+      );
+      final saved = await dataStore.firstSave.future;
+      await Future<void>.delayed(Duration.zero);
+
+      expect(
+        saved,
+        const GeneralSettings(
+          sendMessageShortcut: MessageSendShortcut.primaryModifierEnter,
+          notifications: AgentNotificationSettings(enabled: false),
+          appLanguage: AppLanguage.english,
+        ),
+      );
+      expect(store.state.settings, saved);
+    });
+
     test('persist 成功回执应用；失败回执保持旧值并登记分类', () async {
       final store = _generalStoreWith(
         MemoryGeneralSettingsStore(null, AppLanguage.simplifiedChinese),
@@ -292,17 +546,29 @@ void main() {
       expect(id.scope, SettingsOperationScopes.generalPersist);
       expect(failId.scope, SettingsOperationScopes.generalPersist);
     });
+
+    test('语言、通知与快捷键按提交顺序串行，且不丢在途值链', () async {
+      final dataStore = _RecordingGeneralStore();
+      final store = _generalStoreWith(dataStore);
+
+      store.setAppLanguage(AppLanguage.english);
+      store.setNotificationsEnabled(false);
+      store.setMessageSendShortcut(MessageSendShortcut.primaryModifierEnter);
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+
+      const expected = GeneralSettings(
+        sendMessageShortcut: MessageSendShortcut.primaryModifierEnter,
+        notifications: AgentNotificationSettings(enabled: false),
+        appLanguage: AppLanguage.english,
+      );
+      expect(dataStore.savedSnapshots, hasLength(3));
+      expect(dataStore.savedSnapshots.last, expected);
+      expect(store.state.settings, expected);
+    });
   });
 
-  group('迁移期 ingress 与镜像 provider', () {
-    test('旧 controller 的变化镜像进切片，镜像 provider 跟随', () async {
-      final appearanceController = AppearanceSettingsController(
-        store: MemoryAppearanceSettingsStore(),
-        fontCatalog: const _NoopCatalog(),
-      );
-      final generalController = GeneralSettingsController(
-        store: MemoryGeneralSettingsStore(null, AppLanguage.simplifiedChinese),
-      );
+  group('唯一 owner 与镜像 provider', () {
+    test('Riverpod 只镜像 slice store，两个投影都跟随', () {
       final appearanceSlice = AppearanceSettingsSliceStore(
         initialState: const AppearanceSettingsSliceState(),
         effectRunner: _NoopAppearanceRunner(),
@@ -311,13 +577,6 @@ void main() {
         initialState: const GeneralSettingsSliceState(),
         effectRunner: _NoopGeneralRunner(),
       );
-      final ingress = SettingsSliceIngress(
-        appearanceController: appearanceController,
-        generalController: generalController,
-        appearanceSlice: appearanceSlice,
-        generalSlice: generalSlice,
-      );
-      addTearDown(ingress.dispose);
 
       final container = ProviderContainer(
         overrides: [
@@ -334,27 +593,25 @@ void main() {
         ZetaThemeModePreference.system,
       );
 
-      await appearanceController.setThemeMode(ZetaThemeModePreference.dark);
+      appearanceSlice.selectThemeMode(ZetaThemeModePreference.dark);
+      final generalOperation = generalSlice.setMessageSendShortcut(
+        MessageSendShortcut.primaryModifierEnter,
+      );
+      generalSlice.persisted(
+        generalOperation,
+        generalSlice.state.pendingValue!,
+      );
 
       expect(
         container.read(appearanceSettingsSliceValueProvider).themeMode,
         ZetaThemeModePreference.dark,
       );
+      expect(
+        container.read(generalSettingsSliceValueProvider).sendMessageShortcut,
+        MessageSendShortcut.primaryModifierEnter,
+      );
     });
   });
-}
-
-final class _NoopCatalog implements SystemFontCatalogService {
-  const _NoopCatalog();
-
-  @override
-  Future<List<SystemFontFamily>> uiFontFamilies() async => const [];
-
-  @override
-  Future<List<SystemFontFamily>> codeFontFamilies() async => const [];
-
-  @override
-  Future<SystemFontFamily?> resolveFontFamily(String name) async => null;
 }
 
 final class _NoopAppearanceRunner

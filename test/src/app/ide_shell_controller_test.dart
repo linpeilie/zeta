@@ -24,6 +24,7 @@ import '../testing/agent_event_storm_fixture.dart';
 import '../testing/agent_provider_stub_base.dart';
 import '../testing/legacy_bundle_factory_mixin.dart';
 import '../testing/fake_agent_frame_scheduler.dart';
+import '../testing/provider_settings_test_store.dart';
 
 final List<FakeAgentFrameScheduler> _uiFrameSchedulers =
     <FakeAgentFrameScheduler>[];
@@ -92,6 +93,10 @@ void main() {
       final runtimeRegistry = AgentProviderRuntimeRegistry(
         providerFactory: providerFactory,
       );
+      final providerSettings = createProviderSettingsTestComposition(
+        configStore: MemoryAgentProviderConfigStore(),
+      );
+      addTearDown(providerSettings.dispose);
       final shell = IdeShellController(
         agentUiFrameSchedulerFactory: _createUiFrameScheduler,
         directoryPicker: () async => null,
@@ -103,7 +108,8 @@ void main() {
         ),
         agentProviderFactory: providerFactory,
         agentProviderRuntimeRegistry: runtimeRegistry,
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        agentProviderSettingsPort: providerSettings.store,
+        activeModelCatalogLoader: providerSettings.loadActiveModelCatalog,
       );
       final composition = UsageStatisticsSliceComposition.create(
         loadEnabledProviders: () async {
@@ -121,9 +127,10 @@ void main() {
         }
       }
 
-      shell.agentProviderController.addListener(synchronizeUsageDirectory);
+      final unsubscribeProviderSettings = shell.agentProviderController
+          .subscribe(synchronizeUsageDirectory);
       addTearDown(() async {
-        shell.agentProviderController.removeListener(synchronizeUsageDirectory);
+        unsubscribeProviderSettings();
         composition.dispose();
         shell.dispose();
         await runtimeRegistry.close();
@@ -187,6 +194,18 @@ void main() {
           ),
         ],
       );
+      final providerFactory = _RecordingAgentProviderFactory(
+        <String, _ProviderBackend>{defaultAgentProviderId: codexBackend},
+      );
+      final providerSettings = createProviderSettingsTestComposition(
+        configStore: MemoryAgentProviderConfigStore(
+          const AgentProviderSettings(
+            providers: <AgentProviderConfig>[defaultCodexAgentProviderConfig],
+            activeProviderId: defaultAgentProviderId,
+          ),
+        ),
+      );
+      addTearDown(providerSettings.dispose);
 
       final shell = IdeShellController(
         agentUiFrameSchedulerFactory: _createUiFrameScheduler,
@@ -197,15 +216,9 @@ void main() {
             saveJson: _saveDiscardedSession,
           ),
         ),
-        agentProviderFactory: _RecordingAgentProviderFactory(
-          <String, _ProviderBackend>{defaultAgentProviderId: codexBackend},
-        ),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(
-          const AgentProviderSettings(
-            providers: <AgentProviderConfig>[defaultCodexAgentProviderConfig],
-            activeProviderId: defaultAgentProviderId,
-          ),
-        ),
+        agentProviderFactory: providerFactory,
+        agentProviderSettingsPort: providerSettings.store,
+        activeModelCatalogLoader: providerSettings.loadActiveModelCatalog,
       );
       addTearDown(shell.dispose);
 
@@ -255,7 +268,7 @@ void main() {
         threadIds: const <String>['thread-a', 'thread-b'],
         selectedThreadId: 'thread-a',
       );
-      addTearDown(harness.shell.dispose);
+      addTearDown(harness.dispose);
 
       final activated = await harness.shell.activateAgentThread(
         providerId: defaultAgentProviderId,
@@ -404,6 +417,18 @@ void main() {
         completeTurns: true,
         threadPages: <AgentThreadPage>[],
       );
+      final providerFactory = _RecordingAgentProviderFactory(
+        <String, _ProviderBackend>{defaultAgentProviderId: backend},
+      );
+      final providerSettings = createProviderSettingsTestComposition(
+        configStore: MemoryAgentProviderConfigStore(
+          const AgentProviderSettings(
+            providers: <AgentProviderConfig>[defaultCodexAgentProviderConfig],
+            activeProviderId: defaultAgentProviderId,
+          ),
+        ),
+      );
+      addTearDown(providerSettings.dispose);
       final shell = IdeShellController(
         agentUiFrameSchedulerFactory: _createUiFrameScheduler,
         directoryPicker: () async => null,
@@ -413,15 +438,9 @@ void main() {
             saveJson: _saveDiscardedSession,
           ),
         ),
-        agentProviderFactory: _RecordingAgentProviderFactory(
-          <String, _ProviderBackend>{defaultAgentProviderId: backend},
-        ),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(
-          const AgentProviderSettings(
-            providers: <AgentProviderConfig>[defaultCodexAgentProviderConfig],
-            activeProviderId: defaultAgentProviderId,
-          ),
-        ),
+        agentProviderFactory: providerFactory,
+        agentProviderSettingsPort: providerSettings.store,
+        activeModelCatalogLoader: providerSettings.loadActiveModelCatalog,
         onAgentTurnTerminal: terminalSignals.add,
         onAgentAttention: attentions.add,
       );
@@ -892,6 +911,24 @@ void main() {
         ),
       ],
     );
+    final providerFactory = _RecordingAgentProviderFactory(
+      <String, _ProviderBackend>{
+        defaultAgentProviderId: codexBackend,
+        grokAgentProviderId: grokBackend,
+      },
+    );
+    final providerSettings = createProviderSettingsTestComposition(
+      configStore: MemoryAgentProviderConfigStore(
+        AgentProviderSettings(
+          providers: <AgentProviderConfig>[
+            defaultCodexAgentProviderConfig,
+            defaultGrokAgentProviderConfig.copyWith(enabled: true),
+          ],
+          activeProviderId: defaultAgentProviderId,
+        ),
+      ),
+    );
+    addTearDown(providerSettings.dispose);
 
     final shell = IdeShellController(
       agentUiFrameSchedulerFactory: _createUiFrameScheduler,
@@ -902,21 +939,9 @@ void main() {
           saveJson: _saveDiscardedSession,
         ),
       ),
-      agentProviderFactory: _RecordingAgentProviderFactory(
-        <String, _ProviderBackend>{
-          defaultAgentProviderId: codexBackend,
-          grokAgentProviderId: grokBackend,
-        },
-      ),
-      agentProviderConfigStore: MemoryAgentProviderConfigStore(
-        AgentProviderSettings(
-          providers: <AgentProviderConfig>[
-            defaultCodexAgentProviderConfig,
-            defaultGrokAgentProviderConfig.copyWith(enabled: true),
-          ],
-          activeProviderId: defaultAgentProviderId,
-        ),
-      ),
+      agentProviderFactory: providerFactory,
+      agentProviderSettingsPort: providerSettings.store,
+      activeModelCatalogLoader: providerSettings.loadActiveModelCatalog,
     );
     addTearDown(shell.dispose);
 
@@ -991,6 +1016,16 @@ void main() {
       config: defaultGrokAgentProviderConfig,
       threadPages: const <AgentThreadPage>[],
     );
+    final providerFactory = _RecordingAgentProviderFactory(
+      <String, _ProviderBackend>{
+        defaultAgentProviderId: codexBackend,
+        grokAgentProviderId: grokBackend,
+      },
+    );
+    final providerSettings = createProviderSettingsTestComposition(
+      configStore: configStore,
+    );
+    addTearDown(providerSettings.dispose);
     final shell = IdeShellController(
       agentUiFrameSchedulerFactory: _createUiFrameScheduler,
       directoryPicker: () async => directory.path,
@@ -1000,13 +1035,9 @@ void main() {
           saveJson: _saveDiscardedSession,
         ),
       ),
-      agentProviderFactory: _RecordingAgentProviderFactory(
-        <String, _ProviderBackend>{
-          defaultAgentProviderId: codexBackend,
-          grokAgentProviderId: grokBackend,
-        },
-      ),
-      agentProviderConfigStore: configStore,
+      agentProviderFactory: providerFactory,
+      agentProviderSettingsPort: providerSettings.store,
+      activeModelCatalogLoader: providerSettings.loadActiveModelCatalog,
     );
     addTearDown(shell.dispose);
 
@@ -1095,6 +1126,13 @@ void main() {
           ),
         ],
       );
+      final providerFactory = _RecordingAgentProviderFactory(
+        <String, _ProviderBackend>{defaultAgentProviderId: backend},
+      );
+      final providerSettings = createProviderSettingsTestComposition(
+        configStore: MemoryAgentProviderConfigStore(),
+      );
+      addTearDown(providerSettings.dispose);
       final shell = IdeShellController(
         agentUiFrameSchedulerFactory: _createUiFrameScheduler,
         directoryPicker: () async => firstDirectory.path,
@@ -1104,10 +1142,9 @@ void main() {
             saveJson: _saveDiscardedSession,
           ),
         ),
-        agentProviderFactory: _RecordingAgentProviderFactory(
-          <String, _ProviderBackend>{defaultAgentProviderId: backend},
-        ),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        agentProviderFactory: providerFactory,
+        agentProviderSettingsPort: providerSettings.store,
+        activeModelCatalogLoader: providerSettings.loadActiveModelCatalog,
       );
       addTearDown(shell.dispose);
 
@@ -1190,6 +1227,13 @@ void main() {
         ),
       ],
     );
+    final providerFactory = _RecordingAgentProviderFactory(
+      <String, _ProviderBackend>{defaultAgentProviderId: backend},
+    );
+    final providerSettings = createProviderSettingsTestComposition(
+      configStore: MemoryAgentProviderConfigStore(),
+    );
+    addTearDown(providerSettings.dispose);
     final shell = IdeShellController(
       agentUiFrameSchedulerFactory: _createUiFrameScheduler,
       directoryPicker: () async => directory.path,
@@ -1201,10 +1245,9 @@ void main() {
           },
         ),
       ),
-      agentProviderFactory: _RecordingAgentProviderFactory(
-        <String, _ProviderBackend>{defaultAgentProviderId: backend},
-      ),
-      agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      agentProviderFactory: providerFactory,
+      agentProviderSettingsPort: providerSettings.store,
+      activeModelCatalogLoader: providerSettings.loadActiveModelCatalog,
     );
     addTearDown(shell.dispose);
 
@@ -1236,6 +1279,17 @@ void main() {
         selectedAgentUsageProviderId: 'grok',
       );
       String? savedJson;
+      final providerFactory =
+          _RecordingAgentProviderFactory(<String, _ProviderBackend>{
+            defaultAgentProviderId: _ProviderBackend(
+              config: defaultCodexAgentProviderConfig,
+              threadPages: const <AgentThreadPage>[],
+            ),
+          });
+      final providerSettings = createProviderSettingsTestComposition(
+        configStore: MemoryAgentProviderConfigStore(),
+      );
+      addTearDown(providerSettings.dispose);
       final shell = IdeShellController(
         agentUiFrameSchedulerFactory: _createUiFrameScheduler,
         directoryPicker: () async => null,
@@ -1249,14 +1303,9 @@ void main() {
             },
           ),
         ),
-        agentProviderFactory:
-            _RecordingAgentProviderFactory(<String, _ProviderBackend>{
-              defaultAgentProviderId: _ProviderBackend(
-                config: defaultCodexAgentProviderConfig,
-                threadPages: const <AgentThreadPage>[],
-              ),
-            }),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        agentProviderFactory: providerFactory,
+        agentProviderSettingsPort: providerSettings.store,
+        activeModelCatalogLoader: providerSettings.loadActiveModelCatalog,
       );
       addTearDown(shell.dispose);
 
@@ -1328,6 +1377,17 @@ void main() {
         ),
       ],
     );
+    final providerFactory = _RecordingAgentProviderFactory(
+      <String, _ProviderBackend>{defaultAgentProviderId: backend},
+    );
+    final providerSettings = createProviderSettingsTestComposition(
+      configStore: MemoryAgentProviderConfigStore(
+        const AgentProviderSettings(
+          providers: <AgentProviderConfig>[defaultCodexAgentProviderConfig],
+        ),
+      ),
+    );
+    addTearDown(providerSettings.dispose);
     final shell = IdeShellController(
       agentUiFrameSchedulerFactory: _createUiFrameScheduler,
       directoryPicker: () async => firstDirectory.path,
@@ -1339,14 +1399,9 @@ void main() {
           },
         ),
       ),
-      agentProviderFactory: _RecordingAgentProviderFactory(
-        <String, _ProviderBackend>{defaultAgentProviderId: backend},
-      ),
-      agentProviderConfigStore: MemoryAgentProviderConfigStore(
-        const AgentProviderSettings(
-          providers: <AgentProviderConfig>[defaultCodexAgentProviderConfig],
-        ),
-      ),
+      agentProviderFactory: providerFactory,
+      agentProviderSettingsPort: providerSettings.store,
+      activeModelCatalogLoader: providerSettings.loadActiveModelCatalog,
       now: () => openedNow,
     );
     addTearDown(shell.dispose);
@@ -1433,6 +1488,17 @@ Future<_SelectedThreadShellHarness> _openShellWithSelectedThread({
     ],
   );
   final sessionSaves = _SessionSaveRecorder();
+  final providerFactory = _RecordingAgentProviderFactory(
+    <String, _ProviderBackend>{defaultAgentProviderId: backend},
+  );
+  final providerSettings = createProviderSettingsTestComposition(
+    configStore: MemoryAgentProviderConfigStore(
+      const AgentProviderSettings(
+        providers: <AgentProviderConfig>[defaultCodexAgentProviderConfig],
+        activeProviderId: defaultAgentProviderId,
+      ),
+    ),
+  );
   final shell = IdeShellController(
     agentUiFrameSchedulerFactory: _createUiFrameScheduler,
     directoryPicker: () async => directory.path,
@@ -1442,15 +1508,9 @@ Future<_SelectedThreadShellHarness> _openShellWithSelectedThread({
         saveJson: sessionSaves.save,
       ),
     ),
-    agentProviderFactory: _RecordingAgentProviderFactory(
-      <String, _ProviderBackend>{defaultAgentProviderId: backend},
-    ),
-    agentProviderConfigStore: MemoryAgentProviderConfigStore(
-      const AgentProviderSettings(
-        providers: <AgentProviderConfig>[defaultCodexAgentProviderConfig],
-        activeProviderId: defaultAgentProviderId,
-      ),
-    ),
+    agentProviderFactory: providerFactory,
+    agentProviderSettingsPort: providerSettings.store,
+    activeModelCatalogLoader: providerSettings.loadActiveModelCatalog,
   );
 
   await shell.openProject();
@@ -1470,6 +1530,7 @@ Future<_SelectedThreadShellHarness> _openShellWithSelectedThread({
     shell: shell,
     backend: backend,
     sessionSaves: sessionSaves,
+    providerSettings: providerSettings,
   );
 }
 
@@ -1499,11 +1560,18 @@ class _SelectedThreadShellHarness {
     required this.shell,
     required this.backend,
     required this.sessionSaves,
+    required this.providerSettings,
   });
 
   final IdeShellController shell;
   final _ProviderBackend backend;
   final _SessionSaveRecorder sessionSaves;
+  final ProviderSettingsTestComposition providerSettings;
+
+  Future<void> dispose() async {
+    shell.dispose();
+    await providerSettings.dispose();
+  }
 
   _ShellTestAgentProvider get provider => backend.instances.last;
 }

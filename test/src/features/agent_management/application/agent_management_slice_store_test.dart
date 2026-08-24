@@ -255,6 +255,8 @@ AgentManagementSliceStore _createStore({
     ),
     effectRunner: runner,
     configurationNotLoadedMessage: 'not loaded',
+    accountDataEnrichmentEnabledFor: (config) =>
+        config.extra[claudeCodeAccountDataEnrichmentKey] != false,
   );
 }
 

@@ -1,4 +1,5 @@
-import 'package:flutter/foundation.dart';
+import 'package:meta/meta.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
 
 /// Skill 目录与元数据的中立领域模型。
 ///
@@ -99,8 +100,8 @@ final class AgentSkillsCatalogEntry {
   bool operator ==(Object other) =>
       other is AgentSkillsCatalogEntry &&
       other.cwd == cwd &&
-      listEquals(other.skills, skills) &&
-      listEquals(other.errors, errors);
+      zetaListEquals(other.skills, skills) &&
+      zetaListEquals(other.errors, errors);
 
   @override
   int get hashCode =>
@@ -151,7 +152,7 @@ final class AgentSkillsCatalog {
 
   @override
   bool operator ==(Object other) =>
-      other is AgentSkillsCatalog && listEquals(other.entries, entries);
+      other is AgentSkillsCatalog && zetaListEquals(other.entries, entries);
 
   @override
   int get hashCode => Object.hashAll(entries);

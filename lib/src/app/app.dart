@@ -46,9 +46,6 @@ import 'package:zeta/src/features/agent_management/domain/agent_management_model
 import 'package:zeta/src/features/agent_management/domain/agent_management_text_catalog.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/ide_session/presentation/ide_session_slice/ide_session_slice_providers.dart';
-import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
-import 'package:zeta/src/features/settings/application/agent_notification_settings_source.dart';
-import 'package:zeta/src/features/settings/application/general_settings_controller.dart';
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
 import 'package:zeta/src/features/settings/data/general_settings_store.dart';
 import 'package:zeta/src/features/settings/presentation/appearance_theme_mode_mapper.dart';
@@ -68,8 +65,7 @@ import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
 /// 应用根组件。
 ///
 /// 允许测试注入目录选择器、会话存储和 Agent provider 工厂；生产环境使用真实实现。
-/// 全局外观偏好由 [AppearanceSettingsController] 统一管理，覆盖主题模式、
-/// 界面字体与代码字体，并持久化到本地存储。
+/// 全局设置由纯 Dart slice store 统一管理，并由 app 组合层持久化。
 class MainApp extends StatefulWidget {
   const MainApp({
     super.key,
@@ -83,9 +79,10 @@ class MainApp extends StatefulWidget {
     this.agentProviderAvailabilityLoader,
     this.homeProviderDetectionLoader,
     this.projectLocationOpener,
-    this.appearanceController,
+    this.appearanceSettingsStore,
     this.initialAppearanceSettings,
-    this.generalSettingsController,
+    this.generalSettingsStore,
+    this.systemFontCatalogService,
     this.fallbackLanguage = AppLanguage.simplifiedChinese,
     this.displayLanguageOverride,
     this.waitForGeneralSettings = false,
@@ -98,8 +95,6 @@ class MainApp extends StatefulWidget {
     this.desktopAttentionIndicator,
     this.turnContextStore,
     this.observability,
-    this.settingsSliceEnabled = false,
-    this.providerManagementSliceEnabled = false,
   });
 
   final Future<String?> Function()? directoryPicker;
@@ -115,16 +110,17 @@ class MainApp extends StatefulWidget {
   final HomeProviderDetectionLoader? homeProviderDetectionLoader;
   final ProjectLocationOpener? projectLocationOpener;
 
-  /// 全局外观控制器。测试可注入内存版本以避免触碰真实用户文件；
-  /// 生产环境由 [MainAppState.appearanceController] 自动创建并加载持久化偏好。
-  final AppearanceSettingsController? appearanceController;
+  /// 外观持久化端口注入点；测试可传内存实现避免触碰真实用户文件。
+  final AppearanceSettingsStore? appearanceSettingsStore;
 
   /// 启动阶段已读入的外观偏好，供第一帧使用，避免先按默认 system 再跳变。
   final AppearanceSettings? initialAppearanceSettings;
 
-  /// 全局常规设置控制器。测试可注入内存版本；生产环境自动使用
-  /// `~/.zeta/config/general.json`。
-  final GeneralSettingsController? generalSettingsController;
+  /// 常规设置持久化端口注入点；生产环境默认使用配置目录中的版本化 JSON。
+  final GeneralSettingsStore? generalSettingsStore;
+
+  /// 系统字体目录注入点；测试可传确定性实现。
+  final SystemFontCatalogService? systemFontCatalogService;
 
   /// 常规设置文件缺失或损坏时使用的语言。
   final AppLanguage fallbackLanguage;
@@ -139,18 +135,6 @@ class MainApp extends StatefulWidget {
 
   /// app 级可观测性组合；默认关闭采集，探针退化为 no-op。
   final ZetaObservability? observability;
-
-  /// Phase 3 第 1 批 settings 切片的 feature flag（全局生效，默认 false）。
-  ///
-  /// true 时创建切片组合（两个 store + runner + 迁移期 ingress），主题构建
-  /// 与 settings/Agent Pane/桌面通知投影都改由切片驱动。
-  final bool settingsSliceEnabled;
-
-  /// Phase 3 第 2 批 Provider 配置/管理切片的 feature flag。
-  ///
-  /// true 时 app 根创建 Provider settings store/runner；构造默认 false，旧
-  /// controller 路径完整保留。生产入口自 2026-08-23 起显式传 true。
-  final bool providerManagementSliceEnabled;
 
   /// 生产启动阶段解析并初始化的 Zeta 自有数据路径。
   ///
@@ -178,13 +162,10 @@ class MainApp extends StatefulWidget {
 
 class MainAppState extends State<MainApp>
     with WidgetsBindingObserver, WindowListener {
-  late final AppearanceSettingsController _appearanceController;
-  late final GeneralSettingsController _generalSettingsController;
+  /// Phase 3 第 1 批关批后的唯一 settings 组合。
+  late final SettingsSliceComposition _settingsSliceComposition;
 
-  /// Phase 3 第 1 批切片组合；null = flag 关（默认，生产行为不变）。
-  SettingsSliceComposition? _settingsSliceComposition;
-
-  /// Phase 3 第 2 批 2a 组合；null = flag 关，shell 创建旧 controller。
+  /// 本地化与 Provider 插件目录就绪后创建的唯一 Provider settings 组合。
   ProviderSettingsSliceComposition? _providerSettingsSliceComposition;
 
   /// Phase 3 第 3 批 3b 组合；本地化运行时就绪后创建并成为唯一 owner。
@@ -221,8 +202,6 @@ class MainAppState extends State<MainApp>
   late final UsageStatisticsPartitionStore _usageStatisticsPartitionStore;
   late final AgentModelCatalogRepository _agentModelCatalogRepository;
   late final AgentTurnContextStore _turnContextStore;
-  bool _ownsAppearanceController = false;
-  bool _ownsGeneralSettingsController = false;
   bool _ownsAgentProviderRuntimeRegistry = false;
   AppLifecycleState? _appLifecycleState;
   bool _nativeWindowSuspended = false;
@@ -235,14 +214,6 @@ class MainAppState extends State<MainApp>
   late DesktopAttentionTextCatalog _desktopAttentionTextCatalog;
   late UsageStatisticsTextCatalog _usageStatisticsTextCatalog;
 
-  /// 全局外观控制器引用，供设置面板和主题构建共享。
-  AppearanceSettingsController get appearanceController =>
-      _appearanceController;
-
-  /// 全局常规设置控制器引用，供设置页面和 Agent 输入框共享。
-  GeneralSettingsController get generalSettingsController =>
-      _generalSettingsController;
-
   /// 按需读取当前逻辑状态树；生产 Widget 不得订阅或在 build 中调用。
   ZetaStateSnapshot takeStateSnapshot() {
     final usageComposition = _requiredUsageStatisticsComposition;
@@ -254,9 +225,9 @@ class MainAppState extends State<MainApp>
       desktopAttention: ZetaDesktopAttentionStateSnapshot.fromState(
         _requiredDesktopAttentionComposition.store.state,
       ),
-      appearanceSettings: _settingsSliceComposition?.appearanceStore.state,
-      generalSettings: _settingsSliceComposition?.generalStore.state,
-      providerSettings: _providerSettingsSliceComposition?.store.state,
+      appearanceSettings: _settingsSliceComposition.appearanceStore.state,
+      generalSettings: _settingsSliceComposition.generalStore.state,
+      providerSettings: _requiredProviderSettingsComposition.store.state,
     );
   }
 
@@ -350,49 +321,16 @@ class MainAppState extends State<MainApp>
                 createStorage: (path) => AtomicTextFile(File(path)),
               )
             : MemoryAgentTurnContextStore());
-    if (widget.appearanceController != null) {
-      _appearanceController = widget.appearanceController!;
-      _ownsAppearanceController = false;
-    } else {
-      // 测试通过 sessionLoader/sessionSaver 注入会话回调时，避免读写真实
-      // ~/.zeta；生产环境走默认文件持久化。
-      final store = useFilePersistence
-          ? FileAppearanceSettingsStore(
-              storage: AtomicTextFile(File(dataPaths!.appearanceFilePath)),
-            )
-          : MemoryAppearanceSettingsStore();
-      _appearanceController = AppearanceSettingsController(
-        store: store,
-        fontCatalog: DesktopSystemFontCatalogService(),
-        initialSettings: widget.initialAppearanceSettings,
-      );
-      _ownsAppearanceController = true;
-    }
-    if (widget.generalSettingsController != null) {
-      _generalSettingsController = widget.generalSettingsController!;
-      _ownsGeneralSettingsController = false;
-    } else {
-      final store = useFilePersistence
-          ? FileGeneralSettingsStore(
-              storage: AtomicTextFile(File(dataPaths!.generalSettingsFilePath)),
-              fallbackLanguage: widget.fallbackLanguage,
-            )
-          : MemoryGeneralSettingsStore(null, widget.fallbackLanguage);
-      _generalSettingsController = GeneralSettingsController(store: store);
-      _ownsGeneralSettingsController = true;
-    }
-    if (widget.settingsSliceEnabled) {
-      _settingsSliceComposition = SettingsSliceComposition.create(
-        useFilePersistence: _useFilePersistence,
-        dataPaths: widget.dataPaths,
-        fallbackLanguage: widget.fallbackLanguage,
-        appearanceController: _appearanceController,
-        generalController: _generalSettingsController,
-        fontCatalog: DesktopSystemFontCatalogService(),
-      );
-    }
-    unawaited(_appearanceController.load());
-    final loadGeneralSettings = _generalSettingsController.load();
+    _settingsSliceComposition = SettingsSliceComposition.create(
+      useFilePersistence: _useFilePersistence,
+      dataPaths: widget.dataPaths,
+      fallbackLanguage: widget.fallbackLanguage,
+      appearanceSettingsStore: widget.appearanceSettingsStore,
+      generalSettingsStore: widget.generalSettingsStore,
+      fontCatalog: widget.systemFontCatalogService,
+      initialAppearanceSettings: widget.initialAppearanceSettings,
+    );
+    final loadGeneralSettings = _settingsSliceComposition.generalSettingsReady;
     final overrideLanguage = widget.displayLanguageOverride;
     final shouldWait = widget.waitForGeneralSettings;
     if (overrideLanguage != null || !shouldWait) {
@@ -477,16 +415,13 @@ class MainAppState extends State<MainApp>
         addDesktopWindowShutdownHook(_providerRuntimeShutdownHook!);
       }
     }
-    if (widget.providerManagementSliceEnabled &&
-        _providerSettingsSliceComposition == null) {
-      _providerSettingsSliceComposition =
-          ProviderSettingsSliceComposition.create(
-            configStore: _agentProviderConfigStore,
-            modelCatalogRepository: _agentModelCatalogRepository,
-            runtimeRegistry: _agentProviderRuntimeRegistry,
-            providerDefinitions: _agentProviderDefinitions,
-          );
-    }
+    _providerSettingsSliceComposition ??=
+        ProviderSettingsSliceComposition.create(
+          configStore: _agentProviderConfigStore,
+          modelCatalogRepository: _agentModelCatalogRepository,
+          runtimeRegistry: _agentProviderRuntimeRegistry,
+          providerDefinitions: _agentProviderDefinitions,
+        );
     _usageStatisticsSliceComposition ??= UsageStatisticsSliceComposition.create(
       loadEnabledProviders: _loadEnabledAgentUsageProviders,
       runtimeRegistry: _agentProviderRuntimeRegistry,
@@ -509,10 +444,7 @@ class MainAppState extends State<MainApp>
                   ? MethodChannelDesktopAttentionIndicator()
                   : const NoopDesktopAttentionIndicator()),
           notificationSettingsSource:
-              _settingsSliceComposition?.notificationSettingsSource ??
-              GeneralSettingsControllerNotificationSource(
-                _generalSettingsController,
-              ),
+              _settingsSliceComposition.notificationSettingsSource,
           activateTarget: _desktopAttentionTargetActivatorRelay.call,
           textCatalog: _desktopAttentionTextCatalog,
         );
@@ -558,15 +490,8 @@ class MainAppState extends State<MainApp>
     _providerSettingsSliceComposition?.dispose();
     _providerSettingsSliceComposition = null;
     unawaited(_shutdownOwnedAgentResources());
-    _settingsSliceComposition?.dispose();
-    _settingsSliceComposition = null;
+    _settingsSliceComposition.dispose();
     _ideSessionSliceComposition.dispose();
-    if (_ownsAppearanceController) {
-      _appearanceController.dispose();
-    }
-    if (_ownsGeneralSettingsController) {
-      _generalSettingsController.dispose();
-    }
     super.dispose();
   }
 
@@ -616,8 +541,7 @@ class MainAppState extends State<MainApp>
       // Riverpod 只允许原地更新等长的 overrides。等待持久化语言时，Provider
       // 管理切片会在首帧之后才完成组合；此时用新 key 替换仍处于启动页的容器，
       // 避免对旧容器追加 overrides。IdeHome 尚未挂载，因此不会丢失工作区状态。
-      key: ValueKey<(bool, bool, bool, bool)>((
-        settingsComposition != null,
+      key: ValueKey<(bool, bool, bool)>((
         providerSettingsComposition != null,
         usageStatisticsComposition != null,
         desktopAttentionComposition != null,
@@ -634,14 +558,12 @@ class MainAppState extends State<MainApp>
         agentConversationWorkspaceStoreRegistryProvider.overrideWithValue(
           _conversationWorkspaceStoreRegistry,
         ),
-        if (settingsComposition case final composition?) ...[
-          appearanceSettingsSliceStoreProvider.overrideWithValue(
-            composition.appearanceStore,
-          ),
-          generalSettingsSliceStoreProvider.overrideWithValue(
-            composition.generalStore,
-          ),
-        ],
+        appearanceSettingsSliceStoreProvider.overrideWithValue(
+          settingsComposition.appearanceStore,
+        ),
+        generalSettingsSliceStoreProvider.overrideWithValue(
+          settingsComposition.generalStore,
+        ),
         if (providerSettingsComposition case final composition?) ...[
           agentProviderSettingsSliceStoreProvider.overrideWithValue(
             composition.store,
@@ -668,20 +590,12 @@ class MainAppState extends State<MainApp>
   }
 
   Widget _buildApp(BuildContext context) {
-    // Phase 3 第 1 批：切片路径（flag 开）由镜像 provider 驱动主题构建；
-    // flag 关闭时仍完整回退到旧 controller。
-    if (_settingsSliceComposition != null) {
-      return Consumer(
-        builder: (context, ref, _) => _buildThemedApp(
-          appearanceSettingsFromSlice(
-            ref.watch(appearanceSettingsSliceValueProvider),
-          ),
+    return Consumer(
+      builder: (context, ref, _) => _buildThemedApp(
+        appearanceSettingsFromSlice(
+          ref.watch(appearanceSettingsSliceValueProvider),
         ),
-      );
-    }
-    return ValueListenableBuilder<AppearanceSettings>(
-      valueListenable: _appearanceController.listenable,
-      builder: (context, settings, _) => _buildThemedApp(settings),
+      ),
     );
   }
 
@@ -751,14 +665,11 @@ class MainAppState extends State<MainApp>
                           _conversationSliceStoreRegistry,
                       conversationWorkspaceStoreRegistry:
                           _conversationWorkspaceStoreRegistry,
-                      agentProviderConfigStore: _agentProviderConfigStore,
                       agentProviderSettingsPort:
-                          _providerSettingsSliceComposition?.store,
-                      activeModelCatalogLoader:
-                          _providerSettingsSliceComposition == null
-                          ? null
-                          : () => _providerSettingsSliceComposition!
-                                .loadActiveModelCatalog(),
+                          _requiredProviderSettingsComposition.store,
+                      activeModelCatalogLoader: () =>
+                          _requiredProviderSettingsComposition
+                              .loadActiveModelCatalog(),
                       agentProviderAvailabilityLoader:
                           widget.agentProviderAvailabilityLoader,
                       homeProviderDetectionLoader:
@@ -769,16 +680,13 @@ class MainAppState extends State<MainApp>
                       projectLocationOpener:
                           widget.projectLocationOpener ??
                           openPathInSystemFileManager,
-                      appearanceController: _appearanceController,
-                      generalSettingsController: _generalSettingsController,
                       usageStatisticsSliceComposition:
                           _requiredUsageStatisticsComposition,
                       agentModelCatalogRepository: _agentModelCatalogRepository,
                       turnContextStore: _turnContextStore,
                       agentUiTextCatalog: _agentUiTextCatalog,
                       metrics: _metrics,
-                      providerManagementSliceEnabled:
-                          widget.providerManagementSliceEnabled,
+                      providerMetricLabel: AgentMetricLabels.forProviderId,
                       agentManagementTextCatalog: _agentManagementTextCatalog,
                       // 回调存储用于测试/嵌入宿主；未显式注入统计仓储时不读取本机 CLI 历史。
                       enableAgentUsageAutoRefresh:
@@ -813,16 +721,14 @@ class MainAppState extends State<MainApp>
       _desktopAttentionSliceComposition ??
       (throw StateError('Desktop Attention composition is not ready'));
 
+  ProviderSettingsSliceComposition get _requiredProviderSettingsComposition =>
+      _providerSettingsSliceComposition ??
+      (throw StateError('Provider Settings composition is not ready'));
+
   Future<List<AgentProviderConfig>> _loadEnabledAgentUsageProviders() async {
-    final providerSettings = _providerSettingsSliceComposition?.store;
-    if (providerSettings != null) {
-      await providerSettings.loadSettings();
-      return providerSettings.enabledProviders;
-    }
-    final settings = await _agentProviderConfigStore.load();
-    return List<AgentProviderConfig>.unmodifiable(
-      settings.providers.where((provider) => provider.enabled),
-    );
+    final providerSettings = _requiredProviderSettingsComposition.store;
+    await providerSettings.loadSettings();
+    return providerSettings.enabledProviders;
   }
 
   void _resumeNativeWindowTickers() {

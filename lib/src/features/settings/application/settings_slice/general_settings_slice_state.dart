@@ -11,7 +11,7 @@ enum GeneralSettingsPersistOperation { language, shortcut, notifications }
 ///
 /// 只有分类没有文案（G7）：语言失败的用户可见文字由 presentation 按
 /// `operation == language` 取 `settingsLanguageSaveFailed`，其余失败静默
-/// （与现状一致——旧 controller 只有语言路径把失败返回给 UI）。
+/// UI 只对语言持久化失败给出显式反馈，其余分类保持静默。
 @immutable
 final class GeneralSettingsSlicePersistFailure {
   const GeneralSettingsSlicePersistFailure({
@@ -50,14 +50,12 @@ final class GeneralSettingsSliceState {
   /// 已应用的设置值（persist 成功才更新——现状语义 B）。
   final GeneralSettings settings;
 
-  /// 在途 persist 的身份；新命令覆盖它，旧结果按此判迟到。
+  /// 在途 persist 的身份；store 只允许一次在途，不匹配结果按此判迟到。
   final OperationId? pendingOperationId;
 
   /// 在途提交的完整值。
   ///
-  /// **串行链的基线**：后续修改基于它 `copyWith`，等价于现有 controller 的
-  /// 串行队列——否则 persist-first 下第二次快速修改会基于未应用旧值计算，
-  /// 丢掉第一次的改动。
+  /// 后续命令由 store 排队，只在本次成功/失败后从新的已应用值计算。
   final GeneralSettings? pendingValue;
 
   /// 在途提交对应的命令类别。

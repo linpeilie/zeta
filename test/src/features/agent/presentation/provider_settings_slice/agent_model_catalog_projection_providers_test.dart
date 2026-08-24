@@ -21,6 +21,35 @@ const _query = AgentModelCatalogQuery(
 
 void main() {
   group('Agent model catalog Riverpod projection', () {
+    test('missing composition overrides fail closed', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      expect(
+        () => container.read(agentProviderSettingsSliceStoreProvider),
+        throwsA(
+          isA<Exception>().having(
+            (error) => error.toString(),
+            'provider error',
+            contains('Bad state: Provider settings slice is not installed'),
+          ),
+        ),
+      );
+      expect(
+        () => container.read(agentModelCatalogProjectionSourceProvider),
+        throwsA(
+          isA<Exception>().having(
+            (error) => error.toString(),
+            'provider error',
+            contains(
+              'Bad state: Agent model catalog projection source is not '
+              'installed',
+            ),
+          ),
+        ),
+      );
+    });
+
     test('resolves active and visibility-specific safe query keys', () {
       final source = _FakeProjectionSource();
       final container = _container(source);
@@ -148,6 +177,31 @@ void main() {
       );
     });
 
+    test('unknown provider rejection remains a typed invalid query', () async {
+      final source = _FakeProjectionSource()
+        ..handlers.add((query, forceRefresh, onCacheHit) async {
+          throw const AgentModelCatalogQueryRejected(
+            providerId: 'missing-provider',
+            reason: AgentModelCatalogQueryRejectionReason.unknownProvider,
+          );
+        });
+      final container = _container(source);
+
+      final projection = await container.read(
+        agentModelCatalogProjectionProvider(_query).future,
+      );
+
+      expect(projection.hasCatalog, isFalse);
+      expect(
+        projection.failure,
+        AgentModelCatalogProjectionFailureKind.invalidQuery,
+      );
+      expect(
+        container.read(agentModelCatalogProjectionProvider(_query)).hasError,
+        isFalse,
+      );
+    });
+
     test(
       'explicit refresh keeps prior data and forwards forceRefresh',
       () async {
@@ -245,23 +299,6 @@ void main() {
         'second',
       );
     });
-
-    test(
-      'flag-off source stays unavailable without starting a query',
-      () async {
-        final container = ProviderContainer();
-        addTearDown(container.dispose);
-
-        expect(container.read(activeAgentModelCatalogQueryProvider), isNull);
-        final projection = await container.read(
-          agentModelCatalogProjectionProvider(_query).future,
-        );
-        expect(
-          projection.failure,
-          AgentModelCatalogProjectionFailureKind.sourceUnavailable,
-        );
-      },
-    );
   });
 }
 
@@ -307,13 +344,18 @@ ProviderContainer _container(
   AgentProviderSettingsSliceStore? settingsStore,
   AgentProviderSettings settings = builtInAgentProviderSettings,
 }) {
+  final resolvedSettingsStore =
+      settingsStore ??
+      _settingsStore(_ManualSettingsRunner(), settings: settings);
+  if (settingsStore == null) {
+    addTearDown(resolvedSettingsStore.close);
+  }
   final container = ProviderContainer(
     overrides: [
       agentModelCatalogProjectionSourceProvider.overrideWithValue(source),
-      if (settingsStore != null)
-        agentProviderSettingsSliceStoreProvider.overrideWithValue(settingsStore)
-      else
-        agentProviderSettingsValueProvider.overrideWithValue(settings),
+      agentProviderSettingsSliceStoreProvider.overrideWithValue(
+        resolvedSettingsStore,
+      ),
     ],
   );
   addTearDown(container.dispose);
@@ -321,10 +363,11 @@ ProviderContainer _container(
 }
 
 AgentProviderSettingsSliceStore _settingsStore(
-  AgentProviderSettingsSliceEffectRunner runner,
-) {
+  AgentProviderSettingsSliceEffectRunner runner, {
+  AgentProviderSettings settings = const AgentProviderSettings(),
+}) {
   return AgentProviderSettingsSliceStore(
-    initialState: const AgentProviderSettingsSliceState(),
+    initialState: AgentProviderSettingsSliceState(settings: settings),
     effectRunner: runner,
     modelCatalogRepository: AgentModelCatalogRepository(
       store: MemoryAgentModelCatalogCacheStore(),

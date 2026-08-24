@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_runner.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
@@ -20,7 +21,9 @@ final class AgentManagementSliceComposition {
     required this._runtimeListenable,
     required this._runtimeSnapshotProvider,
   }) {
-    _providerSettings.addListener(_handleProviderSettingsChanged);
+    _unsubscribeProviderSettings = _providerSettings.subscribe(
+      _handleProviderSettingsChanged,
+    );
     _runtimeListenable.addListener(_handleRuntimeChanged);
   }
 
@@ -28,6 +31,7 @@ final class AgentManagementSliceComposition {
   final AgentProviderSettingsPort _providerSettings;
   final Listenable _runtimeListenable;
   final AgentManagementRuntimeSnapshotProvider _runtimeSnapshotProvider;
+  late final void Function() _unsubscribeProviderSettings;
   bool _closed = false;
 
   factory AgentManagementSliceComposition.create({
@@ -78,6 +82,8 @@ final class AgentManagementSliceComposition {
       initialState: initialState,
       effectRunner: deferredRunner,
       configurationNotLoadedMessage: textCatalog.configurationNotLoaded(),
+      accountDataEnrichmentEnabledFor: (config) =>
+          config.extra[claudeCodeAccountDataEnrichmentKey] != false,
     );
     deferredRunner.delegate = AgentManagementSliceRunnerAdapter(
       repositories: repositories,
@@ -99,7 +105,7 @@ final class AgentManagementSliceComposition {
       return;
     }
     _closed = true;
-    _providerSettings.removeListener(_handleProviderSettingsChanged);
+    _unsubscribeProviderSettings();
     _runtimeListenable.removeListener(_handleRuntimeChanged);
     store.close();
   }

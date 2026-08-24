@@ -32,6 +32,40 @@ class _AgentContextPanelState extends State<_AgentContextPanel> {
 
   /// 默认开启：隐藏工具调用、审批、系统事件等非主对话条目。
   bool _filterNonChatMessages = true;
+  late void Function() _unsubscribeProviderSettings;
+
+  @override
+  void initState() {
+    super.initState();
+    _subscribeProviderSettings();
+  }
+
+  @override
+  void didUpdateWidget(covariant _AgentContextPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(
+      oldWidget.viewModel.providerController,
+      widget.viewModel.providerController,
+    )) {
+      _unsubscribeProviderSettings();
+      _subscribeProviderSettings();
+    }
+  }
+
+  void _subscribeProviderSettings() {
+    _unsubscribeProviderSettings = widget.viewModel.providerController
+        .subscribe(() {
+          if (mounted) {
+            setState(() {});
+          }
+        });
+  }
+
+  @override
+  void dispose() {
+    _unsubscribeProviderSettings();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -52,8 +86,8 @@ class _AgentContextPanelState extends State<_AgentContextPanel> {
                   // thread 快照与 Provider 目录不属于 region，仍走 listenable。
                   listenable: Listenable.merge(<Listenable>[
                     viewModel.threadSnapshotListenable,
-                    viewModel.providerController,
-                    ?liveTurnState,
+                    if (liveTurnState != null)
+                      AgentFlutterListenableAdapter(liveTurnState),
                   ]),
                   builder: (context, _) {
                     final colors = IdeColors.of(context);

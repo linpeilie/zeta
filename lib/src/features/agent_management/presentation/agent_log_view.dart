@@ -14,13 +14,11 @@ import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 class AgentLogView extends StatefulWidget {
   const AgentLogView({
     required this.operations,
-    required this.listenable,
     required this.onBack,
     super.key,
   });
 
   final AgentManagementOperations operations;
-  final Listenable listenable;
   final VoidCallback onBack;
 
   @override
@@ -50,168 +48,159 @@ class _AgentLogViewState extends State<AgentLogView> {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    return ListenableBuilder(
-      listenable: widget.listenable,
-      builder: (context, _) {
-        final entries = _filteredEntries(widget.operations.logs);
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Container(
-              padding: IdeSpacing.all12,
-              decoration: BoxDecoration(
-                border: Border(bottom: BorderSide(color: colors.borderSubtle)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+    final entries = _filteredEntries(widget.operations.logs);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: IdeSpacing.all12,
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: colors.borderSubtle)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
                 children: [
-                  Row(
-                    children: [
-                      sf.IconButton.ghost(
-                        key: const ValueKey('agent-log-back-button'),
-                        onPressed: widget.onBack,
-                        size: sf.ButtonSize.small,
-                        density: sf.ButtonDensity.iconDense,
-                        icon: const Icon(Icons.arrow_back_rounded, size: 18),
-                      ),
-                      const SizedBox(width: IdeSpacing.space8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              context.l10n.mgmtRuntimeLogsTitle(
-                                widget.operations.agent.definition.displayName,
-                              ),
-                              style: textStyles.pageTitle,
-                            ),
-                            Text(
-                              context.l10n.mgmtLogSourcesLoaded(
-                                '${widget.operations.agent.logPaths.length}',
-                                '${widget.operations.logs.length}',
-                              ),
-                              style: textStyles.caption.copyWith(
-                                color: colors.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      sf.OutlineButton(
-                        onPressed: widget.operations.loadingLogs
-                            ? null
-                            : widget.operations.loadLogs,
-                        size: sf.ButtonSize.small,
-                        child: Text(
-                          widget.operations.loadingLogs
-                              ? context.l10n.mgmtRefreshing
-                              : context.l10n.mgmtRefresh,
-                        ),
-                      ),
-                      const SizedBox(width: IdeSpacing.space8),
-                      sf.OutlineButton(
-                        onPressed: entries.isEmpty
-                            ? null
-                            : () => _copy(entries),
-                        size: sf.ButtonSize.small,
-                        child: Text(context.l10n.mgmtCopyLogs),
-                      ),
-                    ],
+                  sf.IconButton.ghost(
+                    key: const ValueKey('agent-log-back-button'),
+                    onPressed: widget.onBack,
+                    size: sf.ButtonSize.small,
+                    density: sf.ButtonDensity.iconDense,
+                    icon: const Icon(Icons.arrow_back_rounded, size: 18),
                   ),
-                  const SizedBox(height: IdeSpacing.space12),
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final search = sf.TextField(
-                        key: const ValueKey('agent-log-search'),
-                        controller: _searchController,
-                        placeholder: Text(context.l10n.mgmtSearchLogKeywords),
-                        features: const <sf.InputFeature>[
-                          sf.InputFeature.leading(
-                            Icon(Icons.search_rounded, size: 18),
+                  const SizedBox(width: IdeSpacing.space8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          context.l10n.mgmtRuntimeLogsTitle(
+                            widget.operations.agent.definition.displayName,
                           ),
-                        ],
-                      );
-                      final filters = IdeTabs<AgentLogLevel?>(
-                        value: _level,
-                        semanticLabel: context.l10n.mgmtLogLevel,
-                        items: [
-                          IdeTabItem<AgentLogLevel?>(
-                            value: null,
-                            label: context.l10n.mgmtAll,
+                          style: textStyles.pageTitle,
+                        ),
+                        Text(
+                          context.l10n.mgmtLogSourcesLoaded(
+                            '${widget.operations.agent.logPaths.length}',
+                            '${widget.operations.logs.length}',
                           ),
-                          IdeTabItem<AgentLogLevel?>(
-                            value: AgentLogLevel.debug,
-                            label: 'Debug',
+                          style: textStyles.caption.copyWith(
+                            color: colors.textSecondary,
                           ),
-                          IdeTabItem<AgentLogLevel?>(
-                            value: AgentLogLevel.info,
-                            label: 'Info',
-                          ),
-                          IdeTabItem<AgentLogLevel?>(
-                            value: AgentLogLevel.warning,
-                            label: 'Warning',
-                          ),
-                          IdeTabItem<AgentLogLevel?>(
-                            value: AgentLogLevel.error,
-                            label: 'Error',
-                          ),
-                        ],
-                        onChanged: (value) {
-                          setState(() {
-                            _level = value;
-                          });
-                        },
-                      );
-                      if (constraints.maxWidth < 720) {
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            search,
-                            const SizedBox(height: IdeSpacing.space8),
-                            filters,
-                          ],
-                        );
-                      }
-                      return Row(
-                        children: [
-                          Expanded(child: search),
-                          const SizedBox(width: IdeSpacing.space12),
-                          Flexible(child: filters),
-                        ],
-                      );
-                    },
+                        ),
+                      ],
+                    ),
+                  ),
+                  sf.OutlineButton(
+                    onPressed: widget.operations.loadingLogs
+                        ? null
+                        : widget.operations.loadLogs,
+                    size: sf.ButtonSize.small,
+                    child: Text(
+                      widget.operations.loadingLogs
+                          ? context.l10n.mgmtRefreshing
+                          : context.l10n.mgmtRefresh,
+                    ),
+                  ),
+                  const SizedBox(width: IdeSpacing.space8),
+                  sf.OutlineButton(
+                    onPressed: entries.isEmpty ? null : () => _copy(entries),
+                    size: sf.ButtonSize.small,
+                    child: Text(context.l10n.mgmtCopyLogs),
                   ),
                 ],
               ),
-            ),
-            Expanded(
-              child:
-                  widget.operations.loadingLogs &&
-                      widget.operations.logs.isEmpty
-                  ? Center(
-                      child: IdeLoadingIndicator(
-                        width: 32,
-                        height: 14,
-                        semanticsLabel: context.l10n.mgmtReadingLogs,
+              const SizedBox(height: IdeSpacing.space12),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final search = sf.TextField(
+                    key: const ValueKey('agent-log-search'),
+                    controller: _searchController,
+                    placeholder: Text(context.l10n.mgmtSearchLogKeywords),
+                    features: const <sf.InputFeature>[
+                      sf.InputFeature.leading(
+                        Icon(Icons.search_rounded, size: 18),
                       ),
-                    )
-                  : entries.isEmpty
-                  ? EmptyState(text: context.l10n.mgmtNoMatchingLogs)
-                  : ListView.builder(
-                      key: const ValueKey('agent-log-list'),
-                      padding: IdeSpacing.all12,
-                      itemCount: entries.length,
-                      itemBuilder: (context, index) {
-                        return _LogRow(
-                          key: ValueKey<String>(entries[index].id),
-                          entry: entries[index],
-                        );
-                      },
-                    ),
-            ),
-          ],
-        );
-      },
+                    ],
+                  );
+                  final filters = IdeTabs<AgentLogLevel?>(
+                    value: _level,
+                    semanticLabel: context.l10n.mgmtLogLevel,
+                    items: [
+                      IdeTabItem<AgentLogLevel?>(
+                        value: null,
+                        label: context.l10n.mgmtAll,
+                      ),
+                      IdeTabItem<AgentLogLevel?>(
+                        value: AgentLogLevel.debug,
+                        label: 'Debug',
+                      ),
+                      IdeTabItem<AgentLogLevel?>(
+                        value: AgentLogLevel.info,
+                        label: 'Info',
+                      ),
+                      IdeTabItem<AgentLogLevel?>(
+                        value: AgentLogLevel.warning,
+                        label: 'Warning',
+                      ),
+                      IdeTabItem<AgentLogLevel?>(
+                        value: AgentLogLevel.error,
+                        label: 'Error',
+                      ),
+                    ],
+                    onChanged: (value) {
+                      setState(() {
+                        _level = value;
+                      });
+                    },
+                  );
+                  if (constraints.maxWidth < 720) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        search,
+                        const SizedBox(height: IdeSpacing.space8),
+                        filters,
+                      ],
+                    );
+                  }
+                  return Row(
+                    children: [
+                      Expanded(child: search),
+                      const SizedBox(width: IdeSpacing.space12),
+                      Flexible(child: filters),
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: widget.operations.loadingLogs && widget.operations.logs.isEmpty
+              ? Center(
+                  child: IdeLoadingIndicator(
+                    width: 32,
+                    height: 14,
+                    semanticsLabel: context.l10n.mgmtReadingLogs,
+                  ),
+                )
+              : entries.isEmpty
+              ? EmptyState(text: context.l10n.mgmtNoMatchingLogs)
+              : ListView.builder(
+                  key: const ValueKey('agent-log-list'),
+                  padding: IdeSpacing.all12,
+                  itemCount: entries.length,
+                  itemBuilder: (context, index) {
+                    return _LogRow(
+                      key: ValueKey<String>(entries[index].id),
+                      entry: entries[index],
+                    );
+                  },
+                ),
+        ),
+      ],
     );
   }
 

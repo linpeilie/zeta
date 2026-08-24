@@ -23,7 +23,7 @@ import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta_ui/zeta_ui.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
+import '../../../testing/provider_settings_test_store.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_binding.dart';
@@ -1366,7 +1366,7 @@ void main() {
         providerFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
       );
       addTearDown(registry.close);
-      final controller = AgentProviderSettingsController(
+      final controller = createProviderSettingsTestStore(
         runtimeRegistry: registry,
         configStore: MemoryAgentProviderConfigStore(),
       );
@@ -1451,7 +1451,7 @@ void main() {
       providerFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
     );
     addTearDown(registry.close);
-    final controller = AgentProviderSettingsController(
+    final controller = createProviderSettingsTestStore(
       runtimeRegistry: registry,
       configStore: MemoryAgentProviderConfigStore(),
     );
@@ -1666,7 +1666,7 @@ void main() {
       providerFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
     );
     addTearDown(registry.close);
-    final controller = AgentProviderSettingsController(
+    final controller = createProviderSettingsTestStore(
       runtimeRegistry: registry,
       configStore: MemoryAgentProviderConfigStore(),
     );
@@ -1983,7 +1983,7 @@ void main() {
       providerFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
     );
     addTearDown(registry.close);
-    final controller = AgentProviderSettingsController(
+    final controller = createProviderSettingsTestStore(
       runtimeRegistry: registry,
       configStore: MemoryAgentProviderConfigStore(),
     );

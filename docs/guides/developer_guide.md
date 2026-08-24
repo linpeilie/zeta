@@ -219,7 +219,9 @@ windows/
 - 优先使用 `const` 和不可变 widget。
 - UI 状态简单时使用 Flutter 内建机制，例如 `StatefulWidget`、`ChangeNotifier`、`ValueListenableBuilder`。
 - 复杂状态按“不可变 domain state + application controller + presentation view model/listenable signal”拆分。
-- `flutter_riverpod` 已引入（`pubspec.yaml` + `lib/main.dart` 根节点 `ProviderScope`），但仅是接入点，尚未替代上述 `ChangeNotifier` 基线，现有 controller 不需要迁移。新代码是否采用 Riverpod 见 `AGENTS.md` §3；采用时 `Provider`/`Notifier` 仍要落在对应 feature 的 `application` 层，不得让 `domain` import `riverpod`。
+- `flutter_riverpod` 只镜像纯 Dart slice store，不拥有业务状态。新代码是否增加 Riverpod
+  投影见 `AGENTS.md` §3；`Provider`/`Notifier` 只能落在 presentation 或 `app` 组合层，
+  `application` / `domain` 不得 import `riverpod`。
 - 对可能被后续请求覆盖的异步流程使用 token 或版本号隔离旧结果。
 - 对外暴露集合时优先返回不可变集合或 unmodifiable view。
 - 公共 API 添加 `///` 文档。

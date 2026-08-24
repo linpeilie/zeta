@@ -11,7 +11,7 @@ import 'package:zeta/src/features/project_threads/application/project_threads_sl
 import 'package:zeta/src/features/project_threads/application/project_threads_slice/project_threads_slice_store.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
 import 'package:zeta/src/features/project_threads/domain/project_threads_session_snapshot.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
+import '../../../testing/provider_settings_test_store.dart';
 
 import '../../../testing/agent_provider_stub_base.dart';
 import '../../../testing/legacy_bundle_factory_mixin.dart';
@@ -1087,7 +1087,7 @@ void main() {
       final registry = AgentProviderRuntimeRegistry(
         providerFactory: _FakeAgentProviderFactory(provider),
       );
-      final providerController = AgentProviderSettingsController(
+      final providerController = createProviderSettingsTestStore(
         runtimeRegistry: registry,
         configStore: MemoryAgentProviderConfigStore(
           AgentProviderSettings(
@@ -1140,7 +1140,7 @@ void main() {
       final registry = AgentProviderRuntimeRegistry(
         providerFactory: _FakeAgentProviderFactory(provider),
       );
-      final providerController = AgentProviderSettingsController(
+      final providerController = createProviderSettingsTestStore(
         runtimeRegistry: registry,
         configStore: MemoryAgentProviderConfigStore(
           AgentProviderSettings(
@@ -1227,7 +1227,7 @@ ProjectThreadsController _createController(
   final registry = AgentProviderRuntimeRegistry(
     providerFactory: _FakeAgentProviderFactory(provider),
   );
-  final providerController = AgentProviderSettingsController(
+  final providerController = createProviderSettingsTestStore(
     runtimeRegistry: registry,
     configStore: MemoryAgentProviderConfigStore(
       AgentProviderSettings(
@@ -1262,7 +1262,7 @@ ProjectThreadsController _createMultiProviderController({
       createdProviderIds: createdProviderIds,
     ),
   );
-  final providerController = AgentProviderSettingsController(
+  final providerController = createProviderSettingsTestStore(
     runtimeRegistry: registry,
     configStore: MemoryAgentProviderConfigStore(
       AgentProviderSettings(

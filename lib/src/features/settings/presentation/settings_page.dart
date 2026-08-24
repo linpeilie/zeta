@@ -5,23 +5,17 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta/src/features/settings/application/appearance_font_option.dart';
-import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
-import 'package:zeta/src/features/settings/application/general_settings_controller.dart';
-import 'package:zeta/src/features/settings/application/general_settings_update_result.dart';
 import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/presentation/appearance_theme_mode_mapper.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
-import 'package:zeta/src/features/agent_management/application/agent_management_controller.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_store.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_management_page.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_state.dart';
-import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_store.dart';
 import 'package:zeta/src/features/settings/presentation/settings_slice/settings_slice_providers.dart';
-import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_mapping.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_state.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_store.dart';
 
@@ -50,18 +44,12 @@ IdeSettingsRow _flatSettingsRow({
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
     required this.activeSection,
-    required this.appearanceController,
-    required this.generalSettingsController,
     required this.onSectionSelected,
-    this.agentManagementController,
     this.agentManagementSliceStore,
     super.key,
   });
 
   final SettingsSection activeSection;
-  final AppearanceSettingsController appearanceController;
-  final GeneralSettingsController generalSettingsController;
-  final AgentManagementController? agentManagementController;
   final AgentManagementSliceStore? agentManagementSliceStore;
   final ValueChanged<SettingsSection> onSectionSelected;
 
@@ -84,9 +72,7 @@ class _SettingsPageState extends State<SettingsPage> {
           width: _navigationWidth,
           child: SettingsNavigationPane(
             activeSection: widget.activeSection,
-            showAgentManagement:
-                widget.agentManagementController != null ||
-                widget.agentManagementSliceStore != null,
+            showAgentManagement: widget.agentManagementSliceStore != null,
             onSectionSelected: (section) {
               unawaited(_handleSectionSelected(section));
             },
@@ -97,9 +83,6 @@ class _SettingsPageState extends State<SettingsPage> {
           child: SettingsPageCanvas(
             key: _canvasKey,
             activeSection: widget.activeSection,
-            appearanceController: widget.appearanceController,
-            generalSettingsController: widget.generalSettingsController,
-            agentManagementController: widget.agentManagementController,
             agentManagementSliceStore: widget.agentManagementSliceStore,
           ),
         ),
@@ -179,17 +162,11 @@ class SettingsNavigationPane extends StatelessWidget {
 class SettingsPageCanvas extends StatefulWidget {
   const SettingsPageCanvas({
     required this.activeSection,
-    required this.appearanceController,
-    required this.generalSettingsController,
-    required this.agentManagementController,
     this.agentManagementSliceStore,
     super.key,
   });
 
   final SettingsSection activeSection;
-  final AppearanceSettingsController appearanceController;
-  final GeneralSettingsController generalSettingsController;
-  final AgentManagementController? agentManagementController;
   final AgentManagementSliceStore? agentManagementSliceStore;
 
   @override
@@ -212,31 +189,22 @@ class SettingsPageCanvasState extends State<SettingsPageCanvas> {
   @override
   Widget build(BuildContext context) {
     return switch (widget.activeSection) {
-      SettingsSection.general => _GeneralSettingsPane(
-        generalSettingsController: widget.generalSettingsController,
-      ),
-      SettingsSection.appearance => _AppearanceSettingsPane(
-        appearanceController: widget.appearanceController,
-      ),
+      SettingsSection.general => const _GeneralSettingsPane(),
+      SettingsSection.appearance => const _AppearanceSettingsPane(),
       SettingsSection.agents =>
-        widget.agentManagementController == null &&
-                widget.agentManagementSliceStore == null
+        widget.agentManagementSliceStore == null
             ? IdeSurface.canvas(
                 child: EmptyState(text: context.l10n.settingsAgentsUnavailable),
               )
             : AgentManagementPage(
                 key: _agentManagementKey,
-                controller: widget.agentManagementController,
-                sliceStore: widget.agentManagementSliceStore,
+                sliceStore: widget.agentManagementSliceStore!,
               ),
     };
   }
 }
 
 /// general 设置面板的写操作集。
-///
-/// 新旧两条路径各提供一份实现，**body 只有一份**——复制 180 行 widget 代码去做
-/// 双路径是这类迁移最容易埋 bug 的地方（改一边忘一边）。
 typedef _GeneralSettingsWriteOps = ({
   void Function(AppLanguage language) setAppLanguage,
   void Function(MessageSendShortcut shortcut) setMessageSendShortcut,
@@ -246,9 +214,7 @@ typedef _GeneralSettingsWriteOps = ({
 });
 
 class _GeneralSettingsPane extends ConsumerStatefulWidget {
-  const _GeneralSettingsPane({required this.generalSettingsController});
-
-  final GeneralSettingsController generalSettingsController;
+  const _GeneralSettingsPane();
 
   @override
   ConsumerState<_GeneralSettingsPane> createState() =>
@@ -256,17 +222,6 @@ class _GeneralSettingsPane extends ConsumerStatefulWidget {
 }
 
 class _GeneralSettingsPaneState extends ConsumerState<_GeneralSettingsPane> {
-  /// 旧路径：`setAppLanguage` 直接返回结果，失败就地弹 toast。
-  Future<void> _setAppLanguageLegacy(AppLanguage language) async {
-    final result = await widget.generalSettingsController.setAppLanguage(
-      language,
-    );
-    if (!mounted || result != GeneralSettingsUpdateResult.persistenceFailed) {
-      return;
-    }
-    _showLanguageSaveFailedToast();
-  }
-
   void _showLanguageSaveFailedToast() {
     showIdeToast(
       context,
@@ -279,46 +234,8 @@ class _GeneralSettingsPaneState extends ConsumerState<_GeneralSettingsPane> {
   @override
   Widget build(BuildContext context) {
     final store = ref.watch(generalSettingsSliceStoreProvider);
-    if (store == null) {
-      return _buildLegacy(context);
-    }
-    return _buildSlice(context, store);
-  }
-
-  Widget _buildLegacy(BuildContext context) {
-    return IdeSurface.canvas(
-      key: const ValueKey('settings-detail-panel'),
-      child: ValueListenableBuilder<GeneralSettings>(
-        valueListenable: widget.generalSettingsController.listenable,
-        builder: (context, settings, _) => _generalSettingsBody(
-          context: context,
-          settings: settings,
-          ops: (
-            setAppLanguage: (language) =>
-                unawaited(_setAppLanguageLegacy(language)),
-            setMessageSendShortcut: (shortcut) => unawaited(
-              widget.generalSettingsController.setMessageSendShortcut(shortcut),
-            ),
-            setNotificationsEnabled: (enabled) => unawaited(
-              widget.generalSettingsController.setNotificationsEnabled(enabled),
-            ),
-            setTurnTerminalNotificationsEnabled: (enabled) => unawaited(
-              widget.generalSettingsController
-                  .setTurnTerminalNotificationsEnabled(enabled),
-            ),
-            setActionRequiredNotificationsEnabled: (enabled) => unawaited(
-              widget.generalSettingsController
-                  .setActionRequiredNotificationsEnabled(enabled),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSlice(BuildContext context, GeneralSettingsSliceStore store) {
     // 语言保存失败的 toast：只认 language 这一类失败，其余失败保持静默
-    // （与旧路径一致——快捷键/通知开关失败本来就不弹）。
+    // （快捷键/通知开关失败保持静默）。
     ref.listen(
       generalSettingsSliceProvider.select((state) => state.lastPersistFailure),
       (previous, next) {
@@ -351,7 +268,7 @@ class _GeneralSettingsPaneState extends ConsumerState<_GeneralSettingsPane> {
   }
 }
 
-/// general 设置面板正文；新旧路径共用。
+/// general 设置面板正文。
 Widget _generalSettingsBody({
   required BuildContext context,
   required GeneralSettings settings,
@@ -537,9 +454,7 @@ typedef _AppearanceWriteOps = ({
 });
 
 class _AppearanceSettingsPane extends ConsumerStatefulWidget {
-  const _AppearanceSettingsPane({required this.appearanceController});
-
-  final AppearanceSettingsController appearanceController;
+  const _AppearanceSettingsPane();
 
   @override
   ConsumerState<_AppearanceSettingsPane> createState() =>
@@ -548,7 +463,7 @@ class _AppearanceSettingsPane extends ConsumerStatefulWidget {
 
 class _AppearanceSettingsPaneState
     extends ConsumerState<_AppearanceSettingsPane> {
-  /// 缓存的写操作集与它所属的来源身份（切片 store 或旧 controller）。
+  /// 缓存的写操作集与它所属的 store 身份。
   Object? _opsOwner;
   _AppearanceWriteOps? _ops;
 
@@ -566,40 +481,7 @@ class _AppearanceSettingsPaneState
   @override
   Widget build(BuildContext context) {
     final store = ref.watch(appearanceSettingsSliceStoreProvider);
-    if (store == null) {
-      return _buildLegacy(context);
-    }
     return _buildSlice(context, store);
-  }
-
-  Widget _buildLegacy(BuildContext context) {
-    final controller = widget.appearanceController;
-    final ops = _opsFor(
-      controller,
-      () => (
-        setThemeMode: (mode) => unawaited(controller.setThemeMode(mode)),
-        setUiFontSize: (value) => unawaited(controller.setUiFontSize(value)),
-        setCodeFontSize: (value) =>
-            unawaited(controller.setCodeFontSize(value)),
-        loadUiFontChoices: controller.loadUiFontChoices,
-        loadCodeFontChoices: controller.loadCodeFontChoices,
-        setUiFontChoice: controller.setUiFontChoice,
-        setCodeFontChoice: controller.setCodeFontChoice,
-        displayNameFor: controller.displayNameFor,
-      ),
-    );
-    return IdeSurface.canvas(
-      key: const ValueKey('settings-detail-panel'),
-      child: ValueListenableBuilder<AppearanceSettings>(
-        valueListenable: controller.listenable,
-        builder: (context, settings, _) => _appearanceSettingsBody(
-          context: context,
-          settings: appearanceSliceFromSettings(settings),
-          tabs: _tabs(context),
-          ops: ops,
-        ),
-      ),
-    );
   }
 
   Widget _buildSlice(BuildContext context, AppearanceSettingsSliceStore store) {
@@ -667,7 +549,7 @@ class _AppearanceSettingsPaneState
   /// 派发字体选择并等这次操作收口。
   ///
   /// 成功的判据是**值真的变了**：被拒绝时切片会回滚到原值，行据此弹错误 toast，
-  /// 与旧路径的 `Future<bool>` 语义一致。行级 `_updating` 已保证单飞。
+  /// 行级 `_updating` 已保证单飞。
   Future<bool> _selectFontChoice(
     AppearanceSettingsSliceStore store,
     AppearanceFontChoice choice, {
@@ -745,8 +627,7 @@ class _AppearanceSettingsPaneState
   }
 }
 
-/// appearance 设置面板正文；新旧路径共用，值类型统一为切片的
-/// [AppearanceSettingsSlice]（旧路径经 `appearanceSliceFromSettings` 转换）。
+/// appearance 设置面板正文。
 Widget _appearanceSettingsBody({
   required BuildContext context,
   required AppearanceSettingsSlice settings,

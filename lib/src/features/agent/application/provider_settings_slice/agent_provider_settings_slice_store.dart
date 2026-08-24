@@ -16,8 +16,8 @@ abstract interface class AgentProviderSettingsSliceEffectRunner {
 
 /// Provider settings 的纯 Dart MVI store。
 ///
-/// 迁移期继续实现稳定 [AgentProviderSettingsPort]，让 application 消费方能在
-/// 全局 flag 下原子切换；Riverpod 只通过 [subscribe] 镜像本 store。
+/// 同时实现稳定的纯 Dart [AgentProviderSettingsPort]；Riverpod 只通过
+/// [subscribe] 镜像本 store，不复制业务事实。
 final class AgentProviderSettingsSliceStore
     implements AgentProviderSettingsPort {
   AgentProviderSettingsSliceStore({
@@ -101,16 +101,11 @@ final class AgentProviderSettingsSliceStore
   String modelCatalogSourceFor(AgentProviderConfig config) =>
       _modelCatalogSourceFor(config);
 
-  /// `Listenable` 兼容入口；不依赖 Flutter 的 `ChangeNotifier`。
   @override
-  void addListener(void Function() listener) => _listeners.add(listener);
-
-  @override
-  void removeListener(void Function() listener) => _listeners.remove(listener);
-
   void Function() subscribe(void Function() listener) {
-    addListener(listener);
-    return () => removeListener(listener);
+    _ensureOpen();
+    _listeners.add(listener);
+    return () => _listeners.remove(listener);
   }
 
   @override
@@ -308,22 +303,12 @@ final class AgentProviderSettingsSliceStore
     final transition = agentProviderSettingsSliceReduce(before, intent);
     if (transition.state != before) {
       _state = transition.state;
-      if (_publishesCompatibilitySnapshot(intent)) {
-        _notifyListeners();
-      }
+      _notifyListeners();
     }
     for (final effect in transition.effects) {
       effectRunner.run(effect);
     }
     return transition.effects.isNotEmpty;
-  }
-
-  /// 旧 controller 只在 IO 回执后 notify；迁移期保持相同发布边界。
-  bool _publishesCompatibilitySnapshot(
-    AgentProviderSettingsSliceIntent intent,
-  ) {
-    return intent is ProviderSettingsLoaded ||
-        intent is ProviderSettingsPersisted;
   }
 
   OperationId _nextOperationId(String scope) {

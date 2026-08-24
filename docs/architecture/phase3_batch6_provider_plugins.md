@@ -139,7 +139,7 @@ feature slice 与 runtime registry 持有。
 - `dart format .`、`flutter analyze`、`bash tool/test_affected.sh`、`bash tool/test_full.sh`。
 
 2026-08-24 实际验收结果：`dart format .` 零改动，`flutter analyze` 零问题；
-`tool/test_affected.sh` 与 `tool/test_full.sh` 均通过根测试 2383 条及全部内部 Package
+第 6 批提交时，`tool/test_affected.sh` 与 `tool/test_full.sh` 均通过根测试 2383 条及全部内部 Package
 analyze/test。独立复审没有剩余 P1/P2。
 
 门禁过程还捕获并修复了一个开放 core 默认值带来的启动边界：模型目录查询源先于 Provider
@@ -160,23 +160,22 @@ settings 装载时，投影现在返回不可用而不是读取空目录的 acti
 
 ## 10. Phase 3 / Phase 4 关系
 
-本批关批只清算第 6 批与 Phase 1 §8.1。2026-08-24 复核结论：**Phase 3 尚未全部
-结束，当前不能进入 Phase 4**。
+第 6 批完成后又按明确要求修复原审计阻塞 1、3、4。2026-08-24 最新复核结论：
+**六批代码均已关批，但 Phase 3 阶段证据尚未全部完成，当前仍不能进入 Phase 4**。
 
 | 阶段门禁 | 状态 | 当前证据 / 下一动作 |
 | --- | --- | --- |
 | 第 6 批 + Phase 1 §8.1 | ✅ | 三插件、开放 type、零 compatibility/default factory/core 内置目录 |
-| 第 1 批关批 | ❌ | 仍在至少 3 天翻旗观察，文档最早关批日为 2026-08-26；之后还要删除两个旧 controller、flag/ingress 与对应燃尽项 |
-| 第 2 批关批 | ❌ | 仍在至少 7 天翻旗观察，文档最早关批日为 2026-08-30；之后还要删除 settings/management 旧 controller、flag/false-path 与对应燃尽项 |
+| 第 1 批关批 | ✅ | 用户明确接受不等待原定日期；两个 settings controller、ingress、flag 与 false-path 已删除，固定为 slice 单一路径 |
+| 第 2 批关批 | ✅ | 用户明确接受不等待原定日期；settings/management 旧 controller、Flutter Listenable port、flag 与 false-path 已删除 |
 | Phase 2 长时间真实使用证据 | ❌ | [Phase 3 §0](phase3_slice_expansion.md) 要求从 2026-08-23 起连续 14 天，最早约 2026-09-06；期间若发生需修复的 slice bug 要按规则重新计时 |
-| application Flutter 燃尽 | ❌ | `feature_layering_guard_test` 仍列 5 个第 1/2 批旧 controller/port 例外 |
-| 开放目录跨层贯通 | ❌ | 第 2 批旧 settings/management application 仍直接消费 `zeta_agent_providers` 的内置 identity/Claude 配置 key；第 6 批已清空 core 集中目录，但新增 Provider 的理想改动面要等第 2 批关批时把这些映射收回 data/app 组合 |
-| root snapshot 必选关系 | ❌ | settings/provider/management 节点仍因第 1/2 批双路径而 nullable，关批后才能收紧 |
-| `zeta_agent_core` 纯 Dart | ❌ | 当前仍有 11 个 `package:flutter/*` 源文件，架构守卫历史上限仍为 17；目标为 0 |
-| Phase 4 发布/平台证据 | ❌ | 旧格式迁移窗口结束、可构建回退 tag/分支、三桌面平台构建与真实 Codex/Grok/Claude 冒烟尚未形成同一目标态证据；Phase 1 与第 5 批文档仍有“待执行”项 |
-| 性能与完整门禁 | ⏳ | 本批自动化门禁在 §8/工作流记录；Phase 4 前仍需最终目标态的 Profile 与真实 CLI 证据 |
+| application Flutter 燃尽 | ✅ | `knownApplicationFlutterImports` 已从 5 清零，application 层 Flutter import 现在零容忍 |
+| 开放目录跨层贯通 | ✅ | application/domain 对 `zeta_agent_providers` 的 import 已清零并新增守卫；厂商 identity/extra-key/指标标签映射留在 data/app 组合层；Provider settings/模型目录根接线均 non-null、缺失时 fail-closed |
+| root snapshot 必选关系 | ✅ | appearance/general/provider settings 与 agent management 四个节点均为 required 非空投影 |
+| `zeta_agent_core` 纯 Dart | ✅ | 11 个 Flutter import 与 manifest 的 Flutter SDK/flutter_test 依赖清零；纯 Dart listenable + presentation adapter 替代，守卫改为零容忍 |
+| Phase 4 发布/平台证据 | ❌ | 旧格式迁移窗口结束、可构建回退 tag/分支、三桌面平台构建与真实 Codex/Grok/Claude 冒烟尚未形成同一目标态证据；Phase 1 仍明列三平台构建待执行，第 5 批也明确没有用自动化测试推断真实 CLI 通过 |
+| 性能与完整门禁 | ❌ | 本批自动化门禁在 §8/工作流记录；最近一份已跟踪 Windows Profile（2026-08-11）Raster p95 26.927/26.200ms、慢帧率 11.409%/9.396%，明确未过 16.7ms/5% 门槛，且尚无最终目标态同构复测；Phase 4 前必须复测关闭，并补真实 CLI 证据 |
 
-准入顺序应保持：第 1 批观察/关批 → 第 2 批观察/关批 → Phase 2 连续 14 天证据 →
-core Flutter 与 root snapshot 门禁收紧 → 明确迁移窗口和可构建回退锚 → 三平台构建、
-三 Provider 真实 smoke、Profile/完整门禁。Phase 4 可以删除剩余通用 facade/barrel并统一
-权威文档，但不能接手第 1、2 批本应在 Phase 3 删除的旧 owner。
+剩余准入顺序：完成 Phase 2 连续 14 天证据 → 明确旧格式迁移窗口和可构建回退锚 →
+三平台构建、三 Provider 真实 smoke、Windows Profile 与最终完整门禁。Phase 4 可以删除
+剩余通用 facade/barrel并统一权威文档，但不能把这些未执行证据推断为通过。

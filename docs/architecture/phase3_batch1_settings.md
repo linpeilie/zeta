@@ -1,4 +1,4 @@
-# Phase 3 第 1 批开工文档：settings 切片
+# Phase 3 第 1 批关批记录：settings 切片
 
 > 对应 [Phase 3 开工文档 §3](phase3_slice_expansion.md)（设计）与 §9 模板（本文件）。
 > §3 是设计意图；本文件是开工清单——补齐依赖图、消费方切换顺序与四步节奏锚点。
@@ -53,6 +53,10 @@ effect / reducer / store）与 `presentation/settings_slice/`（Riverpod provide
 > 在途值 `copyWith`，避免丢掉尚未应用的修改。
 
 ## 3. 消费方依赖图与切换顺序
+
+> **关批覆盖（2026-08-24）**：下方保留的双路径记录只是迁移历史。
+> 当前 `MainApp → IdeHome → SettingsPage` 以及 Desktop Attention 只消费
+> slice store；controller、ingress、flag 和 false-path 均已删除。
 
 > **步骤 4 实施记录（2026-08-23 已完成）**：
 >
@@ -118,14 +122,14 @@ DesktopAttentionController (desktop_notifications/application)
 
 见 [§3.7](phase3_slice_expansion.md) 七条。补充两条批内执行口径：
 
-- **对照测试双路径**：第 2–4 步的每步都要在 `settingsSliceEnabled` 开/关下
-  各跑一遍 settings 相关 Widget 测试，两条路径渲染等价；
+- **关批后单路径**：`SettingsPage` / 主题 / 通知投影只消费 slice store；
+  provider 未注入时 fail closed，不存在 controller fallback；
 - **守卫基线变化**：关批时 `feature_layering_guard_test` 的
   `knownApplicationFlutterImports` **−2**（两个 settings controller 删除）、
   `knownDomainImpurities` **−3**（settings domain 纯化），同步删清单条目——
   守卫的"清单不允许有过期条目"断言会强制这件事。
 
-## 7. 删除清单（关批时）
+## 7. 删除清单（已执行）
 
 - `appearance_settings_controller.dart`、`general_settings_controller.dart`；
 - `settings_page.dart` / `ide_home.dart` / `app.dart` 的 controller 传参与
@@ -135,18 +139,25 @@ DesktopAttentionController (desktop_notifications/application)
 
 ## 8. 回滚方式
 
-- 批内：`settingsSliceEnabled` 全局 bool 仍保留；构造默认 false，生产入口自
-  2026-08-23 起显式传 true；
-- 翻 flag 后发现问题：一行拨回 false，回到旧 controller 直连路径；
-- 关批后：revert 关批提交（旧 controller 在 git 历史里完整可恢复）。
+- 2026-08-24 关批后不再保留运行时 flag 或旧 controller 回退；
+- 回滚只允许 revert 关批提交，从 git 历史恢复整个旧路径；
+- 持久化 schema 未变，不建立双写或兼容 facade。
 
 ## 9. 四步节奏锚点
 
 1. **挂 flag**：✅ 步骤 1–4 已在 flag 默认 false 下落地（2026-08-23）；
 2. **对照验证**：✅ §6 双路径对照、`flutter analyze` 与 `test_affected` 已通过
    （2026-08-23）；
-3. **翻 flag**：🟡 经显式确认，`main.dart` 已于 2026-08-23 传
-   `settingsSliceEnabled: true`，进入 ≥ 3 天观察窗口（本批风险为低，取下限）；
-   最早于 2026-08-26 关批，若回退则修复复测后重新起算；
-4. **关批**：执行 §7 删除，更新守卫基线与燃尽表，Phase 3 开工文档 §2.11
-   的 settings 行标记清零。
+3. **翻 flag**：✅ 2026-08-23 生产启用；2026-08-24 用户明确接受不等待原定日期，
+   缩短本批独立观察余量；
+4. **关批**：✅ 2026-08-24 已执行 §7：两个 controller、ingress、flag 与 false-path
+   删除，settings 固定为 slice 单一路径，对应 application Flutter 燃尽项清零。
+
+## 10. 关批证据（2026-08-24）
+
+- `AppearanceSettingsController|GeneralSettingsController|SettingsSliceIngress|settingsSliceEnabled`
+  在 `lib/` 与 `test/` 的 Dart 源码中零命中；
+- controller 测试的载入归一化、字体解析、persist-first、串行写入和
+  失败回执已迁入 slice reducer / store / runner 测试；
+- `ide_settings_widget_test.dart`、settings slice 定向测试和 Desktop Attention
+  组合测试通过；全量门禁由 Phase 3 收尾统一执行。

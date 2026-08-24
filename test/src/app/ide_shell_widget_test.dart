@@ -831,57 +831,40 @@ void main() {
     expect(container.read(agentConversationSliceStoreProvider(key)), isNotNull);
   });
 
-  for (final sliceEnabled in const <bool>[false, true]) {
-    testWidgets('Provider settings 根组合按 flag 二选一 (slice=$sliceEnabled)', (
+  testWidgets('Provider settings 根组合固定为 slice 单一路径', (tester) async {
+    await _pumpIde(
       tester,
-    ) async {
-      await _pumpIde(
-        tester,
-        enableNativeWindowFrame: true,
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
-        enableProviderManagementSlice: sliceEnabled,
-      );
-      final context = tester.element(
-        find.byKey(const ValueKey<String>('zeta.ide-home')),
-      );
-      final container = ProviderScope.containerOf(context, listen: false);
-      final sliceStore = container.read(
-        agentProviderSettingsSliceStoreProvider,
-      );
-      final catalogSource = container.read(
-        agentModelCatalogProjectionSourceProvider,
-      );
+      enableNativeWindowFrame: true,
+      agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+    );
+    final context = tester.element(
+      find.byKey(const ValueKey<String>('zeta.ide-home')),
+    );
+    final container = ProviderScope.containerOf(context, listen: false);
 
-      expect(sliceStore != null, sliceEnabled);
-      expect(catalogSource != null, sliceEnabled);
-      expect(
-        container.read(activeAgentModelCatalogQueryProvider) != null,
-        sliceEnabled,
-      );
-      if (sliceEnabled) {
-        expect(
-          container
-              .read(enabledAgentProviderConfigsProvider)
-              .map((provider) => provider.id),
-          <String>[
-            defaultAgentProviderId,
-            grokAgentProviderId,
-            defaultClaudeCodeProviderId,
-          ],
-        );
-      }
+    expect(container.read(agentProviderSettingsSliceStoreProvider), isNotNull);
+    expect(
+      container.read(agentModelCatalogProjectionSourceProvider),
+      isNotNull,
+    );
+    expect(container.read(activeAgentModelCatalogQueryProvider), isNotNull);
+    expect(
+      container
+          .read(enabledAgentProviderConfigsProvider)
+          .map((provider) => provider.id),
+      <String>[
+        defaultAgentProviderId,
+        grokAgentProviderId,
+        defaultClaudeCodeProviderId,
+      ],
+    );
 
-      await tester.tap(find.byKey(const ValueKey('titlebar-settings-action')));
-      await tester.pump();
-      await tester.tap(find.byKey(const ValueKey('settings-nav-agents')));
-      await tester.pump();
-      final managementPage = tester.widget<AgentManagementPage>(
-        find.byType(AgentManagementPage),
-      );
-      expect(managementPage.sliceStore != null, sliceEnabled);
-      expect(managementPage.controller != null, !sliceEnabled);
-    });
-  }
+    await tester.tap(find.byKey(const ValueKey('titlebar-settings-action')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('settings-nav-agents')));
+    await tester.pump();
+    expect(find.byType(AgentManagementPage), findsOneWidget);
+  });
 
   testWidgets('恢复项目后首次打开 Agent 管理可完成冷初始化', (tester) async {
     final directory = Directory.systemTemp.createTempSync(
@@ -901,7 +884,6 @@ void main() {
         FakeAgentProvider(),
       ),
       agentProviderConfigStore: MemoryAgentProviderConfigStore(),
-      enableProviderManagementSlice: true,
     );
     await pumpUntilCondition(
       tester,
@@ -921,7 +903,7 @@ void main() {
     final managementPage = tester.widget<AgentManagementPage>(
       find.byType(AgentManagementPage),
     );
-    final store = managementPage.sliceStore!;
+    final store = managementPage.sliceStore;
     await pumpUntilCondition(
       tester,
       () => store.initialized,
@@ -951,7 +933,6 @@ void main() {
         FakeAgentProvider(),
       ),
       agentProviderConfigStore: MemoryAgentProviderConfigStore(),
-      enableProviderManagementSlice: true,
     );
     await pumpUntilCondition(
       tester,
@@ -1545,9 +1526,20 @@ void main() {
       await tester.pump();
       await tester.pump();
 
+      final settingsContainer = ProviderScope.containerOf(
+        retained.agentPaneElement,
+      );
+      expect(
+        settingsContainer
+            .read(generalSettingsSliceValueProvider)
+            .sendMessageShortcut,
+        MessageSendShortcut.primaryModifierEnter,
+        reason: '设置页操作必须先发布到唯一 settings slice',
+      );
+      // Agent 子树离屏 keep-alive 时不重建；重新激活时才消费最新 slice。
       expect(
         (retained.agentPaneElement.widget as AgentPane).messageSendShortcut,
-        MessageSendShortcut.primaryModifierEnter,
+        MessageSendShortcut.enter,
       );
       expect(retained.inputController.text, retained.draft);
 
@@ -1601,6 +1593,10 @@ void main() {
       await tester.pump();
 
       _expectRetainedAgentState(tester, retained);
+      expect(
+        (retained.agentPaneElement.widget as AgentPane).messageSendShortcut,
+        MessageSendShortcut.primaryModifierEnter,
+      );
     },
   );
 
@@ -1654,8 +1650,6 @@ void main() {
       directoryPicker: () async => directory.path,
       agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
       agentProviderConfigStore: MemoryAgentProviderConfigStore(),
-      enableSettingsSlice: true,
-      enableProviderManagementSlice: true,
     );
 
     await openProjectFromMenu(tester);
@@ -1705,11 +1699,8 @@ void main() {
     );
   });
 
-  testWidgets('settings 切片更新 AgentPane 快捷键且不回写旧 controller', (tester) async {
-    final retained = await _prepareRetainedAgentState(
-      tester,
-      enableSettingsSlice: true,
-    );
+  testWidgets('settings 切片更新 AgentPane 快捷键且 root snapshot 同源', (tester) async {
+    final retained = await _prepareRetainedAgentState(tester);
     final appState = tester.state<MainAppState>(find.byType(MainApp));
 
     expect(
@@ -1717,7 +1708,7 @@ void main() {
       MessageSendShortcut.enter,
     );
     expect(
-      appState.generalSettingsController.settings.sendMessageShortcut,
+      appState.takeStateSnapshot().generalSettings.settings.sendMessageShortcut,
       MessageSendShortcut.enter,
     );
 
@@ -1730,9 +1721,8 @@ void main() {
     await tester.pump();
     final container = ProviderScope.containerOf(retained.agentPaneElement);
     final sliceStore = container.read(generalSettingsSliceStoreProvider);
-    expect(sliceStore, isNotNull);
     expect(
-      sliceStore!.state.settings.sendMessageShortcut,
+      sliceStore.state.settings.sendMessageShortcut,
       MessageSendShortcut.primaryModifierEnter,
       reason: '设置页操作必须先落到 general settings 切片',
     );
@@ -1756,9 +1746,9 @@ void main() {
     expect(retained.agentPaneElement.mounted, isTrue);
 
     expect(
-      appState.generalSettingsController.settings.sendMessageShortcut,
-      MessageSendShortcut.enter,
-      reason: '切片路径不能回写旧 controller，否则会形成双写 owner',
+      appState.takeStateSnapshot().generalSettings.settings.sendMessageShortcut,
+      MessageSendShortcut.primaryModifierEnter,
+      reason: 'root snapshot 必须直接投影唯一 settings owner',
     );
   });
 
@@ -2317,8 +2307,6 @@ Future<void> _pumpIde(
   MemorySessionStore? sessionStore,
   Future<List<ManagedAgent>> Function()? homeProviderDetectionLoader,
   bool flushInitialUsageRefresh = true,
-  bool enableSettingsSlice = false,
-  bool enableProviderManagementSlice = false,
 }) async {
   tester.view
     ..physicalSize = size
@@ -2344,10 +2332,6 @@ Future<void> _pumpIde(
       homeProviderDetectionLoader: homeProviderDetectionLoader,
       agentUsagePanelRepository:
           agentUsagePanelRepository ?? const _EmptyAgentUsageRepository(),
-      // Phase 3 第 1 批同样使用 app-level 全局 flag 做双路径对照。
-      settingsSliceEnabled: enableSettingsSlice,
-      // Phase 3 第 2 批：测试参数控制，验证 settings + management owner 原子切换。
-      providerManagementSliceEnabled: enableProviderManagementSlice,
     ),
   );
   if (flushInitialUsageRefresh) {
@@ -2578,9 +2562,8 @@ class _TrackedDirectoryAgentUsageRepository
 }
 
 Future<_RetainedAgentState> _prepareRetainedAgentState(
-  WidgetTester tester, {
-  bool enableSettingsSlice = false,
-}) async {
+  WidgetTester tester,
+) async {
   final directory = Directory.systemTemp.createTempSync('zeta_workbench_test_');
   addTearDown(() {
     if (directory.existsSync()) {
@@ -2634,7 +2617,6 @@ Future<_RetainedAgentState> _prepareRetainedAgentState(
     directoryPicker: () async => directory.path,
     agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
     agentProviderConfigStore: MemoryAgentProviderConfigStore(),
-    enableSettingsSlice: enableSettingsSlice,
   );
 
   await openProjectFromMenu(tester);

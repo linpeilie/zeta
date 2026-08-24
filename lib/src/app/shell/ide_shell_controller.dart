@@ -9,10 +9,8 @@ import 'package:zeta/src/app/workspace_slice/workspace_slice_composition.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
 import 'package:zeta/src/ui/core/system_file_manager.dart';
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_restore_result.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_session_slice_operations.dart';
@@ -46,10 +44,11 @@ class IdeShellController extends ChangeNotifier {
     required this._directoryPicker,
     required this.ideSessionOperations,
     required AgentProviderBundleFactory agentProviderFactory,
-    required AgentProviderConfigStore agentProviderConfigStore,
+    required AgentProviderSettingsPort agentProviderSettingsPort,
+    required Future<AgentModelCatalogLoadResult> Function()
+    activeModelCatalogLoader,
     this._projectLocationOpener = openPathInSystemFileManager,
     this._statusReporter,
-    AgentModelCatalogRepository? agentModelCatalogRepository,
     WorkspaceFileIndexController? workspaceFileIndexController,
     AgentProviderRuntimeRegistry? agentProviderRuntimeRegistry,
     AgentFrameScheduler Function()? agentUiFrameSchedulerFactory,
@@ -59,8 +58,7 @@ class IdeShellController extends ChangeNotifier {
     AgentTurnContextStore? turnContextStore,
     this.agentUiTextCatalog = const FallbackAgentUiTextCatalog(),
     this.metrics = noopZetaMetricsPort,
-    AgentProviderSettingsPort? agentProviderSettingsPort,
-    Future<AgentModelCatalogLoadResult> Function()? activeModelCatalogLoader,
+    this.providerMetricLabel = ZetaMetricLabel.hashed,
     DateTime Function()? now,
   }) : _now = now ?? DateTime.now {
     this.agentProviderRuntimeRegistry =
@@ -68,7 +66,6 @@ class IdeShellController extends ChangeNotifier {
         AgentProviderRuntimeRegistry(
           providerFactory: agentProviderFactory,
           metrics: metrics,
-          providerMetricLabel: AgentMetricLabels.forProviderId,
         );
     agentProviderGlobalRuntime = AgentProviderGlobalRuntime(
       runtimeRegistry: this.agentProviderRuntimeRegistry,
@@ -84,28 +81,8 @@ class IdeShellController extends ChangeNotifier {
     );
     workspaceSliceStore = _workspaceSliceComposition.store;
     workspaceSliceStore.addListener(_handleWorkspaceSliceChanged);
-    if (agentProviderSettingsPort == null) {
-      final controller = AgentProviderSettingsController(
-        configStore: agentProviderConfigStore,
-        modelCatalogRepository: agentModelCatalogRepository,
-        runtimeRegistry: this.agentProviderRuntimeRegistry,
-        globalRuntime: agentProviderGlobalRuntime,
-        providerDefinitions: builtInAgentProviderDefinitionCatalog,
-      );
-      agentProviderController = controller;
-      _disposeAgentProviderController = controller.dispose;
-      _loadActiveModelCatalog = controller.loadActiveModelCatalog;
-    } else {
-      if (activeModelCatalogLoader == null) {
-        throw ArgumentError(
-          'activeModelCatalogLoader is required with '
-          'agentProviderSettingsPort',
-        );
-      }
-      agentProviderController = agentProviderSettingsPort;
-      _disposeAgentProviderController = null;
-      _loadActiveModelCatalog = activeModelCatalogLoader;
-    }
+    agentProviderController = agentProviderSettingsPort;
+    _loadActiveModelCatalog = activeModelCatalogLoader;
     _workspaceFileCorpus = CallbackWorkspaceFileCorpusPort(
       filesProvider: () {
         // @mention 候选优先用后台预建的完整语料；未就绪时回退惰性目录树。
@@ -137,6 +114,7 @@ class IdeShellController extends ChangeNotifier {
       turnContextStore: turnContextStore,
       textCatalog: agentUiTextCatalog,
       metrics: metrics,
+      providerMetricLabel: providerMetricLabel,
     );
     _bootstrapAgentEntry = agentConversationWorkspaceStore.ensureDraftEntry(
       projectPath: _bootstrapProjectPath,
@@ -195,7 +173,6 @@ class IdeShellController extends ChangeNotifier {
   late final WorkspaceFileCorpusPort _workspaceFileCorpus;
   late final WorkspaceSliceStore workspaceSliceStore;
   late final AgentProviderSettingsPort agentProviderController;
-  late final VoidCallback? _disposeAgentProviderController;
   late final Future<AgentModelCatalogLoadResult> Function()
   _loadActiveModelCatalog;
   late final AgentConversationWorkspaceStore agentConversationWorkspaceStore;
@@ -207,6 +184,7 @@ class IdeShellController extends ChangeNotifier {
 
   /// app 组合层注入的脱敏指标端口；默认 no-op，探针只剩常量分支。
   final ZetaMetricsPort metrics;
+  final ZetaMetricLabel Function(String providerId) providerMetricLabel;
 
   int _homeRefreshToken = 0;
   bool _isDisposed = false;
@@ -1224,7 +1202,6 @@ class IdeShellController extends ChangeNotifier {
     projectThreadsController.dispose();
     agentConversationWorkspaceStore.dispose();
     _workspaceSliceComposition.dispose();
-    _disposeAgentProviderController?.call();
     // 在 workspace 条目释放后再拆索引监听，避免 popover 仍挂在 listenable 上。
     _fileIndexController.removeListener(_handleFileIndexChanged);
     if (_ownsFileIndexController) {

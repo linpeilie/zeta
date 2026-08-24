@@ -136,8 +136,7 @@ final class AppearanceSettingsSliceStore {
   // 命令入口：铸造身份 → dispatch
   // -------------------------------------------------------------------------
 
-  /// 载入持久化偏好。重复调用不重复发起（对齐现有 controller 的
-  /// `_loadFuture` 记忆化）。
+  /// 载入持久化偏好。重复调用不重复发起。
   void load() {
     if (_loadRequested) {
       return;

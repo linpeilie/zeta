@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import 'package:meta/meta.dart';
 
 import 'package:zeta_agent_core/src/application/agent_permission_request_resolver.dart';
 import 'package:zeta_agent_core/src/application/agent_provider_runtime_identity.dart';

@@ -1,6 +1,6 @@
-import 'package:flutter/foundation.dart';
-
+import 'package:meta/meta.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
+import 'package:zeta_agent_core/src/application/agent_listenable.dart';
 import 'package:zeta_agent_core/src/application/agent_provider_runtime_identity.dart';
 import 'package:zeta_agent_core/src/domain/agent_models.dart';
 import 'package:zeta_agent_core/src/domain/agent_provider_bundle.dart';
@@ -15,7 +15,7 @@ typedef _RuntimeKey = ({String providerId, AgentProviderRuntimeScopeKey scope});
 /// 每个 Provider 在每个 [AgentProviderRuntimeScopeKey] 下各自维护一份运行实例；
 /// 同一 (providerId, scope) 只会有一个。调用方必须显式声明 global 或 session scope，
 /// 避免遗漏参数时意外借用永不空闲回收的 global runtime。
-class AgentProviderRuntimeRegistry extends ChangeNotifier {
+class AgentProviderRuntimeRegistry extends AgentChangeNotifier {
   AgentProviderRuntimeRegistry({
     required this.providerFactory,
     this.metrics = noopZetaMetricsPort,
@@ -277,11 +277,16 @@ class AgentProviderRuntimeRegistry extends ChangeNotifier {
     metrics.counter(ZetaMetric.agentRuntimeRegistryClosed);
     _publishRuntimeGauges();
     notifyListeners();
-    await Future.wait(<Future<void>>[
-      ...entries.map(_disposeEntry),
-      ..._closingByKey.values,
-    ]);
-    _closingByKey.clear();
+    try {
+      await Future.wait(<Future<void>>[
+        ...entries.map(_disposeEntry),
+        ..._closingByKey.values,
+      ]);
+    } finally {
+      _closingByKey.clear();
+      // close Future 结算时 registry 已进入不可复用终态，也不再强引用订阅方。
+      super.dispose();
+    }
   }
 
   Future<void> _disposeEntry(_AgentProviderRuntimeEntry entry) {
@@ -309,8 +314,8 @@ class AgentProviderRuntimeRegistry extends ChangeNotifier {
   ) {
     return current.kind != requested.kind ||
         current.command != requested.command ||
-        !listEquals(current.arguments, requested.arguments) ||
-        !mapEquals(current.environment, requested.environment);
+        !zetaListEquals(current.arguments, requested.arguments) ||
+        !zetaMapEquals(current.environment, requested.environment);
   }
 }
 

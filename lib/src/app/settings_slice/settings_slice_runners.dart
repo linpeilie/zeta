@@ -14,12 +14,13 @@ import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
 import 'package:zeta/src/features/settings/data/general_settings_store.dart';
 import 'package:zeta/src/features/settings/data/system_font_catalog_service.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
+import 'package:zeta/src/features/settings/domain/general_settings.dart';
 
 final _log = zetaLoggerFor('zeta.settings.slice_runner');
 
 /// appearance 切片的 effect runner 适配器（app 组合层）。
 ///
-/// 行为逐条对齐现有 `AppearanceSettingsController`：
+/// 行为保持 Phase 3 前的 appearance 设置语义：
 /// - 载入后做存储字体的目录校验（不可解析回落默认并尽力回写；目录暂不可用
 ///   时保留用户设置）；
 /// - 字体解析的 kind 规则：界面槽位拒绝 bundled、代码槽位拒绝 systemDefault、
@@ -36,16 +37,25 @@ final class AppearanceSettingsSliceRunnerAdapter
   final AppearanceSettingsStore _store;
   final SystemFontCatalogService _fontCatalog;
   final AppearanceSettingsSliceStore _sliceStore;
+  Future<void> _initialLoad = Future<void>.value();
+  Future<void> _writeQueue = Future<void>.value();
+  bool _loadStarted = false;
 
   @override
   void run(AppearanceSettingsSliceEffect effect) {
     switch (effect) {
       case AppearanceSettingsLoadEffect():
-        unawaited(_load());
+        if (!_loadStarted) {
+          _loadStarted = true;
+          _initialLoad = _load();
+        }
       case AppearanceSettingsPersistEffect():
-        unawaited(_persist(effect));
+        _enqueueWrite(() async {
+          await _initialLoad;
+          await _persist(effect);
+        });
       case AppearanceFontChoiceResolveEffect():
-        unawaited(_resolve(effect));
+        unawaited(_initialLoad.then((_) => _resolve(effect)));
       case AppearanceFontCatalogLoadEffect():
         unawaited(_loadCatalog(effect));
     }
@@ -104,8 +114,18 @@ final class AppearanceSettingsSliceRunnerAdapter
   }
 
   Future<void> _persist(AppearanceSettingsPersistEffect effect) async {
+    final merged = _overlayAppearanceChanges(
+      base: effect.previousValue,
+      desired: effect.value,
+      current: _sliceStore.state.value,
+    );
+    if (merged != _sliceStore.state.value) {
+      // load 可能在乐观 intent 后回流；先把用户改动叠加回已加载快照，
+      // 再持久化，避免迟到 load 覆盖内存与磁盘。
+      _sliceStore.loaded(merged);
+    }
     try {
-      await _store.save(appearanceSettingsFromSlice(effect.value));
+      await _store.save(appearanceSettingsFromSlice(merged));
       _sliceStore.persisted(effect.operationId);
     } catch (error, stackTrace) {
       _log.w(
@@ -115,6 +135,10 @@ final class AppearanceSettingsSliceRunnerAdapter
       );
       _sliceStore.persistFailed(effect.operationId);
     }
+  }
+
+  void _enqueueWrite(Future<void> Function() action) {
+    _writeQueue = _writeQueue.catchError((Object _) {}).then((_) => action());
   }
 
   Future<void> _resolve(AppearanceFontChoiceResolveEffect effect) async {
@@ -255,10 +279,32 @@ final class AppearanceSettingsSliceRunnerAdapter
   }
 }
 
+AppearanceSettingsSlice _overlayAppearanceChanges({
+  required AppearanceSettingsSlice base,
+  required AppearanceSettingsSlice desired,
+  required AppearanceSettingsSlice current,
+}) {
+  return current.copyWith(
+    themeMode: desired.themeMode != base.themeMode ? desired.themeMode : null,
+    uiFontChoice: desired.uiFontChoice != base.uiFontChoice
+        ? desired.uiFontChoice
+        : null,
+    codeFontChoice: desired.codeFontChoice != base.codeFontChoice
+        ? desired.codeFontChoice
+        : null,
+    uiFontSize: desired.uiFontSize != base.uiFontSize
+        ? desired.uiFontSize
+        : null,
+    codeFontSize: desired.codeFontSize != base.codeFontSize
+        ? desired.codeFontSize
+        : null,
+  );
+}
+
 /// general 切片的 effect runner 适配器（app 组合层）。
 ///
-/// persist 以单写者串行执行，等价现有 `GeneralSettingsController._enqueue`
-/// 队列：落盘顺序与提交顺序一致，失败不阻断后续命令。
+/// persist 以单写者串行执行：落盘顺序与提交顺序一致，失败不阻断
+/// 后续命令。
 final class GeneralSettingsSliceRunnerAdapter
     implements GeneralSettingsSliceEffectRunner {
   GeneralSettingsSliceRunnerAdapter({
@@ -270,31 +316,53 @@ final class GeneralSettingsSliceRunnerAdapter
   final GeneralSettingsSliceStore _sliceStore;
 
   Future<void> _queue = Future<void>.value();
-  bool _loaded = false;
+  Future<void> _initialLoad = Future<void>.value();
+  final Completer<GeneralSettings> _loadCompleter =
+      Completer<GeneralSettings>();
+  bool _loadStarted = false;
+  bool _initialLoadSettled = false;
+
+  /// 首次加载完成后的快照；组合根据此决定何时安装依赖 Locale 的运行时。
+  Future<GeneralSettings> get loadResult => _loadCompleter.future;
 
   @override
   void run(GeneralSettingsSliceEffect effect) {
     switch (effect) {
       case GeneralSettingsLoadEffect():
-        unawaited(_load());
+        if (!_loadStarted) {
+          _loadStarted = true;
+          _initialLoad = _load();
+        }
       case GeneralSettingsPersistEffect():
-        _enqueue(() => _persist(effect));
+        if (_initialLoadSettled) {
+          _enqueue(() => _persist(effect));
+        } else {
+          _enqueue(() async {
+            await _initialLoad;
+            await _persist(effect);
+          });
+        }
     }
   }
 
   Future<void> _load() async {
-    if (_loaded) {
-      return;
-    }
-    _loaded = true;
     try {
-      _sliceStore.loaded(await _store.load());
+      final settings = await _store.load();
+      // 标记必须先于 loaded 回流：store 会在回流栈内同步排出首条命令。
+      // 此时数据快照已经拿到，persist 可直接进入串行写队列，无需再多等
+      // 一个已完成 Future 的异步轮次。
+      _initialLoadSettled = true;
+      _sliceStore.loaded(settings);
+      _loadCompleter.complete(settings);
     } catch (error, stackTrace) {
       _log.w(
         'Could not load general settings via slice',
         error: error,
         stackTrace: stackTrace,
       );
+      _initialLoadSettled = true;
+      _sliceStore.loadFailed();
+      _loadCompleter.complete(_sliceStore.state.settings);
     }
   }
 

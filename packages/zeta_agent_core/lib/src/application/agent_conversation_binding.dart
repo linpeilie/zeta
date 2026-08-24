@@ -1,7 +1,8 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:meta/meta.dart';
 
+import 'package:zeta_agent_core/src/application/agent_listenable.dart';
 import 'package:zeta_agent_core/src/application/agent_conversation_permission_selection_controller.dart';
 import 'package:zeta_agent_core/src/application/agent_provider_runtime_registry.dart';
 import 'package:zeta_agent_core/src/application/agent_provider_runtime_identity.dart';
@@ -193,7 +194,7 @@ typedef AgentConversationBindingRuntimeCleared =
 /// 它长期保存会话权限和事件入口，但 session Provider 仍由 registry 唯一拥有；
 /// 只有 [beginTurn] 可以惰性创建 Provider，其他操作只能通过 [runCurrent] 使用
 /// 已存在的实例。
-final class AgentConversationBinding extends ChangeNotifier {
+final class AgentConversationBinding extends AgentChangeNotifier {
   AgentConversationBinding({
     required AgentConversationBindingKey key,
     required String runtimeScopeId,

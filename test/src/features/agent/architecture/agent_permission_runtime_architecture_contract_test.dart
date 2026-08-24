@@ -6,7 +6,7 @@ import 'package:zeta/src/features/agent/data/agent_provider_config_codec.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
+import '../../../testing/provider_settings_test_store.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
 
 import '../../../testing/fixture_reader.dart';
@@ -217,7 +217,7 @@ void main() {
         final registry = AgentProviderRuntimeRegistry(
           providerFactory: FixedAgentProviderBundleFactory(provider),
         );
-        final providerController = AgentProviderSettingsController(
+        final providerController = createProviderSettingsTestStore(
           runtimeRegistry: registry,
           configStore: MemoryAgentProviderConfigStore(),
         );
@@ -329,7 +329,7 @@ void main() {
         final registry = AgentProviderRuntimeRegistry(
           providerFactory: FixedAgentProviderBundleFactory(provider),
         );
-        final providerController = AgentProviderSettingsController(
+        final providerController = createProviderSettingsTestStore(
           runtimeRegistry: registry,
           configStore: MemoryAgentProviderConfigStore(),
         );
@@ -436,7 +436,7 @@ void main() {
         final registry = AgentProviderRuntimeRegistry(
           providerFactory: FixedAgentProviderBundleFactory(provider),
         );
-        final providerController = AgentProviderSettingsController(
+        final providerController = createProviderSettingsTestStore(
           runtimeRegistry: registry,
           configStore: MemoryAgentProviderConfigStore(
             AgentProviderSettings(

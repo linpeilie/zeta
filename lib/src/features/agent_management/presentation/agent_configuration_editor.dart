@@ -17,13 +17,11 @@ import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 class AgentConfigurationEditor extends StatefulWidget {
   const AgentConfigurationEditor({
     required this.operations,
-    required this.listenable,
     this.onDirtyChanged,
     super.key,
   });
 
   final AgentManagementOperations operations;
-  final Listenable listenable;
   final ValueChanged<bool>? onDirtyChanged;
 
   @override
@@ -107,100 +105,95 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
       ..syntaxTheme = brightness == Brightness.dark ? vs2015Theme : githubTheme
       ..baseStyle = textStyles.codeSmall.copyWith(color: colors.textPrimary);
 
-    return ListenableBuilder(
-      listenable: widget.listenable,
-      builder: (context, _) {
-        final document = widget.operations.configuration;
-        if (widget.operations.loadingConfiguration && document == null) {
-          return Center(
-            child: IdeLoadingIndicator(
-              width: 32,
-              height: 14,
-              semanticsLabel: context.l10n.mgmtLoadingConfig,
-            ),
-          );
-        }
-        if (document == null) {
-          return EmptyState(
-            text:
-                widget.operations.operationError ??
-                context.l10n.mgmtConfigNotLoadedYet,
-          );
-        }
+    final document = widget.operations.configuration;
+    if (widget.operations.loadingConfiguration && document == null) {
+      return Center(
+        child: IdeLoadingIndicator(
+          width: 32,
+          height: 14,
+          semanticsLabel: context.l10n.mgmtLoadingConfig,
+        ),
+      );
+    }
+    if (document == null) {
+      return EmptyState(
+        text:
+            widget.operations.operationError ??
+            context.l10n.mgmtConfigNotLoadedYet,
+      );
+    }
 
-        final lineCount = '\n'.allMatches(_editingController.text).length + 1;
-        return SingleChildScrollView(
-          padding: IdeSpacing.all16,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildFileHeader(context, document),
-              const SizedBox(height: IdeSpacing.space12),
-              if (!_revealed)
-                IdeStatusCard(
-                  tone: IdeStatusCardTone.warning,
-                  title: context.l10n.mgmtSensitiveMaskedTitle,
-                  body: Text(
-                    context.l10n.mgmtSensitiveMaskedBody,
-                    style: textStyles.bodySmall.copyWith(
-                      color: colors.textSecondary,
-                    ),
-                  ),
+    final lineCount = '\n'.allMatches(_editingController.text).length + 1;
+    return SingleChildScrollView(
+      padding: IdeSpacing.all16,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildFileHeader(context, document),
+          const SizedBox(height: IdeSpacing.space12),
+          if (!_revealed)
+            IdeStatusCard(
+              tone: IdeStatusCardTone.warning,
+              title: context.l10n.mgmtSensitiveMaskedTitle,
+              body: Text(
+                context.l10n.mgmtSensitiveMaskedBody,
+                style: textStyles.bodySmall.copyWith(
+                  color: colors.textSecondary,
                 ),
-              _buildSearchBar(context),
-              const SizedBox(height: IdeSpacing.space8),
-              SizedBox(
-                height: 420,
-                child: PanelCard(
-                  child: SingleChildScrollView(
-                    padding: EdgeInsets.zero,
-                    child: IntrinsicHeight(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Container(
-                            width: 48,
-                            padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
-                            color: colors.surfaceElevated,
-                            child: SelectableText(
-                              List<String>.generate(
-                                lineCount,
-                                (index) => '${index + 1}',
-                              ).join('\n'),
-                              textAlign: TextAlign.right,
-                              style: textStyles.codeSmall.copyWith(
-                                color: colors.textTertiary,
-                                height: 1.45,
-                              ),
-                            ),
+              ),
+            ),
+          _buildSearchBar(context),
+          const SizedBox(height: IdeSpacing.space8),
+          SizedBox(
+            height: 420,
+            child: PanelCard(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.zero,
+                child: IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Container(
+                        width: 48,
+                        padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
+                        color: colors.surfaceElevated,
+                        child: SelectableText(
+                          List<String>.generate(
+                            lineCount,
+                            (index) => '${index + 1}',
+                          ).join('\n'),
+                          textAlign: TextAlign.right,
+                          style: textStyles.codeSmall.copyWith(
+                            color: colors.textTertiary,
+                            height: 1.45,
                           ),
-                          Expanded(
-                            child: sf.TextField(
-                              key: const ValueKey('agent-config-editor'),
-                              controller: _editingController,
-                              readOnly: !_revealed,
-                              minLines: 18,
-                              maxLines: null,
-                              keyboardType: TextInputType.multiline,
-                              style: textStyles.codeSmall.copyWith(
-                                color: colors.textPrimary,
-                                height: 1.45,
-                              ),
-                              onChanged: _handleChanged,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
-                    ),
+                      Expanded(
+                        child: sf.TextField(
+                          key: const ValueKey('agent-config-editor'),
+                          controller: _editingController,
+                          readOnly: !_revealed,
+                          minLines: 18,
+                          maxLines: null,
+                          keyboardType: TextInputType.multiline,
+                          style: textStyles.codeSmall.copyWith(
+                            color: colors.textPrimary,
+                            height: 1.45,
+                          ),
+                          onChanged: _handleChanged,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-              const SizedBox(height: IdeSpacing.space10),
-              _buildValidationAndActions(context),
-            ],
+            ),
           ),
-        );
-      },
+          const SizedBox(height: IdeSpacing.space10),
+          _buildValidationAndActions(context),
+        ],
+      ),
     );
   }
 

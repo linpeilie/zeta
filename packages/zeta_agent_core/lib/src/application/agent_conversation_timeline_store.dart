@@ -1,7 +1,6 @@
 import 'dart:collection';
 
-import 'package:flutter/foundation.dart';
-
+import 'package:zeta_agent_core/src/application/agent_listenable.dart';
 import 'package:zeta_agent_core/src/domain/agent_models.dart';
 import 'package:zeta_agent_core/src/domain/agent_provider_raw_payload.dart';
 import 'package:zeta_agent_core/src/domain/fallback_agent_ui_text_catalog.dart';
@@ -50,8 +49,8 @@ class AgentConversationTimelineStore {
   final Set<String> _expandedActivePlanTurnIds = <String>{};
   final Set<String> _expandedCommandGroupIds = <String>{};
   final Set<String> _expandedFileEditItemIds = <String>{};
-  final ValueNotifier<AgentConversationTurnState?> _liveTurnNotifier =
-      ValueNotifier<AgentConversationTurnState?>(null);
+  final AgentValueNotifier<AgentConversationTurnState?> _liveTurnNotifier =
+      AgentValueNotifier<AgentConversationTurnState?>(null);
 
   String? currentTurnGroupId;
   String? _pendingTurnGroupId;
@@ -128,7 +127,7 @@ class AgentConversationTimelineStore {
 
   AgentConversationTurnState? get liveTurnState => _liveTurnNotifier.value;
 
-  ValueListenable<AgentConversationTurnState?> get liveTurnListenable =>
+  AgentValueListenable<AgentConversationTurnState?> get liveTurnListenable =>
       _liveTurnNotifier;
 
   String? get pendingTurnGroupId => _pendingTurnGroupId;
@@ -1810,7 +1809,7 @@ class AgentConversationTurnGroup {
 /// 单个 turn 的运行时状态。
 ///
 /// 历史区使用快照渲染；live 区直接监听这个对象，避免流式增量时整页重建。
-class AgentConversationTurnState extends ChangeNotifier {
+class AgentConversationTurnState extends AgentChangeNotifier {
   AgentConversationTurnState({required this.id, required this.isStandby});
 
   String id;

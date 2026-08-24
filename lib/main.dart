@@ -86,12 +86,6 @@ void main() {
           fallbackLanguage: fallbackLanguage,
           waitForGeneralSettings: true,
           observability: observability,
-          // Phase 3 第 1 批：经显式确认后生产启用 settings 切片，进入三天观察。
-          // 回退时改回 false 即恢复旧 controller 直连路径，无需数据迁移。
-          settingsSliceEnabled: true,
-          // Phase 3 第 2 批：经显式确认后生产启用 Provider 配置/管理切片，
-          // 进入中高风险批次观察；回退时改回 false，无需数据迁移。
-          providerManagementSliceEnabled: true,
         ),
       );
     },

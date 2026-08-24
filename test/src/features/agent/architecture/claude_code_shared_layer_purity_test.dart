@@ -50,6 +50,11 @@ void main() {
   /// `packages/zeta_agent_core/lib/src/`。**逐字比对确认只有 import URI 变化**
   /// （`package:zeta/src/features/agent/...` → `package:zeta_agent_core/src/...`），
   /// 语义零改动，因此按新内容重算基线。
+  ///
+  /// 2026-08-24：Phase 3 阻塞 4 明确要求 `zeta_agent_core` 纯 Dart。TimelineStore
+  /// 只把 Flutter `ValueNotifier` / `ChangeNotifier` 换成等价的内核
+  /// `AgentValueNotifier` / `AgentChangeNotifier`，并替换 import；合并、身份和
+  /// Provider 语义未改。按这次已授权的边界清算刷新基线。
   const g1ContentBaselines = <String, _FileBaseline>{
     'packages/zeta_agent_core/lib/src/application/agent_event_pipeline.dart':
         _FileBaseline(
@@ -77,9 +82,9 @@ void main() {
         ),
     'packages/zeta_agent_core/lib/src/application/agent_conversation_timeline_store.dart':
         _FileBaseline(
-          lineCount: 2023,
-          byteLength: 68212,
-          fingerprint: '438f67ddffb1df8b',
+          lineCount: 2022,
+          byteLength: 68261,
+          fingerprint: 'c5dae1dc034f5873',
         ),
   };
 

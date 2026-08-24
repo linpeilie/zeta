@@ -23,7 +23,6 @@ import 'package:zeta/src/features/agent/application/conversation_slice/agent_con
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/desktop_notifications/application/desktop_attention_slice_store.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_models.dart';
-import 'package:zeta/src/features/agent_management/application/agent_management_controller.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_operations.dart';
 import 'package:zeta/src/features/agent_management/data/claude_code_agent_management_repository.dart';
 import 'package:zeta/src/features/agent_management/data/codex_agent_management_repository.dart';
@@ -36,8 +35,6 @@ import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_
 import 'package:zeta/src/features/ide_session/presentation/ide_session_slice/ide_session_slice_providers.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
 import 'package:zeta/src/features/project_threads/presentation/project_threads_slice/project_threads_slice_providers.dart';
-import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
-import 'package:zeta/src/features/settings/application/general_settings_controller.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/settings/presentation/settings_page.dart';
 import 'package:zeta/src/features/settings/presentation/settings_slice/settings_slice_providers.dart';
@@ -76,19 +73,16 @@ class IdeHome extends ConsumerStatefulWidget {
     required this.ideSessionOperations,
     required this.shellStateSnapshotRelay,
     required this.agentProviderFactory,
-    required this.agentProviderConfigStore,
+    required this.agentProviderSettingsPort,
+    required this.activeModelCatalogLoader,
     required this.usageStatisticsSliceComposition,
     required this.projectLocationOpener,
-    required this.appearanceController,
-    required this.generalSettingsController,
     required this.desktopAttentionSliceComposition,
     required this.desktopAttentionTargetActivatorRelay,
     required this.conversationSliceStoreRegistry,
     required this.conversationWorkspaceStoreRegistry,
     required this.agentModelCatalogRepository,
     required this.agentProviderRuntimeRegistry,
-    this.agentProviderSettingsPort,
-    this.activeModelCatalogLoader,
     this.enableAgentUsageAutoRefresh = true,
     this.agentProviderAvailabilityLoader,
     this.homeProviderDetectionLoader,
@@ -96,7 +90,7 @@ class IdeHome extends ConsumerStatefulWidget {
     this.turnContextStore,
     this.agentUiTextCatalog = const FallbackAgentUiTextCatalog(),
     this.metrics = noopZetaMetricsPort,
-    this.providerManagementSliceEnabled = false,
+    this.providerMetricLabel = ZetaMetricLabel.hashed,
     this.agentManagementTextCatalog =
         const FallbackAgentManagementTextCatalog(),
     super.key,
@@ -107,11 +101,10 @@ class IdeHome extends ConsumerStatefulWidget {
   final IdeSessionSliceOperations ideSessionOperations;
   final ZetaShellStateSnapshotRelay shellStateSnapshotRelay;
   final AgentProviderBundleFactory agentProviderFactory;
-  final AgentProviderConfigStore agentProviderConfigStore;
+  final AgentProviderSettingsPort agentProviderSettingsPort;
+  final Future<AgentModelCatalogLoadResult> Function() activeModelCatalogLoader;
   final UsageStatisticsSliceComposition usageStatisticsSliceComposition;
   final ProjectLocationOpener projectLocationOpener;
-  final AppearanceSettingsController appearanceController;
-  final GeneralSettingsController generalSettingsController;
   final DesktopAttentionSliceComposition desktopAttentionSliceComposition;
   final DesktopAttentionTargetActivatorRelay
   desktopAttentionTargetActivatorRelay;
@@ -120,13 +113,6 @@ class IdeHome extends ConsumerStatefulWidget {
   conversationWorkspaceStoreRegistry;
   final AgentModelCatalogRepository agentModelCatalogRepository;
   final AgentProviderRuntimeRegistry agentProviderRuntimeRegistry;
-
-  /// 第 2 批 flag 开启时由 app 根注入；null 时 shell 创建旧 controller。
-  final AgentProviderSettingsPort? agentProviderSettingsPort;
-
-  /// 与 [agentProviderSettingsPort] 成对注入的 active 模型目录查询入口。
-  final Future<AgentModelCatalogLoadResult> Function()?
-  activeModelCatalogLoader;
 
   /// 是否在启动及每个回合结束后通过事件消息刷新 Agent 用量。
   final bool enableAgentUsageAutoRefresh;
@@ -137,10 +123,7 @@ class IdeHome extends ConsumerStatefulWidget {
 
   /// app 组合层注入的脱敏指标端口；默认 no-op。
   final ZetaMetricsPort metrics;
-
-  /// Phase 3 第 2 批：true 时只创建 management page store，false 时只创建旧
-  /// controller。生产翻旗由 app 根统一控制。
-  final bool providerManagementSliceEnabled;
+  final ZetaMetricLabel Function(String providerId) providerMetricLabel;
 
   final AgentUiTextCatalog agentUiTextCatalog;
   final AgentManagementTextCatalog agentManagementTextCatalog;
@@ -155,8 +138,8 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
   static const double _maxPanelWidth = IdeMetrics.sidePaneMaxWidth;
 
   late final IdeShellController _shellController;
-  late final AgentManagementController? _agentManagementController;
-  late final AgentManagementSliceComposition? _agentManagementComposition;
+  late final AgentManagementSliceComposition _agentManagementComposition;
+  late final void Function() _unsubscribeProviderSettings;
   late final UsageStatisticsOperations _usageStatisticsController;
   late final AgentUsagePanelOperations _agentUsagePanelController;
   late final AgentUsageRefreshCoordinator _agentUsageRefreshCoordinator;
@@ -197,7 +180,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
       GlobalKey<SettingsPageCanvasState>();
 
   AgentManagementOperations get _agentManagementOperations =>
-      _agentManagementController ?? _agentManagementComposition!.store;
+      _agentManagementComposition.store;
 
   @override
   void initState() {
@@ -215,10 +198,10 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
       directoryPicker: widget.directoryPicker,
       ideSessionOperations: widget.ideSessionOperations,
       agentProviderFactory: widget.agentProviderFactory,
-      agentProviderConfigStore: widget.agentProviderConfigStore,
+      agentProviderSettingsPort: widget.agentProviderSettingsPort,
+      activeModelCatalogLoader: widget.activeModelCatalogLoader,
       projectLocationOpener: widget.projectLocationOpener,
       statusReporter: _showStatus,
-      agentModelCatalogRepository: widget.agentModelCatalogRepository,
       agentProviderRuntimeRegistry: widget.agentProviderRuntimeRegistry,
       onAgentTurnTerminal: _handleAgentTurnTerminal,
       onAgentAttention: (attention) {
@@ -229,8 +212,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
       turnContextStore: widget.turnContextStore,
       agentUiTextCatalog: widget.agentUiTextCatalog,
       metrics: widget.metrics,
-      agentProviderSettingsPort: widget.agentProviderSettingsPort,
-      activeModelCatalogLoader: widget.activeModelCatalogLoader,
+      providerMetricLabel: widget.providerMetricLabel,
     )..addListener(_handleShellChanged);
     widget.conversationWorkspaceStoreRegistry.bind(
       _shellController.agentConversationWorkspaceStore,
@@ -241,9 +223,8 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
     widget.usageStatisticsSliceComposition.bindSelectionPersistence(
       _shellController.setSelectedAgentUsageProviderId,
     );
-    _shellController.agentProviderController.addListener(
-      _handleAgentProviderSettingsUsageChanged,
-    );
+    _unsubscribeProviderSettings = _shellController.agentProviderController
+        .subscribe(_handleAgentProviderSettingsUsageChanged);
     if (widget.enableNativeWindowFrame) {
       windowManager.addListener(this);
     }
@@ -263,34 +244,16 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
         textCatalog: widget.agentManagementTextCatalog,
       ),
     };
-    if (widget.providerManagementSliceEnabled) {
-      final settingsPort = widget.agentProviderSettingsPort;
-      if (settingsPort == null) {
-        throw StateError(
-          'providerManagementSliceEnabled requires agentProviderSettingsPort',
-        );
-      }
-      _agentManagementController = null;
-      _agentManagementComposition = AgentManagementSliceComposition.create(
-        repositories: managementRepositories,
-        providerSettings: settingsPort,
-        runtimeListenable: _shellController,
-        runtimeSnapshotProvider: _managementRuntimeSnapshot,
-        textCatalog: widget.agentManagementTextCatalog,
-      );
-      _agentManagementComposition!.store.addListener(
-        _handleAgentManagementChanged,
-      );
-    } else {
-      _agentManagementComposition = null;
-      _agentManagementController = AgentManagementController(
-        repositories: managementRepositories,
-        providerController: _shellController.agentProviderController,
-        runtimeStateProvider: _managementRuntimeState,
-        runtimeListenable: _shellController,
-        textCatalog: widget.agentManagementTextCatalog,
-      )..addListener(_handleAgentManagementChanged);
-    }
+    _agentManagementComposition = AgentManagementSliceComposition.create(
+      repositories: managementRepositories,
+      providerSettings: widget.agentProviderSettingsPort,
+      runtimeListenable: _shellController,
+      runtimeSnapshotProvider: _managementRuntimeSnapshot,
+      textCatalog: widget.agentManagementTextCatalog,
+    );
+    _agentManagementComposition.store.addListener(
+      _handleAgentManagementChanged,
+    );
     _agentUsageRefreshCoordinator = AgentUsageRefreshCoordinator(
       // turn 完成 / 启动预热走静默刷新：已有数据时不闪加载横条。
       refresh: () => _agentUsagePanelController.refresh(showLoading: false),
@@ -359,7 +322,6 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
         pendingOperationCount: slice.pendingOperations.length,
       );
     }
-    final managementState = _agentManagementComposition?.store.state;
     return ZetaShellStateSnapshot(
       workspace: _shellController.workspaceSliceStore.state,
       projectThreadsByProjectPath: projectThreads,
@@ -369,9 +331,9 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
       conversationsByEntryId: conversations,
       selectedConversationEntryId: selectedEntryId,
       projectHomeActive: _shellController.isProjectHomeActive,
-      agentManagement: managementState == null
-          ? null
-          : ZetaAgentManagementStateSnapshot.fromState(managementState),
+      agentManagement: ZetaAgentManagementStateSnapshot.fromState(
+        _agentManagementComposition.store.state,
+      ),
     );
   }
 
@@ -383,21 +345,13 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
       windowManager.removeListener(this);
     }
     _shellController.removeListener(_handleShellChanged);
-    _shellController.agentProviderController.removeListener(
-      _handleAgentProviderSettingsUsageChanged,
-    );
+    _unsubscribeProviderSettings();
     widget.usageStatisticsSliceComposition.bindSelectionPersistence(null);
     _agentUsageRefreshCoordinator.dispose();
-    final legacyManagement = _agentManagementController;
-    if (legacyManagement != null) {
-      legacyManagement.removeListener(_handleAgentManagementChanged);
-      legacyManagement.dispose();
-    }
-    final managementComposition = _agentManagementComposition;
-    if (managementComposition != null) {
-      managementComposition.store.removeListener(_handleAgentManagementChanged);
-      managementComposition.close();
-    }
+    _agentManagementComposition.store.removeListener(
+      _handleAgentManagementChanged,
+    );
+    _agentManagementComposition.close();
     widget.conversationSliceStoreRegistry.unbind();
     widget.conversationWorkspaceStoreRegistry.unbind(
       _shellController.agentConversationWorkspaceStore,
@@ -664,11 +618,8 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
                 ? SettingsPageCanvas(
                     key: _settingsCanvasKey,
                     activeSection: _settingsSection,
-                    appearanceController: widget.appearanceController,
-                    generalSettingsController: widget.generalSettingsController,
-                    agentManagementController: _agentManagementController,
                     agentManagementSliceStore:
-                        _agentManagementComposition?.store,
+                        _agentManagementComposition.store,
                   )
                 : const SizedBox.shrink(),
           ),
@@ -719,30 +670,15 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
         final projectThreadState = ref.watch(
           projectThreadListStateProvider(projectPath),
         );
-        final sliceStore = ref.watch(generalSettingsSliceStoreProvider);
-        if (sliceStore != null) {
-          final generalSettings = ref.watch(generalSettingsSliceValueProvider);
-          return _buildAgentEntryPages(
-            entries: entries,
-            projectPath: projectPath,
-            projectHomeId: projectHomeId,
-            selectedId: selectedId,
-            projectHomeActive: workspaceState.projectHomeActive,
-            generalSettings: generalSettings,
-            projectThreadState: projectThreadState,
-          );
-        }
-        return ValueListenableBuilder<GeneralSettings>(
-          valueListenable: widget.generalSettingsController.listenable,
-          builder: (context, generalSettings, _) => _buildAgentEntryPages(
-            entries: entries,
-            projectPath: projectPath,
-            projectHomeId: projectHomeId,
-            selectedId: selectedId,
-            projectHomeActive: workspaceState.projectHomeActive,
-            generalSettings: generalSettings,
-            projectThreadState: projectThreadState,
-          ),
+        final generalSettings = ref.watch(generalSettingsSliceValueProvider);
+        return _buildAgentEntryPages(
+          entries: entries,
+          projectPath: projectPath,
+          projectHomeId: projectHomeId,
+          selectedId: selectedId,
+          projectHomeActive: workspaceState.projectHomeActive,
+          generalSettings: generalSettings,
+          projectThreadState: projectThreadState,
         );
       },
     );

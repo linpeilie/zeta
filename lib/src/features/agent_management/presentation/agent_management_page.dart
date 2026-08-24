@@ -9,7 +9,6 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/ui/core/system_file_manager.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon.dart';
-import 'package:zeta/src/features/agent_management/application/agent_management_controller.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_operations.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_store.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
@@ -46,17 +45,12 @@ const double _overviewTwoColumnBreakpoint = 780;
 /// 设置中的 Agent 管理列表、详情、配置和日志页面。
 class AgentManagementPage extends StatefulWidget {
   const AgentManagementPage({
-    this.controller,
-    this.sliceStore,
+    required this.sliceStore,
     this.autoDetect = true,
     super.key,
-  }) : assert(
-         (controller == null) != (sliceStore == null),
-         'Exactly one Agent management state source is required',
-       );
+  });
 
-  final AgentManagementController? controller;
-  final AgentManagementSliceStore? sliceStore;
+  final AgentManagementSliceStore sliceStore;
   final bool autoDetect;
 
   @override
@@ -72,11 +66,7 @@ class AgentManagementPageState extends State<AgentManagementPage> {
   _AgentListTab _listTab = _AgentListTab.installed;
   _AgentDetailTab _detailTab = _AgentDetailTab.overview;
 
-  AgentManagementOperations get _operations =>
-      widget.controller ?? widget.sliceStore!;
-
-  Listenable get _managementListenable =>
-      widget.controller ?? const _InertManagementListenable();
+  AgentManagementOperations get _operations => widget.sliceStore;
 
   @override
   void initState() {
@@ -106,16 +96,12 @@ class AgentManagementPageState extends State<AgentManagementPage> {
 
   @override
   Widget build(BuildContext context) {
-    final sliceStore = widget.sliceStore;
-    if (sliceStore != null) {
-      return Consumer(
-        builder: (context, ref, _) {
-          ref.watch(agentManagementSliceProvider(sliceStore));
-          return _buildPage(context);
-        },
-      );
-    }
-    return _buildPage(context);
+    return Consumer(
+      builder: (context, ref, _) {
+        ref.watch(agentManagementSliceProvider(widget.sliceStore));
+        return _buildPage(context);
+      },
+    );
   }
 
   Widget _buildPage(BuildContext context) {
@@ -126,7 +112,6 @@ class AgentManagementPageState extends State<AgentManagementPage> {
         _ManagementView.detail => _buildDetailPage(context),
         _ManagementView.logs => AgentLogView(
           operations: _operations,
-          listenable: _managementListenable,
           onBack: () {
             setState(() {
               _view = _ManagementView.detail;
@@ -140,9 +125,8 @@ class AgentManagementPageState extends State<AgentManagementPage> {
   Widget _buildListPage(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    return ListenableBuilder(
-      listenable: _managementListenable,
-      builder: (context, _) {
+    return Builder(
+      builder: (context) {
         final allAgents = _operations.agents;
         final visibleAgents = allAgents
             .where(_matchesList)
@@ -345,9 +329,8 @@ class AgentManagementPageState extends State<AgentManagementPage> {
   }
 
   Widget _buildDetailPage(BuildContext context) {
-    return ListenableBuilder(
-      listenable: _managementListenable,
-      builder: (context, _) {
+    return Builder(
+      builder: (context) {
         final agent = _operations.agent;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -435,7 +418,6 @@ class AgentManagementPageState extends State<AgentManagementPage> {
                 _AgentDetailTab.configuration => AgentConfigurationEditor(
                   key: _configurationKey,
                   operations: _operations,
-                  listenable: _managementListenable,
                 ),
               },
             ),
@@ -747,18 +729,6 @@ class AgentManagementPageState extends State<AgentManagementPage> {
       setState(() {});
     }
   }
-}
-
-/// slice 路径由页面最外层 Riverpod 镜像驱动；内层旧 ListenableBuilder 只需
-/// 一个不发布事件的占位对象，避免建立第二条 store 订阅。
-final class _InertManagementListenable implements Listenable {
-  const _InertManagementListenable();
-
-  @override
-  void addListener(VoidCallback listener) {}
-
-  @override
-  void removeListener(VoidCallback listener) {}
 }
 
 enum _ManagementView { list, detail, logs }

@@ -36,7 +36,7 @@ packages/
   zeta_foundation/        # 纯 Dart：Clock、OperationId、Transition、排版常量、日志与指标端口
   zeta_plugin_kernel/     # 纯 Dart：descriptor / contribution / registry / 生命周期
   zeta_ui/                # Flutter：Graphite token、Ide* 控件、Workbench 骨架、虚拟滚动
-  zeta_agent_core/        # Flutter(foundation)：中立 Agent 领域模型与端口、Binding/runtime
+  zeta_agent_core/        # 纯 Dart：中立 Agent 领域模型与端口、Binding/runtime
                           # 契约、事件管线、纯 reducer、TimelineStore、Effect 描述
   zeta_agent_providers/   # Codex app-server / Grok ACP / Claude Code stream-json 的协议
                           # transport、data adapter、Provider-local tracker、插件入口
@@ -233,13 +233,11 @@ Windows 用 `tool/test_affected.ps1` / `tool/test_full.ps1`（后者同样包含
    因为它们依赖应用侧的本地化宿主与主题 harness。包内另有独立的契约测试入口
    （文案注入 + token 解析）。把这批 Widget 测试迁进包内是后续增量；
    `zeta_agent_core` 的既有 reducer/pipeline/timeline 测试同理。
-5. **`zeta_agent_core` 目前依赖 `flutter/foundation`**，与目标架构 §3.1「不依赖 Flutter」
-   不符。原因是 17 个文件用 `ChangeNotifier` / `ValueListenable`，其中包括 **G1 内容冻结的
-   `AgentConversationTimelineStore`**；要做到纯 Dart 必须同时（a）把 10 个 controller 换成
-   MVI store、（b）为 Flutter 侧监听补桥接、（c）动 G1 冻结文件——那是 Phase 2/3 的工作，
-   放在"只搬边界不改行为"的 Phase 1 里做既超范围又高风险。
-   本增量的处理：把 `widgets` / `material` / `services` / Riverpod / `dart:io` / 根 app
-   全部**守卫禁止**，只留 `foundation`，并冻结文件数（只允许变少）。
+5. **`zeta_agent_core` 的 Flutter 欠债已清算（2026-08-24）**。Phase 1 完成时曾有
+   17 个文件使用 `ChangeNotifier` / `ValueListenable`，因此当时只冻结为“只减不增”。
+   Phase 3 第 1、2 批 owner 关批后，内核统一换成纯 Dart listenable，Flutter
+   `Listenable`/`ValueListenable` 只在 presentation adapter 投影；源码 import、manifest
+   Flutter SDK 与 `flutter_test` 依赖均为 0，根架构守卫已从数量上限收紧为零容忍。
 6. **G1 五文件的 T18 内容基线已刷新**。它们随包移动，`import` URI 必然变化。已逐字比对
    确认**只有 import 行变化**（`package:zeta/src/features/agent/...` →
    `package:zeta_agent_core/src/...`），语义零改动，因此按新内容重算 lineCount /

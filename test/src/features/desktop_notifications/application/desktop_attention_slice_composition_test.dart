@@ -5,14 +5,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta/src/app/localization/zeta_text_catalogs.dart';
 import 'package:zeta/src/app/desktop_attention_slice/desktop_attention_slice_composition.dart';
+import 'package:zeta/src/app/settings_slice/settings_slice_composition.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/desktop_notifications/application/desktop_attention_slice_store.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_models.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_text_catalog.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/fallback_desktop_attention_text_catalog.dart';
-import 'package:zeta/src/features/settings/application/agent_notification_settings_source.dart';
-import 'package:zeta/src/features/settings/application/general_settings_controller.dart';
-import 'package:zeta/src/features/settings/data/general_settings_store.dart';
+import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_store.dart';
+import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
 
 void main() {
@@ -116,7 +116,7 @@ void main() {
     await harness.store.handleAttention(_attention());
     expect(harness.store.unreadCount, 1);
 
-    await harness.settings.setTurnTerminalNotificationsEnabled(false);
+    harness.settings.setTurnTerminalNotificationsEnabled(false);
     await pumpEventQueue();
 
     expect(harness.store.unreadCount, 0);
@@ -132,8 +132,9 @@ void main() {
     expect(harness.notifications.shown, hasLength(2));
 
     expect(harness.notifications.permissionRequests, 1);
-    await harness.settings.setNotificationsEnabled(false);
-    await harness.settings.setNotificationsEnabled(true);
+    harness.settings.setNotificationsEnabled(false);
+    await pumpEventQueue();
+    harness.settings.setNotificationsEnabled(true);
     await pumpEventQueue();
     expect(harness.notifications.permissionRequests, 2);
   });
@@ -221,15 +222,16 @@ Future<_Harness> _createHarness({
     initialPayload: initialPayload,
   );
   final indicator = _FakeAttentionIndicator();
-  final settings = GeneralSettingsController(
-    store: MemoryGeneralSettingsStore(),
+  final settingsComposition = SettingsSliceComposition.create(
+    useFilePersistence: false,
+    dataPaths: null,
+    fallbackLanguage: AppLanguage.simplifiedChinese,
   );
+  await settingsComposition.generalSettingsReady;
   final composition = DesktopAttentionSliceComposition.create(
     notificationService: notifications,
     indicator: indicator,
-    notificationSettingsSource: GeneralSettingsControllerNotificationSource(
-      settings,
-    ),
+    notificationSettingsSource: settingsComposition.notificationSettingsSource,
     activateTarget: activateTarget ?? (_, _) async => true,
     textCatalog: textCatalog,
   );
@@ -238,7 +240,7 @@ Future<_Harness> _createHarness({
     composition: composition,
     notifications: notifications,
     indicator: indicator,
-    settings: settings,
+    settingsComposition: settingsComposition,
   );
 }
 
@@ -267,18 +269,19 @@ final class _Harness {
     required this.composition,
     required this.notifications,
     required this.indicator,
-    required this.settings,
+    required this.settingsComposition,
   });
 
   final DesktopAttentionSliceComposition composition;
   DesktopAttentionSliceStore get store => composition.store;
   final _FakeNotificationService notifications;
   final _FakeAttentionIndicator indicator;
-  final GeneralSettingsController settings;
+  final SettingsSliceComposition settingsComposition;
+  GeneralSettingsSliceStore get settings => settingsComposition.generalStore;
 
   void dispose() {
     composition.dispose();
-    settings.dispose();
+    settingsComposition.dispose();
   }
 }
 

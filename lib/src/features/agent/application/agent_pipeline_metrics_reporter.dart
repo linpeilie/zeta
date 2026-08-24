@@ -1,5 +1,4 @@
 import 'package:zeta_foundation/zeta_foundation.dart';
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// 把 [AgentEventPipelineDiagnostics] 增量翻译成白名单指标的采样器。
@@ -16,11 +15,11 @@ final class AgentPipelineMetricsReporter {
   AgentPipelineMetricsReporter({
     required ZetaMetricsPort metrics,
     required String providerId,
+    ZetaMetricLabel Function(String providerId) providerMetricLabel =
+        ZetaMetricLabel.hashed,
   }) : _metrics = metrics,
        _tags = metrics.isEnabled
-           ? ZetaMetricTags(
-               providerId: AgentMetricLabels.forProviderId(providerId),
-             )
+           ? ZetaMetricTags(providerId: providerMetricLabel(providerId))
            : ZetaMetricTags.none;
 
   final ZetaMetricsPort _metrics;

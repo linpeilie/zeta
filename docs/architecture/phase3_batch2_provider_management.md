@@ -272,10 +272,8 @@ MainApp (flag + composition owner)
 
 ## 11. 回滚与四步节奏
 
-- 批内 flag：`providerManagementSliceEnabled`，构造默认 false；生产入口自
-  2026-08-23 起显式传 true；
-- flag true 后异常：一行拨回 false，旧 controller 路径仍完整，无数据迁移和双写；
-- 关批后：revert 关批提交，从 git 历史恢复旧路径；
+- 2026-08-24 关批后不再保留运行时 flag 或旧 controller 路径；
+- 回滚只允许 revert 关批提交，从 git 历史恢复整个旧路径；
 - 任何回滚不得恢复静默 capability 成功或改写 v2 配置。
 
 四步状态：
@@ -286,7 +284,8 @@ MainApp (flag + composition owner)
 2. **对照验证**：✅ 已覆盖 management 检测、连接测试、配置签名与冲突、日志、
    账号增强、迟到结果、dispose 结算和 MainApp/IdeHome flag 双路径；受影响测试与
    完整重构门禁均通过；
-3. **翻 flag**：🟡 经再次显式确认，`main.dart` 已于 2026-08-23 传
-   `providerManagementSliceEnabled: true`；确认同时接受与第 1 批观察窗口重叠，
-   第 2 批进入至少 7 天观察，最早于 2026-08-30 关批；若回退则修复复测后重新起算；
-4. **关批**：观察通过后执行 §10，再启动第 3 批。
+3. **翻 flag**：✅ 2026-08-23 生产启用；2026-08-24 用户明确接受不等待原定日期，
+   缩短本批独立观察余量；
+4. **关批**：✅ 2026-08-24 已执行 §10：settings/management 旧 controller、
+   Flutter Listenable port、flag 与 false-path 删除，Provider settings/management 固定为
+   slice 单一路径，对应 application Flutter 燃尽项清零。

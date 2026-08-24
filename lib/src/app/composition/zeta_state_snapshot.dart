@@ -27,9 +27,9 @@ final class ZetaStateSnapshot {
     required this.usageStatistics,
     required this.agentUsagePanel,
     required this.desktopAttention,
-    this.appearanceSettings,
-    this.generalSettings,
-    this.providerSettings,
+    required this.appearanceSettings,
+    required this.generalSettings,
+    required this.providerSettings,
   });
 
   final ZetaShellStateSnapshot shell;
@@ -38,10 +38,9 @@ final class ZetaStateSnapshot {
   final AgentUsagePanelSliceState agentUsagePanel;
   final ZetaDesktopAttentionStateSnapshot desktopAttention;
 
-  /// 第 1、2 批仍在独立观察时允许为空；各批关批后会收敛为必选节点。
-  final AppearanceSettingsSliceState? appearanceSettings;
-  final GeneralSettingsSliceState? generalSettings;
-  final AgentProviderSettingsSliceState? providerSettings;
+  final AppearanceSettingsSliceState appearanceSettings;
+  final GeneralSettingsSliceState generalSettings;
+  final AgentProviderSettingsSliceState providerSettings;
 }
 
 /// Desktop Attention 的无路径、无正文根投影。
@@ -88,7 +87,7 @@ final class ZetaShellStateSnapshot {
     required Map<String, ZetaConversationStateSnapshot> conversationsByEntryId,
     required this.selectedConversationEntryId,
     required this.projectHomeActive,
-    this.agentManagement,
+    required this.agentManagement,
   }) : projectThreadsByProjectPath = Map.unmodifiable(
          projectThreadsByProjectPath,
        ),
@@ -104,7 +103,7 @@ final class ZetaShellStateSnapshot {
   final Map<String, ZetaConversationStateSnapshot> conversationsByEntryId;
   final String? selectedConversationEntryId;
   final bool projectHomeActive;
-  final ZetaAgentManagementStateSnapshot? agentManagement;
+  final ZetaAgentManagementStateSnapshot agentManagement;
 }
 
 /// Project Threads 的无正文根投影。

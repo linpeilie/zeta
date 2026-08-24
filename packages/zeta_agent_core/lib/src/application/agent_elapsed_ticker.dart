@@ -1,11 +1,11 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:zeta_agent_core/src/application/agent_listenable.dart';
 
 /// 共享 1 秒时钟：仅在 turn 执行中运行，供 header/卡片局部刷新 elapsed。
 ///
 /// 不替代事件驱动的 typed header state；相位变化仍走类型化 UI 状态。
-class AgentElapsedTicker extends ChangeNotifier {
+class AgentElapsedTicker extends AgentChangeNotifier {
   Timer? _timer;
   DateTime _now = DateTime.now();
 

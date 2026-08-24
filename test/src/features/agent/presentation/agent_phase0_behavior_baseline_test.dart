@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
+import '../../../testing/provider_settings_test_store.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
@@ -170,7 +170,7 @@ AgentConversationViewModel _createViewModel(
     metrics: metrics ?? InMemoryZetaMetricsPort(enabled: false),
   );
   addTearDown(registry.close);
-  final controller = AgentProviderSettingsController(
+  final controller = createProviderSettingsTestStore(
     runtimeRegistry: registry,
     configStore: MemoryAgentProviderConfigStore(
       AgentProviderSettings(
@@ -196,6 +196,7 @@ AgentConversationViewModel _createViewModel(
     initialProjectPath: '/repo',
     uiFrameScheduler: FakeAgentFrameScheduler(),
     metrics: metrics ?? InMemoryZetaMetricsPort(enabled: false),
+    providerMetricLabel: AgentMetricLabels.forProviderId,
   );
 }
 

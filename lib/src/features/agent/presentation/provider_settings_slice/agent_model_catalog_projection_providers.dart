@@ -9,18 +9,22 @@ typedef AgentModelCatalogQueryRequest = ({
   bool includeHidden,
 });
 
-/// app 组合层注入的唯一模型目录查询源；null = 第 2 批 flag 关闭。
+/// app 组合层注入的唯一模型目录查询源。
+///
+/// 缺失覆盖是组合错误，不能降级成“目录暂不可用”，否则会把根接线缺陷伪装成
+/// Provider 能力或网络失败。
 final agentModelCatalogProjectionSourceProvider =
-    Provider<AgentModelCatalogProjectionSource?>((ref) => null);
+    Provider<AgentModelCatalogProjectionSource>(
+      (ref) => throw StateError(
+        'Agent model catalog projection source is not installed',
+      ),
+    );
 
 /// 把 Provider ID/可见性解析为安全 family key。
 final agentModelCatalogQueryProvider =
     Provider.family<AgentModelCatalogQuery?, AgentModelCatalogQueryRequest>(
       (ref, request) {
         final source = ref.watch(agentModelCatalogProjectionSourceProvider);
-        if (source == null) {
-          return null;
-        }
         final settings = ref.watch(agentProviderSettingsValueProvider);
         for (final config in settings.providers) {
           if (config.id == request.providerId) {
@@ -65,13 +69,6 @@ final class AgentModelCatalogProjectionNotifier
     ref.watch(agentProviderSettingsSliceProvider);
     final source = ref.watch(agentModelCatalogProjectionSourceProvider);
     final revision = ++_requestRevision;
-    if (source == null) {
-      return Future<AgentModelCatalogProjectionState>.value(
-        AgentModelCatalogProjectionState.failed(
-          AgentModelCatalogProjectionFailureKind.sourceUnavailable,
-        ),
-      );
-    }
     return _load(source, revision: revision, forceRefresh: false);
   }
 
@@ -80,14 +77,6 @@ final class AgentModelCatalogProjectionNotifier
     final source = ref.read(agentModelCatalogProjectionSourceProvider);
     final previous = state.value;
     final revision = ++_requestRevision;
-    if (source == null) {
-      state = AsyncData<AgentModelCatalogProjectionState>(
-        AgentModelCatalogProjectionState.failed(
-          AgentModelCatalogProjectionFailureKind.sourceUnavailable,
-        ),
-      );
-      return;
-    }
     state = previous == null
         ? const AsyncLoading<AgentModelCatalogProjectionState>()
         : AsyncData<AgentModelCatalogProjectionState>(previous.beginRefresh());
@@ -132,13 +121,12 @@ final class AgentModelCatalogProjectionNotifier
   bool _accepts(int revision) => ref.mounted && revision == _requestRevision;
 }
 
-/// active Provider 的安全查询键；flag 关闭或配置缺失时为 null。
+/// active Provider 的安全查询键；配置缺失时为 null。
 final activeAgentModelCatalogQueryProvider = Provider<AgentModelCatalogQuery?>((
   ref,
 ) {
-  if (ref.watch(agentModelCatalogProjectionSourceProvider) == null) {
-    return null;
-  }
+  // 即使当前配置目录为空，也必须验证查询源已经由组合层安装。
+  ref.watch(agentModelCatalogProjectionSourceProvider);
   final activeProviderId = ref
       .watch(agentProviderSettingsValueProvider)
       .activeProviderId;
@@ -153,7 +141,7 @@ final activeAgentModelCatalogQueryProvider = Provider<AgentModelCatalogQuery?>((
   );
 }, name: 'activeAgentModelCatalogQuery');
 
-/// active Provider 的 async 目录投影；null 表示第 2 批路径未启用。
+/// active Provider 的 async 目录投影；没有可查询配置时为 null。
 final activeAgentModelCatalogProjectionProvider =
     Provider<AsyncValue<AgentModelCatalogProjectionState>?>((ref) {
       final query = ref.watch(activeAgentModelCatalogQueryProvider);

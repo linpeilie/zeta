@@ -8,7 +8,9 @@ import 'package:zeta/src/features/agent/data/agent_model_catalog_cache_store.dar
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/workspace/application/workspace_file_corpus_port.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
+import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_provider_settings_slice_store.dart';
+
+import '../../../testing/provider_settings_test_store.dart';
 
 import '../../../testing/fake_agent_frame_scheduler.dart';
 import '../../../testing/legacy_bundle_factory_mixin.dart';
@@ -115,7 +117,7 @@ void main() {
     test('前后台 entry 终态保留各自固定 Binding 的 Provider', () async {
       final factory = _TerminalProviderFactory();
       final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
-      final providerController = AgentProviderSettingsController(
+      final providerController = createProviderSettingsTestStore(
         configStore: MemoryAgentProviderConfigStore(
           const AgentProviderSettings(
             providers: <AgentProviderConfig>[
@@ -190,7 +192,7 @@ void main() {
 final class _WorkspaceHarness {
   _WorkspaceHarness() {
     registry = AgentProviderRuntimeRegistry(providerFactory: factory);
-    providerController = AgentProviderSettingsController(
+    providerController = createProviderSettingsTestStore(
       configStore: MemoryAgentProviderConfigStore(),
       modelCatalogRepository: AgentModelCatalogRepository(
         store: MemoryAgentModelCatalogCacheStore(),
@@ -212,7 +214,7 @@ final class _WorkspaceHarness {
   final _MultiInstanceProviderFactory factory = _MultiInstanceProviderFactory();
   final List<FakeAgentFrameScheduler> _schedulers = <FakeAgentFrameScheduler>[];
   late final AgentProviderRuntimeRegistry registry;
-  late final AgentProviderSettingsController providerController;
+  late final AgentProviderSettingsSliceStore providerController;
   late final AgentConversationWorkspaceStore controller;
 
   Future<AgentThreadWorkspaceEntry> createEntry({

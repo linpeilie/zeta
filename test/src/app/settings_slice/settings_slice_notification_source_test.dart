@@ -4,7 +4,6 @@ import 'package:zeta/src/app/settings_slice/settings_slice_notification_source.d
 import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_effect.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_state.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_store.dart';
-import 'package:zeta/src/features/settings/data/general_settings_store.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 
 void main() {
@@ -16,11 +15,14 @@ void main() {
         turnTerminalEnabled: false,
       ),
     );
-    final dataStore = MemoryGeneralSettingsStore(initial);
     final sliceStore = _sliceStore();
     addTearDown(sliceStore.close);
+    final ready = Future<GeneralSettings>.sync(() {
+      sliceStore.loaded(initial);
+      return initial;
+    });
     final source = GeneralSettingsSliceNotificationSource(
-      dataStore: dataStore,
+      generalSettingsReady: ready,
       sliceStore: sliceStore,
     );
 
@@ -35,7 +37,9 @@ void main() {
     final sliceStore = _sliceStore();
     addTearDown(sliceStore.close);
     final source = GeneralSettingsSliceNotificationSource(
-      dataStore: MemoryGeneralSettingsStore(),
+      generalSettingsReady: Future<GeneralSettings>.value(
+        const GeneralSettings(),
+      ),
       sliceStore: sliceStore,
     );
     var notifications = 0;

@@ -44,6 +44,8 @@ void main() {
         ),
         effectRunner: runner,
         configurationNotLoadedMessage: '配置文件尚未加载',
+        accountDataEnrichmentEnabledFor: (config) =>
+            config.extra[claudeCodeAccountDataEnrichmentKey] != false,
       );
       runner.store = store;
       addTearDown(store.close);
@@ -214,6 +216,8 @@ final class _SlicePageHarness {
       ),
       effectRunner: runner,
       configurationNotLoadedMessage: '配置文件尚未加载',
+      accountDataEnrichmentEnabledFor: (config) =>
+          config.extra[claudeCodeAccountDataEnrichmentKey] != false,
     );
     runner.store = store;
     return _SlicePageHarness(store: store, runner: runner);

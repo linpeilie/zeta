@@ -4,7 +4,8 @@
 
 最后更新：2026-08-24
 
-状态：第 3–6 批已关批；第 1、2 批仍在独立观察，Phase 2 的 14 天真实使用证据仍在计时。
+状态：第 1–6 批代码均已关批；Phase 2 的 14 天真实使用证据仍在计时，Phase 3
+阶段门禁尚未关闭。
 
 > 对应 [目标架构 §14 Phase 3](target_architecture_riverpod_mvi_plugins_packages.md)。
 > 这份文档是 Phase 3 的**前置条件交付物**：钉死批次顺序、开门/关门标准、每批 owner
@@ -59,6 +60,13 @@
 > compatibility/default factory 双轨，直接拆为三个 essential Provider 插件，并同步
 > 清算 Phase 1 §8.1 的 core 封闭目录。该授权只覆盖第 6 批，不豁免第 1、2 批观察、
 > Phase 2 连续 14 天证据或 Phase 4 的平台/发布前置条件。
+>
+> **第 1、2 批提前关批确认（2026-08-24）**：用户明确要求修复阶段阻塞 1、3、4，
+> 并确认不等待第 1、2 批原定观察日期。因此 settings 与 Provider
+> settings/management 同次删除旧 controller、ingress/Flutter Listenable、两个 flag
+> 及所有 false-path，root snapshot 对应节点改为必选；这是缩短批内观察余量的显式
+> 风险接受。该确认没有选择阻塞 2、5，不豁免 Phase 2 连续 14 天证据，也不把未执行的
+> 迁移窗口、回退锚、三平台真实 Provider smoke 或 Profile 推断为通过。
 >
 > **第 3 批提前开工记录（2026-08-23）**：经显式要求，接受第 1、2 批仍在生产
 > 观察时启动第 3 批。当前授权只覆盖字段级契约与 3a Project Threads 的默认关闭
@@ -224,19 +232,19 @@ feature 切片的只读投影，仅供诊断与恢复测试，生产 Widget 禁�
 | --- | --- | --- |
 | `knownApplicationToPresentation`（第 5 批后当前 0，基线 2） | ~~`project_threads_controller`~~ | ✅ 第 3 批 3a 已清零 |
 | | ~~`agent_thread_workspace_controller`~~ | ✅ 第 5 批迁到 app 组合层并删除旧文件 |
-| `knownApplicationFlutterImports`（第 5 批后当前 5，基线 12） | settings ×2（appearance / general controller） | 第 1 批 |
-| | `agent_provider_settings_controller`、`agent_provider_settings_port`、`agent_management_controller` | 第 2 批 |
+| `knownApplicationFlutterImports`（当前 0，基线 12） | ~~settings ×2（appearance / general controller）~~ | ✅ 第 1 批关批清零 |
+| | ~~`agent_provider_settings_controller`、`agent_provider_settings_port`、`agent_management_controller`~~ | ✅ 第 2 批关批清零 |
 | | ~~`usage_statistics_controller`、`agent_usage_panel_controller`~~ | ✅ 第 3 批已清零 |
 | | ~~`workspace_file_index_controller`~~ | ✅ 第 4 批 4a 已清零 |
 | | ~~`agent_conversation_mode_controller`、`agent_conversation_model_selection_controller`、`agent_skills_catalog_controller`、`agent_thread_workspace_controller`~~ | ✅ 第 5 批清零：前三者改为纯 Dart listener，workspace 迁到 app store |
 | `knownDomainImpurities`（4a 后当前 0，基线 4） | ~~settings domain ×3（`appearance_settings` / `general_settings` / `system_font_family`）~~ | ✅ 第 1 批已清零（§3.2 决策点 A） |
 | | ~~`workspace_directory_rules`~~ | ✅ 第 4 批 4a 清理过期清单项 |
 | ~~`_knownExternalViolations`（7，全在 `core/`）~~ | ~~`app_logging` ×2、`sensitive_data_redactor`、`atomic_text_file`、`zeta_data_paths`、`path_utils`、`system_file_manager`~~ | ✅ 2026-08-23 已清零（开工文档起草当天，独立于任何迁移批）：IO 下沉 `app/storage` / `app/logging` / `ui/core`，路径与脱敏注入化 |
-| `_agentCoreFlutterBaseline = 17` | `zeta_agent_core` 的 `flutter/foundation` 依赖 | 不绑单批：随相关监听方改造递减，Phase 4 前清零；日志 sink 单例例外（§12.10）在其取消条件满足（内核用日志的类改构造注入）时一并删除 |
+| ~~`_agentCoreFlutterBaseline = 17`~~（当前 0） | ~~`zeta_agent_core` 的 `flutter/foundation` 依赖~~ | ✅ 2026-08-24 改用纯 Dart listenable，并在 presentation 建 Flutter adapter；manifest 与源码门禁收紧为零容忍 |
 
 ---
 
-## 3. 第 1 批：settings —— 详细设计
+## 3. 第 1 批：settings —— 详细设计（已关批）
 
 ### 3.1 现状盘点
 
@@ -369,9 +377,12 @@ general：`GeneralSettingsLoadRequested / Loaded / LoadFailed(kind)`、
 - domain 的 `ThemeMode` 引用（`appearance_settings.dart` 纯化）；
 - `settingsSliceEnabled` flag。
 
+**关批记录（2026-08-24）**：按 §0 的显式提前关批确认，上述删除项全部执行；
+settings 固定为 slice 单一路径，root snapshot 节点必选。
+
 ---
 
-## 4. 第 2 批：provider 配置 / 管理 / 模型目录（框架级）
+## 4. 第 2 批：provider 配置 / 管理 / 模型目录（已关批）
 
 建议拆三个小步：
 
@@ -408,6 +419,10 @@ capability 位与 UI 入口的 G4 对照表、`AgentProviderSettingsPort` 消费
 > **生产翻旗记录（2026-08-23）**：经再次显式确认接受与第 1 批观察重叠，生产入口
 > 已传 `providerManagementSliceEnabled: true`，进入至少 7 天观察；旧路径只作为独立
 > flag 回滚面保留，未创建双 owner 或双写。
+>
+> **关批记录（2026-08-24）**：按本文件 §0 的显式提前关批确认，两个旧 controller、
+> Flutter Listenable port、flag 与 false-path 已删除；Provider settings 与 management
+> 固定为唯一 slice owner，root snapshot 节点必选。
 
 ---
 
@@ -494,9 +509,9 @@ capability 位与 UI 入口的 G4 对照表、`AgentProviderSettingsPort` 消费
 - 三类 native Bundle 端口矩阵、custom config id、V1/V2 codec、权限迁移、静态能力、
   degraded/duplicate/unknown 路径与零旧符号守卫均已覆盖。
 
-第 6 批关批不等于 Phase 3 整体结束：第 1、2 批旧 settings/management application
-仍消费内置 Provider identity/配置 key，这些跨层遗留及阶段级前置条件继续按 §0 独立验收，
-不能用“core 集中目录已清空”替代 Phase 3 整体关门。
+六批代码现在均已关批，但 Phase 3 整体仍要等待 §0 的连续 14 天真实使用证据；代码迁移
+完成不能替代阶段证据。Phase 4 另有迁移窗口、可构建回退锚、三平台真实 Provider smoke
+与 Profile 前置条件，见第 6 批文档 §10。
 
 ---
 
@@ -533,5 +548,5 @@ capability 位与 UI 入口的 G4 对照表、`AgentProviderSettingsPort` 消费
 - 不动 G1 五文件、entryId / coalescing / reducer identity；
 - 不改任何持久化 schema（§2.5 的六个文件版本号冻结）；
 - `core/` 七处 `dart:io` 清理不与任何迁移批混在同一 PR；
-- `zeta_agent_core` 的 17 文件基线不因无关重构波动（只随监听方改造递减）；
+- `zeta_agent_core` 保持纯 Dart；Flutter import 与 manifest SDK 依赖均为零容忍；
 - 不趁机"统一"两条 settings 持久化语义（§3.1）——那是行为变化，另立任务。

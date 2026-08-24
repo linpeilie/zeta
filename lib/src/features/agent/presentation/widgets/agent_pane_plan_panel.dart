@@ -40,7 +40,7 @@ class _AgentActivePlanSection extends StatelessWidget {
                       return const SizedBox.shrink();
                     }
                     return ListenableBuilder(
-                      listenable: turnState,
+                      listenable: AgentFlutterListenableAdapter(turnState),
                       builder: (context, _) {
                         final entries = turnState.planEntries;
                         if (!viewModel.shouldShowActivePlan) {

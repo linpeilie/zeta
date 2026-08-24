@@ -311,4 +311,10 @@ final class _SettingsPort extends ChangeNotifier
     String providerId,
     String optionId,
   ) async {}
+
+  @override
+  void Function() subscribe(void Function() listener) {
+    addListener(listener);
+    return () => removeListener(listener);
+  }
 }

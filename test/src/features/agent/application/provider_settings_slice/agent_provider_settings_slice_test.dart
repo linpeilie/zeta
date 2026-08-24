@@ -13,7 +13,8 @@ void main() {
       final store = _createStore(runner);
       addTearDown(store.close);
       var notifications = 0;
-      store.addListener(() => notifications += 1);
+      final unsubscribe = store.subscribe(() => notifications += 1);
+      addTearDown(unsubscribe);
 
       final first = store.loadSettings();
       final second = store.loadSettings();
@@ -27,18 +28,19 @@ void main() {
       expect(await second, same(settings));
       expect(runner.effects, isEmpty);
       expect(store.activeProviderId, grokAgentProviderId);
-      expect(notifications, 1);
+      expect(notifications, 2);
     });
 
     test(
-      'late persist success settles its Future without publishing',
+      'late persist success settles its Future without replaying old state',
       () async {
         final runner = _ManualRunner();
         final store = _createStore(runner);
         addTearDown(store.close);
         await _loadDefaults(store, runner);
         var notifications = 0;
-        store.addListener(() => notifications += 1);
+        final unsubscribe = store.subscribe(() => notifications += 1);
+        addTearDown(unsubscribe);
 
         final firstFuture = store.updateProviderConfig(
           defaultCodexAgentProviderConfig.copyWith(command: 'codex-first'),
@@ -54,12 +56,12 @@ void main() {
         store.persisted(first.operationId);
         await firstFuture;
         expect(store.activeProviderConfig.command, 'codex-second');
-        expect(notifications, 0, reason: '迟到回执不得发布旧快照');
+        expect(notifications, 2, reason: '迟到回执不得发布旧快照');
 
         store.persisted(second.operationId);
         await secondFuture;
         expect(store.activeProviderConfig.command, 'codex-second');
-        expect(notifications, 1);
+        expect(notifications, 3);
       },
     );
 

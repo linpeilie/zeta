@@ -114,12 +114,10 @@ Transition<GeneralSettingsSliceState, GeneralSettingsSliceEffect> _submit(
   GeneralSettings Function(GeneralSettings base) update, {
   required bool equalsCurrent,
 }) {
-  if (equalsCurrent) {
+  if (equalsCurrent || state.pendingOperationId != null) {
     return Transition.none(state);
   }
-  // 串行链基线：有在途提交时基于在途值计算，避免丢掉尚未应用的修改。
-  final base = state.pendingValue ?? state.settings;
-  final next = update(base);
+  final next = update(state.settings);
   return Transition(
     state.copyWith(
       pendingOperationId: operationId,
@@ -138,12 +136,14 @@ _submitNotification(
   OperationId operationId,
   AgentNotificationSettingsUpdator update,
 ) {
-  final base = state.pendingValue ?? state.settings;
-  final nextNotifications = update(base.notifications);
-  if (nextNotifications == base.notifications) {
+  if (state.pendingOperationId != null) {
     return Transition.none(state);
   }
-  final next = base.copyWith(notifications: nextNotifications);
+  final nextNotifications = update(state.settings.notifications);
+  if (nextNotifications == state.settings.notifications) {
+    return Transition.none(state);
+  }
+  final next = state.settings.copyWith(notifications: nextNotifications);
   return Transition(
     state.copyWith(
       pendingOperationId: operationId,

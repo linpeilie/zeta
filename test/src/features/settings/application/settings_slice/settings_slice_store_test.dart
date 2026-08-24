@@ -133,12 +133,98 @@ void main() {
       );
 
       final first = store.setAppLanguage(AppLanguage.english);
-      store.setMessageSendShortcut(MessageSendShortcut.primaryModifierEnter);
-      store.persistFailed(first, SettingsPersistFailureKind.persistence);
+      final queued = store.setMessageSendShortcut(
+        MessageSendShortcut.primaryModifierEnter,
+      );
+      store.persistFailed(queued, SettingsPersistFailureKind.persistence);
 
-      // 第一次已被第二次取代 → 迟到，不登记失败。
+      // 队列中的第二次尚未提交，用其 id 回执必然是迟到结果。
       expect(store.state.lastPersistFailure, isNull);
       expect(store.diagnostics.staleResultCount, 1);
+      expect(store.state.pendingOperationId, first);
+    });
+
+    test('首次 load 结算前命令排队，并从持久化快照计算', () {
+      final runner = _RecordingGeneralRunner();
+      final store = GeneralSettingsSliceStore(
+        initialState: const GeneralSettingsSliceState(),
+        effectRunner: runner,
+        initiallyLoaded: false,
+      );
+
+      store.load();
+      final language = store.setAppLanguage(AppLanguage.english);
+
+      expect(
+        runner.effects.whereType<GeneralSettingsLoadEffect>(),
+        hasLength(1),
+      );
+      expect(runner.effects.whereType<GeneralSettingsPersistEffect>(), isEmpty);
+
+      const persisted = GeneralSettings(
+        sendMessageShortcut: MessageSendShortcut.primaryModifierEnter,
+        notifications: AgentNotificationSettings(enabled: false),
+      );
+      store.loaded(persisted);
+
+      final effect = runner.effects
+          .whereType<GeneralSettingsPersistEffect>()
+          .single;
+      expect(effect.operationId, language);
+      expect(
+        effect.value,
+        const GeneralSettings(
+          sendMessageShortcut: MessageSendShortcut.primaryModifierEnter,
+          notifications: AgentNotificationSettings(enabled: false),
+          appLanguage: AppLanguage.english,
+        ),
+      );
+    });
+
+    test('前一次失败后，后一次成功不夹带失败修改', () {
+      final runner = _RecordingGeneralRunner();
+      final store = GeneralSettingsSliceStore(
+        initialState: const GeneralSettingsSliceState(),
+        effectRunner: runner,
+      );
+
+      final language = store.setAppLanguage(AppLanguage.english);
+      final shortcut = store.setMessageSendShortcut(
+        MessageSendShortcut.primaryModifierEnter,
+      );
+      expect(
+        runner.effects.whereType<GeneralSettingsPersistEffect>(),
+        hasLength(1),
+      );
+
+      store.persistFailed(language, SettingsPersistFailureKind.persistence);
+
+      final effects = runner.effects
+          .whereType<GeneralSettingsPersistEffect>()
+          .toList();
+      expect(effects, hasLength(2));
+      expect(effects.last.operationId, shortcut);
+      expect(effects.last.value.appLanguage, AppLanguage.simplifiedChinese);
+      expect(
+        effects.last.value.sendMessageShortcut,
+        MessageSendShortcut.primaryModifierEnter,
+      );
+      expect(
+        store.state.lastPersistFailure,
+        const GeneralSettingsSlicePersistFailure(
+          kind: SettingsPersistFailureKind.persistence,
+          operation: GeneralSettingsPersistOperation.language,
+        ),
+        reason: '失败必须先成为可观察状态，不能因后续 operationId 被吞掉',
+      );
+
+      store.persisted(shortcut, effects.last.value);
+
+      expect(store.state.settings.appLanguage, AppLanguage.simplifiedChinese);
+      expect(
+        store.state.settings.sendMessageShortcut,
+        MessageSendShortcut.primaryModifierEnter,
+      );
     });
 
     test('OperationId 作用域是常量、序号单调', () {

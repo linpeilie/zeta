@@ -4,7 +4,9 @@ import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
+import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_provider_settings_slice_store.dart';
+
+import '../../../testing/provider_settings_test_store.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
 
 import '../../../testing/fake_agent_frame_scheduler.dart';
@@ -90,7 +92,7 @@ void main() {
 final class _RecycleHarness {
   _RecycleHarness() {
     registry = AgentProviderRuntimeRegistry(providerFactory: factory);
-    controller = AgentProviderSettingsController(
+    controller = createProviderSettingsTestStore(
       configStore: MemoryAgentProviderConfigStore(),
       runtimeRegistry: registry,
     );
@@ -113,7 +115,7 @@ final class _RecycleHarness {
   final _MultiInstanceProviderFactory factory = _MultiInstanceProviderFactory();
   final FakeAgentFrameScheduler scheduler = FakeAgentFrameScheduler();
   late final AgentProviderRuntimeRegistry registry;
-  late final AgentProviderSettingsController controller;
+  late final AgentProviderSettingsSliceStore controller;
   late final AgentConversationBindingTestHarness bindingHarness;
   late final AgentConversationBindingLease bindingLease;
   late final AgentConversationViewModel viewModel;

@@ -338,7 +338,8 @@ class _AgentConversationTimeline extends StatelessWidget {
         ? Listenable.merge(<Listenable>[
             viewModel.liveTurnListenable,
             floatingPanelExtent,
-            ?viewModel.liveTurnState,
+            if (viewModel.liveTurnState case final liveTurnState?)
+              AgentFlutterListenableAdapter(liveTurnState),
           ])
         : floatingPanelExtent;
 

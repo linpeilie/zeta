@@ -1,12 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/app/app.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
-import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
-import 'package:zeta/src/features/settings/application/general_settings_controller.dart';
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
 import 'package:zeta/src/features/settings/data/general_settings_store.dart';
 import 'package:zeta/src/features/settings/data/system_font_catalog_service.dart';
@@ -14,6 +13,7 @@ import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/settings/domain/system_font_family.dart';
+import 'package:zeta/src/features/settings/presentation/settings_slice/settings_slice_providers.dart';
 import 'package:zeta/src/ui/features/ide/views/ide_home.dart';
 import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
 
@@ -24,12 +24,10 @@ void main() {
     tester,
   ) async {
     final store = _DeferredGeneralSettingsStore();
-    final controller = GeneralSettingsController(store: store);
-    addTearDown(controller.dispose);
 
     await _pumpMainApp(
       tester,
-      generalSettingsController: controller,
+      generalSettingsStore: store,
       waitForGeneralSettings: true,
     );
     await tester.pump();
@@ -53,19 +51,15 @@ void main() {
     expect(WidgetsLocalizations.of(context), isNotNull);
   });
 
-  testWidgets('production slice flags survive deferred locale bootstrap', (
+  testWidgets('slice-only composition survives deferred locale bootstrap', (
     tester,
   ) async {
     final store = _DeferredGeneralSettingsStore();
-    final controller = GeneralSettingsController(store: store);
-    addTearDown(controller.dispose);
 
     await _pumpMainApp(
       tester,
-      generalSettingsController: controller,
+      generalSettingsStore: store,
       waitForGeneralSettings: true,
-      settingsSliceEnabled: true,
-      providerManagementSliceEnabled: true,
     );
     await tester.pump();
 
@@ -87,12 +81,10 @@ void main() {
     final englishStore = _DeferredGeneralSettingsStore(
       const GeneralSettings(appLanguage: AppLanguage.english),
     );
-    final englishController = GeneralSettingsController(store: englishStore);
-    addTearDown(englishController.dispose);
     await _pumpMainApp(
       tester,
       key: const ValueKey<String>('main-app-en'),
-      generalSettingsController: englishController,
+      generalSettingsStore: englishStore,
       waitForGeneralSettings: true,
     );
     await tester.pump();
@@ -109,12 +101,10 @@ void main() {
     final chineseStore = _DeferredGeneralSettingsStore(
       const GeneralSettings(appLanguage: AppLanguage.simplifiedChinese),
     );
-    final chineseController = GeneralSettingsController(store: chineseStore);
-    addTearDown(chineseController.dispose);
     await _pumpMainApp(
       tester,
       key: const ValueKey<String>('main-app-zh'),
-      generalSettingsController: chineseController,
+      generalSettingsStore: chineseStore,
       waitForGeneralSettings: true,
     );
     await tester.pump();
@@ -145,29 +135,25 @@ void main() {
   testWidgets('language and appearance updates do not remount IdeHome', (
     tester,
   ) async {
-    final general = GeneralSettingsController(
-      store: MemoryGeneralSettingsStore(),
-    );
-    addTearDown(general.dispose);
-    final appearance = AppearanceSettingsController(
-      store: MemoryAppearanceSettingsStore(),
-      fontCatalog: const _FakeSystemFontCatalogService(),
-      initialSettings: const AppearanceSettings(
-        themeMode: ZetaThemeModePreference.dark,
-      ),
-    );
-    addTearDown(appearance.dispose);
-
     await _pumpMainApp(
       tester,
-      generalSettingsController: general,
-      appearanceController: appearance,
+      generalSettingsStore: MemoryGeneralSettingsStore(),
+      appearanceSettingsStore: MemoryAppearanceSettingsStore(),
+      systemFontCatalogService: const _FakeSystemFontCatalogService(),
+      initialAppearanceSettings: const AppearanceSettings(
+        themeMode: ZetaThemeModePreference.dark,
+      ),
     );
     await tester.pump();
 
     final first = tester.element(find.byType(IdeHome));
-    await general.setAppLanguage(AppLanguage.english);
-    await appearance.setThemeMode(ZetaThemeModePreference.light);
+    final container = ProviderScope.containerOf(first, listen: false);
+    container
+        .read(generalSettingsSliceStoreProvider)
+        .setAppLanguage(AppLanguage.english);
+    container
+        .read(appearanceSettingsSliceStoreProvider)
+        .selectThemeMode(ZetaThemeModePreference.light);
     await tester.pump();
 
     expect(tester.element(find.byType(IdeHome)), same(first));
@@ -180,12 +166,10 @@ void main() {
       final store = MemoryGeneralSettingsStore(
         const GeneralSettings(appLanguage: AppLanguage.simplifiedChinese),
       );
-      final controller = GeneralSettingsController(store: store);
-      addTearDown(controller.dispose);
 
       await _pumpMainApp(
         tester,
-        generalSettingsController: controller,
+        generalSettingsStore: store,
         waitForGeneralSettings: true,
       );
       await tester.pump();
@@ -220,13 +204,11 @@ void main() {
       final store = MemoryGeneralSettingsStore(
         const GeneralSettings(appLanguage: AppLanguage.simplifiedChinese),
       );
-      final firstController = GeneralSettingsController(store: store);
-      addTearDown(firstController.dispose);
 
       await _pumpMainApp(
         tester,
         key: const ValueKey<String>('main-app-before-restart'),
-        generalSettingsController: firstController,
+        generalSettingsStore: store,
         waitForGeneralSettings: true,
       );
       await tester.pump();
@@ -238,7 +220,10 @@ void main() {
         'zh',
       );
 
-      await firstController.setAppLanguage(AppLanguage.english);
+      final firstContext = tester.element(find.byType(IdeHome));
+      ProviderScope.containerOf(firstContext, listen: false)
+          .read(generalSettingsSliceStoreProvider)
+          .setAppLanguage(AppLanguage.english);
       await tester.pump();
       expect(
         Localizations.localeOf(
@@ -247,12 +232,10 @@ void main() {
         'zh',
       );
 
-      final secondController = GeneralSettingsController(store: store);
-      addTearDown(secondController.dispose);
       await _pumpMainApp(
         tester,
         key: const ValueKey<String>('main-app-after-restart'),
-        generalSettingsController: secondController,
+        generalSettingsStore: store,
         waitForGeneralSettings: true,
       );
       await tester.pump();
@@ -270,12 +253,12 @@ void main() {
 Future<void> _pumpMainApp(
   WidgetTester tester, {
   Key? key,
-  GeneralSettingsController? generalSettingsController,
-  AppearanceSettingsController? appearanceController,
+  GeneralSettingsStore? generalSettingsStore,
+  AppearanceSettingsStore? appearanceSettingsStore,
+  SystemFontCatalogService? systemFontCatalogService,
+  AppearanceSettings? initialAppearanceSettings,
   AppLanguage? displayLanguageOverride,
   bool waitForGeneralSettings = false,
-  bool settingsSliceEnabled = false,
-  bool providerManagementSliceEnabled = false,
 }) async {
   tester.view
     ..physicalSize = const Size(1400, 900)
@@ -296,12 +279,12 @@ Future<void> _pumpMainApp(
         FakeAgentProvider(),
       ),
       agentProviderConfigStore: MemoryAgentProviderConfigStore(),
-      generalSettingsController: generalSettingsController,
-      appearanceController: appearanceController,
+      generalSettingsStore: generalSettingsStore,
+      appearanceSettingsStore: appearanceSettingsStore,
+      systemFontCatalogService: systemFontCatalogService,
+      initialAppearanceSettings: initialAppearanceSettings,
       displayLanguageOverride: displayLanguageOverride,
       waitForGeneralSettings: waitForGeneralSettings,
-      settingsSliceEnabled: settingsSliceEnabled,
-      providerManagementSliceEnabled: providerManagementSliceEnabled,
     ),
   );
 }

@@ -4,8 +4,7 @@ import 'package:zeta/src/features/agent_management/domain/agent_management_model
 
 /// Agent 管理页面可发起的操作与只读快照。
 ///
-/// 契约本身不依赖 Flutter。迁移期旧 controller 与新 MVI store 都实现它，
-/// presentation 只在最外层选择监听方式，内部控件不再绑定具体状态容器。
+/// 契约本身不依赖 Flutter，由页面级 MVI store 唯一实现。
 abstract interface class AgentManagementOperations {
   List<ManagedAgent> get agents;
 

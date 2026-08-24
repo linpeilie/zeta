@@ -18,12 +18,17 @@ abstract interface class AgentManagementSliceEffectRunner {
   String? validateConfiguration(String agentId, String content);
 }
 
+/// app 组合层注入的 Provider 配置投影，application 不解析厂商私有 extra key。
+typedef AgentAccountDataEnrichmentEnabledResolver =
+    bool Function(AgentProviderConfig config);
+
 /// 页面 scope 的纯 Dart Agent management MVI store。
 final class AgentManagementSliceStore implements AgentManagementOperations {
   AgentManagementSliceStore({
     required AgentManagementSliceState initialState,
     required this.effectRunner,
     required this.configurationNotLoadedMessage,
+    required this.accountDataEnrichmentEnabledFor,
     OperationIdGenerator Function(String scope)? operationIdGeneratorFactory,
   }) : _state = initialState,
        _generatorFactory =
@@ -35,6 +40,8 @@ final class AgentManagementSliceStore implements AgentManagementOperations {
 
   final AgentManagementSliceEffectRunner effectRunner;
   final String configurationNotLoadedMessage;
+  final AgentAccountDataEnrichmentEnabledResolver
+  accountDataEnrichmentEnabledFor;
   final OperationIdGenerator Function(String scope) _generatorFactory;
   final Map<String, OperationIdGenerator> _generators =
       <String, OperationIdGenerator>{};
@@ -128,8 +135,13 @@ final class AgentManagementSliceStore implements AgentManagementOperations {
       AgentManagementSliceSelectors.supportsAccountDataEnrichment(_state);
 
   @override
-  bool get accountDataEnrichmentEnabled =>
-      AgentManagementSliceSelectors.accountDataEnrichmentEnabled(_state);
+  bool get accountDataEnrichmentEnabled {
+    if (!supportsAccountDataEnrichment) {
+      return false;
+    }
+    final config = AgentManagementSliceSelectors.selectedProviderConfig(_state);
+    return config != null && accountDataEnrichmentEnabledFor(config);
+  }
 
   @override
   List<AgentProviderConfig> get availableThreadProviders =>

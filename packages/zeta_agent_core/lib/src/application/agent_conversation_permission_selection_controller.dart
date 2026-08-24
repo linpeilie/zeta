@@ -1,6 +1,7 @@
-import 'package:flutter/foundation.dart';
+import 'package:meta/meta.dart';
 
 import 'package:zeta_agent_core/src/application/agent_conversation_permission_state.dart';
+import 'package:zeta_agent_core/src/application/agent_listenable.dart';
 import 'package:zeta_agent_core/src/application/agent_permission_catalog_controller.dart';
 import 'package:zeta_agent_core/src/application/agent_provider_runtime_identity.dart';
 import 'package:zeta_agent_core/src/domain/agent_models.dart';
@@ -40,7 +41,8 @@ final class _PlanningOnlyPermissionMemory {
 /// 迟到异步结果的门闩不依赖内部计数器：runtime 相关路径用精确
 /// [AgentProviderRuntimeIdentity] + apply port 实例判定；无 runtime 的
 /// dormant 持久化路径用「目标 selection 是否仍是当前 provider default」判定。
-class AgentConversationPermissionSelectionController extends ChangeNotifier {
+class AgentConversationPermissionSelectionController
+    extends AgentChangeNotifier {
   AgentConversationPermissionSelectionController({
     required this.persistOptionId,
     AgentUiTextCatalog? textCatalog,

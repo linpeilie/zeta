@@ -1,4 +1,6 @@
-import 'package:flutter_test/flutter_test.dart';
+import 'dart:async';
+
+import 'package:test/test.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 
@@ -50,6 +52,82 @@ void main() {
       expect(timeline.isTurnRunning, isFalse);
 
       timeline.dispose();
+    });
+
+    test('纯 Dart value signal 只在值变化时按注册顺序通知', () {
+      final signal = AgentValueNotifier<int>(1);
+      final notifications = <String>[];
+      void first() => notifications.add('first:${signal.value}');
+      void second() => notifications.add('second:${signal.value}');
+      signal
+        ..addListener(first)
+        ..addListener(second)
+        ..value = 1;
+
+      expect(notifications, isEmpty);
+
+      signal.value = 2;
+
+      expect(notifications, <String>['first:2', 'second:2']);
+      signal
+        ..removeListener(first)
+        ..value = 3
+        ..dispose();
+      expect(notifications, <String>['first:2', 'second:2', 'second:3']);
+      expect(() => signal.addListener(first), throwsStateError);
+    });
+
+    test('通知期间移除的监听器不会在同一轮迟到执行', () {
+      final signal = AgentValueNotifier<int>(0);
+      final notifications = <String>[];
+      void second() => notifications.add('second');
+      void first() {
+        notifications.add('first');
+        signal.removeListener(second);
+      }
+
+      signal
+        ..addListener(first)
+        ..addListener(second)
+        ..value = 1;
+
+      expect(notifications, <String>['first']);
+      signal.dispose();
+    });
+
+    test('坏监听器不截断后续通知且异常交给当前 Zone', () {
+      final signal = AgentValueNotifier<int>(0);
+      final reportedErrors = <Object>[];
+      var healthyNotifications = 0;
+
+      runZonedGuarded(() {
+        signal
+          ..addListener(() => throw StateError('listener fixture'))
+          ..addListener(() => healthyNotifications += 1)
+          ..value = 1;
+      }, (error, stackTrace) => reportedErrors.add(error));
+
+      expect(healthyNotifications, 1);
+      expect(reportedErrors, hasLength(1));
+      expect(reportedErrors.single, isA<StateError>());
+      signal.dispose();
+    });
+
+    test('runtime registry close 释放监听器并进入不可订阅终态', () async {
+      final registry = AgentProviderRuntimeRegistry(
+        providerFactory: _ThrowingBundleFactory(),
+      );
+      void listener() {}
+      registry.addListener(listener);
+
+      expect(registry.hasListeners, isTrue);
+
+      await registry.close();
+
+      expect(registry.hasListeners, isFalse);
+      expect(() => registry.addListener(listener), throwsStateError);
+      // 重复 close 仍返回已经结算的同一终态，不会二次 dispose。
+      await registry.close();
     });
   });
 }

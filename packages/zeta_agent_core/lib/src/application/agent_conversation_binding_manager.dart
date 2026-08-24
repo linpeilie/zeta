@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:collection';
 
 import 'package:zeta_foundation/zeta_foundation.dart';
-import 'package:flutter/foundation.dart';
 
 import 'package:zeta_agent_core/src/application/agent_conversation_binding.dart';
+import 'package:zeta_agent_core/src/application/agent_listenable.dart';
 import 'package:zeta_agent_core/src/application/agent_provider_runtime_identity.dart';
 import 'package:zeta_agent_core/src/application/agent_provider_runtime_registry.dart';
 import 'package:zeta_agent_core/src/domain/agent_models.dart';
@@ -30,7 +30,7 @@ final class AgentConversationBindingLease {
 }
 
 /// 维护逻辑会话到 [AgentConversationBinding] 的唯一映射，并统一执行空闲回收。
-final class AgentConversationBindingManager extends ChangeNotifier {
+final class AgentConversationBindingManager extends AgentChangeNotifier {
   AgentConversationBindingManager({
     required this.runtimeRegistry,
     DateTime Function()? clock,

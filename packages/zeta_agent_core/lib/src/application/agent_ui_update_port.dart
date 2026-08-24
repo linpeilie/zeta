@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 import 'package:zeta_agent_core/src/application/agent_ui_update_request.dart';
 
 /// Application 向 presentation 发布类型化 UI 更新请求的端口。
@@ -12,12 +10,12 @@ abstract interface class AgentUiUpdatePort {
 
 /// Presentation 帧调度实现所需的最小可注入端口。
 ///
-/// 该契约只使用 [VoidCallback]，不引用 `SchedulerBinding`；生产适配器和测试 fake
+/// 该契约只使用纯 Dart 回调，不引用 `SchedulerBinding`；生产适配器和测试 fake
 /// 分别位于 presentation 与测试支持代码中。
 abstract interface class AgentFrameScheduler {
   /// 当前是否位于 Widget build/layout/paint 所在的 persistent callback 阶段。
   bool get isInBuildPhase;
 
   /// 将回调排入下一 Flutter frame 的 transient callback 阶段。
-  void scheduleNextFrame(VoidCallback callback);
+  void scheduleNextFrame(void Function() callback);
 }

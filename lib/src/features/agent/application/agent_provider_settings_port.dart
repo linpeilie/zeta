@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
@@ -7,7 +5,7 @@ import 'package:zeta_agent_core/zeta_agent_core.dart';
 ///
 /// 会话消费者只依赖这个端口，不依赖 UI 层的具体控制器，也不能从这里创建
 /// session runtime。后者只能通过 `AgentConversationBinding.beginTurn()` 完成。
-abstract interface class AgentProviderSettingsPort implements Listenable {
+abstract interface class AgentProviderSettingsPort {
   AgentModelCatalogRepository get modelCatalogRepository;
 
   AgentProviderSettings get settings;
@@ -51,4 +49,7 @@ abstract interface class AgentProviderSettingsPort implements Listenable {
   );
 
   Future<AgentProviderSettings> loadSettings();
+
+  /// 订阅设置快照变化；返回的函数用于取消订阅。
+  void Function() subscribe(void Function() listener);
 }

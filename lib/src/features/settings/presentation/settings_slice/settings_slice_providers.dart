@@ -6,17 +6,18 @@ import 'package:zeta/src/features/settings/application/settings_slice/general_se
 import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_state.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 
-/// 组合层注入的 appearance 切片 store；null = 切片路径未启用。
+/// 组合层注入的 appearance 切片 store。
 ///
-/// 与 Phase 2 的 resolver 模式同款：store 的生命周期归组合层（app session
-/// 寿命），Riverpod 只读。默认 null，`MainApp` 在 `ProviderScope.overrides`
-/// 里按 flag 注入实例。
+/// store 的生命周期归组合层（app session 寿命），Riverpod 只读。生产组合必须
+/// 覆盖本 provider；缺失即为接线错误，不存在旧 owner fallback。
 final appearanceSettingsSliceStoreProvider =
-    Provider<AppearanceSettingsSliceStore?>((ref) => null);
+    Provider<AppearanceSettingsSliceStore>(
+      (ref) => throw StateError('Appearance settings slice is not installed'),
+    );
 
-/// 组合层注入的 general 切片 store；null = 切片路径未启用。
-final generalSettingsSliceStoreProvider = Provider<GeneralSettingsSliceStore?>(
-  (ref) => null,
+/// 组合层注入的 general 切片 store；缺失时 fail closed。
+final generalSettingsSliceStoreProvider = Provider<GeneralSettingsSliceStore>(
+  (ref) => throw StateError('General settings slice is not installed'),
 );
 
 /// appearance 切片的 Riverpod 镜像。
@@ -34,9 +35,6 @@ final class AppearanceSettingsSliceNotifier
   @override
   AppearanceSettingsSliceState build() {
     final store = ref.watch(appearanceSettingsSliceStoreProvider);
-    if (store == null) {
-      return const AppearanceSettingsSliceState();
-    }
     final unsubscribe = store.subscribe(() => state = store.state);
     ref.onDispose(unsubscribe);
     return store.state;
@@ -55,9 +53,6 @@ final class GeneralSettingsSliceNotifier
   @override
   GeneralSettingsSliceState build() {
     final store = ref.watch(generalSettingsSliceStoreProvider);
-    if (store == null) {
-      return const GeneralSettingsSliceState();
-    }
     final unsubscribe = store.subscribe(() => state = store.state);
     ref.onDispose(unsubscribe);
     return store.state;

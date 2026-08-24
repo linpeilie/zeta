@@ -3,15 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/app/localization/zeta_localization.dart';
-import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
-import 'package:zeta/src/features/settings/application/general_settings_controller.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_effect.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_state.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_store.dart';
-import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
-import 'package:zeta/src/features/settings/data/general_settings_store.dart';
-import 'package:zeta/src/features/settings/data/system_font_catalog_service.dart';
-import 'package:zeta/src/features/settings/domain/system_font_family.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/settings/presentation/settings_page.dart';
 import 'package:zeta/src/features/settings/presentation/settings_slice/settings_slice_providers.dart';
@@ -19,21 +13,17 @@ import 'package:zeta_ui/zeta_ui.dart';
 
 /// Phase 3 第 1 批步骤 4：general 面板改走切片。
 ///
-/// 这里只证明**面板确实从切片读、往切片写**——渲染细节由既有的
-/// `ide_settings_widget_test` 覆盖，两条路径共用同一份 body，不重复断言。
+/// 这里证明面板确实从唯一 slice owner 读取设置。
 void main() {
-  testWidgets('切片开启时，general 面板从切片读取设置', (tester) async {
+  testWidgets('general 面板从唯一 slice owner 读取设置', (tester) async {
     final store = _store(
       const GeneralSettings(sendMessageShortcut: MessageSendShortcut.enter),
     );
     addTearDown(store.close);
-    final controller = _controller();
-    addTearDown(controller.dispose);
-
-    await _pumpPane(tester, controller: controller, store: store);
+    await _pumpPane(tester, store: store);
     expect(find.textContaining('按 Enter 发送消息'), findsOneWidget);
 
-    // 只往切片推、完全不碰旧 controller：走旧路径的话界面不会变。
+    // 直接推动唯一 owner。
     store.setMessageSendShortcut(MessageSendShortcut.primaryModifierEnter);
     store.persisted(store.state.pendingOperationId!, store.state.pendingValue!);
     await tester.pump();
@@ -44,20 +34,6 @@ void main() {
       store.state.settings.sendMessageShortcut,
       MessageSendShortcut.primaryModifierEnter,
     );
-    expect(
-      controller.listenable.value.sendMessageShortcut,
-      MessageSendShortcut.enter,
-      reason: '切片路径不得回头去写旧 controller，否则就是双写',
-    );
-  });
-
-  testWidgets('切片关闭时回退旧路径，仍然渲染', (tester) async {
-    final controller = _controller();
-    addTearDown(controller.dispose);
-
-    await _pumpPane(tester, controller: controller, store: null);
-
-    expect(find.byKey(const ValueKey('settings-language-row')), findsOneWidget);
   });
 }
 
@@ -68,16 +44,9 @@ GeneralSettingsSliceStore _store(GeneralSettings initial) {
   );
 }
 
-GeneralSettingsController _controller() {
-  return GeneralSettingsController(
-    store: MemoryGeneralSettingsStore(const GeneralSettings()),
-  );
-}
-
 Future<void> _pumpPane(
   WidgetTester tester, {
-  required GeneralSettingsController controller,
-  required GeneralSettingsSliceStore? store,
+  required GeneralSettingsSliceStore store,
 }) async {
   final ideTheme = buildIdeThemeData(
     brightness: Brightness.light,
@@ -85,10 +54,7 @@ Future<void> _pumpPane(
   );
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [
-        if (store != null)
-          generalSettingsSliceStoreProvider.overrideWithValue(store),
-      ],
+      overrides: [generalSettingsSliceStoreProvider.overrideWithValue(store)],
       child: IdeThemeScope(
         themeMode: ThemeMode.light,
         lightTheme: ideTheme,
@@ -103,11 +69,6 @@ Future<void> _pumpPane(
             child: SettingsPage(
               activeSection: SettingsSection.general,
               onSectionSelected: (_) {},
-              generalSettingsController: controller,
-              appearanceController: AppearanceSettingsController(
-                store: MemoryAppearanceSettingsStore(),
-                fontCatalog: const _StubFontCatalog(),
-              ),
             ),
           ),
         ),
@@ -120,20 +81,4 @@ Future<void> _pumpPane(
 final class _NoopRunner implements GeneralSettingsSliceEffectRunner {
   @override
   void run(GeneralSettingsSliceEffect effect) {}
-}
-
-/// 外观面板这批还没迁；这里只需要它能构造出来。
-final class _StubFontCatalog implements SystemFontCatalogService {
-  const _StubFontCatalog();
-
-  @override
-  Future<List<SystemFontFamily>> uiFontFamilies() async =>
-      const <SystemFontFamily>[];
-
-  @override
-  Future<List<SystemFontFamily>> codeFontFamilies() async =>
-      const <SystemFontFamily>[];
-
-  @override
-  Future<SystemFontFamily?> resolveFontFamily(String name) async => null;
 }

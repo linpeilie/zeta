@@ -20,19 +20,8 @@ void main() {
   /// 有的组合职责；随 Phase 3 把 ViewModel 换成切片后清掉。新增一律不允许。
   const knownApplicationToPresentation = <String>{};
 
-  /// application 仍 import Flutter 的既有文件（**只允许变少**）。
-  ///
-  /// 目标架构 §12.5 明确禁止 application import Flutter。剩余项都是
-  /// `ChangeNotifier` 形态的既有 controller，属于拆包前的设计，随 Phase 2/3
-  /// 转成 MVI 切片时清掉。新增一律不允许——Phase 2 切片就因为搬家时把
-  /// `@immutable` / `setEquals` 一起带进来踩过一次。
-  const knownApplicationFlutterImports = <String>{
-    'lib/src/features/agent/application/agent_provider_settings_controller.dart',
-    'lib/src/features/agent/application/agent_provider_settings_port.dart',
-    'lib/src/features/agent_management/application/agent_management_controller.dart',
-    'lib/src/features/settings/application/appearance_settings_controller.dart',
-    'lib/src/features/settings/application/general_settings_controller.dart',
-  };
+  /// application import Flutter 的历史燃尽清单已在 Phase 3 第 1、2 批关批时清零。
+  const knownApplicationFlutterImports = <String>{};
 
   /// domain 纯度的既有例外（**只允许变少**）。
   ///
@@ -187,6 +176,27 @@ void main() {
       reason:
           '目标架构 §6.2 把 Riverpod adapter 单列成一层：Provider / Notifier 只能'
           '住在 presentation 或 app 组合层：\n${offenders.join('\n')}',
+    );
+  });
+
+  test('application/domain 不得依赖具体 Provider package', () {
+    final offenders = <String>[];
+    for (final layer in const <String>['application', 'domain']) {
+      for (final file in dartFilesInLayer(layer)) {
+        if (importsOf(
+          file,
+        ).any((uri) => uri.startsWith('package:zeta_agent_providers/'))) {
+          offenders.add(normalize(file.path));
+        }
+      }
+    }
+
+    expect(
+      offenders,
+      isEmpty,
+      reason:
+          'Provider identity/私有配置只能由 data 或 app 组合层投影：\n'
+          '${offenders.join('\n')}',
     );
   });
 

@@ -8,7 +8,7 @@ import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 ///
 /// **纯同步、无副作用**（G3）：不碰时钟、不查字体目录、不铸造 id、不做 IO。
 /// 字号取整与夹取是纯函数；系统字体的异步解析被建模为 effect + result intent，
-/// 由 runner 回流。状态语义逐条对齐现有 `AppearanceSettingsController`：
+/// 由 runner 回流。状态语义保持 Phase 3 前的 appearance 行为：
 ///
 /// - 主题 / 字号：乐观应用（语义 A），persist 失败不回滚；
 /// - 字体：先解析后应用（现状如此——解析失败既不应用也不落盘）；
@@ -123,6 +123,7 @@ appearanceSettingsSliceReduce(
       return Transition(nextState, <AppearanceSettingsSliceEffect>[
         AppearanceSettingsPersistEffect(
           operationId: intent.operationId,
+          previousValue: state.value,
           value: nextValue,
         ),
       ]);
@@ -176,6 +177,7 @@ _applyOptimistically(
     <AppearanceSettingsSliceEffect>[
       AppearanceSettingsPersistEffect(
         operationId: operationId,
+        previousValue: state.value,
         value: nextValue,
       ),
     ],

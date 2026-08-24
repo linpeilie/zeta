@@ -22,6 +22,7 @@ import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 import 'package:zeta/src/ui/core/ide_image_preview.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
+import 'package:zeta/src/features/agent/presentation/agent_flutter_listenable_adapter.dart';
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_region_builder.dart';
 import 'package:zeta/src/features/agent/presentation/agent_presentation_l10n.dart';

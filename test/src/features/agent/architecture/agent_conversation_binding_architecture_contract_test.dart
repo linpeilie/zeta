@@ -212,22 +212,27 @@ void main() {
       }
     });
 
-    test(
-      'settings controller owns settings but no runtime lease or permission',
-      () {
-        final source = File(
-          'lib/src/features/agent/application/agent_provider_settings_controller.dart',
-        ).readAsStringSync();
+    test('settings slice owns settings but no runtime lease or permission', () {
+      expect(
+        File(
+          'lib/src/features/agent/application/'
+          'agent_provider_settings_controller.dart',
+        ).existsSync(),
+        isFalse,
+      );
+      final source = File(
+        'lib/src/features/agent/application/provider_settings_slice/'
+        'agent_provider_settings_slice_store.dart',
+      ).readAsStringSync();
 
-        expect(source, isNot(contains('AgentProviderRuntimeLease')));
-        expect(source, isNot(contains('AgentProviderRuntimeIdentity')));
-        expect(source, isNot(contains('AgentPermissionStateStore')));
-        expect(source, isNot(contains('permissionStateStore')));
-        expect(source, isNot(contains('_providerLease')));
-        expect(source, isNot(contains('activeProviderRuntimeIdentity')));
-        expect(source, isNot(contains('Future<AgentProvider> activeProvider')));
-      },
-    );
+      expect(source, isNot(contains('AgentProviderRuntimeLease')));
+      expect(source, isNot(contains('AgentProviderRuntimeIdentity')));
+      expect(source, isNot(contains('AgentPermissionStateStore')));
+      expect(source, isNot(contains('permissionStateStore')));
+      expect(source, isNot(contains('_providerLease')));
+      expect(source, isNot(contains('activeProviderRuntimeIdentity')));
+      expect(source, isNot(contains('Future<AgentProvider> activeProvider')));
+    });
 
     test(
       'Project Threads uses global runtime instead of active provider cache',

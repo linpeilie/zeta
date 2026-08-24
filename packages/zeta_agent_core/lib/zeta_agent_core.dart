@@ -7,7 +7,7 @@
 /// 明确不做的事：
 ///
 /// - 不含 Provider 协议类型（JSON-RPC / ACP / stream-json 只存在于 data 层）；
-/// - 不读文件、不起进程（无 `dart:io`）；不依赖 Riverpod、Flutter widgets 或根 app；
+/// - 不读文件、不起进程（无 `dart:io`）；不依赖 Flutter SDK、Riverpod 或根 app；
 /// - 不产出本地化文案：需要用户可见文案时只接受注入的 `AgentUiTextCatalog`；
 /// - 事件管线、合并策略、缓冲、分发与 TimelineStore 五个 G1 文件里不出现任何
 ///   具体 Provider 标识（由 `claude_code_shared_layer_purity_test` 强制）。
@@ -67,6 +67,7 @@ export 'src/application/agent_conversation_timeline_store.dart';
 export 'src/application/agent_elapsed_ticker.dart';
 export 'src/application/agent_event_coalescing_policy.dart';
 export 'src/application/agent_event_pipeline.dart';
+export 'src/application/agent_listenable.dart';
 export 'src/application/agent_permission_catalog_controller.dart';
 export 'src/application/agent_permission_request_resolver.dart';
 export 'src/application/agent_provider_config_store.dart';

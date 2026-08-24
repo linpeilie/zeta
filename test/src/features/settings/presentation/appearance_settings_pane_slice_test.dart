@@ -3,28 +3,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/app/localization/zeta_localization.dart';
-import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
-import 'package:zeta/src/features/settings/application/general_settings_controller.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_effect.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_state.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_store.dart';
-import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
-import 'package:zeta/src/features/settings/data/general_settings_store.dart';
-import 'package:zeta/src/features/settings/data/system_font_catalog_service.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
-import 'package:zeta/src/features/settings/domain/general_settings.dart';
-import 'package:zeta/src/features/settings/domain/system_font_family.dart';
 import 'package:zeta/src/features/settings/presentation/settings_page.dart';
 import 'package:zeta/src/features/settings/presentation/settings_slice/settings_slice_providers.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 
 /// Phase 3 第 1 批步骤 4：appearance 面板改走切片。
 ///
-/// 重点不是渲染细节（既有 `ide_settings_widget_test` 覆盖，两条路径共用同一份
-/// body），而是这个面板独有的两处异步语义：字体目录只加载一次、字体选择的
-/// `Future<bool>` 与旧路径同义。
+/// 重点不是渲染细节，而是这个面板独有的两处异步语义：字体目录只加载
+/// 一次，字体选择被拒绝时不应用。
 void main() {
-  testWidgets('切片开启时，面板确实从切片读取', (tester) async {
+  testWidgets('面板从唯一 slice owner 读取', (tester) async {
     final store = _store();
     addTearDown(store.close);
 
@@ -35,7 +27,7 @@ void main() {
     expect(sizeText, findsOneWidget);
     final before = tester.widget<Text>(sizeText).data;
 
-    // 只往切片推、完全不碰旧 controller：走旧路径的话界面数值不会动。
+    // 直接推动唯一 owner，界面随 slice 投影更新。
     final id = store.adjustUiFontSize(18);
     store.persisted(id);
     await tester.pump();
@@ -62,7 +54,7 @@ void main() {
     expect(runner.catalogRequests, 0, reason: '没人打开下拉时不该请求字体目录');
   });
 
-  testWidgets('字体选择被拒绝时返回 false（与旧路径同义）', (tester) async {
+  testWidgets('字体选择被拒绝时不应用候选值', (tester) async {
     final runner = _RecordingRunner();
     final store = _store(runner: runner);
     addTearDown(store.close);
@@ -99,15 +91,6 @@ Future<void> _pumpPane(
     brightness: Brightness.light,
     codeFontFamily: 'CodeFont',
   );
-  final generalController = GeneralSettingsController(
-    store: MemoryGeneralSettingsStore(const GeneralSettings()),
-  );
-  addTearDown(generalController.dispose);
-  final appearanceController = AppearanceSettingsController(
-    store: MemoryAppearanceSettingsStore(),
-    fontCatalog: const _StubFontCatalog(),
-  );
-  addTearDown(appearanceController.dispose);
 
   await tester.pumpWidget(
     ProviderScope(
@@ -128,8 +111,6 @@ Future<void> _pumpPane(
             child: SettingsPage(
               activeSection: SettingsSection.appearance,
               onSectionSelected: (_) {},
-              generalSettingsController: generalController,
-              appearanceController: appearanceController,
             ),
           ),
         ),
@@ -148,19 +129,4 @@ final class _RecordingRunner implements AppearanceSettingsSliceEffectRunner {
       catalogRequests += 1;
     }
   }
-}
-
-final class _StubFontCatalog implements SystemFontCatalogService {
-  const _StubFontCatalog();
-
-  @override
-  Future<List<SystemFontFamily>> uiFontFamilies() async =>
-      const <SystemFontFamily>[];
-
-  @override
-  Future<List<SystemFontFamily>> codeFontFamilies() async =>
-      const <SystemFontFamily>[];
-
-  @override
-  Future<SystemFontFamily?> resolveFontFamily(String name) async => null;
 }

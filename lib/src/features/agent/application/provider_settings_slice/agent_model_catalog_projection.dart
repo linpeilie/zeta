@@ -51,7 +51,6 @@ final class AgentModelCatalogQueryRejected implements Exception {
 
 /// 模型目录投影可公开给 UI 的脱敏失败分类。
 enum AgentModelCatalogProjectionFailureKind {
-  sourceUnavailable,
   invalidQuery,
   unsupported,
   load,

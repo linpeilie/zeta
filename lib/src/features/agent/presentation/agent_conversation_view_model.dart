@@ -21,6 +21,7 @@ import 'package:zeta/src/features/agent/application/agent_turn_context_overlay.d
 import 'package:zeta/src/features/agent/application/agent_pipeline_metrics_reporter.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_region_state.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_ui_state.dart';
+import 'package:zeta/src/features/agent/presentation/agent_flutter_listenable_adapter.dart';
 import 'package:zeta/src/features/agent/presentation/agent_ui_update_scheduler.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_model_config_ui_state.dart';
 import 'package:zeta/src/features/workspace/application/workspace_file_corpus_port.dart';
@@ -80,6 +81,8 @@ class AgentConversationViewModel {
     AgentThreadSummary? initialThread,
     AgentFrameScheduler? uiFrameScheduler,
     this.metrics = noopZetaMetricsPort,
+    ZetaMetricLabel Function(String providerId) providerMetricLabel =
+        ZetaMetricLabel.hashed,
   }) : _textCatalog = textCatalog ?? const FallbackAgentUiTextCatalog(),
        _timeline =
            timelineStore ??
@@ -122,6 +125,7 @@ class AgentConversationViewModel {
     _pipelineMetrics = AgentPipelineMetricsReporter(
       metrics: metrics,
       providerId: conversationBinding.providerId,
+      providerMetricLabel: providerMetricLabel,
     );
     _uiUpdateScheduler = AgentUiUpdateScheduler(
       _publishScheduledUiChanges,
@@ -159,7 +163,9 @@ class AgentConversationViewModel {
     _conversationModeController.addListener(_handleConversationModeChanged);
     _skillsCatalogController.addListener(_handleSkillsCatalogChanged);
     _permissionSelectionController.addListener(_handlePermissionStateChanged);
-    providerController.addListener(_handleProviderSettingsChanged);
+    _unsubscribeProviderSettings = providerController.subscribe(
+      _handleProviderSettingsChanged,
+    );
     conversationBinding.addListener(_handleConversationBindingChanged);
     _threadSnapshotListenable = ValueNotifier<AgentConversationThreadSnapshot>(
       _buildThreadSnapshot(),
@@ -205,6 +211,7 @@ class AgentConversationViewModel {
   bool get isWorkspaceFileIndexReady => workspaceFileCorpus?.isReady ?? true;
 
   final AgentProviderSettingsPort providerController;
+  late final void Function() _unsubscribeProviderSettings;
   final AgentConversationBinding conversationBinding;
   final AgentProviderGlobalRuntime globalRuntime;
   final AgentUiTextCatalog _textCatalog;
@@ -437,7 +444,7 @@ class AgentConversationViewModel {
   Stream<AgentUiEffect> get uiEffects => _uiStateStore.effects;
 
   ValueListenable<AgentConversationTurnState?> get liveTurnListenable =>
-      _timeline.liveTurnListenable;
+      AgentFlutterValueListenableAdapter(_timeline.liveTurnListenable);
 
   String? get projectPath => _projectPath;
 
@@ -967,7 +974,8 @@ class AgentConversationViewModel {
   }
 
   /// 共享 1 秒时钟；对话流和工具卡用其计算 live elapsed。
-  Listenable get elapsedClockListenable => _elapsedTicker;
+  Listenable get elapsedClockListenable =>
+      AgentFlutterListenableAdapter(_elapsedTicker);
 
   /// 最近一次 tick 的本地时间。
   DateTime get elapsedNow => _elapsedTicker.now;
@@ -2975,7 +2983,7 @@ class AgentConversationViewModel {
     _invalidateProviderEventListener(
       reason: AgentEventPipelineCloseReason.disposed,
     );
-    providerController.removeListener(_handleProviderSettingsChanged);
+    _unsubscribeProviderSettings();
     conversationBinding.removeListener(_handleConversationBindingChanged);
     _modelSelectionController.removeListener(_handleModelSelectionChanged);
     _conversationModeController.removeListener(_handleConversationModeChanged);

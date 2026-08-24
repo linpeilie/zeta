@@ -107,61 +107,45 @@ void main() {
     });
   });
 
-  group('general reducer · pending 串行链', () {
-    test('第二次修改基于在途值计算，不丢第一次的改动', () {
-      var state = generalSettingsSliceReduce(
+  group('general reducer · 单一在途', () {
+    test('已有在途提交时拒绝预合并后续命令', () {
+      final state = generalSettingsSliceReduce(
         const GeneralSettingsSliceState(),
         AppLanguageSelected(_id(1), AppLanguage.english),
       ).state;
-      state = generalSettingsSliceReduce(
+      final transition = generalSettingsSliceReduce(
         state,
         MessageSendShortcutSelected(
           _id(2),
           MessageSendShortcut.primaryModifierEnter,
         ),
-      ).state;
-
-      // 第二次提交的完整值同时包含语言与快捷键。
-      expect(state.pendingValue?.appLanguage, AppLanguage.english);
-      expect(
-        state.pendingValue?.sendMessageShortcut,
-        MessageSendShortcut.primaryModifierEnter,
       );
-      expect(state.pendingOperationId, _id(2));
+
+      expect(transition.state, state);
+      expect(transition.effects, isEmpty);
+      expect(transition.state.pendingOperationId, _id(1));
+      expect(transition.state.pendingValue?.appLanguage, AppLanguage.english);
     });
 
-    test('被取代的回执按迟到丢弃，最终应用链上完整值', () {
-      var state = generalSettingsSliceReduce(
+    test('不匹配的回执按迟到丢弃，匹配回执仍正常应用', () {
+      final state = generalSettingsSliceReduce(
         const GeneralSettingsSliceState(),
         AppLanguageSelected(_id(1), AppLanguage.english),
       ).state;
-      final firstValue = state.pendingValue!;
-      state = generalSettingsSliceReduce(
-        state,
-        MessageSendShortcutSelected(
-          _id(2),
-          MessageSendShortcut.primaryModifierEnter,
-        ),
-      ).state;
 
-      // 第一次的回执先回来：在途已是第二次 → 丢弃。
       final stale = generalSettingsSliceReduce(
         state,
-        GeneralSettingsPersisted(_id(1), firstValue),
+        GeneralSettingsPersisted(_id(2), state.pendingValue!),
       );
       expect(stale.state, state);
       expect(stale.effects, isEmpty);
 
-      // 第二次回执应用链上完整值（含两次修改）。
       final finalTransition = generalSettingsSliceReduce(
         state,
-        GeneralSettingsPersisted(_id(2), state.pendingValue!),
+        GeneralSettingsPersisted(_id(1), state.pendingValue!),
       );
       expect(finalTransition.state.settings.appLanguage, AppLanguage.english);
-      expect(
-        finalTransition.state.settings.sendMessageShortcut,
-        MessageSendShortcut.primaryModifierEnter,
-      );
+      expect(finalTransition.state.pendingOperationId, isNull);
     });
   });
 

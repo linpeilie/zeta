@@ -84,11 +84,14 @@ final class AgentThreadWorkspaceEntry {
     required this.sliceBinding,
   }) : _threadSnapshot = viewModel.threadSnapshot {
     viewModel.threadSnapshotListenable.addListener(_handleRuntimeChanged);
-    providerController.addListener(_handleRuntimeChanged);
+    _unsubscribeProviderSettings = providerController.subscribe(
+      _handleRuntimeChanged,
+    );
   }
 
   final String entryId;
   final AgentProviderSettingsPort providerController;
+  late final void Function() _unsubscribeProviderSettings;
   final AgentConversationBindingLease bindingLease;
   final AgentConversationViewModel viewModel;
 
@@ -199,7 +202,7 @@ final class AgentThreadWorkspaceEntry {
     }
     _disposed = true;
     viewModel.threadSnapshotListenable.removeListener(_handleRuntimeChanged);
-    providerController.removeListener(_handleRuntimeChanged);
+    _unsubscribeProviderSettings();
     // 切片先于 ViewModel 释放：它订阅了 ViewModel 的 region listenable。
     sliceBinding.dispose();
     viewModel.dispose();
@@ -234,6 +237,7 @@ final class AgentConversationWorkspaceStore {
     this.turnContextStore,
     AgentUiTextCatalog? textCatalog,
     this.metrics = noopZetaMetricsPort,
+    this.providerMetricLabel = ZetaMetricLabel.hashed,
     this._reducer = const AgentConversationWorkspaceReducer(),
   }) : bindingManager =
            bindingManager ??
@@ -269,6 +273,9 @@ final class AgentConversationWorkspaceStore {
 
   /// 脱敏指标端口，转交给每个常驻 ViewModel 的事件管线与 UI 调度器。
   final ZetaMetricsPort metrics;
+
+  /// Provider 身份到白名单指标标签的组合层投影。
+  final ZetaMetricLabel Function(String providerId) providerMetricLabel;
 
   final AgentUiTextCatalog _textCatalog;
   final AgentConversationWorkspaceReducer _reducer;
@@ -578,6 +585,7 @@ final class AgentConversationWorkspaceStore {
       initialThread: initialThread,
       turnContextStore: turnContextStore,
       metrics: metrics,
+      providerMetricLabel: providerMetricLabel,
       onAttention: (signal) {
         final threadId = signal.threadId ?? entry.threadId;
         if (threadId == null || threadId.trim().isEmpty) {

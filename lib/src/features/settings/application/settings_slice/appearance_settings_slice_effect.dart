@@ -24,10 +24,12 @@ final class AppearanceSettingsPersistEffect
     extends AppearanceSettingsSliceEffect {
   const AppearanceSettingsPersistEffect({
     required this.operationId,
+    required this.previousValue,
     required this.value,
   });
 
   final OperationId operationId;
+  final AppearanceSettingsSlice previousValue;
   final AppearanceSettingsSlice value;
 }
 

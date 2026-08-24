@@ -26,7 +26,7 @@ import 'package:zeta/src/features/workspace/application/workspace_file_corpus_po
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta_ui/zeta_ui.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
+import '../../../../testing/provider_settings_test_store.dart';
 
 import '../../../../testing/agent_provider_stub_base.dart';
 import '../../../../testing/legacy_bundle_factory_mixin.dart';
@@ -269,7 +269,7 @@ AgentConversationViewModel createAgentPaneViewModelWithStore(
     providerFactory: AgentPaneFakeProviderFactory(provider),
   );
   addTearDown(registry.close);
-  final controller = AgentProviderSettingsController(
+  final controller = createProviderSettingsTestStore(
     runtimeRegistry: registry,
     configStore: configStore,
   );

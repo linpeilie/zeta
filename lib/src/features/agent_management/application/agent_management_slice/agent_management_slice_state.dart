@@ -1,7 +1,5 @@
 import 'package:meta/meta.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta_agent_providers/zeta_agent_providers.dart'
-    show claudeCodeAccountDataEnrichmentKey;
 import 'package:zeta_foundation/zeta_foundation.dart';
 
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
@@ -219,16 +217,9 @@ abstract final class AgentManagementSliceSelectors {
           ?.supportsAccountDataEnrichment ??
       false;
 
-  static bool accountDataEnrichmentEnabled(AgentManagementSliceState state) {
-    if (!supportsAccountDataEnrichment(state)) {
-      return false;
-    }
-    return _providerConfig(
-          state,
-          state.selectedAgentId,
-        )?.extra[claudeCodeAccountDataEnrichmentKey] !=
-        false;
-  }
+  static AgentProviderConfig? selectedProviderConfig(
+    AgentManagementSliceState state,
+  ) => _providerConfig(state, state.selectedAgentId);
 
   static List<AgentProviderConfig> availableThreadProviders(
     AgentManagementSliceState state,
