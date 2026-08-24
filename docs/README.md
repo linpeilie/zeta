@@ -36,6 +36,8 @@ docs/
 - [阶段 0：测试与可观测性基线](./architecture/phase0_observability_baseline.md) — 指标端口、脱敏观察器、流式 fixture 与 Package 候选依赖图的基线数值
 - [阶段 1：建立边界但不改变行为](./architecture/phase1_boundaries.md) — pub workspace、`zeta_foundation` / `zeta_plugin_kernel`、插件目录与 MVI 命名规范
 - [阶段 2 开工文档：Conversation 切片](./architecture/phase2_conversation_slice.md) — UiStateStore → slice 字段映射、Intent/Effect 清单与 §15 门禁答卷
+- [阶段 3 迁移记录：Feature 切片扩展](./architecture/phase3_slice_expansion.md) — 六批迁移、关批证据与历史风险接受（历史证据，不是当前开发入口）
+- [阶段 4 执行计划：过渡层清理](./architecture/phase4_transition_cleanup.md) — 当前执行范围、批次、保留边界、验收与回滚
 - [Agent 桌面通知与任务栏未读提醒详细设计](./architecture/desktop_agent_notification_design.md)
 
 ## guides — 开发

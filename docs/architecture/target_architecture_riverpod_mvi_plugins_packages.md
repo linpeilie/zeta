@@ -2,8 +2,8 @@
 
 最后更新：2026-08-24
 
-状态：Phase 0–2 已落地；Phase 3 六批代码均已关批，但长时间真实使用证据未完成；
-尚未准入 Phase 4
+状态：Phase 0–3 代码已落地；Phase 3 未形成的长时/平台证据经显式风险接受不再阻塞；
+Phase 4 已获准执行，代码批次尚未开始
 
 ## 决策摘要
 
@@ -840,7 +840,8 @@ store 和 ViewModel 直连路径，所有 Conversation 固定走按 BindingKey �
 
 ### Phase 3：扩大迁移范围
 
-**状态：第 1–6 批代码均已关批；Phase 2 长时间真实使用证据仍在计时。**
+**状态：第 1–6 批代码均已关批；Phase 2 长时间证据未形成，后续已按显式风险接受
+移出 Phase 4 门禁，Phase 3 代码范围已收口。**
 2026-08-24 用户明确接受不等待第 1、2 批原定日期并授权关批：五个旧 controller、
 两个 flag、ingress/Flutter Listenable 与全部 false-path 已删除，application Flutter
 燃尽项和 `zeta_agent_core` Flutter 依赖清零，root snapshot 节点全部必选。该授权没有
@@ -879,6 +880,12 @@ fallback；第 6 批按 2026-08-24 明确要求直接进入目标态，三个 es
 [第 5 批](./phase3_batch5_desktop_attention_conversation_workspace.md) 与
 [第 6 批](./phase3_batch6_provider_plugins.md)。第 1、2 批随后于 2026-08-24 经显式确认
 缩短观察余量并关批；该授权不豁免 Phase 2 连续 14 天证据或 Phase 4 三平台/发布前置条件。
+
+**后续 Phase 4 准入决定（2026-08-24）**：用户明确要求忽略上述剩余证据并开始
+Phase 4。Phase 2 观察、迁移窗口/回退锚、三平台真实 Provider smoke 与 Windows Profile
+均记录为 `WAIVED`（未执行/未形成，不等于通过），不再作为 Phase 4 开工或关批门禁。
+执行范围、保留边界与验收矩阵见
+[Phase 4 执行计划书](./phase4_transition_cleanup.md)。
 
 按风险从低到高分批，不做一次性“大爆炸”：
 
@@ -934,6 +941,9 @@ fallback；第 6 批按 2026-08-24 明确要求直接进入目标态，三个 es
 
 ### Phase 4：删除剩余旧路径与过渡层
 
+**状态：已获准执行，代码批次尚未开始。** 2026-08-24 的显式准入豁免与实际批次顺序
+以 [Phase 4 执行计划书](./phase4_transition_cleanup.md) 为准。
+
 **改动范围**
 
 - 删除旧 ChangeNotifier/ViewModel bridge、已无调用者的 callback facade 和过渡 barrel。
@@ -949,12 +959,18 @@ fallback；第 6 批按 2026-08-24 明确要求直接进入目标态，三个 es
 - 旧格式数据迁移窗口结束，回退策略已有发布 tag/分支保障。
 - 三桌面平台与真实 Provider 冒烟完成。
 
+> 本次执行经显式决策豁免以上未完成的长时、迁移窗口、发布锚、平台 smoke 与 Profile
+> 证据；它们保持“未执行/未形成”，但不再阻塞 Phase 4。持久化向后读取仍须保留。
+
 **验收标准**
 
 - `rg`/架构测试证明旧 owner、旧 facade、跨层 import 和全部过渡 API 为零。
 - root app、kernel、agent core/providers、ui 的 Package DAG 与本文一致。
 - 全量 analyze/test、性能基线、平台构建和真实 CLI 冒烟通过。
 - 文档只描述一条当前路径，不再要求贡献者理解两套架构。
+
+> 本次关批仍要求完整 analyze/root/Package tests 与自动化行为/性能基线；真实平台构建、
+> CLI smoke 和 Profile 按执行计划记为 `WAIVED`，不作为关批条件。
 
 **回滚方式**
 

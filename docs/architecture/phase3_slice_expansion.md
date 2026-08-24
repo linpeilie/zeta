@@ -4,8 +4,8 @@
 
 最后更新：2026-08-24
 
-状态：第 1–6 批代码均已关批；Phase 2 的 14 天真实使用证据仍在计时，Phase 3
-阶段门禁尚未关闭。
+状态：第 1–6 批代码均已关批；未形成的 14 天/平台阶段证据经 2026-08-24 显式风险接受
+不再阻塞后续，Phase 3 代码迁移范围已收口并移交 Phase 4。
 
 > 对应 [目标架构 §14 Phase 3](target_architecture_riverpod_mvi_plugins_packages.md)。
 > 这份文档是 Phase 3 的**前置条件交付物**：钉死批次顺序、开门/关门标准、每批 owner
@@ -72,6 +72,12 @@
 > 及所有 false-path，root snapshot 对应节点改为必选；这是缩短批内观察余量的显式
 > 风险接受。该确认没有选择阻塞 2、5，不豁免 Phase 2 连续 14 天证据，也不把未执行的
 > 迁移窗口、回退锚、三平台真实 Provider smoke 或 Profile 推断为通过。
+>
+> **Phase 4 准入豁免（2026-08-24）**：后续用户明确要求忽略剩余问题并开始 Phase 4。
+> Phase 2 连续 14 天、迁移窗口/回退锚、三平台真实 Provider smoke 与 Windows Profile
+> 均保持“未执行/未形成”，但不再作为 Phase 4 的开工或关批门禁；这项风险接受不等于
+> 证据通过，也不授权删除持久化/协议的向后读取。执行口径见
+> [Phase 4 执行计划书](phase4_transition_cleanup.md)。
 >
 > **第 3 批提前开工记录（2026-08-23）**：经显式要求，接受第 1、2 批仍在生产
 > 观察时启动第 3 批。当前授权只覆盖字段级契约与 3a Project Threads 的默认关闭
@@ -514,9 +520,9 @@ capability 位与 UI 入口的 G4 对照表、`AgentProviderSettingsPort` 消费
 - 三类 native Bundle 端口矩阵、custom config id、V1/V2 codec、权限迁移、静态能力、
   degraded/duplicate/unknown 路径与零旧符号守卫均已覆盖。
 
-六批代码现在均已关批，但 Phase 3 整体仍要等待 §0 的连续 14 天真实使用证据；代码迁移
-完成不能替代阶段证据。Phase 4 另有迁移窗口、可构建回退锚、三平台真实 Provider smoke
-与 Profile 前置条件，见第 6 批文档 §10。
+六批代码现在均已关批。§0 与第 6 批文档 §10 记录的阶段证据没有形成；2026-08-24
+后续显式决定已将它们记为 `WAIVED` 并移出 Phase 4 门禁，Phase 3 代码迁移范围据此收口。
+未执行证据不得在后续文档中写成通过。
 
 ---
 

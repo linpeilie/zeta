@@ -160,22 +160,23 @@ settings 装载时，投影现在返回不可用而不是读取空目录的 acti
 
 ## 10. Phase 3 / Phase 4 关系
 
-第 6 批完成后又按明确要求修复原审计阻塞 1、3、4。2026-08-24 最新复核结论：
-**六批代码均已关批，但 Phase 3 阶段证据尚未全部完成，当前仍不能进入 Phase 4**。
+第 6 批完成后又按明确要求修复原审计阻塞 1、3、4。当时复核结论是六批代码均已关批，
+但阶段证据尚未完成、不能进入 Phase 4。2026-08-24 后续用户明确覆盖该准入决定：剩余
+证据记为 `WAIVED`（不等于通过），Phase 4 已获准执行。
 
 | 阶段门禁 | 状态 | 当前证据 / 下一动作 |
 | --- | --- | --- |
 | 第 6 批 + Phase 1 §8.1 | ✅ | 三插件、开放 type、零 compatibility/default factory/core 内置目录 |
 | 第 1 批关批 | ✅ | 用户明确接受不等待原定日期；两个 settings controller、ingress、flag 与 false-path 已删除，固定为 slice 单一路径 |
 | 第 2 批关批 | ✅ | 用户明确接受不等待原定日期；settings/management 旧 controller、Flutter Listenable port、flag 与 false-path 已删除 |
-| Phase 2 长时间真实使用证据 | ❌ | [Phase 3 §0](phase3_slice_expansion.md) 要求连续 14 天；本轮在 2026-08-24 修复 slice 路径竞态并按规则重计，最早约 2026-09-07 |
+| Phase 2 长时间真实使用证据 | ⚠️ `WAIVED` | [Phase 3 §0](phase3_slice_expansion.md) 要求连续 14 天；证据未形成，后续显式决定不再以其阻塞 Phase 4 |
 | application Flutter 燃尽 | ✅ | `knownApplicationFlutterImports` 已从 5 清零，application 层 Flutter import 现在零容忍 |
 | 开放目录跨层贯通 | ✅ | application/domain 对 `zeta_agent_providers` 的 import 已清零并新增守卫；厂商 identity/extra-key/指标标签映射留在 data/app 组合层；Provider settings/模型目录根接线均 non-null、缺失时 fail-closed |
 | root snapshot 必选关系 | ✅ | appearance/general/provider settings 与 agent management 四个节点均为 required 非空投影 |
 | `zeta_agent_core` 纯 Dart | ✅ | 11 个 Flutter import 与 manifest 的 Flutter SDK/flutter_test 依赖清零；纯 Dart listenable + presentation adapter 替代，守卫改为零容忍 |
-| Phase 4 发布/平台证据 | ❌ | 旧格式迁移窗口结束、可构建回退 tag/分支、三桌面平台构建与真实 Codex/Grok/Claude 冒烟尚未形成同一目标态证据；Phase 1 仍明列三平台构建待执行，第 5 批也明确没有用自动化测试推断真实 CLI 通过 |
-| 性能与完整门禁 | ❌ | 本批自动化门禁在 §8/工作流记录；最近一份已跟踪 Windows Profile（2026-08-11）Raster p95 26.927/26.200ms、慢帧率 11.409%/9.396%，明确未过 16.7ms/5% 门槛，且尚无最终目标态同构复测；Phase 4 前必须复测关闭，并补真实 CLI 证据 |
+| Phase 4 发布/平台证据 | ⚠️ `WAIVED` | 迁移窗口、回退 tag/分支、三桌面平台构建与真实 Codex/Grok/Claude 冒烟未形成同一目标态证据；后续显式决定不再以其阻塞 Phase 4 |
+| 性能与完整门禁 | ⚠️ `WAIVED` | 自动化门禁保留；Windows Profile 历史红灯尚无同构复测，真实 Profile/CLI 证据经显式决定移出 Phase 4 门禁，不得写成通过 |
 
-剩余准入顺序：完成 Phase 2 连续 14 天证据 → 明确旧格式迁移窗口和可构建回退锚 →
-三平台构建、三 Provider 真实 smoke、Windows Profile 与最终完整门禁。Phase 4 可以删除
-剩余通用 facade/barrel并统一权威文档，但不能把这些未执行证据推断为通过。
+上述未执行证据不再形成准入顺序。Phase 4 按
+[执行计划书](phase4_transition_cleanup.md) 删除剩余通用 facade/barrel 并统一权威文档；
+自动化等价性门禁继续执行，持久化/协议向后读继续保留。
