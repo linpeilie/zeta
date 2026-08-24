@@ -34,7 +34,6 @@ void main() {
         countryCode: firstLocale?.countryCode,
       );
       ZetaDataPaths? dataPaths;
-      var fallbackLanguage = firstSystemLanguage;
       Object? pathError;
       StackTrace? pathStackTrace;
       try {
@@ -63,7 +62,6 @@ void main() {
           dataPaths,
           firstSystemLanguage,
         );
-        fallbackLanguage = bootstrap.fallbackLanguage;
         if (!bootstrap.filePersistenceEnabled) {
           // 避免迁移半途失败后，本次运行用空状态覆盖尚未迁入的旧偏好。
           dataPaths = null;
@@ -83,7 +81,7 @@ void main() {
         MainApp(
           dataPaths: dataPaths,
           initialAppearanceSettings: appearance,
-          fallbackLanguage: fallbackLanguage,
+          fallbackLanguage: firstSystemLanguage,
           waitForGeneralSettings: true,
           observability: observability,
         ),
