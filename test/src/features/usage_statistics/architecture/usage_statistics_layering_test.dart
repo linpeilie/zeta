@@ -72,29 +72,22 @@ void main() {
       }
     });
 
-    test(
-      'legacy Provider partition key stays out of the v4 production path',
-      () {
-        final partitionStore = _stripLineComments(_read(queryCoreFiles.last));
-        final legacyDecoder = _read(
+    test('partition store only accepts the current root version', () {
+      final partitionStore = _stripLineComments(_read(queryCoreFiles.last));
+
+      expect(partitionStore, contains('usageStatisticsPartitionIndexVersion'));
+      expect(
+        partitionStore,
+        isNot(contains('LegacyUsageStatisticsIndexDecoder')),
+      );
+      expect(
+        File(
           'lib/src/features/usage_statistics/data/'
           'legacy_usage_statistics_index_decoder.dart',
-        );
-
-        expect(partitionStore, isNot(contains("'codex'")));
-        expect(partitionStore, isNot(contains("'grok'")));
-        expect(partitionStore, isNot(contains("'claude'")));
-        expect(legacyDecoder, contains("'codex'"));
-        expect(legacyDecoder, contains('仅供 v4 Store 读取 v2/v3 派生索引的专用 decoder'));
-        expect(
-          File(
-            'lib/src/features/usage_statistics/data/'
-            'usage_statistics_index_store.dart',
-          ).existsSync(),
-          isFalse,
-        );
-      },
-    );
+        ).existsSync(),
+        isFalse,
+      );
+    });
 
     test('Provider partition codecs omit private paths and raw failures', () {
       const privatePath = '/private/session/rollout-secret.jsonl';

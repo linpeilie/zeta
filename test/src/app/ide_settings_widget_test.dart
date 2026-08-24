@@ -844,7 +844,7 @@ class _FakeSystemFontCatalogService implements SystemFontCatalogService {
       if (!loadableFonts.contains(family.familyName)) {
         continue;
       }
-      if (family.aliases.any((alias) => alias.toLowerCase() == normalized)) {
+      if (family.familyName.toLowerCase() == normalized) {
         return family;
       }
     }

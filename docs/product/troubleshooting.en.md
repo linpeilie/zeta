@@ -253,7 +253,6 @@ Everything lives under `~/.zeta/` (`%USERPROFILE%\.zeta\` on Windows) as plain J
 │   ├── ide_session.json               Open projects, selected file, expansion, thread cache
 │   ├── usage_statistics_index.json    Derived usage index
 │   ├── session/<providerId>/          Turn context for Zeta-started turns (model, effort, timestamps)
-│   └── migration_marker.json          One-time migration marker
 ├── logs/
 │   └── zeta-YYYY-MM-DD.log            Daily-rotated application log
 └── cache/

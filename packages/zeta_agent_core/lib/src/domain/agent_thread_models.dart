@@ -214,11 +214,7 @@ class AgentThreadSummary {
       providerId: providerId,
       projectPath: projectPath,
       title: decodeOptionalString(map['title']),
-      // `raw` 已不再写盘；这里只保留一次性的**旧缓存**迁移读取，让升级前
-      // 落盘的条目仍能恢复 sessionPath。不是运行期原文取值。
-      sessionPath:
-          decodeOptionalString(map['sessionPath']) ??
-          decodeOptionalString(decodeObjectMap(map['raw'])['path']),
+      sessionPath: decodeOptionalString(map['sessionPath']),
       preview: decodeOptionalString(map['preview']) ?? '',
       createdAt: createdAt,
       updatedAt: updatedAt,

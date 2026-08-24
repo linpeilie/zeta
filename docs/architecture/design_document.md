@@ -32,7 +32,7 @@ Zeta 的设计目标是让 Flutter UI、Agent provider、会话持久化和本�
 ```text
 main()
   -> ZetaDataPaths (~/.zeta)
-  -> ZetaStorageMigrator (legacy SharedPreferences -> JSON files)
+  -> ensureZetaDataDirectories
   -> daily app log (~/.zeta/logs)
   -> MainApp
     -> AgentProviderRuntimeRegistry（Provider 进程唯一所有者）
@@ -232,7 +232,7 @@ projection 与 unified diff 以 turn render revision 缓存，代码高亮复用
   未提供的到期日，也不提供登录、购买、续费或支付动作。
 - 宽屏使用双栏分析区，窄窗口切换为单栏；表格可横向滚动，任务详情使用自适应
   侧边/底部抽屉。
-- `UsageStatisticsIndexStore`（v3）按 Provider 分区持久化派生会话快照：只含
+- `UsageStatisticsIndexStore`（v4）按 Provider 分区持久化派生会话快照：只含
   sourceId / fingerprint / thread·turn ID、时间、项目、模型、状态、时延、Token
   与错误分类；不保存 Prompt、回复正文、session 文件路径或原始错误文本。Codex 与
   Grok 均走 fingerprint 增量扫描，并行写入经 `mergeSave` 合并。
@@ -564,10 +564,8 @@ result。认证证据与 initialize 可用性独立，CLI 仍可能维护自身�
   Composer 紧凑选择器；不支持 mode 的 Provider 保持原布局和普通发送路径。
 
 权限选项选择已收口到中立 `AgentPermissionPolicyPort`：application/presentation 只消费
-option 目录与 optionId；Codex/Grok/Claude Code 协议映射留在 data adapter/codec。Provider 配置 V2
-仅持久化 `selectedPermissionOptionId`。V1 多字段由 data/config 的
-`AgentProviderPermissionMigrationRegistry` 按 provider kind 路由到 Codex/Grok 专属实现；
-组合层负责注册，V2 key 存在时短路迁移。Domain config 只保存归一化 optionId。旧
+option 目录与 optionId；Codex/Grok/Claude Code 协议映射留在 data adapter/codec。Provider 配置当前格式
+仅持久化 `selectedPermissionOptionId`。Domain config 只保存归一化 optionId。旧
 `listPermissionProfiles` / `updatePermissionSelection`、共享层 fat snapshot、
 `AgentPermissionPreset` / `AgentPermissionProfileSummary` 及
 `supportsPermissionPolicySelection` / `supportsPermissionProfile*` 已删除。
@@ -575,7 +573,7 @@ Codex create/resume/fork/send 全部消费 application 冻结的
 `AgentPermissionRequestSnapshot`；data codec 在单次 RPC 编码点展开 profile、approval 与
 sandbox。Provider 构造时的 config snapshot 仅作缺省 fallback，不再由用户选择或 thread
 settings 修改，因此共享 Provider 的多 thread / 多 Canvas 请求彼此隔离。
-配置 JSON 的 V1/V2 宽容解码完全属于 data `AgentProviderSettingsCodec`；domain 不再保留
+配置 JSON 的当前版本解码完全属于 data `AgentProviderSettingsCodec`；domain 不再保留
 `AgentProviderConfig.tryDecode` / `AgentProviderSettings.tryDecode` 过渡门面。Provider API、
 bundle port 与 turn configuration 也只接受显式 request snapshot，不再接受裸 selection。
 
@@ -703,8 +701,8 @@ data 精确编码”的单向流：
 - `AgentModelConfigUiState` 只是不可变渲染快照。`selectedModelId` 属于持久业务状态；
   `expandedModelId` 是 Popover 局部运行态，每次打开重置，不写入 provider 配置。
 - `AgentProviderConfig.modelPreferences` 按 `modelId` 写入版本化
-  `~/.zeta/config/providers.json`；老版单一 selection 在首次模型列表归一化时迁移，
-  损坏或过期的偏好条目被宽容忽略或降级到服务端默认值。
+  `~/.zeta/config/providers.json`；损坏或过期的偏好条目被宽容忽略或降级到服务端默认值，
+  不从历史单一 selection 生成偏好条目。
 
 模型目录由 app 组合层创建的 `AgentModelCatalogRepository` 跨首页、常驻 thread 和 Agent
 管理入口共享。IDE 载入 provider 设置后只对 active provider 发起非阻塞预热；新鲜缓存
@@ -736,7 +734,7 @@ data 精确编码”的单向流：
 
 Zeta 通过 `ZetaDataPaths` 统一解析 `~/.zeta`，由 app 装配层把文件注入 feature data
 store。配置位于 `config/providers.json`、`config/appearance.json` 与
-`config/general.json`；IDE 会话、使用统计派生索引和迁移 marker 位于 `state/`；应用日志
+`config/general.json`；IDE 会话和使用统计派生索引位于 `state/`；应用日志
 按本地日期写入 `logs/zeta-YYYY-MM-DD.log`；规范化模型目录缓存位于
 `cache/agent_models_v1.json`。JSON store 使用同目录临时文件、flush 与 rename 替换，
 并在读取损坏或 I/O 失败时按 feature 语义降级。模型缓存只保存中立白名单字段，不保存
@@ -745,13 +743,10 @@ provider 原始 payload、环境变量值或凭证；文件变更的替换片段
 会话、缓存、日志或通知 payload。
 
 `general.json` 为 v3，字段含发送快捷键、通知开关和 `appLanguage`（`en` /
-`zh-Hans`）。v1/v2 升级补简体中文并保留旧字段。存储迁移 marker 为 v2：已有安装播种
-简体中文，真正的新安装按系统首选语言第一项播种；语言写入成功后才完成 marker。
+`zh-Hans`）。只解码当前版本；损坏或不支持版本时使用启动编排提供的语言 fallback。
 
-启动迁移只读取 Zeta 旧版 SharedPreferences key，目标文件存在时不覆盖，全部处理成功
-后才写 `migration_marker.json`。迁移不会删除旧值，以便旧版应用临时降级；新版本运行时
-不再把这些状态写回 SharedPreferences。若迁移中途失败，本次运行改用内存 store，避免
-空启动状态抢先创建目标文件；marker 保持未完成并在下次启动重试。
+当前没有旧版 SharedPreferences、历史文件迁移或 migration marker。启动阶段只准备
+`~/.zeta` 目录；目录不可用时本次运行改用内存 store，不阻断主界面。
 
 `~/.codex`、`~/.grok`、`~/.claude` 和用户项目源码不属于 Zeta 自有
 存储。Provider 自有 data adapter 可按明确功能读取 Agent CLI 配置、session、日志和账号
@@ -760,7 +755,7 @@ metadata；读取权限不自动授权迁移、复制、改写或删除，原始
 
 ### IDE 会话快照
 
-IDE 会话状态目前版本为 2，持久化内容包括：
+IDE 会话状态目前版本为 4，持久化内容包括：
 
 - 最近项目列表。
 - 当前项目。
@@ -773,7 +768,7 @@ IDE 会话状态目前版本为 2，持久化内容包括：
 - 每个项目的 thread 缓存。
 - 每个项目选中的 thread id。
 
-会话恢复遵循宽容策略：旧版本、损坏内容、缺失字段或不存在的路径都不会阻断启动。
+会话恢复遵循宽容策略：不支持版本、损坏内容、缺失字段或不存在的路径都不会阻断启动。
 
 ## 7. 文件树设计
 

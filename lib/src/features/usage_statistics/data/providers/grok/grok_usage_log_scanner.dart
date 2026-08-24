@@ -80,8 +80,8 @@ class GrokUsageIndexedTurn {
     return GrokUsageIndexedTurn(
       id: id,
       status: _historyStatus(map['status']),
-      startedAt: _dateTime(map['startedAt']),
-      completedAt: _dateTime(map['completedAt']),
+      startedAt: _cachedDateTime(map['startedAt']),
+      completedAt: _cachedDateTime(map['completedAt']),
       duration: _duration(map['durationMs']),
       timeToFirstToken: _duration(map['timeToFirstTokenMs']),
       cwd: _string(map['cwd']),
@@ -138,7 +138,7 @@ class GrokUsageIndexedSession {
     final threadId = _string(map['threadId']);
     final projectPath = _string(map['projectPath']);
     final sourceKind = _string(map['sourceKind']);
-    final modifiedAt = _dateTime(map['modifiedAt']);
+    final modifiedAt = _cachedDateTime(map['modifiedAt']);
     if (sourceId == null ||
         fingerprint == null ||
         threadId == null ||
@@ -447,15 +447,12 @@ int? _int(Object? value) => switch (value) {
   _ => null,
 };
 
-DateTime? _dateTime(Object? value) {
+DateTime? _cachedDateTime(Object? value) {
   final timestamp = _int(value);
   if (timestamp == null) {
     return null;
   }
-  final milliseconds = timestamp.abs() < 1000000000000
-      ? timestamp * Duration.millisecondsPerSecond
-      : timestamp;
-  return DateTime.fromMillisecondsSinceEpoch(milliseconds, isUtc: true);
+  return DateTime.fromMillisecondsSinceEpoch(timestamp, isUtc: true);
 }
 
 Duration? _duration(Object? value) {

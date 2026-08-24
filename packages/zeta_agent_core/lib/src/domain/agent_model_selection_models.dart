@@ -274,7 +274,9 @@ class AgentModelPreference {
       return null;
     }
     final updatedAt = DateTime.tryParse('${map['updatedAt'] ?? ''}')?.toUtc();
-    final rawVersion = map['version'];
+    if (map['version'] != currentVersion) {
+      return null;
+    }
     return AgentModelPreference(
       modelId: modelId.trim(),
       reasoningEffort: map['reasoningEffort'] is String
@@ -286,9 +288,7 @@ class AgentModelPreference {
           : null,
       updatedAt:
           updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
-      version: rawVersion is int && rawVersion > 0
-          ? rawVersion
-          : currentVersion,
+      version: currentVersion,
     );
   }
 }

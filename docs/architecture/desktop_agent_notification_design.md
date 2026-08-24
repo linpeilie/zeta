@@ -286,7 +286,7 @@ Dart 端通过 `zeta/desktop_attention` MethodChannel 调用：
 | --- | --- |
 | domain/application | turn 终态映射正确；request raised/resolved 使用同一 identity |
 | coordinator unit | 可见 thread 抑制；后台去重；resolved 撤回；点击定位并清除；分类开关生效 |
-| settings unit | version 1 迁移；version 2 容错解码；三个开关持久化 |
+| settings unit | 当前格式容错解码；三个开关持久化 |
 | widget | 设置组可见；开关调用 controller；窄视口不溢出 |
 | 静态检查 | `dart format .` 与 `flutter analyze` |
 | 回归 | `bash tool/test_affected.sh` |

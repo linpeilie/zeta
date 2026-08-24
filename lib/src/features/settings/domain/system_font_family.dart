@@ -23,7 +23,7 @@ class SystemFontFamily {
   /// 按当前系统语言解析的家族展示名。
   final String displayName;
 
-  /// 其他本地化名称及旧版文件名，用于搜索和旧设置迁移。
+  /// 其他本地化名称，用于字体目录搜索。
   final List<String> aliases;
 
   /// 平台字体 API 给出的等宽属性。

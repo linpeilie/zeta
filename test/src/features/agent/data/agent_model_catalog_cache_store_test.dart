@@ -84,7 +84,7 @@ void main() {
     );
 
     test(
-      'reads an old v1 static snapshot and overwrites it after refresh',
+      'reads a current static snapshot and overwrites it after refresh',
       () async {
         final oldFetchedAt = DateTime.utc(2026, 8, 12, 6);
         final refreshedAt = oldFetchedAt.add(const Duration(hours: 2));

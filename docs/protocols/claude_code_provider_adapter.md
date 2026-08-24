@@ -370,8 +370,6 @@ Claude CLI 对其自有认证/bootstrap/cache 绝对零写入。
     + claude_code_message_content_codec.dart   # content block ↔ AgentMessage segment
     + claude_code_initialize_metadata_mapper.dart # initialize 白名单 → models/plan
     + claude_code_usage_quota_mapper.dart      # GET /api/oauth/usage 响应 → AgentUsageQuotaSnapshot（§4.11）
-+ src/features/agent/data/agent_provider_permission_migration.dart
-    # 追加 ClaudeCodePermissionPreferenceMigrator（若引入 legacy 字段迁移；否则不必）
 ```
 
 ### 3.2 Domain 层
@@ -646,8 +644,7 @@ throw；这样 CLI 引入新事件类型时不会阻断整个 pipeline。
       切换错误继续向上抛出，不提交新的权限选择；
     - 如果未来 CLI 暴露 live `permission_mode` control，可切到
       `AgentPermissionApplyScope.runtime`；MVP 不做。
-- **不做** legacy 迁移（CC 新入，`AgentProviderPermissionMigrationRegistry`
-  不加分支）。
+- 不注册 Provider 配置迁移器；Claude Code 使用当前 `selectedPermissionOptionId` 格式。
 - 反向 `can_use_tool` 询问：
     - 生成中立 `AgentPermissionRequest`（`decisionOptions=[allow_once,
     allow_always, deny_once, deny_always]`）；

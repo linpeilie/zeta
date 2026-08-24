@@ -2,14 +2,12 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_config_codec.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import '../../../testing/provider_settings_test_store.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
 
-import '../../../testing/fixture_reader.dart';
 import '../../../testing/agent_conversation_binding_test_harness.dart';
 import '../../../testing/fake_agent_frame_scheduler.dart';
 import '../../../testing/recording_json_rpc_peer.dart';
@@ -564,45 +562,10 @@ void main() {
       },
     );
 
-    test('V2 priority and provider migrator fixture table stays executable', () {
-      final fixture = readFixtureJsonMap(
-        'agent_permission_runtime_architecture/permission_migration_cases.json',
-      );
-      expect(fixture['schemaVersion'], 1);
-      final cases = fixture['cases']! as List<Object?>;
-      expect(cases, isNotEmpty);
-
-      for (final value in cases) {
-        final row = (value! as Map<Object?, Object?>).map(
-          (key, item) => MapEntry(key.toString(), item),
-        );
-        final input = row['input']! as Map<Object?, Object?>;
-        final config = _permissionConfigCodec().decodeProvider(input);
-        expect(config, isNotNull, reason: row['id']!.toString());
-        expect(
-          config!.selectedPermissionOptionId,
-          row['expectedOptionId'],
-          reason: row['id']!.toString(),
-        );
-      }
-
-      final migrators = cases
-          .map((value) => value! as Map<Object?, Object?>)
-          .map((row) => row['expectedMigrator'])
-          .toSet();
-      expect(
-        migrators,
-        containsAll(<Object?>['v2-short-circuit', 'codex', 'grok', 'generic']),
-      );
-    });
-
-    test('provider-specific permission migration is data-owned and registered', () {
+    test('provider definitions have no legacy permission migration surface', () {
       final providerModelSource = File(
         'packages/zeta_agent_core/lib/src/domain/agent_provider_models.dart',
       ).readAsStringSync();
-      final legacyDomainMigration = File(
-        'packages/zeta_agent_core/lib/src/domain/agent_permission_preference_migration.dart',
-      );
       final dataMigration = File(
         'packages/zeta_agent_providers/lib/src/agent_provider_permission_migration.dart',
       );
@@ -614,23 +577,13 @@ void main() {
       ).readAsStringSync();
       final appSource = File('lib/src/app/app.dart').readAsStringSync();
 
+      expect(providerModelSource, isNot(contains('supportedVersions')));
+      expect(dataMigration.existsSync(), isFalse);
       expect(
-        providerModelSource.contains(
-          'AgentPermissionPreferenceMigration.resolveOptionId',
-        ),
-        isFalse,
-        reason:
-            'domain config decoding must delegate legacy fields to a data migrator registry',
+        codexPluginSource,
+        isNot(contains('PermissionPreferenceMigrator')),
       );
-      expect(
-        legacyDomainMigration.existsSync(),
-        isFalse,
-        reason:
-            'Codex/Grok legacy protocol strings must leave the shared domain',
-      );
-      expect(dataMigration.existsSync(), isTrue);
-      expect(codexPluginSource, contains('CodexPermissionPreferenceMigrator'));
-      expect(grokPluginSource, contains('GrokPermissionPreferenceMigrator'));
+      expect(grokPluginSource, isNot(contains('PermissionPreferenceMigrator')));
       expect(appSource, isNot(contains('PermissionPreferenceMigrator')));
     });
 
@@ -755,12 +708,6 @@ AgentThreadSummary _threadSummary(String id) {
     updatedAt: timestamp,
     recencyAt: timestamp,
     status: AgentThreadRuntimeStatus.idle,
-  );
-}
-
-AgentProviderSettingsCodec _permissionConfigCodec() {
-  return AgentProviderSettingsCodec(
-    providerDefinitions: builtInAgentProviderDefinitionCatalog,
   );
 }
 

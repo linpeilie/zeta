@@ -5,45 +5,29 @@
 final class IdeWorkbenchLayoutState {
   const IdeWorkbenchLayoutState({
     this.leftSidebarVisible = true,
-    this.agentUsageExpanded = false,
     this.leftSidebarWidth,
-    this.agentUsageHeightFraction,
     this.selectedAgentUsageProviderId,
   });
 
   /// Projects / Agent 统计合并栏是否可见。
   final bool leftSidebarVisible;
 
-  /// 旧版统计区展开标记，仅为会话 JSON 宽容兼容而保留；完整统计改为临时
-  /// Popover 后不再持久化展开态，当前布局不消费该字段。
-  final bool agentUsageExpanded;
-
   /// 用户提交的左栏逻辑像素宽度；为空时由 UI 使用默认 token。
   final double? leftSidebarWidth;
-
-  /// 旧版统计区高度比例，仅为会话 JSON 宽容兼容而保留；当前布局不再消费。
-  final double? agentUsageHeightFraction;
 
   /// 统计面板关注的 Provider 配置 id；目录到达后再校验是否可用。
   final String? selectedAgentUsageProviderId;
 
   IdeWorkbenchLayoutState copyWith({
     bool? leftSidebarVisible,
-    bool? agentUsageExpanded,
     Object? leftSidebarWidth = _unsetWorkbenchLayoutValue,
-    Object? agentUsageHeightFraction = _unsetWorkbenchLayoutValue,
     Object? selectedAgentUsageProviderId = _unsetWorkbenchLayoutValue,
   }) {
     return IdeWorkbenchLayoutState(
       leftSidebarVisible: leftSidebarVisible ?? this.leftSidebarVisible,
-      agentUsageExpanded: agentUsageExpanded ?? this.agentUsageExpanded,
       leftSidebarWidth: identical(leftSidebarWidth, _unsetWorkbenchLayoutValue)
           ? this.leftSidebarWidth
           : _positiveFiniteDouble(leftSidebarWidth),
-      agentUsageHeightFraction:
-          identical(agentUsageHeightFraction, _unsetWorkbenchLayoutValue)
-          ? this.agentUsageHeightFraction
-          : _fraction(agentUsageHeightFraction),
       selectedAgentUsageProviderId:
           identical(selectedAgentUsageProviderId, _unsetWorkbenchLayoutValue)
           ? this.selectedAgentUsageProviderId
@@ -54,9 +38,7 @@ final class IdeWorkbenchLayoutState {
   /// 投影为 `ide_session.json` 中的 `workbench` 白名单字段。
   Map<String, Object?> toJson() => <String, Object?>{
     'leftSidebarVisible': leftSidebarVisible,
-    'agentUsageExpanded': agentUsageExpanded,
     'leftSidebarWidth': leftSidebarWidth,
-    'agentUsageHeightFraction': agentUsageHeightFraction,
     'selectedAgentUsageProviderId': selectedAgentUsageProviderId,
   };
 
@@ -72,11 +54,7 @@ final class IdeWorkbenchLayoutState {
       leftSidebarVisible: map['leftSidebarVisible'] is bool
           ? map['leftSidebarVisible']! as bool
           : true,
-      agentUsageExpanded: map['agentUsageExpanded'] is bool
-          ? map['agentUsageExpanded']! as bool
-          : false,
       leftSidebarWidth: _positiveFiniteDouble(map['leftSidebarWidth']),
-      agentUsageHeightFraction: _fraction(map['agentUsageHeightFraction']),
       selectedAgentUsageProviderId: _providerId(
         map['selectedAgentUsageProviderId'],
       ),
@@ -87,18 +65,14 @@ final class IdeWorkbenchLayoutState {
   bool operator ==(Object other) {
     return other is IdeWorkbenchLayoutState &&
         other.leftSidebarVisible == leftSidebarVisible &&
-        other.agentUsageExpanded == agentUsageExpanded &&
         other.leftSidebarWidth == leftSidebarWidth &&
-        other.agentUsageHeightFraction == agentUsageHeightFraction &&
         other.selectedAgentUsageProviderId == selectedAgentUsageProviderId;
   }
 
   @override
   int get hashCode => Object.hash(
     leftSidebarVisible,
-    agentUsageExpanded,
     leftSidebarWidth,
-    agentUsageHeightFraction,
     selectedAgentUsageProviderId,
   );
 }
@@ -111,11 +85,6 @@ double? _positiveFiniteDouble(Object? raw) {
   }
   final value = raw.toDouble();
   return value.isFinite && value > 0 ? value : null;
-}
-
-double? _fraction(Object? raw) {
-  final value = _positiveFiniteDouble(raw);
-  return value != null && value < 1 ? value : null;
 }
 
 String? _providerId(Object? raw) {

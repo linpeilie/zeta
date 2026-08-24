@@ -41,7 +41,7 @@ class CodexUsageSample {
   static CodexUsageSample? tryDecode(Object? value) {
     final map = _map(value);
     final key = _string(map['deduplicationKey']);
-    final timestamp = _dateTime(map['timestamp']);
+    final timestamp = _cachedDateTime(map['timestamp']);
     if (key == null || timestamp == null) {
       return null;
     }
@@ -124,8 +124,8 @@ class CodexUsageTurnSnapshot {
     return CodexUsageTurnSnapshot(
       id: id,
       status: status,
-      startedAt: _dateTime(map['startedAt']),
-      completedAt: _dateTime(map['completedAt']),
+      startedAt: _cachedDateTime(map['startedAt']),
+      completedAt: _cachedDateTime(map['completedAt']),
       cwd: _string(map['cwd']),
       model: _string(map['model']),
       errorMessage: errorMessage,
@@ -179,15 +179,12 @@ class CodexUsageSessionSnapshot {
 
   static CodexUsageSessionSnapshot? tryDecode(Object? value) {
     final map = _map(value);
-    final legacySourcePath = _string(map['sourcePath']);
-    final sourceId =
-        _string(map['sourceId']) ??
-        (legacySourcePath == null ? null : usageSourceId(legacySourcePath));
+    final sourceId = _string(map['sourceId']);
     final fingerprint = _string(map['fingerprint']);
     final threadId = _string(map['threadId']);
     final projectPath = _string(map['projectPath']);
     final sourceKind = _string(map['sourceKind']);
-    final createdAt = _dateTime(map['createdAt']);
+    final createdAt = _cachedDateTime(map['createdAt']);
     if (sourceId == null ||
         fingerprint == null ||
         threadId == null ||
@@ -206,7 +203,7 @@ class CodexUsageSessionSnapshot {
       }
     }
     return CodexUsageSessionSnapshot(
-      sourcePath: legacySourcePath ?? '',
+      sourcePath: '',
       sourceId: sourceId,
       fingerprint: fingerprint,
       threadId: threadId,
@@ -748,6 +745,14 @@ DateTime? _dateTime(Object? value) {
       ? milliseconds * Duration.millisecondsPerSecond
       : milliseconds;
   return DateTime.fromMillisecondsSinceEpoch(normalized);
+}
+
+DateTime? _cachedDateTime(Object? value) {
+  final milliseconds = _int(value);
+  if (milliseconds == null) {
+    return null;
+  }
+  return DateTime.fromMillisecondsSinceEpoch(milliseconds);
 }
 
 int _nonNegativeDelta(int current, int baseline) {

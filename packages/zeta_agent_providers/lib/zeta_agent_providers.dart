@@ -20,7 +20,6 @@ export 'grok_plugin.dart';
 export 'src/agent_ignored_message_logger.dart';
 export 'src/agent_metric_labels.dart';
 export 'src/agent_provider_definition.dart';
-export 'src/agent_provider_permission_migration.dart';
 export 'src/agent_provider_plugin_contribution.dart';
 export 'src/agent_provider_static_capabilities.dart';
 export 'src/claude_code_cli_locator.dart';

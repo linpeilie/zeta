@@ -1,7 +1,5 @@
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
-import 'package:zeta_agent_providers/src/agent_provider_permission_migration.dart';
-
 /// 单个 compile-time Provider 插件公开的静态定义。
 ///
 /// 这里保存初始化前就能确定的白名单 metadata；协议原文、凭证和 runtime 状态均不
@@ -14,7 +12,6 @@ final class AgentProviderDefinition {
     required this.staticCapabilities,
     required this.modelCatalogSourceLabel,
     this.modelCatalogFingerprintExtraKeys = const <String>{},
-    this.permissionPreferenceMigrator,
     this.isDefault = false,
   });
 
@@ -37,9 +34,6 @@ final class AgentProviderDefinition {
   ///
   /// 值只用于进程内哈希，原始 extra 不进入缓存快照；集合必须是编译期白名单。
   final Set<String> modelCatalogFingerprintExtraKeys;
-
-  /// V1 Provider 设置存在旧权限字段时使用的专属迁移器。
-  final AgentProviderPermissionPreferenceMigrator? permissionPreferenceMigrator;
 
   /// 是否是 active 配置损坏时的默认 Provider。
   final bool isDefault;
@@ -200,16 +194,4 @@ final class AgentProviderDefinitionCatalog {
   ) =>
       _byProviderType[config.kind]?.modelCatalogFingerprintExtraKeys ??
       const <String>{};
-
-  AgentProviderPermissionMigrationRegistry get permissionMigrationRegistry {
-    final migrators =
-        <AgentProviderTypeId, AgentProviderPermissionPreferenceMigrator>{};
-    for (final definition in definitions) {
-      final migrator = definition.permissionPreferenceMigrator;
-      if (migrator != null) {
-        migrators[definition.providerType] = migrator;
-      }
-    }
-    return AgentProviderPermissionMigrationRegistry(migrators);
-  }
 }

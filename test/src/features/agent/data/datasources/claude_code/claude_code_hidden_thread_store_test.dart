@@ -39,7 +39,7 @@ void main() {
       expect(await store.load(), isEmpty);
     });
 
-    test('migrates version zero entries and ignores damaged values', () async {
+    test('unsupported versions decode as empty', () async {
       final store = FileClaudeCodeHiddenThreadStore(
         storage: AtomicTextFile(storeFile),
       );
@@ -52,7 +52,7 @@ void main() {
         }),
       );
 
-      expect(await store.load(), <String>{'-workspace-zeta/session-2'});
+      expect(await store.load(), isEmpty);
     });
 
     test('writes only the versioned key whitelist', () async {

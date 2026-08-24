@@ -46,9 +46,7 @@ void main() {
         projectHomeActive: false,
         workbenchLayout: const IdeWorkbenchLayoutState(
           leftSidebarVisible: false,
-          agentUsageExpanded: true,
           leftSidebarWidth: 300,
-          agentUsageHeightFraction: 0.4,
           selectedAgentUsageProviderId: 'grok',
         ),
       );
@@ -124,9 +122,7 @@ void main() {
         },
         workbenchLayout: const IdeWorkbenchLayoutState(
           leftSidebarVisible: false,
-          agentUsageExpanded: true,
           leftSidebarWidth: 320,
-          agentUsageHeightFraction: 0.5,
           selectedAgentUsageProviderId: 'grok',
         ),
       ),
@@ -165,9 +161,7 @@ void main() {
       result.snapshot?.workbenchLayout,
       const IdeWorkbenchLayoutState(
         leftSidebarVisible: false,
-        agentUsageExpanded: true,
         leftSidebarWidth: 320,
-        agentUsageHeightFraction: 0.5,
         selectedAgentUsageProviderId: 'grok',
       ),
     );

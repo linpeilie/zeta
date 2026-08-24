@@ -185,7 +185,7 @@ void main() {
       );
     });
 
-    test('decodes session path from current and legacy cache payloads', () {
+    test('decodes session path from the current cache payload', () {
       final createdAt = DateTime.fromMillisecondsSinceEpoch(1);
       final updatedAt = DateTime.fromMillisecondsSinceEpoch(2);
 
@@ -201,18 +201,6 @@ void main() {
         'raw': const <String, Object?>{},
       });
       expect(current?.sessionPath, '/tmp/current.jsonl');
-
-      final legacy = AgentThreadSummary.tryDecode(<String, Object?>{
-        'id': 'thread-2',
-        'providerId': defaultAgentProviderId,
-        'projectPath': '/repo',
-        'preview': 'Preview',
-        'createdAt': createdAt.millisecondsSinceEpoch,
-        'updatedAt': updatedAt.millisecondsSinceEpoch,
-        'status': AgentThreadRuntimeStatus.idle.name,
-        'raw': const <String, Object?>{'path': '/tmp/legacy.jsonl'},
-      });
-      expect(legacy?.sessionPath, '/tmp/legacy.jsonl');
     });
   });
 }

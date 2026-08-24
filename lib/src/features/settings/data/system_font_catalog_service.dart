@@ -14,7 +14,7 @@ abstract class SystemFontCatalogService {
 
   Future<List<SystemFontFamily>> codeFontFamilies();
 
-  /// 按真实家族名、本地化名称或旧版文件名解析字体。
+  /// 按当前字体目录中的真实家族名解析字体。
   Future<SystemFontFamily?> resolveFontFamily(String name);
 }
 
@@ -52,9 +52,7 @@ class DesktopSystemFontCatalogService implements SystemFontCatalogService {
       return null;
     }
     for (final family in await uiFontFamilies()) {
-      if (family.familyName.toLowerCase() == normalized ||
-          family.displayName.toLowerCase() == normalized ||
-          family.aliases.any((alias) => alias.toLowerCase() == normalized)) {
+      if (family.familyName.toLowerCase() == normalized) {
         return family;
       }
     }

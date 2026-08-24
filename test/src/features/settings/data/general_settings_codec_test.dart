@@ -6,34 +6,7 @@ import 'package:zeta/src/features/settings/domain/general_settings.dart';
 void main() {
   const codec = GeneralSettingsCodec();
 
-  test('v1 and v2 seed simplified Chinese and keep old fields', () {
-    final v1 = codec.decode(<String, Object?>{
-      'version': 1,
-      'sendMessageShortcut': 'primaryModifierEnter',
-    }, fallbackLanguage: AppLanguage.english);
-    expect(
-      v1,
-      const GeneralSettings(
-        sendMessageShortcut: MessageSendShortcut.primaryModifierEnter,
-        appLanguage: AppLanguage.simplifiedChinese,
-      ),
-    );
-
-    final v2 = codec.decode(<String, Object?>{
-      'version': 2,
-      'sendMessageShortcut': 'enter',
-      'notifications': <String, Object?>{
-        'enabled': false,
-        'turnTerminalEnabled': true,
-        'actionRequiredEnabled': false,
-      },
-    }, fallbackLanguage: AppLanguage.english);
-    expect(v2.appLanguage, AppLanguage.simplifiedChinese);
-    expect(v2.notifications.enabled, isFalse);
-    expect(v2.notifications.actionRequiredEnabled, isFalse);
-  });
-
-  test('v3 round-trips both languages', () {
+  test('current version round-trips both languages', () {
     const english = GeneralSettings(appLanguage: AppLanguage.english);
     const chinese = GeneralSettings(
       appLanguage: AppLanguage.simplifiedChinese,
@@ -65,19 +38,17 @@ void main() {
     expect(settings.appLanguage, AppLanguage.english);
   });
 
-  test('unknown version can still read a known language', () {
+  test('unsupported version uses the explicit fallback language', () {
     final settings = codec.decode(<String, Object?>{
       'version': 99,
       'sendMessageShortcut': 'primaryModifierEnter',
       'notifications': <String, Object?>{'enabled': false},
       'appLanguage': 'en',
     }, fallbackLanguage: AppLanguage.simplifiedChinese);
-    expect(settings.appLanguage, AppLanguage.english);
     expect(
-      settings.sendMessageShortcut,
-      MessageSendShortcut.primaryModifierEnter,
+      settings,
+      const GeneralSettings(appLanguage: AppLanguage.simplifiedChinese),
     );
-    expect(settings.notifications.enabled, isFalse);
   });
 
   test('damaged input uses the explicit fallback language', () {

@@ -98,7 +98,7 @@ IdeSessionState sanitizeIdeSessionState(
       selectedThreadIdsByProject.putIfAbsent(entry.key, () => entry.value);
     }
   } else {
-    // 项目首页显式表示当前没有选中 thread，不能让兼容映射重新制造高亮。
+    // 项目首页显式表示当前没有选中 thread，不能自动制造高亮。
     selectedThreadIdsByProject.clear();
   }
 

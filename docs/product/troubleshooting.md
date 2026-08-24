@@ -248,7 +248,6 @@ credentials 文件。凭据只在一次只读请求期间留在内存，不写�
 │   ├── ide_session.json               打开的项目、选中文件、展开状态、会话缓存
 │   ├── usage_statistics_index.json    使用统计派生索引
 │   ├── session/<providerId>/          Zeta 发起 turn 的上下文（模型、思考程度、时间）
-│   └── migration_marker.json          一次性迁移完成标记
 ├── logs/
 │   └── zeta-YYYY-MM-DD.log            按天轮转的应用日志
 └── cache/

@@ -179,27 +179,8 @@ final class ClaudeCodePermissionPolicyAdapter
     final loaded = Map<String, ClaudeCodeSessionToolDecision>.of(
       await store.load(),
     );
-    final removedInteractiveDecision = loaded.keys.any(
-      _isInteractiveQuestionTool,
-    );
     loaded.removeWhere((toolName, _) => _isInteractiveQuestionTool(toolName));
     _sessionDecisions = loaded;
-    if (removedInteractiveDecision) {
-      // 旧版本曾把 AskUserQuestion 错当权限并落盘。绑定时主动清理，避免恢复
-      // 历史会话后继续静默 allow/deny；清理失败不能阻断会话启动。
-      try {
-        await store.save(
-          Map<String, ClaudeCodeSessionToolDecision>.unmodifiable(
-            _sessionDecisions,
-          ),
-        );
-      } catch (error) {
-        _log.w(
-          'Could not remove stale Claude Code question decision '
-          '(${error.runtimeType})',
-        );
-      }
-    }
   }
 
   /// 查询当前 session 对 [toolName] 的固定决定。

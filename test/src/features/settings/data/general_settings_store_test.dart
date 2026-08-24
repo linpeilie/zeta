@@ -39,7 +39,7 @@ void main() {
       );
     });
 
-    test('round trips v3 including language', () async {
+    test('round trips the current format including language', () async {
       final store = FileGeneralSettingsStore(
         storage: AtomicTextFile(settingsFile),
         fallbackLanguage: AppLanguage.simplifiedChinese,
@@ -66,18 +66,8 @@ void main() {
       expect(await store.load(), settings);
     });
 
-    test('reads v2 as Chinese and keeps other fields', () async {
-      await settingsFile.writeAsString(
-        jsonEncode(<String, Object?>{
-          'version': 2,
-          'sendMessageShortcut': 'primaryModifierEnter',
-          'notifications': <String, Object?>{
-            'enabled': true,
-            'turnTerminalEnabled': false,
-            'actionRequiredEnabled': true,
-          },
-        }),
-      );
+    test('uses fallback language for an unsupported version', () async {
+      await settingsFile.writeAsString('{"version":2}');
       final store = FileGeneralSettingsStore(
         storage: AtomicTextFile(settingsFile),
         fallbackLanguage: AppLanguage.english,
@@ -85,11 +75,7 @@ void main() {
 
       expect(
         await store.load(),
-        const GeneralSettings(
-          sendMessageShortcut: MessageSendShortcut.primaryModifierEnter,
-          notifications: AgentNotificationSettings(turnTerminalEnabled: false),
-          appLanguage: AppLanguage.simplifiedChinese,
-        ),
+        const GeneralSettings(appLanguage: AppLanguage.english),
       );
     });
 

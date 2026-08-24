@@ -198,8 +198,7 @@ IdeThemeData buildIdeThemeData({
   TargetPlatform? platform,
 }) {
   final resolvedPlatform = platform ?? defaultTargetPlatform;
-  // 「跟随应用默认」解析到内置 Geist，而不是平台系统字体：这样老用户持久化的
-  // systemDefault 无需迁移即可获得新默认字体，显式选了系统字体的用户不受影响。
+  // 「跟随应用默认」解析到内置 Geist，而不是平台系统字体。
   final resolvedUiFontFamily =
       _normalizeFontFamily(uiFontFamily) ?? bundledUiFontFamily;
   return IdeThemeData(

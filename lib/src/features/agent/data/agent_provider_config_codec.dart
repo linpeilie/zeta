@@ -3,22 +3,16 @@ import 'dart:convert';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
-/// Provider settings 的版本化 data codec。
-///
-/// V2 `selectedPermissionOptionId` 只要存在就作为唯一权限真源；仅当该 key
-/// 完全缺失时，才按 Provider kind 调用 legacy migrator。domain 始终只看到
-/// 归一化后的中立 optionId。
+/// 当前 Provider settings 的 data codec。
 final class AgentProviderSettingsCodec {
   factory AgentProviderSettingsCodec({
     required AgentProviderDefinitionCatalog providerDefinitions,
   }) => AgentProviderSettingsCodec._(providerDefinitions);
 
   AgentProviderSettingsCodec._(AgentProviderDefinitionCatalog definitions)
-    : _providerDefinitions = definitions,
-      _migrationRegistry = definitions.permissionMigrationRegistry;
+    : _providerDefinitions = definitions;
 
   final AgentProviderDefinitionCatalog _providerDefinitions;
-  final AgentProviderPermissionMigrationRegistry _migrationRegistry;
 
   /// 损坏、空白或未知版本输入使用的插件目录默认快照。
   AgentProviderSettings get fallbackSettings =>
@@ -36,16 +30,15 @@ final class AgentProviderSettingsCodec {
     }
   }
 
-  /// 解码 settings 对象，并在进入 domain 前迁移每个 provider 配置。
+  /// 解码当前 settings 对象。
   AgentProviderSettings decode(Object? value) {
     final settings = _objectMap(value);
     final version = settings['version'];
-    if (version is! int ||
-        !AgentProviderSettings.supportedVersions.contains(version)) {
+    if (version != AgentProviderSettings.currentVersion) {
       return fallbackSettings;
     }
     final providers = _providerDefinitions.ensureDefaultProviders(
-      _decodeProviderList(settings['providers'], migrate: _migrateProviderMap),
+      _decodeProviderList(settings['providers']),
     );
     final activeProviderId =
         decodeOptionalString(settings['activeProviderId']) ??
@@ -59,38 +52,14 @@ final class AgentProviderSettingsCodec {
     );
   }
 
-  /// 解码单个 provider；供配置编辑、fixture 与迁移测试复用。
+  /// 解码单个 provider；供配置编辑与 fixture 复用。
   AgentProviderConfig? decodeProvider(Object? value) {
-    return _decodeProvider(_migrateProviderMap(value));
+    return _decodeProvider(value);
   }
 
-  /// 只写 V2 domain 白名单字段。
+  /// 只写当前 domain 白名单字段。
   String encodeJson(AgentProviderSettings settings) {
     return jsonEncode(settings.toJson());
-  }
-
-  Object? _migrateProviderMap(Object? value) {
-    final raw = _objectMap(value);
-    if (raw.isEmpty || raw.containsKey('selectedPermissionOptionId')) {
-      return raw;
-    }
-    final decoded = _decodeProvider(raw);
-    if (decoded == null) {
-      return raw;
-    }
-    final migratedOptionId = _normalizedOptionId(
-      _migrationRegistry.migrateLegacyOptionId(
-        providerType: decoded.kind,
-        legacyConfig: Map<String, Object?>.unmodifiable(raw),
-      ),
-    );
-    if (migratedOptionId == null) {
-      return raw;
-    }
-    return <String, Object?>{
-      ...raw,
-      'selectedPermissionOptionId': migratedOptionId,
-    };
   }
 
   AgentProviderConfig? _decodeProvider(Object? value) {
@@ -135,17 +104,14 @@ final class AgentProviderSettingsCodec {
     );
   }
 
-  List<AgentProviderConfig> _decodeProviderList(
-    Object? value, {
-    required Object? Function(Object? value) migrate,
-  }) {
+  List<AgentProviderConfig> _decodeProviderList(Object? value) {
     if (value is! List) {
       return _providerDefinitions.defaultSettings.providers;
     }
     final providers = <AgentProviderConfig>[];
     final seen = <String>{};
     for (final item in value) {
-      final provider = _decodeProvider(migrate(item));
+      final provider = _decodeProvider(item);
       if (provider != null && seen.add(provider.id)) {
         providers.add(provider);
       }
@@ -159,13 +125,6 @@ Map<String, AgentModelPreference> _decodeModelPreferences(Object? value) {
   if (value is Map) {
     for (final entry in value.entries) {
       final preference = AgentModelPreference.tryDecode(entry.value);
-      if (preference != null) {
-        decoded[preference.modelId] = preference;
-      }
-    }
-  } else if (value is List) {
-    for (final item in value) {
-      final preference = AgentModelPreference.tryDecode(item);
       if (preference != null) {
         decoded[preference.modelId] = preference;
       }

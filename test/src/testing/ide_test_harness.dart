@@ -60,7 +60,7 @@ Future<void> pumpUntilCondition(
 
 String sessionJson({required String projectPath, String? currentFilePath}) {
   return jsonEncode(<String, Object?>{
-    'version': 1,
+    'version': sessionStateVersion,
     'projectPaths': <String>[projectPath],
     'activeProjectPath': projectPath,
     'currentFilePath': currentFilePath,

@@ -18,7 +18,7 @@ final class GeneralSettingsLoadRequested extends GeneralSettingsSliceIntent {
   const GeneralSettingsLoadRequested();
 }
 
-/// 载入完成；损坏 / 旧版本由 codec 宽容解码回落后回执。
+/// 载入完成；损坏 / 不支持版本由 codec 宽容解码回落后回执。
 final class GeneralSettingsLoaded extends GeneralSettingsSliceIntent {
   const GeneralSettingsLoaded(this.settings);
 

@@ -165,7 +165,7 @@ void main() {
 
       final session = MemorySessionStore(
         jsonEncode(<String, Object?>{
-          'version': 1,
+          'version': sessionStateVersion,
           'projectPaths': <String>[directory.path],
           'activeProjectPath': directory.path,
           'currentFilePath': null,
@@ -199,7 +199,7 @@ void main() {
     _useWideWindow(tester);
     final session = MemorySessionStore(
       jsonEncode(<String, Object?>{
-        'version': 1,
+        'version': sessionStateVersion,
         'projectPaths': <String>['/zeta/missing/project'],
         'activeProjectPath': '/zeta/missing/project',
         'currentFilePath': '/zeta/missing/project/main.dart',
@@ -236,9 +236,7 @@ void main() {
   ) async {
     const workbench = IdeWorkbenchLayoutState(
       leftSidebarVisible: false,
-      agentUsageExpanded: true,
       leftSidebarWidth: 315,
-      agentUsageHeightFraction: 0.48,
       selectedAgentUsageProviderId: 'grok',
     );
     final session = MemorySessionStore(
@@ -273,9 +271,7 @@ void main() {
       _useWideWindow(tester);
       const workbench = IdeWorkbenchLayoutState(
         leftSidebarVisible: false,
-        agentUsageExpanded: true,
         leftSidebarWidth: 315,
-        agentUsageHeightFraction: 0.48,
         selectedAgentUsageProviderId: 'grok',
       );
       final session = MemorySessionStore(
@@ -397,7 +393,6 @@ void main() {
     final persisted = IdeSessionState.tryDecode(session.value)!.workbenchLayout;
     expect(persisted.leftSidebarVisible, isFalse);
     expect(persisted.leftSidebarWidth, 324);
-    expect(persisted.agentUsageHeightFraction, isNull);
     expect(persisted.selectedAgentUsageProviderId, 'grok');
 
     await tester.pumpWidget(const SizedBox.shrink());

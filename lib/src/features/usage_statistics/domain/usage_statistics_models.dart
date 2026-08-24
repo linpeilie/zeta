@@ -486,12 +486,7 @@ DateTime? _dateTime(Object? value) {
   if (timestamp == null) {
     return null;
   }
-  // V1 索引曾把 Codex 的 Unix 秒误当 DateTime 毫秒，继而写出 10 位时间戳。
-  // 读取时识别并修复，下一次保存会自然改写成标准 13 位毫秒值。
-  final milliseconds = timestamp.abs() < 1000000000000
-      ? timestamp * Duration.millisecondsPerSecond
-      : timestamp;
-  return DateTime.fromMillisecondsSinceEpoch(milliseconds, isUtc: true);
+  return DateTime.fromMillisecondsSinceEpoch(timestamp, isUtc: true);
 }
 
 Duration? _duration(Object? value) {

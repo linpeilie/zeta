@@ -630,55 +630,33 @@ void main() {
     );
   });
 
-  testWidgets(
-    'usage summary keeps its own height and ignores legacy layout fields',
-    (tester) async {
-      final session = MemorySessionStore(
-        const IdeSessionState(
-          workbenchLayout: IdeWorkbenchLayoutState(
-            agentUsageExpanded: true,
-            agentUsageHeightFraction: 0.4,
-          ),
-        ).encode(),
-      );
-      await _pumpIde(tester, sessionStore: session);
+  testWidgets('usage summary uses a transient popover without resize handle', (
+    tester,
+  ) async {
+    final session = MemorySessionStore();
+    await _pumpIde(tester, sessionStore: session);
 
-      // 展开态是临时弹层：恢复出来的旧标记不会自动弹出统计。
-      expect(find.byKey(const ValueKey('agent-usage-popover')), findsNothing);
-      final usage = find.byKey(const ValueKey('project-agent-sidebar-usage'));
-      expect(tester.getSize(usage).height, lessThan(200));
-      expect(
-        find.byKey(const ValueKey('agent-usage-resize-handle')),
-        findsNothing,
-      );
+    expect(find.byKey(const ValueKey('agent-usage-popover')), findsNothing);
+    final usage = find.byKey(const ValueKey('project-agent-sidebar-usage'));
+    expect(tester.getSize(usage).height, lessThan(200));
+    expect(
+      find.byKey(const ValueKey('agent-usage-resize-handle')),
+      findsNothing,
+    );
 
-      await tester.tap(find.byKey(const ValueKey('agent-usage-expand-button')));
-      await _settleUsagePopover(tester);
-      expect(find.byKey(const ValueKey('agent-usage-popover')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('agent-usage-expand-button')));
+    await _settleUsagePopover(tester);
+    expect(find.byKey(const ValueKey('agent-usage-popover')), findsOneWidget);
 
-      await tester.tap(find.byKey(const ValueKey('agent-usage-expand-button')));
-      await _settleUsagePopover(tester);
-      await pumpSessionSave(tester);
-      expect(find.byKey(const ValueKey('agent-usage-popover')), findsNothing);
-      expect(
-        find.byKey(const ValueKey('agent-usage-resize-handle')),
-        findsNothing,
-      );
-      // 旧字段原样保留，不被当前布局改写。
-      expect(
-        IdeSessionState.tryDecode(
-          session.value,
-        )?.workbenchLayout.agentUsageHeightFraction,
-        0.4,
-      );
-      expect(
-        IdeSessionState.tryDecode(
-          session.value,
-        )?.workbenchLayout.agentUsageExpanded,
-        isTrue,
-      );
-    },
-  );
+    await tester.tap(find.byKey(const ValueKey('agent-usage-expand-button')));
+    await _settleUsagePopover(tester);
+    await pumpSessionSave(tester);
+    expect(find.byKey(const ValueKey('agent-usage-popover')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('agent-usage-resize-handle')),
+      findsNothing,
+    );
+  });
 
   testWidgets('right panel uses overlay in medium and compact modes', (
     tester,

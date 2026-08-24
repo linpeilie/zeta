@@ -51,12 +51,10 @@ final class FileClaudeCodeHiddenThreadStore
       if (decoded is! Map) {
         return <String>{};
       }
-      final version = decoded['version'];
-      final entries = switch (version) {
-        currentVersion => decoded['hiddenThreadKeys'],
-        0 => decoded['hiddenThreads'],
-        _ => null,
-      };
+      if (decoded['version'] != currentVersion) {
+        return <String>{};
+      }
+      final entries = decoded['hiddenThreadKeys'];
       if (entries is! List) {
         return <String>{};
       }

@@ -2,7 +2,6 @@ import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_plugin_kernel/zeta_plugin_kernel.dart';
 
 import 'package:zeta_agent_providers/src/agent_provider_definition.dart';
-import 'package:zeta_agent_providers/src/agent_provider_permission_migration.dart';
 import 'package:zeta_agent_providers/src/agent_provider_plugin_contribution.dart';
 import 'package:zeta_agent_providers/src/agent_provider_static_capabilities.dart';
 import 'package:zeta_agent_providers/src/native_agent_provider_bundles.dart';
@@ -10,7 +9,7 @@ import 'package:zeta_agent_providers/src/native_agent_provider_bundles.dart';
 /// Codex 内置配置的稳定 id。
 const String defaultAgentProviderId = 'codex';
 
-/// providers.json V2 沿用的 Codex 协议域字符串。
+/// providers.json 使用的 Codex 协议域字符串。
 const AgentProviderTypeId codexAgentProviderType = AgentProviderTypeId(
   'codexAppServer',
 );
@@ -32,7 +31,6 @@ const AgentProviderDefinition codexAgentProviderDefinition =
       defaultConfig: defaultCodexAgentProviderConfig,
       staticCapabilities: AgentProviderStaticCapabilities.codexAppServer,
       modelCatalogSourceLabel: 'Codex app-server',
-      permissionPreferenceMigrator: CodexPermissionPreferenceMigrator(),
       isDefault: true,
     );
 

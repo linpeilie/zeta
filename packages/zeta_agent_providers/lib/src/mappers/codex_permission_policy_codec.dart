@@ -3,7 +3,7 @@ import 'package:zeta_agent_core/zeta_agent_core.dart';
 /// Codex 权限策略编解码（协议私货，仅 Codex data 层使用）。
 ///
 /// 负责 built-in profile 标签、自定义 profile 不透明映射、approval/sandbox
-/// 编解码、thread settings 完整快照与旧配置迁移。共享层不得依赖本类型。
+/// 编解码与 thread settings 完整快照。共享层不得依赖本类型。
 abstract final class CodexPermissionPolicyCodec {
   static const String defaultApprovalPolicy = 'on-request';
   static const String defaultSandboxPolicy = 'workspaceWrite';
@@ -75,7 +75,7 @@ abstract final class CodexPermissionPolicyCodec {
   /// `thread/settings/updated` 中的审批策略采用严格解码。
   ///
   /// settings 是服务端事实回写；未知值不能按客户端默认值猜测，否则会把无法
-  /// 识别的组合错误地更新为某个有效权限。`on-failure` 是已知 legacy 别名。
+  /// 识别的组合错误地更新为某个有效权限。`on-failure` 是协议别名。
   static String? _approvalPolicyFromThreadSettings(Object? value) {
     if (value is! String) {
       return null;
@@ -134,7 +134,7 @@ abstract final class CodexPermissionPolicyCodec {
         builtInForId(fromOption) != null) {
       return fromOption;
     }
-    // 无显式 profile 时，仅用 approval/sandbox 回落内置（legacy）。
+    // 无显式 profile 时，仅用 approval/sandbox 回落内置 profile。
     for (final profile in builtInProfiles) {
       if (profile.approvalPolicy == selection.approvalPolicy &&
           profile.sandboxPolicy == selection.sandboxPolicy) {
@@ -183,13 +183,12 @@ abstract final class CodexPermissionPolicyCodec {
 
   /// 从全局配置恢复快照。
   ///
-  /// V2 仅有 [AgentProviderConfig.selectedPermissionOptionId]：按 profile 语义
-  /// 绑定（自定义 id 无损）。V1 遗留 approval/sandbox/profile 字段若仍在内存中
-  /// 则优先显式 profile，否则由 option 展开。
+  /// 当前配置只保存 [AgentProviderConfig.selectedPermissionOptionId]：按 profile
+  /// 语义绑定（自定义 id 无损）。
   static CodexPermissionRuntimeSnapshot snapshotFromConfig(
     AgentProviderConfig config,
   ) {
-    // V2：配置真源仅为 selectedPermissionOptionId（解码时已完成 V1 迁移）。
+    // 配置真源仅为 selectedPermissionOptionId。
     final optionId = config.resolvedPermissionOptionId?.trim();
     if (optionId != null && optionId.isNotEmpty) {
       return snapshotForProfileId(optionId);
@@ -197,7 +196,7 @@ abstract final class CodexPermissionPolicyCodec {
     return const CodexPermissionRuntimeSnapshot();
   }
 
-  /// 无 profile 的旧 approval/sandbox 组合 → 内置 option（迁移输入）。
+  /// 无 profile 的 approval/sandbox 组合 → 内置 option。
   static String? builtInOptionIdFromPolicies({
     required String approvalPolicy,
     required String sandboxPolicy,

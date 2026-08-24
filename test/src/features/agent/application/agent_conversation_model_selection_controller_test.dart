@@ -68,6 +68,33 @@ void main() {
       expect(persistedSelections.single.modelId, 'gpt-5.4-mini');
     });
 
+    test(
+      'does not migrate provider-level selection into a preference',
+      () async {
+        var saveCount = 0;
+        final controller = AgentConversationModelSelectionController(
+          persistSelection: (_, _) async {
+            saveCount += 1;
+          },
+          clock: () => _now,
+        );
+        addTearDown(controller.dispose);
+
+        controller.seedFromConfig(
+          defaultCodexAgentProviderConfig.copyWith(
+            selectedModel: 'gpt-5.5',
+            selectedReasoningEffort: 'medium',
+            selectedServiceTier: 'priority',
+          ),
+        );
+        controller.handleModelList(_modelList);
+        await Future<void>.delayed(Duration.zero);
+
+        expect(saveCount, 0);
+        expect(controller.preferences['gpt-5.5']?.serviceTierId, 'priority');
+      },
+    );
+
     test('restores each model last valid preference when switching', () async {
       final persistedPreferences = <Map<String, AgentModelPreference>>[];
       final controller = AgentConversationModelSelectionController(

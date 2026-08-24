@@ -386,11 +386,9 @@ handler 之前识别它，映射问题和选项，并通过独立 question pendi
   `nextSession` 只更新 preference/pending hint。旧 generation 的迟到 apply 直接丢弃。
 - **持久化恢复**：Provider apply 成功后再保存默认偏好；保存失败保留已生效状态并显示
   “已应用但保存失败”，通过 `retryPermissionPreferencePersistence` 只重试保存，不重复 apply。
-- **V1 → V2 配置迁移**：`AgentProviderSettings.currentVersion = 2`；decoder 宽容读
-  V1/V2。该 decoder 只存在于 data/config 的 `AgentProviderSettingsCodec`；domain config
-  不再暴露 `tryDecode`。codec 先检查 V2 optionId key；仅当
-  key 缺失时，才通过组合层注册的 Codex/Grok migrator 迁到单一
-  `selectedPermissionOptionId`。Domain 不认识 legacy 字段，writer 只写 optionId。
+- **Provider 配置格式**：`AgentProviderSettings.currentVersion = 2`；
+  `AgentProviderSettingsCodec` 只解码当前版本，权限偏好只保存
+  `selectedPermissionOptionId`。损坏或不支持版本回退到插件默认设置，Domain 不认识旧权限字段。
 - **Catalog 错误**：Codex adapter 只把明确的 `UnsupportedError`、JSON-RPC method-not-found
   或实验 API 明确关闭归类为 unsupported 并返回 built-ins；超时、连接/服务错误与 malformed
   response 均抛给 application。分页任一页失败不返回部分列表，重复 cursor 有界终止。
@@ -663,8 +661,7 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
   入口焦点，不能通过压缩 Canvas 模拟窄屏侧栏。
 - 左栏显隐、左栏宽度和统计 Provider 选择统一写入应用级
   `IdeWorkbenchLayoutState`。JSON 按字段宽容读取；统计展开态是临时弹层状态，只留在
-  presentation 层，不写会话；旧 `agentUsageHeightFraction` 与 `agentUsageExpanded` 仅保留
-  解码/回写兼容，不得再用于 presentation 布局。
+  presentation 层，不写会话。
 - 需要跨页面保持的 Canvas 应使用稳定位置、稳定 Key 和保活容器。Key 必须放在可能因
   slot 增删而换位的 Flex 子节点上，不能只放在其内部后代；保活容器必须只布局活动页，
   非活动页面同时退出布局并暂停 ticker。
@@ -815,8 +812,8 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
   当前生产分区包括 Codex、Grok 与 Claude Code。扫描层共用 `usageSourceId` +
   `usageFileFingerprint` + `forceRefresh` 命中语义；并行刷新必须原子合并，禁止整表覆盖
   写丢另一分区。
-- 分区 Store 的 JSON 必须保持版本化和宽容读取；v2 顶层 `sessions` 迁移进 `codex`
-  分区；索引损坏时从 provider 历史重建，不得阻断页面或应用启动。
+- 分区 Store 的 JSON 必须保持版本化和宽容读取；不支持的根版本按空索引处理，索引损坏时
+  从 provider 历史重建，不得阻断页面或应用启动。
 - 派生索引禁止保存 Prompt、回复、工具输出、session JSONL 路径和原始错误文本。
 - 历史 TTFT 缺失时保持 `null`；UI 显示“数据不足”和有效样本数，禁止用总耗时冒充。
 - 套餐类型、额度窗口、重置时间、余额和可用重置卡数量都是 Provider 返回数据的只读投影；
@@ -837,36 +834,31 @@ Zeta 自有数据统一写入用户主目录下的以下结构：
     ide_session.json
     usage_statistics_index.json
     session/<providerId>/<threadId>.json
-    migration_marker.json
   logs/
     zeta-YYYY-MM-DD.log
   cache/
     agent_models_v1.json
 ```
 
-`main` 在 `runApp` 前解析 HOME、配置文件日志并执行一次性迁移；`app` 把具体文件
-注入各 feature data store。旧版 SharedPreferences key 只作为迁移来源，目标文件已
-存在时不会被覆盖；迁移失败时本次运行使用内存状态，既不阻止主界面，也不写空
-目标覆盖待迁移数据，下次启动会继续重试。
+`main` 在 `runApp` 前解析 HOME、配置文件日志并准备存储目录；`app` 把具体文件
+注入各 feature data store。当前没有旧版 SharedPreferences 或历史文件迁移；目录准备失败时
+本次运行使用内存状态，不阻止主界面启动。
 
 会话状态使用版本化 JSON。变更字段时：
 
-- 保持 `tryDecode` 宽容读取，损坏内容不能导致启动失败。
+- 保持 `tryDecode` 宽容读取，损坏或不支持版本不能导致启动失败。
 - 新字段提供默认值。
-- 如破坏兼容性，提升版本并保留旧版本迁移逻辑。
+- 当前没有历史版本需要迁移；未来格式变更须明确决定是否重新播种空状态。
 - 不要把 provider 全局配置复制进每个项目状态。
 - 不要在 presentation/application 中直接构造 `File('~/.zeta/...')`。
 
 `general.json` 当前为 v3，保存发送快捷键、通知开关和 `appLanguage`
-（`en` / `zh-Hans`）。v1/v2 宽容升级补简体中文并保留旧字段；未知语言回退英语；
-损坏或未知版本在无法识别语言时才使用启动编排的 fallback。存储迁移 marker 为
-v2：已有安装播种简体中文，真正的新安装按系统首选语言第一项播种；语言写入
-成功后才完成 marker。编码结果不得包含任何 localized UI 字符串。
+（`en` / `zh-Hans`）。只解码 v3；未知语言回退英语，损坏或不支持版本使用启动编排的
+fallback。编码结果不得包含任何 localized UI 字符串。
 
 `providers.json` 中的 `modelPreferences` 是 provider 全局配置，按 `modelId` 保存
 `reasoningEffort`、`fastEnabled`、`serviceTierId`、`updatedAt` 和条目 `version`。
-解码时忽略损坏条目并兼容旧版单一 selection；写入时 selection 与完整偏好 map
-必须作为同一快照保存。
+解码时忽略损坏条目；写入时 selection 与完整偏好 map 必须作为同一快照保存。
 
 `cache/agent_models_v1.json` 是可丢弃、可重建的版本化缓存，只保存规范化后的
 `AgentModelInfo` 白名单字段和不含密钥的配置指纹。损坏、版本不兼容、配置指纹变化或

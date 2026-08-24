@@ -194,7 +194,7 @@ flowchart TD
 
 Agent 首页不挂载 Activity Rail。`WindowFrame` 的标题栏左侧按钮是合并左栏唯一的显隐入口，标题栏右侧按钮是 Files Inspector 唯一的显隐入口；Navigation slot 内的 `ProjectAgentSidebar` 以一个卡片承载 Projects / Threads 和底部只读 Agent 统计。统计常驻折叠摘要，展开时以摘要为锚点向上弹出 Popover；Compact 模式下左右侧栏分别复用 Navigation / Inspector Overlay，scrim 或 Esc 关闭后焦点回到对应标题栏按钮。
 
-左栏显隐、左栏宽度和统计 Provider 选择属于应用级 Workbench 偏好，随 `ide_session.json` 宽容恢复。统计展开态是临时 Popover，不写入会话；弹层宽度按左栏左右各内缩 `space4`，超出可用高度时只在弹层内滚动，不提供高度拖动，点击外部或摘要开合按钮都收敛回折叠摘要；旧快照中的高度比例与展开标记只做宽容兼容。前台或后台 thread 的终态只会让统计跟随该信号的 Provider 并静默刷新，不会切换会话 active Provider。
+左栏显隐、左栏宽度和统计 Provider 选择属于应用级 Workbench 偏好，随 `ide_session.json` 宽容恢复。统计展开态是临时 Popover，不写入会话；弹层宽度按左栏左右各内缩 `space4`，超出可用高度时只在弹层内滚动，不提供高度拖动，点击外部或摘要开合按钮都收敛回折叠摘要。前台或后台 thread 的终态只会让统计跟随该信号的 Provider 并静默刷新，不会切换会话 active Provider。
 
 跨页面保活用 `IdeRetainedPageView`，不用 `IndexedStack`（后者会一直保留长时间线的布局开销）。时间线用 `SliverList.builder` 虚拟化，流式回合、代码高亮和 diff 区域各自加 `RepaintBoundary`。
 
@@ -206,7 +206,7 @@ Agent 首页不挂载 Activity Rail。`WindowFrame` 的标题栏左侧按钮是�
 
 首期只支持英语与简体中文。语言偏好是 `settings` 里的 `AppLanguage`，存在 `config/general.json`（v3，码为 `en` / `zh-Hans`）。`MainApp` 在加载常规设置后冻结本次进程 Locale，再挂有文案的 UI；设置里切换后显示「重启后生效」，当前进程不跟随系统、也不重挂 Workbench。
 
-首次启动只看系统首选语言第一项：简体中文（含无 script 的 `zh`）选中文，繁体与其他语言回退英语。已经用过 Zeta 的安装继续中文。Widget 走 `context.l10n`；application / data / reducer 只注入不可变文本目录，禁止把 Flutter Locale 或 generated l10n 下沉。`Agent` / `Provider` / `Thread` / `Token` 保持英文；日期、数字、相对时间格式不随语言变。Provider/user/raw 原文也不翻译。
+首次启动或常规设置不可用时只看系统首选语言第一项：简体中文（含无 script 的 `zh`）选中文，繁体与其他语言回退英语。有效的当前设置优先。Widget 走 `context.l10n`；application / data / reducer 只注入不可变文本目录，禁止把 Flutter Locale 或 generated l10n 下沉。`Agent` / `Provider` / `Thread` / `Token` 保持英文；日期、数字、相对时间格式不随语言变。Provider/user/raw 原文也不翻译。
 
 `shadcn_flutter` 上游只有英语，Zeta 自有适配器把组件库文案接到同一批 ARB。操作系统拥有的文件选择器等可以继续用系统语言。
 
@@ -216,14 +216,14 @@ Zeta 自己的数据全在 `~/.zeta/`：
 
 ```
 config/   providers.json · appearance.json · general.json
-state/    ide_session.json · usage_statistics_index.json · migration_marker.json
+state/    ide_session.json · usage_statistics_index.json
 logs/     zeta-YYYY-MM-DD.log
 cache/    agent_models_v1.json
 ```
 
 三条硬性要求：
 
-- **JSON 必须版本化 + 宽容解码。** 缺字段、损坏、旧版本都不能阻断启动。
+- **JSON 必须版本化 + 宽容解码。** 缺字段、损坏或不支持版本都不能阻断启动；当前没有历史版本迁移。
 - **Provider 私有数据只在自有 data adapter 中读取。** 协议字段、原始正文和私有路径不进入上层；读取权限不自动授权迁移、改写或删除。
 - **派生索引只存白名单字段。** 禁止落盘 prompt、回复正文、工具输出、文件变更 evidence 正文、原始错误文本、环境变量、凭证、Provider raw payload 或 localized UI copy。
 
@@ -241,7 +241,7 @@ feature store 也不得在 presentation / application 里自己拼 `File('~/.zet
 | 加一个 Provider 已支持但 UI 没露出的能力 | domain 端口与 capability → application → presentation |
 | 接入一个全新的 Agent CLI | 新建 `data/` 实现 + factory 组合 + 契约测试 |
 | 改文件树忽略规则 | `features/workspace/domain/workspace_directory_rules.dart` |
-| 改持久化字段 | 对应 feature 的 `data/` + 版本化解码 + 迁移兼容 |
+| 改持久化字段 | 对应 feature 的 `data/` + 当前版本解码 + 损坏/不支持版本的宽容回落 |
 | 加一条用户可见文案 | ARB（`app_en.arb` / `app_zh.arb`）或对应 feature 文本目录；跑字面量扫描 |
 
 **动手前先读**：[贡献指南的架构红线](../../CONTRIBUTING.md#架构红线)是精简版；[工程规范](./engineering_standards.md)是完整版和评审门禁。

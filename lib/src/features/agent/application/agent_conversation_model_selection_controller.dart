@@ -81,7 +81,6 @@ class AgentConversationModelSelectionController {
   int _generation = 0;
   AgentModelConfigField _latestField = AgentModelConfigField.model;
   String _latestModelId = '';
-  bool _needsPreferenceMigration = false;
   bool _disposed = false;
   final List<void Function()> _listeners = <void Function()>[];
 
@@ -163,18 +162,6 @@ class AgentConversationModelSelectionController {
     _preferences = Map<String, AgentModelPreference>.from(
       config.modelPreferences,
     );
-    final modelId = config.selectedModel;
-    _needsPreferenceMigration =
-        modelId != null && !_preferences.containsKey(modelId);
-    if (modelId != null && _needsPreferenceMigration) {
-      _preferences[modelId] = AgentModelPreference(
-        modelId: modelId,
-        reasoningEffort: config.selectedReasoningEffort,
-        fastEnabled: config.selectedServiceTier != null,
-        serviceTierId: config.selectedServiceTier,
-        updatedAt: _clock().toUtc(),
-      );
-    }
     _confirmedSelection = _modelSelection;
     _confirmedPreferences = Map<String, AgentModelPreference>.from(
       config.modelPreferences,
@@ -240,7 +227,6 @@ class AgentConversationModelSelectionController {
       };
       _modelSelection = nextSelection;
     }
-    _needsPreferenceMigration = false;
     _confirmedSelection = _modelSelection;
     _confirmedPreferences = Map<String, AgentModelPreference>.from(
       _preferences,
@@ -514,7 +500,7 @@ class AgentConversationModelSelectionController {
       return;
     }
 
-    var changed = _needsPreferenceMigration;
+    var changed = false;
     final normalizedPreferences = Map<String, AgentModelPreference>.from(
       _preferences,
     );
@@ -566,8 +552,6 @@ class AgentConversationModelSelectionController {
     _preferences = normalizedPreferences;
     _modelSelection = nextSelection;
     _runtime?.updateModelSelection(_modelSelection);
-    _needsPreferenceMigration = false;
-
     if (changed) {
       unawaited(
         _schedulePersistence(

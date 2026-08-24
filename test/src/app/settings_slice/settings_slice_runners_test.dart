@@ -44,8 +44,7 @@ final class _FakeFontCatalog implements SystemFontCatalogService {
     }
     final normalized = name.toLowerCase();
     for (final family in families) {
-      if (family.familyName.toLowerCase() == normalized ||
-          family.aliases.any((alias) => alias.toLowerCase() == normalized)) {
+      if (family.familyName.toLowerCase() == normalized) {
         return family;
       }
     }
@@ -311,7 +310,7 @@ void main() {
       );
     });
 
-    test('旧别名迁移为 canonical family，目录保留本地化展示名', () async {
+    test('无法解析的系统字体回落默认，目录保留本地化展示名', () async {
       final dataStore = MemoryAppearanceSettingsStore(
         const AppearanceSettings(
           uiFontChoice: AppearanceFontChoice.system('simfang'),
@@ -329,12 +328,12 @@ void main() {
 
       expect(
         store.state.value.uiFontChoice,
-        const AppearanceFontChoice.system('FangSong'),
+        const AppearanceFontChoice.systemDefault(),
       );
       expect(store.state.catalog.displayNames['fangsong'], '仿宋');
       expect(
         (await dataStore.load()).uiFontChoice,
-        const AppearanceFontChoice.system('FangSong'),
+        const AppearanceFontChoice.systemDefault(),
       );
     });
 

@@ -206,13 +206,10 @@ notifier 依赖了 runner provider，runner 再读 notifier 就构成 Riverpod �
   协议字段只允许出现在 data adapter/codec。是否展示权限选择器由
   `bundle.permissionPolicy != null` 决定，不得再使用
   `supportsPermissionPolicySelection` / `supportsPermissionProfile*` 静态位。
-- Provider 默认权限偏好持久化在 `~/.zeta` 的 provider settings V2 中，真源为单一
-  `selectedPermissionOptionId`。V1 字段（`selectedApprovalPolicy` /
-  `selectedSandboxPolicy` / `selectedPermissionProfileId` / `selectedPermissionMode`）
-  仅由 data/config 边界的 provider-specific migrator 读取，写入不得再出现。组合层必须按
-  provider kind 注册中立 migrator；V2 optionId key 存在时不得调用 legacy migrator。
-  Domain `AgentProviderConfig` 只保存归一化 optionId，不提供配置 `tryDecode` 门面；V1/V2
-  宽容解码、内置 Provider 补齐与 legacy 迁移全部由 data `AgentProviderSettingsCodec` 负责。
+- Provider 默认权限偏好持久化在 `~/.zeta` 的 provider settings 当前格式中，真源为单一
+  `selectedPermissionOptionId`。`AgentProviderSettingsCodec` 只解码当前外层版本；损坏或
+  不支持版本回退到插件默认设置。Domain `AgentProviderConfig` 只保存归一化 optionId，
+  不提供配置 `tryDecode` 门面。
   每个 `AgentConversationBinding` 独占一个 `AgentConversationPermissionState` 不可变快照；
   快照只保存该 Binding 的 thread、provider default、session effective、一次性 turn
   override、runtime selection 和精确 runtime identity，不得再维护跨 provider/runtime/thread
@@ -496,20 +493,15 @@ Provider 契约测试。若 PR 因 Provider 差异修改 CoalescingPolicy/Buffer
 - Zeta 自有配置、状态、派生索引、日志和预留缓存统一位于 `~/.zeta`：
   `config/providers.json`、`config/appearance.json`、`config/general.json`、
   `state/ide_session.json`、`state/usage_statistics_index.json`、
-  `state/migration_marker.json`、
   `logs/zeta-YYYY-MM-DD.log` 与 `cache/agent_models_v1.json`。
 - `config/general.json` 当前为 v3，用 `appLanguage` 持久化 `en` / `zh-Hans`。
-  v1/v2 宽容升级时补简体中文并保留快捷键/通知字段；未知语言回退英语；损坏或
-  未知版本在无法识别语言时才使用启动编排给出的 fallback。存储迁移 marker 为
-  v2：已有安装一律播种简体中文，真正的新安装按系统首选语言第一项播种；
-  `general.json` 写成功后才写 marker。localized UI copy 不得进入任何 JSON store。
+  只解码当前版本；未知语言回退英语，损坏或不支持版本使用启动编排给出的 fallback。
+  localized UI copy 不得进入任何 JSON store。
 - HOME 解析、目录布局和安全文本替换属于 `core`；各 feature 的 data store 只接收
   app 注入的具体文件并负责自身 codec，presentation/application 不拼接 `~/.zeta` 路径。
-- 旧 SharedPreferences 仅由 app 启动迁移器读取。迁移以已存在的目标文件为准，全部
-  成功后写 marker；部分失败时本次运行使用内存状态，避免空文件覆盖待迁移数据，
-  且不得标记完成或阻断主界面启动。
-- 会话状态使用版本化 JSON；字段新增时提供默认值。
-- `tryDecode` 或等价宽容读取逻辑必须处理空值、损坏 JSON、旧版本和未知字段。
+- 当前不读取旧 SharedPreferences，也没有历史文件迁移器或 marker。
+- 会话状态使用当前版本 JSON；字段新增时提供默认值。
+- `tryDecode` 或等价宽容读取逻辑必须处理空值、损坏 JSON、不支持版本和未知字段。
 - 启动恢复失败不能阻断应用进入主界面。
 - provider 全局配置和项目级 session/thread 状态必须分开存储。
 - provider 模型偏好按 `modelId` 保存为版本化条目；当前 selection 和偏好 map 必须同快照写入，

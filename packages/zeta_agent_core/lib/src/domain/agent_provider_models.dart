@@ -93,7 +93,7 @@ class AgentProviderConfig {
   /// 按模型保存的最近一次有效配置。
   final Map<String, AgentModelPreference> modelPreferences;
 
-  /// 中立权限选项 id（V2 唯一权限真源：Codex profile 或 Grok mode 等）。
+  /// 中立权限选项 id，是持久化权限偏好的唯一真源。
   final String? selectedPermissionOptionId;
 
   /// 是否在配置列表中启用。
@@ -205,7 +205,7 @@ class AgentProviderConfig {
     );
   }
 
-  /// 序列化为 V2 白名单字段；权限只写 [selectedPermissionOptionId]。
+  /// 序列化为当前白名单字段；权限只写 [selectedPermissionOptionId]。
   Map<String, Object?> toJson() {
     return <String, Object?>{
       'id': id,
@@ -222,7 +222,6 @@ class AgentProviderConfig {
         for (final entry in modelPreferences.entries)
           entry.key: entry.value.toJson(),
       },
-      // Provider-specific legacy migration 由 data codec 负责；domain 只写 V2。
       'selectedPermissionOptionId': resolvedPermissionOptionId,
       'enabled': enabled,
       'extra': extra,
@@ -271,11 +270,8 @@ class AgentProviderSettings {
     );
   }
 
-  /// 当前写入的 settings 结构版本（V2：权限仅 optionId）。
+  /// 当前写入的 settings 结构版本。
   static const int currentVersion = 2;
-
-  /// 可解码的 settings 外层版本；V1 权限迁移由 data codec 预处理。
-  static const Set<int> supportedVersions = <int>{1, 2};
 
   Map<String, Object?> toJson() {
     return <String, Object?>{

@@ -4,8 +4,6 @@ import 'dart:io';
 
 import 'package:zeta_foundation/zeta_foundation.dart';
 
-import 'package:zeta/src/features/usage_statistics/data/legacy_usage_statistics_index_decoder.dart';
-
 /// Provider 不透明分区索引的根版本。
 const int usageStatisticsPartitionIndexVersion = 4;
 
@@ -139,20 +137,8 @@ Map<String, UsageStatisticsIndexPartition> _decodeRoot(Object? value) {
   if (root == null) {
     return const <String, UsageStatisticsIndexPartition>{};
   }
-  if (_integer(root['version']) != usageStatisticsPartitionIndexVersion) {
-    final legacy = LegacyUsageStatisticsIndexDecoder.tryDecode(root);
-    final partitions = <String, UsageStatisticsIndexPartition>{};
-    for (final entry in legacy.entries) {
-      try {
-        partitions[entry.key] = UsageStatisticsIndexPartition(
-          schemaVersion: 1,
-          payload: entry.value,
-        );
-      } on ArgumentError {
-        // 单个 legacy 分区损坏时保留其它可用分区。
-      }
-    }
-    return Map<String, UsageStatisticsIndexPartition>.unmodifiable(partitions);
+  if (root['version'] != usageStatisticsPartitionIndexVersion) {
+    return const <String, UsageStatisticsIndexPartition>{};
   }
   final providers = _tryObjectMap(root['providers']);
   if (providers == null) {

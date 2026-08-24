@@ -30,11 +30,10 @@ bool usageCacheHit({
   return cachedFingerprint != null && cachedFingerprint == currentFingerprint;
 }
 
-/// 从缓存 map 查找条目：优先 sourceId，兼容历史 path 键。
+/// 按当前的不可逆 sourceId 从缓存 map 查找条目。
 T? findUsageCachedSession<T extends Object>(
   Map<String, T> cachedSessions,
   String sourcePath,
 ) {
-  return cachedSessions[usageSourceId(sourcePath)] ??
-      cachedSessions[sourcePath];
+  return cachedSessions[usageSourceId(sourcePath)];
 }

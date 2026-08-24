@@ -186,7 +186,7 @@
 | 改了 resize 热路径或时间线渲染 | Windows Profile 采样 1280→1000→1280 十秒场景，记录 UI/Raster p95、慢帧率。**Debug 数据不作结论；未达标数据如实保留** |
 | 改了主要页面切换或保活 | 用真实 `IdeHome` 补集成级 Widget 测试：常驻骨架、AgentPane Element、当前 Thread、草稿、滚动位置、Pane 宽度与可见性都不能被重置 |
 | 改了 Codex 适配层 | `python tool/smoke_codex_app_server.py --expected-version <版本>` + 必要时 `smoke_codex_plan_mode.py`；无设备或凭据时标记「待执行/阻塞」，**不得推断通过** |
-| 改了持久化格式 | 覆盖损坏输入、缺字段、旧版本三种解码路径 |
+| 改了持久化格式 | 覆盖损坏输入、缺字段、不支持版本三种解码路径 |
 
 **阶段门：** 门禁自查全过 · 验收标准逐条有覆盖 · 文档已同步。
 
@@ -390,16 +390,12 @@ python tool/smoke_codex_plan_mode.py --expected-version <新版本>
 ```text
 变更定性：见 01-变更定性.md
 
-设计兼容策略，写入 02-兼容策略.md：
+设计当前格式策略，写入 02-兼容策略.md：
 
-1. 版本号怎么变（参考 AgentProviderSettings.currentVersion = 2 的做法）
-2. tryDecode 的宽容路径：缺字段、损坏 JSON、旧版本、未知字段，
+1. 版本号怎么写（参考 AgentProviderSettings.currentVersion = 2 的做法）
+2. tryDecode 的宽容路径：缺字段、损坏 JSON、不支持版本、未知字段，
    四种情况分别怎么处理 —— 任何一种都不能阻断应用启动
-3. 需要迁移的话：迁移在哪一层做？
-   （只能在 data/config 边界，domain 不认识 legacy 字段）
-4. 迁移必须幂等，且**以已存在的目标文件为准**，不能用空值覆盖待迁移数据
-5. 写不写 migration marker？部分失败怎么办？
-   （本次运行用内存状态，不标完成，不阻断启动，下次继续重试）
+3. 当前没有历史版本迁移，不新增迁移器或 migration marker。
 
 守住 G7：新增的落盘字段只能是规范化白名单。
 不得写入 prompt、回复、工具输出、原始错误文本、环境变量、凭证或 Provider raw payload。

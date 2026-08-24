@@ -372,9 +372,12 @@ void main() {
       codexHome: tempDirectory.path,
       cachedSessions: const <String, CodexUsageSessionSnapshot>{},
     );
+    final firstCache = <String, CodexUsageSessionSnapshot>{
+      for (final session in first.sessions.values) session.sourceId: session,
+    };
     final second = await scanner.scan(
       codexHome: tempDirectory.path,
-      cachedSessions: first.sessions,
+      cachedSessions: firstCache,
     );
     final persisted = CodexUsageSessionSnapshot.tryDecode(
       first.sessions[valid.path]!.toJson(),

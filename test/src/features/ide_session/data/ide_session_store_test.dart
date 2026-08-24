@@ -43,9 +43,7 @@ void main() {
         agentThreadIdsByProject: <String, String>{'/repo': 'thread-1'},
         workbenchLayout: IdeWorkbenchLayoutState(
           leftSidebarVisible: false,
-          agentUsageExpanded: true,
           leftSidebarWidth: 310,
-          agentUsageHeightFraction: 0.45,
           selectedAgentUsageProviderId: 'grok',
         ),
       );
@@ -58,9 +56,7 @@ void main() {
       expect(raw['version'], sessionStateVersion);
       expect((raw['workbench'] as Map<String, Object?>).keys, <String>[
         'leftSidebarVisible',
-        'agentUsageExpanded',
         'leftSidebarWidth',
-        'agentUsageHeightFraction',
         'selectedAgentUsageProviderId',
       ]);
       expect(restored?.projectPaths, <String>['/repo']);

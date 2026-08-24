@@ -109,67 +109,41 @@ void main() {
         throwsA(isA<FileSystemException>()),
       );
     });
-
-    test('loads V1 permission fields and rewrites V2 only', () async {
-      await settingsFile.writeAsString(
-        jsonEncode(<String, Object?>{
-          'version': 1,
-          'activeProviderId': 'grok',
-          'providers': <Object?>[
-            <String, Object?>{
-              'id': 'grok',
-              'displayName': 'Grok',
-              'kind': 'acp',
-              'command': 'grok',
-              'selectedPermissionMode': 'yolo',
-            },
-          ],
-        }),
-      );
-      final store = _fileStore(settingsFile);
-
-      final settings = await store.load();
-      expect(
-        settings.activeProvider.selectedPermissionOptionId,
-        'always-approve',
-      );
-
-      await store.save(settings);
-      final rewritten = await settingsFile.readAsString();
-      expect(rewritten, contains('"selectedPermissionOptionId"'));
-      expect(rewritten, isNot(contains('selectedPermissionMode')));
-    });
   });
 
   group('AgentProviderSettings', () {
-    test('V1/V2 invalid or missing active id uses plugin default', () {
-      for (final version in AgentProviderSettings.supportedVersions) {
-        for (final includeInvalidActive in <bool>[false, true]) {
-          final decoded = _codec().decode(<String, Object?>{
-            'version': version,
-            if (includeInvalidActive) 'activeProviderId': 'removed-provider',
-            'providers': <Object?>[
-              <String, Object?>{
-                'id': 'custom-grok',
-                'displayName': 'Custom Grok',
-                'kind': grokAgentProviderType.value,
-                'command': 'custom-grok',
-              },
-              defaultCodexAgentProviderConfig.toJson(),
-            ],
-          });
+    test('current version with invalid active id uses plugin default', () {
+      final decoded = _codec().decode(<String, Object?>{
+        'version': AgentProviderSettings.currentVersion,
+        'activeProviderId': 'removed-provider',
+        'providers': <Object?>[
+          <String, Object?>{
+            'id': 'custom-grok',
+            'displayName': 'Custom Grok',
+            'kind': grokAgentProviderType.value,
+            'command': 'custom-grok',
+          },
+          defaultCodexAgentProviderConfig.toJson(),
+        ],
+      });
 
-          expect(
-            decoded.activeProviderId,
-            defaultAgentProviderId,
-            reason:
-                'V$version must not activate the first custom config when '
-                'the persisted selection is absent or invalid',
-          );
-          expect(decoded.activeProvider.id, defaultAgentProviderId);
-          expect(decoded.providers.first.id, 'custom-grok');
-        }
-      }
+      expect(decoded.activeProviderId, defaultAgentProviderId);
+      expect(decoded.activeProvider.id, defaultAgentProviderId);
+      expect(decoded.providers.first.id, 'custom-grok');
+    });
+
+    test('unsupported version falls back to plugin defaults', () {
+      final decoded = _codec().decode(<String, Object?>{
+        'version': AgentProviderSettings.currentVersion - 1,
+        'providers': <Object?>[defaultGrokAgentProviderConfig.toJson()],
+      });
+
+      expect(decoded.activeProvider.id, defaultAgentProviderId);
+      expect(decoded.providers.map((provider) => provider.id), <String>[
+        defaultAgentProviderId,
+        grokAgentProviderId,
+        defaultClaudeCodeProviderId,
+      ]);
     });
 
     test('drops a built-in id that claims another plugin type', () {
@@ -190,9 +164,9 @@ void main() {
       expect(decoded.providers, contains(defaultClaudeCodeAgentProviderConfig));
     });
 
-    test('normalizes legacy built-in provider display names', () {
+    test('normalizes built-in provider display names', () {
       final settings = _codec().decode(<String, Object?>{
-        'version': 1,
+        'version': AgentProviderSettings.currentVersion,
         'activeProviderId': defaultAgentProviderId,
         'providers': <Object?>[
           <String, Object?>{
@@ -216,7 +190,7 @@ void main() {
       );
     });
 
-    test('round-trips versioned model preferences tolerantly', () {
+    test('round-trips current model preferences', () {
       final updatedAt = DateTime.utc(2026, 7, 15, 8);
       final config = defaultCodexAgentProviderConfig.withModelConfiguration(
         selection: const AgentModelSelection(
@@ -252,6 +226,7 @@ void main() {
           'reasoningEffort': 'medium',
           'fastEnabled': false,
           'updatedAt': 'not-a-date',
+          'version': AgentModelPreference.currentVersion,
         },
       };
 

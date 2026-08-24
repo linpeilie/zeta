@@ -36,11 +36,15 @@ void main() {
           '仿宋',
         ]);
         expect(codeFonts.single.familyName, 'Cascadia Mono');
-        expect((await service.resolveFontFamily('simfang'))?.displayName, '仿宋');
         expect(
-          (await service.resolveFontFamily('CASCADIACODE'))?.familyName,
+          (await service.resolveFontFamily('FangSong'))?.displayName,
+          '仿宋',
+        );
+        expect(
+          (await service.resolveFontFamily('Cascadia Mono'))?.familyName,
           'Cascadia Mono',
         );
+        expect(await service.resolveFontFamily('simfang'), isNull);
       },
     );
 

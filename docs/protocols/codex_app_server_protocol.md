@@ -108,7 +108,7 @@ Windows 上若 PATH 里的 npm 全局 `codex` 偏旧，脚本会优先尝试
 - `thread/read` 只发送 `threadId` 与 `includeTurns`，不再夹带 `itemsView`。
 - `thread/rollback` 不再作为 Zeta 产品能力；编辑重试使用
   `thread/fork.lastTurnId` 创建新分支。
-- `on-failure` 不再下发，旧持久化值迁移为 `on-request`。
+- `on-failure` 不再下发；协议输入中的该别名按 `on-request` 归一化。
 - Permission Profile 的稳定能力仅声明发现，不承诺实验性的运行时选择。
 - `initialize` 返回值被映射为运行时版本、兼容状态与动态能力，未知或旧版本
   采用保守降级。
