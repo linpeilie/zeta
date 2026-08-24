@@ -15,31 +15,3 @@ abstract interface class WorkspaceFileCorpusPort {
 
   void removeListener(void Function() listener);
 }
-
-/// 用回调组合活动 root、索引缓存和惰性树的轻量端口实现。
-final class CallbackWorkspaceFileCorpusPort implements WorkspaceFileCorpusPort {
-  const CallbackWorkspaceFileCorpusPort({
-    required this.filesProvider,
-    required this.isReadyProvider,
-    required this.addListenerCallback,
-    required this.removeListenerCallback,
-  });
-
-  final List<WorkspaceNode> Function() filesProvider;
-  final bool Function() isReadyProvider;
-  final void Function(void Function() listener) addListenerCallback;
-  final void Function(void Function() listener) removeListenerCallback;
-
-  @override
-  List<WorkspaceNode> get files => filesProvider();
-
-  @override
-  bool get isReady => isReadyProvider();
-
-  @override
-  void addListener(void Function() listener) => addListenerCallback(listener);
-
-  @override
-  void removeListener(void Function() listener) =>
-      removeListenerCallback(listener);
-}

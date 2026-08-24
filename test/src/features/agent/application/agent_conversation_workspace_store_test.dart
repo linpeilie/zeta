@@ -7,6 +7,8 @@ import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/data/agent_model_catalog_cache_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/workspace/application/workspace_file_corpus_port.dart';
+
+import '../../../testing/callback_workspace_file_corpus_port.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_provider_settings_slice_store.dart';
 

@@ -2,7 +2,7 @@
 
 最后更新：2026-08-24
 
-状态：**P4-0 / P4-1 / P4-2a / P4-2b 已关批（2026-08-24），下一批为 P4-2c**
+状态：**P4-0 / P4-1 / P4-2 全部已关批（2026-08-24），下一批为 P4-3a**
 
 > P4-0 的现状测绘、基线与安全网决策落在
 > [`.workflow/refactor/2026-08-24-phase4-transition-cleanup/`](../../.workflow/refactor/2026-08-24-phase4-transition-cleanup/)。
@@ -297,9 +297,25 @@ Management Repository 与 management composition。`lib/src/ui` 的 data import 
 > project threads / conversation 三块 composition，那些仍由 `IdeShellController`
 > 构造函数创建，属 P4-2c / P4-5，**P4-2 整体尚未完成**。
 
-**P4-2c（待做）**：Workspace 只读 corpus port + 删 Shell 的
-`CallbackWorkspaceFileCorpusPort`；UI toast/attention/menu callback 改显式 relay/port。
-该批会动 `IdeShellController` 构造函数，与 P4-5 相邻。
+**P4-2c（已完成）**：新增 `WorkspaceSliceFileCorpus`，`WorkspaceSliceComposition`
+暴露只读 `fileCorpus`；Shell 的 20 行闭包收成一行消费，
+`CallbackWorkspaceFileCorpusPort` 移出生产代码（落到 `test/src/testing/`）。
+门禁 exit 0、根测试 2379 passed / 0 failed。
+
+> 本段"UI 依赖的 toast/attention/menu callback 通过显式 relay/port 绑定"这条要求
+> **比实际待办面大**：attention 早已是 `DesktopAttentionTargetActivatorRelay`；
+> `MenuActionBridge` 在 §4 被明确列为保留项（与本条要求冲突，以 §4 为准）；
+> toast 的 `statusReporter` 已经是 `IdeShellStatusReporter` typedef 端口而非裸闭包。
+> 三者本批均无需改动。
+
+**P4-2 整体已关批。** 目标架构 §3 要求 `IdeWorkbenchComposition` 还拥有 workspace /
+project threads / conversation 三块 composition——它们仍由 `IdeShellController`
+构造函数创建，那属 **P4-5**（"Shell 构造函数只接收 prebuilt ports，不创建 feature
+composition"），不是 P4-2 的遗留。
+
+`zetaClockProvider` / `zetaMetricsPortProvider` / `requiredDependency` 三个 P4-1
+顺延项**决定保留并结案**：生产读取者虽为 0，但 `app_dependencies.dart` 是文档化的
+"组合根 + 覆盖点"契约且有专测，删它属于收窄既有扩展点，不在 §1.2 的 Phase 4 范围内。
 
 ### P4-3：Repository 与 Project Threads 边界收口
 

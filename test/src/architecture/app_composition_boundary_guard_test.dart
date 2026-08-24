@@ -79,7 +79,7 @@ void main() {
     );
   });
 
-  test('宿主模式不得退回成从 session 回调反推', () {
+  test('已收口的 callback seam 不得在生产代码里复活', () {
     // 旧实现用 sessionLoader/sessionSaver 是否为 null 推断"这是不是测试宿主"，
     // 一处推断同时控制持久化、本机 CLI 探测与用量刷新三件事。
     const forbidden = <String>[
@@ -87,6 +87,9 @@ void main() {
       'sessionSaver',
       'CallbackIdeSessionStore',
       '_usesCallbackPersistence',
+      // Shell 曾用四个闭包拼 @mention 语料端口，等于把 Workspace 的索引就绪语义
+      // 和目录树回退规则搬进了 Shell。现在由 WorkspaceSliceFileCorpus 自己组装。
+      'CallbackWorkspaceFileCorpusPort',
     ];
 
     final production = <File>[
@@ -104,7 +107,7 @@ void main() {
       expect(
         offenders,
         isEmpty,
-        reason: '$symbol 已被显式 ZetaHostMode 取代，不得重新引入：$offenders',
+        reason: '$symbol 是已经收口的 callback seam，生产代码不得重新引入：$offenders',
       );
     }
   });

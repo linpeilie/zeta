@@ -22,7 +22,8 @@ import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
-import 'package:zeta/src/features/workspace/application/workspace_file_corpus_port.dart';
+
+import '../../../../testing/callback_workspace_file_corpus_port.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta_ui/zeta_ui.dart';

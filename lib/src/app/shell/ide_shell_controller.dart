@@ -83,25 +83,7 @@ class IdeShellController extends ChangeNotifier {
     workspaceSliceStore.addListener(_handleWorkspaceSliceChanged);
     agentProviderController = agentProviderSettingsPort;
     _loadActiveModelCatalog = activeModelCatalogLoader;
-    _workspaceFileCorpus = CallbackWorkspaceFileCorpusPort(
-      filesProvider: () {
-        // @mention 候选优先用后台预建的完整语料；未就绪时回退惰性目录树。
-        final root = activeProjectPath;
-        if (root != null) {
-          final ready = _fileIndexController.filesFor(root);
-          if (ready != null) {
-            return ready;
-          }
-        }
-        return workspaceTree;
-      },
-      isReadyProvider: () {
-        final root = activeProjectPath;
-        return root == null || _fileIndexController.isReady(root);
-      },
-      addListenerCallback: _fileIndexController.addListener,
-      removeListenerCallback: _fileIndexController.removeListener,
-    );
+    _workspaceFileCorpus = _workspaceSliceComposition.fileCorpus;
     agentConversationWorkspaceStore = AgentConversationWorkspaceStore(
       providerController: agentProviderController,
       workspaceFileCorpus: _workspaceFileCorpus,
