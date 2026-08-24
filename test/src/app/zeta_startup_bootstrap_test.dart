@@ -53,31 +53,33 @@ void main() {
       );
     });
 
-    test('v1 marker is existing and seeds Chinese', () async {
-      await Directory(paths.stateDirectoryPath).create(recursive: true);
-      await File(
-        paths.migrationMarkerFilePath,
-      ).writeAsString(jsonEncode(<String, Object?>{'version': 1}));
+    test(
+      'marker file is existing and seeds Chinese without version parsing',
+      () async {
+        await Directory(paths.stateDirectoryPath).create(recursive: true);
+        await File(
+          paths.migrationMarkerFilePath,
+        ).writeAsString(jsonEncode(<String, Object?>{'version': 0}));
 
-      final result = await ZetaStartupBootstrap(
-        paths: paths,
-        firstSystemLanguage: AppLanguage.english,
-      ).run();
+        final result = await ZetaStartupBootstrap(
+          paths: paths,
+          firstSystemLanguage: AppLanguage.english,
+        ).run();
 
-      expect(result.fallbackLanguage, AppLanguage.simplifiedChinese);
-      final general =
-          jsonDecode(await File(paths.generalSettingsFilePath).readAsString())
-              as Map<String, Object?>;
-      expect(general['appLanguage'], 'zh-Hans');
-    });
+        expect(result.fallbackLanguage, AppLanguage.simplifiedChinese);
+        final general =
+            jsonDecode(await File(paths.generalSettingsFilePath).readAsString())
+                as Map<String, Object?>;
+        expect(general['appLanguage'], 'zh-Hans');
+      },
+    );
 
     test('legacy preference without files is existing Chinese', () async {
-      final isExisting = await hasExistingZetaStorage(
-        paths: paths,
-        preferences: _MapPreferences(<String, String>{
-          agentProviderConfigStorageKey: '{"version":1,"providers":[]}',
-        }),
-      );
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        agentProviderConfigStorageKey: '{"version":1,"providers":[]}',
+      });
+
+      final isExisting = await hasExistingZetaStorage(paths: paths);
 
       expect(isExisting, isTrue);
     });
@@ -142,13 +144,4 @@ void main() {
       );
     });
   });
-}
-
-class _MapPreferences implements LegacyZetaPreferences {
-  _MapPreferences(this.values);
-
-  final Map<String, String> values;
-
-  @override
-  Future<String?> getString(String key) async => values[key];
 }

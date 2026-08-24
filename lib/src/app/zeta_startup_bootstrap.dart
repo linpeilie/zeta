@@ -64,14 +64,9 @@ class ZetaStartupBootstrap {
   }
 }
 
-/// 只读判定：有效 marker、已知 target 或旧偏好即已有 Zeta 存储。
-Future<bool> hasExistingZetaStorage({
-  required ZetaDataPaths paths,
-  LegacyZetaPreferences? preferences,
-}) async {
-  final markerVersion = await readZetaStorageMarkerVersion(paths);
-  if (markerVersion != null &&
-      markerVersion >= zetaStorageExistingMarkerVersion) {
+/// 只读判定：marker、已知 target 或旧偏好即已有 Zeta 存储。
+Future<bool> hasExistingZetaStorage({required ZetaDataPaths paths}) async {
+  if (await File(paths.migrationMarkerFilePath).exists()) {
     return true;
   }
 
@@ -87,8 +82,7 @@ Future<bool> hasExistingZetaStorage({
     }
   }
 
-  final legacyPreferences =
-      preferences ?? SharedPreferencesLegacyZetaPreferences();
+  final legacyPreferences = SharedPreferencesLegacyZetaPreferences();
   for (final key in const <String>[
     agentProviderConfigStorageKey,
     appearanceSettingsStorageKey,

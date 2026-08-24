@@ -18,9 +18,6 @@ import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partiti
 /// 当前 Zeta 自有存储迁移版本。
 const int zetaStorageMigrationVersion = 2;
 
-/// 任一有效 marker（含旧 v1）都视为已经运行过 Zeta。
-const int zetaStorageExistingMarkerVersion = 1;
-
 /// 旧版 Zeta 偏好读取边界。
 ///
 /// 迁移只读取 Zeta 自己的 SharedPreferences key，不访问任何 Agent CLI 目录。
