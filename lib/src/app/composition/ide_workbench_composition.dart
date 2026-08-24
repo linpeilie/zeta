@@ -1,0 +1,72 @@
+import 'package:flutter/foundation.dart';
+
+import 'package:zeta/src/app/agent_management_slice/agent_management_slice_composition.dart';
+import 'package:zeta/src/app/agent_management_slice/agent_management_slice_runner.dart';
+import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
+import 'package:zeta/src/features/agent_management/data/claude_code_agent_management_repository.dart';
+import 'package:zeta/src/features/agent_management/data/codex_agent_management_repository.dart';
+import 'package:zeta/src/features/agent_management/data/grok_agent_management_repository.dart';
+import 'package:zeta/src/features/agent_management/domain/agent_cli_management_repository.dart';
+import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
+import 'package:zeta/src/features/agent_management/domain/agent_management_text_catalog.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+
+/// 工作台级 feature 组合的唯一构造点。
+///
+/// `IdeHome` 只组合 Workbench slot 并消费 selector；**哪个 Provider 用哪个
+/// management Repository** 这类装配决策收在这里。在此之前这三个 Repository 是
+/// 在 `IdeHome.initState` 里直接 `new` 出来的，等于 `lib/src/ui` 直接 import 了
+/// `features/*/data/`，把 UI 层钉死在具体 Provider 的 data 实现上（违反 G6）。
+///
+/// 生命周期：本组合创建的 owner 由 [dispose] 反序释放，`IdeHome` 不再单独关闭
+/// 注入进来的 owner。
+final class IdeWorkbenchComposition {
+  IdeWorkbenchComposition._(this.agentManagementComposition);
+
+  /// 按当前 Provider 目录组装 Agent Management 的 Repository 与 slice 组合。
+  factory IdeWorkbenchComposition.create({
+    required AgentModelCatalogRepository modelCatalogRepository,
+    required AgentProviderRuntimeRegistry runtimeRegistry,
+    required AgentProviderSettingsPort providerSettings,
+    required Listenable runtimeListenable,
+    required AgentManagementRuntimeSnapshotProvider runtimeSnapshotProvider,
+    required AgentManagementTextCatalog textCatalog,
+  }) {
+    // 按 G4：能力差异由各 Repository 自己声明，这里只做 id → 实现的登记，
+    // 不按 Provider 名字分支出任何行为。
+    final repositories = <String, AgentCliManagementRepository>{
+      AgentDefinition.codex.id: CodexAgentManagementRepository(
+        modelCatalogRepository: modelCatalogRepository,
+        runtimeRegistry: runtimeRegistry,
+        textCatalog: textCatalog,
+      ),
+      AgentDefinition.grok.id: GrokAgentManagementRepository(
+        modelCatalogRepository: modelCatalogRepository,
+        runtimeRegistry: runtimeRegistry,
+        textCatalog: textCatalog,
+      ),
+      AgentDefinition.claudeCode.id: ClaudeCodeAgentManagementRepository(
+        textCatalog: textCatalog,
+      ),
+    };
+
+    return IdeWorkbenchComposition._(
+      AgentManagementSliceComposition.create(
+        repositories: repositories,
+        providerSettings: providerSettings,
+        runtimeListenable: runtimeListenable,
+        runtimeSnapshotProvider: runtimeSnapshotProvider,
+        textCatalog: textCatalog,
+      ),
+    );
+  }
+
+  /// Agent Management 的唯一状态与副作用组合。
+  final AgentManagementSliceComposition agentManagementComposition;
+
+  /// 反序释放本组合创建的 owner。
+  void dispose() {
+    agentManagementComposition.close();
+  }
+}

@@ -8,6 +8,7 @@ import 'package:window_manager/window_manager.dart';
 
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_composition.dart';
+import 'package:zeta/src/app/composition/ide_workbench_composition.dart';
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_runner.dart';
 import 'package:zeta/src/app/app_constants.dart';
 import 'package:zeta/src/app/composition/zeta_state_snapshot.dart';
@@ -24,10 +25,6 @@ import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/desktop_notifications/application/desktop_attention_slice_store.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_models.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_operations.dart';
-import 'package:zeta/src/features/agent_management/data/claude_code_agent_management_repository.dart';
-import 'package:zeta/src/features/agent_management/data/codex_agent_management_repository.dart';
-import 'package:zeta/src/features/agent_management/data/grok_agent_management_repository.dart';
-import 'package:zeta/src/features/agent_management/domain/agent_cli_management_repository.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_text_catalog.dart';
 import 'package:zeta/src/features/agent_management/domain/fallback_agent_management_text_catalog.dart';
@@ -138,7 +135,10 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
   static const double _maxPanelWidth = IdeMetrics.sidePaneMaxWidth;
 
   late final IdeShellController _shellController;
-  late final AgentManagementSliceComposition _agentManagementComposition;
+  late final IdeWorkbenchComposition _workbenchComposition;
+
+  AgentManagementSliceComposition get _agentManagementComposition =>
+      _workbenchComposition.agentManagementComposition;
   late final void Function() _unsubscribeProviderSettings;
   late final UsageStatisticsOperations _usageStatisticsController;
   late final AgentUsagePanelOperations _agentUsagePanelController;
@@ -229,23 +229,9 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
       windowManager.addListener(this);
     }
     unawaited(widget.desktopAttentionSliceComposition.initialize());
-    final managementRepositories = <String, AgentCliManagementRepository>{
-      AgentDefinition.codex.id: CodexAgentManagementRepository(
-        modelCatalogRepository: widget.agentModelCatalogRepository,
-        runtimeRegistry: widget.agentProviderRuntimeRegistry,
-        textCatalog: widget.agentManagementTextCatalog,
-      ),
-      AgentDefinition.grok.id: GrokAgentManagementRepository(
-        modelCatalogRepository: widget.agentModelCatalogRepository,
-        runtimeRegistry: widget.agentProviderRuntimeRegistry,
-        textCatalog: widget.agentManagementTextCatalog,
-      ),
-      AgentDefinition.claudeCode.id: ClaudeCodeAgentManagementRepository(
-        textCatalog: widget.agentManagementTextCatalog,
-      ),
-    };
-    _agentManagementComposition = AgentManagementSliceComposition.create(
-      repositories: managementRepositories,
+    _workbenchComposition = IdeWorkbenchComposition.create(
+      modelCatalogRepository: widget.agentModelCatalogRepository,
+      runtimeRegistry: widget.agentProviderRuntimeRegistry,
       providerSettings: widget.agentProviderSettingsPort,
       runtimeListenable: _shellController,
       runtimeSnapshotProvider: _managementRuntimeSnapshot,
@@ -351,7 +337,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
     _agentManagementComposition.store.removeListener(
       _handleAgentManagementChanged,
     );
-    _agentManagementComposition.close();
+    _workbenchComposition.dispose();
     widget.conversationSliceStoreRegistry.unbind();
     widget.conversationWorkspaceStoreRegistry.unbind(
       _shellController.agentConversationWorkspaceStore,

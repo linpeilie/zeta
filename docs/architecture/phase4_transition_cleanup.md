@@ -2,7 +2,7 @@
 
 最后更新：2026-08-24
 
-状态：**P4-0 / P4-1 / P4-2a 已关批（2026-08-24），下一批为 P4-2b**
+状态：**P4-0 / P4-1 / P4-2a / P4-2b 已关批（2026-08-24），下一批为 P4-2c**
 
 > P4-0 的现状测绘、基线与安全网决策落在
 > [`.workflow/refactor/2026-08-24-phase4-transition-cleanup/`](../../.workflow/refactor/2026-08-24-phase4-transition-cleanup/)。
@@ -288,9 +288,14 @@ data/controller；现有启动、恢复、窗口关闭和资源反序释放测�
 > `~/.zeta` 并扫描本机。这四重语义此前**零测试覆盖**，已先补 characterization test
 > 单独提交（`03-安全网.md` §7），再做结构改动。
 
-**P4-2b（待做）**：`IdeWorkbenchComposition` 接管 `IdeHome` 的 3 个 Agent Management
-Repository 与 management composition。`lib/src/ui` 的 Repository 泄漏（3 import +
-3 构造）**仍然存在**，P4-2 不得在 2b 完成前标为已完成。
+**P4-2b（已完成）**：新增 `IdeWorkbenchComposition`，接管 `IdeHome` 的 3 个 Agent
+Management Repository 与 management composition。`lib/src/ui` 的 data import 与
+`Repository(` 构造**双双归零**，§7.2 那条检查首次真正无输出。门禁 exit 0、
+根测试 2379 passed / 0 failed。
+
+> 该组合目前只拥有 Agent Management 一块；§3 目标态要求它还拥有 workspace /
+> project threads / conversation 三块 composition，那些仍由 `IdeShellController`
+> 构造函数创建，属 P4-2c / P4-5，**P4-2 整体尚未完成**。
 
 **P4-2c（待做）**：Workspace 只读 corpus port + 删 Shell 的
 `CallbackWorkspaceFileCorpusPort`；UI toast/attention/menu callback 改显式 relay/port。

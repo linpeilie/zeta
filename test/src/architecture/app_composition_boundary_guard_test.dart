@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-/// `MainApp` 的组合边界守卫。
+/// `MainApp` / `IdeHome` 的组合边界守卫。
 ///
 /// `MainApp` 只负责 Flutter / 窗口生命周期与组合输入；**具体 feature data 用文件还是
 /// 内存**由 `ZetaApplicationComposition` 按 `ZetaHostMode` 决定。这条边界一旦破了，
@@ -43,6 +43,42 @@ void main() {
     );
   });
 
+  test('lib/src/ui 不得 import 或构造 feature data', () {
+    // UI 层直接 new Repository 会把工作台钉死在具体 Provider 的 data 实现上（G6）。
+    // 装配决策属于 app 层的 IdeWorkbenchComposition。
+    final uiFiles = Directory('lib/src/ui')
+        .listSync(recursive: true)
+        .whereType<File>()
+        .where((file) => file.path.endsWith('.dart'));
+
+    final dataImports = <String>[];
+    final repositoryConstructions = <String>[];
+    for (final file in uiFiles) {
+      for (final line in _codeLinesOf(file)) {
+        final trimmed = line.trimLeft();
+        if (trimmed.startsWith('import ') &&
+            RegExp(r'features/[^/]+/data/').hasMatch(trimmed)) {
+          dataImports.add('${file.path}: $trimmed');
+        }
+        // 与验收用的 grep 同一口径（朴素子串），避免守卫和验收检查各说各话。
+        if (line.contains('Repository(')) {
+          repositoryConstructions.add('${file.path}: ${line.trim()}');
+        }
+      }
+    }
+
+    expect(
+      dataImports,
+      isEmpty,
+      reason: 'lib/src/ui 不得 import feature data：$dataImports',
+    );
+    expect(
+      repositoryConstructions,
+      isEmpty,
+      reason: 'lib/src/ui 不得构造 Repository：$repositoryConstructions',
+    );
+  });
+
   test('宿主模式不得退回成从 session 回调反推', () {
     // 旧实现用 sessionLoader/sessionSaver 是否为 null 推断"这是不是测试宿主"，
     // 一处推断同时控制持久化、本机 CLI 探测与用量刷新三件事。
@@ -78,14 +114,14 @@ void main() {
 ///
 /// 文档注释里提到已废弃的名字是**允许的**——解释"以前为什么这么写、现在为什么不"
 /// 恰恰是有价值的；守卫只该拦真正的代码引用。
-String _codeOf(File file) {
-  return file
-      .readAsLinesSync()
-      .where((line) {
-        final trimmed = line.trimLeft();
-        return !trimmed.startsWith('///') &&
-            !trimmed.startsWith('//') &&
-            !trimmed.startsWith('*');
-      })
-      .join('\n');
+String _codeOf(File file) => _codeLinesOf(file).join('\n');
+
+/// 去掉注释行后的源码行。
+List<String> _codeLinesOf(File file) {
+  return file.readAsLinesSync().where((line) {
+    final trimmed = line.trimLeft();
+    return !trimmed.startsWith('///') &&
+        !trimmed.startsWith('//') &&
+        !trimmed.startsWith('*');
+  }).toList();
 }
