@@ -2,7 +2,11 @@
 
 最后更新：2026-08-24
 
-状态：**已获准执行，尚未开始代码批次**
+状态：**P4-0 已关批（2026-08-24），尚未开始代码批次**
+
+> P4-0 的现状测绘、基线与安全网决策落在
+> [`.workflow/refactor/2026-08-24-phase4-transition-cleanup/`](../../.workflow/refactor/2026-08-24-phase4-transition-cleanup/)。
+> 本文 §2 的清单已按该次实测校正，下面标注实测值的地方以本文为准。
 
 > 对应[目标架构 §14 Phase 4](./target_architecture_riverpod_mvi_plugins_packages.md#phase-4删除剩余旧路径与过渡层)。
 > 本文是 Phase 4 的范围、顺序、删除边界与关批标准的权威源；Phase 0–3 文档只保留迁移证据。
@@ -82,7 +86,7 @@
 
 | 类别 | 当前证据 | Phase 4 目标 |
 | --- | --- | --- |
-| Shell 全局通知桥 | `IdeShellController extends ChangeNotifier`，约 18 条通知路径；`IdeHome` 任意变化整页 `setState` | UI 改用 feature selector/定向 listener，Shell 变纯 workflow coordinator |
+| Shell 全局通知桥 | `IdeShellController extends ChangeNotifier`，20 条 `_notifyStateChanged()` 通知路径汇到 1 处 `notifyListeners()`；`IdeHome` 用 20 处 `setState` 消费 | UI 改用 feature selector/定向 listener，Shell 变纯 workflow coordinator |
 | 分散装配 | `MainApp`、`IdeHome`、Shell 直接创建 data/repository/composition | 统一移入 app-owned composition，Widget 只接收当前 operations/state |
 | Project Threads 过渡桥 | `ProjectThreadsController` → `ProjectThreadsSliceRunnerAdapter` → store | effect runner 直接执行业务副作用并 typed 回流 store，删除 controller/adapter |
 | Repository 泄漏 | `AgentProviderSettingsPort.modelCatalogRepository` 被 ViewModel 直接调用；usage operations 暴露 repository getter | presentation 只见窄 operations/effect，Repository 只在 composition/runner/data |
@@ -94,16 +98,25 @@
 
 ### 2.3 零调用候选
 
-下列候选开工前再以 CodeGraph + `rg` 复核一次；调用仍为 0 时直接删除，不为其建立新
-适配层：
+P4-0 已在 `dev` @ `e5cb9273` 上逐个复核，结论如下（生产调用者一律为 0，直接删除，
+不为其建立新适配层）：
 
-- `IdeShellController.agentViewModel`；
-- `CallbackAgentProviderConfigStore`、`CallbackAppearanceSettingsStore`；
-- `codexUsageSourceId`、`AgentThreadSummary.displayTitle`；
-- model selection/ViewModel 的 `selectServiceTier` 兼容入口；
-- `agent_conversation_view_model.dart`、`agent_provider_config_store.dart`、
-  `appearance_settings_slice_state.dart` 的过渡 re-export；
-- `kIdeUseAnchoredDynamicSliver`、`buildIdeVirtualSliver` fallback helper。
+- `IdeShellController.agentViewModel` —— 生产 0 / 测试 0；
+- `CallbackAgentProviderConfigStore` —— 生产 0 / 测试 0；
+- `CallbackAppearanceSettingsStore` —— 生产 0，**测试 1**（`appearance_settings_store_test.dart`），同批删；
+- `codexUsageSourceId` —— 生产 0 / 测试 0；
+- `AgentThreadSummary.displayTitle` —— 生产 0 / 测试 0。**注意同名歧义**：全库
+  `displayTitle` 的其余命中属于 `AgentToolCallUiText.displayTitle` 与 Grok history
+  reader 的私有 getter，都是活路径，不得按名字批量删；
+- model selection/ViewModel 的 `selectServiceTier` 兼容入口 —— 外部调用 0，
+  仅 ViewModel→controller 一跳，整条链删；
+- 过渡 re-export 三处：`agent_conversation_view_model.dart:33`、
+  `agent_provider_config_store.dart:9`、
+  `settings/application/settings_slice/appearance_settings_slice_state.dart:7`
+  （`lib/src` 全库仅 4 条 `export`，第四条 `app_localizations_x.dart` 保留）；
+- `kIdeUseAnchoredDynamicSliver`（`const bool = true` 死 flag）—— 生产 0 / 测试 0；
+- `buildIdeVirtualSliver` fallback helper —— 生产 0，**测试 1**
+  （`ide_dynamic_sliver_list_test.dart`），同批处理。
 
 ---
 
@@ -172,12 +185,34 @@ flowchart TD
 
 **关批**：只有文档/测试安全网变更；完整门禁绿；没有把待删符号加入新的永久 allowlist。
 
+**执行结论（2026-08-24，已关批）**
+
+基线：`dart format` 0 改写 · `flutter analyze` 无 issue · 根测试 **2371 passed** ·
+五个内部 Package analyze 全绿、共 **74 passed** · `tool/test_full.sh` **exit 0**。
+本批未改动任何 `lib` / `packages` / `test` 代码。
+
+上面最后一条（守卫先命中再反转）在执行中被证明**在单批内不可满足**：能命中当前
+待清理面的守卫在本 commit 上必然是红的，要让它绿就得配一份写着待删符号的
+allowlist，而这与本批关批标准和 §1.3 直接冲突。**据此确定后续各批的守卫办法**：
+
+1. 零容忍守卫由**对应批次**编写，与该批删除动作同一提交，不带 allowlist；
+2. 关批前做 **mutation check**——临时把该批删掉的某个符号加回去，确认守卫变红后撤销；
+3. mutation check 结论（mutate 了哪个符号、哪条守卫变红）记进该批执行记录；
+4. 高风险批 P4-3b / P4-4 / P4-5 的 mutation check 由 §6 的独立 reviewer 复查。
+
+已知证据链缺陷（未修）：`tool/test_full.sh` 用 `pwd` 推导的 MSYS 路径
+（`/d/...`）传给 `flutter test --file-reporter`，Windows 下 `flutter` 无法解析而
+静默不写报告，随后的耗时报告读到的是上一次的旧文件。**exit code 与用例数可信，
+打印出的分片耗时不属于本次运行**；Phase 4 各批不要引用该耗时输出作为性能证据。
+
 ### P4-1：零调用与机械过渡 API 清理
 
 **风险：低到中；目标：先缩小后续改动面。**
 
 - 删除 §2.3 的零调用符号、死 virtual-list flag/helper；
-- `rawPayload` 空参数的全部传递点改为当前 logger 结构摘要 API；
+- ~~`rawPayload` 空参数的全部传递点改为当前 logger 结构摘要 API~~ —— P4-0 实测
+  `rawPayload: {}` / `rawPayload: null` 在 `lib` / `packages` / `test` 均为 0 命中，
+  该项**已无待办**，只需在关批时保留零值检查；
 - Timeline 统一使用 `contentRevision`，删除 `renderRevision` ctor 字段/getter/fallback；
 - `mutedText` 调用迁到 `textSecondary` 后删除历史别名；
 - 删除无调用的 app dependency provider/helper；有真实读取者的 provider 保留；
@@ -277,7 +312,10 @@ UiEffect exactly-once、canonical signature、流式重建预算、审批/提问
   allowlist，并校验各内部 Package `pubspec.yaml` 的精确依赖；
 - 扩大 root snapshot 守卫到全部生产 Dart 文件；
 - 新增 UI/presentation→data/Repository、Shell legacy owner、过渡 API 零容忍守卫；
-- 将 `phase3_batch*` 命名的永久负向断言迁到当前架构 guard，保留保护面、不保留阶段命名；
+- 将 `phase3_batch*` 命名的永久负向断言迁到当前架构 guard，保留保护面、不保留阶段命名
+  （P4-0 实测：阶段命名只出现在**文件名**上，仅
+  `test/src/architecture/phase3_batch5_architecture_guard_test.dart` 一个文件，
+  文件内容无 `phase3_batch` 字符串）；
 - 同步 `overview(.en)`、`engineering_standards`、`design_document`、`developer_guide`、
   `glossary(.en)`、`CONTRIBUTING(.en)`、`AGENTS.md` 和 `docs/README.md`；Phase 0–3 文档标为
   历史迁移证据；
@@ -329,11 +367,17 @@ rg -n "conversationSliceEnabled|settingsSliceEnabled|providerManagementSliceEnab
 rg -n "LegacyBundleFactoryMixin|legacy_bundle_factory_mixin|CallbackAppearanceSettingsStore|CallbackAgentProviderConfigStore" lib packages test
 rg -n "knownApplicationToPresentation|knownApplicationFlutterImports|knownDomainImpurities|_knownEdgeViolations|_knownExternalViolations" test
 rg -n "extends ChangeNotifier|notifyListeners|agentViewModel =>" lib/src/app/shell
-rg -n "package:(zeta_foundation|zeta_plugin_kernel|zeta_agent_core|zeta_agent_providers|zeta_ui)/src/" lib packages
+rg -n "package:(zeta_foundation|zeta_plugin_kernel|zeta_agent_core|zeta_agent_providers|zeta_ui)/src/" lib
 rg -n "^import .*features/.*/data/|Repository\\(" lib/src/ui
 ```
 
-预期全部无输出。正式 guard 还必须覆盖：
+预期全部无输出。
+
+> **不要**把倒数第二条的搜索范围扩到 `packages`。P4-0 实测那样会命中 322 行
+> **包内自引用**（各包 import 自己的 `src/`，完全合法），造成假红。G6 禁止的是
+> **跨包** `/src` 引用，当前实测为 0，其权威守卫是
+> `test/src/architecture/package_boundary_candidate_graph_test.dart` 的 Package DAG
+> 检查，不靠这条 shell 命令。正式 guard 还必须覆盖：
 
 - application/domain 的 Flutter、Riverpod、Provider package 依赖为 0；
 - UI/presentation 不 import feature data、不直接取得 Repository；
