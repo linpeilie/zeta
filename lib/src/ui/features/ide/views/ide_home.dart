@@ -142,6 +142,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
   AgentManagementSliceComposition get _agentManagementComposition =>
       _workbenchComposition.agentManagementComposition;
   late final void Function() _unsubscribeProviderSettings;
+  late final void Function() _unsubscribeIdeSession;
   late final UsageStatisticsOperations _usageStatisticsController;
   late final AgentUsagePanelOperations _agentUsagePanelController;
   late final AgentUsageRefreshCoordinator _agentUsageRefreshCoordinator;
@@ -215,7 +216,20 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
       agentUiTextCatalog: widget.agentUiTextCatalog,
       metrics: widget.metrics,
       providerMetricLabel: widget.providerMetricLabel,
-    )..addListener(_handleShellChanged);
+    );
+    // 定向订阅三个 slice store，而不是监听整个 Shell。
+    //
+    // IdeHome 从 Shell 读的每一项都是这三个 store 的投影：
+    // workbenchLayout / initialRestoreCompleted ← IDE Session；
+    // projects / activeProjectPath ← Workspace；
+    // selectedEntry / projectHomeActive ← Conversation Workspace。
+    _unsubscribeIdeSession = _shellController.ideSessionOperations.subscribe(
+      _handleIdeSessionChanged,
+    );
+    _shellController.workspaceSliceStore.addListener(_handleWorkspaceChanged);
+    _shellController.agentConversationWorkspaceStore.addListener(
+      _handleConversationWorkspaceChanged,
+    );
     widget.conversationWorkspaceStoreRegistry.bind(
       _shellController.agentConversationWorkspaceStore,
     );
@@ -328,7 +342,13 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
     if (widget.enableNativeWindowFrame) {
       windowManager.removeListener(this);
     }
-    _shellController.removeListener(_handleShellChanged);
+    _unsubscribeIdeSession();
+    _shellController.workspaceSliceStore.removeListener(
+      _handleWorkspaceChanged,
+    );
+    _shellController.agentConversationWorkspaceStore.removeListener(
+      _handleConversationWorkspaceChanged,
+    );
     _unsubscribeProviderSettings();
     widget.usageStatisticsSliceComposition.bindSelectionPersistence(null);
     _agentUsageRefreshCoordinator.dispose();
@@ -1042,12 +1062,29 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
     unawaited(windowManager.close());
   }
 
-  void _handleShellChanged() {
-    _maybeStartGlobalHomeLoad();
-    _updateDesktopAttentionVisibility();
+  /// IDE Session 变化：面板宽度来自 workbenchLayout，首页预热看 initialRestoreCompleted。
+  void _handleIdeSessionChanged() {
     if (!_leftPanelWidthDragging) {
       _leftPanelWidth = _effectiveLeftPanelWidth;
     }
+    _maybeStartGlobalHomeLoad();
+    _rebuild();
+  }
+
+  /// Workspace 变化：activeProjectPath 同时影响首页预热与 Attention 可见性。
+  void _handleWorkspaceChanged() {
+    _maybeStartGlobalHomeLoad();
+    _updateDesktopAttentionVisibility();
+    _rebuild();
+  }
+
+  /// Conversation Workspace 变化：当前会话决定 Attention 的 provider/thread。
+  void _handleConversationWorkspaceChanged() {
+    _updateDesktopAttentionVisibility();
+    _rebuild();
+  }
+
+  void _rebuild() {
     if (mounted) {
       setState(() {});
     }

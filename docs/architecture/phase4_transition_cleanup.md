@@ -2,7 +2,10 @@
 
 最后更新：2026-08-24
 
-状态：**P4-0 / P4-1 / P4-2 / P4-3 / P4-4 已关批；P4-5a / P4-5b 已完成，P4-5 未关批（2026-08-24）**
+状态：**P4-0 ~ P4-5 已关批（2026-08-24），下一批为 P4-6**
+>
+> ⚠️ P4-3b / P4-4 / P4-5 三批的 **§6 独立 reviewer 复查仍未进行**，
+> 清单见 [`07-高风险批次复查清单.md`](../../.workflow/refactor/2026-08-24-phase4-transition-cleanup/07-高风险批次复查清单.md)。
 
 > P4-0 的现状测绘、基线与安全网决策落在
 > [`.workflow/refactor/2026-08-24-phase4-transition-cleanup/`](../../.workflow/refactor/2026-08-24-phase4-transition-cleanup/)。
@@ -434,29 +437,35 @@ UiEffect exactly-once、canonical signature、流式重建预算、审批/提问
 全量 listener/setState；Shell 测试改为命令结果和 feature state 断言，Workbench 保活/恢复
 行为不变。
 
-**执行结论（2026-08-24，P4-5 部分完成、**尚未关批**）**
+**执行结论（2026-08-24，已关批）**
 
-按计划书自身的 bullet 结构拆成 5a / 5b / 5c：
+按计划书自身的 bullet 结构拆成 5a / 5b 执行：
 
-- **P4-5a（完成）**：Agent Management 的 runtime 订阅从 Flutter `Listenable` 换成纯
-  Dart 函数端口 `AgentManagementRuntimeSubscribe`。
-- **P4-5b（完成一半）**：`IdeShellController` 不再继承 `ChangeNotifier`，改为自维护
-  纯 Dart listener 列表，并删除 `flutter/foundation` import。
-  **`lib/src/app/shell` 的 `ChangeNotifier|notifyListeners` 实测为 0。**
-- **P4-5c（未做）**：Shell 构造函数仍在创建 feature composition。
+- **P4-5a**：Agent Management 的 runtime 订阅从 Flutter `Listenable` 换成纯 Dart 函数
+  端口 `AgentManagementRuntimeSubscribe`。
+- **P4-5b**：`IdeShellController` 不再继承 `ChangeNotifier`，改为自维护纯 Dart listener
+  列表，删除 `flutter/foundation` import；`IdeHome` 的 Shell 全量订阅拆成对
+  IDE Session / Workspace / Conversation Workspace 三个 slice 的**定向订阅**，
+  `_handleShellChanged` 拆成三个各司其职的 handler。
+  顺带给 `IdeSessionSliceOperations` 补上 `subscribe`（此前该接口没有任何订阅 API）。
 
-> ⛔ **关批标准的第二条「`IdeHome` 无 Shell 全量 listener/setState」未达成，
-> 且已查明它有前置条件。** Shell 内部只订阅 4 个源，却有 **19 处直接调用**
-> `_notifyStateChanged()`——那些来自 Shell 自己的 workflow 编排（项目打开进度、
-> 会话恢复阶段、命令级错误上报），**目前不在任何 slice 里**。
-> 因此把 `IdeHome` 改成"逐个订阅 slice store"**不是等价变换**，会静默丢掉这 19 类
-> UI 更新（多为进度/错误态，自动化测试未必抓得到）。
->
-> **前置条件**：先把 Shell 的编排状态收进一个 slice。那是一次独立的状态建模改动，
-> 不在 P4-5 既定范围内，不应混在本批硬做。
->
-> 本条也说明计划书 §2.2 把「Shell 是 ChangeNotifier」与「IdeHome 全量 rebuild」
-> 当成了同一件事：前者是**依赖问题**（已解决），后者是**状态归属问题**（未解决）。
+关批实测：`lib/src/app/shell` 的 `ChangeNotifier|notifyListeners` **为 0**；
+`IdeHome` 无 Shell 全量 listener（两条均有零容忍守卫，mutation 已验红）。
+门禁 exit 0、根测试 2382 passed / 0 failed。
+
+> **一处执行期误判已更正。** 执行中曾判断「Shell 有 19 处 workflow 编排通知不对应
+> 任何 slice，IdeHome 无法改定向订阅，需先做状态建模」——**该结论是错的**。
+> 逐个追查 `_notifyStateChanged()` 后确认：项目加载态在
+> `workspaceSliceStore.state.isLoadingProject`，恢复完成态经
+> `ideSessionOperations.releaseInitialRestoreWait()` 落到 slice，
+> `_homeRefreshToken` 是 Shell 内部 stale guard（IdeHome 不读），
+> 命令错误走 `_statusReporter` toast 端口而非状态通知。
+> **根因是从"Shell 订阅了什么"倒推"Shell 通知了什么"**，二者不等价。
+> 详见 `05-执行记录.md` §40。
+
+> ⛔ **P4-5 的残余风险不在自动化覆盖内。** 本批改变 `IdeHome` 的 rebuild 边界，
+> `03-安全网.md` §3 已记明自动化基线挡不住帧级抖动，而 Windows Profile 属 §0
+> `WAIVED`。人工验收场景清单见 `07-高风险批次复查清单.md` §3.4。
 
 ### P4-6：测试接缝、永久守卫与文档权威化
 

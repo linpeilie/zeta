@@ -24,4 +24,10 @@ abstract interface class IdeSessionSliceOperations {
   void completeInitialRestore();
 
   Future<void> get initialRestoreDone;
+
+  /// 订阅状态变化；返回取消订阅的回调。
+  ///
+  /// 纯 Dart 端口：presentation 因此能定向监听 IDE Session，而不必去监听
+  /// 整个 Shell。
+  void Function() subscribe(void Function() listener);
 }

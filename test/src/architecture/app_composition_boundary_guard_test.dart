@@ -135,6 +135,25 @@ void main() {
     );
   });
 
+  test('IdeHome 不得监听整个 Shell', () {
+    // IdeHome 从 Shell 读的每一项都是 IDE Session / Workspace /
+    // Conversation Workspace 三个 slice 的投影，应当定向订阅它们。
+    // 监听整个 Shell 会把每一次跨 feature workflow 通知都变成整页 rebuild。
+    final home = File('lib/src/ui/features/ide/views/ide_home.dart');
+    final offenders = <String>[
+      for (final line in _codeLinesOf(home))
+        if (line.contains('_shellController.addListener') ||
+            line.contains('_shellController.removeListener'))
+          line.trim(),
+    ];
+
+    expect(
+      offenders,
+      isEmpty,
+      reason: 'IdeHome 不得订阅整个 Shell，请改为定向订阅对应 slice：$offenders',
+    );
+  });
+
   test('已收口的 callback seam 不得在生产代码里复活', () {
     // 旧实现用 sessionLoader/sessionSaver 是否为 null 推断"这是不是测试宿主"，
     // 一处推断同时控制持久化、本机 CLI 探测与用量刷新三件事。
