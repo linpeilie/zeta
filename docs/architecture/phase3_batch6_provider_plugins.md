@@ -168,7 +168,7 @@ settings 装载时，投影现在返回不可用而不是读取空目录的 acti
 | 第 6 批 + Phase 1 §8.1 | ✅ | 三插件、开放 type、零 compatibility/default factory/core 内置目录 |
 | 第 1 批关批 | ✅ | 用户明确接受不等待原定日期；两个 settings controller、ingress、flag 与 false-path 已删除，固定为 slice 单一路径 |
 | 第 2 批关批 | ✅ | 用户明确接受不等待原定日期；settings/management 旧 controller、Flutter Listenable port、flag 与 false-path 已删除 |
-| Phase 2 长时间真实使用证据 | ❌ | [Phase 3 §0](phase3_slice_expansion.md) 要求从 2026-08-23 起连续 14 天，最早约 2026-09-06；期间若发生需修复的 slice bug 要按规则重新计时 |
+| Phase 2 长时间真实使用证据 | ❌ | [Phase 3 §0](phase3_slice_expansion.md) 要求连续 14 天；本轮在 2026-08-24 修复 slice 路径竞态并按规则重计，最早约 2026-09-07 |
 | application Flutter 燃尽 | ✅ | `knownApplicationFlutterImports` 已从 5 清零，application 层 Flutter import 现在零容忍 |
 | 开放目录跨层贯通 | ✅ | application/domain 对 `zeta_agent_providers` 的 import 已清零并新增守卫；厂商 identity/extra-key/指标标签映射留在 data/app 组合层；Provider settings/模型目录根接线均 non-null、缺失时 fail-closed |
 | root snapshot 必选关系 | ✅ | appearance/general/provider settings 与 agent management 四个节点均为 required 非空投影 |
