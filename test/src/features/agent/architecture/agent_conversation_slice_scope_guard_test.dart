@@ -12,8 +12,8 @@ void main() {
       'lib/src/features/agent/application/conversation_slice/'
       'agent_conversation_slice_effect.dart';
   const runnerPath =
-      'lib/src/features/agent/presentation/conversation_slice/'
-      'agent_conversation_slice_binding.dart';
+      'lib/src/app/conversation_slice/'
+      'agent_conversation_slice_composition.dart';
   const scopePath =
       'lib/src/features/agent/application/conversation_slice/'
       'agent_conversation_command_scope.dart';

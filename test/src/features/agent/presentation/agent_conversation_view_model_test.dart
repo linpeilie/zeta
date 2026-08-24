@@ -15,7 +15,7 @@ import '../../../testing/provider_settings_test_store.dart';
 import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_command_scope.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_intent.dart';
-import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_binding.dart';
+import 'package:zeta/src/app/conversation_slice/agent_conversation_slice_composition.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 
@@ -4670,8 +4670,9 @@ void main() {
         final viewModel = _createViewModel(_FakeAgentProvider());
         addTearDown(viewModel.dispose);
         final pendingFlushes = <void Function()>[];
-        final binding = AgentConversationSliceBinding(
-          viewModel: viewModel,
+        final binding = AgentConversationSliceComposition(
+          regions: viewModel,
+          commands: viewModel,
           scheduleFlush: pendingFlushes.add,
         );
         addTearDown(binding.dispose);
@@ -4695,8 +4696,9 @@ void main() {
         final viewModel = _createViewModel(_FakeAgentProvider());
         addTearDown(viewModel.dispose);
         final pendingFlushes = <void Function()>[];
-        final binding = AgentConversationSliceBinding(
-          viewModel: viewModel,
+        final binding = AgentConversationSliceComposition(
+          regions: viewModel,
+          commands: viewModel,
           scheduleFlush: pendingFlushes.add,
         );
         addTearDown(binding.dispose);
@@ -4723,8 +4725,9 @@ void main() {
           _FakeAgentProvider(sendError: StateError('send failed')),
         );
         addTearDown(viewModel.dispose);
-        final binding = AgentConversationSliceBinding(
-          viewModel: viewModel,
+        final binding = AgentConversationSliceComposition(
+          regions: viewModel,
+          commands: viewModel,
           scheduleFlush: (flush) {},
         );
         addTearDown(binding.dispose);
@@ -4746,8 +4749,9 @@ void main() {
       test('空输入被忽略：不留在途，也不报错', () async {
         final viewModel = _createViewModel(_FakeAgentProvider());
         addTearDown(viewModel.dispose);
-        final binding = AgentConversationSliceBinding(
-          viewModel: viewModel,
+        final binding = AgentConversationSliceComposition(
+          regions: viewModel,
+          commands: viewModel,
           scheduleFlush: (flush) {},
         );
         addTearDown(binding.dispose);
@@ -4763,8 +4767,9 @@ void main() {
       test('能力缺失的 thread 操作记成失败', () async {
         final viewModel = _createViewModel(_FakeAgentProvider());
         addTearDown(viewModel.dispose);
-        final binding = AgentConversationSliceBinding(
-          viewModel: viewModel,
+        final binding = AgentConversationSliceComposition(
+          regions: viewModel,
+          commands: viewModel,
           scheduleFlush: (flush) {},
         );
         addTearDown(binding.dispose);
@@ -4793,8 +4798,9 @@ void main() {
           connectionEpoch: 1,
           listenerGeneration: 1,
         );
-        final binding = AgentConversationSliceBinding(
-          viewModel: viewModel,
+        final binding = AgentConversationSliceComposition(
+          regions: viewModel,
+          commands: viewModel,
           scheduleFlush: (flush) {},
           scopeSnapshot: () => scope,
         );
@@ -4823,8 +4829,9 @@ void main() {
         final viewModel = _createViewModel(_FakeAgentProvider());
         addTearDown(viewModel.dispose);
         final pendingFlushes = <void Function()>[];
-        final binding = AgentConversationSliceBinding(
-          viewModel: viewModel,
+        final binding = AgentConversationSliceComposition(
+          regions: viewModel,
+          commands: viewModel,
           scheduleFlush: pendingFlushes.add,
         );
 

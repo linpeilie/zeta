@@ -7,9 +7,9 @@ import 'package:zeta/src/features/agent/application/conversation_slice/agent_con
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_intent.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_state.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
-import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_ports.dart';
 
-/// 把切片接到现有 `AgentConversationViewModel` 上的组合对象。
+/// Conversation 切片组合：拥有 slice store，并把它接到窄 region / command 端口上。
 ///
 /// 它做两件事，两件都是**单向**的：
 ///
@@ -19,39 +19,59 @@ import 'package:zeta/src/features/agent/presentation/agent_conversation_view_mod
 ///   执行，完成后经 result intent 回写。
 ///
 /// 因此不存在双写 owner：TimelineStore 与 ComposerStateOwner 持有领域事实，
-/// Slice Store 是 UI 唯一读取面与命令入口；两者只经这个 binding 单向同步。
-final class AgentConversationSliceBinding {
-  AgentConversationSliceBinding({
-    required AgentConversationViewModel viewModel,
+/// Slice Store 是 UI 唯一读取面与命令入口；两者只经这个组合单向同步。
+///
+/// 它**只依赖两个窄端口**（[AgentConversationRegionSource] /
+/// [AgentConversationCommandPort]），不再持有整个 ViewModel——ViewModel 现在只是
+/// 这两个端口的一个实现。
+final class AgentConversationSliceComposition {
+  AgentConversationSliceComposition({
+    required AgentConversationRegionSource regions,
+    required AgentConversationCommandPort commands,
     void Function(void Function())? scheduleFlush,
     AgentConversationCommandScope Function()? scopeSnapshot,
-  }) : _viewModel = viewModel,
+  }) : _regions = regions,
        _scheduleFlush = scheduleFlush ?? scheduleMicrotask,
-       _scopeSnapshot = scopeSnapshot ?? viewModel.currentCommandScope {
+       _scopeSnapshot = scopeSnapshot ?? regions.currentCommandScope {
     _store = AgentConversationSliceStore(
       initialState: AgentConversationSliceState(
-        header: viewModel.headerState,
-        composer: viewModel.composerState,
-        pendingInteractions: viewModel.pendingInteractionState,
-        expansion: viewModel.expansionState,
-        history: viewModel.historyState,
+        header: regions.headerState,
+        composer: regions.composerState,
+        pendingInteractions: regions.pendingInteractionState,
+        expansion: regions.expansionState,
+        history: regions.historyState,
       ),
-      effectRunner: _AgentConversationViewModelEffectRunner(
-        viewModel: viewModel,
+      effectRunner: _AgentConversationCommandEffectRunner(
+        commands: commands,
         store: () => _store,
         scopeSnapshot: () => _scopeSnapshot(),
       ),
       scopeSnapshot: _scopeSnapshot,
     );
 
-    viewModel.headerStateListenable.addListener(_onHeaderChanged);
-    viewModel.composerStateListenable.addListener(_onComposerChanged);
-    viewModel.pendingInteractionStateListenable.addListener(_onPendingChanged);
-    viewModel.expansionStateListenable.addListener(_onExpansionChanged);
-    viewModel.historyStateListenable.addListener(_onHistoryChanged);
+    regions.addRegionListener(
+      AgentConversationSliceRegion.header,
+      _onHeaderChanged,
+    );
+    regions.addRegionListener(
+      AgentConversationSliceRegion.composer,
+      _onComposerChanged,
+    );
+    regions.addRegionListener(
+      AgentConversationSliceRegion.pendingInteractions,
+      _onPendingChanged,
+    );
+    regions.addRegionListener(
+      AgentConversationSliceRegion.expansion,
+      _onExpansionChanged,
+    );
+    regions.addRegionListener(
+      AgentConversationSliceRegion.history,
+      _onHistoryChanged,
+    );
   }
 
-  final AgentConversationViewModel _viewModel;
+  final AgentConversationRegionSource _regions;
   final void Function(void Function()) _scheduleFlush;
 
   /// 当前作用域读取器；测试可注入以模拟 runtime 换代。
@@ -108,13 +128,13 @@ final class AgentConversationSliceBinding {
     }
     _flushCount += 1;
     final intent = AgentConversationRegionsRefreshed(
-      header: _headerDirty ? _viewModel.headerState : null,
-      composer: _composerDirty ? _viewModel.composerState : null,
+      header: _headerDirty ? _regions.headerState : null,
+      composer: _composerDirty ? _regions.composerState : null,
       pendingInteractions: _pendingDirty
-          ? _viewModel.pendingInteractionState
+          ? _regions.pendingInteractionState
           : null,
-      expansion: _expansionDirty ? _viewModel.expansionState : null,
-      history: _historyDirty ? _viewModel.historyState : null,
+      expansion: _expansionDirty ? _regions.expansionState : null,
+      history: _historyDirty ? _regions.historyState : null,
     );
     _headerDirty = false;
     _composerDirty = false;
@@ -133,29 +153,42 @@ final class AgentConversationSliceBinding {
       return;
     }
     _disposed = true;
-    _viewModel.headerStateListenable.removeListener(_onHeaderChanged);
-    _viewModel.composerStateListenable.removeListener(_onComposerChanged);
-    _viewModel.pendingInteractionStateListenable.removeListener(
+    _regions.removeRegionListener(
+      AgentConversationSliceRegion.header,
+      _onHeaderChanged,
+    );
+    _regions.removeRegionListener(
+      AgentConversationSliceRegion.composer,
+      _onComposerChanged,
+    );
+    _regions.removeRegionListener(
+      AgentConversationSliceRegion.pendingInteractions,
       _onPendingChanged,
     );
-    _viewModel.expansionStateListenable.removeListener(_onExpansionChanged);
-    _viewModel.historyStateListenable.removeListener(_onHistoryChanged);
+    _regions.removeRegionListener(
+      AgentConversationSliceRegion.expansion,
+      _onExpansionChanged,
+    );
+    _regions.removeRegionListener(
+      AgentConversationSliceRegion.history,
+      _onHistoryChanged,
+    );
     _store.dispose();
   }
 }
 
-/// 用现有 ViewModel port 执行切片副作用。
+/// 经窄命令端口执行切片副作用。
 ///
 /// 每个命令副作用都必须回报成败，否则在途身份会永远留在切片里。
-final class _AgentConversationViewModelEffectRunner
+final class _AgentConversationCommandEffectRunner
     implements AgentConversationSliceEffectRunner {
-  _AgentConversationViewModelEffectRunner({
-    required this._viewModel,
+  _AgentConversationCommandEffectRunner({
+    required this.commands,
     required this._store,
     required this._scopeSnapshot,
   });
 
-  final AgentConversationViewModel _viewModel;
+  final AgentConversationCommandPort commands;
   final AgentConversationSliceStore Function() _store;
   final AgentConversationCommandScope Function() _scopeSnapshot;
 
@@ -165,18 +198,18 @@ final class _AgentConversationViewModelEffectRunner
       case AgentConversationToggleExpansionEffect():
         switch (effect.target) {
           case AgentConversationExpansionTarget.toolCall:
-            _viewModel.toggleToolCall(effect.id);
+            commands.toggleToolCall(effect.id);
           case AgentConversationExpansionTarget.planMessage:
-            _viewModel.togglePlanMessage(effect.id);
+            commands.togglePlanMessage(effect.id);
           case AgentConversationExpansionTarget.activePlan:
-            _viewModel.toggleActivePlan(effect.id);
+            commands.toggleActivePlan(effect.id);
           case AgentConversationExpansionTarget.commandGroup:
-            _viewModel.toggleCommandGroup(effect.id);
+            commands.toggleCommandGroup(effect.id);
           case AgentConversationExpansionTarget.fileEditItem:
-            _viewModel.toggleFileEditItem(effect.id);
+            commands.toggleFileEditItem(effect.id);
         }
       case AgentConversationDismissPlanExecutionEffect():
-        _viewModel.dismissPlanExecution(effect.request);
+        commands.dismissPlanExecution(effect.request);
       case AgentConversationCommandEffect():
         _runCommand(effect);
     }
@@ -231,49 +264,49 @@ final class _AgentConversationViewModelEffectRunner
 
   Future<AgentCommandOutcome> _invoke(AgentConversationCommandEffect effect) {
     return switch (effect) {
-      AgentConversationSendMessageEffect() => _viewModel.sendMessage(
+      AgentConversationSendMessageEffect() => commands.sendMessage(
         effect.text,
         localImagePaths: effect.localImagePaths,
         mentions: effect.mentions,
         skills: effect.skills,
       ),
-      AgentConversationCancelTurnEffect() => _viewModel.cancelActiveTurn(),
+      AgentConversationCancelTurnEffect() => commands.cancelActiveTurn(),
       AgentConversationEditLastUserMessageEffect() =>
-        _viewModel.editLastUserMessageAndRetry(effect.text),
-      AgentConversationRetryOpenThreadEffect() => _viewModel.retryOpenThread(),
+        commands.editLastUserMessageAndRetry(effect.text),
+      AgentConversationRetryOpenThreadEffect() => commands.retryOpenThread(),
       // 四种审批语义各自独立调用，绝不互相复用已授权状态（G5）。
       AgentConversationRespondPermissionEffect() =>
-        _viewModel.respondToPermission(
+        commands.respondToPermission(
           effect.request,
           approved: effect.approved,
           cancelTurn: effect.cancelTurn,
           commandDecision: effect.commandDecision,
           execpolicyAmendment: effect.execpolicyAmendment,
         ),
-      AgentConversationRespondQuestionEffect() => _viewModel.respondToQuestion(
+      AgentConversationRespondQuestionEffect() => commands.respondToQuestion(
         effect.request,
         answers: effect.answers,
       ),
       AgentConversationRespondPlanApprovalEffect() =>
-        _viewModel.respondToPlanApproval(
+        commands.respondToPlanApproval(
           effect.request,
           effect.decision,
           reason: effect.reason,
         ),
       AgentConversationPlanExecutionEffect() =>
         switch (effect.revisionFeedback) {
-          final String feedback => _viewModel.revisePlanExecution(
+          final String feedback => commands.revisePlanExecution(
             effect.request,
             revisionMessage: feedback,
           ),
-          null => _viewModel.startPlanExecution(effect.request),
+          null => commands.startPlanExecution(effect.request),
         },
       AgentConversationApproveGuardianDeniedActionEffect() =>
-        _viewModel.approveGuardianDeniedAction(),
+        commands.approveGuardianDeniedAction(),
       AgentConversationThreadMutationEffect() => switch (effect.kind) {
         // fork 用 `null` 表示失败，这里显式翻译，不让它冒充成功。
         AgentConversationThreadMutationKind.fork =>
-          _viewModel.forkCurrentThread().then<AgentCommandOutcome>(
+          commands.forkCurrentThread().then<AgentCommandOutcome>(
             (session) => session == null
                 ? const AgentCommandOutcome.failed(
                     AgentCommandFailureKind.requestFailed,
@@ -281,19 +314,19 @@ final class _AgentConversationViewModelEffectRunner
                 : const AgentCommandOutcome.succeeded(),
           ),
         AgentConversationThreadMutationKind.rename =>
-          _viewModel.renameCurrentThread(effect.name ?? ''),
+          commands.renameCurrentThread(effect.name ?? ''),
         AgentConversationThreadMutationKind.archive =>
-          _viewModel.archiveCurrentThread(),
+          commands.archiveCurrentThread(),
         AgentConversationThreadMutationKind.compact =>
-          _viewModel.compactCurrentThread(),
+          commands.compactCurrentThread(),
       },
       AgentConversationLoadCatalogEffect() => switch (effect.kind) {
-        AgentConversationCatalogKind.models => _viewModel.loadModels(
+        AgentConversationCatalogKind.models => commands.loadModels(
           forceRefresh: effect.forceRefresh,
         ),
-        AgentConversationCatalogKind.skills => _viewModel.ensureSkillsCatalog(),
+        AgentConversationCatalogKind.skills => commands.ensureSkillsCatalog(),
         AgentConversationCatalogKind.conversationModes =>
-          _viewModel.retryConversationModes(),
+          commands.retryConversationModes(),
       },
     };
   }

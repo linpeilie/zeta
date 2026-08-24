@@ -8,7 +8,7 @@ import 'package:zeta/src/features/agent/application/conversation_slice/agent_con
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
-import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_binding.dart';
+import 'package:zeta/src/app/conversation_slice/agent_conversation_slice_composition.dart';
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
@@ -30,8 +30,14 @@ void main() {
       );
       addTearDown(first.dispose);
       addTearDown(second.dispose);
-      final firstBinding = AgentConversationSliceBinding(viewModel: first);
-      final secondBinding = AgentConversationSliceBinding(viewModel: second);
+      final firstBinding = AgentConversationSliceComposition(
+        regions: first,
+        commands: first,
+      );
+      final secondBinding = AgentConversationSliceComposition(
+        regions: second,
+        commands: second,
+      );
       addTearDown(firstBinding.dispose);
       addTearDown(secondBinding.dispose);
 
@@ -80,8 +86,14 @@ void main() {
       );
       addTearDown(first.dispose);
       addTearDown(second.dispose);
-      final firstBinding = AgentConversationSliceBinding(viewModel: first);
-      final secondBinding = AgentConversationSliceBinding(viewModel: second);
+      final firstBinding = AgentConversationSliceComposition(
+        regions: first,
+        commands: first,
+      );
+      final secondBinding = AgentConversationSliceComposition(
+        regions: second,
+        commands: second,
+      );
       addTearDown(secondBinding.dispose);
 
       await tester.pumpWidget(
@@ -116,7 +128,10 @@ void main() {
         initialThread: agentPaneThread(id: 'thread-1', title: '会话一'),
       );
       addTearDown(viewModel.dispose);
-      final binding = AgentConversationSliceBinding(viewModel: viewModel);
+      final binding = AgentConversationSliceComposition(
+        regions: viewModel,
+        commands: viewModel,
+      );
       addTearDown(binding.dispose);
 
       final received = <AgentUiEffect>[];

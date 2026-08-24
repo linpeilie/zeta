@@ -12,6 +12,7 @@ import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_mode_controller.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_command_scope.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_ports.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/application/agent_plan_execution_handoff_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
@@ -47,7 +48,8 @@ typedef AgentCreatedThreadCallback =
 ///
 /// 当前 ViewModel 只保留 provider/session 协调与事件路由；时间线聚合、
 /// 模型选择和局部刷新节流已经下沉到 feature 级应用模块。
-class AgentConversationViewModel {
+class AgentConversationViewModel
+    implements AgentConversationRegionSource, AgentConversationCommandPort {
   AgentConversationViewModel({
     required this.providerController,
     required this.conversationBinding,
@@ -399,27 +401,32 @@ class AgentConversationViewModel {
   AgentUiUpdateRequest? get debugLastUiUpdateRequest =>
       _debugLastUiUpdateRequest;
 
+  @override
   AgentConversationHistoryState get historyState => _uiStateStore.history.value;
 
   ValueListenable<AgentConversationHistoryState> get historyStateListenable =>
       _uiStateStore.history;
 
+  @override
   AgentHeaderState get headerState => _uiStateStore.header.value;
 
   ValueListenable<AgentHeaderState> get headerStateListenable =>
       _uiStateStore.header;
 
+  @override
   AgentComposerState get composerState => _uiStateStore.composer.value;
 
   ValueListenable<AgentComposerState> get composerStateListenable =>
       _uiStateStore.composer;
 
+  @override
   AgentPendingInteractionState get pendingInteractionState =>
       _uiStateStore.pendingInteractions.value;
 
   ValueListenable<AgentPendingInteractionState>
   get pendingInteractionStateListenable => _uiStateStore.pendingInteractions;
 
+  @override
   AgentExpansionState get expansionState => _uiStateStore.expansion.value;
 
   ValueListenable<AgentExpansionState> get expansionStateListenable =>
@@ -519,6 +526,7 @@ class AgentConversationViewModel {
   }
 
   /// 确认上一 Plan 回合，并用 Default 模式启动新的执行回合。
+  @override
   Future<AgentCommandOutcome> startPlanExecution(
     AgentPlanExecutionRequest request,
   ) async {
@@ -628,6 +636,7 @@ class AgentConversationViewModel {
   ///
   /// [revisionMessage] 非空时在关闭交接后立即以 Plan 模式发送；
   /// 为空时仅关闭交接卡，恢复主 Composer 供用户继续输入。
+  @override
   Future<AgentCommandOutcome> revisePlanExecution(
     AgentPlanExecutionRequest request, {
     String? revisionMessage,
@@ -663,6 +672,7 @@ class AgentConversationViewModel {
   }
 
   /// 关闭本地执行提示，不向 Provider 回写任何审批结果。
+  @override
   void dismissPlanExecution(AgentPlanExecutionRequest request) {
     if (!_canResolvePlanExecution(request) ||
         !_planExecutionHandoffController.resolve(request)) {
@@ -681,6 +691,7 @@ class AgentConversationViewModel {
   }
 
   /// 重试当前 Provider 的模式目录探测。
+  @override
   Future<AgentCommandOutcome> retryConversationModes() async {
     await _conversationModeController.retryCatalog();
     // 目录状态本身就是结果：失败会停在 failed 状态，不靠"没抛异常"判定。
@@ -800,6 +811,7 @@ class AgentConversationViewModel {
   }
 
   /// 预热 skill 目录（打开 picker 前调用）。
+  @override
   Future<AgentCommandOutcome> ensureSkillsCatalog() async {
     if (!canUseSkills) {
       return const AgentCommandOutcome.ignored(
@@ -1116,6 +1128,7 @@ class AgentConversationViewModel {
     return _timeline.isFileEditItemExpanded(fileEditItemId);
   }
 
+  @override
   void toggleToolCall(String toolCallId) {
     _timeline.toggleToolCall(toolCallId);
     _publishUiChanges(
@@ -1126,6 +1139,7 @@ class AgentConversationViewModel {
     );
   }
 
+  @override
   void togglePlanMessage(String messageId) {
     _timeline.togglePlanMessage(messageId);
     _publishUiChanges(
@@ -1136,6 +1150,7 @@ class AgentConversationViewModel {
     );
   }
 
+  @override
   void toggleActivePlan(String turnId) {
     _timeline.toggleActivePlan(turnId);
     _publishUiChanges(
@@ -1146,6 +1161,7 @@ class AgentConversationViewModel {
     );
   }
 
+  @override
   void toggleCommandGroup(String commandGroupId) {
     _timeline.toggleCommandGroup(commandGroupId);
     _publishUiChanges(
@@ -1156,6 +1172,7 @@ class AgentConversationViewModel {
     );
   }
 
+  @override
   void toggleFileEditItem(String fileEditItemId) {
     _timeline.toggleFileEditItem(fileEditItemId);
     _publishUiChanges(
@@ -1205,6 +1222,7 @@ class AgentConversationViewModel {
   ///
   /// 在 IDE 启动时调用，触发 provider initialize 握手并拉取 `model/list`，
   /// 使输入框下方的模型/思考/速率控件在用户发送消息前就可用。
+  @override
   Future<AgentCommandOutcome> loadModels({bool forceRefresh = false}) async {
     await loadSettings();
     final config = _boundProviderConfig;
@@ -1338,6 +1356,7 @@ class AgentConversationViewModel {
   }
 
   /// Guardian 拒绝后的人工放行。
+  @override
   Future<AgentCommandOutcome> approveGuardianDeniedAction() async {
     final review = _latestDeniedAutoReview;
     final threadId = review?.threadId ?? sessionId;
@@ -1782,6 +1801,7 @@ class AgentConversationViewModel {
   /// 没有 active turn 时创建新回合；已有 active turn 时发送 steer，保持完整工具循环。
   /// [localImagePaths] 为随文本一并发送的本地图片绝对路径。
   /// [mentions] 为 composer 中选中的 @文件引用。
+  @override
   Future<AgentCommandOutcome> sendMessage(
     String text, {
     List<String> localImagePaths = const <String>[],
@@ -2111,6 +2131,7 @@ class AgentConversationViewModel {
   }
 
   /// 取消正在运行的回合。
+  @override
   Future<AgentCommandOutcome> cancelActiveTurn() async {
     final turnId = _timeline.selectedCancelableTurnId();
     final sessionId = _selectedThreadId;
@@ -2130,6 +2151,7 @@ class AgentConversationViewModel {
   }
 
   /// 重新加载当前 Entry 唯一绑定的 thread；只用于首次打开失败后的显式重试。
+  @override
   Future<AgentCommandOutcome> retryOpenThread() async {
     final thread = _boundThreadSummary;
     if (thread == null) {
@@ -2327,6 +2349,7 @@ class AgentConversationViewModel {
   /// 处理审批卡片的 approve/deny。
   ///
   /// UI 先移除卡片，再异步回写 provider，避免按钮点击后卡片停留造成重复提交。
+  @override
   Future<AgentCommandOutcome> respondToPermission(
     AgentPermissionRequest request, {
     required bool approved,
@@ -2380,6 +2403,7 @@ class AgentConversationViewModel {
   /// 回答或跳过独立用户提问。
   ///
   /// UI 先移除卡片，再通过 question 响应方法回写结构化 answers。
+  @override
   Future<AgentCommandOutcome> respondToQuestion(
     AgentQuestionRequest request, {
     Map<String, List<String>> answers = const <String, List<String>>{},
@@ -2425,6 +2449,7 @@ class AgentConversationViewModel {
   ///
   /// [reason] 承载用户对计划的修改意见：审批是阻塞请求、回合仍在运行，
   /// 修改意见不能走 `sendMessage`，只能随决定一起回传给 Provider。
+  @override
   Future<AgentCommandOutcome> respondToPlanApproval(
     AgentPlanApprovalRequest request,
     AgentPlanApprovalDecisionKind kind, {
@@ -2508,6 +2533,7 @@ class AgentConversationViewModel {
   /// 从上一历史 turn 创建新分支，并用编辑后的文本开启新回合。
   ///
   /// 原 thread 保持不变；分支也不会回滚 Agent 已写入工作区的文件。
+  @override
   Future<AgentCommandOutcome> editLastUserMessageAndRetry(
     String newText,
   ) async {
@@ -2606,6 +2632,7 @@ class AgentConversationViewModel {
   }
 
   /// 分叉当前会话为新 thread，并切换到分叉结果。
+  @override
   Future<AgentSession?> forkCurrentThread() async {
     final threadId = sessionId;
     if (threadId == null || !canForkCurrentThread) {
@@ -2694,6 +2721,7 @@ class AgentConversationViewModel {
   }
 
   /// 重命名当前 thread；先乐观更新标题，再以 `thread/name/updated` 为准。
+  @override
   Future<AgentCommandOutcome> renameCurrentThread(String name) async {
     final trimmed = name.trim();
     final threadId = sessionId;
@@ -2754,6 +2782,7 @@ class AgentConversationViewModel {
   }
 
   /// 归档当前 thread；事件订阅会负责同步左侧列表。
+  @override
   Future<AgentCommandOutcome> archiveCurrentThread() async {
     final threadId = sessionId;
     if (threadId == null || !canArchiveCurrentThread) {
@@ -2789,6 +2818,7 @@ class AgentConversationViewModel {
   ///
   /// Claude 的 compact 是一个真实 `/compact` 回合，因此不能走 global runtime；
   /// Codex 等 Provider 也继续消费同一个中立 [AgentThreadCompactionPort]。
+  @override
   Future<AgentCommandOutcome> compactCurrentThread() async {
     final threadId = sessionId;
     if (threadId == null || !canCompactCurrentThread) {
@@ -3859,6 +3889,36 @@ class AgentConversationViewModel {
   ///
   /// 切片的 effect runner 用它在执行前与结果回写前各校验一次，避免 Provider
   /// 重启 / runtime 换代之后旧命令仍被执行或写回（目标架构 §6.2）。
+  /// 把切片 region 映射到对应的 typed listenable。
+  ///
+  /// 这层映射刻意留在 presentation：`ValueListenable` 是 Flutter 类型，
+  /// application 端口只看到纯 Dart 的 add/removeRegionListener。
+  ValueListenable<Object?> _listenableForRegion(
+    AgentConversationSliceRegion region,
+  ) {
+    return switch (region) {
+      AgentConversationSliceRegion.header => headerStateListenable,
+      AgentConversationSliceRegion.composer => composerStateListenable,
+      AgentConversationSliceRegion.pendingInteractions =>
+        pendingInteractionStateListenable,
+      AgentConversationSliceRegion.expansion => expansionStateListenable,
+      AgentConversationSliceRegion.history => historyStateListenable,
+    };
+  }
+
+  @override
+  void addRegionListener(
+    AgentConversationSliceRegion region,
+    void Function() listener,
+  ) => _listenableForRegion(region).addListener(listener);
+
+  @override
+  void removeRegionListener(
+    AgentConversationSliceRegion region,
+    void Function() listener,
+  ) => _listenableForRegion(region).removeListener(listener);
+
+  @override
   AgentConversationCommandScope currentCommandScope() {
     return AgentConversationCommandScope.fromEffectScope(
       bindingKey: conversationBinding.key,

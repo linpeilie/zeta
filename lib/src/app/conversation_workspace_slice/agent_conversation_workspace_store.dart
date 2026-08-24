@@ -9,7 +9,7 @@ import 'package:zeta/src/features/agent/application/agent_provider_settings_port
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
-import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_binding.dart';
+import 'package:zeta/src/app/conversation_slice/agent_conversation_slice_composition.dart';
 import 'package:zeta/src/features/workspace/application/workspace_file_corpus_port.dart';
 
 /// Agent Canvas 中单个常驻线程/草稿的逻辑标识。
@@ -96,7 +96,7 @@ final class AgentThreadWorkspaceEntry {
   final AgentConversationViewModel viewModel;
 
   /// Conversation Slice 是每个 entry 的必选接线，不存在旧 ViewModel 回退路径。
-  final AgentConversationSliceBinding sliceBinding;
+  final AgentConversationSliceComposition sliceBinding;
 
   AgentConversationSliceStore get sliceStore => sliceBinding.store;
 
@@ -609,7 +609,10 @@ final class AgentConversationWorkspaceStore {
       providerController: providerController,
       bindingLease: bindingLease,
       viewModel: viewModel,
-      sliceBinding: AgentConversationSliceBinding(viewModel: viewModel),
+      sliceBinding: AgentConversationSliceComposition(
+        regions: viewModel,
+        commands: viewModel,
+      ),
     );
     void listener() => _handleEntryChanged(entry);
     entry.addListener(listener);

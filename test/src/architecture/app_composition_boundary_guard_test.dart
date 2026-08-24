@@ -125,6 +125,9 @@ void main() {
       // 业务副作用现在直接在 ProjectThreadsSliceRunner 里执行。
       'ProjectThreadsController',
       'ProjectThreadsSliceRunnerAdapter',
+      // Conversation 切片组合现在只依赖 region / command 两个窄端口，
+      // 不再持有整个 ViewModel。
+      'AgentConversationSliceBinding',
     ];
 
     final production = <File>[

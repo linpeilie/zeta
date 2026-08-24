@@ -2,7 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_intent.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
-import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_binding.dart';
+import 'package:zeta/src/app/conversation_slice/agent_conversation_slice_composition.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 import 'agent_conversation_ui_state_fixtures.dart';
@@ -20,7 +20,10 @@ void main() {
         initialThread: agentPaneThread(id: 'thread-1', title: '会话一'),
       );
       addTearDown(viewModel.dispose);
-      final binding = AgentConversationSliceBinding(viewModel: viewModel);
+      final binding = AgentConversationSliceComposition(
+        regions: viewModel,
+        commands: viewModel,
+      );
       addTearDown(binding.dispose);
 
       await tester.pumpWidget(
@@ -59,7 +62,10 @@ void main() {
         initialThread: agentPaneThread(id: 'thread-1', title: '会话一'),
       );
       addTearDown(viewModel.dispose);
-      final binding = AgentConversationSliceBinding(viewModel: viewModel);
+      final binding = AgentConversationSliceComposition(
+        regions: viewModel,
+        commands: viewModel,
+      );
       addTearDown(binding.dispose);
 
       await tester.pumpWidget(
@@ -90,7 +96,10 @@ void main() {
         initialThread: agentPaneThread(id: 'thread-1', title: '会话一'),
       );
       addTearDown(viewModel.dispose);
-      final binding = AgentConversationSliceBinding(viewModel: viewModel);
+      final binding = AgentConversationSliceComposition(
+        regions: viewModel,
+        commands: viewModel,
+      );
       addTearDown(binding.dispose);
 
       await tester.pumpWidget(

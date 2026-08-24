@@ -14,7 +14,7 @@ import 'package:zeta/src/features/agent/application/agent_skills_catalog_control
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
-import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_binding.dart';
+import 'package:zeta/src/app/conversation_slice/agent_conversation_slice_composition.dart';
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
@@ -68,7 +68,7 @@ class AgentPaneTestApp extends StatefulWidget {
 }
 
 class _AgentPaneTestAppState extends State<AgentPaneTestApp> {
-  late final AgentConversationSliceBinding? _ownedBinding;
+  late final AgentConversationSliceComposition? _ownedBinding;
   late final AgentConversationSliceStoreRegistry _registry;
 
   @override
@@ -77,7 +77,10 @@ class _AgentPaneTestAppState extends State<AgentPaneTestApp> {
     final key = widget.viewModel.conversationBinding.key;
     _ownedBinding = widget.sliceStores.containsKey(key)
         ? null
-        : AgentConversationSliceBinding(viewModel: widget.viewModel);
+        : AgentConversationSliceComposition(
+            regions: widget.viewModel,
+            commands: widget.viewModel,
+          );
     _registry = AgentConversationSliceStoreRegistry()
       ..bind((requestedKey) {
         final injected = widget.sliceStores[requestedKey];

@@ -27,7 +27,7 @@ import 'package:zeta_ui/zeta_ui.dart';
 import '../../../testing/provider_settings_test_store.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
-import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_binding.dart';
+import 'package:zeta/src/app/conversation_slice/agent_conversation_slice_composition.dart';
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
 
 import '../../../testing/ide_test_harness.dart';
@@ -4249,7 +4249,10 @@ Future<void> pumpUntilAgentComposer(WidgetTester tester) async {
 AgentConversationSliceStoreRegistry _registerConversationSlice(
   AgentConversationViewModel viewModel,
 ) {
-  final binding = AgentConversationSliceBinding(viewModel: viewModel);
+  final binding = AgentConversationSliceComposition(
+    regions: viewModel,
+    commands: viewModel,
+  );
   addTearDown(binding.dispose);
   return AgentConversationSliceStoreRegistry()..bind((requestedKey) {
     if (requestedKey != viewModel.conversationBinding.key) {

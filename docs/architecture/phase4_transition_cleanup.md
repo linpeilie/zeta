@@ -2,7 +2,7 @@
 
 最后更新：2026-08-24
 
-状态：**P4-0 / P4-1 / P4-2 / P4-3 已关批（2026-08-24），下一批为 P4-4**
+状态：**P4-0 / P4-1 / P4-2 / P4-3 / P4-4 已关批（2026-08-24），下一批为 P4-5**
 
 > P4-0 的现状测绘、基线与安全网决策落在
 > [`.workflow/refactor/2026-08-24-phase4-transition-cleanup/`](../../.workflow/refactor/2026-08-24-phase4-transition-cleanup/)。
@@ -393,6 +393,28 @@ typed 回执方法上移进 `ProjectThreadsStateOwner` 端口，runner 因此不
 
 **关批**：`AgentConversationSliceBinding` 和旧 region UI 直连为 0；两 thread 隔离、
 UiEffect exactly-once、canonical signature、流式重建预算、审批/提问/Plan wire 行为全绿。
+
+**执行结论（2026-08-24，P4-4 已关批）**
+
+`AgentConversationSliceBinding` → `AgentConversationSliceComposition`
+（移入 `lib/src/app/conversation_slice/`），不再持有整个 ViewModel，改为只依赖两个
+窄端口：`AgentConversationRegionSource`（5 个 region 值 + 纯 Dart 订阅 + 作用域快照）
+与 `AgentConversationCommandPort`（23 个命令）。`AgentConversationViewModel`
+`implements` 这两个端口——**没有写一行实现代码**，签名本就逐一对齐，印证了
+"保留 ViewModel 作为中立命令/typed-listenable facade"的判断。
+
+> **定性更正**：这层**不是**一比一转发（不同于 P4-3b 的 adapter）。它含三处承重逻辑
+> ——帧预算合并（Phase 0）、两阶段作用域校验、fork 的 `null`→failed 翻译。
+> 因此本批的实质是**解耦而非删除**，三处逻辑代码一行未改。
+
+> **端口不得暴露 Flutter listenable。** 第一版端口把 `ValueListenable` 放进
+> application，被 `feature_layering_guard` 拦下；改放 presentation 后又被
+> `agent_region_subscription_guard` 拦下（等于给 UI 开第二条 region 直连路径）。
+> 最终改成纯 Dart 的 `addRegionListener` / `removeRegionListener`，端口回到
+> application 层。**全程未给任何守卫加 allowlist。**
+
+门禁 exit 0、根测试 2380 passed / 0 failed。
+⚠️ **§6 的独立 reviewer 复查未做**，该项未满足。
 
 ### P4-5：Shell ChangeNotifier 桥清零
 
