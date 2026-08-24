@@ -90,10 +90,6 @@ class ZetaDataPaths {
   /// 可丢弃、可重建的 Agent 模型目录缓存文件路径。
   String get agentModelCatalogCacheFilePath =>
       _joinPath(cacheDirectoryPath, 'agent_models_v1.json', _isWindows);
-
-  /// 一次性存储迁移完成标记文件路径。
-  String get migrationMarkerFilePath =>
-      _joinPath(stateDirectoryPath, 'migration_marker.json', _isWindows);
 }
 
 /// 按当前平台规则从环境变量中解析用户主目录。

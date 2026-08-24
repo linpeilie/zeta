@@ -9,15 +9,6 @@ import 'package:zeta/src/features/usage_statistics/data/legacy_usage_statistics_
 /// Provider 不透明分区索引的根版本。
 const int usageStatisticsPartitionIndexVersion = 4;
 
-/// 旧版 Zeta SharedPreferences 中的使用统计派生索引 key。
-const String usageStatisticsIndexStorageKey = 'usage_statistics.index.v2';
-
-/// 将 v2/v3/v4 输入宽容归一为仅含安全分区的 v4 根对象。
-///
-/// 供一次性 Zeta 存储迁移使用；正常读写仍通过 [UsageStatisticsPartitionStore]。
-Map<String, Object?> normalizeUsageStatisticsPartitionIndex(Object? value) =>
-    _encodeRoot(_decodeRoot(value));
-
 /// 单个用量 source 拥有的 JSON-safe 索引分区。
 final class UsageStatisticsIndexPartition {
   UsageStatisticsIndexPartition({

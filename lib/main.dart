@@ -35,12 +35,9 @@ void main() {
       );
       configureAppLogging(logDirectory: Directory(dataPaths.logsDirectoryPath));
       _installGlobalErrorLogging();
-      final bootstrap = await _prepareZetaStorage(
-        dataPaths,
-        firstSystemLanguage,
-      );
+      final bootstrap = await _prepareZetaStorage(dataPaths);
       if (!bootstrap.filePersistenceEnabled) {
-        // 避免迁移半途失败后，本次运行用空状态覆盖尚未迁入的旧偏好。
+        // 存储目录准备失败时，本次运行退回内存状态，避免继续写入不完整的文件存储。
         dataPaths = null;
       }
       await windowManager.ensureInitialized();
@@ -91,12 +88,8 @@ Future<AppearanceSettings> _loadLaunchAppearance(ZetaDataPaths? paths) async {
 
 Future<ZetaStartupBootstrapResult> _prepareZetaStorage(
   ZetaDataPaths paths,
-  AppLanguage firstSystemLanguage,
 ) async {
-  final result = await ZetaStartupBootstrap(
-    paths: paths,
-    firstSystemLanguage: firstSystemLanguage,
-  ).run();
+  final result = await ZetaStartupBootstrap(paths: paths).run();
   return result;
 }
 

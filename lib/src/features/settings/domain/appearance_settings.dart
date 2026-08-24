@@ -192,10 +192,6 @@ class AppearanceSettings {
     );
   }
 
-  static AppearanceSettings fromLegacyThemeMode(String? rawThemeMode) {
-    return AppearanceSettings(themeMode: _parseThemeMode(rawThemeMode));
-  }
-
   static ZetaThemeModePreference _parseThemeMode(Object? raw) {
     return switch (raw) {
       'light' => ZetaThemeModePreference.light,

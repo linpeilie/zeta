@@ -276,13 +276,6 @@ void main() {
       throwsArgumentError,
     );
   });
-
-  test('normalizes damaged input to an empty v4 root', () {
-    expect(normalizeUsageStatisticsPartitionIndex(null), <String, Object?>{
-      'version': usageStatisticsPartitionIndexVersion,
-      'providers': <String, Object?>{},
-    });
-  });
 }
 
 File _indexFile(Directory directory) =>

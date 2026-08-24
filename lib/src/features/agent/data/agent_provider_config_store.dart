@@ -6,9 +6,6 @@ import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_codec.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
-/// 全局 provider 配置的旧版 shared_preferences key。
-const String agentProviderConfigStorageKey = 'zeta.agent.providers.v1';
-
 /// 基于 JSON 文件的生产配置仓库。
 class FileAgentProviderConfigStore implements AgentProviderConfigStore {
   factory FileAgentProviderConfigStore({

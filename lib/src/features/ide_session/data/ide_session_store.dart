@@ -4,9 +4,6 @@ import 'package:zeta_foundation/zeta_foundation.dart';
 
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 
-/// IDE 会话状态的旧版 shared_preferences key。
-const String sessionStorageKey = 'zeta.ide.session.v1';
-
 abstract class IdeSessionStore {
   Future<IdeSessionState?> load();
 

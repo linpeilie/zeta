@@ -5,12 +5,6 @@ import 'package:zeta_foundation/zeta_foundation.dart';
 
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 
-/// 外观设置的旧版 shared_preferences key。
-const String appearanceSettingsStorageKey = 'zeta.appearance.settings.v1';
-
-/// 旧版仅主题模式时的存储 key。
-const String legacyThemeModeStorageKey = 'zeta.theme.mode.v1';
-
 /// 外观设置仓库。
 abstract class AppearanceSettingsStore {
   Future<AppearanceSettings> load();
