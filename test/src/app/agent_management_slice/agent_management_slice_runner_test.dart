@@ -38,7 +38,10 @@ void main() {
           defaultClaudeCodeProviderId: repository,
         },
         providerSettings: settingsPort,
-        runtimeListenable: runtimeSignal,
+        subscribeRuntime: (listener) {
+          runtimeSignal.addListener(listener);
+          return () => runtimeSignal.removeListener(listener);
+        },
         runtimeSnapshotProvider: () => (
           activeAgentId: defaultClaudeCodeProviderId,
           runtimeState: runtimeState,

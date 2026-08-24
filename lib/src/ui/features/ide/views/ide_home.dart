@@ -232,7 +232,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
     }
     unawaited(widget.desktopAttentionSliceComposition.initialize());
     _workbenchComposition = widget.workbenchCompositionFactory(
-      runtimeListenable: _shellController,
+      subscribeRuntime: _shellController.subscribeRuntimeChanges,
       runtimeSnapshotProvider: _managementRuntimeSnapshot,
     );
     _agentManagementComposition.store.addListener(

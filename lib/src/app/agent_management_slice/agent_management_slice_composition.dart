@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_runner.dart';
@@ -14,22 +13,32 @@ import 'package:zeta/src/features/agent_management/domain/agent_management_text_
 ///
 /// 它拥有 store/runner 与两个 ingress 监听；repository、settings store 和 runtime
 /// 均由上层拥有，关闭本对象时只摘监听并关闭页面 store。
+/// 运行时变化订阅端口：注册 listener，返回取消订阅的回调。
+typedef AgentManagementRuntimeSubscribe =
+    void Function() Function(void Function() listener);
+
 final class AgentManagementSliceComposition {
   AgentManagementSliceComposition._({
     required this.store,
     required this._providerSettings,
-    required this._runtimeListenable,
+    required this._subscribeRuntime,
     required this._runtimeSnapshotProvider,
   }) {
     _unsubscribeProviderSettings = _providerSettings.subscribe(
       _handleProviderSettingsChanged,
     );
-    _runtimeListenable.addListener(_handleRuntimeChanged);
+    _unsubscribeRuntime = _subscribeRuntime(_handleRuntimeChanged);
   }
 
   final AgentManagementSliceStore store;
   final AgentProviderSettingsPort _providerSettings;
-  final Listenable _runtimeListenable;
+
+  /// 运行时变化订阅；返回取消订阅的回调。
+  ///
+  /// 纯 Dart 函数端口，**不是** Flutter `Listenable`：Agent Management 不应该
+  /// 因为要感知运行时变化就依赖 Shell 的 Widget 通知机制。
+  final AgentManagementRuntimeSubscribe _subscribeRuntime;
+  late final void Function() _unsubscribeRuntime;
   final AgentManagementRuntimeSnapshotProvider _runtimeSnapshotProvider;
   late final void Function() _unsubscribeProviderSettings;
   bool _closed = false;
@@ -37,7 +46,7 @@ final class AgentManagementSliceComposition {
   factory AgentManagementSliceComposition.create({
     required Map<String, AgentCliManagementRepository> repositories,
     required AgentProviderSettingsPort providerSettings,
-    required Listenable runtimeListenable,
+    required AgentManagementRuntimeSubscribe subscribeRuntime,
     required AgentManagementRuntimeSnapshotProvider runtimeSnapshotProvider,
     required AgentManagementTextCatalog textCatalog,
   }) {
@@ -95,7 +104,7 @@ final class AgentManagementSliceComposition {
     return AgentManagementSliceComposition._(
       store: store,
       providerSettings: providerSettings,
-      runtimeListenable: runtimeListenable,
+      subscribeRuntime: subscribeRuntime,
       runtimeSnapshotProvider: runtimeSnapshotProvider,
     );
   }
@@ -106,7 +115,7 @@ final class AgentManagementSliceComposition {
     }
     _closed = true;
     _unsubscribeProviderSettings();
-    _runtimeListenable.removeListener(_handleRuntimeChanged);
+    _unsubscribeRuntime();
     store.close();
   }
 

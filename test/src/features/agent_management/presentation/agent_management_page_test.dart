@@ -457,7 +457,10 @@ class _ManagementHarness {
         AgentDefinition.codex.id: repository,
       },
       providerSettings: providerController,
-      runtimeListenable: runtimeSignal,
+      subscribeRuntime: (listener) {
+        runtimeSignal.addListener(listener);
+        return () => runtimeSignal.removeListener(listener);
+      },
       runtimeSnapshotProvider: () => (
         activeAgentId: defaultAgentProviderId,
         runtimeState: AgentRuntimeState.notRunning,
@@ -544,7 +547,10 @@ class _ClaudeManagementHarness {
         defaultClaudeCodeProviderId: repository,
       },
       providerSettings: providerController,
-      runtimeListenable: runtimeSignal,
+      subscribeRuntime: (listener) {
+        runtimeSignal.addListener(listener);
+        return () => runtimeSignal.removeListener(listener);
+      },
       runtimeSnapshotProvider: () => (
         activeAgentId: defaultClaudeCodeProviderId,
         runtimeState: AgentRuntimeState.notRunning,

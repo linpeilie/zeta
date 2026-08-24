@@ -4,6 +4,7 @@ import 'package:zeta/src/app/provider_settings_slice/provider_settings_slice_com
 import 'package:zeta/src/app/ide_session_slice/ide_session_slice_composition.dart';
 import 'package:zeta/src/app/settings_slice/settings_slice_composition.dart';
 import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_slice_composition.dart';
+import 'package:zeta/src/app/agent_management_slice/agent_management_slice_composition.dart';
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_runner.dart';
 import 'package:zeta/src/app/composition/ide_workbench_composition.dart';
 import 'package:zeta/src/app/composition/zeta_application_composition.dart';
@@ -254,14 +255,14 @@ class MainAppState extends State<MainApp>
   ///
   /// `IdeHome` 只补 Shell 派生的两个入参，因此 UI 层不再出现任何 Repository 类型。
   IdeWorkbenchComposition _createWorkbenchComposition({
-    required Listenable runtimeListenable,
+    required AgentManagementRuntimeSubscribe subscribeRuntime,
     required AgentManagementRuntimeSnapshotProvider runtimeSnapshotProvider,
   }) {
     return IdeWorkbenchComposition.create(
       modelCatalogRepository: _appComposition.agentModelCatalogRepository,
       runtimeRegistry: _agentProviderRuntimeRegistry,
       providerSettings: _requiredProviderSettingsComposition.store,
-      runtimeListenable: runtimeListenable,
+      subscribeRuntime: subscribeRuntime,
       runtimeSnapshotProvider: runtimeSnapshotProvider,
       textCatalog: _agentManagementTextCatalog,
     );

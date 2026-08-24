@@ -186,6 +186,15 @@ class IdeShellController extends ChangeNotifier {
       agentConversationWorkspaceStore.selectedEntry?.viewModel ??
       _bootstrapAgentEntry.viewModel;
 
+  /// 订阅 Shell 的运行时变化；返回取消订阅的回调。
+  ///
+  /// 纯 Dart 函数端口：调用方（Agent Management）因此不必把 Shell 当成
+  /// Flutter `Listenable`，也就不依赖它是不是 `ChangeNotifier`。
+  void Function() subscribeRuntimeChanges(void Function() listener) {
+    addListener(listener);
+    return () => removeListener(listener);
+  }
+
   List<String> get projects => workspaceSliceStore.state.projects;
 
   /// 当前应用级 Workbench 布局偏好。

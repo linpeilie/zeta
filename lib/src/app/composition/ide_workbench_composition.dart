@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_composition.dart';
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_runner.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
@@ -19,7 +17,7 @@ import 'package:zeta_agent_core/zeta_agent_core.dart';
 /// 这个工厂，`IdeHome` 只补两个 Shell 派生的入参。
 typedef IdeWorkbenchCompositionFactory =
     IdeWorkbenchComposition Function({
-      required Listenable runtimeListenable,
+      required AgentManagementRuntimeSubscribe subscribeRuntime,
       required AgentManagementRuntimeSnapshotProvider runtimeSnapshotProvider,
     });
 
@@ -40,7 +38,7 @@ final class IdeWorkbenchComposition {
     required AgentModelCatalogRepository modelCatalogRepository,
     required AgentProviderRuntimeRegistry runtimeRegistry,
     required AgentProviderSettingsPort providerSettings,
-    required Listenable runtimeListenable,
+    required AgentManagementRuntimeSubscribe subscribeRuntime,
     required AgentManagementRuntimeSnapshotProvider runtimeSnapshotProvider,
     required AgentManagementTextCatalog textCatalog,
   }) {
@@ -66,7 +64,7 @@ final class IdeWorkbenchComposition {
       AgentManagementSliceComposition.create(
         repositories: repositories,
         providerSettings: providerSettings,
-        runtimeListenable: runtimeListenable,
+        subscribeRuntime: subscribeRuntime,
         runtimeSnapshotProvider: runtimeSnapshotProvider,
         textCatalog: textCatalog,
       ),
