@@ -56,7 +56,10 @@ final class AgentUsagePanelSliceStore implements AgentUsagePanelOperations {
   AgentUsagePanelSliceState get state => _state;
   bool get isClosed => _closed;
 
-  @override
+  /// 组合层接线用的仓库出口。
+  ///
+  /// **不在 presentation 面上**——`*Operations` 已经不再暴露它；保留在具体 store 上
+  /// 是为了让组合测试能断言"接的是哪个 Repository 实现"。
   AgentUsagePanelRepository get repository => effectRunner.repository;
 
   @override

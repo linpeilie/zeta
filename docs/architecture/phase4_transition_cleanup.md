@@ -2,7 +2,7 @@
 
 最后更新：2026-08-24
 
-状态：**P4-0 / P4-1 / P4-2 全部已关批（2026-08-24），下一批为 P4-3a**
+状态：**P4-0 / P4-1 / P4-2 / P4-3a 已关批（2026-08-24），下一批为 P4-3b**
 
 > P4-0 的现状测绘、基线与安全网决策落在
 > [`.workflow/refactor/2026-08-24-phase4-transition-cleanup/`](../../.workflow/refactor/2026-08-24-phase4-transition-cleanup/)。
@@ -330,6 +330,24 @@ composition"），不是 P4-2 的遗留。
   `repository` getter；
 - presentation/UI 禁止 import、构造或调用 `*Repository`，app composition/runner/data 是唯一
   允许位置。
+
+**执行结论（2026-08-24，P4-3a 已关批）**
+
+`AgentProviderSettingsPort.modelCatalogRepository` 已删，换成 `recordModelCatalog` /
+`loadModelCatalog` 两个 typed 操作（后者顺带把 `source` 解析收进端口内部）。
+`lib/src/features/*/presentation` 与 `lib/src/ui` 的 `Repository` 引用**双双为 0**。
+门禁 exit 0、根测试 2380 passed / 0 failed。
+
+> **对"删除 store 上 repository getter"的一处收窄执行**：`UsageStatisticsOperations`
+> 与 `AgentUsagePanelOperations` 上的 getter 已删（那是 presentation 面）；
+> 但两个具体 `*SliceStore` 上的同名 getter **有意保留**——
+> `ide_shell_controller_test.dart:72,76` 用它断言组合层接的是哪个 Repository 实现，
+> 而 composition 的两个 runner 是私有字段，删掉就再无路径验证这条接线。
+> 原文的限定词是"**无必要的**"，这两个有必要。
+
+> `IdeHome` 最后 3 处 Repository 引用（只是转交参数）通过新增
+> `IdeWorkbenchCompositionFactory` 消除：app 层把 Repository / registry /
+> providerSettings / 文本目录闭包进工厂，UI 只补 Shell 派生的两个入参。
 
 **P4-3b Project Threads runner**
 

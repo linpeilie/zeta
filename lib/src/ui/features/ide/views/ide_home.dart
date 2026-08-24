@@ -9,6 +9,7 @@ import 'package:window_manager/window_manager.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_composition.dart';
 import 'package:zeta/src/app/composition/ide_workbench_composition.dart';
+import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_runner.dart';
 import 'package:zeta/src/app/app_constants.dart';
 import 'package:zeta/src/app/composition/zeta_state_snapshot.dart';
@@ -18,7 +19,6 @@ import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_wor
 import 'package:zeta/src/app/menu_action_bridge.dart';
 import 'package:zeta/src/app/shell/ide_shell_controller.dart';
 import 'package:zeta/src/ui/core/system_file_manager.dart';
-import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
@@ -78,7 +78,7 @@ class IdeHome extends ConsumerStatefulWidget {
     required this.desktopAttentionTargetActivatorRelay,
     required this.conversationSliceStoreRegistry,
     required this.conversationWorkspaceStoreRegistry,
-    required this.agentModelCatalogRepository,
+    required this.workbenchCompositionFactory,
     required this.agentProviderRuntimeRegistry,
     this.enableAgentUsageAutoRefresh = true,
     this.agentProviderAvailabilityLoader,
@@ -108,7 +108,9 @@ class IdeHome extends ConsumerStatefulWidget {
   final AgentConversationSliceStoreRegistry conversationSliceStoreRegistry;
   final AgentConversationWorkspaceStoreRegistry
   conversationWorkspaceStoreRegistry;
-  final AgentModelCatalogRepository agentModelCatalogRepository;
+
+  /// app 组合层预绑的工作台组合工厂；UI 不再看到任何 Repository。
+  final IdeWorkbenchCompositionFactory workbenchCompositionFactory;
   final AgentProviderRuntimeRegistry agentProviderRuntimeRegistry;
 
   /// 是否在启动及每个回合结束后通过事件消息刷新 Agent 用量。
@@ -229,13 +231,9 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
       windowManager.addListener(this);
     }
     unawaited(widget.desktopAttentionSliceComposition.initialize());
-    _workbenchComposition = IdeWorkbenchComposition.create(
-      modelCatalogRepository: widget.agentModelCatalogRepository,
-      runtimeRegistry: widget.agentProviderRuntimeRegistry,
-      providerSettings: widget.agentProviderSettingsPort,
+    _workbenchComposition = widget.workbenchCompositionFactory(
       runtimeListenable: _shellController,
       runtimeSnapshotProvider: _managementRuntimeSnapshot,
-      textCatalog: widget.agentManagementTextCatalog,
     );
     _agentManagementComposition.store.addListener(
       _handleAgentManagementChanged,

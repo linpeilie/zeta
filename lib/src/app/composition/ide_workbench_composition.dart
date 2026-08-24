@@ -12,6 +12,17 @@ import 'package:zeta/src/features/agent_management/domain/agent_management_model
 import 'package:zeta/src/features/agent_management/domain/agent_management_text_catalog.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
+/// 由 app 组合层预先绑好 data 依赖、只等 Shell 相关入参的工作台组合工厂。
+///
+/// `IdeHome` 需要在 `initState` 里拿到 Shell 之后才能建工作台组合，但它**不应该
+/// 为此看到 Repository**。所以 app 层把 Repository / registry / 文本目录都闭包进
+/// 这个工厂，`IdeHome` 只补两个 Shell 派生的入参。
+typedef IdeWorkbenchCompositionFactory =
+    IdeWorkbenchComposition Function({
+      required Listenable runtimeListenable,
+      required AgentManagementRuntimeSnapshotProvider runtimeSnapshotProvider,
+    });
+
 /// 工作台级 feature 组合的唯一构造点。
 ///
 /// `IdeHome` 只组合 Workbench slot 并消费 selector；**哪个 Provider 用哪个

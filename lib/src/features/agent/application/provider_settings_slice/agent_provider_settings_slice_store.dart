@@ -38,7 +38,8 @@ final class AgentProviderSettingsSliceStore
   static const String persistOperationScope = 'provider-settings/persist';
 
   final AgentProviderSettingsSliceEffectRunner effectRunner;
-  @override
+
+  /// 模型目录仓库；只在本 store 内部使用，不再经端口暴露给 presentation。
   final AgentModelCatalogRepository modelCatalogRepository;
   final AgentProviderStaticCapabilitiesFor staticCapabilitiesFor;
   final String Function(AgentProviderConfig config) _modelCatalogSourceFor;
@@ -100,6 +101,35 @@ final class AgentProviderSettingsSliceStore
   @override
   String modelCatalogSourceFor(AgentProviderConfig config) =>
       _modelCatalogSourceFor(config);
+
+  @override
+  Future<void> recordModelCatalog({
+    required AgentProviderConfig config,
+    required AgentModelList models,
+    required String source,
+  }) {
+    return modelCatalogRepository.record(
+      config: config,
+      models: models,
+      source: source,
+    );
+  }
+
+  @override
+  Future<AgentModelCatalogLoadResult> loadModelCatalog({
+    required AgentProviderConfig config,
+    required AgentModelCatalogLoader refreshLoader,
+    bool forceRefresh = false,
+    void Function(AgentModelCatalogSnapshot snapshot)? onCacheHit,
+  }) {
+    return modelCatalogRepository.load(
+      config: config,
+      source: modelCatalogSourceFor(config),
+      refreshLoader: refreshLoader,
+      forceRefresh: forceRefresh,
+      onCacheHit: onCacheHit,
+    );
+  }
 
   @override
   void Function() subscribe(void Function() listener) {

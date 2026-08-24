@@ -223,8 +223,36 @@ final class _SettingsPort extends ChangeNotifier
 
   AgentProviderSettings _settings;
 
-  @override
   final AgentModelCatalogRepository modelCatalogRepository;
+
+  @override
+  Future<void> recordModelCatalog({
+    required AgentProviderConfig config,
+    required AgentModelList models,
+    required String source,
+  }) {
+    return modelCatalogRepository.record(
+      config: config,
+      models: models,
+      source: source,
+    );
+  }
+
+  @override
+  Future<AgentModelCatalogLoadResult> loadModelCatalog({
+    required AgentProviderConfig config,
+    required AgentModelCatalogLoader refreshLoader,
+    bool forceRefresh = false,
+    void Function(AgentModelCatalogSnapshot snapshot)? onCacheHit,
+  }) {
+    return modelCatalogRepository.load(
+      config: config,
+      source: modelCatalogSourceFor(config),
+      refreshLoader: refreshLoader,
+      forceRefresh: forceRefresh,
+      onCacheHit: onCacheHit,
+    );
+  }
 
   @override
   AgentProviderSettings get settings => _settings;

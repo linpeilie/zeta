@@ -79,6 +79,37 @@ void main() {
     );
   });
 
+  test('presentation 与 UI 层不得触达 Repository', () {
+    // 异步 IO 只经 typed operation/effect runner；Repository 只在
+    // composition / runner / data 出现。
+    final presentationFiles = <File>[
+      for (final feature in Directory(
+        'lib/src/features',
+      ).listSync().whereType<Directory>())
+        ...(() {
+          final dir = Directory(
+            '${feature.path}${Platform.pathSeparator}presentation',
+          );
+          return dir.existsSync()
+              ? dir.listSync(recursive: true).whereType<File>()
+              : const <File>[];
+        })(),
+      ...Directory('lib/src/ui').listSync(recursive: true).whereType<File>(),
+    ].where((file) => file.path.endsWith('.dart')).toList();
+
+    final offenders = <String>[
+      for (final file in presentationFiles)
+        for (final line in _codeLinesOf(file))
+          if (line.contains('Repository')) '${file.path}: ${line.trim()}',
+    ];
+
+    expect(
+      offenders,
+      isEmpty,
+      reason: 'presentation / UI 不得引用 Repository：$offenders',
+    );
+  });
+
   test('已收口的 callback seam 不得在生产代码里复活', () {
     // 旧实现用 sessionLoader/sessionSaver 是否为 null 推断"这是不是测试宿主"，
     // 一处推断同时控制持久化、本机 CLI 探测与用量刷新三件事。

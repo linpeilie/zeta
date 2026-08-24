@@ -1,10 +1,7 @@
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
-import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_repository.dart';
 
 /// 完整使用统计页对 presentation 暴露的稳定操作面。
 abstract interface class UsageStatisticsOperations {
-  UsageStatisticsRepository get repository;
-
   UsageTimeRangePreset get timePreset;
   DateTime? get customStart;
   DateTime? get customEndInclusive;

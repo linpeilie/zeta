@@ -4,6 +4,8 @@ import 'package:zeta/src/app/provider_settings_slice/provider_settings_slice_com
 import 'package:zeta/src/app/ide_session_slice/ide_session_slice_composition.dart';
 import 'package:zeta/src/app/settings_slice/settings_slice_composition.dart';
 import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_slice_composition.dart';
+import 'package:zeta/src/app/agent_management_slice/agent_management_slice_runner.dart';
+import 'package:zeta/src/app/composition/ide_workbench_composition.dart';
 import 'package:zeta/src/app/composition/zeta_application_composition.dart';
 import 'package:zeta/src/app/composition/zeta_host_mode.dart';
 import 'package:file_selector/file_selector.dart';
@@ -245,6 +247,23 @@ class MainAppState extends State<MainApp>
           ? _agentProviderRuntimeRegistry.close
           : null,
       closePluginCatalog: pluginCatalog?.close,
+    );
+  }
+
+  /// 工作台组合工厂：把 Repository / registry / 文本目录闭包在 app 层。
+  ///
+  /// `IdeHome` 只补 Shell 派生的两个入参，因此 UI 层不再出现任何 Repository 类型。
+  IdeWorkbenchComposition _createWorkbenchComposition({
+    required Listenable runtimeListenable,
+    required AgentManagementRuntimeSnapshotProvider runtimeSnapshotProvider,
+  }) {
+    return IdeWorkbenchComposition.create(
+      modelCatalogRepository: _appComposition.agentModelCatalogRepository,
+      runtimeRegistry: _agentProviderRuntimeRegistry,
+      providerSettings: _requiredProviderSettingsComposition.store,
+      runtimeListenable: runtimeListenable,
+      runtimeSnapshotProvider: runtimeSnapshotProvider,
+      textCatalog: _agentManagementTextCatalog,
     );
   }
 
@@ -645,8 +664,7 @@ class MainAppState extends State<MainApp>
                           openPathInSystemFileManager,
                       usageStatisticsSliceComposition:
                           _requiredUsageStatisticsComposition,
-                      agentModelCatalogRepository:
-                          _appComposition.agentModelCatalogRepository,
+                      workbenchCompositionFactory: _createWorkbenchComposition,
                       turnContextStore: _appComposition.turnContextStore,
                       agentUiTextCatalog: _agentUiTextCatalog,
                       metrics: _metrics,

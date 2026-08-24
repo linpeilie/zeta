@@ -3,8 +3,6 @@ import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_mode
 
 /// 左栏 Agent 用量对 Shell/presentation 暴露的稳定操作面。
 abstract interface class AgentUsagePanelOperations {
-  AgentUsagePanelRepository get repository;
-
   List<AgentUsagePanelProviderState> get providers;
   String? get preferredProviderId;
   String? get selectedProviderId;

@@ -125,7 +125,7 @@ class AgentConversationViewModel {
       currentScope: _currentEffectScope,
       recordModelCatalog:
           ({required config, required models, required source}) =>
-              providerController.modelCatalogRepository.record(
+              providerController.recordModelCatalog(
                 config: config,
                 models: models,
                 source: source,
@@ -1257,9 +1257,8 @@ class AgentConversationViewModel {
       ),
     );
     try {
-      final result = await providerController.modelCatalogRepository.load(
+      final result = await providerController.loadModelCatalog(
         config: config,
-        source: providerController.modelCatalogSourceFor(config),
         forceRefresh: forceRefresh,
         onCacheHit: (snapshot) => _handleModelList(snapshot.models),
         // catalog：模型列表是「会话之前的信息」（04 §0.4：listModels → 全局实例）。
