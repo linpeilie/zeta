@@ -1,7 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
-
 import 'package:zeta/src/app/logging/app_logging.dart';
 import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_workspace_store.dart';
 import 'package:zeta/src/app/project_threads_slice/project_threads_slice_composition.dart';
@@ -37,7 +35,7 @@ typedef IdeShellStatusReporter = void Function(String message);
 ///
 /// 它承接项目打开、文件树状态、会话恢复/保存以及 Agent thread 选择同步，
 /// 让页面只负责三栏布局和 UI 事件转发。
-class IdeShellController extends ChangeNotifier {
+class IdeShellController {
   static const String _bootstrapProjectPath = '';
 
   IdeShellController({
@@ -52,8 +50,8 @@ class IdeShellController extends ChangeNotifier {
     WorkspaceFileIndexController? workspaceFileIndexController,
     AgentProviderRuntimeRegistry? agentProviderRuntimeRegistry,
     AgentFrameScheduler Function()? agentUiFrameSchedulerFactory,
-    ValueChanged<AgentTurnTerminalSignal>? onAgentTurnTerminal,
-    ValueChanged<AgentWorkspaceAttention>? onAgentAttention,
+    void Function(AgentTurnTerminalSignal)? onAgentTurnTerminal,
+    void Function(AgentWorkspaceAttention)? onAgentAttention,
     this._onAgentUsageProviderRestored,
     AgentTurnContextStore? turnContextStore,
     this.agentUiTextCatalog = const FallbackAgentUiTextCatalog(),
@@ -142,7 +140,7 @@ class IdeShellController extends ChangeNotifier {
   final IdeDirectoryPicker _directoryPicker;
   final ProjectLocationOpener _projectLocationOpener;
   final IdeShellStatusReporter? _statusReporter;
-  final ValueChanged<String?>? _onAgentUsageProviderRestored;
+  final void Function(String?)? _onAgentUsageProviderRestored;
   final IdeSessionSliceOperations ideSessionOperations;
   final DateTime Function() _now;
 
@@ -193,6 +191,20 @@ class IdeShellController extends ChangeNotifier {
   void Function() subscribeRuntimeChanges(void Function() listener) {
     addListener(listener);
     return () => removeListener(listener);
+  }
+
+  /// Shell 自维护的 listener 列表（纯 Dart）。
+  ///
+  /// 不再继承 `ChangeNotifier`：Shell 是跨 feature 的 workflow 协调器，
+  /// 不该因为要通知变化就变成一个 Flutter Widget 通知源（G6 / 目标架构 §12.5）。
+  final List<void Function()> _stateListeners = <void Function()>[];
+
+  void addListener(void Function() listener) {
+    _stateListeners.add(listener);
+  }
+
+  void removeListener(void Function() listener) {
+    _stateListeners.remove(listener);
   }
 
   List<String> get projects => workspaceSliceStore.state.projects;
@@ -1157,7 +1169,10 @@ class IdeShellController extends ChangeNotifier {
 
   void _notifyStateChanged() {
     if (!_isDisposed) {
-      notifyListeners();
+      // 复制一份再遍历：listener 内部可能同步增删订阅。
+      for (final listener in List<void Function()>.of(_stateListeners)) {
+        listener();
+      }
     }
   }
 
@@ -1171,7 +1186,6 @@ class IdeShellController extends ChangeNotifier {
     _notifyStateChanged();
   }
 
-  @override
   void dispose() {
     if (_isDisposed) {
       return;
@@ -1198,6 +1212,6 @@ class IdeShellController extends ChangeNotifier {
     if (_ownsAgentProviderRuntimeRegistry) {
       unawaited(agentProviderRuntimeRegistry.close());
     }
-    super.dispose();
+    _stateListeners.clear();
   }
 }

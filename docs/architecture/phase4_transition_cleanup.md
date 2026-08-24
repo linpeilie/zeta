@@ -2,7 +2,7 @@
 
 最后更新：2026-08-24
 
-状态：**P4-0 / P4-1 / P4-2 / P4-3 / P4-4 已关批（2026-08-24），下一批为 P4-5**
+状态：**P4-0 / P4-1 / P4-2 / P4-3 / P4-4 已关批；P4-5a / P4-5b 已完成，P4-5 未关批（2026-08-24）**
 
 > P4-0 的现状测绘、基线与安全网决策落在
 > [`.workflow/refactor/2026-08-24-phase4-transition-cleanup/`](../../.workflow/refactor/2026-08-24-phase4-transition-cleanup/)。
@@ -433,6 +433,30 @@ UiEffect exactly-once、canonical signature、流式重建预算、审批/提问
 **关批**：`lib/src/app/shell` 的 `ChangeNotifier|notifyListeners` 为 0；`IdeHome` 无 Shell
 全量 listener/setState；Shell 测试改为命令结果和 feature state 断言，Workbench 保活/恢复
 行为不变。
+
+**执行结论（2026-08-24，P4-5 部分完成、**尚未关批**）**
+
+按计划书自身的 bullet 结构拆成 5a / 5b / 5c：
+
+- **P4-5a（完成）**：Agent Management 的 runtime 订阅从 Flutter `Listenable` 换成纯
+  Dart 函数端口 `AgentManagementRuntimeSubscribe`。
+- **P4-5b（完成一半）**：`IdeShellController` 不再继承 `ChangeNotifier`，改为自维护
+  纯 Dart listener 列表，并删除 `flutter/foundation` import。
+  **`lib/src/app/shell` 的 `ChangeNotifier|notifyListeners` 实测为 0。**
+- **P4-5c（未做）**：Shell 构造函数仍在创建 feature composition。
+
+> ⛔ **关批标准的第二条「`IdeHome` 无 Shell 全量 listener/setState」未达成，
+> 且已查明它有前置条件。** Shell 内部只订阅 4 个源，却有 **19 处直接调用**
+> `_notifyStateChanged()`——那些来自 Shell 自己的 workflow 编排（项目打开进度、
+> 会话恢复阶段、命令级错误上报），**目前不在任何 slice 里**。
+> 因此把 `IdeHome` 改成"逐个订阅 slice store"**不是等价变换**，会静默丢掉这 19 类
+> UI 更新（多为进度/错误态，自动化测试未必抓得到）。
+>
+> **前置条件**：先把 Shell 的编排状态收进一个 slice。那是一次独立的状态建模改动，
+> 不在 P4-5 既定范围内，不应混在本批硬做。
+>
+> 本条也说明计划书 §2.2 把「Shell 是 ChangeNotifier」与「IdeHome 全量 rebuild」
+> 当成了同一件事：前者是**依赖问题**（已解决），后者是**状态归属问题**（未解决）。
 
 ### P4-6：测试接缝、永久守卫与文档权威化
 

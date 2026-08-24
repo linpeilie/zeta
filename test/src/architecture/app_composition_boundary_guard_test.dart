@@ -110,6 +110,31 @@ void main() {
     );
   });
 
+  test('Shell 不得重新变成 Flutter 通知源', () {
+    // Shell 是跨 feature 的 workflow 协调器，不该因为要通知变化就继承
+    // ChangeNotifier——那会让它同时成为 Widget 通知源，把整页 rebuild 绑在
+    // 每一次 workflow 状态变化上（G6 / 目标架构 §12.5）。
+    final shellFiles = Directory('lib/src/app/shell')
+        .listSync(recursive: true)
+        .whereType<File>()
+        .where((file) => file.path.endsWith('.dart'));
+
+    final offenders = <String>[
+      for (final file in shellFiles)
+        for (final line in _codeLinesOf(file))
+          if (line.contains('extends ChangeNotifier') ||
+              line.contains('notifyListeners'))
+            '${file.path}: ${line.trim()}',
+    ];
+
+    expect(
+      offenders,
+      isEmpty,
+      reason:
+          'lib/src/app/shell 不得出现 ChangeNotifier / notifyListeners：$offenders',
+    );
+  });
+
   test('已收口的 callback seam 不得在生产代码里复活', () {
     // 旧实现用 sessionLoader/sessionSaver 是否为 null 推断"这是不是测试宿主"，
     // 一处推断同时控制持久化、本机 CLI 探测与用量刷新三件事。
