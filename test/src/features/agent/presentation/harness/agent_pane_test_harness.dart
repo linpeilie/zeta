@@ -30,7 +30,7 @@ import 'package:zeta_ui/zeta_ui.dart';
 import '../../../../testing/provider_settings_test_store.dart';
 
 import '../../../../testing/agent_provider_stub_base.dart';
-import '../../../../testing/legacy_bundle_factory_mixin.dart';
+import '../../../../testing/test_agent_provider_bundle_factory.dart';
 import '../../../../testing/agent_conversation_binding_test_harness.dart';
 
 class AgentPaneTestApp extends StatefulWidget {
@@ -439,7 +439,7 @@ void expectMarkdownWidgetDefaults(MarkdownWidget widget) {
   expect(widget.contextMenuBuilder, isNotNull);
 }
 
-class AgentPaneFakeProviderFactory with LegacyBundleFactoryMixin {
+class AgentPaneFakeProviderFactory with TestAgentProviderBundleFactory {
   AgentPaneFakeProviderFactory(this.provider);
 
   final AgentPaneFakeProvider provider;

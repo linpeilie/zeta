@@ -291,7 +291,7 @@ Registry acquire 必须显式选择 global/session scope；使用统计面板只
    `exclusive`；不要在持有资源键时再次调度同键操作。
 10. 添加单元测试覆盖初始化、session、turn、权限请求、capability gate、生命周期门控、
     调度顺序和错误映射；已迁移能力域至少补 `AgentProviderBundle` 端口一致性测试，并
-    回归 `AgentConversationViewModel` / `ProjectThreadsController` 的使用路径。
+    回归 `AgentConversationViewModel` / `ProjectThreadsSliceRunner` 的使用路径。
 11. 为流式 Provider 增加 adapter/reducer 序列测试；若同时支持 history/replay，必须使用
     独立 reducer 实例，并用完整 canonical signature regression 比较相对顺序。Store 只按
     entryId/tool id dumb merge，新增 Provider 不得修改 Store 来补叙事规则。

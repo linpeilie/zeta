@@ -81,7 +81,8 @@ main -> app -> presentation/application -> domain
 
 - 纯状态容器只暴露不可变状态和同步 intent 入口，例如
   `ProjectThreadsSliceStore`。
-- 应用控制器收敛分页、恢复、缓存、provider 调用和竞态处理，例如 `ProjectThreadsController`。
+- effect runner 收敛分页、恢复、缓存、provider 调用和竞态处理，例如 `ProjectThreadsSliceRunner`；
+  状态由对应的 MVI store 独占，runner 只经 typed ingress 回流。
 - 高吞吐 UI 使用结构相等的不可变 state slice 与分区 `ValueListenable`，不得用整数
   version/revision 作为主要刷新协议。Timeline 的 live turn 保留稳定对象和增量 mutation，
   不得因不可变状态迁移在每个 delta 复制完整历史。
@@ -179,7 +180,7 @@ main -> app -> presentation/application -> domain
 - bundle 端口为空时，对应 capability 必须不可用；不支持功能不得靠 no-op 伪装成“已实现”。
 - 已绑定真实 thread 的 `AgentConversationBinding` 不得原地改绑到另一个 thread。fork
   返回 `AgentSession` 后必须走 Shell 的新 thread 通用流程：由
-  `ProjectThreadsController.registerSession` 登记列表，再通过 `selectProjectThread` 创建或
+  `ProjectThreadsSliceRunner.registerSession` 登记列表，再通过 `selectProjectThread` 创建或
   复用独立 Workspace Entry/Binding 并选中；“编辑后重试”最后才由新 ViewModel 发送。
   源 ViewModel 只发起 fork，不得继续在源 Binding 上执行新 thread 的 rename/send。
 - 启动时机由 `AgentProviderBootstrapPolicy` 描述；需要项目目录的 provider 不得在获得

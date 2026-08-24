@@ -14,7 +14,7 @@ import 'package:zeta/src/features/project_threads/domain/project_threads_session
 import '../../../testing/provider_settings_test_store.dart';
 
 import '../../../testing/agent_provider_stub_base.dart';
-import '../../../testing/legacy_bundle_factory_mixin.dart';
+import '../../../testing/test_agent_provider_bundle_factory.dart';
 
 void main() {
   group('ProjectThreadsSliceRunner', () {
@@ -1332,7 +1332,7 @@ Future<void> _flushAsync() async {
   await Future<void>.delayed(Duration.zero);
 }
 
-class _FakeAgentProviderFactory with LegacyBundleFactoryMixin {
+class _FakeAgentProviderFactory with TestAgentProviderBundleFactory {
   _FakeAgentProviderFactory(this.provider);
 
   final _FakeAgentProvider provider;
@@ -1341,7 +1341,7 @@ class _FakeAgentProviderFactory with LegacyBundleFactoryMixin {
   Object create(AgentProviderConfig config) => provider;
 }
 
-class _MultiAgentProviderFactory with LegacyBundleFactoryMixin {
+class _MultiAgentProviderFactory with TestAgentProviderBundleFactory {
   _MultiAgentProviderFactory({
     required this.codex,
     required this.grok,

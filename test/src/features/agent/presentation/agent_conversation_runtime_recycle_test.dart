@@ -10,7 +10,7 @@ import '../../../testing/provider_settings_test_store.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
 
 import '../../../testing/fake_agent_frame_scheduler.dart';
-import '../../../testing/legacy_bundle_factory_mixin.dart';
+import '../../../testing/test_agent_provider_bundle_factory.dart';
 import '../../../testing/agent_conversation_binding_test_harness.dart';
 import 'harness/agent_pane_test_harness.dart';
 
@@ -133,7 +133,7 @@ final class _RecycleHarness {
 
 /// 与 [AgentPaneFakeProviderFactory] 不同：每次 create 返回**新**实例，
 /// 这样销毁旧实例后重建才能被观测到。
-final class _MultiInstanceProviderFactory with LegacyBundleFactoryMixin {
+final class _MultiInstanceProviderFactory with TestAgentProviderBundleFactory {
   final List<_RecycleProvider> created = <_RecycleProvider>[];
 
   @override

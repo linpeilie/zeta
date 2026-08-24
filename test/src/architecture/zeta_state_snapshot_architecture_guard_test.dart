@@ -16,24 +16,31 @@ void main() {
     expect(snapshot, isNot(contains('toJson(')));
     expect(snapshot, isNot(contains('encode(')));
 
-    for (final path in const <String>[
-      'lib/src/app/app.dart',
-      'lib/src/ui/features/ide/views/ide_home.dart',
-    ]) {
-      final source = File(path).readAsStringSync();
-      expect(
-        source,
-        isNot(
-          matches(
-            RegExp(
-              r'(ref\.watch|ref\.listen|subscribe)\s*\([^;]*ZetaStateSnapshot',
-              multiLine: true,
-            ),
-          ),
-        ),
-        reason: path,
-      );
-    }
+    // P4-6：覆盖面从两个文件扩到**全部生产 Dart 文件**。
+    // 只盯 app.dart / ide_home.dart 的话，任何新文件都能悄悄把 root snapshot
+    // 变成可订阅的状态源。
+    final subscribePattern = RegExp(
+      r'(ref\.watch|ref\.listen|subscribe)\s*\([^;]*ZetaStateSnapshot',
+      multiLine: true,
+    );
+    final production = Directory('lib')
+        .listSync(recursive: true)
+        .whereType<File>()
+        .where((file) => file.path.endsWith('.dart'))
+        .toList(growable: false);
+
+    expect(production, isNotEmpty, reason: '扫不到生产文件说明守卫本身失效了');
+
+    final offenders = <String>[
+      for (final file in production)
+        if (subscribePattern.hasMatch(file.readAsStringSync())) file.path,
+    ];
+
+    expect(
+      offenders,
+      isEmpty,
+      reason: 'root snapshot 只能按需同步读取，不得被订阅：$offenders',
+    );
   });
 
   test('root conversation and management projections exclude body fields', () {

@@ -3,13 +3,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 
 import '../../../testing/ide_test_harness.dart';
-import '../../../testing/legacy_bundle_factory_mixin.dart';
+import '../../../testing/test_agent_provider_bundle_factory.dart';
 
 void main() {
   group('native test bundle assembly', () {
     test('FakeAgentProvider publishes the ports it implements', () {
       final provider = FakeAgentProvider();
-      final bundle = nativeTestBundle(provider);
+      final bundle = testAgentProviderBundle(provider);
 
       expect(identical(bundle.runtime, provider), isTrue);
       expect(identical(bundle.conversation, provider), isTrue);

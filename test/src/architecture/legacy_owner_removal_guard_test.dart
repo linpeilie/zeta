@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('batch 5 legacy owners and Conversation fallback stay deleted', () {
+  test('已删除的 legacy owner 与 Conversation fallback 不得复活', () {
     expect(
       File(
         'lib/src/features/desktop_notifications/application/'

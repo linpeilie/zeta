@@ -2,18 +2,18 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-/// 阶段 0：Package 候选依赖图守卫。
+/// 内部 Package 依赖图守卫（**零容忍，无 allowlist**）。
 ///
-/// 目标架构会把当前单一 Flutter Package 拆成
 /// `zeta_foundation` / `zeta_plugin_kernel` / `zeta_agent_core` /
-/// `zeta_agent_providers` / `zeta_ui` 加根 app。阶段 0 **不移动任何文件**，
-/// 只把「文件属于哪个候选 Package」和「允许的依赖方向」写成可执行断言：
+/// `zeta_agent_providers` / `zeta_ui` 与根 app 之间的依赖方向是单向 DAG。
+/// 本守卫断言三件事：
 ///
-/// - 现有越界依赖冻结在 [_knownEdgeViolations] / [_knownExternalViolations]；
-/// - 新增越界会直接失败；
-/// - 修好一条就必须从清单里删掉一条（清单不允许有过期条目）。
+/// - 依赖方向只能沿 [_allowedEdges]；
+/// - 纯 Dart 层不得引入 Flutter / Riverpod / `dart:io`；
+/// - 依赖图无环。
 ///
-/// 这样 Phase 1 的物理拆包有一份可燃尽的清单，而不是搬完文件才发现循环依赖。
+/// 曾经的燃尽清单（`_knownEdgeViolations` / `_knownExternalViolations`）在
+/// Phase 4 P4-6 删除——它们早已为空，留着只会给"先违规再登记"开口子。
 void main() {
   final files = <String>[
     ..._dartFilesUnder('lib'),
@@ -46,20 +46,12 @@ void main() {
       }
     }
 
-    final unexpected = violations.difference(_knownEdgeViolations);
     expect(
-      unexpected,
+      violations,
       isEmpty,
       reason:
-          '新增了候选 Package 反向/越级依赖。要么改依赖方向，'
-          '要么在架构评审后显式登记：\n${unexpected.join('\n')}',
-    );
-
-    final stale = _knownEdgeViolations.difference(violations);
-    expect(
-      stale,
-      isEmpty,
-      reason: '这些越界依赖已经消失，请从 _knownEdgeViolations 中删除：\n${stale.join('\n')}',
+          '内部 Package 出现反向/越级依赖，必须改依赖方向（不接受登记豁免）：'
+          '\n${violations.join('\n')}',
     );
   });
 
@@ -80,26 +72,55 @@ void main() {
       }
     }
 
-    final unexpected = violations.difference(_knownExternalViolations);
     expect(
-      unexpected,
+      violations,
       isEmpty,
       reason:
-          '候选 Package 引入了不允许的外部依赖（纯 Dart 层不得依赖 Flutter/Riverpod/dart:io）：'
-          '\n${unexpected.join('\n')}',
-    );
-
-    final stale = _knownExternalViolations.difference(violations);
-    expect(
-      stale,
-      isEmpty,
-      reason:
-          '这些外部依赖越界已经消失，请从 _knownExternalViolations 中删除：'
-          '\n${stale.join('\n')}',
+          '内部 Package 引入了不允许的外部依赖（纯 Dart 层不得依赖 Flutter/Riverpod/dart:io）：'
+          '\n${violations.join('\n')}',
     );
   });
 
-  test('候选依赖图（已知违规除外）无环', () {
+  test('内部 Package 的 manifest 依赖与 DAG 精确一致', () {
+    for (final entry in _manifestInternalDependencies.entries) {
+      final manifest = File('packages/${entry.key}/pubspec.yaml');
+      expect(
+        manifest.existsSync(),
+        isTrue,
+        reason: '扫不到 ${entry.key} 的 pubspec.yaml，守卫本身失效了',
+      );
+
+      final lines = manifest.readAsLinesSync();
+      final declared = <String>{};
+      var inDependencies = false;
+      for (final line in lines) {
+        if (line.startsWith('dependencies:')) {
+          inDependencies = true;
+          continue;
+        }
+        if (line.isNotEmpty && !line.startsWith(' ') && !line.startsWith('#')) {
+          inDependencies = false;
+        }
+        if (!inDependencies) {
+          continue;
+        }
+        final match = RegExp(r'^  (zeta_[a-z_]+):').firstMatch(line);
+        if (match != null) {
+          declared.add(match.group(1)!);
+        }
+      }
+
+      expect(
+        declared,
+        equals(entry.value),
+        reason:
+            '${entry.key} 的 manifest 内部依赖与允许的 DAG 不一致。'
+            'manifest 多出的依赖迟早会变成代码里的越界 import。',
+      );
+    }
+  });
+
+  test('内部 Package 依赖图无环', () {
     final edges = <String, Set<String>>{
       for (final package in _candidatePackages) package: <String>{},
     };
@@ -107,8 +128,7 @@ void main() {
       final source = _candidatePackageFor(path);
       for (final import in _zetaImports(File(path).readAsStringSync())) {
         final target = _candidatePackageFor(import);
-        if (source == target ||
-            _knownEdgeViolations.contains('$path -> $import')) {
+        if (source == target) {
           continue;
         }
         edges[source]!.add(target);
@@ -462,16 +482,8 @@ const Set<String> _platformNeutralCoreLibraries = <String>{
   'dart:typed_data',
 };
 
-/// Phase 1 的燃尽清单：现存的候选 Package 反向依赖。
-const Set<String> _knownEdgeViolations = <String>{};
-
 /// Phase 1 的燃尽清单：现存的外部依赖越界。
 ///
-/// 2026-08-23 清零：core/ 已只留纯契约与纯逻辑——IO 实现分别下沉到
-/// `lib/src/app/storage`（AtomicTextFile / 目录创建）、`lib/src/app/logging`
-/// （宿主日志实现）、`lib/src/ui/core`（系统文件管理器宿主封装）；
-/// `ZetaDataPaths` / 脱敏 / 目录过滤改为注入参数。新增条目必须先过架构评审。
-const Set<String> _knownExternalViolations = <String>{};
 
 /// 把仓库内路径映射到候选 Package。
 ///
@@ -583,3 +595,20 @@ final RegExp _importPattern = RegExp(
 );
 
 String _posix(String path) => path.replaceAll(r'\', '/');
+
+/// 各内部 Package 的 `pubspec.yaml` 里**允许出现的 zeta 内部依赖**（精确匹配）。
+///
+/// manifest 与代码依赖必须一致：代码里改对了方向、manifest 却还留着旧依赖，
+/// 下一次有人 import 就会"合法地"违反 DAG。
+const Map<String, Set<String>> _manifestInternalDependencies =
+    <String, Set<String>>{
+      'zeta_foundation': <String>{},
+      'zeta_plugin_kernel': <String>{'zeta_foundation'},
+      'zeta_agent_core': <String>{'zeta_foundation'},
+      'zeta_agent_providers': <String>{
+        'zeta_agent_core',
+        'zeta_foundation',
+        'zeta_plugin_kernel',
+      },
+      'zeta_ui': <String>{'zeta_foundation'},
+    };

@@ -57,9 +57,9 @@ IdeShellController
   -> AgentProviderSettingsController
   -> AgentConversationWorkspaceStore（entry / 选择 / project home / project→thread 唯一 owner）
     -> 每个 runtime entry 持有 ConversationBinding lease
-    -> AgentConversationSliceBinding（每个 entry 必建，未知 BindingKey fail-closed）
+    -> AgentConversationSliceComposition（每个 entry 必建，未知 BindingKey fail-closed）
     -> AgentConversationViewModel -> 固定 Binding（不持有 Provider lease/scope/pin）
-  -> ProjectThreadsController
+  -> ProjectThreadsSliceRunner
 
 AgentConversationViewModel
   -> AgentEventPipeline（事件资源唯一所有者）
@@ -99,7 +99,7 @@ AgentProviderRuntimeRegistry
     -> GrokAcpAgentProvider -> JsonRpcPeer -> grok agent stdio
     -> ClaudeCodeAgentProvider -> StreamJsonPeer -> claude stream-json stdio
 
-ProjectThreadsController
+ProjectThreadsSliceRunner
   -> AgentProviderBundle
     -> AgentThreadCatalogPort? / AgentThreadNamingPort? / AgentThreadArchivalPort?
     -> AgentThreadDeletionPort? / AgentThreadBranchingPort?
@@ -369,7 +369,7 @@ Application / Presentation 只以 `AgentProviderBundle` 的中立端口作为能
 - 响应权限请求；他端已解决的审批通过事件撤销本地卡片。
 - 推送状态、消息、推理/计划流、工具调用、文件变更快照、审批与系统提示事件。
 
-当前 `AgentConversationViewModel` 与 `ProjectThreadsController` 通过 bundle
+当前 `AgentConversationViewModel` 与 `ProjectThreadsSliceRunner` 通过 bundle
 消费上述端口；Agent 管理页中的模型探测也统一走 `bundle.modelCatalog`。应用层不再
 需要通过 provider kind 或运行时类型判断决定这些功能域。
 
@@ -558,7 +558,7 @@ result。认证证据与 initialize 可用性独立，CLI 仍可能维护自身�
 - thread 生命周期管理（重命名/归档/删除/分叉/按历史 turn 创建分支/压缩）。
 - `AgentConversationViewModel` 的会话、历史、steer、权限响应、独立用户提问响应、
   Guardian 放行、模型目录与计划审批路由。
-- `ProjectThreadsController` 的列表、重命名、归档、删除与分叉。
+- `ProjectThreadsSliceRunner` 的列表、重命名、归档、删除与分叉。
 - Codex / Grok / Claude Code 的 bundle 端口一致性契约测试。
 - Codex Default / Plan 运行时目录、逐 turn mode 快照、settings/history 回写与
   Composer 紧凑选择器；不支持 mode 的 Provider 保持原布局和普通发送路径。

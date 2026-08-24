@@ -1,5 +1,11 @@
 # 阶段 0：测试与可观测性基线
 
+> ⚠️ **历史迁移证据（Phase 4 已完成）。**
+> 本文记录的是当时的迁移过程与决策，**不描述当前架构**——其中提到的过渡层、
+> 燃尽清单与中间态符号多数已在 Phase 4 删除。
+> 当前架构以 [`AGENTS.md`](../../AGENTS.md) 与 [`overview.md`](overview.md) 为准；
+> Phase 4 的删除边界见 [`phase4_transition_cleanup.md`](phase4_transition_cleanup.md)。
+
 最后更新：2026-08-24
 
 状态：阶段 0 已落地。对应 [目标架构 §14 Phase 0](./target_architecture_riverpod_mvi_plugins_packages.md#phase-0增加测试与可观测性)。

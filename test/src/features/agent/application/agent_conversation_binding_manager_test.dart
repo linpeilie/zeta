@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
-import '../../../testing/legacy_bundle_factory_mixin.dart';
+import '../../../testing/test_agent_provider_bundle_factory.dart';
 import '../presentation/harness/agent_pane_test_harness.dart';
 
 void main() {
@@ -488,7 +488,7 @@ void main() {
   });
 }
 
-final class _BindingProviderFactory with LegacyBundleFactoryMixin {
+final class _BindingProviderFactory with TestAgentProviderBundleFactory {
   final List<_BindingProvider> providers = <_BindingProvider>[];
   bool failNextInitialize = false;
 

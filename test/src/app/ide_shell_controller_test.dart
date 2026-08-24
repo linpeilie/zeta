@@ -22,7 +22,7 @@ import 'package:zeta/src/features/usage_statistics/domain/fallback_usage_statist
 
 import '../testing/agent_event_storm_fixture.dart';
 import '../testing/agent_provider_stub_base.dart';
-import '../testing/legacy_bundle_factory_mixin.dart';
+import '../testing/test_agent_provider_bundle_factory.dart';
 import '../testing/fake_agent_frame_scheduler.dart';
 import '../testing/provider_settings_test_store.dart';
 
@@ -1591,7 +1591,7 @@ final class _DirectoryTrackingUsageRepository
   }
 }
 
-class _RecordingAgentProviderFactory with LegacyBundleFactoryMixin {
+class _RecordingAgentProviderFactory with TestAgentProviderBundleFactory {
   _RecordingAgentProviderFactory(this.backendsById);
 
   final Map<String, _ProviderBackend> backendsById;

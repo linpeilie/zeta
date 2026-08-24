@@ -12,7 +12,7 @@ import 'package:zeta/src/features/agent/presentation/agent_conversation_view_mod
 import '../../../testing/agent_conversation_binding_test_harness.dart';
 import '../../../testing/agent_provider_stub_base.dart';
 import '../../../testing/fake_agent_frame_scheduler.dart';
-import '../../../testing/legacy_bundle_factory_mixin.dart';
+import '../../../testing/test_agent_provider_bundle_factory.dart';
 
 /// 阶段 0 行为快照：发送 / 取消 / 审批的真实 wire 序列与双会话隔离。
 ///
@@ -206,7 +206,7 @@ Future<void> _settle() async {
   }
 }
 
-class _RecordingProviderFactory with LegacyBundleFactoryMixin {
+class _RecordingProviderFactory with TestAgentProviderBundleFactory {
   _RecordingProviderFactory(this.provider);
 
   final _RecordingProvider provider;

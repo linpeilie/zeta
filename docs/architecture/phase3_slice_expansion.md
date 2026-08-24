@@ -2,6 +2,12 @@
 
 # Phase 3 开工文档：Feature 切片扩展迁移
 
+> ⚠️ **历史迁移证据（Phase 4 已完成）。**
+> 本文记录的是当时的迁移过程与决策，**不描述当前架构**——其中提到的过渡层、
+> 燃尽清单与中间态符号多数已在 Phase 4 删除。
+> 当前架构以 [`AGENTS.md`](../../AGENTS.md) 与 [`overview.md`](overview.md) 为准；
+> Phase 4 的删除边界见 [`phase4_transition_cleanup.md`](phase4_transition_cleanup.md)。
+
 最后更新：2026-08-24
 
 状态：第 1–6 批代码均已关批；未形成的 14 天/平台阶段证据经 2026-08-24 显式风险接受

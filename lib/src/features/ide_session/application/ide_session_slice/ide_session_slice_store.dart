@@ -61,6 +61,7 @@ final class IdeSessionSliceStore implements IdeSessionSliceOperations {
     _listeners.remove(listener);
   }
 
+  @override
   void Function() subscribe(void Function() listener) {
     addListener(listener);
     return () => removeListener(listener);

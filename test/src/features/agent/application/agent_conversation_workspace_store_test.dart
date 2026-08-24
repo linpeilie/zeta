@@ -15,7 +15,7 @@ import 'package:zeta/src/features/agent/application/provider_settings_slice/agen
 import '../../../testing/provider_settings_test_store.dart';
 
 import '../../../testing/fake_agent_frame_scheduler.dart';
-import '../../../testing/legacy_bundle_factory_mixin.dart';
+import '../../../testing/test_agent_provider_bundle_factory.dart';
 import '../../../testing/ide_test_harness.dart' show FakeAgentProvider;
 import '../presentation/harness/agent_pane_test_harness.dart';
 
@@ -269,7 +269,7 @@ WorkspaceFileCorpusPort _emptyWorkspaceFileCorpus() {
 
 /// 与 [AgentPaneFakeProviderFactory] 不同：每次 create 返回**新**实例，
 /// 这样不同 scope（global / 各个 entry 的 session）拿到的才是可区分的对象。
-final class _MultiInstanceProviderFactory with LegacyBundleFactoryMixin {
+final class _MultiInstanceProviderFactory with TestAgentProviderBundleFactory {
   final List<AgentPaneFakeProvider> created = <AgentPaneFakeProvider>[];
 
   @override
@@ -280,7 +280,7 @@ final class _MultiInstanceProviderFactory with LegacyBundleFactoryMixin {
   }
 }
 
-final class _TerminalProviderFactory with LegacyBundleFactoryMixin {
+final class _TerminalProviderFactory with TestAgentProviderBundleFactory {
   @override
   Object create(AgentProviderConfig config) {
     return FakeAgentProvider(config: config);

@@ -11,7 +11,7 @@ import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 
 import 'agent_provider_stub_base.dart';
-import 'legacy_bundle_factory_mixin.dart';
+import 'test_agent_provider_bundle_factory.dart';
 
 const String conversationTestThreadId = 'thread-1';
 

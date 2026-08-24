@@ -7,7 +7,7 @@ import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta/src/features/agent_management/data/cli_process_runner.dart';
 import 'package:zeta/src/features/agent_management/data/codex_agent_management_repository.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
-import '../../../testing/legacy_bundle_factory_mixin.dart';
+import '../../../testing/test_agent_provider_bundle_factory.dart';
 
 void main() {
   group('CodexAgentManagementRepository', () {
@@ -166,7 +166,7 @@ refreshToken = "refresh-secret"
   });
 }
 
-class _ThrowingProviderFactory with LegacyBundleFactoryMixin {
+class _ThrowingProviderFactory with TestAgentProviderBundleFactory {
   _ThrowingProviderFactory();
 
   @override
@@ -224,7 +224,7 @@ class _LoggedInProcessRunner implements CliProcessRunner {
 
 /// 每次 create 返回新实例，capabilities 全关（不声明模型目录支持），让
 /// `_probeProvider` 走最短路径：不触碰 `fetchAgentProviderModels`。
-class _ProbeProviderFactory with LegacyBundleFactoryMixin {
+class _ProbeProviderFactory with TestAgentProviderBundleFactory {
   final List<_ProbeFakeProvider> providers = <_ProbeFakeProvider>[];
 
   @override

@@ -8,7 +8,7 @@ import 'package:zeta/src/features/agent_management/data/grok_agent_management_re
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 
 import '../../../testing/ide_test_harness.dart';
-import '../../../testing/legacy_bundle_factory_mixin.dart';
+import '../../../testing/test_agent_provider_bundle_factory.dart';
 
 void main() {
   group('parseGrokUpdateCheckJson', () {
@@ -418,7 +418,7 @@ bool _listEquals(List<String> a, List<String> b) {
 /// 与 [FakeAgentProviderBundleBuilder.fromFake] 不同：每次 create 返回**新**实例，用于证明
 /// 不同 scope 拿到的是可区分的对象（对齐
 /// codex_agent_management_repository_test.dart 里同名类的写法）。
-class _ProbeProviderFactory with LegacyBundleFactoryMixin {
+class _ProbeProviderFactory with TestAgentProviderBundleFactory {
   final List<_ProbeFakeProvider> providers = <_ProbeFakeProvider>[];
 
   @override

@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
-import 'legacy_bundle_factory_mixin.dart';
+import 'test_agent_provider_bundle_factory.dart';
 
 /// 一次由测试 harness 捕获的真实 JSON-RPC 请求。
 final class RecordedJsonRpcCall {
@@ -212,7 +212,7 @@ final class FixedAgentProviderBundleFactory
 
   @override
   AgentProviderBundle createBundle(AgentProviderConfig config) {
-    return _bundle ??= nativeTestBundle(host);
+    return _bundle ??= testAgentProviderBundle(host);
   }
 }
 

@@ -1,5 +1,11 @@
 # Phase 3 第 2 批开工文档：Provider 配置、管理与模型目录
 
+> ⚠️ **历史迁移证据（Phase 4 已完成）。**
+> 本文记录的是当时的迁移过程与决策，**不描述当前架构**——其中提到的过渡层、
+> 燃尽清单与中间态符号多数已在 Phase 4 删除。
+> 当前架构以 [`AGENTS.md`](../../AGENTS.md) 与 [`overview.md`](overview.md) 为准；
+> Phase 4 的删除边界见 [`phase4_transition_cleanup.md`](phase4_transition_cleanup.md)。
+
 > 对应 [Phase 3 开工文档 §4](phase3_slice_expansion.md) 与 §9 模板。
 > 本文件是第 2 批的字段级执行契约；框架文档只保留批次边界与顺序。
 >

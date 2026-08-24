@@ -14,21 +14,6 @@ import 'package:flutter_test/flutter_test.dart';
 /// application，和 `agent_conversation_ui_state.dart → application` 形成闭环，
 /// 而 analyze 与全量测试都是绿的。本守卫补上这个缺口。
 void main() {
-  /// 允许存在的既有反向依赖（**只允许变少**）。
-  ///
-  /// 剩余 controller 负责构造并持有对应 feature 的 ViewModel，属于拆包前就
-  /// 有的组合职责；随 Phase 3 把 ViewModel 换成切片后清掉。新增一律不允许。
-  const knownApplicationToPresentation = <String>{};
-
-  /// application import Flutter 的历史燃尽清单已在 Phase 3 第 1、2 批关批时清零。
-  const knownApplicationFlutterImports = <String>{};
-
-  /// domain 纯度的既有例外（**只允许变少**）。
-  ///
-  /// settings ×3 已于 2026-08-23 清零（Phase 3 第 1 批：`ThemeMode` 换纯枚举
-  /// `ZetaThemeModePreference`，`@immutable` 换 `package:meta`）。
-  const knownDomainImpurities = <String>{};
-
   final featuresRoot = Directory('lib/src/features');
 
   List<File> dartFilesInLayer(String layer) {
@@ -73,8 +58,7 @@ void main() {
       final dependsOnPresentation = importsOf(
         file,
       ).any((uri) => RegExp(r'features/[a-z_]+/presentation/').hasMatch(uri));
-      if (dependsOnPresentation &&
-          !knownApplicationToPresentation.contains(path)) {
+      if (dependsOnPresentation) {
         offenders.add(path);
       }
     }
@@ -89,33 +73,6 @@ void main() {
     );
   });
 
-  test('既有反向依赖清单只允许变少', () {
-    final stillViolating = <String>{};
-    for (final file in dartFilesInLayer('application')) {
-      final path = normalize(file.path);
-      if (!knownApplicationToPresentation.contains(path)) {
-        continue;
-      }
-      final dependsOnPresentation = importsOf(
-        file,
-      ).any((uri) => RegExp(r'features/[a-z_]+/presentation/').hasMatch(uri));
-      if (dependsOnPresentation) {
-        stillViolating.add(path);
-      }
-    }
-
-    expect(
-      stillViolating.length,
-      lessThanOrEqualTo(knownApplicationToPresentation.length),
-      reason: '清单只减不增',
-    );
-    for (final resolved in knownApplicationToPresentation.difference(
-      stillViolating,
-    )) {
-      fail('$resolved 已经不再依赖 presentation，请把它从燃尽清单里删掉');
-    }
-  });
-
   test('application 不得 import Flutter（目标架构 §12.5）', () {
     final applicationFiles = dartFilesInLayer('application');
     expect(applicationFiles, isNotEmpty, reason: '扫不到 application 文件说明守卫本身失效了');
@@ -123,9 +80,6 @@ void main() {
     final offenders = <String>[];
     for (final file in applicationFiles) {
       final path = normalize(file.path);
-      if (knownApplicationFlutterImports.contains(path)) {
-        continue;
-      }
       if (importsOf(file).any((uri) => uri.startsWith('package:flutter/'))) {
         offenders.add(path);
       }
@@ -139,25 +93,6 @@ void main() {
           'zeta_foundation 的 zeta*Equals，监听走自己的 listener 列表而不是 '
           'ChangeNotifier：\n${offenders.join('\n')}',
     );
-  });
-
-  test('application 的 Flutter 依赖清单只允许变少', () {
-    final stillImporting = <String>{};
-    for (final file in dartFilesInLayer('application')) {
-      final path = normalize(file.path);
-      if (!knownApplicationFlutterImports.contains(path)) {
-        continue;
-      }
-      if (importsOf(file).any((uri) => uri.startsWith('package:flutter/'))) {
-        stillImporting.add(path);
-      }
-    }
-
-    for (final resolved in knownApplicationFlutterImports.difference(
-      stillImporting,
-    )) {
-      fail('$resolved 已经不再依赖 Flutter，请把它从燃尽清单里删掉');
-    }
   });
 
   test('Riverpod 只允许出现在 presentation / app 组合层', () {
@@ -207,9 +142,6 @@ void main() {
     final offenders = <String>[];
     for (final file in domainFiles) {
       final path = normalize(file.path);
-      if (knownDomainImpurities.contains(path)) {
-        continue;
-      }
       final impure = importsOf(file).any(
         (uri) =>
             uri.startsWith('package:flutter/') ||

@@ -1,5 +1,11 @@
 # Phase 3 第 4 批：Workspace 与 IDE Session
 
+> ⚠️ **历史迁移证据（Phase 4 已完成）。**
+> 本文记录的是当时的迁移过程与决策，**不描述当前架构**——其中提到的过渡层、
+> 燃尽清单与中间态符号多数已在 Phase 4 删除。
+> 当前架构以 [`AGENTS.md`](../../AGENTS.md) 与 [`overview.md`](overview.md) 为准；
+> Phase 4 的删除边界见 [`phase4_transition_cleanup.md`](phase4_transition_cleanup.md)。
+
 > 对应 [Phase 3 开工文档 §6](phase3_slice_expansion.md) 与
 > [目标架构 §15](target_architecture_riverpod_mvi_plugins_packages.md#15-迁移决策门禁)。
 >

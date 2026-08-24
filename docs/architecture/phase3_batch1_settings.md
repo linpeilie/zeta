@@ -1,5 +1,11 @@
 # Phase 3 第 1 批关批记录：settings 切片
 
+> ⚠️ **历史迁移证据（Phase 4 已完成）。**
+> 本文记录的是当时的迁移过程与决策，**不描述当前架构**——其中提到的过渡层、
+> 燃尽清单与中间态符号多数已在 Phase 4 删除。
+> 当前架构以 [`AGENTS.md`](../../AGENTS.md) 与 [`overview.md`](overview.md) 为准；
+> Phase 4 的删除边界见 [`phase4_transition_cleanup.md`](phase4_transition_cleanup.md)。
+
 > 对应 [Phase 3 开工文档 §3](phase3_slice_expansion.md)（设计）与 §9 模板（本文件）。
 > §3 是设计意图；本文件是开工清单——补齐依赖图、消费方切换顺序与四步节奏锚点。
 > 字段映射、Intent / Effect 语义、§15 答卷在 §3 已答完的，这里只引用不复制。
