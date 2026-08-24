@@ -177,7 +177,9 @@ void main() {
             (import) =>
                 !_platformNeutralCoreLibraries.contains(import) &&
                 !(path.endsWith('/src/platform/user_directory.dart') &&
-                    import.startsWith('package:path_provider/')),
+                    import.startsWith('package:path_provider/')) &&
+                !(path.endsWith('/src/platform/system_language.dart') &&
+                    import == 'dart:ui'),
           )
           .toList(growable: false);
       expect(
@@ -185,7 +187,7 @@ void main() {
         isEmpty,
         reason:
             '$path 属于 zeta_foundation：核心契约只能依赖平台中立库；'
-            '宿主路径工具只允许 path_provider，命中 $offenders',
+            '宿主工具只能依赖对应的平台库，命中 $offenders',
       );
     }
   });

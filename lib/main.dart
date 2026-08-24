@@ -13,7 +13,6 @@ import 'package:zeta/src/app/window_bootstrap.dart';
 import 'package:zeta/src/app/zeta_startup_bootstrap.dart';
 import 'package:zeta/src/app/logging/app_logging.dart';
 import 'package:zeta/src/core/storage/zeta_data_paths.dart';
-import 'package:zeta/src/features/settings/application/app_language_resolver.dart';
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
 import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
@@ -26,13 +25,9 @@ void main() {
   runZonedGuarded(
     () async {
       WidgetsFlutterBinding.ensureInitialized();
-      final firstLocale = PlatformDispatcher.instance.locales.isEmpty
-          ? null
-          : PlatformDispatcher.instance.locales.first;
-      final firstSystemLanguage = resolveAppLanguageFromFirstSystemLocale(
-        languageCode: firstLocale?.languageCode,
-        scriptCode: firstLocale?.scriptCode,
-        countryCode: firstLocale?.countryCode,
+      final firstSystemLanguage = ZetaSystemLanguage.getSystemLanguage(
+        english: AppLanguage.english,
+        simplifiedChinese: AppLanguage.simplifiedChinese,
       );
       ZetaDataPaths? dataPaths = ZetaDataPaths.fromHomeDirectory(
         await ZetaUserDirectory.getUserDirectory(),

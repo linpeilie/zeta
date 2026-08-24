@@ -5,3 +5,4 @@
 library;
 
 export 'src/platform/user_directory.dart';
+export 'src/platform/system_language.dart';
