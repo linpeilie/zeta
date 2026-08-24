@@ -19,7 +19,7 @@ import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partiti
 const int zetaStorageMigrationVersion = 2;
 
 /// 任一有效 marker（含旧 v1）都视为已经运行过 Zeta。
-const int zetaStorageExistingCohortMarkerVersion = 1;
+const int zetaStorageExistingMarkerVersion = 1;
 
 /// 旧版 Zeta 偏好读取边界。
 ///
@@ -97,7 +97,7 @@ class ZetaStorageMigrator {
 
   /// 磁盘上没有 `general.json` 时写入的语言。
   ///
-  /// existing cohort 应传入简体中文，fresh 传入第一系统 locale 的解析结果。
+  /// 已有存储应传入简体中文，新安装传入第一系统 locale 的解析结果。
   final AppLanguage missingGeneralLanguage;
   final LegacyZetaPreferences _preferences;
   final DateTime Function() _clock;

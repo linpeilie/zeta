@@ -40,7 +40,6 @@ void main() {
       ).run();
 
       expect(result.filePersistenceEnabled, isTrue);
-      expect(result.cohort, ZetaStorageCohort.fresh);
       expect(result.fallbackLanguage, AppLanguage.english);
       final general =
           jsonDecode(await File(paths.generalSettingsFilePath).readAsString())
@@ -65,7 +64,6 @@ void main() {
         firstSystemLanguage: AppLanguage.english,
       ).run();
 
-      expect(result.cohort, ZetaStorageCohort.existing);
       expect(result.fallbackLanguage, AppLanguage.simplifiedChinese);
       final general =
           jsonDecode(await File(paths.generalSettingsFilePath).readAsString())
@@ -74,14 +72,14 @@ void main() {
     });
 
     test('legacy preference without files is existing Chinese', () async {
-      final cohort = await inspectZetaStorageCohort(
+      final isExisting = await hasExistingZetaStorage(
         paths: paths,
         preferences: _MapPreferences(<String, String>{
           agentProviderConfigStorageKey: '{"version":1,"providers":[]}',
         }),
       );
 
-      expect(cohort, ZetaStorageCohort.existing);
+      expect(isExisting, isTrue);
     });
 
     test('keeps valid v3 language and upgrades marker', () async {
@@ -104,7 +102,6 @@ void main() {
         firstSystemLanguage: AppLanguage.simplifiedChinese,
       ).run();
 
-      expect(result.cohort, ZetaStorageCohort.existing);
       final general =
           jsonDecode(await File(paths.generalSettingsFilePath).readAsString())
               as Map<String, Object?>;
