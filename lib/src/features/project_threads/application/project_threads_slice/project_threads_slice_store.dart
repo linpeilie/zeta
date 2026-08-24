@@ -570,16 +570,19 @@ final class ProjectThreadsSliceStore
   }
 
   /// effect runner 的成功回执。
+  @override
   void operationSucceeded(OperationId operationId) {
     _dispatch(ProjectThreadsOperationSucceeded(operationId));
   }
 
   /// fork effect 的 typed 成功回执。
+  @override
   void forkSucceeded(OperationId operationId, AgentSession? session) {
     _dispatch(ProjectThreadsForkSucceeded(operationId, session));
   }
 
   /// effect runner 的失败回执；错误只用于结算调用方 Future，不进入 state。
+  @override
   void operationFailed(
     OperationId operationId,
     Object error,

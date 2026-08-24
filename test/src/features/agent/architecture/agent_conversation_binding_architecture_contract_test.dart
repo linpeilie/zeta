@@ -238,7 +238,7 @@ void main() {
       'Project Threads uses global runtime instead of active provider cache',
       () {
         final source = File(
-          'lib/src/features/project_threads/application/project_threads_controller.dart',
+          'lib/src/app/project_threads_slice/project_threads_slice_runner.dart',
         ).readAsStringSync();
 
         expect(source, contains('AgentProviderGlobalRuntime'));

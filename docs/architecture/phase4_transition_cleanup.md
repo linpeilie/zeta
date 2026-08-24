@@ -2,7 +2,7 @@
 
 最后更新：2026-08-24
 
-状态：**P4-0 / P4-1 / P4-2 / P4-3a 已关批（2026-08-24），下一批为 P4-3b**
+状态：**P4-0 / P4-1 / P4-2 / P4-3 已关批（2026-08-24），下一批为 P4-4**
 
 > P4-0 的现状测绘、基线与安全网决策落在
 > [`.workflow/refactor/2026-08-24-phase4-transition-cleanup/`](../../.workflow/refactor/2026-08-24-phase4-transition-cleanup/)。
@@ -362,6 +362,22 @@ composition"），不是 P4-2 的遗留。
 
 **关批**：presentation Repository 引用为 0；Project Threads 旧 controller/adapter 为 0；
 现有 pagination、rename/archive/delete/fork、两 Provider 聚合和 session restore 行为全绿。
+
+**执行结论（2026-08-24，P4-3b 已关批）**
+
+`ProjectThreadsController`（1146 行）与 `ProjectThreadsSliceRunnerAdapter`（160 行）
+合并为单一的 `ProjectThreadsSliceRunner`，两者原本是**一比一转发**，adapter 没有任何
+自己的业务判断。分页、防抖、能力校验、聚合游标与 stale token 分支**一行未改**。
+
+顺带修正一处分层：`operationSucceeded` / `forkSucceeded` / `operationFailed` 三个
+typed 回执方法上移进 `ProjectThreadsStateOwner` 端口，runner 因此不再依赖具体 store。
+
+1511 行的 controller 测试用 `git mv` 改名迁移，**零断言修改、零用例删除**。
+门禁 exit 0、根测试 2380 passed / 0 failed。
+
+> ⚠️ **§6 的独立 reviewer 复查未做。** 本批的 mutation check 由执行者自证，
+> 计划书要求高风险批（P4-3b / P4-4 / P4-5）由独立 reviewer 复查 mutation check——
+> 该项**未满足**，需人工补做。
 
 ### P4-4：Conversation ViewModel/slice 过渡 binding 清理
 

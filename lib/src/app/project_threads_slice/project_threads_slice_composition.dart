@@ -2,22 +2,15 @@ import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 import 'package:zeta/src/app/project_threads_slice/project_threads_slice_runner.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
-import 'package:zeta/src/features/project_threads/application/project_threads_controller.dart';
 import 'package:zeta/src/features/project_threads/application/project_threads_slice/project_threads_slice_effect.dart';
 import 'package:zeta/src/features/project_threads/application/project_threads_slice/project_threads_slice_state.dart';
 import 'package:zeta/src/features/project_threads/application/project_threads_slice/project_threads_slice_store.dart';
 
 /// Project Threads 页面切片组合；store 是唯一状态 owner。
 final class ProjectThreadsSliceComposition {
-  ProjectThreadsSliceComposition._({
-    required this.store,
-    required this.controller,
-  });
+  ProjectThreadsSliceComposition._(this.store);
 
   final ProjectThreadsSliceStore store;
-
-  /// Provider 查询、能力校验与防抖 runner；不拥有列表状态。
-  final ProjectThreadsController controller;
 
   factory ProjectThreadsSliceComposition.create({
     required AgentProviderSettingsPort providerController,
@@ -32,24 +25,18 @@ final class ProjectThreadsSliceComposition {
       effectRunner: deferredRunner,
       now: now,
     );
-    final controller = ProjectThreadsController(
+    final runner = ProjectThreadsSliceRunner(
       providerController: providerController,
       globalRuntime: globalRuntime,
       bindingManager: bindingManager,
       stateOwner: store,
       textCatalog: textCatalog,
     );
-    deferredRunner.delegate = ProjectThreadsSliceRunnerAdapter(
-      controller,
-      store,
-    );
-    controller.onActiveThreadCleared = (projectPath, threadId) {
+    deferredRunner.delegate = runner;
+    runner.onActiveThreadCleared = (projectPath, threadId) {
       store.onActiveThreadCleared?.call(projectPath, threadId);
     };
-    return ProjectThreadsSliceComposition._(
-      store: store,
-      controller: controller,
-    );
+    return ProjectThreadsSliceComposition._(store);
   }
 }
 

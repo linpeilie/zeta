@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
-import 'package:zeta/src/features/project_threads/application/project_threads_controller.dart';
+import 'package:zeta/src/app/project_threads_slice/project_threads_slice_runner.dart';
 import 'package:zeta/src/features/project_threads/application/project_threads_session_snapshot_codec.dart';
 import 'package:zeta/src/features/project_threads/application/project_threads_slice/project_threads_slice_effect.dart';
 import 'package:zeta/src/features/project_threads/application/project_threads_slice/project_threads_slice_state.dart';
@@ -17,7 +17,7 @@ import '../../../testing/agent_provider_stub_base.dart';
 import '../../../testing/legacy_bundle_factory_mixin.dart';
 
 void main() {
-  group('ProjectThreadsController', () {
+  group('ProjectThreadsSliceRunner', () {
     test(
       'restores expanded active project and loads first 5 threads',
       () async {
@@ -1096,13 +1096,13 @@ void main() {
           ),
         ),
       );
-      final controller = ProjectThreadsController(
+      final controller = ProjectThreadsSliceRunner(
         providerController: providerController,
         globalRuntime: AgentProviderGlobalRuntime(runtimeRegistry: registry),
         stateOwner: _createProjectThreadsStateOwner(),
       );
       addTearDown(() {
-        controller.dispose();
+        controller.close();
         providerController.dispose();
         unawaited(registry.close());
       });
@@ -1162,14 +1162,14 @@ void main() {
         const AgentPermissionSelection(optionId: ':read-only'),
         syncPort: false,
       );
-      final controller = ProjectThreadsController(
+      final controller = ProjectThreadsSliceRunner(
         providerController: providerController,
         globalRuntime: AgentProviderGlobalRuntime(runtimeRegistry: registry),
         bindingManager: bindingManager,
         stateOwner: _createProjectThreadsStateOwner(),
       );
       addTearDown(() async {
-        controller.dispose();
+        controller.close();
         await bindingLease.release();
         await bindingManager.close();
         providerController.dispose();
@@ -1219,7 +1219,7 @@ final class _NoopProjectThreadsEffectRunner
   void close() {}
 }
 
-ProjectThreadsController _createController(
+ProjectThreadsSliceRunner _createController(
   _FakeAgentProvider provider, {
   ProjectThreadsSliceStore? viewModel,
 }) {
@@ -1236,20 +1236,20 @@ ProjectThreadsController _createController(
       ),
     ),
   );
-  final controller = ProjectThreadsController(
+  final controller = ProjectThreadsSliceRunner(
     providerController: providerController,
     globalRuntime: AgentProviderGlobalRuntime(runtimeRegistry: registry),
     stateOwner: viewModel ?? _createProjectThreadsStateOwner(),
   );
   addTearDown(() {
-    controller.dispose();
+    controller.close();
     providerController.dispose();
     unawaited(registry.close());
   });
   return controller;
 }
 
-ProjectThreadsController _createMultiProviderController({
+ProjectThreadsSliceRunner _createMultiProviderController({
   required _FakeAgentProvider codex,
   required _FakeAgentProvider grok,
   List<String>? createdProviderIds,
@@ -1274,13 +1274,13 @@ ProjectThreadsController _createMultiProviderController({
       ),
     ),
   );
-  final controller = ProjectThreadsController(
+  final controller = ProjectThreadsSliceRunner(
     providerController: providerController,
     globalRuntime: AgentProviderGlobalRuntime(runtimeRegistry: registry),
     stateOwner: viewModel ?? _createProjectThreadsStateOwner(),
   );
   addTearDown(() {
-    controller.dispose();
+    controller.close();
     providerController.dispose();
     unawaited(registry.close());
   });
