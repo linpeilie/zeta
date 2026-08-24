@@ -36,33 +36,23 @@ class ZetaStartupBootstrap {
   ZetaStartupBootstrap({
     required this.paths,
     required this.firstSystemLanguage,
-    LegacyZetaPreferences? preferences,
-    DateTime Function()? clock,
-  }) : _preferences = preferences ?? SharedPreferencesLegacyZetaPreferences(),
-       _clock = clock ?? DateTime.now;
+  });
 
   final ZetaDataPaths paths;
   final AppLanguage firstSystemLanguage;
-  final LegacyZetaPreferences _preferences;
-  final DateTime Function() _clock;
 
   Future<ZetaStartupBootstrapResult> run() async {
     var cohort = ZetaStorageCohort.fresh;
     var fallback = firstSystemLanguage;
     try {
       await ensureZetaDataDirectories(paths);
-      cohort = await inspectZetaStorageCohort(
-        paths: paths,
-        preferences: _preferences,
-      );
+      cohort = await inspectZetaStorageCohort(paths: paths);
       fallback = cohort == ZetaStorageCohort.existing
           ? AppLanguage.simplifiedChinese
           : firstSystemLanguage;
       await ZetaStorageMigrator(
         paths: paths,
         missingGeneralLanguage: fallback,
-        preferences: _preferences,
-        clock: _clock,
       ).migrate();
       return ZetaStartupBootstrapResult(
         filePersistenceEnabled: true,
@@ -87,7 +77,7 @@ class ZetaStartupBootstrap {
 /// 只读判定：有效 marker、已知 target 或旧偏好即 existing。
 Future<ZetaStorageCohort> inspectZetaStorageCohort({
   required ZetaDataPaths paths,
-  required LegacyZetaPreferences preferences,
+  LegacyZetaPreferences? preferences,
 }) async {
   final markerVersion = await readZetaStorageMarkerVersion(paths);
   if (markerVersion != null &&
@@ -107,6 +97,8 @@ Future<ZetaStorageCohort> inspectZetaStorageCohort({
     }
   }
 
+  final legacyPreferences =
+      preferences ?? SharedPreferencesLegacyZetaPreferences();
   for (final key in const <String>[
     agentProviderConfigStorageKey,
     appearanceSettingsStorageKey,
@@ -114,7 +106,7 @@ Future<ZetaStorageCohort> inspectZetaStorageCohort({
     sessionStorageKey,
     usageStatisticsIndexStorageKey,
   ]) {
-    final value = await preferences.getString(key);
+    final value = await legacyPreferences.getString(key);
     if (value != null && value.trim().isNotEmpty) {
       return ZetaStorageCohort.existing;
     }

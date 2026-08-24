@@ -2,6 +2,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 import 'package:zeta/src/app/zeta_startup_bootstrap.dart';
 import 'package:zeta/src/app/zeta_storage_migrator.dart';
 import 'package:zeta/src/core/storage/zeta_data_paths.dart';
@@ -14,6 +17,9 @@ void main() {
     late ZetaDataPaths paths;
 
     setUp(() {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      SharedPreferencesAsyncPlatform.instance =
+          InMemorySharedPreferencesAsync.empty();
       homeDirectory = Directory.systemTemp.createTempSync('zeta_bootstrap_');
       paths = ZetaDataPaths.fromHomeDirectory(
         homeDirectory.path,
@@ -31,7 +37,6 @@ void main() {
       final result = await ZetaStartupBootstrap(
         paths: paths,
         firstSystemLanguage: AppLanguage.english,
-        preferences: _EmptyPreferences(),
       ).run();
 
       expect(result.filePersistenceEnabled, isTrue);
@@ -58,7 +63,6 @@ void main() {
       final result = await ZetaStartupBootstrap(
         paths: paths,
         firstSystemLanguage: AppLanguage.english,
-        preferences: _EmptyPreferences(),
       ).run();
 
       expect(result.cohort, ZetaStorageCohort.existing);
@@ -70,16 +74,14 @@ void main() {
     });
 
     test('legacy preference without files is existing Chinese', () async {
-      final result = await ZetaStartupBootstrap(
+      final cohort = await inspectZetaStorageCohort(
         paths: paths,
-        firstSystemLanguage: AppLanguage.english,
         preferences: _MapPreferences(<String, String>{
           agentProviderConfigStorageKey: '{"version":1,"providers":[]}',
         }),
-      ).run();
+      );
 
-      expect(result.cohort, ZetaStorageCohort.existing);
-      expect(result.fallbackLanguage, AppLanguage.simplifiedChinese);
+      expect(cohort, ZetaStorageCohort.existing);
     });
 
     test('keeps valid v3 language and upgrades marker', () async {
@@ -100,7 +102,6 @@ void main() {
       final result = await ZetaStartupBootstrap(
         paths: paths,
         firstSystemLanguage: AppLanguage.simplifiedChinese,
-        preferences: _EmptyPreferences(),
       ).run();
 
       expect(result.cohort, ZetaStorageCohort.existing);
@@ -118,7 +119,6 @@ void main() {
       final result = await ZetaStartupBootstrap(
         paths: paths,
         firstSystemLanguage: AppLanguage.english,
-        preferences: _EmptyPreferences(),
       ).run();
 
       expect(result.filePersistenceEnabled, isFalse);
@@ -130,7 +130,6 @@ void main() {
       final bootstrap = ZetaStartupBootstrap(
         paths: paths,
         firstSystemLanguage: AppLanguage.english,
-        preferences: _EmptyPreferences(),
       );
       final first = await bootstrap.run();
       final firstGeneral = await File(
@@ -146,11 +145,6 @@ void main() {
       );
     });
   });
-}
-
-class _EmptyPreferences implements LegacyZetaPreferences {
-  @override
-  Future<String?> getString(String key) async => null;
 }
 
 class _MapPreferences implements LegacyZetaPreferences {
