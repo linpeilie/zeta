@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 void main() {
@@ -212,7 +213,7 @@ void main() {
           isHistoryTurnId: historyTimeline.isHistoryTurnId,
           modelsRefreshing: false,
           activeProviderName: 'Codex',
-          activeProviderConfig: AgentProviderConfig.defaultCodex,
+          activeProviderConfig: defaultCodexAgentProviderConfig,
           effectScope: const AgentConversationEffectScope(
             reductionScope: AgentConversationReductionScope.history,
             providerId: 'codex',
@@ -296,7 +297,7 @@ AgentConversationReducerContext _contextFor(
     isHistoryTurnId: timeline.isHistoryTurnId,
     modelsRefreshing: false,
     activeProviderName: 'Codex',
-    activeProviderConfig: AgentProviderConfig.defaultCodex,
+    activeProviderConfig: defaultCodexAgentProviderConfig,
     effectScope: const AgentConversationEffectScope(
       reductionScope: AgentConversationReductionScope.live,
       providerId: 'codex',

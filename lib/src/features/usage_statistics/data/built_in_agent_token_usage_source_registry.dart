@@ -1,4 +1,5 @@
 import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta/src/features/usage_statistics/data/providers/claude_code/claude_code_token_usage_source.dart';
 import 'package:zeta/src/features/usage_statistics/data/providers/codex/codex_token_usage_source.dart';
 import 'package:zeta/src/features/usage_statistics/data/providers/grok/grok_token_usage_source.dart';
@@ -23,21 +24,22 @@ final class BuiltInAgentTokenUsageSourceRegistry
   @override
   AgentTokenUsageSource? createFor(AgentProviderConfig config) {
     return switch (config.kind) {
-      AgentProviderKind.codexAppServer => CodexTokenUsageSource(
+      codexAgentProviderType => CodexTokenUsageSource(
         config: config,
         partitionStore: _partitionStore,
         textCatalog: _textCatalog,
       ),
-      AgentProviderKind.acp => GrokTokenUsageSource(
+      grokAgentProviderType => GrokTokenUsageSource(
         config: config,
         partitionStore: _partitionStore,
         textCatalog: _textCatalog,
       ),
-      AgentProviderKind.claudeCode => ClaudeCodeTokenUsageSource(
+      claudeCodeAgentProviderType => ClaudeCodeTokenUsageSource(
         config: config,
         partitionStore: _partitionStore,
         textCatalog: _textCatalog,
       ),
+      _ => null,
     };
   }
 }

@@ -250,7 +250,7 @@ void main() {
     }
     // Provider 协议与身份分支的纯度由 G1 守卫单独管（五文件 + ACP mapper），
     // 见 claude_code_shared_layer_purity_test；内核 domain 里的
-    // `AgentProviderKind` / 默认配置常量是既有中立设计，不在此列。
+    // `AgentProviderTypeId` / 默认配置常量是既有中立设计，不在此列。
   });
 
   test('zeta_agent_core 对 Flutter 的依赖只允许收缩', () {

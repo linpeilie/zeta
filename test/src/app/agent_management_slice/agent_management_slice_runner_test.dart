@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_composition.dart';
@@ -18,7 +19,7 @@ void main() {
       final settingsPort = _SettingsPort(
         AgentProviderSettings(
           providers: <AgentProviderConfig>[
-            AgentProviderConfig.defaultClaudeCode.copyWith(
+            defaultClaudeCodeAgentProviderConfig.copyWith(
               extra: const <String, Object?>{
                 'cliPath': '/opt/claude',
                 'detectedCurrentVersion': '2.1.0',
@@ -102,7 +103,7 @@ final class _RunnerRepository
 
   @override
   AgentProviderConfig get defaultProviderConfig =>
-      AgentProviderConfig.defaultClaudeCode;
+      defaultClaudeCodeAgentProviderConfig;
 
   @override
   bool acceptsExecutablePath(String path) => path.endsWith('claude');
@@ -259,6 +260,10 @@ final class _SettingsPort extends ChangeNotifier
   @override
   AgentProviderCapabilities capabilitiesForProviderId(String providerId) =>
       AgentProviderCapabilities.unsupported;
+
+  @override
+  String modelCatalogSourceFor(AgentProviderConfig config) =>
+      config.displayName;
 
   @override
   Future<AgentProviderSettings> loadSettings() async => _settings;

@@ -8,7 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// Widget 测试卫生守卫。
 ///
 /// 自动化测试**不得拉起真实 Agent CLI**：不注入 `agentProviderFactory` 时，
-/// `MainApp` 会构造真实的 `DefaultAgentProviderFactory`，Shell 启动阶段的模型
+/// `MainApp` 会激活真实的内置 Provider 插件，Shell 启动阶段的模型
 /// 目录预热就会去启动本机 Codex/Grok/Claude 进程，并注册 30 秒的 JSON-RPC
 /// 超时 `Timer`。该 Timer 常常活过 widget 树销毁，于是测试以
 /// "A Timer is still pending even after the widget tree was disposed" 随机失败——

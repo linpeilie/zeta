@@ -69,7 +69,7 @@ done
 
       final registry = AgentProviderRuntimeRegistry(
         providerFactory: FakeAgentProviderBundleBuilder.fromFake(
-          FakeAgentProvider(config: AgentProviderConfig.defaultGrok),
+          FakeAgentProvider(config: defaultGrokAgentProviderConfig),
         ),
       );
       addTearDown(registry.close);
@@ -94,7 +94,7 @@ done
       );
 
       final detected = await repository.detect(
-        providerConfig: AgentProviderConfig.defaultGrok.copyWith(
+        providerConfig: defaultGrokAgentProviderConfig.copyWith(
           extra: <String, Object?>{'cliPath': grokExe.path},
         ),
         enabled: true,
@@ -124,7 +124,7 @@ done
 
       final registry = AgentProviderRuntimeRegistry(
         providerFactory: FakeAgentProviderBundleBuilder.fromFake(
-          FakeAgentProvider(config: AgentProviderConfig.defaultGrok),
+          FakeAgentProvider(config: defaultGrokAgentProviderConfig),
         ),
       );
       addTearDown(registry.close);
@@ -149,7 +149,7 @@ done
       );
 
       final detected = await repository.detect(
-        providerConfig: AgentProviderConfig.defaultGrok.copyWith(
+        providerConfig: defaultGrokAgentProviderConfig.copyWith(
           extra: <String, Object?>{'cliPath': grokExe.path},
         ),
         enabled: true,
@@ -172,7 +172,7 @@ done
 
       final registry = AgentProviderRuntimeRegistry(
         providerFactory: FakeAgentProviderBundleBuilder.fromFake(
-          FakeAgentProvider(config: AgentProviderConfig.defaultGrok),
+          FakeAgentProvider(config: defaultGrokAgentProviderConfig),
         ),
       );
       addTearDown(registry.close);
@@ -196,7 +196,7 @@ done
       );
 
       final detected = await repository.detect(
-        providerConfig: AgentProviderConfig.defaultGrok.copyWith(
+        providerConfig: defaultGrokAgentProviderConfig.copyWith(
           extra: <String, Object?>{'cliPath': grokExe.path},
         ),
         enabled: true,
@@ -216,7 +216,7 @@ done
 
       final registry = AgentProviderRuntimeRegistry(
         providerFactory: FakeAgentProviderBundleBuilder.fromFake(
-          FakeAgentProvider(config: AgentProviderConfig.defaultGrok),
+          FakeAgentProvider(config: defaultGrokAgentProviderConfig),
         ),
       );
       addTearDown(registry.close);
@@ -241,7 +241,7 @@ done
       );
 
       final detected = await repository.detect(
-        providerConfig: AgentProviderConfig.defaultGrok.copyWith(
+        providerConfig: defaultGrokAgentProviderConfig.copyWith(
           extra: <String, Object?>{'cliPath': grokExe.path},
         ),
         enabled: true,
@@ -256,7 +256,7 @@ done
       ).writeAsStringSync('permission_mode = "default"\n');
       final registry = AgentProviderRuntimeRegistry(
         providerFactory: FakeAgentProviderBundleBuilder.fromFake(
-          FakeAgentProvider(config: AgentProviderConfig.defaultGrok),
+          FakeAgentProvider(config: defaultGrokAgentProviderConfig),
         ),
       );
       addTearDown(registry.close);
@@ -278,7 +278,7 @@ done
         ..writeAsStringSync('stub');
       final registry = AgentProviderRuntimeRegistry(
         providerFactory: FakeAgentProviderBundleBuilder.fromFake(
-          FakeAgentProvider(config: AgentProviderConfig.defaultGrok),
+          FakeAgentProvider(config: defaultGrokAgentProviderConfig),
         ),
       );
       addTearDown(registry.close);
@@ -289,7 +289,7 @@ done
 
       // Act
       final config = await repository.providerConfigForPath(
-        current: AgentProviderConfig.defaultGrok,
+        current: defaultGrokAgentProviderConfig,
         path: grokScript.path,
       );
 
@@ -337,7 +337,7 @@ done
       );
 
       final (result, _) = await repository.testConnection(
-        providerConfig: AgentProviderConfig.defaultGrok.copyWith(
+        providerConfig: defaultGrokAgentProviderConfig.copyWith(
           extra: <String, Object?>{'cliPath': grokExe.path},
         ),
       );
@@ -363,14 +363,14 @@ done
       );
 
       await repository.testConnection(
-        providerConfig: AgentProviderConfig.defaultGrok.copyWith(
+        providerConfig: defaultGrokAgentProviderConfig.copyWith(
           extra: <String, Object?>{'cliPath': grokExe.path},
         ),
       );
       final probedProvider = factory.providers.single;
 
       final sessionLease = await registry.acquire(
-        AgentProviderConfig.defaultGrok,
+        defaultGrokAgentProviderConfig,
         scope: const AgentProviderRuntimeScopeKey.session('entry-a'),
       );
       expect(factory.providers, hasLength(2));

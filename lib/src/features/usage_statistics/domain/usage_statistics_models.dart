@@ -266,10 +266,7 @@ class AgentUsageRecord {
       threadId: threadId,
       turnId: turnId,
       providerId: providerId,
-      providerName: AgentProviderConfig.normalizeDisplayName(
-        providerId,
-        providerName,
-      ),
+      providerName: providerName,
       projectPath: projectPath,
       sourceKind: sourceKind,
       startedAt: startedAt,

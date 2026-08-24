@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_model_selection_controller.dart';
 
@@ -19,7 +20,7 @@ void main() {
       addTearDown(controller.dispose);
 
       controller.seedFromConfig(
-        AgentProviderConfig.defaultCodex.copyWith(
+        defaultCodexAgentProviderConfig.copyWith(
           selectedModel: 'missing-model',
           selectedReasoningEffort: 'xhigh',
           selectedServiceTier: 'priority',
@@ -222,7 +223,7 @@ void main() {
 final DateTime _now = DateTime.utc(2026, 7, 15, 8);
 
 AgentProviderConfig _configuredProvider() {
-  return AgentProviderConfig.defaultCodex.copyWith(
+  return defaultCodexAgentProviderConfig.copyWith(
     selectedModel: 'gpt-5.5',
     selectedReasoningEffort: 'medium',
     modelPreferences: <String, AgentModelPreference>{
@@ -297,7 +298,7 @@ class _FakeAgentProvider
   AgentModelSelection? runtimeSelection;
 
   @override
-  AgentProviderConfig get config => AgentProviderConfig.defaultCodex;
+  AgentProviderConfig get config => defaultCodexAgentProviderConfig;
 
   @override
   Stream<AgentEvent> get events => const Stream<AgentEvent>.empty();

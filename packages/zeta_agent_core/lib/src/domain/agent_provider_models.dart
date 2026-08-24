@@ -3,10 +3,27 @@ import 'package:zeta_agent_core/src/domain/agent_model_selection_models.dart';
 /// [AgentProviderConfig.copyWith] 中「未传参」与「显式传 null」的区分哨兵。
 const Object agentProviderConfigUnset = Object();
 
-/// Agent 后端的类型。
+/// Provider 插件声明的开放协议域标识。
 ///
-/// UI 和会话状态只关心这个中立枚举，不直接绑定某个 CLI 的协议细节。
-enum AgentProviderKind { codexAppServer, acp, claudeCode }
+/// [AgentProviderConfig.id] 是可自定义的配置实例身份；本值只用于把配置路由到
+/// 对应的 compile-time Provider 插件。内核不登记任何厂商常量，新增 Provider
+/// 无需修改本类型。
+final class AgentProviderTypeId {
+  const AgentProviderTypeId(this.value);
+
+  /// 持久化和插件注册使用的稳定值。
+  final String value;
+
+  @override
+  bool operator ==(Object other) =>
+      other is AgentProviderTypeId && other.value == value;
+
+  @override
+  int get hashCode => value.hashCode;
+
+  @override
+  String toString() => 'AgentProviderTypeId($value)';
+}
 
 /// Provider 与当前回合的连接状态。
 ///
@@ -19,21 +36,6 @@ enum AgentProviderConnectionState {
   unavailable,
   error,
 }
-
-/// 内置 Codex provider 的稳定配置 id。
-const String defaultAgentProviderId = 'codex';
-
-/// 内置 Grok ACP provider 的稳定配置 id。
-const String grokAgentProviderId = 'grok';
-
-/// 内置 Claude Code provider 的稳定配置 id。
-const String defaultClaudeCodeProviderId = 'claude_code';
-
-/// Claude Code 账号数据增强开关在 Provider 配置中的稳定 key。
-///
-/// 这是 Zeta 自有配置，不是 Claude Code wire 字段；缺省值视为开启。
-const String claudeCodeAccountDataEnrichmentKey =
-    'claudeCode.accountDataEnrichment';
 
 /// 一个可启动的 Agent provider 定义。
 ///
@@ -65,7 +67,7 @@ class AgentProviderConfig {
   final String displayName;
 
   /// provider 协议类型。
-  final AgentProviderKind kind;
+  final AgentProviderTypeId kind;
 
   /// 启动 CLI 的命令。
   final String command;
@@ -109,49 +111,6 @@ class AgentProviderConfig {
   /// 未来 provider 专属配置的扩展字段。
   final Map<String, Object?> extra;
 
-  /// 默认 Codex CLI 配置。
-  ///
-  /// V1 通过 stdio 启动 app-server，不额外引入 JSON-RPC 第三方依赖。
-  static const AgentProviderConfig defaultCodex = AgentProviderConfig(
-    id: defaultAgentProviderId,
-    displayName: 'Codex',
-    kind: AgentProviderKind.codexAppServer,
-    command: 'codex',
-    arguments: <String>['app-server'],
-  );
-
-  /// 默认 Grok CLI ACP stdio 配置。
-  ///
-  /// 启动 `grok agent stdio`，通过标准 ACP JSON-RPC 与 Zeta 对话。
-  static const AgentProviderConfig defaultGrok = AgentProviderConfig(
-    id: grokAgentProviderId,
-    displayName: 'Grok',
-    kind: AgentProviderKind.acp,
-    command: 'grok',
-    arguments: <String>['agent', 'stdio'],
-  );
-
-  /// 将内置 Provider 的历史展示名称归一化为当前产品名称。
-  static String normalizeDisplayName(String id, String displayName) {
-    return switch (id) {
-      defaultAgentProviderId => defaultCodex.displayName,
-      grokAgentProviderId => defaultGrok.displayName,
-      defaultClaudeCodeProviderId => defaultClaudeCode.displayName,
-      _ => displayName,
-    };
-  }
-
-  /// 默认 Claude Code CLI stream-json 配置。
-  ///
-  /// 启动参数（`--print` / stream-json 等）由 data 层 process starter 按会话
-  /// 动态拼装；此处只固定命令与 kind。
-  static const AgentProviderConfig defaultClaudeCode = AgentProviderConfig(
-    id: defaultClaudeCodeProviderId,
-    displayName: 'Claude',
-    kind: AgentProviderKind.claudeCode,
-    command: 'claude',
-  );
-
   /// 复制配置并覆盖部分字段。
   ///
   /// 权限偏好请优先用 [withPermissionPreference] 以支持显式清空；
@@ -159,7 +118,7 @@ class AgentProviderConfig {
   AgentProviderConfig copyWith({
     String? id,
     String? displayName,
-    AgentProviderKind? kind,
+    AgentProviderTypeId? kind,
     String? command,
     List<String>? arguments,
     Map<String, String>? environment,
@@ -228,7 +187,7 @@ class AgentProviderConfig {
   }) {
     return AgentProviderConfig(
       id: id,
-      displayName: normalizeDisplayName(id, displayName),
+      displayName: displayName,
       kind: kind,
       command: command,
       arguments: arguments,
@@ -251,7 +210,7 @@ class AgentProviderConfig {
     return <String, Object?>{
       'id': id,
       'displayName': displayName,
-      'kind': kind.name,
+      'kind': kind.value,
       'command': command,
       'arguments': arguments,
       'environment': environment,
@@ -277,12 +236,8 @@ class AgentProviderConfig {
 /// 由 IDE 会话状态维护。
 class AgentProviderSettings {
   const AgentProviderSettings({
-    this.providers = const <AgentProviderConfig>[
-      AgentProviderConfig.defaultCodex,
-      AgentProviderConfig.defaultGrok,
-      AgentProviderConfig.defaultClaudeCode,
-    ],
-    this.activeProviderId = defaultAgentProviderId,
+    this.providers = const <AgentProviderConfig>[],
+    this.activeProviderId = '',
   });
 
   /// 全局 provider 定义列表。
@@ -291,11 +246,17 @@ class AgentProviderSettings {
   /// 当前默认 provider id。
   final String activeProviderId;
 
-  /// 当前选中的 provider；如果配置被删除，则回退到内置 Codex。
+  /// 当前选中的 provider；配置引用失效时回退到目录首项。
+  ///
+  /// 空目录表示宿主尚未安装 Provider definition，调用方必须先完成插件组合，
+  /// 不能由中立内核猜一个默认厂商。
   AgentProviderConfig get activeProvider {
+    if (providers.isEmpty) {
+      throw StateError('No Agent provider configuration is available');
+    }
     return providers.firstWhere(
       (provider) => provider.id == activeProviderId,
-      orElse: () => AgentProviderConfig.defaultCodex,
+      orElse: () => providers.first,
     );
   }
 

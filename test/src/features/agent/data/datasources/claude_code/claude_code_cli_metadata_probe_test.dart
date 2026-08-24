@@ -27,7 +27,7 @@ void main() {
           process.writeJson(response);
         };
         final starter = _RecordingProcessStarter(process);
-        final config = AgentProviderConfig.defaultClaudeCode.copyWith(
+        final config = defaultClaudeCodeAgentProviderConfig.copyWith(
           arguments: const <String>['--model', 'must-not-leak'],
           environment: const <String, String>{
             'CLAUDE_CONFIG_DIR': '/fixture/config',
@@ -169,7 +169,7 @@ void main() {
 }
 
 ClaudeCodeCliMetadataProbe _probe({
-  AgentProviderConfig config = AgentProviderConfig.defaultClaudeCode,
+  AgentProviderConfig config = defaultClaudeCodeAgentProviderConfig,
   required _FakeStreamProcess process,
   _RecordingProcessStarter? starter,
   Duration timeout = const Duration(seconds: 1),

@@ -16,7 +16,7 @@ void main() {
     test('starts Codex app-server threads and turns', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
 
@@ -45,7 +45,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         addTearDown(provider.dispose);
@@ -81,7 +81,7 @@ void main() {
     test('rejects unknown turn mode before sending a request', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       addTearDown(provider.dispose);
@@ -129,7 +129,7 @@ void main() {
     test('declares client capabilities during initialize', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
 
@@ -167,7 +167,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         addTearDown(provider.dispose);
@@ -248,7 +248,7 @@ void main() {
           },
         );
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         addTearDown(provider.dispose);
@@ -281,7 +281,7 @@ void main() {
         },
       );
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       addTearDown(provider.dispose);
@@ -310,7 +310,7 @@ void main() {
           },
         );
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         addTearDown(provider.dispose);
@@ -364,7 +364,7 @@ void main() {
           },
         );
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         addTearDown(provider.dispose);
@@ -384,7 +384,7 @@ void main() {
       final peer = _FakeJsonRpcPeer();
       peer.blockNextRequest('collaborationMode/list', gate);
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       addTearDown(provider.dispose);
@@ -419,7 +419,7 @@ void main() {
         final firstPeer = _FakeJsonRpcPeer();
         firstPeer.blockNextRequest('collaborationMode/list', gate);
         final firstProvider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: firstPeer,
         );
 
@@ -439,7 +439,7 @@ void main() {
               _conversationModeListResponse(planName: 'Plan next runtime'),
         );
         final secondProvider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: secondPeer,
         );
         addTearDown(secondProvider.dispose);
@@ -455,7 +455,7 @@ void main() {
     test('maps notifications to unified AgentEvents', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       final events = <AgentEvent>[];
@@ -515,7 +515,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         final events = <AgentEvent>[];
@@ -597,7 +597,7 @@ void main() {
     test('tolerates a future item type and continues the connection', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       final events = <AgentEvent>[];
@@ -637,7 +637,7 @@ void main() {
     test('maps local turn_aborted into an interrupted history turn', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       final sessionFile = await _writeJsonlFile(<Object?>[
@@ -681,7 +681,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         final events = <AgentEvent>[];
@@ -779,7 +779,7 @@ void main() {
         },
       );
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       addTearDown(provider.dispose);
@@ -849,7 +849,7 @@ void main() {
 
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       addTearDown(provider.dispose);
@@ -921,7 +921,7 @@ void main() {
 
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         addTearDown(provider.dispose);
@@ -979,7 +979,7 @@ void main() {
 
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         addTearDown(provider.dispose);
@@ -1076,7 +1076,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         final events = <AgentEvent>[];
@@ -1130,7 +1130,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         final events = <AgentEvent>[];
@@ -1177,7 +1177,7 @@ void main() {
     test('maps item/plan/delta into streaming plan message deltas', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       final events = <AgentEvent>[];
@@ -1222,7 +1222,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         final events = <AgentEvent>[];
@@ -1270,7 +1270,7 @@ void main() {
     test('maps turn/diff/updated into typed live-only snapshot', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       final events = <AgentEvent>[];
@@ -1318,7 +1318,7 @@ void main() {
         );
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         final events = <AgentEvent>[];
@@ -1388,7 +1388,7 @@ void main() {
         final toolStarted = (fixtureEvents[0]! as Map).cast<String, Object?>();
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         final events = <AgentEvent>[];
@@ -1438,7 +1438,7 @@ void main() {
         );
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         final events = <AgentEvent>[];
@@ -1490,7 +1490,7 @@ void main() {
           },
         );
         final historyProvider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: historyPeer,
         );
         final history = await historyProvider.readThreadHistory(
@@ -1523,7 +1523,7 @@ void main() {
     test('maps thread/status/changed with active waiting flags', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       final events = <AgentEvent>[];
@@ -1564,7 +1564,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         final events = <AgentEvent>[];
@@ -1599,7 +1599,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         final events = <AgentEvent>[];
@@ -1739,7 +1739,7 @@ void main() {
     test('maps model/rerouted into AgentModelReroutedEvent', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       final events = <AgentEvent>[];
@@ -1769,7 +1769,7 @@ void main() {
     test('maps deprecationNotice into AgentDeprecationNoticeEvent', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       final events = <AgentEvent>[];
@@ -1793,7 +1793,7 @@ void main() {
     test('maps completed plan items into message updates', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       final events = <AgentEvent>[];
@@ -1830,7 +1830,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         final approvalFuture = provider.events
@@ -1896,7 +1896,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         final events = <AgentEvent>[];
@@ -1948,7 +1948,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         final events = <AgentEvent>[];
@@ -1996,7 +1996,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         final events = <AgentEvent>[];
@@ -2100,7 +2100,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         final events = <AgentEvent>[];
@@ -2144,7 +2144,7 @@ void main() {
     test('responds to MCP elicitation requests with action variants', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       final events = <AgentEvent>[];
@@ -2204,7 +2204,7 @@ void main() {
     test('lists project threads with Codex pagination params', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
 
@@ -2241,7 +2241,7 @@ void main() {
     test('lists archived threads with searchTerm', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
 
@@ -2268,7 +2268,7 @@ void main() {
     test('lists cross-project root threads by source kind', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
 
@@ -2293,7 +2293,7 @@ void main() {
     test('reads Codex plan and rate-limit windows', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
 
@@ -2329,7 +2329,7 @@ void main() {
           },
         );
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
 
@@ -2355,7 +2355,7 @@ void main() {
           },
         );
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
 
@@ -2374,7 +2374,7 @@ void main() {
     test('thread lifecycle RPCs and notifications', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       final events = <AgentEvent>[];
@@ -2467,7 +2467,7 @@ void main() {
     test('atomically maps all thread settings permission shapes', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       addTearDown(provider.dispose);
@@ -2566,7 +2566,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         addTearDown(provider.dispose);
@@ -2671,7 +2671,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         addTearDown(provider.dispose);
@@ -2700,7 +2700,7 @@ void main() {
     test('fork at turn sends stable inclusive lastTurnId boundary', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
 
@@ -2726,7 +2726,7 @@ void main() {
     test('reads thread history with turns and maps items', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
 
@@ -2815,7 +2815,7 @@ void main() {
             .cast<String, Object?>();
         final livePeer = _FakeJsonRpcPeer();
         final liveProvider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: livePeer,
         );
         final liveEvents = <AgentEvent>[];
@@ -2849,7 +2849,7 @@ void main() {
           },
         );
         final historyProvider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: historyPeer,
         );
 
@@ -2910,7 +2910,7 @@ void main() {
     test('prefers local session jsonl history when available', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       final sessionFile = await _writeJsonlFile(<Object?>[
@@ -3089,7 +3089,7 @@ void main() {
           'codex_patch_apply_end_history_0_144_1.json',
         );
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: _FakeJsonRpcPeer(),
         );
         addTearDown(provider.dispose);
@@ -3190,7 +3190,7 @@ void main() {
           },
         );
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         addTearDown(provider.dispose);
@@ -3243,7 +3243,7 @@ void main() {
           },
         );
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         addTearDown(provider.dispose);
@@ -3268,7 +3268,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         addTearDown(provider.dispose);
@@ -3331,7 +3331,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         final sessionFile = await _writeJsonlFile(<Object?>[
@@ -3461,7 +3461,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         final sessionFile = await _writeJsonlFile(<Object?>[
@@ -3546,7 +3546,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         final sessionFile = await _writeJsonlFile(<Object?>[
@@ -3590,7 +3590,7 @@ void main() {
     test('skips bad lines and keeps remaining local history', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       final directory = Directory.systemTemp.createTempSync('zeta_jsonl_bad_');
@@ -3655,7 +3655,7 @@ void main() {
         // 历史气泡依赖 localImagePaths 渲染缩略图，不能只拼文本占位。
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         const imagePath =
@@ -3717,7 +3717,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         const imagePath = r'D:\tmp\zeta-only.png';
@@ -3758,7 +3758,7 @@ void main() {
         // 只剩工具卡，用户看到的就是「打开会话没有内容」。
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         final sessionFile = await _writeJsonlFile(<Object?>[
@@ -3898,7 +3898,7 @@ void main() {
         // 用户机器上躺着的绝大多数 rollout 仍是旧格式，两条路必须都通。
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         final sessionFile = await _writeJsonlFile(<Object?>[
@@ -3980,7 +3980,7 @@ void main() {
         },
       );
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
 
@@ -4003,7 +4003,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
 
@@ -4018,7 +4018,7 @@ void main() {
     test('falls back to thread/read when session file is empty', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       final sessionFile = await _writeJsonlFile(<Object?>[
@@ -4045,7 +4045,7 @@ void main() {
     test('parses token_count events into turn token usage', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       final sessionFile = await _writeJsonlFile(<Object?>[
@@ -4121,7 +4121,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         addTearDown(provider.dispose);
@@ -4167,7 +4167,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         addTearDown(provider.dispose);
@@ -4222,7 +4222,7 @@ void main() {
     test('parses error notifications with nested TurnError payloads', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       addTearDown(provider.dispose);
@@ -4290,7 +4290,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         addTearDown(provider.dispose);
@@ -4353,7 +4353,7 @@ void main() {
     test('maps serverOverloaded error notifications for live UI', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       addTearDown(provider.dispose);
@@ -4410,7 +4410,7 @@ void main() {
           },
         );
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         addTearDown(provider.dispose);
@@ -4467,7 +4467,7 @@ void main() {
     test('keeps legacy flat error payloads readable', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       addTearDown(provider.dispose);
@@ -4494,7 +4494,7 @@ void main() {
     test('reads configWarning summary field as the message', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       addTearDown(provider.dispose);
@@ -4521,7 +4521,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         final sessionFile = await _writeJsonlFile(<Object?>[
@@ -4581,7 +4581,7 @@ void main() {
     test('coalesces concurrent provider initialization', () async {
       final peer = _FakeJsonRpcPeer(startCompleter: Completer<void>());
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
 
@@ -4618,7 +4618,7 @@ void main() {
     test('fetches model list on demand and emits event', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       final events = <AgentEvent>[];
@@ -4651,7 +4651,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         final events = <AgentEvent>[];
@@ -4681,7 +4681,7 @@ void main() {
     test('keeps non-MCP stderr diagnostic-only', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       final events = <AgentEvent>[];
@@ -4703,7 +4703,7 @@ void main() {
     test('listModels returns cached list without extra request', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       addTearDown(provider.dispose);
@@ -4760,7 +4760,7 @@ void main() {
         },
       );
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       addTearDown(provider.dispose);
@@ -4804,7 +4804,7 @@ void main() {
         },
       );
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       addTearDown(provider.dispose);
@@ -4825,7 +4825,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         addTearDown(provider.dispose);
@@ -4850,7 +4850,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         addTearDown(provider.dispose);
@@ -4874,7 +4874,7 @@ void main() {
     test('unsubscribeThread sends thread/unsubscribe', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       addTearDown(provider.dispose);
@@ -4893,7 +4893,7 @@ void main() {
     test('does not unsubscribe when resuming the same session id', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       addTearDown(provider.dispose);
@@ -4912,7 +4912,7 @@ void main() {
     test('encodes localImage inputs in turn/start', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       addTearDown(provider.dispose);
@@ -4942,16 +4942,12 @@ void main() {
     test(
       'restores custom team-safe profile from config and encodes permissions',
       () async {
-        final config = AgentProviderConfig.defaultCodex
-            .withPermissionPreference('team-safe');
+        final config = defaultCodexAgentProviderConfig.withPermissionPreference(
+          'team-safe',
+        );
         // V2 round-trip 只保留 optionId；自定义 profile 不得变成 :workspace。
         final decoded = AgentProviderSettingsCodec(
-          migrationRegistry: AgentProviderPermissionMigrationRegistry(
-            <AgentProviderKind, AgentProviderPermissionPreferenceMigrator>{
-              AgentProviderKind.codexAppServer:
-                  const CodexPermissionPreferenceMigrator(),
-            },
-          ),
+          providerDefinitions: builtInAgentProviderDefinitionCatalog,
         ).decodeProvider(config.toJson());
         expect(decoded, isNotNull);
         expect(decoded!.selectedPermissionOptionId, 'team-safe');
@@ -4991,7 +4987,7 @@ void main() {
     test('keeps legacy turn/start params unchanged without mode', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       addTearDown(provider.dispose);
@@ -5041,8 +5037,9 @@ void main() {
     test(
       'permission apply never mutates the config fallback used by requests',
       () async {
-        final config = AgentProviderConfig.defaultCodex
-            .withPermissionPreference(':workspace');
+        final config = defaultCodexAgentProviderConfig.withPermissionPreference(
+          ':workspace',
+        );
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
           config: config,
@@ -5086,7 +5083,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex.withPermissionPreference(
+          config: defaultCodexAgentProviderConfig.withPermissionPreference(
             ':workspace',
           ),
           peer: peer,
@@ -5149,7 +5146,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         addTearDown(provider.dispose);
@@ -5239,7 +5236,7 @@ void main() {
     test('encodes explicit Default mode after Plan mode', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       addTearDown(provider.dispose);
@@ -5292,7 +5289,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         addTearDown(provider.dispose);
@@ -5340,7 +5337,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         addTearDown(provider.dispose);
@@ -5380,7 +5377,7 @@ void main() {
     test('turn/steer requires active expectedTurnId and omits cwd', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       addTearDown(provider.dispose);
@@ -5420,7 +5417,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         addTearDown(provider.dispose);
@@ -5443,7 +5440,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         addTearDown(provider.dispose);
@@ -5466,7 +5463,7 @@ void main() {
     test('dispose closes pending approvals and rejects new RPC', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       final events = <AgentEvent>[];
@@ -5506,7 +5503,7 @@ void main() {
     test('unexpected connection close clears pending approval UI', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       addTearDown(provider.dispose);
@@ -5548,7 +5545,7 @@ void main() {
         },
       );
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       addTearDown(provider.dispose);
@@ -5573,7 +5570,7 @@ void main() {
     test('encodes mention inputs in turn/start', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       addTearDown(provider.dispose);
@@ -5623,7 +5620,7 @@ void main() {
     test('encodes skill inputs in turn/start', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       addTearDown(provider.dispose);
@@ -5662,7 +5659,7 @@ void main() {
     test('lists skills and emits skillsChanged', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       addTearDown(provider.dispose);
@@ -5690,7 +5687,7 @@ void main() {
     test('maps autoApprovalReview notifications', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       addTearDown(provider.dispose);
@@ -5773,7 +5770,7 @@ void main() {
     test('updateModelSelection overrides turn/start params', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = CodexAppServerAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         peer: peer,
       );
       addTearDown(provider.dispose);
@@ -5806,7 +5803,7 @@ void main() {
     });
 
     test('falls back to config.defaultModel when selection is empty', () async {
-      final config = AgentProviderConfig.defaultCodex.copyWith(
+      final config = defaultCodexAgentProviderConfig.copyWith(
         defaultModel: 'gpt-5.5',
       );
       final peer = _FakeJsonRpcPeer();

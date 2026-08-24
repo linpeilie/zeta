@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
-import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 void main() {
   group('Codex process startup recovery', () {
@@ -13,7 +12,7 @@ void main() {
       addTearDown(() => directory.delete(recursive: true));
       final executable = await _createCodexExecutable(directory);
       final stalePath = _join(directory.path, 'removed-codex.ps1');
-      final config = AgentProviderConfig.defaultCodex.copyWith(
+      final config = defaultCodexAgentProviderConfig.copyWith(
         command: stalePath,
         extra: <String, Object?>{'cliPath': stalePath},
       );
@@ -51,7 +50,7 @@ void main() {
           ),
           'powershell.exe',
         );
-        final config = AgentProviderConfig.defaultCodex.copyWith(
+        final config = defaultCodexAgentProviderConfig.copyWith(
           command: powerShell,
           arguments: <String>[
             '-NoLogo',
@@ -116,7 +115,7 @@ void main() {
               'APPDATA': localAppData.path,
             },
           ).locate(
-            AgentProviderConfig.defaultCodex.copyWith(
+            defaultCodexAgentProviderConfig.copyWith(
               command: stalePath,
               extra: <String, Object?>{'cliPath': stalePath},
             ),

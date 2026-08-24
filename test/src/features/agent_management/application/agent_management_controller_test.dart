@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_controller.dart';
@@ -18,7 +19,7 @@ void main() {
       () async {
         // Arrange
         final harness = _ManagementHarness.create(
-          codexConfig: AgentProviderConfig.defaultCodex,
+          codexConfig: defaultCodexAgentProviderConfig,
         );
         addTearDown(harness.dispose);
 
@@ -41,7 +42,7 @@ void main() {
     test('does not offer an explicitly disabled provider', () async {
       // Arrange
       final harness = _ManagementHarness.create(
-        codexConfig: AgentProviderConfig.defaultCodex.copyWith(enabled: false),
+        codexConfig: defaultCodexAgentProviderConfig.copyWith(enabled: false),
       );
       addTearDown(harness.dispose);
 
@@ -82,7 +83,7 @@ class _ManagementHarness {
         AgentProviderSettings(
           providers: <AgentProviderConfig>[
             codexConfig,
-            AgentProviderConfig.defaultGrok,
+            defaultGrokAgentProviderConfig,
           ],
         ),
       ),

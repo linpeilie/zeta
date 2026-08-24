@@ -1,12 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 void main() {
   group('AgentProviderConfig', () {
     test('normalizes the built-in Claude provider display name', () {
-      expect(AgentProviderConfig.defaultClaudeCode.displayName, 'Claude');
+      expect(defaultClaudeCodeAgentProviderConfig.displayName, 'Claude');
       expect(
-        AgentProviderConfig.normalizeDisplayName(
+        builtInAgentProviderDefinitionCatalog.normalizeDisplayName(
           defaultClaudeCodeProviderId,
           'Claude Code',
         ),

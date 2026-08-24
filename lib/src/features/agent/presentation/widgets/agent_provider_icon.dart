@@ -1,18 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart' as svg;
 
-import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 
 const Map<String, _AgentProviderIconAsset> _agentProviderIconAssets =
     <String, _AgentProviderIconAsset>{
-      defaultAgentProviderId: _AgentProviderIconAsset(
-        path: 'assets/icons/agents/codex.svg',
-      ),
-      grokAgentProviderId: _AgentProviderIconAsset(
-        path: 'assets/icons/agents/grok.svg',
-      ),
-      defaultClaudeCodeProviderId: _AgentProviderIconAsset(
+      'codex': _AgentProviderIconAsset(path: 'assets/icons/agents/codex.svg'),
+      'grok': _AgentProviderIconAsset(path: 'assets/icons/agents/grok.svg'),
+      'claude_code': _AgentProviderIconAsset(
         path: 'assets/icons/agents/claude.svg',
         preserveOriginalColor: true,
       ),
@@ -32,14 +27,13 @@ final class _AgentProviderIconAsset {
 
 /// 使用稳定 Provider id 渲染对应的 Agent 品牌图标。
 ///
-/// 内置品牌由统一资源表声明保留原色或随主题着色；未知 Provider 回退到与协议
-/// 类型匹配的 Material 图标，避免 presentation 调用方自行维护资源与颜色策略。
+/// 内置品牌由统一资源表声明保留原色或随主题着色；未知 Provider 使用中立扩展
+/// 图标。presentation 不读取协议类型，也不参与插件路由。
 class AgentProviderIcon extends StatelessWidget {
   /// 创建 Agent Provider 图标。
   const AgentProviderIcon({
     required this.providerId,
     super.key,
-    this.kind,
     this.size = 18,
     this.color,
     this.semanticLabel,
@@ -47,9 +41,6 @@ class AgentProviderIcon extends StatelessWidget {
 
   /// Provider 的稳定配置 id。
   final String providerId;
-
-  /// 未找到品牌资源时用于选择回退图标的协议类型。
-  final AgentProviderKind? kind;
 
   /// 图标的逻辑宽高。
   final double size;
@@ -93,7 +84,7 @@ class AgentProviderIcon extends StatelessWidget {
   Widget _buildFallback(Color effectiveColor) {
     final normalizedSemanticLabel = semanticLabel?.trim();
     return Icon(
-      _fallbackIcon(kind),
+      Icons.extension_outlined,
       key: ValueKey<String>('agent-provider-icon-fallback-$providerId'),
       size: size,
       color: effectiveColor,
@@ -103,10 +94,3 @@ class AgentProviderIcon extends StatelessWidget {
     );
   }
 }
-
-IconData _fallbackIcon(AgentProviderKind? kind) => switch (kind) {
-  AgentProviderKind.codexAppServer => Icons.code_rounded,
-  AgentProviderKind.acp => Icons.smart_toy_outlined,
-  AgentProviderKind.claudeCode => Icons.terminal_rounded,
-  null => Icons.extension_outlined,
-};

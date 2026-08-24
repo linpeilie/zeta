@@ -1,8 +1,11 @@
 import 'package:zeta_agent_core/src/domain/agent_provider_models.dart';
 
-/// 初始化前按 kind 查询保守静态能力。具体映射由 data/app 组合层注入。
+/// 初始化前按开放 Provider type 查询保守静态能力。
+///
+/// 具体映射由激活后的 plugin definition catalog 注入；未知 type 必须返回
+/// [AgentProviderCapabilities.unsupported]。
 typedef AgentProviderStaticCapabilitiesFor =
-    AgentProviderCapabilities Function(AgentProviderKind kind);
+    AgentProviderCapabilities Function(AgentProviderTypeId providerType);
 
 /// Provider 的启动时机约束。
 ///

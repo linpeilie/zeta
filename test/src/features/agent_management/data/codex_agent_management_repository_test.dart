@@ -129,7 +129,7 @@ refreshToken = "refresh-secret"
       );
 
       final (result, _) = await repository.testConnection(
-        providerConfig: AgentProviderConfig.defaultCodex,
+        providerConfig: defaultCodexAgentProviderConfig,
       );
 
       expect(result.success, isTrue);
@@ -151,12 +151,12 @@ refreshToken = "refresh-secret"
       );
 
       await repository.testConnection(
-        providerConfig: AgentProviderConfig.defaultCodex,
+        providerConfig: defaultCodexAgentProviderConfig,
       );
       final probedProvider = factory.providers.single;
 
       final sessionLease = await registry.acquire(
-        AgentProviderConfig.defaultCodex,
+        defaultCodexAgentProviderConfig,
         scope: const AgentProviderRuntimeScopeKey.session('entry-a'),
       );
       expect(factory.providers, hasLength(2));

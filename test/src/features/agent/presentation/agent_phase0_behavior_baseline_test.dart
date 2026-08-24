@@ -97,7 +97,7 @@ void main() {
     final secondProvider = _RecordingProvider(
       threadId: 'thread-2',
       providerId: grokAgentProviderId,
-      config: AgentProviderConfig.defaultGrok,
+      config: defaultGrokAgentProviderConfig,
     );
     final first = _createViewModel(firstProvider, metrics: metrics);
     final second = _createViewModel(secondProvider, metrics: metrics);
@@ -225,7 +225,7 @@ class _RecordingProvider
     this.threadId = 'thread-1',
     this.providerId = defaultAgentProviderId,
     AgentProviderConfig? config,
-  }) : config = config ?? AgentProviderConfig.defaultCodex;
+  }) : config = config ?? defaultCodexAgentProviderConfig;
 
   final String threadId;
   final String providerId;

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/usage_statistics/data/global_runtime_agent_usage_quota_source.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_query_models.dart';
@@ -18,7 +19,7 @@ void main() {
         AgentProviderGlobalRuntime(runtimeRegistry: registry),
       );
 
-      final result = await source.loadQuota(AgentProviderConfig.defaultCodex);
+      final result = await source.loadQuota(defaultCodexAgentProviderConfig);
 
       expect(result.status, AgentUsageCapabilityStatus.available);
       expect(result.value?.providerId, defaultAgentProviderId);
@@ -36,7 +37,7 @@ void main() {
       AgentProviderGlobalRuntime(runtimeRegistry: registry),
     );
 
-    final result = await source.loadQuota(AgentProviderConfig.defaultCodex);
+    final result = await source.loadQuota(defaultCodexAgentProviderConfig);
 
     expect(result.status, AgentUsageCapabilityStatus.unavailable);
     expect(result.warning?.code, 'quota-unavailable');
@@ -52,7 +53,7 @@ void main() {
       AgentProviderGlobalRuntime(runtimeRegistry: registry),
     );
 
-    final result = await source.loadQuota(AgentProviderConfig.defaultCodex);
+    final result = await source.loadQuota(defaultCodexAgentProviderConfig);
 
     expect(result.status, AgentUsageCapabilityStatus.unsupported);
     expect(registry.debugLeaseCount, 0);
@@ -89,7 +90,7 @@ final class _QuotaProvider extends Fake
   int quotaReadCount = 0;
 
   @override
-  AgentProviderConfig get config => AgentProviderConfig.defaultCodex;
+  AgentProviderConfig get config => defaultCodexAgentProviderConfig;
 
   @override
   Stream<AgentEvent> get events => const Stream<AgentEvent>.empty();
@@ -120,7 +121,7 @@ final class _PlainProvider extends Fake
     with AgentProviderThreadLifecycleStub
     implements AgentRuntimePort, AgentConversationPort {
   @override
-  AgentProviderConfig get config => AgentProviderConfig.defaultCodex;
+  AgentProviderConfig get config => defaultCodexAgentProviderConfig;
 
   @override
   Stream<AgentEvent> get events => const Stream<AgentEvent>.empty();

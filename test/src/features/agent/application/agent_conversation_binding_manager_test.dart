@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 import '../../../testing/legacy_bundle_factory_mixin.dart';
@@ -33,7 +34,7 @@ void main() {
       return manager.acquireDraft(
         providerId: defaultAgentProviderId,
         entryId: 'entry-1',
-        resolveConfig: (_) => AgentProviderConfig.defaultCodex,
+        resolveConfig: (_) => defaultCodexAgentProviderConfig,
         persistPermissionOptionId: (_) async {},
       );
     }
@@ -106,7 +107,7 @@ void main() {
     });
 
     test('dormant 权限选择只更新下次请求，不创建 session Provider', () async {
-      var config = AgentProviderConfig.defaultCodex.withPermissionPreference(
+      var config = defaultCodexAgentProviderConfig.withPermissionPreference(
         ':workspace',
       );
       String? persistedOptionId;
@@ -143,7 +144,7 @@ void main() {
       final lease = manager.acquireDraft(
         providerId: defaultAgentProviderId,
         entryId: 'permission-persist-failure',
-        resolveConfig: (_) => AgentProviderConfig.defaultCodex,
+        resolveConfig: (_) => defaultCodexAgentProviderConfig,
         persistPermissionOptionId: (_) async {
           throw StateError('disk unavailable');
         },
@@ -182,7 +183,7 @@ void main() {
     });
 
     test('首次 beginTurn 切换到 session Provider 后保留并刷新权限目录', () async {
-      final config = AgentProviderConfig.defaultCodex.withPermissionPreference(
+      final config = defaultCodexAgentProviderConfig.withPermissionPreference(
         ':danger-full-access',
       );
       final lease = manager.acquireDraft(
@@ -221,7 +222,7 @@ void main() {
       final reopened = manager.acquireThread(
         providerId: defaultAgentProviderId,
         threadId: 'thread-1',
-        resolveConfig: (_) => AgentProviderConfig.defaultCodex,
+        resolveConfig: (_) => defaultCodexAgentProviderConfig,
         persistPermissionOptionId: (_) async {},
       );
 
@@ -329,13 +330,13 @@ void main() {
       final first = manager.acquireThread(
         providerId: defaultAgentProviderId,
         threadId: 'thread-a',
-        resolveConfig: (_) => AgentProviderConfig.defaultCodex,
+        resolveConfig: (_) => defaultCodexAgentProviderConfig,
         persistPermissionOptionId: (_) async {},
       );
       final second = manager.acquireThread(
         providerId: defaultAgentProviderId,
         threadId: 'thread-b',
-        resolveConfig: (_) => AgentProviderConfig.defaultCodex,
+        resolveConfig: (_) => defaultCodexAgentProviderConfig,
         persistPermissionOptionId: (_) async {},
       );
       final firstEvents = <AgentEvent>[];
@@ -418,7 +419,7 @@ void main() {
 
     test('global runtime 不参与 Binding 空闲回收', () async {
       final global = await registry.acquire(
-        AgentProviderConfig.defaultCodex,
+        defaultCodexAgentProviderConfig,
         scope: AgentProviderRuntimeScopeKey.global,
       );
       await global.bundle.runtime.initialize();
@@ -436,7 +437,7 @@ void main() {
       final existing = manager.acquireThread(
         providerId: defaultAgentProviderId,
         threadId: 'thread-1',
-        resolveConfig: (_) => AgentProviderConfig.defaultCodex,
+        resolveConfig: (_) => defaultCodexAgentProviderConfig,
         persistPermissionOptionId: (_) async {},
       );
 

@@ -1,6 +1,8 @@
 import 'package:zeta_foundation/zeta_foundation.dart';
 
-import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_agent_providers/claude_code_plugin.dart';
+import 'package:zeta_agent_providers/codex_plugin.dart';
+import 'package:zeta_agent_providers/grok_plugin.dart';
 
 /// Agent Provider 的指标标签映射。
 ///

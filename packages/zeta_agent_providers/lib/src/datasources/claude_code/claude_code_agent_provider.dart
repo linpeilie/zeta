@@ -13,6 +13,7 @@ import 'package:zeta_agent_providers/src/datasources/claude_code/claude_code_hid
 import 'package:zeta_agent_providers/src/datasources/claude_code/claude_code_model_catalog.dart';
 import 'package:zeta_agent_providers/src/datasources/claude_code/claude_code_oauth_credentials_reader.dart';
 import 'package:zeta_agent_providers/src/datasources/claude_code/claude_code_permission_policy_adapter.dart';
+import 'package:zeta_agent_providers/src/datasources/claude_code/claude_code_provider_config.dart';
 import 'package:zeta_agent_providers/src/datasources/claude_code/claude_code_plan_approval_adapter.dart';
 import 'package:zeta_agent_providers/src/datasources/claude_code/claude_code_process_starter.dart';
 import 'package:zeta_agent_providers/src/datasources/claude_code/claude_code_question_adapter.dart';

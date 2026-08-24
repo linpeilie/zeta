@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:logger/logger.dart';
 
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 void main() {
@@ -168,7 +169,7 @@ void main() {
         );
         final effect = AgentRecordModelCatalogEffect(
           scope: _scope(threadId: 'thread-from-event'),
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           models: models,
           source: 'runtime event',
         );
@@ -179,7 +180,7 @@ void main() {
 
         // Assert
         expect(recordCount, 1);
-        expect(recordedConfig, AgentProviderConfig.defaultCodex);
+        expect(recordedConfig, defaultCodexAgentProviderConfig);
         expect(recordedModels, same(models));
         expect(recordedSource, 'runtime event');
 
@@ -188,7 +189,7 @@ void main() {
         runner.run(
           AgentRecordModelCatalogEffect(
             scope: _scope(listenerGeneration: 8),
-            config: AgentProviderConfig.defaultCodex,
+            config: defaultCodexAgentProviderConfig,
             models: models,
             source: 'stale generation',
           ),
@@ -196,7 +197,7 @@ void main() {
         runner.run(
           AgentRecordModelCatalogEffect(
             scope: _scope(runtimeId: 'runtime-2'),
-            config: AgentProviderConfig.defaultCodex,
+            config: defaultCodexAgentProviderConfig,
             models: models,
             source: 'stale runtime',
           ),
@@ -260,7 +261,7 @@ void main() {
           (record) => record.message.contains(acceptedMessage),
         );
         final context = _structuredContext(record);
-        expect(context['providerId'], AgentProviderConfig.defaultCodex.id);
+        expect(context['providerId'], defaultCodexAgentProviderConfig.id);
         expect(context['listenerGeneration'], 7);
         expect(context['runtimeId'], 'runtime-1');
         expect(context['connectionEpoch'], 3);
@@ -311,7 +312,7 @@ void main() {
             connectionEpoch: 3,
             threadId: 'thread-1',
           ),
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           models: AgentModelList(models: <AgentModelInfo>[]),
           source: 'disposed',
         ),

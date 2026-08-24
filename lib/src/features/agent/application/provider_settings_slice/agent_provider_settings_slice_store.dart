@@ -25,8 +25,11 @@ final class AgentProviderSettingsSliceStore
     required this.effectRunner,
     required this.modelCatalogRepository,
     required this.staticCapabilitiesFor,
+    String Function(AgentProviderConfig config)? modelCatalogSourceFor,
     OperationIdGenerator Function(String scope)? operationIdGeneratorFactory,
   }) : _state = initialState,
+       _modelCatalogSourceFor =
+           modelCatalogSourceFor ?? ((config) => config.displayName),
        _generatorFactory =
            operationIdGeneratorFactory ??
            ((scope) => OperationIdGenerator(scope: scope));
@@ -38,6 +41,7 @@ final class AgentProviderSettingsSliceStore
   @override
   final AgentModelCatalogRepository modelCatalogRepository;
   final AgentProviderStaticCapabilitiesFor staticCapabilitiesFor;
+  final String Function(AgentProviderConfig config) _modelCatalogSourceFor;
   final OperationIdGenerator Function(String scope) _generatorFactory;
   final Map<String, OperationIdGenerator> _generators =
       <String, OperationIdGenerator>{};
@@ -93,6 +97,10 @@ final class AgentProviderSettingsSliceStore
     return staticCapabilitiesFor(config.kind);
   }
 
+  @override
+  String modelCatalogSourceFor(AgentProviderConfig config) =>
+      _modelCatalogSourceFor(config);
+
   /// `Listenable` 兼容入口；不依赖 Flutter 的 `ChangeNotifier`。
   @override
   void addListener(void Function() listener) => _listeners.add(listener);
@@ -138,8 +146,10 @@ final class AgentProviderSettingsSliceStore
   @override
   Future<void> setProviderEnabled(String providerId, bool enabled) async {
     await loadSettings();
-    final current =
-        providerConfigById(providerId) ?? AgentProviderConfig.defaultCodex;
+    final current = providerConfigById(providerId);
+    if (current == null) {
+      throw ArgumentError.value(providerId, 'providerId', 'Unknown provider');
+    }
     if (current.enabled == enabled) {
       return;
     }

@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/usage_statistics/data/providers/codex/codex_token_usage_source.dart';
 import 'package:zeta/src/features/usage_statistics/data/providers/codex/codex_usage_log_scanner.dart';
@@ -15,7 +16,7 @@ import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_text_
 void main() {
   test('maps canonical records and uses config id partition', () async {
     final sessions = _sessions();
-    final config = AgentProviderConfig.defaultCodex.copyWith(
+    final config = defaultCodexAgentProviderConfig.copyWith(
       id: 'codex-work',
       displayName: 'Codex Work',
     );
@@ -73,7 +74,7 @@ void main() {
   });
 
   test('reuses partition cache and forwards force refresh', () async {
-    final config = AgentProviderConfig.defaultCodex;
+    final config = defaultCodexAgentProviderConfig;
     final scanner = _UsageScanner(_sessions());
     final source = CodexTokenUsageSource(
       config: config,
@@ -100,7 +101,7 @@ void main() {
         const <String, CodexUsageSessionSnapshot>{},
       );
       final source = CodexTokenUsageSource(
-        config: AgentProviderConfig.defaultCodex.copyWith(
+        config: defaultCodexAgentProviderConfig.copyWith(
           environment: const <String, String>{
             'CODEX_HOME': '/configured/codex',
             'SECRET_VALUE': 'must-not-leak',
@@ -127,7 +128,7 @@ void main() {
     'index write failure stays a warning and keeps scanned records',
     () async {
       final source = CodexTokenUsageSource(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         partitionStore: _WriteFailingPartitionStore(),
         scanner: _UsageScanner(_sessions()),
         environment: const <String, String>{'CODEX_HOME': '/codex-home'},

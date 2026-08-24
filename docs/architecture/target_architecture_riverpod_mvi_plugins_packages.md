@@ -1,8 +1,8 @@
 # Zeta 目标架构：Feature-First DDD、Riverpod、MVI、微内核与多 Package
 
-最后更新：2026-08-23
+最后更新：2026-08-24
 
-状态：Phase 0–2 已落地；Phase 3 第 3、4 批已关批，第 1、2 批独立观察
+状态：Phase 0–2 已落地；Phase 3 第 3–6 批已关批，第 1、2 批独立观察；尚未准入 Phase 4
 
 ## 决策摘要
 
@@ -661,7 +661,7 @@ Phase 0 先采基线，再固定阈值。至少要能检测：
 | 状态管理 | `ChangeNotifier`、`ValueNotifier`、controller、专用 store 混合 | MVI 切片 + 单一逻辑树 + Riverpod presentation adapter | 低层高频 TimelineStore/管线可继续专用实现 |
 | 应用协调 | `IdeShellController` 组合并持有多个 feature controller | shell coordinator 只编排 workflow；feature store 独立 owner | `IdeHome` 仍是唯一 Workbench 组合边界 |
 | 流式 Agent | 专用 event pipeline、pure reducer、effect runner、frame scheduler | 原样保留；上层增加轻量 ConversationSlice/revision adapter | G1/G2/G3、entryId、coalescing、Binding 语义 |
-| Provider 装配 | `DefaultAgentProviderFactory` 在 data 组合点 switch | 编译期 plugin registration → typed contribution → runtime registry | Bundle/capability、global/session scope、fail-closed |
+| Provider 装配 | ✅ 三个显式插件 → typed contribution/definition → type-id 聚合 factory → runtime registry | 已达到目标态；继续以契约守卫防回退 | Bundle/capability、global/session scope、fail-closed |
 | 插件 | Provider bundle 具备部分插件特征，无通用 kernel | 最小可信微内核，只管理注册/能力/生命周期 | 不做第三方动态插件 |
 | 生命周期 | app、registry、Binding、ViewModel 各自显式 dispose | kernel/store scope 进一步显式化；Riverpod 只管理其 owner | runtime registry 仍是 CLI 唯一 owner |
 | 依赖门禁 | 文档 + 架构测试 + 单包目录规则 | 再加 Package DAG 和 public API 门禁 | 现有 G1–G8 全部继续有效 |
@@ -760,13 +760,13 @@ Phase 0 先采基线，再固定阈值。至少要能检测：
 - 根 app 仍是唯一装配点；kernel 不 import 具体 Provider。
 - 所有 Package 禁止跨 `/src` import 和反向依赖。
 - analyze/test/构建通过；与 Phase 0 相比启动、内存和流式 publish 基线无显著退化。
-- compatibility layer 有使用点计数、owner 和 Phase 4 删除计划。
+- compatibility layer 有使用点计数、owner 和删除计划（已于 Phase 3 第 6 批兑现）。
 
 **回滚方式**
 
 - 保留原路径兼容 barrel；调用方可逐提交切回原 import。
 - 每次只移动一个叶子模块，回滚不需要恢复多个 Package。
-- plugin catalog 可切回原 `DefaultAgentProviderFactory` 直连组合。
+- Phase 1 当时可切回旧直连组合；Phase 3 第 6 批删除旧实现后只允许整体 revert 该批。
 
 **风险**
 
@@ -839,7 +839,7 @@ store 和 ViewModel 直连路径，所有 Conversation 固定走按 BindingKey �
 
 ### Phase 3：扩大迁移范围
 
-**状态：第 3、4 批已于 2026-08-23 关批；第 1、2 批仍按各自窗口独立观察。**
+**状态：第 3–6 批已关批；第 1、2 批仍按各自窗口独立观察。**
 Phase 2 真实使用证据仍在计时（2026-08-23 起生产全量启用 conversation 切片路径）；
 第 1 批经另行显式确认推进到四步节奏第 3 步，最早于 2026-08-26 满足观察下限。
 第 2 批 2a–2c 双路径与完整重构门禁通过后，经再次显式确认接受两批观察窗口重叠，
@@ -868,6 +868,14 @@ store、app effect runner/composition 与 Riverpod 只读镜像均已落地；�
 只读 `ZetaStateSnapshot` 已建立，生产固定为 MVI 单一路径。字段级契约见
 [Workspace 与 IDE Session 开工文档](./phase3_batch4_workspace_ide_session.md)。
 
+第 5 批已删除 desktop attention、conversation workspace/composer 的旧 owner、flag 与
+fallback；第 6 批按 2026-08-24 明确要求直接进入目标态，三个 essential Provider
+插件取代 compatibility/default factory，core 的封闭 Provider enum/默认配置目录同步
+清零。两批记录分别见
+[第 5 批](./phase3_batch5_desktop_attention_conversation_workspace.md) 与
+[第 6 批](./phase3_batch6_provider_plugins.md)。这些提前关批授权不豁免第 1、2 批观察、
+Phase 2 连续 14 天证据或 Phase 4 三平台/发布前置条件。
+
 按风险从低到高分批，不做一次性“大爆炸”：
 
 1. settings/appearance/general；
@@ -875,7 +883,7 @@ store、app effect runner/composition 与 Riverpod 只读镜像均已落地；�
 3. project threads 与 usage statistics；
 4. workspace 与 ide session；
 5. ~~desktop attention 与完整 conversation workspace~~（✅ 2026-08-23 已关批）；
-6. 将 Codex/Grok/Claude 从 compatibility factory 转为三个显式 compile-time plugin contribution。
+6. ~~将 Codex/Grok/Claude 从 compatibility factory 转为三个显式 compile-time plugin contribution~~（✅ 2026-08-24 已关批，并同步清算 core 封闭 Provider 目录）。
 
 **改动范围**
 
@@ -904,7 +912,7 @@ store、app effect runner/composition 与 Riverpod 只读镜像均已落地；�
 
 - 每批独立 feature flag/组合入口，不跨批双写。
 - Repository 与持久化 schema 尽量不变；若必须变更，保留向后读、旧格式写的临时开关直到本批稳定。
-- Provider plugin 可按 ID 单独回退到 compatibility contribution。
+- 第 6 批无生产双轨；问题整体 revert 该批，不能按 ID 回落 compatibility/default factory。
 
 **风险**
 
@@ -920,11 +928,12 @@ store、app effect runner/composition 与 Riverpod 只读镜像均已落地；�
 - 云同步、第三方插件 SDK、移动端支持。
 - 大规模视觉 redesign 或 Provider 协议重构。
 
-### Phase 4：删除旧路径与兼容层
+### Phase 4：删除剩余旧路径与过渡层
 
 **改动范围**
 
-- 删除旧 ChangeNotifier/ViewModel bridge、已无调用者的 callback facade、compatibility plugin contribution 和过渡 barrel。
+- 删除旧 ChangeNotifier/ViewModel bridge、已无调用者的 callback facade 和过渡 barrel。
+- Provider compatibility contribution 已在 Phase 3 第 6 批提前清零，Phase 4 不重复保留删除任务。
 - 删除根 app 中直接构造 feature data/controller 的旧路径，保留明确 composition providers。
 - 收紧 lint/架构守卫：禁止新 direct Repository call、跨 `/src` import、legacy state owner 和 root snapshot UI 订阅。
 - 更新架构总览、工程规范、开发指南、术语表、贡献指南与 `AGENTS.md`，使目标态成为新权威源。
@@ -932,20 +941,20 @@ store、app effect runner/composition 与 Riverpod 只读镜像均已落地；�
 
 **前置条件**
 
-- 所有生产路径已在 Phase 3 运行稳定；compatibility 使用计数为零。
+- 所有生产路径已在 Phase 3 运行稳定；Provider compatibility 使用计数已为零。
 - 旧格式数据迁移窗口结束，回退策略已有发布 tag/分支保障。
 - 三桌面平台与真实 Provider 冒烟完成。
 
 **验收标准**
 
-- `rg`/架构测试证明旧 owner、旧 facade、跨层 import 和 compatibility API 为零。
+- `rg`/架构测试证明旧 owner、旧 facade、跨层 import 和全部过渡 API 为零。
 - root app、kernel、agent core/providers、ui 的 Package DAG 与本文一致。
 - 全量 analyze/test、性能基线、平台构建和真实 CLI 冒烟通过。
 - 文档只描述一条当前路径，不再要求贡献者理解两套架构。
 
 **回滚方式**
 
-- Phase 4 按 compatibility 组件分小提交删除；问题只 revert 对应删除提交。
+- Phase 4 按剩余 owner/facade 分小提交删除；问题只 revert 对应删除提交。
 - 发布前保留可构建 tag，避免依赖已经删除的运行时 feature flag。
 - 持久化继续向后读取至少一个稳定周期；不通过恢复旧双写路径回滚。
 

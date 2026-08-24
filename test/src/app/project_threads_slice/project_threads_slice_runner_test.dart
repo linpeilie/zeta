@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/app/project_threads_slice/project_threads_slice_composition.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
@@ -31,7 +32,7 @@ void main() {
         runtimeRegistry: registry,
         configStore: MemoryAgentProviderConfigStore(
           const AgentProviderSettings(
-            providers: <AgentProviderConfig>[AgentProviderConfig.defaultCodex],
+            providers: <AgentProviderConfig>[defaultCodexAgentProviderConfig],
             activeProviderId: defaultAgentProviderId,
           ),
         ),
@@ -78,7 +79,7 @@ void main() {
         runtimeRegistry: registry,
         configStore: MemoryAgentProviderConfigStore(
           const AgentProviderSettings(
-            providers: <AgentProviderConfig>[AgentProviderConfig.defaultCodex],
+            providers: <AgentProviderConfig>[defaultCodexAgentProviderConfig],
             activeProviderId: defaultAgentProviderId,
           ),
         ),
@@ -138,7 +139,7 @@ void main() {
         runtimeRegistry: registry,
         configStore: MemoryAgentProviderConfigStore(
           const AgentProviderSettings(
-            providers: <AgentProviderConfig>[AgentProviderConfig.defaultCodex],
+            providers: <AgentProviderConfig>[defaultCodexAgentProviderConfig],
             activeProviderId: defaultAgentProviderId,
           ),
         ),

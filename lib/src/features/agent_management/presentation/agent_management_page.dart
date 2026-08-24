@@ -463,7 +463,8 @@ class AgentManagementPageState extends State<AgentManagementPage> {
             agent: agent,
             onDetect: _operations.detect,
           );
-          final setupGuide = agent.definition.id == defaultClaudeCodeProviderId
+          final setupGuide =
+              agent.definition.id == AgentDefinition.claudeCode.id
               ? const _ClaudeCodeSetupGuideCard()
               : null;
           final accountDataEnrichment =
@@ -676,7 +677,7 @@ class AgentManagementPageState extends State<AgentManagementPage> {
   }
 
   Future<void> _testConnection() async {
-    if (_operations.selectedAgentId == defaultClaudeCodeProviderId) {
+    if (_operations.selectedAgentId == AgentDefinition.claudeCode.id) {
       final confirmed = await showIdeDialog<bool>(
         context: context,
         barrierDismissible: false,
@@ -778,11 +779,7 @@ class _AgentDetailStatusSummary extends StatelessWidget {
       key: const ValueKey('agent-detail-status-summary'),
       mainAxisSize: MainAxisSize.min,
       children: [
-        _AgentLogo(
-          providerId: agent.definition.id,
-          kind: _kindForAgentId(agent.definition.id),
-          installed: agent.installed,
-        ),
+        _AgentLogo(providerId: agent.definition.id, installed: agent.installed),
         const SizedBox(width: IdeSpacing.space8),
         _AgentStatusText(
           status: _priorityAgentStatus(colors, agent, context.l10n),
@@ -866,7 +863,6 @@ class _AgentListRow extends StatelessWidget {
           subtitle: agent.definition.commandName,
           leading: _AgentLogo(
             providerId: agent.definition.id,
-            kind: _kindForAgentId(agent.definition.id),
             installed: agent.installed,
           ),
           trailing: _AgentRowStatus(
@@ -1121,14 +1117,9 @@ _AgentStatus _priorityAgentStatus(
 }
 
 class _AgentLogo extends StatelessWidget {
-  const _AgentLogo({
-    required this.providerId,
-    required this.installed,
-    this.kind,
-  });
+  const _AgentLogo({required this.providerId, required this.installed});
 
   final String providerId;
-  final AgentProviderKind? kind;
   final bool installed;
 
   @override
@@ -1145,7 +1136,6 @@ class _AgentLogo extends StatelessWidget {
       alignment: Alignment.center,
       child: AgentProviderIcon(
         providerId: providerId,
-        kind: kind,
         size: 14,
         color: installed ? colors.textSecondary : colors.textTertiary,
       ),
@@ -1723,15 +1713,6 @@ class _SetupGuideStep extends StatelessWidget {
       ],
     );
   }
-}
-
-AgentProviderKind? _kindForAgentId(String agentId) {
-  return switch (agentId) {
-    defaultAgentProviderId => AgentProviderKind.codexAppServer,
-    grokAgentProviderId => AgentProviderKind.acp,
-    defaultClaudeCodeProviderId => AgentProviderKind.claudeCode,
-    _ => null,
-  };
 }
 
 String _accountEvidenceLabel(ManagedAgent agent, AppLocalizations l10n) {

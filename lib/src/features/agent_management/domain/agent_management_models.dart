@@ -99,7 +99,7 @@ class AgentDefinition {
 
   /// 内置 Codex CLI 定义。
   static const AgentDefinition codex = AgentDefinition(
-    id: defaultAgentProviderId,
+    id: 'codex',
     displayName: 'Codex',
     vendor: 'OpenAI',
     commandName: 'codex',
@@ -112,7 +112,7 @@ class AgentDefinition {
 
   /// 内置 Grok CLI（ACP stdio）定义。
   static const AgentDefinition grok = AgentDefinition(
-    id: grokAgentProviderId,
+    id: 'grok',
     displayName: 'Grok',
     vendor: 'xAI',
     commandName: 'grok',
@@ -125,7 +125,7 @@ class AgentDefinition {
 
   /// 内置 Claude Code CLI（stream-json）定义。
   static const AgentDefinition claudeCode = AgentDefinition(
-    id: defaultClaudeCodeProviderId,
+    id: 'claude_code',
     displayName: 'Claude',
     vendor: 'Anthropic',
     commandName: 'claude',

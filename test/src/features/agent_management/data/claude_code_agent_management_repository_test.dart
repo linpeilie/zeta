@@ -34,7 +34,7 @@ void main() {
 
       // Act
       final agent = await repository.detect(
-        providerConfig: AgentProviderConfig.defaultClaudeCode,
+        providerConfig: defaultClaudeCodeAgentProviderConfig,
         enabled: true,
       );
 
@@ -73,7 +73,7 @@ void main() {
 
         // Act
         final agent = await repository.detect(
-          providerConfig: AgentProviderConfig.defaultClaudeCode,
+          providerConfig: defaultClaudeCodeAgentProviderConfig,
           enabled: true,
           onProgress: (update, _) => progress.add(update),
         );
@@ -139,7 +139,7 @@ void main() {
 
       // Act
       final agent = await repository.detect(
-        providerConfig: AgentProviderConfig.defaultClaudeCode,
+        providerConfig: defaultClaudeCodeAgentProviderConfig,
         enabled: true,
       );
 
@@ -217,7 +217,7 @@ void main() {
           );
 
           final agent = await repository.detect(
-            providerConfig: AgentProviderConfig.defaultClaudeCode,
+            providerConfig: defaultClaudeCodeAgentProviderConfig,
             enabled: true,
           );
 
@@ -259,7 +259,7 @@ void main() {
         );
 
         final agent = await repository.detect(
-          providerConfig: AgentProviderConfig.defaultClaudeCode,
+          providerConfig: defaultClaudeCodeAgentProviderConfig,
           enabled: true,
         );
 
@@ -299,7 +299,7 @@ void main() {
         );
 
         final agent = await repository.detect(
-          providerConfig: AgentProviderConfig.defaultClaudeCode,
+          providerConfig: defaultClaudeCodeAgentProviderConfig,
           enabled: true,
         );
 
@@ -338,11 +338,11 @@ void main() {
 
       // Act
       final detected = await repository.detect(
-        providerConfig: AgentProviderConfig.defaultClaudeCode,
+        providerConfig: defaultClaudeCodeAgentProviderConfig,
         enabled: true,
       );
       final (result, models) = await repository.testConnection(
-        providerConfig: AgentProviderConfig.defaultClaudeCode,
+        providerConfig: defaultClaudeCodeAgentProviderConfig,
       );
 
       // Assert
@@ -396,11 +396,11 @@ void main() {
       );
 
       final detected = await repository.detect(
-        providerConfig: AgentProviderConfig.defaultClaudeCode,
+        providerConfig: defaultClaudeCodeAgentProviderConfig,
         enabled: true,
       );
       final (connection, _) = await repository.testConnection(
-        providerConfig: AgentProviderConfig.defaultClaudeCode,
+        providerConfig: defaultClaudeCodeAgentProviderConfig,
       );
 
       expect(detected.accountState, AgentAccountState.unavailable);
@@ -457,7 +457,7 @@ void main() {
       );
 
       final (result, models) = await repository.testConnection(
-        providerConfig: AgentProviderConfig.defaultClaudeCode,
+        providerConfig: defaultClaudeCodeAgentProviderConfig,
       );
 
       expect(result.success, isFalse);
@@ -484,7 +484,7 @@ void main() {
     );
 
     final (result, _) = await repository.testConnection(
-      providerConfig: AgentProviderConfig.defaultClaudeCode,
+      providerConfig: defaultClaudeCodeAgentProviderConfig,
     );
 
     expect(result.success, isFalse);
@@ -506,7 +506,7 @@ class _FakeClaudeCodeCliLocator extends ClaudeCodeCliLocator {
 
   @override
   Future<ResolvedCliCommand?> resolvePath(String path) =>
-      locate(AgentProviderConfig.defaultClaudeCode);
+      locate(defaultClaudeCodeAgentProviderConfig);
 }
 
 final class _FakeProcessRunner {

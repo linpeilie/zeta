@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/data/agent_model_catalog_cache_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
@@ -12,7 +13,7 @@ import '../../../testing/legacy_bundle_factory_mixin.dart';
 void main() {
   group('AgentProviderSettingsController', () {
     test('persists only normalized V2 permission optionId', () async {
-      final store = _RecordingConfigStore(const AgentProviderSettings());
+      final store = _RecordingConfigStore(builtInAgentProviderSettings);
       final registry = AgentProviderRuntimeRegistry(
         providerFactory: FakeAgentProviderBundleBuilder.fromFake(
           _TrackingFakeAgentProvider(),
@@ -51,7 +52,7 @@ void main() {
       final controller = AgentProviderSettingsController(
         runtimeRegistry: registry,
         configStore: MemoryAgentProviderConfigStore(
-          const AgentProviderSettings(),
+          builtInAgentProviderSettings,
         ),
       );
       addTearDown(controller.dispose);
@@ -66,7 +67,7 @@ void main() {
 
     test('invalidates model cache when an environment value changes', () async {
       // Arrange
-      final initial = AgentProviderConfig.defaultCodex.copyWith(
+      final initial = defaultCodexAgentProviderConfig.copyWith(
         environment: const <String, String>{'ZETA_TOKEN': 'old'},
       );
       final updated = initial.copyWith(
@@ -114,7 +115,7 @@ void main() {
 
     test('model-related settings rebuild only the global runtime', () async {
       // Arrange
-      final initial = AgentProviderConfig.defaultClaudeCode;
+      final initial = defaultClaudeCodeAgentProviderConfig;
       final updated = initial.copyWith(
         extra: const <String, Object?>{
           claudeCodeAccountDataEnrichmentKey: false,
@@ -178,7 +179,7 @@ void main() {
         final controller = AgentProviderSettingsController(
           runtimeRegistry: registry,
           configStore: MemoryAgentProviderConfigStore(
-            const AgentProviderSettings(),
+            builtInAgentProviderSettings,
           ),
         );
         addTearDown(controller.dispose);
@@ -201,7 +202,7 @@ void main() {
     test('loading settings never creates a provider runtime', () async {
       // Arrange
       final mismatchedProvider = _TrackingFakeAgentProvider(
-        AgentProviderConfig.defaultGrok,
+        defaultGrokAgentProviderConfig,
       );
       final registry = AgentProviderRuntimeRegistry(
         providerFactory: FakeAgentProviderBundleBuilder.fromFake(
@@ -212,7 +213,7 @@ void main() {
       final controller = AgentProviderSettingsController(
         runtimeRegistry: registry,
         configStore: MemoryAgentProviderConfigStore(
-          const AgentProviderSettings(),
+          builtInAgentProviderSettings,
         ),
       );
       addTearDown(controller.dispose);
@@ -252,7 +253,7 @@ void main() {
 
 class _TrackingFakeAgentProvider extends FakeAgentProvider {
   _TrackingFakeAgentProvider([
-    AgentProviderConfig config = AgentProviderConfig.defaultCodex,
+    AgentProviderConfig config = defaultCodexAgentProviderConfig,
   ]) : super(config: config);
 
   int disposeCount = 0;

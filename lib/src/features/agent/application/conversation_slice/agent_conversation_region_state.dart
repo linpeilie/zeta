@@ -402,7 +402,6 @@ final class AgentConversationHistoryState {
     required Iterable<AgentConversationTurnGroup> visibleTurns,
     required AgentThreadOpenPhase threadOpenPhase,
     required String providerId,
-    required AgentProviderKind providerKind,
     required String providerName,
   }) {
     final standbySnapshot = standbyTurn == null
@@ -417,7 +416,6 @@ final class AgentConversationHistoryState {
       visibleTurns: turnSnapshots,
       threadOpenPhase: threadOpenPhase,
       providerId: providerId,
-      providerKind: providerKind,
       providerName: providerName,
     );
   }
@@ -428,7 +426,6 @@ final class AgentConversationHistoryState {
     required this.visibleTurns,
     required this.threadOpenPhase,
     required this.providerId,
-    required this.providerKind,
     required this.providerName,
   });
 
@@ -436,7 +433,6 @@ final class AgentConversationHistoryState {
   final List<AgentConversationTurnGroup> visibleTurns;
   final AgentThreadOpenPhase threadOpenPhase;
   final String providerId;
-  final AgentProviderKind providerKind;
   final String providerName;
 
   final Object _semanticSignature;
@@ -449,7 +445,6 @@ final class AgentConversationHistoryState {
       other is AgentConversationHistoryState &&
           other.threadOpenPhase == threadOpenPhase &&
           other.providerId == providerId &&
-          other.providerKind == providerKind &&
           other.providerName == providerName &&
           _deepUiEquals(other._semanticSignature, _semanticSignature);
 
@@ -457,7 +452,6 @@ final class AgentConversationHistoryState {
   int get hashCode => Object.hash(
     threadOpenPhase,
     providerId,
-    providerKind,
     providerName,
     _deepUiHash(_semanticSignature),
   );

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_plugin_kernel/zeta_plugin_kernel.dart';
 
@@ -12,30 +14,44 @@ final _log = loggerFor('zeta.app.plugin_catalog');
 /// 这是唯一的插件注册点：目录是一段写死的 Dart 代码，不扫描目录、不下载、
 /// 不反射。要新增插件就改这里，改动会经过评审和编译期检查。
 ///
-/// 阶段 1 只登记一个兼容插件（[CompatibilityAgentProviderPlugin]），把现有
-/// `DefaultAgentProviderFactory` 原样接进内核；Provider 的分派逻辑一字未动。
+/// 内置目录显式登记 Codex、Grok 与 Claude Code 三个 Provider 插件。新增 Provider
+/// 只在 providers 包的 compile-time 目录追加一项，不扫描目录、不动态执行代码。
 final class ZetaPluginCatalog {
   ZetaPluginCatalog._(this._registry);
 
-  /// 兼容目录：只登记 Agent Provider 兼容插件。
-  ///
-  /// [bundleFactory] 由 app 组合层构造（它需要文本目录与持久化文件），插件
-  /// 只负责把它作为贡献交给内核。
-  factory ZetaPluginCatalog.compatibility({
-    required AgentProviderBundleFactory bundleFactory,
+  /// 创建三个显式内置 Provider 插件的编译期目录。
+  factory ZetaPluginCatalog.builtIn({
+    ClaudeCodeSessionDecisionStoreFactory?
+    claudeCodeSessionDecisionStoreFactory,
+    ClaudeCodeHiddenThreadStore? claudeCodeHiddenThreadStore,
+    ClaudeCodeCliMetadataLoader? claudeCodeMetadataLoader,
+    AgentUiTextCatalog textCatalog = const FallbackAgentUiTextCatalog(),
     Clock clock = systemClock,
     ZetaMetricsPort metrics = noopZetaMetricsPort,
   }) {
     return ZetaPluginCatalog._(
       ZetaPluginRegistry(
-        factories: <ZetaPluginFactory>[
-          CompatibilityAgentProviderPlugin(bundleFactory: bundleFactory),
-        ],
+        factories: createBuiltInAgentProviderPlugins(
+          claudeCodeSessionDecisionStoreFactory:
+              claudeCodeSessionDecisionStoreFactory,
+          claudeCodeHiddenThreadStore: claudeCodeHiddenThreadStore,
+          claudeCodeMetadataLoader: claudeCodeMetadataLoader,
+          textCatalog: textCatalog,
+        ),
         clock: clock,
         metrics: metrics,
       ),
     );
   }
+
+  /// 测试专用目录，用来覆盖重复域、激活失败与反序关闭等 fail-closed 契约。
+  factory ZetaPluginCatalog.forTesting({
+    required Iterable<ZetaPluginFactory> factories,
+    Clock clock = systemClock,
+    ZetaMetricsPort metrics = noopZetaMetricsPort,
+  }) => ZetaPluginCatalog._(
+    ZetaPluginRegistry(factories: factories, clock: clock, metrics: metrics),
+  );
 
   final ZetaPluginRegistry _registry;
   ZetaPluginActivationReport? _report;
@@ -63,30 +79,68 @@ final class ZetaPluginCatalog {
     return report;
   }
 
-  /// 取出唯一的 Agent Provider 工厂。
+  /// 解析激活后的 Provider definitions 与聚合 bundle factory。
   ///
-  /// **fail-closed**：没有任何插件贡献工厂时抛 [StateError]，而不是回退到某个
-  /// 内置默认值——静默降级会让用户以为 Provider 正常可用。
-  AgentProviderBundleFactory resolveAgentProviderBundleFactory() {
+  /// **fail-closed**：未激活、任一 essential 插件失败、无贡献或重复 Provider
+  /// type 时均抛 [StateError]，绝不返回部分目录或回落到 Codex。
+  ResolvedAgentProviderPlugins resolveAgentProviders() {
+    final report = _report;
+    if (report == null) {
+      throw StateError('Zeta plugins must be activated before resolve');
+    }
+    if (report.isDegraded) {
+      throw StateError('Essential Agent provider plugins failed to activate');
+    }
+    for (final state in report.states) {
+      if (state.status != ZetaPluginStatus.active ||
+          !state.descriptor.essential) {
+        continue;
+      }
+      final ownedContributions = _registry
+          .contributionsOf<AgentProviderPluginContribution>(
+            state.descriptor.id,
+          );
+      if (ownedContributions.length != 1) {
+        throw StateError(
+          'Essential Agent provider plugin ${state.descriptor.id} must '
+          'contribute exactly one provider definition',
+        );
+      }
+    }
     final contributions = _registry
         .contributions<AgentProviderPluginContribution>();
     if (contributions.isEmpty) {
       throw StateError(
-        'No plugin contributed an AgentProviderBundleFactory; '
+        'No plugin contributed an Agent provider definition; '
         'the app cannot start Agent providers',
       );
     }
-    if (contributions.length > 1) {
-      // 阶段 1 只允许一个贡献者。多个工厂意味着"谁来造 bundle"没有唯一答案，
-      // 必须先在目录层面解决，不能在这里随便挑一个。
-      throw StateError(
-        'Expected exactly one AgentProviderBundleFactory contribution, '
-        'found ${contributions.length}',
-      );
+    return ResolvedAgentProviderPlugins(contributions);
+  }
+
+  /// 激活并解析启动必需的 Provider；任一步失败都会立即回收已激活 handle。
+  ///
+  /// 该同步组合方法不把半激活目录交给调用方。插件关闭可以包含异步清理，因此
+  /// 失败会原样抛回启动路径，同时在后台完成反序关闭。
+  ResolvedAgentProviderPlugins activateAndResolveAgentProviders() {
+    try {
+      activate();
+      return resolveAgentProviders();
+    } on Object catch (error, stackTrace) {
+      unawaited(_closeAfterFailedActivation());
+      Error.throwWithStackTrace(error, stackTrace);
     }
-    return contributions.single.bundleFactory;
   }
 
   /// 关闭全部插件（按激活反序）。
   Future<void> close() => _registry.close();
+
+  Future<void> _closeAfterFailedActivation() async {
+    try {
+      await close();
+    } on Object {
+      // 启动异常仍是首要失败；这里只记录稳定分类，避免泄漏插件异常正文。
+      _log.e('Could not close plugins after Agent provider activation failed');
+    }
+  }
 }

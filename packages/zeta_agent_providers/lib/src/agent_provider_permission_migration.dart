@@ -9,29 +9,30 @@ abstract interface class AgentProviderPermissionPreferenceMigrator {
   String? migrateLegacyOptionId(Map<String, Object?> legacyConfig);
 }
 
-/// 按 Provider kind 选择专属迁移器的不可变注册表。
+/// 按开放 Provider type 选择专属迁移器的不可变注册表。
 final class AgentProviderPermissionMigrationRegistry {
   AgentProviderPermissionMigrationRegistry(
-    Map<AgentProviderKind, AgentProviderPermissionPreferenceMigrator> migrators,
+    Map<AgentProviderTypeId, AgentProviderPermissionPreferenceMigrator>
+    migrators,
   ) : _migrators =
           Map<
-            AgentProviderKind,
+            AgentProviderTypeId,
             AgentProviderPermissionPreferenceMigrator
           >.unmodifiable(migrators);
 
-  final Map<AgentProviderKind, AgentProviderPermissionPreferenceMigrator>
+  final Map<AgentProviderTypeId, AgentProviderPermissionPreferenceMigrator>
   _migrators;
 
-  /// 已注册迁移器的 Provider kind，不允许调用方修改。
-  Set<AgentProviderKind> get registeredKinds =>
-      Set<AgentProviderKind>.unmodifiable(_migrators.keys);
+  /// 已注册迁移器的 Provider type，不允许调用方修改。
+  Set<AgentProviderTypeId> get registeredTypes =>
+      Set<AgentProviderTypeId>.unmodifiable(_migrators.keys);
 
   /// 未注册的 Provider 不猜测 legacy 权限语义。
   String? migrateLegacyOptionId({
-    required AgentProviderKind providerKind,
+    required AgentProviderTypeId providerType,
     required Map<String, Object?> legacyConfig,
   }) {
-    return _migrators[providerKind]?.migrateLegacyOptionId(legacyConfig);
+    return _migrators[providerType]?.migrateLegacyOptionId(legacyConfig);
   }
 }
 

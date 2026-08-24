@@ -26,13 +26,17 @@ final class ProviderSettingsSliceComposition
     required AgentProviderConfigStore configStore,
     required AgentModelCatalogRepository modelCatalogRepository,
     required AgentProviderRuntimeRegistry runtimeRegistry,
+    required AgentProviderDefinitionCatalog providerDefinitions,
   }) {
     final deferredRunner = _DeferredProviderSettingsRunner();
     final store = AgentProviderSettingsSliceStore(
-      initialState: const AgentProviderSettingsSliceState(),
+      initialState: AgentProviderSettingsSliceState(
+        settings: providerDefinitions.defaultSettings,
+      ),
       effectRunner: deferredRunner,
       modelCatalogRepository: modelCatalogRepository,
-      staticCapabilitiesFor: AgentProviderStaticCapabilities.forKind,
+      staticCapabilitiesFor: providerDefinitions.staticCapabilitiesFor,
+      modelCatalogSourceFor: providerDefinitions.modelCatalogSourceFor,
     );
     final runner = AgentProviderSettingsSliceRunnerAdapter(
       configStore: configStore,

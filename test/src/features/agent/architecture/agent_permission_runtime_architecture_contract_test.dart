@@ -23,7 +23,7 @@ void main() {
       () async {
         final peer = RecordingJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         addTearDown(provider.dispose);
@@ -211,7 +211,7 @@ void main() {
       () async {
         final peer = RecordingJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         final registry = AgentProviderRuntimeRegistry(
@@ -323,7 +323,7 @@ void main() {
       () async {
         final peer = RecordingJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         final registry = AgentProviderRuntimeRegistry(
@@ -426,8 +426,9 @@ void main() {
       'current thread effective wins over provider default for fork',
       () async {
         final peer = RecordingJsonRpcPeer();
-        final config = AgentProviderConfig.defaultCodex
-            .withPermissionPreference(':workspace');
+        final config = defaultCodexAgentProviderConfig.withPermissionPreference(
+          ':workspace',
+        );
         final provider = CodexAppServerAgentProvider(
           config: config,
           peer: peer,
@@ -441,7 +442,7 @@ void main() {
             AgentProviderSettings(
               providers: <AgentProviderConfig>[
                 config,
-                AgentProviderConfig.defaultGrok,
+                defaultGrokAgentProviderConfig,
               ],
               activeProviderId: config.id,
             ),
@@ -605,6 +606,12 @@ void main() {
       final dataMigration = File(
         'packages/zeta_agent_providers/lib/src/agent_provider_permission_migration.dart',
       );
+      final codexPluginSource = File(
+        'packages/zeta_agent_providers/lib/codex_plugin.dart',
+      ).readAsStringSync();
+      final grokPluginSource = File(
+        'packages/zeta_agent_providers/lib/grok_plugin.dart',
+      ).readAsStringSync();
       final appSource = File('lib/src/app/app.dart').readAsStringSync();
 
       expect(
@@ -622,8 +629,9 @@ void main() {
             'Codex/Grok legacy protocol strings must leave the shared domain',
       );
       expect(dataMigration.existsSync(), isTrue);
-      expect(appSource, contains('CodexPermissionPreferenceMigrator'));
-      expect(appSource, contains('GrokPermissionPreferenceMigrator'));
+      expect(codexPluginSource, contains('CodexPermissionPreferenceMigrator'));
+      expect(grokPluginSource, contains('GrokPermissionPreferenceMigrator'));
+      expect(appSource, isNot(contains('PermissionPreferenceMigrator')));
     });
 
     test('legacy permission facades and domain config decoders are absent', () {
@@ -752,13 +760,7 @@ AgentThreadSummary _threadSummary(String id) {
 
 AgentProviderSettingsCodec _permissionConfigCodec() {
   return AgentProviderSettingsCodec(
-    migrationRegistry: AgentProviderPermissionMigrationRegistry(
-      <AgentProviderKind, AgentProviderPermissionPreferenceMigrator>{
-        AgentProviderKind.codexAppServer:
-            const CodexPermissionPreferenceMigrator(),
-        AgentProviderKind.acp: const GrokPermissionPreferenceMigrator(),
-      },
-    ),
+    providerDefinitions: builtInAgentProviderDefinitionCatalog,
   );
 }
 

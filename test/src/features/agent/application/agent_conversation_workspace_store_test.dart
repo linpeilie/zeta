@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_workspace_store.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/data/agent_model_catalog_cache_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
@@ -118,8 +119,8 @@ void main() {
         configStore: MemoryAgentProviderConfigStore(
           const AgentProviderSettings(
             providers: <AgentProviderConfig>[
-              AgentProviderConfig.defaultCodex,
-              AgentProviderConfig.defaultGrok,
+              defaultCodexAgentProviderConfig,
+              defaultGrokAgentProviderConfig,
             ],
             activeProviderId: defaultAgentProviderId,
           ),
@@ -151,11 +152,11 @@ void main() {
 
       final foreground = controller.ensureDraftEntry(
         projectPath: '/repo',
-        providerId: AgentProviderConfig.defaultCodex.id,
+        providerId: defaultCodexAgentProviderConfig.id,
       );
       final background = controller.ensureDraftEntry(
         projectPath: '/repo',
-        providerId: AgentProviderConfig.defaultGrok.id,
+        providerId: defaultGrokAgentProviderConfig.id,
       );
       controller.selectEntry(foreground.entryId);
 
@@ -229,7 +230,7 @@ final class _WorkspaceHarness {
   AgentThreadSummary thread({required String id}) {
     return AgentThreadSummary(
       id: id,
-      providerId: AgentProviderConfig.defaultCodex.id,
+      providerId: defaultCodexAgentProviderConfig.id,
       projectPath: '/repo',
       title: id,
       sessionPath: '/repo/$id.jsonl',

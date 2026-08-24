@@ -2,14 +2,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
+import '../../../testing/activated_agent_provider_plugins.dart';
 import '../../../testing/recording_json_rpc_peer.dart';
 
 void main() {
-  const factory = DefaultAgentProviderFactory();
+  late AgentProviderBundleFactory factory;
+
+  setUp(() {
+    factory = activateBuiltInAgentProviderBundleFactory();
+  });
 
   group('native port presence', () {
     test('Codex native bundle owns the same runtime', () {
-      final native = factory.createBundle(AgentProviderConfig.defaultCodex);
+      final native = factory.createBundle(defaultCodexAgentProviderConfig);
       addTearDown(native.runtime.dispose);
 
       expect(_portPresence(native), _codexPresence);
@@ -18,7 +23,7 @@ void main() {
     });
 
     test('Grok native bundle omits unsupported ports', () {
-      final native = factory.createBundle(AgentProviderConfig.defaultGrok);
+      final native = factory.createBundle(defaultGrokAgentProviderConfig);
       addTearDown(native.runtime.dispose);
 
       expect(_portPresence(native), _grokPresence);
@@ -29,9 +34,7 @@ void main() {
     });
 
     test('Claude Code native bundle omits unsupported ports', () {
-      final native = factory.createBundle(
-        AgentProviderConfig.defaultClaudeCode,
-      );
+      final native = factory.createBundle(defaultClaudeCodeAgentProviderConfig);
       addTearDown(native.runtime.dispose);
 
       expect(_portPresence(native), _claudePresence);
@@ -44,8 +47,8 @@ void main() {
 
   group('create*Bundle', () {
     test('createCodexBundle returns a distinct runtime owner each time', () {
-      final first = createCodexBundle(AgentProviderConfig.defaultCodex);
-      final second = createCodexBundle(AgentProviderConfig.defaultCodex);
+      final first = createCodexBundle(defaultCodexAgentProviderConfig);
+      final second = createCodexBundle(defaultCodexAgentProviderConfig);
       addTearDown(first.runtime.dispose);
       addTearDown(second.runtime.dispose);
 
@@ -55,7 +58,7 @@ void main() {
 
     test('createBundle uses the injected Claude metadata loader', () async {
       var metadataCalls = 0;
-      final providerFactory = DefaultAgentProviderFactory(
+      final providerFactory = activateBuiltInAgentProviderBundleFactory(
         claudeCodeMetadataLoader: () async {
           metadataCalls += 1;
           return const ClaudeCodeCliMetadataSnapshot(
@@ -73,7 +76,7 @@ void main() {
         },
       );
       final bundle = providerFactory.createBundle(
-        AgentProviderConfig.defaultClaudeCode,
+        defaultClaudeCodeAgentProviderConfig,
       );
       addTearDown(bundle.runtime.dispose);
 
@@ -89,7 +92,7 @@ void main() {
       () async {
         final peer = RecordingJsonRpcPeer();
         final native = createCodexBundle(
-          AgentProviderConfig.defaultCodex,
+          defaultCodexAgentProviderConfig,
           peer: peer,
         );
         addTearDown(native.runtime.dispose);

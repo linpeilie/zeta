@@ -1,6 +1,7 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
 import 'package:zeta_ui/zeta_ui.dart';
@@ -208,7 +209,7 @@ void main() {
         projectPath: '/workspace/zeta',
         threadState: const ProjectThreadListState(hasLoaded: true),
         loadAvailableProviders: () async => const <AgentProviderConfig>[
-          AgentProviderConfig.defaultCodex,
+          defaultCodexAgentProviderConfig,
         ],
         onNewThread: (providerId) {
           selectedProviderId = providerId;

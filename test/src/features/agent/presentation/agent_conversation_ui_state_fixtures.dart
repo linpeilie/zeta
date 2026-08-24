@@ -111,7 +111,6 @@ AgentConversationHistoryState agentConversationHistoryStateFixture({
     ],
     threadOpenPhase: AgentThreadOpenPhase.idle,
     providerId: 'provider',
-    providerKind: AgentProviderKind.codexAppServer,
     providerName: 'Provider',
   );
 }

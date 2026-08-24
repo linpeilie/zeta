@@ -41,6 +41,15 @@ void main() {
       );
     });
 
+    test('enabled source stays unavailable until settings have a config', () {
+      final container = _container(
+        _FakeProjectionSource(),
+        settings: const AgentProviderSettings(),
+      );
+
+      expect(container.read(activeAgentModelCatalogQueryProvider), isNull);
+    });
+
     test('publishes last-known-good before refresh completes', () async {
       final releaseRefresh = Completer<void>();
       final loadCompleted = Completer<void>();
@@ -192,7 +201,7 @@ void main() {
           return _result('second');
         });
       final settingsRunner = _ManualSettingsRunner();
-      final initial = AgentProviderConfig.defaultCodex.copyWith(
+      final initial = defaultCodexAgentProviderConfig.copyWith(
         environment: const <String, String>{'ZETA_TOKEN': 'old'},
       );
       final store = _settingsStore(settingsRunner);
@@ -296,14 +305,15 @@ final class _FakeProjectionSource implements AgentModelCatalogProjectionSource {
 ProviderContainer _container(
   AgentModelCatalogProjectionSource source, {
   AgentProviderSettingsSliceStore? settingsStore,
+  AgentProviderSettings settings = builtInAgentProviderSettings,
 }) {
   final container = ProviderContainer(
     overrides: [
       agentModelCatalogProjectionSourceProvider.overrideWithValue(source),
       if (settingsStore != null)
-        agentProviderSettingsSliceStoreProvider.overrideWithValue(
-          settingsStore,
-        ),
+        agentProviderSettingsSliceStoreProvider.overrideWithValue(settingsStore)
+      else
+        agentProviderSettingsValueProvider.overrideWithValue(settings),
     ],
   );
   addTearDown(container.dispose);
@@ -319,7 +329,8 @@ AgentProviderSettingsSliceStore _settingsStore(
     modelCatalogRepository: AgentModelCatalogRepository(
       store: MemoryAgentModelCatalogCacheStore(),
     ),
-    staticCapabilitiesFor: AgentProviderStaticCapabilities.forKind,
+    staticCapabilitiesFor:
+        builtInAgentProviderDefinitionCatalog.staticCapabilitiesFor,
   );
 }
 

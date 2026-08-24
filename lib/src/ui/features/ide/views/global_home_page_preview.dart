@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/widget_previews.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
-import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/ui/features/ide/views/global_home_page.dart';
 
@@ -66,14 +65,14 @@ Widget _preview(Brightness brightness) {
         child: GlobalHomePage(
           installedProviders: const <HomeProviderSummary>[
             HomeProviderSummary(
-              id: defaultAgentProviderId,
+              id: 'codex',
               displayName: 'Codex',
               vendor: 'OpenAI',
               version: '0.42.0',
               status: HomeProviderStatus.available,
             ),
             HomeProviderSummary(
-              id: grokAgentProviderId,
+              id: 'grok',
               displayName: 'Grok',
               vendor: 'xAI',
               version: '1.8.2',

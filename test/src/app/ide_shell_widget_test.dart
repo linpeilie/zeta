@@ -2274,7 +2274,7 @@ void main() {
       ),
       agentProviderConfigStore: MemoryAgentProviderConfigStore(
         const AgentProviderSettings(
-          providers: <AgentProviderConfig>[AgentProviderConfig.defaultCodex],
+          providers: <AgentProviderConfig>[defaultCodexAgentProviderConfig],
         ),
       ),
       homeProviderDetectionLoader: () async => <ManagedAgent>[

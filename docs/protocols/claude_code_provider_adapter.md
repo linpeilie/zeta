@@ -11,6 +11,11 @@
 > `defaultsFor(kind)` 已删除。静态能力走 data 层 `AgentProviderStaticCapabilities`，
 > 工厂走 `AgentProviderBundleFactory.createBundle`。本文仍出现的旧符号只反映提案当时的
 > 骨架设计，不要照抄回 Shared Domain。
+>
+> 2026-08-24 起，封闭 Provider enum、default factory 与 compatibility plugin 也已删除；
+> 当前装配入口是 `ClaudeCodeAgentProviderPlugin` + 开放 `AgentProviderTypeId` 聚合目录。
+> 本文后续出现的旧 enum/factory 路径继续只作历史记录，目标态见
+> [Phase 3 第 6 批](../architecture/phase3_batch6_provider_plugins.md)。
 
 > 目的：将 Anthropic 的 Claude Code CLI 作为 **第三个** Agent Provider 接入
 > Zeta（与 Codex app-server、Grok ACP 并列），复用 `~/.claude` 已登录态，覆盖
@@ -28,7 +33,7 @@
 | --- | --- | --- |
 | 接入形态 | Claude Code CLI 常驻子进程，`--print --input-format stream-json --output-format stream-json --verbose` | 与现有 Codex/Grok stdio 模型同构；零 SDK/Node 依赖；官方稳定支持（备选方案对比见 §0.1） |
 | 认证 | 会话复用 Claude CLI 自有认证；管理页以 `claude auth status --json` 显示认证证据 | 不通过凭据文件名猜登录态；认证证据与 initialize 可用性分开 |
-| 上架方式 | 独立第 3 个 Provider（`AgentProviderKind.claudeCode`） | 骨架已预留：枚举、`defaultsFor`、`DefaultAgentProviderFactory` 均已留分支 |
+| 上架方式 | 独立第 3 个显式 Provider 插件 | `ClaudeCodeAgentProviderPlugin` 声明开放 type、默认配置与单域 bundle factory |
 | MVP 能力 | 对话/工具 + 权限审批 + Plan 审批 + 会话历史/resume + 模型目录 + 账号套餐用量 + MCP/hooks 透传 | 与用户澄清结论一致 |
 | Default provider | 保持 Codex 为默认，Claude Code 与 Grok 一样是可选项 | 降低回滚风险；`AgentDefinition.all` 追加即可 |
 | 数据边界 | Provider-local adapter 可只读 Claude 配置、历史、认证 metadata；Zeta 不保存凭据或 raw payload | 读取不授权刷新、迁移、改写或删除 Claude 数据；CLI 仍可能维护自己的状态 |

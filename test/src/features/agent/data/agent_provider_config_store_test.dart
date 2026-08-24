@@ -47,11 +47,11 @@ void main() {
       final store = _fileStore(settingsFile);
       const settings = AgentProviderSettings(
         providers: <AgentProviderConfig>[
-          AgentProviderConfig.defaultCodex,
+          defaultCodexAgentProviderConfig,
           AgentProviderConfig(
             id: 'claude',
             displayName: 'Claude Code',
-            kind: AgentProviderKind.claudeCode,
+            kind: claudeCodeAgentProviderType,
             command: 'claude',
           ),
         ],
@@ -142,21 +142,69 @@ void main() {
   });
 
   group('AgentProviderSettings', () {
+    test('V1/V2 invalid or missing active id uses plugin default', () {
+      for (final version in AgentProviderSettings.supportedVersions) {
+        for (final includeInvalidActive in <bool>[false, true]) {
+          final decoded = _codec().decode(<String, Object?>{
+            'version': version,
+            if (includeInvalidActive) 'activeProviderId': 'removed-provider',
+            'providers': <Object?>[
+              <String, Object?>{
+                'id': 'custom-grok',
+                'displayName': 'Custom Grok',
+                'kind': grokAgentProviderType.value,
+                'command': 'custom-grok',
+              },
+              defaultCodexAgentProviderConfig.toJson(),
+            ],
+          });
+
+          expect(
+            decoded.activeProviderId,
+            defaultAgentProviderId,
+            reason:
+                'V$version must not activate the first custom config when '
+                'the persisted selection is absent or invalid',
+          );
+          expect(decoded.activeProvider.id, defaultAgentProviderId);
+          expect(decoded.providers.first.id, 'custom-grok');
+        }
+      }
+    });
+
+    test('drops a built-in id that claims another plugin type', () {
+      final decoded = _codec().decode(<String, Object?>{
+        'version': 2,
+        'activeProviderId': defaultAgentProviderId,
+        'providers': <Object?>[
+          <String, Object?>{
+            'id': defaultAgentProviderId,
+            'displayName': 'Wrong',
+            'kind': claudeCodeAgentProviderType.value,
+            'command': 'claude',
+          },
+        ],
+      });
+
+      expect(decoded.activeProvider, defaultCodexAgentProviderConfig);
+      expect(decoded.providers, contains(defaultClaudeCodeAgentProviderConfig));
+    });
+
     test('normalizes legacy built-in provider display names', () {
       final settings = _codec().decode(<String, Object?>{
         'version': 1,
         'activeProviderId': defaultAgentProviderId,
         'providers': <Object?>[
           <String, Object?>{
-            ...AgentProviderConfig.defaultCodex.toJson(),
+            ...defaultCodexAgentProviderConfig.toJson(),
             'displayName': 'Codex CLI',
           },
           <String, Object?>{
-            ...AgentProviderConfig.defaultGrok.toJson(),
+            ...defaultGrokAgentProviderConfig.toJson(),
             'displayName': 'Grok CLI',
           },
           <String, Object?>{
-            ...AgentProviderConfig.defaultClaudeCode.toJson(),
+            ...defaultClaudeCodeAgentProviderConfig.toJson(),
             'displayName': 'Claude Code',
           },
         ],
@@ -170,7 +218,7 @@ void main() {
 
     test('round-trips versioned model preferences tolerantly', () {
       final updatedAt = DateTime.utc(2026, 7, 15, 8);
-      final config = AgentProviderConfig.defaultCodex.withModelConfiguration(
+      final config = defaultCodexAgentProviderConfig.withModelConfiguration(
         selection: const AgentModelSelection(
           modelId: 'gpt-5.5',
           reasoningEffort: 'high',
@@ -196,7 +244,7 @@ void main() {
     });
 
     test('ignores damaged model preference entries', () {
-      final raw = AgentProviderConfig.defaultCodex.toJson();
+      final raw = defaultCodexAgentProviderConfig.toJson();
       raw['modelPreferences'] = <String, Object?>{
         'missing-id': <String, Object?>{'fastEnabled': true},
         'valid': <String, Object?>{
@@ -227,12 +275,6 @@ FileAgentProviderConfigStore _fileStore(File file) {
 
 AgentProviderSettingsCodec _codec() {
   return AgentProviderSettingsCodec(
-    migrationRegistry: AgentProviderPermissionMigrationRegistry(
-      <AgentProviderKind, AgentProviderPermissionPreferenceMigrator>{
-        AgentProviderKind.codexAppServer:
-            const CodexPermissionPreferenceMigrator(),
-        AgentProviderKind.acp: const GrokPermissionPreferenceMigrator(),
-      },
-    ),
+    providerDefinitions: builtInAgentProviderDefinitionCatalog,
   );
 }

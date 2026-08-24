@@ -1,9 +1,10 @@
 # 阶段 1：建立边界但不改变行为
 
-最后更新：2026-08-22
+最后更新：2026-08-24
 
 状态：第四个增量（`zeta_agent_providers`）已落地，目标 Package 图的 5 个包全部拆出；
-三轮 review 的 16 条问题已处理完毕。对应 [目标架构 §14 Phase 1](./target_architecture_riverpod_mvi_plugins_packages.md#phase-1建立边界但不改变行为)。
+三轮 review 的 16 条问题已处理完毕；Phase 3 第 6 批已结清兼容层账本与 §8.1
+集中式 Provider 目录欠债。对应 [目标架构 §14 Phase 1](./target_architecture_riverpod_mvi_plugins_packages.md#phase-1建立边界但不改变行为)。
 
 阶段 1 的规矩是**只搬边界，不动行为**：没有新功能、没有 UI 变化、没有持久化格式变化，
 Provider wire 参数与状态 owner 全部保持原样。
@@ -18,7 +19,7 @@ Provider wire 参数与状态 owner 全部保持原样。
 | `zeta_foundation`（纯 Dart 公共契约） | [`packages/zeta_foundation`](../../packages/zeta_foundation) |
 | `zeta_plugin_kernel`（可信插件微内核） | [`packages/zeta_plugin_kernel`](../../packages/zeta_plugin_kernel) |
 | 编译期插件目录 | [`lib/src/app/plugins/zeta_plugin_catalog.dart`](../../lib/src/app/plugins/zeta_plugin_catalog.dart) |
-| Agent Provider 贡献 + 兼容插件 | `lib/src/features/agent/data/agent_provider_plugin_contribution.dart`、`compatibility_agent_provider_plugin.dart` |
+| Agent Provider 贡献 + 显式插件 | `packages/zeta_agent_providers/lib/{codex,grok,claude_code}_plugin.dart`、`src/agent_provider_plugin_contribution.dart` |
 | 应用级依赖 Provider / 覆盖点 | [`lib/src/app/composition/app_dependencies.dart`](../../lib/src/app/composition/app_dependencies.dart) |
 | Package 依赖图守卫（含跨包 `/src` 禁令） | `test/src/architecture/package_boundary_candidate_graph_test.dart` |
 | Package 独立测试入口 | [`tool/test_packages.sh`](../../tool/test_packages.sh)（已接入 `tool/test_full.sh` / `.ps1`，CI 里是独立的 `packages` Job） |
@@ -94,8 +95,9 @@ plan 执行交接 / turn 上下文叠加 / 指标采样器 / workspace 组合。
 
 搬进包的是 **79 个协议适配文件**：`datasources/**`（Codex app-server、Grok ACP、
 Claude Code stream-json、JSON-RPC transport、本地历史解析）、`mappers/**`、三个 CLI
-定位器、静态能力表、权限迁移、`DefaultAgentProviderFactory`、插件贡献与兼容插件、
-Provider 指标标签映射。
+定位器、静态能力 seed、权限迁移、插件 contribution/definition、三个显式插件入口与
+Provider 指标标签映射。最初随 Phase 1 搬入的 default factory/compatibility 已在 Phase 3
+第 6 批删除。
 
 **留在根 app 的 `lib/src/features/agent/data`（5 个文件）是 Zeta 自有持久化**：provider
 配置存储与 codec、模型目录缓存、turn 上下文文件存储与 codec。它们写的是 `~/.zeta`，
@@ -127,18 +129,19 @@ Provider 指标标签映射。
 | `activate` 抛异常 | 只记分类，不记异常文本（G7） |
 | 核心必需插件失败 | 报告 `isDegraded = true`，应用必须显式进入 degraded 状态 |
 
-### 1.3 兼容层账本
+### 1.3 兼容层账本（已结清）
 
 | 项目 | 内容 |
 | --- | --- |
-| 兼容层 | `CompatibilityAgentProviderPlugin` |
+| 兼容层 | ~~`CompatibilityAgentProviderPlugin`~~（已删除） |
 | owner | 架构迁移（Phase 1 引入） |
-| 使用点计数 | **1**（只允许由 `ZetaPluginCatalog.compatibility` 构造，测试断言） |
-| 删除 Phase | Phase 3 第 6 批：Codex / Grok / Claude Code 拆成三个显式插件贡献后删除 |
-| 回滚方式 | app 组合点改回 `_agentProviderFactory = DefaultAgentProviderFactory(...)` 直连，一行 |
+| 使用点计数 | **0**（生产源码零旧符号守卫） |
+| 删除 Phase | ✅ Phase 3 第 6 批，2026-08-24 |
+| 当前装配 | `ZetaPluginCatalog.builtIn` → 三个 essential plugin contribution → type-id 聚合 factory |
+| 回滚方式 | 整体 revert 第 6 批；不恢复运行时双轨或 fallback |
 
-`DefaultAgentProviderFactory` 内部按 kind 分派的 switch **一字未动**——本阶段只是把
-"谁交出工厂"从 app 直接构造改成了从插件目录取。
+历史上的单一 compatibility contribution 与集中 kind switch 已一并删除；runtime
+registry 仍是 bundle factory 唯一调用者与 CLI 唯一 owner。
 
 ---
 
@@ -157,7 +160,7 @@ presentation 与 shell 组合。
 | ~~agent `application` → agent `data`~~ | ~~3~~ → 0 | ✅ turn context 端口下沉；静态能力随 settings controller 留在 app |
 | ~~agent `application` → presentation / workspace~~ | ~~2~~ → 0 | ✅ 第 5 批将 workspace runtime composition 迁入 `app/conversation_workspace_slice`，旧 application 文件已删除 |
 | ~~`core/` → `dart:io` / Flutter~~ | ~~8~~ → 0 | ✅ 2026-08-23 清零：IO 实现下沉到 `app/storage`（AtomicTextFile、目录创建）、`app/logging`（宿主日志）、`ui/core`（系统文件管理器）；`ZetaDataPaths` 纯 String 化，脱敏与目录过滤改为注入参数，feature 层日志改走 `zetaLoggerFor` |
-| `zeta_agent_core` 依赖 `flutter/foundation` | 17 个文件 | `ChangeNotifier` / `ValueListenable`，随 Phase 2/3 的 MVI 切片移除（见 §6 偏差 5） |
+| `zeta_agent_core` 依赖 `flutter/foundation` | 当前 11 个文件（守卫历史上限仍为 17） | `ChangeNotifier` / `ValueListenable`，后续须清零并把守卫收紧为 0（见 §6 偏差 5） |
 
 ---
 
@@ -252,7 +255,7 @@ Windows 用 `tool/test_affected.ps1` / `tool/test_full.ps1`（后者同样包含
 | 根 app 仍是唯一装配点；kernel 不 import 具体 Provider | ✅ 守卫测试强制 |
 | 禁止跨 `/src` import 与反向依赖 | ✅ 守卫测试强制（已拆包 + 候选包两套规则） |
 | analyze / test / 构建通过，基线无退化 | ✅ 见 §5；三桌面平台构建**待执行**（见下） |
-| compatibility layer 有使用点计数、owner 和删除计划 | ✅ 见 §1.3，测试断言使用点为 1 |
+| compatibility layer 有使用点计数、owner 和删除计划 | ✅ 见 §1.3；Phase 3 第 6 批已删除并守卫使用点为 0 |
 
 **待执行**：三桌面平台（macOS / Windows / Linux）的实际构建验证。workspace 只影响依赖解析，
 不改 Flutter 构建配置，但按 `AGENTS.md` 的规矩，没有跑过就不能推断通过。
@@ -262,20 +265,20 @@ Windows 用 `tool/test_affected.ps1` / `tool/test_full.ps1`（后者同样包含
 ## 8. 拆 `zeta_agent_providers` 之前必须先结论的两笔欠债
 
 这两条都是**拆包前就有的设计**，被本轮拆包正式化成了包公开 API，因此在继续迁移前
-必须有结论，而不是继续往下搬。当前状态：§8.1 **已冻结、已立项、未清算**（收口排在
-Phase 3 第 6 批）；§8.2 **已决并已落地**。
+必须有结论，而不是继续往下搬。当前状态：§8.1、§8.2 均已决并落地。
 
-### 8.1 内核里的集中式 Provider 目录
+### 8.1 内核里的集中式 Provider 目录 —— **已清算（2026-08-24）**
 
-`agent_provider_models.dart` 持有 `AgentProviderKind` 三个枚举值、三个内置 Provider 的
-稳定 ID 与默认 CLI 配置、按 ID 归一化显示名的 switch。全仓库有 29 个文件按 kind 分支，
-新增一种协议要改内核枚举并牵动一串 exhaustive switch——与 §9.3「新增 Provider 只动
-providers 包 + 一行注册」直接冲突。
+原集中式 enum、三个内置 Provider ID/default config、默认 CLI 与 display-name switch
+已经从 `zeta_agent_core` 删除。core 只保留开放、具值语义的 `AgentProviderTypeId` 与中立
+配置/端口契约；不登记任何厂商值。
 
-- **冻结**：`agent_provider_catalog_freeze_test` 精确断言枚举值、内置 ID、默认命令，
-  并断言"内核里出现内置 Provider 身份的文件只有这一个"。任何增删都会失败。
-- **收口**：Phase 3 第 6 批。三个 Provider 转成显式插件贡献时，内置配置与显示名归一化
-  移入 data 层，`AgentProviderKind` 让位给插件 descriptor 的开放注册表。
+- 三个插件 definition 各自拥有稳定 ID、type、默认配置、静态 capability seed、模型目录
+  metadata 与可选权限迁移器；
+- 配置实例 ID 可自定义，聚合 factory 按 type 路由；重复/未知 type fail-closed；
+- `agent_provider_catalog_freeze_test` 已反转为目标态守卫：未来 type 可直接构造，core
+  内置身份/协议域必须为零；
+- 详细证据见 [Phase 3 第 6 批](phase3_batch6_provider_plugins.md)。
 
 ### 8.2 中立事件上的 Provider raw payload —— **已决 + 已落地（2026-08-21）**
 

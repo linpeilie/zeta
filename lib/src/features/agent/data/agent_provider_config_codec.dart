@@ -10,22 +10,29 @@ import 'package:zeta_agent_core/zeta_agent_core.dart';
 /// 归一化后的中立 optionId。
 final class AgentProviderSettingsCodec {
   factory AgentProviderSettingsCodec({
-    required AgentProviderPermissionMigrationRegistry migrationRegistry,
-  }) => AgentProviderSettingsCodec._(migrationRegistry);
+    required AgentProviderDefinitionCatalog providerDefinitions,
+  }) => AgentProviderSettingsCodec._(providerDefinitions);
 
-  AgentProviderSettingsCodec._(this._migrationRegistry);
+  AgentProviderSettingsCodec._(AgentProviderDefinitionCatalog definitions)
+    : _providerDefinitions = definitions,
+      _migrationRegistry = definitions.permissionMigrationRegistry;
 
+  final AgentProviderDefinitionCatalog _providerDefinitions;
   final AgentProviderPermissionMigrationRegistry _migrationRegistry;
+
+  /// 损坏、空白或未知版本输入使用的插件目录默认快照。
+  AgentProviderSettings get fallbackSettings =>
+      _providerDefinitions.defaultSettings;
 
   /// 宽容读取 JSON 文本；空白、损坏或不支持版本均回退内置设置。
   AgentProviderSettings decodeJson(String? value) {
     if (value == null || value.trim().isEmpty) {
-      return const AgentProviderSettings();
+      return fallbackSettings;
     }
     try {
       return decode(jsonDecode(value));
     } catch (_) {
-      return const AgentProviderSettings();
+      return fallbackSettings;
     }
   }
 
@@ -35,20 +42,20 @@ final class AgentProviderSettingsCodec {
     final version = settings['version'];
     if (version is! int ||
         !AgentProviderSettings.supportedVersions.contains(version)) {
-      return const AgentProviderSettings();
+      return fallbackSettings;
     }
-    final providers = _ensureBuiltinProviders(
+    final providers = _providerDefinitions.ensureDefaultProviders(
       _decodeProviderList(settings['providers'], migrate: _migrateProviderMap),
     );
     final activeProviderId =
         decodeOptionalString(settings['activeProviderId']) ??
-        defaultAgentProviderId;
+        _providerDefinitions.defaultDefinition.providerId;
     return AgentProviderSettings(
       providers: List<AgentProviderConfig>.unmodifiable(providers),
       activeProviderId:
           providers.any((provider) => provider.id == activeProviderId)
           ? activeProviderId
-          : providers.first.id,
+          : _providerDefinitions.defaultDefinition.providerId,
     );
   }
 
@@ -73,7 +80,7 @@ final class AgentProviderSettingsCodec {
     }
     final migratedOptionId = _normalizedOptionId(
       _migrationRegistry.migrateLegacyOptionId(
-        providerKind: decoded.kind,
+        providerType: decoded.kind,
         legacyConfig: Map<String, Object?>.unmodifiable(raw),
       ),
     );
@@ -85,42 +92,66 @@ final class AgentProviderSettingsCodec {
       'selectedPermissionOptionId': migratedOptionId,
     };
   }
-}
 
-AgentProviderConfig? _decodeProvider(Object? value) {
-  final map = decodeObjectMap(value);
-  if (map.isEmpty) {
-    return null;
+  AgentProviderConfig? _decodeProvider(Object? value) {
+    final map = decodeObjectMap(value);
+    if (map.isEmpty) {
+      return null;
+    }
+    final id = decodeOptionalString(map['id']);
+    final displayName = decodeOptionalString(map['displayName']);
+    final command = decodeOptionalString(map['command']);
+    final kind = _providerDefinitions.decodeProviderType(
+      decodeOptionalString(map['kind']),
+    );
+    if (id == null ||
+        displayName == null ||
+        command == null ||
+        kind == null ||
+        !_providerDefinitions.acceptsConfigIdentity(id, kind)) {
+      return null;
+    }
+    return AgentProviderConfig(
+      id: id,
+      displayName: _providerDefinitions.normalizeDisplayName(id, displayName),
+      kind: kind,
+      command: command,
+      arguments: List<String>.unmodifiable(decodeStringList(map['arguments'])),
+      environment: Map<String, String>.unmodifiable(
+        decodeStringMap(map['environment']),
+      ),
+      defaultModel: decodeOptionalString(map['defaultModel']),
+      selectedModel: decodeOptionalString(map['selectedModel']),
+      selectedReasoningEffort: decodeOptionalString(
+        map['selectedReasoningEffort'],
+      ),
+      selectedServiceTier: decodeOptionalString(map['selectedServiceTier']),
+      modelPreferences: _decodeModelPreferences(map['modelPreferences']),
+      selectedPermissionOptionId: _normalizedOptionId(
+        decodeOptionalString(map['selectedPermissionOptionId']),
+      ),
+      enabled: map['enabled'] is bool ? map['enabled'] as bool : true,
+      extra: decodeObjectMap(map['extra']),
+    );
   }
-  final id = decodeOptionalString(map['id']);
-  final displayName = decodeOptionalString(map['displayName']);
-  final command = decodeOptionalString(map['command']);
-  final kind = _providerKind(decodeOptionalString(map['kind']));
-  if (id == null || displayName == null || command == null || kind == null) {
-    return null;
+
+  List<AgentProviderConfig> _decodeProviderList(
+    Object? value, {
+    required Object? Function(Object? value) migrate,
+  }) {
+    if (value is! List) {
+      return _providerDefinitions.defaultSettings.providers;
+    }
+    final providers = <AgentProviderConfig>[];
+    final seen = <String>{};
+    for (final item in value) {
+      final provider = _decodeProvider(migrate(item));
+      if (provider != null && seen.add(provider.id)) {
+        providers.add(provider);
+      }
+    }
+    return providers;
   }
-  return AgentProviderConfig(
-    id: id,
-    displayName: AgentProviderConfig.normalizeDisplayName(id, displayName),
-    kind: kind,
-    command: command,
-    arguments: List<String>.unmodifiable(decodeStringList(map['arguments'])),
-    environment: Map<String, String>.unmodifiable(
-      decodeStringMap(map['environment']),
-    ),
-    defaultModel: decodeOptionalString(map['defaultModel']),
-    selectedModel: decodeOptionalString(map['selectedModel']),
-    selectedReasoningEffort: decodeOptionalString(
-      map['selectedReasoningEffort'],
-    ),
-    selectedServiceTier: decodeOptionalString(map['selectedServiceTier']),
-    modelPreferences: _decodeModelPreferences(map['modelPreferences']),
-    selectedPermissionOptionId: _normalizedOptionId(
-      decodeOptionalString(map['selectedPermissionOptionId']),
-    ),
-    enabled: map['enabled'] is bool ? map['enabled'] as bool : true,
-    extra: decodeObjectMap(map['extra']),
-  );
 }
 
 Map<String, AgentModelPreference> _decodeModelPreferences(Object? value) {
@@ -141,54 +172,6 @@ Map<String, AgentModelPreference> _decodeModelPreferences(Object? value) {
     }
   }
   return Map<String, AgentModelPreference>.unmodifiable(decoded);
-}
-
-List<AgentProviderConfig> _decodeProviderList(
-  Object? value, {
-  required Object? Function(Object? value) migrate,
-}) {
-  if (value is! List) {
-    return const <AgentProviderConfig>[
-      AgentProviderConfig.defaultCodex,
-      AgentProviderConfig.defaultGrok,
-      AgentProviderConfig.defaultClaudeCode,
-    ];
-  }
-  final providers = <AgentProviderConfig>[];
-  final seen = <String>{};
-  for (final item in value) {
-    final provider = _decodeProvider(migrate(item));
-    if (provider != null && seen.add(provider.id)) {
-      providers.add(provider);
-    }
-  }
-  return providers;
-}
-
-List<AgentProviderConfig> _ensureBuiltinProviders(
-  List<AgentProviderConfig> providers,
-) {
-  final result = List<AgentProviderConfig>.from(providers);
-  final ids = result.map((provider) => provider.id).toSet();
-  if (!ids.contains(defaultAgentProviderId)) {
-    result.insert(0, AgentProviderConfig.defaultCodex);
-  }
-  if (!ids.contains(grokAgentProviderId)) {
-    result.add(AgentProviderConfig.defaultGrok);
-  }
-  if (!ids.contains(defaultClaudeCodeProviderId)) {
-    result.add(AgentProviderConfig.defaultClaudeCode);
-  }
-  return result;
-}
-
-AgentProviderKind? _providerKind(String? value) {
-  for (final kind in AgentProviderKind.values) {
-    if (kind.name == value) {
-      return kind;
-    }
-  }
-  return null;
 }
 
 Map<String, Object?> _objectMap(Object? value) {

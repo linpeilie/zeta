@@ -154,7 +154,7 @@ class ClaudeCodeAgentManagementRepository
 
   @override
   AgentProviderConfig get defaultProviderConfig =>
-      AgentProviderConfig.defaultClaudeCode;
+      defaultClaudeCodeAgentProviderConfig;
 
   @override
   bool acceptsExecutablePath(String path) => looksLikeClaudeCodeCliPath(path);
@@ -356,7 +356,7 @@ class ClaudeCodeAgentManagementRepository
   }) async {
     final trimmed = path.trim();
     if (trimmed.isEmpty || !looksLikeClaudeCodeCliPath(trimmed)) {
-      return AgentProviderConfig.defaultClaudeCode.copyWith(
+      return defaultClaudeCodeAgentProviderConfig.copyWith(
         enabled: current.enabled,
         extra: current.extra,
       );
@@ -365,8 +365,8 @@ class ClaudeCodeAgentManagementRepository
       ..['cliPath'] = trimmed;
     return current.copyWith(
       id: defaultClaudeCodeProviderId,
-      displayName: AgentProviderConfig.defaultClaudeCode.displayName,
-      kind: AgentProviderKind.claudeCode,
+      displayName: defaultClaudeCodeAgentProviderConfig.displayName,
+      kind: claudeCodeAgentProviderType,
       command: trimmed,
       arguments: const <String>[],
       extra: extra,
@@ -582,7 +582,7 @@ String _preferredClaudeCodePath(AgentProviderConfig config) {
   return configuredPath is String && configuredPath.trim().isNotEmpty
       ? configuredPath.trim()
       : config.command.trim().isEmpty
-      ? AgentProviderConfig.defaultClaudeCode.command
+      ? defaultClaudeCodeAgentProviderConfig.command
       : config.command.trim();
 }
 

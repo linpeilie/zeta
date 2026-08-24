@@ -46,7 +46,7 @@ void main() {
     final providerFactory =
         _RecordingAgentProviderFactory(<String, _ProviderBackend>{
           defaultAgentProviderId: _ProviderBackend(
-            config: AgentProviderConfig.defaultCodex,
+            config: defaultCodexAgentProviderConfig,
             threadHistories: const <String, AgentThreadHistorySnapshot>{},
             threadPages: const <AgentThreadPage>[],
           ),
@@ -56,7 +56,7 @@ void main() {
     );
     final composition = UsageStatisticsSliceComposition.create(
       loadEnabledProviders: () async => const <AgentProviderConfig>[
-        AgentProviderConfig.defaultCodex,
+        defaultCodexAgentProviderConfig,
       ],
       runtimeRegistry: runtimeRegistry,
       partitionStore: MemoryUsageStatisticsPartitionStore(),
@@ -84,7 +84,7 @@ void main() {
       final providerFactory =
           _RecordingAgentProviderFactory(<String, _ProviderBackend>{
             defaultAgentProviderId: _ProviderBackend(
-              config: AgentProviderConfig.defaultCodex,
+              config: defaultCodexAgentProviderConfig,
               threadHistories: const <String, AgentThreadHistorySnapshot>{},
               threadPages: const <AgentThreadPage>[],
             ),
@@ -141,7 +141,7 @@ void main() {
         ),
       ];
       await shell.agentProviderController.updateProviderConfig(
-        AgentProviderConfig.defaultClaudeCode,
+        defaultClaudeCodeAgentProviderConfig,
       );
       await _flushAsync();
 
@@ -165,7 +165,7 @@ void main() {
       ).writeAsStringSync('hello');
 
       final codexBackend = _ProviderBackend(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         threadHistories: const <String, AgentThreadHistorySnapshot>{},
         completeTurns: false,
         threadPages: <AgentThreadPage>[
@@ -202,7 +202,7 @@ void main() {
         ),
         agentProviderConfigStore: MemoryAgentProviderConfigStore(
           const AgentProviderSettings(
-            providers: <AgentProviderConfig>[AgentProviderConfig.defaultCodex],
+            providers: <AgentProviderConfig>[defaultCodexAgentProviderConfig],
             activeProviderId: defaultAgentProviderId,
           ),
         ),
@@ -399,7 +399,7 @@ void main() {
       final terminalSignals = <AgentTurnTerminalSignal>[];
       final attentions = <AgentWorkspaceAttention>[];
       final backend = _ProviderBackend(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         threadHistories: const <String, AgentThreadHistorySnapshot>{},
         completeTurns: true,
         threadPages: <AgentThreadPage>[],
@@ -418,7 +418,7 @@ void main() {
         ),
         agentProviderConfigStore: MemoryAgentProviderConfigStore(
           const AgentProviderSettings(
-            providers: <AgentProviderConfig>[AgentProviderConfig.defaultCodex],
+            providers: <AgentProviderConfig>[defaultCodexAgentProviderConfig],
             activeProviderId: defaultAgentProviderId,
           ),
         ),
@@ -858,7 +858,7 @@ void main() {
     ).writeAsStringSync('hello');
 
     final codexBackend = _ProviderBackend(
-      config: AgentProviderConfig.defaultCodex,
+      config: defaultCodexAgentProviderConfig,
       threadHistories: const <String, AgentThreadHistorySnapshot>{},
       completeTurns: false,
       threadPages: <AgentThreadPage>[
@@ -875,7 +875,7 @@ void main() {
       ],
     );
     final grokBackend = _ProviderBackend(
-      config: AgentProviderConfig.defaultGrok.copyWith(enabled: true),
+      config: defaultGrokAgentProviderConfig.copyWith(enabled: true),
       threadHistories: const <String, AgentThreadHistorySnapshot>{},
       completeTurns: false,
       threadPages: <AgentThreadPage>[
@@ -911,8 +911,8 @@ void main() {
       agentProviderConfigStore: MemoryAgentProviderConfigStore(
         AgentProviderSettings(
           providers: <AgentProviderConfig>[
-            AgentProviderConfig.defaultCodex,
-            AgentProviderConfig.defaultGrok.copyWith(enabled: true),
+            defaultCodexAgentProviderConfig,
+            defaultGrokAgentProviderConfig.copyWith(enabled: true),
           ],
           activeProviderId: defaultAgentProviderId,
         ),
@@ -967,7 +967,7 @@ void main() {
     final settingsCompleter = Completer<AgentProviderSettings>();
     final configStore = _DelayedAgentProviderConfigStore(settingsCompleter);
     final codexBackend = _ProviderBackend(
-      config: AgentProviderConfig.defaultCodex,
+      config: defaultCodexAgentProviderConfig,
       threadPages: const <AgentThreadPage>[],
       threadHistories: <String, AgentThreadHistorySnapshot>{
         thread.id: AgentThreadHistorySnapshot(
@@ -988,7 +988,7 @@ void main() {
       },
     );
     final grokBackend = _ProviderBackend(
-      config: AgentProviderConfig.defaultGrok,
+      config: defaultGrokAgentProviderConfig,
       threadPages: const <AgentThreadPage>[],
     );
     final shell = IdeShellController(
@@ -1035,8 +1035,8 @@ void main() {
     settingsCompleter.complete(
       const AgentProviderSettings(
         providers: <AgentProviderConfig>[
-          AgentProviderConfig.defaultCodex,
-          AgentProviderConfig.defaultGrok,
+          defaultCodexAgentProviderConfig,
+          defaultGrokAgentProviderConfig,
         ],
         activeProviderId: grokAgentProviderId,
       ),
@@ -1083,7 +1083,7 @@ void main() {
         projectPath: firstDirectory.path,
       );
       final backend = _ProviderBackend(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         threadPages: <AgentThreadPage>[
           AgentThreadPage(
             threads: <AgentThreadSummary>[thread],
@@ -1182,7 +1182,7 @@ void main() {
     );
     String? savedJson;
     final backend = _ProviderBackend(
-      config: AgentProviderConfig.defaultCodex,
+      config: defaultCodexAgentProviderConfig,
       threadPages: <AgentThreadPage>[
         const AgentThreadPage(
           threads: <AgentThreadSummary>[],
@@ -1252,7 +1252,7 @@ void main() {
         agentProviderFactory:
             _RecordingAgentProviderFactory(<String, _ProviderBackend>{
               defaultAgentProviderId: _ProviderBackend(
-                config: AgentProviderConfig.defaultCodex,
+                config: defaultCodexAgentProviderConfig,
                 threadPages: const <AgentThreadPage>[],
               ),
             }),
@@ -1320,7 +1320,7 @@ void main() {
     );
     String? savedJson;
     final backend = _ProviderBackend(
-      config: AgentProviderConfig.defaultCodex,
+      config: defaultCodexAgentProviderConfig,
       threadPages: <AgentThreadPage>[
         const AgentThreadPage(
           threads: <AgentThreadSummary>[],
@@ -1344,7 +1344,7 @@ void main() {
       ),
       agentProviderConfigStore: MemoryAgentProviderConfigStore(
         const AgentProviderSettings(
-          providers: <AgentProviderConfig>[AgentProviderConfig.defaultCodex],
+          providers: <AgentProviderConfig>[defaultCodexAgentProviderConfig],
         ),
       ),
       now: () => openedNow,
@@ -1414,7 +1414,7 @@ Future<_SelectedThreadShellHarness> _openShellWithSelectedThread({
       const <String, AgentThreadHistorySnapshot>{},
 }) async {
   final backend = _ProviderBackend(
-    config: AgentProviderConfig.defaultCodex,
+    config: defaultCodexAgentProviderConfig,
     threadHistories: threadHistories,
     completeTurns: startSessionRuntime || completeTurns,
     canForkThreadAtTurn: canForkThreadAtTurn,
@@ -1447,7 +1447,7 @@ Future<_SelectedThreadShellHarness> _openShellWithSelectedThread({
     ),
     agentProviderConfigStore: MemoryAgentProviderConfigStore(
       const AgentProviderSettings(
-        providers: <AgentProviderConfig>[AgentProviderConfig.defaultCodex],
+        providers: <AgentProviderConfig>[defaultCodexAgentProviderConfig],
         activeProviderId: defaultAgentProviderId,
       ),
     ),

@@ -27,7 +27,7 @@ void main() {
           locator: const _FakeClaudeCodeCliLocator(),
           processRunner: runner.call,
         );
-        final config = AgentProviderConfig.defaultClaudeCode.copyWith(
+        final config = defaultClaudeCodeAgentProviderConfig.copyWith(
           environment: const <String, String>{'CLAUDE_CONFIG_DIR': '/redacted'},
         );
 
@@ -88,7 +88,7 @@ void main() {
         );
 
         final snapshot = await probe.probe(
-          AgentProviderConfig.defaultClaudeCode,
+          defaultClaudeCodeAgentProviderConfig,
         );
 
         expect(snapshot?.loggedIn, isTrue);
@@ -116,7 +116,7 @@ void main() {
         processRunner: runner.call,
       );
 
-      final snapshot = await probe.probe(AgentProviderConfig.defaultClaudeCode);
+      final snapshot = await probe.probe(defaultClaudeCodeAgentProviderConfig);
 
       expect(snapshot?.loggedIn, isFalse);
       expect(snapshot?.authMethod, 'none');
@@ -139,10 +139,7 @@ void main() {
           processRunner: runner.call,
         );
 
-        expect(
-          await probe.probe(AgentProviderConfig.defaultClaudeCode),
-          isNull,
-        );
+        expect(await probe.probe(defaultClaudeCodeAgentProviderConfig), isNull);
         expect(runner.calls, isEmpty);
       },
     );
@@ -167,10 +164,7 @@ void main() {
           ).call,
         );
 
-        expect(
-          await probe.probe(AgentProviderConfig.defaultClaudeCode),
-          isNull,
-        );
+        expect(await probe.probe(defaultClaudeCodeAgentProviderConfig), isNull);
       });
     }
 
@@ -187,7 +181,7 @@ void main() {
         ).call,
       );
 
-      expect(await probe.probe(AgentProviderConfig.defaultClaudeCode), isNull);
+      expect(await probe.probe(defaultClaudeCodeAgentProviderConfig), isNull);
     });
 
     for (final error in <Object>[
@@ -201,10 +195,7 @@ void main() {
           processRunner: _FakeProcessRunner(error: error).call,
         );
 
-        expect(
-          await probe.probe(AgentProviderConfig.defaultClaudeCode),
-          isNull,
-        );
+        expect(await probe.probe(defaultClaudeCodeAgentProviderConfig), isNull);
       });
     }
   });

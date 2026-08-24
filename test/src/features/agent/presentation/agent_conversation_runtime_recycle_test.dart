@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
@@ -33,7 +34,7 @@ void main() {
       expect(harness.messageTexts, contains('first'));
 
       await harness.registry.invalidateProvider(
-        AgentProviderConfig.defaultCodex.id,
+        defaultCodexAgentProviderConfig.id,
       );
       await harness.viewModel.sendMessage('second');
       harness.scheduler.drainFrames();
@@ -61,7 +62,7 @@ void main() {
           ?.runtimeIdentity;
 
       await harness.registry.invalidateProvider(
-        AgentProviderConfig.defaultCodex.id,
+        defaultCodexAgentProviderConfig.id,
       );
       await harness.viewModel.sendMessage('second');
       harness.scheduler.drainFrames();
@@ -97,9 +98,7 @@ final class _RecycleHarness {
       registry: registry,
       settings: controller,
     );
-    bindingLease = bindingHarness.acquireDraft(
-      AgentProviderConfig.defaultCodex,
-    );
+    bindingLease = bindingHarness.acquireDraft(defaultCodexAgentProviderConfig);
     viewModel = AgentConversationViewModel(
       providerController: controller,
       conversationBinding: bindingLease.binding,

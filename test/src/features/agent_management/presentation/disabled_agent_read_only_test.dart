@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
@@ -33,7 +34,7 @@ void main() {
       configStore: MemoryAgentProviderConfigStore(
         AgentProviderSettings(
           providers: <AgentProviderConfig>[
-            AgentProviderConfig.defaultCodex.copyWith(enabled: false),
+            defaultCodexAgentProviderConfig.copyWith(enabled: false),
           ],
         ),
       ),
@@ -47,7 +48,7 @@ void main() {
       projectPath: 'C:/workspace',
       title: 'Existing history',
     );
-    final disabledConfig = AgentProviderConfig.defaultCodex.copyWith(
+    final disabledConfig = defaultCodexAgentProviderConfig.copyWith(
       enabled: false,
     );
     final bindingLease = bindingHarness.acquireThread(
@@ -104,16 +105,14 @@ void main() {
     );
     final providerController = AgentProviderSettingsController(
       runtimeRegistry: registry,
-      configStore: MemoryAgentProviderConfigStore(
-        const AgentProviderSettings(),
-      ),
+      configStore: MemoryAgentProviderConfigStore(builtInAgentProviderSettings),
     );
     final bindingHarness = AgentConversationBindingTestHarness(
       registry: registry,
       settings: providerController,
     );
     final bindingLease = bindingHarness.acquireDraft(
-      AgentProviderConfig.defaultCodex,
+      defaultCodexAgentProviderConfig,
     );
     final viewModel = AgentConversationViewModel(
       providerController: providerController,

@@ -191,7 +191,6 @@ class _NewThreadProviderPopoverState extends State<NewThreadProviderPopover> {
                     children: [
                       AgentProviderIcon(
                         providerId: provider.id,
-                        kind: provider.kind,
                         size: 18,
                         color: selected ? colors.accent : colors.textSecondary,
                       ),

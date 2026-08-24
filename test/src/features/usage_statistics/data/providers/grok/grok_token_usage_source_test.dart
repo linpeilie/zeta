@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/usage_statistics/data/providers/grok/grok_token_usage_source.dart';
 import 'package:zeta/src/features/usage_statistics/data/providers/grok/grok_usage_log_scanner.dart';
@@ -15,7 +16,7 @@ import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_text_
 void main() {
   test('maps canonical records and uses config id partition', () async {
     final result = _scanResult();
-    final config = AgentProviderConfig.defaultGrok.copyWith(
+    final config = defaultGrokAgentProviderConfig.copyWith(
       id: 'grok-work',
       displayName: 'Grok Work',
     );
@@ -75,7 +76,7 @@ void main() {
   test('reuses partition cache and forwards force refresh', () async {
     final scanner = _GrokUsageScanner(_scanResult());
     final source = GrokTokenUsageSource(
-      config: AgentProviderConfig.defaultGrok,
+      config: defaultGrokAgentProviderConfig,
       partitionStore: MemoryUsageStatisticsPartitionStore(),
       scanner: scanner,
       environment: const <String, String>{'GROK_HOME': '/grok-home'},
@@ -102,7 +103,7 @@ void main() {
         ),
       );
       final source = GrokTokenUsageSource(
-        config: AgentProviderConfig.defaultGrok.copyWith(
+        config: defaultGrokAgentProviderConfig.copyWith(
           environment: const <String, String>{
             'GROK_HOME': '/configured/grok',
             'SECRET_VALUE': 'must-not-leak',
@@ -129,7 +130,7 @@ void main() {
     'index write failure stays a warning and keeps scanned records',
     () async {
       final source = GrokTokenUsageSource(
-        config: AgentProviderConfig.defaultGrok,
+        config: defaultGrokAgentProviderConfig,
         partitionStore: _WriteFailingPartitionStore(),
         scanner: _GrokUsageScanner(_scanResult(warnings: const <String>[])),
         environment: const <String, String>{'GROK_HOME': '/grok-home'},

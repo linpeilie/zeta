@@ -9,25 +9,24 @@ import '../../../testing/fixture_reader.dart';
 
 void main() {
   group('AgentProviderPermissionMigrationRegistry', () {
-    test('composition registry exposes only registered provider kinds', () {
+    test('composition registry exposes only registered provider types', () {
       final registry = _migrationRegistry();
 
-      expect(registry.registeredKinds, <AgentProviderKind>{
-        AgentProviderKind.codexAppServer,
-        AgentProviderKind.acp,
+      expect(registry.registeredTypes, <AgentProviderTypeId>{
+        codexAgentProviderType,
+        grokAgentProviderType,
       });
       expect(
-        () => registry.registeredKinds.add(AgentProviderKind.claudeCode),
+        () => registry.registeredTypes.add(claudeCodeAgentProviderType),
         throwsUnsupportedError,
       );
     });
 
     test('a new provider can register migration without domain changes', () {
       final codec = AgentProviderSettingsCodec(
-        migrationRegistry: AgentProviderPermissionMigrationRegistry(
-          <AgentProviderKind, AgentProviderPermissionPreferenceMigrator>{
-            AgentProviderKind.claudeCode: const _FixtureMigrator('claude-safe'),
-          },
+        providerDefinitions: _definitionsWithMigrator(
+          claudeCodeAgentProviderType,
+          const _FixtureMigrator('claude-safe'),
         ),
       );
 
@@ -75,10 +74,9 @@ void main() {
     test('present V2 field short-circuits migrator even when empty', () {
       final spy = _SpyMigrator(':must-not-run');
       final codec = AgentProviderSettingsCodec(
-        migrationRegistry: AgentProviderPermissionMigrationRegistry(
-          <AgentProviderKind, AgentProviderPermissionPreferenceMigrator>{
-            AgentProviderKind.codexAppServer: spy,
-          },
+        providerDefinitions: _definitionsWithMigrator(
+          codexAgentProviderType,
+          spy,
         ),
       );
 
@@ -220,17 +218,42 @@ void main() {
 }
 
 AgentProviderPermissionMigrationRegistry _migrationRegistry() {
-  return AgentProviderPermissionMigrationRegistry(<
-    AgentProviderKind,
-    AgentProviderPermissionPreferenceMigrator
-  >{
-    AgentProviderKind.codexAppServer: const CodexPermissionPreferenceMigrator(),
-    AgentProviderKind.acp: const GrokPermissionPreferenceMigrator(),
-  });
+  return AgentProviderPermissionMigrationRegistry(
+    <AgentProviderTypeId, AgentProviderPermissionPreferenceMigrator>{
+      codexAgentProviderType: const CodexPermissionPreferenceMigrator(),
+      grokAgentProviderType: const GrokPermissionPreferenceMigrator(),
+    },
+  );
 }
 
 AgentProviderSettingsCodec _codec() {
-  return AgentProviderSettingsCodec(migrationRegistry: _migrationRegistry());
+  return AgentProviderSettingsCodec(
+    providerDefinitions: builtInAgentProviderDefinitionCatalog,
+  );
+}
+
+AgentProviderDefinitionCatalog _definitionsWithMigrator(
+  AgentProviderTypeId providerType,
+  AgentProviderPermissionPreferenceMigrator migrator,
+) {
+  return AgentProviderDefinitionCatalog(
+    builtInAgentProviderDefinitions.map((definition) {
+      if (definition.providerType != providerType) {
+        return definition;
+      }
+      return AgentProviderDefinition(
+        providerId: definition.providerId,
+        providerType: definition.providerType,
+        defaultConfig: definition.defaultConfig,
+        staticCapabilities: definition.staticCapabilities,
+        modelCatalogSourceLabel: definition.modelCatalogSourceLabel,
+        modelCatalogFingerprintExtraKeys:
+            definition.modelCatalogFingerprintExtraKeys,
+        permissionPreferenceMigrator: migrator,
+        isDefault: definition.isDefault,
+      );
+    }),
+  );
 }
 
 Map<String, Object?> _stringMap(Object? value) {

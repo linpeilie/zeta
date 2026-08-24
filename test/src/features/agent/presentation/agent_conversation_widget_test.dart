@@ -712,7 +712,7 @@ void main() {
   ) async {
     final session = activeProjectSessionStore(tempDirectories);
     final provider = FakeAgentProvider(
-      config: AgentProviderConfig.defaultGrok,
+      config: defaultGrokAgentProviderConfig,
       declaredCapabilities: AgentProviderStaticCapabilities.grokAcp,
       includeConversationTestThread: true,
       permissionOptions: const <AgentPermissionOption>[
@@ -745,7 +745,7 @@ void main() {
         agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
         agentProviderConfigStore: MemoryAgentProviderConfigStore(
           const AgentProviderSettings(
-            providers: <AgentProviderConfig>[AgentProviderConfig.defaultGrok],
+            providers: <AgentProviderConfig>[defaultGrokAgentProviderConfig],
             activeProviderId: grokAgentProviderId,
           ),
         ),
@@ -828,7 +828,7 @@ void main() {
       final configStore = MemoryAgentProviderConfigStore(
         AgentProviderSettings(
           providers: <AgentProviderConfig>[
-            AgentProviderConfig.defaultGrok.copyWith(
+            defaultGrokAgentProviderConfig.copyWith(
               selectedPermissionOptionId: 'ask',
             ),
           ],
@@ -836,7 +836,7 @@ void main() {
         ),
       );
       final provider = FakeAgentProvider(
-        config: AgentProviderConfig.defaultGrok.copyWith(
+        config: defaultGrokAgentProviderConfig.copyWith(
           selectedPermissionOptionId: 'ask',
         ),
         declaredCapabilities: AgentProviderStaticCapabilities.grokAcp,
@@ -947,7 +947,7 @@ void main() {
     const errorMessage = 'Grok rate limit reached. Please try again later.';
     final session = activeProjectSessionStore(tempDirectories);
     final provider = FakeAgentProvider(
-      config: AgentProviderConfig.defaultGrok,
+      config: defaultGrokAgentProviderConfig,
       declaredCapabilities: AgentProviderStaticCapabilities.grokAcp,
       turnErrorMessage: errorMessage,
       includeConversationTestThread: true,
@@ -961,7 +961,7 @@ void main() {
         agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
         agentProviderConfigStore: MemoryAgentProviderConfigStore(
           const AgentProviderSettings(
-            providers: <AgentProviderConfig>[AgentProviderConfig.defaultGrok],
+            providers: <AgentProviderConfig>[defaultGrokAgentProviderConfig],
             activeProviderId: grokAgentProviderId,
           ),
         ),

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 import 'package:zeta/src/app/localization/zeta_localization.dart';
@@ -21,7 +22,7 @@ void main() {
     (tester) async {
       // Arrange
       final runner = _ColdInitializationRunner();
-      final providerConfig = AgentProviderConfig.defaultClaudeCode.copyWith(
+      final providerConfig = defaultClaudeCodeAgentProviderConfig.copyWith(
         extra: const <String, Object?>{},
       );
       final store = AgentManagementSliceStore(
@@ -184,7 +185,7 @@ final class _SlicePageHarness {
 
   factory _SlicePageHarness.create({bool conflictOnFirstSave = false}) {
     final runner = _InteractiveRunner(conflictOnFirstSave: conflictOnFirstSave);
-    final providerConfig = AgentProviderConfig.defaultClaudeCode.copyWith(
+    final providerConfig = defaultClaudeCodeAgentProviderConfig.copyWith(
       extra: const <String, Object?>{},
     );
     final store = AgentManagementSliceStore(

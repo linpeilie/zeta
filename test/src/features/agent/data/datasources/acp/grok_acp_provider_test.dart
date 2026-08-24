@@ -15,7 +15,7 @@ void main() {
     test('initializes, authenticates, and starts ACP sessions', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = GrokAcpAgentProvider(
-        config: AgentProviderConfig.defaultGrok,
+        config: defaultGrokAgentProviderConfig,
         peer: peer,
       );
 
@@ -48,7 +48,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer()..promptCompleter = Completer<Object?>();
         final provider = GrokAcpAgentProvider(
-          config: AgentProviderConfig.defaultGrok,
+          config: defaultGrokAgentProviderConfig,
           peer: peer,
         );
         addTearDown(provider.dispose);
@@ -84,7 +84,7 @@ void main() {
     test('injects permission mode meta on session/new', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = GrokAcpAgentProvider(
-        config: AgentProviderConfig.defaultGrok.copyWith(
+        config: defaultGrokAgentProviderConfig.copyWith(
           selectedPermissionOptionId: 'always-approve',
         ),
         peer: peer,
@@ -107,7 +107,7 @@ void main() {
     test('session/new and session/load share identical Ask meta', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = GrokAcpAgentProvider(
-        config: AgentProviderConfig.defaultGrok.copyWith(
+        config: defaultGrokAgentProviderConfig.copyWith(
           // 旧 default 别名必须归一化为 Ask。
           selectedPermissionOptionId: 'default',
         ),
@@ -143,7 +143,7 @@ void main() {
       Future<Map<String, Object?>> metaFor(String optionId) async {
         final peer = _FakeJsonRpcPeer();
         final provider = GrokAcpAgentProvider(
-          config: AgentProviderConfig.defaultGrok.copyWith(
+          config: defaultGrokAgentProviderConfig.copyWith(
             selectedPermissionOptionId: optionId,
           ),
           peer: peer,
@@ -172,7 +172,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = GrokAcpAgentProvider(
-          config: AgentProviderConfig.defaultGrok,
+          config: defaultGrokAgentProviderConfig,
           peer: peer,
         );
         addTearDown(provider.dispose);
@@ -214,7 +214,7 @@ void main() {
       'permissionPolicy catalog exposes only Ask Auto Always approve',
       () async {
         final provider = GrokAcpAgentProvider(
-          config: AgentProviderConfig.defaultGrok,
+          config: defaultGrokAgentProviderConfig,
           peer: _FakeJsonRpcPeer(),
         );
         addTearDown(provider.dispose);
@@ -237,7 +237,7 @@ void main() {
     test('reads Grok billing plan windows and reset time', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = GrokAcpAgentProvider(
-        config: AgentProviderConfig.defaultGrok,
+        config: defaultGrokAgentProviderConfig,
         peer: peer,
       );
 
@@ -259,7 +259,7 @@ void main() {
     test('lists Grok skills via _x.ai/skills/list', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = GrokAcpAgentProvider(
-        config: AgentProviderConfig.defaultGrok,
+        config: defaultGrokAgentProviderConfig,
         peer: peer,
       );
       addTearDown(provider.dispose);
@@ -282,7 +282,7 @@ void main() {
     test('listSkills falls back to process cwd when no cwd provided', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = GrokAcpAgentProvider(
-        config: AgentProviderConfig.defaultGrok,
+        config: defaultGrokAgentProviderConfig,
         peer: peer,
       );
       addTearDown(provider.dispose);
@@ -302,7 +302,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = GrokAcpAgentProvider(
-          config: AgentProviderConfig.defaultGrok,
+          config: defaultGrokAgentProviderConfig,
           peer: peer,
         );
         addTearDown(provider.dispose);
@@ -331,7 +331,7 @@ void main() {
     test('ignores non-skill session notifications for skillsChanged', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = GrokAcpAgentProvider(
-        config: AgentProviderConfig.defaultGrok,
+        config: defaultGrokAgentProviderConfig,
         peer: peer,
       );
       addTearDown(provider.dispose);
@@ -358,7 +358,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = GrokAcpAgentProvider(
-          config: AgentProviderConfig.defaultGrok,
+          config: defaultGrokAgentProviderConfig,
           peer: peer,
         );
         addTearDown(provider.dispose);
@@ -394,7 +394,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer()..promptCompleter = Completer<Object?>();
         final provider = GrokAcpAgentProvider(
-          config: AgentProviderConfig.defaultGrok,
+          config: defaultGrokAgentProviderConfig,
           peer: peer,
         );
         final events = <AgentEvent>[];
@@ -451,7 +451,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer()..promptCompleter = Completer<Object?>();
         final provider = GrokAcpAgentProvider(
-          config: AgentProviderConfig.defaultGrok,
+          config: defaultGrokAgentProviderConfig,
           peer: peer,
         );
         final events = <AgentEvent>[];
@@ -507,7 +507,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = GrokAcpAgentProvider(
-          config: AgentProviderConfig.defaultGrok,
+          config: defaultGrokAgentProviderConfig,
           peer: peer,
         );
         addTearDown(provider.dispose);
@@ -542,7 +542,7 @@ void main() {
     test('synthesizes \$name text for skill-only sends', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = GrokAcpAgentProvider(
-        config: AgentProviderConfig.defaultGrok,
+        config: defaultGrokAgentProviderConfig,
         peer: peer,
       );
       addTearDown(provider.dispose);
@@ -574,7 +574,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer()..promptCompleter = Completer<Object?>();
         final provider = GrokAcpAgentProvider(
-          config: AgentProviderConfig.defaultGrok,
+          config: defaultGrokAgentProviderConfig,
           peer: peer,
         );
         final events = <AgentEvent>[];
@@ -627,7 +627,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer()..promptCompleter = Completer<Object?>();
         final provider = GrokAcpAgentProvider(
-          config: AgentProviderConfig.defaultGrok,
+          config: defaultGrokAgentProviderConfig,
           peer: peer,
         );
         final events = <AgentEvent>[];
@@ -687,7 +687,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = GrokAcpAgentProvider(
-          config: AgentProviderConfig.defaultGrok,
+          config: defaultGrokAgentProviderConfig,
           peer: peer,
         );
         final events = <AgentEvent>[];
@@ -731,7 +731,7 @@ void main() {
     test('keeps unmatched response diagnostics out of the timeline', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = GrokAcpAgentProvider(
-        config: AgentProviderConfig.defaultGrok,
+        config: defaultGrokAgentProviderConfig,
         peer: peer,
       );
       final events = <AgentEvent>[];
@@ -775,7 +775,7 @@ void main() {
 
         final peer = _FakeJsonRpcPeer();
         final provider = GrokAcpAgentProvider(
-          config: AgentProviderConfig.defaultGrok,
+          config: defaultGrokAgentProviderConfig,
           peer: peer,
         );
         final events = <AgentEvent>[];
@@ -854,7 +854,7 @@ void main() {
     test('renames and deletes Grok sessions via xAI extensions', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = GrokAcpAgentProvider(
-        config: AgentProviderConfig.defaultGrok,
+        config: defaultGrokAgentProviderConfig,
         peer: peer,
       );
       final events = <AgentEvent>[];
@@ -896,7 +896,7 @@ void main() {
 
     test('does not publish unsupported thread lifecycle ports', () {
       final provider = GrokAcpAgentProvider(
-        config: AgentProviderConfig.defaultGrok,
+        config: defaultGrokAgentProviderConfig,
         peer: _FakeJsonRpcPeer(),
       );
       addTearDown(provider.dispose);
@@ -915,7 +915,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = GrokAcpAgentProvider(
-          config: AgentProviderConfig.defaultGrok,
+          config: defaultGrokAgentProviderConfig,
           peer: peer,
         );
         addTearDown(provider.dispose);
@@ -944,7 +944,7 @@ void main() {
     test('encodes default conversation mode as agent _meta.mode', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = GrokAcpAgentProvider(
-        config: AgentProviderConfig.defaultGrok,
+        config: defaultGrokAgentProviderConfig,
         peer: peer,
       );
       addTearDown(provider.dispose);
@@ -989,7 +989,7 @@ void main() {
 ''');
 
         final provider = GrokAcpAgentProvider(
-          config: AgentProviderConfig.defaultGrok,
+          config: defaultGrokAgentProviderConfig,
           peer: _FakeJsonRpcPeer(),
         );
         addTearDown(provider.dispose);
@@ -1026,7 +1026,7 @@ void main() {
 ''');
 
         final provider = GrokAcpAgentProvider(
-          config: AgentProviderConfig.defaultGrok,
+          config: defaultGrokAgentProviderConfig,
           peer: _FakeJsonRpcPeer(),
         );
         addTearDown(provider.dispose);
@@ -1054,7 +1054,7 @@ void main() {
       final peer = _FakeJsonRpcPeer()..includeModelState = false;
       final modelsCompleter = Completer<AgentModelList>();
       final provider = GrokAcpAgentProvider(
-        config: AgentProviderConfig.defaultGrok,
+        config: defaultGrokAgentProviderConfig,
         peer: peer,
         modelsCli: _DelayedModelsCli(modelsCompleter.future),
       );
@@ -1106,7 +1106,7 @@ void main() {
 
         final peer = _FakeJsonRpcPeer();
         final provider = GrokAcpAgentProvider(
-          config: AgentProviderConfig.defaultGrok,
+          config: defaultGrokAgentProviderConfig,
           peer: peer,
           sessionHistoryReader: GrokSessionHistoryReader(
             grokHome: tempRoot.path,
@@ -1192,7 +1192,7 @@ void main() {
         final peer = _FakeJsonRpcPeer();
         // Fake peer 固定返回 sess-1；cwd 用 mac 路径。
         final provider = GrokAcpAgentProvider(
-          config: AgentProviderConfig.defaultGrok,
+          config: defaultGrokAgentProviderConfig,
           peer: peer,
           sessionHistoryReader: GrokSessionHistoryReader(
             grokHome: tempRoot.path,
@@ -1227,7 +1227,7 @@ void main() {
     test('maps session/update chunks and tool calls to AgentEvents', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = GrokAcpAgentProvider(
-        config: AgentProviderConfig.defaultGrok,
+        config: defaultGrokAgentProviderConfig,
         peer: peer,
       );
       final events = <AgentEvent>[];
@@ -1292,7 +1292,7 @@ void main() {
     test('sends session/prompt and completes turn', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = GrokAcpAgentProvider(
-        config: AgentProviderConfig.defaultGrok,
+        config: defaultGrokAgentProviderConfig,
         peer: peer,
       );
 
@@ -1319,7 +1319,7 @@ void main() {
     test('sends session/cancel and cancels pending permissions', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = GrokAcpAgentProvider(
-        config: AgentProviderConfig.defaultGrok,
+        config: defaultGrokAgentProviderConfig,
         peer: peer,
       );
       final events = <AgentEvent>[];
@@ -1386,7 +1386,7 @@ void main() {
         final peer = _FakeJsonRpcPeer()
           ..promptCompleterQueue = <Completer<Object?>>[];
         final provider = GrokAcpAgentProvider(
-          config: AgentProviderConfig.defaultGrok,
+          config: defaultGrokAgentProviderConfig,
           peer: peer,
         );
         final events = <AgentEvent>[];
@@ -1455,7 +1455,7 @@ void main() {
         final peer = _FakeJsonRpcPeer()
           ..promptCompleterQueue = <Completer<Object?>>[];
         final provider = GrokAcpAgentProvider(
-          config: AgentProviderConfig.defaultGrok,
+          config: defaultGrokAgentProviderConfig,
           peer: peer,
         );
         final events = <AgentEvent>[];
@@ -1561,7 +1561,7 @@ void main() {
     test('rejects a second prompt on the same session while running', () async {
       final peer = _FakeJsonRpcPeer()..promptCompleter = Completer<Object?>();
       final provider = GrokAcpAgentProvider(
-        config: AgentProviderConfig.defaultGrok,
+        config: defaultGrokAgentProviderConfig,
         peer: peer,
       );
       addTearDown(provider.dispose);
@@ -1596,7 +1596,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer()..promptCompleter = Completer<Object?>();
         final provider = GrokAcpAgentProvider(
-          config: AgentProviderConfig.defaultGrok,
+          config: defaultGrokAgentProviderConfig,
           peer: peer,
         );
         final events = <AgentEvent>[];
@@ -1646,7 +1646,7 @@ void main() {
     test('suppresses session/load replay updates from live timeline', () async {
       final peer = _FakeJsonRpcPeer()..loadSessionEmitsReplay = true;
       final provider = GrokAcpAgentProvider(
-        config: AgentProviderConfig.defaultGrok,
+        config: defaultGrokAgentProviderConfig,
         peer: peer,
       );
       final events = <AgentEvent>[];
@@ -1670,7 +1670,7 @@ void main() {
       // Arrange
       final peer = _FakeJsonRpcPeer()..supportsLoadSession = false;
       final provider = GrokAcpAgentProvider(
-        config: AgentProviderConfig.defaultGrok,
+        config: defaultGrokAgentProviderConfig,
         peer: peer,
       );
       await provider.initialize();
@@ -1691,7 +1691,7 @@ void main() {
     test('responds to session/request_permission', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = GrokAcpAgentProvider(
-        config: AgentProviderConfig.defaultGrok,
+        config: defaultGrokAgentProviderConfig,
         peer: peer,
       );
       final events = <AgentEvent>[];
@@ -1743,7 +1743,7 @@ void main() {
     test('parks _x.ai/ask_user_question until the user answers', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = GrokAcpAgentProvider(
-        config: AgentProviderConfig.defaultGrok,
+        config: defaultGrokAgentProviderConfig,
         peer: peer,
       );
       final events = <AgentEvent>[];
@@ -1814,7 +1814,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = GrokAcpAgentProvider(
-          config: AgentProviderConfig.defaultGrok,
+          config: defaultGrokAgentProviderConfig,
           peer: peer,
         );
         final events = <AgentEvent>[];
@@ -1857,7 +1857,7 @@ void main() {
     test('parks x.ai/exit_plan_mode until user approves the plan', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = GrokAcpAgentProvider(
-        config: AgentProviderConfig.defaultGrok,
+        config: defaultGrokAgentProviderConfig,
         peer: peer,
       );
       final events = <AgentEvent>[];
@@ -1910,7 +1910,7 @@ void main() {
     test('parks _x.ai/exit_plan_mode with underscore prefix', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = GrokAcpAgentProvider(
-        config: AgentProviderConfig.defaultGrok,
+        config: defaultGrokAgentProviderConfig,
         peer: peer,
       );
       final events = <AgentEvent>[];
@@ -1950,7 +1950,7 @@ void main() {
     test('rejects a plan with feedback mapped to cancelled', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = GrokAcpAgentProvider(
-        config: AgentProviderConfig.defaultGrok,
+        config: defaultGrokAgentProviderConfig,
         peer: peer,
       );
       final events = <AgentEvent>[];
@@ -1993,7 +1993,7 @@ void main() {
       () async {
         final peer = _FakeJsonRpcPeer();
         final provider = GrokAcpAgentProvider(
-          config: AgentProviderConfig.defaultGrok,
+          config: defaultGrokAgentProviderConfig,
           peer: peer,
         );
         final events = <AgentEvent>[];
@@ -2069,7 +2069,7 @@ void main() {
     test('dispose abandons parked exit_plan_mode requests', () async {
       final peer = _FakeJsonRpcPeer();
       final provider = GrokAcpAgentProvider(
-        config: AgentProviderConfig.defaultGrok,
+        config: defaultGrokAgentProviderConfig,
         peer: peer,
       );
       final events = <AgentEvent>[];
@@ -2111,7 +2111,7 @@ void main() {
         final peer = _FakeJsonRpcPeer();
         final mapper = GrokAcpNotificationMapper();
         final provider = GrokAcpAgentProvider(
-          config: AgentProviderConfig.defaultGrok,
+          config: defaultGrokAgentProviderConfig,
           peer: peer,
           notificationMapper: mapper,
         );
@@ -2205,7 +2205,7 @@ void main() {
       final peer = _FakeJsonRpcPeer();
       final mapper = GrokAcpNotificationMapper();
       final provider = GrokAcpAgentProvider(
-        config: AgentProviderConfig.defaultGrok,
+        config: defaultGrokAgentProviderConfig,
         peer: peer,
         notificationMapper: mapper,
       );
@@ -2255,7 +2255,7 @@ void main() {
         final peer = _FakeJsonRpcPeer();
         final mapper = GrokAcpNotificationMapper();
         final provider = GrokAcpAgentProvider(
-          config: AgentProviderConfig.defaultGrok,
+          config: defaultGrokAgentProviderConfig,
           peer: peer,
           notificationMapper: mapper,
         );
@@ -2332,7 +2332,7 @@ void main() {
         // x.ai/session_notification，而不是 session/update。
         final peer = _FakeJsonRpcPeer()..promptCompleter = Completer<Object?>();
         final provider = GrokAcpAgentProvider(
-          config: AgentProviderConfig.defaultGrok,
+          config: defaultGrokAgentProviderConfig,
           peer: peer,
         );
         final events = <AgentEvent>[];
@@ -2409,7 +2409,7 @@ void main() {
         final peer = _FakeJsonRpcPeer()..promptCompleter = Completer<Object?>();
         final mapper = GrokAcpNotificationMapper();
         final provider = GrokAcpAgentProvider(
-          config: AgentProviderConfig.defaultGrok,
+          config: defaultGrokAgentProviderConfig,
           peer: peer,
           notificationMapper: mapper,
         );
@@ -2529,7 +2529,7 @@ void main() {
         final peer = _FakeJsonRpcPeer();
         final mapper = GrokAcpNotificationMapper();
         final provider = GrokAcpAgentProvider(
-          config: AgentProviderConfig.defaultGrok,
+          config: defaultGrokAgentProviderConfig,
           peer: peer,
           notificationMapper: mapper,
         );
@@ -2601,7 +2601,7 @@ void main() {
       final peer = _FakeJsonRpcPeer();
       final mapper = GrokAcpNotificationMapper();
       final provider = GrokAcpAgentProvider(
-        config: AgentProviderConfig.defaultGrok,
+        config: defaultGrokAgentProviderConfig,
         peer: peer,
         notificationMapper: mapper,
       );

@@ -83,13 +83,4 @@ abstract final class AgentProviderStaticCapabilities {
     supportsReasoningOptions: true,
     supportsUsage: true,
   );
-
-  /// 在 provider 尚未实例化时，根据持久化 kind 提供保守静态能力。
-  static AgentProviderCapabilities forKind(AgentProviderKind kind) {
-    return switch (kind) {
-      AgentProviderKind.codexAppServer => codexAppServer,
-      AgentProviderKind.acp => grokAcp,
-      AgentProviderKind.claudeCode => claudeCode,
-    };
-  }
 }

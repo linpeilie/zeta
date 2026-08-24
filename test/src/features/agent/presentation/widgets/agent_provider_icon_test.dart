@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart' as svg;
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon.dart';
 
 import '../../../../ui/core/ide_component_test_harness.dart';
@@ -73,14 +73,13 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('falls back by provider kind when no SVG is registered', (
+  testWidgets('uses a neutral fallback when no SVG is registered', (
     tester,
   ) async {
     await pumpIdeComponent(
       tester,
       child: const AgentProviderIcon(
         providerId: 'custom-claude-provider',
-        kind: AgentProviderKind.claudeCode,
         size: 22,
         color: Colors.green,
         semanticLabel: 'Claude Agent',
@@ -96,7 +95,7 @@ void main() {
 
     expect(fallback, findsOneWidget);
     expect(find.byType(svg.SvgPicture), findsNothing);
-    expect(icon.icon, Icons.terminal_rounded);
+    expect(icon.icon, Icons.extension_outlined);
     expect(icon.size, 22);
     expect(icon.color, Colors.green);
     expect(find.bySemanticsLabel('Claude Agent'), findsOneWidget);

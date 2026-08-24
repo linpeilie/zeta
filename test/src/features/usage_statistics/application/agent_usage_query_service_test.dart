@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_query_service.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_token_usage_source.dart';
@@ -293,7 +294,7 @@ Future<AgentUsageProviderSnapshot> _singleResolved(
 }
 
 AgentProviderConfig _config(String id, String name) =>
-    AgentProviderConfig.defaultCodex.copyWith(id: id, displayName: name);
+    defaultCodexAgentProviderConfig.copyWith(id: id, displayName: name);
 
 AgentUsageCapabilityResult<AgentUsageQuotaSnapshot> _availableQuota(
   AgentProviderConfig config,

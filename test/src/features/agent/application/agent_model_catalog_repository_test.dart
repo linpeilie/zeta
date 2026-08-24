@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/data/agent_model_catalog_cache_store.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 void main() {
@@ -14,14 +15,19 @@ void main() {
     setUp(() {
       now = DateTime.utc(2026, 7, 22, 8);
       store = MemoryAgentModelCatalogCacheStore();
-      repository = AgentModelCatalogRepository(store: store, clock: () => now);
+      repository = AgentModelCatalogRepository(
+        store: store,
+        fingerprintExtraKeysFor: builtInAgentProviderDefinitionCatalog
+            .modelCatalogFingerprintExtraKeysFor,
+        clock: () => now,
+      );
     });
 
     test(
       'returns a fresh persisted catalog without invoking the loader',
       () async {
         await repository.record(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           models: _models('cached'),
           source: 'test',
         );
@@ -32,7 +38,7 @@ void main() {
               store: store,
               clock: () => now.add(const Duration(minutes: 30)),
             ).load(
-              config: AgentProviderConfig.defaultCodex,
+              config: defaultCodexAgentProviderConfig,
               source: 'test',
               refreshLoader: () async {
                 loaderCalls += 1;
@@ -51,7 +57,7 @@ void main() {
       'publishes stale cache before replacing it in the background',
       () async {
         await repository.record(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           models: _models('cached'),
           source: 'test',
         );
@@ -61,7 +67,7 @@ void main() {
         var loaderCalls = 0;
 
         final load = repository.load(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           source: 'test',
           onCacheHit: (snapshot) {
             published.add(snapshot.models.models.single.id);
@@ -85,14 +91,14 @@ void main() {
 
     test('retains stale models when refresh fails', () async {
       await repository.record(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         models: _models('cached'),
         source: 'test',
       );
       now = now.add(const Duration(hours: 2));
 
       final result = await repository.load(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         source: 'test',
         refreshLoader: () async => throw StateError('offline'),
       );
@@ -113,7 +119,7 @@ void main() {
 
         await expectLater(
           emptyRepository.load(
-            config: AgentProviderConfig.defaultClaudeCode,
+            config: defaultClaudeCodeAgentProviderConfig,
             source: 'Claude Code CLI',
             refreshLoader: () async => throw StateError('metadata unavailable'),
           ),
@@ -134,12 +140,12 @@ void main() {
       }
 
       final first = repository.load(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         source: 'test',
         refreshLoader: loader,
       );
       final second = repository.load(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         source: 'test',
         refreshLoader: loader,
       );
@@ -159,14 +165,14 @@ void main() {
 
     test('does not reuse cache after runtime configuration changes', () async {
       await repository.record(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         models: _models('cached'),
         source: 'test',
       );
       var cacheHits = 0;
 
       final result = await repository.load(
-        config: AgentProviderConfig.defaultCodex.copyWith(
+        config: defaultCodexAgentProviderConfig.copyWith(
           command: 'custom-codex',
         ),
         source: 'test',
@@ -179,7 +185,7 @@ void main() {
     });
 
     test('account data enrichment participates in the safe fingerprint', () {
-      final enabled = AgentProviderConfig.defaultClaudeCode;
+      final enabled = defaultClaudeCodeAgentProviderConfig;
       final disabled = enabled.copyWith(
         extra: const <String, Object?>{
           claudeCodeAccountDataEnrichmentKey: false,
@@ -196,10 +202,10 @@ void main() {
       'does not let an older config refresh overwrite a newer one',
       () async {
         // Arrange
-        final oldConfig = AgentProviderConfig.defaultCodex.copyWith(
+        final oldConfig = defaultCodexAgentProviderConfig.copyWith(
           command: 'codex-old',
         );
-        final newConfig = AgentProviderConfig.defaultCodex.copyWith(
+        final newConfig = defaultCodexAgentProviderConfig.copyWith(
           command: 'codex-new',
         );
         final oldGate = Completer<AgentModelList>();
@@ -252,7 +258,7 @@ void main() {
       final oldGate = Completer<AgentModelList>();
       final replacementGate = Completer<AgentModelList>();
       final oldLoad = repository.load(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         source: 'old',
         refreshLoader: () => oldGate.future,
       );
@@ -267,7 +273,7 @@ void main() {
       // Act
       await repository.invalidateProvider(defaultAgentProviderId);
       final replacementLoad = repository.load(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         source: 'replacement',
         refreshLoader: () => replacementGate.future,
       );
@@ -291,12 +297,12 @@ void main() {
 
       // Act
       await countingRepository.load(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         source: 'refresh',
         refreshLoader: () async => _models('same'),
       );
       await countingRepository.record(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         models: _models('same'),
         source: 'runtime event',
       );
@@ -305,7 +311,7 @@ void main() {
       expect(countingStore.saveCalls, 1);
 
       await countingRepository.record(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         models: _models('changed'),
         source: 'runtime event',
       );
@@ -322,7 +328,7 @@ void main() {
           clock: () => now,
         );
         await countingRepository.load(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           source: 'first',
           refreshLoader: () async => _models('same'),
         );
@@ -330,7 +336,7 @@ void main() {
         // Act
         now = now.add(const Duration(hours: 2));
         final refreshed = await countingRepository.load(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           source: 'second',
           refreshLoader: () async => _models('same'),
         );
@@ -352,7 +358,7 @@ void main() {
 
       // Act
       await failingRepository.record(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         models: _models('first'),
         source: 'runtime event',
       );
@@ -363,7 +369,7 @@ void main() {
 
       // 下一次真实状态变化仍会发起一次新的最佳努力保存。
       await failingRepository.record(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         models: _models('second'),
         source: 'runtime event',
       );

@@ -4,6 +4,7 @@ import 'package:zeta/src/features/agent/application/agent_model_catalog_reposito
 import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_model_catalog_projection.dart';
 import 'package:zeta/src/features/agent/data/agent_model_catalog_cache_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 import '../../testing/ide_test_harness.dart';
@@ -11,7 +12,7 @@ import '../../testing/ide_test_harness.dart';
 void main() {
   group('ProviderSettingsSliceComposition', () {
     test('environment changes invalidate the shared model catalog', () async {
-      final initial = AgentProviderConfig.defaultCodex.copyWith(
+      final initial = defaultCodexAgentProviderConfig.copyWith(
         environment: const <String, String>{'ZETA_TOKEN': 'old'},
       );
       final updated = initial.copyWith(
@@ -36,6 +37,7 @@ void main() {
         ),
         modelCatalogRepository: catalog,
         runtimeRegistry: registry,
+        providerDefinitions: builtInAgentProviderDefinitionCatalog,
       );
       addTearDown(composition.dispose);
       await composition.store.loadSettings();
@@ -74,15 +76,16 @@ void main() {
           store: MemoryAgentModelCatalogCacheStore(),
         ),
         runtimeRegistry: registry,
+        providerDefinitions: builtInAgentProviderDefinitionCatalog,
       );
       addTearDown(composition.dispose);
       await composition.store.loadSettings();
 
       final first = composition.store.updateProviderConfig(
-        AgentProviderConfig.defaultCodex.copyWith(command: 'first'),
+        defaultCodexAgentProviderConfig.copyWith(command: 'first'),
       );
       final second = composition.store.updateProviderConfig(
-        AgentProviderConfig.defaultCodex.copyWith(command: 'second'),
+        defaultCodexAgentProviderConfig.copyWith(command: 'second'),
       );
       await Future.wait<void>(<Future<void>>[first, second]);
 
@@ -103,13 +106,14 @@ void main() {
           store: MemoryAgentModelCatalogCacheStore(),
         ),
         runtimeRegistry: registry,
+        providerDefinitions: builtInAgentProviderDefinitionCatalog,
       );
       addTearDown(composition.dispose);
       await composition.store.loadSettings();
 
       final result = await composition.loadModelCatalog(
         composition.queryForConfig(
-          AgentProviderConfig.defaultCodex,
+          defaultCodexAgentProviderConfig,
           includeHidden: true,
         ),
         forceRefresh: true,
@@ -132,14 +136,15 @@ void main() {
           store: MemoryAgentModelCatalogCacheStore(),
         ),
         runtimeRegistry: registry,
+        providerDefinitions: builtInAgentProviderDefinitionCatalog,
       );
       addTearDown(composition.dispose);
       await composition.store.loadSettings();
       final staleQuery = composition.queryForConfig(
-        AgentProviderConfig.defaultCodex,
+        defaultCodexAgentProviderConfig,
       );
       await composition.store.updateProviderConfig(
-        AgentProviderConfig.defaultCodex.copyWith(command: 'codex-next'),
+        defaultCodexAgentProviderConfig.copyWith(command: 'codex-next'),
       );
 
       await expectLater(
@@ -172,6 +177,7 @@ void main() {
             store: MemoryAgentModelCatalogCacheStore(),
           ),
           runtimeRegistry: registry,
+          providerDefinitions: builtInAgentProviderDefinitionCatalog,
         );
         addTearDown(composition.dispose);
 

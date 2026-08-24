@@ -3641,7 +3641,7 @@ void main() {
       'retained Claude thread preserves history selection on catalog reload',
       () async {
         final provider = _FakeAgentProvider(
-          providerConfig: AgentProviderConfig.defaultClaudeCode,
+          providerConfig: defaultClaudeCodeAgentProviderConfig,
           declaredCapabilities: AgentProviderStaticCapabilities.claudeCode,
           availableModels: const AgentModelList(
             models: <AgentModelInfo>[
@@ -3703,7 +3703,7 @@ void main() {
           initialThread: thread,
           providerSettings: const AgentProviderSettings(
             providers: <AgentProviderConfig>[
-              AgentProviderConfig.defaultClaudeCode,
+              defaultClaudeCodeAgentProviderConfig,
             ],
             activeProviderId: defaultClaudeCodeProviderId,
           ),
@@ -3728,7 +3728,7 @@ void main() {
 
     test('bound thread applies explicit Provider default effort', () async {
       final provider = _FakeAgentProvider(
-        providerConfig: AgentProviderConfig.defaultCodex.copyWith(
+        providerConfig: defaultCodexAgentProviderConfig.copyWith(
           selectedModel: 'gpt-5.5',
           selectedReasoningEffort: 'high',
         ),
@@ -3777,7 +3777,7 @@ void main() {
       'bound Claude thread keeps a valid catalog model when history is stale',
       () async {
         final provider = _FakeAgentProvider(
-          providerConfig: AgentProviderConfig.defaultClaudeCode,
+          providerConfig: defaultClaudeCodeAgentProviderConfig,
           declaredCapabilities: AgentProviderStaticCapabilities.claudeCode,
           availableModels: const AgentModelList(
             models: <AgentModelInfo>[
@@ -3816,7 +3816,7 @@ void main() {
           initialThread: thread,
           providerSettings: const AgentProviderSettings(
             providers: <AgentProviderConfig>[
-              AgentProviderConfig.defaultClaudeCode,
+              defaultClaudeCodeAgentProviderConfig,
             ],
             activeProviderId: defaultClaudeCodeProviderId,
           ),
@@ -3975,10 +3975,10 @@ void main() {
       'switchActiveProvider requests a separate draft and keeps this Binding',
       () async {
         // Arrange
-        final codexConfig = AgentProviderConfig.defaultCodex.copyWith(
+        final codexConfig = defaultCodexAgentProviderConfig.copyWith(
           selectedModel: 'gpt-5.5',
         );
-        final grokConfig = AgentProviderConfig.defaultGrok.copyWith(
+        final grokConfig = defaultGrokAgentProviderConfig.copyWith(
           selectedModel: 'grok-4.5',
         );
         final codex = _FakeAgentProvider(
@@ -4065,10 +4065,10 @@ void main() {
       () async {
         // Arrange：默认 active 为 Codex，打开 Grok 历史 thread 后应切换并 resume。
         final codex = _FakeAgentProvider(
-          providerConfig: AgentProviderConfig.defaultCodex,
+          providerConfig: defaultCodexAgentProviderConfig,
         );
         final grok = _FakeAgentProvider(
-          providerConfig: AgentProviderConfig.defaultGrok,
+          providerConfig: defaultGrokAgentProviderConfig,
           historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
             'grok-sess-1': _historySnapshot(
               threadId: 'grok-sess-1',
@@ -4089,8 +4089,8 @@ void main() {
           configStore: MemoryAgentProviderConfigStore(
             const AgentProviderSettings(
               providers: <AgentProviderConfig>[
-                AgentProviderConfig.defaultCodex,
-                AgentProviderConfig.defaultGrok,
+                defaultCodexAgentProviderConfig,
+                defaultGrokAgentProviderConfig,
               ],
             ),
           ),
@@ -4197,7 +4197,7 @@ void main() {
         },
       );
       final grok = _FakeAgentProvider(
-        providerConfig: AgentProviderConfig.defaultGrok,
+        providerConfig: defaultGrokAgentProviderConfig,
       );
       final factory = _MultiFakeAgentProviderFactory(<String, Object>{
         defaultAgentProviderId: codex,
@@ -4238,8 +4238,8 @@ void main() {
       settingsCompleter.complete(
         const AgentProviderSettings(
           providers: <AgentProviderConfig>[
-            AgentProviderConfig.defaultCodex,
-            AgentProviderConfig.defaultGrok,
+            defaultCodexAgentProviderConfig,
+            defaultGrokAgentProviderConfig,
           ],
           activeProviderId: grokAgentProviderId,
         ),
@@ -4884,7 +4884,7 @@ AgentConversationViewModel _createViewModel(
   final controller = AgentProviderSettingsController(
     runtimeRegistry: registry,
     configStore: MemoryAgentProviderConfigStore(
-      providerSettings ?? const AgentProviderSettings(),
+      providerSettings ?? builtInAgentProviderSettings,
     ),
     modelCatalogRepository: modelCatalogRepository,
   );
@@ -5114,7 +5114,7 @@ class _FakeAgentProvider
     this.resumeSessionTitle,
     this.emitSessionStartedDuringSend = false,
     this.sendResult,
-    this.providerConfig = AgentProviderConfig.defaultCodex,
+    this.providerConfig = defaultCodexAgentProviderConfig,
     this.availableModels = const AgentModelList(models: <AgentModelInfo>[]),
     this.emitModelEventOnRefresh = false,
     this.eventCancellationGate,

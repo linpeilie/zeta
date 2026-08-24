@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_effect.dart';
@@ -230,8 +231,8 @@ AgentManagementSliceStore _createStore({
 }) {
   final settings = AgentProviderSettings(
     providers: <AgentProviderConfig>[
-      AgentProviderConfig.defaultCodex,
-      AgentProviderConfig.defaultGrok,
+      defaultCodexAgentProviderConfig,
+      defaultGrokAgentProviderConfig,
     ],
   );
   return AgentManagementSliceStore(

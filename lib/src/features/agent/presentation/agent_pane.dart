@@ -412,7 +412,6 @@ class _AgentPaneState extends State<AgentPane> {
                   timeline: isLoadingHistory
                       ? _AgentThreadHistoryLoading(
                           providerId: historyState.providerId,
-                          providerKind: historyState.providerKind,
                           providerName: historyState.providerName,
                         )
                       : _AgentConversationTimeline(

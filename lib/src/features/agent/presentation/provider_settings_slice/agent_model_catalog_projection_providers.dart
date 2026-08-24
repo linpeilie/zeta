@@ -136,10 +136,18 @@ final class AgentModelCatalogProjectionNotifier
 final activeAgentModelCatalogQueryProvider = Provider<AgentModelCatalogQuery?>((
   ref,
 ) {
-  final config = ref.watch(activeAgentProviderConfigProvider);
+  if (ref.watch(agentModelCatalogProjectionSourceProvider) == null) {
+    return null;
+  }
+  final activeProviderId = ref
+      .watch(agentProviderSettingsValueProvider)
+      .activeProviderId;
+  if (activeProviderId.isEmpty) {
+    return null;
+  }
   return ref.watch(
     agentModelCatalogQueryProvider((
-      providerId: config.id,
+      providerId: activeProviderId,
       includeHidden: false,
     )),
   );

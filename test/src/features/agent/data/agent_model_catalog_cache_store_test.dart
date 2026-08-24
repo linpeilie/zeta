@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/app/storage/atomic_text_file.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/data/agent_model_catalog_cache_store.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 void main() {
@@ -89,7 +90,7 @@ void main() {
         final refreshedAt = oldFetchedAt.add(const Duration(hours: 2));
         final fingerprint = AgentModelCatalogRepository(
           store: MemoryAgentModelCatalogCacheStore(),
-        ).configFingerprint(AgentProviderConfig.defaultClaudeCode);
+        ).configFingerprint(defaultClaudeCodeAgentProviderConfig);
         await file.writeAsString(
           jsonEncode(<String, Object?>{
             'version': 1,
@@ -122,7 +123,7 @@ void main() {
         final cacheHits = <String>[];
 
         final result = await repository.load(
-          config: AgentProviderConfig.defaultClaudeCode,
+          config: defaultClaudeCodeAgentProviderConfig,
           source: 'Claude Code CLI initialize',
           forceRefresh: true,
           onCacheHit: (snapshot) {

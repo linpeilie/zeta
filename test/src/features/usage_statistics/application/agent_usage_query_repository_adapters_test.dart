@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_query_service.dart';
 import 'package:zeta/src/features/usage_statistics/application/query_agent_usage_panel_repository.dart';
@@ -11,7 +12,7 @@ import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_model
 
 void main() {
   final now = DateTime(2026, 8, 12, 12);
-  final config = AgentProviderConfig.defaultCodex.copyWith(
+  final config = defaultCodexAgentProviderConfig.copyWith(
     id: 'codex-work',
     displayName: 'Codex Work',
   );

@@ -55,7 +55,7 @@ class CodexAgentManagementRepository
 
   @override
   AgentProviderConfig get defaultProviderConfig =>
-      AgentProviderConfig.defaultCodex;
+      defaultCodexAgentProviderConfig;
 
   @override
   bool acceptsExecutablePath(String path) => looksLikeCodexCliPath(path);
@@ -492,7 +492,7 @@ class CodexAgentManagementRepository
     return current.copyWith(
       id: AgentDefinition.codex.id,
       displayName: AgentDefinition.codex.displayName,
-      kind: AgentProviderKind.codexAppServer,
+      kind: codexAgentProviderType,
       command: command.executable,
       arguments: command.argumentsFor(const <String>['app-server']),
       extra: extra,

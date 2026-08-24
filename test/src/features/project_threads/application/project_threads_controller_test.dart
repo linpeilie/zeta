@@ -515,7 +515,7 @@ void main() {
 
     test('sorts all provider threads by global recency', () async {
       final codex = _FakeAgentProvider(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         pages: <AgentThreadPage>[
           _page(<AgentThreadSummary>[
             _thread(
@@ -532,7 +532,7 @@ void main() {
         ],
       );
       final grok = _FakeAgentProvider(
-        config: AgentProviderConfig.defaultGrok,
+        config: defaultGrokAgentProviderConfig,
         pages: <AgentThreadPage>[
           _page(<AgentThreadSummary>[
             _thread(
@@ -1046,7 +1046,7 @@ void main() {
       () async {
         final provider = _FakeAgentProvider(
           pages: const <AgentThreadPage>[],
-          config: AgentProviderConfig.defaultCodex.withPermissionPreference(
+          config: defaultCodexAgentProviderConfig.withPermissionPreference(
             ':workspace',
           ),
         );
@@ -1080,7 +1080,7 @@ void main() {
     test('fork without Binding uses the persisted provider default', () async {
       final provider = _FakeAgentProvider(
         pages: const <AgentThreadPage>[],
-        config: AgentProviderConfig.defaultCodex.withPermissionPreference(
+        config: defaultCodexAgentProviderConfig.withPermissionPreference(
           ':workspace',
         ),
       );
@@ -1133,7 +1133,7 @@ void main() {
     test('fork 优先使用已存在 Binding 的 thread 权限快照', () async {
       final provider = _FakeAgentProvider(
         pages: const <AgentThreadPage>[],
-        config: AgentProviderConfig.defaultCodex.withPermissionPreference(
+        config: defaultCodexAgentProviderConfig.withPermissionPreference(
           ':workspace',
         ),
       );
@@ -1267,8 +1267,8 @@ ProjectThreadsController _createMultiProviderController({
     configStore: MemoryAgentProviderConfigStore(
       AgentProviderSettings(
         providers: <AgentProviderConfig>[
-          AgentProviderConfig.defaultCodex,
-          AgentProviderConfig.defaultGrok,
+          defaultCodexAgentProviderConfig,
+          defaultGrokAgentProviderConfig,
         ],
         activeProviderId: defaultAgentProviderId,
       ),
@@ -1371,7 +1371,7 @@ class _FakeAgentProvider
         AgentLocalThreadListPort {
   _FakeAgentProvider({
     required List<AgentThreadPage> pages,
-    this.config = AgentProviderConfig.defaultCodex,
+    this.config = defaultCodexAgentProviderConfig,
   }) : _pages = List<AgentThreadPage>.from(pages);
 
   final List<AgentThreadPage> _pages;

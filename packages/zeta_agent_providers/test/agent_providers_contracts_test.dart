@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
+import 'package:zeta_plugin_kernel/zeta_plugin_kernel.dart';
 
 /// `zeta_agent_providers` 的包内契约测试入口。
 ///
@@ -9,12 +10,12 @@ import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 void main() {
   group('适配层可脱离宿主使用', () {
     test('三个内置 Provider 都能从中立配置造出 bundle', () {
-      const factory = DefaultAgentProviderFactory();
+      final factory = _activateBuiltInFactory();
 
       for (final config in <AgentProviderConfig>[
-        AgentProviderConfig.defaultCodex,
-        AgentProviderConfig.defaultGrok,
-        AgentProviderConfig.defaultClaudeCode,
+        defaultCodexAgentProviderConfig,
+        defaultGrokAgentProviderConfig,
+        defaultClaudeCodeAgentProviderConfig,
       ]) {
         final bundle = factory.createBundle(config);
         addTearDown(bundle.runtime.dispose);
@@ -28,12 +29,12 @@ void main() {
       }
     });
 
-    test('静态能力表按 kind 给出中立能力', () {
-      final codex = AgentProviderStaticCapabilities.forKind(
-        AgentProviderKind.codexAppServer,
+    test('静态能力目录按开放 type 给出中立能力', () {
+      final codex = builtInAgentProviderDefinitionCatalog.staticCapabilitiesFor(
+        codexAgentProviderType,
       );
-      final acp = AgentProviderStaticCapabilities.forKind(
-        AgentProviderKind.acp,
+      final acp = builtInAgentProviderDefinitionCatalog.staticCapabilitiesFor(
+        grokAgentProviderType,
       );
 
       expect(codex.canCreateSession, isTrue);
@@ -47,4 +48,18 @@ void main() {
       expect(looksLikeCodexCliPath('/usr/local/bin/grok'), isFalse);
     });
   });
+}
+
+AgentProviderBundleFactory _activateBuiltInFactory() {
+  final registry = ZetaPluginRegistry(
+    factories: createBuiltInAgentProviderPlugins(),
+  );
+  addTearDown(registry.close);
+  final report = registry.activateAllSynchronously();
+  if (report.isDegraded) {
+    throw StateError('Built-in Agent provider plugins failed to activate');
+  }
+  return ResolvedAgentProviderPlugins(
+    registry.contributions<AgentProviderPluginContribution>(),
+  ).bundleFactory;
 }

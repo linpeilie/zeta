@@ -74,9 +74,10 @@ agentProviderSettingsSliceReduce(
       );
 
     case ProviderEnabledToggled():
-      final current =
-          _providerById(state.settings, intent.providerId) ??
-          AgentProviderConfig.defaultCodex;
+      final current = _providerById(state.settings, intent.providerId);
+      if (current == null) {
+        return Transition.none(state);
+      }
       if (current.enabled == intent.enabled) {
         return Transition.none(state);
       }

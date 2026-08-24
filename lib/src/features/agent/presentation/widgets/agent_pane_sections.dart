@@ -201,12 +201,10 @@ class _AgentConversationLayoutDelegate extends MultiChildLayoutDelegate {
 class _AgentThreadHistoryLoading extends StatelessWidget {
   const _AgentThreadHistoryLoading({
     required this.providerId,
-    required this.providerKind,
     required this.providerName,
   });
 
   final String providerId;
-  final AgentProviderKind providerKind;
   final String providerName;
 
   @override
@@ -254,7 +252,6 @@ class _AgentThreadHistoryLoading extends StatelessWidget {
                               'agent-thread-history-loading-icon-$providerId',
                             ),
                             providerId: providerId,
-                            kind: providerKind,
                             size: 26,
                             color: colors.textSecondary,
                             semanticLabel: providerName,

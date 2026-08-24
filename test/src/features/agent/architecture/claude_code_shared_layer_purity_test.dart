@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// Claude Code 接入期间的共享层纯度守卫（G1 / G2）。
 ///
 /// 共享适配层不得出现 Claude Code 路径或标识符；`AgentProviderBundle` 不得为
-/// Claude Code 新增 `AgentProviderKind` 分支；G1 五文件内容冻结（T18）。
+/// Claude Code 新增 `AgentProviderTypeId` 分支；G1 五文件内容冻结（T18）。
 void main() {
   /// G1 范围内的共享机制层文件（不含 Provider 自有 adapter）。
   ///
@@ -86,9 +86,9 @@ void main() {
   const bundlePath =
       'packages/zeta_agent_core/lib/src/domain/agent_provider_bundle.dart';
 
-  /// 基线：bundle 当前不出现 `AgentProviderKind`（端口装配只靠 interface/`is`）。
+  /// 基线：bundle 当前不出现 `AgentProviderTypeId`（端口装配只靠 interface/`is`）。
   /// 接入 Claude Code 后此计数仍须保持；若上升说明有人加了 kind 分支。
-  const expectedAgentProviderKindMentionsInBundle = 0;
+  const expectedAgentProviderTypeIdMentionsInBundle = 0;
 
   String stripLineComments(String source) {
     final out = StringBuffer();
@@ -140,15 +140,15 @@ void main() {
       }
     });
 
-    test('agent_provider_bundle keeps AgentProviderKind mention baseline', () {
+    test('agent_provider_bundle keeps AgentProviderTypeId mention baseline', () {
       final source = File(bundlePath).readAsStringSync();
-      final mentions = RegExp(r'AgentProviderKind').allMatches(source).length;
+      final mentions = RegExp(r'AgentProviderTypeId').allMatches(source).length;
       expect(
         mentions,
-        expectedAgentProviderKindMentionsInBundle,
+        expectedAgentProviderTypeIdMentionsInBundle,
         reason:
-            'AgentProviderBundle must not grow AgentProviderKind branches; '
-            'baseline=$expectedAgentProviderKindMentionsInBundle actual=$mentions',
+            'AgentProviderBundle must not grow AgentProviderTypeId branches; '
+            'baseline=$expectedAgentProviderTypeIdMentionsInBundle actual=$mentions',
       );
     });
 

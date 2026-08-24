@@ -13,15 +13,19 @@
 /// - 新增 Provider 的正常改动面就是这个包 + 一行插件注册（目标架构 §9.3）。
 library;
 
+export 'built_in_agent_provider_plugins.dart';
+export 'claude_code_plugin.dart';
+export 'codex_plugin.dart';
+export 'grok_plugin.dart';
 export 'src/agent_ignored_message_logger.dart';
 export 'src/agent_metric_labels.dart';
+export 'src/agent_provider_definition.dart';
 export 'src/agent_provider_permission_migration.dart';
 export 'src/agent_provider_plugin_contribution.dart';
 export 'src/agent_provider_static_capabilities.dart';
 export 'src/claude_code_cli_locator.dart';
 export 'src/cli_command_locator.dart';
 export 'src/codex_cli_locator.dart';
-export 'src/compatibility_agent_provider_plugin.dart';
 export 'src/datasources/acp/grok_acp_agent_provider.dart'
     hide JsonRpcPeerFactory;
 export 'src/datasources/acp/grok_models_cli.dart';
@@ -56,7 +60,6 @@ export 'src/datasources/local_history/grok_user_content_parser.dart';
 export 'src/datasources/transport/json_rpc_stdio_transport.dart';
 export 'src/datasources/transport/provider_operation_scheduler.dart';
 export 'src/datasources/transport/provider_runtime_json_rpc_peer.dart';
-export 'src/default_agent_provider_factory.dart';
 export 'src/grok_cli_locator.dart';
 export 'src/mappers/acp_content_codec.dart';
 export 'src/mappers/acp_permission_mapper.dart';

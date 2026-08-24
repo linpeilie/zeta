@@ -522,7 +522,7 @@ class AgentPaneFakeProvider
 
   @override
   AgentProviderConfig get config =>
-      AgentProviderConfig.defaultCodex.withPermissionPreference(':workspace');
+      defaultCodexAgentProviderConfig.withPermissionPreference(':workspace');
 
   @override
   AgentProviderCapabilities get capabilities =>

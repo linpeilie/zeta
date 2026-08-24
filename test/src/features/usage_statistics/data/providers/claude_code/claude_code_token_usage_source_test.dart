@@ -30,7 +30,7 @@ void main() {
 
     test('distinguishes no local history from an empty query window', () async {
       final source = ClaudeCodeTokenUsageSource(
-        config: AgentProviderConfig.defaultClaudeCode,
+        config: defaultClaudeCodeAgentProviderConfig,
         partitionStore: store,
         historyReader: reader,
       );
@@ -131,7 +131,7 @@ void main() {
           response: privateResponse,
         );
         final refreshedAt = today.add(const Duration(hours: 12));
-        final config = AgentProviderConfig.defaultClaudeCode.copyWith(
+        final config = defaultClaudeCodeAgentProviderConfig.copyWith(
           id: 'claude-work',
           displayName: 'Claude Work',
           environment: const <String, String>{
@@ -247,7 +247,7 @@ void main() {
           );
         }
         final source = ClaudeCodeTokenUsageSource(
-          config: AgentProviderConfig.defaultClaudeCode,
+          config: defaultClaudeCodeAgentProviderConfig,
           partitionStore: store,
           historyReader: reader,
         );
@@ -281,7 +281,7 @@ void main() {
           response: '[RESPONSE_REDACTED]',
         );
         final source = ClaudeCodeTokenUsageSource(
-          config: AgentProviderConfig.defaultClaudeCode,
+          config: defaultClaudeCodeAgentProviderConfig,
           partitionStore: store,
           historyReader: reader,
         );
@@ -329,7 +329,7 @@ void main() {
           providerId: defaultClaudeCodeProviderId,
         );
         final source = ClaudeCodeTokenUsageSource(
-          config: AgentProviderConfig.defaultClaudeCode,
+          config: defaultClaudeCodeAgentProviderConfig,
           partitionStore: store,
           historyReader: reader,
         );

@@ -106,7 +106,7 @@ void main() {
     });
 
     test('config snapshot keeps explicit profile id from V2 optionId', () {
-      final config = AgentProviderConfig.defaultCodex.withPermissionPreference(
+      final config = defaultCodexAgentProviderConfig.withPermissionPreference(
         'team-safe',
       );
       final snapshot = CodexPermissionPolicyCodec.snapshotFromConfig(config);

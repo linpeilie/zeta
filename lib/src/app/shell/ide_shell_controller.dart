@@ -90,7 +90,7 @@ class IdeShellController extends ChangeNotifier {
         modelCatalogRepository: agentModelCatalogRepository,
         runtimeRegistry: this.agentProviderRuntimeRegistry,
         globalRuntime: agentProviderGlobalRuntime,
-        staticCapabilitiesFor: AgentProviderStaticCapabilities.forKind,
+        providerDefinitions: builtInAgentProviderDefinitionCatalog,
       );
       agentProviderController = controller;
       _disposeAgentProviderController = controller.dispose;
@@ -140,7 +140,7 @@ class IdeShellController extends ChangeNotifier {
     );
     _bootstrapAgentEntry = agentConversationWorkspaceStore.ensureDraftEntry(
       projectPath: _bootstrapProjectPath,
-      providerId: defaultAgentProviderId,
+      providerId: agentProviderController.activeProviderId,
     );
     agentConversationWorkspaceStore.selectEntry(_bootstrapAgentEntry.entryId);
     final projectThreadsComposition = ProjectThreadsSliceComposition.create(

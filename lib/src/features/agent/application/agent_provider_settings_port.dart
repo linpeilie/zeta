@@ -26,6 +26,9 @@ abstract interface class AgentProviderSettingsPort implements Listenable {
 
   AgentProviderCapabilities capabilitiesForProviderId(String providerId);
 
+  /// 返回插件定义声明的稳定模型目录来源标签。
+  String modelCatalogSourceFor(AgentProviderConfig config);
+
   Future<void> updateProviderConfig(
     AgentProviderConfig updated, {
     bool restartProvider = false,

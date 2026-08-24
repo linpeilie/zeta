@@ -12,6 +12,10 @@ final _log = zetaLoggerFor('zeta.agent.model_catalog');
 /// 实例内的目录缓存，避免下层缓存重新延长共享仓储的 TTL。
 typedef AgentModelCatalogLoader = Future<AgentModelList> Function();
 
+/// 插件 definition 声明的模型目录安全指纹扩展字段。
+typedef AgentModelCatalogFingerprintExtraKeysFor =
+    Iterable<String> Function(AgentProviderConfig config);
+
 /// 一次模型目录读取的结果。
 class AgentModelCatalogLoadResult {
   const AgentModelCatalogLoadResult({
@@ -43,12 +47,16 @@ class AgentModelCatalogRepository {
     required this.store,
     this.freshFor = const Duration(hours: 1),
     this.maxStaleFor = const Duration(days: 7),
+    AgentModelCatalogFingerprintExtraKeysFor? fingerprintExtraKeysFor,
     DateTime Function()? clock,
-  }) : _clock = clock ?? DateTime.now;
+  }) : _fingerprintExtraKeysFor =
+           fingerprintExtraKeysFor ?? ((_) => const <String>[]),
+       _clock = clock ?? DateTime.now;
 
   final AgentModelCatalogCacheStore store;
   final Duration freshFor;
   final Duration maxStaleFor;
+  final AgentModelCatalogFingerprintExtraKeysFor _fingerprintExtraKeysFor;
   final DateTime Function() _clock;
 
   final Map<String, AgentModelCatalogSnapshot> _snapshots =
@@ -162,16 +170,16 @@ class AgentModelCatalogRepository {
   /// 为缓存生成不包含环境变量值或原始扩展配置的稳定指纹。
   String configFingerprint(AgentProviderConfig config) {
     final environmentKeys = config.environment.keys.toList()..sort();
-    const extraKeys = <String>[
-      claudeCodeAccountDataEnrichmentKey,
+    final extraKeys = <String>{
+      ..._fingerprintExtraKeysFor(config),
       'cliPath',
       'detectedCurrentVersion',
       'modelProvider',
       'modelProviderId',
       'profile',
-    ];
+    };
     final safeJson = jsonEncode(<String, Object?>{
-      'kind': config.kind.name,
+      'kind': config.kind.value,
       'command': config.command,
       'arguments': config.arguments,
       'defaultModel': config.defaultModel,

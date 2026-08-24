@@ -26,15 +26,15 @@ void main() {
     );
 
     expect(
-      registry.createFor(AgentProviderConfig.defaultCodex),
+      registry.createFor(defaultCodexAgentProviderConfig),
       isA<CodexTokenUsageSource>(),
     );
     expect(
-      registry.createFor(AgentProviderConfig.defaultGrok),
+      registry.createFor(defaultGrokAgentProviderConfig),
       isA<GrokTokenUsageSource>(),
     );
     expect(
-      registry.createFor(AgentProviderConfig.defaultClaudeCode),
+      registry.createFor(defaultClaudeCodeAgentProviderConfig),
       isA<ClaudeCodeTokenUsageSource>(),
     );
   });
@@ -53,7 +53,7 @@ void main() {
       final startedAt = DateTime(2026, 8, 14, 9);
       final now = DateTime(2026, 8, 14, 12);
       await _writeClaudeHistory(userHome, startedAt);
-      final config = AgentProviderConfig.defaultClaudeCode.copyWith(
+      final config = defaultClaudeCodeAgentProviderConfig.copyWith(
         environment: <String, String>{
           Platform.isWindows ? 'USERPROFILE' : 'HOME': userHome.path,
         },

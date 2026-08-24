@@ -210,10 +210,11 @@ class MainAppState extends State<MainApp>
   final ZetaShellStateSnapshotRelay _shellStateSnapshotRelay =
       ZetaShellStateSnapshotRelay();
 
-  /// 编译期插件目录；仅在应用自己构造 Provider 工厂时创建。
+  /// 三个显式 Provider 的编译期插件目录。
   ZetaPluginCatalog? _pluginCatalog;
   late AgentProviderBundleFactory _agentProviderFactory;
   late AgentProviderRuntimeRegistry _agentProviderRuntimeRegistry;
+  late final AgentProviderDefinitionCatalog _agentProviderDefinitions;
   late final AgentProviderSettingsCodec _agentProviderSettingsCodec;
   late final AgentProviderConfigStore _agentProviderConfigStore;
   Future<void> Function()? _providerRuntimeShutdownHook;
@@ -298,17 +299,6 @@ class MainAppState extends State<MainApp>
     _frozenDisplayLocale = ZetaLocalization.localeFor(
       widget.displayLanguageOverride ?? widget.fallbackLanguage,
     );
-    _agentProviderSettingsCodec = AgentProviderSettingsCodec(
-      migrationRegistry: AgentProviderPermissionMigrationRegistry(
-        <AgentProviderKind, AgentProviderPermissionPreferenceMigrator>{
-          AgentProviderKind.codexAppServer:
-              const CodexPermissionPreferenceMigrator(),
-          AgentProviderKind.acp: const GrokPermissionPreferenceMigrator(),
-        },
-      ),
-    );
-    _agentProviderConfigStore =
-        widget.agentProviderConfigStore ?? _createAgentProviderConfigStore();
     final injectedFactory = widget.agentProviderFactory;
     if (injectedFactory != null) {
       _agentProviderFactory = injectedFactory;
@@ -342,6 +332,8 @@ class MainAppState extends State<MainApp>
     _agentModelCatalogRepository =
         widget.agentModelCatalogRepository ??
         AgentModelCatalogRepository(
+          fingerprintExtraKeysFor: builtInAgentProviderDefinitionCatalog
+              .modelCatalogFingerprintExtraKeysFor,
           store: useFilePersistence
               ? FileAgentModelCatalogCacheStore(
                   storage: AtomicTextFile(
@@ -438,10 +430,10 @@ class MainAppState extends State<MainApp>
       _usageStatisticsTextCatalog = textCatalogs.usageStatistics;
       _zetaUiTextCatalog = textCatalogs.zetaUi;
     }
-    if (widget.agentProviderFactory == null && !_localeRuntimeReady) {
+    if (!_localeRuntimeReady) {
       final dataPaths = widget.dataPaths;
       final useFilePersistence = _useFilePersistence;
-      final defaultFactory = DefaultAgentProviderFactory(
+      final catalog = ZetaPluginCatalog.builtIn(
         claudeCodeSessionDecisionStoreFactory: useFilePersistence
             ? (sessionId) => FileClaudeCodeSessionDecisionStore(
                 storage: AtomicTextFile(
@@ -457,15 +449,19 @@ class MainAppState extends State<MainApp>
               )
             : null,
         textCatalog: _agentUiTextCatalog,
-      );
-      // 阶段 1：工厂改由编译期插件目录交付，内部分派逻辑一字未动。
-      final catalog = ZetaPluginCatalog.compatibility(
-        bundleFactory: defaultFactory,
         metrics: _metrics,
       );
-      catalog.activate();
+      final resolvedProviders = catalog.activateAndResolveAgentProviders();
       _pluginCatalog = catalog;
-      _agentProviderFactory = catalog.resolveAgentProviderBundleFactory();
+      _agentProviderDefinitions = resolvedProviders.definitions;
+      _agentProviderSettingsCodec = AgentProviderSettingsCodec(
+        providerDefinitions: _agentProviderDefinitions,
+      );
+      _agentProviderConfigStore =
+          widget.agentProviderConfigStore ?? _createAgentProviderConfigStore();
+      if (widget.agentProviderFactory == null) {
+        _agentProviderFactory = resolvedProviders.bundleFactory;
+      }
     }
     if (widget.agentProviderRuntimeRegistry == null &&
         widget.agentProviderFactory == null &&
@@ -488,6 +484,7 @@ class MainAppState extends State<MainApp>
             configStore: _agentProviderConfigStore,
             modelCatalogRepository: _agentModelCatalogRepository,
             runtimeRegistry: _agentProviderRuntimeRegistry,
+            providerDefinitions: _agentProviderDefinitions,
           );
     }
     _usageStatisticsSliceComposition ??= UsageStatisticsSliceComposition.create(

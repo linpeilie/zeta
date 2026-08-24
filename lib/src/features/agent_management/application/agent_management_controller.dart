@@ -2,15 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
-import 'package:zeta_agent_providers/zeta_agent_providers.dart'
-    show looksLikeClaudeCodeCliPath;
-import 'package:zeta_agent_providers/zeta_agent_providers.dart'
-    show looksLikeCodexCliPath;
-import 'package:zeta_agent_providers/zeta_agent_providers.dart'
-    show looksLikeGrokCliPath;
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_operations.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta/src/features/agent_management/data/codex_agent_management_repository.dart'
     show isNewerVersion;
 import 'package:zeta/src/features/agent_management/domain/agent_cli_management_repository.dart';
@@ -596,12 +591,12 @@ class AgentManagementController extends ChangeNotifier
       }
     }
     if (agentId == grokAgentProviderId) {
-      return AgentProviderConfig.defaultGrok;
+      return defaultGrokAgentProviderConfig;
     }
     if (agentId == defaultClaudeCodeProviderId) {
-      return AgentProviderConfig.defaultClaudeCode;
+      return defaultClaudeCodeAgentProviderConfig;
     }
-    return AgentProviderConfig.defaultCodex;
+    return defaultCodexAgentProviderConfig;
   }
 
   /// 纠正跨 provider 污染：错误的 kind / command / cliPath 会回落安全默认值。
@@ -630,7 +625,7 @@ class AgentManagementController extends ChangeNotifier
     final commandIsPath = _looksLikeFilePath(config.command);
     final commandWrong = commandIsPath && !looksLikeGrokCliPath(config.command);
     final cliPathWrong = cliPath != null && !looksLikeGrokCliPath(cliPath);
-    final kindWrong = config.kind != AgentProviderKind.acp;
+    final kindWrong = config.kind != grokAgentProviderType;
 
     if (cliPathWrong) {
       extra.remove('cliPath');
@@ -646,13 +641,13 @@ class AgentManagementController extends ChangeNotifier
 
     return config.copyWith(
       id: grokAgentProviderId,
-      displayName: AgentProviderConfig.defaultGrok.displayName,
-      kind: AgentProviderKind.acp,
+      displayName: defaultGrokAgentProviderConfig.displayName,
+      kind: grokAgentProviderType,
       command: needsDefaultCommand
-          ? AgentProviderConfig.defaultGrok.command
+          ? defaultGrokAgentProviderConfig.command
           : config.command,
       arguments: kindWrong || needsDefaultCommand
-          ? AgentProviderConfig.defaultGrok.arguments
+          ? defaultGrokAgentProviderConfig.arguments
           : config.arguments,
       extra: extra,
     );
@@ -668,7 +663,7 @@ class AgentManagementController extends ChangeNotifier
     final commandWrong =
         commandIsPath && !looksLikeCodexCliPath(config.command);
     final cliPathWrong = cliPath != null && !looksLikeCodexCliPath(cliPath);
-    final kindWrong = config.kind != AgentProviderKind.codexAppServer;
+    final kindWrong = config.kind != codexAgentProviderType;
 
     if (cliPathWrong) {
       extra.remove('cliPath');
@@ -684,13 +679,13 @@ class AgentManagementController extends ChangeNotifier
 
     return config.copyWith(
       id: defaultAgentProviderId,
-      displayName: AgentProviderConfig.defaultCodex.displayName,
-      kind: AgentProviderKind.codexAppServer,
+      displayName: defaultCodexAgentProviderConfig.displayName,
+      kind: codexAgentProviderType,
       command: needsDefaultCommand
-          ? AgentProviderConfig.defaultCodex.command
+          ? defaultCodexAgentProviderConfig.command
           : config.command,
       arguments: kindWrong || needsDefaultCommand
-          ? AgentProviderConfig.defaultCodex.arguments
+          ? defaultCodexAgentProviderConfig.arguments
           : config.arguments,
       extra: extra,
     );
@@ -707,7 +702,7 @@ class AgentManagementController extends ChangeNotifier
         commandIsPath && !looksLikeClaudeCodeCliPath(config.command);
     final cliPathWrong =
         cliPath != null && !looksLikeClaudeCodeCliPath(cliPath);
-    final kindWrong = config.kind != AgentProviderKind.claudeCode;
+    final kindWrong = config.kind != claudeCodeAgentProviderType;
 
     if (cliPathWrong) {
       extra.remove('cliPath');
@@ -723,13 +718,13 @@ class AgentManagementController extends ChangeNotifier
 
     return config.copyWith(
       id: defaultClaudeCodeProviderId,
-      displayName: AgentProviderConfig.defaultClaudeCode.displayName,
-      kind: AgentProviderKind.claudeCode,
+      displayName: defaultClaudeCodeAgentProviderConfig.displayName,
+      kind: claudeCodeAgentProviderType,
       command: needsDefaultCommand
-          ? AgentProviderConfig.defaultClaudeCode.command
+          ? defaultClaudeCodeAgentProviderConfig.command
           : config.command,
       arguments: kindWrong || needsDefaultCommand
-          ? AgentProviderConfig.defaultClaudeCode.arguments
+          ? defaultClaudeCodeAgentProviderConfig.arguments
           : config.arguments,
       extra: extra,
     );

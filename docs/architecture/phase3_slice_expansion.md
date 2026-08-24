@@ -2,6 +2,10 @@
 
 # Phase 3 开工文档：Feature 切片扩展迁移
 
+最后更新：2026-08-24
+
+状态：第 3–6 批已关批；第 1、2 批仍在独立观察，Phase 2 的 14 天真实使用证据仍在计时。
+
 > 对应 [目标架构 §14 Phase 3](target_architecture_riverpod_mvi_plugins_packages.md)。
 > 这份文档是 Phase 3 的**前置条件交付物**：钉死批次顺序、开门/关门标准、每批 owner
 > 映射与删除清单。第 1 批（settings）细到字段映射与 §15 门禁答卷；第 2–6 批在本文档
@@ -50,6 +54,11 @@
 > `providerManagementSliceEnabled: true`。第 2 批风险为中高，取至少 7 天观察期，
 > 最早于 2026-08-30 关批；第 1 批仍按原窗口独立观察。任一批发生问题只回退自身
 > flag，修复复测后重新起算该批观察期。
+>
+> **第 6 批直接目标态确认（2026-08-24）**：按明确要求不挂 flag、不保留
+> compatibility/default factory 双轨，直接拆为三个 essential Provider 插件，并同步
+> 清算 Phase 1 §8.1 的 core 封闭目录。该授权只覆盖第 6 批，不豁免第 1、2 批观察、
+> Phase 2 连续 14 天证据或 Phase 4 的平台/发布前置条件。
 >
 > **第 3 批提前开工记录（2026-08-23）**：经显式要求，接受第 1、2 批仍在生产
 > 观察时启动第 3 批。当前授权只覆盖字段级契约与 3a Project Threads 的默认关闭
@@ -118,7 +127,7 @@
 | 3（已关批） | project threads + usage statistics | 迁移源 `ProjectThreadsViewModel`、`UsageStatisticsController`、`AgentUsagePanelController` 均已删除；当前 owner 为三个纯 Dart store | 中：跨 provider 聚合、分页、防抖、恢复 | ✅ 三个 ChangeNotifier、两个 flag 已删；usage 组装链已移出 Shell |
 | 4（已关批） | workspace + ide session | 迁移源 Shell Workspace 字段与 Session false-path 已删除；当前 owner 为 `WorkspaceSliceStore`、`IdeSessionSliceStore` | 中高：启动恢复流程、文件树热路径 | ✅ 两个 flag、八个 Workspace 字段、直接树构造与 Session false-path 已删 |
 | 5（已关批） | desktop attention + conversation workspace 外壳 | 迁移源 `DesktopAttentionController`、`AgentThreadWorkspaceController` 与 Shell 重复状态均已删除；当前 owner 为 `DesktopAttentionSliceStore`、`AgentConversationWorkspaceStore`、`AgentConversationComposerStateOwner` | 中高：G5 审批语义、entry 生命周期、Binding lease | ✅ 三个 application Flutter 燃尽项、旧 workspace controller、Conversation flag/fallback 已删 |
-| 6 | 三个显式 Provider 插件 | `CompatibilityAgentProviderPlugin`（使用点计数 1，测试断言）+ `DefaultAgentProviderFactory` 的 kind switch | 低：kernel 契约测试齐全（665 行 registry 测试） | 兼容层账本兑现：`CompatibilityAgentProviderPlugin`、`ZetaPluginCatalog.compatibility` |
+| 6（已关批） | 三个显式 Provider 插件 + 开放 Provider type | 当前 owner 为三个 Provider 插件 definition、`ResolvedAgentProviderPlugins` 与 runtime registry | 低：kernel 契约与三类 native Bundle 矩阵齐全 | ✅ compatibility/default factory/core 封闭目录均删除，生产直接走三插件聚合 |
 
 批次内部可再拆小步（如第 2 批拆 2a/2b/2c），但**一次只迁一个 context**，不合并
 两个高风险 context（目标架构 Phase 3 禁区）。
@@ -464,33 +473,30 @@ capability 位与 UI 入口的 G4 对照表、`AgentProviderSettingsPort` 消费
 
 ---
 
-## 8. 第 6 批：三个显式 Provider 插件 + 删 compatibility（框架级）
+## 8. 第 6 批：三个显式 Provider 插件 + 开放 Provider type（已关批）
 
-现状事实（开工时复核）：
+2026-08-24 直接切到目标态，详见
+[第 6 批关批文档](phase3_batch6_provider_plugins.md) 与
+[重构证据](../../.workflow/refactor/2026-08-24-phase3-batch6-provider-plugins/)。
 
-- `CompatibilityAgentProviderPlugin`（pluginId
-  `zeta.agent.compatibility-provider-factory`，essential），使用点计数 = 1
-  （`zeta_plugin_catalog_test` 扫描断言）；
-- `ZetaPluginCatalog.resolveAgentProviderBundleFactory()` 目前 fail-closed 于
-  "恰好 1 个贡献"（0 个或 >1 个都抛）；
-- `DefaultAgentProviderFactory` 按 `config.kind` switch 分派三个 bundle 工厂。
+- `CodexAgentProviderPlugin`、`GrokAgentProviderPlugin`、
+  `ClaudeCodeAgentProviderPlugin` 均为 essential 同步插件，各自贡献 definition 与单域
+  bundle factory；
+- `config.id` 继续是可自定义的配置实例身份，插件按开放
+  `AgentProviderTypeId` 路由；JSON `kind` key、版本与三种既有值未变；
+- `ResolvedAgentProviderPlugins` 在未激活、degraded、零贡献、essential 插件贡献数不是
+  1、重复 ID/type 时拒绝
+  resolve；ID/type 还必须是非空无首尾空白的 canonical 值；聚合 factory 对未知 type
+  抛错，不回落任一内置 Provider；启动解析失败会关闭此前已激活的 handle；
+- compatibility plugin、default factory、旧 catalog 入口与 core 的内置 ID/default
+  config/display-name switch 已物理删除；Phase 1 §1.3/§8.1 账本同步结清；
+- runtime registry 仍是 bundle/runtime/CLI 唯一 owner，插件 handle 不创建或关闭进程；
+- 三类 native Bundle 端口矩阵、custom config id、V1/V2 codec、权限迁移、静态能力、
+  degraded/duplicate/unknown 路径与零旧符号守卫均已覆盖。
 
-设计方向（批次文档细化）：
-
-1. 新建 `packages/zeta_agent_providers/lib/{codex,grok,claude_code}_plugin.dart`
-   三个显式插件（目标架构 §9.3 的理想改动面），各自 descriptor + 独立
-   `AgentProviderPluginContribution`；kind switch 逻辑消解进各自插件；
-2. catalog 的 resolve 规则从"恰好 1 个"改为"按贡献声明的 provider 域聚合，
-  未覆盖的 providerId fail-closed 抛错"——不允许静默回落；
-3. 三个插件均 essential：注册失败进入 degraded state（与现状
-   compatibility essential 语义一致）；
-4. **兼容层账本兑现**：删除 `CompatibilityAgentProviderPlugin` 文件与
-   `ZetaPluginCatalog.compatibility` 入口，更新
-   `zeta_plugin_catalog_test` 的使用点计数断言与 [Phase 1 §1.3](phase1_boundaries.md)
-   账本（标记已删除）；
-5. 契约测试更新清单：plugin registry 契约（665 行）不因三插件改变；
-   `agent_providers_contracts_test` 的工厂断言迁移到各插件测试；
-   新增"三插件同激活 + 反序关闭"与"单一插件失败 → degraded"测试。
+第 6 批关批不等于 Phase 3 整体结束：第 1、2 批旧 settings/management application
+仍消费内置 Provider identity/配置 key，这些跨层遗留及阶段级前置条件继续按 §0 独立验收，
+不能用“core 集中目录已清空”替代 Phase 3 整体关门。
 
 ---
 

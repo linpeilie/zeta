@@ -20,25 +20,39 @@ class AgentProviderSettingsController extends ChangeNotifier
     AgentModelCatalogRepository? modelCatalogRepository,
     AgentProviderGlobalRuntime? globalRuntime,
     AgentProviderStaticCapabilitiesFor? staticCapabilitiesFor,
+    AgentProviderDefinitionCatalog? providerDefinitions,
+    AgentProviderSettings? initialSettings,
   }) : modelCatalogRepository =
            modelCatalogRepository ??
            AgentModelCatalogRepository(
              store: _MemoryAgentModelCatalogCacheStore(),
+             fingerprintExtraKeysFor:
+                 (providerDefinitions ?? builtInAgentProviderDefinitionCatalog)
+                     .modelCatalogFingerprintExtraKeysFor,
            ),
        _globalRuntime =
            globalRuntime ??
            AgentProviderGlobalRuntime(runtimeRegistry: runtimeRegistry),
+       _providerDefinitions =
+           providerDefinitions ?? builtInAgentProviderDefinitionCatalog,
        _staticCapabilitiesFor =
-           staticCapabilitiesFor ?? AgentProviderStaticCapabilities.forKind;
+           staticCapabilitiesFor ??
+           (providerDefinitions ?? builtInAgentProviderDefinitionCatalog)
+               .staticCapabilitiesFor,
+       _settings =
+           initialSettings ??
+           (providerDefinitions ?? builtInAgentProviderDefinitionCatalog)
+               .defaultSettings;
 
   final AgentProviderConfigStore configStore;
   @override
   final AgentModelCatalogRepository modelCatalogRepository;
   final AgentProviderRuntimeRegistry runtimeRegistry;
   final AgentProviderGlobalRuntime _globalRuntime;
+  final AgentProviderDefinitionCatalog _providerDefinitions;
   final AgentProviderStaticCapabilitiesFor _staticCapabilitiesFor;
 
-  AgentProviderSettings _settings = const AgentProviderSettings();
+  AgentProviderSettings _settings;
   Future<AgentProviderSettings>? _settingsFuture;
   bool _disposed = false;
 
@@ -98,6 +112,10 @@ class AgentProviderSettingsController extends ChangeNotifier
     return _staticCapabilitiesFor(config.kind);
   }
 
+  @override
+  String modelCatalogSourceFor(AgentProviderConfig config) =>
+      _providerDefinitions.modelCatalogSourceFor(config);
+
   /// 更新一个 provider 的全局配置，并按需重建运行实例。
   @override
   Future<void> updateProviderConfig(
@@ -153,10 +171,10 @@ class AgentProviderSettingsController extends ChangeNotifier
   @override
   Future<void> setProviderEnabled(String providerId, bool enabled) async {
     await loadSettings();
-    final current = _settings.providers.firstWhere(
-      (provider) => provider.id == providerId,
-      orElse: () => AgentProviderConfig.defaultCodex,
-    );
+    final current = providerConfigById(providerId);
+    if (current == null) {
+      throw ArgumentError.value(providerId, 'providerId', 'Unknown provider');
+    }
     if (current.enabled == enabled) {
       return;
     }
@@ -339,7 +357,7 @@ class AgentProviderSettingsController extends ChangeNotifier
     final config = activeProviderConfig;
     return modelCatalogRepository.load(
       config: config,
-      source: _modelCatalogSource(config),
+      source: _providerDefinitions.modelCatalogSourceFor(config),
       forceRefresh: forceRefresh,
       onCacheHit: onCacheHit,
       refreshLoader: () async {
@@ -370,14 +388,6 @@ class AgentProviderSettingsController extends ChangeNotifier
       notifyListeners();
     }
   }
-}
-
-String _modelCatalogSource(AgentProviderConfig config) {
-  return switch (config.kind) {
-    AgentProviderKind.codexAppServer => 'Codex app-server',
-    AgentProviderKind.acp => 'Grok ACP',
-    _ => config.displayName,
-  };
 }
 
 final class _MemoryAgentModelCatalogCacheStore

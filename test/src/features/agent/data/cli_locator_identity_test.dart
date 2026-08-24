@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
-import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 void main() {
   group('CLI path identity guards', () {
@@ -27,7 +26,7 @@ void main() {
         },
       );
       final resolved = await locator.locate(
-        AgentProviderConfig.defaultGrok.copyWith(
+        defaultGrokAgentProviderConfig.copyWith(
           extra: <String, Object?>{'cliPath': r'C:\tools\codex.exe'},
           command: r'C:\tools\codex.exe',
         ),

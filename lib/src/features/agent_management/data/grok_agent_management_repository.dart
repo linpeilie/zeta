@@ -76,7 +76,7 @@ class GrokAgentManagementRepository
 
   @override
   AgentProviderConfig get defaultProviderConfig =>
-      AgentProviderConfig.defaultGrok;
+      defaultGrokAgentProviderConfig;
 
   @override
   bool acceptsExecutablePath(String path) => looksLikeGrokCliPath(path);
@@ -496,7 +496,7 @@ class GrokAgentManagementRepository
     return current.copyWith(
       id: AgentDefinition.grok.id,
       displayName: AgentDefinition.grok.displayName,
-      kind: AgentProviderKind.acp,
+      kind: grokAgentProviderType,
       // 保留真实 CLI 路径与纯协议参数；进程启动器会按平台包装 cmd/PowerShell。
       command: resolved.displayPath,
       arguments: const <String>['agent', 'stdio'],

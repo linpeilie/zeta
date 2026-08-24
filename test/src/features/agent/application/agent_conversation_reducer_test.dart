@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 const _threadId = 'thread-1';
@@ -566,7 +567,7 @@ void main() {
 
       expect(effect.timing, AgentConversationEffectTiming.afterMutation);
       expect(effect.requireThread, isFalse);
-      expect(effect.config, same(AgentProviderConfig.defaultCodex));
+      expect(effect.config, same(defaultCodexAgentProviderConfig));
       expect(effect.models, same(event.models));
       expect(effect.source, 'Codex runtime');
       _expectDefaultScope(effect.scope);
@@ -1258,7 +1259,7 @@ AgentConversationReducerContext _context({
     isHistoryTurnId: historyTurns.contains,
     modelsRefreshing: modelsRefreshing,
     activeProviderName: 'Codex',
-    activeProviderConfig: AgentProviderConfig.defaultCodex,
+    activeProviderConfig: defaultCodexAgentProviderConfig,
     effectScope: AgentConversationEffectScope(
       reductionScope: scope,
       providerId: defaultAgentProviderId,

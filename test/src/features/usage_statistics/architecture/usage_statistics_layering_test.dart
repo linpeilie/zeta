@@ -61,7 +61,7 @@ void main() {
         );
         expect(
           code,
-          isNot(contains('AgentProviderKind')),
+          isNot(contains('AgentProviderTypeId')),
           reason: '$path must not branch on Provider kind',
         );
         expect(

@@ -1,5 +1,7 @@
 import 'package:meta/meta.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart'
+    show claudeCodeAccountDataEnrichmentKey;
 import 'package:zeta_foundation/zeta_foundation.dart';
 
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
@@ -111,7 +113,7 @@ final class AgentManagementSliceState {
       agentsById: agentsById,
       orderedAgentIds: orderedAgentIds,
       selectedAgentId: orderedAgentIds.isEmpty
-          ? defaultAgentProviderId
+          ? providerSettings.activeProviderId
           : orderedAgentIds.first,
       capabilitiesByAgentId: capabilitiesByAgentId,
       providerSettings: providerSettings,
@@ -183,11 +185,17 @@ abstract final class AgentManagementSliceSelectors {
   }
 
   static ManagedAgent selectedAgent(AgentManagementSliceState state) {
-    return state.agentsById[state.selectedAgentId] ??
-        ManagedAgent.codex(
-          enabled:
-              _providerConfig(state, defaultAgentProviderId)?.enabled ?? false,
-        );
+    final selected = state.agentsById[state.selectedAgentId];
+    if (selected != null) {
+      return selected;
+    }
+    for (final id in state.orderedAgentIds) {
+      final agent = state.agentsById[id];
+      if (agent != null) {
+        return agent;
+      }
+    }
+    throw StateError('No managed Agent is available');
   }
 
   static AgentConfigurationDocument? selectedConfiguration(

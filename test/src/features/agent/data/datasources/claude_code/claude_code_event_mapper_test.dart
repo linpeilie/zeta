@@ -653,7 +653,7 @@ AgentConversationEventProcessor _processor({
       isHistoryTurnId: timeline.isHistoryTurnId,
       modelsRefreshing: false,
       activeProviderName: 'Claude Code',
-      activeProviderConfig: AgentProviderConfig.defaultClaudeCode,
+      activeProviderConfig: defaultClaudeCodeAgentProviderConfig,
       effectScope: AgentConversationEffectScope(
         reductionScope: AgentConversationReductionScope.live,
         providerId: defaultClaudeCodeProviderId,

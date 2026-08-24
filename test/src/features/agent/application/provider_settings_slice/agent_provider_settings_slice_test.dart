@@ -4,7 +4,6 @@ import 'package:zeta/src/features/agent/application/provider_settings_slice/agen
 import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_provider_settings_slice_state.dart';
 import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_provider_settings_slice_store.dart';
 import 'package:zeta/src/features/agent/data/agent_model_catalog_cache_store.dart';
-import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 
 void main() {
@@ -19,7 +18,7 @@ void main() {
       final first = store.loadSettings();
       final second = store.loadSettings();
       final effect = runner.take<ProviderSettingsLoadEffect>();
-      const settings = AgentProviderSettings(
+      final settings = builtInAgentProviderSettings.copyWith(
         activeProviderId: grokAgentProviderId,
       );
       store.loaded(effect.operationId, settings);
@@ -42,12 +41,12 @@ void main() {
         store.addListener(() => notifications += 1);
 
         final firstFuture = store.updateProviderConfig(
-          AgentProviderConfig.defaultCodex.copyWith(command: 'codex-first'),
+          defaultCodexAgentProviderConfig.copyWith(command: 'codex-first'),
         );
         await _flushAsync();
         final first = runner.take<ProviderSettingsPersistEffect>();
         final secondFuture = store.updateProviderConfig(
-          AgentProviderConfig.defaultCodex.copyWith(command: 'codex-second'),
+          defaultCodexAgentProviderConfig.copyWith(command: 'codex-second'),
         );
         await _flushAsync();
         final second = runner.take<ProviderSettingsPersistEffect>();
@@ -118,7 +117,7 @@ void main() {
         addTearDown(store.close);
         await _loadDefaults(store, runner);
         final operation = store.updateProviderConfig(
-          AgentProviderConfig.defaultCodex.copyWith(command: 'candidate'),
+          defaultCodexAgentProviderConfig.copyWith(command: 'candidate'),
         );
         await _flushAsync();
         final effect = runner.take<ProviderSettingsPersistEffect>();
@@ -144,7 +143,7 @@ void main() {
       final store = _createStore(runner);
       await _loadDefaults(store, runner);
       final operation = store.updateProviderConfig(
-        AgentProviderConfig.defaultCodex.copyWith(command: 'pending'),
+        defaultCodexAgentProviderConfig.copyWith(command: 'pending'),
       );
       await _flushAsync();
       runner.take<ProviderSettingsPersistEffect>();
@@ -165,7 +164,8 @@ AgentProviderSettingsSliceStore _createStore(_ManualRunner runner) {
     modelCatalogRepository: AgentModelCatalogRepository(
       store: MemoryAgentModelCatalogCacheStore(),
     ),
-    staticCapabilitiesFor: AgentProviderStaticCapabilities.forKind,
+    staticCapabilitiesFor:
+        builtInAgentProviderDefinitionCatalog.staticCapabilitiesFor,
   );
 }
 
@@ -175,7 +175,7 @@ Future<void> _loadDefaults(
 ) async {
   final operation = store.loadSettings();
   final effect = runner.take<ProviderSettingsLoadEffect>();
-  store.loaded(effect.operationId, const AgentProviderSettings());
+  store.loaded(effect.operationId, builtInAgentProviderSettings);
   await operation;
 }
 

@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// 步骤 11 canary：同一中立 fixture 在两种目录下结构相同，仅思考卡标题不同。
@@ -116,7 +117,7 @@ AgentConversationReducerContext _context() {
   const config = AgentProviderConfig(
     id: 'neutral',
     displayName: 'Neutral',
-    kind: AgentProviderKind.acp,
+    kind: grokAgentProviderType,
     command: 'agent',
   );
   return AgentConversationReducerContext(

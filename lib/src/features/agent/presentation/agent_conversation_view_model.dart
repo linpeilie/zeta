@@ -46,14 +46,6 @@ export 'package:zeta_agent_core/zeta_agent_core.dart'
 
 final _log = zetaLoggerFor('zeta.agent.conversation');
 
-String _modelCatalogSource(AgentProviderConfig config) {
-  return switch (config.kind) {
-    AgentProviderKind.codexAppServer => 'Codex app-server',
-    AgentProviderKind.acp => 'Grok ACP',
-    _ => config.displayName,
-  };
-}
-
 /// Provider 创建 thread 后，由 Shell 使用通用新会话流程登记并选中。
 ///
 /// [initialMessage] 只用于“编辑后重试”：Shell 必须在新 thread 成为当前会话后，
@@ -460,8 +452,6 @@ class AgentConversationViewModel {
   AgentProviderConfig get _boundProviderConfig =>
       providerController.providerConfigById(activeProviderId) ??
       providerController.activeProviderConfig;
-
-  AgentProviderKind get activeProviderKind => _boundProviderConfig.kind;
 
   /// 当前 thread 所属 provider 的能力；未绑定实例时回退到 kind 的保守静态能力。
   AgentProviderCapabilities get activeCapabilities {
@@ -1276,7 +1266,7 @@ class AgentConversationViewModel {
     try {
       final result = await providerController.modelCatalogRepository.load(
         config: config,
-        source: _modelCatalogSource(config),
+        source: providerController.modelCatalogSourceFor(config),
         forceRefresh: forceRefresh,
         onCacheHit: (snapshot) => _handleModelList(snapshot.models),
         // catalog：模型列表是「会话之前的信息」（04 §0.4：listModels → 全局实例）。
@@ -4078,7 +4068,6 @@ class AgentConversationViewModel {
       visibleTurns: _timeline.visibleHistoryTurns,
       threadOpenPhase: _threadOpenPhase,
       providerId: threadProviderId,
-      providerKind: activeProviderKind,
       providerName: activeProviderName,
     );
   }

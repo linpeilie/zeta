@@ -25,7 +25,7 @@ void main() {
       expect(source, isNot(contains('static const codexAppServer')));
       expect(source, isNot(contains('static const grokAcp')));
       expect(source, isNot(contains('static const claudeCode')));
-      expect(source, isNot(contains('AgentProviderKind.')));
+      expect(source, isNot(contains('AgentProviderTypeId.')));
     });
 
     test('shared bundle has no adapt path or provider-kind branches', () {
@@ -42,9 +42,9 @@ void main() {
         isFalse,
       );
       for (final token in const <String>[
-        'AgentProviderKind.codexAppServer',
-        'AgentProviderKind.acp',
-        'AgentProviderKind.claudeCode',
+        'codexAgentProviderType',
+        'grokAgentProviderType',
+        'claudeCodeAgentProviderType',
         'codexAppServer',
         'grokAcp',
         'claudeCode',

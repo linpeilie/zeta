@@ -225,7 +225,7 @@ void main() {
         MemoryAgentProviderConfigStore(
           const AgentProviderSettings(
             providers: <AgentProviderConfig>[
-              AgentProviderConfig.defaultClaudeCode,
+              defaultClaudeCodeAgentProviderConfig,
             ],
             activeProviderId: defaultClaudeCodeProviderId,
           ),
@@ -804,14 +804,14 @@ void main() {
       final store = ToggleFailAgentProviderConfigStore(
         AgentProviderSettings(
           providers: <AgentProviderConfig>[
-            AgentProviderConfig.defaultCodex.copyWith(
+            defaultCodexAgentProviderConfig.copyWith(
               selectedModel: 'gpt-5.5',
               selectedReasoningEffort: 'medium',
               modelPreferences: <String, AgentModelPreference>{
                 'gpt-5.5': initialPreference,
               },
             ),
-            AgentProviderConfig.defaultGrok,
+            defaultGrokAgentProviderConfig,
           ],
         ),
       );
@@ -902,11 +902,11 @@ void main() {
       final store = MemoryAgentProviderConfigStore(
         AgentProviderSettings(
           providers: <AgentProviderConfig>[
-            AgentProviderConfig.defaultCodex.copyWith(
+            defaultCodexAgentProviderConfig.copyWith(
               selectedModel: 'retired-model',
               selectedReasoningEffort: 'medium',
             ),
-            AgentProviderConfig.defaultGrok,
+            defaultGrokAgentProviderConfig,
           ],
         ),
       );
@@ -969,7 +969,7 @@ final class _ClaudeEffortModelProvider extends AgentPaneFakeProvider {
       );
 
   @override
-  AgentProviderConfig get config => AgentProviderConfig.defaultClaudeCode;
+  AgentProviderConfig get config => defaultClaudeCodeAgentProviderConfig;
 
   @override
   AgentProviderCapabilities get capabilities =>

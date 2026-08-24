@@ -237,7 +237,7 @@ class FakeAgentProvider
     this.turnErrorMessage,
     this.onResumeSession,
     this.declaredCapabilities = AgentProviderStaticCapabilities.codexAppServer,
-    this.config = AgentProviderConfig.defaultCodex,
+    this.config = defaultCodexAgentProviderConfig,
     this.includeConversationTestThread = false,
     this.conversationThreadProviderId,
     List<AgentPermissionOption> permissionOptions =

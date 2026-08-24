@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 
 import '../../../testing/ide_test_harness.dart';
 import '../../../testing/legacy_bundle_factory_mixin.dart';
@@ -28,7 +28,7 @@ void main() {
         final bundle = FakeAgentProviderBundleBuilder(
           runtime: provider,
           conversation: provider,
-        ).createBundle(AgentProviderConfig.defaultCodex);
+        ).createBundle(defaultCodexAgentProviderConfig);
 
         expect(bundle.threadCatalog, isNull);
         expect(bundle.permissionPolicy, isNull);

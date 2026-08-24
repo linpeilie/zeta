@@ -148,7 +148,7 @@ void main() {
   group('resolveClaudeCodeProcessCommand', () {
     test('uses locator result and config model', () async {
       final resolved = await resolveClaudeCodeProcessCommand(
-        AgentProviderConfig.defaultClaudeCode.copyWith(
+        defaultClaudeCodeAgentProviderConfig.copyWith(
           defaultModel: 'opus',
           selectedReasoningEffort: 'xhigh',
         ),
@@ -178,7 +178,7 @@ void main() {
     test('fails closed when locator cannot find an executable', () async {
       await expectLater(
         resolveClaudeCodeProcessCommand(
-          AgentProviderConfig.defaultClaudeCode,
+          defaultClaudeCodeAgentProviderConfig,
           locator: const _StaticClaudeCodeCliLocator(null),
         ),
         throwsA(isA<ProcessException>()),
@@ -189,7 +189,7 @@ void main() {
       'prepends the locator shell arguments before protocol flags',
       () async {
         final resolved = await resolveClaudeCodeProcessCommand(
-          AgentProviderConfig.defaultClaudeCode,
+          defaultClaudeCodeAgentProviderConfig,
           locator: const _StaticClaudeCodeCliLocator(
             ResolvedCliCommand(
               displayPath: r'D:\bin\claude.cmd',
@@ -223,7 +223,7 @@ void main() {
       'keeps wrapper prefix but excludes conversation config args',
       () async {
         final resolved = await resolveClaudeCodeMetadataProbeCommand(
-          AgentProviderConfig.defaultClaudeCode.copyWith(
+          defaultClaudeCodeAgentProviderConfig.copyWith(
             arguments: const <String>[
               '--model',
               'must-not-leak',
@@ -266,7 +266,7 @@ void main() {
     test('fails closed when metadata CLI cannot be located', () async {
       await expectLater(
         resolveClaudeCodeMetadataProbeCommand(
-          AgentProviderConfig.defaultClaudeCode,
+          defaultClaudeCodeAgentProviderConfig,
           locator: const _StaticClaudeCodeCliLocator(null),
         ),
         throwsA(isA<ProcessException>()),

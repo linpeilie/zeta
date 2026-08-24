@@ -13,7 +13,7 @@ void main() {
       final process = _FakeClaudeProcess();
       var idSeq = 0;
       final provider = ClaudeCodeAgentProvider(
-        config: AgentProviderConfig.defaultClaudeCode,
+        config: defaultClaudeCodeAgentProviderConfig,
         processStarter: _starter(process),
         locator: const _FakeClaudeCodeCliLocator(),
         idFactory: () {
@@ -79,7 +79,7 @@ void main() {
         final process = _FakeClaudeProcess();
         var idSeq = 0;
         final provider = ClaudeCodeAgentProvider(
-          config: AgentProviderConfig.defaultClaudeCode.copyWith(
+          config: defaultClaudeCodeAgentProviderConfig.copyWith(
             selectedModel: 'opus',
             selectedReasoningEffort: 'xhigh',
           ),
@@ -121,7 +121,7 @@ void main() {
       () async {
         final process = _FakeClaudeProcess();
         final provider = ClaudeCodeAgentProvider(
-          config: AgentProviderConfig.defaultClaudeCode,
+          config: defaultClaudeCodeAgentProviderConfig,
           processStarter: _starter(process),
           locator: const _FakeClaudeCodeCliLocator(),
           idFactory: _sequenceIds(<String>[
@@ -182,7 +182,7 @@ void main() {
         final process = _FakeClaudeProcess();
         var idSeq = 0;
         final provider = ClaudeCodeAgentProvider(
-          config: AgentProviderConfig.defaultClaudeCode,
+          config: defaultClaudeCodeAgentProviderConfig,
           processStarter: _starter(process),
           locator: const _FakeClaudeCodeCliLocator(),
           idFactory: () {
@@ -263,7 +263,7 @@ void main() {
       () async {
         final process = _FakeClaudeProcess();
         final provider = ClaudeCodeAgentProvider(
-          config: AgentProviderConfig.defaultClaudeCode,
+          config: defaultClaudeCodeAgentProviderConfig,
           processStarter: _starter(process),
           locator: const _FakeClaudeCodeCliLocator(),
           idFactory: _sequenceIds(<String>[
@@ -361,7 +361,7 @@ void main() {
       () async {
         final process = _FakeClaudeProcess();
         final provider = ClaudeCodeAgentProvider(
-          config: AgentProviderConfig.defaultClaudeCode,
+          config: defaultClaudeCodeAgentProviderConfig,
           processStarter: _starter(process),
           locator: const _FakeClaudeCodeCliLocator(),
           idFactory: _sequenceIds(<String>['session-plan-1', 'turn-plan-1']),
@@ -444,7 +444,7 @@ void main() {
     test('unknown control_request type is still fail-closed denied', () async {
       final process = _FakeClaudeProcess();
       final provider = ClaudeCodeAgentProvider(
-        config: AgentProviderConfig.defaultClaudeCode,
+        config: defaultClaudeCodeAgentProviderConfig,
         processStarter: _starter(process),
         locator: const _FakeClaudeCodeCliLocator(),
         idFactory: () => 'id-unknown-ctrl',
@@ -487,7 +487,7 @@ void main() {
         final starts = <_RecordedProcessStart>[];
         final processes = <_FakeClaudeProcess>[firstProcess, secondProcess];
         final provider = ClaudeCodeAgentProvider(
-          config: AgentProviderConfig.defaultClaudeCode,
+          config: defaultClaudeCodeAgentProviderConfig,
           processStarter: _queueStarter(processes, starts),
           locator: const _FakeClaudeCodeCliLocator(),
           idFactory: () => 'session-switch-1',
@@ -530,7 +530,7 @@ void main() {
         final process = _FakeClaudeProcess();
         final starts = <_RecordedProcessStart>[];
         final provider = ClaudeCodeAgentProvider(
-          config: AgentProviderConfig.defaultClaudeCode,
+          config: defaultClaudeCodeAgentProviderConfig,
           processStarter: _queueStarter(<_FakeClaudeProcess>[process], starts),
           locator: const _FakeClaudeCodeCliLocator(),
         );
@@ -572,7 +572,7 @@ void main() {
     test('thread catalog delegates to the Claude history reader', () async {
       final reader = _RecordingClaudeCodeSessionHistoryReader();
       final provider = ClaudeCodeAgentProvider(
-        config: AgentProviderConfig.defaultClaudeCode,
+        config: defaultClaudeCodeAgentProviderConfig,
         sessionHistoryReader: reader,
       );
       addTearDown(provider.dispose);
@@ -601,7 +601,7 @@ void main() {
       () async {
         var metadataCalls = 0;
         final provider = ClaudeCodeAgentProvider(
-          config: AgentProviderConfig.defaultClaudeCode.copyWith(
+          config: defaultClaudeCodeAgentProviderConfig.copyWith(
             extra: const <String, Object?>{
               claudeCodeAccountDataEnrichmentKey: false,
             },
@@ -633,7 +633,7 @@ void main() {
           },
         );
         final provider = ClaudeCodeAgentProvider(
-          config: AgentProviderConfig.defaultClaudeCode,
+          config: defaultClaudeCodeAgentProviderConfig,
           modelCatalog: catalog,
         );
         addTearDown(provider.dispose);
@@ -651,7 +651,7 @@ void main() {
       final gate = Completer<ClaudeCodeCliMetadataSnapshot>();
       var metadataCalls = 0;
       final provider = ClaudeCodeAgentProvider(
-        config: AgentProviderConfig.defaultClaudeCode.copyWith(
+        config: defaultClaudeCodeAgentProviderConfig.copyWith(
           extra: const <String, Object?>{
             claudeCodeAccountDataEnrichmentKey: false,
           },
@@ -699,7 +699,7 @@ void main() {
             },
       );
       final provider = ClaudeCodeAgentProvider(
-        config: AgentProviderConfig.defaultClaudeCode,
+        config: defaultClaudeCodeAgentProviderConfig,
         usageQuotaAdapter: adapter,
       );
       addTearDown(provider.dispose);
@@ -717,7 +717,7 @@ void main() {
       final process = _FakeClaudeProcess();
       final starts = <_RecordedProcessStart>[];
       final provider = ClaudeCodeAgentProvider(
-        config: AgentProviderConfig.defaultClaudeCode.copyWith(
+        config: defaultClaudeCodeAgentProviderConfig.copyWith(
           selectedModel: 'haiku',
           selectedReasoningEffort: 'high',
         ),
@@ -745,7 +745,7 @@ void main() {
         final secondProcess = _FakeClaudeProcess();
         final starts = <_RecordedProcessStart>[];
         final provider = ClaudeCodeAgentProvider(
-          config: AgentProviderConfig.defaultClaudeCode,
+          config: defaultClaudeCodeAgentProviderConfig,
           processStarter: _queueStarter(<_FakeClaudeProcess>[
             firstProcess,
             secondProcess,
@@ -793,7 +793,7 @@ void main() {
       final secondProcess = _FakeClaudeProcess();
       final starts = <_RecordedProcessStart>[];
       final provider = ClaudeCodeAgentProvider(
-        config: AgentProviderConfig.defaultClaudeCode.copyWith(
+        config: defaultClaudeCodeAgentProviderConfig.copyWith(
           selectedReasoningEffort: 'high',
         ),
         processStarter: _queueStarter(<_FakeClaudeProcess>[
@@ -836,7 +836,7 @@ void main() {
         final secondProcess = _FakeClaudeProcess();
         final starts = <_RecordedProcessStart>[];
         final provider = ClaudeCodeAgentProvider(
-          config: AgentProviderConfig.defaultClaudeCode,
+          config: defaultClaudeCodeAgentProviderConfig,
           processStarter: _queueStarter(<_FakeClaudeProcess>[
             firstProcess,
             secondProcess,
@@ -884,7 +884,7 @@ void main() {
         final secondProcess = _FakeClaudeProcess();
         final starts = <_RecordedProcessStart>[];
         final provider = ClaudeCodeAgentProvider(
-          config: AgentProviderConfig.defaultClaudeCode,
+          config: defaultClaudeCodeAgentProviderConfig,
           processStarter: _queueStarter(<_FakeClaudeProcess>[
             firstProcess,
             secondProcess,
@@ -943,7 +943,7 @@ void main() {
         final executionProcess = _FakeClaudeProcess();
         final starts = <_RecordedProcessStart>[];
         final provider = ClaudeCodeAgentProvider(
-          config: AgentProviderConfig.defaultClaudeCode,
+          config: defaultClaudeCodeAgentProviderConfig,
           processStarter: _queueStarter(<_FakeClaudeProcess>[
             planProcess,
             executionProcess,
@@ -1005,7 +1005,7 @@ void main() {
       final process = _FakeClaudeProcess();
       final starts = <_RecordedProcessStart>[];
       final provider = ClaudeCodeAgentProvider(
-        config: AgentProviderConfig.defaultClaudeCode,
+        config: defaultClaudeCodeAgentProviderConfig,
         processStarter: _queueStarter(<_FakeClaudeProcess>[process], starts),
         locator: const _FakeClaudeCodeCliLocator(),
         idFactory: _sequenceIds(<String>[
@@ -1063,7 +1063,7 @@ void main() {
       final process = _FakeClaudeProcess();
       final starts = <_RecordedProcessStart>[];
       final provider = ClaudeCodeAgentProvider(
-        config: AgentProviderConfig.defaultClaudeCode,
+        config: defaultClaudeCodeAgentProviderConfig,
         processStarter: _queueStarter(<_FakeClaudeProcess>[process], starts),
         locator: const _FakeClaudeCodeCliLocator(),
         idFactory: _sequenceIds(<String>[
@@ -1103,7 +1103,7 @@ void main() {
         );
         final process = _FakeClaudeProcess();
         final provider = ClaudeCodeAgentProvider(
-          config: AgentProviderConfig.defaultClaudeCode,
+          config: defaultClaudeCodeAgentProviderConfig,
           processStarter: _starter(process),
           locator: const _FakeClaudeCodeCliLocator(),
           sessionDecisionStoreFactory: (_) =>
@@ -1174,7 +1174,7 @@ class _FakeClaudeCodeCliLocator extends ClaudeCodeCliLocator {
 
   @override
   Future<ResolvedCliCommand?> resolvePath(String path) =>
-      locate(AgentProviderConfig.defaultClaudeCode);
+      locate(defaultClaudeCodeAgentProviderConfig);
 }
 
 final class _RecordingClaudeCodeSessionHistoryReader

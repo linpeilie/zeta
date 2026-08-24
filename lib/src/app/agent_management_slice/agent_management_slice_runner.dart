@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
@@ -424,7 +425,7 @@ final class AgentManagementSliceRunnerAdapter
       }
     }
     return _descriptor(repository)?.defaultProviderConfig ??
-        AgentProviderConfig.defaultCodex.copyWith(
+        defaultCodexAgentProviderConfig.copyWith(
           id: repository.agentId,
           displayName:
               AgentDefinition.byId(repository.agentId)?.displayName ??

@@ -123,6 +123,21 @@ final class ZetaPluginRegistry {
     return List<T>.unmodifiable(result);
   }
 
+  /// 查询一个 active 插件拥有的指定类型贡献。
+  ///
+  /// 宿主可用它校验 essential 插件是否完整履行自身贡献契约；内核仍不解释 [T]
+  /// 的业务语义。未知、失败或已关闭插件返回空列表。
+  List<T> contributionsOf<T extends ZetaPluginContribution>(String pluginId) {
+    if (_closed) {
+      return const [];
+    }
+    final snapshot = _contributions[pluginId];
+    if (snapshot == null) {
+      return const [];
+    }
+    return List<T>.unmodifiable(snapshot.whereType<T>());
+  }
+
   /// 按拓扑序激活全部插件。
   ///
   /// 每个 registry 只能激活一次：编译期目录没有"重新激活"的语义，而重复激活会

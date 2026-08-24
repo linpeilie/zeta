@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_controller.dart';
@@ -418,7 +419,7 @@ class _ManagementHarness {
       configStore: MemoryAgentProviderConfigStore(
         AgentProviderSettings(
           providers: <AgentProviderConfig>[
-            AgentProviderConfig.defaultCodex.copyWith(
+            defaultCodexAgentProviderConfig.copyWith(
               extra: <String, Object?>{
                 'cliPath': Platform.isWindows
                     ? r'C:\tools\codex.exe'
@@ -497,7 +498,7 @@ class _ClaudeManagementHarness {
       configStore: MemoryAgentProviderConfigStore(
         AgentProviderSettings(
           providers: <AgentProviderConfig>[
-            AgentProviderConfig.defaultClaudeCode.copyWith(
+            defaultClaudeCodeAgentProviderConfig.copyWith(
               extra: <String, Object?>{
                 'cliPath': Platform.isWindows
                     ? r'C:\tools\claude.exe'

@@ -1,40 +1,33 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
-/// 内置 Provider 目录冻结守卫。
+/// 开放 Provider definition 目录守卫。
 ///
-/// `zeta_agent_core` 里仍有一张集中式 Provider 类型表：`AgentProviderKind`
-/// 三个枚举值、三个内置 Provider 的稳定 ID 与默认 CLI 配置、按 ID 归一化显示名。
-/// 它与目标架构 §9.3「新增 Provider 只动 providers 包 + 一行注册」冲突——加一种
-/// 协议要改内核枚举，并牵动 factory / usage statistics / settings / presentation
-/// 的 exhaustive switch。
-///
-/// 这张表是拆包前的既有设计，收口安排在 Phase 3 第 6 批（三个 Provider 转成显式
-/// 插件贡献）。在那之前**冻结它**：任何增删都必须先回到架构讨论，而不是顺手加
-/// 一个 case——否则这笔欠债会在无人注意时继续变大。
+/// core 只保留开放 value object；内置身份与默认配置必须全部由 providers 插件拥有。
 void main() {
-  test('AgentProviderKind 的取值集合被冻结', () {
-    expect(AgentProviderKind.values.map((kind) => kind.name), <String>[
-      'codexAppServer',
-      'acp',
-      'claudeCode',
-    ]);
+  test('AgentProviderTypeId 接受插件声明的未来类型', () {
+    const futureType = AgentProviderTypeId('future.protocol.v1');
+
+    expect(futureType.value, 'future.protocol.v1');
+    expect(futureType, const AgentProviderTypeId('future.protocol.v1'));
+    expect(futureType, isNot(codexAgentProviderType));
   });
 
-  test('内置 Provider ID 与默认配置被冻结', () {
+  test('内置 Provider ID 与默认配置由插件 definition 声明', () {
     expect(defaultAgentProviderId, 'codex');
     expect(grokAgentProviderId, 'grok');
     expect(defaultClaudeCodeProviderId, 'claude_code');
 
-    expect(AgentProviderConfig.defaultCodex.command, 'codex');
-    expect(AgentProviderConfig.defaultCodex.arguments, <String>['app-server']);
-    expect(AgentProviderConfig.defaultGrok.command, 'grok');
-    expect(AgentProviderConfig.defaultClaudeCode.command, 'claude');
+    expect(defaultCodexAgentProviderConfig.command, 'codex');
+    expect(defaultCodexAgentProviderConfig.arguments, <String>['app-server']);
+    expect(defaultGrokAgentProviderConfig.command, 'grok');
+    expect(defaultClaudeCodeAgentProviderConfig.command, 'claude');
   });
 
-  test('内核里按 Provider 身份分支的文件只有这一个', () {
+  test('中立内核不含任何内置 Provider 身份或协议域', () {
     final offenders = Directory('packages/zeta_agent_core/lib')
         .listSync(recursive: true)
         .whereType<File>()
@@ -51,19 +44,18 @@ void main() {
           return codeOnly.contains('defaultAgentProviderId') ||
               codeOnly.contains('grokAgentProviderId') ||
               codeOnly.contains('defaultClaudeCodeProviderId') ||
-              codeOnly.contains('claudeCodeAccountDataEnrichmentKey');
+              codeOnly.contains('claudeCodeAccountDataEnrichmentKey') ||
+              codeOnly.contains('codexAppServer') ||
+              codeOnly.contains("'acp'") ||
+              codeOnly.contains("'claudeCode'");
         })
         .map((file) => file.path.replaceAll(r'\', '/'))
         .toList(growable: false);
 
     expect(
       offenders,
-      <String>[
-        'packages/zeta_agent_core/lib/src/domain/agent_provider_models.dart',
-      ],
-      reason:
-          '内置 Provider 身份只允许出现在这张待迁移的目录表里；'
-          '其它内核文件必须保持 Provider 无关。',
+      isEmpty,
+      reason: '内置 Provider 身份、默认配置和协议域只能由 providers 插件声明。',
     );
   });
 }
