@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/app/composition/zeta_host_mode.dart';
 import 'package:zeta/src/app/app.dart';
 import 'package:zeta/src/core/storage/zeta_data_paths.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
@@ -146,8 +147,8 @@ Future<void> _pumpMainApp(
       showWindowControls: false,
       dataPaths: dataPaths,
       directoryPicker: directoryPicker,
-      sessionLoader: sessionStore.load,
-      sessionSaver: sessionStore.save,
+      hostMode: ZetaHostMode.ephemeral,
+      ideSessionStore: sessionStore,
       agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
         FakeAgentProvider(),
       ),

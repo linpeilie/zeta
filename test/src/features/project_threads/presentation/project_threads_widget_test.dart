@@ -9,6 +9,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
+import 'package:zeta/src/app/composition/zeta_host_mode.dart';
 import 'package:zeta/main.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
@@ -170,8 +171,8 @@ void main() {
       MainApp(
         enableNativeWindowFrame: false,
         directoryPicker: () async => directory.path,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
+        hostMode: ZetaHostMode.ephemeral,
+        ideSessionStore: session,
         agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
         agentProviderConfigStore: singleFakeProviderConfigStore(),
       ),
@@ -389,8 +390,8 @@ void main() {
         MainApp(
           enableNativeWindowFrame: false,
           directoryPicker: () async => directory.path,
-          sessionLoader: session.load,
-          sessionSaver: session.save,
+          hostMode: ZetaHostMode.ephemeral,
+          ideSessionStore: session,
           agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
             provider,
           ),
@@ -571,8 +572,8 @@ void main() {
       await tester.pumpWidget(
         MainApp(
           enableNativeWindowFrame: false,
-          sessionLoader: session.load,
-          sessionSaver: session.save,
+          hostMode: ZetaHostMode.ephemeral,
+          ideSessionStore: session,
           agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
             provider,
           ),
@@ -705,8 +706,8 @@ void main() {
       MainApp(
         enableNativeWindowFrame: false,
         directoryPicker: () async => directory.path,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
+        hostMode: ZetaHostMode.ephemeral,
+        ideSessionStore: session,
         agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
         agentProviderConfigStore: MemoryAgentProviderConfigStore(),
       ),
@@ -773,8 +774,8 @@ void main() {
         MainApp(
           enableNativeWindowFrame: false,
           directoryPicker: () async => directory.path,
-          sessionLoader: session.load,
-          sessionSaver: session.save,
+          hostMode: ZetaHostMode.ephemeral,
+          ideSessionStore: session,
           agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
             provider,
           ),
@@ -860,8 +861,8 @@ void main() {
       MainApp(
         enableNativeWindowFrame: false,
         directoryPicker: () async => directory.path,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
+        hostMode: ZetaHostMode.ephemeral,
+        ideSessionStore: session,
         agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
         agentProviderConfigStore: MemoryAgentProviderConfigStore(),
         agentProviderAvailabilityLoader: () async =>
@@ -1023,8 +1024,8 @@ void main() {
       MainApp(
         enableNativeWindowFrame: false,
         directoryPicker: () async => directory.path,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
+        hostMode: ZetaHostMode.ephemeral,
+        ideSessionStore: session,
         agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
         agentProviderConfigStore: MemoryAgentProviderConfigStore(),
         projectLocationOpener: (path) async {
@@ -1095,8 +1096,8 @@ void main() {
         MainApp(
           enableNativeWindowFrame: false,
           directoryPicker: () async => directory.path,
-          sessionLoader: session.load,
-          sessionSaver: session.save,
+          hostMode: ZetaHostMode.ephemeral,
+          ideSessionStore: session,
           agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
             provider,
           ),
@@ -1200,8 +1201,8 @@ void main() {
         MainApp(
           enableNativeWindowFrame: false,
           directoryPicker: () async => directory.path,
-          sessionLoader: session.load,
-          sessionSaver: session.save,
+          hostMode: ZetaHostMode.ephemeral,
+          ideSessionStore: session,
           agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
             provider,
           ),
@@ -1283,8 +1284,8 @@ void main() {
       MainApp(
         enableNativeWindowFrame: false,
         directoryPicker: () async => directory.path,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
+        hostMode: ZetaHostMode.ephemeral,
+        ideSessionStore: session,
         agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
         agentProviderConfigStore: MemoryAgentProviderConfigStore(),
       ),
@@ -1379,8 +1380,8 @@ void main() {
       MainApp(
         enableNativeWindowFrame: false,
         directoryPicker: () async => directory.path,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
+        hostMode: ZetaHostMode.ephemeral,
+        ideSessionStore: session,
         agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
         agentProviderConfigStore: MemoryAgentProviderConfigStore(),
       ),

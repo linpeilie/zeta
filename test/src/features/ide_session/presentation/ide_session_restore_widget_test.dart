@@ -7,9 +7,11 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/app/composition/zeta_host_mode.dart';
 import 'package:zeta/main.dart';
 import 'package:zeta/src/core/utils/path_utils.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
+import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
@@ -45,8 +47,8 @@ void main() {
         enableNativeWindowFrame: true,
         showWindowControls: false,
         directoryPicker: () async => directory.path,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
+        hostMode: ZetaHostMode.ephemeral,
+        ideSessionStore: session,
         agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
           FakeAgentProvider(),
         ),
@@ -73,8 +75,8 @@ void main() {
       MainApp(
         enableNativeWindowFrame: true,
         showWindowControls: false,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
+        hostMode: ZetaHostMode.ephemeral,
+        ideSessionStore: session,
         agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
           FakeAgentProvider(),
         ),
@@ -107,8 +109,8 @@ void main() {
         enableNativeWindowFrame: true,
         showWindowControls: false,
         directoryPicker: () async => directory.path,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
+        hostMode: ZetaHostMode.ephemeral,
+        ideSessionStore: session,
         agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
           FakeAgentProvider(),
         ),
@@ -134,8 +136,8 @@ void main() {
       MainApp(
         enableNativeWindowFrame: true,
         showWindowControls: false,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
+        hostMode: ZetaHostMode.ephemeral,
+        ideSessionStore: session,
         agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
           FakeAgentProvider(),
         ),
@@ -176,8 +178,8 @@ void main() {
         MainApp(
           enableNativeWindowFrame: true,
           showWindowControls: false,
-          sessionLoader: session.load,
-          sessionSaver: session.save,
+          hostMode: ZetaHostMode.ephemeral,
+          ideSessionStore: session,
           agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
             FakeAgentProvider(),
           ),
@@ -210,8 +212,8 @@ void main() {
       MainApp(
         enableNativeWindowFrame: true,
         showWindowControls: false,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
+        hostMode: ZetaHostMode.ephemeral,
+        ideSessionStore: session,
         // 必须注入 fake：不注入时 MainApp 会构造真实工厂并拉起本机 Codex CLI，
         // 模型目录预热的 30 秒 JSON-RPC Timer 会挂到 widget 树销毁之后。
         agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
@@ -247,8 +249,8 @@ void main() {
       MainApp(
         enableNativeWindowFrame: true,
         showWindowControls: false,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
+        hostMode: ZetaHostMode.ephemeral,
+        ideSessionStore: session,
         agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
           FakeAgentProvider(),
         ),
@@ -284,8 +286,8 @@ void main() {
         MainApp(
           enableNativeWindowFrame: true,
           showWindowControls: false,
-          sessionLoader: session.load,
-          sessionSaver: session.save,
+          hostMode: ZetaHostMode.ephemeral,
+          ideSessionStore: session,
           agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
             FakeAgentProvider(),
           ),
@@ -314,8 +316,8 @@ void main() {
         MainApp(
           enableNativeWindowFrame: true,
           showWindowControls: false,
-          sessionLoader: session.load,
-          sessionSaver: session.save,
+          hostMode: ZetaHostMode.ephemeral,
+          ideSessionStore: session,
           agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
             FakeAgentProvider(),
           ),
@@ -343,8 +345,8 @@ void main() {
         MainApp(
           enableNativeWindowFrame: true,
           showWindowControls: false,
-          sessionLoader: session.load,
-          sessionSaver: session.save,
+          hostMode: ZetaHostMode.ephemeral,
+          ideSessionStore: session,
           agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
             FakeAgentProvider(),
           ),
@@ -477,8 +479,11 @@ void main() {
           enableNativeWindowFrame: true,
           showWindowControls: false,
           directoryPicker: () async => chosenDirectory.path,
-          sessionLoader: () => restoreCompleter.future,
-          sessionSaver: savedSession.save,
+          hostMode: ZetaHostMode.ephemeral,
+          ideSessionStore: _DeferredSessionStore(
+            pending: restoreCompleter.future,
+            sink: savedSession,
+          ),
           agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
             FakeAgentProvider(),
           ),
@@ -537,8 +542,11 @@ void main() {
           enableNativeWindowFrame: true,
           showWindowControls: false,
           directoryPicker: () async => chosenDirectory.path,
-          sessionLoader: () => restoreCompleter.future,
-          sessionSaver: savedSession.save,
+          hostMode: ZetaHostMode.ephemeral,
+          ideSessionStore: _DeferredSessionStore(
+            pending: restoreCompleter.future,
+            sink: savedSession,
+          ),
           agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
             FakeAgentProvider(),
           ),
@@ -615,4 +623,22 @@ void _useWideWindow(WidgetTester tester) {
       ..resetPhysicalSize()
       ..resetDevicePixelRatio();
   });
+}
+
+/// 恢复流程测试专用：load 挂在 completer 上，save 落到内存 store。
+///
+/// 迁移前这条路径用 `sessionLoader: () => completer.future` 表达；
+/// 换成 typed [IdeSessionStore] 后语义不变，只是从裸回调变成显式实现。
+class _DeferredSessionStore implements IdeSessionStore {
+  _DeferredSessionStore({required this.pending, required this.sink});
+
+  final Future<String?> pending;
+  final MemorySessionStore sink;
+
+  @override
+  Future<IdeSessionState?> load() async =>
+      IdeSessionState.tryDecode(await pending);
+
+  @override
+  Future<void> save(IdeSessionState state) => sink.save(state);
 }

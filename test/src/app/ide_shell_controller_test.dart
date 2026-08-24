@@ -101,10 +101,7 @@ void main() {
         agentUiFrameSchedulerFactory: _createUiFrameScheduler,
         directoryPicker: () async => null,
         ideSessionOperations: _createIdeSessionOperations(
-          const CallbackIdeSessionStore(
-            loadJson: _loadEmptySession,
-            saveJson: _saveDiscardedSession,
-          ),
+          _CallbackSessionStore(),
         ),
         agentProviderFactory: providerFactory,
         agentProviderRuntimeRegistry: runtimeRegistry,
@@ -211,10 +208,7 @@ void main() {
         agentUiFrameSchedulerFactory: _createUiFrameScheduler,
         directoryPicker: () async => directory.path,
         ideSessionOperations: _createIdeSessionOperations(
-          const CallbackIdeSessionStore(
-            loadJson: _loadEmptySession,
-            saveJson: _saveDiscardedSession,
-          ),
+          _CallbackSessionStore(),
         ),
         agentProviderFactory: providerFactory,
         agentProviderSettingsPort: providerSettings.store,
@@ -433,10 +427,7 @@ void main() {
         agentUiFrameSchedulerFactory: _createUiFrameScheduler,
         directoryPicker: () async => null,
         ideSessionOperations: _createIdeSessionOperations(
-          const CallbackIdeSessionStore(
-            loadJson: _loadEmptySession,
-            saveJson: _saveDiscardedSession,
-          ),
+          _CallbackSessionStore(),
         ),
         agentProviderFactory: providerFactory,
         agentProviderSettingsPort: providerSettings.store,
@@ -934,10 +925,7 @@ void main() {
       agentUiFrameSchedulerFactory: _createUiFrameScheduler,
       directoryPicker: () async => directory.path,
       ideSessionOperations: _createIdeSessionOperations(
-        const CallbackIdeSessionStore(
-          loadJson: _loadEmptySession,
-          saveJson: _saveDiscardedSession,
-        ),
+        _CallbackSessionStore(),
       ),
       agentProviderFactory: providerFactory,
       agentProviderSettingsPort: providerSettings.store,
@@ -1030,10 +1018,7 @@ void main() {
       agentUiFrameSchedulerFactory: _createUiFrameScheduler,
       directoryPicker: () async => directory.path,
       ideSessionOperations: _createIdeSessionOperations(
-        CallbackIdeSessionStore(
-          loadJson: () async => restoredSession.encode(),
-          saveJson: _saveDiscardedSession,
-        ),
+        _CallbackSessionStore(initial: restoredSession),
       ),
       agentProviderFactory: providerFactory,
       agentProviderSettingsPort: providerSettings.store,
@@ -1137,10 +1122,7 @@ void main() {
         agentUiFrameSchedulerFactory: _createUiFrameScheduler,
         directoryPicker: () async => firstDirectory.path,
         ideSessionOperations: _createIdeSessionOperations(
-          const CallbackIdeSessionStore(
-            loadJson: _loadEmptySession,
-            saveJson: _saveDiscardedSession,
-          ),
+          _CallbackSessionStore(),
         ),
         agentProviderFactory: providerFactory,
         agentProviderSettingsPort: providerSettings.store,
@@ -1238,9 +1220,9 @@ void main() {
       agentUiFrameSchedulerFactory: _createUiFrameScheduler,
       directoryPicker: () async => directory.path,
       ideSessionOperations: _createIdeSessionOperations(
-        CallbackIdeSessionStore(
-          loadJson: () async => restoredSession.encode(),
-          saveJson: (value) async {
+        _CallbackSessionStore(
+          initial: restoredSession,
+          onSave: (value) {
             savedJson = value;
           },
         ),
@@ -1294,11 +1276,9 @@ void main() {
         agentUiFrameSchedulerFactory: _createUiFrameScheduler,
         directoryPicker: () async => null,
         ideSessionOperations: _createIdeSessionOperations(
-          CallbackIdeSessionStore(
-            loadJson: () async => const IdeSessionState(
-              workbenchLayout: restoredWorkbench,
-            ).encode(),
-            saveJson: (value) async {
+          _CallbackSessionStore(
+            initial: const IdeSessionState(workbenchLayout: restoredWorkbench),
+            onSave: (value) {
               savedJson = value;
             },
           ),
@@ -1392,9 +1372,9 @@ void main() {
       agentUiFrameSchedulerFactory: _createUiFrameScheduler,
       directoryPicker: () async => firstDirectory.path,
       ideSessionOperations: _createIdeSessionOperations(
-        CallbackIdeSessionStore(
-          loadJson: () async => restoredSession.encode(),
-          saveJson: (value) async {
+        _CallbackSessionStore(
+          initial: restoredSession,
+          onSave: (value) {
             savedJson = value;
           },
         ),
@@ -1427,10 +1407,6 @@ void main() {
     expect(saved?.projectLastOpenedAtByPath[firstDirectory.path], openedNow);
   });
 }
-
-Future<String?> _loadEmptySession() async => null;
-
-Future<void> _saveDiscardedSession(String value) async {}
 
 IdeSessionSliceOperations _createIdeSessionOperations(
   IdeSessionStore sessionStore,
@@ -1503,10 +1479,7 @@ Future<_SelectedThreadShellHarness> _openShellWithSelectedThread({
     agentUiFrameSchedulerFactory: _createUiFrameScheduler,
     directoryPicker: () async => directory.path,
     ideSessionOperations: _createIdeSessionOperations(
-      CallbackIdeSessionStore(
-        loadJson: _loadEmptySession,
-        saveJson: sessionSaves.save,
-      ),
+      _CallbackSessionStore(onSave: (_) => sessionSaves.record()),
     ),
     agentProviderFactory: providerFactory,
     agentProviderSettingsPort: providerSettings.store,
@@ -1579,7 +1552,7 @@ class _SelectedThreadShellHarness {
 class _SessionSaveRecorder {
   int saveCount = 0;
 
-  Future<void> save(String value) async {
+  void record() {
     saveCount += 1;
   }
 
@@ -1852,5 +1825,24 @@ class _ShellTestAgentProvider
   @override
   Future<void> dispose() async {
     await _events.close();
+  }
+}
+
+/// 测试本地的 typed 会话仓库。
+///
+/// 取代生产侧已删除的 `CallbackIdeSessionStore`：语义完全一致（可注入初始状态、
+/// 可观察保存），但只存在于测试，不再让生产代码为测试保留一条回调实现。
+class _CallbackSessionStore implements IdeSessionStore {
+  _CallbackSessionStore({this.initial, this.onSave});
+
+  final IdeSessionState? initial;
+  final void Function(String encoded)? onSave;
+
+  @override
+  Future<IdeSessionState?> load() async => initial;
+
+  @override
+  Future<void> save(IdeSessionState state) async {
+    onSave?.call(state.encode());
   }
 }

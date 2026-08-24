@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
+import 'package:zeta/src/app/composition/zeta_host_mode.dart';
 import 'package:zeta/main.dart';
 import 'package:zeta/src/app/app.dart' show MainAppState;
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
@@ -2324,8 +2325,8 @@ Future<void> _pumpIde(
       enableNativeWindowFrame: enableNativeWindowFrame,
       showWindowControls: false,
       directoryPicker: directoryPicker,
-      sessionLoader: session.load,
-      sessionSaver: session.save,
+      hostMode: ZetaHostMode.ephemeral,
+      ideSessionStore: session,
       agentProviderFactory: agentProviderFactory,
       agentProviderConfigStore: agentProviderConfigStore,
       agentProviderAvailabilityLoader: agentProviderAvailabilityLoader,

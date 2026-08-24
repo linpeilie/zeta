@@ -38,22 +38,19 @@ class FileIdeSessionStore implements IdeSessionStore {
   }
 }
 
-class CallbackIdeSessionStore implements IdeSessionStore {
-  const CallbackIdeSessionStore({
-    required this.loadJson,
-    required this.saveJson,
-  });
+/// 内存版 IDE 会话仓库。
+///
+/// 临时宿主模式（widget test / 嵌入宿主）使用：会话在进程内往返，不落盘。
+class MemoryIdeSessionStore implements IdeSessionStore {
+  MemoryIdeSessionStore([this._state]);
 
-  final Future<String?> Function() loadJson;
-  final Future<void> Function(String value) saveJson;
-
-  @override
-  Future<IdeSessionState?> load() async {
-    return IdeSessionState.tryDecode(await loadJson());
-  }
+  IdeSessionState? _state;
 
   @override
-  Future<void> save(IdeSessionState state) {
-    return saveJson(state.encode());
+  Future<IdeSessionState?> load() async => _state;
+
+  @override
+  Future<void> save(IdeSessionState state) async {
+    _state = state;
   }
 }

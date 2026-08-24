@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/app/composition/zeta_host_mode.dart';
 import 'package:zeta/main.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
@@ -36,8 +37,8 @@ void main() {
         enableNativeWindowFrame: true,
         showWindowControls: false,
         directoryPicker: () async => directory.path,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
+        hostMode: ZetaHostMode.ephemeral,
+        ideSessionStore: session,
         agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
           FakeAgentProvider(),
         ),
@@ -74,8 +75,8 @@ void main() {
         enableNativeWindowFrame: true,
         showWindowControls: false,
         directoryPicker: () async => repositoryDirectory.path,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
+        hostMode: ZetaHostMode.ephemeral,
+        ideSessionStore: session,
         agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
           FakeAgentProvider(),
         ),
@@ -110,8 +111,8 @@ void main() {
         enableNativeWindowFrame: true,
         showWindowControls: false,
         directoryPicker: () async => directory.path,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
+        hostMode: ZetaHostMode.ephemeral,
+        ideSessionStore: session,
         agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
           FakeAgentProvider(),
         ),
@@ -151,8 +152,8 @@ void main() {
         enableNativeWindowFrame: true,
         showWindowControls: false,
         directoryPicker: directoryPicker,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
+        hostMode: ZetaHostMode.ephemeral,
+        ideSessionStore: session,
         agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
           FakeAgentProvider(),
         ),

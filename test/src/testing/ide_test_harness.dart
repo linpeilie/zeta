@@ -7,6 +7,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
+import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 
 import 'agent_provider_stub_base.dart';
 import 'legacy_bundle_factory_mixin.dart';
@@ -104,15 +106,22 @@ AgentThreadSummary agentThread({
   );
 }
 
-class MemorySessionStore {
+/// 内存会话仓库。
+///
+/// 仍以**编码后的 JSON 字符串**暴露 [value]，这样既能作为 typed
+/// [IdeSessionStore] 注入 `MainApp`，已有断言里的
+/// `IdeSessionState.tryDecode(session.value)` 也一行都不用改。
+class MemorySessionStore implements IdeSessionStore {
   MemorySessionStore([this.value]);
 
   String? value;
 
-  Future<String?> load() async => value;
+  @override
+  Future<IdeSessionState?> load() async => IdeSessionState.tryDecode(value);
 
-  Future<void> save(String newValue) async {
-    value = newValue;
+  @override
+  Future<void> save(IdeSessionState state) async {
+    value = state.encode();
   }
 }
 

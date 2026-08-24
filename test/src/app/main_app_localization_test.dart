@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
+import 'package:zeta/src/app/composition/zeta_host_mode.dart';
 import 'package:zeta/src/app/app.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
@@ -273,8 +274,7 @@ Future<void> _pumpMainApp(
       key: key,
       enableNativeWindowFrame: false,
       showWindowControls: false,
-      sessionLoader: () async => null,
-      sessionSaver: (_) async {},
+      hostMode: ZetaHostMode.ephemeral,
       agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
         FakeAgentProvider(),
       ),

@@ -2,7 +2,7 @@
 
 最后更新：2026-08-24
 
-状态：**P4-0 / P4-1 已关批（2026-08-24），下一批为 P4-2**
+状态：**P4-0 / P4-1 / P4-2a 已关批（2026-08-24），下一批为 P4-2b**
 
 > P4-0 的现状测绘、基线与安全网决策落在
 > [`.workflow/refactor/2026-08-24-phase4-transition-cleanup/`](../../.workflow/refactor/2026-08-24-phase4-transition-cleanup/)。
@@ -269,6 +269,32 @@ Riverpod provider 已物理删除。`lib/src` 现在只剩 `app_localizations_x.
 
 **关批**：`lib/src/ui` 不 import/构造 feature data/Repository；`MainApp` 不直接 new feature
 data/controller；现有启动、恢复、窗口关闭和资源反序释放测试全绿。
+
+**执行结论（2026-08-24，P4-2a 已关批）**
+
+本批按止损线 S6 拆成 **P4-2a / P4-2b / P4-2c**：一批同时动 6 个 feature 的 data 面
+超出了单批边界（拆批理由与三批范围见
+`.workflow/refactor/2026-08-24-phase4-transition-cleanup/04-目标态与步骤.md` §7）。
+
+**P4-2a（已完成）**：新增 `ZetaHostMode` 与 `ZetaApplicationComposition`，
+`MainApp` 的 13 个 feature data 构造调用全部移出；`sessionLoader`/`sessionSaver`
+换成显式 `hostMode` + typed `ideSessionStore`；删除 `CallbackIdeSessionStore`。
+门禁 exit 0、根测试 2378 passed / 0 failed。
+
+> ⚠️ **本批推翻了计划书原文的一处要求。** 原文写「`sessionLoader`/`sessionSaver`
+> 改为 typed `IdeSessionStore`」——照字面做会出事：这对回调实际是个隐式的宿主模式
+> 开关，除注入 session store 外还控制**持久化是否落盘、是否探测本机 CLI、是否读取
+> 本机用量历史**三件事，字面迁移会让后三者静默失效，widget test 将开始写用户真实的
+> `~/.zeta` 并扫描本机。这四重语义此前**零测试覆盖**，已先补 characterization test
+> 单独提交（`03-安全网.md` §7），再做结构改动。
+
+**P4-2b（待做）**：`IdeWorkbenchComposition` 接管 `IdeHome` 的 3 个 Agent Management
+Repository 与 management composition。`lib/src/ui` 的 Repository 泄漏（3 import +
+3 构造）**仍然存在**，P4-2 不得在 2b 完成前标为已完成。
+
+**P4-2c（待做）**：Workspace 只读 corpus port + 删 Shell 的
+`CallbackWorkspaceFileCorpusPort`；UI toast/attention/menu callback 改显式 relay/port。
+该批会动 `IdeShellController` 构造函数，与 P4-5 相邻。
 
 ### P4-3：Repository 与 Project Threads 边界收口
 

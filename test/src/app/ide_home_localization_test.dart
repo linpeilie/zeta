@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/app/composition/zeta_host_mode.dart';
 import 'package:zeta/src/app/app.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
@@ -147,8 +148,8 @@ Future<void> _pumpIdeHome(
     MainApp(
       enableNativeWindowFrame: true,
       showWindowControls: false,
-      sessionLoader: session.load,
-      sessionSaver: session.save,
+      hostMode: ZetaHostMode.ephemeral,
+      ideSessionStore: session,
       agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
         FakeAgentProvider(),
       ),

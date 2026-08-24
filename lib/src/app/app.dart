@@ -1,11 +1,11 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:zeta/src/app/provider_settings_slice/provider_settings_slice_composition.dart';
 import 'package:zeta/src/app/ide_session_slice/ide_session_slice_composition.dart';
 import 'package:zeta/src/app/settings_slice/settings_slice_composition.dart';
 import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_slice_composition.dart';
-import 'package:zeta/src/app/storage/atomic_text_file.dart';
+import 'package:zeta/src/app/composition/zeta_application_composition.dart';
+import 'package:zeta/src/app/composition/zeta_host_mode.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/widgets.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
@@ -29,10 +29,7 @@ import 'package:zeta/src/ui/core/system_file_manager.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
-import 'package:zeta/src/features/agent/data/agent_model_catalog_cache_store.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_codec.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
-import 'package:zeta/src/features/agent/data/agent_turn_context_store.dart';
 import 'package:zeta/src/features/agent/presentation/provider_settings_slice/agent_model_catalog_projection_providers.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
@@ -72,8 +69,8 @@ class MainApp extends StatefulWidget {
     this.directoryPicker,
     this.enableNativeWindowFrame = true,
     this.showWindowControls = true,
-    this.sessionLoader,
-    this.sessionSaver,
+    this.hostMode = ZetaHostMode.local,
+    this.ideSessionStore,
     this.agentProviderFactory,
     this.agentProviderConfigStore,
     this.agentProviderAvailabilityLoader,
@@ -102,8 +99,12 @@ class MainApp extends StatefulWidget {
 
   /// 测试可关闭原生窗口控制按钮，避免依赖桌面平台通道。
   final bool showWindowControls;
-  final Future<String?> Function()? sessionLoader;
-  final Future<void> Function(String value)? sessionSaver;
+
+  /// 宿主运行模式：决定持久化落盘还是留内存、是否允许访问本机 Agent CLI。
+  final ZetaHostMode hostMode;
+
+  /// 会话仓库；未注入时按 [hostMode] 选择文件或内存实现。
+  final IdeSessionStore? ideSessionStore;
   final AgentProviderBundleFactory? agentProviderFactory;
   final AgentProviderConfigStore? agentProviderConfigStore;
   final AgentProviderAvailabilityLoader? agentProviderAvailabilityLoader;
@@ -199,9 +200,7 @@ class MainAppState extends State<MainApp>
   late final AgentProviderSettingsCodec _agentProviderSettingsCodec;
   late final AgentProviderConfigStore _agentProviderConfigStore;
   Future<void> Function()? _providerRuntimeShutdownHook;
-  late final UsageStatisticsPartitionStore _usageStatisticsPartitionStore;
-  late final AgentModelCatalogRepository _agentModelCatalogRepository;
-  late final AgentTurnContextStore _turnContextStore;
+  late final ZetaApplicationComposition _appComposition;
   bool _ownsAgentProviderRuntimeRegistry = false;
   AppLifecycleState? _appLifecycleState;
   bool _nativeWindowSuspended = false;
@@ -261,11 +260,17 @@ class MainAppState extends State<MainApp>
     if (widget.enableNativeWindowFrame) {
       windowManager.addListener(this);
     }
-    final useFilePersistence = _useFilePersistence;
-    final dataPaths = widget.dataPaths;
-    final ideSessionStore = _createSessionStore();
+    _appComposition = ZetaApplicationComposition.create(
+      hostMode: widget.hostMode,
+      dataPaths: widget.dataPaths,
+      ideSessionStore: widget.ideSessionStore,
+      usageStatisticsPartitionStore: widget.usageStatisticsPartitionStore,
+      agentModelCatalogRepository: widget.agentModelCatalogRepository,
+      turnContextStore: widget.turnContextStore,
+      agentProviderConfigStore: widget.agentProviderConfigStore,
+    );
     _ideSessionSliceComposition = IdeSessionSliceComposition.create(
-      sessionStore: ideSessionStore,
+      sessionStore: _appComposition.ideSessionStore,
     );
     _frozenDisplayLocale = ZetaLocalization.localeFor(
       widget.displayLanguageOverride ?? widget.fallbackLanguage,
@@ -291,36 +296,6 @@ class MainAppState extends State<MainApp>
         addDesktopWindowShutdownHook(_providerRuntimeShutdownHook!);
       }
     }
-    _usageStatisticsPartitionStore =
-        widget.usageStatisticsPartitionStore ??
-        (useFilePersistence
-            ? FileUsageStatisticsPartitionStore(
-                storage: AtomicTextFile(
-                  File(dataPaths!.usageStatisticsIndexFilePath),
-                ),
-              )
-            : MemoryUsageStatisticsPartitionStore());
-    _agentModelCatalogRepository =
-        widget.agentModelCatalogRepository ??
-        AgentModelCatalogRepository(
-          fingerprintExtraKeysFor: builtInAgentProviderDefinitionCatalog
-              .modelCatalogFingerprintExtraKeysFor,
-          store: useFilePersistence
-              ? FileAgentModelCatalogCacheStore(
-                  storage: AtomicTextFile(
-                    File(dataPaths!.agentModelCatalogCacheFilePath),
-                  ),
-                )
-              : MemoryAgentModelCatalogCacheStore(),
-        );
-    _turnContextStore =
-        widget.turnContextStore ??
-        (useFilePersistence
-            ? FileAgentTurnContextStore(
-                rootDirectory: Directory(dataPaths!.sessionStateDirectoryPath),
-                createStorage: (path) => AtomicTextFile(File(path)),
-              )
-            : MemoryAgentTurnContextStore());
     _settingsSliceComposition = SettingsSliceComposition.create(
       useFilePersistence: _useFilePersistence,
       dataPaths: widget.dataPaths,
@@ -369,23 +344,11 @@ class MainAppState extends State<MainApp>
       _zetaUiTextCatalog = textCatalogs.zetaUi;
     }
     if (!_localeRuntimeReady) {
-      final dataPaths = widget.dataPaths;
-      final useFilePersistence = _useFilePersistence;
       final catalog = ZetaPluginCatalog.builtIn(
-        claudeCodeSessionDecisionStoreFactory: useFilePersistence
-            ? (sessionId) => FileClaudeCodeSessionDecisionStore(
-                storage: AtomicTextFile(
-                  _claudeCodeSessionDecisionFile(dataPaths!, sessionId),
-                ),
-              )
-            : null,
-        claudeCodeHiddenThreadStore: useFilePersistence
-            ? FileClaudeCodeHiddenThreadStore(
-                storage: AtomicTextFile(
-                  _claudeCodeHiddenThreadsFile(dataPaths!),
-                ),
-              )
-            : null,
+        claudeCodeSessionDecisionStoreFactory:
+            _appComposition.claudeCodeSessionDecisionStoreFactory,
+        claudeCodeHiddenThreadStore:
+            _appComposition.claudeCodeHiddenThreadStore,
         textCatalog: _agentUiTextCatalog,
         metrics: _metrics,
       );
@@ -395,8 +358,8 @@ class MainAppState extends State<MainApp>
       _agentProviderSettingsCodec = AgentProviderSettingsCodec(
         providerDefinitions: _agentProviderDefinitions,
       );
-      _agentProviderConfigStore =
-          widget.agentProviderConfigStore ?? _createAgentProviderConfigStore();
+      _agentProviderConfigStore = _appComposition
+          .createAgentProviderConfigStore(_agentProviderSettingsCodec);
       if (widget.agentProviderFactory == null) {
         _agentProviderFactory = resolvedProviders.bundleFactory;
       }
@@ -418,14 +381,14 @@ class MainAppState extends State<MainApp>
     _providerSettingsSliceComposition ??=
         ProviderSettingsSliceComposition.create(
           configStore: _agentProviderConfigStore,
-          modelCatalogRepository: _agentModelCatalogRepository,
+          modelCatalogRepository: _appComposition.agentModelCatalogRepository,
           runtimeRegistry: _agentProviderRuntimeRegistry,
           providerDefinitions: _agentProviderDefinitions,
         );
     _usageStatisticsSliceComposition ??= UsageStatisticsSliceComposition.create(
       loadEnabledProviders: _loadEnabledAgentUsageProviders,
       runtimeRegistry: _agentProviderRuntimeRegistry,
-      partitionStore: _usageStatisticsPartitionStore,
+      partitionStore: _appComposition.usageStatisticsPartitionStore,
       agentUsagePanelRepository: widget.agentUsagePanelRepository,
       textCatalog: _usageStatisticsTextCatalog,
     );
@@ -674,7 +637,7 @@ class MainAppState extends State<MainApp>
                           widget.agentProviderAvailabilityLoader,
                       homeProviderDetectionLoader:
                           widget.homeProviderDetectionLoader ??
-                          (_usesCallbackPersistence
+                          (_blocksLocalCliAccess
                               ? _loadNoInstalledHomeProviders
                               : null),
                       projectLocationOpener:
@@ -682,15 +645,16 @@ class MainAppState extends State<MainApp>
                           openPathInSystemFileManager,
                       usageStatisticsSliceComposition:
                           _requiredUsageStatisticsComposition,
-                      agentModelCatalogRepository: _agentModelCatalogRepository,
-                      turnContextStore: _turnContextStore,
+                      agentModelCatalogRepository:
+                          _appComposition.agentModelCatalogRepository,
+                      turnContextStore: _appComposition.turnContextStore,
                       agentUiTextCatalog: _agentUiTextCatalog,
                       metrics: _metrics,
                       providerMetricLabel: AgentMetricLabels.forProviderId,
                       agentManagementTextCatalog: _agentManagementTextCatalog,
                       // 回调存储用于测试/嵌入宿主；未显式注入统计仓储时不读取本机 CLI 历史。
                       enableAgentUsageAutoRefresh:
-                          !_usesCallbackPersistence ||
+                          !_blocksLocalCliAccess ||
                           widget.agentUsagePanelRepository != null,
                     )
                   : ColoredBox(
@@ -744,70 +708,12 @@ class MainAppState extends State<MainApp>
     setState(() => _nativeWindowSuspended = suspended);
   }
 
-  IdeSessionStore _createSessionStore() {
-    if (widget.sessionLoader != null || widget.sessionSaver != null) {
-      return CallbackIdeSessionStore(
-        loadJson: widget.sessionLoader ?? () async => null,
-        saveJson: widget.sessionSaver ?? (_) async {},
-      );
-    }
-    final dataPaths = widget.dataPaths;
-    if (_useFilePersistence && dataPaths != null) {
-      return FileIdeSessionStore(
-        storage: AtomicTextFile(File(dataPaths.ideSessionFilePath)),
-      );
-    }
-    return const CallbackIdeSessionStore(
-      loadJson: _loadEmptySession,
-      saveJson: _ignoreSessionSave,
-    );
-  }
+  /// 是否把持久化落到本机文件。语义现在只由宿主模式与 dataPaths 决定。
+  bool get _useFilePersistence => _appComposition.usesFilePersistence;
 
-  AgentProviderConfigStore _createAgentProviderConfigStore() {
-    if (widget.agentProviderConfigStore != null) {
-      return widget.agentProviderConfigStore!;
-    }
-    if (widget.sessionLoader != null || widget.sessionSaver != null) {
-      // widget test 传入会话回调时，默认不触碰真实 ~/.zeta。
-      return MemoryAgentProviderConfigStore();
-    }
-    final dataPaths = widget.dataPaths;
-    if (_useFilePersistence && dataPaths != null) {
-      return FileAgentProviderConfigStore(
-        storage: AtomicTextFile(File(dataPaths.providersFilePath)),
-        codec: _agentProviderSettingsCodec,
-      );
-    }
-    return MemoryAgentProviderConfigStore();
-  }
-
-  bool get _useFilePersistence =>
-      widget.dataPaths != null &&
-      widget.sessionLoader == null &&
-      widget.sessionSaver == null;
-
-  bool get _usesCallbackPersistence =>
-      widget.sessionLoader != null || widget.sessionSaver != null;
+  /// 是否禁止访问本机 Agent CLI（安装探测与用量历史）。
+  bool get _blocksLocalCliAccess => !widget.hostMode.allowsLocalCliAccess;
 }
-
-Future<String?> _loadEmptySession() async => null;
-
-Future<void> _ignoreSessionSave(String _) async {}
 
 Future<List<ManagedAgent>> _loadNoInstalledHomeProviders() async =>
     const <ManagedAgent>[];
-
-File _claudeCodeSessionDecisionFile(ZetaDataPaths dataPaths, String sessionId) {
-  final encodedSessionId = Uri.encodeComponent(sessionId);
-  return File(
-    '${dataPaths.stateDirectoryPath}${Platform.pathSeparator}'
-    'claude_code${Platform.pathSeparator}session_$encodedSessionId.json',
-  );
-}
-
-File _claudeCodeHiddenThreadsFile(ZetaDataPaths dataPaths) {
-  return File(
-    '${dataPaths.stateDirectoryPath}${Platform.pathSeparator}'
-    'claude_code${Platform.pathSeparator}hidden_threads.json',
-  );
-}
