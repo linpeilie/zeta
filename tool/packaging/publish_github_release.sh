@@ -76,13 +76,25 @@ for name in "${expected_assets[@]}"; do
 done
 sort -o "${local_manifest}" "${local_manifest}"
 
-release_endpoint="repos/${repository}/releases/tags/${tag}"
+read_release_json() {
+  gh release view "${tag}" \
+    --repo "${repository}" \
+    --json databaseId,isDraft,isPrerelease,tagName \
+    --jq '{
+      id: .databaseId,
+      draft: .isDraft,
+      prerelease: .isPrerelease,
+      tag_name: .tagName
+    }'
+}
+
 release_error="${temporary_root}/release-error"
-if release_json="$(gh api "${release_endpoint}" 2>"${release_error}")"; then
+if release_json="$(read_release_json 2>"${release_error}")"; then
   :
-elif grep -q 'HTTP 404' "${release_error}"; then
+elif grep -Eqi 'release not found|HTTP 404' "${release_error}"; then
   create_args=(
     "${tag}"
+    --repo "${repository}"
     --draft
     --verify-tag
     --title "Zeta ${tag}"
@@ -92,7 +104,22 @@ elif grep -q 'HTTP 404' "${release_error}"; then
     create_args+=(--prerelease --latest=false)
   fi
   gh release create "${create_args[@]}"
-  release_json="$(gh api "${release_endpoint}")"
+
+  release_json=''
+  for attempt in 1 2 3 4 5 6; do
+    if release_json="$(read_release_json 2>"${release_error}")"; then
+      break
+    fi
+    if [[ "${attempt}" -lt 6 ]]; then
+      echo "Draft release is not visible yet; retrying (${attempt}/6)."
+      sleep 2
+    fi
+  done
+  if [[ -z "${release_json}" ]]; then
+    cat "${release_error}" >&2
+    echo "Could not resolve the newly created draft release." >&2
+    exit 1
+  fi
 else
   cat "${release_error}" >&2
   exit 1
@@ -183,7 +210,7 @@ gh api \
   -f make_latest="${make_latest}" \
   >/dev/null
 
-published_json="$(gh api "${release_endpoint}")"
+published_json="$(read_release_json)"
 if [[ "$(jq -r '.draft' <<<"${published_json}")" != 'false' ]] ||
   [[ "$(jq -r '.prerelease' <<<"${published_json}")" != "${prerelease}" ]]; then
   echo "Release ${tag} was not published with the expected state." >&2
