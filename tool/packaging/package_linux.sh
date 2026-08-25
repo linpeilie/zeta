@@ -218,6 +218,7 @@ install -m 0644 \
 LDAI_OUTPUT="${appimage_package}" \
 LDAI_RUNTIME_FILE="${appimage_runtime}" \
 LINUXDEPLOY_OUTPUT_VERSION="${release_version}" \
+DEPLOY_GTK_VERSION=3 \
 ARCH=x86_64 \
   "${linuxdeploy}" \
   --appdir "${appdir}" \

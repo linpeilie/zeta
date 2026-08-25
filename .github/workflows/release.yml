@@ -87,7 +87,7 @@ jobs:
 
   windows:
     name: Build Windows x86_64
-    needs: prepare
+    needs: [prepare, quality]
     runs-on: windows-2025
     timeout-minutes: 60
     steps:
@@ -127,7 +127,7 @@ jobs:
 
   macos:
     name: Build macOS arm64, x86_64, and universal
-    needs: prepare
+    needs: [prepare, quality]
     runs-on: macos-15
     timeout-minutes: 90
     steps:
@@ -168,7 +168,7 @@ jobs:
 
   linux:
     name: Build Linux x86_64
-    needs: prepare
+    needs: [prepare, quality]
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
