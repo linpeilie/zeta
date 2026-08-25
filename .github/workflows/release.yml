@@ -236,6 +236,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
+      attestations: read
       contents: write
     steps:
       - name: Check out publishing script
@@ -248,7 +249,7 @@ jobs:
           path: dist
           merge-multiple: true
 
-      - name: Create draft, upload assets, and publish
+      - name: Validate assets and publish release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}

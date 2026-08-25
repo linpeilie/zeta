@@ -50,8 +50,8 @@ trap cleanup EXIT
 
 expected_names="${temporary_root}/expected-names"
 local_names="${temporary_root}/local-names"
-local_manifest="${temporary_root}/local-manifest"
-remote_manifest="${temporary_root}/remote-manifest"
+remote_names="${temporary_root}/remote-names"
+release_error="${temporary_root}/release-error"
 printf '%s\n' "${expected_assets[@]}" | sort >"${expected_names}"
 find "${dist_directory}" -maxdepth 1 -type f -printf '%f\n' | sort >"${local_names}"
 if ! cmp -s "${expected_names}" "${local_names}"; then
@@ -65,156 +65,103 @@ fi
   sha256sum --check ./*.sha256
 )
 
-: >"${local_manifest}"
 asset_paths=()
 for name in "${expected_assets[@]}"; do
-  path="${dist_directory}/${name}"
-  size="$(stat --format='%s' "${path}")"
-  digest="$(sha256sum "${path}" | awk '{ print $1 }')"
-  printf '%s\t%s\t%s\n' "${name}" "${size}" "${digest}" >>"${local_manifest}"
-  asset_paths+=("${path}")
+  asset_paths+=("${dist_directory}/${name}")
 done
-sort -o "${local_manifest}" "${local_manifest}"
 
 read_release_json() {
   gh release view "${tag}" \
     --repo "${repository}" \
-    --json databaseId,isDraft,isPrerelease,tagName \
+    --json assets,isDraft,isImmutable,isPrerelease,tagName,url \
     --jq '{
-      id: .databaseId,
+      asset_names: [.assets[].name] | sort,
       draft: .isDraft,
+      immutable: .isImmutable,
       prerelease: .isPrerelease,
-      tag_name: .tagName
+      tag_name: .tagName,
+      url: .url
     }'
 }
 
-release_error="${temporary_root}/release-error"
-if release_json="$(read_release_json 2>"${release_error}")"; then
-  :
-elif grep -Eqi 'release not found|HTTP 404' "${release_error}"; then
-  create_args=(
-    "${tag}"
-    --repo "${repository}"
-    --draft
-    --verify-tag
-    --title "Zeta ${tag}"
-    --generate-notes
-  )
-  if [[ "${prerelease}" == 'true' ]]; then
-    create_args+=(--prerelease --latest=false)
-  fi
-  gh release create "${create_args[@]}"
+verify_release_state() {
+  local release_json="$1"
 
-  release_json=''
-  for attempt in 1 2 3 4 5 6; do
-    if release_json="$(read_release_json 2>"${release_error}")"; then
-      break
-    fi
-    if [[ "${attempt}" -lt 6 ]]; then
-      echo "Draft release is not visible yet; retrying (${attempt}/6)."
-      sleep 2
-    fi
-  done
-  if [[ -z "${release_json}" ]]; then
-    cat "${release_error}" >&2
-    echo "Could not resolve the newly created draft release." >&2
+  jq -r '.asset_names[]' <<<"${release_json}" | tr -d '\r' >"${remote_names}"
+  if [[ "$(jq -rj '.draft' <<<"${release_json}")" != 'false' ]] ||
+    [[ "$(jq -rj '.immutable' <<<"${release_json}")" != 'true' ]] ||
+    [[ "$(jq -rj '.prerelease' <<<"${release_json}")" != "${prerelease}" ]] ||
+    [[ "$(jq -rj '.tag_name' <<<"${release_json}")" != "${tag}" ]] ||
+    ! cmp -s "${expected_names}" "${remote_names}"; then
+    echo "Published immutable release ${tag} does not match the expected state." >&2
+    diff -u "${expected_names}" "${remote_names}" >&2 || true
+    return 1
+  fi
+}
+
+if release_json="$(read_release_json 2>"${release_error}")"; then
+  if [[ "$(jq -rj '.draft' <<<"${release_json}")" == 'true' ]]; then
+    echo "Draft release remains at $(jq -rj '.url' <<<"${release_json}")." >&2
+    echo "Delete that draft manually, then rerun this workflow." >&2
     exit 1
   fi
-else
+  verify_release_state "${release_json}"
+  gh release verify "${tag}" --repo "${repository}" >/dev/null
+  echo "Published GitHub Release ${tag} already has the expected 24 assets and a valid attestation."
+  exit 0
+elif ! grep -Eqi 'release not found|HTTP 404' "${release_error}"; then
   cat "${release_error}" >&2
   exit 1
 fi
 
-release_id="$(jq -r '.id' <<<"${release_json}")"
-is_draft="$(jq -r '.draft' <<<"${release_json}")"
-remote_prerelease="$(jq -r '.prerelease' <<<"${release_json}")"
-assets_endpoint="repos/${repository}/releases/${release_id}/assets?per_page=100"
-
-write_remote_manifest() {
-  gh api "${assets_endpoint}" |
-    jq -r '.[] | [.name, (.size | tostring), ((.digest // "") | sub("^sha256:"; ""))] | @tsv' |
-    sort >"${remote_manifest}"
-}
-
-verify_remote_manifest() {
-  local attempt
-  for attempt in 1 2 3 4 5 6; do
-    write_remote_manifest
-    if cmp -s "${local_manifest}" "${remote_manifest}"; then
-      return 0
-    fi
-    if [[ "${attempt}" -lt 6 ]]; then
-      echo "Remote asset digests are not ready (attempt ${attempt}/6); retrying."
-      sleep 2
-    fi
-  done
-
-  echo "GitHub Release assets do not match the verified local manifest." >&2
-  diff -u "${local_manifest}" "${remote_manifest}" >&2 || true
-  return 1
-}
-
-if [[ "${is_draft}" != 'true' ]]; then
-  if [[ "${remote_prerelease}" != "${prerelease}" ]] ||
-    ! verify_remote_manifest; then
-    echo "Published release ${tag} is immutable and cannot be repaired; create a new tag." >&2
-    exit 1
-  fi
-  echo "Published release ${tag} already matches the complete asset manifest."
-  exit 0
-fi
-
-gh api \
-  --method PATCH \
-  "repos/${repository}/releases/${release_id}" \
-  -f name="Zeta ${tag}" \
-  -F draft=true \
-  -F prerelease="${prerelease}" \
-  >/dev/null
-
-is_expected_asset() {
-  local candidate="$1"
-  local expected
-  for expected in "${expected_assets[@]}"; do
-    if [[ "${candidate}" == "${expected}" ]]; then
-      return 0
-    fi
-  done
-  return 1
-}
-
-while IFS=$'\t' read -r asset_id asset_name; do
-  if ! is_expected_asset "${asset_name}"; then
-    echo "Removing stale draft asset ${asset_name}."
-    gh api \
-      --method DELETE \
-      "repos/${repository}/releases/assets/${asset_id}"
-  fi
-done < <(
-  gh api "${assets_endpoint}" |
-    jq -r '.[] | [.id, .name] | @tsv'
-)
-
-gh release upload "${tag}" "${asset_paths[@]}" --clobber
-verify_remote_manifest
-
-make_latest=true
-if [[ "${prerelease}" == 'true' ]]; then
-  make_latest=false
-fi
-gh api \
-  --method PATCH \
-  "repos/${repository}/releases/${release_id}" \
-  -F draft=false \
-  -F prerelease="${prerelease}" \
-  -f make_latest="${make_latest}" \
-  >/dev/null
-
-published_json="$(read_release_json)"
-if [[ "$(jq -r '.draft' <<<"${published_json}")" != 'false' ]] ||
-  [[ "$(jq -r '.prerelease' <<<"${published_json}")" != "${prerelease}" ]]; then
-  echo "Release ${tag} was not published with the expected state." >&2
+# GitHub may expose an unpublished prerelease only through an untagged-* URL.
+# Detect it by the exact release title instead of trying to address a draft by tag.
+drafts_json="$(
+  gh api --paginate "repos/${repository}/releases?per_page=100" |
+    jq -s \
+      --arg tag "${tag}" \
+      --arg title "Zeta ${tag}" \
+      'add | map(select(.draft == true and (.tag_name == $tag or .name == $title)))'
+)"
+if [[ "$(jq -j 'length' <<<"${drafts_json}")" -ne 0 ]]; then
+  echo "A draft release for ${tag} already exists:" >&2
+  jq -r '.[] | "  \(.html_url)"' <<<"${drafts_json}" >&2
+  echo "Delete the stale draft manually, then rerun this workflow." >&2
   exit 1
 fi
-verify_remote_manifest
+
+create_args=(
+  "${tag}"
+  "${asset_paths[@]}"
+  --repo "${repository}"
+  --verify-tag
+  --title "Zeta ${tag}"
+  --generate-notes
+)
+if [[ "${prerelease}" == 'true' ]]; then
+  create_args+=(--prerelease --latest=false)
+else
+  create_args+=(--latest=true)
+fi
+
+# Do not pass --draft. With assets present, GitHub CLI creates a temporary draft,
+# uploads every asset through its release ID, and publishes only after success.
+gh release create "${create_args[@]}"
+
+release_json="$(read_release_json)"
+verify_release_state "${release_json}"
+for attempt in 1 2 3 4 5 6; do
+  if gh release verify "${tag}" --repo "${repository}" >/dev/null; then
+    break
+  fi
+  if [[ "${attempt}" -eq 6 ]]; then
+    echo "Release attestation for ${tag} is not available." >&2
+    exit 1
+  fi
+  echo "Release attestation is not ready; retrying (${attempt}/6)."
+  sleep 2
+done
+for path in "${asset_paths[@]}"; do
+  gh release verify-asset "${tag}" "${path}" --repo "${repository}" >/dev/null
+done
 echo "Published GitHub Release ${tag} with 24 verified assets."

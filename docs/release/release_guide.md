@@ -8,8 +8,8 @@ Zeta 使用 [GitHub Actions 发布工作流](../../.github/workflows/release.yml
 Windows、macOS 和 Linux 桌面安装包。工作流只监听推送到 GitHub 的 `v*` Tag；Tag
 必须指向 `dev` 分支历史中的提交，并通过下文的版本预检。
 
-仓库启用了 GitHub immutable releases。工作流会先创建草稿 Release，在草稿阶段上传并
-校验全部附件，最后才公开 Release。不要在工作流运行期间手动发布草稿。
+仓库启用了 GitHub immutable releases。发布作业把全部附件交给 GitHub CLI；CLI 会在
+内部创建临时草稿、上传附件，并在全部上传成功后公开 Release。不要预先手动创建 Release。
 
 当前发布仍不做 Windows 代码签名或 Apple notarization。macOS 派生包会重新执行 ad-hoc
 codesign，以保证拆分架构后的应用包结构有效；用户首次运行时仍可能看到 SmartScreen 或
@@ -83,10 +83,12 @@ git push origin v0.2.0-beta.1
 Tag 推送后的流程如下：
 
 1. `Validate release metadata` 校验 Tag 格式、`pubspec.yaml` 和 `dev` 可达性。
-2. 完整质量门禁与 Windows、macOS、Linux 构建并行执行；这些作业只有只读权限。
+2. 完整质量门禁通过后，Windows、macOS、Linux 三个平台并行构建；这些作业只有只读权限。
 3. 发布作业汇总附件并核对精确的 24 项清单和本地 SHA-256。
-4. 不存在 Release 时创建草稿；已有草稿时清理清单外附件并恢复上传。
-5. GitHub 返回的附件名称、大小和 digest 全部匹配后，才将草稿发布。
+4. 一次调用 `gh release create <tag> <24 个附件>`；不显式传入 `--draft`。GitHub CLI
+   自动完成“临时草稿 → 上传全部附件 → 发布”，以兼容 immutable releases。
+5. 发布后核对 Release 状态和 24 个附件名称，并通过 GitHub Release attestation 及
+   `gh release verify-asset` 验证本次上传的每个本地文件。
 
 只有最终发布作业拥有 `contents: write`。Beta 会自动标记为 Pre-release 且不设为 Latest。
 
@@ -135,13 +137,16 @@ tree；AppImage 工具和 runtime 的下载提交及 SHA-256 固定，校验异�
 ## 7. 失败恢复与不可变限制
 
 - 构建或质量门禁失败：Release 作业不会运行；修复代码和版本后创建新 Tag。
-- 草稿阶段上传失败：重跑失败作业。发布脚本会复用草稿，删除清单外的旧附件，并覆盖上传
-  24 项精确清单。
-- 已发布且远端附件与本次清单完全一致：重跑视为成功，不重复修改 Release。
-- 已发布但附件缺失、名称/大小/digest 不一致：工作流明确失败。immutable Release 不能
+- 附件上传失败：GitHub CLI 不会发布不完整的 Release。直接重跑失败作业。
+- 工作流被强制取消后如果遗留草稿，发布脚本会输出草稿 URL 并失败关闭；人工确认并删除
+  该草稿后再重跑。脚本不会猜测或自动删除远端草稿。
+- 已发布且 Release 类型、Tag、24 个附件名称和 attestation 都正确：重跑视为成功，
+  不重复修改 Release。
+- 已发布但状态、附件清单或 attestation 不一致：工作流明确失败。immutable Release 不能
   修复或补传，必须修正后创建新 Tag。
 - 已经公开的 Tag 或 Release 不得改写、删除后复用。当前没有附件的 immutable
-  `v0.1.0-beta.4` 保持原样；首次端到端验收必须使用新 Tag `v0.1.0-beta.5`。
+  `v0.1.0-beta.4` 保持原样。旧工作流留下的 Beta 6/7 草稿不由 CI 自动删除；合并本次
+  修改后应使用新 Tag `v0.1.0-beta.8` 做端到端验收。
 - Tag 预检失败且尚未产生公开 Release 时，确认该 Tag 未被外部使用后才可删除错误 Tag；
   已公开版本一律递增版本并发新 Tag。
 
@@ -153,4 +158,4 @@ tree；AppImage 工具和 runtime 的下载提交及 SHA-256 固定，校验异�
 - [ ] Tag 为 `vX.Y.Z` 或 `vX.Y.Z-beta.N`，且核心版本与应用版本一致。
 - [ ] GitHub Actions 全部成功。
 - [ ] Release 类型、Latest 状态、Release Notes 和 24 个附件正确。
-- [ ] 远端 digest、本地 SHA-256、macOS 架构和目标平台启动冒烟均通过。
+- [ ] Release attestation、本地 SHA-256、macOS 架构和目标平台启动冒烟均通过。
