@@ -3,6 +3,7 @@ run-name: Release ${{ github.ref_name }}
 
 on:
   push:
+    # Tag 没有所属分支；prepare 会校验其提交必须位于 main 历史中。
     tags:
       - 'v*'
 
@@ -30,16 +31,16 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Verify tag belongs to dev
+      - name: Verify tag belongs to main
         shell: bash
         run: |
           set -euo pipefail
-          git fetch --no-tags origin dev:refs/remotes/origin/dev
+          git fetch --no-tags origin main:refs/remotes/origin/main
           tag_commit="$(git rev-parse "${GITHUB_REF_NAME}^{commit}")"
           if ! git merge-base --is-ancestor \
             "${tag_commit}" \
-            refs/remotes/origin/dev; then
-            echo "Release tag ${GITHUB_REF_NAME} is not reachable from dev." >&2
+            refs/remotes/origin/main; then
+            echo "Release tag ${GITHUB_REF_NAME} is not reachable from main." >&2
             exit 1
           fi
 
@@ -60,30 +61,11 @@ jobs:
           --github-output "${GITHUB_OUTPUT}"
 
   quality:
-    name: Analyze and test
+    name: CI quality gate
     needs: prepare
-    runs-on: ubuntu-24.04
-    timeout-minutes: 35
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
-
-      - name: Set up Flutter
-        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
-        with:
-          channel: stable
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          cache: true
-
-      - name: Install dependencies
-        run: flutter pub get --enforce-lockfile
-
-      - name: Analyze
-        run: flutter analyze
-
-      # 发版只执行一次完整门禁；根 flutter test 不覆盖内部 Package。
-      - name: Test
-        run: bash tool/test_full.sh
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci.yml
 
   windows:
     name: Build Windows x86_64

@@ -6,7 +6,7 @@
 
 Zeta 使用 [GitHub Actions 发布工作流](../../.github/workflows/release.yml) 自动构建并发布
 Windows、macOS 和 Linux 桌面安装包。工作流只监听推送到 GitHub 的 `v*` Tag；Tag
-必须指向 `dev` 分支历史中的提交，并通过下文的版本预检。
+必须指向 `main` 分支历史中的提交，并通过下文的版本预检。
 
 仓库启用了 GitHub immutable releases。发布作业把全部附件交给 GitHub CLI；CLI 会在
 内部创建临时草稿、上传附件，并在全部上传成功后公开 Release。不要预先手动创建 Release。
@@ -17,7 +17,7 @@ Gatekeeper 提示。
 
 ## 2. 发布前准备
 
-1. 确认待发布代码已经合并到 `dev`，并且本地工作区没有未提交改动。
+1. 确认待发布代码已经合并到 `main`，并且本地工作区没有未提交改动。
 2. 更新 `pubspec.yaml` 中的 `version`：
 
    ```yaml
@@ -26,7 +26,7 @@ Gatekeeper 提示。
 
    `0.2.0` 是应用数字版本，必须与 Tag 的核心版本一致；`2` 是正整数 build number。
    Windows 和 macOS 的应用元数据继续使用这两个数字字段，不写入 Beta 后缀。
-3. 提交版本变更并推送到 `dev`。
+3. 提交版本变更并推送到 `main`。
 4. 在创建 Tag 前执行完整发版门禁：
 
    ```sh
@@ -52,7 +52,7 @@ Gatekeeper 提示。
 - `v0.2.0-rc.1`：当前发布通道只支持稳定版和 Beta。
 - `0.2.0`：缺少 `v` 前缀。
 - `v0.2.0+2`：Tag 不接受 build metadata。
-- 指向 `dev` 分支历史之外提交的任何 Tag。
+- 指向 `main` 分支历史之外提交的任何 Tag。
 
 可在本地单独检查元数据：
 
@@ -69,7 +69,7 @@ dart tool/packaging/release_metadata.dart \
 以 Beta 发布为例：
 
 ```sh
-git switch dev
+git switch main
 git pull --ff-only
 git tag -a v0.2.0-beta.1 -m "Zeta v0.2.0-beta.1"
 git push origin v0.2.0-beta.1
@@ -82,8 +82,10 @@ git push origin v0.2.0-beta.1
 
 Tag 推送后的流程如下：
 
-1. `Validate release metadata` 校验 Tag 格式、`pubspec.yaml` 和 `dev` 可达性。
-2. 完整质量门禁通过后，Windows、macOS、Linux 三个平台并行构建；这些作业只有只读权限。
+1. `Validate release metadata` 校验 Tag 格式、`pubspec.yaml` 和 `main` 可达性。
+2. Release 调用同一提交中的 reusable CI，执行格式、分析、六个测试分片和内部 Package
+   门禁；全部通过后，Windows、macOS、Linux 三个平台并行构建。普通 CI 只监听分支和 PR，
+   Tag push 不会再额外启动一份独立 CI。
 3. 发布作业汇总附件并核对精确的 24 项清单和本地 SHA-256。
 4. 一次调用 `gh release create <tag> <24 个附件>`；不显式传入 `--draft`。GitHub CLI
    自动完成“临时草稿 → 上传全部附件 → 发布”，以兼容 immutable releases。
@@ -153,7 +155,7 @@ tree；AppImage 工具和 runtime 的下载提交及 SHA-256 固定，校验异�
 ## 8. 发布检查清单
 
 - [ ] `pubspec.yaml` 的数字版本和正整数 build number 已更新。
-- [ ] 版本提交已合并并推送到 `dev`。
+- [ ] 版本提交已合并并推送到 `main`。
 - [ ] `flutter analyze` 和 `bash tool/test_full.sh` 已通过。
 - [ ] Tag 为 `vX.Y.Z` 或 `vX.Y.Z-beta.N`，且核心版本与应用版本一致。
 - [ ] GitHub Actions 全部成功。

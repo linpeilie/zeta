@@ -8,7 +8,7 @@
 
 macOS · Windows · Linux ｜ 本地运行 ｜ 开源
 
-[![CI](https://github.com/linpeilie/zeta/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/linpeilie/zeta/actions/workflows/ci.yml)
+[![CI](https://github.com/linpeilie/zeta/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/linpeilie/zeta/actions/workflows/ci.yml)
 [![Release](https://github.com/linpeilie/zeta/actions/workflows/release.yml/badge.svg)](https://github.com/linpeilie/zeta/actions/workflows/release.yml)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
