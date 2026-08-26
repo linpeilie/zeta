@@ -6,19 +6,20 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:zeta/src/app/settings_slice/settings_slice_overrides.dart';
 import 'package:zeta/src/app/storage/zeta_store_providers.dart';
-import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_store.dart';
+
+import 'package:zeta/src/features/settings/application/appearance_settings_notifier.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_store.dart';
+import 'package:zeta/src/features/settings/presentation/settings_slice/settings_slice_providers.dart';
 import 'package:zeta/src/features/settings/presentation/appearance_theme_mode_mapper.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_mapping.dart';
-import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
 import 'package:zeta/src/features/settings/data/general_settings_store.dart';
-import 'package:zeta/src/features/settings/data/system_font_catalog_service.dart';
+import 'package:zeta/src/features/settings/domain/appearance_settings_repository.dart';
+import 'package:zeta/src/features/settings/domain/system_font_catalog_service.dart';
 import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/settings/domain/system_font_family.dart';
 import 'package:zeta/src/features/settings/presentation/settings_page.dart';
-import 'package:zeta/src/features/settings/presentation/settings_slice/settings_slice_providers.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
 import '../testing/memory_feature_stores.dart';
@@ -407,7 +408,7 @@ void main() {
         tester.widget<Text>(find.text('主题模式')).style?.color;
 
     expect(
-      settings.appearanceStore.state.value.themeMode,
+      settings.container.read(appearanceSettingsValueProvider).themeMode,
       ZetaThemeModePreference.system,
     );
     expect(
@@ -424,7 +425,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      settings.appearanceStore.state.value.themeMode,
+      settings.container.read(appearanceSettingsValueProvider).themeMode,
       ZetaThemeModePreference.dark,
     );
     expect(
@@ -442,7 +443,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      settings.appearanceStore.state.value.themeMode,
+      settings.container.read(appearanceSettingsValueProvider).themeMode,
       ZetaThemeModePreference.light,
     );
     expect(
@@ -529,7 +530,7 @@ void main() {
     await _pumpSelectOverlay(tester);
 
     expect(
-      settings.appearanceStore.state.value.uiFontChoice,
+      settings.container.read(appearanceSettingsValueProvider).uiFontChoice,
       const AppearanceFontChoice.system('Source Han Sans'),
     );
     expect(find.text('思源黑体'), findsOneWidget);
@@ -558,7 +559,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(settings.appearanceStore.state.value.uiFontSize, 13);
+    expect(
+      settings.container.read(appearanceSettingsValueProvider).uiFontSize,
+      13,
+    );
     expect(headingFontSize(), closeTo(13, 0.001));
 
     await tester.tap(
@@ -566,7 +570,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(settings.appearanceStore.state.value.codeFontSize, 13);
+    expect(
+      settings.container.read(appearanceSettingsValueProvider).codeFontSize,
+      13,
+    );
     expect(
       tester
           .widget<Text>(
@@ -661,7 +668,7 @@ void main() {
       await _pumpSelectOverlay(tester);
 
       expect(
-        settings.appearanceStore.state.value.codeFontChoice,
+        settings.container.read(appearanceSettingsValueProvider).codeFontChoice,
         const AppearanceFontChoice.system('Cascadia Mono'),
       );
       expect(find.text('Cascadia Mono'), findsOneWidget);
@@ -691,7 +698,7 @@ void main() {
 
     expect(find.text('无法加载所选界面字体。'), findsOneWidget);
     expect(
-      settings.appearanceStore.state.value.uiFontChoice,
+      settings.container.read(appearanceSettingsValueProvider).uiFontChoice,
       isNot(const AppearanceFontChoice.system('Broken UI')),
     );
 
@@ -707,20 +714,20 @@ Future<void> _pumpSelectOverlay(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 300));
 }
 
-/// 两个切片 store 的句柄；断言只关心 store，不关心容器怎么装配出来的。
+/// 设置装配句柄。
 final class _SettingsSliceHandle {
   const _SettingsSliceHandle({
-    required this.appearanceStore,
+    required this.container,
     required this.generalStore,
   });
 
-  final AppearanceSettingsSliceStore appearanceStore;
+  final ProviderContainer container;
   final GeneralSettingsSliceStore generalStore;
 }
 
 Future<_SettingsSliceHandle> _pumpSettingsPage(
   WidgetTester tester, {
-  AppearanceSettingsStore? appearanceSettingsStore,
+  AppearanceSettingsRepository? appearanceSettingsStore,
   GeneralSettingsStore? generalSettingsStore,
   SystemFontCatalogService? fontCatalog,
   AppearanceSettings? initialAppearanceSettings,
@@ -746,21 +753,21 @@ Future<_SettingsSliceHandle> _pumpSettingsPage(
       ),
       if (initialAppearanceSettings case final settings?)
         initialAppearanceSettingsProvider.overrideWithValue(settings),
-      appearanceSettingsStoreProvider.overrideWithValue(
-        appearanceSettingsStore ?? MemoryAppearanceSettingsStore(),
-      ),
       generalSettingsStoreProvider.overrideWithValue(
         generalSettingsStore ?? MemoryGeneralSettingsStore(),
       ),
-      systemFontCatalogServiceProvider.overrideWithValue(
+      ...settingsSliceOverrides(),
+      appearanceSettingsRepositoryProvider.overrideWithValue(
+        appearanceSettingsStore ?? MemoryAppearanceSettingsStore(),
+      ),
+      appearanceFontCatalogProvider.overrideWithValue(
         fontCatalog ?? const _FakeSystemFontCatalogService(),
       ),
-      ...settingsSliceOverrides(),
     ],
   );
   addTearDown(container.dispose);
   final settings = _SettingsSliceHandle(
-    appearanceStore: container.read(appearanceSettingsSliceStoreProvider),
+    container: container,
     generalStore: container.read(generalSettingsSliceStoreProvider),
   );
   await settings.generalStore.initialLoad;
@@ -771,7 +778,7 @@ Future<_SettingsSliceHandle> _pumpSettingsPage(
       child: Consumer(
         builder: (context, ref, _) {
           final appearance = appearanceSettingsFromSlice(
-            ref.watch(appearanceSettingsSliceValueProvider),
+            ref.watch(appearanceSettingsValueProvider),
           );
           final lightIdeTheme = buildIdeThemeData(
             brightness: Brightness.light,

@@ -6,9 +6,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/app/composition/zeta_host_mode.dart';
 import 'package:zeta/src/app/app.dart';
-import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
+import 'package:zeta/src/features/settings/application/appearance_settings_notifier.dart';
 import 'package:zeta/src/features/settings/data/general_settings_store.dart';
-import 'package:zeta/src/features/settings/data/system_font_catalog_service.dart';
+import 'package:zeta/src/features/settings/domain/appearance_settings_repository.dart';
+import 'package:zeta/src/features/settings/domain/system_font_catalog_service.dart';
 import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
@@ -151,9 +152,9 @@ void main() {
     container
         .read(generalSettingsSliceStoreProvider)
         .setAppLanguage(AppLanguage.english);
-    container
-        .read(appearanceSettingsSliceStoreProvider)
-        .selectThemeMode(ZetaThemeModePreference.light);
+    await container
+        .read(appearanceSettingsProvider.notifier)
+        .setThemeMode(ZetaThemeModePreference.light);
     await tester.pump();
 
     expect(tester.element(find.byType(IdeHome)), same(first));
@@ -254,7 +255,7 @@ Future<void> _pumpMainApp(
   WidgetTester tester, {
   Key? key,
   GeneralSettingsStore? generalSettingsStore,
-  AppearanceSettingsStore? appearanceSettingsStore,
+  AppearanceSettingsRepository? appearanceSettingsStore,
   SystemFontCatalogService? systemFontCatalogService,
   AppearanceSettings? initialAppearanceSettings,
   AppLanguage? displayLanguageOverride,

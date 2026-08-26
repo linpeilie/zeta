@@ -27,7 +27,7 @@ void main() {
       'FileClaudeCodeSessionDecisionStore(',
       'FileClaudeCodeHiddenThreadStore(',
       'AgentModelCatalogRepository(',
-      'FileAppearanceSettingsStore(',
+      'FileAppearanceSettingsRepository(',
       'MemoryAppearanceSettingsStore(',
       'FileGeneralSettingsStore(',
       'MemoryGeneralSettingsStore(',

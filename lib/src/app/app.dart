@@ -30,6 +30,7 @@ import 'package:zeta/src/app/window_bootstrap.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta/src/app/storage/zeta_storage_bindings.dart';
 import 'package:zeta/src/app/storage/zeta_store_providers.dart';
+import 'package:zeta/src/features/settings/application/appearance_settings_notifier.dart';
 import 'package:zeta/src/ui/core/system_file_manager.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
@@ -48,7 +49,6 @@ import 'package:zeta/src/features/agent_management/domain/agent_management_model
 import 'package:zeta/src/features/agent_management/domain/agent_management_text_catalog.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_session_slice_notifier.dart';
-import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
 import 'package:zeta/src/features/settings/data/general_settings_store.dart';
 import 'package:zeta/src/features/settings/presentation/appearance_theme_mode_mapper.dart';
 import 'package:zeta/src/features/settings/presentation/settings_slice/settings_slice_providers.dart';
@@ -56,6 +56,8 @@ import 'package:zeta/src/features/settings/application/settings_slice/appearance
 import 'package:zeta/src/features/settings/data/system_font_catalog_service.dart';
 import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
+import 'package:zeta/src/features/settings/domain/appearance_settings_repository.dart';
+import 'package:zeta/src/features/settings/domain/system_font_catalog_service.dart';
 import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partition_store.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_text_catalog.dart';
@@ -117,7 +119,7 @@ class MainApp extends StatefulWidget {
   final ProjectLocationOpener? projectLocationOpener;
 
   /// 外观持久化端口注入点；测试可传内存实现避免触碰真实用户文件。
-  final AppearanceSettingsStore? appearanceSettingsStore;
+  final AppearanceSettingsRepository? appearanceSettingsStore;
 
   /// 启动阶段已读入的外观偏好，供第一帧使用，避免先按默认 system 再跳变。
   final AppearanceSettings? initialAppearanceSettings;
@@ -233,9 +235,7 @@ class MainAppState extends State<MainApp>
       desktopAttention: ZetaDesktopAttentionStateSnapshot.fromState(
         _requiredDesktopAttentionComposition.store.state,
       ),
-      appearanceSettings: _container
-          .read(appearanceSettingsSliceStoreProvider)
-          .state,
+      appearanceSettings: _container.read(appearanceSettingsProvider),
       generalSettings: _container.read(generalSettingsSliceStoreProvider).state,
       providerSettings: _requiredProviderSettingsComposition.store.state,
     );
@@ -552,8 +552,6 @@ class MainAppState extends State<MainApp>
       agentProviderSettingsCodecProvider.overrideWith(
         (ref) => _agentProviderSettingsCodec,
       ),
-      if (widget.initialAppearanceSettings case final settings?)
-        initialAppearanceSettingsProvider.overrideWithValue(settings),
       if (widget.ideSessionStore case final store?)
         ideSessionStoreProvider.overrideWithValue(store),
       if (widget.usageStatisticsPartitionStore case final store?)
@@ -564,15 +562,18 @@ class MainAppState extends State<MainApp>
         agentTurnContextStoreProvider.overrideWithValue(store),
       if (widget.agentProviderConfigStore case final store?)
         agentProviderConfigStoreProvider.overrideWithValue(store),
-      if (widget.appearanceSettingsStore case final store?)
-        appearanceSettingsStoreProvider.overrideWithValue(store),
       if (widget.generalSettingsStore case final store?)
         generalSettingsStoreProvider.overrideWithValue(store),
-      if (widget.systemFontCatalogService case final catalog?)
-        systemFontCatalogServiceProvider.overrideWithValue(catalog),
       zetaMetricsPortProvider.overrideWith((ref) => _metrics),
       ...ideSessionSliceOverrides(),
       ...settingsSliceOverrides(),
+      if (widget.initialAppearanceSettings case final settings?)
+        initialAppearanceSettingsProvider.overrideWithValue(settings),
+      appearanceSettingsRepositoryOverride(widget.appearanceSettingsStore),
+      appearanceFontCatalogProvider.overrideWith((ref) {
+        return widget.systemFontCatalogService ??
+            DesktopSystemFontCatalogService();
+      }),
       agentConversationSliceStoreRegistryProvider.overrideWithValue(
         _conversationSliceStoreRegistry,
       ),
@@ -600,9 +601,7 @@ class MainAppState extends State<MainApp>
   Widget _buildApp(BuildContext context) {
     return Consumer(
       builder: (context, ref, _) => _buildThemedApp(
-        appearanceSettingsFromSlice(
-          ref.watch(appearanceSettingsSliceValueProvider),
-        ),
+        appearanceSettingsFromSlice(ref.watch(appearanceSettingsValueProvider)),
       ),
     );
   }

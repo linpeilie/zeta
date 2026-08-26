@@ -7,7 +7,7 @@ import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 
 void main() {
-  group('FileAppearanceSettingsStore', () {
+  group('FileAppearanceSettingsRepository', () {
     late Directory tempDirectory;
     late File settingsFile;
 
@@ -27,7 +27,7 @@ void main() {
     });
 
     test('loads default appearance settings when storage is empty', () async {
-      final store = FileAppearanceSettingsStore(
+      final store = FileAppearanceSettingsRepository(
         storage: FileStorageService(settingsFile),
       );
 
@@ -35,7 +35,7 @@ void main() {
     });
 
     test('saves versioned appearance settings json', () async {
-      final store = FileAppearanceSettingsStore(
+      final store = FileAppearanceSettingsRepository(
         storage: FileStorageService(settingsFile),
       );
 
@@ -84,7 +84,7 @@ void main() {
           'codeFontSize': 'large',
         }),
       );
-      final store = FileAppearanceSettingsStore(
+      final store = FileAppearanceSettingsRepository(
         storage: FileStorageService(settingsFile),
       );
 
@@ -96,7 +96,7 @@ void main() {
 
     test('falls back to defaults on invalid json', () async {
       await settingsFile.writeAsString('{not-json');
-      final store = FileAppearanceSettingsStore(
+      final store = FileAppearanceSettingsRepository(
         storage: FileStorageService(settingsFile),
       );
 
@@ -105,7 +105,7 @@ void main() {
 
     test('falls back to defaults on invalid UTF-8', () async {
       await settingsFile.writeAsBytes(<int>[0xff]);
-      final store = FileAppearanceSettingsStore(
+      final store = FileAppearanceSettingsRepository(
         storage: FileStorageService(settingsFile),
       );
 
@@ -117,7 +117,7 @@ void main() {
         '${tempDirectory.path}${Platform.pathSeparator}blocked',
       );
       await blockedParent.writeAsString('not a directory');
-      final store = FileAppearanceSettingsStore(
+      final store = FileAppearanceSettingsRepository(
         storage: FileStorageService(
           File('${blockedParent.path}${Platform.pathSeparator}appearance.json'),
         ),

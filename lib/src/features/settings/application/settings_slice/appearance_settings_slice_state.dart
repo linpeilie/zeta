@@ -6,9 +6,8 @@ import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 
 /// 字体目录的只读投影（source of truth 是 `SystemFontCatalogService`）。
 ///
-/// 缓存四元组：source of truth = 系统字体目录服务；key = 目录槽位
-/// （界面 / 代码）；invalidation = 显式 `AppearanceFontCatalogRequested`；
-/// budget = 进程内，列表随系统目录规模有限。
+/// 这不是外观文档的进程内缓存：列表只在设置页打开下拉时由 Notifier
+/// `ensureFontCatalog` 填入，避免每次展开都打原生通道。
 @immutable
 final class AppearanceFontCatalogProjection {
   const AppearanceFontCatalogProjection({

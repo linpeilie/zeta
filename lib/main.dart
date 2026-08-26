@@ -70,7 +70,9 @@ Future<AppearanceSettings> _loadLaunchAppearance(
   StorageService appearanceStorage,
 ) async {
   try {
-    return await FileAppearanceSettingsStore(storage: appearanceStorage).load();
+    return await FileAppearanceSettingsRepository(
+      storage: appearanceStorage,
+    ).load();
   } catch (error, stackTrace) {
     loggerFor('zeta.storage').w(
       'Could not load appearance settings before showing the window',

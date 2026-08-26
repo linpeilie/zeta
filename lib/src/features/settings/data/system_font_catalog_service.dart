@@ -1,22 +1,13 @@
 import 'dart:io';
 
 import 'package:flutter/services.dart';
+import 'package:zeta/src/features/settings/domain/system_font_catalog_service.dart';
 import 'package:zeta/src/features/settings/domain/system_font_family.dart';
 
 const String systemFontCatalogChannelName = 'zeta/system_fonts';
 
 typedef NativeFontFamilyLoader =
     Future<List<Object?>> Function(String localeName);
-
-/// 桌面系统字体目录服务。
-abstract class SystemFontCatalogService {
-  Future<List<SystemFontFamily>> uiFontFamilies();
-
-  Future<List<SystemFontFamily>> codeFontFamilies();
-
-  /// 按当前字体目录中的真实家族名解析字体。
-  Future<SystemFontFamily?> resolveFontFamily(String name);
-}
 
 /// 基于 DirectWrite、CoreText 和 Fontconfig 的系统字体目录实现。
 class DesktopSystemFontCatalogService implements SystemFontCatalogService {

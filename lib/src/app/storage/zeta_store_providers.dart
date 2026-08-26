@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 
@@ -9,11 +10,11 @@ import 'package:zeta/src/features/agent/data/agent_provider_config_codec.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/data/agent_turn_context_store.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
+import 'package:zeta/src/features/settings/application/appearance_settings_notifier.dart';
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
 import 'package:zeta/src/features/settings/data/general_settings_store.dart';
-import 'package:zeta/src/features/settings/data/system_font_catalog_service.dart';
 import 'package:zeta/src/features/settings/domain/app_language.dart';
-import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
+import 'package:zeta/src/features/settings/domain/appearance_settings_repository.dart';
 import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partition_store.dart';
 
 /// 应用级 feature data 的唯一装配点。
@@ -40,12 +41,6 @@ import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partiti
 final settingsFallbackLanguageProvider = Provider<AppLanguage>(
   (ref) => AppLanguage.simplifiedChinese,
   name: 'settingsFallbackLanguage',
-);
-
-/// 启动阶段已读入的外观偏好，供第一帧使用，避免先按默认 system 再跳变。
-final initialAppearanceSettingsProvider = Provider<AppearanceSettings>(
-  (ref) => const AppearanceSettings(),
-  name: 'initialAppearanceSettings',
 );
 
 /// Provider 配置的编解码器。
@@ -130,14 +125,6 @@ final claudeCodeSessionDecisionStoreFactoryProvider =
           FileClaudeCodeSessionDecisionStore(storage: openStorage(sessionId));
     }, name: 'claudeCodeSessionDecisionStoreFactory');
 
-/// 外观偏好仓库。
-final appearanceSettingsStoreProvider = Provider<AppearanceSettingsStore>(
-  (ref) => FileAppearanceSettingsStore(
-    storage: ref.watch(appearanceStorageProvider),
-  ),
-  name: 'appearanceSettingsStore',
-);
-
 /// 常规设置仓库。
 final generalSettingsStoreProvider = Provider<GeneralSettingsStore>(
   (ref) => FileGeneralSettingsStore(
@@ -147,10 +134,16 @@ final generalSettingsStoreProvider = Provider<GeneralSettingsStore>(
   name: 'generalSettingsStore',
 );
 
-/// 系统字体目录服务。
-///
-/// 走原生通道，Widget 测试可覆盖成确定性实现。
-final systemFontCatalogServiceProvider = Provider<SystemFontCatalogService>(
-  (ref) => DesktopSystemFontCatalogService(),
-  name: 'systemFontCatalogService',
-);
+/// 外观仓库装配。生产走 [FileAppearanceSettingsRepository]，不缓存；测试传入内存实现。
+Override appearanceSettingsRepositoryOverride([
+  AppearanceSettingsRepository? injected,
+]) {
+  if (injected != null) {
+    return appearanceSettingsRepositoryProvider.overrideWithValue(injected);
+  }
+  return appearanceSettingsRepositoryProvider.overrideWith(
+    (ref) => FileAppearanceSettingsRepository(
+      storage: ref.watch(appearanceStorageProvider),
+    ),
+  );
+}

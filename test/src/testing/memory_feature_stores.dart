@@ -1,15 +1,15 @@
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 
-import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
 import 'package:zeta/src/features/settings/data/general_settings_store.dart';
+import 'package:zeta/src/features/settings/domain/appearance_settings_repository.dart';
 import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partition_store.dart';
 
 /// 测试用外观仓库：预置 typed 状态，不走 JSON。
-class MemoryAppearanceSettingsStore implements AppearanceSettingsStore {
+class MemoryAppearanceSettingsStore implements AppearanceSettingsRepository {
   MemoryAppearanceSettingsStore([AppearanceSettings? settings])
     : _settings = settings ?? const AppearanceSettings();
 

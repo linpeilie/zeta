@@ -25,3 +25,15 @@ AppearanceSettings appearanceSettingsFromSlice(AppearanceSettingsSlice value) {
     codeFontSize: value.codeFontSize,
   );
 }
+
+/// 字号归一化：四舍五入到整数并夹取到领域范围。非有限值返回 null。
+double? normalizeSettingsFontSize(
+  double value, {
+  required double min,
+  required double max,
+}) {
+  if (!value.isFinite) {
+    return null;
+  }
+  return value.roundToDouble().clamp(min, max);
+}

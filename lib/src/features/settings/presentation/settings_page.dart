@@ -16,8 +16,8 @@ import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_state.dart';
 import 'package:zeta/src/features/settings/presentation/settings_slice/settings_slice_providers.dart';
+import 'package:zeta/src/features/settings/application/appearance_settings_notifier.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_state.dart';
-import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_store.dart';
 
 enum SettingsSection { general, appearance, agents }
 
@@ -463,7 +463,7 @@ class _AppearanceSettingsPane extends ConsumerStatefulWidget {
 
 class _AppearanceSettingsPaneState
     extends ConsumerState<_AppearanceSettingsPane> {
-  /// 缓存的写操作集与它所属的 store 身份。
+  /// 缓存的写操作集与它所属的 notifier 身份。
   Object? _opsOwner;
   _AppearanceWriteOps? _ops;
 
@@ -480,13 +480,9 @@ class _AppearanceSettingsPaneState
 
   @override
   Widget build(BuildContext context) {
-    final store = ref.watch(appearanceSettingsSliceStoreProvider);
-    return _buildSlice(context, store);
-  }
-
-  Widget _buildSlice(BuildContext context, AppearanceSettingsSliceStore store) {
-    final ops = _opsFor(store, () => _sliceOps(store));
-    final settings = ref.watch(appearanceSettingsSliceValueProvider);
+    final notifier = ref.read(appearanceSettingsProvider.notifier);
+    final ops = _opsFor(notifier, () => _notifierOps(notifier));
+    final settings = ref.watch(appearanceSettingsValueProvider);
     return IdeSurface.canvas(
       key: const ValueKey('settings-detail-panel'),
       child: _appearanceSettingsBody(
@@ -498,105 +494,23 @@ class _AppearanceSettingsPaneState
     );
   }
 
-  _AppearanceWriteOps _sliceOps(AppearanceSettingsSliceStore store) {
+  _AppearanceWriteOps _notifierOps(AppearanceSettingsNotifier notifier) {
     return (
-      setThemeMode: store.selectThemeMode,
-      setUiFontSize: store.adjustUiFontSize,
-      setCodeFontSize: store.adjustCodeFontSize,
-      loadUiFontChoices: () => _loadFontChoices(store, forCodeFont: false),
-      loadCodeFontChoices: () => _loadFontChoices(store, forCodeFont: true),
-      setUiFontChoice: (choice) =>
-          _selectFontChoice(store, choice, forCodeFont: false),
-      setCodeFontChoice: (choice) =>
-          _selectFontChoice(store, choice, forCodeFont: true),
-      displayNameFor: (choice) => _displayNameFor(store, choice),
+      setThemeMode: (mode) {
+        unawaited(notifier.setThemeMode(mode));
+      },
+      setUiFontSize: (value) {
+        unawaited(notifier.setUiFontSize(value));
+      },
+      setCodeFontSize: (value) {
+        unawaited(notifier.setCodeFontSize(value));
+      },
+      loadUiFontChoices: () => notifier.ensureFontCatalog(forCodeFont: false),
+      loadCodeFontChoices: () => notifier.ensureFontCatalog(forCodeFont: true),
+      setUiFontChoice: notifier.setUiFontChoice,
+      setCodeFontChoice: notifier.setCodeFontChoice,
+      displayNameFor: notifier.displayNameFor,
     );
-  }
-
-  /// 目录已在切片里就直接返回，否则请求一次并等回流。
-  Future<List<AppearanceFontOption>> _loadFontChoices(
-    AppearanceSettingsSliceStore store, {
-    required bool forCodeFont,
-  }) {
-    List<AppearanceFontOption>? current() => forCodeFont
-        ? store.state.catalog.codeOptions
-        : store.state.catalog.uiOptions;
-
-    final loaded = current();
-    if (loaded != null) {
-      return Future<List<AppearanceFontOption>>.value(loaded);
-    }
-    final completer = Completer<List<AppearanceFontOption>>();
-    late final void Function() unsubscribe;
-    unsubscribe = store.subscribe(() {
-      final options = current();
-      if (options == null || completer.isCompleted) {
-        return;
-      }
-      unsubscribe();
-      completer.complete(options);
-    });
-    store.requestFontCatalog(forCodeFont: forCodeFont);
-    // 请求可能同步回流；这种情况下上面的订阅不会触发。
-    final afterRequest = current();
-    if (afterRequest != null && !completer.isCompleted) {
-      unsubscribe();
-      completer.complete(afterRequest);
-    }
-    return completer.future;
-  }
-
-  /// 派发字体选择并等这次操作收口。
-  ///
-  /// 成功的判据是**值真的变了**：被拒绝时切片会回滚到原值，行据此弹错误 toast，
-  /// 行级 `_updating` 已保证单飞。
-  Future<bool> _selectFontChoice(
-    AppearanceSettingsSliceStore store,
-    AppearanceFontChoice choice, {
-    required bool forCodeFont,
-  }) {
-    final operationId = forCodeFont
-        ? store.selectCodeFontChoice(choice)
-        : store.selectUiFontChoice(choice);
-
-    bool stillPending() {
-      final pending = forCodeFont
-          ? store.state.pendingCodeFontChoiceOperationId
-          : store.state.pendingUiFontChoiceOperationId;
-      return pending == operationId;
-    }
-
-    bool applied() {
-      final value = forCodeFont
-          ? store.state.value.codeFontChoice
-          : store.state.value.uiFontChoice;
-      return value == choice;
-    }
-
-    if (!stillPending()) {
-      return Future<bool>.value(applied());
-    }
-    final completer = Completer<bool>();
-    late final void Function() unsubscribe;
-    unsubscribe = store.subscribe(() {
-      if (stillPending() || completer.isCompleted) {
-        return;
-      }
-      unsubscribe();
-      completer.complete(applied());
-    });
-    return completer.future;
-  }
-
-  String _displayNameFor(
-    AppearanceSettingsSliceStore store,
-    AppearanceFontChoice choice,
-  ) {
-    final family = choice.fontFamily;
-    if (family == null) {
-      return '';
-    }
-    return store.state.catalog.displayNames[family.toLowerCase()] ?? family;
   }
 
   List<_ThemeModeTabSpec> _tabs(BuildContext context) {
