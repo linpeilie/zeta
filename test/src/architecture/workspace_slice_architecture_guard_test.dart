@@ -3,38 +3,38 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('workspace reducer/store stay pure and Flutter stays out', () {
-    // intent / effect / state / reducer 是纯数据与纯函数：它们不发布状态，
-    // 因此连纯 Dart 的 package:riverpod 都不该出现（工程规范 §3.0）。
+  test('workspace notifier owns state and Flutter stays out of application', () {
+    const ownerFiles = <String>[
+      'lib/src/features/workspace/application/workspace_notifier.dart',
+      'lib/src/features/workspace/application/workspace_file_tree_notifier.dart',
+      'lib/src/features/workspace/application/workspace_file_corpus.dart',
+    ];
     const pureFiles = <String>[
       'lib/src/features/workspace/application/workspace_file_corpus_port.dart',
-      'lib/src/features/workspace/application/workspace_slice/workspace_slice_effect.dart',
-      'lib/src/features/workspace/application/workspace_slice/workspace_slice_intent.dart',
-      'lib/src/features/workspace/application/workspace_slice/workspace_slice_reducer.dart',
-      'lib/src/features/workspace/application/workspace_slice/workspace_slice_state.dart',
+      'lib/src/features/workspace/application/workspace_restore_snapshot.dart',
+      'lib/src/features/workspace/domain/workspace_project.dart',
+      'lib/src/features/workspace/domain/workspace_directory_catalog.dart',
     ];
-    // store 是状态 owner：允许 flutter_riverpod。
-    const ownerFiles = <String>[
-      'lib/src/features/workspace/application/workspace_slice/workspace_slice_store.dart',
-    ];
+    for (final path in [...pureFiles, ...ownerFiles]) {
+      final source = File(path).readAsStringSync();
+      expect(source, isNot(contains('package:flutter/')), reason: path);
+      expect(source, isNot(contains("import 'dart:io'")), reason: path);
+    }
     for (final path in pureFiles) {
       final source = File(path).readAsStringSync();
-      expect(source, isNot(contains('package:flutter/')), reason: path);
       expect(source, isNot(contains('riverpod')), reason: path);
-      expect(source, isNot(contains("import 'dart:io'")), reason: path);
-    }
-    for (final path in ownerFiles) {
-      final source = File(path).readAsStringSync();
-      expect(source, isNot(contains('package:flutter/')), reason: path);
-      expect(source, isNot(contains("import 'dart:io'")), reason: path);
     }
 
-    final reducer = File(
-      'lib/src/features/workspace/application/workspace_slice/workspace_slice_reducer.dart',
+    final notifier = File(
+      'lib/src/features/workspace/application/workspace_notifier.dart',
     ).readAsStringSync();
-    expect(reducer, isNot(contains('Timer(')));
-    expect(reducer, isNot(contains('Future<')));
-    expect(reducer, isNot(contains('Directory(')));
+    expect(notifier, contains('typedef WorkspaceDirectoryPicker'));
+    expect(notifier, isNot(contains('_Deferred')));
+
+    final fileTree = File(
+      'lib/src/features/workspace/application/workspace_file_tree_notifier.dart',
+    ).readAsStringSync();
+    expect(fileTree, contains('NotifierProvider.family'));
   });
 
   test('workspace index and production mention chain do not use ChangeNotifier', () {
@@ -56,7 +56,7 @@ void main() {
     }
   });
 
-  test('batch 4a is closed and Shell cannot regain workspace ownership', () {
+  test('Shell cannot regain workspace ownership', () {
     for (final path in const <String>[
       'lib/main.dart',
       'lib/src/app/app.dart',
@@ -65,6 +65,12 @@ void main() {
     ]) {
       final source = File(path).readAsStringSync();
       expect(source, isNot(contains('workspaceSliceEnabled')), reason: path);
+      expect(source, isNot(contains('WorkspaceSliceStore')), reason: path);
+      expect(
+        source,
+        isNot(contains('_DeferredWorkspaceSliceRunner')),
+        reason: path,
+      );
     }
 
     final shell = File(
@@ -85,6 +91,19 @@ void main() {
     expect(shell, isNot(contains("import 'dart:io'")));
     expect(shell, isNot(contains('workspace_tree_builder.dart')));
     expect(shell, isNot(contains('buildWorkspaceDirectoryChildren(')));
-    expect(shell, contains('workspaceSliceStore.loadProject(path)'));
+    expect(shell, contains('openOrActivate(path)'));
+  });
+
+  test('directory catalog IO lives in data, not domain', () {
+    final domain = File(
+      'lib/src/features/workspace/domain/workspace_directory_catalog.dart',
+    ).readAsStringSync();
+    expect(domain, isNot(contains("import 'dart:io'")));
+
+    final data = File(
+      'lib/src/features/workspace/data/io_workspace_directory_catalog.dart',
+    ).readAsStringSync();
+    expect(data, contains("import 'dart:io'"));
+    expect(data, contains('IoWorkspaceDirectoryCatalog'));
   });
 }

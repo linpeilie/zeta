@@ -167,7 +167,7 @@ void main() {
       'CallbackIdeSessionStore',
       '_usesCallbackPersistence',
       // Shell 曾用四个闭包拼 @mention 语料端口，等于把 Workspace 的索引就绪语义
-      // 和目录树回退规则搬进了 Shell。现在由 WorkspaceSliceFileCorpus 自己组装。
+      // 和目录树回退规则搬进了 Shell。现在由 WorkspaceFileCorpus 自己组装。
       'CallbackWorkspaceFileCorpusPort',
       // Project Threads 曾是 controller → adapter → store 三层一比一转发；
       // 业务副作用现在直接在 ProjectThreadsSliceRunner 里执行。

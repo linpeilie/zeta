@@ -2,13 +2,15 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:zeta/src/app/workspace_slice/workspace_slice_composition.dart';
 import 'package:zeta/src/features/workspace/application/workspace_file_index_controller.dart';
+import 'package:zeta/src/features/workspace/data/io_workspace_directory_catalog.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
+
+import '../../testing/workspace_test_bindings.dart';
 
 void main() {
   test(
-    'runner reads only the requested tree layer and starts the index',
+    'opening a project reads only the requested tree layer and starts the index',
     () async {
       final root = Directory.systemTemp.createTempSync('zeta_workspace_slice_');
       addTearDown(() => root.deleteSync(recursive: true));
@@ -30,43 +32,49 @@ void main() {
         watchDirectory: (_) => const Stream.empty(),
       );
       addTearDown(index.dispose);
-      final composition = WorkspaceSliceComposition.create(
-        fileIndexController: index,
+      final bindings = WorkspaceTestBindings(
+        catalog: const IoWorkspaceDirectoryCatalog(),
+        index: index,
         now: () => DateTime(2026, 8, 23),
       );
-      addTearDown(composition.dispose);
+      addTearDown(bindings.dispose);
 
-      expect(await composition.store.loadProject(root.path), isTrue);
+      expect(await bindings.notifier.openOrActivate(root.path), isTrue);
       await Future<void>.delayed(Duration.zero);
       expect(walkCount, 1);
-      expect(composition.store.state.tree.map((node) => node.name), <String>[
-        'lib',
-      ]);
-      expect(composition.store.state.tree.single.childrenLoaded, isFalse);
+      expect(
+        bindings.notifier.activeFileTree.tree.map((node) => node.name),
+        <String>['lib'],
+      );
+      expect(
+        bindings.notifier.activeFileTree.tree.single.childrenLoaded,
+        isFalse,
+      );
 
-      composition.store.setDirectoryExpanded(lib.path, true);
-      final loaded = composition.store.state.tree.single;
+      bindings.notifier.setDirectoryExpanded(lib.path, true);
+      final loaded = bindings.notifier.activeFileTree.tree.single;
       expect(loaded.childrenLoaded, isTrue);
       expect(loaded.children.single.name, 'main.dart');
     },
   );
 
-  test('runner reports a missing project without committing it', () async {
+  test('missing project is not committed', () async {
     final index = WorkspaceFileIndexController(
       runWalk: (_) async => const <WorkspaceNode>[],
       watchDirectory: (_) => const Stream.empty(),
     );
     addTearDown(index.dispose);
-    final composition = WorkspaceSliceComposition.create(
-      fileIndexController: index,
+    final bindings = WorkspaceTestBindings(
+      catalog: const IoWorkspaceDirectoryCatalog(),
+      index: index,
     );
-    addTearDown(composition.dispose);
+    addTearDown(bindings.dispose);
 
-    await expectLater(
-      composition.store.loadProject('/zeta/missing/workspace'),
-      throwsA(isA<FileSystemException>()),
+    expect(
+      await bindings.notifier.openOrActivate('/zeta/missing/workspace'),
+      isFalse,
     );
-    expect(composition.store.state.activeProjectPath, isNull);
-    expect(composition.store.state.isLoadingProject, isFalse);
+    expect(bindings.notifier.state.activeProjectPath, isNull);
+    expect(bindings.notifier.activeFileTree.isLoading, isFalse);
   });
 }

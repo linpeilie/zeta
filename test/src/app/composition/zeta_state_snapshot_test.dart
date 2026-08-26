@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/app/composition/zeta_state_snapshot.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_state.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
-import 'package:zeta/src/features/workspace/application/workspace_slice/workspace_slice_state.dart';
+import 'package:zeta/src/features/workspace/domain/workspace_project.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 void main() {
@@ -69,7 +69,11 @@ void main() {
       ),
     };
     final snapshot = ZetaShellStateSnapshot(
-      workspace: WorkspaceSliceState(projects: const <String>['/workspace']),
+      workspace: WorkspaceState(
+        openProjects: <WorkspaceProject>[
+          WorkspaceProject.fromPath('/workspace'),
+        ],
+      ),
       projectThreadsByProjectPath: projectThreads,
       orderedConversationEntryIds: orderedEntries,
       conversationsByEntryId: conversations,

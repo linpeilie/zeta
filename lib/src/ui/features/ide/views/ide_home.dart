@@ -51,7 +51,8 @@ import 'package:zeta/src/ui/features/ide/views/project_home_page.dart';
 import 'package:zeta/src/ui/features/ide/views/project_agent_sidebar.dart';
 import 'package:zeta/src/ui/features/ide/views/project_list_pane.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:zeta/src/features/workspace/presentation/workspace_slice/workspace_slice_providers.dart';
+import 'package:zeta/src/features/workspace/application/workspace_file_corpus.dart';
+import 'package:zeta/src/features/workspace/application/workspace_notifier.dart';
 
 typedef AgentProviderAvailabilityLoader =
     Future<List<AgentProviderConfig>> Function();
@@ -64,7 +65,6 @@ typedef HomeProviderDetectionLoader = Future<List<ManagedAgent>> Function();
 /// 具体项目、会话和 Agent thread 编排由 [IdeShellController] 承接。
 class IdeHome extends ConsumerStatefulWidget {
   const IdeHome({
-    required this.directoryPicker,
     required this.enableNativeWindowFrame,
     required this.shellStateSnapshotRelay,
     required this.agentProviderFactory,
@@ -91,7 +91,6 @@ class IdeHome extends ConsumerStatefulWidget {
     super.key,
   });
 
-  final Future<String?> Function() directoryPicker;
   final bool enableNativeWindowFrame;
   final ZetaShellStateSnapshotRelay shellStateSnapshotRelay;
   final AgentProviderBundleFactory agentProviderFactory;
@@ -194,7 +193,11 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
     _agentUsagePanelController =
         widget.usageStatisticsSliceComposition.agentUsagePanelStore;
     _shellController = IdeShellController(
-      directoryPicker: widget.directoryPicker,
+      workspace: ref.read(workspaceProvider.notifier),
+      workspaceFileCorpus: ref.read(workspaceFileCorpusProvider),
+      workspaceFileIndexController: ref.read(
+        workspaceFileIndexControllerProvider,
+      ),
       ideSessionOperations: ref.read(ideSessionSliceProvider.notifier),
       agentProviderFactory: widget.agentProviderFactory,
       agentProviderSettingsPort: widget.agentProviderSettingsPort,
@@ -220,9 +223,8 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
     //
     // IdeHome 从 Shell 读的每一项都是这三个 store 的投影：
     // workbenchLayout / initialRestoreCompleted ← IDE Session；
-    // projects / activeProjectPath ← Workspace；
+    // projects / activeProjectPath ← Workspace（Riverpod）；
     // selectedEntry / projectHomeActive ← Conversation Workspace。
-    _shellController.workspaceSliceStore.addListener(_handleWorkspaceChanged);
     _shellController.agentConversationWorkspaceStore.addListener(
       _handleConversationWorkspaceChanged,
     );
@@ -317,7 +319,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
       );
     }
     return ZetaShellStateSnapshot(
-      workspace: _shellController.workspaceSliceStore.state,
+      workspace: _shellController.workspaceState,
       projectThreadsByProjectPath: projectThreads,
       orderedConversationEntryIds: <String>[
         for (final entry in entries) entry.entryId,
@@ -338,9 +340,6 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
     if (widget.enableNativeWindowFrame) {
       windowManager.removeListener(this);
     }
-    _shellController.workspaceSliceStore.removeListener(
-      _handleWorkspaceChanged,
-    );
     _shellController.agentConversationWorkspaceStore.removeListener(
       _handleConversationWorkspaceChanged,
     );
@@ -381,7 +380,9 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
       ),
     );
     // 侧栏宽度与首页预热是状态变化的副作用，不是渲染输入，因此走 listen。
+    ref.watch(workspaceProvider);
     ref.listen(ideSessionSliceProvider, (_, _) => _handleIdeSessionChanged());
+    ref.listen(workspaceProvider, (_, _) => _handleWorkspaceChanged());
     final homePage = _page == _IdeHomePage.home;
     final leftSidebarVisible =
         homePage && _shellController.workbenchLayout.leftSidebarVisible;
@@ -509,9 +510,6 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
       overrides: [
         projectThreadsSliceStoreProvider.overrideWithValue(
           _shellController.projectThreadsSliceStore,
-        ),
-        workspaceSliceStoreProvider.overrideWithValue(
-          _shellController.workspaceSliceStore,
         ),
       ],
       child: body,
@@ -804,9 +802,10 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
     return Consumer(
       builder: (context, ref, _) {
         final projectThreadsState = ref.watch(projectThreadsSliceProvider);
+        final workspace = ref.watch(workspaceProvider);
         return ProjectListPane(
-          projects: _shellController.projects,
-          activeProject: _shellController.activeProjectPath,
+          projects: workspace.projectPaths,
+          activeProject: workspace.activeProjectPath,
           threadStateFor: projectThreadsState.stateFor,
           onSelectProject: (path) {
             unawaited(_shellController.selectKnownProject(path));
@@ -941,13 +940,16 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
 
     return Consumer(
       builder: (context, ref, _) {
-        final state = ref.watch(workspaceSliceProvider);
+        final projectPath = ref.watch(
+          workspaceProvider.select((state) => state.activeProjectPath),
+        );
+        final tree = ref.watch(activeWorkspaceFileTreeProvider);
         return buildPanel(
-          nodes: state.tree,
-          expandedPaths: state.expandedDirectoryPaths,
-          selectedPath: state.selectedTreePath,
-          projectPath: state.activeProjectPath,
-          isLoading: state.isLoadingProject,
+          nodes: tree.tree,
+          expandedPaths: tree.expandedDirectoryPaths,
+          selectedPath: tree.selectedTreePath,
+          projectPath: projectPath,
+          isLoading: tree.isLoading,
         );
       },
     );

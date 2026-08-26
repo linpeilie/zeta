@@ -4,12 +4,12 @@ import 'package:zeta/src/app/provider_settings_slice/provider_settings_slice_com
 import 'package:zeta/src/app/ide_session_slice/ide_session_slice_overrides.dart';
 import 'package:zeta/src/app/settings_slice/settings_slice_notification_source.dart';
 import 'package:zeta/src/app/settings_slice/settings_slice_overrides.dart';
+import 'package:zeta/src/app/workspace_slice/workspace_overrides.dart';
 import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_slice_composition.dart';
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_composition.dart';
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_runner.dart';
 import 'package:zeta/src/app/composition/ide_workbench_composition.dart';
 import 'package:zeta/src/app/composition/zeta_host_mode.dart';
-import 'package:file_selector/file_selector.dart';
 import 'package:flutter/widgets.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:window_manager/window_manager.dart';
@@ -567,6 +567,7 @@ class MainAppState extends State<MainApp>
       zetaMetricsPortProvider.overrideWith((ref) => _metrics),
       ...ideSessionSliceOverrides(),
       ...settingsSliceOverrides(),
+      ...workspaceOverrides(directoryPicker: widget.directoryPicker),
       if (widget.initialAppearanceSettings case final settings?)
         initialAppearanceSettingsProvider.overrideWithValue(settings),
       appearanceSettingsRepositoryOverride(widget.appearanceSettingsStore),
@@ -655,8 +656,6 @@ class MainAppState extends State<MainApp>
               home: _generalSettingsReady
                   ? IdeHome(
                       key: const ValueKey<String>('zeta.ide-home'),
-                      directoryPicker:
-                          widget.directoryPicker ?? getDirectoryPath,
                       enableNativeWindowFrame: widget.enableNativeWindowFrame,
                       showWindowControls: widget.showWindowControls,
                       shellStateSnapshotRelay: _shellStateSnapshotRelay,

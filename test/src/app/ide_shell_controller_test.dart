@@ -28,6 +28,19 @@ import '../testing/test_agent_provider_bundle_factory.dart';
 import '../testing/fake_agent_frame_scheduler.dart';
 import '../testing/provider_settings_test_store.dart';
 import '../testing/memory_feature_stores.dart';
+import '../testing/workspace_test_bindings.dart';
+
+WorkspaceTestBindings _bindWorkspace({
+  Future<String?> Function()? directoryPicker,
+  DateTime Function()? now,
+}) {
+  final bindings = WorkspaceTestBindings(
+    directoryPicker: directoryPicker,
+    now: now,
+  );
+  addTearDown(bindings.dispose);
+  return bindings;
+}
 
 final List<FakeAgentFrameScheduler> _uiFrameSchedulers =
     <FakeAgentFrameScheduler>[];
@@ -100,9 +113,12 @@ void main() {
         configStore: MemoryAgentProviderConfigStore(),
       );
       addTearDown(providerSettings.dispose);
+      final workspace = _bindWorkspace(directoryPicker: () async => null);
       final shell = IdeShellController(
         agentUiFrameSchedulerFactory: _createUiFrameScheduler,
-        directoryPicker: () async => null,
+        workspace: workspace.notifier,
+        workspaceFileCorpus: workspace.corpus,
+        workspaceFileIndexController: workspace.index,
         ideSessionOperations: _createIdeSessionOperations(
           _CallbackSessionStore(),
         ),
@@ -207,9 +223,14 @@ void main() {
       );
       addTearDown(providerSettings.dispose);
 
+      final workspace = _bindWorkspace(
+        directoryPicker: () async => directory.path,
+      );
       final shell = IdeShellController(
         agentUiFrameSchedulerFactory: _createUiFrameScheduler,
-        directoryPicker: () async => directory.path,
+        workspace: workspace.notifier,
+        workspaceFileCorpus: workspace.corpus,
+        workspaceFileIndexController: workspace.index,
         ideSessionOperations: _createIdeSessionOperations(
           _CallbackSessionStore(),
         ),
@@ -426,9 +447,12 @@ void main() {
         ),
       );
       addTearDown(providerSettings.dispose);
+      final workspace = _bindWorkspace(directoryPicker: () async => null);
       final shell = IdeShellController(
         agentUiFrameSchedulerFactory: _createUiFrameScheduler,
-        directoryPicker: () async => null,
+        workspace: workspace.notifier,
+        workspaceFileCorpus: workspace.corpus,
+        workspaceFileIndexController: workspace.index,
         ideSessionOperations: _createIdeSessionOperations(
           _CallbackSessionStore(),
         ),
@@ -924,9 +948,14 @@ void main() {
     );
     addTearDown(providerSettings.dispose);
 
+    final workspace = _bindWorkspace(
+      directoryPicker: () async => directory.path,
+    );
     final shell = IdeShellController(
       agentUiFrameSchedulerFactory: _createUiFrameScheduler,
-      directoryPicker: () async => directory.path,
+      workspace: workspace.notifier,
+      workspaceFileCorpus: workspace.corpus,
+      workspaceFileIndexController: workspace.index,
       ideSessionOperations: _createIdeSessionOperations(
         _CallbackSessionStore(),
       ),
@@ -1017,9 +1046,14 @@ void main() {
       configStore: configStore,
     );
     addTearDown(providerSettings.dispose);
+    final workspace = _bindWorkspace(
+      directoryPicker: () async => directory.path,
+    );
     final shell = IdeShellController(
       agentUiFrameSchedulerFactory: _createUiFrameScheduler,
-      directoryPicker: () async => directory.path,
+      workspace: workspace.notifier,
+      workspaceFileCorpus: workspace.corpus,
+      workspaceFileIndexController: workspace.index,
       ideSessionOperations: _createIdeSessionOperations(
         _CallbackSessionStore(initial: restoredSession),
       ),
@@ -1121,9 +1155,14 @@ void main() {
         configStore: MemoryAgentProviderConfigStore(),
       );
       addTearDown(providerSettings.dispose);
+      final workspace = _bindWorkspace(
+        directoryPicker: () async => firstDirectory.path,
+      );
       final shell = IdeShellController(
         agentUiFrameSchedulerFactory: _createUiFrameScheduler,
-        directoryPicker: () async => firstDirectory.path,
+        workspace: workspace.notifier,
+        workspaceFileCorpus: workspace.corpus,
+        workspaceFileIndexController: workspace.index,
         ideSessionOperations: _createIdeSessionOperations(
           _CallbackSessionStore(),
         ),
@@ -1219,9 +1258,14 @@ void main() {
       configStore: MemoryAgentProviderConfigStore(),
     );
     addTearDown(providerSettings.dispose);
+    final workspace = _bindWorkspace(
+      directoryPicker: () async => directory.path,
+    );
     final shell = IdeShellController(
       agentUiFrameSchedulerFactory: _createUiFrameScheduler,
-      directoryPicker: () async => directory.path,
+      workspace: workspace.notifier,
+      workspaceFileCorpus: workspace.corpus,
+      workspaceFileIndexController: workspace.index,
       ideSessionOperations: _createIdeSessionOperations(
         _CallbackSessionStore(
           initial: restoredSession,
@@ -1271,9 +1315,12 @@ void main() {
       configStore: MemoryAgentProviderConfigStore(),
     );
     addTearDown(providerSettings.dispose);
+    final workspace = _bindWorkspace(directoryPicker: () async => null);
     final shell = IdeShellController(
       agentUiFrameSchedulerFactory: _createUiFrameScheduler,
-      directoryPicker: () async => null,
+      workspace: workspace.notifier,
+      workspaceFileCorpus: workspace.corpus,
+      workspaceFileIndexController: workspace.index,
       ideSessionOperations: _createIdeSessionOperations(
         _CallbackSessionStore(
           initial: const IdeSessionState(workbenchLayout: restoredWorkbench),
@@ -1363,9 +1410,15 @@ void main() {
       ),
     );
     addTearDown(providerSettings.dispose);
+    final workspace = _bindWorkspace(
+      directoryPicker: () async => firstDirectory.path,
+      now: () => openedNow,
+    );
     final shell = IdeShellController(
       agentUiFrameSchedulerFactory: _createUiFrameScheduler,
-      directoryPicker: () async => firstDirectory.path,
+      workspace: workspace.notifier,
+      workspaceFileCorpus: workspace.corpus,
+      workspaceFileIndexController: workspace.index,
       ideSessionOperations: _createIdeSessionOperations(
         _CallbackSessionStore(
           initial: restoredSession,
@@ -1473,9 +1526,12 @@ Future<_SelectedThreadShellHarness> _openShellWithSelectedThread({
       ),
     ),
   );
+  final workspace = _bindWorkspace(directoryPicker: () async => directory.path);
   final shell = IdeShellController(
     agentUiFrameSchedulerFactory: _createUiFrameScheduler,
-    directoryPicker: () async => directory.path,
+    workspace: workspace.notifier,
+    workspaceFileCorpus: workspace.corpus,
+    workspaceFileIndexController: workspace.index,
     ideSessionOperations: _createIdeSessionOperations(
       _CallbackSessionStore(onSave: (_) => sessionSaves.record()),
     ),

@@ -3,7 +3,7 @@ import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 
 /// 测试用的回调式文件语料端口。
 ///
-/// 生产侧的实现是 `WorkspaceSliceFileCorpus`（由 Workspace slice 自己组装）。
+/// 生产侧的实现是 `WorkspaceFileCorpus`（由 Workspace Notifier 组装）。
 /// 这个回调版本只服务于测试——测试需要用几个闭包临时拼一个语料，
 /// 但生产代码不该为此保留一条通用回调路径。
 final class CallbackWorkspaceFileCorpusPort implements WorkspaceFileCorpusPort {

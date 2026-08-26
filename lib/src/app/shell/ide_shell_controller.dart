@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:zeta/src/app/logging/app_logging.dart';
 import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_workspace_store.dart';
 import 'package:zeta/src/app/project_threads_slice/project_threads_slice_composition.dart';
-import 'package:zeta/src/app/workspace_slice/workspace_slice_composition.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
@@ -22,13 +21,13 @@ import 'package:zeta/src/features/project_threads/application/project_threads_se
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
 import 'package:zeta/src/features/workspace/application/workspace_file_index_controller.dart';
 import 'package:zeta/src/features/workspace/application/workspace_file_corpus_port.dart';
-import 'package:zeta/src/features/workspace/application/workspace_slice/workspace_slice_state.dart';
-import 'package:zeta/src/features/workspace/application/workspace_slice/workspace_slice_store.dart';
+import 'package:zeta/src/features/workspace/application/workspace_notifier.dart';
+import 'package:zeta/src/features/workspace/application/workspace_restore_snapshot.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
+import 'package:zeta/src/features/workspace/domain/workspace_project.dart';
 
 final _log = loggerFor('zeta.app.ide_shell_controller');
 
-typedef IdeDirectoryPicker = Future<String?> Function();
 typedef IdeShellStatusReporter = void Function(String message);
 
 /// IDE shell 的应用级协调器。
@@ -39,7 +38,9 @@ class IdeShellController {
   static const String _bootstrapProjectPath = '';
 
   IdeShellController({
-    required this._directoryPicker,
+    required WorkspaceNotifier workspace,
+    required WorkspaceFileCorpusPort workspaceFileCorpus,
+    required WorkspaceFileIndexController workspaceFileIndexController,
     required this.ideSessionOperations,
     required AgentProviderBundleFactory agentProviderFactory,
     required AgentProviderSettingsPort agentProviderSettingsPort,
@@ -47,7 +48,6 @@ class IdeShellController {
     activeModelCatalogLoader,
     this._projectLocationOpener = openPathInSystemFileManager,
     this._statusReporter,
-    WorkspaceFileIndexController? workspaceFileIndexController,
     AgentProviderRuntimeRegistry? agentProviderRuntimeRegistry,
     AgentFrameScheduler Function()? agentUiFrameSchedulerFactory,
     void Function(AgentTurnTerminalSignal)? onAgentTurnTerminal,
@@ -69,19 +69,12 @@ class IdeShellController {
       runtimeRegistry: this.agentProviderRuntimeRegistry,
     );
     _ownsAgentProviderRuntimeRegistry = agentProviderRuntimeRegistry == null;
-    _ownsFileIndexController = workspaceFileIndexController == null;
-    _fileIndexController =
-        workspaceFileIndexController ?? WorkspaceFileIndexController();
+    _workspace = workspace;
+    _fileIndexController = workspaceFileIndexController;
     _fileIndexController.addListener(_handleFileIndexChanged);
-    _workspaceSliceComposition = WorkspaceSliceComposition.create(
-      fileIndexController: _fileIndexController,
-      now: _now,
-    );
-    workspaceSliceStore = _workspaceSliceComposition.store;
-    workspaceSliceStore.addListener(_handleWorkspaceSliceChanged);
     agentProviderController = agentProviderSettingsPort;
     _loadActiveModelCatalog = activeModelCatalogLoader;
-    _workspaceFileCorpus = _workspaceSliceComposition.fileCorpus;
+    _workspaceFileCorpus = workspaceFileCorpus;
     agentConversationWorkspaceStore = AgentConversationWorkspaceStore(
       providerController: agentProviderController,
       workspaceFileCorpus: _workspaceFileCorpus,
@@ -137,7 +130,6 @@ class IdeShellController {
     }
   }
 
-  final IdeDirectoryPicker _directoryPicker;
   final ProjectLocationOpener _projectLocationOpener;
   final IdeShellStatusReporter? _statusReporter;
   final void Function(String?)? _onAgentUsageProviderRestored;
@@ -147,11 +139,9 @@ class IdeShellController {
   late final AgentProviderRuntimeRegistry agentProviderRuntimeRegistry;
   late final AgentProviderGlobalRuntime agentProviderGlobalRuntime;
   late final bool _ownsAgentProviderRuntimeRegistry;
+  late final WorkspaceNotifier _workspace;
   late final WorkspaceFileIndexController _fileIndexController;
-  late final bool _ownsFileIndexController;
-  late final WorkspaceSliceComposition _workspaceSliceComposition;
   late final WorkspaceFileCorpusPort _workspaceFileCorpus;
-  late final WorkspaceSliceStore workspaceSliceStore;
   late final AgentProviderSettingsPort agentProviderController;
   late final Future<AgentModelCatalogLoadResult> Function()
   _loadActiveModelCatalog;
@@ -207,7 +197,9 @@ class IdeShellController {
     _stateListeners.remove(listener);
   }
 
-  List<String> get projects => workspaceSliceStore.state.projects;
+  WorkspaceState get workspaceState => _workspace.currentState;
+
+  List<String> get projects => _workspace.currentState.projectPaths;
 
   /// 当前应用级 Workbench 布局偏好。
   IdeWorkbenchLayoutState get workbenchLayout =>
@@ -242,7 +234,7 @@ class IdeShellController {
   List<RecentProjectSummary> get recentProjects {
     final projectPaths = projects;
     final lastOpenedAtByPath =
-        workspaceSliceStore.state.projectLastOpenedAtByPath;
+        _workspace.currentState.projectLastOpenedAtByPath;
     final indexed = <({int index, RecentProjectSummary project})>[
       for (final (index, path) in projectPaths.indexed)
         (
@@ -273,19 +265,19 @@ class IdeShellController {
     );
   }
 
-  String? get activeProjectPath => workspaceSliceStore.state.activeProjectPath;
+  String? get activeProjectPath => _workspace.currentState.activeProjectPath;
 
-  List<WorkspaceNode> get workspaceTree => workspaceSliceStore.state.tree;
+  List<WorkspaceNode> get workspaceTree => _workspace.activeFileTree.tree;
 
   Set<String> get expandedDirectoryPaths =>
-      workspaceSliceStore.state.expandedDirectoryPaths;
+      _workspace.activeFileTree.expandedDirectoryPaths;
 
-  String? get selectedTreePath => workspaceSliceStore.state.selectedTreePath;
+  String? get selectedTreePath => _workspace.activeFileTree.selectedTreePath;
 
-  bool get isLoadingProject => workspaceSliceStore.state.isLoadingProject;
+  bool get isLoadingProject => _workspace.activeFileTree.isLoading;
 
   String? get _currentWorkspaceFilePath =>
-      workspaceSliceStore.state.currentFilePath;
+      _workspace.activeFileTree.currentFilePath;
 
   ProjectThreadListState projectThreadStateFor(String projectPath) {
     return projectThreadsController.stateFor(projectPath);
@@ -300,13 +292,25 @@ class IdeShellController {
   }
 
   Future<void> openProject() async {
-    final path = await _directoryPicker();
-    if (path == null || path.trim().isEmpty) {
-      return;
-    }
-
     _cancelPendingSessionRestore();
-    await _loadProject(path);
+    try {
+      final path = await _workspace.openProject();
+      if (path == null || _isDisposed) {
+        return;
+      }
+      await _onProjectActivated(path, activateThreads: true);
+    } catch (error, stackTrace) {
+      _log.w(
+        'Could not open project folder',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      _statusReporter?.call('Could not open folder: $error');
+      _releaseInitialRestoreWait();
+      if (!_isDisposed) {
+        _notifyStateChanged();
+      }
+    }
   }
 
   /// 无活动项目时预热近期项目的会话列表，供左侧 Projects 栏直接取用。
@@ -484,7 +488,8 @@ class IdeShellController {
         ? currentProjects[index + 1]
         : null;
 
-    workspaceSliceStore.removeProject(path);
+    _workspace.removeProject(path);
+    _workspace.discardClosedProject(path);
     agentConversationWorkspaceStore.removeThreadMapping(path);
     projectThreadsController.retainProjects(projects);
     agentConversationWorkspaceStore.removeEntriesForProject(path);
@@ -578,7 +583,7 @@ class IdeShellController {
     if (node == null || !node.isDirectory) {
       return;
     }
-    workspaceSliceStore.setDirectoryExpanded(key, expanded);
+    _workspace.setDirectoryExpanded(key, expanded);
     _notifyStateChanged();
     _requestSessionSave();
   }
@@ -589,7 +594,7 @@ class IdeShellController {
       return;
     }
 
-    workspaceSliceStore.selectTreeNode(key);
+    _workspace.selectTreeNode(key);
     if (node.isDirectory) {
       _notifyStateChanged();
       _requestSessionSave();
@@ -620,19 +625,12 @@ class IdeShellController {
     _notifyStateChanged();
 
     try {
-      final loaded = await workspaceSliceStore.loadProject(path);
+      final loaded = await _workspace.openOrActivate(path);
       if (!loaded || _isDisposed || activeProjectPath != path) {
         return;
       }
 
-      projectThreadsController.retainProjects(projects);
-      if (activateThreads) {
-        projectThreadsController.activateProject(path);
-      }
-      _enterProjectHome(refreshThreads: true);
-      _requestSessionSave();
-      _log.i('Opened project folder: $path');
-      _notifyStateChanged();
+      await _onProjectActivated(path, activateThreads: activateThreads);
     } catch (error, stackTrace) {
       _log.w(
         'Could not open project folder: $path',
@@ -660,7 +658,7 @@ class IdeShellController {
         case IdeSessionRestoreStatus.empty:
           return;
         case IdeSessionRestoreStatus.failed:
-          workspaceSliceStore.clearCurrentFile();
+          _workspace.clearCurrentFile();
           await _syncSelectedAgentWorkspace();
           _notifyStateChanged();
           if (result.shouldRequestSave) {
@@ -676,7 +674,7 @@ class IdeShellController {
         return;
       }
 
-      await workspaceSliceStore.restore(
+      await _workspace.restore(
         WorkspaceRestoreSnapshot(
           projects: session.projectPaths,
           activeProjectPath: session.activeProjectPath,
@@ -743,7 +741,7 @@ class IdeShellController {
 
   void _clearActiveWorkspace() {
     _homeRefreshToken += 1;
-    workspaceSliceStore.clearActiveWorkspace();
+    _workspace.clearActiveProject();
     agentConversationWorkspaceStore.selectEntry(_bootstrapAgentEntry.entryId);
     _bootstrapAgentEntry.viewModel.updateContext(
       projectPath: null,
@@ -755,7 +753,7 @@ class IdeShellController {
 
   IdeSessionState _currentSessionState() {
     final selectedAgentViewModel = this.selectedAgentViewModel;
-    final workspaceState = workspaceSliceStore.state;
+    final workspaceState = _workspace.currentState;
     return buildIdeSessionState(
       projectPaths: projects,
       activeProjectPath: activeProjectPath,
@@ -804,7 +802,7 @@ class IdeShellController {
   }
 
   void _markProjectOpened(String path) {
-    workspaceSliceStore.markProjectOpened(path, _now());
+    _workspace.markProjectOpened(path, _now());
   }
 
   WorkspaceNode? _findTreeNode(String path) {
@@ -1181,8 +1179,17 @@ class IdeShellController {
     _notifyStateChanged();
   }
 
-  /// Workspace owner 的只读变化继续由 Shell 向跨 feature 消费方投影。
-  void _handleWorkspaceSliceChanged() {
+  Future<void> _onProjectActivated(
+    String path, {
+    required bool activateThreads,
+  }) async {
+    projectThreadsController.retainProjects(projects);
+    if (activateThreads) {
+      projectThreadsController.activateProject(path);
+    }
+    _enterProjectHome(refreshThreads: true);
+    _requestSessionSave();
+    _log.i('Opened project folder: $path');
     _notifyStateChanged();
   }
 
@@ -1193,7 +1200,6 @@ class IdeShellController {
     unawaited(saveNow());
     _isDisposed = true;
     _homeRefreshToken += 1;
-    workspaceSliceStore.removeListener(_handleWorkspaceSliceChanged);
     agentConversationWorkspaceStore.removeListener(
       _handleAgentConversationWorkspaceChanged,
     );
@@ -1203,12 +1209,8 @@ class IdeShellController {
     _unsubscribeProjectThreads();
     projectThreadsController.dispose();
     agentConversationWorkspaceStore.dispose();
-    _workspaceSliceComposition.dispose();
     // 在 workspace 条目释放后再拆索引监听，避免 popover 仍挂在 listenable 上。
     _fileIndexController.removeListener(_handleFileIndexChanged);
-    if (_ownsFileIndexController) {
-      _fileIndexController.dispose();
-    }
     if (_ownsAgentProviderRuntimeRegistry) {
       unawaited(agentProviderRuntimeRegistry.close());
     }

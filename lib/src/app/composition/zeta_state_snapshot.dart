@@ -11,7 +11,7 @@ import 'package:zeta/src/features/settings/application/settings_slice/appearance
 import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_state.dart';
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_slice/agent_usage_panel_slice_state.dart';
 import 'package:zeta/src/features/usage_statistics/application/usage_statistics_slice/usage_statistics_slice_state.dart';
-import 'package:zeta/src/features/workspace/application/workspace_slice/workspace_slice_state.dart';
+import 'package:zeta/src/features/workspace/domain/workspace_project.dart';
 
 /// Zeta 进程内逻辑状态树的按需只读快照。
 ///
@@ -96,7 +96,7 @@ final class ZetaShellStateSnapshot {
        ),
        conversationsByEntryId = Map.unmodifiable(conversationsByEntryId);
 
-  final WorkspaceSliceState workspace;
+  final WorkspaceState workspace;
   final Map<String, ZetaProjectThreadsStateSnapshot>
   projectThreadsByProjectPath;
   final List<String> orderedConversationEntryIds;
