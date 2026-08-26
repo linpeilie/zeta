@@ -23,7 +23,7 @@ Reading it once before you start will save you most of the rework.
 
 1. **The default branch is `dev`.** Branch from it and target it in PRs.
 2. **Keep changes small and focused.** For large refactors, new providers, or changes to event-pipeline contracts, open an issue to discuss the approach first — please don't drop a several-thousand-line PR unannounced.
-3. **This project enforces strict layering.** A PR that violates the [hard lines](#architectural-hard-lines) won't be merged even if the feature works. These constraints exist so that multiple providers can coexist without contaminating each other — they aren't box-ticking. The [architecture overview](docs/architecture/overview.en.md) explains why in about 15 minutes.
+3. **This project enforces strict layering.** A PR that violates the [hard lines](#architectural-hard-lines) won't be merged even if the feature works. These constraints exist so that multiple providers can coexist without contaminating each other — they aren't box-ticking. The [architecture overview](docs/en/architecture/overview.md) explains why in about 15 minutes.
 
 ## Setting up
 
@@ -43,9 +43,9 @@ sudo apt-get update && sudo apt-get install --yes \
 
 **To exercise agent features you also need**
 
-- **Codex** (default provider): `codex app-server` must be runnable locally. Without `--listen` it communicates over stdio. The adapter is developed against a pinned schema — see [Codex app-server protocol pinning](docs/protocols/codex_app_server_protocol.md).
+- **Codex** (default provider): `codex app-server` must be runnable locally. Without `--listen` it communicates over stdio. The adapter is developed against a pinned schema — see [Codex app-server protocol pinning](docs/zh/protocols/codex_app_server_protocol.md).
 - **Grok** (optional): Grok CLI (grok-build) **0.2.119 or newer**. That's the multi-session compatibility baseline; earlier versions can't correctly isolate session state or turn terminal states when several Grok sessions are open at once.
-- **Claude Code** (optional): `claude` must be runnable; interactive Claude.ai sign-in uses `claude auth login`. The current conversational stream-json sampling baseline is CLI **2.1.224** (not a minimum-version promise); see the [Claude Code stream-json protocol baseline](docs/protocols/claude_code_stream_json_protocol.md) for boundaries and upgrade checks. Models and the plan name come from no-prompt initialize; only optional quota details read Provider-local OAuth credentials.
+- **Claude Code** (optional): `claude` must be runnable; interactive Claude.ai sign-in uses `claude auth login`. The current conversational stream-json sampling baseline is CLI **2.1.224** (not a minimum-version promise); see the [Claude Code stream-json protocol baseline](docs/zh/protocols/claude_code_stream_json_protocol.md) for boundaries and upgrade checks. Models and the plan name come from no-prompt initialize; only optional quota details read Provider-local OAuth credentials.
 
 For UI-only or docs-only changes you can skip all of these CLIs — the agent panel will simply report nothing detected.
 
@@ -131,7 +131,7 @@ python tool/smoke_codex_app_server.py --expected-version 0.144.5
 python tool/smoke_codex_plan_mode.py --expected-version 0.144.5
 ```
 
-The smoke scripts use a temporary read-only workspace and never emit prompts, responses, file contents, credentials, or raw JSONL. See [developer guide §3](docs/guides/developer_guide.md) (Chinese).
+The smoke scripts use a temporary read-only workspace and never emit prompts, responses, file contents, credentials, or raw JSONL. See [developer guide §3](docs/zh/development/developer_guide.md) (Chinese).
 
 ## Before you commit
 
@@ -186,7 +186,7 @@ Common types: `feat` / `fix` / `docs` / `refactor` / `test` / `chore` / `perf`.
 
 ## Architectural hard lines
 
-**Reading the code for the first time? Start with the [architecture overview](docs/architecture/overview.en.md)** (~15 minutes, with diagrams) and the [glossary](docs/guides/glossary.en.md). Full rules live in [engineering standards](docs/architecture/engineering_standards.md) and [developer guide §7](docs/guides/developer_guide.md). These are the ones most often tripped over:
+**Reading the code for the first time? Start with the [architecture overview](docs/en/architecture/overview.md)** (~15 minutes, with diagrams) and the [glossary](docs/en/development/glossary.md). Full rules live in [engineering standards](docs/zh/architecture/engineering_standards.md) and [developer guide §7](docs/zh/development/developer_guide.md). These are the ones most often tripped over:
 
 **Layering and dependency direction**
 
@@ -208,7 +208,7 @@ Common types: `feat` / `fix` / `docs` / `refactor` / `test` / `chore` / `perf`.
 
 **Event pipeline**
 
-- Before adding or changing an `AgentEvent`, work through all 16 items of the onboarding checklist in [developer guide §7](docs/guides/developer_guide.md) and pin the behavior with tests.
+- Before adding or changing an `AgentEvent`, work through all 16 items of the onboarding checklist in [developer guide §7](docs/zh/development/developer_guide.md) and pin the behavior with tests.
 - Reducers must be purely synchronous: no Flutter scheduler, `Timer`, `Future`, or external callbacks. Side effects go through the scope-aware EffectRunner.
 - Live / history / replay must each use a **separate reducer instance**.
 
@@ -248,7 +248,7 @@ Common types: `feat` / `fix` / `docs` / `refactor` / `test` / `chore` / `perf`.
 
 ## Reporting issues
 
-Before filing, skim [troubleshooting and data reference](docs/product/troubleshooting.en.md) — undetected CLIs, missing notifications, and confusing usage numbers are usually answered there.
+Before filing, skim [troubleshooting](docs/en/guide/troubleshooting.md) and [data reference](docs/en/guide/data-and-privacy.md) — undetected CLIs, missing notifications, and confusing usage numbers are usually answered there.
 
 Please use the [issue templates](https://github.com/linpeilie/zeta/issues/new/choose). Zeta problems are highly environment-dependent, so try to fill in:
 

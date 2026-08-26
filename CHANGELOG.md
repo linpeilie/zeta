@@ -6,7 +6,7 @@
 
 条目类型：`新增` / `变更` / `弃用` / `移除` / `修复` / `安全`。
 
-面向开发者的详细改动记录见 [`docs/history/development_log.md`](docs/history/development_log.md)。
+面向开发者的详细改动记录见 [`docs/history/development_log.md`](docs/zh/history/development_log.md)。
 
 ## [未发布]
 
@@ -252,6 +252,6 @@
 
 1. 把 `[未发布]` 下已完成的条目移到新的版本小节，标注版本号与日期，例如 `## [0.1.0] - 2026-08-15`；
 2. 在 `[未发布]` 留空的类型小节可以删掉；
-3. 同步更新 `pubspec.yaml` 的 `version`，再按[发版指南](docs/release/release_guide.md)打 Tag。
+3. 同步更新 `pubspec.yaml` 的 `version`，再按[发版指南](docs/zh/release/release_guide.md)打 Tag。
 
 只记录**用户能感知**的变化。纯重构、测试补充和内部依赖调整不必写进来。

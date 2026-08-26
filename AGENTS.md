@@ -7,10 +7,10 @@ Zeta 是 Flutter Desktop 的本地 Agent IDE 壳层（macOS / Windows / Linux）
 >
 > | 想要 | 去哪 |
 > |---|---|
-> | 十几分钟建立心智模型（带图） | [`docs/architecture/overview.md`](docs/architecture/overview.md) |
-> | entryId / bundle / capability / coalescing / lease 的定义 | [`docs/guides/glossary.md`](docs/guides/glossary.md) |
-> | 门禁的完整正文与评审细则 | [`docs/architecture/engineering_standards.md`](docs/architecture/engineering_standards.md) |
-> | 接入清单、操作步骤、验收脚本 | [`docs/guides/developer_guide.md`](docs/guides/developer_guide.md) |
+> | 十几分钟建立心智模型（带图） | [`docs/architecture/overview.md`](docs/zh/architecture/overview.md) |
+> | entryId / bundle / capability / coalescing / lease 的定义 | [`docs/guides/glossary.md`](docs/zh/development/glossary.md) |
+> | 门禁的完整正文与评审细则 | [`docs/architecture/engineering_standards.md`](docs/zh/architecture/engineering_standards.md) |
+> | 接入清单、操作步骤、验收脚本 | [`docs/guides/developer_guide.md`](docs/zh/development/developer_guide.md) |
 > | 人类贡献者版摘要 | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
 >
 > 冲突时以本文件为准，并**同步修正**被违反的那一份。
@@ -97,7 +97,7 @@ grep -rnE "(codex|grok|claude|cursor)" \
   | grep -viE "^\S+:[0-9]+:\s*(///|//|\*)"
 ```
 
-> 正文：[工程规范 §4.2](docs/architecture/engineering_standards.md#42-共享适配层纯度门禁) · 归属判定表：[开发者文档 §7「共享适配层修改判定」](docs/guides/developer_guide.md)
+> 正文：[工程规范 §4.2](docs/zh/architecture/engineering_standards.md#42-共享适配层纯度门禁) · 归属判定表：[开发者文档 §7「共享适配层修改判定」](docs/zh/development/developer_guide.md)
 
 ### G2 · 身份由 Provider 决定，Store 不猜
 
@@ -111,7 +111,7 @@ grep -rnE "(codex|grok|claude|cursor)" \
 
 **新增 Provider 不应该需要改 TimelineStore 或 CoalescingPolicy。** 如果你发现非改不可，先停下来开 Issue：那通常意味着抽象没做对。
 
-> 正文：[工程规范 §4.1](docs/architecture/engineering_standards.md)
+> 正文：[工程规范 §4.1](docs/zh/architecture/engineering_standards.md)
 
 ### G3 · reducer 纯同步，副作用走 EffectRunner
 
@@ -121,7 +121,7 @@ grep -rnE "(codex|grok|claude|cursor)" \
 
 **live / history / replay 必须使用各自独立的 reducer 实例**，不共享 current segment、seen event/tool、terminal 或 generation 状态。共用会串味。
 
-> 正文：[工程规范 §4](docs/architecture/engineering_standards.md) · 接入清单：[开发者文档 §7](docs/guides/developer_guide.md)
+> 正文：[工程规范 §4](docs/zh/architecture/engineering_standards.md) · 接入清单：[开发者文档 §7](docs/zh/development/developer_guide.md)
 
 ### G4 · 按 capability 渲染，不支持就抛，禁止静默成功
 
@@ -131,7 +131,7 @@ UI 一律按 `AgentProviderCapabilities` 和 `AgentProviderBundle` 端口是否�
 
 当前 bundle 端口：必选 `runtime` / `conversation`；可选 `threadCatalog` / `threadSubscription` / `threadNaming` / `threadArchival` / `threadDeletion` / `threadCompaction` / `threadBranching` / `turnSteering` / `permissionResponses` / `questions` / `deniedActionOverride` / `modelCatalog` / `conversationModes` / `skills` / `localThreadList` / `sessionConfiguration` / `planApproval` / `permissionPolicy` / `usageQuota`（见 `lib/src/features/agent/domain/agent_provider_bundle.dart`）。
 
-> 正文：[架构总览「Provider 能力协商」](docs/architecture/overview.md) · [工程规范 §4](docs/architecture/engineering_standards.md)
+> 正文：[架构总览「Provider 能力协商」](docs/zh/architecture/overview.md) · [工程规范 §4](docs/zh/architecture/engineering_standards.md)
 
 ### G5 · 四种审批语义隔离，且绝不预授权
 
@@ -146,7 +146,7 @@ UI 一律按 `AgentProviderCapabilities` 和 `AgentProviderBundle` 端口是否�
 
 Plan 执行交接是 Zeta 自己的 application 工作流，不持久化。执行动作必须**新建一个显式的 Default `turn/start`**——不是 steer 当前 turn，不是调 `AgentPlanApprovalPort`。**任何动作都不得预授权计划里提到的命令、文件或网络操作。** 执行权限只可恢复进入 Plan 前由用户明确选择且仍在同 Binding/thread/runtime generation 有效的策略；失效时回落到 Provider catalog 声明的保守默认，目录不可用则要求用户显式选择。不得自动升级权限或持久化本次覆盖。
 
-> 正文：[架构总览「三种审批」](docs/architecture/overview.md) · [开发者文档 §7「Plan conversation mode」](docs/guides/developer_guide.md)
+> 正文：[架构总览「三种审批」](docs/zh/architecture/overview.md) · [开发者文档 §7「Plan conversation mode」](docs/zh/development/developer_guide.md)
 
 ### G6 · 分层依赖单向，协议只在 data 层
 
@@ -167,9 +167,9 @@ main → app → presentation/application → domain
 - **注意这让 application 的 Flutter 边界只剩约定**：`flutter_riverpod` 的 barrel 会带进 `ConsumerWidget` / `WidgetRef` / `ProviderScope`，而它们不匹配 `package:flutter/` 前缀，守卫拦不住。**application 里不准出现这些符号**——Widget 与 `WidgetRef` 是 presentation 的东西，切片只暴露不可变 state 与命令入口。守卫：`feature_layering_guard_test`（零容忍）。
 - 新代码进 `lib/src/features/<feature>/{domain,application,data,presentation}`，**不要新建顶层宽泛目录**。现有 feature：`agent`、`agent_management`、`desktop_notifications`、`ide_session`、`project_threads`、`settings`、`usage_statistics`、`workspace`。跨 feature 基础设施才进 `lib/src/core`；**跨 feature 复用的 UI 原语进 `packages/zeta_ui`**（设计系统已整体拆包，`lib/src/ui/core` 只剩需要本机 IO 的宿主侧封装）。
 - 已物理拆出的内部 Package 在 `packages/`：`zeta_foundation`（平台中立公共契约：Clock / OperationId / Transition / 排版常量 / 日志与指标端口，以及集中在 `src/platform/` 的宿主路径工具）、`zeta_plugin_kernel`（可信插件微内核）、`zeta_ui`（Graphite 设计系统）、`zeta_agent_core`（中立 Agent 内核：领域模型与端口、Binding/runtime 契约、事件管线、纯 reducer、TimelineStore、Effect 描述）与 `zeta_agent_providers`（Codex / Grok / Claude Code 的协议 transport、data adapter、Provider-local tracker、插件入口）。依赖方向单向：`kernel → foundation`、`ui → foundation`、`agent_core → foundation`、`agent_providers → {agent_core, kernel, foundation}`；`zeta_foundation` 的核心契约、`zeta_plugin_kernel` 与 `zeta_agent_core` 不依赖 Flutter，只有 `zeta_foundation/src/platform/` 的宿主工具可依赖明确的 Flutter 插件；`zeta_ui` 依赖 Flutter/shadcn 但**不依赖** Riverpod、`dart:io`、generated l10n 或任何业务模型（控件自有文案走 `ZetaUiTextCatalog` 注入）。`zeta_agent_core` 的状态通知走纯 Dart `AgentListenable`，Flutter 投影只在 presentation adapter；日志走 `ZetaLogger` 端口，Provider 身份映射由组合层注入。
-- **Agent feature 的分层现状**：中立内核在 `packages/zeta_agent_core`；**Provider 协议适配在 `packages/zeta_agent_providers`**（wire 字段、CLI 参数、会话文件格式只能出现在这里）；Zeta 自有持久化（provider 配置、模型目录缓存、turn 上下文文件）仍在 `lib/src/features/agent/data`，运行态事实由 application 层的 slice `Notifier` 独占，presentation 只订阅。新代码按这条边界放：中立机制进 core，Provider 语义进 providers，Zeta 自有状态与 UI 编排进 app。**application/domain 不得 import `zeta_agent_providers`**；厂商 identity、私有配置 key 与指标标签由 data/app 组合层投影。**跨 Package 只能 import 对方顶层 barrel**，禁止 `package:<name>/src/...`。新增 Package 要先按[工程规范 §1](docs/architecture/engineering_standards.md) 的判据论证，不按页面或团队机械拆包。
+- **Agent feature 的分层现状**：中立内核在 `packages/zeta_agent_core`；**Provider 协议适配在 `packages/zeta_agent_providers`**（wire 字段、CLI 参数、会话文件格式只能出现在这里）；Zeta 自有持久化（provider 配置、模型目录缓存、turn 上下文文件）仍在 `lib/src/features/agent/data`，运行态事实由 application 层的 slice `Notifier` 独占，presentation 只订阅。新代码按这条边界放：中立机制进 core，Provider 语义进 providers，Zeta 自有状态与 UI 编排进 app。**application/domain 不得 import `zeta_agent_providers`**；厂商 identity、私有配置 key 与指标标签由 data/app 组合层投影。**跨 Package 只能 import 对方顶层 barrel**，禁止 `package:<name>/src/...`。新增 Package 要先按[工程规范 §1](docs/zh/architecture/engineering_standards.md) 的判据论证，不按页面或团队机械拆包。
 
-> 正文：[工程规范 §1–2](docs/architecture/engineering_standards.md) · 状态所有权与 Riverpod 边界：[工程规范 §3.0](docs/architecture/engineering_standards.md#30-状态所有权与-riverpod-边界) · [架构总览「分层」](docs/architecture/overview.md)
+> 正文：[工程规范 §1–2](docs/zh/architecture/engineering_standards.md) · 状态所有权与 Riverpod 边界：[工程规范 §3.0](docs/zh/architecture/engineering_standards.md#30-状态所有权与-riverpod-边界) · [架构总览「分层」](docs/zh/architecture/overview.md)
 
 ### G7 · 不落盘敏感内容，JSON 版本化且宽容
 
@@ -181,7 +181,7 @@ Zeta 自有数据全部在 `~/.zeta/`：`config/` · `state/` · `logs/` · `cac
 - JSON-RPC transport 日志不得记录 prompt、文件内容、认证参数或 stderr 原文；Agent 日志进 UI 前必须在 data 层完成脱敏。
 - **指标同样受此约束**：只能通过 `ZetaMetricsPort`（`lib/src/core/observability/`）上报，指标名必须登记进 `ZetaMetric` 白名单枚举，标签只有 `providerId` / `component` / `outcome` 三个规范化维度。采集实现只在 `lib/src/app/observability` 组合，业务层一律只见端口且默认 no-op；Riverpod `ProviderObserver` 不得读取 provider state 或 family 参数。
 
-> 正文：[工程规范 §5](docs/architecture/engineering_standards.md) · [开发者文档 §9](docs/guides/developer_guide.md)
+> 正文：[工程规范 §5](docs/zh/architecture/engineering_standards.md) · [开发者文档 §9](docs/zh/development/developer_guide.md)
 
 ### G8 · 主题走 token，`shadcn_flutter` 只能 `as sf`
 
@@ -212,7 +212,7 @@ grep -rn "import 'package:shadcn_flutter" lib | grep -v "as sf"
 grep -rnE "sf\.(IconButton|TextField|Button)\." lib/src/features | wc -l
 ```
 
-> 正文：[工程规范 §6](docs/architecture/engineering_standards.md) · [开发者文档 §8](docs/guides/developer_guide.md)
+> 正文：[工程规范 §6](docs/zh/architecture/engineering_standards.md) · [开发者文档 §8](docs/zh/development/developer_guide.md)
 
 ---
 
@@ -222,22 +222,22 @@ grep -rnE "sf\.(IconButton|TextField|Button)\." lib/src/features | wc -l
 
 | 你要动的东西 | 必守门禁 | 动手前必读 | 额外必做 |
 |---|---|---|---|
-| 新增或修改 `AgentEvent` | G1 G2 G3 | [开发者文档 §7「新增 AgentEvent 接入清单」](docs/guides/developer_guide.md) 的 **16 条**，逐项回答 | 每条答案用测试固定 |
-| 接入新 Provider | G1 G2 G4 G6 | [工程规范 §4.2](docs/architecture/engineering_standards.md#42-共享适配层纯度门禁) + [开发者文档 §7](docs/guides/developer_guide.md) 十二步 | 改动范围应 = 自有 data 文件 + 中立 domain 契约 + `createBundle` 组合 + 契约测试；静态能力走 data 组合层，Domain 不按厂商 switch |
-| Provider adapter / reducer / 流式显示 | G1 G2 G3 | [工程规范 §4.1](docs/architecture/engineering_standards.md) | 带 Provider/CLI 版本的脱敏 fixture 序列测试；有 history/replay 就补 canonical signature 逐位置回归 |
-| Provider 文件变更证据 | G1 G2 G3 G6 G7 | [开发者文档 §7「文件变更证据接入」](docs/guides/developer_guide.md) | Provider-local tracker 输出完整 typed snapshot；command-only 不猜文件；live/history/replay 独立；正文不进日志或持久化 |
-| 权限选项 / 审批 / Plan 模式 | G4 G5 | [开发者文档 §7「权限选项选择」+「Plan conversation mode」](docs/guides/developer_guide.md) | 覆盖两 thread 两 Canvas 的真实 wire 参数、runtime 状态仅限所属 Binding、迟到 apply、旧 generation 丢弃 |
-| Provider 生命周期 / 进程 / Binding | G4 G6 | [工程规范 §4](docs/architecture/engineering_standards.md) | factory 只由 registry 调用且 acquire 显式传 scope；全局操作走 `AgentProviderGlobalRuntime`；session 只由 `AgentConversationBinding.beginTurn()` 惰性创建，回收由 Binding Manager 负责；Binding 必须显式区分 dormant/starting/attached/cleared，只有匹配 identity 的 cleared 才能结算中断；Workspace entry 一次性绑定 thread/Binding/ViewModel，真实 thread 不得原地改绑，fork 结果走 Shell 的新 thread 通用登记/选择流程；Thread 操作走 `ProviderOperationScheduler` |
-| 主题、UI 原语、工作台 slot | G6 G8 | [架构总览「工作台 UI」](docs/architecture/overview.md) + [开发者文档 §8](docs/guides/developer_guide.md) | `IdeHome` 是唯一 Workbench 组合边界，feature 页只填 Navigation / Canvas / Inspector 三个 slot |
-| 界面文案 / 语言 / ARB / 文本目录 | G6 G7 G8 | [开发者文档 §8「界面语言与文案」](docs/guides/developer_guide.md) + [工程规范 §5–6](docs/architecture/engineering_standards.md) | Widget 走 `context.l10n`；application/data/reducer 只注入不可变 feature 文本目录；禁止 Flutter Locale / BuildContext / generated l10n 下沉；新字面量跑 `dart run tool/check_localized_ui_strings.dart --check`；两份 ARB key/placeholder 对齐且不用 plural/date/number formatter |
-| 时间线渲染 / resize 热路径 | G8 | [工程规范 §6](docs/architecture/engineering_standards.md) | 禁止 post-frame 测高、`GlobalKey` 查高、layout 后 `setState` 反馈环；Windows Profile 采样，Debug 数据不作结论 |
-| 页面切换 / 跨页保活 | G6 G8 | [开发者文档 §8](docs/guides/developer_guide.md) | 用真实 `IdeHome` 补集成级 Widget 测试：常驻骨架、AgentPane Element、当前 Thread、草稿、滚动位置、Pane 宽度与可见性都不能被重置；用 `IdeRetainedPageView`，不用 `IndexedStack` |
-| 持久化字段 / `~/.zeta` | G7 | [开发者文档 §9](docs/guides/developer_guide.md) | 版本化 + `tryDecode` 宽容读；覆盖损坏输入与旧版本迁移 |
-| 模型目录 / Composer 模型配置 | G4 G7 | [开发者文档 §7、§8「Composer 模型配置」](docs/guides/developer_guide.md) | 只经 app 级 `AgentModelCatalogRepository`；cursor 分页必须拉完，失败不得用空目录覆盖旧缓存 |
-| 使用统计 | G6 G7 | [开发者文档 §8「使用统计开发约束」](docs/guides/developer_guide.md) | Provider 私有历史解析只在自有 data 层；不按 `originator` 白名单过滤 Codex 会话；`token_count` 是 thread 累计值，写 turn 前做非负差分 |
-| 桌面通知 / 任务栏未读 | G7 | [Agent 桌面通知详细设计](docs/architecture/desktop_agent_notification_design.md) | 先映射为中立 `AgentAttentionSignal`；正文不含 prompt、回复、命令、完整路径 |
-| 文件树 / workspace | — | [工程规范 §7](docs/architecture/engineering_standards.md) | 懒加载、不递归全扫、不跟符号链接、忽略 `.git` / `.dart_tool` / `build` / `node_modules` |
-| Codex 协议升级 | G1 G6 | [协议版本锁定](docs/protocols/codex_app_server_protocol.md) | 见下方「Codex 协议升级流程」 |
+| 新增或修改 `AgentEvent` | G1 G2 G3 | [开发者文档 §7「新增 AgentEvent 接入清单」](docs/zh/development/developer_guide.md) 的 **16 条**，逐项回答 | 每条答案用测试固定 |
+| 接入新 Provider | G1 G2 G4 G6 | [工程规范 §4.2](docs/zh/architecture/engineering_standards.md#42-共享适配层纯度门禁) + [开发者文档 §7](docs/zh/development/developer_guide.md) 十二步 | 改动范围应 = 自有 data 文件 + 中立 domain 契约 + `createBundle` 组合 + 契约测试；静态能力走 data 组合层，Domain 不按厂商 switch |
+| Provider adapter / reducer / 流式显示 | G1 G2 G3 | [工程规范 §4.1](docs/zh/architecture/engineering_standards.md) | 带 Provider/CLI 版本的脱敏 fixture 序列测试；有 history/replay 就补 canonical signature 逐位置回归 |
+| Provider 文件变更证据 | G1 G2 G3 G6 G7 | [开发者文档 §7「文件变更证据接入」](docs/zh/development/developer_guide.md) | Provider-local tracker 输出完整 typed snapshot；command-only 不猜文件；live/history/replay 独立；正文不进日志或持久化 |
+| 权限选项 / 审批 / Plan 模式 | G4 G5 | [开发者文档 §7「权限选项选择」+「Plan conversation mode」](docs/zh/development/developer_guide.md) | 覆盖两 thread 两 Canvas 的真实 wire 参数、runtime 状态仅限所属 Binding、迟到 apply、旧 generation 丢弃 |
+| Provider 生命周期 / 进程 / Binding | G4 G6 | [工程规范 §4](docs/zh/architecture/engineering_standards.md) | factory 只由 registry 调用且 acquire 显式传 scope；全局操作走 `AgentProviderGlobalRuntime`；session 只由 `AgentConversationBinding.beginTurn()` 惰性创建，回收由 Binding Manager 负责；Binding 必须显式区分 dormant/starting/attached/cleared，只有匹配 identity 的 cleared 才能结算中断；Workspace entry 一次性绑定 thread/Binding/ViewModel，真实 thread 不得原地改绑，fork 结果走 Shell 的新 thread 通用登记/选择流程；Thread 操作走 `ProviderOperationScheduler` |
+| 主题、UI 原语、工作台 slot | G6 G8 | [架构总览「工作台 UI」](docs/zh/architecture/overview.md) + [开发者文档 §8](docs/zh/development/developer_guide.md) | `IdeHome` 是唯一 Workbench 组合边界，feature 页只填 Navigation / Canvas / Inspector 三个 slot |
+| 界面文案 / 语言 / ARB / 文本目录 | G6 G7 G8 | [开发者文档 §8「界面语言与文案」](docs/zh/development/developer_guide.md) + [工程规范 §5–6](docs/zh/architecture/engineering_standards.md) | Widget 走 `context.l10n`；application/data/reducer 只注入不可变 feature 文本目录；禁止 Flutter Locale / BuildContext / generated l10n 下沉；新字面量跑 `dart run tool/check_localized_ui_strings.dart --check`；两份 ARB key/placeholder 对齐且不用 plural/date/number formatter |
+| 时间线渲染 / resize 热路径 | G8 | [工程规范 §6](docs/zh/architecture/engineering_standards.md) | 禁止 post-frame 测高、`GlobalKey` 查高、layout 后 `setState` 反馈环；Windows Profile 采样，Debug 数据不作结论 |
+| 页面切换 / 跨页保活 | G6 G8 | [开发者文档 §8](docs/zh/development/developer_guide.md) | 用真实 `IdeHome` 补集成级 Widget 测试：常驻骨架、AgentPane Element、当前 Thread、草稿、滚动位置、Pane 宽度与可见性都不能被重置；用 `IdeRetainedPageView`，不用 `IndexedStack` |
+| 持久化字段 / `~/.zeta` | G7 | [开发者文档 §9](docs/zh/development/developer_guide.md) | 版本化 + `tryDecode` 宽容读；覆盖损坏输入与旧版本迁移 |
+| 模型目录 / Composer 模型配置 | G4 G7 | [开发者文档 §7、§8「Composer 模型配置」](docs/zh/development/developer_guide.md) | 只经 app 级 `AgentModelCatalogRepository`；cursor 分页必须拉完，失败不得用空目录覆盖旧缓存 |
+| 使用统计 | G6 G7 | [开发者文档 §8「使用统计开发约束」](docs/zh/development/developer_guide.md) | Provider 私有历史解析只在自有 data 层；不按 `originator` 白名单过滤 Codex 会话；`token_count` 是 thread 累计值，写 turn 前做非负差分 |
+| 桌面通知 / 任务栏未读 | G7 | [Agent 桌面通知详细设计](docs/zh/architecture/desktop_agent_notification_design.md) | 先映射为中立 `AgentAttentionSignal`；正文不含 prompt、回复、命令、完整路径 |
+| 文件树 / workspace | — | [工程规范 §7](docs/zh/architecture/engineering_standards.md) | 懒加载、不递归全扫、不跟符号链接、忽略 `.git` / `.dart_tool` / `build` / `node_modules` |
+| Codex 协议升级 | G1 G6 | [协议版本锁定](docs/zh/protocols/codex_app_server_protocol.md) | 见下方「Codex 协议升级流程」 |
 
 ### Codex 协议升级流程
 
@@ -329,7 +329,7 @@ flutter test test/src/features/agent/presentation/agent_conversation_widget_test
 - 保留 Flutter 生成的 `linux/` `macos/` `windows/` 目录，除非任务明确针对原生桌面行为。生成文件出现非预期改动时，先确认是不是 Flutter 工具产生的，保留就要说明原因。
 - 不提交构建产物、`.dart_tool`、日志或其他工具链产物。本仓库没有 Cargo.toml，`Cargo.lock` 已加入 `.gitignore`。
 - 不建空占位目录（只放 `.gitkeep` 的目录不要入库）——它们会和 G6 的「不要新建顶层宽泛目录」直接冲突。
-- 走流程的任务，阶段产物写入 `.workflow/<类型>/<日期>-<任务>/<NN>-<阶段>.md` 并跟代码一起提交。约定见 [`.workflow/README.md`](.workflow/README.md)，提示词见 [`docs/prompts/`](docs/prompts/README.md)。**这些文件入 git，粘日志或路径前必须脱敏**（G7 的精神同样适用）。
+- 走流程的任务，阶段产物写入 `.workflow/<类型>/<日期>-<任务>/<NN>-<阶段>.md` 并跟代码一起提交。**这些文件入 git，粘日志或路径前必须脱敏**（G7 的精神同样适用）。`.workflow/` 目录与 `docs/prompts/` 提示词库当前不在仓库中，需要时按上述路径新建。
 - 用户可感知的变化写进 `CHANGELOG.md` 的 `[未发布]`；纯重构和内部调整不必写。
 - Dart / Flutter 技能同时装在 `.agents/skills` 和 `.claude/skills`（内容一致）。处理 widget 测试、集成测试、静态分析、路由、本地化、JSON 序列化、响应式布局、依赖冲突、覆盖率这类聚焦任务时用对应技能。
 - 仓库已由 CodeGraph 索引（存在 `.codegraph/`）。定位或理解代码时优先用 `codegraph explore "<问题或符号名>"`，比 grep + 逐个读文件省一个数量级的往返。

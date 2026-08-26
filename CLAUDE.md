@@ -9,8 +9,8 @@ Zeta 是 Flutter Desktop 的本地 Agent IDE 壳层（macOS / Windows / Linux）
 ## 动手前先读
 
 1. **[`AGENTS.md`](AGENTS.md)** — 约束规则的**权威源**：8 条硬门禁、按任务的路由表、风格约定、收尾协议。**动手前完整读一遍**，然后按 §2 路由表对号入座，找到你这次要动的东西对应哪几条门禁和哪些必读文档。
-2. **[`docs/architecture/overview.md`](docs/architecture/overview.md)** — 架构总览（含图），解释这些约束**为什么**存在。
-3. **[`docs/guides/glossary.md`](docs/guides/glossary.md)** — 术语表。遇到 entryId、bundle、capability、coalescing、lease 先查这里。
+2. **[`docs/architecture/overview.md`](docs/zh/architecture/overview.md)** — 架构总览（含图），解释这些约束**为什么**存在。
+3. **[`docs/guides/glossary.md`](docs/zh/development/glossary.md)** — 术语表。遇到 entryId、bundle、capability、coalescing、lease 先查这里。
 
 规则冲突时的优先级：`AGENTS.md` > `docs/architecture/engineering_standards.md` > `docs/guides/developer_guide.md` > 本文件。
 

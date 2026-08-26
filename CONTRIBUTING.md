@@ -23,7 +23,7 @@
 
 1. **默认分支是 `dev`**，请基于它开分支和提 PR。
 2. **改动要小而聚焦。** 大规模重构、新增 Provider、改动事件管线契约，请先开 Issue 讨论方案，不要直接甩一个几千行的 PR。
-3. **本项目有严格的分层约束。** 违反[架构红线](#架构红线)的 PR 无论功能是否正确都不会合并——这些约束是为了让多 Provider 接入不互相污染，不是形式主义。[架构总览](docs/architecture/overview.md)用十几分钟讲清了为什么。
+3. **本项目有严格的分层约束。** 违反[架构红线](#架构红线)的 PR 无论功能是否正确都不会合并——这些约束是为了让多 Provider 接入不互相污染，不是形式主义。[架构总览](docs/zh/architecture/overview.md)用十几分钟讲清了为什么。
 
 ## 搭建开发环境
 
@@ -43,9 +43,9 @@ sudo apt-get update && sudo apt-get install --yes \
 
 **运行 Agent 功能还需要**
 
-- **Codex**（默认 Provider）：本机能执行 `codex app-server`。未指定 `--listen` 时走 stdio。协议按 pinned schema 开发，见 [Codex app-server 协议版本锁定](docs/protocols/codex_app_server_protocol.md)。
+- **Codex**（默认 Provider）：本机能执行 `codex app-server`。未指定 `--listen` 时走 stdio。协议按 pinned schema 开发，见 [Codex app-server 协议版本锁定](docs/zh/protocols/codex_app_server_protocol.md)。
 - **Grok**（可选）：Grok CLI（grok-build）**0.2.119 或更高**。这是多会话兼容基线，更早的版本在同时打开多个 Grok 会话时无法正确隔离会话状态和回合终态。
-- **Claude Code**（可选）：本机能执行 `claude`；Claude.ai 交互式登录使用 `claude auth login`。当前 stream-json 对话取样基线是 CLI **2.1.224**（不是最低版本承诺），协议边界与升级检查见 [Claude Code stream-json 协议基线](docs/protocols/claude_code_stream_json_protocol.md)。模型与套餐名称来自无 Prompt initialize；可选额度详情才读取 Provider-local OAuth 凭据。
+- **Claude Code**（可选）：本机能执行 `claude`；Claude.ai 交互式登录使用 `claude auth login`。当前 stream-json 对话取样基线是 CLI **2.1.224**（不是最低版本承诺），协议边界与升级检查见 [Claude Code stream-json 协议基线](docs/zh/protocols/claude_code_stream_json_protocol.md)。模型与套餐名称来自无 Prompt initialize；可选额度详情才读取 Provider-local OAuth 凭据。
 
 只改 UI 或文档的话，不装这些 CLI 也能跑起来，只是 Agent 面板会显示未检测到。
 
@@ -126,7 +126,7 @@ python tool/smoke_codex_app_server.py --expected-version 0.144.5
 python tool/smoke_codex_plan_mode.py --expected-version 0.144.5
 ```
 
-冒烟脚本使用临时只读 workspace，输出不含 Prompt、回复、文件内容、凭证或原始 JSONL。详见 [开发者文档 §3](docs/guides/developer_guide.md)。
+冒烟脚本使用临时只读 workspace，输出不含 Prompt、回复、文件内容、凭证或原始 JSONL。详见 [开发者文档 §3](docs/zh/development/developer_guide.md)。
 
 ## 提交前必做
 
@@ -176,7 +176,7 @@ chore: bump flutter action pin
 
 ## 架构红线
 
-**第一次读代码，先看[架构总览](docs/architecture/overview.md)**（十几分钟，带图）和[术语表](docs/guides/glossary.md)。完整规则见[工程规范](docs/architecture/engineering_standards.md)和[开发者文档 §7](docs/guides/developer_guide.md)。以下是最常被踩的几条：
+**第一次读代码，先看[架构总览](docs/zh/architecture/overview.md)**（十几分钟，带图）和[术语表](docs/zh/development/glossary.md)。完整规则见[工程规范](docs/zh/architecture/engineering_standards.md)和[开发者文档 §7](docs/zh/development/developer_guide.md)。以下是最常被踩的几条：
 
 **分层与依赖方向**
 
@@ -198,7 +198,7 @@ chore: bump flutter action pin
 
 **事件管线**
 
-- 新增或修改 `AgentEvent` 前，必须逐项回答[开发者文档 §7 的 16 条接入清单](docs/guides/developer_guide.md)，并用测试固定行为。
+- 新增或修改 `AgentEvent` 前，必须逐项回答[开发者文档 §7 的 16 条接入清单](docs/zh/development/developer_guide.md)，并用测试固定行为。
 - reducer 必须纯同步：不得出现 Flutter scheduler、`Timer`、`Future` 或外部回调，副作用走 scope-aware EffectRunner。
 - live / history / replay 必须使用**独立的 reducer 实例**。
 
@@ -238,7 +238,7 @@ chore: bump flutter action pin
 
 ## 报告问题
 
-开 Issue 之前，先翻一下[故障排查与数据说明](docs/product/troubleshooting.md)——CLI 检测不到、通知不弹、统计对不上这类问题多半在那里有答案。
+开 Issue 之前，先翻一下[故障排查](docs/zh/guide/troubleshooting.md)和[数据与隐私](docs/zh/guide/data-and-privacy.md)——CLI 检测不到、通知不弹、统计对不上这类问题多半在那里有答案。
 
 请使用 [Issue 模板](https://github.com/linpeilie/zeta/issues/new/choose)。Zeta 的问题高度依赖环境，模板里的这些信息请尽量填全：
 
