@@ -14,11 +14,11 @@ abstract class AppearanceSettingsStore {
 
 /// 基于 JSON 文件的生产外观设置仓库。
 ///
-/// 具体文件实例（[ZetaTextFile]）由 app 组合层注入；本类只做编解码与宽容回退。
+/// 具体文档实例（[StorageService]）由 app 组合层注入；本类只做编解码与宽容回退。
 class FileAppearanceSettingsStore implements AppearanceSettingsStore {
   FileAppearanceSettingsStore({required this._storage});
 
-  final ZetaTextFile _storage;
+  final StorageService _storage;
 
   @override
   Future<AppearanceSettings> load() async {
@@ -36,22 +36,6 @@ class FileAppearanceSettingsStore implements AppearanceSettingsStore {
   @override
   Future<void> save(AppearanceSettings settings) async {
     await _storage.write(jsonEncode(settings.toJson()));
-  }
-}
-
-/// 内存版外观设置仓库。
-class MemoryAppearanceSettingsStore implements AppearanceSettingsStore {
-  MemoryAppearanceSettingsStore([AppearanceSettings? settings])
-    : _settings = settings ?? const AppearanceSettings();
-
-  AppearanceSettings _settings;
-
-  @override
-  Future<AppearanceSettings> load() async => _settings;
-
-  @override
-  Future<void> save(AppearanceSettings settings) async {
-    _settings = settings;
   }
 }
 

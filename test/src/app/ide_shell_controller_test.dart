@@ -10,7 +10,6 @@ import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_
 import 'package:zeta/src/app/shell/ide_shell_controller.dart';
 import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_slice_composition.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_session_slice_operations.dart';
@@ -18,7 +17,6 @@ import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
 import 'package:zeta/src/features/usage_statistics/application/query_agent_usage_panel_repository.dart';
 import 'package:zeta/src/features/usage_statistics/application/query_usage_statistics_repository.dart';
-import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partition_store.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/fallback_usage_statistics_text_catalog.dart';
 
@@ -27,6 +25,7 @@ import '../testing/agent_provider_stub_base.dart';
 import '../testing/test_agent_provider_bundle_factory.dart';
 import '../testing/fake_agent_frame_scheduler.dart';
 import '../testing/provider_settings_test_store.dart';
+import '../testing/memory_feature_stores.dart';
 
 final List<FakeAgentFrameScheduler> _uiFrameSchedulers =
     <FakeAgentFrameScheduler>[];

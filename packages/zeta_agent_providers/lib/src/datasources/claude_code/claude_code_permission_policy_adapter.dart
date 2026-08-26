@@ -21,39 +21,20 @@ abstract interface class ClaudeCodeSessionDecisionStore {
   Future<void> save(Map<String, ClaudeCodeSessionToolDecision> decisions);
 }
 
-/// 不落盘的会话工具决策存储，供测试和无文件持久化的宿主使用。
-final class MemoryClaudeCodeSessionDecisionStore
-    implements ClaudeCodeSessionDecisionStore {
-  Map<String, ClaudeCodeSessionToolDecision> _decisions =
-      <String, ClaudeCodeSessionToolDecision>{};
-
-  @override
-  Future<Map<String, ClaudeCodeSessionToolDecision>> load() async {
-    return Map<String, ClaudeCodeSessionToolDecision>.of(_decisions);
-  }
-
-  @override
-  Future<void> save(
-    Map<String, ClaudeCodeSessionToolDecision> decisions,
-  ) async {
-    _decisions = Map<String, ClaudeCodeSessionToolDecision>.of(decisions);
-  }
-}
-
 /// 版本化、宽容解码的会话工具决策文件。
 ///
 /// JSON 白名单只有 `version`、`toolName` 与 `decision`，绝不写入工具 input、
 /// prompt、cwd 或 Provider raw payload。
 final class FileClaudeCodeSessionDecisionStore
     implements ClaudeCodeSessionDecisionStore {
-  /// [storage] 由组合层注入：应用传 `AtomicTextFile`，测试传内存实现。
+  /// [storage] 由组合层注入：应用传 `FileStorageService`，测试传内存实现。
   /// 适配器自己不碰 `dart:io`，这样它可以随 Provider 包脱离根 app。
-  FileClaudeCodeSessionDecisionStore({required ZetaTextFile storage})
+  FileClaudeCodeSessionDecisionStore({required StorageService storage})
     : _file = storage;
 
   static const int currentVersion = 1;
 
-  final ZetaTextFile _file;
+  final StorageService _file;
 
   @override
   Future<Map<String, ClaudeCodeSessionToolDecision>> load() async {
@@ -141,7 +122,9 @@ final class ClaudeCodePermissionPolicyAdapter
     this.textCatalog = const FallbackAgentUiTextCatalog(),
   }) : _sessionDecisionStoreFactory =
            sessionDecisionStoreFactory ??
-           ((_) => MemoryClaudeCodeSessionDecisionStore());
+           ((_) => FileClaudeCodeSessionDecisionStore(
+             storage: MemoryStorageService(),
+           ));
 
   final ClaudeCodePermissionModeApplier applyPermissionMode;
   final ClaudeCodeSessionDecisionStoreFactory _sessionDecisionStoreFactory;

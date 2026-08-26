@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/app/storage/atomic_text_file.dart';
+import 'package:zeta/src/app/storage/file_storage_service.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
@@ -29,13 +29,17 @@ void main() {
     });
 
     test('returns null when the session file is missing', () async {
-      final store = FileIdeSessionStore(storage: AtomicTextFile(sessionFile));
+      final store = FileIdeSessionStore(
+        storage: FileStorageService(sessionFile),
+      );
 
       expect(await store.load(), isNull);
     });
 
     test('saves and restores the versioned session snapshot', () async {
-      final store = FileIdeSessionStore(storage: AtomicTextFile(sessionFile));
+      final store = FileIdeSessionStore(
+        storage: FileStorageService(sessionFile),
+      );
       const snapshot = IdeSessionState(
         projectPaths: <String>['/repo'],
         activeProjectPath: '/repo',
@@ -70,7 +74,9 @@ void main() {
 
     test('returns an empty snapshot when the JSON file is damaged', () async {
       await sessionFile.writeAsString('{not-json');
-      final store = FileIdeSessionStore(storage: AtomicTextFile(sessionFile));
+      final store = FileIdeSessionStore(
+        storage: FileStorageService(sessionFile),
+      );
 
       final restored = await store.load();
 
@@ -80,7 +86,9 @@ void main() {
 
     test('returns null when the file is not valid UTF-8', () async {
       await sessionFile.writeAsBytes(<int>[0xff]);
-      final store = FileIdeSessionStore(storage: AtomicTextFile(sessionFile));
+      final store = FileIdeSessionStore(
+        storage: FileStorageService(sessionFile),
+      );
 
       expect(await store.load(), isNull);
     });
@@ -91,7 +99,7 @@ void main() {
       );
       await blockedParent.writeAsString('not a directory');
       final store = FileIdeSessionStore(
-        storage: AtomicTextFile(
+        storage: FileStorageService(
           File(
             '${blockedParent.path}${Platform.pathSeparator}ide_session.json',
           ),

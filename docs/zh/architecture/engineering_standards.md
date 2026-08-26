@@ -498,7 +498,8 @@ Provider 契约测试。若 PR 因 Provider 差异修改 CoalescingPolicy/Buffer
   只解码当前版本；未知语言回退英语，损坏或不支持版本使用启动编排给出的 fallback。
   localized UI copy 不得进入任何 JSON store。
 - HOME 解析、目录布局和安全文本替换属于 `core`；各 feature 的 data store 只接收
-  app 注入的具体文件并负责自身 codec，presentation/application 不拼接 `~/.zeta` 路径。
+  app 经 `ZetaStorageBindings` 注入 `StorageService` 并负责自身 codec，
+  presentation/application 不拼接 `~/.zeta` 路径。
 - 当前不读取旧 SharedPreferences，也没有历史文件迁移器或 marker。
 - 会话状态使用当前版本 JSON；字段新增时提供默认值。
 - `tryDecode` 或等价宽容读取逻辑必须处理空值、损坏 JSON、不支持版本和未知字段。

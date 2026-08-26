@@ -17,6 +17,7 @@ import 'package:zeta/src/features/settings/presentation/settings_page.dart';
 import 'package:zeta/src/features/settings/presentation/settings_slice/settings_slice_providers.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
+import '../testing/memory_feature_stores.dart';
 
 void main() {
   testWidgets('settings chrome follows locale while values stay stable', (
@@ -723,8 +724,6 @@ Future<SettingsSliceComposition> _pumpSettingsPage(
   });
 
   final settings = SettingsSliceComposition.create(
-    useFilePersistence: false,
-    dataPaths: null,
     fallbackLanguage: AppLanguage.simplifiedChinese,
     appearanceSettingsStore:
         appearanceSettingsStore ?? MemoryAppearanceSettingsStore(),

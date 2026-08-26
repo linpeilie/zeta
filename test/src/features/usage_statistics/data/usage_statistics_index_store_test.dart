@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/app/storage/atomic_text_file.dart';
+import 'package:zeta/src/app/storage/file_storage_service.dart';
 import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partition_store.dart';
 
 void main() {
@@ -41,7 +41,7 @@ void main() {
           }),
         );
         final store = FileUsageStatisticsPartitionStore(
-          storage: AtomicTextFile(file),
+          storage: FileStorageService(file),
         );
         final codex = UsageStatisticsIndexPartition(
           schemaVersion: 1,
@@ -55,10 +55,10 @@ void main() {
         await store.writePartition('codex-work', codex);
 
         final reloaded = await FileUsageStatisticsPartitionStore(
-          storage: AtomicTextFile(file),
+          storage: FileStorageService(file),
         ).readPartition('codex-work');
         final unknown = await FileUsageStatisticsPartitionStore(
-          storage: AtomicTextFile(file),
+          storage: FileStorageService(file),
         ).readPartition('future-agent');
         final encoded = jsonDecode(await file.readAsString()) as Map;
         expect(encoded['version'], usageStatisticsPartitionIndexVersion);
@@ -79,7 +79,7 @@ void main() {
         await file.parent.create(recursive: true);
         await file.writeAsString('{damaged');
         final store = FileUsageStatisticsPartitionStore(
-          storage: AtomicTextFile(file),
+          storage: FileStorageService(file),
         );
         expect(await store.readPartition('codex'), isNull);
 
@@ -116,7 +116,7 @@ void main() {
 
       expect(
         await FileUsageStatisticsPartitionStore(
-          storage: AtomicTextFile(file),
+          storage: FileStorageService(file),
         ).readPartition('codex'),
         isNull,
       );
@@ -139,7 +139,7 @@ void main() {
 
       expect(
         await FileUsageStatisticsPartitionStore(
-          storage: AtomicTextFile(file),
+          storage: FileStorageService(file),
         ).readPartition('codex'),
         isNull,
       );
@@ -147,7 +147,7 @@ void main() {
 
     test('parallel partition writes do not drop either source', () async {
       final store = FileUsageStatisticsPartitionStore(
-        storage: AtomicTextFile(_indexFile(tempDirectory)),
+        storage: FileStorageService(_indexFile(tempDirectory)),
       );
 
       await Future.wait(<Future<void>>[
@@ -177,7 +177,7 @@ void main() {
       );
       await blockingParent.writeAsString('blocked');
       final store = FileUsageStatisticsPartitionStore(
-        storage: AtomicTextFile(
+        storage: FileStorageService(
           File.fromUri(
             tempDirectory.uri.resolve(
               'not-a-directory/usage_statistics_index.json',

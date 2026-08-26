@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:zeta/src/app/storage/atomic_text_file.dart';
+import 'package:zeta/src/app/storage/file_storage_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
@@ -1108,7 +1108,7 @@ void main() {
           locator: const _FakeClaudeCodeCliLocator(),
           sessionDecisionStoreFactory: (_) =>
               FileClaudeCodeSessionDecisionStore(
-                storage: AtomicTextFile(cacheFile),
+                storage: FileStorageService(cacheFile),
               ),
           idFactory: _sequenceIds(<String>['session-cache-1', 'turn-cache-1']),
         );

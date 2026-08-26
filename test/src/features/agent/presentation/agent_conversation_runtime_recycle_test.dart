@@ -2,7 +2,6 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_provider_settings_slice_store.dart';
 
@@ -13,6 +12,7 @@ import '../../../testing/fake_agent_frame_scheduler.dart';
 import '../../../testing/test_agent_provider_bundle_factory.dart';
 import '../../../testing/agent_conversation_binding_test_harness.dart';
 import 'harness/agent_pane_test_harness.dart';
+import '../../../testing/memory_feature_stores.dart';
 
 /// 会话级 Provider 实例改造会引入「闲置回收 + 再次发送时重建」。回收销毁的只应是
 /// 子进程实例，会话本身（时间线、草稿、已选 thread）必须原样留在 Pane 里。

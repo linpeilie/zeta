@@ -62,7 +62,7 @@ final class FileUsageStatisticsPartitionStore
     implements UsageStatisticsPartitionStore {
   FileUsageStatisticsPartitionStore({required this._storage});
 
-  final ZetaTextFile _storage;
+  final StorageService _storage;
   final _AsyncMutex _mutex = _AsyncMutex();
 
   @override
@@ -101,34 +101,6 @@ final class FileUsageStatisticsPartitionStore
       // 越界值、非法嵌套对象等语义损坏均视为可重建索引。
       return const <String, UsageStatisticsIndexPartition>{};
     }
-  }
-}
-
-/// 测试和无文件持久化宿主使用的分区 Store。
-final class MemoryUsageStatisticsPartitionStore
-    implements UsageStatisticsPartitionStore {
-  MemoryUsageStatisticsPartitionStore({
-    Map<String, UsageStatisticsIndexPartition> partitions =
-        const <String, UsageStatisticsIndexPartition>{},
-  }) : _partitions = <String, UsageStatisticsIndexPartition>{...partitions};
-
-  final Map<String, UsageStatisticsIndexPartition> _partitions;
-  final _AsyncMutex _mutex = _AsyncMutex();
-
-  @override
-  Future<UsageStatisticsIndexPartition?> readPartition(String sourceKey) async {
-    return _partitions[_validateSourceKey(sourceKey)];
-  }
-
-  @override
-  Future<void> writePartition(
-    String sourceKey,
-    UsageStatisticsIndexPartition partition,
-  ) {
-    final normalizedKey = _validateSourceKey(sourceKey);
-    return _mutex.synchronized(() async {
-      _partitions[normalizedKey] = partition;
-    });
   }
 }
 

@@ -4,8 +4,6 @@ import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_wor
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta/src/features/agent/data/agent_model_catalog_cache_store.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/workspace/application/workspace_file_corpus_port.dart';
 
 import '../../../testing/callback_workspace_file_corpus_port.dart';
@@ -17,6 +15,7 @@ import '../../../testing/provider_settings_test_store.dart';
 import '../../../testing/fake_agent_frame_scheduler.dart';
 import '../../../testing/test_agent_provider_bundle_factory.dart';
 import '../../../testing/ide_test_harness.dart' show FakeAgentProvider;
+import '../../../testing/memory_feature_stores.dart';
 import '../presentation/harness/agent_pane_test_harness.dart';
 
 /// Workspace 只维护 Binding 租约：两个 thread 运行时隔离，历史读取严格惰性，

@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:zeta/src/app/storage/atomic_text_file.dart';
+import 'package:zeta/src/app/storage/file_storage_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
@@ -38,7 +38,7 @@ void main() {
         '${directory.path}${Platform.pathSeparator}session.json',
       );
       final store = FileClaudeCodeSessionDecisionStore(
-        storage: AtomicTextFile(file),
+        storage: FileStorageService(file),
       );
       final adapter = ClaudeCodePermissionPolicyAdapter(
         applyPermissionMode: (_) async => AgentPermissionApplyScope.nextSession,
@@ -68,8 +68,9 @@ void main() {
 
       final reloaded = ClaudeCodePermissionPolicyAdapter(
         applyPermissionMode: (_) async => AgentPermissionApplyScope.nextSession,
-        sessionDecisionStoreFactory: (_) =>
-            FileClaudeCodeSessionDecisionStore(storage: AtomicTextFile(file)),
+        sessionDecisionStoreFactory: (_) => FileClaudeCodeSessionDecisionStore(
+          storage: FileStorageService(file),
+        ),
       );
       await reloaded.bindSession('session-sensitive-id');
       expect(
@@ -87,7 +88,7 @@ void main() {
         '${directory.path}${Platform.pathSeparator}session.json',
       );
       final store = FileClaudeCodeSessionDecisionStore(
-        storage: AtomicTextFile(file),
+        storage: FileStorageService(file),
       );
 
       await file.writeAsString('{damaged');
@@ -126,8 +127,9 @@ void main() {
       );
       final adapter = ClaudeCodePermissionPolicyAdapter(
         applyPermissionMode: (_) async => AgentPermissionApplyScope.nextSession,
-        sessionDecisionStoreFactory: (_) =>
-            FileClaudeCodeSessionDecisionStore(storage: AtomicTextFile(file)),
+        sessionDecisionStoreFactory: (_) => FileClaudeCodeSessionDecisionStore(
+          storage: FileStorageService(file),
+        ),
       );
 
       await adapter.bindSession('session-question-cache');

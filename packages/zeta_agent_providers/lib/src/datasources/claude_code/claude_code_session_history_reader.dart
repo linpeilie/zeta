@@ -5,6 +5,7 @@ import 'package:zeta_agent_providers/src/datasources/claude_code/claude_code_eve
 import 'package:zeta_agent_providers/src/datasources/claude_code/claude_code_hidden_thread_store.dart';
 import 'package:zeta_agent_providers/src/mappers/claude_code_stream_identity.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
 
 typedef ClaudeCodeHistoryTurnIdFactory =
     String Function(String sessionId, String sourceTurnId, int ordinal);
@@ -57,7 +58,8 @@ class ClaudeCodeSessionHistoryReader {
            historyIdentityFactory ?? ClaudeCodeStreamIdentity.new,
        _historyTurnIdFactory = historyTurnIdFactory ?? _defaultHistoryTurnId,
        _hiddenThreadStore =
-           hiddenThreadStore ?? MemoryClaudeCodeHiddenThreadStore();
+           hiddenThreadStore ??
+           FileClaudeCodeHiddenThreadStore(storage: MemoryStorageService());
 
   /// 测试可注入的 Claude Code 家目录。
   final String? claudeHome;

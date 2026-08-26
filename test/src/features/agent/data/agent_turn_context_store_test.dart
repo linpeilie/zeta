@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/app/storage/atomic_text_file.dart';
+import 'package:zeta/src/app/storage/file_storage_service.dart';
 import 'package:zeta/src/features/agent/data/agent_turn_context_store.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
@@ -22,8 +22,7 @@ void main() {
 
     test('upserts start then complete into one encoded thread file', () async {
       final store = FileAgentTurnContextStore(
-        rootDirectory: tempRoot,
-        createStorage: (path) => AtomicTextFile(File(path)),
+        createStorage: (key) => FileStorageService(_fileFor(tempRoot, key)),
       );
       const started = AgentThreadTurnContext(
         providerId: 'grok',
@@ -67,8 +66,7 @@ void main() {
 
     test('does not let a later null overwrite an existing effort', () async {
       final store = FileAgentTurnContextStore(
-        rootDirectory: tempRoot,
-        createStorage: (path) => AtomicTextFile(File(path)),
+        createStorage: (key) => FileStorageService(_fileFor(tempRoot, key)),
       );
       await store.save(
         const AgentThreadTurnContext(
@@ -96,8 +94,7 @@ void main() {
 
     test('keeps different threads in different files', () async {
       final store = FileAgentTurnContextStore(
-        rootDirectory: tempRoot,
-        createStorage: (path) => AtomicTextFile(File(path)),
+        createStorage: (key) => FileStorageService(_fileFor(tempRoot, key)),
       );
       await store.save(
         const AgentThreadTurnContext(
@@ -138,8 +135,7 @@ void main() {
       'encodes unsafe thread ids and treats corrupt files as missing',
       () async {
         final store = FileAgentTurnContextStore(
-          rootDirectory: tempRoot,
-          createStorage: (path) => AtomicTextFile(File(path)),
+          createStorage: (key) => FileStorageService(_fileFor(tempRoot, key)),
         );
         await store.save(
           const AgentThreadTurnContext(
@@ -175,4 +171,11 @@ void main() {
       },
     );
   });
+}
+
+File _fileFor(Directory root, String key) {
+  return File(
+    '${root.path}${Platform.pathSeparator}'
+    '${key.split('/').join(Platform.pathSeparator)}',
+  );
 }

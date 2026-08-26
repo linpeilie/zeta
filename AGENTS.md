@@ -173,7 +173,7 @@ main → app → presentation/application → domain
 
 ### G7 · 不落盘敏感内容，JSON 版本化且宽容
 
-Zeta 自有数据全部在 `~/.zeta/`：`config/` · `state/` · `logs/` · `cache/`。feature store 只接收 `lib/src/app` 注入的具体文件，**presentation / application 不得自己拼 `~/.zeta` 路径**。
+Zeta 自有数据全部在 `~/.zeta/`：`config/` · `state/` · `logs/` · `cache/`。feature store 只接收 `lib/src/app` 经 `ZetaStorageBindings` 注入的 `StorageService`，**presentation / application 不得自己拼 `~/.zeta` 路径**。
 
 - 持久化 JSON 必须**版本化 + 宽容解码**：缺字段、损坏、旧版本、未知字段都不能阻断应用启动。
 - 派生索引、缓存、日志、系统通知 payload **只保存规范化白名单字段**。

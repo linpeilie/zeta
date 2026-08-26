@@ -13,6 +13,8 @@ import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'agent_provider_stub_base.dart';
 import 'test_agent_provider_bundle_factory.dart';
 
+export 'memory_feature_stores.dart';
+
 const String conversationTestThreadId = 'thread-1';
 
 ValueKey<String> fileNodeKey(String label) {

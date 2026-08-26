@@ -9,6 +9,7 @@ import 'package:zeta/src/features/usage_statistics/data/providers/claude_code/cl
 import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partition_store.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_query_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
+import '../../../../../testing/memory_feature_stores.dart';
 
 void main() {
   group('ClaudeCodeTokenUsageSource', () {

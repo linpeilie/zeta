@@ -22,7 +22,7 @@ class FileGeneralSettingsStore implements GeneralSettingsStore {
     this.codec = const GeneralSettingsCodec(),
   });
 
-  final ZetaTextFile _storage;
+  final StorageService _storage;
   final AppLanguage fallbackLanguage;
   final GeneralSettingsCodec codec;
 
@@ -54,23 +54,5 @@ class FileGeneralSettingsStore implements GeneralSettingsStore {
     } catch (_) {
       return GeneralSettings(appLanguage: fallbackLanguage);
     }
-  }
-}
-
-/// 内存版常规设置仓库，供测试和无文件宿主使用。
-class MemoryGeneralSettingsStore implements GeneralSettingsStore {
-  MemoryGeneralSettingsStore([
-    GeneralSettings? settings,
-    AppLanguage fallbackLanguage = AppLanguage.simplifiedChinese,
-  ]) : _settings = settings ?? GeneralSettings(appLanguage: fallbackLanguage);
-
-  GeneralSettings _settings;
-
-  @override
-  Future<GeneralSettings> load() async => _settings;
-
-  @override
-  Future<void> save(GeneralSettings settings) async {
-    _settings = settings;
   }
 }

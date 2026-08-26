@@ -33,6 +33,7 @@ Zeta 的设计目标是让 Flutter UI、Agent provider、会话持久化和本�
 main()
   -> ZetaDataPaths (~/.zeta)
   -> ensureZetaDataDirectories
+  -> ZetaStorageBindings.file
   -> daily app log (~/.zeta/logs)
   -> MainApp
     -> AgentProviderRuntimeRegistry（Provider 进程唯一所有者）
@@ -732,21 +733,23 @@ data 精确编码”的单向流：
 
 ### Zeta 自有存储边界
 
-Zeta 通过 `ZetaDataPaths` 统一解析 `~/.zeta`，由 app 装配层把文件注入 feature data
-store。配置位于 `config/providers.json`、`config/appearance.json` 与
-`config/general.json`；IDE 会话和使用统计派生索引位于 `state/`；应用日志
-按本地日期写入 `logs/zeta-YYYY-MM-DD.log`；规范化模型目录缓存位于
-`cache/agent_models_v1.json`。JSON store 使用同目录临时文件、flush 与 rename 替换，
-并在读取损坏或 I/O 失败时按 feature 语义降级。模型缓存只保存中立白名单字段，不保存
-provider 原始 payload、环境变量值或凭证；文件变更的替换片段、写入内容与 patch 也只留在
-当前内存时间线，不进入任何 Zeta store 或日志。localized UI copy 同样不得写入配置、
-会话、缓存、日志或通知 payload。
+Zeta 通过 `ZetaDataPaths` 统一解析 `~/.zeta`，仅在 `ZetaStorageBindings`
+装配成一组 `StorageService`（生产为 `FileStorageService`，临时宿主为
+`MemoryStorageService`）。`MainApp` 与 feature store 不再接收路径对象。配置位于
+`config/providers.json`、`config/appearance.json` 与 `config/general.json`；
+IDE 会话和使用统计派生索引位于 `state/`；应用日志按本地日期写入
+`logs/zeta-YYYY-MM-DD.log`；规范化模型目录缓存位于 `cache/agent_models_v1.json`。
+JSON store 使用同目录临时文件、flush 与 rename 替换，并在读取损坏或 I/O 失败时按
+feature 语义降级。模型缓存只保存中立白名单字段，不保存 provider 原始 payload、
+环境变量值或凭证；文件变更的替换片段、写入内容与 patch 也只留在当前内存时间线，
+不进入任何 Zeta store 或日志。localized UI copy 同样不得写入配置、会话、缓存、
+日志或通知 payload。
 
 `general.json` 为 v3，字段含发送快捷键、通知开关和 `appLanguage`（`en` /
 `zh-Hans`）。只解码当前版本；损坏或不支持版本时使用启动编排提供的语言 fallback。
 
-当前没有旧版 SharedPreferences、历史文件迁移或 migration marker。启动阶段只准备
-`~/.zeta` 目录；目录不可用时本次运行改用内存 store，不阻断主界面。
+当前没有旧版 SharedPreferences、历史文件迁移或 migration marker。启动阶段准备
+`~/.zeta` 目录；目录不可用则启动失败，不再回退内存 store。
 
 `~/.codex`、`~/.grok`、`~/.claude` 和用户项目源码不属于 Zeta 自有
 存储。Provider 自有 data adapter 可按明确功能读取 Agent CLI 配置、session、日志和账号

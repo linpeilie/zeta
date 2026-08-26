@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:zeta/src/app/storage/atomic_text_file.dart';
+import 'package:zeta/src/app/storage/file_storage_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 
@@ -26,7 +26,7 @@ void main() {
 
     test('missing fields and corrupt JSON decode as empty', () async {
       final store = FileClaudeCodeHiddenThreadStore(
-        storage: AtomicTextFile(storeFile),
+        storage: FileStorageService(storeFile),
       );
 
       await storeFile.parent.create(recursive: true);
@@ -41,7 +41,7 @@ void main() {
 
     test('unsupported versions decode as empty', () async {
       final store = FileClaudeCodeHiddenThreadStore(
-        storage: AtomicTextFile(storeFile),
+        storage: FileStorageService(storeFile),
       );
       await storeFile.parent.create(recursive: true);
       await storeFile.writeAsString(
@@ -57,7 +57,7 @@ void main() {
 
     test('writes only the versioned key whitelist', () async {
       final store = FileClaudeCodeHiddenThreadStore(
-        storage: AtomicTextFile(storeFile),
+        storage: FileStorageService(storeFile),
       );
 
       await store.save(<String>{

@@ -11,34 +11,20 @@ abstract interface class ClaudeCodeHiddenThreadStore {
   Future<void> save(Set<String> hiddenThreadKeys);
 }
 
-/// 不落盘的隐藏列表，供测试和无文件持久化宿主使用。
-final class MemoryClaudeCodeHiddenThreadStore
-    implements ClaudeCodeHiddenThreadStore {
-  Set<String> _hiddenThreadKeys = <String>{};
-
-  @override
-  Future<Set<String>> load() async => Set<String>.of(_hiddenThreadKeys);
-
-  @override
-  Future<void> save(Set<String> hiddenThreadKeys) async {
-    _hiddenThreadKeys = Set<String>.of(hiddenThreadKeys);
-  }
-}
-
 /// `~/.zeta` 内版本化、宽容解码的 Claude Code 隐藏列表。
 ///
 /// JSON 白名单只有 `version` 与 `hiddenThreadKeys`；不保存 prompt、回复、工具
 /// 输出或 Provider raw payload。
 final class FileClaudeCodeHiddenThreadStore
     implements ClaudeCodeHiddenThreadStore {
-  /// [storage] 由组合层注入：应用传 `AtomicTextFile`，测试传内存实现。
+  /// [storage] 由组合层注入：应用传 `FileStorageService`，测试传内存实现。
   /// 适配器自己不碰 `dart:io`，这样它可以随 Provider 包脱离根 app。
-  FileClaudeCodeHiddenThreadStore({required ZetaTextFile storage})
+  FileClaudeCodeHiddenThreadStore({required StorageService storage})
     : _file = storage;
 
   static const int currentVersion = 1;
 
-  final ZetaTextFile _file;
+  final StorageService _file;
 
   @override
   Future<Set<String>> load() async {

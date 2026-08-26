@@ -28,7 +28,7 @@ import 'package:zeta/src/app/plugins/zeta_plugin_catalog.dart';
 import 'package:zeta/src/app/localization/zeta_text_catalogs.dart';
 import 'package:zeta/src/app/window_bootstrap.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
-import 'package:zeta/src/core/storage/zeta_data_paths.dart';
+import 'package:zeta/src/app/storage/zeta_storage_bindings.dart';
 import 'package:zeta/src/ui/core/system_file_manager.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
@@ -87,7 +87,7 @@ class MainApp extends StatefulWidget {
     this.fallbackLanguage = AppLanguage.simplifiedChinese,
     this.displayLanguageOverride,
     this.waitForGeneralSettings = false,
-    this.dataPaths,
+    this.storageBindings,
     this.usageStatisticsPartitionStore,
     this.agentUsagePanelRepository,
     this.agentModelCatalogRepository,
@@ -107,7 +107,7 @@ class MainApp extends StatefulWidget {
   /// 宿主运行模式：决定持久化落盘还是留内存、是否允许访问本机 Agent CLI。
   final ZetaHostMode hostMode;
 
-  /// 会话仓库；未注入时按 [hostMode] 选择文件或内存实现。
+  /// 会话仓库；未注入时由 [storageBindings] 装配文件或内存文档。
   final IdeSessionStore? ideSessionStore;
   final AgentProviderBundleFactory? agentProviderFactory;
   final AgentProviderConfigStore? agentProviderConfigStore;
@@ -141,12 +141,10 @@ class MainApp extends StatefulWidget {
   /// app 级可观测性组合；默认关闭采集，探针退化为 no-op。
   final ZetaObservability? observability;
 
-  /// 生产启动阶段解析并初始化的 Zeta 自有数据路径。
-  ///
-  /// 未传入时使用内存/回调存储，避免测试或嵌入式宿主意外写入真实 HOME。
-  final ZetaDataPaths? dataPaths;
+  /// 应用级文档存储绑定。生产 `main` 传入文件实现；临时宿主未传入时用内存实现。
+  final ZetaStorageBindings? storageBindings;
 
-  /// 使用统计索引存储注入点；默认按 [dataPaths] 选择文件或内存实现。
+  /// 使用统计索引存储注入点；默认按 [storageBindings] 选择文档实现。
   final UsageStatisticsPartitionStore? usageStatisticsPartitionStore;
 
   /// Context Agent 统计面板的数据注入点，供 Widget 测试隔离本机 Agent 历史。
@@ -210,6 +208,7 @@ class MainAppState extends State<MainApp>
   late final AgentProviderSettingsCodec _agentProviderSettingsCodec;
   late final AgentProviderConfigStore _agentProviderConfigStore;
   Future<void> Function()? _providerRuntimeShutdownHook;
+  late final ZetaStorageBindings _storageBindings;
   late final ZetaApplicationComposition _appComposition;
   bool _ownsAgentProviderRuntimeRegistry = false;
   AppLifecycleState? _appLifecycleState;
@@ -287,9 +286,16 @@ class MainAppState extends State<MainApp>
     if (widget.enableNativeWindowFrame) {
       windowManager.addListener(this);
     }
+    _storageBindings =
+        widget.storageBindings ??
+        (widget.hostMode.usesFilePersistence
+            ? throw StateError(
+                'ZetaHostMode.local requires storageBindings from the composition root',
+              )
+            : ZetaStorageBindings.memory());
     _appComposition = ZetaApplicationComposition.create(
       hostMode: widget.hostMode,
-      dataPaths: widget.dataPaths,
+      storage: _storageBindings,
       ideSessionStore: widget.ideSessionStore,
       usageStatisticsPartitionStore: widget.usageStatisticsPartitionStore,
       agentModelCatalogRepository: widget.agentModelCatalogRepository,
@@ -321,9 +327,9 @@ class MainAppState extends State<MainApp>
       }
     }
     _settingsSliceComposition = SettingsSliceComposition.create(
-      useFilePersistence: _useFilePersistence,
-      dataPaths: widget.dataPaths,
       fallbackLanguage: widget.fallbackLanguage,
+      appearanceStorage: _storageBindings.appearance,
+      generalSettingsStorage: _storageBindings.generalSettings,
       appearanceSettingsStore: widget.appearanceSettingsStore,
       generalSettingsStore: widget.generalSettingsStore,
       fontCatalog: widget.systemFontCatalogService,
@@ -537,6 +543,7 @@ class MainAppState extends State<MainApp>
   /// 尚未组合就被读到时，`_requiredXxx` 会 fail-closed 抛错。
   List<Override> _composeOverrides() {
     return <Override>[
+      ..._storageBindings.providerOverrides,
       zetaMetricsPortProvider.overrideWith((ref) => _metrics),
       ...ideSessionSliceOverrides(
         sessionStore: _appComposition.ideSessionStore,
@@ -724,9 +731,6 @@ class MainAppState extends State<MainApp>
     }
     setState(() => _nativeWindowSuspended = suspended);
   }
-
-  /// 是否把持久化落到本机文件。语义现在只由宿主模式与 dataPaths 决定。
-  bool get _useFilePersistence => _appComposition.usesFilePersistence;
 
   /// 是否禁止访问本机 Agent CLI（安装探测与用量历史）。
   bool get _blocksLocalCliAccess => !widget.hostMode.allowsLocalCliAccess;

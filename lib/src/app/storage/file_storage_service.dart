@@ -7,8 +7,8 @@ import 'package:zeta_foundation/zeta_foundation.dart';
 ///
 /// 同一实例的写入会串行执行，避免应用内并发保存互相覆盖。临时文件与目标文件
 /// 位于同一目录，完成 flush 后再 rename，降低进程中断留下半份 JSON 的概率。
-class AtomicTextFile implements ZetaTextFile {
-  AtomicTextFile(this.file);
+final class FileStorageService implements StorageService {
+  FileStorageService(this.file);
 
   /// 最终持久化文件。
   final File file;

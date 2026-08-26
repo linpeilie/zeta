@@ -9,7 +9,7 @@ class FileAgentModelCatalogCacheStore implements AgentModelCatalogCacheStore {
   FileAgentModelCatalogCacheStore({required this._storage});
 
   static const int _version = 1;
-  final ZetaTextFile _storage;
+  final StorageService _storage;
 
   @override
   Future<List<AgentModelCatalogSnapshot>> load() async {
@@ -45,25 +45,6 @@ class FileAgentModelCatalogCacheStore implements AgentModelCatalogCacheStore {
         'entries': snapshots.map(_encodeSnapshot).toList(growable: false),
       }),
     );
-  }
-}
-
-/// 不访问用户文件的内存缓存，供测试和嵌入式宿主使用。
-class MemoryAgentModelCatalogCacheStore implements AgentModelCatalogCacheStore {
-  MemoryAgentModelCatalogCacheStore([
-    List<AgentModelCatalogSnapshot> snapshots =
-        const <AgentModelCatalogSnapshot>[],
-  ]) : _snapshots = List<AgentModelCatalogSnapshot>.from(snapshots);
-
-  List<AgentModelCatalogSnapshot> _snapshots;
-
-  @override
-  Future<List<AgentModelCatalogSnapshot>> load() async =>
-      List<AgentModelCatalogSnapshot>.unmodifiable(_snapshots);
-
-  @override
-  Future<void> save(List<AgentModelCatalogSnapshot> snapshots) async {
-    _snapshots = List<AgentModelCatalogSnapshot>.from(snapshots);
   }
 }
 

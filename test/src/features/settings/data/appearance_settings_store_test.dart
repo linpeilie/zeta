@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/app/storage/atomic_text_file.dart';
+import 'package:zeta/src/app/storage/file_storage_service.dart';
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 
@@ -28,7 +28,7 @@ void main() {
 
     test('loads default appearance settings when storage is empty', () async {
       final store = FileAppearanceSettingsStore(
-        storage: AtomicTextFile(settingsFile),
+        storage: FileStorageService(settingsFile),
       );
 
       expect(await store.load(), const AppearanceSettings());
@@ -36,7 +36,7 @@ void main() {
 
     test('saves versioned appearance settings json', () async {
       final store = FileAppearanceSettingsStore(
-        storage: AtomicTextFile(settingsFile),
+        storage: FileStorageService(settingsFile),
       );
 
       await store.save(
@@ -85,7 +85,7 @@ void main() {
         }),
       );
       final store = FileAppearanceSettingsStore(
-        storage: AtomicTextFile(settingsFile),
+        storage: FileStorageService(settingsFile),
       );
 
       expect(
@@ -97,7 +97,7 @@ void main() {
     test('falls back to defaults on invalid json', () async {
       await settingsFile.writeAsString('{not-json');
       final store = FileAppearanceSettingsStore(
-        storage: AtomicTextFile(settingsFile),
+        storage: FileStorageService(settingsFile),
       );
 
       expect(await store.load(), const AppearanceSettings());
@@ -106,7 +106,7 @@ void main() {
     test('falls back to defaults on invalid UTF-8', () async {
       await settingsFile.writeAsBytes(<int>[0xff]);
       final store = FileAppearanceSettingsStore(
-        storage: AtomicTextFile(settingsFile),
+        storage: FileStorageService(settingsFile),
       );
 
       expect(await store.load(), const AppearanceSettings());
@@ -118,7 +118,7 @@ void main() {
       );
       await blockedParent.writeAsString('not a directory');
       final store = FileAppearanceSettingsStore(
-        storage: AtomicTextFile(
+        storage: FileStorageService(
           File('${blockedParent.path}${Platform.pathSeparator}appearance.json'),
         ),
       );

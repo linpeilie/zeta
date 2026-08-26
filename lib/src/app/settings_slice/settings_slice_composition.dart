@@ -1,13 +1,11 @@
-import 'dart:io';
+import 'package:zeta_foundation/zeta_foundation.dart';
 
 import 'package:zeta/src/app/settings_slice/settings_slice_notification_source.dart';
-import 'package:zeta/src/app/storage/atomic_text_file.dart';
 import 'package:zeta/src/app/settings_slice/settings_slice_runners.dart';
 import 'package:zeta/src/features/settings/application/agent_notification_settings_source.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_effect.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_mapping.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_effect.dart';
-import 'package:zeta/src/core/storage/zeta_data_paths.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_store.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_state.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_store.dart';
@@ -43,32 +41,25 @@ final class SettingsSliceComposition {
   Future<GeneralSettings> get generalSettingsReady => _generalRunner.loadResult;
 
   factory SettingsSliceComposition.create({
-    required bool useFilePersistence,
-    required ZetaDataPaths? dataPaths,
     required AppLanguage fallbackLanguage,
+    StorageService? appearanceStorage,
+    StorageService? generalSettingsStorage,
     AppearanceSettingsStore? appearanceSettingsStore,
     GeneralSettingsStore? generalSettingsStore,
     SystemFontCatalogService? fontCatalog,
     AppearanceSettings? initialAppearanceSettings,
   }) {
-    final filePersistence = useFilePersistence && dataPaths != null;
     final appearanceDataStore =
         appearanceSettingsStore ??
-        (filePersistence
-            ? FileAppearanceSettingsStore(
-                storage: AtomicTextFile(File(dataPaths.appearanceFilePath)),
-              )
-            : MemoryAppearanceSettingsStore());
+        FileAppearanceSettingsStore(
+          storage: appearanceStorage ?? MemoryStorageService(),
+        );
     final generalDataStore =
         generalSettingsStore ??
-        (filePersistence
-            ? FileGeneralSettingsStore(
-                storage: AtomicTextFile(
-                  File(dataPaths.generalSettingsFilePath),
-                ),
-                fallbackLanguage: fallbackLanguage,
-              )
-            : MemoryGeneralSettingsStore(null, fallbackLanguage));
+        FileGeneralSettingsStore(
+          storage: generalSettingsStorage ?? MemoryStorageService(),
+          fallbackLanguage: fallbackLanguage,
+        );
 
     // store 与 runner 互相引用，用延迟绑定 runner 解开构造环。
     final deferredAppearanceRunner = _DeferredAppearanceRunner();

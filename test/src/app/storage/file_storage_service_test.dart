@@ -1,10 +1,10 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/app/storage/atomic_text_file.dart';
+import 'package:zeta/src/app/storage/file_storage_service.dart';
 
 void main() {
-  group('AtomicTextFile', () {
+  group('FileStorageService', () {
     late Directory directory;
     late File target;
 
@@ -25,7 +25,7 @@ void main() {
     test(
       'returns null for a missing file and creates parent directories',
       () async {
-        final storage = AtomicTextFile(target);
+        final storage = FileStorageService(target);
 
         expect(await storage.read(), isNull);
         await storage.write('{"version":1}');
@@ -38,7 +38,7 @@ void main() {
     test(
       'serializes concurrent replacements without leaving temp files',
       () async {
-        final storage = AtomicTextFile(target);
+        final storage = FileStorageService(target);
 
         final first = storage.write('first');
         final second = storage.write('second');

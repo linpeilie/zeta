@@ -8,12 +8,13 @@ import 'package:zeta_foundation/platform.dart';
 
 import 'package:zeta/src/app/app.dart';
 import 'package:zeta/src/app/observability/zeta_observability.dart';
-import 'package:zeta/src/app/storage/atomic_text_file.dart';
 import 'package:zeta/src/app/storage/zeta_data_file_system.dart';
+import 'package:zeta/src/app/storage/zeta_storage_bindings.dart';
 import 'package:zeta/src/app/window_bootstrap.dart';
 import 'package:zeta/src/app/logging/app_logging.dart';
 import 'package:zeta/src/core/storage/zeta_data_paths.dart';
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/features/settings/presentation/appearance_theme_mode_mapper.dart';
@@ -34,10 +35,11 @@ void main() {
         isWindows: Platform.isWindows,
       );
       await ensureZetaDataDirectories(dataPaths);
+      final storage = ZetaStorageBindings.file(dataPaths);
       configureAppLogging(logDirectory: Directory(dataPaths.logsDirectoryPath));
       _installGlobalErrorLogging();
       await windowManager.ensureInitialized();
-      final appearance = await _loadLaunchAppearance(dataPaths);
+      final appearance = await _loadLaunchAppearance(storage.appearance);
       await bootstrapDesktopWindow(
         preferredBrightness: resolveBrightnessForThemeMode(
           themeModeForPreference(appearance.themeMode),
@@ -48,7 +50,7 @@ void main() {
       // 根 `ProviderScope` 在 MainApp 内部，测试 pump MainApp 时无需重复接线。
       runApp(
         MainApp(
-          dataPaths: dataPaths,
+          storageBindings: storage,
           initialAppearanceSettings: appearance,
           fallbackLanguage: firstSystemLanguage,
           waitForGeneralSettings: true,
@@ -64,11 +66,11 @@ void main() {
   );
 }
 
-Future<AppearanceSettings> _loadLaunchAppearance(ZetaDataPaths paths) async {
+Future<AppearanceSettings> _loadLaunchAppearance(
+  StorageService appearanceStorage,
+) async {
   try {
-    return await FileAppearanceSettingsStore(
-      storage: AtomicTextFile(File(paths.appearanceFilePath)),
-    ).load();
+    return await FileAppearanceSettingsStore(storage: appearanceStorage).load();
   } catch (error, stackTrace) {
     loggerFor('zeta.storage').w(
       'Could not load appearance settings before showing the window',

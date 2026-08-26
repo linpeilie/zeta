@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import '../../../testing/provider_settings_test_store.dart';
@@ -11,6 +10,7 @@ import 'package:zeta/src/features/agent/application/conversation_slice/agent_con
 import '../../../testing/agent_conversation_binding_test_harness.dart';
 import '../../../testing/fake_agent_frame_scheduler.dart';
 import '../../../testing/recording_json_rpc_peer.dart';
+import '../../../testing/memory_feature_stores.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

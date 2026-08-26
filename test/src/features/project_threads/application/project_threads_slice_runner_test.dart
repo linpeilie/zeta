@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta/src/app/project_threads_slice/project_threads_slice_runner.dart';
 import 'package:zeta/src/features/project_threads/application/project_threads_session_snapshot_codec.dart';
@@ -15,6 +14,7 @@ import '../../../testing/provider_settings_test_store.dart';
 
 import '../../../testing/agent_provider_stub_base.dart';
 import '../../../testing/test_agent_provider_bundle_factory.dart';
+import '../../../testing/memory_feature_stores.dart';
 
 void main() {
   group('ProjectThreadsSliceRunner', () {

@@ -12,6 +12,7 @@ import 'package:zeta/src/features/usage_statistics/domain/agent_usage_query_mode
 import 'package:zeta/src/features/usage_statistics/domain/fallback_usage_statistics_text_catalog.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_text_catalog.dart';
+import '../../../../../testing/memory_feature_stores.dart';
 
 void main() {
   test('maps canonical records and uses config id partition', () async {

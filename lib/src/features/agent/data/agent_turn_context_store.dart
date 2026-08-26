@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:zeta_foundation/zeta_foundation.dart';
 
@@ -8,21 +7,15 @@ import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 final _log = zetaLoggerFor('zeta.agent.turn_context');
 
-/// 由宿主注入的原子文件构造器（app 组合层提供 `AtomicTextFile(File(path))`）。
-typedef AgentTurnContextStorageFactory = ZetaTextFile Function(String path);
-
-/// `~/.zeta/state/session/<providerId>/<threadId>.json` 的版本化文件存储。
+/// `state/session/<providerId>/<threadId>.json` 的版本化存储。
 ///
 /// JSON 只保存白名单 turn 元数据；损坏或未知版本视为缺失，不阻断打开会话。
+/// 相对键由本类编码；具体文档由组合层注入的 [StorageServiceFactory] 打开。
 final class FileAgentTurnContextStore implements AgentTurnContextStore {
-  FileAgentTurnContextStore({
-    required this._rootDirectory,
-    required this._createStorage,
-  });
+  FileAgentTurnContextStore({required this._createStorage});
 
-  final Directory _rootDirectory;
-  final AgentTurnContextStorageFactory _createStorage;
-  final Map<String, ZetaTextFile> _files = <String, ZetaTextFile>{};
+  final StorageServiceFactory _createStorage;
+  final Map<String, StorageService> _files = <String, StorageService>{};
   final Map<String, Future<void>> _writeTails = <String, Future<void>>{};
 
   @override
@@ -61,7 +54,7 @@ final class FileAgentTurnContextStore implements AgentTurnContextStore {
       _log.w('Skipped Agent turn context save because path is unsafe');
       return Future<void>.value();
     }
-    final key = entry.path;
+    final key = entry.key;
     final previous = _writeTails[key] ?? Future<void>.value();
     final operation = previous.then((_) async {
       await entry.storage.write(
@@ -72,7 +65,7 @@ final class FileAgentTurnContextStore implements AgentTurnContextStore {
     return operation;
   }
 
-  ({String path, ZetaTextFile storage})? _fileFor(
+  ({String key, StorageService storage})? _fileFor(
     String providerId,
     String threadId,
   ) {
@@ -81,12 +74,9 @@ final class FileAgentTurnContextStore implements AgentTurnContextStore {
     if (providerSegment == null || threadSegment == null) {
       return null;
     }
-    final path =
-        '${_rootDirectory.path}${Platform.pathSeparator}'
-        '$providerSegment${Platform.pathSeparator}'
-        '$threadSegment.json';
-    final storage = _files.putIfAbsent(path, () => _createStorage(path));
-    return (path: path, storage: storage);
+    final key = '$providerSegment/$threadSegment.json';
+    final storage = _files.putIfAbsent(key, () => _createStorage(key));
+    return (key: key, storage: storage);
   }
 }
 

@@ -9,7 +9,6 @@ import 'package:zeta/src/features/agent/application/agent_skills_catalog_control
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import '../../../testing/provider_settings_test_store.dart';
 import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
@@ -23,6 +22,7 @@ import '../../../testing/agent_provider_stub_base.dart';
 import '../../../testing/test_agent_provider_bundle_factory.dart';
 import '../../../testing/agent_conversation_binding_test_harness.dart';
 import '../../../testing/fake_agent_frame_scheduler.dart';
+import '../../../testing/memory_feature_stores.dart';
 
 final List<FakeAgentFrameScheduler> _uiFrameSchedulers =
     <FakeAgentFrameScheduler>[];

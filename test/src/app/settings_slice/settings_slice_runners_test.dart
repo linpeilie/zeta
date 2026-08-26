@@ -20,6 +20,7 @@ import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/settings/domain/system_font_family.dart';
 import 'package:zeta/src/features/settings/presentation/settings_slice/settings_slice_providers.dart';
+import '../../testing/memory_feature_stores.dart';
 
 /// 可编程字体目录：按 familyName 解析。
 final class _FakeFontCatalog implements SystemFontCatalogService {
@@ -230,8 +231,6 @@ void main() {
   group('settings composition · 唯一 owner', () {
     test('构造期外观快照同步可见，general ready 等持久化加载', () async {
       final composition = SettingsSliceComposition.create(
-        useFilePersistence: false,
-        dataPaths: null,
         fallbackLanguage: AppLanguage.simplifiedChinese,
         initialAppearanceSettings: const AppearanceSettings(
           themeMode: ZetaThemeModePreference.light,

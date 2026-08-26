@@ -14,7 +14,7 @@ abstract class IdeSessionStore {
 class FileIdeSessionStore implements IdeSessionStore {
   FileIdeSessionStore({required this._storage});
 
-  final ZetaTextFile _storage;
+  final StorageService _storage;
 
   @override
   Future<IdeSessionState?> load() async {
@@ -32,22 +32,5 @@ class FileIdeSessionStore implements IdeSessionStore {
   @override
   Future<void> save(IdeSessionState state) async {
     await _storage.write(state.encode());
-  }
-}
-
-/// 内存版 IDE 会话仓库。
-///
-/// 临时宿主模式（widget test / 嵌入宿主）使用：会话在进程内往返，不落盘。
-class MemoryIdeSessionStore implements IdeSessionStore {
-  MemoryIdeSessionStore([this._state]);
-
-  IdeSessionState? _state;
-
-  @override
-  Future<IdeSessionState?> load() async => _state;
-
-  @override
-  Future<void> save(IdeSessionState state) async {
-    _state = state;
   }
 }

@@ -223,8 +223,6 @@ Future<_Harness> _createHarness({
   );
   final indicator = _FakeAttentionIndicator();
   final settingsComposition = SettingsSliceComposition.create(
-    useFilePersistence: false,
-    dataPaths: null,
     fallbackLanguage: AppLanguage.simplifiedChinese,
   );
   await settingsComposition.generalSettingsReady;

@@ -17,7 +17,6 @@ import 'package:zeta/src/features/agent/application/conversation_slice/agent_con
 import 'package:zeta/src/app/conversation_slice/agent_conversation_slice_composition.dart';
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
@@ -32,6 +31,7 @@ import '../../../../testing/provider_settings_test_store.dart';
 import '../../../../testing/agent_provider_stub_base.dart';
 import '../../../../testing/test_agent_provider_bundle_factory.dart';
 import '../../../../testing/agent_conversation_binding_test_harness.dart';
+import '../../../../testing/memory_feature_stores.dart';
 
 class AgentPaneTestApp extends StatefulWidget {
   const AgentPaneTestApp({

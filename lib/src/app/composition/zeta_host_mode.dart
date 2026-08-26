@@ -7,14 +7,14 @@
 ///
 /// 行为对照见 `test/src/app/main_app_host_persistence_characterization_test.dart`。
 enum ZetaHostMode {
-  /// 生产模式：持久化落到 `ZetaDataPaths`，探测本机 CLI，读取本机用量历史。
+  /// 生产模式：由 `ZetaStorageBindings.file` 落盘，探测本机 CLI，读取本机用量历史。
   local,
 
   /// 临时宿主模式：widget test 与嵌入宿主使用。
   ///
   /// 三条硬约束——**改动这里等于改动用户数据安全边界**：
   ///
-  /// 1. 所有持久化使用内存实现，一个字节都不写 `ZetaDataPaths` 指向的目录；
+  /// 1. 未注入 `ZetaStorageBindings` 时使用内存文档，一个字节都不写 `~/.zeta`；
   /// 2. 不探测本机安装的 Agent CLI（用无安装结果的 stub 顶掉）；
   /// 3. 不自动刷新 Agent 用量（否则会读本机 CLI 的历史记录）。
   ///

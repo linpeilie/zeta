@@ -46,7 +46,6 @@ void main() {
 
     await _pumpMainApp(
       tester,
-      dataPaths: dataPaths,
       session: session,
       directoryPicker: () async => project.path,
     );
@@ -126,7 +125,6 @@ void main() {
 
 Future<void> _pumpMainApp(
   WidgetTester tester, {
-  ZetaDataPaths? dataPaths,
   AgentUsagePanelRepository? agentUsagePanelRepository,
   HomeProviderDetectionLoader? homeProviderDetectionLoader,
   MemorySessionStore? session,
@@ -145,7 +143,6 @@ Future<void> _pumpMainApp(
     MainApp(
       enableNativeWindowFrame: false,
       showWindowControls: false,
-      dataPaths: dataPaths,
       directoryPicker: directoryPicker,
       hostMode: ZetaHostMode.ephemeral,
       ideSessionStore: sessionStore,
