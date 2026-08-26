@@ -17,14 +17,11 @@ void main() {
     );
     final sliceStore = _sliceStore();
     addTearDown(sliceStore.close);
-    final ready = Future<GeneralSettings>.sync(() {
-      sliceStore.loaded(initial);
-      return initial;
-    });
     final source = GeneralSettingsSliceNotificationSource(
-      generalSettingsReady: ready,
       sliceStore: sliceStore,
     );
+    // runner 回流首次载入：`load()` 等的就是切片自己的这个信号。
+    sliceStore.loaded(initial);
 
     final notifications = await source.load();
 
@@ -37,9 +34,6 @@ void main() {
     final sliceStore = _sliceStore();
     addTearDown(sliceStore.close);
     final source = GeneralSettingsSliceNotificationSource(
-      generalSettingsReady: Future<GeneralSettings>.value(
-        const GeneralSettings(),
-      ),
       sliceStore: sliceStore,
     );
     var notifications = 0;
@@ -63,7 +57,7 @@ void main() {
 GeneralSettingsSliceStore _sliceStore() {
   return GeneralSettingsSliceStore(
     initialState: const GeneralSettingsSliceState(),
-    effectRunner: _NoopRunner(),
+    effectRunnerFactory: (_) => _NoopRunner(),
   );
 }
 

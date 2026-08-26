@@ -3,7 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
-import 'package:zeta/src/app/settings_slice/settings_slice_composition.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
+import 'package:zeta/src/app/settings_slice/settings_slice_overrides.dart';
+import 'package:zeta/src/app/storage/zeta_store_providers.dart';
+import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_store.dart';
+import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_store.dart';
 import 'package:zeta/src/features/settings/presentation/appearance_theme_mode_mapper.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_mapping.dart';
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
@@ -703,7 +707,18 @@ Future<void> _pumpSelectOverlay(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 300));
 }
 
-Future<SettingsSliceComposition> _pumpSettingsPage(
+/// 两个切片 store 的句柄；断言只关心 store，不关心容器怎么装配出来的。
+final class _SettingsSliceHandle {
+  const _SettingsSliceHandle({
+    required this.appearanceStore,
+    required this.generalStore,
+  });
+
+  final AppearanceSettingsSliceStore appearanceStore;
+  final GeneralSettingsSliceStore generalStore;
+}
+
+Future<_SettingsSliceHandle> _pumpSettingsPage(
   WidgetTester tester, {
   AppearanceSettingsStore? appearanceSettingsStore,
   GeneralSettingsStore? generalSettingsStore,
@@ -723,28 +738,36 @@ Future<SettingsSliceComposition> _pumpSettingsPage(
       ..resetDevicePixelRatio();
   });
 
-  final settings = SettingsSliceComposition.create(
-    fallbackLanguage: AppLanguage.simplifiedChinese,
-    appearanceSettingsStore:
+  // 生产由 MainApp 的组合根装配；测试镜像同一套接线，只替掉 data store 与字体目录。
+  final container = ProviderContainer(
+    overrides: <Override>[
+      settingsFallbackLanguageProvider.overrideWithValue(
+        AppLanguage.simplifiedChinese,
+      ),
+      if (initialAppearanceSettings case final settings?)
+        initialAppearanceSettingsProvider.overrideWithValue(settings),
+      appearanceSettingsStoreProvider.overrideWithValue(
         appearanceSettingsStore ?? MemoryAppearanceSettingsStore(),
-    generalSettingsStore: generalSettingsStore ?? MemoryGeneralSettingsStore(),
-    fontCatalog: fontCatalog ?? const _FakeSystemFontCatalogService(),
-    initialAppearanceSettings: initialAppearanceSettings,
+      ),
+      generalSettingsStoreProvider.overrideWithValue(
+        generalSettingsStore ?? MemoryGeneralSettingsStore(),
+      ),
+      systemFontCatalogServiceProvider.overrideWithValue(
+        fontCatalog ?? const _FakeSystemFontCatalogService(),
+      ),
+      ...settingsSliceOverrides(),
+    ],
   );
-  addTearDown(settings.dispose);
-  await settings.generalSettingsReady;
+  addTearDown(container.dispose);
+  final settings = _SettingsSliceHandle(
+    appearanceStore: container.read(appearanceSettingsSliceStoreProvider),
+    generalStore: container.read(generalSettingsSliceStoreProvider),
+  );
+  await settings.generalStore.initialLoad;
 
   await tester.pumpWidget(
-    // 生产由 MainApp 的根 ProviderScope 提供；测试镜像同一套接线。
-    ProviderScope(
-      overrides: [
-        appearanceSettingsSliceStoreProvider.overrideWithValue(
-          settings.appearanceStore,
-        ),
-        generalSettingsSliceStoreProvider.overrideWithValue(
-          settings.generalStore,
-        ),
-      ],
+    UncontrolledProviderScope(
+      container: container,
       child: Consumer(
         builder: (context, ref, _) {
           final appearance = appearanceSettingsFromSlice(

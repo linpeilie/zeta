@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:collection';
 
 import 'package:meta/meta.dart';
@@ -18,6 +19,13 @@ import 'package:zeta/src/features/settings/domain/general_settings.dart';
 abstract interface class GeneralSettingsSliceEffectRunner {
   void run(GeneralSettingsSliceEffect effect);
 }
+
+/// runner 工厂：拿到 store 本身，因此 runner 能直接回流结果。
+///
+/// 理由同 appearance 切片：把「store ↔ runner」的构造环变成一个普通构造参数，
+/// 而不是先造空壳再回填 delegate。
+typedef GeneralSettingsSliceEffectRunnerFactory =
+    GeneralSettingsSliceEffectRunner Function(GeneralSettingsSliceStore store);
 
 /// 切片诊断计数。
 @immutable
@@ -42,16 +50,18 @@ final class GeneralSettingsSliceDiagnostics {
 final class GeneralSettingsSliceStore {
   GeneralSettingsSliceStore({
     required GeneralSettingsSliceState initialState,
-    required this.effectRunner,
+    required GeneralSettingsSliceEffectRunnerFactory effectRunnerFactory,
     bool initiallyLoaded = true,
     OperationIdGenerator Function(String scope)? operationIdGeneratorFactory,
   }) : _state = initialState,
        _loaded = initiallyLoaded,
        _generatorFactory =
            operationIdGeneratorFactory ??
-           ((scope) => OperationIdGenerator(scope: scope));
+           ((scope) => OperationIdGenerator(scope: scope)) {
+    effectRunner = effectRunnerFactory(this);
+  }
 
-  final GeneralSettingsSliceEffectRunner effectRunner;
+  late final GeneralSettingsSliceEffectRunner effectRunner;
   final OperationIdGenerator Function(String scope) _generatorFactory;
   final Map<String, OperationIdGenerator> _generators =
       <String, OperationIdGenerator>{};
@@ -60,6 +70,13 @@ final class GeneralSettingsSliceStore {
   final List<void Function()> _listeners = <void Function()>[];
   final ListQueue<GeneralSettingsSliceIntent> _commandQueue =
       ListQueue<GeneralSettingsSliceIntent>();
+
+  /// 首次载入结算的一次性信号。
+  ///
+  /// 由 store 而不是 runner 持有：组合根要等的是「切片已经有可用的设置快照」这个
+  /// 切片事实，不是某个 runner 实现的内部进度。runner 换实现不该动到等待方。
+  final Completer<GeneralSettings> _initialLoadCompleter =
+      Completer<GeneralSettings>();
 
   GeneralSettingsSliceState _state;
   bool _loaded;
@@ -74,6 +91,12 @@ final class GeneralSettingsSliceStore {
   GeneralSettingsSliceState get state => _state;
 
   bool get isClosed => _closed;
+
+  /// 首次载入结算后的设置快照。
+  ///
+  /// 载入失败时以构造期 fallback 结算，**不会**永远悬空——否则依赖它的
+  /// 「等语言加载完再挂有文字的 UI」会把整个窗口卡在空白帧上。
+  Future<GeneralSettings> get initialLoad => _initialLoadCompleter.future;
 
   GeneralSettingsSliceDiagnostics get diagnostics =>
       GeneralSettingsSliceDiagnostics(
@@ -95,6 +118,7 @@ final class GeneralSettingsSliceStore {
     _closed = true;
     _commandQueue.clear();
     _listeners.clear();
+    _settleInitialLoad();
   }
 
   void dispatch(GeneralSettingsSliceIntent intent) {
@@ -169,13 +193,22 @@ final class GeneralSettingsSliceStore {
   void loaded(GeneralSettings settings) {
     _loaded = true;
     dispatch(GeneralSettingsLoaded(settings));
+    _settleInitialLoad();
     _drainCommands();
   }
 
   /// runner 载入失败时使用构造期 fallback 继续结算排队命令。
   void loadFailed() {
     _loaded = true;
+    _settleInitialLoad();
     _drainCommands();
+  }
+
+  /// 以当前快照结算 [initialLoad]；重复调用无效果。
+  void _settleInitialLoad() {
+    if (!_initialLoadCompleter.isCompleted) {
+      _initialLoadCompleter.complete(_state.settings);
+    }
   }
 
   void persisted(OperationId operationId, GeneralSettings settings) {

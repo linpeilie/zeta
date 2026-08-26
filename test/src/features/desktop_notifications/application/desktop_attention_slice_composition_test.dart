@@ -5,15 +5,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta/src/app/localization/zeta_text_catalogs.dart';
 import 'package:zeta/src/app/desktop_attention_slice/desktop_attention_slice_composition.dart';
-import 'package:zeta/src/app/settings_slice/settings_slice_composition.dart';
+import 'package:zeta/src/app/settings_slice/settings_slice_notification_source.dart';
+import 'package:zeta/src/app/settings_slice/settings_slice_runners.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/desktop_notifications/application/desktop_attention_slice_store.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_models.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_text_catalog.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/fallback_desktop_attention_text_catalog.dart';
+import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_state.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_store.dart';
-import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
+import '../../../testing/memory_feature_stores.dart';
 
 void main() {
   test(
@@ -222,14 +224,23 @@ Future<_Harness> _createHarness({
     initialPayload: initialPayload,
   );
   final indicator = _FakeAttentionIndicator();
-  final settingsComposition = SettingsSliceComposition.create(
-    fallbackLanguage: AppLanguage.simplifiedChinese,
+  // 与组合根同款装配：切片 store 用工厂注入 runner，data store 换成内存实现。
+  final settingsStore = GeneralSettingsSliceStore(
+    initialState: const GeneralSettingsSliceState(),
+    effectRunnerFactory: (sliceStore) => GeneralSettingsSliceRunnerAdapter(
+      store: MemoryGeneralSettingsStore(),
+      sliceStore: sliceStore,
+    ),
+    initiallyLoaded: false,
   );
-  await settingsComposition.generalSettingsReady;
+  settingsStore.load();
+  await settingsStore.initialLoad;
   final composition = DesktopAttentionSliceComposition.create(
     notificationService: notifications,
     indicator: indicator,
-    notificationSettingsSource: settingsComposition.notificationSettingsSource,
+    notificationSettingsSource: GeneralSettingsSliceNotificationSource(
+      sliceStore: settingsStore,
+    ),
     activateTarget: activateTarget ?? (_, _) async => true,
     textCatalog: textCatalog,
   );
@@ -238,7 +249,7 @@ Future<_Harness> _createHarness({
     composition: composition,
     notifications: notifications,
     indicator: indicator,
-    settingsComposition: settingsComposition,
+    settings: settingsStore,
   );
 }
 
@@ -267,19 +278,18 @@ final class _Harness {
     required this.composition,
     required this.notifications,
     required this.indicator,
-    required this.settingsComposition,
+    required this.settings,
   });
 
   final DesktopAttentionSliceComposition composition;
   DesktopAttentionSliceStore get store => composition.store;
   final _FakeNotificationService notifications;
   final _FakeAttentionIndicator indicator;
-  final SettingsSliceComposition settingsComposition;
-  GeneralSettingsSliceStore get settings => settingsComposition.generalStore;
+  final GeneralSettingsSliceStore settings;
 
   void dispose() {
     composition.dispose();
-    settingsComposition.dispose();
+    settings.close();
   }
 }
 

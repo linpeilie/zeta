@@ -2,12 +2,12 @@ import 'dart:async';
 
 import 'package:zeta/src/app/provider_settings_slice/provider_settings_slice_composition.dart';
 import 'package:zeta/src/app/ide_session_slice/ide_session_slice_overrides.dart';
-import 'package:zeta/src/app/settings_slice/settings_slice_composition.dart';
+import 'package:zeta/src/app/settings_slice/settings_slice_notification_source.dart';
+import 'package:zeta/src/app/settings_slice/settings_slice_overrides.dart';
 import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_slice_composition.dart';
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_composition.dart';
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_runner.dart';
 import 'package:zeta/src/app/composition/ide_workbench_composition.dart';
-import 'package:zeta/src/app/composition/zeta_application_composition.dart';
 import 'package:zeta/src/app/composition/zeta_host_mode.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/widgets.dart';
@@ -29,6 +29,7 @@ import 'package:zeta/src/app/localization/zeta_text_catalogs.dart';
 import 'package:zeta/src/app/window_bootstrap.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta/src/app/storage/zeta_storage_bindings.dart';
+import 'package:zeta/src/app/storage/zeta_store_providers.dart';
 import 'package:zeta/src/ui/core/system_file_manager.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
@@ -142,6 +143,9 @@ class MainApp extends StatefulWidget {
   final ZetaObservability? observability;
 
   /// 应用级文档存储绑定。生产 `main` 传入文件实现；临时宿主未传入时用内存实现。
+  ///
+  /// 这是 bindings 在整棵树上出现的**唯一**位置：`initState` 只用它生成容器
+  /// override，之后所有 store 都从 provider 读，不再往下传。
   final ZetaStorageBindings? storageBindings;
 
   /// 使用统计索引存储注入点；默认按 [storageBindings] 选择文档实现。
@@ -165,9 +169,6 @@ class MainApp extends StatefulWidget {
 
 class MainAppState extends State<MainApp>
     with WidgetsBindingObserver, WindowListener {
-  /// Phase 3 第 1 批关批后的唯一 settings 组合。
-  late final SettingsSliceComposition _settingsSliceComposition;
-
   /// 本地化与 Provider 插件目录就绪后创建的唯一 Provider settings 组合。
   ProviderSettingsSliceComposition? _providerSettingsSliceComposition;
 
@@ -209,7 +210,6 @@ class MainAppState extends State<MainApp>
   late final AgentProviderConfigStore _agentProviderConfigStore;
   Future<void> Function()? _providerRuntimeShutdownHook;
   late final ZetaStorageBindings _storageBindings;
-  late final ZetaApplicationComposition _appComposition;
   bool _ownsAgentProviderRuntimeRegistry = false;
   AppLifecycleState? _appLifecycleState;
   bool _nativeWindowSuspended = false;
@@ -233,8 +233,10 @@ class MainAppState extends State<MainApp>
       desktopAttention: ZetaDesktopAttentionStateSnapshot.fromState(
         _requiredDesktopAttentionComposition.store.state,
       ),
-      appearanceSettings: _settingsSliceComposition.appearanceStore.state,
-      generalSettings: _settingsSliceComposition.generalStore.state,
+      appearanceSettings: _container
+          .read(appearanceSettingsSliceStoreProvider)
+          .state,
+      generalSettings: _container.read(generalSettingsSliceStoreProvider).state,
       providerSettings: _requiredProviderSettingsComposition.store.state,
     );
   }
@@ -265,7 +267,9 @@ class MainAppState extends State<MainApp>
     required AgentManagementRuntimeSnapshotProvider runtimeSnapshotProvider,
   }) {
     return IdeWorkbenchComposition.create(
-      modelCatalogRepository: _appComposition.agentModelCatalogRepository,
+      modelCatalogRepository: _container.read(
+        agentModelCatalogRepositoryProvider,
+      ),
       runtimeRegistry: _agentProviderRuntimeRegistry,
       providerSettings: _requiredProviderSettingsComposition.store,
       subscribeRuntime: subscribeRuntime,
@@ -293,14 +297,11 @@ class MainAppState extends State<MainApp>
                 'ZetaHostMode.local requires storageBindings from the composition root',
               )
             : ZetaStorageBindings.memory());
-    _appComposition = ZetaApplicationComposition.create(
-      hostMode: widget.hostMode,
-      storage: _storageBindings,
-      ideSessionStore: widget.ideSessionStore,
-      usageStatisticsPartitionStore: widget.usageStatisticsPartitionStore,
-      agentModelCatalogRepository: widget.agentModelCatalogRepository,
-      turnContextStore: widget.turnContextStore,
-      agentProviderConfigStore: widget.agentProviderConfigStore,
+    // 容器先于任何切片组合建出来：feature data 现在全部从 provider 取，
+    // 组合根不再手工把 StorageService 往下传。
+    _container = ProviderContainer(
+      observers: widget.observability?.providerObservers,
+      overrides: _composeOverrides(),
     );
     _frozenDisplayLocale = ZetaLocalization.localeFor(
       widget.displayLanguageOverride ?? widget.fallbackLanguage,
@@ -326,20 +327,9 @@ class MainAppState extends State<MainApp>
         addDesktopWindowShutdownHook(_providerRuntimeShutdownHook!);
       }
     }
-    _settingsSliceComposition = SettingsSliceComposition.create(
-      fallbackLanguage: widget.fallbackLanguage,
-      appearanceStorage: _storageBindings.appearance,
-      generalSettingsStorage: _storageBindings.generalSettings,
-      appearanceSettingsStore: widget.appearanceSettingsStore,
-      generalSettingsStore: widget.generalSettingsStore,
-      fontCatalog: widget.systemFontCatalogService,
-      initialAppearanceSettings: widget.initialAppearanceSettings,
-    );
-    _container = ProviderContainer(
-      observers: widget.observability?.providerObservers,
-      overrides: _composeOverrides(),
-    );
-    final loadGeneralSettings = _settingsSliceComposition.generalSettingsReady;
+    final loadGeneralSettings = _container
+        .read(generalSettingsSliceStoreProvider)
+        .initialLoad;
     final overrideLanguage = widget.displayLanguageOverride;
     final shouldWait = widget.waitForGeneralSettings;
     if (overrideLanguage != null || !shouldWait) {
@@ -379,10 +369,12 @@ class MainAppState extends State<MainApp>
     }
     if (!_localeRuntimeReady) {
       final catalog = ZetaPluginCatalog.builtIn(
-        claudeCodeSessionDecisionStoreFactory:
-            _appComposition.claudeCodeSessionDecisionStoreFactory,
-        claudeCodeHiddenThreadStore:
-            _appComposition.claudeCodeHiddenThreadStore,
+        claudeCodeSessionDecisionStoreFactory: _container.read(
+          claudeCodeSessionDecisionStoreFactoryProvider,
+        ),
+        claudeCodeHiddenThreadStore: _container.read(
+          claudeCodeHiddenThreadStoreProvider,
+        ),
         textCatalog: _agentUiTextCatalog,
         metrics: _metrics,
       );
@@ -392,8 +384,10 @@ class MainAppState extends State<MainApp>
       _agentProviderSettingsCodec = AgentProviderSettingsCodec(
         providerDefinitions: _agentProviderDefinitions,
       );
-      _agentProviderConfigStore = _appComposition
-          .createAgentProviderConfigStore(_agentProviderSettingsCodec);
+      // codec 已就绪，`agentProviderConfigStoreProvider` 现在可以安全解析。
+      _agentProviderConfigStore = _container.read(
+        agentProviderConfigStoreProvider,
+      );
       if (widget.agentProviderFactory == null) {
         _agentProviderFactory = resolvedProviders.bundleFactory;
       }
@@ -415,14 +409,16 @@ class MainAppState extends State<MainApp>
     _providerSettingsSliceComposition ??=
         ProviderSettingsSliceComposition.create(
           configStore: _agentProviderConfigStore,
-          modelCatalogRepository: _appComposition.agentModelCatalogRepository,
+          modelCatalogRepository: _container.read(
+            agentModelCatalogRepositoryProvider,
+          ),
           runtimeRegistry: _agentProviderRuntimeRegistry,
           providerDefinitions: _agentProviderDefinitions,
         );
     _usageStatisticsSliceComposition ??= UsageStatisticsSliceComposition.create(
       loadEnabledProviders: _loadEnabledAgentUsageProviders,
       runtimeRegistry: _agentProviderRuntimeRegistry,
-      partitionStore: _appComposition.usageStatisticsPartitionStore,
+      partitionStore: _container.read(usageStatisticsPartitionStoreProvider),
       agentUsagePanelRepository: widget.agentUsagePanelRepository,
       textCatalog: _usageStatisticsTextCatalog,
     );
@@ -440,8 +436,9 @@ class MainAppState extends State<MainApp>
               (widget.enableNativeWindowFrame
                   ? MethodChannelDesktopAttentionIndicator()
                   : const NoopDesktopAttentionIndicator()),
-          notificationSettingsSource:
-              _settingsSliceComposition.notificationSettingsSource,
+          notificationSettingsSource: GeneralSettingsSliceNotificationSource(
+            sliceStore: _container.read(generalSettingsSliceStoreProvider),
+          ),
           activateTarget: _desktopAttentionTargetActivatorRelay.call,
           textCatalog: _desktopAttentionTextCatalog,
         );
@@ -487,7 +484,7 @@ class MainAppState extends State<MainApp>
     _providerSettingsSliceComposition?.dispose();
     _providerSettingsSliceComposition = null;
     unawaited(_shutdownOwnedAgentResources());
-    _settingsSliceComposition.dispose();
+    // 两个 settings 切片 store 由 provider 拥有，`ref.onDispose` 随容器一起关。
     _container.dispose();
     super.dispose();
   }
@@ -537,28 +534,50 @@ class MainAppState extends State<MainApp>
 
   /// 组合根的全部 override。
   ///
-  /// **定长且只装配一次。** 依赖延迟到 `overrideWith` 的闭包里读，因此语言持久化
-  /// 完成后才建出来的三个切片组合不会改变 override 的数量——旧实现靠替换
+  /// **只在 `initState` 装配一次。** 依赖延迟到 `overrideWith` 的闭包里读，因此
+  /// 语言持久化完成后才建出来的三个切片组合不会引起重新装配——旧实现靠替换
   /// ProviderScope 的 key 来换容器，那会连带丢掉容器里已有的全部状态。
   /// 尚未组合就被读到时，`_requiredXxx` 会 fail-closed 抛错。
+  ///
+  /// 注入型 override 的**条数**随 `MainApp` 的可选注入参数变化，这不违反上面那条：
+  /// 约束的是「不在运行中重算这张表」，不是「长度必须是常数」。
   List<Override> _composeOverrides() {
     return <Override>[
       ..._storageBindings.providerOverrides,
-      zetaMetricsPortProvider.overrideWith((ref) => _metrics),
-      ...ideSessionSliceOverrides(
-        sessionStore: _appComposition.ideSessionStore,
+      settingsFallbackLanguageProvider.overrideWithValue(
+        widget.fallbackLanguage,
       ),
+      // codec 要等插件目录解析出 Provider definitions，而那要等本地化运行时；
+      // 用闭包延迟读，容器不必等它就能建出来。
+      agentProviderSettingsCodecProvider.overrideWith(
+        (ref) => _agentProviderSettingsCodec,
+      ),
+      if (widget.initialAppearanceSettings case final settings?)
+        initialAppearanceSettingsProvider.overrideWithValue(settings),
+      if (widget.ideSessionStore case final store?)
+        ideSessionStoreProvider.overrideWithValue(store),
+      if (widget.usageStatisticsPartitionStore case final store?)
+        usageStatisticsPartitionStoreProvider.overrideWithValue(store),
+      if (widget.agentModelCatalogRepository case final repository?)
+        agentModelCatalogRepositoryProvider.overrideWithValue(repository),
+      if (widget.turnContextStore case final store?)
+        agentTurnContextStoreProvider.overrideWithValue(store),
+      if (widget.agentProviderConfigStore case final store?)
+        agentProviderConfigStoreProvider.overrideWithValue(store),
+      if (widget.appearanceSettingsStore case final store?)
+        appearanceSettingsStoreProvider.overrideWithValue(store),
+      if (widget.generalSettingsStore case final store?)
+        generalSettingsStoreProvider.overrideWithValue(store),
+      if (widget.systemFontCatalogService case final catalog?)
+        systemFontCatalogServiceProvider.overrideWithValue(catalog),
+      zetaMetricsPortProvider.overrideWith((ref) => _metrics),
+      ...ideSessionSliceOverrides(),
+      ...settingsSliceOverrides(),
       agentConversationSliceStoreRegistryProvider.overrideWithValue(
         _conversationSliceStoreRegistry,
       ),
       agentConversationWorkspaceStoreRegistryProvider.overrideWithValue(
         _conversationWorkspaceStoreRegistry,
-      ),
-      appearanceSettingsSliceStoreProvider.overrideWith(
-        (ref) => _settingsSliceComposition.appearanceStore,
-      ),
-      generalSettingsSliceStoreProvider.overrideWith(
-        (ref) => _settingsSliceComposition.generalStore,
       ),
       agentProviderSettingsSliceStoreProvider.overrideWith(
         (ref) => _requiredProviderSettingsComposition.store,
@@ -671,7 +690,9 @@ class MainAppState extends State<MainApp>
                       usageStatisticsSliceComposition:
                           _requiredUsageStatisticsComposition,
                       workbenchCompositionFactory: _createWorkbenchComposition,
-                      turnContextStore: _appComposition.turnContextStore,
+                      turnContextStore: _container.read(
+                        agentTurnContextStoreProvider,
+                      ),
                       agentUiTextCatalog: _agentUiTextCatalog,
                       metrics: _metrics,
                       providerMetricLabel: AgentMetricLabels.forProviderId,

@@ -5,7 +5,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:zeta/src/app/app_constants.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:zeta/src/app/ide_session_slice/ide_session_slice_overrides.dart';
+import 'package:zeta/src/app/storage/zeta_store_providers.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_session_slice_notifier.dart';
 import 'package:zeta/src/app/shell/ide_shell_controller.dart';
 import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_slice_composition.dart';
@@ -1405,7 +1407,10 @@ IdeSessionSliceOperations _createIdeSessionOperations(
   IdeSessionStore sessionStore,
 ) {
   final container = ProviderContainer(
-    overrides: ideSessionSliceOverrides(sessionStore: sessionStore),
+    overrides: <Override>[
+      ideSessionStoreProvider.overrideWithValue(sessionStore),
+      ...ideSessionSliceOverrides(),
+    ],
   );
   addTearDown(container.dispose);
   return container.read(ideSessionSliceProvider.notifier);

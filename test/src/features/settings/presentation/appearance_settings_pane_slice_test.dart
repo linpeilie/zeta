@@ -79,7 +79,7 @@ void main() {
 AppearanceSettingsSliceStore _store({_RecordingRunner? runner}) {
   return AppearanceSettingsSliceStore(
     initialState: const AppearanceSettingsSliceState(),
-    effectRunner: runner ?? _RecordingRunner(),
+    effectRunnerFactory: (_) => runner ?? _RecordingRunner(),
   );
 }
 

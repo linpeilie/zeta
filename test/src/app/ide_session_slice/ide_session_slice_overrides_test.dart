@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:zeta/src/app/ide_session_slice/ide_session_slice_overrides.dart';
+import 'package:zeta/src/app/storage/zeta_store_providers.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_session_slice_notifier.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_restore_result.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
@@ -134,12 +136,14 @@ IdeSessionSliceNotifier _createSlice({
   bool Function(String path)? directoryExists,
 }) {
   final container = ProviderContainer(
-    overrides: ideSessionSliceOverrides(
-      sessionStore: sessionStore,
-      saveDelay: saveDelay,
-      fileExists: fileExists,
-      directoryExists: directoryExists,
-    ),
+    overrides: <Override>[
+      ideSessionStoreProvider.overrideWithValue(sessionStore),
+      ...ideSessionSliceOverrides(
+        saveDelay: saveDelay,
+        fileExists: fileExists,
+        directoryExists: directoryExists,
+      ),
+    ],
   );
   addTearDown(container.dispose);
   return container.read(ideSessionSliceProvider.notifier);

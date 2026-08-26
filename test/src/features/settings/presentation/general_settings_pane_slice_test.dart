@@ -40,7 +40,7 @@ void main() {
 GeneralSettingsSliceStore _store(GeneralSettings initial) {
   return GeneralSettingsSliceStore(
     initialState: GeneralSettingsSliceState(settings: initial),
-    effectRunner: _NoopRunner(),
+    effectRunnerFactory: (_) => _NoopRunner(),
   );
 }
 

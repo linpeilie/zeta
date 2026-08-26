@@ -735,7 +735,10 @@ data 精确编码”的单向流：
 
 Zeta 通过 `ZetaDataPaths` 统一解析 `~/.zeta`，仅在 `ZetaStorageBindings`
 装配成一组 `StorageService`（生产为 `FileStorageService`，临时宿主为
-`MemoryStorageService`）。`MainApp` 与 feature store 不再接收路径对象。配置位于
+`MemoryStorageService`）。bindings 只在组合根出现一次：它把这组 `StorageService`
+装进 `ProviderContainer` 的 override，各 feature store 再由
+`lib/src/app/storage/zeta_store_providers.dart` 的 provider 读出来组装。`MainApp`
+与 feature store 既不接收路径对象，也不接收 bindings 本身。配置位于
 `config/providers.json`、`config/appearance.json` 与 `config/general.json`；
 IDE 会话和使用统计派生索引位于 `state/`；应用日志按本地日期写入
 `logs/zeta-YYYY-MM-DD.log`；规范化模型目录缓存位于 `cache/agent_models_v1.json`。

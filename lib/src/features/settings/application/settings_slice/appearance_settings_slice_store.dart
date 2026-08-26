@@ -21,6 +21,16 @@ abstract interface class AppearanceSettingsSliceEffectRunner {
   void run(AppearanceSettingsSliceEffect effect);
 }
 
+/// runner 工厂：拿到 store 本身，因此 runner 能直接回流结果。
+///
+/// 用工厂而不是「先造空壳 runner、构造完再 `delegate =` 回填」：延迟绑定会让
+/// 「runner 已就绪」变成一个没人检查的时序约定，构造顺序一旦换过来就是静默丢
+/// effect。工厂把这条边变成普通的构造参数，环从此不存在（AGENTS.md §状态与异步）。
+typedef AppearanceSettingsSliceEffectRunnerFactory =
+    AppearanceSettingsSliceEffectRunner Function(
+      AppearanceSettingsSliceStore store,
+    );
+
 /// 切片诊断计数，用于回归测试与发布频率断言。
 @immutable
 final class AppearanceSettingsSliceDiagnostics {
@@ -52,14 +62,16 @@ final class AppearanceSettingsSliceDiagnostics {
 final class AppearanceSettingsSliceStore {
   AppearanceSettingsSliceStore({
     required AppearanceSettingsSliceState initialState,
-    required this.effectRunner,
+    required AppearanceSettingsSliceEffectRunnerFactory effectRunnerFactory,
     OperationIdGenerator Function(String scope)? operationIdGeneratorFactory,
   }) : _state = initialState,
        _generatorFactory =
            operationIdGeneratorFactory ??
-           ((scope) => OperationIdGenerator(scope: scope));
+           ((scope) => OperationIdGenerator(scope: scope)) {
+    effectRunner = effectRunnerFactory(this);
+  }
 
-  final AppearanceSettingsSliceEffectRunner effectRunner;
+  late final AppearanceSettingsSliceEffectRunner effectRunner;
   final OperationIdGenerator Function(String scope) _generatorFactory;
   final Map<String, OperationIdGenerator> _generators =
       <String, OperationIdGenerator>{};

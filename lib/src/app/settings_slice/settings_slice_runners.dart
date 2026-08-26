@@ -14,7 +14,6 @@ import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
 import 'package:zeta/src/features/settings/data/general_settings_store.dart';
 import 'package:zeta/src/features/settings/data/system_font_catalog_service.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
-import 'package:zeta/src/features/settings/domain/general_settings.dart';
 
 final _log = zetaLoggerFor('zeta.settings.slice_runner');
 
@@ -317,13 +316,8 @@ final class GeneralSettingsSliceRunnerAdapter
 
   Future<void> _queue = Future<void>.value();
   Future<void> _initialLoad = Future<void>.value();
-  final Completer<GeneralSettings> _loadCompleter =
-      Completer<GeneralSettings>();
   bool _loadStarted = false;
   bool _initialLoadSettled = false;
-
-  /// 首次加载完成后的快照；组合根据此决定何时安装依赖 Locale 的运行时。
-  Future<GeneralSettings> get loadResult => _loadCompleter.future;
 
   @override
   void run(GeneralSettingsSliceEffect effect) {
@@ -353,7 +347,6 @@ final class GeneralSettingsSliceRunnerAdapter
       // 一个已完成 Future 的异步轮次。
       _initialLoadSettled = true;
       _sliceStore.loaded(settings);
-      _loadCompleter.complete(settings);
     } catch (error, stackTrace) {
       _log.w(
         'Could not load general settings via slice',
@@ -362,7 +355,6 @@ final class GeneralSettingsSliceRunnerAdapter
       );
       _initialLoadSettled = true;
       _sliceStore.loadFailed();
-      _loadCompleter.complete(_sliceStore.state.settings);
     }
   }
 

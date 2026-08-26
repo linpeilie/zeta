@@ -36,7 +36,7 @@ void main() {
       final runner = _RecordingAppearanceRunner();
       final store = AppearanceSettingsSliceStore(
         initialState: const AppearanceSettingsSliceState(),
-        effectRunner: runner,
+        effectRunnerFactory: (_) => runner,
       );
       var notifications = 0;
       store.subscribe(() => notifications += 1);
@@ -56,7 +56,7 @@ void main() {
       final runner = _RecordingAppearanceRunner();
       final store = AppearanceSettingsSliceStore(
         initialState: const AppearanceSettingsSliceState(),
-        effectRunner: runner,
+        effectRunnerFactory: (_) => runner,
       );
 
       store.load();
@@ -72,7 +72,7 @@ void main() {
       final runner = _RecordingAppearanceRunner();
       final store = AppearanceSettingsSliceStore(
         initialState: const AppearanceSettingsSliceState(),
-        effectRunner: runner,
+        effectRunnerFactory: (_) => runner,
       );
 
       final first = store.selectUiFontChoice(
@@ -91,7 +91,7 @@ void main() {
       final runner = _RecordingAppearanceRunner();
       final store = AppearanceSettingsSliceStore(
         initialState: const AppearanceSettingsSliceState(),
-        effectRunner: runner,
+        effectRunnerFactory: (_) => runner,
       );
       var notifications = 0;
       store.subscribe(() => notifications += 1);
@@ -110,7 +110,7 @@ void main() {
       final runner = _RecordingGeneralRunner();
       final store = GeneralSettingsSliceStore(
         initialState: const GeneralSettingsSliceState(),
-        effectRunner: runner,
+        effectRunnerFactory: (_) => runner,
       );
 
       final id = store.setAppLanguage(AppLanguage.english);
@@ -129,7 +129,7 @@ void main() {
       final runner = _RecordingGeneralRunner();
       final store = GeneralSettingsSliceStore(
         initialState: const GeneralSettingsSliceState(),
-        effectRunner: runner,
+        effectRunnerFactory: (_) => runner,
       );
 
       final first = store.setAppLanguage(AppLanguage.english);
@@ -148,7 +148,7 @@ void main() {
       final runner = _RecordingGeneralRunner();
       final store = GeneralSettingsSliceStore(
         initialState: const GeneralSettingsSliceState(),
-        effectRunner: runner,
+        effectRunnerFactory: (_) => runner,
         initiallyLoaded: false,
       );
 
@@ -185,7 +185,7 @@ void main() {
       final runner = _RecordingGeneralRunner();
       final store = GeneralSettingsSliceStore(
         initialState: const GeneralSettingsSliceState(),
-        effectRunner: runner,
+        effectRunnerFactory: (_) => runner,
       );
 
       final language = store.setAppLanguage(AppLanguage.english);
@@ -231,7 +231,7 @@ void main() {
       final runner = _RecordingGeneralRunner();
       final store = GeneralSettingsSliceStore(
         initialState: const GeneralSettingsSliceState(),
-        effectRunner: runner,
+        effectRunnerFactory: (_) => runner,
       );
 
       final first = store.setAppLanguage(AppLanguage.english);

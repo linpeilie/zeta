@@ -5,9 +5,9 @@ import 'package:flutter_test/flutter_test.dart';
 /// `MainApp` / `IdeHome` 的组合边界守卫。
 ///
 /// `MainApp` 只负责 Flutter / 窗口生命周期与组合输入；**具体 feature data 用文件还是
-/// 内存**由 `ZetaApplicationComposition` 按 `ZetaStorageBindings` 决定。这条边界一旦破了，
-/// "哪个 store 落盘"的决策就会重新散回 Widget，也会再次出现"从有没有传回调反推
-/// 测试模式"那种隐式耦合。
+/// 内存**由 `lib/src/app/storage/zeta_store_providers.dart` 按 `ZetaStorageBindings`
+/// 装进容器的 `StorageService` 决定。这条边界一旦破了，"哪个 store 落盘"的决策就会
+/// 重新散回 Widget，也会再次出现"从有没有传回调反推测试模式"那种隐式耦合。
 void main() {
   final appSource = File('lib/src/app/app.dart').readAsStringSync();
 
@@ -27,6 +27,10 @@ void main() {
       'FileClaudeCodeSessionDecisionStore(',
       'FileClaudeCodeHiddenThreadStore(',
       'AgentModelCatalogRepository(',
+      'FileAppearanceSettingsStore(',
+      'MemoryAppearanceSettingsStore(',
+      'FileGeneralSettingsStore(',
+      'MemoryGeneralSettingsStore(',
     ];
 
     final offenders = <String>[
@@ -39,7 +43,7 @@ void main() {
       isEmpty,
       reason:
           'lib/src/app/app.dart 直接构造了 feature data：$offenders\n'
-          '请改由 ZetaApplicationComposition 按 ZetaStorageBindings 组装。',
+          '请改成读 zeta_store_providers.dart 里对应的 provider。',
     );
   });
 

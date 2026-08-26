@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 
-import 'package:zeta/src/app/settings_slice/settings_slice_composition.dart';
+import 'package:zeta/src/app/settings_slice/settings_slice_overrides.dart';
+import 'package:zeta/src/app/storage/zeta_store_providers.dart';
 import 'package:zeta/src/app/settings_slice/settings_slice_runners.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_effect.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_state.dart';
@@ -158,108 +160,121 @@ const _localizedFont = SystemFontFamily(
   isMonospace: false,
 );
 
-/// 与组合层同款的延迟绑定装配。
+/// 与组合层同款的工厂注入装配。
 AppearanceSettingsSliceStore _appearanceStoreWith({
   required AppearanceSettingsStore dataStore,
   required SystemFontCatalogService fontCatalog,
 }) {
-  final deferred = _DeferredAppearanceRunner();
-  final store = AppearanceSettingsSliceStore(
+  return AppearanceSettingsSliceStore(
     initialState: const AppearanceSettingsSliceState(),
-    effectRunner: deferred,
+    effectRunnerFactory: (sliceStore) => AppearanceSettingsSliceRunnerAdapter(
+      store: dataStore,
+      fontCatalog: fontCatalog,
+      sliceStore: sliceStore,
+    ),
   );
-  deferred.self = store;
-  deferred.delegate = AppearanceSettingsSliceRunnerAdapter(
-    store: dataStore,
-    fontCatalog: fontCatalog,
-    sliceStore: store,
-  );
-  return store;
-}
-
-final class _DeferredAppearanceRunner
-    implements AppearanceSettingsSliceEffectRunner {
-  AppearanceSettingsSliceEffectRunner? delegate;
-  AppearanceSettingsSliceStore? self;
-
-  @override
-  void run(AppearanceSettingsSliceEffect effect) => delegate?.run(effect);
 }
 
 GeneralSettingsSliceStore _generalStoreWith(GeneralSettingsStore dataStore) {
-  final deferred = _DeferredGeneralRunner();
-  final store = GeneralSettingsSliceStore(
+  return GeneralSettingsSliceStore(
     initialState: const GeneralSettingsSliceState(),
-    effectRunner: deferred,
+    effectRunnerFactory: (sliceStore) => GeneralSettingsSliceRunnerAdapter(
+      store: dataStore,
+      sliceStore: sliceStore,
+    ),
   );
-  deferred.self = store;
-  deferred.delegate = GeneralSettingsSliceRunnerAdapter(
-    store: dataStore,
-    sliceStore: store,
-  );
-  return store;
 }
 
 GeneralSettingsSliceStore _unloadedGeneralStoreWith(
   GeneralSettingsStore dataStore,
 ) {
-  final deferred = _DeferredGeneralRunner();
-  final store = GeneralSettingsSliceStore(
+  return GeneralSettingsSliceStore(
     initialState: const GeneralSettingsSliceState(),
-    effectRunner: deferred,
+    effectRunnerFactory: (sliceStore) => GeneralSettingsSliceRunnerAdapter(
+      store: dataStore,
+      sliceStore: sliceStore,
+    ),
     initiallyLoaded: false,
   );
-  deferred.self = store;
-  deferred.delegate = GeneralSettingsSliceRunnerAdapter(
-    store: dataStore,
-    sliceStore: store,
-  );
-  return store;
-}
-
-final class _DeferredGeneralRunner implements GeneralSettingsSliceEffectRunner {
-  GeneralSettingsSliceEffectRunner? delegate;
-  GeneralSettingsSliceStore? self;
-
-  @override
-  void run(GeneralSettingsSliceEffect effect) => delegate?.run(effect);
 }
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  group('settings composition · 唯一 owner', () {
-    test('构造期外观快照同步可见，general ready 等持久化加载', () async {
-      final composition = SettingsSliceComposition.create(
-        fallbackLanguage: AppLanguage.simplifiedChinese,
-        initialAppearanceSettings: const AppearanceSettings(
-          themeMode: ZetaThemeModePreference.light,
-        ),
-        appearanceSettingsStore: MemoryAppearanceSettingsStore(
-          const AppearanceSettings(themeMode: ZetaThemeModePreference.dark),
-        ),
-        generalSettingsStore: MemoryGeneralSettingsStore(
-          const GeneralSettings(appLanguage: AppLanguage.english),
-        ),
-        fontCatalog: _FakeFontCatalog(),
+  group('settings 切片装配 · 唯一 owner', () {
+    test('构造期外观快照同步可见，initialLoad 等持久化加载', () async {
+      final container = ProviderContainer(
+        overrides: <Override>[
+          initialAppearanceSettingsProvider.overrideWithValue(
+            const AppearanceSettings(themeMode: ZetaThemeModePreference.light),
+          ),
+          settingsFallbackLanguageProvider.overrideWithValue(
+            AppLanguage.simplifiedChinese,
+          ),
+          appearanceSettingsStoreProvider.overrideWithValue(
+            MemoryAppearanceSettingsStore(
+              const AppearanceSettings(themeMode: ZetaThemeModePreference.dark),
+            ),
+          ),
+          generalSettingsStoreProvider.overrideWithValue(
+            MemoryGeneralSettingsStore(
+              const GeneralSettings(appLanguage: AppLanguage.english),
+            ),
+          ),
+          systemFontCatalogServiceProvider.overrideWithValue(
+            _FakeFontCatalog(),
+          ),
+          ...settingsSliceOverrides(),
+        ],
       );
-      addTearDown(composition.dispose);
+      addTearDown(container.dispose);
+
+      final appearanceStore = container.read(
+        appearanceSettingsSliceStoreProvider,
+      );
+      final generalStore = container.read(generalSettingsSliceStoreProvider);
 
       expect(
-        composition.appearanceStore.state.value.themeMode,
+        appearanceStore.state.value.themeMode,
         ZetaThemeModePreference.light,
         reason: '首帧必须使用启动阶段已读快照',
       );
 
-      final general = await composition.generalSettingsReady;
+      final general = await generalStore.initialLoad;
 
       expect(general.appLanguage, AppLanguage.english);
-      expect(composition.generalStore.state.settings, general);
+      expect(generalStore.state.settings, general);
       await Future<void>.delayed(Duration.zero);
       expect(
-        composition.appearanceStore.state.value.themeMode,
+        appearanceStore.state.value.themeMode,
         ZetaThemeModePreference.dark,
       );
+    });
+
+    test('容器 dispose 关闭两个切片 store', () {
+      final container = ProviderContainer(
+        overrides: <Override>[
+          appearanceSettingsStoreProvider.overrideWithValue(
+            MemoryAppearanceSettingsStore(const AppearanceSettings()),
+          ),
+          generalSettingsStoreProvider.overrideWithValue(
+            MemoryGeneralSettingsStore(const GeneralSettings()),
+          ),
+          systemFontCatalogServiceProvider.overrideWithValue(
+            _FakeFontCatalog(),
+          ),
+          ...settingsSliceOverrides(),
+        ],
+      );
+      final appearanceStore = container.read(
+        appearanceSettingsSliceStoreProvider,
+      );
+      final generalStore = container.read(generalSettingsSliceStoreProvider);
+
+      container.dispose();
+
+      expect(appearanceStore.isClosed, isTrue);
+      expect(generalStore.isClosed, isTrue);
     });
   });
 
@@ -569,11 +584,11 @@ void main() {
     test('Riverpod 只镜像 slice store，两个投影都跟随', () {
       final appearanceSlice = AppearanceSettingsSliceStore(
         initialState: const AppearanceSettingsSliceState(),
-        effectRunner: _NoopAppearanceRunner(),
+        effectRunnerFactory: (_) => _NoopAppearanceRunner(),
       );
       final generalSlice = GeneralSettingsSliceStore(
         initialState: const GeneralSettingsSliceState(),
-        effectRunner: _NoopGeneralRunner(),
+        effectRunnerFactory: (_) => _NoopGeneralRunner(),
       );
 
       final container = ProviderContainer(

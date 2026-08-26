@@ -9,8 +9,12 @@ import 'package:zeta/src/core/storage/zeta_data_paths.dart';
 
 /// 应用级文档存储的唯一装配点。
 ///
-/// `ZetaDataPaths` 只在这里解析成一组已绑定位置的 [StorageService]；
-/// `MainApp` 与 feature store 不再接收路径对象。
+/// `ZetaDataPaths` 只在这里解析成一组已绑定位置的 [StorageService]。
+///
+/// 本类是**容器的输入**，不是层间传递的对象：组合根拿它生成 [providerOverrides]
+/// 装进 `ProviderContainer`，下游一律从 `zeta_store_providers.dart` 的 provider
+/// 读 store。因此它自己不能反过来从容器里取（那是鸡生蛋），但除组合根外也不该
+/// 再出现在任何构造签名上。
 final class ZetaStorageBindings {
   const ZetaStorageBindings({
     required this.appearance,
