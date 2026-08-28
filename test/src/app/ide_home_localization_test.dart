@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/app/composition/zeta_host_mode.dart';
-import 'package:zeta/src/app/app.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 import 'package:zeta/src/ui/features/ide/views/ide_home.dart';
 
 import '../testing/ide_test_harness.dart';
+import '../testing/zeta_test_app.dart';
 
 void main() {
   testWidgets('already-migrated IdeHome chrome follows the pumped locale', (
@@ -144,7 +144,7 @@ Future<void> _pumpIdeHome(
 
   final session = MemorySessionStore(null);
   await tester.pumpWidget(
-    MainApp(
+    zetaTestApp(
       enableNativeWindowFrame: true,
       showWindowControls: false,
       hostMode: ZetaHostMode.ephemeral,

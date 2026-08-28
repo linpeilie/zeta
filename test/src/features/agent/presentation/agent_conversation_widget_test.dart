@@ -13,7 +13,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/app/composition/zeta_host_mode.dart';
-import 'package:zeta/main.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
@@ -31,6 +30,8 @@ import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_co
 
 import '../../../testing/ide_test_harness.dart';
 import '../../../testing/agent_conversation_binding_test_harness.dart';
+import '../../../testing/fake_workspace_directory_picker.dart';
+import '../../../testing/zeta_test_app.dart';
 
 void main() {
   final binding = TestWidgetsFlutterBinding.ensureInitialized();
@@ -60,7 +61,7 @@ void main() {
 
     // Act
     await tester.pumpWidget(
-      MainApp(
+      zetaTestApp(
         enableNativeWindowFrame: false,
         hostMode: ZetaHostMode.ephemeral,
         ideSessionStore: session,
@@ -125,9 +126,9 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
+      zetaTestApp(
         enableNativeWindowFrame: false,
-        directoryPicker: () async => directory.path,
+        overrides: fakeDirectoryPickerOverrides(directory.path),
         hostMode: ZetaHostMode.ephemeral,
         ideSessionStore: session,
         agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
@@ -228,9 +229,9 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
+      zetaTestApp(
         enableNativeWindowFrame: false,
-        directoryPicker: () async => directory.path,
+        overrides: fakeDirectoryPickerOverrides(directory.path),
         hostMode: ZetaHostMode.ephemeral,
         ideSessionStore: session,
         agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
@@ -319,9 +320,9 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MainApp(
+        zetaTestApp(
           enableNativeWindowFrame: false,
-          directoryPicker: () async => directory.path,
+          overrides: fakeDirectoryPickerOverrides(directory.path),
           hostMode: ZetaHostMode.ephemeral,
           ideSessionStore: session,
           agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
@@ -431,9 +432,9 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MainApp(
+        zetaTestApp(
           enableNativeWindowFrame: false,
-          directoryPicker: () async => directory.path,
+          overrides: fakeDirectoryPickerOverrides(directory.path),
           hostMode: ZetaHostMode.ephemeral,
           ideSessionStore: session,
           agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
@@ -561,9 +562,9 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MainApp(
+        zetaTestApp(
           enableNativeWindowFrame: false,
-          directoryPicker: () async => directory.path,
+          overrides: fakeDirectoryPickerOverrides(directory.path),
           hostMode: ZetaHostMode.ephemeral,
           ideSessionStore: session,
           agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
@@ -656,9 +657,9 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MainApp(
+        zetaTestApp(
           enableNativeWindowFrame: false,
-          directoryPicker: () async => directory.path,
+          overrides: fakeDirectoryPickerOverrides(directory.path),
           hostMode: ZetaHostMode.ephemeral,
           ideSessionStore: session,
           agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
@@ -737,9 +738,9 @@ void main() {
       ],
     );
     await tester.pumpWidget(
-      MainApp(
+      zetaTestApp(
         enableNativeWindowFrame: false,
-        directoryPicker: () async => null,
+        overrides: fakeDirectoryPickerOverrides(null),
         hostMode: ZetaHostMode.ephemeral,
         ideSessionStore: session,
         agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
@@ -864,9 +865,9 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MainApp(
+        zetaTestApp(
           enableNativeWindowFrame: false,
-          directoryPicker: () async => null,
+          overrides: fakeDirectoryPickerOverrides(null),
           hostMode: ZetaHostMode.ephemeral,
           ideSessionStore: session,
           agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
@@ -954,7 +955,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
+      zetaTestApp(
         enableNativeWindowFrame: false,
         hostMode: ZetaHostMode.ephemeral,
         ideSessionStore: session,
@@ -1124,9 +1125,9 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MainApp(
+        zetaTestApp(
           enableNativeWindowFrame: false,
-          directoryPicker: () async => directory.path,
+          overrides: fakeDirectoryPickerOverrides(directory.path),
           hostMode: ZetaHostMode.ephemeral,
           ideSessionStore: session,
           agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
@@ -1297,9 +1298,9 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
+      zetaTestApp(
         enableNativeWindowFrame: false,
-        directoryPicker: () async => directory.path,
+        overrides: fakeDirectoryPickerOverrides(directory.path),
         hostMode: ZetaHostMode.ephemeral,
         ideSessionStore: session,
         agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
@@ -2123,7 +2124,7 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MainApp(
+        zetaTestApp(
           enableNativeWindowFrame: false,
           hostMode: ZetaHostMode.ephemeral,
           ideSessionStore: session,
@@ -2234,7 +2235,7 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MainApp(
+        zetaTestApp(
           enableNativeWindowFrame: false,
           hostMode: ZetaHostMode.ephemeral,
           ideSessionStore: session,
@@ -2324,9 +2325,9 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MainApp(
+        zetaTestApp(
           enableNativeWindowFrame: false,
-          directoryPicker: () async => directory.path,
+          overrides: fakeDirectoryPickerOverrides(directory.path),
           hostMode: ZetaHostMode.ephemeral,
           ideSessionStore: session,
           agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
@@ -2433,7 +2434,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
+      zetaTestApp(
         enableNativeWindowFrame: false,
         hostMode: ZetaHostMode.ephemeral,
         ideSessionStore: session,
@@ -2523,9 +2524,9 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
+      zetaTestApp(
         enableNativeWindowFrame: false,
-        directoryPicker: () async => directory.path,
+        overrides: fakeDirectoryPickerOverrides(directory.path),
         hostMode: ZetaHostMode.ephemeral,
         ideSessionStore: session,
         agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
@@ -2641,9 +2642,9 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
+      zetaTestApp(
         enableNativeWindowFrame: false,
-        directoryPicker: () async => directory.path,
+        overrides: fakeDirectoryPickerOverrides(directory.path),
         hostMode: ZetaHostMode.ephemeral,
         ideSessionStore: session,
         agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
@@ -2696,7 +2697,7 @@ void main() {
     final provider = FakeAgentProvider(includeConversationTestThread: true);
 
     await tester.pumpWidget(
-      MainApp(
+      zetaTestApp(
         enableNativeWindowFrame: false,
         hostMode: ZetaHostMode.ephemeral,
         ideSessionStore: session,
@@ -2736,7 +2737,7 @@ void main() {
     final provider = FakeAgentProvider(includeConversationTestThread: true);
 
     await tester.pumpWidget(
-      MainApp(
+      zetaTestApp(
         enableNativeWindowFrame: false,
         hostMode: ZetaHostMode.ephemeral,
         ideSessionStore: session,
@@ -2772,7 +2773,7 @@ void main() {
     final provider = FakeAgentProvider(includeConversationTestThread: true);
 
     await tester.pumpWidget(
-      MainApp(
+      zetaTestApp(
         enableNativeWindowFrame: false,
         hostMode: ZetaHostMode.ephemeral,
         ideSessionStore: session,
@@ -2830,7 +2831,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
+      zetaTestApp(
         enableNativeWindowFrame: false,
         hostMode: ZetaHostMode.ephemeral,
         ideSessionStore: session,
@@ -2883,7 +2884,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
+      zetaTestApp(
         enableNativeWindowFrame: false,
         hostMode: ZetaHostMode.ephemeral,
         ideSessionStore: session,
@@ -3036,7 +3037,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
+      zetaTestApp(
         enableNativeWindowFrame: false,
         hostMode: ZetaHostMode.ephemeral,
         ideSessionStore: session,
@@ -3130,7 +3131,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
+      zetaTestApp(
         enableNativeWindowFrame: false,
         hostMode: ZetaHostMode.ephemeral,
         ideSessionStore: session,
@@ -3303,7 +3304,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
+      zetaTestApp(
         enableNativeWindowFrame: false,
         hostMode: ZetaHostMode.ephemeral,
         ideSessionStore: session,
@@ -3338,7 +3339,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
+      zetaTestApp(
         enableNativeWindowFrame: false,
         hostMode: ZetaHostMode.ephemeral,
         ideSessionStore: session,
@@ -3395,7 +3396,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
+      zetaTestApp(
         enableNativeWindowFrame: false,
         hostMode: ZetaHostMode.ephemeral,
         ideSessionStore: session,
@@ -3440,7 +3441,7 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MainApp(
+        zetaTestApp(
           enableNativeWindowFrame: false,
           hostMode: ZetaHostMode.ephemeral,
           ideSessionStore: session,
@@ -3728,7 +3729,7 @@ void main() {
       final provider = _ModeCapableFakeAgentProvider(completeTurns: false);
 
       await tester.pumpWidget(
-        MainApp(
+        zetaTestApp(
           enableNativeWindowFrame: false,
           hostMode: ZetaHostMode.ephemeral,
           ideSessionStore: session,
@@ -3946,9 +3947,9 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
+      zetaTestApp(
         enableNativeWindowFrame: false,
-        directoryPicker: () async => directory.path,
+        overrides: fakeDirectoryPickerOverrides(directory.path),
         hostMode: ZetaHostMode.ephemeral,
         ideSessionStore: session,
         agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
@@ -4018,7 +4019,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
+      zetaTestApp(
         enableNativeWindowFrame: false,
         hostMode: ZetaHostMode.ephemeral,
         ideSessionStore: session,
@@ -4119,7 +4120,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
+      zetaTestApp(
         enableNativeWindowFrame: false,
         hostMode: ZetaHostMode.ephemeral,
         ideSessionStore: session,
@@ -4182,7 +4183,7 @@ void main() {
     final provider = FakeAgentProvider(unavailable: true);
 
     await tester.pumpWidget(
-      MainApp(
+      zetaTestApp(
         enableNativeWindowFrame: false,
         hostMode: ZetaHostMode.ephemeral,
         ideSessionStore: session,

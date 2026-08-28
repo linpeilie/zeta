@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/app/composition/zeta_host_mode.dart';
-import 'package:zeta/src/app/app.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_notifier.dart';
 import 'package:zeta/src/features/settings/data/general_settings_store.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings_repository.dart';
@@ -19,6 +18,7 @@ import 'package:zeta/src/ui/features/ide/views/ide_home.dart';
 import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
 
 import '../testing/ide_test_harness.dart';
+import '../testing/zeta_test_app.dart';
 
 void main() {
   testWidgets('waits with a textless background before IdeHome mounts', (
@@ -26,7 +26,7 @@ void main() {
   ) async {
     final store = _DeferredGeneralSettingsStore();
 
-    await _pumpMainApp(
+    await _pumpzetaTestApp(
       tester,
       generalSettingsStore: store,
       waitForGeneralSettings: true,
@@ -57,7 +57,7 @@ void main() {
   ) async {
     final store = _DeferredGeneralSettingsStore();
 
-    await _pumpMainApp(
+    await _pumpzetaTestApp(
       tester,
       generalSettingsStore: store,
       waitForGeneralSettings: true,
@@ -82,7 +82,7 @@ void main() {
     final englishStore = _DeferredGeneralSettingsStore(
       const GeneralSettings(appLanguage: AppLanguage.english),
     );
-    await _pumpMainApp(
+    await _pumpzetaTestApp(
       tester,
       key: const ValueKey<String>('main-app-en'),
       generalSettingsStore: englishStore,
@@ -102,7 +102,7 @@ void main() {
     final chineseStore = _DeferredGeneralSettingsStore(
       const GeneralSettings(appLanguage: AppLanguage.simplifiedChinese),
     );
-    await _pumpMainApp(
+    await _pumpzetaTestApp(
       tester,
       key: const ValueKey<String>('main-app-zh'),
       generalSettingsStore: chineseStore,
@@ -122,7 +122,10 @@ void main() {
   testWidgets('tests can pump English without changing production default', (
     tester,
   ) async {
-    await _pumpMainApp(tester, displayLanguageOverride: AppLanguage.english);
+    await _pumpzetaTestApp(
+      tester,
+      displayLanguageOverride: AppLanguage.english,
+    );
     await tester.pump();
 
     final context = tester.element(find.byType(IdeHome));
@@ -136,7 +139,7 @@ void main() {
   testWidgets('language and appearance updates do not remount IdeHome', (
     tester,
   ) async {
-    await _pumpMainApp(
+    await _pumpzetaTestApp(
       tester,
       generalSettingsStore: MemoryGeneralSettingsStore(),
       appearanceSettingsStore: MemoryAppearanceSettingsStore(),
@@ -168,7 +171,7 @@ void main() {
         const GeneralSettings(appLanguage: AppLanguage.simplifiedChinese),
       );
 
-      await _pumpMainApp(
+      await _pumpzetaTestApp(
         tester,
         generalSettingsStore: store,
         waitForGeneralSettings: true,
@@ -206,7 +209,7 @@ void main() {
         const GeneralSettings(appLanguage: AppLanguage.simplifiedChinese),
       );
 
-      await _pumpMainApp(
+      await _pumpzetaTestApp(
         tester,
         key: const ValueKey<String>('main-app-before-restart'),
         generalSettingsStore: store,
@@ -233,7 +236,7 @@ void main() {
         'zh',
       );
 
-      await _pumpMainApp(
+      await _pumpzetaTestApp(
         tester,
         key: const ValueKey<String>('main-app-after-restart'),
         generalSettingsStore: store,
@@ -251,7 +254,7 @@ void main() {
   );
 }
 
-Future<void> _pumpMainApp(
+Future<void> _pumpzetaTestApp(
   WidgetTester tester, {
   Key? key,
   GeneralSettingsStore? generalSettingsStore,
@@ -270,7 +273,7 @@ Future<void> _pumpMainApp(
       ..resetDevicePixelRatio();
   });
   await tester.pumpWidget(
-    MainApp(
+    zetaTestApp(
       key: key,
       enableNativeWindowFrame: false,
       showWindowControls: false,

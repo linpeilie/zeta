@@ -5,6 +5,7 @@ import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_project.dart';
 
 import '../../../testing/workspace_test_bindings.dart';
+import '../../../testing/fake_workspace_directory_picker.dart';
 
 WorkspaceNode _directory(String path) => WorkspaceNode(
   path: path,
@@ -189,7 +190,9 @@ void main() {
   });
 
   test('picker cancel leaves the workspace empty', () async {
-    final bindings = WorkspaceTestBindings(directoryPicker: () async => null);
+    final bindings = WorkspaceTestBindings(
+      directoryPicker: FakeWorkspaceDirectoryPicker.cancelled(),
+    );
     addTearDown(bindings.dispose);
     expect(await bindings.notifier.openProject(), isNull);
     expect(bindings.notifier.state.openProjects, isEmpty);

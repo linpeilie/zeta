@@ -7,12 +7,15 @@ import 'package:zeta/src/features/workspace/application/workspace_file_tree_noti
 import 'package:zeta/src/features/workspace/application/workspace_notifier.dart';
 import 'package:zeta/src/features/workspace/data/io_workspace_directory_catalog.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_directory_catalog.dart';
+import 'package:zeta/src/features/workspace/domain/workspace_directory_picker.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
+
+import 'fake_workspace_directory_picker.dart';
 
 /// 测试用 workspace 组合：picker / catalog / 索引都可以注入。
 final class WorkspaceTestBindings {
   WorkspaceTestBindings({
-    Future<String?> Function()? directoryPicker,
+    WorkspaceDirectoryPicker? directoryPicker,
     WorkspaceDirectoryCatalog? catalog,
     WorkspaceFileIndexController? index,
     DateTime Function()? now,
@@ -26,7 +29,7 @@ final class WorkspaceTestBindings {
     container = ProviderContainer(
       overrides: [
         workspaceDirectoryPickerProvider.overrideWithValue(
-          directoryPicker ?? () async => null,
+          directoryPicker ?? FakeWorkspaceDirectoryPicker.cancelled(),
         ),
         workspaceDirectoryCatalogProvider.overrideWithValue(
           catalog ?? const IoWorkspaceDirectoryCatalog(),

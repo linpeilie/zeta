@@ -14,6 +14,7 @@ void main() {
       'lib/src/features/workspace/application/workspace_restore_snapshot.dart',
       'lib/src/features/workspace/domain/workspace_project.dart',
       'lib/src/features/workspace/domain/workspace_directory_catalog.dart',
+      'lib/src/features/workspace/domain/workspace_directory_picker.dart',
     ];
     for (final path in [...pureFiles, ...ownerFiles]) {
       final source = File(path).readAsStringSync();
@@ -28,7 +29,7 @@ void main() {
     final notifier = File(
       'lib/src/features/workspace/application/workspace_notifier.dart',
     ).readAsStringSync();
-    expect(notifier, contains('typedef WorkspaceDirectoryPicker'));
+    expect(notifier, contains('workspaceDirectoryPickerProvider'));
     expect(notifier, isNot(contains('_Deferred')));
 
     final fileTree = File(
@@ -105,5 +106,40 @@ void main() {
     ).readAsStringSync();
     expect(data, contains("import 'dart:io'"));
     expect(data, contains('IoWorkspaceDirectoryCatalog'));
+  });
+
+  test('目录选择器：端口在 domain，原生实现在 data，真实实现只由生产入口装', () {
+    final picker = File(
+      'lib/src/features/workspace/data/file_selector_workspace_directory_picker.dart',
+    ).readAsStringSync();
+    expect(
+      picker,
+      contains("import 'package:file_selector/file_selector.dart'"),
+    );
+    expect(picker, contains('FileSelectorWorkspaceDirectoryPicker'));
+
+    // 平台 picker 不许再漏回 app 组合层。
+    final overrides = File(
+      'lib/src/app/workspace_slice/workspace_overrides.dart',
+    ).readAsStringSync();
+    expect(overrides, isNot(contains("package:file_selector/")));
+
+    // 真实选择器只在 local 宿主装：ephemeral 也装的话，调用方就再也覆盖不掉这个
+    // provider（同容器重复 override 会被 Riverpod 断言拦下），fake 进不来。
+    final composition = File(
+      'lib/src/app/composition/zeta_app_composition.dart',
+    ).readAsStringSync();
+    expect(
+      composition,
+      contains(
+        'if (hostMode.usesNativeDialogs) systemDirectoryPickerOverride()',
+      ),
+    );
+
+    // Widget 上不许再有任何注入参数：容器与依赖都归组合根。
+    final app = File('lib/src/app/app.dart').readAsStringSync();
+    expect(app, isNot(contains('directoryPicker')));
+    expect(app, isNot(contains('ProviderContainer(')));
+    expect(app, contains('required this.composition'));
   });
 }

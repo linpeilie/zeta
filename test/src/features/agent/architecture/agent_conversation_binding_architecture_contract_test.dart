@@ -22,7 +22,8 @@ void main() {
 
     test('app shell injects BundleFactory and does not wrap old Factory', () {
       const files = <String>[
-        'lib/src/app/app.dart',
+        // Provider 工厂的注入点随容器一起搬到了组合根，`app.dart` 只剩 Widget。
+        'lib/src/app/composition/zeta_app_composition.dart',
         'lib/src/app/shell/ide_shell_controller.dart',
         'lib/src/ui/features/ide/views/ide_home.dart',
       ];

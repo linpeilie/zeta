@@ -8,7 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// Widget 测试卫生守卫。
 ///
 /// 自动化测试**不得拉起真实 Agent CLI**：不注入 `agentProviderFactory` 时，
-/// `MainApp` 会激活真实的内置 Provider 插件，Shell 启动阶段的模型
+/// 组合根会激活真实的内置 Provider 插件，Shell 启动阶段的模型
 /// 目录预热就会去启动本机 Codex/Grok/Claude 进程，并注册 30 秒的 JSON-RPC
 /// 超时 `Timer`。该 Timer 常常活过 widget 树销毁，于是测试以
 /// "A Timer is still pending even after the widget tree was disposed" 随机失败——
@@ -20,7 +20,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// `agentProviderFactory`，于是下面这种写法能骗过它——
 ///
 /// ```dart
-/// MainApp(
+/// zetaTestApp(
 ///   // TODO: inject agentProviderFactory
 /// )
 /// ```
@@ -28,7 +28,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// 括号配对同样会被字符串和注释里的括号带偏。analyzer 解析出的 AST 天然不含
 /// 注释，命名实参也是结构化的，没有这类漏洞。
 void main() {
-  test('测试构造 MainApp 时必须显式注入 Agent provider 工厂', () {
+  test('测试构造 zetaTestApp 时必须显式注入 Agent provider 工厂', () {
     final offenders = <String>[];
     var scanned = 0;
     for (final file in _dartFilesUnder('test')) {
@@ -54,8 +54,8 @@ void main() {
       }
     }
 
-    // 防止守卫变成空转：真的扫到了 MainApp 构造点，才谈得上"没有违规"。
-    expect(scanned, greaterThan(0), reason: '没有扫到任何 MainApp 构造点，守卫多半失效了');
+    // 防止守卫变成空转：真的扫到了构造点，才谈得上"没有违规"。
+    expect(scanned, greaterThan(0), reason: '没有扫到任何 zetaTestApp 构造点，守卫多半失效了');
     expect(
       offenders,
       isEmpty,
@@ -69,11 +69,11 @@ void main() {
     // 回归用例：文本实现会放过这段代码，AST 实现必须抓住。
     const disguised = '''
 void main() {
-  final widget = MainApp(
+  final widget = zetaTestApp(
     // TODO: inject agentProviderFactory
     enableNativeWindowFrame: false,
   );
-  final ok = MainApp(agentProviderFactory: factory);
+  final ok = zetaTestApp(agentProviderFactory: factory);
 }
 ''';
     final parsed = parseString(content: disguised, throwIfDiagnostics: false);
@@ -86,7 +86,7 @@ void main() {
   });
 }
 
-/// 一次 `MainApp(...)` 构造及其命名实参判定。
+/// 一次 `zetaTestApp(...)` 构造及其命名实参判定。
 final class _MainAppConstruction {
   const _MainAppConstruction({
     required this.offset,
@@ -97,17 +97,21 @@ final class _MainAppConstruction {
   final bool hasAgentProviderFactory;
 }
 
-/// 收集所有 `MainApp(...)` 构造点。
+/// 收集所有 `zetaTestApp(...)` 构造点。
 ///
 /// 只做语法解析（不做元素解析）时，省略 `new` 的构造在 AST 里是
 /// [MethodInvocation] 而不是 [InstanceCreationExpression]，两种都要看。
 /// `_pumpMainApp(...)` 不会被误判：方法名要求完全相等。
+/// 两个入口都要扫：`zetaTestApp` 直接建 Widget，`zetaTestComposition` 建组合根，
+/// 漏掉后者就能绕过守卫。
+const _testAppFactories = <String>{'zetaTestApp', 'zetaTestComposition'};
+
 final class _MainAppConstructionVisitor extends RecursiveAstVisitor<void> {
   final List<_MainAppConstruction> constructions = <_MainAppConstruction>[];
 
   @override
   void visitInstanceCreationExpression(InstanceCreationExpression node) {
-    if (node.constructorName.type.name.lexeme == 'MainApp') {
+    if (_testAppFactories.contains(node.constructorName.type.name.lexeme)) {
       _record(node.offset, node.argumentList);
     }
     super.visitInstanceCreationExpression(node);
@@ -115,7 +119,8 @@ final class _MainAppConstructionVisitor extends RecursiveAstVisitor<void> {
 
   @override
   void visitMethodInvocation(MethodInvocation node) {
-    if (node.target == null && node.methodName.name == 'MainApp') {
+    if (node.target == null &&
+        _testAppFactories.contains(node.methodName.name)) {
       _record(node.offset, node.argumentList);
     }
     super.visitMethodInvocation(node);

@@ -5,8 +5,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/app/composition/zeta_host_mode.dart';
 import 'package:zeta/main.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
+import 'package:zeta/src/features/workspace/domain/workspace_directory_picker.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 
 import '../../../testing/ide_test_harness.dart';
+import '../../../testing/fake_workspace_directory_picker.dart';
+import '../../../testing/zeta_test_app.dart';
 
 void main() {
   final tempDirectories = <Directory>[];
@@ -32,10 +36,10 @@ void main() {
     file.writeAsStringSync('hello from zeta');
 
     await tester.pumpWidget(
-      MainApp(
+      zetaTestApp(
         enableNativeWindowFrame: true,
         showWindowControls: false,
-        directoryPicker: () async => directory.path,
+        overrides: fakeDirectoryPickerOverrides(directory.path),
         hostMode: ZetaHostMode.ephemeral,
         ideSessionStore: session,
         agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
@@ -70,10 +74,10 @@ void main() {
     final repositoryDirectory = Directory.current;
 
     await tester.pumpWidget(
-      MainApp(
+      zetaTestApp(
         enableNativeWindowFrame: true,
         showWindowControls: false,
-        directoryPicker: () async => repositoryDirectory.path,
+        overrides: fakeDirectoryPickerOverrides(repositoryDirectory.path),
         hostMode: ZetaHostMode.ephemeral,
         ideSessionStore: session,
         agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
@@ -106,10 +110,10 @@ void main() {
     ).writeAsStringSync('void main() {}');
 
     await tester.pumpWidget(
-      MainApp(
+      zetaTestApp(
         enableNativeWindowFrame: true,
         showWindowControls: false,
-        directoryPicker: () async => directory.path,
+        overrides: fakeDirectoryPickerOverrides(directory.path),
         hostMode: ZetaHostMode.ephemeral,
         ideSessionStore: session,
         agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
@@ -146,11 +150,13 @@ void main() {
     final file = File('${folder.path}${Platform.pathSeparator}main.dart')
       ..writeAsStringSync('void main() {}');
 
-    MainApp buildApp({Future<String?> Function()? directoryPicker}) {
-      return MainApp(
+    MainApp buildApp({WorkspaceDirectoryPicker? directoryPicker}) {
+      return zetaTestApp(
         enableNativeWindowFrame: true,
         showWindowControls: false,
-        directoryPicker: directoryPicker,
+        overrides: directoryPicker == null
+            ? const <Override>[]
+            : fakeDirectoryPickerOverridesOf(directoryPicker),
         hostMode: ZetaHostMode.ephemeral,
         ideSessionStore: session,
         agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
@@ -161,7 +167,7 @@ void main() {
     }
 
     await tester.pumpWidget(
-      buildApp(directoryPicker: () async => directory.path),
+      buildApp(directoryPicker: FakeWorkspaceDirectoryPicker(directory.path)),
     );
     await openProjectFromMenu(tester);
     await tester.runAsync(waitForIo);

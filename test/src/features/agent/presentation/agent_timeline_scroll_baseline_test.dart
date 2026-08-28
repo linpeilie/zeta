@@ -3,13 +3,14 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/app/composition/zeta_host_mode.dart';
-import 'package:zeta/main.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 
 import '../../../../support/scroll_metrics_trace.dart';
 import '../../../testing/ide_test_harness.dart';
+import '../../../testing/fake_workspace_directory_picker.dart';
+import '../../../testing/zeta_test_app.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -177,7 +178,7 @@ void main() {
       final session = _activeProjectSession(directory);
 
       await tester.pumpWidget(
-        MainApp(
+        zetaTestApp(
           enableNativeWindowFrame: false,
           hostMode: ZetaHostMode.ephemeral,
           ideSessionStore: session,
@@ -306,7 +307,7 @@ void main() {
     final session = _activeProjectSession(directory);
 
     await tester.pumpWidget(
-      MainApp(
+      zetaTestApp(
         enableNativeWindowFrame: false,
         hostMode: ZetaHostMode.ephemeral,
         ideSessionStore: session,
@@ -469,9 +470,9 @@ void main() {
       final session = MemorySessionStore();
 
       await tester.pumpWidget(
-        MainApp(
+        zetaTestApp(
           enableNativeWindowFrame: false,
-          directoryPicker: () async => directory.path,
+          overrides: fakeDirectoryPickerOverrides(directory.path),
           hostMode: ZetaHostMode.ephemeral,
           ideSessionStore: session,
           agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(

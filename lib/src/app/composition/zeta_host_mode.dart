@@ -16,7 +16,8 @@ enum ZetaHostMode {
   ///
   /// 1. 未注入 `ZetaStorageBindings` 时使用内存文档，一个字节都不写 `~/.zeta`；
   /// 2. 不探测本机安装的 Agent CLI（用无安装结果的 stub 顶掉）；
-  /// 3. 不自动刷新 Agent 用量（否则会读本机 CLI 的历史记录）。
+  /// 3. 不自动刷新 Agent 用量（否则会读本机 CLI 的历史记录）；
+  /// 4. 不装本机原生对话框（目录选择器由调用方经 `MainApp.overrides` 注入）。
   ///
   /// 第 3 条在调用方显式注入统计仓储时可以恢复——那时数据来源已经是注入的假实现，
   /// 不再触碰本机。
@@ -27,4 +28,10 @@ enum ZetaHostMode {
 
   /// 是否允许读取本机 Agent CLI 的安装状态与历史记录。
   bool get allowsLocalCliAccess => this == ZetaHostMode.local;
+
+  /// 是否允许弹本机原生对话框（目前只有系统目录选择器）。
+  ///
+  /// ephemeral 宿主返回 false：原生对话框在 widget test 里要么弹不出来、要么把
+  /// 测试挂在系统 UI 上，选择器一律由调用方注入。
+  bool get usesNativeDialogs => this == ZetaHostMode.local;
 }

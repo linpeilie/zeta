@@ -6,7 +6,10 @@ import 'package:flutter/widgets.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:zeta_foundation/platform.dart';
 
+import 'package:flutter_riverpod/misc.dart' show Override;
+
 import 'package:zeta/src/app/app.dart';
+import 'package:zeta/src/app/composition/zeta_app_composition.dart';
 import 'package:zeta/src/app/observability/zeta_observability.dart';
 import 'package:zeta/src/app/storage/zeta_data_file_system.dart';
 import 'package:zeta/src/app/storage/zeta_storage_bindings.dart';
@@ -16,6 +19,7 @@ import 'package:zeta/src/core/storage/zeta_data_paths.dart';
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta/src/features/settings/domain/app_language.dart';
+import 'package:zeta/src/features/settings/application/appearance_settings_notifier.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/features/settings/presentation/appearance_theme_mode_mapper.dart';
 import 'package:zeta_ui/zeta_ui.dart';
@@ -47,16 +51,17 @@ void main() {
       );
       // 阶段 0：只挂脱敏观察器与指标端口，不迁移任何业务状态到 Riverpod。
       final observability = ZetaObservability.fromEnvironment();
-      // 根 `ProviderScope` 在 MainApp 内部，测试 pump MainApp 时无需重复接线。
-      runApp(
-        MainApp(
-          storageBindings: storage,
-          initialAppearanceSettings: appearance,
-          fallbackLanguage: firstSystemLanguage,
-          waitForGeneralSettings: true,
-          observability: observability,
-        ),
+      // 容器由组合根建，MainApp 只消费——测试同样自己建一份并注入 fake。
+      final composition = ZetaAppComposition.create(
+        storageBindings: storage,
+        fallbackLanguage: firstSystemLanguage,
+        waitForGeneralSettings: true,
+        observability: observability,
+        overrides: <Override>[
+          initialAppearanceSettingsProvider.overrideWithValue(appearance),
+        ],
       );
+      runApp(MainApp(composition: composition));
     },
     (error, stackTrace) {
       loggerFor(

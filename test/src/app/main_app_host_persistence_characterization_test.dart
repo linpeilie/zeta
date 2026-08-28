@@ -3,13 +3,16 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/app/composition/zeta_host_mode.dart';
-import 'package:zeta/src/app/app.dart';
 import 'package:zeta/src/core/storage/zeta_data_paths.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 import 'package:zeta/src/ui/features/ide/views/ide_home.dart';
+import 'package:zeta/src/features/workspace/domain/workspace_directory_picker.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 
 import '../testing/ide_test_harness.dart';
+import '../testing/fake_workspace_directory_picker.dart';
+import '../testing/zeta_test_app.dart';
 
 /// `MainApp` 的宿主持久化模式 characterization test。
 ///
@@ -44,10 +47,10 @@ void main() {
     );
     final session = MemorySessionStore(null);
 
-    await _pumpMainApp(
+    await _pumpzetaTestApp(
       tester,
       session: session,
-      directoryPicker: () async => project.path,
+      directoryPicker: FakeWorkspaceDirectoryPicker(project.path),
     );
 
     // 真正落到写路径上：不触发一次持久化，下面的目录断言就是空的。
@@ -72,7 +75,7 @@ void main() {
   });
 
   testWidgets('回调持久化用无安装 stub 顶掉本机 CLI 探测', (tester) async {
-    await _pumpMainApp(tester);
+    await _pumpzetaTestApp(tester);
     await tester.pump();
 
     final ideHome = tester.widget<IdeHome>(find.byType(IdeHome));
@@ -85,7 +88,7 @@ void main() {
   });
 
   testWidgets('回调持久化关闭 Agent 用量自动刷新', (tester) async {
-    await _pumpMainApp(tester);
+    await _pumpzetaTestApp(tester);
     await tester.pump();
 
     final ideHome = tester.widget<IdeHome>(find.byType(IdeHome));
@@ -97,7 +100,7 @@ void main() {
   });
 
   testWidgets('显式注入统计仓储时自动刷新重新打开', (tester) async {
-    await _pumpMainApp(
+    await _pumpzetaTestApp(
       tester,
       agentUsagePanelRepository: const _EmptyAgentUsageRepository(),
     );
@@ -112,7 +115,7 @@ void main() {
   });
 
   testWidgets('显式注入的探测 loader 优先于无安装 stub', (tester) async {
-    await _pumpMainApp(
+    await _pumpzetaTestApp(
       tester,
       homeProviderDetectionLoader: () async => const <ManagedAgent>[],
     );
@@ -123,12 +126,12 @@ void main() {
   });
 }
 
-Future<void> _pumpMainApp(
+Future<void> _pumpzetaTestApp(
   WidgetTester tester, {
   AgentUsagePanelRepository? agentUsagePanelRepository,
   HomeProviderDetectionLoader? homeProviderDetectionLoader,
   MemorySessionStore? session,
-  Future<String?> Function()? directoryPicker,
+  WorkspaceDirectoryPicker? directoryPicker,
 }) async {
   final sessionStore = session ?? MemorySessionStore(null);
   tester.view
@@ -140,10 +143,12 @@ Future<void> _pumpMainApp(
       ..resetDevicePixelRatio();
   });
   await tester.pumpWidget(
-    MainApp(
+    zetaTestApp(
       enableNativeWindowFrame: false,
       showWindowControls: false,
-      directoryPicker: directoryPicker,
+      overrides: directoryPicker == null
+          ? const <Override>[]
+          : fakeDirectoryPickerOverridesOf(directoryPicker),
       hostMode: ZetaHostMode.ephemeral,
       ideSessionStore: sessionStore,
       agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(

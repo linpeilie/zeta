@@ -7,8 +7,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/app/app.dart';
 import 'package:zeta/src/app/composition/zeta_host_mode.dart';
-import 'package:zeta/main.dart';
 import 'package:zeta/src/core/utils/path_utils.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
@@ -17,6 +17,8 @@ import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_mode
 import 'package:zeta_ui/zeta_ui.dart';
 
 import '../../../testing/ide_test_harness.dart';
+import '../../../testing/fake_workspace_directory_picker.dart';
+import '../../../testing/zeta_test_app.dart';
 
 void main() {
   final tempDirectories = <Directory>[];
@@ -42,10 +44,10 @@ void main() {
     file.writeAsStringSync('hello from zeta');
 
     await tester.pumpWidget(
-      MainApp(
+      zetaTestApp(
         enableNativeWindowFrame: true,
         showWindowControls: false,
-        directoryPicker: () async => directory.path,
+        overrides: fakeDirectoryPickerOverrides(directory.path),
         hostMode: ZetaHostMode.ephemeral,
         ideSessionStore: session,
         agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
@@ -71,7 +73,7 @@ void main() {
     await tester.pump();
 
     await tester.pumpWidget(
-      MainApp(
+      zetaTestApp(
         enableNativeWindowFrame: true,
         showWindowControls: false,
         hostMode: ZetaHostMode.ephemeral,
@@ -104,10 +106,10 @@ void main() {
     ).writeAsStringSync('void main() {}');
 
     await tester.pumpWidget(
-      MainApp(
+      zetaTestApp(
         enableNativeWindowFrame: true,
         showWindowControls: false,
-        directoryPicker: () async => directory.path,
+        overrides: fakeDirectoryPickerOverrides(directory.path),
         hostMode: ZetaHostMode.ephemeral,
         ideSessionStore: session,
         agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
@@ -132,7 +134,7 @@ void main() {
     await tester.pump();
 
     await tester.pumpWidget(
-      MainApp(
+      zetaTestApp(
         enableNativeWindowFrame: true,
         showWindowControls: false,
         hostMode: ZetaHostMode.ephemeral,
@@ -174,7 +176,7 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MainApp(
+        zetaTestApp(
           enableNativeWindowFrame: true,
           showWindowControls: false,
           hostMode: ZetaHostMode.ephemeral,
@@ -208,7 +210,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
+      zetaTestApp(
         enableNativeWindowFrame: true,
         showWindowControls: false,
         hostMode: ZetaHostMode.ephemeral,
@@ -243,7 +245,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
+      zetaTestApp(
         enableNativeWindowFrame: true,
         showWindowControls: false,
         hostMode: ZetaHostMode.ephemeral,
@@ -277,18 +279,18 @@ void main() {
         const IdeSessionState(workbenchLayout: workbench).encode(),
       );
 
-      await tester.pumpWidget(
-        MainApp(
-          enableNativeWindowFrame: true,
-          showWindowControls: false,
-          hostMode: ZetaHostMode.ephemeral,
-          ideSessionStore: session,
-          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-            FakeAgentProvider(),
-          ),
-          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      // 同一个组合根重建 Widget：容器与 store identity 都必须保持稳定。
+      final composition = zetaTestComposition(
+        enableNativeWindowFrame: true,
+        showWindowControls: false,
+        hostMode: ZetaHostMode.ephemeral,
+        ideSessionStore: session,
+        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
+          FakeAgentProvider(),
         ),
+        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
       );
+      await tester.pumpWidget(MainApp(composition: composition));
       await tester.runAsync(waitForIo);
       await tester.pumpAndSettle();
 
@@ -306,19 +308,7 @@ void main() {
         workbench.copyWith(leftSidebarVisible: true),
       );
 
-      // 同一个 MainApp State rebuild 时 override 数量与 store identity 都保持稳定。
-      await tester.pumpWidget(
-        MainApp(
-          enableNativeWindowFrame: true,
-          showWindowControls: false,
-          hostMode: ZetaHostMode.ephemeral,
-          ideSessionStore: session,
-          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-            FakeAgentProvider(),
-          ),
-          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
-        ),
-      );
+      await tester.pumpWidget(MainApp(composition: composition));
       await tester.pump();
 
       expect(tester.takeException(), isNull);
@@ -337,7 +327,7 @@ void main() {
 
     Future<void> pumpApp({bool waitForUsage = true}) async {
       await tester.pumpWidget(
-        MainApp(
+        zetaTestApp(
           enableNativeWindowFrame: true,
           showWindowControls: false,
           hostMode: ZetaHostMode.ephemeral,
@@ -469,10 +459,10 @@ void main() {
       ).writeAsStringSync('chosen');
 
       await tester.pumpWidget(
-        MainApp(
+        zetaTestApp(
           enableNativeWindowFrame: true,
           showWindowControls: false,
-          directoryPicker: () async => chosenDirectory.path,
+          overrides: fakeDirectoryPickerOverrides(chosenDirectory.path),
           hostMode: ZetaHostMode.ephemeral,
           ideSessionStore: _DeferredSessionStore(
             pending: restoreCompleter.future,
@@ -532,10 +522,10 @@ void main() {
       ).writeAsStringSync('chosen');
 
       await tester.pumpWidget(
-        MainApp(
+        zetaTestApp(
           enableNativeWindowFrame: true,
           showWindowControls: false,
-          directoryPicker: () async => chosenDirectory.path,
+          overrides: fakeDirectoryPickerOverrides(chosenDirectory.path),
           hostMode: ZetaHostMode.ephemeral,
           ideSessionStore: _DeferredSessionStore(
             pending: restoreCompleter.future,

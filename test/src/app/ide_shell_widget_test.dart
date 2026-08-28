@@ -9,8 +9,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/app/composition/zeta_host_mode.dart';
-import 'package:zeta/main.dart';
-import 'package:zeta/src/app/app.dart' show MainAppState;
+import 'package:zeta/src/app/app.dart' show MainApp, MainAppState;
+import 'package:zeta/src/app/composition/zeta_app_composition.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
@@ -33,9 +33,13 @@ import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics
 import 'package:zeta_ui/zeta_ui.dart';
 
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
+import 'package:zeta/src/features/workspace/domain/workspace_directory_picker.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import '../testing/agent_event_storm_fixture.dart';
 import '../testing/ide_test_harness.dart';
 import '../testing/widget_build_counter.dart';
+import '../testing/fake_workspace_directory_picker.dart';
+import '../testing/zeta_test_app.dart';
 
 /// 阶段 0 固定风暴 fixture 的 UI 侧预算。
 ///
@@ -282,7 +286,7 @@ void main() {
 
       await _pumpIde(
         tester,
-        directoryPicker: () async => directory.path,
+        directoryPicker: FakeWorkspaceDirectoryPicker(directory.path),
         agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
         agentProviderConfigStore: MemoryAgentProviderConfigStore(),
         agentUsagePanelRepository: repository,
@@ -1049,7 +1053,7 @@ void main() {
     );
     await _pumpIde(
       tester,
-      directoryPicker: () async => directory.path,
+      directoryPicker: FakeWorkspaceDirectoryPicker(directory.path),
       agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
       agentProviderConfigStore: MemoryAgentProviderConfigStore(),
     );
@@ -1623,9 +1627,9 @@ void main() {
         ),
       ],
     );
-    await _pumpIde(
+    final composition = await _pumpIde(
       tester,
-      directoryPicker: () async => directory.path,
+      directoryPicker: FakeWorkspaceDirectoryPicker(directory.path),
       agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
       agentProviderConfigStore: MemoryAgentProviderConfigStore(),
     );
@@ -1647,8 +1651,7 @@ void main() {
       failureMessage: 'Snapshot Agent canvas did not become ready',
     );
 
-    final appState = tester.state<MainAppState>(find.byType(MainApp));
-    final snapshot = appState.takeStateSnapshot();
+    final snapshot = composition.takeStateSnapshot();
     final selectedEntryId = snapshot.shell.selectedConversationEntryId;
 
     expect(snapshot.shell.workspace.activeProjectPath, directory.path);
@@ -1679,14 +1682,18 @@ void main() {
 
   testWidgets('settings 切片更新 AgentPane 快捷键且 root snapshot 同源', (tester) async {
     final retained = await _prepareRetainedAgentState(tester);
-    final appState = tester.state<MainAppState>(find.byType(MainApp));
+    final composition = retained.composition;
 
     expect(
       (retained.agentPaneElement.widget as AgentPane).messageSendShortcut,
       MessageSendShortcut.enter,
     );
     expect(
-      appState.takeStateSnapshot().generalSettings.settings.sendMessageShortcut,
+      composition
+          .takeStateSnapshot()
+          .generalSettings
+          .settings
+          .sendMessageShortcut,
       MessageSendShortcut.enter,
     );
 
@@ -1724,7 +1731,11 @@ void main() {
     expect(retained.agentPaneElement.mounted, isTrue);
 
     expect(
-      appState.takeStateSnapshot().generalSettings.settings.sendMessageShortcut,
+      composition
+          .takeStateSnapshot()
+          .generalSettings
+          .settings
+          .sendMessageShortcut,
       MessageSendShortcut.primaryModifierEnter,
       reason: 'root snapshot 必须直接投影唯一 settings owner',
     );
@@ -1924,7 +1935,7 @@ void main() {
 
       await _pumpIde(
         tester,
-        directoryPicker: () async => directory.path,
+        directoryPicker: FakeWorkspaceDirectoryPicker(directory.path),
         agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
         agentProviderConfigStore: MemoryAgentProviderConfigStore(),
       );
@@ -2073,7 +2084,7 @@ void main() {
 
     await _pumpIde(
       tester,
-      directoryPicker: () async => directory.path,
+      directoryPicker: FakeWorkspaceDirectoryPicker(directory.path),
       agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
       agentProviderConfigStore: MemoryAgentProviderConfigStore(),
     );
@@ -2172,7 +2183,7 @@ void main() {
     );
     await _pumpIde(
       tester,
-      directoryPicker: () async => directory.path,
+      directoryPicker: FakeWorkspaceDirectoryPicker(directory.path),
       agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
       agentProviderConfigStore: MemoryAgentProviderConfigStore(),
     );
@@ -2272,11 +2283,11 @@ void main() {
   });
 }
 
-Future<void> _pumpIde(
+Future<ZetaAppComposition> _pumpIde(
   WidgetTester tester, {
   Size size = const Size(1400, 900),
   bool enableNativeWindowFrame = false,
-  Future<String?> Function()? directoryPicker,
+  WorkspaceDirectoryPicker? directoryPicker,
   AgentProviderBundleFactory? agentProviderFactory,
   AgentProviderConfigStore? agentProviderConfigStore,
   Future<List<AgentProviderConfig>> Function()? agentProviderAvailabilityLoader,
@@ -2297,24 +2308,26 @@ Future<void> _pumpIde(
 
   final session = sessionStore ?? MemorySessionStore(initialSessionJson);
 
-  await tester.pumpWidget(
-    MainApp(
-      enableNativeWindowFrame: enableNativeWindowFrame,
-      showWindowControls: false,
-      directoryPicker: directoryPicker,
-      hostMode: ZetaHostMode.ephemeral,
-      ideSessionStore: session,
-      agentProviderFactory: agentProviderFactory,
-      agentProviderConfigStore: agentProviderConfigStore,
-      agentProviderAvailabilityLoader: agentProviderAvailabilityLoader,
-      homeProviderDetectionLoader: homeProviderDetectionLoader,
-      agentUsagePanelRepository:
-          agentUsagePanelRepository ?? const _EmptyAgentUsageRepository(),
-    ),
+  final composition = zetaTestComposition(
+    enableNativeWindowFrame: enableNativeWindowFrame,
+    showWindowControls: false,
+    overrides: directoryPicker == null
+        ? const <Override>[]
+        : fakeDirectoryPickerOverridesOf(directoryPicker),
+    hostMode: ZetaHostMode.ephemeral,
+    ideSessionStore: session,
+    agentProviderFactory: agentProviderFactory,
+    agentProviderConfigStore: agentProviderConfigStore,
+    agentProviderAvailabilityLoader: agentProviderAvailabilityLoader,
+    homeProviderDetectionLoader: homeProviderDetectionLoader,
+    agentUsagePanelRepository:
+        agentUsagePanelRepository ?? const _EmptyAgentUsageRepository(),
   );
+  await tester.pumpWidget(MainApp(composition: composition));
   if (flushInitialUsageRefresh) {
     await _flushInitialUsageRefresh(tester);
   }
+  return composition;
 }
 
 /// Agent 统计弹层在帧末挂载，开合都要多走一帧并跑完过渡。
@@ -2367,7 +2380,7 @@ _prepareEventStormAgentPane(
   );
   await _pumpIde(
     tester,
-    directoryPicker: () async => directory.path,
+    directoryPicker: FakeWorkspaceDirectoryPicker(directory.path),
     agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
     agentProviderConfigStore: MemoryAgentProviderConfigStore(),
   );
@@ -2589,10 +2602,10 @@ Future<_RetainedAgentState> _prepareRetainedAgentState(
       ),
     ],
   );
-  await _pumpIde(
+  final composition = await _pumpIde(
     tester,
     enableNativeWindowFrame: true,
-    directoryPicker: () async => directory.path,
+    directoryPicker: FakeWorkspaceDirectoryPicker(directory.path),
     agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
     agentProviderConfigStore: MemoryAgentProviderConfigStore(),
   );
@@ -2660,6 +2673,7 @@ Future<_RetainedAgentState> _prepareRetainedAgentState(
   await tester.pump();
 
   return _RetainedAgentState(
+    composition: composition,
     windowFrameElement: tester.element(
       find.byKey(const ValueKey('ide-window-frame')),
     ),
@@ -2761,6 +2775,7 @@ Finder _agentMessageInput() {
 
 class _RetainedAgentState {
   const _RetainedAgentState({
+    required this.composition,
     required this.windowFrameElement,
     required this.workbenchElement,
     required this.agentPaneElement,
@@ -2773,6 +2788,7 @@ class _RetainedAgentState {
     required this.selectedMode,
   });
 
+  final ZetaAppComposition composition;
   final Element windowFrameElement;
   final Element workbenchElement;
   final Element agentPaneElement;

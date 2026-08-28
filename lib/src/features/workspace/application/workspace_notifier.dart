@@ -6,15 +6,15 @@ import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta/src/features/workspace/application/workspace_file_index_controller.dart';
 import 'package:zeta/src/features/workspace/application/workspace_file_tree_notifier.dart';
 import 'package:zeta/src/features/workspace/application/workspace_restore_snapshot.dart';
+import 'package:zeta/src/features/workspace/domain/workspace_directory_picker.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_project.dart';
 
 final _log = zetaLoggerFor('zeta.workspace');
 
-/// 系统目录选择器。定义在本文件，由组合根覆盖；测试注入 fake。
-typedef WorkspaceDirectoryPicker = Future<String?> Function();
-
-/// 目录选择器。组合根必须覆盖。
+/// 目录选择器。组合根必须覆盖：生产装 `file_selector` 实现，测试装 fake。
+///
+/// 未覆盖就读到这里是接线漏了，fail-closed 抛错，不静默回退到弹真实对话框。
 final workspaceDirectoryPickerProvider = Provider<WorkspaceDirectoryPicker>(
   (ref) => throw StateError('Workspace directory picker is not installed'),
   name: 'workspaceDirectoryPicker',
@@ -87,7 +87,9 @@ final class WorkspaceNotifier extends Notifier<WorkspaceState> {
 
   /// 弹出系统目录选择器并打开/激活。取消返回 null；目录不存在也返回 null。
   Future<String?> openProject() async {
-    final picked = await ref.read(workspaceDirectoryPickerProvider)();
+    final picked = await ref
+        .read(workspaceDirectoryPickerProvider)
+        .pickDirectory();
     if (picked == null || picked.trim().isEmpty) {
       return null;
     }

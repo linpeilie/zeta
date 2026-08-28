@@ -21,6 +21,7 @@ import 'package:zeta/src/features/usage_statistics/application/query_agent_usage
 import 'package:zeta/src/features/usage_statistics/application/query_usage_statistics_repository.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/fallback_usage_statistics_text_catalog.dart';
+import 'package:zeta/src/features/workspace/domain/workspace_directory_picker.dart';
 
 import '../testing/agent_event_storm_fixture.dart';
 import '../testing/agent_provider_stub_base.dart';
@@ -29,9 +30,10 @@ import '../testing/fake_agent_frame_scheduler.dart';
 import '../testing/provider_settings_test_store.dart';
 import '../testing/memory_feature_stores.dart';
 import '../testing/workspace_test_bindings.dart';
+import '../testing/fake_workspace_directory_picker.dart';
 
 WorkspaceTestBindings _bindWorkspace({
-  Future<String?> Function()? directoryPicker,
+  WorkspaceDirectoryPicker? directoryPicker,
   DateTime Function()? now,
 }) {
   final bindings = WorkspaceTestBindings(
@@ -113,7 +115,9 @@ void main() {
         configStore: MemoryAgentProviderConfigStore(),
       );
       addTearDown(providerSettings.dispose);
-      final workspace = _bindWorkspace(directoryPicker: () async => null);
+      final workspace = _bindWorkspace(
+        directoryPicker: FakeWorkspaceDirectoryPicker.cancelled(),
+      );
       final shell = IdeShellController(
         agentUiFrameSchedulerFactory: _createUiFrameScheduler,
         workspace: workspace.notifier,
@@ -224,7 +228,7 @@ void main() {
       addTearDown(providerSettings.dispose);
 
       final workspace = _bindWorkspace(
-        directoryPicker: () async => directory.path,
+        directoryPicker: FakeWorkspaceDirectoryPicker(directory.path),
       );
       final shell = IdeShellController(
         agentUiFrameSchedulerFactory: _createUiFrameScheduler,
@@ -447,7 +451,9 @@ void main() {
         ),
       );
       addTearDown(providerSettings.dispose);
-      final workspace = _bindWorkspace(directoryPicker: () async => null);
+      final workspace = _bindWorkspace(
+        directoryPicker: FakeWorkspaceDirectoryPicker.cancelled(),
+      );
       final shell = IdeShellController(
         agentUiFrameSchedulerFactory: _createUiFrameScheduler,
         workspace: workspace.notifier,
@@ -949,7 +955,7 @@ void main() {
     addTearDown(providerSettings.dispose);
 
     final workspace = _bindWorkspace(
-      directoryPicker: () async => directory.path,
+      directoryPicker: FakeWorkspaceDirectoryPicker(directory.path),
     );
     final shell = IdeShellController(
       agentUiFrameSchedulerFactory: _createUiFrameScheduler,
@@ -1047,7 +1053,7 @@ void main() {
     );
     addTearDown(providerSettings.dispose);
     final workspace = _bindWorkspace(
-      directoryPicker: () async => directory.path,
+      directoryPicker: FakeWorkspaceDirectoryPicker(directory.path),
     );
     final shell = IdeShellController(
       agentUiFrameSchedulerFactory: _createUiFrameScheduler,
@@ -1156,7 +1162,7 @@ void main() {
       );
       addTearDown(providerSettings.dispose);
       final workspace = _bindWorkspace(
-        directoryPicker: () async => firstDirectory.path,
+        directoryPicker: FakeWorkspaceDirectoryPicker(firstDirectory.path),
       );
       final shell = IdeShellController(
         agentUiFrameSchedulerFactory: _createUiFrameScheduler,
@@ -1259,7 +1265,7 @@ void main() {
     );
     addTearDown(providerSettings.dispose);
     final workspace = _bindWorkspace(
-      directoryPicker: () async => directory.path,
+      directoryPicker: FakeWorkspaceDirectoryPicker(directory.path),
     );
     final shell = IdeShellController(
       agentUiFrameSchedulerFactory: _createUiFrameScheduler,
@@ -1315,7 +1321,9 @@ void main() {
       configStore: MemoryAgentProviderConfigStore(),
     );
     addTearDown(providerSettings.dispose);
-    final workspace = _bindWorkspace(directoryPicker: () async => null);
+    final workspace = _bindWorkspace(
+      directoryPicker: FakeWorkspaceDirectoryPicker.cancelled(),
+    );
     final shell = IdeShellController(
       agentUiFrameSchedulerFactory: _createUiFrameScheduler,
       workspace: workspace.notifier,
@@ -1411,7 +1419,7 @@ void main() {
     );
     addTearDown(providerSettings.dispose);
     final workspace = _bindWorkspace(
-      directoryPicker: () async => firstDirectory.path,
+      directoryPicker: FakeWorkspaceDirectoryPicker(firstDirectory.path),
       now: () => openedNow,
     );
     final shell = IdeShellController(
@@ -1526,7 +1534,9 @@ Future<_SelectedThreadShellHarness> _openShellWithSelectedThread({
       ),
     ),
   );
-  final workspace = _bindWorkspace(directoryPicker: () async => directory.path);
+  final workspace = _bindWorkspace(
+    directoryPicker: FakeWorkspaceDirectoryPicker(directory.path),
+  );
   final shell = IdeShellController(
     agentUiFrameSchedulerFactory: _createUiFrameScheduler,
     workspace: workspace.notifier,
