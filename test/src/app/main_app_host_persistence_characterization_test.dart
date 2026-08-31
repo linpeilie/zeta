@@ -13,6 +13,10 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import '../testing/ide_test_harness.dart';
 import '../testing/fake_workspace_directory_picker.dart';
 import '../testing/zeta_test_app.dart';
+import 'package:zeta/src/app/composition/zeta_environment_providers.dart';
+import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
+import 'package:zeta/src/app/storage/zeta_store_providers.dart';
+import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_providers.dart';
 
 /// `MainApp` 的宿主持久化模式 characterization test。
 ///
@@ -27,6 +31,11 @@ import '../testing/zeta_test_app.dart';
 /// 这三条在写这个测试之前**没有任何测试覆盖**，而 Phase 4 P4-2a 要把这对回调
 /// 换成显式的宿主模式参数。先把现状钉死，改完必须逐条仍然成立——这正是重构
 /// "行为不变"的证据。
+///
+/// 第 3 条现在多了一层显式：自动刷新由 `agentUsageAutoRefreshEnabledProvider`
+/// 决定，默认仍然跟随宿主模式，但**不再从"有没有传统计仓储"反推**。一个可选
+/// 参数同时决定数据源和刷新策略，改一处就会悄悄改另一处；要恢复刷新就自己把
+/// 开关打开。
 void main() {
   testWidgets('会话保存走回调，不写 dataPaths 指向的任何文件', (tester) async {
     final home = Directory.systemTemp.createTempSync('zeta_host_mode_');
@@ -99,7 +108,7 @@ void main() {
     );
   });
 
-  testWidgets('显式注入统计仓储时自动刷新重新打开', (tester) async {
+  testWidgets('注入统计仓储并显式打开开关后自动刷新恢复', (tester) async {
     await _pumpzetaTestApp(
       tester,
       agentUsagePanelRepository: const _EmptyAgentUsageRepository(),
@@ -110,7 +119,7 @@ void main() {
     expect(
       ideHome.enableAgentUsageAutoRefresh,
       isTrue,
-      reason: '仓储已显式注入时不再读本机历史，自动刷新可以恢复',
+      reason: '仓储已注入、开关已显式打开时不再读本机历史，自动刷新可以恢复',
     );
   });
 
@@ -144,18 +153,24 @@ Future<void> _pumpzetaTestApp(
   });
   await tester.pumpWidget(
     zetaTestApp(
-      enableNativeWindowFrame: false,
-      showWindowControls: false,
-      overrides: directoryPicker == null
-          ? const <Override>[]
-          : fakeDirectoryPickerOverridesOf(directoryPicker),
       hostMode: ZetaHostMode.ephemeral,
-      ideSessionStore: sessionStore,
-      agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-        FakeAgentProvider(),
-      ),
-      agentUsagePanelRepository: agentUsagePanelRepository,
-      homeProviderDetectionLoader: homeProviderDetectionLoader,
+      overrides: <Override>[
+        headlessWindowHost(showsWindowControls: false),
+        ...directoryPicker == null
+            ? const <Override>[]
+            : fakeDirectoryPickerOverridesOf(directoryPicker),
+        ideSessionStoreProvider.overrideWithValue(sessionStore),
+        agentProviderBundleFactoryProvider.overrideWithValue(
+          FakeAgentProviderBundleBuilder.fromFake(FakeAgentProvider()),
+        ),
+        // 注入统计仓储时数据来源已经不碰本机，这时才把自动刷新打开。
+        if (agentUsagePanelRepository case final repository?) ...<Override>[
+          agentUsagePanelRepositoryProvider.overrideWithValue(repository),
+          agentUsageAutoRefreshEnabledProvider.overrideWithValue(true),
+        ],
+        if (homeProviderDetectionLoader case final loader?)
+          homeProviderDetectionLoaderProvider.overrideWithValue(loader),
+      ],
     ),
   );
   // 用量刷新协调器用零延迟 Timer 重试，必须排干净否则 widget 树销毁后仍有 pending timer。

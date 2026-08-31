@@ -6,9 +6,15 @@ import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 
 import 'package:zeta/src/app/app_constants.dart';
+import 'package:zeta/src/app/composition/app_dependencies.dart';
 import 'package:zeta/src/app/composition/zeta_app_composition.dart';
+import 'package:zeta/src/app/composition/zeta_environment_providers.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
+import 'package:zeta/src/app/localization/zeta_text_catalog_providers.dart';
+import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
 import 'package:zeta/src/app/storage/zeta_store_providers.dart';
+import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_providers.dart';
+import 'package:zeta/src/app/window/zeta_window_host.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_notifier.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_mapping.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
@@ -40,14 +46,19 @@ class MainAppState extends State<MainApp>
 
   ZetaAppComposition get _composition => widget.composition;
 
+  /// 当前窗口宿主；`ephemeral` 下是一份什么都不做的实现。
+  ///
+  /// 在 `initState` 解析一次并留住：`dispose()` 里还要退订窗口事件，而组合根
+  /// 的容器可能已经先一步关掉了。
+  late ZetaWindowHost _windowHost;
+
   @override
   void initState() {
     super.initState();
     _appLifecycleState = WidgetsBinding.instance.lifecycleState;
     WidgetsBinding.instance.addObserver(this);
-    if (_composition.enableNativeWindowFrame) {
-      windowManager.addListener(this);
-    }
+    _windowHost = _composition.container.read(zetaWindowHostProvider);
+    _windowHost.addListener(this);
     if (!_composition.isReady) {
       // 组合根还在等常规设置定显示语言；就绪后重挂有文字的 UI。
       _composition.ready.then((_) {
@@ -62,25 +73,21 @@ class MainAppState extends State<MainApp>
   @override
   void didUpdateWidget(covariant MainApp oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final wasEnabled = oldWidget.composition.enableNativeWindowFrame;
-    final isEnabled = _composition.enableNativeWindowFrame;
-    if (wasEnabled == isEnabled) {
+    final previousHost = _windowHost;
+    final currentHost = _composition.container.read(zetaWindowHostProvider);
+    if (identical(previousHost, currentHost)) {
       return;
     }
-    if (isEnabled) {
-      windowManager.addListener(this);
-      return;
-    }
-    windowManager.removeListener(this);
+    previousHost.removeListener(this);
+    _windowHost = currentHost;
+    currentHost.addListener(this);
     _nativeWindowSuspended = false;
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    if (_composition.enableNativeWindowFrame) {
-      windowManager.removeListener(this);
-    }
+    _windowHost.removeListener(this);
     super.dispose();
   }
 
@@ -192,13 +199,16 @@ class MainAppState extends State<MainApp>
 
   Widget _buildHome() {
     final composition = _composition;
+    // 这一支只在语言冻结之后走到（见 build 里的 isReady 分支），因此读文本目录
+    // 与插件链上的 provider 都已经有值。
+    final container = composition.container;
     return IdeHome(
       key: const ValueKey<String>('zeta.ide-home'),
-      enableNativeWindowFrame: composition.enableNativeWindowFrame,
-      showWindowControls: composition.showWindowControls,
       shellStateSnapshotRelay: composition.shellStateSnapshotRelay,
-      agentProviderFactory: composition.agentProviderFactory,
-      agentProviderRuntimeRegistry: composition.agentProviderRuntimeRegistry,
+      agentProviderFactory: container.read(agentProviderBundleFactoryProvider),
+      agentProviderRuntimeRegistry: container.read(
+        agentProviderRuntimeRegistryProvider,
+      ),
       desktopAttentionSliceComposition: composition.desktopAttentionComposition,
       desktopAttentionTargetActivatorRelay:
           composition.desktopAttentionTargetActivatorRelay,
@@ -209,22 +219,25 @@ class MainAppState extends State<MainApp>
       agentProviderSettingsPort: composition.providerSettingsComposition.store,
       activeModelCatalogLoader: () =>
           composition.providerSettingsComposition.loadActiveModelCatalog(),
-      agentProviderAvailabilityLoader:
-          composition.agentProviderAvailabilityLoader,
-      homeProviderDetectionLoader:
-          composition.resolvedHomeProviderDetectionLoader,
-      projectLocationOpener: composition.projectLocationOpener,
+      agentProviderAvailabilityLoader: container.read(
+        agentProviderAvailabilityLoaderProvider,
+      ),
+      homeProviderDetectionLoader: container.read(
+        homeProviderDetectionLoaderProvider,
+      ),
+      projectLocationOpener: container.read(projectLocationOpenerProvider),
       usageStatisticsSliceComposition: composition.usageStatisticsComposition,
       workbenchCompositionFactory: composition.createWorkbenchComposition,
-      turnContextStore: composition.container.read(
-        agentTurnContextStoreProvider,
-      ),
-      agentUiTextCatalog: composition.agentUiTextCatalog,
-      metrics: composition.metrics,
+      turnContextStore: container.read(agentTurnContextStoreProvider),
+      agentUiTextCatalog: container.read(agentUiTextCatalogProvider),
+      metrics: container.read(zetaMetricsPortProvider),
       providerMetricLabel: AgentMetricLabels.forProviderId,
-      agentManagementTextCatalog: composition.agentManagementTextCatalog,
-      // 未显式注入统计仓储时不读取本机 CLI 历史。
-      enableAgentUsageAutoRefresh: composition.enableAgentUsageAutoRefresh,
+      agentManagementTextCatalog: container.read(
+        agentManagementTextCatalogProvider,
+      ),
+      enableAgentUsageAutoRefresh: container.read(
+        agentUsageAutoRefreshEnabledProvider,
+      ),
     );
   }
 

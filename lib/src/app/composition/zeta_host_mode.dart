@@ -1,3 +1,5 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 /// 宿主运行模式。
 ///
 /// 在此之前，这套语义是从 `MainApp.sessionLoader` / `sessionSaver` 是否为 null
@@ -34,4 +36,28 @@ enum ZetaHostMode {
   /// ephemeral 宿主返回 false：原生对话框在 widget test 里要么弹不出来、要么把
   /// 测试挂在系统 UI 上，选择器一律由调用方注入。
   bool get usesNativeDialogs => this == ZetaHostMode.local;
+
+  /// 是否接管原生窗口与随之而来的系统集成。
+  ///
+  /// 覆盖窗口事件监听、关闭前的资源回收、原生 File 菜单、桌面通知与任务栏
+  /// 指示：这些在 widget test 里要么打不到平台通道、要么把用例挂住，因此
+  /// ephemeral 宿主一律换成不做事的实现（见 `ZetaWindowHost`）。
+  bool get usesNativeDesktopIntegration => this == ZetaHostMode.local;
+
+  /// 显示语言是否要等持久化的常规设置读完再定。
+  ///
+  /// 生产必须等：先按默认语言挂一次 UI 再跳变，用户会看到文案闪一下。测试不
+  /// 等——除非用例本身就在验证这个等待过程，那时自己覆盖显示语言来源。
+  bool get waitsForPersistedDisplayLanguage => this == ZetaHostMode.local;
 }
+
+/// 宿主运行模式的容器入口。
+///
+/// 组合根按 `ZetaAppComposition.create(hostMode:)` 覆盖它，之后所有"这台机器能
+/// 不能碰"的默认值都从这里派生（窗口宿主、显示语言来源、桌面通知、用量自动
+/// 刷新）。**不要再经 `overrides` 覆盖它**：组合根已经装过一次，同容器重复
+/// override 会被 Riverpod 断言拦下。
+final zetaHostModeProvider = Provider<ZetaHostMode>(
+  (ref) => ZetaHostMode.local,
+  name: 'zetaHostMode',
+);

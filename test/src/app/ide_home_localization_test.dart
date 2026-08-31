@@ -8,6 +8,13 @@ import 'package:zeta/src/ui/features/ide/views/ide_home.dart';
 
 import '../testing/ide_test_harness.dart';
 import '../testing/zeta_test_app.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
+import 'package:zeta/src/app/composition/zeta_environment_providers.dart';
+import 'package:zeta/src/app/localization/zeta_display_language_source.dart';
+import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
+import 'package:zeta/src/app/storage/zeta_store_providers.dart';
+import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_providers.dart';
+import 'package:zeta/src/app/window/zeta_window_host.dart';
 
 void main() {
   testWidgets('already-migrated IdeHome chrome follows the pumped locale', (
@@ -145,17 +152,29 @@ Future<void> _pumpIdeHome(
   final session = MemorySessionStore(null);
   await tester.pumpWidget(
     zetaTestApp(
-      enableNativeWindowFrame: true,
-      showWindowControls: false,
       hostMode: ZetaHostMode.ephemeral,
-      ideSessionStore: session,
-      agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-        FakeAgentProvider(),
-      ),
-      agentProviderConfigStore: MemoryAgentProviderConfigStore(),
-      homeProviderDetectionLoader: homeProviderDetectionLoader,
-      displayLanguageOverride: language,
-      agentUsagePanelRepository: const _EmptyAgentUsageRepository(),
+      overrides: <Override>[
+        zetaWindowHostProvider.overrideWithValue(
+          const NativeDesktopWindowHost(showsWindowControls: false),
+        ),
+        ideSessionStoreProvider.overrideWithValue(session),
+        agentProviderBundleFactoryProvider.overrideWithValue(
+          FakeAgentProviderBundleBuilder.fromFake(FakeAgentProvider()),
+        ),
+        agentProviderConfigStoreProvider.overrideWithValue(
+          MemoryAgentProviderConfigStore(),
+        ),
+        if (homeProviderDetectionLoader case final loader?)
+          homeProviderDetectionLoaderProvider.overrideWithValue(loader),
+        if (language case final value?)
+          zetaDisplayLanguageSourceProvider.overrideWithValue(
+            FixedDisplayLanguageSource(value),
+          ),
+        agentUsagePanelRepositoryProvider.overrideWithValue(
+          const _EmptyAgentUsageRepository(),
+        ),
+        agentUsageAutoRefreshEnabledProvider.overrideWithValue(true),
+      ],
     ),
   );
   await tester.pump(const Duration(milliseconds: 1));

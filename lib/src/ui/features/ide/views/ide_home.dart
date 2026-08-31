@@ -9,6 +9,7 @@ import 'package:window_manager/window_manager.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_composition.dart';
 import 'package:zeta/src/app/composition/ide_workbench_composition.dart';
+import 'package:zeta/src/app/window/zeta_window_host.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_runner.dart';
 import 'package:zeta/src/app/app_constants.dart';
@@ -65,7 +66,6 @@ typedef HomeProviderDetectionLoader = Future<List<ManagedAgent>> Function();
 /// 具体项目、会话和 Agent thread 编排由 [IdeShellController] 承接。
 class IdeHome extends ConsumerStatefulWidget {
   const IdeHome({
-    required this.enableNativeWindowFrame,
     required this.shellStateSnapshotRelay,
     required this.agentProviderFactory,
     required this.agentProviderSettingsPort,
@@ -81,7 +81,6 @@ class IdeHome extends ConsumerStatefulWidget {
     this.enableAgentUsageAutoRefresh = true,
     this.agentProviderAvailabilityLoader,
     this.homeProviderDetectionLoader,
-    this.showWindowControls = true,
     this.turnContextStore,
     this.agentUiTextCatalog = const FallbackAgentUiTextCatalog(),
     this.metrics = noopZetaMetricsPort,
@@ -91,7 +90,6 @@ class IdeHome extends ConsumerStatefulWidget {
     super.key,
   });
 
-  final bool enableNativeWindowFrame;
   final ZetaShellStateSnapshotRelay shellStateSnapshotRelay;
   final AgentProviderBundleFactory agentProviderFactory;
   final AgentProviderSettingsPort agentProviderSettingsPort;
@@ -113,7 +111,6 @@ class IdeHome extends ConsumerStatefulWidget {
   final bool enableAgentUsageAutoRefresh;
   final AgentProviderAvailabilityLoader? agentProviderAvailabilityLoader;
   final HomeProviderDetectionLoader? homeProviderDetectionLoader;
-  final bool showWindowControls;
   final AgentTurnContextStore? turnContextStore;
 
   /// app 组合层注入的脱敏指标端口；默认 no-op。
@@ -134,6 +131,12 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
 
   late final IdeShellController _shellController;
   late final IdeWorkbenchComposition _workbenchComposition;
+
+  /// 窗口宿主：原生标题栏、窗口事件与菜单都经它，`ephemeral` 下什么都不做。
+  ///
+  /// 在 `initState` 取一次并留住：`dispose()` 里还要退订窗口事件，而那时
+  /// `ref` 已经不能再读了。
+  late final ZetaWindowHost _windowHost = ref.read(zetaWindowHostProvider);
 
   AgentManagementSliceComposition get _agentManagementComposition =>
       _workbenchComposition.agentManagementComposition;
@@ -239,9 +242,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
     );
     _unsubscribeProviderSettings = _shellController.agentProviderController
         .subscribe(_handleAgentProviderSettingsUsageChanged);
-    if (widget.enableNativeWindowFrame) {
-      windowManager.addListener(this);
-    }
+    _windowHost.addListener(this);
     unawaited(widget.desktopAttentionSliceComposition.initialize());
     _workbenchComposition = widget.workbenchCompositionFactory(
       subscribeRuntime: _shellController.subscribeRuntimeChanges,
@@ -266,11 +267,11 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (!_nativeMenuConfigured && widget.enableNativeWindowFrame) {
+    if (!_nativeMenuConfigured && _windowHost.rendersNativeChrome) {
       _nativeMenuConfigured = true;
       final l10n = context.l10n;
       unawaited(
-        MenuActionBridge.instance.configure(
+        _windowHost.configureNativeMenu(
           fileMenuLabel: l10n.workbenchMenuFile,
           openProjectLabel: l10n.workbenchMenuOpenProject,
         ),
@@ -337,9 +338,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
   void dispose() {
     MenuActionBridge.instance.setOpenProject(null);
     widget.shellStateSnapshotRelay.unbind(_shellStateSnapshotReader);
-    if (widget.enableNativeWindowFrame) {
-      windowManager.removeListener(this);
-    }
+    _windowHost.removeListener(this);
     _shellController.agentConversationWorkspaceStore.removeListener(
       _handleConversationWorkspaceChanged,
     );
@@ -411,7 +410,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
       // 品牌资产由根 app 拥有并声明；zeta_ui 只负责尺寸盒与无障碍标签。
       brandLogo: SvgPicture.asset(brandingLogoAsset),
       key: const ValueKey('ide-window-frame'),
-      enableNativeWindowFrame: widget.enableNativeWindowFrame,
+      enableNativeWindowFrame: _windowHost.rendersNativeChrome,
       menus: _windowMenus(context),
       titleBarLeadingActions: switch (_page) {
         _IdeHomePage.home => <WindowTitleBarAction>[
@@ -492,7 +491,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
           ),
         ),
       ],
-      showWindowControls: widget.showWindowControls,
+      showWindowControls: _windowHost.showsWindowControls,
       // 左右/底 space8 让 Pane 与窗口边缘保持呼吸感；顶部 space0 与标题栏贴齐，
       // 中间不再画分隔线。
       child: Padding(
@@ -517,7 +516,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
   }
 
   List<WindowMenu> _windowMenus(BuildContext context) {
-    if (!widget.enableNativeWindowFrame) {
+    if (!_windowHost.rendersNativeChrome) {
       return const <WindowMenu>[];
     }
     final l10n = context.l10n;
@@ -1058,7 +1057,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
   }
 
   void _handleMenuExit() {
-    unawaited(windowManager.close());
+    unawaited(_windowHost.closeWindow());
   }
 
   /// IDE Session 变化：面板宽度来自 workbenchLayout，首页预热看 initialRestoreCompleted。
@@ -1142,13 +1141,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
     if (!mounted) {
       return false;
     }
-    if (widget.enableNativeWindowFrame) {
-      if (await windowManager.isMinimized()) {
-        await windowManager.restore();
-      }
-      await windowManager.show();
-      await windowManager.focus();
-    }
+    await _windowHost.revealWindow();
     final activated = await _shellController.activateAgentThread(
       providerId: providerId,
       threadId: threadId,

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 
+import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
 import 'package:zeta/src/app/storage/zeta_storage_providers.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/data/agent_model_catalog_cache_store.dart';
@@ -45,14 +46,12 @@ final settingsFallbackLanguageProvider = Provider<AppLanguage>(
 
 /// Provider 配置的编解码器。
 ///
-/// fail-closed：codec 依赖插件目录解析出的 Provider definitions，而插件目录要等
-/// 本地化运行时就绪才能建。组合根在 `_installLocaleDependentRuntime` 之后用闭包
-/// override 供给；**在那之前读到就是接线顺序错了**，宁可抛错也不要静默用一份空
-/// definitions 去解码用户配置。
+/// definitions 来自插件目录，而插件目录要等显示语言冻结才能建。这条依赖链是
+/// **接线顺序的守卫**：过早读 codec 会一路传导到文本目录那里 fail-closed 抛错，
+/// 而不是静默用一份空 definitions 去解码用户配置。
 final agentProviderSettingsCodecProvider = Provider<AgentProviderSettingsCodec>(
-  (ref) => throw StateError(
-    'agentProviderSettingsCodecProvider was read before the composition root '
-    'installed the localization-dependent runtime',
+  (ref) => AgentProviderSettingsCodec(
+    providerDefinitions: ref.watch(agentProviderDefinitionCatalogProvider),
   ),
   name: 'agentProviderSettingsCodec',
 );

@@ -40,6 +40,11 @@ import '../testing/ide_test_harness.dart';
 import '../testing/widget_build_counter.dart';
 import '../testing/fake_workspace_directory_picker.dart';
 import '../testing/zeta_test_app.dart';
+import 'package:zeta/src/app/composition/zeta_environment_providers.dart';
+import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
+import 'package:zeta/src/app/storage/zeta_store_providers.dart';
+import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_providers.dart';
+import 'package:zeta/src/app/window/zeta_window_host.dart';
 
 /// 阶段 0 固定风暴 fixture 的 UI 侧预算。
 ///
@@ -2307,21 +2312,33 @@ Future<ZetaAppComposition> _pumpIde(
   });
 
   final session = sessionStore ?? MemorySessionStore(initialSessionJson);
+  final providerFactory =
+      agentProviderFactory ??
+      FakeAgentProviderBundleBuilder.fromFake(FakeAgentProvider());
 
   final composition = zetaTestComposition(
-    enableNativeWindowFrame: enableNativeWindowFrame,
-    showWindowControls: false,
-    overrides: directoryPicker == null
-        ? const <Override>[]
-        : fakeDirectoryPickerOverridesOf(directoryPicker),
     hostMode: ZetaHostMode.ephemeral,
-    ideSessionStore: session,
-    agentProviderFactory: agentProviderFactory,
-    agentProviderConfigStore: agentProviderConfigStore,
-    agentProviderAvailabilityLoader: agentProviderAvailabilityLoader,
-    homeProviderDetectionLoader: homeProviderDetectionLoader,
-    agentUsagePanelRepository:
+    overrides: <Override>[
+      zetaWindowHostProvider.overrideWithValue(
+        enableNativeWindowFrame
+            ? const NativeDesktopWindowHost(showsWindowControls: false)
+            : const HeadlessWindowHost(showsWindowControls: false),
+      ),
+      if (directoryPicker != null)
+        ...fakeDirectoryPickerOverridesOf(directoryPicker),
+      ideSessionStoreProvider.overrideWithValue(session),
+      agentProviderBundleFactoryProvider.overrideWithValue(providerFactory),
+      if (agentProviderConfigStore case final store?)
+        agentProviderConfigStoreProvider.overrideWithValue(store),
+      if (agentProviderAvailabilityLoader case final loader?)
+        agentProviderAvailabilityLoaderProvider.overrideWithValue(loader),
+      if (homeProviderDetectionLoader case final loader?)
+        homeProviderDetectionLoaderProvider.overrideWithValue(loader),
+      agentUsagePanelRepositoryProvider.overrideWithValue(
         agentUsagePanelRepository ?? const _EmptyAgentUsageRepository(),
+      ),
+      agentUsageAutoRefreshEnabledProvider.overrideWithValue(true),
+    ],
   );
   await tester.pumpWidget(MainApp(composition: composition));
   if (flushInitialUsageRefresh) {

@@ -19,6 +19,10 @@ import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
 
 import '../testing/ide_test_harness.dart';
 import '../testing/zeta_test_app.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
+import 'package:zeta/src/app/localization/zeta_display_language_source.dart';
+import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
+import 'package:zeta/src/app/storage/zeta_store_providers.dart';
 
 void main() {
   testWidgets('waits with a textless background before IdeHome mounts', (
@@ -275,19 +279,29 @@ Future<void> _pumpzetaTestApp(
   await tester.pumpWidget(
     zetaTestApp(
       key: key,
-      enableNativeWindowFrame: false,
-      showWindowControls: false,
       hostMode: ZetaHostMode.ephemeral,
-      agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-        FakeAgentProvider(),
-      ),
-      agentProviderConfigStore: MemoryAgentProviderConfigStore(),
-      generalSettingsStore: generalSettingsStore,
-      appearanceSettingsStore: appearanceSettingsStore,
-      systemFontCatalogService: systemFontCatalogService,
-      initialAppearanceSettings: initialAppearanceSettings,
-      displayLanguageOverride: displayLanguageOverride,
-      waitForGeneralSettings: waitForGeneralSettings,
+      overrides: <Override>[
+        headlessWindowHost(showsWindowControls: false),
+        agentProviderBundleFactoryProvider.overrideWithValue(
+          FakeAgentProviderBundleBuilder.fromFake(FakeAgentProvider()),
+        ),
+        agentProviderConfigStoreProvider.overrideWithValue(
+          MemoryAgentProviderConfigStore(),
+        ),
+        if (generalSettingsStore case final store?)
+          generalSettingsStoreProvider.overrideWithValue(store),
+        if (appearanceSettingsStore case final store?)
+          appearanceSettingsRepositoryProvider.overrideWithValue(store),
+        if (systemFontCatalogService case final catalog?)
+          appearanceFontCatalogProvider.overrideWithValue(catalog),
+        if (initialAppearanceSettings case final settings?)
+          initialAppearanceSettingsProvider.overrideWithValue(settings),
+        if (displayLanguageOverride case final language?)
+          zetaDisplayLanguageSourceProvider.overrideWithValue(
+            FixedDisplayLanguageSource(language),
+          ),
+        if (waitForGeneralSettings) waitForGeneralSettingsDisplayLanguage(),
+      ],
     ),
   );
 }

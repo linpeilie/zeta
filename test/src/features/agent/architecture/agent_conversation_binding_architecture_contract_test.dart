@@ -20,26 +20,33 @@ void main() {
       );
     });
 
-    test('app shell injects BundleFactory and does not wrap old Factory', () {
-      const files = <String>[
-        // Provider 工厂的注入点随容器一起搬到了组合根，`app.dart` 只剩 Widget。
-        'lib/src/app/composition/zeta_app_composition.dart',
-        'lib/src/app/shell/ide_shell_controller.dart',
-        'lib/src/ui/features/ide/views/ide_home.dart',
-      ];
-      for (final path in files) {
-        final source = File(path).readAsStringSync();
-        expect(source, contains('AgentProviderBundleFactory'));
-        expect(source, isNot(contains('asAgentProviderBundleFactory')));
+    test(
+      'app shell reads BundleFactory provider and does not wrap old Factory',
+      () {
+        final appSource = File('lib/src/app/app.dart').readAsStringSync();
         expect(
-          source,
-          isNot(
-            matches(RegExp(r'(?<![A-Za-z])AgentProviderFactory(?![A-Za-z])')),
-          ),
-          reason: path,
+          appSource,
+          contains('container.read(agentProviderBundleFactoryProvider)'),
         );
-      }
-    });
+
+        const files = <String>[
+          'lib/src/app/shell/ide_shell_controller.dart',
+          'lib/src/ui/features/ide/views/ide_home.dart',
+        ];
+        for (final path in files) {
+          final source = File(path).readAsStringSync();
+          expect(source, contains('AgentProviderBundleFactory'));
+          expect(source, isNot(contains('asAgentProviderBundleFactory')));
+          expect(
+            source,
+            isNot(
+              matches(RegExp(r'(?<![A-Za-z])AgentProviderFactory(?![A-Za-z])')),
+            ),
+            reason: path,
+          );
+        }
+      },
+    );
 
     test('registry remains the only runtime factory caller', () {
       final callers =

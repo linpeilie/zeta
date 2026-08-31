@@ -15,6 +15,8 @@ library;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 
+import 'package:zeta/src/app/observability/zeta_observability.dart';
+
 /// 系统时钟；测试与回放通过覆盖注入固定时钟。
 final zetaClockProvider = Provider<Clock>(
   (ref) => systemClock,
@@ -24,9 +26,9 @@ final zetaClockProvider = Provider<Clock>(
 /// 脱敏指标端口。
 ///
 /// 默认 no-op：未显式开启可观测性时，读到它的调用方只剩一次常量分支。
-/// 生产由 `main` 用 `ZetaObservability` 的实例覆盖。
+/// 采集实现由 [zetaObservabilityProvider] 选择，覆盖那一个就够。
 final zetaMetricsPortProvider = Provider<ZetaMetricsPort>(
-  (ref) => noopZetaMetricsPort,
+  (ref) => ref.watch(zetaResolvedObservabilityProvider).metrics,
   name: 'zeta.metrics',
 );
 

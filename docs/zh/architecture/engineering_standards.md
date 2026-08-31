@@ -129,11 +129,30 @@ import Flutter」那条守卫**拦不住它们**。也就是说 application 与 
 真要重新拉紧，两条路——恢复核心包依赖并按包禁，或者加一条符号级黑名单守卫；后者漏一个符号
 就开一个口子，比按包禁脆。
 
-**依赖注入同样归 Riverpod。** 没有安全默认值的依赖用会抛错的 `Provider` 声明保持 fail-closed，
-由组合根 override；测试用 `ProviderContainer(overrides: ...)`。这取代了两种旧写法：把几十个
-可空依赖挂在根 Widget 构造函数上向下钻，以及用可变注册表把运行期才造出来的对象反向 `bind()`
-回 provider。后者尤其危险——它让「谁拥有这个对象」在编译期不可见，读到未绑定状态只能靠运行期
-抛错兜底。
+**依赖注入同样归 Riverpod。** 没有安全默认值的依赖用会抛错的 `Provider` 声明保持 fail-closed；
+测试用 `ProviderContainer(overrides: ...)`。这取代了两种旧写法：把几十个可空依赖挂在根 Widget
+构造函数上向下钻，以及用可变注册表把运行期才造出来的对象反向 `bind()` 回 provider。后者尤其
+危险——它让「谁拥有这个对象」在编译期不可见，读到未绑定状态只能靠运行期抛错兜底。
+
+**组合根只接 `hostMode` 与 `overrides`，兜底值写进 provider body。** `ZetaAppComposition.create`
+不再收依赖参数。有安全默认值的依赖（窗口宿主、显示语言来源、桌面通知、Agent bundle 工厂与
+runtime 池、用量仓储与自动刷新开关、探测 loader）把兜底写在自己的 provider body 里，按
+`zetaHostModeProvider` 分支：`local` 装真实现，`ephemeral` 装不碰本机的那份。
+
+这条约束有个硬理由：**Riverpod 对同一容器内的重复 override 直接断言失败**（`ProviderContainer`
+构造时就抛，debug 下必现）。组合根一旦替某个 provider 装了默认 override，调用方就再也覆盖不掉
+它——fake 进不来。所以组合根内部只装三类调用方不该碰的东西：宿主模式本身、显示语言冻结之后才
+存在的文本目录、三个切片组合的 store 出口。其余一律留给 `overrides`。
+
+同理，声明在 feature `application` 层的 provider 够不到 `data` 实现（那是反向依赖），兜底写不
+进 body：外观仓库、系统字体目录、目录选择器就属于这一类，由 `lib/main.dart` 和测试助手各自装
+一份，组合根不碰。
+
+**环境差异做成实现，不做成布尔参数。** 「接管原生窗口」不是一个标志位，而是
+`ZetaWindowHost` 的 `NativeDesktopWindowHost` / `HeadlessWindowHost` 两个实现（窗口事件、关闭
+hook、原生菜单、抢前台）；「显示语言等不等持久化设置」是 `ZetaDisplayLanguageSource` 的两个
+实现。布尔开关的代价是每加一个平台调用都要在调用点补一次 `if`，漏一处就在 widget test 里打到
+真实平台通道；换成实现之后，调用点只有一条路径。
 
 **`autoDispose` 的适用范围是硬边界。** 它只能决定**纯 UI 镜像**的存活：selector、投影、派生视图。
 Binding lease、CLI runtime、子进程、文件句柄的生命周期永远由显式的 application 逻辑决定，
@@ -498,10 +517,12 @@ Provider 契约测试。若 PR 因 Provider 差异修改 CoalescingPolicy/Buffer
   只解码当前版本；未知语言回退英语，损坏或不支持版本使用启动编排给出的 fallback。
   localized UI copy 不得进入任何 JSON store。
 - HOME 解析、目录布局和安全文本替换属于 `core`；各 feature 的 data store 只接收
-  `StorageService` 并负责自身 codec。注入走容器：`ZetaStorageBindings` 在组合根
-  解析一次并装进 override，store 由 `lib/src/app/storage/zeta_store_providers.dart`
-  的 provider 组装，不把 bindings 或 `StorageService` 当构造参数向下钻；
-  presentation/application 不拼接 `~/.zeta` 路径。
+  `StorageService` 并负责自身 codec。注入走容器：`ZetaStorageBindings` 由**入口**
+  解析一次（生产 `.file(paths)`、测试 `.memory()`），把 `providerOverrides` 展开进
+  `ZetaAppComposition.create(overrides:)`，store 由
+  `lib/src/app/storage/zeta_store_providers.dart` 的 provider 组装，不把 bindings 或
+  `StorageService` 当构造参数向下钻；presentation/application 不拼接 `~/.zeta` 路径。
+  存储 provider 的默认值保持 fail-closed：组合根替它装了，调用方就换不掉了。
 - 当前不读取旧 SharedPreferences，也没有历史文件迁移器或 marker。
 - 会话状态使用当前版本 JSON；字段新增时提供默认值。
 - `tryDecode` 或等价宽容读取逻辑必须处理空值、损坏 JSON、不支持版本和未知字段。

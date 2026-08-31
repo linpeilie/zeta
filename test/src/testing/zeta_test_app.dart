@@ -1,96 +1,32 @@
 import 'package:flutter/widgets.dart' show Key;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 import 'package:zeta/src/app/app.dart';
 import 'package:zeta/src/app/composition/zeta_app_composition.dart';
 import 'package:zeta/src/app/composition/zeta_host_mode.dart';
-import 'package:zeta/src/app/observability/zeta_observability.dart';
 import 'package:zeta/src/app/storage/zeta_storage_bindings.dart';
 import 'package:zeta/src/app/storage/zeta_store_providers.dart';
-import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
-import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_models.dart';
-import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
+import 'package:zeta/src/app/window/zeta_window_host.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_notifier.dart';
-import 'package:zeta/src/features/settings/data/general_settings_store.dart';
 import 'package:zeta/src/features/settings/data/system_font_catalog_service.dart';
-import 'package:zeta/src/features/settings/domain/app_language.dart';
-import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
-import 'package:zeta/src/features/settings/domain/appearance_settings_repository.dart';
-import 'package:zeta/src/features/settings/domain/system_font_catalog_service.dart';
-import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partition_store.dart';
-import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
-import 'package:zeta/src/ui/core/system_file_manager.dart';
-import 'package:zeta/src/ui/features/ide/views/ide_home.dart';
 
 /// 测试用的 [MainApp]。
 ///
-/// 生产代码里 `MainApp` 只接一个 [ZetaAppComposition]，注入口径全在组合根上；测试
-/// 专用的便利参数留在这里，**不再污染 Widget 的构造函数**。已经是 provider 的依赖
-/// 会被折成 `overrides`，其余的直接进 [ZetaAppComposition.create]。
+/// 和生产入口是同一个口径：**组合根只认宿主模式，实现全部经 `overrides` 进
+/// 容器**。这里不再有一排便利参数——那排参数本质上是把组合根的注入口重复实现了
+/// 一遍，两边还会各自漂移。要换掉什么就覆盖对应的 provider。
 ///
 /// 组合根会自动 `addTearDown(dispose)`，容器与三个切片组合随用例结束一起关。
 MainApp zetaTestApp({
   Key? key,
-  bool enableNativeWindowFrame = false,
-  bool showWindowControls = true,
   ZetaHostMode hostMode = ZetaHostMode.ephemeral,
-  AppLanguage fallbackLanguage = AppLanguage.simplifiedChinese,
-  AppLanguage? displayLanguageOverride,
-  bool waitForGeneralSettings = false,
-  ZetaObservability? observability,
-  ZetaStorageBindings? storageBindings,
-  AgentProviderBundleFactory? agentProviderFactory,
-  AgentProviderRuntimeRegistry? agentProviderRuntimeRegistry,
-  AgentProviderAvailabilityLoader? agentProviderAvailabilityLoader,
-  HomeProviderDetectionLoader? homeProviderDetectionLoader,
-  ProjectLocationOpener? projectLocationOpener,
-  AgentUsagePanelRepository? agentUsagePanelRepository,
-  DesktopNotificationService? desktopNotificationService,
-  DesktopAttentionIndicator? desktopAttentionIndicator,
-  // 以下依赖都已经是 provider，折成 overrides 装进容器。
-  IdeSessionStore? ideSessionStore,
-  AgentProviderConfigStore? agentProviderConfigStore,
-  GeneralSettingsStore? generalSettingsStore,
-  AppearanceSettingsRepository? appearanceSettingsStore,
-  AppearanceSettings? initialAppearanceSettings,
-  SystemFontCatalogService? systemFontCatalogService,
-  UsageStatisticsPartitionStore? usageStatisticsPartitionStore,
-  AgentModelCatalogRepository? agentModelCatalogRepository,
-  AgentTurnContextStore? turnContextStore,
   List<Override> overrides = const <Override>[],
 }) {
   return MainApp(
     key: key,
-    composition: zetaTestComposition(
-      enableNativeWindowFrame: enableNativeWindowFrame,
-      showWindowControls: showWindowControls,
-      hostMode: hostMode,
-      fallbackLanguage: fallbackLanguage,
-      displayLanguageOverride: displayLanguageOverride,
-      waitForGeneralSettings: waitForGeneralSettings,
-      observability: observability,
-      storageBindings: storageBindings,
-      agentProviderFactory: agentProviderFactory,
-      agentProviderRuntimeRegistry: agentProviderRuntimeRegistry,
-      agentProviderAvailabilityLoader: agentProviderAvailabilityLoader,
-      homeProviderDetectionLoader: homeProviderDetectionLoader,
-      projectLocationOpener: projectLocationOpener,
-      agentUsagePanelRepository: agentUsagePanelRepository,
-      desktopNotificationService: desktopNotificationService,
-      desktopAttentionIndicator: desktopAttentionIndicator,
-      ideSessionStore: ideSessionStore,
-      agentProviderConfigStore: agentProviderConfigStore,
-      generalSettingsStore: generalSettingsStore,
-      appearanceSettingsStore: appearanceSettingsStore,
-      initialAppearanceSettings: initialAppearanceSettings,
-      systemFontCatalogService: systemFontCatalogService,
-      usageStatisticsPartitionStore: usageStatisticsPartitionStore,
-      agentModelCatalogRepository: agentModelCatalogRepository,
-      turnContextStore: turnContextStore,
-      overrides: overrides,
-    ),
+    composition: zetaTestComposition(hostMode: hostMode, overrides: overrides),
   );
 }
 
@@ -98,79 +34,67 @@ MainApp zetaTestApp({
 ///
 /// 需要 `takeStateSnapshot()` 或直接读容器的用例，自己拿这个返回值；只要 Widget 的
 /// 用例用 [zetaTestApp] 即可。
+///
+/// 自动补两类 ephemeral 宿主装配，用例传了同一个 provider 时以用例为准：
+///
+/// 1. 内存文档存储——`ephemeral` 一个字节都不写 `~/.zeta`；
+/// 2. 外观仓库与系统字体目录——它们声明在 feature 的 application 层，那里够不到
+///    `data` 实现，兜底值只能由调用方装（生产在 `lib/main.dart` 装同样两个）。
 ZetaAppComposition zetaTestComposition({
-  bool enableNativeWindowFrame = false,
-  bool showWindowControls = true,
   ZetaHostMode hostMode = ZetaHostMode.ephemeral,
-  AppLanguage fallbackLanguage = AppLanguage.simplifiedChinese,
-  AppLanguage? displayLanguageOverride,
-  bool waitForGeneralSettings = false,
-  ZetaObservability? observability,
-  ZetaStorageBindings? storageBindings,
-  AgentProviderBundleFactory? agentProviderFactory,
-  AgentProviderRuntimeRegistry? agentProviderRuntimeRegistry,
-  AgentProviderAvailabilityLoader? agentProviderAvailabilityLoader,
-  HomeProviderDetectionLoader? homeProviderDetectionLoader,
-  ProjectLocationOpener? projectLocationOpener,
-  AgentUsagePanelRepository? agentUsagePanelRepository,
-  DesktopNotificationService? desktopNotificationService,
-  DesktopAttentionIndicator? desktopAttentionIndicator,
-  IdeSessionStore? ideSessionStore,
-  AgentProviderConfigStore? agentProviderConfigStore,
-  GeneralSettingsStore? generalSettingsStore,
-  AppearanceSettingsRepository? appearanceSettingsStore,
-  AppearanceSettings? initialAppearanceSettings,
-  SystemFontCatalogService? systemFontCatalogService,
-  UsageStatisticsPartitionStore? usageStatisticsPartitionStore,
-  AgentModelCatalogRepository? agentModelCatalogRepository,
-  AgentTurnContextStore? turnContextStore,
   List<Override> overrides = const <Override>[],
 }) {
   final composition = ZetaAppComposition.create(
     hostMode: hostMode,
-    enableNativeWindowFrame: enableNativeWindowFrame,
-    showWindowControls: showWindowControls,
-    fallbackLanguage: fallbackLanguage,
-    displayLanguageOverride: displayLanguageOverride,
-    waitForGeneralSettings: waitForGeneralSettings,
-    observability: observability,
-    storageBindings: storageBindings,
-    agentProviderFactory: agentProviderFactory,
-    agentProviderRuntimeRegistry: agentProviderRuntimeRegistry,
-    agentProviderAvailabilityLoader: agentProviderAvailabilityLoader,
-    homeProviderDetectionLoader: homeProviderDetectionLoader,
-    projectLocationOpener: projectLocationOpener,
-    agentUsagePanelRepository: agentUsagePanelRepository,
-    desktopNotificationService: desktopNotificationService,
-    desktopAttentionIndicator: desktopAttentionIndicator,
     overrides: <Override>[
-      // ephemeral 宿主不装触碰本机的平台实现，这里补上与生产等价的默认值，
-      // 用例显式传入时以用例为准。
-      appearanceSettingsStore == null
-          ? appearanceSettingsRepositoryOverride()
-          : appearanceSettingsRepositoryProvider.overrideWithValue(
-              appearanceSettingsStore,
-            ),
-      appearanceFontCatalogProvider.overrideWith(
-        (ref) => systemFontCatalogService ?? DesktopSystemFontCatalogService(),
-      ),
-      if (initialAppearanceSettings case final settings?)
-        initialAppearanceSettingsProvider.overrideWithValue(settings),
-      if (ideSessionStore case final store?)
-        ideSessionStoreProvider.overrideWithValue(store),
-      if (agentProviderConfigStore case final store?)
-        agentProviderConfigStoreProvider.overrideWithValue(store),
-      if (generalSettingsStore case final store?)
-        generalSettingsStoreProvider.overrideWithValue(store),
-      if (usageStatisticsPartitionStore case final store?)
-        usageStatisticsPartitionStoreProvider.overrideWithValue(store),
-      if (agentModelCatalogRepository case final repository?)
-        agentModelCatalogRepositoryProvider.overrideWithValue(repository),
-      if (turnContextStore case final store?)
-        agentTurnContextStoreProvider.overrideWithValue(store),
+      ...ZetaStorageBindings.memory().providerOverrides,
+      ..._appearanceDefaultsNotCoveredBy(overrides),
       ...overrides,
     ],
   );
   addTearDown(composition.dispose);
   return composition;
+}
+
+/// 不接管原生窗口的窗口宿主。
+///
+/// `ephemeral` 本来就是这个默认值；只有要关掉窗口控制按钮时才需要显式装。
+Override headlessWindowHost({bool showsWindowControls = true}) =>
+    zetaWindowHostProvider.overrideWithValue(
+      HeadlessWindowHost(showsWindowControls: showsWindowControls),
+    );
+
+/// 补上用例没有自己装的外观依赖。
+///
+/// Riverpod 对同一容器内的重复 override 直接断言失败，因此不能无条件装——先拿
+/// 用例自己的 override 开一个临时容器探一下：读得出来就说明用例装过了。两个
+/// provider 的兜底都是 fail-closed 抛错，"读得出来"和"被覆盖过"是同一件事。
+List<Override> _appearanceDefaultsNotCoveredBy(List<Override> overrides) {
+  final probe = ProviderContainer(
+    overrides: <Override>[
+      ...ZetaStorageBindings.memory().providerOverrides,
+      ...overrides,
+    ],
+  );
+  try {
+    return <Override>[
+      if (!_resolves(probe, appearanceSettingsRepositoryProvider))
+        appearanceSettingsRepositoryOverride(),
+      if (!_resolves(probe, appearanceFontCatalogProvider))
+        appearanceFontCatalogProvider.overrideWith(
+          (ref) => DesktopSystemFontCatalogService(),
+        ),
+    ];
+  } finally {
+    probe.dispose();
+  }
+}
+
+bool _resolves<T>(ProviderContainer probe, Provider<T> provider) {
+  try {
+    probe.read(provider);
+    return true;
+  } on Object {
+    return false;
+  }
 }

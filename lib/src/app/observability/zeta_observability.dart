@@ -55,3 +55,26 @@ final class ZetaObservability {
     return <ProviderObserver>[ZetaProviderObserver(metrics: metrics)];
   }
 }
+
+/// 应用级可观测性组合。
+///
+/// 默认按编译期开关走 [ZetaObservability.fromEnvironment]，因此生产入口什么都
+/// 不用传。
+///
+/// 组合根会在真正的容器建出来之前先解析一次它（`ProviderContainer` 的 observers
+/// 只能在构造时传入），再把解析出的同一实例装回正式容器。因此 `overrideWith`
+/// 工厂只执行一次，观察器与业务指标也始终共享同一份 collector。
+final zetaObservabilityProvider = Provider<ZetaObservability>(
+  (ref) => ZetaObservability.fromEnvironment(),
+  name: 'zetaObservability',
+);
+
+/// 正式容器使用的已解析可观测性实例。
+///
+/// 普通独立容器直接沿用 [zetaObservabilityProvider]；`ZetaAppComposition` 会先在
+/// 临时容器解析调用方 override，再把同一实例覆盖到这里，使 Provider observer 与
+/// `zetaMetricsPortProvider` 共用 collector。调用方不要直接覆盖本 provider。
+final zetaResolvedObservabilityProvider = Provider<ZetaObservability>(
+  (ref) => ref.watch(zetaObservabilityProvider),
+  name: 'zetaResolvedObservability',
+);

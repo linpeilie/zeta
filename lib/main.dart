@@ -10,13 +10,16 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 
 import 'package:zeta/src/app/app.dart';
 import 'package:zeta/src/app/composition/zeta_app_composition.dart';
-import 'package:zeta/src/app/observability/zeta_observability.dart';
+import 'package:zeta/src/app/composition/zeta_host_mode.dart';
 import 'package:zeta/src/app/storage/zeta_data_file_system.dart';
 import 'package:zeta/src/app/storage/zeta_storage_bindings.dart';
+import 'package:zeta/src/app/storage/zeta_store_providers.dart';
 import 'package:zeta/src/app/window_bootstrap.dart';
+import 'package:zeta/src/app/workspace_slice/workspace_overrides.dart';
 import 'package:zeta/src/app/logging/app_logging.dart';
 import 'package:zeta/src/core/storage/zeta_data_paths.dart';
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
+import 'package:zeta/src/features/settings/data/system_font_catalog_service.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_notifier.dart';
@@ -49,15 +52,20 @@ void main() {
           themeModeForPreference(appearance.themeMode),
         ),
       );
-      // 阶段 0：只挂脱敏观察器与指标端口，不迁移任何业务状态到 Riverpod。
-      final observability = ZetaObservability.fromEnvironment();
       // 容器由组合根建，MainApp 只消费——测试同样自己建一份并注入 fake。
+      // 组合根只认宿主模式，实现全部经 overrides 进容器。
       final composition = ZetaAppComposition.create(
-        storageBindings: storage,
-        fallbackLanguage: firstSystemLanguage,
-        waitForGeneralSettings: true,
-        observability: observability,
+        hostMode: ZetaHostMode.local,
         overrides: <Override>[
+          ...storage.providerOverrides,
+          settingsFallbackLanguageProvider.overrideWithValue(
+            firstSystemLanguage,
+          ),
+          appearanceSettingsRepositoryOverride(),
+          appearanceFontCatalogProvider.overrideWith(
+            (ref) => DesktopSystemFontCatalogService(),
+          ),
+          systemDirectoryPickerOverride(),
           initialAppearanceSettingsProvider.overrideWithValue(appearance),
         ],
       );

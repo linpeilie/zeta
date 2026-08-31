@@ -11,6 +11,9 @@ import '../../../../support/scroll_metrics_trace.dart';
 import '../../../testing/ide_test_harness.dart';
 import '../../../testing/fake_workspace_directory_picker.dart';
 import '../../../testing/zeta_test_app.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
+import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
+import 'package:zeta/src/app/storage/zeta_store_providers.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -179,13 +182,16 @@ void main() {
 
       await tester.pumpWidget(
         zetaTestApp(
-          enableNativeWindowFrame: false,
           hostMode: ZetaHostMode.ephemeral,
-          ideSessionStore: session,
-          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-            provider,
-          ),
-          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+          overrides: <Override>[
+            ideSessionStoreProvider.overrideWithValue(session),
+            agentProviderBundleFactoryProvider.overrideWithValue(
+              FakeAgentProviderBundleBuilder.fromFake(provider),
+            ),
+            agentProviderConfigStoreProvider.overrideWithValue(
+              MemoryAgentProviderConfigStore(),
+            ),
+          ],
         ),
       );
       await _openConversation(tester);
@@ -308,11 +314,16 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        enableNativeWindowFrame: false,
         hostMode: ZetaHostMode.ephemeral,
-        ideSessionStore: session,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        overrides: <Override>[
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
     await _openConversation(tester);
@@ -471,14 +482,17 @@ void main() {
 
       await tester.pumpWidget(
         zetaTestApp(
-          enableNativeWindowFrame: false,
-          overrides: fakeDirectoryPickerOverrides(directory.path),
           hostMode: ZetaHostMode.ephemeral,
-          ideSessionStore: session,
-          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-            provider,
-          ),
-          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+          overrides: <Override>[
+            ...fakeDirectoryPickerOverrides(directory.path),
+            ideSessionStoreProvider.overrideWithValue(session),
+            agentProviderBundleFactoryProvider.overrideWithValue(
+              FakeAgentProviderBundleBuilder.fromFake(provider),
+            ),
+            agentProviderConfigStoreProvider.overrideWithValue(
+              MemoryAgentProviderConfigStore(),
+            ),
+          ],
         ),
       );
       await openProjectFromMenu(tester);

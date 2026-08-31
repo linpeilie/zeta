@@ -32,6 +32,9 @@ import '../../../testing/ide_test_harness.dart';
 import '../../../testing/agent_conversation_binding_test_harness.dart';
 import '../../../testing/fake_workspace_directory_picker.dart';
 import '../../../testing/zeta_test_app.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
+import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
+import 'package:zeta/src/app/storage/zeta_store_providers.dart';
 
 void main() {
   final binding = TestWidgetsFlutterBinding.ensureInitialized();
@@ -62,13 +65,18 @@ void main() {
     // Act
     await tester.pumpWidget(
       zetaTestApp(
-        enableNativeWindowFrame: false,
         hostMode: ZetaHostMode.ephemeral,
-        ideSessionStore: session,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-          FakeAgentProvider(includeConversationTestThread: true),
-        ),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        overrides: <Override>[
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(
+              FakeAgentProvider(includeConversationTestThread: true),
+            ),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
     await pumpUntilAgentComposer(tester);
@@ -127,12 +135,17 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        enableNativeWindowFrame: false,
-        overrides: fakeDirectoryPickerOverrides(directory.path),
         hostMode: ZetaHostMode.ephemeral,
-        ideSessionStore: session,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        overrides: <Override>[
+          ...fakeDirectoryPickerOverrides(directory.path),
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -230,12 +243,17 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        enableNativeWindowFrame: false,
-        overrides: fakeDirectoryPickerOverrides(directory.path),
         hostMode: ZetaHostMode.ephemeral,
-        ideSessionStore: session,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        overrides: <Override>[
+          ...fakeDirectoryPickerOverrides(directory.path),
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -321,14 +339,17 @@ void main() {
 
       await tester.pumpWidget(
         zetaTestApp(
-          enableNativeWindowFrame: false,
-          overrides: fakeDirectoryPickerOverrides(directory.path),
           hostMode: ZetaHostMode.ephemeral,
-          ideSessionStore: session,
-          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-            provider,
-          ),
-          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+          overrides: <Override>[
+            ...fakeDirectoryPickerOverrides(directory.path),
+            ideSessionStoreProvider.overrideWithValue(session),
+            agentProviderBundleFactoryProvider.overrideWithValue(
+              FakeAgentProviderBundleBuilder.fromFake(provider),
+            ),
+            agentProviderConfigStoreProvider.overrideWithValue(
+              MemoryAgentProviderConfigStore(),
+            ),
+          ],
         ),
       );
 
@@ -433,14 +454,17 @@ void main() {
 
       await tester.pumpWidget(
         zetaTestApp(
-          enableNativeWindowFrame: false,
-          overrides: fakeDirectoryPickerOverrides(directory.path),
           hostMode: ZetaHostMode.ephemeral,
-          ideSessionStore: session,
-          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-            provider,
-          ),
-          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+          overrides: <Override>[
+            ...fakeDirectoryPickerOverrides(directory.path),
+            ideSessionStoreProvider.overrideWithValue(session),
+            agentProviderBundleFactoryProvider.overrideWithValue(
+              FakeAgentProviderBundleBuilder.fromFake(provider),
+            ),
+            agentProviderConfigStoreProvider.overrideWithValue(
+              MemoryAgentProviderConfigStore(),
+            ),
+          ],
         ),
       );
 
@@ -563,14 +587,17 @@ void main() {
 
       await tester.pumpWidget(
         zetaTestApp(
-          enableNativeWindowFrame: false,
-          overrides: fakeDirectoryPickerOverrides(directory.path),
           hostMode: ZetaHostMode.ephemeral,
-          ideSessionStore: session,
-          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-            provider,
-          ),
-          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+          overrides: <Override>[
+            ...fakeDirectoryPickerOverrides(directory.path),
+            ideSessionStoreProvider.overrideWithValue(session),
+            agentProviderBundleFactoryProvider.overrideWithValue(
+              FakeAgentProviderBundleBuilder.fromFake(provider),
+            ),
+            agentProviderConfigStoreProvider.overrideWithValue(
+              MemoryAgentProviderConfigStore(),
+            ),
+          ],
         ),
       );
 
@@ -658,14 +685,17 @@ void main() {
 
       await tester.pumpWidget(
         zetaTestApp(
-          enableNativeWindowFrame: false,
-          overrides: fakeDirectoryPickerOverrides(directory.path),
           hostMode: ZetaHostMode.ephemeral,
-          ideSessionStore: session,
-          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-            provider,
-          ),
-          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+          overrides: <Override>[
+            ...fakeDirectoryPickerOverrides(directory.path),
+            ideSessionStoreProvider.overrideWithValue(session),
+            agentProviderBundleFactoryProvider.overrideWithValue(
+              FakeAgentProviderBundleBuilder.fromFake(provider),
+            ),
+            agentProviderConfigStoreProvider.overrideWithValue(
+              MemoryAgentProviderConfigStore(),
+            ),
+          ],
         ),
       );
 
@@ -739,17 +769,24 @@ void main() {
     );
     await tester.pumpWidget(
       zetaTestApp(
-        enableNativeWindowFrame: false,
-        overrides: fakeDirectoryPickerOverrides(null),
         hostMode: ZetaHostMode.ephemeral,
-        ideSessionStore: session,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(
-          const AgentProviderSettings(
-            providers: <AgentProviderConfig>[defaultGrokAgentProviderConfig],
-            activeProviderId: grokAgentProviderId,
+        overrides: <Override>[
+          ...fakeDirectoryPickerOverrides(null),
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
           ),
-        ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(
+              const AgentProviderSettings(
+                providers: <AgentProviderConfig>[
+                  defaultGrokAgentProviderConfig,
+                ],
+                activeProviderId: grokAgentProviderId,
+              ),
+            ),
+          ),
+        ],
       ),
     );
     final moreActionsButton = find.byKey(
@@ -866,14 +903,15 @@ void main() {
 
       await tester.pumpWidget(
         zetaTestApp(
-          enableNativeWindowFrame: false,
-          overrides: fakeDirectoryPickerOverrides(null),
           hostMode: ZetaHostMode.ephemeral,
-          ideSessionStore: session,
-          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-            provider,
-          ),
-          agentProviderConfigStore: configStore,
+          overrides: <Override>[
+            ...fakeDirectoryPickerOverrides(null),
+            ideSessionStoreProvider.overrideWithValue(session),
+            agentProviderBundleFactoryProvider.overrideWithValue(
+              FakeAgentProviderBundleBuilder.fromFake(provider),
+            ),
+            agentProviderConfigStoreProvider.overrideWithValue(configStore),
+          ],
         ),
       );
       await openConversationTestThread(tester);
@@ -956,16 +994,23 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        enableNativeWindowFrame: false,
         hostMode: ZetaHostMode.ephemeral,
-        ideSessionStore: session,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(
-          const AgentProviderSettings(
-            providers: <AgentProviderConfig>[defaultGrokAgentProviderConfig],
-            activeProviderId: grokAgentProviderId,
+        overrides: <Override>[
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
           ),
-        ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(
+              const AgentProviderSettings(
+                providers: <AgentProviderConfig>[
+                  defaultGrokAgentProviderConfig,
+                ],
+                activeProviderId: grokAgentProviderId,
+              ),
+            ),
+          ),
+        ],
       ),
     );
     await pumpUntilAgentComposer(tester);
@@ -1126,14 +1171,17 @@ void main() {
 
       await tester.pumpWidget(
         zetaTestApp(
-          enableNativeWindowFrame: false,
-          overrides: fakeDirectoryPickerOverrides(directory.path),
           hostMode: ZetaHostMode.ephemeral,
-          ideSessionStore: session,
-          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-            provider,
-          ),
-          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+          overrides: <Override>[
+            ...fakeDirectoryPickerOverrides(directory.path),
+            ideSessionStoreProvider.overrideWithValue(session),
+            agentProviderBundleFactoryProvider.overrideWithValue(
+              FakeAgentProviderBundleBuilder.fromFake(provider),
+            ),
+            agentProviderConfigStoreProvider.overrideWithValue(
+              MemoryAgentProviderConfigStore(),
+            ),
+          ],
         ),
       );
 
@@ -1299,12 +1347,17 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        enableNativeWindowFrame: false,
-        overrides: fakeDirectoryPickerOverrides(directory.path),
         hostMode: ZetaHostMode.ephemeral,
-        ideSessionStore: session,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        overrides: <Override>[
+          ...fakeDirectoryPickerOverrides(directory.path),
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -2125,13 +2178,16 @@ void main() {
 
       await tester.pumpWidget(
         zetaTestApp(
-          enableNativeWindowFrame: false,
           hostMode: ZetaHostMode.ephemeral,
-          ideSessionStore: session,
-          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-            provider,
-          ),
-          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+          overrides: <Override>[
+            ideSessionStoreProvider.overrideWithValue(session),
+            agentProviderBundleFactoryProvider.overrideWithValue(
+              FakeAgentProviderBundleBuilder.fromFake(provider),
+            ),
+            agentProviderConfigStoreProvider.overrideWithValue(
+              MemoryAgentProviderConfigStore(),
+            ),
+          ],
         ),
       );
 
@@ -2236,13 +2292,16 @@ void main() {
 
       await tester.pumpWidget(
         zetaTestApp(
-          enableNativeWindowFrame: false,
           hostMode: ZetaHostMode.ephemeral,
-          ideSessionStore: session,
-          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-            provider,
-          ),
-          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+          overrides: <Override>[
+            ideSessionStoreProvider.overrideWithValue(session),
+            agentProviderBundleFactoryProvider.overrideWithValue(
+              FakeAgentProviderBundleBuilder.fromFake(provider),
+            ),
+            agentProviderConfigStoreProvider.overrideWithValue(
+              MemoryAgentProviderConfigStore(),
+            ),
+          ],
         ),
       );
 
@@ -2326,14 +2385,17 @@ void main() {
 
       await tester.pumpWidget(
         zetaTestApp(
-          enableNativeWindowFrame: false,
-          overrides: fakeDirectoryPickerOverrides(directory.path),
           hostMode: ZetaHostMode.ephemeral,
-          ideSessionStore: session,
-          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-            provider,
-          ),
-          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+          overrides: <Override>[
+            ...fakeDirectoryPickerOverrides(directory.path),
+            ideSessionStoreProvider.overrideWithValue(session),
+            agentProviderBundleFactoryProvider.overrideWithValue(
+              FakeAgentProviderBundleBuilder.fromFake(provider),
+            ),
+            agentProviderConfigStoreProvider.overrideWithValue(
+              MemoryAgentProviderConfigStore(),
+            ),
+          ],
         ),
       );
 
@@ -2435,11 +2497,16 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        enableNativeWindowFrame: false,
         hostMode: ZetaHostMode.ephemeral,
-        ideSessionStore: session,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        overrides: <Override>[
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -2525,12 +2592,17 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        enableNativeWindowFrame: false,
-        overrides: fakeDirectoryPickerOverrides(directory.path),
         hostMode: ZetaHostMode.ephemeral,
-        ideSessionStore: session,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        overrides: <Override>[
+          ...fakeDirectoryPickerOverrides(directory.path),
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -2643,12 +2715,17 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        enableNativeWindowFrame: false,
-        overrides: fakeDirectoryPickerOverrides(directory.path),
         hostMode: ZetaHostMode.ephemeral,
-        ideSessionStore: session,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        overrides: <Override>[
+          ...fakeDirectoryPickerOverrides(directory.path),
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -2698,11 +2775,16 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        enableNativeWindowFrame: false,
         hostMode: ZetaHostMode.ephemeral,
-        ideSessionStore: session,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        overrides: <Override>[
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -2738,11 +2820,16 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        enableNativeWindowFrame: false,
         hostMode: ZetaHostMode.ephemeral,
-        ideSessionStore: session,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        overrides: <Override>[
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -2774,11 +2861,16 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        enableNativeWindowFrame: false,
         hostMode: ZetaHostMode.ephemeral,
-        ideSessionStore: session,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        overrides: <Override>[
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -2832,11 +2924,16 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        enableNativeWindowFrame: false,
         hostMode: ZetaHostMode.ephemeral,
-        ideSessionStore: session,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        overrides: <Override>[
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -2885,11 +2982,16 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        enableNativeWindowFrame: false,
         hostMode: ZetaHostMode.ephemeral,
-        ideSessionStore: session,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        overrides: <Override>[
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
     await pumpUntilAgentComposer(tester);
@@ -3038,11 +3140,16 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        enableNativeWindowFrame: false,
         hostMode: ZetaHostMode.ephemeral,
-        ideSessionStore: session,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        overrides: <Override>[
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -3132,11 +3239,16 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        enableNativeWindowFrame: false,
         hostMode: ZetaHostMode.ephemeral,
-        ideSessionStore: session,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        overrides: <Override>[
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -3305,11 +3417,16 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        enableNativeWindowFrame: false,
         hostMode: ZetaHostMode.ephemeral,
-        ideSessionStore: session,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        overrides: <Override>[
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -3340,11 +3457,16 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        enableNativeWindowFrame: false,
         hostMode: ZetaHostMode.ephemeral,
-        ideSessionStore: session,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        overrides: <Override>[
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -3397,11 +3519,16 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        enableNativeWindowFrame: false,
         hostMode: ZetaHostMode.ephemeral,
-        ideSessionStore: session,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        overrides: <Override>[
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -3442,13 +3569,16 @@ void main() {
 
       await tester.pumpWidget(
         zetaTestApp(
-          enableNativeWindowFrame: false,
           hostMode: ZetaHostMode.ephemeral,
-          ideSessionStore: session,
-          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-            provider,
-          ),
-          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+          overrides: <Override>[
+            ideSessionStoreProvider.overrideWithValue(session),
+            agentProviderBundleFactoryProvider.overrideWithValue(
+              FakeAgentProviderBundleBuilder.fromFake(provider),
+            ),
+            agentProviderConfigStoreProvider.overrideWithValue(
+              MemoryAgentProviderConfigStore(),
+            ),
+          ],
         ),
       );
       await pumpUntilAgentComposer(tester);
@@ -3730,13 +3860,16 @@ void main() {
 
       await tester.pumpWidget(
         zetaTestApp(
-          enableNativeWindowFrame: false,
           hostMode: ZetaHostMode.ephemeral,
-          ideSessionStore: session,
-          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-            provider,
-          ),
-          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+          overrides: <Override>[
+            ideSessionStoreProvider.overrideWithValue(session),
+            agentProviderBundleFactoryProvider.overrideWithValue(
+              FakeAgentProviderBundleBuilder.fromFake(provider),
+            ),
+            agentProviderConfigStoreProvider.overrideWithValue(
+              MemoryAgentProviderConfigStore(),
+            ),
+          ],
         ),
       );
       await pumpUntilAgentComposer(tester);
@@ -3948,12 +4081,17 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        enableNativeWindowFrame: false,
-        overrides: fakeDirectoryPickerOverrides(directory.path),
         hostMode: ZetaHostMode.ephemeral,
-        ideSessionStore: session,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        overrides: <Override>[
+          ...fakeDirectoryPickerOverrides(directory.path),
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -4020,11 +4158,16 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        enableNativeWindowFrame: false,
         hostMode: ZetaHostMode.ephemeral,
-        ideSessionStore: session,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        overrides: <Override>[
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -4121,11 +4264,16 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        enableNativeWindowFrame: false,
         hostMode: ZetaHostMode.ephemeral,
-        ideSessionStore: session,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        overrides: <Override>[
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -4184,11 +4332,16 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        enableNativeWindowFrame: false,
         hostMode: ZetaHostMode.ephemeral,
-        ideSessionStore: session,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        overrides: <Override>[
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 

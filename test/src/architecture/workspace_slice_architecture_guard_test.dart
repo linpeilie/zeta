@@ -124,16 +124,15 @@ void main() {
     ).readAsStringSync();
     expect(overrides, isNot(contains("package:file_selector/")));
 
-    // 真实选择器只在 local 宿主装：ephemeral 也装的话，调用方就再也覆盖不掉这个
+    // 真实选择器只由生产入口装：组合根装了的话，调用方就再也覆盖不掉这个
     // provider（同容器重复 override 会被 Riverpod 断言拦下），fake 进不来。
     final composition = File(
       'lib/src/app/composition/zeta_app_composition.dart',
     ).readAsStringSync();
+    expect(composition, isNot(contains('systemDirectoryPickerOverride')));
     expect(
-      composition,
-      contains(
-        'if (hostMode.usesNativeDialogs) systemDirectoryPickerOverride()',
-      ),
+      File('lib/main.dart').readAsStringSync(),
+      contains('systemDirectoryPickerOverride()'),
     );
 
     // Widget 上不许再有任何注入参数：容器与依赖都归组合根。
