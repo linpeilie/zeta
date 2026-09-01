@@ -8,7 +8,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
-import 'package:zeta/src/app/composition/zeta_host_mode.dart';
 import 'package:zeta/src/app/app.dart' show MainApp, MainAppState;
 import 'package:zeta/src/app/composition/zeta_app_composition.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
@@ -2316,7 +2315,6 @@ Future<ZetaAppComposition> _pumpIde(
       FakeAgentProviderBundleBuilder.fromFake(FakeAgentProvider());
 
   final composition = zetaTestComposition(
-    hostMode: ZetaHostMode.ephemeral,
     overrides: <Override>[
       zetaWindowHostProvider.overrideWithValue(
         enableNativeWindowFrame

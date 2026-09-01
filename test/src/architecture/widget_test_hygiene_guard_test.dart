@@ -75,7 +75,6 @@ void main() {
 void main() {
   final widget = zetaTestApp(
     // TODO: override agentProviderBundleFactoryProvider
-    hostMode: ZetaHostMode.ephemeral,
   );
   final ok = zetaTestApp(
     overrides: <Override>[
@@ -98,6 +97,31 @@ void main() {
     expect(visitor.constructions.first.overridesAgentProviderFactory, isFalse);
     expect(visitor.constructions[1].overridesAgentProviderFactory, isTrue);
     expect(visitor.constructions.last.overridesAgentProviderFactory, isFalse);
+  });
+
+  test('测试不得绕过 zetaTestComposition 直接建组合根', () {
+    final offenders = <String>[];
+    for (final file in _dartFilesUnder('test')) {
+      final path = _posix(file.path);
+      if (path.endsWith('test/src/testing/zeta_test_app.dart') ||
+          path.endsWith(
+            'test/src/architecture/widget_test_hygiene_guard_test.dart',
+          )) {
+        continue;
+      }
+      final source = file.readAsStringSync();
+      if (source.contains('ZetaAppComposition.create(')) {
+        offenders.add(path);
+      }
+    }
+    expect(
+      offenders,
+      isEmpty,
+      reason:
+          '直接调用 ZetaAppComposition.create 会落到生产默认值（原生窗口、本机 CLI 探测、'
+          '用量刷新）。请走 zetaTestComposition / zetaTestApp：\n'
+          '${offenders.join('\n')}',
+    );
   });
 }
 

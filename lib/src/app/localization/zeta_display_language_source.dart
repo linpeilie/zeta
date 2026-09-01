@@ -1,8 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 
-import 'package:zeta/src/app/composition/zeta_host_mode.dart';
-import 'package:zeta/src/app/storage/zeta_store_providers.dart';
 import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/presentation/settings_slice/settings_slice_providers.dart';
 
@@ -57,25 +55,18 @@ final class FixedDisplayLanguageSource implements ZetaDisplayLanguageSource {
 
 /// 当前的显示语言来源。
 ///
-/// 默认按宿主模式选：`local` 等常规设置，`ephemeral` 直接用
-/// [settingsFallbackLanguageProvider]（也就是常规设置损坏时的兜底语言）。要在
-/// 测试里验证"等待常规设置"这段过程，就覆盖成
-/// [GeneralSettingsDisplayLanguageSource]。
-final zetaDisplayLanguageSourceProvider = Provider<ZetaDisplayLanguageSource>((
-  ref,
-) {
-  if (!ref.watch(zetaHostModeProvider).waitsForPersistedDisplayLanguage) {
-    return FixedDisplayLanguageSource(
-      ref.watch(settingsFallbackLanguageProvider),
-    );
-  }
-  return _generalSettingsSource(ref);
-}, name: 'zetaDisplayLanguageSource');
+/// 生产默认等常规设置读完再冻结，避免先按兜底语言挂一次 UI 再跳变。
+/// widget test 由 `zetaTestComposition` 换成 [FixedDisplayLanguageSource]，
+/// 第一帧就能挂有文字的 UI；要验证等待过程，覆盖成
+/// [waitForGeneralSettingsDisplayLanguage]。
+final zetaDisplayLanguageSourceProvider = Provider<ZetaDisplayLanguageSource>(
+  _generalSettingsSource,
+  name: 'zetaDisplayLanguageSource',
+);
 
 /// 等常规设置读完再冻结显示语言。
 ///
-/// `local` 宿主本来就是这个默认值；这个 override 是给"要验证等待过程"的
-/// ephemeral 用例用的。
+/// 生产本来就是这个默认值；这个 override 是给"要验证等待过程"的测试用例用的。
 Override waitForGeneralSettingsDisplayLanguage() =>
     zetaDisplayLanguageSourceProvider.overrideWith(_generalSettingsSource);
 

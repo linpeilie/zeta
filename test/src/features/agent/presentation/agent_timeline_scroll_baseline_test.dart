@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/app/composition/zeta_host_mode.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
@@ -182,7 +181,6 @@ void main() {
 
       await tester.pumpWidget(
         zetaTestApp(
-          hostMode: ZetaHostMode.ephemeral,
           overrides: <Override>[
             ideSessionStoreProvider.overrideWithValue(session),
             agentProviderBundleFactoryProvider.overrideWithValue(
@@ -314,7 +312,6 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        hostMode: ZetaHostMode.ephemeral,
         overrides: <Override>[
           ideSessionStoreProvider.overrideWithValue(session),
           agentProviderBundleFactoryProvider.overrideWithValue(
@@ -482,7 +479,6 @@ void main() {
 
       await tester.pumpWidget(
         zetaTestApp(
-          hostMode: ZetaHostMode.ephemeral,
           overrides: <Override>[
             ...fakeDirectoryPickerOverrides(directory.path),
             ideSessionStoreProvider.overrideWithValue(session),

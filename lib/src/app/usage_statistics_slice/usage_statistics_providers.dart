@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:zeta/src/app/composition/zeta_host_mode.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 
 /// Agent 统计面板的数据源。
@@ -16,12 +15,11 @@ final agentUsagePanelRepositoryProvider = Provider<AgentUsagePanelRepository?>(
 
 /// 是否在启动及每个回合结束后自动刷新 Agent 用量。
 ///
-/// 默认跟随宿主模式：自动刷新会去读本机 Agent CLI 的历史记录，ephemeral 宿主
-/// 一律不读（`ZetaHostMode` 第 3 条硬约束）。用例注入了自己的
-/// [agentUsagePanelRepositoryProvider] 之后数据来源已经不碰本机，那时可以显式
-/// 打开——**要显式打开**：此前这里是从"有没有传统计仓储"反推的，一个可选参数
-/// 同时决定数据源和刷新策略，改一处就会悄悄改另一处。
+/// 生产默认打开：会读本机 Agent CLI 的历史记录。widget test 由
+/// `zetaTestComposition` 关掉；注入了假仓储、数据来源已经不碰本机之后，用例
+/// 再显式覆盖成 `true`。不要从"有没有传统计仓储"反推——一个可选参数同时决定
+/// 数据源和刷新策略，改一处就会悄悄改另一处。
 final agentUsageAutoRefreshEnabledProvider = Provider<bool>(
-  (ref) => ref.watch(zetaHostModeProvider).allowsLocalCliAccess,
+  (ref) => true,
   name: 'agentUsageAutoRefreshEnabled',
 );

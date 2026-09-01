@@ -10,7 +10,6 @@ import 'package:zeta/src/app/agent_management_slice/agent_management_slice_compo
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_runner.dart';
 import 'package:zeta/src/app/composition/agent_resource_shutdown.dart';
 import 'package:zeta/src/app/composition/ide_workbench_composition.dart';
-import 'package:zeta/src/app/composition/zeta_host_mode.dart';
 import 'package:zeta/src/app/composition/zeta_state_snapshot.dart';
 import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_workspace_providers.dart';
 import 'package:zeta/src/app/desktop_attention_slice/desktop_attention_providers.dart';
@@ -47,26 +46,22 @@ import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
 /// 这是 Riverpod 的标准形状：**容器由组合根创建，Widget 只消费**。生产入口和测试
 /// 各自建一份 [ZetaAppComposition]，注入口径只有一个——[create] 的 `overrides`。
 ///
-/// 组合根不再接收依赖参数。以前那 15 个可选参数现在各自是一个 provider，兜底值
-/// 写在 provider 的 body 里、按 [hostMode] 分支；调用方要换实现就覆盖那个
+/// 组合根不再接收依赖参数。以前那 15 个可选参数现在各自是一个 provider，有安全
+/// 默认值的把兜底写在 provider 的 body 里（生产实现）；调用方要换实现就覆盖那个
 /// provider。这条规矩有个硬约束撑着：Riverpod 对同一容器内的重复 override 直接
 /// 断言失败，所以**组合根内部装过的 provider，调用方就再也覆盖不掉**——凡是调用
 /// 方可能想换的东西，这里一律不装。
 ///
-/// 内部仍然装的只有四类，都是调用方不该碰的：
+/// 内部仍然装的只有三类，都是调用方不该碰的：
 ///
-/// 1. [hostMode] 本身；
-/// 2. 正式容器复用的已解析可观测性实例；
-/// 3. 显示语言冻结之后才存在的文本目录（值还没有，写不进 provider body）；
-/// 4. 三个切片组合的 store（组合对象由本类持有，provider 只是读出口）。
+/// 1. 正式容器复用的已解析可观测性实例；
+/// 2. 显示语言冻结之后才存在的文本目录（值还没有，写不进 provider body）；
+/// 3. 三个切片组合的 store（组合对象由本类持有，provider 只是读出口）。
 ///
 /// 生命周期：**谁创建谁 [dispose]**。生产入口交给进程退出与窗口关闭 hook，测试用
 /// `addTearDown`。
 final class ZetaAppComposition {
-  ZetaAppComposition._({
-    required this.hostMode,
-    required List<Override> extra,
-  }) {
+  ZetaAppComposition._({required List<Override> extra}) {
     observability = _readObservability(extra);
     container = ProviderContainer(
       observers: observability.providerObservers,
@@ -83,16 +78,12 @@ final class ZetaAppComposition {
 
   /// 建出组合根并立即开始装配。
   ///
-  /// [hostMode] 决定所有"这台机器能不能碰"的默认值：持久化落盘还是留内存、要不
-  /// 要接管原生窗口、要不要探测本机 Agent CLI。
-  ///
   /// [overrides] 是唯一的注入口。**存储不在这里装**：`ZetaStorageBindings` 生成
   /// 的那批 override 由调用方自己展开（生产用 `.file(paths)`，测试用
   /// `.memory()`），组合根装了的话调用方就再也换不掉。
   ///
   /// ```dart
   /// ZetaAppComposition.create(
-  ///   hostMode: ZetaHostMode.local,
   ///   overrides: <Override>[
   ///     ...ZetaStorageBindings.file(paths).providerOverrides,
   ///     initialAppearanceSettingsProvider.overrideWithValue(appearance),
@@ -100,14 +91,10 @@ final class ZetaAppComposition {
   /// );
   /// ```
   factory ZetaAppComposition.create({
-    ZetaHostMode hostMode = ZetaHostMode.local,
     List<Override> overrides = const <Override>[],
   }) {
-    return ZetaAppComposition._(hostMode: hostMode, extra: overrides);
+    return ZetaAppComposition._(extra: overrides);
   }
-
-  /// 宿主运行模式：决定持久化落盘还是留内存、是否允许访问本机 Agent CLI。
-  final ZetaHostMode hostMode;
 
   /// 组合根持有的 Riverpod 容器。
   late final ProviderContainer container;
@@ -354,7 +341,6 @@ final class ZetaAppComposition {
   /// 到时会 fail-closed 抛错。[extra] 排在最后。
   List<Override> _composeOverrides(List<Override> extra) {
     return <Override>[
-      zetaHostModeProvider.overrideWithValue(hostMode),
       zetaResolvedObservabilityProvider.overrideWithValue(observability),
       zetaTextCatalogsProvider.overrideWith(
         (ref) =>

@@ -134,15 +134,16 @@ import Flutter」那条守卫**拦不住它们**。也就是说 application 与 
 构造函数上向下钻，以及用可变注册表把运行期才造出来的对象反向 `bind()` 回 provider。后者尤其
 危险——它让「谁拥有这个对象」在编译期不可见，读到未绑定状态只能靠运行期抛错兜底。
 
-**组合根只接 `hostMode` 与 `overrides`，兜底值写进 provider body。** `ZetaAppComposition.create`
+**组合根只接 `overrides`，生产默认值写进 provider body。** `ZetaAppComposition.create`
 不再收依赖参数。有安全默认值的依赖（窗口宿主、显示语言来源、桌面通知、Agent bundle 工厂与
-runtime 池、用量仓储与自动刷新开关、探测 loader）把兜底写在自己的 provider body 里，按
-`zetaHostModeProvider` 分支：`local` 装真实现，`ephemeral` 装不碰本机的那份。
+runtime 池、用量仓储与自动刷新开关、探测 loader）把**生产实现**写在自己的 provider body 里。
+widget test 不另开一套模式开关：`zetaTestComposition` / `zetaTestApp` 自动装不碰本机的那份
+（内存存储、无头窗口、空 CLI 探测、关闭用量刷新），用例要换就覆盖对应 provider。
 
 这条约束有个硬理由：**Riverpod 对同一容器内的重复 override 直接断言失败**（`ProviderContainer`
 构造时就抛，debug 下必现）。组合根一旦替某个 provider 装了默认 override，调用方就再也覆盖不掉
-它——fake 进不来。所以组合根内部只装三类调用方不该碰的东西：宿主模式本身、显示语言冻结之后才
-存在的文本目录、三个切片组合的 store 出口。其余一律留给 `overrides`。
+它——fake 进不来。所以组合根内部只装三类调用方不该碰的东西：已解析的可观测性实例、显示语言
+冻结之后才存在的文本目录、三个切片组合的 store 出口。其余一律留给 `overrides`。
 
 同理，声明在 feature `application` 层的 provider 够不到 `data` 实现（那是反向依赖），兜底写不
 进 body：外观仓库、系统字体目录、目录选择器就属于这一类，由 `lib/main.dart` 和测试助手各自装

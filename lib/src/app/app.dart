@@ -40,7 +40,7 @@ class MainAppState extends State<MainApp>
 
   ZetaAppComposition get _composition => widget.composition;
 
-  /// 当前窗口宿主；`ephemeral` 下是一份什么都不做的实现。
+  /// 当前窗口宿主；测试里通常是一份什么都不做的 [HeadlessWindowHost]。
   ///
   /// 在 `initState` 解析一次并留住：`dispose()` 里还要退订窗口事件，而组合根
   /// 的容器可能已经先一步关掉了。

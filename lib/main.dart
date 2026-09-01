@@ -10,7 +10,6 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 
 import 'package:zeta/src/app/app.dart';
 import 'package:zeta/src/app/composition/zeta_app_composition.dart';
-import 'package:zeta/src/app/composition/zeta_host_mode.dart';
 import 'package:zeta/src/app/storage/zeta_data_file_system.dart';
 import 'package:zeta/src/app/storage/zeta_storage_bindings.dart';
 import 'package:zeta/src/app/storage/zeta_store_providers.dart';
@@ -53,9 +52,8 @@ void main() {
         ),
       );
       // 容器由组合根建，MainApp 只消费——测试同样自己建一份并注入 fake。
-      // 组合根只认宿主模式，实现全部经 overrides 进容器。
+      // 组合根只接 overrides；生产默认写在各 provider body 里。
       final composition = ZetaAppComposition.create(
-        hostMode: ZetaHostMode.local,
         overrides: <Override>[
           ...storage.providerOverrides,
           settingsFallbackLanguageProvider.overrideWithValue(

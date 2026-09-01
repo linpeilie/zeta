@@ -223,12 +223,13 @@ windows/
   notifier——一份状态只能有一个 owner。
 - **依赖注入走 `ProviderScope` / `ProviderContainer` overrides**，不用构造参数向下钻，也不用
   可变注册表反向 `bind()`。没有安全默认值的依赖声明成会抛错的 `Provider`。
-- **组合根只接两个入参**：`ZetaAppComposition.create(hostMode:, overrides:)`。要换实现就覆盖
+- **组合根只接 `overrides`**：`ZetaAppComposition.create(overrides:)`。要换实现就覆盖
   对应 provider，不要往 `create` 上加参数——加了也没用，组合根装过的 provider 调用方覆盖不掉
-  （同容器重复 override 会被 Riverpod 断言拦下）。有安全默认值的依赖把兜底写进自己的 provider
-  body，按 `zetaHostModeProvider` 分支。
-- **测试同一个口径**：`zetaTestApp(hostMode:, overrides:)` / `zetaTestComposition(...)`，内存存储
-  由助手自动补。窗口相关用 `headlessWindowHost(showsWindowControls: …)`，Agent 工厂必须覆盖
+  （同容器重复 override 会被 Riverpod 断言拦下）。有安全默认值的依赖把生产实现写进自己的
+  provider body。
+- **测试同一个口径**：`zetaTestApp(overrides:)` / `zetaTestComposition(...)`。助手自动补内存
+  存储、无头窗口、空 CLI 探测、关闭用量刷新等；用例覆盖同一 provider 时以用例为准。窗口控制
+  按钮用 `headlessWindowHost(showsWindowControls: …)`，Agent 工厂必须覆盖
   `agentProviderBundleFactoryProvider`（`widget_test_hygiene_guard_test` 会拦）。
 - Riverpod 只用 `flutter_riverpod` 一个包，允许出现在 `application` 及以上；`domain` / `data`
   两层都禁。不要从传递依赖 `package:riverpod/` 导入。application 里也不要出现

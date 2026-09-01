@@ -2,7 +2,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
-import 'package:zeta/src/app/composition/zeta_host_mode.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/ui/core/system_file_manager.dart';
 
@@ -21,13 +20,11 @@ final projectLocationOpenerProvider = Provider<ProjectLocationOpener>(
 
 /// 首页的本机 Provider 探测。
 ///
-/// null 表示由首页用自己的默认探测；ephemeral 宿主换成"一个都没装"的结果，
-/// 避免 widget test 去扫本机 CLI（`ZetaHostMode` 第 2 条硬约束）。
+/// null 表示由首页用自己的默认探测（会扫本机 CLI）。widget test 由
+/// `zetaTestComposition` 换成空列表 stub，避免真的去初始化 Agent Management。
 final homeProviderDetectionLoaderProvider =
     Provider<HomeProviderDetectionLoader?>(
-      (ref) => ref.watch(zetaHostModeProvider).allowsLocalCliAccess
-          ? null
-          : _loadNoInstalledHomeProviders,
+      (ref) => null,
       name: 'homeProviderDetectionLoader',
     );
 
@@ -37,6 +34,3 @@ final agentProviderAvailabilityLoaderProvider =
       (ref) => null,
       name: 'agentProviderAvailabilityLoader',
     );
-
-Future<List<ManagedAgent>> _loadNoInstalledHomeProviders() async =>
-    const <ManagedAgent>[];

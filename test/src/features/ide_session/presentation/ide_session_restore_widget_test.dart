@@ -8,7 +8,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/app/app.dart';
-import 'package:zeta/src/app/composition/zeta_host_mode.dart';
 import 'package:zeta/src/core/utils/path_utils.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
@@ -50,7 +49,6 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        hostMode: ZetaHostMode.ephemeral,
         overrides: <Override>[
           zetaWindowHostProvider.overrideWithValue(
             const NativeDesktopWindowHost(showsWindowControls: false),
@@ -84,7 +82,6 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        hostMode: ZetaHostMode.ephemeral,
         overrides: <Override>[
           zetaWindowHostProvider.overrideWithValue(
             const NativeDesktopWindowHost(showsWindowControls: false),
@@ -122,7 +119,6 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        hostMode: ZetaHostMode.ephemeral,
         overrides: <Override>[
           zetaWindowHostProvider.overrideWithValue(
             const NativeDesktopWindowHost(showsWindowControls: false),
@@ -155,7 +151,6 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        hostMode: ZetaHostMode.ephemeral,
         overrides: <Override>[
           zetaWindowHostProvider.overrideWithValue(
             const NativeDesktopWindowHost(showsWindowControls: false),
@@ -202,7 +197,6 @@ void main() {
 
       await tester.pumpWidget(
         zetaTestApp(
-          hostMode: ZetaHostMode.ephemeral,
           overrides: <Override>[
             zetaWindowHostProvider.overrideWithValue(
               const NativeDesktopWindowHost(showsWindowControls: false),
@@ -241,7 +235,6 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        hostMode: ZetaHostMode.ephemeral,
         overrides: <Override>[
           zetaWindowHostProvider.overrideWithValue(
             const NativeDesktopWindowHost(showsWindowControls: false),
@@ -281,7 +274,6 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        hostMode: ZetaHostMode.ephemeral,
         overrides: <Override>[
           zetaWindowHostProvider.overrideWithValue(
             const NativeDesktopWindowHost(showsWindowControls: false),
@@ -321,7 +313,6 @@ void main() {
 
       // 同一个组合根重建 Widget：容器与 store identity 都必须保持稳定。
       final composition = zetaTestComposition(
-        hostMode: ZetaHostMode.ephemeral,
         overrides: <Override>[
           zetaWindowHostProvider.overrideWithValue(
             const NativeDesktopWindowHost(showsWindowControls: false),
@@ -373,7 +364,6 @@ void main() {
     Future<void> pumpApp({bool waitForUsage = true}) async {
       await tester.pumpWidget(
         zetaTestApp(
-          hostMode: ZetaHostMode.ephemeral,
           overrides: <Override>[
             zetaWindowHostProvider.overrideWithValue(
               const NativeDesktopWindowHost(showsWindowControls: false),
@@ -513,7 +503,6 @@ void main() {
 
       await tester.pumpWidget(
         zetaTestApp(
-          hostMode: ZetaHostMode.ephemeral,
           overrides: <Override>[
             zetaWindowHostProvider.overrideWithValue(
               const NativeDesktopWindowHost(showsWindowControls: false),
@@ -583,7 +572,6 @@ void main() {
 
       await tester.pumpWidget(
         zetaTestApp(
-          hostMode: ZetaHostMode.ephemeral,
           overrides: <Override>[
             zetaWindowHostProvider.overrideWithValue(
               const NativeDesktopWindowHost(showsWindowControls: false),

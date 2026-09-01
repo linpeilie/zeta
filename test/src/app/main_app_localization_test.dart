@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
-import 'package:zeta/src/app/composition/zeta_host_mode.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_notifier.dart';
 import 'package:zeta/src/features/settings/data/general_settings_store.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings_repository.dart';
@@ -279,7 +278,6 @@ Future<void> _pumpzetaTestApp(
   await tester.pumpWidget(
     zetaTestApp(
       key: key,
-      hostMode: ZetaHostMode.ephemeral,
       overrides: <Override>[
         headlessWindowHost(showsWindowControls: false),
         agentProviderBundleFactoryProvider.overrideWithValue(

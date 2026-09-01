@@ -12,7 +12,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
-import 'package:zeta/src/app/composition/zeta_host_mode.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
@@ -68,7 +67,6 @@ void main() {
     // Act
     await tester.pumpWidget(
       zetaTestApp(
-        hostMode: ZetaHostMode.ephemeral,
         overrides: <Override>[
           ideSessionStoreProvider.overrideWithValue(session),
           agentProviderBundleFactoryProvider.overrideWithValue(
@@ -138,7 +136,6 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        hostMode: ZetaHostMode.ephemeral,
         overrides: <Override>[
           ...fakeDirectoryPickerOverrides(directory.path),
           ideSessionStoreProvider.overrideWithValue(session),
@@ -246,7 +243,6 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        hostMode: ZetaHostMode.ephemeral,
         overrides: <Override>[
           ...fakeDirectoryPickerOverrides(directory.path),
           ideSessionStoreProvider.overrideWithValue(session),
@@ -342,7 +338,6 @@ void main() {
 
       await tester.pumpWidget(
         zetaTestApp(
-          hostMode: ZetaHostMode.ephemeral,
           overrides: <Override>[
             ...fakeDirectoryPickerOverrides(directory.path),
             ideSessionStoreProvider.overrideWithValue(session),
@@ -457,7 +452,6 @@ void main() {
 
       await tester.pumpWidget(
         zetaTestApp(
-          hostMode: ZetaHostMode.ephemeral,
           overrides: <Override>[
             ...fakeDirectoryPickerOverrides(directory.path),
             ideSessionStoreProvider.overrideWithValue(session),
@@ -590,7 +584,6 @@ void main() {
 
       await tester.pumpWidget(
         zetaTestApp(
-          hostMode: ZetaHostMode.ephemeral,
           overrides: <Override>[
             ...fakeDirectoryPickerOverrides(directory.path),
             ideSessionStoreProvider.overrideWithValue(session),
@@ -688,7 +681,6 @@ void main() {
 
       await tester.pumpWidget(
         zetaTestApp(
-          hostMode: ZetaHostMode.ephemeral,
           overrides: <Override>[
             ...fakeDirectoryPickerOverrides(directory.path),
             ideSessionStoreProvider.overrideWithValue(session),
@@ -772,7 +764,6 @@ void main() {
     );
     await tester.pumpWidget(
       zetaTestApp(
-        hostMode: ZetaHostMode.ephemeral,
         overrides: <Override>[
           ...fakeDirectoryPickerOverrides(null),
           ideSessionStoreProvider.overrideWithValue(session),
@@ -906,7 +897,6 @@ void main() {
 
       await tester.pumpWidget(
         zetaTestApp(
-          hostMode: ZetaHostMode.ephemeral,
           overrides: <Override>[
             ...fakeDirectoryPickerOverrides(null),
             ideSessionStoreProvider.overrideWithValue(session),
@@ -997,7 +987,6 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        hostMode: ZetaHostMode.ephemeral,
         overrides: <Override>[
           ideSessionStoreProvider.overrideWithValue(session),
           agentProviderBundleFactoryProvider.overrideWithValue(
@@ -1174,7 +1163,6 @@ void main() {
 
       await tester.pumpWidget(
         zetaTestApp(
-          hostMode: ZetaHostMode.ephemeral,
           overrides: <Override>[
             ...fakeDirectoryPickerOverrides(directory.path),
             ideSessionStoreProvider.overrideWithValue(session),
@@ -1350,7 +1338,6 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        hostMode: ZetaHostMode.ephemeral,
         overrides: <Override>[
           ...fakeDirectoryPickerOverrides(directory.path),
           ideSessionStoreProvider.overrideWithValue(session),
@@ -2193,7 +2180,6 @@ void main() {
 
       await tester.pumpWidget(
         zetaTestApp(
-          hostMode: ZetaHostMode.ephemeral,
           overrides: <Override>[
             ideSessionStoreProvider.overrideWithValue(session),
             agentProviderBundleFactoryProvider.overrideWithValue(
@@ -2307,7 +2293,6 @@ void main() {
 
       await tester.pumpWidget(
         zetaTestApp(
-          hostMode: ZetaHostMode.ephemeral,
           overrides: <Override>[
             ideSessionStoreProvider.overrideWithValue(session),
             agentProviderBundleFactoryProvider.overrideWithValue(
@@ -2400,7 +2385,6 @@ void main() {
 
       await tester.pumpWidget(
         zetaTestApp(
-          hostMode: ZetaHostMode.ephemeral,
           overrides: <Override>[
             ...fakeDirectoryPickerOverrides(directory.path),
             ideSessionStoreProvider.overrideWithValue(session),
@@ -2512,7 +2496,6 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        hostMode: ZetaHostMode.ephemeral,
         overrides: <Override>[
           ideSessionStoreProvider.overrideWithValue(session),
           agentProviderBundleFactoryProvider.overrideWithValue(
@@ -2607,7 +2590,6 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        hostMode: ZetaHostMode.ephemeral,
         overrides: <Override>[
           ...fakeDirectoryPickerOverrides(directory.path),
           ideSessionStoreProvider.overrideWithValue(session),
@@ -2730,7 +2712,6 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        hostMode: ZetaHostMode.ephemeral,
         overrides: <Override>[
           ...fakeDirectoryPickerOverrides(directory.path),
           ideSessionStoreProvider.overrideWithValue(session),
@@ -2790,7 +2771,6 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        hostMode: ZetaHostMode.ephemeral,
         overrides: <Override>[
           ideSessionStoreProvider.overrideWithValue(session),
           agentProviderBundleFactoryProvider.overrideWithValue(
@@ -2835,7 +2815,6 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        hostMode: ZetaHostMode.ephemeral,
         overrides: <Override>[
           ideSessionStoreProvider.overrideWithValue(session),
           agentProviderBundleFactoryProvider.overrideWithValue(
@@ -2876,7 +2855,6 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        hostMode: ZetaHostMode.ephemeral,
         overrides: <Override>[
           ideSessionStoreProvider.overrideWithValue(session),
           agentProviderBundleFactoryProvider.overrideWithValue(
@@ -2939,7 +2917,6 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        hostMode: ZetaHostMode.ephemeral,
         overrides: <Override>[
           ideSessionStoreProvider.overrideWithValue(session),
           agentProviderBundleFactoryProvider.overrideWithValue(
@@ -2997,7 +2974,6 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        hostMode: ZetaHostMode.ephemeral,
         overrides: <Override>[
           ideSessionStoreProvider.overrideWithValue(session),
           agentProviderBundleFactoryProvider.overrideWithValue(
@@ -3155,7 +3131,6 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        hostMode: ZetaHostMode.ephemeral,
         overrides: <Override>[
           ideSessionStoreProvider.overrideWithValue(session),
           agentProviderBundleFactoryProvider.overrideWithValue(
@@ -3254,7 +3229,6 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        hostMode: ZetaHostMode.ephemeral,
         overrides: <Override>[
           ideSessionStoreProvider.overrideWithValue(session),
           agentProviderBundleFactoryProvider.overrideWithValue(
@@ -3432,7 +3406,6 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        hostMode: ZetaHostMode.ephemeral,
         overrides: <Override>[
           ideSessionStoreProvider.overrideWithValue(session),
           agentProviderBundleFactoryProvider.overrideWithValue(
@@ -3472,7 +3445,6 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        hostMode: ZetaHostMode.ephemeral,
         overrides: <Override>[
           ideSessionStoreProvider.overrideWithValue(session),
           agentProviderBundleFactoryProvider.overrideWithValue(
@@ -3534,7 +3506,6 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        hostMode: ZetaHostMode.ephemeral,
         overrides: <Override>[
           ideSessionStoreProvider.overrideWithValue(session),
           agentProviderBundleFactoryProvider.overrideWithValue(
@@ -3584,7 +3555,6 @@ void main() {
 
       await tester.pumpWidget(
         zetaTestApp(
-          hostMode: ZetaHostMode.ephemeral,
           overrides: <Override>[
             ideSessionStoreProvider.overrideWithValue(session),
             agentProviderBundleFactoryProvider.overrideWithValue(
@@ -3875,7 +3845,6 @@ void main() {
 
       await tester.pumpWidget(
         zetaTestApp(
-          hostMode: ZetaHostMode.ephemeral,
           overrides: <Override>[
             ideSessionStoreProvider.overrideWithValue(session),
             agentProviderBundleFactoryProvider.overrideWithValue(
@@ -4096,7 +4065,6 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        hostMode: ZetaHostMode.ephemeral,
         overrides: <Override>[
           ...fakeDirectoryPickerOverrides(directory.path),
           ideSessionStoreProvider.overrideWithValue(session),
@@ -4173,7 +4141,6 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        hostMode: ZetaHostMode.ephemeral,
         overrides: <Override>[
           ideSessionStoreProvider.overrideWithValue(session),
           agentProviderBundleFactoryProvider.overrideWithValue(
@@ -4279,7 +4246,6 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        hostMode: ZetaHostMode.ephemeral,
         overrides: <Override>[
           ideSessionStoreProvider.overrideWithValue(session),
           agentProviderBundleFactoryProvider.overrideWithValue(
@@ -4347,7 +4313,6 @@ void main() {
 
     await tester.pumpWidget(
       zetaTestApp(
-        hostMode: ZetaHostMode.ephemeral,
         overrides: <Override>[
           ideSessionStoreProvider.overrideWithValue(session),
           agentProviderBundleFactoryProvider.overrideWithValue(

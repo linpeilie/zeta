@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/app/composition/zeta_host_mode.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
@@ -152,7 +151,6 @@ Future<void> _pumpIdeHome(
   final session = MemorySessionStore(null);
   await tester.pumpWidget(
     zetaTestApp(
-      hostMode: ZetaHostMode.ephemeral,
       overrides: <Override>[
         zetaWindowHostProvider.overrideWithValue(
           const NativeDesktopWindowHost(showsWindowControls: false),

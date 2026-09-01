@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/app/app.dart';
 import 'package:zeta/src/app/composition/zeta_app_composition.dart';
-import 'package:zeta/src/app/composition/zeta_host_mode.dart';
 import 'package:zeta/src/core/storage/zeta_data_paths.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
@@ -19,27 +18,21 @@ import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
 import 'package:zeta/src/app/storage/zeta_store_providers.dart';
 import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_providers.dart';
 
-/// `MainApp` 的宿主持久化模式 characterization test。
+/// `zetaTestComposition` 的本机隔离 characterization test。
 ///
-/// 钉住的是一条**隐式**推断链：只要传入 `sessionLoader` / `sessionSaver`，
-/// `MainApp` 就把整个应用切进"临时宿主"模式——
+/// widget test 必须经测试组合根装配，不能碰用户机器：
 ///
 /// 1. 所有持久化退成内存实现，一个字节都不写 `dataPaths` 指向的目录；
 /// 2. 用无安装结果的 stub 顶掉本机 CLI 探测（否则 `IdeHome` 会去
 ///    `AgentManagementOperations.initialize()` 真扫本机）；
 /// 3. 关掉 Agent 用量自动刷新（否则会读本机 CLI 的历史记录）。
 ///
-/// 这三条在写这个测试之前**没有任何测试覆盖**，而 Phase 4 P4-2a 要把这对回调
-/// 换成显式的宿主模式参数。先把现状钉死，改完必须逐条仍然成立——这正是重构
-/// "行为不变"的证据。
-///
-/// 第 3 条现在多了一层显式：自动刷新由 `agentUsageAutoRefreshEnabledProvider`
-/// 决定，默认仍然跟随宿主模式，但**不再从"有没有传统计仓储"反推**。一个可选
-/// 参数同时决定数据源和刷新策略，改一处就会悄悄改另一处；要恢复刷新就自己把
-/// 开关打开。
+/// 第 3 条由 `agentUsageAutoRefreshEnabledProvider` 显式决定，**不再从
+/// "有没有传统计仓储"反推**。一个可选参数同时决定数据源和刷新策略，改一处
+/// 就会悄悄改另一处；要恢复刷新就自己把开关打开。
 void main() {
   testWidgets('会话保存走回调，不写 dataPaths 指向的任何文件', (tester) async {
-    final home = Directory.systemTemp.createTempSync('zeta_host_mode_');
+    final home = Directory.systemTemp.createTempSync('zeta_test_host_');
     addTearDown(() {
       if (home.existsSync()) {
         home.deleteSync(recursive: true);
@@ -79,12 +72,12 @@ void main() {
               .map((file) => file.path)
               .toList()
         : const <String>[];
-    expect(written, isEmpty, reason: '传入 session 回调时不得触碰 dataPaths 指向的真实目录');
+    expect(written, isEmpty, reason: '测试组合根不得触碰 dataPaths 指向的真实目录');
 
     expect(session.value, isNotNull, reason: '会话必须交给注入的回调，而不是写进 dataPaths');
   });
 
-  testWidgets('回调持久化用无安装 stub 顶掉本机 CLI 探测', (tester) async {
+  testWidgets('测试组合根用无安装 stub 顶掉本机 CLI 探测', (tester) async {
     final composition = await _pumpzetaTestApp(tester);
     await tester.pump();
 
@@ -99,14 +92,14 @@ void main() {
     expect(await loader!(), isEmpty);
   });
 
-  testWidgets('回调持久化关闭 Agent 用量自动刷新', (tester) async {
+  testWidgets('测试组合根关闭 Agent 用量自动刷新', (tester) async {
     final composition = await _pumpzetaTestApp(tester);
     await tester.pump();
 
     expect(
       composition.container.read(agentUsageAutoRefreshEnabledProvider),
       isFalse,
-      reason: '自动刷新会读取本机 CLI 历史，临时宿主模式下必须关闭',
+      reason: '自动刷新会读取本机 CLI 历史，测试组合根必须关闭',
     );
   });
 
@@ -155,7 +148,6 @@ Future<ZetaAppComposition> _pumpzetaTestApp(
       ..resetDevicePixelRatio();
   });
   final composition = zetaTestComposition(
-    hostMode: ZetaHostMode.ephemeral,
     overrides: <Override>[
       headlessWindowHost(showsWindowControls: false),
       ...directoryPicker == null

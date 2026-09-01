@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
-import 'package:zeta/src/app/composition/zeta_host_mode.dart';
 import 'package:zeta/src/app/menu_action_bridge.dart';
 import 'package:zeta/src/app/window_bootstrap.dart';
 
@@ -16,9 +15,9 @@ import 'package:zeta/src/app/window_bootstrap.dart';
 /// 写法每加一个平台调用就要记得补一次分支，漏掉一处就会在 widget test 里打到
 /// 真实平台通道。
 ///
-/// 实现只有两个：[NativeDesktopWindowHost]（生产）与 [HeadlessWindowHost]
-/// （widget test 与嵌入宿主）。默认由 [zetaWindowHostProvider] 按宿主模式选，
-/// 要换实现就覆盖那个 provider。
+/// 实现只有两个：[NativeDesktopWindowHost]（生产默认）与 [HeadlessWindowHost]
+/// （widget test）。要换实现就覆盖 [zetaWindowHostProvider]；测试入口
+/// `zetaTestComposition` 会自动装无头实现。
 abstract interface class ZetaWindowHost {
   /// 是否由原生窗口框架渲染标题栏与菜单栏。
   ///
@@ -103,7 +102,7 @@ final class NativeDesktopWindowHost implements ZetaWindowHost {
   Future<void> closeWindow() => windowManager.close();
 }
 
-/// 无窗口实现：widget test 与嵌入宿主用，一个平台通道都不碰。
+/// 无窗口实现：widget test 用，一个平台通道都不碰。
 ///
 /// [showsWindowControls] 仍然可调：控制按钮是纯绘制，不经平台通道，用例按自己
 /// 要断言的布局决定画不画。
@@ -143,11 +142,10 @@ final class HeadlessWindowHost implements ZetaWindowHost {
 
 /// 当前窗口宿主。
 ///
-/// 默认按宿主模式选：`local` 接管原生窗口，`ephemeral` 什么都不做。要在测试里
-/// 改窗口控制按钮的可见性，覆盖成 `HeadlessWindowHost(showsWindowControls: …)`。
+/// 生产默认接管原生窗口。widget test 由 `zetaTestComposition` 换成
+/// [HeadlessWindowHost]；要改窗口控制按钮可见性，覆盖成
+/// `HeadlessWindowHost(showsWindowControls: …)`。
 final zetaWindowHostProvider = Provider<ZetaWindowHost>(
-  (ref) => ref.watch(zetaHostModeProvider).usesNativeDesktopIntegration
-      ? const NativeDesktopWindowHost()
-      : const HeadlessWindowHost(),
+  (ref) => const NativeDesktopWindowHost(),
   name: 'zetaWindowHost',
 );

@@ -106,7 +106,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
   late final IdeShellController _shellController;
   late final IdeWorkbenchComposition _workbenchComposition;
 
-  /// 窗口宿主：原生标题栏、窗口事件与菜单都经它，`ephemeral` 下什么都不做。
+  /// 窗口宿主：原生标题栏、窗口事件与菜单都经它；测试里通常什么都不做。
   ///
   /// 在 `initState` 取一次并留住：`dispose()` 里还要退订窗口事件，而那时
   /// `ref` 已经不能再读了。
