@@ -6,14 +6,8 @@ import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 
 import 'package:zeta/src/app/app_constants.dart';
-import 'package:zeta/src/app/composition/app_dependencies.dart';
 import 'package:zeta/src/app/composition/zeta_app_composition.dart';
-import 'package:zeta/src/app/composition/zeta_environment_providers.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
-import 'package:zeta/src/app/localization/zeta_text_catalog_providers.dart';
-import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
-import 'package:zeta/src/app/storage/zeta_store_providers.dart';
-import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_providers.dart';
 import 'package:zeta/src/app/window/zeta_window_host.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_notifier.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_mapping.dart';
@@ -200,45 +194,23 @@ class MainAppState extends State<MainApp>
 
   Widget _buildHome() {
     final composition = _composition;
-    // 这一支只在语言冻结之后走到（见 build 里的 isReady 分支），因此读文本目录
-    // 与插件链上的 provider 都已经有值。
-    final container = composition.container;
+    // 这一支只在语言冻结之后走到（见 build 里的 isReady 分支），因此 `IdeHome`
+    // 自己从容器读文本目录与插件链上的 provider 时都已经有值。
+    //
+    // 这里只补**容器里还没有的东西**：组合根手工持有的三个切片组合、状态快照桥
+    // 与工作台工厂。凡是已经装进 Riverpod 的依赖一律不经这里下钻——那只是把
+    // `container.read` 换个地方写，还会让 `IdeHome` 的构造函数继续膨胀。
     return IdeHome(
       key: const ValueKey<String>('zeta.ide-home'),
       shellStateSnapshotRelay: composition.shellStateSnapshotRelay,
-      agentProviderFactory: container.read(agentProviderBundleFactoryProvider),
-      agentProviderRuntimeRegistry: container.read(
-        agentProviderRuntimeRegistryProvider,
-      ),
       desktopAttentionSliceComposition: composition.desktopAttentionComposition,
       desktopAttentionTargetActivatorRelay:
           composition.desktopAttentionTargetActivatorRelay,
-      conversationSliceStoreRegistry:
-          composition.conversationSliceStoreRegistry,
-      conversationWorkspaceStoreRegistry:
-          composition.conversationWorkspaceStoreRegistry,
-      agentProviderSettingsPort: composition.providerSettingsComposition.store,
       activeModelCatalogLoader: () =>
           composition.providerSettingsComposition.loadActiveModelCatalog(),
-      agentProviderAvailabilityLoader: container.read(
-        agentProviderAvailabilityLoaderProvider,
-      ),
-      homeProviderDetectionLoader: container.read(
-        homeProviderDetectionLoaderProvider,
-      ),
-      projectLocationOpener: container.read(projectLocationOpenerProvider),
       usageStatisticsSliceComposition: composition.usageStatisticsComposition,
       workbenchCompositionFactory: composition.createWorkbenchComposition,
-      turnContextStore: container.read(agentTurnContextStoreProvider),
-      agentUiTextCatalog: container.read(agentUiTextCatalogProvider),
-      metrics: container.read(zetaMetricsPortProvider),
       providerMetricLabel: AgentMetricLabels.forProviderId,
-      agentManagementTextCatalog: container.read(
-        agentManagementTextCatalogProvider,
-      ),
-      enableAgentUsageAutoRefresh: container.read(
-        agentUsageAutoRefreshEnabledProvider,
-      ),
     );
   }
 

@@ -8,7 +8,9 @@ import 'package:window_manager/window_manager.dart';
 
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_composition.dart';
+import 'package:zeta/src/app/composition/app_dependencies.dart';
 import 'package:zeta/src/app/composition/ide_workbench_composition.dart';
+import 'package:zeta/src/app/composition/zeta_environment_providers.dart';
 import 'package:zeta/src/app/window/zeta_window_host.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_runner.dart';
@@ -19,16 +21,18 @@ import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_wor
 import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_workspace_store.dart';
 import 'package:zeta/src/app/menu_action_bridge.dart';
 import 'package:zeta/src/app/shell/ide_shell_controller.dart';
-import 'package:zeta/src/ui/core/system_file_manager.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
+import 'package:zeta/src/app/localization/zeta_text_catalog_providers.dart';
+import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
+import 'package:zeta/src/app/storage/zeta_store_providers.dart';
+import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_providers.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
+import 'package:zeta/src/features/agent/presentation/provider_settings_slice/agent_provider_settings_slice_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/desktop_notifications/application/desktop_attention_slice_store.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_models.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_operations.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
-import 'package:zeta/src/features/agent_management/domain/agent_management_text_catalog.dart';
-import 'package:zeta/src/features/agent_management/domain/fallback_agent_management_text_catalog.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_session_slice_notifier.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
 import 'package:zeta/src/features/project_threads/presentation/project_threads_slice/project_threads_slice_providers.dart';
@@ -55,70 +59,40 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:zeta/src/features/workspace/application/workspace_file_corpus.dart';
 import 'package:zeta/src/features/workspace/application/workspace_notifier.dart';
 
-typedef AgentProviderAvailabilityLoader =
-    Future<List<AgentProviderConfig>> Function();
-
-typedef HomeProviderDetectionLoader = Future<List<ManagedAgent>> Function();
-
 /// IDE 主界面。
 ///
 /// 首页由标题栏入口控制 Projects / Agent 统计合并栏，中央保留 Agent 主编辑区；
 /// 具体项目、会话和 Agent thread 编排由 [IdeShellController] 承接。
+///
+/// **依赖从容器读，不从构造函数下钻。** 凡是组合根已经装进 Riverpod 的依赖
+/// （bundle 工厂、runtime 池、两个 registry、文本目录、指标端口、探测 loader……）
+/// 一律由 `_IdeHomeState` 自己 `ref.read`，调用方要换实现就覆盖对应的 provider。
+/// 经构造函数传的只剩**容器里还没有的那些**：组合根手工 `new` 出来的两个切片组合
+/// （Usage Statistics / Desktop Attention）、Provider settings 组合的目录加载入口、
+/// 状态快照桥与工作台工厂。它们随切片去 Composition 一起消失。
 class IdeHome extends ConsumerStatefulWidget {
   const IdeHome({
     required this.shellStateSnapshotRelay,
-    required this.agentProviderFactory,
-    required this.agentProviderSettingsPort,
     required this.activeModelCatalogLoader,
     required this.usageStatisticsSliceComposition,
-    required this.projectLocationOpener,
     required this.desktopAttentionSliceComposition,
     required this.desktopAttentionTargetActivatorRelay,
-    required this.conversationSliceStoreRegistry,
-    required this.conversationWorkspaceStoreRegistry,
     required this.workbenchCompositionFactory,
-    required this.agentProviderRuntimeRegistry,
-    this.enableAgentUsageAutoRefresh = true,
-    this.agentProviderAvailabilityLoader,
-    this.homeProviderDetectionLoader,
-    this.turnContextStore,
-    this.agentUiTextCatalog = const FallbackAgentUiTextCatalog(),
-    this.metrics = noopZetaMetricsPort,
     this.providerMetricLabel = ZetaMetricLabel.hashed,
-    this.agentManagementTextCatalog =
-        const FallbackAgentManagementTextCatalog(),
     super.key,
   });
 
   final ZetaShellStateSnapshotRelay shellStateSnapshotRelay;
-  final AgentProviderBundleFactory agentProviderFactory;
-  final AgentProviderSettingsPort agentProviderSettingsPort;
   final Future<AgentModelCatalogLoadResult> Function() activeModelCatalogLoader;
   final UsageStatisticsSliceComposition usageStatisticsSliceComposition;
-  final ProjectLocationOpener projectLocationOpener;
   final DesktopAttentionSliceComposition desktopAttentionSliceComposition;
   final DesktopAttentionTargetActivatorRelay
   desktopAttentionTargetActivatorRelay;
-  final AgentConversationSliceStoreRegistry conversationSliceStoreRegistry;
-  final AgentConversationWorkspaceStoreRegistry
-  conversationWorkspaceStoreRegistry;
 
   /// app 组合层预绑的工作台组合工厂；UI 不再看到任何 Repository。
   final IdeWorkbenchCompositionFactory workbenchCompositionFactory;
-  final AgentProviderRuntimeRegistry agentProviderRuntimeRegistry;
 
-  /// 是否在启动及每个回合结束后通过事件消息刷新 Agent 用量。
-  final bool enableAgentUsageAutoRefresh;
-  final AgentProviderAvailabilityLoader? agentProviderAvailabilityLoader;
-  final HomeProviderDetectionLoader? homeProviderDetectionLoader;
-  final AgentTurnContextStore? turnContextStore;
-
-  /// app 组合层注入的脱敏指标端口；默认 no-op。
-  final ZetaMetricsPort metrics;
   final ZetaMetricLabel Function(String providerId) providerMetricLabel;
-
-  final AgentUiTextCatalog agentUiTextCatalog;
-  final AgentManagementTextCatalog agentManagementTextCatalog;
 
   @override
   ConsumerState<IdeHome> createState() => _IdeHomeState();
@@ -137,6 +111,30 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
   /// 在 `initState` 取一次并留住：`dispose()` 里还要退订窗口事件，而那时
   /// `ref` 已经不能再读了。
   late final ZetaWindowHost _windowHost = ref.read(zetaWindowHostProvider);
+
+  /// 会话与切片 store 的两个 registry。
+  ///
+  /// 同样在 `initState` 解析一次并留住：`dispose()` 里还要 `unbind`，而那时
+  /// `ref` 已经不能再读了。
+  late final AgentConversationSliceStoreRegistry
+  _conversationSliceStoreRegistry = ref.read(
+    agentConversationSliceStoreRegistryProvider,
+  );
+  late final AgentConversationWorkspaceStoreRegistry
+  _conversationWorkspaceStoreRegistry = ref.read(
+    agentConversationWorkspaceStoreRegistryProvider,
+  );
+
+  /// 是否在启动及每个回合结束后通过事件消息刷新 Agent 用量。
+  late final bool _agentUsageAutoRefreshEnabled = ref.read(
+    agentUsageAutoRefreshEnabledProvider,
+  );
+
+  /// 首页探测端口；null 表示由首页走自己的默认实现。
+  late final AgentProviderAvailabilityLoader? _agentProviderAvailabilityLoader =
+      ref.read(agentProviderAvailabilityLoaderProvider);
+  late final HomeProviderDetectionLoader? _homeProviderDetectionLoader = ref
+      .read(homeProviderDetectionLoaderProvider);
 
   AgentManagementSliceComposition get _agentManagementComposition =>
       _workbenchComposition.agentManagementComposition;
@@ -202,21 +200,25 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
         workspaceFileIndexControllerProvider,
       ),
       ideSessionOperations: ref.read(ideSessionSliceProvider.notifier),
-      agentProviderFactory: widget.agentProviderFactory,
-      agentProviderSettingsPort: widget.agentProviderSettingsPort,
+      agentProviderFactory: ref.read(agentProviderBundleFactoryProvider),
+      agentProviderSettingsPort: ref.read(
+        agentProviderSettingsSliceStoreProvider,
+      ),
       activeModelCatalogLoader: widget.activeModelCatalogLoader,
-      projectLocationOpener: widget.projectLocationOpener,
+      projectLocationOpener: ref.read(projectLocationOpenerProvider),
       statusReporter: _showStatus,
-      agentProviderRuntimeRegistry: widget.agentProviderRuntimeRegistry,
+      agentProviderRuntimeRegistry: ref.read(
+        agentProviderRuntimeRegistryProvider,
+      ),
       onAgentTurnTerminal: _handleAgentTurnTerminal,
       onAgentAttention: (attention) {
         unawaited(_desktopAttentionStore.handleAttention(attention));
       },
       onAgentUsageProviderRestored:
           _agentUsagePanelController.restorePreferredProviderId,
-      turnContextStore: widget.turnContextStore,
-      agentUiTextCatalog: widget.agentUiTextCatalog,
-      metrics: widget.metrics,
+      turnContextStore: ref.read(agentTurnContextStoreProvider),
+      agentUiTextCatalog: ref.read(agentUiTextCatalogProvider),
+      metrics: ref.read(zetaMetricsPortProvider),
       providerMetricLabel: widget.providerMetricLabel,
     );
     // 定向订阅三个切片，而不是监听整个 Shell。
@@ -231,10 +233,10 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
     _shellController.agentConversationWorkspaceStore.addListener(
       _handleConversationWorkspaceChanged,
     );
-    widget.conversationWorkspaceStoreRegistry.bind(
+    _conversationWorkspaceStoreRegistry.bind(
       _shellController.agentConversationWorkspaceStore,
     );
-    widget.conversationSliceStoreRegistry.bind(
+    _conversationSliceStoreRegistry.bind(
       _shellController.agentConversationWorkspaceStore.sliceStoreForBinding,
     );
     widget.usageStatisticsSliceComposition.bindSelectionPersistence(
@@ -257,7 +259,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
     );
     _shellStateSnapshotReader = _takeShellStateSnapshot;
     widget.shellStateSnapshotRelay.bind(_shellStateSnapshotReader);
-    if (widget.enableAgentUsageAutoRefresh) {
+    if (_agentUsageAutoRefreshEnabled) {
       _scheduleInitialAgentUsageRefresh();
     }
     // 打开项目只走菜单栏（原生 File 菜单或标题栏菜单），不在项目列表放入口。
@@ -349,8 +351,8 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
       _handleAgentManagementChanged,
     );
     _workbenchComposition.dispose();
-    widget.conversationSliceStoreRegistry.unbind();
-    widget.conversationWorkspaceStoreRegistry.unbind(
+    _conversationSliceStoreRegistry.unbind();
+    _conversationWorkspaceStoreRegistry.unbind(
       _shellController.agentConversationWorkspaceStore,
     );
     _shellController.dispose();
@@ -959,7 +961,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
   }
 
   Future<List<AgentProviderConfig>> _loadAvailableAgentProviders() async {
-    final injectedLoader = widget.agentProviderAvailabilityLoader;
+    final injectedLoader = _agentProviderAvailabilityLoader;
     if (injectedLoader != null) {
       return injectedLoader();
     }
@@ -985,7 +987,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
   }
 
   void _requestAgentUsageRefresh() {
-    if (!mounted || !widget.enableAgentUsageAutoRefresh) {
+    if (!mounted || !_agentUsageAutoRefreshEnabled) {
       return;
     }
     _agentUsageRefreshCoordinator.requestRefresh();
@@ -1198,7 +1200,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
       _installedHomeProviders,
     );
     try {
-      final injectedLoader = widget.homeProviderDetectionLoader;
+      final injectedLoader = _homeProviderDetectionLoader;
       if (injectedLoader != null) {
         final agents = await injectedLoader();
         if (!mounted || token != _globalHomeLoadToken) {
@@ -1263,7 +1265,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
   void _handleAgentManagementChanged() {
     if (!mounted ||
         _homeProvidersLoading ||
-        widget.homeProviderDetectionLoader != null) {
+        _homeProviderDetectionLoader != null) {
       return;
     }
     if (_page != _IdeHomePage.home) {
@@ -1282,7 +1284,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
         _agentManagementHomeRefreshScheduled = false;
         if (!mounted ||
             _homeProvidersLoading ||
-            widget.homeProviderDetectionLoader != null) {
+            _homeProviderDetectionLoader != null) {
           return;
         }
         if (_page != _IdeHomePage.home) {

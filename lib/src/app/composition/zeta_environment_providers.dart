@@ -1,9 +1,17 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+
 import 'package:zeta/src/app/composition/zeta_host_mode.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/ui/core/system_file_manager.dart';
-import 'package:zeta/src/ui/features/ide/views/ide_home.dart';
+
+/// 首页可用 Provider 列表的探测端口。
+typedef AgentProviderAvailabilityLoader =
+    Future<List<AgentProviderConfig>> Function();
+
+/// 首页本机已安装 Agent 的探测端口。
+typedef HomeProviderDetectionLoader = Future<List<ManagedAgent>> Function();
 
 /// 打开项目所在目录的方式。
 final projectLocationOpenerProvider = Provider<ProjectLocationOpener>(

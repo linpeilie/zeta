@@ -2,11 +2,12 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/app/app.dart';
+import 'package:zeta/src/app/composition/zeta_app_composition.dart';
 import 'package:zeta/src/app/composition/zeta_host_mode.dart';
 import 'package:zeta/src/core/storage/zeta_data_paths.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
-import 'package:zeta/src/ui/features/ide/views/ide_home.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_directory_picker.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 
@@ -84,58 +85,60 @@ void main() {
   });
 
   testWidgets('回调持久化用无安装 stub 顶掉本机 CLI 探测', (tester) async {
-    await _pumpzetaTestApp(tester);
+    final composition = await _pumpzetaTestApp(tester);
     await tester.pump();
 
-    final ideHome = tester.widget<IdeHome>(find.byType(IdeHome));
+    final loader = composition.container.read(
+      homeProviderDetectionLoaderProvider,
+    );
     expect(
-      ideHome.homeProviderDetectionLoader,
+      loader,
       isNotNull,
       reason: 'loader 为 null 时 IdeHome 会真的去初始化 Agent Management 扫描本机',
     );
-    expect(await ideHome.homeProviderDetectionLoader!(), isEmpty);
+    expect(await loader!(), isEmpty);
   });
 
   testWidgets('回调持久化关闭 Agent 用量自动刷新', (tester) async {
-    await _pumpzetaTestApp(tester);
+    final composition = await _pumpzetaTestApp(tester);
     await tester.pump();
 
-    final ideHome = tester.widget<IdeHome>(find.byType(IdeHome));
     expect(
-      ideHome.enableAgentUsageAutoRefresh,
+      composition.container.read(agentUsageAutoRefreshEnabledProvider),
       isFalse,
       reason: '自动刷新会读取本机 CLI 历史，临时宿主模式下必须关闭',
     );
   });
 
   testWidgets('注入统计仓储并显式打开开关后自动刷新恢复', (tester) async {
-    await _pumpzetaTestApp(
+    final composition = await _pumpzetaTestApp(
       tester,
       agentUsagePanelRepository: const _EmptyAgentUsageRepository(),
     );
     await tester.pump();
 
-    final ideHome = tester.widget<IdeHome>(find.byType(IdeHome));
     expect(
-      ideHome.enableAgentUsageAutoRefresh,
+      composition.container.read(agentUsageAutoRefreshEnabledProvider),
       isTrue,
       reason: '仓储已注入、开关已显式打开时不再读本机历史，自动刷新可以恢复',
     );
   });
 
   testWidgets('显式注入的探测 loader 优先于无安装 stub', (tester) async {
-    await _pumpzetaTestApp(
+    final composition = await _pumpzetaTestApp(
       tester,
       homeProviderDetectionLoader: () async => const <ManagedAgent>[],
     );
     await tester.pump();
 
-    final ideHome = tester.widget<IdeHome>(find.byType(IdeHome));
-    expect(ideHome.homeProviderDetectionLoader, isNotNull);
+    expect(
+      composition.container.read(homeProviderDetectionLoaderProvider),
+      isNotNull,
+    );
   });
 }
 
-Future<void> _pumpzetaTestApp(
+Future<ZetaAppComposition> _pumpzetaTestApp(
   WidgetTester tester, {
   AgentUsagePanelRepository? agentUsagePanelRepository,
   HomeProviderDetectionLoader? homeProviderDetectionLoader,
@@ -151,32 +154,32 @@ Future<void> _pumpzetaTestApp(
       ..resetPhysicalSize()
       ..resetDevicePixelRatio();
   });
-  await tester.pumpWidget(
-    zetaTestApp(
-      hostMode: ZetaHostMode.ephemeral,
-      overrides: <Override>[
-        headlessWindowHost(showsWindowControls: false),
-        ...directoryPicker == null
-            ? const <Override>[]
-            : fakeDirectoryPickerOverridesOf(directoryPicker),
-        ideSessionStoreProvider.overrideWithValue(sessionStore),
-        agentProviderBundleFactoryProvider.overrideWithValue(
-          FakeAgentProviderBundleBuilder.fromFake(FakeAgentProvider()),
-        ),
-        // 注入统计仓储时数据来源已经不碰本机，这时才把自动刷新打开。
-        if (agentUsagePanelRepository case final repository?) ...<Override>[
-          agentUsagePanelRepositoryProvider.overrideWithValue(repository),
-          agentUsageAutoRefreshEnabledProvider.overrideWithValue(true),
-        ],
-        if (homeProviderDetectionLoader case final loader?)
-          homeProviderDetectionLoaderProvider.overrideWithValue(loader),
+  final composition = zetaTestComposition(
+    hostMode: ZetaHostMode.ephemeral,
+    overrides: <Override>[
+      headlessWindowHost(showsWindowControls: false),
+      ...directoryPicker == null
+          ? const <Override>[]
+          : fakeDirectoryPickerOverridesOf(directoryPicker),
+      ideSessionStoreProvider.overrideWithValue(sessionStore),
+      agentProviderBundleFactoryProvider.overrideWithValue(
+        FakeAgentProviderBundleBuilder.fromFake(FakeAgentProvider()),
+      ),
+      // 注入统计仓储时数据来源已经不碰本机，这时才把自动刷新打开。
+      if (agentUsagePanelRepository case final repository?) ...<Override>[
+        agentUsagePanelRepositoryProvider.overrideWithValue(repository),
+        agentUsageAutoRefreshEnabledProvider.overrideWithValue(true),
       ],
-    ),
+      if (homeProviderDetectionLoader case final loader?)
+        homeProviderDetectionLoaderProvider.overrideWithValue(loader),
+    ],
   );
+  await tester.pumpWidget(MainApp(composition: composition));
   // 用量刷新协调器用零延迟 Timer 重试，必须排干净否则 widget 树销毁后仍有 pending timer。
   await tester.pump(const Duration(milliseconds: 1));
   await tester.idle();
   await tester.pump();
+  return composition;
 }
 
 class _EmptyAgentUsageRepository implements AgentUsagePanelRepository {
