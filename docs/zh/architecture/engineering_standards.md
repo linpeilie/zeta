@@ -155,6 +155,10 @@ hook、原生菜单、抢前台）；「显示语言等不等持久化设置」�
 实现。布尔开关的代价是每加一个平台调用都要在调用点补一次 `if`，漏一处就在 widget test 里打到
 真实平台通道；换成实现之后，调用点只有一条路径。
 
+平台 `WindowListener` 只允许出现在 app 窗口模块（`ZetaWindowSurfaceNotifier` 译成快照）和
+关窗 hook（`window_bootstrap.dart`）。`MainApp` / `IdeHome` / feature Widget 禁止 mixin；
+ticker 闸门读 `minimized`，桌面通知读 `focused`。守卫：`window_listener_guard_test`。
+
 **`autoDispose` 的适用范围是硬边界。** 它只能决定**纯 UI 镜像**的存活：selector、投影、派生视图。
 Binding lease、CLI runtime、子进程、文件句柄的生命周期永远由显式的 application 逻辑决定，
 绝不能由「当前有没有 Widget 在看」决定——否则用户切个面板就会杀掉一个正在跑的 turn。

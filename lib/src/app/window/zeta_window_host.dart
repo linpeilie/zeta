@@ -106,8 +106,11 @@ final class NativeDesktopWindowHost implements ZetaWindowHost {
 ///
 /// [showsWindowControls] 仍然可调：控制按钮是纯绘制，不经平台通道，用例按自己
 /// 要断言的布局决定画不画。
+///
+/// 会记下 [addListener] 的订阅者，测试经 `emit*` 把窗口事件打进
+/// 窗口表面快照，不要再去调 `MainApp` 的 State。
 final class HeadlessWindowHost implements ZetaWindowHost {
-  const HeadlessWindowHost({this.showsWindowControls = true});
+  HeadlessWindowHost({this.showsWindowControls = true});
 
   @override
   bool get rendersNativeChrome => false;
@@ -115,11 +118,43 @@ final class HeadlessWindowHost implements ZetaWindowHost {
   @override
   final bool showsWindowControls;
 
-  @override
-  void addListener(WindowListener listener) {}
+  final List<WindowListener> _listeners = <WindowListener>[];
 
   @override
-  void removeListener(WindowListener listener) {}
+  void addListener(WindowListener listener) {
+    if (!_listeners.contains(listener)) {
+      _listeners.add(listener);
+    }
+  }
+
+  @override
+  void removeListener(WindowListener listener) {
+    _listeners.remove(listener);
+  }
+
+  void emitMinimize() => _emit((listener) => listener.onWindowMinimize());
+
+  void emitRestore() => _emit((listener) => listener.onWindowRestore());
+
+  void emitMaximize() => _emit((listener) => listener.onWindowMaximize());
+
+  void emitUnmaximize() => _emit((listener) => listener.onWindowUnmaximize());
+
+  void emitFocus() => _emit((listener) => listener.onWindowFocus());
+
+  void emitBlur() => _emit((listener) => listener.onWindowBlur());
+
+  void emitEnterFullScreen() =>
+      _emit((listener) => listener.onWindowEnterFullScreen());
+
+  void emitEvent(String eventName) =>
+      _emit((listener) => listener.onWindowEvent(eventName));
+
+  void _emit(void Function(WindowListener listener) notify) {
+    for (final listener in List<WindowListener>.of(_listeners)) {
+      notify(listener);
+    }
+  }
 
   @override
   void addShutdownHook(Future<void> Function() hook) {}

@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
-import 'package:window_manager/window_manager.dart';
 
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_composition.dart';
@@ -12,6 +11,7 @@ import 'package:zeta/src/app/composition/app_dependencies.dart';
 import 'package:zeta/src/app/composition/ide_workbench_composition.dart';
 import 'package:zeta/src/app/composition/zeta_environment_providers.dart';
 import 'package:zeta/src/app/window/zeta_window_host.dart';
+import 'package:zeta/src/app/window/zeta_window_surface.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_runner.dart';
 import 'package:zeta/src/app/app_constants.dart';
@@ -98,7 +98,7 @@ class IdeHome extends ConsumerStatefulWidget {
   ConsumerState<IdeHome> createState() => _IdeHomeState();
 }
 
-class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
+class _IdeHomeState extends ConsumerState<IdeHome> {
   static const double _initialPanelWidth = IdeMetrics.sidePaneDefaultWidth;
   static const double _minPanelWidth = IdeMetrics.sidePaneMinWidth;
   static const double _maxPanelWidth = IdeMetrics.sidePaneMaxWidth;
@@ -106,10 +106,10 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
   late final IdeShellController _shellController;
   late final IdeWorkbenchComposition _workbenchComposition;
 
-  /// 窗口宿主：原生标题栏、窗口事件与菜单都经它；测试里通常什么都不做。
+  /// 窗口宿主：原生标题栏、菜单与抢前台都经它；测试里通常什么都不做。
   ///
-  /// 在 `initState` 取一次并留住：`dispose()` 里还要退订窗口事件，而那时
-  /// `ref` 已经不能再读了。
+  /// 在 `initState` 取一次并留住：`dispose()` 里还可能用到，而那时
+  /// `ref` 已经不能再读了。窗口事件本身走 [zetaWindowSurfaceProvider]。
   late final ZetaWindowHost _windowHost = ref.read(zetaWindowHostProvider);
 
   /// 会话与切片 store 的两个 registry。
@@ -145,7 +145,6 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
   late final DesktopAttentionSliceStore _desktopAttentionStore;
   late final DesktopAttentionTargetActivator _desktopAttentionTargetActivator;
   late final ZetaShellStateSnapshotReader _shellStateSnapshotReader;
-  bool _windowFocused = true;
   bool _nativeMenuConfigured = false;
 
   bool _rightSidebarVisible = false;
@@ -244,7 +243,6 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
     );
     _unsubscribeProviderSettings = _shellController.agentProviderController
         .subscribe(_handleAgentProviderSettingsUsageChanged);
-    _windowHost.addListener(this);
     unawaited(widget.desktopAttentionSliceComposition.initialize());
     _workbenchComposition = widget.workbenchCompositionFactory(
       subscribeRuntime: _shellController.subscribeRuntimeChanges,
@@ -340,7 +338,6 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
   void dispose() {
     MenuActionBridge.instance.setOpenProject(null);
     widget.shellStateSnapshotRelay.unbind(_shellStateSnapshotReader);
-    _windowHost.removeListener(this);
     _shellController.agentConversationWorkspaceStore.removeListener(
       _handleConversationWorkspaceChanged,
     );
@@ -384,6 +381,15 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
     ref.watch(workspaceProvider);
     ref.listen(ideSessionSliceProvider, (_, _) => _handleIdeSessionChanged());
     ref.listen(workspaceProvider, (_, _) => _handleWorkspaceChanged());
+    ref.listen(zetaWindowSurfaceProvider.select((state) => state.focused), (
+      previous,
+      next,
+    ) {
+      if (previous == next) {
+        return;
+      }
+      _updateDesktopAttentionVisibility();
+    });
     final homePage = _page == _IdeHomePage.home;
     final leftSidebarVisible =
         homePage && _shellController.workbenchLayout.leftSidebarVisible;
@@ -1094,37 +1100,13 @@ class _IdeHomeState extends ConsumerState<IdeHome> with WindowListener {
       (_shellController.workbenchLayout.leftSidebarWidth ?? _initialPanelWidth)
           .clamp(_minPanelWidth, _maxPanelWidth);
 
-  @override
-  void onWindowFocus() {
-    _windowFocused = true;
-    _updateDesktopAttentionVisibility();
-  }
-
-  @override
-  void onWindowBlur() {
-    _windowFocused = false;
-    _updateDesktopAttentionVisibility();
-  }
-
-  @override
-  void onWindowMinimize() {
-    _windowFocused = false;
-    _updateDesktopAttentionVisibility();
-  }
-
-  @override
-  void onWindowRestore() {
-    _windowFocused = true;
-    _updateDesktopAttentionVisibility();
-  }
-
   void _updateDesktopAttentionVisibility() {
     final entry =
         _shellController.agentConversationWorkspaceStore.selectedEntry;
     unawaited(
       _desktopAttentionStore.updateVisibility(
         DesktopAttentionVisibility(
-          windowFocused: _windowFocused,
+          windowFocused: ref.read(zetaWindowSurfaceProvider).focused,
           agentCanvasVisible:
               _page == _IdeHomePage.home &&
               !_shellController.isProjectHomeActive,

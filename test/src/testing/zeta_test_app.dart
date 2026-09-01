@@ -70,7 +70,7 @@ Override headlessWindowHost({bool showsWindowControls = true}) =>
 List<Override> _testDefaultsNotCoveredBy(List<Override> overrides) {
   return <Override>[
     if (!_covers(overrides, zetaWindowHostProvider))
-      zetaWindowHostProvider.overrideWithValue(const HeadlessWindowHost()),
+      zetaWindowHostProvider.overrideWithValue(HeadlessWindowHost()),
     if (!_covers(overrides, desktopNotificationServiceProvider))
       desktopNotificationServiceProvider.overrideWithValue(
         const NoopDesktopNotificationService(),

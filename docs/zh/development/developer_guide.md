@@ -229,8 +229,13 @@ windows/
   provider body。
 - **测试同一个口径**：`zetaTestApp(overrides:)` / `zetaTestComposition(...)`。助手自动补内存
   存储、无头窗口、空 CLI 探测、关闭用量刷新等；用例覆盖同一 provider 时以用例为准。窗口控制
-  按钮用 `headlessWindowHost(showsWindowControls: …)`，Agent 工厂必须覆盖
+  按钮用 `headlessWindowHost(showsWindowControls: …)`，窗口事件经 `HeadlessWindowHost.emit*`
+  派发。测 ticker 生命周期时调 `ZetaTickerGateState.didChangeAppLifecycleState`（不要走
+  `binding.handleAppLifecycleStateChanged`：测试里它会关掉 frames，`pump` 不再重建）。
+  Agent 工厂必须覆盖
   `agentProviderBundleFactoryProvider`（`widget_test_hygiene_guard_test` 会拦）。
+- **窗口监听只有一处**：`ZetaWindowSurfaceNotifier` 是全应用唯一的 `WindowListener`。ticker
+  走 `ZetaTickerGate`，桌面通知走快照的 `focused`。`MainApp` / `IdeHome` 禁止 mixin。
 - Riverpod 只用 `flutter_riverpod` 一个包，允许出现在 `application` 及以上；`domain` / `data`
   两层都禁。不要从传递依赖 `package:riverpod/` 导入。application 里也不要出现
   `ConsumerWidget` / `WidgetRef`——那是 presentation 的东西。正文见

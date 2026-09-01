@@ -8,7 +8,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
-import 'package:zeta/src/app/app.dart' show MainApp, MainAppState;
+import 'package:zeta/src/app/app.dart' show MainApp;
+import 'package:zeta/src/app/window/zeta_ticker_gate.dart';
 import 'package:zeta/src/app/composition/zeta_app_composition.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
@@ -192,41 +193,44 @@ void main() {
   });
 
   testWidgets('窗口从最小化恢复可重启全局 ticker', (tester) async {
-    await _pumpIde(tester);
-    final appState = tester.state<MainAppState>(find.byType(MainApp));
+    final composition = await _pumpIde(tester);
+    final host =
+        composition.container.read(zetaWindowHostProvider)
+            as HeadlessWindowHost;
+    final gate = tester.state<ZetaTickerGateState>(find.byType(ZetaTickerGate));
     final homeContext = tester.element(
       find.byKey(const ValueKey('global-home-page')),
     );
 
-    appState.didChangeAppLifecycleState(AppLifecycleState.resumed);
+    gate.didChangeAppLifecycleState(AppLifecycleState.resumed);
     await tester.pump();
     expect(TickerMode.valuesOf(homeContext).enabled, isTrue);
 
-    appState.onWindowMinimize();
+    host.emitMinimize();
     await tester.pump();
     expect(TickerMode.valuesOf(homeContext).enabled, isFalse);
 
-    appState.onWindowRestore();
+    host.emitRestore();
     await tester.pump();
     expect(TickerMode.valuesOf(homeContext).enabled, isTrue);
 
     // Windows 会把“最小化前为最大化”的恢复报告为 maximize。
-    appState.onWindowMinimize();
-    appState.onWindowMaximize();
+    host.emitMinimize();
+    host.emitMaximize();
     await tester.pump();
     expect(TickerMode.valuesOf(homeContext).enabled, isTrue);
 
-    appState.onWindowMinimize();
-    appState.onWindowFocus();
+    host.emitMinimize();
+    host.emitFocus();
     await tester.pump();
     expect(TickerMode.valuesOf(homeContext).enabled, isTrue);
 
-    appState.onWindowMinimize();
-    appState.onWindowEvent('show');
+    host.emitMinimize();
+    host.emitEvent('show');
     await tester.pump();
     expect(TickerMode.valuesOf(homeContext).enabled, isTrue);
 
-    appState.didChangeAppLifecycleState(AppLifecycleState.hidden);
+    gate.didChangeAppLifecycleState(AppLifecycleState.hidden);
     await tester.pump();
     expect(TickerMode.valuesOf(homeContext).enabled, isFalse);
   });
@@ -2319,7 +2323,7 @@ Future<ZetaAppComposition> _pumpIde(
       zetaWindowHostProvider.overrideWithValue(
         enableNativeWindowFrame
             ? const NativeDesktopWindowHost(showsWindowControls: false)
-            : const HeadlessWindowHost(showsWindowControls: false),
+            : HeadlessWindowHost(showsWindowControls: false),
       ),
       if (directoryPicker != null)
         ...fakeDirectoryPickerOverridesOf(directoryPicker),
