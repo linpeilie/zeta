@@ -8,8 +8,7 @@ import 'package:zeta/src/app/settings_slice/settings_slice_overrides.dart';
 import 'package:zeta/src/app/storage/zeta_store_providers.dart';
 
 import 'package:zeta/src/features/settings/application/appearance_settings_notifier.dart';
-import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_store.dart';
-import 'package:zeta/src/features/settings/presentation/settings_slice/settings_slice_providers.dart';
+import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_notifier.dart';
 import 'package:zeta/src/features/settings/presentation/appearance_theme_mode_mapper.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_mapping.dart';
 import 'package:zeta/src/features/settings/data/general_settings_store.dart';
@@ -723,7 +722,7 @@ final class _SettingsSliceHandle {
   });
 
   final ProviderContainer container;
-  final GeneralSettingsSliceStore generalStore;
+  final GeneralSettingsSliceNotifier generalStore;
 }
 
 Future<_SettingsSliceHandle> _pumpSettingsPage(
@@ -769,7 +768,7 @@ Future<_SettingsSliceHandle> _pumpSettingsPage(
   addTearDown(container.dispose);
   final settings = _SettingsSliceHandle(
     container: container,
-    generalStore: container.read(generalSettingsSliceStoreProvider),
+    generalStore: container.read(generalSettingsSliceProvider.notifier),
   );
   await settings.generalStore.initialLoad;
 

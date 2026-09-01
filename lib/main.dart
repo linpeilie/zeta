@@ -17,6 +17,7 @@ import 'package:zeta/src/app/window/zeta_window_host.dart';
 import 'package:zeta/src/app/workspace_slice/workspace_overrides.dart';
 import 'package:zeta/src/app/logging/app_logging.dart';
 import 'package:zeta/src/core/storage/zeta_data_paths.dart';
+import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_notifier.dart';
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
 import 'package:zeta/src/features/settings/data/system_font_catalog_service.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';

@@ -1,110 +1,55 @@
 import 'dart:async';
 
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
+
 import 'package:zeta/src/features/desktop_notifications/application/desktop_attention_slice_effect.dart';
-import 'package:zeta/src/features/desktop_notifications/application/desktop_attention_slice_store.dart';
+import 'package:zeta/src/features/desktop_notifications/application/desktop_attention_slice_notifier.dart';
 import 'package:zeta/src/features/desktop_notifications/application/desktop_attention_slice_state.dart';
 import 'package:zeta/src/features/desktop_notifications/data/desktop_notification_payload_codec.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_models.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_text_catalog.dart';
 import 'package:zeta/src/features/settings/application/agent_notification_settings_source.dart';
-import 'package:zeta_agent_core/zeta_agent_core.dart';
 
-/// target activator 在 MainApp 创建、IdeHome 首帧前绑定。
-final class DesktopAttentionTargetActivatorRelay {
-  DesktopAttentionTargetActivator? _activator;
-
-  void bind(DesktopAttentionTargetActivator activator) {
-    if (_activator != null && !identical(_activator, activator)) {
-      throw StateError('Desktop attention target activator is already bound');
-    }
-    _activator = activator;
-  }
-
-  void unbind(DesktopAttentionTargetActivator activator) {
-    if (identical(_activator, activator)) {
-      _activator = null;
-    }
-  }
-
-  Future<bool> call(String providerId, String threadId) async {
-    final activator = _activator;
-    return activator == null ? false : activator(providerId, threadId);
-  }
-}
-
-/// Desktop Attention 的 app 组合：store 是唯一 owner，runner 独占副作用端口。
-final class DesktopAttentionSliceComposition {
-  DesktopAttentionSliceComposition._({
-    required this.store,
-    required this._runner,
-  });
-
-  factory DesktopAttentionSliceComposition.create({
-    required DesktopNotificationService notificationService,
-    required DesktopAttentionIndicator indicator,
-    required AgentNotificationSettingsSource notificationSettingsSource,
-    required DesktopAttentionTargetActivator activateTarget,
-    required DesktopAttentionTextCatalog textCatalog,
-  }) {
-    late final DesktopAttentionSliceStore store;
-    final runner = _DesktopAttentionSliceRunner(
-      notificationService: notificationService,
-      indicator: indicator,
-      notificationSettingsSource: notificationSettingsSource,
-      activateTarget: activateTarget,
-      textCatalog: textCatalog,
-      store: () => store,
-    );
-    store = DesktopAttentionSliceStore(effectRunner: runner);
-    return DesktopAttentionSliceComposition._(store: store, runner: runner);
-  }
-
-  final DesktopAttentionSliceStore store;
-  final _DesktopAttentionSliceRunner _runner;
-
-  Future<void> initialize() => _runner.initialize();
-
-  void dispose() {
-    _runner.dispose();
-    store.close();
-  }
-}
-
-final class _DesktopAttentionSliceRunner
+/// Desktop Attention MVI 的 app 组合层 effect runner。
+///
+/// notifier 由 [DesktopAttentionSliceEffectRunnerFactory] 直接传进来，因此这里既
+/// 不需要延迟绑定的空壳转发器，也不需要反向读 provider（工程规范 §3.0）。
+final class DesktopAttentionSliceRunner
     implements DesktopAttentionSliceEffectRunner {
-  _DesktopAttentionSliceRunner({
+  DesktopAttentionSliceRunner(
+    this._notifier, {
     required this.notificationService,
     required this.indicator,
     required this.notificationSettingsSource,
     required this.activateTarget,
     required this.textCatalog,
-    required this._store,
   });
 
   static final _log = zetaLoggerFor('zeta.desktop_attention');
 
+  final DesktopAttentionSliceNotifier _notifier;
   final DesktopNotificationService notificationService;
   final DesktopAttentionIndicator indicator;
   final AgentNotificationSettingsSource notificationSettingsSource;
   final DesktopAttentionTargetActivator activateTarget;
   final DesktopAttentionTextCatalog textCatalog;
-  final DesktopAttentionSliceStore Function() _store;
 
   bool _initialized = false;
-  bool _disposed = false;
+  bool _closed = false;
   void Function()? _unsubscribeSettings;
 
+  @override
   Future<void> initialize() async {
-    if (_initialized || _disposed) {
+    if (_initialized || _closed) {
       return;
     }
     _initialized = true;
     final settings = await notificationSettingsSource.load();
     _unsubscribeSettings = notificationSettingsSource.addListener(() {
-      if (!_disposed) {
+      if (!_closed) {
         unawaited(
-          _store().settingsChanged(notificationSettingsSource.notifications),
+          _notifier.settingsChanged(notificationSettingsSource.notifications),
         );
       }
     });
@@ -113,7 +58,7 @@ final class _DesktopAttentionSliceRunner
     try {
       initialPayload = await notificationService.initialize(
         onActivate: (payload) {
-          unawaited(_store().handleActivation(payload));
+          unawaited(_notifier.handleActivation(payload));
         },
       );
     } catch (error, stackTrace) {
@@ -123,13 +68,13 @@ final class _DesktopAttentionSliceRunner
         stackTrace: stackTrace,
       );
     }
-    await _store().initialized(settings);
-    await _store().handleActivation(initialPayload);
+    await _notifier.initialized(settings);
+    await _notifier.handleActivation(initialPayload);
   }
 
   @override
   Future<void> run(DesktopAttentionSliceEffect effect) async {
-    if (_disposed) {
+    if (_closed) {
       return;
     }
     switch (effect) {
@@ -186,9 +131,9 @@ final class _DesktopAttentionSliceRunner
         payload.threadId,
       );
       if (activated) {
-        await _store().markThreadRead(payload.providerId, payload.threadId);
+        await _notifier.markThreadRead(payload.providerId, payload.threadId);
       } else if (payload.identity case final identity?) {
-        await _store().removeIdentity(identity);
+        await _notifier.removeIdentity(identity);
       }
     } catch (error, stackTrace) {
       _log.w(
@@ -255,11 +200,12 @@ final class _DesktopAttentionSliceRunner
     return textCatalog.sessionBody(projectName);
   }
 
-  void dispose() {
-    if (_disposed) {
+  @override
+  void close() {
+    if (_closed) {
       return;
     }
-    _disposed = true;
+    _closed = true;
     _unsubscribeSettings?.call();
     _unsubscribeSettings = null;
     notificationService.dispose();

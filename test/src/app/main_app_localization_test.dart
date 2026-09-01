@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
+import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_notifier.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_notifier.dart';
 import 'package:zeta/src/features/settings/data/general_settings_store.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings_repository.dart';
@@ -12,7 +13,6 @@ import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/settings/domain/system_font_family.dart';
-import 'package:zeta/src/features/settings/presentation/settings_slice/settings_slice_providers.dart';
 import 'package:zeta/src/ui/features/ide/views/ide_home.dart';
 import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
 
@@ -156,7 +156,7 @@ void main() {
     final first = tester.element(find.byType(IdeHome));
     final container = ProviderScope.containerOf(first, listen: false);
     container
-        .read(generalSettingsSliceStoreProvider)
+        .read(generalSettingsSliceProvider.notifier)
         .setAppLanguage(AppLanguage.english);
     await container
         .read(appearanceSettingsProvider.notifier)
@@ -229,7 +229,7 @@ void main() {
 
       final firstContext = tester.element(find.byType(IdeHome));
       ProviderScope.containerOf(firstContext, listen: false)
-          .read(generalSettingsSliceStoreProvider)
+          .read(generalSettingsSliceProvider.notifier)
           .setAppLanguage(AppLanguage.english);
       await tester.pump();
       expect(

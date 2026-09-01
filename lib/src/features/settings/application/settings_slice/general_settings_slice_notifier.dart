@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:meta/meta.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 
@@ -12,6 +13,15 @@ import 'package:zeta/src/features/settings/application/settings_slice/settings_s
 import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 
+/// 首次载入结算之前使用的语言兜底值。
+///
+/// 声明在切片自己这一层，由组合根按宿主环境覆盖（生产是 OS 语言）。默认值必须
+/// 安全：它决定了「设置还没读出来」那几帧用哪种语言渲染。
+final settingsFallbackLanguageProvider = Provider<AppLanguage>(
+  (ref) => AppLanguage.simplifiedChinese,
+  name: 'settingsFallbackLanguage',
+);
+
 /// 执行 general 切片副作用的端口。
 ///
 /// 实现住在组合层，持有 `GeneralSettingsStore`，并保证 [GeneralSettingsPersistEffect]
@@ -20,12 +30,42 @@ abstract interface class GeneralSettingsSliceEffectRunner {
   void run(GeneralSettingsSliceEffect effect);
 }
 
-/// runner 工厂：拿到 store 本身，因此 runner 能直接回流结果。
+/// runner 工厂：拿到 notifier 本身，因此 runner 能直接回流结果。
 ///
-/// 理由同 appearance 切片：把「store ↔ runner」的构造环变成一个普通构造参数，
-/// 而不是先造空壳再回填 delegate。
+/// 把「owner ↔ runner」的构造环变成一个普通构造参数，而不是先造空壳再回填
+/// delegate，也不是反向 `ref.read` notifier（那会被判成 `CircularDependencyError`，
+/// 工程规范 §3.0）。
 typedef GeneralSettingsSliceEffectRunnerFactory =
-    GeneralSettingsSliceEffectRunner Function(GeneralSettingsSliceStore store);
+    GeneralSettingsSliceEffectRunner Function(
+      GeneralSettingsSliceNotifier notifier,
+    );
+
+/// 组合根必须覆盖的 effect runner 工厂。
+///
+/// fail-closed：没被覆盖就抛错，而不是静默退化成一个不落盘的 runner——那会让
+/// 「设置没保存」变成一个没人发现的哑 failure。
+final generalSettingsSliceEffectRunnerFactoryProvider =
+    Provider<GeneralSettingsSliceEffectRunnerFactory>(
+      (ref) => throw StateError(
+        'generalSettingsSliceEffectRunnerFactoryProvider was read before the '
+        'composition root overrode it',
+      ),
+      name: 'generalSettingsSliceEffectRunnerFactory',
+    );
+
+/// 常规设置切片的唯一状态 owner。
+///
+/// **不是 autoDispose。** 设置的载入与落盘跟 app session 走，不能由「当前有没有
+/// Widget 在看设置页」决定（工程规范 §3.0）。
+///
+/// **不声明 `dependencies`。** 它只服务于「把某个 provider 局部 scope 掉」，而本
+/// 切片全局唯一、从不被 `ProviderScope` 覆盖；声明了反而会传染——每一个读它的
+/// provider（比如 Desktop Attention 的通知设置来源）都得跟着列一遍。
+final generalSettingsSliceProvider =
+    NotifierProvider<GeneralSettingsSliceNotifier, GeneralSettingsSliceState>(
+      GeneralSettingsSliceNotifier.new,
+      name: 'generalSettingsSlice',
+    );
 
 /// 切片诊断计数。
 @immutable
@@ -43,52 +83,71 @@ final class GeneralSettingsSliceDiagnostics {
   final int staleResultCount;
 }
 
-/// 常规设置切片的薄 store（persist-first）。
+/// 常规设置切片（persist-first）。
 ///
-/// 与 appearance store 同一套骨架：铸造 id、调 reducer、状态变化才发布、
-/// effect 交 runner、关闭后拒绝写入；不拥有持久化事实。
-final class GeneralSettingsSliceStore {
-  GeneralSettingsSliceStore({
-    required GeneralSettingsSliceState initialState,
-    required GeneralSettingsSliceEffectRunnerFactory effectRunnerFactory,
-    bool initiallyLoaded = true,
+/// 与 appearance 切片同一套骨架：铸造 id、调 reducer、状态变化才发布、effect 交
+/// runner、关闭后拒绝写入；不拥有持久化事实。
+final class GeneralSettingsSliceNotifier
+    extends Notifier<GeneralSettingsSliceState> {
+  GeneralSettingsSliceNotifier({
+    bool initiallyLoaded = false,
     OperationIdGenerator Function(String scope)? operationIdGeneratorFactory,
-  }) : _state = initialState,
-       _loaded = initiallyLoaded,
+  }) : _loaded = initiallyLoaded,
        _generatorFactory =
            operationIdGeneratorFactory ??
-           ((scope) => OperationIdGenerator(scope: scope)) {
-    effectRunner = effectRunnerFactory(this);
-  }
+           ((scope) => OperationIdGenerator(scope: scope));
 
-  late final GeneralSettingsSliceEffectRunner effectRunner;
   final OperationIdGenerator Function(String scope) _generatorFactory;
   final Map<String, OperationIdGenerator> _generators =
       <String, OperationIdGenerator>{};
-
-  /// 监听器列表（同 appearance store：不用 `ChangeNotifier`，§12.5）。
-  final List<void Function()> _listeners = <void Function()>[];
   final ListQueue<GeneralSettingsSliceIntent> _commandQueue =
       ListQueue<GeneralSettingsSliceIntent>();
 
   /// 首次载入结算的一次性信号。
   ///
-  /// 由 store 而不是 runner 持有：组合根要等的是「切片已经有可用的设置快照」这个
+  /// 由切片而不是 runner 持有：组合根要等的是「切片已经有可用的设置快照」这个
   /// 切片事实，不是某个 runner 实现的内部进度。runner 换实现不该动到等待方。
   final Completer<GeneralSettings> _initialLoadCompleter =
       Completer<GeneralSettings>();
 
-  GeneralSettingsSliceState _state;
+  late GeneralSettingsSliceEffectRunner _effectRunner;
+
+  /// 已提交的切片状态：这是唯一 owner，[state] 只是它的广播通道。
+  ///
+  /// 命令入口在同一个同步栈里既要归约又要排干队列（persist-first 的串行语义），
+  /// 中间态不该被广播；`build()` 里的自启动 load 也不能同步写 state。因此归约结果
+  /// 先落在这里，广播排到 microtask。
+  late GeneralSettingsSliceState _working;
+
   bool _loaded;
   bool _closed = false;
   bool _loadRequested = false;
   bool _drainingCommands = false;
+  bool _publishScheduled = false;
   int _dispatchCount = 0;
   int _publishCount = 0;
   int _effectCount = 0;
   int _staleResultCount = 0;
 
-  GeneralSettingsSliceState get state => _state;
+  @override
+  GeneralSettingsSliceState build() {
+    // 工厂由组合根一次性覆盖，容器存活期内不再变化。
+    _effectRunner = ref.watch(generalSettingsSliceEffectRunnerFactoryProvider)(
+      this,
+    );
+    _working = GeneralSettingsSliceState(
+      settings: GeneralSettings(
+        appLanguage: ref.watch(settingsFallbackLanguageProvider),
+      ),
+    );
+    ref.onDispose(_handleDispose);
+    // 切片自启动：显示语言这条链在等 [initialLoad]，没人再去外面 kick 一次。
+    load();
+    return _working;
+  }
+
+  @override
+  GeneralSettingsSliceState get state => _working;
 
   bool get isClosed => _closed;
 
@@ -106,40 +165,25 @@ final class GeneralSettingsSliceStore {
         staleResultCount: _staleResultCount,
       );
 
-  void Function() subscribe(void Function() listener) {
-    _listeners.add(listener);
-    return () => _listeners.remove(listener);
-  }
-
-  void close() {
-    if (_closed) {
-      return;
-    }
-    _closed = true;
-    _commandQueue.clear();
-    _listeners.clear();
-    _settleInitialLoad();
-  }
-
   void dispatch(GeneralSettingsSliceIntent intent) {
     if (_closed) {
       return;
     }
     _dispatchCount += 1;
-    final before = _state;
+    final before = _working;
     final transition = generalSettingsSliceReduce(before, intent);
 
     if (transition.state != before) {
-      _state = transition.state;
+      _working = transition.state;
       _publishCount += 1;
-      _notifyListeners();
+      _schedulePublish();
     } else if (_isStaleResult(before, intent)) {
       _staleResultCount += 1;
     }
 
     for (final effect in transition.effects) {
       _effectCount += 1;
-      effectRunner.run(effect);
+      _effectRunner.run(effect);
     }
   }
 
@@ -204,15 +248,8 @@ final class GeneralSettingsSliceStore {
     _drainCommands();
   }
 
-  /// 以当前快照结算 [initialLoad]；重复调用无效果。
-  void _settleInitialLoad() {
-    if (!_initialLoadCompleter.isCompleted) {
-      _initialLoadCompleter.complete(_state.settings);
-    }
-  }
-
   void persisted(OperationId operationId, GeneralSettings settings) {
-    final accepted = _state.pendingOperationId == operationId;
+    final accepted = _working.pendingOperationId == operationId;
     dispatch(GeneralSettingsPersisted(operationId, settings));
     if (accepted) {
       _drainCommands();
@@ -220,7 +257,7 @@ final class GeneralSettingsSliceStore {
   }
 
   void persistFailed(OperationId operationId, SettingsPersistFailureKind kind) {
-    final accepted = _state.pendingOperationId == operationId;
+    final accepted = _working.pendingOperationId == operationId;
     dispatch(GeneralSettingsPersistFailed(operationId, kind));
     if (accepted) {
       _drainCommands();
@@ -229,6 +266,13 @@ final class GeneralSettingsSliceStore {
 
   void acknowledgeFailure() {
     dispatch(const GeneralSettingsFailureAcknowledged());
+  }
+
+  /// 以当前快照结算 [initialLoad]；重复调用无效果。
+  void _settleInitialLoad() {
+    if (!_initialLoadCompleter.isCompleted) {
+      _initialLoadCompleter.complete(_working.settings);
+    }
   }
 
   OperationId _nextOperationId() {
@@ -259,12 +303,12 @@ final class GeneralSettingsSliceStore {
     if (_closed ||
         !_loaded ||
         _drainingCommands ||
-        _state.pendingOperationId != null) {
+        _working.pendingOperationId != null) {
       return;
     }
     _drainingCommands = true;
     try {
-      while (_commandQueue.isNotEmpty && _state.pendingOperationId == null) {
+      while (_commandQueue.isNotEmpty && _working.pendingOperationId == null) {
         dispatch(_commandQueue.removeFirst());
       }
     } finally {
@@ -286,10 +330,27 @@ final class GeneralSettingsSliceStore {
     };
   }
 
-  void _notifyListeners() {
-    final snapshot = List<void Function()>.of(_listeners);
-    for (final listener in snapshot) {
-      listener();
+  void _handleDispose() {
+    if (_closed) {
+      return;
     }
+    _closed = true;
+    _commandQueue.clear();
+    _settleInitialLoad();
+  }
+
+  /// 把已提交状态广播给 Riverpod，同一 microtask 内的多次提交合并成一次。
+  void _schedulePublish() {
+    if (_publishScheduled || _closed) {
+      return;
+    }
+    _publishScheduled = true;
+    scheduleMicrotask(() {
+      _publishScheduled = false;
+      if (_closed) {
+        return;
+      }
+      state = _working;
+    });
   }
 }

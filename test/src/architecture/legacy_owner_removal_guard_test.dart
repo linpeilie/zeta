@@ -76,7 +76,7 @@ void main() {
     },
   );
 
-  test('Composer application owners and Desktop Attention store stay pure', () {
+  test('Composer application owners and Desktop Attention slice stay pure', () {
     for (final path in const <String>[
       'lib/src/features/agent/application/'
           'agent_conversation_mode_controller.dart',
@@ -86,7 +86,7 @@ void main() {
       'lib/src/features/desktop_notifications/application/'
           'desktop_attention_slice_reducer.dart',
       'lib/src/features/desktop_notifications/application/'
-          'desktop_attention_slice_store.dart',
+          'desktop_attention_slice_notifier.dart',
     ]) {
       final source = File(path).readAsStringSync();
       expect(source, isNot(contains('package:flutter/')), reason: path);
@@ -95,12 +95,13 @@ void main() {
       expect(source, isNot(contains('ChangeNotifier')), reason: path);
     }
 
-    final attentionStore = File(
+    // 切片只描述「要做什么」；系统通知中心与任务栏指示器属于 app 层的 runner。
+    final attentionSlice = File(
       'lib/src/features/desktop_notifications/application/'
-      'desktop_attention_slice_store.dart',
+      'desktop_attention_slice_notifier.dart',
     ).readAsStringSync();
-    expect(attentionStore, isNot(contains('DesktopNotificationService')));
-    expect(attentionStore, isNot(contains('DesktopAttentionIndicator')));
+    expect(attentionSlice, isNot(contains('DesktopNotificationService')));
+    expect(attentionSlice, isNot(contains('DesktopAttentionIndicator')));
 
     final viewModel = File(
       'lib/src/features/agent/presentation/agent_conversation_view_model.dart',

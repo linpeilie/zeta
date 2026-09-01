@@ -9,7 +9,7 @@ import 'package:zeta/src/app/storage/zeta_store_providers.dart';
 import 'package:zeta/src/app/settings_slice/settings_slice_runners.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_notifier.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_effect.dart';
-import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_store.dart';
+import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_notifier.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_state.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/settings_slice_operation.dart';
 import 'package:zeta/src/features/settings/data/general_settings_store.dart';
@@ -82,27 +82,35 @@ final class _DelayedGeneralStore implements GeneralSettingsStore {
   }
 }
 
-GeneralSettingsSliceStore _generalStoreWith(GeneralSettingsStore dataStore) {
-  return GeneralSettingsSliceStore(
-    initialState: const GeneralSettingsSliceState(),
-    effectRunnerFactory: (sliceStore) => GeneralSettingsSliceRunnerAdapter(
-      store: dataStore,
-      sliceStore: sliceStore,
-    ),
-  );
+GeneralSettingsSliceNotifier _generalStoreWith(GeneralSettingsStore dataStore) {
+  return _generalSliceWith(dataStore, initiallyLoaded: true);
 }
 
-GeneralSettingsSliceStore _unloadedGeneralStoreWith(
+GeneralSettingsSliceNotifier _unloadedGeneralStoreWith(
   GeneralSettingsStore dataStore,
 ) {
-  return GeneralSettingsSliceStore(
-    initialState: const GeneralSettingsSliceState(),
-    effectRunnerFactory: (sliceStore) => GeneralSettingsSliceRunnerAdapter(
-      store: dataStore,
-      sliceStore: sliceStore,
-    ),
-    initiallyLoaded: false,
+  return _generalSliceWith(dataStore, initiallyLoaded: false);
+}
+
+/// 切片状态由容器拥有：这里建一个只装 runner 工厂的最小容器。
+GeneralSettingsSliceNotifier _generalSliceWith(
+  GeneralSettingsStore dataStore, {
+  required bool initiallyLoaded,
+}) {
+  final container = ProviderContainer(
+    overrides: <Override>[
+      generalSettingsSliceEffectRunnerFactoryProvider.overrideWithValue(
+        (slice) =>
+            GeneralSettingsSliceRunnerAdapter(store: dataStore, slice: slice),
+      ),
+      if (initiallyLoaded)
+        generalSettingsSliceProvider.overrideWith(
+          () => GeneralSettingsSliceNotifier(initiallyLoaded: true),
+        ),
+    ],
   );
+  addTearDown(container.dispose);
+  return container.read(generalSettingsSliceProvider.notifier);
 }
 
 void main() {
@@ -139,7 +147,9 @@ void main() {
         ZetaThemeModePreference.light,
         reason: '首帧必须使用启动阶段已读快照',
       );
-      final generalStore = container.read(generalSettingsSliceStoreProvider);
+      final generalStore = container.read(
+        generalSettingsSliceProvider.notifier,
+      );
 
       final general = await generalStore.initialLoad;
 
@@ -165,7 +175,9 @@ void main() {
           ...settingsSliceOverrides(),
         ],
       );
-      final generalStore = container.read(generalSettingsSliceStoreProvider);
+      final generalStore = container.read(
+        generalSettingsSliceProvider.notifier,
+      );
 
       container.dispose();
 
@@ -254,21 +266,24 @@ void main() {
 
   group('唯一 owner 与镜像 provider', () {
     test('外观 Notifier 与 general 切片投影都跟随', () async {
-      final generalSlice = GeneralSettingsSliceStore(
-        initialState: const GeneralSettingsSliceState(),
-        effectRunnerFactory: (_) => _NoopGeneralRunner(),
-      );
-
       final container = ProviderContainer(
         overrides: [
           appearanceSettingsRepositoryProvider.overrideWithValue(
             MemoryAppearanceSettingsStore(),
           ),
           appearanceFontCatalogProvider.overrideWithValue(_FakeFontCatalog()),
-          generalSettingsSliceStoreProvider.overrideWithValue(generalSlice),
+          generalSettingsSliceEffectRunnerFactoryProvider.overrideWithValue(
+            (_) => _NoopGeneralRunner(),
+          ),
+          generalSettingsSliceProvider.overrideWith(
+            () => GeneralSettingsSliceNotifier(initiallyLoaded: true),
+          ),
         ],
       );
       addTearDown(container.dispose);
+      final generalSlice = container.read(
+        generalSettingsSliceProvider.notifier,
+      );
 
       expect(
         container.read(appearanceSettingsValueProvider).themeMode,
@@ -285,6 +300,10 @@ void main() {
         generalOperation,
         generalSlice.state.pendingValue!,
       );
+
+      // 投影读的是已广播状态；切片把同一 microtask 内的多次提交合并成一次广播，
+      // 所以断言前先让那次广播落地。
+      await pumpEventQueue();
 
       expect(
         container.read(appearanceSettingsValueProvider).themeMode,

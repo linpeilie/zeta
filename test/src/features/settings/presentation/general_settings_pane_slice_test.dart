@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_effect.dart';
-import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_state.dart';
-import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_store.dart';
+import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_notifier.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/settings/presentation/settings_page.dart';
-import 'package:zeta/src/features/settings/presentation/settings_slice/settings_slice_providers.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 
 /// Phase 3 第 1 批步骤 4：general 面板改走切片。
@@ -16,17 +15,18 @@ import 'package:zeta_ui/zeta_ui.dart';
 /// 这里证明面板确实从唯一 slice owner 读取设置。
 void main() {
   testWidgets('general 面板从唯一 slice owner 读取设置', (tester) async {
-    final store = _store(
+    final container = _container(
       const GeneralSettings(sendMessageShortcut: MessageSendShortcut.enter),
     );
-    addTearDown(store.close);
-    await _pumpPane(tester, store: store);
+    final store = container.read(generalSettingsSliceProvider.notifier);
+    await _pumpPane(tester, container: container);
     expect(find.textContaining('按 Enter 发送消息'), findsOneWidget);
 
     // 直接推动唯一 owner。
     store.setMessageSendShortcut(MessageSendShortcut.primaryModifierEnter);
     store.persisted(store.state.pendingOperationId!, store.state.pendingValue!);
-    await tester.pump();
+    // 切片把同一 microtask 内的多次提交合并成一次广播，先让它落地再验帧。
+    await tester.pumpAndSettle();
 
     // 界面确实跟着切片走——这条才能区分"真的接上了"和"看起来接上了"。
     expect(find.textContaining('Enter 发送消息，按 Enter 换行'), findsOneWidget);
@@ -37,24 +37,34 @@ void main() {
   });
 }
 
-GeneralSettingsSliceStore _store(GeneralSettings initial) {
-  return GeneralSettingsSliceStore(
-    initialState: GeneralSettingsSliceState(settings: initial),
-    effectRunnerFactory: (_) => _NoopRunner(),
+/// 切片状态由容器拥有；初值经 runner 的 `loaded` 回流，与生产同一条路径。
+ProviderContainer _container(GeneralSettings initial) {
+  final container = ProviderContainer(
+    overrides: <Override>[
+      generalSettingsSliceEffectRunnerFactoryProvider.overrideWithValue(
+        (_) => _NoopRunner(),
+      ),
+      generalSettingsSliceProvider.overrideWith(
+        () => GeneralSettingsSliceNotifier(initiallyLoaded: true),
+      ),
+    ],
   );
+  addTearDown(container.dispose);
+  container.read(generalSettingsSliceProvider.notifier).loaded(initial);
+  return container;
 }
 
 Future<void> _pumpPane(
   WidgetTester tester, {
-  required GeneralSettingsSliceStore store,
+  required ProviderContainer container,
 }) async {
   final ideTheme = buildIdeThemeData(
     brightness: Brightness.light,
     codeFontFamily: 'CodeFont',
   );
   await tester.pumpWidget(
-    ProviderScope(
-      overrides: [generalSettingsSliceStoreProvider.overrideWithValue(store)],
+    UncontrolledProviderScope(
+      container: container,
       child: IdeThemeScope(
         themeMode: ThemeMode.light,
         lightTheme: ideTheme,

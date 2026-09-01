@@ -3,17 +3,19 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zeta/src/app/localization/zeta_localization.dart';
+import 'package:zeta/src/app/localization/zeta_text_catalog_providers.dart';
 import 'package:zeta/src/app/localization/zeta_text_catalogs.dart';
-import 'package:zeta/src/app/desktop_attention_slice/desktop_attention_slice_composition.dart';
-import 'package:zeta/src/app/settings_slice/settings_slice_notification_source.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
+import 'package:zeta/src/app/desktop_attention_slice/desktop_attention_providers.dart';
+import 'package:zeta/src/app/desktop_attention_slice/desktop_attention_slice_overrides.dart';
 import 'package:zeta/src/app/settings_slice/settings_slice_runners.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta/src/features/desktop_notifications/application/desktop_attention_slice_store.dart';
+import 'package:zeta/src/features/desktop_notifications/application/desktop_attention_slice_notifier.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_models.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_text_catalog.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/fallback_desktop_attention_text_catalog.dart';
-import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_state.dart';
-import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_store.dart';
+import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_notifier.dart';
 import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
 import '../../../testing/memory_feature_stores.dart';
 
@@ -24,7 +26,7 @@ void main() {
       final harness = await _createHarness();
       addTearDown(harness.dispose);
       final attention = _attention();
-      await harness.store.updateVisibility(
+      await harness.slice.updateVisibility(
         const DesktopAttentionVisibility(
           windowFocused: true,
           agentCanvasVisible: true,
@@ -33,16 +35,16 @@ void main() {
         ),
       );
 
-      await harness.store.handleAttention(attention);
+      await harness.slice.handleAttention(attention);
 
       expect(harness.notifications.shown, isEmpty);
-      expect(harness.store.unreadCount, 0);
+      expect(harness.slice.unreadCount, 0);
 
-      await harness.store.updateVisibility(
+      await harness.slice.updateVisibility(
         const DesktopAttentionVisibility(windowFocused: false),
       );
-      await harness.store.handleAttention(attention);
-      await harness.store.handleAttention(attention);
+      await harness.slice.handleAttention(attention);
+      await harness.slice.handleAttention(attention);
 
       expect(harness.notifications.shown, hasLength(1));
       expect(harness.notifications.shown.single.title, '任务已完成');
@@ -51,7 +53,7 @@ void main() {
         harness.notifications.shown.single.body,
         isNot(contains('secret')),
       );
-      expect(harness.store.unreadCount, 1);
+      expect(harness.slice.unreadCount, 1);
       expect(harness.indicator.counts.last, 1);
       expect(harness.indicator.attentionRequests, 1);
     },
@@ -60,15 +62,15 @@ void main() {
   test('resolved signal cancels the notification and clears unread', () async {
     final harness = await _createHarness();
     addTearDown(harness.dispose);
-    await harness.store.handleAttention(_attention());
+    await harness.slice.handleAttention(_attention());
     final shownId = harness.notifications.shown.single.id;
 
-    await harness.store.handleAttention(
+    await harness.slice.handleAttention(
       _attention(phase: AgentAttentionPhase.resolved),
     );
 
     expect(harness.notifications.cancelledIds, <int>[shownId]);
-    expect(harness.store.unreadCount, 0);
+    expect(harness.slice.unreadCount, 0);
     expect(harness.indicator.counts.last, 0);
   });
 
@@ -81,14 +83,14 @@ void main() {
       },
     );
     addTearDown(harness.dispose);
-    await harness.store.handleAttention(
+    await harness.slice.handleAttention(
       _attention(kind: AgentAttentionKind.permissionRequired),
     );
 
     await harness.notifications.activateLast();
 
     expect(activations, <(String, String)>[('codex', 'thread-1')]);
-    expect(harness.store.unreadCount, 0);
+    expect(harness.slice.unreadCount, 0);
     expect(harness.notifications.cancelledIds, hasLength(1));
   });
 
@@ -115,17 +117,17 @@ void main() {
   test('category switches clear and suppress matching notifications', () async {
     final harness = await _createHarness();
     addTearDown(harness.dispose);
-    await harness.store.handleAttention(_attention());
-    expect(harness.store.unreadCount, 1);
+    await harness.slice.handleAttention(_attention());
+    expect(harness.slice.unreadCount, 1);
 
     harness.settings.setTurnTerminalNotificationsEnabled(false);
     await pumpEventQueue();
 
-    expect(harness.store.unreadCount, 0);
-    await harness.store.handleAttention(_attention(sourceId: 'turn-2'));
+    expect(harness.slice.unreadCount, 0);
+    await harness.slice.handleAttention(_attention(sourceId: 'turn-2'));
     expect(harness.notifications.shown, hasLength(1));
 
-    await harness.store.handleAttention(
+    await harness.slice.handleAttention(
       _attention(
         kind: AgentAttentionKind.questionRequired,
         sourceId: 'question-1',
@@ -173,8 +175,8 @@ void main() {
         addTearDown(zhHarness.dispose);
         addTearDown(enHarness.dispose);
 
-        await zhHarness.store.handleAttention(_attention(kind: kind));
-        await enHarness.store.handleAttention(_attention(kind: kind));
+        await zhHarness.slice.handleAttention(_attention(kind: kind));
+        await enHarness.slice.handleAttention(_attention(kind: kind));
 
         final zhRequest = zhHarness.notifications.shown.single;
         final enRequest = enHarness.notifications.shown.single;
@@ -205,7 +207,7 @@ void main() {
     );
     addTearDown(enHarness.dispose);
 
-    await enHarness.store.handleAttention(_attention(projectPath: ''));
+    await enHarness.slice.handleAttention(_attention(projectPath: ''));
 
     expect(
       enHarness.notifications.shown.single.body,
@@ -225,28 +227,33 @@ Future<_Harness> _createHarness({
   );
   final indicator = _FakeAttentionIndicator();
   // 与组合根同款装配：切片 store 用工厂注入 runner，data store 换成内存实现。
-  final settingsStore = GeneralSettingsSliceStore(
-    initialState: const GeneralSettingsSliceState(),
-    effectRunnerFactory: (sliceStore) => GeneralSettingsSliceRunnerAdapter(
-      store: MemoryGeneralSettingsStore(),
-      sliceStore: sliceStore,
-    ),
-    initiallyLoaded: false,
+  final relay = DesktopAttentionTargetActivatorRelay()
+    ..bind(activateTarget ?? (_, _) async => true);
+  // 和组合根同一条装配路径：`desktopAttentionSliceOverrides()` 只装 runner 工厂，
+  // 端口全部经各自的 provider 换成 fake——这正是生产代码里能换的那几个点。
+  final container = ProviderContainer(
+    overrides: <Override>[
+      desktopNotificationServiceProvider.overrideWithValue(notifications),
+      desktopAttentionIndicatorProvider.overrideWithValue(indicator),
+      desktopAttentionTextCatalogProvider.overrideWithValue(textCatalog),
+      desktopAttentionTargetActivatorRelayProvider.overrideWithValue(relay),
+      // general 切片走真实装配，只把 data store 换成内存实现。
+      generalSettingsSliceEffectRunnerFactoryProvider.overrideWithValue(
+        (slice) => GeneralSettingsSliceRunnerAdapter(
+          store: MemoryGeneralSettingsStore(),
+          slice: slice,
+        ),
+      ),
+      ...desktopAttentionSliceOverrides(),
+    ],
   );
-  settingsStore.load();
+  final settingsStore = container.read(generalSettingsSliceProvider.notifier);
   await settingsStore.initialLoad;
-  final composition = DesktopAttentionSliceComposition.create(
-    notificationService: notifications,
-    indicator: indicator,
-    notificationSettingsSource: GeneralSettingsSliceNotificationSource(
-      sliceStore: settingsStore,
-    ),
-    activateTarget: activateTarget ?? (_, _) async => true,
-    textCatalog: textCatalog,
-  );
-  await composition.initialize();
+  final slice = container.read(desktopAttentionSliceProvider.notifier);
+  await slice.initialize();
   return _Harness(
-    composition: composition,
+    container: container,
+    slice: slice,
     notifications: notifications,
     indicator: indicator,
     settings: settingsStore,
@@ -275,21 +282,22 @@ AgentWorkspaceAttention _attention({
 
 final class _Harness {
   const _Harness({
-    required this.composition,
+    required this.container,
+    required this.slice,
     required this.notifications,
     required this.indicator,
     required this.settings,
   });
 
-  final DesktopAttentionSliceComposition composition;
-  DesktopAttentionSliceStore get store => composition.store;
+  final ProviderContainer container;
+  final DesktopAttentionSliceNotifier slice;
   final _FakeNotificationService notifications;
   final _FakeAttentionIndicator indicator;
-  final GeneralSettingsSliceStore settings;
+  final GeneralSettingsSliceNotifier settings;
 
   void dispose() {
-    composition.dispose();
-    settings.close();
+    // runner 与两个切片都由容器拥有，随容器一起关；不再手工串 dispose。
+    container.dispose();
   }
 }
 

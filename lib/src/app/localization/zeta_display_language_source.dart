@@ -1,8 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 
+import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_notifier.dart';
 import 'package:zeta/src/features/settings/domain/app_language.dart';
-import 'package:zeta/src/features/settings/presentation/settings_slice/settings_slice_providers.dart';
 
 /// 显示语言从哪里来。
 ///
@@ -72,7 +72,8 @@ Override waitForGeneralSettingsDisplayLanguage() =>
 
 GeneralSettingsDisplayLanguageSource _generalSettingsSource(Ref ref) {
   return GeneralSettingsDisplayLanguageSource(
-    () async => (await ref.read(generalSettingsSliceStoreProvider).initialLoad)
-        .appLanguage,
+    () async =>
+        (await ref.read(generalSettingsSliceProvider.notifier).initialLoad)
+            .appLanguage,
   );
 }

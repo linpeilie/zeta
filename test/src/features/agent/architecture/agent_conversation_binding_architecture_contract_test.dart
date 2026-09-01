@@ -23,19 +23,29 @@ void main() {
     test(
       'app shell reads BundleFactory provider and does not wrap old Factory',
       () {
-        final appSource = File('lib/src/app/app.dart').readAsStringSync();
+        // 装配点是 `IdeHome`：它从容器读 bundle 工厂再交给 Shell，`app.dart`
+        // 不再经手（依赖不从构造函数下钻）。
+        final homeSource = File(
+          'lib/src/ui/features/ide/views/ide_home.dart',
+        ).readAsStringSync();
         expect(
-          appSource,
-          contains('container.read(agentProviderBundleFactoryProvider)'),
+          homeSource,
+          contains('ref.read(agentProviderBundleFactoryProvider)'),
+        );
+        expect(
+          File(
+            'lib/src/app/shell/ide_shell_controller.dart',
+          ).readAsStringSync(),
+          contains('AgentProviderBundleFactory'),
         );
 
         const files = <String>[
+          'lib/src/app/app.dart',
           'lib/src/app/shell/ide_shell_controller.dart',
           'lib/src/ui/features/ide/views/ide_home.dart',
         ];
         for (final path in files) {
           final source = File(path).readAsStringSync();
-          expect(source, contains('AgentProviderBundleFactory'));
           expect(source, isNot(contains('asAgentProviderBundleFactory')));
           expect(
             source,

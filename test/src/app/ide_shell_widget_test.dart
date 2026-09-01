@@ -24,6 +24,7 @@ import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
 import 'package:zeta/src/features/project_threads/presentation/project_threads_slice/project_threads_slice_providers.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
+import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_notifier.dart';
 import 'package:zeta/src/features/settings/presentation/settings_slice/settings_slice_providers.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
@@ -1712,7 +1713,7 @@ void main() {
     await tester.pump();
     await tester.pump();
     final container = ProviderScope.containerOf(retained.agentPaneElement);
-    final sliceStore = container.read(generalSettingsSliceStoreProvider);
+    final sliceStore = container.read(generalSettingsSliceProvider.notifier);
     expect(
       sliceStore.state.settings.sendMessageShortcut,
       MessageSendShortcut.primaryModifierEnter,

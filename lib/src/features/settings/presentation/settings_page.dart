@@ -8,6 +8,7 @@ import 'package:zeta/src/features/settings/application/appearance_font_option.da
 import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/presentation/appearance_theme_mode_mapper.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
+import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_notifier.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_store.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_management_page.dart';
@@ -233,7 +234,7 @@ class _GeneralSettingsPaneState extends ConsumerState<_GeneralSettingsPane> {
 
   @override
   Widget build(BuildContext context) {
-    final store = ref.watch(generalSettingsSliceStoreProvider);
+    final slice = ref.watch(generalSettingsSliceProvider.notifier);
     // 语言保存失败的 toast：只认 language 这一类失败，其余失败保持静默
     // （快捷键/通知开关失败保持静默）。
     ref.listen(
@@ -244,7 +245,7 @@ class _GeneralSettingsPaneState extends ConsumerState<_GeneralSettingsPane> {
           return;
         }
         _showLanguageSaveFailedToast();
-        store.acknowledgeFailure();
+        slice.acknowledgeFailure();
       },
     );
 
@@ -255,13 +256,13 @@ class _GeneralSettingsPaneState extends ConsumerState<_GeneralSettingsPane> {
         context: context,
         settings: settings,
         ops: (
-          setAppLanguage: store.setAppLanguage,
-          setMessageSendShortcut: store.setMessageSendShortcut,
-          setNotificationsEnabled: store.setNotificationsEnabled,
+          setAppLanguage: slice.setAppLanguage,
+          setMessageSendShortcut: slice.setMessageSendShortcut,
+          setNotificationsEnabled: slice.setNotificationsEnabled,
           setTurnTerminalNotificationsEnabled:
-              store.setTurnTerminalNotificationsEnabled,
+              slice.setTurnTerminalNotificationsEnabled,
           setActionRequiredNotificationsEnabled:
-              store.setActionRequiredNotificationsEnabled,
+              slice.setActionRequiredNotificationsEnabled,
         ),
       ),
     );

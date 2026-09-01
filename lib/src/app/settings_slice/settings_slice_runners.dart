@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:zeta_foundation/zeta_foundation.dart';
 
 import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_effect.dart';
-import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_store.dart';
+import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_notifier.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/settings_slice_operation.dart';
 import 'package:zeta/src/features/settings/data/general_settings_store.dart';
 
@@ -17,11 +17,11 @@ final class GeneralSettingsSliceRunnerAdapter
     implements GeneralSettingsSliceEffectRunner {
   GeneralSettingsSliceRunnerAdapter({
     required this._store,
-    required this._sliceStore,
+    required this._slice,
   });
 
   final GeneralSettingsStore _store;
-  final GeneralSettingsSliceStore _sliceStore;
+  final GeneralSettingsSliceNotifier _slice;
 
   Future<void> _queue = Future<void>.value();
   Future<void> _initialLoad = Future<void>.value();
@@ -52,7 +52,7 @@ final class GeneralSettingsSliceRunnerAdapter
     try {
       final settings = await _store.load();
       _initialLoadSettled = true;
-      _sliceStore.loaded(settings);
+      _slice.loaded(settings);
     } catch (error, stackTrace) {
       _log.w(
         'Could not load general settings via slice',
@@ -60,21 +60,21 @@ final class GeneralSettingsSliceRunnerAdapter
         stackTrace: stackTrace,
       );
       _initialLoadSettled = true;
-      _sliceStore.loadFailed();
+      _slice.loadFailed();
     }
   }
 
   Future<void> _persist(GeneralSettingsPersistEffect effect) async {
     try {
       await _store.save(effect.value);
-      _sliceStore.persisted(effect.operationId, effect.value);
+      _slice.persisted(effect.operationId, effect.value);
     } catch (error, stackTrace) {
       _log.w(
         'Could not persist general settings via slice',
         error: error,
         stackTrace: stackTrace,
       );
-      _sliceStore.persistFailed(
+      _slice.persistFailed(
         effect.operationId,
         SettingsPersistFailureKind.persistence,
       );

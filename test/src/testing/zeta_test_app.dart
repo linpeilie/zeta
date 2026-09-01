@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_notifier.dart';
 import 'package:zeta/src/app/app.dart';
 import 'package:zeta/src/app/composition/zeta_app_composition.dart';
 import 'package:zeta/src/app/composition/zeta_environment_providers.dart';

@@ -24,3 +24,37 @@ final desktopAttentionIndicatorProvider = Provider<DesktopAttentionIndicator>(
   (ref) => MethodChannelDesktopAttentionIndicator(),
   name: 'desktopAttentionIndicator',
 );
+
+/// 「点开通知就跳到那个会话」的落点。
+///
+/// 真正能激活会话的只有已挂载的 `IdeHome`，而 effect runner 在它之前就要建出来
+/// ——这是一条**运行期才补齐**的边，用 relay 显式表达：未绑定时激活返回 false，
+/// 切片据此把这条未读丢掉，而不是当成已读。
+final desktopAttentionTargetActivatorRelayProvider =
+    Provider<DesktopAttentionTargetActivatorRelay>(
+      (ref) => DesktopAttentionTargetActivatorRelay(),
+      name: 'desktopAttentionTargetActivatorRelay',
+    );
+
+/// target activator 在 `IdeHome.initState` 绑定、`dispose` 解绑。
+final class DesktopAttentionTargetActivatorRelay {
+  DesktopAttentionTargetActivator? _activator;
+
+  void bind(DesktopAttentionTargetActivator activator) {
+    if (_activator != null && !identical(_activator, activator)) {
+      throw StateError('Desktop attention target activator is already bound');
+    }
+    _activator = activator;
+  }
+
+  void unbind(DesktopAttentionTargetActivator activator) {
+    if (identical(_activator, activator)) {
+      _activator = null;
+    }
+  }
+
+  Future<bool> call(String providerId, String threadId) async {
+    final activator = _activator;
+    return activator == null ? false : activator(providerId, threadId);
+  }
+}

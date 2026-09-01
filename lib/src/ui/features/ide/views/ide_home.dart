@@ -16,7 +16,7 @@ import 'package:zeta/src/features/agent/application/agent_model_catalog_reposito
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_runner.dart';
 import 'package:zeta/src/app/app_constants.dart';
 import 'package:zeta/src/app/composition/zeta_state_snapshot.dart';
-import 'package:zeta/src/app/desktop_attention_slice/desktop_attention_slice_composition.dart';
+import 'package:zeta/src/app/desktop_attention_slice/desktop_attention_providers.dart';
 import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_workspace_providers.dart';
 import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_workspace_store.dart';
 import 'package:zeta/src/app/menu_action_bridge.dart';
@@ -29,7 +29,7 @@ import 'package:zeta/src/features/agent/application/conversation_slice/agent_con
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
 import 'package:zeta/src/features/agent/presentation/provider_settings_slice/agent_provider_settings_slice_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta/src/features/desktop_notifications/application/desktop_attention_slice_store.dart';
+import 'package:zeta/src/features/desktop_notifications/application/desktop_attention_slice_notifier.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_models.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_operations.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
@@ -75,8 +75,6 @@ class IdeHome extends ConsumerStatefulWidget {
     required this.shellStateSnapshotRelay,
     required this.activeModelCatalogLoader,
     required this.usageStatisticsSliceComposition,
-    required this.desktopAttentionSliceComposition,
-    required this.desktopAttentionTargetActivatorRelay,
     required this.workbenchCompositionFactory,
     this.providerMetricLabel = ZetaMetricLabel.hashed,
     super.key,
@@ -85,9 +83,6 @@ class IdeHome extends ConsumerStatefulWidget {
   final ZetaShellStateSnapshotRelay shellStateSnapshotRelay;
   final Future<AgentModelCatalogLoadResult> Function() activeModelCatalogLoader;
   final UsageStatisticsSliceComposition usageStatisticsSliceComposition;
-  final DesktopAttentionSliceComposition desktopAttentionSliceComposition;
-  final DesktopAttentionTargetActivatorRelay
-  desktopAttentionTargetActivatorRelay;
 
   /// app 组合层预绑的工作台组合工厂；UI 不再看到任何 Repository。
   final IdeWorkbenchCompositionFactory workbenchCompositionFactory;
@@ -142,7 +137,13 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
   late final UsageStatisticsOperations _usageStatisticsController;
   late final AgentUsagePanelOperations _agentUsagePanelController;
   late final AgentUsageRefreshCoordinator _agentUsageRefreshCoordinator;
-  late final DesktopAttentionSliceStore _desktopAttentionStore;
+  late final DesktopAttentionSliceNotifier _desktopAttention = ref.read(
+    desktopAttentionSliceProvider.notifier,
+  );
+  late final DesktopAttentionTargetActivatorRelay
+  _desktopAttentionTargetActivatorRelay = ref.read(
+    desktopAttentionTargetActivatorRelayProvider,
+  );
   late final DesktopAttentionTargetActivator _desktopAttentionTargetActivator;
   late final ZetaShellStateSnapshotReader _shellStateSnapshotReader;
   bool _nativeMenuConfigured = false;
@@ -183,9 +184,8 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
   @override
   void initState() {
     super.initState();
-    _desktopAttentionStore = widget.desktopAttentionSliceComposition.store;
     _desktopAttentionTargetActivator = _activateAttentionTarget;
-    widget.desktopAttentionTargetActivatorRelay.bind(
+    _desktopAttentionTargetActivatorRelay.bind(
       _desktopAttentionTargetActivator,
     );
     _usageStatisticsController =
@@ -211,7 +211,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
       ),
       onAgentTurnTerminal: _handleAgentTurnTerminal,
       onAgentAttention: (attention) {
-        unawaited(_desktopAttentionStore.handleAttention(attention));
+        unawaited(_desktopAttention.handleAttention(attention));
       },
       onAgentUsageProviderRestored:
           _agentUsagePanelController.restorePreferredProviderId,
@@ -243,7 +243,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
     );
     _unsubscribeProviderSettings = _shellController.agentProviderController
         .subscribe(_handleAgentProviderSettingsUsageChanged);
-    unawaited(widget.desktopAttentionSliceComposition.initialize());
+    unawaited(_desktopAttention.initialize());
     _workbenchComposition = widget.workbenchCompositionFactory(
       subscribeRuntime: _shellController.subscribeRuntimeChanges,
       runtimeSnapshotProvider: _managementRuntimeSnapshot,
@@ -353,7 +353,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
       _shellController.agentConversationWorkspaceStore,
     );
     _shellController.dispose();
-    widget.desktopAttentionTargetActivatorRelay.unbind(
+    _desktopAttentionTargetActivatorRelay.unbind(
       _desktopAttentionTargetActivator,
     );
     _leftSidebarFocusNode.dispose();
@@ -1104,7 +1104,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
     final entry =
         _shellController.agentConversationWorkspaceStore.selectedEntry;
     unawaited(
-      _desktopAttentionStore.updateVisibility(
+      _desktopAttention.updateVisibility(
         DesktopAttentionVisibility(
           windowFocused: ref.read(zetaWindowSurfaceProvider).focused,
           agentCanvasVisible:

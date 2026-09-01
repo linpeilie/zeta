@@ -12,9 +12,9 @@ import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
 import 'package:zeta/src/features/agent/data/agent_turn_context_store.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_notifier.dart';
+import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_notifier.dart';
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
 import 'package:zeta/src/features/settings/data/general_settings_store.dart';
-import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings_repository.dart';
 import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partition_store.dart';
 
@@ -39,11 +39,6 @@ import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partiti
 /// 常规设置文件缺失或损坏时使用的语言。
 ///
 /// 有安全默认值，因此不 fail-closed；组合根按 `MainApp.fallbackLanguage` 覆盖。
-final settingsFallbackLanguageProvider = Provider<AppLanguage>(
-  (ref) => AppLanguage.simplifiedChinese,
-  name: 'settingsFallbackLanguage',
-);
-
 /// Provider 配置的编解码器。
 ///
 /// definitions 来自插件目录，而插件目录要等显示语言冻结才能建。这条依赖链是

@@ -1,8 +1,10 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_effect.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_state.dart';
-import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_store.dart';
+import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_notifier.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/settings_slice_operation.dart';
 import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
@@ -20,10 +22,7 @@ void main() {
   group('general store', () {
     test('persist-first：提交不改变已应用值，回执才应用', () {
       final runner = _RecordingGeneralRunner();
-      final store = GeneralSettingsSliceStore(
-        initialState: const GeneralSettingsSliceState(),
-        effectRunnerFactory: (_) => runner,
-      );
+      final store = _slice(runner);
 
       final id = store.setAppLanguage(AppLanguage.english);
       expect(store.state.settings.appLanguage, AppLanguage.simplifiedChinese);
@@ -39,10 +38,7 @@ void main() {
 
     test('迟到 persist 回执丢弃并计数', () {
       final runner = _RecordingGeneralRunner();
-      final store = GeneralSettingsSliceStore(
-        initialState: const GeneralSettingsSliceState(),
-        effectRunnerFactory: (_) => runner,
-      );
+      final store = _slice(runner);
 
       final first = store.setAppLanguage(AppLanguage.english);
       final queued = store.setMessageSendShortcut(
@@ -58,11 +54,7 @@ void main() {
 
     test('首次 load 结算前命令排队，并从持久化快照计算', () {
       final runner = _RecordingGeneralRunner();
-      final store = GeneralSettingsSliceStore(
-        initialState: const GeneralSettingsSliceState(),
-        effectRunnerFactory: (_) => runner,
-        initiallyLoaded: false,
-      );
+      final store = _slice(runner, initiallyLoaded: false);
 
       store.load();
       final language = store.setAppLanguage(AppLanguage.english);
@@ -95,10 +87,7 @@ void main() {
 
     test('前一次失败后，后一次成功不夹带失败修改', () {
       final runner = _RecordingGeneralRunner();
-      final store = GeneralSettingsSliceStore(
-        initialState: const GeneralSettingsSliceState(),
-        effectRunnerFactory: (_) => runner,
-      );
+      final store = _slice(runner);
 
       final language = store.setAppLanguage(AppLanguage.english);
       final shortcut = store.setMessageSendShortcut(
@@ -141,10 +130,7 @@ void main() {
 
     test('OperationId 作用域是常量、序号单调', () {
       final runner = _RecordingGeneralRunner();
-      final store = GeneralSettingsSliceStore(
-        initialState: const GeneralSettingsSliceState(),
-        effectRunnerFactory: (_) => runner,
-      );
+      final store = _slice(runner);
 
       final first = store.setAppLanguage(AppLanguage.english);
       final second = store.setAppLanguage(AppLanguage.english);
@@ -153,4 +139,27 @@ void main() {
       expect(second.sequence, greaterThan(first.sequence));
     });
   });
+}
+
+/// 建一个只挂录制 runner 的切片。
+///
+/// 切片状态由容器拥有，因此这里建容器而不是 `new` 一个 store；命令入口读到的
+/// `state` 仍是同步提交值，断言写法一行不用改。
+GeneralSettingsSliceNotifier _slice(
+  GeneralSettingsSliceEffectRunner runner, {
+  bool initiallyLoaded = true,
+}) {
+  final container = ProviderContainer(
+    overrides: <Override>[
+      generalSettingsSliceEffectRunnerFactoryProvider.overrideWithValue(
+        (_) => runner,
+      ),
+      if (initiallyLoaded)
+        generalSettingsSliceProvider.overrideWith(
+          () => GeneralSettingsSliceNotifier(initiallyLoaded: true),
+        ),
+    ],
+  );
+  addTearDown(container.dispose);
+  return container.read(generalSettingsSliceProvider.notifier);
 }

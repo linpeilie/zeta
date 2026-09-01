@@ -12,8 +12,7 @@ import 'package:zeta/src/app/composition/agent_resource_shutdown.dart';
 import 'package:zeta/src/app/composition/ide_workbench_composition.dart';
 import 'package:zeta/src/app/composition/zeta_state_snapshot.dart';
 import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_workspace_providers.dart';
-import 'package:zeta/src/app/desktop_attention_slice/desktop_attention_providers.dart';
-import 'package:zeta/src/app/desktop_attention_slice/desktop_attention_slice_composition.dart';
+import 'package:zeta/src/app/desktop_attention_slice/desktop_attention_slice_overrides.dart';
 import 'package:zeta/src/app/ide_session_slice/ide_session_slice_overrides.dart';
 import 'package:zeta/src/app/localization/zeta_display_language_source.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
@@ -22,7 +21,6 @@ import 'package:zeta/src/app/localization/zeta_text_catalogs.dart';
 import 'package:zeta/src/app/observability/zeta_observability.dart';
 import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
 import 'package:zeta/src/app/provider_settings_slice/provider_settings_slice_composition.dart';
-import 'package:zeta/src/app/settings_slice/settings_slice_notification_source.dart';
 import 'package:zeta/src/app/settings_slice/settings_slice_overrides.dart';
 import 'package:zeta/src/app/storage/zeta_store_providers.dart';
 import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_providers.dart';
@@ -34,11 +32,11 @@ import 'package:zeta/src/features/agent/application/conversation_slice/agent_con
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
 import 'package:zeta/src/features/agent/presentation/provider_settings_slice/agent_model_catalog_projection_providers.dart';
 import 'package:zeta/src/features/agent/presentation/provider_settings_slice/agent_provider_settings_slice_providers.dart';
-import 'package:zeta/src/features/desktop_notifications/presentation/desktop_attention_slice_providers.dart';
+import 'package:zeta/src/features/desktop_notifications/application/desktop_attention_slice_notifier.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_session_slice_notifier.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_notifier.dart';
+import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_notifier.dart';
 import 'package:zeta/src/features/settings/domain/app_language.dart';
-import 'package:zeta/src/features/settings/presentation/settings_slice/settings_slice_providers.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_slice/usage_statistics_slice_providers.dart';
 import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
 
@@ -108,10 +106,6 @@ final class ZetaAppComposition implements ZetaShutdownHook {
   /// 本地化与 Provider 插件目录就绪后创建的唯一 Provider settings 组合。
   ProviderSettingsSliceComposition? _providerSettingsSliceComposition;
   UsageStatisticsSliceComposition? _usageStatisticsSliceComposition;
-  DesktopAttentionSliceComposition? _desktopAttentionSliceComposition;
-
-  final DesktopAttentionTargetActivatorRelay
-  desktopAttentionTargetActivatorRelay = DesktopAttentionTargetActivatorRelay();
 
   /// 在 `IdeHome.initState` 同步接入 Workspace，保证首个会话 build 只有新路径。
   final AgentConversationSliceStoreRegistry conversationSliceStoreRegistry =
@@ -151,10 +145,6 @@ final class ZetaAppComposition implements ZetaShutdownHook {
       _usageStatisticsSliceComposition ??
       (throw StateError('Usage Statistics composition is not ready'));
 
-  DesktopAttentionSliceComposition get desktopAttentionComposition =>
-      _desktopAttentionSliceComposition ??
-      (throw StateError('Desktop Attention composition is not ready'));
-
   ProviderSettingsSliceComposition get providerSettingsComposition =>
       _providerSettingsSliceComposition ??
       (throw StateError('Provider Settings composition is not ready'));
@@ -168,10 +158,10 @@ final class ZetaAppComposition implements ZetaShutdownHook {
       usageStatistics: usageComposition.usageStatisticsStore.state,
       agentUsagePanel: usageComposition.agentUsagePanelStore.state,
       desktopAttention: ZetaDesktopAttentionStateSnapshot.fromState(
-        desktopAttentionComposition.store.state,
+        container.read(desktopAttentionSliceProvider),
       ),
       appearanceSettings: container.read(appearanceSettingsProvider),
-      generalSettings: container.read(generalSettingsSliceStoreProvider).state,
+      generalSettings: container.read(generalSettingsSliceProvider),
       providerSettings: providerSettingsComposition.store.state,
     );
   }
@@ -229,13 +219,12 @@ final class ZetaAppComposition implements ZetaShutdownHook {
     _windowHost.removeShutdownHook(this);
     _usageStatisticsSliceComposition?.dispose();
     _usageStatisticsSliceComposition = null;
-    _desktopAttentionSliceComposition?.dispose();
-    _desktopAttentionSliceComposition = null;
     _providerSettingsSliceComposition?.dispose();
     _providerSettingsSliceComposition = null;
     // 关闭动作在容器销毁前同步取出，await 发生在容器已经关掉之后也不受影响。
     unawaited(shutdownOwnedAgentResources());
-    // 两个 settings 切片 store 由 provider 拥有，`ref.onDispose` 随容器一起关。
+    // 两个 settings 切片 store 与 Desktop Attention 切片由 provider 拥有，
+    // `ref.onDispose` 随容器一起关。
     container.dispose();
   }
 
@@ -243,7 +232,7 @@ final class ZetaAppComposition implements ZetaShutdownHook {
     final displayLanguage = container.read(zetaDisplayLanguageSourceProvider);
     // 无论显示语言等不等它，常规设置都要在启动时就开始读。
     final loadGeneralSettings = container
-        .read(generalSettingsSliceStoreProvider)
+        .read(generalSettingsSliceProvider.notifier)
         .initialLoad;
     final eagerLanguage = displayLanguage.eagerLanguage;
     if (eagerLanguage != null) {
@@ -307,18 +296,6 @@ final class ZetaAppComposition implements ZetaShutdownHook {
       ),
       textCatalog: container.read(usageStatisticsTextCatalogProvider),
     );
-    _desktopAttentionSliceComposition ??=
-        DesktopAttentionSliceComposition.create(
-          notificationService: container.read(
-            desktopNotificationServiceProvider,
-          ),
-          indicator: container.read(desktopAttentionIndicatorProvider),
-          notificationSettingsSource: GeneralSettingsSliceNotificationSource(
-            sliceStore: container.read(generalSettingsSliceStoreProvider),
-          ),
-          activateTarget: desktopAttentionTargetActivatorRelay.call,
-          textCatalog: container.read(desktopAttentionTextCatalogProvider),
-        );
     _localeRuntimeReady = true;
   }
 
@@ -350,6 +327,7 @@ final class ZetaAppComposition implements ZetaShutdownHook {
               'display language',
             )),
       ),
+      ...desktopAttentionSliceOverrides(),
       ...ideSessionSliceOverrides(),
       ...settingsSliceOverrides(),
       ...workspaceOverrides(),
@@ -370,9 +348,6 @@ final class ZetaAppComposition implements ZetaShutdownHook {
       ),
       agentUsagePanelSliceStoreProvider.overrideWith(
         (ref) => usageStatisticsComposition.agentUsagePanelStore,
-      ),
-      desktopAttentionSliceStoreProvider.overrideWith(
-        (ref) => desktopAttentionComposition.store,
       ),
       ...extra,
     ];
