@@ -153,7 +153,7 @@ Future<void> _pumpIdeHome(
     zetaTestApp(
       overrides: <Override>[
         zetaWindowHostProvider.overrideWithValue(
-          const NativeDesktopWindowHost(showsWindowControls: false),
+          NativeDesktopWindowHost(showsWindowControls: false),
         ),
         ideSessionStoreProvider.overrideWithValue(session),
         agentProviderBundleFactoryProvider.overrideWithValue(

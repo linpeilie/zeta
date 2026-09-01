@@ -41,7 +41,7 @@ void main() {
       zetaTestApp(
         overrides: <Override>[
           zetaWindowHostProvider.overrideWithValue(
-            const NativeDesktopWindowHost(showsWindowControls: false),
+            NativeDesktopWindowHost(showsWindowControls: false),
           ),
           ...fakeDirectoryPickerOverrides(directory.path),
           ideSessionStoreProvider.overrideWithValue(session),
@@ -83,7 +83,7 @@ void main() {
       zetaTestApp(
         overrides: <Override>[
           zetaWindowHostProvider.overrideWithValue(
-            const NativeDesktopWindowHost(showsWindowControls: false),
+            NativeDesktopWindowHost(showsWindowControls: false),
           ),
           ...fakeDirectoryPickerOverrides(repositoryDirectory.path),
           ideSessionStoreProvider.overrideWithValue(session),
@@ -123,7 +123,7 @@ void main() {
       zetaTestApp(
         overrides: <Override>[
           zetaWindowHostProvider.overrideWithValue(
-            const NativeDesktopWindowHost(showsWindowControls: false),
+            NativeDesktopWindowHost(showsWindowControls: false),
           ),
           ...fakeDirectoryPickerOverrides(directory.path),
           ideSessionStoreProvider.overrideWithValue(session),
@@ -168,7 +168,7 @@ void main() {
       return zetaTestApp(
         overrides: <Override>[
           zetaWindowHostProvider.overrideWithValue(
-            const NativeDesktopWindowHost(showsWindowControls: false),
+            NativeDesktopWindowHost(showsWindowControls: false),
           ),
           ...directoryPicker == null
               ? const <Override>[]

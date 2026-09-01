@@ -1,6 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/app/window_bootstrap.dart';
+import 'package:zeta/src/app/window/zeta_window_frame_color.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 
 void main() {

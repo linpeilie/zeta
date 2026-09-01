@@ -13,7 +13,7 @@ import 'package:zeta/src/app/composition/zeta_app_composition.dart';
 import 'package:zeta/src/app/storage/zeta_data_file_system.dart';
 import 'package:zeta/src/app/storage/zeta_storage_bindings.dart';
 import 'package:zeta/src/app/storage/zeta_store_providers.dart';
-import 'package:zeta/src/app/window_bootstrap.dart';
+import 'package:zeta/src/app/window/zeta_window_host.dart';
 import 'package:zeta/src/app/workspace_slice/workspace_overrides.dart';
 import 'package:zeta/src/app/logging/app_logging.dart';
 import 'package:zeta/src/core/storage/zeta_data_paths.dart';
@@ -46,15 +46,17 @@ void main() {
       _installGlobalErrorLogging();
       await windowManager.ensureInitialized();
       final appearance = await _loadLaunchAppearance(storage.appearance);
-      await bootstrapDesktopWindow(
+      final windowHost = NativeDesktopWindowHost();
+      await windowHost.prepareDesktopWindow(
         preferredBrightness: resolveBrightnessForThemeMode(
           themeModeForPreference(appearance.themeMode),
         ),
       );
       // 容器由组合根建，MainApp 只消费——测试同样自己建一份并注入 fake。
-      // 组合根只接 overrides；生产默认写在各 provider body 里。
+      // 窗口宿主必须注入已经 prepare 过的那一份，否则关窗会跳过 shutdown hook。
       final composition = ZetaAppComposition.create(
         overrides: <Override>[
+          zetaWindowHostProvider.overrideWithValue(windowHost),
           ...storage.providerOverrides,
           settingsFallbackLanguageProvider.overrideWithValue(
             firstSystemLanguage,

@@ -51,7 +51,7 @@ void main() {
       zetaTestApp(
         overrides: <Override>[
           zetaWindowHostProvider.overrideWithValue(
-            const NativeDesktopWindowHost(showsWindowControls: false),
+            NativeDesktopWindowHost(showsWindowControls: false),
           ),
           ...fakeDirectoryPickerOverrides(directory.path),
           ideSessionStoreProvider.overrideWithValue(session),
@@ -84,7 +84,7 @@ void main() {
       zetaTestApp(
         overrides: <Override>[
           zetaWindowHostProvider.overrideWithValue(
-            const NativeDesktopWindowHost(showsWindowControls: false),
+            NativeDesktopWindowHost(showsWindowControls: false),
           ),
           ideSessionStoreProvider.overrideWithValue(session),
           agentProviderBundleFactoryProvider.overrideWithValue(
@@ -121,7 +121,7 @@ void main() {
       zetaTestApp(
         overrides: <Override>[
           zetaWindowHostProvider.overrideWithValue(
-            const NativeDesktopWindowHost(showsWindowControls: false),
+            NativeDesktopWindowHost(showsWindowControls: false),
           ),
           ...fakeDirectoryPickerOverrides(directory.path),
           ideSessionStoreProvider.overrideWithValue(session),
@@ -153,7 +153,7 @@ void main() {
       zetaTestApp(
         overrides: <Override>[
           zetaWindowHostProvider.overrideWithValue(
-            const NativeDesktopWindowHost(showsWindowControls: false),
+            NativeDesktopWindowHost(showsWindowControls: false),
           ),
           ideSessionStoreProvider.overrideWithValue(session),
           agentProviderBundleFactoryProvider.overrideWithValue(
@@ -199,7 +199,7 @@ void main() {
         zetaTestApp(
           overrides: <Override>[
             zetaWindowHostProvider.overrideWithValue(
-              const NativeDesktopWindowHost(showsWindowControls: false),
+              NativeDesktopWindowHost(showsWindowControls: false),
             ),
             ideSessionStoreProvider.overrideWithValue(session),
             agentProviderBundleFactoryProvider.overrideWithValue(
@@ -237,7 +237,7 @@ void main() {
       zetaTestApp(
         overrides: <Override>[
           zetaWindowHostProvider.overrideWithValue(
-            const NativeDesktopWindowHost(showsWindowControls: false),
+            NativeDesktopWindowHost(showsWindowControls: false),
           ),
           ideSessionStoreProvider.overrideWithValue(session),
           // 必须注入 fake：不注入时 MainApp 会构造真实工厂并拉起本机 Codex CLI，
@@ -276,7 +276,7 @@ void main() {
       zetaTestApp(
         overrides: <Override>[
           zetaWindowHostProvider.overrideWithValue(
-            const NativeDesktopWindowHost(showsWindowControls: false),
+            NativeDesktopWindowHost(showsWindowControls: false),
           ),
           ideSessionStoreProvider.overrideWithValue(session),
           agentProviderBundleFactoryProvider.overrideWithValue(
@@ -315,7 +315,7 @@ void main() {
       final composition = zetaTestComposition(
         overrides: <Override>[
           zetaWindowHostProvider.overrideWithValue(
-            const NativeDesktopWindowHost(showsWindowControls: false),
+            NativeDesktopWindowHost(showsWindowControls: false),
           ),
           ideSessionStoreProvider.overrideWithValue(session),
           agentProviderBundleFactoryProvider.overrideWithValue(
@@ -366,7 +366,7 @@ void main() {
         zetaTestApp(
           overrides: <Override>[
             zetaWindowHostProvider.overrideWithValue(
-              const NativeDesktopWindowHost(showsWindowControls: false),
+              NativeDesktopWindowHost(showsWindowControls: false),
             ),
             ideSessionStoreProvider.overrideWithValue(session),
             agentProviderBundleFactoryProvider.overrideWithValue(
@@ -505,7 +505,7 @@ void main() {
         zetaTestApp(
           overrides: <Override>[
             zetaWindowHostProvider.overrideWithValue(
-              const NativeDesktopWindowHost(showsWindowControls: false),
+              NativeDesktopWindowHost(showsWindowControls: false),
             ),
             ...fakeDirectoryPickerOverrides(chosenDirectory.path),
             ideSessionStoreProvider.overrideWithValue(
@@ -574,7 +574,7 @@ void main() {
         zetaTestApp(
           overrides: <Override>[
             zetaWindowHostProvider.overrideWithValue(
-              const NativeDesktopWindowHost(showsWindowControls: false),
+              NativeDesktopWindowHost(showsWindowControls: false),
             ),
             ...fakeDirectoryPickerOverrides(chosenDirectory.path),
             ideSessionStoreProvider.overrideWithValue(

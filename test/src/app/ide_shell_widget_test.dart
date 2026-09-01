@@ -2322,7 +2322,7 @@ Future<ZetaAppComposition> _pumpIde(
     overrides: <Override>[
       zetaWindowHostProvider.overrideWithValue(
         enableNativeWindowFrame
-            ? const NativeDesktopWindowHost(showsWindowControls: false)
+            ? NativeDesktopWindowHost(showsWindowControls: false)
             : HeadlessWindowHost(showsWindowControls: false),
       ),
       if (directoryPicker != null)

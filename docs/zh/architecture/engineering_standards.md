@@ -146,8 +146,9 @@ widget test 不另开一套模式开关：`zetaTestComposition` / `zetaTestApp` 
 冻结之后才存在的文本目录、三个切片组合的 store 出口。其余一律留给 `overrides`。
 
 同理，声明在 feature `application` 层的 provider 够不到 `data` 实现（那是反向依赖），兜底写不
-进 body：外观仓库、系统字体目录、目录选择器就属于这一类，由 `lib/main.dart` 和测试助手各自装
-一份，组合根不碰。
+进 body：外观仓库、系统字体目录、目录选择器就属于这一类。窗口宿主必须先
+`prepareDesktopWindow` 才能拦截关窗，也不能写进 provider body。这些都由 `lib/main.dart` 和
+测试助手各自装一份，组合根不碰。
 
 **环境差异做成实现，不做成布尔参数。** 「接管原生窗口」不是一个标志位，而是
 `ZetaWindowHost` 的 `NativeDesktopWindowHost` / `HeadlessWindowHost` 两个实现（窗口事件、关闭
@@ -155,9 +156,10 @@ hook、原生菜单、抢前台）；「显示语言等不等持久化设置」�
 实现。布尔开关的代价是每加一个平台调用都要在调用点补一次 `if`，漏一处就在 widget test 里打到
 真实平台通道；换成实现之后，调用点只有一条路径。
 
-平台 `WindowListener` 只允许出现在 app 窗口模块（`ZetaWindowSurfaceNotifier` 译成快照）和
-关窗 hook（`window_bootstrap.dart`）。`MainApp` / `IdeHome` / feature Widget 禁止 mixin；
-ticker 闸门读 `minimized`，桌面通知读 `focused`。守卫：`window_listener_guard_test`。
+平台 `WindowListener` 只允许出现在 app 窗口模块：`ZetaWindowSurfaceNotifier` 译成 UI 快照，
+`NativeDesktopWindowHost` 的关窗拦截跑 shutdown hook。`MainApp` / `IdeHome` / feature
+Widget 禁止 mixin。生产必须注入已经 `prepareDesktopWindow` 的那一份 host（provider
+fail-closed）；测试装 `HeadlessWindowHost`。守卫：`window_listener_guard_test`。
 
 **`autoDispose` 的适用范围是硬边界。** 它只能决定**纯 UI 镜像**的存活：selector、投影、派生视图。
 Binding lease、CLI runtime、子进程、文件句柄的生命周期永远由显式的 application 逻辑决定，
