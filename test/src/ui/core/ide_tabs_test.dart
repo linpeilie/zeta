@@ -250,7 +250,10 @@ class _ThemeHarness extends StatelessWidget {
           localizationsDelegates: ZetaLocalization.delegates,
           theme: buildShadcnTheme(lightIdeTheme),
           darkTheme: buildShadcnTheme(darkIdeTheme),
-          materialTheme: buildMaterialTheme(lightIdeTheme),
+          builder: (context, child) => IdeMaterialLayer(
+            theme: buildMaterialTheme(lightIdeTheme),
+            child: child,
+          ),
           themeMode: sf.ThemeMode.light,
           home: _MotionHarness(
             disableAnimations: disableAnimations,

@@ -110,7 +110,10 @@ Future<void> _pumpPane(
           supportedLocales: ZetaLocalization.supportedLocales,
           localizationsDelegates: ZetaLocalization.delegates,
           theme: buildShadcnTheme(ideTheme),
-          materialTheme: buildMaterialTheme(ideTheme),
+          builder: (context, child) => IdeMaterialLayer(
+            theme: buildMaterialTheme(ideTheme),
+            child: child,
+          ),
           home: sf.Scaffold(
             child: SettingsPage(
               activeSection: SettingsSection.appearance,

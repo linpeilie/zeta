@@ -168,7 +168,10 @@ Future<void> _pumpSurface(
       child: sf.ShadcnApp(
         theme: buildShadcnTheme(lightTheme),
         darkTheme: buildShadcnTheme(darkTheme),
-        materialTheme: buildMaterialTheme(currentTheme),
+        builder: (context, child) => IdeMaterialLayer(
+          theme: buildMaterialTheme(currentTheme),
+          child: child,
+        ),
         themeMode: resolveShadcnThemeMode(themeMode),
         home: sf.Scaffold(
           child: Center(

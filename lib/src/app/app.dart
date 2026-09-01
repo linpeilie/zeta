@@ -178,13 +178,14 @@ class MainAppState extends State<MainApp>
             locale: _composition.frozenDisplayLocale,
             supportedLocales: ZetaLocalization.supportedLocales,
             localizationsDelegates: ZetaLocalization.delegates,
-            popoverHandler: ideStablePopoverOverlayHandler,
-            tooltipHandler: ideStablePopoverOverlayHandler,
-            menuHandler: ideStablePopoverOverlayHandler,
             theme: buildShadcnTheme(lightIdeTheme),
             darkTheme: buildShadcnTheme(darkIdeTheme),
-            materialTheme: buildMaterialTheme(materialIdeTheme),
             themeMode: resolveShadcnThemeMode(flutterThemeMode),
+            // 0.0.54 起 ShadcnApp 不再安装 Material 祖先，改由这一层补齐。
+            builder: (context, child) => IdeMaterialLayer(
+              theme: buildMaterialTheme(materialIdeTheme),
+              child: child,
+            ),
             home: _composition.isReady
                 ? _buildHome()
                 : ColoredBox(

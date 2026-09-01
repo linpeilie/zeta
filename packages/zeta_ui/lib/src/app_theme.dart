@@ -251,9 +251,8 @@ sf.ThemeData buildShadcnTheme(IdeThemeData ideTheme) {
 
 /// 为仍在使用 Material widget 的区域提供最小主题投影。
 ///
-/// 生效位置：`MainApp` 中 `sf.ShadcnApp` 的 `materialTheme:`（应用没有
-/// `MaterialApp`）；覆盖 shadcn 内部与少量残留 Material widget 的背景、
-/// 图标色、分隔线、hover/focus 等默认样式。
+/// 生效位置：[IdeMaterialLayer]（应用没有 `MaterialApp`）；覆盖少量残留
+/// Material widget 的背景、图标色、分隔线、hover/focus 等默认样式。
 ThemeData buildMaterialTheme(IdeThemeData ideTheme) {
   final colors = ideTheme.colors;
   final baseTheme = ThemeData(
@@ -480,4 +479,37 @@ TextStyle _overrideTextStyle(
     package: null,
     overflow: style.overflow,
   );
+}
+
+/// 给残留的 Material widget 补上 `Theme` / `Material` / `ScaffoldMessenger`
+/// 祖先。
+///
+/// shadcn_flutter 0.0.54 起不再依赖 Material，`ShadcnApp` 也不再安装这三个
+/// 祖先（`materialTheme` 参数一并删除）。官方给的替代品是
+/// `shadcn_flutter_material`，但它建立在独立的 `material_ui` package 上，
+/// 那是一套与 `package:flutter/material.dart` **不同**的类型；本仓库上百个
+/// 文件用的是 SDK 内的 Material，换过去等于同时跑两套 Material，祖先照样对
+/// 不上。所以这里直接用 SDK 的 Material 自建一层，保持单一实现。
+///
+/// 层次与 0.0.53 的 `ShadcnApp` 内部实现保持一致，避免升级引入观感差异。
+class IdeMaterialLayer extends StatelessWidget {
+  /// 创建 Material 兼容层。
+  const IdeMaterialLayer({super.key, required this.theme, this.child});
+
+  /// Material 主题投影，通常来自 [buildMaterialTheme]。
+  final ThemeData theme;
+
+  /// 被包裹的子树。
+  final Widget? child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Theme(
+      data: theme,
+      child: Material(
+        color: Colors.transparent,
+        child: ScaffoldMessenger(child: child ?? const SizedBox.shrink()),
+      ),
+    );
+  }
 }

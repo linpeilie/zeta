@@ -22,6 +22,7 @@ import 'package:zeta/src/features/settings/domain/system_font_family.dart';
 import 'package:zeta/src/features/settings/presentation/settings_page.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
+
 import '../testing/memory_feature_stores.dart';
 
 void main() {
@@ -810,9 +811,12 @@ Future<_SettingsSliceHandle> _pumpSettingsPage(
               localizationsDelegates: ZetaLocalization.delegates,
               theme: buildShadcnTheme(lightIdeTheme),
               darkTheme: buildShadcnTheme(darkIdeTheme),
-              materialTheme: buildMaterialTheme(
-                materialIdeTheme,
-              ).copyWith(platform: platform),
+              builder: (context, child) => IdeMaterialLayer(
+                theme: buildMaterialTheme(
+                  materialIdeTheme,
+                ).copyWith(platform: platform),
+                child: child,
+              ),
               themeMode: resolveShadcnThemeMode(
                 themeModeForPreference(appearance.themeMode),
               ),

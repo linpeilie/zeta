@@ -70,7 +70,10 @@ class _ToastHarness extends StatelessWidget {
       child: sf.ShadcnApp(
         theme: buildShadcnTheme(lightIdeTheme),
         darkTheme: buildShadcnTheme(darkIdeTheme),
-        materialTheme: buildMaterialTheme(lightIdeTheme),
+        builder: (context, child) => IdeMaterialLayer(
+          theme: buildMaterialTheme(lightIdeTheme),
+          child: child,
+        ),
         themeMode: sf.ThemeMode.light,
         home: sf.Scaffold(
           child: Builder(

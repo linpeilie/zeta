@@ -59,7 +59,10 @@ Widget _preview(Brightness brightness) {
       debugShowCheckedModeBanner: false,
       theme: buildShadcnTheme(lightTheme),
       darkTheme: buildShadcnTheme(darkTheme),
-      materialTheme: buildMaterialTheme(currentTheme),
+      builder: (context, child) => IdeMaterialLayer(
+        theme: buildMaterialTheme(currentTheme),
+        child: child,
+      ),
       themeMode: resolveShadcnThemeMode(themeMode),
       home: sf.Scaffold(
         child: GlobalHomePage(

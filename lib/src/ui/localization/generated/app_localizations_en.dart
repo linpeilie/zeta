@@ -29,6 +29,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shadcnInvalidURL => 'Invalid URL';
 
   @override
+  String get shadcnNoSpellCheckReplacements => 'No replacements found';
+
+  @override
   String shadcnFormLessThan(String value) {
     return 'Must be less than $value';
   }

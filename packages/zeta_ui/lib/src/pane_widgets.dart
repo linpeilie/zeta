@@ -8,6 +8,7 @@ import 'ide_effects.dart';
 import 'ide_metrics.dart';
 import 'ide_motion.dart';
 import 'ide_spacing.dart';
+import 'ide_stable_overlay.dart';
 import 'ide_text_styles.dart';
 import 'zeta_ui_text_catalog.dart';
 
@@ -97,14 +98,19 @@ class _IdeTooltipState extends State<IdeTooltip> {
   void _showTooltip() {
     _entry?.remove();
     _entry?.dispose();
-    final entry = sf.OverlayManager.of(context).showTooltip<void>(
-      context: context,
-      modal: false,
-      alignment: Alignment.topCenter,
-      anchorAlignment: Alignment.bottomCenter,
-      dismissBackdropFocus: false,
-      overlayBarrier: const sf.OverlayBarrier(barrierColor: Colors.transparent),
+    final entry = sf.showOverlay<void>(
+      context,
+      ideStableOverlayConfiguration(
+        const sf.PopoverConfiguration(
+          modal: false,
+          alignment: Alignment.topCenter,
+          anchorAlignment: Alignment.bottomCenter,
+          dismissBackdropFocus: false,
+          overlayBarrier: sf.OverlayBarrier(barrierColor: Colors.transparent),
+        ),
+      ),
       builder: _buildTooltip,
+      adaptive: false,
     );
     _entry = entry;
   }

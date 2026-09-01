@@ -19,6 +19,7 @@ import 'package:zeta/src/features/agent_management/presentation/agent_configurat
 import 'package:zeta/src/features/agent_management/presentation/agent_management_page.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta_ui/zeta_ui.dart';
+
 import '../../../testing/ide_test_harness.dart';
 
 /// 按字段名定位一条 [IdeKeyValueRow]。
@@ -859,7 +860,10 @@ Future<void> _pumpManagementPage(
           supportedLocales: ZetaLocalization.supportedLocales,
           localizationsDelegates: ZetaLocalization.delegates,
           theme: buildShadcnTheme(ideTheme),
-          materialTheme: buildMaterialTheme(ideTheme),
+          builder: (context, child) => IdeMaterialLayer(
+            theme: buildMaterialTheme(ideTheme),
+            child: child,
+          ),
           home: sf.Scaffold(
             child: AgentManagementPage(
               sliceStore: controller,

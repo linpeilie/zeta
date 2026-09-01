@@ -23,7 +23,6 @@ Future<T?> showIdeDialog<T>({
       .showOverlay<T>(
         context,
         sf.DialogConfiguration(
-          builder: builder,
           useRootNavigator: useRootNavigator,
           barrierDismissible: barrierDismissible,
           barrierColor: barrierColor,
@@ -35,6 +34,7 @@ Future<T?> showIdeDialog<T>({
           alignment: alignment,
           fullScreen: fullScreen,
         ),
+        builder: builder,
         adaptive: false,
       )
       .future;

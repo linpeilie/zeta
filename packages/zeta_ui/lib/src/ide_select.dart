@@ -8,6 +8,7 @@ import 'ide_colors.dart';
 import 'ide_icon_box.dart';
 import 'ide_metrics.dart';
 import 'ide_spacing.dart';
+import 'ide_stable_overlay.dart';
 import 'ide_text_styles.dart';
 
 /// Select 触发器右侧的展开箭头。
@@ -155,11 +156,20 @@ class IdeSelect<T> extends StatelessWidget {
         maxHeight: popupMaxHeight,
         minWidth: minWidth,
       ),
-      popupWidthConstraint: switch (popupWidthPolicy) {
-        IdeSelectPopupWidthPolicy.matchTrigger =>
-          sf.PopoverConstraint.anchorFixedSize,
-        IdeSelectPopupWidthPolicy.fitContent => sf.PopoverConstraint.intrinsic,
-      },
+      // 0.0.54 删掉了 `popupWidthConstraint`：弹层表现改成整份
+      // `OverlayConfiguration`。这里按 sf.Select 的默认值重建 alignment，
+      // 只替换宽度约束，并统一关掉 follow。
+      overlayConfiguration: ideStableOverlayConfiguration(
+        sf.PopoverConfiguration(
+          alignment: Alignment.topCenter,
+          widthConstraint: switch (popupWidthPolicy) {
+            IdeSelectPopupWidthPolicy.matchTrigger =>
+              sf.PopoverConstraint.anchorFixedSize,
+            IdeSelectPopupWidthPolicy.fitContent =>
+              sf.PopoverConstraint.intrinsic,
+          },
+        ),
+      ),
       itemBuilder: (context, selectedValue) {
         final option = _findOption(selectedValue) ?? selected;
         final text = option?.label ?? placeholder ?? '$selectedValue';

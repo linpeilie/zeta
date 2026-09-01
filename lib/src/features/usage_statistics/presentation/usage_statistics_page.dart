@@ -140,8 +140,8 @@ class _UsageStatisticsPageState extends State<UsageStatisticsPage> {
       sf.DrawerConfiguration(
         expands: narrow,
         position: narrow ? sf.OverlayPosition.bottom : sf.OverlayPosition.end,
-        builder: (drawerContext) => _TaskDetailDrawer(record: record),
       ),
+      builder: (drawerContext) => _TaskDetailDrawer(record: record),
       adaptive: false,
     );
   }

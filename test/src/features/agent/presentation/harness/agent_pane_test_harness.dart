@@ -23,9 +23,11 @@ import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 
 import '../../../../testing/callback_workspace_file_corpus_port.dart';
+
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta_ui/zeta_ui.dart';
+
 import '../../../../testing/provider_settings_test_store.dart';
 
 import '../../../../testing/agent_provider_stub_base.dart';
@@ -132,9 +134,12 @@ class _AgentPaneTestAppState extends State<AgentPaneTestApp> {
           localizationsDelegates: ZetaLocalization.delegates,
           theme: buildShadcnTheme(lightIdeTheme),
           darkTheme: buildShadcnTheme(darkIdeTheme),
-          materialTheme: buildMaterialTheme(
-            activeIdeTheme,
-          ).copyWith(platform: widget.platform),
+          builder: (context, child) => IdeMaterialLayer(
+            theme: buildMaterialTheme(
+              activeIdeTheme,
+            ).copyWith(platform: widget.platform),
+            child: child,
+          ),
           themeMode: resolveShadcnThemeMode(widget.themeMode),
           home: Builder(
             builder: (context) => MediaQuery(

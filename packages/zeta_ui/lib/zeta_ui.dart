@@ -28,7 +28,7 @@ export 'src/ide_resize_handle.dart';
 export 'src/ide_select.dart';
 export 'src/ide_skeleton.dart';
 export 'src/ide_spacing.dart';
-export 'src/ide_stable_overlay_handler.dart';
+export 'src/ide_stable_overlay.dart';
 export 'src/ide_status_card.dart';
 export 'src/ide_switch.dart';
 export 'src/ide_tabs.dart';

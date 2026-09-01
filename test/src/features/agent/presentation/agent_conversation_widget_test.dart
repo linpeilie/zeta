@@ -22,7 +22,9 @@ import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta_ui/zeta_ui.dart';
+
 import '../../../testing/provider_settings_test_store.dart';
+
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
 import 'package:zeta/src/app/conversation_slice/agent_conversation_slice_composition.dart';
@@ -32,6 +34,7 @@ import '../../../testing/ide_test_harness.dart';
 import '../../../testing/agent_conversation_binding_test_harness.dart';
 import '../../../testing/fake_workspace_directory_picker.dart';
 import '../../../testing/zeta_test_app.dart';
+
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
 import 'package:zeta/src/app/storage/zeta_store_providers.dart';
@@ -1468,7 +1471,10 @@ void main() {
               localizationsDelegates: ZetaLocalization.delegates,
               theme: buildShadcnTheme(lightIdeTheme),
               darkTheme: buildShadcnTheme(darkIdeTheme),
-              materialTheme: buildMaterialTheme(darkIdeTheme),
+              builder: (context, child) => IdeMaterialLayer(
+                theme: buildMaterialTheme(darkIdeTheme),
+                child: child,
+              ),
               themeMode: sf.ThemeMode.dark,
               home: sf.Scaffold(child: AgentPane(viewModel: viewModel)),
             ),
@@ -1563,7 +1569,10 @@ void main() {
             localizationsDelegates: ZetaLocalization.delegates,
             theme: buildShadcnTheme(lightIdeTheme),
             darkTheme: buildShadcnTheme(darkIdeTheme),
-            materialTheme: buildMaterialTheme(darkIdeTheme),
+            builder: (context, child) => IdeMaterialLayer(
+              theme: buildMaterialTheme(darkIdeTheme),
+              child: child,
+            ),
             themeMode: sf.ThemeMode.dark,
             home: sf.Scaffold(child: AgentPane(viewModel: viewModel)),
           ),
@@ -1785,7 +1794,10 @@ void main() {
             localizationsDelegates: ZetaLocalization.delegates,
             theme: buildShadcnTheme(lightIdeTheme),
             darkTheme: buildShadcnTheme(darkIdeTheme),
-            materialTheme: buildMaterialTheme(darkIdeTheme),
+            builder: (context, child) => IdeMaterialLayer(
+              theme: buildMaterialTheme(darkIdeTheme),
+              child: child,
+            ),
             themeMode: sf.ThemeMode.dark,
             home: sf.Scaffold(child: AgentPane(viewModel: viewModel)),
           ),
@@ -2106,7 +2118,10 @@ void main() {
             localizationsDelegates: ZetaLocalization.delegates,
             theme: buildShadcnTheme(lightIdeTheme),
             darkTheme: buildShadcnTheme(darkIdeTheme),
-            materialTheme: buildMaterialTheme(darkIdeTheme),
+            builder: (context, child) => IdeMaterialLayer(
+              theme: buildMaterialTheme(darkIdeTheme),
+              child: child,
+            ),
             themeMode: sf.ThemeMode.dark,
             home: sf.Scaffold(child: AgentPane(viewModel: viewModel)),
           ),

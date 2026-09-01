@@ -35,6 +35,9 @@ final class ZetaShadcnLocalizations extends sf.ShadcnLocalizations {
   String get invalidURL => _l10n.shadcnInvalidURL;
 
   @override
+  String get noSpellCheckReplacements => _l10n.shadcnNoSpellCheckReplacements;
+
+  @override
   String formLessThan(double value) =>
       _l10n.shadcnFormLessThan(formatInvariantNumber(value));
 

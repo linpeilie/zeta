@@ -134,6 +134,12 @@ abstract class AppLocalizations {
   /// **'Invalid URL'**
   String get shadcnInvalidURL;
 
+  /// shadcn spell check toolbar empty state
+  ///
+  /// In en, this message translates to:
+  /// **'No replacements found'**
+  String get shadcnNoSpellCheckReplacements;
+
   /// shadcn less-than validation; value is preformatted
   ///
   /// In en, this message translates to:

@@ -29,6 +29,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get shadcnInvalidURL => 'URL 无效';
 
   @override
+  String get shadcnNoSpellCheckReplacements => '没有可用的替换建议';
+
+  @override
   String shadcnFormLessThan(String value) {
     return '必须小于 $value';
   }

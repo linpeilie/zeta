@@ -598,7 +598,10 @@ Future<void> _pumpUsagePage(
           supportedLocales: ZetaLocalization.supportedLocales,
           localizationsDelegates: ZetaLocalization.delegates,
           theme: buildShadcnTheme(ideTheme),
-          materialTheme: buildMaterialTheme(ideTheme),
+          builder: (context, child) => IdeMaterialLayer(
+            theme: buildMaterialTheme(ideTheme),
+            child: child,
+          ),
           home: Consumer(
             builder: (context, ref, _) {
               ref.watch(usageStatisticsSliceProvider);

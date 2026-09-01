@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
+import 'ide_stable_overlay.dart';
+
 /// IDE 统一 popover 宽高约束语义。
 enum IdePopoverConstraint {
   flexible,
@@ -136,29 +138,31 @@ IdePopoverHandle<T> showIdePopover<T>({
 }) {
   final delegate = sf.showOverlay<T>(
     context,
-    sf.PopoverConfiguration(
-      alignment: alignment,
-      builder: key == null
-          ? builder
-          : (context) => KeyedSubtree(key: key, child: builder(context)),
-      anchorAlignment: anchorAlignment,
-      widthConstraint: _toSfConstraint(widthConstraint),
-      heightConstraint: _toSfConstraint(heightConstraint),
-      rootOverlay: rootOverlay,
-      modal: modal,
-      barrierDismissable: barrierDismissible,
-      clipBehavior: clipBehavior,
-      offset: offset,
-      margin: margin,
-      follow: follow,
-      consumeOutsideTaps: consumeOutsideTaps,
-      allowInvertHorizontal: allowInvertHorizontal,
-      allowInvertVertical: allowInvertVertical,
-      dismissBackdropFocus: dismissBackdropFocus,
-      transitionAlignment: transitionAlignment,
-      showDuration: showDuration,
-      dismissDuration: dismissDuration,
+    ideStableOverlayConfiguration(
+      sf.PopoverConfiguration(
+        alignment: alignment,
+        anchorAlignment: anchorAlignment,
+        widthConstraint: _toSfConstraint(widthConstraint),
+        heightConstraint: _toSfConstraint(heightConstraint),
+        rootOverlay: rootOverlay,
+        modal: modal,
+        barrierDismissable: barrierDismissible,
+        clipBehavior: clipBehavior,
+        offset: offset,
+        margin: margin,
+        follow: follow,
+        consumeOutsideTaps: consumeOutsideTaps,
+        allowInvertHorizontal: allowInvertHorizontal,
+        allowInvertVertical: allowInvertVertical,
+        dismissBackdropFocus: dismissBackdropFocus,
+        transitionAlignment: transitionAlignment,
+        showDuration: showDuration,
+        dismissDuration: dismissDuration,
+      ),
     ),
+    builder: key == null
+        ? builder
+        : (context) => KeyedSubtree(key: key, child: builder(context)),
     adaptive: adaptive,
   );
   return IdePopoverHandle<T>._(delegate);

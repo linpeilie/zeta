@@ -35,11 +35,13 @@ import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_directory_picker.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
+
 import '../testing/agent_event_storm_fixture.dart';
 import '../testing/ide_test_harness.dart';
 import '../testing/widget_build_counter.dart';
 import '../testing/fake_workspace_directory_picker.dart';
 import '../testing/zeta_test_app.dart';
+
 import 'package:zeta/src/app/composition/zeta_environment_providers.dart';
 import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
 import 'package:zeta/src/app/storage/zeta_store_providers.dart';
@@ -61,10 +63,7 @@ void main() {
     await _pumpIde(tester, enableNativeWindowFrame: true);
     await tester.pump();
 
-    final shadcnApp = tester.widget<sf.ShadcnApp>(find.byType(sf.ShadcnApp));
-    expect(shadcnApp.popoverHandler, same(ideStablePopoverOverlayHandler));
-    expect(shadcnApp.tooltipHandler, same(ideStablePopoverOverlayHandler));
-    expect(shadcnApp.menuHandler, same(ideStablePopoverOverlayHandler));
+    expect(find.byType(IdeMaterialLayer), findsOneWidget);
     expect(find.text('Zeta'), findsNothing);
     expect(find.byKey(const ValueKey('projects-panel-card')), findsOneWidget);
     expect(find.byKey(const ValueKey('agent-usage-compact')), findsOneWidget);

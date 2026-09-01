@@ -30,6 +30,10 @@
   "@shadcnInvalidURL": {
     "description": "shadcn URL validation"
   },
+  "shadcnNoSpellCheckReplacements": "没有可用的替换建议",
+  "@shadcnNoSpellCheckReplacements": {
+    "description": "shadcn spell check toolbar empty state"
+  },
   "shadcnFormLessThan": "必须小于 {value}",
   "@shadcnFormLessThan": {
     "description": "shadcn less-than validation; value is preformatted",

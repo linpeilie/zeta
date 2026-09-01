@@ -30,6 +30,10 @@
   "@shadcnInvalidURL": {
     "description": "shadcn URL validation"
   },
+  "shadcnNoSpellCheckReplacements": "No replacements found",
+  "@shadcnNoSpellCheckReplacements": {
+    "description": "shadcn spell check toolbar empty state"
+  },
   "shadcnFormLessThan": "Must be less than {value}",
   "@shadcnFormLessThan": {
     "description": "shadcn less-than validation; value is preformatted",

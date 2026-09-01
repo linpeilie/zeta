@@ -11,7 +11,9 @@ import 'package:zeta/src/features/agent/presentation/agent_conversation_view_mod
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta_ui/zeta_ui.dart';
+
 import '../../../testing/provider_settings_test_store.dart';
+
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
 import 'package:zeta/src/app/conversation_slice/agent_conversation_slice_composition.dart';
@@ -196,7 +198,10 @@ Future<void> _pumpAgentPane(
           supportedLocales: ZetaLocalization.supportedLocales,
           localizationsDelegates: ZetaLocalization.delegates,
           theme: buildShadcnTheme(ideTheme),
-          materialTheme: buildMaterialTheme(ideTheme),
+          builder: (context, child) => IdeMaterialLayer(
+            theme: buildMaterialTheme(ideTheme),
+            child: child,
+          ),
           home: sf.Scaffold(child: AgentPane(viewModel: viewModel)),
         ),
       ),

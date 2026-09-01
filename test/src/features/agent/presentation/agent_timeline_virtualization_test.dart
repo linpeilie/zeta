@@ -305,7 +305,8 @@ class _TimelineHost extends StatelessWidget {
         localizationsDelegates: ZetaLocalization.delegates,
         theme: buildShadcnTheme(light),
         darkTheme: buildShadcnTheme(dark),
-        materialTheme: buildMaterialTheme(dark),
+        builder: (context, child) =>
+            IdeMaterialLayer(theme: buildMaterialTheme(dark), child: child),
         themeMode: sf.ThemeMode.dark,
         home: sf.Scaffold(
           child: StatefulBuilder(
