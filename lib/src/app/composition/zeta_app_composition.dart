@@ -27,6 +27,7 @@ import 'package:zeta/src/app/settings_slice/settings_slice_overrides.dart';
 import 'package:zeta/src/app/storage/zeta_store_providers.dart';
 import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_providers.dart';
 import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_slice_composition.dart';
+import 'package:zeta/src/app/window/zeta_shutdown_hook.dart';
 import 'package:zeta/src/app/window/zeta_window_host.dart';
 import 'package:zeta/src/app/workspace_slice/workspace_overrides.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
@@ -60,7 +61,7 @@ import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
 ///
 /// 生命周期：**谁创建谁 [dispose]**。生产入口交给进程退出与窗口关闭 hook，测试用
 /// `addTearDown`。
-final class ZetaAppComposition {
+final class ZetaAppComposition implements ZetaShutdownHook {
   ZetaAppComposition._({required List<Override> extra}) {
     observability = _readObservability(extra);
     container = ProviderContainer(
@@ -72,7 +73,7 @@ final class ZetaAppComposition {
       container.read(settingsFallbackLanguageProvider),
     );
     _windowHost = container.read(zetaWindowHostProvider);
-    _windowHost.addShutdownHook(_shutdownHook);
+    _windowHost.addShutdownHook(this);
     _start();
   }
 
@@ -103,10 +104,6 @@ final class ZetaAppComposition {
   late final ZetaObservability observability;
 
   late final ZetaWindowHost _windowHost;
-
-  /// 窗口关闭 hook 的稳定引用：注册与注销必须是同一个对象。
-  late final Future<void> Function() _shutdownHook =
-      shutdownOwnedAgentResources;
 
   /// 本地化与 Provider 插件目录就绪后创建的唯一 Provider settings 组合。
   ProviderSettingsSliceComposition? _providerSettingsSliceComposition;
@@ -201,8 +198,8 @@ final class ZetaAppComposition {
   /// 按依赖反序关闭本实例拥有的 Agent 资源。
   ///
   /// 顺序是硬要求：**runtime registry 先、plugin catalog 后**。插件贡献出的工厂是
-  /// runtime 的上游依赖，先关插件会让仍在退出中的 runtime 失去依赖；窗口关闭 hook
-  /// 与 [dispose] 共用这一个入口，避免两条路径顺序不一致。
+  /// runtime 的上游依赖，先关插件会让仍在退出中的 runtime 失去依赖；窗口关闭
+  /// （[run]）与 [dispose] 共用这一个入口，避免两条路径顺序不一致。
   ///
   /// 只关**已经建出来的**：覆盖了 bundle 工厂的用例根本不会建插件目录，
   /// [ProviderContainer.exists] 就是这个"建没建过"的判据。两个 `close()` 本身可
@@ -220,13 +217,16 @@ final class ZetaAppComposition {
     );
   }
 
+  @override
+  Future<void> run() => shutdownOwnedAgentResources();
+
   /// 关闭组合根。谁创建谁调用；重复调用安全。
   void dispose() {
     if (_disposed) {
       return;
     }
     _disposed = true;
-    _windowHost.removeShutdownHook(_shutdownHook);
+    _windowHost.removeShutdownHook(this);
     _usageStatisticsSliceComposition?.dispose();
     _usageStatisticsSliceComposition = null;
     _desktopAttentionSliceComposition?.dispose();

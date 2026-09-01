@@ -235,9 +235,9 @@ windows/
   Agent 工厂必须覆盖
   `agentProviderBundleFactoryProvider`（`widget_test_hygiene_guard_test` 会拦）。
 - **窗口监听分两处、各干各的**：`ZetaWindowSurfaceNotifier` 译 UI 快照（ticker / 通知焦点）；
-  `NativeDesktopWindowHost` 在 `prepareDesktopWindow` 之后拦截关窗并跑 hook。`MainApp` /
-  `IdeHome` 禁止 mixin。生产由 `lib/main.dart` 注入已经 prepare 的 host（`zetaWindowHostProvider`
-  fail-closed）。
+  `NativeDesktopWindowHost` 在 `prepareDesktopWindow` 之后拦截关窗并跑 `ZetaShutdownHook`。
+  组合根本身实现该接口，关日志仍接在 hook 列表后面。`MainApp` / `IdeHome` 禁止 mixin。生产由
+  `lib/main.dart` 注入已经 prepare 的 host（`zetaWindowHostProvider` fail-closed）。
 - Riverpod 只用 `flutter_riverpod` 一个包，允许出现在 `application` 及以上；`domain` / `data`
   两层都禁。不要从传递依赖 `package:riverpod/` 导入。application 里也不要出现
   `ConsumerWidget` / `WidgetRef`——那是 presentation 的东西。正文见

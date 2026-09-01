@@ -9,6 +9,7 @@ import 'package:window_manager/window_manager.dart';
 import 'package:zeta/src/app/app_constants.dart';
 import 'package:zeta/src/app/logging/app_logging.dart';
 import 'package:zeta/src/app/menu_action_bridge.dart';
+import 'package:zeta/src/app/window/zeta_shutdown_hook.dart';
 import 'package:zeta/src/app/window/zeta_window_frame_color.dart';
 
 /// 桌面窗口宿主。
@@ -40,11 +41,11 @@ abstract interface class ZetaWindowHost {
   /// 取消订阅窗口事件。
   void removeListener(WindowListener listener);
 
-  /// 注册窗口真正关闭前必须等待的资源清理任务。
-  void addShutdownHook(Future<void> Function() hook);
+  /// 注册窗口真正关闭前必须等待的清理任务。
+  void addShutdownHook(ZetaShutdownHook hook);
 
-  /// 移除此前注册的清理任务。
-  void removeShutdownHook(Future<void> Function() hook);
+  /// 移除此前登记的同一 [ZetaShutdownHook] 实例。
+  void removeShutdownHook(ZetaShutdownHook hook);
 
   /// 把当前显示语言的 File / Open Project 标签发给原生菜单。
   Future<void> configureNativeMenu({
@@ -73,8 +74,7 @@ final class NativeDesktopWindowHost implements ZetaWindowHost {
   @override
   final bool showsWindowControls;
 
-  final Set<Future<void> Function()> _shutdownHooks =
-      <Future<void> Function()>{};
+  final Set<ZetaShutdownHook> _shutdownHooks = <ZetaShutdownHook>{};
 
   late final _NativeWindowCloseListener _closeListener =
       _NativeWindowCloseListener(this);
@@ -131,12 +131,12 @@ final class NativeDesktopWindowHost implements ZetaWindowHost {
       windowManager.removeListener(listener);
 
   @override
-  void addShutdownHook(Future<void> Function() hook) {
+  void addShutdownHook(ZetaShutdownHook hook) {
     _shutdownHooks.add(hook);
   }
 
   @override
-  void removeShutdownHook(Future<void> Function() hook) {
+  void removeShutdownHook(ZetaShutdownHook hook) {
     _shutdownHooks.remove(hook);
   }
 
@@ -168,7 +168,7 @@ final class NativeDesktopWindowHost implements ZetaWindowHost {
   Future<void> flushShutdownHooks() async {
     for (final hook in _shutdownHooks.toList(growable: false)) {
       try {
-        await hook();
+        await hook.run();
       } catch (_) {
         // 单个资源关闭失败不能阻止窗口退出。
       }
@@ -257,10 +257,10 @@ final class HeadlessWindowHost implements ZetaWindowHost {
   }
 
   @override
-  void addShutdownHook(Future<void> Function() hook) {}
+  void addShutdownHook(ZetaShutdownHook hook) {}
 
   @override
-  void removeShutdownHook(Future<void> Function() hook) {}
+  void removeShutdownHook(ZetaShutdownHook hook) {}
 
   @override
   Future<void> configureNativeMenu({
