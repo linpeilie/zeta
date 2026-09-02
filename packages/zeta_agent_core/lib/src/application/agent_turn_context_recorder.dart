@@ -1,9 +1,12 @@
 import 'dart:async';
 
 import 'package:zeta_foundation/zeta_foundation.dart';
+import 'package:zeta_agent_core/src/application/agent_conversation_effect.dart';
+import 'package:zeta_agent_core/src/application/agent_conversation_mutation.dart';
+import 'package:zeta_agent_core/src/application/agent_conversation_reducer.dart';
+import 'package:zeta_agent_core/src/application/agent_event_observer.dart';
 import 'package:zeta_agent_core/src/application/agent_turn_context_store.dart';
-import 'package:zeta_agent_core/src/domain/agent_event_models.dart';
-import 'package:zeta_agent_core/src/domain/agent_turn_context_models.dart';
+import 'package:zeta_agent_core/src/domain/agent_models.dart';
 
 final _log = zetaLoggerFor('zeta.agent.turn_context');
 
@@ -140,4 +143,34 @@ final class DefaultAgentTurnContextRecorder
 
   /// 等待已入队的落盘完成，供测试使用。
   Future<void> flush() => Future.wait(_tails.values);
+}
+
+/// 把 live turn 开始/结束旁路写入 [AgentTurnContextRecorder]。
+///
+/// 异常交给 processor 统一捕获，这里不再 catch。
+final class AgentTurnContextObserver implements AgentEventObserver {
+  const AgentTurnContextObserver(this._recorder);
+
+  final AgentTurnContextRecorder _recorder;
+
+  @override
+  void onProcessed(
+    AgentEvent event,
+    AgentConversationMutation mutation,
+    AgentConversationReducerContext context,
+  ) {
+    if (!mutation.accepted ||
+        context.scope != AgentConversationReductionScope.live) {
+      return;
+    }
+    final providerId = context.effectScope.providerId;
+    switch (event) {
+      case AgentTurnStartedEvent():
+        _recorder.recordStarted(providerId: providerId, event: event);
+      case AgentTurnCompletedEvent():
+        _recorder.recordCompleted(providerId: providerId, event: event);
+      default:
+        break;
+    }
+  }
 }

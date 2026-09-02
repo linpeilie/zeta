@@ -228,7 +228,7 @@ void main() {
         ),
         uiUpdates: _RecordingUiUpdatePort(<String>[]),
         effectRunner: _RecordingEffectRunner(<String>[]),
-        turnContextRecorder: recorder,
+        observers: <AgentEventObserver>[AgentTurnContextObserver(recorder)],
       );
       historyProcessor.process(
         const AgentTurnStartedEvent(
@@ -281,7 +281,10 @@ AgentConversationEventProcessor _processor({
     stateTarget: stateTarget,
     uiUpdates: uiUpdates,
     effectRunner: effectRunner,
-    turnContextRecorder: turnContextRecorder,
+    observers: <AgentEventObserver>[
+      if (turnContextRecorder != null)
+        AgentTurnContextObserver(turnContextRecorder),
+    ],
   );
 }
 

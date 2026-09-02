@@ -142,9 +142,12 @@ class AgentConversationViewModel
       stateTarget: _eventStateTarget,
       uiUpdates: _eventUiUpdates,
       effectRunner: _effectRunner,
-      turnContextRecorder: turnContextStore == null
-          ? null
-          : DefaultAgentTurnContextRecorder(store: turnContextStore!),
+      observers: <AgentEventObserver>[
+        if (turnContextStore != null)
+          AgentTurnContextObserver(
+            DefaultAgentTurnContextRecorder(store: turnContextStore!),
+          ),
+      ],
     );
     _modelSelectionController.addListener(_handleModelSelectionChanged);
     _conversationModeController.addListener(_handleConversationModeChanged);

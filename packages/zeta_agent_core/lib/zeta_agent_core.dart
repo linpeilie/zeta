@@ -67,6 +67,7 @@ export 'src/application/agent_conversation_thread_snapshot.dart';
 export 'src/application/agent_conversation_timeline_store.dart';
 export 'src/application/agent_elapsed_ticker.dart';
 export 'src/application/agent_event_coalescing_policy.dart';
+export 'src/application/agent_event_observer.dart';
 export 'src/application/agent_event_pipeline.dart';
 export 'src/application/agent_listenable.dart';
 export 'src/application/agent_permission_catalog_controller.dart';
