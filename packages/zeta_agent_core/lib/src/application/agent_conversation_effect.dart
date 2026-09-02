@@ -127,3 +127,103 @@ final class AgentLogProviderErrorEffect extends AgentConversationEffect {
 
   final AgentErrorEvent event;
 }
+
+/// 新 session 身份落地后绑定 conversation mode / permission thread。
+final class AgentBindConversationModeThreadEffect
+    extends AgentConversationEffect {
+  const AgentBindConversationModeThreadEffect({
+    required super.scope,
+    required this.threadId,
+  });
+
+  final String threadId;
+}
+
+/// 将 settings 里已中立化的权限事实写入事件所属 thread。
+///
+/// settings 事件可能不属于当前 Canvas thread，因此 [requireThread] 必须为 false；
+/// listener generation / runtime / epoch 仍走 EffectRunner 身份校验。
+final class AgentApplyThreadPermissionEffect extends AgentConversationEffect {
+  const AgentApplyThreadPermissionEffect({
+    required super.scope,
+    required this.threadId,
+    required this.permissionSelection,
+  }) : super(requireThread: false);
+
+  final String threadId;
+  final AgentPermissionSelection permissionSelection;
+}
+
+/// 把 thread settings 中的模型与 conversation mode 写回当前会话。
+final class AgentApplyThreadSettingsEffect extends AgentConversationEffect {
+  const AgentApplyThreadSettingsEffect({
+    required super.scope,
+    required this.event,
+  });
+
+  final AgentThreadSettingsUpdatedEvent event;
+}
+
+/// 按 session config options 同步模型选择。
+final class AgentSyncThreadSelectionEffect extends AgentConversationEffect {
+  const AgentSyncThreadSelectionEffect({
+    required super.scope,
+    required this.options,
+  });
+
+  final List<AgentSessionConfigOption> options;
+}
+
+/// 应用服务端权威的会话模式。
+final class AgentApplyServerConversationModeEffect
+    extends AgentConversationEffect {
+  const AgentApplyServerConversationModeEffect({
+    required super.scope,
+    required this.event,
+  });
+
+  final AgentConversationModeUpdatedEvent event;
+}
+
+/// 在 live plan 被归档前生成本地执行交接。
+final class AgentPreparePlanHandoffEffect extends AgentConversationEffect {
+  const AgentPreparePlanHandoffEffect({
+    required super.scope,
+    required this.event,
+  }) : super(timing: AgentConversationEffectTiming.beforeMutation);
+
+  final AgentTurnCompletedEvent event;
+}
+
+/// 同步 conversation mode 的 turn-running、活动令牌与耗时 ticker。
+final class AgentSyncTurnRunningEffect extends AgentConversationEffect {
+  const AgentSyncTurnRunningEffect({required super.scope, this.forceRunning});
+
+  /// 非空时直接写入；空则读取 timeline 应用后的 isTurnRunning。
+  final bool? forceRunning;
+}
+
+/// 同 generation 内自动启动 Plan 执行交接。
+///
+/// [requireThread] 必须为 true；scope 必须带 turnId。runtime 换代后不得执行。
+final class AgentAutoStartPlanExecutionEffect extends AgentConversationEffect {
+  const AgentAutoStartPlanExecutionEffect({required super.scope})
+    : super(
+        requireThread: true,
+        timing: AgentConversationEffectTiming.afterMutation,
+      );
+}
+
+/// 中断收尾时清掉本地 plan handoff。
+final class AgentClearPlanHandoffEffect extends AgentConversationEffect {
+  const AgentClearPlanHandoffEffect({required super.scope})
+    : super(timing: AgentConversationEffectTiming.beforeMutation);
+}
+
+/// 把 Provider 推送的模型目录交给模型选择控制器。
+final class AgentApplyModelListEffect extends AgentConversationEffect {
+  const AgentApplyModelListEffect({required super.scope, required this.models})
+    : super(requireThread: false);
+
+  final AgentModelList models;
+}

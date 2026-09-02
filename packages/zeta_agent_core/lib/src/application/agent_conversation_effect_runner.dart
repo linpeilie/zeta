@@ -24,6 +24,34 @@ abstract interface class AgentConversationEffectRunner {
   void dispose();
 }
 
+/// 会话副作用宿主。由 ViewModel 实现，EffectRunner 在身份校验之后回调。
+abstract interface class AgentConversationSessionEffectHandler {
+  void bindConversationModeThread({required String threadId});
+
+  void applyThreadPermission({
+    required String threadId,
+    required AgentPermissionSelection permissionSelection,
+  });
+
+  void applyThreadSettings(AgentThreadSettingsUpdatedEvent event);
+
+  void syncThreadSelectionFromSessionConfig(
+    List<AgentSessionConfigOption> options,
+  );
+
+  void applyServerConversationMode(AgentConversationModeUpdatedEvent event);
+
+  void preparePlanHandoff(AgentTurnCompletedEvent event);
+
+  void syncTurnRunning({bool? forceRunning});
+
+  void autoStartPlanExecution();
+
+  void clearPlanHandoff();
+
+  void applyModelList(AgentModelList models);
+}
+
 /// 生产环境 effect runner。
 ///
 /// 每个 effect 先校验 listener generation、runtime/epoch 与必要 thread scope；
@@ -35,11 +63,13 @@ final class DefaultAgentConversationEffectRunner
     required AgentModelCatalogRecorder recordModelCatalog,
     AgentTurnTerminalCallback? onTurnTerminal,
     AgentAttentionCallback? onAttention,
+    AgentConversationSessionEffectHandler? sessionEffects,
   }) => DefaultAgentConversationEffectRunner._(
     currentScope,
     recordModelCatalog,
     onTurnTerminal,
     onAttention,
+    sessionEffects,
   );
 
   DefaultAgentConversationEffectRunner._(
@@ -47,6 +77,7 @@ final class DefaultAgentConversationEffectRunner
     this._recordModelCatalog,
     this._onTurnTerminal,
     this._onAttention,
+    this._sessionEffects,
   );
 
   static final _log = zetaLoggerFor('zeta.agent.conversation.effects');
@@ -55,6 +86,7 @@ final class DefaultAgentConversationEffectRunner
   final AgentModelCatalogRecorder _recordModelCatalog;
   final AgentTurnTerminalCallback? _onTurnTerminal;
   final AgentAttentionCallback? _onAttention;
+  final AgentConversationSessionEffectHandler? _sessionEffects;
   Expando<bool> _executed = Expando<bool>(
     'AgentConversationEffectRunner.executed',
   );
@@ -100,7 +132,85 @@ final class DefaultAgentConversationEffectRunner
         _runModelCatalogRecord(effect);
       case AgentLogProviderErrorEffect():
         _logProviderError(effect);
+      case AgentBindConversationModeThreadEffect():
+        _runSession(
+          effect,
+          operation: 'session/bind-conversation-mode',
+          callback: () => _sessionEffects?.bindConversationModeThread(
+            threadId: effect.threadId,
+          ),
+        );
+      case AgentApplyThreadPermissionEffect():
+        _runSession(
+          effect,
+          operation: 'session/apply-thread-permission',
+          callback: () => _sessionEffects?.applyThreadPermission(
+            threadId: effect.threadId,
+            permissionSelection: effect.permissionSelection,
+          ),
+        );
+      case AgentApplyThreadSettingsEffect():
+        _runSession(
+          effect,
+          operation: 'session/apply-thread-settings',
+          callback: () => _sessionEffects?.applyThreadSettings(effect.event),
+        );
+      case AgentSyncThreadSelectionEffect():
+        _runSession(
+          effect,
+          operation: 'session/sync-thread-selection',
+          callback: () => _sessionEffects?.syncThreadSelectionFromSessionConfig(
+            effect.options,
+          ),
+        );
+      case AgentApplyServerConversationModeEffect():
+        _runSession(
+          effect,
+          operation: 'session/apply-server-conversation-mode',
+          callback: () =>
+              _sessionEffects?.applyServerConversationMode(effect.event),
+        );
+      case AgentPreparePlanHandoffEffect():
+        _runSession(
+          effect,
+          operation: 'session/prepare-plan-handoff',
+          callback: () => _sessionEffects?.preparePlanHandoff(effect.event),
+        );
+      case AgentSyncTurnRunningEffect():
+        _runSession(
+          effect,
+          operation: 'session/sync-turn-running',
+          callback: () => _sessionEffects?.syncTurnRunning(
+            forceRunning: effect.forceRunning,
+          ),
+        );
+      case AgentAutoStartPlanExecutionEffect():
+        _runSession(
+          effect,
+          operation: 'session/auto-start-plan-execution',
+          callback: () => _sessionEffects?.autoStartPlanExecution(),
+        );
+      case AgentClearPlanHandoffEffect():
+        _runSession(
+          effect,
+          operation: 'session/clear-plan-handoff',
+          callback: () => _sessionEffects?.clearPlanHandoff(),
+        );
+      case AgentApplyModelListEffect():
+        _runSession(
+          effect,
+          operation: 'session/apply-model-list',
+          callback: () => _sessionEffects?.applyModelList(effect.models),
+        );
     }
+  }
+
+  void _runSession(
+    AgentConversationEffect effect, {
+    required String operation,
+    required void Function() callback,
+  }) {
+    _runSynchronous(effect, operation: operation, callback: callback);
   }
 
   @override

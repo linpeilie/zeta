@@ -1,143 +1,9 @@
 import 'package:zeta_agent_core/src/application/agent_conversation_effect.dart';
+import 'package:zeta_agent_core/src/application/agent_conversation_session_state.dart';
 import 'package:zeta_agent_core/src/application/agent_conversation_timeline_store.dart';
 import 'package:zeta_agent_core/src/application/agent_ui_update_request.dart';
 import 'package:zeta_agent_core/src/domain/agent_models.dart';
 import 'package:zeta_agent_core/src/domain/agent_provider_raw_payload.dart';
-
-/// reducer 产生的类型化会话状态变化。
-sealed class AgentConversationStateChange {
-  const AgentConversationStateChange();
-}
-
-final class AgentSetProviderStatusChange extends AgentConversationStateChange {
-  const AgentSetProviderStatusChange(this.status);
-
-  final AgentProviderStatus status;
-}
-
-final class AgentApplySessionStartedChange
-    extends AgentConversationStateChange {
-  const AgentApplySessionStartedChange(this.session);
-
-  final AgentSession session;
-}
-
-final class AgentApplyThreadRuntimeStatusChange
-    extends AgentConversationStateChange {
-  const AgentApplyThreadRuntimeStatusChange({
-    required this.status,
-    required this.waitingOnApproval,
-    required this.waitingOnUserInput,
-  });
-
-  final AgentThreadRuntimeStatus status;
-  final bool waitingOnApproval;
-  final bool waitingOnUserInput;
-}
-
-final class AgentApplyThreadNameChange extends AgentConversationStateChange {
-  const AgentApplyThreadNameChange(this.threadName);
-
-  final String? threadName;
-}
-
-/// 回写 thread 列表旁文案（preview），不改正式标题。
-final class AgentApplyThreadPreviewChange extends AgentConversationStateChange {
-  const AgentApplyThreadPreviewChange(this.preview);
-
-  final String preview;
-}
-
-final class AgentApplyThreadSettingsChange
-    extends AgentConversationStateChange {
-  const AgentApplyThreadSettingsChange(this.event);
-
-  final AgentThreadSettingsUpdatedEvent event;
-}
-
-/// 将服务端 settings 中已中立化的权限事实写入事件所属 thread。
-///
-/// 此变化不要求该 thread 是当前 Canvas，也不触发 provider apply。
-final class AgentApplyThreadPermissionSettingsChange
-    extends AgentConversationStateChange {
-  const AgentApplyThreadPermissionSettingsChange({
-    required this.threadId,
-    required this.permissionSelection,
-  });
-
-  final String threadId;
-  final AgentPermissionSelection permissionSelection;
-}
-
-final class AgentApplySessionConfigChange extends AgentConversationStateChange {
-  const AgentApplySessionConfigChange(this.options);
-
-  final List<AgentSessionConfigOption> options;
-}
-
-final class AgentApplyConversationModeChange
-    extends AgentConversationStateChange {
-  const AgentApplyConversationModeChange(this.event);
-
-  final AgentConversationModeUpdatedEvent event;
-}
-
-final class AgentApplyAutoApprovalReviewChange
-    extends AgentConversationStateChange {
-  const AgentApplyAutoApprovalReviewChange(this.event);
-
-  final AgentAutoApprovalReviewEvent event;
-}
-
-/// 在 live plan 被归档前生成本地执行交接。
-final class AgentPrepareTurnCompletedChange
-    extends AgentConversationStateChange {
-  const AgentPrepareTurnCompletedChange(this.event);
-
-  final AgentTurnCompletedEvent event;
-}
-
-final class AgentFinalizeTurnStartedChange
-    extends AgentConversationStateChange {
-  const AgentFinalizeTurnStartedChange();
-}
-
-final class AgentFinalizeTurnCompletedChange
-    extends AgentConversationStateChange {
-  const AgentFinalizeTurnCompletedChange(this.event);
-
-  final AgentTurnCompletedEvent event;
-}
-
-/// 清理 runtime/waiting 与本地 plan handoff，再收尾中断 turn。
-final class AgentPrepareInterruptedTurnChange
-    extends AgentConversationStateChange {
-  const AgentPrepareInterruptedTurnChange();
-}
-
-final class AgentFinalizeInterruptedTurnChange
-    extends AgentConversationStateChange {
-  const AgentFinalizeInterruptedTurnChange();
-}
-
-final class AgentApplyToolStatusChange extends AgentConversationStateChange {
-  const AgentApplyToolStatusChange(this.toolCall);
-
-  final AgentToolCall toolCall;
-}
-
-final class AgentSetModelRerouteNoticeChange
-    extends AgentConversationStateChange {
-  const AgentSetModelRerouteNoticeChange(this.notice);
-
-  final String? notice;
-}
-
-final class AgentHandleModelListChange extends AgentConversationStateChange {
-  const AgentHandleModelListChange(this.models);
-
-  final AgentModelList models;
-}
 
 /// TimelineStore 执行的高性能增量 mutation。
 ///
@@ -434,74 +300,63 @@ final class AgentConversationUiResolution {
 enum AgentThreadSnapshotMutation { refresh }
 
 /// 一次 AgentEvent 的完整同步 reduction 结果。
-final class AgentConversationMutation {
-  AgentConversationMutation({
+final class AgentConversationReduction {
+  AgentConversationReduction({
     required this.accepted,
+    required this.state,
     this.rejectionReason,
-    Iterable<AgentConversationStateChange> stateChangesBeforeTimeline =
-        const <AgentConversationStateChange>[],
     Iterable<AgentTimelineMutation> timelineMutations =
         const <AgentTimelineMutation>[],
-    Iterable<AgentConversationStateChange> stateChanges =
-        const <AgentConversationStateChange>[],
-    this.uiUpdate,
-    this.uiResolution = const AgentConversationUiResolution(),
-    this.threadSnapshot,
     Iterable<AgentConversationEffect> effects =
         const <AgentConversationEffect>[],
-  }) : stateChangesBeforeTimeline =
-           List<AgentConversationStateChange>.unmodifiable(
-             stateChangesBeforeTimeline,
-           ),
-       timelineMutations = List<AgentTimelineMutation>.unmodifiable(
+    this.urgency = AgentUiUpdateUrgency.nextFrame,
+    Iterable<AgentUiEffect> uiEffects = const <AgentUiEffect>[],
+    this.uiRegions,
+    this.uiResolution = const AgentConversationUiResolution(),
+    this.threadSnapshot,
+  }) : timelineMutations = List<AgentTimelineMutation>.unmodifiable(
          timelineMutations,
        ),
-       stateChanges = List<AgentConversationStateChange>.unmodifiable(
-         stateChanges,
-       ),
-       effects = List<AgentConversationEffect>.unmodifiable(effects);
+       effects = List<AgentConversationEffect>.unmodifiable(effects),
+       uiEffects = List<AgentUiEffect>.unmodifiable(uiEffects);
 
-  factory AgentConversationMutation.rejected(
-    String reason, {
+  factory AgentConversationReduction.rejected(
+    String reason,
+    AgentConversationSessionState state, {
     Iterable<AgentConversationEffect> effects =
         const <AgentConversationEffect>[],
   }) {
-    return AgentConversationMutation(
+    return AgentConversationReduction(
       accepted: false,
+      state: state,
       rejectionReason: reason,
       effects: effects,
     );
   }
 
   final bool accepted;
+  final AgentConversationSessionState state;
   final String? rejectionReason;
-  final List<AgentConversationStateChange> stateChangesBeforeTimeline;
   final List<AgentTimelineMutation> timelineMutations;
-  final List<AgentConversationStateChange> stateChanges;
+  final List<AgentConversationEffect> effects;
+  final AgentUiUpdateUrgency urgency;
+  final List<AgentUiEffect> uiEffects;
 
-  /// null 表示该 case 完全不发布 UI；空 request 与 null 不同，可冲刷 pending。
-  final AgentUiUpdateRequest? uiUpdate;
+  /// null 表示该 case 完全不发布 UI；空集合与 null 不同，可冲刷 pending。
+  final Set<AgentUiRegion>? uiRegions;
   final AgentConversationUiResolution uiResolution;
   final AgentThreadSnapshotMutation? threadSnapshot;
-  final List<AgentConversationEffect> effects;
-}
 
-/// typed state application 的同步结果。
-final class AgentConversationStateMutationOutcome {
-  const AgentConversationStateMutationOutcome({
-    this.pendingInteractionChanged = false,
-  });
-
-  static const none = AgentConversationStateMutationOutcome();
-
-  final bool pendingInteractionChanged;
-
-  AgentConversationStateMutationOutcome mergedWith(
-    AgentConversationStateMutationOutcome other,
-  ) {
-    return AgentConversationStateMutationOutcome(
-      pendingInteractionChanged:
-          pendingInteractionChanged || other.pendingInteractionChanged,
+  /// 由 [uiRegions] / [urgency] / [uiEffects] 合成；null 表示不发布。
+  AgentUiUpdateRequest? get uiUpdate {
+    final regions = uiRegions;
+    if (regions == null) {
+      return null;
+    }
+    return AgentUiUpdateRequest(
+      regions: regions,
+      urgency: urgency,
+      effects: uiEffects,
     );
   }
 }

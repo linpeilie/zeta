@@ -121,7 +121,7 @@ class AgentConversationViewModel
       providerId: conversationBinding.providerId,
     );
     _uiUpdates = _uiUpdateScheduler;
-    _eventStateTarget = _AgentConversationEventStateTarget(this);
+    _eventStateSink = _AgentConversationStateSink(this);
     _eventUiUpdates = _AgentConversationEventUiUpdatePort(this);
     _effectRunner = DefaultAgentConversationEffectRunner(
       currentScope: _currentEffectScope,
@@ -134,12 +134,13 @@ class AgentConversationViewModel
               ),
       onTurnTerminal: onTurnTerminal,
       onAttention: _handleAttentionSignal,
+      sessionEffects: _AgentConversationSessionEffects(this),
     );
     _eventProcessor = AgentConversationEventProcessor(
       reducer: _eventReducerContexts.live,
       context: _buildEventReducerContext,
       timeline: _timeline,
-      stateTarget: _eventStateTarget,
+      stateSink: _eventStateSink,
       uiUpdates: _eventUiUpdates,
       effectRunner: _effectRunner,
       observers: <AgentEventObserver>[
@@ -220,7 +221,7 @@ class AgentConversationViewModel
   late final AgentUiUpdateScheduler _uiUpdateScheduler;
   late final AgentUiUpdatePort _uiUpdates;
   late final AgentConversationReducerContexts _eventReducerContexts;
-  late final AgentConversationStateMutationTarget _eventStateTarget;
+  late final AgentConversationStateSink _eventStateSink;
   late final AgentUiUpdatePort _eventUiUpdates;
   late final AgentConversationEffectRunner _effectRunner;
   late final AgentConversationEventProcessor _eventProcessor;
@@ -243,16 +244,16 @@ class AgentConversationViewModel
   /// 从提交被接受起持有的长生命周期活动令牌；终态或 VM dispose 时释放。
   AgentConversationTurnActivity? _turnActivity;
 
-  AgentSession? _session;
+  AgentConversationSessionState _state =
+      const AgentConversationSessionState.initial(
+        defaultTitle: defaultThreadTitle,
+      );
   String? _projectPath;
   String? _contextFilePath;
   AgentThreadSummary? _boundThreadSummary;
   late final Future<void> _initialization;
 
-  String? _restoredSessionId;
   String? _selectedProviderId;
-  AgentThreadOpenPhase _threadOpenPhase = AgentThreadOpenPhase.idle;
-  bool _requiresResumedSelectedThread = false;
   bool _compactRequestInProgress = false;
   Future<void>? _settingsLoadFuture;
   bool _disposed = false;
@@ -262,18 +263,56 @@ class AgentConversationViewModel
   String? _conversationModeCatalogProviderId;
   AgentRuntimeScope? _conversationModeCatalogRuntimeScope;
 
-  String _currentThreadTitle = defaultThreadTitle;
-  String _currentThreadPreview = '';
-  AgentProviderStatus _status = const AgentProviderStatus.idle();
-  AgentThreadRuntimeStatus? _threadRuntimeStatus;
-  bool _threadWaitingOnApproval = false;
-  bool _threadWaitingOnUserInput = false;
+  AgentSession? get _session => _state.session;
+  set _session(AgentSession? value) => _state = _state.copyWith(session: value);
+
+  String? get _restoredSessionId => _state.restoredSessionId;
+  set _restoredSessionId(String? value) =>
+      _state = _state.withRestoredSessionId(value);
+
+  AgentThreadOpenPhase get _threadOpenPhase => _state.threadOpenPhase;
+  set _threadOpenPhase(AgentThreadOpenPhase value) =>
+      _state = _state.copyWith(threadOpenPhase: value);
+
+  bool get _requiresResumedSelectedThread =>
+      _state.requiresResumedSelectedThread;
+  set _requiresResumedSelectedThread(bool value) =>
+      _state = _state.copyWith(requiresResumedSelectedThread: value);
+
+  String get _currentThreadTitle => _state.currentThreadTitle;
+  set _currentThreadTitle(String value) =>
+      _state = _state.copyWith(currentThreadTitle: value);
+
+  String get _currentThreadPreview => _state.currentThreadPreview;
+  set _currentThreadPreview(String value) =>
+      _state = _state.copyWith(currentThreadPreview: value);
+
+  AgentProviderStatus get _status => _state.status;
+  set _status(AgentProviderStatus value) =>
+      _state = _state.copyWith(status: value);
+
+  AgentThreadRuntimeStatus? get _threadRuntimeStatus =>
+      _state.threadRuntimeStatus;
+  set _threadRuntimeStatus(AgentThreadRuntimeStatus? value) =>
+      _state = _state.copyWith(threadRuntimeStatus: value);
+
+  bool get _threadWaitingOnApproval => _state.threadWaitingOnApproval;
+  set _threadWaitingOnApproval(bool value) =>
+      _state = _state.copyWith(threadWaitingOnApproval: value);
+
+  bool get _threadWaitingOnUserInput => _state.threadWaitingOnUserInput;
+  set _threadWaitingOnUserInput(bool value) =>
+      _state = _state.copyWith(threadWaitingOnUserInput: value);
 
   /// 最近一次模型改道的目标模型；用于头栏短暂提示。
-  String? _modelRerouteNotice;
+  String? get _modelRerouteNotice => _state.modelRerouteNotice;
+  set _modelRerouteNotice(String? value) =>
+      _state = _state.copyWith(modelRerouteNotice: value);
 
-  List<AgentSessionConfigOption> _sessionConfigOptions =
-      const <AgentSessionConfigOption>[];
+  List<AgentSessionConfigOption> get _sessionConfigOptions =>
+      _state.sessionConfigOptions;
+  set _sessionConfigOptions(List<AgentSessionConfigOption> value) =>
+      _state = _state.copyWith(sessionConfigOptions: value);
 
   bool _modelsRefreshing = false;
   String? _modelRefreshError;
@@ -289,11 +328,14 @@ class AgentConversationViewModel
   DateTime? _threadLastActiveAt;
 
   /// 按 turnId 跟踪 Guardian 自动评审状态。
-  final Map<String, AgentAutoApprovalReviewEvent> _autoReviewsByTurnId =
-      <String, AgentAutoApprovalReviewEvent>{};
+  Map<String, AgentAutoApprovalReviewEvent> get _autoReviewsByTurnId =>
+      _state.autoReviewsByTurnId;
 
   /// 最近一次被拒绝的自动评审（供放行按钮使用）。
-  AgentAutoApprovalReviewEvent? _latestDeniedAutoReview;
+  AgentAutoApprovalReviewEvent? get _latestDeniedAutoReview =>
+      _state.latestDeniedAutoReview;
+  set _latestDeniedAutoReview(AgentAutoApprovalReviewEvent? value) =>
+      _state = _state.copyWith(latestDeniedAutoReview: value);
 
   List<AgentConversationMessage> get messages => _timeline.messages;
 
@@ -3881,6 +3923,10 @@ class AgentConversationViewModel
       pendingTurnGroupId: _timeline.pendingTurnGroupId,
       hasTurn: _timeline.hasTurn,
       isHistoryTurnId: _timeline.isHistoryTurnId,
+      hasRunningTurnExcluding: (turnId) {
+        final running = _timeline.selectedRunningTurnId;
+        return running != null && running != turnId;
+      },
       modelsRefreshing: _modelsRefreshing,
       activeProviderName: activeProviderName,
       activeProviderConfig: _boundProviderConfig,
@@ -3985,11 +4031,6 @@ class AgentConversationViewModel
     }
   }
 
-  /// 更新当前 thread 的列表旁文案。
-  void _applyThreadPreview(String preview) {
-    _currentThreadPreview = preview;
-  }
-
   /// 首条用户输入的临时展示标题（单行、限长，避免头栏被长 prompt 撑爆）。
   static String _provisionalThreadTitle(String text) {
     final singleLine = text
@@ -4021,12 +4062,6 @@ class AgentConversationViewModel
     return status == AgentThreadRuntimeStatus.active
         ? AgentThreadRuntimeStatus.idle
         : status;
-  }
-
-  void _clearThreadRuntimeStatus() {
-    _threadRuntimeStatus = null;
-    _threadWaitingOnApproval = false;
-    _threadWaitingOnUserInput = false;
   }
 
   void _publishUiChanges(AgentUiUpdateRequest request) {
@@ -4178,157 +4213,104 @@ final class _AgentConversationEventUiUpdatePort implements AgentUiUpdatePort {
   }
 }
 
-final class _AgentConversationEventStateTarget
-    implements AgentConversationStateMutationTarget {
-  const _AgentConversationEventStateTarget(this._viewModel);
+final class _AgentConversationStateSink implements AgentConversationStateSink {
+  const _AgentConversationStateSink(this._viewModel);
 
   final AgentConversationViewModel _viewModel;
 
   @override
-  AgentConversationStateMutationOutcome apply(
-    AgentConversationStateChange change,
-  ) {
-    switch (change) {
-      case AgentSetProviderStatusChange():
-        _viewModel._status = change.status;
-      case AgentApplySessionStartedChange():
-        final session = change.session;
-        final wasCurrentSession = _viewModel._session?.id == session.id;
-        _viewModel._session = session;
-        _viewModel._restoredSessionId = session.id;
-        if (!wasCurrentSession) {
-          _viewModel._bindConversationModeThreadPreservingDraft(
-            threadId: session.id,
-            historyMode:
-                _viewModel._conversationModeController.state.confirmedMode,
-          );
-          _viewModel._conversationModeController.setTurnRunning(
-            _viewModel.isTurnRunning,
-          );
-        }
-        _viewModel._threadOpenPhase = AgentThreadOpenPhase.idle;
-        _viewModel._requiresResumedSelectedThread = false;
-        _viewModel._applySessionTitle(session);
-      case AgentApplyThreadRuntimeStatusChange():
-        _viewModel._applyThreadRuntimeStatus(
-          status: change.status,
-          waitingOnApproval: change.waitingOnApproval,
-          waitingOnUserInput: change.waitingOnUserInput,
-        );
-      case AgentApplyThreadNameChange():
-        final name = change.threadName?.trim();
-        if (name != null && name.isNotEmpty) {
-          _viewModel._applyThreadTitle(name);
-        }
-      case AgentApplyThreadPreviewChange():
-        _viewModel._applyThreadPreview(change.preview);
-      case AgentApplyThreadPermissionSettingsChange():
-        // data mapper 已将 Codex 私有字段原子解码为中立 selection。settings
-        // 只回写事件所属 thread effective，不二次 apply、不持久化 provider 默认。
-        unawaited(
-          _viewModel._permissionSelectionController.applyThreadSettings(
-            threadId: change.threadId,
-            permissionSelection: change.permissionSelection,
-          ),
-        );
-      case AgentApplyThreadSettingsChange():
-        final event = change.event;
-        _viewModel._applyThreadSelectionFromThreadSettings(
-          modelId: event.model,
-        );
-        _viewModel._conversationModeController.applyThreadSettings(event);
-      case AgentApplySessionConfigChange():
-        _viewModel._sessionConfigOptions = change.options;
-        _viewModel._applyThreadSelectionFromSessionConfigOptions(
-          change.options,
-        );
-      case AgentApplyConversationModeChange():
-        _viewModel._applyServerConversationMode(change.event);
-      case AgentApplyAutoApprovalReviewChange():
-        final event = change.event;
-        _viewModel._autoReviewsByTurnId[event.turnId] = event;
-        if (event.status == 'denied') {
-          _viewModel._latestDeniedAutoReview = event;
-        } else if (event.status == 'approved' &&
-            _viewModel._latestDeniedAutoReview?.reviewId == event.reviewId) {
-          _viewModel._latestDeniedAutoReview = null;
-        }
-      case AgentPrepareTurnCompletedChange():
-        return AgentConversationStateMutationOutcome(
-          pendingInteractionChanged: _viewModel
-              ._updatePlanExecutionRequestForCompletedTurn(change.event),
-        );
-      case AgentFinalizeTurnStartedChange():
-        _viewModel._conversationModeController.setTurnRunning(true);
-        _viewModel._consumeActivityDirty();
-        _viewModel._syncElapsedTicker();
-      case AgentFinalizeTurnCompletedChange():
-        _viewModel._conversationModeController.setTurnRunning(
-          _viewModel.isTurnRunning,
-        );
-        _viewModel._modelRerouteNotice = null;
-        if (!_viewModel.isTurnRunning &&
-            _viewModel._status.state == AgentProviderConnectionState.running) {
-          _viewModel._status = AgentProviderStatus(
-            state: AgentProviderConnectionState.ready,
-            message: _viewModel._textCatalog.providerReady(
-              _viewModel.activeProviderName,
-            ),
-          );
-        }
-        if (!_viewModel.isTurnRunning &&
-            _viewModel._threadRuntimeStatus ==
-                AgentThreadRuntimeStatus.active) {
-          _viewModel._applyThreadRuntimeStatus(
-            status: AgentThreadRuntimeStatus.idle,
-            waitingOnApproval: false,
-            waitingOnUserInput: false,
-          );
-        }
-        // completed/failed 终态后释放 Binding 活动令牌。
-        if (!_viewModel.isTurnRunning) {
-          _viewModel._releaseTurnActivity();
-        }
-        _viewModel._consumeActivityDirty();
-        _viewModel._syncElapsedTicker();
-        _viewModel._maybeAutoStartPlanExecution();
-      case AgentPrepareInterruptedTurnChange():
-        _viewModel._clearThreadRuntimeStatus();
-        return AgentConversationStateMutationOutcome(
-          pendingInteractionChanged: _viewModel._planExecutionHandoffController
-              .clear(),
-        );
-      case AgentFinalizeInterruptedTurnChange():
-        _viewModel._conversationModeController.setTurnRunning(
-          _viewModel.isTurnRunning,
-        );
-        // 取消/中断同样结束 Binding 活动状态。
-        if (!_viewModel.isTurnRunning) {
-          _viewModel._releaseTurnActivity();
-        }
-        _viewModel._consumeActivityDirty();
-        _viewModel._syncElapsedTicker();
-      case AgentApplyToolStatusChange():
-        final title = change.toolCall
-            .displayTitle(_viewModel._textCatalog)
-            .trim();
-        if (title.isNotEmpty) {
-          _viewModel._status = AgentProviderStatus(
-            state: AgentProviderConnectionState.running,
-            message: title.length > 80 ? '${title.substring(0, 80)}…' : title,
-          );
-        }
-      case AgentSetModelRerouteNoticeChange():
-        _viewModel._modelRerouteNotice = change.notice;
-      case AgentHandleModelListChange():
-        _viewModel._applyModelList(change.models);
-    }
-    return AgentConversationStateMutationOutcome.none;
+  AgentConversationSessionState get sessionState => _viewModel._state;
+
+  @override
+  void applyReducedState(AgentConversationSessionState next) {
+    _viewModel._state = next;
   }
 
   @override
   void requestThreadSnapshotRefresh() {
     _viewModel._threadSnapshotRefreshPending = true;
+  }
+}
+
+final class _AgentConversationSessionEffects
+    implements AgentConversationSessionEffectHandler {
+  const _AgentConversationSessionEffects(this._viewModel);
+
+  final AgentConversationViewModel _viewModel;
+
+  @override
+  void bindConversationModeThread({required String threadId}) {
+    _viewModel._bindConversationModeThreadPreservingDraft(
+      threadId: threadId,
+      historyMode: _viewModel._conversationModeController.state.confirmedMode,
+    );
+    _viewModel._conversationModeController.setTurnRunning(
+      _viewModel.isTurnRunning,
+    );
+  }
+
+  @override
+  void applyThreadPermission({
+    required String threadId,
+    required AgentPermissionSelection permissionSelection,
+  }) {
+    // data mapper 已将 Codex 私有字段原子解码为中立 selection。settings
+    // 只回写事件所属 thread effective，不二次 apply、不持久化 provider 默认。
+    unawaited(
+      _viewModel._permissionSelectionController.applyThreadSettings(
+        threadId: threadId,
+        permissionSelection: permissionSelection,
+      ),
+    );
+  }
+
+  @override
+  void applyThreadSettings(AgentThreadSettingsUpdatedEvent event) {
+    _viewModel._applyThreadSelectionFromThreadSettings(modelId: event.model);
+    _viewModel._conversationModeController.applyThreadSettings(event);
+  }
+
+  @override
+  void syncThreadSelectionFromSessionConfig(
+    List<AgentSessionConfigOption> options,
+  ) {
+    _viewModel._applyThreadSelectionFromSessionConfigOptions(options);
+  }
+
+  @override
+  void applyServerConversationMode(AgentConversationModeUpdatedEvent event) {
+    _viewModel._applyServerConversationMode(event);
+  }
+
+  @override
+  void preparePlanHandoff(AgentTurnCompletedEvent event) {
+    _viewModel._updatePlanExecutionRequestForCompletedTurn(event);
+  }
+
+  @override
+  void syncTurnRunning({bool? forceRunning}) {
+    final running = forceRunning ?? _viewModel.isTurnRunning;
+    _viewModel._conversationModeController.setTurnRunning(running);
+    if (!running) {
+      _viewModel._releaseTurnActivity();
+    }
+    _viewModel._consumeActivityDirty();
+    _viewModel._syncElapsedTicker();
+  }
+
+  @override
+  void autoStartPlanExecution() {
+    _viewModel._maybeAutoStartPlanExecution();
+  }
+
+  @override
+  void clearPlanHandoff() {
+    _viewModel._planExecutionHandoffController.clear();
+  }
+
+  @override
+  void applyModelList(AgentModelList models) {
+    _viewModel._applyModelList(models);
   }
 }
 

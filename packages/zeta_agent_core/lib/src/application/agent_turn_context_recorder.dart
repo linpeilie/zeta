@@ -156,10 +156,10 @@ final class AgentTurnContextObserver implements AgentEventObserver {
   @override
   void onProcessed(
     AgentEvent event,
-    AgentConversationMutation mutation,
+    AgentConversationReduction reduction,
     AgentConversationReducerContext context,
   ) {
-    if (!mutation.accepted ||
+    if (!reduction.accepted ||
         context.scope != AgentConversationReductionScope.live) {
       return;
     }

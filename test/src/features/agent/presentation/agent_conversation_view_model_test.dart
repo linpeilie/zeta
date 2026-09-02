@@ -4358,6 +4358,7 @@ void main() {
               AgentUiRegion.liveTurnBinding,
               AgentUiRegion.header,
               AgentUiRegion.composer,
+              AgentUiRegion.pendingInteraction,
             },
             urgency: AgentUiUpdateUrgency.immediate,
             effects: const <AgentUiEffect>[AgentRequestAutoScroll()],

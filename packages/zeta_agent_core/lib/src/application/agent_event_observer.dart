@@ -13,7 +13,7 @@ import 'package:zeta_agent_core/src/domain/agent_models.dart';
 abstract interface class AgentEventObserver {
   void onProcessed(
     AgentEvent event,
-    AgentConversationMutation mutation,
+    AgentConversationReduction reduction,
     AgentConversationReducerContext context,
   );
 }

@@ -37,4 +37,18 @@ void main() {
       }
     }
   });
+
+  test('SessionState 不 import Flutter（G6）', () {
+    final source = File(
+      'packages/zeta_agent_core/lib/src/application/agent_conversation_session_state.dart',
+    ).readAsStringSync();
+    expect(source.contains('package:flutter/'), isFalse);
+  });
+
+  test('StateChange 类已彻底删除', () {
+    final source = File(
+      'packages/zeta_agent_core/lib/src/application/agent_conversation_mutation.dart',
+    ).readAsStringSync();
+    expect(source.contains('AgentConversationStateChange'), isFalse);
+  });
 }

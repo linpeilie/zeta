@@ -339,7 +339,82 @@ void main() {
         isEmpty,
       );
     });
+
+    test('runtime 换代后不再自动启动 Plan 执行', () {
+      final handler = _RecordingSessionEffects();
+      var current = _scope(connectionEpoch: 3, turnId: 'turn-1');
+      final runner = DefaultAgentConversationEffectRunner(
+        currentScope: () => current,
+        recordModelCatalog: _discardCatalog,
+        sessionEffects: handler,
+      );
+      addTearDown(runner.dispose);
+      final effect = AgentAutoStartPlanExecutionEffect(
+        scope: _scope(connectionEpoch: 3, turnId: 'turn-1'),
+      );
+
+      current = _scope(connectionEpoch: 4, turnId: 'turn-1');
+      runner.run(effect);
+
+      expect(handler.autoStartCount, 0);
+    });
+
+    test('同 generation 内 turn 完成仍会自动启动 Plan 执行', () {
+      final handler = _RecordingSessionEffects();
+      final runner = DefaultAgentConversationEffectRunner(
+        currentScope: () => _scope(turnId: 'turn-1'),
+        recordModelCatalog: _discardCatalog,
+        sessionEffects: handler,
+      );
+      addTearDown(runner.dispose);
+
+      runner.run(
+        AgentAutoStartPlanExecutionEffect(scope: _scope(turnId: 'turn-1')),
+      );
+
+      expect(handler.autoStartCount, 1);
+    });
   });
+}
+
+final class _RecordingSessionEffects
+    implements AgentConversationSessionEffectHandler {
+  int autoStartCount = 0;
+
+  @override
+  void autoStartPlanExecution() => autoStartCount += 1;
+
+  @override
+  void applyModelList(AgentModelList models) {}
+
+  @override
+  void applyServerConversationMode(AgentConversationModeUpdatedEvent event) {}
+
+  @override
+  void applyThreadPermission({
+    required String threadId,
+    required AgentPermissionSelection permissionSelection,
+  }) {}
+
+  @override
+  void applyThreadSettings(AgentThreadSettingsUpdatedEvent event) {}
+
+  @override
+  void bindConversationModeThread({required String threadId}) {}
+
+  @override
+  void clearPlanHandoff() {}
+
+  @override
+  void preparePlanHandoff(AgentTurnCompletedEvent event) {}
+
+  @override
+  void syncThreadSelectionFromSessionConfig(
+    List<AgentSessionConfigOption> options,
+  ) {}
+
+  @override
+  void syncTurnRunning({bool? forceRunning}) {}
 }
 
 const _turnCompletedAttention = AgentAttentionSignal(

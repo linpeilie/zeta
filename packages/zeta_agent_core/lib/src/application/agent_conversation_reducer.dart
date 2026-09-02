@@ -1,5 +1,7 @@
 import 'package:zeta_agent_core/src/application/agent_conversation_effect.dart';
 import 'package:zeta_agent_core/src/application/agent_conversation_mutation.dart';
+import 'package:zeta_agent_core/src/application/agent_conversation_session_state.dart';
+import 'package:zeta_agent_core/src/application/agent_conversation_timeline_store.dart';
 import 'package:zeta_agent_core/src/application/agent_ui_update_request.dart';
 import 'package:zeta_agent_core/src/domain/agent_models.dart';
 import 'package:zeta_agent_core/src/domain/fallback_agent_ui_text_catalog.dart';
@@ -80,6 +82,7 @@ final class AgentConversationReducerContext {
     required this.pendingTurnGroupId,
     required this.hasTurn,
     required this.isHistoryTurnId,
+    required this.hasRunningTurnExcluding,
     required this.modelsRefreshing,
     required this.activeProviderName,
     required this.activeProviderConfig,
@@ -92,15 +95,22 @@ final class AgentConversationReducerContext {
   final String? pendingTurnGroupId;
   final bool Function(String turnId) hasTurn;
   final bool Function(String turnId) isHistoryTurnId;
+
+  /// 排除指定 turn 后，是否仍有 running turn。
+  ///
+  /// 供 turn 终态归约判断"这一回合结束后会话是否仍在运行"，
+  /// 避免 reducer 依赖 timeline mutation 的应用顺序。
+  final bool Function(String excludedTurnId) hasRunningTurnExcluding;
   final bool modelsRefreshing;
   final String activeProviderName;
   final AgentProviderConfig activeProviderConfig;
   final AgentConversationEffectScope effectScope;
 }
 
-/// 将规范化 [AgentEvent] 纯同步归约为 state/timeline/UI/snapshot/effect 描述。
+/// 将规范化 [AgentEvent] 纯同步归约为 nextState/timeline/UI/snapshot/effect 描述。
 ///
-/// reducer 不访问 Flutter scheduler，不创建 Timer，也不执行 Future。每个 live、
+/// reducer 返回 [AgentConversationSessionState]，不访问 Flutter scheduler，
+/// 不创建 Timer，也不执行 Future。副作用一律走 EffectRunner。每个 live、
 /// history、replay consumer 必须创建独立实例。
 final class AgentConversationReducer {
   AgentConversationReducer._({
@@ -155,8 +165,9 @@ final class AgentConversationReducer {
   final Set<String> _shownDeprecationSummaries = <String>{};
   String? _lastShownErrorMessage;
 
-  AgentConversationMutation reduce(
+  AgentConversationReduction reduce(
     AgentEvent event,
+    AgentConversationSessionState state,
     AgentConversationReducerContext context,
   ) {
     assert(
@@ -164,74 +175,101 @@ final class AgentConversationReducer {
       'Reducer 与 context 的 live/history/replay scope 必须一致。',
     );
     return switch (event) {
-      AgentStatusEvent() => _status(event),
-      AgentSessionStartedEvent() => _sessionStarted(event, context),
-      AgentThreadStatusChangedEvent() => _threadStatus(event, context),
-      AgentThreadNameUpdatedEvent() => _threadName(event, context),
-      AgentThreadPreviewUpdatedEvent() => _threadPreview(event, context),
-      AgentThreadArchivedEvent() => _noOp(),
-      AgentThreadUnarchivedEvent() => _noOp(),
-      AgentThreadDeletedEvent() => _noOp(),
-      AgentThreadClosedEvent() => _threadClosed(event, context),
-      AgentThreadCompactedEvent() => _threadCompacted(event, context),
-      AgentThreadSettingsUpdatedEvent() => _threadSettings(event, context),
-      AgentAutoApprovalReviewEvent() => _autoApprovalReview(event, context),
-      AgentTurnStartedEvent() => _turnStarted(event, context),
-      AgentTurnCompletedEvent() => _turnCompleted(event, context),
-      AgentTokenUsageEvent() => _tokenUsage(event, context),
-      AgentContextWindowUsageEvent() => _contextUsage(event, context),
-      AgentMessageDeltaEvent() => _messageDelta(event, context),
-      AgentReasoningDeltaEvent() => _reasoningDelta(event, context),
-      AgentMessageUpdatedEvent() => _messageUpdated(event, context),
-      AgentPlanUpdatedEvent() => _planUpdated(event, context),
-      AgentSessionConfigUpdatedEvent() => _sessionConfig(event, context),
+      AgentStatusEvent() => _status(event, state),
+      AgentSessionStartedEvent() => _sessionStarted(event, state, context),
+      AgentThreadStatusChangedEvent() => _threadStatus(event, state, context),
+      AgentThreadNameUpdatedEvent() => _threadName(event, state, context),
+      AgentThreadPreviewUpdatedEvent() => _threadPreview(event, state, context),
+      AgentThreadArchivedEvent() => _noOp(state),
+      AgentThreadUnarchivedEvent() => _noOp(state),
+      AgentThreadDeletedEvent() => _noOp(state),
+      AgentThreadClosedEvent() => _threadClosed(event, state, context),
+      AgentThreadCompactedEvent() => _threadCompacted(event, state, context),
+      AgentThreadSettingsUpdatedEvent() => _threadSettings(
+        event,
+        state,
+        context,
+      ),
+      AgentAutoApprovalReviewEvent() => _autoApprovalReview(
+        event,
+        state,
+        context,
+      ),
+      AgentTurnStartedEvent() => _turnStarted(event, state, context),
+      AgentTurnCompletedEvent() => _turnCompleted(event, state, context),
+      AgentTokenUsageEvent() => _tokenUsage(event, state, context),
+      AgentContextWindowUsageEvent() => _contextUsage(event, state, context),
+      AgentMessageDeltaEvent() => _messageDelta(event, state, context),
+      AgentReasoningDeltaEvent() => _reasoningDelta(event, state, context),
+      AgentMessageUpdatedEvent() => _messageUpdated(event, state, context),
+      AgentPlanUpdatedEvent() => _planUpdated(event, state, context),
+      AgentSessionConfigUpdatedEvent() => _sessionConfig(event, state, context),
       AgentConversationModeUpdatedEvent() => _conversationModeUpdated(
         event,
+        state,
         context,
       ),
       AgentPlanApprovalRequestedEvent() => _planApprovalRequested(
         event,
+        state,
         context,
       ),
-      AgentPlanApprovalResolvedEvent() => _planApprovalResolved(event, context),
-      AgentTurnFileChangesEvent() => _turnFileChanges(event, context),
-      AgentToolCallEvent() => _toolCall(event, context),
-      AgentPermissionRequestedEvent() => _permissionRequested(event, context),
-      AgentPermissionResolvedEvent() => _permissionResolved(event, context),
-      AgentQuestionRequestedEvent() => _questionRequested(event, context),
-      AgentQuestionResolvedEvent() => _questionResolved(event, context),
-      AgentModelReroutedEvent() => _modelRerouted(event, context),
-      AgentDeprecationNoticeEvent() => _deprecation(event),
-      AgentSystemItemEvent() => _systemItem(event, context),
-      AgentErrorEvent() => _error(event, context),
-      AgentModelListEvent() => _modelList(event, context),
+      AgentPlanApprovalResolvedEvent() => _planApprovalResolved(
+        event,
+        state,
+        context,
+      ),
+      AgentTurnFileChangesEvent() => _turnFileChanges(event, state, context),
+      AgentToolCallEvent() => _toolCall(event, state, context),
+      AgentPermissionRequestedEvent() => _permissionRequested(
+        event,
+        state,
+        context,
+      ),
+      AgentPermissionResolvedEvent() => _permissionResolved(
+        event,
+        state,
+        context,
+      ),
+      AgentQuestionRequestedEvent() => _questionRequested(
+        event,
+        state,
+        context,
+      ),
+      AgentQuestionResolvedEvent() => _questionResolved(event, state, context),
+      AgentModelReroutedEvent() => _modelRerouted(event, state, context),
+      AgentDeprecationNoticeEvent() => _deprecation(event, state),
+      AgentSystemItemEvent() => _systemItem(event, state, context),
+      AgentErrorEvent() => _error(event, state, context),
+      AgentModelListEvent() => _modelList(event, state, context),
     };
   }
 
   /// Provider stream onDone 与 thread/closed 共用的中断收尾 mutation。
-  AgentConversationMutation settleInterruptedTurn({
+  AgentConversationReduction settleInterruptedTurn({
     required String fallbackTurnId,
+    required AgentConversationSessionState state,
+    required AgentConversationReducerContext context,
   }) {
-    return AgentConversationMutation(
-      accepted: true,
-      stateChangesBeforeTimeline: const <AgentConversationStateChange>[
-        AgentPrepareInterruptedTurnChange(),
-      ],
+    return _accept(
+      state.copyWith(
+        threadRuntimeStatus: null,
+        threadWaitingOnApproval: false,
+        threadWaitingOnUserInput: false,
+      ),
       timelineMutations: <AgentTimelineMutation>[
         AgentSettleInterruptedTimelineMutation(fallbackTurnId),
       ],
-      stateChanges: const <AgentConversationStateChange>[
-        AgentFinalizeInterruptedTurnChange(),
+      effects: <AgentConversationEffect>[
+        AgentClearPlanHandoffEffect(scope: context.effectScope),
+        AgentSyncTurnRunningEffect(scope: context.effectScope),
       ],
-      uiUpdate: AgentUiUpdateRequest(
-        regions: const <AgentUiRegion>{
-          AgentUiRegion.history,
-          AgentUiRegion.liveTurnBinding,
-          AgentUiRegion.header,
-          AgentUiRegion.composer,
-        },
-        urgency: AgentUiUpdateUrgency.immediate,
-      ),
+      uiRegions: const <AgentUiRegion>{
+        AgentUiRegion.history,
+        AgentUiRegion.liveTurnBinding,
+        AgentUiRegion.header,
+        AgentUiRegion.composer,
+      },
       uiResolution: const AgentConversationUiResolution(
         includePendingInteractionWhenStateChanges: true,
       ),
@@ -239,19 +277,20 @@ final class AgentConversationReducer {
     );
   }
 
-  AgentConversationMutation _status(AgentStatusEvent event) {
-    return AgentConversationMutation(
-      accepted: true,
-      stateChanges: <AgentConversationStateChange>[
-        AgentSetProviderStatusChange(event.status),
-      ],
+  AgentConversationReduction _status(
+    AgentStatusEvent event,
+    AgentConversationSessionState state,
+  ) {
+    return _accept(
+      state.copyWith(status: event.status),
       // 空 immediate request 仍可吸收并冲刷已有的 next-frame pending。
-      uiUpdate: AgentUiUpdateRequest(urgency: AgentUiUpdateUrgency.immediate),
+      uiRegions: const <AgentUiRegion>{},
     );
   }
 
-  AgentConversationMutation _sessionStarted(
+  AgentConversationReduction _sessionStarted(
     AgentSessionStartedEvent event,
+    AgentConversationSessionState state,
     AgentConversationReducerContext context,
   ) {
     final selectedThreadId = context.selectedThreadId;
@@ -259,185 +298,191 @@ final class AgentConversationReducer {
         ? selectedThreadId == event.session.id
         : !context.requiresResumedSelectedThread;
     if (!accepted) {
-      return AgentConversationMutation.rejected('sessionStartedThreadMismatch');
+      return _rejected(state, 'sessionStartedThreadMismatch');
     }
-    return AgentConversationMutation(
-      accepted: true,
-      stateChanges: <AgentConversationStateChange>[
-        AgentApplySessionStartedChange(event.session),
+    var next = state.copyWith(
+      session: event.session,
+      restoredSessionId: event.session.id,
+      threadOpenPhase: AgentThreadOpenPhase.idle,
+      requiresResumedSelectedThread: false,
+    );
+    next = _adoptSessionTitle(next, event.session);
+    return _accept(
+      next,
+      effects: <AgentConversationEffect>[
+        if (state.session?.id != event.session.id)
+          AgentBindConversationModeThreadEffect(
+            scope: context.effectScope,
+            threadId: event.session.id,
+          ),
       ],
-      uiUpdate: AgentUiUpdateRequest(
-        regions: const <AgentUiRegion>{
-          AgentUiRegion.header,
-          AgentUiRegion.composer,
-        },
-        urgency: AgentUiUpdateUrgency.immediate,
-      ),
+      uiRegions: const <AgentUiRegion>{
+        AgentUiRegion.header,
+        AgentUiRegion.composer,
+      },
       threadSnapshot: AgentThreadSnapshotMutation.refresh,
     );
   }
 
-  AgentConversationMutation _threadStatus(
+  AgentConversationReduction _threadStatus(
     AgentThreadStatusChangedEvent event,
+    AgentConversationSessionState state,
     AgentConversationReducerContext context,
   ) {
     if (!_shouldHandleCurrent(context, sessionId: event.threadId)) {
-      return AgentConversationMutation.rejected('currentThreadMismatch');
+      return _rejected(state, 'currentThreadMismatch');
     }
-    return AgentConversationMutation(
-      accepted: true,
-      stateChanges: <AgentConversationStateChange>[
-        AgentApplyThreadRuntimeStatusChange(
-          status: event.status,
-          waitingOnApproval: event.waitingOnApproval,
-          waitingOnUserInput: event.waitingOnUserInput,
-        ),
-      ],
-      uiUpdate: AgentUiUpdateRequest(
-        regions: const <AgentUiRegion>{AgentUiRegion.header},
-        urgency: AgentUiUpdateUrgency.immediate,
+    return _accept(
+      _withThreadRuntimeStatus(
+        state,
+        status: event.status,
+        waitingOnApproval: event.waitingOnApproval,
+        waitingOnUserInput: event.waitingOnUserInput,
       ),
+      uiRegions: const <AgentUiRegion>{AgentUiRegion.header},
       threadSnapshot: AgentThreadSnapshotMutation.refresh,
     );
   }
 
-  AgentConversationMutation _threadName(
+  AgentConversationReduction _threadName(
     AgentThreadNameUpdatedEvent event,
+    AgentConversationSessionState state,
     AgentConversationReducerContext context,
   ) {
     if (!_shouldHandleCurrent(context, sessionId: event.threadId)) {
-      return AgentConversationMutation.rejected('currentThreadMismatch');
+      return _rejected(state, 'currentThreadMismatch');
     }
-    return AgentConversationMutation(
-      accepted: true,
-      stateChanges: <AgentConversationStateChange>[
-        AgentApplyThreadNameChange(event.threadName),
-      ],
-      uiUpdate: AgentUiUpdateRequest(
-        regions: const <AgentUiRegion>{AgentUiRegion.header},
-        urgency: AgentUiUpdateUrgency.immediate,
-      ),
+    final name = event.threadName?.trim();
+    return _accept(
+      name != null && name.isNotEmpty ? _withThreadTitle(state, name) : state,
+      uiRegions: const <AgentUiRegion>{AgentUiRegion.header},
       threadSnapshot: AgentThreadSnapshotMutation.refresh,
     );
   }
 
-  AgentConversationMutation _threadPreview(
+  AgentConversationReduction _threadPreview(
     AgentThreadPreviewUpdatedEvent event,
+    AgentConversationSessionState state,
     AgentConversationReducerContext context,
   ) {
     if (!_shouldHandleCurrent(context, sessionId: event.threadId)) {
-      return AgentConversationMutation.rejected('currentThreadMismatch');
+      return _rejected(state, 'currentThreadMismatch');
     }
-    return AgentConversationMutation(
-      accepted: true,
-      stateChanges: <AgentConversationStateChange>[
-        AgentApplyThreadPreviewChange(event.preview),
-      ],
+    return _accept(
+      state.copyWith(currentThreadPreview: event.preview),
       // 旁文案只影响列表 snapshot；仍发一次 UI publish，以便延帧刷新 snapshot。
-      uiUpdate: AgentUiUpdateRequest(
-        regions: const <AgentUiRegion>{},
-        urgency: AgentUiUpdateUrgency.immediate,
-      ),
+      uiRegions: const <AgentUiRegion>{},
       threadSnapshot: AgentThreadSnapshotMutation.refresh,
     );
   }
 
-  AgentConversationMutation _noOp() {
-    return AgentConversationMutation(accepted: true);
+  AgentConversationReduction _noOp(AgentConversationSessionState state) {
+    return _accept(state, uiRegions: null);
   }
 
-  AgentConversationMutation _threadClosed(
+  AgentConversationReduction _threadClosed(
     AgentThreadClosedEvent event,
+    AgentConversationSessionState state,
     AgentConversationReducerContext context,
   ) {
     if (!_shouldHandleCurrent(context, sessionId: event.threadId)) {
-      return AgentConversationMutation.rejected('currentThreadMismatch');
+      return _rejected(state, 'currentThreadMismatch');
     }
-    return settleInterruptedTurn(fallbackTurnId: 'closed');
+    return settleInterruptedTurn(
+      fallbackTurnId: 'closed',
+      state: state,
+      context: context,
+    );
   }
 
-  AgentConversationMutation _threadCompacted(
+  AgentConversationReduction _threadCompacted(
     AgentThreadCompactedEvent event,
+    AgentConversationSessionState state,
     AgentConversationReducerContext context,
   ) {
     if (!_shouldHandleCurrent(context, sessionId: event.threadId)) {
-      return AgentConversationMutation.rejected('currentThreadMismatch');
+      return _rejected(state, 'currentThreadMismatch');
     }
-    return AgentConversationMutation(accepted: true);
+    return _accept(state, uiRegions: null);
   }
 
-  AgentConversationMutation _threadSettings(
+  AgentConversationReduction _threadSettings(
     AgentThreadSettingsUpdatedEvent event,
+    AgentConversationSessionState state,
     AgentConversationReducerContext context,
   ) {
     final permissionSelection = event.permissionSelection;
     final isCurrent = _shouldHandleCurrent(context, sessionId: event.threadId);
     if (!isCurrent && permissionSelection == null) {
-      return AgentConversationMutation.rejected('currentThreadMismatch');
+      return _rejected(state, 'currentThreadMismatch');
     }
-    final stateChanges = <AgentConversationStateChange>[
-      if (permissionSelection != null)
-        AgentApplyThreadPermissionSettingsChange(
-          threadId: event.threadId,
-          permissionSelection: permissionSelection,
-        ),
-      if (isCurrent) AgentApplyThreadSettingsChange(event),
-    ];
-    return AgentConversationMutation(
-      accepted: true,
-      stateChanges: stateChanges,
-      uiUpdate: isCurrent
-          ? AgentUiUpdateRequest(
-              regions: const <AgentUiRegion>{AgentUiRegion.composer},
-              urgency: AgentUiUpdateUrgency.immediate,
-            )
+    return _accept(
+      state,
+      effects: <AgentConversationEffect>[
+        if (permissionSelection != null)
+          AgentApplyThreadPermissionEffect(
+            scope: context.effectScope,
+            threadId: event.threadId,
+            permissionSelection: permissionSelection,
+          ),
+        if (isCurrent)
+          AgentApplyThreadSettingsEffect(
+            scope: context.effectScope,
+            event: event,
+          ),
+      ],
+      uiRegions: isCurrent
+          ? const <AgentUiRegion>{AgentUiRegion.composer}
           : null,
     );
   }
 
-  AgentConversationMutation _sessionConfig(
+  AgentConversationReduction _sessionConfig(
     AgentSessionConfigUpdatedEvent event,
+    AgentConversationSessionState state,
     AgentConversationReducerContext context,
   ) {
     if (!_shouldHandleCurrent(context, sessionId: event.sessionId)) {
-      return AgentConversationMutation.rejected('currentThreadMismatch');
+      return _rejected(state, 'currentThreadMismatch');
     }
-    return AgentConversationMutation(
-      accepted: true,
-      stateChanges: <AgentConversationStateChange>[
-        AgentApplySessionConfigChange(event.options),
+    return _accept(
+      state.copyWith(sessionConfigOptions: event.options),
+      effects: <AgentConversationEffect>[
+        AgentSyncThreadSelectionEffect(
+          scope: context.effectScope,
+          options: event.options,
+        ),
       ],
-      uiUpdate: AgentUiUpdateRequest(
-        regions: const <AgentUiRegion>{AgentUiRegion.composer},
-        urgency: AgentUiUpdateUrgency.immediate,
-      ),
+      uiRegions: const <AgentUiRegion>{AgentUiRegion.composer},
     );
   }
 
-  AgentConversationMutation _conversationModeUpdated(
+  AgentConversationReduction _conversationModeUpdated(
     AgentConversationModeUpdatedEvent event,
+    AgentConversationSessionState state,
     AgentConversationReducerContext context,
   ) {
     if (!_shouldHandleCurrent(context, sessionId: event.sessionId)) {
-      return AgentConversationMutation.rejected('currentThreadMismatch');
+      return _rejected(state, 'currentThreadMismatch');
     }
-    return AgentConversationMutation(
-      accepted: true,
-      stateChanges: <AgentConversationStateChange>[
-        AgentApplyConversationModeChange(event),
+    return _accept(
+      state,
+      effects: <AgentConversationEffect>[
+        AgentApplyServerConversationModeEffect(
+          scope: context.effectScope,
+          event: event,
+        ),
       ],
-      uiUpdate: AgentUiUpdateRequest(
-        regions: const <AgentUiRegion>{
-          AgentUiRegion.header,
-          AgentUiRegion.composer,
-        },
-        urgency: AgentUiUpdateUrgency.immediate,
-      ),
+      uiRegions: const <AgentUiRegion>{
+        AgentUiRegion.header,
+        AgentUiRegion.composer,
+      },
     );
   }
 
-  AgentConversationMutation _autoApprovalReview(
+  AgentConversationReduction _autoApprovalReview(
     AgentAutoApprovalReviewEvent event,
+    AgentConversationSessionState state,
     AgentConversationReducerContext context,
   ) {
     if (!_shouldHandleCurrent(
@@ -445,26 +490,21 @@ final class AgentConversationReducer {
       sessionId: event.threadId,
       turnId: event.turnId,
     )) {
-      return AgentConversationMutation.rejected('currentThreadMismatch');
+      return _rejected(state, 'currentThreadMismatch');
     }
-    return AgentConversationMutation(
-      accepted: true,
-      stateChanges: <AgentConversationStateChange>[
-        AgentApplyAutoApprovalReviewChange(event),
-      ],
-      uiUpdate: AgentUiUpdateRequest(
-        regions: const <AgentUiRegion>{
-          AgentUiRegion.header,
-          AgentUiRegion.liveTurn,
-          AgentUiRegion.history,
-        },
-        urgency: AgentUiUpdateUrgency.immediate,
-      ),
+    return _accept(
+      _withAutoReview(state, event),
+      uiRegions: const <AgentUiRegion>{
+        AgentUiRegion.header,
+        AgentUiRegion.liveTurn,
+        AgentUiRegion.history,
+      },
     );
   }
 
-  AgentConversationMutation _turnStarted(
+  AgentConversationReduction _turnStarted(
     AgentTurnStartedEvent event,
+    AgentConversationSessionState state,
     AgentConversationReducerContext context,
   ) {
     if (!_shouldHandleCurrent(
@@ -472,33 +512,34 @@ final class AgentConversationReducer {
       sessionId: event.turn.sessionId,
       turnId: event.turn.id,
     )) {
-      return AgentConversationMutation.rejected('currentThreadMismatch');
+      return _rejected(state, 'currentThreadMismatch');
     }
     _lastShownErrorMessage = null;
-    return AgentConversationMutation(
-      accepted: true,
+    return _accept(
+      state,
       timelineMutations: <AgentTimelineMutation>[
         AgentBeginLiveTurnTimelineMutation(event.turn),
       ],
-      stateChanges: const <AgentConversationStateChange>[
-        AgentFinalizeTurnStartedChange(),
+      effects: <AgentConversationEffect>[
+        AgentSyncTurnRunningEffect(
+          scope: context.effectScope.forTurn(event.turn.id),
+          forceRunning: true,
+        ),
       ],
-      uiUpdate: AgentUiUpdateRequest(
-        regions: const <AgentUiRegion>{
-          AgentUiRegion.history,
-          AgentUiRegion.liveTurnBinding,
-          AgentUiRegion.liveTurn,
-          AgentUiRegion.header,
-          AgentUiRegion.composer,
-        },
-        urgency: AgentUiUpdateUrgency.immediate,
-      ),
+      uiRegions: const <AgentUiRegion>{
+        AgentUiRegion.history,
+        AgentUiRegion.liveTurnBinding,
+        AgentUiRegion.liveTurn,
+        AgentUiRegion.header,
+        AgentUiRegion.composer,
+      },
       threadSnapshot: AgentThreadSnapshotMutation.refresh,
     );
   }
 
-  AgentConversationMutation _turnCompleted(
+  AgentConversationReduction _turnCompleted(
     AgentTurnCompletedEvent event,
+    AgentConversationSessionState state,
     AgentConversationReducerContext context,
   ) {
     if (!_shouldHandleCurrent(
@@ -506,7 +547,7 @@ final class AgentConversationReducer {
       sessionId: event.sessionId,
       turnId: event.turnId,
     )) {
-      return AgentConversationMutation.rejected('currentThreadMismatch');
+      return _rejected(state, 'currentThreadMismatch');
     }
     final timelineMutations = <AgentTimelineMutation>[];
     final errorMessage = event.errorMessage;
@@ -530,32 +571,14 @@ final class AgentConversationReducer {
       );
     }
     timelineMutations.add(AgentCompleteLiveTurnTimelineMutation(event));
-    return AgentConversationMutation(
-      accepted: true,
-      stateChangesBeforeTimeline: <AgentConversationStateChange>[
-        AgentPrepareTurnCompletedChange(event),
-      ],
+    final turnScope = context.effectScope.forTurn(event.turnId);
+    return _accept(
+      _finalizeTurnCompleted(state, event, context),
       timelineMutations: timelineMutations,
-      stateChanges: <AgentConversationStateChange>[
-        AgentFinalizeTurnCompletedChange(event),
-      ],
-      uiUpdate: AgentUiUpdateRequest(
-        regions: const <AgentUiRegion>{
-          AgentUiRegion.history,
-          AgentUiRegion.liveTurnBinding,
-          AgentUiRegion.header,
-          AgentUiRegion.composer,
-        },
-        urgency: AgentUiUpdateUrgency.immediate,
-        effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
-      ),
-      uiResolution: const AgentConversationUiResolution(
-        includePendingInteractionWhenStateChanges: true,
-      ),
-      threadSnapshot: AgentThreadSnapshotMutation.refresh,
       effects: <AgentConversationEffect>[
+        AgentPreparePlanHandoffEffect(scope: turnScope, event: event),
         AgentTurnCompletedEffect(
-          scope: context.effectScope.forTurn(event.turnId),
+          scope: turnScope,
           turnId: event.turnId,
           attention: AgentAttentionSignal(
             kind: switch (event.status) {
@@ -575,12 +598,26 @@ final class AgentConversationReducer {
             turnId: event.turnId,
           ),
         ),
+        AgentSyncTurnRunningEffect(scope: turnScope),
+        AgentAutoStartPlanExecutionEffect(scope: turnScope),
       ],
+      uiRegions: const <AgentUiRegion>{
+        AgentUiRegion.history,
+        AgentUiRegion.liveTurnBinding,
+        AgentUiRegion.header,
+        AgentUiRegion.composer,
+      },
+      uiEffects: const <AgentUiEffect>[AgentRequestAutoScroll()],
+      uiResolution: const AgentConversationUiResolution(
+        includePendingInteractionWhenStateChanges: true,
+      ),
+      threadSnapshot: AgentThreadSnapshotMutation.refresh,
     );
   }
 
-  AgentConversationMutation _tokenUsage(
+  AgentConversationReduction _tokenUsage(
     AgentTokenUsageEvent event,
+    AgentConversationSessionState state,
     AgentConversationReducerContext context,
   ) {
     if (!_shouldHandleCurrent(
@@ -588,30 +625,28 @@ final class AgentConversationReducer {
       sessionId: event.sessionId,
       turnId: event.turnId,
     )) {
-      return AgentConversationMutation.rejected('currentThreadMismatch');
+      return _rejected(state, 'currentThreadMismatch');
     }
     final usageTurnId = event.turnId;
     final usageOnHistory =
         usageTurnId != null && context.isHistoryTurnId(usageTurnId);
-    return AgentConversationMutation(
-      accepted: true,
+    return _accept(
+      state,
       timelineMutations: <AgentTimelineMutation>[
         AgentUpdateTurnTokenUsageTimelineMutation(event),
       ],
-      uiUpdate: AgentUiUpdateRequest(
-        regions: <AgentUiRegion>{
-          AgentUiRegion.header,
-          AgentUiRegion.composer,
-          if (usageOnHistory) AgentUiRegion.history,
-          if (!usageOnHistory) AgentUiRegion.liveTurn,
-        },
-        urgency: AgentUiUpdateUrgency.immediate,
-      ),
+      uiRegions: <AgentUiRegion>{
+        AgentUiRegion.header,
+        AgentUiRegion.composer,
+        if (usageOnHistory) AgentUiRegion.history,
+        if (!usageOnHistory) AgentUiRegion.liveTurn,
+      },
     );
   }
 
-  AgentConversationMutation _contextUsage(
+  AgentConversationReduction _contextUsage(
     AgentContextWindowUsageEvent event,
+    AgentConversationSessionState state,
     AgentConversationReducerContext context,
   ) {
     if (!_shouldHandleCurrent(
@@ -619,25 +654,24 @@ final class AgentConversationReducer {
       sessionId: event.sessionId,
       turnId: event.turnId,
     )) {
-      return AgentConversationMutation.rejected('currentThreadMismatch');
+      return _rejected(state, 'currentThreadMismatch');
     }
-    return AgentConversationMutation(
-      accepted: true,
+    return _accept(
+      state,
       timelineMutations: <AgentTimelineMutation>[
         AgentUpdateContextWindowUsageTimelineMutation(event),
       ],
-      uiUpdate: AgentUiUpdateRequest(
-        regions: const <AgentUiRegion>{
-          AgentUiRegion.liveTurn,
-          AgentUiRegion.composer,
-        },
-        urgency: AgentUiUpdateUrgency.nextFrame,
-      ),
+      uiRegions: const <AgentUiRegion>{
+        AgentUiRegion.liveTurn,
+        AgentUiRegion.composer,
+      },
+      urgency: AgentUiUpdateUrgency.nextFrame,
     );
   }
 
-  AgentConversationMutation _messageDelta(
+  AgentConversationReduction _messageDelta(
     AgentMessageDeltaEvent event,
+    AgentConversationSessionState state,
     AgentConversationReducerContext context,
   ) {
     if (!_shouldHandleCurrent(
@@ -645,29 +679,28 @@ final class AgentConversationReducer {
       sessionId: event.sessionId,
       turnId: event.turnId,
     )) {
-      return AgentConversationMutation.rejected('currentThreadMismatch');
+      return _rejected(state, 'currentThreadMismatch');
     }
-    return AgentConversationMutation(
-      accepted: true,
+    return _accept(
+      state,
       timelineMutations: <AgentTimelineMutation>[
         AgentAppendMessageDeltaTimelineMutation(event),
       ],
-      uiUpdate: AgentUiUpdateRequest(
-        regions: <AgentUiRegion>{
-          AgentUiRegion.liveTurn,
-          if (event.kind == AgentMessageKind.plan) AgentUiRegion.expansion,
-        },
-        urgency: AgentUiUpdateUrgency.nextFrame,
-        effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
-      ),
+      uiRegions: <AgentUiRegion>{
+        AgentUiRegion.liveTurn,
+        if (event.kind == AgentMessageKind.plan) AgentUiRegion.expansion,
+      },
+      urgency: AgentUiUpdateUrgency.nextFrame,
+      uiEffects: const <AgentUiEffect>[AgentRequestAutoScroll()],
       uiResolution: const AgentConversationUiResolution(
         includeHeaderWhenActivityChanges: true,
       ),
     );
   }
 
-  AgentConversationMutation _reasoningDelta(
+  AgentConversationReduction _reasoningDelta(
     AgentReasoningDeltaEvent event,
+    AgentConversationSessionState state,
     AgentConversationReducerContext context,
   ) {
     if (!_shouldHandleCurrent(
@@ -675,29 +708,28 @@ final class AgentConversationReducer {
       sessionId: event.sessionId,
       turnId: event.turnId,
     )) {
-      return AgentConversationMutation.rejected('currentThreadMismatch');
+      return _rejected(state, 'currentThreadMismatch');
     }
-    return AgentConversationMutation(
-      accepted: true,
+    return _accept(
+      state,
       timelineMutations: <AgentTimelineMutation>[
         AgentAppendReasoningDeltaTimelineMutation(event),
       ],
-      uiUpdate: AgentUiUpdateRequest(
-        regions: const <AgentUiRegion>{
-          AgentUiRegion.liveTurn,
-          AgentUiRegion.expansion,
-        },
-        urgency: AgentUiUpdateUrgency.nextFrame,
-        effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
-      ),
+      uiRegions: const <AgentUiRegion>{
+        AgentUiRegion.liveTurn,
+        AgentUiRegion.expansion,
+      },
+      urgency: AgentUiUpdateUrgency.nextFrame,
+      uiEffects: const <AgentUiEffect>[AgentRequestAutoScroll()],
       uiResolution: const AgentConversationUiResolution(
         includeHeaderWhenActivityChanges: true,
       ),
     );
   }
 
-  AgentConversationMutation _messageUpdated(
+  AgentConversationReduction _messageUpdated(
     AgentMessageUpdatedEvent event,
+    AgentConversationSessionState state,
     AgentConversationReducerContext context,
   ) {
     if (!_shouldHandleCurrent(
@@ -705,23 +737,21 @@ final class AgentConversationReducer {
       sessionId: event.sessionId,
       turnId: event.turnId,
     )) {
-      return AgentConversationMutation.rejected('currentThreadMismatch');
+      return _rejected(state, 'currentThreadMismatch');
     }
-    return AgentConversationMutation(
-      accepted: true,
+    return _accept(
+      state,
       timelineMutations: <AgentTimelineMutation>[
         AgentUpdateMessageTimelineMutation(event),
       ],
-      uiUpdate: AgentUiUpdateRequest(
-        regions: const <AgentUiRegion>{AgentUiRegion.liveTurn},
-        urgency: AgentUiUpdateUrgency.immediate,
-        effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
-      ),
+      uiRegions: const <AgentUiRegion>{AgentUiRegion.liveTurn},
+      uiEffects: const <AgentUiEffect>[AgentRequestAutoScroll()],
     );
   }
 
-  AgentConversationMutation _planUpdated(
+  AgentConversationReduction _planUpdated(
     AgentPlanUpdatedEvent event,
+    AgentConversationSessionState state,
     AgentConversationReducerContext context,
   ) {
     if (!_shouldHandleCurrent(
@@ -729,22 +759,20 @@ final class AgentConversationReducer {
       sessionId: event.sessionId,
       turnId: event.turnId,
     )) {
-      return AgentConversationMutation.rejected('currentThreadMismatch');
+      return _rejected(state, 'currentThreadMismatch');
     }
-    return AgentConversationMutation(
-      accepted: true,
+    return _accept(
+      state,
       timelineMutations: <AgentTimelineMutation>[
         AgentReplaceActivePlanTimelineMutation(event),
       ],
-      uiUpdate: AgentUiUpdateRequest(
-        regions: const <AgentUiRegion>{AgentUiRegion.liveTurn},
-        urgency: AgentUiUpdateUrgency.immediate,
-      ),
+      uiRegions: const <AgentUiRegion>{AgentUiRegion.liveTurn},
     );
   }
 
-  AgentConversationMutation _turnFileChanges(
+  AgentConversationReduction _turnFileChanges(
     AgentTurnFileChangesEvent event,
+    AgentConversationSessionState state,
     AgentConversationReducerContext context,
   ) {
     if (!_shouldHandleCurrent(
@@ -752,23 +780,21 @@ final class AgentConversationReducer {
       sessionId: event.sessionId,
       turnId: event.turnId,
     )) {
-      return AgentConversationMutation.rejected('currentThreadMismatch');
+      return _rejected(state, 'currentThreadMismatch');
     }
-    return AgentConversationMutation(
-      accepted: true,
+    return _accept(
+      state,
       timelineMutations: <AgentTimelineMutation>[
         AgentUpsertTurnFileChangesTimelineMutation(event),
       ],
-      uiUpdate: AgentUiUpdateRequest(
-        regions: const <AgentUiRegion>{AgentUiRegion.liveTurn},
-        urgency: AgentUiUpdateUrgency.immediate,
-        effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
-      ),
+      uiRegions: const <AgentUiRegion>{AgentUiRegion.liveTurn},
+      uiEffects: const <AgentUiEffect>[AgentRequestAutoScroll()],
     );
   }
 
-  AgentConversationMutation _toolCall(
+  AgentConversationReduction _toolCall(
     AgentToolCallEvent event,
+    AgentConversationSessionState state,
     AgentConversationReducerContext context,
   ) {
     final toolCall = event.toolCall;
@@ -777,34 +803,42 @@ final class AgentConversationReducer {
       sessionId: toolCall.sessionId,
       turnId: toolCall.turnId,
     )) {
-      return AgentConversationMutation.rejected('currentThreadMismatch');
+      return _rejected(state, 'currentThreadMismatch');
     }
     final isActive =
         toolCall.status == AgentToolStatus.inProgress ||
         toolCall.status == AgentToolStatus.pending;
-    return AgentConversationMutation(
-      accepted: true,
+    var next = state;
+    if (isActive) {
+      final title = toolCall.displayTitle(textCatalog).trim();
+      if (title.isNotEmpty) {
+        next = next.copyWith(
+          status: AgentProviderStatus(
+            state: AgentProviderConnectionState.running,
+            message: title.length > 80 ? '${title.substring(0, 80)}…' : title,
+          ),
+        );
+      }
+    }
+    return _accept(
+      next,
       timelineMutations: <AgentTimelineMutation>[
         AgentUpsertToolCallTimelineMutation(toolCall),
       ],
-      stateChanges: isActive
-          ? <AgentConversationStateChange>[AgentApplyToolStatusChange(toolCall)]
-          : const <AgentConversationStateChange>[],
-      uiUpdate: AgentUiUpdateRequest(
-        regions: const <AgentUiRegion>{AgentUiRegion.liveTurn},
-        urgency: isActive
-            ? AgentUiUpdateUrgency.nextFrame
-            : AgentUiUpdateUrgency.immediate,
-        effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
-      ),
+      uiRegions: const <AgentUiRegion>{AgentUiRegion.liveTurn},
+      urgency: isActive
+          ? AgentUiUpdateUrgency.nextFrame
+          : AgentUiUpdateUrgency.immediate,
+      uiEffects: const <AgentUiEffect>[AgentRequestAutoScroll()],
       uiResolution: const AgentConversationUiResolution(
         includeHeaderWhenActivityChanges: true,
       ),
     );
   }
 
-  AgentConversationMutation _permissionRequested(
+  AgentConversationReduction _permissionRequested(
     AgentPermissionRequestedEvent event,
+    AgentConversationSessionState state,
     AgentConversationReducerContext context,
   ) {
     if (!_shouldHandleCurrent(
@@ -812,9 +846,10 @@ final class AgentConversationReducer {
       sessionId: event.request.sessionId,
       turnId: event.request.turnId,
     )) {
-      return AgentConversationMutation.rejected('currentThreadMismatch');
+      return _rejected(state, 'currentThreadMismatch');
     }
     return _pendingInteraction(
+      state,
       AgentAddPermissionRequestTimelineMutation(event.request),
       effect: AgentAttentionEffect(
         scope: context.effectScope.forTurn(event.request.turnId),
@@ -829,14 +864,16 @@ final class AgentConversationReducer {
     );
   }
 
-  AgentConversationMutation _permissionResolved(
+  AgentConversationReduction _permissionResolved(
     AgentPermissionResolvedEvent event,
+    AgentConversationSessionState state,
     AgentConversationReducerContext context,
   ) {
     if (!_shouldHandleCurrent(context, sessionId: event.threadId)) {
-      return AgentConversationMutation.rejected('currentThreadMismatch');
+      return _rejected(state, 'currentThreadMismatch');
     }
     return _pendingInteraction(
+      state,
       AgentRemovePermissionRequestTimelineMutation(event.requestId),
       effect: AgentAttentionEffect(
         scope: context.effectScope,
@@ -850,8 +887,9 @@ final class AgentConversationReducer {
     );
   }
 
-  AgentConversationMutation _questionRequested(
+  AgentConversationReduction _questionRequested(
     AgentQuestionRequestedEvent event,
+    AgentConversationSessionState state,
     AgentConversationReducerContext context,
   ) {
     if (!_shouldHandleCurrent(
@@ -859,9 +897,10 @@ final class AgentConversationReducer {
       sessionId: event.request.sessionId,
       turnId: event.request.turnId,
     )) {
-      return AgentConversationMutation.rejected('currentThreadMismatch');
+      return _rejected(state, 'currentThreadMismatch');
     }
     return _pendingInteraction(
+      state,
       AgentAddQuestionRequestTimelineMutation(event.request),
       effect: AgentAttentionEffect(
         scope: context.effectScope.forTurn(event.request.turnId),
@@ -876,14 +915,16 @@ final class AgentConversationReducer {
     );
   }
 
-  AgentConversationMutation _questionResolved(
+  AgentConversationReduction _questionResolved(
     AgentQuestionResolvedEvent event,
+    AgentConversationSessionState state,
     AgentConversationReducerContext context,
   ) {
     if (!_shouldHandleCurrent(context, sessionId: event.threadId)) {
-      return AgentConversationMutation.rejected('currentThreadMismatch');
+      return _rejected(state, 'currentThreadMismatch');
     }
     return _pendingInteraction(
+      state,
       AgentRemoveQuestionRequestTimelineMutation(event.requestId),
       effect: AgentAttentionEffect(
         scope: context.effectScope,
@@ -897,8 +938,9 @@ final class AgentConversationReducer {
     );
   }
 
-  AgentConversationMutation _planApprovalRequested(
+  AgentConversationReduction _planApprovalRequested(
     AgentPlanApprovalRequestedEvent event,
+    AgentConversationSessionState state,
     AgentConversationReducerContext context,
   ) {
     if (!_shouldHandleCurrent(
@@ -906,9 +948,10 @@ final class AgentConversationReducer {
       sessionId: event.request.sessionId,
       turnId: event.request.turnId,
     )) {
-      return AgentConversationMutation.rejected('currentThreadMismatch');
+      return _rejected(state, 'currentThreadMismatch');
     }
     return _pendingInteraction(
+      state,
       AgentAddPlanApprovalRequestTimelineMutation(event.request),
       effect: AgentAttentionEffect(
         scope: context.effectScope.forTurn(event.request.turnId),
@@ -923,14 +966,16 @@ final class AgentConversationReducer {
     );
   }
 
-  AgentConversationMutation _planApprovalResolved(
+  AgentConversationReduction _planApprovalResolved(
     AgentPlanApprovalResolvedEvent event,
+    AgentConversationSessionState state,
     AgentConversationReducerContext context,
   ) {
     if (!_shouldHandleCurrent(context, sessionId: event.sessionId)) {
-      return AgentConversationMutation.rejected('currentThreadMismatch');
+      return _rejected(state, 'currentThreadMismatch');
     }
     return _pendingInteraction(
+      state,
       AgentRemovePlanApprovalRequestTimelineMutation(event.requestId),
       effect: AgentAttentionEffect(
         scope: context.effectScope,
@@ -944,26 +989,25 @@ final class AgentConversationReducer {
     );
   }
 
-  AgentConversationMutation _pendingInteraction(
+  AgentConversationReduction _pendingInteraction(
+    AgentConversationSessionState state,
     AgentTimelineMutation timelineMutation, {
     AgentConversationEffect? effect,
   }) {
-    return AgentConversationMutation(
-      accepted: true,
+    return _accept(
+      state,
       timelineMutations: <AgentTimelineMutation>[timelineMutation],
-      uiUpdate: AgentUiUpdateRequest(
-        regions: const <AgentUiRegion>{
-          AgentUiRegion.liveTurn,
-          AgentUiRegion.pendingInteraction,
-        },
-        urgency: AgentUiUpdateUrgency.immediate,
-      ),
+      uiRegions: const <AgentUiRegion>{
+        AgentUiRegion.liveTurn,
+        AgentUiRegion.pendingInteraction,
+      },
       effects: <AgentConversationEffect>[?effect],
     );
   }
 
-  AgentConversationMutation _modelRerouted(
+  AgentConversationReduction _modelRerouted(
     AgentModelReroutedEvent event,
+    AgentConversationSessionState state,
     AgentConversationReducerContext context,
   ) {
     if (!_shouldHandleCurrent(
@@ -971,15 +1015,12 @@ final class AgentConversationReducer {
       sessionId: event.threadId,
       turnId: event.turnId,
     )) {
-      return AgentConversationMutation.rejected('currentThreadMismatch');
+      return _rejected(state, 'currentThreadMismatch');
     }
-    return AgentConversationMutation(
-      accepted: true,
-      stateChanges: <AgentConversationStateChange>[
-        AgentSetModelRerouteNoticeChange(
-          textCatalog.modelReroutedNotice(event.toModel),
-        ),
-      ],
+    return _accept(
+      state.copyWith(
+        modelRerouteNotice: textCatalog.modelReroutedNotice(event.toModel),
+      ),
       timelineMutations: <AgentTimelineMutation>[
         AgentAddHistoryEventTimelineMutation(
           AgentHistoryEventEntry(
@@ -991,23 +1032,23 @@ final class AgentConversationReducer {
           ),
         ),
       ],
-      uiUpdate: AgentUiUpdateRequest(
-        regions: const <AgentUiRegion>{
-          AgentUiRegion.liveTurn,
-          AgentUiRegion.header,
-        },
-        urgency: AgentUiUpdateUrgency.immediate,
-        effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
-      ),
+      uiRegions: const <AgentUiRegion>{
+        AgentUiRegion.liveTurn,
+        AgentUiRegion.header,
+      },
+      uiEffects: const <AgentUiEffect>[AgentRequestAutoScroll()],
     );
   }
 
-  AgentConversationMutation _deprecation(AgentDeprecationNoticeEvent event) {
+  AgentConversationReduction _deprecation(
+    AgentDeprecationNoticeEvent event,
+    AgentConversationSessionState state,
+  ) {
     if (!_shownDeprecationSummaries.add(event.summary)) {
-      return AgentConversationMutation.rejected('duplicateDeprecation');
+      return _rejected(state, 'duplicateDeprecation');
     }
-    return AgentConversationMutation(
-      accepted: true,
+    return _accept(
+      state,
       timelineMutations: <AgentTimelineMutation>[
         AgentAddHistoryEventTimelineMutation(
           AgentHistoryEventEntry(
@@ -1021,16 +1062,14 @@ final class AgentConversationReducer {
           ),
         ),
       ],
-      uiUpdate: AgentUiUpdateRequest(
-        regions: const <AgentUiRegion>{AgentUiRegion.liveTurn},
-        urgency: AgentUiUpdateUrgency.immediate,
-        effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
-      ),
+      uiRegions: const <AgentUiRegion>{AgentUiRegion.liveTurn},
+      uiEffects: const <AgentUiEffect>[AgentRequestAutoScroll()],
     );
   }
 
-  AgentConversationMutation _systemItem(
+  AgentConversationReduction _systemItem(
     AgentSystemItemEvent event,
+    AgentConversationSessionState state,
     AgentConversationReducerContext context,
   ) {
     if (!_shouldHandleCurrent(
@@ -1038,49 +1077,45 @@ final class AgentConversationReducer {
       sessionId: event.sessionId,
       turnId: event.turnId,
     )) {
-      return AgentConversationMutation.rejected('currentThreadMismatch');
+      return _rejected(state, 'currentThreadMismatch');
     }
-    return AgentConversationMutation(
-      accepted: true,
+    return _accept(
+      state,
       timelineMutations: <AgentTimelineMutation>[
         AgentAddHistoryEventTimelineMutation(event.entry),
       ],
-      uiUpdate: AgentUiUpdateRequest(
-        regions: const <AgentUiRegion>{AgentUiRegion.liveTurn},
-        urgency: AgentUiUpdateUrgency.immediate,
-        effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
-      ),
+      uiRegions: const <AgentUiRegion>{AgentUiRegion.liveTurn},
+      uiEffects: const <AgentUiEffect>[AgentRequestAutoScroll()],
     );
   }
 
-  AgentConversationMutation _modelList(
+  AgentConversationReduction _modelList(
     AgentModelListEvent event,
+    AgentConversationSessionState state,
     AgentConversationReducerContext context,
   ) {
-    return AgentConversationMutation(
-      accepted: true,
-      stateChanges: <AgentConversationStateChange>[
-        AgentHandleModelListChange(event.models),
+    return _accept(
+      state,
+      uiRegions: const <AgentUiRegion>{AgentUiRegion.composer},
+      effects: <AgentConversationEffect>[
+        AgentApplyModelListEffect(
+          scope: context.effectScope,
+          models: event.models,
+        ),
+        if (!context.modelsRefreshing)
+          AgentRecordModelCatalogEffect(
+            scope: context.effectScope,
+            config: context.activeProviderConfig,
+            models: event.models,
+            source: '${context.activeProviderName} runtime',
+          ),
       ],
-      uiUpdate: AgentUiUpdateRequest(
-        regions: const <AgentUiRegion>{AgentUiRegion.composer},
-        urgency: AgentUiUpdateUrgency.immediate,
-      ),
-      effects: context.modelsRefreshing
-          ? const <AgentConversationEffect>[]
-          : <AgentConversationEffect>[
-              AgentRecordModelCatalogEffect(
-                scope: context.effectScope,
-                config: context.activeProviderConfig,
-                models: event.models,
-                source: '${context.activeProviderName} runtime',
-              ),
-            ],
     );
   }
 
-  AgentConversationMutation _error(
+  AgentConversationReduction _error(
     AgentErrorEvent event,
+    AgentConversationSessionState state,
     AgentConversationReducerContext context,
   ) {
     final logEffect = AgentLogProviderErrorEffect(
@@ -1092,14 +1127,15 @@ final class AgentConversationReducer {
       sessionId: event.sessionId,
       turnId: event.turnId,
     )) {
-      return AgentConversationMutation.rejected(
+      return _rejected(
+        state,
         'currentThreadMismatch',
         effects: <AgentConversationEffect>[logEffect],
       );
     }
     _lastShownErrorMessage = event.message;
-    return AgentConversationMutation(
-      accepted: true,
+    return _accept(
+      state,
       timelineMutations: <AgentTimelineMutation>[
         AgentAddConversationMessageTimelineMutation(
           AgentConversationMessageMutationData(
@@ -1109,17 +1145,142 @@ final class AgentConversationReducer {
           ),
         ),
       ],
-      uiUpdate: AgentUiUpdateRequest(
-        regions: const <AgentUiRegion>{
-          AgentUiRegion.history,
-          AgentUiRegion.liveTurn,
-          AgentUiRegion.header,
-        },
-        urgency: AgentUiUpdateUrgency.immediate,
-        effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
-      ),
+      uiRegions: const <AgentUiRegion>{
+        AgentUiRegion.history,
+        AgentUiRegion.liveTurn,
+        AgentUiRegion.header,
+      },
+      uiEffects: const <AgentUiEffect>[AgentRequestAutoScroll()],
       effects: <AgentConversationEffect>[logEffect],
     );
+  }
+
+  AgentConversationReduction _accept(
+    AgentConversationSessionState state, {
+    Iterable<AgentTimelineMutation> timelineMutations =
+        const <AgentTimelineMutation>[],
+    Iterable<AgentConversationEffect> effects =
+        const <AgentConversationEffect>[],
+    Set<AgentUiRegion>? uiRegions,
+    AgentUiUpdateUrgency urgency = AgentUiUpdateUrgency.immediate,
+    Iterable<AgentUiEffect> uiEffects = const <AgentUiEffect>[],
+    AgentConversationUiResolution uiResolution =
+        const AgentConversationUiResolution(),
+    AgentThreadSnapshotMutation? threadSnapshot,
+  }) {
+    return AgentConversationReduction(
+      accepted: true,
+      state: state,
+      timelineMutations: timelineMutations,
+      effects: effects,
+      uiRegions: uiRegions,
+      urgency: urgency,
+      uiEffects: uiEffects,
+      uiResolution: uiResolution,
+      threadSnapshot: threadSnapshot,
+    );
+  }
+
+  AgentConversationReduction _rejected(
+    AgentConversationSessionState state,
+    String reason, {
+    Iterable<AgentConversationEffect> effects =
+        const <AgentConversationEffect>[],
+  }) {
+    return AgentConversationReduction.rejected(reason, state, effects: effects);
+  }
+
+  AgentConversationSessionState _adoptSessionTitle(
+    AgentConversationSessionState state,
+    AgentSession session,
+  ) {
+    final title = session.title?.trim();
+    if (isAgentThreadTitlePlaceholder(title)) {
+      return state;
+    }
+    if (!isAgentThreadTitlePlaceholder(state.currentThreadTitle)) {
+      return state;
+    }
+    return _withThreadTitle(state, title!);
+  }
+
+  AgentConversationSessionState _withThreadTitle(
+    AgentConversationSessionState state,
+    String title,
+  ) {
+    final session = state.session;
+    return state.copyWith(
+      currentThreadTitle: title,
+      session: session == null
+          ? null
+          : AgentSession(
+              id: session.id,
+              providerId: session.providerId,
+              title: title,
+            ),
+    );
+  }
+
+  AgentConversationSessionState _withThreadRuntimeStatus(
+    AgentConversationSessionState state, {
+    required AgentThreadRuntimeStatus status,
+    required bool waitingOnApproval,
+    required bool waitingOnUserInput,
+  }) {
+    final isActive = status == AgentThreadRuntimeStatus.active;
+    return state.copyWith(
+      threadRuntimeStatus: status,
+      threadWaitingOnApproval: isActive && waitingOnApproval,
+      threadWaitingOnUserInput: isActive && waitingOnUserInput,
+    );
+  }
+
+  AgentConversationSessionState _withAutoReview(
+    AgentConversationSessionState state,
+    AgentAutoApprovalReviewEvent event,
+  ) {
+    final reviews = Map<String, AgentAutoApprovalReviewEvent>.of(
+      state.autoReviewsByTurnId,
+    );
+    reviews[event.turnId] = event;
+    var latest = state.latestDeniedAutoReview;
+    if (event.status == 'denied') {
+      latest = event;
+    } else if (event.status == 'approved' &&
+        latest?.reviewId == event.reviewId) {
+      latest = null;
+    }
+    return state.copyWith(
+      autoReviewsByTurnId: reviews,
+      latestDeniedAutoReview: latest,
+    );
+  }
+
+  AgentConversationSessionState _finalizeTurnCompleted(
+    AgentConversationSessionState state,
+    AgentTurnCompletedEvent event,
+    AgentConversationReducerContext context,
+  ) {
+    final willBeRunning = context.hasRunningTurnExcluding(event.turnId);
+    var next = state.copyWith(modelRerouteNotice: null);
+    if (!willBeRunning &&
+        state.status.state == AgentProviderConnectionState.running) {
+      next = next.copyWith(
+        status: AgentProviderStatus(
+          state: AgentProviderConnectionState.ready,
+          message: textCatalog.providerReady(context.activeProviderName),
+        ),
+      );
+    }
+    if (!willBeRunning &&
+        state.threadRuntimeStatus == AgentThreadRuntimeStatus.active) {
+      next = next.copyWith(
+        threadRuntimeStatus: AgentThreadRuntimeStatus.idle,
+        threadWaitingOnApproval: false,
+        threadWaitingOnUserInput: false,
+      );
+    }
+    return next;
   }
 
   bool _shouldHandleCurrent(

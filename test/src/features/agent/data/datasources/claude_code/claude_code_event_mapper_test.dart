@@ -651,6 +651,7 @@ AgentConversationEventProcessor _processor({
       pendingTurnGroupId: timeline.pendingTurnGroupId,
       hasTurn: timeline.hasTurn,
       isHistoryTurnId: timeline.isHistoryTurnId,
+      hasRunningTurnExcluding: (_) => false,
       modelsRefreshing: false,
       activeProviderName: 'Claude Code',
       activeProviderConfig: defaultClaudeCodeAgentProviderConfig,
@@ -664,20 +665,23 @@ AgentConversationEventProcessor _processor({
       ),
     ),
     timeline: timeline,
-    stateTarget: const _NoOpStateMutationTarget(),
+    stateSink: _NoOpStateSink(),
     uiUpdates: const _NoOpUiUpdatePort(),
     effectRunner: const _NoOpEffectRunner(),
   );
 }
 
-final class _NoOpStateMutationTarget
-    implements AgentConversationStateMutationTarget {
-  const _NoOpStateMutationTarget();
+final class _NoOpStateSink implements AgentConversationStateSink {
+  @override
+  AgentConversationSessionState sessionState =
+      const AgentConversationSessionState.initial(
+        defaultTitle: agentDefaultThreadTitle,
+      );
 
   @override
-  AgentConversationStateMutationOutcome apply(
-    AgentConversationStateChange change,
-  ) => AgentConversationStateMutationOutcome.none;
+  void applyReducedState(AgentConversationSessionState next) {
+    sessionState = next;
+  }
 
   @override
   void requestThreadSnapshotRefresh() {}

@@ -3,6 +3,7 @@ import 'package:zeta_agent_core/src/application/agent_conversation_effect.dart';
 import 'package:zeta_agent_core/src/application/agent_conversation_effect_runner.dart';
 import 'package:zeta_agent_core/src/application/agent_conversation_mutation.dart';
 import 'package:zeta_agent_core/src/application/agent_conversation_reducer.dart';
+import 'package:zeta_agent_core/src/application/agent_conversation_session_state.dart';
 import 'package:zeta_agent_core/src/application/agent_conversation_timeline_store.dart';
 import 'package:zeta_agent_core/src/application/agent_event_observer.dart';
 import 'package:zeta_agent_core/src/application/agent_ui_update_port.dart';
@@ -14,13 +15,15 @@ final _log = zetaLoggerFor('zeta.agent.event_processor');
 typedef AgentConversationReducerContextReader =
     AgentConversationReducerContext Function();
 
-/// typed state mutation 的 application/presentation facade 边界。
-abstract interface class AgentConversationStateMutationTarget {
-  AgentConversationStateMutationOutcome apply(
-    AgentConversationStateChange change,
-  );
+/// processor 与状态宿主之间的唯一边界。
+abstract interface class AgentConversationStateSink {
+  /// 当前会话状态。processor 每次 process 前读一次。
+  AgentConversationSessionState get sessionState;
 
-  /// 请求 presentation 在下一次安全 UI 发布边界刷新 thread snapshot。
+  /// 写回归约结果。宿主只做赋值，不得在此触发 Flutter 通知。
+  void applyReducedState(AgentConversationSessionState next);
+
+  /// 请求在下一次安全 UI 发布边界刷新 thread snapshot。
   ///
   /// 实现不得在这里同步通知 Flutter listener；build phase 延帧由 presentation
   /// 的 [AgentUiUpdatePort] 实现统一处理。
@@ -36,7 +39,7 @@ final class AgentConversationEventProcessor {
     required AgentConversationReducer reducer,
     required AgentConversationReducerContextReader context,
     required AgentConversationTimelineStore timeline,
-    required AgentConversationStateMutationTarget stateTarget,
+    required AgentConversationStateSink stateSink,
     required AgentUiUpdatePort uiUpdates,
     required AgentConversationEffectRunner effectRunner,
     Iterable<AgentEventObserver> observers = const <AgentEventObserver>[],
@@ -44,7 +47,7 @@ final class AgentConversationEventProcessor {
     reducer,
     context,
     timeline,
-    stateTarget,
+    stateSink,
     uiUpdates,
     effectRunner,
     List<AgentEventObserver>.unmodifiable(observers),
@@ -54,7 +57,7 @@ final class AgentConversationEventProcessor {
     this._reducer,
     this._context,
     this._timeline,
-    this._stateTarget,
+    this._stateSink,
     this._uiUpdates,
     this._effectRunner,
     this._observers,
@@ -63,39 +66,43 @@ final class AgentConversationEventProcessor {
   final AgentConversationReducer _reducer;
   final AgentConversationReducerContextReader _context;
   final AgentConversationTimelineStore _timeline;
-  final AgentConversationStateMutationTarget _stateTarget;
+  final AgentConversationStateSink _stateSink;
   final AgentUiUpdatePort _uiUpdates;
   final AgentConversationEffectRunner _effectRunner;
   final List<AgentEventObserver> _observers;
 
   /// 处理一个规范化事件，并返回最终 reduction 结果供诊断/测试。
-  AgentConversationMutation process(AgentEvent event) {
+  AgentConversationReduction process(AgentEvent event) {
     final context = _context();
-    final mutation = _reducer.reduce(event, context);
-    _apply(mutation);
-    _notifyObservers(event, mutation, context);
-    return mutation;
+    final before = _stateSink.sessionState;
+    final reduction = _reducer.reduce(event, before, context);
+    _apply(reduction);
+    _notifyObservers(event, reduction, context);
+    return reduction;
   }
 
   /// 复用同步 mutation 收尾 provider-disconnected/thread-closed turn。
-  AgentConversationMutation settleInterruptedTurn({
+  AgentConversationReduction settleInterruptedTurn({
     required String fallbackTurnId,
   }) {
-    final mutation = _reducer.settleInterruptedTurn(
+    final before = _stateSink.sessionState;
+    final reduction = _reducer.settleInterruptedTurn(
       fallbackTurnId: fallbackTurnId,
+      state: before,
+      context: _context(),
     );
-    _apply(mutation);
-    return mutation;
+    _apply(reduction);
+    return reduction;
   }
 
   void _notifyObservers(
     AgentEvent event,
-    AgentConversationMutation mutation,
+    AgentConversationReduction reduction,
     AgentConversationReducerContext context,
   ) {
     for (final observer in _observers) {
       try {
-        observer.onProcessed(event, mutation, context);
+        observer.onProcessed(event, reduction, context);
       } catch (error) {
         // 旁路失败不影响已接受事件；只记类型不记正文（G7）。
         _log.w('Agent event observer failed (${error.runtimeType})');
@@ -103,61 +110,56 @@ final class AgentConversationEventProcessor {
     }
   }
 
-  void _apply(AgentConversationMutation mutation) {
-    _runEffects(mutation, AgentConversationEffectTiming.beforeMutation);
-    if (!mutation.accepted) {
-      _runEffects(mutation, AgentConversationEffectTiming.afterMutation);
+  void _apply(AgentConversationReduction reduction) {
+    _runEffects(reduction, AgentConversationEffectTiming.beforeMutation);
+    if (!reduction.accepted) {
+      _runEffects(reduction, AgentConversationEffectTiming.afterMutation);
       return;
     }
 
-    var stateOutcome = AgentConversationStateMutationOutcome.none;
-    for (final change in mutation.stateChangesBeforeTimeline) {
-      stateOutcome = stateOutcome.mergedWith(_stateTarget.apply(change));
-    }
+    _stateSink.applyReducedState(reduction.state);
 
     var activityChanged = false;
-    for (final timelineMutation in mutation.timelineMutations) {
+    for (final timelineMutation in reduction.timelineMutations) {
       timelineMutation.applyTo(_timeline);
       if (timelineMutation.trackActivityChange) {
         activityChanged = _timeline.takeActivityDirty() || activityChanged;
       }
     }
 
-    for (final change in mutation.stateChanges) {
-      stateOutcome = stateOutcome.mergedWith(_stateTarget.apply(change));
+    if (reduction.threadSnapshot != null) {
+      _stateSink.requestThreadSnapshotRefresh();
     }
 
-    if (mutation.threadSnapshot != null) {
-      _stateTarget.requestThreadSnapshotRefresh();
-    }
+    // afterMutation 必须在 UI 发布前执行：原 stateChanges 里的
+    // setTurnRunning / bind mode 会同步触发 composer 刷新，若放在 publish
+    // 之后会盖掉 reducer 声明的 region。TurnCompleted 等原 after 效果
+    // 提前一拍不影响注意力回调语义。
+    _runEffects(reduction, AgentConversationEffectTiming.afterMutation);
 
     final request = _resolveUiUpdate(
-      mutation,
+      reduction,
       activityChanged: activityChanged,
-      stateOutcome: stateOutcome,
     );
     if (request != null) {
       _uiUpdates.publish(request);
     }
-    _runEffects(mutation, AgentConversationEffectTiming.afterMutation);
   }
 
   AgentUiUpdateRequest? _resolveUiUpdate(
-    AgentConversationMutation mutation, {
+    AgentConversationReduction reduction, {
     required bool activityChanged,
-    required AgentConversationStateMutationOutcome stateOutcome,
   }) {
-    final base = mutation.uiUpdate;
+    final base = reduction.uiUpdate;
     if (base == null) {
       return null;
     }
     final regions = <AgentUiRegion>{...base.regions};
     if (activityChanged &&
-        mutation.uiResolution.includeHeaderWhenActivityChanges) {
+        reduction.uiResolution.includeHeaderWhenActivityChanges) {
       regions.add(AgentUiRegion.header);
     }
-    if (stateOutcome.pendingInteractionChanged &&
-        mutation.uiResolution.includePendingInteractionWhenStateChanges) {
+    if (reduction.uiResolution.includePendingInteractionWhenStateChanges) {
       regions.add(AgentUiRegion.pendingInteraction);
     }
     return AgentUiUpdateRequest(
@@ -168,10 +170,10 @@ final class AgentConversationEventProcessor {
   }
 
   void _runEffects(
-    AgentConversationMutation mutation,
+    AgentConversationReduction reduction,
     AgentConversationEffectTiming timing,
   ) {
-    for (final effect in mutation.effects) {
+    for (final effect in reduction.effects) {
       if (effect.timing == timing) {
         _effectRunner.run(effect);
       }

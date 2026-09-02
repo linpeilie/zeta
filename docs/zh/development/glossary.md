@@ -65,8 +65,12 @@ Provider 明确给出的内容证据：替换前后片段、写入内容或 unif
 FIFO 派发事件，每个 Dart event-loop turn 默认最多 64 个，续批用 `Timer.run`。它和 Flutter 的 frame 调度相互独立。
 
 **Reducer（归约器）**
-把事件变成状态迁移的纯函数式组件。**必须纯同步**：不许有 `Timer`、`Future`、Flutter scheduler 或外部回调。
+把事件变成状态迁移的纯函数式组件。**必须纯同步**：不许有 `Timer`、`Future`、Flutter scheduler 或外部回调。产出 nextState（`AgentConversationSessionState`）、timeline mutation、UI request 与 effect；副作用一律走 EffectRunner。
 `agent_conversation_reducer.dart`
+
+**SessionState（会话状态）**
+单个会话由事件归约产生的不可变值对象。纯数据、可单测、可 diff。不包含命令侧令牌、模型选择控制器或 Binding 活动令牌。
+`agent_conversation_session_state.dart`
 
 **EffectRunner（副作用执行器）**
 reducer 唯一的副作用出口。带作用域校验（generation / runtime / thread），保证陈旧的副作用不会执行。

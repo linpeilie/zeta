@@ -36,12 +36,22 @@ void main() {
     });
 
     test('reasoning mutations are identical across catalogs', () {
-      final zhMutation = AgentConversationReducer.live(
-        textCatalog: _zhThinkingCatalog,
-      ).reduce(_reasoningDelta, _context());
-      final enMutation = AgentConversationReducer.live(
-        textCatalog: _enThinkingCatalog,
-      ).reduce(_reasoningDelta, _context());
+      final zhMutation =
+          AgentConversationReducer.live(textCatalog: _zhThinkingCatalog).reduce(
+            _reasoningDelta,
+            const AgentConversationSessionState.initial(
+              defaultTitle: agentDefaultThreadTitle,
+            ),
+            _context(),
+          );
+      final enMutation =
+          AgentConversationReducer.live(textCatalog: _enThinkingCatalog).reduce(
+            _reasoningDelta,
+            const AgentConversationSessionState.initial(
+              defaultTitle: agentDefaultThreadTitle,
+            ),
+            _context(),
+          );
 
       expect(zhMutation.accepted, isTrue);
       expect(enMutation.accepted, isTrue);
@@ -127,6 +137,7 @@ AgentConversationReducerContext _context() {
     pendingTurnGroupId: null,
     hasTurn: (turnId) => turnId == 'turn-1',
     isHistoryTurnId: (_) => false,
+    hasRunningTurnExcluding: (_) => false,
     modelsRefreshing: false,
     activeProviderName: 'Neutral',
     activeProviderConfig: config,

@@ -115,7 +115,7 @@ grep -rnE "(codex|grok|claude|cursor)" \
 
 ### G3 · reducer 纯同步，副作用走 EffectRunner
 
-`AgentConversationReducer` 只能同步产出 typed state、`AgentTimelineMutation`、ThreadSnapshot、`AgentUiUpdateRequest`、`AgentConversationEffect`。**禁止** import Flutter scheduler、创建 `Timer`、执行 `Future`、调用外部回调。
+`AgentConversationReducer` 只能同步产出 nextState（`AgentConversationSessionState`）、`AgentTimelineMutation`、ThreadSnapshot、`AgentUiUpdateRequest`、`AgentConversationEffect`。**禁止** import Flutter scheduler、创建 `Timer`、执行 `Future`、调用外部回调。副作用一律走 EffectRunner。
 
 副作用统一走 scope-aware EffectRunner，执行前重新校验 listener generation、runtime/epoch 和必要的 thread scope。
 

@@ -6,22 +6,18 @@ import 'package:zeta_agent_core/zeta_agent_core.dart';
 void main() {
   group('AgentConversationEventProcessor', () {
     test(
-      'applies pre-state, timeline, post-state, snapshot request, UI, then effect once',
+      'applies state, timeline, snapshot request, UI, then after-effects',
       () {
         // Arrange
         final order = <String>[];
         final timeline = _runningTimeline();
         addTearDown(timeline.dispose);
-        final stateTarget = _RecordingStateTarget(
-          timeline: timeline,
-          order: order,
-          pendingInteractionOnTurnCompleted: true,
-        );
+        final stateSink = _RecordingStateSink(order: order);
         final uiUpdates = _RecordingUiUpdatePort(order);
         final effectRunner = _RecordingEffectRunner(order);
         final processor = _processor(
           timeline: timeline,
-          stateTarget: stateTarget,
+          stateSink: stateSink,
           uiUpdates: uiUpdates,
           effectRunner: effectRunner,
         );
@@ -37,16 +33,17 @@ void main() {
         // Assert
         expect(mutation.accepted, isTrue);
         expect(order, <String>[
-          'pre-state',
-          'timeline',
-          'post-state',
+          'before-effect',
+          'state',
           'snapshot',
-          'ui',
           'after-effect',
+          'after-effect',
+          'after-effect',
+          'ui',
         ]);
         expect(timeline.isTurnRunning, isFalse);
         expect(timeline.isHistoryTurnId('turn-1'), isTrue);
-        expect(stateTarget.snapshotRefreshRequests, 1);
+        expect(stateSink.snapshotRefreshRequests, 1);
         expect(uiUpdates.requests, hasLength(1));
         expect(
           mutation.uiUpdate!.regions,
@@ -62,8 +59,11 @@ void main() {
             AgentUiRegion.pendingInteraction,
           ]),
         );
-        expect(effectRunner.effects, hasLength(1));
-        expect(effectRunner.effects.single, isA<AgentTurnCompletedEffect>());
+        expect(effectRunner.effects, hasLength(4));
+        expect(
+          effectRunner.effects.whereType<AgentTurnCompletedEffect>(),
+          hasLength(1),
+        );
       },
     );
 
@@ -72,15 +72,12 @@ void main() {
       final order = <String>[];
       final timeline = AgentConversationTimelineStore();
       addTearDown(timeline.dispose);
-      final stateTarget = _RecordingStateTarget(
-        timeline: timeline,
-        order: order,
-      );
+      final stateSink = _RecordingStateSink(order: order);
       final uiUpdates = _RecordingUiUpdatePort(order);
       final effectRunner = _RecordingEffectRunner(order);
       final processor = _processor(
         timeline: timeline,
-        stateTarget: stateTarget,
+        stateSink: stateSink,
         uiUpdates: uiUpdates,
         effectRunner: effectRunner,
       );
@@ -100,8 +97,8 @@ void main() {
       expect(order, <String>['before-effect']);
       expect(effectRunner.effects, hasLength(1));
       expect(effectRunner.effects.single, isA<AgentLogProviderErrorEffect>());
-      expect(stateTarget.appliedChanges, isEmpty);
-      expect(stateTarget.snapshotRefreshRequests, 0);
+      expect(stateSink.applyCount, 0);
+      expect(stateSink.snapshotRefreshRequests, 0);
       expect(uiUpdates.requests, isEmpty);
       expect(timeline.messages, isEmpty);
     });
@@ -110,14 +107,10 @@ void main() {
       // Arrange
       final timeline = _runningTimeline();
       addTearDown(timeline.dispose);
-      final stateTarget = _RecordingStateTarget(
-        timeline: timeline,
-        order: <String>[],
-      );
       final uiUpdates = _RecordingUiUpdatePort(<String>[]);
       final processor = _processor(
         timeline: timeline,
-        stateTarget: stateTarget,
+        stateSink: _RecordingStateSink(),
         uiUpdates: uiUpdates,
         effectRunner: _RecordingEffectRunner(<String>[]),
       );
@@ -152,10 +145,7 @@ void main() {
       final recorder = _RecordingTurnContextRecorder();
       final processor = _processor(
         timeline: timeline,
-        stateTarget: _RecordingStateTarget(
-          timeline: timeline,
-          order: <String>[],
-        ),
+        stateSink: _RecordingStateSink(),
         uiUpdates: _RecordingUiUpdatePort(<String>[]),
         effectRunner: _RecordingEffectRunner(<String>[]),
         turnContextRecorder: recorder,
@@ -183,10 +173,7 @@ void main() {
       final recorder = _RecordingTurnContextRecorder();
       final liveProcessor = _processor(
         timeline: timeline,
-        stateTarget: _RecordingStateTarget(
-          timeline: timeline,
-          order: <String>[],
-        ),
+        stateSink: _RecordingStateSink(),
         uiUpdates: _RecordingUiUpdatePort(<String>[]),
         effectRunner: _RecordingEffectRunner(<String>[]),
         turnContextRecorder: recorder,
@@ -211,6 +198,7 @@ void main() {
           pendingTurnGroupId: historyTimeline.pendingTurnGroupId,
           hasTurn: historyTimeline.hasTurn,
           isHistoryTurnId: historyTimeline.isHistoryTurnId,
+          hasRunningTurnExcluding: (_) => false,
           modelsRefreshing: false,
           activeProviderName: 'Codex',
           activeProviderConfig: defaultCodexAgentProviderConfig,
@@ -222,10 +210,7 @@ void main() {
           ),
         ),
         timeline: historyTimeline,
-        stateTarget: _RecordingStateTarget(
-          timeline: historyTimeline,
-          order: <String>[],
-        ),
+        stateSink: _RecordingStateSink(),
         uiUpdates: _RecordingUiUpdatePort(<String>[]),
         effectRunner: _RecordingEffectRunner(<String>[]),
         observers: <AgentEventObserver>[AgentTurnContextObserver(recorder)],
@@ -246,10 +231,7 @@ void main() {
       addTearDown(timeline.dispose);
       final processor = _processor(
         timeline: timeline,
-        stateTarget: _RecordingStateTarget(
-          timeline: timeline,
-          order: <String>[],
-        ),
+        stateSink: _RecordingStateSink(),
         uiUpdates: _RecordingUiUpdatePort(<String>[]),
         effectRunner: _RecordingEffectRunner(<String>[]),
         turnContextRecorder: _ThrowingTurnContextRecorder(),
@@ -267,7 +249,7 @@ void main() {
 
 AgentConversationEventProcessor _processor({
   required AgentConversationTimelineStore timeline,
-  required AgentConversationStateMutationTarget stateTarget,
+  required AgentConversationStateSink stateSink,
   required AgentUiUpdatePort uiUpdates,
   required AgentConversationEffectRunner effectRunner,
   AgentTurnContextRecorder? turnContextRecorder,
@@ -278,7 +260,7 @@ AgentConversationEventProcessor _processor({
     ),
     context: () => _contextFor(timeline),
     timeline: timeline,
-    stateTarget: stateTarget,
+    stateSink: stateSink,
     uiUpdates: uiUpdates,
     effectRunner: effectRunner,
     observers: <AgentEventObserver>[
@@ -298,6 +280,10 @@ AgentConversationReducerContext _contextFor(
     pendingTurnGroupId: timeline.pendingTurnGroupId,
     hasTurn: timeline.hasTurn,
     isHistoryTurnId: timeline.isHistoryTurnId,
+    hasRunningTurnExcluding: (turnId) {
+      final running = timeline.selectedRunningTurnId;
+      return running != null && running != turnId;
+    },
     modelsRefreshing: false,
     activeProviderName: 'Codex',
     activeProviderConfig: defaultCodexAgentProviderConfig,
@@ -322,43 +308,23 @@ AgentConversationTimelineStore _runningTimeline() {
   return timeline;
 }
 
-final class _RecordingStateTarget
-    implements AgentConversationStateMutationTarget {
-  _RecordingStateTarget({
-    required this.timeline,
-    required this.order,
-    this.pendingInteractionOnTurnCompleted = false,
-  });
+final class _RecordingStateSink implements AgentConversationStateSink {
+  _RecordingStateSink({List<String>? order}) : order = order ?? <String>[];
 
-  final AgentConversationTimelineStore timeline;
   final List<String> order;
-  final bool pendingInteractionOnTurnCompleted;
-  final List<AgentConversationStateChange> appliedChanges =
-      <AgentConversationStateChange>[];
+  @override
+  AgentConversationSessionState sessionState =
+      const AgentConversationSessionState.initial(
+        defaultTitle: agentDefaultThreadTitle,
+      );
+  int applyCount = 0;
   int snapshotRefreshRequests = 0;
 
   @override
-  AgentConversationStateMutationOutcome apply(
-    AgentConversationStateChange change,
-  ) {
-    appliedChanges.add(change);
-    switch (change) {
-      case AgentPrepareTurnCompletedChange():
-        expect(timeline.isTurnRunning, isTrue);
-        order.add('pre-state');
-      case AgentFinalizeTurnCompletedChange():
-        expect(timeline.isTurnRunning, isFalse);
-        expect(timeline.isHistoryTurnId(change.event.turnId), isTrue);
-        order
-          ..add('timeline')
-          ..add('post-state');
-        return AgentConversationStateMutationOutcome(
-          pendingInteractionChanged: pendingInteractionOnTurnCompleted,
-        );
-      default:
-        order.add('state');
-    }
-    return AgentConversationStateMutationOutcome.none;
+  void applyReducedState(AgentConversationSessionState next) {
+    sessionState = next;
+    applyCount += 1;
+    order.add('state');
   }
 
   @override

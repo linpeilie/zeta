@@ -65,8 +65,12 @@ The merge strategy for high-frequency events: text/reasoning deltas on the same 
 FIFO event delivery, capped at 64 per Dart event-loop turn by default, continuing via `Timer.run`. Independent of Flutter's frame scheduling.
 
 **Reducer**
-The functional component turning events into state transitions. **Must be purely synchronous**: no `Timer`, `Future`, Flutter scheduler, or external callbacks.
+The functional component turning events into state transitions. **Must be purely synchronous**: no `Timer`, `Future`, Flutter scheduler, or external callbacks. It emits nextState (`AgentConversationSessionState`), timeline mutations, UI requests, and effects; side effects always go through EffectRunner.
 `agent_conversation_reducer.dart`
+
+**SessionState**
+The immutable value object produced by reducing events for one conversation. Pure data, unit-testable, and diffable. It does not hold command-side tokens, the model selection controller, or Binding activity leases.
+`agent_conversation_session_state.dart`
 
 **EffectRunner**
 The reducer's only exit for side effects. Validates scope (generation / runtime / thread) so stale effects never execute.
