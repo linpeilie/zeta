@@ -38,13 +38,10 @@ import 'package:zeta/src/features/project_threads/presentation/project_threads_s
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/settings/presentation/settings_page.dart';
 import 'package:zeta/src/features/settings/presentation/settings_slice/settings_slice_providers.dart';
-import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_operations.dart';
+import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_slice/agent_usage_panel_slice_store.dart';
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_refresh_coordinator.dart';
-import 'package:zeta/src/features/usage_statistics/application/usage_statistics_operations.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/agent_usage_panel.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_page.dart';
-import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_slice/usage_statistics_slice_providers.dart';
-import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_slice_composition.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 import 'package:zeta/src/features/workspace/presentation/file_tree_pane.dart';
@@ -66,20 +63,16 @@ import 'package:zeta/src/features/workspace/application/workspace_notifier.dart'
 /// **依赖从容器读，不从构造函数下钻。** 凡是组合根已经装进 Riverpod 的依赖
 /// （bundle 工厂、runtime 池、两个 registry、文本目录、指标端口、探测 loader……）
 /// 一律由 `_IdeHomeState` 自己 `ref.read`，调用方要换实现就覆盖对应的 provider。
-/// 经构造函数传的只剩**容器里还没有的那些**：组合根手工 `new` 出来的两个切片组合
-/// （Usage Statistics / Desktop Attention）、Provider settings 组合的目录加载入口、
-/// 状态快照桥与工作台工厂。它们随切片去 Composition 一起消失。
+/// 经构造函数传的只剩**容器里还没有的那些**：状态快照桥与工作台工厂。
 class IdeHome extends ConsumerStatefulWidget {
   const IdeHome({
     required this.shellStateSnapshotRelay,
-    required this.usageStatisticsSliceComposition,
     required this.workbenchCompositionFactory,
     this.providerMetricLabel = ZetaMetricLabel.hashed,
     super.key,
   });
 
   final ZetaShellStateSnapshotRelay shellStateSnapshotRelay;
-  final UsageStatisticsSliceComposition usageStatisticsSliceComposition;
 
   /// app 组合层预绑的工作台组合工厂；UI 不再看到任何 Repository。
   final IdeWorkbenchCompositionFactory workbenchCompositionFactory;
@@ -131,8 +124,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
   AgentManagementSliceComposition get _agentManagementComposition =>
       _workbenchComposition.agentManagementComposition;
   late final void Function() _unsubscribeProviderSettings;
-  late final UsageStatisticsOperations _usageStatisticsController;
-  late final AgentUsagePanelOperations _agentUsagePanelController;
+  late final AgentUsagePanelSliceNotifier _agentUsagePanelController;
   late final AgentUsageRefreshCoordinator _agentUsageRefreshCoordinator;
   late final DesktopAttentionSliceNotifier _desktopAttention = ref.read(
     desktopAttentionSliceProvider.notifier,
@@ -185,10 +177,9 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
     _desktopAttentionTargetActivatorRelay.bind(
       _desktopAttentionTargetActivator,
     );
-    _usageStatisticsController =
-        widget.usageStatisticsSliceComposition.usageStatisticsStore;
-    _agentUsagePanelController =
-        widget.usageStatisticsSliceComposition.agentUsagePanelStore;
+    _agentUsagePanelController = ref.read(
+      agentUsagePanelSliceProvider.notifier,
+    );
     _shellController = IdeShellController(
       workspace: ref.read(workspaceProvider.notifier),
       workspaceFileCorpus: ref.read(workspaceFileCorpusProvider),
@@ -212,8 +203,6 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
       onAgentAttention: (attention) {
         unawaited(_desktopAttention.handleAttention(attention));
       },
-      onAgentUsageProviderRestored:
-          _agentUsagePanelController.restorePreferredProviderId,
       turnContextStore: ref.read(agentTurnContextStoreProvider),
       agentUiTextCatalog: ref.read(agentUiTextCatalogProvider),
       metrics: ref.read(zetaMetricsPortProvider),
@@ -236,9 +225,6 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
     );
     _conversationSliceStoreRegistry.bind(
       _shellController.agentConversationWorkspaceStore.sliceStoreForBinding,
-    );
-    widget.usageStatisticsSliceComposition.bindSelectionPersistence(
-      _shellController.setSelectedAgentUsageProviderId,
     );
     _unsubscribeProviderSettings = _shellController.agentProviderController
         .subscribe(_handleAgentProviderSettingsUsageChanged);
@@ -341,7 +327,6 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
       _handleConversationWorkspaceChanged,
     );
     _unsubscribeProviderSettings();
-    widget.usageStatisticsSliceComposition.bindSelectionPersistence(null);
     _agentUsageRefreshCoordinator.dispose();
     _agentManagementComposition.store.removeListener(
       _handleAgentManagementChanged,
@@ -379,6 +364,29 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
     // 侧栏宽度与首页预热是状态变化的副作用，不是渲染输入，因此走 listen。
     ref.watch(workspaceProvider);
     ref.listen(ideSessionSliceProvider, (_, _) => _handleIdeSessionChanged());
+    ref.listen(
+      ideSessionSliceProvider.select(
+        (state) => (
+          initialRestoreCompleted: state.initialRestoreCompleted,
+          providerId: state.workbenchLayout.selectedAgentUsageProviderId,
+        ),
+      ),
+      (previous, next) {
+        if (_agentUsagePanelController.preferredProviderId != next.providerId) {
+          _agentUsagePanelController.restorePreferredProviderId(
+            next.providerId,
+          );
+        }
+        if (previous == null ||
+            previous.providerId == next.providerId ||
+            !next.initialRestoreCompleted) {
+          return;
+        }
+        // Panel runner 只提交 Workbench typed state；Shell 在这里补齐完整会话
+        // 快照并交给既有 debounce coordinator 落盘。
+        _shellController.requestSessionSave();
+      },
+    );
     ref.listen(workspaceProvider, (_, _) => _handleWorkspaceChanged());
     ref.listen(zetaWindowSurfaceProvider.select((state) => state.focused), (
       previous,
@@ -889,22 +897,14 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
   }
 
   Widget _buildUsageStatisticsPage() {
-    final page = UsageStatisticsPage(
+    return UsageStatisticsPage(
       key: const ValueKey('usage-statistics-page-host'),
-      controller: _usageStatisticsController,
       onOpenAgentManagement: _openAgentManagementFromUsage,
-    );
-    return Consumer(
-      builder: (context, ref, _) {
-        ref.watch(usageStatisticsSliceProvider);
-        return page;
-      },
     );
   }
 
   Widget _buildAgentUsagePanel() {
-    Widget buildPanel() => AgentUsagePanelContent(
-      controller: _agentUsagePanelController,
+    return AgentUsagePanelContent(
       mode: _agentUsageExpanded
           ? AgentUsagePanelMode.expanded
           : AgentUsagePanelMode.collapsed,
@@ -912,12 +912,6 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
         setState(() {
           _agentUsageExpanded = mode == AgentUsagePanelMode.expanded;
         });
-      },
-    );
-    return Consumer(
-      builder: (context, ref, _) {
-        ref.watch(agentUsagePanelSliceProvider);
-        return buildPanel();
       },
     );
   }
@@ -983,6 +977,16 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
   Future<void> _refreshInitialAgentUsageAfterRestore() async {
     // 会话恢复会写入上次选中的统计 Tab；等待它收敛，避免先误载默认 Provider。
     await _shellController.initialRestoreDone;
+    if (!mounted) {
+      return;
+    }
+    _agentUsagePanelController.restorePreferredProviderId(
+      ref
+          .read(ideSessionSliceProvider.notifier)
+          .state
+          .workbenchLayout
+          .selectedAgentUsageProviderId,
+    );
     _requestAgentUsageRefresh();
   }
 

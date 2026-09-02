@@ -52,7 +52,6 @@ class IdeShellController {
     AgentFrameScheduler Function()? agentUiFrameSchedulerFactory,
     void Function(AgentTurnTerminalSignal)? onAgentTurnTerminal,
     void Function(AgentWorkspaceAttention)? onAgentAttention,
-    this._onAgentUsageProviderRestored,
     AgentTurnContextStore? turnContextStore,
     this.agentUiTextCatalog = const FallbackAgentUiTextCatalog(),
     this.metrics = noopZetaMetricsPort,
@@ -132,7 +131,6 @@ class IdeShellController {
 
   final ProjectLocationOpener _projectLocationOpener;
   final IdeShellStatusReporter? _statusReporter;
-  final void Function(String?)? _onAgentUsageProviderRestored;
   final IdeSessionSliceOperations ideSessionOperations;
   final DateTime Function() _now;
 
@@ -213,13 +211,6 @@ class IdeShellController {
   /// 提交左栏逻辑像素宽度；传空恢复 UI 默认宽度。
   void setLeftSidebarWidth(double? width) {
     _setWorkbenchLayout(workbenchLayout.copyWith(leftSidebarWidth: width));
-  }
-
-  /// 提交统计面板关注的 Provider id；传空清除偏好。
-  void setSelectedAgentUsageProviderId(String? providerId) {
-    _setWorkbenchLayout(
-      workbenchLayout.copyWith(selectedAgentUsageProviderId: providerId),
-    );
   }
 
   /// 初始会话恢复已完成；此后无活动项目时可以稳定展示全局首页。
@@ -619,6 +610,9 @@ class IdeShellController {
     return ideSessionOperations.saveNow(snapshot);
   }
 
+  /// 外部 application 切片已经提交会话字段后，请求保存完整 Shell 快照。
+  void requestSessionSave() => _requestSessionSave();
+
   Future<void> _loadProject(String path, {bool activateThreads = true}) async {
     _homeRefreshToken += 1;
     _log.i('Opening project folder: $path');
@@ -688,9 +682,6 @@ class IdeShellController {
         session.agentThreadIdsByProject,
       );
       ideSessionOperations.setWorkbenchLayout(session.workbenchLayout);
-      _onAgentUsageProviderRestored?.call(
-        session.workbenchLayout.selectedAgentUsageProviderId,
-      );
 
       projectThreadsController.restoreSession(
         projectPaths: session.projectPaths,

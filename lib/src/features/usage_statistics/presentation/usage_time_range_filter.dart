@@ -1,9 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
-import 'package:zeta/src/features/usage_statistics/application/usage_statistics_operations.dart';
+import 'package:zeta/src/features/usage_statistics/application/usage_statistics_slice/usage_statistics_slice_store.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_formatters.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_l10n.dart';
@@ -11,21 +12,17 @@ import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 
 /// 使用统计条件栏的时间范围触发器：点击后弹出「快捷项 + 日期区间」Popover。
-class UsageTimeRangeFilter extends StatefulWidget {
-  const UsageTimeRangeFilter({
-    required this.controller,
-    required this.width,
-    super.key,
-  });
+class UsageTimeRangeFilter extends ConsumerStatefulWidget {
+  const UsageTimeRangeFilter({required this.width, super.key});
 
-  final UsageStatisticsOperations controller;
   final double width;
 
   @override
-  State<UsageTimeRangeFilter> createState() => _UsageTimeRangeFilterState();
+  ConsumerState<UsageTimeRangeFilter> createState() =>
+      _UsageTimeRangeFilterState();
 }
 
-class _UsageTimeRangeFilterState extends State<UsageTimeRangeFilter> {
+class _UsageTimeRangeFilterState extends ConsumerState<UsageTimeRangeFilter> {
   IdePopoverHandle<void>? _popover;
 
   @override
@@ -36,7 +33,7 @@ class _UsageTimeRangeFilterState extends State<UsageTimeRangeFilter> {
   }
 
   String get _triggerLabel {
-    final controller = widget.controller;
+    final controller = ref.read(usageStatisticsSliceProvider.notifier);
     if (controller.timePreset == UsageTimeRangePreset.custom) {
       final window = controller.window;
       final endInclusive = window.endExclusive.subtract(
@@ -73,13 +70,20 @@ class _UsageTimeRangeFilterState extends State<UsageTimeRangeFilter> {
       dismissDuration: duration,
       key: const ValueKey('usage-time-range-popover'),
       builder: (popoverContext) => _UsageTimeRangePopover(
-        controller: widget.controller,
         onPresetSelected: (preset) {
-          unawaited(widget.controller.selectTimePreset(preset));
+          unawaited(
+            ref
+                .read(usageStatisticsSliceProvider.notifier)
+                .selectTimePreset(preset),
+          );
           sf.closeOverlay(popoverContext);
         },
         onCustomRangeSelected: (start, endInclusive) {
-          unawaited(widget.controller.selectCustomRange(start, endInclusive));
+          unawaited(
+            ref
+                .read(usageStatisticsSliceProvider.notifier)
+                .selectCustomRange(start, endInclusive),
+          );
           sf.closeOverlay(popoverContext);
         },
       ),
@@ -96,6 +100,7 @@ class _UsageTimeRangeFilterState extends State<UsageTimeRangeFilter> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(usageStatisticsSliceProvider);
     final isOpen = _popover != null && !_popover!.isCompleted;
     return IdeButton.toolbar(
       key: const ValueKey('usage-time-range-filter'),
@@ -110,23 +115,23 @@ class _UsageTimeRangeFilterState extends State<UsageTimeRangeFilter> {
   }
 }
 
-class _UsageTimeRangePopover extends StatefulWidget {
+class _UsageTimeRangePopover extends ConsumerStatefulWidget {
   const _UsageTimeRangePopover({
-    required this.controller,
     required this.onPresetSelected,
     required this.onCustomRangeSelected,
   });
 
-  final UsageStatisticsOperations controller;
   final ValueChanged<UsageTimeRangePreset> onPresetSelected;
   final void Function(DateTime start, DateTime endInclusive)
   onCustomRangeSelected;
 
   @override
-  State<_UsageTimeRangePopover> createState() => _UsageTimeRangePopoverState();
+  ConsumerState<_UsageTimeRangePopover> createState() =>
+      _UsageTimeRangePopoverState();
 }
 
-class _UsageTimeRangePopoverState extends State<_UsageTimeRangePopover> {
+class _UsageTimeRangePopoverState
+    extends ConsumerState<_UsageTimeRangePopover> {
   late sf.CalendarValue? _calendarValue;
   bool _awaitingRangeEnd = false;
 
@@ -137,7 +142,7 @@ class _UsageTimeRangePopoverState extends State<_UsageTimeRangePopover> {
   }
 
   sf.CalendarValue? _calendarValueFromController() {
-    final window = widget.controller.window;
+    final window = ref.read(usageStatisticsSliceProvider.notifier).window;
     final start = DateTime(
       window.start.year,
       window.start.month,
@@ -199,10 +204,12 @@ class _UsageTimeRangePopoverState extends State<_UsageTimeRangePopover> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(usageStatisticsSliceProvider);
+    final controller = ref.read(usageStatisticsSliceProvider.notifier);
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     final brightness = sf.Theme.of(context).brightness;
-    final selectedPreset = widget.controller.timePreset;
+    final selectedPreset = controller.timePreset;
     final mediaWidth = MediaQuery.sizeOf(context).width;
     final narrow = mediaWidth < 640;
     // 窄屏只显示单月，宽屏用双月 range 视图。

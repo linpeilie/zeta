@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 
 import 'package:zeta/src/features/usage_statistics/application/usage_statistics_operations.dart';
@@ -12,100 +13,147 @@ import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_repos
 
 /// 完整使用统计页 effect 的 app 组合层执行入口。
 abstract interface class UsageStatisticsSliceEffectRunner {
-  UsageStatisticsRepository get repository;
-
   void run(UsageStatisticsSliceEffect effect);
 
   void close();
 }
 
-/// 完整使用统计页的纯 Dart MVI owner。
-final class UsageStatisticsSliceStore implements UsageStatisticsOperations {
-  UsageStatisticsSliceStore({
-    required UsageStatisticsSliceState initialState,
-    required this.effectRunner,
+/// runner 工厂：把 notifier 作为 typed 回流目标，避免 runner 延迟反向绑定。
+typedef UsageStatisticsSliceEffectRunnerFactory =
+    UsageStatisticsSliceEffectRunner Function(
+      UsageStatisticsSliceNotifier notifier,
+    );
+
+/// 完整使用统计页切片所需的中立 application 依赖。
+final class UsageStatisticsSliceDependencies {
+  UsageStatisticsSliceDependencies({
+    required this.repository,
+    this.initialState = const UsageStatisticsSliceState(),
     DateTime Function()? clock,
     OperationIdGenerator? operationIdGenerator,
-  }) : _state = initialState,
-       _clock = clock ?? DateTime.now,
-       _operationIdGenerator =
+  }) : clock = clock ?? DateTime.now,
+       operationIdGenerator =
            operationIdGenerator ??
            OperationIdGenerator(scope: 'usage-statistics/load');
 
-  final UsageStatisticsSliceEffectRunner effectRunner;
-  final DateTime Function() _clock;
-  final OperationIdGenerator _operationIdGenerator;
-  final List<void Function()> _listeners = <void Function()>[];
+  final UsageStatisticsSliceState initialState;
+  final UsageStatisticsRepository repository;
+  final DateTime Function() clock;
+  final OperationIdGenerator operationIdGenerator;
+}
+
+/// 组合根必须安装的切片依赖；缺失时 fail-closed。
+final usageStatisticsSliceDependenciesProvider =
+    Provider<UsageStatisticsSliceDependencies>(
+      (ref) => throw StateError(
+        'usageStatisticsSliceDependenciesProvider was read before the '
+        'composition root overrode it',
+      ),
+      name: 'usageStatisticsSliceDependencies',
+    );
+
+/// 组合根必须安装的 runner 工厂；缺失时不伪造加载成功。
+final usageStatisticsSliceEffectRunnerFactoryProvider =
+    Provider<UsageStatisticsSliceEffectRunnerFactory>(
+      (ref) => throw StateError(
+        'usageStatisticsSliceEffectRunnerFactoryProvider was read before '
+        'the composition root overrode it',
+      ),
+      name: 'usageStatisticsSliceEffectRunnerFactory',
+    );
+
+/// 完整使用统计页的唯一 app-session 状态 owner。
+///
+/// 不是 autoDispose：在途历史聚合与缓存跟随应用会话，不能由统计页是否挂载决定。
+final usageStatisticsSliceProvider =
+    NotifierProvider<UsageStatisticsSliceNotifier, UsageStatisticsSliceState>(
+      UsageStatisticsSliceNotifier.new,
+      name: 'usageStatisticsSlice',
+    );
+
+/// 完整使用统计页的 Riverpod MVI owner。
+final class UsageStatisticsSliceNotifier
+    extends Notifier<UsageStatisticsSliceState>
+    implements UsageStatisticsOperations {
+  late UsageStatisticsSliceEffectRunner _effectRunner;
+  late UsageStatisticsRepository _repository;
+  late DateTime Function() _clock;
+  late OperationIdGenerator _operationIdGenerator;
   final Map<OperationId, Completer<void>> _loadCompleters =
       <OperationId, Completer<void>>{};
 
-  UsageStatisticsSliceState _state;
+  late UsageStatisticsSliceState _working;
+  bool _publishScheduled = false;
   bool _closed = false;
 
-  UsageStatisticsSliceState get state => _state;
+  @override
+  UsageStatisticsSliceState build() {
+    final dependencies = ref.watch(usageStatisticsSliceDependenciesProvider);
+    _repository = dependencies.repository;
+    _clock = dependencies.clock;
+    _operationIdGenerator = dependencies.operationIdGenerator;
+    _working = dependencies.initialState;
+    _effectRunner = ref.watch(usageStatisticsSliceEffectRunnerFactoryProvider)(
+      this,
+    );
+    ref.onDispose(_handleDispose);
+    return _working;
+  }
+
+  @override
+  UsageStatisticsSliceState get state => _working;
+
   bool get isClosed => _closed;
 
-  /// 组合层接线用的仓库出口。
-  ///
-  /// **不在 presentation 面上**——`*Operations` 已经不再暴露它；保留在具体 store 上
-  /// 是为了让组合测试能断言"接的是哪个 Repository 实现"。
-  UsageStatisticsRepository get repository => effectRunner.repository;
+  /// 组合测试使用的只读接线出口；presentation 仍只依赖操作端口。
+  UsageStatisticsRepository get repository => _repository;
 
   @override
-  UsageTimeRangePreset get timePreset => _state.timePreset;
+  UsageTimeRangePreset get timePreset => _working.timePreset;
 
   @override
-  DateTime? get customStart => _state.customStart;
+  DateTime? get customStart => _working.customStart;
 
   @override
-  DateTime? get customEndInclusive => _state.customEndInclusive;
+  DateTime? get customEndInclusive => _working.customEndInclusive;
 
   @override
-  String? get projectPath => _state.selectedProjectPath;
+  String? get projectPath => _working.selectedProjectPath;
 
   @override
-  String? get providerId => _state.selectedProviderId;
+  String? get providerId => _working.selectedProviderId;
 
   @override
-  String? get model => _state.selectedModel;
+  String? get model => _working.selectedModel;
 
   @override
-  UsageRankSort get rankSort => _state.rankSort;
+  UsageRankSort get rankSort => _working.rankSort;
 
   @override
-  UsageStatisticsReport? get report => _state.report;
+  UsageStatisticsReport? get report => _working.report;
 
   @override
-  UsageStatisticsSourceSnapshot? get source => _state.source;
+  UsageStatisticsSourceSnapshot? get source => _working.source;
 
   @override
-  bool get loading => _state.loading;
+  bool get loading => _working.loading;
 
   @override
-  String? get errorMessage => _state.errorMessage;
+  String? get errorMessage => _working.errorMessage;
 
   @override
-  DateTime? get lastUpdated => _state.lastUpdated;
+  DateTime? get lastUpdated => _working.lastUpdated;
 
   @override
-  List<String> get warnings => _state.warnings;
+  List<String> get warnings => _working.warnings;
 
   @override
-  UsageDateWindow get window => usageStatisticsWindow(_state, _clock());
-
-  void addListener(void Function() listener) => _listeners.add(listener);
-
-  void removeListener(void Function() listener) => _listeners.remove(listener);
-
-  void Function() subscribe(void Function() listener) {
-    addListener(listener);
-    return () => removeListener(listener);
-  }
+  UsageDateWindow get window => usageStatisticsWindow(_working, _clock());
 
   @override
   Future<void> initialize() {
     _ensureOpen();
-    if (_state.initialized) {
+    if (_working.initialized) {
       return Future<void>.value();
     }
     return _load(forceRefresh: false, markInitialized: true);
@@ -120,9 +168,9 @@ final class UsageStatisticsSliceStore implements UsageStatisticsOperations {
   @override
   Future<void> selectTimePreset(UsageTimeRangePreset value) async {
     _ensureOpen();
-    final before = _state;
+    final before = _working;
     _dispatch(UsageStatisticsTimePresetSelected(value, _clock()));
-    if (identical(before, _state)) {
+    if (identical(before, _working)) {
       return;
     }
     await _ensureWindowLoaded();
@@ -167,7 +215,7 @@ final class UsageStatisticsSliceStore implements UsageStatisticsOperations {
 
   Future<void> _ensureWindowLoaded() {
     final requiredEarliest = window.previous.start;
-    final loadedEarliest = _state.loadedEarliest;
+    final loadedEarliest = _working.loadedEarliest;
     if (loadedEarliest == null || requiredEarliest.isBefore(loadedEarliest)) {
       return _load(forceRefresh: false, markInitialized: false);
     }
@@ -182,7 +230,10 @@ final class UsageStatisticsSliceStore implements UsageStatisticsOperations {
     final completer = Completer<void>();
     _loadCompleters[operationId] = completer;
     final now = _clock();
-    final requiredEarliest = usageStatisticsWindow(_state, now).previous.start;
+    final requiredEarliest = usageStatisticsWindow(
+      _working,
+      now,
+    ).previous.start;
     try {
       _dispatch(
         UsageStatisticsLoadRequested(
@@ -243,31 +294,43 @@ final class UsageStatisticsSliceStore implements UsageStatisticsOperations {
     if (_closed) {
       return;
     }
-    final transition = usageStatisticsSliceReduce(_state, intent);
+    final transition = usageStatisticsSliceReduce(_working, intent);
     final nextState = transition.state;
-    if (!identical(nextState, _state)) {
-      _state = nextState;
-      for (final listener in List<void Function()>.of(_listeners)) {
-        listener();
-      }
+    if (!identical(nextState, _working)) {
+      _working = nextState;
+      _schedulePublish();
     }
     for (final effect in transition.effects) {
-      effectRunner.run(effect);
+      _effectRunner.run(effect);
     }
   }
 
   void _ensureOpen() {
     if (_closed) {
-      throw StateError('UsageStatisticsSliceStore is closed');
+      throw StateError('UsageStatisticsSliceNotifier is disposed');
     }
   }
 
-  void close() {
+  /// 命令同步提交到 [_working]，Riverpod 广播延后到当前 build 生命周期之外。
+  void _schedulePublish() {
+    if (_publishScheduled || _closed) {
+      return;
+    }
+    _publishScheduled = true;
+    scheduleMicrotask(() {
+      _publishScheduled = false;
+      if (!_closed) {
+        state = _working;
+      }
+    });
+  }
+
+  void _handleDispose() {
     if (_closed) {
       return;
     }
     _closed = true;
-    effectRunner.close();
+    _effectRunner.close();
     for (final completer in _loadCompleters.values) {
       if (!completer.isCompleted) {
         // 页面以 unawaited initialize 启动；关闭是取消，不应在卸载阶段制造
@@ -276,9 +339,5 @@ final class UsageStatisticsSliceStore implements UsageStatisticsOperations {
       }
     }
     _loadCompleters.clear();
-    _listeners.clear();
   }
-
-  @override
-  void dispose() => close();
 }

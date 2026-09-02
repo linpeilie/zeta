@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_operations.dart';
@@ -11,97 +12,146 @@ import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_mode
 
 /// Agent Usage Panel effect 的 app 组合层执行入口。
 abstract interface class AgentUsagePanelSliceEffectRunner {
-  AgentUsagePanelRepository get repository;
-
   void run(AgentUsagePanelSliceEffect effect);
 
   void close();
 }
 
-typedef _ProviderLoad = ({OperationId operationId, Future<void> future});
+/// runner 工厂：把 notifier 作为 typed 回流目标，避免 runner 延迟反向绑定。
+typedef AgentUsagePanelSliceEffectRunnerFactory =
+    AgentUsagePanelSliceEffectRunner Function(
+      AgentUsagePanelSliceNotifier notifier,
+    );
 
-/// Agent Usage Panel 的纯 Dart MVI owner。
-final class AgentUsagePanelSliceStore implements AgentUsagePanelOperations {
-  AgentUsagePanelSliceStore({
-    required AgentUsagePanelSliceState initialState,
-    required this.effectRunner,
+/// Agent Usage Panel 切片所需的中立 application 依赖。
+final class AgentUsagePanelSliceDependencies {
+  AgentUsagePanelSliceDependencies({
+    required this.repository,
+    AgentUsagePanelSliceState? initialState,
     OperationIdGenerator? directoryOperationIdGenerator,
     OperationIdGenerator Function(String providerId)?
     providerOperationIdGenerator,
-  }) : _state = initialState,
-       _directoryOperationIdGenerator =
+  }) : initialState = initialState ?? AgentUsagePanelSliceState(),
+       directoryOperationIdGenerator =
            directoryOperationIdGenerator ??
            OperationIdGenerator(scope: 'agent-usage/directory'),
-       _providerOperationIdGenerator =
+       providerOperationIdGenerator =
            providerOperationIdGenerator ??
            ((providerId) =>
                OperationIdGenerator(scope: 'agent-usage/provider/$providerId'));
 
-  final AgentUsagePanelSliceEffectRunner effectRunner;
-  final OperationIdGenerator _directoryOperationIdGenerator;
+  final AgentUsagePanelSliceState initialState;
+  final AgentUsagePanelRepository repository;
+  final OperationIdGenerator directoryOperationIdGenerator;
   final OperationIdGenerator Function(String providerId)
+  providerOperationIdGenerator;
+}
+
+/// 组合根必须安装的切片依赖；缺失时 fail-closed。
+final agentUsagePanelSliceDependenciesProvider =
+    Provider<AgentUsagePanelSliceDependencies>(
+      (ref) => throw StateError(
+        'agentUsagePanelSliceDependenciesProvider was read before the '
+        'composition root overrode it',
+      ),
+      name: 'agentUsagePanelSliceDependencies',
+    );
+
+/// 组合根必须安装的 runner 工厂；缺失时不伪造加载或选择持久化成功。
+final agentUsagePanelSliceEffectRunnerFactoryProvider =
+    Provider<AgentUsagePanelSliceEffectRunnerFactory>(
+      (ref) => throw StateError(
+        'agentUsagePanelSliceEffectRunnerFactoryProvider was read before '
+        'the composition root overrode it',
+      ),
+      name: 'agentUsagePanelSliceEffectRunnerFactory',
+    );
+
+/// Agent Usage Panel 的唯一 app-session 状态 owner。
+///
+/// 不是 autoDispose：目录发现、Provider 单飞查询与选择偏好跟随应用会话。
+final agentUsagePanelSliceProvider =
+    NotifierProvider<AgentUsagePanelSliceNotifier, AgentUsagePanelSliceState>(
+      AgentUsagePanelSliceNotifier.new,
+      name: 'agentUsagePanelSlice',
+    );
+
+typedef _ProviderLoad = ({OperationId operationId, Future<void> future});
+
+/// Agent Usage Panel 的 Riverpod MVI owner。
+final class AgentUsagePanelSliceNotifier
+    extends Notifier<AgentUsagePanelSliceState>
+    implements AgentUsagePanelOperations {
+  late AgentUsagePanelSliceEffectRunner _effectRunner;
+  late AgentUsagePanelRepository _repository;
+  late OperationIdGenerator _directoryOperationIdGenerator;
+  late OperationIdGenerator Function(String providerId)
   _providerOperationIdGenerator;
   final Map<String, OperationIdGenerator> _providerGenerators =
       <String, OperationIdGenerator>{};
-  final List<void Function()> _listeners = <void Function()>[];
   final Map<OperationId, Completer<void>> _directoryCompleters =
       <OperationId, Completer<void>>{};
   final Map<OperationId, Completer<void>> _providerCompleters =
       <OperationId, Completer<void>>{};
   final Map<String, _ProviderLoad> _providerLoads = <String, _ProviderLoad>{};
 
-  AgentUsagePanelSliceState _state;
+  late AgentUsagePanelSliceState _working;
+  bool _publishScheduled = false;
   bool _closed = false;
 
-  AgentUsagePanelSliceState get state => _state;
+  @override
+  AgentUsagePanelSliceState build() {
+    final dependencies = ref.watch(agentUsagePanelSliceDependenciesProvider);
+    _repository = dependencies.repository;
+    _directoryOperationIdGenerator = dependencies.directoryOperationIdGenerator;
+    _providerOperationIdGenerator = dependencies.providerOperationIdGenerator;
+    _working = dependencies.initialState;
+    _effectRunner = ref.watch(agentUsagePanelSliceEffectRunnerFactoryProvider)(
+      this,
+    );
+    ref.onDispose(_handleDispose);
+    return _working;
+  }
+
+  @override
+  AgentUsagePanelSliceState get state => _working;
+
   bool get isClosed => _closed;
 
-  /// 组合层接线用的仓库出口。
-  ///
-  /// **不在 presentation 面上**——`*Operations` 已经不再暴露它；保留在具体 store 上
-  /// 是为了让组合测试能断言"接的是哪个 Repository 实现"。
-  AgentUsagePanelRepository get repository => effectRunner.repository;
+  /// 组合测试使用的只读接线出口；presentation 仍只依赖操作端口。
+  AgentUsagePanelRepository get repository => _repository;
 
   @override
-  List<AgentUsagePanelProviderState> get providers => _state.providers;
+  List<AgentUsagePanelProviderState> get providers => _working.providers;
 
   @override
-  String? get preferredProviderId => _state.preferredProviderId;
+  String? get preferredProviderId => _working.preferredProviderId;
 
   @override
-  String? get selectedProviderId => _state.selectedProviderId;
+  String? get selectedProviderId => _working.selectedProviderId;
 
   @override
-  DateTime? get lastUpdated => _state.lastUpdated;
+  DateTime? get lastUpdated => _working.lastUpdated;
 
   @override
-  String? get errorMessage => _state.directoryError;
+  String? get errorMessage => _working.directoryError;
 
   @override
-  bool get hasDiscoveredProviders => _state.directoryDiscovered;
+  bool get hasDiscoveredProviders => _working.directoryDiscovered;
 
   @override
-  bool get isLoading => AgentUsagePanelSliceSelectors.isLoading(_state);
+  bool get isLoading => AgentUsagePanelSliceSelectors.isLoading(_working);
 
   @override
   AgentUsagePanelProviderState? get selectedProvider =>
-      AgentUsagePanelSliceSelectors.selectedProvider(_state);
+      AgentUsagePanelSliceSelectors.selectedProvider(_working);
 
   @override
   List<AgentUsagePanelEntry> get entries =>
-      AgentUsagePanelSliceSelectors.entries(_state);
+      AgentUsagePanelSliceSelectors.entries(_working);
 
   @override
   AgentUsagePanelEntry? get selectedEntry => selectedProvider?.entry;
-
-  void addListener(void Function() listener) => _listeners.add(listener);
-
-  void removeListener(void Function() listener) => _listeners.remove(listener);
-
-  void Function() subscribe(void Function() listener) {
-    addListener(listener);
-    return () => removeListener(listener);
-  }
 
   @override
   Future<void> refresh({
@@ -109,10 +159,10 @@ final class AgentUsagePanelSliceStore implements AgentUsagePanelOperations {
     bool showLoading = true,
   }) async {
     _ensureOpen();
-    if (!_state.directoryDiscovered || _state.providers.isEmpty) {
+    if (!_working.directoryDiscovered || _working.providers.isEmpty) {
       await _requestDirectory(showLoading: showLoading);
     }
-    final providerId = _state.selectedProviderId;
+    final providerId = _working.selectedProviderId;
     if (providerId == null || _closed) {
       return;
     }
@@ -127,7 +177,7 @@ final class AgentUsagePanelSliceStore implements AgentUsagePanelOperations {
   Future<void> synchronizeProviders({bool showLoading = false}) async {
     _ensureOpen();
     await _requestDirectory(showLoading: showLoading);
-    final providerId = _state.selectedProviderId;
+    final providerId = _working.selectedProviderId;
     if (providerId == null || _closed) {
       return;
     }
@@ -154,18 +204,18 @@ final class AgentUsagePanelSliceStore implements AgentUsagePanelOperations {
     _ensureOpen();
     final normalized = _normalizeProviderId(providerId);
     final selectionAlreadyMatches =
-        !_state.directoryDiscovered ||
-        _state.selectedProviderId == normalized &&
+        !_working.directoryDiscovered ||
+        _working.selectedProviderId == normalized &&
             (normalized == null || _containsProvider(normalized));
-    if (_state.preferredProviderId == normalized && selectionAlreadyMatches) {
-      final selected = _state.selectedProviderId;
+    if (_working.preferredProviderId == normalized && selectionAlreadyMatches) {
+      final selected = _working.selectedProviderId;
       if (selected != null) {
         unawaited(_ensureProviderLoaded(selected));
       }
       return;
     }
     _dispatch(AgentUsagePreferredProviderRestored(normalized));
-    final selected = _state.selectedProviderId;
+    final selected = _working.selectedProviderId;
     if (selected != null) {
       unawaited(_ensureProviderLoaded(selected));
     }
@@ -249,7 +299,7 @@ final class AgentUsagePanelSliceStore implements AgentUsagePanelOperations {
     if (_closed || operationIds.isEmpty) {
       return;
     }
-    final previousIds = _state.providers
+    final previousIds = _working.providers
         .map((state) => state.provider.providerId)
         .toSet();
     _dispatch(
@@ -345,21 +395,19 @@ final class AgentUsagePanelSliceStore implements AgentUsagePanelOperations {
     if (_closed) {
       return;
     }
-    final transition = agentUsagePanelSliceReduce(_state, intent);
+    final transition = agentUsagePanelSliceReduce(_working, intent);
     final nextState = transition.state;
-    if (!identical(nextState, _state)) {
-      _state = nextState;
-      for (final listener in List<void Function()>.of(_listeners)) {
-        listener();
-      }
+    if (!identical(nextState, _working)) {
+      _working = nextState;
+      _schedulePublish();
     }
     for (final effect in transition.effects) {
-      effectRunner.run(effect);
+      _effectRunner.run(effect);
     }
   }
 
   AgentUsagePanelProviderState? _stateFor(String providerId) {
-    for (final providerState in _state.providers) {
+    for (final providerState in _working.providers) {
       if (providerState.provider.providerId == providerId) {
         return providerState;
       }
@@ -371,16 +419,30 @@ final class AgentUsagePanelSliceStore implements AgentUsagePanelOperations {
 
   void _ensureOpen() {
     if (_closed) {
-      throw StateError('AgentUsagePanelSliceStore is closed');
+      throw StateError('AgentUsagePanelSliceNotifier is disposed');
     }
   }
 
-  void close() {
+  /// Shell restore 与 Widget 事件都可同步提交，广播统一在安全的 microtask 发布。
+  void _schedulePublish() {
+    if (_publishScheduled || _closed) {
+      return;
+    }
+    _publishScheduled = true;
+    scheduleMicrotask(() {
+      _publishScheduled = false;
+      if (!_closed) {
+        state = _working;
+      }
+    });
+  }
+
+  void _handleDispose() {
     if (_closed) {
       return;
     }
     _closed = true;
-    effectRunner.close();
+    _effectRunner.close();
     for (final completer in <Completer<void>>[
       ..._directoryCompleters.values,
       ..._providerCompleters.values,
@@ -394,11 +456,7 @@ final class AgentUsagePanelSliceStore implements AgentUsagePanelOperations {
     _directoryCompleters.clear();
     _providerCompleters.clear();
     _providerLoads.clear();
-    _listeners.clear();
   }
-
-  @override
-  void dispose() => close();
 }
 
 String? _normalizeProviderId(String? providerId) {

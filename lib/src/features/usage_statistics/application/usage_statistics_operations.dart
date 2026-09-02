@@ -1,6 +1,6 @@
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 
-/// 完整使用统计页对 presentation 暴露的稳定操作面。
+/// 完整使用统计页对 application workflow 暴露的稳定操作面。
 abstract interface class UsageStatisticsOperations {
   UsageTimeRangePreset get timePreset;
   DateTime? get customStart;
@@ -25,6 +25,4 @@ abstract interface class UsageStatisticsOperations {
   void selectProvider(String? value);
   void selectModel(String? value);
   void selectRankSort(UsageRankSort value);
-
-  void dispose();
 }

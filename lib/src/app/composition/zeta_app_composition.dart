@@ -4,7 +4,6 @@ import 'package:flutter/widgets.dart' show Locale;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:zeta_ui/zeta_ui.dart';
-import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_composition.dart';
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_runner.dart';
@@ -23,8 +22,7 @@ import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
 import 'package:zeta/src/app/provider_settings_slice/provider_settings_slice_overrides.dart';
 import 'package:zeta/src/app/settings_slice/settings_slice_overrides.dart';
 import 'package:zeta/src/app/storage/zeta_store_providers.dart';
-import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_providers.dart';
-import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_slice_composition.dart';
+import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_slice_overrides.dart';
 import 'package:zeta/src/app/window/zeta_shutdown_hook.dart';
 import 'package:zeta/src/app/window/zeta_window_host.dart';
 import 'package:zeta/src/app/workspace_slice/workspace_overrides.dart';
@@ -36,7 +34,8 @@ import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_
 import 'package:zeta/src/features/settings/application/appearance_settings_notifier.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_notifier.dart';
 import 'package:zeta/src/features/settings/domain/app_language.dart';
-import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_slice/usage_statistics_slice_providers.dart';
+import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_slice/agent_usage_panel_slice_store.dart';
+import 'package:zeta/src/features/usage_statistics/application/usage_statistics_slice/usage_statistics_slice_store.dart';
 import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
 
 /// Zeta 的组合根。
@@ -102,8 +101,6 @@ final class ZetaAppComposition implements ZetaShutdownHook {
 
   late final ZetaWindowHost _windowHost;
 
-  UsageStatisticsSliceComposition? _usageStatisticsSliceComposition;
-
   /// 在 `IdeHome.initState` 同步接入 Workspace，保证首个会话 build 只有新路径。
   final AgentConversationSliceStoreRegistry conversationSliceStoreRegistry =
       AgentConversationSliceStoreRegistry();
@@ -138,18 +135,13 @@ final class ZetaAppComposition implements ZetaShutdownHook {
   ZetaUiTextCatalog get zetaUiTextCatalog =>
       _textCatalogs?.zetaUi ?? const FallbackZetaUiTextCatalog();
 
-  UsageStatisticsSliceComposition get usageStatisticsComposition =>
-      _usageStatisticsSliceComposition ??
-      (throw StateError('Usage Statistics composition is not ready'));
-
   /// 按需读取当前逻辑状态树；生产 Widget 不得订阅或在 build 中调用。
   ZetaStateSnapshot takeStateSnapshot() {
-    final usageComposition = usageStatisticsComposition;
     return ZetaStateSnapshot(
       shell: shellStateSnapshotRelay.read(),
       ideSession: container.read(ideSessionSliceProvider),
-      usageStatistics: usageComposition.usageStatisticsStore.state,
-      agentUsagePanel: usageComposition.agentUsagePanelStore.state,
+      usageStatistics: container.read(usageStatisticsSliceProvider),
+      agentUsagePanel: container.read(agentUsagePanelSliceProvider),
       desktopAttention: ZetaDesktopAttentionStateSnapshot.fromState(
         container.read(desktopAttentionSliceProvider),
       ),
@@ -212,8 +204,6 @@ final class ZetaAppComposition implements ZetaShutdownHook {
     }
     _disposed = true;
     _windowHost.removeShutdownHook(this);
-    _usageStatisticsSliceComposition?.dispose();
-    _usageStatisticsSliceComposition = null;
     // 关闭动作在容器销毁前同步取出，await 发生在容器已经关掉之后也不受影响。
     unawaited(shutdownOwnedAgentResources());
     // Provider Settings、两个 settings 切片与 Desktop Attention 由 provider 拥有，
@@ -278,24 +268,11 @@ final class ZetaAppComposition implements ZetaShutdownHook {
     // Notifier 会触发 Riverpod 的 build-phase 写保护；Shell 随后调用时只会复用
     // 同一个 in-flight Future，不再产生第二次 effect。
     unawaited(providerSettings.loadSettings());
-    _usageStatisticsSliceComposition ??= UsageStatisticsSliceComposition.create(
-      loadEnabledProviders: _loadEnabledAgentUsageProviders,
-      runtimeRegistry: container.read(agentProviderRuntimeRegistryProvider),
-      partitionStore: container.read(usageStatisticsPartitionStoreProvider),
-      agentUsagePanelRepository: container.read(
-        agentUsagePanelRepositoryProvider,
-      ),
-      textCatalog: container.read(usageStatisticsTextCatalogProvider),
-    );
+    // Usage Statistics 同样是 app-session Notifier。此处只显式建出 owner，
+    // 查询仍按页面/侧栏命令惰性启动。
+    container.read(usageStatisticsSliceProvider.notifier);
+    container.read(agentUsagePanelSliceProvider.notifier);
     _localeRuntimeReady = true;
-  }
-
-  Future<List<AgentProviderConfig>> _loadEnabledAgentUsageProviders() async {
-    final providerSettings = container.read(
-      agentProviderSettingsSliceProvider.notifier,
-    );
-    await providerSettings.loadSettings();
-    return providerSettings.enabledProviders;
   }
 
   /// 取出某个资源的关闭动作；没建出来就返回 null。
@@ -324,18 +301,13 @@ final class ZetaAppComposition implements ZetaShutdownHook {
       ...ideSessionSliceOverrides(),
       ...providerSettingsSliceOverrides(),
       ...settingsSliceOverrides(),
+      ...usageStatisticsSliceOverrides(),
       ...workspaceOverrides(),
       agentConversationSliceStoreRegistryProvider.overrideWithValue(
         conversationSliceStoreRegistry,
       ),
       agentConversationWorkspaceStoreRegistryProvider.overrideWithValue(
         conversationWorkspaceStoreRegistry,
-      ),
-      usageStatisticsSliceStoreProvider.overrideWith(
-        (ref) => usageStatisticsComposition.usageStatisticsStore,
-      ),
-      agentUsagePanelSliceStoreProvider.overrideWith(
-        (ref) => usageStatisticsComposition.agentUsagePanelStore,
       ),
       ...extra,
     ];

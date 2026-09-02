@@ -16,12 +16,12 @@ final class UsageStatisticsSliceRunnerAdapter
   UsageStatisticsSliceRunnerAdapter({
     required this.repository,
     required this.textCatalog,
+    required this.notifier,
   });
 
-  @override
   final UsageStatisticsRepository repository;
   final UsageStatisticsTextCatalog textCatalog;
-  UsageStatisticsSliceStore? store;
+  final UsageStatisticsSliceNotifier notifier;
   bool _closed = false;
 
   @override
@@ -42,7 +42,7 @@ final class UsageStatisticsSliceRunnerAdapter
         forceRefresh: effect.forceRefresh,
       );
       if (!_closed) {
-        store?.sourceLoaded(
+        notifier.sourceLoaded(
           operationId: effect.operationId,
           earliest: effect.earliest,
           source: source,
@@ -51,7 +51,7 @@ final class UsageStatisticsSliceRunnerAdapter
       }
     } catch (error) {
       if (!_closed) {
-        store?.loadFailed(
+        notifier.loadFailed(
           operationId: effect.operationId,
           message: textCatalog.loadFailed(error),
         );
@@ -62,7 +62,6 @@ final class UsageStatisticsSliceRunnerAdapter
   @override
   void close() {
     _closed = true;
-    store = null;
   }
 }
 
@@ -75,13 +74,14 @@ final class AgentUsagePanelSliceRunnerAdapter
   AgentUsagePanelSliceRunnerAdapter({
     required this.repository,
     required this.textCatalog,
+    required this.notifier,
+    required this.persistSelection,
   });
 
-  @override
   final AgentUsagePanelRepository repository;
   final UsageStatisticsTextCatalog textCatalog;
-  AgentUsagePanelSliceStore? store;
-  void Function(String? providerId)? selectionPersistenceHandler;
+  final AgentUsagePanelSliceNotifier notifier;
+  final void Function(String? providerId) persistSelection;
   final List<DiscoverAgentUsageProvidersEffect> _directoryQueue =
       <DiscoverAgentUsageProvidersEffect>[];
   Future<void>? _directoryDrain;
@@ -99,7 +99,7 @@ final class AgentUsagePanelSliceRunnerAdapter
       case LoadAgentUsageProviderEffect():
         unawaited(_loadProvider(effect));
       case PersistAgentUsageSelectionEffect():
-        selectionPersistenceHandler?.call(effect.providerId);
+        persistSelection(effect.providerId);
     }
   }
 
@@ -139,9 +139,12 @@ final class AgentUsagePanelSliceRunnerAdapter
       return;
     }
     if (finalProviders case final providers?) {
-      store?.directoryLoaded(operationIds: operationIds, providers: providers);
+      notifier.directoryLoaded(
+        operationIds: operationIds,
+        providers: providers,
+      );
     } else {
-      store?.directoryFailed(
+      notifier.directoryFailed(
         operationIds: operationIds,
         message: finalError ?? textCatalog.agentUsageTemporarilyUnavailable,
       );
@@ -158,7 +161,7 @@ final class AgentUsagePanelSliceRunnerAdapter
         return;
       }
       if (result == null) {
-        store?.providerFailed(
+        notifier.providerFailed(
           operationId: effect.operationId,
           providerId: effect.providerId,
           message: textCatalog.agentDisabledOrUnavailable,
@@ -166,14 +169,14 @@ final class AgentUsagePanelSliceRunnerAdapter
         );
         return;
       }
-      store?.providerLoaded(
+      notifier.providerLoaded(
         operationId: effect.operationId,
         providerId: effect.providerId,
         result: result,
       );
     } catch (_) {
       if (!_closed) {
-        store?.providerFailed(
+        notifier.providerFailed(
           operationId: effect.operationId,
           providerId: effect.providerId,
           message: textCatalog.agentUsageTemporarilyUnavailable,
@@ -186,7 +189,5 @@ final class AgentUsagePanelSliceRunnerAdapter
   void close() {
     _closed = true;
     _directoryQueue.clear();
-    selectionPersistenceHandler = null;
-    store = null;
   }
 }
