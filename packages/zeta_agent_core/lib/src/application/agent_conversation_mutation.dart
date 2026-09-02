@@ -1,4 +1,5 @@
 import 'package:zeta_agent_core/src/application/agent_conversation_effect.dart';
+import 'package:zeta_agent_core/src/application/agent_conversation_timeline_store.dart';
 import 'package:zeta_agent_core/src/application/agent_ui_update_request.dart';
 import 'package:zeta_agent_core/src/domain/agent_models.dart';
 import 'package:zeta_agent_core/src/domain/agent_provider_raw_payload.dart';
@@ -146,12 +147,23 @@ sealed class AgentTimelineMutation {
 
   /// mutation 后是否读取并清除 Store 的 activity dirty 标志。
   final bool trackActivityChange;
+
+  /// 把本次变化应用到 Store。
+  ///
+  /// **只允许 [AgentConversationEventProcessor] 调用。**
+  /// reducer 内调用即违反 G3（reducer 必须纯同步、不得触碰 Store）。
+  /// 守卫：`agent_reducer_purity_guard_test.dart`。
+  void applyTo(AgentConversationTimelineStore store);
 }
 
 final class AgentBeginLiveTurnTimelineMutation extends AgentTimelineMutation {
   const AgentBeginLiveTurnTimelineMutation(this.turn);
 
   final AgentTurn turn;
+
+  @override
+  void applyTo(AgentConversationTimelineStore store) =>
+      store.beginLiveTurnGroup(turn);
 }
 
 final class AgentCompleteLiveTurnTimelineMutation
@@ -159,6 +171,14 @@ final class AgentCompleteLiveTurnTimelineMutation
   const AgentCompleteLiveTurnTimelineMutation(this.event);
 
   final AgentTurnCompletedEvent event;
+
+  @override
+  void applyTo(AgentConversationTimelineStore store) =>
+      store.completeLiveTurnGroup(
+        event.turnId,
+        status: event.status,
+        duration: event.duration,
+      );
 }
 
 final class AgentSettleInterruptedTimelineMutation
@@ -166,6 +186,17 @@ final class AgentSettleInterruptedTimelineMutation
   const AgentSettleInterruptedTimelineMutation(this.fallbackTurnId);
 
   final String fallbackTurnId;
+
+  @override
+  void applyTo(AgentConversationTimelineStore store) {
+    if (!store.isTurnRunning) {
+      return;
+    }
+    store.completeLiveTurnGroup(
+      store.selectedRunningTurnId ?? fallbackTurnId,
+      status: AgentHistoryTurnStatus.interrupted,
+    );
+  }
 }
 
 /// 新增会话消息所需的纯 Dart 白名单字段。
@@ -200,12 +231,36 @@ final class AgentAddConversationMessageTimelineMutation
   const AgentAddConversationMessageTimelineMutation(this.message);
 
   final AgentConversationMessageMutationData message;
+
+  @override
+  void applyTo(AgentConversationTimelineStore store) {
+    // 白名单字段逐个搬运，禁止直接透传对象。
+    // addConversationMessage 返回 entryId；与原 processor 实现一致丢弃返回值。
+    store.addConversationMessage(
+      AgentConversationMessage(
+        id: message.id,
+        sourceMessageId: message.sourceMessageId,
+        role: message.role,
+        text: message.text,
+        kind: message.kind,
+        phase: message.phase,
+        status: message.status,
+        duration: message.duration,
+        localImagePaths: message.localImagePaths,
+        raw: message.raw,
+      ),
+    );
+  }
 }
 
 final class AgentAddHistoryEventTimelineMutation extends AgentTimelineMutation {
   const AgentAddHistoryEventTimelineMutation(this.event);
 
   final AgentHistoryEventEntry event;
+
+  @override
+  void applyTo(AgentConversationTimelineStore store) =>
+      store.addHistoryEvent(event);
 }
 
 final class AgentUpdateTurnTokenUsageTimelineMutation
@@ -213,6 +268,10 @@ final class AgentUpdateTurnTokenUsageTimelineMutation
   const AgentUpdateTurnTokenUsageTimelineMutation(this.event);
 
   final AgentTokenUsageEvent event;
+
+  @override
+  void applyTo(AgentConversationTimelineStore store) =>
+      store.updateTurnTokenUsage(event);
 }
 
 final class AgentUpdateContextWindowUsageTimelineMutation
@@ -220,6 +279,10 @@ final class AgentUpdateContextWindowUsageTimelineMutation
   const AgentUpdateContextWindowUsageTimelineMutation(this.event);
 
   final AgentContextWindowUsageEvent event;
+
+  @override
+  void applyTo(AgentConversationTimelineStore store) =>
+      store.updateContextWindowUsage(event);
 }
 
 final class AgentAppendMessageDeltaTimelineMutation
@@ -228,6 +291,10 @@ final class AgentAppendMessageDeltaTimelineMutation
     : super(trackActivityChange: true);
 
   final AgentMessageDeltaEvent event;
+
+  @override
+  void applyTo(AgentConversationTimelineStore store) =>
+      store.appendMessageDelta(event);
 }
 
 final class AgentAppendReasoningDeltaTimelineMutation
@@ -236,12 +303,20 @@ final class AgentAppendReasoningDeltaTimelineMutation
     : super(trackActivityChange: true);
 
   final AgentReasoningDeltaEvent event;
+
+  @override
+  void applyTo(AgentConversationTimelineStore store) =>
+      store.appendReasoningDelta(event);
 }
 
 final class AgentUpdateMessageTimelineMutation extends AgentTimelineMutation {
   const AgentUpdateMessageTimelineMutation(this.event);
 
   final AgentMessageUpdatedEvent event;
+
+  @override
+  void applyTo(AgentConversationTimelineStore store) =>
+      store.updateMessage(event);
 }
 
 final class AgentReplaceActivePlanTimelineMutation
@@ -249,6 +324,10 @@ final class AgentReplaceActivePlanTimelineMutation
   const AgentReplaceActivePlanTimelineMutation(this.event);
 
   final AgentPlanUpdatedEvent event;
+
+  @override
+  void applyTo(AgentConversationTimelineStore store) =>
+      store.replaceActivePlan(event);
 }
 
 /// 原位写入或清除回合级中立文件变更快照。
@@ -257,6 +336,10 @@ final class AgentUpsertTurnFileChangesTimelineMutation
   const AgentUpsertTurnFileChangesTimelineMutation(this.event);
 
   final AgentTurnFileChangesEvent event;
+
+  @override
+  void applyTo(AgentConversationTimelineStore store) =>
+      store.upsertTurnFileChanges(event);
 }
 
 final class AgentUpsertToolCallTimelineMutation extends AgentTimelineMutation {
@@ -264,6 +347,10 @@ final class AgentUpsertToolCallTimelineMutation extends AgentTimelineMutation {
     : super(trackActivityChange: true);
 
   final AgentToolCall toolCall;
+
+  @override
+  void applyTo(AgentConversationTimelineStore store) =>
+      store.upsertToolCall(toolCall);
 }
 
 final class AgentAddPermissionRequestTimelineMutation
@@ -271,6 +358,10 @@ final class AgentAddPermissionRequestTimelineMutation
   const AgentAddPermissionRequestTimelineMutation(this.request);
 
   final AgentPermissionRequest request;
+
+  @override
+  void applyTo(AgentConversationTimelineStore store) =>
+      store.addPermissionRequest(request);
 }
 
 final class AgentRemovePermissionRequestTimelineMutation
@@ -278,6 +369,10 @@ final class AgentRemovePermissionRequestTimelineMutation
   const AgentRemovePermissionRequestTimelineMutation(this.requestId);
 
   final String requestId;
+
+  @override
+  void applyTo(AgentConversationTimelineStore store) =>
+      store.removePermissionRequest(requestId);
 }
 
 final class AgentAddQuestionRequestTimelineMutation
@@ -285,6 +380,10 @@ final class AgentAddQuestionRequestTimelineMutation
   const AgentAddQuestionRequestTimelineMutation(this.request);
 
   final AgentQuestionRequest request;
+
+  @override
+  void applyTo(AgentConversationTimelineStore store) =>
+      store.addQuestionRequest(request);
 }
 
 final class AgentRemoveQuestionRequestTimelineMutation
@@ -292,6 +391,10 @@ final class AgentRemoveQuestionRequestTimelineMutation
   const AgentRemoveQuestionRequestTimelineMutation(this.requestId);
 
   final String requestId;
+
+  @override
+  void applyTo(AgentConversationTimelineStore store) =>
+      store.removeQuestionRequest(requestId);
 }
 
 final class AgentAddPlanApprovalRequestTimelineMutation
@@ -299,6 +402,10 @@ final class AgentAddPlanApprovalRequestTimelineMutation
   const AgentAddPlanApprovalRequestTimelineMutation(this.request);
 
   final AgentPlanApprovalRequest request;
+
+  @override
+  void applyTo(AgentConversationTimelineStore store) =>
+      store.addPlanApprovalRequest(request);
 }
 
 final class AgentRemovePlanApprovalRequestTimelineMutation
@@ -306,6 +413,10 @@ final class AgentRemovePlanApprovalRequestTimelineMutation
   const AgentRemovePlanApprovalRequestTimelineMutation(this.requestId);
 
   final String requestId;
+
+  @override
+  void applyTo(AgentConversationTimelineStore store) =>
+      store.removePlanApprovalRequest(requestId);
 }
 
 /// Timeline/state outcome 参与最终 UI request 合成的规则。

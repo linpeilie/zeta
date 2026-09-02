@@ -3458,7 +3458,7 @@ class AgentConversationViewModel
       threadId: threadId,
       runtimeScope: currentRuntimeScope(),
       currentRuntimeScope: currentRuntimeScope,
-      allowDetachedEvent: AgentConversationReducer.isCriticalDetachedEvent,
+      allowDetachedEvent: AgentDetachedEventPolicy.isCritical,
       // pipeline 身份是事件 listener generation 的唯一真源。
       processEvent: (event) {
         if (_disposed || !identical(_eventPipeline, pipeline)) {

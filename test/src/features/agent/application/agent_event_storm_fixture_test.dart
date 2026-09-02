@@ -368,7 +368,7 @@ Future<_ProcessedStormRun> _runProcessedStorm() async {
       } else {
         rejectedEvents += 1;
       }
-      if (AgentConversationReducer.isCriticalDetachedEvent(event)) {
+      if (AgentDetachedEventPolicy.isCritical(event)) {
         criticalEventTypes.add(event.runtimeType);
       }
     },

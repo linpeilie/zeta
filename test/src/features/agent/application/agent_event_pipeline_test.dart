@@ -325,7 +325,7 @@ AgentEventPipeline _pipeline({
     threadId: threadId,
     runtimeScope: currentRuntimeScope(),
     currentRuntimeScope: currentRuntimeScope,
-    allowDetachedEvent: AgentConversationReducer.isCriticalDetachedEvent,
+    allowDetachedEvent: AgentDetachedEventPolicy.isCritical,
     processEvent: processed.add,
     onSourceError: (error, stackTrace) {},
     onDone: onDone ?? () {},

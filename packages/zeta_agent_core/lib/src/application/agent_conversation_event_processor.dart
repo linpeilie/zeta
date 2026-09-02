@@ -130,7 +130,7 @@ final class AgentConversationEventProcessor {
 
     var activityChanged = false;
     for (final timelineMutation in mutation.timelineMutations) {
-      _applyTimelineMutation(timelineMutation);
+      timelineMutation.applyTo(_timeline);
       if (timelineMutation.trackActivityChange) {
         activityChanged = _timeline.takeActivityDirty() || activityChanged;
       }
@@ -188,73 +188,6 @@ final class AgentConversationEventProcessor {
       if (effect.timing == timing) {
         _effectRunner.run(effect);
       }
-    }
-  }
-
-  void _applyTimelineMutation(AgentTimelineMutation mutation) {
-    switch (mutation) {
-      case AgentBeginLiveTurnTimelineMutation():
-        _timeline.beginLiveTurnGroup(mutation.turn);
-      case AgentCompleteLiveTurnTimelineMutation():
-        final event = mutation.event;
-        _timeline.completeLiveTurnGroup(
-          event.turnId,
-          status: event.status,
-          duration: event.duration,
-        );
-      case AgentSettleInterruptedTimelineMutation():
-        if (_timeline.isTurnRunning) {
-          _timeline.completeLiveTurnGroup(
-            _timeline.selectedRunningTurnId ?? mutation.fallbackTurnId,
-            status: AgentHistoryTurnStatus.interrupted,
-          );
-        }
-      case AgentAddConversationMessageTimelineMutation():
-        final message = mutation.message;
-        _timeline.addConversationMessage(
-          AgentConversationMessage(
-            id: message.id,
-            sourceMessageId: message.sourceMessageId,
-            role: message.role,
-            text: message.text,
-            kind: message.kind,
-            phase: message.phase,
-            status: message.status,
-            duration: message.duration,
-            localImagePaths: message.localImagePaths,
-            raw: message.raw,
-          ),
-        );
-      case AgentAddHistoryEventTimelineMutation():
-        _timeline.addHistoryEvent(mutation.event);
-      case AgentUpdateTurnTokenUsageTimelineMutation():
-        _timeline.updateTurnTokenUsage(mutation.event);
-      case AgentUpdateContextWindowUsageTimelineMutation():
-        _timeline.updateContextWindowUsage(mutation.event);
-      case AgentAppendMessageDeltaTimelineMutation():
-        _timeline.appendMessageDelta(mutation.event);
-      case AgentAppendReasoningDeltaTimelineMutation():
-        _timeline.appendReasoningDelta(mutation.event);
-      case AgentUpdateMessageTimelineMutation():
-        _timeline.updateMessage(mutation.event);
-      case AgentReplaceActivePlanTimelineMutation():
-        _timeline.replaceActivePlan(mutation.event);
-      case AgentUpsertTurnFileChangesTimelineMutation():
-        _timeline.upsertTurnFileChanges(mutation.event);
-      case AgentUpsertToolCallTimelineMutation():
-        _timeline.upsertToolCall(mutation.toolCall);
-      case AgentAddPermissionRequestTimelineMutation():
-        _timeline.addPermissionRequest(mutation.request);
-      case AgentRemovePermissionRequestTimelineMutation():
-        _timeline.removePermissionRequest(mutation.requestId);
-      case AgentAddQuestionRequestTimelineMutation():
-        _timeline.addQuestionRequest(mutation.request);
-      case AgentRemoveQuestionRequestTimelineMutation():
-        _timeline.removeQuestionRequest(mutation.requestId);
-      case AgentAddPlanApprovalRequestTimelineMutation():
-        _timeline.addPlanApprovalRequest(mutation.request);
-      case AgentRemovePlanApprovalRequestTimelineMutation():
-        _timeline.removePlanApprovalRequest(mutation.requestId);
     }
   }
 }

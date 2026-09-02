@@ -25,27 +25,47 @@ final class AgentConversationLocalTimelineIdGenerator {
 
 /// live/history/replay 各自持有独立可变 identity 状态的 reducer 集合。
 final class AgentConversationReducerContexts {
-  AgentConversationReducerContexts({
+  factory AgentConversationReducerContexts({
     AgentConversationClock? clock,
     AgentConversationLocalTimelineIdGenerator? liveTimelineIds,
     AgentUiTextCatalog textCatalog = const FallbackAgentUiTextCatalog(),
-  }) : live = AgentConversationReducer.live(
-         clock: clock,
-         timelineIds: liveTimelineIds,
-         textCatalog: textCatalog,
-       ),
-       history = AgentConversationReducer.history(
-         clock: clock,
-         textCatalog: textCatalog,
-       ),
-       replay = AgentConversationReducer.replay(
-         clock: clock,
-         textCatalog: textCatalog,
-       );
+  }) {
+    return AgentConversationReducerContexts._(
+      clock,
+      liveTimelineIds,
+      textCatalog,
+    );
+  }
 
-  final AgentConversationReducer live;
-  final AgentConversationReducer history;
-  final AgentConversationReducer replay;
+  AgentConversationReducerContexts._(
+    this._clock,
+    this._liveTimelineIds,
+    this._textCatalog,
+  );
+
+  final AgentConversationClock? _clock;
+  final AgentConversationLocalTimelineIdGenerator? _liveTimelineIds;
+  final AgentUiTextCatalog _textCatalog;
+
+  /// 生产路径唯一消费者。
+  late final AgentConversationReducer live = AgentConversationReducer.live(
+    clock: _clock,
+    timelineIds: _liveTimelineIds,
+    textCatalog: _textCatalog,
+  );
+
+  /// 历史加载路径预留；当前仅测试消费（G3 隔离守卫）。
+  late final AgentConversationReducer history =
+      AgentConversationReducer.history(
+        clock: _clock,
+        textCatalog: _textCatalog,
+      );
+
+  /// 回放路径预留；当前仅测试消费（G3 隔离守卫）。
+  late final AgentConversationReducer replay = AgentConversationReducer.replay(
+    clock: _clock,
+    textCatalog: _textCatalog,
+  );
 }
 
 /// reducer 所需的只读会话视图。
@@ -134,24 +154,6 @@ final class AgentConversationReducer {
   final AgentConversationLocalTimelineIdGenerator _timelineIds;
   final Set<String> _shownDeprecationSummaries = <String>{};
   String? _lastShownErrorMessage;
-
-  /// detached runtime 仍可交付的精确 critical allowlist。
-  ///
-  /// [AgentThreadNameUpdatedEvent] / [AgentThreadPreviewUpdatedEvent] 纳入：
-  /// Grok 在 turn 结束后异步下发标题或 `last_turn_summary`，事件可能略晚于
-  /// runtime detach 边界，仍需更新列表展示。
-  static bool isCriticalDetachedEvent(AgentEvent event) {
-    return event is AgentStatusEvent ||
-        event is AgentErrorEvent ||
-        event is AgentTurnCompletedEvent ||
-        event is AgentThreadClosedEvent ||
-        event is AgentThreadNameUpdatedEvent ||
-        event is AgentThreadPreviewUpdatedEvent ||
-        event is AgentPermissionRequestedEvent ||
-        event is AgentPermissionResolvedEvent ||
-        event is AgentPlanApprovalRequestedEvent ||
-        event is AgentPlanApprovalResolvedEvent;
-  }
 
   AgentConversationMutation reduce(
     AgentEvent event,

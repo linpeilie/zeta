@@ -225,17 +225,14 @@ void main() {
 
       for (final reductionCase in cases) {
         expect(
-          AgentConversationReducer.isCriticalDetachedEvent(reductionCase.event),
+          AgentDetachedEventPolicy.isCritical(reductionCase.event),
           criticalTypes.contains(reductionCase.event.runtimeType),
           reason: reductionCase.name,
         );
       }
       expect(
         cases
-            .where(
-              (item) =>
-                  AgentConversationReducer.isCriticalDetachedEvent(item.event),
-            )
+            .where((item) => AgentDetachedEventPolicy.isCritical(item.event))
             .length,
         criticalTypes.length,
       );
