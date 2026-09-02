@@ -1910,7 +1910,7 @@ class AgentConversationViewModel
       // 在发送瞬间冻结本回合模型配置，避免 footer 被后续改配置污染。
       _timeline.startPendingLiveTurn(modelConfig: _currentTurnModelConfig());
       _conversationModeController.setTurnRunning(true);
-      _consumeActivityDirty();
+      _consumeTimelineDirty();
     } else {
       _timeline.currentTurnGroupId = runningTurnId;
     }
@@ -1922,6 +1922,7 @@ class AgentConversationViewModel
         localImagePaths: imagePaths,
       ),
     );
+    _consumeTimelineDirty();
     _status = AgentProviderStatus(
       state: AgentProviderConnectionState.running,
       message: _textCatalog.agentIsWorking,
@@ -2033,6 +2034,7 @@ class AgentConversationViewModel
         if (pendingId != null &&
             _isStillSelectedThread(switchToken, session.id)) {
           _timeline.beginLiveTurnGroup(turn);
+          _consumeTimelineDirty();
           _publishUiChanges(
             AgentUiUpdateRequest(
               regions: const <AgentUiRegion>{
@@ -2279,6 +2281,7 @@ class AgentConversationViewModel
       waitingOnUserInput: false,
     );
     _timeline.clearConversation();
+    _consumeTimelineDirty();
     _modelRerouteNotice = null;
     _status = AgentProviderStatus(
       state: AgentProviderConnectionState.connecting,
@@ -2350,6 +2353,7 @@ class AgentConversationViewModel
         }
       }
       _timeline.applyHistorySnapshot(history, thread);
+      _consumeTimelineDirty();
       _applyThreadSelectionFromHistory(history);
       _conversationModeController.bindThread(
         threadId: thread.id,
@@ -3068,8 +3072,10 @@ class AgentConversationViewModel
     }
   }
 
-  /// 消费活动段脏标记；为 true 时应刷新 header。
-  bool _consumeActivityDirty() => _timeline.takeActivityDirty();
+  /// 消费时间线脏区，避免命令侧写入泄漏进下一次事件发布。
+  void _consumeTimelineDirty() {
+    _timeline.takeDirtyRegions();
+  }
 
   /// 释放会话活动令牌。
   ///
@@ -3340,7 +3346,7 @@ class AgentConversationViewModel
       status: AgentHistoryTurnStatus.failed,
     );
     _timeline.clearPendingTurnGroupId();
-    _consumeActivityDirty();
+    _consumeTimelineDirty();
     _syncElapsedTicker();
     _conversationModeController.setTurnRunning(isTurnRunning);
     _publishUiChanges(
@@ -3839,6 +3845,7 @@ class AgentConversationViewModel
         text: details == null ? message : '$message: $details',
       ),
     );
+    _consumeTimelineDirty();
     _publishUiChanges(
       AgentUiUpdateRequest(
         regions: <AgentUiRegion>{
@@ -3866,6 +3873,7 @@ class AgentConversationViewModel
         text: details == null ? message : '$message: $details',
       ),
     );
+    _consumeTimelineDirty();
     _publishUiChanges(
       AgentUiUpdateRequest(
         regions: <AgentUiRegion>{
@@ -4294,7 +4302,6 @@ final class _AgentConversationSessionEffects
     if (!running) {
       _viewModel._releaseTurnActivity();
     }
-    _viewModel._consumeActivityDirty();
     _viewModel._syncElapsedTicker();
   }
 

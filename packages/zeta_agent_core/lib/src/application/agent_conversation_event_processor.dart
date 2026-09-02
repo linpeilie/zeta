@@ -111,6 +111,7 @@ final class AgentConversationEventProcessor {
   }
 
   void _apply(AgentConversationReduction reduction) {
+    final before = _stateSink.sessionState;
     _runEffects(reduction, AgentConversationEffectTiming.beforeMutation);
     if (!reduction.accepted) {
       _runEffects(reduction, AgentConversationEffectTiming.afterMutation);
@@ -119,12 +120,8 @@ final class AgentConversationEventProcessor {
 
     _stateSink.applyReducedState(reduction.state);
 
-    var activityChanged = false;
     for (final timelineMutation in reduction.timelineMutations) {
       timelineMutation.applyTo(_timeline);
-      if (timelineMutation.trackActivityChange) {
-        activityChanged = _timeline.takeActivityDirty() || activityChanged;
-      }
     }
 
     if (reduction.threadSnapshot != null) {
@@ -133,14 +130,11 @@ final class AgentConversationEventProcessor {
 
     // afterMutation 必须在 UI 发布前执行：原 stateChanges 里的
     // setTurnRunning / bind mode 会同步触发 composer 刷新，若放在 publish
-    // 之后会盖掉 reducer 声明的 region。TurnCompleted 等原 after 效果
+    // 之后会盖掉本次派生的 region。TurnCompleted 等原 after 效果
     // 提前一拍不影响注意力回调语义。
     _runEffects(reduction, AgentConversationEffectTiming.afterMutation);
 
-    final request = _resolveUiUpdate(
-      reduction,
-      activityChanged: activityChanged,
-    );
+    final request = _resolveUiUpdate(reduction, before: before);
     if (request != null) {
       _uiUpdates.publish(request);
     }
@@ -148,26 +142,61 @@ final class AgentConversationEventProcessor {
 
   AgentUiUpdateRequest? _resolveUiUpdate(
     AgentConversationReduction reduction, {
-    required bool activityChanged,
+    required AgentConversationSessionState before,
   }) {
-    final base = reduction.uiUpdate;
-    if (base == null) {
+    final urgency = reduction.urgency;
+    if (urgency == null) {
       return null;
     }
-    final regions = <AgentUiRegion>{...base.regions};
-    if (activityChanged &&
-        reduction.uiResolution.includeHeaderWhenActivityChanges) {
-      regions.add(AgentUiRegion.header);
-    }
-    if (reduction.uiResolution.includePendingInteractionWhenStateChanges) {
-      regions.add(AgentUiRegion.pendingInteraction);
-    }
+    final regions = <AgentUiRegion>{
+      ..._regionsFromDirty(_timeline.takeDirtyRegions()),
+      ...agentUiRegionsFromSessionStateDiff(before, reduction.state),
+    };
     return AgentUiUpdateRequest(
       regions: regions,
-      urgency: base.urgency,
-      effects: base.effects,
+      urgency: urgency,
+      effects: reduction.uiEffects,
     );
   }
+
+  static Set<AgentUiRegion> _regionsFromDirty(
+    Set<AgentTimelineDirtyRegion> dirty,
+  ) {
+    if (dirty.isEmpty) {
+      return const <AgentUiRegion>{};
+    }
+    final regions = <AgentUiRegion>{};
+    for (final region in dirty) {
+      regions.addAll(_uiRegionsOf[region] ?? const <AgentUiRegion>{});
+    }
+    return regions;
+  }
+
+  static const Map<AgentTimelineDirtyRegion, Set<AgentUiRegion>>
+  _uiRegionsOf = <AgentTimelineDirtyRegion, Set<AgentUiRegion>>{
+    AgentTimelineDirtyRegion.history: <AgentUiRegion>{AgentUiRegion.history},
+    AgentTimelineDirtyRegion.liveTurn: <AgentUiRegion>{AgentUiRegion.liveTurn},
+    // running ↔ historical 切换时，头栏与 composer 都读 isTurnRunning。
+    AgentTimelineDirtyRegion.liveTurnBinding: <AgentUiRegion>{
+      AgentUiRegion.liveTurnBinding,
+      AgentUiRegion.header,
+      AgentUiRegion.composer,
+    },
+    AgentTimelineDirtyRegion.activity: <AgentUiRegion>{AgentUiRegion.header},
+    AgentTimelineDirtyRegion.expansion: <AgentUiRegion>{
+      AgentUiRegion.expansion,
+    },
+    AgentTimelineDirtyRegion.pendingInteraction: <AgentUiRegion>{
+      AgentUiRegion.pendingInteraction,
+    },
+    AgentTimelineDirtyRegion.usage: <AgentUiRegion>{
+      AgentUiRegion.header,
+      AgentUiRegion.composer,
+    },
+    AgentTimelineDirtyRegion.contextUsage: <AgentUiRegion>{
+      AgentUiRegion.composer,
+    },
+  };
 
   void _runEffects(
     AgentConversationReduction reduction,
@@ -179,4 +208,37 @@ final class AgentConversationEventProcessor {
       }
     }
   }
+}
+
+/// 由 SessionState 字段 diff 派生的 UI region。
+///
+/// 必须与 `_buildHeaderState` / `_buildComposerState` /
+/// `_buildPendingInteractionState` 实际读取的会话字段对齐。
+Set<AgentUiRegion> agentUiRegionsFromSessionStateDiff(
+  AgentConversationSessionState before,
+  AgentConversationSessionState after,
+) {
+  if (identical(before, after) || before == after) {
+    return const <AgentUiRegion>{};
+  }
+  final regions = <AgentUiRegion>{};
+  if (before.status != after.status ||
+      before.currentThreadTitle != after.currentThreadTitle ||
+      before.threadRuntimeStatus != after.threadRuntimeStatus ||
+      before.threadWaitingOnApproval != after.threadWaitingOnApproval ||
+      before.threadWaitingOnUserInput != after.threadWaitingOnUserInput ||
+      before.modelRerouteNotice != after.modelRerouteNotice ||
+      before.threadOpenPhase != after.threadOpenPhase) {
+    regions.add(AgentUiRegion.header);
+  }
+  if (before.sessionConfigOptions != after.sessionConfigOptions ||
+      before.threadOpenPhase != after.threadOpenPhase ||
+      before.session != after.session) {
+    regions.add(AgentUiRegion.composer);
+  }
+  if (before.autoReviewsByTurnId != after.autoReviewsByTurnId ||
+      before.latestDeniedAutoReview != after.latestDeniedAutoReview) {
+    regions.add(AgentUiRegion.pendingInteraction);
+  }
+  return regions;
 }

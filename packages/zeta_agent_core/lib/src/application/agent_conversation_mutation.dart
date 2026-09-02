@@ -9,10 +9,7 @@ import 'package:zeta_agent_core/src/domain/agent_provider_raw_payload.dart';
 ///
 /// 这些对象只描述数据变化，不携带 UI urgency，也不根据 Provider 类型分支。
 sealed class AgentTimelineMutation {
-  const AgentTimelineMutation({this.trackActivityChange = false});
-
-  /// mutation 后是否读取并清除 Store 的 activity dirty 标志。
-  final bool trackActivityChange;
+  const AgentTimelineMutation();
 
   /// 把本次变化应用到 Store。
   ///
@@ -153,8 +150,7 @@ final class AgentUpdateContextWindowUsageTimelineMutation
 
 final class AgentAppendMessageDeltaTimelineMutation
     extends AgentTimelineMutation {
-  const AgentAppendMessageDeltaTimelineMutation(this.event)
-    : super(trackActivityChange: true);
+  const AgentAppendMessageDeltaTimelineMutation(this.event);
 
   final AgentMessageDeltaEvent event;
 
@@ -165,8 +161,7 @@ final class AgentAppendMessageDeltaTimelineMutation
 
 final class AgentAppendReasoningDeltaTimelineMutation
     extends AgentTimelineMutation {
-  const AgentAppendReasoningDeltaTimelineMutation(this.event)
-    : super(trackActivityChange: true);
+  const AgentAppendReasoningDeltaTimelineMutation(this.event);
 
   final AgentReasoningDeltaEvent event;
 
@@ -209,8 +204,7 @@ final class AgentUpsertTurnFileChangesTimelineMutation
 }
 
 final class AgentUpsertToolCallTimelineMutation extends AgentTimelineMutation {
-  const AgentUpsertToolCallTimelineMutation(this.toolCall)
-    : super(trackActivityChange: true);
+  const AgentUpsertToolCallTimelineMutation(this.toolCall);
 
   final AgentToolCall toolCall;
 
@@ -285,17 +279,6 @@ final class AgentRemovePlanApprovalRequestTimelineMutation
       store.removePlanApprovalRequest(requestId);
 }
 
-/// Timeline/state outcome 参与最终 UI request 合成的规则。
-final class AgentConversationUiResolution {
-  const AgentConversationUiResolution({
-    this.includeHeaderWhenActivityChanges = false,
-    this.includePendingInteractionWhenStateChanges = false,
-  });
-
-  final bool includeHeaderWhenActivityChanges;
-  final bool includePendingInteractionWhenStateChanges;
-}
-
 /// ThreadSnapshot 的独立刷新请求。
 enum AgentThreadSnapshotMutation { refresh }
 
@@ -309,10 +292,8 @@ final class AgentConversationReduction {
         const <AgentTimelineMutation>[],
     Iterable<AgentConversationEffect> effects =
         const <AgentConversationEffect>[],
-    this.urgency = AgentUiUpdateUrgency.nextFrame,
+    this.urgency,
     Iterable<AgentUiEffect> uiEffects = const <AgentUiEffect>[],
-    this.uiRegions,
-    this.uiResolution = const AgentConversationUiResolution(),
     this.threadSnapshot,
   }) : timelineMutations = List<AgentTimelineMutation>.unmodifiable(
          timelineMutations,
@@ -339,22 +320,23 @@ final class AgentConversationReduction {
   final String? rejectionReason;
   final List<AgentTimelineMutation> timelineMutations;
   final List<AgentConversationEffect> effects;
-  final AgentUiUpdateUrgency urgency;
-  final List<AgentUiEffect> uiEffects;
 
-  /// null 表示该 case 完全不发布 UI；空集合与 null 不同，可冲刷 pending。
-  final Set<AgentUiRegion>? uiRegions;
-  final AgentConversationUiResolution uiResolution;
+  /// null 表示该 case 完全不发布 UI（与空 region 的冲刷请求不同）。
+  final AgentUiUpdateUrgency? urgency;
+  final List<AgentUiEffect> uiEffects;
   final AgentThreadSnapshotMutation? threadSnapshot;
 
-  /// 由 [uiRegions] / [urgency] / [uiEffects] 合成；null 表示不发布。
+  /// 由 [urgency] / [uiEffects] 合成；region 由 processor 按脏区派生。
+  ///
+  /// null 表示不发布。非空时 regions 为空，仅携带 urgency 与 effects，
+  /// 供 reducer 单测断言调度意图；真正的 region 集合在 processor 填入。
   AgentUiUpdateRequest? get uiUpdate {
-    final regions = uiRegions;
-    if (regions == null) {
+    final urgency = this.urgency;
+    if (urgency == null) {
       return null;
     }
     return AgentUiUpdateRequest(
-      regions: regions,
+      regions: const <AgentUiRegion>{},
       urgency: urgency,
       effects: uiEffects,
     );

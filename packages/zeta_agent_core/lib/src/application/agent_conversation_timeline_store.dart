@@ -5,6 +5,24 @@ import 'package:zeta_agent_core/src/domain/agent_models.dart';
 import 'package:zeta_agent_core/src/domain/agent_provider_raw_payload.dart';
 import 'package:zeta_agent_core/src/domain/fallback_agent_ui_text_catalog.dart';
 
+/// 时间线写入后被点亮的脏区。
+///
+/// 只描述「哪块数据变了」，不描述 UI 布局；到 UI region 的映射在 processor。
+enum AgentTimelineDirtyRegion {
+  history,
+  liveTurn,
+  liveTurnBinding,
+  activity,
+  expansion,
+  pendingInteraction,
+
+  /// 会话累计 token。头栏读 tokenUsage，composer 也可能读 last* 占用。
+  usage,
+
+  /// 上下文窗口占用。composer 读 contextUsage。
+  contextUsage,
+}
+
 /// Agent 对话时间线与 turn 分组的运行时状态仓库。
 ///
 /// 它负责管理：
@@ -69,8 +87,8 @@ class AgentConversationTimelineStore {
   /// 当前 live turn 主活动段；无 running turn 时为 idle。
   AgentTurnActivitySnapshot _currentActivity = AgentTurnActivitySnapshot.idle;
 
-  /// 主活动段自上次读取后是否变化（供 ViewModel 决定是否刷新 header）。
-  bool _activityDirty = false;
+  /// 自上次 [takeDirtyRegions] 以来被点亮的脏区。
+  final Set<AgentTimelineDirtyRegion> _dirty = <AgentTimelineDirtyRegion>{};
 
   List<AgentConversationMessage> get messages =>
       List<AgentConversationMessage>.unmodifiable(_messages);
@@ -182,11 +200,18 @@ class AgentConversationTimelineStore {
     return _turnGroups[turnId]?.startedAt;
   }
 
-  /// 读取并清除活动段脏标记。
-  bool takeActivityDirty() {
-    final dirty = _activityDirty;
-    _activityDirty = false;
-    return dirty;
+  /// 取走并清空当前脏区。
+  Set<AgentTimelineDirtyRegion> takeDirtyRegions() {
+    if (_dirty.isEmpty) {
+      return const <AgentTimelineDirtyRegion>{};
+    }
+    final taken = Set<AgentTimelineDirtyRegion>.of(_dirty);
+    _dirty.clear();
+    return taken;
+  }
+
+  void _markDirty(AgentTimelineDirtyRegion region) {
+    _dirty.add(region);
   }
 
   bool isToolCallExpanded(String toolCallId) {
@@ -269,30 +294,35 @@ class AgentConversationTimelineStore {
     if (!_expandedToolCallIds.add(toolCallId)) {
       _expandedToolCallIds.remove(toolCallId);
     }
+    _markDirty(AgentTimelineDirtyRegion.expansion);
   }
 
   void togglePlanMessage(String messageId) {
     if (!_expandedPlanMessageIds.add(messageId)) {
       _expandedPlanMessageIds.remove(messageId);
     }
+    _markDirty(AgentTimelineDirtyRegion.expansion);
   }
 
   void toggleActivePlan(String turnId) {
     if (!_expandedActivePlanTurnIds.add(turnId)) {
       _expandedActivePlanTurnIds.remove(turnId);
     }
+    _markDirty(AgentTimelineDirtyRegion.expansion);
   }
 
   void toggleCommandGroup(String commandGroupId) {
     if (!_expandedCommandGroupIds.add(commandGroupId)) {
       _expandedCommandGroupIds.remove(commandGroupId);
     }
+    _markDirty(AgentTimelineDirtyRegion.expansion);
   }
 
   void toggleFileEditItem(String fileEditItemId) {
     if (!_expandedFileEditItemIds.add(fileEditItemId)) {
       _expandedFileEditItemIds.remove(fileEditItemId);
     }
+    _markDirty(AgentTimelineDirtyRegion.expansion);
   }
 
   /// 新回合启动前，先创建一个临时分组承载用户消息与后续增量。
@@ -387,6 +417,9 @@ class AgentConversationTimelineStore {
     _threadTokenUsage = null;
     _liveContextWindowUsage = null;
     _clearActivity();
+    _markDirty(AgentTimelineDirtyRegion.history);
+    _markDirty(AgentTimelineDirtyRegion.liveTurn);
+    _markDirty(AgentTimelineDirtyRegion.liveTurnBinding);
   }
 
   void applyHistorySnapshot(
@@ -534,11 +567,13 @@ class AgentConversationTimelineStore {
     } else {
       _messages.add(message);
     }
+    _markDirty(AgentTimelineDirtyRegion.liveTurn);
     return appendTimelineEntry(AgentMessageTimelineEntry(message: message));
   }
 
   /// 插入系统/警告类历史事件卡片（模型改道、弃用提示等）。
   String addHistoryEvent(AgentHistoryEventEntry event) {
+    _markDirty(AgentTimelineDirtyRegion.liveTurn);
     return appendTimelineEntry(AgentHistoryEventTimelineEntry(event: event));
   }
 
@@ -602,16 +637,22 @@ class AgentConversationTimelineStore {
 
   String addPermissionRequest(AgentPermissionRequest request) {
     _permissionRequests.add(request);
+    _markDirty(AgentTimelineDirtyRegion.liveTurn);
+    _markDirty(AgentTimelineDirtyRegion.pendingInteraction);
     return appendTimelineEntry(AgentPermissionTimelineEntry(request: request));
   }
 
   String addQuestionRequest(AgentQuestionRequest request) {
     _questionRequests.add(request);
+    _markDirty(AgentTimelineDirtyRegion.liveTurn);
+    _markDirty(AgentTimelineDirtyRegion.pendingInteraction);
     return appendTimelineEntry(AgentQuestionTimelineEntry(request: request));
   }
 
   String addPlanApprovalRequest(AgentPlanApprovalRequest request) {
     _planApprovalRequests.add(request);
+    _markDirty(AgentTimelineDirtyRegion.liveTurn);
+    _markDirty(AgentTimelineDirtyRegion.pendingInteraction);
     return appendTimelineEntry(
       AgentPlanApprovalTimelineEntry(request: request),
     );
@@ -624,7 +665,9 @@ class AgentConversationTimelineStore {
   void upsertTurnFileChanges(AgentTurnFileChangesEvent event) {
     final entryId = 'turn-file-changes-${event.turnId}';
     if (event.snapshot.changes.isEmpty) {
-      _removeTimelineEntryById(entryId);
+      if (_removeTimelineEntryById(entryId)) {
+        _markDirty(AgentTimelineDirtyRegion.liveTurn);
+      }
       return;
     }
 
@@ -638,6 +681,7 @@ class AgentConversationTimelineStore {
       _timelineEntries[index] = entry;
       final turnId = _timelineEntryTurnIds[index];
       _turnGroups[turnId]?.replaceEntry(entry);
+      _markDirty(AgentTimelineDirtyRegion.liveTurn);
       return;
     }
 
@@ -648,12 +692,13 @@ class AgentConversationTimelineStore {
     }
     appendTimelineEntry(entry);
     currentTurnGroupId = previousCurrent;
+    _markDirty(AgentTimelineDirtyRegion.liveTurn);
   }
 
-  void _removeTimelineEntryById(String entryId) {
+  bool _removeTimelineEntryById(String entryId) {
     final index = _timelineEntries.indexWhere((item) => item.id == entryId);
     if (index == -1) {
-      return;
+      return false;
     }
     final entry = _timelineEntries[index];
     final turnId = _timelineEntryTurnIds[index];
@@ -661,60 +706,67 @@ class AgentConversationTimelineStore {
     _timelineEntryTurnIds.removeAt(index);
     _turnIdsByTimelineEntryId.remove(entry.id);
     _turnGroups[turnId]?.removeEntry(entry.id);
+    return true;
   }
 
   void removePermissionRequest(String requestId) {
+    final beforeCount = _permissionRequests.length;
     _permissionRequests.removeWhere((item) => item.id == requestId);
-    var index = 0;
-    while (index < _timelineEntries.length) {
-      final entry = _timelineEntries[index];
-      if (entry is AgentPermissionTimelineEntry &&
-          entry.request.id == requestId) {
-        final turnId = _timelineEntryTurnIds[index];
-        _timelineEntries.removeAt(index);
-        _timelineEntryTurnIds.removeAt(index);
-        _turnIdsByTimelineEntryId.remove(entry.id);
-        _turnGroups[turnId]?.removeEntry(entry.id);
-      } else {
-        index += 1;
-      }
+    final removedEntry = _removeMatchingTimelineEntries(
+      (entry) =>
+          entry is AgentPermissionTimelineEntry &&
+          entry.request.id == requestId,
+    );
+    if (beforeCount != _permissionRequests.length || removedEntry) {
+      _markDirty(AgentTimelineDirtyRegion.liveTurn);
+      _markDirty(AgentTimelineDirtyRegion.pendingInteraction);
     }
   }
 
   void removeQuestionRequest(String requestId) {
+    final beforeCount = _questionRequests.length;
     _questionRequests.removeWhere((item) => item.id == requestId);
-    var index = 0;
-    while (index < _timelineEntries.length) {
-      final entry = _timelineEntries[index];
-      if (entry is AgentQuestionTimelineEntry &&
-          entry.request.id == requestId) {
-        final turnId = _timelineEntryTurnIds[index];
-        _timelineEntries.removeAt(index);
-        _timelineEntryTurnIds.removeAt(index);
-        _turnIdsByTimelineEntryId.remove(entry.id);
-        _turnGroups[turnId]?.removeEntry(entry.id);
-      } else {
-        index += 1;
-      }
+    final removedEntry = _removeMatchingTimelineEntries(
+      (entry) =>
+          entry is AgentQuestionTimelineEntry && entry.request.id == requestId,
+    );
+    if (beforeCount != _questionRequests.length || removedEntry) {
+      _markDirty(AgentTimelineDirtyRegion.liveTurn);
+      _markDirty(AgentTimelineDirtyRegion.pendingInteraction);
     }
   }
 
   void removePlanApprovalRequest(String requestId) {
+    final beforeCount = _planApprovalRequests.length;
     _planApprovalRequests.removeWhere((item) => item.id == requestId);
+    final removedEntry = _removeMatchingTimelineEntries(
+      (entry) =>
+          entry is AgentPlanApprovalTimelineEntry &&
+          entry.request.id == requestId,
+    );
+    if (beforeCount != _planApprovalRequests.length || removedEntry) {
+      _markDirty(AgentTimelineDirtyRegion.liveTurn);
+      _markDirty(AgentTimelineDirtyRegion.pendingInteraction);
+    }
+  }
+
+  bool _removeMatchingTimelineEntries(bool Function(AgentTimelineEntry) match) {
+    var removed = false;
     var index = 0;
     while (index < _timelineEntries.length) {
       final entry = _timelineEntries[index];
-      if (entry is AgentPlanApprovalTimelineEntry &&
-          entry.request.id == requestId) {
+      if (match(entry)) {
         final turnId = _timelineEntryTurnIds[index];
         _timelineEntries.removeAt(index);
         _timelineEntryTurnIds.removeAt(index);
         _turnIdsByTimelineEntryId.remove(entry.id);
         _turnGroups[turnId]?.removeEntry(entry.id);
+        removed = true;
       } else {
         index += 1;
       }
     }
+    return removed;
   }
 
   /// 按 Provider 已规范化的 entryId 合并流式消息增量。
@@ -742,7 +794,9 @@ class AgentConversationTimelineStore {
         (message) => message.id == messageId,
       );
       if (event.kind == AgentMessageKind.plan && event.delta.isNotEmpty) {
-        _expandedPlanMessageIds.add(messageId);
+        if (_expandedPlanMessageIds.add(messageId)) {
+          _markDirty(AgentTimelineDirtyRegion.expansion);
+        }
       }
       _noteRespondingActivity(event.role);
       return;
@@ -763,11 +817,16 @@ class AgentConversationTimelineStore {
     );
     _messages[existingIndex] = updated;
     replaceTimelineMessage(updated);
+    if (!_messageLooksUnchanged(existing, updated)) {
+      _markDirty(AgentTimelineDirtyRegion.liveTurn);
+    }
     if (wasEmptyPlan ||
         (event.kind == AgentMessageKind.plan &&
             !existing.isPlan &&
             event.delta.isNotEmpty)) {
-      _expandedPlanMessageIds.add(messageId);
+      if (_expandedPlanMessageIds.add(messageId)) {
+        _markDirty(AgentTimelineDirtyRegion.expansion);
+      }
     }
     _noteRespondingActivity(event.role);
   }
@@ -792,6 +851,9 @@ class AgentConversationTimelineStore {
     );
     _messages[existingIndex] = updated;
     replaceTimelineMessage(updated);
+    if (!_messageLooksUnchanged(existing, updated)) {
+      _markDirty(AgentTimelineDirtyRegion.liveTurn);
+    }
   }
 
   /// 用最新结构化计划整体替换当前 live turn 的瞬时计划状态。
@@ -806,6 +868,7 @@ class AgentConversationTimelineStore {
       return;
     }
     turnState.replacePlanEntries(event.entries);
+    _markDirty(AgentTimelineDirtyRegion.liveTurn);
   }
 
   /// 插入或更新工具卡片。
@@ -832,8 +895,11 @@ class AgentConversationTimelineStore {
       if (_isToolProgressAppend(stamped) &&
           stamped.content != null &&
           stamped.content!.isNotEmpty) {
-        _expandedToolCallIds.add(stamped.id);
+        if (_expandedToolCallIds.add(stamped.id)) {
+          _markDirty(AgentTimelineDirtyRegion.expansion);
+        }
       }
+      _markDirty(AgentTimelineDirtyRegion.liveTurn);
       _noteToolActivity(stamped);
       return;
     }
@@ -846,8 +912,11 @@ class AgentConversationTimelineStore {
     if (_isToolProgressAppend(toolCall) &&
         merged.content != null &&
         merged.content!.isNotEmpty) {
-      _expandedToolCallIds.add(toolCall.id);
+      if (_expandedToolCallIds.add(toolCall.id)) {
+        _markDirty(AgentTimelineDirtyRegion.expansion);
+      }
     }
+    _markDirty(AgentTimelineDirtyRegion.liveTurn);
     _noteToolActivity(merged);
   }
 
@@ -1061,16 +1130,22 @@ class AgentConversationTimelineStore {
       appendTimelineEntry(AgentToolTimelineEntry(toolCall: toolCall));
       // 流式思考首次出现时自动展开，完成后仍可由用户折叠。
       if (displayText.isNotEmpty) {
-        _expandedToolCallIds.add(event.itemId);
+        if (_expandedToolCallIds.add(event.itemId)) {
+          _markDirty(AgentTimelineDirtyRegion.expansion);
+        }
       }
+      _markDirty(AgentTimelineDirtyRegion.liveTurn);
       _noteToolActivity(toolCall);
       return;
     }
 
     _toolCalls[existingIndex] = toolCall;
     replaceTimelineTool(toolCall);
+    _markDirty(AgentTimelineDirtyRegion.liveTurn);
     if (displayText.isNotEmpty && previousDisplay.isEmpty) {
-      _expandedToolCallIds.add(event.itemId);
+      if (_expandedToolCallIds.add(event.itemId)) {
+        _markDirty(AgentTimelineDirtyRegion.expansion);
+      }
     }
     _noteToolActivity(toolCall);
   }
@@ -1139,6 +1214,9 @@ class AgentConversationTimelineStore {
         forceSegmentRestart: false,
       );
     }
+    _markDirty(AgentTimelineDirtyRegion.liveTurn);
+    _markDirty(AgentTimelineDirtyRegion.liveTurnBinding);
+    _markDirty(AgentTimelineDirtyRegion.history);
   }
 
   /// turn 结束时更新分组元数据；后续条目回到 standby 分组。
@@ -1161,6 +1239,9 @@ class AgentConversationTimelineStore {
       currentTurnGroupId = null;
       _pendingTurnGroupId = null;
       _clearActivity();
+      _markDirty(AgentTimelineDirtyRegion.history);
+      _markDirty(AgentTimelineDirtyRegion.liveTurnBinding);
+      _markDirty(AgentTimelineDirtyRegion.pendingInteraction);
       return;
     }
     turnState.clearPlanEntries();
@@ -1185,18 +1266,31 @@ class AgentConversationTimelineStore {
     _promoteTurnToHistorical(turnId);
     currentTurnGroupId = null;
     _clearActivity();
+    _markDirty(AgentTimelineDirtyRegion.history);
+    _markDirty(AgentTimelineDirtyRegion.liveTurnBinding);
+    // Plan 执行交接卡挂在 pendingInteraction，不在 TimelineStore 里；
+    // turn 结束始终刷新该 region，与原先 includePendingInteraction 补丁对齐。
+    _markDirty(AgentTimelineDirtyRegion.pendingInteraction);
   }
 
   /// 更新当前请求的上下文占用，不修改 turn/footer 或会话累计计费用量。
   void updateContextWindowUsage(AgentContextWindowUsageEvent event) {
-    _liveContextWindowUsage = AgentTokenUsage(
+    final previous = _liveContextWindowUsage;
+    final next = AgentTokenUsage(
       inputTokens: event.usedTokens,
       totalTokens: event.usedTokens,
       modelContextWindow:
           event.modelContextWindow ??
-          _liveContextWindowUsage?.modelContextWindow ??
+          previous?.modelContextWindow ??
           _threadTokenUsage?.modelContextWindow,
     );
+    _liveContextWindowUsage = next;
+    if (previous?.inputTokens != next.inputTokens ||
+        previous?.totalTokens != next.totalTokens ||
+        previous?.modelContextWindow != next.modelContextWindow) {
+      _markDirty(AgentTimelineDirtyRegion.liveTurn);
+      _markDirty(AgentTimelineDirtyRegion.contextUsage);
+    }
   }
 
   /// 用 provider 上报的 token 用量更新会话总量与对应回合增量。
@@ -1253,6 +1347,12 @@ class AgentConversationTimelineStore {
       tokenUsage: turnDelta,
       modelConfig: turnState.modelConfig,
     );
+    if (isHistoryTurnId(turnId)) {
+      _markDirty(AgentTimelineDirtyRegion.history);
+    } else {
+      _markDirty(AgentTimelineDirtyRegion.liveTurn);
+    }
+    _markDirty(AgentTimelineDirtyRegion.usage);
   }
 
   bool isHistoryTurnId(String turnId) {
@@ -1381,7 +1481,7 @@ class AgentConversationTimelineStore {
           turnStartedAt: resolvedTurnStartedAt,
           primaryToolId: primaryToolId,
         );
-        _activityDirty = true;
+        _markDirty(AgentTimelineDirtyRegion.activity);
       }
       return;
     }
@@ -1400,16 +1500,30 @@ class AgentConversationTimelineStore {
       turnStartedAt: resolvedTurnStartedAt,
       primaryToolId: primaryToolId,
     );
-    _activityDirty = true;
+    _markDirty(AgentTimelineDirtyRegion.activity);
   }
 
   void _clearActivity() {
     if (_currentActivity.phase == AgentTurnActivityPhase.idle &&
-        !_activityDirty) {
+        !_dirty.contains(AgentTimelineDirtyRegion.activity)) {
       return;
     }
     _currentActivity = AgentTurnActivitySnapshot.idle;
-    _activityDirty = true;
+    _markDirty(AgentTimelineDirtyRegion.activity);
+  }
+
+  bool _messageLooksUnchanged(
+    AgentConversationMessage before,
+    AgentConversationMessage after,
+  ) {
+    return before.id == after.id &&
+        before.sourceMessageId == after.sourceMessageId &&
+        before.role == after.role &&
+        before.text == after.text &&
+        before.kind == after.kind &&
+        before.phase == after.phase &&
+        before.status == after.status &&
+        before.duration == after.duration;
   }
 
   /// turn 结束时冻结尚未写 duration 的工具项。

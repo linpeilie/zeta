@@ -77,8 +77,11 @@ reducer 唯一的副作用出口。带作用域校验（generation / runtime / t
 `agent_conversation_effect_runner.dart`
 
 **TimelineStore（时间线存储）**
-只做三件事：同 entryId 更新、异 entryId 新建、同 tool id upsert。不推断开放条目、不改写 id、不判断 UI 紧急程度。
+只做三件事：同 entryId 更新、异 entryId 新建、同 tool id upsert。不推断开放条目、不改写 id、不判断 UI 紧急程度。写方法在值真正变化时点亮脏区，供 processor 派生 UI region。
 `agent_conversation_timeline_store.dart`
+
+**脏区（dirty region）**
+TimelineStore 在写入后举起的数据变化标记（history / liveTurn / liveTurnBinding / activity / expansion / pendingInteraction / usage / contextUsage）。它只描述哪块数据变了，不描述界面长什么样；processor 把它映射成 `AgentUiRegion`，再与 SessionState 字段 diff 合并后发布。reducer 不再硬编码 UI region。
 
 ## Provider 抽象
 

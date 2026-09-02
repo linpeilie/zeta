@@ -45,10 +45,7 @@ void main() {
         expect(timeline.isHistoryTurnId('turn-1'), isTrue);
         expect(stateSink.snapshotRefreshRequests, 1);
         expect(uiUpdates.requests, hasLength(1));
-        expect(
-          mutation.uiUpdate!.regions,
-          isNot(contains(AgentUiRegion.pendingInteraction)),
-        );
+        expect(mutation.uiUpdate!.regions, isEmpty);
         expect(
           uiUpdates.requests.single.regions,
           containsAll(<AgentUiRegion>[
@@ -128,7 +125,7 @@ void main() {
 
       // Assert
       expect(mutation.accepted, isTrue);
-      expect(mutation.uiUpdate!.regions, isNot(contains(AgentUiRegion.header)));
+      expect(mutation.uiUpdate!.regions, isEmpty);
       expect(uiUpdates.requests, hasLength(1));
       expect(
         uiUpdates.requests.single.regions,
@@ -304,7 +301,7 @@ AgentConversationTimelineStore _runningTimeline() {
   timeline.beginLiveTurnGroup(
     const AgentTurn(id: 'turn-1', sessionId: 'thread-1'),
   );
-  timeline.takeActivityDirty();
+  timeline.takeDirtyRegions();
   return timeline;
 }
 

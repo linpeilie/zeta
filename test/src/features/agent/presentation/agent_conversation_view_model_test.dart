@@ -4655,11 +4655,7 @@ void main() {
         await _drainTypedUiUpdate();
         _expectLastUiUpdate(
           viewModel,
-          regions: const <AgentUiRegion>{
-            AgentUiRegion.history,
-            AgentUiRegion.liveTurn,
-            AgentUiRegion.header,
-          },
+          regions: const <AgentUiRegion>{AgentUiRegion.liveTurn},
           urgency: AgentUiUpdateUrgency.immediate,
           effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
         );

@@ -264,15 +264,6 @@ final class AgentConversationReducer {
         AgentClearPlanHandoffEffect(scope: context.effectScope),
         AgentSyncTurnRunningEffect(scope: context.effectScope),
       ],
-      uiRegions: const <AgentUiRegion>{
-        AgentUiRegion.history,
-        AgentUiRegion.liveTurnBinding,
-        AgentUiRegion.header,
-        AgentUiRegion.composer,
-      },
-      uiResolution: const AgentConversationUiResolution(
-        includePendingInteractionWhenStateChanges: true,
-      ),
       threadSnapshot: AgentThreadSnapshotMutation.refresh,
     );
   }
@@ -284,7 +275,6 @@ final class AgentConversationReducer {
     return _accept(
       state.copyWith(status: event.status),
       // 空 immediate request 仍可吸收并冲刷已有的 next-frame pending。
-      uiRegions: const <AgentUiRegion>{},
     );
   }
 
@@ -316,10 +306,6 @@ final class AgentConversationReducer {
             threadId: event.session.id,
           ),
       ],
-      uiRegions: const <AgentUiRegion>{
-        AgentUiRegion.header,
-        AgentUiRegion.composer,
-      },
       threadSnapshot: AgentThreadSnapshotMutation.refresh,
     );
   }
@@ -339,7 +325,6 @@ final class AgentConversationReducer {
         waitingOnApproval: event.waitingOnApproval,
         waitingOnUserInput: event.waitingOnUserInput,
       ),
-      uiRegions: const <AgentUiRegion>{AgentUiRegion.header},
       threadSnapshot: AgentThreadSnapshotMutation.refresh,
     );
   }
@@ -355,7 +340,6 @@ final class AgentConversationReducer {
     final name = event.threadName?.trim();
     return _accept(
       name != null && name.isNotEmpty ? _withThreadTitle(state, name) : state,
-      uiRegions: const <AgentUiRegion>{AgentUiRegion.header},
       threadSnapshot: AgentThreadSnapshotMutation.refresh,
     );
   }
@@ -371,13 +355,12 @@ final class AgentConversationReducer {
     return _accept(
       state.copyWith(currentThreadPreview: event.preview),
       // 旁文案只影响列表 snapshot；仍发一次 UI publish，以便延帧刷新 snapshot。
-      uiRegions: const <AgentUiRegion>{},
       threadSnapshot: AgentThreadSnapshotMutation.refresh,
     );
   }
 
   AgentConversationReduction _noOp(AgentConversationSessionState state) {
-    return _accept(state, uiRegions: null);
+    return _accept(state, urgency: null);
   }
 
   AgentConversationReduction _threadClosed(
@@ -403,7 +386,7 @@ final class AgentConversationReducer {
     if (!_shouldHandleCurrent(context, sessionId: event.threadId)) {
       return _rejected(state, 'currentThreadMismatch');
     }
-    return _accept(state, uiRegions: null);
+    return _accept(state, urgency: null);
   }
 
   AgentConversationReduction _threadSettings(
@@ -431,9 +414,7 @@ final class AgentConversationReducer {
             event: event,
           ),
       ],
-      uiRegions: isCurrent
-          ? const <AgentUiRegion>{AgentUiRegion.composer}
-          : null,
+      urgency: isCurrent ? AgentUiUpdateUrgency.immediate : null,
     );
   }
 
@@ -453,7 +434,6 @@ final class AgentConversationReducer {
           options: event.options,
         ),
       ],
-      uiRegions: const <AgentUiRegion>{AgentUiRegion.composer},
     );
   }
 
@@ -473,10 +453,6 @@ final class AgentConversationReducer {
           event: event,
         ),
       ],
-      uiRegions: const <AgentUiRegion>{
-        AgentUiRegion.header,
-        AgentUiRegion.composer,
-      },
     );
   }
 
@@ -492,14 +468,7 @@ final class AgentConversationReducer {
     )) {
       return _rejected(state, 'currentThreadMismatch');
     }
-    return _accept(
-      _withAutoReview(state, event),
-      uiRegions: const <AgentUiRegion>{
-        AgentUiRegion.header,
-        AgentUiRegion.liveTurn,
-        AgentUiRegion.history,
-      },
-    );
+    return _accept(_withAutoReview(state, event));
   }
 
   AgentConversationReduction _turnStarted(
@@ -526,13 +495,6 @@ final class AgentConversationReducer {
           forceRunning: true,
         ),
       ],
-      uiRegions: const <AgentUiRegion>{
-        AgentUiRegion.history,
-        AgentUiRegion.liveTurnBinding,
-        AgentUiRegion.liveTurn,
-        AgentUiRegion.header,
-        AgentUiRegion.composer,
-      },
       threadSnapshot: AgentThreadSnapshotMutation.refresh,
     );
   }
@@ -601,16 +563,7 @@ final class AgentConversationReducer {
         AgentSyncTurnRunningEffect(scope: turnScope),
         AgentAutoStartPlanExecutionEffect(scope: turnScope),
       ],
-      uiRegions: const <AgentUiRegion>{
-        AgentUiRegion.history,
-        AgentUiRegion.liveTurnBinding,
-        AgentUiRegion.header,
-        AgentUiRegion.composer,
-      },
       uiEffects: const <AgentUiEffect>[AgentRequestAutoScroll()],
-      uiResolution: const AgentConversationUiResolution(
-        includePendingInteractionWhenStateChanges: true,
-      ),
       threadSnapshot: AgentThreadSnapshotMutation.refresh,
     );
   }
@@ -627,20 +580,11 @@ final class AgentConversationReducer {
     )) {
       return _rejected(state, 'currentThreadMismatch');
     }
-    final usageTurnId = event.turnId;
-    final usageOnHistory =
-        usageTurnId != null && context.isHistoryTurnId(usageTurnId);
     return _accept(
       state,
       timelineMutations: <AgentTimelineMutation>[
         AgentUpdateTurnTokenUsageTimelineMutation(event),
       ],
-      uiRegions: <AgentUiRegion>{
-        AgentUiRegion.header,
-        AgentUiRegion.composer,
-        if (usageOnHistory) AgentUiRegion.history,
-        if (!usageOnHistory) AgentUiRegion.liveTurn,
-      },
     );
   }
 
@@ -661,10 +605,6 @@ final class AgentConversationReducer {
       timelineMutations: <AgentTimelineMutation>[
         AgentUpdateContextWindowUsageTimelineMutation(event),
       ],
-      uiRegions: const <AgentUiRegion>{
-        AgentUiRegion.liveTurn,
-        AgentUiRegion.composer,
-      },
       urgency: AgentUiUpdateUrgency.nextFrame,
     );
   }
@@ -686,15 +626,8 @@ final class AgentConversationReducer {
       timelineMutations: <AgentTimelineMutation>[
         AgentAppendMessageDeltaTimelineMutation(event),
       ],
-      uiRegions: <AgentUiRegion>{
-        AgentUiRegion.liveTurn,
-        if (event.kind == AgentMessageKind.plan) AgentUiRegion.expansion,
-      },
       urgency: AgentUiUpdateUrgency.nextFrame,
       uiEffects: const <AgentUiEffect>[AgentRequestAutoScroll()],
-      uiResolution: const AgentConversationUiResolution(
-        includeHeaderWhenActivityChanges: true,
-      ),
     );
   }
 
@@ -715,15 +648,8 @@ final class AgentConversationReducer {
       timelineMutations: <AgentTimelineMutation>[
         AgentAppendReasoningDeltaTimelineMutation(event),
       ],
-      uiRegions: const <AgentUiRegion>{
-        AgentUiRegion.liveTurn,
-        AgentUiRegion.expansion,
-      },
       urgency: AgentUiUpdateUrgency.nextFrame,
       uiEffects: const <AgentUiEffect>[AgentRequestAutoScroll()],
-      uiResolution: const AgentConversationUiResolution(
-        includeHeaderWhenActivityChanges: true,
-      ),
     );
   }
 
@@ -744,7 +670,6 @@ final class AgentConversationReducer {
       timelineMutations: <AgentTimelineMutation>[
         AgentUpdateMessageTimelineMutation(event),
       ],
-      uiRegions: const <AgentUiRegion>{AgentUiRegion.liveTurn},
       uiEffects: const <AgentUiEffect>[AgentRequestAutoScroll()],
     );
   }
@@ -766,7 +691,6 @@ final class AgentConversationReducer {
       timelineMutations: <AgentTimelineMutation>[
         AgentReplaceActivePlanTimelineMutation(event),
       ],
-      uiRegions: const <AgentUiRegion>{AgentUiRegion.liveTurn},
     );
   }
 
@@ -787,7 +711,6 @@ final class AgentConversationReducer {
       timelineMutations: <AgentTimelineMutation>[
         AgentUpsertTurnFileChangesTimelineMutation(event),
       ],
-      uiRegions: const <AgentUiRegion>{AgentUiRegion.liveTurn},
       uiEffects: const <AgentUiEffect>[AgentRequestAutoScroll()],
     );
   }
@@ -825,14 +748,10 @@ final class AgentConversationReducer {
       timelineMutations: <AgentTimelineMutation>[
         AgentUpsertToolCallTimelineMutation(toolCall),
       ],
-      uiRegions: const <AgentUiRegion>{AgentUiRegion.liveTurn},
       urgency: isActive
           ? AgentUiUpdateUrgency.nextFrame
           : AgentUiUpdateUrgency.immediate,
       uiEffects: const <AgentUiEffect>[AgentRequestAutoScroll()],
-      uiResolution: const AgentConversationUiResolution(
-        includeHeaderWhenActivityChanges: true,
-      ),
     );
   }
 
@@ -997,10 +916,6 @@ final class AgentConversationReducer {
     return _accept(
       state,
       timelineMutations: <AgentTimelineMutation>[timelineMutation],
-      uiRegions: const <AgentUiRegion>{
-        AgentUiRegion.liveTurn,
-        AgentUiRegion.pendingInteraction,
-      },
       effects: <AgentConversationEffect>[?effect],
     );
   }
@@ -1032,10 +947,6 @@ final class AgentConversationReducer {
           ),
         ),
       ],
-      uiRegions: const <AgentUiRegion>{
-        AgentUiRegion.liveTurn,
-        AgentUiRegion.header,
-      },
       uiEffects: const <AgentUiEffect>[AgentRequestAutoScroll()],
     );
   }
@@ -1062,7 +973,6 @@ final class AgentConversationReducer {
           ),
         ),
       ],
-      uiRegions: const <AgentUiRegion>{AgentUiRegion.liveTurn},
       uiEffects: const <AgentUiEffect>[AgentRequestAutoScroll()],
     );
   }
@@ -1084,7 +994,6 @@ final class AgentConversationReducer {
       timelineMutations: <AgentTimelineMutation>[
         AgentAddHistoryEventTimelineMutation(event.entry),
       ],
-      uiRegions: const <AgentUiRegion>{AgentUiRegion.liveTurn},
       uiEffects: const <AgentUiEffect>[AgentRequestAutoScroll()],
     );
   }
@@ -1096,7 +1005,6 @@ final class AgentConversationReducer {
   ) {
     return _accept(
       state,
-      uiRegions: const <AgentUiRegion>{AgentUiRegion.composer},
       effects: <AgentConversationEffect>[
         AgentApplyModelListEffect(
           scope: context.effectScope,
@@ -1145,11 +1053,6 @@ final class AgentConversationReducer {
           ),
         ),
       ],
-      uiRegions: const <AgentUiRegion>{
-        AgentUiRegion.history,
-        AgentUiRegion.liveTurn,
-        AgentUiRegion.header,
-      },
       uiEffects: const <AgentUiEffect>[AgentRequestAutoScroll()],
       effects: <AgentConversationEffect>[logEffect],
     );
@@ -1161,11 +1064,8 @@ final class AgentConversationReducer {
         const <AgentTimelineMutation>[],
     Iterable<AgentConversationEffect> effects =
         const <AgentConversationEffect>[],
-    Set<AgentUiRegion>? uiRegions,
-    AgentUiUpdateUrgency urgency = AgentUiUpdateUrgency.immediate,
+    AgentUiUpdateUrgency? urgency = AgentUiUpdateUrgency.immediate,
     Iterable<AgentUiEffect> uiEffects = const <AgentUiEffect>[],
-    AgentConversationUiResolution uiResolution =
-        const AgentConversationUiResolution(),
     AgentThreadSnapshotMutation? threadSnapshot,
   }) {
     return AgentConversationReduction(
@@ -1173,10 +1073,8 @@ final class AgentConversationReducer {
       state: state,
       timelineMutations: timelineMutations,
       effects: effects,
-      uiRegions: uiRegions,
       urgency: urgency,
       uiEffects: uiEffects,
-      uiResolution: uiResolution,
       threadSnapshot: threadSnapshot,
     );
   }

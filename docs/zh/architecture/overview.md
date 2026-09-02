@@ -78,8 +78,8 @@ flowchart LR
 | decoder | 协议语法、传输生命周期 | 任何 Provider 分支 |
 | **Provider adapter / reducer** | 厂商字段兼容、entryId 归属、分段、去重、终态判定、完整文件变更快照 | 把没想清楚的语义丢给下游猜 |
 | Pipeline | 订阅作用域、事件合并、有界派发 | 业务语义 |
-| Processor / reducer | 状态迁移、时间线变更描述 | 异步、Flutter 调度 |
-| TimelineStore | 同 entryId 更新、异 entryId 新建 | 推断、改写 id |
+| Processor / reducer | 状态迁移、时间线变更描述；UI region 由脏区 + SessionState diff 派生 | 异步、Flutter 调度、硬编码要刷哪块界面 |
+| TimelineStore | 同 entryId 更新、异 entryId 新建；值变了才点亮脏区 | 推断、改写 id、判断 UI 紧急程度 |
 | UI | 渲染 | 解析协议 |
 
 三条最容易违反的规则：

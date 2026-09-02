@@ -417,7 +417,10 @@ void main() {
       store.startPendingLiveTurn();
       expect(store.currentActivity.phase, AgentTurnActivityPhase.starting);
       expect(store.currentTurnStartedAt, isNotNull);
-      expect(store.takeActivityDirty(), isTrue);
+      expect(
+        store.takeDirtyRegions(),
+        contains(AgentTimelineDirtyRegion.activity),
+      );
 
       store.appendReasoningDelta(
         const AgentReasoningDeltaEvent(
@@ -430,7 +433,10 @@ void main() {
       final think = store.toolCalls.singleWhere((t) => t.id == 'think-1');
       expect(think.startedAt, isNotNull);
       expect(think.duration, isNull);
-      expect(store.takeActivityDirty(), isTrue);
+      expect(
+        store.takeDirtyRegions(),
+        contains(AgentTimelineDirtyRegion.activity),
+      );
 
       store.upsertToolCall(
         const AgentToolCall(

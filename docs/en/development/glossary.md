@@ -77,8 +77,11 @@ The reducer's only exit for side effects. Validates scope (generation / runtime 
 `agent_conversation_effect_runner.dart`
 
 **TimelineStore**
-Does exactly three things: update on matching entryId, create on new entryId, upsert on matching tool id. It doesn't infer open entries, rewrite ids, or judge UI urgency.
+Does exactly three things: update on matching entryId, create on new entryId, upsert on matching tool id. It doesn't infer open entries, rewrite ids, or judge UI urgency. Write methods raise dirty regions only when values actually change, so the processor can derive UI regions.
 `agent_conversation_timeline_store.dart`
+
+**Dirty region**
+A data-change flag TimelineStore raises after a write (history / liveTurn / liveTurnBinding / activity / expansion / pendingInteraction / usage / contextUsage). It describes which data changed, not how the UI is laid out. The processor maps it to `AgentUiRegion`, merges that with a SessionState field diff, and publishes. The reducer no longer hard-codes UI regions.
 
 ## Provider abstraction
 

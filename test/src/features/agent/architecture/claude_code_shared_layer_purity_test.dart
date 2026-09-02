@@ -66,6 +66,13 @@ void main() {
   /// `contentRevision`。**合并逻辑、entryId 身份、dumb merge、Provider 分支与
   /// 任何 typed metadata 均未触碰**，本次没有新增或修改一行可执行语句。
   /// 触发 T18 后按守卫要求停线取得明确批准，边界记录于此。
+  ///
+  /// 2026-09-02：TimelineStore 基线因**事件链路改造 P4** 刷新——Store 增加
+  /// `AgentTimelineDirtyRegion` 脏位集合与 `takeDirtyRegions()`，各写方法在
+  /// **值真正变化时**置位，取代原先只有 `_activityDirty` 一个布尔的做法。
+  /// 目的：让 UI region 由「谁改了数据谁举手」派生，而不是由 reducer 硬编码
+  /// （见 docs/plan/agent_event_chain_refactor.md §7）。
+  /// 本次不触碰 merge / identity / 终态判定，G2 边界不变。已按停线流程批准。
   const g1ContentBaselines = <String, _FileBaseline>{
     'packages/zeta_agent_core/lib/src/application/agent_event_pipeline.dart':
         _FileBaseline(
@@ -93,9 +100,9 @@ void main() {
         ),
     'packages/zeta_agent_core/lib/src/application/agent_conversation_timeline_store.dart':
         _FileBaseline(
-          lineCount: 2012,
-          byteLength: 67887,
-          fingerprint: 'bd6bd5a988733b38',
+          lineCount: 2126,
+          byteLength: 72626,
+          fingerprint: 'e3588fb39c7f1a57',
         ),
   };
 
