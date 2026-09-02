@@ -622,8 +622,8 @@ synthetic fixture 或退役实现。
 5. merge 是追加、替换还是不可合并？
 6. 是否为输入 barrier，处理前需要 flush 哪些 pending？
 7. 是否属于不可丢失 critical event？
-8. Reducer 产生哪些 state 或 timeline mutation？
-9. 哪些 typed UI region 会变化？
+8. 新增事件的 handler 放在哪个文件，并在 `defaultAgentHandlerRegistryBuilder()` 注册了一行？
+9. 哪些数据变化会点亮脏区 / SessionState diff，从而派生 UI region？
 10. UI urgency 是 next-frame 还是 immediate，理由是什么？
 11. 是否产生一次性 `AgentUiEffect`？
 12. 是否产生 scope-aware `AgentConversationEffect`？

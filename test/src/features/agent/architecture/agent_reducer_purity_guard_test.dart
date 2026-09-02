@@ -4,9 +4,13 @@ import 'package:flutter_test/flutter_test.dart';
 
 /// G3 守卫：reducer 只能"描述"变化，不能"执行"变化。
 void main() {
-  const reducerSources = <String>[
+  final reducerSources = <String>[
     'packages/zeta_agent_core/lib/src/application/agent_conversation_reducer.dart',
-    // P5 之后追加 handlers/ 目录下全部文件（用 glob 展开）
+    ...Directory('packages/zeta_agent_core/lib/src/application/reduction')
+        .listSync(recursive: true)
+        .whereType<File>()
+        .where((file) => file.path.endsWith('.dart'))
+        .map((file) => file.path),
   ];
 
   const forbidden = <String, String>{

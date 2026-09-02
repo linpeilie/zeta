@@ -469,7 +469,8 @@ phase；被正文、tool、plan 或交互打断后的 reasoning 必须使用新 
 
 本节中的“共享适配层”包括共享协议 decoder/codec/transport、
 `AgentEventPipeline`、`AgentEventCoalescingPolicy`、`CoalescingEventBuffer`、
-`BoundedEventDispatcher`、`AgentConversationTimelineStore`，以及消费中立
+`BoundedEventDispatcher`、`AgentConversationTimelineStore`、共享 handler 注册表
+（`packages/zeta_agent_core/lib/src/application/reduction/`），以及消费中立
 `AgentEvent` 的 application/presentation 投影。它们是 Provider 无关的机制层，
 不是安放厂商兼容逻辑的兜底层。Grok、Codex 等 Provider 自有的 mapper、adapter、
 reducer 和 history parser 不属于共享适配层。

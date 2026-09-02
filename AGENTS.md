@@ -84,6 +84,20 @@ lib/src/features/agent/data/mappers/acp_*.dart      # 共享 ACP decoder/codec/m
 
 共享层若必须产出 Zeta 自有用户可见文案，只允许通过构造函数注入不可变、Provider 无关的 `AgentUiTextCatalog`；禁止 import generated l10n、Flutter `Locale` / `BuildContext`，也不得按 Provider 分支选文案。
 
+**Provider 覆盖 handler 的边界。** 事件归约允许 Provider 用自己的实现覆盖某个事件
+类型的共享 handler，但只能这样做：
+
+- 覆盖 handler **只能注册在该 Provider 自己的 bundle 里**
+  （`packages/zeta_agent_providers/lib/src/<provider>/`），通过
+  `defaultAgentHandlerRegistryBuilder()` 之上的 `register<E>()` 覆盖。
+- 共享 handler 目录 `packages/zeta_agent_core/lib/src/application/reduction/`
+  **禁止**出现任何 Provider 标识、`providerId` 分支或按实现类型分支——它和 G1
+  五文件适用同一条纯度规则。
+- 每个覆盖 handler 必须在 PR 描述里回答："共享实现为什么不适用？"回答不了，
+  说明问题该在该 Provider 的 adapter/reducer 里消化，而不是在归约层分叉。
+- 覆盖 handler 不得放宽权限、审批或 Plan 交接语义（G5）。四种审批语义的
+  handler（permission / question / planApproval / planExecution）**不允许覆盖**。
+
 **自查**（应无输出；注释里出现 Provider 名做说明是允许的）：
 
 ```sh
@@ -93,6 +107,7 @@ grep -rnE "(codex|grok|claude|cursor)" \
   packages/zeta_agent_core/lib/src/application/coalescing_event_buffer.dart \
   packages/zeta_agent_core/lib/src/application/bounded_event_dispatcher.dart \
   packages/zeta_agent_core/lib/src/application/agent_conversation_timeline_store.dart \
+  packages/zeta_agent_core/lib/src/application/reduction/ \
   packages/zeta_agent_providers/lib/src/mappers/acp_*.dart \
   | grep -viE "^\S+:[0-9]+:\s*(///|//|\*)"
 ```
@@ -115,7 +130,7 @@ grep -rnE "(codex|grok|claude|cursor)" \
 
 ### G3 · reducer 纯同步，副作用走 EffectRunner
 
-`AgentConversationReducer` 只能同步产出 nextState（`AgentConversationSessionState`）、`AgentTimelineMutation`、ThreadSnapshot、`AgentUiUpdateRequest`、`AgentConversationEffect`。**禁止** import Flutter scheduler、创建 `Timer`、执行 `Future`、调用外部回调。副作用一律走 EffectRunner。
+`AgentConversationReducer` 只能同步产出 nextState（`AgentConversationSessionState`）、`AgentTimelineMutation`、ThreadSnapshot、`AgentUiUpdateRequest`、`AgentConversationEffect`。归约经 handler 注册表按事件类型分发；live / history / replay 共用同一份 registry，但各自持有独立 scratch。**禁止** import Flutter scheduler、创建 `Timer`、执行 `Future`、调用外部回调。副作用一律走 EffectRunner。
 
 副作用统一走 scope-aware EffectRunner，执行前重新校验 listener generation、runtime/epoch 和必要的 thread scope。
 

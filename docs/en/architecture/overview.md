@@ -78,7 +78,7 @@ Responsibilities break down like this:
 | decoder | protocol syntax, transport lifecycle | any provider branching |
 | **provider adapter / reducer** | vendor field compatibility, entryId assignment, segmentation, dedup, terminal states, complete file-change snapshots | punting unresolved semantics downstream |
 | pipeline | subscription scope, coalescing, bounded dispatch | business semantics |
-| processor / reducer | state transitions, timeline mutation descriptions; UI regions derived from dirty bits + SessionState diff | async work, Flutter scheduling, hard-coding which pane to refresh |
+| processor / reducer | state transitions, timeline mutation descriptions; reduction dispatched via the handler registry; UI regions derived from dirty bits + SessionState diff | async work, Flutter scheduling, hard-coding which pane to refresh, branching on providerId |
 | TimelineStore | update on same entryId, create on new entryId; raise dirty regions only when values change | inference, id rewriting, judging UI urgency |
 | UI | rendering | parsing protocol |
 

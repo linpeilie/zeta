@@ -80,6 +80,13 @@ The reducer's only exit for side effects. Validates scope (generation / runtime 
 Does exactly three things: update on matching entryId, create on new entryId, upsert on matching tool id. It doesn't infer open entries, rewrite ids, or judge UI urgency. Write methods raise dirty regions only when values actually change, so the processor can derive UI regions.
 `agent_conversation_timeline_store.dart`
 
+**Handler registry**
+A shared table that dispatches reduction by `AgentEvent.runtimeType`. Default handlers live in `packages/zeta_agent_core/lib/src/application/reduction/`. A provider may override a non-approval event only from its own bundle via `register<E>()`. The four approval-semantics handlers cannot be overridden (G5).
+`agent_event_handler_registry.dart`
+
+**Override handler**
+A provider-owned `AgentEventHandler<E>` that replaces the shared default. The PR must answer why the shared implementation does not apply; it must not relax approval or plan-handoff semantics.
+
 **Dirty region**
 A data-change flag TimelineStore raises after a write (history / liveTurn / liveTurnBinding / activity / expansion / pendingInteraction / usage / contextUsage). It describes which data changed, not how the UI is laid out. The processor maps it to `AgentUiRegion`, merges that with a SessionState field diff, and publishes. The reducer no longer hard-codes UI regions.
 

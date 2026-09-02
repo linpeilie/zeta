@@ -422,7 +422,7 @@ typed state、`AgentTimelineMutation`、ThreadSnapshot、`AgentUiUpdateRequest` 
 | `AgentEventPipeline` | `Stream<AgentEvent>` → 已隔离、有界交付的事件 | subscription/scope/gate/buffer/dispatcher 所有权与 close 顺序 | UI region、Widget、Provider raw identity |
 | `AgentEventCoalescingPolicy` | `AgentEvent` → key/merge/barrier 决策 | normalized identity/kind/detail 的 Agent 合并规则 | 订阅生命周期、UI urgency、厂商 raw 字段 |
 | `CoalescingEventBuffer` / `BoundedEventDispatcher` | policy 输出 → FIFO 事件批 | pending 上限、barrier flush、每 turn 上限与 event-queue yield | Agent 业务分支、Flutter frame 调度 |
-| `AgentConversationReducer` | 规范化 `AgentEvent` + 只读 context → `AgentConversationMutation` | 接收规则、typed state、timeline/UI/snapshot/effect 描述 | Flutter 调度、Timer、Future、外部回调 |
+| `AgentConversationReducer` | 规范化 `AgentEvent` + 只读 context → `AgentConversationReduction` | 门面分发到 handler 注册表；scratch 隔离 live/history/replay | Flutter 调度、Timer、Future、外部回调、按 providerId 分支 |
 | `AgentConversationEventProcessor` | `AgentConversationMutation` → 已应用状态 | state/timeline/snapshot 刷新请求/UI/effect 的确定顺序与 outcome 合成 | Widget、ChangeNotifier、Flutter build-phase 判断、Provider 协议分支 |
 | `AgentConversationTimelineStore` | `AgentTimelineMutation` → timeline state | 同 entryId 更新、异 entryId 新建、同 tool id upsert | Provider 分支、开放条目推断、segment 分配、id 改写、UI urgency |
 | `AgentConversationEffectRunner` | scope-aware `AgentConversationEffect` → 外部工作 | generation/runtime/thread 校验与一次性执行 | 修改 Timeline、在 reducer 内执行异步 |

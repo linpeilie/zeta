@@ -187,7 +187,8 @@ chore: bump flutter action pin
 **Provider 隔离（最重要）**
 
 - Provider 的原始协议**只能存在于 data 层**。UI 和 application 消费中立的 domain 事件与契约。
-- 共享层（decoder、CoalescingPolicy/Buffer、Pipeline、TimelineStore）**禁止出现任何 Provider 的 import、kind 分支、id 分支或 raw 字段读取**。
+- 共享层（decoder、CoalescingPolicy/Buffer、Pipeline、TimelineStore、handler 注册表）**禁止出现任何 Provider 的 import、kind 分支、id 分支或 raw 字段读取**。
+- Provider 覆盖 handler 只能注册在该 Provider 自己的 bundle；四种审批语义 handler 不允许覆盖。
 - 文件变更必须由 Provider-local tracker 先形成完整 typed snapshot；Store 只机械透传，UI 不读 raw，只有命令时不得猜路径或 diff。
 - 新增 Provider 的正常改动范围 = 自有 data 文件 + 中立 domain 契约 + factory 组合 + 契约测试。如果你发现必须改共享层，说明抽象没做对，先开 Issue 讨论。
 - UI 一律按 **capability** 渲染，不按 provider kind 或名称硬编码。未支持的能力必须 `capability = false` 并抛 `UnsupportedError`，**不得静默成功**。
