@@ -7,20 +7,18 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_slice_runner.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon.dart';
-import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_slice/agent_usage_panel_slice_state.dart';
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_slice/agent_usage_panel_slice_store.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
-import 'package:zeta/src/features/usage_statistics/domain/fallback_usage_statistics_text_catalog.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/agent_usage_panel.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/agent_usage_quota_gallery.dart';
-import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_slice/usage_statistics_slice_providers.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta/src/app/localization/zeta_text_catalogs.dart';
 import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
 import 'package:zeta_ui/zeta_ui.dart';
+
+import '../../../testing/usage_statistics_test_bindings.dart';
 
 /// 展开态弹层的根节点；折叠摘要仍留在锚点上，断言需按弹层限定范围。
 final _popover = find.byKey(const ValueKey('agent-usage-popover'));
@@ -1112,19 +1110,11 @@ final _usageEntries = <AgentUsagePanelEntry>[
   ),
 ];
 
-AgentUsagePanelSliceStore _createPanelStore({
+AgentUsagePanelSliceNotifier _createPanelStore({
   required AgentUsagePanelRepository repository,
 }) {
-  final runner = AgentUsagePanelSliceRunnerAdapter(
-    repository: repository,
-    textCatalog: const FallbackUsageStatisticsTextCatalog(),
-  );
-  final store = AgentUsagePanelSliceStore(
-    initialState: AgentUsagePanelSliceState(),
-    effectRunner: runner,
-  );
-  runner.store = store;
-  return store;
+  final bindings = AgentUsagePanelTestBindings(repository: repository);
+  return bindings.notifier;
 }
 
 List<AgentUsagePanelProvider> _directoryFor(
@@ -1146,7 +1136,7 @@ AgentUsagePanelProviderResult _panelResult(
 
 Future<void> _pumpPanel(
   WidgetTester tester,
-  AgentUsagePanelSliceStore controller, {
+  AgentUsagePanelSliceNotifier controller, {
   double width = 320,
 }) async {
   unawaited(controller.refresh());
@@ -1163,10 +1153,8 @@ Future<void> _pumpPanel(
     codeFontFamily: 'JetBrainsMono',
   );
   await tester.pumpWidget(
-    ProviderScope(
-      overrides: [
-        agentUsagePanelSliceStoreProvider.overrideWithValue(controller),
-      ],
+    UncontrolledProviderScope(
+      container: controller.testContainer,
       child: IdeUiTextScope(
         catalog: AppZetaUiTextCatalog(
           lookupAppLocalizations(ZetaLocalization.simplifiedChinese),
@@ -1197,7 +1185,6 @@ Future<void> _pumpPanel(
                     children: [
                       const Spacer(),
                       AgentUsagePanelContent(
-                        controller: controller,
                         mode: AgentUsagePanelMode.expanded,
                       ),
                     ],
@@ -1223,7 +1210,7 @@ Future<void> _settlePopover(WidgetTester tester) async {
 
 Future<void> _pumpPanelContent(
   WidgetTester tester,
-  AgentUsagePanelSliceStore controller, {
+  AgentUsagePanelSliceNotifier controller, {
   required AgentUsagePanelMode mode,
   required ValueChanged<AgentUsagePanelMode> onModeChanged,
   double width = 320,
@@ -1243,10 +1230,8 @@ Future<void> _pumpPanelContent(
     codeFontFamily: 'JetBrainsMono',
   );
   await tester.pumpWidget(
-    ProviderScope(
-      overrides: [
-        agentUsagePanelSliceStoreProvider.overrideWithValue(controller),
-      ],
+    UncontrolledProviderScope(
+      container: controller.testContainer,
       child: IdeUiTextScope(
         catalog: AppZetaUiTextCatalog(
           lookupAppLocalizations(ZetaLocalization.simplifiedChinese),
@@ -1276,7 +1261,6 @@ Future<void> _pumpPanelContent(
                     children: [
                       const Spacer(),
                       AgentUsagePanelContent(
-                        controller: controller,
                         mode: mode,
                         onModeChanged: onModeChanged,
                       ),

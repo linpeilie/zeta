@@ -8,16 +8,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_slice_runner.dart';
-import 'package:zeta/src/features/usage_statistics/application/usage_statistics_slice/usage_statistics_slice_state.dart';
 import 'package:zeta/src/features/usage_statistics/application/usage_statistics_slice/usage_statistics_slice_store.dart';
-import 'package:zeta/src/features/usage_statistics/domain/fallback_usage_statistics_text_catalog.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_repository.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_page.dart';
-import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_slice/usage_statistics_slice_providers.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta_ui/zeta_ui.dart';
+
+import '../../../testing/usage_statistics_test_bindings.dart';
 
 void main() {
   testWidgets('renders full statistics and opens task detail drawer', (
@@ -545,26 +543,20 @@ void main() {
   });
 }
 
-UsageStatisticsSliceStore _createUsageStatisticsStore({
+UsageStatisticsSliceNotifier _createUsageStatisticsStore({
   required UsageStatisticsRepository repository,
   DateTime Function()? clock,
 }) {
-  final runner = UsageStatisticsSliceRunnerAdapter(
+  final bindings = UsageStatisticsTestBindings(
     repository: repository,
-    textCatalog: const FallbackUsageStatisticsTextCatalog(),
-  );
-  final store = UsageStatisticsSliceStore(
-    initialState: const UsageStatisticsSliceState(),
-    effectRunner: runner,
     clock: clock,
   );
-  runner.store = store;
-  return store;
+  return bindings.notifier;
 }
 
 Future<void> _pumpUsagePage(
   WidgetTester tester, {
-  required UsageStatisticsSliceStore controller,
+  required UsageStatisticsSliceNotifier controller,
   Size size = const Size(1200, 900),
   VoidCallback? onOpenAgentManagement,
   Locale locale = ZetaLocalization.simplifiedChinese,
@@ -582,10 +574,8 @@ Future<void> _pumpUsagePage(
     codeFontFamily: 'JetBrainsMono',
   );
   await tester.pumpWidget(
-    ProviderScope(
-      overrides: [
-        usageStatisticsSliceStoreProvider.overrideWithValue(controller),
-      ],
+    UncontrolledProviderScope(
+      container: controller.testContainer,
       child: IdeThemeScope(
         themeMode: ThemeMode.light,
         lightTheme: ideTheme,
@@ -607,7 +597,6 @@ Future<void> _pumpUsagePage(
               ref.watch(usageStatisticsSliceProvider);
               return sf.Scaffold(
                 child: UsageStatisticsPage(
-                  controller: controller,
                   onOpenAgentManagement: onOpenAgentManagement ?? () {},
                 ),
               );

@@ -4,20 +4,17 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_slice_runner.dart';
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_query_service.dart';
 import 'package:zeta/src/features/usage_statistics/application/query_agent_usage_panel_repository.dart';
 import 'package:zeta/src/features/usage_statistics/application/query_usage_statistics_repository.dart';
-import 'package:zeta/src/features/usage_statistics/application/usage_statistics_slice/usage_statistics_slice_state.dart';
-import 'package:zeta/src/features/usage_statistics/application/usage_statistics_slice/usage_statistics_slice_store.dart';
 import 'package:zeta/src/features/usage_statistics/data/built_in_agent_token_usage_source_registry.dart';
 import 'package:zeta/src/features/usage_statistics/data/providers/claude_code/claude_code_token_usage_source.dart';
 import 'package:zeta/src/features/usage_statistics/data/providers/codex/codex_token_usage_source.dart';
 import 'package:zeta/src/features/usage_statistics/data/providers/grok/grok_token_usage_source.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_query_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_quota_source.dart';
-import 'package:zeta/src/features/usage_statistics/domain/fallback_usage_statistics_text_catalog.dart';
 import '../../../testing/memory_feature_stores.dart';
+import '../../../testing/usage_statistics_test_bindings.dart';
 
 void main() {
   test('registry exposes every active Provider token source', () {
@@ -75,17 +72,12 @@ void main() {
         queryService,
         clock: () => now,
       );
-      final statisticsRunner = UsageStatisticsSliceRunnerAdapter(
+      final statisticsBindings = UsageStatisticsTestBindings(
         repository: statisticsRepository,
-        textCatalog: const FallbackUsageStatisticsTextCatalog(),
-      );
-      final statisticsController = UsageStatisticsSliceStore(
-        initialState: const UsageStatisticsSliceState(),
-        effectRunner: statisticsRunner,
         clock: () => now,
       );
-      statisticsRunner.store = statisticsController;
-      addTearDown(statisticsController.dispose);
+      final statisticsController = statisticsBindings.notifier;
+      addTearDown(statisticsBindings.dispose);
       await statisticsController.initialize();
 
       expect(panelResult!.entry.providerId, defaultClaudeCodeProviderId);

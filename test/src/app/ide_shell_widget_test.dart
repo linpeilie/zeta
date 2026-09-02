@@ -29,9 +29,10 @@ import 'package:zeta/src/features/settings/application/settings_slice/general_se
 import 'package:zeta/src/features/settings/presentation/settings_slice/settings_slice_providers.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
+import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_slice/agent_usage_panel_slice_store.dart';
+import 'package:zeta/src/features/usage_statistics/application/usage_statistics_slice/usage_statistics_slice_store.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/agent_usage_panel.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_page.dart';
-import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_slice/usage_statistics_slice_providers.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
@@ -1000,14 +1001,13 @@ void main() {
       find.byKey(const ValueKey<String>('zeta.ide-home')),
     );
     final container = ProviderScope.containerOf(homeContext, listen: false);
-    final statisticsStore = container.read(usageStatisticsSliceStoreProvider);
-    final panelStore = container.read(agentUsagePanelSliceStoreProvider);
-
-    final panel = tester.widget<AgentUsagePanelContent>(
-      find.byType(AgentUsagePanelContent),
+    final statisticsStore = container.read(
+      usageStatisticsSliceProvider.notifier,
     );
-    expect(identical(panel.controller, panelStore), isTrue);
-    expect(panel.controller.selectedEntry?.providerId, 'codex');
+    final panelStore = container.read(agentUsagePanelSliceProvider.notifier);
+
+    expect(find.byType(AgentUsagePanelContent), findsOneWidget);
+    expect(panelStore.selectedEntry?.providerId, 'codex');
     expect(usageRepository.forceRefreshValues, isNotEmpty);
 
     statisticsStore.selectRankSort(UsageRankSort.totalTokens);
@@ -1021,10 +1021,7 @@ void main() {
       find.byKey(const ValueKey('titlebar-usage-statistics-action')),
     );
     await tester.pump();
-    final page = tester.widget<UsageStatisticsPage>(
-      find.byType(UsageStatisticsPage),
-    );
-    expect(identical(page.controller, statisticsStore), isTrue);
+    expect(find.byType(UsageStatisticsPage), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

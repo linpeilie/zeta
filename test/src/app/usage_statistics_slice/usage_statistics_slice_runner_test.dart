@@ -2,33 +2,24 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_slice_runner.dart';
-import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_slice/agent_usage_panel_slice_state.dart';
-import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_slice/agent_usage_panel_slice_store.dart';
 import 'package:zeta/src/features/usage_statistics/application/usage_statistics_report_builder.dart';
-import 'package:zeta/src/features/usage_statistics/application/usage_statistics_slice/usage_statistics_slice_state.dart';
-import 'package:zeta/src/features/usage_statistics/application/usage_statistics_slice/usage_statistics_slice_store.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
-import 'package:zeta/src/features/usage_statistics/domain/fallback_usage_statistics_text_catalog.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_repository.dart';
+
+import '../../testing/usage_statistics_test_bindings.dart';
 
 void main() {
   group('UsageStatisticsSlice', () {
     test('迟到加载只结算调用方，不覆盖最新报表', () async {
       final repository = _ControlledUsageStatisticsRepository();
-      final runner = UsageStatisticsSliceRunnerAdapter(
+      final bindings = UsageStatisticsTestBindings(
         repository: repository,
-        textCatalog: const FallbackUsageStatisticsTextCatalog(),
+        clock: () => DateTime(2026, 8, 23, 12),
       );
       final now = DateTime(2026, 8, 23, 12);
-      final store = UsageStatisticsSliceStore(
-        initialState: const UsageStatisticsSliceState(),
-        effectRunner: runner,
-        clock: () => now,
-      );
-      runner.store = store;
-      addTearDown(store.close);
+      final store = bindings.notifier;
+      addTearDown(bindings.dispose);
 
       final initialize = store.initialize();
       await _flushEvents();
@@ -58,18 +49,13 @@ void main() {
 
     test('扩大时间窗口时补读更早数据，已覆盖窗口不重复查询', () async {
       final repository = _ControlledUsageStatisticsRepository();
-      final runner = UsageStatisticsSliceRunnerAdapter(
-        repository: repository,
-        textCatalog: const FallbackUsageStatisticsTextCatalog(),
-      );
       final now = DateTime(2026, 8, 23, 12);
-      final store = UsageStatisticsSliceStore(
-        initialState: const UsageStatisticsSliceState(),
-        effectRunner: runner,
+      final bindings = UsageStatisticsTestBindings(
+        repository: repository,
         clock: () => now,
       );
-      runner.store = store;
-      addTearDown(store.close);
+      final store = bindings.notifier;
+      addTearDown(bindings.dispose);
 
       final initialize = store.initialize();
       await _flushEvents();
@@ -94,17 +80,12 @@ void main() {
     test('筛选、报表和失效选项清理保持既有语义', () async {
       final sliceRepository = _ControlledUsageStatisticsRepository();
       final now = DateTime(2026, 8, 23, 12);
-      final runner = UsageStatisticsSliceRunnerAdapter(
+      final bindings = UsageStatisticsTestBindings(
         repository: sliceRepository,
-        textCatalog: const FallbackUsageStatisticsTextCatalog(),
-      );
-      final store = UsageStatisticsSliceStore(
-        initialState: const UsageStatisticsSliceState(),
-        effectRunner: runner,
         clock: () => now,
       );
-      runner.store = store;
-      addTearDown(store.close);
+      final store = bindings.notifier;
+      addTearDown(bindings.dispose);
 
       final sliceInitialize = store.initialize();
       await _flushEvents();
@@ -171,19 +152,12 @@ void main() {
 
     test('关闭 store 会正常结算在途 Future，迟到结果不再回流', () async {
       final repository = _ControlledUsageStatisticsRepository();
-      final runner = UsageStatisticsSliceRunnerAdapter(
-        repository: repository,
-        textCatalog: const FallbackUsageStatisticsTextCatalog(),
-      );
-      final store = UsageStatisticsSliceStore(
-        initialState: const UsageStatisticsSliceState(),
-        effectRunner: runner,
-      );
-      runner.store = store;
+      final bindings = UsageStatisticsTestBindings(repository: repository);
+      final store = bindings.notifier;
 
       final initialize = store.initialize();
       await _flushEvents();
-      store.close();
+      bindings.dispose();
 
       await initialize;
       repository.requests.single.complete(
@@ -199,18 +173,13 @@ void main() {
   group('AgentUsagePanelSlice', () {
     test('恢复偏好后首次只加载目标 Provider 且不重复回写', () async {
       final repository = _ControlledAgentUsagePanelRepository();
-      final runner = AgentUsagePanelSliceRunnerAdapter(
-        repository: repository,
-        textCatalog: const FallbackUsageStatisticsTextCatalog(),
-      );
-      final store = AgentUsagePanelSliceStore(
-        initialState: AgentUsagePanelSliceState(),
-        effectRunner: runner,
-      );
-      runner.store = store;
       final persistedSelections = <String?>[];
-      runner.selectionPersistenceHandler = persistedSelections.add;
-      addTearDown(store.close);
+      final bindings = AgentUsagePanelTestBindings(
+        repository: repository,
+        onSelectionChanged: persistedSelections.add,
+      );
+      final store = bindings.notifier;
+      addTearDown(bindings.dispose);
 
       store.restorePreferredProviderId(' grok ');
       final refresh = store.refresh(forceRefresh: false);
@@ -230,16 +199,9 @@ void main() {
 
     test('快速切换按 Provider 单飞并保留各自迟到结果', () async {
       final repository = _ControlledAgentUsagePanelRepository();
-      final runner = AgentUsagePanelSliceRunnerAdapter(
-        repository: repository,
-        textCatalog: const FallbackUsageStatisticsTextCatalog(),
-      );
-      final store = AgentUsagePanelSliceStore(
-        initialState: AgentUsagePanelSliceState(),
-        effectRunner: runner,
-      );
-      runner.store = store;
-      addTearDown(store.close);
+      final bindings = AgentUsagePanelTestBindings(repository: repository);
+      final store = bindings.notifier;
+      addTearDown(bindings.dispose);
 
       final initialRefresh = store.refresh(forceRefresh: false);
       await _flushEvents();
@@ -273,16 +235,9 @@ void main() {
       final repository = _ControlledAgentUsagePanelRepository(
         holdDirectory: true,
       );
-      final runner = AgentUsagePanelSliceRunnerAdapter(
-        repository: repository,
-        textCatalog: const FallbackUsageStatisticsTextCatalog(),
-      );
-      final store = AgentUsagePanelSliceStore(
-        initialState: AgentUsagePanelSliceState(),
-        effectRunner: runner,
-      );
-      runner.store = store;
-      addTearDown(store.close);
+      final bindings = AgentUsagePanelTestBindings(repository: repository);
+      final store = bindings.notifier;
+      addTearDown(bindings.dispose);
 
       final first = store.synchronizeProviders();
       await _flushEvents();
@@ -309,16 +264,9 @@ void main() {
 
     test('目录移除 Provider 后丢弃其迟到结果', () async {
       final repository = _ControlledAgentUsagePanelRepository();
-      final runner = AgentUsagePanelSliceRunnerAdapter(
-        repository: repository,
-        textCatalog: const FallbackUsageStatisticsTextCatalog(),
-      );
-      final store = AgentUsagePanelSliceStore(
-        initialState: AgentUsagePanelSliceState(),
-        effectRunner: runner,
-      );
-      runner.store = store;
-      addTearDown(store.close);
+      final bindings = AgentUsagePanelTestBindings(repository: repository);
+      final store = bindings.notifier;
+      addTearDown(bindings.dispose);
 
       final staleRefresh = store.refresh(forceRefresh: false);
       await _flushEvents();

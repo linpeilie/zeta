@@ -10,7 +10,6 @@ import 'package:zeta/src/app/ide_session_slice/ide_session_slice_overrides.dart'
 import 'package:zeta/src/app/storage/zeta_store_providers.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_session_slice_notifier.dart';
 import 'package:zeta/src/app/shell/ide_shell_controller.dart';
-import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_slice_composition.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
@@ -19,8 +18,10 @@ import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
 import 'package:zeta/src/features/usage_statistics/application/query_agent_usage_panel_repository.dart';
 import 'package:zeta/src/features/usage_statistics/application/query_usage_statistics_repository.dart';
+import 'package:zeta/src/features/usage_statistics/application/agent_usage_query_service.dart';
+import 'package:zeta/src/features/usage_statistics/data/built_in_agent_token_usage_source_registry.dart';
+import 'package:zeta/src/features/usage_statistics/data/global_runtime_agent_usage_quota_source.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
-import 'package:zeta/src/features/usage_statistics/domain/fallback_usage_statistics_text_catalog.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_directory_picker.dart';
 
 import '../testing/agent_event_storm_fixture.dart';
@@ -31,6 +32,7 @@ import '../testing/provider_settings_test_store.dart';
 import '../testing/memory_feature_stores.dart';
 import '../testing/workspace_test_bindings.dart';
 import '../testing/fake_workspace_directory_picker.dart';
+import '../testing/usage_statistics_test_bindings.dart';
 
 WorkspaceTestBindings _bindWorkspace({
   WorkspaceDirectoryPicker? directoryPicker,
@@ -61,7 +63,7 @@ void main() {
     tempDirectories.clear();
   });
 
-  test('app composition exposes both usage stores from one query service', () {
+  test('两个 usage notifier 可共享同一查询服务', () {
     final providerFactory =
         _RecordingAgentProviderFactory(<String, _ProviderBackend>{
           defaultAgentProviderId: _ProviderBackend(
@@ -73,25 +75,33 @@ void main() {
     final runtimeRegistry = AgentProviderRuntimeRegistry(
       providerFactory: providerFactory,
     );
-    final composition = UsageStatisticsSliceComposition.create(
-      loadEnabledProviders: () async => const <AgentProviderConfig>[
-        defaultCodexAgentProviderConfig,
-      ],
-      runtimeRegistry: runtimeRegistry,
-      partitionStore: MemoryUsageStatisticsPartitionStore(),
-      textCatalog: const FallbackUsageStatisticsTextCatalog(),
+    final queryService = AgentUsageQueryService(
+      () async => const <AgentProviderConfig>[defaultCodexAgentProviderConfig],
+      GlobalRuntimeAgentUsageQuotaSource(
+        AgentProviderGlobalRuntime(runtimeRegistry: runtimeRegistry),
+      ),
+      BuiltInAgentTokenUsageSourceRegistry(
+        MemoryUsageStatisticsPartitionStore(),
+      ),
+    );
+    final usageBindings = UsageStatisticsTestBindings(
+      repository: QueryUsageStatisticsRepository(queryService),
+    );
+    final panelBindings = AgentUsagePanelTestBindings(
+      repository: QueryAgentUsagePanelRepository(queryService),
     );
     addTearDown(() async {
-      composition.dispose();
+      usageBindings.dispose();
+      panelBindings.dispose();
       await runtimeRegistry.close();
     });
 
     expect(
-      composition.usageStatisticsStore.repository,
+      usageBindings.notifier.repository,
       isA<QueryUsageStatisticsRepository>(),
     );
     expect(
-      composition.agentUsagePanelStore.repository,
+      panelBindings.notifier.repository,
       isA<QueryAgentUsagePanelRepository>(),
     );
   });
@@ -131,19 +141,13 @@ void main() {
         agentProviderSettingsPort: providerSettings.store,
         activeModelCatalogLoader: providerSettings.loadActiveModelCatalog,
       );
-      final composition = UsageStatisticsSliceComposition.create(
-        loadEnabledProviders: () async {
-          await shell.agentProviderController.loadSettings();
-          return shell.agentProviderController.enabledProviders;
-        },
-        runtimeRegistry: runtimeRegistry,
-        partitionStore: MemoryUsageStatisticsPartitionStore(),
-        agentUsagePanelRepository: usageRepository,
-        textCatalog: const FallbackUsageStatisticsTextCatalog(),
+      final usageBindings = AgentUsagePanelTestBindings(
+        repository: usageRepository,
       );
+      final panel = usageBindings.notifier;
       void synchronizeUsageDirectory() {
-        if (composition.agentUsagePanelStore.hasDiscoveredProviders) {
-          unawaited(composition.agentUsagePanelStore.synchronizeProviders());
+        if (panel.hasDiscoveredProviders) {
+          unawaited(panel.synchronizeProviders());
         }
       }
 
@@ -151,12 +155,12 @@ void main() {
           .subscribe(synchronizeUsageDirectory);
       addTearDown(() async {
         unsubscribeProviderSettings();
-        composition.dispose();
+        usageBindings.dispose();
         shell.dispose();
         await runtimeRegistry.close();
       });
 
-      await composition.agentUsagePanelStore.refresh(forceRefresh: false);
+      await panel.refresh(forceRefresh: false);
       expect(usageRepository.loadedProviderIds, <String>['codex']);
 
       usageRepository.directory = const <AgentUsagePanelProvider>[
@@ -173,9 +177,7 @@ void main() {
       await _flushAsync();
 
       expect(
-        composition.agentUsagePanelStore.providers.map(
-          (state) => state.provider.providerId,
-        ),
+        panel.providers.map((state) => state.provider.providerId),
         <String>['codex', 'grok', 'claude_code'],
       );
       expect(usageRepository.loadedProviderIds, <String>['codex']);
@@ -1351,8 +1353,7 @@ void main() {
 
     shell
       ..setLeftSidebarVisible(true)
-      ..setLeftSidebarWidth(340)
-      ..setSelectedAgentUsageProviderId('claude_code');
+      ..setLeftSidebarWidth(340);
     expect(savedJson, isNull);
 
     await Future<void>.delayed(
@@ -1361,21 +1362,12 @@ void main() {
 
     const updatedWorkbench = IdeWorkbenchLayoutState(
       leftSidebarWidth: 340,
-      selectedAgentUsageProviderId: 'claude_code',
+      selectedAgentUsageProviderId: 'grok',
     );
     expect(shell.workbenchLayout, updatedWorkbench);
     expect(
       IdeSessionState.tryDecode(savedJson)?.workbenchLayout,
       updatedWorkbench,
-    );
-
-    savedJson = null;
-    shell.setSelectedAgentUsageProviderId('codex');
-    await shell.saveNow();
-
-    expect(
-      IdeSessionState.tryDecode(savedJson)?.workbenchLayout,
-      updatedWorkbench.copyWith(selectedAgentUsageProviderId: 'codex'),
     );
   });
 

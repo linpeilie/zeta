@@ -2,17 +2,16 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_slice_runner.dart';
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_slice/agent_usage_panel_slice_state.dart';
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_slice/agent_usage_panel_slice_store.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
-import 'package:zeta/src/features/usage_statistics/domain/fallback_usage_statistics_text_catalog.dart';
+
+import '../../../testing/usage_statistics_test_bindings.dart';
 
 void main() {
   test('首次只加载默认选中的 Provider', () async {
     final repository = _ControlledPanelRepository();
     final controller = _createPanelStore(repository: repository);
-    addTearDown(controller.dispose);
 
     final refresh = controller.refresh(forceRefresh: false);
     await _flushEvents();
@@ -42,7 +41,6 @@ void main() {
   test('切换到未加载 Tab 时按需加载，快速切换保留各自结果', () async {
     final repository = _ControlledPanelRepository();
     final controller = _createPanelStore(repository: repository);
-    addTearDown(controller.dispose);
 
     final initialRefresh = controller.refresh();
     await _flushEvents();
@@ -78,7 +76,6 @@ void main() {
   test('已加载 Tab 再次选中不会重复查询', () async {
     final repository = _ControlledPanelRepository();
     final controller = _createPanelStore(repository: repository);
-    addTearDown(controller.dispose);
 
     final refresh = controller.refresh();
     await _flushEvents();
@@ -94,7 +91,6 @@ void main() {
   test('手动刷新只强制刷新当前 Provider，并保留旧数据', () async {
     final repository = _ControlledPanelRepository();
     final controller = _createPanelStore(repository: repository);
-    addTearDown(controller.dispose);
 
     final initialRefresh = controller.refresh();
     await _flushEvents();
@@ -125,7 +121,6 @@ void main() {
   test('静默刷新保留旧数据且不进入当前 Tab 加载态', () async {
     final repository = _ControlledPanelRepository();
     final controller = _createPanelStore(repository: repository);
-    addTearDown(controller.dispose);
 
     final initialRefresh = controller.refresh();
     await _flushEvents();
@@ -146,7 +141,6 @@ void main() {
   test('目录同步只增加未加载 Tab，切换后才读取新增 Provider', () async {
     final repository = _ControlledPanelRepository();
     final controller = _createPanelStore(repository: repository);
-    addTearDown(controller.dispose);
 
     final initialRefresh = controller.refresh();
     await _flushEvents();
@@ -178,7 +172,6 @@ void main() {
   test('目录移除 Provider 后丢弃它的迟到结果', () async {
     final repository = _ControlledPanelRepository();
     final controller = _createPanelStore(repository: repository);
-    addTearDown(controller.dispose);
 
     final staleRefresh = controller.refresh();
     await _flushEvents();
@@ -203,7 +196,6 @@ void main() {
   test('单 Provider 失败局部展示错误，并可独立重试', () async {
     final repository = _ControlledPanelRepository();
     final controller = _createPanelStore(repository: repository);
-    addTearDown(controller.dispose);
 
     final initialRefresh = controller.refresh();
     await _flushEvents();
@@ -238,7 +230,6 @@ void main() {
       initialPreferredProviderId: ' grok ',
       onSelectionChanged: selectionChanges.add,
     );
-    addTearDown(controller.dispose);
 
     final refresh = controller.refresh();
     await _flushEvents();
@@ -258,7 +249,6 @@ void main() {
       repository: repository,
       onSelectionChanged: selectionChanges.add,
     );
-    addTearDown(controller.dispose);
 
     controller
       ..selectProviderFromTurn('codex')
@@ -278,7 +268,6 @@ void main() {
   test('目录读取失败时提供目录级错误并允许重试', () async {
     final repository = _ControlledPanelRepository()..failNextDiscovery = true;
     final controller = _createPanelStore(repository: repository);
-    addTearDown(controller.dispose);
 
     await controller.refresh();
     expect(controller.errorMessage, 'Agent 用量暂时无法读取');
@@ -294,24 +283,18 @@ void main() {
   });
 }
 
-AgentUsagePanelSliceStore _createPanelStore({
+AgentUsagePanelSliceNotifier _createPanelStore({
   required AgentUsagePanelRepository repository,
   String? initialPreferredProviderId,
   void Function(String? providerId)? onSelectionChanged,
 }) {
-  final runner = AgentUsagePanelSliceRunnerAdapter(
+  final bindings = AgentUsagePanelTestBindings(
     repository: repository,
-    textCatalog: const FallbackUsageStatisticsTextCatalog(),
+    onSelectionChanged: onSelectionChanged,
   );
-  final store = AgentUsagePanelSliceStore(
-    initialState: AgentUsagePanelSliceState(),
-    effectRunner: runner,
-  );
-  runner
-    ..store = store
-    ..selectionPersistenceHandler = onSelectionChanged;
-  store.restorePreferredProviderId(initialPreferredProviderId);
-  return store;
+  addTearDown(bindings.dispose);
+  bindings.notifier.restorePreferredProviderId(initialPreferredProviderId);
+  return bindings.notifier;
 }
 
 const _directory = <AgentUsagePanelProvider>[
