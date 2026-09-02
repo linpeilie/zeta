@@ -215,7 +215,7 @@ final class _WorkspaceHarness {
   final _MultiInstanceProviderFactory factory = _MultiInstanceProviderFactory();
   final List<FakeAgentFrameScheduler> _schedulers = <FakeAgentFrameScheduler>[];
   late final AgentProviderRuntimeRegistry registry;
-  late final AgentProviderSettingsSliceStore providerController;
+  late final AgentProviderSettingsSliceNotifier providerController;
   late final AgentConversationWorkspaceStore controller;
 
   Future<AgentThreadWorkspaceEntry> createEntry({

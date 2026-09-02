@@ -1,6 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
+import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_model_catalog_projection.dart';
+import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_provider_settings_slice_store.dart';
 import 'package:zeta/src/features/agent/presentation/provider_settings_slice/agent_provider_settings_slice_providers.dart';
 
 /// 不含 Provider 配置正文的查询请求。
@@ -9,16 +12,40 @@ typedef AgentModelCatalogQueryRequest = ({
   bool includeHidden,
 });
 
-/// app 组合层注入的唯一模型目录查询源。
-///
-/// 缺失覆盖是组合错误，不能降级成“目录暂不可用”，否则会把根接线缺陷伪装成
-/// Provider 能力或网络失败。
+/// 唯一 Provider Settings notifier 的模型目录查询投影。
 final agentModelCatalogProjectionSourceProvider =
-    Provider<AgentModelCatalogProjectionSource>(
-      (ref) => throw StateError(
-        'Agent model catalog projection source is not installed',
-      ),
-    );
+    Provider<AgentModelCatalogProjectionSource>((ref) {
+      // 读取 notifier 本身不会触发 build；用常量选择器先完成 fail-closed
+      // 依赖解析，同时避免配置变化时重建这个无状态 adapter。
+      ref.watch(agentProviderSettingsSliceProvider.select((state) => null));
+      return _AgentProviderSettingsModelCatalogProjectionSource(
+        ref.watch(agentProviderSettingsSliceProvider.notifier),
+      );
+    }, name: 'agentModelCatalogProjectionSource');
+
+final class _AgentProviderSettingsModelCatalogProjectionSource
+    implements AgentModelCatalogProjectionSource {
+  const _AgentProviderSettingsModelCatalogProjectionSource(this._notifier);
+
+  final AgentProviderSettingsSliceNotifier _notifier;
+
+  @override
+  AgentModelCatalogQuery queryForConfig(
+    AgentProviderConfig config, {
+    bool includeHidden = false,
+  }) => _notifier.queryForConfig(config, includeHidden: includeHidden);
+
+  @override
+  Future<AgentModelCatalogLoadResult> loadModelCatalog(
+    AgentModelCatalogQuery query, {
+    bool forceRefresh = false,
+    void Function(AgentModelCatalogSnapshot snapshot)? onCacheHit,
+  }) => _notifier.loadModelCatalogQuery(
+    query,
+    forceRefresh: forceRefresh,
+    onCacheHit: onCacheHit,
+  );
+}
 
 /// 把 Provider ID/可见性解析为安全 family key。
 final agentModelCatalogQueryProvider =

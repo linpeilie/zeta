@@ -1,17 +1,19 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_provider_settings_slice_effect.dart';
 import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_provider_settings_slice_state.dart';
 import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_provider_settings_slice_store.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
-import '../../../../testing/memory_feature_stores.dart';
+import '../../../../testing/ide_test_harness.dart';
 
 void main() {
-  group('AgentProviderSettingsSliceStore', () {
+  group('AgentProviderSettingsSliceNotifier', () {
     test('loads once and publishes one confirmed snapshot', () async {
       final runner = _ManualRunner();
       final store = _createStore(runner);
-      addTearDown(store.close);
       var notifications = 0;
       final unsubscribe = store.subscribe(() => notifications += 1);
       addTearDown(unsubscribe);
@@ -36,7 +38,6 @@ void main() {
       () async {
         final runner = _ManualRunner();
         final store = _createStore(runner);
-        addTearDown(store.close);
         await _loadDefaults(store, runner);
         var notifications = 0;
         final unsubscribe = store.subscribe(() => notifications += 1);
@@ -70,7 +71,6 @@ void main() {
       () async {
         final runner = _ManualRunner();
         final store = _createStore(runner);
-        addTearDown(store.close);
         await _loadDefaults(store, runner);
 
         final operation = store.setProviderEnabled(
@@ -93,7 +93,6 @@ void main() {
     test('normalizes the V2 permission option before persistence', () async {
       final runner = _ManualRunner();
       final store = _createStore(runner);
-      addTearDown(store.close);
       await _loadDefaults(store, runner);
 
       final operation = store.persistPermissionOptionId('  team-safe  ');
@@ -116,7 +115,6 @@ void main() {
       () async {
         final runner = _ManualRunner();
         final store = _createStore(runner);
-        addTearDown(store.close);
         await _loadDefaults(store, runner);
         final operation = store.updateProviderConfig(
           defaultCodexAgentProviderConfig.copyWith(command: 'candidate'),
@@ -151,7 +149,7 @@ void main() {
       runner.take<ProviderSettingsPersistEffect>();
       final expectation = expectLater(operation, throwsA(isA<StateError>()));
 
-      store.close();
+      _dispose(store);
 
       await expectation;
       expect(store.isClosed, isTrue);
@@ -159,20 +157,45 @@ void main() {
   });
 }
 
-AgentProviderSettingsSliceStore _createStore(_ManualRunner runner) {
-  return AgentProviderSettingsSliceStore(
-    initialState: const AgentProviderSettingsSliceState(),
-    effectRunner: runner,
-    modelCatalogRepository: AgentModelCatalogRepository(
-      store: MemoryAgentModelCatalogCacheStore(),
+final _containers = Expando<ProviderContainer>();
+
+AgentProviderSettingsSliceNotifier _createStore(_ManualRunner runner) {
+  final runtimeRegistry = AgentProviderRuntimeRegistry(
+    providerFactory: FakeAgentProviderBundleBuilder.fromFake(
+      FakeAgentProvider(),
     ),
-    staticCapabilitiesFor:
-        builtInAgentProviderDefinitionCatalog.staticCapabilitiesFor,
   );
+  addTearDown(runtimeRegistry.close);
+  final catalog = AgentModelCatalogRepository(
+    store: MemoryAgentModelCatalogCacheStore(),
+  );
+  final definitions = builtInAgentProviderDefinitionCatalog;
+  final container = ProviderContainer(
+    overrides: <Override>[
+      agentProviderSettingsSliceDependenciesProvider.overrideWithValue(
+        AgentProviderSettingsSliceDependencies(
+          initialSettings: const AgentProviderSettings(),
+          modelCatalogRepository: catalog,
+          staticCapabilitiesFor: definitions.staticCapabilitiesFor,
+          modelCatalogSourceFor: definitions.modelCatalogSourceFor,
+          globalRuntime: AgentProviderGlobalRuntime(
+            runtimeRegistry: runtimeRegistry,
+          ),
+        ),
+      ),
+      agentProviderSettingsSliceEffectRunnerFactoryProvider.overrideWithValue(
+        (_) => runner,
+      ),
+    ],
+  );
+  addTearDown(container.dispose);
+  final notifier = container.read(agentProviderSettingsSliceProvider.notifier);
+  _containers[notifier] = container;
+  return notifier;
 }
 
 Future<void> _loadDefaults(
-  AgentProviderSettingsSliceStore store,
+  AgentProviderSettingsSliceNotifier store,
   _ManualRunner runner,
 ) async {
   final operation = store.loadSettings();
@@ -182,6 +205,11 @@ Future<void> _loadDefaults(
 }
 
 Future<void> _flushAsync() => Future<void>.delayed(Duration.zero);
+
+void _dispose(AgentProviderSettingsSliceNotifier notifier) {
+  _containers[notifier]?.dispose();
+  _containers[notifier] = null;
+}
 
 final class _ManualRunner implements AgentProviderSettingsSliceEffectRunner {
   final List<AgentProviderSettingsSliceEffect> effects =

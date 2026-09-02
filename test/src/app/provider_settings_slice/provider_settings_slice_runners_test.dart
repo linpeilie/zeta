@@ -1,14 +1,14 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/app/provider_settings_slice/provider_settings_slice_composition.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_model_catalog_projection.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 import '../../testing/ide_test_harness.dart';
+import '../../testing/provider_settings_test_store.dart';
 
 void main() {
-  group('ProviderSettingsSliceComposition', () {
+  group('AgentProviderSettingsSliceRunner', () {
     test('environment changes invalidate the shared model catalog', () async {
       final initial = defaultCodexAgentProviderConfig.copyWith(
         environment: const <String, String>{'ZETA_TOKEN': 'old'},
@@ -29,7 +29,7 @@ void main() {
         providerFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
       );
       addTearDown(registry.close);
-      final composition = ProviderSettingsSliceComposition.create(
+      final composition = createProviderSettingsTestComposition(
         configStore: MemoryAgentProviderConfigStore(
           AgentProviderSettings(providers: <AgentProviderConfig>[initial]),
         ),
@@ -68,7 +68,7 @@ void main() {
         providerFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
       );
       addTearDown(registry.close);
-      final composition = ProviderSettingsSliceComposition.create(
+      final composition = createProviderSettingsTestComposition(
         configStore: configStore,
         modelCatalogRepository: AgentModelCatalogRepository(
           store: MemoryAgentModelCatalogCacheStore(),
@@ -98,7 +98,7 @@ void main() {
         providerFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
       );
       addTearDown(registry.close);
-      final composition = ProviderSettingsSliceComposition.create(
+      final composition = createProviderSettingsTestComposition(
         configStore: MemoryAgentProviderConfigStore(),
         modelCatalogRepository: AgentModelCatalogRepository(
           store: MemoryAgentModelCatalogCacheStore(),
@@ -128,7 +128,7 @@ void main() {
         providerFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
       );
       addTearDown(registry.close);
-      final composition = ProviderSettingsSliceComposition.create(
+      final composition = createProviderSettingsTestComposition(
         configStore: MemoryAgentProviderConfigStore(),
         modelCatalogRepository: AgentModelCatalogRepository(
           store: MemoryAgentModelCatalogCacheStore(),
@@ -169,7 +169,7 @@ void main() {
           ),
         );
         addTearDown(registry.close);
-        final composition = ProviderSettingsSliceComposition.create(
+        final composition = createProviderSettingsTestComposition(
           configStore: MemoryAgentProviderConfigStore(),
           modelCatalogRepository: AgentModelCatalogRepository(
             store: MemoryAgentModelCatalogCacheStore(),

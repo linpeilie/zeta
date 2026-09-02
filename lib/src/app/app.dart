@@ -131,8 +131,6 @@ class _MainAppState extends State<MainApp> {
     return IdeHome(
       key: const ValueKey<String>('zeta.ide-home'),
       shellStateSnapshotRelay: composition.shellStateSnapshotRelay,
-      activeModelCatalogLoader: () =>
-          composition.providerSettingsComposition.loadActiveModelCatalog(),
       usageStatisticsSliceComposition: composition.usageStatisticsComposition,
       workbenchCompositionFactory: composition.createWorkbenchComposition,
       providerMetricLabel: AgentMetricLabels.forProviderId,

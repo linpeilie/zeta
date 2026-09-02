@@ -1,17 +1,16 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_model_catalog_projection.dart';
 import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_provider_settings_slice_effect.dart';
-import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_provider_settings_slice_state.dart';
 import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_provider_settings_slice_store.dart';
 import 'package:zeta/src/features/agent/presentation/provider_settings_slice/agent_model_catalog_projection_providers.dart';
-import 'package:zeta/src/features/agent/presentation/provider_settings_slice/agent_provider_settings_slice_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
-import '../../../../testing/memory_feature_stores.dart';
+import '../../../../testing/ide_test_harness.dart';
 
 const _query = AgentModelCatalogQuery(
   providerId: defaultAgentProviderId,
@@ -26,12 +25,12 @@ void main() {
       addTearDown(container.dispose);
 
       expect(
-        () => container.read(agentProviderSettingsSliceStoreProvider),
+        () => container.read(agentProviderSettingsSliceProvider),
         throwsA(
           isA<Exception>().having(
             (error) => error.toString(),
             'provider error',
-            contains('Bad state: Provider settings slice is not installed'),
+            contains('agentProviderSettingsSliceDependenciesProvider'),
           ),
         ),
       );
@@ -41,10 +40,7 @@ void main() {
           isA<Exception>().having(
             (error) => error.toString(),
             'provider error',
-            contains(
-              'Bad state: Agent model catalog projection source is not '
-              'installed',
-            ),
+            contains('agentProviderSettingsSliceDependenciesProvider'),
           ),
         ),
       );
@@ -258,8 +254,14 @@ void main() {
       final initial = defaultCodexAgentProviderConfig.copyWith(
         environment: const <String, String>{'ZETA_TOKEN': 'old'},
       );
-      final store = _settingsStore(settingsRunner);
-      addTearDown(store.close);
+      final container = _container(
+        source,
+        settingsRunner: settingsRunner,
+        settings: AgentProviderSettings(
+          providers: <AgentProviderConfig>[initial],
+        ),
+      );
+      final store = container.read(agentProviderSettingsSliceProvider.notifier);
       final load = store.loadSettings();
       final loadEffect = settingsRunner.take<ProviderSettingsLoadEffect>();
       store.loaded(
@@ -267,7 +269,6 @@ void main() {
         AgentProviderSettings(providers: <AgentProviderConfig>[initial]),
       );
       await load;
-      final container = _container(source, settingsStore: store);
       final subscription = container.listen(
         agentModelCatalogProjectionProvider(_query),
         (_, _) {},
@@ -341,40 +342,38 @@ final class _FakeProjectionSource implements AgentModelCatalogProjectionSource {
 
 ProviderContainer _container(
   AgentModelCatalogProjectionSource source, {
-  AgentProviderSettingsSliceStore? settingsStore,
+  _ManualSettingsRunner? settingsRunner,
   AgentProviderSettings settings = builtInAgentProviderSettings,
 }) {
-  final resolvedSettingsStore =
-      settingsStore ??
-      _settingsStore(_ManualSettingsRunner(), settings: settings);
-  if (settingsStore == null) {
-    addTearDown(resolvedSettingsStore.close);
-  }
+  final runner = settingsRunner ?? _ManualSettingsRunner();
+  final registry = AgentProviderRuntimeRegistry(
+    providerFactory: FakeAgentProviderBundleBuilder.fromFake(
+      FakeAgentProvider(),
+    ),
+  );
+  addTearDown(registry.close);
+  final definitions = builtInAgentProviderDefinitionCatalog;
   final container = ProviderContainer(
-    overrides: [
+    overrides: <Override>[
       agentModelCatalogProjectionSourceProvider.overrideWithValue(source),
-      agentProviderSettingsSliceStoreProvider.overrideWithValue(
-        resolvedSettingsStore,
+      agentProviderSettingsSliceDependenciesProvider.overrideWithValue(
+        AgentProviderSettingsSliceDependencies(
+          initialSettings: settings,
+          modelCatalogRepository: AgentModelCatalogRepository(
+            store: MemoryAgentModelCatalogCacheStore(),
+          ),
+          staticCapabilitiesFor: definitions.staticCapabilitiesFor,
+          modelCatalogSourceFor: definitions.modelCatalogSourceFor,
+          globalRuntime: AgentProviderGlobalRuntime(runtimeRegistry: registry),
+        ),
+      ),
+      agentProviderSettingsSliceEffectRunnerFactoryProvider.overrideWithValue(
+        (_) => runner,
       ),
     ],
   );
   addTearDown(container.dispose);
   return container;
-}
-
-AgentProviderSettingsSliceStore _settingsStore(
-  AgentProviderSettingsSliceEffectRunner runner, {
-  AgentProviderSettings settings = const AgentProviderSettings(),
-}) {
-  return AgentProviderSettingsSliceStore(
-    initialState: AgentProviderSettingsSliceState(settings: settings),
-    effectRunner: runner,
-    modelCatalogRepository: AgentModelCatalogRepository(
-      store: MemoryAgentModelCatalogCacheStore(),
-    ),
-    staticCapabilitiesFor:
-        builtInAgentProviderDefinitionCatalog.staticCapabilitiesFor,
-  );
 }
 
 final class _ManualSettingsRunner

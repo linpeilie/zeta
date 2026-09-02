@@ -12,7 +12,6 @@ import 'package:zeta/src/app/composition/ide_workbench_composition.dart';
 import 'package:zeta/src/app/composition/zeta_environment_providers.dart';
 import 'package:zeta/src/app/window/zeta_window_host.dart';
 import 'package:zeta/src/app/window/zeta_window_surface.dart';
-import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_runner.dart';
 import 'package:zeta/src/app/app_constants.dart';
 import 'package:zeta/src/app/composition/zeta_state_snapshot.dart';
@@ -26,8 +25,8 @@ import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
 import 'package:zeta/src/app/storage/zeta_store_providers.dart';
 import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_providers.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
+import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_provider_settings_slice_store.dart';
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
-import 'package:zeta/src/features/agent/presentation/provider_settings_slice/agent_provider_settings_slice_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/desktop_notifications/application/desktop_attention_slice_notifier.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_models.dart';
@@ -73,7 +72,6 @@ import 'package:zeta/src/features/workspace/application/workspace_notifier.dart'
 class IdeHome extends ConsumerStatefulWidget {
   const IdeHome({
     required this.shellStateSnapshotRelay,
-    required this.activeModelCatalogLoader,
     required this.usageStatisticsSliceComposition,
     required this.workbenchCompositionFactory,
     this.providerMetricLabel = ZetaMetricLabel.hashed,
@@ -81,7 +79,6 @@ class IdeHome extends ConsumerStatefulWidget {
   });
 
   final ZetaShellStateSnapshotRelay shellStateSnapshotRelay;
-  final Future<AgentModelCatalogLoadResult> Function() activeModelCatalogLoader;
   final UsageStatisticsSliceComposition usageStatisticsSliceComposition;
 
   /// app 组合层预绑的工作台组合工厂；UI 不再看到任何 Repository。
@@ -201,9 +198,11 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
       ideSessionOperations: ref.read(ideSessionSliceProvider.notifier),
       agentProviderFactory: ref.read(agentProviderBundleFactoryProvider),
       agentProviderSettingsPort: ref.read(
-        agentProviderSettingsSliceStoreProvider,
+        agentProviderSettingsSliceProvider.notifier,
       ),
-      activeModelCatalogLoader: widget.activeModelCatalogLoader,
+      activeModelCatalogLoader: () => ref
+          .read(agentProviderSettingsSliceProvider.notifier)
+          .loadActiveModelCatalog(),
       projectLocationOpener: ref.read(projectLocationOpenerProvider),
       statusReporter: _showStatus,
       agentProviderRuntimeRegistry: ref.read(

@@ -20,7 +20,7 @@ import 'package:zeta/src/app/localization/zeta_text_catalog_providers.dart';
 import 'package:zeta/src/app/localization/zeta_text_catalogs.dart';
 import 'package:zeta/src/app/observability/zeta_observability.dart';
 import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
-import 'package:zeta/src/app/provider_settings_slice/provider_settings_slice_composition.dart';
+import 'package:zeta/src/app/provider_settings_slice/provider_settings_slice_overrides.dart';
 import 'package:zeta/src/app/settings_slice/settings_slice_overrides.dart';
 import 'package:zeta/src/app/storage/zeta_store_providers.dart';
 import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_providers.dart';
@@ -29,9 +29,8 @@ import 'package:zeta/src/app/window/zeta_shutdown_hook.dart';
 import 'package:zeta/src/app/window/zeta_window_host.dart';
 import 'package:zeta/src/app/workspace_slice/workspace_overrides.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
+import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_provider_settings_slice_store.dart';
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
-import 'package:zeta/src/features/agent/presentation/provider_settings_slice/agent_model_catalog_projection_providers.dart';
-import 'package:zeta/src/features/agent/presentation/provider_settings_slice/agent_provider_settings_slice_providers.dart';
 import 'package:zeta/src/features/desktop_notifications/application/desktop_attention_slice_notifier.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_session_slice_notifier.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_notifier.dart';
@@ -55,7 +54,7 @@ import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
 ///
 /// 1. 正式容器复用的已解析可观测性实例；
 /// 2. 显示语言冻结之后才存在的文本目录（值还没有，写不进 provider body）；
-/// 3. 三个切片组合的 store（组合对象由本类持有，provider 只是读出口）。
+/// 3. 尚未迁移的切片组合 store（组合对象由本类持有，provider 只是读出口）。
 ///
 /// 生命周期：**谁创建谁 [dispose]**。生产入口交给进程退出与窗口关闭 hook，测试用
 /// `addTearDown`。
@@ -103,8 +102,6 @@ final class ZetaAppComposition implements ZetaShutdownHook {
 
   late final ZetaWindowHost _windowHost;
 
-  /// 本地化与 Provider 插件目录就绪后创建的唯一 Provider settings 组合。
-  ProviderSettingsSliceComposition? _providerSettingsSliceComposition;
   UsageStatisticsSliceComposition? _usageStatisticsSliceComposition;
 
   /// 在 `IdeHome.initState` 同步接入 Workspace，保证首个会话 build 只有新路径。
@@ -145,10 +142,6 @@ final class ZetaAppComposition implements ZetaShutdownHook {
       _usageStatisticsSliceComposition ??
       (throw StateError('Usage Statistics composition is not ready'));
 
-  ProviderSettingsSliceComposition get providerSettingsComposition =>
-      _providerSettingsSliceComposition ??
-      (throw StateError('Provider Settings composition is not ready'));
-
   /// 按需读取当前逻辑状态树；生产 Widget 不得订阅或在 build 中调用。
   ZetaStateSnapshot takeStateSnapshot() {
     final usageComposition = usageStatisticsComposition;
@@ -162,7 +155,7 @@ final class ZetaAppComposition implements ZetaShutdownHook {
       ),
       appearanceSettings: container.read(appearanceSettingsProvider),
       generalSettings: container.read(generalSettingsSliceProvider),
-      providerSettings: providerSettingsComposition.store.state,
+      providerSettings: container.read(agentProviderSettingsSliceProvider),
     );
   }
 
@@ -178,7 +171,9 @@ final class ZetaAppComposition implements ZetaShutdownHook {
         agentModelCatalogRepositoryProvider,
       ),
       runtimeRegistry: container.read(agentProviderRuntimeRegistryProvider),
-      providerSettings: providerSettingsComposition.store,
+      providerSettings: container.read(
+        agentProviderSettingsSliceProvider.notifier,
+      ),
       subscribeRuntime: subscribeRuntime,
       runtimeSnapshotProvider: runtimeSnapshotProvider,
       textCatalog: container.read(agentManagementTextCatalogProvider),
@@ -219,11 +214,9 @@ final class ZetaAppComposition implements ZetaShutdownHook {
     _windowHost.removeShutdownHook(this);
     _usageStatisticsSliceComposition?.dispose();
     _usageStatisticsSliceComposition = null;
-    _providerSettingsSliceComposition?.dispose();
-    _providerSettingsSliceComposition = null;
     // 关闭动作在容器销毁前同步取出，await 发生在容器已经关掉之后也不受影响。
     unawaited(shutdownOwnedAgentResources());
-    // 两个 settings 切片 store 与 Desktop Attention 切片由 provider 拥有，
+    // Provider Settings、两个 settings 切片与 Desktop Attention 由 provider 拥有，
     // `ref.onDispose` 随容器一起关。
     container.dispose();
   }
@@ -276,17 +269,15 @@ final class ZetaAppComposition implements ZetaShutdownHook {
         lookupAppLocalizations(_frozenDisplayLocale),
       );
     }
-    _providerSettingsSliceComposition ??=
-        ProviderSettingsSliceComposition.create(
-          configStore: container.read(agentProviderConfigStoreProvider),
-          modelCatalogRepository: container.read(
-            agentModelCatalogRepositoryProvider,
-          ),
-          runtimeRegistry: container.read(agentProviderRuntimeRegistryProvider),
-          providerDefinitions: container.read(
-            agentProviderDefinitionCatalogProvider,
-          ),
-        );
+    // Provider Settings 是 app-session Notifier；在文本目录就绪后显式建出，
+    // 保持旧组合在使用统计和 Shell 之前已安装的启动顺序。
+    final providerSettings = container.read(
+      agentProviderSettingsSliceProvider.notifier,
+    );
+    // 首次 intent 必须在 Widget 挂载前发出。IdeHome.initState 中同步修改
+    // Notifier 会触发 Riverpod 的 build-phase 写保护；Shell 随后调用时只会复用
+    // 同一个 in-flight Future，不再产生第二次 effect。
+    unawaited(providerSettings.loadSettings());
     _usageStatisticsSliceComposition ??= UsageStatisticsSliceComposition.create(
       loadEnabledProviders: _loadEnabledAgentUsageProviders,
       runtimeRegistry: container.read(agentProviderRuntimeRegistryProvider),
@@ -300,7 +291,9 @@ final class ZetaAppComposition implements ZetaShutdownHook {
   }
 
   Future<List<AgentProviderConfig>> _loadEnabledAgentUsageProviders() async {
-    final providerSettings = providerSettingsComposition.store;
+    final providerSettings = container.read(
+      agentProviderSettingsSliceProvider.notifier,
+    );
     await providerSettings.loadSettings();
     return providerSettings.enabledProviders;
   }
@@ -314,7 +307,7 @@ final class ZetaAppComposition implements ZetaShutdownHook {
   /// 组合根内部装的 override。
   ///
   /// **只装调用方不该碰的那三类**（见类文档）。依赖延迟到 `overrideWith` 的闭包
-  /// 里读，因此语言冻结后才建出来的三个切片组合不会引起重新装配；尚未组合就被读
+  /// 里读，因此语言冻结后才建出来的切片 owner 不会引起重新装配；尚未组合就被读
   /// 到时会 fail-closed 抛错。[extra] 排在最后。
   List<Override> _composeOverrides(List<Override> extra) {
     return <Override>[
@@ -329,6 +322,7 @@ final class ZetaAppComposition implements ZetaShutdownHook {
       ),
       ...desktopAttentionSliceOverrides(),
       ...ideSessionSliceOverrides(),
+      ...providerSettingsSliceOverrides(),
       ...settingsSliceOverrides(),
       ...workspaceOverrides(),
       agentConversationSliceStoreRegistryProvider.overrideWithValue(
@@ -336,12 +330,6 @@ final class ZetaAppComposition implements ZetaShutdownHook {
       ),
       agentConversationWorkspaceStoreRegistryProvider.overrideWithValue(
         conversationWorkspaceStoreRegistry,
-      ),
-      agentProviderSettingsSliceStoreProvider.overrideWith(
-        (ref) => providerSettingsComposition.store,
-      ),
-      agentModelCatalogProjectionSourceProvider.overrideWith(
-        (ref) => providerSettingsComposition,
       ),
       usageStatisticsSliceStoreProvider.overrideWith(
         (ref) => usageStatisticsComposition.usageStatisticsStore,

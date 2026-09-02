@@ -115,7 +115,7 @@ final class _RecycleHarness {
   final _MultiInstanceProviderFactory factory = _MultiInstanceProviderFactory();
   final FakeAgentFrameScheduler scheduler = FakeAgentFrameScheduler();
   late final AgentProviderRuntimeRegistry registry;
-  late final AgentProviderSettingsSliceStore controller;
+  late final AgentProviderSettingsSliceNotifier controller;
   late final AgentConversationBindingTestHarness bindingHarness;
   late final AgentConversationBindingLease bindingLease;
   late final AgentConversationViewModel viewModel;

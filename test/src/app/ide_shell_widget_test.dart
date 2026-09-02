@@ -17,6 +17,7 @@ import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent/presentation/provider_settings_slice/agent_model_catalog_projection_providers.dart';
 import 'package:zeta/src/features/agent/presentation/provider_settings_slice/agent_provider_settings_slice_providers.dart';
+import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_provider_settings_slice_store.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_management_page.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
@@ -832,7 +833,10 @@ void main() {
     );
     final container = ProviderScope.containerOf(context, listen: false);
 
-    expect(container.read(agentProviderSettingsSliceStoreProvider), isNotNull);
+    expect(
+      container.read(agentProviderSettingsSliceProvider.notifier),
+      isNotNull,
+    );
     expect(
       container.read(agentModelCatalogProjectionSourceProvider),
       isNotNull,
