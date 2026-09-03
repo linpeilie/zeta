@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |----|----|
-| 状态 | 未开始 |
+| 状态 | 进行中（T1 已完成） |
 | 规模 | 3–4 人天，1–2 个 PR |
 | 依赖 | **WP-2 完成后启动**（文件先独立）；与 WP-1 解耦（只依赖 `AgentConversationCommandPort` 窄接口） |
 | 门禁焦点 | G6；「新增条目类型 = 新增一个 renderer 文件」 |
@@ -217,12 +217,26 @@ final keepAliveListenable = item is AgentBlockViewportItem
 
 ## 3. 任务拆分
 
-### T1 · 类型与注册表落地（0.5 人天）
+### T1 · 类型与注册表落地（0.5 人天） · 已完成（2026-09-03）
 
 1. 按 §2.1/§2.2 建两个文件；`AgentTimelineExtentKinds` 常量从 extent_descriptor 平移或复用（保持字符串值不变）。
 2. 单测：注册表 resolve 命中/未命中抛 `UnsupportedError`；重复注册同类型抛错（构造函数里加断言）。
 
-**验收**：类型编译通过；注册表单测 3 条绿。
+**施工记录**：新增 `presentation/timeline_rendering/agent_timeline_renderer.dart`（context + 接口 + `AgentTimelineRendererBase`）与 `agent_timeline_renderer_registry.dart`（单层平表）；测试 `test/src/features/agent/presentation/timeline_rendering/agent_timeline_renderer_registry_test.dart` 3 条绿。`AgentTimelineExtentKinds` 直接 import 复用，不平移。`flutter analyze` 零 issue；`test_affected.sh` 140 个根测试全绿。
+
+**对照仓库代码的 5 处设计修正**（以代码为准，§2.1 骨架按此理解；T2 照此实现）：
+
+| # | 文档原设计 | 实际落地 | 原因 |
+|---|-----------|---------|------|
+| 1 | `String get kind` | `String kindOf(P payload)` | 消息条目的 kind 取决于 role 与 `isPlan`（`_kindForMessage`，extent_descriptor.dart:192-201），一种 entry 类型对应 4 个 kind 值。kind 决定虚拟化列表的测量 cohort，收敛成常量会改变行为 |
+| 2 | `build(payload, context, {turn, pendingState})` | 首参补 `BuildContext context` | 现状 `_buildPlanApprovalCard` 用 `context.l10n`（sections:880），卡片族普遍依赖 `IdeColors.of(context)` |
+| 3 | context 持 `commands` + `bindingKey` 两个字段 | 持 `controller`（`AgentConversationRuntimeController`），另暴露 `commands` / `bindingKey` 两个只读 getter | WP-1 收尾后卡片族统一接收 `controller`（如 `AgentCommandGroupCard({group, controller})`）；改成窄接口要动全部卡片签名，属 WP-4 范围。窄依赖意图由两个 getter 保留 |
+| 4 | 重复注册用 `assert` | 抛 `ArgumentError` | assert 在 release 被剥离；重复注册的后果是分发结果取决于清单顺序，应 release 也 fail-closed |
+| 5 | `prepareWarmEntry` 在接口里带 `=> null` 默认实现 | 接口不带实现体，默认值下沉到 `AgentTimelineRendererBase` | Dart `implements` 不继承实现体，写在 `abstract interface class` 里的默认实现对实现者无效 |
+
+另补：注册表提供 `static Object payloadOf(AgentTimelineRenderBlock)` 解包助手，供 sections / 保温钩子调用点复用同一份解包规则。
+
+**验收**：类型编译通过；注册表单测 3 条绿。✅
 
 ### T2 · 迭代迁移 renderer（1.5–2 人天）
 

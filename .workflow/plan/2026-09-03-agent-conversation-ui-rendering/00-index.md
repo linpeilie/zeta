@@ -48,7 +48,7 @@
 |----|------|------------|------|---------|------|------|
 | WP-1 | 切片 owner 归位 + ViewModel 拆分 | 10–14 | 独立，建议 WP-2 之后降低冲突 | G3 G6，一份状态一个 owner | 已完成 | [01-wp1-slice-ownership.md](01-wp1-slice-ownership.md) |
 | WP-2 | part-of 单体 library 拆分 | 2–3 | 无（WP-3/WP-4 的地基） | G6 | 已完成 | [02-wp2-part-of-split.md](02-wp2-part-of-split.md) |
-| WP-3 | 渲染分发插件化（renderer 注册表） | 3–4 | WP-2 | G1 G4（registry 保持中立） | 未开始 | [03-wp3-renderer-registry.md](03-wp3-renderer-registry.md) |
+| WP-3 | 渲染分发插件化（renderer 注册表） | 3–4 | WP-2 | G1 G4（registry 保持中立） | 进行中 | [03-wp3-renderer-registry.md](03-wp3-renderer-registry.md) |
 | WP-4 | 控件收敛下沉 zeta_ui | 4–5 | WP-2（可穿插） | G8；zeta_ui 纯度 | 未开始 | [04-wp4-zeta-ui-convergence.md](04-wp4-zeta-ui-convergence.md) |
 | WP-5 | 历史分页 / 窗口化 | 5–8（含 spike） | 需先 spike；WP-1 之后 | G2 G3 G6 | 未开始 | [05-wp5-history-pagination.md](05-wp5-history-pagination.md) |
 | WP-6 | **Markdown vendor + 深度改造** | 11–16（T1–T10 + 治理；P2 另计） | 无 | G6 G7 G8；包治理 | 未开始 | [06-wp6-markdown-vendor.md](06-wp6-markdown-vendor.md) |
@@ -101,3 +101,4 @@ WP-5（spike 结论后再排期）
 | 2026-09-03 | WP-2 T5 | 转换 L4 composer 族 | popover / model_config / mode_selector / 三个 picker / composer 独立 library；mode_selector 测试改 import；analyze 绿，`test_affected` 53 个根测试绿 |
 | 2026-09-03 | WP-2 T4 | 转换 L2–L3 文件 | header / rail / cards / messages / context / sections / plan_panel 独立 library；presentation 已无 part；AgentBuildTarget runtimeType 同步；analyze 绿，`test_affected` 53 个根测试绿 |
 | 2026-09-03 | WP-2 T6 | 壳收缩与全量门禁 | Composer 交互抽到 session，对话树抽到 body；`agent_pane.dart` 329 行；`test_full` 绿；WP-2 已完成 |
+| 2026-09-03 | WP-3 T1 | renderer 契约 + 单层注册表落地 | `timeline_rendering/` 新目录两文件；注册表单测 3 条绿；对照代码修正文档 5 处设计（kindOf 取代常量 kind、build 补 BuildContext、context 持 controller、重复注册抛 ArgumentError、默认实现下沉 Base 类） |
