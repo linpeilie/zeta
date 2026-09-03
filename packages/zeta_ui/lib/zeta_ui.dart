@@ -24,6 +24,7 @@ export 'src/ide_icon_box.dart';
 export 'src/ide_metrics.dart';
 export 'src/ide_motion.dart';
 export 'src/ide_popover.dart';
+export 'src/ide_popup_select.dart';
 export 'src/ide_resize_handle.dart';
 export 'src/ide_select.dart';
 export 'src/ide_skeleton.dart';

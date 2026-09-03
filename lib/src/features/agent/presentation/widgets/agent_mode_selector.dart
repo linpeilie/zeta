@@ -6,8 +6,6 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_ui/zeta_ui.dart';
-import 'package:zeta/src/features/agent/presentation/widgets/agent_model_config.dart';
-import 'package:zeta/src/features/agent/presentation/widgets/composer_selector_popover.dart';
 import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
 const double _agentModeSelectorPopoverPreferredWidth = 240;
@@ -74,7 +72,7 @@ class _AgentModeSelectorState extends State<AgentModeSelector> {
   final FocusNode _triggerFocusNode = FocusNode(
     debugLabel: 'agent-mode-selector-trigger',
   );
-  late final ComposerSelectorPopoverController _popoverController;
+  late final IdePopoverController _popoverController;
 
   bool get _canOpen =>
       widget.status == AgentModeSelectorStatus.ready &&
@@ -84,7 +82,7 @@ class _AgentModeSelectorState extends State<AgentModeSelector> {
   @override
   void initState() {
     super.initState();
-    _popoverController = ComposerSelectorPopoverController(
+    _popoverController = IdePopoverController(
       triggerFocusNode: _triggerFocusNode,
       onOpenChanged: () {
         if (mounted) {
@@ -172,61 +170,69 @@ class _AgentModeSelectorState extends State<AgentModeSelector> {
                 ),
               )
             : _agentModeSelectorLabelMaxWidth;
-        return ComposerSelectorTrigger(
-          surfaceKey: const ValueKey('agent-mode-selector'),
-          tooltip: display.tooltip,
-          semanticLabel: display.semanticLabel,
-          open: open,
-          focusNode: _triggerFocusNode,
-          onPressed: _canOpen ? _togglePopover : null,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Semantics(
-                label: context.l10n.agentConversationModeIcon,
-                excludeSemantics: true,
-                child: Icon(
-                  Icons.alt_route_rounded,
-                  size: 13,
-                  color: colors.textTertiary,
-                ),
-              ),
-              const SizedBox(width: IdeSpacing.space4),
-              ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: availableLabelWidth),
-                child: Text(
-                  display.visibleLabel,
-                  key: const ValueKey('agent-mode-selector-label'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: textStyles.bodySmall.copyWith(
-                    color: colors.textSecondary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              const SizedBox(width: IdeSpacing.space4),
-              if (isLoading)
-                IdeBusySpinner(
-                  key: const ValueKey('agent-mode-selector-loading'),
-                  size: 12,
-                  strokeWidth: 1.5,
-                  color: colors.textTertiary,
-                )
-              else
-                AnimatedRotation(
-                  turns: open ? 0.5 : 0,
-                  duration: MediaQuery.disableAnimationsOf(context)
-                      ? Duration.zero
-                      : IdeMotion.durationNormal,
-                  curve: IdeMotion.curveDefault,
-                  child: Icon(
-                    Icons.keyboard_arrow_down_rounded,
+        return IdeTooltip(
+          message: display.tooltip,
+          enabled: !open,
+          child: IdeButton(
+            key: const ValueKey('agent-mode-selector'),
+            label: display.visibleLabel,
+            semanticLabel: display.semanticLabel,
+            variant: open ? IdeButtonVariant.secondary : IdeButtonVariant.ghost,
+            focusNode: _triggerFocusNode,
+            onPressed: _canOpen ? _togglePopover : null,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Semantics(
+                  label: context.l10n.agentConversationModeIcon,
+                  excludeSemantics: true,
+                  child: IdeIconBox(
+                    Icons.alt_route_rounded,
                     size: 13,
                     color: colors.textTertiary,
                   ),
                 ),
-            ],
+                const SizedBox(width: IdeSpacing.space4),
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: availableLabelWidth),
+                  child: Text(
+                    display.visibleLabel,
+                    key: const ValueKey('agent-mode-selector-label'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: textStyles.bodySmall.copyWith(
+                      color: colors.textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: IdeSpacing.space4),
+                if (isLoading)
+                  IdeIconBox.custom(
+                    key: const ValueKey('agent-mode-selector-loading'),
+                    child: IdeBusySpinner(
+                      size: 12,
+                      strokeWidth: 1.5,
+                      color: colors.textTertiary,
+                    ),
+                  )
+                else
+                  IdeIconBox.custom(
+                    child: AnimatedRotation(
+                      turns: open ? 0.5 : 0,
+                      duration: MediaQuery.disableAnimationsOf(context)
+                          ? Duration.zero
+                          : IdeMotion.durationNormal,
+                      curve: IdeMotion.curveDefault,
+                      child: Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        size: 13,
+                        color: colors.textTertiary,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         );
       },
@@ -263,7 +269,7 @@ class _AgentModeSelectorPopover extends StatelessWidget {
         width: width,
         child: ConstrainedBox(
           constraints: BoxConstraints(maxHeight: maxHeight),
-          child: ComposerSelectPopup<AgentConversationModeId>(
+          child: IdePopupSelectList<AgentConversationModeId>(
             value: selectedMode,
             onChanged: (mode, selected) {
               if (!selected) {

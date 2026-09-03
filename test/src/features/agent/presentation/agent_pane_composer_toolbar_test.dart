@@ -941,16 +941,14 @@ void main() {
         final permissionSelector = find.byKey(
           const ValueKey('agent-permission-option-selector'),
         );
-        final modelSurface = tester.widget<PaneInteractiveSurface>(
-          modelSelector,
+        final modelButton = tester.widget<IdeButton>(modelSelector);
+        final permissionButton = tester.widget<IdeButton>(permissionSelector);
+        expect(
+          tester.getSize(permissionSelector).height,
+          tester.getSize(modelSelector).height,
         );
-        final permissionSurface = tester.widget<PaneInteractiveSurface>(
-          permissionSelector,
-        );
-        expect(permissionSurface.height, modelSurface.height);
-        expect(permissionSurface.borderRadius, modelSurface.borderRadius);
-        expect(permissionSurface.backgroundColor, modelSurface.backgroundColor);
-        expect(permissionSurface.borderColor, modelSurface.borderColor);
+        expect(permissionButton.controlSize, modelButton.controlSize);
+        expect(permissionButton.variant, modelButton.variant);
         // 触发器短标签契约：option label，不含审批副标题。
         expect(find.text('Workspace write'), findsOneWidget);
         expect(viewModel.permissionPolicyLabel, 'Workspace write');

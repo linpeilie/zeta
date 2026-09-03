@@ -60,6 +60,8 @@ class IdeButton extends StatelessWidget {
     required this.label,
     super.key,
     this.onPressed,
+    this.focusNode,
+    this.child,
     this.leading,
     this.leadingIcon,
     this.trailingIcon,
@@ -77,6 +79,8 @@ class IdeButton extends StatelessWidget {
     required this.label,
     super.key,
     this.onPressed,
+    this.focusNode,
+    this.child,
     this.leading,
     this.leadingIcon,
     this.trailingIcon,
@@ -93,6 +97,15 @@ class IdeButton extends StatelessWidget {
 
   /// 点击回调；为 `null` 时按钮禁用。
   final VoidCallback? onPressed;
+
+  /// 外部管理的焦点节点；弹层触发器用它在关闭后恢复键盘焦点。
+  final FocusNode? focusNode;
+
+  /// 替代默认文本的富内容。
+  ///
+  /// [label] 仍作为无障碍名称与无富内容时的可见文案。调用方负责让富内容
+  /// 使用 Graphite token，并不得让其高度超过当前控件档位的自然内容高度。
+  final Widget? child;
 
   /// 文案前的可选自定义前导组件，优先于 [leadingIcon]。
   ///
@@ -159,6 +172,7 @@ class IdeButton extends StatelessWidget {
     final labelStyle = textStyles.bodySmall.copyWith(color: foreground);
     final button = sf.Button(
       onPressed: isEnabled ? onPressed : null,
+      focusNode: focusNode,
       enabled: isEnabled,
       style: _resolveStyle(
         variant,
@@ -179,12 +193,14 @@ class IdeButton extends StatelessWidget {
       trailing: trailingIcon == null
           ? null
           : IdeIconBox(trailingIcon!, style: labelStyle, color: iconColor),
-      child: Text(
-        label,
-        maxLines: maxLines,
-        overflow: TextOverflow.ellipsis,
-        style: labelStyle,
-      ),
+      child:
+          child ??
+          Text(
+            label,
+            maxLines: maxLines,
+            overflow: TextOverflow.ellipsis,
+            style: labelStyle,
+          ),
     );
 
     // 高度由 `_resolveStyle` 给的竖向内边距和内容自然撑开；这里只兜住点击
@@ -297,6 +313,7 @@ class IdeIconButton extends StatelessWidget {
     required this.semanticLabel,
     super.key,
     this.onPressed,
+    this.focusNode,
     this.enabled = true,
     this.variant = IdeButtonVariant.outline,
     this.controlSize = IdeControlSize.compact,
@@ -310,6 +327,9 @@ class IdeIconButton extends StatelessWidget {
 
   /// 点击回调；为 `null` 时按钮禁用。
   final VoidCallback? onPressed;
+
+  /// 外部管理的焦点节点；弹层关闭后可据此恢复键盘焦点。
+  final FocusNode? focusNode;
 
   /// 是否允许交互；与 [onPressed] 同时为真时才可点。
   final bool enabled;
@@ -354,6 +374,7 @@ class IdeIconButton extends StatelessWidget {
         constraints: BoxConstraints(minWidth: minSide, minHeight: minSide),
         child: sf.Button(
           onPressed: isEnabled ? onPressed : null,
+          focusNode: focusNode,
           enabled: isEnabled,
           style: IdeButton._resolveStyle(variant, EdgeInsets.all(padding)),
           alignment: Alignment.center,

@@ -106,3 +106,4 @@ WP-5（spike 结论后再排期）
 | 2026-09-03 | WP-3 T3 | 收敛 switch + extent 工厂接线 + 导航谓词 | sections 两处 switch 与保温判断链归零（净减 130 行）；extent 工厂 585→255 行，八个私有估算/指纹方法删除；工厂改为显式注入 registry；导航兜底锚点跳过零高度块；架构守卫 4 条（源码盘点密封子类双向比对）。过渡 re-export 被零容忍守卫拦下，改为迁符号 + 直接 import 真源 |
 | 2026-09-03 | WP-3 T4 | 注入接线与全量门禁 | AgentPane 持 registry 与 renderContext（换会话时重建）；timeline/body 两个缓存参数合并；`test_full` 绿；WP-3 已完成。接线后 permission/question 由 48px 估算改为 0，虚拟化少一份系统性偏差 |
 | 2026-09-03 | WP-4 T1 | `IdeStatusCard` compact 变体 + 模型配置横幅收敛 | compact 默认 30px 下限、零外边距、Graphite tone 与 `IdeIconBox`；两处横幅保留原 key；模型禁用尾图标和模式列表警示因结构不同保留 |
+| 2026-09-03 | WP-4 T2 | `IdePopupSelect` + 通用 popover 生命周期收敛 | session config 使用通用选择器；mode/permission/model 与三个 picker 复用 `IdePopoverController`；旧 Composer selector helper 删除；异步字体搜索因语义不等价保留 |

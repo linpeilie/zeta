@@ -12,7 +12,6 @@ import 'package:zeta/src/features/agent/presentation/widgets/agent_mode_selector
 import 'package:zeta/src/features/agent/presentation/widgets/agent_model_config.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_styles.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_text.dart';
-import 'package:zeta/src/features/agent/presentation/widgets/composer_selector_popover.dart';
 import 'package:zeta/src/ui/core/ide_image_preview.dart';
 import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
@@ -793,16 +792,18 @@ class _ComposerMoreActionsButtonState
     if (!_hasActions) {
       return const SizedBox.shrink();
     }
-    final colors = IdeColors.of(context);
     final open = _popoverEntry != null;
-    return ComposerSelectorTrigger(
-      surfaceKey: const ValueKey('agent-more-actions-button'),
-      tooltip: context.l10n.agentMoreActions,
-      semanticLabel: open ? 'More actions, expanded' : 'More actions',
-      open: open,
-      focusNode: _triggerFocusNode,
-      onPressed: _togglePopover,
-      child: Icon(Icons.add_rounded, size: 18, color: colors.textSecondary),
+    return IdeTooltip(
+      message: context.l10n.agentMoreActions,
+      enabled: !open,
+      child: IdeIconButton(
+        key: const ValueKey('agent-more-actions-button'),
+        icon: Icons.add_rounded,
+        semanticLabel: open ? 'More actions, expanded' : 'More actions',
+        variant: open ? IdeButtonVariant.secondary : IdeButtonVariant.ghost,
+        focusNode: _triggerFocusNode,
+        onPressed: _togglePopover,
+      ),
     );
   }
 }
@@ -1112,122 +1113,6 @@ class _ComposerImageDraftStrip extends StatelessWidget {
   }
 }
 
-class _SelectorSelect<T extends Object> extends StatefulWidget {
-  const _SelectorSelect({
-    required this.selectorKey,
-    required this.tooltip,
-    required this.placeholderLabel,
-    required this.icon,
-    required this.value,
-    required this.labelBuilder,
-    required this.options,
-    required this.onChanged,
-  });
-
-  final Key selectorKey;
-  final String tooltip;
-  final String placeholderLabel;
-  final IconData icon;
-  final T? value;
-  final String Function(T value) labelBuilder;
-  final List<Widget> options;
-  final ValueChanged<T> onChanged;
-
-  @override
-  State<_SelectorSelect<T>> createState() => _SelectorSelectState<T>();
-}
-
-class _SelectorSelectState<T extends Object> extends State<_SelectorSelect<T>> {
-  final FocusNode _triggerFocusNode = FocusNode(
-    debugLabel: 'agent-session-selector-trigger',
-  );
-  late final ComposerSelectorPopoverController _popoverController;
-
-  @override
-  void initState() {
-    super.initState();
-    _popoverController = ComposerSelectorPopoverController(
-      triggerFocusNode: _triggerFocusNode,
-      onOpenChanged: () {
-        if (mounted) {
-          setState(() {});
-        }
-      },
-    );
-  }
-
-  @override
-  void didUpdateWidget(covariant _SelectorSelect<T> oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (_popoverController.isOpen &&
-        (oldWidget.value != widget.value || widget.options.isEmpty)) {
-      final entry = _popoverController.handle;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _popoverController.dismiss(entry);
-        }
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    _popoverController.dispose();
-    _triggerFocusNode.dispose();
-    super.dispose();
-  }
-
-  void _toggleMenu() {
-    if (!_popoverController.isOpen && widget.options.isEmpty) {
-      return;
-    }
-    _popoverController.toggle(
-      context: context,
-      preferredWidth: 280,
-      preferredMaxHeight: 320,
-      builder: (context, layout) {
-        return ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: layout.width,
-            maxHeight: layout.maxHeight,
-          ),
-          child: ComposerSelectPopup<T>(
-            value: widget.value,
-            items: widget.options,
-            onChanged: (value, selected) {
-              if (!selected) {
-                return false;
-              }
-              widget.onChanged(value);
-              return true;
-            },
-          ),
-        );
-      },
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final label = widget.value == null
-        ? widget.placeholderLabel
-        : widget.labelBuilder(widget.value as T);
-    return IdeTooltip(
-      message: widget.tooltip,
-      child: IdeTab(
-        key: widget.selectorKey,
-        focusNode: _triggerFocusNode,
-        label: label,
-        leadingIcon: widget.icon,
-        selected: _popoverController.isOpen,
-        enabled: widget.options.isNotEmpty,
-        onPressed: _toggleMenu,
-        semanticLabel: widget.tooltip,
-      ),
-    );
-  }
-}
-
 /// Provider 动态下发的 session 配置控件。
 class _SessionConfigOptionControl extends StatelessWidget {
   const _SessionConfigOptionControl({
@@ -1255,38 +1140,46 @@ class _SessionConfigOptionControl extends StatelessWidget {
         ),
       );
     }
-    return _SelectorSelect<Object>(
-      selectorKey: ValueKey<String>('agent-session-config-${option.id}'),
+    return IdePopupSelect<Object>(
       tooltip: option.description ?? option.name,
-      placeholderLabel: option.name,
-      icon: _sessionConfigIcon(option.category),
+      placeholder: option.name,
       value: option.currentValue,
-      labelBuilder: _valueLabel,
       onChanged: onSelect,
-      options: <Widget>[
+      focusNodeDebugLabel: 'agent-session-selector-trigger',
+      items: <IdePopupSelectItem<Object>>[
         for (final value in option.values)
-          sf.SelectItemButton<Object>(
+          IdePopupSelectItem<Object>(
             key: ValueKey<String>(
               'agent-session-config-${option.id}-option-${value.id}',
             ),
             value: value.id,
-            child: Text(
-              value.label,
-              overflow: TextOverflow.ellipsis,
-              style: IdeTextStyles.of(context).bodyMedium,
-            ),
+            label: value.label,
           ),
       ],
+      triggerBuilder:
+          (
+            context, {
+            required label,
+            required isOpen,
+            required enabled,
+            required focusNode,
+            required onPressed,
+          }) => IdeTab(
+            key: ValueKey<String>('agent-session-config-${option.id}'),
+            focusNode: focusNode,
+            label: label,
+            leadingIcon: _sessionConfigIcon(option.category),
+            selected: isOpen,
+            enabled: enabled,
+            onPressed: onPressed,
+            semanticLabel: option.description ?? option.name,
+          ),
+      itemBuilder: (context, item, {required selected}) => Text(
+        item.label,
+        overflow: TextOverflow.ellipsis,
+        style: IdeTextStyles.of(context).bodyMedium,
+      ),
     );
-  }
-
-  String _valueLabel(Object value) {
-    for (final candidate in option.values) {
-      if (candidate.id == value) {
-        return candidate.label;
-      }
-    }
-    return value.toString();
   }
 }
 
@@ -1329,12 +1222,12 @@ class _PermissionOptionButtonState extends State<PermissionOptionButton> {
   final FocusNode _triggerFocusNode = FocusNode(
     debugLabel: 'agent-permission-option-trigger',
   );
-  late final ComposerSelectorPopoverController _popoverController;
+  late final IdePopoverController _popoverController;
 
   @override
   void initState() {
     super.initState();
-    _popoverController = ComposerSelectorPopoverController(
+    _popoverController = IdePopoverController(
       triggerFocusNode: _triggerFocusNode,
       onOpenChanged: () {
         if (mounted) {
@@ -1407,65 +1300,76 @@ class _PermissionOptionButtonState extends State<PermissionOptionButton> {
     final displayLabel = _displayLabel;
     final scopeHint = widget.scopeHint?.trim();
     final hasHint = scopeHint != null && scopeHint.isNotEmpty;
-    return ComposerSelectorTrigger(
-      surfaceKey: widget.surfaceKey,
-      tooltip: hasHint
-          ? context.l10n.agentPermissionModeHint(scopeHint)
-          : context.l10n.agentPermissionMode,
-      semanticLabel: hasHint
-          ? context.l10n.agentPermissionModeSemantic(displayLabel, scopeHint)
-          : context.l10n.agentPermissionModeOnly(displayLabel),
-      open: open,
-      focusNode: _triggerFocusNode,
-      onPressed: widget.enabled && widget.options.isNotEmpty
-          ? _togglePopover
-          : null,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.shield_outlined, size: 14, color: colors.textSecondary),
-          const SizedBox(width: IdeSpacing.space6),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 140),
-            child: Text(
-              displayLabel,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: textStyles.bodySmall.copyWith(
-                color: colors.textSecondary,
-                fontWeight: FontWeight.w600,
-              ),
+    final tooltip = hasHint
+        ? context.l10n.agentPermissionModeHint(scopeHint)
+        : context.l10n.agentPermissionMode;
+    return IdeTooltip(
+      message: tooltip,
+      enabled: !open,
+      child: IdeButton(
+        key: widget.surfaceKey,
+        label: displayLabel,
+        semanticLabel: hasHint
+            ? context.l10n.agentPermissionModeSemantic(displayLabel, scopeHint)
+            : context.l10n.agentPermissionModeOnly(displayLabel),
+        variant: open ? IdeButtonVariant.secondary : IdeButtonVariant.ghost,
+        focusNode: _triggerFocusNode,
+        onPressed: widget.enabled && widget.options.isNotEmpty
+            ? _togglePopover
+            : null,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IdeIconBox(
+              Icons.shield_outlined,
+              size: 14,
+              color: colors.textSecondary,
             ),
-          ),
-          if (hasHint) ...[
-            const SizedBox(width: IdeSpacing.space4),
+            const SizedBox(width: IdeSpacing.space6),
             ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 72),
+              constraints: const BoxConstraints(maxWidth: 140),
               child: Text(
-                scopeHint,
+                displayLabel,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: textStyles.bodySmall.copyWith(
+                  color: colors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            if (hasHint) ...[
+              const SizedBox(width: IdeSpacing.space4),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 72),
+                child: Text(
+                  scopeHint,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textStyles.bodySmall.copyWith(
+                    color: colors.textTertiary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(width: IdeSpacing.space4),
+            IdeIconBox.custom(
+              child: AnimatedRotation(
+                turns: open ? 0.5 : 0,
+                duration: MediaQuery.disableAnimationsOf(context)
+                    ? Duration.zero
+                    : IdeMotion.durationNormal,
+                curve: IdeMotion.curveDefault,
+                child: Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  size: 13,
                   color: colors.textTertiary,
-                  fontWeight: FontWeight.w500,
                 ),
               ),
             ),
           ],
-          const SizedBox(width: IdeSpacing.space4),
-          AnimatedRotation(
-            turns: open ? 0.5 : 0,
-            duration: MediaQuery.disableAnimationsOf(context)
-                ? Duration.zero
-                : IdeMotion.durationNormal,
-            curve: IdeMotion.curveDefault,
-            child: Icon(
-              Icons.keyboard_arrow_down_rounded,
-              size: 13,
-              color: colors.textTertiary,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -1502,7 +1406,7 @@ class _PermissionOptionPopover extends StatelessWidget {
         width: width,
         child: ConstrainedBox(
           constraints: BoxConstraints(maxHeight: maxHeight),
-          child: ComposerSelectPopup<AgentPermissionOption>(
+          child: IdePopupSelectList<AgentPermissionOption>(
             value: selectedOption,
             onChanged: (option, selected) {
               // 保持旧行为：点击当前项也先通知业务层，再由 Select 关层。

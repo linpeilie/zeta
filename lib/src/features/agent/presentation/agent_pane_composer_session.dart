@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:pasteboard/pasteboard.dart';
 
@@ -15,7 +16,6 @@ import 'package:zeta/src/features/agent/presentation/composer_document.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_mention_file_picker.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_skill_picker.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_slash_command_picker.dart';
-import 'package:zeta/src/features/agent/presentation/widgets/composer_selector_popover.dart';
 
 /// Composer 提交回调：由壳把文本交给会话命令面。
 typedef AgentPaneSubmitMessage =
@@ -42,15 +42,15 @@ final class AgentPaneComposerSession {
       debugLabel: 'AgentMessageComposer',
       onKeyEvent: handleComposerKeyEvent,
     );
-    skillPopoverController = ComposerSelectorPopoverController(
+    skillPopoverController = IdePopoverController(
       triggerFocusNode: focusNode,
       onOpenChanged: _handleSkillPopoverOpenChanged,
     );
-    slashPopoverController = ComposerSelectorPopoverController(
+    slashPopoverController = IdePopoverController(
       triggerFocusNode: focusNode,
       onOpenChanged: _handleSlashPopoverOpenChanged,
     );
-    mentionPopoverController = ComposerSelectorPopoverController(
+    mentionPopoverController = IdePopoverController(
       triggerFocusNode: focusNode,
       onOpenChanged: _handleMentionPopoverOpenChanged,
     );
@@ -83,13 +83,13 @@ final class AgentPaneComposerSession {
       ValueNotifier<List<String>>(const <String>[]);
   final Set<String> _stagedClipboardPaths = <String>{};
 
-  late final ComposerSelectorPopoverController skillPopoverController;
+  late final IdePopoverController skillPopoverController;
   final SkillPickerListController skillPickerListController =
       SkillPickerListController();
-  late final ComposerSelectorPopoverController slashPopoverController;
+  late final IdePopoverController slashPopoverController;
   final SlashMenuListController slashMenuListController =
       SlashMenuListController();
-  late final ComposerSelectorPopoverController mentionPopoverController;
+  late final IdePopoverController mentionPopoverController;
   final MentionFileListController mentionFileListController =
       MentionFileListController();
 

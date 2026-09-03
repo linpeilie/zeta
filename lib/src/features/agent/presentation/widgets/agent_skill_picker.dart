@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/features/agent/presentation/composer_document.dart';
-import 'package:zeta/src/features/agent/presentation/widgets/agent_model_config.dart';
 import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
 const double agentSkillPickerPreferredWidth = 320;
@@ -136,7 +135,7 @@ class _AgentSkillPickerPopoverState extends State<AgentSkillPickerPopover> {
         width: widget.width,
         child: ConstrainedBox(
           constraints: BoxConstraints(maxHeight: widget.maxHeight),
-          child: ComposerSelectorPanel(
+          child: IdePopoverPanel(
             child: candidates.isEmpty
                 ? Padding(
                     padding: IdeSpacing.all12,

@@ -14,7 +14,7 @@
 四类重复控件（现状代码均已逐字核对，见各任务「现状」节）：
 
 1. **横幅**：手写横幅确认只有 **2 处**——`_NextTurnModelConfigBanner`（`agent_model_config.dart:888-915`）与 `_ModelSelectionNoticeBanner`（`:917-962`），均为 `IdeStatusCard` 的 compact 变体。另有 2 处 info 提示行（`agent_model_config.dart:1037`、`agent_mode_selector.dart:285`）替换时评估是否同构。注意 `_AgentReadOnlyNotice`（`agent_pane.dart:1281-1306`）与 cards.dart:2037/2093 **已经在用 `IdeStatusCard`**，不在本任务范围（2026-09-03 review 修正：初版「另有 4 处近似实现 / 共 6 处」的清单有误）。
-2. **弹层选择器**：`_SelectorSelect`（`agent_pane_composer.dart:1098-1212`）与 `_ComposerSelectorTrigger/Panel`（`agent_model_config.dart:496-563`）同构；`IdeSelect`（`packages/zeta_ui/lib/src/ide_select.dart:78-221`）不支持自定义触发器/弹层项。
+2. **弹层选择器**：施工前 `_SelectorSelect` 只剩 session config **1 处**调用（初版记录的 4 处已随 WP-2 后代码演进失效）；`ComposerSelectorTrigger/Panel` 则被模式、模型、权限与三个 picker 共用。`IdeSelect`（`packages/zeta_ui/lib/src/ide_select.dart:78-221`）不支持自定义触发器/弹层项。
 3. **时间线行**：`_AgentCommandGroupItemRow`（cards.dart:62-77）、tool 卡行、diff 文件行、历史事件行同构（leading icon + 省略标题 + 尾部 meta）。
 4. **折叠卡**：`IdeCollapsibleCard` 调用点重复拼装 titleWidget/leading/bodyPadding/hoverBackground。
 
@@ -65,9 +65,9 @@ tone 色 `bodySmall` 文案、14px `IdeIconBox` 及组件内 `_compactBannerBack
 其表面、间距和 tone 均不同于顶部 info 横幅。新增 zeta_ui Widget 测试覆盖最小高度、
 默认零外边距、tone 排版、图标盒和两行标题；现有模型配置测试覆盖两处业务 key 与文案。
 
-### T2 · `IdePopupSelect` 原语（1.5–2 人天）
+### T2 · `IdePopupSelect` 原语（1.5–2 人天） · 已完成（2026-09-03）
 
-**现状**：`_SelectorSelect<T>`（composer:1098-1212）= `IdeTab` 触发器 + `_ComposerSelectorPopoverController` 弹层 + `_ComposerSelectPopup` 内容；模型配置的 `_ComposerSelectorTrigger/Panel`（model_config:496-563）是同一模式的另一实现。
+**现状**：施工前 `_SelectorSelect<T>`（composer）= `IdeTab` 触发器 + `ComposerSelectorPopoverController` 弹层 + `ComposerSelectPopup` 内容，实际只剩 session config 一处调用；模型配置的 `ComposerSelectorTrigger/Panel` 是同一模式的另一实现。
 
 **设计**（新文件 `packages/zeta_ui/lib/src/ide_popup_select.dart`）：
 
@@ -92,9 +92,24 @@ class IdePopupSelect<T extends Object> extends StatefulWidget {
 
 **实现要点**（从 `_SelectorSelectState` 平移）：弹层控制器逻辑（`initState` 建 controller、值变化时 post-frame dismiss `:1143-1154`、dispose 顺序）原样进 zeta_ui；**弹层控制器本身若通用，一并下沉为 `IdePopoverController`**。
 
-**替换映射**：`_SelectorSelect`（composer 4 处实例）→ `IdePopupSelect` + `triggerBuilder: (ctx, s) => IdeTab(...)`；`_ComposerSelectorTrigger/Panel` → `triggerBuilder: IdeButton.ghost(...)`；设置页 2 处 `sf.Select` 搜索弹层 → 评估后替换（满足则 G8 基线 −2）。
+**替换映射**：`_SelectorSelect`（composer 现存 1 处实例）→ `IdePopupSelect` + `triggerBuilder: (ctx, s) => IdeTab(...)`；`ComposerSelectorTrigger/Panel` → `IdeButton.ghost(...)` + `IdePopoverPanel`，复合模型面板只下沉通用 controller，不损失展开配置语义；设置页复用 Widget 承载的 UI/code font 两处 `sf.Select` 搜索弹层 → 评估后替换（满足则 G8 基线 −2）。
 
 **验收**：composer 与模型配置选择器行为/焦点/Esc 关闭不变（widget 测试覆盖）；zeta_ui 新文件零 Riverpod/l10n import（守卫测试断言）。
+
+**施工记录**：新增 `IdePopupSelect<T>` / `IdePopupSelectItem<T>`，把值变更或
+选项清空后的 post-frame dismiss、选中自动关闭、Esc/外点关闭与触发器回焦统一
+收进组件；原 `_SelectorSelect` 已删除，session config 改用自定义 `IdeTab`
+trigger。通用定位与 handle 生命周期下沉为 `IdePopoverController`，mode、permission、
+skill/slash/mention picker 及模型复合面板均复用；旧
+`composer_selector_popover.dart`、`ComposerSelectorTrigger/Panel` 与
+`ComposerSelectPopup` 删除。模型/mode/permission 触发器改用 `IdeButton.ghost`
+（展开态为 secondary），纯图标 more-actions 改用 `IdeIconButton`，控件内图标走
+`IdeIconBox`，不再以 28px 固定高度兜底。模型面板仍保留展开配置、保存回滚等复合
+语义，只复用通用弹层机制，不伪装成同步单值选择器。设置页实际是一个复用 Widget
+承载 UI/code font 两行的异步可搜索 `sf.SelectPopup.builder`，包含 loading/empty/error
+状态；`IdePopupSelect` 不提供这些语义，替换会降级交互，因此保留现状。新增 zeta_ui
+Widget 测试覆盖选择、Esc、回焦与外部选项失效关闭；既有 mode/model/composer 测试
+继续覆盖键盘导航、视口上翻、复杂模型配置与 Provider session config 回写。
 
 ### T3 · `IdeTimelineRow`（0.5–1 人天）
 

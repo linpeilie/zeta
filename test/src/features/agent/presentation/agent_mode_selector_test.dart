@@ -31,11 +31,9 @@ void main() {
     expect(find.text('Mode…'), findsOneWidget);
     expect(
       tester
-          .widget<PaneInteractiveSurface>(
-            find.byKey(const ValueKey('agent-mode-selector')),
-          )
-          .enabled,
-      isFalse,
+          .widget<IdeButton>(find.byKey(const ValueKey('agent-mode-selector')))
+          .onPressed,
+      isNull,
     );
 
     await tester.pumpWidget(
@@ -57,11 +55,9 @@ void main() {
     );
     expect(
       tester
-          .widget<PaneInteractiveSurface>(
-            find.byKey(const ValueKey('agent-mode-selector')),
-          )
-          .enabled,
-      isFalse,
+          .widget<IdeButton>(find.byKey(const ValueKey('agent-mode-selector')))
+          .onPressed,
+      isNull,
     );
     semantics.dispose();
   });
