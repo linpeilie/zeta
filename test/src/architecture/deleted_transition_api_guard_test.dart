@@ -20,7 +20,7 @@ void main() {
       'renderRevision',
       // 设计 token 别名：统一到 textSecondary
       'mutedText',
-      // Shell 兼容 getter：统一到 selectedAgentViewModel
+      // Shell 兼容 getter：统一到 selectedAgentController
       'agentViewModel',
       // usage source id 转发：统一到 usageSourceId
       'codexUsageSourceId',

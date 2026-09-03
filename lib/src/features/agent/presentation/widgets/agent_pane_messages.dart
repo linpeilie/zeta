@@ -5,7 +5,7 @@ class _AgentMessageEntry extends StatelessWidget {
   const _AgentMessageEntry({
     required this.message,
     required this.useStreamingMarkdown,
-    required this.viewModel,
+    required this.controller,
     required this.markdownCache,
     required this.planRevisionDrafts,
     required this.planExecutionHandoff,
@@ -13,7 +13,7 @@ class _AgentMessageEntry extends StatelessWidget {
 
   final AgentConversationMessage message;
   final bool useStreamingMarkdown;
-  final AgentConversationViewModel viewModel;
+  final AgentConversationRuntimeController controller;
   final AgentMarkdownCache markdownCache;
   final AgentPlanRevisionDraftStore planRevisionDrafts;
 
@@ -31,7 +31,7 @@ class _AgentMessageEntry extends StatelessWidget {
       return _AgentPlanMessageCard(
         message: message,
         useStreamingMarkdown: useStreamingMarkdown,
-        viewModel: viewModel,
+        controller: controller,
         markdownCache: markdownCache,
       );
     }
@@ -56,7 +56,7 @@ class _AgentMessageEntry extends StatelessWidget {
     return _AgentBubbleMessage(
       message: message,
       useStreamingMarkdown: useStreamingMarkdown,
-      viewModel: viewModel,
+      controller: controller,
       markdownCache: markdownCache,
     );
   }
@@ -81,18 +81,18 @@ class _AgentMessageEntry extends StatelessWidget {
       markdown: request.markdown,
       revisionController: planRevisionDrafts.controllerFor(request.id),
       revisionFocusNode: planRevisionDrafts.focusNodeFor(request.id),
-      viewModel: viewModel,
+      controller: controller,
       executionPermission: request.executionPermission,
-      executionPermissionOptions: viewModel.composerState.permissionOptions,
+      executionPermissionOptions: controller.composerState.permissionOptions,
       onSelectExecutionPermission: (option) =>
-          viewModel.selectPlanExecutionPermissionOption(request, option),
+          controller.selectPlanExecutionPermissionOption(request, option),
       onRevise: (revision) => unawaited(
-        viewModel.revisePlanExecution(request, revisionMessage: revision),
+        controller.revisePlanExecution(request, revisionMessage: revision),
       ),
       onExecute: request.executionPermission == null
           ? null
-          : () => unawaited(viewModel.startPlanExecution(request)),
-      onAbandon: () => viewModel.dismissPlanExecution(request),
+          : () => unawaited(controller.startPlanExecution(request)),
+      onAbandon: () => controller.dismissPlanExecution(request),
     );
   }
 }
@@ -103,17 +103,17 @@ class _AgentMessageEntry extends StatelessWidget {
 /// 思考数据本身不进入可见时间线，但仍通过此状态条反馈当前活动相位。
 class _AgentLiveActivityStatus extends StatelessWidget {
   const _AgentLiveActivityStatus({
-    required this.viewModel,
+    required this.controller,
     required this.isActive,
   });
 
-  final AgentConversationViewModel viewModel;
+  final AgentConversationRuntimeController controller;
   final bool isActive;
 
   @override
   Widget build(BuildContext context) {
     return AgentRegionBuilder<AgentHeaderState>(
-      viewModel: viewModel,
+      bindingKey: controller.conversationBinding.key,
       selector: agentConversationHeaderProvider.call,
       builder: (context, state) {
         Widget content(DateTime now) {
@@ -178,8 +178,8 @@ class _AgentLiveActivityStatus extends StatelessWidget {
           return content(DateTime.now());
         }
         return ListenableBuilder(
-          listenable: viewModel.elapsedClockListenable,
-          builder: (context, _) => content(viewModel.elapsedNow),
+          listenable: controller.flutterElapsedClockListenable,
+          builder: (context, _) => content(controller.elapsedNow),
         );
       },
     );
@@ -412,13 +412,13 @@ class _AgentBubbleMessage extends StatelessWidget {
   const _AgentBubbleMessage({
     required this.message,
     required this.useStreamingMarkdown,
-    required this.viewModel,
+    required this.controller,
     required this.markdownCache,
   });
 
   final AgentConversationMessage message;
   final bool useStreamingMarkdown;
-  final AgentConversationViewModel viewModel;
+  final AgentConversationRuntimeController controller;
   final AgentMarkdownCache markdownCache;
 
   @override
@@ -431,8 +431,8 @@ class _AgentBubbleMessage extends StatelessWidget {
     final canEdit =
         isUser &&
         hasText &&
-        viewModel.canEditLastUserMessage &&
-        viewModel.lastEditableUserMessageId == message.id;
+        controller.canEditLastUserMessage &&
+        controller.lastEditableUserMessageId == message.id;
 
     // 角色前缀走等宽字体：它是机器标签而非人类文案，和模型 ID / Token 计数
     // 属于同一类信息，排版上要能一眼与正文区分。
@@ -533,7 +533,7 @@ class _AgentBubbleMessage extends StatelessWidget {
   }
 
   Future<void> _showEditRetryDialog(BuildContext context) async {
-    final controller = TextEditingController(text: message.text);
+    final textController = TextEditingController(text: message.text);
     final confirmed = await showIdeDialog<bool>(
       context: context,
       builder: (dialogContext) {
@@ -548,7 +548,7 @@ class _AgentBubbleMessage extends StatelessWidget {
                 Text(dialogContext.l10n.agentCreateBranchBody),
                 const SizedBox(height: IdeSpacing.space12),
                 sf.TextField(
-                  controller: controller,
+                  controller: textController,
                   autofocus: true,
                   placeholder: Text(context.l10n.agentEditMessage),
                 ),
@@ -568,10 +568,10 @@ class _AgentBubbleMessage extends StatelessWidget {
         );
       },
     );
-    final text = controller.text;
-    controller.dispose();
+    final text = textController.text;
+    textController.dispose();
     if (confirmed == true && text.trim().isNotEmpty) {
-      await viewModel.editLastUserMessageAndRetry(text);
+      await controller.editLastUserMessageAndRetry(text);
     }
   }
 }
@@ -773,13 +773,13 @@ class _AgentPlanMessageCard extends StatelessWidget {
   const _AgentPlanMessageCard({
     required this.message,
     required this.useStreamingMarkdown,
-    required this.viewModel,
+    required this.controller,
     required this.markdownCache,
   });
 
   final AgentConversationMessage message;
   final bool useStreamingMarkdown;
-  final AgentConversationViewModel viewModel;
+  final AgentConversationRuntimeController controller;
   final AgentMarkdownCache markdownCache;
 
   @override
@@ -789,7 +789,7 @@ class _AgentPlanMessageCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: IdeSpacing.space12),
       child: AgentRegionBuilder<AgentExpansionState>(
-        viewModel: viewModel,
+        bindingKey: controller.conversationBinding.key,
         selector: agentConversationExpansionProvider.call,
         builder: (context, expansion) {
           final expanded = expansion.isPlanMessageExpanded(message.id);
@@ -799,7 +799,7 @@ class _AgentPlanMessageCard extends StatelessWidget {
               toggleKey: ValueKey<String>('agent-plan-toggle-${message.id}'),
               bodyKey: ValueKey<String>('agent-plan-body-${message.id}'),
               expanded: expanded,
-              onToggle: () => viewModel.togglePlanMessage(message.id),
+              onToggle: () => controller.togglePlanMessage(message.id),
               leading: Icon(
                 Icons.checklist_rounded,
                 size: 16,

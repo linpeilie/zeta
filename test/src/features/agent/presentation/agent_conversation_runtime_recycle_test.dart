@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
 import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_provider_settings_slice_store.dart';
 
 import '../../../testing/provider_settings_test_store.dart';
@@ -101,7 +101,7 @@ final class _RecycleHarness {
       settings: controller,
     );
     bindingLease = bindingHarness.acquireDraft(defaultCodexAgentProviderConfig);
-    viewModel = AgentConversationViewModel(
+    viewModel = AgentConversationRuntimeController(
       providerController: controller,
       conversationBinding: bindingLease.binding,
       globalRuntime: bindingHarness.globalRuntime,
@@ -118,7 +118,7 @@ final class _RecycleHarness {
   late final AgentProviderSettingsSliceNotifier controller;
   late final AgentConversationBindingTestHarness bindingHarness;
   late final AgentConversationBindingLease bindingLease;
-  late final AgentConversationViewModel viewModel;
+  late final AgentConversationRuntimeController viewModel;
 
   List<String> get messageTexts =>
       viewModel.messages.map((message) => message.text).toList();

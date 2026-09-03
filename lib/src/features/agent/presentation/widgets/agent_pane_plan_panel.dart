@@ -6,12 +6,12 @@ const double _activePlanScrollMaxHeight = 200;
 /// 固定在 Composer 上方的当前 turn 结构化计划。
 class _AgentActivePlanSection extends StatelessWidget {
   const _AgentActivePlanSection({
-    required this.viewModel,
+    required this.controller,
     required this.pagePadding,
     required this.onExtentChanged,
   });
 
-  final AgentConversationViewModel viewModel;
+  final AgentConversationRuntimeController controller;
   final EdgeInsets pagePadding;
 
   /// 向时间线同步浮层实测高度，用于滚动底部 inset（不缩短 viewport）。
@@ -23,19 +23,19 @@ class _AgentActivePlanSection extends StatelessWidget {
       onExtent: onExtentChanged,
       // 三个 region 各订各的；live turn 仍走 listenable（§2.7）。
       child: AgentRegionBuilder<AgentHeaderState>(
-        viewModel: viewModel,
+        bindingKey: controller.conversationBinding.key,
         selector: agentConversationHeaderProvider.call,
         builder: (context, _) =>
             AgentRegionBuilder<AgentPendingInteractionState>(
-              viewModel: viewModel,
+              bindingKey: controller.conversationBinding.key,
               selector: agentConversationPendingInteractionProvider.call,
               builder: (context, _) => AgentRegionBuilder<AgentExpansionState>(
-                viewModel: viewModel,
+                bindingKey: controller.conversationBinding.key,
                 selector: agentConversationExpansionProvider.call,
                 builder: (context, _) => ListenableBuilder(
-                  listenable: viewModel.liveTurnListenable,
+                  listenable: controller.flutterLiveTurnListenable,
                   builder: (context, _) {
-                    final turnState = viewModel.liveTurnState;
+                    final turnState = controller.liveTurnState;
                     if (turnState == null) {
                       return const SizedBox.shrink();
                     }
@@ -43,7 +43,7 @@ class _AgentActivePlanSection extends StatelessWidget {
                       listenable: AgentFlutterListenableAdapter(turnState),
                       builder: (context, _) {
                         final entries = turnState.planEntries;
-                        if (!viewModel.shouldShowActivePlan) {
+                        if (!controller.shouldShowActivePlan) {
                           return const SizedBox.shrink();
                         }
                         return _AgentContentAlign(
@@ -70,9 +70,9 @@ class _AgentActivePlanSection extends StatelessWidget {
                                     ),
                                     turnId: turnState.id,
                                     entries: entries,
-                                    expanded: viewModel.expansionState
+                                    expanded: controller.expansionState
                                         .isActivePlanExpanded(turnState.id),
-                                    onToggle: () => viewModel.toggleActivePlan(
+                                    onToggle: () => controller.toggleActivePlan(
                                       turnState.id,
                                     ),
                                   ),

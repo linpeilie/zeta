@@ -20,8 +20,8 @@ void main() {
       );
       addTearDown(viewModel.dispose);
       final store = AgentConversationSliceStore.connected(
-        regions: viewModel.runtime,
-        commands: viewModel.runtime,
+        regions: viewModel,
+        commands: viewModel,
       );
       addTearDown(store.dispose);
 
@@ -62,8 +62,8 @@ void main() {
       );
       addTearDown(viewModel.dispose);
       final store = AgentConversationSliceStore.connected(
-        regions: viewModel.runtime,
-        commands: viewModel.runtime,
+        regions: viewModel,
+        commands: viewModel,
       );
       addTearDown(store.dispose);
 
@@ -96,8 +96,8 @@ void main() {
       );
       addTearDown(viewModel.dispose);
       final store = AgentConversationSliceStore.connected(
-        regions: viewModel.runtime,
-        commands: viewModel.runtime,
+        regions: viewModel,
+        commands: viewModel,
       );
       addTearDown(store.dispose);
 

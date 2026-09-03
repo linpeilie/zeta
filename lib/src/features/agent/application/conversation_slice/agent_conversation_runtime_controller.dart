@@ -32,7 +32,7 @@ final _log = zetaLoggerFor('zeta.agent.conversation');
 /// Provider 创建 thread 后，由 Shell 使用通用新会话流程登记并选中。
 ///
 /// [initialMessage] 只用于“编辑后重试”：Shell 必须在新 thread 成为当前会话后，
-/// 再由新 ViewModel 提交这条消息。
+/// 再由新 runtime 提交这条消息。
 typedef AgentCreatedThreadCallback =
     Future<void> Function({
       required AgentSession session,
@@ -42,8 +42,8 @@ typedef AgentCreatedThreadCallback =
 
 /// Agent 面板的状态协调器。
 ///
-/// 当前 ViewModel 只保留 provider/session 协调与事件路由；时间线聚合、
-/// 模型选择和局部刷新节流已经下沉到 feature 级应用模块。
+/// 持有 provider/session 协调、事件路由、时间线聚合与 UI 更新调度；
+/// presentation 只订阅 region 与命令面。
 final class AgentConversationRuntimeController
     implements AgentConversationRegionSource, AgentConversationCommandPort {
   AgentConversationRuntimeController({

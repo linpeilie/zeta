@@ -16,7 +16,6 @@ import 'package:zeta/src/features/agent/application/conversation_slice/agent_con
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_intent.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
-import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 
 import '../../../testing/agent_provider_stub_base.dart';
@@ -31,14 +30,14 @@ final List<FakeAgentFrameScheduler> _uiFrameSchedulers =
 void main() {
   setUp(_uiFrameSchedulers.clear);
 
-  group('AgentConversationViewModel', () {
+  group('AgentConversationRuntimeController', () {
     test('uses New thread as the default header title', () {
       final viewModel = _createViewModel(_FakeAgentProvider());
       addTearDown(viewModel.dispose);
 
       expect(
         viewModel.currentThreadTitle,
-        AgentConversationViewModel.defaultThreadTitle,
+        AgentConversationRuntimeController.defaultThreadTitle,
       );
       expect(viewModel.currentThreadTokenUsage, isNull);
       expect(viewModel.currentThreadLastTokenUsage, isNull);
@@ -424,7 +423,7 @@ void main() {
         );
         expect(
           viewModel.messages.map((message) => message.text),
-          contains(AgentConversationViewModel.planExecutionPrompt),
+          contains(AgentConversationRuntimeController.planExecutionPrompt),
         );
         expect(
           provider.calls.where((call) => call.startsWith('steer:')),
@@ -859,7 +858,7 @@ void main() {
       // 列表误写占位 title 时，不得把详情头栏冲回 New thread。
       viewModel.syncThreadTitleIfCurrent(
         'thread-1',
-        AgentConversationViewModel.defaultThreadTitle,
+        AgentConversationRuntimeController.defaultThreadTitle,
       );
       expect(viewModel.currentThreadTitle, 'hello from provisional title');
     });
@@ -2561,15 +2560,12 @@ void main() {
         var headerNotifications = 0;
         var composerNotifications = 0;
         var liveNotifications = 0;
-        viewModel.historyStateListenable.addListener(() {
-          historyNotifications += 1;
-        });
-        viewModel.headerStateListenable.addListener(() {
-          headerNotifications += 1;
-        });
-        viewModel.composerStateListenable.addListener(() {
-          composerNotifications += 1;
-        });
+        _listenRegionValueChanges(
+          viewModel,
+          onHistory: () => historyNotifications += 1,
+          onHeader: () => headerNotifications += 1,
+          onComposer: () => composerNotifications += 1,
+        );
         liveTurn!.addListener(() {
           liveNotifications += 1;
         });
@@ -2629,15 +2625,12 @@ void main() {
         var composerNotifications = 0;
         var liveNotifications = 0;
         var autoScrollNotifications = 0;
-        viewModel.historyStateListenable.addListener(() {
-          historyNotifications += 1;
-        });
-        viewModel.headerStateListenable.addListener(() {
-          headerNotifications += 1;
-        });
-        viewModel.composerStateListenable.addListener(() {
-          composerNotifications += 1;
-        });
+        _listenRegionValueChanges(
+          viewModel,
+          onHistory: () => historyNotifications += 1,
+          onHeader: () => headerNotifications += 1,
+          onComposer: () => composerNotifications += 1,
+        );
         final effectSubscription = viewModel.uiEffects.listen((effect) {
           if (effect is AgentRequestAutoScroll) {
             autoScrollNotifications += 1;
@@ -3943,7 +3936,7 @@ void main() {
       );
       addTearDown(bindingHarness.close);
       final bindingLease = bindingHarness.acquireDraft(provider.config);
-      final viewModel = AgentConversationViewModel(
+      final viewModel = AgentConversationRuntimeController(
         providerController: controller,
         conversationBinding: bindingLease.binding,
         globalRuntime: bindingHarness.globalRuntime,
@@ -4031,7 +4024,7 @@ void main() {
         addTearDown(bindingHarness.close);
         final bindingLease = bindingHarness.acquireDraft(codexConfig);
         String? requestedProviderId;
-        final viewModel = AgentConversationViewModel(
+        final viewModel = AgentConversationRuntimeController(
           providerController: controller,
           conversationBinding: bindingLease.binding,
           globalRuntime: bindingHarness.globalRuntime,
@@ -4117,7 +4110,7 @@ void main() {
           config: grok.config,
           threadId: thread.id,
         );
-        final viewModel = AgentConversationViewModel(
+        final viewModel = AgentConversationRuntimeController(
           providerController: controller,
           conversationBinding: bindingLease.binding,
           globalRuntime: bindingHarness.globalRuntime,
@@ -4221,7 +4214,7 @@ void main() {
         config: codex.config,
         threadId: thread.id,
       );
-      final viewModel = AgentConversationViewModel(
+      final viewModel = AgentConversationRuntimeController(
         providerController: controller,
         conversationBinding: bindingLease.binding,
         globalRuntime: bindingHarness.globalRuntime,
@@ -4668,8 +4661,8 @@ void main() {
         final viewModel = _createViewModel(_FakeAgentProvider());
         addTearDown(viewModel.dispose);
         final store = AgentConversationSliceStore.connected(
-          regions: viewModel.runtime,
-          commands: viewModel.runtime,
+          regions: viewModel,
+          commands: viewModel,
         );
         addTearDown(store.dispose);
 
@@ -4685,8 +4678,8 @@ void main() {
         final viewModel = _createViewModel(_FakeAgentProvider());
         addTearDown(viewModel.dispose);
         final store = AgentConversationSliceStore.connected(
-          regions: viewModel.runtime,
-          commands: viewModel.runtime,
+          regions: viewModel,
+          commands: viewModel,
         );
         addTearDown(store.dispose);
 
@@ -4707,8 +4700,8 @@ void main() {
         );
         addTearDown(viewModel.dispose);
         final store = AgentConversationSliceStore.connected(
-          regions: viewModel.runtime,
-          commands: viewModel.runtime,
+          regions: viewModel,
+          commands: viewModel,
         );
         addTearDown(store.dispose);
 
@@ -4730,8 +4723,8 @@ void main() {
         final viewModel = _createViewModel(_FakeAgentProvider());
         addTearDown(viewModel.dispose);
         final store = AgentConversationSliceStore.connected(
-          regions: viewModel.runtime,
-          commands: viewModel.runtime,
+          regions: viewModel,
+          commands: viewModel,
         );
         addTearDown(store.dispose);
 
@@ -4747,8 +4740,8 @@ void main() {
         final viewModel = _createViewModel(_FakeAgentProvider());
         addTearDown(viewModel.dispose);
         final store = AgentConversationSliceStore.connected(
-          regions: viewModel.runtime,
-          commands: viewModel.runtime,
+          regions: viewModel,
+          commands: viewModel,
         );
         addTearDown(store.dispose);
 
@@ -4777,8 +4770,8 @@ void main() {
           listenerGeneration: 1,
         );
         final store = AgentConversationSliceStore.connected(
-          regions: viewModel.runtime,
-          commands: viewModel.runtime,
+          regions: viewModel,
+          commands: viewModel,
           scopeSnapshot: () => scope,
         );
         addTearDown(store.dispose);
@@ -4806,8 +4799,8 @@ void main() {
         final viewModel = _createViewModel(_FakeAgentProvider());
         addTearDown(viewModel.dispose);
         final store = AgentConversationSliceStore.connected(
-          regions: viewModel.runtime,
-          commands: viewModel.runtime,
+          regions: viewModel,
+          commands: viewModel,
         );
 
         store.dispose();
@@ -4835,8 +4828,42 @@ Future<void> _drainTypedUiScheduling() async {
   await Future<void>.delayed(Duration.zero);
 }
 
+void _listenRegionValueChanges(
+  AgentConversationRuntimeController viewModel, {
+  required void Function() onHistory,
+  required void Function() onHeader,
+  required void Function() onComposer,
+}) {
+  var lastHistory = viewModel.historyState;
+  var lastHeader = viewModel.headerState;
+  var lastComposer = viewModel.composerState;
+  viewModel.addUiUpdateListener((request) {
+    if (request.regions.contains(AgentUiRegion.history)) {
+      final next = viewModel.historyState;
+      if (next != lastHistory) {
+        lastHistory = next;
+        onHistory();
+      }
+    }
+    if (request.regions.contains(AgentUiRegion.header)) {
+      final next = viewModel.headerState;
+      if (next != lastHeader) {
+        lastHeader = next;
+        onHeader();
+      }
+    }
+    if (request.regions.contains(AgentUiRegion.composer)) {
+      final next = viewModel.composerState;
+      if (next != lastComposer) {
+        lastComposer = next;
+        onComposer();
+      }
+    }
+  });
+}
+
 void _expectLastUiUpdate(
-  AgentConversationViewModel viewModel, {
+  AgentConversationRuntimeController viewModel, {
   required Set<AgentUiRegion> regions,
   required AgentUiUpdateUrgency urgency,
   List<AgentUiEffect> effects = const <AgentUiEffect>[],
@@ -4847,7 +4874,7 @@ void _expectLastUiUpdate(
   );
 }
 
-AgentConversationViewModel _createViewModel(
+AgentConversationRuntimeController _createViewModel(
   _FakeAgentProvider provider, {
   AgentThreadSummary? initialThread,
   AgentProviderSettings? providerSettings,
@@ -4881,7 +4908,7 @@ AgentConversationViewModel _createViewModel(
           config: provider.config,
           threadId: initialThread.id,
         );
-  final viewModel = AgentConversationViewModel(
+  final viewModel = AgentConversationRuntimeController(
     providerController: controller,
     conversationBinding: bindingLease.binding,
     globalRuntime: bindingHarness.globalRuntime,

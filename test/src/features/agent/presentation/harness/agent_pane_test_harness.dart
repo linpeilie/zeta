@@ -19,7 +19,7 @@ import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_co
 import '../../../../testing/memory_agent_composer_attachment_store.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
-import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 
@@ -27,6 +27,7 @@ import '../../../../testing/callback_workspace_file_corpus_port.dart';
 
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
+import 'package:zeta/src/features/agent/presentation/agent_ui_update_scheduler.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 
 import '../../../../testing/provider_settings_test_store.dart';
@@ -51,7 +52,7 @@ class AgentPaneTestApp extends StatefulWidget {
         const <AgentConversationBindingKey, AgentConversationSliceStore>{},
   });
 
-  final AgentConversationViewModel viewModel;
+  final AgentConversationRuntimeController viewModel;
 
   /// 挂到 [AgentPane] 上，供 `AgentPane.debugAddDraftImages` 等测试钩子使用。
   final GlobalKey? agentPaneKey;
@@ -81,17 +82,25 @@ class _AgentPaneTestAppState extends State<AgentPaneTestApp> {
     _ownedStore = widget.sliceStores.containsKey(key)
         ? null
         : AgentConversationSliceStore.connected(
-            regions: widget.viewModel.runtime,
-            commands: widget.viewModel.runtime,
+            regions: widget.viewModel,
+            commands: widget.viewModel,
           );
     _registry = AgentConversationSliceStoreRegistry()
       ..bind((requestedKey) {
         final injected = widget.sliceStores[requestedKey];
         if (injected != null) {
-          return injected;
+          return AgentConversationSessionHandle(
+            store: injected,
+            controller: requestedKey == widget.viewModel.conversationBinding.key
+                ? widget.viewModel
+                : null,
+          );
         }
         if (requestedKey == widget.viewModel.conversationBinding.key) {
-          return _ownedStore!;
+          return AgentConversationSessionHandle(
+            store: _ownedStore!,
+            controller: widget.viewModel,
+          );
         }
         throw StateError('No test conversation slice for $requestedKey');
       });
@@ -151,7 +160,7 @@ class _AgentPaneTestAppState extends State<AgentPaneTestApp> {
               child: sf.Scaffold(
                 child: AgentPane(
                   key: widget.agentPaneKey,
-                  viewModel: widget.viewModel,
+                  controller: widget.viewModel,
                   messageSendShortcut: widget.messageSendShortcut,
                 ),
               ),
@@ -248,7 +257,7 @@ const AgentModelList agentPaneSingleReasoningModelList = AgentModelList(
   ],
 );
 
-AgentConversationViewModel createAgentPaneViewModel(
+AgentConversationRuntimeController createAgentPaneViewModel(
   AgentPaneFakeProvider provider, {
   AgentThreadSummary? initialThread,
   AgentConversationModeController? conversationModeController,
@@ -267,7 +276,7 @@ AgentConversationViewModel createAgentPaneViewModel(
   );
 }
 
-AgentConversationViewModel createAgentPaneViewModelWithStore(
+AgentConversationRuntimeController createAgentPaneViewModelWithStore(
   AgentPaneFakeProvider provider,
   AgentProviderConfigStore configStore, {
   AgentThreadSummary? initialThread,
@@ -296,7 +305,7 @@ AgentConversationViewModel createAgentPaneViewModelWithStore(
           config: provider.config,
           threadId: initialThread.id,
         );
-  final viewModel = AgentConversationViewModel(
+  final viewModel = AgentConversationRuntimeController(
     providerController: controller,
     conversationBinding: bindingLease.binding,
     globalRuntime: bindingHarness.globalRuntime,
@@ -319,6 +328,7 @@ AgentConversationViewModel createAgentPaneViewModelWithStore(
           ),
     initialProjectPath: initialThread?.projectPath ?? '/repo',
     initialThread: initialThread,
+    uiFrameScheduler: const SchedulerBindingAgentFrameScheduler(),
   );
   return viewModel;
 }

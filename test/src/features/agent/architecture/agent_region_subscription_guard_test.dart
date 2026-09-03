@@ -18,22 +18,11 @@ void main() {
 
   const seamPath = '$paneRoot/conversation_slice/agent_region_builder.dart';
 
-  /// 另外两处按职责豁免：
-  /// - ViewModel 是这些 listenable 的**定义方**；
-  /// - 切片 binding 订阅它们是 **ingress**——切片正是靠这条线拿到 region 更新的。
-  const allowedPaths = <String>{
-    '$paneRoot/agent_conversation_view_model.dart',
-    '$paneRoot/conversation_slice/agent_conversation_slice_binding.dart',
-  };
-
   test('presentation 只经 AgentRegionBuilder 订阅 region', () {
     final files = Directory(paneRoot)
         .listSync(recursive: true)
         .whereType<File>()
-        .where((file) => file.path.endsWith('.dart'))
-        .where(
-          (file) => !allowedPaths.contains(file.path.replaceAll(r'\', '/')),
-        );
+        .where((file) => file.path.endsWith('.dart'));
     expect(files, isNotEmpty, reason: '扫不到 presentation 文件，守卫失效了');
 
     final offenders = <String>[];
@@ -62,7 +51,7 @@ void main() {
 
     expect(
       source,
-      contains('ref.watch(selector(key))'),
+      contains('ref.watch(selector(bindingKey))'),
       reason: '接缝必须按 BindingKey 读取 selector',
     );
     expect(

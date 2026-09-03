@@ -6,7 +6,7 @@ import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_intent.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
-import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
 import 'package:zeta_ui/zeta_ui.dart';
@@ -31,12 +31,12 @@ void main() {
       addTearDown(first.dispose);
       addTearDown(second.dispose);
       final firstStore = AgentConversationSliceStore.connected(
-        regions: first.runtime,
-        commands: first.runtime,
+        regions: first,
+        commands: first,
       );
       final secondStore = AgentConversationSliceStore.connected(
-        regions: second.runtime,
-        commands: second.runtime,
+        regions: second,
+        commands: second,
       );
       addTearDown(firstStore.dispose);
       addTearDown(secondStore.dispose);
@@ -87,12 +87,12 @@ void main() {
       addTearDown(first.dispose);
       addTearDown(second.dispose);
       final firstStore = AgentConversationSliceStore.connected(
-        regions: first.runtime,
-        commands: first.runtime,
+        regions: first,
+        commands: first,
       );
       final secondStore = AgentConversationSliceStore.connected(
-        regions: second.runtime,
-        commands: second.runtime,
+        regions: second,
+        commands: second,
       );
       addTearDown(secondStore.dispose);
 
@@ -129,8 +129,8 @@ void main() {
       );
       addTearDown(viewModel.dispose);
       final store = AgentConversationSliceStore.connected(
-        regions: viewModel.runtime,
-        commands: viewModel.runtime,
+        regions: viewModel,
+        commands: viewModel,
       );
       addTearDown(store.dispose);
 
@@ -183,18 +183,27 @@ class _TwoPaneApp extends StatelessWidget {
     required this.stores,
   });
 
-  final AgentConversationViewModel first;
-  final AgentConversationViewModel second;
+  final AgentConversationRuntimeController first;
+  final AgentConversationRuntimeController second;
   final Map<AgentConversationBindingKey, AgentConversationSliceStore> stores;
 
   @override
   Widget build(BuildContext context) {
     final registry = AgentConversationSliceStoreRegistry()
-      ..bind(
-        (key) =>
+      ..bind((key) {
+        final store =
             stores[key] ??
-            (throw StateError('No test conversation slice for $key')),
-      );
+            (throw StateError('No test conversation slice for $key'));
+        final controller = key == first.conversationBinding.key
+            ? first
+            : key == second.conversationBinding.key
+            ? second
+            : null;
+        return AgentConversationSessionHandle(
+          store: store,
+          controller: controller,
+        );
+      });
     final ideTheme = buildIdeThemeData(
       brightness: Brightness.dark,
       codeFontFamily: 'CodeFont',
@@ -220,8 +229,8 @@ class _TwoPaneApp extends StatelessWidget {
           home: sf.Scaffold(
             child: Column(
               children: [
-                Expanded(child: AgentPane(viewModel: first)),
-                Expanded(child: AgentPane(viewModel: second)),
+                Expanded(child: AgentPane(controller: first)),
+                Expanded(child: AgentPane(controller: second)),
               ],
             ),
           ),

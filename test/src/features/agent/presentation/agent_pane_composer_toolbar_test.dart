@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/features/agent/application/agent_conversation_mode_controller.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 import 'package:zeta_ui/zeta_ui.dart';
@@ -660,7 +660,7 @@ void main() {
         );
         expect(
           provider.sentMessages,
-          contains(AgentConversationViewModel.planExecutionPrompt),
+          contains(AgentConversationRuntimeController.planExecutionPrompt),
         );
         expect(
           provider.turnConfigurations.last.conversationMode!.modeId,

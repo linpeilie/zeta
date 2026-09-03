@@ -2,10 +2,15 @@ part of '../agent_pane.dart';
 
 /// thread 详情头部：左侧项目与会话标题，右侧 token、分叉与更多菜单。
 class _AgentHeader extends StatelessWidget {
-  const _AgentHeader({required this.viewModel, required this.state});
+  const _AgentHeader({
+    required this.controller,
+    required this.state,
+    required this.onToggleContextPanel,
+  });
 
-  final AgentConversationViewModel viewModel;
+  final AgentConversationRuntimeController controller;
   final AgentHeaderState state;
+  final VoidCallback onToggleContextPanel;
 
   @override
   Widget build(BuildContext context) {
@@ -16,7 +21,7 @@ class _AgentHeader extends StatelessWidget {
     final tokenLabel = _threadTotalTokenUsageLabel(tokenUsage);
     final tokenTooltip = _tokenUsageTooltip(tokenUsage);
     final threadOpenStatusText = _threadOpenStatusText(state);
-    final projectName = viewModel.projectName;
+    final projectName = controller.projectName;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -36,7 +41,7 @@ class _AgentHeader extends StatelessWidget {
                         Flexible(
                           fit: FlexFit.loose,
                           child: IdeTooltip(
-                            message: viewModel.projectPath ?? name,
+                            message: controller.projectPath ?? name,
                             child: Semantics(
                               label: context.l10n.agentProjectName(name),
                               child: ConstrainedBox(
@@ -177,7 +182,11 @@ class _AgentHeader extends StatelessWidget {
               ),
             ],
             const SizedBox(width: IdeSpacing.space4),
-            _AgentHeaderMoreButton(viewModel: viewModel, state: state),
+            _AgentHeaderMoreButton(
+              controller: controller,
+              state: state,
+              onToggleContextPanel: onToggleContextPanel,
+            ),
           ],
         ),
       ],
@@ -187,10 +196,15 @@ class _AgentHeader extends StatelessWidget {
 
 /// 标题栏右侧「更多」菜单：分叉 / 重命名 / 归档 / 上下文。
 class _AgentHeaderMoreButton extends StatefulWidget {
-  const _AgentHeaderMoreButton({required this.viewModel, required this.state});
+  const _AgentHeaderMoreButton({
+    required this.controller,
+    required this.state,
+    required this.onToggleContextPanel,
+  });
 
-  final AgentConversationViewModel viewModel;
+  final AgentConversationRuntimeController controller;
   final AgentHeaderState state;
+  final VoidCallback onToggleContextPanel;
 
   @override
   State<_AgentHeaderMoreButton> createState() => _AgentHeaderMoreButtonState();
@@ -242,7 +256,7 @@ class _AgentHeaderMoreButtonState extends State<_AgentHeaderMoreButton> {
           label: context.l10n.agentForkSession,
           leadingIcon: Icons.call_split_rounded,
           onPressed: () {
-            unawaited(widget.viewModel.forkCurrentThread());
+            unawaited(widget.controller.forkCurrentThread());
           },
         ),
       if (canArchive)
@@ -251,7 +265,7 @@ class _AgentHeaderMoreButtonState extends State<_AgentHeaderMoreButton> {
           label: context.l10n.agentArchive,
           leadingIcon: Icons.archive_outlined,
           onPressed: () {
-            unawaited(widget.viewModel.archiveCurrentThread());
+            unawaited(widget.controller.archiveCurrentThread());
           },
         ),
     ];
@@ -261,7 +275,7 @@ class _AgentHeaderMoreButtonState extends State<_AgentHeaderMoreButton> {
         label: context.l10n.agentContext,
         leadingIcon: Icons.account_tree_outlined,
         onPressed: () {
-          widget.viewModel.toggleContextPanel();
+          widget.onToggleContextPanel();
         },
       ),
       for (var index = 0; index < contextFollowing.length; index++)
@@ -345,7 +359,7 @@ class _AgentHeaderMoreButtonState extends State<_AgentHeaderMoreButton> {
     if (!mounted || name == null || name.isEmpty) {
       return;
     }
-    await widget.viewModel.renameCurrentThread(name);
+    await widget.controller.renameCurrentThread(name);
   }
 
   @override

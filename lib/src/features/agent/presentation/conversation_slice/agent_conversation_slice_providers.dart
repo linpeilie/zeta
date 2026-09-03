@@ -13,6 +13,8 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_region_state.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_ports.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_state.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
@@ -29,7 +31,7 @@ final agentConversationSliceStoreRegistryProvider =
 
 /// 指定会话的切片 store。
 ///
-/// 未注册身份直接抛错，禁止静默降级到旧 ViewModel 监听路径。
+/// 未注册身份直接抛错，禁止静默降级。
 final agentConversationSliceStoreProvider =
     Provider.family<AgentConversationSliceStore, AgentConversationBindingKey>((
       ref,
@@ -37,8 +39,34 @@ final agentConversationSliceStoreProvider =
     ) {
       return ref
           .watch(agentConversationSliceStoreRegistryProvider)
-          .resolve(key);
+          .resolve(key)
+          .store;
     }, name: 'agentConversationSliceStore');
+
+/// 指定会话的命令面。实现是 [AgentConversationRuntimeController]。
+final agentConversationCommandProvider =
+    Provider.family<AgentConversationCommandPort, AgentConversationBindingKey>((
+      ref,
+      key,
+    ) {
+      return ref.watch(agentConversationRuntimeProvider(key));
+    }, name: 'agentConversationCommand');
+
+/// 指定会话的 runtime。查询、listenables 与未进 CommandPort 的命令都走这里。
+final agentConversationRuntimeProvider =
+    Provider.family<
+      AgentConversationRuntimeController,
+      AgentConversationBindingKey
+    >((ref, key) {
+      final controller = ref
+          .watch(agentConversationSliceStoreRegistryProvider)
+          .resolve(key)
+          .controller;
+      if (controller == null) {
+        throw StateError('No conversation runtime registered for $key');
+      }
+      return controller;
+    }, name: 'agentConversationRuntime');
 
 /// 指定会话的切片状态。
 ///

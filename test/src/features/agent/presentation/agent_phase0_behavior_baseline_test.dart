@@ -6,7 +6,7 @@ import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import '../../../testing/provider_settings_test_store.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
-import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
 
 import '../../../testing/agent_conversation_binding_test_harness.dart';
 import '../../../testing/agent_provider_stub_base.dart';
@@ -161,7 +161,7 @@ void main() {
   });
 }
 
-AgentConversationViewModel _createViewModel(
+AgentConversationRuntimeController _createViewModel(
   _RecordingProvider provider, {
   InMemoryZetaMetricsPort? metrics,
 }) {
@@ -186,7 +186,7 @@ AgentConversationViewModel _createViewModel(
   );
   addTearDown(harness.close);
   final lease = harness.acquireDraft(provider.config);
-  return AgentConversationViewModel(
+  return AgentConversationRuntimeController(
     providerController: controller,
     conversationBinding: lease.binding,
     globalRuntime: harness.globalRuntime,

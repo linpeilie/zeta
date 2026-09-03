@@ -8,16 +8,16 @@ final Listenable _neverNotifies = ChangeNotifier();
 ///
 /// 连续工具调用和搜索事件会先规约成命令集，在这里统一展示摘要与展开列表。
 class _AgentCommandGroupCard extends StatelessWidget {
-  const _AgentCommandGroupCard({required this.group, required this.viewModel});
+  const _AgentCommandGroupCard({required this.group, required this.controller});
 
   final AgentTimelineCommandGroup group;
-  final AgentConversationViewModel viewModel;
+  final AgentConversationRuntimeController controller;
 
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     return AgentRegionBuilder<AgentExpansionState>(
-      viewModel: viewModel,
+      bindingKey: controller.conversationBinding.key,
       selector: agentConversationExpansionProvider.call,
       builder: (context, expansion) {
         final expanded = expansion.isCommandGroupExpanded(group.id);
@@ -25,7 +25,7 @@ class _AgentCommandGroupCard extends StatelessWidget {
           headerKey: ValueKey<String>('agent-command-group-header-${group.id}'),
           bodyKey: ValueKey<String>('agent-command-group-body-${group.id}'),
           expanded: expanded,
-          onToggle: () => viewModel.toggleCommandGroup(group.id),
+          onToggle: () => controller.toggleCommandGroup(group.id),
           titleWidget: Text(
             _commandGroupSummary(group, context.l10n),
             maxLines: 1,
@@ -93,10 +93,13 @@ String _commandGroupItemTitle(
 ///
 /// 连续编辑操作会按文件拆分后显示在该组中，每个文件项支持独立展开详情。
 class _AgentFileEditGroupCard extends StatefulWidget {
-  const _AgentFileEditGroupCard({required this.group, required this.viewModel});
+  const _AgentFileEditGroupCard({
+    required this.group,
+    required this.controller,
+  });
 
   final AgentTimelineFileEditGroup group;
-  final AgentConversationViewModel viewModel;
+  final AgentConversationRuntimeController controller;
 
   @override
   State<_AgentFileEditGroupCard> createState() =>
@@ -153,7 +156,7 @@ class _AgentFileEditGroupCardState extends State<_AgentFileEditGroupCard> {
                 'agent-file-edit-item-${widget.group.items[index].id}',
               ),
               item: widget.group.items[index],
-              viewModel: widget.viewModel,
+              controller: widget.controller,
             ),
           ],
         ],
@@ -166,16 +169,16 @@ class _AgentFileEditItemRow extends StatelessWidget {
   const _AgentFileEditItemRow({
     super.key,
     required this.item,
-    required this.viewModel,
+    required this.controller,
   });
 
   final AgentTimelineFileEditItem item;
-  final AgentConversationViewModel viewModel;
+  final AgentConversationRuntimeController controller;
 
   @override
   Widget build(BuildContext context) {
     return AgentRegionBuilder<AgentExpansionState>(
-      viewModel: viewModel,
+      bindingKey: controller.conversationBinding.key,
       selector: agentConversationExpansionProvider.call,
       builder: (context, expansion) {
         final expanded = expansion.isFileEditItemExpanded(item.id);
@@ -184,7 +187,7 @@ class _AgentFileEditItemRow extends StatelessWidget {
           status: item.status,
           expanded: expanded,
           onToggle: item.hasDetails
-              ? () => viewModel.toggleFileEditItem(item.id)
+              ? () => controller.toggleFileEditItem(item.id)
               : () {},
         );
       },
@@ -323,10 +326,10 @@ class _AgentHighlightThemeSignature {
 ///
 /// 命令输出、文件变更、计划等 provider 事件都会规约到这个组件展示。
 class _AgentToolCallCard extends StatelessWidget {
-  const _AgentToolCallCard({required this.toolCall, required this.viewModel});
+  const _AgentToolCallCard({required this.toolCall, required this.controller});
 
   final AgentToolCall toolCall;
-  final AgentConversationViewModel viewModel;
+  final AgentConversationRuntimeController controller;
 
   @override
   Widget build(BuildContext context) {
@@ -337,21 +340,21 @@ class _AgentToolCallCard extends StatelessWidget {
         toolCall.startedAt != null &&
         toolCall.isActiveStatus;
     return AgentRegionBuilder<AgentExpansionState>(
-      viewModel: viewModel,
+      bindingKey: controller.conversationBinding.key,
       selector: agentConversationExpansionProvider.call,
       // elapsed 是本地时钟 tick，不属于任何 region：只在需要时单独订阅。
       builder: (context, expansion) => ListenableBuilder(
         listenable: needsElapsedTick
-            ? viewModel.elapsedClockListenable
+            ? controller.flutterElapsedClockListenable
             : _neverNotifies,
         builder: (context, _) {
           final canExpand =
               toolCall.content != null && toolCall.content!.isNotEmpty;
           final expanded = expansion.isToolCallExpanded(toolCall.id);
           final elapsedLabel = _toolElapsedLabel(
-            viewModel,
+            controller,
             toolCall,
-            viewModel.elapsedNow,
+            controller.elapsedNow,
           );
           return IdeCollapsibleCard(
             headerKey: ValueKey<String>('agent-tool-header-${toolCall.id}'),
@@ -359,7 +362,7 @@ class _AgentToolCallCard extends StatelessWidget {
             expanded: expanded,
             canExpand: canExpand,
             onToggle: canExpand
-                ? () => viewModel.toggleToolCall(toolCall.id)
+                ? () => controller.toggleToolCall(toolCall.id)
                 : () {},
             titleWidget: Row(
               children: [
@@ -452,7 +455,7 @@ class _AgentPlanDocumentCard extends StatelessWidget {
     required this.markdown,
     required this.revisionController,
     required this.revisionFocusNode,
-    required this.viewModel,
+    required this.controller,
     required this.onRevise,
     required this.onExecute,
     required this.onAbandon,
@@ -474,7 +477,7 @@ class _AgentPlanDocumentCard extends StatelessWidget {
   final String markdown;
   final TextEditingController revisionController;
   final FocusNode revisionFocusNode;
-  final AgentConversationViewModel viewModel;
+  final AgentConversationRuntimeController controller;
   final AgentPlanExecutionPermissionChoice? executionPermission;
   final List<AgentPermissionOption> executionPermissionOptions;
   final ValueChanged<AgentPermissionOption>? onSelectExecutionPermission;
@@ -681,7 +684,7 @@ class _AgentPlanDocumentCard extends StatelessWidget {
                   const Spacer(),
                   // 模型可在卡内直接切换；跟随 composer 状态刷新标签。
                   AgentRegionBuilder<AgentComposerState>(
-                    viewModel: viewModel,
+                    bindingKey: controller.conversationBinding.key,
                     selector: agentConversationComposerProvider.call,
                     builder: (context, _) {
                       final selector = _buildModelSelector();
@@ -758,7 +761,7 @@ class _AgentPlanDocumentCard extends StatelessWidget {
 
   /// 与主 Composer 共用同一个模型配置入口与回调集合。
   Widget? _buildModelSelector() {
-    final state = viewModel.composerState;
+    final state = controller.composerState;
     if (!state.showModelSelection) {
       return null;
     }
@@ -770,12 +773,12 @@ class _AgentPlanDocumentCard extends StatelessWidget {
     }
     return _AgentModelConfig(
       state: modelConfigState,
-      onSelectModel: viewModel.selectModel,
-      onSelectReasoningEffort: viewModel.selectReasoningEffort,
-      onSelectFastEnabled: viewModel.selectFastEnabled,
-      onResolveCompatibility: viewModel.resolveModelCompatibilityConflict,
-      onRetrySave: viewModel.retryModelConfigurationSave,
-      onPopoverClosed: viewModel.clearModelConfigurationTransientState,
+      onSelectModel: controller.selectModel,
+      onSelectReasoningEffort: controller.selectReasoningEffort,
+      onSelectFastEnabled: controller.selectFastEnabled,
+      onResolveCompatibility: controller.resolveModelCompatibilityConflict,
+      onRetrySave: controller.retryModelConfigurationSave,
+      onPopoverClosed: controller.clearModelConfigurationTransientState,
     );
   }
 }

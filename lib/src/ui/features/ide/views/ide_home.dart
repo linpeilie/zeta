@@ -224,7 +224,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
       _shellController.agentConversationWorkspaceStore,
     );
     _conversationSliceStoreRegistry.bind(
-      _shellController.agentConversationWorkspaceStore.sliceStoreForBinding,
+      _shellController.agentConversationWorkspaceStore.handleForBinding,
     );
     _unsubscribeProviderSettings = _shellController.agentProviderController
         .subscribe(_handleAgentProviderSettingsUsageChanged);
@@ -748,7 +748,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
             child: KeyedSubtree(
               key: ValueKey<String>('agent-pane-entry-${entry.entryId}'),
               child: AgentPane(
-                viewModel: entry.viewModel,
+                controller: entry.controller,
                 isActive: entry.entryId == selectedId,
                 messageSendShortcut: generalSettings.sendMessageShortcut,
               ),
@@ -1301,7 +1301,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
   }
 
   AgentRuntimeState _managementRuntimeState() {
-    return switch (_shellController.selectedAgentViewModel.status.state) {
+    return switch (_shellController.selectedAgentController.status.state) {
       AgentProviderConnectionState.idle => AgentRuntimeState.notRunning,
       AgentProviderConnectionState.connecting => AgentRuntimeState.starting,
       AgentProviderConnectionState.ready => AgentRuntimeState.idle,

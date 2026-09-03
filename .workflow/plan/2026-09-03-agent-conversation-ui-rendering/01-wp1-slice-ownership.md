@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |----|----|
-| 状态 | 进行中（T0/T1/T2/T3/T4 完成） |
+| 状态 | 进行中（T0–T5 完成，T6 未开始） |
 | 规模 | 10–14 人天，4 个 PR |
 | 依赖 | 建议 WP-2 完成后启动；**T0 前置：WP-7 T3**（scheduler 的 providers 依赖切除，0.5 人天，先合入） |
 | 门禁焦点 | G3、G6、「一份状态只能有一个 owner」（AGENTS.md §3） |
@@ -328,6 +328,17 @@ final agentConversationCommandProvider = Provider.family
 4. `agent_pane_test_harness.dart`（753 行）适配；`agent_conversation_view_model_test.dart`（5114 行 / 107 用例）逐条核对归属迁入 controller / projection / store 测试，**不允许静默删除用例**。
 
 **验收**：`grep -rn "AgentConversationViewModel" lib test` 零命中。
+
+**落地偏差**：
+
+- Registry 解析 `AgentConversationSessionHandle { store, controller? }`；`controller` 在只测切片镜像的容器里可空。
+- 同时新增 `agentConversationCommandProvider` 与 `agentConversationRuntimeProvider`（后者 fail-closed）。未进 CommandPort 的命令仍走 RuntimeController，本 PR 不扩端口。
+- 非 ConsumerWidget 的 pane part 仍直接调 `controller.xxx`（WP-2 再拆）；`AgentPane._sendMessage` 已改 `ref.read(agentConversationCommandProvider(key))`。
+- 上下文面板显隐留在 `AgentPane` State 的 `ValueNotifier`，不进 RuntimeController。
+- Flutter listenable 由 presentation 扩展 `AgentConversationFlutterListenables` 投影。
+- Workspace 构造 RuntimeController 时默认 `SchedulerBindingAgentFrameScheduler`（app 层可 import presentation scheduler）。
+- 原 ViewModel region ValueNotifier 的 `!=` 门闩，测试改为 `addUiUpdateListener` + 同条件计数，用例未删。
+- RuntimeController 仍 import `dart:io`（`ProcessException`），留给 T6。
 
 ### T6 · 全量门禁与文档同步（PR-4，1–2 人天）
 

@@ -293,7 +293,7 @@ class _AgentThreadHistoryLoading extends StatelessWidget {
 /// 共享 920px 内容轴的可滚动对话区（CustomScrollView + block 级虚拟化）。
 class _AgentConversationTimeline extends StatelessWidget {
   const _AgentConversationTimeline({
-    required this.viewModel,
+    required this.controller,
     required this.isActive,
     required this.scrollController,
     required this.pagePadding,
@@ -309,7 +309,7 @@ class _AgentConversationTimeline extends StatelessWidget {
     required this.onScrollToEndPressed,
   });
 
-  final AgentConversationViewModel viewModel;
+  final AgentConversationRuntimeController controller;
 
   /// 前台才订阅 live 流式 listenable。
   final bool isActive;
@@ -336,9 +336,9 @@ class _AgentConversationTimeline extends StatelessWidget {
     // live turn 与浮层高度不属于任何 region（§2.7），继续走 listenable。
     final liveListenable = isActive
         ? Listenable.merge(<Listenable>[
-            viewModel.liveTurnListenable,
+            controller.flutterLiveTurnListenable,
             floatingPanelExtent,
-            if (viewModel.liveTurnState case final liveTurnState?)
+            if (controller.liveTurnState case final liveTurnState?)
               AgentFlutterListenableAdapter(liveTurnState),
           ])
         : floatingPanelExtent;
@@ -346,21 +346,21 @@ class _AgentConversationTimeline extends StatelessWidget {
     // 导航轨贴 AgentPanel 全宽左侧；对话流仍经 _AgentContentAlign 居中限宽。
     // 三个 region 各订各的：pending 变化不再重建 history 那层。
     return AgentRegionBuilder<AgentConversationHistoryState>(
-      viewModel: viewModel,
+      bindingKey: controller.conversationBinding.key,
       selector: agentConversationHistoryProvider.call,
       builder: (context, historyState) => AgentRegionBuilder<AgentExpansionState>(
-        viewModel: viewModel,
+        bindingKey: controller.conversationBinding.key,
         selector: agentConversationExpansionProvider.call,
         builder: (context, expansionState) =>
             AgentRegionBuilder<AgentPendingInteractionState>(
-              viewModel: viewModel,
+              bindingKey: controller.conversationBinding.key,
               selector: agentConversationPendingInteractionProvider.call,
               builder: (context, pendingState) => ListenableBuilder(
                 listenable: liveListenable,
                 builder: (context, _) {
                   final standbySnapshot = historyState.standbyTurn;
                   final historyTurns = historyState.visibleTurns;
-                  final liveTurnState = viewModel.liveTurnState;
+                  final liveTurnState = controller.liveTurnState;
                   final liveSnapshot = liveTurnState?.snapshot();
                   // 阻塞式计划文档自身已承载等待决策的反馈；仅在它展示时隐藏 live
                   // 活动条。实时步骤进度浮层不等价于活动状态，两者应同时保留。
@@ -548,7 +548,7 @@ class _AgentConversationTimeline extends StatelessWidget {
                                           showScrollToEndButton: showButton,
                                           hasNewContent:
                                               showButton &&
-                                              viewModel.liveTurnState != null,
+                                              controller.liveTurnState != null,
                                           onScrollToEnd: () {
                                             unawaited(onScrollToEndPressed());
                                           },
@@ -684,7 +684,7 @@ class _AgentConversationTimeline extends StatelessWidget {
         return _AgentTimelineBlockSection(
           turn: turn,
           block: block,
-          viewModel: viewModel,
+          controller: controller,
           markdownCache: markdownCache,
           planRevisionDrafts: planRevisionDrafts,
           pendingState: pendingState,
@@ -695,7 +695,7 @@ class _AgentConversationTimeline extends StatelessWidget {
         return KeyedSubtree(
           key: const ValueKey('agent-live-turn-section'),
           child: _AgentLiveActivityStatus(
-            viewModel: viewModel,
+            controller: controller,
             isActive: isActive,
           ),
         );
@@ -743,7 +743,7 @@ class _AgentTimelineBlockSection extends StatelessWidget {
   const _AgentTimelineBlockSection({
     required this.turn,
     required this.block,
-    required this.viewModel,
+    required this.controller,
     required this.markdownCache,
     required this.planRevisionDrafts,
     required this.pendingState,
@@ -753,7 +753,7 @@ class _AgentTimelineBlockSection extends StatelessWidget {
 
   final AgentConversationTurnGroup turn;
   final AgentTimelineRenderBlock block;
-  final AgentConversationViewModel viewModel;
+  final AgentConversationRuntimeController controller;
   final AgentMarkdownCache markdownCache;
   final AgentPlanRevisionDraftStore planRevisionDrafts;
 
@@ -775,9 +775,9 @@ class _AgentTimelineBlockSection extends StatelessWidget {
         markdownCache: markdownCache,
       ),
       AgentTimelineCommandGroupRenderBlock(:final group) =>
-        _AgentCommandGroupCard(group: group, viewModel: viewModel),
+        _AgentCommandGroupCard(group: group, controller: controller),
       AgentTimelineFileEditGroupRenderBlock(:final group) =>
-        _AgentFileEditGroupCard(group: group, viewModel: viewModel),
+        _AgentFileEditGroupCard(group: group, controller: controller),
     };
     // 操作组间距由列表层统一包 Padding；卡片自身零 margin。
     final child = isAgentTimelineOperationGroupBlock(block)
@@ -800,20 +800,20 @@ class _AgentTimelineBlockSection extends StatelessWidget {
     AgentTimelineEntry entry, {
     required AgentMarkdownCache markdownCache,
   }) {
-    final isLiveTurn = viewModel.liveTurnState?.id == turn.id;
+    final isLiveTurn = controller.liveTurnState?.id == turn.id;
     return switch (entry) {
       AgentMessageTimelineEntry(:final message) => _AgentMessageEntry(
         message: message,
         // 历史与 live 正文均全文渲染，禁止折叠预览。
         useStreamingMarkdown: isLiveTurn,
-        viewModel: viewModel,
+        controller: controller,
         markdownCache: markdownCache,
         planRevisionDrafts: planRevisionDrafts,
         planExecutionHandoff: pendingState.planExecutionHandoff,
       ),
       AgentToolTimelineEntry(:final toolCall) => _AgentToolCallCard(
         toolCall: toolCall,
-        viewModel: viewModel,
+        controller: controller,
       ),
       // 权限与提问仍在 Composer 上方的 dock 渲染，避免时间线出现重复卡片。
       AgentPermissionTimelineEntry() => const SizedBox.shrink(),
@@ -849,9 +849,9 @@ class _AgentTimelineBlockSection extends StatelessWidget {
       phases: request.phases,
       revisionController: planRevisionDrafts.controllerFor(request.id),
       revisionFocusNode: planRevisionDrafts.focusNodeFor(request.id),
-      viewModel: viewModel,
+      controller: controller,
       onRevise: (revision) => unawaited(
-        viewModel.respondToPlanApproval(
+        controller.respondToPlanApproval(
           request,
           AgentPlanApprovalDecisionKind.rejected,
           reason: revision,
@@ -859,13 +859,13 @@ class _AgentTimelineBlockSection extends StatelessWidget {
       ),
       executeLabel: context.l10n.agentAcceptPlan,
       onExecute: () => unawaited(
-        viewModel.respondToPlanApproval(
+        controller.respondToPlanApproval(
           request,
           AgentPlanApprovalDecisionKind.accepted,
         ),
       ),
       onAbandon: () => unawaited(
-        viewModel.respondToPlanApproval(
+        controller.respondToPlanApproval(
           request,
           AgentPlanApprovalDecisionKind.cancelled,
         ),
@@ -880,19 +880,19 @@ class _AgentTimelineBlockSection extends StatelessWidget {
 /// [panelHeight] 由 AgentPane width-bucket 的约束旁路提供，不进入 bucket 身份。
 class _AgentPendingInteractionSection extends StatelessWidget {
   const _AgentPendingInteractionSection({
-    required this.viewModel,
+    required this.controller,
     required this.panelHeight,
     required this.pagePadding,
   });
 
-  final AgentConversationViewModel viewModel;
+  final AgentConversationRuntimeController controller;
   final double panelHeight;
   final EdgeInsets pagePadding;
 
   @override
   Widget build(BuildContext context) {
     return AgentRegionBuilder<AgentPendingInteractionState>(
-      viewModel: viewModel,
+      bindingKey: controller.conversationBinding.key,
       selector: agentConversationPendingInteractionProvider.call,
       builder: _buildDock,
     );
@@ -938,7 +938,7 @@ class _AgentPendingInteractionSection extends StatelessWidget {
           ),
           child: _AgentQuestionCard(
             request: questionRequests[index],
-            onRespond: (answers) => viewModel.respondToQuestion(
+            onRespond: (answers) => controller.respondToQuestion(
               questionRequests[index],
               answers: answers,
             ),
@@ -978,7 +978,7 @@ class _AgentPendingInteractionSection extends StatelessWidget {
       request: request,
       autoReview: state.autoReviewForTurn(request.turnId),
       onApproveGuardian: state.latestDeniedAutoReview != null
-          ? viewModel.approveGuardianDeniedAction
+          ? controller.approveGuardianDeniedAction
           : null,
       onRespond:
           ({
@@ -986,7 +986,7 @@ class _AgentPendingInteractionSection extends StatelessWidget {
             bool cancelTurn = false,
             AgentCommandApprovalDecisionKind? commandDecision,
             List<String> execpolicyAmendment = const <String>[],
-          }) => viewModel.respondToPermission(
+          }) => controller.respondToPermission(
             request,
             approved: approved,
             cancelTurn: cancelTurn,
@@ -999,7 +999,7 @@ class _AgentPendingInteractionSection extends StatelessWidget {
 
 class _AgentComposerSection extends StatelessWidget {
   const _AgentComposerSection({
-    required this.viewModel,
+    required this.controller,
     required this.state,
     required this.inputController,
     required this.composerFocusNode,
@@ -1015,7 +1015,7 @@ class _AgentComposerSection extends StatelessWidget {
     super.key,
   });
 
-  final AgentConversationViewModel viewModel;
+  final AgentConversationRuntimeController controller;
   final AgentComposerState state;
   final TextEditingController inputController;
   final FocusNode composerFocusNode;
@@ -1052,7 +1052,7 @@ class _AgentComposerSection extends StatelessWidget {
                 onAttachImages: onAttachImages,
                 onRemoveImage: onRemoveImage,
                 onSend: onSend,
-                onCancel: viewModel.cancelActiveTurn,
+                onCancel: controller.cancelActiveTurn,
                 showImageAttachment: state.canAttachImages,
                 showResourceMention: state.canMentionResources,
                 showSkillInsert: state.canUseSkills,
@@ -1064,7 +1064,7 @@ class _AgentComposerSection extends StatelessWidget {
                 conversationModeAppliesToNextTurn:
                     state.conversationModeAppliesToNextTurn,
                 conversationModeContextId: state.conversationModeContextId,
-                onSelectConversationMode: viewModel.selectConversationMode,
+                onSelectConversationMode: controller.selectConversationMode,
                 showModelSelection: state.showModelSelection,
                 modelConfigState: state.modelConfigState,
                 showPermissionPolicy: state.showPermissionPolicy,
@@ -1073,17 +1073,17 @@ class _AgentComposerSection extends StatelessWidget {
                 selectedPermissionOptionId: state.selectedPermissionOptionId,
                 permissionApplyScopeHint: state.permissionApplyScopeHint,
                 sessionConfigOptions: state.sessionConfigOptions,
-                onSelectModel: viewModel.selectModel,
-                onSelectReasoningEffort: viewModel.selectReasoningEffort,
-                onSelectFastEnabled: viewModel.selectFastEnabled,
+                onSelectModel: controller.selectModel,
+                onSelectReasoningEffort: controller.selectReasoningEffort,
+                onSelectFastEnabled: controller.selectFastEnabled,
                 onResolveModelCompatibility:
-                    viewModel.resolveModelCompatibilityConflict,
+                    controller.resolveModelCompatibilityConflict,
                 onRetryModelConfiguration:
-                    viewModel.retryModelConfigurationSave,
+                    controller.retryModelConfigurationSave,
                 onCloseModelConfiguration:
-                    viewModel.clearModelConfigurationTransientState,
+                    controller.clearModelConfigurationTransientState,
                 onSelectPermissionOption: (option) async {
-                  final error = await viewModel.selectPermissionOption(option);
+                  final error = await controller.selectPermissionOption(option);
                   if (!context.mounted) {
                     return;
                   }
@@ -1095,13 +1095,13 @@ class _AgentComposerSection extends StatelessWidget {
                     );
                     return;
                   }
-                  final hint = viewModel.takePermissionApplyHint();
+                  final hint = controller.takePermissionApplyHint();
                   if (hint != null && hint.isNotEmpty) {
                     showIdeToast(context, message: hint);
                   }
                 },
                 onSelectSessionConfigOption:
-                    viewModel.selectSessionConfigOption,
+                    controller.selectSessionConfigOption,
                 onOpenMentionPicker: onOpenMentionPicker,
                 onInsertSkill: onInsertSkill,
               ),

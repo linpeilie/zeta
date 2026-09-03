@@ -103,12 +103,13 @@ void main() {
     expect(attentionSlice, isNot(contains('DesktopNotificationService')));
     expect(attentionSlice, isNot(contains('DesktopAttentionIndicator')));
 
-    final viewModel = File(
-      'lib/src/features/agent/presentation/agent_conversation_view_model.dart',
+    final runtime = File(
+      'lib/src/features/agent/application/conversation_slice/'
+      'agent_conversation_runtime_controller.dart',
     ).readAsStringSync();
-    expect(viewModel, contains('required AgentConversationComposerStateOwner'));
-    expect(viewModel, isNot(contains('_ownsModelSelectionController')));
-    expect(viewModel, isNot(contains('_ownsConversationModeController')));
-    expect(viewModel, isNot(contains('_ownsSkillsCatalogController')));
+    expect(runtime, contains('required AgentConversationComposerStateOwner'));
+    expect(runtime, isNot(contains('_ownsModelSelectionController')));
+    expect(runtime, isNot(contains('_ownsConversationModeController')));
+    expect(runtime, isNot(contains('_ownsSkillsCatalogController')));
   });
 }

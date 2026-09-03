@@ -93,3 +93,4 @@ WP-5（spike 结论后再排期）
 | 2026-09-03 | WP-1 T2 | RuntimeController 下沉；删除 UiStateStore/SliceComposition | scheduler 进 application；SliceStore.connected 直接吃 UiUpdateRequest；ViewModel 成 Flutter 门面；因删除 Dart 文件 `test_affected` 走全量并绿 |
 | 2026-09-03 | WP-1 T3 | 纯函数下沉：selection patch / skill 候选 / flatten 文件节点 | RuntimeController 改委托；三组表驱动单测 |
 | 2026-09-03 | WP-1 T4 | Composer 图片附件 IO 下沉到 data 端口 | AgentPane 去掉 dart:io；生产写临时目录、测试走内存 fake |
+| 2026-09-03 | WP-1 T5 | 删除 Conversation ViewModel；命令面改走 RuntimeController | Slice registry 解析 SessionHandle；AgentPane 持 RuntimeController；上下文面板显隐留在 Pane State |

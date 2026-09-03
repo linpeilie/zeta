@@ -18,9 +18,10 @@ const double _agentContextKeyColumnWidth = 76;
 /// 原始消息列表展示消息 ID、角色与时间，点击可展开查看 raw 协议原文。
 /// 面板正文包在 [SelectionArea] 中，支持拖选文本与系统复制菜单。
 class _AgentContextPanel extends StatefulWidget {
-  const _AgentContextPanel({required this.viewModel});
+  const _AgentContextPanel({required this.controller, required this.onClose});
 
-  final AgentConversationViewModel viewModel;
+  final AgentConversationRuntimeController controller;
+  final VoidCallback onClose;
 
   @override
   State<_AgentContextPanel> createState() => _AgentContextPanelState();
@@ -44,8 +45,8 @@ class _AgentContextPanelState extends State<_AgentContextPanel> {
   void didUpdateWidget(covariant _AgentContextPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(
-      oldWidget.viewModel.providerController,
-      widget.viewModel.providerController,
+      oldWidget.controller.providerController,
+      widget.controller.providerController,
     )) {
       _unsubscribeProviderSettings();
       _subscribeProviderSettings();
@@ -53,7 +54,7 @@ class _AgentContextPanelState extends State<_AgentContextPanel> {
   }
 
   void _subscribeProviderSettings() {
-    _unsubscribeProviderSettings = widget.viewModel.providerController
+    _unsubscribeProviderSettings = widget.controller.providerController
         .subscribe(() {
           if (mounted) {
             setState(() {});
@@ -69,34 +70,34 @@ class _AgentContextPanelState extends State<_AgentContextPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final viewModel = widget.viewModel;
+    final controller = widget.controller;
     return ValueListenableBuilder<AgentConversationTurnState?>(
-      valueListenable: viewModel.liveTurnListenable,
+      valueListenable: controller.flutterLiveTurnListenable,
       builder: (context, liveTurnState, _) {
         // 上下文面板只组合已有 typed slice；live binding 改变时重绑稳定 turn
         // notifier，避免重新引入完整 ViewModel ChangeNotifier。
         return AgentRegionBuilder<AgentHeaderState>(
-          viewModel: viewModel,
+          bindingKey: controller.conversationBinding.key,
           selector: agentConversationHeaderProvider.call,
           builder: (context, _) =>
               AgentRegionBuilder<AgentConversationHistoryState>(
-                viewModel: viewModel,
+                bindingKey: controller.conversationBinding.key,
                 selector: agentConversationHistoryProvider.call,
                 builder: (context, _) => ListenableBuilder(
                   // thread 快照与 Provider 目录不属于 region，仍走 listenable。
                   listenable: Listenable.merge(<Listenable>[
-                    viewModel.threadSnapshotListenable,
+                    controller.flutterThreadSnapshotListenable,
                     if (liveTurnState != null)
                       AgentFlutterListenableAdapter(liveTurnState),
                   ]),
                   builder: (context, _) {
                     final colors = IdeColors.of(context);
-                    final usage = viewModel.currentThreadTokenUsage;
-                    final messages = viewModel.messages;
+                    final usage = controller.currentThreadTokenUsage;
+                    final messages = controller.messages;
                     final rawItems = _buildContextRawItems(
-                      timelineEntries: viewModel.timelineEntries,
+                      timelineEntries: controller.timelineEntries,
                       filterNonChat: _filterNonChatMessages,
-                      catalog: viewModel.textCatalog,
+                      catalog: controller.textCatalog,
                       l10n: context.l10n,
                     );
                     return Container(
@@ -114,9 +115,7 @@ class _AgentContextPanelState extends State<_AgentContextPanel> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          _AgentContextPanelHeader(
-                            onClose: viewModel.hideContextPanel,
-                          ),
+                          _AgentContextPanelHeader(onClose: widget.onClose),
                           // SelectionArea 覆盖概览与原始消息区，支持拖选 / 右键复制；
                           // 关闭按钮留在区外，避免与选择手势争用。
                           Expanded(
@@ -137,11 +136,11 @@ class _AgentContextPanelState extends State<_AgentContextPanel> {
                                         CrossAxisAlignment.stretch,
                                     children: [
                                       _AgentContextSummaryCard(
-                                        title: viewModel.currentThreadTitle,
-                                        sessionId: viewModel.sessionId,
+                                        title: controller.currentThreadTitle,
+                                        sessionId: controller.sessionId,
                                         messageCount: messages.length,
                                         providerName:
-                                            viewModel.activeProviderName,
+                                            controller.activeProviderName,
                                         contextLimit:
                                             usage?.displayModelContextWindow,
                                         totalTokens: usage?.displayTotalTokens,
@@ -150,9 +149,9 @@ class _AgentContextPanelState extends State<_AgentContextPanel> {
                                             usage?.displayOutputTokens,
                                         cachedTokens:
                                             usage?.displayCachedInputTokens,
-                                        createdAt: viewModel.threadCreatedAt,
+                                        createdAt: controller.threadCreatedAt,
                                         lastActiveAt:
-                                            viewModel.threadLastActiveAt,
+                                            controller.threadLastActiveAt,
                                       ),
                                       // 元数据区与原始消息之间不画线：靠一整段留白
                                       // 把两个功能区分开，面板整体保持无框线。

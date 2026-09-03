@@ -352,11 +352,11 @@ String _liveActivityStatusText(
 
 /// 工具/思考卡旁的耗时文案。
 String? _toolElapsedLabel(
-  AgentConversationViewModel viewModel,
+  AgentConversationRuntimeController controller,
   AgentToolCall toolCall,
   DateTime now,
 ) {
-  final elapsed = viewModel.toolElapsedAt(toolCall, now);
+  final elapsed = controller.toolElapsedAt(toolCall, now);
   // 进行中不足 1 秒也给即时反馈；终态仍隐藏 0 时长。
   final live = toolCall.isActiveStatus && toolCall.duration == null;
   return _formatDuration(elapsed, includeSubSecond: live);

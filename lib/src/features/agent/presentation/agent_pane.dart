@@ -22,7 +22,7 @@ import 'package:zeta/src/features/workspace/application/workspace_file_corpus_po
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 import 'package:zeta/src/ui/core/ide_image_preview.dart';
 import 'package:zeta_ui/zeta_ui.dart';
-import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
 import 'package:zeta/src/features/agent/presentation/agent_flutter_listenable_adapter.dart';
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_region_builder.dart';
@@ -72,13 +72,13 @@ _AgentPaneWidthClass _selectAgentPaneWidthClass(BoxConstraints constraints) {
 /// composer 以及各类卡片都已拆到独立组件文件。
 class AgentPane extends ConsumerStatefulWidget {
   const AgentPane({
-    required this.viewModel,
+    required this.controller,
     this.messageSendShortcut = MessageSendShortcut.enter,
     this.isActive = true,
     super.key,
   });
 
-  final AgentConversationViewModel viewModel;
+  final AgentConversationRuntimeController controller;
 
   /// 当前消息输入框使用的发送快捷键。
   final MessageSendShortcut messageSendShortcut;
@@ -149,6 +149,7 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
   /// 缓存，`setState` 不会重建 composer，仅改 list 会让缩略图「删不掉」。
   final ValueNotifier<List<String>> _draftImagePaths =
       ValueNotifier<List<String>>(const <String>[]);
+  final ValueNotifier<bool> _contextPanelVisible = ValueNotifier<bool>(false);
 
   /// 由附件端口写出的剪贴板暂存路径；移除/销毁时只清理这些，不删用户文件。
   final Set<String> _stagedClipboardPaths = <String>{};
@@ -192,10 +193,10 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
 
   /// 是否具备可展示的 Plan 斜线命令。
   bool get _hasSlashPlanCommand {
-    if (!widget.viewModel.canSelectConversationMode) {
+    if (!widget.controller.canSelectConversationMode) {
       return false;
     }
-    return widget.viewModel.conversationModeOptions.any(
+    return widget.controller.conversationModeOptions.any(
       (preset) =>
           preset.id == AgentConversationModeId.plan && preset.isSelectable,
     );
@@ -204,8 +205,8 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
   /// 斜线菜单是否至少有一个分区（命令或 Skills）可展示。
   bool get _canOpenSlashMenu =>
       _hasSlashPlanCommand ||
-      widget.viewModel.canCompactCurrentThread ||
-      widget.viewModel.canUseSkills;
+      widget.controller.canCompactCurrentThread ||
+      widget.controller.canUseSkills;
 
   late StreamSubscription<AgentUiEffect> _uiEffectSubscription;
 
@@ -248,7 +249,7 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
   void initState() {
     super.initState();
     _projectionCache = AgentTimelineProjectionCache(
-      textCatalog: widget.viewModel.textCatalog,
+      textCatalog: widget.controller.textCatalog,
     );
     _composerFocusNode = FocusNode(
       debugLabel: 'AgentMessageComposer',
@@ -278,17 +279,18 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
     _scrollCoordinator = IdeVirtualScrollCoordinator(driver: _scrollDriver)
       ..onModeChanged = _notifyScrollChrome;
     _scrollController.addListener(_handleScrollChanged);
-    _uiEffectSubscription = widget.viewModel.uiEffects.listen(_handleUiEffect);
+    _uiEffectSubscription = widget.controller.uiEffects.listen(_handleUiEffect);
   }
 
   @override
   void didUpdateWidget(covariant AgentPane oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.viewModel == widget.viewModel) {
+    if (oldWidget.controller == widget.controller) {
       return;
     }
+    _hideContextPanel();
     unawaited(_uiEffectSubscription.cancel());
-    // view model 真正替换时才使档位 child 失效；普通 resize 父重建继续复用。
+    // runtime 真正替换时才使档位 child 失效；普通 resize 父重建继续复用。
     _responsiveBodyBuilder = _createResponsiveBodyBuilder();
     _projectionCache.clear();
     _descriptorFactory.clearCache();
@@ -314,7 +316,7 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
     _lastTimelineItemId = null;
     // 重置 coordinator：重新 attach driver 并请求 follow。
     unawaited(_scrollCoordinator.requestFollowEnd(animated: false));
-    _uiEffectSubscription = widget.viewModel.uiEffects.listen(_handleUiEffect);
+    _uiEffectSubscription = widget.controller.uiEffects.listen(_handleUiEffect);
   }
 
   @override
@@ -336,6 +338,7 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
     _composerFocusNode.dispose();
     _scrollController.dispose();
     _canSendNotifier.dispose();
+    _contextPanelVisible.dispose();
     final leftover = List<String>.of(_stagedClipboardPaths);
     _draftImagePaths.dispose();
     if (leftover.isNotEmpty) {
@@ -378,12 +381,15 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
           ),
           // 头栏「上下文」菜单触发的详情面板，默认隐藏。
           ValueListenableBuilder<bool>(
-            valueListenable: widget.viewModel.contextPanelVisible,
+            valueListenable: _contextPanelVisible,
             builder: (context, visible, _) {
               if (!visible) {
                 return const SizedBox.shrink();
               }
-              return _AgentContextPanel(viewModel: widget.viewModel);
+              return _AgentContextPanel(
+                controller: widget.controller,
+                onClose: _hideContextPanel,
+              );
             },
           ),
         ],
@@ -409,24 +415,28 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
           child: Padding(
             padding: pagePadding,
             child: AgentRegionBuilder<AgentHeaderState>(
-              viewModel: widget.viewModel,
+              bindingKey: widget.controller.conversationBinding.key,
               selector: agentConversationHeaderProvider.call,
               builder: (context, state) {
-                return _AgentHeader(viewModel: widget.viewModel, state: state);
+                return _AgentHeader(
+                  controller: widget.controller,
+                  state: state,
+                  onToggleContextPanel: _toggleContextPanel,
+                );
               },
             ),
           ),
         ),
         Expanded(
           child: AgentRegionBuilder<AgentConversationHistoryState>(
-            viewModel: widget.viewModel,
+            bindingKey: widget.controller.conversationBinding.key,
             selector: agentConversationHistoryProvider.call,
             builder: (context, historyState) => ListenableBuilder(
               // live turn 刻意不进切片（§2.7）：每个 token 触发一次切片发布会
               // 直接撞穿帧预算，它继续走局部重建路径。
-              listenable: widget.viewModel.liveTurnListenable,
+              listenable: widget.controller.flutterLiveTurnListenable,
               builder: (context, _) {
-                final liveTurnState = widget.viewModel.liveTurnState;
+                final liveTurnState = widget.controller.liveTurnState;
                 final hasConversation =
                     historyState.visibleTurns.isNotEmpty ||
                     liveTurnState != null;
@@ -442,7 +452,7 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
                           providerName: historyState.providerName,
                         )
                       : _AgentConversationTimeline(
-                          viewModel: widget.viewModel,
+                          controller: widget.controller,
                           isActive: widget.isActive,
                           scrollController: _scrollController,
                           pagePadding: pagePadding,
@@ -460,7 +470,7 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
                           onScrollToEndPressed: _requestScrollToEndFromButton,
                         ),
                   floatingPanel: _AgentActivePlanSection(
-                    viewModel: widget.viewModel,
+                    controller: widget.controller,
                     pagePadding: pagePadding,
                     onExtentChanged: _handleActivePlanPanelExtentChanged,
                   ),
@@ -470,16 +480,17 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
                     children: [
                       // panelHeight 由 selectBucket 旁路缓存，不进入 bucket 身份。
                       _AgentPendingInteractionSection(
-                        viewModel: widget.viewModel,
+                        controller: widget.controller,
                         panelHeight: _panelHeight,
                         pagePadding: pagePadding,
                       ),
                       AgentRegionBuilder<AgentComposerState>(
-                        viewModel: widget.viewModel,
+                        bindingKey: widget.controller.conversationBinding.key,
                         selector: agentConversationComposerProvider.call,
                         builder: (context, composerState) =>
                             AgentRegionBuilder<AgentPendingInteractionState>(
-                              viewModel: widget.viewModel,
+                              bindingKey:
+                                  widget.controller.conversationBinding.key,
                               selector:
                                   agentConversationPendingInteractionProvider
                                       .call,
@@ -504,7 +515,7 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
                                                 'agent-composer-section',
                                               ),
                                               anchorKey: _composerAnchorKey,
-                                              viewModel: widget.viewModel,
+                                              controller: widget.controller,
                                               state: composerState,
                                               inputController: _inputController,
                                               composerFocusNode:
@@ -557,7 +568,7 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
   }
 
   void _handleSkillQueryChanged() {
-    if (!widget.viewModel.canUseSkills) {
+    if (!widget.controller.canUseSkills) {
       return;
     }
     final query = _inputController.activeSkillQuery;
@@ -633,7 +644,7 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
   }
 
   void _handleMentionQueryChanged() {
-    if (!widget.viewModel.canMentionResources) {
+    if (!widget.controller.canMentionResources) {
       return;
     }
     final query = _inputController.activeMentionQuery;
@@ -677,6 +688,14 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
       return;
     }
     _canSendNotifier.value = canSend;
+  }
+
+  void _toggleContextPanel() {
+    _contextPanelVisible.value = !_contextPanelVisible.value;
+  }
+
+  void _hideContextPanel() {
+    _contextPanelVisible.value = false;
   }
 
   KeyEventResult _handleComposerKeyEvent(FocusNode node, KeyEvent event) {
@@ -788,7 +807,7 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
         return KeyEventResult.ignored;
       }
       if (_matchesMessageSendShortcut(Theme.of(context).platform)) {
-        if (_canSendNotifier.value && widget.viewModel.canSubmitMessage) {
+        if (_canSendNotifier.value && widget.controller.canSubmitMessage) {
           _sendMessage();
         }
       } else {
@@ -841,7 +860,7 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
   }
 
   Future<void> _pickImages() async {
-    if (!widget.viewModel.canAttachImages) {
+    if (!widget.controller.canAttachImages) {
       return;
     }
     final files = await openFiles(
@@ -855,7 +874,7 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
 
   /// Ctrl/Cmd+V：优先粘贴剪贴板图片；无图时回退插入纯文本。
   Future<bool> _pasteImagesFromClipboard() async {
-    if (widget.viewModel.canAttachImages) {
+    if (widget.controller.canAttachImages) {
       final imageBytes = await Pasteboard.image;
       if (imageBytes != null && imageBytes.isNotEmpty) {
         final path = await _stageClipboardImage(imageBytes);
@@ -952,7 +971,7 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
   }
 
   void _sendMessage() {
-    if (!_canSendNotifier.value || !widget.viewModel.canSubmitMessage) {
+    if (!_canSendNotifier.value || !widget.controller.canSubmitMessage) {
       return;
     }
     final serialized = _inputController.serialize();
@@ -971,16 +990,24 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
     // 发送后路径交给 turn；不再由 Composer 在 dispose 时删除。
     _stagedClipboardPaths.removeAll(images);
     _syncCanSend();
-    widget.viewModel.sendMessage(
-      serialized.text,
-      localImagePaths: images,
-      mentions: mentions,
-      skills: serialized.skills,
+    unawaited(
+      ref
+          .read(
+            agentConversationCommandProvider(
+              widget.controller.conversationBinding.key,
+            ),
+          )
+          .sendMessage(
+            serialized.text,
+            localImagePaths: images,
+            mentions: mentions,
+            skills: serialized.skills,
+          ),
     );
   }
 
   void _insertSkill(AgentSkillMetadata skill) {
-    if (!widget.viewModel.canUseSkills) {
+    if (!widget.controller.canUseSkills) {
       return;
     }
     _inputController.insertSkill(skill);
@@ -1008,12 +1035,14 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
     _inputController.consumeActiveSlashQuery();
     switch (id) {
       case _SlashCommandId.plan:
-        if (widget.viewModel.selectedConversationMode !=
+        if (widget.controller.selectedConversationMode !=
             AgentConversationModeId.plan) {
-          widget.viewModel.selectConversationMode(AgentConversationModeId.plan);
+          widget.controller.selectConversationMode(
+            AgentConversationModeId.plan,
+          );
         }
       case _SlashCommandId.compact:
-        unawaited(widget.viewModel.compactCurrentThread());
+        unawaited(widget.controller.compactCurrentThread());
     }
     _composerFocusNode.requestFocus();
   }
@@ -1025,7 +1054,7 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
 
   /// More actions → Insert skill：确保进入 `$query` 后再弹出列表。
   void _openSkillPickerFromMenu() {
-    if (!widget.viewModel.canUseSkills ||
+    if (!widget.controller.canUseSkills ||
         _skillPickerOpen ||
         _skillPickerOpening) {
       return;
@@ -1066,7 +1095,7 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
   }
 
   Future<void> _showSkillPicker() async {
-    if (!widget.viewModel.canUseSkills ||
+    if (!widget.controller.canUseSkills ||
         _skillPickerOpen ||
         _skillPickerOpening ||
         !mounted) {
@@ -1079,7 +1108,7 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
     try {
       // 打开前尽量预热 skills/list，避免空列表误导。
       try {
-        await widget.viewModel.ensureSkillsCatalog();
+        await widget.controller.ensureSkillsCatalog();
       } catch (_) {
         // 目录失败时仍展示 picker，由空态提示用户。
       }
@@ -1101,7 +1130,7 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
           documentController: _inputController,
           listController: _skillPickerListController,
           candidatesFor: (query) =>
-              widget.viewModel.skillCandidates(query: query),
+              widget.controller.skillCandidates(query: query),
           onSelect: _selectSkillFromPicker,
           onRequestClose: _skillPopoverController.dismiss,
         ),
@@ -1124,9 +1153,9 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
     _slashPickerOpening = true;
     try {
       // Skills 分区存在时尽量预热目录，避免空列表误导。
-      if (widget.viewModel.canUseSkills) {
+      if (widget.controller.canUseSkills) {
         try {
-          await widget.viewModel.ensureSkillsCatalog();
+          await widget.controller.ensureSkillsCatalog();
         } catch (_) {
           // 目录失败时仍展示菜单；Skills 可为空，命令仍可用。
         }
@@ -1149,12 +1178,12 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
           documentController: _inputController,
           listController: _slashMenuListController,
           showPlanCommand: _hasSlashPlanCommand,
-          showCompactCommand: widget.viewModel.canCompactCurrentThread,
+          showCompactCommand: widget.controller.canCompactCurrentThread,
           planSelected:
-              widget.viewModel.selectedConversationMode ==
+              widget.controller.selectedConversationMode ==
               AgentConversationModeId.plan,
-          skillCandidatesFor: (query) => widget.viewModel.canUseSkills
-              ? widget.viewModel.skillCandidates(query: query)
+          skillCandidatesFor: (query) => widget.controller.canUseSkills
+              ? widget.controller.skillCandidates(query: query)
               : const <AgentSkillMetadata>[],
           onSelectCommand: _selectSlashCommand,
           onSelectSkill: _selectSkillFromSlashMenu,
@@ -1173,7 +1202,7 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
   }
 
   Future<void> _showMentionFilePicker() async {
-    if (!widget.viewModel.canMentionResources ||
+    if (!widget.controller.canMentionResources ||
         _mentionPickerOpen ||
         _mentionPickerOpening ||
         !mounted) {
@@ -1202,9 +1231,9 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
           documentController: _inputController,
           listController: _mentionFileListController,
           candidatesFor: (query) =>
-              widget.viewModel.mentionCandidateFiles(query: query),
-          fileCorpus: widget.viewModel.workspaceFileCorpus,
-          isIndexReady: () => widget.viewModel.isWorkspaceFileIndexReady,
+              widget.controller.mentionCandidateFiles(query: query),
+          fileCorpus: widget.controller.workspaceFileCorpus,
+          isIndexReady: () => widget.controller.isWorkspaceFileIndexReady,
           onSelect: _selectMentionFromPicker,
           onRequestClose: _mentionPopoverController.dismiss,
         ),
@@ -1216,7 +1245,7 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
 
   /// More actions → Mention file：确保进入 `@query` 后再弹出列表。
   void _openMentionPickerFromMenu() {
-    if (!widget.viewModel.canMentionResources ||
+    if (!widget.controller.canMentionResources ||
         _mentionPickerOpen ||
         _mentionPickerOpening) {
       return;
@@ -1261,7 +1290,7 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
 
   /// 从工作区文件列表插入 @mention（原子 chip；光标在有效 @-token 内时替换该片段）。
   void _insertMention(WorkspaceNode file) {
-    if (!widget.viewModel.canMentionResources) {
+    if (!widget.controller.canMentionResources) {
       return;
     }
     _inputController.insertMention(name: file.name, path: file.path);

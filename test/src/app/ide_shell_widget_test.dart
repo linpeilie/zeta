@@ -14,7 +14,7 @@ import 'package:zeta/src/app/composition/zeta_app_composition.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
-import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
 import 'package:zeta/src/features/agent/presentation/provider_settings_slice/agent_model_catalog_projection_providers.dart';
 import 'package:zeta/src/features/agent/presentation/provider_settings_slice/agent_provider_settings_slice_providers.dart';
 import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_provider_settings_slice_store.dart';
@@ -327,7 +327,7 @@ void main() {
       );
       final viewModel = tester
           .widget<AgentPane>(find.byType(AgentPane))
-          .viewModel;
+          .controller;
       final activeProviderBefore = viewModel.activeProviderId;
 
       await viewModel.sendMessage('finish and refresh usage');
@@ -817,7 +817,7 @@ void main() {
 
     final paneElement = find.byType(AgentPane).evaluate().first;
     final key =
-        (paneElement.widget as AgentPane).viewModel.conversationBinding.key;
+        (paneElement.widget as AgentPane).controller.conversationBinding.key;
     final container = ProviderScope.containerOf(paneElement);
 
     expect(container.read(agentConversationSliceStoreProvider(key)), isNotNull);
@@ -1091,7 +1091,7 @@ void main() {
 
     final viewModel = tester
         .widget<AgentPane>(find.byType(AgentPane))
-        .viewModel;
+        .controller;
     // Binding 架构：打开历史 thread 不挂 live Pipeline；先发一条消息附着 runtime。
     await _attachLiveEventPipelineForStorm(
       tester,
@@ -1297,18 +1297,31 @@ void main() {
       viewModel.threadSnapshotListenable.addListener(
         handleShellSnapshotChanged,
       );
-      viewModel.headerStateListenable.addListener(handleHeaderStateChanged);
-      viewModel.composerStateListenable.addListener(handleComposerStateChanged);
+      var lastHeader = viewModel.headerState;
+      var lastComposer = viewModel.composerState;
+      void handleUiUpdate(AgentUiUpdateRequest request) {
+        if (request.regions.contains(AgentUiRegion.header)) {
+          final next = viewModel.headerState;
+          if (next != lastHeader) {
+            lastHeader = next;
+            handleHeaderStateChanged();
+          }
+        }
+        if (request.regions.contains(AgentUiRegion.composer)) {
+          final next = viewModel.composerState;
+          if (next != lastComposer) {
+            lastComposer = next;
+            handleComposerStateChanged();
+          }
+        }
+      }
+
+      viewModel.addUiUpdateListener(handleUiUpdate);
       addTearDown(() {
         viewModel.threadSnapshotListenable.removeListener(
           handleShellSnapshotChanged,
         );
-        viewModel.headerStateListenable.removeListener(
-          handleHeaderStateChanged,
-        );
-        viewModel.composerStateListenable.removeListener(
-          handleComposerStateChanged,
-        );
+        viewModel.removeUiUpdateListener(handleUiUpdate);
       });
 
       final beforeBuffer = viewModel.eventCoalescingBufferDiagnostics!;
@@ -2363,7 +2376,9 @@ Future<void> _flushInitialUsageRefresh(WidgetTester tester) async {
   await tester.pump();
 }
 
-Future<({FakeAgentProvider provider, AgentConversationViewModel viewModel})>
+Future<
+  ({FakeAgentProvider provider, AgentConversationRuntimeController viewModel})
+>
 _prepareEventStormAgentPane(
   WidgetTester tester, {
   required AgentEventStormFixture fixture,
@@ -2424,7 +2439,7 @@ _prepareEventStormAgentPane(
     failureMessage: 'Storm phase 1 AgentPane did not become ready',
   );
 
-  final viewModel = tester.widget<AgentPane>(find.byType(AgentPane)).viewModel;
+  final viewModel = tester.widget<AgentPane>(find.byType(AgentPane)).controller;
   await _attachLiveEventPipelineForStorm(
     tester,
     provider: provider,
@@ -2440,7 +2455,7 @@ _prepareEventStormAgentPane(
 Future<void> _attachLiveEventPipelineForStorm(
   WidgetTester tester, {
   required FakeAgentProvider provider,
-  required AgentConversationViewModel viewModel,
+  required AgentConversationRuntimeController viewModel,
   required String sessionId,
 }) async {
   final sentBefore = provider.sentMessages.length;
@@ -2468,7 +2483,7 @@ Future<void> _attachLiveEventPipelineForStorm(
 
 Future<void> _drainAgentEventSubset(
   WidgetTester tester, {
-  required AgentConversationViewModel viewModel,
+  required AgentConversationRuntimeController viewModel,
   required int beforeReceivedEvents,
   required int expectedInputEventCount,
 }) async {
@@ -2757,7 +2772,7 @@ void _expectRetainedAgentContentState(
   expect(headerTitleText(tester), 'Retained thread');
   expect(
     (retained.agentPaneElement.widget as AgentPane)
-        .viewModel
+        .controller
         .selectedConversationMode,
     retained.selectedMode,
   );
