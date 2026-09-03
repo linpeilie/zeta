@@ -1,0 +1,316 @@
+# WP-3 · 时间线渲染分发注册表（插件化）
+
+| 项 | 值 |
+|----|----|
+| 状态 | 未开始 |
+| 规模 | 3–4 人天，1–2 个 PR |
+| 依赖 | **WP-2 完成后启动**（文件先独立）；与 WP-1 解耦（只依赖 `AgentConversationCommandPort` 窄接口） |
+| 门禁焦点 | G6；「新增条目类型 = 新增一个 renderer 文件」 |
+
+---
+
+## 0. 背景与现状代码
+
+一种 block 类型的渲染职责目前**分散在四个文件**（以命令集为例）：
+
+| 职责 | 现状位置 | 现状代码 |
+|---|---|---|
+| 分组归约 | `agent_timeline_grouping.dart:140-250` | `buildAgentTimelineRenderBlocks` |
+| extent 估算 | `agent_timeline_extent_descriptor.dart:403-418` | `_estimateCommandGroup` |
+| 展开态指纹 | 同上 `:337-354` | `_blockExpansionFingerprint` |
+| Widget 构建 | `agent_pane_sections.dart:777-778` | switch case → `_AgentCommandGroupCard`（cards.dart:10-60） |
+| 导航目录 | `agent_pane_navigation_rail.dart` | 独立谓词 |
+
+新增一种卡片要同步改 4 处，漏改 extent 就引发滚动跳动（`IdeAnchoredDynamicSliverList` 用估算高度维持锚点）。
+
+**现状两处 switch**（`agent_pane_sections.dart`）：
+
+```dart
+// :771-781  block → Widget
+final content = switch (block) {
+  AgentTimelineEntryRenderBlock(:final entry) => _buildTimelineEntry(context, entry, ...),
+  AgentTimelineCommandGroupRenderBlock(:final group) => _AgentCommandGroupCard(...),
+  AgentTimelineFileEditGroupRenderBlock(:final group) => _AgentFileEditGroupCard(...),
+};
+
+// :804-831  entry → Widget（_buildTimelineEntry 内）
+return switch (entry) {
+  AgentMessageTimelineEntry(:final message) => _AgentMessageEntry(...),
+  AgentToolTimelineEntry(:final toolCall) => _AgentToolCallCard(...),
+  AgentPermissionTimelineEntry() => const SizedBox.shrink(),
+  AgentQuestionTimelineEntry() => const SizedBox.shrink(),
+  AgentPlanApprovalTimelineEntry(:final request) => _buildPlanApprovalCard(context, request),
+  AgentTurnFileChangesTimelineEntry() => const SizedBox.shrink(),
+  AgentHistoryEventTimelineEntry(:final event) => _AgentHistoryEventCard(event: event),
+};
+```
+
+extent 工厂侧对应的分支在 `_kindOf`（`:167-190`）与 `_estimateExtent`（`:356-401`）。
+
+## 1. 目标与非目标
+
+- **目标**：`AgentTimelineRendererRegistry` 把「渲染 + extent 估算 + 展开指纹 + 目录谓词」收敛为单条目；两处 switch 收敛为一次注册表查询；新增类型只加一个文件 + 一行注册。
+- **非目标**：不改 `buildAgentTimelineRenderBlocks` 的归约算法；不改 `IdeAnchoredDynamicSliverList`；不改任何卡片视觉；viewport 层的 `AgentLiveActivityViewportItem` / `AgentTurnFooterViewportItem` 不是 block，**不进注册表**（它们的 kind/估算留在工厂，构建留在 `_buildViewportItem`）。
+
+## 2. 总体设计（实现前读完）
+
+### 2.1 核心类型（新文件 `presentation/timeline_rendering/agent_timeline_renderer.dart`）
+
+```dart
+/// 渲染上下文：renderer 需要的**稳定**外部依赖，每个 AgentPane 创建一次。
+/// 终审修正：pendingState / turn / isLive 是逐 build 变化的量，**不进 context**
+///（否则 context 必须每帧重建，「创建一次」不成立）——它们作为 build 的调用点参数传入。
+final class AgentTimelineRenderContext {
+  const AgentTimelineRenderContext({
+    required this.commands,          // AgentConversationCommandPort（窄接口，WP-1 后由 provider 提供）
+    required this.bindingKey,        // AgentConversationBindingKey（AgentRegionBuilder 用；WP-1 后替代 viewModel 参数）
+    required this.markdownCache,
+    required this.planRevisionDrafts,
+  });
+
+  final AgentConversationCommandPort commands;
+  final AgentConversationBindingKey bindingKey;
+  final AgentMarkdownCache markdownCache;
+  final AgentPlanRevisionDraftStore planRevisionDrafts;
+}
+
+/// 单个 payload 类型的完整渲染条目。payload 可能是 block（命令集/文件编辑组）
+/// 也可能是 entry（消息/工具卡/…）——registry resolve 时对 AgentTimelineEntryRenderBlock 解包。
+///
+/// 泛型说明：Dart 泛型类协变，`AgentTimelineRenderer<AgentMessageTimelineEntry>`
+/// 可直接赋值给 `AgentTimelineRenderer<Object>` 使用；registry 按精确 runtimeType
+/// 解析，build/estimate 入参的运行时类型必然匹配，协变插入的运行时检查不会触发。
+abstract interface class AgentTimelineRenderer<P extends Object> {
+  /// 该 renderer 接管的 payload 运行时类型（entry 类型或 block 类型）。
+  Type get payloadType;
+
+  /// extent 工厂用的稳定 kind 字符串（值必须等于 AgentTimelineExtentKinds 既有常量）。
+  String get kind;
+
+  /// 构建 Widget。turn 与 pendingState 随调用点传入（payload 里没有 turn 概念；
+  /// 现状 _buildTimelineEntry 的 isLiveTurn 判断 = viewModel.liveTurnState?.id == turn.id）。
+  Widget build(
+    P payload,
+    AgentTimelineRenderContext context, {
+    required AgentConversationTurnGroup turn,
+    required AgentPendingInteractionState pendingState,
+  });
+
+  /// 估算主轴高度。语义与现状 _estimateExtent 完全一致：
+  /// 输入 crossAxisExtent / textScale / 展开态 / 操作组邻接，输出 logical px。
+  double estimateExtent(
+    P payload, {
+    required double crossAxisExtent,
+    required double textScale,
+    required AgentTimelineExpansionLookup expansion,
+    required bool precededByOperationGroup,
+    required bool followedByOperationGroup,
+  });
+
+  /// 布局修订指纹：内容或展开态变化必须改变返回值（现状 _layoutRevision 语义）。
+  Object layoutRevision(P payload, AgentTimelineExpansionLookup expansion);
+
+  /// 是否计入导航目录（现状导航谓词内联语义）。
+  bool get rendersInline;
+
+  /// 可选：Sliver child 创建前的保温准备（现状 _prepareMarkdownWarmEntry 语义）。
+  /// 返回非 null 时列表层包 ValueListenableBuilder + KeepAlive；默认 null = 不保温。
+  /// isLive 取 viewport item 的 isLive 标志（现状 preferIncrementalUpdate 的数据源）。
+  /// 只有 agent 正文 markdown 消息实现它。
+  ValueListenable<bool>? prepareWarmEntry(
+    P payload,
+    AgentTimelineRenderContext context, {
+    required bool isLive,
+  }) =>
+      null;
+}
+```
+
+### 2.2 注册表（同目录 `agent_timeline_renderer_registry.dart`）
+
+**单层注册表**（2026-09-03 review 修正：取代初版的「block 级 + entry 级两级注册 + meta-renderer 再分发」——解包后一张平表即可，去掉一层间接）：
+
+```dart
+final class AgentTimelineRendererRegistry {
+  AgentTimelineRendererRegistry(List<AgentTimelineRenderer<Object>> renderers)
+      : _byPayloadType = {for (final r in renderers) r.payloadType: r} {
+    assert(_byPayloadType.isNotEmpty);
+  }
+
+  final Map<Type, AgentTimelineRenderer<Object>> _byPayloadType;
+
+  /// 解析失败即抛——fail-closed，不允许静默回退（G4 精神）。
+  AgentTimelineRenderer<Object> resolve(AgentTimelineRenderBlock block) {
+    // entry 级 block 解包：按 entry 类型查表。
+    final key = block is AgentTimelineEntryRenderBlock
+        ? block.entry.runtimeType
+        : block.runtimeType;
+    return _byPayloadType[key] ??
+        (throw UnsupportedError('未注册的时间线渲染类型: $key'));
+  }
+}
+```
+
+注册清单共 **9 条**（平铺）：entry 级 7 条（`AgentMessageTimelineEntry` / `AgentToolTimelineEntry` / `AgentPermissionTimelineEntry` / `AgentQuestionTimelineEntry` / `AgentPlanApprovalTimelineEntry` / `AgentTurnFileChangesTimelineEntry` / `AgentHistoryEventTimelineEntry`）+ block 级 2 条（`AgentTimelineCommandGroupRenderBlock` / `AgentTimelineFileEditGroupRenderBlock`）；不允许兜底，未注册即抛。
+
+**hidden 类 entry 的显式登记**（review 修正：消除一处现状隐患）：permission / question / turnFileChanges 三个 renderer 的 `build` 返回 `const SizedBox.shrink()`、`kind` 返回 `AgentTimelineExtentKinds.hidden`、`estimateExtent` 返回 0。注意现状 `_estimateEntry`（`agent_timeline_extent_descriptor.dart:441-479`）对这三类落到 `48 * scale` 兜底、而 sections 渲染零高度——`AgentTimelineExtentKinds.hidden`（`:35`）定义了却没有分支返回它。**迁移时先核对这三类 entry 是否真的到达视口**（读 `projectAgentTimelineViewportItems`）：若到达，现状就是「估算 48px、实际 0px」的虚拟化错位，本 WP 顺手修正并在 PR 描述记录；若不到达（被提前过滤），hidden renderer 是防御性登记，同样保留。
+
+### 2.3 extent 工厂改造
+
+`AgentTimelineExtentDescriptorFactory.describe`（`:134-165`）内的 `_kindOf` / `_layoutRevision` / `_estimateExtent` 三个私有方法的 block 分支，改为查询注册表：
+
+```dart
+// 改后骨架
+String _kindOf(AgentTimelineViewportItem item) => switch (item) {
+  AgentLiveActivityViewportItem() => AgentTimelineExtentKinds.liveActivity,   // 保留
+  AgentTurnFooterViewportItem() => AgentTimelineExtentKinds.turnFooter,       // 保留
+  AgentBlockViewportItem(:final block) => _registry.resolve(block).kind,      // 注册表（内部解包 entry）
+};
+```
+
+`AgentTimelineLayoutContext` / `describeAll` 的 descriptor 复用机制（`:106-131`）原样保留，不动。
+
+`_estimateExtent` / `_layoutRevision` 同理：viewport 级两种保留现状分支，block 级委托 `renderer.estimateExtent(...)` / `renderer.layoutRevision(...)`。
+
+### 2.4 sections 改造
+
+`_AgentTimelineBlockSection.build`（`:769-796`）的两处 switch 收敛为：
+
+```dart
+@override
+Widget build(BuildContext context) {
+  final renderer = registry.resolve(block);
+  final payload = block is AgentTimelineEntryRenderBlock ? block.entry : block;
+  final content = renderer.build(
+    payload,
+    renderContext,
+    turn: turn,
+    pendingState: pendingState,   // 本 section 的既有字段，逐 build 传入
+  );
+  final child = isAgentTimelineOperationGroupBlock(block)
+      ? Padding(padding: _operationGroupOuterPadding(...), child: content)  // 保留现状
+      : content;
+  return KeyedSubtree(key: ValueKey<String>('turn-block-${turn.id}-${block.id}'), child: child);
+}
+```
+
+操作组外间距逻辑（`:782-791`）**保留在列表层**，不进 renderer——它是块间关系，不是块内职责。
+
+**保温钩子同步迁移**：`_prepareMarkdownWarmEntry`（`:707-730`）的类型判断链删除，itemBuilder 里（`:427-440`）改为：
+
+```dart
+final keepAliveListenable = item is AgentBlockViewportItem
+    ? registry.resolve(item.block).prepareWarmEntry(
+        item.block is AgentTimelineEntryRenderBlock ? item.block.entry : item.block,
+        renderContext,
+        isLive: item.isLive,
+      )
+    : null;
+// null → 不包 KeepAlive（现状行为）；非 null → ValueListenableBuilder + KeepAlive（现状行为）
+```
+
+只有 `AgentMessageRenderer.prepareWarmEntry` 返回非 null（agent 角色 + 非 plan 时调 `context.markdownCache.prepareWarmEntry(messageId:..., data:..., preferIncrementalUpdate: isLive)`）——逻辑逐行平移，判断条件不变。
+
+### 2.5 注入
+
+`AgentPane` 组合段创建一次注册表与 `AgentTimelineRenderContext`（`AgentPane` initState 或组合根；context 只含稳定依赖，创建一次成立），沿 `_AgentConversationTimeline` 构造参数下传（该构造已有 12 个参数，viewModel/markdownCache/planRevisionDrafts 并入 context；`pendingState` 保持现状作为 `_AgentTimelineBlockSection` 的逐 build 字段，不进 context）。**不做**全局单例/静态注册表——测试要能注入裁剪版。
+
+## 3. 任务拆分
+
+### T1 · 类型与注册表落地（0.5 人天）
+
+1. 按 §2.1/§2.2 建两个文件；`AgentTimelineExtentKinds` 常量从 extent_descriptor 平移或复用（保持字符串值不变）。
+2. 单测：注册表 resolve 命中/未命中抛 `UnsupportedError`；重复注册同类型抛错（构造函数里加断言）。
+
+**验收**：类型编译通过；注册表单测 3 条绿。
+
+### T2 · 迭代迁移 renderer（1.5–2 人天）
+
+**顺序**：`AgentCommandGroupRenderer`（最简单，做样板）→ `AgentFileEditGroupRenderer` → entry 级 7 个（message / toolCall / permission / question / planApproval / turnFileChanges / historyEvent，其中 permission/question/turnFileChanges 按 §2.2 的 hidden 规约登记）。
+
+**样板：命令集 renderer 完整迁移**（照此模式做其余 8 个）：
+
+```dart
+final class AgentCommandGroupRenderer
+    implements AgentTimelineRenderer<AgentTimelineCommandGroupRenderBlock> {
+  const AgentCommandGroupRenderer();
+
+  @override
+  Type get payloadType => AgentTimelineCommandGroupRenderBlock;
+
+  @override
+  String get kind => AgentTimelineExtentKinds.commandGroup; // 值不变
+
+  @override
+  Widget build(
+    AgentTimelineCommandGroupRenderBlock block,
+    AgentTimelineRenderContext context, {
+    required AgentConversationTurnGroup turn,
+    required AgentPendingInteractionState pendingState,
+  }) {
+    // 平移 _AgentCommandGroupCard（cards.dart:10-60）的 build：
+    // viewModel.toggleCommandGroup → context.commands.toggleCommandGroup
+    // AgentRegionBuilder 的 viewModel 参数 → context.bindingKey
+    // 卡片构造参数以 WP-2 后的实际签名为准（此处为示意）
+    return AgentCommandGroupCard(group: block.group, renderContext: context);
+  }
+
+  @override
+  double estimateExtent(...) {
+    // 平移 _estimateCommandGroup（extent_descriptor.dart:403-418）原逻辑，逐行不改
+  }
+
+  @override
+  Object layoutRevision(block, expansion) {
+    // 平移 _blockExpansionFingerprint 中 commandGroup 分支（:337-354）
+  }
+
+  @override
+  bool get rendersInline => true;
+  // prepareWarmEntry 不覆写：默认 null（命令集无 markdown 保温）
+}
+```
+
+**每迁移一个条目，跑对齐测试**（新文件 `test/.../agent_timeline_extent_alignment_test.dart`）：
+
+```dart
+test('commandGroup extent 与迁移前一致', () {
+  // 用固定 fixture block + 固定 layoutContext，对比 renderer.estimateExtent
+  // 与迁移前工厂输出的快照值（先把现状值作为 expected 写死，再迁移）
+});
+```
+
+**验收**：9 个条目全部迁移；每个都有 extent 对齐断言；`test_affected.sh` 绿。
+
+### T3 · 收敛 switch + 导航谓词（0.5–1 人天）
+
+1. sections 两处 switch 按 §2.4 收敛；`_buildTimelineEntry` / `_buildPlanApprovalCard` 删除（逻辑已在 renderer 内）。
+2. `agent_pane_navigation_rail.dart` 的目录收集改为 `registry.resolve(block).rendersInline`。
+3. 守卫测试（放 `test/src/features/agent/architecture/`）：
+
+```dart
+test('所有 block 类型均有注册 renderer', () {
+  // 反射不可行——用穷举：构造每种 block 的 fixture 实例，registry.resolve 不抛
+});
+```
+
+**验收**：`grep -n "switch (block)\|switch (entry)" agent_pane_sections.dart` 零命中。
+
+### T4 · 注入接线 + 收尾（0.5 人天）
+
+- [ ] `AgentPane` 组合段建注册表 + context；`_AgentConversationTimeline` 构造参数收敛（12 个参数中 viewModel/markdownCache/planRevisionDrafts 并入 context；pendingState 保持逐 build 传递）。
+- [ ] `bash tool/test_full.sh` 绿；登记 `00-index.md` §6「开发记录」。
+
+## 4. 风险与回滚
+
+| 风险 | 缓解 |
+|------|------|
+| extent 迁移偏差 → 滚动跳动 | T2 逐条目对齐测试；Windows Profile 采样对比（AGENTS.md 热路径要求） |
+| 展开指纹漏迁 → 展开态不触发重布局 | `layoutRevision` 迁移时对照 `_blockExpansionFingerprint` 逐字段核对 |
+| 与 WP-1 并行改 sections 冲突 | 按 DR-003 顺序；context 的 `commands/bindingKey` 字段已兼容 WP-1 目标形态 |
+
+## 5. 完成定义（DoD）
+
+- [ ] 新增条目类型 = 新增 1 个 renderer 文件 + 1 行注册（在 PR 描述中演示一遍）。
+- [ ] sections 无 block/entry switch；extent 工厂无 block 类型分支。
+- [ ] `tool/test_full.sh` 绿；CHANGELOG 无条目。

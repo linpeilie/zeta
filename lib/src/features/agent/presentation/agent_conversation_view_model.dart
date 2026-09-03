@@ -119,6 +119,7 @@ class AgentConversationViewModel
       frameScheduler: uiFrameScheduler,
       metrics: metrics,
       providerId: conversationBinding.providerId,
+      providerMetricLabel: providerMetricLabel,
     );
     _uiUpdates = _uiUpdateScheduler;
     _eventStateSink = _AgentConversationStateSink(this);
