@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |----|----|
-| 状态 | 进行中（T1–T5 已完成） |
+| 状态 | 已完成 |
 | 规模 | 2–3 人天，1–2 个 PR |
 | 依赖 | 无；**是 WP-3 / WP-4 的地基** |
 | 门禁焦点 | G6 |
@@ -347,7 +347,7 @@ import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
 **施工记录**：按 T1 叶序将 7 个 L4 文件转为独立 library；表 C 符号去下划线；State / `_showComposerSelectorPopover` / `_composerSelectorRowHeight` 保持私有。公开 widget 补 `super.key`。`agent_mode_selector_test.dart` 改 import `widgets/agent_mode_selector.dart`。壳去掉已无用的 `gestures` / `workspace_file_corpus_port` / `agent_model_config_ui_state` import。`flutter analyze` 零 issue；`tool/test_affected.sh` 53 个根测试全绿。剩余 7 个 part：cards / context_panel / header / messages / plan_panel / sections / navigation_rail（T4）。
 
-### T6 · 壳收缩与全量门禁（0.5 人天）
+### T6 · 壳收缩与全量门禁（0.5 人天） · 已完成（2026-09-03）
 
 1. `agent_pane.dart` 删 15 行 `part`，改为 import 各独立文件；确认壳只留：页面组合（`AgentPane` / `_AgentPaneState`）、`IdeConstraintBucketBuilder`、滚动协作、context panel 显隐接线、图片粘贴接线（WP-1 已把 IO 下沉到 data 端口，壳不再 `import dart:io`）。
 2. 自检 diff 纯度：
@@ -360,6 +360,8 @@ git diff -U0 | grep -E "^[+-]" | grep -vE "^[+-]{3}|import |part |^[-+]\s*$" | l
 
 3. `bash tool/test_full.sh` 全绿；登记 `00-index.md` §6「开发记录」。
 
+**施工记录**：T4/T5 已去掉全部 `part`。壳仍有 ~1246 行 Composer 交互与对话树，抽到 `agent_pane_composer_session.dart` 与 `widgets/agent_pane_body.dart`。`agent_pane.dart` 现 329 行，只留页面组合、宽度档位、滚动协作、上下文面板显隐与命令面接线。草稿图 `ValueListenableBuilder` 仍包在 Composer 段，避免改图重建整棵时间线。`flutter analyze` 零 issue；`tool/test_affected.sh` 绿；`tool/test_full.sh` 绿（含内部 Package）。CHANGELOG 无条目。
+
 ## 3. 风险与回滚
 
 | 风险 | 缓解 |
@@ -370,6 +372,6 @@ git diff -U0 | grep -E "^[+-]" | grep -vE "^[+-]{3}|import |part |^[-+]\s*$" | l
 
 ## 4. 完成定义（DoD）
 
-- [ ] `grep -rnE "^(part |part of )" lib/src/features/agent/presentation` 零命中（注意必须带 `-E`，BRE 下 `|` 是字面量）。
-- [ ] `agent_pane.dart` < 400 行。
-- [ ] `tool/test_full.sh` 绿且测试断言零修改；CHANGELOG 无条目。
+- [x] `grep -rnE "^(part |part of )" lib/src/features/agent/presentation` 零命中（注意必须带 `-E`，BRE 下 `|` 是字面量）。
+- [x] `agent_pane.dart` < 400 行。
+- [x] `tool/test_full.sh` 绿且测试断言零修改；CHANGELOG 无条目。
