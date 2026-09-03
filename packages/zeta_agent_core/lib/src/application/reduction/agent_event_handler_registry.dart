@@ -46,11 +46,28 @@ final class AgentEventHandlerRegistry {
   }
 }
 
-/// 注册表建造器。默认表 seal 之后，四种审批语义 handler 不允许再被覆盖（G5）。
+/// 注册表建造器。默认表 seal 之后，审批类事件 handler 不允许再被覆盖（G5）。
 final class AgentEventHandlerRegistryBuilder {
   final Map<Type, _HandlerEntry> _entries = <Type, _HandlerEntry>{};
   var _sealed = false;
 
+  /// seal 之后禁止 Provider 覆盖的事件类型。
+  ///
+  /// 覆盖 G5 四种审批语义中**有对应 Provider 事件**的三种：权限、提问、
+  /// Plan 审批（各含 requested / resolved）。
+  ///
+  /// 第四种「Plan 执行交接」**不在这里**，因为它没有对应的 [AgentEvent]——
+  /// 它是 Zeta 本地概念，由 [AgentTurnCompletedEvent] 的 handler 产出
+  /// `AgentAutoStartPlanExecutionEffect` 触发。它的保护在 **effect 层**：
+  /// 该 effect 强制 `requireThread: true`，scope 必须带 turnId，执行前由
+  /// `DefaultAgentConversationEffectRunner` 重新校验 listener generation /
+  /// runtime / epoch（见 `agent_conversation_effect_runner_test.dart` 的
+  /// 「runtime 换代后不再自动启动 Plan 执行」）。
+  ///
+  /// 因此 [AgentTurnCompletedEvent] 是**可覆盖**的：turn 完成有大量正当的
+  /// Provider 定制需求。覆盖者仍然绕不过 effect 层的身份校验，但**可以**改变
+  /// 是否发射该 effect——覆盖 turn completed handler 的 PR 必须在描述里说明
+  /// 对 Plan 执行交接的影响。
   static const Set<Type> _nonOverridable = <Type>{
     AgentPermissionRequestedEvent,
     AgentPermissionResolvedEvent,

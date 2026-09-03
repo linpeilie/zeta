@@ -95,8 +95,16 @@ lib/src/features/agent/data/mappers/acp_*.dart      # 共享 ACP decoder/codec/m
   五文件适用同一条纯度规则。
 - 每个覆盖 handler 必须在 PR 描述里回答："共享实现为什么不适用？"回答不了，
   说明问题该在该 Provider 的 adapter/reducer 里消化，而不是在归约层分叉。
-- 覆盖 handler 不得放宽权限、审批或 Plan 交接语义（G5）。四种审批语义的
-  handler（permission / question / planApproval / planExecution）**不允许覆盖**。
+- 覆盖 handler 不得放宽权限、审批或 Plan 交接语义（G5）。**权限、提问、Plan 审批**
+  三类事件的 handler（各含 requested / resolved，共 6 个事件类型）**不允许覆盖**：
+  `AgentEventHandlerRegistryBuilder.register` 在 seal 之后对它们抛 `StateError`。
+- G5 的第四种语义「Plan 执行交接」没有对应的 `AgentEvent`，因此**没有 handler
+  可保护**——它由 `AgentTurnCompletedEvent` 的 handler 产出
+  `AgentAutoStartPlanExecutionEffect` 触发，保护在 **effect 层**：强制
+  `requireThread: true`、scope 必须带 turnId，执行前重新校验 listener
+  generation / runtime / epoch。`AgentTurnCompletedEvent` 本身**是可覆盖的**
+  （turn 完成有正当的 Provider 定制需求），但覆盖它的 PR 必须在描述里说明对
+  Plan 执行交接的影响。
 
 **自查**（应无输出；注释里出现 Provider 名做说明是允许的）：
 

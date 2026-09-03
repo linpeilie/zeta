@@ -64,6 +64,47 @@ void main() {
       },
     );
 
+    test('after-effects observe already-applied state and timeline', () {
+      // P4 把 afterMutation effect 挪到了 UI 发布之前（processor._apply 的注释
+      // 解释了原因：原 stateChanges 里的 setTurnRunning / bind mode 会同步触发
+      // composer 刷新，放在 publish 之后会盖掉本次派生的 region）。
+      //
+      // 这条测试锁住那个改动**赖以成立的不变量**：effect 跑的时候，state 和
+      // timeline 都已经应用完了。所以 AgentTurnCompletedEffect 触发的通知
+      // 回调读到的是终态，而不是 turn 仍在运行的中间态——"提前一拍"因此不
+      // 影响注意力回调语义。上面那条顺序断言只钉住相对次序，不保证这一点。
+      final timeline = _runningTimeline();
+      addTearDown(timeline.dispose);
+      final stateSink = _RecordingStateSink();
+      final observations = <String, bool>{};
+      final effectRunner = _ObservingEffectRunner((effect) {
+        if (effect is AgentTurnCompletedEffect) {
+          observations['turnRunning'] = timeline.isTurnRunning;
+          observations['isHistoryTurn'] = timeline.isHistoryTurnId('turn-1');
+          observations['runtimeCleared'] =
+              stateSink.sessionState.threadRuntimeStatus == null ||
+              stateSink.sessionState.threadRuntimeStatus !=
+                  AgentThreadRuntimeStatus.active;
+        }
+      });
+      final processor = _processor(
+        timeline: timeline,
+        stateSink: stateSink,
+        uiUpdates: _RecordingUiUpdatePort(<String>[]),
+        effectRunner: effectRunner,
+      );
+
+      processor.process(
+        const AgentTurnCompletedEvent(sessionId: 'thread-1', turnId: 'turn-1'),
+      );
+
+      expect(observations, <String, bool>{
+        'turnRunning': false,
+        'isHistoryTurn': true,
+        'runtimeCleared': true,
+      }, reason: 'turn 完成通知必须看到已归档的终态时间线与已写回的 state');
+    });
+
     test('runs a rejected error logging effect before returning', () {
       // Arrange
       final order = <String>[];
@@ -329,6 +370,20 @@ final class _RecordingStateSink implements AgentConversationStateSink {
     snapshotRefreshRequests += 1;
     order.add('snapshot');
   }
+}
+
+/// 在每个 effect 执行的那一刻回调，用于观察当时的 state / timeline 快照。
+final class _ObservingEffectRunner implements AgentConversationEffectRunner {
+  _ObservingEffectRunner(this.onRun);
+
+  final void Function(AgentConversationEffect effect) onRun;
+  bool disposed = false;
+
+  @override
+  void run(AgentConversationEffect effect) => onRun(effect);
+
+  @override
+  void dispose() => disposed = true;
 }
 
 final class _RecordingUiUpdatePort implements AgentUiUpdatePort {

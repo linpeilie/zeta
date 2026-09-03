@@ -156,8 +156,19 @@ final class AgentConversationSessionState {
     currentThreadPreview,
     modelRerouteNotice,
     Object.hashAll(sessionConfigOptions),
-    Object.hashAll(autoReviewsByTurnId.entries),
+    _autoReviewsHash,
     latestDeniedAutoReview,
     requiresResumedSelectedThread,
   );
+
+  /// `Map.entries` 每次迭代都新建 [MapEntry]，而 [MapEntry] 不覆写
+  /// `==` / `hashCode`（恒等语义）。直接 `Object.hashAll(map.entries)` 会让
+  /// **同一个对象**两次读 `hashCode` 得到不同值，违反 Object 契约。
+  ///
+  /// 逐对 [Object.hash] 后走无序聚合：与 [zetaMapEquals] 的「键集合相同且逐键
+  /// 值相等、与插入顺序无关」保持一致。
+  int get _autoReviewsHash => Object.hashAllUnordered(<int>[
+    for (final entry in autoReviewsByTurnId.entries)
+      Object.hash(entry.key, entry.value),
+  ]);
 }

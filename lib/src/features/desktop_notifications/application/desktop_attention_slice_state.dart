@@ -72,7 +72,12 @@ final class DesktopAttentionSliceState {
     initialized,
     settings,
     visibility,
-    Object.hashAllUnordered(unreadByIdentity.entries),
+    // MapEntry 不覆写 == / hashCode（恒等语义），且 Map.entries 每次迭代都新建
+    // 实例：直接聚合 entries 会让同一对象两次读 hashCode 得到不同值。
+    Object.hashAllUnordered(<int>[
+      for (final entry in unreadByIdentity.entries)
+        Object.hash(entry.key, entry.value),
+    ]),
     nextNotificationId,
   );
 }

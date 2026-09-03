@@ -198,7 +198,7 @@ Common types: `feat` / `fix` / `docs` / `refactor` / `test` / `chore` / `perf`.
 
 - Raw provider protocol **may only exist in the data layer**. UI and application code consume neutral domain events and contracts.
 - Shared layers (decoder, CoalescingPolicy/Buffer, Pipeline, TimelineStore, handler registry) **must contain no provider imports, kind branches, id branches, or raw field reads**.
-- Provider override handlers may be registered only in that provider's own bundle; the four approval-semantics handlers cannot be overridden.
+- Provider override handlers may be registered only in that provider's own bundle; permission / question / plan-approval handlers cannot be overridden (plan-execution handoff has no matching event — it is protected at the effect layer).
 - File changes must become complete typed snapshots in a provider-local tracker first. The Store only carries them mechanically, the UI never reads raw fields, and a command-only path must not invent a path or diff.
 - Adding a provider should touch only its own data files, neutral domain contracts, factory wiring, and contract tests. If you find yourself needing to modify a shared layer, the abstraction is wrong — open an issue first.
 - UI renders strictly by **capability**, never hard-coded on provider kind or name. Unsupported capabilities must report `capability = false` and throw `UnsupportedError` — **never succeed silently**.

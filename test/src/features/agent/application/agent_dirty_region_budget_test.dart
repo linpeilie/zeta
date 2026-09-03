@@ -174,6 +174,65 @@ void main() {
         equals(<AgentUiRegion>{AgentUiRegion.composer}),
       );
     });
+
+    test('auto approval review 只点亮 pendingInteraction', () {
+      // 改造前 _autoApprovalReview 刷的是 [header, liveTurn, history]，而这份
+      // 数据实际住在 AgentPendingInteractionState（VM._buildPendingInteractionState），
+      // 渲染在 pending interaction dock —— 那三个 region 没一个带它。
+      // 脏区派生把它纠正成 pendingInteraction；这条测试锁住修复，防止回退。
+      const baseline = AgentConversationSessionState.initial(
+        defaultTitle: 'Thread',
+      );
+      const review = AgentAutoApprovalReviewEvent(
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        reviewId: 'review-1',
+        status: 'denied',
+      );
+
+      final reduced = AgentConversationReducer.live()
+          .reduce(review, baseline, _reducerContext())
+          .state;
+
+      expect(reduced.autoReviewsByTurnId, hasLength(1));
+      expect(reduced.latestDeniedAutoReview, same(review));
+      expect(
+        agentUiRegionsFromSessionStateDiff(baseline, reduced),
+        equals(<AgentUiRegion>{AgentUiRegion.pendingInteraction}),
+      );
+    });
+
+    test('latestDeniedAutoReview 被清除同样点亮 pendingInteraction', () {
+      const baseline = AgentConversationSessionState.initial(
+        defaultTitle: 'Thread',
+      );
+      const denied = AgentAutoApprovalReviewEvent(
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        reviewId: 'review-1',
+        status: 'denied',
+      );
+      const approved = AgentAutoApprovalReviewEvent(
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        reviewId: 'review-1',
+        status: 'approved',
+      );
+
+      final reducer = AgentConversationReducer.live();
+      final afterDenied = reducer
+          .reduce(denied, baseline, _reducerContext())
+          .state;
+      final afterApproved = reducer
+          .reduce(approved, afterDenied, _reducerContext())
+          .state;
+
+      expect(afterApproved.latestDeniedAutoReview, isNull);
+      expect(
+        agentUiRegionsFromSessionStateDiff(afterDenied, afterApproved),
+        contains(AgentUiRegion.pendingInteraction),
+      );
+    });
   });
 }
 
@@ -245,4 +304,28 @@ final class _NoopEffects implements AgentConversationEffectRunner {
 
   @override
   void dispose() {}
+}
+
+/// 只做 state 归约的最小 context：不接 timeline，turn 相关端口给保守默认值。
+AgentConversationReducerContext _reducerContext() {
+  return AgentConversationReducerContext(
+    scope: AgentConversationReductionScope.live,
+    selectedThreadId: 'thread-1',
+    requiresResumedSelectedThread: false,
+    pendingTurnGroupId: null,
+    hasTurn: (_) => true,
+    isHistoryTurnId: (_) => false,
+    hasRunningTurnExcluding: (_) => false,
+    modelsRefreshing: false,
+    activeProviderName: 'Codex',
+    activeProviderConfig: defaultCodexAgentProviderConfig,
+    effectScope: const AgentConversationEffectScope(
+      reductionScope: AgentConversationReductionScope.live,
+      providerId: 'codex',
+      listenerGeneration: 7,
+      runtimeId: 'runtime-1',
+      connectionEpoch: 3,
+      threadId: 'thread-1',
+    ),
+  );
 }

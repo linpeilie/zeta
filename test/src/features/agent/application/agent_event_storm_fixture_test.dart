@@ -194,15 +194,31 @@ void main() {
         first.delivery.turnCompletedCount,
       );
       expect(first.effects.providerErrorCount, first.delivery.errorCount);
-      expect(
-        first.effects.effectTypes,
-        containsAll(<Type>[
-          AgentAttentionEffect,
-          AgentLogProviderErrorEffect,
-          AgentTurnCompletedEffect,
-        ]),
-      );
+      // 精确序列（不是 containsAll）：同时钉死 effect 的**发射顺序**、精确
+      // 数量与「不出现预期外 effect」。P3 把 7 类副作用从状态通道搬进 effect
+      // 通道之后，这条断言就是那次搬迁的回归网——降级成 containsAll 会让
+      // 多发一次 AgentAutoStartPlanExecutionEffect 这类 G5 事故静默通过。
+      //
+      // turn 完成那一批的顺序体现 timing 语义：beforeMutation 的
+      // PreparePlanHandoff 先于三个 afterMutation effect。
+      expect(first.effects.effectTypes, const <Type>[
+        AgentSyncTurnRunningEffect, // turn started
+        AgentAttentionEffect, // permission requested
+        AgentAttentionEffect, // permission resolved
+        AgentLogProviderErrorEffect, // error
+        AgentPreparePlanHandoffEffect, // turn completed（beforeMutation）
+        AgentTurnCompletedEffect, // turn completed
+        AgentSyncTurnRunningEffect, // turn completed
+        AgentAutoStartPlanExecutionEffect, // turn completed
+      ]);
 
+      expect(
+        first.effects.effectTypes.where((type) => type == AgentAttentionEffect),
+        hasLength(
+          first.delivery.permissionRequestedCount +
+              first.delivery.permissionResolvedCount,
+        ),
+      );
       expect(
         first.effects.effectTypes.where(
           (type) => type == AgentPreparePlanHandoffEffect,

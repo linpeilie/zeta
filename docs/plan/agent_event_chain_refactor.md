@@ -1675,9 +1675,13 @@ grep -rnE "(codex|grok|claude|cursor)" \
 ​```
 ```
 
-> 注意最后一条：**四种审批语义的 handler 不允许覆盖**。这条是把 G5 的隔离要求
-> 前推到注册表层，避免"Provider 可覆盖"变成绕过审批语义的入口。
-> 实施时在 `AgentEventHandlerRegistryBuilder.register` 里硬编码一张禁止覆盖清单：
+> 注意最后一条。**修正（实施后 review 发现）**：原措辞写的是"四种审批语义的
+> handler 不允许覆盖"，但 G5 的第四种语义「Plan 执行交接」**没有对应的
+> `AgentEvent`**，因而没有 handler 可以保护——它由 `AgentTurnCompletedEvent`
+> 的 handler 产出 `AgentAutoStartPlanExecutionEffect` 触发，保护在 **effect 层**
+> （`requireThread: true` + scope 带 turnId + 执行前重校验 generation/runtime/epoch）。
+> `AgentTurnCompletedEvent` 本身可覆盖。禁止覆盖清单实际覆盖三类共 6 个事件类型：
+> 实施时在 `AgentEventHandlerRegistryBuilder.register` 里硬编码：
 >
 > ```dart
 > static const _nonOverridable = <Type>{
