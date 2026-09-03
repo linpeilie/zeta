@@ -1,14 +1,29 @@
-part of '../agent_pane.dart';
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_ui/zeta_ui.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_region_state.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
+import 'package:zeta/src/features/agent/presentation/agent_flutter_listenable_adapter.dart';
+import 'package:zeta/src/features/agent/presentation/agent_presentation_l10n.dart';
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_region_builder.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_sections.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
 const double _activePlanPanelMaxWidth = 340;
 const double _activePlanScrollMaxHeight = 200;
 
 /// 固定在 Composer 上方的当前 turn 结构化计划。
-class _AgentActivePlanSection extends StatelessWidget {
-  const _AgentActivePlanSection({
+class AgentActivePlanSection extends StatelessWidget {
+  const AgentActivePlanSection({
     required this.controller,
     required this.pagePadding,
     required this.onExtentChanged,
+    super.key,
   });
 
   final AgentConversationRuntimeController controller;
@@ -46,7 +61,7 @@ class _AgentActivePlanSection extends StatelessWidget {
                         if (!controller.shouldShowActivePlan) {
                           return const SizedBox.shrink();
                         }
-                        return _AgentContentAlign(
+                        return AgentContentAlign(
                           // CustomMultiChildLayout 会给浮层一个有界最大高度；这里必须按内容
                           // 收缩，否则 Align 会占满 Footer 上方空间并把卡片留在时间线顶部。
                           shrinkWrapHeight: true,

@@ -1,4 +1,27 @@
-part of '../agent_pane.dart';
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:highlight/highlight.dart' show Node, highlight;
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
+
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_ui/zeta_ui.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_region_state.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
+import 'package:zeta/src/features/agent/presentation/agent_flutter_listenable_adapter.dart';
+import 'package:zeta/src/features/agent/presentation/agent_plan_revision_drafts.dart';
+import 'package:zeta/src/features/agent/presentation/agent_presentation_l10n.dart';
+import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_region_builder.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_file_change_evidence_card.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_markdown_body.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_model_config.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_composer.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_styles.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_text.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
 /// 永不通知的 [Listenable]：用于"本次不需要 elapsed 时钟"的分支，
 /// 避免为了条件订阅去改变 widget 树形状。
@@ -7,8 +30,12 @@ final Listenable _neverNotifies = ChangeNotifier();
 /// 命令集折叠卡片。
 ///
 /// 连续工具调用和搜索事件会先规约成命令集，在这里统一展示摘要与展开列表。
-class _AgentCommandGroupCard extends StatelessWidget {
-  const _AgentCommandGroupCard({required this.group, required this.controller});
+class AgentCommandGroupCard extends StatelessWidget {
+  const AgentCommandGroupCard({
+    required this.group,
+    required this.controller,
+    super.key,
+  });
 
   final AgentTimelineCommandGroup group;
   final AgentConversationRuntimeController controller;
@@ -92,21 +119,21 @@ String _commandGroupItemTitle(
 /// 文件编辑组折叠卡片。
 ///
 /// 连续编辑操作会按文件拆分后显示在该组中，每个文件项支持独立展开详情。
-class _AgentFileEditGroupCard extends StatefulWidget {
-  const _AgentFileEditGroupCard({
+class AgentFileEditGroupCard extends StatefulWidget {
+  const AgentFileEditGroupCard({
     required this.group,
     required this.controller,
+    super.key,
   });
 
   final AgentTimelineFileEditGroup group;
   final AgentConversationRuntimeController controller;
 
   @override
-  State<_AgentFileEditGroupCard> createState() =>
-      _AgentFileEditGroupCardState();
+  State<AgentFileEditGroupCard> createState() => _AgentFileEditGroupCardState();
 }
 
-class _AgentFileEditGroupCardState extends State<_AgentFileEditGroupCard> {
+class _AgentFileEditGroupCardState extends State<AgentFileEditGroupCard> {
   bool _expanded = false;
 
   @override
@@ -195,22 +222,22 @@ class _AgentFileEditItemRow extends StatelessWidget {
   }
 }
 
-class _AgentHighlightedCodeBlock extends StatefulWidget {
-  const _AgentHighlightedCodeBlock({
+class AgentHighlightedCodeBlock extends StatefulWidget {
+  const AgentHighlightedCodeBlock({
     required this.code,
     required this.language,
+    super.key,
   });
 
   final String code;
   final String language;
 
   @override
-  State<_AgentHighlightedCodeBlock> createState() =>
+  State<AgentHighlightedCodeBlock> createState() =>
       _AgentHighlightedCodeBlockState();
 }
 
-class _AgentHighlightedCodeBlockState
-    extends State<_AgentHighlightedCodeBlock> {
+class _AgentHighlightedCodeBlockState extends State<AgentHighlightedCodeBlock> {
   TextSpan? _cachedHighlight;
   String? _cachedCode;
   String? _cachedLanguage;
@@ -325,8 +352,12 @@ class _AgentHighlightThemeSignature {
 /// 工具调用卡片。
 ///
 /// 命令输出、文件变更、计划等 provider 事件都会规约到这个组件展示。
-class _AgentToolCallCard extends StatelessWidget {
-  const _AgentToolCallCard({required this.toolCall, required this.controller});
+class AgentToolCallCard extends StatelessWidget {
+  const AgentToolCallCard({
+    required this.toolCall,
+    required this.controller,
+    super.key,
+  });
 
   final AgentToolCall toolCall;
   final AgentConversationRuntimeController controller;
@@ -447,8 +478,8 @@ String _toolCardTitle(AgentToolCall toolCall, AppLocalizations l10n) {
 ///
 /// 修改输入的控制器由 [AgentPlanRevisionDraftStore] 托管：卡片会随虚拟列表
 /// 回收，State 自持控制器会丢草稿。
-class _AgentPlanDocumentCard extends StatelessWidget {
-  const _AgentPlanDocumentCard({
+class AgentPlanDocumentCard extends StatelessWidget {
+  const AgentPlanDocumentCard({
     required this.requestId,
     required this.title,
     required this.subtitle,
@@ -850,12 +881,13 @@ IconData _planTodoIcon(String? status) {
 ///
 /// 中性悬浮卡：浅色表面 + 细描边，警告语义只落在左上角图标上。
 /// 标题描述本次请求；命令块是视觉焦点；按钮按主次排在底部。
-class _AgentPermissionCard extends StatefulWidget {
-  const _AgentPermissionCard({
+class AgentPermissionCard extends StatefulWidget {
+  const AgentPermissionCard({
     required this.request,
     required this.onRespond,
     this.autoReview,
     this.onApproveGuardian,
+    super.key,
   });
 
   final AgentPermissionRequest request;
@@ -870,10 +902,10 @@ class _AgentPermissionCard extends StatefulWidget {
   final VoidCallback? onApproveGuardian;
 
   @override
-  State<_AgentPermissionCard> createState() => _AgentPermissionCardState();
+  State<AgentPermissionCard> createState() => _AgentPermissionCardState();
 }
 
-class _AgentPermissionCardState extends State<_AgentPermissionCard> {
+class _AgentPermissionCardState extends State<AgentPermissionCard> {
   AgentPermissionRequest get request => widget.request;
 
   @override
@@ -1111,17 +1143,21 @@ class _AgentPermissionCommandBlock extends StatelessWidget {
 ///
 /// 同一请求一次只展示一道题。单选自动推进，多选和自由文本显式确认，
 /// 所有答案在最后一题完成时一次性回写 Provider。
-class _AgentQuestionCard extends StatefulWidget {
-  const _AgentQuestionCard({required this.request, required this.onRespond});
+class AgentQuestionCard extends StatefulWidget {
+  const AgentQuestionCard({
+    required this.request,
+    required this.onRespond,
+    super.key,
+  });
 
   final AgentQuestionRequest request;
   final ValueChanged<Map<String, List<String>>> onRespond;
 
   @override
-  State<_AgentQuestionCard> createState() => _AgentQuestionCardState();
+  State<AgentQuestionCard> createState() => _AgentQuestionCardState();
 }
 
-class _AgentQuestionCardState extends State<_AgentQuestionCard>
+class _AgentQuestionCardState extends State<AgentQuestionCard>
     with SingleTickerProviderStateMixin {
   static const double _compactHeaderBreakpoint = 520;
 
@@ -2018,8 +2054,8 @@ class _AgentQuestionOtherField extends StatelessWidget {
 }
 
 /// 只读历史事件卡片。
-class _AgentHistoryEventCard extends StatelessWidget {
-  const _AgentHistoryEventCard({required this.event});
+class AgentHistoryEventCard extends StatelessWidget {
+  const AgentHistoryEventCard({required this.event, super.key});
 
   final AgentHistoryEventEntry event;
 

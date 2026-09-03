@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |----|----|
-| 状态 | 进行中（T1–T3、T5 已完成） |
+| 状态 | 进行中（T1–T5 已完成） |
 | 规模 | 2–3 人天，1–2 个 PR |
 | 依赖 | 无；**是 WP-3 / WP-4 的地基** |
 | 门禁焦点 | G6 |
@@ -302,7 +302,7 @@ class AgentRawMarkdownBody extends StatelessWidget { /* 平移 :706-727 */ }
 
 **验收**：`grep -rn "_AgentRawMarkdownBody\|_AgentMarkdownBody[^S]" lib` 零命中；widget 测试绿。
 
-### T4 · 转换 L2–L3 文件（1 人天）
+### T4 · 转换 L2–L3 文件（1 人天） · 已完成（2026-09-03）
 
 **每个文件的固定动作序列**（以 `agent_pane_cards.dart` 为完整示例）：
 
@@ -332,6 +332,8 @@ import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 **转换顺序**（T1 叶序；**不可**先转 cards）：`header` 与 `navigation_rail` 可与 T5 并行 →（T5 完成后）`cards` → `messages` → `context_panel` → `sections` → `plan_panel`。
 
 **验收**：7 个文件全部无 `part of`；analyze 零新增告警；`test_affected.sh` 绿。
+
+**施工记录**：按 T1 叶序转换 header / navigation_rail / cards / messages / context_panel / sections / plan_panel。表 C 符号去下划线；State 与文件内 helper 保持私有。公开 widget 补 `super.key`。`AgentBuildTarget` 的 runtimeType 字符串同步为公开类名。壳去掉已无用 import（highlight / shadcn / grouping 等）。`lib/src/features/agent/presentation` 已无 `part` / `part of`。`flutter analyze` 零 issue；`tool/test_affected.sh` 53 个根测试全绿。
 
 ### T5 · 转换 L4 文件（0.5–1 人天） · 已完成（2026-09-03）
 

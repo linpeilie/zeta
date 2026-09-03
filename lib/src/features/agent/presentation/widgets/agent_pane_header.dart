@@ -1,11 +1,22 @@
-part of '../agent_pane.dart';
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
+
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_ui/zeta_ui.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_region_state.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_text.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
 /// thread 详情头部：左侧项目与会话标题，右侧 token、分叉与更多菜单。
-class _AgentHeader extends StatelessWidget {
-  const _AgentHeader({
+class AgentHeader extends StatelessWidget {
+  const AgentHeader({
     required this.controller,
     required this.state,
     required this.onToggleContextPanel,
+    super.key,
   });
 
   final AgentConversationRuntimeController controller;

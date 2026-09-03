@@ -4,9 +4,9 @@ import 'package:flutter/widgets.dart';
 abstract final class AgentBuildTarget {
   static const String ideHome = 'IdeHome';
   static const String agentPane = 'AgentPane';
-  static const String header = '_AgentHeader';
-  static const String composer = '_AgentComposerSection';
-  static const String liveTimeline = '_AgentConversationTimeline';
+  static const String header = 'AgentHeader';
+  static const String composer = 'AgentComposerSection';
+  static const String liveTimeline = 'AgentConversationTimeline';
 
   static const Set<String> all = <String>{
     ideHome,

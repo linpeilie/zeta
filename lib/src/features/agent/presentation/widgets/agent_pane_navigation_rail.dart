@@ -1,4 +1,11 @@
-part of '../agent_pane.dart';
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import 'package:zeta_ui/zeta_ui.dart';
+import 'package:zeta/src/features/agent/presentation/agent_conversation_navigation.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
 /// 默认「长」短横线宽度（偶数下标）。
 const double _kNavTickWidthLong = 12;
@@ -23,8 +30,8 @@ const double _kNavPreviewCardMaxWidth = 260;
 /// - 短线之间切换用 [IdeMotion] 过渡尺寸与颜色，避免跳变。
 ///
 /// 低对比度折叠态；不持久化任何正文。
-class _AgentConversationNavigationRail extends StatefulWidget {
-  const _AgentConversationNavigationRail({
+class AgentConversationNavigationRail extends StatefulWidget {
+  const AgentConversationNavigationRail({
     required this.entries,
     required this.activeTurnId,
     required this.onSelectTurn,
@@ -40,12 +47,12 @@ class _AgentConversationNavigationRail extends StatefulWidget {
   final bool compact;
 
   @override
-  State<_AgentConversationNavigationRail> createState() =>
+  State<AgentConversationNavigationRail> createState() =>
       _AgentConversationNavigationRailState();
 }
 
 class _AgentConversationNavigationRailState
-    extends State<_AgentConversationNavigationRail> {
+    extends State<AgentConversationNavigationRail> {
   late final FocusNode _focusNode;
   int _focusedIndex = 0;
 
@@ -61,7 +68,7 @@ class _AgentConversationNavigationRailState
   }
 
   @override
-  void didUpdateWidget(covariant _AgentConversationNavigationRail oldWidget) {
+  void didUpdateWidget(covariant AgentConversationNavigationRail oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.activeTurnId != widget.activeTurnId ||
         oldWidget.entries.length != widget.entries.length) {

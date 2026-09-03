@@ -1,59 +1,37 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:highlight/highlight.dart' show Node, highlight;
 import 'package:pasteboard/pasteboard.dart';
-import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'package:zeta/src/features/agent/application/agent_composer_attachment_port.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_mode_controller.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
-import 'package:zeta/src/ui/core/ide_image_preview.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
 import 'package:zeta/src/features/agent/presentation/agent_flutter_listenable_adapter.dart';
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_region_builder.dart';
-import 'package:zeta/src/features/agent/presentation/agent_presentation_l10n.dart';
 import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_region_state.dart';
 import 'package:zeta/src/features/agent/presentation/agent_markdown_cache.dart';
 import 'package:zeta/src/features/agent/presentation/agent_plan_revision_drafts.dart';
 import 'package:zeta/src/features/agent/presentation/composer_document.dart';
-import 'package:zeta/src/features/agent/presentation/agent_conversation_navigation.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_extent_descriptor.dart';
-import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
-import 'package:zeta/src/features/agent/presentation/agent_timeline_projection.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection_cache.dart';
-import 'package:zeta/src/features/agent/presentation/widgets/agent_file_change_evidence_card.dart';
-import 'package:zeta/src/features/agent/presentation/widgets/agent_markdown_body.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_mention_file_picker.dart';
-import 'package:zeta/src/features/agent/presentation/widgets/agent_mode_selector.dart';
-import 'package:zeta/src/features/agent/presentation/widgets/agent_model_config.dart';
-import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_composer.dart';
-import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_styles.dart';
-import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_text.dart';
-import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_context_panel.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_header.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_plan_panel.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_sections.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_skill_picker.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_slash_command_picker.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/composer_selector_popover.dart';
-
-part 'widgets/agent_pane_cards.dart';
-part 'widgets/agent_pane_context_panel.dart';
-part 'widgets/agent_pane_header.dart';
-part 'widgets/agent_pane_messages.dart';
-part 'widgets/agent_pane_plan_panel.dart';
-part 'widgets/agent_pane_sections.dart';
-part 'widgets/agent_pane_navigation_rail.dart';
 
 /// Agent 主列宽度档位：只影响 page padding 等布局语义，不随每像素宽度重建。
 enum _AgentPaneWidthClass { compact, regular }
@@ -384,7 +362,7 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
               if (!visible) {
                 return const SizedBox.shrink();
               }
-              return _AgentContextPanel(
+              return AgentContextPanel(
                 controller: widget.controller,
                 onClose: _hideContextPanel,
               );
@@ -409,14 +387,14 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _AgentContentAlign(
+        AgentContentAlign(
           child: Padding(
             padding: pagePadding,
             child: AgentRegionBuilder<AgentHeaderState>(
               bindingKey: widget.controller.conversationBinding.key,
               selector: agentConversationHeaderProvider.call,
               builder: (context, state) {
-                return _AgentHeader(
+                return AgentHeader(
                   controller: widget.controller,
                   state: state,
                   onToggleContextPanel: _toggleContextPanel,
@@ -441,15 +419,15 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
                 final isLoadingHistory = historyState.isLoading;
                 // 加载历史时输入框固定底部（与已有对话一致），空草稿仍居中。
                 final pinFooterToBottom = hasConversation || isLoadingHistory;
-                return _AgentConversationLayout(
+                return AgentConversationLayout(
                   pinFooterToBottom: pinFooterToBottom,
                   reduceMotion: MediaQuery.disableAnimationsOf(context),
                   timeline: isLoadingHistory
-                      ? _AgentThreadHistoryLoading(
+                      ? AgentThreadHistoryLoading(
                           providerId: historyState.providerId,
                           providerName: historyState.providerName,
                         )
-                      : _AgentConversationTimeline(
+                      : AgentConversationTimeline(
                           controller: widget.controller,
                           isActive: widget.isActive,
                           scrollController: _scrollController,
@@ -467,7 +445,7 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
                           },
                           onScrollToEndPressed: _requestScrollToEndFromButton,
                         ),
-                  floatingPanel: _AgentActivePlanSection(
+                  floatingPanel: AgentActivePlanSection(
                     controller: widget.controller,
                     pagePadding: pagePadding,
                     onExtentChanged: _handleActivePlanPanelExtentChanged,
@@ -477,7 +455,7 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       // panelHeight 由 selectBucket 旁路缓存，不进入 bucket 身份。
-                      _AgentPendingInteractionSection(
+                      AgentPendingInteractionSection(
                         controller: widget.controller,
                         panelHeight: _panelHeight,
                         pagePadding: pagePadding,
@@ -508,7 +486,7 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
                                           else if (!pendingState.blocksComposer)
                                             // 提问卡 / 权限卡占用底部交互时隐藏 Composer，
                                             // 与 pending dock 互斥，避免双焦点与误发送。
-                                            _AgentComposerSection(
+                                            AgentComposerSection(
                                               key: const ValueKey(
                                                 'agent-composer-section',
                                               ),
@@ -1344,7 +1322,7 @@ class _AgentReadOnlyNotice extends StatelessWidget {
   Widget build(BuildContext context) {
     final textStyles = IdeTextStyles.of(context);
     final colors = IdeColors.of(context);
-    return _AgentContentAlign(
+    return AgentContentAlign(
       child: Padding(
         padding: pagePadding.copyWith(top: IdeSpacing.space8),
         child: IdeStatusCard(

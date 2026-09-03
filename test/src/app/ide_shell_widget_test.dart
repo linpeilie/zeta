@@ -2836,7 +2836,7 @@ class _RetainedAgentState {
   final AgentConversationModeId selectedMode;
 }
 
-/// 统计 `_AgentConversationTimeline` 内部 listenable builder 的局部重建。
+/// 统计 `AgentConversationTimeline` 内部 listenable builder 的局部重建。
 ///
 /// 阶段 0 的通用计数器统计 Widget runtimeType；流式更新不会重建 timeline 外壳，
 /// 因此这里通过 Element 祖先关系补充观察内部内容刷新，且不向生产 UI 注入 API。

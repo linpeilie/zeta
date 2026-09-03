@@ -1,14 +1,34 @@
-part of '../agent_pane.dart';
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
+
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_ui/zeta_ui.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_region_state.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
+import 'package:zeta/src/features/agent/presentation/agent_flutter_listenable_adapter.dart';
+import 'package:zeta/src/features/agent/presentation/agent_markdown_cache.dart';
+import 'package:zeta/src/features/agent/presentation/agent_plan_revision_drafts.dart';
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_region_builder.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_markdown_body.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_cards.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_styles.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_text.dart';
+import 'package:zeta/src/ui/core/ide_image_preview.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
 /// 单条用户、Agent 或系统消息。
-class _AgentMessageEntry extends StatelessWidget {
-  const _AgentMessageEntry({
+class AgentMessageEntry extends StatelessWidget {
+  const AgentMessageEntry({
     required this.message,
     required this.useStreamingMarkdown,
     required this.controller,
     required this.markdownCache,
     required this.planRevisionDrafts,
     required this.planExecutionHandoff,
+    super.key,
   });
 
   final AgentConversationMessage message;
@@ -69,7 +89,7 @@ class _AgentMessageEntry extends StatelessWidget {
     BuildContext context,
     AgentPlanExecutionRequest request,
   ) {
-    return _AgentPlanDocumentCard(
+    return AgentPlanDocumentCard(
       key: ValueKey<String>('agent-plan-execution-card-${request.id}'),
       requestId: request.id,
       title: request.title,
@@ -101,10 +121,11 @@ class _AgentMessageEntry extends StatelessWidget {
 ///
 /// 挂在 live turn 条目之后、footer 之前：展示主活动段 + 时长，
 /// 思考数据本身不进入可见时间线，但仍通过此状态条反馈当前活动相位。
-class _AgentLiveActivityStatus extends StatelessWidget {
-  const _AgentLiveActivityStatus({
+class AgentLiveActivityStatus extends StatelessWidget {
+  const AgentLiveActivityStatus({
     required this.controller,
     required this.isActive,
+    super.key,
   });
 
   final AgentConversationRuntimeController controller;
@@ -190,8 +211,8 @@ class _AgentLiveActivityStatus extends StatelessWidget {
 ///
 /// 仅终态（完成/中断/失败）展示；进行中耗时已在 live 活动条展示，避免重复。
 /// 无任何可展示元数据时不渲染，避免空行干扰时间线。
-class _AgentTurnFooter extends StatelessWidget {
-  const _AgentTurnFooter({required this.turn});
+class AgentTurnFooter extends StatelessWidget {
+  const AgentTurnFooter({required this.turn, super.key});
 
   final AgentConversationTurnGroup turn;
 

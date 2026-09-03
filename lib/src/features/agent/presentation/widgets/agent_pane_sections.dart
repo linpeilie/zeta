@@ -1,4 +1,32 @@
-part of '../agent_pane.dart';
+import 'dart:async';
+import 'dart:math' as math;
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_ui/zeta_ui.dart';
+import 'package:zeta/src/features/agent/application/agent_conversation_mode_controller.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_region_state.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
+import 'package:zeta/src/features/agent/presentation/agent_conversation_navigation.dart';
+import 'package:zeta/src/features/agent/presentation/agent_flutter_listenable_adapter.dart';
+import 'package:zeta/src/features/agent/presentation/agent_markdown_cache.dart';
+import 'package:zeta/src/features/agent/presentation/agent_plan_revision_drafts.dart';
+import 'package:zeta/src/features/agent/presentation/agent_timeline_extent_descriptor.dart';
+import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
+import 'package:zeta/src/features/agent/presentation/agent_timeline_projection.dart';
+import 'package:zeta/src/features/agent/presentation/agent_timeline_projection_cache.dart';
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_region_builder.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_mode_selector.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_cards.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_composer.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_messages.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_navigation_rail.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_styles.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
 /// 对话时间线与 Composer 的统一布局壳。
 ///
@@ -8,13 +36,14 @@ part of '../agent_pane.dart';
 /// 靠时间线内部的底部滚动 inset（见 [floatingPanelExtent]），而非缩短 viewport。
 enum _AgentConversationSlot { timeline, floatingPanel, footer }
 
-class _AgentConversationLayout extends StatefulWidget {
-  const _AgentConversationLayout({
+class AgentConversationLayout extends StatefulWidget {
+  const AgentConversationLayout({
     required this.pinFooterToBottom,
     required this.reduceMotion,
     required this.timeline,
     required this.floatingPanel,
     required this.footer,
+    super.key,
   });
 
   /// 为 true 时 Composer 贴底（已有对话 / 加载历史）；否则空草稿居中。
@@ -25,11 +54,11 @@ class _AgentConversationLayout extends StatefulWidget {
   final Widget footer;
 
   @override
-  State<_AgentConversationLayout> createState() =>
+  State<AgentConversationLayout> createState() =>
       _AgentConversationLayoutState();
 }
 
-class _AgentConversationLayoutState extends State<_AgentConversationLayout>
+class _AgentConversationLayoutState extends State<AgentConversationLayout>
     with SingleTickerProviderStateMixin {
   static const Alignment _newConversationAlignment = Alignment(0, -0.12);
 
@@ -48,7 +77,7 @@ class _AgentConversationLayoutState extends State<_AgentConversationLayout>
   }
 
   @override
-  void didUpdateWidget(covariant _AgentConversationLayout oldWidget) {
+  void didUpdateWidget(covariant AgentConversationLayout oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.pinFooterToBottom == widget.pinFooterToBottom) {
       if (widget.reduceMotion &&
@@ -198,10 +227,11 @@ class _AgentConversationLayoutDelegate extends MultiChildLayoutDelegate {
 /// Thread 历史加载中的对话区占位：Agent 图标 + 进度环 + 文案。
 ///
 /// 输入框由布局壳固定在底部；本组件只填充原时间线区域。
-class _AgentThreadHistoryLoading extends StatelessWidget {
-  const _AgentThreadHistoryLoading({
+class AgentThreadHistoryLoading extends StatelessWidget {
+  const AgentThreadHistoryLoading({
     required this.providerId,
     required this.providerName,
+    super.key,
   });
 
   final String providerId;
@@ -291,8 +321,8 @@ class _AgentThreadHistoryLoading extends StatelessWidget {
 }
 
 /// 共享 920px 内容轴的可滚动对话区（CustomScrollView + block 级虚拟化）。
-class _AgentConversationTimeline extends StatelessWidget {
-  const _AgentConversationTimeline({
+class AgentConversationTimeline extends StatelessWidget {
+  const AgentConversationTimeline({
     required this.controller,
     required this.isActive,
     required this.scrollController,
@@ -307,6 +337,7 @@ class _AgentConversationTimeline extends StatelessWidget {
     required this.scrollChromeTick,
     required this.onLastItemIdChanged,
     required this.onScrollToEndPressed,
+    super.key,
   });
 
   final AgentConversationRuntimeController controller;
@@ -343,7 +374,7 @@ class _AgentConversationTimeline extends StatelessWidget {
           ])
         : floatingPanelExtent;
 
-    // 导航轨贴 AgentPanel 全宽左侧；对话流仍经 _AgentContentAlign 居中限宽。
+    // 导航轨贴 AgentPanel 全宽左侧；对话流仍经 AgentContentAlign 居中限宽。
     // 三个 region 各订各的：pending 变化不再重建 history 那层。
     return AgentRegionBuilder<AgentConversationHistoryState>(
       bindingKey: controller.conversationBinding.key,
@@ -465,7 +496,7 @@ class _AgentConversationTimeline extends StatelessWidget {
                     controller: scrollController,
                     // 默认 cacheExtent 保留少量视口外 block，兼顾滚动流畅与虚拟化收益。
                     slivers: [
-                      // 保留 pagePadding；内容最大宽由 _AgentContentAlign 约束。
+                      // 保留 pagePadding；内容最大宽由 AgentContentAlign 约束。
                       // 底部额外 inset = Plan 浮层高度；两侧仍可透出对话流。
                       SliverPadding(
                         padding: listPadding,
@@ -486,7 +517,7 @@ class _AgentConversationTimeline extends StatelessWidget {
                         children: [
                           // 对话流：仍居中限宽（contentMaxWidth）。
                           Positioned.fill(
-                            child: _AgentContentAlign(
+                            child: AgentContentAlign(
                               child: LayoutBuilder(
                                 builder: (context, contentConstraints) {
                                   final media = MediaQuery.of(context);
@@ -578,7 +609,7 @@ class _AgentConversationTimeline extends StatelessWidget {
                                           items: items,
                                           contentTopInset: listPadding.top,
                                         );
-                                    return _AgentConversationNavigationRail(
+                                    return AgentConversationNavigationRail(
                                       key: const ValueKey(
                                         'agent-conversation-navigation-rail',
                                       ),
@@ -694,13 +725,13 @@ class _AgentConversationTimeline extends StatelessWidget {
       case AgentLiveActivityViewportItem():
         return KeyedSubtree(
           key: const ValueKey('agent-live-turn-section'),
-          child: _AgentLiveActivityStatus(
+          child: AgentLiveActivityStatus(
             controller: controller,
             isActive: isActive,
           ),
         );
       case AgentTurnFooterViewportItem(:final turn):
-        return _AgentTurnFooter(turn: turn);
+        return AgentTurnFooter(turn: turn);
     }
   }
 
@@ -775,9 +806,9 @@ class _AgentTimelineBlockSection extends StatelessWidget {
         markdownCache: markdownCache,
       ),
       AgentTimelineCommandGroupRenderBlock(:final group) =>
-        _AgentCommandGroupCard(group: group, controller: controller),
+        AgentCommandGroupCard(group: group, controller: controller),
       AgentTimelineFileEditGroupRenderBlock(:final group) =>
-        _AgentFileEditGroupCard(group: group, controller: controller),
+        AgentFileEditGroupCard(group: group, controller: controller),
     };
     // 操作组间距由列表层统一包 Padding；卡片自身零 margin。
     final child = isAgentTimelineOperationGroupBlock(block)
@@ -802,7 +833,7 @@ class _AgentTimelineBlockSection extends StatelessWidget {
   }) {
     final isLiveTurn = controller.liveTurnState?.id == turn.id;
     return switch (entry) {
-      AgentMessageTimelineEntry(:final message) => _AgentMessageEntry(
+      AgentMessageTimelineEntry(:final message) => AgentMessageEntry(
         message: message,
         // 历史与 live 正文均全文渲染，禁止折叠预览。
         useStreamingMarkdown: isLiveTurn,
@@ -811,7 +842,7 @@ class _AgentTimelineBlockSection extends StatelessWidget {
         planRevisionDrafts: planRevisionDrafts,
         planExecutionHandoff: pendingState.planExecutionHandoff,
       ),
-      AgentToolTimelineEntry(:final toolCall) => _AgentToolCallCard(
+      AgentToolTimelineEntry(:final toolCall) => AgentToolCallCard(
         toolCall: toolCall,
         controller: controller,
       ),
@@ -825,7 +856,7 @@ class _AgentTimelineBlockSection extends StatelessWidget {
       ),
       // 正常路径会在 grouping 中转成文件编辑组；此处仅作兜底。
       AgentTurnFileChangesTimelineEntry() => const SizedBox.shrink(),
-      AgentHistoryEventTimelineEntry(:final event) => _AgentHistoryEventCard(
+      AgentHistoryEventTimelineEntry(:final event) => AgentHistoryEventCard(
         event: event,
       ),
     };
@@ -839,7 +870,7 @@ class _AgentTimelineBlockSection extends StatelessWidget {
     BuildContext context,
     AgentPlanApprovalRequest request,
   ) {
-    return _AgentPlanDocumentCard(
+    return AgentPlanDocumentCard(
       key: ValueKey<String>('agent-plan-approval-card-${request.id}'),
       requestId: request.id,
       title: request.title,
@@ -878,11 +909,12 @@ class _AgentTimelineBlockSection extends StatelessWidget {
 ///
 /// 权限与用户提问从独立 pending 状态读取；计划文档已改在对话流内渲染。
 /// [panelHeight] 由 AgentPane width-bucket 的约束旁路提供，不进入 bucket 身份。
-class _AgentPendingInteractionSection extends StatelessWidget {
-  const _AgentPendingInteractionSection({
+class AgentPendingInteractionSection extends StatelessWidget {
+  const AgentPendingInteractionSection({
     required this.controller,
     required this.panelHeight,
     required this.pagePadding,
+    super.key,
   });
 
   final AgentConversationRuntimeController controller;
@@ -936,7 +968,7 @@ class _AgentPendingInteractionSection extends StatelessWidget {
           padding: EdgeInsets.only(
             bottom: index < questionRequests.length - 1 ? IdeSpacing.space8 : 0,
           ),
-          child: _AgentQuestionCard(
+          child: AgentQuestionCard(
             request: questionRequests[index],
             onRespond: (answers) => controller.respondToQuestion(
               questionRequests[index],
@@ -946,7 +978,7 @@ class _AgentPendingInteractionSection extends StatelessWidget {
         ),
     ];
 
-    return _AgentContentAlign(
+    return AgentContentAlign(
       child: Padding(
         padding: pagePadding.copyWith(
           top: IdeSpacing.space8,
@@ -974,7 +1006,7 @@ class _AgentPendingInteractionSection extends StatelessWidget {
     AgentPermissionRequest request,
     AgentPendingInteractionState state,
   ) {
-    return _AgentPermissionCard(
+    return AgentPermissionCard(
       request: request,
       autoReview: state.autoReviewForTurn(request.turnId),
       onApproveGuardian: state.latestDeniedAutoReview != null
@@ -997,8 +1029,8 @@ class _AgentPendingInteractionSection extends StatelessWidget {
   }
 }
 
-class _AgentComposerSection extends StatelessWidget {
-  const _AgentComposerSection({
+class AgentComposerSection extends StatelessWidget {
+  const AgentComposerSection({
     required this.controller,
     required this.state,
     required this.inputController,
@@ -1033,7 +1065,7 @@ class _AgentComposerSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _AgentContentAlign(
+    return AgentContentAlign(
       child: Padding(
         padding: pagePadding.copyWith(top: IdeSpacing.space8),
         child: ValueListenableBuilder<bool>(
@@ -1125,10 +1157,11 @@ AgentModeSelectorStatus _modeSelectorStatus(
   };
 }
 
-class _AgentContentAlign extends StatelessWidget {
-  const _AgentContentAlign({
+class AgentContentAlign extends StatelessWidget {
+  const AgentContentAlign({
     required this.child,
     this.shrinkWrapHeight = false,
+    super.key,
   });
 
   final Widget child;

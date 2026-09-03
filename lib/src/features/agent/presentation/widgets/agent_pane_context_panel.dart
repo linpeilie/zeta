@@ -1,4 +1,20 @@
-part of '../agent_pane.dart';
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
+
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_ui/zeta_ui.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_region_state.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
+import 'package:zeta/src/features/agent/presentation/agent_flutter_listenable_adapter.dart';
+import 'package:zeta/src/features/agent/presentation/agent_presentation_l10n.dart';
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_region_builder.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_cards.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_styles.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
 /// 上下文详情面板的固定宽度。
 const double _agentContextPanelWidth = 360;
@@ -17,17 +33,21 @@ const double _agentContextKeyColumnWidth = 76;
 /// 消息数、提供商、上下文限制、token 占用、创建/活跃时间）与原始消息列表。
 /// 原始消息列表展示消息 ID、角色与时间，点击可展开查看 raw 协议原文。
 /// 面板正文包在 [SelectionArea] 中，支持拖选文本与系统复制菜单。
-class _AgentContextPanel extends StatefulWidget {
-  const _AgentContextPanel({required this.controller, required this.onClose});
+class AgentContextPanel extends StatefulWidget {
+  const AgentContextPanel({
+    required this.controller,
+    required this.onClose,
+    super.key,
+  });
 
   final AgentConversationRuntimeController controller;
   final VoidCallback onClose;
 
   @override
-  State<_AgentContextPanel> createState() => _AgentContextPanelState();
+  State<AgentContextPanel> createState() => _AgentContextPanelState();
 }
 
-class _AgentContextPanelState extends State<_AgentContextPanel> {
+class _AgentContextPanelState extends State<AgentContextPanel> {
   /// 原始消息行展开态：按条目 id 记录，避免父级重建时丢失。
   final Set<String> _expandedRawMessageIds = <String>{};
 
@@ -42,7 +62,7 @@ class _AgentContextPanelState extends State<_AgentContextPanel> {
   }
 
   @override
-  void didUpdateWidget(covariant _AgentContextPanel oldWidget) {
+  void didUpdateWidget(covariant AgentContextPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(
       oldWidget.controller.providerController,
@@ -569,7 +589,7 @@ class _AgentContextRawMessageRow extends StatelessWidget {
                 ConstrainedBox(
                   constraints: const BoxConstraints(maxHeight: 360),
                   child: SingleChildScrollView(
-                    child: _AgentHighlightedCodeBlock(
+                    child: AgentHighlightedCodeBlock(
                       code: rawText,
                       language: 'json',
                     ),
