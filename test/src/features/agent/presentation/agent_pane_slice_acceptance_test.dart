@@ -14,6 +14,7 @@ import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 import 'agent_conversation_ui_state_fixtures.dart';
 import 'harness/agent_pane_test_harness.dart';
+import '../../../testing/memory_agent_composer_attachment_store.dart';
 
 /// Phase 2 §8 验收表里与切片 UI 直接相关的几条。
 void main() {
@@ -201,6 +202,7 @@ class _TwoPaneApp extends StatelessWidget {
     return ProviderScope(
       overrides: [
         agentConversationSliceStoreRegistryProvider.overrideWithValue(registry),
+        memoryAgentComposerAttachmentOverride(),
       ],
       child: IdeThemeScope(
         themeMode: ThemeMode.dark,

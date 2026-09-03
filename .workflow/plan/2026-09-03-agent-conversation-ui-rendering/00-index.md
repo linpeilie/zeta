@@ -92,3 +92,4 @@ WP-5（spike 结论后再排期）
 | 2026-09-03 | WP-1 T0 / WP-7 T3 | `feature/wp7-t3-scheduler-metric-label` | scheduler 指标标签改为构造注入；presentation 不再 import `zeta_agent_providers`；ViewModel 透传已有 `providerMetricLabel`；组合层绑定不变 |
 | 2026-09-03 | WP-1 T2 | RuntimeController 下沉；删除 UiStateStore/SliceComposition | scheduler 进 application；SliceStore.connected 直接吃 UiUpdateRequest；ViewModel 成 Flutter 门面；因删除 Dart 文件 `test_affected` 走全量并绿 |
 | 2026-09-03 | WP-1 T3 | 纯函数下沉：selection patch / skill 候选 / flatten 文件节点 | RuntimeController 改委托；三组表驱动单测 |
+| 2026-09-03 | WP-1 T4 | Composer 图片附件 IO 下沉到 data 端口 | AgentPane 去掉 dart:io；生产写临时目录、测试走内存 fake |

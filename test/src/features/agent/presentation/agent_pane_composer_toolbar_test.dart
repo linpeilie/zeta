@@ -1198,5 +1198,53 @@ void main() {
       expect(draftStrip, findsNothing);
       expect(removeButton, findsNothing);
     });
+
+    testWidgets(
+      'clipboard paste stages via attachment port then send clears drafts',
+      (tester) async {
+        final paneKey = GlobalKey();
+        final provider = AgentPaneFakeProvider();
+        final viewModel = createAgentPaneViewModel(
+          provider,
+          initialThread: agentPaneThread(
+            id: 'thread-paste-image',
+            title: 'Paste',
+          ),
+        );
+        addTearDown(provider.dispose);
+        addTearDown(viewModel.dispose);
+
+        await tester.pumpWidget(
+          AgentPaneTestApp(viewModel: viewModel, agentPaneKey: paneKey),
+        );
+        await viewModel.initialization;
+        await pumpAgentPaneUi(tester);
+
+        await AgentPane.debugPasteClipboardImage(
+          paneKey,
+          Uint8List.fromList(const <int>[137, 80, 78, 71]),
+        );
+        await tester.pump();
+        final staged = AgentPane.debugDraftImagePaths(paneKey);
+        expect(staged, hasLength(1));
+        expect(staged.single, startsWith('memory://paste-'));
+        expect(staged.single, endsWith('.png'));
+
+        final input = find.byKey(const ValueKey('agent-message-input'));
+        await tester.enterText(input, 'see image');
+        await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+        await pumpUntilMessageSent(tester, provider);
+
+        expect(provider.sentMessages, <String>['see image']);
+        expect(AgentPane.debugDraftImagePaths(paneKey), isEmpty);
+        provider.emitEvent(
+          const AgentTurnCompletedEvent(
+            sessionId: 'thread-paste-image',
+            turnId: 'turn-1',
+          ),
+        );
+        await tester.pump();
+      },
+    );
   });
 }

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:file_selector/file_selector.dart';
@@ -9,11 +8,13 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:highlight/highlight.dart' show Node, highlight;
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 import 'package:pasteboard/pasteboard.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
+import 'package:zeta/src/features/agent/application/agent_composer_attachment_port.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_mode_controller.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
@@ -69,7 +70,7 @@ _AgentPaneWidthClass _selectAgentPaneWidthClass(BoxConstraints constraints) {
 ///
 /// 当前文件只保留页面壳、滚动协作与组合关系；实际 header、timeline、
 /// composer 以及各类卡片都已拆到独立组件文件。
-class AgentPane extends StatefulWidget {
+class AgentPane extends ConsumerStatefulWidget {
   const AgentPane({
     required this.viewModel,
     this.messageSendShortcut = MessageSendShortcut.enter,
@@ -88,7 +89,25 @@ class AgentPane extends StatefulWidget {
   /// 与 threadSnapshot 侧栏路径。
   final bool isActive;
 
-  /// 测试用：向已挂载的 [AgentPane] 注入草稿图片路径（不走系统文件选择器）。
+  /// 测试用：走与粘贴相同的暂存端口，把字节写成草稿图。
+  @visibleForTesting
+  static Future<void> debugPasteClipboardImage(
+    GlobalKey key,
+    Uint8List bytes,
+  ) async {
+    final state = key.currentState;
+    if (state is! _AgentPaneState) {
+      throw StateError(
+        'AgentPane is not mounted for $key (state=${state.runtimeType})',
+      );
+    }
+    final path = await state._stageClipboardImage(bytes);
+    if (!state.mounted) {
+      return;
+    }
+    state._addDraftImages(<String>[path]);
+  }
+
   @visibleForTesting
   static void debugAddDraftImages(GlobalKey key, List<String> paths) {
     final state = key.currentState;
@@ -111,10 +130,10 @@ class AgentPane extends StatefulWidget {
   }
 
   @override
-  State<AgentPane> createState() => _AgentPaneState();
+  ConsumerState<AgentPane> createState() => _AgentPaneState();
 }
 
-class _AgentPaneState extends State<AgentPane> {
+class _AgentPaneState extends ConsumerState<AgentPane> {
   static const XTypeGroup _imageTypeGroup = XTypeGroup(
     label: 'Images',
     extensions: <String>['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'],
@@ -130,6 +149,9 @@ class _AgentPaneState extends State<AgentPane> {
   /// 缓存，`setState` 不会重建 composer，仅改 list 会让缩略图「删不掉」。
   final ValueNotifier<List<String>> _draftImagePaths =
       ValueNotifier<List<String>>(const <String>[]);
+
+  /// 由附件端口写出的剪贴板暂存路径；移除/销毁时只清理这些，不删用户文件。
+  final Set<String> _stagedClipboardPaths = <String>{};
   final GlobalKey _composerAnchorKey = GlobalKey(
     debugLabel: 'agent-composer-skill-anchor',
   );
@@ -314,7 +336,11 @@ class _AgentPaneState extends State<AgentPane> {
     _composerFocusNode.dispose();
     _scrollController.dispose();
     _canSendNotifier.dispose();
+    final leftover = List<String>.of(_stagedClipboardPaths);
     _draftImagePaths.dispose();
+    if (leftover.isNotEmpty) {
+      unawaited(_discardStaged(leftover));
+    }
     _scrollChromeTick.dispose();
     _activePlanPanelExtent.dispose();
     _projectionCache.clear();
@@ -832,8 +858,9 @@ class _AgentPaneState extends State<AgentPane> {
     if (widget.viewModel.canAttachImages) {
       final imageBytes = await Pasteboard.image;
       if (imageBytes != null && imageBytes.isNotEmpty) {
-        final path = await _persistClipboardImage(imageBytes);
+        final path = await _stageClipboardImage(imageBytes);
         if (!mounted) {
+          unawaited(_discardStaged(<String>[path]));
           return true;
         }
         _addDraftImages(<String>[path]);
@@ -842,7 +869,7 @@ class _AgentPaneState extends State<AgentPane> {
 
       final files = await Pasteboard.files();
       final imagePaths = files
-          .where(_looksLikeImagePath)
+          .where(looksLikeAgentComposerImagePath)
           .toList(growable: false);
       if (imagePaths.isNotEmpty) {
         if (!mounted) {
@@ -897,30 +924,31 @@ class _AgentPaneState extends State<AgentPane> {
     _draftImagePaths.value = List<String>.unmodifiable(
       current.where((item) => item != path),
     );
+    unawaited(_discardStaged(<String>[path]));
     _syncCanSend();
   }
 
-  Future<String> _persistClipboardImage(Uint8List bytes) async {
-    final root = Directory(
-      '${Directory.systemTemp.path}${Platform.pathSeparator}zeta-agent-images',
+  AgentComposerAttachmentPort get _attachments =>
+      ref.read(agentComposerAttachmentPortProvider);
+
+  Future<String> _stageClipboardImage(Uint8List bytes) async {
+    final path = await _attachments.stageClipboardImage(
+      bytes,
+      extension: 'png',
     );
-    await root.create(recursive: true);
-    final file = File(
-      '${root.path}${Platform.pathSeparator}'
-      'paste-${DateTime.now().microsecondsSinceEpoch}.png',
-    );
-    await file.writeAsBytes(bytes, flush: true);
-    return file.path;
+    _stagedClipboardPaths.add(path);
+    return path;
   }
 
-  bool _looksLikeImagePath(String path) {
-    final lower = path.toLowerCase();
-    return lower.endsWith('.png') ||
-        lower.endsWith('.jpg') ||
-        lower.endsWith('.jpeg') ||
-        lower.endsWith('.gif') ||
-        lower.endsWith('.webp') ||
-        lower.endsWith('.bmp');
+  Future<void> _discardStaged(List<String> paths) {
+    final staged = <String>[
+      for (final path in paths)
+        if (_stagedClipboardPaths.remove(path)) path,
+    ];
+    if (staged.isEmpty) {
+      return Future<void>.value();
+    }
+    return _attachments.discard(staged);
   }
 
   void _sendMessage() {
@@ -940,6 +968,8 @@ class _AgentPaneState extends State<AgentPane> {
     if (_draftImagePaths.value.isNotEmpty) {
       _draftImagePaths.value = const <String>[];
     }
+    // 发送后路径交给 turn；不再由 Composer 在 dispose 时删除。
+    _stagedClipboardPaths.removeAll(images);
     _syncCanSend();
     widget.viewModel.sendMessage(
       serialized.text,

@@ -15,6 +15,8 @@ import 'package:zeta/src/features/agent/application/conversation_slice/agent_con
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
+
+import '../../../../testing/memory_agent_composer_attachment_store.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
@@ -122,6 +124,7 @@ class _AgentPaneTestAppState extends State<AgentPaneTestApp> {
         agentConversationSliceStoreRegistryProvider.overrideWithValue(
           _registry,
         ),
+        memoryAgentComposerAttachmentOverride(),
       ],
       child: IdeThemeScope(
         themeMode: widget.themeMode,

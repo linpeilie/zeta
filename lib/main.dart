@@ -15,6 +15,7 @@ import 'package:zeta/src/app/storage/zeta_storage_bindings.dart';
 import 'package:zeta/src/app/storage/zeta_store_providers.dart';
 import 'package:zeta/src/app/window/zeta_window_host.dart';
 import 'package:zeta/src/app/workspace_slice/workspace_overrides.dart';
+import 'package:zeta/src/app/conversation_workspace_slice/agent_composer_attachment_overrides.dart';
 import 'package:zeta/src/app/logging/app_logging.dart';
 import 'package:zeta/src/core/storage/zeta_data_paths.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_notifier.dart';
@@ -67,6 +68,7 @@ void main() {
             (ref) => DesktopSystemFontCatalogService(),
           ),
           systemDirectoryPickerOverride(),
+          systemComposerAttachmentOverride(),
           initialAppearanceSettingsProvider.overrideWithValue(appearance),
         ],
       );

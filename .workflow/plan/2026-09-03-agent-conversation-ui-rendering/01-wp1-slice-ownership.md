@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |----|----|
-| 状态 | 进行中（T0/T1/T2/T3 完成） |
+| 状态 | 进行中（T0/T1/T2/T3/T4 完成） |
 | 规模 | 10–14 人天，4 个 PR |
 | 依赖 | 建议 WP-2 完成后启动；**T0 前置：WP-7 T3**（scheduler 的 providers 依赖切除，0.5 人天，先合入） |
 | 门禁焦点 | G3、G6、「一份状态只能有一个 owner」（AGENTS.md §3） |
@@ -260,6 +260,12 @@ final class AgentConversationRuntimeController
 
 ### T4 · 附件 port：dart:io 移出 presentation（PR-2，1 人天）
 
+- [x] application 端口 `AgentComposerAttachmentPort` + fail-closed provider。
+- [x] data `AgentComposerAttachmentStore`（可注入 tempDir / Clock）；只 discard 自己写出的路径。
+- [x] 生产 override 在 `lib/main.dart`；`zetaTestComposition` / harness 装内存 fake。
+- [x] `AgentPane` 去掉 `dart:io`；粘贴走端口；嗅探走顶层纯函数。
+- [x] 单测覆盖暂存/嗅探/清理；粘贴 → 发送 widget 测试。
+
 **现状**：`agent_pane.dart:903-924` `_persistClipboardImage` 用 `Directory.systemTemp` + `File.writeAsBytes` 直写临时文件；`_looksLikeImagePath` 做扩展名嗅探。
 
 **设计**：
@@ -293,6 +299,16 @@ final class AgentComposerAttachmentStore implements AgentComposerAttachmentPort 
 **接线**：组合根（`ZetaAppComposition.create` 链路的 overrides）装生产实现；`zetaTestComposition` 装内存 fake；`AgentPane` State 里 `_persistClipboardImage` 改为 `ref.read(agentComposerAttachmentPortProvider)`。
 
 **验收**：`grep -n "dart:io" lib/src/features/agent/presentation` 零命中（或仅剩注释说明的特例）；粘贴图片 → 发送的 widget 测试绿；fake 单测覆盖暂存/嗅探/清理。
+
+**落地偏差**：
+
+- 扩展名嗅探是顶层纯函数 `looksLikeAgentComposerImagePath`：`Pasteboard.files` 过滤不必读 fail-closed provider。
+- `discard` 只删本端口 `stageClipboardImage` 写出的路径，文件选择器 / 剪贴板文件路径不得误删。
+- 生产 override 装在 `lib/main.dart`（与 `systemDirectoryPickerOverride` 同模式），不进 `ZetaAppComposition.create`，否则测试无法覆盖。
+- 文件名仍是 `paste-<microseconds>.<ext>`，无随机后缀（与搬迁前一致）。
+- `AgentPane` 改为 `ConsumerStatefulWidget`，只在暂存/清理时懒读端口。
+- 发送后从 Composer 跟踪集移除路径，不立即删文件——路径已交给 turn。
+- RuntimeController 仍 import `dart:io`（`ProcessException`），留给 T5/T6。
 
 ### T5 · ViewModel 删除与命令面切换（PR-3，2 人天）
 

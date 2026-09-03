@@ -17,6 +17,9 @@ import 'package:zeta/src/features/agent_management/domain/agent_management_model
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_models.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_notifier.dart';
 import 'package:zeta/src/features/settings/data/system_font_catalog_service.dart';
+import 'package:zeta/src/features/agent/application/agent_composer_attachment_port.dart';
+
+import 'memory_agent_composer_attachment_store.dart';
 
 /// 测试用的 [MainApp]。
 ///
@@ -98,6 +101,8 @@ List<Override> _testDefaultsNotCoveredBy(List<Override> overrides) {
       appearanceFontCatalogProvider.overrideWith(
         (ref) => DesktopSystemFontCatalogService(),
       ),
+    if (!_covers(overrides, agentComposerAttachmentPortProvider))
+      memoryAgentComposerAttachmentOverride(),
   ];
 }
 

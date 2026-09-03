@@ -32,6 +32,7 @@ import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_co
 import '../../../testing/ide_test_harness.dart';
 import '../../../testing/agent_conversation_binding_test_harness.dart';
 import '../../../testing/fake_workspace_directory_picker.dart';
+import '../../../testing/memory_agent_composer_attachment_store.dart';
 import '../../../testing/zeta_test_app.dart';
 
 import 'package:flutter_riverpod/misc.dart' show Override;
@@ -1447,6 +1448,7 @@ void main() {
             agentConversationSliceStoreRegistryProvider.overrideWithValue(
               sliceRegistry,
             ),
+            memoryAgentComposerAttachmentOverride(),
           ],
           child: IdeThemeScope(
             themeMode: ThemeMode.dark,
@@ -1545,6 +1547,7 @@ void main() {
           agentConversationSliceStoreRegistryProvider.overrideWithValue(
             sliceRegistry,
           ),
+          memoryAgentComposerAttachmentOverride(),
         ],
         child: IdeThemeScope(
           themeMode: ThemeMode.dark,
@@ -1770,6 +1773,7 @@ void main() {
           agentConversationSliceStoreRegistryProvider.overrideWithValue(
             sliceRegistry,
           ),
+          memoryAgentComposerAttachmentOverride(),
         ],
         child: IdeThemeScope(
           themeMode: ThemeMode.dark,
@@ -2094,6 +2098,7 @@ void main() {
           agentConversationSliceStoreRegistryProvider.overrideWithValue(
             sliceRegistry,
           ),
+          memoryAgentComposerAttachmentOverride(),
         ],
         child: IdeThemeScope(
           themeMode: ThemeMode.dark,

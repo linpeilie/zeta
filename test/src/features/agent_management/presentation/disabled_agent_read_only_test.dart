@@ -21,6 +21,7 @@ import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_co
 
 import '../../../testing/ide_test_harness.dart';
 import '../../../testing/agent_conversation_binding_test_harness.dart';
+import '../../../testing/memory_agent_composer_attachment_store.dart';
 
 void main() {
   testWidgets('disabled Agent keeps history visible and hides the composer', (
@@ -185,6 +186,7 @@ Future<void> _pumpAgentPane(
         agentConversationSliceStoreRegistryProvider.overrideWithValue(
           sliceRegistry,
         ),
+        memoryAgentComposerAttachmentOverride(),
       ],
       child: IdeThemeScope(
         themeMode: ThemeMode.light,
