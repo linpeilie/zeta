@@ -14,7 +14,6 @@ import 'package:zeta/src/features/agent/application/agent_skills_catalog_control
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
-import 'package:zeta/src/app/conversation_slice/agent_conversation_slice_composition.dart';
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
@@ -70,18 +69,18 @@ class AgentPaneTestApp extends StatefulWidget {
 }
 
 class _AgentPaneTestAppState extends State<AgentPaneTestApp> {
-  late final AgentConversationSliceComposition? _ownedBinding;
+  late final AgentConversationSliceStore? _ownedStore;
   late final AgentConversationSliceStoreRegistry _registry;
 
   @override
   void initState() {
     super.initState();
     final key = widget.viewModel.conversationBinding.key;
-    _ownedBinding = widget.sliceStores.containsKey(key)
+    _ownedStore = widget.sliceStores.containsKey(key)
         ? null
-        : AgentConversationSliceComposition(
-            regions: widget.viewModel,
-            commands: widget.viewModel,
+        : AgentConversationSliceStore.connected(
+            regions: widget.viewModel.runtime,
+            commands: widget.viewModel.runtime,
           );
     _registry = AgentConversationSliceStoreRegistry()
       ..bind((requestedKey) {
@@ -90,7 +89,7 @@ class _AgentPaneTestAppState extends State<AgentPaneTestApp> {
           return injected;
         }
         if (requestedKey == widget.viewModel.conversationBinding.key) {
-          return _ownedBinding!.store;
+          return _ownedStore!;
         }
         throw StateError('No test conversation slice for $requestedKey');
       });
@@ -99,7 +98,7 @@ class _AgentPaneTestAppState extends State<AgentPaneTestApp> {
   @override
   void dispose() {
     _registry.unbind();
-    _ownedBinding?.dispose();
+    _ownedStore?.dispose();
     super.dispose();
   }
 

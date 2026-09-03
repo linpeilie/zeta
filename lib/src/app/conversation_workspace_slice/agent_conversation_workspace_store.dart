@@ -7,9 +7,9 @@ import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
-import 'package:zeta/src/app/conversation_slice/agent_conversation_slice_composition.dart';
 import 'package:zeta/src/features/workspace/application/workspace_file_corpus_port.dart';
 
 /// Agent Canvas 中单个常驻线程/草稿的逻辑标识。
@@ -96,9 +96,9 @@ final class AgentThreadWorkspaceEntry {
   final AgentConversationViewModel viewModel;
 
   /// Conversation Slice 是每个 entry 的必选接线，不存在旧 ViewModel 回退路径。
-  final AgentConversationSliceComposition sliceBinding;
+  final AgentConversationSliceStore sliceBinding;
 
-  AgentConversationSliceStore get sliceStore => sliceBinding.store;
+  AgentConversationSliceStore get sliceStore => sliceBinding;
 
   AgentConversationBinding get binding => bindingLease.binding;
 
@@ -203,7 +203,7 @@ final class AgentThreadWorkspaceEntry {
     _disposed = true;
     viewModel.threadSnapshotListenable.removeListener(_handleRuntimeChanged);
     _unsubscribeProviderSettings();
-    // 切片先于 ViewModel 释放：它订阅了 ViewModel 的 region listenable。
+    // 切片先于 ViewModel 释放：它订阅了 runtime 的 UI 更新。
     sliceBinding.dispose();
     viewModel.dispose();
     unawaited(bindingLease.release());
@@ -609,9 +609,9 @@ final class AgentConversationWorkspaceStore {
       providerController: providerController,
       bindingLease: bindingLease,
       viewModel: viewModel,
-      sliceBinding: AgentConversationSliceComposition(
-        regions: viewModel,
-        commands: viewModel,
+      sliceBinding: AgentConversationSliceStore.connected(
+        regions: viewModel.runtime,
+        commands: viewModel.runtime,
       ),
     );
     void listener() => _handleEntryChanged(entry);

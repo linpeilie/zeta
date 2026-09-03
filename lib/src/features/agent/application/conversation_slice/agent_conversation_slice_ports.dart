@@ -3,24 +3,15 @@ import 'package:zeta/src/features/agent/application/conversation_slice/agent_con
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_region_state.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
-/// Conversation 切片关心的五个 region。
-enum AgentConversationSliceRegion {
-  header,
-  composer,
-  pendingInteractions,
-  expansion,
-  history,
-}
-
 /// Conversation slice 的 **region 只读来源**。
 ///
-/// 切片组合只需要"五个 region 的当前值 + 变化通知 + 当前作用域"，不需要整个
-/// ViewModel。把它收成端口之后，组合层与 ViewModel 之间只剩这一条窄依赖。
+/// 切片只需要"五个 region 的当前值 + 批处理 UI 更新通知 + 当前作用域"，不需要整个
+/// runtime controller。把它收成端口之后，SliceStore 与 controller 之间只剩这一条
+/// 窄依赖。
 ///
-/// **订阅是纯 Dart 的**，不暴露 Flutter `ValueListenable`：
-/// 一来 application 层禁止 import Flutter（G6 / 目标架构 §12.5）；
-/// 二来 presentation 的 region 订阅必须统一走 `AgentRegionBuilder`，
-/// 一个对外暴露裸 listenable 的端口会给 UI 开第二条直连路径。
+/// **订阅是纯 Dart 的**：一次 [AgentUiUpdateRequest] 携带 region 集合，SliceStore
+/// 据此组装一次 `RegionsRefreshed`。不再按 region 拆成五条 listener——那是
+/// UiStateStore 时代一拆一合的中间态。
 abstract interface class AgentConversationRegionSource {
   AgentConversationHistoryState get historyState;
   AgentHeaderState get headerState;
@@ -28,15 +19,13 @@ abstract interface class AgentConversationRegionSource {
   AgentPendingInteractionState get pendingInteractionState;
   AgentExpansionState get expansionState;
 
-  /// 订阅某个 region 的变化通知。
-  void addRegionListener(
-    AgentConversationSliceRegion region,
-    void Function() listener,
+  /// 订阅 scheduler 批处理之后的 UI 更新。
+  void addUiUpdateListener(
+    void Function(AgentUiUpdateRequest request) listener,
   );
 
-  void removeRegionListener(
-    AgentConversationSliceRegion region,
-    void Function() listener,
+  void removeUiUpdateListener(
+    void Function(AgentUiUpdateRequest request) listener,
   );
 
   /// 当前命令作用域快照；用于命令执行前/回写前的两次换代校验。

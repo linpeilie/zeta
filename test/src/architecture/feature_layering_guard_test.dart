@@ -11,8 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 ///
 /// 这两条以前只写在文档里：仓库有 Package 边界守卫，却没有 feature 内部的分层
 /// 守卫，于是 Phase 2 切片一度把五个 region state 从 presentation import 进
-/// application，和 `agent_conversation_ui_state.dart → application` 形成闭环，
-/// 而 analyze 与全量测试都是绿的。本守卫补上这个缺口。
+/// application，形成闭环，而 analyze 与全量测试都是绿的。本守卫补上这个缺口。
 void main() {
   final featuresRoot = Directory('lib/src/features');
 

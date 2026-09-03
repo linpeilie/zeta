@@ -57,10 +57,11 @@ void main() {
     });
 
     test(
-      'ViewModel still AND-gates reasoning UI on capability and model efforts',
+      'RuntimeController still AND-gates reasoning UI on capability and model efforts',
       () {
         final source = File(
-          'lib/src/features/agent/presentation/agent_conversation_view_model.dart',
+          'lib/src/features/agent/application/conversation_slice/'
+          'agent_conversation_runtime_controller.dart',
         ).readAsStringSync();
 
         expect(source, contains('bool get showReasoningEffort'));

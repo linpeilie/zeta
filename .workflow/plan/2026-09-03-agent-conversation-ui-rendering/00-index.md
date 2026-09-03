@@ -46,7 +46,7 @@
 
 | WP | 标题 | 规模（人天） | 依赖 | 门禁焦点 | 状态 | 文档 |
 |----|------|------------|------|---------|------|------|
-| WP-1 | 切片 owner 归位 + ViewModel 拆分 | 10–14 | 独立，建议 WP-2 之后降低冲突 | G3 G6，一份状态一个 owner | 未开始 | [01-wp1-slice-ownership.md](01-wp1-slice-ownership.md) |
+| WP-1 | 切片 owner 归位 + ViewModel 拆分 | 10–14 | 独立，建议 WP-2 之后降低冲突 | G3 G6，一份状态一个 owner | 进行中 | [01-wp1-slice-ownership.md](01-wp1-slice-ownership.md) |
 | WP-2 | part-of 单体 library 拆分 | 2–3 | 无（WP-3/WP-4 的地基） | G6 | 未开始 | [02-wp2-part-of-split.md](02-wp2-part-of-split.md) |
 | WP-3 | 渲染分发插件化（renderer 注册表） | 3–4 | WP-2 | G1 G4（registry 保持中立） | 未开始 | [03-wp3-renderer-registry.md](03-wp3-renderer-registry.md) |
 | WP-4 | 控件收敛下沉 zeta_ui | 4–5 | WP-2（可穿插） | G8；zeta_ui 纯度 | 未开始 | [04-wp4-zeta-ui-convergence.md](04-wp4-zeta-ui-convergence.md) |
@@ -90,4 +90,4 @@ WP-5（spike 结论后再排期）
 | 2026-09-03 | 全部 | 对照仓库代码 review 并三轮修订 | 修正 11 项：WP-1 攒批理由与装配顺序（无环订阅模式）、补 publish 路径遗漏（threadSnapshot/管线指标/诊断）与 Widget 只读面清单；WP-2 改原地转换（不建 kit）；WP-3 改单层注册表 + 补 warmup hook 与 hidden 类 extent 隐患；WP-4 横幅清单纠错（2 处替换 + 2 处评估）；WP-5 补 overlay/standby 交互；WP-6 修 onTapLink 签名、补 T8 透传与 T1 重命名清单；WP-7 圈定 T2 范围 |
 | 2026-09-03 | 全部 | 逐字终审并四轮修订 | 修正 15 项：WP-1 D2/D3 与骨架矛盾（effect 流归属、live 旁路时点）、补 `_effectController` 字段与 registry 接线（复用现有 sliceStoreRegistry）；WP-2 DoD grep 命令修复；WP-3 render context 拆分稳定/逐项参数（原设计会冻结 pendingState）、注册清单计数 10→9；WP-4 T1 与 WP-7 T2 循环引用解除（alpha 内建 zeta_ui）；WP-5 T3 刷新通道修正（TimelineStore 不发 UiUpdateRequest）+ G1 自查；WP-6 目录计数、pubspec 模板对齐 zeta_ui、import 计数 4→5、T8 工具栏补状态持有；全部 WP 的「登记 §5」统一改 §6 |
 | 2026-09-03 | WP-1 T0 / WP-7 T3 | `feature/wp7-t3-scheduler-metric-label` | scheduler 指标标签改为构造注入；presentation 不再 import `zeta_agent_providers`；ViewModel 透传已有 `providerMetricLabel`；组合层绑定不变 |
-| 2026-09-03 | WP-1 T1 | `01-wp1-slice-ownership.md` 附录 A | 现状测绘：70 处 ViewModel 类型引用；5 region 全字段矩阵；生产 84 / 测试独占 48 个 `viewModel.` 成员去向；标出 CommandPort 缺口与双源直读 |
+| 2026-09-03 | WP-1 T2 | RuntimeController 下沉；删除 UiStateStore/SliceComposition | scheduler 进 application；SliceStore.connected 直接吃 UiUpdateRequest；ViewModel 成 Flutter 门面；因删除 Dart 文件 `test_affected` 走全量并绿 |

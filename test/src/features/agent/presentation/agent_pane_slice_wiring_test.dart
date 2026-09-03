@@ -2,7 +2,6 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_intent.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
-import 'package:zeta/src/app/conversation_slice/agent_conversation_slice_composition.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 import 'agent_conversation_ui_state_fixtures.dart';
@@ -10,7 +9,7 @@ import 'harness/agent_pane_test_harness.dart';
 
 /// Conversation 单一路径验收：AgentPane 只通过 selector 订阅切片。
 ///
-/// 这里主要证明三件事：渲染正确、每个 entry 都必建 binding、切片确实是唯一数据来源。
+/// 这里主要证明三件事：渲染正确、每个 entry 都必建 store、切片确实是唯一数据来源。
 void main() {
   group('AgentPane 切片单一路径接线', () {
     testWidgets('显式注入的切片 store 正常渲染', (tester) async {
@@ -20,18 +19,18 @@ void main() {
         initialThread: agentPaneThread(id: 'thread-1', title: '会话一'),
       );
       addTearDown(viewModel.dispose);
-      final binding = AgentConversationSliceComposition(
-        regions: viewModel,
-        commands: viewModel,
+      final store = AgentConversationSliceStore.connected(
+        regions: viewModel.runtime,
+        commands: viewModel.runtime,
       );
-      addTearDown(binding.dispose);
+      addTearDown(store.dispose);
 
       await tester.pumpWidget(
         AgentPaneTestApp(
           viewModel: viewModel,
           sliceStores:
               <AgentConversationBindingKey, AgentConversationSliceStore>{
-                viewModel.conversationBinding.key: binding.store,
+                viewModel.conversationBinding.key: store,
               },
         ),
       );
@@ -40,7 +39,7 @@ void main() {
       expect(find.text('会话一'), findsWidgets);
     });
 
-    testWidgets('Harness 未注入 store 时仍强制创建 binding', (tester) async {
+    testWidgets('Harness 未注入 store 时仍强制创建 store', (tester) async {
       final provider = AgentPaneFakeProvider();
       final viewModel = createAgentPaneViewModel(
         provider,
@@ -48,7 +47,7 @@ void main() {
       );
       addTearDown(viewModel.dispose);
 
-      // sliceStores 为空时 Harness 创建必选 binding，不存在关闭或回退语义。
+      // sliceStores 为空时 Harness 创建必选 store，不存在关闭或回退语义。
       await tester.pumpWidget(AgentPaneTestApp(viewModel: viewModel));
       await pumpAgentPaneUi(tester);
 
@@ -62,25 +61,25 @@ void main() {
         initialThread: agentPaneThread(id: 'thread-1', title: '会话一'),
       );
       addTearDown(viewModel.dispose);
-      final binding = AgentConversationSliceComposition(
-        regions: viewModel,
-        commands: viewModel,
+      final store = AgentConversationSliceStore.connected(
+        regions: viewModel.runtime,
+        commands: viewModel.runtime,
       );
-      addTearDown(binding.dispose);
+      addTearDown(store.dispose);
 
       await tester.pumpWidget(
         AgentPaneTestApp(
           viewModel: viewModel,
           sliceStores:
               <AgentConversationBindingKey, AgentConversationSliceStore>{
-                viewModel.conversationBinding.key: binding.store,
+                viewModel.conversationBinding.key: store,
               },
         ),
       );
       await pumpAgentPaneUi(tester);
 
       // **只**往切片 store 里推，不碰 ViewModel，证明 Widget 唯一读取 selector。
-      binding.store.refreshRegions(
+      store.refreshRegions(
         AgentConversationRegionsRefreshed(
           header: agentHeaderStateFixture(title: '只存在于切片里的标题'),
         ),
@@ -96,18 +95,18 @@ void main() {
         initialThread: agentPaneThread(id: 'thread-1', title: '会话一'),
       );
       addTearDown(viewModel.dispose);
-      final binding = AgentConversationSliceComposition(
-        regions: viewModel,
-        commands: viewModel,
+      final store = AgentConversationSliceStore.connected(
+        regions: viewModel.runtime,
+        commands: viewModel.runtime,
       );
-      addTearDown(binding.dispose);
+      addTearDown(store.dispose);
 
       await tester.pumpWidget(
         AgentPaneTestApp(
           viewModel: viewModel,
           sliceStores:
               <AgentConversationBindingKey, AgentConversationSliceStore>{
-                viewModel.conversationBinding.key: binding.store,
+                viewModel.conversationBinding.key: store,
               },
         ),
       );
@@ -119,7 +118,7 @@ void main() {
       );
 
       // pending dock 在 `agent_pane_sections.dart` 深处，只往切片推以固定唯一读取面。
-      binding.store.refreshRegions(
+      store.refreshRegions(
         AgentConversationRegionsRefreshed(
           pendingInteractions: agentPendingInteractionStateFixture(
             permissions: const <AgentPermissionRequest>[

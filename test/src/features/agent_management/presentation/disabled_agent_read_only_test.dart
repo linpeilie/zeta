@@ -16,7 +16,7 @@ import '../../../testing/provider_settings_test_store.dart';
 
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
-import 'package:zeta/src/app/conversation_slice/agent_conversation_slice_composition.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
 
 import '../../../testing/ide_test_harness.dart';
@@ -164,20 +164,20 @@ Future<void> _pumpAgentPane(
     brightness: Brightness.light,
     codeFontFamily: 'JetBrainsMono',
   );
-  final sliceBinding = AgentConversationSliceComposition(
-    regions: viewModel,
-    commands: viewModel,
+  final sliceStore = AgentConversationSliceStore.connected(
+    regions: viewModel.runtime,
+    commands: viewModel.runtime,
   );
   final sliceRegistry = AgentConversationSliceStoreRegistry()
     ..bind((requestedKey) {
       if (requestedKey == viewModel.conversationBinding.key) {
-        return sliceBinding.store;
+        return sliceStore;
       }
       throw StateError('No test conversation slice for $requestedKey');
     });
   addTearDown(() {
     sliceRegistry.unbind();
-    sliceBinding.dispose();
+    sliceStore.dispose();
   });
   await tester.pumpWidget(
     ProviderScope(

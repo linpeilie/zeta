@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |----|----|
-| 状态 | 未开始 |
+| 状态 | 进行中（T0/T1/T2 完成） |
 | 规模 | 10–14 人天，4 个 PR |
 | 依赖 | 建议 WP-2 完成后启动；**T0 前置：WP-7 T3**（scheduler 的 providers 依赖切除，0.5 人天，先合入） |
 | 门禁焦点 | G3、G6、「一份状态只能有一个 owner」（AGENTS.md §3） |
@@ -126,7 +126,11 @@ grep -rn "_buildHeaderState\|_buildComposerState\|_buildPendingInteractionState\
 
 ### T2 · runtime controller 下沉（PR-1，3–4 人天）
 
-**目的**：把「持有 core runtime + 投影 + 历史加载 + provider 切换」从 ViewModel 搬到 application。
+- [x] 把 ViewModel `:74-152`（core 三件套装配，**删去其中 UiStateStore 创建**）、`:4189-4199`（`_publishScheduledUiChanges` 全部四件事：threadSnapshot 同步、live 旁路、region 发布、管线指标）、5 个 `_buildXxxState`、`_openBoundThread`（`:2222` 起）、`switchActiveProvider`（`:902`）、provider 事件订阅全部平移进 controller。
+- [x] scheduler 搬到 application（D1）；`AgentConversationUiStateStore` 删除。其诊断（`publishCount` / `debugLastAcceptedRequest`）的断言迁移到 scheduler 诊断或 SliceStore 诊断（`dispatchCount`/`publishCount` 已存在）——逐条核对引用测试，不允许静默删除。
+- [x] ViewModel 对应成员改为 `final AgentConversationRuntimeController _runtime;` + 同名 getter 委托（`AgentConversationRegionSource` 的 5 个 getter 改调 `_runtime`）。
+- [x] SliceComposition 删除；SliceStore 新增 `_onUiUpdate(AgentUiUpdateRequest request)`：按 `request.regions` 包含的 region 逐个调 `_regions.<region>State` 取新值，组装成**一次** `AgentConversationRegionsRefreshed` dispatch（字段缺省 = 未变化）。**注意这里有一次 intent 形状变更**：现状 `AgentConversationRegionsRefreshed` 的 5 个字段全非空（composition._flush 每次都全量取 5 个投影），目标态改为可空（null = 该 region 未变化，reducer 保留旧值）——reducer 与既有切片测试随迁。装配处在 `agent_conversation_workspace_store.dart:565-616` 段按 D6 顺序建 controller → store（`regions: controller, commands: controller`，构造体内 `controller.addUiUpdateListener(_onUiUpdate)`）。
+- [x] `AgentConversationSliceComposition` 里的 `_AgentConversationCommandEffectRunner`（`:183-333`，含两次 scope 校验）**整体平移**进 SliceStore 所在层（它本来就是 application 逻辑，只是物理放在 app 层文件）。
 
 **新文件** `application/conversation_slice/agent_conversation_runtime_controller.dart` 骨架：
 
@@ -220,6 +224,13 @@ final class AgentConversationRuntimeController
 **验收**：Widget 树零改动；`grep -n "AgentConversationUiStateStore\|AgentConversationSliceComposition" lib test` 零命中；`feature_layering_guard_test` 绿。
 
 **测试**：`agent_conversation_widget_test.dart` 全量（38 用例是回归网）；切片 wiring 两个测试文件适配装配变化；scheduler 测试随迁（改 import 即可，行为不变）。
+
+**落地偏差**：
+
+- `frameScheduler` 在 application scheduler 上改为必填，生产由 ViewModel 注入 `SchedulerBindingAgentFrameScheduler`。
+- presentation **不得** `export` application scheduler / RuntimeController（`deleted_transition_api_guard_test` 禁止 `lib/src` 过渡 re-export）。
+- reasoning AND-gate 的源码守卫改钉 `agent_conversation_runtime_controller.dart`。
+- 删除 SliceComposition 后，两次 `immediate` toggle 不再被 microtask 合并成一次 dispatch。
 
 ### T3 · 纯函数下沉（PR-2，1 人天）
 
