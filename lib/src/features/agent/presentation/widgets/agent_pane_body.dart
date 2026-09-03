@@ -4,13 +4,13 @@ import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_region_state.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
 import 'package:zeta/src/features/agent/presentation/agent_flutter_listenable_adapter.dart';
-import 'package:zeta/src/features/agent/presentation/agent_markdown_cache.dart';
-import 'package:zeta/src/features/agent/presentation/agent_plan_revision_drafts.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_extent_descriptor.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection_cache.dart';
 import 'package:zeta/src/features/agent/presentation/composer_document.dart';
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_region_builder.dart';
+import 'package:zeta/src/features/agent/presentation/timeline_rendering/agent_timeline_renderer.dart';
+import 'package:zeta/src/features/agent/presentation/timeline_rendering/agent_timeline_renderer_registry.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_header.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_plan_panel.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_sections.dart';
@@ -26,8 +26,8 @@ class AgentPaneBody extends StatelessWidget {
     required this.floatingPanelExtent,
     required this.projectionCache,
     required this.descriptorFactory,
-    required this.markdownCache,
-    required this.planRevisionDrafts,
+    required this.renderContext,
+    required this.rendererRegistry,
     required this.virtualListController,
     required this.scrollCoordinator,
     required this.scrollChromeTick,
@@ -56,8 +56,8 @@ class AgentPaneBody extends StatelessWidget {
   final ValueNotifier<double> floatingPanelExtent;
   final AgentTimelineProjectionCache projectionCache;
   final AgentTimelineExtentDescriptorFactory descriptorFactory;
-  final AgentMarkdownCache markdownCache;
-  final AgentPlanRevisionDraftStore planRevisionDrafts;
+  final AgentTimelineRenderContext renderContext;
+  final AgentTimelineRendererRegistry rendererRegistry;
   final IdeVirtualListController virtualListController;
   final IdeVirtualScrollCoordinator scrollCoordinator;
   final ValueNotifier<int> scrollChromeTick;
@@ -127,8 +127,8 @@ class AgentPaneBody extends StatelessWidget {
                           floatingPanelExtent: floatingPanelExtent,
                           projectionCache: projectionCache,
                           descriptorFactory: descriptorFactory,
-                          markdownCache: markdownCache,
-                          planRevisionDrafts: planRevisionDrafts,
+                          renderContext: renderContext,
+                          rendererRegistry: rendererRegistry,
                           virtualListController: virtualListController,
                           scrollCoordinator: scrollCoordinator,
                           scrollChromeTick: scrollChromeTick,

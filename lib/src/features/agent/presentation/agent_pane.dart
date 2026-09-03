@@ -12,6 +12,9 @@ import 'package:zeta/src/features/agent/application/conversation_slice/agent_con
 import 'package:zeta/src/features/agent/presentation/agent_markdown_cache.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane_composer_session.dart';
 import 'package:zeta/src/features/agent/presentation/agent_plan_revision_drafts.dart';
+import 'package:zeta/src/features/agent/presentation/timeline_rendering/agent_timeline_renderer.dart';
+import 'package:zeta/src/features/agent/presentation/timeline_rendering/agent_timeline_renderer_registry.dart';
+import 'package:zeta/src/features/agent/presentation/timeline_rendering/agent_timeline_renderers.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_extent_descriptor.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection_cache.dart';
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
@@ -109,11 +112,18 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
   String? _lastTimelineItemId;
   double _panelHeight = 600;
   late final AgentTimelineProjectionCache _projectionCache;
-  final AgentTimelineExtentDescriptorFactory _descriptorFactory =
-      AgentTimelineExtentDescriptorFactory();
+
+  /// 渲染分发表：无状态，整个 Pane 生命周期一份。
+  final AgentTimelineRendererRegistry _rendererRegistry =
+      buildAgentTimelineRendererRegistry();
+  late final AgentTimelineExtentDescriptorFactory _descriptorFactory =
+      AgentTimelineExtentDescriptorFactory(registry: _rendererRegistry);
   AgentMarkdownCache _markdownCache = AgentMarkdownCache();
   AgentPlanRevisionDraftStore _planRevisionDrafts =
       AgentPlanRevisionDraftStore();
+
+  /// renderer 的稳定依赖；会话（controller / 缓存）换代时重建。
+  late AgentTimelineRenderContext _renderContext;
   late Widget Function(BuildContext, _AgentPaneWidthClass)
   _responsiveBodyBuilder;
 
@@ -123,6 +133,7 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
     _projectionCache = AgentTimelineProjectionCache(
       textCatalog: widget.controller.textCatalog,
     );
+    _renderContext = _createRenderContext();
     _composer = AgentPaneComposerSession(
       runtime: widget.controller,
       messageSendShortcut: widget.messageSendShortcut,
@@ -159,6 +170,8 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
     _markdownCache = AgentMarkdownCache();
     final previousPlanDrafts = _planRevisionDrafts;
     _planRevisionDrafts = AgentPlanRevisionDraftStore();
+    // controller 与两个缓存都换了实例，渲染上下文必须跟着换代。
+    _renderContext = _createRenderContext();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       previousMarkdownCache.dispose();
       previousPlanDrafts.dispose();
@@ -175,6 +188,14 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
     _lastTimelineItemId = null;
     unawaited(_scrollCoordinator.requestFollowEnd(animated: false));
     _uiEffectSubscription = widget.controller.uiEffects.listen(_handleUiEffect);
+  }
+
+  AgentTimelineRenderContext _createRenderContext() {
+    return AgentTimelineRenderContext(
+      controller: widget.controller,
+      markdownCache: _markdownCache,
+      planRevisionDrafts: _planRevisionDrafts,
+    );
   }
 
   @override
@@ -277,8 +298,8 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
       floatingPanelExtent: _activePlanPanelExtent,
       projectionCache: _projectionCache,
       descriptorFactory: _descriptorFactory,
-      markdownCache: _markdownCache,
-      planRevisionDrafts: _planRevisionDrafts,
+      renderContext: _renderContext,
+      rendererRegistry: _rendererRegistry,
       virtualListController: _virtualListController,
       scrollCoordinator: _scrollCoordinator,
       scrollChromeTick: _scrollChromeTick,

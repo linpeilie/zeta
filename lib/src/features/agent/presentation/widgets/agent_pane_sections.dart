@@ -11,14 +11,14 @@ import 'package:zeta/src/features/agent/application/conversation_slice/agent_con
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_navigation.dart';
 import 'package:zeta/src/features/agent/presentation/agent_flutter_listenable_adapter.dart';
-import 'package:zeta/src/features/agent/presentation/agent_markdown_cache.dart';
-import 'package:zeta/src/features/agent/presentation/agent_plan_revision_drafts.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_extent_descriptor.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection_cache.dart';
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_region_builder.dart';
+import 'package:zeta/src/features/agent/presentation/timeline_rendering/agent_timeline_renderer.dart';
+import 'package:zeta/src/features/agent/presentation/timeline_rendering/agent_timeline_renderer_registry.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_mode_selector.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_cards.dart';
@@ -330,8 +330,8 @@ class AgentConversationTimeline extends StatelessWidget {
     required this.floatingPanelExtent,
     required this.projectionCache,
     required this.descriptorFactory,
-    required this.markdownCache,
-    required this.planRevisionDrafts,
+    required this.renderContext,
+    required this.rendererRegistry,
     required this.virtualListController,
     required this.scrollCoordinator,
     required this.scrollChromeTick,
@@ -351,10 +351,12 @@ class AgentConversationTimeline extends StatelessWidget {
   final ValueListenable<double> floatingPanelExtent;
   final AgentTimelineProjectionCache projectionCache;
   final AgentTimelineExtentDescriptorFactory descriptorFactory;
-  final AgentMarkdownCache markdownCache;
 
-  /// 计划卡修改输入的草稿宿主；由 [AgentPane] 持有，跨虚拟列表回收存活。
-  final AgentPlanRevisionDraftStore planRevisionDrafts;
+  /// renderer 的稳定依赖（controller / markdown 缓存 / 计划草稿宿主）。
+  final AgentTimelineRenderContext renderContext;
+
+  /// block → renderer 的分发表。
+  final AgentTimelineRendererRegistry rendererRegistry;
   final IdeVirtualListController virtualListController;
   final IdeVirtualScrollCoordinator scrollCoordinator;
   final ValueListenable<int> scrollChromeTick;
@@ -409,7 +411,7 @@ class AgentConversationTimeline extends StatelessWidget {
                     if (liveSnapshot != null) liveSnapshot.id,
                   });
                   // 计划请求消失即释放草稿，避免长会话里控制器无限累积。
-                  planRevisionDrafts.retainOnly(<String>{
+                  renderContext.planRevisionDrafts.retainOnly(<String>{
                     for (final request in pendingState.planApprovals)
                       request.id,
                     if (pendingState.planExecutionHandoff case final handoff?)
@@ -428,6 +430,8 @@ class AgentConversationTimeline extends StatelessWidget {
                         visibleHistoryTurns: historyTurns,
                         liveTurn: liveSnapshot,
                         resolveBlocks: projectionCache.resolve,
+                        rendersInline: (block) =>
+                            rendererRegistry.resolve(block).rendersInline,
                       );
                   final showNavigationRail =
                       shouldShowAgentConversationNavigation(navigationEntries);
@@ -715,9 +719,8 @@ class AgentConversationTimeline extends StatelessWidget {
         return _AgentTimelineBlockSection(
           turn: turn,
           block: block,
-          controller: controller,
-          markdownCache: markdownCache,
-          planRevisionDrafts: planRevisionDrafts,
+          renderContext: renderContext,
+          renderer: rendererRegistry.resolve(block),
           pendingState: pendingState,
           precededByOperationGroup: _isOperationGroupViewportItem(previousItem),
           followedByOperationGroup: _isOperationGroupViewportItem(nextItem),
@@ -741,23 +744,14 @@ class AgentConversationTimeline extends StatelessWidget {
     if (item is! AgentBlockViewportItem) {
       return null;
     }
-    final block = item.block;
-    if (block is! AgentTimelineEntryRenderBlock) {
-      return null;
-    }
-    final entry = block.entry;
-    if (entry is! AgentMessageTimelineEntry) {
-      return null;
-    }
-    final message = entry.message;
-    if (message.role != AgentMessageRole.agent || message.isPlan) {
-      return null;
-    }
-    return markdownCache.prepareWarmEntry(
-      messageId: message.id,
-      data: message.text,
-      preferIncrementalUpdate: item.isLive,
-    );
+    // 是否保温由 renderer 自己说了算；返回 null 即不包 KeepAlive。
+    return rendererRegistry
+        .resolve(item.block)
+        .prepareWarmEntry(
+          AgentTimelineRendererRegistry.payloadOf(item.block),
+          renderContext,
+          isLive: item.isLive,
+        );
   }
 }
 
@@ -774,9 +768,8 @@ class _AgentTimelineBlockSection extends StatelessWidget {
   const _AgentTimelineBlockSection({
     required this.turn,
     required this.block,
-    required this.controller,
-    required this.markdownCache,
-    required this.planRevisionDrafts,
+    required this.renderContext,
+    required this.renderer,
     required this.pendingState,
     this.precededByOperationGroup = false,
     this.followedByOperationGroup = false,
@@ -784,9 +777,10 @@ class _AgentTimelineBlockSection extends StatelessWidget {
 
   final AgentConversationTurnGroup turn;
   final AgentTimelineRenderBlock block;
-  final AgentConversationRuntimeController controller;
-  final AgentMarkdownCache markdownCache;
-  final AgentPlanRevisionDraftStore planRevisionDrafts;
+  final AgentTimelineRenderContext renderContext;
+
+  /// 已按 block 类型解析好的 renderer。
+  final AgentTimelineRenderer<Object> renderer;
 
   /// 计划卡在流内渲染，需要知道当前是否有待处理的计划请求。
   final AgentPendingInteractionState pendingState;
@@ -799,18 +793,15 @@ class _AgentTimelineBlockSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final content = switch (block) {
-      AgentTimelineEntryRenderBlock(:final entry) => _buildTimelineEntry(
-        context,
-        entry,
-        markdownCache: markdownCache,
-      ),
-      AgentTimelineCommandGroupRenderBlock(:final group) =>
-        AgentCommandGroupCard(group: group, controller: controller),
-      AgentTimelineFileEditGroupRenderBlock(:final group) =>
-        AgentFileEditGroupCard(group: group, controller: controller),
-    };
+    final content = renderer.build(
+      context,
+      AgentTimelineRendererRegistry.payloadOf(block),
+      renderContext,
+      turn: turn,
+      pendingState: pendingState,
+    );
     // 操作组间距由列表层统一包 Padding；卡片自身零 margin。
+    // 这是块间关系而非块内职责，因此不进 renderer。
     final child = isAgentTimelineOperationGroupBlock(block)
         ? Padding(
             padding: operationGroupOuterPadding(
@@ -823,57 +814,6 @@ class _AgentTimelineBlockSection extends StatelessWidget {
     return KeyedSubtree(
       key: ValueKey<String>('turn-block-${turn.id}-${block.id}'),
       child: child,
-    );
-  }
-
-  Widget _buildTimelineEntry(
-    BuildContext context,
-    AgentTimelineEntry entry, {
-    required AgentMarkdownCache markdownCache,
-  }) {
-    final isLiveTurn = controller.liveTurnState?.id == turn.id;
-    return switch (entry) {
-      AgentMessageTimelineEntry(:final message) => AgentMessageEntry(
-        message: message,
-        // 历史与 live 正文均全文渲染，禁止折叠预览。
-        useStreamingMarkdown: isLiveTurn,
-        controller: controller,
-        markdownCache: markdownCache,
-        planRevisionDrafts: planRevisionDrafts,
-        planExecutionHandoff: pendingState.planExecutionHandoff,
-      ),
-      AgentToolTimelineEntry(:final toolCall) => AgentToolCallCard(
-        toolCall: toolCall,
-        controller: controller,
-      ),
-      // 权限与提问仍在 Composer 上方的 dock 渲染，避免时间线出现重复卡片。
-      AgentPermissionTimelineEntry() => const SizedBox.shrink(),
-      AgentQuestionTimelineEntry() => const SizedBox.shrink(),
-      // 计划文档改在对话流内渲染：仍待审批时才是交互卡，决定后条目即被移除。
-      AgentPlanApprovalTimelineEntry(:final request) => _buildPlanApprovalCard(
-        context,
-        request,
-      ),
-      // 正常路径会在 grouping 中转成文件编辑组；此处仅作兜底。
-      AgentTurnFileChangesTimelineEntry() => const SizedBox.shrink(),
-      AgentHistoryEventTimelineEntry(:final event) => AgentHistoryEventCard(
-        event: event,
-      ),
-    };
-  }
-
-  /// Provider 计划审批卡。
-  ///
-  /// 卡片装配已下沉到 [buildAgentPlanApprovalCard]，与 renderer 共用一份实现。
-  Widget _buildPlanApprovalCard(
-    BuildContext context,
-    AgentPlanApprovalRequest request,
-  ) {
-    return buildAgentPlanApprovalCard(
-      context,
-      request,
-      controller: controller,
-      planRevisionDrafts: planRevisionDrafts,
     );
   }
 }

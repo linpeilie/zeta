@@ -15,7 +15,7 @@ import 'package:zeta/src/features/agent/application/conversation_slice/agent_con
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_ports.dart';
 import 'package:zeta/src/features/agent/presentation/agent_markdown_cache.dart';
 import 'package:zeta/src/features/agent/presentation/agent_plan_revision_drafts.dart';
-import 'package:zeta/src/features/agent/presentation/agent_timeline_extent_descriptor.dart';
+import 'package:zeta/src/features/agent/presentation/timeline_rendering/agent_timeline_extent_math.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 
 /// 渲染上下文：renderer 需要的**稳定**外部依赖，每个 AgentPane 创建一次。

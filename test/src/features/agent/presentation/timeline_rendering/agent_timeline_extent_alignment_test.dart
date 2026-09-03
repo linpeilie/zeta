@@ -3,6 +3,7 @@ import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 import 'package:zeta/src/features/agent/presentation/agent_file_change_projection.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_extent_descriptor.dart';
+import 'package:zeta/src/features/agent/presentation/timeline_rendering/agent_timeline_extent_math.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection.dart';
 import 'package:zeta/src/features/agent/presentation/timeline_rendering/agent_timeline_renderer_registry.dart';
@@ -46,13 +47,16 @@ void main() {
     );
     final previous = precededByOperationGroup ? _operationGroupItem() : null;
     final next = followedByOperationGroup ? _operationGroupItem() : null;
-    final descriptor = AgentTimelineExtentDescriptorFactory().describe(
-      item,
-      previousItem: previous,
-      nextItem: next,
-      expansion: lookup,
-      layoutContext: layout,
-    );
+    final descriptor =
+        AgentTimelineExtentDescriptorFactory(
+          registry: buildAgentTimelineRendererRegistry(),
+        ).describe(
+          item,
+          previousItem: previous,
+          nextItem: next,
+          expansion: lookup,
+          layoutContext: layout,
+        );
     final renderer = registry.resolve(block);
     final payload = AgentTimelineRendererRegistry.payloadOf(block);
 

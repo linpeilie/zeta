@@ -7,6 +7,30 @@ library;
 
 import 'dart:math' as math;
 
+/// 展开态查询，避免估算与 renderer 依赖完整 ViewModel。
+typedef AgentTimelineExpansionLookup = ({
+  bool Function(String commandGroupId) isCommandGroupExpanded,
+  bool Function(String fileEditItemId) isFileEditItemExpanded,
+
+  /// 该 plan 消息是否已升级为带底部输入的交互卡（形态与高度都不同）。
+  bool Function(String messageId) isPlanMessageInteractive,
+});
+
+/// Agent item kind 常量（仅用于估算，不参与业务分支）。
+abstract final class AgentTimelineExtentKinds {
+  static const userMessage = 'userMessage';
+  static const agentMarkdown = 'agentMarkdown';
+  static const plan = 'plan';
+  static const toolCard = 'toolCard';
+  static const commandGroup = 'commandGroup';
+  static const fileEditGroup = 'fileEditGroup';
+  static const planInteraction = 'planInteraction';
+  static const liveActivity = 'liveActivity';
+  static const turnFooter = 'turnFooter';
+  static const system = 'system';
+  static const hidden = 'hidden';
+}
+
 /// 归一化后的估算度量。
 ///
 /// 宽度非法（非有限 / 非正）时回退 720，缩放非法时回退 1.0——冷启动首帧拿不到

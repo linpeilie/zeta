@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |----|----|
-| 状态 | 进行中（T1 / T2 已完成） |
+| 状态 | 已完成 |
 | 规模 | 3–4 人天，1–2 个 PR |
 | 依赖 | **WP-2 完成后启动**（文件先独立）；与 WP-1 解耦（只依赖 `AgentConversationCommandPort` 窄接口） |
 | 门禁焦点 | G6；「新增条目类型 = 新增一个 renderer 文件」 |
@@ -334,12 +334,24 @@ test('所有 block 类型均有注册 renderer', () {
 });
 ```
 
-**验收**：`grep -n "switch (block)\|switch (entry)" agent_pane_sections.dart` 零命中。
+**验收**：`grep -n "switch (block)\|switch (entry)" agent_pane_sections.dart` 零命中。 ✅（实测零命中）
 
-### T4 · 注入接线 + 收尾（0.5 人天）
+**施工记录（2026-09-03）**：
 
-- [ ] `AgentPane` 组合段建注册表 + context；`_AgentConversationTimeline` 构造参数收敛（12 个参数中 viewModel/markdownCache/planRevisionDrafts 并入 context；pendingState 保持逐 build 传递）。
-- [ ] `bash tool/test_full.sh` 绿；登记 `00-index.md` §6「开发记录」。
+- `_AgentTimelineBlockSection` 收缩为「拿已解析的 renderer 调 build + 包操作组 Padding + KeyedSubtree」，`_buildTimelineEntry` / `_buildPlanApprovalCard` 删除；`_prepareMarkdownWarmEntry` 的四层类型判断链换成 `registry.resolve(block).prepareWarmEntry(...)`。sections 净减 ~130 行。
+- **extent 工厂同步接线**（§2.3）：`_kindOf` / `_layoutRevision` / `_estimateExtent` 的 block 分支全部委托注册表，`_kindForMessage` / `_blockContentRevision` / `_entryContentRevision` / `_blockExpansionFingerprint` / `_estimateCommandGroup` / `_estimateFileEditGroup` / `_estimateEntry` / `_estimateMessage` 八个私有方法删除。文件从 585 行降到 255 行，只剩 viewport 级两项（live 活动条 / turn footer）与 descriptor 复用机制。
+- 工厂构造改为 `AgentTimelineExtentDescriptorFactory({required registry})`——**不设全局单例**，5 处测试调用点显式传清单。
+- 导航谓词按实际代码落在 `buildAgentConversationNavigationEntries`：新增 `rendersInline` 谓词参数（默认全可见，保持既有调用者行为），兜底锚点由 `blocks.first` 改为 `_firstInlineBlock`。sections 传入 `registry.resolve(block).rendersInline`。
+- 守卫测试 `test/src/features/agent/architecture/agent_timeline_renderer_registry_guard_test.dart` 4 条：从 `agent_conversation_timeline_store.dart` 与 `agent_timeline_grouping.dart` 源码盘点密封子类名，双向比对注册表（漏登记与多余登记都失败），外加三种 block fixture 的 resolve 冒烟。
+
+**一处踩坑**：为兼容而在 `agent_timeline_extent_descriptor.dart` 加的 `export`（re-export `AgentTimelineExtentKinds` / `AgentTimelineExpansionLookup`）被 `test/src/architecture/deleted_transition_api_guard_test.dart` 的「lib/src 不得新增过渡 re-export」零容忍守卫拦下。已改为两个符号迁到 `timeline_rendering/agent_timeline_extent_math.dart` 后，各引用点直接 import 真源。
+
+### T4 · 注入接线 + 收尾（0.5 人天） · 已完成（2026-09-03）
+
+- [x] `AgentPane` 组合段建注册表 + context；`_AgentConversationTimeline` 构造参数收敛（12 个参数中 viewModel/markdownCache/planRevisionDrafts 并入 context；pendingState 保持逐 build 传递）。
+- [x] `bash tool/test_full.sh` 绿；登记 `00-index.md` §6「开发记录」。
+
+**施工记录**：`_AgentPaneState` 持 `_rendererRegistry`（无状态，Pane 生命周期一份）与 `_renderContext`；后者在 `initState` 与 `didUpdateWidget` 换会话时重建——controller 与 markdown 缓存 / 计划草稿宿主都会换实例，上下文必须跟着换代。`AgentConversationTimeline` 与 `AgentPaneBody` 的 `markdownCache` / `planRevisionDrafts` 两个参数合并为 `renderContext` + `rendererRegistry`（净减 1 个参数，且两个缓存不再各传一路）。
 
 ## 4. 风险与回滚
 
@@ -351,6 +363,8 @@ test('所有 block 类型均有注册 renderer', () {
 
 ## 5. 完成定义（DoD）
 
-- [ ] 新增条目类型 = 新增 1 个 renderer 文件 + 1 行注册（在 PR 描述中演示一遍）。
-- [ ] sections 无 block/entry switch；extent 工厂无 block 类型分支。
-- [ ] `tool/test_full.sh` 绿；CHANGELOG 无条目。
+- [x] 新增条目类型 = 新增 1 个 renderer 文件 + 1 行注册（清单在 `timeline_rendering/agent_timeline_renderers.dart`；架构守卫测试会在漏登记时失败）。
+- [x] sections 无 block/entry switch；extent 工厂无 block 类型分支。
+- [x] `tool/test_full.sh` 绿；CHANGELOG 无条目。
+
+**接线后生效的行为变化（PR 描述需记录）**：permission / question 两类条目此前按 `toolCard` / 48px 估算而实际渲染 0px，现在按 `hidden` / 0 估算，长会话滚动锚点少一份系统性偏差；导航兜底锚点不再可能落在这类零高度块上。

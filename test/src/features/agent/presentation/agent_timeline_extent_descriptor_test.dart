@@ -2,11 +2,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_extent_descriptor.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
+import 'package:zeta/src/features/agent/presentation/timeline_rendering/agent_timeline_extent_math.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection.dart';
 import 'package:zeta_ui/zeta_ui.dart';
+import 'package:zeta/src/features/agent/presentation/timeline_rendering/agent_timeline_renderers.dart';
 
 void main() {
-  final factory = AgentTimelineExtentDescriptorFactory();
+  final factory = AgentTimelineExtentDescriptorFactory(
+    registry: buildAgentTimelineRendererRegistry(),
+  );
   const layout = AgentTimelineLayoutContext(
     crossAxisExtent: 720,
     devicePixelRatio: 1,

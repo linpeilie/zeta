@@ -11,7 +11,7 @@ import 'package:flutter/widgets.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_region_state.dart';
-import 'package:zeta/src/features/agent/presentation/agent_timeline_extent_descriptor.dart';
+import 'package:zeta/src/features/agent/presentation/timeline_rendering/agent_timeline_extent_math.dart';
 import 'package:zeta/src/features/agent/presentation/timeline_rendering/agent_timeline_renderer.dart';
 
 /// 不在流内渲染的条目。

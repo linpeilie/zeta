@@ -3,7 +3,7 @@ library;
 
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
-import 'package:zeta/src/features/agent/presentation/agent_timeline_extent_descriptor.dart';
+import 'package:zeta/src/features/agent/presentation/timeline_rendering/agent_timeline_extent_math.dart';
 import 'package:zeta/src/features/agent/presentation/timeline_rendering/renderers/agent_hidden_entry_renderer.dart';
 
 /// 权限审批仍在 Composer 上方的 dock 渲染，避免时间线出现重复卡片。
