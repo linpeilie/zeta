@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |----|----|
-| 状态 | 进行中（T0–T5 完成，T6 未开始） |
+| 状态 | 已完成（T0–T6） |
 | 规模 | 10–14 人天，4 个 PR |
 | 依赖 | 建议 WP-2 完成后启动；**T0 前置：WP-7 T3**（scheduler 的 providers 依赖切除，0.5 人天，先合入） |
 | 门禁焦点 | G3、G6、「一份状态只能有一个 owner」（AGENTS.md §3） |
@@ -338,13 +338,19 @@ final agentConversationCommandProvider = Provider.family
 - Flutter listenable 由 presentation 扩展 `AgentConversationFlutterListenables` 投影。
 - Workspace 构造 RuntimeController 时默认 `SchedulerBindingAgentFrameScheduler`（app 层可 import presentation scheduler）。
 - 原 ViewModel region ValueNotifier 的 `!=` 门闩，测试改为 `addUiUpdateListener` + 同条件计数，用例未删。
-- RuntimeController 仍 import `dart:io`（`ProcessException`），留给 T6。
+- RuntimeController 仍 import `dart:io`（`ProcessException`），留给后续卫生项；T6 DoD 只要求 presentation 层为零。
 
 ### T6 · 全量门禁与文档同步（PR-4，1–2 人天）
 
-- [ ] `bash tool/test_full.sh` 全绿。
-- [ ] §6 文档同步：`docs/architecture/overview.md`(+en) 状态发布链路图、`engineering_standards.md` §3.0、`developer_guide.md` 切片接入说明、`glossary.md`（region/slice 术语如变化）。
-- [ ] 登记 `00-index.md` §6「开发记录」。
+- [x] `bash tool/test_full.sh` 全绿。
+- [x] §6 文档同步：`docs/architecture/overview.md`(+en) 状态发布链路图、`engineering_standards.md` §3.0、`developer_guide.md` 切片接入说明、`glossary.md`（region/slice 术语如变化）。
+- [x] 登记 `00-index.md` §6「开发记录」。
+
+**落地偏差**：
+
+- 同步范围按 AGENTS.md §6 扩到 `design_document.md`、`CONTRIBUTING.md`(+en)、`desktop_agent_notification_design.md`。
+- RuntimeController 的 `dart:io` / `ProcessException` 未在本任务切除（application 允许；presentation 已为零）。
+- CHANGELOG 无条目（纯内部重构）。
 
 ## 4. 风险与回滚
 
@@ -357,10 +363,10 @@ final agentConversationCommandProvider = Provider.family
 
 ## 5. 完成定义（DoD）
 
-- [ ] 链路两跳；`AgentConversationUiStateStore` / `AgentConversationSliceComposition` / `AgentConversationViewModel` 零命中。
-- [ ] presentation 层 agent feature 无 `dart:io`、无 `zeta_agent_providers` import。
-- [ ] `flutter analyze` 零告警；`tool/test_full.sh` 绿；架构守卫绿。
-- [ ] 文档同步完成；CHANGELOG 无条目（纯内部重构）。
+- [x] 链路两跳；`AgentConversationUiStateStore` / `AgentConversationSliceComposition` / `AgentConversationViewModel` 零命中。
+- [x] presentation 层 agent feature 无 `dart:io`、无 `zeta_agent_providers` import。
+- [x] `flutter analyze` 零告警；`tool/test_full.sh` 绿；架构守卫绿。
+- [x] 文档同步完成；CHANGELOG 无条目（纯内部重构）。
 
 ---
 

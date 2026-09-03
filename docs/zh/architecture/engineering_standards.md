@@ -52,7 +52,7 @@ lib/
 - `features/<feature>/domain` 放纯模型、枚举、接口和领域状态。
 - `features/<feature>/application` 放用例协调、恢复计划、分页加载、状态编排和跨对象协作。
 - `features/<feature>/data` 放外部协议、存储、datasource、mapper 和 codec。
-- `features/<feature>/presentation` 放 feature 私有 view model、pane、widget 和 UI 分组逻辑。
+- `features/<feature>/presentation` 放 feature 私有 pane、widget、region selector 和 UI 分组逻辑。会话命令入口在 application 的 RuntimeController，不在 presentation ViewModel。
 - `zeta_ui`（`packages/zeta_ui`）放跨 feature 可复用的主题、窗口框架、pane、panel 和状态展示组件；它不依赖业务模型、Riverpod、`dart:io` 或 generated l10n。
 - `agent_management` 负责 CLI 检测、版本/账号/模型诊断、配置文件安全写入、
   磁盘日志读取与管理页面；它复用 `agent` 的 provider 抽象，不复制会话协议实现。
@@ -69,7 +69,7 @@ main -> app -> presentation/application -> domain
                        presentation -> zeta_ui
 ```
 
-- presentation 可以读取 view model、controller 暴露的状态并触发动作，但不直接解析 provider 原始协议。
+- presentation 可以读取 RuntimeController / slice selector 暴露的状态并触发动作，但不直接解析 provider 原始协议。
 - application 负责异步流程、恢复、分页、竞态隔离和状态写入，不负责绘制 widget。
 - data 实现 provider、JSON-RPC、JSONL、版本化本地 JSON 文件等具体细节，并把外部 payload 映射为 domain 模型。Provider 自有 data adapter 可按明确功能读取对应 CLI 的私有数据，但原始结构与路径不得泄漏到上层。
 - domain 不依赖 Flutter widget、不访问本地文件系统、不引用具体 provider 实现。
@@ -128,6 +128,14 @@ import Flutter」那条守卫**拦不住它们**。也就是说 application 与 
 非物理边界：切片只暴露不可变 state 与命令入口，Widget 与 `WidgetRef` 属于 presentation。
 真要重新拉紧，两条路——恢复核心包依赖并按包禁，或者加一条符号级黑名单守卫；后者漏一个符号
 就开一个口子，比按包禁脆。
+
+**会话 UI 发布是两跳。** TimelineStore 之后：`AgentConversationRuntimeController` 投影
+region 并经 `AgentUiUpdateScheduler` 发出 `AgentUiUpdateRequest`；
+`AgentConversationSliceStore` 对每个 request 做一次 `RegionsRefreshed` dispatch。
+presentation 的 `AgentConversationSliceNotifier` 镜像 store，`AgentRegionBuilder` 只
+`ref.watch(selector(bindingKey))`。禁止再经 `AgentConversationUiStateStore`、
+`AgentConversationSliceComposition` 或 `AgentConversationViewModel` 做第三跳。上下文面板
+显隐属于 AgentPane 的 Widget 状态，不进 application 快照。
 
 **依赖注入同样归 Riverpod。** 没有安全默认值的依赖用会抛错的 `Provider` 声明保持 fail-closed；
 测试用 `ProviderContainer(overrides: ...)`。这取代了两种旧写法：把几十个可空依赖挂在根 Widget
@@ -188,17 +196,22 @@ notifier 依赖了 runner provider，runner 再读 notifier 就构成 Riverpod �
 - 高吞吐 UI 使用结构相等的不可变 state slice 与分区 `ValueListenable`，不得用整数
   version/revision 作为主要刷新协议。Timeline 的 live turn 保留稳定对象和增量 mutation，
   不得因不可变状态迁移在每个 delta 复制完整历史。
-- Agent UI 更新由 application 通过 `AgentUiUpdatePort` 提交类型化 request；
-  `SchedulerBinding` 只允许出现在 presentation 的 `AgentUiUpdateScheduler` 生产适配中。
-  普通请求按下一 Flutter frame 合并，immediate 请求吸收 pending 后在安全边界发布；
-  不得重新引入固定毫秒 Timer、post-frame 释放门闩或 idle task 队列。
-- `AgentConversationViewModel` 是命令入口和 typed listenable facade，不再继承
-  `ChangeNotifier`。Widget 只能监听所需 state slice、稳定 live turn 或一次性 UI effect；
-  Shell 只能监听 `AgentConversationThreadSnapshot`。
-- Workspace entry 构造时必须一次性注入匹配的 thread summary 与 Binding。一个
-  `AgentConversationViewModel` 只能承载该 Binding 的固定 thread；不得提供跨 thread
-  `switch`、带 restored session/provider 的通用 workspace 更新或 reset conversation 入口。
-  project/file context 更新不得清空会话状态，切换 thread 必须选择另一个 entry/ViewModel。
+- Agent UI 更新由 application 的 `AgentConversationRuntimeController` 经
+  `AgentUiUpdateScheduler` 提交类型化 request；`SchedulerBinding` 只允许出现在
+  presentation 的 `SchedulerBindingAgentFrameScheduler`。普通请求按下一 Flutter frame
+  合并，immediate 请求吸收 pending 后在安全边界发布；不得重新引入固定毫秒 Timer、
+  post-frame 释放门闩或 idle task 队列。
+- `AgentConversationRuntimeController` 是会话命令入口与 region 投影 owner，位于
+  application 层。Widget 经 `AgentRegionBuilder` 与 family selector 读所需 region；
+  高频 live turn 可经 presentation 的 Flutter listenable 适配。Shell 只能监听
+  `AgentConversationThreadSnapshot`（`selectedAgentController`）。不得再引入
+  `AgentConversationViewModel`、`AgentConversationUiStateStore` 或
+  `AgentConversationSliceComposition`。
+- Workspace entry 构造时必须一次性注入匹配的 thread summary、Binding 与
+  RuntimeController。一个 RuntimeController 只能承载该 Binding 的固定 thread；不得提供
+  跨 thread `switch`、带 restored session/provider 的通用 workspace 更新或 reset
+  conversation 入口。project/file context 更新不得清空会话状态，切换 thread 必须选择
+  另一个 entry。
 - 跨模块共享的运行时指示（如侧栏 thread busy）若依赖独立 snapshot listenable，
   stream flush 与分区 publish 都必须同步该 snapshot，不得只 bump 面板 version。
 - 对会被新请求覆盖的异步加载使用 token/version guard，旧结果返回时必须被丢弃。
@@ -223,8 +236,8 @@ notifier 依赖了 runner provider，runner 再读 notifier 就构成 Riverpod �
   `deniedActionOverride`、`modelCatalog`、
   `localThreadList`、`sessionConfiguration`、`planApproval`、`conversationModes`、
   `permissionPolicy`、`usageQuota`）优先通过 bundle 端口访问；Bundle 和
-  `AgentRuntimePort` 不得向 controller / ViewModel 暴露原始 `AgentProvider`；
-  controller / view model 不再通过 provider kind、`is SomeProvider` 或直接调用
+  `AgentRuntimePort` 不得向 controller / RuntimeController 暴露原始 `AgentProvider`；
+  controller / RuntimeController 不再通过 provider kind、`is SomeProvider` 或直接调用
   已迁移旧方法做分支。
 - 权限选项选择只走中立 `AgentPermissionPolicyPort`（`listPermissionOptions` /
   `applyPermissionSelection`）。共享层仅使用 `AgentPermissionOption` /
@@ -241,7 +254,7 @@ notifier 依赖了 runner provider，runner 再读 notifier 就构成 Riverpod �
   override、runtime selection 和精确 runtime identity，不得再维护跨 provider/runtime/thread
   的 map 或 active-runtime 注册表；
   provider default、thread effective、state source、last scope、warning 与持久化失败不得
-  分散回 ViewModel 字段。catalog 加载由独立 `AgentPermissionCatalogController` 管理：只提交
+  分散回 RuntimeController 字段。catalog 加载由独立 `AgentPermissionCatalogController` 管理：只提交
   adapter 返回的完整成功目录，transient/malformed 失败保留 last-known-good；旧 refresh
   generation 不得覆盖新目录。Codex 只有明确 unsupported 才允许降级静态 built-ins。
 - 所有权限 apply 路径必须消费完整 `AgentPermissionApplyResult`：`currentTurn` 只形成下一次
@@ -281,8 +294,8 @@ notifier 依赖了 runner provider，runner 再读 notifier 就构成 Riverpod �
 - 已绑定真实 thread 的 `AgentConversationBinding` 不得原地改绑到另一个 thread。fork
   返回 `AgentSession` 后必须走 Shell 的新 thread 通用流程：由
   `ProjectThreadsSliceRunner.registerSession` 登记列表，再通过 `selectProjectThread` 创建或
-  复用独立 Workspace Entry/Binding 并选中；“编辑后重试”最后才由新 ViewModel 发送。
-  源 ViewModel 只发起 fork，不得继续在源 Binding 上执行新 thread 的 rename/send。
+  复用独立 Workspace Entry/Binding 并选中；“编辑后重试”最后才由新 RuntimeController 发送。
+  源 RuntimeController 只发起 fork，不得继续在源 Binding 上执行新 thread 的 rename/send。
 - 启动时机由 `AgentProviderBootstrapPolicy` 描述；需要项目目录的 provider 不得在获得
   workspace 前启动，也不得参与 eager model preload。
 - `AgentProviderRuntimeRegistry` 是应用进程内 Provider 实例和子进程的唯一所有者，也是
@@ -294,7 +307,7 @@ notifier 依赖了 runner provider，runner 再读 notifier 就构成 Riverpod �
   raw Provider loader、lease loader 或 shared-provider predicate 等并行生命周期入口。
 - `AgentConversationBindingManager` 按 `draft(providerId, entryId)` 或
   `thread(providerId, threadId)` 唯一映射逻辑会话。草稿拿到真实 threadId 后必须原子晋升；
-  目标 key 已存在时 fail-closed。Workspace 只持有 Binding lease，ViewModel 不得持有
+  目标 key 已存在时 fail-closed。Workspace 只持有 Binding lease，RuntimeController 不得持有
   registry lease、scope、pin 或 runtime identity 缓存。
 - `AgentConversationBinding.beginTurn()` 是创建 session runtime 的唯一入口；打开草稿、打开
   thread 和读取历史都不得调用它。cancel、steer、审批/提问回写与 session configuration
@@ -428,7 +441,7 @@ phase；被正文、tool、plan 或交互打断后的 reasoning 必须使用新 
   typed 字段，必须无状态；Grok data adapter/reducer 负责解释 ACP source id、segment/phase、
   去重和 lifecycle，Codex mapper 按 app-server item 生命周期确定 entryId，Claude Code
   data identity/mapper 按 stream-json message/tool 与 Zeta 自行 mint 的 turnId 确定边界。
-  共享层不得提供带 eventId/turn scope 叙事假设的 identity mapper；Store/ViewModel/UI
+  共享层不得提供带 eventId/turn scope 叙事假设的 identity mapper；Store/RuntimeController/UI
   不得读取 raw payload 推断 identity 或 plan。
 - live、replay、history 可以复用同一 reducer 算法和 entry-id builder，但必须使用不同
   实例，不得共享 current segment、seen event/tool、terminal 或 generation 状态。
@@ -490,7 +503,7 @@ reducer 和 history parser 不属于共享适配层。
   reasoning phase、plan、叙事边界、去重、终态或错误恢复策略；
 - 从 rawInput/rawOutput、命令、路径或 patch header 猜测文件变更 identity、动作、证据类型，
   或替某个 Provider 保存 partial update 的 last-valid snapshot；
-- 在 CoalescingPolicy/Buffer、TimelineStore、ViewModel 或 UI 中为某个 Provider
+- 在 CoalescingPolicy/Buffer、TimelineStore、RuntimeController 或 UI 中为某个 Provider
   修复乱序、缺 id、
   delta/snapshot 差异或终态竞态；
 - 为接入新 Provider 修改 Store 的合并规则，或在共享层增加以 `unknown`、最后开放条目、

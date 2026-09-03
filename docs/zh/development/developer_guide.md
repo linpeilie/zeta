@@ -268,15 +268,36 @@ start/resume/send；其他 session RPC 只能 `runCurrent()`，runtime 不存在
 Binding 生命周期必须显式区分 dormant、starting、attached 与 cleared；消费者不得根据
 `currentRuntime == null` 猜测断连。只有曾 attached 且匹配精确 runtime identity 的 cleared
 转换可以中断当前 turn，首次初始化失败继续走本次请求的失败收尾。
-Workspace 创建真实 thread entry 时必须同时注入匹配的 thread summary 与 Binding；一个
-ViewModel 的 thread 身份固定，不提供 `switchThread` 或带 restored session/provider 的通用
-workspace 更新入口。project/file context 更新不改变会话，选择另一 thread 就选择另一 entry。
+Workspace 创建真实 thread entry 时必须同时注入匹配的 thread summary、Binding 与
+RuntimeController；一个 RuntimeController 的 thread 身份固定，不提供 `switchThread` 或带
+restored session/provider 的通用 workspace 更新入口。project/file context 更新不改变会话，
+选择另一 thread 就选择另一 entry。
 草稿拿到 threadId 后原子晋升，冲突必须拒绝。Binding Manager 每分钟 single-flight
 扫描，没有运行中 turn/RPC 且空闲满 10 分钟的 runtime 按精确 identity 条件回收；旧进程
 dispose 完成前同 scope acquire 必须等待。配置失效会同时清理 global 与全部 session，
 窗口退出等待 registry 完成清理。
 Registry acquire 必须显式选择 global/session scope；使用统计面板只通过 global runtime
 访问中立 quota 端口，不接受 raw Provider/lease loader 兼容路径。
+
+### Conversation Slice 接入
+
+会话 UI 发布是两跳。Workspace entry 持有 Binding lease、`AgentConversationRuntimeController`
+与 `AgentConversationSliceStore`；slice registry 解析 `AgentConversationSessionHandle`
+（`store` + 可选 `controller`）。未知 BindingKey fail-closed。
+
+```
+TimelineStore
+ → AgentConversationRuntimeController（region 投影 + AgentUiUpdateScheduler）
+ → AgentConversationSliceStore（每个 AgentUiUpdateRequest 一次 RegionsRefreshed）
+ → AgentConversationSliceNotifier / family selector
+ → AgentRegionBuilder(bindingKey, selector)
+```
+
+Widget 读 region 只经 `AgentRegionBuilder` 的 `ref.watch(selector(bindingKey))`。发送走
+`agentConversationCommandProvider`；未进 CommandPort 的命令仍走 RuntimeController
+（`agentConversationRuntimeProvider`，controller 为空时 fail-closed）。上下文面板显隐属于
+AgentPane Widget 状态。禁止再引入 `AgentConversationViewModel`、
+`AgentConversationUiStateStore` 或 `AgentConversationSliceComposition`。
 
 新增 provider 时：
 
@@ -287,7 +308,7 @@ Registry acquire 必须显式选择 global/session scope；使用统计面板只
    `modelCatalog`、`localThreadList`、
    `sessionConfiguration`、`planApproval`、`conversationModes`、`skills`、
    `permissionPolicy` 等端口。不支持的端口必须为 `null`，禁止 no-op 或
-   `UnsupportedError` 伪实现。controller / ViewModel 必须始终停留在中立端口边界。
+   `UnsupportedError` 伪实现。controller / RuntimeController 必须始终停留在中立端口边界。
 2. 在 data 组合层声明初始化前可判断的静态 `AgentProviderCapabilities` 与 bootstrap
    policy（见 `AgentProviderStaticCapabilities`）；不要往 Shared Domain 增加厂商命名
    默认值或 `defaultsFor(kind)`。握手后若能力发生变化，由 `runtime.capabilities`
@@ -315,7 +336,7 @@ Registry acquire 必须显式选择 global/session scope；使用统计面板只
    `exclusive`；不要在持有资源键时再次调度同键操作。
 10. 添加单元测试覆盖初始化、session、turn、权限请求、capability gate、生命周期门控、
     调度顺序和错误映射；已迁移能力域至少补 `AgentProviderBundle` 端口一致性测试，并
-    回归 `AgentConversationViewModel` / `ProjectThreadsSliceRunner` 的使用路径。
+    回归 `AgentConversationRuntimeController` / `ProjectThreadsSliceRunner` 的使用路径。
 11. 为流式 Provider 增加 adapter/reducer 序列测试；若同时支持 history/replay，必须使用
     独立 reducer 实例，并用完整 canonical signature regression 比较相对顺序。Store 只按
     entryId/tool id dumb merge，新增 Provider 不得修改 Store 来补叙事规则。
@@ -476,10 +497,10 @@ create/resume/fork/send --> Binding.permissions.snapshotForRequest()
   data client / mapper / encoder。`planningOnly` 由各 Provider 的权限 catalog 打标
   （Claude 的 Plan 档为 true）。
 - `AgentConversationModeController` 管理目录、draft、confirmed、pending 和 generation；
-  ViewModel 只负责绑定 Provider/thread 与冻结 `AgentTurnConfiguration`，Widget 不直接发 RPC。
+  `AgentConversationRuntimeController` 只负责绑定 Provider/thread 与冻结 `AgentTurnConfiguration`，Widget 不直接发 RPC。
 - Plan 终态的执行确认由 `AgentPlanExecutionHandoffController` 管理，是非持久化的本地
   application 状态。必须在 `completeLiveTurnGroup` 清除 structured plan 之前捕获快照；
-  Widget 只渲染请求并调用 ViewModel 的 start/revise/dismiss 动作。
+  Widget 只渲染请求并调用 RuntimeController 的 start/revise/dismiss 动作。
 - 执行交接与 Provider 计划审批共用 `_AgentPlanDockCard` 壳（正文可滚、底栏固定）；
   交接卡出现时 `blocksComposer` 为 true，隐藏主 Composer。交接底栏整合修订输入与
   「执行计划」：执行始终新建 Default 回合；「继续规划 / 发送修改」保持 Plan，可选
@@ -534,7 +555,7 @@ factory/catalog 组合以及 Provider 契约测试。`AgentEventCoalescingPolicy
 提交评审前逐项确认：
 
 1. 搜索共享层是否新增具体 Provider import、名称、kind、id 或实现类型判断。
-2. 搜索 Store/ViewModel/UI 是否新增 raw/extra key、文件变更 wire key、命令/patch header 推断、
+2. 搜索 Store/RuntimeController/UI 是否新增 raw/extra key、文件变更 wire key、命令/patch header 推断、
    eventId、source id 或“最后开放条目”推断。
 3. 使用 Provider-local 序列测试证明 `raw update → AgentEvent` 已完成身份、边界和终态决策。
 4. 使用 Provider 无关 fixture 回归 CoalescingPolicy/Buffer、Pipeline 与 TimelineStore；新增 Provider 时这些测试不应依赖
@@ -791,7 +812,7 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
 - 历史 parser 必须在 Provider data 边界把协议别名归一化到
   `AgentHistoryTurn.modelId`、`reasoningEffort`、`serviceTierId` 和 `explicitFast` typed 字段；
   reasoning effort 明确区分 unknown、Provider default 与 explicit value，Fast 是否可由
-  service tier 推导也由 Provider 决定。共享 TimelineStore/ViewModel/footer 只消费 typed
+  service tier 推导也由 Provider 决定。共享 TimelineStore/RuntimeController/footer 只消费 typed
   字段；缺失或冲突证据保持 unknown，不得从 raw、当前选择、模型默认值或相邻 turn 猜测。
 
 ### 使用统计开发约束

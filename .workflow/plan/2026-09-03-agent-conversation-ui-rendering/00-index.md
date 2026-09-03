@@ -46,7 +46,7 @@
 
 | WP | 标题 | 规模（人天） | 依赖 | 门禁焦点 | 状态 | 文档 |
 |----|------|------------|------|---------|------|------|
-| WP-1 | 切片 owner 归位 + ViewModel 拆分 | 10–14 | 独立，建议 WP-2 之后降低冲突 | G3 G6，一份状态一个 owner | 进行中 | [01-wp1-slice-ownership.md](01-wp1-slice-ownership.md) |
+| WP-1 | 切片 owner 归位 + ViewModel 拆分 | 10–14 | 独立，建议 WP-2 之后降低冲突 | G3 G6，一份状态一个 owner | 已完成 | [01-wp1-slice-ownership.md](01-wp1-slice-ownership.md) |
 | WP-2 | part-of 单体 library 拆分 | 2–3 | 无（WP-3/WP-4 的地基） | G6 | 未开始 | [02-wp2-part-of-split.md](02-wp2-part-of-split.md) |
 | WP-3 | 渲染分发插件化（renderer 注册表） | 3–4 | WP-2 | G1 G4（registry 保持中立） | 未开始 | [03-wp3-renderer-registry.md](03-wp3-renderer-registry.md) |
 | WP-4 | 控件收敛下沉 zeta_ui | 4–5 | WP-2（可穿插） | G8；zeta_ui 纯度 | 未开始 | [04-wp4-zeta-ui-convergence.md](04-wp4-zeta-ui-convergence.md) |
@@ -94,3 +94,4 @@ WP-5（spike 结论后再排期）
 | 2026-09-03 | WP-1 T3 | 纯函数下沉：selection patch / skill 候选 / flatten 文件节点 | RuntimeController 改委托；三组表驱动单测 |
 | 2026-09-03 | WP-1 T4 | Composer 图片附件 IO 下沉到 data 端口 | AgentPane 去掉 dart:io；生产写临时目录、测试走内存 fake |
 | 2026-09-03 | WP-1 T5 | 删除 Conversation ViewModel；命令面改走 RuntimeController | Slice registry 解析 SessionHandle；AgentPane 持 RuntimeController；上下文面板显隐留在 Pane State |
+| 2026-09-03 | WP-1 T6 | 全量门禁与文档同步 | overview(+en) 两跳发布图；工程规范 §3.0；developer_guide 切片接入；glossary region/slice；`test_full` 根包 2459 全绿；WP-1 已完成 |

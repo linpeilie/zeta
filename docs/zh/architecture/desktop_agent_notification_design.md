@@ -78,7 +78,7 @@ Provider data adapter
     -> AgentConversationReducer
       -> AgentTurnCompletedEffect / AgentAttentionEffect
         -> AgentConversationEffectRunner
-          -> AgentConversationViewModel
+        -> AgentConversationRuntimeController
             -> AgentConversationWorkspaceStore（补 provider/project/thread 上下文）
               -> IdeShellController callback
                 -> DesktopAttentionSliceStore + pure reducer
@@ -105,7 +105,7 @@ runner 组装。Riverpod provider 只镜像 store，不拥有未读状态。
 | `kind` | 业务类别 |
 | `phase` | `raised` 或 `resolved` |
 | `sourceId` | turn ID 或 request ID，用于幂等去重和精确清除 |
-| `threadId` | Provider thread 标识，可由 ViewModel 补齐 |
+| `threadId` | Provider thread 标识，可由 RuntimeController 补齐 |
 | `turnId` | 可选的关联 turn，用于 Plan 交接判定 |
 
 幂等标识：
@@ -164,7 +164,7 @@ Unread -- category disabled --> Absent + cancel system notification
 5. 首条未读使任务栏/Dock 请求用户注意，并在支持角标的平台同步未读数；
 6. 系统通知失败只写脱敏日志，内部未读仍是权威状态。
 
-本地 Plan 完成时，ViewModel 在 effect 执行前已建立
+本地 Plan 完成时，RuntimeController 在 effect 执行前已建立
 `AgentPlanExecutionRequest`。若成功 turn 与当前交接的 `turnId` 一致，则将普通
 `turnCompleted` 替换为 `planExecutionRequired`，避免一个 Plan 终态产生两条通知。
 
@@ -264,7 +264,7 @@ Dart 端通过 `zeta/desktop_attention` MethodChannel 调用：
 ## 11. 异常、竞态与生命周期
 
 - 多个常驻 thread 共享同一协调器，但 identity 含 Provider/thread，不会串话。
-- ViewModel 的 effect scope 继续校验 listener generation、runtime/epoch 和 thread；陈旧
+- RuntimeController 的 effect scope 继续校验 listener generation、runtime/epoch 和 thread；陈旧
   Provider 事件不能产生通知。
 - 用户提交本地决策时先发 `resolved`，即使 Provider 回包迟到或丢失，也不留下
   无法操作的陈旧未读。Provider 后续的 resolved 为幂等 no-op。

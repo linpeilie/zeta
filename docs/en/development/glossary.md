@@ -52,8 +52,8 @@ The three timeline data sources: currently streaming, history read back from the
 The neutral domain event — the boundary between provider protocol and Zeta internals. Everything downstream of this type must be provider-agnostic. Adding or changing one requires the 16-item checklist in [developer guide §7](../../zh/development/developer_guide.md) (Chinese).
 
 **AgentEventPipeline**
-Sole owner of event resources, tying together the listener gate, coalescing buffer, and bounded dispatcher. Subscription lifecycle lives here rather than being scattered across view models.
-`lib/src/features/agent/application/`
+Sole owner of event resources, tying together the listener gate, coalescing buffer, and bounded dispatcher. Subscription lifecycle lives here rather than being scattered across conversation facades.
+`packages/zeta_agent_core/lib/src/application/agent_event_pipeline.dart`
 
 **Listener gate**
 Admission control for the event stream. When thread switches, provider restarts, and disposal interleave, this is what keeps a stale stream from projecting onto a new session.
@@ -90,6 +90,22 @@ A provider-owned `AgentEventHandler<E>` that replaces the shared default. The PR
 **Dirty region**
 A data-change flag TimelineStore raises after a write (history / liveTurn / liveTurnBinding / activity / expansion / pendingInteraction / usage / contextUsage). It describes which data changed, not how the UI is laid out. The processor maps it to `AgentUiRegion`, merges that with a SessionState field diff, and publishes. The reducer no longer hard-codes UI regions.
 
+**AgentUiRegion**
+A UI partition derived by the processor from dirty regions plus a SessionState field diff (header / composer / pendingInteraction / expansion / history / liveTurn, and so on). Widgets subscribe by region.
+
+**Conversation slice**
+One Binding owns one UI-region state. `AgentConversationSliceStore` is the owner; the Riverpod family only mirrors it. Unknown BindingKeys fail closed. The publish chain is two hops: RuntimeController → SliceStore → selector / `AgentRegionBuilder`. Do not reintroduce a ViewModel, UiStateStore, or SliceComposition.
+
+**AgentConversationRuntimeController**
+The application aggregate for a conversation: pipeline, region projection, `AgentUiUpdateScheduler`, CommandPort, and effects. A workspace entry holds it; there is no `AgentConversationViewModel`.
+`agent_conversation_runtime_controller.dart`
+
+**AgentConversationSessionHandle**
+What the slice registry resolves: `store` plus an optional `controller`. The controller may be null in containers that only test the slice mirror.
+
+**AgentRegionBuilder**
+Presentation subscription to one region selector: `ref.watch(selector(bindingKey))`. Send goes through `agentConversationCommandProvider`.
+
 ## Provider abstraction
 
 **Provider**
@@ -104,10 +120,10 @@ A provider's declaration of what it supports. **UI renders by capability and por
 `agent_provider_capabilities.dart`
 
 **Runtime lease**
-A releasable registry reference to a provider instance. It stays inside infrastructure and global-runtime/binding code; view models and panes do not own it directly.
+A releasable registry reference to a provider instance. It stays inside infrastructure and global-runtime/binding code; RuntimeControllers and panes do not own it directly.
 
 **Conversation binding**
-The application aggregate for one logical conversation, uniquely keyed as a draft or thread. It owns the optional session runtime, generation-filtered events, a single-binding immutable permission snapshot, and active operations. Only `beginTurn()` may create a runtime. The binding manager owns mapping, draft promotion, and ten-minute idle reclamation. A binding attached to a real thread is never rebound in place; the workspace gives it a fixed-identity view model, and switching threads selects another entry. A fork result is registered as a newly created thread and receives a separate binding.
+The application aggregate for one logical conversation, uniquely keyed as a draft or thread. It owns the optional session runtime, generation-filtered events, a single-binding immutable permission snapshot, and active operations. Only `beginTurn()` may create a runtime. The binding manager owns mapping, draft promotion, and ten-minute idle reclamation. A binding attached to a real thread is never rebound in place; the workspace gives it a fixed-identity RuntimeController, and switching threads selects another entry. A fork result is registered as a newly created thread and receives a separate binding.
 
 **Global runtime**
 The single non-reaped instance per provider ID, used for history, thread management, models, skills, usage, connection tests, and other pre-session/global information.

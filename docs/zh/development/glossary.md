@@ -52,8 +52,8 @@ Provider 明确给出的内容证据：替换前后片段、写入内容或 unif
 中立的领域事件，是 Provider 协议与 Zeta 内部的分界线。这个类型之后的所有代码都必须是 Provider 无关的。新增或修改前要走完[开发者文档 §7](developer_guide.md) 的 16 条接入清单。
 
 **AgentEventPipeline（事件管线）**
-事件资源的唯一所有者，串起 listener gate、合并缓冲和有界派发。订阅生命周期由它统一管理，ViewModel 不再分散持有。
-`lib/src/features/agent/application/`
+事件资源的唯一所有者，串起 listener gate、合并缓冲和有界派发。订阅生命周期由它统一管理，不再由会话门面分散持有。
+`packages/zeta_agent_core/lib/src/application/agent_event_pipeline.dart`
 
 **Listener gate（监听闸门）**
 控制事件流的准入。切换 thread、重启 Provider、dispose 交叉发生时，靠它保证旧的事件流不会投影到新会话上。
@@ -90,6 +90,22 @@ Provider 用自己的 `AgentEventHandler<E>` 替换共享默认实现。必须�
 **脏区（dirty region）**
 TimelineStore 在写入后举起的数据变化标记（history / liveTurn / liveTurnBinding / activity / expansion / pendingInteraction / usage / contextUsage）。它只描述哪块数据变了，不描述界面长什么样；processor 把它映射成 `AgentUiRegion`，再与 SessionState 字段 diff 合并后发布。reducer 不再硬编码 UI region。
 
+**AgentUiRegion（UI 分区）**
+processor 从脏区 + SessionState diff 派生的界面分区（header / composer / pendingInteraction / expansion / history / liveTurn 等）。Widget 按 region 订阅。
+
+**Conversation Slice（会话切片）**
+一个 Binding 对应一份 UI 区域状态。`AgentConversationSliceStore` 是 owner；Riverpod family 只镜像。未知 BindingKey fail-closed。发布链路是两跳：RuntimeController → SliceStore → selector / `AgentRegionBuilder`。不得再经 ViewModel、UiStateStore 或 SliceComposition 转手。
+
+**AgentConversationRuntimeController**
+会话 application 聚合：pipeline、region 投影、`AgentUiUpdateScheduler`、CommandPort 与 effect。Workspace entry 持有它；不再有 `AgentConversationViewModel`。
+`agent_conversation_runtime_controller.dart`
+
+**AgentConversationSessionHandle**
+Slice registry 的解析结果：`store` + 可选 `controller`。只测切片镜像的容器里 controller 可空。
+
+**AgentRegionBuilder**
+presentation 订阅一个 region selector：`ref.watch(selector(bindingKey))`。发送走 `agentConversationCommandProvider`。
+
 ## Provider 抽象
 
 **Provider**
@@ -104,10 +120,10 @@ Provider 声明自己支持什么。**UI 一律按 capability 与端口是否非
 `agent_provider_capabilities.dart`
 
 **Runtime lease（运行时租约）**
-Registry 对 Provider 实例的可释放引用。它只在基础设施与 global runtime/Binding 内流转，ViewModel 和 Pane 不直接持有。
+Registry 对 Provider 实例的可释放引用。它只在基础设施与 global runtime/Binding 内流转，RuntimeController 和 Pane 不直接持有。
 
 **Conversation Binding（会话绑定）**
-一个逻辑会话的 application 聚合根，以 draft 或 thread key 唯一标识。它维护可选 session runtime、过滤旧 generation 的事件流、单 Binding 不可变权限快照和活跃操作；只有 `beginTurn()` 能创建 runtime。Binding Manager 负责映射、草稿晋升以及 10 分钟空闲回收。已绑定真实 thread 的 Binding 不原地改绑；Workspace 为它创建固定身份的 ViewModel，切换 thread 会选择另一 entry。fork 结果按新建 thread 登记并获得独立 Binding。
+一个逻辑会话的 application 聚合根，以 draft 或 thread key 唯一标识。它维护可选 session runtime、过滤旧 generation 的事件流、单 Binding 不可变权限快照和活跃操作；只有 `beginTurn()` 能创建 runtime。Binding Manager 负责映射、草稿晋升以及 10 分钟空闲回收。已绑定真实 thread 的 Binding 不原地改绑；Workspace 为它创建固定身份的 RuntimeController，切换 thread 会选择另一 entry。fork 结果按新建 thread 登记并获得独立 Binding。
 
 **Global runtime（全局运行时）**
 每个 Provider ID 唯一且不参与空闲回收的实例，用于历史、thread 管理、模型、Skill、用量和连接探测等会话前/全局信息。
