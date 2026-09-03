@@ -31,6 +31,7 @@ export 'src/ide_skeleton.dart';
 export 'src/ide_spacing.dart';
 export 'src/ide_stable_overlay.dart';
 export 'src/ide_status_card.dart';
+export 'src/ide_submit_button.dart';
 export 'src/ide_switch.dart';
 export 'src/ide_tabs.dart';
 export 'src/ide_text_styles.dart';

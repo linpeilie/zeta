@@ -464,7 +464,6 @@ class AgentComposer extends StatelessWidget {
     required bool showCancel,
     required bool showSend,
   }) {
-    final colors = IdeColors.of(context);
     return AnimatedSwitcher(
       duration: IdeMotion.durationNormal,
       switchInCurve: IdeMotion.curveDefault,
@@ -472,29 +471,21 @@ class AgentComposer extends StatelessWidget {
       layoutBuilder: (currentChild, previousChildren) =>
           currentChild ?? const SizedBox.shrink(),
       child: showCancel
-          ? _ComposerActionButton(
+          ? IdeSubmitButton(
               key: const ValueKey('agent-cancel-button-state'),
               tooltip: context.l10n.agentCancel,
-              backgroundColor: colors.border.withValues(alpha: 0.36),
-              foregroundColor: colors.textSecondary,
               buttonKey: const ValueKey('agent-cancel-button'),
-              icon: const Icon(Icons.stop_rounded, size: 22),
+              icon: Icons.stop_rounded,
               onPressed: onCancel,
             )
           : showSend
-          ? _ComposerActionButton(
+          ? IdeSubmitButton(
               key: const ValueKey('agent-send-button-state'),
               tooltip: context.l10n.agentSend,
               // 可发送时使用实心 accent，作为界面最强的行动锚点；不可发送时退回弱化中性底。
-              backgroundColor: canSubmit
-                  ? colors.accent
-                  : colors.border.withValues(alpha: 0.2),
-              foregroundColor: canSubmit
-                  ? Colors.white
-                  : colors.textSecondary.withValues(alpha: 0.72),
               filled: canSubmit,
               buttonKey: const ValueKey('agent-send-button'),
-              icon: const Icon(Icons.arrow_upward_rounded, size: 22),
+              icon: Icons.arrow_upward_rounded,
               onPressed: canSubmit ? onSend : null,
             )
           : const SizedBox(
@@ -1456,56 +1447,6 @@ class _PermissionOptionPopover extends StatelessWidget {
                   ),
                 ),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ComposerActionButton extends StatelessWidget {
-  const _ComposerActionButton({
-    required this.tooltip,
-    required this.backgroundColor,
-    required this.foregroundColor,
-    required this.buttonKey,
-    required this.icon,
-    required this.onPressed,
-    this.filled = false,
-    super.key,
-  });
-
-  final String tooltip;
-  final Color backgroundColor;
-  final Color foregroundColor;
-  final Key buttonKey;
-  final Widget icon;
-  final VoidCallback? onPressed;
-
-  /// 实心样式：hover 时保持前景色不变，仅叠加白色提亮。
-  final bool filled;
-
-  @override
-  Widget build(BuildContext context) {
-    return IdeTooltip(
-      message: tooltip,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: backgroundColor,
-          shape: BoxShape.circle,
-        ),
-        child: ClipOval(
-          child: sf.IconButton.ghost(
-            key: buttonKey,
-            onPressed: onPressed,
-            size: sf.ButtonSize.small,
-            density: sf.ButtonDensity.iconDense,
-            shape: sf.ButtonShape.circle,
-            disableTransition: filled,
-            icon: IconTheme.merge(
-              data: IconThemeData(color: foregroundColor),
-              child: icon,
-            ),
           ),
         ),
       ),

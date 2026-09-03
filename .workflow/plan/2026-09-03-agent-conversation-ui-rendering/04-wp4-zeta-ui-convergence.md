@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |----|----|
-| 状态 | 进行中 |
+| 状态 | 已完成 |
 | 规模 | 4–5 人天，每任务独立 PR |
 | 依赖 | WP-2 完成后启动（文件独立才好动）；与 WP-1/WP-3 解耦 |
 | 门禁焦点 | G8（token、控件高度由内容撑开）、zeta_ui 约束（禁 Riverpod / dart:io / 业务模型，文案走 `ZetaUiTextCatalog`） |
@@ -182,7 +182,7 @@ slice 订阅、摘要数据与条目构造；`AgentFileEditGroupCard` 只保留�
 `expanded/onToggle`。新增 Widget 测试覆盖两种 key namespace、外部状态驱动展开、
 正文间距和 leading；真实历史/live 命令组、文件编辑组及 extent 对齐测试继续通过。
 
-### T5 · `IdeSubmitButton`（0.5 人天）
+### T5 · `IdeSubmitButton`（0.5 人天） · 已完成（2026-09-03）
 
 **现状**（`_ComposerActionButton`，composer:1545-1593）：圆形 DecoratedBox + ClipOval + `sf.IconButton.ghost`（`size: small, density: iconDense, shape: circle`）+ `filled` 时 `disableTransition`。
 
@@ -205,6 +205,15 @@ class IdeSubmitButton extends StatelessWidget {
 
 **验收**：composer 发送/停止按钮替换；G8 存量清单 −1（`sf.IconButton.ghost` 内嵌数从 10 → 9）。
 
+**施工记录**：新增 `IdeSubmitButton`，把发送的 accent 实心态、停止的中性 surface
+态与不可发送的弱化禁用态统一映射到 Graphite 语义色；内部保留圆形裁切、
+`sf.IconButton.ghost` hover 行为与 filled 转场策略，图标改经 `IdeIconBox` 并随 UI
+字号自然缩放。组件同时提供 tooltip/按钮语义，并用独立 `buttonKey` 兼容外层
+`AnimatedSwitcher` 状态 key。Composer 已删除 `_ComposerActionButton`，发送、停止及
+两套 state/button `ValueKey` 全部保留；feature 内 `sf.IconButton.ghost` 从 10 降至
+9。新增 zeta_ui Widget 测试覆盖三种 tone、禁用语义、点击、图标盒与 key 契约；
+既有 Composer 工具栏 17 条回归继续通过。
+
 ## 2. 风险与回滚
 
 | 风险 | 缓解 |
@@ -215,6 +224,6 @@ class IdeSubmitButton extends StatelessWidget {
 
 ## 3. 完成定义（DoD）
 
-- [ ] 四类重复收敛；zeta_ui 新增 ≤3 个原语（`IdePopupSelect`、`IdeTimelineRow`、`IdeSubmitButton`）+ `IdeStatusCard` 密度参数。
-- [ ] 每个 PR：`test_affected.sh` 绿 + zeta_ui 守卫（无 Riverpod/dart:io/l10n import）。
-- [ ] CHANGELOG 不写（内部收敛，无用户可感知变化）。
+- [x] 四类重复收敛；zeta_ui 新增 ≤3 个原语（`IdePopupSelect`、`IdeTimelineRow`、`IdeSubmitButton`）+ `IdeStatusCard` 密度参数。
+- [x] 每个 PR：`test_affected.sh` 绿 + zeta_ui 守卫（无 Riverpod/dart:io/l10n import）。
+- [x] CHANGELOG 不写（内部收敛，无用户可感知变化）。

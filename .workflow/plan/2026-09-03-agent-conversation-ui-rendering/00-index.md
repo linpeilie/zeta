@@ -49,7 +49,7 @@
 | WP-1 | 切片 owner 归位 + ViewModel 拆分 | 10–14 | 独立，建议 WP-2 之后降低冲突 | G3 G6，一份状态一个 owner | 已完成 | [01-wp1-slice-ownership.md](01-wp1-slice-ownership.md) |
 | WP-2 | part-of 单体 library 拆分 | 2–3 | 无（WP-3/WP-4 的地基） | G6 | 已完成 | [02-wp2-part-of-split.md](02-wp2-part-of-split.md) |
 | WP-3 | 渲染分发插件化（renderer 注册表） | 3–4 | WP-2 | G1 G4（registry 保持中立） | 已完成 | [03-wp3-renderer-registry.md](03-wp3-renderer-registry.md) |
-| WP-4 | 控件收敛下沉 zeta_ui | 4–5 | WP-2（可穿插） | G8；zeta_ui 纯度 | 进行中 | [04-wp4-zeta-ui-convergence.md](04-wp4-zeta-ui-convergence.md) |
+| WP-4 | 控件收敛下沉 zeta_ui | 4–5 | WP-2（可穿插） | G8；zeta_ui 纯度 | 已完成 | [04-wp4-zeta-ui-convergence.md](04-wp4-zeta-ui-convergence.md) |
 | WP-5 | 历史分页 / 窗口化 | 5–8（含 spike） | 需先 spike；WP-1 之后 | G2 G3 G6 | 未开始 | [05-wp5-history-pagination.md](05-wp5-history-pagination.md) |
 | WP-6 | **Markdown vendor + 深度改造** | 11–16（T1–T10 + 治理；P2 另计） | 无 | G6 G7 G8；包治理 | 未开始 | [06-wp6-markdown-vendor.md](06-wp6-markdown-vendor.md) |
 | WP-7 | 卫生小修清单 | 2–3 | 无（T3 是 WP-1 解锁条件，优先） | G6 G7 G8 | 未开始 | [07-wp7-hygiene.md](07-wp7-hygiene.md) |
@@ -109,3 +109,4 @@ WP-5（spike 结论后再排期）
 | 2026-09-03 | WP-4 T2 | `IdePopupSelect` + 通用 popover 生命周期收敛 | session config 使用通用选择器；mode/permission/model 与三个 picker 复用 `IdePopoverController`；旧 Composer selector helper 删除；异步字体搜索因语义不等价保留 |
 | 2026-09-03 | WP-4 T3 | `IdeTimelineRow` + 时间线摘要行收敛 | 命令组（含历史 search/system）、独立 tool 与 diff 标题改用自然高度原语；多行 history status card 保留；既有 key 不变 |
 | 2026-09-03 | WP-4 T4 | `AgentTimelineGroupCard` 折叠组骨架收敛 | command/file-edit 共用 key、摘要、图标、间距和 hover 组装；slice 与 Widget 两类展开状态 owner 保持独立 |
+| 2026-09-03 | WP-4 T5 | `IdeSubmitButton` + WP-4 收尾 | Composer 发送/停止/禁用态统一下沉；双层 key 与交互保持；feature `sf.IconButton.ghost` 10→9；WP-4 已完成 |
