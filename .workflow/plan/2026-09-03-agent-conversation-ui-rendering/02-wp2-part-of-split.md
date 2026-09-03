@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |----|----|
-| 状态 | 进行中（T1–T3 已完成） |
+| 状态 | 进行中（T1–T3、T5 已完成） |
 | 规模 | 2–3 人天，1–2 个 PR |
 | 依赖 | 无；**是 WP-3 / WP-4 的地基** |
 | 门禁焦点 | G6 |
@@ -333,7 +333,7 @@ import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
 **验收**：7 个文件全部无 `part of`；analyze 零新增告警；`test_affected.sh` 绿。
 
-### T5 · 转换 L4 文件（0.5–1 人天）
+### T5 · 转换 L4 文件（0.5–1 人天） · 已完成（2026-09-03）
 
 同 T4 动作序列。T1 叶序：**必须在 T4 的 cards/messages/sections 之前完成**。
 
@@ -342,6 +342,8 @@ import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 `ComposerSelectorPopoverLayout` / `ComposerSelectorPopoverBuilder` 虽仅在 popover 文件内被提到，但它们是即将公开的 `ComposerSelectorPopoverController` 的公开 API 类型，必须一并去下划线（T1 表 C）。
 
 **注意**：`agent_model_config.dart`（1921 行）本次**不再细分**——内部拆分留给 WP-4 控件收敛时顺手做，避免双重 diff。
+
+**施工记录**：按 T1 叶序将 7 个 L4 文件转为独立 library；表 C 符号去下划线；State / `_showComposerSelectorPopover` / `_composerSelectorRowHeight` 保持私有。公开 widget 补 `super.key`。`agent_mode_selector_test.dart` 改 import `widgets/agent_mode_selector.dart`。壳去掉已无用的 `gestures` / `workspace_file_corpus_port` / `agent_model_config_ui_state` import。`flutter analyze` 零 issue；`tool/test_affected.sh` 53 个根测试全绿。剩余 7 个 part：cards / context_panel / header / messages / plan_panel / sections / navigation_rail（T4）。
 
 ### T6 · 壳收缩与全量门禁（0.5 人天）
 

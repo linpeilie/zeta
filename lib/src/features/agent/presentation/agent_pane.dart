@@ -4,7 +4,6 @@ import 'dart:math' as math;
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -17,7 +16,6 @@ import 'package:zeta/src/features/agent/application/agent_composer_attachment_po
 import 'package:zeta/src/features/agent/application/agent_conversation_mode_controller.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
-import 'package:zeta/src/features/workspace/application/workspace_file_corpus_port.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 import 'package:zeta/src/ui/core/ide_image_preview.dart';
 import 'package:zeta_ui/zeta_ui.dart';
@@ -36,25 +34,24 @@ import 'package:zeta/src/features/agent/presentation/agent_timeline_extent_descr
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection_cache.dart';
-import 'package:zeta/src/features/agent/application/conversation_slice/agent_model_config_ui_state.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_file_change_evidence_card.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_markdown_body.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_mention_file_picker.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_mode_selector.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_model_config.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_composer.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_styles.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_text.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_skill_picker.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_slash_command_picker.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/composer_selector_popover.dart';
 
 part 'widgets/agent_pane_cards.dart';
-part 'widgets/agent_pane_composer.dart';
 part 'widgets/agent_pane_context_panel.dart';
 part 'widgets/agent_pane_header.dart';
 part 'widgets/agent_pane_messages.dart';
 part 'widgets/agent_pane_plan_panel.dart';
-part 'widgets/composer_selector_popover.dart';
-part 'widgets/agent_model_config.dart';
-part 'widgets/agent_mode_selector.dart';
-part 'widgets/agent_skill_picker.dart';
-part 'widgets/agent_slash_command_picker.dart';
-part 'widgets/agent_mention_file_picker.dart';
 part 'widgets/agent_pane_sections.dart';
 part 'widgets/agent_pane_navigation_rail.dart';
 
@@ -157,12 +154,12 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
   final GlobalKey _composerAnchorKey = GlobalKey(
     debugLabel: 'agent-composer-skill-anchor',
   );
-  late final _ComposerSelectorPopoverController _skillPopoverController;
-  final _SkillPickerListController _skillPickerListController =
-      _SkillPickerListController();
-  late final _ComposerSelectorPopoverController _slashPopoverController;
-  final _SlashMenuListController _slashMenuListController =
-      _SlashMenuListController();
+  late final ComposerSelectorPopoverController _skillPopoverController;
+  final SkillPickerListController _skillPickerListController =
+      SkillPickerListController();
+  late final ComposerSelectorPopoverController _slashPopoverController;
+  final SlashMenuListController _slashMenuListController =
+      SlashMenuListController();
 
   /// 允许下一次 `$` 触发自动打开 skill picker（关闭后需先离开 `$query` 再进入）。
   bool _skillQueryArmed = true;
@@ -176,9 +173,9 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
   /// 防止 `/` 监听并发预热时重复 show。
   bool _slashPickerOpening = false;
 
-  late final _ComposerSelectorPopoverController _mentionPopoverController;
-  final _MentionFileListController _mentionFileListController =
-      _MentionFileListController();
+  late final ComposerSelectorPopoverController _mentionPopoverController;
+  final MentionFileListController _mentionFileListController =
+      MentionFileListController();
 
   /// 允许下一次 `@` 触发自动打开 mention picker（关闭后需先离开 @token 再进入）。
   bool _mentionQueryArmed = true;
@@ -256,15 +253,15 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
       debugLabel: 'AgentMessageComposer',
       onKeyEvent: _handleComposerKeyEvent,
     );
-    _skillPopoverController = _ComposerSelectorPopoverController(
+    _skillPopoverController = ComposerSelectorPopoverController(
       triggerFocusNode: _composerFocusNode,
       onOpenChanged: _handleSkillPopoverOpenChanged,
     );
-    _slashPopoverController = _ComposerSelectorPopoverController(
+    _slashPopoverController = ComposerSelectorPopoverController(
       triggerFocusNode: _composerFocusNode,
       onOpenChanged: _handleSlashPopoverOpenChanged,
     );
-    _mentionPopoverController = _ComposerSelectorPopoverController(
+    _mentionPopoverController = ComposerSelectorPopoverController(
       triggerFocusNode: _composerFocusNode,
       onOpenChanged: _handleMentionPopoverOpenChanged,
     );
@@ -1021,28 +1018,28 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
     _insertSkill(skill);
   }
 
-  void _activateSlashMenuItem(_SlashMenuItem item) {
+  void _activateSlashMenuItem(SlashMenuItem item) {
     switch (item) {
-      case final _SlashCommandMenuItem command:
+      case final SlashCommandMenuItem command:
         _selectSlashCommand(command.id);
-      case final _SlashSkillMenuItem skill:
+      case final SlashSkillMenuItem skill:
         _selectSkillFromSlashMenu(skill.skill);
     }
   }
 
   /// 选中斜线命令：移除 `/query` 并执行对应动作。
-  void _selectSlashCommand(_SlashCommandId id) {
+  void _selectSlashCommand(SlashCommandId id) {
     _slashPopoverController.dismiss();
     _inputController.consumeActiveSlashQuery();
     switch (id) {
-      case _SlashCommandId.plan:
+      case SlashCommandId.plan:
         if (widget.controller.selectedConversationMode !=
             AgentConversationModeId.plan) {
           widget.controller.selectConversationMode(
             AgentConversationModeId.plan,
           );
         }
-      case _SlashCommandId.compact:
+      case SlashCommandId.compact:
         unawaited(widget.controller.compactCurrentThread());
     }
     _composerFocusNode.requestFocus();
@@ -1122,10 +1119,10 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
       }
       _skillPopoverController.show(
         context: openContext,
-        preferredWidth: _agentSkillPickerPreferredWidth,
-        preferredMaxHeight: _agentSkillPickerPreferredMaxHeight,
+        preferredWidth: agentSkillPickerPreferredWidth,
+        preferredMaxHeight: agentSkillPickerPreferredMaxHeight,
         key: const ValueKey('agent-skill-picker-overlay'),
-        builder: (context, layout) => _AgentSkillPickerPopover(
+        builder: (context, layout) => AgentSkillPickerPopover(
           width: layout.width,
           maxHeight: layout.maxHeight,
           documentController: _inputController,
@@ -1170,10 +1167,10 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
       }
       _slashPopoverController.show(
         context: openContext,
-        preferredWidth: _agentSlashCommandPickerPreferredWidth,
-        preferredMaxHeight: _agentSlashCommandPickerPreferredMaxHeight,
+        preferredWidth: agentSlashCommandPickerPreferredWidth,
+        preferredMaxHeight: agentSlashCommandPickerPreferredMaxHeight,
         key: const ValueKey('agent-slash-command-picker-overlay'),
-        builder: (context, layout) => _AgentSlashCommandPickerPopover(
+        builder: (context, layout) => AgentSlashCommandPickerPopover(
           width: layout.width,
           maxHeight: layout.maxHeight,
           documentController: _inputController,
@@ -1223,10 +1220,10 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
       }
       _mentionPopoverController.show(
         context: openContext,
-        preferredWidth: _agentMentionFilePickerPreferredWidth,
-        preferredMaxHeight: _agentMentionFilePickerPreferredMaxHeight,
+        preferredWidth: agentMentionFilePickerPreferredWidth,
+        preferredMaxHeight: agentMentionFilePickerPreferredMaxHeight,
         key: const ValueKey('agent-mention-picker-overlay'),
-        builder: (context, layout) => _AgentMentionFilePickerPopover(
+        builder: (context, layout) => AgentMentionFilePickerPopover(
           width: layout.width,
           maxHeight: layout.maxHeight,
           documentController: _inputController,

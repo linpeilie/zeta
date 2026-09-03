@@ -1,10 +1,16 @@
-part of '../agent_pane.dart';
+import 'package:flutter/material.dart';
 
-const double _agentSkillPickerPreferredWidth = 320;
-const double _agentSkillPickerPreferredMaxHeight = 280;
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_ui/zeta_ui.dart';
+import 'package:zeta/src/features/agent/presentation/composer_document.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_model_config.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
+
+const double agentSkillPickerPreferredWidth = 320;
+const double agentSkillPickerPreferredMaxHeight = 280;
 
 /// Skill 列表的高亮与候选状态，供 Composer 键盘与 popover 共享。
-final class _SkillPickerListController extends ChangeNotifier {
+final class SkillPickerListController extends ChangeNotifier {
   List<AgentSkillMetadata> _candidates = const <AgentSkillMetadata>[];
   int _highlightIndex = 0;
 
@@ -53,8 +59,8 @@ final class _SkillPickerListController extends ChangeNotifier {
 }
 
 /// Composer 上方的 Skill 候选 popover。
-class _AgentSkillPickerPopover extends StatefulWidget {
-  const _AgentSkillPickerPopover({
+class AgentSkillPickerPopover extends StatefulWidget {
+  const AgentSkillPickerPopover({
     required this.width,
     required this.maxHeight,
     required this.documentController,
@@ -62,22 +68,23 @@ class _AgentSkillPickerPopover extends StatefulWidget {
     required this.candidatesFor,
     required this.onSelect,
     required this.onRequestClose,
+    super.key,
   });
 
   final double width;
   final double maxHeight;
   final ComposerDocumentController documentController;
-  final _SkillPickerListController listController;
+  final SkillPickerListController listController;
   final List<AgentSkillMetadata> Function(String query) candidatesFor;
   final ValueChanged<AgentSkillMetadata> onSelect;
   final VoidCallback onRequestClose;
 
   @override
-  State<_AgentSkillPickerPopover> createState() =>
+  State<AgentSkillPickerPopover> createState() =>
       _AgentSkillPickerPopoverState();
 }
 
-class _AgentSkillPickerPopoverState extends State<_AgentSkillPickerPopover> {
+class _AgentSkillPickerPopoverState extends State<AgentSkillPickerPopover> {
   @override
   void initState() {
     super.initState();
@@ -129,7 +136,7 @@ class _AgentSkillPickerPopoverState extends State<_AgentSkillPickerPopover> {
         width: widget.width,
         child: ConstrainedBox(
           constraints: BoxConstraints(maxHeight: widget.maxHeight),
-          child: _ComposerSelectorPanel(
+          child: ComposerSelectorPanel(
             child: candidates.isEmpty
                 ? Padding(
                     padding: IdeSpacing.all12,

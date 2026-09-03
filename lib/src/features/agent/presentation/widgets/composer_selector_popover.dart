@@ -1,9 +1,15 @@
-part of '../agent_pane.dart';
+import 'dart:async';
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
+
+import 'package:zeta_ui/zeta_ui.dart';
 
 /// Composer 选择器弹层在当前视口中的定位结果。
 @immutable
-class _ComposerSelectorPopoverLayout {
-  const _ComposerSelectorPopoverLayout({
+class ComposerSelectorPopoverLayout {
+  const ComposerSelectorPopoverLayout({
     required this.openAbove,
     required this.width,
     required this.maxHeight,
@@ -19,11 +25,8 @@ class _ComposerSelectorPopoverLayout {
   final double maxHeight;
 }
 
-typedef _ComposerSelectorPopoverBuilder =
-    Widget Function(
-      BuildContext context,
-      _ComposerSelectorPopoverLayout layout,
-    );
+typedef ComposerSelectorPopoverBuilder =
+    Widget Function(BuildContext context, ComposerSelectorPopoverLayout layout);
 
 /// 通过 [showIdePopover] 打开 Composer 紧凑选择器。
 ///
@@ -33,7 +36,7 @@ IdePopoverHandle<void> _showComposerSelectorPopover({
   required BuildContext context,
   required double preferredWidth,
   required double preferredMaxHeight,
-  required _ComposerSelectorPopoverBuilder builder,
+  required ComposerSelectorPopoverBuilder builder,
   double minimumSpaceBelow = 180,
   Key? key,
 }) {
@@ -62,7 +65,7 @@ IdePopoverHandle<void> _showComposerSelectorPopover({
     1.0,
     math.min(preferredMaxHeight, availableHeight),
   );
-  final layout = _ComposerSelectorPopoverLayout(
+  final layout = ComposerSelectorPopoverLayout(
     openAbove: openAbove,
     width: width,
     maxHeight: maxHeight,
@@ -92,8 +95,8 @@ IdePopoverHandle<void> _showComposerSelectorPopover({
 ///
 /// owner 只需持有 controller；点击外部、Esc、选中或主动 dismiss 最终都会从
 /// 同一 future 清理 handle。owner dispose 后异步回调不会再 setState 或请求焦点。
-class _ComposerSelectorPopoverController {
-  _ComposerSelectorPopoverController({
+class ComposerSelectorPopoverController {
+  ComposerSelectorPopoverController({
     required this.triggerFocusNode,
     required this.onOpenChanged,
   });
@@ -112,7 +115,7 @@ class _ComposerSelectorPopoverController {
     required BuildContext context,
     required double preferredWidth,
     required double preferredMaxHeight,
-    required _ComposerSelectorPopoverBuilder builder,
+    required ComposerSelectorPopoverBuilder builder,
     double minimumSpaceBelow = 180,
     Key? key,
   }) {
@@ -135,7 +138,7 @@ class _ComposerSelectorPopoverController {
     required BuildContext context,
     required double preferredWidth,
     required double preferredMaxHeight,
-    required _ComposerSelectorPopoverBuilder builder,
+    required ComposerSelectorPopoverBuilder builder,
     double minimumSpaceBelow = 180,
     Key? key,
   }) {
@@ -192,8 +195,8 @@ class _ComposerSelectorPopoverController {
 ///
 /// 调用方只提供业务值与 item；键盘导航、选中态和 auto-close 统一交给
 /// [sf.SelectPopup] / [sf.SelectItemButton]，不再各自拼装 [sf.SelectData]。
-class _ComposerSelectPopup<T extends Object> extends StatelessWidget {
-  _ComposerSelectPopup({
+class ComposerSelectPopup<T extends Object> extends StatelessWidget {
+  ComposerSelectPopup({
     required this.value,
     required List<Widget> items,
     required this.onChanged,

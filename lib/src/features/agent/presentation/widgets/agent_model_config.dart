@@ -1,7 +1,19 @@
-part of '../agent_pane.dart';
+import 'dart:async';
+import 'dart:math' as math;
 
-const double _composerSelectorPopoverPreferredWidth = 288;
-const double _composerSelectorPopoverMaxHeight = 360;
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
+
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_ui/zeta_ui.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_model_config_ui_state.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
+
+const double composerSelectorPopoverPreferredWidth = 288;
+const double composerSelectorPopoverMaxHeight = 360;
 const double _composerSelectorRowHeight = 32;
 
 /// Popover 展开态 + 模型配置快照。
@@ -46,8 +58,8 @@ class _AgentModelConfigPopoverState {
 }
 
 /// Composer 中统一的模型配置入口与 Popover 协调器。
-class _AgentModelConfig extends StatefulWidget {
-  const _AgentModelConfig({
+class AgentModelConfig extends StatefulWidget {
+  const AgentModelConfig({
     required this.state,
     required this.onSelectModel,
     required this.onSelectReasoningEffort,
@@ -55,6 +67,7 @@ class _AgentModelConfig extends StatefulWidget {
     required this.onResolveCompatibility,
     required this.onRetrySave,
     required this.onPopoverClosed,
+    super.key,
   });
 
   final AgentModelConfigUiState state;
@@ -66,10 +79,10 @@ class _AgentModelConfig extends StatefulWidget {
   final VoidCallback onPopoverClosed;
 
   @override
-  State<_AgentModelConfig> createState() => _AgentModelConfigState();
+  State<AgentModelConfig> createState() => _AgentModelConfigState();
 }
 
-class _AgentModelConfigState extends State<_AgentModelConfig> {
+class _AgentModelConfigState extends State<AgentModelConfig> {
   late final ValueNotifier<_AgentModelConfigPopoverState> _popoverState;
   final FocusNode _triggerFocusNode = FocusNode(
     debugLabel: 'agent-model-config-trigger',
@@ -87,7 +100,7 @@ class _AgentModelConfigState extends State<_AgentModelConfig> {
   }
 
   @override
-  void didUpdateWidget(covariant _AgentModelConfig oldWidget) {
+  void didUpdateWidget(covariant AgentModelConfig oldWidget) {
     super.didUpdateWidget(oldWidget);
     var expandedModelId = _desiredExpandedModelId;
     if (widget.state.saveError != null &&
@@ -152,11 +165,11 @@ class _AgentModelConfigState extends State<_AgentModelConfig> {
         IdeSpacing.space12;
     final width = math.max(
       1.0,
-      math.min(_composerSelectorPopoverPreferredWidth, viewport.width - 24),
+      math.min(composerSelectorPopoverPreferredWidth, viewport.width - 24),
     );
     final maxHeight = math.max(
       1.0,
-      math.min(_composerSelectorPopoverMaxHeight, availablePopoverHeight),
+      math.min(composerSelectorPopoverMaxHeight, availablePopoverHeight),
     );
     final reduceMotion = mediaQuery.disableAnimations;
 
@@ -411,7 +424,7 @@ class _ModelConfigTrigger extends StatelessWidget {
       tooltip.write('\n$refreshError');
     }
 
-    return _ComposerSelectorTrigger(
+    return ComposerSelectorTrigger(
       surfaceKey: const ValueKey('agent-model-selector'),
       tooltip: tooltip.toString(),
       semanticLabel: refreshError == null
@@ -493,8 +506,8 @@ class _ModelConfigTrigger extends StatelessWidget {
 }
 
 /// Composer 选择器共用触发器：模式、模型与权限使用同一套尺寸和交互反馈。
-class _ComposerSelectorTrigger extends StatelessWidget {
-  const _ComposerSelectorTrigger({
+class ComposerSelectorTrigger extends StatelessWidget {
+  const ComposerSelectorTrigger({
     required this.surfaceKey,
     required this.tooltip,
     required this.semanticLabel,
@@ -502,6 +515,7 @@ class _ComposerSelectorTrigger extends StatelessWidget {
     required this.focusNode,
     required this.onPressed,
     required this.child,
+    super.key,
   });
 
   final Key surfaceKey;
@@ -546,8 +560,8 @@ class _ComposerSelectorTrigger extends StatelessWidget {
 /// `colorScheme.card`、1px muted 边框、零内边距），避免选择弹层再叠一层
 /// 独立卡片造成「两层」视觉。非 SelectPopup 的 picker（skill/mention/
 /// slash/model 列表）使用本表面，与 SelectPopup 路径视觉一致。
-class _ComposerSelectorPanel extends StatelessWidget {
-  const _ComposerSelectorPanel({required this.child});
+class ComposerSelectorPanel extends StatelessWidget {
+  const ComposerSelectorPanel({required this.child, super.key});
 
   final Widget child;
 
@@ -798,7 +812,7 @@ class _ModelConfigPopoverState extends State<_ModelConfigPopover> {
                 width: widget.width,
                 child: ConstrainedBox(
                   constraints: BoxConstraints(maxHeight: widget.maxHeight),
-                  child: _ComposerSelectorPanel(
+                  child: ComposerSelectorPanel(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,

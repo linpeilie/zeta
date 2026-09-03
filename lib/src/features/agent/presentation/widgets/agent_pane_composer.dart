@@ -1,4 +1,20 @@
-part of '../agent_pane.dart';
+import 'dart:async';
+import 'dart:convert';
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
+
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_ui/zeta_ui.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_model_config_ui_state.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_mode_selector.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_model_config.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_styles.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_text.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/composer_selector_popover.dart';
+import 'package:zeta/src/ui/core/ide_image_preview.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
 /// 底部输入面板。
 ///
@@ -6,8 +22,8 @@ part of '../agent_pane.dart';
 /// 图片和 Plan 快捷入口；**仅当 draft 为 Plan 时**在工具栏展示 Plan 标识（Default
 /// 不占位）。会话配置/审批策略渐进展示；模型选择器固定在右侧，位于上下文进度
 /// 圆圈左侧，发送/取消按钮最右。
-class _AgentComposer extends StatelessWidget {
-  const _AgentComposer({
+class AgentComposer extends StatelessWidget {
+  const AgentComposer({
     required this.controller,
     required this.focusNode,
     required this.canSubmit,
@@ -46,6 +62,7 @@ class _AgentComposer extends StatelessWidget {
     required this.onSelectSessionConfigOption,
     required this.onOpenMentionPicker,
     required this.onInsertSkill,
+    super.key,
   });
 
   final TextEditingController controller;
@@ -174,7 +191,7 @@ class _AgentComposer extends StatelessWidget {
     }
     if (showPermissionPolicy) {
       addSelector(
-        _PermissionOptionButton(
+        PermissionOptionButton(
           label: permissionPolicyLabel,
           options: permissionOptions,
           selectedOptionId: selectedPermissionOptionId,
@@ -190,7 +207,7 @@ class _AgentComposer extends StatelessWidget {
             (modelConfigState.models.isNotEmpty ||
                 modelConfigState.isRefreshing ||
                 modelConfigState.refreshError != null)
-        ? _AgentModelConfig(
+        ? AgentModelConfig(
             state: modelConfigState,
             onSelectModel: onSelectModel,
             onSelectReasoningEffort: onSelectReasoningEffort,
@@ -273,7 +290,7 @@ class _AgentComposer extends StatelessWidget {
                                   ),
                                   borderRadius: BorderRadius.zero,
                                 ),
-                                initialHeight: _textAreaHeight(
+                                initialHeight: textAreaHeight(
                                   controller.text,
                                   lineHeight,
                                   minTextAreaHeight,
@@ -493,7 +510,7 @@ class _AgentComposer extends StatelessWidget {
 /// 依据文本行数推导 `sf.TextArea` 的初始高度。
 ///
 /// 主 Composer 与计划卡内的修改输入共用同一套增高节奏。
-double _textAreaHeight(
+double textAreaHeight(
   String text,
   double lineHeight,
   double minHeight,
@@ -778,7 +795,7 @@ class _ComposerMoreActionsButtonState
     }
     final colors = IdeColors.of(context);
     final open = _popoverEntry != null;
-    return _ComposerSelectorTrigger(
+    return ComposerSelectorTrigger(
       surfaceKey: const ValueKey('agent-more-actions-button'),
       tooltip: context.l10n.agentMoreActions,
       semanticLabel: open ? 'More actions, expanded' : 'More actions',
@@ -1124,12 +1141,12 @@ class _SelectorSelectState<T extends Object> extends State<_SelectorSelect<T>> {
   final FocusNode _triggerFocusNode = FocusNode(
     debugLabel: 'agent-session-selector-trigger',
   );
-  late final _ComposerSelectorPopoverController _popoverController;
+  late final ComposerSelectorPopoverController _popoverController;
 
   @override
   void initState() {
     super.initState();
-    _popoverController = _ComposerSelectorPopoverController(
+    _popoverController = ComposerSelectorPopoverController(
       triggerFocusNode: _triggerFocusNode,
       onOpenChanged: () {
         if (mounted) {
@@ -1174,7 +1191,7 @@ class _SelectorSelectState<T extends Object> extends State<_SelectorSelect<T>> {
             maxWidth: layout.width,
             maxHeight: layout.maxHeight,
           ),
-          child: _ComposerSelectPopup<T>(
+          child: ComposerSelectPopup<T>(
             value: widget.value,
             items: widget.options,
             onChanged: (value, selected) {
@@ -1284,8 +1301,8 @@ IconData _sessionConfigIcon(String? category) {
 }
 
 /// 权限模式选择：选项来自 [AgentPermissionOption] catalog。
-class _PermissionOptionButton extends StatefulWidget {
-  const _PermissionOptionButton({
+class PermissionOptionButton extends StatefulWidget {
+  const PermissionOptionButton({
     required this.label,
     required this.options,
     required this.selectedOptionId,
@@ -1293,6 +1310,7 @@ class _PermissionOptionButton extends StatefulWidget {
     required this.onSelect,
     this.scopeHint,
     this.surfaceKey = const ValueKey('agent-permission-option-selector'),
+    super.key,
   });
 
   final String label;
@@ -1304,20 +1322,19 @@ class _PermissionOptionButton extends StatefulWidget {
   final Key surfaceKey;
 
   @override
-  State<_PermissionOptionButton> createState() =>
-      _PermissionOptionButtonState();
+  State<PermissionOptionButton> createState() => _PermissionOptionButtonState();
 }
 
-class _PermissionOptionButtonState extends State<_PermissionOptionButton> {
+class _PermissionOptionButtonState extends State<PermissionOptionButton> {
   final FocusNode _triggerFocusNode = FocusNode(
     debugLabel: 'agent-permission-option-trigger',
   );
-  late final _ComposerSelectorPopoverController _popoverController;
+  late final ComposerSelectorPopoverController _popoverController;
 
   @override
   void initState() {
     super.initState();
-    _popoverController = _ComposerSelectorPopoverController(
+    _popoverController = ComposerSelectorPopoverController(
       triggerFocusNode: _triggerFocusNode,
       onOpenChanged: () {
         if (mounted) {
@@ -1328,7 +1345,7 @@ class _PermissionOptionButtonState extends State<_PermissionOptionButton> {
   }
 
   @override
-  void didUpdateWidget(covariant _PermissionOptionButton oldWidget) {
+  void didUpdateWidget(covariant PermissionOptionButton oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (_popoverController.isOpen &&
         (oldWidget.selectedOptionId != widget.selectedOptionId ||
@@ -1357,8 +1374,8 @@ class _PermissionOptionButtonState extends State<_PermissionOptionButton> {
     }
     _popoverController.toggle(
       context: context,
-      preferredWidth: _composerSelectorPopoverPreferredWidth,
-      preferredMaxHeight: _composerSelectorPopoverMaxHeight,
+      preferredWidth: composerSelectorPopoverPreferredWidth,
+      preferredMaxHeight: composerSelectorPopoverMaxHeight,
       builder: (context, layout) => _PermissionOptionPopover(
         width: layout.width,
         maxHeight: layout.maxHeight,
@@ -1390,7 +1407,7 @@ class _PermissionOptionButtonState extends State<_PermissionOptionButton> {
     final displayLabel = _displayLabel;
     final scopeHint = widget.scopeHint?.trim();
     final hasHint = scopeHint != null && scopeHint.isNotEmpty;
-    return _ComposerSelectorTrigger(
+    return ComposerSelectorTrigger(
       surfaceKey: widget.surfaceKey,
       tooltip: hasHint
           ? context.l10n.agentPermissionModeHint(scopeHint)
@@ -1485,7 +1502,7 @@ class _PermissionOptionPopover extends StatelessWidget {
         width: width,
         child: ConstrainedBox(
           constraints: BoxConstraints(maxHeight: maxHeight),
-          child: _ComposerSelectPopup<AgentPermissionOption>(
+          child: ComposerSelectPopup<AgentPermissionOption>(
             value: selectedOption,
             onChanged: (option, selected) {
               // 保持旧行为：点击当前项也先通知业务层，再由 Select 关层。

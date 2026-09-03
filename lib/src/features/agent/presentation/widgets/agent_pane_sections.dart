@@ -1041,7 +1041,7 @@ class _AgentComposerSection extends StatelessWidget {
           builder: (context, canSend, _) {
             return KeyedSubtree(
               key: anchorKey,
-              child: _AgentComposer(
+              child: AgentComposer(
                 controller: inputController,
                 focusNode: composerFocusNode,
                 canSubmit: canSend && state.canSubmitMessage,

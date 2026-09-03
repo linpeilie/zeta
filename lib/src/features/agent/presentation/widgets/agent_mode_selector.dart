@@ -1,4 +1,14 @@
-part of '../agent_pane.dart';
+import 'dart:math' as math;
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
+
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_ui/zeta_ui.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_model_config.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/composer_selector_popover.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
 const double _agentModeSelectorPopoverPreferredWidth = 240;
 const double _agentModeSelectorPopoverMaxHeight = 280;
@@ -64,7 +74,7 @@ class _AgentModeSelectorState extends State<AgentModeSelector> {
   final FocusNode _triggerFocusNode = FocusNode(
     debugLabel: 'agent-mode-selector-trigger',
   );
-  late final _ComposerSelectorPopoverController _popoverController;
+  late final ComposerSelectorPopoverController _popoverController;
 
   bool get _canOpen =>
       widget.status == AgentModeSelectorStatus.ready &&
@@ -74,7 +84,7 @@ class _AgentModeSelectorState extends State<AgentModeSelector> {
   @override
   void initState() {
     super.initState();
-    _popoverController = _ComposerSelectorPopoverController(
+    _popoverController = ComposerSelectorPopoverController(
       triggerFocusNode: _triggerFocusNode,
       onOpenChanged: () {
         if (mounted) {
@@ -162,7 +172,7 @@ class _AgentModeSelectorState extends State<AgentModeSelector> {
                 ),
               )
             : _agentModeSelectorLabelMaxWidth;
-        return _ComposerSelectorTrigger(
+        return ComposerSelectorTrigger(
           surfaceKey: const ValueKey('agent-mode-selector'),
           tooltip: display.tooltip,
           semanticLabel: display.semanticLabel,
@@ -253,7 +263,7 @@ class _AgentModeSelectorPopover extends StatelessWidget {
         width: width,
         child: ConstrainedBox(
           constraints: BoxConstraints(maxHeight: maxHeight),
-          child: _ComposerSelectPopup<AgentConversationModeId>(
+          child: ComposerSelectPopup<AgentConversationModeId>(
             value: selectedMode,
             onChanged: (mode, selected) {
               if (!selected) {

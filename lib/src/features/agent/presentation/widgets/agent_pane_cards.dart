@@ -654,7 +654,7 @@ class _AgentPlanDocumentCard extends StatelessWidget {
                       border: const Border.fromBorderSide(BorderSide.none),
                       borderRadius: BorderRadius.zero,
                     ),
-                    initialHeight: _textAreaHeight(
+                    initialHeight: textAreaHeight(
                       revisionController.text,
                       lineHeight,
                       minHeight,
@@ -743,7 +743,7 @@ class _AgentPlanDocumentCard extends StatelessWidget {
         Text(context.l10n.agentExecPermission, style: textStyles.bodySmall),
         const SizedBox(width: IdeSpacing.space8),
         Flexible(
-          child: _PermissionOptionButton(
+          child: PermissionOptionButton(
             label: permission?.label ?? context.l10n.agentChooseExecPermission,
             options: executionPermissionOptions,
             selectedOptionId: permission?.selection?.optionId,
@@ -771,7 +771,7 @@ class _AgentPlanDocumentCard extends StatelessWidget {
         modelConfigState.refreshError == null) {
       return null;
     }
-    return _AgentModelConfig(
+    return AgentModelConfig(
       state: modelConfigState,
       onSelectModel: controller.selectModel,
       onSelectReasoningEffort: controller.selectReasoningEffort,
