@@ -14,18 +14,6 @@ TextStyle agentSummaryTextStyle(BuildContext context) {
   );
 }
 
-TextStyle agentItemTextStyle(
-  BuildContext context, {
-  FontWeight fontWeight = FontWeight.w400,
-}) {
-  final colors = IdeColors.of(context);
-  final textStyles = IdeTextStyles.of(context);
-  return textStyles.bodyMedium.copyWith(
-    fontWeight: fontWeight,
-    color: colors.textSecondary.withValues(alpha: 0.88),
-  );
-}
-
 TextStyle agentMetaTextStyle(
   BuildContext context, {
   FontWeight fontWeight = FontWeight.w400,

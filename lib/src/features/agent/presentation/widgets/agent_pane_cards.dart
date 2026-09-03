@@ -93,12 +93,11 @@ class _AgentCommandGroupItemRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
+    final colors = IdeColors.of(context);
+    return IdeTimelineRow(
       key: ValueKey<String>('agent-command-group-item-${item.id}'),
-      _commandGroupItemTitle(item, context.l10n),
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      style: agentItemTextStyle(context),
+      title: _commandGroupItemTitle(item, context.l10n),
+      leading: Icon(toolIcon(item.kind), size: 14, color: colors.textTertiary),
     );
   }
 }
@@ -365,7 +364,6 @@ class AgentToolCallCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
-    final textStyles = IdeTextStyles.of(context);
     final needsElapsedTick =
         toolCall.duration == null &&
         toolCall.startedAt != null &&
@@ -395,40 +393,28 @@ class AgentToolCallCard extends StatelessWidget {
             onToggle: canExpand
                 ? () => controller.toggleToolCall(toolCall.id)
                 : () {},
-            titleWidget: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    _toolCardTitle(toolCall, context.l10n),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: agentItemTextStyle(context),
-                  ),
-                ),
-                if (elapsedLabel != null) ...[
-                  const SizedBox(width: IdeSpacing.space8),
-                  Text(
-                    elapsedLabel,
-                    key: ValueKey<String>('agent-tool-elapsed-${toolCall.id}'),
-                    style: textStyles.caption.copyWith(
+            titleWidget: IdeTimelineRow(
+              title: _toolCardTitle(toolCall, context.l10n),
+              leading: toolCall.isActiveStatus
+                  ? IdeBusySpinner(
+                      size: 12,
+                      strokeWidth: 1.8,
+                      semanticsLabel: context.l10n.agentToolRunning,
+                    )
+                  : Icon(
+                      toolIcon(toolCall.kind),
+                      size: 14,
                       color: colors.textTertiary,
-                      fontWeight: FontWeight.w500,
                     ),
-                  ),
-                ],
-              ],
+              trailing: elapsedLabel == null
+                  ? null
+                  : Text(
+                      elapsedLabel,
+                      key: ValueKey<String>(
+                        'agent-tool-elapsed-${toolCall.id}',
+                      ),
+                    ),
             ),
-            leading: toolCall.isActiveStatus
-                ? IdeBusySpinner(
-                    size: 12,
-                    strokeWidth: 1.8,
-                    semanticsLabel: context.l10n.agentToolRunning,
-                  )
-                : Icon(
-                    toolIcon(toolCall.kind),
-                    size: 14,
-                    color: colors.textTertiary,
-                  ),
             margin: const EdgeInsets.only(bottom: IdeSpacing.space10),
             bodyPadding: const EdgeInsets.only(top: IdeSpacing.space8),
             hoverBackgroundColor: agentHoverBackground(context),

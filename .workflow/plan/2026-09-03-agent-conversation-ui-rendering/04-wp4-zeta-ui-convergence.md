@@ -15,7 +15,7 @@
 
 1. **横幅**：手写横幅确认只有 **2 处**——`_NextTurnModelConfigBanner`（`agent_model_config.dart:888-915`）与 `_ModelSelectionNoticeBanner`（`:917-962`），均为 `IdeStatusCard` 的 compact 变体。另有 2 处 info 提示行（`agent_model_config.dart:1037`、`agent_mode_selector.dart:285`）替换时评估是否同构。注意 `_AgentReadOnlyNotice`（`agent_pane.dart:1281-1306`）与 cards.dart:2037/2093 **已经在用 `IdeStatusCard`**，不在本任务范围（2026-09-03 review 修正：初版「另有 4 处近似实现 / 共 6 处」的清单有误）。
 2. **弹层选择器**：施工前 `_SelectorSelect` 只剩 session config **1 处**调用（初版记录的 4 处已随 WP-2 后代码演进失效）；`ComposerSelectorTrigger/Panel` 则被模式、模型、权限与三个 picker 共用。`IdeSelect`（`packages/zeta_ui/lib/src/ide_select.dart:78-221`）不支持自定义触发器/弹层项。
-3. **时间线行**：`_AgentCommandGroupItemRow`（cards.dart:62-77）、tool 卡行、diff 文件行、历史事件行同构（leading icon + 省略标题 + 尾部 meta）。
+3. **时间线行**：`_AgentCommandGroupItemRow`（cards.dart:62-77）、tool 卡行、diff 文件行同构（leading icon + 省略标题 + 尾部 meta）；其中命令组同时承载 tool 与历史 search/system 摘要项。独立 `AgentHistoryEventCard` 是含 description/content 的多行状态卡，不属于这一骨架。
 4. **折叠卡**：`IdeCollapsibleCard` 调用点重复拼装 titleWidget/leading/bodyPadding/hoverBackground。
 
 **zeta_ui 新原语的铁律**（每个 T 都适用）：不 import Riverpod / `dart:io` / generated l10n / 业务模型；控件自有文案经 `ZetaUiTextCatalog` 注入；高度由内容撑开，下限走 `IdeMetrics.controlMinHeightFor`；图标过 `IdeIconBox`。
@@ -111,9 +111,9 @@ skill/slash/mention picker 及模型复合面板均复用；旧
 Widget 测试覆盖选择、Esc、回焦与外部选项失效关闭；既有 mode/model/composer 测试
 继续覆盖键盘导航、视口上翻、复杂模型配置与 Provider session config 回写。
 
-### T3 · `IdeTimelineRow`（0.5–1 人天）
+### T3 · `IdeTimelineRow`（0.5–1 人天） · 已完成（2026-09-03）
 
-**现状**（`_AgentCommandGroupItemRow`，cards.dart:67-76）：单行 Text + 省略号 + `_agentItemTextStyle`。tool 卡行、diff 文件行、历史事件行是同一骨架加 leading/trailing。
+**现状**（`_AgentCommandGroupItemRow`，cards.dart:67-76）：单行 Text + 省略号 + `_agentItemTextStyle`。tool 卡行、diff 文件行是同一骨架加 leading/trailing；历史 search/system 摘要也通过 `_AgentCommandGroupItemRow` 渲染。独立 `AgentHistoryEventCard` 是多行 `IdeStatusCard`，不在本任务范围。
 
 **设计**：
 
@@ -134,6 +134,16 @@ class IdeTimelineRow extends StatelessWidget {
 **替换**：`_AgentCommandGroupItemRow` → `IdeTimelineRow(title: _commandGroupItemTitle(item, l10n), leading: kindIcon)`；tool 卡行 / diff 行 / 历史事件行逐个对照（注意历史事件行的 tone 差异用 trailing 表达）。
 
 **验收**：4 类行替换；行高无回归（widget 测试既有断言）；`ValueKey` 全部保留。
+
+**施工记录**：新增 `IdeTimelineRow`，统一 leading `IdeIconBox`、单行省略标题、
+尾部 meta、可选按钮语义与按内容自然增高；按真实调用并集补充 `prefix` 和
+`titleStyle`，用于保留 diff 动作 caption 与等宽文件路径。命令组中的 live/history
+tool 和历史 search/system 摘要、独立 tool 卡标题、diff 文件标题均已迁移；原
+`agentItemTextStyle` 删除。独立 `AgentHistoryEventCard` 保持多行状态卡，因为它还
+承载 description/content 与 tone，强行套入单行骨架会丢失语义。命令组、tool、diff
+现有 header/body/item `ValueKey` 均保留。新增 zeta_ui Widget 测试覆盖图标盒、
+prefix/title/trailing 排列、单行省略、交互语义和 2x 字号自然增高；既有命令组、
+文件证据、extent 对齐与响应式回归测试继续通过。
 
 ### T4 · 折叠卡骨架参数化（1 人天）
 
