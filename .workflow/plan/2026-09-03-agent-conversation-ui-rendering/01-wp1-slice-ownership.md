@@ -112,7 +112,7 @@ TimelineStore / EventProcessor
 
 ### T1 · 现状测绘（0.5 人天）
 
-- [ ] 跑以下命令，把结果整理成「region 字段 × 生产者 × 消费者」矩阵贴进 PR-1 描述：
+- [x] 跑以下命令，把结果整理成「region 字段 × 生产者 × 消费者」矩阵贴进 PR-1 描述：
 
 ```sh
 grep -rn "AgentConversationViewModel" lib test --include=*.dart | wc -l
@@ -120,9 +120,9 @@ grep -rn "uiEffects\|liveTurnListenable\|threadSnapshotListenable\|contextPanelV
 grep -rn "_buildHeaderState\|_buildComposerState\|_buildPendingInteractionState\|_buildExpansionState\|_buildHistoryState" lib/src/features/agent/presentation/agent_conversation_view_model.dart
 ```
 
-- [ ] 5 个 region state 的字段清单已在 `agent_conversation_region_state.dart`（`AgentHeaderState` 17 字段 / `AgentComposerState` 22 字段 / `AgentPendingInteractionState` 8 字段 / `AgentExpansionState` 5 字段 / `AgentConversationHistoryState` 6 字段）；逐个标注投影数据源（读 timeline 还是 session state 还是 controller）。
-- [ ] **Widget 只读面清单**（review 补充：T5 只覆盖命令面，只读访问器也必须各有归属）：`liveTurnListenable` / `liveTurnState` / `threadSnapshotListenable` / `contextPanelVisible` / `uiEffects` / `toolElapsedAt` / `mentionCandidateFiles` / `isWorkspaceFileIndexReady` / `workspaceFileCorpus` / `loadSettings` / `canUseSkills` 等——grep 全部 `viewModel.` 调用点，按「controller 查询方法 / region state 字段 / composerStateOwner」分类标注去向。
-- [ ] **验收**：矩阵覆盖 5 个 region 全部字段；ViewModel 引用点（命令面 + 只读面）清单无遗漏。
+- [x] 5 个 region state 的字段清单已在 `agent_conversation_region_state.dart`（代码现状：`AgentHeaderState` 17 / `AgentComposerState` 22 / `AgentPendingInteractionState` **7 存储字段** / `AgentExpansionState` 5 / `AgentConversationHistoryState` **5 存储字段**；初版「8 / 6」含派生 getter）。逐个标注投影数据源见 [附录 A](#附录-a--t1-测绘结果-2026-09-03)。
+- [x] **Widget 只读面清单**：生产 `viewModel.` 84 个成员、测试独占 48 个；按「controller 查询 / region 字段 / composerStateOwner / CommandPort / Shell 编排」分类，见附录 A §2–§3。
+- [x] **验收**：矩阵覆盖 5 个 region 全部存储字段；生产侧 ViewModel 引用点（命令面 + 只读面）无遗漏。
 
 ### T2 · runtime controller 下沉（PR-1，3–4 人天）
 
@@ -311,3 +311,192 @@ final agentConversationCommandProvider = Provider.family
 - [ ] presentation 层 agent feature 无 `dart:io`、无 `zeta_agent_providers` import。
 - [ ] `flutter analyze` 零告警；`tool/test_full.sh` 绿；架构守卫绿。
 - [ ] 文档同步完成；CHANGELOG 无条目（纯内部重构）。
+
+---
+
+## 附录 A · T1 测绘结果（2026-09-03）
+
+扫描基准：`feature/wp7-t3-scheduler-metric-label` 工作树（T0 已合入本分支、尚未提交）。行号以符号名为准。
+
+### A.0 扫描规模
+
+| 命令 / 口径 | 结果 |
+|---|---|
+| `AgentConversationViewModel` 匹配行（`lib`+`test`，含 `.dart`） | **70 行 / 24 文件**（生产 12 + 测试 12） |
+| 生产 `viewModel.<member>` 不同成员 | **84**（`lib/`，不含 ViewModel 自身） |
+| 测试独占成员（生产未调用） | **48**（已剔除 ProjectThreads 的 `applyProjectState` 误伤） |
+| `_buildHeaderState` | `:4084` |
+| `_buildComposerState` | `:4107` |
+| `_buildPendingInteractionState` | `:4136` |
+| `_buildExpansionState` | `:4148` |
+| `_buildHistoryState` | `:4158` |
+
+只读面 hint 的四处订阅点（均仍存在）：
+
+| 符号 | 生产订阅 |
+|---|---|
+| `uiEffects` | `agent_pane.dart:259,295` |
+| `liveTurnListenable` | `agent_pane.dart:401`；`agent_pane_sections.dart:339`；`agent_pane_plan_panel.dart:36`；`agent_pane_context_panel.dart:74` |
+| `threadSnapshotListenable` | workspace store `:86`；`agent_pane_context_panel.dart:88` |
+| `contextPanelVisible` | `agent_pane.dart:355` |
+
+Selector 未改签名：`agentConversationHeader/Composer/PendingInteraction/Expansion/HistoryProvider`（`agent_conversation_slice_providers.dart:91-140`）。Widget 经 `AgentRegionBuilder` 订阅；`IdeHome:283-305` 另从 `entry.sliceStore.state` 读 header/history/pending 做 Shell 快照。
+
+### A.1 Region 字段矩阵
+
+数据源缩写：**TL** = `AgentConversationTimelineStore`；**SS** = `AgentConversationSessionState`（`_state`）；**Cap** = `activeCapabilities`（runtime / global / settings 端口）；**Mode** = `_conversationModeController`；**Model** = `_modelSelectionController`；**Perm** = `_permissionSelectionController`；**PlanH** = `_planExecutionHandoffController`；**Text** = `_textCatalog`；**Bind** = `conversationBinding`；**Settings** = `providerController`。
+
+#### AgentHeaderState（17）· `_buildHeaderState` `:4084`
+
+| 字段 | 投影源 | 生产消费者 |
+|---|---|---|
+| `title` | SS `_currentThreadTitle` | `agent_pane_header.dart` 标题 / 重命名初值 |
+| `threadOpenPhase` | SS | header 状态文案；`_threadOpenStatusText`；`IdeHome` 快照 |
+| `systemNoticeLabel` | SS `_modelRerouteNotice` | header 次要提示（idle 时） |
+| `statusCapsuleLabel` | SS waiting/runtime + Text | header 胶囊；live activity 条等待文案 |
+| `waitingOnApproval` | SS | header / live activity 图标 |
+| `waitingOnUserInput` | SS | 同上 |
+| `showRunningIndicator` | TL `isTurnRunning` ∧ 无胶囊 | **生产 Widget 未读该 bool**；live 条用 `isTurnRunning` + 胶囊代替。测试读 ViewModel getter |
+| `runningActivityLabel` | TL `currentActivity` + Text | `_liveActivityStatusText` |
+| `segmentStartedAt` | TL activity | `_liveActivityStatusText` 段耗时 |
+| `turnStartedAt` | TL `currentTurnStartedAt` | `_liveActivityStatusText` 回合耗时 |
+| `tokenUsage` | TL `currentThreadTokenUsage` | header 累计 Token 标签 / tooltip |
+| `isTurnRunning` | TL | live activity 显隐；`IdeHome` 快照 |
+| `isReadOnly` | Settings 是否启用当前 provider | `IdeHome` 快照（header 菜单不读此字段） |
+| `canFork` | Cap + `canSubmitMessage` + `onCreatedThread` | header 更多菜单 |
+| `canRename` | Cap + `sessionId` + `!isReadOnly` | header 更多菜单 |
+| `canArchive` | Cap + `sessionId` + `!isReadOnly` | header 更多菜单 |
+| `isPlanMode` | Mode `confirmedMode.kind == plan` | header Plan 徽章 |
+
+#### AgentComposerState（22）· `_buildComposerState` `:4107`
+
+| 字段 | 投影源 | 生产消费者 |
+|---|---|---|
+| `canSubmitMessage` | SS phase + Settings 只读 + Cap `canPrompt`/`canSteerTurn` + TL running | `_AgentComposerBar`；`agent_pane` 发送门闩仍直读 ViewModel |
+| `isTurnRunning` | TL | Composer 取消按钮 / applies-next-turn |
+| `threadOpenPhase` | SS | Composer 加载/失败态 |
+| `contextUsage` | TL last usage ⊕ Model `contextWindowTokens` | Composer 窗口占用 |
+| `isReadOnly` | Settings | `agent_pane.dart` 只读占位 vs Composer |
+| `canAttachImages` | Cap `supportsLocalImageInput` | Composer 附件入口；**pane 仍直读 ViewModel 做粘贴门闩** |
+| `canMentionResources` | Cap `supportsResourceInput` | Composer；**pane 仍直读做 @ picker** |
+| `canUseSkills` | Cap `supportsSkillInput` | Composer；**pane 仍直读做 /skills** |
+| `conversationModeStatus` | Mode | 模式选择器状态 |
+| `conversationModeOptions` | Mode presets | 模式选择器；**pane 斜线菜单仍直读 ViewModel** |
+| `selectedConversationMode` | Mode draft | 选择器；**pane `/plan` 仍直读** |
+| `conversationModeAppliesToNextTurn` | Mode | 选择器「下回合生效」 |
+| `conversationModeStatusMessage` | Mode + Text | **生产 Widget 未读**（只进相等性） |
+| `conversationModeContextId` | Bind provider/thread | 选择器隔离 key |
+| `showModelSelection` | Cap `supportsModelSelection` | Composer / cards 模型入口 |
+| `modelConfigState` | Model + Cap + VM `_modelsRefreshing` | 模型 popover |
+| `showPermissionPolicy` | Perm.hasPort ∨ bundle.permissionPolicy | Composer 权限选择器 |
+| `permissionPolicyLabel` | Perm | 选择器标签 |
+| `permissionOptions` | Perm | Composer；**plan 卡经 `viewModel.composerState.permissionOptions` 旁路** |
+| `selectedPermissionOptionId` | Perm | 选择器 |
+| `permissionApplyScopeHint` | Perm | Composer toast 前仍经 `takePermissionApplyHint()` |
+| `sessionConfigOptions` | SS 过滤后的动态配置 | Composer |
+
+#### AgentPendingInteractionState（7 存储 + 派生）· `_buildPendingInteractionState` `:4136`
+
+| 字段 | 投影源 | 生产消费者 |
+|---|---|---|
+| `permissions` | TL | `agent_pane_sections` 权限卡 |
+| `questions` | TL | 提问卡 |
+| `planApprovals` | TL | 计划审批卡 / 时间线插入 |
+| `planExecutionHandoff` | PlanH | 执行交接卡 |
+| `isReadOnly` | Settings | 待处理区整体禁用 |
+| `autoReviewsByTurnId` | SS | 经 `state.autoReviewForTurn(turnId)` |
+| `latestDeniedAutoReview` | SS | Guardian 放行按钮显隐 |
+| `blocksComposer`（派生） | 上列非空 | `agent_pane` 隐藏主 Composer |
+| `hasBlockingPlanDocument`（派生） | plan 审批/交接 | 隐藏 live 活动条 |
+
+#### AgentExpansionState（5）· `_buildExpansionState` `:4148`
+
+| 字段 | 投影源 | 生产消费者 |
+|---|---|---|
+| `toolCallIds` | TL | cards `isToolCallExpanded` |
+| `planMessageIds` | TL | messages `isPlanMessageExpanded` |
+| `activePlanTurnIds` | TL | plan_panel `isActivePlanExpanded` |
+| `commandGroupIds` | TL | cards / extent descriptor |
+| `fileEditItemIds` | TL | cards / extent descriptor |
+
+#### AgentConversationHistoryState（5 存储 + 派生）· `_buildHistoryState` `:4158`
+
+| 字段 | 投影源 | 生产消费者 |
+|---|---|---|
+| `standbyTurn` | TL standby snapshot（空 entries 则 null） | `agent_pane_sections` overlay |
+| `visibleTurns` | TL | 历史虚拟列表；`agent_pane` 空态；`IdeHome` `visibleTurnCount` |
+| `threadOpenPhase` | SS | 经 `isLoading` |
+| `providerId` | SS/session/`_selectedProviderId`/Bind | 空态 provider 图标 |
+| `providerName` | Settings displayName | 空态文案 |
+| `isLoading`（派生） | `threadOpenPhase == loadingHistory` | `agent_pane` 历史骨架 |
+
+### A.2 生产 `viewModel.` 去向（84）
+
+T5 只切 CommandPort；下列只读/额外命令必须在 T2 就有归属，否则 T5 删 ViewModel 时会断。
+
+#### controller 查询 / 旁路订阅（T2 随 runtime controller 暴露）
+
+| 成员 | 调用方 | T5 去向 |
+|---|---|---|
+| `liveTurnListenable` | pane / sections / plan_panel / context_panel | controller → Flutter adapter（D3，订阅方式不变） |
+| `liveTurnState` | pane / sections / plan_panel | 同上 |
+| `threadSnapshot` / `threadSnapshotListenable` | workspace store；context_panel | controller 自持 `ValueNotifier`（application 用 core notifier，presentation 再适配） |
+| `uiEffects` | `agent_pane` | controller `_effectController`（D2） |
+| `contextPanelVisible` / `toggleContextPanel` / `hideContextPanel` | pane / header / context_panel | **不进 region**。建议留 presentation `ValueNotifier`，或 controller 窄端口 |
+| `elapsedClockListenable` / `elapsedNow` / `toolElapsedAt` | cards / messages / styles | controller 持有 `AgentElapsedTicker` |
+| `mentionCandidateFiles` / `isWorkspaceFileIndexReady` / `workspaceFileCorpus` | pane @mention | T3 纯函数 + `WorkspaceFileCorpusPort`；查询挂 controller |
+| `shouldShowActivePlan` | plan_panel | controller 查询（组合 TL + pending + SS waiting） |
+| `expansionState` | plan_panel 展开判定 | 可改为 `AgentRegionBuilder<AgentExpansionState>`，与 cards 对齐 |
+| `composerState` | cards 模型卡；messages 交接权限选项 | **旁路 region**。T5 前改为 selector / 把 permissionOptions 传入交接卡 |
+| `conversationBinding` | `AgentRegionBuilder` 只取 `.key` | T5 改为直接收 `BindingKey` |
+| `textCatalog` | pane / context_panel | 注入到 presentation 或经 region/context |
+| `projectName` / `projectPath` | header | **未进 HeaderState**。T2 可并入 header 投影，或 controller 查询 |
+| `currentThreadTitle` / `sessionId` / `currentThreadTokenUsage` / `threadCreatedAt` / `threadLastActiveAt` / `messages` / `timelineEntries` / `activeProviderName` | context_panel | 面板只读面：controller 查询（或专有 context-panel 投影，本 WP 非目标） |
+| `providerController` | context_panel **subscribe 触发 setState** | 越层。T5 前改为 settings 端口订阅或把目录快照打进投影 |
+| `initialization` / `threadOpenPhase` / `currentSession` / `retryOpenThread` | Shell | controller / CommandPort（`retryOpenThread` 已在端口） |
+| `activeProviderId` | Shell | Bind.key.providerId，可不经 ViewModel |
+| `permissionSnapshotForThread` | Shell fork 工作流 | controller 查询（Perm） |
+| `dispose` | workspace store | controller.dispose |
+
+#### 与 Composer region 重复、pane 仍直读 ViewModel 的能力位
+
+`canSubmitMessage` / `canAttachImages` / `canMentionResources` / `canUseSkills` / `canSelectConversationMode` / `canCompactCurrentThread` / `conversationModeOptions` / `selectedConversationMode` / `canEditLastUserMessage` / `lastEditableUserMessageId`
+
+T5：pane 门闩改为读 `agentConversationComposerProvider`（或局部已有的 `composerState`），避免双源。
+
+#### composerStateOwner 命令（**不在 CommandPort**，T5 必须扩端口或另开 command family）
+
+| 成员 | 调用方 |
+|---|---|
+| `selectConversationMode` | pane `/plan`；Composer 选择器 |
+| `selectModel` / `selectReasoningEffort` / `selectFastEnabled` / `resolveModelCompatibilityConflict` / `retryModelConfigurationSave` / `clearModelConfigurationTransientState` | Composer / cards |
+| `selectPermissionOption` / `takePermissionApplyHint` | Composer |
+| `selectSessionConfigOption` | Composer |
+| `selectPlanExecutionPermissionOption` | messages 交接卡 |
+| `skillCandidates` / `ensureSkillsCatalog` | pane 斜线菜单（后者已在 CommandPort） |
+
+#### 已在 `AgentConversationCommandPort`（23 个，文档旧称 21）
+
+生产 Widget/Shell 已调用：`sendMessage` `cancelActiveTurn` `editLastUserMessageAndRetry` `retryOpenThread` `respondToPermission` `respondToQuestion` `respondToPlanApproval` `revisePlanExecution` `startPlanExecution` `dismissPlanExecution` `approveGuardianDeniedAction` `forkCurrentThread` `renameCurrentThread` `archiveCurrentThread` `compactCurrentThread` `loadModels` `ensureSkillsCatalog` `toggleToolCall` `togglePlanMessage` `toggleActivePlan` `toggleCommandGroup` `toggleFileEditItem`。
+
+`retryConversationModes`：端口有，**无生产 `viewModel.` 调用**；走 slice composition effect runner。
+
+#### Shell 编排（非 AgentPane；T5 切 command provider / controller）
+
+`loadSettings` `updateContext` `switchActiveProvider` `syncThreadTitleIfCurrent` `loadModels` `sendMessage` `retryOpenThread` `initialization`。
+
+`loadSettings` **不在 CommandPort**。
+
+### A.3 测试独占成员（49）· 不允许 T5 静默删除
+
+多数是投影源的直读（`isTurnRunning` `permissionRequests` `visibleHistoryTurns` `headerState` `historyState` …）或 `@visibleForTesting` 诊断（`eventCoalescingBufferDiagnostics` `uiStateDiagnostics` `uiUpdateSchedulerDiagnostics` `debugLastUiUpdateRequest`）。迁入 controller / scheduler / store 测试时按符号搬家，不断言删除。
+
+扫描时 `project_threads_slice_runner_test` 的 `viewModel.applyProjectState` 是 **ProjectThreads** 测试 double，与 `AgentConversationViewModel` 无关，T5 可忽略。
+
+### A.4 T2 必带缺口（本测绘新发现）
+
+1. **CommandPort 覆盖不足**：模型/模式/权限/session config/交接权限选择、`loadSettings`、`updateContext`、`switchActiveProvider`、上下文面板开关均不在 23 个端口方法里。T5「widgets 改 `ref.read(commandProvider)`」之前必须扩端口或拆第二端口，否则这些调用无处可去。
+2. **双源直读**：pane 对 `canSubmitMessage` / 附件 / mention / skills / 模式 同时走 ViewModel 与 Composer region。T2 委托期可暂留；T5 必须收口到 region。
+3. **未进 region 的头栏字段**：`projectName` / `projectPath` 仍直读 ViewModel。
+4. **死投影字段**：`AgentHeaderState.showRunningIndicator`、`AgentComposerState.conversationModeStatusMessage` 无生产读取；T2 平移投影时保留（相等性/测试），不要当无主删除。
+5. **context_panel 订阅 `providerController`**：presentation 直接听 settings 端口。T5 前要有替代订阅，否则删 ViewModel 后面板目录不刷新。
