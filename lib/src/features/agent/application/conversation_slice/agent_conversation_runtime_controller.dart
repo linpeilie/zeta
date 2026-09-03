@@ -11,10 +11,12 @@ import 'package:zeta/src/features/agent/application/agent_conversation_mode_cont
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_command_scope.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_ports.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_thread_selection_patch.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/application/agent_plan_execution_handoff_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_model_selection_controller.dart';
+import 'package:zeta/src/features/agent/application/agent_skill_candidates.dart';
 import 'package:zeta/src/features/agent/application/agent_skills_catalog_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_turn_context_overlay.dart';
 import 'package:zeta/src/features/agent/application/agent_pipeline_metrics_reporter.dart';
@@ -815,10 +817,11 @@ final class AgentConversationRuntimeController
 
   /// Skill picker 候选；按 name/description 过滤。
   List<AgentSkillMetadata> skillCandidates({String query = ''}) {
-    if (!canUseSkills) {
-      return const <AgentSkillMetadata>[];
-    }
-    return _skillsCatalogController.query(query);
+    return filterAgentSkillCandidates(
+      _skillsCatalogController.state.catalog.allSkills,
+      canUseSkills: canUseSkills,
+      query: query,
+    );
   }
 
   /// 预热 skill 目录（打开 picker 前调用）。
@@ -915,29 +918,10 @@ final class AgentConversationRuntimeController
   List<WorkspaceNode> mentionCandidateFiles({String query = ''}) {
     final source = workspaceFileCorpus?.files ?? const <WorkspaceNode>[];
     return fuzzyRankWorkspaceFiles(
-      _flattenFileNodes(source),
+      flattenWorkspaceFileNodes(source),
       query: query,
       limit: 40,
     );
-  }
-
-  /// 递归收集 file 节点；provider 返回扁平语料时等价于一次廉价复制。
-  List<WorkspaceNode> _flattenFileNodes(List<WorkspaceNode> nodes) {
-    final files = <WorkspaceNode>[];
-    void walk(WorkspaceNode node) {
-      if (node.isDirectory) {
-        for (final child in node.children) {
-          walk(child);
-        }
-        return;
-      }
-      files.add(node);
-    }
-
-    for (final node in nodes) {
-      walk(node);
-    }
-    return files;
   }
 
   String? get sessionId => _session?.id ?? _restoredSessionId;
@@ -1469,10 +1453,12 @@ final class AgentConversationRuntimeController
   }
 
   void _applyThreadSelectionFromHistory(AgentThreadHistorySnapshot history) {
-    final fallback = _latestHistorySelectionPatch(history.turns);
-    final current = _selectionPatchFromHistoryTurn(history.currentTurn);
+    final fallback = latestAgentThreadSelectionPatch(history.turns);
+    final current = agentThreadSelectionPatchFromHistoryTurn(
+      history.currentTurn,
+    );
     _applyThreadSelectionPatch(
-      _mergeThreadSelectionPatches(fallback, current),
+      mergeAgentThreadSelectionPatches(fallback, current),
       requireCatalogModel: true,
     );
   }
@@ -1480,9 +1466,11 @@ final class AgentConversationRuntimeController
   bool _historySelectionNeedsCatalogRefresh(
     AgentThreadHistorySnapshot history,
   ) {
-    final fallback = _latestHistorySelectionPatch(history.turns);
-    final current = _selectionPatchFromHistoryTurn(history.currentTurn);
-    final patch = _mergeThreadSelectionPatches(fallback, current);
+    final fallback = latestAgentThreadSelectionPatch(history.turns);
+    final current = agentThreadSelectionPatchFromHistoryTurn(
+      history.currentTurn,
+    );
+    final patch = mergeAgentThreadSelectionPatches(fallback, current);
     final requestedModelId = _nonEmptyValue(patch?.modelId);
     return requestedModelId != null &&
         _resolveModelInfo(requestedModelId) == null;
@@ -1494,7 +1482,7 @@ final class AgentConversationRuntimeController
       return;
     }
     _applyThreadSelectionPatch(
-      _ThreadModelSelectionPatch(modelId: cleanedModelId),
+      AgentThreadSelectionPatch(modelId: cleanedModelId),
     );
   }
 
@@ -1502,9 +1490,9 @@ final class AgentConversationRuntimeController
     List<AgentSessionConfigOption> options,
   ) {
     String? modelId;
-    Object? reasoningEffort = _threadModelSelectionUnset;
-    Object? serviceTierId = _threadModelSelectionUnset;
-    Object? fastEnabled = _threadModelSelectionUnset;
+    Object? reasoningEffort = kAgentThreadSelectionUnset;
+    Object? serviceTierId = kAgentThreadSelectionUnset;
+    Object? fastEnabled = kAgentThreadSelectionUnset;
     for (final option in options) {
       if (option.category == 'model') {
         final value = _stringValue(option.currentValue);
@@ -1542,7 +1530,7 @@ final class AgentConversationRuntimeController
         }
       }
     }
-    final patch = _ThreadModelSelectionPatch(
+    final patch = AgentThreadSelectionPatch(
       modelId: modelId,
       reasoningEffort: reasoningEffort,
       serviceTierId: serviceTierId,
@@ -1555,7 +1543,7 @@ final class AgentConversationRuntimeController
   }
 
   void _applyThreadSelectionPatch(
-    _ThreadModelSelectionPatch? patch, {
+    AgentThreadSelectionPatch? patch, {
     bool requireCatalogModel = false,
   }) {
     if (patch == null || !patch.hasAny) {
@@ -1594,15 +1582,15 @@ final class AgentConversationRuntimeController
             )
           : modelConfigUiState.effectivePreference(resolvedModel);
       reasoningEffort =
-          identical(patch.reasoningEffort, _threadModelSelectionUnset)
+          identical(patch.reasoningEffort, kAgentThreadSelectionUnset)
           ? basePreference.reasoningEffort
           : patch.reasoningEffort as String?;
-      if (!identical(patch.fastEnabled, _threadModelSelectionUnset)) {
+      if (!identical(patch.fastEnabled, kAgentThreadSelectionUnset)) {
         final fastTier = agentFastServiceTier(resolvedModel);
         serviceTierId = (patch.fastEnabled as bool?) == true
             ? fastTier?.id
             : null;
-      } else if (!identical(patch.serviceTierId, _threadModelSelectionUnset)) {
+      } else if (!identical(patch.serviceTierId, kAgentThreadSelectionUnset)) {
         serviceTierId = _normalizeThreadServiceTierId(
           resolvedModel,
           patch.serviceTierId as String?,
@@ -1615,14 +1603,14 @@ final class AgentConversationRuntimeController
           requestedModelId != null &&
           requestedModelId != currentSelection.modelId;
       reasoningEffort =
-          identical(patch.reasoningEffort, _threadModelSelectionUnset)
+          identical(patch.reasoningEffort, kAgentThreadSelectionUnset)
           ? (modelChanged ? null : currentSelection.reasoningEffort)
           : patch.reasoningEffort as String?;
-      if (!identical(patch.fastEnabled, _threadModelSelectionUnset)) {
+      if (!identical(patch.fastEnabled, kAgentThreadSelectionUnset)) {
         serviceTierId = (patch.fastEnabled as bool?) == true && !modelChanged
             ? currentSelection.serviceTierId
             : null;
-      } else if (!identical(patch.serviceTierId, _threadModelSelectionUnset)) {
+      } else if (!identical(patch.serviceTierId, kAgentThreadSelectionUnset)) {
         serviceTierId = patch.serviceTierId as String?;
       } else {
         serviceTierId = modelChanged ? null : currentSelection.serviceTierId;
@@ -1636,82 +1624,6 @@ final class AgentConversationRuntimeController
         serviceTierId: serviceTierId,
       ),
     );
-  }
-
-  _ThreadModelSelectionPatch? _latestHistorySelectionPatch(
-    List<AgentHistoryTurn> turns,
-  ) {
-    for (var index = turns.length - 1; index >= 0; index -= 1) {
-      final patch = _selectionPatchFromHistoryTurn(turns[index]);
-      if (patch != null && _nonEmptyValue(patch.modelId) != null) {
-        return patch;
-      }
-    }
-    for (var index = turns.length - 1; index >= 0; index -= 1) {
-      final patch = _selectionPatchFromHistoryTurn(turns[index]);
-      if (patch != null && patch.hasAny) {
-        return patch;
-      }
-    }
-    return null;
-  }
-
-  _ThreadModelSelectionPatch? _selectionPatchFromHistoryTurn(
-    AgentHistoryTurn? turn,
-  ) {
-    if (turn == null) {
-      return null;
-    }
-    Object? reasoningEffort = _threadModelSelectionUnset;
-    if (turn.reasoningEffort.isKnown) {
-      reasoningEffort = _nonEmptyValue(turn.reasoningEffort.value);
-    }
-
-    Object? serviceTierId = _threadModelSelectionUnset;
-    final typedServiceTierId = _nonEmptyValue(turn.serviceTierId);
-    if (typedServiceTierId != null) {
-      serviceTierId = typedServiceTierId;
-    }
-
-    Object? fastEnabled = _threadModelSelectionUnset;
-    if (turn.explicitFast != null) {
-      fastEnabled = turn.explicitFast;
-    }
-
-    final patch = _ThreadModelSelectionPatch(
-      modelId: _nonEmptyValue(turn.modelId),
-      reasoningEffort: reasoningEffort,
-      serviceTierId: serviceTierId,
-      fastEnabled: fastEnabled,
-    );
-    return patch.hasAny ? patch : null;
-  }
-
-  _ThreadModelSelectionPatch? _mergeThreadSelectionPatches(
-    _ThreadModelSelectionPatch? base,
-    _ThreadModelSelectionPatch? overlay,
-  ) {
-    if (base == null) {
-      return overlay;
-    }
-    if (overlay == null) {
-      return base;
-    }
-    final merged = _ThreadModelSelectionPatch(
-      modelId: _nonEmptyValue(overlay.modelId) ?? base.modelId,
-      reasoningEffort:
-          identical(overlay.reasoningEffort, _threadModelSelectionUnset)
-          ? base.reasoningEffort
-          : overlay.reasoningEffort,
-      serviceTierId:
-          identical(overlay.serviceTierId, _threadModelSelectionUnset)
-          ? base.serviceTierId
-          : overlay.serviceTierId,
-      fastEnabled: identical(overlay.fastEnabled, _threadModelSelectionUnset)
-          ? base.fastEnabled
-          : overlay.fastEnabled,
-    );
-    return merged.hasAny ? merged : null;
   }
 
   AgentModelInfo? _resolveModelInfo(String? modelId) {
@@ -4280,26 +4192,4 @@ final class _AgentConversationSessionEffects
   void applyModelList(AgentModelList models) {
     _controller._applyModelList(models);
   }
-}
-
-const Object _threadModelSelectionUnset = Object();
-
-final class _ThreadModelSelectionPatch {
-  const _ThreadModelSelectionPatch({
-    this.modelId,
-    this.reasoningEffort = _threadModelSelectionUnset,
-    this.serviceTierId = _threadModelSelectionUnset,
-    this.fastEnabled = _threadModelSelectionUnset,
-  });
-
-  final String? modelId;
-  final Object? reasoningEffort;
-  final Object? serviceTierId;
-  final Object? fastEnabled;
-
-  bool get hasAny =>
-      (modelId != null && modelId!.isNotEmpty) ||
-      !identical(reasoningEffort, _threadModelSelectionUnset) ||
-      !identical(serviceTierId, _threadModelSelectionUnset) ||
-      !identical(fastEnabled, _threadModelSelectionUnset);
 }

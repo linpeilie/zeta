@@ -91,3 +91,4 @@ WP-5（spike 结论后再排期）
 | 2026-09-03 | 全部 | 逐字终审并四轮修订 | 修正 15 项：WP-1 D2/D3 与骨架矛盾（effect 流归属、live 旁路时点）、补 `_effectController` 字段与 registry 接线（复用现有 sliceStoreRegistry）；WP-2 DoD grep 命令修复；WP-3 render context 拆分稳定/逐项参数（原设计会冻结 pendingState）、注册清单计数 10→9；WP-4 T1 与 WP-7 T2 循环引用解除（alpha 内建 zeta_ui）；WP-5 T3 刷新通道修正（TimelineStore 不发 UiUpdateRequest）+ G1 自查；WP-6 目录计数、pubspec 模板对齐 zeta_ui、import 计数 4→5、T8 工具栏补状态持有；全部 WP 的「登记 §5」统一改 §6 |
 | 2026-09-03 | WP-1 T0 / WP-7 T3 | `feature/wp7-t3-scheduler-metric-label` | scheduler 指标标签改为构造注入；presentation 不再 import `zeta_agent_providers`；ViewModel 透传已有 `providerMetricLabel`；组合层绑定不变 |
 | 2026-09-03 | WP-1 T2 | RuntimeController 下沉；删除 UiStateStore/SliceComposition | scheduler 进 application；SliceStore.connected 直接吃 UiUpdateRequest；ViewModel 成 Flutter 门面；因删除 Dart 文件 `test_affected` 走全量并绿 |
+| 2026-09-03 | WP-1 T3 | 纯函数下沉：selection patch / skill 候选 / flatten 文件节点 | RuntimeController 改委托；三组表驱动单测 |

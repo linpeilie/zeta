@@ -9,6 +9,55 @@ WorkspaceNode _file(String path) => WorkspaceNode(
 );
 
 void main() {
+  group('flattenWorkspaceFileNodes', () {
+    test('空输入返回空列表', () {
+      expect(flattenWorkspaceFileNodes(const <WorkspaceNode>[]), isEmpty);
+    });
+
+    test('递归收集嵌套 file，跳过目录本身', () {
+      const tree = [
+        WorkspaceNode(
+          path: '/repo',
+          name: 'repo',
+          type: WorkspaceNodeType.directory,
+          childrenLoaded: true,
+          children: [
+            WorkspaceNode(
+              path: '/repo/lib',
+              name: 'lib',
+              type: WorkspaceNodeType.directory,
+              childrenLoaded: true,
+              children: [
+                WorkspaceNode(
+                  path: '/repo/lib/main.dart',
+                  name: 'main.dart',
+                  type: WorkspaceNodeType.file,
+                ),
+              ],
+            ),
+            WorkspaceNode(
+              path: '/repo/README.md',
+              name: 'README.md',
+              type: WorkspaceNodeType.file,
+            ),
+          ],
+        ),
+      ];
+      expect(flattenWorkspaceFileNodes(tree).map((node) => node.path), <String>[
+        '/repo/lib/main.dart',
+        '/repo/README.md',
+      ]);
+    });
+
+    test('已扁平的 file 列表保持顺序复制', () {
+      final files = [_file('/repo/a.dart'), _file('/repo/b.dart')];
+      expect(
+        flattenWorkspaceFileNodes(files).map((node) => node.path),
+        <String>['/repo/a.dart', '/repo/b.dart'],
+      );
+    });
+  });
+
   group('fuzzyRankWorkspaceFiles 空查询', () {
     test('按输入顺序返回前 limit 个', () {
       final files = [

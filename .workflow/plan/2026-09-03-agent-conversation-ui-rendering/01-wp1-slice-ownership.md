@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |----|----|
-| 状态 | 进行中（T0/T1/T2 完成） |
+| 状态 | 进行中（T0/T1/T2/T3 完成） |
 | 规模 | 10–14 人天，4 个 PR |
 | 依赖 | 建议 WP-2 完成后启动；**T0 前置：WP-7 T3**（scheduler 的 providers 依赖切除，0.5 人天，先合入） |
 | 门禁焦点 | G3、G6、「一份状态只能有一个 owner」（AGENTS.md §3） |
@@ -234,17 +234,29 @@ final class AgentConversationRuntimeController
 
 ### T3 · 纯函数下沉（PR-2，1 人天）
 
+- [x] 把 `_latestHistorySelectionPatch` / `_mergeThreadSelectionPatches` / `_selectionPatchFromHistoryTurn` 下沉为顶层纯函数。
+- [x] 把 skill 候选过滤下沉为 `filterAgentSkillCandidates`。
+- [x] 把 `_flattenFileNodes` 下沉为 `flattenWorkspaceFileNodes`。
+- [x] 表驱动单测（每函数 ≥3 组：空输入、典型、边界）；RuntimeController 改委托。
+
 **平移清单与落点**：
 
-| 现状（ViewModel） | 落点 | 目标签名 |
+| 现状（T2 后在 RuntimeController） | 落点 | 目标签名 |
 |---|---|---|
-| `_latestHistorySelectionPatch` / `_mergeThreadSelectionPatches`（`:1686-1760`） | `application/conversation_slice/agent_thread_selection_patch.dart` | `AgentThreadSelectionPatch? mergeAgentThreadSelectionPatches(...)` 纯函数 |
-| skills 候选过滤（`:851-900`） | `application/` 侧 skills 查询文件 | `List<AgentSkillRef> filterAgentSkillCandidates(...)` |
-| `mentionCandidateFiles` / `_flattenFileNodes`（`:949-1038`） | 经 `WorkspaceFileCorpusPort` 的 application 查询 | `List<WorkspaceNode> flattenWorkspaceFileNodes(...)`（若通用则下沉 workspace feature） |
+| `_latestHistorySelectionPatch` / `_mergeThreadSelectionPatches` / `_selectionPatchFromHistoryTurn` | `application/conversation_slice/agent_thread_selection_patch.dart` | `AgentThreadSelectionPatch? mergeAgentThreadSelectionPatches(...)` 纯函数 |
+| `skillCandidates` 的能力门控 + catalog 过滤 | `application/agent_skill_candidates.dart` | `List<AgentSkillMetadata> filterAgentSkillCandidates(...)` |
+| `_flattenFileNodes` | `workspace/domain/workspace_file_query.dart` | `List<WorkspaceNode> flattenWorkspaceFileNodes(...)` |
 
-**步骤**：逐函数平移 → 改静态/顶层纯函数 → 表驱动单测（每函数 ≥3 组用例：空输入、典型、边界）→ ViewModel 删原方法改委托。
+**步骤**：逐函数平移 → 改静态/顶层纯函数 → 表驱动单测（每函数 ≥3 组用例：空输入、典型、边界）→ RuntimeController 删原方法改委托。
 
-**验收**：三个函数各有独立单测；ViewModel 减少约 350 行；`test_affected.sh` 绿。
+**验收**：三个函数各有独立单测；`test_affected.sh` 绿。
+
+**落地偏差**：
+
+- T2 后这些方法已不在 ViewModel，源在 RuntimeController；ViewModel 继续薄委托。
+- 过滤函数返回 `AgentSkillMetadata`（picker 真实类型），不是计划草稿里的 `AgentSkillRef`。
+- flatten 是通用树行走，落在 workspace domain，与既有 `fuzzyRankWorkspaceFiles` 同文件。
+- RuntimeController 只减约百行，不到原估 350（T2 已先搬走装配代码）。
 
 ### T4 · 附件 port：dart:io 移出 presentation（PR-2，1 人天）
 
