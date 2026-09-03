@@ -126,7 +126,7 @@ class _AgentLiveActivityStatus extends StatelessWidget {
           final isWaiting = waitingLabel != null;
           final statusText = isWaiting
               ? waitingLabel
-              : _liveActivityStatusText(state, now, context.l10n);
+              : liveActivityStatusText(state, now, context.l10n);
           final accent = isWaiting ? colors.warning : colors.accent;
           return Padding(
             key: const ValueKey<String>('agent-live-activity-status'),
@@ -221,8 +221,8 @@ class _AgentTurnFooter extends StatelessWidget {
       modelConfig?.reasoningEffort,
     );
     final showFast = modelConfig?.fastEnabled == true;
-    final tokenLabel = _turnTokenUsageLabel(turn.tokenUsage);
-    final tokenTooltip = _tokenUsageTooltip(turn.tokenUsage);
+    final tokenLabel = turnTokenUsageLabel(turn.tokenUsage);
+    final tokenTooltip = tokenUsageTooltip(turn.tokenUsage);
     final showTokens = tokenLabel != null;
     final hasMeta =
         durationLabel != null ||
@@ -381,7 +381,7 @@ String? _turnDurationLabel(
   AgentConversationTurnGroup group,
   AppLocalizations l10n,
 ) {
-  final durationText = _formatDuration(group.duration);
+  final durationText = formatDuration(group.duration);
   return switch (group.status) {
     AgentHistoryTurnStatus.running => null,
     // 中断/失败终态优先展示状态词，有耗时再附加。
@@ -508,7 +508,7 @@ class _AgentBubbleMessage extends StatelessWidget {
                     message: message,
                     useStreamingMarkdown: useStreamingMarkdown,
                     markdownCache: markdownCache,
-                    themeBuilder: _agentUserBubbleMarkdownTheme,
+                    themeBuilder: agentUserBubbleMarkdownTheme,
                   ),
                 ),
               if (canEdit) ...[
@@ -689,7 +689,7 @@ class _AgentMarkdownBodyState extends State<_AgentMarkdownBody> {
       cursor: SystemMouseCursors.text,
       child: MarkdownWidget(
         controller: _lease.controller,
-        theme: (widget.themeBuilder ?? _agentMarkdownTheme)(context),
+        theme: (widget.themeBuilder ?? agentMarkdownTheme)(context),
         useColumn: true,
         selectable: true,
         padding: EdgeInsets.zero,
@@ -714,7 +714,7 @@ class _AgentRawMarkdownBody extends StatelessWidget {
       cursor: SystemMouseCursors.text,
       child: MarkdownWidget(
         data: data,
-        theme: _agentMarkdownTheme(context),
+        theme: agentMarkdownTheme(context),
         useColumn: true,
         selectable: true,
         padding: EdgeInsets.zero,
@@ -819,7 +819,7 @@ class _AgentPlanMessageCard extends StatelessWidget {
                       child: Align(
                         alignment: Alignment.topLeft,
                         child: Text(
-                          _planPreviewText(message.text),
+                          planPreviewText(message.text),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: textStyles.bodyMedium.copyWith(

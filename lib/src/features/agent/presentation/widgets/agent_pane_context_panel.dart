@@ -503,7 +503,7 @@ class _AgentContextRawMessageRow extends StatelessWidget {
       expanded: expanded,
       canExpand: hasRaw,
       onToggle: onToggle,
-      hoverBackgroundColor: _agentHoverBackground(context),
+      hoverBackgroundColor: agentHoverBackground(context),
       padding: const EdgeInsets.symmetric(vertical: IdeSpacing.space2),
       bodyPadding: const EdgeInsets.only(top: IdeSpacing.space8),
       semanticLabel: context.l10n.agentRawMessages,
@@ -581,7 +581,7 @@ class _AgentContextRawMessageRow extends StatelessWidget {
               padding: const EdgeInsets.only(top: IdeSpacing.space4),
               child: Text(
                 context.l10n.agentNoRawPayload,
-                style: _agentMetaTextStyle(context),
+                style: agentMetaTextStyle(context),
               ),
             ),
     );

@@ -18,9 +18,9 @@ class _AgentHeader extends StatelessWidget {
     final textStyles = IdeTextStyles.of(context);
     // 与上下文面板「总 Token」同源：会话累计用量，而非最近一次上下文窗口占用。
     final tokenUsage = state.tokenUsage;
-    final tokenLabel = _threadTotalTokenUsageLabel(tokenUsage);
-    final tokenTooltip = _tokenUsageTooltip(tokenUsage);
-    final threadOpenStatusText = _threadOpenStatusText(state);
+    final tokenLabel = threadTotalTokenUsageLabel(tokenUsage);
+    final tokenTooltip = tokenUsageTooltip(tokenUsage);
+    final openStatusText = threadOpenStatusText(state);
     final projectName = controller.projectName;
 
     return Column(
@@ -130,10 +130,10 @@ class _AgentHeader extends StatelessWidget {
                       ],
                     ],
                   ),
-                  if (threadOpenStatusText != null) ...[
+                  if (openStatusText != null) ...[
                     const SizedBox(height: 3),
                     Text(
-                      threadOpenStatusText,
+                      openStatusText,
                       key: ValueKey(
                         state.threadOpenPhase == AgentThreadOpenPhase.idle &&
                                 state.systemNoticeLabel != null

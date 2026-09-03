@@ -139,10 +139,10 @@ class _AgentComposer extends StatelessWidget {
         threadOpenPhase == AgentThreadOpenPhase.idle &&
         isTurnRunning &&
         !showSend;
-    final contextWindowTokenTooltip = _contextWindowTokenUsageTooltip(
+    final contextWindowTokenTooltip = contextWindowTokenUsageTooltip(
       currentWindowTokenUsage,
     );
-    final contextWindowTokenProgress = _contextWindowTokenUsageProgressValue(
+    final contextWindowTokenProgress = contextWindowTokenUsageProgressValue(
       currentWindowTokenUsage,
     );
     // 左侧可裁切选择器：Plan 标识（仅选中 Plan 时）、会话配置、审批策略。

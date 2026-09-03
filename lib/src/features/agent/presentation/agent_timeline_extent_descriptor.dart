@@ -407,7 +407,7 @@ final class AgentTimelineExtentDescriptorFactory {
     bool precededByOperationGroup = false,
     bool followedByOperationGroup = false,
   }) {
-    // 内容区约 30；外间距与 `_operationGroupOuterPadding` 保持一致：
+    // 内容区约 30；外间距与 `operationGroupOuterPadding` 保持一致：
     // 块内 2、块外 10。估算与真实间距脱节会让长会话滚动出现跳动。
     final content = expansion.isCommandGroupExpanded(group.id)
         ? 30 + group.items.length * 28

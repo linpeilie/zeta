@@ -39,6 +39,8 @@ import 'package:zeta/src/features/agent/presentation/agent_timeline_projection.d
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection_cache.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_model_config_ui_state.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_file_change_evidence_card.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_styles.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_text.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon.dart';
 
 part 'widgets/agent_pane_cards.dart';
@@ -54,7 +56,6 @@ part 'widgets/agent_skill_picker.dart';
 part 'widgets/agent_slash_command_picker.dart';
 part 'widgets/agent_mention_file_picker.dart';
 part 'widgets/agent_pane_sections.dart';
-part 'widgets/agent_pane_styles.dart';
 part 'widgets/agent_pane_navigation_rail.dart';
 
 /// Agent 主列宽度档位：只影响 page padding 等布局语义，不随每像素宽度重建。

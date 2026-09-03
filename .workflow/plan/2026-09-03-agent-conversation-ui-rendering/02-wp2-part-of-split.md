@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |----|----|
-| 状态 | 进行中（T1 已完成） |
+| 状态 | 进行中（T1、T2 已完成） |
 | 规模 | 2–3 人天，1–2 个 PR |
 | 依赖 | 无；**是 WP-3 / WP-4 的地基** |
 | 门禁焦点 | G6 |
@@ -251,7 +251,7 @@ T4 / T5 仍按「L2–L3 文件 / L4 文件」分任务记账，但 **T5 必须�
 
 **验收**：上表覆盖 15 个 part + 壳；每个顶层 `_` 符号有去向；无「待定」。T2–T6 按本表施工，不再重新设计。
 
-### T2 · `agent_pane_styles.dart` 原地转为独立 library（0.5 人天）
+### T2 · `agent_pane_styles.dart` 原地转为独立 library（0.5 人天） · 已完成（2026-09-03）
 
 **做法**（2026-09-03 review 修正：不新建「kit」文件——原地转换保留 git blame/history，不发明新概念）：
 
@@ -263,6 +263,8 @@ T4 / T5 仍按「L2–L3 文件 / L4 文件」分任务记账，但 **T5 必须�
 
 - 这些函数大量引用 `context.l10n`、`IdeColors.of(context)`——import 照抄。
 - 转换后该文件 import markdown 包；WP-6 T2 换包时只改这一处。
+
+**施工记录**：壳改为 import 两个独立 library，剩余 part 继续共享壳命名空间，只把调用从 `_foo` 改成 `foo`。header 局部变量 `threadOpenStatusText` 与公开函数同名，改为 `openStatusText`（零行为，仅为解除遮蔽）。`flutter analyze` 零 issue；`tool/test_affected.sh` 57 个根测试全绿。
 
 **验收**：`agent_pane_styles.dart` 与 `agent_pane_text.dart` 均为独立 library，analyze 无 unresolved；符号与 T1 表 A 一一对应。
 

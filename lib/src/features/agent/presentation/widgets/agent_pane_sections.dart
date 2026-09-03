@@ -782,7 +782,7 @@ class _AgentTimelineBlockSection extends StatelessWidget {
     // 操作组间距由列表层统一包 Padding；卡片自身零 margin。
     final child = isAgentTimelineOperationGroupBlock(block)
         ? Padding(
-            padding: _operationGroupOuterPadding(
+            padding: operationGroupOuterPadding(
               precededByOperationGroup: precededByOperationGroup,
               followedByOperationGroup: followedByOperationGroup,
             ),

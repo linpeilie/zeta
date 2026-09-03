@@ -27,10 +27,10 @@ class _AgentCommandGroupCard extends StatelessWidget {
           expanded: expanded,
           onToggle: () => controller.toggleCommandGroup(group.id),
           titleWidget: Text(
-            _commandGroupSummary(group, context.l10n),
+            commandGroupSummary(group, context.l10n),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: _agentSummaryTextStyle(context),
+            style: agentSummaryTextStyle(context),
           ),
           leading: Icon(
             Icons.segment_rounded,
@@ -41,7 +41,7 @@ class _AgentCommandGroupCard extends StatelessWidget {
             top: IdeSpacing.space8,
             left: IdeSpacing.space20,
           ),
-          hoverBackgroundColor: _agentHoverBackground(context),
+          hoverBackgroundColor: agentHoverBackground(context),
           semanticLabel: context.l10n.agentCommandGroup,
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -71,7 +71,7 @@ class _AgentCommandGroupItemRow extends StatelessWidget {
       _commandGroupItemTitle(item, context.l10n),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: _agentItemTextStyle(context),
+      style: agentItemTextStyle(context),
     );
   }
 }
@@ -81,7 +81,7 @@ String _commandGroupItemTitle(
   AgentTimelineCommandGroupItem item,
   AppLocalizations l10n,
 ) {
-  final kindLabel = _toolKindLabel(item.kind, l10n);
+  final kindLabel = toolKindLabel(item.kind, l10n);
   final title = item.title.trim();
   if (title.isEmpty || title == kindLabel || title.startsWith('$kindLabel ·')) {
     return title.isEmpty ? kindLabel : title;
@@ -134,16 +134,16 @@ class _AgentFileEditGroupCardState extends State<_AgentFileEditGroupCard> {
         key: ValueKey<String>(
           'agent-file-edit-group-summary-${widget.group.id}',
         ),
-        _fileEditGroupSummarySpan(context, widget.group),
+        fileEditGroupSummarySpan(context, widget.group),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: _agentSummaryTextStyle(context),
+        style: agentSummaryTextStyle(context),
       ),
       bodyPadding: const EdgeInsets.only(
         top: IdeSpacing.space8,
         left: IdeSpacing.space20,
       ),
-      hoverBackgroundColor: _agentHoverBackground(context),
+      hoverBackgroundColor: agentHoverBackground(context),
       semanticLabel: context.l10n.agentFileEditGroup,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -219,8 +219,8 @@ class _AgentHighlightedCodeBlockState
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
-    final highlightTheme = _agentHighlightTheme(context);
-    final codeTextStyle = _agentCodeTextStyle(context);
+    final highlightTheme = agentHighlightTheme(context);
+    final codeTextStyle = agentCodeTextStyle(context);
     final textScaler = MediaQuery.textScalerOf(context);
     final themeSignature = _AgentHighlightThemeSignature(
       brightness: sf.Theme.of(context).brightness,
@@ -246,7 +246,7 @@ class _AgentHighlightedCodeBlockState
 
     return RepaintBoundary(
       child: DecoratedBox(
-        decoration: _agentCodeBlockDecoration(colors),
+        decoration: agentCodeBlockDecoration(colors),
         child: ClipRRect(
           borderRadius: IdeRadius.allSmall,
           // RichText 显式接入 SelectionArea 的 registrar；普通 HighlightView
@@ -351,7 +351,7 @@ class _AgentToolCallCard extends StatelessWidget {
           final canExpand =
               toolCall.content != null && toolCall.content!.isNotEmpty;
           final expanded = expansion.isToolCallExpanded(toolCall.id);
-          final elapsedLabel = _toolElapsedLabel(
+          final elapsedLabel = toolElapsedLabel(
             controller,
             toolCall,
             controller.elapsedNow,
@@ -371,7 +371,7 @@ class _AgentToolCallCard extends StatelessWidget {
                     _toolCardTitle(toolCall, context.l10n),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: _agentItemTextStyle(context),
+                    style: agentItemTextStyle(context),
                   ),
                 ),
                 if (elapsedLabel != null) ...[
@@ -394,19 +394,19 @@ class _AgentToolCallCard extends StatelessWidget {
                     semanticsLabel: context.l10n.agentToolRunning,
                   )
                 : Icon(
-                    _toolIcon(toolCall.kind),
+                    toolIcon(toolCall.kind),
                     size: 14,
                     color: colors.textTertiary,
                   ),
             margin: const EdgeInsets.only(bottom: IdeSpacing.space10),
             bodyPadding: const EdgeInsets.only(top: IdeSpacing.space8),
-            hoverBackgroundColor: _agentHoverBackground(context),
+            hoverBackgroundColor: agentHoverBackground(context),
             semanticLabel: context.l10n.agentToolCall,
             body: toolCall.content == null
                 ? null
                 : SelectableText(
                     toolCall.content!,
-                    style: _agentCodeTextStyle(context).copyWith(
+                    style: agentCodeTextStyle(context).copyWith(
                       color: colors.textSecondary.withValues(alpha: 0.8),
                     ),
                   ),
@@ -1086,7 +1086,7 @@ class _AgentPermissionCommandBlock extends StatelessWidget {
           children: [
             Text(
               '\$',
-              style: _agentCodeTextStyle(context).copyWith(
+              style: agentCodeTextStyle(context).copyWith(
                 color: colors.textTertiary,
                 fontWeight: FontWeight.w600,
               ),
@@ -1097,7 +1097,7 @@ class _AgentPermissionCommandBlock extends StatelessWidget {
                 command,
                 maxLines: 4,
                 overflow: TextOverflow.ellipsis,
-                style: _agentCodeTextStyle(context),
+                style: agentCodeTextStyle(context),
               ),
             ),
           ],
@@ -2035,13 +2035,13 @@ class _AgentHistoryEventCard extends StatelessWidget {
 
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    final accent = _historyEventAccent(event.kind, colors);
+    final accent = historyEventAccent(event.kind, colors);
 
     return IdeStatusCard(
       key: ValueKey<String>('agent-history-event-${event.id}'),
-      tone: _historyEventTone(event.kind),
+      tone: historyEventTone(event.kind),
       title: event.title,
-      leading: Icon(_historyEventIcon(event.kind), size: 16, color: accent),
+      leading: Icon(historyEventIcon(event.kind), size: 16, color: accent),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
@@ -2062,7 +2062,7 @@ class _AgentHistoryEventCard extends StatelessWidget {
                 event.content!,
                 maxLines: 5,
                 overflow: TextOverflow.ellipsis,
-                style: _agentCodeTextStyle(
+                style: agentCodeTextStyle(
                   context,
                 ).copyWith(color: colors.textSecondary.withValues(alpha: 0.78)),
               ),
