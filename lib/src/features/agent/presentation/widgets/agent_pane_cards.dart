@@ -21,6 +21,7 @@ import 'package:zeta/src/features/agent/presentation/widgets/agent_model_config.
 import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_composer.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_styles.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_text.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_timeline_group_card.dart';
 import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
 /// 永不通知的 [Listenable]：用于"本次不需要 elapsed 时钟"的分支，
@@ -42,33 +43,18 @@ class AgentCommandGroupCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
     return AgentRegionBuilder<AgentExpansionState>(
       bindingKey: controller.conversationBinding.key,
       selector: agentConversationExpansionProvider.call,
       builder: (context, expansion) {
         final expanded = expansion.isCommandGroupExpanded(group.id);
-        return IdeCollapsibleCard(
-          headerKey: ValueKey<String>('agent-command-group-header-${group.id}'),
-          bodyKey: ValueKey<String>('agent-command-group-body-${group.id}'),
+        return AgentTimelineGroupCard(
+          kind: AgentTimelineGroupKind.command,
+          groupId: group.id,
           expanded: expanded,
           onToggle: () => controller.toggleCommandGroup(group.id),
-          titleWidget: Text(
-            commandGroupSummary(group, context.l10n),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: agentSummaryTextStyle(context),
-          ),
-          leading: Icon(
-            Icons.segment_rounded,
-            size: 14,
-            color: colors.textTertiary.withValues(alpha: 0.65),
-          ),
-          bodyPadding: const EdgeInsets.only(
-            top: IdeSpacing.space8,
-            left: IdeSpacing.space20,
-          ),
-          hoverBackgroundColor: agentHoverBackground(context),
+          titleSpan: TextSpan(text: commandGroupSummary(group, context.l10n)),
+          leadingIcon: Icons.segment_rounded,
           semanticLabel: context.l10n.agentCommandGroup,
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -137,39 +123,17 @@ class _AgentFileEditGroupCardState extends State<AgentFileEditGroupCard> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
-    return IdeCollapsibleCard(
-      headerKey: ValueKey<String>(
-        'agent-file-edit-group-header-${widget.group.id}',
-      ),
-      bodyKey: ValueKey<String>(
-        'agent-file-edit-group-body-${widget.group.id}',
-      ),
+    return AgentTimelineGroupCard(
+      kind: AgentTimelineGroupKind.fileEdit,
+      groupId: widget.group.id,
       expanded: _expanded,
       onToggle: () {
         setState(() {
           _expanded = !_expanded;
         });
       },
-      leading: Icon(
-        Icons.edit_note_rounded,
-        size: 14,
-        color: colors.textTertiary.withValues(alpha: 0.65),
-      ),
-      titleWidget: Text.rich(
-        key: ValueKey<String>(
-          'agent-file-edit-group-summary-${widget.group.id}',
-        ),
-        fileEditGroupSummarySpan(context, widget.group),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: agentSummaryTextStyle(context),
-      ),
-      bodyPadding: const EdgeInsets.only(
-        top: IdeSpacing.space8,
-        left: IdeSpacing.space20,
-      ),
-      hoverBackgroundColor: agentHoverBackground(context),
+      titleSpan: fileEditGroupSummarySpan(context, widget.group),
+      leadingIcon: Icons.edit_note_rounded,
       semanticLabel: context.l10n.agentFileEditGroup,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

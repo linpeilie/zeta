@@ -108,3 +108,4 @@ WP-5（spike 结论后再排期）
 | 2026-09-03 | WP-4 T1 | `IdeStatusCard` compact 变体 + 模型配置横幅收敛 | compact 默认 30px 下限、零外边距、Graphite tone 与 `IdeIconBox`；两处横幅保留原 key；模型禁用尾图标和模式列表警示因结构不同保留 |
 | 2026-09-03 | WP-4 T2 | `IdePopupSelect` + 通用 popover 生命周期收敛 | session config 使用通用选择器；mode/permission/model 与三个 picker 复用 `IdePopoverController`；旧 Composer selector helper 删除；异步字体搜索因语义不等价保留 |
 | 2026-09-03 | WP-4 T3 | `IdeTimelineRow` + 时间线摘要行收敛 | 命令组（含历史 search/system）、独立 tool 与 diff 标题改用自然高度原语；多行 history status card 保留；既有 key 不变 |
+| 2026-09-03 | WP-4 T4 | `AgentTimelineGroupCard` 折叠组骨架收敛 | command/file-edit 共用 key、摘要、图标、间距和 hover 组装；slice 与 Widget 两类展开状态 owner 保持独立 |

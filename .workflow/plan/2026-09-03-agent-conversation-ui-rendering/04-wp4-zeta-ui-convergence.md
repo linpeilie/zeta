@@ -145,9 +145,9 @@ tool 和历史 search/system 摘要、独立 tool 卡标题、diff 文件标题�
 prefix/title/trailing 排列、单行省略、交互语义和 2x 字号自然增高；既有命令组、
 文件证据、extent 对齐与响应式回归测试继续通过。
 
-### T4 · 折叠卡骨架参数化（1 人天）
+### T4 · 折叠卡骨架参数化（1 人天） · 已完成（2026-09-03）
 
-**现状**：`_AgentCommandGroupCard`（cards.dart:17-58）= `AgentRegionBuilder<AgentExpansionState>` + `IdeCollapsibleCard(headerKey/bodyKey/expanded/onToggle/titleWidget/leading/bodyPadding/hoverBackgroundColor/semanticLabel)`；`_AgentFileEditGroupCard` 同构。
+**现状**：`AgentCommandGroupCard` = `AgentRegionBuilder<AgentExpansionState>` + `IdeCollapsibleCard(headerKey/bodyKey/expanded/onToggle/titleWidget/leading/bodyPadding/hoverBackgroundColor/semanticLabel)`；`AgentFileEditGroupCard` 的折叠卡骨架同构，但组级展开状态由 Widget 局部持有。
 
 **设计**：feature 内收敛（不进 zeta_ui——它依赖 expansion state，是业务组合）：
 
@@ -155,8 +155,9 @@ prefix/title/trailing 排列、单行省略、交互语义和 2x 字号自然增
 // widgets/agent_timeline_group_card.dart（WP-2 后的独立文件）
 class AgentTimelineGroupCard extends StatelessWidget {
   const AgentTimelineGroupCard({
+    required this.kind,               // command / fileEdit，只用于稳定 key namespace
     required this.groupId,
-    required this.isExpanded,        // bool Function(String groupId) —— 由调用方从 expansion state 取
+    required this.expanded,           // bool；状态 owner 在调用方
     required this.onToggle,
     required this.titleSpan,         // InlineSpan（命令组文案 / 文件组 diff 统计 span）
     required this.leadingIcon,
@@ -171,6 +172,15 @@ class AgentTimelineGroupCard extends StatelessWidget {
 **替换**：`_AgentCommandGroupCard` / `_AgentFileEditGroupCard` 的 build 收敛为数据准备 + `AgentTimelineGroupCard`。
 
 **验收**：两卡视觉/交互零变化；`IdeCollapsibleCard` 调用参数只出现在 `AgentTimelineGroupCard` 一处。
+
+**施工记录**：新增 feature 内的 `AgentTimelineGroupCard` 与封闭的
+`AgentTimelineGroupKind`，集中生成 command/file-edit 两套既有 header、body、summary
+key，并统一 `Text.rich` 单行摘要、14px leading 图标、`space8/space20` 正文缩进、
+hover 表面和 `IdeCollapsibleCard` 参数。`AgentCommandGroupCard` 只保留 conversation
+slice 订阅、摘要数据与条目构造；`AgentFileEditGroupCard` 只保留局部展开状态、摘要
+数据与文件条目构造。两者没有合并状态 owner：共享组件只接收已解析的
+`expanded/onToggle`。新增 Widget 测试覆盖两种 key namespace、外部状态驱动展开、
+正文间距和 leading；真实历史/live 命令组、文件编辑组及 extent 对齐测试继续通过。
 
 ### T5 · `IdeSubmitButton`（0.5 人天）
 
