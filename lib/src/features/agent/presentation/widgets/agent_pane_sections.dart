@@ -864,43 +864,16 @@ class _AgentTimelineBlockSection extends StatelessWidget {
 
   /// Provider 计划审批卡。
   ///
-  /// 审批是阻塞请求、回合仍在运行，「修改」只能把意见随 `rejected` 决定回传，
-  /// 不能走 `sendMessage`。「执行」仅代表接受方案，不预授权任何操作。
+  /// 卡片装配已下沉到 [buildAgentPlanApprovalCard]，与 renderer 共用一份实现。
   Widget _buildPlanApprovalCard(
     BuildContext context,
     AgentPlanApprovalRequest request,
   ) {
-    return AgentPlanDocumentCard(
-      key: ValueKey<String>('agent-plan-approval-card-${request.id}'),
-      requestId: request.id,
-      title: request.title,
-      subtitle: context.l10n.agentAcceptPlanHint,
-      markdown: request.markdown,
-      todos: request.todos,
-      phases: request.phases,
-      revisionController: planRevisionDrafts.controllerFor(request.id),
-      revisionFocusNode: planRevisionDrafts.focusNodeFor(request.id),
+    return buildAgentPlanApprovalCard(
+      context,
+      request,
       controller: controller,
-      onRevise: (revision) => unawaited(
-        controller.respondToPlanApproval(
-          request,
-          AgentPlanApprovalDecisionKind.rejected,
-          reason: revision,
-        ),
-      ),
-      executeLabel: context.l10n.agentAcceptPlan,
-      onExecute: () => unawaited(
-        controller.respondToPlanApproval(
-          request,
-          AgentPlanApprovalDecisionKind.accepted,
-        ),
-      ),
-      onAbandon: () => unawaited(
-        controller.respondToPlanApproval(
-          request,
-          AgentPlanApprovalDecisionKind.cancelled,
-        ),
-      ),
+      planRevisionDrafts: planRevisionDrafts,
     );
   }
 }

@@ -102,3 +102,4 @@ WP-5（spike 结论后再排期）
 | 2026-09-03 | WP-2 T4 | 转换 L2–L3 文件 | header / rail / cards / messages / context / sections / plan_panel 独立 library；presentation 已无 part；AgentBuildTarget runtimeType 同步；analyze 绿，`test_affected` 53 个根测试绿 |
 | 2026-09-03 | WP-2 T6 | 壳收缩与全量门禁 | Composer 交互抽到 session，对话树抽到 body；`agent_pane.dart` 329 行；`test_full` 绿；WP-2 已完成 |
 | 2026-09-03 | WP-3 T1 | renderer 契约 + 单层注册表落地 | `timeline_rendering/` 新目录两文件；注册表单测 3 条绿；对照代码修正文档 5 处设计（kindOf 取代常量 kind、build 补 BuildContext、context 持 controller、重复注册抛 ArgumentError、默认实现下沉 Base 类） |
+| 2026-09-03 | WP-3 T2 | 9 个 renderer 迁移 + 默认注册清单 | extent 算式提取共享文件（工厂同步改调用，数值零变化）；计划审批卡装配下沉复用；对齐测试以现役工厂为基线 11 条绿；核实 permission/question 到达视口 → 估算 48px vs 实测 0px，renderer 已登记 hidden，接线后生效 |

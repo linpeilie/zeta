@@ -9,6 +9,7 @@ import 'dart:math' as math;
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection.dart';
+import 'package:zeta/src/features/agent/presentation/timeline_rendering/agent_timeline_extent_math.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 
 /// 展开态查询，避免 descriptor 工厂依赖完整 ViewModel。
@@ -362,11 +363,13 @@ final class AgentTimelineExtentDescriptorFactory {
     bool precededByOperationGroup = false,
     bool followedByOperationGroup = false,
   }) {
-    final width = crossAxisExtent.isFinite && crossAxisExtent > 0
-        ? crossAxisExtent
-        : 720.0;
-    final scale = textScale.isFinite && textScale > 0 ? textScale : 1.0;
-    final lineHeight = 18.0 * scale;
+    final metrics = AgentTimelineExtentMetrics.from(
+      crossAxisExtent: crossAxisExtent,
+      textScale: textScale,
+    );
+    final width = metrics.width;
+    final scale = metrics.scale;
+    final lineHeight = metrics.lineHeight;
 
     return switch (item) {
       AgentLiveActivityViewportItem() => 36 * scale,
@@ -412,9 +415,11 @@ final class AgentTimelineExtentDescriptorFactory {
     final content = expansion.isCommandGroupExpanded(group.id)
         ? 30 + group.items.length * 28
         : 30;
-    final top = precededByOperationGroup ? 0.0 : 10.0;
-    final bottom = followedByOperationGroup ? 2.0 : 10.0;
-    return (content + top + bottom) * scale;
+    final outer = agentOperationGroupOuterExtent(
+      precededByOperationGroup: precededByOperationGroup,
+      followedByOperationGroup: followedByOperationGroup,
+    );
+    return (content + outer) * scale;
   }
 
   double _estimateFileEditGroup(
@@ -433,9 +438,11 @@ final class AgentTimelineExtentDescriptorFactory {
         content += 28;
       }
     }
-    final top = precededByOperationGroup ? 0.0 : 10.0;
-    final bottom = followedByOperationGroup ? 2.0 : 10.0;
-    return (content + top + bottom) * scale;
+    final outer = agentOperationGroupOuterExtent(
+      precededByOperationGroup: precededByOperationGroup,
+      followedByOperationGroup: followedByOperationGroup,
+    );
+    return (content + outer) * scale;
   }
 
   double _estimateEntry(
@@ -466,13 +473,13 @@ final class AgentTimelineExtentDescriptorFactory {
       // 审批卡在流内始终是交互态：正文全文 + 底部输入与动作栏。
       return math.max(
         24.0,
-        _estimateMarkdownExtent(
+        estimateAgentMarkdownExtent(
               entry.request.markdown,
               width: width,
               lineHeight: lineHeight,
               scale: scale,
             ) +
-            _planInteractionChromeExtent(scale),
+            agentPlanInteractionChromeExtent(scale),
       );
     }
     return 48 * scale;
@@ -491,7 +498,7 @@ final class AgentTimelineExtentDescriptorFactory {
         message.isPlan && expansion.isPlanMessageInteractive(message.id);
     if (text.trim().isEmpty) {
       return isInteractivePlan
-          ? 32 * scale + _planInteractionChromeExtent(scale)
+          ? 32 * scale + agentPlanInteractionChromeExtent(scale)
           : 32 * scale;
     }
 
@@ -504,7 +511,7 @@ final class AgentTimelineExtentDescriptorFactory {
 
     final content =
         padding +
-        _estimateMarkdownExtent(
+        estimateAgentMarkdownExtent(
           text,
           width: width,
           lineHeight: lineHeight,
@@ -515,56 +522,9 @@ final class AgentTimelineExtentDescriptorFactory {
     final estimated = math.max(base * 0.5, content);
     // 交互态计划卡额外挂着输入框与动作栏，不加上会严重低估。
     final chrome = isInteractivePlan
-        ? _planInteractionChromeExtent(scale)
+        ? agentPlanInteractionChromeExtent(scale)
         : 0.0;
     return math.max(24.0, estimated + chrome);
-  }
-
-  /// 计划交互卡底部输入框 + 动作栏 + 分隔线的固定高度。
-  double _planInteractionChromeExtent(double scale) => 120 * scale;
-
-  /// 按源行逐行累加折行，估算一段 Markdown 的渲染高度。
-  double _estimateMarkdownExtent(
-    String text, {
-    required double width,
-    required double lineHeight,
-    required double scale,
-  }) {
-    // 全文渲染：历史与 live 均按完整内容估算高度，禁止折叠预览截断。
-    final charsPerLine = math.max(24, (width / (7.5 * scale)).floor());
-    var visualLines = 0;
-    var blockSpacingLines = 0.0;
-    var insideFence = false;
-    for (final sourceLine in text.split('\n')) {
-      final trimmed = sourceLine.trim();
-      if (trimmed.startsWith('```') || trimmed.startsWith('~~~')) {
-        insideFence = !insideFence;
-        visualLines += 1;
-        blockSpacingLines += 0.5;
-        continue;
-      }
-
-      // 必须逐源行累加折行；按全文字符数与显式行数取 max 会严重低估
-      // “多行且每行都需要折行”的长 Markdown。
-      final lineLength = trimmed.runes.length;
-      final effectiveCharsPerLine = insideFence
-          ? math.max(20, (charsPerLine * 0.9).floor())
-          : charsPerLine;
-      visualLines += math.max(1, (lineLength / effectiveCharsPerLine).ceil());
-
-      if (trimmed.isEmpty) {
-        blockSpacingLines += 0.45;
-      } else if (!insideFence && trimmed.startsWith('#')) {
-        blockSpacingLines += 0.7;
-      } else if (!insideFence &&
-          (trimmed.startsWith('- ') ||
-              trimmed.startsWith('* ') ||
-              trimmed.startsWith('> '))) {
-        blockSpacingLines += 0.15;
-      }
-    }
-
-    return (visualLines + blockSpacingLines) * lineHeight;
   }
 
   static bool _descriptorFingerprintEquals(

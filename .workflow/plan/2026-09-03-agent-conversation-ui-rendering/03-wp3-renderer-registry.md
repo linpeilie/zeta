@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |----|----|
-| 状态 | 进行中（T1 已完成） |
+| 状态 | 进行中（T1 / T2 已完成） |
 | 规模 | 3–4 人天，1–2 个 PR |
 | 依赖 | **WP-2 完成后启动**（文件先独立）；与 WP-1 解耦（只依赖 `AgentConversationCommandPort` 窄接口） |
 | 门禁焦点 | G6；「新增条目类型 = 新增一个 renderer 文件」 |
@@ -294,7 +294,33 @@ test('commandGroup extent 与迁移前一致', () {
 });
 ```
 
-**验收**：9 个条目全部迁移；每个都有 extent 对齐断言；`test_affected.sh` 绿。
+**验收**：9 个条目全部迁移；每个都有 extent 对齐断言；`test_affected.sh` 绿。 ✅
+
+**施工记录（2026-09-03）**：
+
+- 新增 `timeline_rendering/renderers/` 共 10 个文件：命令集 / 文件编辑组 / 消息 / 工具调用 / 计划审批 / 历史事件各一，permission / question / turnFileChanges 各一（共享 `agent_hidden_entry_renderer.dart` 基类）。
+- 新增 `timeline_rendering/agent_timeline_renderers.dart`：默认清单 `buildAgentTimelineRendererRegistry()`——**新增条目类型 = 新增 1 个 renderer 文件 + 在这里加 1 行**。
+- 新增 `timeline_rendering/agent_timeline_extent_math.dart`：把 `_estimateMarkdownExtent` / `_planInteractionChromeExtent` / 宽高缩放归一化 / 操作组外间距四个算式从 descriptor 工厂提出来共享。**工厂同步改为调用这份共享算式**，因此 renderer 与工厂不存在两份公式（纯提取，数值零变化，三个既有 extent 测试原样绿）。
+- 计划审批卡装配下沉为 `buildAgentPlanApprovalCard()`（`widgets/agent_pane_cards.dart`），sections 的 `_buildPlanApprovalCard` 改为委托——T2 阶段 renderer 与 sections 共用同一份实现，不出现两份卡片装配代码。
+- 测试 `test/src/features/agent/presentation/timeline_rendering/agent_timeline_extent_alignment_test.dart` 11 条：**对齐基线直接取现役 descriptor 工厂的输出**（而非文档设想的写死快照值），覆盖 9 个条目 × 折叠/展开/邻接/空正文/交互态 plan 等情形，另含 layoutRevision 失效性与清单计数。工厂公式将来若调整，两侧不会悄悄分叉。
+- `flutter analyze` 零 issue；`tool/test_affected.sh` 384 个测试全绿。
+
+**两处需要在 T3 接线时知道的设计**：
+
+1. **命令集条目指纹靠注入而非中心 switch**。`_blockContentRevision` 的命令集分支要哈希组内每个 entry 的内容，而 entry 指纹归各自 renderer 所有。装配函数先建 entry 级查表，再把 `entryLayoutRevision` 闭包注入 `AgentCommandGroupRenderer`——避免在命令集里重写一份 entry 类型分支，「新增类型 = 1 个文件 + 1 行」才真正成立。
+2. **`layoutRevision` 只覆盖 payload 自身**：返回 `Object.hash(内容指纹, 展开指纹)`。turn id / block id / 操作组邻接仍由工厂在外层合成（T3 接线时保留现状的外层 `Object.hash('block', turn.id, block.id, …)`，只把中间两项换成 `renderer.layoutRevision(...)`）。
+
+**顺带修正的现状缺陷（§2.2 预判已核实）**：读 `buildAgentTimelineRenderBlocks`（`agent_timeline_grouping.dart:196-244`）确认——
+
+| entry | 是否到达视口 | 迁移前估算 | 实际渲染 | renderer 登记 |
+|---|---|---|---|---|
+| `AgentPermissionTimelineEntry` | **会**（`_shouldSkipTimelineEntry` 不过滤，落 `AgentTimelineEntryRenderBlock`） | `toolCard` / `48 * scale` | `SizedBox.shrink()` = 0 | `hidden` / 0 |
+| `AgentQuestionTimelineEntry` | **会**（同上） | `toolCard` / `48 * scale` | `SizedBox.shrink()` = 0 | `hidden` / 0 |
+| `AgentTurnFileChangesTimelineEntry` | 不会（快照非空转成文件编辑组，空则丢弃） | `fileEditGroup` / `80 * scale` | — | `hidden` / 0（防御性登记） |
+
+即 permission / question 两类此前每条会让虚拟化多算 48px。**该修正在 T3/T4 接线后才生效**（T2 阶段工厂仍走旧分支），届时要在 PR 描述里记录。三个 renderer 的 `rendersInline` 同时为 false，供 T3 的导航锚点使用。
+
+**T3 的导航谓词有一处与文档不同**：`agent_pane_navigation_rail.dart` 没有 block 级谓词；实际取锚点的是 `buildAgentConversationNavigationEntries`（`agent_conversation_navigation.dart:114-116`），优先用户消息块、否则 `blocks.first`。`blocks.first` 可能是零高度块（跳过去等于跳到不可见位置），T3 改成「首个 `rendersInline` 的块」即可顺带修掉。
 
 ### T3 · 收敛 switch + 导航谓词（0.5–1 人天）
 
