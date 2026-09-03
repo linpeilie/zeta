@@ -818,11 +818,10 @@ class _ModelConfigPopoverState extends State<_ModelConfigPopover> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         if (state.appliesNextTurn)
-                          _NextTurnModelConfigBanner(colors: colors),
+                          const _NextTurnModelConfigBanner(),
                         if (state.selectionNotice != null)
                           _ModelSelectionNoticeBanner(
                             message: state.selectionNotice!,
-                            colors: colors,
                           ),
                         Flexible(
                           child: Listener(
@@ -900,77 +899,32 @@ class _ModelConfigPopoverState extends State<_ModelConfigPopover> {
 }
 
 class _NextTurnModelConfigBanner extends StatelessWidget {
-  const _NextTurnModelConfigBanner({required this.colors});
-
-  final IdeColors colors;
+  const _NextTurnModelConfigBanner();
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return IdeStatusCard(
       key: const ValueKey('agent-model-next-turn-banner'),
-      height: 30,
-      padding: const EdgeInsets.symmetric(horizontal: IdeSpacing.space10),
-      color: colors.info.withValues(alpha: 0.1),
-      child: Row(
-        children: [
-          Icon(Icons.info_outline_rounded, size: 14, color: colors.info),
-          const SizedBox(width: IdeSpacing.space6),
-          Text(
-            context.l10n.agentConfigNextTurn,
-            style: IdeTextStyles.of(context).bodySmall.copyWith(
-              color: colors.info,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
+      tone: IdeStatusCardTone.info,
+      density: IdeStatusCardDensity.compact,
+      title: context.l10n.agentConfigNextTurn,
     );
   }
 }
 
 class _ModelSelectionNoticeBanner extends StatelessWidget {
-  const _ModelSelectionNoticeBanner({
-    required this.message,
-    required this.colors,
-  });
+  const _ModelSelectionNoticeBanner({required this.message});
 
   final String message;
-  final IdeColors colors;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return IdeStatusCard(
       key: const ValueKey('agent-model-auto-switch-notice'),
-      constraints: const BoxConstraints(minHeight: 30),
-      padding: const EdgeInsets.symmetric(
-        horizontal: IdeSpacing.space10,
-        vertical: IdeSpacing.space6,
-      ),
-      color: colors.info.withValues(alpha: 0.1),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 1),
-            child: Icon(
-              Icons.info_outline_rounded,
-              size: 14,
-              color: colors.info,
-            ),
-          ),
-          const SizedBox(width: IdeSpacing.space6),
-          Expanded(
-            child: Text(
-              message,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: IdeTextStyles.of(
-                context,
-              ).bodySmall.copyWith(color: colors.info),
-            ),
-          ),
-        ],
-      ),
+      tone: IdeStatusCardTone.info,
+      density: IdeStatusCardDensity.compact,
+      title: message,
+      titleMaxLines: 2,
     );
   }
 }

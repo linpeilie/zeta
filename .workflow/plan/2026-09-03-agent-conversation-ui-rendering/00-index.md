@@ -49,7 +49,7 @@
 | WP-1 | 切片 owner 归位 + ViewModel 拆分 | 10–14 | 独立，建议 WP-2 之后降低冲突 | G3 G6，一份状态一个 owner | 已完成 | [01-wp1-slice-ownership.md](01-wp1-slice-ownership.md) |
 | WP-2 | part-of 单体 library 拆分 | 2–3 | 无（WP-3/WP-4 的地基） | G6 | 已完成 | [02-wp2-part-of-split.md](02-wp2-part-of-split.md) |
 | WP-3 | 渲染分发插件化（renderer 注册表） | 3–4 | WP-2 | G1 G4（registry 保持中立） | 已完成 | [03-wp3-renderer-registry.md](03-wp3-renderer-registry.md) |
-| WP-4 | 控件收敛下沉 zeta_ui | 4–5 | WP-2（可穿插） | G8；zeta_ui 纯度 | 未开始 | [04-wp4-zeta-ui-convergence.md](04-wp4-zeta-ui-convergence.md) |
+| WP-4 | 控件收敛下沉 zeta_ui | 4–5 | WP-2（可穿插） | G8；zeta_ui 纯度 | 进行中 | [04-wp4-zeta-ui-convergence.md](04-wp4-zeta-ui-convergence.md) |
 | WP-5 | 历史分页 / 窗口化 | 5–8（含 spike） | 需先 spike；WP-1 之后 | G2 G3 G6 | 未开始 | [05-wp5-history-pagination.md](05-wp5-history-pagination.md) |
 | WP-6 | **Markdown vendor + 深度改造** | 11–16（T1–T10 + 治理；P2 另计） | 无 | G6 G7 G8；包治理 | 未开始 | [06-wp6-markdown-vendor.md](06-wp6-markdown-vendor.md) |
 | WP-7 | 卫生小修清单 | 2–3 | 无（T3 是 WP-1 解锁条件，优先） | G6 G7 G8 | 未开始 | [07-wp7-hygiene.md](07-wp7-hygiene.md) |
@@ -105,3 +105,4 @@ WP-5（spike 结论后再排期）
 | 2026-09-03 | WP-3 T2 | 9 个 renderer 迁移 + 默认注册清单 | extent 算式提取共享文件（工厂同步改调用，数值零变化）；计划审批卡装配下沉复用；对齐测试以现役工厂为基线 11 条绿；核实 permission/question 到达视口 → 估算 48px vs 实测 0px，renderer 已登记 hidden，接线后生效 |
 | 2026-09-03 | WP-3 T3 | 收敛 switch + extent 工厂接线 + 导航谓词 | sections 两处 switch 与保温判断链归零（净减 130 行）；extent 工厂 585→255 行，八个私有估算/指纹方法删除；工厂改为显式注入 registry；导航兜底锚点跳过零高度块；架构守卫 4 条（源码盘点密封子类双向比对）。过渡 re-export 被零容忍守卫拦下，改为迁符号 + 直接 import 真源 |
 | 2026-09-03 | WP-3 T4 | 注入接线与全量门禁 | AgentPane 持 registry 与 renderContext（换会话时重建）；timeline/body 两个缓存参数合并；`test_full` 绿；WP-3 已完成。接线后 permission/question 由 48px 估算改为 0，虚拟化少一份系统性偏差 |
+| 2026-09-03 | WP-4 T1 | `IdeStatusCard` compact 变体 + 模型配置横幅收敛 | compact 默认 30px 下限、零外边距、Graphite tone 与 `IdeIconBox`；两处横幅保留原 key；模型禁用尾图标和模式列表警示因结构不同保留 |

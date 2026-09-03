@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |----|----|
-| 状态 | 未开始 |
+| 状态 | 进行中 |
 | 规模 | 4–5 人天，每任务独立 PR |
 | 依赖 | WP-2 完成后启动（文件独立才好动）；与 WP-1/WP-3 解耦 |
 | 门禁焦点 | G8（token、控件高度由内容撑开）、zeta_ui 约束（禁 Riverpod / dart:io / 业务模型，文案走 `ZetaUiTextCatalog`） |
@@ -22,7 +22,7 @@
 
 ## 1. 任务拆分
 
-### T1 · `IdeStatusCard` compact 变体（0.5–1 人天）
+### T1 · `IdeStatusCard` compact 变体（0.5–1 人天） · 已完成（2026-09-03）
 
 **现状**（`_NextTurnModelConfigBanner`，`agent_model_config.dart:893-913`）：
 
@@ -55,6 +55,15 @@ compact 档规格（从现状 banner 反推，落成 token）：`minHeight: 30`�
 **替换映射**：`_NextTurnModelConfigBanner` → `IdeStatusCard(tone: info, density: compact, leading: icon, title: ...)`；`_ModelSelectionNoticeBanner` → 同上加 `maxLines: 2` body；`agent_model_config.dart:1037` 与 `agent_mode_selector.dart:285` 两处提示行逐个评估（同构则替换，不同构在 PR 描述写明保留原因）。
 
 **验收**：2 处手写横幅替换完成 + 2 处提示行有明确结论；`grep -n "withValues(alpha: 0.1)" agent_model_config.dart` 零命中；widget 测试绿（key 保留：`agent-model-next-turn-banner` 等 key 透传给 IdeStatusCard）。
+
+**施工记录**：`IdeStatusCard` 新增 `IdeStatusCardDensity.compact` 与可配置的
+`titleMaxLines`；compact 默认使用 30px 最小高度、`space10/space6` 内边距、零外边距、
+tone 色 `bodySmall` 文案、14px `IdeIconBox` 及组件内 `_compactBannerBackgroundAlpha`。
+`_NextTurnModelConfigBanner` / `_ModelSelectionNoticeBanner` 已改用该变体并保留原 key，
+后者允许两行标题。另两处提示逐项核对后保留：模型项中的提示只是禁用状态尾部图标，
+不是横幅；未知 conversation mode 提示是 Select 列表内带分隔线的 warning 说明行，
+其表面、间距和 tone 均不同于顶部 info 横幅。新增 zeta_ui Widget 测试覆盖最小高度、
+默认零外边距、tone 排版、图标盒和两行标题；现有模型配置测试覆盖两处业务 key 与文案。
 
 ### T2 · `IdePopupSelect` 原语（1.5–2 人天）
 
