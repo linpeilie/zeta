@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |----|----|
-| 状态 | 进行中（T1、T2 已完成） |
+| 状态 | 进行中（T1–T3 已完成） |
 | 规模 | 2–3 人天，1–2 个 PR |
 | 依赖 | 无；**是 WP-3 / WP-4 的地基** |
 | 门禁焦点 | G6 |
@@ -268,7 +268,7 @@ T4 / T5 仍按「L2–L3 文件 / L4 文件」分任务记账，但 **T5 必须�
 
 **验收**：`agent_pane_styles.dart` 与 `agent_pane_text.dart` 均为独立 library，analyze 无 unresolved；符号与 T1 表 A 一一对应。
 
-### T3 · markdown 组件独立（0.5 人天，与 WP-6 协同）
+### T3 · markdown 组件独立（0.5 人天，与 WP-6 协同） · 已完成（2026-09-03）
 
 **做法**：新文件 `widgets/agent_markdown_body.dart`：
 
@@ -298,7 +298,9 @@ class AgentRawMarkdownBody extends StatelessWidget { /* 平移 :706-727 */ }
 - 右键菜单抑制（`:698,729-737`）与 MouseRegion 光标补丁（`:686-689`）**原样保留**（WP-6 T9/T10 才删）。
 - 引用点只有 messages 与 cards（T1 修正：sections 不引用 markdown body），改为 import 本文件。
 
-**验收**：`grep -rn "_AgentMarkdownBody\|_AgentRawMarkdownBody" lib` 零命中；widget 测试绿。
+**施工记录**：按现状 API 平移（`message` / `useStreamingMarkdown` / `markdownCache` / `themeBuilder`），不改成骨架里的 `messageId`/`data`/`cache`。公开 widget 补 `super.key`（lint `use_key_in_widget_constructors`）；右键菜单抑制与 MouseRegion 光标补丁原样保留。壳去掉已无用的 `mixin_markdown_widget` import。`_AgentMarkdownBodyState` / `_suppressMarkdownContextMenu` 留在新文件并保持私有，因此字面 grep `_AgentMarkdownBody` 仍会命中 State 类名。`flutter analyze` 零 issue；`tool/test_affected.sh` 53 个根测试全绿。
+
+**验收**：`grep -rn "_AgentRawMarkdownBody\|_AgentMarkdownBody[^S]" lib` 零命中；widget 测试绿。
 
 ### T4 · 转换 L2–L3 文件（1 人天）
 

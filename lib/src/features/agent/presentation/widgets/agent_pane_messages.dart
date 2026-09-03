@@ -504,7 +504,7 @@ class _AgentBubbleMessage extends StatelessWidget {
               if (hasText)
                 SizedBox(
                   width: double.infinity,
-                  child: _AgentMarkdownBody(
+                  child: AgentMarkdownBody(
                     message: message,
                     useStreamingMarkdown: useStreamingMarkdown,
                     markdownCache: markdownCache,
@@ -591,7 +591,7 @@ class _AgentMarkdownMessage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return RepaintBoundary(
-      child: _AgentMarkdownBody(
+      child: AgentMarkdownBody(
         message: message,
         useStreamingMarkdown: useStreamingMarkdown,
         markdownCache: markdownCache,
@@ -600,147 +600,11 @@ class _AgentMarkdownMessage extends StatelessWidget {
   }
 }
 
-class _AgentMarkdownBody extends StatefulWidget {
-  const _AgentMarkdownBody({
-    required this.message,
-    required this.useStreamingMarkdown,
-    required this.markdownCache,
-    this.themeBuilder,
-  });
-
-  final AgentConversationMessage message;
-  final bool useStreamingMarkdown;
-  final AgentMarkdownCache markdownCache;
-
-  /// 可选的主题构造器；缺省使用 Agent 正文主题。
-  final MarkdownThemeData Function(BuildContext context)? themeBuilder;
-
-  @override
-  State<_AgentMarkdownBody> createState() => _AgentMarkdownBodyState();
-}
-
-class _AgentMarkdownBodyState extends State<_AgentMarkdownBody> {
-  late AgentMarkdownCacheLease _lease;
-  bool _streamCommitted = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _attachLease();
-    _syncMarkdownController();
-  }
-
-  @override
-  void didUpdateWidget(covariant _AgentMarkdownBody oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.markdownCache != widget.markdownCache ||
-        oldWidget.message.id != widget.message.id) {
-      _detachLease();
-      _attachLease();
-    }
-    _syncMarkdownController();
-  }
-
-  void _attachLease() {
-    final lease = widget.markdownCache.acquire(
-      messageId: widget.message.id,
-      data: widget.message.text,
-      preferIncrementalUpdate: widget.useStreamingMarkdown,
-    );
-    _lease = lease;
-  }
-
-  void _detachLease() {
-    _lease.release();
-    _streamCommitted = false;
-  }
-
-  void _syncMarkdownController() {
-    final lease = _lease;
-    final nextText = widget.message.text;
-    if (lease.controller.data != nextText) {
-      lease.updateData(
-        nextText,
-        preferIncrementalUpdate: widget.useStreamingMarkdown,
-      );
-      _streamCommitted = false;
-    }
-
-    final isCompleted = widget.message.status == AgentMessageStatus.completed;
-    if (isCompleted && !_streamCommitted) {
-      lease.controller.commitStream();
-      _streamCommitted = true;
-    } else if (!isCompleted) {
-      _streamCommitted = false;
-    }
-  }
-
-  @override
-  void dispose() {
-    _detachLease();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // mixin_markdown 对普通文本使用 MouseCursor.defer，桌面端默认仍是箭头；
-    // 外层声明 text 光标，链接仍会用包内 click 覆盖。
-    return MouseRegion(
-      cursor: SystemMouseCursors.text,
-      child: MarkdownWidget(
-        controller: _lease.controller,
-        theme: (widget.themeBuilder ?? agentMarkdownTheme)(context),
-        useColumn: true,
-        selectable: true,
-        padding: EdgeInsets.zero,
-        enableCopyFullDocumentShortcut: false,
-        showCopyAllInContextMenu: false,
-        // 包无 enableContextMenu 开关；返回空组件以完全不显示右键菜单。
-        contextMenuBuilder: _suppressMarkdownContextMenu,
-      ),
-    );
-  }
-}
-
-/// 非时间线消息使用的轻量 Markdown 渲染，不进入历史消息保温缓存。
-class _AgentRawMarkdownBody extends StatelessWidget {
-  const _AgentRawMarkdownBody({required this.data});
-
-  final String data;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.text,
-      child: MarkdownWidget(
-        data: data,
-        theme: agentMarkdownTheme(context),
-        useColumn: true,
-        selectable: true,
-        padding: EdgeInsets.zero,
-        enableCopyFullDocumentShortcut: false,
-        showCopyAllInContextMenu: false,
-        contextMenuBuilder: _suppressMarkdownContextMenu,
-      ),
-    );
-  }
-}
-
-/// 抑制 mixin_markdown 右键菜单：仍会走 show，但不渲染任何菜单项。
-Widget _suppressMarkdownContextMenu(
-  BuildContext context,
-  MarkdownSelectionController selectionController,
-  List<ContextMenuButtonItem> buttonItems,
-  TextSelectionToolbarAnchors anchors,
-) {
-  return const SizedBox.shrink();
-}
-
 /// Agent 完成汇总：对应 Codex `agent_message` + `phase=final_answer`。
 ///
 /// 展示全文 Markdown（不做历史折叠），流式回合内仍可增量渲染。
 ///
-/// **刻意不套卡片**：它和普通 Agent 正文走的是同一个 [_AgentMarkdownBody]，
+/// **刻意不套卡片**：它和普通 Agent 正文走的是同一个 [AgentMarkdownBody]，
 /// 同样的内容只因为处于不同阶段就长得不一样，会让阅读流被反复打断。会话区
 /// 是文档流，回合的结束由回合底栏的分隔线交代，不需要再给最后一段话加边框。
 /// 保留 key 供测试与滚动定位使用。
@@ -759,7 +623,7 @@ class _AgentFinalAnswerCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return RepaintBoundary(
       key: ValueKey<String>('agent-final-answer-card-${message.id}'),
-      child: _AgentMarkdownBody(
+      child: AgentMarkdownBody(
         message: message,
         useStreamingMarkdown: useStreamingMarkdown,
         markdownCache: markdownCache,
@@ -839,7 +703,7 @@ class _AgentPlanMessageCard extends StatelessWidget {
                   : context.l10n.agentExpandPlan,
               body: Padding(
                 padding: const EdgeInsets.only(right: IdeSpacing.space4),
-                child: _AgentMarkdownBody(
+                child: AgentMarkdownBody(
                   message: message,
                   useStreamingMarkdown: useStreamingMarkdown,
                   markdownCache: markdownCache,

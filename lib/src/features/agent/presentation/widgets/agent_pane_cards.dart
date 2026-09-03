@@ -530,7 +530,7 @@ class _AgentPlanDocumentCard extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (markdown.trim().isNotEmpty)
-                      _AgentRawMarkdownBody(data: markdown),
+                      AgentRawMarkdownBody(data: markdown),
                     if (todos.isNotEmpty) ...[
                       const SizedBox(height: IdeSpacing.space8),
                       _AgentPlanTodoList(

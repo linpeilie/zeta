@@ -10,7 +10,6 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:highlight/highlight.dart' show Node, highlight;
-import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 import 'package:pasteboard/pasteboard.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
@@ -39,6 +38,7 @@ import 'package:zeta/src/features/agent/presentation/agent_timeline_projection.d
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection_cache.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_model_config_ui_state.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_file_change_evidence_card.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_markdown_body.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_styles.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_text.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon.dart';
