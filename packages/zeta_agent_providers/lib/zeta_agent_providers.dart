@@ -19,7 +19,6 @@ export 'codex_plugin.dart';
 export 'grok_plugin.dart';
 export 'src/agent_provider_static_capabilities.dart';
 export 'src/claude_code_cli_locator.dart';
-export 'src/cli_command_locator.dart';
 export 'src/codex_cli_locator.dart';
 export 'src/datasources/acp/grok_acp_agent_provider.dart'
     hide JsonRpcPeerFactory;

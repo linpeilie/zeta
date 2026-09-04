@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:zeta_foundation/zeta_foundation.dart';
-import 'package:zeta_agent_providers/src/cli_command_locator.dart';
 import 'package:zeta_agent_providers/src/codex_cli_locator.dart'
     show CodexCliLocator;
 import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk.dart';

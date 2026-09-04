@@ -1,7 +1,15 @@
 import 'dart:io';
 
-import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
+import 'package:test/test.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk.dart';
+
+const _testConfig = AgentProviderConfig(
+  id: 'test-cli',
+  displayName: 'Test CLI',
+  kind: AgentProviderTypeId('testCli'),
+  command: 'claude',
+);
 
 void main() {
   group('CliCommandLocator Windows launchers', () {
@@ -22,7 +30,7 @@ void main() {
           return path == shim || path == cmd;
         },
       );
-      final config = defaultClaudeCodeAgentProviderConfig.copyWith(
+      final config = _testConfig.copyWith(
         command: shim,
         extra: const <String, Object?>{'cliPath': shim},
       );
@@ -135,7 +143,7 @@ void main() {
     );
 
     // Act
-    final resolved = await locator.locate(defaultClaudeCodeAgentProviderConfig);
+    final resolved = await locator.locate(_testConfig);
 
     // Assert
     expect(resolved?.executable, executable);

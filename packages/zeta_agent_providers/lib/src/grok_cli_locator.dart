@@ -1,7 +1,7 @@
 import 'dart:io';
 
-import 'package:zeta_agent_providers/src/cli_command_locator.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk.dart';
 
 /// 在已保存路径、PATH 与常见安装目录中定位 Grok CLI。
 class GrokCliLocator {

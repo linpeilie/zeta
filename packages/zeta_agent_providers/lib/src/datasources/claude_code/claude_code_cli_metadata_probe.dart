@@ -3,12 +3,11 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:zeta_agent_providers/src/claude_code_cli_locator.dart';
-import 'package:zeta_agent_providers/src/cli_command_locator.dart';
 import 'package:zeta_agent_providers/src/datasources/claude_code/claude_code_cli_metadata.dart';
 import 'package:zeta_agent_providers/src/datasources/claude_code/claude_code_process_starter.dart';
 import 'package:zeta_agent_providers/src/datasources/claude_code/stream_json_peer.dart';
 import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk.dart'
-    show ProcessStarter;
+    show ProcessStarter, ResolvedCliProcessCommand;
 import 'package:zeta_agent_providers/src/mappers/claude_code_initialize_metadata_mapper.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
