@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
+import 'package:zeta_markdown/zeta_markdown.dart';
 
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/presentation/agent_markdown_cache.dart';
@@ -90,7 +90,7 @@ class _AgentMarkdownBodyState extends State<AgentMarkdownBody> {
 
   @override
   Widget build(BuildContext context) {
-    // mixin_markdown 对普通文本使用 MouseCursor.defer，桌面端默认仍是箭头；
+    // zeta_markdown 对普通文本使用 MouseCursor.defer，桌面端默认仍是箭头；
     // 外层声明 text 光标，链接仍会用包内 click 覆盖。
     return MouseRegion(
       cursor: SystemMouseCursors.text,
@@ -133,7 +133,7 @@ class AgentRawMarkdownBody extends StatelessWidget {
   }
 }
 
-/// 抑制 mixin_markdown 右键菜单：仍会走 show，但不渲染任何菜单项。
+/// 抑制 zeta_markdown 右键菜单：仍会走 show，但不渲染任何菜单项。
 Widget _suppressMarkdownContextMenu(
   BuildContext context,
   MarkdownSelectionController selectionController,

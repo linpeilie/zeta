@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |----|----|
-| 状态 | 进行中（T1 已完成） |
+| 状态 | 进行中（T1 / T2 已完成） |
 | 规模 | 11–16 人天（T1–T10 + T14–T15）；P2 可选项另计 |
 | 依赖 | 无硬依赖；T2 换包与 WP-2 T3 协同；T7 与 WP-3 协同 |
 | 门禁焦点 | G6（新 Package 论证）、G7（外链处理）、G8（主题 token） |
@@ -181,7 +181,21 @@ grep -rl "package:mixin_markdown_widget" lib test packages | ForEach-Object {
 ```
 
 3. `flutter pub get && flutter analyze` 零错误；`bash tool/test_affected.sh` 绿。
-4. **验收**：`grep -rn "mixin_markdown" lib test packages --include=*.dart` 零命中（UPSTREAM.md 除外）。
+4. **验收**：`grep -rn "mixin_markdown" lib test packages --include=*.dart` 零命中（UPSTREAM.md 除外）。 ✅
+
+**施工记录（2026-09-03）**：根 `pubspec.yaml` 删 `mixin_markdown_widget: 0.3.1`、加 `zeta_markdown: ^0.1.0`（按仓库既有 workspace 包写法用版本约束，不用 `{workspace: true}`）。`pubspec.lock` 只少了 mixin 那一个 hosted 条目，镜像 url 未动。`flutter analyze` 零 issue；`test_affected.sh` 根包 2479 条 + 各内部包（含 zeta_markdown 180 条）全绿。
+
+**§0.3 的使用点清单已过期，实际是 3 个 lib + 2 个测试**（WP-2/WP-3 重构后的落点）：
+
+| 文档写的 | 实际 |
+|---|---|
+| `agent_pane_messages.dart:7` | 已被 WP-2 T3 抽成 `widgets/agent_markdown_body.dart:2` |
+| `agent_markdown_render_descriptor.dart:5` | **文件不存在**（presentation 下只剩 `agent_timeline_extent_descriptor.dart`） |
+| `agent_pane_plan_panel.dart:17` | **已无该 import** |
+| `agent_pane_styles.dart:6`、`agent_markdown_cache.dart:5` | 仍在 |
+| 「测试」 | 具体是 `agent_conversation_widget_test.dart:13` 与 `harness/agent_pane_test_harness.dart:9` |
+
+另外换掉了两处提到旧包名的注释（`agent_markdown_body.dart` 的光标 workaround 与右键菜单抑制说明）。
 
 #### T3 · 测试基线（0.5–1 人天）
 

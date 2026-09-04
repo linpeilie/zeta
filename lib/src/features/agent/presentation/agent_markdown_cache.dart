@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
-import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
+import 'package:zeta_markdown/zeta_markdown.dart';
 
 /// Agent Markdown 的有界解析与渲染保温缓存。
 ///

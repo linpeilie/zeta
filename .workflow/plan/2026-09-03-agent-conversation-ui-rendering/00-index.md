@@ -111,3 +111,4 @@ WP-5（spike 结论后再排期）
 | 2026-09-03 | WP-4 T4 | `AgentTimelineGroupCard` 折叠组骨架收敛 | command/file-edit 共用 key、摘要、图标、间距和 hover 组装；slice 与 Widget 两类展开状态 owner 保持独立 |
 | 2026-09-03 | WP-4 T5 | `IdeSubmitButton` + WP-4 收尾 | Composer 发送/停止/禁用态统一下沉；双层 key 与交互保持；feature `sf.IconButton.ghost` 10→9；WP-4 已完成 |
 | 2026-09-03 | WP-6 T1 | `packages/zeta_markdown` fork 落地 | 31 个 lib 文件 + 1 个测试随迁，包内 180 条测试全绿。对照发布产物修正文档 5 处：依赖实为 pretext/flutter_math_fork（无 flutter_highlight/meta）、测试只有 1 个文件、新建包级 analysis_options 关三条风格 lint、example/benchmark/上游 AGENTS.md 不迁入、SDK 下限跟上游 ^3.5.0（用户决策：保住与上游逐字节一致，31 个文件仅 7 个有登记在案的差异）。顺带修上游 Windows 盘符被当成 URI scheme 导致本地图片全部加载失败的缺陷 |
+| 2026-09-03 | WP-6 T2 | 根应用换到 zeta_markdown | 依赖与 3 个 lib + 2 个测试的 import 全部切换，`grep mixin_markdown` 零命中；lock 只少一个 hosted 条目。文档 §0.3 使用点清单已过期（descriptor 文件不存在、plan_panel 无该 import、messages 已被 WP-2 抽成 agent_markdown_body），已回写 |

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
+import 'package:zeta_markdown/zeta_markdown.dart';
 
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_ui/zeta_ui.dart';
