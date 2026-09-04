@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |----|----|
-| 状态 | 未开始 |
+| 状态 | 已完成 |
 | 规模 | 2–3 人天，每任务独立小 PR |
 | 依赖 | 无（T1/T2 与 WP-2 的 styles 原地转换有先后关系，见任务内说明） |
 | 门禁焦点 | G6 / G7 / G8 |
@@ -12,6 +12,8 @@
 ---
 
 ## T1 · 5 处英文字面量接入 l10n（0.5 人天）
+
+- [x] 5 个函数接入 l10n；导航轨同源短标签一并走 `agentTurnTokenUsage`。
 
 **现状**（`agent_pane_styles.dart:365-440`，5 个函数含英文字面量）：
 
@@ -45,7 +47,7 @@ String _tokenUsageTooltip(AgentTokenUsage? usage) => ... 'Total: $value' / 'Cont
 "agentTokenUsageDetailTooltip": "..."
 ```
 
-2. 函数签名加 `AppLocalizations l10n` 参数（如 `_threadOpenStatusText(AgentHeaderState state, AppLocalizations l10n)`），调用点传 `context.l10n`。已知调用点：`_threadOpenStatusText` ← `agent_pane_header.dart:18`；token 相关四个 ← header / context_panel（grep 补全）。
+2. 函数签名加 `AppLocalizations l10n` 参数（如 `threadOpenStatusText(AgentHeaderState state, AppLocalizations l10n)`），调用点传 `context.l10n`。已知调用点：`threadOpenStatusText` ← `agent_pane_header.dart`；token 相关四个 ← header / messages / composer；导航轨同源短标签 `agentConversationNavigationTokenLabel` 也走同一 `agentTurnTokenUsage` key。
 3. 若 WP-2 已合入：这些函数在转换后的 `agent_pane_styles.dart`（或二分出的 `agent_pane_text.dart`），改一处即可；否则改 part 时代的 `agent_pane_styles.dart`。
 4. 跑 `dart run tool/check_localized_ui_strings.dart --check` 确认无新增违规。
 
@@ -53,7 +55,9 @@ String _tokenUsageTooltip(AgentTokenUsage? usage) => ... 'Total: $value' / 'Cont
 
 ## T2 · alpha 魔法数 token 化（0.5 人天）
 
-**现状与范围圈定**（2026-09-03 review 修正）：裸 alpha 比初版清单多——本任务**只圈** `agent_pane_styles.dart`（WP-2 后含 `agent_pane_text.dart`）+ `agent_pane_cards.dart`：`0.68`（`_agentSummaryTextStyle:9`）、`0.88`（`_agentItemTextStyle:21`）、`0.12`（`_agentHoverBackground:34`）、`0.65`（cards.dart:38）、`0.98` ×2（`_fileEditGroupSummarySpan:123,130`）。**明确不圈**（避免任务边界模糊，列为后续候选）：model_config 的 `0.1`（WP-4 T1 处理）、navigation_rail 的 `0.94/0.85/0.8/0.14`（导航目录配色，需设计走查）、file_change_evidence_views 的 `0.08/0.12`（diff 行底色，与证据卡视觉绑定）、cards.dart:2178 的 `0.12`。
+- [x] 命名常量落地：`0.68` / `0.12` / `0.65` / `0.98×2`。`0.88` 的 item 文本样式已随 WP-2/WP-4 删除，不再补常量。`0.65` 随 WP-4 T4 迁到 `agent_timeline_group_card.dart`。
+
+**现状与范围圈定**（2026-09-04 对照仓库回写）：裸 alpha 比初版清单多——本任务**只圈** styles / text / 从 cards 抽出的折叠组：`0.68`（`agentSummaryTextStyle`）、`0.12`（`agentHoverBackground`）、`0.65`（`agent_timeline_group_card.dart`，WP-4 T4 从 cards 迁出）、`0.98` ×2（`fileEditGroupSummarySpan`，WP-2 迁到 `agent_pane_text.dart`）。`0.88` 的 item 文本样式已不存在，不再补常量。**明确不圈**（避免任务边界模糊，列为后续候选）：model_config 的 `0.1`（WP-4 T1 已处理）、navigation_rail 的 `0.94/0.85/0.8/0.14`、file_change_evidence_views 的 `0.08/0.12`、cards.dart 现役 `0.12`、header 的 `0.65`。
 
 **设计**：不做「alpha 常量表」过度设计——在 styles 文件顶部命名，语义化：
 
@@ -110,6 +114,8 @@ AgentUiUpdateScheduler(
 
 ## T4 · `sf.` 控件基线对齐（0.5 人天）
 
+- [x] 基线 9 处 `sf.IconButton.ghost`（WP-4 T5 已 −1）+ 设置页 2 处 `sf.Select`；9 处调用点均注明 IdeIconButton 缺 iconDense。
+
 **背景**：G8 基线 = 10 处内嵌 `sf.IconButton.ghost` + 设置页 2 处 `sf.Select`；规则是「只减不增」。
 
 **步骤**：
@@ -127,6 +133,8 @@ grep -rnE "sf\.(IconButton|TextField|Button)\." lib/src/features | Measure-Objec
 
 ## T5 · Plan 预览正则剥壳评估（0.5 人天）
 
+- [x] 保留正则；补契约注释；单测覆盖 `## 标题` 与空输入兜底。
+
 **现状**（`agent_pane_styles.dart:75-88`）：`_planPreviewText` 用三条正则剥 markdown 标记（`#` 头 / 列表符号 / 反引号），取首个非空行做导航目录预览。
 
 **评估结论先行**：**保留正则，不引入解析器**。理由：输入是单行标题级文本，正则失败的最坏结果是预览带 `#` 字符——无害；引入 `zeta_markdown` 的 plain text serializer（`MarkdownPlainTextSerializer`，`markdown_controller.dart:38` 的 `plainText` getter 用它）意味着为导航目录的一次性字符串解析跑完整 parser，成本不对等。
@@ -139,6 +147,6 @@ grep -rnE "sf\.(IconButton|TextField|Button)\." lib/src/features | Measure-Objec
 
 ## 完成定义（DoD）
 
-- [ ] 5 个任务各自独立 PR 合入；每个 PR `dart format . && flutter analyze && tool/test_affected.sh` 绿。
-- [ ] T1/T9（WP-6）后 `check_localized_ui_strings --check` 无违规。
-- [ ] CHANGELOG 不写（均为内部卫生项；T1 的中文文案补全可视为修复，酌情一条）。
+- [x] 5 个任务落地（T3 此前已合入；T1/T2/T4/T5 同分支收口）。`dart format . && flutter analyze && tool/test_affected.sh` 绿。
+- [x] T1/T9（WP-6）后 `check_localized_ui_strings --check` 无违规。
+- [x] T1 中文文案补全写入 CHANGELOG `[未发布]` 修复一条。

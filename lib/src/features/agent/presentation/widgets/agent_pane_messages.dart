@@ -242,8 +242,8 @@ class AgentTurnFooter extends StatelessWidget {
       modelConfig?.reasoningEffort,
     );
     final showFast = modelConfig?.fastEnabled == true;
-    final tokenLabel = turnTokenUsageLabel(turn.tokenUsage);
-    final tokenTooltip = tokenUsageTooltip(turn.tokenUsage);
+    final tokenLabel = turnTokenUsageLabel(turn.tokenUsage, context.l10n);
+    final tokenTooltip = tokenUsageTooltip(turn.tokenUsage, context.l10n);
     final showTokens = tokenLabel != null;
     final hasMeta =
         durationLabel != null ||

@@ -62,6 +62,8 @@ class _AgentLogViewState extends State<AgentLogView> {
             children: [
               Row(
                 children: [
+                  // G8：IdeIconButton 没有 iconDense，且不接受自定义 18px 图标；
+                  // 日志页返回继续用 small+iconDense，避免被撑到 compact 24px。
                   sf.IconButton.ghost(
                     key: const ValueKey('agent-log-back-button'),
                     onPressed: widget.onBack,

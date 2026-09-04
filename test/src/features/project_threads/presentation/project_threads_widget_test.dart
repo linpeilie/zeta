@@ -24,6 +24,7 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:zeta/src/app/composition/zeta_environment_providers.dart';
 import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
 import 'package:zeta/src/app/storage/zeta_store_providers.dart';
+import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
 
 void main() {
   final binding = TestWidgetsFlutterBinding.ensureInitialized();
@@ -325,7 +326,11 @@ void main() {
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('agent-header-token')),
-        matching: find.text('43.5k tokens'),
+        matching: find.text(
+          lookupAppLocalizations(
+            const Locale('zh'),
+          ).agentTurnTokenUsage('43.5k'),
+        ),
       ),
       findsOneWidget,
     );

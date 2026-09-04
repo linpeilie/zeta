@@ -340,6 +340,8 @@ class AgentManagementPageState extends State<AgentManagementPage> {
               subtitle:
                   '${agent.definition.vendor} · ${agent.definition.commandName} · '
                   '${context.l10n.mgmtVersionWithValue(agent.currentVersion ?? context.l10n.mgmtUnknown)}',
+              // G8：IdeIconButton 没有 iconDense，且不接受自定义 18px 图标；
+              // 详情页返回继续用 small+iconDense，避免被撑到 compact 24px。
               leading: sf.IconButton.ghost(
                 key: const ValueKey('agent-detail-back-button'),
                 onPressed: _backToList,
@@ -1262,6 +1264,7 @@ class _AgentInformationCard extends StatelessWidget {
                 label: context.l10n.mgmtLaunchCommand,
                 value: agent.definition.commandName,
                 tone: IdeKeyValueTone.identifier,
+                // G8：IdeIconButton 没有 iconDense / xSmall，会把 14px 复制图标撑到 compact 24px。
                 trailing: sf.IconButton.ghost(
                   onPressed: onCopyCommand,
                   size: sf.ButtonSize.xSmall,

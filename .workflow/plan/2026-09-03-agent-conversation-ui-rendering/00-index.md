@@ -52,7 +52,7 @@
 | WP-4 | 控件收敛下沉 zeta_ui | 4–5 | WP-2（可穿插） | G8；zeta_ui 纯度 | 已完成 | [04-wp4-zeta-ui-convergence.md](04-wp4-zeta-ui-convergence.md) |
 | WP-5 | 历史分页 / 窗口化 | 5–8（含 spike） | 需先 spike；WP-1 之后 | G2 G3 G6 | 未开始 | [05-wp5-history-pagination.md](05-wp5-history-pagination.md) |
 | WP-6 | **Markdown vendor + 深度改造** | 11–16（T1–T10 + 治理；P2 另计） | 无 | G6 G7 G8；包治理 | 已完成（P2 跳过） | [06-wp6-markdown-vendor.md](06-wp6-markdown-vendor.md) |
-| WP-7 | 卫生小修清单 | 2–3 | 无（T3 是 WP-1 解锁条件，优先） | G6 G7 G8 | 未开始 | [07-wp7-hygiene.md](07-wp7-hygiene.md) |
+| WP-7 | 卫生小修清单 | 2–3 | 无（T3 是 WP-1 解锁条件，优先） | G6 G7 G8 | 已完成 | [07-wp7-hygiene.md](07-wp7-hygiene.md) |
 
 **依赖图**：
 
@@ -121,3 +121,4 @@ WP-5（spike 结论后再排期）
 | 2026-09-03 | WP-6 T9 | 右键菜单开关 + 文案注入 | 包内 enableContextMenu 早退 + MarkdownContextMenuLabels（默认英文不变）；Zeta 删掉空组件抑制 hack，改为过滤 selectAll 后交平台工具栏渲染，ARB 补两键。连带更新两处特征化旧 hack 的断言。踩坑：正文 build 现在读 l10n（脚手架缺 delegates 会渲染错误组件）、useColumn 下右键要点首行文字而非 getCenter |
 | 2026-09-03 | WP-6 T10 | 正文光标修复 | 包内按文本块声明 I-Beam 缺省（可选中才给），链接 click 仍在更内层优先；应用侧两处 MouseRegion 补丁删除。没走 span 缺省那条路——那有 9 处构造点。补一条「单段正文只有一个文本光标区域」防补丁复活。WP-6 的 P0/P1 至此全部落地 |
 | 2026-09-03 | WP-6 T14/T15 | 治理收尾 | UPSTREAM.md 补同步节奏/SOP/合入后三节（SOP 写明 `--strip-trailing-cr` 与改名预处理两个实际坑）；README 加注入点清单与稳定引用警告；developer_guide 加「Markdown 渲染」小节。按 `AGENTS.md` §6 一并同步 AGENTS/CLAUDE/工程规范/中英文架构总览/中英文 CONTRIBUTING；CHANGELOG 记 6 条。阶段五 P2 按用户决定跳过 |
+| 2026-09-04 | WP-7 T1–T5 | `feature/wp7-hygiene` | T3 此前已合入。T1 头栏/token 文案接入 l10n（含导航轨同源短标签）；T2 alpha 常量落在 styles（`0.88` 已随 WP-2/WP-4 删除，`0.65` 在 group card）；T4 基线 9 处 ghost 按钮补 G8 注释，AGENTS.md 基线 10→9；T5 保留正则并补单测 |

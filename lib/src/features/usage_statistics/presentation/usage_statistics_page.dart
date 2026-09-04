@@ -1378,6 +1378,8 @@ class _DrawerSurface extends StatelessWidget {
             IdePageHeader(
               title: title,
               actions: [
+                // G8：IdeIconButton 没有 iconDense，且不接受自定义 18px 图标；
+                // 抽屉关闭继续用 iconDense，避免被撑到 compact 24px。
                 sf.IconButton.ghost(
                   key: const ValueKey('usage-drawer-close-button'),
                   onPressed: () => sf.closeOverlay(context),

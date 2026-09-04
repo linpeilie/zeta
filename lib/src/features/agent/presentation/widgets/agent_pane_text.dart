@@ -6,6 +6,7 @@ import 'package:zeta/src/features/agent/application/conversation_slice/agent_con
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
 import 'package:zeta/src/features/agent/presentation/agent_presentation_l10n.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_styles.dart';
 import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
 String commandGroupSummary(
@@ -29,6 +30,10 @@ String commandGroupSummary(
       .join(' · ');
 }
 
+/// 导航目录用的单行预览。
+///
+/// 输入是标题级单行文本；循环内顺序剥掉 markdown 标记（`#` 头 / 列表符号 /
+/// 反引号）。失败的最坏结果是预览带 `#` 字符，无害，因此不引入完整 parser。
 String planPreviewText(String markdown) {
   for (final rawLine in markdown.split('\n')) {
     final preview = rawLine
@@ -76,7 +81,7 @@ InlineSpan fileEditGroupSummarySpan(
       TextSpan(
         text: '+$addedLines',
         style: TextStyle(
-          color: colors.success.withValues(alpha: 0.98),
+          color: colors.success.withValues(alpha: kAgentDiffStatTextAlpha),
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -84,7 +89,7 @@ InlineSpan fileEditGroupSummarySpan(
       TextSpan(
         text: '-$removedLines',
         style: TextStyle(
-          color: colors.error.withValues(alpha: 0.98),
+          color: colors.error.withValues(alpha: kAgentDiffStatTextAlpha),
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -145,36 +150,35 @@ String? toolElapsedLabel(
   return formatDuration(elapsed, includeSubSecond: live);
 }
 
-String? threadOpenStatusText(AgentHeaderState state) {
+String? threadOpenStatusText(AgentHeaderState state, AppLocalizations l10n) {
   return switch (state.threadOpenPhase) {
-    AgentThreadOpenPhase.loadingHistory => 'Loading thread history...',
-    AgentThreadOpenPhase.openFailed =>
-      'Thread open failed. Click this thread again to retry.',
+    AgentThreadOpenPhase.loadingHistory => l10n.agentThreadLoadingHistory,
+    AgentThreadOpenPhase.openFailed => l10n.agentThreadOpenFailedRetry,
     // 打开成功时，头栏可展示模型改道等非阻塞系统提示。
     AgentThreadOpenPhase.idle => state.systemNoticeLabel,
   };
 }
 
 /// 单个 turn 的 token 用量短标签（turn 增量，不展示上下文窗口占比）。
-String? turnTokenUsageLabel(AgentTokenUsage? usage) {
+String? turnTokenUsageLabel(AgentTokenUsage? usage, AppLocalizations l10n) {
   final total = usage?.totalTokens;
   if (total == null || total <= 0) {
     return null;
   }
-  return '${usage!.displayTotalTokens!} tokens';
+  return l10n.agentTurnTokenUsage(usage!.displayTotalTokens!);
 }
 
 /// 当前会话累计 token 总量短标签；与上下文面板「总 Token」一致。
-String? threadTotalTokenUsageLabel(AgentTokenUsage? usage) {
-  final total = usage?.totalTokens;
-  if (total == null || total <= 0) {
-    return null;
-  }
-  return '${usage!.displayTotalTokens!} tokens';
-}
+String? threadTotalTokenUsageLabel(
+  AgentTokenUsage? usage,
+  AppLocalizations l10n,
+) => turnTokenUsageLabel(usage, l10n);
 
 /// 当前上下文窗口 token 用量的悬停明细（仅已用 / 上限 / 占比）。
-String contextWindowTokenUsageTooltip(AgentTokenUsage? usage) {
+String contextWindowTokenUsageTooltip(
+  AgentTokenUsage? usage,
+  AppLocalizations l10n,
+) {
   final total = usage?.totalTokens;
   final window = usage?.modelContextWindow;
   if (total == null || total <= 0 || window == null || window <= 0) {
@@ -182,33 +186,33 @@ String contextWindowTokenUsageTooltip(AgentTokenUsage? usage) {
   }
   final tokenUsage = usage!;
   final percent = ((total / window) * 100).round();
-  return [
-    'Usage: $percent%',
-    'Used: ${tokenUsage.displayTotalTokens}',
-    'Total: ${tokenUsage.displayModelContextWindow}',
-  ].join('\n');
+  return l10n.agentTokenUsageContextTooltip(
+    '$percent',
+    tokenUsage.displayTotalTokens!,
+    tokenUsage.displayModelContextWindow!,
+  );
 }
 
 /// 悬停时展示的 token 明细，含输入/缓存/输出/推理分项。
-String tokenUsageTooltip(AgentTokenUsage? usage) {
+String tokenUsageTooltip(AgentTokenUsage? usage, AppLocalizations l10n) {
   if (usage == null) {
     return '';
   }
   final parts = <String>[];
   if (usage.displayTotalTokens case final value?) {
-    parts.add('Total: $value');
+    parts.add(l10n.agentTokenUsageTotalLine(value));
   }
   if (usage.displayModelContextWindow case final value?) {
-    parts.add('Context window: $value');
+    parts.add(l10n.agentTokenUsageContextWindowLine(value));
   }
   if (usage.displayInputTokens case final value?) {
-    parts.add('Input: $value');
+    parts.add(l10n.agentTokenUsageInputLine(value));
   }
   if (usage.displayCachedInputTokens case final value?) {
-    parts.add('Cached: $value');
+    parts.add(l10n.agentTokenUsageCachedLine(value));
   }
   if (usage.displayOutputTokens case final value?) {
-    parts.add('Output: $value');
+    parts.add(l10n.agentTokenUsageOutputLine(value));
   }
   return parts.isEmpty ? '' : parts.join('\n');
 }

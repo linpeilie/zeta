@@ -2990,6 +2990,51 @@ class AppLocalizationsZh extends AppLocalizations {
   String get agentLoadingHistory => 'Loading thread history';
 
   @override
+  String get agentThreadLoadingHistory => '正在加载 Thread 历史...';
+
+  @override
+  String get agentThreadOpenFailedRetry => 'Thread 打开失败。再次点击该 Thread 可重试。';
+
+  @override
+  String agentTurnTokenUsage(String count) {
+    return '$count Token';
+  }
+
+  @override
+  String agentTokenUsageContextTooltip(
+    String percent,
+    String used,
+    String total,
+  ) {
+    return '用量：$percent%\n已用：$used\n上限：$total';
+  }
+
+  @override
+  String agentTokenUsageTotalLine(String value) {
+    return '总计：$value';
+  }
+
+  @override
+  String agentTokenUsageContextWindowLine(String value) {
+    return '上下文窗口：$value';
+  }
+
+  @override
+  String agentTokenUsageInputLine(String value) {
+    return '输入：$value';
+  }
+
+  @override
+  String agentTokenUsageCachedLine(String value) {
+    return '缓存：$value';
+  }
+
+  @override
+  String agentTokenUsageOutputLine(String value) {
+    return '输出：$value';
+  }
+
+  @override
   String get agentNoSkills => 'No skills found';
 
   @override

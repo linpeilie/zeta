@@ -29,9 +29,10 @@ class AgentHeader extends StatelessWidget {
     final textStyles = IdeTextStyles.of(context);
     // 与上下文面板「总 Token」同源：会话累计用量，而非最近一次上下文窗口占用。
     final tokenUsage = state.tokenUsage;
-    final tokenLabel = threadTotalTokenUsageLabel(tokenUsage);
-    final tokenTooltip = tokenUsageTooltip(tokenUsage);
-    final openStatusText = threadOpenStatusText(state);
+    final l10n = context.l10n;
+    final tokenLabel = threadTotalTokenUsageLabel(tokenUsage, l10n);
+    final tokenTooltip = tokenUsageTooltip(tokenUsage, l10n);
+    final openStatusText = threadOpenStatusText(state, l10n);
     final projectName = controller.projectName;
 
     return Column(
@@ -378,6 +379,8 @@ class _AgentHeaderMoreButtonState extends State<_AgentHeaderMoreButton> {
     final colors = IdeColors.of(context);
     return IdeTooltip(
       message: context.l10n.agentMore,
+      // G8：IdeIconButton 没有 iconDense，也不能按菜单开合改图标色；
+      // 头栏更多按钮继续用 small+iconDense，避免被撑到 compact 24px。
       child: sf.IconButton.ghost(
         key: const ValueKey('agent-header-more'),
         onPressed: _toggleMenu,

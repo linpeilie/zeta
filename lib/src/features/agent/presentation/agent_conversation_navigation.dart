@@ -245,7 +245,10 @@ String buildAgentConversationNavigationTooltip(
     ..writeln(l10n.agentTurnOrdinal('${entry.ordinal}'))
     ..writeln(entry.label.isEmpty ? l10n.agentNoPromptSummary : entry.label)
     ..write(l10n.agentStatusWithValue(_statusLabel(entry.status, l10n)));
-  final tokenLabel = agentConversationNavigationTokenLabel(entry.tokenUsage);
+  final tokenLabel = agentConversationNavigationTokenLabel(
+    entry.tokenUsage,
+    l10n,
+  );
   if (tokenLabel != null) {
     buffer
       ..writeln()
@@ -263,12 +266,15 @@ String buildAgentConversationNavigationTooltip(
 }
 
 /// 导航预览用的 turn token 短标签；口径与 turn footer 一致。
-String? agentConversationNavigationTokenLabel(AgentTokenUsage? usage) {
+String? agentConversationNavigationTokenLabel(
+  AgentTokenUsage? usage,
+  AppLocalizations l10n,
+) {
   final total = usage?.totalTokens;
   if (total == null || total <= 0) {
     return null;
   }
-  return '${usage!.displayTotalTokens!} tokens';
+  return l10n.agentTurnTokenUsage(usage!.displayTotalTokens!);
 }
 
 List<AgentTimelineRenderBlock> _defaultResolveBlocks(

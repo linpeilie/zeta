@@ -157,6 +157,7 @@ class AgentComposer extends StatelessWidget {
         !showSend;
     final contextWindowTokenTooltip = contextWindowTokenUsageTooltip(
       currentWindowTokenUsage,
+      context.l10n,
     );
     final contextWindowTokenProgress = contextWindowTokenUsageProgressValue(
       currentWindowTokenUsage,

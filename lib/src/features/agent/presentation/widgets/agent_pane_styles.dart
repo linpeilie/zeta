@@ -4,13 +4,25 @@ import 'package:zeta_markdown/zeta_markdown.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 
+/// 折叠摘要文字的不透明度：弱于正文但可辨认。
+const double kAgentSummaryTextAlpha = 0.68;
+
+/// hover 背景的不透明度（border 色稀释）。
+const double kAgentHoverBackgroundAlpha = 0.12;
+
+/// 卡片内次要图标的不透明度。
+const double kAgentSecondaryIconAlpha = 0.65;
+
+/// diff 增删统计文字的不透明度。
+const double kAgentDiffStatTextAlpha = 0.98;
+
 TextStyle agentSummaryTextStyle(BuildContext context) {
   final colors = IdeColors.of(context);
   final textStyles = IdeTextStyles.of(context);
   // 折叠摘要：中等字重 + 低对比，弱于正文但可辨认。
   return textStyles.bodyMedium.copyWith(
     fontWeight: FontWeight.w500,
-    color: colors.textSecondary.withValues(alpha: 0.68),
+    color: colors.textSecondary.withValues(alpha: kAgentSummaryTextAlpha),
   );
 }
 
@@ -23,7 +35,9 @@ TextStyle agentMetaTextStyle(
 }
 
 Color agentHoverBackground(BuildContext context) {
-  return IdeColors.of(context).border.withValues(alpha: 0.12);
+  return IdeColors.of(
+    context,
+  ).border.withValues(alpha: kAgentHoverBackgroundAlpha);
 }
 
 /// 操作组（命令集 / 文件编辑组）外间距：由列表层 [Padding] 包一层，卡片自身零 margin。

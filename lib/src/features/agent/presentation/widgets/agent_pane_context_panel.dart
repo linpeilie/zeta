@@ -250,6 +250,8 @@ class _AgentContextPanelHeader extends StatelessWidget {
           const Spacer(),
           IdeTooltip(
             message: context.l10n.agentClose,
+            // G8：IdeIconButton 没有 iconDense，且不接受自定义 15px 图标；
+            // 面板头 chrome 继续用 small+iconDense，避免被撑到 compact 24px。
             child: sf.IconButton.ghost(
               key: const ValueKey('agent-context-panel-close'),
               onPressed: onClose,
@@ -570,6 +572,8 @@ class _AgentContextRawMessageRow extends StatelessWidget {
                     label: context.l10n.agentCopyOriginal,
                     child: IdeTooltip(
                       message: context.l10n.agentCopyOriginal,
+                      // G8：IdeIconButton 没有 iconDense，且不接受自定义 14px 图标；
+                      // 行内复制继续用 small+iconDense，避免被撑到 compact 24px。
                       child: sf.IconButton.ghost(
                         key: ValueKey<String>(
                           'agent-context-raw-copy-${item.id}',

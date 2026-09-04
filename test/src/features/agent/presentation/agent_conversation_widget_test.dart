@@ -39,8 +39,10 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
 import 'package:zeta/src/app/storage/zeta_store_providers.dart';
 import 'package:zeta/src/features/agent/presentation/agent_ui_update_scheduler.dart';
+import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
 
 void main() {
+  final l10n = lookupAppLocalizations(const Locale('zh'));
   final binding = TestWidgetsFlutterBinding.ensureInitialized();
   final tempDirectories = <Directory>[];
 
@@ -479,10 +481,7 @@ void main() {
       await pumpAgentConversationUi(tester);
 
       expect(find.text('History survives failure'), findsOneWidget);
-      expect(
-        find.text('Thread open failed. Click this thread again to retry.'),
-        findsNothing,
-      );
+      expect(find.text(l10n.agentThreadOpenFailedRetry), findsNothing);
 
       await tester.enterText(
         find.byKey(const ValueKey('agent-message-input')),
@@ -493,10 +492,7 @@ void main() {
       await pumpAgentConversationUi(tester);
 
       expect(find.text('History survives failure'), findsOneWidget);
-      expect(
-        find.text('Thread open failed. Click this thread again to retry.'),
-        findsOneWidget,
-      );
+      expect(find.text(l10n.agentThreadOpenFailedRetry), findsOneWidget);
       expect(find.byKey(const ValueKey('agent-send-button')), findsNothing);
 
       await tester.tap(
@@ -507,10 +503,7 @@ void main() {
       await pumpAgentConversationUi(tester);
 
       expect(find.text('History survives failure'), findsOneWidget);
-      expect(
-        find.text('Thread open failed. Click this thread again to retry.'),
-        findsNothing,
-      );
+      expect(find.text(l10n.agentThreadOpenFailedRetry), findsNothing);
 
       await tester.enterText(
         find.byKey(const ValueKey('agent-message-input')),
@@ -2234,7 +2227,7 @@ void main() {
       expect(
         find.descendant(
           of: find.byKey(const ValueKey('agent-header-token')),
-          matching: find.text('10.3k tokens'),
+          matching: find.text(l10n.agentTurnTokenUsage('10.3k')),
         ),
         findsOneWidget,
       );
@@ -2282,9 +2275,10 @@ void main() {
           matching: find.byType(IdeTooltip),
         ),
       );
-      expect(tooltip.message, contains('Usage: 65%'));
-      expect(tooltip.message, contains('Used: 1.3k'));
-      expect(tooltip.message, contains('Total: 2k'));
+      expect(
+        tooltip.message,
+        l10n.agentTokenUsageContextTooltip('65', '1.3k', '2k'),
+      );
       expect(tooltip.message, isNot(contains('input_tokens')));
       expect(tooltip.message, isNot(contains('output_tokens')));
       expect(tooltip.message, isNot(contains('cached_input_tokens')));

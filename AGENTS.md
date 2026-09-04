@@ -230,7 +230,7 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 grep -rnE "Color\(0x|BoxShadow\(|BorderRadius\.circular|ColorScheme\.fromSeed|Shad[A-Z]" lib/src/features
 grep -rn "import 'package:shadcn_flutter" lib | grep -v "as sf"
 # 控件级 sf 原件的存量清单：只增不减就是在制造新的高度分叉。
-# 当前基线是 10 处内嵌 `sf.IconButton.ghost`（行内小动作）+ 设置页 2 处需要
+# 当前基线是 9 处内嵌 `sf.IconButton.ghost`（行内小动作）+ 设置页 2 处需要
 # 搜索弹层的 `sf.Select`；新增一律要么走 Ide 封装，要么在调用点写明为什么
 # 封装满足不了，并显式对齐 IdeMetrics 的内边距。
 grep -rnE "sf\.(IconButton|TextField|Button)\." lib/src/features | wc -l

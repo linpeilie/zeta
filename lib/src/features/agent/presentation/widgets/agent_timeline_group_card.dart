@@ -59,7 +59,7 @@ class AgentTimelineGroupCard extends StatelessWidget {
       leading: Icon(
         leadingIcon,
         size: 14,
-        color: colors.textTertiary.withValues(alpha: 0.65),
+        color: colors.textTertiary.withValues(alpha: kAgentSecondaryIconAlpha),
       ),
       bodyPadding: const EdgeInsets.only(
         top: IdeSpacing.space8,

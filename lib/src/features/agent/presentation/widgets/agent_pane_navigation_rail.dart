@@ -467,7 +467,10 @@ class _AgentConversationNavigationPreviewCard extends StatelessWidget {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     final status = _navStatusPresentation(entry.status, colors, context.l10n);
-    final tokenLabel = agentConversationNavigationTokenLabel(entry.tokenUsage);
+    final tokenLabel = agentConversationNavigationTokenLabel(
+      entry.tokenUsage,
+      context.l10n,
+    );
 
     return ConstrainedBox(
       constraints: const BoxConstraints(
