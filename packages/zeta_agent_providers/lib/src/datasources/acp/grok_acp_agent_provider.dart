@@ -12,7 +12,6 @@ import 'package:zeta_agent_providers/src/datasources/acp/grok_process_starter.da
 import 'package:zeta_agent_providers/src/datasources/local_history/grok_session_history_reader.dart';
 import 'package:zeta_agent_providers/src/datasources/local_history/grok_updates_history_parser.dart';
 import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk.dart';
-import 'package:zeta_agent_providers/src/datasources/transport/provider_runtime_json_rpc_peer.dart';
 import 'package:zeta_agent_providers/src/mappers/acp_content_codec.dart';
 import 'package:zeta_agent_providers/src/mappers/acp_permission_mapper.dart';
 import 'package:zeta_agent_providers/src/mappers/grok_acp_notification_mapper.dart';
