@@ -31,6 +31,7 @@ class MarkdownDocumentView extends StatefulWidget {
     this.selectable = true,
     this.selectionController,
     this.onTapLink,
+    this.codeBlockToolbarBuilder,
     this.onCopyPlainText,
     this.enableCopyFullDocumentShortcut = true,
     this.showCopyAllInContextMenu = true,
@@ -49,6 +50,9 @@ class MarkdownDocumentView extends StatefulWidget {
   final bool selectable;
   final MarkdownSelectionController? selectionController;
   final MarkdownTapLinkCallback? onTapLink;
+
+  /// 自绘代码块工具栏；为空时保持包内默认的复制按钮。
+  final MarkdownCodeBlockToolbarBuilder? codeBlockToolbarBuilder;
   final VoidCallback? onCopyPlainText;
   final bool enableCopyFullDocumentShortcut;
   final bool showCopyAllInContextMenu;
@@ -465,6 +469,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       plainTextSerializer: _plainTextSerializer,
       imageBuilder: widget.imageBuilder,
       codeBlockBuilder: widget.codeBlockBuilder,
+      codeBlockToolbarBuilder: widget.codeBlockToolbarBuilder,
       bulletBuilder: widget.bulletBuilder,
       onTapLink: widget.onTapLink,
       onRequestContextMenu: _showToolbar,

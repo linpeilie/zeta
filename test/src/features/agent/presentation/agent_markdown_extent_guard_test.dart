@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 
 import 'package:zeta/src/features/agent/presentation/timeline_rendering/agent_timeline_extent_math.dart';
+import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_markdown_body.dart';
 
 /// Markdown 估算公式与真实渲染高度的契约守卫。
@@ -129,10 +131,18 @@ Future<double> _measureNaturalHeight(
         themeMode: ThemeMode.dark,
         lightTheme: light,
         darkTheme: dark,
-        child: MaterialApp(
-          theme: buildMaterialTheme(dark),
-          home: Scaffold(
-            body: SingleChildScrollView(
+        // 外壳与真实应用一致：代码块工具栏用 Ide* 控件（底层 shadcn Button），
+        // 缺 shadcn 主题会断言失败；缺 l10n delegates 会渲染成错误组件，
+        // 两种情况量到的都不是内容高度。
+        child: sf.ShadcnApp(
+          locale: ZetaLocalization.simplifiedChinese,
+          supportedLocales: ZetaLocalization.supportedLocales,
+          localizationsDelegates: ZetaLocalization.delegates,
+          theme: buildShadcnTheme(dark),
+          builder: (context, child) =>
+              IdeMaterialLayer(theme: buildMaterialTheme(dark), child: child),
+          home: sf.Scaffold(
+            child: SingleChildScrollView(
               child: SizedBox(
                 width: width,
                 child: AgentRawMarkdownBody(key: key, data: markdown),

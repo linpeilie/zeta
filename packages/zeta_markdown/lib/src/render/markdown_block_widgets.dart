@@ -537,6 +537,9 @@ class MarkdownCodeBlockView extends StatelessWidget {
     required this.scrollController,
     this.directTextKey,
     this.viewportKey,
+    this.language,
+    this.lineCount = 0,
+    this.toolbarBuilder,
   });
 
   final MarkdownThemeData theme;
@@ -546,8 +549,28 @@ class MarkdownCodeBlockView extends StatelessWidget {
   final GlobalKey? directTextKey;
   final GlobalKey? viewportKey;
 
+  /// fence info string；仅用于工具栏展示。
+  final String? language;
+
+  /// 代码行数；仅用于工具栏展示。
+  final int lineCount;
+
+  /// 自绘工具栏；为空时用包内默认的复制按钮（上游行为）。
+  final MarkdownCodeBlockToolbarBuilder? toolbarBuilder;
+
   @override
   Widget build(BuildContext context) {
+    // builder 返回 null 表示「明确不要工具栏」，与「没注入 builder」不同：
+    // 后者保持上游默认的复制按钮。
+    final toolbar = toolbarBuilder?.call(
+      context,
+      MarkdownCodeBlockToolbarData(
+        language: language,
+        lineCount: lineCount,
+        onCopy: onCopyCode,
+        theme: theme,
+      ),
+    );
     final resolvedPadding = theme.codeBlockPadding.resolve(TextDirection.ltr);
     final effectivePadding = EdgeInsets.fromLTRB(
       resolvedPadding.left,
@@ -583,25 +606,30 @@ class MarkdownCodeBlockView extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              Tooltip(
-                message: 'Copy code',
-                child: IconButton(
-                  visualDensity: VisualDensity.compact,
-                  constraints: const BoxConstraints.tightFor(
-                    width: 28,
-                    height: 28,
+              if (toolbar != null) ...<Widget>[
+                const SizedBox(width: 8),
+                toolbar,
+              ] else if (toolbarBuilder == null) ...<Widget>[
+                const SizedBox(width: 8),
+                Tooltip(
+                  message: 'Copy code',
+                  child: IconButton(
+                    visualDensity: VisualDensity.compact,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 28,
+                      height: 28,
+                    ),
+                    padding: EdgeInsets.zero,
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      foregroundColor:
+                          theme.bodyStyle.color?.withValues(alpha: 0.72),
+                    ),
+                    icon: const Icon(Icons.copy_rounded, size: 18),
+                    onPressed: onCopyCode,
                   ),
-                  padding: EdgeInsets.zero,
-                  style: IconButton.styleFrom(
-                    backgroundColor: Colors.transparent,
-                    foregroundColor:
-                        theme.bodyStyle.color?.withValues(alpha: 0.72),
-                  ),
-                  icon: const Icon(Icons.copy_rounded, size: 18),
-                  onPressed: onCopyCode,
                 ),
-              ),
+              ],
             ],
           ),
         ),

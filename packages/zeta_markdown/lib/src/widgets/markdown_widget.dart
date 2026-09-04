@@ -23,6 +23,7 @@ class MarkdownWidget extends StatefulWidget {
     this.selectionController,
     this.padding,
     this.onTapLink,
+    this.codeBlockToolbarBuilder,
     this.imageBuilder,
     this.codeBlockBuilder,
     this.bulletBuilder,
@@ -45,6 +46,11 @@ class MarkdownWidget extends StatefulWidget {
   final MarkdownSelectionController? selectionController;
   final EdgeInsetsGeometry? padding;
   final MarkdownTapLinkCallback? onTapLink;
+
+  /// 自绘代码块工具栏；为空时保持包内默认的复制按钮。
+  ///
+  /// 与 `codeBlockBuilder` 一样要传稳定引用，别在 build 里现写闭包。
+  final MarkdownCodeBlockToolbarBuilder? codeBlockToolbarBuilder;
   final MarkdownImageBuilder? imageBuilder;
   final MarkdownCodeBlockBuilder? codeBlockBuilder;
   final MarkdownBulletBuilder? bulletBuilder;
@@ -146,6 +152,7 @@ class _MarkdownWidgetState extends State<MarkdownWidget> {
                       widget.enableCopyFullDocumentShortcut,
                   showCopyAllInContextMenu: widget.showCopyAllInContextMenu,
                   onTapLink: widget.onTapLink,
+                  codeBlockToolbarBuilder: widget.codeBlockToolbarBuilder,
                   imageBuilder: widget.imageBuilder,
                   codeBlockBuilder: widget.codeBlockBuilder,
                   bulletBuilder: widget.bulletBuilder,

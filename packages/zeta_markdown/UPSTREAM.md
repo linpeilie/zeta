@@ -106,6 +106,29 @@ Zeta 自己加的测试放**独立文件**（`test/zeta_*.dart`），不要写�
 测试：`test/zeta_code_highlight_palette_test.dart`（默认推导不变 / 逐槽位生效且
 未给的槽位仍走推导 / 主题值相等与不等 / lerp / isEmpty）。
 
+### 2026-09-03 · WP-6 T8 · 代码块工具栏注入点
+
+默认行为零变化（不注入 builder = 上游那颗复制按钮）：
+
+- `lib/src/widgets/markdown_types.dart`：新增 `MarkdownCodeBlockToolbarData`
+  （language / lineCount / onCopy / theme）与 `MarkdownCodeBlockToolbarBuilder`。
+- `lib/src/render/markdown_block_widgets.dart`：`MarkdownCodeBlockView` 增加
+  `language` / `lineCount` / `toolbarBuilder` 三个字段。**三态语义**：不注入
+  builder → 默认复制按钮；builder 返回 widget → 用它替换；builder 返回 null →
+  不渲染任何工具栏。
+- `lib/src/render/builder/markdown_block_builder.dart`：新增
+  `codeBlockToolbarBuilder` 字段，并在构造 view 时补上 `language`（`block.language`）
+  与 `lineCount`（复用 highlighter 的 `lineCountOf`）——上游这两项本来没往下传。
+- `lib/src/render/markdown_document_view.dart` / `lib/src/widgets/markdown_widget.dart`：
+  逐层透传。
+
+**没有**把 `codeBlockToolbarBuilder` 加进 `didUpdateWidget` 的比较列表：与
+`codeBlockBuilder` 保持一致，也避免宿主传闭包时每帧清空 block 行缓存（见 T4）。
+文档注释里写明要传稳定引用。
+
+测试：`test/zeta_code_block_toolbar_test.dart`（默认按钮 / 自绘替换并拿到语言与
+行数 / 返回 null 不渲染 / onCopy 复用写剪贴板 / 无语言时 language 为 null）。
+
 **未改**（有意保留，减小同步 diff 面）：
 
 - `lib/src/selection/mixin_selection_area.dart` 与其中的 `MixinSelectionArea` —— 这里的 "Mixin" 是上游组织名而非包标识；改名会让选择区相关文件的同步 diff 全量失配。

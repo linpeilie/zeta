@@ -6,6 +6,7 @@ import 'package:zeta_markdown/zeta_markdown.dart';
 
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/presentation/agent_markdown_cache.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_code_block_toolbar.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_styles.dart';
 import 'package:zeta/src/ui/core/system_url_opener.dart';
 
@@ -112,6 +113,7 @@ class _AgentMarkdownBodyState extends ConsumerState<AgentMarkdownBody> {
         // onTapLink，不等就清空整份 block 行缓存，而 block 的 GlobalKey 仍被
         // 复用——每帧重建一次会把渲染对象在帧中拆装，直接炸布局断言。
         onTapLink: _handleTapLink,
+        codeBlockToolbarBuilder: agentCodeBlockToolbar,
       ),
     );
   }
@@ -148,6 +150,7 @@ class _AgentRawMarkdownBodyState extends ConsumerState<AgentRawMarkdownBody> {
         contextMenuBuilder: _suppressMarkdownContextMenu,
         // 同上：稳定引用，别在这里写闭包。
         onTapLink: _handleTapLink,
+        codeBlockToolbarBuilder: agentCodeBlockToolbar,
       ),
     );
   }

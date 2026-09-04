@@ -38,6 +38,7 @@ class MarkdownBlockBuilder {
     this.codeBlockBuilder,
     this.bulletBuilder,
     this.onTapLink,
+    this.codeBlockToolbarBuilder,
     required this.onRequestContextMenu,
     required Map<String, CachedBlockRow> cachedBlockRows,
     required this.tableLayoutPlanCache,
@@ -58,6 +59,9 @@ class MarkdownBlockBuilder {
   final MarkdownCodeBlockBuilder? codeBlockBuilder;
   final MarkdownBulletBuilder? bulletBuilder;
   final MarkdownTapLinkCallback? onTapLink;
+
+  /// 自绘代码块工具栏；为空时保持包内默认的复制按钮。
+  final MarkdownCodeBlockToolbarBuilder? codeBlockToolbarBuilder;
   final void Function(Offset) onRequestContextMenu;
   final MarkdownTableLayoutPlanCache tableLayoutPlanCache;
   final MarkdownCodeHighlightCache codeHighlightCache;
@@ -1663,6 +1667,9 @@ class MarkdownBlockBuilder {
       codeSpan: codeSpan,
       directTextKey: directTextKey,
       viewportKey: viewportKey,
+      language: block.language,
+      lineCount: const MarkdownCodeSyntaxHighlighter().lineCountOf(block.code),
+      toolbarBuilder: codeBlockToolbarBuilder,
       scrollController: scrollController ??
           keysRegistry.codeBlockScrollControllers
               .putIfAbsent(block.id, ScrollController.new),

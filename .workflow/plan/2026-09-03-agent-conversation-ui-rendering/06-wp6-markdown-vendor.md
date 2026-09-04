@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |----|----|
-| 状态 | 进行中（T1–T7 已完成） |
+| 状态 | 进行中（T1–T8 已完成） |
 | 规模 | 11–16 人天（T1–T10 + T14–T15）；P2 可选项另计 |
 | 依赖 | 无硬依赖；T2 换包与 WP-2 T3 协同；T7 与 WP-3 协同 |
 | 门禁焦点 | G6（新 Package 论证）、G7（外链处理）、G8（主题 token） |
@@ -550,7 +550,20 @@ Widget _agentCodeBlockToolbar(BuildContext context, MarkdownCodeBlockToolbarData
 }
 ```
 
-- **验收**：默认 builder 为 null 时包内测试全绿；Zeta 侧代码块出现语言标签 + 行数 + 复制反馈；**T7 的守卫测试先红后绿**（工具栏加高 → descriptor 更新）。
+- **验收**：默认 builder 为 null 时包内测试全绿；Zeta 侧代码块出现语言标签 + 行数 + 复制反馈；**T7 的守卫测试先红后绿**（工具栏加高 → descriptor 更新）。 ✅（前两条达成；第三条**未发生**，原因见下）
+
+**施工记录（2026-09-03）**：包内按文档逐层透传（types → view → block builder → document view → widget），并补上文档指出的那处遗漏：`MarkdownCodeBlockView` 原先收不到语言与行数，现在由 `_buildDecoratedCodeBlock` 从 `block.language` 与 highlighter 的 `lineCountOf` 传入。工具栏是**三态**：不注入 builder → 上游默认复制按钮；返回 widget → 替换；返回 null → 不渲染。包内 201 条全绿（新增 5 条）。
+
+Zeta 侧 `agentCodeBlockToolbar`（顶层函数，稳定引用）+ 自持状态的 `_AgentCodeBlockToolbar`：语言标签、`agentLineCount` 行数、复制按钮与 1.5s 对勾反馈。**没有新增 l10n 键**——复用了既有的 `agentLineCount` 与 `shadcnMenuCopy`。
+
+**「T7 守卫先红后绿」没有发生，这是设计使然而不是守卫失效**：工具栏与代码内容同处一个 `Row`（`Expanded` + 工具栏），只有当它比代码内容更高时才会增高。文档那句预期隐含了「工具栏另起一行」的形态。守卫本身仍然有效——T7 记录里那次变异验证（给代码块加 28px 上内边距）依然会让它变红。若将来把工具栏改成独立一行（悬浮在代码上方），届时会按预期先红。
+
+**踩到两个脚手架问题（都不是产品代码的问题）**：
+
+1. 工具栏读 `context.l10n`，而测量脚手架的 `MaterialApp` 没装 delegates → 抛错后渲染的是错误组件，量到的高度是 **100073.6px**（不是布局炸了）。
+2. `IdeIconButton` 底层是 `sf.Button`，需要 shadcn 主题祖先，纯 `MaterialApp` 下直接断言失败。
+
+T7 的守卫脚手架因此换成与真实应用一致的外壳（`sf.ShadcnApp` + `IdeMaterialLayer` + l10n delegates）。**基线数值未变**（仍是 prose 123.2 / code 145.6 / table 148.6）——换壳与加工具栏都没有改变这三个 fixture 的高度。
 
 #### T9 · 右键菜单开关 + 文案注入（1 人天）
 
