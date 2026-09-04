@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
+import 'cli_command_locator.dart';
 
 /// CLI 子进程执行结果。
 class CliProcessResult {

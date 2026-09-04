@@ -13,6 +13,9 @@
 /// - 新增 Provider 的正常改动面就是这个包 + 一行插件注册（目标架构 §9.3）。
 library;
 
+// WP-C 删除聚合包前保留外部源码兼容；新代码直接导入 SDK barrel。
+export 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk.dart';
+
 export 'built_in_agent_provider_plugins.dart';
 export 'claude_code_plugin.dart';
 export 'codex_plugin.dart';

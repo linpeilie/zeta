@@ -2,9 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
+import 'package:zeta_agent_providers/zeta_agent_providers.dart'
+    hide CliProcessResult, CliProcessRunner, ResolvedCliCommand;
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta/src/features/agent_management/data/cli_process_runner.dart';
+import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk.dart';
 
 /// Claude Code `auth status --json` 的白名单投影。
 ///
