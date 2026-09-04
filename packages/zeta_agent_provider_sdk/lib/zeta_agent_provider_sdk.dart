@@ -4,6 +4,7 @@ library;
 export 'src/acp/acp_content_codec.dart';
 export 'src/acp/acp_permission_mapper.dart';
 export 'src/acp/acp_session_config_mapper.dart';
+export 'src/acp/acp_session_update_decoder.dart';
 export 'src/payload/agent_provider_payload.dart';
 export 'src/payload/context_window_codec.dart';
 export 'src/transport/json_rpc_stdio_transport.dart';
