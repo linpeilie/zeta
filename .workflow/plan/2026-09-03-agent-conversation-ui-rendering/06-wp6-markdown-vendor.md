@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |----|----|
-| 状态 | 进行中（T1–T10 已完成，P0/P1 全部落地） |
+| 状态 | 已完成（T1–T10 + T14/T15；阶段五 P2 按决定跳过） |
 | 规模 | 11–16 人天（T1–T10 + T14–T15）；P2 可选项另计 |
 | 依赖 | 无硬依赖；T2 换包与 WP-2 T3 协同；T7 与 WP-3 协同 |
 | 门禁焦点 | G6（新 Package 论证）、G7（外链处理）、G8（主题 token） |
@@ -665,11 +665,33 @@ MarkdownWidget(
 - `UPSTREAM.md` 完整填写（T1 已建模板）；每季度或有安全修复时评估同步。
 - 同步 SOP：`diff -r upstream/lib packages/zeta_markdown/lib` → 逐文件评估 → 合入后 `tool/test_packages.sh`。
 
+**施工记录（2026-09-03）· 已完成**：`UPSTREAM.md` 补齐「同步节奏 / 同步 SOP / 合入后」三节。SOP 写成可直接执行的命令（稀疏 clone 上游 tag + `diff -r`），并写明两处实际踩过的坑：
+
+1. **`diff` 必须加 `--strip-trailing-cr`**：本仓库工作区是 CRLF、上游是 LF，不加会看到「每一行都改了」的假 diff（T3 核实基线时踩过）。
+2. 改名类差异会让每个 import 行都显示为差异，先用 `sed` 把上游副本改名再 diff。
+
+另加一条治理约定：**上游若自己修了我们本地改过的缺陷（如 Windows 盘符解析），以上游实现为准并删掉对应本地条目**，避免 fork 无限膨胀。
+
 #### T15 · 文档（0.5 人天）
 
 - `packages/zeta_markdown/README.md`：定位、与上游关系、改造清单（T5/T6/T8/T9/T10 各一段 + 注入点示例）。
 - `docs/guides/developer_guide.md` 加「Markdown 渲染」小节（如何改语法/高亮/工具栏，指向本包）。
 - `AGENTS.md` §4 依赖清单加 `zeta_markdown`；`00-index.md` §6「开发记录」登记。
+
+**施工记录（2026-09-03）· 已完成**：
+
+| 文档 | 改了什么 |
+|---|---|
+| `packages/zeta_markdown/README.md` | 新增「注入点清单」表（5 个注入点各一行）、用法代码示例、以及**稳定引用**警告 |
+| `docs/zh/development/developer_guide.md` | §8 下新增「Markdown 渲染」小节：「想改 X 去改哪」对照表 + 三条易踩约定 |
+| `AGENTS.md` | 依赖图加 `presentation → zeta_markdown`；内部 Package 清单加本包，写明它是叶子、是 vendor 包、SDK 下限跟随上游 |
+| `CLAUDE.md` | workspace 包列表加本包，指向 `UPSTREAM.md` |
+| `docs/zh/architecture/engineering_standards.md` | §1 目录职责加本包，§2 依赖图加一条边 |
+| `docs/zh/architecture/overview.md` + `docs/en/architecture/overview.md` | mermaid 图加节点；「改某类东西去哪」表加一行 |
+| `CONTRIBUTING.md` + `CONTRIBUTING.en.md` | 依赖方向补一条边 |
+| `CHANGELOG.md` `[未发布]` | 新增 3 条（链接可点、代码块工具栏、右键菜单中文化）、变更 1 条（高亮走主题配色）、修复 2 条（文本光标、Windows 本地图片） |
+
+**比文档要求多做的**：`AGENTS.md` §6 要求架构边界变更时同步的是**一整组**文档，新增一个 Package 属于此类，所以除了文档点名的 `AGENTS.md` 与 developer_guide 之外，`CLAUDE.md`、工程规范、中英文架构总览、中英文 CONTRIBUTING 一并同步了。
 
 ## 4. 风险与回滚
 
@@ -683,7 +705,9 @@ MarkdownWidget(
 
 ## 5. 完成定义（DoD）
 
-- [ ] `packages/zeta_markdown` 落地，根应用全量换包，`grep mixin_markdown` 零命中。
-- [ ] T4–T10 全部落地；包内测试 + `tool/test_packages.sh` + `tool/test_full.sh` 绿。
-- [ ] UPSTREAM.md / README / developer_guide 同步完成。
-- [ ] CHANGELOG `[未发布]` 记录：链接可点击打开、代码块工具栏、右键菜单中文化、文本光标修复。
+- [x] `packages/zeta_markdown` 落地，根应用全量换包，`grep mixin_markdown` 零命中。
+- [x] T4–T10 全部落地；包内测试 + `tool/test_packages.sh` 绿；`tool/test_full.sh` 见下方收尾记录。
+- [x] UPSTREAM.md / README / developer_guide 同步完成。
+- [x] CHANGELOG `[未发布]` 记录：链接可点击打开、代码块工具栏、右键菜单中文化、文本光标修复（另加高亮配色与 Windows 本地图片两条）。
+
+**阶段五（T11–T13）按用户决定跳过**：文档本就写明「独立评估立项」，且 T11 需要先确认产品需求、T12 需要先 Profile 证实开销、T13 投入 3–5 人天需单独立项。三者的注入点或扩展点都已就位（T5 的语法集、`code_syntax_highlighter` 的分段缓存、`MarkdownCopySerializer`），立项时不必再动地基。

@@ -27,6 +27,7 @@ flowchart TD
     appl --> domain["domain<br/><i>pure models and contracts</i>"]
     data --> domain
     pres --> uicore["zeta_ui<br/><i>theme tokens · workbench primitives</i>"]
+    pres --> md["zeta_markdown<br/><i>Markdown rendering · upstream fork</i>"]
 
     classDef pure fill:#1B84FF22,stroke:#1B84FF
     class domain pure
@@ -258,6 +259,7 @@ For the user-facing file listing and cleanup instructions, see the [data referen
 | What you want to do | Mainly touches |
 | --- | --- |
 | Restyle a timeline card | `features/agent/presentation` + `zeta_ui` tokens |
+| Change Markdown rendering (syntax set / code palette / code toolbar / context menu / cursor) | injection points in `packages/zeta_markdown` plus the mapping in `agent_pane_styles.dart`; read `packages/zeta_markdown/UPSTREAM.md` first |
 | Fix a streaming glitch in one provider | that provider's `data/` adapter / reducer |
 | Add or fix provider file-change evidence | that provider's `data/` tracker + neutral domain/presentation; the shared Store only carries it mechanically |
 | Surface a capability the provider already supports | domain port and capability → application → presentation |

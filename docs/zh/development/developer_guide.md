@@ -856,6 +856,37 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
   重置卡数量必须采用 Provider 明示的权威总数，不得用可能被截断的明细条数推算。不得据此
   添加 Zeta 登录/账号体系、购买、续费、支付入口或任何写回 Provider 账号的动作。
 
+### Markdown 渲染
+
+会话正文、计划文档与工具卡正文都由 `packages/zeta_markdown` 渲染——它是
+`mixin_markdown_widget 0.3.1` 的 fork（MIT），决策见
+`.workflow/plan/2026-09-03-agent-conversation-ui-rendering/00-index.md` 的 DR-001。
+
+**改之前先读 `packages/zeta_markdown/UPSTREAM.md`。** 所有定制都走「新增注入点 +
+默认值与上游一致」，这样上游同步时只需逐文件 diff。想改什么，去对应的注入点：
+
+| 想改的东西 | 改哪里 |
+|---|---|
+| 支持/去掉某种 Markdown 语法 | `MarkdownSyntaxSet` → `AgentMarkdownCache(syntaxSet:)` |
+| 代码高亮配色 | `agentCodeHighlightPalette()`（`agent_pane_styles.dart`），映射到 `MarkdownCodeHighlightPalette` |
+| 代码块工具栏（语言标签 / 行数 / 复制） | `agentCodeBlockToolbar()`（`widgets/agent_code_block_toolbar.dart`） |
+| 右键菜单项与文案 | `agentMarkdownContextMenu()` / `agentMarkdownContextMenuLabels()`（`widgets/agent_markdown_body.dart`） |
+| 正文字体、块间距、引用/表格样式 | `agentMarkdownTheme()`（`agent_pane_styles.dart`） |
+| 外链点击行为 | `SystemUrlOpener`（`lib/src/ui/core/system_url_opener.dart`），白名单只放 http(s) |
+
+三条容易踩的约定：
+
+1. **传给 `MarkdownWidget` 的回调必须是稳定引用**（State 的绑定方法或顶层函数）。
+   `MarkdownDocumentView.didUpdateWidget` 按引用比较 `theme` / `onTapLink`，不等就
+   清空整份 block 行缓存，而 block 的 GlobalKey 仍被复用——渲染对象会在同一帧里被
+   拆装，直接撞 Flutter 布局断言。自定义主题字段同理，必须有值语义 `==`。
+2. **改包内布局会让 `agent_markdown_extent_guard_test.dart` 变红**。那是估算公式与
+   真实渲染高度的契约守卫（虚拟化列表靠估算维持滚动锚点）。红了先确认变化是有意的，
+   再更新基线并复核估算公式。
+3. **渲染正文的测试脚手架要与真实应用对齐**：正文会读 l10n（右键菜单文案），代码块
+   工具栏用 `Ide*` 控件（底层 shadcn Button）。缺 delegates 会渲染成错误组件、缺
+   shadcn 主题会直接断言失败，两种情况量到的都不是真实布局。
+
 ## 9. 会话和持久化
 
 Zeta 自有数据统一写入用户主目录下的以下结构：

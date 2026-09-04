@@ -54,6 +54,7 @@ lib/
 - `features/<feature>/data` 放外部协议、存储、datasource、mapper 和 codec。
 - `features/<feature>/presentation` 放 feature 私有 pane、widget、region selector 和 UI 分组逻辑。会话命令入口在 application 的 RuntimeController，不在 presentation ViewModel。
 - `zeta_ui`（`packages/zeta_ui`）放跨 feature 可复用的主题、窗口框架、pane、panel 和状态展示组件；它不依赖业务模型、Riverpod、`dart:io` 或 generated l10n。
+- `zeta_markdown`（`packages/zeta_markdown`）是 Markdown 渲染包，fork 自 `mixin_markdown_widget 0.3.1`（MIT）。它是依赖图的叶子，不依赖任何内部包；Graphite token 到渲染参数的映射发生在根应用侧。所有定制走「新增注入点 + 默认值与上游一致」，改动前后都要读写 `packages/zeta_markdown/UPSTREAM.md`。
 - `agent_management` 负责 CLI 检测、版本/账号/模型诊断、配置文件安全写入、
   磁盘日志读取与管理页面；它复用 `agent` 的 provider 抽象，不复制会话协议实现。
 
@@ -67,6 +68,7 @@ lib/
 main -> app -> presentation/application -> domain
                        app -> data -> domain
                        presentation -> zeta_ui
+                       presentation -> zeta_markdown
 ```
 
 - presentation 可以读取 RuntimeController / slice selector 暴露的状态并触发动作，但不直接解析 provider 原始协议。

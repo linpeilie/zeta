@@ -26,12 +26,38 @@
 
 Zeta 自己加的测试放**独立文件**（`test/zeta_*.dart`），不要写进 `test/zeta_markdown_test.dart`。那个文件除了改名之外与上游逐字节相同，同步时直接整文件比对即可；混入本地用例会让它每次都冲突。
 
-## 同步流程
+## 同步节奏
 
-1. 上游发新版 → diff 其 `lib/` 与本包 `lib/`。
-2. 逐文件评估合入；本包改动集中在「注入点新增 + 默认值不变」，冲突预期低。
-3. 合入后跑 `bash tool/test_packages.sh`。
-4. 更新本文件的基线版本与下方改动清单。
+**每季度评估一次**；上游有安全修复或我们撞到需要上游修的缺陷时立即评估。不追新：
+本包所有改造都走注入点，上游不发版也不影响我们迭代。
+
+## 同步 SOP
+
+```sh
+# 1. 取上游对应 tag 的源码（sparse clone，只要这一个包）
+git clone --depth 1 --branch mixin_markdown_widget-vX.Y.Z --filter=blob:none --sparse   https://github.com/MixinNetwork/flutter-plugins /tmp/mmw
+cd /tmp/mmw && git sparse-checkout set packages/mixin_markdown_widget
+
+# 2. 与本包逐文件比对
+#    --strip-trailing-cr 必加：本仓库工作区是 CRLF，上游是 LF，
+#    不加会看到「每一行都改了」的假 diff。
+diff -r --strip-trailing-cr   /tmp/mmw/packages/mixin_markdown_widget/lib   <仓库>/packages/zeta_markdown/lib
+```
+
+比对时按下方「本地改动清单」逐条对号：**清单里有的文件出现差异是预期的**，清单外
+的文件出现差异说明上游改了它，需要评估合入。
+
+改名类差异（`package:mixin_markdown_widget/` → `package:zeta_markdown/`、
+`mixinMarkdownDebugLogging`、日志前缀）会让每个 import 行都显示为差异，先用
+`sed` 把上游副本改名再 diff 更省事。
+
+## 合入后
+
+1. `bash tool/test_packages.sh`（analyze + test 一起跑）。
+2. `bash tool/test_affected.sh`——包的行为变化会波及根应用的估算守卫。
+3. 更新本文件的基线版本、上方差异表与下方改动清单。
+4. 若上游自己修了我们本地改过的缺陷（如 Windows 盘符解析），**以上游实现为准**
+   并删掉对应的本地条目，别让 fork 无限膨胀。
 
 ## 本地改动清单
 
