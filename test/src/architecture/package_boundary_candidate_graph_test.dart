@@ -5,8 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 /// 内部 Package 依赖图守卫（**零容忍，无 allowlist**）。
 ///
 /// `zeta_foundation` / `zeta_plugin_kernel` / `zeta_agent_core` /
-/// `zeta_agent_provider_api` / `zeta_agent_providers` / `zeta_ui` 与根 app
-/// 之间的依赖方向是单向 DAG。
+/// `zeta_agent_provider_api` / `zeta_agent_provider_sdk` /
+/// `zeta_agent_providers` / `zeta_ui` 与根 app 之间的依赖方向是单向 DAG。
 /// 本守卫断言三件事：
 ///
 /// - 依赖方向只能沿 [_allowedEdges]；
@@ -340,7 +340,7 @@ void main() {
     }
   });
 
-  test('Provider 协议原文只出现在 zeta_agent_providers 里', () {
+  test('Provider 协议原文只出现在 provider 适配包里', () {
     // wire 层标识（JSON-RPC method、ACP session/update、stream-json 事件名）
     // 一旦出现在内核或 app，就说明协议细节又漏出了适配层。
     // 只列 **wire 标识**：`stream-json` 之类的协议名会出现在管理页文案与 ARB 里，
@@ -348,7 +348,8 @@ void main() {
     const protocolTokens = <String>['jsonrpc', 'session/update'];
     final offenders = <String>[];
     for (final path in files) {
-      if (path.startsWith('packages/zeta_agent_providers/')) {
+      if (path.startsWith('packages/zeta_agent_providers/') ||
+          path.startsWith('packages/zeta_agent_provider_sdk/')) {
         continue;
       }
       if (path.startsWith('test/')) {
@@ -408,6 +409,7 @@ const String _foundation = 'zeta_foundation';
 const String _pluginKernel = 'zeta_plugin_kernel';
 const String _agentCore = 'zeta_agent_core';
 const String _agentProviderApi = 'zeta_agent_provider_api';
+const String _agentProviderSdk = 'zeta_agent_provider_sdk';
 const String _agentProviders = 'zeta_agent_providers';
 const String _ui = 'zeta_ui';
 const String _app = 'app';
@@ -417,6 +419,7 @@ const Set<String> _candidatePackages = <String>{
   _pluginKernel,
   _agentCore,
   _agentProviderApi,
+  _agentProviderSdk,
   _agentProviders,
   _ui,
   _app,
@@ -432,6 +435,7 @@ const Set<String> _materializedPackages = <String>{
   _ui,
   _agentCore,
   _agentProviderApi,
+  _agentProviderSdk,
   _agentProviders,
 };
 
@@ -446,8 +450,16 @@ const Map<String, Set<String>> _allowedEdges = <String, Set<String>>{
     _pluginKernel,
     _foundation,
   },
+  _agentProviderSdk: <String>{
+    _agentProviderSdk,
+    _agentProviderApi,
+    _agentCore,
+    _pluginKernel,
+    _foundation,
+  },
   _agentProviders: <String>{
     _agentProviders,
+    _agentProviderSdk,
     _agentProviderApi,
     _agentCore,
     _pluginKernel,
@@ -485,6 +497,12 @@ const Map<String, List<String>> _bannedExternalPrefixes =
         'package:flutter_riverpod/',
         'package:shadcn_flutter/',
         'dart:io',
+      ],
+      _agentProviderSdk: <String>[
+        'package:flutter/',
+        'package:flutter_riverpod/',
+        'package:shadcn_flutter/',
+        'dart:ui',
       ],
       _agentProviders: <String>[
         'package:flutter/material',
@@ -641,9 +659,16 @@ const Map<String, Set<String>> _manifestInternalDependencies =
         'zeta_foundation',
         'zeta_plugin_kernel',
       },
+      'zeta_agent_provider_sdk': <String>{
+        'zeta_agent_core',
+        'zeta_agent_provider_api',
+        'zeta_foundation',
+        'zeta_plugin_kernel',
+      },
       'zeta_agent_providers': <String>{
         'zeta_agent_core',
         'zeta_agent_provider_api',
+        'zeta_agent_provider_sdk',
         'zeta_foundation',
         'zeta_plugin_kernel',
       },

@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk.dart';
 
 import 'test_agent_provider_bundle_factory.dart';
 

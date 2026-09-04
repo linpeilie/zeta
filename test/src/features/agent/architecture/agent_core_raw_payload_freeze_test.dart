@@ -11,7 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// 1. 原文类型换成不透明的 `AgentProviderRawPayload`（无 `operator []`、无
 ///    `keys`、无 `toMap()`），任何 `raw['x']` 都是编译错误；
 /// 2. 只有上下文面板会调用唯一的内容出口 `toPrettyJson()`；
-/// 3. 只有 `zeta_agent_providers` 能用 `AgentProviderRawPayload.wrap` 造原文；
+/// 3. 只有 SDK 的内容盲包装器能用 `AgentProviderRawPayload.wrap` 造原文；
 /// 4. 面板不展示的模型，`raw` 字段**直接删掉**（Map 版本清零），需要的语义改成
 ///    adapter 显式声明的 typed 字段（`appendsProgress` / `inputDetail` /
 ///    `sourceLabel` / `sessionPath` / `sourceItemId` / `AgentFileChangeSnapshot`）。
@@ -98,7 +98,7 @@ void main() {
     expect(source, contains("'AgentProviderRawPayload(\$entryCount entries)'"));
   });
 
-  test('只有 zeta_agent_providers 能构造原文', () {
+  test('只有 SDK 内容盲包装器能构造原文', () {
     final offenders = <String>[];
     for (final root in const <String>[
       'lib',
@@ -106,10 +106,12 @@ void main() {
       'packages/zeta_ui/lib',
       'packages/zeta_foundation/lib',
       'packages/zeta_plugin_kernel/lib',
+      'packages/zeta_agent_provider_sdk/lib',
     ]) {
       for (final file in dartFilesIn(root)) {
         final path = normalize(file.path);
-        if (path.endsWith('agent_provider_raw_payload.dart')) {
+        if (path.endsWith('agent_provider_raw_payload.dart') ||
+            path.endsWith('payload/agent_provider_payload.dart')) {
           continue;
         }
         if (file.readAsStringSync().contains('AgentProviderRawPayload.wrap')) {
@@ -150,7 +152,7 @@ void main() {
 
   test('共享 raw 包装器不扫描 wire 键名', () {
     final source = File(
-      'packages/zeta_agent_providers/lib/src/mappers/'
+      'packages/zeta_agent_provider_sdk/lib/src/payload/'
       'agent_provider_payload.dart',
     ).readAsStringSync();
 
