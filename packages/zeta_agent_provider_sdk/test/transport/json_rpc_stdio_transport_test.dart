@@ -2,29 +2,20 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter_test/flutter_test.dart';
-import 'package:logger/logger.dart';
-import 'package:zeta/src/app/logging/app_logging.dart';
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
+import 'package:test/test.dart';
+import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
 
 void main() {
   group('JsonRpcStdioTransport', () {
-    final records = <LogEvent>[];
-    late OutputCallback outputListener;
+    final records = <_RecordedLog>[];
 
-    setUp(() async {
+    setUp(() {
       records.clear();
-      await resetAppLoggingForTesting();
-      outputListener = (event) => records.add(event.origin);
-      Logger.addOutputListener(outputListener);
-      Logger.level = Level.all;
-      configureAppLogging();
+      ZetaLogging.install((_) => _RecordingLogger(records));
     });
 
-    tearDown(() async {
-      Logger.removeOutputListener(outputListener);
-      await resetAppLoggingForTesting();
-    });
+    tearDown(ZetaLogging.reset);
 
     test(
       'sends requests, matches responses, and receives notifications',
@@ -362,6 +353,52 @@ void main() {
       },
     );
   });
+}
+
+final class _RecordedLog {
+  const _RecordedLog(this.message, {this.error, this.stackTrace});
+
+  final String message;
+  final Object? error;
+  final StackTrace? stackTrace;
+}
+
+final class _RecordingLogger implements ZetaLogger {
+  const _RecordingLogger(this.records);
+
+  final List<_RecordedLog> records;
+
+  void _record(String message, {Object? error, StackTrace? stackTrace}) {
+    records.add(_RecordedLog(message, error: error, stackTrace: stackTrace));
+  }
+
+  @override
+  void t(String message, {Object? error, StackTrace? stackTrace}) =>
+      _record(message, error: error, stackTrace: stackTrace);
+
+  @override
+  void d(String message, {Object? error, StackTrace? stackTrace}) =>
+      _record(message, error: error, stackTrace: stackTrace);
+
+  @override
+  void i(String message, {Object? error, StackTrace? stackTrace}) =>
+      _record(message, error: error, stackTrace: stackTrace);
+
+  @override
+  void w(String message, {Object? error, StackTrace? stackTrace}) =>
+      _record(message, error: error, stackTrace: stackTrace);
+
+  @override
+  void e(String message, {Object? error, StackTrace? stackTrace}) =>
+      _record(message, error: error, stackTrace: stackTrace);
+
+  @override
+  void failure(
+    String message, {
+    Map<String, Object?> context = const <String, Object?>{},
+    Object? error,
+    StackTrace? stackTrace,
+  }) => _record(message, error: error, stackTrace: stackTrace);
 }
 
 typedef _FakeMessageHandler =
