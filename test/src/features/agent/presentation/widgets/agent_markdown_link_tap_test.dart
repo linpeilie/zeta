@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_markdown_body.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 
@@ -57,6 +58,10 @@ Future<void> _pumpBody(
         darkTheme: darkIdeTheme,
         child: MaterialApp(
           theme: buildMaterialTheme(darkIdeTheme),
+          // 正文会读 l10n 造右键菜单文案；缺 delegates 会直接渲染成错误组件。
+          locale: ZetaLocalization.simplifiedChinese,
+          supportedLocales: ZetaLocalization.supportedLocales,
+          localizationsDelegates: ZetaLocalization.delegates,
           home: Scaffold(body: AgentRawMarkdownBody(data: markdown)),
         ),
       ),

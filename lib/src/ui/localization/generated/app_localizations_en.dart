@@ -2553,6 +2553,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get agentNoRawMessages => 'No raw messages';
 
   @override
+  String get agentMarkdownCopyAll => 'Copy all';
+
+  @override
+  String get agentMarkdownClearSelection => 'Clear selection';
+
+  @override
   String get agentCopyOriginal => 'Copy original';
 
   @override

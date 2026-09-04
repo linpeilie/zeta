@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |----|----|
-| 状态 | 进行中（T1–T8 已完成） |
+| 状态 | 进行中（T1–T9 已完成） |
 | 规模 | 11–16 人天（T1–T10 + T14–T15）；P2 可选项另计 |
 | 依赖 | 无硬依赖；T2 换包与 WP-2 T3 协同；T7 与 WP-3 协同 |
 | 门禁焦点 | G6（新 Package 论证）、G7（外链处理）、G8（主题 token） |
@@ -611,7 +611,18 @@ MarkdownWidget(
 
 - ARB 两 key 同步 `app_en.arb` / `app_zh.arb`（WP-7 T1 同批做）。
 - `contextMenuBuilder` 的真实 typedef（`markdown_types.dart:34-39`，review 确认）：`Widget Function(BuildContext, MarkdownSelectionController, List<ContextMenuButtonItem>, TextSelectionToolbarAnchors)`——Zeta 的收敛菜单直接**过滤/重排传入的 buttonItems**（去掉 selectAll 项）再交给 `AdaptiveTextSelectionToolbar.buttonItems` 渲染即可，不必自绘菜单 UI。
-- **验收**：右键出现收敛后的中文菜单；`enableContextMenu: false` 时无任何菜单；包内默认行为不变。
+- **验收**：右键出现收敛后的中文菜单；`enableContextMenu: false` 时无任何菜单；包内默认行为不变。 ✅
+
+**施工记录（2026-09-03）**：包内按文档落地（types 加 `MarkdownContextMenuLabels`、`show` 加 `labels`、view 加 `enableContextMenu` 早退、widget 逐层透传），包内 205 条全绿（新增 4 条）。Zeta 侧删掉 `_suppressMarkdownContextMenu` 空组件 hack，改为 `agentMarkdownContextMenu`：只**过滤**掉 selectAll 再交给 `AdaptiveTextSelectionToolbar.buttonItems`，不自绘 UI——「复制」那项因此继续跟随系统语言。ARB 两个键（`agentMarkdownCopyAll` / `agentMarkdownClearSelection`）已按文档同批补齐并重新生成。
+
+**`MixinSelectionArea` 里的另一处 `MarkdownContextMenu.show` 没接线**：那是独立的跨组件选区入口，Zeta 没有使用；接线只会扩大上游同步面。它继续用默认英文文案，已在 `UPSTREAM.md` 记明。
+
+**连带要改的既有测试（本来就该改，不是意外）**：`expectMarkdownWidgetDefaults`（共享 harness）与 `agent_conversation_widget_test.dart:3503` 都在特征化旧 hack（断言 `showCopyAllInContextMenu` 为 false）。T9 撤掉 hack 后这两处断言按新形态更新为 true，并补一条「菜单文案非空」。
+
+**两个踩坑记录**：
+
+1. **正文 build 现在会读 l10n**（造菜单文案），凡是渲染 `AgentRawMarkdownBody` 的测试脚手架都必须装 delegates，否则渲染成错误组件。T4 那个链接测试因此被带红，已补 delegates。与 T8 那次是同一类问题：**Ide/Agent 组件对宿主环境（l10n、shadcn 主题）有硬依赖，脚手架要与真实应用对齐**。
+2. **右键要点在首行文字上**：`useColumn: true` 时组件盒可能比内容高，`getCenter` 落到空白处菜单不会弹。包内与应用侧两个测试都踩了，别误判成开关没生效。
 
 #### T10 · 文本光标修复（0.5 人天）
 

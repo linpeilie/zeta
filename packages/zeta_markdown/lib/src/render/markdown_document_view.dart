@@ -35,6 +35,8 @@ class MarkdownDocumentView extends StatefulWidget {
     this.onCopyPlainText,
     this.enableCopyFullDocumentShortcut = true,
     this.showCopyAllInContextMenu = true,
+    this.enableContextMenu = true,
+    this.contextMenuLabels = const MarkdownContextMenuLabels(),
     this.imageBuilder,
     this.codeBlockBuilder,
     this.bulletBuilder,
@@ -54,6 +56,12 @@ class MarkdownDocumentView extends StatefulWidget {
   /// 自绘代码块工具栏；为空时保持包内默认的复制按钮。
   final MarkdownCodeBlockToolbarBuilder? codeBlockToolbarBuilder;
   final VoidCallback? onCopyPlainText;
+
+  /// 是否允许弹出右键菜单；false 时右键完全无反应。
+  final bool enableContextMenu;
+
+  /// 菜单里本包自造项的文案。
+  final MarkdownContextMenuLabels contextMenuLabels;
   final bool enableCopyFullDocumentShortcut;
   final bool showCopyAllInContextMenu;
   final MarkdownImageBuilder? imageBuilder;
@@ -279,7 +287,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
   }
 
   void _showToolbar(Offset globalPosition) {
-    if (widget.selectionController == null) {
+    if (!widget.enableContextMenu || widget.selectionController == null) {
       return;
     }
     MarkdownContextMenu.show(
@@ -291,6 +299,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       onCopyPlainText: widget.onCopyPlainText,
       showCopyAllInContextMenu: widget.showCopyAllInContextMenu,
       contextMenuBuilder: widget.contextMenuBuilder,
+      labels: widget.contextMenuLabels,
     );
   }
 

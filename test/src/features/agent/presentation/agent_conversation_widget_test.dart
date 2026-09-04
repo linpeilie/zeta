@@ -3500,7 +3500,8 @@ void main() {
     expect(markdownWidget.selectable, isTrue);
     expect(markdownWidget.padding, EdgeInsets.zero);
     expect(markdownWidget.enableCopyFullDocumentShortcut, isFalse);
-    expect(markdownWidget.showCopyAllInContextMenu, isFalse);
+    // WP-6 T9：右键菜单从「空组件抑制」改成收敛后的中文菜单。
+    expect(markdownWidget.showCopyAllInContextMenu, isTrue);
     expect(markdownWidget.contextMenuBuilder, isNotNull);
   });
 

@@ -120,6 +120,7 @@ class MarkdownContextMenu {
     VoidCallback? onCopyPlainText,
     bool showCopyAllInContextMenu = true,
     MarkdownContextMenuBuilder? contextMenuBuilder,
+    MarkdownContextMenuLabels labels = const MarkdownContextMenuLabels(),
   }) {
     final buttonItems = <ContextMenuButtonItem>[
       ContextMenuButtonItem(
@@ -142,7 +143,7 @@ class MarkdownContextMenu {
             contextMenuController.remove();
             onCopyPlainText.call();
           },
-          label: 'Copy all',
+          label: labels.copyAll,
         ),
       if (selectionController.hasSelection)
         ContextMenuButtonItem(
@@ -150,7 +151,7 @@ class MarkdownContextMenu {
             contextMenuController.remove();
             selectionController.clear();
           },
-          label: 'Clear selection',
+          label: labels.clearSelection,
         ),
     ];
 

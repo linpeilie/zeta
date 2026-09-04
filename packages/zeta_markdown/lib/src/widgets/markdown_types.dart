@@ -74,3 +74,35 @@ typedef MarkdownCodeBlockToolbarBuilder = Widget? Function(
   BuildContext context,
   MarkdownCodeBlockToolbarData data,
 );
+
+/// 右键菜单里由本包自造的两项文案。
+///
+/// `copy` / `selectAll` 两项用的是 [ContextMenuButtonType]，由平台本地化，
+/// 不需要也不应该在这里注入。
+@immutable
+final class MarkdownContextMenuLabels {
+  /// 创建文案；默认值与上游硬编码的英文一致。
+  const MarkdownContextMenuLabels({
+    this.copyAll = 'Copy all',
+    this.clearSelection = 'Clear selection',
+  });
+
+  /// 复制整份文档。
+  final String copyAll;
+
+  /// 清除当前选区。
+  final String clearSelection;
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) {
+      return true;
+    }
+    return other is MarkdownContextMenuLabels &&
+        other.copyAll == copyAll &&
+        other.clearSelection == clearSelection;
+  }
+
+  @override
+  int get hashCode => Object.hash(copyAll, clearSelection);
+}

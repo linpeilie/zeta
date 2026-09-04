@@ -8,6 +8,7 @@ import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/presentation/agent_markdown_cache.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_code_block_toolbar.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_styles.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 import 'package:zeta/src/ui/core/system_url_opener.dart';
 
 /// 会话正文 Markdown：经 [AgentMarkdownCache] 复用控制器，支持流式增量。
@@ -106,9 +107,8 @@ class _AgentMarkdownBodyState extends ConsumerState<AgentMarkdownBody> {
         selectable: true,
         padding: EdgeInsets.zero,
         enableCopyFullDocumentShortcut: false,
-        showCopyAllInContextMenu: false,
-        // 包无 enableContextMenu 开关；返回空组件以完全不显示右键菜单。
-        contextMenuBuilder: _suppressMarkdownContextMenu,
+        contextMenuLabels: agentMarkdownContextMenuLabels(context),
+        contextMenuBuilder: agentMarkdownContextMenu,
         // 必须传稳定引用：MarkdownDocumentView.didUpdateWidget 按引用比较
         // onTapLink，不等就清空整份 block 行缓存，而 block 的 GlobalKey 仍被
         // 复用——每帧重建一次会把渲染对象在帧中拆装，直接炸布局断言。
@@ -146,8 +146,8 @@ class _AgentRawMarkdownBodyState extends ConsumerState<AgentRawMarkdownBody> {
         selectable: true,
         padding: EdgeInsets.zero,
         enableCopyFullDocumentShortcut: false,
-        showCopyAllInContextMenu: false,
-        contextMenuBuilder: _suppressMarkdownContextMenu,
+        contextMenuLabels: agentMarkdownContextMenuLabels(context),
+        contextMenuBuilder: agentMarkdownContextMenu,
         // 同上：稳定引用，别在这里写闭包。
         onTapLink: _handleTapLink,
         codeBlockToolbarBuilder: agentCodeBlockToolbar,
@@ -168,12 +168,33 @@ void openAgentMarkdownLink(WidgetRef ref, String destination) {
   unawaited(ref.read(systemUrlOpenerProvider).openUrl(destination));
 }
 
-/// 抑制 zeta_markdown 右键菜单：仍会走 show，但不渲染任何菜单项。
-Widget _suppressMarkdownContextMenu(
+/// 会话正文右键菜单的中文文案。
+MarkdownContextMenuLabels agentMarkdownContextMenuLabels(BuildContext context) {
+  return MarkdownContextMenuLabels(
+    copyAll: context.l10n.agentMarkdownCopyAll,
+    clearSelection: context.l10n.agentMarkdownClearSelection,
+  );
+}
+
+/// 会话正文右键菜单：复制 / 复制全文 / 清除选区。
+///
+/// 只过滤与重排包给的 `buttonItems`，不自绘菜单 UI——渲染仍交给平台自适应工具栏，
+/// 「复制」那项的文案也就继续跟随系统语言。「全选」在会话流里没有意义（选区会
+/// 跨越整篇文档），因此去掉。
+Widget agentMarkdownContextMenu(
   BuildContext context,
   MarkdownSelectionController selectionController,
   List<ContextMenuButtonItem> buttonItems,
   TextSelectionToolbarAnchors anchors,
 ) {
-  return const SizedBox.shrink();
+  final items = buttonItems
+      .where((item) => item.type != ContextMenuButtonType.selectAll)
+      .toList(growable: false);
+  if (items.isEmpty) {
+    return const SizedBox.shrink();
+  }
+  return AdaptiveTextSelectionToolbar.buttonItems(
+    anchors: anchors,
+    buttonItems: items,
+  );
 }

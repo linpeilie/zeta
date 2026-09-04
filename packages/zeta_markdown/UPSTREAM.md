@@ -129,6 +129,29 @@ Zeta 自己加的测试放**独立文件**（`test/zeta_*.dart`），不要写�
 测试：`test/zeta_code_block_toolbar_test.dart`（默认按钮 / 自绘替换并拿到语言与
 行数 / 返回 null 不渲染 / onCopy 复用写剪贴板 / 无语言时 language 为 null）。
 
+### 2026-09-03 · WP-6 T9 · 右键菜单开关与文案注入
+
+默认行为零变化（不传参 = 菜单照常弹、自造项仍是英文原文）：
+
+- `lib/src/widgets/markdown_types.dart`：新增 `MarkdownContextMenuLabels`
+  （`copyAll` / `clearSelection`，默认值就是上游硬编码的英文，带值语义 `==`）。
+  `copy` / `selectAll` 两项用的是 `ContextMenuButtonType`，由平台本地化，**不**
+  纳入注入面。
+- `lib/src/render/shortcuts/markdown_shortcuts_scope.dart`：`MarkdownContextMenu.show`
+  增加 `labels` 参数，两处硬编码字符串改用它。
+- `lib/src/render/markdown_document_view.dart`：新增 `enableContextMenu`（默认
+  true）与 `contextMenuLabels`；`_showToolbar` 开头按开关早退。
+- `lib/src/widgets/markdown_widget.dart`：两个参数逐层透传。
+
+`MixinSelectionArea` 里的另一处 `MarkdownContextMenu.show` **未接线**：那是独立
+的跨组件选区入口，Zeta 没有用到；接了反而扩大同步面。它继续使用默认英文文案。
+
+测试：`test/zeta_context_menu_test.dart`（默认英文 / 注入生效 / 关掉开关后右键
+无任何菜单 / 文案值语义）。
+
+**测试要点**：右键要点在**首行文字**上。`useColumn: true` 时组件盒可能比内容高，
+`getCenter` 会落到空白处，菜单不会弹——这跟开关无关，别误判成回归。
+
 **未改**（有意保留，减小同步 diff 面）：
 
 - `lib/src/selection/mixin_selection_area.dart` 与其中的 `MixinSelectionArea` —— 这里的 "Mixin" 是上游组织名而非包标识；改名会让选择区相关文件的同步 diff 全量失配。

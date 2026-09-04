@@ -451,9 +451,10 @@ void expectMarkdownWidgetDefaults(MarkdownWidget widget) {
   expect(widget.selectable, isTrue);
   expect(widget.padding, EdgeInsets.zero);
   expect(widget.enableCopyFullDocumentShortcut, isFalse);
-  expect(widget.showCopyAllInContextMenu, isFalse);
-  // 对话 Markdown 通过空 contextMenuBuilder 完全抑制右键菜单。
+  // WP-6 T9：右键菜单不再被抑制，而是收敛成中文的「复制 / 复制全文 / 清除选区」。
+  expect(widget.showCopyAllInContextMenu, isTrue);
   expect(widget.contextMenuBuilder, isNotNull);
+  expect(widget.contextMenuLabels.copyAll, isNotEmpty);
 }
 
 class AgentPaneFakeProviderFactory with TestAgentProviderBundleFactory {

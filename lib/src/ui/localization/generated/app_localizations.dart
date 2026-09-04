@@ -4670,6 +4670,18 @@ abstract class AppLocalizations {
   /// **'No raw messages'**
   String get agentNoRawMessages;
 
+  /// Copy the whole markdown document
+  ///
+  /// In en, this message translates to:
+  /// **'Copy all'**
+  String get agentMarkdownCopyAll;
+
+  /// Clear the markdown selection
+  ///
+  /// In en, this message translates to:
+  /// **'Clear selection'**
+  String get agentMarkdownClearSelection;
+
   /// Copy original
   ///
   /// In en, this message translates to:

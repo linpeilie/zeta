@@ -20,6 +20,8 @@ class MarkdownWidget extends StatefulWidget {
     this.selectable = true,
     this.enableCopyFullDocumentShortcut = true,
     this.showCopyAllInContextMenu = true,
+    this.enableContextMenu = true,
+    this.contextMenuLabels = const MarkdownContextMenuLabels(),
     this.selectionController,
     this.padding,
     this.onTapLink,
@@ -43,6 +45,12 @@ class MarkdownWidget extends StatefulWidget {
   final bool selectable;
   final bool enableCopyFullDocumentShortcut;
   final bool showCopyAllInContextMenu;
+
+  /// 是否允许弹出右键菜单；false 时右键完全无反应（不必再用空组件 builder 抑制）。
+  final bool enableContextMenu;
+
+  /// 菜单里本包自造项（复制全文 / 清除选区）的文案。
+  final MarkdownContextMenuLabels contextMenuLabels;
   final MarkdownSelectionController? selectionController;
   final EdgeInsetsGeometry? padding;
   final MarkdownTapLinkCallback? onTapLink;
@@ -151,6 +159,8 @@ class _MarkdownWidgetState extends State<MarkdownWidget> {
                   enableCopyFullDocumentShortcut:
                       widget.enableCopyFullDocumentShortcut,
                   showCopyAllInContextMenu: widget.showCopyAllInContextMenu,
+                  enableContextMenu: widget.enableContextMenu,
+                  contextMenuLabels: widget.contextMenuLabels,
                   onTapLink: widget.onTapLink,
                   codeBlockToolbarBuilder: widget.codeBlockToolbarBuilder,
                   imageBuilder: widget.imageBuilder,

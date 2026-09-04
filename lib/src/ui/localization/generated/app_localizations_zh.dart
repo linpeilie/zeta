@@ -2475,6 +2475,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get agentNoRawMessages => '暂无原始消息';
 
   @override
+  String get agentMarkdownCopyAll => '复制全文';
+
+  @override
+  String get agentMarkdownClearSelection => '清除选区';
+
+  @override
   String get agentCopyOriginal => '复制原文';
 
   @override
