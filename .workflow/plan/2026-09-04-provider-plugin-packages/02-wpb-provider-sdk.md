@@ -44,7 +44,32 @@
 
 **barrel-only 确认**：`lib/` 与 `test/` 中对 `package:zeta_agent_providers/src/...` 的直接 import 为零（唯一例外是该包内部测试 `packages/zeta_agent_providers/test/agent_provider_payload_test.dart:2`），全部经 barrel——搬迁后只需改 barrel 与包内相对 import，外部引用面不变。
 
-### 1.2 app 侧随迁文件
+### 1.2 没有外部 ACP SDK（实证，勿再引入）
+
+初稿曾把 `acp_sdk`（亦即 pub.dev 上的 `dart_acp_sdk`）列为 sdk 的依赖，说它是「acp_* codec 的协议类型来源」。**实测全错**：
+
+- `grep -rn "acp_sdk"` 全仓只命中本计划文档；`pubspec.lock` 里**零**个含 `acp` 的条目——所谓「与根 pubspec 锁定版对齐」无版本可对；
+- 四个 `acp_*` mapper 一个外部协议类型都不用，全是裸 JSON 解析：
+
+```dart
+// acp_content_codec.dart（现状全文形态）
+import 'package:zeta_agent_core/zeta_agent_core.dart';   // ← 唯一 import
+static String? textFromContent(Object? content) {
+  if (content is Map) {
+    final map = content.map((k, v) => MapEntry(k.toString(), v as Object?));
+    if (map['type'] == null || map['type']?.toString() == 'text') {
+      return map['text']?.toString();
+    }
+  }
+  ...
+}
+```
+
+- 整个 `zeta_agent_providers` 包的外部依赖只有三个：`crypto`、`flutter`、`unorm_dart`（且都是 Claude/日志私产）。
+
+**结论**：sdk 是零第三方依赖包。若日后想用 typed ACP SDK 替换手写 codec，那是**独立提案**——它会改变 wire 解析的容错行为，牵动 D7 持久化红线（Grok 会话历史解码）、G1 共享适配层纯度论证与 Grok 真实 CLI 冒烟，绝不能混进本 WP 的「纯搬移」里。
+
+### 1.3 app 侧随迁文件
 
 `lib/src/features/agent_management/data/cli_process_runner.dart`：L5 import providers barrel，实际只用 `ResolvedCliCommand`（L37/45/46：`command.executable` / `command.argumentsFor(...)`）。三家管理仓库与 plugin 内 CLI 探测都依赖它 → **迁 sdk**（`src/cli_process_runner.dart`）。
 
@@ -55,6 +80,7 @@
 **目标**
 - 上表 13+1 个文件物理迁入 sdk，包内 import 改为 sdk 内部相对路径。
 - 提供 `runAgentProviderContractTests(...)` 契约测试套件骨架（WP-C 三家包各自接入）。
+- **测试公共零件入 testing barrel**（T7）：WP-C 要迁的 82 个测试文件依赖一批住在根 test 树与 app 层的零件，插件包够不着，必须先有落脚点。
 - sdk 纯度守卫：零 import 任何 `zeta_agent_provider_<x>`。
 
 **非目标**
@@ -93,7 +119,8 @@ packages/zeta_agent_provider_sdk/
 │       │   ├── cli_command_locator.dart
 │       │   └── cli_process_runner.dart              # 自 app agent_management/data/
 │       └── testing/
-│           └── agent_provider_contract_tests.dart   # 契约测试套件（仅 testing barrel 导出）
+│           ├── agent_provider_contract_tests.dart   # 契约测试套件（仅 testing barrel 导出）
+│           └── provider_test_support.dart           # T7：fixture 读取 / 文件版 StorageService 等公共零件
 └── test/                                            # sdk 自测（搬迁时随迁的机制单测）
 ```
 
@@ -119,8 +146,8 @@ dependencies:
   zeta_agent_provider_api: # WP-A 产物：贡献类型与 definition
   zeta_plugin_kernel:     # ZetaPlugin 契约
   zeta_foundation:        # zetaLoggerFor / Clock / OperationId
-  acp_sdk: ^<对齐根 pubspec 锁定版本>   # acp_* codec 的协议类型来源
   test: ^1.25.0           # src/testing/ 的契约套件要 export test 的类型（group/test）
+# 零第三方依赖：ACP 是手写解析（§1.2），crypto/unorm_dart/toml 都是厂商私产（WP-C §1）
 
 dev_dependencies: {}      # sdk 自测复用 dependencies 的 test
 ```
@@ -130,7 +157,7 @@ dev_dependencies: {}      # sdk 自测复用 dependencies 的 test
 依赖规则（写进包内 README 与 WP-E 守卫）：
 
 ```
-sdk → {agent_core, provider_api, plugin_kernel, foundation, acp_sdk}
+sdk → {agent_core, provider_api, plugin_kernel, foundation}   # 零第三方
 sdk ✗→ {zeta_agent_provider_<x>, zeta(根应用), flutter/*}
 ```
 
@@ -236,7 +263,7 @@ WP-C 拆分时按下表归类（完整清单在 WP-C §4 的测试迁移表；�
 ### T1 · 建包骨架
 **输入**：无
 **产出**：目录结构 + pubspec + analysis_options + 空 barrel
-1. 按 §3 建目录；pubspec 依赖版本与根 `pubspec.yaml` 的 `acp_sdk` 锁定版对齐。
+1. 按 §3 建目录；sdk 不引任何第三方包（§1.2），版本号与兄弟包对齐即可。
 2. 根 `pubspec.yaml` `workspace:` 列表加 `packages/zeta_agent_provider_sdk`（位置紧随 `zeta_agent_providers` 之后，保持字母序）。
 3. `flutter pub get` 通过。
 **验收**：`flutter analyze packages/zeta_agent_provider_sdk` 零 issue（空 barrel 状态）。
@@ -280,6 +307,25 @@ WP-C 拆分时按下表归类（完整清单在 WP-C §4 的测试迁移表；�
 2. sdk 自测：`test/contract_suite_self_test.dart` 用一个内存 fake fixture 跑套件，断言「全绿 fixture 过、端口/能力不一致的 fixture 挂」。
 **验收**：sdk 自身 `flutter test` 绿；套件只经 `import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk_testing.dart'` 可用，且主 barrel **不**导出 `src/testing/`（grep 主 barrel 无 `testing` 字样）。
 
+### T7 · 测试公共零件入 testing barrel
+**输入**：T6
+**产出**：`src/testing/provider_test_support.dart` + testing barrel 导出
+
+WP-C 要迁的 82 个测试文件里有一批依赖**根 test 树与 app 层**的零件，插件包 import 不到 `package:zeta`，也 import 不到根 `test/`。不先解决，WP-C 的「测试随迁」在第一个文件就卡住。实测清单：
+
+| 零件 | 现址 | 待迁测试用到的次数 | 处理 |
+|---|---|---|---|
+| `readFixtureText` / `readFixtureJsonMap` | `test/src/testing/fixture_reader.dart` | 7 | 迁 sdk testing（**注意**：现实现写死 `File('test/fixtures/$path')`，包内跑测试时 CWD 就是包目录，fixture 随包迁到 `packages/<x>/test/fixtures/` 后路径天然成立，实现逐字不动） |
+| `agent_file_change_canonical.dart` | `test/src/testing/` | 4 | 迁 sdk testing |
+| `memory_feature_stores.dart` | `test/src/testing/` | 3 | 按符号拆：Provider 无关的内存 store 迁 sdk testing；含 app 类型的留根 |
+| `test_agent_provider_bundle_factory.dart` | `test/src/testing/` | 2 | 迁 sdk testing |
+| `FileStorageService` | `lib/src/app/storage/file_storage_service.dart`（**app 层**） | 4 | 见下 |
+| `loggerFor` | `lib/src/app/logging/app_logging.dart`（**app 层**） | 2 | 改用 foundation 的 `zetaLoggerFor`（同源，app 版只是加了 app 前缀） |
+
+**`FileStorageService` 的取舍（要拍板，不要顺手换）**：foundation 已有 `MemoryStorageService`，但 `claude_code_hidden_thread_store_test.dart:29/44/60` 用真文件是**故意的**——它测的就是落盘往返。换内存实现等于降覆盖。处理：在 sdk testing 里放一个约 20 行的文件版 `StorageService`（`implements StorageService`，逐字复制 app 版的原子替换语义），测试只改 import 与类名，断言零修改。
+
+**验收**：`grep -rn "package:zeta/" packages/zeta_agent_provider_sdk` 零命中；testing barrel 导出上述零件；sdk 自测绿。
+
 ---
 
 ## 6. 验收标准（DoD）
@@ -288,6 +334,8 @@ WP-C 拆分时按下表归类（完整清单在 WP-C §4 的测试迁移表；�
 - [ ] sdk 内任意文件 `grep -iE "codex|grok|claude"`（排除注释）无输出。
 - [ ] `stream_json_peer.dart`、`grok_models_cli.dart` 未误迁入 sdk（留在 WP-C 归私有）。
 - [ ] 契约套件骨架可用，sdk 自测绿。
+- [ ] T7 六类公共零件就位，`grep -rn "package:zeta/" packages/zeta_agent_provider_sdk` 零命中。
+- [ ] sdk pubspec **零第三方依赖**（§1.2）；`grep -n "acp_sdk\|dart_acp_sdk" packages/zeta_agent_provider_sdk/pubspec.yaml` 无输出。
 - [ ] `bash tool/test_affected.sh` 绿；无测试断言被修改（纯搬迁的证据）。
 - [ ] root barrel `zeta_agent_providers.dart` 的 export 数从搬迁前基线单调下降（最终由 WP-C 清零）。
 
@@ -307,4 +355,5 @@ WP-C 拆分时按下表归类（完整清单在 WP-C §4 的测试迁移表；�
 | 2026-09-04 | 初稿 |
 | 2026-09-04 | 重写：归属表改为 import 反查实证（13 文件逐行引用方）；修正 stream_json_peer→Claude 私有、grok_models_cli→Grok 私有；AcpSessionConfigMapper 标注无生产引用；cli_process_runner 只依赖 ResolvedCliCommand 的事实落表；契约套件映射表补现有测试实例 |
 | 2026-09-04 | 完整勘察报告对账：#13 的 Flutter 依赖实测落档并定一行等价替换方案（kReleaseMode→dart.vm.product），sdk 纯 Dart 论断随之成立；#9 未被 barrel 导出、包内测试裸 src import 的处理落档；`agent_core_raw_payload_freeze_test` 的字符串路径引用登记为 WP-E 挂起项；映射表补 4 个测试文件（包内 payload 测试、raw_payload、cli_command_locator、ignored_message_logger）；pubspec 定稿纯 Dart（无 flutter 段、dev 用 test） |
+| 2026-09-04 | 实证复核轮：① **删除 `acp_sdk` 依赖**（pubspec / 依赖规则 / T1 三处）并新增 §1.2 实证——该包（含 pub.dev 上的 `dart_acp_sdk`）全仓不存在，`pubspec.lock` 零 `acp` 条目，四个 `acp_*` mapper 只 import core、全裸 JSON 解析；sdk 定为零第三方依赖包，typed ACP SDK 若要引属独立提案（牵动 D7 与 Grok 冒烟）。② **新增 T7**：WP-C 的 82 个待迁测试依赖 6 类住在根 test 树/app 层的公共零件（`fixture_reader` ×7、`agent_file_change_canonical` ×4、`memory_feature_stores` ×3、`test_agent_provider_bundle_factory` ×2、app 层 `FileStorageService` ×4、`app_logging` ×2），插件包够不着，必须先入 testing barrel；`FileStorageService` 明确不换 `MemoryStorageService`（会降落盘往返覆盖），改放文件版实现。 |
 | 2026-09-04 | 终审轮：① **testing 独立 barrel 定稿**（`zeta_agent_provider_sdk_testing.dart`）——套件 import `package:test`，若经主 barrel 导出会把 test 变成主库传递依赖；`test` 因此列为常规 dependencies，主 barrel 不 export `src/testing/`，T6 验收同步改写。② `agent_ignored_message_logger` 从 `payload/` 改归 `diagnostics/`（语义不符修正）。③ 明确 `agent_provider_timestamp` 的 barrel 升格为本 WP 唯一可见性变化（原包内私有，插件包只能经 barrel 取）。④ 删除 T2/T3/T4 里与 §1.1 表对不上的引用方计数（8/6/12 → 改指表行）。 |

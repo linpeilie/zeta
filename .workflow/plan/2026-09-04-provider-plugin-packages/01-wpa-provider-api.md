@@ -151,7 +151,7 @@ export 'src/agent_provider_plugin_contribution.dart';
 
 ### T2 · definition/catalog 上移 + metricLabel 入 definition
 
-1. `git mv`（或新建+删除）`zeta_agent_providers/lib/src/agent_provider_definition.dart` → api 包同相对路径。文件头注释保留；import 行不变（只引 `zeta_agent_core` + 新增 `zeta_foundation`——`ZetaMetricLabel` 来自 foundation，确认原文件是否已传递可用，否则显式 import）。
+1. `git mv`（或新建+删除）`zeta_agent_providers/lib/src/agent_provider_definition.dart` → api 包同相对路径。文件头注释保留；import 行**必须新增** `import 'package:zeta_foundation/zeta_foundation.dart';`——实测原文件第一行只有 `import 'package:zeta_agent_core/zeta_agent_core.dart';`，`ZetaMetricLabel` 不是传递可用的。
 2. 应用设计变更（逐字段 diff）：
 
 ```dart
@@ -214,28 +214,37 @@ const AgentProviderDefinition codexAgentProviderDefinition = AgentProviderDefini
 1. 删 `packages/zeta_agent_providers/lib/src/agent_metric_labels.dart`；barrel 移除 `export 'src/agent_metric_labels.dart';`。
 2. 生产注入点：
 
+> **硬约束（D3 注入口径）**：两处都只能读**静态**目录常量，**禁止**读
+> `agentProviderDefinitionCatalogProvider`。后者 → `resolvedAgentProviderPluginsProvider`
+> → `zetaPluginCatalogProvider`，一读就把插件目录真建出来。而全仓有 12 个文件、
+> 20+ 处用例靠覆盖 `agentProviderBundleFactoryProvider` 来**不建**插件目录
+> （`zeta_app_composition.dart:180` 明文写着「覆盖了 bundle 工厂的用例根本不会建
+> 插件目录，`ProviderContainer.exists` 就是这个『建没建过』的判据」）。踩了它，
+> 本 WP 的验收凭据「测试断言零修改 + 全量绿」当场失效。
+
 ```dart
-// lib/src/app/plugins/zeta_plugin_providers.dart（agentProviderRuntimeRegistryProvider 体内）:
+// lib/src/app/plugins/zeta_plugin_providers.dart:68（agentProviderRuntimeRegistryProvider 体内）:
 final agentProviderRuntimeRegistryProvider =
     Provider<AgentProviderRuntimeRegistry>(
       (ref) => AgentProviderRuntimeRegistry(
         providerFactory: ref.watch(agentProviderBundleFactoryProvider),
         metrics: ref.watch(zetaMetricsPortProvider),
-        providerMetricLabel:
-            ref.watch(agentProviderDefinitionCatalogProvider).metricLabelFor,
+        // 静态目录常量，不经 ref、不挂激活链。
+        providerMetricLabel: builtInAgentProviderDefinitionCatalog.metricLabelFor,
       ),
       name: 'agentProviderRuntimeRegistry',
     );
 ```
 
 ```dart
-// lib/src/app/app.dart:135 —— IdeHome 参数。
-// app.dart 不持有 Ref；经组合层容器读一次 catalog（写法以 app.dart 现有
-// 容器访问方式为准，例如 composition 暴露的 container/read 通道）：
-providerMetricLabel: <读 agentProviderDefinitionCatalogProvider>.metricLabelFor,
+// lib/src/app/app.dart:135 —— IdeHome 参数，同样直接引静态目录：
+providerMetricLabel: builtInAgentProviderDefinitionCatalog.metricLabelFor,
 ```
 
-注意顺序约束：`agentProviderDefinitionCatalogProvider` 依赖插件激活（同步，首帧前完成），`app.dart:135` 所在分支本就发生在语言冻结与组合根就绪之后（见其上方注释「这一支只在语言冻结之后走到」），读取安全。
+`builtInAgentProviderDefinitionCatalog` 是编译期常量目录（`zeta_store_providers.dart:77`
+已经这么用，即 C9），不依赖激活，也没有读取时机问题。WP-C manifest 落地后两处统一换成
+`zetaAgentProviderDefinitionCatalog.metricLabelFor`（manifest 成员二，同为静态），
+仍然不碰激活链。
 
 3. 测试注入点（两处）：把 `AgentMetricLabels.forProviderId` 换成 `builtInAgentProviderDefinitionCatalog.metricLabelFor`（该 catalog 在 WP-C 前仍由 providers barrel 导出，测试改动最小）。
 4. `agent_provider_runtime_registry.dart:33` 注释改为「组合层按 `AgentProviderDefinitionCatalog.metricLabelFor` 注入后，内置 Provider 才会显示成可读常量」。
@@ -272,6 +281,7 @@ providerMetricLabel: <读 agentProviderDefinitionCatalogProvider>.metricLabelFor
 - [ ] `AgentMetricLabels` 全仓零引用（含测试与注释，除历史文档外）
 - [ ] 三个 definition 的 `metricLabel` 值与旧常量逐字一致（codex/grok/claude_code）
 - [ ] `AgentProviderStaticCapabilities` 仍在 providers 包原位、值未动
+- [ ] 两个生产注入点均引静态目录常量：`grep -rn "agentProviderDefinitionCatalogProvider" lib/src/app/plugins/zeta_plugin_providers.dart lib/src/app/app.dart` 零命中
 - [ ] `bash tool/test_full.sh` 全绿；测试断言零修改（除 import 与 T4-3 的函数名替换）
 
 ## 6. 风险
@@ -281,7 +291,7 @@ providerMetricLabel: <读 agentProviderDefinitionCatalogProvider>.metricLabelFor
 | definition 加 required 字段漏改构造点 | 编译期必炸；构造点 = 三个插件入口 + 测试 fixture，analyze 即暴露 |
 | 切换 import 漏掉裸 `src/` 路径引用 | T5 收尾反查三条 pattern |
 | metricLabel 语义漂移（指标基数/标签变化） | §T2-2 的等价论证 + T6 单测固化两分支；指标标签值逐字比对 |
-| `app.dart` 读取 catalog 的时机早于激活 | 激活是同步的且发生在组合根；该分支上方注释已保证顺序，PR 里截图/引用该注释说明 |
+| **读 catalog 反而强制激活插件目录** | 真实风险方向与初稿相反：不是「读太早」，而是读 `agentProviderDefinitionCatalogProvider` 会把插件目录建出来，破坏 20+ 处测试赖以生效的逃生口。T4-2 已改为只读静态目录常量；DoD 加一条反查断言 |
 
 ## 7. 开发记录
 
@@ -289,3 +299,4 @@ providerMetricLabel: <读 agentProviderDefinitionCatalogProvider>.metricLabelFor
 |---|---|
 | 2026-09-04 | 文档加深到伪代码级：补全逐字现状（metric_labels 全文、registry 签名、四个注入点表）、pubspec 逐字模板、workspace 字典序插入位置、metricLabelFor 语义等价论证、T5 逐文件切换表。 |
 | 2026-09-04 | 复审轮：§3 补 WP-D 扩展预留说明（management/usage 两个子库将在 WP-D T0 加入本包），防止两文件结构被当成定案。 |
+| 2026-09-04 | 实证复核轮：① **T4-2 改写**——原方案读 `agentProviderDefinitionCatalogProvider` 会强制建插件目录，冲掉 12 个文件 20+ 处覆盖 bundle 工厂的测试逃生口（`zeta_app_composition.dart:180` 明文依赖），改为只读静态 `builtInAgentProviderDefinitionCatalog`（WP-C 后换 manifest 成员二）；§6 风险表对应行方向纠正，DoD 加反查断言。② T2-1 的待确认项定案：`agent_provider_definition.dart` 实测**未** import foundation，必须显式新增。 |

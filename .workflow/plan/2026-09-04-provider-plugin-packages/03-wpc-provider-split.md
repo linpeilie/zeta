@@ -1,7 +1,8 @@
 # WP-C · 三插件拆包 + manifest 落地
 
 > 状态：未开始
-> 规模：每个 Provider 约 1–2 人天（Claude 取上限），共 3 个独立 PR + 1 个 manifest PR
+> 规模：每个 Provider 约 1.5–2.5 人天（Claude 取上限），共 3 个独立 PR + 1 个 manifest PR
+> （相较初稿上调：测试面实测比初稿大——82 个随迁 + 77 个留根改 import + 52 个断言库替换，见 §5）
 > 依赖：WP-B 完成
 > 性质：纯搬移。每个 PR 全量绿 + 测试断言零修改（除路径/import）为唯一正确性证据。
 
@@ -46,7 +47,12 @@ WP-C 删除 `zeta_agent_providers` 后、WP-D 完成前，app 层以下文件**�
 ## 3. 通用拆包流程（每个 Provider 重复）
 
 ```
-1. 建包：pubspec/analysis_options 对齐兄弟包；根 pubspec workspace 登记
+1. 建包：pubspec/analysis_options 对齐兄弟包；根 pubspec workspace 登记。
+   **第三方依赖按实测归属**（现状 providers 包只有三个外部依赖，全是私产）：
+   - codex：`toml`（config 解析，2 个文件）
+   - claude：`crypto` + `unorm_dart`（`claude_code_macos_keychain_source.dart:6-7`）
+   - grok：无
+   - 三包统一加 `meta`（`@visibleForTesting` 替换用）与 `dev_dependencies: test`
 2. 迁移实现文件（§4 清单），import 改写：
    - 契约类型   → package:zeta_agent_provider_api/...
    - 共享机制   → package:zeta_agent_provider_sdk/...
@@ -57,7 +63,16 @@ WP-C 删除 `zeta_agent_providers` 后、WP-D 完成前，app 层以下文件**�
 4. native_agent_provider_bundles.dart 中本 Provider 的组装函数（nativeBundleFromXxx
    及 createXxxBundle 链路）随迁本包 src/；该文件随三家拆完后删除
 5. barrel 定稿（见 §2 导出规则）
-6. 测试随迁（§5 映射表），契约测试一行接入：
+6. 测试随迁（§5 映射表）。**注意断言库替换**：`tool/test_packages.sh:17` 按 pubspec
+   里有没有 `sdk: flutter` 选 runner，插件包无 flutter 段 → 走 `dart test` → 一行
+   `package:flutter_test` 都不能留。实测 82 个待迁文件里 **52 个** import flutter_test，
+   但**零** `testWidgets` / `WidgetTester`（纯当断言库用），机械替换即可：
+
+     grep -rl "package:flutter_test/flutter_test.dart" \
+       packages/zeta_agent_provider_<x>/test \
+       | xargs sed -i '' \
+           's|package:flutter_test/flutter_test.dart|package:test/test.dart|'
+   随后契约测试一行接入：
    // packages/zeta_agent_provider_<x>/test/contracts_test.dart
    import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk_testing.dart';
    void main() {
@@ -146,7 +161,7 @@ Claude 特有：插件工厂收三个宿主注入（`sessionDecisionStoreFactory
 
 - 枚举命令（实施时先跑它生成真实清单再逐行核对）：
   `git ls-files test/ | rg "(app_server|/acp/|claude_code|codex_|grok_)"`
-  实测去重后 **59 个文件**（58 个 `*_test.dart` + 1 个 fixture 辅助 `grok_canonical_signature.dart`）。
+  实测去重后 **82 个文件**（初稿记 59 有误）。其中 **52 个** import `package:flutter_test`，需按 §3 第 6 步替换为 `package:test`。
 - `test/src/features/agent/data/native_agent_provider_bundle_test.dart` 是三家混合断言（经 `nativeBundleFromXxx` 组装）——函数本体随家迁，测试按家拆成三段随迁；纯组装一致性部分（若有）留根树改经 manifest 断言。
 - `datasources/app_server/codex_app_server_runtime_info.dart` 是 `part of 'codex_app_server_agent_provider.dart'` 的 part 文件——迁移时必须与主文件同包同相对路径，`part of` URI 不变。
 - 测试里对 fixture 的相对路径引用随包迁移调整；fixture（脱敏 wire 序列）一并随迁。
@@ -154,14 +169,43 @@ Claude 特有：插件工厂收三个宿主注入（`sessionDecisionStoreFactory
 - 迁出后根树分片自然减重；`tool/test_shards.dart` 无需改动（目录仍在），分片耗时若失衡留 WP-E 处理。
 - `tool/test_packages.sh` 对 `packages/*` 自动发现，无需登记。
 
-### 5.1 根测试的身份常量与 fixture 来源（重要设计）
+### 5.1 留根测试的两层边界（重要设计，已按实测改写）
 
-实测约 25 个根测试文件引用 `defaultAgentProviderId`、`codexAgentProviderType`、`builtInAgentProviderSettings`、`builtInAgentProviderDefinitionCatalog` 等符号（它们今天由 providers barrel 导出）。拆包后这些符号物理上进了各插件包，而**根测试不允许 import 插件包**（WP-E 守卫把「manifest 唯一」扩展到 `test/`）。
+**初稿方案（manifest 即唯一 fixture 源）已被实测推翻**，这里记录实测数据与新方案。
 
-解法：**manifest 即测试 fixture 源**。manifest（app 代码，`lib/src/app/plugins/`）除了 §6 的四类成员，再暴露一组派生快照，根测试统一改为 import manifest：
+实测（`grep -rln "package:zeta_agent_providers" test/`）：
+
+| 口径 | 初稿估计 | 实测 |
+|---|---|---|
+| 直接 import providers barrel 的根测试 | — | **125 个** |
+| 其中不在 §5 迁移集、**必须留根**的 | 约 25 个 | **77 个** |
+| 留根文件里只要**身份常量**（id / type / defaultConfig / settings 快照）的 | — | 57 个 |
+| 留根文件里要**厂商实现类型**的 | 0（初稿假设） | **20 个** |
+
+那 20 个要的是 `CodexAppServerAgentProvider`、`GrokAgentProviderPlugin`、`GrokPermissionPolicyAdapter`、`GrokPermissionMode`、`ClaudeCodeCliMetadataSnapshot`、`looksLikeGrokCliPath` 一类**实现符号**，分布在 `ide_shell_controller_test`、`agent_management_slice_runner_test`、`agent_management_page_test`、`agent_conversation_view_model_test`、`agent_provider_catalog_freeze_test`、`test/src/testing/activated_agent_provider_plugins.dart` 等 **app 级测试**里——搬不进插件包。
+
+若坚持「manifest 唯一」，manifest 的 `show` 列表就得把这些实现类型从**生产文件**重新导出，「显式收敛、不倒灌 barrel」当场失守，而且是为测试扩生产导出面。
+
+**新方案：双层边界（00-index D10）**
+
+```
+lib/  ：只有 lib/src/app/plugins/agent_provider_manifest.dart 可 import 插件包
+test/ ：只有 test/src/testing/**            可 import 插件包
+```
+
+`test/src/testing/` 本就是共享测试装配层（`activated_agent_provider_plugins.dart`、`provider_settings_test_store.dart`、`memory_feature_stores.dart` 都在里面），把它定义成**测试侧的 manifest 对应物**，语义自洽，也不用动生产代码。
+
+分工：
+
+| 测试需要什么 | 走哪条通道 |
+|---|---|
+| 身份常量（`defaultAgentProviderId` / `codexAgentProviderType` / `defaultCodexAgentProviderConfig` / settings 快照） | manifest 成员五的 `show` 再导出 + 成员派生快照（下方 `zetaBuiltInAgentProviderSettings`）——**57 个**文件纯 import 改写 |
+| 厂商实现类型 | 经 `test/src/testing/` 下的 harness 取；harness 直接 import 插件包——**20 个**文件改为 import harness |
+| 跨厂商不变量（`cli_locator_identity_test.dart`：断言 Grok locator 拒绝 codex 路径、反之亦然） | 明确归 `test/src/testing/`，两个插件包都放不下，不再假装它属于某一家 |
+
+manifest 侧仍提供派生快照（同时是 codec/DI 的生产来源，见 §6）：
 
 ```dart
-// manifest 内的测试支持面（同时也是 codec/DI 的生产来源，见 §6）
 /// 与旧 builtInAgentProviderSettings 逐字段相同的启动快照。
 const AgentProviderSettings zetaBuiltInAgentProviderSettings =
     AgentProviderSettings(
@@ -176,13 +220,11 @@ const AgentProviderSettings zetaBuiltInAgentProviderSettings =
 const String zetaDefaultAgentProviderId = defaultAgentProviderId;
 ```
 
-引用 `codexAgentProviderType` 等**类型常量**的测试走 §6 成员五的 show 再导出（manifest 是全仓唯一 import 插件包的文件，再导出天然遵守该规则）。
-
-根测试的迁移是**纯 import 改写**（`package:zeta_agent_providers/...` → `package:zeta/src/app/plugins/agent_provider_manifest.dart`），不断言变化，符合本 WP「断言零修改」纪律。`test/src/testing/provider_settings_test_store.dart:60/99`、`memory_feature_stores.dart:48`、`activated_agent_provider_plugins.dart:11` 等公共 harness 先改，多数测试文件经 harness 间接消掉 providers import。
+**执行顺序**：先改 `test/src/testing/` 下的公共 harness（`provider_settings_test_store.dart:60/99`、`memory_feature_stores.dart:48`、`activated_agent_provider_plugins.dart:11`），多数下游测试经 harness 间接消掉 providers import；剩下的逐个改 import。全程**断言零修改**，符合本 WP 纪律。
 
 ## 6. T4 · manifest 与注册点改造（与 T1 同 PR 落地，逐 PR 追加）
 
-新建 `lib/src/app/plugins/agent_provider_manifest.dart`——**全仓库（含 `test/`）唯一允许 import 插件包的文件**（WP-E 守卫固化）：
+新建 `lib/src/app/plugins/agent_provider_manifest.dart`——**`lib/` 下唯一允许 import 插件包的文件**（`test/` 侧的对应物是 `test/src/testing/`，见 §5.1 与 00-index D10；两者都由 WP-E 守卫固化）：
 
 ```dart
 /// Agent Provider 插件的编译期 manifest。
@@ -226,9 +268,10 @@ List<ZetaPluginFactory> zetaAgentProviderPluginFactories({
 // claudeCodeCliMetadataLoaderProvider 从 zeta_store_providers.dart 整体迁入本文件——
 // 它们的类型来自 Claude 插件包，只有 manifest 允许 import。
 
-// ── 成员五：身份符号再导出（根测试 fixture 通道，§5.1）──
-// 约 25 个根测试文件还引用 codexAgentProviderType 等类型常量；根测试禁 import
-// 插件包，统一经本文件再导出（show 列表显式收敛，不倒灌整个 barrel）：
+// ── 成员五：身份符号再导出（留根测试的**身份常量**通道，§5.1）──
+// 实测 57 个留根测试只要身份常量（id / type / defaultConfig），统一经本文件再导出。
+// show 列表**只收身份常量**：厂商实现类型（CodexAppServerAgentProvider 等，20 个
+// 测试要用）一律走 test/src/testing/ 的 harness，绝不从生产文件倒灌出去。
 export 'package:zeta_agent_provider_codex/zeta_agent_provider_codex.dart'
     show codexAgentProviderType, codexAgentProviderDefinition,
         defaultCodexAgentProviderConfig;
@@ -251,11 +294,13 @@ export 'package:zeta_agent_provider_codex/zeta_agent_provider_codex.dart'
 
 - [ ] 三个插件包各自 `flutter test packages/zeta_agent_provider_<x>` 独立绿
 - [ ] 每个插件包接入 `runAgentProviderContractTests` 且全绿
-- [ ] manifest 是唯一 import 插件包的文件（`lib/` 与 `test/` 全域；§2 过渡白名单除外且均已注释登记）
+- [ ] `lib/` 下 manifest 是唯一 import 插件包的文件；`test/` 下仅 `test/src/testing/**` 可 import 插件包（§2 过渡白名单除外且均已注释登记）
+- [ ] manifest 成员五的 `show` 列表只含身份常量，无厂商实现类型（目检 + WP-E 守卫）
 - [ ] `zeta_agent_providers` 已删除，全仓零引用
 - [ ] `AgentProviderStaticCapabilities`、`native_agent_provider_bundles.dart`、`built_in_agent_provider_plugins.dart` 不存在了
 - [ ] D7 红线：`grep -rn "codexAppServer\|'acp'\|claudeCode" packages/zeta_agent_provider_*/lib` 的字符串值与拆分前逐字节一致；`agent_provider_config_codec.dart` 无 diff
-- [ ] 每个 PR 全量绿、测试断言零修改（除路径/import）
+- [ ] 待迁测试无 `package:flutter_test` 残留：`grep -rn "package:flutter_test" packages/zeta_agent_provider_*/test` 零命中
+- [ ] 每个 PR 全量绿、测试断言零修改（除路径/import 与断言库替换）
 - [ ] Codex 协议冒烟（`tool/smoke_codex_app_server.py --expected-version 0.144.5`）按 AGENTS.md 流程执行；无设备/凭据时在 PR 描述标「待执行/阻塞」，不得推断通过
 
 ## 8. 风险
@@ -266,7 +311,8 @@ export 'package:zeta_agent_provider_codex/zeta_agent_provider_codex.dart'
 | 过渡白名单失控扩散 | 白名单写死 §2，WP-E 守卫只放行这几个文件；新增一律打回 |
 | Claude 包体量大（30 文件）单 PR 难审 | T3 内部再拆两个 commit（先实现文件、后入口+测试），或按评审要求拆 PR |
 | Grok/Claude 历史解析被 usage 与 conversation 两处共用，迁走后 usage 侧断链 | §2 已列为过渡白名单，WP-D T4 收口 |
-| 根测试误留插件包 import | §5.1 统一到 manifest；WP-E 守卫 `test/` 全域禁插件包 import |
+| 根测试误留插件包 import | §5.1 双层边界：身份常量经 manifest、实现类型经 `test/src/testing/`；WP-E 守卫按这两层断言 |
+| 断言库替换漏改导致包内测试跑不起来 | `test_packages.sh` 对无 flutter 段的包用 `dart test`，漏改会直接编译失败——不会静默 |
 
 ## 9. 开发记录
 
@@ -275,4 +321,5 @@ export 'package:zeta_agent_provider_codex/zeta_agent_provider_codex.dart'
 | 2026-09-04 | 初稿 |
 | 2026-09-04 | 重写：三包文件数按实测清点（23/20/30）；`stream_json_peer` 归 Claude 实证落档；过渡白名单移除 `cli_process_runner`（WP-B 已迁 sdk）；新增 §5.1「manifest 即测试 fixture 源」取代测试身份常量文件方案（~25 个根测试文件纯 import 改写）；codec 的 catalog 驱动事实落档（`fallbackSettings => defaultSettings`，manifest 保持 Codex 首位保 D7）；barrel 导出清单补 `builtInAgentProviderSettings` 后继者 `zetaBuiltInAgentProviderSettings` |
 | 2026-09-04 | 完整勘察报告对账：Flutter 依赖实测（仅 2 个厂商 adapter 用 `@visibleForTesting`）→ 迁 `package:meta` 的一行替换方案落档，三插件包纯 Dart 论断成立；`native_agent_provider_bundles.dart` 实测 129 行、static capabilities 86 行、built_in 51 行；测试枚举实测 59 文件（58 测试 + 1 fixture 辅助）；补 `native_agent_provider_bundle_test` 按家拆分与 part 文件（`codex_app_server_runtime_info`）随迁两条注意事项 |
+| 2026-09-04 | 实证复核轮：① **§5.1 整节重写**——初稿「manifest 即唯一 fixture 源」被实测推翻：providers barrel 的根测试引用是 125 个（不是约 25），留根 77 个，其中 20 个要的是厂商**实现类型**（`CodexAppServerAgentProvider`/`GrokPermissionPolicyAdapter`/`ClaudeCodeCliMetadataSnapshot` 等，都在 app 级测试里搬不走），走 manifest `show` 等于把实现类型倒灌进生产导出面；改为双层边界（`lib/` 只有 manifest、`test/` 只有 `test/src/testing/`，见 00-index D10），manifest `show` 只收身份常量。② **断言库替换**：待迁测试实测 82 个（初稿记 59），其中 52 个 import `flutter_test`，而 `test_packages.sh:17` 对无 `sdk: flutter` 的包用 `dart test`——必须换 `package:test`（零 `testWidgets`，机械替换）；§3 第 6 步给出命令。③ 三包第三方依赖定案（codex `toml`、claude `crypto`+`unorm_dart`、grok 无、统一 `meta`）。④ `cli_locator_identity_test.dart`（跨厂商不变量）归属定案：`test/src/testing/`。⑤ 规模上调至每包 1.5–2.5 人天。 |
 | 2026-09-04 | 终审轮：① §2 白名单补 `agent_management_slice_runner.dart`（实测 `:4` import providers barrel、`:217/219` 用 enrichment key，此前漏列，WP-D T5 消灭）。② manifest 新增**成员五：身份符号 show 再导出**（约 25 个根测试还引用 `codexAgentProviderType` 等类型常量，纯派生快照不够，再导出守住「唯一 import 点」规则）与生产注入注意（localized textCatalog 必须显式传，fallback 只是测试兜底）。③ 契约测试接入改经 testing 独立 barrel（WP-B 终审定稿）。 |
