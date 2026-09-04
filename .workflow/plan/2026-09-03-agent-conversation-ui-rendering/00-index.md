@@ -119,3 +119,4 @@ WP-5（spike 结论后再排期）
 | 2026-09-03 | WP-6 T7 | markdown 估算契约守卫 | 文档点名的 descriptor 文件不存在，守卫改盯 WP-3 的 `estimateAgentMarkdownExtent`；「偏差<20%」与实测不符（现状高估 30%~70%），且纯比值带拦不住 T8 的工具栏，故做成「真实高度基线 ±6% + 不对称比值带 0.95~2.2」两层。已变异验证：代码块 +28px 只让 code 那条红 |
 | 2026-09-03 | WP-6 T8 | 代码块工具栏注入点 | 包内三态 builder（不注入=默认按钮/返回 widget=替换/返回 null=不渲染）+ 补齐 language/lineCount 透传；Zeta 侧语言标签+行数+1.5s 对勾反馈，复用既有 l10n 键。文档预期的「T7 守卫先红」未发生：工具栏与代码同处一行不增高，那句预期隐含了工具栏另起一行的形态。守卫脚手架换成 ShadcnApp 外壳（IdeIconButton 需要 shadcn 主题祖先，缺 l10n delegates 会量到错误组件的 10 万 px） |
 | 2026-09-03 | WP-6 T9 | 右键菜单开关 + 文案注入 | 包内 enableContextMenu 早退 + MarkdownContextMenuLabels（默认英文不变）；Zeta 删掉空组件抑制 hack，改为过滤 selectAll 后交平台工具栏渲染，ARB 补两键。连带更新两处特征化旧 hack 的断言。踩坑：正文 build 现在读 l10n（脚手架缺 delegates 会渲染错误组件）、useColumn 下右键要点首行文字而非 getCenter |
+| 2026-09-03 | WP-6 T10 | 正文光标修复 | 包内按文本块声明 I-Beam 缺省（可选中才给），链接 click 仍在更内层优先；应用侧两处 MouseRegion 补丁删除。没走 span 缺省那条路——那有 9 处构造点。补一条「单段正文只有一个文本光标区域」防补丁复活。WP-6 的 P0/P1 至此全部落地 |

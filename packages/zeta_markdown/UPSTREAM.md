@@ -152,6 +152,24 @@ Zeta 自己加的测试放**独立文件**（`test/zeta_*.dart`），不要写�
 **测试要点**：右键要点在**首行文字**上。`useColumn: true` 时组件盒可能比内容高，
 `getCenter` 会落到空白处，菜单不会弹——这跟开关无关，别误判成回归。
 
+### 2026-09-03 · WP-6 T10 · 正文缺省鼠标光标
+
+默认行为零变化（不传 `mouseCursor` = 上游的 `MouseCursor.defer`）：
+
+- `lib/src/render/pretext_text_block.dart`：`MarkdownPretextTextBlock` 两个构造
+  各加可选 `mouseCursor`；原 `build` 更名 `_buildContent`，非空时在**块级**包一层
+  `MouseRegion`。
+- `lib/src/render/builder/markdown_block_builder.dart`：5 处 `.rich(` 构造统一传
+  `_defaultTextCursor`——可选中时 `SystemMouseCursors.text`，否则 null。
+
+**为什么包在块级而不是改 span 缺省**：span 侧有 9 处构造点，逐处改动大且容易漏；
+块级 `MouseRegion` 只声明「缺省」，run 自带的光标（链接的 click）在更内层、命中
+时优先生效，语义与逐 span 改一致。非文本块（图片、表格、代码块）不经这个路径，
+光标不受影响——这正是宿主外层套 `MouseRegion` 那种补丁做不到的。
+
+测试：`test/zeta_text_cursor_test.dart`（可选中为 I-Beam / 不可选中保持 defer /
+挂 onTapLink 后链接 span 是 click）。
+
 **未改**（有意保留，减小同步 diff 面）：
 
 - `lib/src/selection/mixin_selection_area.dart` 与其中的 `MixinSelectionArea` —— 这里的 "Mixin" 是上游组织名而非包标识；改名会让选择区相关文件的同步 diff 全量失配。

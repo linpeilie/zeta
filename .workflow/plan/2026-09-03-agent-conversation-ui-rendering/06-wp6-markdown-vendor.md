@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |----|----|
-| 状态 | 进行中（T1–T9 已完成） |
+| 状态 | 进行中（T1–T10 已完成，P0/P1 全部落地） |
 | 规模 | 11–16 人天（T1–T10 + T14–T15）；P2 可选项另计 |
 | 依赖 | 无硬依赖；T2 换包与 WP-2 T3 协同；T7 与 WP-3 协同 |
 | 门禁焦点 | G6（新 Package 论证）、G7（外链处理）、G8（主题 token） |
@@ -640,7 +640,15 @@ MarkdownWidget(
 
 **Zeta 侧**：删 `_AgentMarkdownBody` 的 MouseRegion 补丁（`agent_pane_messages.dart:686-689`）。
 
-- **验收**：正文 hover 显示 I-Beam；链接 hover 显示手型；非文本块（图片等）光标不变。
+- **验收**：正文 hover 显示 I-Beam；链接 hover 显示手型；非文本块（图片等）光标不变。 ✅
+
+**施工记录（2026-09-03）**：包内 205 条全绿（新增 4 条），应用侧的 `MouseRegion` 补丁已删（两处正文组件）。
+
+**实现路径与文档预案不同**（文档给了两条备选，选了第二条并改进）：没有改 span 侧的 `mouseCursor ?? MouseCursor.defer` 缺省——那个字段在 `pretext_text_block.dart` 里有 **9 处构造点**（fragment / segment / run 各一套），逐处改动大且容易漏。改为给 `MarkdownPretextTextBlock` 两个构造各加可选 `mouseCursor`，非空时在**块级**包一层 `MouseRegion`，由 `MarkdownBlockBuilder` 的 5 处 `.rich(` 统一传入（可选中才传 I-Beam）。
+
+语义与逐 span 改等价：块级只声明「缺省」，run 自带的光标（链接的 click）在更内层、命中时优先。**比宿主外层补丁强的地方**：图片、表格、代码块不经这条路径，光标不受影响——原来的 `MouseRegion` 补丁把整棵 markdown 树都罩住了。
+
+应用侧测试补了一条：单段正文有且只有**一个**文本光标区域。外层补丁若复活会变成两个，测试直接红。
 
 ### 阶段五：P2 可选（T11–T13，独立评估立项）
 

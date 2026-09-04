@@ -85,6 +85,7 @@ class MarkdownPretextTextBlock extends StatelessWidget {
     this.intrinsicWidthSafe = false,
     this.directTextKey,
     this.preferDirectRichText = false,
+    this.mouseCursor,
   })  : runs = null,
         fallbackStyle = style;
 
@@ -96,6 +97,7 @@ class MarkdownPretextTextBlock extends StatelessWidget {
     this.intrinsicWidthSafe = false,
     this.directTextKey,
     this.preferDirectRichText = false,
+    this.mouseCursor,
   })  : text = '',
         style = fallbackStyle;
 
@@ -108,8 +110,24 @@ class MarkdownPretextTextBlock extends StatelessWidget {
   final GlobalKey? directTextKey;
   final bool preferDirectRichText;
 
+  /// 整块文本的缺省鼠标光标。
+  ///
+  /// 为空时保持上游行为（`MouseCursor.defer`，桌面端表现为箭头）。run 自带的
+  /// 光标（如链接的 click）在更内层，优先于这里。
+  final MouseCursor? mouseCursor;
+
   @override
   Widget build(BuildContext context) {
+    final content = _buildContent(context);
+    final cursor = mouseCursor;
+    if (cursor == null) {
+      return content;
+    }
+    // 只声明「缺省」：span 上带 click 的链接在更内层，命中时先于这里生效。
+    return MouseRegion(cursor: cursor, child: content);
+  }
+
+  Widget _buildContent(BuildContext context) {
     final textScaler =
         MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling;
     final textDirection = Directionality.of(context);

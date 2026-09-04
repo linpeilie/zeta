@@ -72,6 +72,23 @@ void main() {
     expect(find.text('全选'), findsNothing);
   });
 
+  testWidgets('正文声明 I-Beam 光标，且不再靠外层 MouseRegion 补丁', (tester) async {
+    await pump(tester);
+
+    final cursors = tester
+        .widgetList<MouseRegion>(find.byType(MouseRegion))
+        .map((region) => region.cursor)
+        .toList();
+    expect(cursors, contains(SystemMouseCursors.text));
+
+    // 单段正文只应有一个文本光标区域——它由包内按文本块声明。
+    // 外层补丁若复活，这里会变成两个（补丁那层把整棵树都包了）。
+    expect(
+      cursors.where((cursor) => cursor == SystemMouseCursors.text),
+      hasLength(1),
+    );
+  });
+
   testWidgets('菜单不再是被抑制的空组件', (tester) async {
     await pump(tester);
     await secondaryTap(tester);

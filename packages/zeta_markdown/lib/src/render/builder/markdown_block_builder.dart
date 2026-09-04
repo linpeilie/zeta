@@ -383,6 +383,7 @@ class MarkdownBlockBuilder {
           child: _wrapHeadingBlock(
             level: heading.level,
             child: MarkdownPretextTextBlock.rich(
+              mouseCursor: _defaultTextCursor,
               runs: runs,
               fallbackStyle: style,
               directTextKey: directTextKey,
@@ -833,6 +834,7 @@ class MarkdownBlockBuilder {
     return SelectableBlockSpec(
       child: child ??
           MarkdownPretextTextBlock.rich(
+            mouseCursor: _defaultTextCursor,
             runs: runs,
             fallbackStyle: fallbackStyle,
             directTextKey: directTextKey,
@@ -1555,6 +1557,10 @@ class MarkdownBlockBuilder {
     );
   }
 
+  /// 可选中的正文用 I-Beam；非选中态保持上游的 defer（桌面端是箭头）。
+  MouseCursor? get _defaultTextCursor =>
+      isSelectable ? SystemMouseCursors.text : null;
+
   Widget _buildTextBlock({
     required TextStyle style,
     required List<InlineNode> inlines,
@@ -1569,6 +1575,7 @@ class MarkdownBlockBuilder {
       linkStyle: linkStyle,
     );
     return MarkdownPretextTextBlock.rich(
+      mouseCursor: _defaultTextCursor,
       runs: runs,
       fallbackStyle: style,
       textAlign: textAlign,
@@ -1822,6 +1829,7 @@ class MarkdownBlockBuilder {
     TextStyle? linkStyle,
   }) {
     return MarkdownPretextTextBlock.rich(
+      mouseCursor: _defaultTextCursor,
       runs: inlineBuilder.buildPretextRuns(
         style,
         inlines,
@@ -2033,6 +2041,7 @@ class MarkdownBlockBuilder {
       );
     }
     return MarkdownPretextTextBlock.rich(
+      mouseCursor: _defaultTextCursor,
       runs: pretext.runs,
       fallbackStyle: pretext.fallbackStyle,
       directTextKey: directTextKey,
