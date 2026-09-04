@@ -1,4 +1,4 @@
-import 'package:zeta_agent_providers/src/mappers/acp_content_codec.dart';
+import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk.dart';
 import 'package:zeta_agent_providers/src/mappers/acp_session_update_decoder.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
