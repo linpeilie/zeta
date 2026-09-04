@@ -3,6 +3,8 @@ import 'dart:ui' show lerpDouble;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../render/markdown_code_highlight_palette.dart';
+
 class MarkdownTheme extends InheritedTheme {
   const MarkdownTheme({
     super.key,
@@ -135,6 +137,7 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
     required this.showHeading1Divider,
     required this.showHeading2Divider,
     required this.codeHighlightMaxLines,
+    this.codeHighlightPalette,
   });
 
   factory MarkdownThemeData.fallback(
@@ -514,6 +517,9 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
   final bool showHeading2Divider;
   final int? codeHighlightMaxLines;
 
+  /// 代码高亮语义调色板；为空时按 `linkStyle.color` 推导（上游默认行为）。
+  final MarkdownCodeHighlightPalette? codeHighlightPalette;
+
   TextStyle headingStyleForLevel(int level) {
     switch (level) {
       case 1:
@@ -575,6 +581,7 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
     bool? showHeading1Divider,
     bool? showHeading2Divider,
     int? codeHighlightMaxLines,
+    MarkdownCodeHighlightPalette? codeHighlightPalette,
   }) {
     return MarkdownThemeData(
       padding: padding ?? this.padding,
@@ -627,6 +634,7 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
       showHeading2Divider: showHeading2Divider ?? this.showHeading2Divider,
       codeHighlightMaxLines:
           codeHighlightMaxLines ?? this.codeHighlightMaxLines,
+      codeHighlightPalette: codeHighlightPalette ?? this.codeHighlightPalette,
     );
   }
 
@@ -775,6 +783,11 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
           t < 0.5 ? showHeading2Divider : other.showHeading2Divider,
       codeHighlightMaxLines:
           t < 0.5 ? codeHighlightMaxLines : other.codeHighlightMaxLines,
+      codeHighlightPalette: MarkdownCodeHighlightPalette.lerp(
+        codeHighlightPalette,
+        other.codeHighlightPalette,
+        t,
+      ),
     );
   }
 
@@ -787,6 +800,13 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
     properties.add(DoubleProperty('imageCaptionSpacing', imageCaptionSpacing));
     properties.add(DoubleProperty('quoteBorderWidth', quoteBorderWidth));
     properties.add(IntProperty('codeHighlightMaxLines', codeHighlightMaxLines));
+    properties.add(
+      DiagnosticsProperty<MarkdownCodeHighlightPalette>(
+        'codeHighlightPalette',
+        codeHighlightPalette,
+        defaultValue: null,
+      ),
+    );
     properties.add(ColorProperty('selectionColor', selectionColor));
     properties.add(DiagnosticsProperty<TextStyle>('bodyStyle', bodyStyle));
     properties
@@ -837,6 +857,7 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
       showHeading1Divider,
       showHeading2Divider,
       codeHighlightMaxLines,
+      codeHighlightPalette,
     ]);
   }
 
@@ -887,6 +908,7 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
             imagePlaceholderBackgroundColor &&
         other.showHeading1Divider == showHeading1Divider &&
         other.showHeading2Divider == showHeading2Divider &&
-        other.codeHighlightMaxLines == codeHighlightMaxLines;
+        other.codeHighlightMaxLines == codeHighlightMaxLines &&
+        other.codeHighlightPalette == codeHighlightPalette;
   }
 }

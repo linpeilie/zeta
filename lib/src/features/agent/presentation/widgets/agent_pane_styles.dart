@@ -85,6 +85,25 @@ IdeStatusCardTone historyEventTone(AgentHistoryEventKind kind) {
   };
 }
 
+/// 代码块高亮的 Graphite 语义映射。
+///
+/// 不映射的槽位（link）继续走包内从 `linkStyle` 的推导，与正文链接同色。
+/// 颜色一律取自 token，明暗主题各自解析——这里不写死任何 hex。
+MarkdownCodeHighlightPalette agentCodeHighlightPalette(IdeColors colors) {
+  return MarkdownCodeHighlightPalette(
+    // 关键字与正文链接同源（accent），代码块里最重的一档。
+    keyword: colors.accent,
+    string: colors.success,
+    number: colors.warning,
+    // 注释压到三级文本，避免与正文抢注意力。
+    comment: colors.textTertiary,
+    type: colors.info,
+    title: colors.textPrimary,
+    meta: colors.textSecondary,
+    punctuation: colors.textSecondary,
+  );
+}
+
 MarkdownThemeData agentMarkdownTheme(BuildContext context) {
   final colors = IdeColors.of(context);
   final textStyles = IdeTextStyles.of(context);
@@ -107,6 +126,7 @@ MarkdownThemeData agentMarkdownTheme(BuildContext context) {
     codeBlockPadding: IdeSpacing.cardPadding,
     codeBlockBackgroundColor: colors.surfaceElevated,
     codeBlockBorderRadius: IdeRadius.allSmall,
+    codeHighlightPalette: agentCodeHighlightPalette(colors),
     quotePadding: const EdgeInsets.fromLTRB(
       IdeSpacing.space12,
       IdeSpacing.space8,

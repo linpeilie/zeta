@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |----|----|
-| 状态 | 进行中（T1–T5 已完成） |
+| 状态 | 进行中（T1–T6 已完成） |
 | 规模 | 11–16 人天（T1–T10 + T14–T15）；P2 可选项另计 |
 | 依赖 | 无硬依赖；T2 换包与 WP-2 T3 协同；T7 与 WP-3 协同 |
 | 门禁焦点 | G6（新 Package 论证）、G7（外链处理）、G8（主题 token） |
@@ -425,7 +425,22 @@ MarkdownCodeHighlightPalette _agentCodeHighlightPalette(IdeColors colors) =>
 // 注入：_agentMarkdownTheme 构造 MarkdownThemeData 时传 codeHighlightPalette
 ```
 
-- **验收**：默认（palette == null）渲染与上游逐像素一致（包内既有测试绿）；Zeta 侧明暗主题下代码块颜色全部来自 token；`flutter_highlight` 的 theme map 依赖（`_agentHighlightTheme` 现状）同步替换或保留兜底。
+- **验收**：默认（palette == null）渲染与上游逐像素一致（包内既有测试绿）；Zeta 侧明暗主题下代码块颜色全部来自 token；`flutter_highlight` 的 theme map 依赖（`_agentHighlightTheme` 现状）同步替换或保留兜底。 ✅
+
+**施工记录（2026-09-03）**：包内新增 `MarkdownCodeHighlightPalette`（9 槽位、带 lerp 与值语义 ==/hashCode），`MarkdownThemeData` 加**可选**字段并同步补齐 `copyWith` / `lerp` / `debugFillProperties` / `hashCode` / `operator ==` 五处；`_tokenStyle` 每个语义色改成「槽位 ?? 上游推导」。包内 192 条全绿（新增 6 条）。
+
+**值语义是硬要求，不是可选项**：宿主在 build 里现算主题，而 `MarkdownDocumentView` 按 `theme !=` 清空整份 block 行缓存——调色板若只有引用相等，就会每帧清缓存并撞上 T4 那个布局断言。包内与应用侧各有一条测试盯这个（「相同槽位的两个调色板让主题相等」/「两次现算的主题必须相等」）。
+
+**对照代码修正文档 2 处**：
+
+| # | 文档写的 | 实际 |
+|---|---|---|
+| 1 | 槽位含独立的 `type` 语义色 | 上游 `type/built_in/attr/variable/...` 与 `meta/meta-keyword` **共用同一个推导色**（`metaColor`）。拆成 `type` / `meta` 两槽，两个都不传时值相同，默认行为不变 |
+| 2 | `_tokenStyle` 里 `accent` 直接当推导起点 | 覆盖 keyword 槽位后 `accent` 就不再是推导起点了——string / number / meta / title 都是从**原始** `linkStyle.color` lerp 出来的。实现里把「推导起点」与「keyword 生效色」分成两个变量，否则宿主一改 keyword，其余四色会跟着漂 |
+
+**Zeta 侧映射**（`agentCodeHighlightPalette`，`agent_pane_styles.dart`）：keyword→accent、string→success、number→warning、comment→textTertiary、type→info、title→textPrimary、meta/punctuation→textSecondary；`link` 不映射，继续跟随正文链接色。全部取自 token，没有写死 hex，明暗主题各解析各的。**具体色相搭配未经设计走查**——需要调整时只改这一个函数。
+
+**`agentHighlightTheme`（flutter_highlight 那套）保留不动**：它服务的是工具卡/diff 的 `AgentHighlightedCodeBlock`，与 markdown 代码块是两个渲染体系（索引 §2 的 D 项债务），token 集合也不同（只覆盖 meta/comment/addition/deletion/emphasis/strong）。合并两套体系不在 T6 范围内。
 
 #### T7 · descriptor 守卫（0.5 人天，与 WP-3 协同）
 

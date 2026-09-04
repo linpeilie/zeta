@@ -82,6 +82,30 @@ Zeta 自己加的测试放**独立文件**（`test/zeta_*.dart`），不要写�
 测试：`test/zeta_syntax_set_test.dart`（默认集与上游列表逐条一致、裁剪生效、
 嵌套片段跟随裁剪、controller 接线与互斥断言）。
 
+### 2026-09-03 · WP-6 T6 · 代码高亮调色板注入点
+
+默认行为零变化（调色板为空 = 逐色沿用上游从 `linkStyle.color` 的推导）：
+
+- 新文件 `lib/src/render/markdown_code_highlight_palette.dart`：
+  `MarkdownCodeHighlightPalette`，9 个可空槽位（comment / keyword / string /
+  number / type / title / meta / link / punctuation），带 `lerp` 与**值语义**
+  `==`/`hashCode`。
+- `lib/src/widgets/markdown_theme.dart`：新增**可选**字段
+  `codeHighlightPalette`（可选是为了不动任何既有构造点），并同步补进
+  `copyWith` / `lerp` / `debugFillProperties` / `hashCode` / `operator ==`
+  ——这五处都是逐字段写的，漏一处编译器不会报错。
+- `lib/src/render/code_syntax_highlighter.dart`：`_tokenStyle` 的每个语义色改成
+  「槽位 ?? 上游推导」。上游把 `type` 与 `meta` 共用一个推导色，这里拆成两槽，
+  都不传时仍是同一个值。
+- `lib/zeta_markdown.dart`：barrel 导出调色板文件。
+
+**值语义是硬要求**：宿主通常在 build 里现算主题，而 `MarkdownDocumentView`
+按 `theme !=` 决定要不要清空整份 block 行缓存——引用相等会让每帧都清，并连带
+撞上布局断言（同 T4 那个坑）。
+
+测试：`test/zeta_code_highlight_palette_test.dart`（默认推导不变 / 逐槽位生效且
+未给的槽位仍走推导 / 主题值相等与不等 / lerp / isEmpty）。
+
 **未改**（有意保留，减小同步 diff 面）：
 
 - `lib/src/selection/mixin_selection_area.dart` 与其中的 `MixinSelectionArea` —— 这里的 "Mixin" 是上游组织名而非包标识；改名会让选择区相关文件的同步 diff 全量失配。

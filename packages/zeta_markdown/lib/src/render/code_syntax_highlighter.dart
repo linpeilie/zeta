@@ -232,16 +232,28 @@ class MarkdownCodeSyntaxHighlighter {
     required TextStyle baseStyle,
     required MarkdownThemeData theme,
   }) {
+    // 每个语义色都是「调色板槽位 ?? 上游推导」：不注入调色板时逐色不变。
+    final palette = theme.codeHighlightPalette;
     final foreground = baseStyle.color ?? const Color(0xFF1D1D1F);
-    final accent = theme.linkStyle.color ?? const Color(0xFF0F6CBD);
-    final stringColor = Color.lerp(accent, const Color(0xFF1F7A52), 0.6)!;
-    final numericColor = Color.lerp(accent, const Color(0xFFB2581C), 0.5)!;
-    final metaColor = Color.lerp(accent, const Color(0xFF006B6B), 0.45)!;
-    final titleColor = Color.lerp(accent, const Color(0xFF8B5A00), 0.3)!;
-    final mutedColor = Color.alphaBlend(
-      foreground.withValues(alpha: 0.55),
-      theme.codeBlockBackgroundColor,
-    );
+    final derivedAccent = theme.linkStyle.color ?? const Color(0xFF0F6CBD);
+    final accent = palette?.keyword ?? derivedAccent;
+    final stringColor = palette?.string ??
+        Color.lerp(derivedAccent, const Color(0xFF1F7A52), 0.6)!;
+    final numericColor = palette?.number ??
+        Color.lerp(derivedAccent, const Color(0xFFB2581C), 0.5)!;
+    final derivedMetaColor =
+        Color.lerp(derivedAccent, const Color(0xFF006B6B), 0.45)!;
+    final typeColor = palette?.type ?? derivedMetaColor;
+    final metaColor = palette?.meta ?? derivedMetaColor;
+    final titleColor = palette?.title ??
+        Color.lerp(derivedAccent, const Color(0xFF8B5A00), 0.3)!;
+    final mutedColor = palette?.comment ??
+        Color.alphaBlend(
+          foreground.withValues(alpha: 0.55),
+          theme.codeBlockBackgroundColor,
+        );
+    final punctuationColor =
+        palette?.punctuation ?? foreground.withValues(alpha: 0.78);
 
     switch (token) {
       case 'comment':
@@ -268,7 +280,7 @@ class MarkdownCodeSyntaxHighlighter {
       case 'attribute':
       case 'variable':
       case 'template-variable':
-        return TextStyle(color: metaColor);
+        return TextStyle(color: typeColor);
       case 'title':
       case 'title.function_':
       case 'title.class_':
@@ -284,12 +296,12 @@ class MarkdownCodeSyntaxHighlighter {
         return const TextStyle(fontWeight: FontWeight.w700);
       case 'link':
         return TextStyle(
-          color: theme.linkStyle.color,
+          color: palette?.link ?? theme.linkStyle.color,
           decoration: theme.linkStyle.decoration,
           decorationColor: theme.linkStyle.decorationColor,
         );
       case 'punctuation':
-        return TextStyle(color: foreground.withValues(alpha: 0.78));
+        return TextStyle(color: punctuationColor);
       default:
         return const TextStyle();
     }
