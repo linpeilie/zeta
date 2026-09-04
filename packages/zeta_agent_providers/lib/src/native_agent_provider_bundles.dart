@@ -5,7 +5,7 @@ import 'package:zeta_agent_providers/src/datasources/claude_code/claude_code_age
 import 'package:zeta_agent_providers/src/datasources/claude_code/claude_code_cli_metadata_coordinator.dart';
 import 'package:zeta_agent_providers/src/datasources/claude_code/claude_code_hidden_thread_store.dart';
 import 'package:zeta_agent_providers/src/datasources/claude_code/claude_code_permission_policy_adapter.dart';
-import 'package:zeta_agent_providers/src/datasources/transport/json_rpc_stdio_transport.dart';
+import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// 由已构造的 Codex adapter 组装原生 Bundle。

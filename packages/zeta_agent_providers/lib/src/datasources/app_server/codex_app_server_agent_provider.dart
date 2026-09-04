@@ -7,7 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:zeta_agent_providers/src/agent_ignored_message_logger.dart';
 import 'package:zeta_agent_providers/src/datasources/app_server/codex_permission_policy_adapter.dart';
 import 'package:zeta_agent_providers/src/datasources/app_server/codex_process_starter.dart';
-import 'package:zeta_agent_providers/src/datasources/transport/json_rpc_stdio_transport.dart';
+import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk.dart';
 import 'package:zeta_agent_providers/src/datasources/transport/provider_operation_scheduler.dart';
 import 'package:zeta_agent_providers/src/datasources/transport/provider_runtime_json_rpc_peer.dart';
 import 'package:zeta_agent_providers/src/agent_provider_static_capabilities.dart';

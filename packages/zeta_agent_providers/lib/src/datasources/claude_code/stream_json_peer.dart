@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:zeta_foundation/zeta_foundation.dart';
-import 'package:zeta_agent_providers/src/datasources/transport/json_rpc_stdio_transport.dart'
+import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk.dart'
     show ProcessStarter;
 
 final _log = zetaLoggerFor('zeta.agent.claude_code.stream_json');

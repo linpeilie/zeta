@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:zeta_foundation/zeta_foundation.dart';
-import 'package:zeta_agent_providers/src/datasources/transport/json_rpc_stdio_transport.dart';
+import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk.dart';
 import 'package:zeta_agent_providers/src/mappers/codex_permission_policy_codec.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 

@@ -7,7 +7,7 @@ import 'package:zeta_agent_providers/src/cli_command_locator.dart';
 import 'package:zeta_agent_providers/src/datasources/claude_code/claude_code_cli_metadata.dart';
 import 'package:zeta_agent_providers/src/datasources/claude_code/claude_code_process_starter.dart';
 import 'package:zeta_agent_providers/src/datasources/claude_code/stream_json_peer.dart';
-import 'package:zeta_agent_providers/src/datasources/transport/json_rpc_stdio_transport.dart'
+import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk.dart'
     show ProcessStarter;
 import 'package:zeta_agent_providers/src/mappers/claude_code_initialize_metadata_mapper.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';

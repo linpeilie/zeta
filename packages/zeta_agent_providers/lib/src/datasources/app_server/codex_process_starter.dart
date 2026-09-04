@@ -4,7 +4,7 @@ import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_agent_providers/src/cli_command_locator.dart';
 import 'package:zeta_agent_providers/src/codex_cli_locator.dart'
     show CodexCliLocator;
-import 'package:zeta_agent_providers/src/datasources/transport/json_rpc_stdio_transport.dart';
+import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 final _log = zetaLoggerFor('zeta.agent.codex_process_starter');
