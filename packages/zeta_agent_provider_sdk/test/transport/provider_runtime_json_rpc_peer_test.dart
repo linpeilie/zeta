@@ -13,7 +13,7 @@ void main() {
         final delegate = _FakeJsonRpcPeer(startCompleter: startCompleter);
         final peer = ProviderRuntimeJsonRpcPeer(
           delegate,
-          providerId: 'codex',
+          providerId: 'provider-a',
           runtimeId: 'runtime-test',
         );
 
@@ -42,7 +42,10 @@ void main() {
 
     test('closing rejects new client RPC and dispose is idempotent', () async {
       final delegate = _FakeJsonRpcPeer();
-      final peer = ProviderRuntimeJsonRpcPeer(delegate, providerId: 'codex');
+      final peer = ProviderRuntimeJsonRpcPeer(
+        delegate,
+        providerId: 'provider-a',
+      );
       await peer.start();
       peer.markReady();
 
@@ -123,7 +126,10 @@ void main() {
 
     test('unexpected transport completion marks the runtime failed', () async {
       final delegate = _FakeJsonRpcPeer();
-      final peer = ProviderRuntimeJsonRpcPeer(delegate, providerId: 'codex');
+      final peer = ProviderRuntimeJsonRpcPeer(
+        delegate,
+        providerId: 'provider-a',
+      );
       await peer.start();
       peer.markReady();
       final subscription = peer.notifications.listen((_) {});
@@ -137,7 +143,10 @@ void main() {
 
     test('rejects a response scoped to a closed connection', () async {
       final delegate = _FakeJsonRpcPeer();
-      final peer = ProviderRuntimeJsonRpcPeer(delegate, providerId: 'grok');
+      final peer = ProviderRuntimeJsonRpcPeer(
+        delegate,
+        providerId: 'provider-b',
+      );
       await peer.start();
       peer.markReady();
       final oldScope = peer.runtimeScope;

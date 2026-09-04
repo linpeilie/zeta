@@ -6,7 +6,7 @@ import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk.dart';
 void main() {
   group('ProviderOperationScheduler', () {
     const threadKey = ThreadOperationKey(
-      providerId: 'codex',
+      providerId: 'provider-a',
       threadId: 'thread-1',
     );
 
@@ -123,7 +123,7 @@ void main() {
       );
       final second = scheduler.schedule<void>(
         key: const ThreadOperationKey(
-          providerId: 'codex',
+          providerId: 'provider-a',
           threadId: 'thread-2',
         ),
         access: ProviderOperationAccess.exclusive,

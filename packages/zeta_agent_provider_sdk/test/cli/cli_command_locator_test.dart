@@ -8,18 +8,18 @@ const _testConfig = AgentProviderConfig(
   id: 'test-cli',
   displayName: 'Test CLI',
   kind: AgentProviderTypeId('testCli'),
-  command: 'claude',
+  command: 'provider-cli',
 );
 
 void main() {
   group('CliCommandLocator Windows launchers', () {
     test('skips extensionless shim and falls back to cmd sibling', () async {
       // Arrange
-      const shim = r'D:\nodejs\claude';
-      const cmd = r'D:\nodejs\claude.cmd';
+      const shim = r'D:\nodejs\provider-cli';
+      const cmd = r'D:\nodejs\provider-cli.cmd';
       final inspectedPaths = <String>[];
       final locator = CliCommandLocator(
-        executableName: 'claude',
+        executableName: 'provider-cli',
         environment: const <String, String>{
           'PATH': r'D:\nodejs',
           'SystemRoot': r'C:\Windows',
@@ -53,9 +53,9 @@ void main() {
 
     test('runs exe directly without a shell prefix', () async {
       // Arrange
-      const executable = r'C:\Tools\claude.exe';
+      const executable = r'C:\Tools\provider-cli.exe';
       final locator = CliCommandLocator(
-        executableName: 'claude',
+        executableName: 'provider-cli',
         environment: const <String, String>{'SystemRoot': r'C:\Windows'},
         isWindows: true,
         fileExists: (path) async => path == executable,
@@ -71,9 +71,9 @@ void main() {
 
     test('wraps PowerShell scripts non-interactively', () async {
       // Arrange
-      const script = r'C:\Tools\claude.ps1';
+      const script = r'C:\Tools\provider-cli.ps1';
       final locator = CliCommandLocator(
-        executableName: 'claude',
+        executableName: 'provider-cli',
         environment: const <String, String>{'SystemRoot': r'C:\Windows'},
         isWindows: true,
         fileExists: (path) async => path == script,
@@ -107,11 +107,11 @@ void main() {
       );
       addTearDown(() => directory.delete(recursive: true));
       final script = File(
-        '${directory.path}${Platform.pathSeparator}claude.cmd',
+        '${directory.path}${Platform.pathSeparator}provider-cli.cmd',
       );
       await script.writeAsString('@ECHO off\r\nECHO received:%*\r\n');
       final locator = CliCommandLocator(
-        executableName: 'claude',
+        executableName: 'provider-cli',
         environment: <String, String>{
           if (Platform.environment['SystemRoot'] case final String value)
             'SystemRoot': value,
@@ -134,9 +134,9 @@ void main() {
 
   test('Unix accepts the extensionless executable', () async {
     // Arrange
-    const executable = '/usr/local/bin/claude';
+    const executable = '/usr/local/bin/provider-cli';
     final locator = CliCommandLocator(
-      executableName: 'claude',
+      executableName: 'provider-cli',
       environment: const <String, String>{'PATH': '/usr/local/bin'},
       isWindows: false,
       fileExists: (path) async => path == executable,

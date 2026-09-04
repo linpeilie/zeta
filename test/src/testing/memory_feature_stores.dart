@@ -1,4 +1,6 @@
 import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk_testing.dart'
+    as provider_sdk;
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 
 import 'package:zeta/src/features/settings/data/general_settings_store.dart';
@@ -7,6 +9,9 @@ import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partition_store.dart';
+
+export 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk_testing.dart'
+    show MemoryAgentModelCatalogCacheStore;
 
 /// 测试用外观仓库：预置 typed 状态，不走 JSON。
 class MemoryAppearanceSettingsStore implements AppearanceSettingsRepository {
@@ -42,39 +47,11 @@ class MemoryGeneralSettingsStore implements GeneralSettingsStore {
   }
 }
 
-/// 测试用 Provider 配置仓库。codec 依赖插件目录，测试用 typed 状态绕过它。
-class MemoryAgentProviderConfigStore implements AgentProviderConfigStore {
+/// 根测试兼容层：为 SDK 的中立内存仓库补入当前内置 Provider 默认设置。
+class MemoryAgentProviderConfigStore
+    extends provider_sdk.MemoryAgentProviderConfigStore {
   MemoryAgentProviderConfigStore([AgentProviderSettings? settings])
-    : _settings = settings ?? builtInAgentProviderSettings;
-
-  AgentProviderSettings _settings;
-
-  @override
-  Future<AgentProviderSettings> load() async => _settings;
-
-  @override
-  Future<void> save(AgentProviderSettings settings) async {
-    _settings = settings;
-  }
-}
-
-/// 测试用模型目录缓存。
-class MemoryAgentModelCatalogCacheStore implements AgentModelCatalogCacheStore {
-  MemoryAgentModelCatalogCacheStore([
-    List<AgentModelCatalogSnapshot> snapshots =
-        const <AgentModelCatalogSnapshot>[],
-  ]) : _snapshots = List<AgentModelCatalogSnapshot>.from(snapshots);
-
-  List<AgentModelCatalogSnapshot> _snapshots;
-
-  @override
-  Future<List<AgentModelCatalogSnapshot>> load() async =>
-      List<AgentModelCatalogSnapshot>.unmodifiable(_snapshots);
-
-  @override
-  Future<void> save(List<AgentModelCatalogSnapshot> snapshots) async {
-    _snapshots = List<AgentModelCatalogSnapshot>.from(snapshots);
-  }
+    : super(settings ?? builtInAgentProviderSettings);
 }
 
 /// 测试用用量分区仓库。
