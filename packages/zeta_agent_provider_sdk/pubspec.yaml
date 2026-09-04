@@ -1,0 +1,17 @@
+name: zeta_agent_provider_sdk
+description: Zeta Agent Provider 插件 SDK：共享 transport、ACP codec、payload 工具与契约测试套件。
+publish_to: 'none'
+version: 0.1.0
+resolution: workspace
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  test: ^1.25.0
+  zeta_agent_core: ^0.1.0
+  zeta_agent_provider_api: ^0.1.0
+  zeta_foundation: ^0.1.0
+  zeta_plugin_kernel: ^0.1.0
+
+dev_dependencies: {}

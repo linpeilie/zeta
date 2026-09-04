@@ -11,6 +11,7 @@ environment:
 workspace:
   - packages/zeta_agent_core
   - packages/zeta_agent_provider_api
+  - packages/zeta_agent_provider_sdk
   - packages/zeta_agent_providers
   - packages/zeta_foundation
   - packages/zeta_markdown
@@ -42,6 +43,7 @@ dependencies:
   window_manager: ^0.5.1
   zeta_agent_core: ^0.1.0
   zeta_agent_provider_api: ^0.1.0
+  zeta_agent_provider_sdk: ^0.1.0
   zeta_agent_providers: ^0.1.0
   zeta_foundation: ^0.1.0
   zeta_markdown: ^0.1.0
