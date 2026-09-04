@@ -12,6 +12,8 @@ class AcpSessionConfigSnapshot {
 }
 
 /// 标准 ACP session config options 与旧 session modes 的宽容映射器。
+///
+/// 当前无生产引用，属前瞻机制。
 class AcpSessionConfigMapper {
   const AcpSessionConfigMapper();
 
