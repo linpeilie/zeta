@@ -28,9 +28,12 @@ class MarkdownParserTiming {
 }
 
 class MarkdownDocumentParser {
-  const MarkdownDocumentParser({this.onTiming});
+  const MarkdownDocumentParser({this.onTiming, this.syntaxSet});
 
   final void Function(MarkdownParserTiming timing)? onTiming;
+
+  /// 解析用的语法集；为空时用 [MarkdownSyntaxSet.standard]（上游默认行为）。
+  final MarkdownSyntaxSet? syntaxSet;
 
   static final Expando<Map<MarkdownBlockKind, int>> _documentKindCounts =
       Expando<Map<MarkdownBlockKind, int>>('markdownDocumentKindCounts');
@@ -236,10 +239,11 @@ class MarkdownDocumentParser {
     final timing = onTiming == null ? null : _MarkdownParserTimingBuilder();
     final totalStopwatch = timing == null ? null : (Stopwatch()..start());
     timing?.parseLineCount = lines.length;
+    final effectiveSyntaxSet = syntaxSet ?? MarkdownSyntaxSet.standard;
     final document = md.Document(
       extensionSet: md.ExtensionSet.none,
-      blockSyntaxes: buildMarkdownBlockSyntaxes(),
-      inlineSyntaxes: buildMarkdownInlineSyntaxes(),
+      blockSyntaxes: effectiveSyntaxSet.documentBlockSyntaxes,
+      inlineSyntaxes: effectiveSyntaxSet.inlineSyntaxes,
       encodeHtml: false,
     );
     final nodes = _measure(

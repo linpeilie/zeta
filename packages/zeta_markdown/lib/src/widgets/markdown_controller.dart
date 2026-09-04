@@ -8,14 +8,23 @@ import '../clipboard/plain_text_serializer.dart';
 import '../core/document.dart';
 import '../debug.dart';
 import '../parser/markdown_document_parser.dart';
+import '../parser/markdown_syntaxes.dart';
 import '../streaming/streaming_state.dart';
 
 class MarkdownController extends ChangeNotifier {
   MarkdownController({
     String data = '',
     MarkdownDocumentParser? parser,
+    MarkdownSyntaxSet? syntaxSet,
     MarkdownCopySerializer? plainTextSerializer,
-  })  : _parser = parser ?? const MarkdownDocumentParser(),
+  })  : assert(
+          parser == null || syntaxSet == null,
+          'parser 自带语法集，两者只能给一个',
+        ),
+        _parser = parser ??
+            (syntaxSet == null
+                ? const MarkdownDocumentParser()
+                : MarkdownDocumentParser(syntaxSet: syntaxSet)),
         _plainTextSerializer =
             plainTextSerializer ?? const MarkdownPlainTextSerializer() {
     _replaceData(data);

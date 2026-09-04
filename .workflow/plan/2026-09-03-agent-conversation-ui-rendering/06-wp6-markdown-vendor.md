@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |----|----|
-| 状态 | 进行中（T1–T4 已完成） |
+| 状态 | 进行中（T1–T5 已完成） |
 | 规模 | 11–16 人天（T1–T10 + T14–T15）；P2 可选项另计 |
 | 依赖 | 无硬依赖；T2 换包与 WP-2 T3 协同；T7 与 WP-3 协同 |
 | 门禁焦点 | G6（新 Package 论证）、G7（外链处理）、G8（主题 token） |
@@ -351,7 +351,20 @@ MarkdownController(
 )
 ```
 
-- **验收**：默认行为零变化（包内 parser 测试全绿）；Zeta 侧可注入裁剪集；新增单测：自定义语法集生效（如禁用 `TableSyntax` 后表格按段落渲染）。
+- **验收**：默认行为零变化（包内 parser 测试全绿）；Zeta 侧可注入裁剪集；新增单测：自定义语法集生效（如禁用 `TableSyntax` 后表格按段落渲染）。 ✅
+
+**施工记录（2026-09-03）**：包内三处注入按文档落地（parser / controller / 嵌套片段），barrel 补 `export 'src/parser/markdown_syntaxes.dart'`（宿主要组合裁剪集就得拿到语法类型，而 G6 只允许 import barrel）。包内 186 条全绿，其中新增 6 条覆盖「默认集与上游列表逐条一致 / 裁剪生效 / 嵌套片段跟随裁剪 / controller 接线与互斥断言」。
+
+**对照代码修正文档 2 处**：
+
+| # | 文档写的 | 实际 |
+|---|---|---|
+| 1 | 第二处 `md.Document` 在「顶层工具函数」里，加可选参数透传即可 | 它是 `MarkdownHtmlBlockSyntax._parseMarkdownFragment`，即 **const 语法类的实例方法**，而该实例本身又在语法集里——直接持有集合会成环。改为给它一个惰性引用 `MarkdownSyntaxSet Function()? nestedSyntaxSet`，并由 `MarkdownSyntaxSet.documentBlockSyntaxes` 在交给 `md.Document` 前把集合里的该实例重新绑定到自身（结果按集合缓存，流式解析不会每次重建列表）。不做这一步的话，外层裁剪了语法而 `<details>` 内部仍按默认集解析，同一份文档里两套语法并存 |
+| 2 | `MarkdownController` 的 `_parser` 默认值「带 syntaxSet 后不能 const」 | 仅当真的传了 syntaxSet 才需要非 const：`parser ?? (syntaxSet == null ? const MarkdownDocumentParser() : MarkdownDocumentParser(syntaxSet: syntaxSet))`，默认路径仍复用 const 实例。另加断言：`parser` 与 `syntaxSet` 互斥（parser 自带语法集，同时给必有一个被忽略） |
+
+**Zeta 侧只接线、暂不裁剪**：`AgentMarkdownCache` 增加可选 `syntaxSet`（为空 = 包内默认集），一路传到 `MarkdownController`；测试 `agent_markdown_cache_syntax_set_test.dart` 两条覆盖「默认表格照常解析」与「注入裁剪集后按裁剪集解析」。**具体要增删哪些语法是产品决定，本任务不替你定**——文档 §0.1 只举了 `==mark==` 这类增补的例子，而删语法（math / emoji / 脚注 / 定义列表…）会直接改变现有会话的渲染结果。需要时在根应用侧定义具名集合再传进来，包内默认列表保持不动。
+
+**一个后续要注意的依赖细节**：真要在根应用侧组合裁剪集，就得点名具体语法类型（`md.TableSyntax` 等），根 `pubspec.yaml` 需要显式加 `markdown` 依赖（现在只是传递依赖，直接 import 会被 `depend_on_referenced_packages` 拦下）。本次测试用「从标准集过滤出空表」绕开了这一点，没有提前引入依赖。
 
 #### T6 · 代码高亮 Graphite 调色板（1–2 人天）
 

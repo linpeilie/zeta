@@ -61,6 +61,27 @@ Zeta 自己加的测试放**独立文件**（`test/zeta_*.dart`），不要写�
 `default image renderer falls back to local files` 在 Windows 上原本失败，修复后
 转绿。
 
+### 2026-09-03 · WP-6 T5 · 语法集注入点
+
+默认行为零变化，新增的都是「多一个可选参数」：
+
+- `lib/src/parser/markdown_syntaxes.dart`：新增公开的 `MarkdownSyntaxSet`
+  （`standard` 就是原来那两份私有列表）；`MarkdownHtmlBlockSyntax` 增加可选的
+  `nestedSyntaxSet` 惰性引用，`<details>` 内部的嵌套解析改用它，缺省仍是标准集。
+- `lib/src/parser/markdown_document_parser.dart`：构造增加 `syntaxSet`，
+  `md.Document` 改用 `set.documentBlockSyntaxes` / `set.inlineSyntaxes`。
+- `lib/src/widgets/markdown_controller.dart`：构造增加 `syntaxSet`（与 `parser`
+  互斥，同时给会断言失败）。
+- `lib/zeta_markdown.dart`：barrel 增加 `export 'src/parser/markdown_syntaxes.dart'`
+  ——宿主要组合裁剪集就得拿到这些语法类型，而 G6 要求只 import barrel。
+
+`documentBlockSyntaxes` 会把集合里的 `MarkdownHtmlBlockSyntax` 重新绑定到本
+集合上（惰性，避免成环），并按集合缓存结果；否则外层裁剪了语法而 `<details>`
+内部仍按默认集解析，同一份文档里会出现两套语法。
+
+测试：`test/zeta_syntax_set_test.dart`（默认集与上游列表逐条一致、裁剪生效、
+嵌套片段跟随裁剪、controller 接线与互斥断言）。
+
 **未改**（有意保留，减小同步 diff 面）：
 
 - `lib/src/selection/mixin_selection_area.dart` 与其中的 `MixinSelectionArea` —— 这里的 "Mixin" 是上游组织名而非包标识；改名会让选择区相关文件的同步 diff 全量失配。

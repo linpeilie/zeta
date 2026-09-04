@@ -35,8 +35,57 @@ List<md.BlockSyntax> buildMarkdownBlockSyntaxes() => _markdownBlockSyntaxes;
 
 List<md.InlineSyntax> buildMarkdownInlineSyntaxes() => _markdownInlineSyntaxes;
 
+/// 可注入的语法集。
+///
+/// [standard] 与上游 0.3.1 的两份私有列表逐条一致；不传语法集时一切照旧。
+/// 顺序是敏感的（block 先到先匹配），裁剪时只删不重排。
+final class MarkdownSyntaxSet {
+  MarkdownSyntaxSet({
+    required List<md.BlockSyntax> blockSyntaxes,
+    required List<md.InlineSyntax> inlineSyntaxes,
+  })  : blockSyntaxes = List<md.BlockSyntax>.unmodifiable(blockSyntaxes),
+        inlineSyntaxes = List<md.InlineSyntax>.unmodifiable(inlineSyntaxes);
+
+  /// 块级语法，按匹配优先级排列。
+  final List<md.BlockSyntax> blockSyntaxes;
+
+  /// 行内语法，按匹配优先级排列。
+  final List<md.InlineSyntax> inlineSyntaxes;
+
+  /// 上游默认集。
+  static final MarkdownSyntaxSet standard = MarkdownSyntaxSet(
+    blockSyntaxes: _markdownBlockSyntaxes,
+    inlineSyntaxes: _markdownInlineSyntaxes,
+  );
+
+  List<md.BlockSyntax>? _documentBlockSyntaxes;
+
+  /// 交给 `md.Document` 的块级语法。
+  ///
+  /// 与 [blockSyntaxes] 只差一处：把 `<details>` / `<summary>` 内部的嵌套解析
+  /// 绑回本集合，否则外层裁剪了语法、内部仍按默认集解析。绑定结果按集合缓存，
+  /// 流式场景下不会每次解析都重建列表。
+  List<md.BlockSyntax> get documentBlockSyntaxes {
+    return _documentBlockSyntaxes ??= List<md.BlockSyntax>.unmodifiable(
+      <md.BlockSyntax>[
+        for (final syntax in blockSyntaxes)
+          if (syntax is MarkdownHtmlBlockSyntax)
+            MarkdownHtmlBlockSyntax(nestedSyntaxSet: () => this)
+          else
+            syntax,
+      ],
+    );
+  }
+}
+
 class MarkdownHtmlBlockSyntax extends md.BlockSyntax {
-  const MarkdownHtmlBlockSyntax();
+  const MarkdownHtmlBlockSyntax({this.nestedSyntaxSet});
+
+  /// 解析 `<details>` 内部片段时使用的语法集；缺省用
+  /// [MarkdownSyntaxSet.standard]（即上游行为）。
+  ///
+  /// 取值是惰性的：语法集本身包含本实例，直接持有会成环。
+  final MarkdownSyntaxSet Function()? nestedSyntaxSet;
 
   static const Set<String> _supportedBlockTags = <String>{
     'details',
@@ -183,10 +232,11 @@ class MarkdownHtmlBlockSyntax extends md.BlockSyntax {
     if (normalizedSource.isEmpty) {
       return const <md.Node>[];
     }
+    final syntaxSet = nestedSyntaxSet?.call() ?? MarkdownSyntaxSet.standard;
     final document = md.Document(
       extensionSet: md.ExtensionSet.none,
-      blockSyntaxes: buildMarkdownBlockSyntaxes(),
-      inlineSyntaxes: buildMarkdownInlineSyntaxes(),
+      blockSyntaxes: syntaxSet.documentBlockSyntaxes,
+      inlineSyntaxes: syntaxSet.inlineSyntaxes,
       encodeHtml: false,
     );
     return document.parseLines(normalizedSource.split('\n'));
