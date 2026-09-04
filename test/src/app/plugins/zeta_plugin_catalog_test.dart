@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/app/plugins/zeta_plugin_catalog.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_plugin_kernel/zeta_plugin_kernel.dart';
@@ -109,6 +110,7 @@ void main() {
         ),
         staticCapabilities: AgentProviderCapabilities.unsupported,
         modelCatalogSourceLabel: 'Future',
+        metricLabel: ZetaMetricLabel.constant('future'),
       );
       final catalog = ZetaPluginCatalog.forTesting(
         factories: <ZetaPluginFactory>[
@@ -225,6 +227,7 @@ void main() {
           ),
           staticCapabilities: AgentProviderCapabilities.unsupported,
           modelCatalogSourceLabel: 'Fixture',
+          metricLabel: const ZetaMetricLabel.constant('fixture'),
           isDefault: true,
         );
       }

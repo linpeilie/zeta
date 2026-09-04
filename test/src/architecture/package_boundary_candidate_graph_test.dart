@@ -5,7 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 /// 内部 Package 依赖图守卫（**零容忍，无 allowlist**）。
 ///
 /// `zeta_foundation` / `zeta_plugin_kernel` / `zeta_agent_core` /
-/// `zeta_agent_providers` / `zeta_ui` 与根 app 之间的依赖方向是单向 DAG。
+/// `zeta_agent_provider_api` / `zeta_agent_providers` / `zeta_ui` 与根 app
+/// 之间的依赖方向是单向 DAG。
 /// 本守卫断言三件事：
 ///
 /// - 依赖方向只能沿 [_allowedEdges]；
@@ -406,6 +407,7 @@ void main() {
 const String _foundation = 'zeta_foundation';
 const String _pluginKernel = 'zeta_plugin_kernel';
 const String _agentCore = 'zeta_agent_core';
+const String _agentProviderApi = 'zeta_agent_provider_api';
 const String _agentProviders = 'zeta_agent_providers';
 const String _ui = 'zeta_ui';
 const String _app = 'app';
@@ -414,6 +416,7 @@ const Set<String> _candidatePackages = <String>{
   _foundation,
   _pluginKernel,
   _agentCore,
+  _agentProviderApi,
   _agentProviders,
   _ui,
   _app,
@@ -428,6 +431,7 @@ const Set<String> _materializedPackages = <String>{
   _pluginKernel,
   _ui,
   _agentCore,
+  _agentProviderApi,
   _agentProviders,
 };
 
@@ -436,8 +440,15 @@ const Map<String, Set<String>> _allowedEdges = <String, Set<String>>{
   _foundation: <String>{_foundation},
   _pluginKernel: <String>{_pluginKernel, _foundation},
   _agentCore: <String>{_agentCore, _foundation},
+  _agentProviderApi: <String>{
+    _agentProviderApi,
+    _agentCore,
+    _pluginKernel,
+    _foundation,
+  },
   _agentProviders: <String>{
     _agentProviders,
+    _agentProviderApi,
     _agentCore,
     _pluginKernel,
     _foundation,
@@ -465,6 +476,12 @@ const Map<String, List<String>> _bannedExternalPrefixes =
         'package:flutter/material',
         'package:flutter/widgets',
         'package:flutter/services',
+        'package:flutter_riverpod/',
+        'package:shadcn_flutter/',
+        'dart:io',
+      ],
+      _agentProviderApi: <String>[
+        'package:flutter/',
         'package:flutter_riverpod/',
         'package:shadcn_flutter/',
         'dart:io',
@@ -619,8 +636,14 @@ const Map<String, Set<String>> _manifestInternalDependencies =
       'zeta_foundation': <String>{},
       'zeta_plugin_kernel': <String>{'zeta_foundation'},
       'zeta_agent_core': <String>{'zeta_foundation'},
+      'zeta_agent_provider_api': <String>{
+        'zeta_agent_core',
+        'zeta_foundation',
+        'zeta_plugin_kernel',
+      },
       'zeta_agent_providers': <String>{
         'zeta_agent_core',
+        'zeta_agent_provider_api',
         'zeta_foundation',
         'zeta_plugin_kernel',
       },

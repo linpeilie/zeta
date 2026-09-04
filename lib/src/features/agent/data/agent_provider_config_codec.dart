@@ -1,7 +1,7 @@
 import 'dart:convert';
 
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 
 /// 当前 Provider settings 的 data codec。
 final class AgentProviderSettingsCodec {

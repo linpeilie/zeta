@@ -1,7 +1,7 @@
 # Provider 插件化拆包 · 总索引与开发记录
 
 > 任务日期：2026-09-04
-> 状态：待开发
+> 状态：开发中（WP-A 已完成）
 > 前置：会话 UI 渲染改造（2026-09-03 计划，WP-1/2/3/4/6/7 已完成，WP-5 显式跳过）已收尾，本计划与其无代码依赖。
 
 ## 1. 目标（用户验收口径）
@@ -140,7 +140,7 @@ WP-D 把 management/usage 从「组合层直接 new」改成「读插件贡献�
 
 | WP | 文档 | 内容 | 规模 | 依赖 | 状态 |
 |---|---|---|---|---|---|
-| WP-A | [01-wpa-provider-api.md](01-wpa-provider-api.md) | 契约包：definition/catalog/contribution/聚合工厂上移 + metricLabel 入 definition | 1 人天 | 无 | 未开始 |
+| WP-A | [01-wpa-provider-api.md](01-wpa-provider-api.md) | 契约包：definition/catalog/contribution/聚合工厂上移 + metricLabel 入 definition | 1 人天 | 无 | 已完成 |
 | WP-B | [02-wpb-provider-sdk.md](02-wpb-provider-sdk.md) | 共享机制包：13+1 文件逐行 import 反查实证归属 + `cli_process_runner` 入 sdk + 契约测试套件骨架 | 0.5–1 人天 | A | 未开始 |
 | WP-C | [03-wpc-provider-split.md](03-wpc-provider-split.md) | 三个 Provider 各自拆包（23/20/30 文件实测清单），manifest 落地，测试侧边界收口（82 文件随迁 + 77 文件留根改 import + 52 文件断言库替换），删旧包 | 每个 1.5–2.5 人天 | B | 未开始 |
 | WP-D | [04-wpd-app-contributions.md](04-wpd-app-contributions.md) | usage/management 贡献化（D4+D8）：模型闭包下沉 api、文案目录下沉、窄端口 ×2、聚合改写，消除 app 侧耦合 C4/C5/C6/C7 与 C10 的一处（另一处登记例外） | 2–3 人天 | C | 未开始 |
@@ -162,6 +162,7 @@ WP-D 把 management/usage 从「组合层直接 new」改成「读插件贡献�
 
 | 日期 | 记录 |
 |---|---|
+| 2026-09-04 | **WP-A 完成**：新增纯 Dart `zeta_agent_provider_api`，迁入 definition/catalog 与 Provider contribution/聚合 factory；`metricLabel` 改由各插件 definition 声明，未知配置 id 保持 hash 回落；四个 runtime/UI 注入点切到静态 catalog；旧 `AgentMetricLabels` 与 providers 契约 re-export 删除。同步扩展现有 Package DAG 守卫以覆盖新包。验证：基线完整门禁通过；`dart format .` 0 改动、`flutter analyze` 0 issue、`bash tool/test_packages.sh` 通过、最终 `bash tool/test_full.sh` 退出码 0（根 2506 条 + 全部内部 Package）。锁文件无漂移。 |
 | 2026-09-04 | 初版方案经用户确认（范围：WP-D 一步到位；落档：是）。建立索引与五份 WP 文档。 |
 | 2026-09-04 | 复审+细化轮：① 逐行 review 修正 4 处（WP-A barrel 数、D7 持久化红线新增、WP-E 的 CI 覆盖确认、DoD 计数）。② 基于三路并行事实采集（插件结构/pubspec/测试清单、13 个共享文件 import 反查、management/usage 接口与调用点实测）把 WP-A/B/C/D 全部重写到伪代码级。关键设计修正：**D8 新增**（文案目录下沉取代失败原因码映射，依据 50+ 实测调用点与 AgentUiTextCatalog 先例）；`AgentDefinition` 与管理元数据合并并加 `accountDataEnrichmentExtraKey` 字段（enrichment 能力门本已合规，实测只有 key 字符串上漏）；usage 贡献键改 providerType（现状按 config.kind switch）；`runtimeRegistry` 无需窄端口（core 类型）；唯一窄端口是模型目录单方法；WP-C 新增 §5.1「manifest 即根测试 fixture 源」（约 25 个测试文件纯 import 改写）；`stream_json_peer` 实证归 Claude 私有；`AcpSessionConfigMapper` 标注无生产引用。WP-E 守卫扩到七类（新增 D7 红线、贡献完备性、C6 登记例外、test/ 全域隔离、TypeId 字面量禁令）。 |
 | 2026-09-04 | 完整勘察报告对账轮（三份逐字报告 vs 已写文档）：① **Flutter 依赖实测**——全 providers 包仅 3 个文件 import foundation（logger 的 kReleaseMode + 两个 adapter 的 @visibleForTesting），定三处一行等价替换（dart.vm.product / package:meta），sdk 与三插件包「纯 Dart」论断由此成立并写入 WP-B/WP-C。② **WP-D 664 分支纠错**——实测是测试连接确认弹窗（非 enrichment 编辑），新增 `requiresConnectionTestConfirmation` 能力位消灭之，C6 登记例外收敛为 `page.dart:451` 一处。③ usage 闭包精确化（query 仅 earliest/forceRefresh；`UsageDateWindow`/`UsageTimeRangePreset` 不下沉；补 `UsageErrorCategory`）；`usage_scan_cache.dart` 三家共用实测，T4 迁 sdk；claude 两处构造差异（无本地 scanner、management 无 runtimeRegistry/modelCatalog）落档。④ **字符串引用守卫点名**（WP-E 守卫 6）：`agent_core_raw_payload_freeze_test`、`agent_provider_catalog_freeze_test`、`agent_provider_bundle_contract_test` 三处以字符串引用将被静默绕过，列入逐条核对清单。⑤ 根测试 definition 字面量 fixture（4 个引用点）+ WP-E parity 断言联动。⑥ 行数/文件数校订（bundles 129 行、static 86 行、测试 59 文件、part 文件随迁）。 |

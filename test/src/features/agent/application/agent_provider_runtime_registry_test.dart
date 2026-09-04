@@ -553,10 +553,13 @@ void main() {
         providerFactory: factory,
         metrics: metrics,
         // 生产由组合层注入；内核自己不认识 Provider 身份。
-        providerMetricLabel: AgentMetricLabels.forProviderId,
+        providerMetricLabel:
+            builtInAgentProviderDefinitionCatalog.metricLabelFor,
       );
       final codexTags = ZetaMetricTags(
-        providerId: AgentMetricLabels.forProviderId(defaultAgentProviderId),
+        providerId: builtInAgentProviderDefinitionCatalog.metricLabelFor(
+          defaultAgentProviderId,
+        ),
       );
 
       final first = await registry.acquire(
@@ -599,7 +602,8 @@ void main() {
       final registry = AgentProviderRuntimeRegistry(
         providerFactory: _CountingProviderFactory(),
         metrics: metrics,
-        providerMetricLabel: AgentMetricLabels.forProviderId,
+        providerMetricLabel:
+            builtInAgentProviderDefinitionCatalog.metricLabelFor,
       );
       addTearDown(registry.close);
 

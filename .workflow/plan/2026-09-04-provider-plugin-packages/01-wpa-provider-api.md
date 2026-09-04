@@ -1,6 +1,6 @@
 # WP-A · 契约包 `zeta_agent_provider_api`
 
-> 状态：未开始
+> 状态：已完成
 > 规模：约 1 人天
 > 依赖：无（本计划第一个 WP）
 > 性质：纯搬移 + 一处语义等价迁移（metricLabel 入 definition）。行为零变化，全量绿为凭。
@@ -276,13 +276,13 @@ providerMetricLabel: builtInAgentProviderDefinitionCatalog.metricLabelFor,
 
 ## 5. DoD
 
-- [ ] api 包建立，依赖只有 core/kernel/foundation（`flutter analyze` + pubspec 目检）
-- [ ] 契约两文件物理位于 api 包；providers barrel 无相关 export；全仓无 `src/agent_provider_definition` 裸路径 import
-- [ ] `AgentMetricLabels` 全仓零引用（含测试与注释，除历史文档外）
-- [ ] 三个 definition 的 `metricLabel` 值与旧常量逐字一致（codex/grok/claude_code）
-- [ ] `AgentProviderStaticCapabilities` 仍在 providers 包原位、值未动
-- [ ] 两个生产注入点均引静态目录常量：`grep -rn "agentProviderDefinitionCatalogProvider" lib/src/app/plugins/zeta_plugin_providers.dart lib/src/app/app.dart` 零命中
-- [ ] `bash tool/test_full.sh` 全绿；测试断言零修改（除 import 与 T4-3 的函数名替换）
+- [x] api 包建立，依赖只有 core/kernel/foundation（`flutter analyze` + pubspec 目检）
+- [x] 契约两文件物理位于 api 包；providers barrel 无相关 export；全仓无 `src/agent_provider_definition` 裸路径 import
+- [x] `AgentMetricLabels` 全仓零引用（含测试与注释，除历史文档外）
+- [x] 三个 definition 的 `metricLabel` 值与旧常量逐字一致（codex/grok/claude_code）
+- [x] `AgentProviderStaticCapabilities` 仍在 providers 包原位、值未动
+- [x] 两个生产注入点均引静态目录常量：`grep -rn "ref.watch(agentProviderDefinitionCatalogProvider)" lib/src/app/plugins/zeta_plugin_providers.dart lib/src/app/app.dart` 零命中
+- [x] `bash tool/test_full.sh` 全绿；测试断言零修改（除 import 与 T4-3 的函数名替换）
 
 ## 6. 风险
 
@@ -297,6 +297,7 @@ providerMetricLabel: builtInAgentProviderDefinitionCatalog.metricLabelFor,
 
 | 日期 | 内容 |
 |---|---|
+| 2026-09-04 | **实现完成**：契约两文件迁入新 api 包，三个内置 definition 声明稳定 metric label，静态 catalog 接管指标映射并保留未知 id 的 hash 回落；旧映射类与 providers re-export 已删除。现有 Package DAG 守卫同步纳入 api 包，确保纯 Dart 外部依赖与 `api → core/kernel/foundation`、`providers → api` 的精确边界。验证：新包 2 条独立测试通过，根相关回归 42 条通过，`flutter analyze` 0 issue，最终完整门禁根 2506 条与全部内部 Package 通过。 |
 | 2026-09-04 | 文档加深到伪代码级：补全逐字现状（metric_labels 全文、registry 签名、四个注入点表）、pubspec 逐字模板、workspace 字典序插入位置、metricLabelFor 语义等价论证、T5 逐文件切换表。 |
 | 2026-09-04 | 复审轮：§3 补 WP-D 扩展预留说明（management/usage 两个子库将在 WP-D T0 加入本包），防止两文件结构被当成定案。 |
 | 2026-09-04 | 实证复核轮：① **T4-2 改写**——原方案读 `agentProviderDefinitionCatalogProvider` 会强制建插件目录，冲掉 12 个文件 20+ 处覆盖 bundle 工厂的测试逃生口（`zeta_app_composition.dart:180` 明文依赖），改为只读静态 `builtInAgentProviderDefinitionCatalog`（WP-C 后换 manifest 成员二）；§6 风险表对应行方向纠正，DoD 加反查断言。② T2-1 的待确认项定案：`agent_provider_definition.dart` 实测**未** import foundation，必须显式新增。 |

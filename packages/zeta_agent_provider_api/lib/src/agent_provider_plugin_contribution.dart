@@ -1,12 +1,12 @@
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_plugin_kernel/zeta_plugin_kernel.dart';
 
-import 'package:zeta_agent_providers/src/agent_provider_definition.dart';
-import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'agent_provider_definition.dart';
 
 /// Agent Provider 插件贡献：向宿主提供一个中立的 [AgentProviderBundleFactory]。
 ///
-/// 这是首期唯一的贡献类型。它定义在 data 层（未来的 `zeta_agent_providers`）
-/// 而不是内核里：内核不认识 Agent 语义，也不 import Provider 契约。
+/// 这是首期唯一的贡献类型。它定义在宿主侧契约包
+/// `zeta_agent_provider_api`：内核不认识 Agent 语义，也不 import Provider 契约。
 final class AgentProviderPluginContribution extends ZetaPluginContribution {
   const AgentProviderPluginContribution({
     required this.definition,

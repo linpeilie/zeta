@@ -142,10 +142,14 @@ void main() {
 
     // 指标按 Provider 分序列；正文与路径不出现在任何序列里。
     final firstTags = ZetaMetricTags(
-      providerId: AgentMetricLabels.forProviderId(defaultAgentProviderId),
+      providerId: builtInAgentProviderDefinitionCatalog.metricLabelFor(
+        defaultAgentProviderId,
+      ),
     );
     final secondTags = ZetaMetricTags(
-      providerId: AgentMetricLabels.forProviderId(grokAgentProviderId),
+      providerId: builtInAgentProviderDefinitionCatalog.metricLabelFor(
+        grokAgentProviderId,
+      ),
     );
     expect(
       metrics.totalOf(ZetaMetric.agentPipelineEventsAccepted, tags: firstTags),
@@ -196,7 +200,7 @@ AgentConversationRuntimeController _createViewModel(
     initialProjectPath: '/repo',
     uiFrameScheduler: FakeAgentFrameScheduler(),
     metrics: metrics ?? InMemoryZetaMetricsPort(enabled: false),
-    providerMetricLabel: AgentMetricLabels.forProviderId,
+    providerMetricLabel: builtInAgentProviderDefinitionCatalog.metricLabelFor,
   );
 }
 

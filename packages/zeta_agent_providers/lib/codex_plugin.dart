@@ -1,8 +1,8 @@
 import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_plugin_kernel/zeta_plugin_kernel.dart';
 
-import 'package:zeta_agent_providers/src/agent_provider_definition.dart';
-import 'package:zeta_agent_providers/src/agent_provider_plugin_contribution.dart';
 import 'package:zeta_agent_providers/src/agent_provider_static_capabilities.dart';
 import 'package:zeta_agent_providers/src/native_agent_provider_bundles.dart';
 
@@ -31,6 +31,7 @@ const AgentProviderDefinition codexAgentProviderDefinition =
       defaultConfig: defaultCodexAgentProviderConfig,
       staticCapabilities: AgentProviderStaticCapabilities.codexAppServer,
       modelCatalogSourceLabel: 'Codex app-server',
+      metricLabel: ZetaMetricLabel.constant('codex'),
       isDefault: true,
     );
 

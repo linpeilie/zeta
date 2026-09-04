@@ -1,8 +1,8 @@
 import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_plugin_kernel/zeta_plugin_kernel.dart';
 
-import 'package:zeta_agent_providers/src/agent_provider_definition.dart';
-import 'package:zeta_agent_providers/src/agent_provider_plugin_contribution.dart';
 import 'package:zeta_agent_providers/src/agent_provider_static_capabilities.dart';
 import 'package:zeta_agent_providers/src/datasources/claude_code/claude_code_cli_metadata_coordinator.dart';
 import 'package:zeta_agent_providers/src/datasources/claude_code/claude_code_hidden_thread_store.dart';
@@ -38,6 +38,7 @@ const AgentProviderDefinition claudeCodeAgentProviderDefinition =
       defaultConfig: defaultClaudeCodeAgentProviderConfig,
       staticCapabilities: AgentProviderStaticCapabilities.claudeCode,
       modelCatalogSourceLabel: 'Claude Code',
+      metricLabel: ZetaMetricLabel.constant('claude_code'),
       modelCatalogFingerprintExtraKeys: <String>{
         claudeCodeAccountDataEnrichmentKey,
       },

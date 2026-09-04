@@ -132,7 +132,7 @@ class _MainAppState extends State<MainApp> {
       key: const ValueKey<String>('zeta.ide-home'),
       shellStateSnapshotRelay: composition.shellStateSnapshotRelay,
       workbenchCompositionFactory: composition.createWorkbenchComposition,
-      providerMetricLabel: AgentMetricLabels.forProviderId,
+      providerMetricLabel: builtInAgentProviderDefinitionCatalog.metricLabelFor,
     );
   }
 }

@@ -10,6 +10,7 @@ environment:
 # 目标 Package 图与依赖方向见 AGENTS.md §1 G6。
 workspace:
   - packages/zeta_agent_core
+  - packages/zeta_agent_provider_api
   - packages/zeta_agent_providers
   - packages/zeta_foundation
   - packages/zeta_markdown
@@ -40,6 +41,7 @@ dependencies:
   unorm_dart: ^0.3.2
   window_manager: ^0.5.1
   zeta_agent_core: ^0.1.0
+  zeta_agent_provider_api: ^0.1.0
   zeta_agent_providers: ^0.1.0
   zeta_foundation: ^0.1.0
   zeta_markdown: ^0.1.0

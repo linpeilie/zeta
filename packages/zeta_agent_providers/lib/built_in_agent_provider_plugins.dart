@@ -1,10 +1,10 @@
 import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'package:zeta_plugin_kernel/zeta_plugin_kernel.dart';
 
 import 'package:zeta_agent_providers/claude_code_plugin.dart';
 import 'package:zeta_agent_providers/codex_plugin.dart';
 import 'package:zeta_agent_providers/grok_plugin.dart';
-import 'package:zeta_agent_providers/src/agent_provider_definition.dart';
 import 'package:zeta_agent_providers/src/datasources/claude_code/claude_code_cli_metadata_coordinator.dart';
 import 'package:zeta_agent_providers/src/datasources/claude_code/claude_code_hidden_thread_store.dart';
 import 'package:zeta_agent_providers/src/datasources/claude_code/claude_code_permission_policy_adapter.dart';

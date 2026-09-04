@@ -30,7 +30,8 @@ class AgentProviderRuntimeRegistry extends AgentChangeNotifier {
   /// Provider ID → 指标标签的解析函数。
   ///
   /// 内核**不认识**任何具体 Provider（G1），所以默认把 ID 直接 hash；组合层注入
-  /// `AgentMetricLabels.forProviderId`（data 层）后，内置 Provider 才会显示成可读常量。
+  /// `AgentProviderDefinitionCatalog.metricLabelFor` 后，内置 Provider 才会显示成
+  /// 可读常量。
   final ZetaMetricLabel Function(String providerId) providerMetricLabel;
 
   final Map<_RuntimeKey, _AgentProviderRuntimeEntry> _entries =

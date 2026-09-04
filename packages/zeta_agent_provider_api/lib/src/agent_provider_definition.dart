@@ -1,4 +1,5 @@
 import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
 
 /// 单个 compile-time Provider 插件公开的静态定义。
 ///
@@ -11,6 +12,7 @@ final class AgentProviderDefinition {
     required this.defaultConfig,
     required this.staticCapabilities,
     required this.modelCatalogSourceLabel,
+    required this.metricLabel,
     this.modelCatalogFingerprintExtraKeys = const <String>{},
     this.isDefault = false,
   });
@@ -29,6 +31,12 @@ final class AgentProviderDefinition {
 
   /// 模型目录快照展示使用的稳定来源标签。
   final String modelCatalogSourceLabel;
+
+  /// 该 Provider 的指标标签，编译期常量。
+  ///
+  /// 内置插件通过 [ZetaMetricLabel.constant] 声明；指标维度只允许规范化标签（G7），
+  /// 自定义配置 id 不经过这里，由 catalog 回落不可逆短 hash（见 [metricLabelFor]）。
+  final ZetaMetricLabel metricLabel;
 
   /// 参与模型目录安全指纹的 Provider 自有配置 key。
   ///
@@ -184,6 +192,13 @@ final class AgentProviderDefinitionCatalog {
   ) =>
       _byProviderType[providerType]?.staticCapabilities ??
       AgentProviderCapabilities.unsupported;
+
+  /// 指标标签查询：内置 id 用插件声明的常量，未知/自定义 id 回落不可逆短 hash。
+  ///
+  /// 语义与退役的厂商身份分支逐分支一致。
+  ZetaMetricLabel metricLabelFor(String providerId) =>
+      _byProviderId[providerId]?.metricLabel ??
+      ZetaMetricLabel.hashed(providerId);
 
   String modelCatalogSourceFor(AgentProviderConfig config) =>
       _byProviderType[config.kind]?.modelCatalogSourceLabel ??

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 
 import 'package:zeta/src/app/composition/app_dependencies.dart';
@@ -65,7 +66,8 @@ final agentProviderRuntimeRegistryProvider =
       (ref) => AgentProviderRuntimeRegistry(
         providerFactory: ref.watch(agentProviderBundleFactoryProvider),
         metrics: ref.watch(zetaMetricsPortProvider),
-        providerMetricLabel: AgentMetricLabels.forProviderId,
+        providerMetricLabel:
+            builtInAgentProviderDefinitionCatalog.metricLabelFor,
       ),
       name: 'agentProviderRuntimeRegistry',
     );
