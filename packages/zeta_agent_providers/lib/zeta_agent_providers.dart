@@ -54,7 +54,6 @@ export 'src/datasources/local_history/grok_session_history_reader.dart';
 export 'src/datasources/local_history/grok_updates_history_parser.dart';
 export 'src/datasources/local_history/grok_user_content_parser.dart';
 export 'src/grok_cli_locator.dart';
-export 'src/mappers/acp_permission_mapper.dart';
 export 'src/mappers/acp_session_config_mapper.dart';
 export 'src/mappers/agent_tool_input_detail.dart';
 export 'src/mappers/acp_session_update_decoder.dart';

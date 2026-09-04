@@ -1,5 +1,6 @@
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk.dart';
+
+import '../payload/agent_provider_payload.dart';
 
 /// ACP permission response option。
 class AcpPermissionOption {
