@@ -3,7 +3,6 @@ import 'package:zeta_agent_providers/src/mappers/grok_error_normalizer.dart';
 import 'package:zeta_agent_providers/src/mappers/grok_file_change_tracker.dart';
 import 'package:zeta_agent_providers/src/mappers/grok_stream_identity.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta_agent_providers/src/mappers/agent_tool_input_detail.dart';
 import 'package:zeta_agent_providers/src/mappers/grok_provider_payload.dart';
 
 /// Grok typed ACP update 到领域事件的映射结果。

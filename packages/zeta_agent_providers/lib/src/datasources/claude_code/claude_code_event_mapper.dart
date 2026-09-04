@@ -3,7 +3,6 @@ import 'package:zeta_agent_providers/src/datasources/claude_code/claude_code_fil
 import 'package:zeta_agent_providers/src/datasources/claude_code/claude_code_plan_approval_adapter.dart';
 import 'package:zeta_agent_providers/src/mappers/claude_code_stream_identity.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta_agent_providers/src/mappers/agent_tool_input_detail.dart';
 import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk.dart';
 
 final _log = zetaLoggerFor('zeta.agent.claude_code.event_mapper');
