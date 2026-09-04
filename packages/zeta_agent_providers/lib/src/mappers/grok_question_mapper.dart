@@ -1,5 +1,5 @@
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta_agent_providers/src/mappers/agent_provider_payload.dart';
+import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk.dart';
 import 'package:zeta_agent_providers/src/mappers/grok_provider_payload.dart';
 
 /// 映射 Grok ACP 扩展 `_x.ai/ask_user_question` / `x.ai/ask_user_question`。

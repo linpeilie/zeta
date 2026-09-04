@@ -21,7 +21,6 @@ import 'package:zeta_agent_providers/src/mappers/grok_permission_mode_codec.dart
 import 'package:zeta_agent_providers/src/mappers/grok_question_mapper.dart';
 import 'package:zeta_agent_providers/src/mappers/grok_skills_mapper.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta_agent_providers/src/mappers/agent_provider_payload.dart';
 import 'package:zeta_agent_providers/src/mappers/grok_provider_payload.dart';
 
 final _log = zetaLoggerFor('zeta.agent.grok_acp');

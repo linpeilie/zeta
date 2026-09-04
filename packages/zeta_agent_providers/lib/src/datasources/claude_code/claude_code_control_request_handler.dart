@@ -1,6 +1,6 @@
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta_agent_providers/src/mappers/agent_provider_payload.dart';
+import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk.dart';
 
 final _log = zetaLoggerFor('zeta.agent.claude_code.control_request');
 

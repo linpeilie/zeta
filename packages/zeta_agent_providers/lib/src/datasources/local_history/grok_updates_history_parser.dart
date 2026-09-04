@@ -6,7 +6,7 @@ import 'package:zeta_agent_providers/src/mappers/grok_error_normalizer.dart';
 import 'package:zeta_agent_providers/src/mappers/grok_session_update_mapper.dart';
 import 'package:zeta_agent_providers/src/mappers/grok_stream_identity.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta_agent_providers/src/mappers/agent_provider_payload.dart';
+import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk.dart';
 
 /// 从 Grok `updates.jsonl` 重建多回合历史快照。
 ///
