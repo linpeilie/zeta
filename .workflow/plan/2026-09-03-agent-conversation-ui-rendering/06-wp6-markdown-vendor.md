@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |----|----|
-| 状态 | 进行中（T1–T6 已完成） |
+| 状态 | 进行中（T1–T7 已完成） |
 | 规模 | 11–16 人天（T1–T10 + T14–T15）；P2 可选项另计 |
 | 依赖 | 无硬依赖；T2 换包与 WP-2 T3 协同；T7 与 WP-3 协同 |
 | 门禁焦点 | G6（新 Package 论证）、G7（外链处理）、G8（主题 token） |
@@ -457,7 +457,22 @@ testWidgets('descriptor 估算与真实渲染高度偏差在容差内', (tester)
 });
 ```
 
-- **验收**：T8（工具栏加高）落地时该测试**必须红**→ 更新 descriptor 后转绿——这就是它存在的意义。
+- **验收**：T8（工具栏加高）落地时该测试**必须红**→ 更新 descriptor 后转绿——这就是它存在的意义。 ✅（已用变异验证）
+
+**施工记录（2026-09-03）**：落到 `test/src/features/agent/presentation/agent_markdown_extent_guard_test.dart`（文件名与文档不同，见下）。
+
+**文档前提需要更正**：`agent_markdown_render_descriptor.dart` **不存在**（T2 已核实，presentation 下只剩 `agent_timeline_extent_descriptor.dart`）。估算契约在 WP-3 之后落在 `timeline_rendering/agent_timeline_extent_math.dart` 的 `estimateAgentMarkdownExtent`，守卫因此改为盯它。
+
+**「偏差 < 20%」这个容差与现实不符**：实测（flutter_test 确定性字体、720px 宽）估算/真实为 prose 1.43、code 1.65、table 1.34——现状公式（逐源行折行 + 块间距）本就高估 30%~70%。按 20% 写下去只会立刻红。
+
+**更关键的是：纯比值带拦不住 T8。** 工具栏给代码块加约 28px，比值从 1.65 掉到 1.37，仍在任何合理带内。所以守卫做成两层：
+
+1. **真实渲染高度基线**（±6%）：prose 123.2 / code 145.6 / table 148.6。包内布局一改就先红。
+2. **估算/真实比值带**（0.95 ~ 2.2，不对称）：拦数量级失真。下界贴紧真实高度，因为低估会让锚点向上跳；上界放宽，高估只是多留白。
+
+**变异验证**（守卫不空转）：把包内代码块的上内边距 +28px 模拟工具栏后，**只有 `code` 那条红**，prose/table 不动；还原后全绿。
+
+测量要点：`MarkdownWidget` 在高度受限时会撑满约束，直接量得到的是视口高度（3000）而不是内容高度——必须放进可滚动容器量自然高度。
 
 ### 阶段四：P1 深改（T8–T10）
 
