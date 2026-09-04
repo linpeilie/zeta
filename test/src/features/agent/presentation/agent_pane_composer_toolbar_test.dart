@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/features/agent/application/agent_conversation_mode_controller.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 import 'package:zeta_ui/zeta_ui.dart';
@@ -660,7 +660,7 @@ void main() {
         );
         expect(
           provider.sentMessages,
-          contains(AgentConversationViewModel.planExecutionPrompt),
+          contains(AgentConversationRuntimeController.planExecutionPrompt),
         );
         expect(
           provider.turnConfigurations.last.conversationMode!.modeId,
@@ -941,16 +941,14 @@ void main() {
         final permissionSelector = find.byKey(
           const ValueKey('agent-permission-option-selector'),
         );
-        final modelSurface = tester.widget<PaneInteractiveSurface>(
-          modelSelector,
+        final modelButton = tester.widget<IdeButton>(modelSelector);
+        final permissionButton = tester.widget<IdeButton>(permissionSelector);
+        expect(
+          tester.getSize(permissionSelector).height,
+          tester.getSize(modelSelector).height,
         );
-        final permissionSurface = tester.widget<PaneInteractiveSurface>(
-          permissionSelector,
-        );
-        expect(permissionSurface.height, modelSurface.height);
-        expect(permissionSurface.borderRadius, modelSurface.borderRadius);
-        expect(permissionSurface.backgroundColor, modelSurface.backgroundColor);
-        expect(permissionSurface.borderColor, modelSurface.borderColor);
+        expect(permissionButton.controlSize, modelButton.controlSize);
+        expect(permissionButton.variant, modelButton.variant);
         // 触发器短标签契约：option label，不含审批副标题。
         expect(find.text('Workspace write'), findsOneWidget);
         expect(viewModel.permissionPolicyLabel, 'Workspace write');
@@ -1198,5 +1196,53 @@ void main() {
       expect(draftStrip, findsNothing);
       expect(removeButton, findsNothing);
     });
+
+    testWidgets(
+      'clipboard paste stages via attachment port then send clears drafts',
+      (tester) async {
+        final paneKey = GlobalKey();
+        final provider = AgentPaneFakeProvider();
+        final viewModel = createAgentPaneViewModel(
+          provider,
+          initialThread: agentPaneThread(
+            id: 'thread-paste-image',
+            title: 'Paste',
+          ),
+        );
+        addTearDown(provider.dispose);
+        addTearDown(viewModel.dispose);
+
+        await tester.pumpWidget(
+          AgentPaneTestApp(viewModel: viewModel, agentPaneKey: paneKey),
+        );
+        await viewModel.initialization;
+        await pumpAgentPaneUi(tester);
+
+        await AgentPane.debugPasteClipboardImage(
+          paneKey,
+          Uint8List.fromList(const <int>[137, 80, 78, 71]),
+        );
+        await tester.pump();
+        final staged = AgentPane.debugDraftImagePaths(paneKey);
+        expect(staged, hasLength(1));
+        expect(staged.single, startsWith('memory://paste-'));
+        expect(staged.single, endsWith('.png'));
+
+        final input = find.byKey(const ValueKey('agent-message-input'));
+        await tester.enterText(input, 'see image');
+        await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+        await pumpUntilMessageSent(tester, provider);
+
+        expect(provider.sentMessages, <String>['see image']);
+        expect(AgentPane.debugDraftImagePaths(paneKey), isEmpty);
+        provider.emitEvent(
+          const AgentTurnCompletedEvent(
+            sessionId: 'thread-paste-image',
+            turnId: 'turn-1',
+          ),
+        );
+        await tester.pump();
+      },
+    );
   });
 }

@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/application/agent_pipeline_metrics_reporter.dart';
-import 'package:zeta/src/features/agent/presentation/agent_ui_update_scheduler.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_ui_update_scheduler.dart';
 
 import '../../../testing/agent_event_storm_fixture.dart';
 import '../../../testing/fake_agent_frame_scheduler.dart';

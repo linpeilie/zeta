@@ -12,7 +12,7 @@ Zeta 的设计目标是让 Flutter UI、Agent provider、会话持久化和本�
 
 - app：应用根组件、窗口启动、应用常量。
 - core：日志、Zeta 数据路径与原子文本写入等跨层基础能力。
-- features/agent：Agent provider 抽象、Codex app-server、Grok ACP stdio、Claude Code stream-json、传输、历史解析、事件映射、对话 view model 和 Agent pane。
+- features/agent：Agent provider 抽象、Codex app-server、Grok ACP stdio、Claude Code stream-json、传输、历史解析、事件映射、RuntimeController 和 Agent pane。
 - features/agent_management：Agent CLI 检测、版本与账号诊断、模型读取、配置安全编辑、
   CLI 磁盘日志读取和管理页面。
 - features/ide_session：会话状态、版本化持久化、恢复计划和恢复协调。
@@ -58,11 +58,11 @@ IdeShellController
   -> AgentProviderSettingsController
   -> AgentConversationWorkspaceStore（entry / 选择 / project home / project→thread 唯一 owner）
     -> 每个 runtime entry 持有 ConversationBinding lease
-    -> AgentConversationSliceComposition（每个 entry 必建，未知 BindingKey fail-closed）
-    -> AgentConversationViewModel -> 固定 Binding（不持有 Provider lease/scope/pin）
+    -> AgentConversationRuntimeController -> 固定 Binding（不持有 Provider lease/scope/pin）
+    -> AgentConversationSliceStore（每个 entry 必建，未知 BindingKey fail-closed）
   -> ProjectThreadsSliceRunner
 
-AgentConversationViewModel
+AgentConversationRuntimeController
   -> AgentEventPipeline（事件资源唯一所有者）
     -> AgentProviderEventListenerGate
     -> AgentEventCoalescingPolicy + CoalescingEventBuffer
@@ -74,11 +74,12 @@ AgentConversationViewModel
         -> turn completed / attention / model catalog / structured error log
       -> AgentConversationThreadSnapshot
   -> AgentUiUpdatePort
-    -> AgentUiUpdateScheduler（presentation，按 Flutter frame 合并）
-      -> SchedulerBindingAgentFrameScheduler
-      -> AgentConversationUiStateStore
-        -> header/composer/pending/expansion/history typed listenable
-        -> live turn 增量通知 + AgentUiEffect stream
+    -> AgentUiUpdateScheduler（application，按 Flutter frame 合并）
+      -> AgentFrameScheduler（presentation 生产适配：SchedulerBindingAgentFrameScheduler）
+      -> addUiUpdateListener
+        -> AgentConversationSliceStore.connected
+          -> header/composer/pending/expansion/history 一次 RegionsRefreshed
+          -> live turn 增量通知 + AgentUiEffect stream
   -> AgentConversationComposerStateOwner
     -> AgentConversationModelSelectionController
     -> AgentConversationModeController
@@ -370,7 +371,7 @@ Application / Presentation 只以 `AgentProviderBundle` 的中立端口作为能
 - 响应权限请求；他端已解决的审批通过事件撤销本地卡片。
 - 推送状态、消息、推理/计划流、工具调用、文件变更快照、审批与系统提示事件。
 
-当前 `AgentConversationViewModel` 与 `ProjectThreadsSliceRunner` 通过 bundle
+当前 `AgentConversationRuntimeController` 与 `ProjectThreadsSliceRunner` 通过 bundle
 消费上述端口；Agent 管理页中的模型探测也统一走 `bundle.modelCatalog`。应用层不再
 需要通过 provider kind 或运行时类型判断决定这些功能域。
 
@@ -393,7 +394,7 @@ Provider 事件进入对话详情前由 `AgentEventPipeline` 集中管理。每�
 交叉不会把旧流投影到新会话。Pipeline 先使 listener scope 失效并停止接收，再取消 source；
 Thread 切换、替换与 dispose 清除旧缓存和 dispatcher 队列，只有当前 generation 的自然
 `onDone` 才会有界 drain 已接收事件；detached runtime 仅在 scope 仍当前时按既有 critical
-allowlist 接收。subscription、gate、buffer 与 dispatcher 不再由 ViewModel 分散持有。
+allowlist 接收。subscription、gate、buffer 与 dispatcher 不再由 RuntimeController 分散持有。
 
 高频事件在 Application 投影边界由 `AgentEventCoalescingPolicy` 与
 `CoalescingEventBuffer` 合并：同 item 文本/reasoning delta 追加，同 turn token/文件变更完整快照取
@@ -418,7 +419,7 @@ typed state、`AgentTimelineMutation`、ThreadSnapshot、`AgentUiUpdateRequest` 
 | 层级 | 输入与输出 | 拥有的决策 | 明确禁止 |
 |------|------------|------------|----------|
 | shared transport / decoder / codec | 原始帧 → typed protocol update | 通用协议语法、传输生命周期、字段类型 | mutable identity 状态、Provider 名称/kind/id 分支 |
-| Provider mapper / adapter / reducer | typed/raw Provider update → 完整 `AgentEvent` | 厂商字段兼容、source→entry、segment/phase、boundary、去重、终态和迟到事件 | 把未决语义交给 Store/ViewModel 猜测 |
+| Provider mapper / adapter / reducer | typed/raw Provider update → 完整 `AgentEvent` | 厂商字段兼容、source→entry、segment/phase、boundary、去重、终态和迟到事件 | 把未决语义交给 Store/RuntimeController 猜测 |
 | `AgentEventPipeline` | `Stream<AgentEvent>` → 已隔离、有界交付的事件 | subscription/scope/gate/buffer/dispatcher 所有权与 close 顺序 | UI region、Widget、Provider raw identity |
 | `AgentEventCoalescingPolicy` | `AgentEvent` → key/merge/barrier 决策 | normalized identity/kind/detail 的 Agent 合并规则 | 订阅生命周期、UI urgency、厂商 raw 字段 |
 | `CoalescingEventBuffer` / `BoundedEventDispatcher` | policy 输出 → FIFO 事件批 | pending 上限、barrier flush、每 turn 上限与 event-queue yield | Agent 业务分支、Flutter frame 调度 |
@@ -426,8 +427,8 @@ typed state、`AgentTimelineMutation`、ThreadSnapshot、`AgentUiUpdateRequest` 
 | `AgentConversationEventProcessor` | `AgentConversationMutation` → 已应用状态 | state/timeline/snapshot 刷新请求/UI/effect 的确定顺序与 outcome 合成 | Widget、ChangeNotifier、Flutter build-phase 判断、Provider 协议分支 |
 | `AgentConversationTimelineStore` | `AgentTimelineMutation` → timeline state | 同 entryId 更新、异 entryId 新建、同 tool id upsert | Provider 分支、开放条目推断、segment 分配、id 改写、UI urgency |
 | `AgentConversationEffectRunner` | scope-aware `AgentConversationEffect` → 外部工作 | generation/runtime/thread 校验与一次性执行 | 修改 Timeline、在 reducer 内执行异步 |
-| `AgentUiUpdateScheduler` / typed state store | `AgentUiUpdateRequest` → 局部 listenable/effect | Flutter frame 合并、结构相等发布、一次性 UI effect | 解释 `AgentEvent`、通知 Shell、持久化历史 |
-| ViewModel / UI | typed state/timeline/domain state → 展示 | 中立 facade、局部监听与交互 | 完整 ViewModel listener、解析协议 payload、根据 Provider 猜 identity/plan |
+| `AgentUiUpdateScheduler` / SliceStore | `AgentUiUpdateRequest` → 一次 RegionsRefreshed | Flutter frame 合并、按 region dispatch、一次性 UI effect | 解释 `AgentEvent`、通知 Shell、持久化历史 |
+| RuntimeController / AgentRegionBuilder / UI | typed state/timeline/domain state → 展示 | 中立命令入口、region selector 与交互 | 整页会话 listener、解析协议 payload、根据 Provider 猜 identity/plan |
 
 依赖方向是单向的：共享层定义中立机制和契约，Provider data 层依赖这些契约并产出完整语义；
 共享层不得反向 import Provider 实现，也不得通过 raw map、魔法字符串或隐藏 flag 接收单一
@@ -466,15 +467,16 @@ Agent Canvas 支持多 thread 常驻 entry。`AgentProviderRuntimeRegistry` 是�
 全局实例，承载用量、目录、历史和 thread 操作。`AgentConversationBindingManager`
 按草稿 key 或 thread key 唯一维护 Binding；Workspace entry 只持有 Binding lease。
 Workspace 是 thread 身份的组合边界：创建 entry 时一次性注入 thread summary 与匹配的
-Binding；ViewModel 没有 `switchThread` 或带恢复参数的通用 workspace 更新入口，只能更新
-project/file context。打开另一个 thread 必须选择或创建另一个 entry/ViewModel。
+Binding 和 RuntimeController；RuntimeController 没有 `switchThread` 或带恢复参数的通用
+workspace 更新入口，只能更新 project/file context。打开另一个 thread 必须选择或创建另一个
+entry/RuntimeController。
 打开草稿、打开已有 thread 和读取历史均不创建 session Provider，只有第一次提交输入
 调用 `Binding.beginTurn()` 后才启动，并在已有 thread 上 resume。草稿取得 threadId 后
 原子晋升，碰到已有 key 时 fail-closed。
 
 Binding 显式发布 dormant、starting、attached 与 cleared 生命周期。首次启动和初始化失败
 不能仅凭 `currentRuntime == null` 被解释成断连；只有曾 attached 且按精确 runtime identity
-清除后产生的 cleared 转换，才允许 ViewModel 将当前 turn 结算为中断。
+清除后产生的 cleared 转换，才允许 RuntimeController 将当前 turn 结算为中断。
 
 Binding 持有该逻辑会话的可选 runtime、generation 过滤后的事件流、权限状态和活跃操作
 计数。运行中 turn 与短 RPC 都阻止回收；终态/操作完成时间是新的 TTL 起点。Manager 每
@@ -557,7 +559,7 @@ result。认证证据与 initialize 可用性独立，CLI 仍可能维护自身�
 核心流式体验；Phase 2 已完成 Provider Bundle 与多 Provider 能力端口迁移，并覆盖：
 
 - thread 生命周期管理（重命名/归档/删除/分叉/按历史 turn 创建分支/压缩）。
-- `AgentConversationViewModel` 的会话、历史、steer、权限响应、独立用户提问响应、
+- `AgentConversationRuntimeController` 的会话、历史、steer、权限响应、独立用户提问响应、
   Guardian 放行、模型目录与计划审批路由。
 - `ProjectThreadsSliceRunner` 的列表、重命名、归档、删除与分叉。
 - Codex / Grok / Claude Code 的 bundle 端口一致性契约测试。
@@ -655,7 +657,7 @@ conversation mode 的 UI 回写仍受当前 thread gate 约束。
 - Thread 列表：搜索、活动/归档切换、右键重命名/归档/删除/分叉。
 - 编辑上一条用户消息时保留原 thread，并通过 `thread/fork.lastTurnId` 创建分支；fork
   返回的 session 按新建 thread 登记到列表，Shell 复用标准 thread 选择流程创建并选中独立
-  Entry/Binding，再由新 ViewModel 重发编辑后的内容。源 Binding 不改绑，工作区文件改动
+  Entry/Binding，再由新 RuntimeController 重发编辑后的内容。源 Binding 不改绑，工作区文件改动
   也不会随会话分支而回滚。
 
 ### Conversation mode 配置
@@ -669,7 +671,7 @@ data 精确编码”的单向流：
   model 和 skills 三个纯 Dart 状态引擎；其中 mode 引擎按 Provider/thread scope 管理
   draft、confirmed、pending、错误和 generation。快速切换 Provider/thread 时，旧异步结果
   不得覆盖新上下文。
-- `AgentConversationViewModel` 在发送前冻结 mode 与有效模型配置到
+- `AgentConversationRuntimeController` 在发送前冻结 mode 与有效模型配置到
   `AgentTurnConfiguration`。活动 turn 中改变选择只更新下一回合 draft，不修改当前 turn。
 - Codex data 层独占 `collaborationMode/list`、`turn/start.collaborationMode` 和
   `thread/settings/updated` JSON；显式 mode 与顶层 model / effort 互斥。
@@ -693,7 +695,7 @@ data 精确编码”的单向流：
 - Provider 历史解析器将协议别名归一化到 typed `AgentHistoryTurn.modelId`、
   `reasoningEffort`、`serviceTierId` 和 `explicitFast`；reasoning effort 区分 unknown、
   Provider default 与 explicit value，Fast 的 service tier 映射由 Provider 自己决定。
-  共享 Store/ViewModel/UI 不读取 raw payload 猜测。
+  共享 Store/RuntimeController/UI 不读取 raw payload 猜测。
 - Composer owner 内的 model selection 引擎是配置真源，负责 capability 归一化、Fast /
   `xhigh` 冲突解决、provider 运行态更新及持久化。快速连续修改串行合并，过期请求不得
   覆盖新快照。
@@ -817,7 +819,7 @@ IDE 会话状态目前版本为 4，持久化内容包括：
   providerId/kind/type 分支，也不从 raw/source/eventId 推断 identity 或 narrative boundary。
 - Provider-local 序列契约：每个 Provider 在进入共享层前完成 source→entry、segment/phase、
   tool upsert、终态竞态和迟到事件决策；共享层 fixture 保持 Provider 无关。
-- AgentConversationViewModel 状态机。
+- AgentConversationRuntimeController 状态机。
 - Agent 管理的版本比较、配置校验/冲突/备份、日志脱敏和禁用只读联动。
 - ProjectThreadsSliceStore 与 effect/query runner 的分页、缓存、选择和错误状态分工。
 - App 或关键 Pane 的 widget 行为。
@@ -832,5 +834,5 @@ IDE 会话状态目前版本为 4，持久化内容包括：
 - 增加文件内容预览或编辑器能力。
 - 增加 Agent 执行审计记录。
 - 支持更多 Agent provider。
-- 把复杂 UI 状态进一步拆成更小的 view model。
+- 把复杂 UI 状态进一步拆成更小的切片。
 - 在需要深链、多屏或 Web 支持时再引入声明式路由。

@@ -190,7 +190,7 @@ Common types: `feat` / `fix` / `docs` / `refactor` / `test` / `chore` / `perf`.
 
 **Layering and dependency direction**
 
-- One-way: `main → app → presentation/application → domain`, `app → data → domain`, `presentation → zeta_ui` (the design system in `packages/zeta_ui`).
+- One-way: `main → app → presentation/application → domain`, `app → data → domain`, `presentation → zeta_ui` (the design system in `packages/zeta_ui`), `presentation → zeta_markdown` (the Markdown renderer in `packages/zeta_markdown`, forked from upstream — read `packages/zeta_markdown/UPSTREAM.md` before touching it).
 - New code goes into the matching `features/<feature>/{domain,application,data,presentation}` — not back into broad top-level directories.
 - `main.dart` only bootstraps; `lib/src/app` is the single composition point.
 
@@ -202,8 +202,8 @@ Common types: `feat` / `fix` / `docs` / `refactor` / `test` / `chore` / `perf`.
 - File changes must become complete typed snapshots in a provider-local tracker first. The Store only carries them mechanically, the UI never reads raw fields, and a command-only path must not invent a path or diff.
 - Adding a provider should touch only its own data files, neutral domain contracts, factory wiring, and contract tests. If you find yourself needing to modify a shared layer, the abstraction is wrong — open an issue first.
 - UI renders strictly by **capability**, never hard-coded on provider kind or name. Unsupported capabilities must report `capability = false` and throw `UnsupportedError` — **never succeed silently**.
-- Provider processes are created only by `AgentProviderRuntimeRegistry`. Global work uses `AgentProviderGlobalRuntime`; session instances are created lazily only by `AgentConversationBinding.beginTurn()`. A binding distinguishes dormant/starting/attached/cleared explicitly, and only a cleared transition for the matching runtime identity is a disconnect. View models own no lease/scope/pin, and the binding manager owns idle reclamation.
-- A workspace entry binds its thread, binding, and view model once. View models expose no cross-thread switch/restore compatibility API and may update only project/file context. Runtime acquisition must pass an explicit scope.
+- Provider processes are created only by `AgentProviderRuntimeRegistry`. Global work uses `AgentProviderGlobalRuntime`; session instances are created lazily only by `AgentConversationBinding.beginTurn()`. A binding distinguishes dormant/starting/attached/cleared explicitly, and only a cleared transition for the matching runtime identity is a disconnect. RuntimeControllers own no lease/scope/pin, and the binding manager owns idle reclamation.
+- A workspace entry binds its thread, binding, and RuntimeController once. RuntimeControllers expose no cross-thread switch/restore compatibility API and may update only project/file context. Runtime acquisition must pass an explicit scope.
 - A binding attached to a real thread must never be rebound in place. A forked session goes through the shell's standard new-thread registration and selection flow, and later operations target only the fork result.
 - `AgentProviderBundle` is the only Application / Presentation capability surface and is created directly by `createBundle`; the old `AgentProvider` facade is gone. Each binding owns one immutable permission snapshot, with no cross-provider/runtime/thread permission registry. Static capability defaults are injected by the data composition layer; Domain does not switch on vendor names.
 

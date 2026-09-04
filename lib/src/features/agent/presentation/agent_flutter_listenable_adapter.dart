@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// 把中立内核的 [AgentListenable] 投影为 Flutter presentation 可消费的信号。
@@ -36,4 +37,18 @@ final class AgentFlutterValueListenableAdapter<T>
 
   @override
   T get value => valueSource.value;
+}
+
+/// Runtime 的中立 listenable 到 Flutter 投影。适配器是值语义，build 里重建无害。
+extension AgentConversationFlutterListenables
+    on AgentConversationRuntimeController {
+  ValueListenable<AgentConversationTurnState?> get flutterLiveTurnListenable =>
+      AgentFlutterValueListenableAdapter(liveTurnListenable);
+
+  ValueListenable<AgentConversationThreadSnapshot>
+  get flutterThreadSnapshotListenable =>
+      AgentFlutterValueListenableAdapter(threadSnapshotListenable);
+
+  Listenable get flutterElapsedClockListenable =>
+      AgentFlutterListenableAdapter(elapsedClockListenable);
 }

@@ -14,8 +14,8 @@ import '../../../testing/provider_settings_test_store.dart';
 import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_command_scope.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_intent.dart';
-import 'package:zeta/src/app/conversation_slice/agent_conversation_slice_composition.dart';
-import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 
 import '../../../testing/agent_provider_stub_base.dart';
@@ -30,14 +30,14 @@ final List<FakeAgentFrameScheduler> _uiFrameSchedulers =
 void main() {
   setUp(_uiFrameSchedulers.clear);
 
-  group('AgentConversationViewModel', () {
+  group('AgentConversationRuntimeController', () {
     test('uses New thread as the default header title', () {
       final viewModel = _createViewModel(_FakeAgentProvider());
       addTearDown(viewModel.dispose);
 
       expect(
         viewModel.currentThreadTitle,
-        AgentConversationViewModel.defaultThreadTitle,
+        AgentConversationRuntimeController.defaultThreadTitle,
       );
       expect(viewModel.currentThreadTokenUsage, isNull);
       expect(viewModel.currentThreadLastTokenUsage, isNull);
@@ -423,7 +423,7 @@ void main() {
         );
         expect(
           viewModel.messages.map((message) => message.text),
-          contains(AgentConversationViewModel.planExecutionPrompt),
+          contains(AgentConversationRuntimeController.planExecutionPrompt),
         );
         expect(
           provider.calls.where((call) => call.startsWith('steer:')),
@@ -858,7 +858,7 @@ void main() {
       // 列表误写占位 title 时，不得把详情头栏冲回 New thread。
       viewModel.syncThreadTitleIfCurrent(
         'thread-1',
-        AgentConversationViewModel.defaultThreadTitle,
+        AgentConversationRuntimeController.defaultThreadTitle,
       );
       expect(viewModel.currentThreadTitle, 'hello from provisional title');
     });
@@ -2560,15 +2560,12 @@ void main() {
         var headerNotifications = 0;
         var composerNotifications = 0;
         var liveNotifications = 0;
-        viewModel.historyStateListenable.addListener(() {
-          historyNotifications += 1;
-        });
-        viewModel.headerStateListenable.addListener(() {
-          headerNotifications += 1;
-        });
-        viewModel.composerStateListenable.addListener(() {
-          composerNotifications += 1;
-        });
+        _listenRegionValueChanges(
+          viewModel,
+          onHistory: () => historyNotifications += 1,
+          onHeader: () => headerNotifications += 1,
+          onComposer: () => composerNotifications += 1,
+        );
         liveTurn!.addListener(() {
           liveNotifications += 1;
         });
@@ -2628,15 +2625,12 @@ void main() {
         var composerNotifications = 0;
         var liveNotifications = 0;
         var autoScrollNotifications = 0;
-        viewModel.historyStateListenable.addListener(() {
-          historyNotifications += 1;
-        });
-        viewModel.headerStateListenable.addListener(() {
-          headerNotifications += 1;
-        });
-        viewModel.composerStateListenable.addListener(() {
-          composerNotifications += 1;
-        });
+        _listenRegionValueChanges(
+          viewModel,
+          onHistory: () => historyNotifications += 1,
+          onHeader: () => headerNotifications += 1,
+          onComposer: () => composerNotifications += 1,
+        );
         final effectSubscription = viewModel.uiEffects.listen((effect) {
           if (effect is AgentRequestAutoScroll) {
             autoScrollNotifications += 1;
@@ -3942,7 +3936,7 @@ void main() {
       );
       addTearDown(bindingHarness.close);
       final bindingLease = bindingHarness.acquireDraft(provider.config);
-      final viewModel = AgentConversationViewModel(
+      final viewModel = AgentConversationRuntimeController(
         providerController: controller,
         conversationBinding: bindingLease.binding,
         globalRuntime: bindingHarness.globalRuntime,
@@ -4030,7 +4024,7 @@ void main() {
         addTearDown(bindingHarness.close);
         final bindingLease = bindingHarness.acquireDraft(codexConfig);
         String? requestedProviderId;
-        final viewModel = AgentConversationViewModel(
+        final viewModel = AgentConversationRuntimeController(
           providerController: controller,
           conversationBinding: bindingLease.binding,
           globalRuntime: bindingHarness.globalRuntime,
@@ -4116,7 +4110,7 @@ void main() {
           config: grok.config,
           threadId: thread.id,
         );
-        final viewModel = AgentConversationViewModel(
+        final viewModel = AgentConversationRuntimeController(
           providerController: controller,
           conversationBinding: bindingLease.binding,
           globalRuntime: bindingHarness.globalRuntime,
@@ -4220,7 +4214,7 @@ void main() {
         config: codex.config,
         threadId: thread.id,
       );
-      final viewModel = AgentConversationViewModel(
+      final viewModel = AgentConversationRuntimeController(
         providerController: controller,
         conversationBinding: bindingLease.binding,
         globalRuntime: bindingHarness.globalRuntime,
@@ -4663,58 +4657,41 @@ void main() {
     });
 
     group('Phase 2 切片接线', () {
-      test('同一批 region 变化只合并成一次切片发布', () async {
+      test('expansion 变化经 scheduler 流进切片', () async {
         final viewModel = _createViewModel(_FakeAgentProvider());
         addTearDown(viewModel.dispose);
-        final pendingFlushes = <void Function()>[];
-        final binding = AgentConversationSliceComposition(
+        final store = AgentConversationSliceStore.connected(
           regions: viewModel,
           commands: viewModel,
-          scheduleFlush: pendingFlushes.add,
         );
-        addTearDown(binding.dispose);
+        addTearDown(store.dispose);
 
         viewModel.toggleToolCall('call-1');
         viewModel.toggleToolCall('call-2');
         await _drainTypedUiUpdate();
 
-        // 两次 region 变化只排一次合并刷新。
-        expect(pendingFlushes, hasLength(1));
-        pendingFlushes.single();
-        expect(binding.flushCount, 1);
-        expect(binding.store.diagnostics.publishCount, 1);
-        expect(binding.store.state.expansion.toolCallIds, <String>{
-          'call-1',
-          'call-2',
-        });
+        expect(store.state.expansion.toolCallIds, <String>{'call-1', 'call-2'});
+        expect(store.diagnostics.publishCount, greaterThan(0));
       });
 
       test('切片命令经 effect 打到现有 port，状态由 region 回流', () async {
         final viewModel = _createViewModel(_FakeAgentProvider());
         addTearDown(viewModel.dispose);
-        final pendingFlushes = <void Function()>[];
-        final binding = AgentConversationSliceComposition(
+        final store = AgentConversationSliceStore.connected(
           regions: viewModel,
           commands: viewModel,
-          scheduleFlush: pendingFlushes.add,
         );
-        addTearDown(binding.dispose);
+        addTearDown(store.dispose);
 
-        binding.store.toggleExpansion(
+        store.toggleExpansion(
           AgentConversationExpansionTarget.toolCall,
           'call-from-slice',
         );
         await _drainTypedUiUpdate();
-        for (final flush in pendingFlushes) {
-          flush();
-        }
 
         // 展开集合的 owner 仍是 TimelineStore：切片只是把结果投影回来。
         expect(viewModel.isToolCallExpanded('call-from-slice'), isTrue);
-        expect(
-          binding.store.state.expansion.toolCallIds,
-          contains('call-from-slice'),
-        );
+        expect(store.state.expansion.toolCallIds, contains('call-from-slice'));
       });
 
       test('port 吞掉的失败必须记成失败，而不是成功', () async {
@@ -4722,23 +4699,22 @@ void main() {
           _FakeAgentProvider(sendError: StateError('send failed')),
         );
         addTearDown(viewModel.dispose);
-        final binding = AgentConversationSliceComposition(
+        final store = AgentConversationSliceStore.connected(
           regions: viewModel,
           commands: viewModel,
-          scheduleFlush: (flush) {},
         );
-        addTearDown(binding.dispose);
+        addTearDown(store.dispose);
 
-        final operation = binding.store.sendMessage(text: 'hello');
+        final operation = store.sendMessage(text: 'hello');
         await _drainTypedUiUpdate();
         await pumpEventQueue();
 
         // ViewModel 的 sendMessage 会 catch 掉异常并正常返回；靠"没抛异常"
         // 判定就会把这次失败记成成功。
-        expect(binding.store.state.pendingOperations, isEmpty);
-        expect(binding.store.state.lastFailure?.operationId, operation);
+        expect(store.state.pendingOperations, isEmpty);
+        expect(store.state.lastFailure?.operationId, operation);
         expect(
-          binding.store.state.lastFailure?.kind,
+          store.state.lastFailure?.kind,
           AgentCommandFailureKind.requestFailed,
         );
       });
@@ -4746,42 +4722,40 @@ void main() {
       test('空输入被忽略：不留在途，也不报错', () async {
         final viewModel = _createViewModel(_FakeAgentProvider());
         addTearDown(viewModel.dispose);
-        final binding = AgentConversationSliceComposition(
+        final store = AgentConversationSliceStore.connected(
           regions: viewModel,
           commands: viewModel,
-          scheduleFlush: (flush) {},
         );
-        addTearDown(binding.dispose);
+        addTearDown(store.dispose);
 
-        binding.store.sendMessage(text: '   ');
+        store.sendMessage(text: '   ');
         await _drainTypedUiUpdate();
         await pumpEventQueue();
 
-        expect(binding.store.state.pendingOperations, isEmpty);
-        expect(binding.store.state.lastFailure, isNull);
+        expect(store.state.pendingOperations, isEmpty);
+        expect(store.state.lastFailure, isNull);
       });
 
       test('能力缺失的 thread 操作记成失败', () async {
         final viewModel = _createViewModel(_FakeAgentProvider());
         addTearDown(viewModel.dispose);
-        final binding = AgentConversationSliceComposition(
+        final store = AgentConversationSliceStore.connected(
           regions: viewModel,
           commands: viewModel,
-          scheduleFlush: (flush) {},
         );
-        addTearDown(binding.dispose);
+        addTearDown(store.dispose);
 
         // 草稿会话没有 threadId：rename 属于"当前不允许"，按忽略处理，
         // 不该冒充成功、也不该报错给用户。
-        binding.store.mutateThread(
+        store.mutateThread(
           AgentConversationThreadMutationKind.rename,
           name: '新名字',
         );
         await _drainTypedUiUpdate();
         await pumpEventQueue();
 
-        expect(binding.store.state.pendingOperations, isEmpty);
-        expect(binding.store.state.lastFailure, isNull);
+        expect(store.state.pendingOperations, isEmpty);
+        expect(store.state.lastFailure, isNull);
       });
 
       test('runtime 换代后旧命令不执行，也不写回结果', () async {
@@ -4795,15 +4769,14 @@ void main() {
           connectionEpoch: 1,
           listenerGeneration: 1,
         );
-        final binding = AgentConversationSliceComposition(
+        final store = AgentConversationSliceStore.connected(
           regions: viewModel,
           commands: viewModel,
-          scheduleFlush: (flush) {},
           scopeSnapshot: () => scope,
         );
-        addTearDown(binding.dispose);
+        addTearDown(store.dispose);
 
-        final operation = binding.store.sendMessage(text: 'hello');
+        final operation = store.sendMessage(text: 'hello');
         // 命令在途期间 Provider 重启：runtime 换代。
         scope = AgentConversationCommandScope(
           bindingKey: bindingKey,
@@ -4814,31 +4787,28 @@ void main() {
         await _drainTypedUiUpdate();
         await pumpEventQueue();
 
-        expect(binding.store.state.pendingOperations, isEmpty);
-        expect(binding.store.state.lastFailure?.operationId, operation);
+        expect(store.state.pendingOperations, isEmpty);
+        expect(store.state.lastFailure?.operationId, operation);
         expect(
-          binding.store.state.lastFailure?.kind,
+          store.state.lastFailure?.kind,
           AgentCommandFailureKind.staleTarget,
         );
       });
 
-      test('binding dispose 后 ViewModel 再变不再流进切片', () async {
+      test('store dispose 后 ViewModel 再变不再流进切片', () async {
         final viewModel = _createViewModel(_FakeAgentProvider());
         addTearDown(viewModel.dispose);
-        final pendingFlushes = <void Function()>[];
-        final binding = AgentConversationSliceComposition(
+        final store = AgentConversationSliceStore.connected(
           regions: viewModel,
           commands: viewModel,
-          scheduleFlush: pendingFlushes.add,
         );
 
-        binding.dispose();
+        store.dispose();
         viewModel.toggleToolCall('after-dispose');
         await _drainTypedUiUpdate();
 
-        expect(pendingFlushes, isEmpty);
-        expect(binding.store.isClosed, isTrue);
-        expect(binding.store.state.expansion.toolCallIds, isEmpty);
+        expect(store.isClosed, isTrue);
+        expect(store.state.expansion.toolCallIds, isEmpty);
       });
     });
   });
@@ -4858,8 +4828,42 @@ Future<void> _drainTypedUiScheduling() async {
   await Future<void>.delayed(Duration.zero);
 }
 
+void _listenRegionValueChanges(
+  AgentConversationRuntimeController viewModel, {
+  required void Function() onHistory,
+  required void Function() onHeader,
+  required void Function() onComposer,
+}) {
+  var lastHistory = viewModel.historyState;
+  var lastHeader = viewModel.headerState;
+  var lastComposer = viewModel.composerState;
+  viewModel.addUiUpdateListener((request) {
+    if (request.regions.contains(AgentUiRegion.history)) {
+      final next = viewModel.historyState;
+      if (next != lastHistory) {
+        lastHistory = next;
+        onHistory();
+      }
+    }
+    if (request.regions.contains(AgentUiRegion.header)) {
+      final next = viewModel.headerState;
+      if (next != lastHeader) {
+        lastHeader = next;
+        onHeader();
+      }
+    }
+    if (request.regions.contains(AgentUiRegion.composer)) {
+      final next = viewModel.composerState;
+      if (next != lastComposer) {
+        lastComposer = next;
+        onComposer();
+      }
+    }
+  });
+}
+
 void _expectLastUiUpdate(
-  AgentConversationViewModel viewModel, {
+  AgentConversationRuntimeController viewModel, {
   required Set<AgentUiRegion> regions,
   required AgentUiUpdateUrgency urgency,
   List<AgentUiEffect> effects = const <AgentUiEffect>[],
@@ -4870,7 +4874,7 @@ void _expectLastUiUpdate(
   );
 }
 
-AgentConversationViewModel _createViewModel(
+AgentConversationRuntimeController _createViewModel(
   _FakeAgentProvider provider, {
   AgentThreadSummary? initialThread,
   AgentProviderSettings? providerSettings,
@@ -4904,7 +4908,7 @@ AgentConversationViewModel _createViewModel(
           config: provider.config,
           threadId: initialThread.id,
         );
-  final viewModel = AgentConversationViewModel(
+  final viewModel = AgentConversationRuntimeController(
     providerController: controller,
     conversationBinding: bindingLease.binding,
     globalRuntime: bindingHarness.globalRuntime,

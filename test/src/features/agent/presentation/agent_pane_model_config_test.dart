@@ -61,15 +61,16 @@ void main() {
         findsOneWidget,
       );
       final modelSelector = find.byKey(const ValueKey('agent-model-selector'));
-      final selectorSurface = tester.widget<PaneInteractiveSurface>(
-        modelSelector,
-      );
+      final selectorButton = tester.widget<IdeButton>(modelSelector);
       // effort 直接展示协议原值（如 medium），比中文单字略宽。
       expect(tester.getSize(modelSelector).width, lessThan(240));
-      expect(tester.getSize(modelSelector).height, 28);
-      expect(selectorSurface.backgroundColor, Colors.transparent);
-      expect(selectorSurface.borderColor, isNull);
-      expect(selectorSurface.borderRadius, IdeRadius.allSmall);
+      expect(
+        tester.getSize(modelSelector).height,
+        greaterThanOrEqualTo(
+          IdeMetrics.controlMinHeightFor(IdeControlSize.compact),
+        ),
+      );
+      expect(selectorButton.variant, IdeButtonVariant.ghost);
       expect(find.text('GPT-5.5'), findsOneWidget);
       final closedTriggerTooltip = find.ancestor(
         of: modelSelector,
@@ -103,15 +104,8 @@ void main() {
       expect(modelPopoverPanel.color, colors.surfaceElevated);
       expect(modelPopoverPanel.borderRadius, IdeRadius.allSmall);
       expect(modelPopoverPanel.boxShadow, isEmpty);
-      final openSelectorSurface = tester.widget<PaneInteractiveSurface>(
-        modelSelector,
-      );
-      expect(openSelectorSurface.selected, isTrue);
-      expect(
-        openSelectorSurface.selectedBackgroundColor,
-        colors.frame.withValues(alpha: 0.72),
-      );
-      expect(openSelectorSurface.selectedBorderColor, isNull);
+      final openSelectorButton = tester.widget<IdeButton>(modelSelector);
+      expect(openSelectorButton.variant, IdeButtonVariant.secondary);
       expect(
         find.descendant(of: modelSelector, matching: find.byType(Stack)),
         findsNothing,

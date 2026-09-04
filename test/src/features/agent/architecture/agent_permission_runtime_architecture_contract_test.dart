@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
-import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
 import '../../../testing/provider_settings_test_store.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
 
@@ -237,7 +237,7 @@ void main() {
           threadId: secondThread.id,
         );
 
-        final first = AgentConversationViewModel(
+        final first = AgentConversationRuntimeController(
           providerController: providerController,
           conversationBinding: firstBinding.binding,
           globalRuntime: bindingHarness.globalRuntime,
@@ -248,7 +248,7 @@ void main() {
           initialThread: firstThread,
           uiFrameScheduler: FakeAgentFrameScheduler(),
         );
-        final second = AgentConversationViewModel(
+        final second = AgentConversationRuntimeController(
           providerController: providerController,
           conversationBinding: secondBinding.binding,
           globalRuntime: bindingHarness.globalRuntime,
@@ -349,7 +349,7 @@ void main() {
           threadId: secondThread.id,
         );
 
-        final first = AgentConversationViewModel(
+        final first = AgentConversationRuntimeController(
           providerController: providerController,
           conversationBinding: firstBinding.binding,
           globalRuntime: bindingHarness.globalRuntime,
@@ -360,7 +360,7 @@ void main() {
           initialThread: firstThread,
           uiFrameScheduler: FakeAgentFrameScheduler(),
         );
-        final second = AgentConversationViewModel(
+        final second = AgentConversationRuntimeController(
           providerController: providerController,
           conversationBinding: secondBinding.binding,
           globalRuntime: bindingHarness.globalRuntime,
@@ -459,7 +459,7 @@ void main() {
           threadId: thread.id,
         );
         final permissions = bindingLease.binding.permissions;
-        final viewModel = AgentConversationViewModel(
+        final viewModel = AgentConversationRuntimeController(
           providerController: providerController,
           conversationBinding: bindingLease.binding,
           globalRuntime: bindingHarness.globalRuntime,

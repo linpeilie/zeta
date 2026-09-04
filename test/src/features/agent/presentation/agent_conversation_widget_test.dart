@@ -10,11 +10,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
+import 'package:zeta_markdown/zeta_markdown.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
-import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_file_change_evidence_views.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
@@ -26,19 +26,23 @@ import '../../../testing/provider_settings_test_store.dart';
 
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
-import 'package:zeta/src/app/conversation_slice/agent_conversation_slice_composition.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
 
 import '../../../testing/ide_test_harness.dart';
 import '../../../testing/agent_conversation_binding_test_harness.dart';
 import '../../../testing/fake_workspace_directory_picker.dart';
+import '../../../testing/memory_agent_composer_attachment_store.dart';
 import '../../../testing/zeta_test_app.dart';
 
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
 import 'package:zeta/src/app/storage/zeta_store_providers.dart';
+import 'package:zeta/src/features/agent/presentation/agent_ui_update_scheduler.dart';
+import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
 
 void main() {
+  final l10n = lookupAppLocalizations(const Locale('zh'));
   final binding = TestWidgetsFlutterBinding.ensureInitialized();
   final tempDirectories = <Directory>[];
 
@@ -477,10 +481,7 @@ void main() {
       await pumpAgentConversationUi(tester);
 
       expect(find.text('History survives failure'), findsOneWidget);
-      expect(
-        find.text('Thread open failed. Click this thread again to retry.'),
-        findsNothing,
-      );
+      expect(find.text(l10n.agentThreadOpenFailedRetry), findsNothing);
 
       await tester.enterText(
         find.byKey(const ValueKey('agent-message-input')),
@@ -491,10 +492,7 @@ void main() {
       await pumpAgentConversationUi(tester);
 
       expect(find.text('History survives failure'), findsOneWidget);
-      expect(
-        find.text('Thread open failed. Click this thread again to retry.'),
-        findsOneWidget,
-      );
+      expect(find.text(l10n.agentThreadOpenFailedRetry), findsOneWidget);
       expect(find.byKey(const ValueKey('agent-send-button')), findsNothing);
 
       await tester.tap(
@@ -505,10 +503,7 @@ void main() {
       await pumpAgentConversationUi(tester);
 
       expect(find.text('History survives failure'), findsOneWidget);
-      expect(
-        find.text('Thread open failed. Click this thread again to retry.'),
-        findsNothing,
-      );
+      expect(find.text(l10n.agentThreadOpenFailedRetry), findsNothing);
 
       await tester.enterText(
         find.byKey(const ValueKey('agent-message-input')),
@@ -1421,13 +1416,14 @@ void main() {
       );
       addTearDown(bindingHarness.close);
       final bindingLease = bindingHarness.acquireDraft(provider.config);
-      final viewModel = AgentConversationViewModel(
+      final viewModel = AgentConversationRuntimeController(
         providerController: controller,
         conversationBinding: bindingLease.binding,
         globalRuntime: bindingHarness.globalRuntime,
         composerStateOwner: AgentConversationComposerStateOwner.create(
           providerController: controller,
         ),
+        uiFrameScheduler: const SchedulerBindingAgentFrameScheduler(),
       );
       addTearDown(viewModel.dispose);
       final sliceRegistry = _registerConversationSlice(viewModel);
@@ -1447,6 +1443,7 @@ void main() {
             agentConversationSliceStoreRegistryProvider.overrideWithValue(
               sliceRegistry,
             ),
+            memoryAgentComposerAttachmentOverride(),
           ],
           child: IdeThemeScope(
             themeMode: ThemeMode.dark,
@@ -1463,7 +1460,7 @@ void main() {
                 child: child,
               ),
               themeMode: sf.ThemeMode.dark,
-              home: sf.Scaffold(child: AgentPane(viewModel: viewModel)),
+              home: sf.Scaffold(child: AgentPane(controller: viewModel)),
             ),
           ),
         ),
@@ -1517,7 +1514,7 @@ void main() {
       config: provider.config,
       threadId: thread.id,
     );
-    final viewModel = AgentConversationViewModel(
+    final viewModel = AgentConversationRuntimeController(
       providerController: controller,
       conversationBinding: bindingLease.binding,
       globalRuntime: bindingHarness.globalRuntime,
@@ -1526,6 +1523,7 @@ void main() {
       ),
       initialProjectPath: '/repo',
       initialThread: thread,
+      uiFrameScheduler: const SchedulerBindingAgentFrameScheduler(),
     );
     addTearDown(viewModel.dispose);
     final sliceRegistry = _registerConversationSlice(viewModel);
@@ -1545,6 +1543,7 @@ void main() {
           agentConversationSliceStoreRegistryProvider.overrideWithValue(
             sliceRegistry,
           ),
+          memoryAgentComposerAttachmentOverride(),
         ],
         child: IdeThemeScope(
           themeMode: ThemeMode.dark,
@@ -1561,7 +1560,7 @@ void main() {
               child: child,
             ),
             themeMode: sf.ThemeMode.dark,
-            home: sf.Scaffold(child: AgentPane(viewModel: viewModel)),
+            home: sf.Scaffold(child: AgentPane(controller: viewModel)),
           ),
         ),
       ),
@@ -1742,7 +1741,7 @@ void main() {
       config: provider.config,
       threadId: thread.id,
     );
-    final viewModel = AgentConversationViewModel(
+    final viewModel = AgentConversationRuntimeController(
       providerController: controller,
       conversationBinding: bindingLease.binding,
       globalRuntime: bindingHarness.globalRuntime,
@@ -1751,6 +1750,7 @@ void main() {
       ),
       initialProjectPath: '/repo',
       initialThread: thread,
+      uiFrameScheduler: const SchedulerBindingAgentFrameScheduler(),
     );
     addTearDown(viewModel.dispose);
     final sliceRegistry = _registerConversationSlice(viewModel);
@@ -1770,6 +1770,7 @@ void main() {
           agentConversationSliceStoreRegistryProvider.overrideWithValue(
             sliceRegistry,
           ),
+          memoryAgentComposerAttachmentOverride(),
         ],
         child: IdeThemeScope(
           themeMode: ThemeMode.dark,
@@ -1786,7 +1787,7 @@ void main() {
               child: child,
             ),
             themeMode: sf.ThemeMode.dark,
-            home: sf.Scaffold(child: AgentPane(viewModel: viewModel)),
+            home: sf.Scaffold(child: AgentPane(controller: viewModel)),
           ),
         ),
       ),
@@ -2062,7 +2063,7 @@ void main() {
       config: provider.config,
       threadId: thread.id,
     );
-    final viewModel = AgentConversationViewModel(
+    final viewModel = AgentConversationRuntimeController(
       providerController: controller,
       conversationBinding: bindingLease.binding,
       globalRuntime: bindingHarness.globalRuntime,
@@ -2075,6 +2076,7 @@ void main() {
           ({required session, required context, String? initialMessage}) async {
             selectedFork = session;
           },
+      uiFrameScheduler: const SchedulerBindingAgentFrameScheduler(),
     );
     addTearDown(viewModel.dispose);
     final sliceRegistry = _registerConversationSlice(viewModel);
@@ -2094,6 +2096,7 @@ void main() {
           agentConversationSliceStoreRegistryProvider.overrideWithValue(
             sliceRegistry,
           ),
+          memoryAgentComposerAttachmentOverride(),
         ],
         child: IdeThemeScope(
           themeMode: ThemeMode.dark,
@@ -2110,7 +2113,7 @@ void main() {
               child: child,
             ),
             themeMode: sf.ThemeMode.dark,
-            home: sf.Scaffold(child: AgentPane(viewModel: viewModel)),
+            home: sf.Scaffold(child: AgentPane(controller: viewModel)),
           ),
         ),
       ),
@@ -2224,7 +2227,7 @@ void main() {
       expect(
         find.descendant(
           of: find.byKey(const ValueKey('agent-header-token')),
-          matching: find.text('10.3k tokens'),
+          matching: find.text(l10n.agentTurnTokenUsage('10.3k')),
         ),
         findsOneWidget,
       );
@@ -2272,9 +2275,10 @@ void main() {
           matching: find.byType(IdeTooltip),
         ),
       );
-      expect(tooltip.message, contains('Usage: 65%'));
-      expect(tooltip.message, contains('Used: 1.3k'));
-      expect(tooltip.message, contains('Total: 2k'));
+      expect(
+        tooltip.message,
+        l10n.agentTokenUsageContextTooltip('65', '1.3k', '2k'),
+      );
       expect(tooltip.message, isNot(contains('input_tokens')));
       expect(tooltip.message, isNot(contains('output_tokens')));
       expect(tooltip.message, isNot(contains('cached_input_tokens')));
@@ -3490,7 +3494,8 @@ void main() {
     expect(markdownWidget.selectable, isTrue);
     expect(markdownWidget.padding, EdgeInsets.zero);
     expect(markdownWidget.enableCopyFullDocumentShortcut, isFalse);
-    expect(markdownWidget.showCopyAllInContextMenu, isFalse);
+    // WP-6 T9：右键菜单从「空组件抑制」改成收敛后的中文菜单。
+    expect(markdownWidget.showCopyAllInContextMenu, isTrue);
     expect(markdownWidget.contextMenuBuilder, isNotNull);
   });
 
@@ -4380,18 +4385,18 @@ Future<void> pumpUntilAgentComposer(WidgetTester tester) async {
 }
 
 AgentConversationSliceStoreRegistry _registerConversationSlice(
-  AgentConversationViewModel viewModel,
+  AgentConversationRuntimeController viewModel,
 ) {
-  final binding = AgentConversationSliceComposition(
+  final store = AgentConversationSliceStore.connected(
     regions: viewModel,
     commands: viewModel,
   );
-  addTearDown(binding.dispose);
+  addTearDown(store.dispose);
   return AgentConversationSliceStoreRegistry()..bind((requestedKey) {
     if (requestedKey != viewModel.conversationBinding.key) {
       throw StateError('No test conversation slice for $requestedKey');
     }
-    return binding.store;
+    return AgentConversationSessionHandle(store: store, controller: viewModel);
   });
 }
 

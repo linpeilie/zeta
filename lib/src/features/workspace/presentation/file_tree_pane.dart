@@ -153,6 +153,8 @@ class _FileTreeNodeTile extends StatelessWidget {
               width: IdeMetrics.iconButtonHitSize,
               height: IdeMetrics.iconButtonHitSize,
               child: node.isDirectory
+                  // G8：IdeIconButton 没有 iconDense，会把 14px 折叠箭头撑到 compact 24px。
+                  // 点击区域由外层 IdeMetrics.iconButtonHitSize 钉住，内边距走 xSmall+iconDense。
                   ? sf.IconButton.ghost(
                       onPressed: onToggleExpansion,
                       size: sf.ButtonSize.xSmall,

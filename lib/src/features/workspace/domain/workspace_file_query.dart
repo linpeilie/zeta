@@ -1,5 +1,26 @@
 import 'workspace_node.dart';
 
+/// 递归收集 [nodes] 中的 file 节点；目录只向下走，不进入结果。
+///
+/// 语料已扁平时等价于一次廉价复制。空输入返回空列表。
+List<WorkspaceNode> flattenWorkspaceFileNodes(Iterable<WorkspaceNode> nodes) {
+  final files = <WorkspaceNode>[];
+  void walk(WorkspaceNode node) {
+    if (node.isDirectory) {
+      for (final child in node.children) {
+        walk(child);
+      }
+      return;
+    }
+    files.add(node);
+  }
+
+  for (final node in nodes) {
+    walk(node);
+  }
+  return files;
+}
+
 /// 对扁平工作区文件做模糊子序列排序，返回 top-k。
 ///
 /// `query` 为空时保持输入顺序，仅取前 `limit` 个（对齐旧 `take(40)` 语义）。

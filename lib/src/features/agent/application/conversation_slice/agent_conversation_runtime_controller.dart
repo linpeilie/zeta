@@ -2,8 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
-
 import 'package:zeta/src/core/utils/path_utils.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta/src/core/logging/structured_error_logging.dart';
@@ -13,30 +11,28 @@ import 'package:zeta/src/features/agent/application/agent_conversation_mode_cont
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_command_scope.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_ports.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_thread_selection_patch.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/application/agent_plan_execution_handoff_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_model_selection_controller.dart';
+import 'package:zeta/src/features/agent/application/agent_skill_candidates.dart';
 import 'package:zeta/src/features/agent/application/agent_skills_catalog_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_turn_context_overlay.dart';
 import 'package:zeta/src/features/agent/application/agent_pipeline_metrics_reporter.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_region_state.dart';
-import 'package:zeta/src/features/agent/presentation/agent_conversation_ui_state.dart';
-import 'package:zeta/src/features/agent/presentation/agent_flutter_listenable_adapter.dart';
-import 'package:zeta/src/features/agent/presentation/agent_ui_update_scheduler.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_ui_update_scheduler.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_model_config_ui_state.dart';
 import 'package:zeta/src/features/workspace/application/workspace_file_corpus_port.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_file_query.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 
-// 兼容既有调用点：ViewModel 过去 re-export TimelineStore 所在库，这里保持同样的
-// 公开面，但显式列出类型，避免把整个内核 barrel 透传出去。
 final _log = zetaLoggerFor('zeta.agent.conversation');
 
 /// Provider 创建 thread 后，由 Shell 使用通用新会话流程登记并选中。
 ///
 /// [initialMessage] 只用于“编辑后重试”：Shell 必须在新 thread 成为当前会话后，
-/// 再由新 ViewModel 提交这条消息。
+/// 再由新 runtime 提交这条消息。
 typedef AgentCreatedThreadCallback =
     Future<void> Function({
       required AgentSession session,
@@ -46,11 +42,11 @@ typedef AgentCreatedThreadCallback =
 
 /// Agent 面板的状态协调器。
 ///
-/// 当前 ViewModel 只保留 provider/session 协调与事件路由；时间线聚合、
-/// 模型选择和局部刷新节流已经下沉到 feature 级应用模块。
-class AgentConversationViewModel
+/// 持有 provider/session 协调、事件路由、时间线聚合与 UI 更新调度；
+/// presentation 只订阅 region 与命令面。
+final class AgentConversationRuntimeController
     implements AgentConversationRegionSource, AgentConversationCommandPort {
-  AgentConversationViewModel({
+  AgentConversationRuntimeController({
     required this.providerController,
     required this.conversationBinding,
     required this.globalRuntime,
@@ -66,7 +62,7 @@ class AgentConversationViewModel
     String? initialProjectPath,
     String? initialContextFilePath,
     AgentThreadSummary? initialThread,
-    AgentFrameScheduler? uiFrameScheduler,
+    required AgentFrameScheduler uiFrameScheduler,
     this.metrics = noopZetaMetricsPort,
     ZetaMetricLabel Function(String providerId) providerMetricLabel =
         ZetaMetricLabel.hashed,
@@ -100,25 +96,18 @@ class AgentConversationViewModel
       liveTimelineIds: _localTimelineIds,
       textCatalog: _textCatalog,
     );
-    _uiStateStore = AgentConversationUiStateStore(
-      timeline: _timeline,
-      buildHeaderState: _buildHeaderState,
-      buildComposerState: _buildComposerState,
-      buildPendingInteractionState: _buildPendingInteractionState,
-      buildExpansionState: _buildExpansionState,
-      buildHistoryState: _buildHistoryState,
-      isDisposed: () => _disposed,
-    );
+    _effectController = StreamController<AgentUiEffect>.broadcast(sync: true);
     _pipelineMetrics = AgentPipelineMetricsReporter(
       metrics: metrics,
       providerId: conversationBinding.providerId,
       providerMetricLabel: providerMetricLabel,
     );
     _uiUpdateScheduler = AgentUiUpdateScheduler(
-      _publishScheduledUiChanges,
+      _applyUiUpdate,
       frameScheduler: uiFrameScheduler,
       metrics: metrics,
       providerId: conversationBinding.providerId,
+      providerMetricLabel: providerMetricLabel,
     );
     _uiUpdates = _uiUpdateScheduler;
     _eventStateSink = _AgentConversationStateSink(this);
@@ -158,9 +147,10 @@ class AgentConversationViewModel
       _handleProviderSettingsChanged,
     );
     conversationBinding.addListener(_handleConversationBindingChanged);
-    _threadSnapshotListenable = ValueNotifier<AgentConversationThreadSnapshot>(
-      _buildThreadSnapshot(),
-    );
+    _threadSnapshotListenable =
+        AgentValueNotifier<AgentConversationThreadSnapshot>(
+          _buildThreadSnapshot(),
+        );
     _initialization = thread == null
         ? Future<void>.value()
         : _openBoundThread(thread);
@@ -217,7 +207,9 @@ class AgentConversationViewModel
   String? _autoStartPlanExecutionRequestId;
   final AgentConversationLocalTimelineIdGenerator _localTimelineIds =
       AgentConversationLocalTimelineIdGenerator();
-  late final AgentConversationUiStateStore _uiStateStore;
+  late final StreamController<AgentUiEffect> _effectController;
+  final List<void Function(AgentUiUpdateRequest)> _uiUpdateListeners =
+      <void Function(AgentUiUpdateRequest)>[];
   late final AgentUiUpdateScheduler _uiUpdateScheduler;
   late final AgentUiUpdatePort _uiUpdates;
   late final AgentConversationReducerContexts _eventReducerContexts;
@@ -228,7 +220,7 @@ class AgentConversationViewModel
   AgentUiUpdateRequest? _debugLastUiUpdateRequest;
   bool _threadSnapshotRefreshPending = false;
   final AgentElapsedTicker _elapsedTicker = AgentElapsedTicker();
-  late final ValueNotifier<AgentConversationThreadSnapshot>
+  late final AgentValueNotifier<AgentConversationThreadSnapshot>
   _threadSnapshotListenable;
 
   /// ViewModel 只读取 Binding 暴露的中立运行时端口。
@@ -317,9 +309,6 @@ class AgentConversationViewModel
   bool _modelsRefreshing = false;
   String? _modelRefreshError;
   bool _modelSelectionSeededFromProviderConfig = false;
-
-  /// 上下文详情面板是否展开（头栏「上下文」菜单触发）。
-  final ValueNotifier<bool> contextPanelVisible = ValueNotifier<bool>(false);
 
   /// 当前线程的创建时间；仅从恢复的 thread 摘要填充，新会话为空。
   DateTime? _threadCreatedAt;
@@ -417,71 +406,50 @@ class AgentConversationViewModel
   String? get systemNoticeLabel => _modelRerouteNotice;
 
   /// 当前事件缓冲诊断；仅包含计数和 pending key 深度。
-  @visibleForTesting
   CoalescingEventBufferDiagnostics? get eventCoalescingBufferDiagnostics =>
       _eventPipeline?.diagnostics.buffer;
 
   /// 当前有界事件调度诊断；仅包含吞吐、批次和队列深度。
-  @visibleForTesting
   BoundedEventDispatcherDiagnostics? get eventDispatcherDiagnostics =>
       _eventPipeline?.diagnostics.dispatcher;
 
   /// 当前 Pipeline 的完整脱敏诊断。
-  @visibleForTesting
   AgentEventPipelineDiagnostics? get eventPipelineDiagnostics =>
       _eventPipeline?.diagnostics;
 
-  /// 当前 typed UI state 发布诊断；不包含消息正文或 Provider payload。
-  @visibleForTesting
-  AgentConversationUiStateDiagnostics get uiStateDiagnostics =>
-      _uiStateStore.diagnostics;
+  /// 当前 typed UI 发布诊断；与 scheduler 同计数，不包含消息正文或 payload。
+  AgentUiUpdateSchedulerDiagnostics get uiStateDiagnostics =>
+      _uiUpdateScheduler.diagnostics;
 
   /// 当前统一 UI frame 调度诊断；不包含任何事件内容。
-  @visibleForTesting
   AgentUiUpdateSchedulerDiagnostics get uiUpdateSchedulerDiagnostics =>
       _uiUpdateScheduler.diagnostics;
 
-  /// 最近一次由 ViewModel 生成的无 payload UI 更新请求，仅供事件映射测试。
-  @visibleForTesting
+  /// 最近一次由 runtime 生成的无 payload UI 更新请求，仅供事件映射测试。
   AgentUiUpdateRequest? get debugLastUiUpdateRequest =>
       _debugLastUiUpdateRequest;
 
   @override
-  AgentConversationHistoryState get historyState => _uiStateStore.history.value;
-
-  ValueListenable<AgentConversationHistoryState> get historyStateListenable =>
-      _uiStateStore.history;
+  AgentConversationHistoryState get historyState => _buildHistoryState();
 
   @override
-  AgentHeaderState get headerState => _uiStateStore.header.value;
-
-  ValueListenable<AgentHeaderState> get headerStateListenable =>
-      _uiStateStore.header;
+  AgentHeaderState get headerState => _buildHeaderState();
 
   @override
-  AgentComposerState get composerState => _uiStateStore.composer.value;
-
-  ValueListenable<AgentComposerState> get composerStateListenable =>
-      _uiStateStore.composer;
+  AgentComposerState get composerState => _buildComposerState();
 
   @override
   AgentPendingInteractionState get pendingInteractionState =>
-      _uiStateStore.pendingInteractions.value;
-
-  ValueListenable<AgentPendingInteractionState>
-  get pendingInteractionStateListenable => _uiStateStore.pendingInteractions;
+      _buildPendingInteractionState();
 
   @override
-  AgentExpansionState get expansionState => _uiStateStore.expansion.value;
-
-  ValueListenable<AgentExpansionState> get expansionStateListenable =>
-      _uiStateStore.expansion;
+  AgentExpansionState get expansionState => _buildExpansionState();
 
   /// 当前挂载 AgentPane 消费的一次性 UI effect；不保存或 replay。
-  Stream<AgentUiEffect> get uiEffects => _uiStateStore.effects;
+  Stream<AgentUiEffect> get uiEffects => _effectController.stream;
 
-  ValueListenable<AgentConversationTurnState?> get liveTurnListenable =>
-      AgentFlutterValueListenableAdapter(_timeline.liveTurnListenable);
+  AgentValueListenable<AgentConversationTurnState?> get liveTurnListenable =>
+      _timeline.liveTurnListenable;
 
   String? get projectPath => _projectPath;
 
@@ -849,10 +817,11 @@ class AgentConversationViewModel
 
   /// Skill picker 候选；按 name/description 过滤。
   List<AgentSkillMetadata> skillCandidates({String query = ''}) {
-    if (!canUseSkills) {
-      return const <AgentSkillMetadata>[];
-    }
-    return _skillsCatalogController.query(query);
+    return filterAgentSkillCandidates(
+      _skillsCatalogController.state.catalog.allSkills,
+      canUseSkills: canUseSkills,
+      query: query,
+    );
   }
 
   /// 预热 skill 目录（打开 picker 前调用）。
@@ -949,29 +918,10 @@ class AgentConversationViewModel
   List<WorkspaceNode> mentionCandidateFiles({String query = ''}) {
     final source = workspaceFileCorpus?.files ?? const <WorkspaceNode>[];
     return fuzzyRankWorkspaceFiles(
-      _flattenFileNodes(source),
+      flattenWorkspaceFileNodes(source),
       query: query,
       limit: 40,
     );
-  }
-
-  /// 递归收集 file 节点；provider 返回扁平语料时等价于一次廉价复制。
-  List<WorkspaceNode> _flattenFileNodes(List<WorkspaceNode> nodes) {
-    final files = <WorkspaceNode>[];
-    void walk(WorkspaceNode node) {
-      if (node.isDirectory) {
-        for (final child in node.children) {
-          walk(child);
-        }
-        return;
-      }
-      files.add(node);
-    }
-
-    for (final node in nodes) {
-      walk(node);
-    }
-    return files;
   }
 
   String? get sessionId => _session?.id ?? _restoredSessionId;
@@ -980,7 +930,7 @@ class AgentConversationViewModel
   AgentConversationThreadSnapshot get threadSnapshot =>
       _threadSnapshotListenable.value;
 
-  ValueListenable<AgentConversationThreadSnapshot>
+  AgentValueListenable<AgentConversationThreadSnapshot>
   get threadSnapshotListenable => _threadSnapshotListenable;
 
   /// 已由 provider 创建或恢复成功的当前会话；草稿和待恢复状态返回 null。
@@ -1016,8 +966,7 @@ class AgentConversationViewModel
   }
 
   /// 共享 1 秒时钟；对话流和工具卡用其计算 live elapsed。
-  Listenable get elapsedClockListenable =>
-      AgentFlutterListenableAdapter(_elapsedTicker);
+  AgentListenable get elapsedClockListenable => _elapsedTicker;
 
   /// 最近一次 tick 的本地时间。
   DateTime get elapsedNow => _elapsedTicker.now;
@@ -1113,16 +1062,6 @@ class AgentConversationViewModel
 
   /// 当前线程的最后活跃时间；新会话无摘要时为空。
   DateTime? get threadLastActiveAt => _threadLastActiveAt;
-
-  /// 切换上下文详情面板的展开状态。
-  void toggleContextPanel() {
-    contextPanelVisible.value = !contextPanelVisible.value;
-  }
-
-  /// 关闭上下文详情面板。
-  void hideContextPanel() {
-    contextPanelVisible.value = false;
-  }
 
   /// 空闲、版本支持指定 turn 分支，且存在稳定前置边界时可创建分支重试。
   bool get canEditLastUserMessage {
@@ -1514,10 +1453,12 @@ class AgentConversationViewModel
   }
 
   void _applyThreadSelectionFromHistory(AgentThreadHistorySnapshot history) {
-    final fallback = _latestHistorySelectionPatch(history.turns);
-    final current = _selectionPatchFromHistoryTurn(history.currentTurn);
+    final fallback = latestAgentThreadSelectionPatch(history.turns);
+    final current = agentThreadSelectionPatchFromHistoryTurn(
+      history.currentTurn,
+    );
     _applyThreadSelectionPatch(
-      _mergeThreadSelectionPatches(fallback, current),
+      mergeAgentThreadSelectionPatches(fallback, current),
       requireCatalogModel: true,
     );
   }
@@ -1525,9 +1466,11 @@ class AgentConversationViewModel
   bool _historySelectionNeedsCatalogRefresh(
     AgentThreadHistorySnapshot history,
   ) {
-    final fallback = _latestHistorySelectionPatch(history.turns);
-    final current = _selectionPatchFromHistoryTurn(history.currentTurn);
-    final patch = _mergeThreadSelectionPatches(fallback, current);
+    final fallback = latestAgentThreadSelectionPatch(history.turns);
+    final current = agentThreadSelectionPatchFromHistoryTurn(
+      history.currentTurn,
+    );
+    final patch = mergeAgentThreadSelectionPatches(fallback, current);
     final requestedModelId = _nonEmptyValue(patch?.modelId);
     return requestedModelId != null &&
         _resolveModelInfo(requestedModelId) == null;
@@ -1539,7 +1482,7 @@ class AgentConversationViewModel
       return;
     }
     _applyThreadSelectionPatch(
-      _ThreadModelSelectionPatch(modelId: cleanedModelId),
+      AgentThreadSelectionPatch(modelId: cleanedModelId),
     );
   }
 
@@ -1547,9 +1490,9 @@ class AgentConversationViewModel
     List<AgentSessionConfigOption> options,
   ) {
     String? modelId;
-    Object? reasoningEffort = _threadModelSelectionUnset;
-    Object? serviceTierId = _threadModelSelectionUnset;
-    Object? fastEnabled = _threadModelSelectionUnset;
+    Object? reasoningEffort = kAgentThreadSelectionUnset;
+    Object? serviceTierId = kAgentThreadSelectionUnset;
+    Object? fastEnabled = kAgentThreadSelectionUnset;
     for (final option in options) {
       if (option.category == 'model') {
         final value = _stringValue(option.currentValue);
@@ -1587,7 +1530,7 @@ class AgentConversationViewModel
         }
       }
     }
-    final patch = _ThreadModelSelectionPatch(
+    final patch = AgentThreadSelectionPatch(
       modelId: modelId,
       reasoningEffort: reasoningEffort,
       serviceTierId: serviceTierId,
@@ -1600,7 +1543,7 @@ class AgentConversationViewModel
   }
 
   void _applyThreadSelectionPatch(
-    _ThreadModelSelectionPatch? patch, {
+    AgentThreadSelectionPatch? patch, {
     bool requireCatalogModel = false,
   }) {
     if (patch == null || !patch.hasAny) {
@@ -1639,15 +1582,15 @@ class AgentConversationViewModel
             )
           : modelConfigUiState.effectivePreference(resolvedModel);
       reasoningEffort =
-          identical(patch.reasoningEffort, _threadModelSelectionUnset)
+          identical(patch.reasoningEffort, kAgentThreadSelectionUnset)
           ? basePreference.reasoningEffort
           : patch.reasoningEffort as String?;
-      if (!identical(patch.fastEnabled, _threadModelSelectionUnset)) {
+      if (!identical(patch.fastEnabled, kAgentThreadSelectionUnset)) {
         final fastTier = agentFastServiceTier(resolvedModel);
         serviceTierId = (patch.fastEnabled as bool?) == true
             ? fastTier?.id
             : null;
-      } else if (!identical(patch.serviceTierId, _threadModelSelectionUnset)) {
+      } else if (!identical(patch.serviceTierId, kAgentThreadSelectionUnset)) {
         serviceTierId = _normalizeThreadServiceTierId(
           resolvedModel,
           patch.serviceTierId as String?,
@@ -1660,14 +1603,14 @@ class AgentConversationViewModel
           requestedModelId != null &&
           requestedModelId != currentSelection.modelId;
       reasoningEffort =
-          identical(patch.reasoningEffort, _threadModelSelectionUnset)
+          identical(patch.reasoningEffort, kAgentThreadSelectionUnset)
           ? (modelChanged ? null : currentSelection.reasoningEffort)
           : patch.reasoningEffort as String?;
-      if (!identical(patch.fastEnabled, _threadModelSelectionUnset)) {
+      if (!identical(patch.fastEnabled, kAgentThreadSelectionUnset)) {
         serviceTierId = (patch.fastEnabled as bool?) == true && !modelChanged
             ? currentSelection.serviceTierId
             : null;
-      } else if (!identical(patch.serviceTierId, _threadModelSelectionUnset)) {
+      } else if (!identical(patch.serviceTierId, kAgentThreadSelectionUnset)) {
         serviceTierId = patch.serviceTierId as String?;
       } else {
         serviceTierId = modelChanged ? null : currentSelection.serviceTierId;
@@ -1681,82 +1624,6 @@ class AgentConversationViewModel
         serviceTierId: serviceTierId,
       ),
     );
-  }
-
-  _ThreadModelSelectionPatch? _latestHistorySelectionPatch(
-    List<AgentHistoryTurn> turns,
-  ) {
-    for (var index = turns.length - 1; index >= 0; index -= 1) {
-      final patch = _selectionPatchFromHistoryTurn(turns[index]);
-      if (patch != null && _nonEmptyValue(patch.modelId) != null) {
-        return patch;
-      }
-    }
-    for (var index = turns.length - 1; index >= 0; index -= 1) {
-      final patch = _selectionPatchFromHistoryTurn(turns[index]);
-      if (patch != null && patch.hasAny) {
-        return patch;
-      }
-    }
-    return null;
-  }
-
-  _ThreadModelSelectionPatch? _selectionPatchFromHistoryTurn(
-    AgentHistoryTurn? turn,
-  ) {
-    if (turn == null) {
-      return null;
-    }
-    Object? reasoningEffort = _threadModelSelectionUnset;
-    if (turn.reasoningEffort.isKnown) {
-      reasoningEffort = _nonEmptyValue(turn.reasoningEffort.value);
-    }
-
-    Object? serviceTierId = _threadModelSelectionUnset;
-    final typedServiceTierId = _nonEmptyValue(turn.serviceTierId);
-    if (typedServiceTierId != null) {
-      serviceTierId = typedServiceTierId;
-    }
-
-    Object? fastEnabled = _threadModelSelectionUnset;
-    if (turn.explicitFast != null) {
-      fastEnabled = turn.explicitFast;
-    }
-
-    final patch = _ThreadModelSelectionPatch(
-      modelId: _nonEmptyValue(turn.modelId),
-      reasoningEffort: reasoningEffort,
-      serviceTierId: serviceTierId,
-      fastEnabled: fastEnabled,
-    );
-    return patch.hasAny ? patch : null;
-  }
-
-  _ThreadModelSelectionPatch? _mergeThreadSelectionPatches(
-    _ThreadModelSelectionPatch? base,
-    _ThreadModelSelectionPatch? overlay,
-  ) {
-    if (base == null) {
-      return overlay;
-    }
-    if (overlay == null) {
-      return base;
-    }
-    final merged = _ThreadModelSelectionPatch(
-      modelId: _nonEmptyValue(overlay.modelId) ?? base.modelId,
-      reasoningEffort:
-          identical(overlay.reasoningEffort, _threadModelSelectionUnset)
-          ? base.reasoningEffort
-          : overlay.reasoningEffort,
-      serviceTierId:
-          identical(overlay.serviceTierId, _threadModelSelectionUnset)
-          ? base.serviceTierId
-          : overlay.serviceTierId,
-      fastEnabled: identical(overlay.fastEnabled, _threadModelSelectionUnset)
-          ? base.fastEnabled
-          : overlay.fastEnabled,
-    );
-    return merged.hasAny ? merged : null;
   }
 
   AgentModelInfo? _resolveModelInfo(String? modelId) {
@@ -3055,9 +2922,9 @@ class AgentConversationViewModel
     _elapsedTicker.dispose();
     _effectRunner.dispose();
     _uiUpdateScheduler.dispose();
-    _uiStateStore.dispose();
+    unawaited(_effectController.close());
+    _uiUpdateListeners.clear();
     _threadSnapshotListenable.dispose();
-    contextPanelVisible.dispose();
     _timeline.dispose();
   }
 
@@ -3946,34 +3813,22 @@ class AgentConversationViewModel
   ///
   /// 切片的 effect runner 用它在执行前与结果回写前各校验一次，避免 Provider
   /// 重启 / runtime 换代之后旧命令仍被执行或写回（目标架构 §6.2）。
-  /// 把切片 region 映射到对应的 typed listenable。
-  ///
-  /// 这层映射刻意留在 presentation：`ValueListenable` 是 Flutter 类型，
-  /// application 端口只看到纯 Dart 的 add/removeRegionListener。
-  ValueListenable<Object?> _listenableForRegion(
-    AgentConversationSliceRegion region,
+  @override
+  void addUiUpdateListener(
+    void Function(AgentUiUpdateRequest request) listener,
   ) {
-    return switch (region) {
-      AgentConversationSliceRegion.header => headerStateListenable,
-      AgentConversationSliceRegion.composer => composerStateListenable,
-      AgentConversationSliceRegion.pendingInteractions =>
-        pendingInteractionStateListenable,
-      AgentConversationSliceRegion.expansion => expansionStateListenable,
-      AgentConversationSliceRegion.history => historyStateListenable,
-    };
+    if (_disposed || _uiUpdateListeners.contains(listener)) {
+      return;
+    }
+    _uiUpdateListeners.add(listener);
   }
 
   @override
-  void addRegionListener(
-    AgentConversationSliceRegion region,
-    void Function() listener,
-  ) => _listenableForRegion(region).addListener(listener);
-
-  @override
-  void removeRegionListener(
-    AgentConversationSliceRegion region,
-    void Function() listener,
-  ) => _listenableForRegion(region).removeListener(listener);
+  void removeUiUpdateListener(
+    void Function(AgentUiUpdateRequest request) listener,
+  ) {
+    _uiUpdateListeners.remove(listener);
+  }
 
   @override
   AgentConversationCommandScope currentCommandScope() {
@@ -4186,14 +4041,32 @@ class AgentConversationViewModel
     );
   }
 
-  void _publishScheduledUiChanges(AgentUiUpdateRequest request) {
-    // Thread snapshot 与局部 listenable 共用安全发布边界，避免 immediate 请求
+  /// scheduler 的 onPublish：先应用 live 旁路与快照，再广播给订阅者。
+  void _applyUiUpdate(AgentUiUpdateRequest request) {
+    if (_disposed) {
+      return;
+    }
+    // Thread snapshot 与局部刷新共用安全发布边界，避免 immediate 请求
     // 在 Widget build 中先经 Shell 通知形成同步重入。
     if (_threadSnapshotRefreshPending) {
       _threadSnapshotRefreshPending = false;
       _syncThreadSnapshotListenable();
     }
-    _uiStateStore.publish(request);
+    if (request.regions.contains(AgentUiRegion.liveTurnBinding)) {
+      _timeline.syncLiveTurnBinding();
+    }
+    if (request.regions.contains(AgentUiRegion.liveTurn)) {
+      _timeline.liveTurnState?.markDirty();
+      _timeline.liveTurnState?.flushNow();
+    }
+    for (final listener in List<void Function(AgentUiUpdateRequest)>.of(
+      _uiUpdateListeners,
+    )) {
+      listener(request);
+    }
+    for (final effect in request.effects) {
+      _effectController.add(effect);
+    }
     // 帧边界采样：管线热路径本身不埋点，指标只在这里按增量上报。
     _pipelineMetrics.report(_eventPipeline?.diagnostics);
   }
@@ -4211,49 +4084,49 @@ class AgentConversationViewModel
 }
 
 final class _AgentConversationEventUiUpdatePort implements AgentUiUpdatePort {
-  const _AgentConversationEventUiUpdatePort(this._viewModel);
+  const _AgentConversationEventUiUpdatePort(this._controller);
 
-  final AgentConversationViewModel _viewModel;
+  final AgentConversationRuntimeController _controller;
 
   @override
   void publish(AgentUiUpdateRequest request) {
-    _viewModel._publishUiChanges(request);
+    _controller._publishUiChanges(request);
   }
 }
 
 final class _AgentConversationStateSink implements AgentConversationStateSink {
-  const _AgentConversationStateSink(this._viewModel);
+  const _AgentConversationStateSink(this._controller);
 
-  final AgentConversationViewModel _viewModel;
+  final AgentConversationRuntimeController _controller;
 
   @override
-  AgentConversationSessionState get sessionState => _viewModel._state;
+  AgentConversationSessionState get sessionState => _controller._state;
 
   @override
   void applyReducedState(AgentConversationSessionState next) {
-    _viewModel._state = next;
+    _controller._state = next;
   }
 
   @override
   void requestThreadSnapshotRefresh() {
-    _viewModel._threadSnapshotRefreshPending = true;
+    _controller._threadSnapshotRefreshPending = true;
   }
 }
 
 final class _AgentConversationSessionEffects
     implements AgentConversationSessionEffectHandler {
-  const _AgentConversationSessionEffects(this._viewModel);
+  const _AgentConversationSessionEffects(this._controller);
 
-  final AgentConversationViewModel _viewModel;
+  final AgentConversationRuntimeController _controller;
 
   @override
   void bindConversationModeThread({required String threadId}) {
-    _viewModel._bindConversationModeThreadPreservingDraft(
+    _controller._bindConversationModeThreadPreservingDraft(
       threadId: threadId,
-      historyMode: _viewModel._conversationModeController.state.confirmedMode,
+      historyMode: _controller._conversationModeController.state.confirmedMode,
     );
-    _viewModel._conversationModeController.setTurnRunning(
-      _viewModel.isTurnRunning,
+    _controller._conversationModeController.setTurnRunning(
+      _controller.isTurnRunning,
     );
   }
 
@@ -4265,7 +4138,7 @@ final class _AgentConversationSessionEffects
     // data mapper 已将 Codex 私有字段原子解码为中立 selection。settings
     // 只回写事件所属 thread effective，不二次 apply、不持久化 provider 默认。
     unawaited(
-      _viewModel._permissionSelectionController.applyThreadSettings(
+      _controller._permissionSelectionController.applyThreadSettings(
         threadId: threadId,
         permissionSelection: permissionSelection,
       ),
@@ -4274,71 +4147,49 @@ final class _AgentConversationSessionEffects
 
   @override
   void applyThreadSettings(AgentThreadSettingsUpdatedEvent event) {
-    _viewModel._applyThreadSelectionFromThreadSettings(modelId: event.model);
-    _viewModel._conversationModeController.applyThreadSettings(event);
+    _controller._applyThreadSelectionFromThreadSettings(modelId: event.model);
+    _controller._conversationModeController.applyThreadSettings(event);
   }
 
   @override
   void syncThreadSelectionFromSessionConfig(
     List<AgentSessionConfigOption> options,
   ) {
-    _viewModel._applyThreadSelectionFromSessionConfigOptions(options);
+    _controller._applyThreadSelectionFromSessionConfigOptions(options);
   }
 
   @override
   void applyServerConversationMode(AgentConversationModeUpdatedEvent event) {
-    _viewModel._applyServerConversationMode(event);
+    _controller._applyServerConversationMode(event);
   }
 
   @override
   void preparePlanHandoff(AgentTurnCompletedEvent event) {
-    _viewModel._updatePlanExecutionRequestForCompletedTurn(event);
+    _controller._updatePlanExecutionRequestForCompletedTurn(event);
   }
 
   @override
   void syncTurnRunning({bool? forceRunning}) {
-    final running = forceRunning ?? _viewModel.isTurnRunning;
-    _viewModel._conversationModeController.setTurnRunning(running);
+    final running = forceRunning ?? _controller.isTurnRunning;
+    _controller._conversationModeController.setTurnRunning(running);
     if (!running) {
-      _viewModel._releaseTurnActivity();
+      _controller._releaseTurnActivity();
     }
-    _viewModel._syncElapsedTicker();
+    _controller._syncElapsedTicker();
   }
 
   @override
   void autoStartPlanExecution() {
-    _viewModel._maybeAutoStartPlanExecution();
+    _controller._maybeAutoStartPlanExecution();
   }
 
   @override
   void clearPlanHandoff() {
-    _viewModel._planExecutionHandoffController.clear();
+    _controller._planExecutionHandoffController.clear();
   }
 
   @override
   void applyModelList(AgentModelList models) {
-    _viewModel._applyModelList(models);
+    _controller._applyModelList(models);
   }
-}
-
-const Object _threadModelSelectionUnset = Object();
-
-final class _ThreadModelSelectionPatch {
-  const _ThreadModelSelectionPatch({
-    this.modelId,
-    this.reasoningEffort = _threadModelSelectionUnset,
-    this.serviceTierId = _threadModelSelectionUnset,
-    this.fastEnabled = _threadModelSelectionUnset,
-  });
-
-  final String? modelId;
-  final Object? reasoningEffort;
-  final Object? serviceTierId;
-  final Object? fastEnabled;
-
-  bool get hasAny =>
-      (modelId != null && modelId!.isNotEmpty) ||
-      !identical(reasoningEffort, _threadModelSelectionUnset) ||
-      !identical(serviceTierId, _threadModelSelectionUnset) ||
-      !identical(fastEnabled, _threadModelSelectionUnset);
 }

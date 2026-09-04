@@ -75,16 +75,21 @@ final class AgentConversationNavigationEntry {
   final AgentTokenUsage? tokenUsage;
 }
 
+/// 某个渲染块是否会在流内产出可见内容（零高度块不能当锚点）。
+typedef AgentTimelineInlineBlockPredicate =
+    bool Function(AgentTimelineRenderBlock block);
+
 /// 从可见 history + live turn 派生导航项列表。
 ///
 /// - 跳过 standby；
 /// - 每个非 standby turn 至多一项；
 /// - live 与 history 同 id 时只保留一项（history 优先）；
-/// - 锚点优先用户消息 block，否则 turn 内首个 block。
+/// - 锚点优先用户消息 block，否则 turn 内首个**可见** block。
 List<AgentConversationNavigationEntry> buildAgentConversationNavigationEntries({
   required List<AgentConversationTurnGroup> visibleHistoryTurns,
   required AgentConversationTurnGroup? liveTurn,
   AgentTimelineBlocksResolver resolveBlocks = _defaultResolveBlocks,
+  AgentTimelineInlineBlockPredicate rendersInline = _alwaysInline,
 }) {
   final turns = <AgentConversationTurnGroup>[];
   final seenIds = <String>{};
@@ -111,9 +116,11 @@ List<AgentConversationNavigationEntry> buildAgentConversationNavigationEntries({
     final isLive = liveTurn != null && liveTurn.id == turn.id;
     final userMessage = _firstUserMessage(turn);
     final blocks = resolveBlocks(turn);
+    // 兜底锚点必须落在真正可见的块上：权限/提问这类零高度块跳过去等于
+    // 跳到不可见位置。
     final anchorBlock =
         _preferUserMessageBlock(blocks, userMessage) ??
-        (blocks.isEmpty ? null : blocks.first);
+        _firstInlineBlock(blocks, rendersInline);
     if (anchorBlock == null) {
       // 尚无可见块（极早的 live 空回合）时跳过，避免不可跳转的幽灵项。
       continue;
@@ -238,7 +245,10 @@ String buildAgentConversationNavigationTooltip(
     ..writeln(l10n.agentTurnOrdinal('${entry.ordinal}'))
     ..writeln(entry.label.isEmpty ? l10n.agentNoPromptSummary : entry.label)
     ..write(l10n.agentStatusWithValue(_statusLabel(entry.status, l10n)));
-  final tokenLabel = agentConversationNavigationTokenLabel(entry.tokenUsage);
+  final tokenLabel = agentConversationNavigationTokenLabel(
+    entry.tokenUsage,
+    l10n,
+  );
   if (tokenLabel != null) {
     buffer
       ..writeln()
@@ -256,12 +266,15 @@ String buildAgentConversationNavigationTooltip(
 }
 
 /// 导航预览用的 turn token 短标签；口径与 turn footer 一致。
-String? agentConversationNavigationTokenLabel(AgentTokenUsage? usage) {
+String? agentConversationNavigationTokenLabel(
+  AgentTokenUsage? usage,
+  AppLocalizations l10n,
+) {
   final total = usage?.totalTokens;
   if (total == null || total <= 0) {
     return null;
   }
-  return '${usage!.displayTotalTokens!} tokens';
+  return l10n.agentTurnTokenUsage(usage!.displayTotalTokens!);
 }
 
 List<AgentTimelineRenderBlock> _defaultResolveBlocks(
@@ -275,6 +288,20 @@ AgentConversationMessage? _firstUserMessage(AgentConversationTurnGroup turn) {
     if (entry is AgentMessageTimelineEntry &&
         entry.message.role == AgentMessageRole.user) {
       return entry.message;
+    }
+  }
+  return null;
+}
+
+bool _alwaysInline(AgentTimelineRenderBlock block) => true;
+
+AgentTimelineRenderBlock? _firstInlineBlock(
+  List<AgentTimelineRenderBlock> blocks,
+  AgentTimelineInlineBlockPredicate rendersInline,
+) {
+  for (final block in blocks) {
+    if (rendersInline(block)) {
+      return block;
     }
   }
   return null;

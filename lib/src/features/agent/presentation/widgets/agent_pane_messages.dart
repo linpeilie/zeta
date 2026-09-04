@@ -1,19 +1,39 @@
-part of '../agent_pane.dart';
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
+
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_ui/zeta_ui.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_region_state.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
+import 'package:zeta/src/features/agent/presentation/agent_flutter_listenable_adapter.dart';
+import 'package:zeta/src/features/agent/presentation/agent_markdown_cache.dart';
+import 'package:zeta/src/features/agent/presentation/agent_plan_revision_drafts.dart';
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_region_builder.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_markdown_body.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_cards.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_styles.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_text.dart';
+import 'package:zeta/src/ui/core/ide_image_preview.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
 /// 单条用户、Agent 或系统消息。
-class _AgentMessageEntry extends StatelessWidget {
-  const _AgentMessageEntry({
+class AgentMessageEntry extends StatelessWidget {
+  const AgentMessageEntry({
     required this.message,
     required this.useStreamingMarkdown,
-    required this.viewModel,
+    required this.controller,
     required this.markdownCache,
     required this.planRevisionDrafts,
     required this.planExecutionHandoff,
+    super.key,
   });
 
   final AgentConversationMessage message;
   final bool useStreamingMarkdown;
-  final AgentConversationViewModel viewModel;
+  final AgentConversationRuntimeController controller;
   final AgentMarkdownCache markdownCache;
   final AgentPlanRevisionDraftStore planRevisionDrafts;
 
@@ -31,7 +51,7 @@ class _AgentMessageEntry extends StatelessWidget {
       return _AgentPlanMessageCard(
         message: message,
         useStreamingMarkdown: useStreamingMarkdown,
-        viewModel: viewModel,
+        controller: controller,
         markdownCache: markdownCache,
       );
     }
@@ -56,7 +76,7 @@ class _AgentMessageEntry extends StatelessWidget {
     return _AgentBubbleMessage(
       message: message,
       useStreamingMarkdown: useStreamingMarkdown,
-      viewModel: viewModel,
+      controller: controller,
       markdownCache: markdownCache,
     );
   }
@@ -69,7 +89,7 @@ class _AgentMessageEntry extends StatelessWidget {
     BuildContext context,
     AgentPlanExecutionRequest request,
   ) {
-    return _AgentPlanDocumentCard(
+    return AgentPlanDocumentCard(
       key: ValueKey<String>('agent-plan-execution-card-${request.id}'),
       requestId: request.id,
       title: request.title,
@@ -81,18 +101,18 @@ class _AgentMessageEntry extends StatelessWidget {
       markdown: request.markdown,
       revisionController: planRevisionDrafts.controllerFor(request.id),
       revisionFocusNode: planRevisionDrafts.focusNodeFor(request.id),
-      viewModel: viewModel,
+      controller: controller,
       executionPermission: request.executionPermission,
-      executionPermissionOptions: viewModel.composerState.permissionOptions,
+      executionPermissionOptions: controller.composerState.permissionOptions,
       onSelectExecutionPermission: (option) =>
-          viewModel.selectPlanExecutionPermissionOption(request, option),
+          controller.selectPlanExecutionPermissionOption(request, option),
       onRevise: (revision) => unawaited(
-        viewModel.revisePlanExecution(request, revisionMessage: revision),
+        controller.revisePlanExecution(request, revisionMessage: revision),
       ),
       onExecute: request.executionPermission == null
           ? null
-          : () => unawaited(viewModel.startPlanExecution(request)),
-      onAbandon: () => viewModel.dismissPlanExecution(request),
+          : () => unawaited(controller.startPlanExecution(request)),
+      onAbandon: () => controller.dismissPlanExecution(request),
     );
   }
 }
@@ -101,19 +121,20 @@ class _AgentMessageEntry extends StatelessWidget {
 ///
 /// 挂在 live turn 条目之后、footer 之前：展示主活动段 + 时长，
 /// 思考数据本身不进入可见时间线，但仍通过此状态条反馈当前活动相位。
-class _AgentLiveActivityStatus extends StatelessWidget {
-  const _AgentLiveActivityStatus({
-    required this.viewModel,
+class AgentLiveActivityStatus extends StatelessWidget {
+  const AgentLiveActivityStatus({
+    required this.controller,
     required this.isActive,
+    super.key,
   });
 
-  final AgentConversationViewModel viewModel;
+  final AgentConversationRuntimeController controller;
   final bool isActive;
 
   @override
   Widget build(BuildContext context) {
     return AgentRegionBuilder<AgentHeaderState>(
-      viewModel: viewModel,
+      bindingKey: controller.conversationBinding.key,
       selector: agentConversationHeaderProvider.call,
       builder: (context, state) {
         Widget content(DateTime now) {
@@ -126,7 +147,7 @@ class _AgentLiveActivityStatus extends StatelessWidget {
           final isWaiting = waitingLabel != null;
           final statusText = isWaiting
               ? waitingLabel
-              : _liveActivityStatusText(state, now, context.l10n);
+              : liveActivityStatusText(state, now, context.l10n);
           final accent = isWaiting ? colors.warning : colors.accent;
           return Padding(
             key: const ValueKey<String>('agent-live-activity-status'),
@@ -178,8 +199,8 @@ class _AgentLiveActivityStatus extends StatelessWidget {
           return content(DateTime.now());
         }
         return ListenableBuilder(
-          listenable: viewModel.elapsedClockListenable,
-          builder: (context, _) => content(viewModel.elapsedNow),
+          listenable: controller.flutterElapsedClockListenable,
+          builder: (context, _) => content(controller.elapsedNow),
         );
       },
     );
@@ -190,8 +211,8 @@ class _AgentLiveActivityStatus extends StatelessWidget {
 ///
 /// 仅终态（完成/中断/失败）展示；进行中耗时已在 live 活动条展示，避免重复。
 /// 无任何可展示元数据时不渲染，避免空行干扰时间线。
-class _AgentTurnFooter extends StatelessWidget {
-  const _AgentTurnFooter({required this.turn});
+class AgentTurnFooter extends StatelessWidget {
+  const AgentTurnFooter({required this.turn, super.key});
 
   final AgentConversationTurnGroup turn;
 
@@ -221,8 +242,8 @@ class _AgentTurnFooter extends StatelessWidget {
       modelConfig?.reasoningEffort,
     );
     final showFast = modelConfig?.fastEnabled == true;
-    final tokenLabel = _turnTokenUsageLabel(turn.tokenUsage);
-    final tokenTooltip = _tokenUsageTooltip(turn.tokenUsage);
+    final tokenLabel = turnTokenUsageLabel(turn.tokenUsage, context.l10n);
+    final tokenTooltip = tokenUsageTooltip(turn.tokenUsage, context.l10n);
     final showTokens = tokenLabel != null;
     final hasMeta =
         durationLabel != null ||
@@ -381,7 +402,7 @@ String? _turnDurationLabel(
   AgentConversationTurnGroup group,
   AppLocalizations l10n,
 ) {
-  final durationText = _formatDuration(group.duration);
+  final durationText = formatDuration(group.duration);
   return switch (group.status) {
     AgentHistoryTurnStatus.running => null,
     // 中断/失败终态优先展示状态词，有耗时再附加。
@@ -412,13 +433,13 @@ class _AgentBubbleMessage extends StatelessWidget {
   const _AgentBubbleMessage({
     required this.message,
     required this.useStreamingMarkdown,
-    required this.viewModel,
+    required this.controller,
     required this.markdownCache,
   });
 
   final AgentConversationMessage message;
   final bool useStreamingMarkdown;
-  final AgentConversationViewModel viewModel;
+  final AgentConversationRuntimeController controller;
   final AgentMarkdownCache markdownCache;
 
   @override
@@ -431,8 +452,8 @@ class _AgentBubbleMessage extends StatelessWidget {
     final canEdit =
         isUser &&
         hasText &&
-        viewModel.canEditLastUserMessage &&
-        viewModel.lastEditableUserMessageId == message.id;
+        controller.canEditLastUserMessage &&
+        controller.lastEditableUserMessageId == message.id;
 
     // 角色前缀走等宽字体：它是机器标签而非人类文案，和模型 ID / Token 计数
     // 属于同一类信息，排版上要能一眼与正文区分。
@@ -504,11 +525,11 @@ class _AgentBubbleMessage extends StatelessWidget {
               if (hasText)
                 SizedBox(
                   width: double.infinity,
-                  child: _AgentMarkdownBody(
+                  child: AgentMarkdownBody(
                     message: message,
                     useStreamingMarkdown: useStreamingMarkdown,
                     markdownCache: markdownCache,
-                    themeBuilder: _agentUserBubbleMarkdownTheme,
+                    themeBuilder: agentUserBubbleMarkdownTheme,
                   ),
                 ),
               if (canEdit) ...[
@@ -533,7 +554,7 @@ class _AgentBubbleMessage extends StatelessWidget {
   }
 
   Future<void> _showEditRetryDialog(BuildContext context) async {
-    final controller = TextEditingController(text: message.text);
+    final textController = TextEditingController(text: message.text);
     final confirmed = await showIdeDialog<bool>(
       context: context,
       builder: (dialogContext) {
@@ -548,7 +569,7 @@ class _AgentBubbleMessage extends StatelessWidget {
                 Text(dialogContext.l10n.agentCreateBranchBody),
                 const SizedBox(height: IdeSpacing.space12),
                 sf.TextField(
-                  controller: controller,
+                  controller: textController,
                   autofocus: true,
                   placeholder: Text(context.l10n.agentEditMessage),
                 ),
@@ -568,10 +589,10 @@ class _AgentBubbleMessage extends StatelessWidget {
         );
       },
     );
-    final text = controller.text;
-    controller.dispose();
+    final text = textController.text;
+    textController.dispose();
     if (confirmed == true && text.trim().isNotEmpty) {
-      await viewModel.editLastUserMessageAndRetry(text);
+      await controller.editLastUserMessageAndRetry(text);
     }
   }
 }
@@ -591,7 +612,7 @@ class _AgentMarkdownMessage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return RepaintBoundary(
-      child: _AgentMarkdownBody(
+      child: AgentMarkdownBody(
         message: message,
         useStreamingMarkdown: useStreamingMarkdown,
         markdownCache: markdownCache,
@@ -600,147 +621,11 @@ class _AgentMarkdownMessage extends StatelessWidget {
   }
 }
 
-class _AgentMarkdownBody extends StatefulWidget {
-  const _AgentMarkdownBody({
-    required this.message,
-    required this.useStreamingMarkdown,
-    required this.markdownCache,
-    this.themeBuilder,
-  });
-
-  final AgentConversationMessage message;
-  final bool useStreamingMarkdown;
-  final AgentMarkdownCache markdownCache;
-
-  /// 可选的主题构造器；缺省使用 Agent 正文主题。
-  final MarkdownThemeData Function(BuildContext context)? themeBuilder;
-
-  @override
-  State<_AgentMarkdownBody> createState() => _AgentMarkdownBodyState();
-}
-
-class _AgentMarkdownBodyState extends State<_AgentMarkdownBody> {
-  late AgentMarkdownCacheLease _lease;
-  bool _streamCommitted = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _attachLease();
-    _syncMarkdownController();
-  }
-
-  @override
-  void didUpdateWidget(covariant _AgentMarkdownBody oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.markdownCache != widget.markdownCache ||
-        oldWidget.message.id != widget.message.id) {
-      _detachLease();
-      _attachLease();
-    }
-    _syncMarkdownController();
-  }
-
-  void _attachLease() {
-    final lease = widget.markdownCache.acquire(
-      messageId: widget.message.id,
-      data: widget.message.text,
-      preferIncrementalUpdate: widget.useStreamingMarkdown,
-    );
-    _lease = lease;
-  }
-
-  void _detachLease() {
-    _lease.release();
-    _streamCommitted = false;
-  }
-
-  void _syncMarkdownController() {
-    final lease = _lease;
-    final nextText = widget.message.text;
-    if (lease.controller.data != nextText) {
-      lease.updateData(
-        nextText,
-        preferIncrementalUpdate: widget.useStreamingMarkdown,
-      );
-      _streamCommitted = false;
-    }
-
-    final isCompleted = widget.message.status == AgentMessageStatus.completed;
-    if (isCompleted && !_streamCommitted) {
-      lease.controller.commitStream();
-      _streamCommitted = true;
-    } else if (!isCompleted) {
-      _streamCommitted = false;
-    }
-  }
-
-  @override
-  void dispose() {
-    _detachLease();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // mixin_markdown 对普通文本使用 MouseCursor.defer，桌面端默认仍是箭头；
-    // 外层声明 text 光标，链接仍会用包内 click 覆盖。
-    return MouseRegion(
-      cursor: SystemMouseCursors.text,
-      child: MarkdownWidget(
-        controller: _lease.controller,
-        theme: (widget.themeBuilder ?? _agentMarkdownTheme)(context),
-        useColumn: true,
-        selectable: true,
-        padding: EdgeInsets.zero,
-        enableCopyFullDocumentShortcut: false,
-        showCopyAllInContextMenu: false,
-        // 包无 enableContextMenu 开关；返回空组件以完全不显示右键菜单。
-        contextMenuBuilder: _suppressMarkdownContextMenu,
-      ),
-    );
-  }
-}
-
-/// 非时间线消息使用的轻量 Markdown 渲染，不进入历史消息保温缓存。
-class _AgentRawMarkdownBody extends StatelessWidget {
-  const _AgentRawMarkdownBody({required this.data});
-
-  final String data;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.text,
-      child: MarkdownWidget(
-        data: data,
-        theme: _agentMarkdownTheme(context),
-        useColumn: true,
-        selectable: true,
-        padding: EdgeInsets.zero,
-        enableCopyFullDocumentShortcut: false,
-        showCopyAllInContextMenu: false,
-        contextMenuBuilder: _suppressMarkdownContextMenu,
-      ),
-    );
-  }
-}
-
-/// 抑制 mixin_markdown 右键菜单：仍会走 show，但不渲染任何菜单项。
-Widget _suppressMarkdownContextMenu(
-  BuildContext context,
-  MarkdownSelectionController selectionController,
-  List<ContextMenuButtonItem> buttonItems,
-  TextSelectionToolbarAnchors anchors,
-) {
-  return const SizedBox.shrink();
-}
-
 /// Agent 完成汇总：对应 Codex `agent_message` + `phase=final_answer`。
 ///
 /// 展示全文 Markdown（不做历史折叠），流式回合内仍可增量渲染。
 ///
-/// **刻意不套卡片**：它和普通 Agent 正文走的是同一个 [_AgentMarkdownBody]，
+/// **刻意不套卡片**：它和普通 Agent 正文走的是同一个 [AgentMarkdownBody]，
 /// 同样的内容只因为处于不同阶段就长得不一样，会让阅读流被反复打断。会话区
 /// 是文档流，回合的结束由回合底栏的分隔线交代，不需要再给最后一段话加边框。
 /// 保留 key 供测试与滚动定位使用。
@@ -759,7 +644,7 @@ class _AgentFinalAnswerCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return RepaintBoundary(
       key: ValueKey<String>('agent-final-answer-card-${message.id}'),
-      child: _AgentMarkdownBody(
+      child: AgentMarkdownBody(
         message: message,
         useStreamingMarkdown: useStreamingMarkdown,
         markdownCache: markdownCache,
@@ -773,13 +658,13 @@ class _AgentPlanMessageCard extends StatelessWidget {
   const _AgentPlanMessageCard({
     required this.message,
     required this.useStreamingMarkdown,
-    required this.viewModel,
+    required this.controller,
     required this.markdownCache,
   });
 
   final AgentConversationMessage message;
   final bool useStreamingMarkdown;
-  final AgentConversationViewModel viewModel;
+  final AgentConversationRuntimeController controller;
   final AgentMarkdownCache markdownCache;
 
   @override
@@ -789,7 +674,7 @@ class _AgentPlanMessageCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: IdeSpacing.space12),
       child: AgentRegionBuilder<AgentExpansionState>(
-        viewModel: viewModel,
+        bindingKey: controller.conversationBinding.key,
         selector: agentConversationExpansionProvider.call,
         builder: (context, expansion) {
           final expanded = expansion.isPlanMessageExpanded(message.id);
@@ -799,7 +684,7 @@ class _AgentPlanMessageCard extends StatelessWidget {
               toggleKey: ValueKey<String>('agent-plan-toggle-${message.id}'),
               bodyKey: ValueKey<String>('agent-plan-body-${message.id}'),
               expanded: expanded,
-              onToggle: () => viewModel.togglePlanMessage(message.id),
+              onToggle: () => controller.togglePlanMessage(message.id),
               leading: Icon(
                 Icons.checklist_rounded,
                 size: 16,
@@ -819,7 +704,7 @@ class _AgentPlanMessageCard extends StatelessWidget {
                       child: Align(
                         alignment: Alignment.topLeft,
                         child: Text(
-                          _planPreviewText(message.text),
+                          planPreviewText(message.text),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: textStyles.bodyMedium.copyWith(
@@ -839,7 +724,7 @@ class _AgentPlanMessageCard extends StatelessWidget {
                   : context.l10n.agentExpandPlan,
               body: Padding(
                 padding: const EdgeInsets.only(right: IdeSpacing.space4),
-                child: _AgentMarkdownBody(
+                child: AgentMarkdownBody(
                   message: message,
                   useStreamingMarkdown: useStreamingMarkdown,
                   markdownCache: markdownCache,

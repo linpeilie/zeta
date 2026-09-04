@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_file_change_evidence_views.dart';
 import 'package:zeta_ui/zeta_ui.dart';
+import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
 
 import 'harness/agent_pane_test_harness.dart';
 
@@ -254,7 +255,14 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.descendant(of: footer, matching: find.text('1.2k tokens')),
+        find.descendant(
+          of: footer,
+          matching: find.text(
+            lookupAppLocalizations(
+              const Locale('zh'),
+            ).agentTurnTokenUsage('1.2k'),
+          ),
+        ),
         findsOneWidget,
       );
       // 宽布局给元数据留出足够空间，各项以带留白的 • 分隔。

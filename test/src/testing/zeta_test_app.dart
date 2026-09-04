@@ -17,6 +17,11 @@ import 'package:zeta/src/features/agent_management/domain/agent_management_model
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_models.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_notifier.dart';
 import 'package:zeta/src/features/settings/data/system_font_catalog_service.dart';
+import 'package:zeta/src/features/agent/application/agent_composer_attachment_port.dart';
+import 'package:zeta/src/ui/core/system_url_opener.dart';
+
+import 'memory_agent_composer_attachment_store.dart';
+import 'recording_system_url_opener.dart';
 
 /// 测试用的 [MainApp]。
 ///
@@ -45,6 +50,7 @@ MainApp zetaTestApp({Key? key, List<Override> overrides = const <Override>[]}) {
 /// 4. 空的本机 CLI 探测、关闭用量自动刷新——不扫本机 Agent、不读用量历史；
 /// 5. 外观仓库与系统字体目录——它们声明在 feature 的 application 层，那里够不到
 ///    `data` 实现，兜底值只能由调用方装（生产在 `lib/main.dart` 装同样两个）。
+/// 6. 记录型外链打开器——widget test 不拉起系统浏览器。
 ZetaAppComposition zetaTestComposition({
   List<Override> overrides = const <Override>[],
 }) {
@@ -98,6 +104,10 @@ List<Override> _testDefaultsNotCoveredBy(List<Override> overrides) {
       appearanceFontCatalogProvider.overrideWith(
         (ref) => DesktopSystemFontCatalogService(),
       ),
+    if (!_covers(overrides, agentComposerAttachmentPortProvider))
+      memoryAgentComposerAttachmentOverride(),
+    if (!_covers(overrides, systemUrlOpenerProvider))
+      recordingSystemUrlOpenerOverride(),
   ];
 }
 

@@ -89,7 +89,10 @@ void main() {
       expect(entries, hasLength(1));
       expect(entries.single.tokenUsage?.totalTokens, 1280);
       expect(
-        agentConversationNavigationTokenLabel(entries.single.tokenUsage),
+        agentConversationNavigationTokenLabel(
+          entries.single.tokenUsage,
+          lookupAppLocalizations(const Locale('en')),
+        ),
         '1.3k tokens',
       );
       expect(entries.single.anchorViewportItemId, contains('message-u1'));
@@ -263,7 +266,7 @@ void main() {
       expect(text, contains(l10n.agentTurnOrdinal('6')));
       expect(text, contains('建立 Agent 权限架构契约测试'));
       expect(text, contains(l10n.agentStatusCompleted));
-      expect(text, contains('1.3k tokens'));
+      expect(text, contains(l10n.agentTurnTokenUsage('1.3k')));
     });
   });
 }

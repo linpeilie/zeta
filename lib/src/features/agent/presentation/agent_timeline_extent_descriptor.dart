@@ -2,38 +2,17 @@
 ///
 /// 只做冷启动估算与 layoutRevision 指纹；不依赖 BuildContext / Provider raw
 /// payload。cohort 均值不得在此批量回写已有未知项。
+///
+/// block 级的 kind / 估算 / 指纹全部委托 [AgentTimelineRendererRegistry]——
+/// 这里只保留不属于任何 block 的 viewport 级两项（live 活动条与 turn footer）。
 library;
-
-import 'dart:math' as math;
 
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection.dart';
+import 'package:zeta/src/features/agent/presentation/timeline_rendering/agent_timeline_extent_math.dart';
+import 'package:zeta/src/features/agent/presentation/timeline_rendering/agent_timeline_renderer_registry.dart';
 import 'package:zeta_ui/zeta_ui.dart';
-
-/// 展开态查询，避免 descriptor 工厂依赖完整 ViewModel。
-typedef AgentTimelineExpansionLookup = ({
-  bool Function(String commandGroupId) isCommandGroupExpanded,
-  bool Function(String fileEditItemId) isFileEditItemExpanded,
-
-  /// 该 plan 消息是否已升级为带底部输入的交互卡（形态与高度都不同）。
-  bool Function(String messageId) isPlanMessageInteractive,
-});
-
-/// Agent item kind 常量（仅用于估算，不参与业务分支）。
-abstract final class AgentTimelineExtentKinds {
-  static const userMessage = 'userMessage';
-  static const agentMarkdown = 'agentMarkdown';
-  static const plan = 'plan';
-  static const toolCard = 'toolCard';
-  static const commandGroup = 'commandGroup';
-  static const fileEditGroup = 'fileEditGroup';
-  static const planInteraction = 'planInteraction';
-  static const liveActivity = 'liveActivity';
-  static const turnFooter = 'turnFooter';
-  static const system = 'system';
-  static const hidden = 'hidden';
-}
 
 /// 布局环境输入（宽度 / 缩放 / locale），用于构造 [IdeLayoutEpoch]。
 final class AgentTimelineLayoutContext {
@@ -84,7 +63,12 @@ final class AgentTimelineLayoutContext {
 /// 对象，使尾部变化时前缀布局保持稳定。
 final class AgentTimelineExtentDescriptorFactory {
   /// 创建工厂。
-  AgentTimelineExtentDescriptorFactory();
+  ///
+  /// [registry] 显式注入：不设全局单例，测试可以传裁剪版清单。
+  AgentTimelineExtentDescriptorFactory({required this.registry});
+
+  /// block 级分发表。
+  final AgentTimelineRendererRegistry registry;
 
   List<IdeVirtualItemDescriptor>? _lastDescriptors;
 
@@ -149,7 +133,6 @@ final class AgentTimelineExtentDescriptorFactory {
     );
     final estimated = _estimateExtent(
       item,
-      kind: kind,
       crossAxisExtent: layoutContext.crossAxisExtent,
       textScale: layoutContext.textScale,
       expansion: expansion,
@@ -168,35 +151,10 @@ final class AgentTimelineExtentDescriptorFactory {
     return switch (item) {
       AgentLiveActivityViewportItem() => AgentTimelineExtentKinds.liveActivity,
       AgentTurnFooterViewportItem() => AgentTimelineExtentKinds.turnFooter,
-      AgentBlockViewportItem(:final block) => switch (block) {
-        AgentTimelineCommandGroupRenderBlock() =>
-          AgentTimelineExtentKinds.commandGroup,
-        AgentTimelineFileEditGroupRenderBlock() =>
-          AgentTimelineExtentKinds.fileEditGroup,
-        AgentTimelineEntryRenderBlock(:final entry) => switch (entry) {
-          AgentMessageTimelineEntry(:final message) => _kindForMessage(message),
-          AgentToolTimelineEntry() => AgentTimelineExtentKinds.toolCard,
-          AgentPermissionTimelineEntry() ||
-          AgentQuestionTimelineEntry() => AgentTimelineExtentKinds.toolCard,
-          // 审批卡在流内展示完整计划正文，不能按 tool card 的固定高度估算。
-          AgentPlanApprovalTimelineEntry() =>
-            AgentTimelineExtentKinds.planInteraction,
-          AgentHistoryEventTimelineEntry() => AgentTimelineExtentKinds.system,
-          AgentTurnFileChangesTimelineEntry() =>
-            AgentTimelineExtentKinds.fileEditGroup,
-        },
-      },
-    };
-  }
-
-  String _kindForMessage(AgentConversationMessage message) {
-    if (message.isPlan) {
-      return AgentTimelineExtentKinds.plan;
-    }
-    return switch (message.role) {
-      AgentMessageRole.user => AgentTimelineExtentKinds.userMessage,
-      AgentMessageRole.agent => AgentTimelineExtentKinds.agentMarkdown,
-      AgentMessageRole.system => AgentTimelineExtentKinds.system,
+      AgentBlockViewportItem(:final block) =>
+        registry
+            .resolve(block)
+            .kindOf(AgentTimelineRendererRegistry.payloadOf(block)),
     };
   }
 
@@ -231,8 +189,12 @@ final class AgentTimelineExtentDescriptorFactory {
         'block',
         turn.id,
         block.id,
-        _blockContentRevision(block),
-        _blockExpansionFingerprint(block, expansion),
+        registry
+            .resolve(block)
+            .layoutRevision(
+              AgentTimelineRendererRegistry.payloadOf(block),
+              expansion,
+            ),
         // 相邻操作组会改变上下外间距（块内 2 / 块外 10），进而影响实测高度，
         // 所以前后两侧都要进指纹，否则邻居变化后旧估算会被复用。
         isAgentTimelineOperationGroupBlock(block)
@@ -245,326 +207,34 @@ final class AgentTimelineExtentDescriptorFactory {
     };
   }
 
-  /// 单个 render block 的内容指纹（不含 turn 级 contentRevision）。
-  Object _blockContentRevision(AgentTimelineRenderBlock block) {
-    return switch (block) {
-      AgentTimelineCommandGroupRenderBlock(:final group) => Object.hashAll([
-        for (final item in group.items)
-          Object.hash(
-            item.id,
-            item.kind,
-            item.title,
-            _entryContentRevision(item.entry),
-          ),
-      ]),
-      AgentTimelineFileEditGroupRenderBlock(:final group) => Object.hashAll([
-        for (final item in group.items)
-          Object.hash(
-            item.id,
-            item.title,
-            item.status,
-            item.projection.snapshotRevision,
-            item.projection.replayability,
-            item.projection.changeId,
-            item.projection.kind,
-            item.projection.path,
-            item.projection.destinationPath,
-          ),
-      ]),
-      AgentTimelineEntryRenderBlock(:final entry) => _entryContentRevision(
-        entry,
-      ),
-    };
-  }
-
-  Object _entryContentRevision(AgentTimelineEntry entry) {
-    return switch (entry) {
-      AgentMessageTimelineEntry(:final message) => Object.hash(
-        message.id,
-        message.kind,
-        message.phase,
-        message.status,
-        message.role,
-        message.text.length,
-        message.text.hashCode,
-      ),
-      AgentToolTimelineEntry(:final toolCall) => Object.hash(
-        toolCall.id,
-        toolCall.kind,
-        toolCall.status,
-        toolCall.title,
-        toolCall.content?.length,
-        toolCall.content?.hashCode,
-        toolCall.duration?.inMilliseconds,
-      ),
-      AgentPermissionTimelineEntry(:final request) => Object.hash(
-        request.id,
-        request.title,
-        request.kind,
-        request.command,
-        request.description,
-      ),
-      AgentQuestionTimelineEntry(:final request) => Object.hash(
-        request.id,
-        request.title,
-        request.description,
-        request.questions.length,
-      ),
-      AgentPlanApprovalTimelineEntry(:final request) => Object.hash(
-        request.id,
-        request.title,
-        request.markdown.length,
-        request.markdown.hashCode,
-        request.todos.length,
-      ),
-      AgentHistoryEventTimelineEntry(:final event) => Object.hash(
-        event.id,
-        event.kind,
-        event.title,
-        event.description,
-        event.content?.length,
-      ),
-      AgentTurnFileChangesTimelineEntry(:final turnId, :final snapshot) =>
-        Object.hash(
-          turnId,
-          snapshot.revision,
-          snapshot.replayability,
-          snapshot.changes.length,
-        ),
-    };
-  }
-
-  Object _blockExpansionFingerprint(
-    AgentTimelineRenderBlock block,
-    AgentTimelineExpansionLookup expansion,
-  ) {
-    return switch (block) {
-      AgentTimelineCommandGroupRenderBlock(:final group) =>
-        expansion.isCommandGroupExpanded(group.id),
-      AgentTimelineFileEditGroupRenderBlock(:final group) => Object.hashAll([
-        for (final item in group.items)
-          Object.hash(item.id, expansion.isFileEditItemExpanded(item.id)),
-      ]),
-      // plan 消息在折叠卡与交互卡之间切换时高度差异巨大，必须让缓存测量失效。
-      AgentTimelineEntryRenderBlock(:final entry) =>
-        entry is AgentMessageTimelineEntry && entry.message.isPlan
-            ? expansion.isPlanMessageInteractive(entry.message.id)
-            : 0,
-    };
-  }
-
   double _estimateExtent(
     AgentTimelineViewportItem item, {
-    required String kind,
     required double crossAxisExtent,
     required double textScale,
     required AgentTimelineExpansionLookup expansion,
     bool precededByOperationGroup = false,
     bool followedByOperationGroup = false,
   }) {
-    final width = crossAxisExtent.isFinite && crossAxisExtent > 0
-        ? crossAxisExtent
-        : 720.0;
-    final scale = textScale.isFinite && textScale > 0 ? textScale : 1.0;
-    final lineHeight = 18.0 * scale;
+    final metrics = AgentTimelineExtentMetrics.from(
+      crossAxisExtent: crossAxisExtent,
+      textScale: textScale,
+    );
 
     return switch (item) {
-      AgentLiveActivityViewportItem() => 36 * scale,
-      AgentTurnFooterViewportItem() => 28 * scale,
-      AgentBlockViewportItem(:final block) => switch (block) {
-        AgentTimelineCommandGroupRenderBlock(:final group) =>
-          _estimateCommandGroup(
-            group,
-            expansion,
-            scale,
-            precededByOperationGroup: precededByOperationGroup,
-            followedByOperationGroup: followedByOperationGroup,
-          ),
-        AgentTimelineFileEditGroupRenderBlock(:final group) =>
-          _estimateFileEditGroup(
-            group,
-            expansion,
-            scale,
-            precededByOperationGroup: precededByOperationGroup,
-            followedByOperationGroup: followedByOperationGroup,
-          ),
-        AgentTimelineEntryRenderBlock(:final entry) => _estimateEntry(
-          entry,
-          kind: kind,
-          width: width,
-          lineHeight: lineHeight,
-          scale: scale,
-          expansion: expansion,
-        ),
-      },
+      AgentLiveActivityViewportItem() => 36 * metrics.scale,
+      AgentTurnFooterViewportItem() => 28 * metrics.scale,
+      AgentBlockViewportItem(:final block) =>
+        registry
+            .resolve(block)
+            .estimateExtent(
+              AgentTimelineRendererRegistry.payloadOf(block),
+              crossAxisExtent: crossAxisExtent,
+              textScale: textScale,
+              expansion: expansion,
+              precededByOperationGroup: precededByOperationGroup,
+              followedByOperationGroup: followedByOperationGroup,
+            ),
     };
-  }
-
-  double _estimateCommandGroup(
-    AgentTimelineCommandGroup group,
-    AgentTimelineExpansionLookup expansion,
-    double scale, {
-    bool precededByOperationGroup = false,
-    bool followedByOperationGroup = false,
-  }) {
-    // 内容区约 30；外间距与 `_operationGroupOuterPadding` 保持一致：
-    // 块内 2、块外 10。估算与真实间距脱节会让长会话滚动出现跳动。
-    final content = expansion.isCommandGroupExpanded(group.id)
-        ? 30 + group.items.length * 28
-        : 30;
-    final top = precededByOperationGroup ? 0.0 : 10.0;
-    final bottom = followedByOperationGroup ? 2.0 : 10.0;
-    return (content + top + bottom) * scale;
-  }
-
-  double _estimateFileEditGroup(
-    AgentTimelineFileEditGroup group,
-    AgentTimelineExpansionLookup expansion,
-    double scale, {
-    bool precededByOperationGroup = false,
-    bool followedByOperationGroup = false,
-  }) {
-    // 内容区：折叠头约 30 + 各文件行；外间距与命令集相同规则。
-    var content = 30.0;
-    for (final item in group.items) {
-      if (expansion.isFileEditItemExpanded(item.id)) {
-        content += 120;
-      } else {
-        content += 28;
-      }
-    }
-    final top = precededByOperationGroup ? 0.0 : 10.0;
-    final bottom = followedByOperationGroup ? 2.0 : 10.0;
-    return (content + top + bottom) * scale;
-  }
-
-  double _estimateEntry(
-    AgentTimelineEntry entry, {
-    required String kind,
-    required double width,
-    required double lineHeight,
-    required double scale,
-    required AgentTimelineExpansionLookup expansion,
-  }) {
-    if (entry is AgentMessageTimelineEntry) {
-      return _estimateMessage(
-        entry.message,
-        kind: kind,
-        width: width,
-        lineHeight: lineHeight,
-        scale: scale,
-        expansion: expansion,
-      );
-    }
-    if (entry is AgentToolTimelineEntry) {
-      return 56 * scale;
-    }
-    if (entry is AgentTurnFileChangesTimelineEntry) {
-      return 80 * scale;
-    }
-    if (entry is AgentPlanApprovalTimelineEntry) {
-      // 审批卡在流内始终是交互态：正文全文 + 底部输入与动作栏。
-      return math.max(
-        24.0,
-        _estimateMarkdownExtent(
-              entry.request.markdown,
-              width: width,
-              lineHeight: lineHeight,
-              scale: scale,
-            ) +
-            _planInteractionChromeExtent(scale),
-      );
-    }
-    return 48 * scale;
-  }
-
-  double _estimateMessage(
-    AgentConversationMessage message, {
-    required String kind,
-    required double width,
-    required double lineHeight,
-    required double scale,
-    required AgentTimelineExpansionLookup expansion,
-  }) {
-    final text = message.text;
-    final isInteractivePlan =
-        message.isPlan && expansion.isPlanMessageInteractive(message.id);
-    if (text.trim().isEmpty) {
-      return isInteractivePlan
-          ? 32 * scale + _planInteractionChromeExtent(scale)
-          : 32 * scale;
-    }
-
-    final padding = 24 * scale;
-    final base = kind == AgentTimelineExtentKinds.agentMarkdown
-        ? 200 * scale
-        : kind == AgentTimelineExtentKinds.plan
-        ? 120 * scale
-        : 48 * scale;
-
-    final content =
-        padding +
-        _estimateMarkdownExtent(
-          text,
-          width: width,
-          lineHeight: lineHeight,
-          scale: scale,
-        );
-    // 冷启动基线：取 content 与 kind 默认的较大者。不要截断长消息估算，
-    // 否则单项超过旧上限后会在滚动帧内产生巨大的同步 measurement delta。
-    final estimated = math.max(base * 0.5, content);
-    // 交互态计划卡额外挂着输入框与动作栏，不加上会严重低估。
-    final chrome = isInteractivePlan
-        ? _planInteractionChromeExtent(scale)
-        : 0.0;
-    return math.max(24.0, estimated + chrome);
-  }
-
-  /// 计划交互卡底部输入框 + 动作栏 + 分隔线的固定高度。
-  double _planInteractionChromeExtent(double scale) => 120 * scale;
-
-  /// 按源行逐行累加折行，估算一段 Markdown 的渲染高度。
-  double _estimateMarkdownExtent(
-    String text, {
-    required double width,
-    required double lineHeight,
-    required double scale,
-  }) {
-    // 全文渲染：历史与 live 均按完整内容估算高度，禁止折叠预览截断。
-    final charsPerLine = math.max(24, (width / (7.5 * scale)).floor());
-    var visualLines = 0;
-    var blockSpacingLines = 0.0;
-    var insideFence = false;
-    for (final sourceLine in text.split('\n')) {
-      final trimmed = sourceLine.trim();
-      if (trimmed.startsWith('```') || trimmed.startsWith('~~~')) {
-        insideFence = !insideFence;
-        visualLines += 1;
-        blockSpacingLines += 0.5;
-        continue;
-      }
-
-      // 必须逐源行累加折行；按全文字符数与显式行数取 max 会严重低估
-      // “多行且每行都需要折行”的长 Markdown。
-      final lineLength = trimmed.runes.length;
-      final effectiveCharsPerLine = insideFence
-          ? math.max(20, (charsPerLine * 0.9).floor())
-          : charsPerLine;
-      visualLines += math.max(1, (lineLength / effectiveCharsPerLine).ceil());
-
-      if (trimmed.isEmpty) {
-        blockSpacingLines += 0.45;
-      } else if (!insideFence && trimmed.startsWith('#')) {
-        blockSpacingLines += 0.7;
-      } else if (!insideFence &&
-          (trimmed.startsWith('- ') ||
-              trimmed.startsWith('* ') ||
-              trimmed.startsWith('> '))) {
-        blockSpacingLines += 0.15;
-      }
-    }
-
-    return (visualLines + blockSpacingLines) * lineHeight;
   }
 
   static bool _descriptorFingerprintEquals(

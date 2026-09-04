@@ -43,7 +43,7 @@ flutter run -d macos       # 或 -d windows / -d linux
 
 `dart_test.yaml` 固定并发 2，不要改。全量的强制点在 CI（6 个分片并行 + 内部 Package），本地默认只跑受影响的那一档。完整档位表见 [`AGENTS.md` §0](AGENTS.md#0-收尾协议每次改完代码必做)。
 
-仓库是 pub workspace：根 Flutter 应用 + `packages/zeta_foundation`、`packages/zeta_plugin_kernel`、`packages/zeta_ui`（Graphite 设计系统）、`packages/zeta_agent_core`（中立 Agent 内核）、`packages/zeta_agent_providers`（Provider 协议适配）。
+仓库是 pub workspace：根 Flutter 应用 + `packages/zeta_foundation`、`packages/zeta_plugin_kernel`、`packages/zeta_ui`（Graphite 设计系统）、`packages/zeta_markdown`（Markdown 渲染，fork 自 `mixin_markdown_widget`，改它先读 `packages/zeta_markdown/UPSTREAM.md`）、`packages/zeta_agent_core`（中立 Agent 内核）、`packages/zeta_agent_providers`（Provider 协议适配）。
 
 单个测试文件：`flutter test test/src/features/agent/presentation/agent_conversation_widget_test.dart`
 

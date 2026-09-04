@@ -258,7 +258,7 @@ void main() {
       );
 
       await shell.selectProjectThread(directory.path, threadA);
-      await shell.selectedAgentViewModel.sendMessage('keep running');
+      await shell.selectedAgentController.sendMessage('keep running');
       await _flushAsync();
 
       expect(
@@ -306,7 +306,7 @@ void main() {
       expect(activated, isTrue);
       expect(missing, isFalse);
       expect(harness.shell.activeProjectPath, directory.path);
-      expect(harness.shell.selectedAgentViewModel.sessionId, 'thread-b');
+      expect(harness.shell.selectedAgentController.sessionId, 'thread-b');
     },
   );
 
@@ -323,7 +323,7 @@ void main() {
     addTearDown(shell.dispose);
     final sourceEntry = shell.agentConversationWorkspaceStore.selectedEntry!;
 
-    final session = await sourceEntry.viewModel.forkCurrentThread();
+    final session = await sourceEntry.controller.forkCurrentThread();
     await _flushAsync();
 
     expect(session?.id, 'forked-thread-a');
@@ -338,13 +338,13 @@ void main() {
     expect(backend.instances, hasLength(1));
     expect(sourceEntry.binding.hasRuntime, isFalse);
 
-    await selectedEntry.viewModel.renameCurrentThread('Fork renamed');
+    await selectedEntry.controller.renameCurrentThread('Fork renamed');
     expect(
       backend.instances.single.renamedThreads,
       contains((threadId: 'forked-thread-a', name: 'Fork renamed')),
     );
 
-    await selectedEntry.viewModel.sendMessage('continue on fork');
+    await selectedEntry.controller.sendMessage('continue on fork');
     await _flushAsync();
     expect(backend.instances, hasLength(2));
     expect(
@@ -401,9 +401,9 @@ void main() {
     final backend = harness.backend;
     addTearDown(shell.dispose);
     final sourceEntry = shell.agentConversationWorkspaceStore.selectedEntry!;
-    expect(sourceEntry.viewModel.canEditLastUserMessage, isTrue);
+    expect(sourceEntry.controller.canEditLastUserMessage, isTrue);
 
-    await sourceEntry.viewModel.editLastUserMessageAndRetry('new prompt');
+    await sourceEntry.controller.editLastUserMessageAndRetry('new prompt');
     await _flushAsync();
 
     final selectedEntry = shell.agentConversationWorkspaceStore.selectedEntry!;
@@ -474,7 +474,7 @@ void main() {
       await _flushAsync();
 
       // Act
-      await shell.selectedAgentViewModel.sendMessage('run once');
+      await shell.selectedAgentController.sendMessage('run once');
       await _flushAsync();
 
       // Assert
@@ -504,7 +504,7 @@ void main() {
       );
       final shell = harness.shell;
       final provider = harness.provider;
-      final viewModel = shell.selectedAgentViewModel;
+      final viewModel = shell.selectedAgentController;
       addTearDown(shell.dispose);
 
       provider.emit(
@@ -622,7 +622,7 @@ void main() {
     );
     final shell = harness.shell;
     final provider = harness.provider;
-    final viewModel = shell.selectedAgentViewModel;
+    final viewModel = shell.selectedAgentController;
     addTearDown(shell.dispose);
     await shell.saveNow();
     harness.sessionSaves.reset();
@@ -724,7 +724,7 @@ void main() {
     );
     await _flushAsync();
     expect(
-      shell.selectedAgentViewModel.threadSnapshot.threadTitle,
+      shell.selectedAgentController.threadSnapshot.threadTitle,
       'Renamed thread',
     );
     expect(shellNotifications, greaterThan(0));
@@ -737,7 +737,7 @@ void main() {
       ),
     );
     await _flushAsync();
-    expect(shell.selectedAgentViewModel.threadSnapshot.isTurnRunning, isTrue);
+    expect(shell.selectedAgentController.threadSnapshot.isTurnRunning, isTrue);
     expect(shellNotifications, greaterThan(0));
 
     // Act + Assert: turn idle
@@ -746,7 +746,7 @@ void main() {
       const AgentTurnCompletedEvent(sessionId: 'thread-a', turnId: 'turn-a'),
     );
     await _flushAsync();
-    expect(shell.selectedAgentViewModel.threadSnapshot.isTurnRunning, isFalse);
+    expect(shell.selectedAgentController.threadSnapshot.isTurnRunning, isFalse);
     expect(shellNotifications, greaterThan(0));
 
     // Act + Assert: waiting on approval
@@ -760,11 +760,11 @@ void main() {
     );
     await _flushAsync();
     expect(
-      shell.selectedAgentViewModel.threadSnapshot.waitingOnApproval,
+      shell.selectedAgentController.threadSnapshot.waitingOnApproval,
       isTrue,
     );
     expect(
-      shell.selectedAgentViewModel.threadSnapshot.waitingOnUserInput,
+      shell.selectedAgentController.threadSnapshot.waitingOnUserInput,
       isFalse,
     );
     expect(shellNotifications, greaterThan(0));
@@ -780,11 +780,11 @@ void main() {
     );
     await _flushAsync();
     expect(
-      shell.selectedAgentViewModel.threadSnapshot.waitingOnApproval,
+      shell.selectedAgentController.threadSnapshot.waitingOnApproval,
       isFalse,
     );
     expect(
-      shell.selectedAgentViewModel.threadSnapshot.waitingOnUserInput,
+      shell.selectedAgentController.threadSnapshot.waitingOnUserInput,
       isTrue,
     );
     expect(shellNotifications, greaterThan(0));
@@ -798,7 +798,7 @@ void main() {
       ),
     );
     await _flushAsync();
-    final idleSnapshot = shell.selectedAgentViewModel.threadSnapshot;
+    final idleSnapshot = shell.selectedAgentController.threadSnapshot;
     expect(idleSnapshot.runtimeStatus, AgentThreadRuntimeStatus.idle);
     expect(idleSnapshot.waitingOnApproval, isFalse);
     expect(idleSnapshot.waitingOnUserInput, isFalse);
@@ -817,7 +817,7 @@ void main() {
     );
     final shell = harness.shell;
     final provider = harness.provider;
-    final oldViewModel = shell.selectedAgentViewModel;
+    final oldViewModel = shell.selectedAgentController;
     final oldSnapshot = oldViewModel.threadSnapshot;
     addTearDown(shell.dispose);
 
@@ -827,7 +827,7 @@ void main() {
         .singleWhere((thread) => thread.id == 'thread-b');
     await shell.selectProjectThread(directory.path, threadB);
     await _flushAsync();
-    final currentViewModel = shell.selectedAgentViewModel;
+    final currentViewModel = shell.selectedAgentController;
     expect(currentViewModel.sessionId, 'thread-b');
     expect(currentViewModel, isNot(same(oldViewModel)));
 
@@ -876,7 +876,7 @@ void main() {
       ),
       isFalse,
     );
-    expect(shell.selectedAgentViewModel, same(currentViewModel));
+    expect(shell.selectedAgentController, same(currentViewModel));
     expect(shellNotifications, 0);
     expect(harness.sessionSaves.saveCount, 0);
 
@@ -892,7 +892,7 @@ void main() {
 
     expect(oldViewModel.threadSnapshot.threadTitle, 'Renamed old thread');
     expect(currentViewModel.threadSnapshot, currentSnapshot);
-    expect(shell.selectedAgentViewModel, same(currentViewModel));
+    expect(shell.selectedAgentController, same(currentViewModel));
   });
 
   test('allows cross-provider threads to run in parallel', () async {
@@ -985,11 +985,11 @@ void main() {
     );
 
     await shell.selectProjectThread(directory.path, codexThread);
-    await shell.selectedAgentViewModel.sendMessage('run codex');
+    await shell.selectedAgentController.sendMessage('run codex');
     await _flushAsync();
 
     await shell.selectProjectThread(directory.path, grokThread);
-    await shell.selectedAgentViewModel.sendMessage('run grok');
+    await shell.selectedAgentController.sendMessage('run grok');
     await _flushAsync();
 
     expect(
@@ -1116,13 +1116,13 @@ void main() {
     // Assert：会话自身的 Provider 归属仍优先于当前全局 Provider。
     expect(shell.isProjectHomeActive, isFalse);
     expect(
-      shell.selectedAgentViewModel.activeProviderId,
+      shell.selectedAgentController.activeProviderId,
       defaultAgentProviderId,
     );
     expect(codexBackend.readThreadIds, <String>[thread.id]);
     expect(grokBackend.readThreadIds, isEmpty);
     expect(
-      shell.selectedAgentViewModel.timelineEntries
+      shell.selectedAgentController.timelineEntries
           .whereType<AgentMessageTimelineEntry>()
           .map((entry) => entry.message.text),
       contains('Restored Codex history'),
@@ -1551,7 +1551,7 @@ Future<_SelectedThreadShellHarness> _openShellWithSelectedThread({
   await shell.selectProjectThread(directory.path, thread);
   await _flushAsync();
   if (startSessionRuntime) {
-    await shell.selectedAgentViewModel.sendMessage('bind test runtime');
+    await shell.selectedAgentController.sendMessage('bind test runtime');
     await _flushAsync();
   }
 

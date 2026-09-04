@@ -104,9 +104,16 @@ void main() {
       }
     });
 
-    test('ViewModel cannot own session leases scopes or pins', () {
+    test('RuntimeController cannot own session leases scopes or pins', () {
+      expect(
+        File(
+          'lib/src/features/agent/presentation/agent_conversation_view_model.dart',
+        ).existsSync(),
+        isFalse,
+      );
       final source = File(
-        'lib/src/features/agent/presentation/agent_conversation_view_model.dart',
+        'lib/src/features/agent/application/conversation_slice/'
+        'agent_conversation_runtime_controller.dart',
       ).readAsStringSync();
 
       expect(source, isNot(contains('AgentProviderRuntimeLease')));
@@ -130,8 +137,9 @@ void main() {
         ).existsSync(),
         isFalse,
       );
-      final viewModel = File(
-        'lib/src/features/agent/presentation/agent_conversation_view_model.dart',
+      final runtime = File(
+        'lib/src/features/agent/application/conversation_slice/'
+        'agent_conversation_runtime_controller.dart',
       ).readAsStringSync();
       final workspace = File(
         'lib/src/app/conversation_workspace_slice/'
@@ -145,7 +153,7 @@ void main() {
         'restoredProviderId:',
         'resetConversation:',
       ]) {
-        expect(viewModel, isNot(contains(legacy)), reason: legacy);
+        expect(runtime, isNot(contains(legacy)), reason: legacy);
       }
       expect(workspace, isNot(contains('bindThreadIdentity(')));
     });

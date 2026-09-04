@@ -207,7 +207,7 @@ void main() {
       final controller = tester.widget<ScrollView>(scrollView).controller!;
       final pane = tester.widget<AgentPane>(find.byType(AgentPane));
       var autoScrollNotifications = 0;
-      final effectSubscription = pane.viewModel.uiEffects.listen((effect) {
+      final effectSubscription = pane.controller.uiEffects.listen((effect) {
         if (effect is AgentRequestAutoScroll) {
           autoScrollNotifications += 1;
         }
@@ -544,7 +544,7 @@ void main() {
       );
       final viewModel = tester
           .widget<AgentPane>(find.byType(AgentPane))
-          .viewModel;
+          .controller;
       viewModel.toggleCommandGroup(
         commandGroupId(turnId, 'tool-$commandToolId'),
       );

@@ -231,9 +231,13 @@ ProviderContainer _container(
 ) {
   final registry = AgentConversationSliceStoreRegistry()
     ..bind(
-      (key) =>
-          stores[key] ??
-          (throw StateError('No conversation slice store registered for $key')),
+      (key) => AgentConversationSessionHandle(
+        store:
+            stores[key] ??
+            (throw StateError(
+              'No conversation slice store registered for $key',
+            )),
+      ),
     );
   final container = ProviderContainer(
     overrides: [

@@ -8,11 +8,10 @@ import 'package:zeta_foundation/zeta_foundation.dart';
 /// Agent Conversation 的五个 region 状态契约。
 ///
 /// 它们是**不可变的 MVI 状态**，不是 Widget：因此住在 application 层，由
-/// presentation 与 Phase 2 切片共同消费。放在 presentation 会让 application
-/// 反向依赖 presentation，和 `agent_conversation_ui_state.dart` 形成闭环（G6）。
+/// presentation 与切片共同消费。
 ///
-/// 发布机制（`ValueNotifier` + 帧调度）留在 presentation 的
-/// `AgentConversationUiStateStore`：那是 UI 更新机制，不是状态契约。
+/// 发布机制（帧调度 + SliceStore ingress）住在 application 的
+/// `AgentUiUpdateScheduler` / `AgentConversationSliceStore`。
 
 /// Agent 头栏实际渲染所需的不可变状态。
 @immutable

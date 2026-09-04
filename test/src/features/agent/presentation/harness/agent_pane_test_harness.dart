@@ -6,7 +6,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
+import 'package:zeta_markdown/zeta_markdown.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/features/agent/application/agent_conversation_mode_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_model_selection_controller.dart';
@@ -14,11 +14,12 @@ import 'package:zeta/src/features/agent/application/agent_skills_catalog_control
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
-import 'package:zeta/src/app/conversation_slice/agent_conversation_slice_composition.dart';
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
+
+import '../../../../testing/memory_agent_composer_attachment_store.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
-import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 
@@ -26,6 +27,7 @@ import '../../../../testing/callback_workspace_file_corpus_port.dart';
 
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
+import 'package:zeta/src/features/agent/presentation/agent_ui_update_scheduler.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 
 import '../../../../testing/provider_settings_test_store.dart';
@@ -50,7 +52,7 @@ class AgentPaneTestApp extends StatefulWidget {
         const <AgentConversationBindingKey, AgentConversationSliceStore>{},
   });
 
-  final AgentConversationViewModel viewModel;
+  final AgentConversationRuntimeController viewModel;
 
   /// 挂到 [AgentPane] 上，供 `AgentPane.debugAddDraftImages` 等测试钩子使用。
   final GlobalKey? agentPaneKey;
@@ -70,16 +72,16 @@ class AgentPaneTestApp extends StatefulWidget {
 }
 
 class _AgentPaneTestAppState extends State<AgentPaneTestApp> {
-  late final AgentConversationSliceComposition? _ownedBinding;
+  late final AgentConversationSliceStore? _ownedStore;
   late final AgentConversationSliceStoreRegistry _registry;
 
   @override
   void initState() {
     super.initState();
     final key = widget.viewModel.conversationBinding.key;
-    _ownedBinding = widget.sliceStores.containsKey(key)
+    _ownedStore = widget.sliceStores.containsKey(key)
         ? null
-        : AgentConversationSliceComposition(
+        : AgentConversationSliceStore.connected(
             regions: widget.viewModel,
             commands: widget.viewModel,
           );
@@ -87,10 +89,18 @@ class _AgentPaneTestAppState extends State<AgentPaneTestApp> {
       ..bind((requestedKey) {
         final injected = widget.sliceStores[requestedKey];
         if (injected != null) {
-          return injected;
+          return AgentConversationSessionHandle(
+            store: injected,
+            controller: requestedKey == widget.viewModel.conversationBinding.key
+                ? widget.viewModel
+                : null,
+          );
         }
         if (requestedKey == widget.viewModel.conversationBinding.key) {
-          return _ownedBinding!.store;
+          return AgentConversationSessionHandle(
+            store: _ownedStore!,
+            controller: widget.viewModel,
+          );
         }
         throw StateError('No test conversation slice for $requestedKey');
       });
@@ -99,7 +109,7 @@ class _AgentPaneTestAppState extends State<AgentPaneTestApp> {
   @override
   void dispose() {
     _registry.unbind();
-    _ownedBinding?.dispose();
+    _ownedStore?.dispose();
     super.dispose();
   }
 
@@ -123,6 +133,7 @@ class _AgentPaneTestAppState extends State<AgentPaneTestApp> {
         agentConversationSliceStoreRegistryProvider.overrideWithValue(
           _registry,
         ),
+        memoryAgentComposerAttachmentOverride(),
       ],
       child: IdeThemeScope(
         themeMode: widget.themeMode,
@@ -149,7 +160,7 @@ class _AgentPaneTestAppState extends State<AgentPaneTestApp> {
               child: sf.Scaffold(
                 child: AgentPane(
                   key: widget.agentPaneKey,
-                  viewModel: widget.viewModel,
+                  controller: widget.viewModel,
                   messageSendShortcut: widget.messageSendShortcut,
                 ),
               ),
@@ -246,7 +257,7 @@ const AgentModelList agentPaneSingleReasoningModelList = AgentModelList(
   ],
 );
 
-AgentConversationViewModel createAgentPaneViewModel(
+AgentConversationRuntimeController createAgentPaneViewModel(
   AgentPaneFakeProvider provider, {
   AgentThreadSummary? initialThread,
   AgentConversationModeController? conversationModeController,
@@ -265,7 +276,7 @@ AgentConversationViewModel createAgentPaneViewModel(
   );
 }
 
-AgentConversationViewModel createAgentPaneViewModelWithStore(
+AgentConversationRuntimeController createAgentPaneViewModelWithStore(
   AgentPaneFakeProvider provider,
   AgentProviderConfigStore configStore, {
   AgentThreadSummary? initialThread,
@@ -294,7 +305,7 @@ AgentConversationViewModel createAgentPaneViewModelWithStore(
           config: provider.config,
           threadId: initialThread.id,
         );
-  final viewModel = AgentConversationViewModel(
+  final viewModel = AgentConversationRuntimeController(
     providerController: controller,
     conversationBinding: bindingLease.binding,
     globalRuntime: bindingHarness.globalRuntime,
@@ -317,6 +328,7 @@ AgentConversationViewModel createAgentPaneViewModelWithStore(
           ),
     initialProjectPath: initialThread?.projectPath ?? '/repo',
     initialThread: initialThread,
+    uiFrameScheduler: const SchedulerBindingAgentFrameScheduler(),
   );
   return viewModel;
 }
@@ -439,9 +451,10 @@ void expectMarkdownWidgetDefaults(MarkdownWidget widget) {
   expect(widget.selectable, isTrue);
   expect(widget.padding, EdgeInsets.zero);
   expect(widget.enableCopyFullDocumentShortcut, isFalse);
-  expect(widget.showCopyAllInContextMenu, isFalse);
-  // 对话 Markdown 通过空 contextMenuBuilder 完全抑制右键菜单。
+  // WP-6 T9：右键菜单不再被抑制，而是收敛成中文的「复制 / 复制全文 / 清除选区」。
+  expect(widget.showCopyAllInContextMenu, isTrue);
   expect(widget.contextMenuBuilder, isNotNull);
+  expect(widget.contextMenuLabels.copyAll, isNotEmpty);
 }
 
 class AgentPaneFakeProviderFactory with TestAgentProviderBundleFactory {

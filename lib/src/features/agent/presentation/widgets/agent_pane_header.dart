@@ -1,11 +1,27 @@
-part of '../agent_pane.dart';
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
+
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_ui/zeta_ui.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_region_state.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_text.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
 /// thread 详情头部：左侧项目与会话标题，右侧 token、分叉与更多菜单。
-class _AgentHeader extends StatelessWidget {
-  const _AgentHeader({required this.viewModel, required this.state});
+class AgentHeader extends StatelessWidget {
+  const AgentHeader({
+    required this.controller,
+    required this.state,
+    required this.onToggleContextPanel,
+    super.key,
+  });
 
-  final AgentConversationViewModel viewModel;
+  final AgentConversationRuntimeController controller;
   final AgentHeaderState state;
+  final VoidCallback onToggleContextPanel;
 
   @override
   Widget build(BuildContext context) {
@@ -13,10 +29,11 @@ class _AgentHeader extends StatelessWidget {
     final textStyles = IdeTextStyles.of(context);
     // 与上下文面板「总 Token」同源：会话累计用量，而非最近一次上下文窗口占用。
     final tokenUsage = state.tokenUsage;
-    final tokenLabel = _threadTotalTokenUsageLabel(tokenUsage);
-    final tokenTooltip = _tokenUsageTooltip(tokenUsage);
-    final threadOpenStatusText = _threadOpenStatusText(state);
-    final projectName = viewModel.projectName;
+    final l10n = context.l10n;
+    final tokenLabel = threadTotalTokenUsageLabel(tokenUsage, l10n);
+    final tokenTooltip = tokenUsageTooltip(tokenUsage, l10n);
+    final openStatusText = threadOpenStatusText(state, l10n);
+    final projectName = controller.projectName;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -36,7 +53,7 @@ class _AgentHeader extends StatelessWidget {
                         Flexible(
                           fit: FlexFit.loose,
                           child: IdeTooltip(
-                            message: viewModel.projectPath ?? name,
+                            message: controller.projectPath ?? name,
                             child: Semantics(
                               label: context.l10n.agentProjectName(name),
                               child: ConstrainedBox(
@@ -125,10 +142,10 @@ class _AgentHeader extends StatelessWidget {
                       ],
                     ],
                   ),
-                  if (threadOpenStatusText != null) ...[
+                  if (openStatusText != null) ...[
                     const SizedBox(height: 3),
                     Text(
-                      threadOpenStatusText,
+                      openStatusText,
                       key: ValueKey(
                         state.threadOpenPhase == AgentThreadOpenPhase.idle &&
                                 state.systemNoticeLabel != null
@@ -177,7 +194,11 @@ class _AgentHeader extends StatelessWidget {
               ),
             ],
             const SizedBox(width: IdeSpacing.space4),
-            _AgentHeaderMoreButton(viewModel: viewModel, state: state),
+            _AgentHeaderMoreButton(
+              controller: controller,
+              state: state,
+              onToggleContextPanel: onToggleContextPanel,
+            ),
           ],
         ),
       ],
@@ -187,10 +208,15 @@ class _AgentHeader extends StatelessWidget {
 
 /// 标题栏右侧「更多」菜单：分叉 / 重命名 / 归档 / 上下文。
 class _AgentHeaderMoreButton extends StatefulWidget {
-  const _AgentHeaderMoreButton({required this.viewModel, required this.state});
+  const _AgentHeaderMoreButton({
+    required this.controller,
+    required this.state,
+    required this.onToggleContextPanel,
+  });
 
-  final AgentConversationViewModel viewModel;
+  final AgentConversationRuntimeController controller;
   final AgentHeaderState state;
+  final VoidCallback onToggleContextPanel;
 
   @override
   State<_AgentHeaderMoreButton> createState() => _AgentHeaderMoreButtonState();
@@ -242,7 +268,7 @@ class _AgentHeaderMoreButtonState extends State<_AgentHeaderMoreButton> {
           label: context.l10n.agentForkSession,
           leadingIcon: Icons.call_split_rounded,
           onPressed: () {
-            unawaited(widget.viewModel.forkCurrentThread());
+            unawaited(widget.controller.forkCurrentThread());
           },
         ),
       if (canArchive)
@@ -251,7 +277,7 @@ class _AgentHeaderMoreButtonState extends State<_AgentHeaderMoreButton> {
           label: context.l10n.agentArchive,
           leadingIcon: Icons.archive_outlined,
           onPressed: () {
-            unawaited(widget.viewModel.archiveCurrentThread());
+            unawaited(widget.controller.archiveCurrentThread());
           },
         ),
     ];
@@ -261,7 +287,7 @@ class _AgentHeaderMoreButtonState extends State<_AgentHeaderMoreButton> {
         label: context.l10n.agentContext,
         leadingIcon: Icons.account_tree_outlined,
         onPressed: () {
-          widget.viewModel.toggleContextPanel();
+          widget.onToggleContextPanel();
         },
       ),
       for (var index = 0; index < contextFollowing.length; index++)
@@ -345,7 +371,7 @@ class _AgentHeaderMoreButtonState extends State<_AgentHeaderMoreButton> {
     if (!mounted || name == null || name.isEmpty) {
       return;
     }
-    await widget.viewModel.renameCurrentThread(name);
+    await widget.controller.renameCurrentThread(name);
   }
 
   @override
@@ -353,6 +379,8 @@ class _AgentHeaderMoreButtonState extends State<_AgentHeaderMoreButton> {
     final colors = IdeColors.of(context);
     return IdeTooltip(
       message: context.l10n.agentMore,
+      // G8：IdeIconButton 没有 iconDense，也不能按菜单开合改图标色；
+      // 头栏更多按钮继续用 small+iconDense，避免被撑到 compact 24px。
       child: sf.IconButton.ghost(
         key: const ValueKey('agent-header-more'),
         onPressed: _toggleMenu,

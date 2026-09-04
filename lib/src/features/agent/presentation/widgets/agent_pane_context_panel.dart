@@ -1,4 +1,20 @@
-part of '../agent_pane.dart';
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
+
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_ui/zeta_ui.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_region_state.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
+import 'package:zeta/src/features/agent/presentation/agent_flutter_listenable_adapter.dart';
+import 'package:zeta/src/features/agent/presentation/agent_presentation_l10n.dart';
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_region_builder.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_cards.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_styles.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
 /// 上下文详情面板的固定宽度。
 const double _agentContextPanelWidth = 360;
@@ -17,16 +33,21 @@ const double _agentContextKeyColumnWidth = 76;
 /// 消息数、提供商、上下文限制、token 占用、创建/活跃时间）与原始消息列表。
 /// 原始消息列表展示消息 ID、角色与时间，点击可展开查看 raw 协议原文。
 /// 面板正文包在 [SelectionArea] 中，支持拖选文本与系统复制菜单。
-class _AgentContextPanel extends StatefulWidget {
-  const _AgentContextPanel({required this.viewModel});
+class AgentContextPanel extends StatefulWidget {
+  const AgentContextPanel({
+    required this.controller,
+    required this.onClose,
+    super.key,
+  });
 
-  final AgentConversationViewModel viewModel;
+  final AgentConversationRuntimeController controller;
+  final VoidCallback onClose;
 
   @override
-  State<_AgentContextPanel> createState() => _AgentContextPanelState();
+  State<AgentContextPanel> createState() => _AgentContextPanelState();
 }
 
-class _AgentContextPanelState extends State<_AgentContextPanel> {
+class _AgentContextPanelState extends State<AgentContextPanel> {
   /// 原始消息行展开态：按条目 id 记录，避免父级重建时丢失。
   final Set<String> _expandedRawMessageIds = <String>{};
 
@@ -41,11 +62,11 @@ class _AgentContextPanelState extends State<_AgentContextPanel> {
   }
 
   @override
-  void didUpdateWidget(covariant _AgentContextPanel oldWidget) {
+  void didUpdateWidget(covariant AgentContextPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(
-      oldWidget.viewModel.providerController,
-      widget.viewModel.providerController,
+      oldWidget.controller.providerController,
+      widget.controller.providerController,
     )) {
       _unsubscribeProviderSettings();
       _subscribeProviderSettings();
@@ -53,7 +74,7 @@ class _AgentContextPanelState extends State<_AgentContextPanel> {
   }
 
   void _subscribeProviderSettings() {
-    _unsubscribeProviderSettings = widget.viewModel.providerController
+    _unsubscribeProviderSettings = widget.controller.providerController
         .subscribe(() {
           if (mounted) {
             setState(() {});
@@ -69,34 +90,34 @@ class _AgentContextPanelState extends State<_AgentContextPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final viewModel = widget.viewModel;
+    final controller = widget.controller;
     return ValueListenableBuilder<AgentConversationTurnState?>(
-      valueListenable: viewModel.liveTurnListenable,
+      valueListenable: controller.flutterLiveTurnListenable,
       builder: (context, liveTurnState, _) {
         // 上下文面板只组合已有 typed slice；live binding 改变时重绑稳定 turn
         // notifier，避免重新引入完整 ViewModel ChangeNotifier。
         return AgentRegionBuilder<AgentHeaderState>(
-          viewModel: viewModel,
+          bindingKey: controller.conversationBinding.key,
           selector: agentConversationHeaderProvider.call,
           builder: (context, _) =>
               AgentRegionBuilder<AgentConversationHistoryState>(
-                viewModel: viewModel,
+                bindingKey: controller.conversationBinding.key,
                 selector: agentConversationHistoryProvider.call,
                 builder: (context, _) => ListenableBuilder(
                   // thread 快照与 Provider 目录不属于 region，仍走 listenable。
                   listenable: Listenable.merge(<Listenable>[
-                    viewModel.threadSnapshotListenable,
+                    controller.flutterThreadSnapshotListenable,
                     if (liveTurnState != null)
                       AgentFlutterListenableAdapter(liveTurnState),
                   ]),
                   builder: (context, _) {
                     final colors = IdeColors.of(context);
-                    final usage = viewModel.currentThreadTokenUsage;
-                    final messages = viewModel.messages;
+                    final usage = controller.currentThreadTokenUsage;
+                    final messages = controller.messages;
                     final rawItems = _buildContextRawItems(
-                      timelineEntries: viewModel.timelineEntries,
+                      timelineEntries: controller.timelineEntries,
                       filterNonChat: _filterNonChatMessages,
-                      catalog: viewModel.textCatalog,
+                      catalog: controller.textCatalog,
                       l10n: context.l10n,
                     );
                     return Container(
@@ -114,9 +135,7 @@ class _AgentContextPanelState extends State<_AgentContextPanel> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          _AgentContextPanelHeader(
-                            onClose: viewModel.hideContextPanel,
-                          ),
+                          _AgentContextPanelHeader(onClose: widget.onClose),
                           // SelectionArea 覆盖概览与原始消息区，支持拖选 / 右键复制；
                           // 关闭按钮留在区外，避免与选择手势争用。
                           Expanded(
@@ -137,11 +156,11 @@ class _AgentContextPanelState extends State<_AgentContextPanel> {
                                         CrossAxisAlignment.stretch,
                                     children: [
                                       _AgentContextSummaryCard(
-                                        title: viewModel.currentThreadTitle,
-                                        sessionId: viewModel.sessionId,
+                                        title: controller.currentThreadTitle,
+                                        sessionId: controller.sessionId,
                                         messageCount: messages.length,
                                         providerName:
-                                            viewModel.activeProviderName,
+                                            controller.activeProviderName,
                                         contextLimit:
                                             usage?.displayModelContextWindow,
                                         totalTokens: usage?.displayTotalTokens,
@@ -150,9 +169,9 @@ class _AgentContextPanelState extends State<_AgentContextPanel> {
                                             usage?.displayOutputTokens,
                                         cachedTokens:
                                             usage?.displayCachedInputTokens,
-                                        createdAt: viewModel.threadCreatedAt,
+                                        createdAt: controller.threadCreatedAt,
                                         lastActiveAt:
-                                            viewModel.threadLastActiveAt,
+                                            controller.threadLastActiveAt,
                                       ),
                                       // 元数据区与原始消息之间不画线：靠一整段留白
                                       // 把两个功能区分开，面板整体保持无框线。
@@ -231,6 +250,8 @@ class _AgentContextPanelHeader extends StatelessWidget {
           const Spacer(),
           IdeTooltip(
             message: context.l10n.agentClose,
+            // G8：IdeIconButton 没有 iconDense，且不接受自定义 15px 图标；
+            // 面板头 chrome 继续用 small+iconDense，避免被撑到 compact 24px。
             child: sf.IconButton.ghost(
               key: const ValueKey('agent-context-panel-close'),
               onPressed: onClose,
@@ -504,7 +525,7 @@ class _AgentContextRawMessageRow extends StatelessWidget {
       expanded: expanded,
       canExpand: hasRaw,
       onToggle: onToggle,
-      hoverBackgroundColor: _agentHoverBackground(context),
+      hoverBackgroundColor: agentHoverBackground(context),
       padding: const EdgeInsets.symmetric(vertical: IdeSpacing.space2),
       bodyPadding: const EdgeInsets.only(top: IdeSpacing.space8),
       semanticLabel: context.l10n.agentRawMessages,
@@ -551,6 +572,8 @@ class _AgentContextRawMessageRow extends StatelessWidget {
                     label: context.l10n.agentCopyOriginal,
                     child: IdeTooltip(
                       message: context.l10n.agentCopyOriginal,
+                      // G8：IdeIconButton 没有 iconDense，且不接受自定义 14px 图标；
+                      // 行内复制继续用 small+iconDense，避免被撑到 compact 24px。
                       child: sf.IconButton.ghost(
                         key: ValueKey<String>(
                           'agent-context-raw-copy-${item.id}',
@@ -570,7 +593,7 @@ class _AgentContextRawMessageRow extends StatelessWidget {
                 ConstrainedBox(
                   constraints: const BoxConstraints(maxHeight: 360),
                   child: SingleChildScrollView(
-                    child: _AgentHighlightedCodeBlock(
+                    child: AgentHighlightedCodeBlock(
                       code: rawText,
                       language: 'json',
                     ),
@@ -582,7 +605,7 @@ class _AgentContextRawMessageRow extends StatelessWidget {
               padding: const EdgeInsets.only(top: IdeSpacing.space4),
               child: Text(
                 context.l10n.agentNoRawPayload,
-                style: _agentMetaTextStyle(context),
+                style: agentMetaTextStyle(context),
               ),
             ),
     );

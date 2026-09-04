@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 
 import 'harness/agent_pane_test_harness.dart';
@@ -266,7 +266,7 @@ void main() {
 /// 跑完一个 Plan 回合，使本地执行交接卡出现在对话流末尾。
 Future<void> _completePlanTurn(
   WidgetTester tester,
-  AgentConversationViewModel viewModel,
+  AgentConversationRuntimeController viewModel,
   AgentPaneModeFakeProvider provider,
 ) async {
   viewModel.selectConversationMode(AgentConversationModeId.plan);

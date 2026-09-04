@@ -7,7 +7,7 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta_ui/zeta_ui.dart';
@@ -16,11 +16,13 @@ import '../../../testing/provider_settings_test_store.dart';
 
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
-import 'package:zeta/src/app/conversation_slice/agent_conversation_slice_composition.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
+import 'package:zeta/src/features/agent/presentation/agent_ui_update_scheduler.dart';
 
 import '../../../testing/ide_test_harness.dart';
 import '../../../testing/agent_conversation_binding_test_harness.dart';
+import '../../../testing/memory_agent_composer_attachment_store.dart';
 
 void main() {
   testWidgets('disabled Agent keeps history visible and hides the composer', (
@@ -56,7 +58,7 @@ void main() {
       config: disabledConfig,
       threadId: thread.id,
     );
-    final viewModel = AgentConversationViewModel(
+    final viewModel = AgentConversationRuntimeController(
       providerController: providerController,
       conversationBinding: bindingLease.binding,
       globalRuntime: bindingHarness.globalRuntime,
@@ -65,6 +67,7 @@ void main() {
       ),
       initialProjectPath: thread.projectPath,
       initialThread: thread,
+      uiFrameScheduler: const SchedulerBindingAgentFrameScheduler(),
     );
     addTearDown(() {
       viewModel.dispose();
@@ -115,13 +118,14 @@ void main() {
     final bindingLease = bindingHarness.acquireDraft(
       defaultCodexAgentProviderConfig,
     );
-    final viewModel = AgentConversationViewModel(
+    final viewModel = AgentConversationRuntimeController(
       providerController: providerController,
       conversationBinding: bindingLease.binding,
       globalRuntime: bindingHarness.globalRuntime,
       composerStateOwner: AgentConversationComposerStateOwner.create(
         providerController: providerController,
       ),
+      uiFrameScheduler: const SchedulerBindingAgentFrameScheduler(),
     );
     addTearDown(() {
       viewModel.dispose();
@@ -150,7 +154,7 @@ void main() {
 
 Future<void> _pumpAgentPane(
   WidgetTester tester,
-  AgentConversationViewModel viewModel,
+  AgentConversationRuntimeController viewModel,
 ) async {
   tester.view
     ..physicalSize = const Size(1000, 800)
@@ -164,20 +168,23 @@ Future<void> _pumpAgentPane(
     brightness: Brightness.light,
     codeFontFamily: 'JetBrainsMono',
   );
-  final sliceBinding = AgentConversationSliceComposition(
+  final sliceStore = AgentConversationSliceStore.connected(
     regions: viewModel,
     commands: viewModel,
   );
   final sliceRegistry = AgentConversationSliceStoreRegistry()
     ..bind((requestedKey) {
       if (requestedKey == viewModel.conversationBinding.key) {
-        return sliceBinding.store;
+        return AgentConversationSessionHandle(
+          store: sliceStore,
+          controller: viewModel,
+        );
       }
       throw StateError('No test conversation slice for $requestedKey');
     });
   addTearDown(() {
     sliceRegistry.unbind();
-    sliceBinding.dispose();
+    sliceStore.dispose();
   });
   await tester.pumpWidget(
     ProviderScope(
@@ -185,6 +192,7 @@ Future<void> _pumpAgentPane(
         agentConversationSliceStoreRegistryProvider.overrideWithValue(
           sliceRegistry,
         ),
+        memoryAgentComposerAttachmentOverride(),
       ],
       child: IdeThemeScope(
         themeMode: ThemeMode.light,
@@ -202,7 +210,7 @@ Future<void> _pumpAgentPane(
             theme: buildMaterialTheme(ideTheme),
             child: child,
           ),
-          home: sf.Scaffold(child: AgentPane(viewModel: viewModel)),
+          home: sf.Scaffold(child: AgentPane(controller: viewModel)),
         ),
       ),
     ),

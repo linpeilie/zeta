@@ -1,15 +1,20 @@
-part of '../agent_pane.dart';
+import 'package:flutter/material.dart';
 
-const double _agentSlashCommandPickerPreferredWidth = 320;
-const double _agentSlashCommandPickerPreferredMaxHeight = 320;
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_ui/zeta_ui.dart';
+import 'package:zeta/src/features/agent/presentation/composer_document.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
+
+const double agentSlashCommandPickerPreferredWidth = 320;
+const double agentSlashCommandPickerPreferredMaxHeight = 320;
 
 /// 斜线菜单中的固定命令。
-enum _SlashCommandId { plan, compact }
+enum SlashCommandId { plan, compact }
 
 /// 斜线菜单可选项（命令或 Skill），用于跨分组键盘导航。
 @immutable
-sealed class _SlashMenuItem {
-  const _SlashMenuItem();
+sealed class SlashMenuItem {
+  const SlashMenuItem();
 
   String get identity;
   String get label;
@@ -17,14 +22,14 @@ sealed class _SlashMenuItem {
 
 /// 命令项。
 @immutable
-final class _SlashCommandMenuItem extends _SlashMenuItem {
-  const _SlashCommandMenuItem({
+final class SlashCommandMenuItem extends SlashMenuItem {
+  const SlashCommandMenuItem({
     required this.id,
     required this.label,
     this.selected = false,
   });
 
-  final _SlashCommandId id;
+  final SlashCommandId id;
   @override
   final String label;
   final bool selected;
@@ -35,8 +40,8 @@ final class _SlashCommandMenuItem extends _SlashMenuItem {
 
 /// Skill 项。
 @immutable
-final class _SlashSkillMenuItem extends _SlashMenuItem {
-  const _SlashSkillMenuItem(this.skill);
+final class SlashSkillMenuItem extends SlashMenuItem {
+  const SlashSkillMenuItem(this.skill);
 
   final AgentSkillMetadata skill;
 
@@ -48,24 +53,24 @@ final class _SlashSkillMenuItem extends _SlashMenuItem {
 }
 
 /// 斜线菜单高亮与候选状态，供 Composer 键盘与 popover 共享。
-final class _SlashMenuListController extends ChangeNotifier {
-  List<_SlashMenuItem> _items = const <_SlashMenuItem>[];
+final class SlashMenuListController extends ChangeNotifier {
+  List<SlashMenuItem> _items = const <SlashMenuItem>[];
   int _highlightIndex = 0;
 
-  List<_SlashMenuItem> get items => _items;
+  List<SlashMenuItem> get items => _items;
 
   int get highlightIndex => _highlightIndex;
 
-  _SlashMenuItem? get highlighted {
+  SlashMenuItem? get highlighted {
     if (_items.isEmpty) {
       return null;
     }
     return _items[_highlightIndex.clamp(0, _items.length - 1)];
   }
 
-  void syncItems(List<_SlashMenuItem> next) {
+  void syncItems(List<SlashMenuItem> next) {
     final previousId = highlighted?.identity;
-    _items = List<_SlashMenuItem>.unmodifiable(next);
+    _items = List<SlashMenuItem>.unmodifiable(next);
     if (_items.isEmpty) {
       _highlightIndex = 0;
       notifyListeners();
@@ -91,13 +96,13 @@ final class _SlashMenuListController extends ChangeNotifier {
   }
 
   void reset() {
-    _items = const <_SlashMenuItem>[];
+    _items = const <SlashMenuItem>[];
     _highlightIndex = 0;
   }
 }
 
 /// 构建斜线菜单候选：命令在前，Skills 在后；按 query 过滤。
-List<_SlashMenuItem> _buildSlashMenuItems({
+List<SlashMenuItem> _buildSlashMenuItems({
   required String query,
   required bool showPlanCommand,
   required bool showCompactCommand,
@@ -105,14 +110,14 @@ List<_SlashMenuItem> _buildSlashMenuItems({
   required List<AgentSkillMetadata> skills,
 }) {
   final normalized = query.trim().toLowerCase();
-  final items = <_SlashMenuItem>[];
+  final items = <SlashMenuItem>[];
 
   if (showPlanCommand) {
     const label = 'Plan';
     if (normalized.isEmpty || label.toLowerCase().contains(normalized)) {
       items.add(
-        _SlashCommandMenuItem(
-          id: _SlashCommandId.plan,
+        SlashCommandMenuItem(
+          id: SlashCommandId.plan,
           label: label,
           selected: planSelected,
         ),
@@ -124,20 +129,20 @@ List<_SlashMenuItem> _buildSlashMenuItems({
     const label = 'Compact context';
     if (normalized.isEmpty || label.toLowerCase().contains(normalized)) {
       items.add(
-        const _SlashCommandMenuItem(id: _SlashCommandId.compact, label: label),
+        const SlashCommandMenuItem(id: SlashCommandId.compact, label: label),
       );
     }
   }
 
   for (final skill in skills) {
-    items.add(_SlashSkillMenuItem(skill));
+    items.add(SlashSkillMenuItem(skill));
   }
   return items;
 }
 
 /// Composer 上方的斜线命令菜单（命令 + Skills）。
-class _AgentSlashCommandPickerPopover extends StatefulWidget {
-  const _AgentSlashCommandPickerPopover({
+class AgentSlashCommandPickerPopover extends StatefulWidget {
+  const AgentSlashCommandPickerPopover({
     required this.width,
     required this.maxHeight,
     required this.documentController,
@@ -149,27 +154,28 @@ class _AgentSlashCommandPickerPopover extends StatefulWidget {
     required this.onSelectCommand,
     required this.onSelectSkill,
     required this.onRequestClose,
+    super.key,
   });
 
   final double width;
   final double maxHeight;
   final ComposerDocumentController documentController;
-  final _SlashMenuListController listController;
+  final SlashMenuListController listController;
   final bool showPlanCommand;
   final bool showCompactCommand;
   final bool planSelected;
   final List<AgentSkillMetadata> Function(String query) skillCandidatesFor;
-  final ValueChanged<_SlashCommandId> onSelectCommand;
+  final ValueChanged<SlashCommandId> onSelectCommand;
   final ValueChanged<AgentSkillMetadata> onSelectSkill;
   final VoidCallback onRequestClose;
 
   @override
-  State<_AgentSlashCommandPickerPopover> createState() =>
+  State<AgentSlashCommandPickerPopover> createState() =>
       _AgentSlashCommandPickerPopoverState();
 }
 
 class _AgentSlashCommandPickerPopoverState
-    extends State<_AgentSlashCommandPickerPopover> {
+    extends State<AgentSlashCommandPickerPopover> {
   @override
   void initState() {
     super.initState();
@@ -179,7 +185,7 @@ class _AgentSlashCommandPickerPopoverState
   }
 
   @override
-  void didUpdateWidget(covariant _AgentSlashCommandPickerPopover oldWidget) {
+  void didUpdateWidget(covariant AgentSlashCommandPickerPopover oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.showPlanCommand != widget.showPlanCommand ||
         oldWidget.showCompactCommand != widget.showCompactCommand ||
@@ -224,11 +230,11 @@ class _AgentSlashCommandPickerPopoverState
     );
   }
 
-  void _activate(_SlashMenuItem item) {
+  void _activate(SlashMenuItem item) {
     switch (item) {
-      case final _SlashCommandMenuItem command:
+      case final SlashCommandMenuItem command:
         widget.onSelectCommand(command.id);
-      case final _SlashSkillMenuItem skill:
+      case final SlashSkillMenuItem skill:
         widget.onSelectSkill(skill.skill);
     }
   }
@@ -240,10 +246,10 @@ class _AgentSlashCommandPickerPopoverState
     final items = widget.listController.items;
     final highlightIndex = widget.listController.highlightIndex;
 
-    final commandItems = items.whereType<_SlashCommandMenuItem>().toList(
+    final commandItems = items.whereType<SlashCommandMenuItem>().toList(
       growable: false,
     );
-    final skillItems = items.whereType<_SlashSkillMenuItem>().toList(
+    final skillItems = items.whereType<SlashSkillMenuItem>().toList(
       growable: false,
     );
 
@@ -255,7 +261,7 @@ class _AgentSlashCommandPickerPopoverState
         width: widget.width,
         child: ConstrainedBox(
           constraints: BoxConstraints(maxHeight: widget.maxHeight),
-          child: _ComposerSelectorPanel(
+          child: IdePopoverPanel(
             child: items.isEmpty
                 ? Padding(
                     padding: IdeSpacing.all12,

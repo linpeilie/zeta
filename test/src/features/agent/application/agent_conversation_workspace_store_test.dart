@@ -30,8 +30,8 @@ void main() {
       final entryB = await harness.createEntry(threadId: 'thread-b');
 
       await Future.wait(<Future<void>>[
-        entryA.viewModel.sendMessage('hello from A'),
-        entryB.viewModel.sendMessage('hello from B'),
+        entryA.controller.sendMessage('hello from A'),
+        entryB.controller.sendMessage('hello from B'),
       ]);
       harness.drainAll();
 
@@ -42,11 +42,11 @@ void main() {
         isFalse,
       );
       expect(
-        entryA.viewModel.messages.map((message) => message.text),
+        entryA.controller.messages.map((message) => message.text),
         contains('hello from A'),
       );
       expect(
-        entryB.viewModel.messages.map((message) => message.text),
+        entryB.controller.messages.map((message) => message.text),
         contains('hello from B'),
       );
     });
@@ -68,7 +68,7 @@ void main() {
       expect(harness.registry.debugProviderCount, 1);
       expect(entry.binding.hasRuntime, isFalse);
 
-      await entry.viewModel.sendMessage('go');
+      await entry.controller.sendMessage('go');
       harness.drainAll();
 
       // AC3：首次提交输入才会创建这个 entry 专属的 session scope 实例
@@ -85,8 +85,8 @@ void main() {
       final entryA = await harness.createEntry(threadId: 'thread-a');
       final entryB = await harness.createEntry(threadId: 'thread-b');
 
-      await entryA.viewModel.sendMessage('hello from A');
-      await entryB.viewModel.sendMessage('hello from B');
+      await entryA.controller.sendMessage('hello from A');
+      await entryB.controller.sendMessage('hello from B');
       harness.drainAll();
       expect(harness.factory.created, hasLength(3));
 
@@ -95,21 +95,21 @@ void main() {
 
       // entry B 完全不受影响：历史时间线原样保留，且能继续发消息。
       expect(
-        entryB.viewModel.messages.map((message) => message.text),
+        entryB.controller.messages.map((message) => message.text),
         contains('hello from B'),
       );
-      await entryB.viewModel.sendMessage('second from B');
+      await entryB.controller.sendMessage('second from B');
       harness.drainAll();
       expect(
-        entryB.viewModel.messages.map((message) => message.text),
+        entryB.controller.messages.map((message) => message.text),
         containsAllInOrder(<String>['hello from B', 'second from B']),
       );
 
       // entry A 再次发消息会自动重建它自己的实例，且不影响之前已保留的时间线。
-      await entryA.viewModel.sendMessage('second from A');
+      await entryA.controller.sendMessage('second from A');
       harness.drainAll();
       expect(
-        entryA.viewModel.messages.map((message) => message.text),
+        entryA.controller.messages.map((message) => message.text),
         containsAllInOrder(<String>['hello from A', 'second from A']),
       );
       expect(harness.factory.created, hasLength(4));
@@ -163,7 +163,7 @@ void main() {
       );
       controller.selectEntry(foreground.entryId);
 
-      await background.viewModel.sendMessage('background');
+      await background.controller.sendMessage('background');
       await pumpEventQueue(times: 5);
       for (final scheduler in schedulers) {
         scheduler.drainFrames();
@@ -172,7 +172,7 @@ void main() {
       expect(controller.selectedEntry, same(foreground));
       expect(signals.map((signal) => signal.providerId), <String>['grok']);
 
-      await foreground.viewModel.sendMessage('foreground');
+      await foreground.controller.sendMessage('foreground');
       await pumpEventQueue(times: 5);
       for (final scheduler in schedulers) {
         scheduler.drainFrames();
@@ -226,7 +226,7 @@ final class _WorkspaceHarness {
       projectPath: '/repo',
       thread: summary,
     );
-    await entry.viewModel.initialization;
+    await entry.controller.initialization;
     return entry;
   }
 

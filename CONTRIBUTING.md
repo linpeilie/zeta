@@ -180,7 +180,7 @@ chore: bump flutter action pin
 
 **分层与依赖方向**
 
-- 依赖单向：`main → app → presentation/application → domain`，`app → data → domain`，`presentation → zeta_ui`（`packages/zeta_ui` 设计系统）。
+- 依赖单向：`main → app → presentation/application → domain`，`app → data → domain`，`presentation → zeta_ui`（`packages/zeta_ui` 设计系统）、`presentation → zeta_markdown`（`packages/zeta_markdown` Markdown 渲染包，fork 自上游，改它先读 `packages/zeta_markdown/UPSTREAM.md`）。
 - 新代码进对应的 `features/<feature>/{domain,application,data,presentation}`，不要回到顶层宽泛目录。
 - `main.dart` 只做启动；`lib/src/app` 是唯一装配点。
 
@@ -192,8 +192,8 @@ chore: bump flutter action pin
 - 文件变更必须由 Provider-local tracker 先形成完整 typed snapshot；Store 只机械透传，UI 不读 raw，只有命令时不得猜路径或 diff。
 - 新增 Provider 的正常改动范围 = 自有 data 文件 + 中立 domain 契约 + factory 组合 + 契约测试。如果你发现必须改共享层，说明抽象没做对，先开 Issue 讨论。
 - UI 一律按 **capability** 渲染，不按 provider kind 或名称硬编码。未支持的能力必须 `capability = false` 并抛 `UnsupportedError`，**不得静默成功**。
-- Provider 进程只由 `AgentProviderRuntimeRegistry` 创建；全局操作走 `AgentProviderGlobalRuntime`，会话实例只由 `AgentConversationBinding.beginTurn()` 惰性创建。Binding 显式区分 dormant/starting/attached/cleared，只有匹配 runtime identity 的 cleared 才是断连。ViewModel 不持有 lease/scope/pin，空闲回收归 Binding Manager。
-- Workspace entry 创建时一次性绑定 thread、Binding 与 ViewModel；ViewModel 不提供跨 thread 切换/恢复兼容入口，只允许更新 project/file context。Registry 获取 runtime 必须显式传 scope。
+- Provider 进程只由 `AgentProviderRuntimeRegistry` 创建；全局操作走 `AgentProviderGlobalRuntime`，会话实例只由 `AgentConversationBinding.beginTurn()` 惰性创建。Binding 显式区分 dormant/starting/attached/cleared，只有匹配 runtime identity 的 cleared 才是断连。RuntimeController 不持有 lease/scope/pin，空闲回收归 Binding Manager。
+- Workspace entry 创建时一次性绑定 thread、Binding 与 RuntimeController；RuntimeController 不提供跨 thread 切换/恢复兼容入口，只允许更新 project/file context。Registry 获取 runtime 必须显式传 scope。
 - 真实 thread 的 Binding 不得原地改绑；fork 返回的 session 走 Shell 的新 thread 通用登记/选择流程，后续操作只作用于 fork 结果。
 - `AgentProviderBundle` 是 Application / Presentation 的唯一能力入口，由 `createBundle` 直接创建；旧 `AgentProvider` 大接口已删除。每个 Binding 独占一份不可变权限快照，不得恢复跨 provider/runtime/thread 的权限注册表。静态能力默认值由 data 组合层注入，Domain 不按厂商名称 switch。
 

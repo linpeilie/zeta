@@ -204,6 +204,8 @@ class _AgentUsageRefreshButton extends ConsumerWidget {
     final controller = ref.read(agentUsagePanelSliceProvider.notifier);
     return IdeTooltip(
       message: context.l10n.usageRefreshUsage,
+      // G8：IdeIconButton 没有 iconDense，且不接受自定义 16px 图标；
+      // 统计刷新继续用 small+iconDense，避免被撑到 compact 24px。
       child: sf.IconButton.ghost(
         key: const ValueKey('agent-usage-refresh-button'),
         onPressed: controller.isLoading

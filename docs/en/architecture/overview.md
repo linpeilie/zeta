@@ -19,14 +19,15 @@ So the architecture revolves around exactly one question: **how do we keep provi
 ```mermaid
 flowchart TD
     main["main.dart<br/><i>bootstrap only</i>"] --> app["app<br/><i>single composition point · DI</i>"]
-    app --> pres["presentation<br/><i>widgets · view models</i>"]
-    app --> appl["application<br/><i>workflow orchestration</i>"]
+    app --> pres["presentation<br/><i>widgets · region selectors</i>"]
+    app --> appl["application<br/><i>workflow · RuntimeController</i>"]
     app --> data["data<br/><i>protocol adapters · storage</i>"]
     pres --> appl
     pres --> domain
     appl --> domain["domain<br/><i>pure models and contracts</i>"]
     data --> domain
     pres --> uicore["zeta_ui<br/><i>theme tokens · workbench primitives</i>"]
+    pres --> md["zeta_markdown<br/><i>Markdown rendering · upstream fork</i>"]
 
     classDef pure fill:#1B84FF22,stroke:#1B84FF
     class domain pure
@@ -41,7 +42,7 @@ lib/src/features/<feature>/
 ├── domain/         models, contracts, pure rules
 ├── application/    controllers, workflow orchestration
 ├── data/           protocol adapters, storage implementations
-└── presentation/   widgets, view models
+└── presentation/   widgets, region selectors
 ```
 
 Existing features: `agent` (provider abstraction and conversation), `agent_management` (CLI detection and diagnostics), `desktop_notifications`, `ide_session` (restore), `project_threads`, `settings`, `usage_statistics`, `workspace` (file tree).
@@ -61,12 +62,14 @@ flowchart LR
     pipe --> proc["EventProcessor<br/><i>pure sync reducer</i>"]
     proc --> store["TimelineStore<br/><i>dumb merge by entryId</i>"]
     proc --> eff["EffectRunner<br/><i>side-effect exit</i>"]
-    store --> ui["AgentUiUpdatePort<br/>→ frame coalescing → widgets"]
+    store --> runtime["RuntimeController<br/>region projection + frame coalesce"]
+    runtime --> slice["SliceStore<br/>one RegionsRefreshed"]
+    slice --> ui["selector → AgentRegionBuilder"]
 
     classDef vendor fill:#F5A62333,stroke:#F5A623
     classDef neutral fill:#1B84FF22,stroke:#1B84FF
     class ad vendor
-    class ev,pipe,proc,store,ui neutral
+    class ev,pipe,proc,store,runtime,slice,ui neutral
 ```
 
 Exactly one box is orange. **Everything after it must be provider-agnostic** — that's the entire point of the design.
@@ -96,6 +99,26 @@ tool-scoped evidence.
 
 Before adding or changing an `AgentEvent`, work through all 16 items of the onboarding checklist in [developer guide §7](../../zh/development/developer_guide.md).
 
+## Conversation UI publish
+
+After TimelineStore there are only **two hops**. Do not reintroduce a ViewModel, `AgentConversationUiStateStore`, or `AgentConversationSliceComposition`:
+
+```mermaid
+flowchart LR
+    tl["TimelineStore"] --> rt["RuntimeController<br/>project regions · scheduler"]
+    rt --> sl["SliceStore<br/>one RegionsRefreshed"]
+    sl --> sel["SliceNotifier / family selector"]
+    sel --> rb["AgentRegionBuilder"]
+    rt --> cmd["CommandPort"]
+    cmd --> pane["AgentPane"]
+```
+
+- `AgentConversationRuntimeController` (application) owns the pipeline, region projection, `AgentUiUpdateScheduler`, CommandPort, and effects.
+- `AgentConversationSliceStore.connected` dispatches once per `AgentUiUpdateRequest`, by region.
+- Widgets read a region only through `AgentRegionBuilder`'s `ref.watch(selector(bindingKey))`. Send goes through `agentConversationCommandProvider`. High-frequency live-turn updates may use the presentation Flutter listenable adapter.
+- A workspace entry composes thread, Binding, RuntimeController, and SliceStore once. Context-panel visibility is AgentPane widget state, not an application snapshot.
+- The shell reads only `AgentConversationThreadSnapshot` (`selectedAgentController`).
+
 ## Provider capability negotiation
 
 Zeta doesn't assume every agent can do the same things. Each provider exposes a set of ports through `AgentProviderBundle`, only two of which are required:
@@ -119,7 +142,7 @@ flowchart TD
 
 **UI renders by capability, never by provider name.** When a port is absent or `capability = false`, the corresponding entry point never appears in the menu, and an accidental call from the application layer throws `UnsupportedError` — **silent success is forbidden**, because it makes users believe something took effect when it didn't.
 
-The bundle is a strict boundary: the factory creates a native `AgentProviderBundle` directly, and the old `AgentProvider` facade is gone. View models only retain neutral ports. Static capability defaults are injected by the data composition layer; Shared Domain does not switch on vendor names.
+The bundle is a strict boundary: the factory creates a native `AgentProviderBundle` directly, and the old `AgentProvider` facade is gone. The RuntimeController only retains neutral ports. Static capability defaults are injected by the data composition layer; Shared Domain does not switch on vendor names.
 
 This is also what makes "adding a provider without touching shared code" realistic. The normal scope of a new provider is:
 
@@ -131,7 +154,7 @@ If you find yourself needing to change a shared layer, stop and open an issue �
 
 ## Conversation bindings and provider lifecycle
 
-Panes and view models never own provider processes directly:
+Panes and RuntimeControllers never own provider processes directly:
 
 ```mermaid
 flowchart LR
@@ -139,13 +162,13 @@ flowchart LR
     Global --> Registry["ProviderRuntimeRegistry"]
     Manager["ConversationBindingManager"] --> Binding["ConversationBinding"]
     Binding --> Registry
-    VM["ConversationViewModel"] --> Global
-    VM --> Binding
+    RT["RuntimeController"] --> Global
+    RT --> Binding
 ```
 
 - The registry is the sole owner of instances and child processes. There is one non-reaped global runtime per provider ID.
 - A binding uniquely represents one logical conversation by draft/thread key and owns its session runtime, event generation, single-conversation permission snapshot, and active operations; permission state is not kept in a cross-conversation registry.
-- The workspace composes a matching thread summary, binding, and view model once when creating an entry. A view model's thread identity is fixed; it may update only project/file context, while selecting another thread selects another entry.
+- The workspace composes a matching thread summary, binding, and RuntimeController once when creating an entry. A RuntimeController's thread identity is fixed; it may update only project/file context, while selecting another thread selects another entry.
 - Creating a draft, opening a thread, or reading history/models/skills does not start a session runtime. Only the first submitted turn calls `beginTurn()`.
 - A binding distinguishes dormant, starting, attached, and cleared explicitly. Starting is not a disconnect; only a cleared transition for the matching runtime identity may settle the current turn as interrupted.
 - A binding already attached to a real thread is never rebound in place. The session returned by fork is registered like any newly created thread, then the shell reuses the standard selection flow to create its separate entry/binding; subsequent history, rename, and send operations target that new thread.
@@ -236,6 +259,7 @@ For the user-facing file listing and cleanup instructions, see the [data referen
 | What you want to do | Mainly touches |
 | --- | --- |
 | Restyle a timeline card | `features/agent/presentation` + `zeta_ui` tokens |
+| Change Markdown rendering (syntax set / code palette / code toolbar / context menu / cursor) | injection points in `packages/zeta_markdown` plus the mapping in `agent_pane_styles.dart`; read `packages/zeta_markdown/UPSTREAM.md` first |
 | Fix a streaming glitch in one provider | that provider's `data/` adapter / reducer |
 | Add or fix provider file-change evidence | that provider's `data/` tracker + neutral domain/presentation; the shared Store only carries it mechanically |
 | Surface a capability the provider already supports | domain port and capability → application → presentation |

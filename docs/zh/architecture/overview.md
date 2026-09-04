@@ -19,14 +19,15 @@ Zeta 是一个**桌面壳层**：它不含模型，也不实现编辑器。它�
 ```mermaid
 flowchart TD
     main["main.dart<br/><i>只做启动</i>"] --> app["app<br/><i>唯一装配点 · DI</i>"]
-    app --> pres["presentation<br/><i>Widget · ViewModel</i>"]
-    app --> appl["application<br/><i>工作流编排 · Controller</i>"]
+    app --> pres["presentation<br/><i>Widget · region selector</i>"]
+    app --> appl["application<br/><i>工作流编排 · RuntimeController</i>"]
     app --> data["data<br/><i>协议适配 · 存储实现</i>"]
     pres --> appl
     pres --> domain
     appl --> domain["domain<br/><i>纯模型与契约 · 不依赖 UI</i>"]
     data --> domain
     pres --> uicore["zeta_ui<br/><i>主题 token · 工作台原语</i>"]
+    pres --> md["zeta_markdown<br/><i>Markdown 渲染 · fork 自上游</i>"]
 
     classDef pure fill:#1B84FF22,stroke:#1B84FF
     class domain pure
@@ -41,7 +42,7 @@ lib/src/features/<feature>/
 ├── domain/         模型、契约、纯规则
 ├── application/    controller、工作流编排
 ├── data/           协议适配、存储实现
-└── presentation/   Widget、ViewModel
+└── presentation/   Widget、region selector
 ```
 
 现有 feature：`agent`（Provider 抽象与对话）、`agent_management`（CLI 检测与诊断）、`desktop_notifications`、`ide_session`（会话恢复）、`project_threads`、`settings`、`usage_statistics`、`workspace`（文件树）。
@@ -61,12 +62,14 @@ flowchart LR
     pipe --> proc["EventProcessor<br/><i>纯同步 reducer</i>"]
     proc --> store["TimelineStore<br/><i>按 entryId dumb merge</i>"]
     proc --> eff["EffectRunner<br/><i>副作用出口</i>"]
-    store --> ui["AgentUiUpdatePort<br/>→ 按 frame 合并 → Widget"]
+    store --> runtime["RuntimeController<br/>region 投影 + frame 合并"]
+    runtime --> slice["SliceStore<br/>一次 RegionsRefreshed"]
+    slice --> ui["selector → AgentRegionBuilder"]
 
     classDef vendor fill:#F5A62333,stroke:#F5A623
     classDef neutral fill:#1B84FF22,stroke:#1B84FF
     class ad vendor
-    class ev,pipe,proc,store,ui neutral
+    class ev,pipe,proc,store,runtime,slice,ui neutral
 ```
 
 橙色的只有一格。**那格之后的所有东西都必须是 Provider 无关的**，这是整条链路的设计意图。
@@ -95,6 +98,26 @@ UI 只按 evidence 类型渲染；Codex 的 turn aggregate 是显式 `liveOnly` 
 
 新增或修改 `AgentEvent` 之前，要逐项走完[开发者文档 §7](../development/developer_guide.md) 的 16 条接入清单。
 
+## 会话 UI 发布
+
+TimelineStore 之后只允许**两跳**。禁止再经 ViewModel、`AgentConversationUiStateStore` 或 `AgentConversationSliceComposition` 转手：
+
+```mermaid
+flowchart LR
+    tl["TimelineStore"] --> rt["RuntimeController<br/>投影 region · scheduler"]
+    rt --> sl["SliceStore<br/>一次 RegionsRefreshed"]
+    sl --> sel["SliceNotifier / family selector"]
+    sel --> rb["AgentRegionBuilder"]
+    rt --> cmd["CommandPort"]
+    cmd --> pane["AgentPane"]
+```
+
+- `AgentConversationRuntimeController`（application）拥有 pipeline、region 投影、`AgentUiUpdateScheduler`、CommandPort 与 effect。
+- `AgentConversationSliceStore.connected` 对每个 `AgentUiUpdateRequest` 做一次按 region 的 dispatch。
+- Widget 读 region 只经 `AgentRegionBuilder` 的 `ref.watch(selector(bindingKey))`；发送走 `agentConversationCommandProvider`。高频 live turn 可由 presentation 的 Flutter listenable 适配。
+- Workspace entry 一次性组合 thread、Binding、RuntimeController 与 SliceStore。上下文面板显隐属于 AgentPane 的 Widget 状态，不进 application 快照。
+- Shell 只读 `AgentConversationThreadSnapshot`（`selectedAgentController`）。
+
 ## Provider 能力协商
 
 Zeta 不假设所有 Agent 能力相同。每个 Provider 通过 `AgentProviderBundle` 暴露一组端口，必选的只有两个：
@@ -119,7 +142,7 @@ flowchart TD
 **UI 按 capability 渲染，绝不按 provider 名字硬编码。** 端口缺失或 `capability = false` 时，对应入口根本不会出现在菜单里；应用层误调用会抛 `UnsupportedError`——**不允许静默成功**，因为静默成功会让用户以为操作生效了。
 
 Bundle 是严格边界：工厂直接创建原生 `AgentProviderBundle`，旧 `AgentProvider`
-大接口已删除。ViewModel 只持有中立端口。静态能力默认值由 data 组合层注入，
+大接口已删除。RuntimeController 只持有中立端口。静态能力默认值由 data 组合层注入，
 Shared Domain 不按厂商名称 switch。
 
 这也是"新增 Provider 不用改共享层"的底气所在。正常的接入范围是：
@@ -132,7 +155,7 @@ Shared Domain 不按厂商名称 switch。
 
 ## 会话 Binding 与 Provider 生命周期
 
-Provider 进程不会由 Pane 或 ViewModel 直接持有：
+Provider 进程不会由 Pane 或 RuntimeController 直接持有：
 
 ```mermaid
 flowchart LR
@@ -140,13 +163,13 @@ flowchart LR
     Global --> Registry["ProviderRuntimeRegistry"]
     Manager["ConversationBindingManager"] --> Binding["ConversationBinding"]
     Binding --> Registry
-    VM["ConversationViewModel"] --> Global
-    VM --> Binding
+    RT["RuntimeController"] --> Global
+    RT --> Binding
 ```
 
 - Registry 是实例和子进程的唯一所有者；global runtime 每个 Provider ID 一个，永不空闲回收。
 - Binding 以 draft/thread key 唯一代表一个逻辑会话，并独占 session runtime、事件 generation、单会话权限快照和活跃操作；权限状态不再使用跨会话注册表。
-- Workspace 创建 entry 时一次性组合匹配的 thread summary、Binding 与 ViewModel；一个 ViewModel 的 thread 身份固定，只能更新 project/file context，切换 thread 必须选择另一个 entry。
+- Workspace 创建 entry 时一次性组合匹配的 thread summary、Binding 与 RuntimeController；一个 RuntimeController 的 thread 身份固定，只能更新 project/file context，切换 thread 必须选择另一个 entry。
 - 新建草稿、打开 thread、读取历史/模型/Skill 不启动 session runtime；只有首次提交调用 `beginTurn()`。
 - Binding 显式区分 dormant、starting、attached 与 cleared；启动中不是断连，只有匹配
   runtime identity 的 cleared 转换才会把当前 turn 结算为中断。
@@ -236,6 +259,7 @@ feature store 也不得在 presentation / application 里自己拼 `File('~/.zet
 | 你想做的事 | 主要涉及 |
 | --- | --- |
 | 调整时间线某种卡片的外观 | `features/agent/presentation` + `zeta_ui` token |
+| 改 Markdown 渲染（语法集 / 代码高亮配色 / 代码块工具栏 / 右键菜单 / 光标） | `packages/zeta_markdown` 的注入点 + `agent_pane_styles.dart` 的映射；先读 `packages/zeta_markdown/UPSTREAM.md` |
 | 修某个 Provider 的流式显示异常 | 该 Provider 的 `data/` adapter / reducer |
 | 接入或修复 Provider 文件变更证据 | 该 Provider 的 `data/` tracker + 中立 domain/presentation；共享 Store 只机械透传 |
 | 加一个 Provider 已支持但 UI 没露出的能力 | domain 端口与 capability → application → presentation |

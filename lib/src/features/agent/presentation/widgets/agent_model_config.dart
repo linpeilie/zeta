@@ -1,7 +1,19 @@
-part of '../agent_pane.dart';
+import 'dart:async';
+import 'dart:math' as math;
 
-const double _composerSelectorPopoverPreferredWidth = 288;
-const double _composerSelectorPopoverMaxHeight = 360;
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
+
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_ui/zeta_ui.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_model_config_ui_state.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
+
+const double composerSelectorPopoverPreferredWidth = 288;
+const double composerSelectorPopoverMaxHeight = 360;
 const double _composerSelectorRowHeight = 32;
 
 /// Popover 展开态 + 模型配置快照。
@@ -46,8 +58,8 @@ class _AgentModelConfigPopoverState {
 }
 
 /// Composer 中统一的模型配置入口与 Popover 协调器。
-class _AgentModelConfig extends StatefulWidget {
-  const _AgentModelConfig({
+class AgentModelConfig extends StatefulWidget {
+  const AgentModelConfig({
     required this.state,
     required this.onSelectModel,
     required this.onSelectReasoningEffort,
@@ -55,6 +67,7 @@ class _AgentModelConfig extends StatefulWidget {
     required this.onResolveCompatibility,
     required this.onRetrySave,
     required this.onPopoverClosed,
+    super.key,
   });
 
   final AgentModelConfigUiState state;
@@ -66,15 +79,15 @@ class _AgentModelConfig extends StatefulWidget {
   final VoidCallback onPopoverClosed;
 
   @override
-  State<_AgentModelConfig> createState() => _AgentModelConfigState();
+  State<AgentModelConfig> createState() => _AgentModelConfigState();
 }
 
-class _AgentModelConfigState extends State<_AgentModelConfig> {
+class _AgentModelConfigState extends State<AgentModelConfig> {
   late final ValueNotifier<_AgentModelConfigPopoverState> _popoverState;
   final FocusNode _triggerFocusNode = FocusNode(
     debugLabel: 'agent-model-config-trigger',
   );
-  IdePopoverHandle<void>? _popoverEntry;
+  late final IdePopoverController _popoverController;
   String? _desiredExpandedModelId;
   int _runtimeSyncRevision = 0;
 
@@ -84,10 +97,25 @@ class _AgentModelConfigState extends State<_AgentModelConfig> {
     _popoverState = ValueNotifier<_AgentModelConfigPopoverState>(
       _AgentModelConfigPopoverState(snapshot: widget.state),
     );
+    _popoverController = IdePopoverController(
+      triggerFocusNode: _triggerFocusNode,
+      onOpenChanged: () {
+        if (mounted) {
+          setState(() {});
+        }
+      },
+      onClosed: () {
+        _desiredExpandedModelId = null;
+        _popoverState.value = _AgentModelConfigPopoverState(
+          snapshot: widget.state,
+        );
+        widget.onPopoverClosed();
+      },
+    );
   }
 
   @override
-  void didUpdateWidget(covariant _AgentModelConfig oldWidget) {
+  void didUpdateWidget(covariant AgentModelConfig oldWidget) {
     super.didUpdateWidget(oldWidget);
     var expandedModelId = _desiredExpandedModelId;
     if (widget.state.saveError != null &&
@@ -110,7 +138,7 @@ class _AgentModelConfigState extends State<_AgentModelConfig> {
       if (mounted && syncRevision == _runtimeSyncRevision) {
         _popoverState.value = _AgentModelConfigPopoverState(
           snapshot: widget.state,
-          expandedModelId: _popoverEntry == null
+          expandedModelId: !_popoverController.isOpen
               ? null
               : _desiredExpandedModelId,
         );
@@ -120,45 +148,24 @@ class _AgentModelConfigState extends State<_AgentModelConfig> {
 
   @override
   void dispose() {
-    _popoverEntry?.dismiss();
+    _popoverController.dispose();
     _triggerFocusNode.dispose();
     _popoverState.dispose();
     super.dispose();
   }
 
   void _togglePopover() {
-    if (_popoverEntry != null) {
-      _popoverEntry!.dismiss();
+    if (_popoverController.isOpen) {
+      _popoverController.dismiss();
       return;
     }
     _showPopover();
   }
 
   void _showPopover() {
-    if (_popoverEntry != null || widget.state.models.isEmpty) {
+    if (_popoverController.isOpen || widget.state.models.isEmpty) {
       return;
     }
-    final mediaQuery = MediaQuery.of(context);
-    final viewport = mediaQuery.size;
-    final renderBox = context.findRenderObject() as RenderBox?;
-    final origin = renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
-    final triggerHeight = renderBox?.size.height ?? 28;
-    final spaceAbove = origin.dy;
-    final spaceBelow = viewport.height - origin.dy - triggerHeight;
-    final openAbove = spaceAbove > spaceBelow && spaceBelow < 260;
-    final availablePopoverHeight =
-        (openAbove ? spaceAbove : spaceBelow) -
-        IdeSpacing.space6 -
-        IdeSpacing.space12;
-    final width = math.max(
-      1.0,
-      math.min(_composerSelectorPopoverPreferredWidth, viewport.width - 24),
-    );
-    final maxHeight = math.max(
-      1.0,
-      math.min(_composerSelectorPopoverMaxHeight, availablePopoverHeight),
-    );
-    final reduceMotion = mediaQuery.disableAnimations;
 
     // 打开时直接展开当前已选模型的额外配置（思考程度、Fast 等），
     // 避免用户还要再点一次已选项才能看到。
@@ -168,60 +175,30 @@ class _AgentModelConfigState extends State<_AgentModelConfig> {
         expandedModelId: widget.state.selectedModelId,
       ),
     );
-    final entry = showIdePopover<void>(
+    _popoverController.show(
       context: context,
-      alignment: openAbove ? Alignment.bottomLeft : Alignment.topLeft,
-      anchorAlignment: openAbove ? Alignment.topLeft : Alignment.bottomLeft,
-      widthConstraint: IdePopoverConstraint.intrinsic,
-      // 列表使用 shrink-wrap viewport；避免底层 popover 请求其 intrinsic
-      // height，并由组件自身的 maxHeight 负责滚动约束。
-      heightConstraint: IdePopoverConstraint.flexible,
-      offset: Offset(0, openAbove ? -6 : 6),
-      margin: const EdgeInsets.all(IdeSpacing.space12),
-      allowInvertVertical: false,
-      showDuration: reduceMotion
-          ? const Duration(milliseconds: 80)
-          : IdeMotion.durationFast,
-      dismissDuration: reduceMotion
-          ? const Duration(milliseconds: 80)
-          : IdeMotion.durationFast,
-      builder: (context) => MediaQuery(
-        data: mediaQuery,
-        child: _ModelConfigPopover(
-          stateListenable: _popoverState,
-          width: width,
-          maxHeight: maxHeight,
-          expansionAlignment: openAbove
-              ? Alignment.bottomLeft
-              : Alignment.topLeft,
-          onSelectModel: _selectModel,
-          onSelectReasoningEffort: _selectReasoningEffort,
-          onSelectFastEnabled: _selectFastEnabled,
-          onResolveCompatibility: () {
-            unawaited(widget.onResolveCompatibility());
-          },
-          onRetrySave: () {
-            unawaited(widget.onRetrySave());
-          },
-          onDismiss: () => _popoverEntry?.dismiss(),
-        ),
+      preferredWidth: composerSelectorPopoverPreferredWidth,
+      preferredMaxHeight: composerSelectorPopoverMaxHeight,
+      minimumSpaceBelow: 260,
+      builder: (context, layout) => _ModelConfigPopover(
+        stateListenable: _popoverState,
+        width: layout.width,
+        maxHeight: layout.maxHeight,
+        expansionAlignment: layout.openAbove
+            ? Alignment.bottomLeft
+            : Alignment.topLeft,
+        onSelectModel: _selectModel,
+        onSelectReasoningEffort: _selectReasoningEffort,
+        onSelectFastEnabled: _selectFastEnabled,
+        onResolveCompatibility: () {
+          unawaited(widget.onResolveCompatibility());
+        },
+        onRetrySave: () {
+          unawaited(widget.onRetrySave());
+        },
+        onDismiss: _popoverController.dismiss,
       ),
     );
-    _popoverEntry = entry;
-    setState(() {});
-    entry.future.whenComplete(() {
-      if (!mounted || !identical(_popoverEntry, entry)) {
-        return;
-      }
-      _popoverEntry = null;
-      _desiredExpandedModelId = null;
-      _popoverState.value = _AgentModelConfigPopoverState(
-        snapshot: widget.state,
-      );
-      widget.onPopoverClosed();
-      setState(() {});
-      _triggerFocusNode.requestFocus();
-    });
   }
 
   void _selectModel(AgentModelInfo model) {
@@ -351,12 +328,12 @@ class _AgentModelConfigState extends State<_AgentModelConfig> {
 
   @override
   Widget build(BuildContext context) {
-    final displayState = _popoverEntry == null
+    final displayState = !_popoverController.isOpen
         ? widget.state
         : _popoverState.value.snapshot;
     return _ModelConfigTrigger(
       state: displayState,
-      open: _popoverEntry != null,
+      open: _popoverController.isOpen,
       focusNode: _triggerFocusNode,
       onPressed: widget.state.models.isEmpty ? null : _togglePopover,
     );
@@ -411,152 +388,93 @@ class _ModelConfigTrigger extends StatelessWidget {
       tooltip.write('\n$refreshError');
     }
 
-    return _ComposerSelectorTrigger(
-      surfaceKey: const ValueKey('agent-model-selector'),
-      tooltip: tooltip.toString(),
-      semanticLabel: refreshError == null
-          ? context.l10n.agentModelConfigSemantic(modelLabel)
-          : context.l10n.agentModelConfigErrorSemantic(
-              modelLabel,
-              refreshError,
-            ),
-      open: open,
-      focusNode: focusNode,
-      onPressed: onPressed,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // 只限制模型名本身；外层保持无界，避免触发器在高 DPI 下
-          // 扩张到最大宽度。
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 140),
-            child: Text(
-              modelLabel,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: textStyles.identifier.copyWith(
-                color: colors.textSecondary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          if (effortLabel != null) ...[
-            const SizedBox(width: IdeSpacing.space4),
-            Text(
-              '· $effortLabel',
-              maxLines: 1,
-              style: textStyles.bodySmall.copyWith(color: colors.textTertiary),
-            ),
-          ],
-          if (state.selectedFastEnabled) ...[
-            const SizedBox(width: IdeSpacing.space4),
-            Icon(
-              Icons.bolt_rounded,
-              key: const ValueKey('agent-model-fast-enabled'),
-              size: 13,
-              color: colors.warning,
-            ),
-          ],
-          if (refreshError != null) ...[
-            const SizedBox(width: IdeSpacing.space4),
-            Icon(
-              Icons.error_outline_rounded,
-              key: const ValueKey('agent-model-refresh-error'),
-              size: 13,
-              color: colors.error,
-            ),
-          ],
-          const SizedBox(width: IdeSpacing.space4),
-          if (state.isRefreshing)
-            IdeBusySpinner(
-              size: 12,
-              strokeWidth: 1.5,
-              color: colors.textTertiary,
-            )
-          else
-            AnimatedRotation(
-              turns: open ? 0.5 : 0,
-              duration: MediaQuery.disableAnimationsOf(context)
-                  ? Duration.zero
-                  : IdeMotion.durationNormal,
-              curve: IdeMotion.curveDefault,
-              child: Icon(
-                Icons.keyboard_arrow_down_rounded,
-                size: 13,
-                color: colors.textTertiary,
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Composer 选择器共用触发器：模式、模型与权限使用同一套尺寸和交互反馈。
-class _ComposerSelectorTrigger extends StatelessWidget {
-  const _ComposerSelectorTrigger({
-    required this.surfaceKey,
-    required this.tooltip,
-    required this.semanticLabel,
-    required this.open,
-    required this.focusNode,
-    required this.onPressed,
-    required this.child,
-  });
-
-  final Key surfaceKey;
-  final String tooltip;
-  final String semanticLabel;
-  final bool open;
-  final FocusNode focusNode;
-  final VoidCallback? onPressed;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = IdeColors.of(context);
     return IdeTooltip(
-      // 弹层打开后禁用 tooltip，避免延迟提示覆盖选项。
-      message: tooltip,
+      message: tooltip.toString(),
       enabled: !open,
-      child: PaneInteractiveSurface(
-        key: surfaceKey,
+      child: IdeButton(
+        key: const ValueKey('agent-model-selector'),
+        label: modelLabel,
+        semanticLabel: refreshError == null
+            ? context.l10n.agentModelConfigSemantic(modelLabel)
+            : context.l10n.agentModelConfigErrorSemantic(
+                modelLabel,
+                refreshError,
+              ),
+        variant: open ? IdeButtonVariant.secondary : IdeButtonVariant.ghost,
         focusNode: focusNode,
         onPressed: onPressed,
-        enabled: onPressed != null,
-        selected: open,
-        height: 28,
-        padding: const EdgeInsets.symmetric(horizontal: IdeSpacing.space8),
-        borderRadius: IdeRadius.allSmall,
-        backgroundColor: Colors.transparent,
-        hoverBackgroundColor: colors.border.withValues(alpha: 0.2),
-        pressedBackgroundColor: colors.border.withValues(alpha: 0.32),
-        selectedBackgroundColor: colors.frame.withValues(alpha: 0.72),
-        focusBorderColor: colors.focusRing,
-        semanticLabel: semanticLabel,
-        child: child,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // 只限制模型名本身；外层保持无界，避免触发器在高 DPI 下
+            // 扩张到最大宽度。
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 140),
+              child: Text(
+                modelLabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: textStyles.bodySmall.copyWith(
+                  color: colors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            if (effortLabel != null) ...[
+              const SizedBox(width: IdeSpacing.space4),
+              Text(
+                '· $effortLabel',
+                maxLines: 1,
+                style: textStyles.bodySmall.copyWith(
+                  color: colors.textTertiary,
+                ),
+              ),
+            ],
+            if (state.selectedFastEnabled) ...[
+              const SizedBox(width: IdeSpacing.space4),
+              IdeIconBox(
+                Icons.bolt_rounded,
+                key: const ValueKey('agent-model-fast-enabled'),
+                size: 13,
+                color: colors.warning,
+              ),
+            ],
+            if (refreshError != null) ...[
+              const SizedBox(width: IdeSpacing.space4),
+              IdeIconBox(
+                Icons.error_outline_rounded,
+                key: const ValueKey('agent-model-refresh-error'),
+                size: 13,
+                color: colors.error,
+              ),
+            ],
+            const SizedBox(width: IdeSpacing.space4),
+            if (state.isRefreshing)
+              IdeIconBox.custom(
+                child: IdeBusySpinner(
+                  size: 12,
+                  strokeWidth: 1.5,
+                  color: colors.textTertiary,
+                ),
+              )
+            else
+              IdeIconBox.custom(
+                child: AnimatedRotation(
+                  turns: open ? 0.5 : 0,
+                  duration: MediaQuery.disableAnimationsOf(context)
+                      ? Duration.zero
+                      : IdeMotion.durationNormal,
+                  curve: IdeMotion.curveDefault,
+                  child: Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    size: 13,
+                    color: colors.textTertiary,
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
-    );
-  }
-}
-
-/// Composer 选择器共用弹层表面。
-///
-/// 与 [sf.SelectPopup] 自带卡统一：同一张 shadcn surface 卡（底色
-/// `colorScheme.card`、1px muted 边框、零内边距），避免选择弹层再叠一层
-/// 独立卡片造成「两层」视觉。非 SelectPopup 的 picker（skill/mention/
-/// slash/model 列表）使用本表面，与 SelectPopup 路径视觉一致。
-class _ComposerSelectorPanel extends StatelessWidget {
-  const _ComposerSelectorPanel({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return sf.Card(
-      padding: EdgeInsets.zero,
-      clipBehavior: Clip.antiAlias,
-      child: child,
     );
   }
 }
@@ -798,17 +716,16 @@ class _ModelConfigPopoverState extends State<_ModelConfigPopover> {
                 width: widget.width,
                 child: ConstrainedBox(
                   constraints: BoxConstraints(maxHeight: widget.maxHeight),
-                  child: _ComposerSelectorPanel(
+                  child: IdePopoverPanel(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         if (state.appliesNextTurn)
-                          _NextTurnModelConfigBanner(colors: colors),
+                          const _NextTurnModelConfigBanner(),
                         if (state.selectionNotice != null)
                           _ModelSelectionNoticeBanner(
                             message: state.selectionNotice!,
-                            colors: colors,
                           ),
                         Flexible(
                           child: Listener(
@@ -886,77 +803,32 @@ class _ModelConfigPopoverState extends State<_ModelConfigPopover> {
 }
 
 class _NextTurnModelConfigBanner extends StatelessWidget {
-  const _NextTurnModelConfigBanner({required this.colors});
-
-  final IdeColors colors;
+  const _NextTurnModelConfigBanner();
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return IdeStatusCard(
       key: const ValueKey('agent-model-next-turn-banner'),
-      height: 30,
-      padding: const EdgeInsets.symmetric(horizontal: IdeSpacing.space10),
-      color: colors.info.withValues(alpha: 0.1),
-      child: Row(
-        children: [
-          Icon(Icons.info_outline_rounded, size: 14, color: colors.info),
-          const SizedBox(width: IdeSpacing.space6),
-          Text(
-            context.l10n.agentConfigNextTurn,
-            style: IdeTextStyles.of(context).bodySmall.copyWith(
-              color: colors.info,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
+      tone: IdeStatusCardTone.info,
+      density: IdeStatusCardDensity.compact,
+      title: context.l10n.agentConfigNextTurn,
     );
   }
 }
 
 class _ModelSelectionNoticeBanner extends StatelessWidget {
-  const _ModelSelectionNoticeBanner({
-    required this.message,
-    required this.colors,
-  });
+  const _ModelSelectionNoticeBanner({required this.message});
 
   final String message;
-  final IdeColors colors;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return IdeStatusCard(
       key: const ValueKey('agent-model-auto-switch-notice'),
-      constraints: const BoxConstraints(minHeight: 30),
-      padding: const EdgeInsets.symmetric(
-        horizontal: IdeSpacing.space10,
-        vertical: IdeSpacing.space6,
-      ),
-      color: colors.info.withValues(alpha: 0.1),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 1),
-            child: Icon(
-              Icons.info_outline_rounded,
-              size: 14,
-              color: colors.info,
-            ),
-          ),
-          const SizedBox(width: IdeSpacing.space6),
-          Expanded(
-            child: Text(
-              message,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: IdeTextStyles.of(
-                context,
-              ).bodySmall.copyWith(color: colors.info),
-            ),
-          ),
-        ],
-      ),
+      tone: IdeStatusCardTone.info,
+      density: IdeStatusCardDensity.compact,
+      title: message,
+      titleMaxLines: 2,
     );
   }
 }

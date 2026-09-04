@@ -11,8 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 ///
 /// 这两条以前只写在文档里：仓库有 Package 边界守卫，却没有 feature 内部的分层
 /// 守卫，于是 Phase 2 切片一度把五个 region state 从 presentation import 进
-/// application，和 `agent_conversation_ui_state.dart → application` 形成闭环，
-/// 而 analyze 与全量测试都是绿的。本守卫补上这个缺口。
+/// application，形成闭环，而 analyze 与全量测试都是绿的。本守卫补上这个缺口。
 void main() {
   final featuresRoot = Directory('lib/src/features');
 
@@ -160,6 +159,30 @@ void main() {
       isEmpty,
       reason:
           'Provider identity/私有配置只能由 data 或 app 组合层投影：\n'
+          '${offenders.join('\n')}',
+    );
+  });
+
+  test('agent presentation 不得依赖具体 Provider package', () {
+    // WP-7 T3 / WP-1 D1：scheduler 的指标标签必须由组合层注入，presentation
+    // 不能再直接 import zeta_agent_providers，否则无法下沉到 application。
+    final presentationFiles = Directory('lib/src/features/agent/presentation')
+        .listSync(recursive: true)
+        .whereType<File>()
+        .where((file) => file.path.endsWith('.dart'));
+    final offenders = <String>[
+      for (final file in presentationFiles)
+        if (importsOf(
+          file,
+        ).any((uri) => uri.startsWith('package:zeta_agent_providers/')))
+          normalize(file.path),
+    ];
+
+    expect(
+      offenders,
+      isEmpty,
+      reason:
+          'agent presentation 的 Provider 身份标签只能由 data/app 组合层注入：\n'
           '${offenders.join('\n')}',
     );
   });

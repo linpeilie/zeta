@@ -6,15 +6,15 @@ import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_intent.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
-import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
-import 'package:zeta/src/app/conversation_slice/agent_conversation_slice_composition.dart';
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 import 'agent_conversation_ui_state_fixtures.dart';
 import 'harness/agent_pane_test_harness.dart';
+import '../../../testing/memory_agent_composer_attachment_store.dart';
 
 /// Phase 2 §8 验收表里与切片 UI 直接相关的几条。
 void main() {
@@ -30,16 +30,16 @@ void main() {
       );
       addTearDown(first.dispose);
       addTearDown(second.dispose);
-      final firstBinding = AgentConversationSliceComposition(
+      final firstStore = AgentConversationSliceStore.connected(
         regions: first,
         commands: first,
       );
-      final secondBinding = AgentConversationSliceComposition(
+      final secondStore = AgentConversationSliceStore.connected(
         regions: second,
         commands: second,
       );
-      addTearDown(firstBinding.dispose);
-      addTearDown(secondBinding.dispose);
+      addTearDown(firstStore.dispose);
+      addTearDown(secondStore.dispose);
 
       // 两个 Binding 身份必须不同，否则这条测试证明不了隔离。
       expect(
@@ -52,15 +52,15 @@ void main() {
           first: first,
           second: second,
           stores: <AgentConversationBindingKey, AgentConversationSliceStore>{
-            first.conversationBinding.key: firstBinding.store,
-            second.conversationBinding.key: secondBinding.store,
+            first.conversationBinding.key: firstStore,
+            second.conversationBinding.key: secondStore,
           },
         ),
       );
       await pumpAgentPaneUi(tester);
 
       // 只推第一个会话的切片。
-      firstBinding.store.refreshRegions(
+      firstStore.refreshRegions(
         AgentConversationRegionsRefreshed(
           header: agentHeaderStateFixture(title: '只属于会话一'),
         ),
@@ -69,7 +69,7 @@ void main() {
 
       expect(find.text('只属于会话一'), findsOneWidget);
       expect(
-        secondBinding.store.state.header.title,
+        secondStore.state.header.title,
         isNot('只属于会话一'),
         reason: '第二个会话的切片状态不得被串改',
       );
@@ -86,32 +86,32 @@ void main() {
       );
       addTearDown(first.dispose);
       addTearDown(second.dispose);
-      final firstBinding = AgentConversationSliceComposition(
+      final firstStore = AgentConversationSliceStore.connected(
         regions: first,
         commands: first,
       );
-      final secondBinding = AgentConversationSliceComposition(
+      final secondStore = AgentConversationSliceStore.connected(
         regions: second,
         commands: second,
       );
-      addTearDown(secondBinding.dispose);
+      addTearDown(secondStore.dispose);
 
       await tester.pumpWidget(
         _TwoPaneApp(
           first: first,
           second: second,
           stores: <AgentConversationBindingKey, AgentConversationSliceStore>{
-            first.conversationBinding.key: firstBinding.store,
-            second.conversationBinding.key: secondBinding.store,
+            first.conversationBinding.key: firstStore,
+            second.conversationBinding.key: secondStore,
           },
         ),
       );
       await pumpAgentPaneUi(tester);
 
-      firstBinding.dispose();
+      firstStore.dispose();
       await pumpAgentPaneUi(tester);
 
-      secondBinding.store.refreshRegions(
+      secondStore.refreshRegions(
         AgentConversationRegionsRefreshed(
           header: agentHeaderStateFixture(title: '第二个仍在更新'),
         ),
@@ -128,11 +128,11 @@ void main() {
         initialThread: agentPaneThread(id: 'thread-1', title: '会话一'),
       );
       addTearDown(viewModel.dispose);
-      final binding = AgentConversationSliceComposition(
+      final store = AgentConversationSliceStore.connected(
         regions: viewModel,
         commands: viewModel,
       );
-      addTearDown(binding.dispose);
+      addTearDown(store.dispose);
 
       final received = <AgentUiEffect>[];
       final subscription = viewModel.uiEffects.listen(received.add);
@@ -143,7 +143,7 @@ void main() {
           viewModel: viewModel,
           sliceStores:
               <AgentConversationBindingKey, AgentConversationSliceStore>{
-                viewModel.conversationBinding.key: binding.store,
+                viewModel.conversationBinding.key: store,
               },
         ),
       );
@@ -153,7 +153,7 @@ void main() {
       // 反复推切片、反复重建：一次性 effect 只走 stream，不进切片状态，
       // 因此重建既不会重放旧 effect，也不会凭空产生新的。
       for (var i = 0; i < 5; i += 1) {
-        binding.store.refreshRegions(
+        store.refreshRegions(
           AgentConversationRegionsRefreshed(
             header: agentHeaderStateFixture(title: '重建 $i'),
           ),
@@ -183,18 +183,27 @@ class _TwoPaneApp extends StatelessWidget {
     required this.stores,
   });
 
-  final AgentConversationViewModel first;
-  final AgentConversationViewModel second;
+  final AgentConversationRuntimeController first;
+  final AgentConversationRuntimeController second;
   final Map<AgentConversationBindingKey, AgentConversationSliceStore> stores;
 
   @override
   Widget build(BuildContext context) {
     final registry = AgentConversationSliceStoreRegistry()
-      ..bind(
-        (key) =>
+      ..bind((key) {
+        final store =
             stores[key] ??
-            (throw StateError('No test conversation slice for $key')),
-      );
+            (throw StateError('No test conversation slice for $key'));
+        final controller = key == first.conversationBinding.key
+            ? first
+            : key == second.conversationBinding.key
+            ? second
+            : null;
+        return AgentConversationSessionHandle(
+          store: store,
+          controller: controller,
+        );
+      });
     final ideTheme = buildIdeThemeData(
       brightness: Brightness.dark,
       codeFontFamily: 'CodeFont',
@@ -202,6 +211,7 @@ class _TwoPaneApp extends StatelessWidget {
     return ProviderScope(
       overrides: [
         agentConversationSliceStoreRegistryProvider.overrideWithValue(registry),
+        memoryAgentComposerAttachmentOverride(),
       ],
       child: IdeThemeScope(
         themeMode: ThemeMode.dark,
@@ -219,8 +229,8 @@ class _TwoPaneApp extends StatelessWidget {
           home: sf.Scaffold(
             child: Column(
               children: [
-                Expanded(child: AgentPane(viewModel: first)),
-                Expanded(child: AgentPane(viewModel: second)),
+                Expanded(child: AgentPane(controller: first)),
+                Expanded(child: AgentPane(controller: second)),
               ],
             ),
           ),

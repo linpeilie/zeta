@@ -3,6 +3,7 @@ import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_extent_descriptor.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection.dart';
+import 'package:zeta/src/features/agent/presentation/timeline_rendering/agent_timeline_renderers.dart';
 
 void main() {
   const layout = AgentTimelineLayoutContext(
@@ -18,7 +19,9 @@ void main() {
   );
 
   test('describeAll reuses unchanged prefix descriptors when tail grows', () {
-    final factory = AgentTimelineExtentDescriptorFactory();
+    final factory = AgentTimelineExtentDescriptorFactory(
+      registry: buildAgentTimelineRendererRegistry(),
+    );
     final toolEntry = AgentToolTimelineEntry(
       toolCall: const AgentToolCall(
         id: 'tool-1',

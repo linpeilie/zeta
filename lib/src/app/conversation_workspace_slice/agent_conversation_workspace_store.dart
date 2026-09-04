@@ -7,9 +7,10 @@ import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
-import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
-import 'package:zeta/src/app/conversation_slice/agent_conversation_slice_composition.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
+import 'package:zeta/src/features/agent/presentation/agent_ui_update_scheduler.dart';
 import 'package:zeta/src/features/workspace/application/workspace_file_corpus_port.dart';
 
 /// Agent Canvas 中单个常驻线程/草稿的逻辑标识。
@@ -71,7 +72,7 @@ final class AgentThreadWorkspaceDraftKey extends AgentThreadWorkspaceKey {
 
 /// Agent Canvas 中单个常驻 Pane 的运行时条目。
 ///
-/// 一个 entry 对应独立的 Binding 与 conversation view model；Provider 设置由
+/// 一个 entry 对应独立的 Binding 与 conversation runtime；Provider 设置由
 /// Workspace 共享，entryId 在草稿晋升为真实 thread 后保持不变。
 final class AgentThreadWorkspaceEntry {
   AgentThreadWorkspaceEntry({
@@ -80,10 +81,10 @@ final class AgentThreadWorkspaceEntry {
     required this.projectPath,
     required this.providerController,
     required this.bindingLease,
-    required this.viewModel,
+    required this.controller,
     required this.sliceBinding,
-  }) : _threadSnapshot = viewModel.threadSnapshot {
-    viewModel.threadSnapshotListenable.addListener(_handleRuntimeChanged);
+  }) : _threadSnapshot = controller.threadSnapshot {
+    controller.threadSnapshotListenable.addListener(_handleRuntimeChanged);
     _unsubscribeProviderSettings = providerController.subscribe(
       _handleRuntimeChanged,
     );
@@ -93,12 +94,12 @@ final class AgentThreadWorkspaceEntry {
   final AgentProviderSettingsPort providerController;
   late final void Function() _unsubscribeProviderSettings;
   final AgentConversationBindingLease bindingLease;
-  final AgentConversationViewModel viewModel;
+  final AgentConversationRuntimeController controller;
 
-  /// Conversation Slice 是每个 entry 的必选接线，不存在旧 ViewModel 回退路径。
-  final AgentConversationSliceComposition sliceBinding;
+  /// Conversation Slice 是每个 entry 的必选接线。
+  final AgentConversationSliceStore sliceBinding;
 
-  AgentConversationSliceStore get sliceStore => sliceBinding.store;
+  AgentConversationSliceStore get sliceStore => sliceBinding;
 
   AgentConversationBinding get binding => bindingLease.binding;
 
@@ -175,7 +176,7 @@ final class AgentThreadWorkspaceEntry {
 
   void _handleRuntimeChanged() {
     var changed = false;
-    final nextSnapshot = viewModel.threadSnapshot;
+    final nextSnapshot = controller.threadSnapshot;
     if (nextSnapshot != _threadSnapshot) {
       _threadSnapshot = nextSnapshot;
       changed = true;
@@ -201,11 +202,11 @@ final class AgentThreadWorkspaceEntry {
       return;
     }
     _disposed = true;
-    viewModel.threadSnapshotListenable.removeListener(_handleRuntimeChanged);
+    controller.threadSnapshotListenable.removeListener(_handleRuntimeChanged);
     _unsubscribeProviderSettings();
-    // 切片先于 ViewModel 释放：它订阅了 ViewModel 的 region listenable。
+    // 切片先于 runtime 释放：它订阅了 UI 更新。
     sliceBinding.dispose();
-    viewModel.dispose();
+    controller.dispose();
     unawaited(bindingLease.release());
     _listeners.clear();
   }
@@ -221,7 +222,7 @@ final class AgentThreadWorkspaceEntry {
 
 /// Conversation Workspace 的唯一运行时与状态 owner。
 ///
-/// reducer 只处理不可变状态；Binding、ViewModel 与 SliceBinding 的创建/释放留在
+/// reducer 只处理不可变状态；Binding、runtime 与 SliceBinding 的创建/释放留在
 /// 本 app 组合层 store。Shell 只订阅这个 owner，不再逐 entry 维护镜像监听表。
 final class AgentConversationWorkspaceStore {
   AgentConversationWorkspaceStore({
@@ -498,13 +499,16 @@ final class AgentConversationWorkspaceStore {
     return removeEntry(entry.entryId);
   }
 
-  /// 按 Binding 身份解析该会话唯一的切片 store；未知身份 fail-closed。
-  AgentConversationSliceStore sliceStoreForBinding(
+  /// 按 Binding 身份解析该会话的切片句柄；未知身份 fail-closed。
+  AgentConversationSessionHandle handleForBinding(
     AgentConversationBindingKey key,
   ) {
     for (final entry in _entries) {
       if (entry.binding.key == key) {
-        return entry.sliceStore;
+        return AgentConversationSessionHandle(
+          store: entry.sliceStore,
+          controller: entry.controller,
+        );
       }
     }
     throw StateError('No conversation workspace entry registered for $key');
@@ -561,8 +565,8 @@ final class AgentConversationWorkspaceStore {
         ),
     };
     late final AgentThreadWorkspaceEntry entry;
-    late final AgentConversationViewModel viewModel;
-    viewModel = AgentConversationViewModel(
+    late final AgentConversationRuntimeController controller;
+    controller = AgentConversationRuntimeController(
       providerController: providerController,
       conversationBinding: bindingLease.binding,
       globalRuntime: globalRuntime,
@@ -600,7 +604,9 @@ final class AgentConversationWorkspaceStore {
           ),
         );
       },
-      uiFrameScheduler: uiFrameSchedulerFactory?.call(),
+      uiFrameScheduler:
+          uiFrameSchedulerFactory?.call() ??
+          const SchedulerBindingAgentFrameScheduler(),
     );
     entry = AgentThreadWorkspaceEntry(
       entryId: entryId,
@@ -608,10 +614,10 @@ final class AgentConversationWorkspaceStore {
       projectPath: projectPath,
       providerController: providerController,
       bindingLease: bindingLease,
-      viewModel: viewModel,
-      sliceBinding: AgentConversationSliceComposition(
-        regions: viewModel,
-        commands: viewModel,
+      controller: controller,
+      sliceBinding: AgentConversationSliceStore.connected(
+        regions: controller,
+        commands: controller,
       ),
     );
     void listener() => _handleEntryChanged(entry);
@@ -619,7 +625,7 @@ final class AgentConversationWorkspaceStore {
     _entryListeners[entry.entryId] = listener;
     _entries.add(entry);
     _dispatch(AgentConversationWorkspaceEntryRegistered(entry.state));
-    unawaited(viewModel.loadSettings());
+    unawaited(controller.loadSettings());
     return entry;
   }
 

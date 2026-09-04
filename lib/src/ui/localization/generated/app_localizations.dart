@@ -4670,6 +4670,18 @@ abstract class AppLocalizations {
   /// **'No raw messages'**
   String get agentNoRawMessages;
 
+  /// Copy the whole markdown document
+  ///
+  /// In en, this message translates to:
+  /// **'Copy all'**
+  String get agentMarkdownCopyAll;
+
+  /// Clear the markdown selection
+  ///
+  /// In en, this message translates to:
+  /// **'Clear selection'**
+  String get agentMarkdownClearSelection;
+
   /// Copy original
   ///
   /// In en, this message translates to:
@@ -5611,6 +5623,64 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Loading thread history'**
   String get agentLoadingHistory;
+
+  /// Header status while thread history is loading
+  ///
+  /// In en, this message translates to:
+  /// **'Loading thread history...'**
+  String get agentThreadLoadingHistory;
+
+  /// Header status when thread open failed; click the thread to retry
+  ///
+  /// In en, this message translates to:
+  /// **'Thread open failed. Click this thread again to retry.'**
+  String get agentThreadOpenFailedRetry;
+
+  /// Short token usage label for a turn or thread total
+  ///
+  /// In en, this message translates to:
+  /// **'{count} tokens'**
+  String agentTurnTokenUsage(String count);
+
+  /// Composer context-window token tooltip
+  ///
+  /// In en, this message translates to:
+  /// **'Usage: {percent}%\nUsed: {used}\nTotal: {total}'**
+  String agentTokenUsageContextTooltip(
+    String percent,
+    String used,
+    String total,
+  );
+
+  /// Token tooltip total line
+  ///
+  /// In en, this message translates to:
+  /// **'Total: {value}'**
+  String agentTokenUsageTotalLine(String value);
+
+  /// Token tooltip context window line
+  ///
+  /// In en, this message translates to:
+  /// **'Context window: {value}'**
+  String agentTokenUsageContextWindowLine(String value);
+
+  /// Token tooltip input line
+  ///
+  /// In en, this message translates to:
+  /// **'Input: {value}'**
+  String agentTokenUsageInputLine(String value);
+
+  /// Token tooltip cached input line
+  ///
+  /// In en, this message translates to:
+  /// **'Cached: {value}'**
+  String agentTokenUsageCachedLine(String value);
+
+  /// Token tooltip output line
+  ///
+  /// In en, this message translates to:
+  /// **'Output: {value}'**
+  String agentTokenUsageOutputLine(String value);
 
   /// Skill picker empty
   ///

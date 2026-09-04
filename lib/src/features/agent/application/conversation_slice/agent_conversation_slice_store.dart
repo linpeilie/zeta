@@ -1,8 +1,10 @@
 import 'package:meta/meta.dart';
 import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_command_effect_runner.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_command_scope.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_effect.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_intent.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_ports.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_reducer.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_state.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
@@ -52,20 +54,55 @@ final class AgentConversationSliceDiagnostics {
 /// 3. 把 effect 交给 runner；
 /// 4. 关闭后拒绝一切写入。
 ///
-/// 它**不拥有**任何会话事实：region 状态由 ingress 意图带进来，owner 仍是
-/// `AgentConversationTimelineStore` 与既有 controller。
+/// 它**不拥有**任何会话事实：region 状态由 [AgentUiUpdateRequest] ingress
+/// 带进来，owner 仍是 TimelineStore 与 runtime controller。
 final class AgentConversationSliceStore {
+  /// 生产装配：订阅 [regions] 的批处理 UI 更新，并用 [commands] 执行 effect。
+  factory AgentConversationSliceStore.connected({
+    required AgentConversationRegionSource regions,
+    required AgentConversationCommandPort commands,
+    AgentConversationCommandScope Function()? scopeSnapshot,
+    OperationIdGenerator Function(String scope)? operationIdGeneratorFactory,
+  }) {
+    late final AgentConversationSliceStore store;
+    final resolveScope = scopeSnapshot ?? regions.currentCommandScope;
+    store = AgentConversationSliceStore(
+      initialState: AgentConversationSliceState(
+        header: regions.headerState,
+        composer: regions.composerState,
+        pendingInteractions: regions.pendingInteractionState,
+        expansion: regions.expansionState,
+        history: regions.historyState,
+      ),
+      effectRunner: AgentConversationCommandEffectRunner(
+        commands: commands,
+        store: () => store,
+        scopeSnapshot: resolveScope,
+      ),
+      scopeSnapshot: resolveScope,
+      operationIdGeneratorFactory: operationIdGeneratorFactory,
+      regions: regions,
+    );
+    return store;
+  }
+
   AgentConversationSliceStore({
     required AgentConversationSliceState initialState,
     required this._effectRunner,
     required this._scopeSnapshot,
     OperationIdGenerator Function(String scope)? operationIdGeneratorFactory,
+    AgentConversationRegionSource? regions,
   }) : _state = initialState,
+       // Named `regions` keeps the production factory readable.
+       _regions = regions, // ignore: prefer_initializing_formals
        _generatorFactory =
            operationIdGeneratorFactory ??
-           ((scope) => OperationIdGenerator(scope: scope));
+           ((scope) => OperationIdGenerator(scope: scope)) {
+    _regions?.addUiUpdateListener(_onUiUpdate);
+  }
 
   final AgentConversationSliceEffectRunner _effectRunner;
+  final AgentConversationRegionSource? _regions;
 
   /// 拍下"此刻的 Binding / runtime / thread"。
   ///
@@ -135,6 +172,39 @@ final class AgentConversationSliceStore {
   /// 把同一帧变化的 region 合并成一次转移。
   void refreshRegions(AgentConversationRegionsRefreshed intent) =>
       dispatch(intent);
+
+  /// scheduler 批处理输出：一次 request 更新所有涉及的 region。
+  void _onUiUpdate(AgentUiUpdateRequest request) {
+    if (_closed || request.isEmpty) {
+      return;
+    }
+    final regions = _regions;
+    if (regions == null) {
+      return;
+    }
+    final intent = AgentConversationRegionsRefreshed(
+      header: request.regions.contains(AgentUiRegion.header)
+          ? regions.headerState
+          : null,
+      composer: request.regions.contains(AgentUiRegion.composer)
+          ? regions.composerState
+          : null,
+      pendingInteractions:
+          request.regions.contains(AgentUiRegion.pendingInteraction)
+          ? regions.pendingInteractionState
+          : null,
+      expansion: request.regions.contains(AgentUiRegion.expansion)
+          ? regions.expansionState
+          : null,
+      history: request.regions.contains(AgentUiRegion.history)
+          ? regions.historyState
+          : null,
+    );
+    if (intent.isEmpty) {
+      return;
+    }
+    refreshRegions(intent);
+  }
 
   // -------------------------------------------------------------------------
   // 命令入口：铸造身份 → dispatch
@@ -390,7 +460,11 @@ final class AgentConversationSliceStore {
   }
 
   void dispose() {
+    if (_closed) {
+      return;
+    }
     _closed = true;
+    _regions?.removeUiUpdateListener(_onUiUpdate);
     _listeners.clear();
   }
 
