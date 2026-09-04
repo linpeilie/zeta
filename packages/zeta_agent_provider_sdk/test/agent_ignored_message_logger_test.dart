@@ -1,31 +1,29 @@
 import 'dart:io';
 
-import 'package:flutter_test/flutter_test.dart';
-import 'package:logger/logger.dart';
-import 'package:zeta/src/app/logging/app_logging.dart';
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
+import 'package:test/test.dart';
+import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
 
 void main() {
   group('AgentIgnoredMessageLogger', () {
-    final events = <LogEvent>[];
+    final events = <_RecordedLog>[];
     late Directory logDirectory;
-    late OutputCallback outputListener;
 
     setUp(() async {
       events.clear();
-      await resetAppLoggingForTesting();
-      outputListener = (event) => events.add(event.origin);
-      Logger.addOutputListener(outputListener);
-      Logger.level = Level.all;
       logDirectory = await Directory.systemTemp.createTemp(
         'zeta-ignored-message-logger-test-',
       );
-      configureAppLogging(logDirectory: logDirectory);
+      ZetaLogging.install(
+        (_) => _FileRecordingLogger(
+          events,
+          File('${logDirectory.path}/provider.log'),
+        ),
+      );
     });
 
     tearDown(() async {
-      Logger.removeOutputListener(outputListener);
-      await resetAppLoggingForTesting();
+      ZetaLogging.reset();
       if (await logDirectory.exists()) {
         await logDirectory.delete(recursive: true);
       }
@@ -71,7 +69,7 @@ void main() {
         },
       );
 
-      await flushAppLogging();
+      await Future<void>.value();
 
       final renderedMemory = events.map((event) => event.message).join('\n');
       expect(renderedMemory, contains('Ignoring unmatched Test notification'));
@@ -115,4 +113,50 @@ void main() {
       expect(ignored.unmatchedCounts, <String, int>{'future/method': 1});
     });
   });
+}
+
+final class _RecordedLog {
+  const _RecordedLog(this.message);
+
+  final String message;
+}
+
+final class _FileRecordingLogger implements ZetaLogger {
+  const _FileRecordingLogger(this.events, this.file);
+
+  final List<_RecordedLog> events;
+  final File file;
+
+  void _record(String message) {
+    events.add(_RecordedLog(message));
+    file.writeAsStringSync('$message\n', mode: FileMode.append, flush: true);
+  }
+
+  @override
+  void t(String message, {Object? error, StackTrace? stackTrace}) =>
+      _record(message);
+
+  @override
+  void d(String message, {Object? error, StackTrace? stackTrace}) =>
+      _record(message);
+
+  @override
+  void i(String message, {Object? error, StackTrace? stackTrace}) =>
+      _record(message);
+
+  @override
+  void w(String message, {Object? error, StackTrace? stackTrace}) =>
+      _record(message);
+
+  @override
+  void e(String message, {Object? error, StackTrace? stackTrace}) =>
+      _record(message);
+
+  @override
+  void failure(
+    String message, {
+    Map<String, Object?> context = const <String, Object?>{},
+    Object? error,
+    StackTrace? stackTrace,
+  }) => _record(message);
 }

@@ -17,7 +17,6 @@ export 'built_in_agent_provider_plugins.dart';
 export 'claude_code_plugin.dart';
 export 'codex_plugin.dart';
 export 'grok_plugin.dart';
-export 'src/agent_ignored_message_logger.dart';
 export 'src/agent_provider_static_capabilities.dart';
 export 'src/claude_code_cli_locator.dart';
 export 'src/cli_command_locator.dart';

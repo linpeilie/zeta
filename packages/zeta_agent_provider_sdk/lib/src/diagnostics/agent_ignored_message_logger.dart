@@ -1,5 +1,4 @@
 import 'package:zeta_foundation/zeta_foundation.dart';
-import 'package:flutter/foundation.dart';
 
 /// 统一记录 agent provider 丢弃的协议消息。
 ///
@@ -46,7 +45,7 @@ final class AgentIgnoredMessageLogger {
     if (unmatched) {
       _unmatchedCounts[method] = (_unmatchedCounts[method] ?? 0) + 1;
     }
-    if (kReleaseMode) {
+    if (const bool.fromEnvironment('dart.vm.product')) {
       return;
     }
 

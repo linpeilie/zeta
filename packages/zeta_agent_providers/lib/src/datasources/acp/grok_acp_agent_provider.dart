@@ -5,7 +5,6 @@ import 'dart:math';
 
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:flutter/foundation.dart';
-import 'package:zeta_agent_providers/src/agent_ignored_message_logger.dart';
 import 'package:zeta_agent_providers/src/agent_provider_static_capabilities.dart';
 import 'package:zeta_agent_providers/src/datasources/acp/grok_models_cli.dart';
 import 'package:zeta_agent_providers/src/datasources/acp/grok_process_starter.dart';

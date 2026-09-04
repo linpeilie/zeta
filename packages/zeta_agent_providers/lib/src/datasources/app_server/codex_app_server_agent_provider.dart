@@ -4,7 +4,6 @@ import 'dart:io';
 
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:flutter/foundation.dart';
-import 'package:zeta_agent_providers/src/agent_ignored_message_logger.dart';
 import 'package:zeta_agent_providers/src/datasources/app_server/codex_permission_policy_adapter.dart';
 import 'package:zeta_agent_providers/src/datasources/app_server/codex_process_starter.dart';
 import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk.dart';

@@ -5,6 +5,7 @@ export 'src/acp/acp_content_codec.dart';
 export 'src/acp/acp_permission_mapper.dart';
 export 'src/acp/acp_session_config_mapper.dart';
 export 'src/acp/acp_session_update_decoder.dart';
+export 'src/diagnostics/agent_ignored_message_logger.dart';
 export 'src/payload/agent_provider_payload.dart';
 export 'src/payload/agent_provider_timestamp.dart';
 export 'src/payload/agent_tool_input_detail.dart';
