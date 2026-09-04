@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |----|----|
-| 状态 | 进行中（阶段一 T1–T3 已完成） |
+| 状态 | 进行中（T1–T4 已完成） |
 | 规模 | 11–16 人天（T1–T10 + T14–T15）；P2 可选项另计 |
 | 依赖 | 无硬依赖；T2 换包与 WP-2 T3 协同；T7 与 WP-3 协同 |
 | 门禁焦点 | G6（新 Package 论证）、G7（外链处理）、G8（主题 token） |
@@ -259,7 +259,22 @@ MarkdownWidget(
 ```
 
 - 注入路径：`SystemUrlOpener` provider（fail-closed 声明 + 组合根装生产实现 + `zetaTestComposition` 装记录型 fake）。`_AgentRawMarkdownBody` 同样接线。
-- **验收**：点击 agent 消息中的链接 → 系统浏览器打开；非 http(s) 链接点击无反应；单测覆盖 scheme 白名单（`javascript:`、`file:`、`ftp:` 拒绝）。
+- **验收**：点击 agent 消息中的链接 → 系统浏览器打开；非 http(s) 链接点击无反应；单测覆盖 scheme 白名单（`javascript:`、`file:`、`ftp:` 拒绝）。 ✅
+
+**施工记录（2026-09-03）**：
+
+- `lib/src/ui/core/system_url_opener.dart`：`SystemUrlOpener` 接口 + `ProcessSystemUrlOpener`（三平台 `Process.start` 传参数组、不经 shell）+ fail-closed 的 `systemUrlOpenerProvider`。白名单只放 http/https 且**要求 host 非空**（`https:`、`http:///a` 一并拒绝）；G7：失败只回 false，url 不进日志。
+- 注入：`lib/main.dart` 装生产实现；`zetaTestComposition` 默认装 `RecordingSystemUrlOpener`（widget test 一律不许真拉起浏览器），fake 的白名单判定复用生产的 `isOpenableExternalUrl`，用例断言与生产同源。
+- 架构守卫 `package_boundary_candidate_graph_test.dart` 的 `lib/src/ui/core/` 白名单加一条（该目录只允许留需要宿主能力的封装）。
+- 测试：`test/src/ui/core/system_url_opener_test.dart`（白名单 3 组，含 `javascript:` / `file:` / `ftp:` / `data:` / `mailto:` / `vbscript:`）+ `test/src/features/agent/presentation/widgets/agent_markdown_link_tap_test.dart`（真点击：http 进打开器、`javascript:` 被拒）。
+
+**踩到的坑（值得记住，代价大约半天）**：直接把 `onTapLink: (d, t, l) => ...` 这样的闭包传给 `MarkdownWidget`，会让 `agent_pane_composer_toolbar_test.dart` 一整档 12 条报渲染断言（`_debugRelayoutBoundaryAlreadyMarkedNeedsLayout` / `child._parent == this`）。
+
+根因在 `markdown_document_view.dart:165-169`：`didUpdateWidget` 对 `onTapLink` 做**引用比较**，不等就 `_cachedBlockRows.clear()`。每帧新建的闭包必然不等 → 每次重建都清空整份 block 行缓存，而 block 的 GlobalKey 仍被复用 → 渲染对象在同一帧里被拆掉重装，正好撞上 LayoutBuilder 内的布局断言。
+
+**修复完全在应用侧，vendor 零改动**：两个 markdown 组件都改成持有 State 的绑定方法 `_handleTapLink`（Dart 保证同一实例的方法 tear-off 相等），`AgentRawMarkdownBody` 为此从 `ConsumerWidget` 升为 `ConsumerStatefulWidget`。**后续任何往包里传的回调参数都要遵守这条：传稳定引用，不要在 build 里写闭包。**
+
+（过程中一度以为是包内 recognizer 生命周期的问题，改了 `_disposeRecognizers` 又试了按身份复用——两次「验证通过」都是假的，因为当时 onTapLink 已被隔离实验摘掉。这类改动已全部回退，vendor 保持与 T1 提交一致。）
 
 ### 阶段三：P0 深改（T5–T7）
 

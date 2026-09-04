@@ -250,10 +250,11 @@ void main() {
         .where((path) => path.startsWith('lib/src/ui/core/'))
         .toList(growable: false);
 
-    // 只允许留下确实需要宿主能力（本机 IO）的封装。
+    // 只允许留下确实需要宿主能力（本机 IO / 拉起系统程序）的封装。
     expect(remaining, const <String>[
       'lib/src/ui/core/ide_image_preview.dart',
       'lib/src/ui/core/system_file_manager.dart',
+      'lib/src/ui/core/system_url_opener.dart',
     ]);
   });
 

@@ -26,6 +26,7 @@ import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_notifier.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/features/settings/presentation/appearance_theme_mode_mapper.dart';
+import 'package:zeta/src/ui/core/system_url_opener.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 
 export 'package:zeta/src/app/app.dart' show MainApp;
@@ -69,6 +70,9 @@ void main() {
           ),
           systemDirectoryPickerOverride(),
           systemComposerAttachmentOverride(),
+          systemUrlOpenerProvider.overrideWithValue(
+            const ProcessSystemUrlOpener(),
+          ),
           initialAppearanceSettingsProvider.overrideWithValue(appearance),
         ],
       );

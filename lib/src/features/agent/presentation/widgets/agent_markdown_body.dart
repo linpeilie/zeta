@@ -1,12 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:zeta_markdown/zeta_markdown.dart';
 
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/presentation/agent_markdown_cache.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_styles.dart';
+import 'package:zeta/src/ui/core/system_url_opener.dart';
 
 /// 会话正文 Markdown：经 [AgentMarkdownCache] 复用控制器，支持流式增量。
-class AgentMarkdownBody extends StatefulWidget {
+class AgentMarkdownBody extends ConsumerStatefulWidget {
   const AgentMarkdownBody({
     required this.message,
     required this.useStreamingMarkdown,
@@ -23,10 +27,10 @@ class AgentMarkdownBody extends StatefulWidget {
   final MarkdownThemeData Function(BuildContext context)? themeBuilder;
 
   @override
-  State<AgentMarkdownBody> createState() => _AgentMarkdownBodyState();
+  ConsumerState<AgentMarkdownBody> createState() => _AgentMarkdownBodyState();
 }
 
-class _AgentMarkdownBodyState extends State<AgentMarkdownBody> {
+class _AgentMarkdownBodyState extends ConsumerState<AgentMarkdownBody> {
   late AgentMarkdownCacheLease _lease;
   bool _streamCommitted = false;
 
@@ -104,23 +108,37 @@ class _AgentMarkdownBodyState extends State<AgentMarkdownBody> {
         showCopyAllInContextMenu: false,
         // 包无 enableContextMenu 开关；返回空组件以完全不显示右键菜单。
         contextMenuBuilder: _suppressMarkdownContextMenu,
+        // 必须传稳定引用：MarkdownDocumentView.didUpdateWidget 按引用比较
+        // onTapLink，不等就清空整份 block 行缓存，而 block 的 GlobalKey 仍被
+        // 复用——每帧重建一次会把渲染对象在帧中拆装，直接炸布局断言。
+        onTapLink: _handleTapLink,
       ),
     );
+  }
+
+  void _handleTapLink(String destination, String? title, String label) {
+    openAgentMarkdownLink(ref, destination);
   }
 }
 
 /// 非时间线消息使用的轻量 Markdown 渲染，不进入历史消息保温缓存。
-class AgentRawMarkdownBody extends StatelessWidget {
+class AgentRawMarkdownBody extends ConsumerStatefulWidget {
   const AgentRawMarkdownBody({required this.data, super.key});
 
   final String data;
 
   @override
+  ConsumerState<AgentRawMarkdownBody> createState() =>
+      _AgentRawMarkdownBodyState();
+}
+
+class _AgentRawMarkdownBodyState extends ConsumerState<AgentRawMarkdownBody> {
+  @override
   Widget build(BuildContext context) {
     return MouseRegion(
       cursor: SystemMouseCursors.text,
       child: MarkdownWidget(
-        data: data,
+        data: widget.data,
         theme: agentMarkdownTheme(context),
         useColumn: true,
         selectable: true,
@@ -128,9 +146,23 @@ class AgentRawMarkdownBody extends StatelessWidget {
         enableCopyFullDocumentShortcut: false,
         showCopyAllInContextMenu: false,
         contextMenuBuilder: _suppressMarkdownContextMenu,
+        // 同上：稳定引用，别在这里写闭包。
+        onTapLink: _handleTapLink,
       ),
     );
   }
+
+  void _handleTapLink(String destination, String? title, String label) {
+    openAgentMarkdownLink(ref, destination);
+  }
+}
+
+/// 把正文里点中的外链交给系统浏览器。
+///
+/// 打开器只在点击时解析：从不点链接的用例不会碰到 fail-closed 的 provider。
+/// 非 http(s) 由打开器自身拒绝，这里不做二次判断，避免两处白名单漂移。
+void openAgentMarkdownLink(WidgetRef ref, String destination) {
+  unawaited(ref.read(systemUrlOpenerProvider).openUrl(destination));
 }
 
 /// 抑制 zeta_markdown 右键菜单：仍会走 show，但不渲染任何菜单项。
