@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |----|----|
-| 状态 | 进行中（T1 / T2 已完成） |
+| 状态 | 进行中（阶段一 T1–T3 已完成） |
 | 规模 | 11–16 人天（T1–T10 + T14–T15）；P2 可选项另计 |
 | 依赖 | 无硬依赖；T2 换包与 WP-2 T3 协同；T7 与 WP-3 协同 |
 | 门禁焦点 | G6（新 Package 论证）、G7（外链处理）、G8（主题 token） |
@@ -202,7 +202,16 @@ grep -rl "package:mixin_markdown_widget" lib test packages | ForEach-Object {
 1. 随迁测试逐个跑通：`flutter test packages/zeta_markdown/test`。
 2. 失败分类处理：依赖漂移（`markdown` 包小版本行为差异）→ 固定依赖版本或适配断言；环境差异（字体/Skia）→ golden 测试标记或剔除并记录 UPSTREAM.md。
 3. 把 `packages/zeta_markdown` 纳入 `tool/test_packages.sh` 覆盖（该脚本按 workspace 自动发现则无需改动，验证即可）。
-4. **验收**：包内测试全绿或每条剔除有记录；CI 的 packages 分片覆盖新包。
+4. **验收**：包内测试全绿或每条剔除有记录；CI 的 packages 分片覆盖新包。 ✅
+
+**施工记录（2026-09-03）**：
+
+1. **包内测试全绿，零剔除**：184 条（上游 180 + Zeta 新增 4）。唯一失败的那条（`default image renderer falls back to local files`）根因是上游的 Windows 缺陷，已在 T1 修掉而非剔除。
+2. **文档说的「12 个测试文件」不存在**。稀疏 clone 上游 tag `mixin_markdown_widget-v0.3.1` 核实：上游 `test/` 下本来就只有 `mixin_markdown_widget_test.dart` 一个文件（8256 行集成式套件），发布产物没有裁剪；`lib/` 与 tag 逐字节一致（仅行尾差异）。**所以没有可回补的分文件测试**，UPSTREAM.md 里原先写的「缺口」条目已改为核实结论。
+3. **`tool/test_packages.sh` 无需改动**：它按 `packages/*/` 自动发现带 `test/` 的包，已实际跑到 zeta_markdown（analyze + test 两步都过）。CI 的 `packages` job 直接调这个脚本，因此自动覆盖；`flutter pub get --enforce-lockfile` 实测通过（workspace 成员不进 lock，与 zeta_ui 同款）。
+4. **新增本地测试的放置约定**：Zeta 自己的用例放 `test/zeta_*.dart` 独立文件，`test/zeta_markdown_test.dart` 保持与上游逐字节对齐（仅改名差异），同步时整文件比对。首个落地的是 `test/zeta_local_image_provider_test.dart`——锁住 T1 的 Windows 盘符修复，其中「绝对路径必须成图」这条在三平台都有效，盘符字面量那条用 `testOn: 'windows'` 圈定。
+
+**遗留风险（无法本地验证）**：CI 的 packages job 跑在 `ubuntu-24.04`，而这 180 条上游用例只在本机 Windows 上跑过。若上游套件里存在依赖字体/平台的断言，首次 CI 可能暴露 Linux 侧失败——届时按 T3 的分类原则处理（环境差异 → 标记或剔除并记 UPSTREAM.md）。
 
 ### 阶段二：公开 API 可解（T4）
 

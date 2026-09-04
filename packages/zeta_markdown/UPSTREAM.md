@@ -20,7 +20,11 @@
 | `AGENTS.md` | **不迁入** | 仓库的 `AGENTS.md` 是唯一规则源，第二份会造成路由歧义 |
 | `example/`、`benchmark/` | **不迁入** | 各带独立 pubspec 与平台目录，会污染 workspace 解析；需要时回上游仓库看 |
 
-**测试基线的缺口**：pub 发布产物只含 1 个测试文件（8256 行的集成式套件），上游仓库里的分文件测试（`markdown_document_parser_test.dart` 等）未随发布产物分发。若后续需要更细的回归基线，从上游 GitHub tag `mixin_markdown_widget-v0.3.1` 补齐 `test/` 目录。
+**测试基线是完整的**（2026-09-03 核实）：稀疏 clone 上游 tag `mixin_markdown_widget-v0.3.1` 比对后确认——上游 `test/` 下**本来就只有这一个文件**（8256 行的集成式套件），发布产物没有裁剪；`lib/` 与 tag 逐字节一致（仅行尾差异）。所以不存在「分文件测试待回补」这回事。
+
+## 本地新增测试的放置约定
+
+Zeta 自己加的测试放**独立文件**（`test/zeta_*.dart`），不要写进 `test/zeta_markdown_test.dart`。那个文件除了改名之外与上游逐字节相同，同步时直接整文件比对即可；混入本地用例会让它每次都冲突。
 
 ## 同步流程
 
@@ -52,6 +56,10 @@
 上游同款测试 `default image renderer falls back to local files` 在 Windows
 上因此失败；这是上游缺陷而非 vendor 引入。若上游后续自行修复，同步时以上游
 实现为准并删除本条。
+
+守卫测试：`test/zeta_local_image_provider_test.dart`（Zeta 新增）。上游同款测试
+`default image renderer falls back to local files` 在 Windows 上原本失败，修复后
+转绿。
 
 **未改**（有意保留，减小同步 diff 面）：
 
