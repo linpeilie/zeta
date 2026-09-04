@@ -61,7 +61,6 @@ export 'src/mappers/claude_code_permission_mode_codec.dart';
 export 'src/mappers/claude_code_stream_identity.dart';
 export 'src/mappers/claude_code_usage_quota_mapper.dart';
 export 'src/mappers/codex_permission_policy_codec.dart';
-export 'src/mappers/context_window_codec.dart';
 export 'src/mappers/grok_acp_notification_mapper.dart';
 export 'src/mappers/grok_billing_quota_mapper.dart';
 export 'src/mappers/grok_error_normalizer.dart';
