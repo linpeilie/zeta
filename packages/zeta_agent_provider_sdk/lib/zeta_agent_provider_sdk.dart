@@ -2,3 +2,4 @@
 library;
 
 export 'src/transport/json_rpc_stdio_transport.dart';
+export 'src/transport/provider_operation_scheduler.dart';

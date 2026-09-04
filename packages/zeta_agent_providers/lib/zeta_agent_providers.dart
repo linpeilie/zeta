@@ -53,7 +53,6 @@ export 'src/datasources/local_history/grok_chat_history_parser.dart';
 export 'src/datasources/local_history/grok_session_history_reader.dart';
 export 'src/datasources/local_history/grok_updates_history_parser.dart';
 export 'src/datasources/local_history/grok_user_content_parser.dart';
-export 'src/datasources/transport/provider_operation_scheduler.dart';
 export 'src/datasources/transport/provider_runtime_json_rpc_peer.dart';
 export 'src/grok_cli_locator.dart';
 export 'src/mappers/acp_content_codec.dart';
