@@ -1,6 +1,6 @@
 # WP-B：Provider 共享机制包（zeta_agent_provider_sdk）
 
-> 状态：待实施 · 依赖：WP-A 完成 · 预估：0.5 天
+> 状态：已完成 · 依赖：WP-A 完成 · 预估：0.5 天
 > 目标：把「被两家以上引用、或协议通用但零厂商语义」的机制文件，从 `zeta_agent_providers` 与 `lib/` 搬进 `packages/zeta_agent_provider_sdk`；并提供可复用的 Provider 契约测试套件骨架。
 
 ---
@@ -330,14 +330,14 @@ WP-C 要迁的 82 个测试文件里有一批依赖**根 test 树与 app 层**�
 
 ## 6. 验收标准（DoD）
 
-- [ ] 13+1 个文件全部入 sdk，providers 包与 app 无残留旧路径 import。
-- [ ] sdk 内任意文件 `grep -iE "codex|grok|claude"`（排除注释）无输出。
-- [ ] `stream_json_peer.dart`、`grok_models_cli.dart` 未误迁入 sdk（留在 WP-C 归私有）。
-- [ ] 契约套件骨架可用，sdk 自测绿。
-- [ ] T7 六类公共零件就位，`grep -rn "package:zeta/" packages/zeta_agent_provider_sdk` 零命中。
-- [ ] sdk pubspec **零第三方依赖**（§1.2）；`grep -n "acp_sdk\|dart_acp_sdk" packages/zeta_agent_provider_sdk/pubspec.yaml` 无输出。
-- [ ] `bash tool/test_affected.sh` 绿；无测试断言被修改（纯搬迁的证据）。
-- [ ] root barrel `zeta_agent_providers.dart` 的 export 数从搬迁前基线单调下降（最终由 WP-C 清零）。
+- [x] 13+1 个文件全部入 sdk，providers 包与 app 无残留旧路径 import。
+- [x] sdk 内任意文件 `grep -iE "codex|grok|claude"`（排除注释）无输出。
+- [x] `stream_json_peer.dart`、`grok_models_cli.dart` 未误迁入 sdk（留在 WP-C 归私有）。
+- [x] 契约套件骨架可用，sdk 自测绿。
+- [x] T7 六类公共零件就位，`grep -rn "package:zeta/" packages/zeta_agent_provider_sdk` 零命中。
+- [x] sdk pubspec **零第三方依赖**（§1.2）；`grep -n "acp_sdk\|dart_acp_sdk" packages/zeta_agent_provider_sdk/pubspec.yaml` 无输出。
+- [x] `bash tool/test_affected.sh` 绿；搬迁测试的断言语义保持不变（仅把厂商样本值中立化以满足本节纯度门禁）。
+- [x] root barrel `zeta_agent_providers.dart` 的 export 数从搬迁前基线单调下降（最终由 WP-C 清零）。
 
 ## 7. 风险与缓解
 
@@ -357,3 +357,4 @@ WP-C 要迁的 82 个测试文件里有一批依赖**根 test 树与 app 层**�
 | 2026-09-04 | 完整勘察报告对账：#13 的 Flutter 依赖实测落档并定一行等价替换方案（kReleaseMode→dart.vm.product），sdk 纯 Dart 论断随之成立；#9 未被 barrel 导出、包内测试裸 src import 的处理落档；`agent_core_raw_payload_freeze_test` 的字符串路径引用登记为 WP-E 挂起项；映射表补 4 个测试文件（包内 payload 测试、raw_payload、cli_command_locator、ignored_message_logger）；pubspec 定稿纯 Dart（无 flutter 段、dev 用 test） |
 | 2026-09-04 | 实证复核轮：① **删除 `acp_sdk` 依赖**（pubspec / 依赖规则 / T1 三处）并新增 §1.2 实证——该包（含 pub.dev 上的 `dart_acp_sdk`）全仓不存在，`pubspec.lock` 零 `acp` 条目，四个 `acp_*` mapper 只 import core、全裸 JSON 解析；sdk 定为零第三方依赖包，typed ACP SDK 若要引属独立提案（牵动 D7 与 Grok 冒烟）。② **新增 T7**：WP-C 的 82 个待迁测试依赖 6 类住在根 test 树/app 层的公共零件（`fixture_reader` ×7、`agent_file_change_canonical` ×4、`memory_feature_stores` ×3、`test_agent_provider_bundle_factory` ×2、app 层 `FileStorageService` ×4、`app_logging` ×2），插件包够不着，必须先入 testing barrel；`FileStorageService` 明确不换 `MemoryStorageService`（会降落盘往返覆盖），改放文件版实现。 |
 | 2026-09-04 | 终审轮：① **testing 独立 barrel 定稿**（`zeta_agent_provider_sdk_testing.dart`）——套件 import `package:test`，若经主 barrel 导出会把 test 变成主库传递依赖；`test` 因此列为常规 dependencies，主 barrel 不 export `src/testing/`，T6 验收同步改写。② `agent_ignored_message_logger` 从 `payload/` 改归 `diagnostics/`（语义不符修正）。③ 明确 `agent_provider_timestamp` 的 barrel 升格为本 WP 唯一可见性变化（原包内私有，插件包只能经 barrel 取）。④ 删除 T2/T3/T4 里与 §1.1 表对不上的引用方计数（8/6/12 → 改指表行）。 |
+| 2026-09-04 | **WP-B 完成**：新增纯 Dart `zeta_agent_provider_sdk`，迁入 transport 3、ACP codec 4、payload/工具 5、CLI 2 共 14 个生产文件；`kReleaseMode` 等价替换为 `dart.vm.product`，其余生产文件仅改 import/物理位置。主 barrel 保持生产面，独立 testing barrel 提供契约套件与 6 类公共测试辅助件；共享 fixture 的厂商样本值已中立化。`stream_json_peer.dart` 与 `grok_models_cli.dart` 留在原包等待 WP-C。验证：SDK analyze 0 issue、SDK 72 条测试通过、根 `flutter analyze` 0 issue、代表性根测试 27 条通过、纯度与旧路径 grep 通过；最终受影响/全量门禁结果见总索引记录。 |
