@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |----|----|
-| 状态 | **已决策**（DR-001：WP-6B 本地 vendor，2026-09-03） |
+| 状态 | 进行中（T1 已完成） |
 | 规模 | 11–16 人天（T1–T10 + T14–T15）；P2 可选项另计 |
 | 依赖 | 无硬依赖；T2 换包与 WP-2 T3 协同；T7 与 WP-3 协同 |
 | 门禁焦点 | G6（新 Package 论证）、G7（外链处理）、G8（主题 token） |
@@ -149,7 +149,23 @@ flutter:
 - （初始）包标识重命名
 ```
 
-**验收**：`flutter pub get` 成功；`dart analyze packages/zeta_markdown` 零错误（警告可留待 T3）。
+**验收**：`flutter pub get` 成功；`dart analyze packages/zeta_markdown` 零错误（警告可留待 T3）。 ✅
+
+**施工记录（2026-09-03）**：`packages/zeta_markdown` 落地，lib/ 31 个文件 + test/ 1 个 + LICENSE + README + UPSTREAM.md + pubspec；根 `workspace:` 已登记；`flutter pub get` 成功且 `pubspec.lock` 零改动（新包的依赖上游本来就在 lock 里）；包内 `flutter analyze` 零 issue。
+
+**对照发布产物修正文档 4 处**（以 pub 缓存里的 0.3.1 为准）：
+
+| # | 文档写的 | 实际 | 影响 |
+|---|---|---|---|
+| 1 | 依赖为 `markdown ^7.3.3` / `re_highlight ^0.0.6` / `flutter_highlight ^0.7.0` / `html ^0.15.7` / `meta ^1.16.0` | 上游 pubspec 是 `markdown ^7.3.0` / `re_highlight ^0.0.3` / `html ^0.15.6` / **`pretext ^0.1.0`** / **`flutter_math_fork ^0.7.4`**；**没有** `flutter_highlight`，**没有** `meta` | pubspec 按实际写。`pretext` 是包内预排文本布局（`pretext_text_block.dart`）的来源，`flutter_math_fork` 是数学公式渲染——两个都是文档漏掉的硬依赖。`flutter_highlight` 是**根应用**的依赖（Graphite 代码高亮），不是这个包的 |
+| 2 | 包内测试 12 个文件全部随迁 | 发布产物只有 1 个测试文件（`mixin_markdown_widget_test.dart`，8256 行集成式套件） | 分文件测试没随 pub 发布。已迁入并改名 `zeta_markdown_test.dart`；缺口与补齐路径（上游 GitHub tag）记进 `UPSTREAM.md` |
+| 3 | 不新建 `analysis_options.yaml` | **新建了** | 上游源码在本仓库的 lint 集下有 9 条 info（`prefer_initializing_formals` ×5、`use_null_aware_elements`、`unnecessary_underscores` ×2），而 `flutter analyze` 对 info 也返回非零 → `tool/test_packages.sh` 会红。为满足风格 lint 重写上游构造函数会让同步 diff 全面失配，与本 WP「冲突面最小」的原则冲突。改为包级 `analysis_options.yaml` 继承根配置、只关这三条风格规则（语义规则一条不关），与根配置整体排除 `third_party/**` 是同一取舍 |
+| 4 | 目录结构里没提 `example/`、`benchmark/`、上游 `AGENTS.md` | 发布产物都带 | 三者均不迁入（各带独立 pubspec 与平台目录会污染 workspace 解析；第二份 AGENTS.md 会与仓库规则源冲突），取舍写进 `UPSTREAM.md` |
+| 5 | `environment: sdk: ^3.12.2`（与 zeta_ui 对齐） | 改为 **`^3.5.0`**（跟上游 pubspec 一致） | 语言版本决定 `dart format` 用短风格还是 tall 风格。写 `^3.12.2` 时 `dart format .` 会重排 32 个文件里的 27 个，与上游 0.3.1 逐行失配，此后每次同步都要先把上游源码格式化成同一风格才能 diff——与 §2.3「上游同步时冲突面最小」直接冲突。改回 `^3.5.0` 后，vendor 文件与上游**逐字节相同**，实测 31 个 lib 文件只有 7 个有差异，且每个都对应 `UPSTREAM.md` 里登记的改动。代价：包内（含 T4–T10 新增的注入点）只能用 3.5 的语言特性。**用户决策** |
+
+**顺带修掉一个上游 Windows 缺陷**（T3「失败分类处理」提前到这里，因为它让 `tool/test_packages.sh` 直接红）：`local_image_provider_io.dart` 用 `Uri.tryParse(path).scheme.isNotEmpty` 拒绝带 scheme 的输入，而 Windows 盘符会被解析成单字母 scheme（`C:` → `c`），导致**Windows 上本地图片一律返回 null**。改为只拒绝长度 > 1 的 scheme；上游同款测试 `default image renderer falls back to local files` 随之转绿（包内 180 条全绿）。已登记 `UPSTREAM.md`。
+
+**重命名清单执行情况**：barrel 文件名 + import 路径 + `zetaMarkdownDebugLogging` + `[zeta_markdown]` 日志前缀 4 处 + `selection_host.dart` 的 focus debugLabel + 删除 `typedef MarkownWidget`。`MixinSelectionArea` 及其文件名**保留未改**——那里的 "Mixin" 是上游组织名而非包标识，改名会让选择区相关文件的同步 diff 全量失配（已在 `UPSTREAM.md` 记明）。
 
 #### T2 · 根应用接线（0.5 人天）
 

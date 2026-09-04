@@ -1,0 +1,32 @@
+name: zeta_markdown
+description: Zeta 的 Markdown 渲染包（fork 自 mixin_markdown_widget 0.3.1，MIT）。
+publish_to: 'none'
+version: 0.1.0
+resolution: workspace
+
+# SDK 下限跟上游 pubspec 一致（不跟其他内部包的 ^3.12.2 对齐）：语言版本决定
+# `dart format` 用短风格还是 tall 风格。跟上游一致才能让 vendor 文件与上游
+# 0.3.1 逐字节相同，同步时直接 diff；否则 32 个文件里 27 个会整文件失配。
+# 代价是包内（含后续新增的注入点）只能用 3.5 的语言特性。
+environment:
+  sdk: ^3.5.0
+
+# 依赖与上游 0.3.1 逐条对齐，不做被动升级：markdown 的小版本行为差异会直接
+# 改变解析结果，pretext 承载代码块/预排文本的布局缓存。
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_math_fork: ^0.7.4
+  html: ^0.15.6
+  markdown: ^7.3.0
+  pretext: ^0.1.0
+  re_highlight: ^0.0.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  # 包内用 Material `Icons.*`（复制按钮等），缺这行独立跑包测试会有字体缺失警告
+  # （与 packages/zeta_ui 同款处理）。
+  uses-material-design: true

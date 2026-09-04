@@ -1,0 +1,864 @@
+import 'image_caption_layout.dart';
+
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
+
+import '../core/document.dart';
+import '../widgets/markdown_theme.dart';
+import '../widgets/markdown_types.dart';
+
+double markdownListMarkerWidth(ListBlock block, int index) {
+  final item = block.items[index];
+  if (item.taskState != null) {
+    return 22;
+  }
+  if (!block.ordered) {
+    return 14;
+  }
+  final digits = (block.startIndex + index).toString().length;
+  return 10 + digits * 8;
+}
+
+double markdownListMarkerGap(ListBlock block, int index) {
+  final item = block.items[index];
+  return item.taskState == null ? 6 : 8;
+}
+
+double markdownListMarkerExtent(ListBlock block, int index) {
+  return markdownListMarkerWidth(block, index) +
+      markdownListMarkerGap(block, index);
+}
+
+typedef MarkdownInlineTextWidgetBuilder = Widget Function(
+  BuildContext context,
+  TextStyle style,
+  List<InlineNode> inlines,
+  TextAlign textAlign, {
+  GlobalKey? directTextKey,
+  bool alignInlineMathToBaseline,
+  TextStyle? inlineCodeStyle,
+  TextStyle? linkStyle,
+});
+
+typedef MarkdownTableWidgetBuilder = Widget Function(
+  Map<int, TableColumnWidth>? columnWidths,
+  TableColumnWidth defaultColumnWidth,
+);
+
+enum MarkdownTableColumnSizing {
+  fixed,
+  flex,
+}
+
+class MarkdownTableLayoutPlanCache {
+  final Map<String, _CachedMarkdownTableLayoutPlan> _plans =
+      <String, _CachedMarkdownTableLayoutPlan>{};
+
+  MarkdownTableLayoutPlan planFor(TableBlock block) {
+    final cached = _plans[block.id];
+    if (cached != null && identical(cached.block, block)) {
+      return cached.plan;
+    }
+    final plan = MarkdownTableLayoutPlan.fromBlock(block);
+    _plans[block.id] = _CachedMarkdownTableLayoutPlan(
+      block: block,
+      plan: plan,
+    );
+    return plan;
+  }
+
+  void cleanup(Set<String> validIds) {
+    _plans.removeWhere((key, _) => !validIds.contains(key));
+  }
+}
+
+class _CachedMarkdownTableLayoutPlan {
+  const _CachedMarkdownTableLayoutPlan({
+    required this.block,
+    required this.plan,
+  });
+
+  final TableBlock block;
+  final MarkdownTableLayoutPlan plan;
+}
+
+class MarkdownTableLayoutPlan {
+  const MarkdownTableLayoutPlan({
+    required this.columnCount,
+    required this.columnSizing,
+    required this.fixedWidths,
+    required this.flexFactors,
+    required this.minimumWidth,
+  });
+
+  factory MarkdownTableLayoutPlan.fromBlock(TableBlock block) {
+    final columnCount = block.rows.fold<int>(
+      0,
+      (maxCount, row) =>
+          row.cells.length > maxCount ? row.cells.length : maxCount,
+    );
+    if (columnCount == 0) {
+      return const MarkdownTableLayoutPlan(
+        columnCount: 0,
+        columnSizing: <MarkdownTableColumnSizing>[],
+        fixedWidths: <double>[],
+        flexFactors: <double>[],
+        minimumWidth: 0,
+      );
+    }
+
+    final colMaxChars = List<int>.filled(columnCount, 0);
+    for (final row in block.rows) {
+      for (var index = 0;
+          index < row.cells.length && index < columnCount;
+          index++) {
+        final textLen = _estimateInlineTextLength(row.cells[index].inlines);
+        if (textLen > colMaxChars[index]) {
+          colMaxChars[index] = textLen;
+        }
+      }
+    }
+
+    final columnSizing = <MarkdownTableColumnSizing>[];
+    final fixedWidths = <double>[];
+    final flexFactors = <double>[];
+    var minimumWidth = 0.0;
+
+    for (final charCount in colMaxChars) {
+      if (charCount > 30) {
+        columnSizing.add(MarkdownTableColumnSizing.flex);
+        fixedWidths.add(0);
+        final factor = math.max(1, charCount).toDouble();
+        flexFactors.add(factor);
+        minimumWidth += 160.0;
+      } else {
+        columnSizing.add(MarkdownTableColumnSizing.fixed);
+        final width = math.min(math.max(charCount * 10.0 + 24.0, 72.0), 160.0);
+        fixedWidths.add(width);
+        flexFactors.add(0);
+        minimumWidth += width;
+      }
+    }
+
+    return MarkdownTableLayoutPlan(
+      columnCount: columnCount,
+      columnSizing: columnSizing,
+      fixedWidths: fixedWidths,
+      flexFactors: flexFactors,
+      minimumWidth: minimumWidth,
+    );
+  }
+
+  final int columnCount;
+  final List<MarkdownTableColumnSizing> columnSizing;
+  final List<double> fixedWidths;
+  final List<double> flexFactors;
+  final double minimumWidth;
+}
+
+int _estimateInlineTextLength(List<InlineNode> inlines) {
+  int length = 0;
+  for (final inline in inlines) {
+    if (inline is TextInline) {
+      length += inline.text.length;
+    } else if (inline is InlineCode) {
+      length += inline.text.length;
+    } else if (inline is MathInline) {
+      length += inline.tex.length;
+    } else if (inline is EmphasisInline) {
+      length += _estimateInlineTextLength(inline.children);
+    } else if (inline is StrongInline) {
+      length += _estimateInlineTextLength(inline.children);
+    } else if (inline is StrikethroughInline) {
+      length += _estimateInlineTextLength(inline.children);
+    } else if (inline is HighlightInline) {
+      length += _estimateInlineTextLength(inline.children);
+    } else if (inline is SubscriptInline) {
+      length += _estimateInlineTextLength(inline.children);
+    } else if (inline is SuperscriptInline) {
+      length += _estimateInlineTextLength(inline.children);
+    } else if (inline is LinkInline) {
+      length += _estimateInlineTextLength(inline.children);
+    } else if (inline is SoftBreakInline || inline is HardBreakInline) {
+      length += 1;
+    }
+  }
+  return length;
+}
+
+class MarkdownAdaptiveTableLayout extends StatelessWidget {
+  const MarkdownAdaptiveTableLayout({
+    super.key,
+    required this.block,
+    required this.layoutPlan,
+    required this.tableBuilder,
+    required this.borderRadius,
+    this.scrollController,
+    this.viewportKey,
+  });
+
+  final TableBlock block;
+  final MarkdownTableLayoutPlan layoutPlan;
+  final MarkdownTableWidgetBuilder tableBuilder;
+  final BorderRadius borderRadius;
+  final ScrollController? scrollController;
+  final GlobalKey? viewportKey;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = math.max(constraints.maxWidth, 0.0);
+        final columnCount = layoutPlan.columnCount;
+
+        if (columnCount == 0) {
+          return const SizedBox.shrink();
+        }
+
+        final Map<int, TableColumnWidth> customWidths = {};
+        for (var index = 0; index < columnCount; index++) {
+          switch (layoutPlan.columnSizing[index]) {
+            case MarkdownTableColumnSizing.fixed:
+              customWidths[index] = FixedColumnWidth(
+                layoutPlan.fixedWidths[index],
+              );
+            case MarkdownTableColumnSizing.flex:
+              customWidths[index] = FlexColumnWidth(
+                layoutPlan.flexFactors[index],
+              );
+          }
+        }
+
+        final idealWidth = math.max(availableWidth, layoutPlan.minimumWidth);
+        final table = tableBuilder(customWidths, const FlexColumnWidth());
+
+        return SingleChildScrollView(
+          key: viewportKey,
+          controller: scrollController,
+          scrollDirection: Axis.horizontal,
+          child: MarkdownTableContentFrame(
+            borderRadius: borderRadius,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minWidth: idealWidth,
+                maxWidth: idealWidth,
+              ),
+              child: table,
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class MarkdownTableContentFrame extends StatelessWidget {
+  const MarkdownTableContentFrame({
+    super.key,
+    required this.borderRadius,
+    required this.child,
+  });
+
+  final BorderRadius borderRadius;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = MarkdownTheme.of(context);
+    return CustomPaint(
+      foregroundPainter: _MarkdownTableBorderPainter(
+        borderColor: theme.tableBorderColor,
+        borderRadius: borderRadius,
+      ),
+      child: ClipRRect(
+        borderRadius: borderRadius,
+        child: child,
+      ),
+    );
+  }
+}
+
+class MarkdownQuoteBlockView extends StatelessWidget {
+  const MarkdownQuoteBlockView({
+    super.key,
+    required this.theme,
+    required this.child,
+    this.selectableContent,
+  });
+
+  final MarkdownThemeData theme;
+  final Widget child;
+  final Widget? selectableContent;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: theme.quoteBackgroundColor,
+        borderRadius: theme.quoteBorderRadius,
+      ),
+      child: Stack(
+        children: <Widget>[
+          Positioned(
+            left: 0,
+            top: 0,
+            bottom: 0,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: theme.quoteBorderColor,
+                borderRadius: BorderRadius.horizontal(
+                    left: theme.quoteBorderRadius.topLeft),
+              ),
+              child: SizedBox(width: theme.quoteBorderWidth),
+            ),
+          ),
+          Padding(
+            padding: theme.quotePadding,
+            child: _buildContent(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildContent() {
+    final selectableContent = this.selectableContent;
+    if (selectableContent == null) {
+      return child;
+    }
+
+    return Stack(
+      alignment: Alignment.topLeft,
+      children: <Widget>[
+        child,
+        Positioned.fill(
+          child: IgnorePointer(
+            child: ExcludeSemantics(
+              child: Opacity(
+                opacity: 0,
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  child: selectableContent,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class MarkdownDetailsBlockView extends StatefulWidget {
+  const MarkdownDetailsBlockView({
+    super.key,
+    required this.theme,
+    required this.summary,
+    required this.content,
+    this.initiallyExpanded = false,
+  });
+
+  final MarkdownThemeData theme;
+  final Widget summary;
+  final Widget content;
+  final bool initiallyExpanded;
+
+  @override
+  State<MarkdownDetailsBlockView> createState() =>
+      _MarkdownDetailsBlockViewState();
+}
+
+class _MarkdownDetailsBlockViewState extends State<MarkdownDetailsBlockView> {
+  late bool _expanded = widget.initiallyExpanded;
+
+  @override
+  void didUpdateWidget(covariant MarkdownDetailsBlockView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initiallyExpanded != widget.initiallyExpanded) {
+      _expanded = widget.initiallyExpanded;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = widget.theme;
+    final foregroundColor = theme.bodyStyle.color;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        InkWell(
+          borderRadius: BorderRadius.circular(6),
+          onTap: () {
+            setState(() {
+              _expanded = !_expanded;
+            });
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Icon(
+                  _expanded
+                      ? Icons.expand_more_rounded
+                      : Icons.chevron_right_rounded,
+                  size: 20,
+                  color: foregroundColor?.withValues(alpha: 0.72),
+                ),
+                const SizedBox(width: 4),
+                Expanded(child: widget.summary),
+              ],
+            ),
+          ),
+        ),
+        if (_expanded) ...<Widget>[
+          SizedBox(height: theme.blockSpacing * 0.72),
+          widget.content,
+        ],
+      ],
+    );
+  }
+}
+
+class MarkdownListBlockView extends StatelessWidget {
+  const MarkdownListBlockView({
+    super.key,
+    required this.theme,
+    required this.block,
+    required this.itemBuilder,
+    this.itemRowKeyBuilder,
+    this.itemContentKeyBuilder,
+    this.markerStyle,
+    this.bulletBuilder,
+  });
+
+  final MarkdownThemeData theme;
+  final ListBlock block;
+  final Widget Function(int index, ListItemNode item) itemBuilder;
+  final Key? Function(int index)? itemRowKeyBuilder;
+  final Key? Function(int index)? itemContentKeyBuilder;
+  final TextStyle? markerStyle;
+  final MarkdownBulletBuilder? bulletBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        for (var index = 0; index < block.items.length; index++)
+          Builder(
+            builder: (context) {
+              final markerWidth = markdownListMarkerWidth(block, index);
+              final markerGap = markdownListMarkerGap(block, index);
+              return KeyedSubtree(
+                key: itemRowKeyBuilder?.call(index),
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    bottom: index == block.items.length - 1
+                        ? 0
+                        : theme.listItemSpacing,
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      SizedBox(
+                        width: markerWidth,
+                        child: Align(
+                          alignment: AlignmentDirectional.topEnd,
+                          child: _buildMarker(context, index),
+                        ),
+                      ),
+                      SizedBox(width: markerGap),
+                      Expanded(
+                        child: KeyedSubtree(
+                          key: itemContentKeyBuilder?.call(index),
+                          child: itemBuilder(index, block.items[index]),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+      ],
+    );
+  }
+
+  Widget _buildMarker(BuildContext context, int index) {
+    final item = block.items[index];
+    final effectiveMarkerStyle = markerStyle ?? theme.bodyStyle;
+    if (bulletBuilder != null) {
+      return bulletBuilder!(
+        context,
+        index,
+        block.ordered,
+        block.ordered ? block.startIndex : null,
+        item.taskState,
+        theme,
+      );
+    }
+    switch (item.taskState) {
+      case MarkdownTaskListItemState.checked:
+        return Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Icon(
+            Icons.check_box_rounded,
+            size: 18,
+            color: effectiveMarkerStyle.color ?? theme.linkStyle.color,
+          ),
+        );
+      case MarkdownTaskListItemState.unchecked:
+        return Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Icon(
+            Icons.check_box_outline_blank_rounded,
+            size: 18,
+            color: effectiveMarkerStyle.color?.withValues(alpha: 0.72),
+          ),
+        );
+      case null:
+        return Text(
+          block.ordered ? '${block.startIndex + index}.' : '•',
+          style: effectiveMarkerStyle.copyWith(height: 1.45),
+        );
+    }
+  }
+}
+
+class MarkdownCodeBlockView extends StatelessWidget {
+  const MarkdownCodeBlockView({
+    super.key,
+    required this.theme,
+    required this.codeSpan,
+    required this.onCopyCode,
+    required this.scrollController,
+    this.directTextKey,
+    this.viewportKey,
+  });
+
+  final MarkdownThemeData theme;
+  final InlineSpan codeSpan;
+  final VoidCallback onCopyCode;
+  final ScrollController scrollController;
+  final GlobalKey? directTextKey;
+  final GlobalKey? viewportKey;
+
+  @override
+  Widget build(BuildContext context) {
+    final resolvedPadding = theme.codeBlockPadding.resolve(TextDirection.ltr);
+    final effectivePadding = EdgeInsets.fromLTRB(
+      resolvedPadding.left,
+      resolvedPadding.top,
+      math.max(8, resolvedPadding.right - 4),
+      resolvedPadding.top,
+    );
+
+    return SizedBox(
+      width: double.infinity,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: theme.codeBlockBackgroundColor,
+          borderRadius: theme.codeBlockBorderRadius,
+        ),
+        child: Padding(
+          padding: effectivePadding,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Expanded(
+                child: ClipRect(
+                  key: viewportKey,
+                  child: SingleChildScrollView(
+                    controller: scrollController,
+                    scrollDirection: Axis.horizontal,
+                    child: Text.rich(
+                      key: directTextKey,
+                      codeSpan,
+                      style: theme.codeBlockStyle,
+                      softWrap: false,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Tooltip(
+                message: 'Copy code',
+                child: IconButton(
+                  visualDensity: VisualDensity.compact,
+                  constraints: const BoxConstraints.tightFor(
+                    width: 28,
+                    height: 28,
+                  ),
+                  padding: EdgeInsets.zero,
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    foregroundColor:
+                        theme.bodyStyle.color?.withValues(alpha: 0.72),
+                  ),
+                  icon: const Icon(Icons.copy_rounded, size: 18),
+                  onPressed: onCopyCode,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class MarkdownTableBlockView extends StatelessWidget {
+  const MarkdownTableBlockView({
+    super.key,
+    required this.theme,
+    required this.block,
+    required this.layoutPlan,
+    required this.textWidgetBuilder,
+    this.bodyStyle,
+    this.tableHeaderStyle,
+    this.inlineCodeStyle,
+    this.linkStyle,
+    this.cellKeyBuilder,
+    this.cellTextKeyBuilder,
+    this.scrollController,
+    this.viewportKey,
+  });
+
+  final MarkdownThemeData theme;
+  final TableBlock block;
+  final MarkdownTableLayoutPlan layoutPlan;
+  final MarkdownInlineTextWidgetBuilder textWidgetBuilder;
+  final TextStyle? bodyStyle;
+  final TextStyle? tableHeaderStyle;
+  final TextStyle? inlineCodeStyle;
+  final TextStyle? linkStyle;
+  final Key? Function(int rowIndex, int columnIndex)? cellKeyBuilder;
+  final GlobalKey? Function(int rowIndex, int columnIndex)? cellTextKeyBuilder;
+  final ScrollController? scrollController;
+  final GlobalKey? viewportKey;
+
+  @override
+  Widget build(BuildContext context) {
+    final columnCount = block.rows.fold<int>(
+      0,
+      (maxCount, row) =>
+          row.cells.length > maxCount ? row.cells.length : maxCount,
+    );
+    if (columnCount == 0) {
+      return const SizedBox.shrink();
+    }
+
+    return MarkdownAdaptiveTableLayout(
+      block: block,
+      layoutPlan: layoutPlan,
+      borderRadius: theme.tableBorderRadius,
+      scrollController: scrollController,
+      viewportKey: viewportKey,
+      tableBuilder: (columnWidths, defaultColumnWidth) => Table(
+        columnWidths: columnWidths,
+        defaultColumnWidth: defaultColumnWidth,
+        border: TableBorder(
+          horizontalInside: BorderSide(color: theme.tableBorderColor),
+          verticalInside: BorderSide(color: theme.tableBorderColor),
+        ),
+        children: <TableRow>[
+          for (var rowIndex = 0; rowIndex < block.rows.length; rowIndex++)
+            TableRow(
+              decoration: BoxDecoration(
+                color: block.rows[rowIndex].isHeader
+                    ? theme.tableHeaderBackgroundColor
+                    : theme.tableRowBackgroundColor,
+              ),
+              children: <Widget>[
+                for (var index = 0; index < columnCount; index++)
+                  _buildCell(
+                    context: context,
+                    row: block.rows[rowIndex],
+                    rowIndex: rowIndex,
+                    cellIndex: index,
+                    alignment: index < block.alignments.length
+                        ? block.alignments[index]
+                        : MarkdownTableColumnAlignment.none,
+                    directTextKey: cellTextKeyBuilder?.call(rowIndex, index),
+                  ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCell({
+    required BuildContext context,
+    required TableRowNode row,
+    required int rowIndex,
+    required int cellIndex,
+    required MarkdownTableColumnAlignment alignment,
+    GlobalKey? directTextKey,
+  }) {
+    final cell = cellIndex < row.cells.length
+        ? row.cells[cellIndex]
+        : const TableCellNode(inlines: <InlineNode>[]);
+    final textStyle = row.isHeader
+        ? tableHeaderStyle ?? theme.tableHeaderStyle
+        : bodyStyle ?? theme.bodyStyle;
+    Widget child = Padding(
+      padding: theme.tableCellPadding.resolve(Directionality.of(context)),
+      child: Align(
+        alignment: _alignmentFor(alignment),
+        child: textWidgetBuilder(
+          context,
+          textStyle,
+          cell.inlines,
+          _textAlignFor(alignment),
+          directTextKey: directTextKey,
+          alignInlineMathToBaseline: false,
+          inlineCodeStyle: inlineCodeStyle,
+          linkStyle: linkStyle,
+        ),
+      ),
+    );
+    if (cellKeyBuilder != null) {
+      child = KeyedSubtree(
+        key: cellKeyBuilder!(rowIndex, cellIndex),
+        child: child,
+      );
+    }
+    return child;
+  }
+
+  Alignment _alignmentFor(MarkdownTableColumnAlignment alignment) {
+    switch (alignment) {
+      case MarkdownTableColumnAlignment.center:
+        return Alignment.center;
+      case MarkdownTableColumnAlignment.right:
+        return Alignment.centerRight;
+      case MarkdownTableColumnAlignment.left:
+      case MarkdownTableColumnAlignment.none:
+        return Alignment.centerLeft;
+    }
+  }
+
+  TextAlign _textAlignFor(MarkdownTableColumnAlignment alignment) {
+    switch (alignment) {
+      case MarkdownTableColumnAlignment.center:
+        return TextAlign.center;
+      case MarkdownTableColumnAlignment.right:
+        return TextAlign.right;
+      case MarkdownTableColumnAlignment.left:
+      case MarkdownTableColumnAlignment.none:
+        return TextAlign.left;
+    }
+  }
+}
+
+class MarkdownImageBlockView extends StatelessWidget {
+  const MarkdownImageBlockView({
+    super.key,
+    required this.theme,
+    required this.image,
+    this.caption,
+    this.hasErrorNotifier,
+    this.hasKnownSize = false,
+  });
+
+  final MarkdownThemeData theme;
+  final Widget image;
+  final Widget? caption;
+  final ValueNotifier<bool>? hasErrorNotifier;
+  final bool hasKnownSize;
+
+  @override
+  Widget build(BuildContext context) {
+    if (hasErrorNotifier == null) {
+      return _buildContent(false, image);
+    }
+    return ValueListenableBuilder<bool>(
+      valueListenable: hasErrorNotifier!,
+      child: image,
+      builder: (context, hasError, imageChild) {
+        return _buildContent(hasError, imageChild!);
+      },
+    );
+  }
+
+  Widget _buildContent(bool hasError, Widget imageChild) {
+    if (caption == null) {
+      return imageChild;
+    }
+
+    if (!hasKnownSize && hasError) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: theme.imagePlaceholderBackgroundColor,
+          borderRadius: theme.imageBorderRadius,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            imageChild,
+            const SizedBox(width: 8),
+            Flexible(
+              child: DefaultTextStyle.merge(
+                style: theme.bodyStyle.copyWith(
+                  color: theme.bodyStyle.color?.withValues(alpha: 0.72),
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                child: caption!,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final showCaption = hasKnownSize || !hasError;
+    if (!showCaption) {
+      return imageChild;
+    }
+
+    return ImageCaptionLayout(
+      image: imageChild,
+      spacing: theme.imageCaptionSpacing,
+      caption: DefaultTextStyle.merge(
+        textAlign: TextAlign.center,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        child: caption!,
+      ),
+    );
+  }
+}
+
+class _MarkdownTableBorderPainter extends CustomPainter {
+  const _MarkdownTableBorderPainter({
+    required this.borderColor,
+    required this.borderRadius,
+  });
+
+  final Color borderColor;
+  final BorderRadius borderRadius;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    canvas.drawRRect(
+      borderRadius.toRRect(rect.deflate(0.5)),
+      Paint()
+        ..color = borderColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.0,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _MarkdownTableBorderPainter oldDelegate) {
+    return oldDelegate.borderColor != borderColor ||
+        oldDelegate.borderRadius != borderRadius;
+  }
+}

@@ -51,7 +51,7 @@
 | WP-3 | 渲染分发插件化（renderer 注册表） | 3–4 | WP-2 | G1 G4（registry 保持中立） | 已完成 | [03-wp3-renderer-registry.md](03-wp3-renderer-registry.md) |
 | WP-4 | 控件收敛下沉 zeta_ui | 4–5 | WP-2（可穿插） | G8；zeta_ui 纯度 | 已完成 | [04-wp4-zeta-ui-convergence.md](04-wp4-zeta-ui-convergence.md) |
 | WP-5 | 历史分页 / 窗口化 | 5–8（含 spike） | 需先 spike；WP-1 之后 | G2 G3 G6 | 未开始 | [05-wp5-history-pagination.md](05-wp5-history-pagination.md) |
-| WP-6 | **Markdown vendor + 深度改造** | 11–16（T1–T10 + 治理；P2 另计） | 无 | G6 G7 G8；包治理 | 未开始 | [06-wp6-markdown-vendor.md](06-wp6-markdown-vendor.md) |
+| WP-6 | **Markdown vendor + 深度改造** | 11–16（T1–T10 + 治理；P2 另计） | 无 | G6 G7 G8；包治理 | 进行中 | [06-wp6-markdown-vendor.md](06-wp6-markdown-vendor.md) |
 | WP-7 | 卫生小修清单 | 2–3 | 无（T3 是 WP-1 解锁条件，优先） | G6 G7 G8 | 未开始 | [07-wp7-hygiene.md](07-wp7-hygiene.md) |
 
 **依赖图**：
@@ -110,3 +110,4 @@ WP-5（spike 结论后再排期）
 | 2026-09-03 | WP-4 T3 | `IdeTimelineRow` + 时间线摘要行收敛 | 命令组（含历史 search/system）、独立 tool 与 diff 标题改用自然高度原语；多行 history status card 保留；既有 key 不变 |
 | 2026-09-03 | WP-4 T4 | `AgentTimelineGroupCard` 折叠组骨架收敛 | command/file-edit 共用 key、摘要、图标、间距和 hover 组装；slice 与 Widget 两类展开状态 owner 保持独立 |
 | 2026-09-03 | WP-4 T5 | `IdeSubmitButton` + WP-4 收尾 | Composer 发送/停止/禁用态统一下沉；双层 key 与交互保持；feature `sf.IconButton.ghost` 10→9；WP-4 已完成 |
+| 2026-09-03 | WP-6 T1 | `packages/zeta_markdown` fork 落地 | 31 个 lib 文件 + 1 个测试随迁，包内 180 条测试全绿。对照发布产物修正文档 5 处：依赖实为 pretext/flutter_math_fork（无 flutter_highlight/meta）、测试只有 1 个文件、新建包级 analysis_options 关三条风格 lint、example/benchmark/上游 AGENTS.md 不迁入、SDK 下限跟上游 ^3.5.0（用户决策：保住与上游逐字节一致，31 个文件仅 7 个有登记在案的差异）。顺带修上游 Windows 盘符被当成 URI scheme 导致本地图片全部加载失败的缺陷 |

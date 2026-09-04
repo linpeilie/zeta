@@ -1,0 +1,20 @@
+# vendor 包的分析配置：继承仓库根规则，只关掉三条会与上游源码逐行打架的风格 lint。
+#
+# 本包是 mixin_markdown_widget 0.3.1 的 fork，改造原则是「新增注入点、默认行为
+# 不变」，上游同步时按文件 diff 合入。为满足风格 lint 去重写上游的构造函数与
+# 集合字面量，会让同步 diff 全面失配——代价远大于收益。仓库根配置对
+# `third_party/**` 同样是整体排除，这里是同一取舍的更窄版本。
+#
+# 这三条只影响写法偏好，不涉及正确性；本包新写的代码同样按上游风格走，保持
+# 单一风格。语义类规则（unused_*、错误、警告）一条不关。
+include: ../../analysis_options.yaml
+
+linter:
+  rules:
+    # 上游大量用「命名参数 + initializer 赋私有字段」，改成私有初始化形参要连
+    # 带改调用点参数名。
+    prefer_initializing_formals: false
+    # 新版 lint；上游写的是 `if (x != null) x` 集合元素。
+    use_null_aware_elements: false
+    # 上游回调用 `(_, __, ___, position)` 占位，改名会动到闭包签名。
+    unnecessary_underscores: false
