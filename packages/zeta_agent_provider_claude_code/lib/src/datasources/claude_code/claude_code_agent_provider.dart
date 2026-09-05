@@ -11,7 +11,7 @@ import 'package:zeta_agent_provider_claude_code/src/datasources/claude_code/clau
 import 'package:zeta_agent_provider_claude_code/src/datasources/claude_code/claude_code_event_mapper.dart';
 import 'package:zeta_agent_provider_claude_code/src/datasources/claude_code/claude_code_hidden_thread_store.dart';
 import 'package:zeta_agent_provider_claude_code/src/datasources/claude_code/claude_code_model_catalog.dart';
-import 'package:zeta_agent_provider_claude_code/src/datasources/claude_code/claude_code_oauth_credentials_reader.dart';
+import 'package:zeta_agent_provider_claude_code/src/datasources/claude_code/claude_code_credentials_service.dart';
 import 'package:zeta_agent_provider_claude_code/src/datasources/claude_code/claude_code_permission_policy_adapter.dart';
 import 'package:zeta_agent_provider_claude_code/src/datasources/claude_code/claude_code_provider_config.dart';
 import 'package:zeta_agent_provider_claude_code/src/datasources/claude_code/claude_code_plan_approval_adapter.dart';
@@ -56,6 +56,7 @@ class ClaudeCodeAgentProvider
     ClaudeCodeCliMetadataLoader? metadataLoader,
     ClaudeCodeCliMetadataCoordinator? metadataCoordinator,
     ClaudeCodeUsageQuotaAdapter? usageQuotaAdapter,
+    ClaudeCodeCredentialsService? credentialsService,
     ClaudeCodeControlRequestHandler? controlRequestHandler,
     ClaudeCodeQuestionAdapter? questionAdapter,
     ClaudeCodeSessionDecisionStoreFactory? sessionDecisionStoreFactory,
@@ -95,12 +96,17 @@ class ClaudeCodeAgentProvider
                 processStarter: processStarter,
               ).probe,
         );
-    final credentialsReader = ClaudeCodeOAuthCredentialsReader(
-      environment: <String, String>{
-        ...Platform.environment,
-        ...config.environment,
-      },
-    );
+    this.credentialsService =
+        credentialsService ??
+        LocalClaudeCodeCredentialsService(
+          oauthEnabled:
+              !config.arguments.contains('--bare') &&
+              config.extra['hasApiKey'] != true,
+          environment: <String, String>{
+            ...Platform.environment,
+            ...config.environment,
+          },
+        );
     _modelCatalog =
         modelCatalog ??
         ClaudeCodeModelCatalog(metadataLoader: sharedMetadata.refreshForModels);
@@ -117,7 +123,7 @@ class ClaudeCodeAgentProvider
           claudeCodeVersion: _nonEmptyConfigValue(
             config.extra['detectedCurrentVersion'],
           ),
-          credentialsLoader: credentialsReader.read,
+          credentialsService: this.credentialsService,
         );
     _planApprovalAdapter = _mapper.planApprovalAdapter;
     _permissionMode = ClaudeCodePermissionModeCodec.parseOptionId(
@@ -140,6 +146,9 @@ class ClaudeCodeAgentProvider
   final ClaudeCodeEventMapper _mapper;
   late final ClaudeCodeModelCatalog _modelCatalog;
   late final ClaudeCodeUsageQuotaAdapter _usageQuotaAdapter;
+
+  /// Claude data 层统一凭据入口；初始化不预读，调用方不得缓存结果。
+  late final ClaudeCodeCredentialsService credentialsService;
   final ClaudeCodeControlRequestHandler _controlHandler;
   final ClaudeCodeQuestionAdapter _questionAdapter;
   final ClaudeCodeSessionHistoryReader _sessionHistoryReader;

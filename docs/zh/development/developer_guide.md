@@ -861,7 +861,10 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
   到 `AgentUsageQuotaSnapshot`，原始 billing JSON 不得泄漏到 presentation。
 - Claude 的 `planType` 只来自 initialize metadata；可选 `/api/oauth/usage` 仅补额度窗口
   与 extra usage。只有增强开启、非 API key、token 有效且 scopes 同时含
-  `user:inference` / `user:profile` 时才能读凭据并发请求；5 秒超时、60 秒节流且不重试。
+  `user:inference` / `user:profile` 时才能发请求；5 秒超时、60 秒节流且不重试。
+  凭据只通过 Claude-local `ClaudeCodeCredentialsService.read()` 按需读取，三平台统一
+  返回 access/refresh token 和可空 UTC 到期时间；增强关闭/API key 模式不读取凭据，
+  读取完成后再检查有效期，过期/未知均不访问额度 API。详见协议文档 §11。
   REST 失败或增强关闭返回 plan-only，UI 不得伪造 0% 窗口、100% 剩余、币种或余额。
 - 调用统计依赖中立 `AgentUsageRecord`，provider 原始 JSON key 只允许出现在 data 层。
 - Codex 使用统计扫描 `$CODEX_HOME/sessions/**/rollout-*.jsonl`：只要首行是合法

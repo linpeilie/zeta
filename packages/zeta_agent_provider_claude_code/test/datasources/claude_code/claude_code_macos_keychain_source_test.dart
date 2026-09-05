@@ -106,14 +106,21 @@ void main() {
           ),
         ]) {
       test(
-        '${failureCase.name} returns null without surfacing diagnostics',
+        '${failureCase.name} preserves absence or a sanitized failure',
         () async {
           final source = ClaudeCodeMacOsKeychainSource(
             environment: const <String, String>{'USER': 'fixture-user'},
             processRunner: failureCase.process.call,
           );
 
-          await expectLater(source.read(), completion(isNull));
+          if (failureCase.name == 'missing item') {
+            await expectLater(source.read(), completion(isNull));
+          } else {
+            await expectLater(
+              source.read(),
+              throwsA(isA<ClaudeCodeSecureCredentialsUnavailable>()),
+            );
+          }
           expect(failureCase.process.calls, hasLength(1));
         },
       );
