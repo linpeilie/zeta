@@ -23,6 +23,15 @@ Provider 提供的运行时模式目录（端口 `conversationModes`）。Defaul
 **权限 Plan（`planningOnly`）**
 权限目录里标成只读规划的档（端口 `permissionPolicy`）。和对话 Plan 不是同一能力：它限制进程能做什么，不是下一回合聊法。点本地交接「执行」必须离开该档，不能带着只读规划去「执行」。
 
+**Management runtime facts（管理运行事实）**
+只含 Workbench session Binding 的不可变白名单快照；不含正文、路径或原始错误。按精确 Provider 实例 id 聚合，和安装/账号/连接测试诊断分开。
+
+**Runtime observation attemptEpoch（运行观测启动代次）**
+controller 在无 runtime 的新启动尝试前推进的内存代数，隔离尚未取得实例 identity 的失败。Binding 对象 identity、runtime identity、connection scope、attemptEpoch 分别覆盖不同生命周期边界，均不持久化。
+
+**unobservedTurnRuntimeCount（无当前 turn 观测的实例数）**
+仍附着 runtime 但没有当前有效 controller 观测的实例数量。ready 可以证明连接，不能因此证明 turn 空闲或运行。
+
 ## 时间线
 
 **Entry / entryId（条目）**

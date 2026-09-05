@@ -1,3 +1,4 @@
+import '../agent_management_runtime_aggregation.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
@@ -6,9 +7,53 @@ import 'package:zeta/src/features/agent_management/application/agent_management_
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_state.dart';
 import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 
-/// Agent 管理页的纯同步 reducer。
+/// 所有 ingress 共用出口；探测/初始化/连接测试不得覆盖 session 运行事实。
 Transition<AgentManagementSliceState, AgentManagementSliceEffect>
 agentManagementSliceReduce(
+  AgentManagementSliceState state,
+  AgentManagementSliceIntent intent,
+) {
+  final transition = _reduce(state, intent);
+  return Transition(
+    projectManagementRuntimeState(transition.state),
+    transition.effects,
+  );
+}
+
+AgentManagementSliceState projectManagementRuntimeState(
+  AgentManagementSliceState state,
+) {
+  final enabled = <String, bool>{
+    for (final agent in state.agentsById.entries)
+      agent.key: agent.value.enabled,
+    for (final config in state.providerSettings.providers)
+      config.id: config.enabled,
+  };
+  final summaries = aggregateManagementRuntime(state.runtimeFacts, enabled);
+  var changed = false;
+  final agents = <String, ManagedAgent>{};
+  for (final entry in state.agentsById.entries) {
+    final summary = summaries[entry.key]!;
+    final agent = entry.value;
+    if (agent.runtimeState != summary.state ||
+        agent.enabled != summary.enabled) {
+      changed = true;
+      agents[entry.key] = agent.copyWith(
+        runtimeState: summary.state,
+        enabled: summary.enabled,
+      );
+    } else {
+      agents[entry.key] = agent;
+    }
+  }
+  if (!changed && zetaMapEquals(summaries, state.runtimeByProviderId)) {
+    return state;
+  }
+  return state.copyWith(agentsById: agents, runtimeByProviderId: summaries);
+}
+
+/// Agent 管理页的纯同步 reducer。
+Transition<AgentManagementSliceState, AgentManagementSliceEffect> _reduce(
   AgentManagementSliceState state,
   AgentManagementSliceIntent intent,
 ) {
@@ -201,12 +246,7 @@ agentManagementSliceReduce(
               : _replaceAgent(
                   state.agentsById,
                   intent.agentId,
-                  current.copyWith(
-                    enabled: intent.enabled,
-                    runtimeState: intent.enabled
-                        ? AgentRuntimeState.notRunning
-                        : AgentRuntimeState.disabled,
-                  ),
+                  current.copyWith(enabled: intent.enabled),
                 ),
           providerSettings: intent.providerSettings,
           pendingOperations: _removePending(state.pendingOperations, key),
@@ -319,11 +359,6 @@ agentManagementSliceReduce(
         modelSource: intent.models.isEmpty
             ? current.modelSource
             : intent.modelSource,
-        runtimeState: !current.enabled
-            ? AgentRuntimeState.disabled
-            : intent.result.success
-            ? AgentRuntimeState.idle
-            : AgentRuntimeState.error,
         errorStage: intent.result.success ? null : intent.result.failureStage,
         errorMessage: intent.result.success ? null : intent.result.message,
         errorDetails: intent.result.success
@@ -556,12 +591,7 @@ agentManagementSliceReduce(
           continue;
         }
         changed = true;
-        agents[entry.key] = entry.value.copyWith(
-          enabled: enabled,
-          runtimeState: enabled
-              ? AgentRuntimeState.notRunning
-              : AgentRuntimeState.disabled,
-        );
+        agents[entry.key] = entry.value.copyWith(enabled: enabled);
       }
       if (!changed &&
           identical(state.providerSettings, intent.providerSettings)) {
@@ -574,26 +604,10 @@ agentManagementSliceReduce(
         ),
       );
 
-    case RuntimeSnapshotChanged():
-      final current = state.agentsById[intent.agentId];
-      if (current == null) {
-        return Transition.none(state);
-      }
-      final next = current.enabled
-          ? intent.runtimeState
-          : AgentRuntimeState.disabled;
-      if (next == current.runtimeState) {
-        return Transition.none(state);
-      }
-      return Transition.stateOnly(
-        state.copyWith(
-          agentsById: _replaceAgent(
-            state.agentsById,
-            intent.agentId,
-            current.copyWith(runtimeState: next),
-          ),
-        ),
-      );
+    case RuntimeFactsReplaced():
+      return intent.facts == state.runtimeFacts
+          ? Transition.none(state)
+          : Transition.stateOnly(state.copyWith(runtimeFacts: intent.facts));
   }
 }
 

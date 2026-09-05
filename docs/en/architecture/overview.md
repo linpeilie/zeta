@@ -194,6 +194,10 @@ available. Credentials are written only to the selected existing CLI store, unde
 readback verification. Zeta-owned storage and logs never contain credentials or raw payloads.
 See the Claude protocol document, section 11, for scope and platform validation limits.
 
+### Session scope of management status
+
+Management runtime summaries cover only this Workbench's session bindings, grouped by exact configured `providerId` across foreground and background entries, including retained bindings without an entry. Default-provider choice and Canvas selection do not determine ownership. Global catalog warmup, connection tests, and external CLI processes are excluded. Ready means connected; a live turn or pending interaction means running. Historical active flags and short RPC counts cannot establish a live turn. Disabled policy preserves existing facts until actual clear/removal. Primary status follows running → error → starting → unavailable → idle → disabled → notRunning, while `hasErrors` remains independent.
+
 ## Three kinds of approval — don't conflate them
 
 This is the most common newcomer trap. They all look like "show a card and wait for a click", but they are **three independent domain semantics** that do not share request/decision models:

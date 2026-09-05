@@ -1,3 +1,4 @@
+import '../../../testing/memory_agent_runtime_fact_source.dart';
 import 'package:zeta/src/app/plugins/agent_provider_icon_overrides.dart';
 import '../../../testing/agent_management_test_definitions.dart';
 import 'dart:io';
@@ -41,6 +42,47 @@ void main() {
       expect(harness.managementStore.accountDataEnrichmentEnabled, isFalse);
     },
   );
+
+  for (final width in [680.0, 1280.0]) {
+    testWidgets('running and error are both visible at width $width', (
+      tester,
+    ) async {
+      final harness = _ManagementHarness.create();
+      addTearDown(harness.dispose);
+      await tester.runAsync(harness.managementStore.initialize);
+      harness.managementStore.runtimeFactsReplaced(
+        AgentManagementRuntimeFacts([
+          AgentManagementRuntimeFact(
+            observationKey: Object(),
+            providerId: defaultAgentProviderId,
+            lifecycle: AgentConversationRuntimeLifecyclePhase.attached,
+            activeTurn: true,
+          ),
+          AgentManagementRuntimeFact(
+            observationKey: Object(),
+            providerId: defaultAgentProviderId,
+            lifecycle: AgentConversationRuntimeLifecyclePhase.dormant,
+            currentError: true,
+          ),
+        ]),
+      );
+      await _pumpManagementPage(
+        tester,
+        controller: harness.managementStore,
+        size: Size(width, 800),
+      );
+      expect(
+        harness.managementStore.agent.runtimeState,
+        AgentRuntimeState.running,
+      );
+      expect(
+        find.byKey(const ValueKey('agent-runtime-error-codex')),
+        findsOneWidget,
+      );
+      expect(find.text('运行中'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   testWidgets('renders list and opens responsive Codex detail page', (
     tester,
@@ -410,7 +452,6 @@ class _ManagementHarness {
     required this.managementStore,
     required this._managementComposition,
     required this._registry,
-    required this._runtimeSignal,
   });
 
   final Directory root;
@@ -419,7 +460,6 @@ class _ManagementHarness {
   final AgentManagementSliceStore managementStore;
   final AgentManagementSliceComposition _managementComposition;
   final AgentProviderRuntimeRegistry _registry;
-  final ChangeNotifier _runtimeSignal;
 
   static _ManagementHarness create() {
     final root = Directory.systemTemp.createTempSync(
@@ -450,21 +490,13 @@ class _ManagementHarness {
       runtimeRegistry: registry,
       codexHomeProvider: () => root.path,
     );
-    final runtimeSignal = ChangeNotifier();
     final managementComposition = AgentManagementSliceComposition.create(
       definitions: testAgentManagementDefinitions,
       repositories: <String, AgentCliManagementRepository>{
         codexAgentManagementDefinition.id: repository,
       },
       providerSettings: providerController,
-      subscribeRuntime: (listener) {
-        runtimeSignal.addListener(listener);
-        return () => runtimeSignal.removeListener(listener);
-      },
-      runtimeSnapshotProvider: () => (
-        activeAgentId: defaultAgentProviderId,
-        runtimeState: AgentRuntimeState.notRunning,
-      ),
+      runtimeFactSource: MemoryAgentRuntimeFactSource(),
       textCatalog: const FallbackAgentManagementTextCatalog(),
     );
     return _ManagementHarness(
@@ -474,13 +506,11 @@ class _ManagementHarness {
       managementStore: managementComposition.store,
       managementComposition: managementComposition,
       registry: registry,
-      runtimeSignal: runtimeSignal,
     );
   }
 
   Future<void> dispose() async {
     _managementComposition.close();
-    _runtimeSignal.dispose();
     providerController.dispose();
     await _registry.close();
     for (var attempt = 0; attempt < 5 && await root.exists(); attempt++) {
@@ -500,7 +530,6 @@ class _ClaudeManagementHarness {
     required this.managementStore,
     required this._managementComposition,
     required this._registry,
-    required this._runtimeSignal,
   });
 
   final _FakeClaudeManagementRepository repository;
@@ -508,7 +537,6 @@ class _ClaudeManagementHarness {
   final AgentManagementSliceStore managementStore;
   final AgentManagementSliceComposition _managementComposition;
   final AgentProviderRuntimeRegistry _registry;
-  final ChangeNotifier _runtimeSignal;
 
   static _ClaudeManagementHarness create({
     bool? accountDataEnrichmentEnabled,
@@ -541,21 +569,13 @@ class _ClaudeManagementHarness {
         activeProviderId: defaultClaudeCodeProviderId,
       ),
     );
-    final runtimeSignal = ChangeNotifier();
     final managementComposition = AgentManagementSliceComposition.create(
       definitions: testAgentManagementDefinitions,
       repositories: <String, AgentCliManagementRepository>{
         defaultClaudeCodeProviderId: repository,
       },
       providerSettings: providerController,
-      subscribeRuntime: (listener) {
-        runtimeSignal.addListener(listener);
-        return () => runtimeSignal.removeListener(listener);
-      },
-      runtimeSnapshotProvider: () => (
-        activeAgentId: defaultClaudeCodeProviderId,
-        runtimeState: AgentRuntimeState.notRunning,
-      ),
+      runtimeFactSource: MemoryAgentRuntimeFactSource(),
       textCatalog: const FallbackAgentManagementTextCatalog(),
     );
     return _ClaudeManagementHarness(
@@ -564,13 +584,11 @@ class _ClaudeManagementHarness {
       managementStore: managementComposition.store,
       managementComposition: managementComposition,
       registry: registry,
-      runtimeSignal: runtimeSignal,
     );
   }
 
   Future<void> dispose() async {
     _managementComposition.close();
-    _runtimeSignal.dispose();
     providerController.dispose();
     await _registry.close();
   }

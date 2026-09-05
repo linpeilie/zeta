@@ -639,6 +639,14 @@ conversation mode 的 UI 回写仍受当前 thread gate 约束。
 权限域的状态、请求、事件、迁移与 catalog 边界已完成收口。旧 `AgentProvider` 中仍可能存在的
 其它门面只涉及非权限能力，不构成权限运行态的第二真源。
 
+### 管理运行事实摘要
+
+管理运行状态只统计本 Workbench 的 session Binding，按精确配置实例 `providerId` 聚合所有前后台 entry，并保留无 entry 但仍有 runtime 的 Binding。默认 Provider 与 Canvas 选择不参与归属；global 模型预热、连接测试和外部 CLI 进程不计入。`ready` 只证明连接，活跃 turn/等待交互才证明运行；不从历史 active 或短 RPC 计数猜测 turn。禁用是配置策略，现存事实保留至实际 clear/remove。主状态按 running → error → starting → unavailable → idle → disabled → notRunning 投影，`hasErrors` 独立保留。
+
+生产链：`RuntimeController.runtimeObservationListenable + BindingManager + Workspace → WorkspaceAgentRuntimeFactSource → Management.runtimeFactsReplaced → aggregateManagementRuntime → runtimeByProviderId`。计数分别为 active turn、ready runtime、starting Binding、error Binding、unavailable Binding，以及无当前会话观测的 runtime；runtime 以完整 identity 去重，Binding 的 opaque token 在 draft 晋升时保持不变。
+
+source 由 Shell 创建并 start，管理 composition 借用端口；退出顺序为管理消费者退订/关闭 → source close → Workspace/BindingManager。source 同时观察 retained Binding 的事件通知但不读取内容，只同步重读中立 lifecycle。管理行独立显示运行错误；首页保留当前诊断缓存机制，但实时状态按 exact id 从同一摘要投影。WP-3 的 Notifier owner 迁移与 WP-5 的诊断缓存收口另行实施。
+
 ### 当前已落地的对话体验
 
 - 流式推理（思考卡，摘要优先）与流式 plan 卡。

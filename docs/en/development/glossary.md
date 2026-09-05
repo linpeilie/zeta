@@ -23,6 +23,15 @@ A runtime mode catalog supplied by the provider (`conversationModes`). Default e
 **Permission Plan (`planningOnly`)**
 A permission-catalog option marked read-only planning (`permissionPolicy`). It is not the same capability as conversation Plan: it constrains what the process may do. Local handoff "Run" must leave this option; execution must not keep a planning-only permission.
 
+**Management runtime facts**
+Immutable, allowlisted snapshots of Workbench session bindings, without content, paths, or raw errors. Grouped by exact provider configuration instance, independently of installation/account/connection-test diagnostics.
+
+**Runtime observation attemptEpoch**
+An in-memory controller counter advanced before a new startup attempt without a runtime. It isolates failures before an instance identity exists; binding identity, runtime identity and connection scope cover separate lifecycle boundaries. None is persisted.
+
+**unobservedTurnRuntimeCount**
+The number of attached runtimes without a current controller observation. Ready can establish a connection but cannot establish whether its turn is idle or active.
+
 ## Timeline
 
 **Entry / entryId**

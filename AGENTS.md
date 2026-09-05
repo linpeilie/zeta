@@ -164,6 +164,10 @@ Session config 以 `bundle.sessionConfiguration` 端口为能力真源，不新�
 
 > 正文：[架构总览「Provider 能力协商」](docs/zh/architecture/overview.md) · [工程规范 §4](docs/zh/architecture/engineering_standards.md)
 
+管理运行摘要必须按精确配置实例 id 聚合 Workbench 全部 session Binding；默认 Provider、Canvas 选择、global 预热和短 RPC 不得代替会话运行事实。禁用不能凭空清零现存运行事实；错误标志必须独立于 running 主状态。Shell 拥有只读事实源，管理 composition 只退订；关闭时先关闭管理消费者，再关闭事实源，最后关闭 Workspace/BindingManager。事实源不得 acquire/release/invalidate runtime 或持久化摘要。
+
+> 接线与计数：[开发者文档「管理运行事实摘要」](docs/zh/development/developer_guide.md#管理运行事实摘要)
+
 ### G5 · 四种审批语义隔离，且绝不预授权
 
 这是新人最容易踩的坑。看起来都是「弹卡片让用户点」，但它们不共享 request/decision 模型和 pending registry：

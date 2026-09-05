@@ -1,6 +1,6 @@
 # WP-1 · 按 Provider 实例聚合会话运行事实
 
-> 状态：未开始。前置：无。先适配现有 workspace；WP-3 更换源 owner 时保留同一事实端口。 统一约束见 [总入口](00-index.md)。本章新 API 与代码块均为目标设计。
+> 状态：已完成（2026-09-06）。前置：无。已适配现有 workspace；WP-3 更换源 owner 时保留同一事实端口。统一约束见 [总入口](00-index.md)。§1.1–1.7 保留设计基线；落地细化与验收见 §1.8。
 
 ### 1.1 问题、实施前提与边界
 
@@ -340,3 +340,12 @@ final agentManagementIngressProvider = Provider<void>((ref) {
 建议新增 `test/src/app/agent_management_slice/workspace_agent_runtime_fact_source_test.dart` 与 `test/src/features/agent_management/application/agent_management_runtime_aggregation_test.dart`；真实接线用例扩展 `test/src/app/ide_shell_widget_test.dart`，现有 `ide_shell_controller_test.dart` 的跨Provider并行用例保留。
 
 回滚：保持WP-1为独立提交，在回退该提交时同时回退source、observation端口及消费者迁移，不保留两套runtime ingress。若WP-3已经基于该端口迁移，先按依赖逆序回退相关后继提交；不向新owner并行接回旧单Provider通道。无持久化迁移，因此不需要降级数据恢复。
+
+
+### 1.8 落地与验收（2026-09-06）
+
+实现包含 observation、Shell 所有的全量事实源、纯聚合、Management 全 ingress 的统一投影及真实 UI 接线，旧单 Provider tuple 与 UI runtime 桥已删除。Store owner 和首页诊断缓存的后继迁移仍留给 WP-3/WP-5。
+
+相对伪代码，live 接线时冻结实际 listener 的 identity/connection scope，避免旧 turn 被重新标成新连接；仅 retained Binding 额外监听内容盲事件通知；attemptEpoch 为 0 的 global 预热失败不算 session 启动失败。隐藏首页只更新缓存，不因 runtime ingress 重建会话 Workbench。详见[验收记录](../../fix/2026-09-06-management-runtime/00-validation.md)。
+
+验证：`dart format .`（1100 文件）、`flutter analyze`（0 issues）、本地化字面量检查通过；真实 Shell 全文件 34 条、受影响 81/307 个根测试文件共 681 条通过。首轮门禁捕获的多余 Workbench 重建已修复，既有流式性能和保活断言未放宽。未执行真实 CLI/跨平台实机验收；依赖、内部包、协议及持久化格式无改动。本工作包按行为修复门禁完成，下一项为 WP-4。

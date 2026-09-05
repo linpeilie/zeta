@@ -12,7 +12,6 @@ import 'package:zeta/src/app/composition/ide_workbench_composition.dart';
 import 'package:zeta/src/app/composition/zeta_environment_providers.dart';
 import 'package:zeta/src/app/window/zeta_window_host.dart';
 import 'package:zeta/src/app/window/zeta_window_surface.dart';
-import 'package:zeta/src/app/agent_management_slice/agent_management_slice_runner.dart';
 import 'package:zeta/src/app/app_constants.dart';
 import 'package:zeta/src/app/composition/zeta_state_snapshot.dart';
 import 'package:zeta/src/app/desktop_attention_slice/desktop_attention_providers.dart';
@@ -230,8 +229,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
         .subscribe(_handleAgentProviderSettingsUsageChanged);
     unawaited(_desktopAttention.initialize());
     _workbenchComposition = widget.workbenchCompositionFactory(
-      subscribeRuntime: _shellController.subscribeRuntimeChanges,
-      runtimeSnapshotProvider: _managementRuntimeSnapshot,
+      runtimeFactSource: _shellController.agentRuntimeFactSource,
     );
     _agentManagementComposition.store.addListener(
       _handleAgentManagementChanged,
@@ -658,7 +656,15 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
         return _buildGlobalHomeRestoringState();
       }
       return GlobalHomePage(
-        installedProviders: _installedHomeProviders,
+        installedProviders: [
+          for (final provider in _installedHomeProviders)
+            provider.withRuntime(
+              _agentManagementComposition
+                  .store
+                  .state
+                  .runtimeByProviderId[provider.id],
+            ),
+        ],
         onOpenProject: _openProject,
         isLoadingProviders: _homeProvidersLoading,
         providerError: _homeProviderError,
@@ -1247,16 +1253,21 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
     );
   }
 
+  void _refreshHomeAvailability() {
+    if (!_homeProvidersLoading && _homeProviderDetectionLoader == null) {
+      _setInstalledHomeProviders(_agentManagementOperations.agents);
+    }
+  }
+
   void _handleAgentManagementChanged() {
-    if (!mounted ||
-        _homeProvidersLoading ||
-        _homeProviderDetectionLoader != null) {
+    if (!mounted) {
       return;
     }
-    if (_page != _IdeHomePage.home) {
+    if (_page != _IdeHomePage.home ||
+        _shellController.activeProjectPath != null) {
       // 设置页会自行监听同一状态；这里只刷新隐藏首页的缓存，回到首页时
       // 页面切换本身会触发重建，无需让 Workbench 根节点在子页构建期标脏。
-      _setInstalledHomeProviders(_agentManagementOperations.agents);
+      _refreshHomeAvailability();
       return;
     }
     if (SchedulerBinding.instance.schedulerPhase ==
@@ -1267,23 +1278,22 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
       _agentManagementHomeRefreshScheduled = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _agentManagementHomeRefreshScheduled = false;
-        if (!mounted ||
-            _homeProvidersLoading ||
-            _homeProviderDetectionLoader != null) {
+        if (!mounted) {
           return;
         }
-        if (_page != _IdeHomePage.home) {
-          _setInstalledHomeProviders(_agentManagementOperations.agents);
+        if (_page != _IdeHomePage.home ||
+            _shellController.activeProjectPath != null) {
+          _refreshHomeAvailability();
           return;
         }
         setState(() {
-          _setInstalledHomeProviders(_agentManagementOperations.agents);
+          _refreshHomeAvailability();
         });
       });
       return;
     }
     setState(() {
-      _setInstalledHomeProviders(_agentManagementOperations.agents);
+      _refreshHomeAvailability();
     });
   }
 
@@ -1299,22 +1309,6 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
       showDuration: const Duration(seconds: 2),
     );
   }
-
-  AgentRuntimeState _managementRuntimeState() {
-    return switch (_shellController.selectedAgentController.status.state) {
-      AgentProviderConnectionState.idle => AgentRuntimeState.notRunning,
-      AgentProviderConnectionState.connecting => AgentRuntimeState.starting,
-      AgentProviderConnectionState.ready => AgentRuntimeState.idle,
-      AgentProviderConnectionState.running => AgentRuntimeState.running,
-      AgentProviderConnectionState.unavailable => AgentRuntimeState.unavailable,
-      AgentProviderConnectionState.error => AgentRuntimeState.error,
-    };
-  }
-
-  AgentManagementRuntimeSnapshot _managementRuntimeSnapshot() => (
-    activeAgentId: _shellController.agentProviderController.activeProviderId,
-    runtimeState: _managementRuntimeState(),
-  );
 
   void _openSettingsPage() {
     if (_page == _IdeHomePage.settings) {
