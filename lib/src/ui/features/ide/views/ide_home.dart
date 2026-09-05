@@ -1,133 +1,140 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
-import 'package:window_manager/window_manager.dart';
 
+import 'package:zeta_foundation/zeta_foundation.dart';
+import 'package:zeta/src/app/agent_management_slice/agent_management_slice_composition.dart';
+import 'package:zeta/src/app/composition/app_dependencies.dart';
+import 'package:zeta/src/app/composition/ide_workbench_composition.dart';
+import 'package:zeta/src/app/composition/zeta_environment_providers.dart';
+import 'package:zeta/src/app/window/zeta_window_host.dart';
+import 'package:zeta/src/app/window/zeta_window_surface.dart';
+import 'package:zeta/src/app/agent_management_slice/agent_management_slice_runner.dart';
+import 'package:zeta/src/app/app_constants.dart';
+import 'package:zeta/src/app/composition/zeta_state_snapshot.dart';
+import 'package:zeta/src/app/desktop_attention_slice/desktop_attention_providers.dart';
+import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_workspace_providers.dart';
+import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_workspace_store.dart';
 import 'package:zeta/src/app/menu_action_bridge.dart';
 import 'package:zeta/src/app/shell/ide_shell_controller.dart';
-import 'package:zeta/src/core/utils/system_file_manager.dart';
-import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
-import 'package:zeta/src/features/agent/data/agent_turn_context_store.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
-import 'package:zeta/src/features/agent/domain/agent_turn_terminal_signal.dart';
-import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
-import 'package:zeta/src/features/desktop_notifications/application/desktop_attention_controller.dart';
-import 'package:zeta/src/features/desktop_notifications/data/flutter_desktop_notification_service.dart';
-import 'package:zeta/src/features/desktop_notifications/data/method_channel_desktop_attention_indicator.dart';
+import 'package:zeta/src/app/localization/zeta_text_catalog_providers.dart';
+import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
+import 'package:zeta/src/app/storage/zeta_store_providers.dart';
+import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_providers.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
+import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_provider_settings_slice_store.dart';
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta/src/features/desktop_notifications/application/desktop_attention_slice_notifier.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_models.dart';
-import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_text_catalog.dart';
-import 'package:zeta/src/features/desktop_notifications/domain/fallback_desktop_attention_text_catalog.dart';
-import 'package:zeta/src/features/agent_management/application/agent_management_controller.dart';
-import 'package:zeta/src/features/agent_management/data/claude_code_agent_management_repository.dart';
-import 'package:zeta/src/features/agent_management/data/codex_agent_management_repository.dart';
-import 'package:zeta/src/features/agent_management/data/grok_agent_management_repository.dart';
-import 'package:zeta/src/features/agent_management/domain/agent_cli_management_repository.dart';
-import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
-import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
-import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
-import 'package:zeta/src/features/settings/application/general_settings_controller.dart';
+import 'package:zeta/src/features/agent_management/application/agent_management_operations.dart';
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
+import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_session_slice_notifier.dart';
+import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
+import 'package:zeta/src/features/project_threads/presentation/project_threads_slice/project_threads_slice_providers.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/settings/presentation/settings_page.dart';
-import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_controller.dart';
+import 'package:zeta/src/features/settings/presentation/settings_slice/settings_slice_providers.dart';
+import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_slice/agent_usage_panel_slice_store.dart';
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_refresh_coordinator.dart';
-import 'package:zeta/src/features/usage_statistics/application/usage_statistics_controller.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/agent_usage_panel.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_page.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
+import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 import 'package:zeta/src/features/workspace/presentation/file_tree_pane.dart';
-import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/ui/localization/app_localizations_x.dart';
-import 'package:zeta/src/ui/core/ide_metrics.dart';
-import 'package:zeta/src/ui/core/ide_resize_handle.dart';
-import 'package:zeta/src/ui/core/ide_spacing.dart';
-import 'package:zeta/src/ui/core/ide_toast.dart';
-import 'package:zeta/src/ui/core/pane_widgets.dart';
-import 'package:zeta/src/ui/core/window_frame.dart';
-import 'package:zeta/src/ui/core/workbench/ide_retained_page_view.dart';
-import 'package:zeta/src/ui/core/workbench/ide_workbench_scaffold.dart';
 import 'package:zeta/src/ui/features/ide/views/global_home_page.dart';
 import 'package:zeta/src/ui/features/ide/views/project_home_page.dart';
 import 'package:zeta/src/ui/features/ide/views/project_agent_sidebar.dart';
 import 'package:zeta/src/ui/features/ide/views/project_list_pane.dart';
-
-typedef AgentProviderAvailabilityLoader =
-    Future<List<AgentProviderConfig>> Function();
-
-typedef HomeProviderDetectionLoader = Future<List<ManagedAgent>> Function();
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:zeta/src/features/workspace/application/workspace_file_corpus.dart';
+import 'package:zeta/src/features/workspace/application/workspace_notifier.dart';
 
 /// IDE 主界面。
 ///
 /// 首页由标题栏入口控制 Projects / Agent 统计合并栏，中央保留 Agent 主编辑区；
 /// 具体项目、会话和 Agent thread 编排由 [IdeShellController] 承接。
-class IdeHome extends StatefulWidget {
+///
+/// **依赖从容器读，不从构造函数下钻。** 凡是组合根已经装进 Riverpod 的依赖
+/// （bundle 工厂、runtime 池、两个 registry、文本目录、指标端口、探测 loader……）
+/// 一律由 `_IdeHomeState` 自己 `ref.read`，调用方要换实现就覆盖对应的 provider。
+/// 经构造函数传的只剩**容器里还没有的那些**：状态快照桥与工作台工厂。
+class IdeHome extends ConsumerStatefulWidget {
   const IdeHome({
-    required this.directoryPicker,
-    required this.enableNativeWindowFrame,
-    required this.sessionStore,
-    required this.agentProviderFactory,
-    required this.agentProviderConfigStore,
-    required this.usageStatisticsDependencies,
-    required this.projectLocationOpener,
-    required this.appearanceController,
-    required this.generalSettingsController,
-    required this.agentModelCatalogRepository,
-    required this.agentProviderRuntimeRegistry,
-    this.enableAgentUsageAutoRefresh = true,
-    this.agentProviderAvailabilityLoader,
-    this.homeProviderDetectionLoader,
-    this.showWindowControls = true,
-    this.desktopNotificationService,
-    this.desktopAttentionIndicator,
-    this.turnContextStore,
-    this.agentUiTextCatalog = const FallbackAgentUiTextCatalog(),
-    this.desktopAttentionTextCatalog =
-        const FallbackDesktopAttentionTextCatalog(),
+    required this.shellStateSnapshotRelay,
+    required this.workbenchCompositionFactory,
+    this.providerMetricLabel = ZetaMetricLabel.hashed,
     super.key,
   });
 
-  final Future<String?> Function() directoryPicker;
-  final bool enableNativeWindowFrame;
-  final IdeSessionStore sessionStore;
-  final AgentProviderBundleFactory agentProviderFactory;
-  final AgentProviderConfigStore agentProviderConfigStore;
-  final IdeShellUsageStatisticsDependencies usageStatisticsDependencies;
-  final ProjectLocationOpener projectLocationOpener;
-  final AppearanceSettingsController appearanceController;
-  final GeneralSettingsController generalSettingsController;
-  final AgentModelCatalogRepository agentModelCatalogRepository;
-  final AgentProviderRuntimeRegistry agentProviderRuntimeRegistry;
+  final ZetaShellStateSnapshotRelay shellStateSnapshotRelay;
 
-  /// 是否在启动及每个回合结束后通过事件消息刷新 Agent 用量。
-  final bool enableAgentUsageAutoRefresh;
-  final AgentProviderAvailabilityLoader? agentProviderAvailabilityLoader;
-  final HomeProviderDetectionLoader? homeProviderDetectionLoader;
-  final bool showWindowControls;
-  final DesktopNotificationService? desktopNotificationService;
-  final DesktopAttentionIndicator? desktopAttentionIndicator;
-  final AgentTurnContextStore? turnContextStore;
-  final AgentUiTextCatalog agentUiTextCatalog;
-  final DesktopAttentionTextCatalog desktopAttentionTextCatalog;
+  /// app 组合层预绑的工作台组合工厂；UI 不再看到任何 Repository。
+  final IdeWorkbenchCompositionFactory workbenchCompositionFactory;
+
+  final ZetaMetricLabel Function(String providerId) providerMetricLabel;
 
   @override
-  State<IdeHome> createState() => _IdeHomeState();
+  ConsumerState<IdeHome> createState() => _IdeHomeState();
 }
 
-class _IdeHomeState extends State<IdeHome> with WindowListener {
+class _IdeHomeState extends ConsumerState<IdeHome> {
   static const double _initialPanelWidth = IdeMetrics.sidePaneDefaultWidth;
   static const double _minPanelWidth = IdeMetrics.sidePaneMinWidth;
   static const double _maxPanelWidth = IdeMetrics.sidePaneMaxWidth;
 
   late final IdeShellController _shellController;
-  late final AgentManagementController _agentManagementController;
-  late final UsageStatisticsController _usageStatisticsController;
-  late final AgentUsagePanelController _agentUsagePanelController;
+  late final IdeWorkbenchComposition _workbenchComposition;
+
+  /// 窗口宿主：原生标题栏、菜单与抢前台都经它；测试里通常什么都不做。
+  ///
+  /// 在 `initState` 取一次并留住：`dispose()` 里还可能用到，而那时
+  /// `ref` 已经不能再读了。窗口事件本身走 [zetaWindowSurfaceProvider]。
+  late final ZetaWindowHost _windowHost = ref.read(zetaWindowHostProvider);
+
+  /// 会话与切片 store 的两个 registry。
+  ///
+  /// 同样在 `initState` 解析一次并留住：`dispose()` 里还要 `unbind`，而那时
+  /// `ref` 已经不能再读了。
+  late final AgentConversationSliceStoreRegistry
+  _conversationSliceStoreRegistry = ref.read(
+    agentConversationSliceStoreRegistryProvider,
+  );
+  late final AgentConversationWorkspaceStoreRegistry
+  _conversationWorkspaceStoreRegistry = ref.read(
+    agentConversationWorkspaceStoreRegistryProvider,
+  );
+
+  /// 是否在启动及每个回合结束后通过事件消息刷新 Agent 用量。
+  late final bool _agentUsageAutoRefreshEnabled = ref.read(
+    agentUsageAutoRefreshEnabledProvider,
+  );
+
+  /// 首页探测端口；null 表示由首页走自己的默认实现。
+  late final AgentProviderAvailabilityLoader? _agentProviderAvailabilityLoader =
+      ref.read(agentProviderAvailabilityLoaderProvider);
+  late final HomeProviderDetectionLoader? _homeProviderDetectionLoader = ref
+      .read(homeProviderDetectionLoaderProvider);
+
+  AgentManagementSliceComposition get _agentManagementComposition =>
+      _workbenchComposition.agentManagementComposition;
+  late final void Function() _unsubscribeProviderSettings;
+  late final AgentUsagePanelSliceNotifier _agentUsagePanelController;
   late final AgentUsageRefreshCoordinator _agentUsageRefreshCoordinator;
-  late final DesktopAttentionController _desktopAttentionController;
-  bool _windowFocused = true;
+  late final DesktopAttentionSliceNotifier _desktopAttention = ref.read(
+    desktopAttentionSliceProvider.notifier,
+  );
+  late final DesktopAttentionTargetActivatorRelay
+  _desktopAttentionTargetActivatorRelay = ref.read(
+    desktopAttentionTargetActivatorRelayProvider,
+  );
+  late final DesktopAttentionTargetActivator _desktopAttentionTargetActivator;
+  late final ZetaShellStateSnapshotReader _shellStateSnapshotReader;
   bool _nativeMenuConfigured = false;
 
   bool _rightSidebarVisible = false;
@@ -138,6 +145,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   bool _usageStatisticsPageMounted = false;
   bool _globalHomeLoadRequested = false;
   bool _homeProvidersLoading = false;
+  bool _agentManagementHomeRefreshScheduled = false;
   List<HomeProviderSummary> _installedHomeProviders =
       const <HomeProviderSummary>[];
   String? _homeProviderError;
@@ -159,74 +167,82 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   final GlobalKey<SettingsPageCanvasState> _settingsCanvasKey =
       GlobalKey<SettingsPageCanvasState>();
 
+  AgentManagementOperations get _agentManagementOperations =>
+      _agentManagementComposition.store;
+
   @override
   void initState() {
     super.initState();
-    unawaited(widget.appearanceController.load());
-    unawaited(widget.generalSettingsController.load());
-    final notificationService =
-        widget.desktopNotificationService ??
-        (widget.enableNativeWindowFrame
-            ? FlutterDesktopNotificationService(
-                linuxActionName: widget.desktopAttentionTextCatalog.linuxAction,
-              )
-            : const NoopDesktopNotificationService());
-    final attentionIndicator =
-        widget.desktopAttentionIndicator ??
-        (widget.enableNativeWindowFrame
-            ? MethodChannelDesktopAttentionIndicator()
-            : const NoopDesktopAttentionIndicator());
-    _desktopAttentionController = DesktopAttentionController(
-      notificationService: notificationService,
-      indicator: attentionIndicator,
-      generalSettingsController: widget.generalSettingsController,
-      activateTarget: _activateAttentionTarget,
-      textCatalog: widget.desktopAttentionTextCatalog,
+    _desktopAttentionTargetActivator = _activateAttentionTarget;
+    _desktopAttentionTargetActivatorRelay.bind(
+      _desktopAttentionTargetActivator,
+    );
+    _agentUsagePanelController = ref.read(
+      agentUsagePanelSliceProvider.notifier,
     );
     _shellController = IdeShellController(
-      directoryPicker: widget.directoryPicker,
-      sessionStore: widget.sessionStore,
-      agentProviderFactory: widget.agentProviderFactory,
-      agentProviderConfigStore: widget.agentProviderConfigStore,
-      projectLocationOpener: widget.projectLocationOpener,
+      workspace: ref.read(workspaceProvider.notifier),
+      workspaceFileCorpus: ref.read(workspaceFileCorpusProvider),
+      workspaceFileIndexController: ref.read(
+        workspaceFileIndexControllerProvider,
+      ),
+      ideSessionOperations: ref.read(ideSessionSliceProvider.notifier),
+      agentProviderFactory: ref.read(agentProviderBundleFactoryProvider),
+      agentProviderSettingsPort: ref.read(
+        agentProviderSettingsSliceProvider.notifier,
+      ),
+      activeModelCatalogLoader: () => ref
+          .read(agentProviderSettingsSliceProvider.notifier)
+          .loadActiveModelCatalog(),
+      projectLocationOpener: ref.read(projectLocationOpenerProvider),
       statusReporter: _showStatus,
-      agentModelCatalogRepository: widget.agentModelCatalogRepository,
-      agentProviderRuntimeRegistry: widget.agentProviderRuntimeRegistry,
+      agentProviderRuntimeRegistry: ref.read(
+        agentProviderRuntimeRegistryProvider,
+      ),
       onAgentTurnTerminal: _handleAgentTurnTerminal,
       onAgentAttention: (attention) {
-        unawaited(_desktopAttentionController.handleAttention(attention));
+        unawaited(_desktopAttention.handleAttention(attention));
       },
-      usageStatistics: widget.usageStatisticsDependencies,
-      turnContextStore: widget.turnContextStore,
-      agentUiTextCatalog: widget.agentUiTextCatalog,
-    )..addListener(_handleShellChanged);
-    if (widget.enableNativeWindowFrame) {
-      windowManager.addListener(this);
-    }
-    unawaited(_desktopAttentionController.initialize());
-    _agentManagementController = AgentManagementController(
-      repositories: <String, AgentCliManagementRepository>{
-        AgentDefinition.codex.id: CodexAgentManagementRepository(
-          modelCatalogRepository: widget.agentModelCatalogRepository,
-          runtimeRegistry: widget.agentProviderRuntimeRegistry,
-        ),
-        AgentDefinition.grok.id: GrokAgentManagementRepository(
-          modelCatalogRepository: widget.agentModelCatalogRepository,
-          runtimeRegistry: widget.agentProviderRuntimeRegistry,
-        ),
-        AgentDefinition.claudeCode.id: ClaudeCodeAgentManagementRepository(),
-      },
-      providerController: _shellController.agentProviderController,
-      runtimeStateProvider: _managementRuntimeState,
-      runtimeListenable: _shellController,
-    )..addListener(_handleAgentManagementChanged);
-    _usageStatisticsController = _shellController.usageStatisticsController;
-    _agentUsagePanelController = _shellController.agentUsagePanelController;
+      turnContextStore: ref.read(agentTurnContextStoreProvider),
+      agentUiTextCatalog: ref.read(agentUiTextCatalogProvider),
+      metrics: ref.read(zetaMetricsPortProvider),
+      providerMetricLabel: widget.providerMetricLabel,
+    );
+    // 定向订阅三个切片，而不是监听整个 Shell。
+    //
+    // IDE Session 走 Riverpod：订阅与取消都由 `ref.listen` 在 build 里管，
+    // 不需要自己存一个取消回调再在 dispose 里调。
+    //
+    // IdeHome 从 Shell 读的每一项都是这三个 store 的投影：
+    // workbenchLayout / initialRestoreCompleted ← IDE Session；
+    // projects / activeProjectPath ← Workspace（Riverpod）；
+    // selectedEntry / projectHomeActive ← Conversation Workspace。
+    _shellController.agentConversationWorkspaceStore.addListener(
+      _handleConversationWorkspaceChanged,
+    );
+    _conversationWorkspaceStoreRegistry.bind(
+      _shellController.agentConversationWorkspaceStore,
+    );
+    _conversationSliceStoreRegistry.bind(
+      _shellController.agentConversationWorkspaceStore.handleForBinding,
+    );
+    _unsubscribeProviderSettings = _shellController.agentProviderController
+        .subscribe(_handleAgentProviderSettingsUsageChanged);
+    unawaited(_desktopAttention.initialize());
+    _workbenchComposition = widget.workbenchCompositionFactory(
+      subscribeRuntime: _shellController.subscribeRuntimeChanges,
+      runtimeSnapshotProvider: _managementRuntimeSnapshot,
+    );
+    _agentManagementComposition.store.addListener(
+      _handleAgentManagementChanged,
+    );
     _agentUsageRefreshCoordinator = AgentUsageRefreshCoordinator(
       // turn 完成 / 启动预热走静默刷新：已有数据时不闪加载横条。
       refresh: () => _agentUsagePanelController.refresh(showLoading: false),
     );
-    if (widget.enableAgentUsageAutoRefresh) {
+    _shellStateSnapshotReader = _takeShellStateSnapshot;
+    widget.shellStateSnapshotRelay.bind(_shellStateSnapshotReader);
+    if (_agentUsageAutoRefreshEnabled) {
       _scheduleInitialAgentUsageRefresh();
     }
     // 打开项目只走菜单栏（原生 File 菜单或标题栏菜单），不在项目列表放入口。
@@ -236,11 +252,11 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (!_nativeMenuConfigured && widget.enableNativeWindowFrame) {
+    if (!_nativeMenuConfigured && _windowHost.rendersNativeChrome) {
       _nativeMenuConfigured = true;
       final l10n = context.l10n;
       unawaited(
-        MenuActionBridge.instance.configure(
+        _windowHost.configureNativeMenu(
           fileMenuLabel: l10n.workbenchMenuFile,
           openProjectLabel: l10n.workbenchMenuOpenProject,
         ),
@@ -248,25 +264,139 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
     }
   }
 
+  /// 诊断与恢复测试使用的无正文 Shell 投影。
+  ///
+  /// 这里刻意同步读取各唯一 owner，既不缓存也不注册 listener；生产 Widget 仍只
+  /// watch 各自的 feature selector。
+  ZetaShellStateSnapshot _takeShellStateSnapshot() {
+    final threadStates = _shellController.projectThreadsSliceStore.state;
+    final projectThreads = <String, ZetaProjectThreadsStateSnapshot>{
+      for (final entry in threadStates.statesByProject.entries)
+        entry.key: ZetaProjectThreadsStateSnapshot.fromState(
+          entry.key,
+          entry.value,
+        ),
+    };
+    final entries = _shellController.agentWorkspaceEntries;
+    final selectedEntryId = _shellController.selectedAgentWorkspaceEntryId;
+    final conversations = <String, ZetaConversationStateSnapshot>{};
+    for (final entry in entries) {
+      final slice = entry.sliceStore.state;
+      final pendingInteractions = slice.pendingInteractions;
+      conversations[entry.entryId] = ZetaConversationStateSnapshot(
+        entryId: entry.entryId,
+        projectPath: entry.projectPath,
+        providerId: entry.providerId,
+        threadId: entry.threadId,
+        isDraft: entry.isDraft,
+        isSelected: entry.entryId == selectedEntryId,
+        sliceAvailable: true,
+        threadOpenPhase: slice.header.threadOpenPhase,
+        runtimeStatus: entry.threadSnapshot.runtimeStatus,
+        isTurnRunning: slice.header.isTurnRunning,
+        isReadOnly: slice.header.isReadOnly,
+        visibleTurnCount: slice.history.visibleTurns.length,
+        pendingInteractionCount:
+            pendingInteractions.permissions.length +
+            pendingInteractions.questions.length +
+            pendingInteractions.planApprovals.length +
+            (pendingInteractions.planExecutionHandoff == null ? 0 : 1),
+        pendingOperationCount: slice.pendingOperations.length,
+      );
+    }
+    return ZetaShellStateSnapshot(
+      workspace: _shellController.workspaceState,
+      projectThreadsByProjectPath: projectThreads,
+      orderedConversationEntryIds: <String>[
+        for (final entry in entries) entry.entryId,
+      ],
+      conversationsByEntryId: conversations,
+      selectedConversationEntryId: selectedEntryId,
+      projectHomeActive: _shellController.isProjectHomeActive,
+      agentManagement: ZetaAgentManagementStateSnapshot.fromState(
+        _agentManagementComposition.store.state,
+      ),
+    );
+  }
+
   @override
   void dispose() {
     MenuActionBridge.instance.setOpenProject(null);
-    if (widget.enableNativeWindowFrame) {
-      windowManager.removeListener(this);
-    }
-    _shellController.removeListener(_handleShellChanged);
+    widget.shellStateSnapshotRelay.unbind(_shellStateSnapshotReader);
+    _shellController.agentConversationWorkspaceStore.removeListener(
+      _handleConversationWorkspaceChanged,
+    );
+    _unsubscribeProviderSettings();
     _agentUsageRefreshCoordinator.dispose();
-    _agentManagementController.removeListener(_handleAgentManagementChanged);
-    _agentManagementController.dispose();
+    _agentManagementComposition.store.removeListener(
+      _handleAgentManagementChanged,
+    );
+    _workbenchComposition.dispose();
+    _conversationSliceStoreRegistry.unbind();
+    _conversationWorkspaceStoreRegistry.unbind(
+      _shellController.agentConversationWorkspaceStore,
+    );
     _shellController.dispose();
-    _desktopAttentionController.dispose();
+    _desktopAttentionTargetActivatorRelay.unbind(
+      _desktopAttentionTargetActivator,
+    );
     _leftSidebarFocusNode.dispose();
     _rightSidebarFocusNode.dispose();
     super.dispose();
   }
 
+  /// Provider 配置更新可能增删侧栏目录；只在目录已发现后做无闪烁同步。
+  void _handleAgentProviderSettingsUsageChanged() {
+    if (!_agentUsagePanelController.hasDiscoveredProviders) {
+      return;
+    }
+    unawaited(_agentUsagePanelController.synchronizeProviders());
+  }
+
   @override
   Widget build(BuildContext context) {
+    // 只订阅 IDE Session 的轻量 UI 投影；持久化 DTO 不进入 Riverpod。
+    ref.watch(
+      ideSessionSliceProvider.select(
+        (state) => (state.workbenchLayout, state.initialRestoreCompleted),
+      ),
+    );
+    // 侧栏宽度与首页预热是状态变化的副作用，不是渲染输入，因此走 listen。
+    ref.watch(workspaceProvider);
+    ref.listen(ideSessionSliceProvider, (_, _) => _handleIdeSessionChanged());
+    ref.listen(
+      ideSessionSliceProvider.select(
+        (state) => (
+          initialRestoreCompleted: state.initialRestoreCompleted,
+          providerId: state.workbenchLayout.selectedAgentUsageProviderId,
+        ),
+      ),
+      (previous, next) {
+        if (_agentUsagePanelController.preferredProviderId != next.providerId) {
+          _agentUsagePanelController.restorePreferredProviderId(
+            next.providerId,
+          );
+        }
+        if (previous == null ||
+            previous.providerId == next.providerId ||
+            !next.initialRestoreCompleted) {
+          return;
+        }
+        // Panel runner 只提交 Workbench typed state；Shell 在这里补齐完整会话
+        // 快照并交给既有 debounce coordinator 落盘。
+        _shellController.requestSessionSave();
+      },
+    );
+    ref.listen(workspaceProvider, (_, _) => _handleWorkspaceChanged());
+    ref.listen(zetaWindowSurfaceProvider.select((state) => state.focused), (
+      previous,
+      next,
+    ) {
+      if (previous == next) {
+        return;
+      }
+      _updateDesktopAttentionVisibility();
+    });
     final homePage = _page == _IdeHomePage.home;
     final leftSidebarVisible =
         homePage && _shellController.workbenchLayout.leftSidebarVisible;
@@ -292,8 +422,10 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
         (!rightSidebarUsesOverlay ||
             _activeOverlay == IdeWorkbenchOverlay.inspector);
     final body = WindowFrame(
+      // 品牌资产由根 app 拥有并声明；zeta_ui 只负责尺寸盒与无障碍标签。
+      brandLogo: SvgPicture.asset(brandingLogoAsset),
       key: const ValueKey('ide-window-frame'),
-      enableNativeWindowFrame: widget.enableNativeWindowFrame,
+      enableNativeWindowFrame: _windowHost.rendersNativeChrome,
       menus: _windowMenus(context),
       titleBarLeadingActions: switch (_page) {
         _IdeHomePage.home => <WindowTitleBarAction>[
@@ -374,7 +506,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
           ),
         ),
       ],
-      showWindowControls: widget.showWindowControls,
+      showWindowControls: _windowHost.showsWindowControls,
       // 左右/底 space8 让 Pane 与窗口边缘保持呼吸感；顶部 space0 与标题栏贴齐，
       // 中间不再画分隔线。
       child: Padding(
@@ -388,11 +520,18 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
       ),
     );
 
-    return body;
+    return ProviderScope(
+      overrides: [
+        projectThreadsSliceStoreProvider.overrideWithValue(
+          _shellController.projectThreadsSliceStore,
+        ),
+      ],
+      child: body,
+    );
   }
 
   List<WindowMenu> _windowMenus(BuildContext context) {
-    if (!widget.enableNativeWindowFrame) {
+    if (!_windowHost.rendersNativeChrome) {
       return const <WindowMenu>[];
     }
     final l10n = context.l10n;
@@ -492,9 +631,8 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
                 ? SettingsPageCanvas(
                     key: _settingsCanvasKey,
                     activeSection: _settingsSection,
-                    appearanceController: widget.appearanceController,
-                    generalSettingsController: widget.generalSettingsController,
-                    agentManagementController: _agentManagementController,
+                    agentManagementSliceStore:
+                        _agentManagementComposition.store,
                   )
                 : const SizedBox.shrink(),
           ),
@@ -504,11 +642,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
           child: TickerMode(
             enabled: _page == _IdeHomePage.usageStatistics,
             child: _usageStatisticsPageMounted
-                ? UsageStatisticsPage(
-                    key: const ValueKey('usage-statistics-page-host'),
-                    controller: _usageStatisticsController,
-                    onOpenAgentManagement: _openAgentManagementFromUsage,
-                  )
+                ? _buildUsageStatisticsPage()
                 : const SizedBox.shrink(),
           ),
         ),
@@ -518,7 +652,6 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
 
   /// 会话级保留容器：Project Home + 各 Agent 会话，仅布局当前选中项。
   Widget _buildRetainedAgentPaneStack() {
-    final entries = _shellController.agentWorkspaceEntries;
     final projectPath = _shellController.activeProjectPath;
     if (projectPath == null) {
       if (!_shellController.initialRestoreCompleted) {
@@ -532,69 +665,96 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
       );
     }
 
-    const projectHomeId = 'project-home';
-    final selectedEntryId = _shellController.selectedAgentWorkspaceEntryId;
-    final selectedId = _shellController.isProjectHomeActive
-        ? projectHomeId
-        : (selectedEntryId ??
-              (entries.isNotEmpty ? entries.first.entryId : projectHomeId));
-
-    return ValueListenableBuilder<GeneralSettings>(
-      valueListenable: widget.generalSettingsController.listenable,
-      builder: (context, generalSettings, _) {
-        return IdeRetainedPageView(
-          key: const ValueKey('agent-pane-entry-stack'),
+    return Consumer(
+      builder: (context, ref, _) {
+        final workspaceState = ref.watch(agentConversationWorkspaceProvider);
+        final workspaceStore = ref.watch(
+          agentConversationWorkspaceStoreProvider,
+        );
+        final entries = <AgentThreadWorkspaceEntry>[
+          for (final entryState in workspaceState.entries)
+            workspaceStore.entryById(entryState.entryId),
+        ];
+        const projectHomeId = 'project-home';
+        final selectedId = workspaceState.projectHomeActive
+            ? projectHomeId
+            : (workspaceState.selectedEntryId ??
+                  (entries.isNotEmpty ? entries.first.entryId : projectHomeId));
+        final projectThreadState = ref.watch(
+          projectThreadListStateProvider(projectPath),
+        );
+        final generalSettings = ref.watch(generalSettingsSliceValueProvider);
+        return _buildAgentEntryPages(
+          entries: entries,
+          projectPath: projectPath,
+          projectHomeId: projectHomeId,
           selectedId: selectedId,
-          pages: <IdeRetainedPage>[
-            IdeRetainedPage(
-              id: projectHomeId,
-              child: !_shellController.isProjectHomeActive
-                  ? const SizedBox.shrink()
-                  : KeyedSubtree(
-                      key: ValueKey<String>('project-home-$projectPath'),
-                      child: ProjectHomePage(
-                        projectPath: projectPath,
-                        threadState: _shellController.projectThreadStateFor(
-                          projectPath,
-                        ),
-                        loadAvailableProviders: _loadAvailableAgentProviders,
-                        onNewThread: (providerId) {
-                          unawaited(
-                            _shellController.startNewThreadForProject(
-                              projectPath,
-                              providerId: providerId,
-                            ),
-                          );
-                        },
-                        onSelectThread: (thread) {
-                          unawaited(
-                            _shellController.selectProjectThread(
-                              projectPath,
-                              thread,
-                            ),
-                          );
-                        },
-                        onRetryThreads: () {
-                          unawaited(_shellController.retryThreads(projectPath));
-                        },
-                      ),
-                    ),
-            ),
-            for (final entry in entries)
-              IdeRetainedPage(
-                id: entry.entryId,
-                child: KeyedSubtree(
-                  key: ValueKey<String>('agent-pane-entry-${entry.entryId}'),
-                  child: AgentPane(
-                    viewModel: entry.viewModel,
-                    isActive: entry.entryId == selectedId,
-                    messageSendShortcut: generalSettings.sendMessageShortcut,
-                  ),
-                ),
-              ),
-          ],
+          projectHomeActive: workspaceState.projectHomeActive,
+          generalSettings: generalSettings,
+          projectThreadState: projectThreadState,
         );
       },
+    );
+  }
+
+  Widget _buildAgentEntryPages({
+    required List<AgentThreadWorkspaceEntry> entries,
+    required String projectPath,
+    required String projectHomeId,
+    required String selectedId,
+    required bool projectHomeActive,
+    required GeneralSettings generalSettings,
+    required ProjectThreadListState projectThreadState,
+  }) {
+    return IdeRetainedPageView(
+      key: const ValueKey('agent-pane-entry-stack'),
+      selectedId: selectedId,
+      pages: <IdeRetainedPage>[
+        IdeRetainedPage(
+          id: projectHomeId,
+          child: !projectHomeActive
+              ? const SizedBox.shrink()
+              : KeyedSubtree(
+                  key: ValueKey<String>('project-home-$projectPath'),
+                  child: ProjectHomePage(
+                    projectPath: projectPath,
+                    threadState: projectThreadState,
+                    loadAvailableProviders: _loadAvailableAgentProviders,
+                    onNewThread: (providerId) {
+                      unawaited(
+                        _shellController.startNewThreadForProject(
+                          projectPath,
+                          providerId: providerId,
+                        ),
+                      );
+                    },
+                    onSelectThread: (thread) {
+                      unawaited(
+                        _shellController.selectProjectThread(
+                          projectPath,
+                          thread,
+                        ),
+                      );
+                    },
+                    onRetryThreads: () {
+                      unawaited(_shellController.retryThreads(projectPath));
+                    },
+                  ),
+                ),
+        ),
+        for (final entry in entries)
+          IdeRetainedPage(
+            id: entry.entryId,
+            child: KeyedSubtree(
+              key: ValueKey<String>('agent-pane-entry-${entry.entryId}'),
+              child: AgentPane(
+                controller: entry.controller,
+                isActive: entry.entryId == selectedId,
+                messageSendShortcut: generalSettings.sendMessageShortcut,
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -653,58 +813,78 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   }
 
   Widget _buildProjectsContent() {
-    return ProjectListPane(
-      projects: _shellController.projects,
-      activeProject: _shellController.activeProjectPath,
-      threadStateFor: _shellController.projectThreadStateFor,
-      onSelectProject: (path) {
-        unawaited(_shellController.selectKnownProject(path));
-      },
-      onSelectThread: (projectPath, thread) {
-        unawaited(_shellController.selectProjectThread(projectPath, thread));
-      },
-      onLoadMoreThreads: (projectPath) {
-        unawaited(_shellController.loadMoreThreads(projectPath));
-      },
-      onRetryThreads: (projectPath) {
-        unawaited(_shellController.retryThreads(projectPath));
-      },
-      loadAvailableProviders: _loadAvailableAgentProviders,
-      capabilitiesForProvider:
-          _shellController.agentProviderController.capabilitiesForProviderId,
-      onNewThread: (projectPath, providerId) {
-        unawaited(
-          _shellController.startNewThreadForProject(
-            projectPath,
-            providerId: providerId,
-          ),
+    return Consumer(
+      builder: (context, ref, _) {
+        final projectThreadsState = ref.watch(projectThreadsSliceProvider);
+        final workspace = ref.watch(workspaceProvider);
+        return ProjectListPane(
+          projects: workspace.projectPaths,
+          activeProject: workspace.activeProjectPath,
+          threadStateFor: projectThreadsState.stateFor,
+          onSelectProject: (path) {
+            unawaited(_shellController.selectKnownProject(path));
+          },
+          onSelectThread: (projectPath, thread) {
+            unawaited(
+              _shellController.selectProjectThread(projectPath, thread),
+            );
+          },
+          onLoadMoreThreads: (projectPath) {
+            unawaited(_shellController.loadMoreThreads(projectPath));
+          },
+          onRetryThreads: (projectPath) {
+            unawaited(_shellController.retryThreads(projectPath));
+          },
+          loadAvailableProviders: _loadAvailableAgentProviders,
+          capabilitiesForProvider: _shellController
+              .agentProviderController
+              .capabilitiesForProviderId,
+          onNewThread: (projectPath, providerId) {
+            unawaited(
+              _shellController.startNewThreadForProject(
+                projectPath,
+                providerId: providerId,
+              ),
+            );
+          },
+          onOpenProjectLocation: (projectPath) {
+            unawaited(
+              _shellController.openProjectInSystemFileManager(projectPath),
+            );
+          },
+          onRemoveProject: (projectPath) {
+            unawaited(_shellController.removeProject(projectPath));
+          },
+          onRenameThread: (projectPath, threadId, name) {
+            unawaited(
+              _shellController.renameProjectThread(projectPath, threadId, name),
+            );
+          },
+          onArchiveThread: (projectPath, thread) {
+            unawaited(
+              _shellController.archiveProjectThread(projectPath, thread),
+            );
+          },
+          onUnarchiveThread: (projectPath, thread) {
+            unawaited(
+              _shellController.unarchiveProjectThread(projectPath, thread),
+            );
+          },
+          onDeleteThread: (projectPath, thread) {
+            unawaited(
+              _shellController.deleteProjectThread(projectPath, thread),
+            );
+          },
+          onForkThread: (projectPath, thread) {
+            unawaited(_shellController.forkProjectThread(projectPath, thread));
+          },
+          onDismissCompletedThread: (projectPath, threadId) {
+            _shellController.dismissCompletedProjectThread(
+              projectPath,
+              threadId,
+            );
+          },
         );
-      },
-      onOpenProjectLocation: (projectPath) {
-        unawaited(_shellController.openProjectInSystemFileManager(projectPath));
-      },
-      onRemoveProject: (projectPath) {
-        unawaited(_shellController.removeProject(projectPath));
-      },
-      onRenameThread: (projectPath, threadId, name) {
-        unawaited(
-          _shellController.renameProjectThread(projectPath, threadId, name),
-        );
-      },
-      onArchiveThread: (projectPath, thread) {
-        unawaited(_shellController.archiveProjectThread(projectPath, thread));
-      },
-      onUnarchiveThread: (projectPath, thread) {
-        unawaited(_shellController.unarchiveProjectThread(projectPath, thread));
-      },
-      onDeleteThread: (projectPath, thread) {
-        unawaited(_shellController.deleteProjectThread(projectPath, thread));
-      },
-      onForkThread: (projectPath, thread) {
-        unawaited(_shellController.forkProjectThread(projectPath, thread));
-      },
-      onDismissCompletedThread: (projectPath, threadId) {
-        _shellController.dismissCompletedProjectThread(projectPath, threadId);
       },
     );
   }
@@ -712,32 +892,66 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   Widget _buildLeftPanel() {
     return ProjectAgentSidebar(
       projects: _buildProjectsContent(),
-      agentUsage: AgentUsagePanelContent(
-        controller: _agentUsagePanelController,
-        mode: _agentUsageExpanded
-            ? AgentUsagePanelMode.expanded
-            : AgentUsagePanelMode.collapsed,
-        onModeChanged: (mode) {
-          setState(() {
-            _agentUsageExpanded = mode == AgentUsagePanelMode.expanded;
-          });
-        },
-      ),
+      agentUsage: _buildAgentUsagePanel(),
+    );
+  }
+
+  Widget _buildUsageStatisticsPage() {
+    return UsageStatisticsPage(
+      key: const ValueKey('usage-statistics-page-host'),
+      onOpenAgentManagement: _openAgentManagementFromUsage,
+    );
+  }
+
+  Widget _buildAgentUsagePanel() {
+    return AgentUsagePanelContent(
+      mode: _agentUsageExpanded
+          ? AgentUsagePanelMode.expanded
+          : AgentUsagePanelMode.collapsed,
+      onModeChanged: (mode) {
+        setState(() {
+          _agentUsageExpanded = mode == AgentUsagePanelMode.expanded;
+        });
+      },
     );
   }
 
   Widget _buildFilesPanel() {
-    return PanelCard(
-      key: const ValueKey('files-panel-card'),
-      child: FileTreePane(
-        nodes: _shellController.workspaceTree,
-        expandedPaths: _shellController.expandedDirectoryPaths,
-        selectedPath: _shellController.selectedTreePath,
-        projectPath: _shellController.activeProjectPath,
-        isLoading: _shellController.isLoadingProject,
-        onNodeTap: _shellController.handleTreeNodeTap,
-        onExpansionChanged: _shellController.handleTreeExpansionChanged,
-      ),
+    Widget buildPanel({
+      required List<WorkspaceNode> nodes,
+      required Set<String> expandedPaths,
+      required String? selectedPath,
+      required String? projectPath,
+      required bool isLoading,
+    }) {
+      return PanelCard(
+        key: const ValueKey('files-panel-card'),
+        child: FileTreePane(
+          nodes: nodes,
+          expandedPaths: expandedPaths,
+          selectedPath: selectedPath,
+          projectPath: projectPath,
+          isLoading: isLoading,
+          onNodeTap: _shellController.handleTreeNodeTap,
+          onExpansionChanged: _shellController.handleTreeExpansionChanged,
+        ),
+      );
+    }
+
+    return Consumer(
+      builder: (context, ref, _) {
+        final projectPath = ref.watch(
+          workspaceProvider.select((state) => state.activeProjectPath),
+        );
+        final tree = ref.watch(activeWorkspaceFileTreeProvider);
+        return buildPanel(
+          nodes: tree.tree,
+          expandedPaths: tree.expandedDirectoryPaths,
+          selectedPath: tree.selectedTreePath,
+          projectPath: projectPath,
+          isLoading: tree.isLoading,
+        );
+      },
     );
   }
 
@@ -746,11 +960,11 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   }
 
   Future<List<AgentProviderConfig>> _loadAvailableAgentProviders() async {
-    final injectedLoader = widget.agentProviderAvailabilityLoader;
+    final injectedLoader = _agentProviderAvailabilityLoader;
     if (injectedLoader != null) {
       return injectedLoader();
     }
-    return _agentManagementController.loadAvailableThreadProviders();
+    return _agentManagementOperations.loadAvailableThreadProviders();
   }
 
   void _scheduleInitialAgentUsageRefresh() {
@@ -763,6 +977,16 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   Future<void> _refreshInitialAgentUsageAfterRestore() async {
     // 会话恢复会写入上次选中的统计 Tab；等待它收敛，避免先误载默认 Provider。
     await _shellController.initialRestoreDone;
+    if (!mounted) {
+      return;
+    }
+    _agentUsagePanelController.restorePreferredProviderId(
+      ref
+          .read(ideSessionSliceProvider.notifier)
+          .state
+          .workbenchLayout
+          .selectedAgentUsageProviderId,
+    );
     _requestAgentUsageRefresh();
   }
 
@@ -772,7 +996,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   }
 
   void _requestAgentUsageRefresh() {
-    if (!mounted || !widget.enableAgentUsageAutoRefresh) {
+    if (!mounted || !_agentUsageAutoRefreshEnabled) {
       return;
     }
     _agentUsageRefreshCoordinator.requestRefresh();
@@ -844,15 +1068,32 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   }
 
   void _handleMenuExit() {
-    unawaited(windowManager.close());
+    unawaited(_windowHost.closeWindow());
   }
 
-  void _handleShellChanged() {
-    _maybeStartGlobalHomeLoad();
-    _updateDesktopAttentionVisibility();
+  /// IDE Session 变化：面板宽度来自 workbenchLayout，首页预热看 initialRestoreCompleted。
+  void _handleIdeSessionChanged() {
     if (!_leftPanelWidthDragging) {
       _leftPanelWidth = _effectiveLeftPanelWidth;
     }
+    _maybeStartGlobalHomeLoad();
+    _rebuild();
+  }
+
+  /// Workspace 变化：activeProjectPath 同时影响首页预热与 Attention 可见性。
+  void _handleWorkspaceChanged() {
+    _maybeStartGlobalHomeLoad();
+    _updateDesktopAttentionVisibility();
+    _rebuild();
+  }
+
+  /// Conversation Workspace 变化：当前会话决定 Attention 的 provider/thread。
+  void _handleConversationWorkspaceChanged() {
+    _updateDesktopAttentionVisibility();
+    _rebuild();
+  }
+
+  void _rebuild() {
     if (mounted) {
       setState(() {});
     }
@@ -862,39 +1103,19 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
       (_shellController.workbenchLayout.leftSidebarWidth ?? _initialPanelWidth)
           .clamp(_minPanelWidth, _maxPanelWidth);
 
-  @override
-  void onWindowFocus() {
-    _windowFocused = true;
-    _updateDesktopAttentionVisibility();
-  }
-
-  @override
-  void onWindowBlur() {
-    _windowFocused = false;
-    _updateDesktopAttentionVisibility();
-  }
-
-  @override
-  void onWindowMinimize() {
-    _windowFocused = false;
-    _updateDesktopAttentionVisibility();
-  }
-
-  @override
-  void onWindowRestore() {
-    _windowFocused = true;
-    _updateDesktopAttentionVisibility();
-  }
-
   void _updateDesktopAttentionVisibility() {
-    final entry = _shellController.agentWorkspaceController.selectedEntry;
-    _desktopAttentionController.updateVisibility(
-      DesktopAttentionVisibility(
-        windowFocused: _windowFocused,
-        agentCanvasVisible:
-            _page == _IdeHomePage.home && !_shellController.isProjectHomeActive,
-        providerId: entry?.providerId,
-        threadId: entry?.threadId,
+    final entry =
+        _shellController.agentConversationWorkspaceStore.selectedEntry;
+    unawaited(
+      _desktopAttention.updateVisibility(
+        DesktopAttentionVisibility(
+          windowFocused: ref.read(zetaWindowSurfaceProvider).focused,
+          agentCanvasVisible:
+              _page == _IdeHomePage.home &&
+              !_shellController.isProjectHomeActive,
+          providerId: entry?.providerId,
+          threadId: entry?.threadId,
+        ),
       ),
     );
   }
@@ -907,13 +1128,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
     if (!mounted) {
       return false;
     }
-    if (widget.enableNativeWindowFrame) {
-      if (await windowManager.isMinimized()) {
-        await windowManager.restore();
-      }
-      await windowManager.show();
-      await windowManager.focus();
-    }
+    await _windowHost.revealWindow();
     final activated = await _shellController.activateAgentThread(
       providerId: providerId,
       threadId: threadId,
@@ -970,7 +1185,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
       _installedHomeProviders,
     );
     try {
-      final injectedLoader = widget.homeProviderDetectionLoader;
+      final injectedLoader = _homeProviderDetectionLoader;
       if (injectedLoader != null) {
         final agents = await injectedLoader();
         if (!mounted || token != _globalHomeLoadToken) {
@@ -978,23 +1193,23 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
         }
         _setInstalledHomeProviders(agents);
       } else {
-        await _agentManagementController.initialize();
+        await _agentManagementOperations.initialize();
         if (!mounted || token != _globalHomeLoadToken) {
           return;
         }
-        _setInstalledHomeProviders(_agentManagementController.agents);
+        _setInstalledHomeProviders(_agentManagementOperations.agents);
         cachedProviders
           ..clear()
           ..addAll(_installedHomeProviders);
         setState(() {});
 
-        await _agentManagementController.detect();
+        await _agentManagementOperations.detect();
         if (!mounted || token != _globalHomeLoadToken) {
           return;
         }
-        final detectionError = _agentManagementController.operationError;
+        final detectionError = _agentManagementOperations.operationError;
         if (detectionError == null) {
-          _setInstalledHomeProviders(_agentManagementController.agents);
+          _setInstalledHomeProviders(_agentManagementOperations.agents);
         } else {
           _installedHomeProviders = List<HomeProviderSummary>.unmodifiable(
             cachedProviders,
@@ -1035,11 +1250,40 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   void _handleAgentManagementChanged() {
     if (!mounted ||
         _homeProvidersLoading ||
-        widget.homeProviderDetectionLoader != null) {
+        _homeProviderDetectionLoader != null) {
+      return;
+    }
+    if (_page != _IdeHomePage.home) {
+      // 设置页会自行监听同一状态；这里只刷新隐藏首页的缓存，回到首页时
+      // 页面切换本身会触发重建，无需让 Workbench 根节点在子页构建期标脏。
+      _setInstalledHomeProviders(_agentManagementOperations.agents);
+      return;
+    }
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      if (_agentManagementHomeRefreshScheduled) {
+        return;
+      }
+      _agentManagementHomeRefreshScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _agentManagementHomeRefreshScheduled = false;
+        if (!mounted ||
+            _homeProvidersLoading ||
+            _homeProviderDetectionLoader != null) {
+          return;
+        }
+        if (_page != _IdeHomePage.home) {
+          _setInstalledHomeProviders(_agentManagementOperations.agents);
+          return;
+        }
+        setState(() {
+          _setInstalledHomeProviders(_agentManagementOperations.agents);
+        });
+      });
       return;
     }
     setState(() {
-      _setInstalledHomeProviders(_agentManagementController.agents);
+      _setInstalledHomeProviders(_agentManagementOperations.agents);
     });
   }
 
@@ -1057,7 +1301,7 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
   }
 
   AgentRuntimeState _managementRuntimeState() {
-    return switch (_shellController.selectedAgentViewModel.status.state) {
+    return switch (_shellController.selectedAgentController.status.state) {
       AgentProviderConnectionState.idle => AgentRuntimeState.notRunning,
       AgentProviderConnectionState.connecting => AgentRuntimeState.starting,
       AgentProviderConnectionState.ready => AgentRuntimeState.idle,
@@ -1066,6 +1310,11 @@ class _IdeHomeState extends State<IdeHome> with WindowListener {
       AgentProviderConnectionState.error => AgentRuntimeState.error,
     };
   }
+
+  AgentManagementRuntimeSnapshot _managementRuntimeSnapshot() => (
+    activeAgentId: _shellController.agentProviderController.activeProviderId,
+    runtimeState: _managementRuntimeState(),
+  );
 
   void _openSettingsPage() {
     if (_page == _IdeHomePage.settings) {

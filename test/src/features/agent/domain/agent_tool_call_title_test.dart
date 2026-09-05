@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 void main() {
   group('buildAgentToolCallDisplayTitle', () {
@@ -39,13 +38,15 @@ void main() {
       );
     });
 
-    test('synthesizes execute titles from command rawInput', () {
+    test('synthesizes execute titles from adapter-provided detail', () {
+      // wire payload 的形状解析已经归适配层（deriveAgentToolInputDetail），
+      // 中立层只消费算好的 inputDetail。
       expect(
         buildAgentToolCallDisplayTitle(
           toolCallId: 'call-9',
           kindLabel: const FallbackAgentUiTextCatalog().toolKindLabel,
           kind: AgentToolKind.execute,
-          rawInput: const <String, Object?>{'command': 'flutter test'},
+          inputDetail: 'flutter test',
         ),
         '执行 · flutter test',
       );

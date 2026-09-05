@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/workspace/application/workspace_tree_builder.dart';
+import 'package:zeta/src/features/workspace/data/workspace_tree_builder.dart';
 
 void main() {
   final tempDirectories = <Directory>[];

@@ -1,23 +1,24 @@
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
-import 'package:zeta/src/features/agent/data/datasources/app_server/codex_app_server_agent_provider.dart';
-import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_cli_metadata.dart';
-import 'package:zeta/src/features/agent/data/default_agent_provider_factory.dart';
-import 'package:zeta/src/features/agent/data/native_agent_provider_bundles.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import '../../../testing/agent_provider_implementations.dart';
 
+import '../../../testing/activated_agent_provider_plugins.dart';
 import '../../../testing/recording_json_rpc_peer.dart';
 
 /// 三个生产 Provider 原生 Bundle 的细分端口矩阵。
 ///
 /// 不支持的能力必须是端口为 null，不能靠 Bundle 上的 no-op / 抛错方法冒充。
 void main() {
-  const factory = DefaultAgentProviderFactory();
+  late AgentProviderBundleFactory factory;
+
+  setUp(() {
+    factory = activateBuiltInAgentProviderBundleFactory();
+  });
 
   group('production Bundle port matrix', () {
     test('Codex exposes the split ports it actually supports', () {
-      final bundle = factory.createBundle(AgentProviderConfig.defaultCodex);
+      final bundle = factory.createBundle(defaultCodexAgentProviderConfig);
       addTearDown(bundle.runtime.dispose);
 
       _expectRuntimeOwner(bundle);
@@ -49,7 +50,7 @@ void main() {
     });
 
     test('Grok exposes only the split ports it actually supports', () {
-      final bundle = factory.createBundle(AgentProviderConfig.defaultGrok);
+      final bundle = factory.createBundle(defaultGrokAgentProviderConfig);
       addTearDown(bundle.runtime.dispose);
 
       _expectRuntimeOwner(bundle);
@@ -81,9 +82,7 @@ void main() {
     });
 
     test('Claude Code exposes only the split ports it actually supports', () {
-      final bundle = factory.createBundle(
-        AgentProviderConfig.defaultClaudeCode,
-      );
+      final bundle = factory.createBundle(defaultClaudeCodeAgentProviderConfig);
       addTearDown(bundle.runtime.dispose);
 
       _expectRuntimeOwner(bundle);
@@ -119,8 +118,8 @@ void main() {
 
   group('factory and registry identity', () {
     test('factory createBundle returns a new runtime owner each time', () {
-      final first = factory.createBundle(AgentProviderConfig.defaultCodex);
-      final second = factory.createBundle(AgentProviderConfig.defaultCodex);
+      final first = factory.createBundle(defaultCodexAgentProviderConfig);
+      final second = factory.createBundle(defaultCodexAgentProviderConfig);
       addTearDown(first.runtime.dispose);
       addTearDown(second.runtime.dispose);
 
@@ -135,19 +134,19 @@ void main() {
         addTearDown(registry.close);
 
         final global = await registry.acquire(
-          AgentProviderConfig.defaultGrok,
+          defaultGrokAgentProviderConfig,
           scope: AgentProviderRuntimeScopeKey.global,
         );
         final sessionA = await registry.acquire(
-          AgentProviderConfig.defaultGrok,
+          defaultGrokAgentProviderConfig,
           scope: const AgentProviderRuntimeScopeKey.session('entry-a'),
         );
         final sessionB = await registry.acquire(
-          AgentProviderConfig.defaultGrok,
+          defaultGrokAgentProviderConfig,
           scope: const AgentProviderRuntimeScopeKey.session('entry-b'),
         );
         final sessionAAgain = await registry.acquire(
-          AgentProviderConfig.defaultGrok,
+          defaultGrokAgentProviderConfig,
           scope: const AgentProviderRuntimeScopeKey.session('entry-a'),
         );
 
@@ -176,7 +175,7 @@ void main() {
       () async {
         final peer = RecordingJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         addTearDown(provider.dispose);
@@ -208,7 +207,7 @@ void main() {
           const AgentModelReasoningEffort(effort: 'low'),
           const AgentModelReasoningEffort(effort: 'high'),
         ];
-        final providerFactory = DefaultAgentProviderFactory(
+        final providerFactory = activateBuiltInAgentProviderBundleFactory(
           claudeCodeMetadataLoader: () async {
             metadataCalls += 1;
             return ClaudeCodeCliMetadataSnapshot(
@@ -227,7 +226,7 @@ void main() {
           },
         );
         final bundle = providerFactory.createBundle(
-          AgentProviderConfig.defaultClaudeCode,
+          defaultClaudeCodeAgentProviderConfig,
         );
         addTearDown(bundle.runtime.dispose);
         final catalog = bundle.modelCatalog!;

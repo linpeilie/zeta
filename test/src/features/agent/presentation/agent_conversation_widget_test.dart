@@ -1,38 +1,50 @@
-// ignore_for_file: deprecated_member_use
-
 @Tags(['slow', 'shell'])
 library;
+
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
+// ignore_for_file: deprecated_member_use
 
 import 'dart:io';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
+import 'package:zeta_markdown/zeta_markdown.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
-import 'package:zeta/main.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_static_capabilities.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
-import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import '../../../testing/agent_provider_implementations.dart';
+import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_file_change_evidence_views.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
-import 'package:zeta/src/ui/core/app_theme.dart';
-import 'package:zeta/src/ui/core/ide_colors.dart';
-import 'package:zeta/src/ui/core/ide_motion.dart';
-import 'package:zeta/src/ui/core/pane_widgets.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
+import 'package:zeta_ui/zeta_ui.dart';
+
+import '../../../testing/provider_settings_test_store.dart';
+
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
 
 import '../../../testing/ide_test_harness.dart';
 import '../../../testing/agent_conversation_binding_test_harness.dart';
+import '../../../testing/fake_workspace_directory_picker.dart';
+import '../../../testing/memory_agent_composer_attachment_store.dart';
+import '../../../testing/zeta_test_app.dart';
+
+import 'package:flutter_riverpod/misc.dart' show Override;
+import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
+import 'package:zeta/src/app/storage/zeta_store_providers.dart';
+import 'package:zeta/src/features/agent/presentation/agent_ui_update_scheduler.dart';
+import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
 
 void main() {
+  final l10n = lookupAppLocalizations(const Locale('zh'));
   final binding = TestWidgetsFlutterBinding.ensureInitialized();
   final tempDirectories = <Directory>[];
 
@@ -60,14 +72,18 @@ void main() {
 
     // Act
     await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-          FakeAgentProvider(includeConversationTestThread: true),
-        ),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      zetaTestApp(
+        overrides: <Override>[
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(
+              FakeAgentProvider(includeConversationTestThread: true),
+            ),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
     await pumpUntilAgentComposer(tester);
@@ -125,13 +141,17 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        directoryPicker: () async => directory.path,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      zetaTestApp(
+        overrides: <Override>[
+          ...fakeDirectoryPickerOverrides(directory.path),
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -228,13 +248,17 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        directoryPicker: () async => directory.path,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      zetaTestApp(
+        overrides: <Override>[
+          ...fakeDirectoryPickerOverrides(directory.path),
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -319,15 +343,17 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MainApp(
-          enableNativeWindowFrame: false,
-          directoryPicker: () async => directory.path,
-          sessionLoader: session.load,
-          sessionSaver: session.save,
-          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-            provider,
-          ),
-          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        zetaTestApp(
+          overrides: <Override>[
+            ...fakeDirectoryPickerOverrides(directory.path),
+            ideSessionStoreProvider.overrideWithValue(session),
+            agentProviderBundleFactoryProvider.overrideWithValue(
+              FakeAgentProviderBundleBuilder.fromFake(provider),
+            ),
+            agentProviderConfigStoreProvider.overrideWithValue(
+              MemoryAgentProviderConfigStore(),
+            ),
+          ],
         ),
       );
 
@@ -431,15 +457,17 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MainApp(
-          enableNativeWindowFrame: false,
-          directoryPicker: () async => directory.path,
-          sessionLoader: session.load,
-          sessionSaver: session.save,
-          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-            provider,
-          ),
-          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        zetaTestApp(
+          overrides: <Override>[
+            ...fakeDirectoryPickerOverrides(directory.path),
+            ideSessionStoreProvider.overrideWithValue(session),
+            agentProviderBundleFactoryProvider.overrideWithValue(
+              FakeAgentProviderBundleBuilder.fromFake(provider),
+            ),
+            agentProviderConfigStoreProvider.overrideWithValue(
+              MemoryAgentProviderConfigStore(),
+            ),
+          ],
         ),
       );
 
@@ -455,10 +483,7 @@ void main() {
       await pumpAgentConversationUi(tester);
 
       expect(find.text('History survives failure'), findsOneWidget);
-      expect(
-        find.text('Thread open failed. Click this thread again to retry.'),
-        findsNothing,
-      );
+      expect(find.text(l10n.agentThreadOpenFailedRetry), findsNothing);
 
       await tester.enterText(
         find.byKey(const ValueKey('agent-message-input')),
@@ -469,10 +494,7 @@ void main() {
       await pumpAgentConversationUi(tester);
 
       expect(find.text('History survives failure'), findsOneWidget);
-      expect(
-        find.text('Thread open failed. Click this thread again to retry.'),
-        findsOneWidget,
-      );
+      expect(find.text(l10n.agentThreadOpenFailedRetry), findsOneWidget);
       expect(find.byKey(const ValueKey('agent-send-button')), findsNothing);
 
       await tester.tap(
@@ -483,10 +505,7 @@ void main() {
       await pumpAgentConversationUi(tester);
 
       expect(find.text('History survives failure'), findsOneWidget);
-      expect(
-        find.text('Thread open failed. Click this thread again to retry.'),
-        findsNothing,
-      );
+      expect(find.text(l10n.agentThreadOpenFailedRetry), findsNothing);
 
       await tester.enterText(
         find.byKey(const ValueKey('agent-message-input')),
@@ -561,15 +580,17 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MainApp(
-          enableNativeWindowFrame: false,
-          directoryPicker: () async => directory.path,
-          sessionLoader: session.load,
-          sessionSaver: session.save,
-          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-            provider,
-          ),
-          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        zetaTestApp(
+          overrides: <Override>[
+            ...fakeDirectoryPickerOverrides(directory.path),
+            ideSessionStoreProvider.overrideWithValue(session),
+            agentProviderBundleFactoryProvider.overrideWithValue(
+              FakeAgentProviderBundleBuilder.fromFake(provider),
+            ),
+            agentProviderConfigStoreProvider.overrideWithValue(
+              MemoryAgentProviderConfigStore(),
+            ),
+          ],
         ),
       );
 
@@ -622,9 +643,11 @@ void main() {
                       kind: AgentToolKind.execute,
                       status: AgentToolStatus.completed,
                       content: 'flutter test\nhidden log line',
-                      rawInput: const <String, Object?>{
-                        'command': 'flutter test',
-                      },
+                      rawInput: AgentProviderRawPayload.wrap(
+                        const <String, Object?>{'command': 'flutter test'},
+                      ),
+                      // 展示细节现在由适配层算好传入，中立层不再解析 wire 形状。
+                      inputDetail: 'flutter test',
                     ),
                   ),
                   const AgentHistoryEventEntry(
@@ -654,15 +677,17 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MainApp(
-          enableNativeWindowFrame: false,
-          directoryPicker: () async => directory.path,
-          sessionLoader: session.load,
-          sessionSaver: session.save,
-          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-            provider,
-          ),
-          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        zetaTestApp(
+          overrides: <Override>[
+            ...fakeDirectoryPickerOverrides(directory.path),
+            ideSessionStoreProvider.overrideWithValue(session),
+            agentProviderBundleFactoryProvider.overrideWithValue(
+              FakeAgentProviderBundleBuilder.fromFake(provider),
+            ),
+            agentProviderConfigStoreProvider.overrideWithValue(
+              MemoryAgentProviderConfigStore(),
+            ),
+          ],
         ),
       );
 
@@ -710,8 +735,8 @@ void main() {
   ) async {
     final session = activeProjectSessionStore(tempDirectories);
     final provider = FakeAgentProvider(
-      config: AgentProviderConfig.defaultGrok,
-      declaredCapabilities: AgentProviderStaticCapabilities.grokAcp,
+      config: defaultGrokAgentProviderConfig,
+      declaredCapabilities: grokStaticCapabilities,
       includeConversationTestThread: true,
       permissionOptions: const <AgentPermissionOption>[
         AgentPermissionOption(
@@ -735,18 +760,24 @@ void main() {
       ],
     );
     await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        directoryPicker: () async => null,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(
-          const AgentProviderSettings(
-            providers: <AgentProviderConfig>[AgentProviderConfig.defaultGrok],
-            activeProviderId: grokAgentProviderId,
+      zetaTestApp(
+        overrides: <Override>[
+          ...fakeDirectoryPickerOverrides(null),
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
           ),
-        ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(
+              const AgentProviderSettings(
+                providers: <AgentProviderConfig>[
+                  defaultGrokAgentProviderConfig,
+                ],
+                activeProviderId: grokAgentProviderId,
+              ),
+            ),
+          ),
+        ],
       ),
     );
     final moreActionsButton = find.byKey(
@@ -826,7 +857,7 @@ void main() {
       final configStore = MemoryAgentProviderConfigStore(
         AgentProviderSettings(
           providers: <AgentProviderConfig>[
-            AgentProviderConfig.defaultGrok.copyWith(
+            defaultGrokAgentProviderConfig.copyWith(
               selectedPermissionOptionId: 'ask',
             ),
           ],
@@ -834,10 +865,10 @@ void main() {
         ),
       );
       final provider = FakeAgentProvider(
-        config: AgentProviderConfig.defaultGrok.copyWith(
+        config: defaultGrokAgentProviderConfig.copyWith(
           selectedPermissionOptionId: 'ask',
         ),
-        declaredCapabilities: AgentProviderStaticCapabilities.grokAcp,
+        declaredCapabilities: grokStaticCapabilities,
         includeConversationTestThread: true,
         permissionOptions: const <AgentPermissionOption>[
           AgentPermissionOption(
@@ -862,15 +893,15 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MainApp(
-          enableNativeWindowFrame: false,
-          directoryPicker: () async => null,
-          sessionLoader: session.load,
-          sessionSaver: session.save,
-          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-            provider,
-          ),
-          agentProviderConfigStore: configStore,
+        zetaTestApp(
+          overrides: <Override>[
+            ...fakeDirectoryPickerOverrides(null),
+            ideSessionStoreProvider.overrideWithValue(session),
+            agentProviderBundleFactoryProvider.overrideWithValue(
+              FakeAgentProviderBundleBuilder.fromFake(provider),
+            ),
+            agentProviderConfigStoreProvider.overrideWithValue(configStore),
+          ],
         ),
       );
       await openConversationTestThread(tester);
@@ -945,24 +976,30 @@ void main() {
     const errorMessage = 'Grok rate limit reached. Please try again later.';
     final session = activeProjectSessionStore(tempDirectories);
     final provider = FakeAgentProvider(
-      config: AgentProviderConfig.defaultGrok,
-      declaredCapabilities: AgentProviderStaticCapabilities.grokAcp,
+      config: defaultGrokAgentProviderConfig,
+      declaredCapabilities: grokStaticCapabilities,
       turnErrorMessage: errorMessage,
       includeConversationTestThread: true,
     );
 
     await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(
-          const AgentProviderSettings(
-            providers: <AgentProviderConfig>[AgentProviderConfig.defaultGrok],
-            activeProviderId: grokAgentProviderId,
+      zetaTestApp(
+        overrides: <Override>[
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
           ),
-        ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(
+              const AgentProviderSettings(
+                providers: <AgentProviderConfig>[
+                  defaultGrokAgentProviderConfig,
+                ],
+                activeProviderId: grokAgentProviderId,
+              ),
+            ),
+          ),
+        ],
       ),
     );
     await pumpUntilAgentComposer(tester);
@@ -1122,15 +1159,17 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MainApp(
-          enableNativeWindowFrame: false,
-          directoryPicker: () async => directory.path,
-          sessionLoader: session.load,
-          sessionSaver: session.save,
-          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-            provider,
-          ),
-          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        zetaTestApp(
+          overrides: <Override>[
+            ...fakeDirectoryPickerOverrides(directory.path),
+            ideSessionStoreProvider.overrideWithValue(session),
+            agentProviderBundleFactoryProvider.overrideWithValue(
+              FakeAgentProviderBundleBuilder.fromFake(provider),
+            ),
+            agentProviderConfigStoreProvider.overrideWithValue(
+              MemoryAgentProviderConfigStore(),
+            ),
+          ],
         ),
       );
 
@@ -1295,13 +1334,17 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        directoryPicker: () async => directory.path,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      zetaTestApp(
+        overrides: <Override>[
+          ...fakeDirectoryPickerOverrides(directory.path),
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -1364,7 +1407,7 @@ void main() {
         providerFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
       );
       addTearDown(registry.close);
-      final controller = AgentProviderSettingsController(
+      final controller = createProviderSettingsTestStore(
         runtimeRegistry: registry,
         configStore: MemoryAgentProviderConfigStore(),
       );
@@ -1375,12 +1418,17 @@ void main() {
       );
       addTearDown(bindingHarness.close);
       final bindingLease = bindingHarness.acquireDraft(provider.config);
-      final viewModel = AgentConversationViewModel(
+      final viewModel = AgentConversationRuntimeController(
         providerController: controller,
         conversationBinding: bindingLease.binding,
         globalRuntime: bindingHarness.globalRuntime,
+        composerStateOwner: AgentConversationComposerStateOwner.create(
+          providerController: controller,
+        ),
+        uiFrameScheduler: const SchedulerBindingAgentFrameScheduler(),
       );
       addTearDown(viewModel.dispose);
+      final sliceRegistry = _registerConversationSlice(viewModel);
       viewModel.updateContext(projectPath: '/repo', contextFilePath: null);
 
       final lightIdeTheme = buildIdeThemeData(
@@ -1392,19 +1440,30 @@ void main() {
         codeFontFamily: 'CodeFont',
       );
       await tester.pumpWidget(
-        IdeThemeScope(
-          themeMode: ThemeMode.dark,
-          lightTheme: lightIdeTheme,
-          darkTheme: darkIdeTheme,
-          child: sf.ShadcnApp(
-            locale: ZetaLocalization.simplifiedChinese,
-            supportedLocales: ZetaLocalization.supportedLocales,
-            localizationsDelegates: ZetaLocalization.delegates,
-            theme: buildShadcnTheme(lightIdeTheme),
-            darkTheme: buildShadcnTheme(darkIdeTheme),
-            materialTheme: buildMaterialTheme(darkIdeTheme),
-            themeMode: sf.ThemeMode.dark,
-            home: sf.Scaffold(child: AgentPane(viewModel: viewModel)),
+        ProviderScope(
+          overrides: [
+            agentConversationSliceStoreRegistryProvider.overrideWithValue(
+              sliceRegistry,
+            ),
+            memoryAgentComposerAttachmentOverride(),
+          ],
+          child: IdeThemeScope(
+            themeMode: ThemeMode.dark,
+            lightTheme: lightIdeTheme,
+            darkTheme: darkIdeTheme,
+            child: sf.ShadcnApp(
+              locale: ZetaLocalization.simplifiedChinese,
+              supportedLocales: ZetaLocalization.supportedLocales,
+              localizationsDelegates: ZetaLocalization.delegates,
+              theme: buildShadcnTheme(lightIdeTheme),
+              darkTheme: buildShadcnTheme(darkIdeTheme),
+              builder: (context, child) => IdeMaterialLayer(
+                theme: buildMaterialTheme(darkIdeTheme),
+                child: child,
+              ),
+              themeMode: sf.ThemeMode.dark,
+              home: sf.Scaffold(child: AgentPane(controller: viewModel)),
+            ),
           ),
         ),
       );
@@ -1438,7 +1497,7 @@ void main() {
       providerFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
     );
     addTearDown(registry.close);
-    final controller = AgentProviderSettingsController(
+    final controller = createProviderSettingsTestStore(
       runtimeRegistry: registry,
       configStore: MemoryAgentProviderConfigStore(),
     );
@@ -1457,14 +1516,19 @@ void main() {
       config: provider.config,
       threadId: thread.id,
     );
-    final viewModel = AgentConversationViewModel(
+    final viewModel = AgentConversationRuntimeController(
       providerController: controller,
       conversationBinding: bindingLease.binding,
       globalRuntime: bindingHarness.globalRuntime,
+      composerStateOwner: AgentConversationComposerStateOwner.create(
+        providerController: controller,
+      ),
       initialProjectPath: '/repo',
       initialThread: thread,
+      uiFrameScheduler: const SchedulerBindingAgentFrameScheduler(),
     );
     addTearDown(viewModel.dispose);
+    final sliceRegistry = _registerConversationSlice(viewModel);
     await viewModel.initialization;
 
     final lightIdeTheme = buildIdeThemeData(
@@ -1476,19 +1540,30 @@ void main() {
       codeFontFamily: 'CodeFont',
     );
     await tester.pumpWidget(
-      IdeThemeScope(
-        themeMode: ThemeMode.dark,
-        lightTheme: lightIdeTheme,
-        darkTheme: darkIdeTheme,
-        child: sf.ShadcnApp(
-          locale: ZetaLocalization.simplifiedChinese,
-          supportedLocales: ZetaLocalization.supportedLocales,
-          localizationsDelegates: ZetaLocalization.delegates,
-          theme: buildShadcnTheme(lightIdeTheme),
-          darkTheme: buildShadcnTheme(darkIdeTheme),
-          materialTheme: buildMaterialTheme(darkIdeTheme),
-          themeMode: sf.ThemeMode.dark,
-          home: sf.Scaffold(child: AgentPane(viewModel: viewModel)),
+      ProviderScope(
+        overrides: [
+          agentConversationSliceStoreRegistryProvider.overrideWithValue(
+            sliceRegistry,
+          ),
+          memoryAgentComposerAttachmentOverride(),
+        ],
+        child: IdeThemeScope(
+          themeMode: ThemeMode.dark,
+          lightTheme: lightIdeTheme,
+          darkTheme: darkIdeTheme,
+          child: sf.ShadcnApp(
+            locale: ZetaLocalization.simplifiedChinese,
+            supportedLocales: ZetaLocalization.supportedLocales,
+            localizationsDelegates: ZetaLocalization.delegates,
+            theme: buildShadcnTheme(lightIdeTheme),
+            darkTheme: buildShadcnTheme(darkIdeTheme),
+            builder: (context, child) => IdeMaterialLayer(
+              theme: buildMaterialTheme(darkIdeTheme),
+              child: child,
+            ),
+            themeMode: sf.ThemeMode.dark,
+            home: sf.Scaffold(child: AgentPane(controller: viewModel)),
+          ),
         ),
       ),
     );
@@ -1543,6 +1618,10 @@ void main() {
     );
     final createdAt = DateTime(2024, 1, 15, 10, 30);
     final lastActiveAt = DateTime(2024, 6, 20, 14, 5);
+    final providerRawCapturedAt = DateTime.fromMillisecondsSinceEpoch(
+      1700000000 * 1000,
+      isUtc: true,
+    ).toLocal();
     final provider = FakeAgentProvider(
       threadHistories: <String, AgentThreadHistorySnapshot>{
         'thread-ctx': AgentThreadHistorySnapshot(
@@ -1564,21 +1643,37 @@ void main() {
                   id: 'msg-user-1',
                   role: AgentMessageRole.user,
                   text: 'Hello',
-                  raw: <String, Object?>{
+                  raw: wrapAgentProviderPayload(<String, Object?>{
                     'type': 'response_item',
                     'timestamp': 1700000000,
                     'marker': 'ctx-user-raw',
-                  },
+                  }, capturedAt: providerRawCapturedAt),
                 ),
                 AgentHistoryMessageEntry(
                   id: 'msg-agent-1',
                   role: AgentMessageRole.agent,
                   text: 'Hi there',
-                  raw: <String, Object?>{
-                    'type': 'event_msg',
-                    'timestamp': 1700000005,
-                    'marker': 'ctx-agent-raw',
-                  },
+                  raw: wrapAgentProviderPayload(
+                    <String, Object?>{
+                      'type': 'event_msg',
+                      'timestamp': 1700000005,
+                      'marker': 'ctx-agent-raw',
+                    },
+                    capturedAt: providerRawCapturedAt.add(
+                      const Duration(seconds: 5),
+                    ),
+                  ),
+                ),
+                AgentHistoryToolEntry(
+                  toolCall: AgentToolCall(
+                    id: 'ctx-search-1',
+                    title: 'Search context',
+                    kind: AgentToolKind.search,
+                    status: AgentToolStatus.completed,
+                    rawInput: wrapAgentProviderPayload(const <String, Object?>{
+                      'pattern': 'SEARCH_RAW_SENTINEL',
+                    }),
+                  ),
                 ),
                 AgentHistoryToolEntry(
                   toolCall: AgentToolCall(
@@ -1586,15 +1681,15 @@ void main() {
                     title: 'Replace context file',
                     kind: AgentToolKind.edit,
                     status: AgentToolStatus.completed,
-                    raw: const <String, Object?>{
+                    raw: wrapAgentProviderPayload(const <String, Object?>{
                       'sentinel': 'FILE_RAW_SENTINEL',
-                    },
-                    rawInput: const <String, Object?>{
+                    }),
+                    rawInput: wrapAgentProviderPayload(const <String, Object?>{
                       'oldText': 'WIRE_OLD_SENTINEL',
-                    },
-                    rawOutput: const <String, Object?>{
+                    }),
+                    rawOutput: wrapAgentProviderPayload(const <String, Object?>{
                       'newText': 'WIRE_NEW_SENTINEL',
-                    },
+                    }),
                     fileChanges: AgentFileChangeSnapshot(
                       revision: 4,
                       replayability: AgentFileChangeReplayability.replayable,
@@ -1622,7 +1717,7 @@ void main() {
       providerFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
     );
     addTearDown(registry.close);
-    final controller = AgentProviderSettingsController(
+    final controller = createProviderSettingsTestStore(
       runtimeRegistry: registry,
       configStore: MemoryAgentProviderConfigStore(),
     );
@@ -1648,14 +1743,19 @@ void main() {
       config: provider.config,
       threadId: thread.id,
     );
-    final viewModel = AgentConversationViewModel(
+    final viewModel = AgentConversationRuntimeController(
       providerController: controller,
       conversationBinding: bindingLease.binding,
       globalRuntime: bindingHarness.globalRuntime,
+      composerStateOwner: AgentConversationComposerStateOwner.create(
+        providerController: controller,
+      ),
       initialProjectPath: '/repo',
       initialThread: thread,
+      uiFrameScheduler: const SchedulerBindingAgentFrameScheduler(),
     );
     addTearDown(viewModel.dispose);
+    final sliceRegistry = _registerConversationSlice(viewModel);
     await viewModel.initialization;
 
     final lightIdeTheme = buildIdeThemeData(
@@ -1667,19 +1767,30 @@ void main() {
       codeFontFamily: 'CodeFont',
     );
     await tester.pumpWidget(
-      IdeThemeScope(
-        themeMode: ThemeMode.dark,
-        lightTheme: lightIdeTheme,
-        darkTheme: darkIdeTheme,
-        child: sf.ShadcnApp(
-          locale: ZetaLocalization.simplifiedChinese,
-          supportedLocales: ZetaLocalization.supportedLocales,
-          localizationsDelegates: ZetaLocalization.delegates,
-          theme: buildShadcnTheme(lightIdeTheme),
-          darkTheme: buildShadcnTheme(darkIdeTheme),
-          materialTheme: buildMaterialTheme(darkIdeTheme),
-          themeMode: sf.ThemeMode.dark,
-          home: sf.Scaffold(child: AgentPane(viewModel: viewModel)),
+      ProviderScope(
+        overrides: [
+          agentConversationSliceStoreRegistryProvider.overrideWithValue(
+            sliceRegistry,
+          ),
+          memoryAgentComposerAttachmentOverride(),
+        ],
+        child: IdeThemeScope(
+          themeMode: ThemeMode.dark,
+          lightTheme: lightIdeTheme,
+          darkTheme: darkIdeTheme,
+          child: sf.ShadcnApp(
+            locale: ZetaLocalization.simplifiedChinese,
+            supportedLocales: ZetaLocalization.supportedLocales,
+            localizationsDelegates: ZetaLocalization.delegates,
+            theme: buildShadcnTheme(lightIdeTheme),
+            darkTheme: buildShadcnTheme(darkIdeTheme),
+            builder: (context, child) => IdeMaterialLayer(
+              theme: buildMaterialTheme(darkIdeTheme),
+              child: child,
+            ),
+            themeMode: sf.ThemeMode.dark,
+            home: sf.Scaffold(child: AgentPane(controller: viewModel)),
+          ),
         ),
       ),
     );
@@ -1765,6 +1876,23 @@ void main() {
       find.byKey(const ValueKey('agent-context-raw-body-msg-user-1')),
       findsNothing,
     );
+    // 报文时间来自适配层算好的 capturedAt（wire `timestamp`），不是 UI 翻 JSON。
+    final expectedCapturedAt = providerRawCapturedAt;
+    String two(int value) => value.toString().padLeft(2, '0');
+    final expectedTimeText =
+        '${expectedCapturedAt.year}-'
+        '${two(expectedCapturedAt.month)}-'
+        '${two(expectedCapturedAt.day)} '
+        '${two(expectedCapturedAt.hour)}:'
+        '${two(expectedCapturedAt.minute)}';
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('agent-context-raw-msg-user-1')),
+        matching: find.text(expectedTimeText),
+      ),
+      findsOneWidget,
+    );
+
     // 展开后渲染 raw 原文区。
     await tester.tap(
       find.byKey(const ValueKey('agent-context-raw-msg-user-1')),
@@ -1837,6 +1965,44 @@ void main() {
       findsNothing,
     );
 
+    // 非 edit 工具：原文作为独立段落附在 typed 摘要之后，不做二次转义。
+    final searchHeader = find.byKey(
+      const ValueKey('agent-context-raw-ctx-search-1'),
+    );
+    await tester.ensureVisible(searchHeader);
+    await pumpAgentConversationUi(tester);
+    await tester.tap(searchHeader);
+    await pumpAgentConversationUi(tester);
+    final searchBody = find.byKey(
+      const ValueKey('agent-context-raw-body-ctx-search-1'),
+    );
+    expect(searchBody, findsOneWidget);
+    expect(
+      find.descendant(
+        of: searchBody,
+        matching: find.textContaining('// rawInput', findRichText: true),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: searchBody,
+        matching: find.textContaining(
+          '"pattern": "SEARCH_RAW_SENTINEL"',
+          findRichText: true,
+        ),
+      ),
+      findsOneWidget,
+    );
+    // 二次转义会把整段原文压成一行 `\n`。
+    expect(
+      find.descendant(
+        of: searchBody,
+        matching: find.textContaining(r'\n', findRichText: true),
+      ),
+      findsNothing,
+    );
+
     // 关闭按钮收起面板。
     await tester.tap(find.byKey(const ValueKey('agent-context-panel-close')));
     await tester.pump();
@@ -1873,7 +2039,7 @@ void main() {
       providerFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
     );
     addTearDown(registry.close);
-    final controller = AgentProviderSettingsController(
+    final controller = createProviderSettingsTestStore(
       runtimeRegistry: registry,
       configStore: MemoryAgentProviderConfigStore(),
     );
@@ -1899,18 +2065,23 @@ void main() {
       config: provider.config,
       threadId: thread.id,
     );
-    final viewModel = AgentConversationViewModel(
+    final viewModel = AgentConversationRuntimeController(
       providerController: controller,
       conversationBinding: bindingLease.binding,
       globalRuntime: bindingHarness.globalRuntime,
+      composerStateOwner: AgentConversationComposerStateOwner.create(
+        providerController: controller,
+      ),
       initialProjectPath: '/repo',
       initialThread: thread,
       onCreatedThread:
           ({required session, required context, String? initialMessage}) async {
             selectedFork = session;
           },
+      uiFrameScheduler: const SchedulerBindingAgentFrameScheduler(),
     );
     addTearDown(viewModel.dispose);
+    final sliceRegistry = _registerConversationSlice(viewModel);
     await viewModel.initialization;
 
     final lightIdeTheme = buildIdeThemeData(
@@ -1922,19 +2093,30 @@ void main() {
       codeFontFamily: 'CodeFont',
     );
     await tester.pumpWidget(
-      IdeThemeScope(
-        themeMode: ThemeMode.dark,
-        lightTheme: lightIdeTheme,
-        darkTheme: darkIdeTheme,
-        child: sf.ShadcnApp(
-          locale: ZetaLocalization.simplifiedChinese,
-          supportedLocales: ZetaLocalization.supportedLocales,
-          localizationsDelegates: ZetaLocalization.delegates,
-          theme: buildShadcnTheme(lightIdeTheme),
-          darkTheme: buildShadcnTheme(darkIdeTheme),
-          materialTheme: buildMaterialTheme(darkIdeTheme),
-          themeMode: sf.ThemeMode.dark,
-          home: sf.Scaffold(child: AgentPane(viewModel: viewModel)),
+      ProviderScope(
+        overrides: [
+          agentConversationSliceStoreRegistryProvider.overrideWithValue(
+            sliceRegistry,
+          ),
+          memoryAgentComposerAttachmentOverride(),
+        ],
+        child: IdeThemeScope(
+          themeMode: ThemeMode.dark,
+          lightTheme: lightIdeTheme,
+          darkTheme: darkIdeTheme,
+          child: sf.ShadcnApp(
+            locale: ZetaLocalization.simplifiedChinese,
+            supportedLocales: ZetaLocalization.supportedLocales,
+            localizationsDelegates: ZetaLocalization.delegates,
+            theme: buildShadcnTheme(lightIdeTheme),
+            darkTheme: buildShadcnTheme(darkIdeTheme),
+            builder: (context, child) => IdeMaterialLayer(
+              theme: buildMaterialTheme(darkIdeTheme),
+              child: child,
+            ),
+            themeMode: sf.ThemeMode.dark,
+            home: sf.Scaffold(child: AgentPane(controller: viewModel)),
+          ),
         ),
       ),
     );
@@ -2002,14 +2184,16 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MainApp(
-          enableNativeWindowFrame: false,
-          sessionLoader: session.load,
-          sessionSaver: session.save,
-          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-            provider,
-          ),
-          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        zetaTestApp(
+          overrides: <Override>[
+            ideSessionStoreProvider.overrideWithValue(session),
+            agentProviderBundleFactoryProvider.overrideWithValue(
+              FakeAgentProviderBundleBuilder.fromFake(provider),
+            ),
+            agentProviderConfigStoreProvider.overrideWithValue(
+              MemoryAgentProviderConfigStore(),
+            ),
+          ],
         ),
       );
 
@@ -2045,7 +2229,7 @@ void main() {
       expect(
         find.descendant(
           of: find.byKey(const ValueKey('agent-header-token')),
-          matching: find.text('10.3k tokens'),
+          matching: find.text(l10n.agentTurnTokenUsage('10.3k')),
         ),
         findsOneWidget,
       );
@@ -2093,9 +2277,10 @@ void main() {
           matching: find.byType(IdeTooltip),
         ),
       );
-      expect(tooltip.message, contains('Usage: 65%'));
-      expect(tooltip.message, contains('Used: 1.3k'));
-      expect(tooltip.message, contains('Total: 2k'));
+      expect(
+        tooltip.message,
+        l10n.agentTokenUsageContextTooltip('65', '1.3k', '2k'),
+      );
       expect(tooltip.message, isNot(contains('input_tokens')));
       expect(tooltip.message, isNot(contains('output_tokens')));
       expect(tooltip.message, isNot(contains('cached_input_tokens')));
@@ -2113,14 +2298,16 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MainApp(
-          enableNativeWindowFrame: false,
-          sessionLoader: session.load,
-          sessionSaver: session.save,
-          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-            provider,
-          ),
-          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        zetaTestApp(
+          overrides: <Override>[
+            ideSessionStoreProvider.overrideWithValue(session),
+            agentProviderBundleFactoryProvider.overrideWithValue(
+              FakeAgentProviderBundleBuilder.fromFake(provider),
+            ),
+            agentProviderConfigStoreProvider.overrideWithValue(
+              MemoryAgentProviderConfigStore(),
+            ),
+          ],
         ),
       );
 
@@ -2203,15 +2390,17 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MainApp(
-          enableNativeWindowFrame: false,
-          directoryPicker: () async => directory.path,
-          sessionLoader: session.load,
-          sessionSaver: session.save,
-          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-            provider,
-          ),
-          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        zetaTestApp(
+          overrides: <Override>[
+            ...fakeDirectoryPickerOverrides(directory.path),
+            ideSessionStoreProvider.overrideWithValue(session),
+            agentProviderBundleFactoryProvider.overrideWithValue(
+              FakeAgentProviderBundleBuilder.fromFake(provider),
+            ),
+            agentProviderConfigStoreProvider.overrideWithValue(
+              MemoryAgentProviderConfigStore(),
+            ),
+          ],
         ),
       );
 
@@ -2312,12 +2501,16 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      zetaTestApp(
+        overrides: <Override>[
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -2402,13 +2595,17 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        directoryPicker: () async => directory.path,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      zetaTestApp(
+        overrides: <Override>[
+          ...fakeDirectoryPickerOverrides(directory.path),
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -2520,13 +2717,17 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        directoryPicker: () async => directory.path,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      zetaTestApp(
+        overrides: <Override>[
+          ...fakeDirectoryPickerOverrides(directory.path),
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -2575,12 +2776,16 @@ void main() {
     final provider = FakeAgentProvider(includeConversationTestThread: true);
 
     await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      zetaTestApp(
+        overrides: <Override>[
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -2615,12 +2820,16 @@ void main() {
     final provider = FakeAgentProvider(includeConversationTestThread: true);
 
     await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      zetaTestApp(
+        overrides: <Override>[
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -2651,12 +2860,16 @@ void main() {
     final provider = FakeAgentProvider(includeConversationTestThread: true);
 
     await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      zetaTestApp(
+        overrides: <Override>[
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -2709,12 +2922,16 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      zetaTestApp(
+        overrides: <Override>[
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -2762,12 +2979,16 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      zetaTestApp(
+        overrides: <Override>[
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
     await pumpUntilAgentComposer(tester);
@@ -2915,12 +3136,16 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      zetaTestApp(
+        overrides: <Override>[
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -3009,12 +3234,16 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      zetaTestApp(
+        overrides: <Override>[
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -3182,12 +3411,16 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      zetaTestApp(
+        overrides: <Override>[
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -3217,12 +3450,16 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      zetaTestApp(
+        overrides: <Override>[
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -3259,7 +3496,8 @@ void main() {
     expect(markdownWidget.selectable, isTrue);
     expect(markdownWidget.padding, EdgeInsets.zero);
     expect(markdownWidget.enableCopyFullDocumentShortcut, isFalse);
-    expect(markdownWidget.showCopyAllInContextMenu, isFalse);
+    // WP-6 T9：右键菜单从「空组件抑制」改成收敛后的中文菜单。
+    expect(markdownWidget.showCopyAllInContextMenu, isTrue);
     expect(markdownWidget.contextMenuBuilder, isNotNull);
   });
 
@@ -3274,12 +3512,16 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      zetaTestApp(
+        overrides: <Override>[
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -3319,14 +3561,16 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MainApp(
-          enableNativeWindowFrame: false,
-          sessionLoader: session.load,
-          sessionSaver: session.save,
-          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-            provider,
-          ),
-          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        zetaTestApp(
+          overrides: <Override>[
+            ideSessionStoreProvider.overrideWithValue(session),
+            agentProviderBundleFactoryProvider.overrideWithValue(
+              FakeAgentProviderBundleBuilder.fromFake(provider),
+            ),
+            agentProviderConfigStoreProvider.overrideWithValue(
+              MemoryAgentProviderConfigStore(),
+            ),
+          ],
         ),
       );
       await pumpUntilAgentComposer(tester);
@@ -3607,14 +3851,16 @@ void main() {
       final provider = _ModeCapableFakeAgentProvider(completeTurns: false);
 
       await tester.pumpWidget(
-        MainApp(
-          enableNativeWindowFrame: false,
-          sessionLoader: session.load,
-          sessionSaver: session.save,
-          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-            provider,
-          ),
-          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        zetaTestApp(
+          overrides: <Override>[
+            ideSessionStoreProvider.overrideWithValue(session),
+            agentProviderBundleFactoryProvider.overrideWithValue(
+              FakeAgentProviderBundleBuilder.fromFake(provider),
+            ),
+            agentProviderConfigStoreProvider.overrideWithValue(
+              MemoryAgentProviderConfigStore(),
+            ),
+          ],
         ),
       );
       await pumpUntilAgentComposer(tester);
@@ -3800,7 +4046,9 @@ void main() {
                       '# 命令集折叠分组\n\n## Summary\n\n- 第一项\n\n```dart\nvoid main() {}\n```',
                   kind: AgentMessageKind.plan,
                   status: AgentMessageStatus.completed,
-                  raw: <String, Object?>{'type': 'plan'},
+                  raw: AgentProviderRawPayload.wrap(<String, Object?>{
+                    'type': 'plan',
+                  }),
                 ),
               ],
             ),
@@ -3823,13 +4071,17 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        directoryPicker: () async => directory.path,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      zetaTestApp(
+        overrides: <Override>[
+          ...fakeDirectoryPickerOverrides(directory.path),
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -3895,12 +4147,16 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      zetaTestApp(
+        overrides: <Override>[
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -3996,12 +4252,16 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      zetaTestApp(
+        overrides: <Override>[
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -4059,12 +4319,16 @@ void main() {
     final provider = FakeAgentProvider(unavailable: true);
 
     await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      zetaTestApp(
+        overrides: <Override>[
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -4122,6 +4386,22 @@ Future<void> pumpUntilAgentComposer(WidgetTester tester) async {
   );
 }
 
+AgentConversationSliceStoreRegistry _registerConversationSlice(
+  AgentConversationRuntimeController viewModel,
+) {
+  final store = AgentConversationSliceStore.connected(
+    regions: viewModel,
+    commands: viewModel,
+  );
+  addTearDown(store.dispose);
+  return AgentConversationSliceStoreRegistry()..bind((requestedKey) {
+    if (requestedKey != viewModel.conversationBinding.key) {
+      throw StateError('No test conversation slice for $requestedKey');
+    }
+    return AgentConversationSessionHandle(store: store, controller: viewModel);
+  });
+}
+
 /// 完整 Shell 含有常驻监听与动效，按有限帧推进普通交互，避免每次都扫描到 settle。
 Future<void> pumpAgentConversationUi(WidgetTester tester) async {
   await tester.pump();
@@ -4140,8 +4420,9 @@ class _ModeCapableFakeAgentProvider extends FakeAgentProvider
   _ModeCapableFakeAgentProvider({required super.completeTurns})
     : super(
         includeConversationTestThread: true,
-        declaredCapabilities: AgentProviderStaticCapabilities.codexAppServer
-            .copyWith(supportsModeSelection: true),
+        declaredCapabilities: codexStaticCapabilities.copyWith(
+          supportsModeSelection: true,
+        ),
       );
 
   @override

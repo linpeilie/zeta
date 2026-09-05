@@ -2,9 +2,12 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/app/storage/file_storage_service.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/data/agent_model_catalog_cache_store.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import '../../../testing/memory_feature_stores.dart';
 
 void main() {
   group('FileAgentModelCatalogCacheStore', () {
@@ -15,7 +18,9 @@ void main() {
     setUp(() {
       directory = Directory.systemTemp.createTempSync('zeta_model_catalog_');
       file = File('${directory.path}/agent_models_v1.json');
-      store = FileAgentModelCatalogCacheStore(file: file);
+      store = FileAgentModelCatalogCacheStore(
+        storage: FileStorageService(file),
+      );
     });
 
     tearDown(() async {
@@ -51,7 +56,6 @@ void main() {
                     AgentModelServiceTier(id: 'priority', name: 'Fast'),
                   ],
                   contextWindowTokens: 128000,
-                  raw: <String, Object?>{'secret': 'do-not-write'},
                 ),
               ],
             ),
@@ -68,7 +72,6 @@ void main() {
         expect(model.supportedReasoningEfforts.single.effort, 'high');
         expect(model.serviceTiers.single.id, 'priority');
         expect(model.contextWindowTokens, 128000);
-        expect(model.raw, isEmpty);
       },
     );
 
@@ -84,13 +87,13 @@ void main() {
     );
 
     test(
-      'reads an old v1 static snapshot and overwrites it after refresh',
+      'reads a current static snapshot and overwrites it after refresh',
       () async {
         final oldFetchedAt = DateTime.utc(2026, 8, 12, 6);
         final refreshedAt = oldFetchedAt.add(const Duration(hours: 2));
         final fingerprint = AgentModelCatalogRepository(
           store: MemoryAgentModelCatalogCacheStore(),
-        ).configFingerprint(AgentProviderConfig.defaultClaudeCode);
+        ).configFingerprint(defaultClaudeCodeAgentProviderConfig);
         await file.writeAsString(
           jsonEncode(<String, Object?>{
             'version': 1,
@@ -123,7 +126,7 @@ void main() {
         final cacheHits = <String>[];
 
         final result = await repository.load(
-          config: AgentProviderConfig.defaultClaudeCode,
+          config: defaultClaudeCodeAgentProviderConfig,
           source: 'Claude Code CLI initialize',
           forceRefresh: true,
           onCacheHit: (snapshot) {

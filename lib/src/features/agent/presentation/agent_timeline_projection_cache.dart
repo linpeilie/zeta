@@ -1,6 +1,4 @@
-import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/presentation/agent_file_change_projection_cache.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 
@@ -18,9 +16,6 @@ final class AgentTurnProjection {
 
   /// 与 [AgentConversationTurnGroup.contentRevision] 对齐。
   final int contentRevision;
-
-  /// 兼容旧字段名：等于 [contentRevision]。
-  int get renderRevision => contentRevision;
 
   final List<AgentTimelineRenderBlock> blocks;
 }
@@ -58,9 +53,7 @@ final class AgentTimelineProjectionCache {
 
   /// 解析 turn 的渲染块列表；命中缓存时返回同一列表实例。
   List<AgentTimelineRenderBlock> resolve(AgentConversationTurnGroup turn) {
-    final contentRevision = turn.contentRevision != 0
-        ? turn.contentRevision
-        : turn.renderRevision;
+    final contentRevision = turn.contentRevision;
     final cached = _turns[turn.id];
     if (cached != null && cached.contentRevision == contentRevision) {
       return cached.blocks;

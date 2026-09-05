@@ -1,15 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
-import 'package:zeta/src/app/app.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
-import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
-import 'package:zeta/src/features/settings/application/general_settings_controller.dart';
-import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
+import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_notifier.dart';
+import 'package:zeta/src/features/settings/application/appearance_settings_notifier.dart';
 import 'package:zeta/src/features/settings/data/general_settings_store.dart';
-import 'package:zeta/src/features/settings/data/system_font_catalog_service.dart';
+import 'package:zeta/src/features/settings/domain/appearance_settings_repository.dart';
+import 'package:zeta/src/features/settings/domain/system_font_catalog_service.dart';
 import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
@@ -18,18 +17,21 @@ import 'package:zeta/src/ui/features/ide/views/ide_home.dart';
 import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
 
 import '../testing/ide_test_harness.dart';
+import '../testing/zeta_test_app.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
+import 'package:zeta/src/app/localization/zeta_display_language_source.dart';
+import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
+import 'package:zeta/src/app/storage/zeta_store_providers.dart';
 
 void main() {
   testWidgets('waits with a textless background before IdeHome mounts', (
     tester,
   ) async {
     final store = _DeferredGeneralSettingsStore();
-    final controller = GeneralSettingsController(store: store);
-    addTearDown(controller.dispose);
 
-    await _pumpMainApp(
+    await _pumpzetaTestApp(
       tester,
-      generalSettingsController: controller,
+      generalSettingsStore: store,
       waitForGeneralSettings: true,
     );
     await tester.pump();
@@ -53,16 +55,40 @@ void main() {
     expect(WidgetsLocalizations.of(context), isNotNull);
   });
 
+  testWidgets('slice-only composition survives deferred locale bootstrap', (
+    tester,
+  ) async {
+    final store = _DeferredGeneralSettingsStore();
+
+    await _pumpzetaTestApp(
+      tester,
+      generalSettingsStore: store,
+      waitForGeneralSettings: true,
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey<String>('zeta.localization-loading')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+
+    store.complete();
+    await tester.pump();
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    expect(find.byType(IdeHome), findsOneWidget);
+  });
+
   testWidgets('wait path freezes the persisted app language', (tester) async {
     final englishStore = _DeferredGeneralSettingsStore(
       const GeneralSettings(appLanguage: AppLanguage.english),
     );
-    final englishController = GeneralSettingsController(store: englishStore);
-    addTearDown(englishController.dispose);
-    await _pumpMainApp(
+    await _pumpzetaTestApp(
       tester,
       key: const ValueKey<String>('main-app-en'),
-      generalSettingsController: englishController,
+      generalSettingsStore: englishStore,
       waitForGeneralSettings: true,
     );
     await tester.pump();
@@ -79,12 +105,10 @@ void main() {
     final chineseStore = _DeferredGeneralSettingsStore(
       const GeneralSettings(appLanguage: AppLanguage.simplifiedChinese),
     );
-    final chineseController = GeneralSettingsController(store: chineseStore);
-    addTearDown(chineseController.dispose);
-    await _pumpMainApp(
+    await _pumpzetaTestApp(
       tester,
       key: const ValueKey<String>('main-app-zh'),
-      generalSettingsController: chineseController,
+      generalSettingsStore: chineseStore,
       waitForGeneralSettings: true,
     );
     await tester.pump();
@@ -101,7 +125,10 @@ void main() {
   testWidgets('tests can pump English without changing production default', (
     tester,
   ) async {
-    await _pumpMainApp(tester, displayLanguageOverride: AppLanguage.english);
+    await _pumpzetaTestApp(
+      tester,
+      displayLanguageOverride: AppLanguage.english,
+    );
     await tester.pump();
 
     final context = tester.element(find.byType(IdeHome));
@@ -115,27 +142,25 @@ void main() {
   testWidgets('language and appearance updates do not remount IdeHome', (
     tester,
   ) async {
-    final general = GeneralSettingsController(
-      store: MemoryGeneralSettingsStore(),
-    );
-    addTearDown(general.dispose);
-    final appearance = AppearanceSettingsController(
-      store: MemoryAppearanceSettingsStore(),
-      fontCatalog: const _FakeSystemFontCatalogService(),
-      initialSettings: const AppearanceSettings(themeMode: ThemeMode.dark),
-    );
-    addTearDown(appearance.dispose);
-
-    await _pumpMainApp(
+    await _pumpzetaTestApp(
       tester,
-      generalSettingsController: general,
-      appearanceController: appearance,
+      generalSettingsStore: MemoryGeneralSettingsStore(),
+      appearanceSettingsStore: MemoryAppearanceSettingsStore(),
+      systemFontCatalogService: const _FakeSystemFontCatalogService(),
+      initialAppearanceSettings: const AppearanceSettings(
+        themeMode: ZetaThemeModePreference.dark,
+      ),
     );
     await tester.pump();
 
     final first = tester.element(find.byType(IdeHome));
-    await general.setAppLanguage(AppLanguage.english);
-    await appearance.setThemeMode(ThemeMode.light);
+    final container = ProviderScope.containerOf(first, listen: false);
+    container
+        .read(generalSettingsSliceProvider.notifier)
+        .setAppLanguage(AppLanguage.english);
+    await container
+        .read(appearanceSettingsProvider.notifier)
+        .setThemeMode(ZetaThemeModePreference.light);
     await tester.pump();
 
     expect(tester.element(find.byType(IdeHome)), same(first));
@@ -148,12 +173,10 @@ void main() {
       final store = MemoryGeneralSettingsStore(
         const GeneralSettings(appLanguage: AppLanguage.simplifiedChinese),
       );
-      final controller = GeneralSettingsController(store: store);
-      addTearDown(controller.dispose);
 
-      await _pumpMainApp(
+      await _pumpzetaTestApp(
         tester,
-        generalSettingsController: controller,
+        generalSettingsStore: store,
         waitForGeneralSettings: true,
       );
       await tester.pump();
@@ -188,13 +211,11 @@ void main() {
       final store = MemoryGeneralSettingsStore(
         const GeneralSettings(appLanguage: AppLanguage.simplifiedChinese),
       );
-      final firstController = GeneralSettingsController(store: store);
-      addTearDown(firstController.dispose);
 
-      await _pumpMainApp(
+      await _pumpzetaTestApp(
         tester,
         key: const ValueKey<String>('main-app-before-restart'),
-        generalSettingsController: firstController,
+        generalSettingsStore: store,
         waitForGeneralSettings: true,
       );
       await tester.pump();
@@ -206,7 +227,10 @@ void main() {
         'zh',
       );
 
-      await firstController.setAppLanguage(AppLanguage.english);
+      final firstContext = tester.element(find.byType(IdeHome));
+      ProviderScope.containerOf(firstContext, listen: false)
+          .read(generalSettingsSliceProvider.notifier)
+          .setAppLanguage(AppLanguage.english);
       await tester.pump();
       expect(
         Localizations.localeOf(
@@ -215,12 +239,10 @@ void main() {
         'zh',
       );
 
-      final secondController = GeneralSettingsController(store: store);
-      addTearDown(secondController.dispose);
-      await _pumpMainApp(
+      await _pumpzetaTestApp(
         tester,
         key: const ValueKey<String>('main-app-after-restart'),
-        generalSettingsController: secondController,
+        generalSettingsStore: store,
         waitForGeneralSettings: true,
       );
       await tester.pump();
@@ -235,11 +257,13 @@ void main() {
   );
 }
 
-Future<void> _pumpMainApp(
+Future<void> _pumpzetaTestApp(
   WidgetTester tester, {
   Key? key,
-  GeneralSettingsController? generalSettingsController,
-  AppearanceSettingsController? appearanceController,
+  GeneralSettingsStore? generalSettingsStore,
+  AppearanceSettingsRepository? appearanceSettingsStore,
+  SystemFontCatalogService? systemFontCatalogService,
+  AppearanceSettings? initialAppearanceSettings,
   AppLanguage? displayLanguageOverride,
   bool waitForGeneralSettings = false,
 }) async {
@@ -252,20 +276,30 @@ Future<void> _pumpMainApp(
       ..resetDevicePixelRatio();
   });
   await tester.pumpWidget(
-    MainApp(
+    zetaTestApp(
       key: key,
-      enableNativeWindowFrame: false,
-      showWindowControls: false,
-      sessionLoader: () async => null,
-      sessionSaver: (_) async {},
-      agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-        FakeAgentProvider(),
-      ),
-      agentProviderConfigStore: MemoryAgentProviderConfigStore(),
-      generalSettingsController: generalSettingsController,
-      appearanceController: appearanceController,
-      displayLanguageOverride: displayLanguageOverride,
-      waitForGeneralSettings: waitForGeneralSettings,
+      overrides: <Override>[
+        headlessWindowHost(showsWindowControls: false),
+        agentProviderBundleFactoryProvider.overrideWithValue(
+          FakeAgentProviderBundleBuilder.fromFake(FakeAgentProvider()),
+        ),
+        agentProviderConfigStoreProvider.overrideWithValue(
+          MemoryAgentProviderConfigStore(),
+        ),
+        if (generalSettingsStore case final store?)
+          generalSettingsStoreProvider.overrideWithValue(store),
+        if (appearanceSettingsStore case final store?)
+          appearanceSettingsRepositoryProvider.overrideWithValue(store),
+        if (systemFontCatalogService case final catalog?)
+          appearanceFontCatalogProvider.overrideWithValue(catalog),
+        if (initialAppearanceSettings case final settings?)
+          initialAppearanceSettingsProvider.overrideWithValue(settings),
+        if (displayLanguageOverride case final language?)
+          zetaDisplayLanguageSourceProvider.overrideWithValue(
+            FixedDisplayLanguageSource(language),
+          ),
+        if (waitForGeneralSettings) waitForGeneralSettingsDisplayLanguage(),
+      ],
     ),
   );
 }

@@ -1,0 +1,26 @@
+name: zeta_agent_provider_claude_code
+description: Zeta claude_code Provider 插件：协议适配、CLI 定位与独立契约测试。
+publish_to: 'none'
+version: 0.1.0
+resolution: workspace
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  meta: ^1.18.0
+  crypto: ^3.0.7
+  unorm_dart: ^0.3.2
+  zeta_agent_core: ^0.1.0
+  zeta_agent_provider_api: ^0.1.0
+  zeta_agent_provider_sdk: ^0.1.0
+  zeta_foundation: ^0.1.0
+  zeta_plugin_kernel: ^0.1.0
+
+dev_dependencies:
+  test: ^1.25.0
+
+# 仅声明静态资源；协议实现与测试仍为纯 Dart。
+flutter:
+  assets:
+    - assets/icon.svg

@@ -9,8 +9,8 @@ Zeta 是 Flutter Desktop 的本地 Agent IDE 壳层（macOS / Windows / Linux）
 ## 动手前先读
 
 1. **[`AGENTS.md`](AGENTS.md)** — 约束规则的**权威源**：8 条硬门禁、按任务的路由表、风格约定、收尾协议。**动手前完整读一遍**，然后按 §2 路由表对号入座，找到你这次要动的东西对应哪几条门禁和哪些必读文档。
-2. **[`docs/architecture/overview.md`](docs/architecture/overview.md)** — 架构总览（含图），解释这些约束**为什么**存在。
-3. **[`docs/guides/glossary.md`](docs/guides/glossary.md)** — 术语表。遇到 entryId、bundle、capability、coalescing、lease 先查这里。
+2. **[`docs/architecture/overview.md`](docs/zh/architecture/overview.md)** — 架构总览（含图），解释这些约束**为什么**存在。
+3. **[`docs/guides/glossary.md`](docs/zh/development/glossary.md)** — 术语表。遇到 entryId、bundle、capability、coalescing、lease 先查这里。
 
 规则冲突时的优先级：`AGENTS.md` > `docs/architecture/engineering_standards.md` > `docs/guides/developer_guide.md` > 本文件。
 
@@ -33,19 +33,27 @@ Zeta 是 Flutter Desktop 的本地 Agent IDE 壳层（macOS / Windows / Linux）
 
 ```sh
 flutter pub get
-dart format .          # 编辑 Dart 文件后必跑
-flutter analyze        # 结束改动前必跑
-flutter test           # 行为变化时必跑；dart_test.yaml 固定并发 2，不要改
-flutter run -d macos   # 或 -d windows / -d linux
+dart format .              # 编辑 Dart 文件后必跑
+flutter analyze            # 结束改动前必跑（只覆盖根 Package）
+bash tool/test_affected.sh # 行为变化时必跑：只跑受影响的测试，不要跑全量
+bash tool/test_packages.sh # 只动了 packages/ 时的定向入口
+bash tool/test_full.sh     # 完整门禁：重构收尾 / 发版 / 改测试基础设施才用
+flutter run -d macos       # 或 -d windows / -d linux
 ```
 
+`dart_test.yaml` 固定并发 2，不要改。全量的强制点在 CI（6 个分片并行 + 内部 Package），本地默认只跑受影响的那一档。完整档位表见 [`AGENTS.md` §0](AGENTS.md#0-收尾协议每次改完代码必做)。
+
+仓库是 pub workspace：根 Flutter 应用 + `packages/zeta_foundation`、`packages/zeta_plugin_kernel`、`packages/zeta_ui`（Graphite 设计系统）、`packages/zeta_markdown`（Markdown 渲染，fork 自 `mixin_markdown_widget`，改它先读 `packages/zeta_markdown/UPSTREAM.md`）、`packages/zeta_agent_core`（中立 Agent 内核）、`packages/zeta_agent_provider_api`（中立装配契约）、`packages/zeta_agent_provider_sdk`（共享机制）、`packages/zeta_agent_provider_codex` / `packages/zeta_agent_provider_grok` / `packages/zeta_agent_provider_claude_code`（独立 Provider 插件）。
+
 单个测试文件：`flutter test test/src/features/agent/presentation/agent_conversation_widget_test.dart`
+
+只跑某一片：`bash tool/test_affected.sh --shards` 拿分片 id，再 `bash tool/test_shard.sh <id>`。分片清单在 [`tool/test_shards.dart`](tool/test_shards.dart)。
 
 Codex 协议升级、真实 CLI 冒烟的完整流程见 [`AGENTS.md` §2](AGENTS.md#codex-协议升级流程)。
 
 ## 每次改完代码
 
-`dart format .` → `flutter analyze` →（行为变化时）`flutter test`，然后在回复末尾附【Git 提交信息】模块。完整格式与示例见 [`AGENTS.md` §0](AGENTS.md#0-收尾协议每次改完代码必做)。
+`dart format .` → `flutter analyze` →（行为变化时）`bash tool/test_affected.sh`，然后在回复末尾附【Git 提交信息】模块。完整格式与示例见 [`AGENTS.md` §0](AGENTS.md#0-收尾协议每次改完代码必做)。
 
 ## 定位代码
 
@@ -54,3 +62,7 @@ Codex 协议升级、真实 CLI 冒烟的完整流程见 [`AGENTS.md` §2](AGENT
 ## 改了架构边界
 
 分层、Provider 契约、事件管线、能力协商或持久化格式有变动时，`AGENTS.md`、`docs/architecture/`、`docs/guides/` 和 `CONTRIBUTING.md`（含英文版）要一起改。清单见 [`AGENTS.md` §6](AGENTS.md#6-改了架构边界同步这几处)。
+
+Provider 登记入口为 `lib/src/app/plugins/agent_provider_manifest.dart`；management/usage 实现与贡献均由插件拥有，中立端口在 api，宿主通过可覆盖贡献接缝装配。原 WP-C 过渡 import 已清零；详见 `AGENTS.md` G6 与 WP-D §3.6 的安装指引例外。
+
+新增 Provider 与守卫入口见[开发者文档 §7](docs/zh/development/developer_guide.md#新增-provider-插件)。内部包 CI 由实际目录动态生成矩阵，单包验证走 `test_packages.sh --only`；品牌内容例外与依赖边界统一查[工程规范 §2.1](docs/zh/architecture/engineering_standards.md#21-provider-插件包边界)。

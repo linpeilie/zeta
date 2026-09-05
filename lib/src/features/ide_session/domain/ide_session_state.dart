@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
 
 const int sessionStateVersion = 4;
@@ -93,9 +93,9 @@ class IdeSessionState {
     };
   }
 
-  /// 从持久化 JSON 读取会话状态。
+  /// 从当前版本的持久化 JSON 读取会话状态。
   ///
-  /// 旧版本、损坏内容或缺失字段都不会抛错；调用方会得到空状态并继续启动。
+  /// 不支持版本、损坏内容或缺失字段都不会抛错；调用方会得到空状态并继续启动。
   static IdeSessionState? tryDecode(String? value) {
     if (value == null || value.isEmpty) {
       return null;
@@ -107,11 +107,7 @@ class IdeSessionState {
         return const IdeSessionState();
       }
 
-      final version = decoded['version'];
-      if (version != 1 &&
-          version != 2 &&
-          version != 3 &&
-          version != sessionStateVersion) {
+      if (decoded['version'] != sessionStateVersion) {
         return const IdeSessionState();
       }
 
@@ -139,9 +135,7 @@ class IdeSessionState {
         projectLastOpenedAtByPath: _dateTimeMap(
           decoded['projectLastOpenedAtByPath'],
         ),
-        projectHomeActive:
-            (version == 3 || version == sessionStateVersion) &&
-            decoded['projectHomeActive'] == true,
+        projectHomeActive: decoded['projectHomeActive'] == true,
         workbenchLayout: IdeWorkbenchLayoutState.tryDecode(
           decoded['workbench'],
         ),

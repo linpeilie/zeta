@@ -1,16 +1,18 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:zeta/src/features/agent/application/agent_conversation_binding_manager.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
+import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_provider_settings_slice_store.dart';
+
+import '../../../testing/provider_settings_test_store.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
 
 import '../../../testing/fake_agent_frame_scheduler.dart';
-import '../../../testing/legacy_bundle_factory_mixin.dart';
+import '../../../testing/test_agent_provider_bundle_factory.dart';
 import '../../../testing/agent_conversation_binding_test_harness.dart';
 import 'harness/agent_pane_test_harness.dart';
+import '../../../testing/memory_feature_stores.dart';
 
 /// 会话级 Provider 实例改造会引入「闲置回收 + 再次发送时重建」。回收销毁的只应是
 /// 子进程实例，会话本身（时间线、草稿、已选 thread）必须原样留在 Pane 里。
@@ -34,7 +36,7 @@ void main() {
       expect(harness.messageTexts, contains('first'));
 
       await harness.registry.invalidateProvider(
-        AgentProviderConfig.defaultCodex.id,
+        defaultCodexAgentProviderConfig.id,
       );
       await harness.viewModel.sendMessage('second');
       harness.scheduler.drainFrames();
@@ -62,7 +64,7 @@ void main() {
           ?.runtimeIdentity;
 
       await harness.registry.invalidateProvider(
-        AgentProviderConfig.defaultCodex.id,
+        defaultCodexAgentProviderConfig.id,
       );
       await harness.viewModel.sendMessage('second');
       harness.scheduler.drainFrames();
@@ -90,7 +92,7 @@ void main() {
 final class _RecycleHarness {
   _RecycleHarness() {
     registry = AgentProviderRuntimeRegistry(providerFactory: factory);
-    controller = AgentProviderSettingsController(
+    controller = createProviderSettingsTestStore(
       configStore: MemoryAgentProviderConfigStore(),
       runtimeRegistry: registry,
     );
@@ -98,13 +100,14 @@ final class _RecycleHarness {
       registry: registry,
       settings: controller,
     );
-    bindingLease = bindingHarness.acquireDraft(
-      AgentProviderConfig.defaultCodex,
-    );
-    viewModel = AgentConversationViewModel(
+    bindingLease = bindingHarness.acquireDraft(defaultCodexAgentProviderConfig);
+    viewModel = AgentConversationRuntimeController(
       providerController: controller,
       conversationBinding: bindingLease.binding,
       globalRuntime: bindingHarness.globalRuntime,
+      composerStateOwner: AgentConversationComposerStateOwner.create(
+        providerController: controller,
+      ),
       uiFrameScheduler: scheduler,
     )..updateContext(projectPath: '/repo', contextFilePath: null);
   }
@@ -112,10 +115,10 @@ final class _RecycleHarness {
   final _MultiInstanceProviderFactory factory = _MultiInstanceProviderFactory();
   final FakeAgentFrameScheduler scheduler = FakeAgentFrameScheduler();
   late final AgentProviderRuntimeRegistry registry;
-  late final AgentProviderSettingsController controller;
+  late final AgentProviderSettingsSliceNotifier controller;
   late final AgentConversationBindingTestHarness bindingHarness;
   late final AgentConversationBindingLease bindingLease;
-  late final AgentConversationViewModel viewModel;
+  late final AgentConversationRuntimeController viewModel;
 
   List<String> get messageTexts =>
       viewModel.messages.map((message) => message.text).toList();
@@ -130,7 +133,7 @@ final class _RecycleHarness {
 
 /// 与 [AgentPaneFakeProviderFactory] 不同：每次 create 返回**新**实例，
 /// 这样销毁旧实例后重建才能被观测到。
-final class _MultiInstanceProviderFactory with LegacyBundleFactoryMixin {
+final class _MultiInstanceProviderFactory with TestAgentProviderBundleFactory {
   final List<_RecycleProvider> created = <_RecycleProvider>[];
 
   @override

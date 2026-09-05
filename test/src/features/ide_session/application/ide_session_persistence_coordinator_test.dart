@@ -2,7 +2,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_persistence_coordinator.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_restore_result.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_state_builder.dart';
@@ -45,9 +46,7 @@ void main() {
         projectHomeActive: false,
         workbenchLayout: const IdeWorkbenchLayoutState(
           leftSidebarVisible: false,
-          agentUsageExpanded: true,
           leftSidebarWidth: 300,
-          agentUsageHeightFraction: 0.4,
           selectedAgentUsageProviderId: 'grok',
         ),
       );
@@ -123,15 +122,15 @@ void main() {
         },
         workbenchLayout: const IdeWorkbenchLayoutState(
           leftSidebarVisible: false,
-          agentUsageExpanded: true,
           leftSidebarWidth: 320,
-          agentUsageHeightFraction: 0.5,
           selectedAgentUsageProviderId: 'grok',
         ),
       ),
     );
     final coordinator = IdeSessionPersistenceCoordinator(
       store: store,
+      fileExists: (path) => File(path).existsSync(),
+      directoryExists: (path) => Directory(path).existsSync(),
       saveDelay: const Duration(milliseconds: 1),
     );
     coordinators.add(coordinator);
@@ -162,9 +161,7 @@ void main() {
       result.snapshot?.workbenchLayout,
       const IdeWorkbenchLayoutState(
         leftSidebarVisible: false,
-        agentUsageExpanded: true,
         leftSidebarWidth: 320,
-        agentUsageHeightFraction: 0.5,
         selectedAgentUsageProviderId: 'grok',
       ),
     );
@@ -177,6 +174,8 @@ void main() {
       final store = _FakeIdeSessionStore(loadFuture: restoreCompleter.future);
       final coordinator = IdeSessionPersistenceCoordinator(
         store: store,
+        fileExists: (path) => File(path).existsSync(),
+        directoryExists: (path) => Directory(path).existsSync(),
         saveDelay: const Duration(milliseconds: 5),
       );
       coordinators.add(coordinator);
@@ -224,6 +223,8 @@ void main() {
       final store = _FakeIdeSessionStore();
       final coordinator = IdeSessionPersistenceCoordinator(
         store: store,
+        fileExists: (path) => File(path).existsSync(),
+        directoryExists: (path) => Directory(path).existsSync(),
         saveDelay: const Duration(milliseconds: 10),
       );
       coordinators.add(coordinator);
@@ -261,6 +262,8 @@ void main() {
     final store = _FakeIdeSessionStore(loadFuture: restoreCompleter.future);
     final coordinator = IdeSessionPersistenceCoordinator(
       store: store,
+      fileExists: (path) => File(path).existsSync(),
+      directoryExists: (path) => Directory(path).existsSync(),
       saveDelay: const Duration(milliseconds: 1),
     );
     coordinators.add(coordinator);

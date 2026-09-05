@@ -1,10 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
-
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
-import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 typedef AgentModelSelectionPersistCallback =
     Future<void> Function(
@@ -50,7 +46,7 @@ class AgentModelSelectionSaveError {
 /// UI 只消费规范化后的中立状态；provider 的 `serviceTier` 精确值仍保留在
 /// [AgentModelPreference] 中。快速连续修改通过串行保存循环合并，最终一次写入
 /// 始终覆盖过期快照。
-class AgentConversationModelSelectionController extends ChangeNotifier {
+class AgentConversationModelSelectionController {
   AgentConversationModelSelectionController({
     required this.persistSelection,
     DateTime Function()? clock,
@@ -85,8 +81,16 @@ class AgentConversationModelSelectionController extends ChangeNotifier {
   int _generation = 0;
   AgentModelConfigField _latestField = AgentModelConfigField.model;
   String _latestModelId = '';
-  bool _needsPreferenceMigration = false;
   bool _disposed = false;
+  final List<void Function()> _listeners = <void Function()>[];
+
+  void addListener(void Function() listener) {
+    if (!_disposed && !_listeners.contains(listener)) {
+      _listeners.add(listener);
+    }
+  }
+
+  void removeListener(void Function() listener) => _listeners.remove(listener);
 
   List<AgentModelInfo> get models =>
       _modelList?.models ?? const <AgentModelInfo>[];
@@ -158,18 +162,6 @@ class AgentConversationModelSelectionController extends ChangeNotifier {
     _preferences = Map<String, AgentModelPreference>.from(
       config.modelPreferences,
     );
-    final modelId = config.selectedModel;
-    _needsPreferenceMigration =
-        modelId != null && !_preferences.containsKey(modelId);
-    if (modelId != null && _needsPreferenceMigration) {
-      _preferences[modelId] = AgentModelPreference(
-        modelId: modelId,
-        reasoningEffort: config.selectedReasoningEffort,
-        fastEnabled: config.selectedServiceTier != null,
-        serviceTierId: config.selectedServiceTier,
-        updatedAt: _clock().toUtc(),
-      );
-    }
     _confirmedSelection = _modelSelection;
     _confirmedPreferences = Map<String, AgentModelPreference>.from(
       config.modelPreferences,
@@ -235,7 +227,6 @@ class AgentConversationModelSelectionController extends ChangeNotifier {
       };
       _modelSelection = nextSelection;
     }
-    _needsPreferenceMigration = false;
     _confirmedSelection = _modelSelection;
     _confirmedPreferences = Map<String, AgentModelPreference>.from(
       _preferences,
@@ -346,35 +337,6 @@ class AgentConversationModelSelectionController extends ChangeNotifier {
       updatedAt: _clock().toUtc(),
     );
     return _applyPreference(preference, field: AgentModelConfigField.fast);
-  }
-
-  /// 兼容旧调用点的通用 service tier 更新。
-  Future<bool> selectServiceTier(String? tierId) {
-    final model = selectedModel;
-    if (model == null) {
-      return Future<bool>.value(false);
-    }
-    final tier = tierId == null
-        ? null
-        : model.serviceTiers.where((item) => item.id == tierId).firstOrNull;
-    if (tierId != null && (tier == null || !tier.enabled)) {
-      return Future<bool>.value(false);
-    }
-    final fastTier = agentFastServiceTier(model);
-    if (tierId != null && tierId == fastTier?.id) {
-      return selectFastEnabled(true);
-    }
-    final current = _preferenceForSelectedModel(model);
-    return _applyPreference(
-      AgentModelPreference(
-        modelId: model.id,
-        reasoningEffort: current.reasoningEffort,
-        fastEnabled: false,
-        serviceTierId: tierId,
-        updatedAt: _clock().toUtc(),
-      ),
-      field: AgentModelConfigField.fast,
-    );
   }
 
   /// 按提示一次提交 Fast 与思考程度的兼容调整。
@@ -538,7 +500,7 @@ class AgentConversationModelSelectionController extends ChangeNotifier {
       return;
     }
 
-    var changed = _needsPreferenceMigration;
+    var changed = false;
     final normalizedPreferences = Map<String, AgentModelPreference>.from(
       _preferences,
     );
@@ -590,8 +552,6 @@ class AgentConversationModelSelectionController extends ChangeNotifier {
     _preferences = normalizedPreferences;
     _modelSelection = nextSelection;
     _runtime?.updateModelSelection(_modelSelection);
-    _needsPreferenceMigration = false;
-
     if (changed) {
       unawaited(
         _schedulePersistence(
@@ -747,16 +707,20 @@ class AgentConversationModelSelectionController extends ChangeNotifier {
 
   void _notify() {
     if (!_disposed) {
-      notifyListeners();
+      for (final listener in List<void Function()>.of(_listeners)) {
+        listener();
+      }
     }
   }
 
-  @override
   void dispose() {
+    if (_disposed) {
+      return;
+    }
     _disposed = true;
     _generation += 1;
     _completeAllWaiters(false);
-    super.dispose();
+    _listeners.clear();
   }
 }
 

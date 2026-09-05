@@ -1,29 +1,24 @@
+import 'package:zeta/src/app/plugins/agent_provider_icon_overrides.dart';
+import '../../../testing/agent_management_test_definitions.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
-import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent_management/application/agent_management_controller.dart';
-import 'package:zeta/src/features/agent_management/data/codex_agent_management_repository.dart';
-import 'package:zeta/src/features/agent_management/domain/agent_cli_management_repository.dart';
-import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
+import '../../../testing/agent_provider_implementations.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta/src/app/agent_management_slice/agent_management_slice_composition.dart';
+import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
+import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_store.dart';
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_configuration_editor.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_management_page.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
-import 'package:zeta/src/ui/core/app_theme.dart';
-import 'package:zeta/src/ui/core/ide_metrics.dart';
-import 'package:zeta/src/ui/core/ide_spacing.dart';
-import 'package:zeta/src/ui/core/ide_switch.dart';
-import 'package:zeta/src/ui/core/pane_widgets.dart';
-import 'package:zeta/src/ui/core/rows/ide_key_value_row.dart';
-import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
-import 'package:zeta/src/ui/core/workbench/ide_section.dart';
-import 'package:zeta/src/ui/core/workbench/ide_toolbar.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 
 import '../../../testing/ide_test_harness.dart';
 
@@ -32,16 +27,31 @@ Finder _keyValueRowFor(String label) =>
     find.ancestor(of: find.text(label), matching: find.byType(IdeKeyValueRow));
 
 void main() {
+  test(
+    'slice management account option settles through provider settings',
+    () async {
+      final harness = _ClaudeManagementHarness.create();
+      addTearDown(harness.dispose);
+      await harness.managementStore.initialize();
+
+      await harness.managementStore
+          .setAccountDataEnrichmentEnabled(false)
+          .timeout(const Duration(seconds: 5));
+
+      expect(harness.managementStore.accountDataEnrichmentEnabled, isFalse);
+    },
+  );
+
   testWidgets('renders list and opens responsive Codex detail page', (
     tester,
   ) async {
     final harness = _ManagementHarness.create();
     addTearDown(harness.dispose);
-    await tester.runAsync(harness.managementController.initialize);
+    await tester.runAsync(harness.managementStore.initialize);
 
     await _pumpManagementPage(
       tester,
-      controller: harness.managementController,
+      controller: harness.managementStore,
       size: const Size(680, 760),
     );
 
@@ -91,11 +101,11 @@ void main() {
   testWidgets('详情页键值对同行阅读且机器数据走等宽', (tester) async {
     final harness = _ManagementHarness.create();
     addTearDown(harness.dispose);
-    await tester.runAsync(harness.managementController.initialize);
+    await tester.runAsync(harness.managementStore.initialize);
 
     await _pumpManagementPage(
       tester,
-      controller: harness.managementController,
+      controller: harness.managementStore,
       size: const Size(1280, 900),
     );
     await tester.tap(find.byKey(const ValueKey('agent-row-codex')));
@@ -143,9 +153,9 @@ void main() {
   testWidgets('wide Agent rows keep neutral status columns', (tester) async {
     final harness = _ManagementHarness.create();
     addTearDown(harness.dispose);
-    await tester.runAsync(harness.managementController.initialize);
+    await tester.runAsync(harness.managementStore.initialize);
 
-    await _pumpManagementPage(tester, controller: harness.managementController);
+    await _pumpManagementPage(tester, controller: harness.managementStore);
 
     expect(find.byKey(const ValueKey('agent-row-status-wide')), findsOneWidget);
     expect(find.byType(StateLabel), findsNothing);
@@ -169,12 +179,9 @@ void main() {
     (tester) async {
       final harness = _ClaudeManagementHarness.create();
       addTearDown(harness.dispose);
-      await tester.runAsync(harness.managementController.initialize);
+      await tester.runAsync(harness.managementStore.initialize);
 
-      await _pumpManagementPage(
-        tester,
-        controller: harness.managementController,
-      );
+      await _pumpManagementPage(tester, controller: harness.managementStore);
       expect(find.text('Claude'), findsOneWidget);
       expect(
         find.byKey(
@@ -198,19 +205,16 @@ void main() {
       expect(tester.widget<IdeSwitch>(switchFinder).value, isTrue);
       expect(tester.widget<IdeSwitch>(switchFinder).onChanged, isNotNull);
 
-      await tester.runAsync(
-        () => harness.managementController
-            .setClaudeCodeAccountDataEnrichmentEnabled(false),
+      final update = harness.managementStore.setAccountDataEnrichmentEnabled(
+        false,
       );
+      await update;
       await tester.pump();
 
       final disabledConfig = harness.providerController.providerConfigById(
         defaultClaudeCodeProviderId,
       );
-      expect(
-        disabledConfig?.extra[claudeCodeAccountDataEnrichmentKey],
-        isFalse,
-      );
+      expect(disabledConfig?.extra[testAccountDataEnrichmentKey], isFalse);
       expect(tester.widget<IdeSwitch>(switchFinder).value, isFalse);
       expect(tester.takeException(), isNull);
     },
@@ -223,9 +227,9 @@ void main() {
       accountDataEnrichmentEnabled: false,
     );
     addTearDown(harness.dispose);
-    await tester.runAsync(harness.managementController.initialize);
+    await tester.runAsync(harness.managementStore.initialize);
 
-    await _pumpManagementPage(tester, controller: harness.managementController);
+    await _pumpManagementPage(tester, controller: harness.managementStore);
     await tester.tap(find.byKey(const ValueKey('agent-row-claude_code')));
     await tester.pump();
 
@@ -239,7 +243,7 @@ void main() {
     expect(
       harness.providerController
           .providerConfigById(defaultClaudeCodeProviderId)
-          ?.extra[claudeCodeAccountDataEnrichmentKey],
+          ?.extra[testAccountDataEnrichmentKey],
       isFalse,
     );
     expect(find.textContaining('模型列表与套餐名称始终来自 Claude CLI'), findsOneWidget);
@@ -251,9 +255,9 @@ void main() {
   ) async {
     final harness = _ClaudeManagementHarness.create();
     addTearDown(harness.dispose);
-    await tester.runAsync(harness.managementController.initialize);
+    await tester.runAsync(harness.managementStore.initialize);
 
-    await _pumpManagementPage(tester, controller: harness.managementController);
+    await _pumpManagementPage(tester, controller: harness.managementStore);
     await tester.tap(find.byKey(const ValueKey('agent-row-claude_code')));
     await tester.pump();
 
@@ -295,13 +299,10 @@ void main() {
         accountLabel: '未检测到 Claude.ai OAuth 或 API key 登录证据',
       );
       addTearDown(harness.dispose);
-      await tester.runAsync(harness.managementController.initialize);
-      await tester.runAsync(harness.managementController.detect);
+      await tester.runAsync(harness.managementStore.initialize);
+      await tester.runAsync(harness.managementStore.detect);
 
-      await _pumpManagementPage(
-        tester,
-        controller: harness.managementController,
-      );
+      await _pumpManagementPage(tester, controller: harness.managementStore);
       await tester.tap(find.byKey(const ValueKey('agent-row-claude_code')));
       await tester.pump();
 
@@ -338,12 +339,12 @@ void main() {
   ) async {
     final harness = _ManagementHarness.create();
     addTearDown(harness.dispose);
-    await tester.runAsync(harness.managementController.initialize);
+    await tester.runAsync(harness.managementStore.initialize);
     final config = File(harness.repository.configPath);
     config.writeAsStringSync('model = "old"\n');
-    await tester.runAsync(harness.managementController.loadConfiguration);
+    await tester.runAsync(harness.managementStore.loadConfiguration);
 
-    await _pumpManagementPage(tester, controller: harness.managementController);
+    await _pumpManagementPage(tester, controller: harness.managementStore);
     await tester.tap(find.byKey(const ValueKey('agent-row-codex')));
     await tester.pump();
     await tester.tap(find.text('配置'));
@@ -404,15 +405,19 @@ class _ManagementHarness {
     required this.root,
     required this.repository,
     required this.providerController,
-    required this.managementController,
+    required this.managementStore,
+    required this._managementComposition,
     required this._registry,
+    required this._runtimeSignal,
   });
 
   final Directory root;
   final CodexAgentManagementRepository repository;
-  final AgentProviderSettingsController providerController;
-  final AgentManagementController managementController;
+  final _MemoryProviderSettingsPort providerController;
+  final AgentManagementSliceStore managementStore;
+  final AgentManagementSliceComposition _managementComposition;
   final AgentProviderRuntimeRegistry _registry;
+  final ChangeNotifier _runtimeSignal;
 
   static _ManagementHarness create() {
     final root = Directory.systemTemp.createTempSync(
@@ -422,47 +427,58 @@ class _ManagementHarness {
     final registry = AgentProviderRuntimeRegistry(
       providerFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
     );
-    final providerController = AgentProviderSettingsController(
-      runtimeRegistry: registry,
-      configStore: MemoryAgentProviderConfigStore(
-        AgentProviderSettings(
-          providers: <AgentProviderConfig>[
-            AgentProviderConfig.defaultCodex.copyWith(
-              extra: <String, Object?>{
-                'cliPath': Platform.isWindows
-                    ? r'C:\tools\codex.exe'
-                    : '/usr/local/bin/codex',
-                'detectedCurrentVersion': '0.130.0',
-                'detectedLatestVersion': '0.131.0',
-                'detectedAccountState': 'loggedIn',
-                'lastDetectedAt': DateTime.now().toIso8601String(),
-              },
-            ),
-          ],
-        ),
+    final providerController = _MemoryProviderSettingsPort(
+      AgentProviderSettings(
+        providers: <AgentProviderConfig>[
+          defaultCodexAgentProviderConfig.copyWith(
+            extra: <String, Object?>{
+              'cliPath': Platform.isWindows
+                  ? r'C:\tools\codex.exe'
+                  : '/usr/local/bin/codex',
+              'detectedCurrentVersion': '0.130.0',
+              'detectedLatestVersion': '0.131.0',
+              'detectedAccountState': 'loggedIn',
+              'lastDetectedAt': DateTime.now().toIso8601String(),
+            },
+          ),
+        ],
       ),
     );
     final repository = CodexAgentManagementRepository(
       runtimeRegistry: registry,
       codexHomeProvider: () => root.path,
     );
-    final managementController = AgentManagementController(
+    final runtimeSignal = ChangeNotifier();
+    final managementComposition = AgentManagementSliceComposition.create(
+      definitions: testAgentManagementDefinitions,
       repositories: <String, AgentCliManagementRepository>{
-        AgentDefinition.codex.id: repository,
+        codexAgentManagementDefinition.id: repository,
       },
-      providerController: providerController,
+      providerSettings: providerController,
+      subscribeRuntime: (listener) {
+        runtimeSignal.addListener(listener);
+        return () => runtimeSignal.removeListener(listener);
+      },
+      runtimeSnapshotProvider: () => (
+        activeAgentId: defaultAgentProviderId,
+        runtimeState: AgentRuntimeState.notRunning,
+      ),
+      textCatalog: const FallbackAgentManagementTextCatalog(),
     );
     return _ManagementHarness(
       root: root,
       repository: repository,
       providerController: providerController,
-      managementController: managementController,
+      managementStore: managementComposition.store,
+      managementComposition: managementComposition,
       registry: registry,
+      runtimeSignal: runtimeSignal,
     );
   }
 
   Future<void> dispose() async {
-    managementController.dispose();
+    _managementComposition.close();
+    _runtimeSignal.dispose();
     providerController.dispose();
     await _registry.close();
     for (var attempt = 0; attempt < 5 && await root.exists(); attempt++) {
@@ -479,14 +495,18 @@ class _ClaudeManagementHarness {
   _ClaudeManagementHarness({
     required this.repository,
     required this.providerController,
-    required this.managementController,
+    required this.managementStore,
+    required this._managementComposition,
     required this._registry,
+    required this._runtimeSignal,
   });
 
   final _FakeClaudeManagementRepository repository;
-  final AgentProviderSettingsController providerController;
-  final AgentManagementController managementController;
+  final _MemoryProviderSettingsPort providerController;
+  final AgentManagementSliceStore managementStore;
+  final AgentManagementSliceComposition _managementComposition;
   final AgentProviderRuntimeRegistry _registry;
+  final ChangeNotifier _runtimeSignal;
 
   static _ClaudeManagementHarness create({
     bool? accountDataEnrichmentEnabled,
@@ -501,50 +521,207 @@ class _ClaudeManagementHarness {
     final registry = AgentProviderRuntimeRegistry(
       providerFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
     );
-    final providerController = AgentProviderSettingsController(
-      runtimeRegistry: registry,
-      configStore: MemoryAgentProviderConfigStore(
-        AgentProviderSettings(
-          providers: <AgentProviderConfig>[
-            AgentProviderConfig.defaultClaudeCode.copyWith(
-              extra: <String, Object?>{
-                'cliPath': Platform.isWindows
-                    ? r'C:\tools\claude.exe'
-                    : '/usr/local/bin/claude',
-                'detectedCurrentVersion': '2.1.224',
-                'detectedAccountState': accountState.name,
-                'lastDetectedAt': DateTime.utc(2026, 8, 11).toIso8601String(),
-                claudeCodeAccountDataEnrichmentKey:
-                    ?accountDataEnrichmentEnabled,
-              },
-            ),
-          ],
-          activeProviderId: defaultClaudeCodeProviderId,
-        ),
+    final providerController = _MemoryProviderSettingsPort(
+      AgentProviderSettings(
+        providers: <AgentProviderConfig>[
+          defaultClaudeCodeAgentProviderConfig.copyWith(
+            extra: <String, Object?>{
+              'cliPath': Platform.isWindows
+                  ? r'C:\tools\claude.exe'
+                  : '/usr/local/bin/claude',
+              'detectedCurrentVersion': '2.1.224',
+              'detectedAccountState': accountState.name,
+              'lastDetectedAt': DateTime.utc(2026, 8, 11).toIso8601String(),
+              testAccountDataEnrichmentKey: ?accountDataEnrichmentEnabled,
+            },
+          ),
+        ],
+        activeProviderId: defaultClaudeCodeProviderId,
       ),
     );
-    final managementController = AgentManagementController(
+    final runtimeSignal = ChangeNotifier();
+    final managementComposition = AgentManagementSliceComposition.create(
+      definitions: testAgentManagementDefinitions,
       repositories: <String, AgentCliManagementRepository>{
         defaultClaudeCodeProviderId: repository,
       },
-      providerController: providerController,
+      providerSettings: providerController,
+      subscribeRuntime: (listener) {
+        runtimeSignal.addListener(listener);
+        return () => runtimeSignal.removeListener(listener);
+      },
+      runtimeSnapshotProvider: () => (
+        activeAgentId: defaultClaudeCodeProviderId,
+        runtimeState: AgentRuntimeState.notRunning,
+      ),
+      textCatalog: const FallbackAgentManagementTextCatalog(),
     );
     return _ClaudeManagementHarness(
       repository: repository,
       providerController: providerController,
-      managementController: managementController,
+      managementStore: managementComposition.store,
+      managementComposition: managementComposition,
       registry: registry,
+      runtimeSignal: runtimeSignal,
     );
   }
 
   Future<void> dispose() async {
-    managementController.dispose();
+    _managementComposition.close();
+    _runtimeSignal.dispose();
     providerController.dispose();
     await _registry.close();
   }
 }
 
-class _FakeClaudeManagementRepository implements AgentCliManagementRepository {
+final class _MemoryProviderSettingsPort implements AgentProviderSettingsPort {
+  _MemoryProviderSettingsPort(this._settings)
+    : modelCatalogRepository = AgentModelCatalogRepository(
+        store: MemoryAgentModelCatalogCacheStore(),
+      );
+
+  AgentProviderSettings _settings;
+  final List<void Function()> _listeners = <void Function()>[];
+
+  final AgentModelCatalogRepository modelCatalogRepository;
+
+  @override
+  Future<void> recordModelCatalog({
+    required AgentProviderConfig config,
+    required AgentModelList models,
+    required String source,
+  }) {
+    return modelCatalogRepository.record(
+      config: config,
+      models: models,
+      source: source,
+    );
+  }
+
+  @override
+  Future<AgentModelCatalogLoadResult> loadModelCatalog({
+    required AgentProviderConfig config,
+    required AgentModelCatalogLoader refreshLoader,
+    bool forceRefresh = false,
+    void Function(AgentModelCatalogSnapshot snapshot)? onCacheHit,
+  }) {
+    return modelCatalogRepository.load(
+      config: config,
+      source: modelCatalogSourceFor(config),
+      refreshLoader: refreshLoader,
+      forceRefresh: forceRefresh,
+      onCacheHit: onCacheHit,
+    );
+  }
+
+  @override
+  AgentProviderSettings get settings => _settings;
+
+  @override
+  String get activeProviderId => _settings.activeProvider.id;
+
+  @override
+  String get activeProviderName => _settings.activeProvider.displayName;
+
+  @override
+  AgentProviderConfig get activeProviderConfig => _settings.activeProvider;
+
+  @override
+  List<AgentProviderConfig> get enabledProviders =>
+      List<AgentProviderConfig>.unmodifiable(
+        _settings.providers.where((provider) => provider.enabled),
+      );
+
+  @override
+  bool isProviderEnabled(String providerId) =>
+      providerConfigById(providerId)?.enabled ?? false;
+
+  @override
+  AgentProviderConfig? providerConfigById(String providerId) {
+    for (final provider in _settings.providers) {
+      if (provider.id == providerId) {
+        return provider;
+      }
+    }
+    return null;
+  }
+
+  @override
+  AgentProviderCapabilities capabilitiesForProviderId(String providerId) {
+    final config = providerConfigById(providerId);
+    return config == null
+        ? AgentProviderCapabilities.unsupported
+        : zetaAgentProviderDefinitionCatalog.staticCapabilitiesFor(config.kind);
+  }
+
+  @override
+  String modelCatalogSourceFor(AgentProviderConfig config) =>
+      zetaAgentProviderDefinitionCatalog.modelCatalogSourceFor(config);
+
+  @override
+  Future<AgentProviderSettings> loadSettings() async => _settings;
+
+  @override
+  Future<void> updateProviderConfig(
+    AgentProviderConfig updated, {
+    bool restartProvider = false,
+  }) async {
+    _settings = AgentProviderSettings(
+      providers: <AgentProviderConfig>[
+        for (final provider in _settings.providers)
+          if (provider.id == updated.id) updated else provider,
+      ],
+      activeProviderId: _settings.activeProviderId,
+    );
+    _notify();
+  }
+
+  @override
+  Future<void> setProviderEnabled(String providerId, bool enabled) async {
+    final config = providerConfigById(providerId);
+    if (config != null) {
+      await updateProviderConfig(config.copyWith(enabled: enabled));
+    }
+  }
+
+  @override
+  Future<void> setActiveProvider(String providerId) async {
+    _settings = _settings.copyWith(activeProviderId: providerId);
+    _notify();
+  }
+
+  @override
+  Future<void> persistModelSelection(
+    AgentModelSelection selection,
+    Map<String, AgentModelPreference> preferences,
+  ) async {}
+
+  @override
+  Future<void> persistPermissionOptionId(String optionId) async {}
+
+  @override
+  Future<void> persistPermissionOptionIdForProvider(
+    String providerId,
+    String optionId,
+  ) async {}
+
+  @override
+  void Function() subscribe(void Function() listener) {
+    _listeners.add(listener);
+    return () => _listeners.remove(listener);
+  }
+
+  void dispose() => _listeners.clear();
+
+  void _notify() {
+    for (final listener in List<void Function()>.of(_listeners)) {
+      listener();
+    }
+  }
+}
+
+class _FakeClaudeManagementRepository
+    implements AgentCliManagementRepository, AgentCliManagementDescriptor {
   _FakeClaudeManagementRepository({
     this.accountState = AgentAccountState.loggedIn,
     this.accountLabel,
@@ -553,6 +730,20 @@ class _FakeClaudeManagementRepository implements AgentCliManagementRepository {
   final AgentAccountState accountState;
   final String? accountLabel;
   int testConnectionCalls = 0;
+
+  @override
+  AgentCliManagementCapabilities get managementCapabilities =>
+      testClaudeManagementCapabilities;
+
+  @override
+  AgentProviderConfig get defaultProviderConfig =>
+      defaultClaudeCodeAgentProviderConfig;
+
+  @override
+  bool acceptsExecutablePath(String path) => true;
+
+  @override
+  String get connectionModelSourceLabel => 'Claude CLI';
 
   @override
   String get agentId => defaultClaudeCodeProviderId;
@@ -566,7 +757,10 @@ class _FakeClaudeManagementRepository implements AgentCliManagementRepository {
     required bool enabled,
     AgentDetectionProgressCallback? onProgress,
   }) async {
-    return ManagedAgent.claudeCode(enabled: enabled).copyWith(
+    return ManagedAgent.forDefinition(
+      definition: claudeCodeAgentManagementDefinition,
+      enabled: enabled,
+    ).copyWith(
       installationState: AgentInstallationState.installed,
       accountState: accountState,
       accountLabel: accountLabel,
@@ -637,7 +831,7 @@ class _FakeClaudeManagementRepository implements AgentCliManagementRepository {
 
 Future<void> _pumpManagementPage(
   WidgetTester tester, {
-  required AgentManagementController controller,
+  required AgentManagementSliceStore controller,
   Size size = const Size(1200, 820),
 }) async {
   tester.view
@@ -660,14 +854,23 @@ Future<void> _pumpManagementPage(
         brightness: Brightness.dark,
         codeFontFamily: 'JetBrainsMono',
       ),
-      child: sf.ShadcnApp(
-        locale: ZetaLocalization.simplifiedChinese,
-        supportedLocales: ZetaLocalization.supportedLocales,
-        localizationsDelegates: ZetaLocalization.delegates,
-        theme: buildShadcnTheme(ideTheme),
-        materialTheme: buildMaterialTheme(ideTheme),
-        home: sf.Scaffold(
-          child: AgentManagementPage(controller: controller, autoDetect: false),
+      child: ProviderScope(
+        overrides: [agentProviderIconsOverride()],
+        child: sf.ShadcnApp(
+          locale: ZetaLocalization.simplifiedChinese,
+          supportedLocales: ZetaLocalization.supportedLocales,
+          localizationsDelegates: ZetaLocalization.delegates,
+          theme: buildShadcnTheme(ideTheme),
+          builder: (context, child) => IdeMaterialLayer(
+            theme: buildMaterialTheme(ideTheme),
+            child: child,
+          ),
+          home: sf.Scaffold(
+            child: AgentManagementPage(
+              sliceStore: controller,
+              autoDetect: false,
+            ),
+          ),
         ),
       ),
     ),

@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:zeta/src/ui/core/ide_metrics.dart';
-import 'package:zeta/src/ui/core/pane_widgets.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/ui/features/ide/views/project_agent_sidebar.dart';
 
 import '../../../core/ide_component_test_harness.dart';

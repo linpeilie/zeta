@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/animation.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/ui/core/virtualization/ide_virtual_scroll_coordinator.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 
 void main() {
   group('19.4 IdeVirtualScrollCoordinator', () {

@@ -1,24 +1,17 @@
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_permission_state.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_permission_selection_controller.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_runtime_identity.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_config_codec.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_permission_migration.dart';
-import 'package:zeta/src/features/agent/data/datasources/acp/grok_permission_policy_adapter.dart';
-import 'package:zeta/src/features/agent/data/datasources/app_server/codex_app_server_agent_provider.dart';
-import 'package:zeta/src/features/agent/data/mappers/grok_permission_mode_codec.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import '../../../testing/agent_provider_implementations.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
+import '../../../testing/provider_settings_test_store.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
 
-import '../../../testing/fixture_reader.dart';
 import '../../../testing/agent_conversation_binding_test_harness.dart';
 import '../../../testing/fake_agent_frame_scheduler.dart';
 import '../../../testing/recording_json_rpc_peer.dart';
+import '../../../testing/memory_feature_stores.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -29,7 +22,7 @@ void main() {
       () async {
         final peer = RecordingJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         addTearDown(provider.dispose);
@@ -217,13 +210,13 @@ void main() {
       () async {
         final peer = RecordingJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         final registry = AgentProviderRuntimeRegistry(
           providerFactory: FixedAgentProviderBundleFactory(provider),
         );
-        final providerController = AgentProviderSettingsController(
+        final providerController = createProviderSettingsTestStore(
           runtimeRegistry: registry,
           configStore: MemoryAgentProviderConfigStore(),
         );
@@ -245,18 +238,24 @@ void main() {
           threadId: secondThread.id,
         );
 
-        final first = AgentConversationViewModel(
+        final first = AgentConversationRuntimeController(
           providerController: providerController,
           conversationBinding: firstBinding.binding,
           globalRuntime: bindingHarness.globalRuntime,
+          composerStateOwner: AgentConversationComposerStateOwner.create(
+            providerController: providerController,
+          ),
           initialProjectPath: '/repo',
           initialThread: firstThread,
           uiFrameScheduler: FakeAgentFrameScheduler(),
         );
-        final second = AgentConversationViewModel(
+        final second = AgentConversationRuntimeController(
           providerController: providerController,
           conversationBinding: secondBinding.binding,
           globalRuntime: bindingHarness.globalRuntime,
+          composerStateOwner: AgentConversationComposerStateOwner.create(
+            providerController: providerController,
+          ),
           initialProjectPath: '/repo',
           initialThread: secondThread,
           uiFrameScheduler: FakeAgentFrameScheduler(),
@@ -323,13 +322,13 @@ void main() {
       () async {
         final peer = RecordingJsonRpcPeer();
         final provider = CodexAppServerAgentProvider(
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           peer: peer,
         );
         final registry = AgentProviderRuntimeRegistry(
           providerFactory: FixedAgentProviderBundleFactory(provider),
         );
-        final providerController = AgentProviderSettingsController(
+        final providerController = createProviderSettingsTestStore(
           runtimeRegistry: registry,
           configStore: MemoryAgentProviderConfigStore(),
         );
@@ -351,18 +350,24 @@ void main() {
           threadId: secondThread.id,
         );
 
-        final first = AgentConversationViewModel(
+        final first = AgentConversationRuntimeController(
           providerController: providerController,
           conversationBinding: firstBinding.binding,
           globalRuntime: bindingHarness.globalRuntime,
+          composerStateOwner: AgentConversationComposerStateOwner.create(
+            providerController: providerController,
+          ),
           initialProjectPath: '/repo',
           initialThread: firstThread,
           uiFrameScheduler: FakeAgentFrameScheduler(),
         );
-        final second = AgentConversationViewModel(
+        final second = AgentConversationRuntimeController(
           providerController: providerController,
           conversationBinding: secondBinding.binding,
           globalRuntime: bindingHarness.globalRuntime,
+          composerStateOwner: AgentConversationComposerStateOwner.create(
+            providerController: providerController,
+          ),
           initialProjectPath: '/repo',
           initialThread: secondThread,
           uiFrameScheduler: FakeAgentFrameScheduler(),
@@ -420,8 +425,9 @@ void main() {
       'current thread effective wins over provider default for fork',
       () async {
         final peer = RecordingJsonRpcPeer();
-        final config = AgentProviderConfig.defaultCodex
-            .withPermissionPreference(':workspace');
+        final config = defaultCodexAgentProviderConfig.withPermissionPreference(
+          ':workspace',
+        );
         final provider = CodexAppServerAgentProvider(
           config: config,
           peer: peer,
@@ -429,13 +435,13 @@ void main() {
         final registry = AgentProviderRuntimeRegistry(
           providerFactory: FixedAgentProviderBundleFactory(provider),
         );
-        final providerController = AgentProviderSettingsController(
+        final providerController = createProviderSettingsTestStore(
           runtimeRegistry: registry,
           configStore: MemoryAgentProviderConfigStore(
             AgentProviderSettings(
               providers: <AgentProviderConfig>[
                 config,
-                AgentProviderConfig.defaultGrok,
+                defaultGrokAgentProviderConfig,
               ],
               activeProviderId: config.id,
             ),
@@ -454,10 +460,13 @@ void main() {
           threadId: thread.id,
         );
         final permissions = bindingLease.binding.permissions;
-        final viewModel = AgentConversationViewModel(
+        final viewModel = AgentConversationRuntimeController(
           providerController: providerController,
           conversationBinding: bindingLease.binding,
           globalRuntime: bindingHarness.globalRuntime,
+          composerStateOwner: AgentConversationComposerStateOwner.create(
+            providerController: providerController,
+          ),
           initialProjectPath: '/repo',
           initialThread: thread,
           onCreatedThread:
@@ -497,7 +506,7 @@ void main() {
 
     test('thread settings domain event exposes neutral permission only', () {
       final source = File(
-        'lib/src/features/agent/domain/agent_event_models.dart',
+        'packages/zeta_agent_core/lib/src/domain/agent_event_models.dart',
       ).readAsStringSync();
       final classStart = source.indexOf(
         'class AgentThreadSettingsUpdatedEvent',
@@ -524,7 +533,7 @@ void main() {
       'shared application and presentation do not decode Codex settings',
       () {
         for (final rootPath in const <String>[
-          'lib/src/features/agent/application',
+          'packages/zeta_agent_core/lib/src/application',
           'lib/src/features/agent/presentation',
         ]) {
           final files = Directory(rootPath)
@@ -554,82 +563,46 @@ void main() {
       },
     );
 
-    test('V2 priority and provider migrator fixture table stays executable', () {
-      final fixture = readFixtureJsonMap(
-        'agent_permission_runtime_architecture/permission_migration_cases.json',
-      );
-      expect(fixture['schemaVersion'], 1);
-      final cases = fixture['cases']! as List<Object?>;
-      expect(cases, isNotEmpty);
-
-      for (final value in cases) {
-        final row = (value! as Map<Object?, Object?>).map(
-          (key, item) => MapEntry(key.toString(), item),
-        );
-        final input = row['input']! as Map<Object?, Object?>;
-        final config = _permissionConfigCodec().decodeProvider(input);
-        expect(config, isNotNull, reason: row['id']!.toString());
-        expect(
-          config!.selectedPermissionOptionId,
-          row['expectedOptionId'],
-          reason: row['id']!.toString(),
-        );
-      }
-
-      final migrators = cases
-          .map((value) => value! as Map<Object?, Object?>)
-          .map((row) => row['expectedMigrator'])
-          .toSet();
-      expect(
-        migrators,
-        containsAll(<Object?>['v2-short-circuit', 'codex', 'grok', 'generic']),
-      );
-    });
-
-    test('provider-specific permission migration is data-owned and registered', () {
+    test('provider definitions have no legacy permission migration surface', () {
       final providerModelSource = File(
-        'lib/src/features/agent/domain/agent_provider_models.dart',
+        'packages/zeta_agent_core/lib/src/domain/agent_provider_models.dart',
       ).readAsStringSync();
-      final legacyDomainMigration = File(
-        'lib/src/features/agent/domain/agent_permission_preference_migration.dart',
-      );
       final dataMigration = File(
-        'lib/src/features/agent/data/agent_provider_permission_migration.dart',
+        'packages/zeta_agent_provider_api/lib/src/agent_provider_permission_migration.dart',
       );
+      final codexPluginSource = File(
+        'packages/zeta_agent_provider_codex/lib/codex_plugin.dart',
+      ).readAsStringSync();
+      final grokPluginSource = File(
+        'packages/zeta_agent_provider_grok/lib/grok_plugin.dart',
+      ).readAsStringSync();
       final appSource = File('lib/src/app/app.dart').readAsStringSync();
 
+      expect(providerModelSource, isNot(contains('supportedVersions')));
+      expect(dataMigration.existsSync(), isFalse);
       expect(
-        providerModelSource.contains(
-          'AgentPermissionPreferenceMigration.resolveOptionId',
-        ),
-        isFalse,
-        reason:
-            'domain config decoding must delegate legacy fields to a data migrator registry',
+        codexPluginSource,
+        isNot(contains('PermissionPreferenceMigrator')),
       );
-      expect(
-        legacyDomainMigration.existsSync(),
-        isFalse,
-        reason:
-            'Codex/Grok legacy protocol strings must leave the shared domain',
-      );
-      expect(dataMigration.existsSync(), isTrue);
-      expect(appSource, contains('CodexPermissionPreferenceMigrator'));
-      expect(appSource, contains('GrokPermissionPreferenceMigrator'));
+      expect(grokPluginSource, isNot(contains('PermissionPreferenceMigrator')));
+      expect(appSource, isNot(contains('PermissionPreferenceMigrator')));
     });
 
     test('legacy permission facades and domain config decoders are absent', () {
       expect(
-        File('lib/src/features/agent/domain/agent_provider.dart').existsSync(),
+        File(
+          'packages/zeta_agent_core/lib/src/domain/agent_provider.dart',
+        ).existsSync(),
         isFalse,
       );
       final turnConfiguration = File(
-        'lib/src/features/agent/domain/agent_conversation_mode_models.dart',
+        'packages/zeta_agent_core/lib/src/domain/agent_conversation_mode_models.dart',
       ).readAsStringSync();
       final providerModels = File(
-        'lib/src/features/agent/domain/agent_provider_models.dart',
+        'packages/zeta_agent_core/lib/src/domain/agent_provider_models.dart',
       ).readAsStringSync();
       final codexProvider = File(
-        'lib/src/features/agent/data/datasources/app_server/'
+        'packages/zeta_agent_provider_codex/lib/src/datasources/app_server/'
         'codex_app_server_agent_provider.dart',
       ).readAsStringSync();
 
@@ -665,8 +638,8 @@ void main() {
         'permission protocol', () {
       final sharedFiles =
           <String>[
-            'lib/src/features/agent/application',
-            'lib/src/features/agent/domain',
+            'packages/zeta_agent_core/lib/src/application',
+            'packages/zeta_agent_core/lib/src/domain',
             'lib/src/features/agent/presentation',
             'lib/src/features/project_threads/application',
             'lib/src/features/project_threads/domain',
@@ -736,18 +709,6 @@ AgentThreadSummary _threadSummary(String id) {
     updatedAt: timestamp,
     recencyAt: timestamp,
     status: AgentThreadRuntimeStatus.idle,
-  );
-}
-
-AgentProviderSettingsCodec _permissionConfigCodec() {
-  return AgentProviderSettingsCodec(
-    migrationRegistry: AgentProviderPermissionMigrationRegistry(
-      <AgentProviderKind, AgentProviderPermissionPreferenceMigrator>{
-        AgentProviderKind.codexAppServer:
-            const CodexPermissionPreferenceMigrator(),
-        AgentProviderKind.acp: const GrokPermissionPreferenceMigrator(),
-      },
-    ),
   );
 }
 

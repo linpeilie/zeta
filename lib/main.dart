@@ -1,20 +1,34 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter/widgets.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:zeta_foundation/platform.dart';
 
+import 'package:flutter_riverpod/misc.dart' show Override;
+
+import 'package:zeta/src/app/plugins/agent_provider_icon_overrides.dart';
 import 'package:zeta/src/app/app.dart';
-import 'package:zeta/src/app/window_bootstrap.dart';
-import 'package:zeta/src/app/zeta_startup_bootstrap.dart';
-import 'package:zeta/src/core/logging/app_logging.dart';
+import 'package:zeta/src/app/composition/zeta_app_composition.dart';
+import 'package:zeta/src/app/storage/zeta_data_file_system.dart';
+import 'package:zeta/src/app/storage/zeta_storage_bindings.dart';
+import 'package:zeta/src/app/storage/zeta_store_providers.dart';
+import 'package:zeta/src/app/window/zeta_window_host.dart';
+import 'package:zeta/src/app/workspace_slice/workspace_overrides.dart';
+import 'package:zeta/src/app/conversation_workspace_slice/agent_composer_attachment_overrides.dart';
+import 'package:zeta/src/app/logging/app_logging.dart';
 import 'package:zeta/src/core/storage/zeta_data_paths.dart';
-import 'package:zeta/src/features/settings/application/app_language_resolver.dart';
+import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_notifier.dart';
 import 'package:zeta/src/features/settings/data/appearance_settings_store.dart';
+import 'package:zeta/src/features/settings/data/system_font_catalog_service.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta/src/features/settings/domain/app_language.dart';
+import 'package:zeta/src/features/settings/application/appearance_settings_notifier.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
-import 'package:zeta/src/ui/core/app_theme.dart';
+import 'package:zeta/src/features/settings/presentation/appearance_theme_mode_mapper.dart';
+import 'package:zeta/src/ui/core/system_url_opener.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 
 export 'package:zeta/src/app/app.dart' show MainApp;
 
@@ -22,60 +36,49 @@ void main() {
   runZonedGuarded(
     () async {
       WidgetsFlutterBinding.ensureInitialized();
-      final firstLocale = PlatformDispatcher.instance.locales.isEmpty
-          ? null
-          : PlatformDispatcher.instance.locales.first;
-      final firstSystemLanguage = resolveAppLanguageFromFirstSystemLocale(
-        languageCode: firstLocale?.languageCode,
-        scriptCode: firstLocale?.scriptCode,
-        countryCode: firstLocale?.countryCode,
+      final firstSystemLanguage = ZetaSystemLanguage.getSystemLanguage(
+        english: AppLanguage.english,
+        simplifiedChinese: AppLanguage.simplifiedChinese,
       );
-      ZetaDataPaths? dataPaths;
-      var fallbackLanguage = firstSystemLanguage;
-      Object? pathError;
-      StackTrace? pathStackTrace;
-      try {
-        dataPaths = ZetaDataPaths.fromEnvironment();
-      } catch (error, stackTrace) {
-        pathError = error;
-        pathStackTrace = stackTrace;
-      }
-      configureAppLogging(logDirectory: dataPaths?.logsDirectory);
+      final dataPaths = ZetaDataPaths.fromHomeDirectory(
+        await ZetaUserDirectory.getUserDirectory(),
+        isWindows: Platform.isWindows,
+      );
+      await ensureZetaDataDirectories(dataPaths);
+      final storage = ZetaStorageBindings.file(dataPaths);
+      configureAppLogging(logDirectory: Directory(dataPaths.logsDirectoryPath));
       _installGlobalErrorLogging();
-      if (pathError != null) {
-        loggerFor('zeta.storage').w(
-          'Could not resolve the Zeta data directory; persistence is disabled',
-          error: pathError,
-          stackTrace: pathStackTrace,
-        );
-      } else if (dataPaths != null) {
-        final bootstrap = await _prepareZetaStorage(
-          dataPaths,
-          firstSystemLanguage,
-        );
-        fallbackLanguage = bootstrap.fallbackLanguage;
-        if (!bootstrap.filePersistenceEnabled) {
-          // 避免迁移半途失败后，本次运行用空状态覆盖尚未迁入的旧偏好。
-          dataPaths = null;
-        }
-      }
       await windowManager.ensureInitialized();
-      final appearance = await _loadLaunchAppearance(dataPaths);
-      await bootstrapDesktopWindow(
+      final appearance = await _loadLaunchAppearance(storage.appearance);
+      final windowHost = NativeDesktopWindowHost();
+      await windowHost.prepareDesktopWindow(
         preferredBrightness: resolveBrightnessForThemeMode(
-          appearance.themeMode,
+          themeModeForPreference(appearance.themeMode),
         ),
       );
-      runApp(
-        ProviderScope(
-          child: MainApp(
-            dataPaths: dataPaths,
-            initialAppearanceSettings: appearance,
-            fallbackLanguage: fallbackLanguage,
-            waitForGeneralSettings: true,
+      // 容器由组合根建，MainApp 只消费——测试同样自己建一份并注入 fake。
+      // 窗口宿主必须注入已经 prepare 过的那一份，否则关窗会跳过 shutdown hook。
+      final composition = ZetaAppComposition.create(
+        overrides: <Override>[
+          zetaWindowHostProvider.overrideWithValue(windowHost),
+          ...storage.providerOverrides,
+          agentProviderIconsOverride(),
+          settingsFallbackLanguageProvider.overrideWithValue(
+            firstSystemLanguage,
           ),
-        ),
+          appearanceSettingsRepositoryOverride(),
+          appearanceFontCatalogProvider.overrideWith(
+            (ref) => DesktopSystemFontCatalogService(),
+          ),
+          systemDirectoryPickerOverride(),
+          systemComposerAttachmentOverride(),
+          systemUrlOpenerProvider.overrideWithValue(
+            const ProcessSystemUrlOpener(),
+          ),
+          initialAppearanceSettingsProvider.overrideWithValue(appearance),
+        ],
       );
+      runApp(MainApp(composition: composition));
     },
     (error, stackTrace) {
       loggerFor(
@@ -85,12 +88,13 @@ void main() {
   );
 }
 
-Future<AppearanceSettings> _loadLaunchAppearance(ZetaDataPaths? paths) async {
-  if (paths == null) {
-    return const AppearanceSettings();
-  }
+Future<AppearanceSettings> _loadLaunchAppearance(
+  StorageService appearanceStorage,
+) async {
   try {
-    return await FileAppearanceSettingsStore(file: paths.appearanceFile).load();
+    return await FileAppearanceSettingsRepository(
+      storage: appearanceStorage,
+    ).load();
   } catch (error, stackTrace) {
     loggerFor('zeta.storage').w(
       'Could not load appearance settings before showing the window',
@@ -99,17 +103,6 @@ Future<AppearanceSettings> _loadLaunchAppearance(ZetaDataPaths? paths) async {
     );
     return const AppearanceSettings();
   }
-}
-
-Future<ZetaStartupBootstrapResult> _prepareZetaStorage(
-  ZetaDataPaths paths,
-  AppLanguage firstSystemLanguage,
-) async {
-  final result = await ZetaStartupBootstrap(
-    paths: paths,
-    firstSystemLanguage: firstSystemLanguage,
-  ).run();
-  return result;
 }
 
 void _installGlobalErrorLogging() {

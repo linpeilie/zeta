@@ -1,6 +1,4 @@
-import 'package:zeta/src/features/agent/application/agent_provider_runtime_identity.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// 本地执行请求冻结的权限来源与 runtime 门闩。
 final class AgentPlanExecutionPermissionSeed {

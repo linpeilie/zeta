@@ -1,14 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
-import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
-import 'package:zeta/src/ui/core/app_theme.dart';
-import 'package:zeta/src/ui/core/virtualization/ide_dynamic_sliver_list.dart';
-import 'package:zeta/src/ui/core/virtualization/ide_virtual_item.dart';
-import 'package:zeta/src/ui/core/virtualization/ide_virtual_list_controller.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 
 void main() {
   testWidgets('SliverList 首帧只构建视口内 item，滚动后回收首屏', (tester) async {
@@ -309,7 +305,8 @@ class _TimelineHost extends StatelessWidget {
         localizationsDelegates: ZetaLocalization.delegates,
         theme: buildShadcnTheme(light),
         darkTheme: buildShadcnTheme(dark),
-        materialTheme: buildMaterialTheme(dark),
+        builder: (context, child) =>
+            IdeMaterialLayer(theme: buildMaterialTheme(dark), child: child),
         themeMode: sf.ThemeMode.dark,
         home: sf.Scaffold(
           child: StatefulBuilder(

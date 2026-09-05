@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
 
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/presentation/agent_file_change_projection.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_file_change_evidence_views.dart';
-import 'package:zeta/src/ui/core/ide_collapsible_card.dart';
-import 'package:zeta/src/ui/core/ide_colors.dart';
-import 'package:zeta/src/ui/core/ide_spacing.dart';
-import 'package:zeta/src/ui/core/ide_text_styles.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/features/agent/presentation/agent_presentation_l10n.dart';
 import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
@@ -70,11 +67,6 @@ class AgentFileChangeEvidenceCard extends StatelessWidget {
           detailLabel,
           ?statusLabel,
         ].join('，'),
-        leading: Icon(
-          _icon(item.kind),
-          size: 14,
-          color: statusColor ?? colors.textTertiary,
-        ),
         titleWidget: _Title(
           item: item,
           action: action,
@@ -135,58 +127,57 @@ class _Title extends StatelessWidget {
     final colors = IdeColors.of(context);
     final styles = IdeTextStyles.of(context);
     final statistics = item.statistics;
-    return Row(
-      children: <Widget>[
-        Text(action, style: styles.caption),
-        const SizedBox(width: IdeSpacing.space6),
-        Expanded(
-          child: Text(
-            _path(item),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: styles.codeSmall.copyWith(color: colors.textPrimary),
-          ),
+    final trailing = <Widget>[
+      if (statusLabel case final label?)
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: styles.caption.copyWith(color: statusColor),
         ),
-        if (statusLabel case final label?) ...<Widget>[
-          const SizedBox(width: IdeSpacing.space8),
+      if (statusLabel != null && statistics != null)
+        const SizedBox(width: IdeSpacing.space8),
+      if (statistics != null)
+        if (statistics.addedLines == null && statistics.removedLines == null)
           Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: styles.caption.copyWith(color: statusColor),
-          ),
-        ],
-        if (statistics != null) ...<Widget>[
-          const SizedBox(width: IdeSpacing.space8),
-          if (statistics.addedLines == null && statistics.removedLines == null)
-            Text(
-              context.l10n.agentLineCount('${statistics.totalLines}'),
-              style: styles.meta,
-            )
-          else
-            Semantics(
-              label: context.l10n.agentAddedRemovedLines(
-                '${statistics.addedLines ?? 0}',
-                '${statistics.removedLines ?? 0}',
-              ),
-              child: Text.rich(
-                TextSpan(
-                  children: <InlineSpan>[
-                    TextSpan(
-                      text: '+${statistics.addedLines ?? 0}',
-                      style: styles.meta.copyWith(color: colors.success),
-                    ),
-                    const TextSpan(text: '  '),
-                    TextSpan(
-                      text: '−${statistics.removedLines ?? 0}',
-                      style: styles.meta.copyWith(color: colors.error),
-                    ),
-                  ],
-                ),
+            context.l10n.agentLineCount('${statistics.totalLines}'),
+            style: styles.meta,
+          )
+        else
+          Semantics(
+            label: context.l10n.agentAddedRemovedLines(
+              '${statistics.addedLines ?? 0}',
+              '${statistics.removedLines ?? 0}',
+            ),
+            child: Text.rich(
+              TextSpan(
+                children: <InlineSpan>[
+                  TextSpan(
+                    text: '+${statistics.addedLines ?? 0}',
+                    style: styles.meta.copyWith(color: colors.success),
+                  ),
+                  const TextSpan(text: '  '),
+                  TextSpan(
+                    text: '−${statistics.removedLines ?? 0}',
+                    style: styles.meta.copyWith(color: colors.error),
+                  ),
+                ],
               ),
             ),
-        ],
-      ],
+          ),
+    ];
+    return IdeTimelineRow(
+      leading: Icon(
+        _icon(item.kind),
+        size: 14,
+        color: statusColor ?? colors.textTertiary,
+      ),
+      prefix: Text(action, style: styles.caption),
+      title: _path(item),
+      titleStyle: styles.codeSmall.copyWith(color: colors.textPrimary),
+      trailing: trailing.isEmpty
+          ? null
+          : Row(mainAxisSize: MainAxisSize.min, children: trailing),
     );
   }
 }

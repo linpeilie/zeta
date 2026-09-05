@@ -128,6 +128,30 @@ void main() {
     expect(ticks, 2);
   });
 
+  test('通知期间增删 listener 从下一轮开始生效', () async {
+    final controller = _controller(
+      runWalk: (root) async => <WorkspaceNode>[_file('$root/a.dart')],
+    );
+    final calls = <String>[];
+    late void Function() first;
+    void third() => calls.add('third');
+    first = () {
+      calls.add('first');
+      controller.removeListener(first);
+      controller.addListener(third);
+    };
+    void second() => calls.add('second');
+    controller
+      ..addListener(first)
+      ..addListener(second);
+
+    await controller.index('/repo');
+    expect(calls, <String>['first', 'second']);
+
+    controller.invalidate('/repo');
+    expect(calls, <String>['first', 'second', 'second', 'third']);
+  });
+
   test('invalidate 丢弃已提交语料', () async {
     final controller = _controller(
       runWalk: (root) async => <WorkspaceNode>[_file('$root/a.dart')],

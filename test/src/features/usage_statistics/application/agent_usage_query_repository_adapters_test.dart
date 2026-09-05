@@ -1,17 +1,17 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_query_service.dart';
 import 'package:zeta/src/features/usage_statistics/application/query_agent_usage_panel_repository.dart';
 import 'package:zeta/src/features/usage_statistics/application/query_usage_statistics_repository.dart';
-import 'package:zeta/src/features/usage_statistics/domain/agent_token_usage_source.dart';
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_query_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_quota_source.dart';
-import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 
 void main() {
   final now = DateTime(2026, 8, 12, 12);
-  final config = AgentProviderConfig.defaultCodex.copyWith(
+  final config = defaultCodexAgentProviderConfig.copyWith(
     id: 'codex-work',
     displayName: 'Codex Work',
   );

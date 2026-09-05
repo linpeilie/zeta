@@ -1,0 +1,372 @@
+{
+  "_fixture": {
+    "formatVersion": 2,
+    "provider": "grok",
+    "protocol": "ACP updates history JSONL record shape",
+    "cliVersion": "0.2.101",
+    "localCliVersionChecked": "0.2.102 (ab5ebf69ac)",
+    "scenario": "Compare live and history canonical ordering for text-tool-text, thought-tool-thought, and repeated tool updates.",
+    "provenance": "Sanitized synthesis from existing redacted Grok update shapes and mapper/history tests.",
+    "privacy": "All text and identifiers are placeholders; no prompt, path, credential, token, or user file content is retained."
+  },
+  "turns": [
+    {
+      "turnId": "grok-turn-redacted-1",
+      "records": [
+        {
+          "timestamp": 1700000000,
+          "method": "session/update",
+          "params": {
+            "sessionId": "grok-session-redacted",
+            "update": {
+              "sessionUpdate": "user_message_chunk",
+              "content": {
+                "type": "text",
+                "text": "[PROMPT_REDACTED_1]"
+              },
+              "_meta": {
+                "promptIndex": 1
+              }
+            },
+            "_meta": {
+              "eventId": "grok-history-user-1"
+            }
+          }
+        },
+        {
+          "timestamp": 1700000001,
+          "method": "session/update",
+          "params": {
+            "sessionId": "grok-session-redacted",
+            "update": {
+              "sessionUpdate": "agent_message_chunk",
+              "messageId": "grok-source-message-redacted",
+              "content": {
+                "type": "text",
+                "text": "[AGENT_TEXT_SEGMENT_1]"
+              },
+              "_meta": {
+                "promptId": "grok-turn-redacted-1"
+              }
+            },
+            "_meta": {
+              "eventId": "grok-history-agent-1"
+            }
+          }
+        },
+        {
+          "timestamp": 1700000002,
+          "method": "session/update",
+          "params": {
+            "sessionId": "grok-session-redacted",
+            "update": {
+              "sessionUpdate": "tool_call",
+              "toolCallId": "grok-history-tool-redacted-1",
+              "title": "[TOOL_TITLE_REDACTED_1]",
+              "kind": "read",
+              "status": "pending",
+              "_meta": {
+                "promptId": "grok-turn-redacted-1"
+              }
+            },
+            "_meta": {
+              "eventId": "grok-history-tool-1-start"
+            }
+          }
+        },
+        {
+          "timestamp": 1700000003,
+          "method": "session/update",
+          "params": {
+            "sessionId": "grok-session-redacted",
+            "update": {
+              "sessionUpdate": "tool_call_update",
+              "toolCallId": "grok-history-tool-redacted-1",
+              "status": "in_progress",
+              "content": [
+                {
+                  "type": "content",
+                  "content": {
+                    "type": "text",
+                    "text": "[TOOL_PROGRESS_REDACTED_1]"
+                  }
+                }
+              ],
+              "_meta": {
+                "promptId": "grok-turn-redacted-1"
+              }
+            },
+            "_meta": {
+              "eventId": "grok-history-tool-1-progress"
+            }
+          }
+        },
+        {
+          "timestamp": 1700000004,
+          "method": "session/update",
+          "params": {
+            "sessionId": "grok-session-redacted",
+            "update": {
+              "sessionUpdate": "tool_call_update",
+              "toolCallId": "grok-history-tool-redacted-1",
+              "status": "completed",
+              "content": [
+                {
+                  "type": "content",
+                  "content": {
+                    "type": "text",
+                    "text": "[TOOL_OUTPUT_REDACTED_1]"
+                  }
+                }
+              ],
+              "_meta": {
+                "promptId": "grok-turn-redacted-1"
+              }
+            },
+            "_meta": {
+              "eventId": "grok-history-tool-1-complete"
+            }
+          }
+        },
+        {
+          "timestamp": 1700000005,
+          "method": "session/update",
+          "params": {
+            "sessionId": "grok-session-redacted",
+            "update": {
+              "sessionUpdate": "agent_message_chunk",
+              "messageId": "grok-source-message-redacted",
+              "content": {
+                "type": "text",
+                "text": "[AGENT_TEXT_SEGMENT_2]"
+              },
+              "_meta": {
+                "promptId": "grok-turn-redacted-1"
+              }
+            },
+            "_meta": {
+              "eventId": "grok-history-agent-2"
+            }
+          }
+        },
+        {
+          "timestamp": 1700000006,
+          "method": "_x.ai/session/update",
+          "params": {
+            "sessionId": "grok-session-redacted",
+            "update": {
+              "sessionUpdate": "turn_completed",
+              "prompt_id": "grok-turn-redacted-1",
+              "stop_reason": "end_turn"
+            },
+            "_meta": {
+              "eventId": "grok-history-terminal-1"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "turnId": "grok-turn-redacted-2",
+      "records": [
+        {
+          "timestamp": 1700000010,
+          "method": "session/update",
+          "params": {
+            "sessionId": "grok-session-redacted",
+            "update": {
+              "sessionUpdate": "user_message_chunk",
+              "content": {
+                "type": "text",
+                "text": "[PROMPT_REDACTED_2]"
+              },
+              "_meta": {
+                "promptIndex": 2
+              }
+            },
+            "_meta": {
+              "eventId": "grok-history-user-2"
+            }
+          }
+        },
+        {
+          "timestamp": 1700000011,
+          "method": "session/update",
+          "params": {
+            "sessionId": "grok-session-redacted",
+            "update": {
+              "sessionUpdate": "agent_thought_chunk",
+              "itemId": "grok-source-reasoning-redacted",
+              "content": {
+                "type": "text",
+                "text": "[THOUGHT_DELTA_1]"
+              },
+              "_meta": {
+                "promptId": "grok-turn-redacted-2"
+              }
+            },
+            "_meta": {
+              "eventId": "grok-history-thought-1"
+            }
+          }
+        },
+        {
+          "timestamp": 1700000012,
+          "method": "session/update",
+          "params": {
+            "sessionId": "grok-session-redacted",
+            "update": {
+              "sessionUpdate": "agent_thought_chunk",
+              "itemId": "grok-source-reasoning-redacted",
+              "content": {
+                "type": "text",
+                "text": "[THOUGHT_DELTA_2]"
+              },
+              "_meta": {
+                "promptId": "grok-turn-redacted-2"
+              }
+            },
+            "_meta": {
+              "eventId": "grok-history-thought-2"
+            }
+          }
+        },
+        {
+          "timestamp": 1700000013,
+          "method": "session/update",
+          "params": {
+            "sessionId": "grok-session-redacted",
+            "update": {
+              "sessionUpdate": "tool_call",
+              "toolCallId": "grok-history-tool-redacted-2",
+              "title": "[TOOL_TITLE_REDACTED_2]",
+              "kind": "search",
+              "status": "pending",
+              "_meta": {
+                "promptId": "grok-turn-redacted-2"
+              }
+            },
+            "_meta": {
+              "eventId": "grok-history-tool-2-start"
+            }
+          }
+        },
+        {
+          "timestamp": 1700000014,
+          "method": "session/update",
+          "params": {
+            "sessionId": "grok-session-redacted",
+            "update": {
+              "sessionUpdate": "tool_call_update",
+              "toolCallId": "grok-history-tool-redacted-2",
+              "status": "completed",
+              "content": [
+                {
+                  "type": "content",
+                  "content": {
+                    "type": "text",
+                    "text": "[TOOL_OUTPUT_REDACTED_2]"
+                  }
+                }
+              ],
+              "_meta": {
+                "promptId": "grok-turn-redacted-2"
+              }
+            },
+            "_meta": {
+              "eventId": "grok-history-tool-2-complete"
+            }
+          }
+        },
+        {
+          "timestamp": 1700000015,
+          "method": "session/update",
+          "params": {
+            "sessionId": "grok-session-redacted",
+            "update": {
+              "sessionUpdate": "agent_thought_chunk",
+              "itemId": "grok-source-reasoning-redacted",
+              "content": {
+                "type": "text",
+                "text": "[THOUGHT_DELTA_3]"
+              },
+              "_meta": {
+                "promptId": "grok-turn-redacted-2"
+              }
+            },
+            "_meta": {
+              "eventId": "grok-history-thought-3"
+            }
+          }
+        },
+        {
+          "timestamp": 1700000016,
+          "method": "_x.ai/session/update",
+          "params": {
+            "sessionId": "grok-session-redacted",
+            "update": {
+              "sessionUpdate": "turn_completed",
+              "prompt_id": "grok-turn-redacted-2",
+              "stop_reason": "end_turn"
+            },
+            "_meta": {
+              "eventId": "grok-history-terminal-2"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "expectedCanonicalSignature": [
+    {
+      "turnOrdinal": 1,
+      "entryOrdinal": 1,
+      "entryType": "message",
+      "phaseOrdinal": 1,
+      "sourceId": "grok-source-message-redacted",
+      "normalizedText": "[AGENT_TEXT_SEGMENT_1]"
+    },
+    {
+      "turnOrdinal": 1,
+      "entryOrdinal": 2,
+      "entryType": "tool",
+      "sourceId": "grok-history-tool-redacted-1",
+      "normalizedText": "[TOOL_OUTPUT_REDACTED_1]",
+      "toolKind": "read",
+      "toolStatus": "completed"
+    },
+    {
+      "turnOrdinal": 1,
+      "entryOrdinal": 3,
+      "entryType": "message",
+      "phaseOrdinal": 2,
+      "sourceId": "grok-source-message-redacted",
+      "normalizedText": "[AGENT_TEXT_SEGMENT_2]"
+    },
+    {
+      "turnOrdinal": 2,
+      "entryOrdinal": 1,
+      "entryType": "reasoning",
+      "phaseOrdinal": 1,
+      "sourceId": "grok-source-reasoning-redacted",
+      "normalizedText": "[THOUGHT_DELTA_1][THOUGHT_DELTA_2]"
+    },
+    {
+      "turnOrdinal": 2,
+      "entryOrdinal": 2,
+      "entryType": "tool",
+      "sourceId": "grok-history-tool-redacted-2",
+      "normalizedText": "[TOOL_OUTPUT_REDACTED_2]",
+      "toolKind": "search",
+      "toolStatus": "completed"
+    },
+    {
+      "turnOrdinal": 2,
+      "entryOrdinal": 3,
+      "entryType": "reasoning",
+      "phaseOrdinal": 2,
+      "sourceId": "grok-source-reasoning-redacted",
+      "normalizedText": "[THOUGHT_DELTA_3]"
+    }
+  ]
+}

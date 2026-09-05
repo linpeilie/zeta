@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// Claude Code 接入期间的共享层纯度守卫（G1 / G2）。
 ///
 /// 共享适配层不得出现 Claude Code 路径或标识符；`AgentProviderBundle` 不得为
-/// Claude Code 新增 `AgentProviderKind` 分支；G1 五文件内容冻结（T18）。
+/// Claude Code 新增 `AgentProviderTypeId` 分支；G1 五文件内容冻结（T18）。
 void main() {
   /// G1 范围内的共享机制层文件（不含 Provider 自有 adapter）。
   ///
@@ -14,12 +14,12 @@ void main() {
   /// Dispatcher / TimelineStore，外加 capability 端口装配的 `AgentProviderBundle`
   /// （禁止按 kind 分支）。
   const sharedLayerFiles = <String>[
-    'lib/src/features/agent/application/agent_event_pipeline.dart',
-    'lib/src/features/agent/application/agent_event_coalescing_policy.dart',
-    'lib/src/features/agent/application/coalescing_event_buffer.dart',
-    'lib/src/features/agent/application/bounded_event_dispatcher.dart',
-    'lib/src/features/agent/application/agent_conversation_timeline_store.dart',
-    'lib/src/features/agent/domain/agent_provider_bundle.dart',
+    'packages/zeta_agent_core/lib/src/application/agent_event_pipeline.dart',
+    'packages/zeta_agent_core/lib/src/application/agent_event_coalescing_policy.dart',
+    'packages/zeta_agent_core/lib/src/application/coalescing_event_buffer.dart',
+    'packages/zeta_agent_core/lib/src/application/bounded_event_dispatcher.dart',
+    'packages/zeta_agent_core/lib/src/application/agent_conversation_timeline_store.dart',
+    'packages/zeta_agent_core/lib/src/domain/agent_provider_bundle.dart',
   ];
 
   /// T18：G1 五文件内容基线（lineCount + 规范化 byteLength + FNV-1a 指纹）。
@@ -29,44 +29,89 @@ void main() {
   /// LF 计算，避免不同平台的 checkout 行尾让守卫误报。
   /// TimelineStore 基线已按 2026-08-17 多语言步骤 12（其余 context-free
   /// 文案改走 `AgentUiTextCatalog`）刷新。
+  ///
+  /// 2026-08-22（四）：TimelineStore 基线因 review 修复刷新——工具卡合并与
+  /// reasoning→think 构造漏带 adapter 产出的 typed metadata
+  /// （`appendsProgress` / `inputDetail` / `sourceItemId`），状态型 update 一到
+  /// 就把它们清成默认值。这是（二）(三) 那批改动的补漏：删掉 raw 之后，typed
+  /// 替代必须端到端保真，否则等于语义丢失。同一批架构批准。
+  ///
+  /// 2026-08-22（三）：CoalescingPolicy 与 TimelineStore 基线随 raw payload 变成
+  /// 不可取值的 `AgentProviderRawPayload` 刷新：策略层不再 `raw['_progressAppend']`
+  /// 也不再手动 spread 合并原文（改为内容盲的 `mergedWith`），Store 不再作者化
+  /// "原始报文"内容。同一批架构批准。
+  ///
+  /// 2026-08-22（二）：TimelineStore 基线因**语义改动**刷新——进度追加不再从
+  /// `toolCall.raw['_progressAppend']` 读私有标记，改读 adapter 显式声明的
+  /// `AgentToolCall.appendsProgress`。这是修复一处 G1 违规（适配层借 raw payload
+  /// 遥控共享层），已获架构 owner 批准。
+  ///
+  /// 2026-08-22：G1 五文件随 `zeta_agent_core` 拆包移动到
+  /// `packages/zeta_agent_core/lib/src/`。**逐字比对确认只有 import URI 变化**
+  /// （`package:zeta/src/features/agent/...` → `package:zeta_agent_core/src/...`），
+  /// 语义零改动，因此按新内容重算基线。
+  ///
+  /// 2026-08-24：Phase 3 阻塞 4 明确要求 `zeta_agent_core` 纯 Dart。TimelineStore
+  /// 只把 Flutter `ValueNotifier` / `ChangeNotifier` 换成等价的内核
+  /// `AgentValueNotifier` / `AgentChangeNotifier`，并替换 import；合并、身份和
+  /// Provider 语义未改。按这次已授权的边界清算刷新基线。
+  ///
+  /// 2026-08-24（Phase 4 / P4-1）：TimelineStore 基线随**纯删除**刷新——去掉
+  /// `renderRevision` 这个与 `contentRevision` 同义的兼容别名，共 4 处：
+  /// `AgentConversationTurnGroup` 的 ctor 参数与 final 字段、
+  /// `AgentConversationTurnState` 的转发 getter、`snapshot()` 的传参。
+  /// 删除前已确认三处别名全是纯转发（`=> _contentRevision`），且唯一构造点给两个
+  /// 字段赋的是同一个值，因此 presentation 侧
+  /// `contentRevision != 0 ? contentRevision : renderRevision` 的兜底恒等于
+  /// `contentRevision`。**合并逻辑、entryId 身份、dumb merge、Provider 分支与
+  /// 任何 typed metadata 均未触碰**，本次没有新增或修改一行可执行语句。
+  /// 触发 T18 后按守卫要求停线取得明确批准，边界记录于此。
+  ///
+  /// 2026-09-02：TimelineStore 基线因**事件链路改造 P4** 刷新——Store 增加
+  /// `AgentTimelineDirtyRegion` 脏位集合与 `takeDirtyRegions()`，各写方法在
+  /// **值真正变化时**置位，取代原先只有 `_activityDirty` 一个布尔的做法。
+  /// 目的：让 UI region 由「谁改了数据谁举手」派生，而不是由 reducer 硬编码
+  /// （见 docs/plan/agent_event_chain_refactor.md §7）。
+  /// 本次不触碰 merge / identity / 终态判定，G2 边界不变。已按停线流程批准。
   const g1ContentBaselines = <String, _FileBaseline>{
-    'lib/src/features/agent/application/agent_event_pipeline.dart':
+    'packages/zeta_agent_core/lib/src/application/agent_event_pipeline.dart':
         _FileBaseline(
           lineCount: 349,
-          byteLength: 11823,
-          fingerprint: '77d81121c8b9d9fd',
+          byteLength: 11803,
+          fingerprint: '37c52abd0f2b39df',
         ),
-    'lib/src/features/agent/application/agent_event_coalescing_policy.dart':
+    'packages/zeta_agent_core/lib/src/application/agent_event_coalescing_policy.dart':
         _FileBaseline(
-          lineCount: 143,
-          byteLength: 4569,
-          fingerprint: '53fcea25bd7a52d0',
+          lineCount: 141,
+          byteLength: 4505,
+          fingerprint: 'aa08191562e5b0ae',
         ),
-    'lib/src/features/agent/application/coalescing_event_buffer.dart':
+    'packages/zeta_agent_core/lib/src/application/coalescing_event_buffer.dart':
         _FileBaseline(
           lineCount: 163,
           byteLength: 4407,
           fingerprint: '82eff5df2bcc5047',
         ),
-    'lib/src/features/agent/application/bounded_event_dispatcher.dart':
+    'packages/zeta_agent_core/lib/src/application/bounded_event_dispatcher.dart':
         _FileBaseline(
           lineCount: 183,
           byteLength: 4779,
           fingerprint: 'fbbeb5ecb3de50e3',
         ),
-    'lib/src/features/agent/application/agent_conversation_timeline_store.dart':
+    'packages/zeta_agent_core/lib/src/application/agent_conversation_timeline_store.dart':
         _FileBaseline(
-          lineCount: 2017,
-          byteLength: 67491,
-          fingerprint: '9a129dfe302117a4',
+          lineCount: 2126,
+          byteLength: 72626,
+          fingerprint: 'e3588fb39c7f1a57',
         ),
   };
 
-  const bundlePath = 'lib/src/features/agent/domain/agent_provider_bundle.dart';
+  const bundlePath =
+      'packages/zeta_agent_core/lib/src/domain/agent_provider_bundle.dart';
 
-  /// 基线：bundle 当前不出现 `AgentProviderKind`（端口装配只靠 interface/`is`）。
+  /// 基线：bundle 当前不出现 `AgentProviderTypeId`（端口装配只靠 interface/`is`）。
   /// 接入 Claude Code 后此计数仍须保持；若上升说明有人加了 kind 分支。
-  const expectedAgentProviderKindMentionsInBundle = 0;
+  const expectedAgentProviderTypeIdMentionsInBundle = 0;
 
   String stripLineComments(String source) {
     final out = StringBuffer();
@@ -118,15 +163,15 @@ void main() {
       }
     });
 
-    test('agent_provider_bundle keeps AgentProviderKind mention baseline', () {
+    test('agent_provider_bundle keeps AgentProviderTypeId mention baseline', () {
       final source = File(bundlePath).readAsStringSync();
-      final mentions = RegExp(r'AgentProviderKind').allMatches(source).length;
+      final mentions = RegExp(r'AgentProviderTypeId').allMatches(source).length;
       expect(
         mentions,
-        expectedAgentProviderKindMentionsInBundle,
+        expectedAgentProviderTypeIdMentionsInBundle,
         reason:
-            'AgentProviderBundle must not grow AgentProviderKind branches; '
-            'baseline=$expectedAgentProviderKindMentionsInBundle actual=$mentions',
+            'AgentProviderBundle must not grow AgentProviderTypeId branches; '
+            'baseline=$expectedAgentProviderTypeIdMentionsInBundle actual=$mentions',
       );
     });
 

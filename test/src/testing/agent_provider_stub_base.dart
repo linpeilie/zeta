@@ -1,6 +1,5 @@
-import 'package:zeta/src/features/agent/data/agent_provider_static_capabilities.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// 为测试 Fake 提供 thread 生命周期端口的默认空实现。
 ///
@@ -14,8 +13,8 @@ mixin AgentProviderThreadLifecycleStub
         AgentThreadCompactionPort,
         AgentThreadBranchingPort {
   /// 测试 fake 默认模拟能力完整的 Codex；专项测试可 override。
-  AgentProviderCapabilities get capabilities => AgentProviderStaticCapabilities
-      .codexAppServer
+  AgentProviderCapabilities get capabilities => codexAgentProviderDefinition
+      .staticCapabilities
       .copyWith(canForkThreadAtTurn: true);
 
   final List<({String threadId, String name})> renamedThreads =

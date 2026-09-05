@@ -1,12 +1,8 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/usage_statistics/data/providers/claude_code/claude_code_usage_partition_codec.dart';
-import 'package:zeta/src/features/usage_statistics/data/providers/codex/codex_usage_log_scanner.dart';
-import 'package:zeta/src/features/usage_statistics/data/providers/codex/codex_usage_partition_codec.dart';
-import 'package:zeta/src/features/usage_statistics/data/providers/grok/grok_usage_log_scanner.dart';
-import 'package:zeta/src/features/usage_statistics/data/providers/grok/grok_usage_partition_codec.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import '../../../testing/agent_provider_implementations.dart';
 
 void main() {
   const queryCoreFiles = <String>[
@@ -14,11 +10,11 @@ void main() {
     'lib/src/features/usage_statistics/data/usage_statistics_partition_store.dart',
   ];
   const g1SharedFiles = <String>[
-    'lib/src/features/agent/application/agent_event_pipeline.dart',
-    'lib/src/features/agent/application/agent_event_coalescing_policy.dart',
-    'lib/src/features/agent/application/coalescing_event_buffer.dart',
-    'lib/src/features/agent/application/bounded_event_dispatcher.dart',
-    'lib/src/features/agent/application/agent_conversation_timeline_store.dart',
+    'packages/zeta_agent_core/lib/src/application/agent_event_pipeline.dart',
+    'packages/zeta_agent_core/lib/src/application/agent_event_coalescing_policy.dart',
+    'packages/zeta_agent_core/lib/src/application/coalescing_event_buffer.dart',
+    'packages/zeta_agent_core/lib/src/application/bounded_event_dispatcher.dart',
+    'packages/zeta_agent_core/lib/src/application/agent_conversation_timeline_store.dart',
   ];
 
   group('usage statistics layering', () {
@@ -61,7 +57,7 @@ void main() {
         );
         expect(
           code,
-          isNot(contains('AgentProviderKind')),
+          isNot(contains('AgentProviderTypeId')),
           reason: '$path must not branch on Provider kind',
         );
         expect(
@@ -72,29 +68,22 @@ void main() {
       }
     });
 
-    test(
-      'legacy Provider partition key stays out of the v4 production path',
-      () {
-        final partitionStore = _stripLineComments(_read(queryCoreFiles.last));
-        final legacyDecoder = _read(
+    test('partition store only accepts the current root version', () {
+      final partitionStore = _stripLineComments(_read(queryCoreFiles.last));
+
+      expect(partitionStore, contains('usageStatisticsPartitionIndexVersion'));
+      expect(
+        partitionStore,
+        isNot(contains('LegacyUsageStatisticsIndexDecoder')),
+      );
+      expect(
+        File(
           'lib/src/features/usage_statistics/data/'
           'legacy_usage_statistics_index_decoder.dart',
-        );
-
-        expect(partitionStore, isNot(contains("'codex'")));
-        expect(partitionStore, isNot(contains("'grok'")));
-        expect(partitionStore, isNot(contains("'claude'")));
-        expect(legacyDecoder, contains("'codex'"));
-        expect(legacyDecoder, contains('仅供 v4 Store 读取 v2/v3 派生索引的专用 decoder'));
-        expect(
-          File(
-            'lib/src/features/usage_statistics/data/'
-            'usage_statistics_index_store.dart',
-          ).existsSync(),
-          isFalse,
-        );
-      },
-    );
+        ).existsSync(),
+        isFalse,
+      );
+    });
 
     test('Provider partition codecs omit private paths and raw failures', () {
       const privatePath = '/private/session/rollout-secret.jsonl';

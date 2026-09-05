@@ -1,45 +1,73 @@
 @Tags(['slow', 'shell'])
 library;
 
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
-import 'package:zeta/main.dart';
-import 'package:zeta/src/app/app.dart' show MainAppState;
-import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_static_capabilities.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
+import 'package:zeta/src/app/app.dart' show MainApp;
+import 'package:zeta/src/app/window/zeta_ticker_gate.dart';
+import 'package:zeta/src/app/composition/zeta_app_composition.dart';
+import '../testing/agent_provider_implementations.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
-import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
-import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
+import 'package:zeta/src/features/agent/presentation/provider_settings_slice/agent_model_catalog_projection_providers.dart';
+import 'package:zeta/src/features/agent/presentation/provider_settings_slice/agent_provider_settings_slice_providers.dart';
+import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_provider_settings_slice_store.dart';
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
+import 'package:zeta/src/features/agent_management/presentation/agent_management_page.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
+import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
+import 'package:zeta/src/features/project_threads/presentation/project_threads_slice/project_threads_slice_providers.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
+import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_notifier.dart';
+import 'package:zeta/src/features/settings/presentation/settings_slice/settings_slice_providers.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
-import 'package:zeta/src/ui/core/ide_metrics.dart';
-import 'package:zeta/src/ui/core/ide_spacing.dart';
-import 'package:zeta/src/ui/core/ide_stable_overlay_handler.dart';
-import 'package:zeta/src/ui/core/pane_widgets.dart';
-import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
-import 'package:zeta/src/ui/core/window_frame.dart';
+import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
+import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_slice/agent_usage_panel_slice_store.dart';
+import 'package:zeta/src/features/usage_statistics/application/usage_statistics_slice/usage_statistics_slice_store.dart';
+import 'package:zeta/src/features/usage_statistics/presentation/agent_usage_panel.dart';
+import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_page.dart';
+import 'package:zeta_ui/zeta_ui.dart';
+
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
+import 'package:zeta/src/features/workspace/domain/workspace_directory_picker.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 
 import '../testing/agent_event_storm_fixture.dart';
 import '../testing/ide_test_harness.dart';
 import '../testing/widget_build_counter.dart';
+import '../testing/fake_workspace_directory_picker.dart';
+import '../testing/zeta_test_app.dart';
+
+import 'package:zeta/src/app/composition/zeta_environment_providers.dart';
+import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
+import 'package:zeta/src/app/storage/zeta_store_providers.dart';
+import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_providers.dart';
+import 'package:zeta/src/app/window/zeta_window_host.dart';
+
+/// 阶段 0 固定风暴 fixture 的 UI 侧预算。
+///
+/// 预算不是精确值，而是「不许再退化」的上界：当前观测值远低于它们
+/// （Shell 骨架各 1 次重建、227 次 region 发布、队列水位 2、pending key 1）。
+/// 迁移到 Riverpod slice 后仍必须满足这些上界，否则说明发布频率被放大。
+const int kStormShellRebuildBudget = 2;
+const int kStormUiPublishBudget = 400;
+const int kStormDispatcherQueueBudget = 64;
+const int kStormPendingKeyBudget = 64;
 
 void main() {
   testWidgets('starts with the compact IDE panes', (tester) async {
     await _pumpIde(tester, enableNativeWindowFrame: true);
     await tester.pump();
 
-    final shadcnApp = tester.widget<sf.ShadcnApp>(find.byType(sf.ShadcnApp));
-    expect(shadcnApp.popoverHandler, same(ideStablePopoverOverlayHandler));
-    expect(shadcnApp.tooltipHandler, same(ideStablePopoverOverlayHandler));
-    expect(shadcnApp.menuHandler, same(ideStablePopoverOverlayHandler));
+    expect(find.byType(IdeMaterialLayer), findsOneWidget);
     expect(find.text('Zeta'), findsNothing);
     expect(find.byKey(const ValueKey('projects-panel-card')), findsOneWidget);
     expect(find.byKey(const ValueKey('agent-usage-compact')), findsOneWidget);
@@ -169,41 +197,44 @@ void main() {
   });
 
   testWidgets('窗口从最小化恢复可重启全局 ticker', (tester) async {
-    await _pumpIde(tester);
-    final appState = tester.state<MainAppState>(find.byType(MainApp));
+    final composition = await _pumpIde(tester);
+    final host =
+        composition.container.read(zetaWindowHostProvider)
+            as HeadlessWindowHost;
+    final gate = tester.state<ZetaTickerGateState>(find.byType(ZetaTickerGate));
     final homeContext = tester.element(
       find.byKey(const ValueKey('global-home-page')),
     );
 
-    appState.didChangeAppLifecycleState(AppLifecycleState.resumed);
+    gate.didChangeAppLifecycleState(AppLifecycleState.resumed);
     await tester.pump();
     expect(TickerMode.valuesOf(homeContext).enabled, isTrue);
 
-    appState.onWindowMinimize();
+    host.emitMinimize();
     await tester.pump();
     expect(TickerMode.valuesOf(homeContext).enabled, isFalse);
 
-    appState.onWindowRestore();
+    host.emitRestore();
     await tester.pump();
     expect(TickerMode.valuesOf(homeContext).enabled, isTrue);
 
     // Windows 会把“最小化前为最大化”的恢复报告为 maximize。
-    appState.onWindowMinimize();
-    appState.onWindowMaximize();
+    host.emitMinimize();
+    host.emitMaximize();
     await tester.pump();
     expect(TickerMode.valuesOf(homeContext).enabled, isTrue);
 
-    appState.onWindowMinimize();
-    appState.onWindowFocus();
+    host.emitMinimize();
+    host.emitFocus();
     await tester.pump();
     expect(TickerMode.valuesOf(homeContext).enabled, isTrue);
 
-    appState.onWindowMinimize();
-    appState.onWindowEvent('show');
+    host.emitMinimize();
+    host.emitEvent('show');
     await tester.pump();
     expect(TickerMode.valuesOf(homeContext).enabled, isTrue);
 
-    appState.didChangeAppLifecycleState(AppLifecycleState.hidden);
+    gate.didChangeAppLifecycleState(AppLifecycleState.hidden);
     await tester.pump();
     expect(TickerMode.valuesOf(homeContext).enabled, isFalse);
   });
@@ -266,7 +297,7 @@ void main() {
 
       await _pumpIde(
         tester,
-        directoryPicker: () async => directory.path,
+        directoryPicker: FakeWorkspaceDirectoryPicker(directory.path),
         agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
         agentProviderConfigStore: MemoryAgentProviderConfigStore(),
         agentUsagePanelRepository: repository,
@@ -297,7 +328,7 @@ void main() {
       );
       final viewModel = tester
           .widget<AgentPane>(find.byType(AgentPane))
-          .viewModel;
+          .controller;
       final activeProviderBefore = viewModel.activeProviderId;
 
       await viewModel.sendMessage('finish and refresh usage');
@@ -613,55 +644,33 @@ void main() {
     );
   });
 
-  testWidgets(
-    'usage summary keeps its own height and ignores legacy layout fields',
-    (tester) async {
-      final session = MemorySessionStore(
-        const IdeSessionState(
-          workbenchLayout: IdeWorkbenchLayoutState(
-            agentUsageExpanded: true,
-            agentUsageHeightFraction: 0.4,
-          ),
-        ).encode(),
-      );
-      await _pumpIde(tester, sessionStore: session);
+  testWidgets('usage summary uses a transient popover without resize handle', (
+    tester,
+  ) async {
+    final session = MemorySessionStore();
+    await _pumpIde(tester, sessionStore: session);
 
-      // 展开态是临时弹层：恢复出来的旧标记不会自动弹出统计。
-      expect(find.byKey(const ValueKey('agent-usage-popover')), findsNothing);
-      final usage = find.byKey(const ValueKey('project-agent-sidebar-usage'));
-      expect(tester.getSize(usage).height, lessThan(200));
-      expect(
-        find.byKey(const ValueKey('agent-usage-resize-handle')),
-        findsNothing,
-      );
+    expect(find.byKey(const ValueKey('agent-usage-popover')), findsNothing);
+    final usage = find.byKey(const ValueKey('project-agent-sidebar-usage'));
+    expect(tester.getSize(usage).height, lessThan(200));
+    expect(
+      find.byKey(const ValueKey('agent-usage-resize-handle')),
+      findsNothing,
+    );
 
-      await tester.tap(find.byKey(const ValueKey('agent-usage-expand-button')));
-      await _settleUsagePopover(tester);
-      expect(find.byKey(const ValueKey('agent-usage-popover')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('agent-usage-expand-button')));
+    await _settleUsagePopover(tester);
+    expect(find.byKey(const ValueKey('agent-usage-popover')), findsOneWidget);
 
-      await tester.tap(find.byKey(const ValueKey('agent-usage-expand-button')));
-      await _settleUsagePopover(tester);
-      await pumpSessionSave(tester);
-      expect(find.byKey(const ValueKey('agent-usage-popover')), findsNothing);
-      expect(
-        find.byKey(const ValueKey('agent-usage-resize-handle')),
-        findsNothing,
-      );
-      // 旧字段原样保留，不被当前布局改写。
-      expect(
-        IdeSessionState.tryDecode(
-          session.value,
-        )?.workbenchLayout.agentUsageHeightFraction,
-        0.4,
-      );
-      expect(
-        IdeSessionState.tryDecode(
-          session.value,
-        )?.workbenchLayout.agentUsageExpanded,
-        isTrue,
-      );
-    },
-  );
+    await tester.tap(find.byKey(const ValueKey('agent-usage-expand-button')));
+    await _settleUsagePopover(tester);
+    await pumpSessionSave(tester);
+    expect(find.byKey(const ValueKey('agent-usage-popover')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('agent-usage-resize-handle')),
+      findsNothing,
+    );
+  });
 
   testWidgets('right panel uses overlay in medium and compact modes', (
     tester,
@@ -799,6 +808,224 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('生产接线为每个 Binding 强制注册 Conversation Slice', (tester) async {
+    final fixture = AgentEventStormFixture();
+    await _prepareEventStormAgentPane(
+      tester,
+      fixture: fixture,
+      directoryPrefix: 'zeta_slice_activation_',
+    );
+
+    final paneElement = find.byType(AgentPane).evaluate().first;
+    final key =
+        (paneElement.widget as AgentPane).controller.conversationBinding.key;
+    final container = ProviderScope.containerOf(paneElement);
+
+    expect(container.read(agentConversationSliceStoreProvider(key)), isNotNull);
+  });
+
+  testWidgets('Provider settings 根组合固定为 slice 单一路径', (tester) async {
+    await _pumpIde(
+      tester,
+      enableNativeWindowFrame: true,
+      agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+    );
+    final context = tester.element(
+      find.byKey(const ValueKey<String>('zeta.ide-home')),
+    );
+    final container = ProviderScope.containerOf(context, listen: false);
+
+    expect(
+      container.read(agentProviderSettingsSliceProvider.notifier),
+      isNotNull,
+    );
+    expect(
+      container.read(agentModelCatalogProjectionSourceProvider),
+      isNotNull,
+    );
+    expect(container.read(activeAgentModelCatalogQueryProvider), isNotNull);
+    expect(
+      container
+          .read(enabledAgentProviderConfigsProvider)
+          .map((provider) => provider.id),
+      <String>[
+        defaultAgentProviderId,
+        grokAgentProviderId,
+        defaultClaudeCodeProviderId,
+      ],
+    );
+
+    await tester.tap(find.byKey(const ValueKey('titlebar-settings-action')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('settings-nav-agents')));
+    await tester.pump();
+    expect(find.byType(AgentManagementPage), findsOneWidget);
+  });
+
+  testWidgets('恢复项目后首次打开 Agent 管理可完成冷初始化', (tester) async {
+    final directory = Directory.systemTemp.createTempSync(
+      'zeta_agent_management_cold_start_',
+    );
+    addTearDown(() {
+      if (directory.existsSync()) {
+        directory.deleteSync(recursive: true);
+      }
+    });
+
+    await _pumpIde(
+      tester,
+      enableNativeWindowFrame: true,
+      initialSessionJson: sessionJson(projectPath: directory.path),
+      agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
+        FakeAgentProvider(),
+      ),
+      agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+    );
+    await pumpUntilCondition(
+      tester,
+      () => find
+          .byKey(const ValueKey<String>('project-home-scroll-view'))
+          .evaluate()
+          .isNotEmpty,
+      failureMessage: 'Restored project did not become ready',
+    );
+
+    await tester.tap(find.byKey(const ValueKey('titlebar-settings-action')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('settings-nav-agents')));
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    final managementPage = tester.widget<AgentManagementPage>(
+      find.byType(AgentManagementPage),
+    );
+    final store = managementPage.sliceStore;
+    await pumpUntilCondition(
+      tester,
+      () => store.initialized,
+      failureMessage: 'Agent management slice did not initialize',
+    );
+
+    expect(tester.takeException(), isNull);
+    expect(store.initialized, isTrue);
+    expect(find.byKey(const ValueKey('agent-management-page')), findsOneWidget);
+  });
+
+  testWidgets('项目首页首次打开新 Thread 弹层列出全部内置 Agent', (tester) async {
+    final directory = Directory.systemTemp.createTempSync(
+      'zeta_new_thread_provider_cold_start_',
+    );
+    addTearDown(() {
+      if (directory.existsSync()) {
+        directory.deleteSync(recursive: true);
+      }
+    });
+
+    await _pumpIde(
+      tester,
+      enableNativeWindowFrame: true,
+      initialSessionJson: sessionJson(projectPath: directory.path),
+      agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
+        FakeAgentProvider(),
+      ),
+      agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+    );
+    await pumpUntilCondition(
+      tester,
+      () => find
+          .byKey(const ValueKey<String>('project-home-new-thread-button'))
+          .hitTestable()
+          .evaluate()
+          .isNotEmpty,
+      failureMessage: 'Restored project home did not become ready',
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('project-home-new-thread-button')),
+    );
+    await pumpUntilCondition(
+      tester,
+      () => find
+          .byKey(
+            const ValueKey<String>('new-thread-provider-option-claude_code'),
+          )
+          .evaluate()
+          .isNotEmpty,
+      failureMessage: 'Enabled Agent providers did not finish loading',
+    );
+
+    expect(tester.takeException(), isNull);
+    for (final providerId in const <String>[
+      defaultAgentProviderId,
+      grokAgentProviderId,
+      defaultClaudeCodeProviderId,
+    ]) {
+      expect(
+        find.byKey(ValueKey<String>('new-thread-provider-option-$providerId')),
+        findsOneWidget,
+      );
+    }
+  });
+
+  testWidgets('Project Threads 根组合固定使用切片 owner', (tester) async {
+    await _pumpIde(tester, enableNativeWindowFrame: true);
+    final frameContext = tester.element(
+      find.byKey(const ValueKey('ide-window-frame')),
+    );
+    final container = ProviderScope.containerOf(frameContext, listen: false);
+    final store = container.read(projectThreadsSliceStoreProvider);
+
+    store.applyProjectState(
+      '/slice-probe',
+      const ProjectThreadListState(isExpanded: true),
+    );
+    await tester.pump();
+
+    expect(
+      container
+          .read(projectThreadsSliceProvider)
+          .stateFor('/slice-probe')
+          .isExpanded,
+      isTrue,
+    );
+  });
+
+  testWidgets('Usage Statistics 根组合固定使用两个切片 owner', (tester) async {
+    final usageRepository = _TrackedAgentUsageRepository();
+    await _pumpIde(
+      tester,
+      enableNativeWindowFrame: true,
+      agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      agentUsagePanelRepository: usageRepository,
+    );
+    final homeContext = tester.element(
+      find.byKey(const ValueKey<String>('zeta.ide-home')),
+    );
+    final container = ProviderScope.containerOf(homeContext, listen: false);
+    final statisticsStore = container.read(
+      usageStatisticsSliceProvider.notifier,
+    );
+    final panelStore = container.read(agentUsagePanelSliceProvider.notifier);
+
+    expect(find.byType(AgentUsagePanelContent), findsOneWidget);
+    expect(panelStore.selectedEntry?.providerId, 'codex');
+    expect(usageRepository.forceRefreshValues, isNotEmpty);
+
+    statisticsStore.selectRankSort(UsageRankSort.totalTokens);
+    await tester.pump();
+    expect(
+      container.read(usageStatisticsSliceProvider).rankSort,
+      UsageRankSort.totalTokens,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('titlebar-usage-statistics-action')),
+    );
+    await tester.pump();
+    expect(find.byType(UsageStatisticsPage), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('records the current Agent event storm rebuild baseline', (
     tester,
   ) async {
@@ -836,7 +1063,7 @@ void main() {
     );
     await _pumpIde(
       tester,
-      directoryPicker: () async => directory.path,
+      directoryPicker: FakeWorkspaceDirectoryPicker(directory.path),
       agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
       agentProviderConfigStore: MemoryAgentProviderConfigStore(),
     );
@@ -865,7 +1092,7 @@ void main() {
 
     final viewModel = tester
         .widget<AgentPane>(find.byType(AgentPane))
-        .viewModel;
+        .controller;
     // Binding 架构：打开历史 thread 不挂 live Pipeline；先发一条消息附着 runtime。
     await _attachLiveEventPipelineForStorm(
       tester,
@@ -962,6 +1189,31 @@ void main() {
       greaterThan(0),
     );
 
+    // 阶段 0 基线：整场风暴只允许常驻 Shell/Pane 骨架各构建一次，
+    // 流式内容重建收敛在局部时间线里（见同文件后两个 phase1 测试）。
+    for (final target in AgentBuildTarget.all) {
+      expect(
+        buildCounts[target],
+        lessThanOrEqualTo(kStormShellRebuildBudget),
+        reason: '$target 在一场事件风暴中超出重建预算',
+      );
+    }
+    expect(
+      afterUi.publishCount - beforeUi.publishCount,
+      lessThanOrEqualTo(kStormUiPublishBudget),
+      reason: 'UI region 发布次数超出阶段 0 预算',
+    );
+    expect(
+      afterScheduler.maxQueueDepth,
+      lessThanOrEqualTo(kStormDispatcherQueueBudget),
+      reason: '有界 dispatcher 队列水位超出阶段 0 预算',
+    );
+    expect(
+      afterBuffer.maxPendingKeys,
+      lessThanOrEqualTo(kStormPendingKeyBudget),
+      reason: 'coalescing buffer pending key 水位超出阶段 0 预算',
+    );
+
     debugPrint(
       'agent-event-widget-baseline '
       'fixture=${fixture.expectedInputEventCount} '
@@ -1046,18 +1298,31 @@ void main() {
       viewModel.threadSnapshotListenable.addListener(
         handleShellSnapshotChanged,
       );
-      viewModel.headerStateListenable.addListener(handleHeaderStateChanged);
-      viewModel.composerStateListenable.addListener(handleComposerStateChanged);
+      var lastHeader = viewModel.headerState;
+      var lastComposer = viewModel.composerState;
+      void handleUiUpdate(AgentUiUpdateRequest request) {
+        if (request.regions.contains(AgentUiRegion.header)) {
+          final next = viewModel.headerState;
+          if (next != lastHeader) {
+            lastHeader = next;
+            handleHeaderStateChanged();
+          }
+        }
+        if (request.regions.contains(AgentUiRegion.composer)) {
+          final next = viewModel.composerState;
+          if (next != lastComposer) {
+            lastComposer = next;
+            handleComposerStateChanged();
+          }
+        }
+      }
+
+      viewModel.addUiUpdateListener(handleUiUpdate);
       addTearDown(() {
         viewModel.threadSnapshotListenable.removeListener(
           handleShellSnapshotChanged,
         );
-        viewModel.headerStateListenable.removeListener(
-          handleHeaderStateChanged,
-        );
-        viewModel.composerStateListenable.removeListener(
-          handleComposerStateChanged,
-        );
+        viewModel.removeUiUpdateListener(handleUiUpdate);
       });
 
       final beforeBuffer = viewModel.eventCoalescingBufferDiagnostics!;
@@ -1266,9 +1531,20 @@ void main() {
       await tester.pump();
       await tester.pump();
 
+      final settingsContainer = ProviderScope.containerOf(
+        retained.agentPaneElement,
+      );
+      expect(
+        settingsContainer
+            .read(generalSettingsSliceValueProvider)
+            .sendMessageShortcut,
+        MessageSendShortcut.primaryModifierEnter,
+        reason: '设置页操作必须先发布到唯一 settings slice',
+      );
+      // Agent 子树离屏 keep-alive 时不重建；重新激活时才消费最新 slice。
       expect(
         (retained.agentPaneElement.widget as AgentPane).messageSendShortcut,
-        MessageSendShortcut.primaryModifierEnter,
+        MessageSendShortcut.enter,
       );
       expect(retained.inputController.text, retained.draft);
 
@@ -1322,8 +1598,171 @@ void main() {
       await tester.pump();
 
       _expectRetainedAgentState(tester, retained);
+      expect(
+        (retained.agentPaneElement.widget as AgentPane).messageSendShortcut,
+        MessageSendShortcut.primaryModifierEnter,
+      );
     },
   );
+
+  testWidgets('IDE Session slice keeps Agent state retained across Settings', (
+    tester,
+  ) async {
+    final retained = await _prepareRetainedAgentState(tester);
+
+    await tester.tap(find.byKey(const ValueKey('titlebar-settings-action')));
+    await tester.pump();
+
+    expect(retained.agentPaneElement.mounted, isTrue);
+    expect(find.byKey(const ValueKey('settings-nav-panel')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('titlebar-back-action')));
+    await tester.pump();
+
+    _expectRetainedAgentState(tester, retained);
+  });
+
+  testWidgets('root snapshot reconstructs slice identities without UI watch', (
+    tester,
+  ) async {
+    final directory = Directory.systemTemp.createTempSync(
+      'zeta_root_snapshot_',
+    );
+    addTearDown(() {
+      if (directory.existsSync()) {
+        directory.deleteSync(recursive: true);
+      }
+    });
+    File(
+      '${directory.path}${Platform.pathSeparator}sample.txt',
+    ).writeAsStringSync('snapshot fixture');
+    final provider = FakeAgentProvider(
+      threadPages: <AgentThreadPage>[
+        AgentThreadPage(
+          threads: <AgentThreadSummary>[
+            agentThread(
+              id: 'snapshot-thread',
+              projectPath: directory.path,
+              title: 'Snapshot thread',
+            ),
+          ],
+          nextCursor: null,
+        ),
+      ],
+    );
+    final composition = await _pumpIde(
+      tester,
+      directoryPicker: FakeWorkspaceDirectoryPicker(directory.path),
+      agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
+      agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+    );
+
+    await openProjectFromMenu(tester);
+    await tester.runAsync(waitForIo);
+    final threadRow = find.byKey(
+      ValueKey<String>('project-thread-${directory.path}-snapshot-thread'),
+    );
+    await pumpUntilCondition(
+      tester,
+      () => threadRow.evaluate().isNotEmpty,
+      failureMessage: 'Snapshot thread did not become ready',
+    );
+    await tester.tap(threadRow);
+    await pumpUntilCondition(
+      tester,
+      () => _agentMessageInput().hitTestable().evaluate().isNotEmpty,
+      failureMessage: 'Snapshot Agent canvas did not become ready',
+    );
+
+    final snapshot = composition.takeStateSnapshot();
+    final selectedEntryId = snapshot.shell.selectedConversationEntryId;
+
+    expect(snapshot.shell.workspace.activeProjectPath, directory.path);
+    expect(snapshot.ideSession.initialRestoreCompleted, isTrue);
+    expect(snapshot.appearanceSettings, isNotNull);
+    expect(snapshot.generalSettings, isNotNull);
+    expect(snapshot.providerSettings, isNotNull);
+    expect(snapshot.desktopAttention.initialized, isTrue);
+    expect(snapshot.desktopAttention.unreadCount, 0);
+    expect(snapshot.shell.agentManagement, isNotNull);
+    expect(
+      snapshot
+          .shell
+          .projectThreadsByProjectPath[directory.path]
+          ?.orderedThreadIds,
+      contains('snapshot-thread'),
+    );
+    expect(selectedEntryId, isNotNull);
+    expect(
+      snapshot.shell.conversationsByEntryId[selectedEntryId]?.threadId,
+      'snapshot-thread',
+    );
+    expect(
+      snapshot.shell.conversationsByEntryId[selectedEntryId]?.sliceAvailable,
+      isTrue,
+    );
+  });
+
+  testWidgets('settings 切片更新 AgentPane 快捷键且 root snapshot 同源', (tester) async {
+    final retained = await _prepareRetainedAgentState(tester);
+    final composition = retained.composition;
+
+    expect(
+      (retained.agentPaneElement.widget as AgentPane).messageSendShortcut,
+      MessageSendShortcut.enter,
+    );
+    expect(
+      composition
+          .takeStateSnapshot()
+          .generalSettings
+          .settings
+          .sendMessageShortcut,
+      MessageSendShortcut.enter,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('titlebar-settings-action')));
+    await tester.pump();
+    await tester.tap(
+      find.byKey(const ValueKey('settings-send-message-shortcut-modifier')),
+    );
+    await tester.pump();
+    await tester.pump();
+    final container = ProviderScope.containerOf(retained.agentPaneElement);
+    final sliceStore = container.read(generalSettingsSliceProvider.notifier);
+    expect(
+      sliceStore.state.settings.sendMessageShortcut,
+      MessageSendShortcut.primaryModifierEnter,
+      reason: '设置页操作必须先落到 general settings 切片',
+    );
+    expect(
+      container.read(generalSettingsSliceValueProvider).sendMessageShortcut,
+      MessageSendShortcut.primaryModifierEnter,
+      reason: 'Riverpod selector 必须发布已经持久化的切片值',
+    );
+    expect(retained.agentPaneElement.mounted, isTrue);
+
+    // 离屏 keep-alive 子树在重新激活时消费新配置；Element 本身不能被替换。
+    await tester.tap(find.byKey(const ValueKey('titlebar-back-action')));
+    await tester.pump();
+    await pumpUntilCondition(
+      tester,
+      () =>
+          (retained.agentPaneElement.widget as AgentPane).messageSendShortcut ==
+          MessageSendShortcut.primaryModifierEnter,
+      failureMessage: 'AgentPane did not receive the settings slice shortcut',
+    );
+    expect(retained.agentPaneElement.mounted, isTrue);
+
+    expect(
+      composition
+          .takeStateSnapshot()
+          .generalSettings
+          .settings
+          .sendMessageShortcut,
+      MessageSendShortcut.primaryModifierEnter,
+      reason: 'root snapshot 必须直接投影唯一 settings owner',
+    );
+  });
 
   testWidgets('Agent to Usage and back retains the workbench and Agent state', (
     tester,
@@ -1519,7 +1958,7 @@ void main() {
 
       await _pumpIde(
         tester,
-        directoryPicker: () async => directory.path,
+        directoryPicker: FakeWorkspaceDirectoryPicker(directory.path),
         agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
         agentProviderConfigStore: MemoryAgentProviderConfigStore(),
       );
@@ -1668,7 +2107,7 @@ void main() {
 
     await _pumpIde(
       tester,
-      directoryPicker: () async => directory.path,
+      directoryPicker: FakeWorkspaceDirectoryPicker(directory.path),
       agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
       agentProviderConfigStore: MemoryAgentProviderConfigStore(),
     );
@@ -1767,7 +2206,7 @@ void main() {
     );
     await _pumpIde(
       tester,
-      directoryPicker: () async => directory.path,
+      directoryPicker: FakeWorkspaceDirectoryPicker(directory.path),
       agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
       agentProviderConfigStore: MemoryAgentProviderConfigStore(),
     );
@@ -1837,13 +2276,13 @@ void main() {
       ),
       agentProviderConfigStore: MemoryAgentProviderConfigStore(
         const AgentProviderSettings(
-          providers: <AgentProviderConfig>[AgentProviderConfig.defaultCodex],
+          providers: <AgentProviderConfig>[defaultCodexAgentProviderConfig],
         ),
       ),
       homeProviderDetectionLoader: () async => <ManagedAgent>[
-        _installedAgent(AgentDefinition.codex),
+        _installedAgent(codexAgentManagementDefinition),
         ManagedAgent.forDefinition(
-          definition: AgentDefinition.grok,
+          definition: grokAgentManagementDefinition,
           enabled: true,
         ).copyWith(installationState: AgentInstallationState.notInstalled),
       ],
@@ -1867,11 +2306,11 @@ void main() {
   });
 }
 
-Future<void> _pumpIde(
+Future<ZetaAppComposition> _pumpIde(
   WidgetTester tester, {
   Size size = const Size(1400, 900),
   bool enableNativeWindowFrame = false,
-  Future<String?> Function()? directoryPicker,
+  WorkspaceDirectoryPicker? directoryPicker,
   AgentProviderBundleFactory? agentProviderFactory,
   AgentProviderConfigStore? agentProviderConfigStore,
   Future<List<AgentProviderConfig>> Function()? agentProviderAvailabilityLoader,
@@ -1891,25 +2330,38 @@ Future<void> _pumpIde(
   });
 
   final session = sessionStore ?? MemorySessionStore(initialSessionJson);
+  final providerFactory =
+      agentProviderFactory ??
+      FakeAgentProviderBundleBuilder.fromFake(FakeAgentProvider());
 
-  await tester.pumpWidget(
-    MainApp(
-      enableNativeWindowFrame: enableNativeWindowFrame,
-      showWindowControls: false,
-      directoryPicker: directoryPicker,
-      sessionLoader: session.load,
-      sessionSaver: session.save,
-      agentProviderFactory: agentProviderFactory,
-      agentProviderConfigStore: agentProviderConfigStore,
-      agentProviderAvailabilityLoader: agentProviderAvailabilityLoader,
-      homeProviderDetectionLoader: homeProviderDetectionLoader,
-      agentUsagePanelRepository:
-          agentUsagePanelRepository ?? const _EmptyAgentUsageRepository(),
-    ),
+  final composition = zetaTestComposition(
+    overrides: <Override>[
+      zetaWindowHostProvider.overrideWithValue(
+        enableNativeWindowFrame
+            ? NativeDesktopWindowHost(showsWindowControls: false)
+            : HeadlessWindowHost(showsWindowControls: false),
+      ),
+      if (directoryPicker != null)
+        ...fakeDirectoryPickerOverridesOf(directoryPicker),
+      ideSessionStoreProvider.overrideWithValue(session),
+      agentProviderBundleFactoryProvider.overrideWithValue(providerFactory),
+      if (agentProviderConfigStore case final store?)
+        agentProviderConfigStoreProvider.overrideWithValue(store),
+      if (agentProviderAvailabilityLoader case final loader?)
+        agentProviderAvailabilityLoaderProvider.overrideWithValue(loader),
+      if (homeProviderDetectionLoader case final loader?)
+        homeProviderDetectionLoaderProvider.overrideWithValue(loader),
+      agentUsagePanelRepositoryProvider.overrideWithValue(
+        agentUsagePanelRepository ?? const _EmptyAgentUsageRepository(),
+      ),
+      agentUsageAutoRefreshEnabledProvider.overrideWithValue(true),
+    ],
   );
+  await tester.pumpWidget(MainApp(composition: composition));
   if (flushInitialUsageRefresh) {
     await _flushInitialUsageRefresh(tester);
   }
+  return composition;
 }
 
 /// Agent 统计弹层在帧末挂载，开合都要多走一帧并跑完过渡。
@@ -1925,7 +2377,9 @@ Future<void> _flushInitialUsageRefresh(WidgetTester tester) async {
   await tester.pump();
 }
 
-Future<({FakeAgentProvider provider, AgentConversationViewModel viewModel})>
+Future<
+  ({FakeAgentProvider provider, AgentConversationRuntimeController viewModel})
+>
 _prepareEventStormAgentPane(
   WidgetTester tester, {
   required AgentEventStormFixture fixture,
@@ -1962,7 +2416,7 @@ _prepareEventStormAgentPane(
   );
   await _pumpIde(
     tester,
-    directoryPicker: () async => directory.path,
+    directoryPicker: FakeWorkspaceDirectoryPicker(directory.path),
     agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
     agentProviderConfigStore: MemoryAgentProviderConfigStore(),
   );
@@ -1986,7 +2440,7 @@ _prepareEventStormAgentPane(
     failureMessage: 'Storm phase 1 AgentPane did not become ready',
   );
 
-  final viewModel = tester.widget<AgentPane>(find.byType(AgentPane)).viewModel;
+  final viewModel = tester.widget<AgentPane>(find.byType(AgentPane)).controller;
   await _attachLiveEventPipelineForStorm(
     tester,
     provider: provider,
@@ -2002,7 +2456,7 @@ _prepareEventStormAgentPane(
 Future<void> _attachLiveEventPipelineForStorm(
   WidgetTester tester, {
   required FakeAgentProvider provider,
-  required AgentConversationViewModel viewModel,
+  required AgentConversationRuntimeController viewModel,
   required String sessionId,
 }) async {
   final sentBefore = provider.sentMessages.length;
@@ -2030,7 +2484,7 @@ Future<void> _attachLiveEventPipelineForStorm(
 
 Future<void> _drainAgentEventSubset(
   WidgetTester tester, {
-  required AgentConversationViewModel viewModel,
+  required AgentConversationRuntimeController viewModel,
   required int beforeReceivedEvents,
   required int expectedInputEventCount,
 }) async {
@@ -2184,10 +2638,10 @@ Future<_RetainedAgentState> _prepareRetainedAgentState(
       ),
     ],
   );
-  await _pumpIde(
+  final composition = await _pumpIde(
     tester,
     enableNativeWindowFrame: true,
-    directoryPicker: () async => directory.path,
+    directoryPicker: FakeWorkspaceDirectoryPicker(directory.path),
     agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
     agentProviderConfigStore: MemoryAgentProviderConfigStore(),
   );
@@ -2255,6 +2709,7 @@ Future<_RetainedAgentState> _prepareRetainedAgentState(
   await tester.pump();
 
   return _RetainedAgentState(
+    composition: composition,
     windowFrameElement: tester.element(
       find.byKey(const ValueKey('ide-window-frame')),
     ),
@@ -2318,7 +2773,7 @@ void _expectRetainedAgentContentState(
   expect(headerTitleText(tester), 'Retained thread');
   expect(
     (retained.agentPaneElement.widget as AgentPane)
-        .viewModel
+        .controller
         .selectedConversationMode,
     retained.selectedMode,
   );
@@ -2356,6 +2811,7 @@ Finder _agentMessageInput() {
 
 class _RetainedAgentState {
   const _RetainedAgentState({
+    required this.composition,
     required this.windowFrameElement,
     required this.workbenchElement,
     required this.agentPaneElement,
@@ -2368,6 +2824,7 @@ class _RetainedAgentState {
     required this.selectedMode,
   });
 
+  final ZetaAppComposition composition;
   final Element windowFrameElement;
   final Element workbenchElement;
   final Element agentPaneElement;
@@ -2380,7 +2837,7 @@ class _RetainedAgentState {
   final AgentConversationModeId selectedMode;
 }
 
-/// 统计 `_AgentConversationTimeline` 内部 listenable builder 的局部重建。
+/// 统计 `AgentConversationTimeline` 内部 listenable builder 的局部重建。
 ///
 /// 阶段 0 的通用计数器统计 Widget runtimeType；流式更新不会重建 timeline 外壳，
 /// 因此这里通过 Element 祖先关系补充观察内部内容刷新，且不向生产 UI 注入 API。
@@ -2436,8 +2893,9 @@ class _ModeCapableFakeAgentProvider extends FakeAgentProvider
     required super.threadHistories,
     required super.threadPages,
   }) : super(
-         declaredCapabilities: AgentProviderStaticCapabilities.codexAppServer
-             .copyWith(supportsModeSelection: true),
+         declaredCapabilities: codexStaticCapabilities.copyWith(
+           supportsModeSelection: true,
+         ),
        );
 
   @override

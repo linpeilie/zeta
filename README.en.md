@@ -4,170 +4,143 @@
 
 # Zeta
 
-**A desktop workbench for command-line AI coding agents — so you can actually see what they're doing.**
+**A desktop workbench for command-line AI coding assistants — one where you can see what they're doing and stay in control.**
 
 macOS · Windows · Linux ｜ Runs locally ｜ Open source
 
-[![CI](https://github.com/linpeilie/zeta/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/linpeilie/zeta/actions/workflows/ci.yml)
+[![CI](https://github.com/linpeilie/zeta/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/linpeilie/zeta/actions/workflows/ci.yml)
 [![Release](https://github.com/linpeilie/zeta/actions/workflows/release.yml/badge.svg)](https://github.com/linpeilie/zeta/actions/workflows/release.yml)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
 [中文](README.md) ｜ English
 
-<!-- Screenshot pending: see docs/images/README.md for specs; drop the comment markers once added
-<img src="docs/images/hero.png" alt="Zeta three-pane workbench" width="900" />
+<!-- Screenshots pending; see docs/images/README.md for the capture spec
+<img src="docs/images/hero.png" alt="Zeta workbench" width="900" />
 -->
 
 </div>
 
 ---
 
-## What is Zeta
+## What Zeta is
 
-Today's AI coding agents (Codex CLI, Grok, and friends) are powerful — and they all live inside a dark terminal window:
+Codex, Claude Code and Grok are capable assistants, but they all live inside a terminal window:
 
-- Which files did it actually change? Scroll back through hundreds of log lines to find out.
-- It wants to run a command, and you get one shot at "y / n" before it scrolls past.
-- Where did yesterday's conversation leave off? Closing the terminal closed the door.
-- It ran for five minutes, you switched tasks, and it turns out it's been waiting on your approval for ten.
+- Which files did it actually change? Scroll back through hundreds of lines to find out.
+- It wants to run a command, and you get one "y / n" before it's gone.
+- Where did yesterday's conversation get to? Closing the terminal ended it.
+- A task ran for five minutes, you switched away, and it turns out it has been waiting on you for the last ten.
 
-**Zeta moves all of that into a real desktop app.** Projects and past conversations on the left, the agent's full working timeline in the middle, your project file tree on the right. Every step the agent takes — what it said, what it reasoned about, which tools it called, which lines it changed — is laid out in order and stays scrollable.
+Zeta moves all of that into a desktop application. Projects and past conversations on the left, a complete working timeline in the middle, the file tree on the right. Every step the assistant takes — what it said, how it reasoned, which tools it called, which lines it changed — is laid out in order and stays there for you to scroll back through.
 
-It isn't trying to be your code editor, and it doesn't upload your code anywhere. It does one thing: **let you see exactly what an AI is doing on your machine, and stop it whenever you want.**
+It doesn't replace your code editor, and it doesn't upload your code. It does one thing: **make it clear what the assistant is doing on your machine, and let you stop it at any point.**
 
-## Why it's worth a try
+## What it does
 
-**The work is visible**
-Replies, reasoning, tool calls, and the per-turn code diff all live in one continuous, syntax-highlighted timeline. No more archaeology in scrollback.
+**A complete working timeline**
+Replies, reasoning, tool calls, and the turn's code diff, all on one continuous timeline with syntax highlighting. Consecutive commands and file edits are grouped automatically so the view stays readable.
 
-<!-- <img src="docs/images/timeline-tools.png" alt="Tool calls and per-turn diff" width="720" /> -->
+**It asks when it should ask**
+Running a command, writing a file, reaching the network — all require your approval by default. Approval cards sit in a fixed area above the composer and are never pushed out by new messages. Zeta never approves anything for you.
 
-**It asks before it acts**
-Running commands, writing files, and network access all require your approval by default. Approval cards are pinned above the composer so new messages can't push them out of view. Zeta never pre-authorizes anything on your behalf.
+**Review the plan, then act**
+Have the assistant propose an approach first and confirm it before anything runs. Accepting a plan **does not** authorise the commands in it — those are still requested one at a time. You can iterate on the plan before committing to it.
 
-<!-- <img src="docs/images/approval.png" alt="Permission approval card" width="720" /> -->
-
-**Plan first, then execute**
-Ask the agent to draft a plan, read it, and only then let it run. You can send revisions mid-way. Planning and execution are two clearly separate actions — running a plan always starts a fresh turn.
-
-**It taps you on the shoulder**
-Turn finished, approval needed, agent has a question — if you aren't looking at that conversation, you get a system notification, plus taskbar flashing on Windows and a Dock badge on macOS. Click it and you land back in the right thread. Notifications only carry a category like "Task completed" — never your code, prompts, or file paths.
+**It tells you when it's done**
+Task finished, approval needed, question waiting — if you aren't watching that conversation, you get a system notification plus a taskbar or Dock hint. Clicking through takes you straight to the conversation. Notifications carry only a category like "Task completed", never your code or prompts.
 
 **Close it and pick up where you left off**
-Project list, current project, expanded folders, selected file, recent threads — all restored on restart. Every project keeps its conversation history, ready to resume.
+Project list, current project, expanded tree nodes, selected file, panel widths and conversation history are all restored on the next launch.
 
-**Know what you're spending**
-A built-in usage page: filter by time, project, agent, and model to see call counts, success rate, token usage, and latency, plus your plan's current usage window and reset time. Everything shown comes from what the provider actually returned — nothing is estimated.
-
-<!-- <img src="docs/images/usage.png" alt="Usage statistics" width="720" /> -->
+**See what you're spending**
+Built-in usage statistics: filter by time, project and model to see call counts, success rate, token spend and response times, along with your plan's usage windows and reset times. Every number comes from what the assistant actually reported — nothing is estimated.
 
 **A composer that gets out of the way**
-Paste or attach screenshots straight in, type `$` for Skills, `/` for the command menu, `@` to reference project files. Arrow keys to pick, Enter to confirm.
+Paste a screenshot straight in, `@` to reference project files, `$` to insert a skill, `/` for the command menu. Arrow keys to choose, Enter to confirm.
 
 **Two themes, desktop density**
-Dark "Graphite Night" and light "Graphite Day", draggable panel widths, and side panels that collapse into overlays when the window gets narrow.
+A light and a dark theme, draggable panel widths, collapsible columns that become overlays on narrow windows, and separately configurable interface and code fonts.
 
-## Supported agents
+## Supported assistants
 
-| Agent | Status | Notes |
+| Assistant | Vendor | Notes |
 | --- | --- | --- |
-| **Codex CLI** | ✅ Default | Full support: session resume, plan mode, Skills, model switching, usage stats |
-| **Grok** | ✅ Supported | Connected over ACP; capabilities degrade automatically based on handshake |
+| **Codex** | OpenAI | The most complete support: resume, archive, branch, plan mode, skills, image input, model and reasoning depth, usage statistics |
+| **Grok** | xAI | Plan mode and plan approval, conversation modes, skills, file references; archive and branch not yet supported |
+| **Claude Code** | Anthropic | Plan mode and plan approval, four permission modes, context compaction, subscription quota detail; file references and skills not yet supported |
 
-Zeta negotiates capabilities: anything an agent doesn't support simply isn't rendered, rather than failing silently when clicked. Adding a new agent requires no UI changes.
+Zeta only shows what your assistant can actually do: anything it can't, simply doesn't appear, rather than failing when clicked. Full table in [Connecting AI Assistants](docs/en/guide/agents.md#what-each-assistant-supports).
 
-> Cursor was supported once and has been retired. Zeta never launches Cursor and never reads or modifies anything under `~/.cursor`.
+> Cursor was supported previously and has been retired. Zeta does not launch Cursor and does not read or write anything under `~/.cursor`.
 
 ## Where your data lives
 
-- **Your code stays local.** Zeta passes only the project path and your selected file path to the local AI CLI. It uploads nothing and has no accounts.
-- **Your CLI config stays put.** Zeta does not touch `~/.codex` or `~/.grok`.
-- **Zeta's own data lives in `~/.zeta/`** (settings, session state, logs, cache) as plain versioned JSON you can inspect or delete at any time.
-- **The usage index stores only the essentials**: thread ID, timestamp, project, model, status, latency, token counts. No prompts, no response bodies, no tool output, no raw error text.
+- **Your code stays local.** Zeta passes the project path and any file path you selected to the local AI command-line tool. It uploads nothing itself, and has no account system and no telemetry.
+- **Assistant configuration stays put.** Unless you explicitly save from Zeta's configuration editor, Zeta doesn't touch anything under `~/.codex`, `~/.grok` or `~/.claude`.
+- **Zeta's own data** lives in a `.zeta` folder inside your system Documents directory (settings, session state, logs, cache) — all plain JSON you can read or delete at any time.
+- **The statistics index stores only what it needs**: conversation ID, time, project, model, status, duration, token counts. Never prompts, replies, tool output, or raw error text.
 
-For a file-by-file breakdown and cleanup instructions, see the [data reference](docs/product/troubleshooting.en.md#what-zeta-stores-on-your-machine).
+File-by-file details and how to clear them: [Data and Privacy](docs/en/guide/data-and-privacy.md).
 
-## Download and install
+## Quick start
 
-Grab a build for your platform from the [Releases page](https://github.com/linpeilie/zeta/releases):
+**1. Install an AI assistant first**
 
-| Platform | Installer | Portable |
-| --- | --- | --- |
-| macOS (Intel / Apple Silicon universal) | `zeta-<version>-macos-universal.dmg` | `...-macos-universal.zip` |
-| Windows x64 | `zeta-<version>-windows-x64-setup.exe` | `...-windows-x64.zip` |
-| Linux x64 | `zeta_<version>_amd64.deb` | `zeta-<version>-linux-x64.tar.gz` |
+Zeta ships no model. Install and sign in to [Codex CLI](https://github.com/openai/codex), Claude Code or Grok CLI, and confirm it works in your terminal.
 
-Every package ships with a `.sha256` checksum file.
+**2. Install Zeta**
 
-Builds are **not code-signed**, so the first launch triggers an OS warning:
+Download the package for your platform from the [Releases page](https://github.com/linpeilie/zeta/releases). The packages aren't code-signed yet, so you'll need to allow the first launch (right-click → Open on macOS; "Run anyway" past SmartScreen on Windows).
 
-- **macOS**: if you see "cannot be opened because the developer cannot be verified", right-click the app in Finder → **Open** → confirm; or go to **System Settings → Privacy & Security** and click **Open Anyway**.
-- **Windows**: on the SmartScreen prompt, click **More info** → **Run anyway**.
+**3. Open a project and start talking**
 
-## Get started in three steps
+Launch Zeta → "Open project folder" → pick a local repository → describe what you want in the composer and press Enter. To have it plan first, type `/` and pick `Plan`.
 
-**1. Install an agent CLI first**
+Assistant not detected? Open **Settings → Agents** — it shows exactly which step failed. The connection test only performs a handshake; it calls no model and costs nothing.
 
-Zeta is a shell — it ships no model of its own. Install and sign in to [Codex CLI](https://github.com/openai/codex) (recommended) or Grok CLI, and confirm it works in your terminal.
+Full walkthrough: [Installation and First Run](docs/en/guide/getting-started.md).
 
-**2. Open your project**
+## Documentation
 
-Launch Zeta → click **Open directory** in the Projects panel → pick a local repo. The file tree loads on the right, skipping `.git`, `node_modules`, `build`, and similar folders.
+**User documentation** ([English](docs/en/README.md) ｜ [中文](docs/zh/README.md))
 
-**3. Start talking**
+- [Installation and First Run](docs/en/guide/getting-started.md) · [Interface Tour](docs/en/guide/workbench.md) · [Conversations and the Timeline](docs/en/guide/conversations.md)
+- [Approvals, Questions and Plans](docs/en/guide/approvals.md) · [Connecting AI Assistants](docs/en/guide/agents.md) · [Notifications](docs/en/guide/notifications.md)
+- [Usage Statistics](docs/en/guide/usage-statistics.md) · [Settings](docs/en/guide/settings.md) · [Data and Privacy](docs/en/guide/data-and-privacy.md)
+- [Troubleshooting](docs/en/guide/troubleshooting.md)
 
-Describe what you want in the composer and hit Enter. Want a plan first? Type `/` and pick **Plan**.
+**Project documentation**
 
-> CLI not detected? Open **Settings → Agent management** for identity, version, sign-in state, and a connection test that tells you exactly where things break. The test performs a handshake only — it never triggers a billable model call.
-
-## Running into trouble
-
-**[Troubleshooting and data reference](docs/product/troubleshooting.en.md)** covers the usual suspects: OS install warnings, undetected CLIs, vanishing approval cards, missing notifications, hidden directories in the file tree, and confusing usage numbers — plus what every file under `~/.zeta/` holds and how to clean or reset it.
-
-Still stuck? [Open an issue](https://github.com/linpeilie/zeta/issues/new/choose).
+- [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.en.md) · [Security policy](SECURITY.md) · [Code of conduct](CODE_OF_CONDUCT.md)
+- [Architecture overview](docs/en/architecture/overview.md) · [Glossary](docs/en/development/glossary.md) · [Developer guide](docs/zh/development/developer_guide.md)
 
 ## Contributing
 
-Contributions are welcome. Please read the **[contributing guide](CONTRIBUTING.en.md)** first — this project enforces a set of architectural constraints (provider isolation, event-pipeline invariants, the permission model), and PRs that violate them won't be merged even if the feature works.
+Contributions are welcome. Read the **[contributing guide](CONTRIBUTING.en.md)** before you start — this project has a set of architectural constraints that are enforced in review, and a PR that violates them won't be merged even if the feature works.
 
-Zeta is a Flutter Desktop app on Dart SDK `^3.12.2`; CI builds with Flutter stable 3.44.4.
+Zeta is a Flutter Desktop application. Dart SDK `^3.12.2`; CI runs Flutter stable 3.44.4.
 
 ```sh
 flutter pub get
 flutter run -d macos    # or -d windows / -d linux
 ```
 
-Before submitting, run in order:
+Before committing, run in order:
 
 ```sh
 dart format .
 flutter analyze
-flutter test
+bash tool/test_affected.sh   # only the tests affected by your change
 ```
 
-Architecture rules, provider onboarding, event-pipeline invariants, and review gates live in [`docs/`](docs/README.md) (Chinese):
-
-- [**Architecture overview**](docs/architecture/overview.en.md) — layering, event pipeline, capability negotiation; start here
-- [**Glossary**](docs/guides/glossary.en.md) — thread / turn / entryId / capability and other recurring terms
-- [Contributing guide](CONTRIBUTING.en.md) — setup, commands, commit format, hard lines
-- [Changelog](CHANGELOG.md) — user-visible changes (Chinese)
-- [Security policy](SECURITY.md) — threat model and vulnerability reporting
-- [Code of conduct](CODE_OF_CONDUCT.md)
-- [Product requirements](docs/product/product_requirements.md) — target users, scope, user flows
-- [Design document](docs/architecture/design_document.md) — layering, UI skeleton, provider abstraction
-- [Developer guide](docs/guides/developer_guide.md) — commands, event pipeline, UI details
-- [Engineering standards](docs/architecture/engineering_standards.md) — architecture review rules
-- [Release guide](docs/release/release_guide.md) — tag rules and release workflow
-- [AGENTS.md](AGENTS.md) — AI collaboration rules and commit format
-
-Adding a provider should touch only its own data files, the neutral domain contracts, the factory wiring, and contract tests. Shared layers (decoder, event pipeline, timeline store) must contain no provider-specific branching.
+Don't run the full suite in your development loop — CI is where the full suite is enforced. The full matrix is in [`AGENTS.md`](AGENTS.md).
 
 ## Not included
 
-Zeta is an agent collaboration panel, not a full IDE. The following are **not** available and aren't planned near-term:
+Zeta is an agent collaboration panel, not a full IDE. These are out of scope for now:
 
-Built-in code editor · file content reading and in-editor diff · remote repos and cloud sync · accounts · a full plugin system · mobile
+A built-in code editor · in-editor diffs and file editing · remote repositories and cloud sync · user accounts · a full plugin system · mobile
 
-## License
+## Licence
 
-[GPL-3.0](LICENSE). You're free to use, modify, and distribute this project, but distributed modifications must also be released under GPL-3.0.
+[GPL-3.0](LICENSE). You are free to use, modify and distribute this project, but modified versions must also be released under GPL-3.0.

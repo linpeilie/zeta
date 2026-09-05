@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/app/localization/zeta_localization.dart';
-import 'package:zeta/src/ui/core/app_theme.dart';
 import 'package:zeta/src/ui/core/ide_image_preview.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 
 void main() {
   testWidgets('showIdeLocalImagePreview refuses missing file without dialog', (
@@ -93,7 +93,10 @@ class _PreviewHarness extends StatelessWidget {
         localizationsDelegates: ZetaLocalization.delegates,
         theme: buildShadcnTheme(lightIdeTheme),
         darkTheme: buildShadcnTheme(darkIdeTheme),
-        materialTheme: buildMaterialTheme(lightIdeTheme),
+        builder: (context, child) => IdeMaterialLayer(
+          theme: buildMaterialTheme(lightIdeTheme),
+          child: child,
+        ),
         themeMode: sf.ThemeMode.light,
         home: sf.Scaffold(child: child),
       ),

@@ -1,0 +1,71 @@
+import 'models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+
+/// 单个 Agent CLI 的检测、配置与日志仓库契约。
+///
+/// Codex / Grok 各自实现；管理控制器按 agentId 路由。
+abstract class AgentCliManagementRepository {
+  /// 与 [AgentDefinition.id] / [AgentProviderConfig.id] 对齐的稳定 id。
+  String get agentId;
+
+  /// 执行完整但不产生模型费用的自动检测。
+  Future<ManagedAgent> detect({
+    required AgentProviderConfig providerConfig,
+    required bool enabled,
+    AgentDetectionProgressCallback? onProgress,
+  });
+
+  /// 用户显式发起的连接测试；实现可按 Provider 协议执行最小握手。
+  Future<(AgentConnectionTestResult, List<AgentModelInfo>)> testConnection({
+    required AgentProviderConfig providerConfig,
+  });
+
+  /// 将用户选择的 CLI 路径转为可持久化 provider 配置。
+  Future<AgentProviderConfig> providerConfigForPath({
+    required AgentProviderConfig current,
+    required String path,
+  });
+
+  /// 本地配置文件绝对路径。
+  String get configPath;
+
+  /// 读取配置文档（含脱敏内容）。
+  Future<AgentConfigurationDocument> readConfiguration();
+
+  /// 校验配置内容；返回 null 表示合法。
+  String? validateConfiguration(String content);
+
+  /// 安全保存配置。
+  Future<AgentConfigurationSaveResult> saveConfiguration({
+    required AgentConfigurationDocument original,
+    required String content,
+    bool overwriteExternalChanges = false,
+  });
+
+  /// 发现本机日志路径。
+  Future<List<String>> discoverLogPaths();
+
+  /// 读取日志尾部（脱敏后）。
+  Future<List<AgentLogEntry>> readLogs(
+    List<String> paths, {
+    int maxLines = 1000,
+  });
+}
+
+/// repository 可选实现的 typed management 描述。
+///
+/// 与主 IO 契约分离，既有第三方/fake repository 无需为新增展示能力补成员；
+/// 未实现时 management runner 按 fail-closed 的无可选能力处理。
+abstract interface class AgentCliManagementDescriptor {
+  AgentCliManagementCapabilities get managementCapabilities;
+
+  AgentProviderConfig get defaultProviderConfig;
+
+  bool acceptsExecutablePath(String path);
+
+  String get connectionModelSourceLabel;
+}
+
+/// 检测进度回调。
+typedef AgentDetectionProgressCallback =
+    void Function(AgentDetectionProgress progress, ManagedAgent partial);

@@ -29,6 +29,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shadcnInvalidURL => 'Invalid URL';
 
   @override
+  String get shadcnNoSpellCheckReplacements => 'No replacements found';
+
+  @override
   String shadcnFormLessThan(String value) {
     return 'Must be less than $value';
   }
@@ -564,6 +567,24 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get commonRemove => 'Remove';
+
+  @override
+  String get uiLoading => 'Loading';
+
+  @override
+  String get uiRunning => 'Running';
+
+  @override
+  String get windowMinimize => 'Minimize';
+
+  @override
+  String get windowRestore => 'Restore';
+
+  @override
+  String get windowMaximize => 'Maximize';
+
+  @override
+  String get windowClose => 'Close';
 
   @override
   String get commonMenu => 'Menu';
@@ -2532,6 +2553,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get agentNoRawMessages => 'No raw messages';
 
   @override
+  String get agentMarkdownCopyAll => 'Copy all';
+
+  @override
+  String get agentMarkdownClearSelection => 'Clear selection';
+
+  @override
   String get agentCopyOriginal => 'Copy original';
 
   @override
@@ -3063,6 +3090,52 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentLoadingHistory => 'Loading thread history';
+
+  @override
+  String get agentThreadLoadingHistory => 'Loading thread history...';
+
+  @override
+  String get agentThreadOpenFailedRetry =>
+      'Thread open failed. Click this thread again to retry.';
+
+  @override
+  String agentTurnTokenUsage(String count) {
+    return '$count tokens';
+  }
+
+  @override
+  String agentTokenUsageContextTooltip(
+    String percent,
+    String used,
+    String total,
+  ) {
+    return 'Usage: $percent%\nUsed: $used\nTotal: $total';
+  }
+
+  @override
+  String agentTokenUsageTotalLine(String value) {
+    return 'Total: $value';
+  }
+
+  @override
+  String agentTokenUsageContextWindowLine(String value) {
+    return 'Context window: $value';
+  }
+
+  @override
+  String agentTokenUsageInputLine(String value) {
+    return 'Input: $value';
+  }
+
+  @override
+  String agentTokenUsageCachedLine(String value) {
+    return 'Cached: $value';
+  }
+
+  @override
+  String agentTokenUsageOutputLine(String value) {
+    return 'Output: $value';
+  }
 
   @override
   String get agentNoSkills => 'No skills found';

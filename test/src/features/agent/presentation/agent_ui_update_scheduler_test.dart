@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/application/agent_ui_update_request.dart';
-import 'package:zeta/src/features/agent/presentation/agent_ui_update_scheduler.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_ui_update_scheduler.dart';
 
 import '../../../testing/fake_agent_frame_scheduler.dart';
 
@@ -240,5 +241,43 @@ void main() {
         });
       },
     );
+
+    test('metric tags use the injected providerMetricLabel', () {
+      final metrics = InMemoryZetaMetricsPort();
+      final isolatedFrames = FakeAgentFrameScheduler();
+      const label = ZetaMetricLabel.constant('zeta.test.scheduler');
+      final taggedScheduler = AgentUiUpdateScheduler(
+        (_) {},
+        frameScheduler: isolatedFrames,
+        metrics: metrics,
+        providerId: 'any-provider',
+        providerMetricLabel: (_) => label,
+      );
+      addTearDown(taggedScheduler.dispose);
+
+      taggedScheduler.publish(
+        AgentUiUpdateRequest(
+          regions: const <AgentUiRegion>{AgentUiRegion.header},
+        ),
+      );
+      isolatedFrames.pumpFrame();
+
+      expect(
+        metrics.totalOf(
+          ZetaMetric.agentUiFramePublishes,
+          tags: const ZetaMetricTags(providerId: label),
+        ),
+        1,
+      );
+      expect(
+        metrics.totalOf(
+          ZetaMetric.agentUiFramePublishes,
+          tags: ZetaMetricTags(
+            providerId: ZetaMetricLabel.hashed('any-provider'),
+          ),
+        ),
+        0,
+      );
+    });
   });
 }

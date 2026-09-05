@@ -1,7 +1,9 @@
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/app/storage/file_storage_service.dart';
 import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partition_store.dart';
 
 void main() {
@@ -39,21 +41,25 @@ void main() {
             'unknownRootField': true,
           }),
         );
-        final store = FileUsageStatisticsPartitionStore(file: file);
+        final store = FileUsageStatisticsPartitionStore(
+          storage: FileStorageService(file),
+        );
         final codex = UsageStatisticsIndexPartition(
           schemaVersion: 1,
           payload: <String, Object?>{
-            'sessions': <Object?>[_safeSession('codex-source')],
+            'sessions': <Object?>[
+              <String, Object?>{'sourceId': 'codex-source'},
+            ],
           },
         );
 
         await store.writePartition('codex-work', codex);
 
         final reloaded = await FileUsageStatisticsPartitionStore(
-          file: file,
+          storage: FileStorageService(file),
         ).readPartition('codex-work');
         final unknown = await FileUsageStatisticsPartitionStore(
-          file: file,
+          storage: FileStorageService(file),
         ).readPartition('future-agent');
         final encoded = jsonDecode(await file.readAsString()) as Map;
         expect(encoded['version'], usageStatisticsPartitionIndexVersion);
@@ -68,84 +74,14 @@ void main() {
     );
 
     test(
-      'migrates and sanitizes the real v2 top-level sessions shape',
-      () async {
-        const sourcePath = '/private/codex/rollout-secret.jsonl';
-        const rawError = 'raw error containing prompt text';
-        final file = _indexFile(tempDirectory);
-        await file.parent.create(recursive: true);
-        await file.writeAsString(
-          jsonEncode(<String, Object?>{
-            'version': 2,
-            'sessions': <Object?>[
-              <String, Object?>{
-                ..._safeSession(null),
-                'sourceId': null,
-                'sourcePath': sourcePath,
-                'turns': <Object?>[
-                  <String, Object?>{
-                    'id': 'turn-1',
-                    'status': 'failed',
-                    'errorMessage': rawError,
-                    'errorCode': 'provider-private-code',
-                    'samples': <Object?>[],
-                  },
-                ],
-              },
-            ],
-          }),
-        );
-        final store = FileUsageStatisticsPartitionStore(file: file);
-
-        final migrated = await store.readPartition('codex');
-        await store.writePartition('codex', migrated!);
-
-        final encoded = await file.readAsString();
-        expect(jsonDecode(encoded), isA<Map>());
-        expect(encoded, contains('sourceId'));
-        expect(encoded, isNot(contains('sourcePath')));
-        expect(encoded, isNot(contains(sourcePath)));
-        expect(encoded, isNot(contains('errorMessage')));
-        expect(encoded, isNot(contains(rawError)));
-        expect(encoded, isNot(contains('provider-private-code')));
-        expect(
-          (jsonDecode(encoded) as Map)['version'],
-          usageStatisticsPartitionIndexVersion,
-        );
-      },
-    );
-
-    test(
-      'migrates the real v3 provider shape and preserves every partition',
-      () async {
-        final file = _indexFile(tempDirectory);
-        await file.parent.create(recursive: true);
-        await file.writeAsString(jsonEncode(_legacyV3()));
-        final store = FileUsageStatisticsPartitionStore(file: file);
-
-        final codex = await store.readPartition('codex');
-        final grok = await store.readPartition('grok');
-        await store.writePartition('codex', codex!);
-
-        final encoded = jsonDecode(await file.readAsString()) as Map;
-        final providers = encoded['providers'] as Map;
-        expect(codex.payload['sessions'], hasLength(1));
-        expect(grok?.payload['sessions'], hasLength(1));
-        expect(encoded['version'], usageStatisticsPartitionIndexVersion);
-        expect(
-          providers.keys,
-          containsAll(<String>['codex', 'grok', 'future-agent']),
-        );
-      },
-    );
-
-    test(
       'damaged JSON and damaged partitions degrade without blocking valid data',
       () async {
         final file = _indexFile(tempDirectory);
         await file.parent.create(recursive: true);
         await file.writeAsString('{damaged');
-        final store = FileUsageStatisticsPartitionStore(file: file);
+        final store = FileUsageStatisticsPartitionStore(
+          storage: FileStorageService(file),
+        );
         expect(await store.readPartition('codex'), isNull);
 
         await file.writeAsString(
@@ -181,30 +117,38 @@ void main() {
 
       expect(
         await FileUsageStatisticsPartitionStore(
-          file: file,
+          storage: FileStorageService(file),
         ).readPartition('codex'),
         isNull,
       );
     });
 
-    test('repeating a legacy migration is idempotent', () async {
+    test('unsupported root versions degrade to an empty index', () async {
       final file = _indexFile(tempDirectory);
       await file.parent.create(recursive: true);
-      await file.writeAsString(jsonEncode(_legacyV3()));
-      final store = FileUsageStatisticsPartitionStore(file: file);
-      final partition = await store.readPartition('codex');
+      await file.writeAsString(
+        jsonEncode(<String, Object?>{
+          'version': usageStatisticsPartitionIndexVersion - 1,
+          'providers': <String, Object?>{
+            'codex': <String, Object?>{
+              'schemaVersion': 1,
+              'payload': <String, Object?>{},
+            },
+          },
+        }),
+      );
 
-      await store.writePartition('codex', partition!);
-      final first = jsonDecode(await file.readAsString());
-      await store.writePartition('codex', partition);
-      final second = jsonDecode(await file.readAsString());
-
-      expect(second, first);
+      expect(
+        await FileUsageStatisticsPartitionStore(
+          storage: FileStorageService(file),
+        ).readPartition('codex'),
+        isNull,
+      );
     });
 
     test('parallel partition writes do not drop either source', () async {
       final store = FileUsageStatisticsPartitionStore(
-        file: _indexFile(tempDirectory),
+        storage: FileStorageService(_indexFile(tempDirectory)),
       );
 
       await Future.wait(<Future<void>>[
@@ -234,9 +178,11 @@ void main() {
       );
       await blockingParent.writeAsString('blocked');
       final store = FileUsageStatisticsPartitionStore(
-        file: File.fromUri(
-          tempDirectory.uri.resolve(
-            'not-a-directory/usage_statistics_index.json',
+        storage: FileStorageService(
+          File.fromUri(
+            tempDirectory.uri.resolve(
+              'not-a-directory/usage_statistics_index.json',
+            ),
           ),
         ),
       );
@@ -263,45 +209,7 @@ void main() {
       throwsArgumentError,
     );
   });
-
-  test('normalizes damaged input to an empty v4 root', () {
-    expect(normalizeUsageStatisticsPartitionIndex(null), <String, Object?>{
-      'version': usageStatisticsPartitionIndexVersion,
-      'providers': <String, Object?>{},
-    });
-  });
 }
 
 File _indexFile(Directory directory) =>
     File.fromUri(directory.uri.resolve('state/usage_statistics_index.json'));
-
-Map<String, Object?> _legacyV3() => <String, Object?>{
-  'version': 3,
-  'providers': <String, Object?>{
-    'codex': <String, Object?>{
-      'sessions': <Object?>[_safeSession('codex-source')],
-    },
-    'grok': <String, Object?>{
-      'sessions': <Object?>[
-        <String, Object?>{
-          ..._safeSession('grok-source'),
-          'modifiedAt': DateTime.utc(2026, 8, 12).millisecondsSinceEpoch,
-        },
-      ],
-    },
-    'future-agent': <String, Object?>{
-      'sessions': <Object?>[_safeSession('future-source')],
-      'unknown': true,
-    },
-  },
-};
-
-Map<String, Object?> _safeSession(String? sourceId) => <String, Object?>{
-  'sourceId': ?sourceId,
-  'fingerprint': '10:20',
-  'threadId': 'thread-1',
-  'projectPath': '/workspace/zeta',
-  'sourceKind': 'fixture',
-  'createdAt': DateTime.utc(2026, 8, 12).millisecondsSinceEpoch,
-  'turns': <Object?>[],
-};

@@ -23,7 +23,7 @@
 
 1. **默认分支是 `dev`**，请基于它开分支和提 PR。
 2. **改动要小而聚焦。** 大规模重构、新增 Provider、改动事件管线契约，请先开 Issue 讨论方案，不要直接甩一个几千行的 PR。
-3. **本项目有严格的分层约束。** 违反[架构红线](#架构红线)的 PR 无论功能是否正确都不会合并——这些约束是为了让多 Provider 接入不互相污染，不是形式主义。[架构总览](docs/architecture/overview.md)用十几分钟讲清了为什么。
+3. **本项目有严格的分层约束。** 违反[架构红线](#架构红线)的 PR 无论功能是否正确都不会合并——这些约束是为了让多 Provider 接入不互相污染，不是形式主义。[架构总览](docs/zh/architecture/overview.md)用十几分钟讲清了为什么。
 
 ## 搭建开发环境
 
@@ -43,9 +43,9 @@ sudo apt-get update && sudo apt-get install --yes \
 
 **运行 Agent 功能还需要**
 
-- **Codex**（默认 Provider）：本机能执行 `codex app-server`。未指定 `--listen` 时走 stdio。协议按 pinned schema 开发，见 [Codex app-server 协议版本锁定](docs/protocols/codex_app_server_protocol.md)。
+- **Codex**（默认 Provider）：本机能执行 `codex app-server`。未指定 `--listen` 时走 stdio。协议按 pinned schema 开发，见 [Codex app-server 协议版本锁定](docs/zh/protocols/codex_app_server_protocol.md)。
 - **Grok**（可选）：Grok CLI（grok-build）**0.2.119 或更高**。这是多会话兼容基线，更早的版本在同时打开多个 Grok 会话时无法正确隔离会话状态和回合终态。
-- **Claude Code**（可选）：本机能执行 `claude`；Claude.ai 交互式登录使用 `claude auth login`。当前 stream-json 对话取样基线是 CLI **2.1.224**（不是最低版本承诺），协议边界与升级检查见 [Claude Code stream-json 协议基线](docs/protocols/claude_code_stream_json_protocol.md)。模型与套餐名称来自无 Prompt initialize；可选额度详情才读取 Provider-local OAuth 凭据。
+- **Claude Code**（可选）：本机能执行 `claude`；Claude.ai 交互式登录使用 `claude auth login`。当前 stream-json 对话取样基线是 CLI **2.1.224**（不是最低版本承诺），协议边界与升级检查见 [Claude Code stream-json 协议基线](docs/zh/protocols/claude_code_stream_json_protocol.md)。模型与套餐名称来自无 Prompt initialize；可选额度详情才读取 Provider-local OAuth 凭据。
 
 只改 UI 或文档的话，不装这些 CLI 也能跑起来，只是 Agent 面板会显示未检测到。
 
@@ -59,37 +59,57 @@ flutter run -d macos    # 或 -d windows / -d linux
 ## 日常命令
 
 ```sh
-dart format .           # 编辑 Dart 文件后必跑
-flutter analyze         # 结束改动前必跑
-flutter test            # 行为变化时必跑
+dart format .              # 编辑 Dart 文件后必跑
+flutter analyze            # 结束改动前必跑
+bash tool/test_affected.sh # 行为变化时必跑：只跑受影响的测试
 ```
 
-跑单个测试文件：
+### 别在开发循环里跑全量
+
+全量是 2114 条、墙钟约 4m10s，而一次改动通常只碰得到几十条。`tool/test_affected.sh`
+从 git 变更集出发，沿 import 图做反向闭包算出受影响的测试，自动追加架构守卫，
+通常 10–40s 出结果，并打印选中了多少、为什么选中：
 
 ```sh
+# Windows PowerShell
+./tool/test_affected.ps1
+
+# macOS / Linux / Git Bash
+bash tool/test_affected.sh
+
+bash tool/test_affected.sh --print   # 只看会跑哪些，不执行
+bash tool/test_affected.sh --shards  # 只看命中哪些分片
+bash tool/test_affected.sh --base origin/dev   # 与某个分支比对而不是只看工作区
+```
+
+**全量的强制点在 CI，不在你的终端。** 每个 PR 都会跑满 6 个测试分片 + 内部
+Package，本地选择器漏了，合并前一定会被抓到。
+
+### 按需要往上加档
+
+```sh
+# 单个测试文件
 flutter test test/src/features/agent/presentation/agent_conversation_widget_test.dart
+
+# 定向复现单条用例
+flutter test test/src/features/agent --plain-name "<用例名>"
+
+# 跑整片（分片清单在 tool/test_shards.dart，用 --shards 拿 id）
+bash tool/test_shard.sh 3          # Windows: ./tool/test_shard.ps1 3
+
+# 只动了 packages/：逐个内部 Package 的 analyze + test
+bash tool/test_packages.sh
+
+# 快速全量：排除标记为 slow 的完整 Shell、性能和工具链测试
+bash tool/test_fast.sh             # Windows: ./tool/test_fast.ps1
+
+# 完整门禁：根测试 + 耗时报告 + 全部内部 Package，
+# 顺带把 JSON 报告写入 .dart_tool/test-results/full.json
+bash tool/test_full.sh             # Windows: ./tool/test_full.ps1
 ```
 
-开发中的快速回归会排除标记为 `slow` 的完整 Shell、性能和工具链测试：
-
-```sh
-# Windows PowerShell
-./tool/test_fast.ps1
-
-# macOS / Linux / Git Bash
-bash tool/test_fast.sh
-```
-
-提交前仍跑完整门禁；该入口同时把 JSON 报告写入 `.dart_tool/test-results/full.json`，
-并输出最慢的测试文件和用例：
-
-```sh
-# Windows PowerShell
-./tool/test_full.ps1
-
-# macOS / Linux / Git Bash
-bash tool/test_full.sh
-```
+**重构是例外，必须跑完整门禁**：重构会搬文件、改 import，import 图本身就失真，
+而"测试断言零修改 + 全量绿"正是重构唯一的正确性证据。
 
 > `dart_test.yaml` 固定了 `concurrency: 2`。大 Widget 测试单个 worker 会加载完整 IDE Shell，放开并发容易触发内存峰值。**请不要为了跑得快而改掉它。**
 
@@ -106,7 +126,7 @@ python tool/smoke_codex_app_server.py --expected-version 0.144.5
 python tool/smoke_codex_plan_mode.py --expected-version 0.144.5
 ```
 
-冒烟脚本使用临时只读 workspace，输出不含 Prompt、回复、文件内容、凭证或原始 JSONL。详见 [开发者文档 §3](docs/guides/developer_guide.md)。
+冒烟脚本使用临时只读 workspace，输出不含 Prompt、回复、文件内容、凭证或原始 JSONL。详见 [开发者文档 §3](docs/zh/development/developer_guide.md)。
 
 ## 提交前必做
 
@@ -115,10 +135,28 @@ python tool/smoke_codex_plan_mode.py --expected-version 0.144.5
 ```sh
 dart format .
 flutter analyze
-flutter test
+bash tool/test_affected.sh
 ```
 
-CI 会重跑同样的检查（外加 `dart format --set-exit-if-changed` 和 `--enforce-lockfile`），本地先过一遍能省一轮往返。
+CI 先执行 `flutter pub get --enforce-lockfile`，再跑完整版本（`dart format --set-exit-if-changed`、`flutter analyze`、
+6 个测试分片并行、内部 Package 的 analyze + test），本地先过一遍窄的能省一轮往返。
+
+根应用与内部 Package 共用 `pubspec.lock`，提交的 hosted 包源统一为 `https://pub.dev`。
+本机使用镜像时，提交前需切回该包源，并使用 `.github/workflows/ci.yml` 声明的 Flutter 版本：
+
+```sh
+export PUB_HOSTED_URL=https://pub.dev
+flutter pub get
+git diff -- pubspec.lock
+flutter pub get --enforce-lockfile
+```
+
+包源 URL 也是锁定信息；即使包版本相同，镜像与官方源不同也会触发重新解析。
+审阅并提交有意的锁文件变化，保留 CI 的 `--enforce-lockfile` 检查。
+
+**新增测试文件时**：根 `test/` 按目录切片，测试放进已有目录就自动归片，不用登记。
+只有新建顶层测试目录时才要回 [`tool/test_shards.dart`](tool/test_shards.dart) 加一条——
+`test/src/architecture/test_shard_coverage_guard_test.dart` 会拦住漏登记的孤儿文件。
 
 另外：
 
@@ -151,29 +189,30 @@ chore: bump flutter action pin
 
 ## 架构红线
 
-**第一次读代码，先看[架构总览](docs/architecture/overview.md)**（十几分钟，带图）和[术语表](docs/guides/glossary.md)。完整规则见[工程规范](docs/architecture/engineering_standards.md)和[开发者文档 §7](docs/guides/developer_guide.md)。以下是最常被踩的几条：
+**第一次读代码，先看[架构总览](docs/zh/architecture/overview.md)**（十几分钟，带图）和[术语表](docs/zh/development/glossary.md)。完整规则见[工程规范](docs/zh/architecture/engineering_standards.md)和[开发者文档 §7](docs/zh/development/developer_guide.md)。以下是最常被踩的几条：
 
 **分层与依赖方向**
 
-- 依赖单向：`main → app → presentation/application → domain`，`app → data → domain`，`presentation → ui/core`。
+- 依赖单向：`main → app → presentation/application → domain`，`app → data → domain`，`presentation → zeta_ui`（`packages/zeta_ui` 设计系统）、`presentation → zeta_markdown`（`packages/zeta_markdown` Markdown 渲染包，fork 自上游，改它先读 `packages/zeta_markdown/UPSTREAM.md`）。
 - 新代码进对应的 `features/<feature>/{domain,application,data,presentation}`，不要回到顶层宽泛目录。
 - `main.dart` 只做启动；`lib/src/app` 是唯一装配点。
 
 **Provider 隔离（最重要）**
 
 - Provider 的原始协议**只能存在于 data 层**。UI 和 application 消费中立的 domain 事件与契约。
-- 共享层（decoder、CoalescingPolicy/Buffer、Pipeline、TimelineStore）**禁止出现任何 Provider 的 import、kind 分支、id 分支或 raw 字段读取**。
+- 共享层（decoder、CoalescingPolicy/Buffer、Pipeline、TimelineStore、handler 注册表）**禁止出现任何 Provider 的 import、kind 分支、id 分支或 raw 字段读取**。
+- Provider 覆盖 handler 只能注册在该 Provider 自己的 bundle；权限 / 提问 / Plan 审批三类事件的 handler 不允许覆盖（Plan 执行交接没有对应事件，保护在 effect 层）。
 - 文件变更必须由 Provider-local tracker 先形成完整 typed snapshot；Store 只机械透传，UI 不读 raw，只有命令时不得猜路径或 diff。
 - 新增 Provider 的正常改动范围 = 自有 data 文件 + 中立 domain 契约 + factory 组合 + 契约测试。如果你发现必须改共享层，说明抽象没做对，先开 Issue 讨论。
 - UI 一律按 **capability** 渲染，不按 provider kind 或名称硬编码。未支持的能力必须 `capability = false` 并抛 `UnsupportedError`，**不得静默成功**。
-- Provider 进程只由 `AgentProviderRuntimeRegistry` 创建；全局操作走 `AgentProviderGlobalRuntime`，会话实例只由 `AgentConversationBinding.beginTurn()` 惰性创建。Binding 显式区分 dormant/starting/attached/cleared，只有匹配 runtime identity 的 cleared 才是断连。ViewModel 不持有 lease/scope/pin，空闲回收归 Binding Manager。
-- Workspace entry 创建时一次性绑定 thread、Binding 与 ViewModel；ViewModel 不提供跨 thread 切换/恢复兼容入口，只允许更新 project/file context。Registry 获取 runtime 必须显式传 scope。
+- Provider 进程只由 `AgentProviderRuntimeRegistry` 创建；全局操作走 `AgentProviderGlobalRuntime`，会话实例只由 `AgentConversationBinding.beginTurn()` 惰性创建。Binding 显式区分 dormant/starting/attached/cleared，只有匹配 runtime identity 的 cleared 才是断连。RuntimeController 不持有 lease/scope/pin，空闲回收归 Binding Manager。
+- Workspace entry 创建时一次性绑定 thread、Binding 与 RuntimeController；RuntimeController 不提供跨 thread 切换/恢复兼容入口，只允许更新 project/file context。Registry 获取 runtime 必须显式传 scope。
 - 真实 thread 的 Binding 不得原地改绑；fork 返回的 session 走 Shell 的新 thread 通用登记/选择流程，后续操作只作用于 fork 结果。
 - `AgentProviderBundle` 是 Application / Presentation 的唯一能力入口，由 `createBundle` 直接创建；旧 `AgentProvider` 大接口已删除。每个 Binding 独占一份不可变权限快照，不得恢复跨 provider/runtime/thread 的权限注册表。静态能力默认值由 data 组合层注入，Domain 不按厂商名称 switch。
 
 **事件管线**
 
-- 新增或修改 `AgentEvent` 前，必须逐项回答[开发者文档 §7 的 16 条接入清单](docs/guides/developer_guide.md)，并用测试固定行为。
+- 新增或修改 `AgentEvent` 前，必须逐项回答[开发者文档 §7 的 16 条接入清单](docs/zh/development/developer_guide.md)，并用测试固定行为。
 - reducer 必须纯同步：不得出现 Flutter scheduler、`Timer`、`Future` 或外部回调，副作用走 scope-aware EffectRunner。
 - live / history / replay 必须使用**独立的 reducer 实例**。
 
@@ -213,7 +252,7 @@ chore: bump flutter action pin
 
 ## 报告问题
 
-开 Issue 之前，先翻一下[故障排查与数据说明](docs/product/troubleshooting.md)——CLI 检测不到、通知不弹、统计对不上这类问题多半在那里有答案。
+开 Issue 之前，先翻一下[故障排查](docs/zh/guide/troubleshooting.md)和[数据与隐私](docs/zh/guide/data-and-privacy.md)——CLI 检测不到、通知不弹、统计对不上这类问题多半在那里有答案。
 
 请使用 [Issue 模板](https://github.com/linpeilie/zeta/issues/new/choose)。Zeta 的问题高度依赖环境，模板里的这些信息请尽量填全：
 
@@ -231,3 +270,9 @@ chore: bump flutter action pin
 参与本项目即表示你同意遵守[行为准则](CODE_OF_CONDUCT.md)。
 
 本项目采用 **GPL-3.0** 许可，见 [LICENSE](LICENSE)。提交贡献即表示你同意以相同许可授权你的代码。
+
+Provider 包已分离中立契约（`provider_api`）、共享机制（`provider_sdk`）与三个独立厂商插件。登记入口是 `lib/src/app/plugins/agent_provider_manifest.dart`；根测试访问实现只经 `test/src/testing/`。management/usage 由插件贡献，原过渡 import 已清零；空贡献或冲突必须 fail-closed，详见[工程规范 §2.1](docs/zh/architecture/engineering_standards.md#21-provider-插件包边界)。
+
+新增 Provider 按[开发者文档插件流程](docs/zh/development/developer_guide.md#新增-provider-插件)建包并登记根 pubspec/manifest；隔离与贡献守卫自动覆盖未来插件，CI 自动发现测试包。单包检查用 `bash tool/test_packages.sh --only <package>`，完整门禁仍是 `bash tool/test_full.sh`。
+
+Provider 图标的 SVG 与 `AgentProviderDefinition.icon` 由各插件包拥有；包内 `flutter.assets` 仅声明静态资源，不引入 Flutter SDK 依赖。宿主入口通过 `agentProviderIconsOverride` 注入静态查询，统一处理主题、尺寸、语义与失败回退；图标查询不得触发插件激活、猜测自定义实例品牌或写入持久化配置。

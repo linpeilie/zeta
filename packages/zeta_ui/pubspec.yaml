@@ -1,0 +1,23 @@
+name: zeta_ui
+description: Zeta 的 Graphite 设计系统：主题 token、Ide* 控件、Workbench 骨架与虚拟滚动原语。
+publish_to: 'none'
+version: 0.1.0
+resolution: workspace
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  shadcn_flutter: ^0.0.54
+  window_manager: ^0.5.1
+  zeta_foundation: ^0.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  # 包内大量使用 Material `Icons.*`，缺这行独立跑包测试会有字体缺失警告。
+  uses-material-design: true

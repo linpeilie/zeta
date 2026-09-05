@@ -1,9 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_extent_descriptor.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection.dart';
+import 'package:zeta/src/features/agent/presentation/timeline_rendering/agent_timeline_renderers.dart';
 
 void main() {
   const layout = AgentTimelineLayoutContext(
@@ -19,7 +19,9 @@ void main() {
   );
 
   test('describeAll reuses unchanged prefix descriptors when tail grows', () {
-    final factory = AgentTimelineExtentDescriptorFactory();
+    final factory = AgentTimelineExtentDescriptorFactory(
+      registry: buildAgentTimelineRendererRegistry(),
+    );
     final toolEntry = AgentToolTimelineEntry(
       toolCall: const AgentToolCall(
         id: 'tool-1',
@@ -49,14 +51,14 @@ void main() {
       status: AgentHistoryTurnStatus.running,
       isStandby: false,
       entries: <AgentTimelineEntry>[toolEntry, msgV1],
-      renderRevision: 1,
+      contentRevision: 1,
     );
     final turnV2 = AgentConversationTurnGroup(
       id: 'live',
       status: AgentHistoryTurnStatus.running,
       isStandby: false,
       entries: <AgentTimelineEntry>[toolEntry, msgV2],
-      renderRevision: 2,
+      contentRevision: 2,
     );
 
     final itemsV1 = <AgentTimelineViewportItem>[

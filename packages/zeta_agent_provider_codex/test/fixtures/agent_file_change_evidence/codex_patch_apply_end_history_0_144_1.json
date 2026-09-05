@@ -1,0 +1,116 @@
+{
+  "_fixture": {
+    "formatVersion": 1,
+    "provider": "codex",
+    "protocol": "Codex local session JSONL",
+    "cliVersion": "0.144.1",
+    "sourceKind": "sanitizedRealShape",
+    "scenario": "An outer exec custom tool followed by independent patch_apply_end update, add, and delete records.",
+    "provenance": "Sanitized field shapes observed in the current local Codex session; paths and contents are synthetic sentinels.",
+    "privacy": "Prompt, reply, command, identifiers, real paths, real file content, credentials, environment values, and stderr are not retained."
+  },
+  "records": [
+    {
+      "timestamp": "2026-08-12T08:00:00.000Z",
+      "type": "session_meta",
+      "payload": {
+        "session_id": "codex-thread-redacted"
+      }
+    },
+    {
+      "timestamp": "2026-08-12T08:00:01.000Z",
+      "type": "event_msg",
+      "payload": {
+        "type": "task_started",
+        "turn_id": "codex-turn-redacted"
+      }
+    },
+    {
+      "timestamp": "2026-08-12T08:00:02.000Z",
+      "type": "response_item",
+      "payload": {
+        "type": "custom_tool_call",
+        "status": "completed",
+        "call_id": "codex-outer-exec-redacted",
+        "name": "exec",
+        "input": "[TOOL_INPUT_REDACTED]"
+      }
+    },
+    {
+      "timestamp": "2026-08-12T08:00:03.000Z",
+      "type": "event_msg",
+      "payload": {
+        "type": "patch_apply_end",
+        "call_id": "codex-patch-update-redacted",
+        "success": true,
+        "stdout": "[TOOL_OUTPUT_REDACTED]",
+        "changes": {
+          "lib/example.dart": {
+            "type": "update",
+            "move_path": null,
+            "unified_diff": "@@ -1 +1 @@\n-[BEFORE_REDACTED]\n+[AFTER_REDACTED]\n"
+          }
+        }
+      }
+    },
+    {
+      "timestamp": "2026-08-12T08:00:04.000Z",
+      "type": "event_msg",
+      "payload": {
+        "type": "patch_apply_end",
+        "call_id": "codex-patch-add-redacted",
+        "success": true,
+        "stdout": "[TOOL_OUTPUT_REDACTED]",
+        "changes": {
+          "lib/created.dart": {
+            "type": "add",
+            "content": "[CREATED_CONTENT_REDACTED]\n"
+          }
+        }
+      }
+    },
+    {
+      "timestamp": "2026-08-12T08:00:05.000Z",
+      "type": "event_msg",
+      "payload": {
+        "type": "patch_apply_end",
+        "call_id": "codex-patch-delete-redacted",
+        "success": true,
+        "stdout": "[TOOL_OUTPUT_REDACTED]",
+        "changes": {
+          "lib/deleted.dart": {
+            "type": "delete",
+            "content": "[DELETED_CONTENT_REDACTED]\n"
+          }
+        }
+      }
+    },
+    {
+      "timestamp": "2026-08-12T08:00:06.000Z",
+      "type": "event_msg",
+      "payload": {
+        "type": "task_complete",
+        "turn_id": "codex-turn-redacted",
+        "duration_ms": 5000
+      }
+    }
+  ],
+  "_captureChecks": {
+    "outerCustomToolName": "exec",
+    "patchApplyCallIdsMatchOuterTool": false,
+    "observedActionTypes": [
+      "update",
+      "add",
+      "delete"
+    ],
+    "updateFields": [
+      "type",
+      "move_path",
+      "unified_diff"
+    ],
+    "addDeleteFields": [
+      "type",
+      "content"
+    ]
+  }
+}

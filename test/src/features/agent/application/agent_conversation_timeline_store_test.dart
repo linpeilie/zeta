@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 void main() {
   group('AgentConversationTimelineStore', () {
@@ -325,9 +324,6 @@ void main() {
               explicitFast: true,
               status: AgentHistoryTurnStatus.completed,
               duration: Duration(seconds: 12),
-              raw: <String, Object?>{
-                'turnContext': <String, Object?>{'serviceTier': 'ignored'},
-              },
             ),
           ],
         ),
@@ -361,6 +357,59 @@ void main() {
       expect(liveGroup.modelConfig?.fastEnabled, isTrue);
     });
 
+    test('状态型 update 不冲掉 adapter 产出的 typed metadata', () {
+      final store = AgentConversationTimelineStore();
+
+      store.upsertToolCall(
+        AgentToolCall(
+          id: 'call-1',
+          title: 'shell',
+          kind: AgentToolKind.execute,
+          status: AgentToolStatus.inProgress,
+          content: 'line 1',
+          appendsProgress: true,
+          inputDetail: 'git status',
+          sourceItemId: 'item-1',
+          rawInput: AgentProviderRawPayload.wrap(const <String, Object?>{
+            'command': 'git status',
+          }),
+        ),
+      );
+
+      // 后续只带状态的 update：adapter 通常不重复携带 typed metadata。
+      store.upsertToolCall(
+        const AgentToolCall(
+          id: 'call-1',
+          title: 'shell',
+          kind: AgentToolKind.execute,
+          status: AgentToolStatus.completed,
+        ),
+      );
+
+      final merged = store.toolCalls.singleWhere((tool) => tool.id == 'call-1');
+      expect(merged.status, AgentToolStatus.completed);
+      expect(merged.appendsProgress, isTrue);
+      expect(merged.inputDetail, 'git status');
+      expect(merged.sourceItemId, 'item-1');
+      expect(merged.rawInput.isNotEmpty, isTrue);
+    });
+
+    test('reasoning 转 think tool 带上事件的 sourceItemId', () {
+      final store = AgentConversationTimelineStore();
+
+      store.appendReasoningDelta(
+        const AgentReasoningDeltaEvent(
+          itemId: 'think-1',
+          sourceItemId: 'source-think-1',
+          kind: AgentReasoningDeltaKind.summaryText,
+          delta: 'planning',
+        ),
+      );
+
+      final think = store.toolCalls.singleWhere((tool) => tool.id == 'think-1');
+      expect(think.sourceItemId, 'source-think-1');
+    });
+
     test('stamps tool startedAt, tracks activity phase, freezes duration', () {
       final store = AgentConversationTimelineStore();
       addTearDown(store.dispose);
@@ -368,7 +417,10 @@ void main() {
       store.startPendingLiveTurn();
       expect(store.currentActivity.phase, AgentTurnActivityPhase.starting);
       expect(store.currentTurnStartedAt, isNotNull);
-      expect(store.takeActivityDirty(), isTrue);
+      expect(
+        store.takeDirtyRegions(),
+        contains(AgentTimelineDirtyRegion.activity),
+      );
 
       store.appendReasoningDelta(
         const AgentReasoningDeltaEvent(
@@ -381,7 +433,10 @@ void main() {
       final think = store.toolCalls.singleWhere((t) => t.id == 'think-1');
       expect(think.startedAt, isNotNull);
       expect(think.duration, isNull);
-      expect(store.takeActivityDirty(), isTrue);
+      expect(
+        store.takeDirtyRegions(),
+        contains(AgentTimelineDirtyRegion.activity),
+      );
 
       store.upsertToolCall(
         const AgentToolCall(
@@ -738,7 +793,7 @@ void main() {
           content: 'Fetching resources…',
           sessionId: 'thread-1',
           turnId: 'turn-1',
-          raw: <String, Object?>{'_progressAppend': true},
+          appendsProgress: true,
         ),
       );
       store.upsertToolCall(
@@ -750,7 +805,7 @@ void main() {
           content: 'Parsing results…',
           sessionId: 'thread-1',
           turnId: 'turn-1',
-          raw: <String, Object?>{'_progressAppend': true},
+          appendsProgress: true,
         ),
       );
 
@@ -989,14 +1044,16 @@ void main() {
         const AgentTurn(id: 'turn-1', sessionId: 'thread-1'),
       );
       store.upsertToolCall(
-        const AgentToolCall(
+        AgentToolCall(
           id: 'call-abc-0',
           title: 'sessionUpdate',
           kind: AgentToolKind.search,
           status: AgentToolStatus.inProgress,
           sessionId: 'thread-1',
           turnId: 'turn-1',
-          rawInput: <String, Object?>{'pattern': 'sessionUpdate'},
+          rawInput: AgentProviderRawPayload.wrap(<String, Object?>{
+            'pattern': 'sessionUpdate',
+          }),
         ),
       );
       store.upsertToolCall(
@@ -1014,7 +1071,7 @@ void main() {
       final tool = store.toolCalls.single;
       expect(tool.title, 'sessionUpdate');
       expect(tool.kind, AgentToolKind.search);
-      expect(tool.rawInput['pattern'], 'sessionUpdate');
+      expect(tool.rawInput.toPrettyJson(), contains('sessionUpdate'));
       expect(tool.content, 'found 42 matches');
     });
 
@@ -1287,7 +1344,7 @@ void main() {
       addTearDown(store.dispose);
 
       store.appendMessageDelta(
-        const AgentMessageDeltaEvent(
+        AgentMessageDeltaEvent(
           messageId: 'message-a',
           sourceMessageId: 'provider-message-a',
           delta: 'partial',
@@ -1296,7 +1353,9 @@ void main() {
           phase: AgentMessagePhase.commentary,
           status: AgentMessageStatus.streaming,
           duration: Duration(seconds: 1),
-          raw: <String, Object?>{'type': 'not-a-plan'},
+          raw: AgentProviderRawPayload.wrap(<String, Object?>{
+            'type': 'not-a-plan',
+          }),
         ),
       );
       store.updateMessage(
@@ -1337,20 +1396,22 @@ void main() {
       addTearDown(store.dispose);
 
       store.appendMessageDelta(
-        const AgentMessageDeltaEvent(
+        AgentMessageDeltaEvent(
           messageId: 'regular-message',
           delta: 'regular',
           role: AgentMessageRole.agent,
-          raw: <String, Object?>{'type': 'plan'},
+          raw: AgentProviderRawPayload.wrap(<String, Object?>{'type': 'plan'}),
         ),
       );
       store.appendMessageDelta(
-        const AgentMessageDeltaEvent(
+        AgentMessageDeltaEvent(
           messageId: 'plan-message',
           delta: 'plan',
           role: AgentMessageRole.agent,
           kind: AgentMessageKind.plan,
-          raw: <String, Object?>{'type': 'agentMessage'},
+          raw: AgentProviderRawPayload.wrap(<String, Object?>{
+            'type': 'agentMessage',
+          }),
         ),
       );
 

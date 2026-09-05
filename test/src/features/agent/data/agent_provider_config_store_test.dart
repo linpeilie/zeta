@@ -2,10 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:zeta/src/app/storage/file_storage_service.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_codec.dart';
 import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_permission_migration.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 void main() {
   group('FileAgentProviderConfigStore', () {
@@ -27,7 +28,7 @@ void main() {
       }
     });
 
-    test('loads the default Codex provider when storage is empty', () async {
+    test('loads every built-in provider when storage is empty', () async {
       final store = _fileStore(settingsFile);
 
       final settings = await store.load();
@@ -38,6 +39,7 @@ void main() {
       expect(settings.providers.map((provider) => provider.id), <String>[
         defaultAgentProviderId,
         grokAgentProviderId,
+        defaultClaudeCodeProviderId,
       ]);
     });
 
@@ -45,11 +47,11 @@ void main() {
       final store = _fileStore(settingsFile);
       const settings = AgentProviderSettings(
         providers: <AgentProviderConfig>[
-          AgentProviderConfig.defaultCodex,
+          defaultCodexAgentProviderConfig,
           AgentProviderConfig(
             id: 'claude',
             displayName: 'Claude Code',
-            kind: AgentProviderKind.claudeCode,
+            kind: claudeCodeAgentProviderType,
             command: 'claude',
           ),
         ],
@@ -74,6 +76,11 @@ void main() {
       final settings = await store.load();
 
       expect(settings.activeProvider.id, defaultAgentProviderId);
+      expect(settings.providers.map((provider) => provider.id), <String>[
+        defaultAgentProviderId,
+        grokAgentProviderId,
+        defaultClaudeCodeProviderId,
+      ]);
     });
 
     test('falls back to defaults when the file is not valid UTF-8', () async {
@@ -91,8 +98,8 @@ void main() {
       );
       await blockedParent.writeAsString('not a directory');
       final store = FileAgentProviderConfigStore(
-        file: File(
-          '${blockedParent.path}${Platform.pathSeparator}providers.json',
+        storage: FileStorageService(
+          File('${blockedParent.path}${Platform.pathSeparator}providers.json'),
         ),
         codec: _codec(),
       );
@@ -102,64 +109,90 @@ void main() {
         throwsA(isA<FileSystemException>()),
       );
     });
-
-    test('loads V1 permission fields and rewrites V2 only', () async {
-      await settingsFile.writeAsString(
-        jsonEncode(<String, Object?>{
-          'version': 1,
-          'activeProviderId': 'grok',
-          'providers': <Object?>[
-            <String, Object?>{
-              'id': 'grok',
-              'displayName': 'Grok',
-              'kind': 'acp',
-              'command': 'grok',
-              'selectedPermissionMode': 'yolo',
-            },
-          ],
-        }),
-      );
-      final store = _fileStore(settingsFile);
-
-      final settings = await store.load();
-      expect(
-        settings.activeProvider.selectedPermissionOptionId,
-        'always-approve',
-      );
-
-      await store.save(settings);
-      final rewritten = await settingsFile.readAsString();
-      expect(rewritten, contains('"selectedPermissionOptionId"'));
-      expect(rewritten, isNot(contains('selectedPermissionMode')));
-    });
   });
 
   group('AgentProviderSettings', () {
-    test('normalizes legacy built-in provider display names', () {
-      final settings = _codec().decode(<String, Object?>{
-        'version': 1,
+    test('current version with invalid active id uses plugin default', () {
+      final decoded = _codec().decode(<String, Object?>{
+        'version': AgentProviderSettings.currentVersion,
+        'activeProviderId': 'removed-provider',
+        'providers': <Object?>[
+          <String, Object?>{
+            'id': 'custom-grok',
+            'displayName': 'Custom Grok',
+            'kind': grokAgentProviderType.value,
+            'command': 'custom-grok',
+          },
+          defaultCodexAgentProviderConfig.toJson(),
+        ],
+      });
+
+      expect(decoded.activeProviderId, defaultAgentProviderId);
+      expect(decoded.activeProvider.id, defaultAgentProviderId);
+      expect(decoded.providers.first.id, 'custom-grok');
+    });
+
+    test('unsupported version falls back to plugin defaults', () {
+      final decoded = _codec().decode(<String, Object?>{
+        'version': AgentProviderSettings.currentVersion - 1,
+        'providers': <Object?>[defaultGrokAgentProviderConfig.toJson()],
+      });
+
+      expect(decoded.activeProvider.id, defaultAgentProviderId);
+      expect(decoded.providers.map((provider) => provider.id), <String>[
+        defaultAgentProviderId,
+        grokAgentProviderId,
+        defaultClaudeCodeProviderId,
+      ]);
+    });
+
+    test('drops a built-in id that claims another plugin type', () {
+      final decoded = _codec().decode(<String, Object?>{
+        'version': 2,
         'activeProviderId': defaultAgentProviderId,
         'providers': <Object?>[
           <String, Object?>{
-            ...AgentProviderConfig.defaultCodex.toJson(),
+            'id': defaultAgentProviderId,
+            'displayName': 'Wrong',
+            'kind': claudeCodeAgentProviderType.value,
+            'command': 'claude',
+          },
+        ],
+      });
+
+      expect(decoded.activeProvider, defaultCodexAgentProviderConfig);
+      expect(decoded.providers, contains(defaultClaudeCodeAgentProviderConfig));
+    });
+
+    test('normalizes built-in provider display names', () {
+      final settings = _codec().decode(<String, Object?>{
+        'version': AgentProviderSettings.currentVersion,
+        'activeProviderId': defaultAgentProviderId,
+        'providers': <Object?>[
+          <String, Object?>{
+            ...defaultCodexAgentProviderConfig.toJson(),
             'displayName': 'Codex CLI',
           },
           <String, Object?>{
-            ...AgentProviderConfig.defaultGrok.toJson(),
+            ...defaultGrokAgentProviderConfig.toJson(),
             'displayName': 'Grok CLI',
+          },
+          <String, Object?>{
+            ...defaultClaudeCodeAgentProviderConfig.toJson(),
+            'displayName': 'Claude Code',
           },
         ],
       });
 
       expect(
         settings.providers.map((provider) => provider.displayName),
-        <String>['Codex', 'Grok'],
+        <String>['Codex', 'Grok', 'Claude'],
       );
     });
 
-    test('round-trips versioned model preferences tolerantly', () {
+    test('round-trips current model preferences', () {
       final updatedAt = DateTime.utc(2026, 7, 15, 8);
-      final config = AgentProviderConfig.defaultCodex.withModelConfiguration(
+      final config = defaultCodexAgentProviderConfig.withModelConfiguration(
         selection: const AgentModelSelection(
           modelId: 'gpt-5.5',
           reasoningEffort: 'high',
@@ -185,7 +218,7 @@ void main() {
     });
 
     test('ignores damaged model preference entries', () {
-      final raw = AgentProviderConfig.defaultCodex.toJson();
+      final raw = defaultCodexAgentProviderConfig.toJson();
       raw['modelPreferences'] = <String, Object?>{
         'missing-id': <String, Object?>{'fastEnabled': true},
         'valid': <String, Object?>{
@@ -193,6 +226,7 @@ void main() {
           'reasoningEffort': 'medium',
           'fastEnabled': false,
           'updatedAt': 'not-a-date',
+          'version': AgentModelPreference.currentVersion,
         },
       };
 
@@ -208,17 +242,14 @@ void main() {
 }
 
 FileAgentProviderConfigStore _fileStore(File file) {
-  return FileAgentProviderConfigStore(file: file, codec: _codec());
+  return FileAgentProviderConfigStore(
+    storage: FileStorageService(file),
+    codec: _codec(),
+  );
 }
 
 AgentProviderSettingsCodec _codec() {
   return AgentProviderSettingsCodec(
-    migrationRegistry: AgentProviderPermissionMigrationRegistry(
-      <AgentProviderKind, AgentProviderPermissionPreferenceMigrator>{
-        AgentProviderKind.codexAppServer:
-            const CodexPermissionPreferenceMigrator(),
-        AgentProviderKind.acp: const GrokPermissionPreferenceMigrator(),
-      },
-    ),
+    providerDefinitions: zetaAgentProviderDefinitionCatalog,
   );
 }

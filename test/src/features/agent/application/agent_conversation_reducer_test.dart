@@ -1,13 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_effect.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_mutation.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_reducer.dart';
-import 'package:zeta/src/features/agent/application/agent_ui_update_request.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 const _threadId = 'thread-1';
 const _turnId = 'turn-1';
 final _fixedClockValue = DateTime.utc(2026, 1, 2, 3, 4, 5, 6, 7);
+const _initialState = AgentConversationSessionState.initial(
+  defaultTitle: agentDefaultThreadTitle,
+);
 
 void main() {
   group('AgentConversationReducer 33-event migration table', () {
@@ -21,7 +21,11 @@ void main() {
             );
 
             // Act
-            final mutation = reducer.reduce(reductionCase.event, _context());
+            final mutation = reducer.reduce(
+              reductionCase.event,
+              _initialState,
+              _context(),
+            );
 
             // Assert
             _expectReduction(mutation, reductionCase);
@@ -51,6 +55,7 @@ void main() {
         // Act
         final mutation = reducer.reduce(
           reductionCase.event,
+          _initialState,
           _context(selectedThreadId: 'other-thread'),
         );
 
@@ -84,10 +89,12 @@ void main() {
 
       final accepted = reducer.reduce(
         event,
+        _initialState,
         _context(hasTurns: const <String>{}),
       );
       final rejected = reducer.reduce(
         event,
+        _initialState,
         _context(
           selectedThreadId: 'other-thread',
           hasTurns: const <String>{'foreign-turn'},
@@ -112,17 +119,17 @@ void main() {
 
       final mutation = AgentConversationReducer.live().reduce(
         event,
+        _initialState,
         _context(selectedThreadId: 'other-thread'),
       );
 
       expect(mutation.accepted, isTrue);
       expect(mutation.uiUpdate, isNull);
-      expect(_runtimeTypes(mutation.stateChanges), <Type>[
-        AgentApplyThreadPermissionSettingsChange,
+      expect(_runtimeTypes(mutation.effects), <Type>[
+        AgentApplyThreadPermissionEffect,
       ]);
       final change =
-          mutation.stateChanges.single
-              as AgentApplyThreadPermissionSettingsChange;
+          mutation.effects.single as AgentApplyThreadPermissionEffect;
       expect(change.threadId, _threadId);
       expect(change.permissionSelection.optionId, ':read-only');
     });
@@ -152,10 +159,16 @@ void main() {
         pendingTurnGroupId: 'pending-turn',
       );
 
-      expect(reducer.reduce(knownTurnEvent, context).accepted, isTrue);
-      expect(reducer.reduce(pendingTurnEvent, context).accepted, isTrue);
+      expect(
+        reducer.reduce(knownTurnEvent, _initialState, context).accepted,
+        isTrue,
+      );
+      expect(
+        reducer.reduce(pendingTurnEvent, _initialState, context).accepted,
+        isTrue,
+      );
       _expectRejected(
-        reducer.reduce(unknownTurnEvent, context),
+        reducer.reduce(unknownTurnEvent, _initialState, context),
         reason: 'currentThreadMismatch',
       );
     });
@@ -170,6 +183,7 @@ void main() {
 
         final mutation = AgentConversationReducer.live().reduce(
           event,
+          _initialState,
           _context(
             selectedThreadId: 'other-thread',
             hasTurns: const <String>{},
@@ -190,20 +204,25 @@ void main() {
 
       expect(
         AgentConversationReducer.live()
-            .reduce(event, _context(selectedThreadId: null))
+            .reduce(event, _initialState, _context(selectedThreadId: null))
             .accepted,
         isTrue,
       );
       _expectRejected(
         AgentConversationReducer.live().reduce(
           event,
+          _initialState,
           _context(selectedThreadId: null, requiresResumedSelectedThread: true),
         ),
         reason: 'sessionStartedThreadMismatch',
       );
       expect(
         AgentConversationReducer.live()
-            .reduce(event, _context(requiresResumedSelectedThread: true))
+            .reduce(
+              event,
+              _initialState,
+              _context(requiresResumedSelectedThread: true),
+            )
             .accepted,
         isTrue,
       );
@@ -228,17 +247,14 @@ void main() {
 
       for (final reductionCase in cases) {
         expect(
-          AgentConversationReducer.isCriticalDetachedEvent(reductionCase.event),
+          AgentDetachedEventPolicy.isCritical(reductionCase.event),
           criticalTypes.contains(reductionCase.event.runtimeType),
           reason: reductionCase.name,
         );
       }
       expect(
         cases
-            .where(
-              (item) =>
-                  AgentConversationReducer.isCriticalDetachedEvent(item.event),
-            )
+            .where((item) => AgentDetachedEventPolicy.isCritical(item.event))
             .length,
         criticalTypes.length,
       );
@@ -249,12 +265,11 @@ void main() {
     test('interrupted turn settles through ordered synchronous mutations', () {
       final mutation = AgentConversationReducer.live().settleInterruptedTurn(
         fallbackTurnId: 'fallback-turn',
+        state: _initialState,
+        context: _context(),
       );
 
       expect(mutation.accepted, isTrue);
-      expect(_runtimeTypes(mutation.stateChangesBeforeTimeline), const <Type>[
-        AgentPrepareInterruptedTurnChange,
-      ]);
       expect(_runtimeTypes(mutation.timelineMutations), const <Type>[
         AgentSettleInterruptedTimelineMutation,
       ]);
@@ -264,25 +279,12 @@ void main() {
             .fallbackTurnId,
         'fallback-turn',
       );
-      expect(_runtimeTypes(mutation.stateChanges), const <Type>[
-        AgentFinalizeInterruptedTurnChange,
+      expect(_runtimeTypes(mutation.effects), const <Type>[
+        AgentClearPlanHandoffEffect,
+        AgentSyncTurnRunningEffect,
       ]);
-      expect(
-        mutation.uiUpdate?.regions,
-        unorderedEquals(const <AgentUiRegion>{
-          AgentUiRegion.history,
-          AgentUiRegion.liveTurnBinding,
-          AgentUiRegion.header,
-          AgentUiRegion.composer,
-        }),
-      );
       expect(mutation.uiUpdate?.urgency, AgentUiUpdateUrgency.immediate);
-      expect(
-        mutation.uiResolution.includePendingInteractionWhenStateChanges,
-        isTrue,
-      );
       expect(mutation.threadSnapshot, AgentThreadSnapshotMutation.refresh);
-      expect(mutation.effects, isEmpty);
     });
 
     test('Codex error and matching failed turn.error render only once', () {
@@ -302,15 +304,24 @@ void main() {
         errorMessage: 'same failure',
       );
 
-      final errorMutation = reducer.reduce(error, context);
-      final deduplicatedCompletion = reducer.reduce(completion, context);
+      final errorMutation = reducer.reduce(error, _initialState, context);
+      final deduplicatedCompletion = reducer.reduce(
+        completion,
+        _initialState,
+        context,
+      );
       reducer.reduce(
         const AgentTurnStartedEvent(
           AgentTurn(id: _turnId, sessionId: _threadId),
         ),
+        _initialState,
         context,
       );
-      final completionAfterNewTurn = reducer.reduce(completion, context);
+      final completionAfterNewTurn = reducer.reduce(
+        completion,
+        _initialState,
+        context,
+      );
 
       expect(_runtimeTypes(errorMutation.timelineMutations), const <Type>[
         AgentAddConversationMessageTimelineMutation,
@@ -339,6 +350,7 @@ void main() {
               sessionId: _threadId,
               turnId: _turnId,
             ),
+            _initialState,
             _context(),
           );
 
@@ -363,6 +375,7 @@ void main() {
                   'Selected model is at capacity. Please try a different model.',
               errorCode: 'serverOverloaded',
             ),
+            _initialState,
             _context(),
           );
 
@@ -385,27 +398,24 @@ void main() {
 
         final mutation = AgentConversationReducer.live().reduce(
           event,
+          _initialState,
           _context(),
         );
 
         expect(
-          mutation.stateChangesBeforeTimeline.single,
-          isA<AgentPrepareTurnCompletedChange>(),
-        );
-        expect(
-          (mutation.stateChangesBeforeTimeline.single
-                  as AgentPrepareTurnCompletedChange)
+          mutation.effects
+              .whereType<AgentPreparePlanHandoffEffect>()
+              .single
               .event,
           same(event),
         );
         expect(
-          mutation.stateChanges.single,
-          isA<AgentFinalizeTurnCompletedChange>(),
+          mutation.effects.whereType<AgentSyncTurnRunningEffect>(),
+          isNotEmpty,
         );
         expect(
-          (mutation.stateChanges.single as AgentFinalizeTurnCompletedChange)
-              .event,
-          same(event),
+          mutation.effects.whereType<AgentAutoStartPlanExecutionEffect>(),
+          isNotEmpty,
         );
       },
     );
@@ -428,6 +438,7 @@ void main() {
 
         final mutation = AgentConversationReducer.live().reduce(
           event,
+          _initialState,
           _context(),
         );
 
@@ -435,13 +446,11 @@ void main() {
         expect(_runtimeTypes(mutation.timelineMutations), const <Type>[
           AgentUpsertToolCallTimelineMutation,
         ]);
-        expect(mutation.stateChanges, isEmpty);
         expect(mutation.uiUpdate?.urgency, AgentUiUpdateUrgency.immediate);
         expect(
           _runtimeTypes(mutation.uiUpdate?.effects ?? const []),
           const <Type>[AgentRequestAutoScroll],
         );
-        expect(mutation.uiResolution.includeHeaderWhenActivityChanges, isTrue);
       },
     );
   });
@@ -459,20 +468,14 @@ void main() {
 
         final mutation = AgentConversationReducer.live().reduce(
           event,
+          _initialState,
           _context(historyTurns: const <String>{_turnId}),
         );
 
+        expect(mutation.uiUpdate?.urgency, AgentUiUpdateUrgency.immediate);
         expect(
-          mutation.uiUpdate?.regions,
-          unorderedEquals(const <AgentUiRegion>{
-            AgentUiRegion.header,
-            AgentUiRegion.composer,
-            AgentUiRegion.history,
-          }),
-        );
-        expect(
-          mutation.uiUpdate?.regions.contains(AgentUiRegion.liveTurn),
-          isFalse,
+          mutation.timelineMutations.single,
+          isA<AgentUpdateTurnTokenUsageTimelineMutation>(),
         );
       },
     );
@@ -483,12 +486,11 @@ void main() {
         details: 'details',
         sessionId: _threadId,
         turnId: _turnId,
-        raw: <String, Object?>{'providerSecret': 'must-not-leak'},
       );
 
       final mutation = AgentConversationReducer.live(
         clock: () => _fixedClockValue,
-      ).reduce(event, _context());
+      ).reduce(event, _initialState, _context());
       final message =
           (mutation.timelineMutations.single
                   as AgentAddConversationMessageTimelineMutation)
@@ -510,9 +512,12 @@ void main() {
 
       final mutation = AgentConversationReducer.live().reduce(
         event,
+        _initialState,
         _context(),
       );
-      final effect = mutation.effects.single as AgentTurnCompletedEffect;
+      final effect = mutation.effects
+          .whereType<AgentTurnCompletedEffect>()
+          .single;
 
       expect(effect.turnId, _turnId);
       expect(effect.attention.kind, AgentAttentionKind.turnCompleted);
@@ -535,6 +540,7 @@ void main() {
             turnId: _turnId,
           ),
         ),
+        _initialState,
         _context(),
       );
       final resolved = AgentConversationReducer.live().reduce(
@@ -542,6 +548,7 @@ void main() {
           requestId: 'permission-1',
           threadId: _threadId,
         ),
+        _initialState,
         _context(),
       );
 
@@ -565,13 +572,16 @@ void main() {
 
       final mutation = AgentConversationReducer.live().reduce(
         event,
+        _initialState,
         _context(),
       );
-      final effect = mutation.effects.single as AgentRecordModelCatalogEffect;
+      final effect = mutation.effects
+          .whereType<AgentRecordModelCatalogEffect>()
+          .single;
 
       expect(effect.timing, AgentConversationEffectTiming.afterMutation);
       expect(effect.requireThread, isFalse);
-      expect(effect.config, same(AgentProviderConfig.defaultCodex));
+      expect(effect.config, same(defaultCodexAgentProviderConfig));
       expect(effect.models, same(event.models));
       expect(effect.source, 'Codex runtime');
       _expectDefaultScope(effect.scope);
@@ -584,11 +594,15 @@ void main() {
 
       final mutation = AgentConversationReducer.live().reduce(
         event,
+        _initialState,
         _context(modelsRefreshing: true),
       );
 
       expect(mutation.accepted, isTrue);
-      expect(mutation.effects, isEmpty);
+      expect(
+        mutation.effects.whereType<AgentRecordModelCatalogEffect>(),
+        isEmpty,
+      );
     });
 
     test('error logging is a before-mutation thread-independent effect', () {
@@ -600,6 +614,7 @@ void main() {
 
       final mutation = AgentConversationReducer.live().reduce(
         event,
+        _initialState,
         _context(),
       );
       final effect = mutation.effects.single as AgentLogProviderErrorEffect;
@@ -625,6 +640,7 @@ void main() {
           sessionId: _threadId,
           turnId: _turnId,
         ),
+        _initialState,
         _context(),
       );
       final secondId =
@@ -647,18 +663,22 @@ void main() {
 
       final liveDeprecation = reducers.live.reduce(
         deprecation,
+        _initialState,
         _context(scope: AgentConversationReductionScope.live),
       );
       final duplicateLiveDeprecation = reducers.live.reduce(
         deprecation,
+        _initialState,
         _context(scope: AgentConversationReductionScope.live),
       );
       final historyDeprecation = reducers.history.reduce(
         deprecation,
+        _initialState,
         _context(scope: AgentConversationReductionScope.history),
       );
       final replayDeprecation = reducers.replay.reduce(
         deprecation,
+        _initialState,
         _context(scope: AgentConversationReductionScope.replay),
       );
 
@@ -690,18 +710,22 @@ void main() {
       );
       reducers.live.reduce(
         error,
+        _initialState,
         _context(scope: AgentConversationReductionScope.live),
       );
       final liveCompletion = reducers.live.reduce(
         completion,
+        _initialState,
         _context(scope: AgentConversationReductionScope.live),
       );
       final historyCompletion = reducers.history.reduce(
         completion,
+        _initialState,
         _context(scope: AgentConversationReductionScope.history),
       );
       final replayCompletion = reducers.replay.reduce(
         completion,
+        _initialState,
         _context(scope: AgentConversationReductionScope.replay),
       );
 
@@ -724,6 +748,7 @@ void main() {
       expect(
         () => reducer.reduce(
           const AgentStatusEvent(AgentProviderStatus.idle()),
+          _initialState,
           _context(scope: AgentConversationReductionScope.history),
         ),
         throwsAssertionError,
@@ -738,8 +763,6 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
       const _ReductionCase(
         name: 'status',
         event: AgentStatusEvent(AgentProviderStatus.idle()),
-        afterStateTypes: <Type>[AgentSetProviderStatusChange],
-        uiRegions: <AgentUiRegion>{},
         uiUrgency: AgentUiUpdateUrgency.immediate,
       ),
       const _ReductionCase(
@@ -751,13 +774,9 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
             title: 'Thread 1',
           ),
         ),
-        afterStateTypes: <Type>[AgentApplySessionStartedChange],
-        uiRegions: <AgentUiRegion>{
-          AgentUiRegion.header,
-          AgentUiRegion.composer,
-        },
         uiUrgency: AgentUiUpdateUrgency.immediate,
         snapshot: AgentThreadSnapshotMutation.refresh,
+        applicationEffectTypes: <Type>[AgentBindConversationModeThreadEffect],
       ),
       const _ReductionCase(
         name: 'thread status',
@@ -766,8 +785,6 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
           status: AgentThreadRuntimeStatus.active,
           waitingOnApproval: true,
         ),
-        afterStateTypes: <Type>[AgentApplyThreadRuntimeStatusChange],
-        uiRegions: <AgentUiRegion>{AgentUiRegion.header},
         uiUrgency: AgentUiUpdateUrgency.immediate,
         snapshot: AgentThreadSnapshotMutation.refresh,
       ),
@@ -777,8 +794,6 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
           threadId: _threadId,
           threadName: 'Renamed',
         ),
-        afterStateTypes: <Type>[AgentApplyThreadNameChange],
-        uiRegions: <AgentUiRegion>{AgentUiRegion.header},
         uiUrgency: AgentUiUpdateUrgency.immediate,
         snapshot: AgentThreadSnapshotMutation.refresh,
       ),
@@ -788,8 +803,6 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
           threadId: _threadId,
           preview: 'Last turn summary',
         ),
-        afterStateTypes: <Type>[AgentApplyThreadPreviewChange],
-        uiRegions: <AgentUiRegion>{},
         uiUrgency: AgentUiUpdateUrgency.immediate,
         snapshot: AgentThreadSnapshotMutation.refresh,
       ),
@@ -808,18 +821,13 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
       const _ReductionCase(
         name: 'thread closed',
         event: AgentThreadClosedEvent(threadId: _threadId),
-        beforeStateTypes: <Type>[AgentPrepareInterruptedTurnChange],
         timelineTypes: <Type>[AgentSettleInterruptedTimelineMutation],
-        afterStateTypes: <Type>[AgentFinalizeInterruptedTurnChange],
-        uiRegions: <AgentUiRegion>{
-          AgentUiRegion.history,
-          AgentUiRegion.liveTurnBinding,
-          AgentUiRegion.header,
-          AgentUiRegion.composer,
-        },
         uiUrgency: AgentUiUpdateUrgency.immediate,
-        includePendingInteractionWhenStateChanges: true,
         snapshot: AgentThreadSnapshotMutation.refresh,
+        applicationEffectTypes: <Type>[
+          AgentClearPlanHandoffEffect,
+          AgentSyncTurnRunningEffect,
+        ],
       ),
       const _ReductionCase(
         name: 'thread compacted',
@@ -831,9 +839,8 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
           threadId: _threadId,
           model: 'gpt-test',
         ),
-        afterStateTypes: <Type>[AgentApplyThreadSettingsChange],
-        uiRegions: <AgentUiRegion>{AgentUiRegion.composer},
         uiUrgency: AgentUiUpdateUrgency.immediate,
+        applicationEffectTypes: <Type>[AgentApplyThreadSettingsEffect],
       ),
       const _ReductionCase(
         name: 'session config',
@@ -848,9 +855,8 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
             ),
           ],
         ),
-        afterStateTypes: <Type>[AgentApplySessionConfigChange],
-        uiRegions: <AgentUiRegion>{AgentUiRegion.composer},
         uiUrgency: AgentUiUpdateUrgency.immediate,
+        applicationEffectTypes: <Type>[AgentSyncThreadSelectionEffect],
       ),
     ],
     'batch B turn': <_ReductionCase>[
@@ -860,34 +866,23 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
           AgentTurn(id: _turnId, sessionId: _threadId),
         ),
         timelineTypes: <Type>[AgentBeginLiveTurnTimelineMutation],
-        afterStateTypes: <Type>[AgentFinalizeTurnStartedChange],
-        uiRegions: <AgentUiRegion>{
-          AgentUiRegion.history,
-          AgentUiRegion.liveTurnBinding,
-          AgentUiRegion.liveTurn,
-          AgentUiRegion.header,
-          AgentUiRegion.composer,
-        },
         uiUrgency: AgentUiUpdateUrgency.immediate,
         snapshot: AgentThreadSnapshotMutation.refresh,
+        applicationEffectTypes: <Type>[AgentSyncTurnRunningEffect],
       ),
       const _ReductionCase(
         name: 'turn completed',
         event: AgentTurnCompletedEvent(sessionId: _threadId, turnId: _turnId),
-        beforeStateTypes: <Type>[AgentPrepareTurnCompletedChange],
         timelineTypes: <Type>[AgentCompleteLiveTurnTimelineMutation],
-        afterStateTypes: <Type>[AgentFinalizeTurnCompletedChange],
-        uiRegions: <AgentUiRegion>{
-          AgentUiRegion.history,
-          AgentUiRegion.liveTurnBinding,
-          AgentUiRegion.header,
-          AgentUiRegion.composer,
-        },
         uiUrgency: AgentUiUpdateUrgency.immediate,
         uiEffectTypes: <Type>[AgentRequestAutoScroll],
-        includePendingInteractionWhenStateChanges: true,
         snapshot: AgentThreadSnapshotMutation.refresh,
-        applicationEffectTypes: <Type>[AgentTurnCompletedEffect],
+        applicationEffectTypes: <Type>[
+          AgentPreparePlanHandoffEffect,
+          AgentTurnCompletedEffect,
+          AgentSyncTurnRunningEffect,
+          AgentAutoStartPlanExecutionEffect,
+        ],
       ),
     ],
     'batch C message/reasoning': <_ReductionCase>[
@@ -902,13 +897,8 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
           turnId: _turnId,
         ),
         timelineTypes: <Type>[AgentAppendMessageDeltaTimelineMutation],
-        uiRegions: <AgentUiRegion>{
-          AgentUiRegion.liveTurn,
-          AgentUiRegion.expansion,
-        },
         uiUrgency: AgentUiUpdateUrgency.nextFrame,
         uiEffectTypes: <Type>[AgentRequestAutoScroll],
-        includeHeaderWhenActivityChanges: true,
       ),
       const _ReductionCase(
         name: 'reasoning delta',
@@ -920,13 +910,8 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
           turnId: _turnId,
         ),
         timelineTypes: <Type>[AgentAppendReasoningDeltaTimelineMutation],
-        uiRegions: <AgentUiRegion>{
-          AgentUiRegion.liveTurn,
-          AgentUiRegion.expansion,
-        },
         uiUrgency: AgentUiUpdateUrgency.nextFrame,
         uiEffectTypes: <Type>[AgentRequestAutoScroll],
-        includeHeaderWhenActivityChanges: true,
       ),
       const _ReductionCase(
         name: 'message updated',
@@ -937,7 +922,6 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
           turnId: _turnId,
         ),
         timelineTypes: <Type>[AgentUpdateMessageTimelineMutation],
-        uiRegions: <AgentUiRegion>{AgentUiRegion.liveTurn},
         uiUrgency: AgentUiUpdateUrgency.immediate,
         uiEffectTypes: <Type>[AgentRequestAutoScroll],
       ),
@@ -949,7 +933,6 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
           turnId: _turnId,
         ),
         timelineTypes: <Type>[AgentReplaceActivePlanTimelineMutation],
-        uiRegions: <AgentUiRegion>{AgentUiRegion.liveTurn},
         uiUrgency: AgentUiUpdateUrgency.immediate,
       ),
     ],
@@ -962,11 +945,6 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
           turnId: _turnId,
         ),
         timelineTypes: <Type>[AgentUpdateTurnTokenUsageTimelineMutation],
-        uiRegions: <AgentUiRegion>{
-          AgentUiRegion.header,
-          AgentUiRegion.composer,
-          AgentUiRegion.liveTurn,
-        },
         uiUrgency: AgentUiUpdateUrgency.immediate,
       ),
       const _ReductionCase(
@@ -978,10 +956,6 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
           turnId: _turnId,
         ),
         timelineTypes: <Type>[AgentUpdateContextWindowUsageTimelineMutation],
-        uiRegions: <AgentUiRegion>{
-          AgentUiRegion.liveTurn,
-          AgentUiRegion.composer,
-        },
         uiUrgency: AgentUiUpdateUrgency.nextFrame,
       ),
     ],
@@ -999,11 +973,8 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
           ),
         ),
         timelineTypes: <Type>[AgentUpsertToolCallTimelineMutation],
-        afterStateTypes: <Type>[AgentApplyToolStatusChange],
-        uiRegions: <AgentUiRegion>{AgentUiRegion.liveTurn},
         uiUrgency: AgentUiUpdateUrgency.nextFrame,
         uiEffectTypes: <Type>[AgentRequestAutoScroll],
-        includeHeaderWhenActivityChanges: true,
       ),
       _ReductionCase(
         name: 'turn file changes',
@@ -1026,7 +997,6 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
           ),
         ),
         timelineTypes: const <Type>[AgentUpsertTurnFileChangesTimelineMutation],
-        uiRegions: const <AgentUiRegion>{AgentUiRegion.liveTurn},
         uiUrgency: AgentUiUpdateUrgency.immediate,
         uiEffectTypes: const <Type>[AgentRequestAutoScroll],
       ),
@@ -1040,12 +1010,6 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
           reviewId: 'review-1',
           status: 'denied',
         ),
-        afterStateTypes: <Type>[AgentApplyAutoApprovalReviewChange],
-        uiRegions: <AgentUiRegion>{
-          AgentUiRegion.header,
-          AgentUiRegion.liveTurn,
-          AgentUiRegion.history,
-        },
         uiUrgency: AgentUiUpdateUrgency.immediate,
       ),
       const _ReductionCase(
@@ -1060,10 +1024,6 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
           ),
         ),
         timelineTypes: <Type>[AgentAddPermissionRequestTimelineMutation],
-        uiRegions: <AgentUiRegion>{
-          AgentUiRegion.liveTurn,
-          AgentUiRegion.pendingInteraction,
-        },
         uiUrgency: AgentUiUpdateUrgency.immediate,
         applicationEffectTypes: <Type>[AgentAttentionEffect],
       ),
@@ -1074,10 +1034,6 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
           threadId: _threadId,
         ),
         timelineTypes: <Type>[AgentRemovePermissionRequestTimelineMutation],
-        uiRegions: <AgentUiRegion>{
-          AgentUiRegion.liveTurn,
-          AgentUiRegion.pendingInteraction,
-        },
         uiUrgency: AgentUiUpdateUrgency.immediate,
         applicationEffectTypes: <Type>[AgentAttentionEffect],
       ),
@@ -1095,10 +1051,6 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
           ),
         ),
         timelineTypes: <Type>[AgentAddQuestionRequestTimelineMutation],
-        uiRegions: <AgentUiRegion>{
-          AgentUiRegion.liveTurn,
-          AgentUiRegion.pendingInteraction,
-        },
         uiUrgency: AgentUiUpdateUrgency.immediate,
         applicationEffectTypes: <Type>[AgentAttentionEffect],
       ),
@@ -1109,10 +1061,6 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
           threadId: _threadId,
         ),
         timelineTypes: <Type>[AgentRemoveQuestionRequestTimelineMutation],
-        uiRegions: <AgentUiRegion>{
-          AgentUiRegion.liveTurn,
-          AgentUiRegion.pendingInteraction,
-        },
         uiUrgency: AgentUiUpdateUrgency.immediate,
         applicationEffectTypes: <Type>[AgentAttentionEffect],
       ),
@@ -1128,10 +1076,6 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
           ),
         ),
         timelineTypes: <Type>[AgentAddPlanApprovalRequestTimelineMutation],
-        uiRegions: <AgentUiRegion>{
-          AgentUiRegion.liveTurn,
-          AgentUiRegion.pendingInteraction,
-        },
         uiUrgency: AgentUiUpdateUrgency.immediate,
         applicationEffectTypes: <Type>[AgentAttentionEffect],
       ),
@@ -1142,10 +1086,6 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
           sessionId: _threadId,
         ),
         timelineTypes: <Type>[AgentRemovePlanApprovalRequestTimelineMutation],
-        uiRegions: <AgentUiRegion>{
-          AgentUiRegion.liveTurn,
-          AgentUiRegion.pendingInteraction,
-        },
         uiUrgency: AgentUiUpdateUrgency.immediate,
         applicationEffectTypes: <Type>[AgentAttentionEffect],
       ),
@@ -1161,11 +1101,6 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
           reason: 'highRiskCyberActivity',
         ),
         timelineTypes: <Type>[AgentAddHistoryEventTimelineMutation],
-        afterStateTypes: <Type>[AgentSetModelRerouteNoticeChange],
-        uiRegions: <AgentUiRegion>{
-          AgentUiRegion.liveTurn,
-          AgentUiRegion.header,
-        },
         uiUrgency: AgentUiUpdateUrgency.immediate,
         uiEffectTypes: <Type>[AgentRequestAutoScroll],
       ),
@@ -1176,24 +1111,24 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
           details: 'Upgrade',
         ),
         timelineTypes: <Type>[AgentAddHistoryEventTimelineMutation],
-        uiRegions: <AgentUiRegion>{AgentUiRegion.liveTurn},
         uiUrgency: AgentUiUpdateUrgency.immediate,
         uiEffectTypes: <Type>[AgentRequestAutoScroll],
       ),
-      const _ReductionCase(
+      _ReductionCase(
         name: 'system item',
         event: AgentSystemItemEvent(
           entry: AgentHistoryEventEntry(
             id: 'system-1',
             kind: AgentHistoryEventKind.system,
             title: '上下文已压缩',
-            raw: <String, Object?>{'type': 'contextCompaction'},
+            raw: AgentProviderRawPayload.wrap(<String, Object?>{
+              'type': 'contextCompaction',
+            }),
           ),
           sessionId: _threadId,
           turnId: _turnId,
         ),
         timelineTypes: <Type>[AgentAddHistoryEventTimelineMutation],
-        uiRegions: <AgentUiRegion>{AgentUiRegion.liveTurn},
         uiUrgency: AgentUiUpdateUrgency.immediate,
         uiEffectTypes: <Type>[AgentRequestAutoScroll],
       ),
@@ -1210,10 +1145,11 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
             ],
           ),
         ),
-        afterStateTypes: <Type>[AgentHandleModelListChange],
-        uiRegions: <AgentUiRegion>{AgentUiRegion.composer},
         uiUrgency: AgentUiUpdateUrgency.immediate,
-        applicationEffectTypes: <Type>[AgentRecordModelCatalogEffect],
+        applicationEffectTypes: <Type>[
+          AgentApplyModelListEffect,
+          AgentRecordModelCatalogEffect,
+        ],
       ),
       const _ReductionCase(
         name: 'error',
@@ -1224,11 +1160,6 @@ Map<String, List<_ReductionCase>> _reductionCasesByBatch() {
           turnId: _turnId,
         ),
         timelineTypes: <Type>[AgentAddConversationMessageTimelineMutation],
-        uiRegions: <AgentUiRegion>{
-          AgentUiRegion.history,
-          AgentUiRegion.liveTurn,
-          AgentUiRegion.header,
-        },
         uiUrgency: AgentUiUpdateUrgency.immediate,
         uiEffectTypes: <Type>[AgentRequestAutoScroll],
         applicationEffectTypes: <Type>[AgentLogProviderErrorEffect],
@@ -1259,9 +1190,10 @@ AgentConversationReducerContext _context({
     pendingTurnGroupId: pendingTurnGroupId,
     hasTurn: hasTurns.contains,
     isHistoryTurnId: historyTurns.contains,
+    hasRunningTurnExcluding: (_) => false,
     modelsRefreshing: modelsRefreshing,
     activeProviderName: 'Codex',
-    activeProviderConfig: AgentProviderConfig.defaultCodex,
+    activeProviderConfig: defaultCodexAgentProviderConfig,
     effectScope: AgentConversationEffectScope(
       reductionScope: scope,
       providerId: defaultAgentProviderId,
@@ -1275,40 +1207,20 @@ AgentConversationReducerContext _context({
 }
 
 void _expectReduction(
-  AgentConversationMutation mutation,
+  AgentConversationReduction mutation,
   _ReductionCase expected,
 ) {
   expect(mutation.accepted, isTrue, reason: expected.name);
   expect(mutation.rejectionReason, isNull, reason: expected.name);
-  expect(
-    _runtimeTypes(mutation.stateChangesBeforeTimeline),
-    expected.beforeStateTypes,
-    reason: '${expected.name}: before state',
-  );
   expect(
     _runtimeTypes(mutation.timelineMutations),
     expected.timelineTypes,
     reason: '${expected.name}: timeline',
   );
   expect(
-    _runtimeTypes(mutation.stateChanges),
-    expected.afterStateTypes,
-    reason: '${expected.name}: after state',
-  );
-  expect(
     mutation.threadSnapshot,
     expected.snapshot,
     reason: '${expected.name}: thread snapshot',
-  );
-  expect(
-    mutation.uiResolution.includeHeaderWhenActivityChanges,
-    expected.includeHeaderWhenActivityChanges,
-    reason: '${expected.name}: activity resolution',
-  );
-  expect(
-    mutation.uiResolution.includePendingInteractionWhenStateChanges,
-    expected.includePendingInteractionWhenStateChanges,
-    reason: '${expected.name}: interaction resolution',
   );
   expect(
     _runtimeTypes(mutation.effects),
@@ -1317,20 +1229,15 @@ void _expectReduction(
   );
 
   final uiUpdate = mutation.uiUpdate;
-  final expectedRegions = expected.uiRegions;
-  if (expectedRegions == null) {
+  final expectedUrgency = expected.uiUrgency;
+  if (expectedUrgency == null) {
     expect(uiUpdate, isNull, reason: '${expected.name}: UI request');
     return;
   }
   expect(uiUpdate, isNotNull, reason: '${expected.name}: UI request');
   expect(
-    uiUpdate!.regions,
-    unorderedEquals(expectedRegions),
-    reason: '${expected.name}: UI regions',
-  );
-  expect(
-    uiUpdate.urgency,
-    expected.uiUrgency,
+    uiUpdate!.urgency,
+    expectedUrgency,
     reason: '${expected.name}: UI urgency',
   );
   expect(
@@ -1341,21 +1248,14 @@ void _expectReduction(
 }
 
 void _expectRejected(
-  AgentConversationMutation mutation, {
+  AgentConversationReduction mutation, {
   required String reason,
   List<Type> effectTypes = const <Type>[],
 }) {
   expect(mutation.accepted, isFalse);
   expect(mutation.rejectionReason, reason);
-  expect(mutation.stateChangesBeforeTimeline, isEmpty);
   expect(mutation.timelineMutations, isEmpty);
-  expect(mutation.stateChanges, isEmpty);
   expect(mutation.uiUpdate, isNull);
-  expect(mutation.uiResolution.includeHeaderWhenActivityChanges, isFalse);
-  expect(
-    mutation.uiResolution.includePendingInteractionWhenStateChanges,
-    isFalse,
-  );
   expect(mutation.threadSnapshot, isNull);
   expect(_runtimeTypes(mutation.effects), effectTypes);
 }
@@ -1375,7 +1275,7 @@ List<Type> _runtimeTypes(Iterable<Object> values) {
   return values.map((value) => value.runtimeType).toList(growable: false);
 }
 
-String _historyEventId(AgentConversationMutation mutation) {
+String _historyEventId(AgentConversationReduction mutation) {
   return (mutation.timelineMutations.single
           as AgentAddHistoryEventTimelineMutation)
       .event
@@ -1386,28 +1286,18 @@ final class _ReductionCase {
   const _ReductionCase({
     required this.name,
     required this.event,
-    this.beforeStateTypes = const <Type>[],
     this.timelineTypes = const <Type>[],
-    this.afterStateTypes = const <Type>[],
-    this.uiRegions,
     this.uiUrgency,
     this.uiEffectTypes = const <Type>[],
-    this.includeHeaderWhenActivityChanges = false,
-    this.includePendingInteractionWhenStateChanges = false,
     this.snapshot,
     this.applicationEffectTypes = const <Type>[],
   });
 
   final String name;
   final AgentEvent event;
-  final List<Type> beforeStateTypes;
   final List<Type> timelineTypes;
-  final List<Type> afterStateTypes;
-  final Set<AgentUiRegion>? uiRegions;
   final AgentUiUpdateUrgency? uiUrgency;
   final List<Type> uiEffectTypes;
-  final bool includeHeaderWhenActivityChanges;
-  final bool includePendingInteractionWhenStateChanges;
   final AgentThreadSnapshotMutation? snapshot;
   final List<Type> applicationEffectTypes;
 }

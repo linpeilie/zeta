@@ -1,56 +1,42 @@
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
-import 'package:zeta/src/features/usage_statistics/application/usage_statistics_controller.dart';
 import 'package:zeta/src/features/usage_statistics/application/usage_statistics_report_builder.dart';
+import 'package:zeta/src/features/usage_statistics/application/usage_statistics_slice/usage_statistics_slice_store.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_formatters.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_l10n.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_time_range_filter.dart';
 import 'package:zeta/src/ui/localization/app_localizations_x.dart';
-import 'package:zeta/src/ui/core/ide_button.dart';
-import 'package:zeta/src/ui/core/ide_colors.dart';
-import 'package:zeta/src/ui/core/ide_effects.dart';
-import 'package:zeta/src/ui/core/ide_metrics.dart';
-import 'package:zeta/src/ui/core/ide_select.dart';
-import 'package:zeta/src/ui/core/ide_skeleton.dart';
-import 'package:zeta/src/ui/core/ide_spacing.dart';
-import 'package:zeta/src/ui/core/ide_status_card.dart';
-import 'package:zeta/src/ui/core/ide_tabs.dart';
-import 'package:zeta/src/ui/core/ide_text_styles.dart';
-import 'package:zeta/src/ui/core/rows/ide_data_row.dart';
-import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
-import 'package:zeta/src/ui/core/workbench/ide_page_header.dart';
-import 'package:zeta/src/ui/core/workbench/ide_section.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 
 /// 本地 Agent CLI 使用统计页面。
-class UsageStatisticsPage extends StatefulWidget {
-  const UsageStatisticsPage({
-    required this.controller,
-    required this.onOpenAgentManagement,
-    super.key,
-  });
+class UsageStatisticsPage extends ConsumerStatefulWidget {
+  const UsageStatisticsPage({required this.onOpenAgentManagement, super.key});
 
-  final UsageStatisticsController controller;
   final VoidCallback onOpenAgentManagement;
 
   @override
-  State<UsageStatisticsPage> createState() => _UsageStatisticsPageState();
+  ConsumerState<UsageStatisticsPage> createState() =>
+      _UsageStatisticsPageState();
 }
 
-class _UsageStatisticsPageState extends State<UsageStatisticsPage> {
+class _UsageStatisticsPageState extends ConsumerState<UsageStatisticsPage> {
   @override
   void initState() {
     super.initState();
-    unawaited(widget.controller.initialize());
+    unawaited(ref.read(usageStatisticsSliceProvider.notifier).initialize());
   }
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(usageStatisticsSliceProvider);
     return IdeSurface.canvas(
       key: const ValueKey('usage-statistics-page'),
       child: Column(
@@ -60,19 +46,14 @@ class _UsageStatisticsPageState extends State<UsageStatisticsPage> {
             title: context.l10n.usagePageTitle,
             subtitle: context.l10n.usagePageSubtitle,
           ),
-          Expanded(
-            child: ListenableBuilder(
-              listenable: widget.controller,
-              builder: (context, _) => _buildBody(context),
-            ),
-          ),
+          Expanded(child: _buildBody(context)),
         ],
       ),
     );
   }
 
   Widget _buildBody(BuildContext context) {
-    final controller = widget.controller;
+    final controller = ref.read(usageStatisticsSliceProvider.notifier);
     final report = controller.report;
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -96,7 +77,7 @@ class _UsageStatisticsPageState extends State<UsageStatisticsPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _UsageFilters(controller: controller, report: report),
+                      _UsageFilters(report: report),
                       const SizedBox(height: IdeSpacing.space12),
                       // 冷加载用 Skeleton 占位；有旧数据时的刷新保留内容，不再插顶栏进度条。
                       if (controller.errorMessage case final error?)
@@ -133,7 +114,6 @@ class _UsageStatisticsPageState extends State<UsageStatisticsPage> {
                           )
                         else
                           _UsageDetailTabs(
-                            controller: controller,
                             report: report,
                             onTaskPressed: (record) =>
                                 _openTaskDrawer(context, record),
@@ -158,23 +138,24 @@ class _UsageStatisticsPageState extends State<UsageStatisticsPage> {
       sf.DrawerConfiguration(
         expands: narrow,
         position: narrow ? sf.OverlayPosition.bottom : sf.OverlayPosition.end,
-        builder: (drawerContext) => _TaskDetailDrawer(record: record),
       ),
+      builder: (drawerContext) => _TaskDetailDrawer(record: record),
       adaptive: false,
     );
   }
 }
 
-class _UsageFilters extends StatelessWidget {
-  const _UsageFilters({required this.controller, required this.report});
+class _UsageFilters extends ConsumerWidget {
+  const _UsageFilters({required this.report});
 
   static const String _all = '__all__';
 
-  final UsageStatisticsController controller;
   final UsageStatisticsReport? report;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(usageStatisticsSliceProvider);
+    final controller = ref.read(usageStatisticsSliceProvider.notifier);
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     final report = this.report;
@@ -205,10 +186,7 @@ class _UsageFilters extends StatelessWidget {
                   _LabeledFilter(
                     label: context.l10n.usageTimeRangeLabel,
                     width: fieldWidth,
-                    child: UsageTimeRangeFilter(
-                      controller: controller,
-                      width: fieldWidth,
-                    ),
+                    child: UsageTimeRangeFilter(width: fieldWidth),
                   ),
                   _LabeledFilter(
                     label: 'Agent',
@@ -520,13 +498,11 @@ enum _UsageDetailTab { agents, models, projects, tasks }
 /// 趋势图下方四栏：Agent / 模型 / 项目 / 任务。
 class _UsageDetailTabs extends StatefulWidget {
   const _UsageDetailTabs({
-    required this.controller,
     required this.report,
     required this.onTaskPressed,
     required this.onProjectSelected,
   });
 
-  final UsageStatisticsController controller;
   final UsageStatisticsReport report;
   final ValueChanged<AgentUsageRecord> onTaskPressed;
   final ValueChanged<String?> onProjectSelected;
@@ -600,7 +576,6 @@ class _UsageDetailTabsState extends State<_UsageDetailTabs> {
           const SizedBox(height: IdeSpacing.space12),
           switch (_tab) {
             _UsageDetailTab.agents => _AgentStatsPanel(
-              controller: widget.controller,
               entries: widget.report.agentRanking,
             ),
             _UsageDetailTab.models => _ModelStatsPanel(report: widget.report),
@@ -626,14 +601,15 @@ class _UsageDetailTabsState extends State<_UsageDetailTabs> {
   }
 }
 
-class _AgentStatsPanel extends StatelessWidget {
-  const _AgentStatsPanel({required this.controller, required this.entries});
+class _AgentStatsPanel extends ConsumerWidget {
+  const _AgentStatsPanel({required this.entries});
 
-  final UsageStatisticsController controller;
   final List<UsageAgentRankEntry> entries;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(usageStatisticsSliceProvider);
+    final controller = ref.read(usageStatisticsSliceProvider.notifier);
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     return Column(
@@ -1403,6 +1379,8 @@ class _DrawerSurface extends StatelessWidget {
             IdePageHeader(
               title: title,
               actions: [
+                // G8：IdeIconButton 没有 iconDense，且不接受自定义 18px 图标；
+                // 抽屉关闭继续用 iconDense，避免被撑到 compact 24px。
                 sf.IconButton.ghost(
                   key: const ValueKey('usage-drawer-close-button'),
                   onPressed: () => sf.closeOverlay(context),

@@ -1,17 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_effect.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_effect_runner.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_event_processor.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_mutation.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_reducer.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
-import 'package:zeta/src/features/agent/application/agent_ui_update_port.dart';
-import 'package:zeta/src/features/agent/application/agent_ui_update_request.dart';
-import 'package:zeta/src/features/agent/application/agent_event_coalescing_policy.dart';
-import 'package:zeta/src/features/agent/application/bounded_event_dispatcher.dart';
-import 'package:zeta/src/features/agent/application/coalescing_event_buffer.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 import '../../../testing/agent_event_storm_fixture.dart';
 
@@ -204,26 +194,41 @@ void main() {
         first.delivery.turnCompletedCount,
       );
       expect(first.effects.providerErrorCount, first.delivery.errorCount);
+      // 精确序列（不是 containsAll）：同时钉死 effect 的**发射顺序**、精确
+      // 数量与「不出现预期外 effect」。P3 把 7 类副作用从状态通道搬进 effect
+      // 通道之后，这条断言就是那次搬迁的回归网——降级成 containsAll 会让
+      // 多发一次 AgentAutoStartPlanExecutionEffect 这类 G5 事故静默通过。
+      //
+      // turn 完成那一批的顺序体现 timing 语义：beforeMutation 的
+      // PreparePlanHandoff 先于三个 afterMutation effect。
       expect(first.effects.effectTypes, const <Type>[
-        AgentAttentionEffect,
-        AgentAttentionEffect,
-        AgentLogProviderErrorEffect,
-        AgentTurnCompletedEffect,
+        AgentSyncTurnRunningEffect, // turn started
+        AgentAttentionEffect, // permission requested
+        AgentAttentionEffect, // permission resolved
+        AgentLogProviderErrorEffect, // error
+        AgentPreparePlanHandoffEffect, // turn completed（beforeMutation）
+        AgentTurnCompletedEffect, // turn completed
+        AgentSyncTurnRunningEffect, // turn completed
+        AgentAutoStartPlanExecutionEffect, // turn completed
       ]);
 
       expect(
-        first.stateTarget.appliedChanges
-            .whereType<AgentFinalizeTurnStartedChange>(),
-        hasLength(1),
+        first.effects.effectTypes.where((type) => type == AgentAttentionEffect),
+        hasLength(
+          first.delivery.permissionRequestedCount +
+              first.delivery.permissionResolvedCount,
+        ),
       );
       expect(
-        first.stateTarget.appliedChanges
-            .whereType<AgentPrepareTurnCompletedChange>(),
+        first.effects.effectTypes.where(
+          (type) => type == AgentPreparePlanHandoffEffect,
+        ),
         hasLength(first.delivery.turnCompletedCount),
       );
       expect(
-        first.stateTarget.appliedChanges
-            .whereType<AgentFinalizeTurnCompletedChange>(),
+        first.effects.effectTypes.where(
+          (type) => type == AgentAutoStartPlanExecutionEffect,
+        ),
         hasLength(first.delivery.turnCompletedCount),
       );
       expect(first.stateTarget.snapshotRefreshRunningStates, const <bool>[
@@ -350,9 +355,13 @@ Future<_ProcessedStormRun> _runProcessedStorm() async {
       pendingTurnGroupId: timeline.pendingTurnGroupId,
       hasTurn: timeline.hasTurn,
       isHistoryTurnId: timeline.isHistoryTurnId,
+      hasRunningTurnExcluding: (turnId) {
+        final running = timeline.selectedRunningTurnId;
+        return running != null && running != turnId;
+      },
       modelsRefreshing: false,
       activeProviderName: 'Codex',
-      activeProviderConfig: AgentProviderConfig.defaultCodex,
+      activeProviderConfig: defaultCodexAgentProviderConfig,
       effectScope: AgentConversationEffectScope(
         reductionScope: AgentConversationReductionScope.live,
         providerId: defaultAgentProviderId,
@@ -364,7 +373,7 @@ Future<_ProcessedStormRun> _runProcessedStorm() async {
       ),
     ),
     timeline: timeline,
-    stateTarget: stateTarget,
+    stateSink: stateTarget,
     uiUpdates: uiUpdates,
     effectRunner: effects,
   );
@@ -378,7 +387,7 @@ Future<_ProcessedStormRun> _runProcessedStorm() async {
       } else {
         rejectedEvents += 1;
       }
-      if (AgentConversationReducer.isCriticalDetachedEvent(event)) {
+      if (AgentDetachedEventPolicy.isCritical(event)) {
         criticalEventTypes.add(event.runtimeType);
       }
     },
@@ -419,20 +428,22 @@ final class _ProcessedStormRun {
   final int rejectedEvents;
 }
 
-final class _StormStateTarget implements AgentConversationStateMutationTarget {
+final class _StormStateTarget implements AgentConversationStateSink {
   _StormStateTarget({required this.timeline});
 
   final AgentConversationTimelineStore timeline;
-  final List<AgentConversationStateChange> appliedChanges =
-      <AgentConversationStateChange>[];
+  @override
+  AgentConversationSessionState sessionState =
+      const AgentConversationSessionState.initial(
+        defaultTitle: agentDefaultThreadTitle,
+      );
+  int applyCount = 0;
   final List<bool> snapshotRefreshRunningStates = <bool>[];
 
   @override
-  AgentConversationStateMutationOutcome apply(
-    AgentConversationStateChange change,
-  ) {
-    appliedChanges.add(change);
-    return AgentConversationStateMutationOutcome.none;
+  void applyReducedState(AgentConversationSessionState next) {
+    sessionState = next;
+    applyCount += 1;
   }
 
   @override
@@ -468,6 +479,17 @@ final class _CountingEffectRunner implements AgentConversationEffectRunner {
         break;
       case AgentLogProviderErrorEffect():
         providerErrorCount += 1;
+      case AgentBindConversationModeThreadEffect():
+      case AgentApplyThreadPermissionEffect():
+      case AgentApplyThreadSettingsEffect():
+      case AgentSyncThreadSelectionEffect():
+      case AgentApplyServerConversationModeEffect():
+      case AgentPreparePlanHandoffEffect():
+      case AgentSyncTurnRunningEffect():
+      case AgentAutoStartPlanExecutionEffect():
+      case AgentClearPlanHandoffEffect():
+      case AgentApplyModelListEffect():
+        break;
     }
   }
 

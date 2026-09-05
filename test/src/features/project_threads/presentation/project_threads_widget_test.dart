@@ -9,18 +9,22 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
-import 'package:zeta/main.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
-import 'package:zeta/src/ui/core/ide_metrics.dart';
-import 'package:zeta/src/ui/core/ide_spacing.dart';
-import 'package:zeta/src/ui/core/pane_widgets.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/ui/features/ide/views/project_list_pane.dart';
 
 import '../../../testing/ide_test_harness.dart';
 import '../../../ui/core/ide_component_test_harness.dart';
+import '../../../testing/fake_workspace_directory_picker.dart';
+import '../../../testing/zeta_test_app.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
+import 'package:zeta/src/app/composition/zeta_environment_providers.dart';
+import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
+import 'package:zeta/src/app/storage/zeta_store_providers.dart';
+import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
 
 void main() {
   final binding = TestWidgetsFlutterBinding.ensureInitialized();
@@ -42,7 +46,14 @@ void main() {
     tempDirectories.clear();
   });
 
-  testWidgets('shows project threads and switches selected thread', (
+  void testProjectThreadsPath(
+    String description,
+    Future<void> Function(WidgetTester tester) body,
+  ) {
+    testWidgets(description, body);
+  }
+
+  testProjectThreadsPath('shows project threads and switches selected thread', (
     tester,
   ) async {
     final session = MemorySessionStore();
@@ -161,13 +172,17 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        directoryPicker: () async => directory.path,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: singleFakeProviderConfigStore(),
+      zetaTestApp(
+        overrides: <Override>[
+          ...fakeDirectoryPickerOverrides(directory.path),
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            singleFakeProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -311,7 +326,11 @@ void main() {
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('agent-header-token')),
-        matching: find.text('43.5k tokens'),
+        matching: find.text(
+          lookupAppLocalizations(
+            const Locale('zh'),
+          ).agentTurnTokenUsage('43.5k'),
+        ),
       ),
       findsOneWidget,
     );
@@ -345,7 +364,7 @@ void main() {
     );
   });
 
-  testWidgets(
+  testProjectThreadsPath(
     'shows a running icon instead of relative time for active threads',
     (tester) async {
       final session = MemorySessionStore();
@@ -380,15 +399,17 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MainApp(
-          enableNativeWindowFrame: false,
-          directoryPicker: () async => directory.path,
-          sessionLoader: session.load,
-          sessionSaver: session.save,
-          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-            provider,
-          ),
-          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        zetaTestApp(
+          overrides: <Override>[
+            ...fakeDirectoryPickerOverrides(directory.path),
+            ideSessionStoreProvider.overrideWithValue(session),
+            agentProviderBundleFactoryProvider.overrideWithValue(
+              FakeAgentProviderBundleBuilder.fromFake(provider),
+            ),
+            agentProviderConfigStoreProvider.overrideWithValue(
+              MemoryAgentProviderConfigStore(),
+            ),
+          ],
         ),
       );
 
@@ -520,152 +541,161 @@ void main() {
     },
   );
 
-  testWidgets('shows running indicators for each collapsed project', (
-    tester,
-  ) async {
-    final firstDirectory = Directory.systemTemp.createTempSync('zeta_test_');
-    final secondDirectory = Directory.systemTemp.createTempSync('zeta_test_');
-    tempDirectories.addAll(<Directory>[firstDirectory, secondDirectory]);
-    File(
-      '${firstDirectory.path}${Platform.pathSeparator}first.txt',
-    ).writeAsStringSync('first');
-    File(
-      '${secondDirectory.path}${Platform.pathSeparator}second.txt',
-    ).writeAsStringSync('second');
+  testProjectThreadsPath(
+    'shows running indicators for each collapsed project',
+    (tester) async {
+      final firstDirectory = Directory.systemTemp.createTempSync('zeta_test_');
+      final secondDirectory = Directory.systemTemp.createTempSync('zeta_test_');
+      tempDirectories.addAll(<Directory>[firstDirectory, secondDirectory]);
+      File(
+        '${firstDirectory.path}${Platform.pathSeparator}first.txt',
+      ).writeAsStringSync('first');
+      File(
+        '${secondDirectory.path}${Platform.pathSeparator}second.txt',
+      ).writeAsStringSync('second');
 
-    final firstThread = agentThread(
-      id: 'thread-first',
-      projectPath: firstDirectory.path,
-      title: 'First running thread',
-    );
-    final secondThread = agentThread(
-      id: 'thread-second',
-      projectPath: secondDirectory.path,
-      title: 'Second running thread',
-    );
-    final session = MemorySessionStore(
-      IdeSessionState(
-        projectPaths: <String>[firstDirectory.path, secondDirectory.path],
-        activeProjectPath: firstDirectory.path,
-        projectHomeActive: true,
-        projectThreadExpansionByProject: <String, bool>{
-          firstDirectory.path: true,
-          secondDirectory.path: true,
-        },
-        cachedThreadsByProject: <String, List<AgentThreadSummary>>{
-          firstDirectory.path: <AgentThreadSummary>[firstThread],
-          secondDirectory.path: <AgentThreadSummary>[secondThread],
-        },
-      ).encode(),
-    );
-    final provider = _ProjectScopedFakeAgentProvider(
-      threads: <AgentThreadSummary>[firstThread, secondThread],
-    );
-
-    await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
-      ),
-    );
-    await tester.runAsync(waitForIo);
-    await tester.pumpAndSettle();
-
-    final firstProjectRunning = find.byKey(
-      ValueKey<String>('project-tile-running-icon-${firstDirectory.path}'),
-    );
-    final secondProjectRunning = find.byKey(
-      ValueKey<String>('project-tile-running-icon-${secondDirectory.path}'),
-    );
-
-    Future<void> startTurnOnThread({
-      required String projectPath,
-      required String threadId,
-      required String threadTitle,
-      required String message,
-    }) async {
-      final threadFinder = find.byKey(
-        ValueKey<String>('project-thread-$projectPath-$threadId'),
+      final firstThread = agentThread(
+        id: 'thread-first',
+        projectPath: firstDirectory.path,
+        title: 'First running thread',
       );
-      if (threadFinder.evaluate().isEmpty) {
+      final secondThread = agentThread(
+        id: 'thread-second',
+        projectPath: secondDirectory.path,
+        title: 'Second running thread',
+      );
+      final session = MemorySessionStore(
+        IdeSessionState(
+          projectPaths: <String>[firstDirectory.path, secondDirectory.path],
+          activeProjectPath: firstDirectory.path,
+          projectHomeActive: true,
+          projectThreadExpansionByProject: <String, bool>{
+            firstDirectory.path: true,
+            secondDirectory.path: true,
+          },
+          cachedThreadsByProject: <String, List<AgentThreadSummary>>{
+            firstDirectory.path: <AgentThreadSummary>[firstThread],
+            secondDirectory.path: <AgentThreadSummary>[secondThread],
+          },
+        ).encode(),
+      );
+      final provider = _ProjectScopedFakeAgentProvider(
+        threads: <AgentThreadSummary>[firstThread, secondThread],
+      );
+
+      await tester.pumpWidget(
+        zetaTestApp(
+          overrides: <Override>[
+            ideSessionStoreProvider.overrideWithValue(session),
+            agentProviderBundleFactoryProvider.overrideWithValue(
+              FakeAgentProviderBundleBuilder.fromFake(provider),
+            ),
+            agentProviderConfigStoreProvider.overrideWithValue(
+              MemoryAgentProviderConfigStore(),
+            ),
+          ],
+        ),
+      );
+      await tester.runAsync(waitForIo);
+      await tester.pumpAndSettle();
+
+      final firstProjectRunning = find.byKey(
+        ValueKey<String>('project-tile-running-icon-${firstDirectory.path}'),
+      );
+      final secondProjectRunning = find.byKey(
+        ValueKey<String>('project-tile-running-icon-${secondDirectory.path}'),
+      );
+
+      Future<void> startTurnOnThread({
+        required String projectPath,
+        required String threadId,
+        required String threadTitle,
+        required String message,
+      }) async {
+        final threadFinder = find.byKey(
+          ValueKey<String>('project-thread-$projectPath-$threadId'),
+        );
+        if (threadFinder.evaluate().isEmpty) {
+          await tester.tap(
+            find.byKey(ValueKey<String>('project-tile-$projectPath')),
+          );
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 300));
+        }
+        await tester.tap(threadFinder);
+        // 跨项目 selectProjectThread 会走真实 IO 的 _loadProject。
+        await tester.runAsync(waitForIo);
+        await pumpUntilCondition(
+          tester,
+          () {
+            final title = find
+                .byKey(const ValueKey('agent-header-title'))
+                .hitTestable();
+            if (title.evaluate().length != 1) {
+              return false;
+            }
+            return tester.widget<Text>(title).data == threadTitle;
+          },
+          maxPumps: 80,
+          failureMessage: 'Thread $threadId did not become selected',
+        );
+        await tester.enterText(
+          find.byKey(const ValueKey('agent-message-input')),
+          message,
+        );
+        await tester.pump();
+        await tester.tap(find.byKey(const ValueKey('agent-send-button')));
+        final listRunning = find.byKey(
+          ValueKey<String>(
+            'project-thread-running-icon-$projectPath-$threadId',
+          ),
+        );
+        await pumpUntilCondition(
+          tester,
+          () => listRunning.evaluate().isNotEmpty,
+          failureMessage: 'Thread $threadId did not enter running state',
+        );
+        // 收起项目，验证折叠态 running 指示。
         await tester.tap(
           find.byKey(ValueKey<String>('project-tile-$projectPath')),
         );
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));
       }
-      await tester.tap(threadFinder);
-      // 跨项目 selectProjectThread 会走真实 IO 的 _loadProject。
-      await tester.runAsync(waitForIo);
-      await pumpUntilCondition(
-        tester,
-        () {
-          final title = find
-              .byKey(const ValueKey('agent-header-title'))
-              .hitTestable();
-          if (title.evaluate().length != 1) {
-            return false;
-          }
-          return tester.widget<Text>(title).data == threadTitle;
-        },
-        maxPumps: 80,
-        failureMessage: 'Thread $threadId did not become selected',
+
+      await startTurnOnThread(
+        projectPath: firstDirectory.path,
+        threadId: 'thread-first',
+        threadTitle: 'First running thread',
+        message: 'run first',
       );
-      await tester.enterText(
-        find.byKey(const ValueKey('agent-message-input')),
-        message,
+      await startTurnOnThread(
+        projectPath: secondDirectory.path,
+        threadId: 'thread-second',
+        threadTitle: 'Second running thread',
+        message: 'run second',
       );
-      await tester.pump();
-      await tester.tap(find.byKey(const ValueKey('agent-send-button')));
-      final listRunning = find.byKey(
-        ValueKey<String>('project-thread-running-icon-$projectPath-$threadId'),
-      );
-      await pumpUntilCondition(
-        tester,
-        () => listRunning.evaluate().isNotEmpty,
-        failureMessage: 'Thread $threadId did not enter running state',
-      );
-      // 收起项目，验证折叠态 running 指示。
-      await tester.tap(
-        find.byKey(ValueKey<String>('project-tile-$projectPath')),
+
+      expect(firstProjectRunning, findsOneWidget);
+      expect(secondProjectRunning, findsOneWidget);
+
+      provider.emit(
+        const AgentTurnCompletedEvent(
+          sessionId: 'thread-first',
+          turnId: 'turn-1',
+        ),
       );
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-    }
+      await tester.pump();
 
-    await startTurnOnThread(
-      projectPath: firstDirectory.path,
-      threadId: 'thread-first',
-      threadTitle: 'First running thread',
-      message: 'run first',
-    );
-    await startTurnOnThread(
-      projectPath: secondDirectory.path,
-      threadId: 'thread-second',
-      threadTitle: 'Second running thread',
-      message: 'run second',
-    );
+      expect(firstProjectRunning, findsNothing);
+      expect(secondProjectRunning, findsOneWidget);
+    },
+  );
 
-    expect(firstProjectRunning, findsOneWidget);
-    expect(secondProjectRunning, findsOneWidget);
-
-    provider.emit(
-      const AgentTurnCompletedEvent(
-        sessionId: 'thread-first',
-        turnId: 'turn-1',
-      ),
-    );
-    await tester.pump();
-    await tester.pump();
-
-    expect(firstProjectRunning, findsNothing);
-    expect(secondProjectRunning, findsOneWidget);
-  });
-
-  testWidgets('shows project actions only while hovered', (tester) async {
+  testProjectThreadsPath('shows project actions only while hovered', (
+    tester,
+  ) async {
     final session = MemorySessionStore();
     final directory = Directory.systemTemp.createTempSync('zeta_test_');
     tempDirectories.add(directory);
@@ -689,13 +719,17 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        directoryPicker: () async => directory.path,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      zetaTestApp(
+        overrides: <Override>[
+          ...fakeDirectoryPickerOverrides(directory.path),
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -731,69 +765,74 @@ void main() {
     );
   });
 
-  testWidgets('does not duplicate keys when thread actions toggle quickly', (
-    tester,
-  ) async {
-    final session = MemorySessionStore();
-    final directory = Directory.systemTemp.createTempSync('zeta_test_');
-    tempDirectories.add(directory);
-    File(
-      '${directory.path}${Platform.pathSeparator}sample.txt',
-    ).writeAsStringSync('hello from zeta');
+  testProjectThreadsPath(
+    'does not duplicate keys when thread actions toggle quickly',
+    (tester) async {
+      final session = MemorySessionStore();
+      final directory = Directory.systemTemp.createTempSync('zeta_test_');
+      tempDirectories.add(directory);
+      File(
+        '${directory.path}${Platform.pathSeparator}sample.txt',
+      ).writeAsStringSync('hello from zeta');
 
-    final provider = FakeAgentProvider(
-      threadPages: <AgentThreadPage>[
-        AgentThreadPage(
-          threads: <AgentThreadSummary>[
-            agentThread(
-              id: 'thread-a',
-              projectPath: directory.path,
-              title: 'Hover thread',
+      final provider = FakeAgentProvider(
+        threadPages: <AgentThreadPage>[
+          AgentThreadPage(
+            threads: <AgentThreadSummary>[
+              agentThread(
+                id: 'thread-a',
+                projectPath: directory.path,
+                title: 'Hover thread',
+              ),
+            ],
+            nextCursor: null,
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        zetaTestApp(
+          overrides: <Override>[
+            ...fakeDirectoryPickerOverrides(directory.path),
+            ideSessionStoreProvider.overrideWithValue(session),
+            agentProviderBundleFactoryProvider.overrideWithValue(
+              FakeAgentProviderBundleBuilder.fromFake(provider),
+            ),
+            agentProviderConfigStoreProvider.overrideWithValue(
+              MemoryAgentProviderConfigStore(),
             ),
           ],
-          nextCursor: null,
         ),
-      ],
-    );
+      );
 
-    await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        directoryPicker: () async => directory.path,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
-      ),
-    );
+      await openProjectFromMenu(tester);
+      await tester.runAsync(waitForIo);
+      await tester.pumpAndSettle();
 
-    await openProjectFromMenu(tester);
-    await tester.runAsync(waitForIo);
-    await tester.pumpAndSettle();
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      addTearDown(mouse.removePointer);
+      await mouse.addPointer(location: Offset.zero);
+      await tester.pump();
 
-    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
-    addTearDown(mouse.removePointer);
-    await mouse.addPointer(location: Offset.zero);
-    await tester.pump();
+      final threadFinder = find.byKey(
+        ValueKey<String>('project-thread-${directory.path}-thread-a'),
+      );
 
-    final threadFinder = find.byKey(
-      ValueKey<String>('project-thread-${directory.path}-thread-a'),
-    );
+      await mouse.moveTo(tester.getCenter(threadFinder));
+      await tester.pump(const Duration(milliseconds: 40));
+      expect(tester.takeException(), isNull);
 
-    await mouse.moveTo(tester.getCenter(threadFinder));
-    await tester.pump(const Duration(milliseconds: 40));
-    expect(tester.takeException(), isNull);
+      await mouse.moveTo(Offset.zero);
+      await tester.pump(const Duration(milliseconds: 40));
+      expect(tester.takeException(), isNull);
 
-    await mouse.moveTo(Offset.zero);
-    await tester.pump(const Duration(milliseconds: 40));
-    expect(tester.takeException(), isNull);
+      await mouse.moveTo(tester.getCenter(threadFinder));
+      await tester.pump(const Duration(milliseconds: 40));
+      expect(tester.takeException(), isNull);
+    },
+  );
 
-    await mouse.moveTo(tester.getCenter(threadFinder));
-    await tester.pump(const Duration(milliseconds: 40));
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('starts a blank new thread from the project action', (
+  testProjectThreadsPath('starts a blank new thread from the project action', (
     tester,
   ) async {
     final session = MemorySessionStore();
@@ -841,18 +880,23 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        directoryPicker: () async => directory.path,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
-        agentProviderAvailabilityLoader: () async =>
-            const <AgentProviderConfig>[
-              AgentProviderConfig.defaultCodex,
-              AgentProviderConfig.defaultGrok,
+      zetaTestApp(
+        overrides: <Override>[
+          ...fakeDirectoryPickerOverrides(directory.path),
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+          agentProviderAvailabilityLoaderProvider.overrideWithValue(
+            () async => const <AgentProviderConfig>[
+              defaultCodexAgentProviderConfig,
+              defaultGrokAgentProviderConfig,
             ],
+          ),
+        ],
       ),
     );
 
@@ -977,7 +1021,9 @@ void main() {
     expect(createdThread.providerId, defaultAgentProviderId);
   });
 
-  testWidgets('opens the project location from the more menu', (tester) async {
+  testProjectThreadsPath('opens the project location from the more menu', (
+    tester,
+  ) async {
     final session = MemorySessionStore();
     final directory = Directory.systemTemp.createTempSync('zeta_test_');
     tempDirectories.add(directory);
@@ -1002,16 +1048,20 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        directoryPicker: () async => directory.path,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
-        projectLocationOpener: (path) async {
-          openedPaths.add(path);
-        },
+      zetaTestApp(
+        overrides: <Override>[
+          ...fakeDirectoryPickerOverrides(directory.path),
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+          projectLocationOpenerProvider.overrideWithValue((path) async {
+            openedPaths.add(path);
+          }),
+        ],
       ),
     );
 
@@ -1038,100 +1088,107 @@ void main() {
     expect(openedPaths, <String>[directory.path]);
   });
 
-  testWidgets('refreshes the project thread list from the more menu', (
-    tester,
-  ) async {
-    final session = MemorySessionStore();
-    final directory = Directory.systemTemp.createTempSync('zeta_test_');
-    tempDirectories.add(directory);
-    File(
-      '${directory.path}${Platform.pathSeparator}sample.txt',
-    ).writeAsStringSync('hello from zeta');
+  testProjectThreadsPath(
+    'refreshes the project thread list from the more menu',
+    (tester) async {
+      final session = MemorySessionStore();
+      final directory = Directory.systemTemp.createTempSync('zeta_test_');
+      tempDirectories.add(directory);
+      File(
+        '${directory.path}${Platform.pathSeparator}sample.txt',
+      ).writeAsStringSync('hello from zeta');
 
-    final provider = FakeAgentProvider(
-      threadPages: <AgentThreadPage>[
-        AgentThreadPage(
-          threads: <AgentThreadSummary>[
-            agentThread(
-              id: 'thread-a',
-              projectPath: directory.path,
-              title: 'Initial thread',
+      final provider = FakeAgentProvider(
+        threadPages: <AgentThreadPage>[
+          AgentThreadPage(
+            threads: <AgentThreadSummary>[
+              agentThread(
+                id: 'thread-a',
+                projectPath: directory.path,
+                title: 'Initial thread',
+              ),
+            ],
+            nextCursor: null,
+          ),
+          AgentThreadPage(
+            threads: <AgentThreadSummary>[
+              agentThread(
+                id: 'thread-b',
+                projectPath: directory.path,
+                title: 'Refreshed thread',
+              ),
+            ],
+            nextCursor: null,
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        zetaTestApp(
+          overrides: <Override>[
+            ...fakeDirectoryPickerOverrides(directory.path),
+            ideSessionStoreProvider.overrideWithValue(session),
+            agentProviderBundleFactoryProvider.overrideWithValue(
+              FakeAgentProviderBundleBuilder.fromFake(provider),
+            ),
+            agentProviderConfigStoreProvider.overrideWithValue(
+              singleFakeProviderConfigStore(),
             ),
           ],
-          nextCursor: null,
         ),
-        AgentThreadPage(
-          threads: <AgentThreadSummary>[
-            agentThread(
-              id: 'thread-b',
-              projectPath: directory.path,
-              title: 'Refreshed thread',
-            ),
-          ],
-          nextCursor: null,
+      );
+
+      await openProjectFromMenu(tester);
+      await tester.runAsync(waitForIo);
+      await tester.pumpAndSettle();
+
+      expect(provider.listQueries, hasLength(1));
+      expect(
+        find.descendant(
+          of: find.byKey(
+            ValueKey<String>('project-thread-${directory.path}-thread-a'),
+          ),
+          matching: find.text('Initial thread'),
         ),
-      ],
-    );
+        findsOneWidget,
+      );
 
-    await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        directoryPicker: () async => directory.path,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: singleFakeProviderConfigStore(),
-      ),
-    );
-
-    await openProjectFromMenu(tester);
-    await tester.runAsync(waitForIo);
-    await tester.pumpAndSettle();
-
-    expect(provider.listQueries, hasLength(1));
-    expect(
-      find.descendant(
-        of: find.byKey(
-          ValueKey<String>('project-thread-${directory.path}-thread-a'),
+      final mouse = await hoverProjectTile(tester, directory.path);
+      addTearDown(mouse.removePointer);
+      await tester.tap(
+        find.byKey(
+          ValueKey<String>('project-tile-more-menu-${directory.path}'),
         ),
-        matching: find.text('Initial thread'),
-      ),
-      findsOneWidget,
-    );
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
-    final mouse = await hoverProjectTile(tester, directory.path);
-    addTearDown(mouse.removePointer);
-    await tester.tap(
-      find.byKey(ValueKey<String>('project-tile-more-menu-${directory.path}')),
-    );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-
-    await tester.tap(
-      find.byKey(
-        ValueKey<String>('project-tile-refresh-threads-${directory.path}'),
-      ),
-    );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-
-    expect(provider.listQueries, hasLength(2));
-    expect(provider.listQueries.last.projectPath, directory.path);
-    expect(provider.listQueries.last.limit, 10);
-    expect(provider.listQueries.last.cursor, isNull);
-    expect(find.text('Initial thread'), findsNothing);
-    expect(
-      find.descendant(
-        of: find.byKey(
-          ValueKey<String>('project-thread-${directory.path}-thread-b'),
+      await tester.tap(
+        find.byKey(
+          ValueKey<String>('project-tile-refresh-threads-${directory.path}'),
         ),
-        matching: find.text('Refreshed thread'),
-      ),
-      findsOneWidget,
-    );
-  });
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
-  testWidgets(
+      expect(provider.listQueries, hasLength(2));
+      expect(provider.listQueries.last.projectPath, directory.path);
+      expect(provider.listQueries.last.limit, 10);
+      expect(provider.listQueries.last.cursor, isNull);
+      expect(find.text('Initial thread'), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byKey(
+            ValueKey<String>('project-thread-${directory.path}-thread-b'),
+          ),
+          matching: find.text('Refreshed thread'),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testProjectThreadsPath(
     'removes the active project from the list and clears the workspace when no next project exists',
     (tester) async {
       final session = MemorySessionStore();
@@ -1174,15 +1231,17 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MainApp(
-          enableNativeWindowFrame: false,
-          directoryPicker: () async => directory.path,
-          sessionLoader: session.load,
-          sessionSaver: session.save,
-          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-            provider,
-          ),
-          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        zetaTestApp(
+          overrides: <Override>[
+            ...fakeDirectoryPickerOverrides(directory.path),
+            ideSessionStoreProvider.overrideWithValue(session),
+            agentProviderBundleFactoryProvider.overrideWithValue(
+              FakeAgentProviderBundleBuilder.fromFake(provider),
+            ),
+            agentProviderConfigStoreProvider.overrideWithValue(
+              MemoryAgentProviderConfigStore(),
+            ),
+          ],
         ),
       );
 
@@ -1231,7 +1290,9 @@ void main() {
     },
   );
 
-  testWidgets('renames a project thread from the more menu', (tester) async {
+  testProjectThreadsPath('renames a project thread from the more menu', (
+    tester,
+  ) async {
     final session = MemorySessionStore();
     final directory = Directory.systemTemp.createTempSync('zeta_test_');
     tempDirectories.add(directory);
@@ -1255,13 +1316,17 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        directoryPicker: () async => directory.path,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      zetaTestApp(
+        overrides: <Override>[
+          ...fakeDirectoryPickerOverrides(directory.path),
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -1329,7 +1394,7 @@ void main() {
     );
   });
 
-  testWidgets('shows only supported Grok thread lifecycle actions', (
+  testProjectThreadsPath('shows only supported Grok thread lifecycle actions', (
     tester,
   ) async {
     final session = MemorySessionStore();
@@ -1351,13 +1416,17 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        directoryPicker: () async => directory.path,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      zetaTestApp(
+        overrides: <Override>[
+          ...fakeDirectoryPickerOverrides(directory.path),
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -1493,7 +1562,7 @@ void main() {
 MemoryAgentProviderConfigStore singleFakeProviderConfigStore() {
   return MemoryAgentProviderConfigStore(
     const AgentProviderSettings(
-      providers: <AgentProviderConfig>[AgentProviderConfig.defaultCodex],
+      providers: <AgentProviderConfig>[defaultCodexAgentProviderConfig],
       activeProviderId: defaultAgentProviderId,
     ),
   );

@@ -7,15 +7,22 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/main.dart';
+import 'package:zeta/src/app/app.dart';
 import 'package:zeta/src/core/utils/path_utils.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
+import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
-import 'package:zeta/src/ui/core/ide_tabs.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 
 import '../../../testing/ide_test_harness.dart';
+import '../../../testing/fake_workspace_directory_picker.dart';
+import '../../../testing/zeta_test_app.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
+import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
+import 'package:zeta/src/app/storage/zeta_store_providers.dart';
+import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_providers.dart';
+import 'package:zeta/src/app/window/zeta_window_host.dart';
 
 void main() {
   final tempDirectories = <Directory>[];
@@ -41,16 +48,20 @@ void main() {
     file.writeAsStringSync('hello from zeta');
 
     await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: true,
-        showWindowControls: false,
-        directoryPicker: () async => directory.path,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-          FakeAgentProvider(),
-        ),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      zetaTestApp(
+        overrides: <Override>[
+          zetaWindowHostProvider.overrideWithValue(
+            NativeDesktopWindowHost(showsWindowControls: false),
+          ),
+          ...fakeDirectoryPickerOverrides(directory.path),
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(FakeAgentProvider()),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -70,15 +81,19 @@ void main() {
     await tester.pump();
 
     await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: true,
-        showWindowControls: false,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-          FakeAgentProvider(),
-        ),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      zetaTestApp(
+        overrides: <Override>[
+          zetaWindowHostProvider.overrideWithValue(
+            NativeDesktopWindowHost(showsWindowControls: false),
+          ),
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(FakeAgentProvider()),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
     await tester.runAsync(waitForIo);
@@ -103,16 +118,20 @@ void main() {
     ).writeAsStringSync('void main() {}');
 
     await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: true,
-        showWindowControls: false,
-        directoryPicker: () async => directory.path,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-          FakeAgentProvider(),
-        ),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      zetaTestApp(
+        overrides: <Override>[
+          zetaWindowHostProvider.overrideWithValue(
+            NativeDesktopWindowHost(showsWindowControls: false),
+          ),
+          ...fakeDirectoryPickerOverrides(directory.path),
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(FakeAgentProvider()),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
 
@@ -131,15 +150,19 @@ void main() {
     await tester.pump();
 
     await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: true,
-        showWindowControls: false,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-          FakeAgentProvider(),
-        ),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      zetaTestApp(
+        overrides: <Override>[
+          zetaWindowHostProvider.overrideWithValue(
+            NativeDesktopWindowHost(showsWindowControls: false),
+          ),
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(FakeAgentProvider()),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
     await tester.runAsync(waitForIo);
@@ -163,7 +186,7 @@ void main() {
 
       final session = MemorySessionStore(
         jsonEncode(<String, Object?>{
-          'version': 1,
+          'version': sessionStateVersion,
           'projectPaths': <String>[directory.path],
           'activeProjectPath': directory.path,
           'currentFilePath': null,
@@ -173,15 +196,19 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MainApp(
-          enableNativeWindowFrame: true,
-          showWindowControls: false,
-          sessionLoader: session.load,
-          sessionSaver: session.save,
-          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-            FakeAgentProvider(),
-          ),
-          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        zetaTestApp(
+          overrides: <Override>[
+            zetaWindowHostProvider.overrideWithValue(
+              NativeDesktopWindowHost(showsWindowControls: false),
+            ),
+            ideSessionStoreProvider.overrideWithValue(session),
+            agentProviderBundleFactoryProvider.overrideWithValue(
+              FakeAgentProviderBundleBuilder.fromFake(FakeAgentProvider()),
+            ),
+            agentProviderConfigStoreProvider.overrideWithValue(
+              MemoryAgentProviderConfigStore(),
+            ),
+          ],
         ),
       );
       await tester.runAsync(waitForIo);
@@ -197,7 +224,7 @@ void main() {
     _useWideWindow(tester);
     final session = MemorySessionStore(
       jsonEncode(<String, Object?>{
-        'version': 1,
+        'version': sessionStateVersion,
         'projectPaths': <String>['/zeta/missing/project'],
         'activeProjectPath': '/zeta/missing/project',
         'currentFilePath': '/zeta/missing/project/main.dart',
@@ -207,11 +234,21 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: true,
-        showWindowControls: false,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
+      zetaTestApp(
+        overrides: <Override>[
+          zetaWindowHostProvider.overrideWithValue(
+            NativeDesktopWindowHost(showsWindowControls: false),
+          ),
+          ideSessionStoreProvider.overrideWithValue(session),
+          // 必须注入 fake：不注入时 MainApp 会构造真实工厂并拉起本机 Codex CLI，
+          // 模型目录预热的 30 秒 JSON-RPC Timer 会挂到 widget 树销毁之后。
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(FakeAgentProvider()),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
     await tester.runAsync(waitForIo);
@@ -228,9 +265,7 @@ void main() {
   ) async {
     const workbench = IdeWorkbenchLayoutState(
       leftSidebarVisible: false,
-      agentUsageExpanded: true,
       leftSidebarWidth: 315,
-      agentUsageHeightFraction: 0.48,
       selectedAgentUsageProviderId: 'grok',
     );
     final session = MemorySessionStore(
@@ -238,15 +273,19 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: true,
-        showWindowControls: false,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-          FakeAgentProvider(),
-        ),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      zetaTestApp(
+        overrides: <Override>[
+          zetaWindowHostProvider.overrideWithValue(
+            NativeDesktopWindowHost(showsWindowControls: false),
+          ),
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(FakeAgentProvider()),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
     await tester.runAsync(waitForIo);
@@ -259,6 +298,63 @@ void main() {
     );
   });
 
+  testWidgets(
+    'IDE Session slice restores and resaves the same workbench projection',
+    (tester) async {
+      _useWideWindow(tester);
+      const workbench = IdeWorkbenchLayoutState(
+        leftSidebarVisible: false,
+        leftSidebarWidth: 315,
+        selectedAgentUsageProviderId: 'grok',
+      );
+      final session = MemorySessionStore(
+        const IdeSessionState(workbenchLayout: workbench).encode(),
+      );
+
+      // 同一个组合根重建 Widget：容器与 store identity 都必须保持稳定。
+      final composition = zetaTestComposition(
+        overrides: <Override>[
+          zetaWindowHostProvider.overrideWithValue(
+            NativeDesktopWindowHost(showsWindowControls: false),
+          ),
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(FakeAgentProvider()),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
+      );
+      await tester.pumpWidget(MainApp(composition: composition));
+      await tester.runAsync(waitForIo);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('workbench-navigation-inline')),
+        findsNothing,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('titlebar-left-sidebar-action')),
+      );
+      await pumpSessionSave(tester);
+
+      expect(
+        IdeSessionState.tryDecode(session.value)?.workbenchLayout,
+        workbench.copyWith(leftSidebarVisible: true),
+      );
+
+      await tester.pumpWidget(MainApp(composition: composition));
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+      expect(
+        find.byKey(const ValueKey('workbench-navigation-inline')),
+        findsOneWidget,
+      );
+    },
+  );
+
   testWidgets('restores active workbench preferences after user interactions', (
     tester,
   ) async {
@@ -267,16 +363,23 @@ void main() {
 
     Future<void> pumpApp({bool waitForUsage = true}) async {
       await tester.pumpWidget(
-        MainApp(
-          enableNativeWindowFrame: true,
-          showWindowControls: false,
-          sessionLoader: session.load,
-          sessionSaver: session.save,
-          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-            FakeAgentProvider(),
-          ),
-          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
-          agentUsagePanelRepository: const _WorkbenchUsageRepository(),
+        zetaTestApp(
+          overrides: <Override>[
+            zetaWindowHostProvider.overrideWithValue(
+              NativeDesktopWindowHost(showsWindowControls: false),
+            ),
+            ideSessionStoreProvider.overrideWithValue(session),
+            agentProviderBundleFactoryProvider.overrideWithValue(
+              FakeAgentProviderBundleBuilder.fromFake(FakeAgentProvider()),
+            ),
+            agentProviderConfigStoreProvider.overrideWithValue(
+              MemoryAgentProviderConfigStore(),
+            ),
+            agentUsagePanelRepositoryProvider.overrideWithValue(
+              const _WorkbenchUsageRepository(),
+            ),
+            agentUsageAutoRefreshEnabledProvider.overrideWithValue(true),
+          ],
         ),
       );
       await pumpUntilCondition(tester, () {
@@ -322,7 +425,6 @@ void main() {
     final persisted = IdeSessionState.tryDecode(session.value)!.workbenchLayout;
     expect(persisted.leftSidebarVisible, isFalse);
     expect(persisted.leftSidebarWidth, 324);
-    expect(persisted.agentUsageHeightFraction, isNull);
     expect(persisted.selectedAgentUsageProviderId, 'grok');
 
     await tester.pumpWidget(const SizedBox.shrink());
@@ -400,16 +502,25 @@ void main() {
       ).writeAsStringSync('chosen');
 
       await tester.pumpWidget(
-        MainApp(
-          enableNativeWindowFrame: true,
-          showWindowControls: false,
-          directoryPicker: () async => chosenDirectory.path,
-          sessionLoader: () => restoreCompleter.future,
-          sessionSaver: savedSession.save,
-          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-            FakeAgentProvider(),
-          ),
-          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        zetaTestApp(
+          overrides: <Override>[
+            zetaWindowHostProvider.overrideWithValue(
+              NativeDesktopWindowHost(showsWindowControls: false),
+            ),
+            ...fakeDirectoryPickerOverrides(chosenDirectory.path),
+            ideSessionStoreProvider.overrideWithValue(
+              _DeferredSessionStore(
+                pending: restoreCompleter.future,
+                sink: savedSession,
+              ),
+            ),
+            agentProviderBundleFactoryProvider.overrideWithValue(
+              FakeAgentProviderBundleBuilder.fromFake(FakeAgentProvider()),
+            ),
+            agentProviderConfigStoreProvider.overrideWithValue(
+              MemoryAgentProviderConfigStore(),
+            ),
+          ],
         ),
       );
 
@@ -421,6 +532,73 @@ void main() {
       expect(find.text('chosen.txt'), findsOneWidget);
       expect(find.text('restored.txt'), findsNothing);
 
+      restoreCompleter.complete(
+        sessionJson(
+          projectPath: restoredDirectory.path,
+          currentFilePath: restoredFile.path,
+        ),
+      );
+      await tester.runAsync(waitForIo);
+      await tester.pumpAndSettle();
+      await pumpSessionSave(tester);
+
+      expect(find.text('chosen.txt'), findsOneWidget);
+      expect(find.text('restored.txt'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'IDE Session slice cancels a slow restore after the user opens a folder',
+    (tester) async {
+      _useWideWindow(tester);
+      final restoreCompleter = Completer<String?>();
+      final savedSession = MemorySessionStore();
+      final restoredDirectory = Directory.systemTemp.createTempSync(
+        'zeta_restore_slice_',
+      );
+      final chosenDirectory = Directory.systemTemp.createTempSync(
+        'zeta_chosen_slice_',
+      );
+      tempDirectories
+        ..add(restoredDirectory)
+        ..add(chosenDirectory);
+
+      final restoredFile = File(
+        '${restoredDirectory.path}${Platform.pathSeparator}restored.txt',
+      )..writeAsStringSync('restored');
+      File(
+        '${chosenDirectory.path}${Platform.pathSeparator}chosen.txt',
+      ).writeAsStringSync('chosen');
+
+      await tester.pumpWidget(
+        zetaTestApp(
+          overrides: <Override>[
+            zetaWindowHostProvider.overrideWithValue(
+              NativeDesktopWindowHost(showsWindowControls: false),
+            ),
+            ...fakeDirectoryPickerOverrides(chosenDirectory.path),
+            ideSessionStoreProvider.overrideWithValue(
+              _DeferredSessionStore(
+                pending: restoreCompleter.future,
+                sink: savedSession,
+              ),
+            ),
+            agentProviderBundleFactoryProvider.overrideWithValue(
+              FakeAgentProviderBundleBuilder.fromFake(FakeAgentProvider()),
+            ),
+            agentProviderConfigStoreProvider.overrideWithValue(
+              MemoryAgentProviderConfigStore(),
+            ),
+          ],
+        ),
+      );
+
+      await openProjectFromMenu(tester);
+      await tester.runAsync(waitForIo);
+      await tester.pumpAndSettle();
+      await _openFilesPanel(tester);
+
+      expect(find.text('chosen.txt'), findsOneWidget);
       restoreCompleter.complete(
         sessionJson(
           projectPath: restoredDirectory.path,
@@ -484,4 +662,22 @@ void _useWideWindow(WidgetTester tester) {
       ..resetPhysicalSize()
       ..resetDevicePixelRatio();
   });
+}
+
+/// 恢复流程测试专用：load 挂在 completer 上，save 落到内存 store。
+///
+/// 迁移前这条路径用 `sessionLoader: () => completer.future` 表达；
+/// 换成 typed [IdeSessionStore] 后语义不变，只是从裸回调变成显式实现。
+class _DeferredSessionStore implements IdeSessionStore {
+  _DeferredSessionStore({required this.pending, required this.sink});
+
+  final Future<String?> pending;
+  final MemorySessionStore sink;
+
+  @override
+  Future<IdeSessionState?> load() async =>
+      IdeSessionState.tryDecode(await pending);
+
+  @override
+  Future<void> save(IdeSessionState state) => sink.save(state);
 }

@@ -4,10 +4,8 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:logger/logger.dart';
 
-import 'package:zeta/src/features/agent/application/agent_conversation_effect.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_effect_runner.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_turn_terminal_signal.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 void main() {
   group('DefaultAgentConversationEffectRunner', () {
@@ -171,7 +169,7 @@ void main() {
         );
         final effect = AgentRecordModelCatalogEffect(
           scope: _scope(threadId: 'thread-from-event'),
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           models: models,
           source: 'runtime event',
         );
@@ -182,7 +180,7 @@ void main() {
 
         // Assert
         expect(recordCount, 1);
-        expect(recordedConfig, AgentProviderConfig.defaultCodex);
+        expect(recordedConfig, defaultCodexAgentProviderConfig);
         expect(recordedModels, same(models));
         expect(recordedSource, 'runtime event');
 
@@ -191,7 +189,7 @@ void main() {
         runner.run(
           AgentRecordModelCatalogEffect(
             scope: _scope(listenerGeneration: 8),
-            config: AgentProviderConfig.defaultCodex,
+            config: defaultCodexAgentProviderConfig,
             models: models,
             source: 'stale generation',
           ),
@@ -199,7 +197,7 @@ void main() {
         runner.run(
           AgentRecordModelCatalogEffect(
             scope: _scope(runtimeId: 'runtime-2'),
-            config: AgentProviderConfig.defaultCodex,
+            config: defaultCodexAgentProviderConfig,
             models: models,
             source: 'stale runtime',
           ),
@@ -263,7 +261,7 @@ void main() {
           (record) => record.message.contains(acceptedMessage),
         );
         final context = _structuredContext(record);
-        expect(context['providerId'], AgentProviderConfig.defaultCodex.id);
+        expect(context['providerId'], defaultCodexAgentProviderConfig.id);
         expect(context['listenerGeneration'], 7);
         expect(context['runtimeId'], 'runtime-1');
         expect(context['connectionEpoch'], 3);
@@ -314,7 +312,7 @@ void main() {
             connectionEpoch: 3,
             threadId: 'thread-1',
           ),
-          config: AgentProviderConfig.defaultCodex,
+          config: defaultCodexAgentProviderConfig,
           models: AgentModelList(models: <AgentModelInfo>[]),
           source: 'disposed',
         ),
@@ -341,7 +339,82 @@ void main() {
         isEmpty,
       );
     });
+
+    test('runtime 换代后不再自动启动 Plan 执行', () {
+      final handler = _RecordingSessionEffects();
+      var current = _scope(connectionEpoch: 3, turnId: 'turn-1');
+      final runner = DefaultAgentConversationEffectRunner(
+        currentScope: () => current,
+        recordModelCatalog: _discardCatalog,
+        sessionEffects: handler,
+      );
+      addTearDown(runner.dispose);
+      final effect = AgentAutoStartPlanExecutionEffect(
+        scope: _scope(connectionEpoch: 3, turnId: 'turn-1'),
+      );
+
+      current = _scope(connectionEpoch: 4, turnId: 'turn-1');
+      runner.run(effect);
+
+      expect(handler.autoStartCount, 0);
+    });
+
+    test('同 generation 内 turn 完成仍会自动启动 Plan 执行', () {
+      final handler = _RecordingSessionEffects();
+      final runner = DefaultAgentConversationEffectRunner(
+        currentScope: () => _scope(turnId: 'turn-1'),
+        recordModelCatalog: _discardCatalog,
+        sessionEffects: handler,
+      );
+      addTearDown(runner.dispose);
+
+      runner.run(
+        AgentAutoStartPlanExecutionEffect(scope: _scope(turnId: 'turn-1')),
+      );
+
+      expect(handler.autoStartCount, 1);
+    });
   });
+}
+
+final class _RecordingSessionEffects
+    implements AgentConversationSessionEffectHandler {
+  int autoStartCount = 0;
+
+  @override
+  void autoStartPlanExecution() => autoStartCount += 1;
+
+  @override
+  void applyModelList(AgentModelList models) {}
+
+  @override
+  void applyServerConversationMode(AgentConversationModeUpdatedEvent event) {}
+
+  @override
+  void applyThreadPermission({
+    required String threadId,
+    required AgentPermissionSelection permissionSelection,
+  }) {}
+
+  @override
+  void applyThreadSettings(AgentThreadSettingsUpdatedEvent event) {}
+
+  @override
+  void bindConversationModeThread({required String threadId}) {}
+
+  @override
+  void clearPlanHandoff() {}
+
+  @override
+  void preparePlanHandoff(AgentTurnCompletedEvent event) {}
+
+  @override
+  void syncThreadSelectionFromSessionConfig(
+    List<AgentSessionConfigOption> options,
+  ) {}
+
+  @override
+  void syncTurnRunning({bool? forceRunning}) {}
 }
 
 const _turnCompletedAttention = AgentAttentionSignal(

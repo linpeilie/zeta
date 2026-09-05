@@ -1,7 +1,7 @@
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_query_models.dart';
-import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 
 void main() {
   test('AgentUsageQuery uses value equality including forceRefresh', () {

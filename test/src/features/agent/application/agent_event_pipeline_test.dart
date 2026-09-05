@@ -1,9 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_reducer.dart';
-import 'package:zeta/src/features/agent/application/agent_event_pipeline.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 import '../../../testing/agent_file_change_canonical.dart';
 import '../../../testing/agent_event_storm_fixture.dart';
@@ -327,7 +325,7 @@ AgentEventPipeline _pipeline({
     threadId: threadId,
     runtimeScope: currentRuntimeScope(),
     currentRuntimeScope: currentRuntimeScope,
-    allowDetachedEvent: AgentConversationReducer.isCriticalDetachedEvent,
+    allowDetachedEvent: AgentDetachedEventPolicy.isCritical,
     processEvent: processed.add,
     onSourceError: (error, stackTrace) {},
     onDone: onDone ?? () {},

@@ -1,8 +1,10 @@
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/data/agent_turn_context_codec.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_models.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
@@ -10,7 +12,6 @@ import 'package:zeta/src/features/settings/data/general_settings_codec.dart';
 import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
-import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partition_store.dart';
 
 /// 持久化 JSON 不得写入 Zeta 本地化 UI 文案。
 ///

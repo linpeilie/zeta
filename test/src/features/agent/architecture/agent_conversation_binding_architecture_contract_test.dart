@@ -6,7 +6,9 @@ void main() {
   group('conversation binding architecture contracts', () {
     test('legacy AgentProvider interface and adapter files stay deleted', () {
       expect(
-        File('lib/src/features/agent/domain/agent_provider.dart').existsSync(),
+        File(
+          'packages/zeta_agent_core/lib/src/domain/agent_provider.dart',
+        ).existsSync(),
         isFalse,
       );
       expect(
@@ -18,47 +20,77 @@ void main() {
       );
     });
 
-    test('app shell injects BundleFactory and does not wrap old Factory', () {
-      const files = <String>[
-        'lib/src/app/app.dart',
-        'lib/src/app/shell/ide_shell_controller.dart',
-        'lib/src/ui/features/ide/views/ide_home.dart',
-      ];
-      for (final path in files) {
-        final source = File(path).readAsStringSync();
-        expect(source, contains('AgentProviderBundleFactory'));
-        expect(source, isNot(contains('asAgentProviderBundleFactory')));
+    test(
+      'app shell reads BundleFactory provider and does not wrap old Factory',
+      () {
+        // 装配点是 `IdeHome`：它从容器读 bundle 工厂再交给 Shell，`app.dart`
+        // 不再经手（依赖不从构造函数下钻）。
+        final homeSource = File(
+          'lib/src/ui/features/ide/views/ide_home.dart',
+        ).readAsStringSync();
         expect(
-          source,
-          isNot(
-            matches(RegExp(r'(?<![A-Za-z])AgentProviderFactory(?![A-Za-z])')),
-          ),
-          reason: path,
+          homeSource,
+          contains('ref.read(agentProviderBundleFactoryProvider)'),
         );
-      }
-    });
+        expect(
+          File(
+            'lib/src/app/shell/ide_shell_controller.dart',
+          ).readAsStringSync(),
+          contains('AgentProviderBundleFactory'),
+        );
+
+        const files = <String>[
+          'lib/src/app/app.dart',
+          'lib/src/app/shell/ide_shell_controller.dart',
+          'lib/src/ui/features/ide/views/ide_home.dart',
+        ];
+        for (final path in files) {
+          final source = File(path).readAsStringSync();
+          expect(source, isNot(contains('asAgentProviderBundleFactory')));
+          expect(
+            source,
+            isNot(
+              matches(RegExp(r'(?<![A-Za-z])AgentProviderFactory(?![A-Za-z])')),
+            ),
+            reason: path,
+          );
+        }
+      },
+    );
 
     test('registry remains the only runtime factory caller', () {
-      final callers = Directory('lib/src')
-          .listSync(recursive: true)
-          .whereType<File>()
-          .where((file) => file.path.endsWith('.dart'))
-          .where(
-            (file) => file.readAsStringSync().contains(
-              'providerFactory.createBundle(',
-            ),
-          )
-          .map((file) => file.path.replaceAll(Platform.pathSeparator, '/'))
-          .toList(growable: false);
+      final callers =
+          <File>[
+                ...Directory(
+                  'lib/src',
+                ).listSync(recursive: true).whereType<File>(),
+                ...Directory(
+                  'packages',
+                ).listSync(recursive: true).whereType<File>(),
+              ]
+              .where((file) => file.path.endsWith('.dart'))
+              // 插件测试已随包迁移；本守卫只约束生产调用点。
+              .where(
+                (file) => !file.path
+                    .replaceAll(Platform.pathSeparator, '/')
+                    .contains('/test/'),
+              )
+              .where(
+                (file) => file.readAsStringSync().contains(
+                  'providerFactory.createBundle(',
+                ),
+              )
+              .map((file) => file.path.replaceAll(Platform.pathSeparator, '/'))
+              .toList(growable: false);
 
       expect(callers, <String>[
-        'lib/src/features/agent/application/agent_provider_runtime_registry.dart',
+        'packages/zeta_agent_core/lib/src/application/agent_provider_runtime_registry.dart',
       ]);
     });
 
     test('application lifecycle code has no UI controller dependency', () {
       const roots = <String>[
-        'lib/src/features/agent/application',
+        'packages/zeta_agent_core/lib/src/application',
         'lib/src/features/agent_management/application',
         'lib/src/features/project_threads/application',
       ];
@@ -68,7 +100,13 @@ void main() {
             in Directory(root)
                 .listSync(recursive: true)
                 .whereType<File>()
-                .where((file) => file.path.endsWith('.dart'))) {
+                .where((file) => file.path.endsWith('.dart'))
+                // 插件测试已随包迁移；本守卫只约束生产调用点。
+                .where(
+                  (file) => !file.path
+                      .replaceAll(Platform.pathSeparator, '/')
+                      .contains('/test/'),
+                )) {
           expect(
             file.readAsStringSync(),
             isNot(contains('/src/ui/')),
@@ -78,9 +116,16 @@ void main() {
       }
     });
 
-    test('ViewModel cannot own session leases scopes or pins', () {
+    test('RuntimeController cannot own session leases scopes or pins', () {
+      expect(
+        File(
+          'lib/src/features/agent/presentation/agent_conversation_view_model.dart',
+        ).existsSync(),
+        isFalse,
+      );
       final source = File(
-        'lib/src/features/agent/presentation/agent_conversation_view_model.dart',
+        'lib/src/features/agent/application/conversation_slice/'
+        'agent_conversation_runtime_controller.dart',
       ).readAsStringSync();
 
       expect(source, isNot(contains('AgentProviderRuntimeLease')));
@@ -104,12 +149,13 @@ void main() {
         ).existsSync(),
         isFalse,
       );
-      final viewModel = File(
-        'lib/src/features/agent/presentation/agent_conversation_view_model.dart',
+      final runtime = File(
+        'lib/src/features/agent/application/conversation_slice/'
+        'agent_conversation_runtime_controller.dart',
       ).readAsStringSync();
       final workspace = File(
-        'lib/src/features/agent/application/'
-        'agent_thread_workspace_controller.dart',
+        'lib/src/app/conversation_workspace_slice/'
+        'agent_conversation_workspace_store.dart',
       ).readAsStringSync();
 
       for (final legacy in const <String>[
@@ -119,14 +165,14 @@ void main() {
         'restoredProviderId:',
         'resetConversation:',
       ]) {
-        expect(viewModel, isNot(contains(legacy)), reason: legacy);
+        expect(runtime, isNot(contains(legacy)), reason: legacy);
       }
       expect(workspace, isNot(contains('bindThreadIdentity(')));
     });
 
     test('runtime scope and neutral ports have no compatibility defaults', () {
       final registry = File(
-        'lib/src/features/agent/application/agent_provider_runtime_registry.dart',
+        'packages/zeta_agent_core/lib/src/application/agent_provider_runtime_registry.dart',
       ).readAsStringSync();
       final modelSelection = File(
         'lib/src/features/agent/application/'
@@ -163,10 +209,10 @@ void main() {
 
     test('Binding and Bundle do not expose the raw provider', () {
       final binding = File(
-        'lib/src/features/agent/application/agent_conversation_binding.dart',
+        'packages/zeta_agent_core/lib/src/application/agent_conversation_binding.dart',
       ).readAsStringSync();
       final bundle = File(
-        'lib/src/features/agent/domain/agent_provider_bundle.dart',
+        'packages/zeta_agent_core/lib/src/domain/agent_provider_bundle.dart',
       ).readAsStringSync();
 
       expect(binding, isNot(contains('AgentProvider get provider')));
@@ -175,7 +221,7 @@ void main() {
       expect(bundle, isNot(contains('runtime.provider')));
       expect(
         File(
-          'lib/src/features/agent/application/agent_provider_runtime_registry.dart',
+          'packages/zeta_agent_core/lib/src/application/agent_provider_runtime_registry.dart',
         ).readAsStringSync(),
         isNot(contains('AgentProvider get provider')),
       );
@@ -189,10 +235,10 @@ void main() {
         isFalse,
       );
       final state = File(
-        'lib/src/features/agent/application/agent_conversation_permission_state.dart',
+        'packages/zeta_agent_core/lib/src/application/agent_conversation_permission_state.dart',
       ).readAsStringSync();
       final controller = File(
-        'lib/src/features/agent/application/'
+        'packages/zeta_agent_core/lib/src/application/'
         'agent_conversation_permission_selection_controller.dart',
       ).readAsStringSync();
 
@@ -204,28 +250,33 @@ void main() {
       }
     });
 
-    test(
-      'settings controller owns settings but no runtime lease or permission',
-      () {
-        final source = File(
-          'lib/src/features/agent/application/agent_provider_settings_controller.dart',
-        ).readAsStringSync();
+    test('settings slice owns settings but no runtime lease or permission', () {
+      expect(
+        File(
+          'lib/src/features/agent/application/'
+          'agent_provider_settings_controller.dart',
+        ).existsSync(),
+        isFalse,
+      );
+      final source = File(
+        'lib/src/features/agent/application/provider_settings_slice/'
+        'agent_provider_settings_slice_store.dart',
+      ).readAsStringSync();
 
-        expect(source, isNot(contains('AgentProviderRuntimeLease')));
-        expect(source, isNot(contains('AgentProviderRuntimeIdentity')));
-        expect(source, isNot(contains('AgentPermissionStateStore')));
-        expect(source, isNot(contains('permissionStateStore')));
-        expect(source, isNot(contains('_providerLease')));
-        expect(source, isNot(contains('activeProviderRuntimeIdentity')));
-        expect(source, isNot(contains('Future<AgentProvider> activeProvider')));
-      },
-    );
+      expect(source, isNot(contains('AgentProviderRuntimeLease')));
+      expect(source, isNot(contains('AgentProviderRuntimeIdentity')));
+      expect(source, isNot(contains('AgentPermissionStateStore')));
+      expect(source, isNot(contains('permissionStateStore')));
+      expect(source, isNot(contains('_providerLease')));
+      expect(source, isNot(contains('activeProviderRuntimeIdentity')));
+      expect(source, isNot(contains('Future<AgentProvider> activeProvider')));
+    });
 
     test(
       'Project Threads uses global runtime instead of active provider cache',
       () {
         final source = File(
-          'lib/src/features/project_threads/application/project_threads_controller.dart',
+          'lib/src/app/project_threads_slice/project_threads_slice_runner.dart',
         ).readAsStringSync();
 
         expect(source, contains('AgentProviderGlobalRuntime'));
@@ -244,10 +295,10 @@ void main() {
         isFalse,
       );
       final manager = File(
-        'lib/src/features/agent/application/agent_conversation_binding_manager.dart',
+        'packages/zeta_agent_core/lib/src/application/agent_conversation_binding_manager.dart',
       ).readAsStringSync();
       final registry = File(
-        'lib/src/features/agent/application/agent_provider_runtime_registry.dart',
+        'packages/zeta_agent_core/lib/src/application/agent_provider_runtime_registry.dart',
       ).readAsStringSync();
 
       expect(manager, contains('Timer.periodic'));

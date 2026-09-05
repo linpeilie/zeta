@@ -1,28 +1,52 @@
+import '../testing/agent_management_test_definitions.dart';
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:zeta/src/app/app_constants.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
+import 'package:zeta/src/app/ide_session_slice/ide_session_slice_overrides.dart';
+import 'package:zeta/src/app/storage/zeta_store_providers.dart';
+import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_session_slice_notifier.dart';
 import 'package:zeta/src/app/shell/ide_shell_controller.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_static_capabilities.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
-import 'package:zeta/src/features/agent/domain/agent_turn_terminal_signal.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
+import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_session_slice_operations.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
 import 'package:zeta/src/features/usage_statistics/application/query_agent_usage_panel_repository.dart';
 import 'package:zeta/src/features/usage_statistics/application/query_usage_statistics_repository.dart';
-import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partition_store.dart';
+import 'package:zeta/src/features/usage_statistics/application/agent_usage_query_service.dart';
+import 'package:zeta/src/features/usage_statistics/data/contributed_agent_token_usage_source_registry.dart';
+import 'package:zeta/src/features/usage_statistics/data/global_runtime_agent_usage_quota_source.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
+import 'package:zeta/src/features/workspace/domain/workspace_directory_picker.dart';
 
 import '../testing/agent_event_storm_fixture.dart';
 import '../testing/agent_provider_stub_base.dart';
-import '../testing/legacy_bundle_factory_mixin.dart';
+import '../testing/test_agent_provider_bundle_factory.dart';
 import '../testing/fake_agent_frame_scheduler.dart';
+import '../testing/provider_settings_test_store.dart';
+import '../testing/memory_feature_stores.dart';
+import '../testing/workspace_test_bindings.dart';
+import '../testing/fake_workspace_directory_picker.dart';
+import '../testing/usage_statistics_test_bindings.dart';
+
+WorkspaceTestBindings _bindWorkspace({
+  WorkspaceDirectoryPicker? directoryPicker,
+  DateTime Function()? now,
+}) {
+  final bindings = WorkspaceTestBindings(
+    directoryPicker: directoryPicker,
+    now: now,
+  );
+  addTearDown(bindings.dispose);
+  return bindings;
+}
 
 final List<FakeAgentFrameScheduler> _uiFrameSchedulers =
     <FakeAgentFrameScheduler>[];
@@ -41,37 +65,48 @@ void main() {
     tempDirectories.clear();
   });
 
-  test('composes both usage controllers from the shared query service', () {
-    final shell = IdeShellController(
-      agentUiFrameSchedulerFactory: _createUiFrameScheduler,
-      directoryPicker: () async => null,
-      sessionStore: const CallbackIdeSessionStore(
-        loadJson: _loadEmptySession,
-        saveJson: _saveDiscardedSession,
+  test('两个 usage notifier 可共享同一查询服务', () {
+    final providerFactory =
+        _RecordingAgentProviderFactory(<String, _ProviderBackend>{
+          defaultAgentProviderId: _ProviderBackend(
+            config: defaultCodexAgentProviderConfig,
+            threadHistories: const <String, AgentThreadHistorySnapshot>{},
+            threadPages: const <AgentThreadPage>[],
+          ),
+        });
+    final runtimeRegistry = AgentProviderRuntimeRegistry(
+      providerFactory: providerFactory,
+    );
+    final queryService = AgentUsageQueryService(
+      () async => const <AgentProviderConfig>[defaultCodexAgentProviderConfig],
+      GlobalRuntimeAgentUsageQuotaSource(
+        AgentProviderGlobalRuntime(runtimeRegistry: runtimeRegistry),
       ),
-      agentProviderFactory:
-          _RecordingAgentProviderFactory(<String, _ProviderBackend>{
-            defaultAgentProviderId: _ProviderBackend(
-              config: AgentProviderConfig.defaultCodex,
-              threadHistories: const <String, AgentThreadHistorySnapshot>{},
-              threadPages: const <AgentThreadPage>[],
-            ),
-          }),
-      agentProviderConfigStore: MemoryAgentProviderConfigStore(
-        const AgentProviderSettings(
-          providers: <AgentProviderConfig>[AgentProviderConfig.defaultCodex],
-          activeProviderId: defaultAgentProviderId,
+      ContributedAgentTokenUsageSourceRegistry(
+        testAgentUsageContributions,
+        services: AgentUsageHostServices(
+          partitionPort: MemoryUsageStatisticsPartitionStore(),
         ),
       ),
     );
-    addTearDown(shell.dispose);
+    final usageBindings = UsageStatisticsTestBindings(
+      repository: QueryUsageStatisticsRepository(queryService),
+    );
+    final panelBindings = AgentUsagePanelTestBindings(
+      repository: QueryAgentUsagePanelRepository(queryService),
+    );
+    addTearDown(() async {
+      usageBindings.dispose();
+      panelBindings.dispose();
+      await runtimeRegistry.close();
+    });
 
     expect(
-      shell.usageStatisticsController.repository,
+      usageBindings.notifier.repository,
       isA<QueryUsageStatisticsRepository>(),
     );
     expect(
-      shell.agentUsagePanelController.repository,
+      panelBindings.notifier.repository,
       isA<QueryAgentUsagePanelRepository>(),
     );
   });
@@ -80,30 +115,57 @@ void main() {
     'provider settings changes resync usage directory without loading siblings',
     () async {
       final usageRepository = _DirectoryTrackingUsageRepository();
+      final providerFactory =
+          _RecordingAgentProviderFactory(<String, _ProviderBackend>{
+            defaultAgentProviderId: _ProviderBackend(
+              config: defaultCodexAgentProviderConfig,
+              threadHistories: const <String, AgentThreadHistorySnapshot>{},
+              threadPages: const <AgentThreadPage>[],
+            ),
+          });
+      final runtimeRegistry = AgentProviderRuntimeRegistry(
+        providerFactory: providerFactory,
+      );
+      final providerSettings = createProviderSettingsTestComposition(
+        configStore: MemoryAgentProviderConfigStore(),
+      );
+      addTearDown(providerSettings.dispose);
+      final workspace = _bindWorkspace(
+        directoryPicker: FakeWorkspaceDirectoryPicker.cancelled(),
+      );
       final shell = IdeShellController(
         agentUiFrameSchedulerFactory: _createUiFrameScheduler,
-        directoryPicker: () async => null,
-        sessionStore: const CallbackIdeSessionStore(
-          loadJson: _loadEmptySession,
-          saveJson: _saveDiscardedSession,
+        workspace: workspace.notifier,
+        workspaceFileCorpus: workspace.corpus,
+        workspaceFileIndexController: workspace.index,
+        ideSessionOperations: _createIdeSessionOperations(
+          _CallbackSessionStore(),
         ),
-        agentProviderFactory:
-            _RecordingAgentProviderFactory(<String, _ProviderBackend>{
-              defaultAgentProviderId: _ProviderBackend(
-                config: AgentProviderConfig.defaultCodex,
-                threadHistories: const <String, AgentThreadHistorySnapshot>{},
-                threadPages: const <AgentThreadPage>[],
-              ),
-            }),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
-        usageStatistics: IdeShellUsageStatisticsDependencies(
-          partitionStore: MemoryUsageStatisticsPartitionStore(),
-          agentUsagePanelRepository: usageRepository,
-        ),
+        agentProviderFactory: providerFactory,
+        agentProviderRuntimeRegistry: runtimeRegistry,
+        agentProviderSettingsPort: providerSettings.store,
+        activeModelCatalogLoader: providerSettings.loadActiveModelCatalog,
       );
-      addTearDown(shell.dispose);
+      final usageBindings = AgentUsagePanelTestBindings(
+        repository: usageRepository,
+      );
+      final panel = usageBindings.notifier;
+      void synchronizeUsageDirectory() {
+        if (panel.hasDiscoveredProviders) {
+          unawaited(panel.synchronizeProviders());
+        }
+      }
 
-      await shell.agentUsagePanelController.refresh(forceRefresh: false);
+      final unsubscribeProviderSettings = shell.agentProviderController
+          .subscribe(synchronizeUsageDirectory);
+      addTearDown(() async {
+        unsubscribeProviderSettings();
+        usageBindings.dispose();
+        shell.dispose();
+        await runtimeRegistry.close();
+      });
+
+      await panel.refresh(forceRefresh: false);
       expect(usageRepository.loadedProviderIds, <String>['codex']);
 
       usageRepository.directory = const <AgentUsagePanelProvider>[
@@ -115,14 +177,12 @@ void main() {
         ),
       ];
       await shell.agentProviderController.updateProviderConfig(
-        AgentProviderConfig.defaultClaudeCode,
+        defaultClaudeCodeAgentProviderConfig,
       );
       await _flushAsync();
 
       expect(
-        shell.agentUsagePanelController.providers.map(
-          (state) => state.provider.providerId,
-        ),
+        panel.providers.map((state) => state.provider.providerId),
         <String>['codex', 'grok', 'claude_code'],
       );
       expect(usageRepository.loadedProviderIds, <String>['codex']);
@@ -139,7 +199,7 @@ void main() {
       ).writeAsStringSync('hello');
 
       final codexBackend = _ProviderBackend(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         threadHistories: const <String, AgentThreadHistorySnapshot>{},
         completeTurns: false,
         threadPages: <AgentThreadPage>[
@@ -161,23 +221,33 @@ void main() {
           ),
         ],
       );
-
-      final shell = IdeShellController(
-        agentUiFrameSchedulerFactory: _createUiFrameScheduler,
-        directoryPicker: () async => directory.path,
-        sessionStore: const CallbackIdeSessionStore(
-          loadJson: _loadEmptySession,
-          saveJson: _saveDiscardedSession,
-        ),
-        agentProviderFactory: _RecordingAgentProviderFactory(
-          <String, _ProviderBackend>{defaultAgentProviderId: codexBackend},
-        ),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(
+      final providerFactory = _RecordingAgentProviderFactory(
+        <String, _ProviderBackend>{defaultAgentProviderId: codexBackend},
+      );
+      final providerSettings = createProviderSettingsTestComposition(
+        configStore: MemoryAgentProviderConfigStore(
           const AgentProviderSettings(
-            providers: <AgentProviderConfig>[AgentProviderConfig.defaultCodex],
+            providers: <AgentProviderConfig>[defaultCodexAgentProviderConfig],
             activeProviderId: defaultAgentProviderId,
           ),
         ),
+      );
+      addTearDown(providerSettings.dispose);
+
+      final workspace = _bindWorkspace(
+        directoryPicker: FakeWorkspaceDirectoryPicker(directory.path),
+      );
+      final shell = IdeShellController(
+        agentUiFrameSchedulerFactory: _createUiFrameScheduler,
+        workspace: workspace.notifier,
+        workspaceFileCorpus: workspace.corpus,
+        workspaceFileIndexController: workspace.index,
+        ideSessionOperations: _createIdeSessionOperations(
+          _CallbackSessionStore(),
+        ),
+        agentProviderFactory: providerFactory,
+        agentProviderSettingsPort: providerSettings.store,
+        activeModelCatalogLoader: providerSettings.loadActiveModelCatalog,
       );
       addTearDown(shell.dispose);
 
@@ -193,7 +263,7 @@ void main() {
       );
 
       await shell.selectProjectThread(directory.path, threadA);
-      await shell.selectedAgentViewModel.sendMessage('keep running');
+      await shell.selectedAgentController.sendMessage('keep running');
       await _flushAsync();
 
       expect(
@@ -227,7 +297,7 @@ void main() {
         threadIds: const <String>['thread-a', 'thread-b'],
         selectedThreadId: 'thread-a',
       );
-      addTearDown(harness.shell.dispose);
+      addTearDown(harness.dispose);
 
       final activated = await harness.shell.activateAgentThread(
         providerId: defaultAgentProviderId,
@@ -241,7 +311,7 @@ void main() {
       expect(activated, isTrue);
       expect(missing, isFalse);
       expect(harness.shell.activeProjectPath, directory.path);
-      expect(harness.shell.selectedAgentViewModel.sessionId, 'thread-b');
+      expect(harness.shell.selectedAgentController.sessionId, 'thread-b');
     },
   );
 
@@ -256,9 +326,9 @@ void main() {
     final shell = harness.shell;
     final backend = harness.backend;
     addTearDown(shell.dispose);
-    final sourceEntry = shell.agentWorkspaceController.selectedEntry!;
+    final sourceEntry = shell.agentConversationWorkspaceStore.selectedEntry!;
 
-    final session = await sourceEntry.viewModel.forkCurrentThread();
+    final session = await sourceEntry.controller.forkCurrentThread();
     await _flushAsync();
 
     expect(session?.id, 'forked-thread-a');
@@ -266,20 +336,20 @@ void main() {
       shell.projectThreadStateFor(directory.path).selectedThreadId,
       'forked-thread-a',
     );
-    final selectedEntry = shell.agentWorkspaceController.selectedEntry!;
+    final selectedEntry = shell.agentConversationWorkspaceStore.selectedEntry!;
     expect(selectedEntry, isNot(same(sourceEntry)));
     expect(selectedEntry.binding.threadId, 'forked-thread-a');
     expect(sourceEntry.binding.threadId, 'thread-a');
     expect(backend.instances, hasLength(1));
     expect(sourceEntry.binding.hasRuntime, isFalse);
 
-    await selectedEntry.viewModel.renameCurrentThread('Fork renamed');
+    await selectedEntry.controller.renameCurrentThread('Fork renamed');
     expect(
       backend.instances.single.renamedThreads,
       contains((threadId: 'forked-thread-a', name: 'Fork renamed')),
     );
 
-    await selectedEntry.viewModel.sendMessage('continue on fork');
+    await selectedEntry.controller.sendMessage('continue on fork');
     await _flushAsync();
     expect(backend.instances, hasLength(2));
     expect(
@@ -335,13 +405,13 @@ void main() {
     final shell = harness.shell;
     final backend = harness.backend;
     addTearDown(shell.dispose);
-    final sourceEntry = shell.agentWorkspaceController.selectedEntry!;
-    expect(sourceEntry.viewModel.canEditLastUserMessage, isTrue);
+    final sourceEntry = shell.agentConversationWorkspaceStore.selectedEntry!;
+    expect(sourceEntry.controller.canEditLastUserMessage, isTrue);
 
-    await sourceEntry.viewModel.editLastUserMessageAndRetry('new prompt');
+    await sourceEntry.controller.editLastUserMessageAndRetry('new prompt');
     await _flushAsync();
 
-    final selectedEntry = shell.agentWorkspaceController.selectedEntry!;
+    final selectedEntry = shell.agentConversationWorkspaceStore.selectedEntry!;
     expect(selectedEntry, isNot(same(sourceEntry)));
     expect(selectedEntry.binding.threadId, 'forked-thread-a');
     expect(sourceEntry.binding.threadId, 'thread-a');
@@ -371,27 +441,37 @@ void main() {
       final terminalSignals = <AgentTurnTerminalSignal>[];
       final attentions = <AgentWorkspaceAttention>[];
       final backend = _ProviderBackend(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         threadHistories: const <String, AgentThreadHistorySnapshot>{},
         completeTurns: true,
         threadPages: <AgentThreadPage>[],
       );
-      final shell = IdeShellController(
-        agentUiFrameSchedulerFactory: _createUiFrameScheduler,
-        directoryPicker: () async => null,
-        sessionStore: const CallbackIdeSessionStore(
-          loadJson: _loadEmptySession,
-          saveJson: _saveDiscardedSession,
-        ),
-        agentProviderFactory: _RecordingAgentProviderFactory(
-          <String, _ProviderBackend>{defaultAgentProviderId: backend},
-        ),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(
+      final providerFactory = _RecordingAgentProviderFactory(
+        <String, _ProviderBackend>{defaultAgentProviderId: backend},
+      );
+      final providerSettings = createProviderSettingsTestComposition(
+        configStore: MemoryAgentProviderConfigStore(
           const AgentProviderSettings(
-            providers: <AgentProviderConfig>[AgentProviderConfig.defaultCodex],
+            providers: <AgentProviderConfig>[defaultCodexAgentProviderConfig],
             activeProviderId: defaultAgentProviderId,
           ),
         ),
+      );
+      addTearDown(providerSettings.dispose);
+      final workspace = _bindWorkspace(
+        directoryPicker: FakeWorkspaceDirectoryPicker.cancelled(),
+      );
+      final shell = IdeShellController(
+        agentUiFrameSchedulerFactory: _createUiFrameScheduler,
+        workspace: workspace.notifier,
+        workspaceFileCorpus: workspace.corpus,
+        workspaceFileIndexController: workspace.index,
+        ideSessionOperations: _createIdeSessionOperations(
+          _CallbackSessionStore(),
+        ),
+        agentProviderFactory: providerFactory,
+        agentProviderSettingsPort: providerSettings.store,
+        activeModelCatalogLoader: providerSettings.loadActiveModelCatalog,
         onAgentTurnTerminal: terminalSignals.add,
         onAgentAttention: attentions.add,
       );
@@ -399,7 +479,7 @@ void main() {
       await _flushAsync();
 
       // Act
-      await shell.selectedAgentViewModel.sendMessage('run once');
+      await shell.selectedAgentController.sendMessage('run once');
       await _flushAsync();
 
       // Assert
@@ -429,7 +509,7 @@ void main() {
       );
       final shell = harness.shell;
       final provider = harness.provider;
-      final viewModel = shell.selectedAgentViewModel;
+      final viewModel = shell.selectedAgentController;
       addTearDown(shell.dispose);
 
       provider.emit(
@@ -547,7 +627,7 @@ void main() {
     );
     final shell = harness.shell;
     final provider = harness.provider;
-    final viewModel = shell.selectedAgentViewModel;
+    final viewModel = shell.selectedAgentController;
     addTearDown(shell.dispose);
     await shell.saveNow();
     harness.sessionSaves.reset();
@@ -649,7 +729,7 @@ void main() {
     );
     await _flushAsync();
     expect(
-      shell.selectedAgentViewModel.threadSnapshot.threadTitle,
+      shell.selectedAgentController.threadSnapshot.threadTitle,
       'Renamed thread',
     );
     expect(shellNotifications, greaterThan(0));
@@ -662,7 +742,7 @@ void main() {
       ),
     );
     await _flushAsync();
-    expect(shell.selectedAgentViewModel.threadSnapshot.isTurnRunning, isTrue);
+    expect(shell.selectedAgentController.threadSnapshot.isTurnRunning, isTrue);
     expect(shellNotifications, greaterThan(0));
 
     // Act + Assert: turn idle
@@ -671,7 +751,7 @@ void main() {
       const AgentTurnCompletedEvent(sessionId: 'thread-a', turnId: 'turn-a'),
     );
     await _flushAsync();
-    expect(shell.selectedAgentViewModel.threadSnapshot.isTurnRunning, isFalse);
+    expect(shell.selectedAgentController.threadSnapshot.isTurnRunning, isFalse);
     expect(shellNotifications, greaterThan(0));
 
     // Act + Assert: waiting on approval
@@ -685,11 +765,11 @@ void main() {
     );
     await _flushAsync();
     expect(
-      shell.selectedAgentViewModel.threadSnapshot.waitingOnApproval,
+      shell.selectedAgentController.threadSnapshot.waitingOnApproval,
       isTrue,
     );
     expect(
-      shell.selectedAgentViewModel.threadSnapshot.waitingOnUserInput,
+      shell.selectedAgentController.threadSnapshot.waitingOnUserInput,
       isFalse,
     );
     expect(shellNotifications, greaterThan(0));
@@ -705,11 +785,11 @@ void main() {
     );
     await _flushAsync();
     expect(
-      shell.selectedAgentViewModel.threadSnapshot.waitingOnApproval,
+      shell.selectedAgentController.threadSnapshot.waitingOnApproval,
       isFalse,
     );
     expect(
-      shell.selectedAgentViewModel.threadSnapshot.waitingOnUserInput,
+      shell.selectedAgentController.threadSnapshot.waitingOnUserInput,
       isTrue,
     );
     expect(shellNotifications, greaterThan(0));
@@ -723,7 +803,7 @@ void main() {
       ),
     );
     await _flushAsync();
-    final idleSnapshot = shell.selectedAgentViewModel.threadSnapshot;
+    final idleSnapshot = shell.selectedAgentController.threadSnapshot;
     expect(idleSnapshot.runtimeStatus, AgentThreadRuntimeStatus.idle);
     expect(idleSnapshot.waitingOnApproval, isFalse);
     expect(idleSnapshot.waitingOnUserInput, isFalse);
@@ -742,7 +822,7 @@ void main() {
     );
     final shell = harness.shell;
     final provider = harness.provider;
-    final oldViewModel = shell.selectedAgentViewModel;
+    final oldViewModel = shell.selectedAgentController;
     final oldSnapshot = oldViewModel.threadSnapshot;
     addTearDown(shell.dispose);
 
@@ -752,7 +832,7 @@ void main() {
         .singleWhere((thread) => thread.id == 'thread-b');
     await shell.selectProjectThread(directory.path, threadB);
     await _flushAsync();
-    final currentViewModel = shell.selectedAgentViewModel;
+    final currentViewModel = shell.selectedAgentController;
     expect(currentViewModel.sessionId, 'thread-b');
     expect(currentViewModel, isNot(same(oldViewModel)));
 
@@ -801,7 +881,7 @@ void main() {
       ),
       isFalse,
     );
-    expect(shell.selectedAgentViewModel, same(currentViewModel));
+    expect(shell.selectedAgentController, same(currentViewModel));
     expect(shellNotifications, 0);
     expect(harness.sessionSaves.saveCount, 0);
 
@@ -817,7 +897,7 @@ void main() {
 
     expect(oldViewModel.threadSnapshot.threadTitle, 'Renamed old thread');
     expect(currentViewModel.threadSnapshot, currentSnapshot);
-    expect(shell.selectedAgentViewModel, same(currentViewModel));
+    expect(shell.selectedAgentController, same(currentViewModel));
   });
 
   test('allows cross-provider threads to run in parallel', () async {
@@ -828,7 +908,7 @@ void main() {
     ).writeAsStringSync('hello');
 
     final codexBackend = _ProviderBackend(
-      config: AgentProviderConfig.defaultCodex,
+      config: defaultCodexAgentProviderConfig,
       threadHistories: const <String, AgentThreadHistorySnapshot>{},
       completeTurns: false,
       threadPages: <AgentThreadPage>[
@@ -845,7 +925,7 @@ void main() {
       ],
     );
     final grokBackend = _ProviderBackend(
-      config: AgentProviderConfig.defaultGrok.copyWith(enabled: true),
+      config: defaultGrokAgentProviderConfig.copyWith(enabled: true),
       threadHistories: const <String, AgentThreadHistorySnapshot>{},
       completeTurns: false,
       threadPages: <AgentThreadPage>[
@@ -862,29 +942,39 @@ void main() {
         ),
       ],
     );
-
-    final shell = IdeShellController(
-      agentUiFrameSchedulerFactory: _createUiFrameScheduler,
-      directoryPicker: () async => directory.path,
-      sessionStore: const CallbackIdeSessionStore(
-        loadJson: _loadEmptySession,
-        saveJson: _saveDiscardedSession,
-      ),
-      agentProviderFactory: _RecordingAgentProviderFactory(
-        <String, _ProviderBackend>{
-          defaultAgentProviderId: codexBackend,
-          grokAgentProviderId: grokBackend,
-        },
-      ),
-      agentProviderConfigStore: MemoryAgentProviderConfigStore(
+    final providerFactory = _RecordingAgentProviderFactory(
+      <String, _ProviderBackend>{
+        defaultAgentProviderId: codexBackend,
+        grokAgentProviderId: grokBackend,
+      },
+    );
+    final providerSettings = createProviderSettingsTestComposition(
+      configStore: MemoryAgentProviderConfigStore(
         AgentProviderSettings(
           providers: <AgentProviderConfig>[
-            AgentProviderConfig.defaultCodex,
-            AgentProviderConfig.defaultGrok.copyWith(enabled: true),
+            defaultCodexAgentProviderConfig,
+            defaultGrokAgentProviderConfig.copyWith(enabled: true),
           ],
           activeProviderId: defaultAgentProviderId,
         ),
       ),
+    );
+    addTearDown(providerSettings.dispose);
+
+    final workspace = _bindWorkspace(
+      directoryPicker: FakeWorkspaceDirectoryPicker(directory.path),
+    );
+    final shell = IdeShellController(
+      agentUiFrameSchedulerFactory: _createUiFrameScheduler,
+      workspace: workspace.notifier,
+      workspaceFileCorpus: workspace.corpus,
+      workspaceFileIndexController: workspace.index,
+      ideSessionOperations: _createIdeSessionOperations(
+        _CallbackSessionStore(),
+      ),
+      agentProviderFactory: providerFactory,
+      agentProviderSettingsPort: providerSettings.store,
+      activeModelCatalogLoader: providerSettings.loadActiveModelCatalog,
     );
     addTearDown(shell.dispose);
 
@@ -900,11 +990,11 @@ void main() {
     );
 
     await shell.selectProjectThread(directory.path, codexThread);
-    await shell.selectedAgentViewModel.sendMessage('run codex');
+    await shell.selectedAgentController.sendMessage('run codex');
     await _flushAsync();
 
     await shell.selectProjectThread(directory.path, grokThread);
-    await shell.selectedAgentViewModel.sendMessage('run grok');
+    await shell.selectedAgentController.sendMessage('run grok');
     await _flushAsync();
 
     expect(
@@ -935,7 +1025,7 @@ void main() {
     final settingsCompleter = Completer<AgentProviderSettings>();
     final configStore = _DelayedAgentProviderConfigStore(settingsCompleter);
     final codexBackend = _ProviderBackend(
-      config: AgentProviderConfig.defaultCodex,
+      config: defaultCodexAgentProviderConfig,
       threadPages: const <AgentThreadPage>[],
       threadHistories: <String, AgentThreadHistorySnapshot>{
         thread.id: AgentThreadHistorySnapshot(
@@ -956,23 +1046,33 @@ void main() {
       },
     );
     final grokBackend = _ProviderBackend(
-      config: AgentProviderConfig.defaultGrok,
+      config: defaultGrokAgentProviderConfig,
       threadPages: const <AgentThreadPage>[],
+    );
+    final providerFactory = _RecordingAgentProviderFactory(
+      <String, _ProviderBackend>{
+        defaultAgentProviderId: codexBackend,
+        grokAgentProviderId: grokBackend,
+      },
+    );
+    final providerSettings = createProviderSettingsTestComposition(
+      configStore: configStore,
+    );
+    addTearDown(providerSettings.dispose);
+    final workspace = _bindWorkspace(
+      directoryPicker: FakeWorkspaceDirectoryPicker(directory.path),
     );
     final shell = IdeShellController(
       agentUiFrameSchedulerFactory: _createUiFrameScheduler,
-      directoryPicker: () async => directory.path,
-      sessionStore: CallbackIdeSessionStore(
-        loadJson: () async => restoredSession.encode(),
-        saveJson: _saveDiscardedSession,
+      workspace: workspace.notifier,
+      workspaceFileCorpus: workspace.corpus,
+      workspaceFileIndexController: workspace.index,
+      ideSessionOperations: _createIdeSessionOperations(
+        _CallbackSessionStore(initial: restoredSession),
       ),
-      agentProviderFactory: _RecordingAgentProviderFactory(
-        <String, _ProviderBackend>{
-          defaultAgentProviderId: codexBackend,
-          grokAgentProviderId: grokBackend,
-        },
-      ),
-      agentProviderConfigStore: configStore,
+      agentProviderFactory: providerFactory,
+      agentProviderSettingsPort: providerSettings.store,
+      activeModelCatalogLoader: providerSettings.loadActiveModelCatalog,
     );
     addTearDown(shell.dispose);
 
@@ -1001,8 +1101,8 @@ void main() {
     settingsCompleter.complete(
       const AgentProviderSettings(
         providers: <AgentProviderConfig>[
-          AgentProviderConfig.defaultCodex,
-          AgentProviderConfig.defaultGrok,
+          defaultCodexAgentProviderConfig,
+          defaultGrokAgentProviderConfig,
         ],
         activeProviderId: grokAgentProviderId,
       ),
@@ -1021,13 +1121,13 @@ void main() {
     // Assert：会话自身的 Provider 归属仍优先于当前全局 Provider。
     expect(shell.isProjectHomeActive, isFalse);
     expect(
-      shell.selectedAgentViewModel.activeProviderId,
+      shell.selectedAgentController.activeProviderId,
       defaultAgentProviderId,
     );
     expect(codexBackend.readThreadIds, <String>[thread.id]);
     expect(grokBackend.readThreadIds, isEmpty);
     expect(
-      shell.selectedAgentViewModel.timelineEntries
+      shell.selectedAgentController.timelineEntries
           .whereType<AgentMessageTimelineEntry>()
           .map((entry) => entry.message.text),
       contains('Restored Codex history'),
@@ -1049,7 +1149,7 @@ void main() {
         projectPath: firstDirectory.path,
       );
       final backend = _ProviderBackend(
-        config: AgentProviderConfig.defaultCodex,
+        config: defaultCodexAgentProviderConfig,
         threadPages: <AgentThreadPage>[
           AgentThreadPage(
             threads: <AgentThreadSummary>[thread],
@@ -1061,17 +1161,27 @@ void main() {
           ),
         ],
       );
+      final providerFactory = _RecordingAgentProviderFactory(
+        <String, _ProviderBackend>{defaultAgentProviderId: backend},
+      );
+      final providerSettings = createProviderSettingsTestComposition(
+        configStore: MemoryAgentProviderConfigStore(),
+      );
+      addTearDown(providerSettings.dispose);
+      final workspace = _bindWorkspace(
+        directoryPicker: FakeWorkspaceDirectoryPicker(firstDirectory.path),
+      );
       final shell = IdeShellController(
         agentUiFrameSchedulerFactory: _createUiFrameScheduler,
-        directoryPicker: () async => firstDirectory.path,
-        sessionStore: const CallbackIdeSessionStore(
-          loadJson: _loadEmptySession,
-          saveJson: _saveDiscardedSession,
+        workspace: workspace.notifier,
+        workspaceFileCorpus: workspace.corpus,
+        workspaceFileIndexController: workspace.index,
+        ideSessionOperations: _createIdeSessionOperations(
+          _CallbackSessionStore(),
         ),
-        agentProviderFactory: _RecordingAgentProviderFactory(
-          <String, _ProviderBackend>{defaultAgentProviderId: backend},
-        ),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        agentProviderFactory: providerFactory,
+        agentProviderSettingsPort: providerSettings.store,
+        activeModelCatalogLoader: providerSettings.loadActiveModelCatalog,
       );
       addTearDown(shell.dispose);
 
@@ -1107,7 +1217,7 @@ void main() {
       expect(shell.isProjectHomeActive, isTrue);
       expect(shell.selectedAgentWorkspaceEntryId, isNull);
       expect(
-        shell.projectThreadsViewModel.states.values.every(
+        shell.projectThreadsSliceStore.states.values.every(
           (state) => state.selectedThreadId == null,
         ),
         isTrue,
@@ -1146,7 +1256,7 @@ void main() {
     );
     String? savedJson;
     final backend = _ProviderBackend(
-      config: AgentProviderConfig.defaultCodex,
+      config: defaultCodexAgentProviderConfig,
       threadPages: <AgentThreadPage>[
         const AgentThreadPage(
           threads: <AgentThreadSummary>[],
@@ -1154,19 +1264,32 @@ void main() {
         ),
       ],
     );
+    final providerFactory = _RecordingAgentProviderFactory(
+      <String, _ProviderBackend>{defaultAgentProviderId: backend},
+    );
+    final providerSettings = createProviderSettingsTestComposition(
+      configStore: MemoryAgentProviderConfigStore(),
+    );
+    addTearDown(providerSettings.dispose);
+    final workspace = _bindWorkspace(
+      directoryPicker: FakeWorkspaceDirectoryPicker(directory.path),
+    );
     final shell = IdeShellController(
       agentUiFrameSchedulerFactory: _createUiFrameScheduler,
-      directoryPicker: () async => directory.path,
-      sessionStore: CallbackIdeSessionStore(
-        loadJson: () async => restoredSession.encode(),
-        saveJson: (value) async {
-          savedJson = value;
-        },
+      workspace: workspace.notifier,
+      workspaceFileCorpus: workspace.corpus,
+      workspaceFileIndexController: workspace.index,
+      ideSessionOperations: _createIdeSessionOperations(
+        _CallbackSessionStore(
+          initial: restoredSession,
+          onSave: (value) {
+            savedJson = value;
+          },
+        ),
       ),
-      agentProviderFactory: _RecordingAgentProviderFactory(
-        <String, _ProviderBackend>{defaultAgentProviderId: backend},
-      ),
-      agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      agentProviderFactory: providerFactory,
+      agentProviderSettingsPort: providerSettings.store,
+      activeModelCatalogLoader: providerSettings.loadActiveModelCatalog,
     );
     addTearDown(shell.dispose);
 
@@ -1187,78 +1310,71 @@ void main() {
     expect(saved?.selectedThreadIdsByProject, isEmpty);
   });
 
-  test(
-    'restores legacy usage height while persisting active workbench fields',
-    () async {
-      const restoredWorkbench = IdeWorkbenchLayoutState(
-        leftSidebarVisible: false,
-        agentUsageExpanded: true,
-        leftSidebarWidth: 305,
-        agentUsageHeightFraction: 0.41,
-        selectedAgentUsageProviderId: 'grok',
-      );
-      String? savedJson;
-      final shell = IdeShellController(
-        agentUiFrameSchedulerFactory: _createUiFrameScheduler,
-        directoryPicker: () async => null,
-        sessionStore: CallbackIdeSessionStore(
-          loadJson: () async => const IdeSessionState(
-            workbenchLayout: restoredWorkbench,
-          ).encode(),
-          saveJson: (value) async {
+  test('restores and persists active workbench fields', () async {
+    const restoredWorkbench = IdeWorkbenchLayoutState(
+      leftSidebarVisible: false,
+      leftSidebarWidth: 305,
+      selectedAgentUsageProviderId: 'grok',
+    );
+    String? savedJson;
+    final providerFactory =
+        _RecordingAgentProviderFactory(<String, _ProviderBackend>{
+          defaultAgentProviderId: _ProviderBackend(
+            config: defaultCodexAgentProviderConfig,
+            threadPages: const <AgentThreadPage>[],
+          ),
+        });
+    final providerSettings = createProviderSettingsTestComposition(
+      configStore: MemoryAgentProviderConfigStore(),
+    );
+    addTearDown(providerSettings.dispose);
+    final workspace = _bindWorkspace(
+      directoryPicker: FakeWorkspaceDirectoryPicker.cancelled(),
+    );
+    final shell = IdeShellController(
+      agentUiFrameSchedulerFactory: _createUiFrameScheduler,
+      workspace: workspace.notifier,
+      workspaceFileCorpus: workspace.corpus,
+      workspaceFileIndexController: workspace.index,
+      ideSessionOperations: _createIdeSessionOperations(
+        _CallbackSessionStore(
+          initial: const IdeSessionState(workbenchLayout: restoredWorkbench),
+          onSave: (value) {
             savedJson = value;
           },
         ),
-        agentProviderFactory:
-            _RecordingAgentProviderFactory(<String, _ProviderBackend>{
-              defaultAgentProviderId: _ProviderBackend(
-                config: AgentProviderConfig.defaultCodex,
-                threadPages: const <AgentThreadPage>[],
-              ),
-            }),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
-      );
-      addTearDown(shell.dispose);
+      ),
+      agentProviderFactory: providerFactory,
+      agentProviderSettingsPort: providerSettings.store,
+      activeModelCatalogLoader: providerSettings.loadActiveModelCatalog,
+    );
+    addTearDown(shell.dispose);
 
-      await _flushAsync();
-      await _flushAsync();
+    await _flushAsync();
+    await _flushAsync();
 
-      expect(shell.initialRestoreCompleted, isTrue);
-      expect(shell.workbenchLayout, restoredWorkbench);
+    expect(shell.initialRestoreCompleted, isTrue);
+    expect(shell.workbenchLayout, restoredWorkbench);
 
-      shell
-        ..setLeftSidebarVisible(true)
-        ..setLeftSidebarWidth(340)
-        ..setSelectedAgentUsageProviderId('claude_code');
-      expect(savedJson, isNull);
+    shell
+      ..setLeftSidebarVisible(true)
+      ..setLeftSidebarWidth(340);
+    expect(savedJson, isNull);
 
-      await Future<void>.delayed(
-        sessionSaveDelay + const Duration(milliseconds: 50),
-      );
+    await Future<void>.delayed(
+      sessionSaveDelay + const Duration(milliseconds: 50),
+    );
 
-      // agentUsageExpanded 已是只读遗留字段：原样带过，不被布局改写。
-      const updatedWorkbench = IdeWorkbenchLayoutState(
-        agentUsageExpanded: true,
-        leftSidebarWidth: 340,
-        agentUsageHeightFraction: 0.41,
-        selectedAgentUsageProviderId: 'claude_code',
-      );
-      expect(shell.workbenchLayout, updatedWorkbench);
-      expect(
-        IdeSessionState.tryDecode(savedJson)?.workbenchLayout,
-        updatedWorkbench,
-      );
-
-      savedJson = null;
-      shell.setSelectedAgentUsageProviderId('codex');
-      await shell.saveNow();
-
-      expect(
-        IdeSessionState.tryDecode(savedJson)?.workbenchLayout,
-        updatedWorkbench.copyWith(selectedAgentUsageProviderId: 'codex'),
-      );
-    },
-  );
+    const updatedWorkbench = IdeWorkbenchLayoutState(
+      leftSidebarWidth: 340,
+      selectedAgentUsageProviderId: 'grok',
+    );
+    expect(shell.workbenchLayout, updatedWorkbench);
+    expect(
+      IdeSessionState.tryDecode(savedJson)?.workbenchLayout,
+      updatedWorkbench,
+    );
+  });
 
   test('sorts recent projects by last opened time', () async {
     final firstDirectory = Directory.systemTemp.createTempSync('zeta_recent_');
@@ -1280,7 +1396,7 @@ void main() {
     );
     String? savedJson;
     final backend = _ProviderBackend(
-      config: AgentProviderConfig.defaultCodex,
+      config: defaultCodexAgentProviderConfig,
       threadPages: <AgentThreadPage>[
         const AgentThreadPage(
           threads: <AgentThreadSummary>[],
@@ -1288,23 +1404,37 @@ void main() {
         ),
       ],
     );
-    final shell = IdeShellController(
-      agentUiFrameSchedulerFactory: _createUiFrameScheduler,
-      directoryPicker: () async => firstDirectory.path,
-      sessionStore: CallbackIdeSessionStore(
-        loadJson: () async => restoredSession.encode(),
-        saveJson: (value) async {
-          savedJson = value;
-        },
-      ),
-      agentProviderFactory: _RecordingAgentProviderFactory(
-        <String, _ProviderBackend>{defaultAgentProviderId: backend},
-      ),
-      agentProviderConfigStore: MemoryAgentProviderConfigStore(
+    final providerFactory = _RecordingAgentProviderFactory(
+      <String, _ProviderBackend>{defaultAgentProviderId: backend},
+    );
+    final providerSettings = createProviderSettingsTestComposition(
+      configStore: MemoryAgentProviderConfigStore(
         const AgentProviderSettings(
-          providers: <AgentProviderConfig>[AgentProviderConfig.defaultCodex],
+          providers: <AgentProviderConfig>[defaultCodexAgentProviderConfig],
         ),
       ),
+    );
+    addTearDown(providerSettings.dispose);
+    final workspace = _bindWorkspace(
+      directoryPicker: FakeWorkspaceDirectoryPicker(firstDirectory.path),
+      now: () => openedNow,
+    );
+    final shell = IdeShellController(
+      agentUiFrameSchedulerFactory: _createUiFrameScheduler,
+      workspace: workspace.notifier,
+      workspaceFileCorpus: workspace.corpus,
+      workspaceFileIndexController: workspace.index,
+      ideSessionOperations: _createIdeSessionOperations(
+        _CallbackSessionStore(
+          initial: restoredSession,
+          onSave: (value) {
+            savedJson = value;
+          },
+        ),
+      ),
+      agentProviderFactory: providerFactory,
+      agentProviderSettingsPort: providerSettings.store,
+      activeModelCatalogLoader: providerSettings.loadActiveModelCatalog,
       now: () => openedNow,
     );
     addTearDown(shell.dispose);
@@ -1331,9 +1461,18 @@ void main() {
   });
 }
 
-Future<String?> _loadEmptySession() async => null;
-
-Future<void> _saveDiscardedSession(String value) async {}
+IdeSessionSliceOperations _createIdeSessionOperations(
+  IdeSessionStore sessionStore,
+) {
+  final container = ProviderContainer(
+    overrides: <Override>[
+      ideSessionStoreProvider.overrideWithValue(sessionStore),
+      ...ideSessionSliceOverrides(),
+    ],
+  );
+  addTearDown(container.dispose);
+  return container.read(ideSessionSliceProvider.notifier);
+}
 
 Future<void> _flushAsync() async {
   await Future<void>.delayed(const Duration(milliseconds: 20));
@@ -1362,7 +1501,7 @@ Future<_SelectedThreadShellHarness> _openShellWithSelectedThread({
       const <String, AgentThreadHistorySnapshot>{},
 }) async {
   final backend = _ProviderBackend(
-    config: AgentProviderConfig.defaultCodex,
+    config: defaultCodexAgentProviderConfig,
     threadHistories: threadHistories,
     completeTurns: startSessionRuntime || completeTurns,
     canForkThreadAtTurn: canForkThreadAtTurn,
@@ -1381,22 +1520,31 @@ Future<_SelectedThreadShellHarness> _openShellWithSelectedThread({
     ],
   );
   final sessionSaves = _SessionSaveRecorder();
-  final shell = IdeShellController(
-    agentUiFrameSchedulerFactory: _createUiFrameScheduler,
-    directoryPicker: () async => directory.path,
-    sessionStore: CallbackIdeSessionStore(
-      loadJson: _loadEmptySession,
-      saveJson: sessionSaves.save,
-    ),
-    agentProviderFactory: _RecordingAgentProviderFactory(
-      <String, _ProviderBackend>{defaultAgentProviderId: backend},
-    ),
-    agentProviderConfigStore: MemoryAgentProviderConfigStore(
+  final providerFactory = _RecordingAgentProviderFactory(
+    <String, _ProviderBackend>{defaultAgentProviderId: backend},
+  );
+  final providerSettings = createProviderSettingsTestComposition(
+    configStore: MemoryAgentProviderConfigStore(
       const AgentProviderSettings(
-        providers: <AgentProviderConfig>[AgentProviderConfig.defaultCodex],
+        providers: <AgentProviderConfig>[defaultCodexAgentProviderConfig],
         activeProviderId: defaultAgentProviderId,
       ),
     ),
+  );
+  final workspace = _bindWorkspace(
+    directoryPicker: FakeWorkspaceDirectoryPicker(directory.path),
+  );
+  final shell = IdeShellController(
+    agentUiFrameSchedulerFactory: _createUiFrameScheduler,
+    workspace: workspace.notifier,
+    workspaceFileCorpus: workspace.corpus,
+    workspaceFileIndexController: workspace.index,
+    ideSessionOperations: _createIdeSessionOperations(
+      _CallbackSessionStore(onSave: (_) => sessionSaves.record()),
+    ),
+    agentProviderFactory: providerFactory,
+    agentProviderSettingsPort: providerSettings.store,
+    activeModelCatalogLoader: providerSettings.loadActiveModelCatalog,
   );
 
   await shell.openProject();
@@ -1408,7 +1556,7 @@ Future<_SelectedThreadShellHarness> _openShellWithSelectedThread({
   await shell.selectProjectThread(directory.path, thread);
   await _flushAsync();
   if (startSessionRuntime) {
-    await shell.selectedAgentViewModel.sendMessage('bind test runtime');
+    await shell.selectedAgentController.sendMessage('bind test runtime');
     await _flushAsync();
   }
 
@@ -1416,6 +1564,7 @@ Future<_SelectedThreadShellHarness> _openShellWithSelectedThread({
     shell: shell,
     backend: backend,
     sessionSaves: sessionSaves,
+    providerSettings: providerSettings,
   );
 }
 
@@ -1445,11 +1594,18 @@ class _SelectedThreadShellHarness {
     required this.shell,
     required this.backend,
     required this.sessionSaves,
+    required this.providerSettings,
   });
 
   final IdeShellController shell;
   final _ProviderBackend backend;
   final _SessionSaveRecorder sessionSaves;
+  final ProviderSettingsTestComposition providerSettings;
+
+  Future<void> dispose() async {
+    shell.dispose();
+    await providerSettings.dispose();
+  }
 
   _ShellTestAgentProvider get provider => backend.instances.last;
 }
@@ -1457,7 +1613,7 @@ class _SelectedThreadShellHarness {
 class _SessionSaveRecorder {
   int saveCount = 0;
 
-  Future<void> save(String value) async {
+  void record() {
     saveCount += 1;
   }
 
@@ -1496,7 +1652,7 @@ final class _DirectoryTrackingUsageRepository
   }
 }
 
-class _RecordingAgentProviderFactory with LegacyBundleFactoryMixin {
+class _RecordingAgentProviderFactory with TestAgentProviderBundleFactory {
   _RecordingAgentProviderFactory(this.backendsById);
 
   final Map<String, _ProviderBackend> backendsById;
@@ -1585,8 +1741,8 @@ class _ShellTestAgentProvider
   AgentProviderConfig get config => backend.config;
 
   @override
-  AgentProviderCapabilities get capabilities => AgentProviderStaticCapabilities
-      .codexAppServer
+  AgentProviderCapabilities get capabilities => codexAgentProviderDefinition
+      .staticCapabilities
       .copyWith(canForkThreadAtTurn: backend.canForkThreadAtTurn);
 
   @override
@@ -1730,5 +1886,24 @@ class _ShellTestAgentProvider
   @override
   Future<void> dispose() async {
     await _events.close();
+  }
+}
+
+/// 测试本地的 typed 会话仓库。
+///
+/// 取代生产侧已删除的 `CallbackIdeSessionStore`：语义完全一致（可注入初始状态、
+/// 可观察保存），但只存在于测试，不再让生产代码为测试保留一条回调实现。
+class _CallbackSessionStore implements IdeSessionStore {
+  _CallbackSessionStore({this.initial, this.onSave});
+
+  final IdeSessionState? initial;
+  final void Function(String encoded)? onSave;
+
+  @override
+  Future<IdeSessionState?> load() async => initial;
+
+  @override
+  Future<void> save(IdeSessionState state) async {
+    onSave?.call(state.encode());
   }
 }

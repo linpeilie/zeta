@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// 文件变更详情的中立 presentation 投影。
 sealed class AgentFileChangeDetailProjection {

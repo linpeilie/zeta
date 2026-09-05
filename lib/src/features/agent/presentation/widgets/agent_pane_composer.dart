@@ -1,4 +1,19 @@
-part of '../agent_pane.dart';
+import 'dart:async';
+import 'dart:convert';
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
+
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_ui/zeta_ui.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_model_config_ui_state.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_mode_selector.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_model_config.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_styles.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_text.dart';
+import 'package:zeta/src/ui/core/ide_image_preview.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
 /// 底部输入面板。
 ///
@@ -6,8 +21,8 @@ part of '../agent_pane.dart';
 /// 图片和 Plan 快捷入口；**仅当 draft 为 Plan 时**在工具栏展示 Plan 标识（Default
 /// 不占位）。会话配置/审批策略渐进展示；模型选择器固定在右侧，位于上下文进度
 /// 圆圈左侧，发送/取消按钮最右。
-class _AgentComposer extends StatelessWidget {
-  const _AgentComposer({
+class AgentComposer extends StatelessWidget {
+  const AgentComposer({
     required this.controller,
     required this.focusNode,
     required this.canSubmit,
@@ -46,6 +61,7 @@ class _AgentComposer extends StatelessWidget {
     required this.onSelectSessionConfigOption,
     required this.onOpenMentionPicker,
     required this.onInsertSkill,
+    super.key,
   });
 
   final TextEditingController controller;
@@ -139,10 +155,11 @@ class _AgentComposer extends StatelessWidget {
         threadOpenPhase == AgentThreadOpenPhase.idle &&
         isTurnRunning &&
         !showSend;
-    final contextWindowTokenTooltip = _contextWindowTokenUsageTooltip(
+    final contextWindowTokenTooltip = contextWindowTokenUsageTooltip(
       currentWindowTokenUsage,
+      context.l10n,
     );
-    final contextWindowTokenProgress = _contextWindowTokenUsageProgressValue(
+    final contextWindowTokenProgress = contextWindowTokenUsageProgressValue(
       currentWindowTokenUsage,
     );
     // 左侧可裁切选择器：Plan 标识（仅选中 Plan 时）、会话配置、审批策略。
@@ -174,7 +191,7 @@ class _AgentComposer extends StatelessWidget {
     }
     if (showPermissionPolicy) {
       addSelector(
-        _PermissionOptionButton(
+        PermissionOptionButton(
           label: permissionPolicyLabel,
           options: permissionOptions,
           selectedOptionId: selectedPermissionOptionId,
@@ -190,7 +207,7 @@ class _AgentComposer extends StatelessWidget {
             (modelConfigState.models.isNotEmpty ||
                 modelConfigState.isRefreshing ||
                 modelConfigState.refreshError != null)
-        ? _AgentModelConfig(
+        ? AgentModelConfig(
             state: modelConfigState,
             onSelectModel: onSelectModel,
             onSelectReasoningEffort: onSelectReasoningEffort,
@@ -273,7 +290,7 @@ class _AgentComposer extends StatelessWidget {
                                   ),
                                   borderRadius: BorderRadius.zero,
                                 ),
-                                initialHeight: _textAreaHeight(
+                                initialHeight: textAreaHeight(
                                   controller.text,
                                   lineHeight,
                                   minTextAreaHeight,
@@ -448,7 +465,6 @@ class _AgentComposer extends StatelessWidget {
     required bool showCancel,
     required bool showSend,
   }) {
-    final colors = IdeColors.of(context);
     return AnimatedSwitcher(
       duration: IdeMotion.durationNormal,
       switchInCurve: IdeMotion.curveDefault,
@@ -456,29 +472,21 @@ class _AgentComposer extends StatelessWidget {
       layoutBuilder: (currentChild, previousChildren) =>
           currentChild ?? const SizedBox.shrink(),
       child: showCancel
-          ? _ComposerActionButton(
+          ? IdeSubmitButton(
               key: const ValueKey('agent-cancel-button-state'),
               tooltip: context.l10n.agentCancel,
-              backgroundColor: colors.border.withValues(alpha: 0.36),
-              foregroundColor: colors.textSecondary,
               buttonKey: const ValueKey('agent-cancel-button'),
-              icon: const Icon(Icons.stop_rounded, size: 22),
+              icon: Icons.stop_rounded,
               onPressed: onCancel,
             )
           : showSend
-          ? _ComposerActionButton(
+          ? IdeSubmitButton(
               key: const ValueKey('agent-send-button-state'),
               tooltip: context.l10n.agentSend,
               // 可发送时使用实心 accent，作为界面最强的行动锚点；不可发送时退回弱化中性底。
-              backgroundColor: canSubmit
-                  ? colors.accent
-                  : colors.border.withValues(alpha: 0.2),
-              foregroundColor: canSubmit
-                  ? Colors.white
-                  : colors.textSecondary.withValues(alpha: 0.72),
               filled: canSubmit,
               buttonKey: const ValueKey('agent-send-button'),
-              icon: const Icon(Icons.arrow_upward_rounded, size: 22),
+              icon: Icons.arrow_upward_rounded,
               onPressed: canSubmit ? onSend : null,
             )
           : const SizedBox(
@@ -493,7 +501,7 @@ class _AgentComposer extends StatelessWidget {
 /// 依据文本行数推导 `sf.TextArea` 的初始高度。
 ///
 /// 主 Composer 与计划卡内的修改输入共用同一套增高节奏。
-double _textAreaHeight(
+double textAreaHeight(
   String text,
   double lineHeight,
   double minHeight,
@@ -776,16 +784,18 @@ class _ComposerMoreActionsButtonState
     if (!_hasActions) {
       return const SizedBox.shrink();
     }
-    final colors = IdeColors.of(context);
     final open = _popoverEntry != null;
-    return _ComposerSelectorTrigger(
-      surfaceKey: const ValueKey('agent-more-actions-button'),
-      tooltip: context.l10n.agentMoreActions,
-      semanticLabel: open ? 'More actions, expanded' : 'More actions',
-      open: open,
-      focusNode: _triggerFocusNode,
-      onPressed: _togglePopover,
-      child: Icon(Icons.add_rounded, size: 18, color: colors.textSecondary),
+    return IdeTooltip(
+      message: context.l10n.agentMoreActions,
+      enabled: !open,
+      child: IdeIconButton(
+        key: const ValueKey('agent-more-actions-button'),
+        icon: Icons.add_rounded,
+        semanticLabel: open ? 'More actions, expanded' : 'More actions',
+        variant: open ? IdeButtonVariant.secondary : IdeButtonVariant.ghost,
+        focusNode: _triggerFocusNode,
+        onPressed: _togglePopover,
+      ),
     );
   }
 }
@@ -1095,122 +1105,6 @@ class _ComposerImageDraftStrip extends StatelessWidget {
   }
 }
 
-class _SelectorSelect<T extends Object> extends StatefulWidget {
-  const _SelectorSelect({
-    required this.selectorKey,
-    required this.tooltip,
-    required this.placeholderLabel,
-    required this.icon,
-    required this.value,
-    required this.labelBuilder,
-    required this.options,
-    required this.onChanged,
-  });
-
-  final Key selectorKey;
-  final String tooltip;
-  final String placeholderLabel;
-  final IconData icon;
-  final T? value;
-  final String Function(T value) labelBuilder;
-  final List<Widget> options;
-  final ValueChanged<T> onChanged;
-
-  @override
-  State<_SelectorSelect<T>> createState() => _SelectorSelectState<T>();
-}
-
-class _SelectorSelectState<T extends Object> extends State<_SelectorSelect<T>> {
-  final FocusNode _triggerFocusNode = FocusNode(
-    debugLabel: 'agent-session-selector-trigger',
-  );
-  late final _ComposerSelectorPopoverController _popoverController;
-
-  @override
-  void initState() {
-    super.initState();
-    _popoverController = _ComposerSelectorPopoverController(
-      triggerFocusNode: _triggerFocusNode,
-      onOpenChanged: () {
-        if (mounted) {
-          setState(() {});
-        }
-      },
-    );
-  }
-
-  @override
-  void didUpdateWidget(covariant _SelectorSelect<T> oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (_popoverController.isOpen &&
-        (oldWidget.value != widget.value || widget.options.isEmpty)) {
-      final entry = _popoverController.handle;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _popoverController.dismiss(entry);
-        }
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    _popoverController.dispose();
-    _triggerFocusNode.dispose();
-    super.dispose();
-  }
-
-  void _toggleMenu() {
-    if (!_popoverController.isOpen && widget.options.isEmpty) {
-      return;
-    }
-    _popoverController.toggle(
-      context: context,
-      preferredWidth: 280,
-      preferredMaxHeight: 320,
-      builder: (context, layout) {
-        return ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: layout.width,
-            maxHeight: layout.maxHeight,
-          ),
-          child: _ComposerSelectPopup<T>(
-            value: widget.value,
-            items: widget.options,
-            onChanged: (value, selected) {
-              if (!selected) {
-                return false;
-              }
-              widget.onChanged(value);
-              return true;
-            },
-          ),
-        );
-      },
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final label = widget.value == null
-        ? widget.placeholderLabel
-        : widget.labelBuilder(widget.value as T);
-    return IdeTooltip(
-      message: widget.tooltip,
-      child: IdeTab(
-        key: widget.selectorKey,
-        focusNode: _triggerFocusNode,
-        label: label,
-        leadingIcon: widget.icon,
-        selected: _popoverController.isOpen,
-        enabled: widget.options.isNotEmpty,
-        onPressed: _toggleMenu,
-        semanticLabel: widget.tooltip,
-      ),
-    );
-  }
-}
-
 /// Provider 动态下发的 session 配置控件。
 class _SessionConfigOptionControl extends StatelessWidget {
   const _SessionConfigOptionControl({
@@ -1238,38 +1132,46 @@ class _SessionConfigOptionControl extends StatelessWidget {
         ),
       );
     }
-    return _SelectorSelect<Object>(
-      selectorKey: ValueKey<String>('agent-session-config-${option.id}'),
+    return IdePopupSelect<Object>(
       tooltip: option.description ?? option.name,
-      placeholderLabel: option.name,
-      icon: _sessionConfigIcon(option.category),
+      placeholder: option.name,
       value: option.currentValue,
-      labelBuilder: _valueLabel,
       onChanged: onSelect,
-      options: <Widget>[
+      focusNodeDebugLabel: 'agent-session-selector-trigger',
+      items: <IdePopupSelectItem<Object>>[
         for (final value in option.values)
-          sf.SelectItemButton<Object>(
+          IdePopupSelectItem<Object>(
             key: ValueKey<String>(
               'agent-session-config-${option.id}-option-${value.id}',
             ),
             value: value.id,
-            child: Text(
-              value.label,
-              overflow: TextOverflow.ellipsis,
-              style: IdeTextStyles.of(context).bodyMedium,
-            ),
+            label: value.label,
           ),
       ],
+      triggerBuilder:
+          (
+            context, {
+            required label,
+            required isOpen,
+            required enabled,
+            required focusNode,
+            required onPressed,
+          }) => IdeTab(
+            key: ValueKey<String>('agent-session-config-${option.id}'),
+            focusNode: focusNode,
+            label: label,
+            leadingIcon: _sessionConfigIcon(option.category),
+            selected: isOpen,
+            enabled: enabled,
+            onPressed: onPressed,
+            semanticLabel: option.description ?? option.name,
+          ),
+      itemBuilder: (context, item, {required selected}) => Text(
+        item.label,
+        overflow: TextOverflow.ellipsis,
+        style: IdeTextStyles.of(context).bodyMedium,
+      ),
     );
-  }
-
-  String _valueLabel(Object value) {
-    for (final candidate in option.values) {
-      if (candidate.id == value) {
-        return candidate.label;
-      }
-    }
-    return value.toString();
   }
 }
 
@@ -1284,8 +1186,8 @@ IconData _sessionConfigIcon(String? category) {
 }
 
 /// 权限模式选择：选项来自 [AgentPermissionOption] catalog。
-class _PermissionOptionButton extends StatefulWidget {
-  const _PermissionOptionButton({
+class PermissionOptionButton extends StatefulWidget {
+  const PermissionOptionButton({
     required this.label,
     required this.options,
     required this.selectedOptionId,
@@ -1293,6 +1195,7 @@ class _PermissionOptionButton extends StatefulWidget {
     required this.onSelect,
     this.scopeHint,
     this.surfaceKey = const ValueKey('agent-permission-option-selector'),
+    super.key,
   });
 
   final String label;
@@ -1304,20 +1207,19 @@ class _PermissionOptionButton extends StatefulWidget {
   final Key surfaceKey;
 
   @override
-  State<_PermissionOptionButton> createState() =>
-      _PermissionOptionButtonState();
+  State<PermissionOptionButton> createState() => _PermissionOptionButtonState();
 }
 
-class _PermissionOptionButtonState extends State<_PermissionOptionButton> {
+class _PermissionOptionButtonState extends State<PermissionOptionButton> {
   final FocusNode _triggerFocusNode = FocusNode(
     debugLabel: 'agent-permission-option-trigger',
   );
-  late final _ComposerSelectorPopoverController _popoverController;
+  late final IdePopoverController _popoverController;
 
   @override
   void initState() {
     super.initState();
-    _popoverController = _ComposerSelectorPopoverController(
+    _popoverController = IdePopoverController(
       triggerFocusNode: _triggerFocusNode,
       onOpenChanged: () {
         if (mounted) {
@@ -1328,7 +1230,7 @@ class _PermissionOptionButtonState extends State<_PermissionOptionButton> {
   }
 
   @override
-  void didUpdateWidget(covariant _PermissionOptionButton oldWidget) {
+  void didUpdateWidget(covariant PermissionOptionButton oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (_popoverController.isOpen &&
         (oldWidget.selectedOptionId != widget.selectedOptionId ||
@@ -1357,8 +1259,8 @@ class _PermissionOptionButtonState extends State<_PermissionOptionButton> {
     }
     _popoverController.toggle(
       context: context,
-      preferredWidth: _composerSelectorPopoverPreferredWidth,
-      preferredMaxHeight: _composerSelectorPopoverMaxHeight,
+      preferredWidth: composerSelectorPopoverPreferredWidth,
+      preferredMaxHeight: composerSelectorPopoverMaxHeight,
       builder: (context, layout) => _PermissionOptionPopover(
         width: layout.width,
         maxHeight: layout.maxHeight,
@@ -1390,65 +1292,76 @@ class _PermissionOptionButtonState extends State<_PermissionOptionButton> {
     final displayLabel = _displayLabel;
     final scopeHint = widget.scopeHint?.trim();
     final hasHint = scopeHint != null && scopeHint.isNotEmpty;
-    return _ComposerSelectorTrigger(
-      surfaceKey: widget.surfaceKey,
-      tooltip: hasHint
-          ? context.l10n.agentPermissionModeHint(scopeHint)
-          : context.l10n.agentPermissionMode,
-      semanticLabel: hasHint
-          ? context.l10n.agentPermissionModeSemantic(displayLabel, scopeHint)
-          : context.l10n.agentPermissionModeOnly(displayLabel),
-      open: open,
-      focusNode: _triggerFocusNode,
-      onPressed: widget.enabled && widget.options.isNotEmpty
-          ? _togglePopover
-          : null,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.shield_outlined, size: 14, color: colors.textSecondary),
-          const SizedBox(width: IdeSpacing.space6),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 140),
-            child: Text(
-              displayLabel,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: textStyles.bodySmall.copyWith(
-                color: colors.textSecondary,
-                fontWeight: FontWeight.w600,
-              ),
+    final tooltip = hasHint
+        ? context.l10n.agentPermissionModeHint(scopeHint)
+        : context.l10n.agentPermissionMode;
+    return IdeTooltip(
+      message: tooltip,
+      enabled: !open,
+      child: IdeButton(
+        key: widget.surfaceKey,
+        label: displayLabel,
+        semanticLabel: hasHint
+            ? context.l10n.agentPermissionModeSemantic(displayLabel, scopeHint)
+            : context.l10n.agentPermissionModeOnly(displayLabel),
+        variant: open ? IdeButtonVariant.secondary : IdeButtonVariant.ghost,
+        focusNode: _triggerFocusNode,
+        onPressed: widget.enabled && widget.options.isNotEmpty
+            ? _togglePopover
+            : null,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IdeIconBox(
+              Icons.shield_outlined,
+              size: 14,
+              color: colors.textSecondary,
             ),
-          ),
-          if (hasHint) ...[
-            const SizedBox(width: IdeSpacing.space4),
+            const SizedBox(width: IdeSpacing.space6),
             ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 72),
+              constraints: const BoxConstraints(maxWidth: 140),
               child: Text(
-                scopeHint,
+                displayLabel,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: textStyles.bodySmall.copyWith(
+                  color: colors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            if (hasHint) ...[
+              const SizedBox(width: IdeSpacing.space4),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 72),
+                child: Text(
+                  scopeHint,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textStyles.bodySmall.copyWith(
+                    color: colors.textTertiary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(width: IdeSpacing.space4),
+            IdeIconBox.custom(
+              child: AnimatedRotation(
+                turns: open ? 0.5 : 0,
+                duration: MediaQuery.disableAnimationsOf(context)
+                    ? Duration.zero
+                    : IdeMotion.durationNormal,
+                curve: IdeMotion.curveDefault,
+                child: Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  size: 13,
                   color: colors.textTertiary,
-                  fontWeight: FontWeight.w500,
                 ),
               ),
             ),
           ],
-          const SizedBox(width: IdeSpacing.space4),
-          AnimatedRotation(
-            turns: open ? 0.5 : 0,
-            duration: MediaQuery.disableAnimationsOf(context)
-                ? Duration.zero
-                : IdeMotion.durationNormal,
-            curve: IdeMotion.curveDefault,
-            child: Icon(
-              Icons.keyboard_arrow_down_rounded,
-              size: 13,
-              color: colors.textTertiary,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -1485,7 +1398,7 @@ class _PermissionOptionPopover extends StatelessWidget {
         width: width,
         child: ConstrainedBox(
           constraints: BoxConstraints(maxHeight: maxHeight),
-          child: _ComposerSelectPopup<AgentPermissionOption>(
+          child: IdePopupSelectList<AgentPermissionOption>(
             value: selectedOption,
             onChanged: (option, selected) {
               // 保持旧行为：点击当前项也先通知业务层，再由 Select 关层。
@@ -1535,56 +1448,6 @@ class _PermissionOptionPopover extends StatelessWidget {
                   ),
                 ),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ComposerActionButton extends StatelessWidget {
-  const _ComposerActionButton({
-    required this.tooltip,
-    required this.backgroundColor,
-    required this.foregroundColor,
-    required this.buttonKey,
-    required this.icon,
-    required this.onPressed,
-    this.filled = false,
-    super.key,
-  });
-
-  final String tooltip;
-  final Color backgroundColor;
-  final Color foregroundColor;
-  final Key buttonKey;
-  final Widget icon;
-  final VoidCallback? onPressed;
-
-  /// 实心样式：hover 时保持前景色不变，仅叠加白色提亮。
-  final bool filled;
-
-  @override
-  Widget build(BuildContext context) {
-    return IdeTooltip(
-      message: tooltip,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: backgroundColor,
-          shape: BoxShape.circle,
-        ),
-        child: ClipOval(
-          child: sf.IconButton.ghost(
-            key: buttonKey,
-            onPressed: onPressed,
-            size: sf.ButtonSize.small,
-            density: sf.ButtonDensity.iconDense,
-            shape: sf.ButtonShape.circle,
-            disableTransition: filled,
-            icon: IconTheme.merge(
-              data: IconThemeData(color: foregroundColor),
-              child: icon,
-            ),
           ),
         ),
       ),

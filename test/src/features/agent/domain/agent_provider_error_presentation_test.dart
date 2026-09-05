@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider_error_presentation.dart';
-import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 void main() {
   group('AgentProviderErrorPresentation', () {

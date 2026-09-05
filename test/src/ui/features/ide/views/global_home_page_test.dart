@@ -1,8 +1,9 @@
+import '../../../../testing/agent_management_test_definitions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
-import 'package:zeta/src/ui/core/rows/ide_row_divider.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/ui/features/ide/views/global_home_page.dart';
 
 import '../../../core/ide_component_test_harness.dart';
@@ -204,7 +205,7 @@ void main() {
 
   test('maps managed Agent state to homepage Provider status', () {
     final installed = ManagedAgent.forDefinition(
-      definition: AgentDefinition.codex,
+      definition: codexAgentManagementDefinition,
       enabled: true,
     ).copyWith(installationState: AgentInstallationState.installed);
 

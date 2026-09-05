@@ -1,32 +1,44 @@
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 // Shared harness for AgentPane widget tests.
 // 避免 AgentPane 集成测试重复搭建 FakeProvider / Theme / pump 工具。
 import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
+import 'package:zeta_markdown/zeta_markdown.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/features/agent/application/agent_conversation_mode_controller.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_static_capabilities.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
-import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
+import 'package:zeta/src/features/agent/application/agent_conversation_model_selection_controller.dart';
+import 'package:zeta/src/features/agent/application/agent_skills_catalog_controller.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
+
+import '../../../../testing/memory_agent_composer_attachment_store.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import '../../../../testing/agent_provider_implementations.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
+
+import '../../../../testing/callback_workspace_file_corpus_port.dart';
+
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
-import 'package:zeta/src/ui/core/app_theme.dart';
-import 'package:zeta/src/ui/core/ide_motion.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
+import 'package:zeta/src/features/agent/presentation/agent_ui_update_scheduler.dart';
+import 'package:zeta_ui/zeta_ui.dart';
+
+import '../../../../testing/provider_settings_test_store.dart';
 
 import '../../../../testing/agent_provider_stub_base.dart';
-import '../../../../testing/legacy_bundle_factory_mixin.dart';
+import '../../../../testing/test_agent_provider_bundle_factory.dart';
 import '../../../../testing/agent_conversation_binding_test_harness.dart';
+import '../../../../testing/memory_feature_stores.dart';
 
-class AgentPaneTestApp extends StatelessWidget {
+class AgentPaneTestApp extends StatefulWidget {
   const AgentPaneTestApp({
     super.key,
     required this.viewModel,
@@ -37,9 +49,11 @@ class AgentPaneTestApp extends StatelessWidget {
     this.disableAnimations = false,
     this.messageSendShortcut = MessageSendShortcut.enter,
     this.platform,
+    this.sliceStores =
+        const <AgentConversationBindingKey, AgentConversationSliceStore>{},
   });
 
-  final AgentConversationViewModel viewModel;
+  final AgentConversationRuntimeController viewModel;
 
   /// 挂到 [AgentPane] 上，供 `AgentPane.debugAddDraftImages` 等测试钩子使用。
   final GlobalKey? agentPaneKey;
@@ -50,45 +64,106 @@ class AgentPaneTestApp extends StatelessWidget {
   final MessageSendShortcut messageSendShortcut;
   final TargetPlatform? platform;
 
+  /// 可注入已经由测试显式驱动的切片 store；默认由本 Harness 创建必选 binding。
+  final Map<AgentConversationBindingKey, AgentConversationSliceStore>
+  sliceStores;
+
+  @override
+  State<AgentPaneTestApp> createState() => _AgentPaneTestAppState();
+}
+
+class _AgentPaneTestAppState extends State<AgentPaneTestApp> {
+  late final AgentConversationSliceStore? _ownedStore;
+  late final AgentConversationSliceStoreRegistry _registry;
+
+  @override
+  void initState() {
+    super.initState();
+    final key = widget.viewModel.conversationBinding.key;
+    _ownedStore = widget.sliceStores.containsKey(key)
+        ? null
+        : AgentConversationSliceStore.connected(
+            regions: widget.viewModel,
+            commands: widget.viewModel,
+          );
+    _registry = AgentConversationSliceStoreRegistry()
+      ..bind((requestedKey) {
+        final injected = widget.sliceStores[requestedKey];
+        if (injected != null) {
+          return AgentConversationSessionHandle(
+            store: injected,
+            controller: requestedKey == widget.viewModel.conversationBinding.key
+                ? widget.viewModel
+                : null,
+          );
+        }
+        if (requestedKey == widget.viewModel.conversationBinding.key) {
+          return AgentConversationSessionHandle(
+            store: _ownedStore!,
+            controller: widget.viewModel,
+          );
+        }
+        throw StateError('No test conversation slice for $requestedKey');
+      });
+  }
+
+  @override
+  void dispose() {
+    _registry.unbind();
+    _ownedStore?.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final lightIdeTheme = buildIdeThemeData(
       brightness: Brightness.light,
-      uiFontFamily: uiFontFamily,
-      codeFontFamily: codeFontFamily,
+      uiFontFamily: widget.uiFontFamily,
+      codeFontFamily: widget.codeFontFamily,
     );
     final darkIdeTheme = buildIdeThemeData(
       brightness: Brightness.dark,
-      uiFontFamily: uiFontFamily,
-      codeFontFamily: codeFontFamily,
+      uiFontFamily: widget.uiFontFamily,
+      codeFontFamily: widget.codeFontFamily,
     );
-    final activeIdeTheme = themeMode == ThemeMode.light
+    final activeIdeTheme = widget.themeMode == ThemeMode.light
         ? lightIdeTheme
         : darkIdeTheme;
-    return IdeThemeScope(
-      themeMode: themeMode,
-      lightTheme: lightIdeTheme,
-      darkTheme: darkIdeTheme,
-      child: sf.ShadcnApp(
-        locale: ZetaLocalization.simplifiedChinese,
-        supportedLocales: ZetaLocalization.supportedLocales,
-        localizationsDelegates: ZetaLocalization.delegates,
-        theme: buildShadcnTheme(lightIdeTheme),
-        darkTheme: buildShadcnTheme(darkIdeTheme),
-        materialTheme: buildMaterialTheme(
-          activeIdeTheme,
-        ).copyWith(platform: platform),
-        themeMode: resolveShadcnThemeMode(themeMode),
-        home: Builder(
-          builder: (context) => MediaQuery(
-            data: MediaQuery.of(
-              context,
-            ).copyWith(disableAnimations: disableAnimations),
-            child: sf.Scaffold(
-              child: AgentPane(
-                key: agentPaneKey,
-                viewModel: viewModel,
-                messageSendShortcut: messageSendShortcut,
+    return ProviderScope(
+      overrides: [
+        agentConversationSliceStoreRegistryProvider.overrideWithValue(
+          _registry,
+        ),
+        memoryAgentComposerAttachmentOverride(),
+      ],
+      child: IdeThemeScope(
+        themeMode: widget.themeMode,
+        lightTheme: lightIdeTheme,
+        darkTheme: darkIdeTheme,
+        child: sf.ShadcnApp(
+          locale: ZetaLocalization.simplifiedChinese,
+          supportedLocales: ZetaLocalization.supportedLocales,
+          localizationsDelegates: ZetaLocalization.delegates,
+          theme: buildShadcnTheme(lightIdeTheme),
+          darkTheme: buildShadcnTheme(darkIdeTheme),
+          builder: (context, child) => IdeMaterialLayer(
+            theme: buildMaterialTheme(
+              activeIdeTheme,
+            ).copyWith(platform: widget.platform),
+            child: child,
+          ),
+          themeMode: resolveShadcnThemeMode(widget.themeMode),
+          home: Builder(
+            builder: (context) => MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(disableAnimations: widget.disableAnimations),
+              child: sf.Scaffold(
+                child: AgentPane(
+                  key: widget.agentPaneKey,
+                  controller: widget.viewModel,
+                  messageSendShortcut: widget.messageSendShortcut,
+                ),
               ),
             ),
           ),
@@ -183,7 +258,7 @@ const AgentModelList agentPaneSingleReasoningModelList = AgentModelList(
   ],
 );
 
-AgentConversationViewModel createAgentPaneViewModel(
+AgentConversationRuntimeController createAgentPaneViewModel(
   AgentPaneFakeProvider provider, {
   AgentThreadSummary? initialThread,
   AgentConversationModeController? conversationModeController,
@@ -202,7 +277,7 @@ AgentConversationViewModel createAgentPaneViewModel(
   );
 }
 
-AgentConversationViewModel createAgentPaneViewModelWithStore(
+AgentConversationRuntimeController createAgentPaneViewModelWithStore(
   AgentPaneFakeProvider provider,
   AgentProviderConfigStore configStore, {
   AgentThreadSummary? initialThread,
@@ -215,7 +290,7 @@ AgentConversationViewModel createAgentPaneViewModelWithStore(
     providerFactory: AgentPaneFakeProviderFactory(provider),
   );
   addTearDown(registry.close);
-  final controller = AgentProviderSettingsController(
+  final controller = createProviderSettingsTestStore(
     runtimeRegistry: registry,
     configStore: configStore,
   );
@@ -231,16 +306,30 @@ AgentConversationViewModel createAgentPaneViewModelWithStore(
           config: provider.config,
           threadId: initialThread.id,
         );
-  final viewModel = AgentConversationViewModel(
+  final viewModel = AgentConversationRuntimeController(
     providerController: controller,
     conversationBinding: bindingLease.binding,
     globalRuntime: bindingHarness.globalRuntime,
-    conversationModeController: conversationModeController,
-    workspaceFilesProvider: workspaceFilesProvider,
-    workspaceFilesListenable: workspaceFilesListenable,
-    workspaceFilesIndexReady: workspaceFilesIndexReady,
+    composerStateOwner: AgentConversationComposerStateOwner(
+      modelSelection: AgentConversationModelSelectionController(
+        persistSelection: controller.persistModelSelection,
+      ),
+      mode: conversationModeController ?? AgentConversationModeController(),
+      skills: AgentSkillsCatalogController(),
+    ),
+    workspaceFileCorpus: workspaceFilesProvider == null
+        ? null
+        : CallbackWorkspaceFileCorpusPort(
+            filesProvider: workspaceFilesProvider,
+            isReadyProvider: workspaceFilesIndexReady ?? () => true,
+            addListenerCallback: (listener) =>
+                workspaceFilesListenable?.addListener(listener),
+            removeListenerCallback: (listener) =>
+                workspaceFilesListenable?.removeListener(listener),
+          ),
     initialProjectPath: initialThread?.projectPath ?? '/repo',
     initialThread: initialThread,
+    uiFrameScheduler: const SchedulerBindingAgentFrameScheduler(),
   );
   return viewModel;
 }
@@ -363,12 +452,13 @@ void expectMarkdownWidgetDefaults(MarkdownWidget widget) {
   expect(widget.selectable, isTrue);
   expect(widget.padding, EdgeInsets.zero);
   expect(widget.enableCopyFullDocumentShortcut, isFalse);
-  expect(widget.showCopyAllInContextMenu, isFalse);
-  // 对话 Markdown 通过空 contextMenuBuilder 完全抑制右键菜单。
+  // WP-6 T9：右键菜单不再被抑制，而是收敛成中文的「复制 / 复制全文 / 清除选区」。
+  expect(widget.showCopyAllInContextMenu, isTrue);
   expect(widget.contextMenuBuilder, isNotNull);
+  expect(widget.contextMenuLabels.copyAll, isNotEmpty);
 }
 
-class AgentPaneFakeProviderFactory with LegacyBundleFactoryMixin {
+class AgentPaneFakeProviderFactory with TestAgentProviderBundleFactory {
   AgentPaneFakeProviderFactory(this.provider);
 
   final AgentPaneFakeProvider provider;
@@ -455,11 +545,11 @@ class AgentPaneFakeProvider
 
   @override
   AgentProviderConfig get config =>
-      AgentProviderConfig.defaultCodex.withPermissionPreference(':workspace');
+      defaultCodexAgentProviderConfig.withPermissionPreference(':workspace');
 
   @override
   AgentProviderCapabilities get capabilities =>
-      AgentProviderStaticCapabilities.codexAppServer.copyWith(
+      codexStaticCapabilities.copyWith(
         canForkThreadAtTurn: true,
         canSteerTurn: canSteerTurn,
         canCompactThread: canCompactThread,

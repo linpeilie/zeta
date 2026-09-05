@@ -1,12 +1,14 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_extent_descriptor.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection.dart';
+import 'package:zeta/src/features/agent/presentation/timeline_rendering/agent_timeline_renderers.dart';
 
 void main() {
-  final factory = AgentTimelineExtentDescriptorFactory();
+  final factory = AgentTimelineExtentDescriptorFactory(
+    registry: buildAgentTimelineRendererRegistry(),
+  );
   const layout = AgentTimelineLayoutContext(
     crossAxisExtent: 720,
     devicePixelRatio: 1,
@@ -51,7 +53,7 @@ void main() {
         status: AgentHistoryTurnStatus.running,
         isStandby: false,
         entries: <AgentTimelineEntry>[toolEntry, messageV1],
-        renderRevision: 10,
+        contentRevision: 10,
       );
       final turnV2 = AgentConversationTurnGroup(
         id: 'live',
@@ -59,7 +61,7 @@ void main() {
         isStandby: false,
         entries: <AgentTimelineEntry>[toolEntry, messageV2],
         // 整 turn 修订号继续涨，但 sibling tool 的 layoutRevision 不得跟涨。
-        renderRevision: 11,
+        contentRevision: 11,
       );
 
       final toolBlock = AgentTimelineEntryRenderBlock(entry: toolEntry);

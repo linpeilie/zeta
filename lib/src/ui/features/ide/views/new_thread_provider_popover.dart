@@ -1,13 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon.dart';
-import 'package:zeta/src/ui/core/ide_colors.dart';
-import 'package:zeta/src/ui/core/ide_effects.dart';
-import 'package:zeta/src/ui/core/ide_spacing.dart';
-import 'package:zeta/src/ui/core/ide_text_styles.dart';
-import 'package:zeta/src/ui/core/pane_widgets.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
 /// 新建 Thread 时使用的 Agent Provider 选择内容。
@@ -27,9 +23,19 @@ class NewThreadProviderPopover extends StatefulWidget {
 }
 
 class _NewThreadProviderPopoverState extends State<NewThreadProviderPopover> {
-  late final Future<List<AgentProviderConfig>> _providersFuture = widget
-      .loadAvailableProviders();
+  late final Future<List<AgentProviderConfig>> _providersFuture;
   String? _selectedProviderId;
+
+  @override
+  void initState() {
+    super.initState();
+    // Overlay 子树在当前帧构建时，loader 可能冷启动 Agent management store 并
+    // 发布状态。推迟到下一事件，避免从弹层 build 反向标脏 Workbench 祖先。
+    _providersFuture = Future<List<AgentProviderConfig>>.delayed(
+      Duration.zero,
+      widget.loadAvailableProviders,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -185,7 +191,6 @@ class _NewThreadProviderPopoverState extends State<NewThreadProviderPopover> {
                     children: [
                       AgentProviderIcon(
                         providerId: provider.id,
-                        kind: provider.kind,
                         size: 18,
                         color: selected ? colors.accent : colors.textSecondary,
                       ),

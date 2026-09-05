@@ -4,11 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
-import 'package:zeta/src/ui/core/ide_colors.dart';
-import 'package:zeta/src/ui/core/ide_context_menu.dart';
-import 'package:zeta/src/ui/core/ide_popover.dart';
-import 'package:zeta/src/ui/core/pane_widgets.dart';
-import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 
 import 'ide_component_test_harness.dart';
 

@@ -1,35 +1,23 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:zeta/src/features/agent/application/agent_conversation_effect.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_effect_runner.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_event_processor.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_mutation.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_reducer.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
-import 'package:zeta/src/features/agent/application/agent_turn_context_recorder.dart';
-import 'package:zeta/src/features/agent/application/agent_ui_update_port.dart';
-import 'package:zeta/src/features/agent/application/agent_ui_update_request.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 void main() {
   group('AgentConversationEventProcessor', () {
     test(
-      'applies pre-state, timeline, post-state, snapshot request, UI, then effect once',
+      'applies state, timeline, snapshot request, UI, then after-effects',
       () {
         // Arrange
         final order = <String>[];
         final timeline = _runningTimeline();
         addTearDown(timeline.dispose);
-        final stateTarget = _RecordingStateTarget(
-          timeline: timeline,
-          order: order,
-          pendingInteractionOnTurnCompleted: true,
-        );
+        final stateSink = _RecordingStateSink(order: order);
         final uiUpdates = _RecordingUiUpdatePort(order);
         final effectRunner = _RecordingEffectRunner(order);
         final processor = _processor(
           timeline: timeline,
-          stateTarget: stateTarget,
+          stateSink: stateSink,
           uiUpdates: uiUpdates,
           effectRunner: effectRunner,
         );
@@ -45,21 +33,19 @@ void main() {
         // Assert
         expect(mutation.accepted, isTrue);
         expect(order, <String>[
-          'pre-state',
-          'timeline',
-          'post-state',
+          'before-effect',
+          'state',
           'snapshot',
-          'ui',
           'after-effect',
+          'after-effect',
+          'after-effect',
+          'ui',
         ]);
         expect(timeline.isTurnRunning, isFalse);
         expect(timeline.isHistoryTurnId('turn-1'), isTrue);
-        expect(stateTarget.snapshotRefreshRequests, 1);
+        expect(stateSink.snapshotRefreshRequests, 1);
         expect(uiUpdates.requests, hasLength(1));
-        expect(
-          mutation.uiUpdate!.regions,
-          isNot(contains(AgentUiRegion.pendingInteraction)),
-        );
+        expect(mutation.uiUpdate!.regions, isEmpty);
         expect(
           uiUpdates.requests.single.regions,
           containsAll(<AgentUiRegion>[
@@ -70,25 +56,66 @@ void main() {
             AgentUiRegion.pendingInteraction,
           ]),
         );
-        expect(effectRunner.effects, hasLength(1));
-        expect(effectRunner.effects.single, isA<AgentTurnCompletedEffect>());
+        expect(effectRunner.effects, hasLength(4));
+        expect(
+          effectRunner.effects.whereType<AgentTurnCompletedEffect>(),
+          hasLength(1),
+        );
       },
     );
+
+    test('after-effects observe already-applied state and timeline', () {
+      // P4 把 afterMutation effect 挪到了 UI 发布之前（processor._apply 的注释
+      // 解释了原因：原 stateChanges 里的 setTurnRunning / bind mode 会同步触发
+      // composer 刷新，放在 publish 之后会盖掉本次派生的 region）。
+      //
+      // 这条测试锁住那个改动**赖以成立的不变量**：effect 跑的时候，state 和
+      // timeline 都已经应用完了。所以 AgentTurnCompletedEffect 触发的通知
+      // 回调读到的是终态，而不是 turn 仍在运行的中间态——"提前一拍"因此不
+      // 影响注意力回调语义。上面那条顺序断言只钉住相对次序，不保证这一点。
+      final timeline = _runningTimeline();
+      addTearDown(timeline.dispose);
+      final stateSink = _RecordingStateSink();
+      final observations = <String, bool>{};
+      final effectRunner = _ObservingEffectRunner((effect) {
+        if (effect is AgentTurnCompletedEffect) {
+          observations['turnRunning'] = timeline.isTurnRunning;
+          observations['isHistoryTurn'] = timeline.isHistoryTurnId('turn-1');
+          observations['runtimeCleared'] =
+              stateSink.sessionState.threadRuntimeStatus == null ||
+              stateSink.sessionState.threadRuntimeStatus !=
+                  AgentThreadRuntimeStatus.active;
+        }
+      });
+      final processor = _processor(
+        timeline: timeline,
+        stateSink: stateSink,
+        uiUpdates: _RecordingUiUpdatePort(<String>[]),
+        effectRunner: effectRunner,
+      );
+
+      processor.process(
+        const AgentTurnCompletedEvent(sessionId: 'thread-1', turnId: 'turn-1'),
+      );
+
+      expect(observations, <String, bool>{
+        'turnRunning': false,
+        'isHistoryTurn': true,
+        'runtimeCleared': true,
+      }, reason: 'turn 完成通知必须看到已归档的终态时间线与已写回的 state');
+    });
 
     test('runs a rejected error logging effect before returning', () {
       // Arrange
       final order = <String>[];
       final timeline = AgentConversationTimelineStore();
       addTearDown(timeline.dispose);
-      final stateTarget = _RecordingStateTarget(
-        timeline: timeline,
-        order: order,
-      );
+      final stateSink = _RecordingStateSink(order: order);
       final uiUpdates = _RecordingUiUpdatePort(order);
       final effectRunner = _RecordingEffectRunner(order);
       final processor = _processor(
         timeline: timeline,
-        stateTarget: stateTarget,
+        stateSink: stateSink,
         uiUpdates: uiUpdates,
         effectRunner: effectRunner,
       );
@@ -108,8 +135,8 @@ void main() {
       expect(order, <String>['before-effect']);
       expect(effectRunner.effects, hasLength(1));
       expect(effectRunner.effects.single, isA<AgentLogProviderErrorEffect>());
-      expect(stateTarget.appliedChanges, isEmpty);
-      expect(stateTarget.snapshotRefreshRequests, 0);
+      expect(stateSink.applyCount, 0);
+      expect(stateSink.snapshotRefreshRequests, 0);
       expect(uiUpdates.requests, isEmpty);
       expect(timeline.messages, isEmpty);
     });
@@ -118,14 +145,10 @@ void main() {
       // Arrange
       final timeline = _runningTimeline();
       addTearDown(timeline.dispose);
-      final stateTarget = _RecordingStateTarget(
-        timeline: timeline,
-        order: <String>[],
-      );
       final uiUpdates = _RecordingUiUpdatePort(<String>[]);
       final processor = _processor(
         timeline: timeline,
-        stateTarget: stateTarget,
+        stateSink: _RecordingStateSink(),
         uiUpdates: uiUpdates,
         effectRunner: _RecordingEffectRunner(<String>[]),
       );
@@ -143,7 +166,7 @@ void main() {
 
       // Assert
       expect(mutation.accepted, isTrue);
-      expect(mutation.uiUpdate!.regions, isNot(contains(AgentUiRegion.header)));
+      expect(mutation.uiUpdate!.regions, isEmpty);
       expect(uiUpdates.requests, hasLength(1));
       expect(
         uiUpdates.requests.single.regions,
@@ -160,10 +183,7 @@ void main() {
       final recorder = _RecordingTurnContextRecorder();
       final processor = _processor(
         timeline: timeline,
-        stateTarget: _RecordingStateTarget(
-          timeline: timeline,
-          order: <String>[],
-        ),
+        stateSink: _RecordingStateSink(),
         uiUpdates: _RecordingUiUpdatePort(<String>[]),
         effectRunner: _RecordingEffectRunner(<String>[]),
         turnContextRecorder: recorder,
@@ -191,10 +211,7 @@ void main() {
       final recorder = _RecordingTurnContextRecorder();
       final liveProcessor = _processor(
         timeline: timeline,
-        stateTarget: _RecordingStateTarget(
-          timeline: timeline,
-          order: <String>[],
-        ),
+        stateSink: _RecordingStateSink(),
         uiUpdates: _RecordingUiUpdatePort(<String>[]),
         effectRunner: _RecordingEffectRunner(<String>[]),
         turnContextRecorder: recorder,
@@ -219,9 +236,10 @@ void main() {
           pendingTurnGroupId: historyTimeline.pendingTurnGroupId,
           hasTurn: historyTimeline.hasTurn,
           isHistoryTurnId: historyTimeline.isHistoryTurnId,
+          hasRunningTurnExcluding: (_) => false,
           modelsRefreshing: false,
           activeProviderName: 'Codex',
-          activeProviderConfig: AgentProviderConfig.defaultCodex,
+          activeProviderConfig: defaultCodexAgentProviderConfig,
           effectScope: const AgentConversationEffectScope(
             reductionScope: AgentConversationReductionScope.history,
             providerId: 'codex',
@@ -230,13 +248,10 @@ void main() {
           ),
         ),
         timeline: historyTimeline,
-        stateTarget: _RecordingStateTarget(
-          timeline: historyTimeline,
-          order: <String>[],
-        ),
+        stateSink: _RecordingStateSink(),
         uiUpdates: _RecordingUiUpdatePort(<String>[]),
         effectRunner: _RecordingEffectRunner(<String>[]),
-        turnContextRecorder: recorder,
+        observers: <AgentEventObserver>[AgentTurnContextObserver(recorder)],
       );
       historyProcessor.process(
         const AgentTurnStartedEvent(
@@ -254,10 +269,7 @@ void main() {
       addTearDown(timeline.dispose);
       final processor = _processor(
         timeline: timeline,
-        stateTarget: _RecordingStateTarget(
-          timeline: timeline,
-          order: <String>[],
-        ),
+        stateSink: _RecordingStateSink(),
         uiUpdates: _RecordingUiUpdatePort(<String>[]),
         effectRunner: _RecordingEffectRunner(<String>[]),
         turnContextRecorder: _ThrowingTurnContextRecorder(),
@@ -275,7 +287,7 @@ void main() {
 
 AgentConversationEventProcessor _processor({
   required AgentConversationTimelineStore timeline,
-  required AgentConversationStateMutationTarget stateTarget,
+  required AgentConversationStateSink stateSink,
   required AgentUiUpdatePort uiUpdates,
   required AgentConversationEffectRunner effectRunner,
   AgentTurnContextRecorder? turnContextRecorder,
@@ -286,10 +298,13 @@ AgentConversationEventProcessor _processor({
     ),
     context: () => _contextFor(timeline),
     timeline: timeline,
-    stateTarget: stateTarget,
+    stateSink: stateSink,
     uiUpdates: uiUpdates,
     effectRunner: effectRunner,
-    turnContextRecorder: turnContextRecorder,
+    observers: <AgentEventObserver>[
+      if (turnContextRecorder != null)
+        AgentTurnContextObserver(turnContextRecorder),
+    ],
   );
 }
 
@@ -303,9 +318,13 @@ AgentConversationReducerContext _contextFor(
     pendingTurnGroupId: timeline.pendingTurnGroupId,
     hasTurn: timeline.hasTurn,
     isHistoryTurnId: timeline.isHistoryTurnId,
+    hasRunningTurnExcluding: (turnId) {
+      final running = timeline.selectedRunningTurnId;
+      return running != null && running != turnId;
+    },
     modelsRefreshing: false,
     activeProviderName: 'Codex',
-    activeProviderConfig: AgentProviderConfig.defaultCodex,
+    activeProviderConfig: defaultCodexAgentProviderConfig,
     effectScope: const AgentConversationEffectScope(
       reductionScope: AgentConversationReductionScope.live,
       providerId: 'codex',
@@ -323,47 +342,27 @@ AgentConversationTimelineStore _runningTimeline() {
   timeline.beginLiveTurnGroup(
     const AgentTurn(id: 'turn-1', sessionId: 'thread-1'),
   );
-  timeline.takeActivityDirty();
+  timeline.takeDirtyRegions();
   return timeline;
 }
 
-final class _RecordingStateTarget
-    implements AgentConversationStateMutationTarget {
-  _RecordingStateTarget({
-    required this.timeline,
-    required this.order,
-    this.pendingInteractionOnTurnCompleted = false,
-  });
+final class _RecordingStateSink implements AgentConversationStateSink {
+  _RecordingStateSink({List<String>? order}) : order = order ?? <String>[];
 
-  final AgentConversationTimelineStore timeline;
   final List<String> order;
-  final bool pendingInteractionOnTurnCompleted;
-  final List<AgentConversationStateChange> appliedChanges =
-      <AgentConversationStateChange>[];
+  @override
+  AgentConversationSessionState sessionState =
+      const AgentConversationSessionState.initial(
+        defaultTitle: agentDefaultThreadTitle,
+      );
+  int applyCount = 0;
   int snapshotRefreshRequests = 0;
 
   @override
-  AgentConversationStateMutationOutcome apply(
-    AgentConversationStateChange change,
-  ) {
-    appliedChanges.add(change);
-    switch (change) {
-      case AgentPrepareTurnCompletedChange():
-        expect(timeline.isTurnRunning, isTrue);
-        order.add('pre-state');
-      case AgentFinalizeTurnCompletedChange():
-        expect(timeline.isTurnRunning, isFalse);
-        expect(timeline.isHistoryTurnId(change.event.turnId), isTrue);
-        order
-          ..add('timeline')
-          ..add('post-state');
-        return AgentConversationStateMutationOutcome(
-          pendingInteractionChanged: pendingInteractionOnTurnCompleted,
-        );
-      default:
-        order.add('state');
-    }
-    return AgentConversationStateMutationOutcome.none;
+  void applyReducedState(AgentConversationSessionState next) {
+    sessionState = next;
+    applyCount += 1;
+    order.add('state');
   }
 
   @override
@@ -371,6 +370,20 @@ final class _RecordingStateTarget
     snapshotRefreshRequests += 1;
     order.add('snapshot');
   }
+}
+
+/// 在每个 effect 执行的那一刻回调，用于观察当时的 state / timeline 快照。
+final class _ObservingEffectRunner implements AgentConversationEffectRunner {
+  _ObservingEffectRunner(this.onRun);
+
+  final void Function(AgentConversationEffect effect) onRun;
+  bool disposed = false;
+
+  @override
+  void run(AgentConversationEffect effect) => onRun(effect);
+
+  @override
+  void dispose() => disposed = true;
 }
 
 final class _RecordingUiUpdatePort implements AgentUiUpdatePort {

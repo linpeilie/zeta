@@ -1,38 +1,15 @@
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:zeta/src/core/logging/app_logging.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
-final _log = loggerFor('zeta.agent.model_catalog');
+final _log = zetaLoggerFor('zeta.agent.model_catalog');
 
-/// 从 Provider 权威来源刷新模型目录。
-///
-/// 只有共享仓储判断缓存缺失、过期或被强制刷新时才会调用；实现必须绕过 Provider
-/// 实例内的目录缓存，避免下层缓存重新延长共享仓储的 TTL。
-typedef AgentModelCatalogLoader = Future<AgentModelList> Function();
-
-/// 一次模型目录读取的结果。
-class AgentModelCatalogLoadResult {
-  const AgentModelCatalogLoadResult({
-    required this.models,
-    required this.fetchedAt,
-    required this.fromCache,
-    required this.refreshed,
-    required this.isStale,
-    this.refreshError,
-  });
-
-  final AgentModelList models;
-  final DateTime fetchedAt;
-  final bool fromCache;
-  final bool refreshed;
-  final bool isStale;
-
-  /// 后台刷新失败时保留的错误；此时 [models] 仍是最近一次可用缓存。
-  final Object? refreshError;
-}
+/// 插件 definition 声明的模型目录安全指纹扩展字段。
+typedef AgentModelCatalogFingerprintExtraKeysFor =
+    Iterable<String> Function(AgentProviderConfig config);
 
 /// 应用级共享模型目录。
 ///
@@ -44,12 +21,16 @@ class AgentModelCatalogRepository {
     required this.store,
     this.freshFor = const Duration(hours: 1),
     this.maxStaleFor = const Duration(days: 7),
+    AgentModelCatalogFingerprintExtraKeysFor? fingerprintExtraKeysFor,
     DateTime Function()? clock,
-  }) : _clock = clock ?? DateTime.now;
+  }) : _fingerprintExtraKeysFor =
+           fingerprintExtraKeysFor ?? ((_) => const <String>[]),
+       _clock = clock ?? DateTime.now;
 
   final AgentModelCatalogCacheStore store;
   final Duration freshFor;
   final Duration maxStaleFor;
+  final AgentModelCatalogFingerprintExtraKeysFor _fingerprintExtraKeysFor;
   final DateTime Function() _clock;
 
   final Map<String, AgentModelCatalogSnapshot> _snapshots =
@@ -163,16 +144,16 @@ class AgentModelCatalogRepository {
   /// 为缓存生成不包含环境变量值或原始扩展配置的稳定指纹。
   String configFingerprint(AgentProviderConfig config) {
     final environmentKeys = config.environment.keys.toList()..sort();
-    const extraKeys = <String>[
-      claudeCodeAccountDataEnrichmentKey,
+    final extraKeys = <String>{
+      ..._fingerprintExtraKeysFor(config),
       'cliPath',
       'detectedCurrentVersion',
       'modelProvider',
       'modelProviderId',
       'profile',
-    ];
+    };
     final safeJson = jsonEncode(<String, Object?>{
-      'kind': config.kind.name,
+      'kind': config.kind.value,
       'command': config.command,
       'arguments': config.arguments,
       'defaultModel': config.defaultModel,
@@ -382,20 +363,6 @@ final class _AgentModelCatalogRefreshSuperseded implements Exception {
   @override
   String toString() =>
       'Model catalog refresh for $providerId was superseded by newer config';
-}
-
-/// 按 Provider 能力选择普通读取或强制刷新。
-Future<AgentModelList> fetchAgentProviderModels(
-  AgentModelCatalogPort modelCatalog, {
-  bool forceRefresh = false,
-  int limit = 20,
-  bool includeHidden = false,
-}) {
-  return modelCatalog.listModels(
-    limit: limit,
-    includeHidden: includeHidden,
-    forceRefresh: forceRefresh,
-  );
 }
 
 String _cacheKey(String providerId, bool includeHidden) =>

@@ -2,11 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_mode_selector.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
-import 'package:zeta/src/ui/core/app_theme.dart';
-import 'package:zeta/src/ui/core/pane_widgets.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -32,11 +31,9 @@ void main() {
     expect(find.text('Mode…'), findsOneWidget);
     expect(
       tester
-          .widget<PaneInteractiveSurface>(
-            find.byKey(const ValueKey('agent-mode-selector')),
-          )
-          .enabled,
-      isFalse,
+          .widget<IdeButton>(find.byKey(const ValueKey('agent-mode-selector')))
+          .onPressed,
+      isNull,
     );
 
     await tester.pumpWidget(
@@ -58,11 +55,9 @@ void main() {
     );
     expect(
       tester
-          .widget<PaneInteractiveSurface>(
-            find.byKey(const ValueKey('agent-mode-selector')),
-          )
-          .enabled,
-      isFalse,
+          .widget<IdeButton>(find.byKey(const ValueKey('agent-mode-selector')))
+          .onPressed,
+      isNull,
     );
     semantics.dispose();
   });
@@ -496,7 +491,10 @@ class _ThemeHarness extends StatelessWidget {
         localizationsDelegates: ZetaLocalization.delegates,
         theme: buildShadcnTheme(lightIdeTheme),
         darkTheme: buildShadcnTheme(darkIdeTheme),
-        materialTheme: buildMaterialTheme(lightIdeTheme),
+        builder: (context, child) => IdeMaterialLayer(
+          theme: buildMaterialTheme(lightIdeTheme),
+          child: child,
+        ),
         themeMode: sf.ThemeMode.light,
         home: Builder(
           builder: (context) {

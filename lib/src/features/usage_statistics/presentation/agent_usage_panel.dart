@@ -1,29 +1,20 @@
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
-import 'package:zeta/src/features/agent/domain/agent_usage_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon.dart';
-import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_controller.dart';
+import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_slice/agent_usage_panel_slice_state.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
-import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/agent_usage_quota_gallery.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_formatters.dart';
+import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_slice/agent_usage_panel_slice_store.dart';
 import 'package:zeta/src/ui/localization/app_localizations_x.dart';
-import 'package:zeta/src/ui/core/ide_colors.dart';
-import 'package:zeta/src/ui/core/ide_effects.dart';
-import 'package:zeta/src/ui/core/ide_metrics.dart';
-import 'package:zeta/src/ui/core/ide_motion.dart';
-import 'package:zeta/src/ui/core/ide_popover.dart';
-import 'package:zeta/src/ui/core/ide_skeleton.dart';
-import 'package:zeta/src/ui/core/rows/ide_row_divider.dart';
-import 'package:zeta/src/ui/core/ide_spacing.dart';
-import 'package:zeta/src/ui/core/ide_tabs.dart';
-import 'package:zeta/src/ui/core/ide_text_styles.dart';
-import 'package:zeta/src/ui/core/pane_widgets.dart';
-import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 
 /// Agent 统计在合并左栏中的显示模式。
 enum AgentUsagePanelMode { collapsed, expanded }
@@ -32,23 +23,23 @@ enum AgentUsagePanelMode { collapsed, expanded }
 ///
 /// 左栏常驻的始终是最多三行的折叠摘要；展开态不再原地撑高，而是以摘要为锚点
 /// 向上弹出 Popover 承载完整统计，避免挤压 Projects 列表。
-class AgentUsagePanelContent extends StatefulWidget {
+class AgentUsagePanelContent extends ConsumerStatefulWidget {
   const AgentUsagePanelContent({
-    required this.controller,
     required this.mode,
     super.key,
     this.onModeChanged,
   });
 
-  final AgentUsagePanelController controller;
   final AgentUsagePanelMode mode;
   final ValueChanged<AgentUsagePanelMode>? onModeChanged;
 
   @override
-  State<AgentUsagePanelContent> createState() => _AgentUsagePanelContentState();
+  ConsumerState<AgentUsagePanelContent> createState() =>
+      _AgentUsagePanelContentState();
 }
 
-class _AgentUsagePanelContentState extends State<AgentUsagePanelContent> {
+class _AgentUsagePanelContentState
+    extends ConsumerState<AgentUsagePanelContent> {
   /// 锚点上方空间不足时仍保留的最小弹层高度，避免塌缩成不可读的窄条。
   static const double _minPopoverHeight = 160;
 
@@ -85,13 +76,10 @@ class _AgentUsagePanelContentState extends State<AgentUsagePanelContent> {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: widget.controller,
-      builder: (context, _) => _CompactAgentUsage(
-        controller: widget.controller,
-        expanded: widget.mode == AgentUsagePanelMode.expanded,
-        onToggle: widget.onModeChanged == null ? null : _toggleMode,
-      ),
+    ref.watch(agentUsagePanelSliceProvider);
+    return _CompactAgentUsage(
+      expanded: widget.mode == AgentUsagePanelMode.expanded,
+      onToggle: widget.onModeChanged == null ? null : _toggleMode,
     );
   }
 
@@ -161,11 +149,7 @@ class _AgentUsagePanelContentState extends State<AgentUsagePanelContent> {
       allowInvertVertical: false,
       showDuration: duration,
       dismissDuration: duration,
-      builder: (_) => _AgentUsagePopover(
-        controller: widget.controller,
-        width: width,
-        maxHeight: maxHeight,
-      ),
+      builder: (_) => _AgentUsagePopover(width: width, maxHeight: maxHeight),
     );
     _popover = handle;
     unawaited(_awaitPopoverClose(handle));
@@ -186,14 +170,8 @@ class _AgentUsagePanelContentState extends State<AgentUsagePanelContent> {
 }
 
 /// 向上弹出的 Agent 统计弹层：内容超出可用高度时在弹层内滚动。
-class _AgentUsagePopover extends StatelessWidget {
-  const _AgentUsagePopover({
-    required this.controller,
-    required this.width,
-    required this.maxHeight,
-  });
-
-  final AgentUsagePanelController controller;
+class _AgentUsagePopover extends ConsumerWidget {
+  const _AgentUsagePopover({required this.width, required this.maxHeight});
 
   /// 锚点宽度左右各内缩后的弹层宽度。
   final double width;
@@ -201,7 +179,8 @@ class _AgentUsagePopover extends StatelessWidget {
   final double maxHeight;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(agentUsagePanelSliceProvider);
     return ConstrainedBox(
       constraints: BoxConstraints(
         minWidth: width,
@@ -210,24 +189,23 @@ class _AgentUsagePopover extends StatelessWidget {
       ),
       child: IdeSurface.popover(
         key: const ValueKey('agent-usage-popover'),
-        child: ListenableBuilder(
-          listenable: controller,
-          builder: (context, _) => _AgentUsagePanelBody(controller: controller),
-        ),
+        child: const _AgentUsagePanelBody(),
       ),
     );
   }
 }
 
-class _AgentUsageRefreshButton extends StatelessWidget {
-  const _AgentUsageRefreshButton({required this.controller});
-
-  final AgentUsagePanelController controller;
+class _AgentUsageRefreshButton extends ConsumerWidget {
+  const _AgentUsageRefreshButton();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(agentUsagePanelSliceProvider);
+    final controller = ref.read(agentUsagePanelSliceProvider.notifier);
     return IdeTooltip(
       message: context.l10n.usageRefreshUsage,
+      // G8：IdeIconButton 没有 iconDense，且不接受自定义 16px 图标；
+      // 统计刷新继续用 small+iconDense，避免被撑到 compact 24px。
       child: sf.IconButton.ghost(
         key: const ValueKey('agent-usage-refresh-button'),
         onPressed: controller.isLoading
@@ -273,19 +251,16 @@ class _AgentUsageModeButton extends StatelessWidget {
 }
 
 /// 折叠摘要同时是弹层锚点：[expanded] 只影响开合按钮的图标与语义。
-class _CompactAgentUsage extends StatelessWidget {
-  const _CompactAgentUsage({
-    required this.controller,
-    required this.expanded,
-    required this.onToggle,
-  });
+class _CompactAgentUsage extends ConsumerWidget {
+  const _CompactAgentUsage({required this.expanded, required this.onToggle});
 
-  final AgentUsagePanelController controller;
   final bool expanded;
   final VoidCallback? onToggle;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(agentUsagePanelSliceProvider);
+    final controller = ref.read(agentUsagePanelSliceProvider.notifier);
     if (controller.providers.isEmpty) {
       if (controller.isLoading) {
         return _CompactAgentUsageSkeleton(
@@ -603,13 +578,13 @@ class _CompactAgentUsageMessage extends StatelessWidget {
   }
 }
 
-class _AgentUsagePanelBody extends StatelessWidget {
-  const _AgentUsagePanelBody({required this.controller});
-
-  final AgentUsagePanelController controller;
+class _AgentUsagePanelBody extends ConsumerWidget {
+  const _AgentUsagePanelBody();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(agentUsagePanelSliceProvider);
+    final controller = ref.read(agentUsagePanelSliceProvider.notifier);
     final selected = controller.selectedProvider;
     final Widget content;
     if (controller.providers.isEmpty) {
@@ -664,10 +639,7 @@ class _AgentUsagePanelBody extends StatelessWidget {
                 ).caption.copyWith(color: IdeColors.of(context).warning),
               ),
             ),
-          _SelectedProviderBody(
-            state: resolvedSelected,
-            controller: controller,
-          ),
+          _SelectedProviderBody(state: resolvedSelected),
         ],
       );
     }
@@ -679,7 +651,6 @@ class _AgentUsagePanelBody extends StatelessWidget {
         // Tabs 与刷新常驻底部，仅正文在弹层可用高度内滚动。
         Flexible(child: SingleChildScrollView(child: content)),
         _AgentUsageTabsToolbar(
-          controller: controller,
           selectedProviderId: selected?.provider.providerId,
         ),
       ],
@@ -687,17 +658,15 @@ class _AgentUsagePanelBody extends StatelessWidget {
   }
 }
 
-class _AgentUsageTabsToolbar extends StatelessWidget {
-  const _AgentUsageTabsToolbar({
-    required this.controller,
-    required this.selectedProviderId,
-  });
+class _AgentUsageTabsToolbar extends ConsumerWidget {
+  const _AgentUsageTabsToolbar({required this.selectedProviderId});
 
-  final AgentUsagePanelController controller;
   final String? selectedProviderId;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(agentUsagePanelSliceProvider);
+    final controller = ref.read(agentUsagePanelSliceProvider.notifier);
     final showTabs =
         controller.providers.length > 1 && selectedProviderId != null;
     return Padding(
@@ -734,21 +703,22 @@ class _AgentUsageTabsToolbar extends StatelessWidget {
           else
             const Spacer(),
           if (showTabs) const SizedBox(width: IdeSpacing.space4),
-          _AgentUsageRefreshButton(controller: controller),
+          const _AgentUsageRefreshButton(),
         ],
       ),
     );
   }
 }
 
-class _SelectedProviderBody extends StatelessWidget {
-  const _SelectedProviderBody({required this.state, required this.controller});
+class _SelectedProviderBody extends ConsumerWidget {
+  const _SelectedProviderBody({required this.state});
 
   final AgentUsagePanelProviderState state;
-  final AgentUsagePanelController controller;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(agentUsagePanelSliceProvider);
+    final controller = ref.read(agentUsagePanelSliceProvider.notifier);
     final entry = state.entry;
     if (entry == null) {
       if (state.isLoading) {

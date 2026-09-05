@@ -7,27 +7,21 @@ import 'package:flutter_highlight/themes/vs2015.dart';
 import 'package:highlight/highlight.dart' show Node, highlight;
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
-import 'package:zeta/src/core/utils/system_file_manager.dart';
-import 'package:zeta/src/features/agent_management/application/agent_management_controller.dart';
-import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
-import 'package:zeta/src/ui/core/ide_colors.dart';
+import 'package:zeta/src/ui/core/system_file_manager.dart';
+import 'package:zeta/src/features/agent_management/application/agent_management_operations.dart';
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/ui/localization/app_localizations_x.dart';
-import 'package:zeta/src/ui/core/ide_dialog.dart';
-import 'package:zeta/src/ui/core/ide_spacing.dart';
-import 'package:zeta/src/ui/core/ide_status_card.dart';
-import 'package:zeta/src/ui/core/ide_text_styles.dart';
-import 'package:zeta/src/ui/core/ide_toast.dart';
-import 'package:zeta/src/ui/core/pane_widgets.dart';
 
 /// Codex TOML 配置编辑器。
 class AgentConfigurationEditor extends StatefulWidget {
   const AgentConfigurationEditor({
-    required this.controller,
+    required this.operations,
     this.onDirtyChanged,
     super.key,
   });
 
-  final AgentManagementController controller;
+  final AgentManagementOperations operations;
   final ValueChanged<bool>? onDirtyChanged;
 
   @override
@@ -57,7 +51,7 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
       if (!mounted) {
         return;
       }
-      final existing = widget.controller.configuration;
+      final existing = widget.operations.configuration;
       if (existing != null) {
         _setEditorContent(
           _revealed ? existing.content : existing.maskedContent,
@@ -111,100 +105,95 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
       ..syntaxTheme = brightness == Brightness.dark ? vs2015Theme : githubTheme
       ..baseStyle = textStyles.codeSmall.copyWith(color: colors.textPrimary);
 
-    return ListenableBuilder(
-      listenable: widget.controller,
-      builder: (context, _) {
-        final document = widget.controller.configuration;
-        if (widget.controller.loadingConfiguration && document == null) {
-          return Center(
-            child: IdeLoadingIndicator(
-              width: 32,
-              height: 14,
-              semanticsLabel: context.l10n.mgmtLoadingConfig,
-            ),
-          );
-        }
-        if (document == null) {
-          return EmptyState(
-            text:
-                widget.controller.operationError ??
-                context.l10n.mgmtConfigNotLoadedYet,
-          );
-        }
+    final document = widget.operations.configuration;
+    if (widget.operations.loadingConfiguration && document == null) {
+      return Center(
+        child: IdeLoadingIndicator(
+          width: 32,
+          height: 14,
+          semanticsLabel: context.l10n.mgmtLoadingConfig,
+        ),
+      );
+    }
+    if (document == null) {
+      return EmptyState(
+        text:
+            widget.operations.operationError ??
+            context.l10n.mgmtConfigNotLoadedYet,
+      );
+    }
 
-        final lineCount = '\n'.allMatches(_editingController.text).length + 1;
-        return SingleChildScrollView(
-          padding: IdeSpacing.all16,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildFileHeader(context, document),
-              const SizedBox(height: IdeSpacing.space12),
-              if (!_revealed)
-                IdeStatusCard(
-                  tone: IdeStatusCardTone.warning,
-                  title: context.l10n.mgmtSensitiveMaskedTitle,
-                  body: Text(
-                    context.l10n.mgmtSensitiveMaskedBody,
-                    style: textStyles.bodySmall.copyWith(
-                      color: colors.textSecondary,
-                    ),
-                  ),
+    final lineCount = '\n'.allMatches(_editingController.text).length + 1;
+    return SingleChildScrollView(
+      padding: IdeSpacing.all16,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildFileHeader(context, document),
+          const SizedBox(height: IdeSpacing.space12),
+          if (!_revealed)
+            IdeStatusCard(
+              tone: IdeStatusCardTone.warning,
+              title: context.l10n.mgmtSensitiveMaskedTitle,
+              body: Text(
+                context.l10n.mgmtSensitiveMaskedBody,
+                style: textStyles.bodySmall.copyWith(
+                  color: colors.textSecondary,
                 ),
-              _buildSearchBar(context),
-              const SizedBox(height: IdeSpacing.space8),
-              SizedBox(
-                height: 420,
-                child: PanelCard(
-                  child: SingleChildScrollView(
-                    padding: EdgeInsets.zero,
-                    child: IntrinsicHeight(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Container(
-                            width: 48,
-                            padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
-                            color: colors.surfaceElevated,
-                            child: SelectableText(
-                              List<String>.generate(
-                                lineCount,
-                                (index) => '${index + 1}',
-                              ).join('\n'),
-                              textAlign: TextAlign.right,
-                              style: textStyles.codeSmall.copyWith(
-                                color: colors.textTertiary,
-                                height: 1.45,
-                              ),
-                            ),
+              ),
+            ),
+          _buildSearchBar(context),
+          const SizedBox(height: IdeSpacing.space8),
+          SizedBox(
+            height: 420,
+            child: PanelCard(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.zero,
+                child: IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Container(
+                        width: 48,
+                        padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
+                        color: colors.surfaceElevated,
+                        child: SelectableText(
+                          List<String>.generate(
+                            lineCount,
+                            (index) => '${index + 1}',
+                          ).join('\n'),
+                          textAlign: TextAlign.right,
+                          style: textStyles.codeSmall.copyWith(
+                            color: colors.textTertiary,
+                            height: 1.45,
                           ),
-                          Expanded(
-                            child: sf.TextField(
-                              key: const ValueKey('agent-config-editor'),
-                              controller: _editingController,
-                              readOnly: !_revealed,
-                              minLines: 18,
-                              maxLines: null,
-                              keyboardType: TextInputType.multiline,
-                              style: textStyles.codeSmall.copyWith(
-                                color: colors.textPrimary,
-                                height: 1.45,
-                              ),
-                              onChanged: _handleChanged,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
-                    ),
+                      Expanded(
+                        child: sf.TextField(
+                          key: const ValueKey('agent-config-editor'),
+                          controller: _editingController,
+                          readOnly: !_revealed,
+                          minLines: 18,
+                          maxLines: null,
+                          keyboardType: TextInputType.multiline,
+                          style: textStyles.codeSmall.copyWith(
+                            color: colors.textPrimary,
+                            height: 1.45,
+                          ),
+                          onChanged: _handleChanged,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-              const SizedBox(height: IdeSpacing.space10),
-              _buildValidationAndActions(context),
-            ],
+            ),
           ),
-        );
-      },
+          const SizedBox(height: IdeSpacing.space10),
+          _buildValidationAndActions(context),
+        ],
+      ),
     );
   }
 
@@ -348,12 +337,12 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
             sf.PrimaryButton(
               key: const ValueKey('agent-config-save-button'),
               onPressed:
-                  _dirty && valid && !widget.controller.savingConfiguration
+                  _dirty && valid && !widget.operations.savingConfiguration
                   ? _save
                   : null,
               size: sf.ButtonSize.small,
               child: Text(
-                widget.controller.savingConfiguration
+                widget.operations.savingConfiguration
                     ? context.l10n.mgmtSaving
                     : context.l10n.mgmtSaveConfig,
               ),
@@ -365,7 +354,7 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
   }
 
   Future<void> _load() async {
-    final document = await widget.controller.loadConfiguration();
+    final document = await widget.operations.loadConfiguration();
     if (document == null || !mounted) {
       return;
     }
@@ -376,7 +365,7 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
   }
 
   void _toggleReveal() {
-    final document = widget.controller.configuration;
+    final document = widget.operations.configuration;
     if (document == null || _dirty) {
       return;
     }
@@ -387,7 +376,7 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
           : document.maskedContent;
       _editingController.selection = const TextSelection.collapsed(offset: 0);
       _validationError = _revealed
-          ? widget.controller.validateConfiguration(document.content)
+          ? widget.operations.validateConfiguration(document.content)
           : null;
     });
   }
@@ -396,9 +385,9 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
     if (!_revealed) {
       return;
     }
-    final document = widget.controller.configuration;
+    final document = widget.operations.configuration;
     final dirty = document != null && content != document.content;
-    final error = widget.controller.validateConfiguration(content);
+    final error = widget.operations.validateConfiguration(content);
     if (dirty == _dirty && error == _validationError) {
       return;
     }
@@ -409,7 +398,7 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
   }
 
   void _discardChanges() {
-    final document = widget.controller.configuration;
+    final document = widget.operations.configuration;
     if (document == null) {
       return;
     }
@@ -418,7 +407,7 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
 
   Future<void> _save({bool overwriteExternalChanges = false}) async {
     try {
-      final result = await widget.controller.saveConfiguration(
+      final result = await widget.operations.saveConfiguration(
         _editingController.text,
         overwriteExternalChanges: overwriteExternalChanges,
       );
@@ -506,7 +495,7 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
       _editingController.text = content;
       _editingController.selection = const TextSelection.collapsed(offset: 0);
       _validationError = _revealed
-          ? widget.controller.validateConfiguration(content)
+          ? widget.operations.validateConfiguration(content)
           : null;
       _setDirty(dirty);
     });

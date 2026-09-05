@@ -4,13 +4,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
+import 'package:zeta_ui/zeta_ui.dart';
 
-import 'ide_colors.dart';
-import 'ide_dialog.dart';
-import 'ide_effects.dart';
-import 'ide_text_styles.dart';
-import 'ide_toast.dart';
-import 'pane_widgets.dart';
 import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
 /// 打开本地图片预览弹层。

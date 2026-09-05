@@ -1,10 +1,8 @@
 import 'dart:io';
 
-import 'package:zeta/src/core/storage/atomic_text_file.dart';
-import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
 
-/// IDE 会话状态的旧版 shared_preferences key。
-const String sessionStorageKey = 'zeta.ide.session.v1';
+import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 
 abstract class IdeSessionStore {
   Future<IdeSessionState?> load();
@@ -14,9 +12,9 @@ abstract class IdeSessionStore {
 
 /// 基于 JSON 文件的 IDE 会话仓库。
 class FileIdeSessionStore implements IdeSessionStore {
-  FileIdeSessionStore({required File file}) : _storage = AtomicTextFile(file);
+  FileIdeSessionStore({required this._storage});
 
-  final AtomicTextFile _storage;
+  final StorageService _storage;
 
   @override
   Future<IdeSessionState?> load() async {
@@ -34,25 +32,5 @@ class FileIdeSessionStore implements IdeSessionStore {
   @override
   Future<void> save(IdeSessionState state) async {
     await _storage.write(state.encode());
-  }
-}
-
-class CallbackIdeSessionStore implements IdeSessionStore {
-  const CallbackIdeSessionStore({
-    required this.loadJson,
-    required this.saveJson,
-  });
-
-  final Future<String?> Function() loadJson;
-  final Future<void> Function(String value) saveJson;
-
-  @override
-  Future<IdeSessionState?> load() async {
-    return IdeSessionState.tryDecode(await loadJson());
-  }
-
-  @override
-  Future<void> save(IdeSessionState state) {
-    return saveJson(state.encode());
   }
 }

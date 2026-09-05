@@ -1,29 +1,29 @@
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
-import 'package:zeta/src/features/agent/domain/agent_usage_models.dart';
-import 'package:zeta/src/features/usage_statistics/application/usage_statistics_controller.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta/src/features/usage_statistics/application/usage_statistics_slice/usage_statistics_slice_store.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_repository.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/usage_statistics_page.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
-import 'package:zeta/src/ui/core/app_theme.dart';
-import 'package:zeta/src/ui/core/ide_metrics.dart';
-import 'package:zeta/src/ui/core/ide_text_styles.dart';
-import 'package:zeta/src/ui/core/rows/ide_data_row.dart';
-import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
+import 'package:zeta_ui/zeta_ui.dart';
+
+import '../../../testing/usage_statistics_test_bindings.dart';
 
 void main() {
   testWidgets('renders full statistics and opens task detail drawer', (
     tester,
   ) async {
     final now = DateTime(2026, 7, 10, 12);
-    final controller = UsageStatisticsController(
+    final controller = _createUsageStatisticsStore(
       repository: _UsageRepository(_source(now)),
       clock: () => now,
     );
@@ -105,7 +105,7 @@ void main() {
 
   testWidgets('switches detail tabs and shows model stats', (tester) async {
     final now = DateTime(2026, 7, 10, 12);
-    final controller = UsageStatisticsController(
+    final controller = _createUsageStatisticsStore(
       repository: _UsageRepository(_source(now)),
       clock: () => now,
     );
@@ -127,7 +127,7 @@ void main() {
 
   testWidgets('adapts filters to a narrow viewport', (tester) async {
     final now = DateTime(2026, 7, 10, 12);
-    final controller = UsageStatisticsController(
+    final controller = _createUsageStatisticsStore(
       repository: _UsageRepository(_source(now)),
       clock: () => now,
     );
@@ -163,7 +163,7 @@ void main() {
     tester,
   ) async {
     final now = DateTime(2026, 7, 10, 12);
-    final controller = UsageStatisticsController(
+    final controller = _createUsageStatisticsStore(
       repository: _UsageRepository(_source(now)),
       clock: () => now,
     );
@@ -192,7 +192,7 @@ void main() {
     tester,
   ) async {
     final now = DateTime(2026, 7, 10, 12);
-    final controller = UsageStatisticsController(
+    final controller = _createUsageStatisticsStore(
       repository: _UsageRepository(_source(now)),
       clock: () => now,
     );
@@ -263,7 +263,7 @@ void main() {
     tester,
   ) async {
     final now = DateTime(2026, 7, 10, 12);
-    final controller = UsageStatisticsController(
+    final controller = _createUsageStatisticsStore(
       repository: _UsageRepository(_source(now)),
       clock: () => now,
     );
@@ -326,7 +326,7 @@ void main() {
           tokens: const UsageTokenBreakdown(totalTokens: 10),
         ),
     ];
-    final controller = UsageStatisticsController(
+    final controller = _createUsageStatisticsStore(
       repository: _UsageRepository(
         UsageStatisticsSourceSnapshot(records: records, refreshedAt: now),
       ),
@@ -393,7 +393,7 @@ void main() {
       startedAt: DateTime(2026, 7, 10, 10),
       status: UsageTaskStatus.completed,
     );
-    final controller = UsageStatisticsController(
+    final controller = _createUsageStatisticsStore(
       repository: _UsageRepository(
         UsageStatisticsSourceSnapshot(
           records: <AgentUsageRecord>[duplicate, ...source.records],
@@ -437,7 +437,7 @@ void main() {
     tester,
   ) async {
     final now = DateTime(2026, 7, 10, 12);
-    final controller = UsageStatisticsController(
+    final controller = _createUsageStatisticsStore(
       repository: _UsageRepository(
         UsageStatisticsSourceSnapshot(records: const [], refreshedAt: now),
       ),
@@ -482,7 +482,7 @@ void main() {
     try {
       final now = DateTime(2026, 7, 10, 12);
       final repository = _DeferredUsageRepository(_source(now));
-      final controller = UsageStatisticsController(
+      final controller = _createUsageStatisticsStore(
         repository: repository,
         clock: () => now,
       );
@@ -522,7 +522,7 @@ void main() {
     tester,
   ) async {
     final now = DateTime(2026, 7, 10, 12);
-    final controller = UsageStatisticsController(
+    final controller = _createUsageStatisticsStore(
       repository: _UsageRepository(_source(now)),
       clock: () => now,
     );
@@ -544,9 +544,20 @@ void main() {
   });
 }
 
+UsageStatisticsSliceNotifier _createUsageStatisticsStore({
+  required UsageStatisticsRepository repository,
+  DateTime Function()? clock,
+}) {
+  final bindings = UsageStatisticsTestBindings(
+    repository: repository,
+    clock: clock,
+  );
+  return bindings.notifier;
+}
+
 Future<void> _pumpUsagePage(
   WidgetTester tester, {
-  required UsageStatisticsController controller,
+  required UsageStatisticsSliceNotifier controller,
   Size size = const Size(1200, 900),
   VoidCallback? onOpenAgentManagement,
   Locale locale = ZetaLocalization.simplifiedChinese,
@@ -564,23 +575,33 @@ Future<void> _pumpUsagePage(
     codeFontFamily: 'JetBrainsMono',
   );
   await tester.pumpWidget(
-    IdeThemeScope(
-      themeMode: ThemeMode.light,
-      lightTheme: ideTheme,
-      darkTheme: buildIdeThemeData(
-        brightness: Brightness.dark,
-        codeFontFamily: 'JetBrainsMono',
-      ),
-      child: sf.ShadcnApp(
-        locale: locale,
-        supportedLocales: ZetaLocalization.supportedLocales,
-        localizationsDelegates: ZetaLocalization.delegates,
-        theme: buildShadcnTheme(ideTheme),
-        materialTheme: buildMaterialTheme(ideTheme),
-        home: sf.Scaffold(
-          child: UsageStatisticsPage(
-            controller: controller,
-            onOpenAgentManagement: onOpenAgentManagement ?? () {},
+    UncontrolledProviderScope(
+      container: controller.testContainer,
+      child: IdeThemeScope(
+        themeMode: ThemeMode.light,
+        lightTheme: ideTheme,
+        darkTheme: buildIdeThemeData(
+          brightness: Brightness.dark,
+          codeFontFamily: 'JetBrainsMono',
+        ),
+        child: sf.ShadcnApp(
+          locale: locale,
+          supportedLocales: ZetaLocalization.supportedLocales,
+          localizationsDelegates: ZetaLocalization.delegates,
+          theme: buildShadcnTheme(ideTheme),
+          builder: (context, child) => IdeMaterialLayer(
+            theme: buildMaterialTheme(ideTheme),
+            child: child,
+          ),
+          home: Consumer(
+            builder: (context, ref, _) {
+              ref.watch(usageStatisticsSliceProvider);
+              return sf.Scaffold(
+                child: UsageStatisticsPage(
+                  onOpenAgentManagement: onOpenAgentManagement ?? () {},
+                ),
+              );
+            },
           ),
         ),
       ),

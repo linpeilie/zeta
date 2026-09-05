@@ -1,3 +1,4 @@
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -5,12 +6,15 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_static_capabilities.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
+import 'agent_provider_implementations.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
+import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 
 import 'agent_provider_stub_base.dart';
-import 'legacy_bundle_factory_mixin.dart';
+import 'test_agent_provider_bundle_factory.dart';
+
+export 'memory_feature_stores.dart';
 
 const String conversationTestThreadId = 'thread-1';
 
@@ -59,7 +63,7 @@ Future<void> pumpUntilCondition(
 
 String sessionJson({required String projectPath, String? currentFilePath}) {
   return jsonEncode(<String, Object?>{
-    'version': 1,
+    'version': sessionStateVersion,
     'projectPaths': <String>[projectPath],
     'activeProjectPath': projectPath,
     'currentFilePath': currentFilePath,
@@ -105,15 +109,22 @@ AgentThreadSummary agentThread({
   );
 }
 
-class MemorySessionStore {
+/// 内存会话仓库。
+///
+/// 仍以**编码后的 JSON 字符串**暴露 [value]，这样既能作为 typed
+/// [IdeSessionStore] 注入 `MainApp`，已有断言里的
+/// `IdeSessionState.tryDecode(session.value)` 也一行都不用改。
+class MemorySessionStore implements IdeSessionStore {
   MemorySessionStore([this.value]);
 
   String? value;
 
-  Future<String?> load() async => value;
+  @override
+  Future<IdeSessionState?> load() async => IdeSessionState.tryDecode(value);
 
-  Future<void> save(String newValue) async {
-    value = newValue;
+  @override
+  Future<void> save(IdeSessionState state) async {
+    value = state.encode();
   }
 }
 
@@ -237,8 +248,8 @@ class FakeAgentProvider
     this.responseText = 'Fake response from provider',
     this.turnErrorMessage,
     this.onResumeSession,
-    this.declaredCapabilities = AgentProviderStaticCapabilities.codexAppServer,
-    this.config = AgentProviderConfig.defaultCodex,
+    this.declaredCapabilities = codexStaticCapabilities,
+    this.config = defaultCodexAgentProviderConfig,
     this.includeConversationTestThread = false,
     this.conversationThreadProviderId,
     List<AgentPermissionOption> permissionOptions =

@@ -35,7 +35,7 @@ void main() {
       final files = <File>[
         for (final path in _g1ApplicationFiles) File(path),
         ...Directory(
-          'lib/src/features/agent/data/mappers',
+          'packages/zeta_agent_provider_sdk/lib/src/acp',
         ).listSync().whereType<File>().where((file) {
           final name = file.uri.pathSegments.last;
           return name.startsWith('acp_') && name.endsWith('.dart');
@@ -60,19 +60,20 @@ void main() {
     });
 
     test('统计选择不会改写会话 active Provider', () {
-      final controller = File(
+      final panelStore = File(
         'lib/src/features/usage_statistics/application/'
-        'agent_usage_panel_controller.dart',
+        'agent_usage_panel_slice/agent_usage_panel_slice_store.dart',
       ).readAsStringSync();
       final home = File(
         'lib/src/ui/features/ide/views/ide_home.dart',
       ).readAsStringSync();
-      final shell = File(
-        'lib/src/app/shell/ide_shell_controller.dart',
+      final overrides = File(
+        'lib/src/app/usage_statistics_slice/'
+        'usage_statistics_slice_overrides.dart',
       ).readAsStringSync();
 
-      expect(controller, isNot(contains('AgentProviderSettingsController')));
-      expect(controller, isNot(contains('activeProviderId')));
+      expect(panelStore, isNot(contains('AgentProviderSettingsController')));
+      expect(panelStore, isNot(contains('activeProviderId')));
 
       final terminalHandler = _slice(
         home,
@@ -82,27 +83,65 @@ void main() {
       expect(terminalHandler, contains('selectProviderFromTurn'));
       expect(terminalHandler, isNot(contains('agentProviderController')));
 
-      final selectionSetter = _slice(
-        shell,
-        'void setSelectedAgentUsageProviderId',
-        'bool get initialRestoreCompleted',
-      );
+      expect(overrides, contains('selectedAgentUsageProviderId: providerId'));
+      expect(overrides, isNot(contains('activeProviderId')));
+    });
+
+    test('两个统计切片由 application Riverpod Notifier 唯一持有', () {
+      final usageOwner = File(
+        'lib/src/features/usage_statistics/application/'
+        'usage_statistics_slice/usage_statistics_slice_store.dart',
+      ).readAsStringSync();
+      final panelOwner = File(
+        'lib/src/features/usage_statistics/application/'
+        'agent_usage_panel_slice/agent_usage_panel_slice_store.dart',
+      ).readAsStringSync();
+      final runner = File(
+        'lib/src/app/usage_statistics_slice/usage_statistics_slice_runner.dart',
+      ).readAsStringSync();
+      final presentation = <String>[
+        File(
+          'lib/src/features/usage_statistics/presentation/'
+          'usage_statistics_page.dart',
+        ).readAsStringSync(),
+        File(
+          'lib/src/features/usage_statistics/presentation/'
+          'usage_time_range_filter.dart',
+        ).readAsStringSync(),
+        File(
+          'lib/src/features/usage_statistics/presentation/'
+          'agent_usage_panel.dart',
+        ).readAsStringSync(),
+      ].join('\n');
+
+      for (final owner in <String>[usageOwner, panelOwner]) {
+        expect(owner, contains('NotifierProvider<'));
+        expect(owner, isNot(contains('isAutoDispose: true')));
+        expect(owner, isNot(contains('_listeners')));
+        expect(owner, isNot(contains('void addListener')));
+      }
+      expect(runner, isNot(contains('SliceStore? store')));
+      expect(runner, isNot(contains('selectionPersistenceHandler')));
+      expect(presentation, isNot(contains('UsageStatisticsOperations')));
+      expect(presentation, isNot(contains('AgentUsagePanelOperations')));
+      expect(presentation, isNot(contains('required this.controller')));
       expect(
-        selectionSetter,
-        contains('copyWith(selectedAgentUsageProviderId: providerId)'),
+        File(
+          'lib/src/app/usage_statistics_slice/'
+          'usage_statistics_slice_composition.dart',
+        ).existsSync(),
+        isFalse,
       );
-      expect(selectionSetter, isNot(contains('agentProviderController')));
-      expect(selectionSetter, isNot(contains('activeProviderId')));
     });
   });
 }
 
 const _g1ApplicationFiles = <String>[
-  'lib/src/features/agent/application/agent_event_pipeline.dart',
-  'lib/src/features/agent/application/agent_event_coalescing_policy.dart',
-  'lib/src/features/agent/application/coalescing_event_buffer.dart',
-  'lib/src/features/agent/application/bounded_event_dispatcher.dart',
-  'lib/src/features/agent/application/agent_conversation_timeline_store.dart',
+  'packages/zeta_agent_core/lib/src/application/agent_event_pipeline.dart',
+  'packages/zeta_agent_core/lib/src/application/agent_event_coalescing_policy.dart',
+  'packages/zeta_agent_core/lib/src/application/coalescing_event_buffer.dart',
+  'packages/zeta_agent_core/lib/src/application/bounded_event_dispatcher.dart',
+  'packages/zeta_agent_core/lib/src/application/agent_conversation_timeline_store.dart',
 ];
 
 final _concreteProviderIdentifier = RegExp(

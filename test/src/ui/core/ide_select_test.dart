@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
-import 'package:zeta/src/ui/core/ide_metrics.dart';
-import 'package:zeta/src/ui/core/ide_select.dart';
-import 'package:zeta/src/ui/core/ide_text_styles.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 
 import 'ide_component_test_harness.dart';
 

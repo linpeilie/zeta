@@ -1,12 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/ui/core/ide_colors.dart';
-import 'package:zeta/src/ui/core/ide_effects.dart';
-import 'package:zeta/src/ui/core/ide_metrics.dart';
-import 'package:zeta/src/ui/core/ide_spacing.dart';
-import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
-import 'package:zeta/src/ui/core/workbench/ide_workbench_scaffold.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 
 import 'ide_component_test_harness.dart';
 

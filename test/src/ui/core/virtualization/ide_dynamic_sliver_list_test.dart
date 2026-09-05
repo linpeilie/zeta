@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/ui/core/virtualization/ide_dynamic_sliver_list.dart';
-import 'package:zeta/src/ui/core/virtualization/ide_virtual_item.dart';
-import 'package:zeta/src/ui/core/virtualization/ide_virtual_list_controller.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 
 void main() {
   const epoch = IdeLayoutEpoch(
@@ -278,41 +276,6 @@ void main() {
       await tester.pumpAndSettle(const Duration(milliseconds: 100));
       expect(tester.takeException(), isNull);
       expect(_position(tester).pixels.isFinite, isTrue);
-    });
-
-    testWidgets('feature flag 可回退到普通 SliverList', (tester) async {
-      final controller = IdeVirtualListController();
-      final items = List<_Item>.generate(
-        10,
-        (i) => _Item(id: 'i-$i', height: 40),
-      );
-      controller.synchronizeNow(_descriptors(items), epoch: epoch);
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: CustomScrollView(
-              slivers: [
-                buildIdeVirtualSliver(
-                  useAnchoredDynamic: false,
-                  controller: controller,
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) => SizedBox(
-                      key: ValueKey(items[index].id),
-                      height: items[index].height,
-                      child: Text(items[index].id),
-                    ),
-                    childCount: items.length,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.byType(SliverList), findsOneWidget);
-      expect(find.byType(IdeAnchoredDynamicSliverList), findsNothing);
     });
 
     testWidgets('geometry.scrollExtent 跟踪 index.totalExtent', (tester) async {

@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/app/storage/file_storage_service.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
@@ -28,13 +29,17 @@ void main() {
     });
 
     test('returns null when the session file is missing', () async {
-      final store = FileIdeSessionStore(file: sessionFile);
+      final store = FileIdeSessionStore(
+        storage: FileStorageService(sessionFile),
+      );
 
       expect(await store.load(), isNull);
     });
 
     test('saves and restores the versioned session snapshot', () async {
-      final store = FileIdeSessionStore(file: sessionFile);
+      final store = FileIdeSessionStore(
+        storage: FileStorageService(sessionFile),
+      );
       const snapshot = IdeSessionState(
         projectPaths: <String>['/repo'],
         activeProjectPath: '/repo',
@@ -42,9 +47,7 @@ void main() {
         agentThreadIdsByProject: <String, String>{'/repo': 'thread-1'},
         workbenchLayout: IdeWorkbenchLayoutState(
           leftSidebarVisible: false,
-          agentUsageExpanded: true,
           leftSidebarWidth: 310,
-          agentUsageHeightFraction: 0.45,
           selectedAgentUsageProviderId: 'grok',
         ),
       );
@@ -57,9 +60,7 @@ void main() {
       expect(raw['version'], sessionStateVersion);
       expect((raw['workbench'] as Map<String, Object?>).keys, <String>[
         'leftSidebarVisible',
-        'agentUsageExpanded',
         'leftSidebarWidth',
-        'agentUsageHeightFraction',
         'selectedAgentUsageProviderId',
       ]);
       expect(restored?.projectPaths, <String>['/repo']);
@@ -73,7 +74,9 @@ void main() {
 
     test('returns an empty snapshot when the JSON file is damaged', () async {
       await sessionFile.writeAsString('{not-json');
-      final store = FileIdeSessionStore(file: sessionFile);
+      final store = FileIdeSessionStore(
+        storage: FileStorageService(sessionFile),
+      );
 
       final restored = await store.load();
 
@@ -83,7 +86,9 @@ void main() {
 
     test('returns null when the file is not valid UTF-8', () async {
       await sessionFile.writeAsBytes(<int>[0xff]);
-      final store = FileIdeSessionStore(file: sessionFile);
+      final store = FileIdeSessionStore(
+        storage: FileStorageService(sessionFile),
+      );
 
       expect(await store.load(), isNull);
     });
@@ -94,8 +99,10 @@ void main() {
       );
       await blockedParent.writeAsString('not a directory');
       final store = FileIdeSessionStore(
-        file: File(
-          '${blockedParent.path}${Platform.pathSeparator}ide_session.json',
+        storage: FileStorageService(
+          File(
+            '${blockedParent.path}${Platform.pathSeparator}ide_session.json',
+          ),
         ),
       );
 

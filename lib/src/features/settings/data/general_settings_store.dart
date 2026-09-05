@@ -1,7 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:zeta/src/core/storage/atomic_text_file.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
+
 import 'package:zeta/src/features/settings/data/general_settings_codec.dart';
 import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
@@ -16,12 +17,12 @@ abstract class GeneralSettingsStore {
 /// 基于版本化 JSON 文件的常规设置仓库。
 class FileGeneralSettingsStore implements GeneralSettingsStore {
   FileGeneralSettingsStore({
-    required File file,
+    required this._storage,
     required this.fallbackLanguage,
     this.codec = const GeneralSettingsCodec(),
-  }) : _storage = AtomicTextFile(file);
+  });
 
-  final AtomicTextFile _storage;
+  final StorageService _storage;
   final AppLanguage fallbackLanguage;
   final GeneralSettingsCodec codec;
 
@@ -53,23 +54,5 @@ class FileGeneralSettingsStore implements GeneralSettingsStore {
     } catch (_) {
       return GeneralSettings(appLanguage: fallbackLanguage);
     }
-  }
-}
-
-/// 内存版常规设置仓库，供测试和无文件宿主使用。
-class MemoryGeneralSettingsStore implements GeneralSettingsStore {
-  MemoryGeneralSettingsStore([
-    GeneralSettings? settings,
-    AppLanguage fallbackLanguage = AppLanguage.simplifiedChinese,
-  ]) : _settings = settings ?? GeneralSettings(appLanguage: fallbackLanguage);
-
-  GeneralSettings _settings;
-
-  @override
-  Future<GeneralSettings> load() async => _settings;
-
-  @override
-  Future<void> save(GeneralSettings settings) async {
-    _settings = settings;
   }
 }

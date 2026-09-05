@@ -1,10 +1,9 @@
 import 'dart:async';
 
-import 'package:zeta/src/features/agent/data/datasources/transport/json_rpc_stdio_transport.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk.dart';
 
-import 'legacy_bundle_factory_mixin.dart';
+import 'test_agent_provider_bundle_factory.dart';
 
 /// 一次由测试 harness 捕获的真实 JSON-RPC 请求。
 final class RecordedJsonRpcCall {
@@ -36,6 +35,12 @@ final class RecordingJsonRpcPeer implements JsonRpcPeer {
       StreamController<JsonRpcProtocolException>.broadcast();
 
   final List<RecordedJsonRpcCall> calls = <RecordedJsonRpcCall>[];
+
+  /// 与协议级 fixture 相同的请求顺序投影。
+  List<String> get requestMethods => calls.map((call) => call.method).toList();
+
+  /// 保留原始请求顺序，供宿主配置往返断言比对 wire 参数。
+  List<Object?> get requestParams => calls.map((call) => call.params).toList();
   final List<RecordedJsonRpcCall> notificationsSent = <RecordedJsonRpcCall>[];
 
   var _threadSequence = 0;
@@ -213,7 +218,7 @@ final class FixedAgentProviderBundleFactory
 
   @override
   AgentProviderBundle createBundle(AgentProviderConfig config) {
-    return _bundle ??= nativeTestBundle(host);
+    return _bundle ??= testAgentProviderBundle(host);
   }
 }
 

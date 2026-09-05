@@ -4,23 +4,26 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:logger/logger.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_mode_controller.dart';
+import 'package:zeta/src/features/agent/application/agent_conversation_model_selection_controller.dart';
+import 'package:zeta/src/features/agent/application/agent_skills_catalog_controller.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
-import 'package:zeta/src/features/agent/application/agent_ui_update_request.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_static_capabilities.dart';
-import 'package:zeta/src/features/agent/data/agent_turn_context_store.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
-import 'package:zeta/src/features/agent/domain/agent_turn_terminal_signal.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_settings_controller.dart';
-import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
+import '../../../testing/agent_provider_implementations.dart';
+import '../../../testing/provider_settings_test_store.dart';
+import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_command_scope.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_intent.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 
 import '../../../testing/agent_provider_stub_base.dart';
-import '../../../testing/legacy_bundle_factory_mixin.dart';
+import '../../../testing/test_agent_provider_bundle_factory.dart';
 import '../../../testing/agent_conversation_binding_test_harness.dart';
 import '../../../testing/fake_agent_frame_scheduler.dart';
+import '../../../testing/memory_feature_stores.dart';
 
 final List<FakeAgentFrameScheduler> _uiFrameSchedulers =
     <FakeAgentFrameScheduler>[];
@@ -28,14 +31,14 @@ final List<FakeAgentFrameScheduler> _uiFrameSchedulers =
 void main() {
   setUp(_uiFrameSchedulers.clear);
 
-  group('AgentConversationViewModel', () {
+  group('AgentConversationRuntimeController', () {
     test('uses New thread as the default header title', () {
       final viewModel = _createViewModel(_FakeAgentProvider());
       addTearDown(viewModel.dispose);
 
       expect(
         viewModel.currentThreadTitle,
-        AgentConversationViewModel.defaultThreadTitle,
+        AgentConversationRuntimeController.defaultThreadTitle,
       );
       expect(viewModel.currentThreadTokenUsage, isNull);
       expect(viewModel.currentThreadLastTokenUsage, isNull);
@@ -421,7 +424,7 @@ void main() {
         );
         expect(
           viewModel.messages.map((message) => message.text),
-          contains(AgentConversationViewModel.planExecutionPrompt),
+          contains(AgentConversationRuntimeController.planExecutionPrompt),
         );
         expect(
           provider.calls.where((call) => call.startsWith('steer:')),
@@ -856,7 +859,7 @@ void main() {
       // 列表误写占位 title 时，不得把详情头栏冲回 New thread。
       viewModel.syncThreadTitleIfCurrent(
         'thread-1',
-        AgentConversationViewModel.defaultThreadTitle,
+        AgentConversationRuntimeController.defaultThreadTitle,
       );
       expect(viewModel.currentThreadTitle, 'hello from provisional title');
     });
@@ -1718,25 +1721,29 @@ void main() {
 
       await viewModel.sendMessage('hello');
       provider.emit(
-        const AgentMessageDeltaEvent(
+        AgentMessageDeltaEvent(
           messageId: 'plan-1',
           delta: '# Plan\n',
           role: AgentMessageRole.agent,
           kind: AgentMessageKind.plan,
           status: AgentMessageStatus.streaming,
-          raw: <String, Object?>{'type': 'agentMessage'},
+          raw: AgentProviderRawPayload.wrap(<String, Object?>{
+            'type': 'agentMessage',
+          }),
           sessionId: 'thread-1',
           turnId: 'turn-1',
         ),
       );
       provider.emit(
-        const AgentMessageDeltaEvent(
+        AgentMessageDeltaEvent(
           messageId: 'plan-1',
           delta: '- Step one',
           role: AgentMessageRole.agent,
           kind: AgentMessageKind.plan,
           status: AgentMessageStatus.streaming,
-          raw: <String, Object?>{'type': 'agentMessage'},
+          raw: AgentProviderRawPayload.wrap(<String, Object?>{
+            'type': 'agentMessage',
+          }),
           sessionId: 'thread-1',
           turnId: 'turn-1',
         ),
@@ -1753,13 +1760,15 @@ void main() {
 
       // completed item 用权威全文覆盖拼接结果。
       provider.emit(
-        const AgentMessageUpdatedEvent(
+        AgentMessageUpdatedEvent(
           messageId: 'plan-1',
           kind: AgentMessageKind.plan,
           text: '# Final Plan\n\n- Step one\n- Step two',
           role: AgentMessageRole.agent,
           status: AgentMessageStatus.completed,
-          raw: <String, Object?>{'type': 'agentMessage'},
+          raw: AgentProviderRawPayload.wrap(<String, Object?>{
+            'type': 'agentMessage',
+          }),
           sessionId: 'thread-1',
           turnId: 'turn-1',
         ),
@@ -2228,7 +2237,7 @@ void main() {
             content: 'Fetching resources…',
             sessionId: 'thread-1',
             turnId: 'turn-1',
-            raw: <String, Object?>{'_progressAppend': true},
+            appendsProgress: true,
           ),
         ),
       );
@@ -2552,15 +2561,12 @@ void main() {
         var headerNotifications = 0;
         var composerNotifications = 0;
         var liveNotifications = 0;
-        viewModel.historyStateListenable.addListener(() {
-          historyNotifications += 1;
-        });
-        viewModel.headerStateListenable.addListener(() {
-          headerNotifications += 1;
-        });
-        viewModel.composerStateListenable.addListener(() {
-          composerNotifications += 1;
-        });
+        _listenRegionValueChanges(
+          viewModel,
+          onHistory: () => historyNotifications += 1,
+          onHeader: () => headerNotifications += 1,
+          onComposer: () => composerNotifications += 1,
+        );
         liveTurn!.addListener(() {
           liveNotifications += 1;
         });
@@ -2620,15 +2626,12 @@ void main() {
         var composerNotifications = 0;
         var liveNotifications = 0;
         var autoScrollNotifications = 0;
-        viewModel.historyStateListenable.addListener(() {
-          historyNotifications += 1;
-        });
-        viewModel.headerStateListenable.addListener(() {
-          headerNotifications += 1;
-        });
-        viewModel.composerStateListenable.addListener(() {
-          composerNotifications += 1;
-        });
+        _listenRegionValueChanges(
+          viewModel,
+          onHistory: () => historyNotifications += 1,
+          onHeader: () => headerNotifications += 1,
+          onComposer: () => composerNotifications += 1,
+        );
         final effectSubscription = viewModel.uiEffects.listen((effect) {
           if (effect is AgentRequestAutoScroll) {
             autoScrollNotifications += 1;
@@ -3041,12 +3044,6 @@ void main() {
           willRetry: false,
           sessionId: 'thread-1',
           turnId: 'turn-1',
-          raw: <String, Object?>{
-            'jsonRpcError': <String, Object?>{
-              'code': -32003,
-              'accessToken': 'event-secret',
-            },
-          },
         ),
       );
       await _drainTypedUiScheduling();
@@ -3063,10 +3060,8 @@ void main() {
       expect(context['sessionId'], 'thread-1');
       expect(context['turnId'], 'turn-1');
       expect(context['code'], 'rateLimited');
-      final diagnostic = context['diagnostic']! as Map<String, Object?>;
-      final rpc = diagnostic['jsonRpcError']! as Map<String, Object?>;
-      expect(rpc['code'], -32003);
-      expect(rpc['accessToken'], '••••••');
+      // 原文不再随事件传播，也就不会进日志：比"先落日志再脱敏"更强的保证。
+      expect(context.containsKey('diagnostic'), isFalse);
       expect(record.message, isNot(contains('event-secret')));
       expect(record.message, isNot(contains('private user prompt')));
     });
@@ -3356,8 +3351,9 @@ void main() {
       'compact stays unavailable without capability or while running',
       () async {
         final unsupportedProvider = _FakeAgentProvider(
-          declaredCapabilities: AgentProviderStaticCapabilities.codexAppServer
-              .copyWith(canCompactThread: false),
+          declaredCapabilities: codexStaticCapabilities.copyWith(
+            canCompactThread: false,
+          ),
         );
         final unsupportedViewModel = _createViewModel(
           unsupportedProvider,
@@ -3614,13 +3610,6 @@ void main() {
                   reasoningEffort: AgentHistoryReasoningEffort.explicit('low'),
                   serviceTierId: 'priority',
                   explicitFast: true,
-                  raw: <String, Object?>{
-                    'turnContext': <String, Object?>{
-                      'model': 'ignored-model',
-                      'serviceTier': 'ignored-tier',
-                      'fast': false,
-                    },
-                  },
                 ),
                 AgentHistoryTurn(id: 'turn-2'),
               ],
@@ -3648,8 +3637,8 @@ void main() {
       'retained Claude thread preserves history selection on catalog reload',
       () async {
         final provider = _FakeAgentProvider(
-          providerConfig: AgentProviderConfig.defaultClaudeCode,
-          declaredCapabilities: AgentProviderStaticCapabilities.claudeCode,
+          providerConfig: defaultClaudeCodeAgentProviderConfig,
+          declaredCapabilities: claudeCodeStaticCapabilities,
           availableModels: const AgentModelList(
             models: <AgentModelInfo>[
               AgentModelInfo(
@@ -3710,7 +3699,7 @@ void main() {
           initialThread: thread,
           providerSettings: const AgentProviderSettings(
             providers: <AgentProviderConfig>[
-              AgentProviderConfig.defaultClaudeCode,
+              defaultClaudeCodeAgentProviderConfig,
             ],
             activeProviderId: defaultClaudeCodeProviderId,
           ),
@@ -3735,7 +3724,7 @@ void main() {
 
     test('bound thread applies explicit Provider default effort', () async {
       final provider = _FakeAgentProvider(
-        providerConfig: AgentProviderConfig.defaultCodex.copyWith(
+        providerConfig: defaultCodexAgentProviderConfig.copyWith(
           selectedModel: 'gpt-5.5',
           selectedReasoningEffort: 'high',
         ),
@@ -3784,8 +3773,8 @@ void main() {
       'bound Claude thread keeps a valid catalog model when history is stale',
       () async {
         final provider = _FakeAgentProvider(
-          providerConfig: AgentProviderConfig.defaultClaudeCode,
-          declaredCapabilities: AgentProviderStaticCapabilities.claudeCode,
+          providerConfig: defaultClaudeCodeAgentProviderConfig,
+          declaredCapabilities: claudeCodeStaticCapabilities,
           availableModels: const AgentModelList(
             models: <AgentModelInfo>[
               AgentModelInfo(
@@ -3823,7 +3812,7 @@ void main() {
           initialThread: thread,
           providerSettings: const AgentProviderSettings(
             providers: <AgentProviderConfig>[
-              AgentProviderConfig.defaultClaudeCode,
+              defaultClaudeCodeAgentProviderConfig,
             ],
             activeProviderId: defaultClaudeCodeProviderId,
           ),
@@ -3864,16 +3853,7 @@ void main() {
             'thread-1': const AgentThreadHistorySnapshot(
               threadId: 'thread-1',
               turns: <AgentHistoryTurn>[
-                AgentHistoryTurn(
-                  id: 'turn-1',
-                  modelId: 'gpt-5.5',
-                  raw: <String, Object?>{
-                    'turnContext': <String, Object?>{
-                      'model': 'gpt-5.5',
-                      'effort': 'low',
-                    },
-                  },
-                ),
+                AgentHistoryTurn(id: 'turn-1', modelId: 'gpt-5.5'),
               ],
             ),
           },
@@ -3947,7 +3927,7 @@ void main() {
         providerFactory: _FakeAgentProviderFactory(provider),
       );
       addTearDown(registry.close);
-      final controller = AgentProviderSettingsController(
+      final controller = createProviderSettingsTestStore(
         runtimeRegistry: registry,
         configStore: MemoryAgentProviderConfigStore(),
       );
@@ -3958,10 +3938,13 @@ void main() {
       );
       addTearDown(bindingHarness.close);
       final bindingLease = bindingHarness.acquireDraft(provider.config);
-      final viewModel = AgentConversationViewModel(
+      final viewModel = AgentConversationRuntimeController(
         providerController: controller,
         conversationBinding: bindingLease.binding,
         globalRuntime: bindingHarness.globalRuntime,
+        composerStateOwner: AgentConversationComposerStateOwner.create(
+          providerController: controller,
+        ),
         uiFrameScheduler: _createUiFrameScheduler(),
       );
       addTearDown(viewModel.dispose);
@@ -3988,10 +3971,10 @@ void main() {
       'switchActiveProvider requests a separate draft and keeps this Binding',
       () async {
         // Arrange
-        final codexConfig = AgentProviderConfig.defaultCodex.copyWith(
+        final codexConfig = defaultCodexAgentProviderConfig.copyWith(
           selectedModel: 'gpt-5.5',
         );
-        final grokConfig = AgentProviderConfig.defaultGrok.copyWith(
+        final grokConfig = defaultGrokAgentProviderConfig.copyWith(
           selectedModel: 'grok-4.5',
         );
         final codex = _FakeAgentProvider(
@@ -4027,7 +4010,7 @@ void main() {
           }),
         );
         addTearDown(registry.close);
-        final controller = AgentProviderSettingsController(
+        final controller = createProviderSettingsTestStore(
           runtimeRegistry: registry,
           configStore: MemoryAgentProviderConfigStore(
             AgentProviderSettings(
@@ -4043,10 +4026,13 @@ void main() {
         addTearDown(bindingHarness.close);
         final bindingLease = bindingHarness.acquireDraft(codexConfig);
         String? requestedProviderId;
-        final viewModel = AgentConversationViewModel(
+        final viewModel = AgentConversationRuntimeController(
           providerController: controller,
           conversationBinding: bindingLease.binding,
           globalRuntime: bindingHarness.globalRuntime,
+          composerStateOwner: AgentConversationComposerStateOwner.create(
+            providerController: controller,
+          ),
           onProviderSwitchRequested: (providerId) async {
             requestedProviderId = providerId;
           },
@@ -4075,10 +4061,10 @@ void main() {
       () async {
         // Arrange：默认 active 为 Codex，打开 Grok 历史 thread 后应切换并 resume。
         final codex = _FakeAgentProvider(
-          providerConfig: AgentProviderConfig.defaultCodex,
+          providerConfig: defaultCodexAgentProviderConfig,
         );
         final grok = _FakeAgentProvider(
-          providerConfig: AgentProviderConfig.defaultGrok,
+          providerConfig: defaultGrokAgentProviderConfig,
           historySnapshotsByThread: <String, AgentThreadHistorySnapshot>{
             'grok-sess-1': _historySnapshot(
               threadId: 'grok-sess-1',
@@ -4094,13 +4080,13 @@ void main() {
           }),
         );
         addTearDown(registry.close);
-        final controller = AgentProviderSettingsController(
+        final controller = createProviderSettingsTestStore(
           runtimeRegistry: registry,
           configStore: MemoryAgentProviderConfigStore(
             const AgentProviderSettings(
               providers: <AgentProviderConfig>[
-                AgentProviderConfig.defaultCodex,
-                AgentProviderConfig.defaultGrok,
+                defaultCodexAgentProviderConfig,
+                defaultGrokAgentProviderConfig,
               ],
             ),
           ),
@@ -4126,10 +4112,13 @@ void main() {
           config: grok.config,
           threadId: thread.id,
         );
-        final viewModel = AgentConversationViewModel(
+        final viewModel = AgentConversationRuntimeController(
           providerController: controller,
           conversationBinding: bindingLease.binding,
           globalRuntime: bindingHarness.globalRuntime,
+          composerStateOwner: AgentConversationComposerStateOwner.create(
+            providerController: controller,
+          ),
           initialProjectPath: '/repo',
           initialThread: thread,
           uiFrameScheduler: _createUiFrameScheduler(),
@@ -4204,7 +4193,7 @@ void main() {
         },
       );
       final grok = _FakeAgentProvider(
-        providerConfig: AgentProviderConfig.defaultGrok,
+        providerConfig: defaultGrokAgentProviderConfig,
       );
       final factory = _MultiFakeAgentProviderFactory(<String, Object>{
         defaultAgentProviderId: codex,
@@ -4212,7 +4201,7 @@ void main() {
       });
       final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
       addTearDown(registry.close);
-      final controller = AgentProviderSettingsController(
+      final controller = createProviderSettingsTestStore(
         runtimeRegistry: registry,
         configStore: configStore,
       );
@@ -4227,10 +4216,13 @@ void main() {
         config: codex.config,
         threadId: thread.id,
       );
-      final viewModel = AgentConversationViewModel(
+      final viewModel = AgentConversationRuntimeController(
         providerController: controller,
         conversationBinding: bindingLease.binding,
         globalRuntime: bindingHarness.globalRuntime,
+        composerStateOwner: AgentConversationComposerStateOwner.create(
+          providerController: controller,
+        ),
         initialProjectPath: '/repo',
         initialThread: thread,
         uiFrameScheduler: _createUiFrameScheduler(),
@@ -4242,8 +4234,8 @@ void main() {
       settingsCompleter.complete(
         const AgentProviderSettings(
           providers: <AgentProviderConfig>[
-            AgentProviderConfig.defaultCodex,
-            AgentProviderConfig.defaultGrok,
+            defaultCodexAgentProviderConfig,
+            defaultGrokAgentProviderConfig,
           ],
           activeProviderId: grokAgentProviderId,
         ),
@@ -4362,6 +4354,7 @@ void main() {
               AgentUiRegion.liveTurnBinding,
               AgentUiRegion.header,
               AgentUiRegion.composer,
+              AgentUiRegion.pendingInteraction,
             },
             urgency: AgentUiUpdateUrgency.immediate,
             effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
@@ -4658,14 +4651,166 @@ void main() {
         await _drainTypedUiUpdate();
         _expectLastUiUpdate(
           viewModel,
-          regions: const <AgentUiRegion>{
-            AgentUiRegion.history,
-            AgentUiRegion.liveTurn,
-            AgentUiRegion.header,
-          },
+          regions: const <AgentUiRegion>{AgentUiRegion.liveTurn},
           urgency: AgentUiUpdateUrgency.immediate,
           effects: const <AgentUiEffect>[AgentRequestAutoScroll()],
         );
+      });
+    });
+
+    group('Phase 2 切片接线', () {
+      test('expansion 变化经 scheduler 流进切片', () async {
+        final viewModel = _createViewModel(_FakeAgentProvider());
+        addTearDown(viewModel.dispose);
+        final store = AgentConversationSliceStore.connected(
+          regions: viewModel,
+          commands: viewModel,
+        );
+        addTearDown(store.dispose);
+
+        viewModel.toggleToolCall('call-1');
+        viewModel.toggleToolCall('call-2');
+        await _drainTypedUiUpdate();
+
+        expect(store.state.expansion.toolCallIds, <String>{'call-1', 'call-2'});
+        expect(store.diagnostics.publishCount, greaterThan(0));
+      });
+
+      test('切片命令经 effect 打到现有 port，状态由 region 回流', () async {
+        final viewModel = _createViewModel(_FakeAgentProvider());
+        addTearDown(viewModel.dispose);
+        final store = AgentConversationSliceStore.connected(
+          regions: viewModel,
+          commands: viewModel,
+        );
+        addTearDown(store.dispose);
+
+        store.toggleExpansion(
+          AgentConversationExpansionTarget.toolCall,
+          'call-from-slice',
+        );
+        await _drainTypedUiUpdate();
+
+        // 展开集合的 owner 仍是 TimelineStore：切片只是把结果投影回来。
+        expect(viewModel.isToolCallExpanded('call-from-slice'), isTrue);
+        expect(store.state.expansion.toolCallIds, contains('call-from-slice'));
+      });
+
+      test('port 吞掉的失败必须记成失败，而不是成功', () async {
+        final viewModel = _createViewModel(
+          _FakeAgentProvider(sendError: StateError('send failed')),
+        );
+        addTearDown(viewModel.dispose);
+        final store = AgentConversationSliceStore.connected(
+          regions: viewModel,
+          commands: viewModel,
+        );
+        addTearDown(store.dispose);
+
+        final operation = store.sendMessage(text: 'hello');
+        await _drainTypedUiUpdate();
+        await pumpEventQueue();
+
+        // ViewModel 的 sendMessage 会 catch 掉异常并正常返回；靠"没抛异常"
+        // 判定就会把这次失败记成成功。
+        expect(store.state.pendingOperations, isEmpty);
+        expect(store.state.lastFailure?.operationId, operation);
+        expect(
+          store.state.lastFailure?.kind,
+          AgentCommandFailureKind.requestFailed,
+        );
+      });
+
+      test('空输入被忽略：不留在途，也不报错', () async {
+        final viewModel = _createViewModel(_FakeAgentProvider());
+        addTearDown(viewModel.dispose);
+        final store = AgentConversationSliceStore.connected(
+          regions: viewModel,
+          commands: viewModel,
+        );
+        addTearDown(store.dispose);
+
+        store.sendMessage(text: '   ');
+        await _drainTypedUiUpdate();
+        await pumpEventQueue();
+
+        expect(store.state.pendingOperations, isEmpty);
+        expect(store.state.lastFailure, isNull);
+      });
+
+      test('能力缺失的 thread 操作记成失败', () async {
+        final viewModel = _createViewModel(_FakeAgentProvider());
+        addTearDown(viewModel.dispose);
+        final store = AgentConversationSliceStore.connected(
+          regions: viewModel,
+          commands: viewModel,
+        );
+        addTearDown(store.dispose);
+
+        // 草稿会话没有 threadId：rename 属于"当前不允许"，按忽略处理，
+        // 不该冒充成功、也不该报错给用户。
+        store.mutateThread(
+          AgentConversationThreadMutationKind.rename,
+          name: '新名字',
+        );
+        await _drainTypedUiUpdate();
+        await pumpEventQueue();
+
+        expect(store.state.pendingOperations, isEmpty);
+        expect(store.state.lastFailure, isNull);
+      });
+
+      test('runtime 换代后旧命令不执行，也不写回结果', () async {
+        final viewModel = _createViewModel(_FakeAgentProvider());
+        addTearDown(viewModel.dispose);
+        final bindingKey = viewModel.conversationBinding.key;
+        // 发起时：绑在 runtime-1 / epoch 1 上。
+        var scope = AgentConversationCommandScope(
+          bindingKey: bindingKey,
+          runtimeId: 'runtime-1',
+          connectionEpoch: 1,
+          listenerGeneration: 1,
+        );
+        final store = AgentConversationSliceStore.connected(
+          regions: viewModel,
+          commands: viewModel,
+          scopeSnapshot: () => scope,
+        );
+        addTearDown(store.dispose);
+
+        final operation = store.sendMessage(text: 'hello');
+        // 命令在途期间 Provider 重启：runtime 换代。
+        scope = AgentConversationCommandScope(
+          bindingKey: bindingKey,
+          runtimeId: 'runtime-1',
+          connectionEpoch: 2,
+          listenerGeneration: 2,
+        );
+        await _drainTypedUiUpdate();
+        await pumpEventQueue();
+
+        expect(store.state.pendingOperations, isEmpty);
+        expect(store.state.lastFailure?.operationId, operation);
+        expect(
+          store.state.lastFailure?.kind,
+          AgentCommandFailureKind.staleTarget,
+        );
+      });
+
+      test('store dispose 后 ViewModel 再变不再流进切片', () async {
+        final viewModel = _createViewModel(_FakeAgentProvider());
+        addTearDown(viewModel.dispose);
+        final store = AgentConversationSliceStore.connected(
+          regions: viewModel,
+          commands: viewModel,
+        );
+
+        store.dispose();
+        viewModel.toggleToolCall('after-dispose');
+        await _drainTypedUiUpdate();
+
+        expect(store.isClosed, isTrue);
+        expect(store.state.expansion.toolCallIds, isEmpty);
       });
     });
   });
@@ -4685,8 +4830,42 @@ Future<void> _drainTypedUiScheduling() async {
   await Future<void>.delayed(Duration.zero);
 }
 
+void _listenRegionValueChanges(
+  AgentConversationRuntimeController viewModel, {
+  required void Function() onHistory,
+  required void Function() onHeader,
+  required void Function() onComposer,
+}) {
+  var lastHistory = viewModel.historyState;
+  var lastHeader = viewModel.headerState;
+  var lastComposer = viewModel.composerState;
+  viewModel.addUiUpdateListener((request) {
+    if (request.regions.contains(AgentUiRegion.history)) {
+      final next = viewModel.historyState;
+      if (next != lastHistory) {
+        lastHistory = next;
+        onHistory();
+      }
+    }
+    if (request.regions.contains(AgentUiRegion.header)) {
+      final next = viewModel.headerState;
+      if (next != lastHeader) {
+        lastHeader = next;
+        onHeader();
+      }
+    }
+    if (request.regions.contains(AgentUiRegion.composer)) {
+      final next = viewModel.composerState;
+      if (next != lastComposer) {
+        lastComposer = next;
+        onComposer();
+      }
+    }
+  });
+}
+
 void _expectLastUiUpdate(
-  AgentConversationViewModel viewModel, {
+  AgentConversationRuntimeController viewModel, {
   required Set<AgentUiRegion> regions,
   required AgentUiUpdateUrgency urgency,
   List<AgentUiEffect> effects = const <AgentUiEffect>[],
@@ -4697,7 +4876,7 @@ void _expectLastUiUpdate(
   );
 }
 
-AgentConversationViewModel _createViewModel(
+AgentConversationRuntimeController _createViewModel(
   _FakeAgentProvider provider, {
   AgentThreadSummary? initialThread,
   AgentProviderSettings? providerSettings,
@@ -4712,10 +4891,10 @@ AgentConversationViewModel _createViewModel(
     providerFactory: _FakeAgentProviderFactory(provider),
   );
   addTearDown(registry.close);
-  final controller = AgentProviderSettingsController(
+  final controller = createProviderSettingsTestStore(
     runtimeRegistry: registry,
     configStore: MemoryAgentProviderConfigStore(
-      providerSettings ?? const AgentProviderSettings(),
+      providerSettings ?? zetaBuiltInAgentProviderSettings,
     ),
     modelCatalogRepository: modelCatalogRepository,
   );
@@ -4731,11 +4910,17 @@ AgentConversationViewModel _createViewModel(
           config: provider.config,
           threadId: initialThread.id,
         );
-  final viewModel = AgentConversationViewModel(
+  final viewModel = AgentConversationRuntimeController(
     providerController: controller,
     conversationBinding: bindingLease.binding,
     globalRuntime: bindingHarness.globalRuntime,
-    conversationModeController: conversationModeController,
+    composerStateOwner: AgentConversationComposerStateOwner(
+      modelSelection: AgentConversationModelSelectionController(
+        persistSelection: controller.persistModelSelection,
+      ),
+      mode: conversationModeController ?? AgentConversationModeController(),
+      skills: AgentSkillsCatalogController(),
+    ),
     onTurnTerminal: onTurnTerminal,
     onAttention: onAttention,
     onCreatedThread: onCreatedThread,
@@ -4817,7 +5002,7 @@ AgentThreadHistorySnapshot _historySnapshot({
   );
 }
 
-class _FakeAgentProviderFactory with LegacyBundleFactoryMixin {
+class _FakeAgentProviderFactory with TestAgentProviderBundleFactory {
   _FakeAgentProviderFactory(this.provider);
 
   final _FakeAgentProvider provider;
@@ -4894,7 +5079,7 @@ class _FakePermissionPolicy implements AgentPermissionPolicyPort {
   }
 }
 
-class _MultiFakeAgentProviderFactory with LegacyBundleFactoryMixin {
+class _MultiFakeAgentProviderFactory with TestAgentProviderBundleFactory {
   _MultiFakeAgentProviderFactory(this.providers);
 
   final Map<String, Object> providers;
@@ -4939,7 +5124,7 @@ class _FakeAgentProvider
     this.resumeSessionTitle,
     this.emitSessionStartedDuringSend = false,
     this.sendResult,
-    this.providerConfig = AgentProviderConfig.defaultCodex,
+    this.providerConfig = defaultCodexAgentProviderConfig,
     this.availableModels = const AgentModelList(models: <AgentModelInfo>[]),
     this.emitModelEventOnRefresh = false,
     this.eventCancellationGate,
@@ -4953,9 +5138,7 @@ class _FakeAgentProvider
         const <String, Completer<AgentThreadHistorySnapshot>>{},
   }) : declaredCapabilities =
            declaredCapabilities ??
-           AgentProviderStaticCapabilities.codexAppServer.copyWith(
-             canForkThreadAtTurn: true,
-           ),
+           codexStaticCapabilities.copyWith(canForkThreadAtTurn: true),
        _defaultHistorySnapshot =
            historySnapshot ??
            const AgentThreadHistorySnapshot(

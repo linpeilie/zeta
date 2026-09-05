@@ -1,10 +1,16 @@
-part of '../agent_pane.dart';
+import 'package:flutter/material.dart';
 
-const double _agentMentionFilePickerPreferredWidth = 360;
-const double _agentMentionFilePickerPreferredMaxHeight = 280;
+import 'package:zeta_ui/zeta_ui.dart';
+import 'package:zeta/src/features/workspace/application/workspace_file_corpus_port.dart';
+import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
+import 'package:zeta/src/features/agent/presentation/composer_document.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
+
+const double agentMentionFilePickerPreferredWidth = 360;
+const double agentMentionFilePickerPreferredMaxHeight = 280;
 
 /// @-mention 文件候选的高亮与候选状态，供 Composer 键盘与 popover 共享。
-final class _MentionFileListController extends ChangeNotifier {
+final class MentionFileListController extends ChangeNotifier {
   List<WorkspaceNode> _candidates = const <WorkspaceNode>[];
   int _highlightIndex = 0;
 
@@ -53,8 +59,8 @@ final class _MentionFileListController extends ChangeNotifier {
 }
 
 /// Composer 上方的 @-mention 文件候选 popover。
-class _AgentMentionFilePickerPopover extends StatefulWidget {
-  const _AgentMentionFilePickerPopover({
+class AgentMentionFilePickerPopover extends StatefulWidget {
+  const AgentMentionFilePickerPopover({
     required this.width,
     required this.maxHeight,
     required this.documentController,
@@ -62,46 +68,47 @@ class _AgentMentionFilePickerPopover extends StatefulWidget {
     required this.candidatesFor,
     required this.onSelect,
     required this.onRequestClose,
-    this.filesListenable,
+    this.fileCorpus,
     this.isIndexReady,
+    super.key,
   });
 
   final double width;
   final double maxHeight;
   final ComposerDocumentController documentController;
-  final _MentionFileListController listController;
+  final MentionFileListController listController;
   final List<WorkspaceNode> Function(String query) candidatesFor;
   final ValueChanged<WorkspaceNode> onSelect;
   final VoidCallback onRequestClose;
 
   /// 后台语料就绪时通知，用于在 popover 打开期间刷新候选。
-  final Listenable? filesListenable;
+  final WorkspaceFileCorpusPort? fileCorpus;
 
   /// 完整文件索引是否已就绪；未注入时视为就绪。
   final bool Function()? isIndexReady;
 
   @override
-  State<_AgentMentionFilePickerPopover> createState() =>
+  State<AgentMentionFilePickerPopover> createState() =>
       _AgentMentionFilePickerPopoverState();
 }
 
 class _AgentMentionFilePickerPopoverState
-    extends State<_AgentMentionFilePickerPopover> {
+    extends State<AgentMentionFilePickerPopover> {
   @override
   void initState() {
     super.initState();
     widget.documentController.addListener(_handleDocumentChanged);
     widget.listController.addListener(_handleListChanged);
-    widget.filesListenable?.addListener(_handleFilesChanged);
+    widget.fileCorpus?.addListener(_handleFilesChanged);
     _refreshCandidates();
   }
 
   @override
-  void didUpdateWidget(covariant _AgentMentionFilePickerPopover oldWidget) {
+  void didUpdateWidget(covariant AgentMentionFilePickerPopover oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.filesListenable != widget.filesListenable) {
-      oldWidget.filesListenable?.removeListener(_handleFilesChanged);
-      widget.filesListenable?.addListener(_handleFilesChanged);
+    if (!identical(oldWidget.fileCorpus, widget.fileCorpus)) {
+      oldWidget.fileCorpus?.removeListener(_handleFilesChanged);
+      widget.fileCorpus?.addListener(_handleFilesChanged);
       _refreshCandidates();
     }
   }
@@ -110,7 +117,7 @@ class _AgentMentionFilePickerPopoverState
   void dispose() {
     widget.documentController.removeListener(_handleDocumentChanged);
     widget.listController.removeListener(_handleListChanged);
-    widget.filesListenable?.removeListener(_handleFilesChanged);
+    widget.fileCorpus?.removeListener(_handleFilesChanged);
     super.dispose();
   }
 
@@ -160,7 +167,7 @@ class _AgentMentionFilePickerPopoverState
         width: widget.width,
         child: ConstrainedBox(
           constraints: BoxConstraints(maxHeight: widget.maxHeight),
-          child: _ComposerSelectorPanel(
+          child: IdePopoverPanel(
             child: candidates.isEmpty
                 ? Padding(
                     padding: IdeSpacing.all12,

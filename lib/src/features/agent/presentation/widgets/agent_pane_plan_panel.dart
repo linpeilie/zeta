@@ -1,17 +1,32 @@
-part of '../agent_pane.dart';
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_ui/zeta_ui.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_region_state.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
+import 'package:zeta/src/features/agent/presentation/agent_flutter_listenable_adapter.dart';
+import 'package:zeta/src/features/agent/presentation/agent_presentation_l10n.dart';
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_region_builder.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_sections.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
 const double _activePlanPanelMaxWidth = 340;
 const double _activePlanScrollMaxHeight = 200;
 
 /// 固定在 Composer 上方的当前 turn 结构化计划。
-class _AgentActivePlanSection extends StatelessWidget {
-  const _AgentActivePlanSection({
-    required this.viewModel,
+class AgentActivePlanSection extends StatelessWidget {
+  const AgentActivePlanSection({
+    required this.controller,
     required this.pagePadding,
     required this.onExtentChanged,
+    super.key,
   });
 
-  final AgentConversationViewModel viewModel;
+  final AgentConversationRuntimeController controller;
   final EdgeInsets pagePadding;
 
   /// 向时间线同步浮层实测高度，用于滚动底部 inset（不缩短 viewport）。
@@ -21,62 +36,72 @@ class _AgentActivePlanSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return _FloatingPanelExtentReporter(
       onExtent: onExtentChanged,
-      child: ListenableBuilder(
-        listenable: Listenable.merge(<Listenable>[
-          viewModel.liveTurnListenable,
-          viewModel.headerStateListenable,
-          viewModel.pendingInteractionStateListenable,
-          viewModel.expansionStateListenable,
-        ]),
-        builder: (context, _) {
-          final turnState = viewModel.liveTurnState;
-          if (turnState == null) {
-            return const SizedBox.shrink();
-          }
-          return ListenableBuilder(
-            listenable: turnState,
-            builder: (context, _) {
-              final entries = turnState.planEntries;
-              if (!viewModel.shouldShowActivePlan) {
-                return const SizedBox.shrink();
-              }
-              return _AgentContentAlign(
-                // CustomMultiChildLayout 会给浮层一个有界最大高度；这里必须按内容
-                // 收缩，否则 Align 会占满 Footer 上方空间并把卡片留在时间线顶部。
-                shrinkWrapHeight: true,
-                child: Padding(
-                  padding: pagePadding.copyWith(
-                    top: IdeSpacing.space8,
-                    bottom: 0,
-                  ),
-                  child: Align(
-                    alignment: Alignment.topCenter,
-                    heightFactor: 1,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(
-                        maxWidth: _activePlanPanelMaxWidth,
-                      ),
-                      child: SizedBox(
-                        width: double.infinity,
-                        child: _AgentActivePlanCard(
-                          key: ValueKey<String>(
-                            'agent-active-plan-card-${turnState.id}',
+      // 三个 region 各订各的；live turn 仍走 listenable（§2.7）。
+      child: AgentRegionBuilder<AgentHeaderState>(
+        bindingKey: controller.conversationBinding.key,
+        selector: agentConversationHeaderProvider.call,
+        builder: (context, _) =>
+            AgentRegionBuilder<AgentPendingInteractionState>(
+              bindingKey: controller.conversationBinding.key,
+              selector: agentConversationPendingInteractionProvider.call,
+              builder: (context, _) => AgentRegionBuilder<AgentExpansionState>(
+                bindingKey: controller.conversationBinding.key,
+                selector: agentConversationExpansionProvider.call,
+                builder: (context, _) => ListenableBuilder(
+                  listenable: controller.flutterLiveTurnListenable,
+                  builder: (context, _) {
+                    final turnState = controller.liveTurnState;
+                    if (turnState == null) {
+                      return const SizedBox.shrink();
+                    }
+                    return ListenableBuilder(
+                      listenable: AgentFlutterListenableAdapter(turnState),
+                      builder: (context, _) {
+                        final entries = turnState.planEntries;
+                        if (!controller.shouldShowActivePlan) {
+                          return const SizedBox.shrink();
+                        }
+                        return AgentContentAlign(
+                          // CustomMultiChildLayout 会给浮层一个有界最大高度；这里必须按内容
+                          // 收缩，否则 Align 会占满 Footer 上方空间并把卡片留在时间线顶部。
+                          shrinkWrapHeight: true,
+                          child: Padding(
+                            padding: pagePadding.copyWith(
+                              top: IdeSpacing.space8,
+                              bottom: 0,
+                            ),
+                            child: Align(
+                              alignment: Alignment.topCenter,
+                              heightFactor: 1,
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  maxWidth: _activePlanPanelMaxWidth,
+                                ),
+                                child: SizedBox(
+                                  width: double.infinity,
+                                  child: _AgentActivePlanCard(
+                                    key: ValueKey<String>(
+                                      'agent-active-plan-card-${turnState.id}',
+                                    ),
+                                    turnId: turnState.id,
+                                    entries: entries,
+                                    expanded: controller.expansionState
+                                        .isActivePlanExpanded(turnState.id),
+                                    onToggle: () => controller.toggleActivePlan(
+                                      turnState.id,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
-                          turnId: turnState.id,
-                          entries: entries,
-                          expanded: viewModel.expansionState
-                              .isActivePlanExpanded(turnState.id),
-                          onToggle: () =>
-                              viewModel.toggleActivePlan(turnState.id),
-                        ),
-                      ),
-                    ),
-                  ),
+                        );
+                      },
+                    );
+                  },
                 ),
-              );
-            },
-          );
-        },
+              ),
+            ),
       ),
     );
   }

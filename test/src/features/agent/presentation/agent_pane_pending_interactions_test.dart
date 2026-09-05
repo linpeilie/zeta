@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/presentation/agent_conversation_view_model.dart';
-import 'package:zeta/src/ui/core/ide_motion.dart';
-import 'package:zeta/src/ui/core/ide_spacing.dart';
-import 'package:zeta/src/ui/core/pane_widgets.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 
 import 'harness/agent_pane_test_harness.dart';
 
@@ -606,7 +604,7 @@ void main() {
 
 Future<void> _startLiveTurn(
   WidgetTester tester,
-  AgentConversationViewModel viewModel,
+  AgentConversationRuntimeController viewModel,
 ) async {
   await viewModel.sendMessage('Start live interaction');
   await pumpLiveAgentUi(tester);

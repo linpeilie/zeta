@@ -2,15 +2,17 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/main.dart';
-import 'package:zeta/src/features/agent/application/agent_ui_update_request.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 
 import '../../../../support/scroll_metrics_trace.dart';
 import '../../../testing/ide_test_harness.dart';
+import '../../../testing/fake_workspace_directory_picker.dart';
+import '../../../testing/zeta_test_app.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
+import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
+import 'package:zeta/src/app/storage/zeta_store_providers.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -178,14 +180,16 @@ void main() {
       final session = _activeProjectSession(directory);
 
       await tester.pumpWidget(
-        MainApp(
-          enableNativeWindowFrame: false,
-          sessionLoader: session.load,
-          sessionSaver: session.save,
-          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-            provider,
-          ),
-          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        zetaTestApp(
+          overrides: <Override>[
+            ideSessionStoreProvider.overrideWithValue(session),
+            agentProviderBundleFactoryProvider.overrideWithValue(
+              FakeAgentProviderBundleBuilder.fromFake(provider),
+            ),
+            agentProviderConfigStoreProvider.overrideWithValue(
+              MemoryAgentProviderConfigStore(),
+            ),
+          ],
         ),
       );
       await _openConversation(tester);
@@ -203,7 +207,7 @@ void main() {
       final controller = tester.widget<ScrollView>(scrollView).controller!;
       final pane = tester.widget<AgentPane>(find.byType(AgentPane));
       var autoScrollNotifications = 0;
-      final effectSubscription = pane.viewModel.uiEffects.listen((effect) {
+      final effectSubscription = pane.controller.uiEffects.listen((effect) {
         if (effect is AgentRequestAutoScroll) {
           autoScrollNotifications += 1;
         }
@@ -307,12 +311,16 @@ void main() {
     final session = _activeProjectSession(directory);
 
     await tester.pumpWidget(
-      MainApp(
-        enableNativeWindowFrame: false,
-        sessionLoader: session.load,
-        sessionSaver: session.save,
-        agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-        agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      zetaTestApp(
+        overrides: <Override>[
+          ideSessionStoreProvider.overrideWithValue(session),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            FakeAgentProviderBundleBuilder.fromFake(provider),
+          ),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(),
+          ),
+        ],
       ),
     );
     await _openConversation(tester);
@@ -470,15 +478,17 @@ void main() {
       final session = MemorySessionStore();
 
       await tester.pumpWidget(
-        MainApp(
-          enableNativeWindowFrame: false,
-          directoryPicker: () async => directory.path,
-          sessionLoader: session.load,
-          sessionSaver: session.save,
-          agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-            provider,
-          ),
-          agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+        zetaTestApp(
+          overrides: <Override>[
+            ...fakeDirectoryPickerOverrides(directory.path),
+            ideSessionStoreProvider.overrideWithValue(session),
+            agentProviderBundleFactoryProvider.overrideWithValue(
+              FakeAgentProviderBundleBuilder.fromFake(provider),
+            ),
+            agentProviderConfigStoreProvider.overrideWithValue(
+              MemoryAgentProviderConfigStore(),
+            ),
+          ],
         ),
       );
       await openProjectFromMenu(tester);
@@ -534,7 +544,7 @@ void main() {
       );
       final viewModel = tester
           .widget<AgentPane>(find.byType(AgentPane))
-          .viewModel;
+          .controller;
       viewModel.toggleCommandGroup(
         commandGroupId(turnId, 'tool-$commandToolId'),
       );

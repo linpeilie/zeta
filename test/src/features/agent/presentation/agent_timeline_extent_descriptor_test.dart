@@ -1,13 +1,16 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_extent_descriptor.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
+import 'package:zeta/src/features/agent/presentation/timeline_rendering/agent_timeline_extent_math.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection.dart';
-import 'package:zeta/src/ui/core/virtualization/ide_virtual_item.dart';
+import 'package:zeta_ui/zeta_ui.dart';
+import 'package:zeta/src/features/agent/presentation/timeline_rendering/agent_timeline_renderers.dart';
 
 void main() {
-  final factory = AgentTimelineExtentDescriptorFactory();
+  final factory = AgentTimelineExtentDescriptorFactory(
+    registry: buildAgentTimelineRendererRegistry(),
+  );
   const layout = AgentTimelineLayoutContext(
     crossAxisExtent: 720,
     devicePixelRatio: 1,
@@ -27,7 +30,7 @@ void main() {
         status: AgentHistoryTurnStatus.completed,
         isStandby: false,
         entries: const <AgentTimelineEntry>[],
-        renderRevision: 3,
+        contentRevision: 3,
       ),
       isLive: false,
     );
@@ -37,7 +40,7 @@ void main() {
         status: AgentHistoryTurnStatus.running,
         isStandby: false,
         entries: const <AgentTimelineEntry>[],
-        renderRevision: 1,
+        contentRevision: 1,
       ),
     );
     final user = AgentBlockViewportItem(
@@ -46,7 +49,7 @@ void main() {
         status: AgentHistoryTurnStatus.completed,
         isStandby: false,
         entries: const <AgentTimelineEntry>[],
-        renderRevision: 2,
+        contentRevision: 2,
       ),
       block: AgentTimelineEntryRenderBlock(
         entry: AgentMessageTimelineEntry(

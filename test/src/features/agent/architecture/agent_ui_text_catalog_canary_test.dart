@@ -1,10 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_effect.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_mutation.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_reducer.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/fallback_agent_ui_text_catalog.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// 步骤 11 canary：同一中立 fixture 在两种目录下结构相同，仅思考卡标题不同。
 const _zhThinkingCatalog = _FixedAgentUiTextCatalog('思考');
@@ -40,12 +36,22 @@ void main() {
     });
 
     test('reasoning mutations are identical across catalogs', () {
-      final zhMutation = AgentConversationReducer.live(
-        textCatalog: _zhThinkingCatalog,
-      ).reduce(_reasoningDelta, _context());
-      final enMutation = AgentConversationReducer.live(
-        textCatalog: _enThinkingCatalog,
-      ).reduce(_reasoningDelta, _context());
+      final zhMutation =
+          AgentConversationReducer.live(textCatalog: _zhThinkingCatalog).reduce(
+            _reasoningDelta,
+            const AgentConversationSessionState.initial(
+              defaultTitle: agentDefaultThreadTitle,
+            ),
+            _context(),
+          );
+      final enMutation =
+          AgentConversationReducer.live(textCatalog: _enThinkingCatalog).reduce(
+            _reasoningDelta,
+            const AgentConversationSessionState.initial(
+              defaultTitle: agentDefaultThreadTitle,
+            ),
+            _context(),
+          );
 
       expect(zhMutation.accepted, isTrue);
       expect(enMutation.accepted, isTrue);
@@ -121,7 +127,7 @@ AgentConversationReducerContext _context() {
   const config = AgentProviderConfig(
     id: 'neutral',
     displayName: 'Neutral',
-    kind: AgentProviderKind.acp,
+    kind: grokAgentProviderType,
     command: 'agent',
   );
   return AgentConversationReducerContext(
@@ -131,6 +137,7 @@ AgentConversationReducerContext _context() {
     pendingTurnGroupId: null,
     hasTurn: (turnId) => turnId == 'turn-1',
     isHistoryTurnId: (_) => false,
+    hasRunningTurnExcluding: (_) => false,
     modelsRefreshing: false,
     activeProviderName: 'Neutral',
     activeProviderConfig: config,

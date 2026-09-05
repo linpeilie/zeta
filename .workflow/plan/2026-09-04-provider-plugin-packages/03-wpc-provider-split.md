@@ -1,0 +1,345 @@
+# WP-C · 三插件拆包 + manifest 落地
+
+> 状态：已完成（2026-09-05；证据见 [实施与验证记录](06-wpc-validation.md)）
+> 规模：每个 Provider 约 1.5–2.5 人天（Claude 取上限），共 3 个独立 PR + 1 个 manifest PR
+> （相较初稿上调：测试面实测比初稿大——82 个随迁 + 77 个留根改 import + 52 个断言库替换，见 §5）
+> 依赖：WP-B 完成
+> 性质：纯搬移。每个 PR 全量绿 + 测试断言零修改（除路径/import）为唯一正确性证据。
+
+## 本轮实施口径（2026-09-05）
+
+下文原清单保留 2026-09-04 的规划证据，执行以本轮仓库实测为准：生产文件 Codex/Grok/Claude Code 为 **22/20/26，共 68 个**；根协议测试迁移集为 **43 个 Dart 文件（42 个测试文件 + 1 个 canonical helper）**。旧聚合包内另有两份测试：时间戳测试按厂商拆分，跨插件组装测试留在根测试装配层。六条 native bundle 测试按厂商拆成三个包内文件。
+
+- 测试资源经 SDK `ProviderTestFiles` 按 package config 定位所属包根；根目录 `flutter test packages/<插件>` 和包内 runner 均不依赖当前目录或根 fixture 副本。
+- 每包增加独立 testing barrel，供本包协议测试与 `test/src/testing/agent_provider_implementations.dart` 使用；生产 barrel 通过精确 `show` 列表收敛，manifest 只再导出身份常量。
+- 实测只有两个 Claude 宿主 store provider；metadata loader 原本就是工厂可选注入参数，保持这一现状，不新增无用 provider。
+- 日志 fixture 从宿主 `Logger` 装配切换为已有的 `RecordingZetaLoggerFactory`；保留全部日志断言，只把 `Level.trace` 的比较值等价投影为 `'trace'`。文件往返仍使用 WP-B 的文件版 `FileTestStorageService`。
+- Codex 配置 codec 往返测试留根，断言原样保留，经 root recording peer 检查真实 wire 参数；生产 codec 与 store 无改动。
+- SDK 契约套件的事件回放支持 `FutureOr`，让私有 mapper 可经实际异步 transport 测试；模式目录端口允许在能力发现前存在，但声明模式选择能力后仍强制要求端口。已有反例守卫保留，并新增两个模式目录自测。三个插件的 fixture 用例均不跳过。
+- 包 DAG、G1/raw、生产调用点与 re-export 守卫随路径同步。manifest 的永久身份出口通过常量声明校验，拒绝实现类型和整库导出，不恢复旧兼容 barrel。
+- 活动代码、测试、工具、AGENTS/CLAUDE 中旧聚合包引用清零；本计划和历史设计保留旧路径作为搬迁证据，不能继续用于实现。
+
+完整审计与 CLI 验证见 [06-wpc-validation.md](06-wpc-validation.md)。
+
+## 1. 背景与拆分顺序
+
+WP-B 后 `zeta_agent_providers` 只剩厂商私产。按文件实测（2026-09-04 清点），三包体量：
+
+| 包 | 文件构成 | 合计 |
+|---|---|---|
+| codex | `datasources/app_server/` 8 + `local_history/codex_*` 2 + `mappers/codex_*` 11 + `codex_cli_locator.dart` + `codex_plugin.dart` | **23** |
+| grok | `datasources/acp/` 3（全 `grok_*`）+ `local_history/grok_*` 4 + `mappers/grok_*` 11 + `grok_cli_locator.dart` + `grok_plugin.dart` | **20** |
+| claude_code | `datasources/claude_code/` 24（23 个 `claude_code_*` + `stream_json_peer.dart`）+ `mappers/claude_code_*` 4 + `claude_code_cli_locator.dart` + `claude_code_plugin.dart` | **30** |
+
+另有三个跨包文件在 T5 拆除：`native_agent_provider_bundles.dart`（129 行，三个 `nativeBundleFromXxx` + 三个 `createXxxBundle` 按家拆分随迁）、`agent_provider_static_capabilities.dart`（86 行，常量随家迁，类本体删除）、`built_in_agent_provider_plugins.dart`（51 行，由 manifest 取代）。
+
+**Flutter 依赖清除（实测）**：providers 包内仅 3 个文件 import `package:flutter/foundation.dart`——`agent_ignored_message_logger.dart`（WP-B T4 已处理）与两个厂商 adapter（`codex_app_server_agent_provider.dart:6`、`grok_acp_agent_provider.dart:7`，只用 `@visibleForTesting` 注解，实测 L246/251、L236/241）。迁移这两个文件时把 import 换成 `package:meta/meta.dart`（foundation 的该注解本就 re-export 自 meta；providers pubspec 已有 meta 依赖，插件包照常带上）。替换后**三个插件包纯 Dart**（允许 `dart:io`，禁 `package:flutter/`、禁 Riverpod）。这两个一行替换是本 WP 唯二的文件体非 import 改动，PR 描述点名。
+
+拆分顺序 **Codex → Grok → Claude**：
+
+1. Codex 依赖面最小（不依赖 sdk 的 ACP codec），先跑通全流程，沉淀模板。
+2. Grok 重度依赖 sdk 的 ACP codec（6 处 import），验证 sdk 边界。
+3. Claude 最复杂（三个宿主注入工厂、stream-json 私有 peer、metadata coordinator），放最后。
+
+**每拆完一个 Provider 立刻落地其 manifest 行**（manifest 在 T1 先建好只含 Codex；逐 PR 追加），每步独立可交付。
+
+## 2. 过渡态约定（重要）
+
+**2026-09-05 WP-D 状态：下述过渡清单已全部消除，当前不再授权这些 import。以下保留为 WP-C 的历史迁移证据。**
+
+WP-C 删除 `zeta_agent_providers` 后、WP-D 完成前，app 层以下文件**临时**直接 import 插件包——已登记的过渡白名单，WP-D 逐一消灭，WP-E 守卫只放行这几个：
+
+| 文件 | 引用的插件包 | WP-D 消灭手段 |
+|---|---|---|
+| `lib/src/features/agent_management/data/{codex,grok,claude_code}_agent_management_repository.dart` | 对应插件包（locator、历史解析、config codec 等） | WP-D T2 迁入插件 |
+| `lib/src/features/agent_management/data/claude_code_auth_status_probe.dart` | claude 插件包 | WP-D T2 迁入插件 |
+| `lib/src/features/usage_statistics/data/providers/{codex,grok,claude_code}/**` | 对应插件包（`GrokUpdatesHistoryParser`、`ClaudeCodeSessionHistoryReader` 等） | WP-D T4 迁入插件 |
+| `lib/src/app/agent_management_slice/agent_management_slice_composition.dart`、`ide_workbench_composition.dart`（enrichment key 与 repository 注册处） | 各插件包 | WP-D T1/T5 |
+| `lib/src/app/agent_management_slice/agent_management_slice_runner.dart`（`:4` import providers barrel，`:217/219` 用 enrichment key，实测） | claude 插件包 | WP-D T5 |
+
+补充实测过渡项：`lib/src/features/usage_statistics/data/built_in_agent_token_usage_source_registry.dart` 仍按三个 providerType 路由，直接从三个插件 barrel 的 `show` 取得类型常量。它不能反向 import app manifest；WP-D T4/T5 通过 usage 贡献消除。本轮所有过渡调用点均有 WP-C 注释，未把实现类型导出到 manifest。
+
+> `cli_process_runner.dart` 不在此列——WP-B T5 已迁 sdk，WP-C 开始前 app 侧就只剩 sdk import。
+
+每个插件包 barrel 只导出两类符号：**manifest 需要的**（插件类 + definition 常量 + 默认配置/类型常量）与**过渡白名单需要的**。其余一律 `src/` 私有；过渡导出在 barrel 里注释分组并标注「WP-D 后移除」。
+
+## 3. 通用拆包流程（每个 Provider 重复）
+
+```
+1. 建包：pubspec/analysis_options 对齐兄弟包；根 pubspec workspace 登记。
+   **第三方依赖按实测归属**（现状 providers 包只有三个外部依赖，全是私产）：
+   - codex：`toml`（config 解析，2 个文件）
+   - claude：`crypto` + `unorm_dart`（`claude_code_macos_keychain_source.dart:6-7`）
+   - grok：无
+   - 三包统一加 `meta`（`@visibleForTesting` 替换用）与 `dev_dependencies: test`
+2. 迁移实现文件（§4 清单），import 改写：
+   - 契约类型   → package:zeta_agent_provider_api/...
+   - 共享机制   → package:zeta_agent_provider_sdk/...
+   - core       → package:zeta_agent_core/...（不变）
+   - 严禁       → 其他插件包、根 app、Riverpod、package:flutter/（纯 Dart）
+3. 插件入口改造：插件类 + definition 常量（含 WP-A 的 metricLabel）+ 静态能力常量迁入
+   - AgentProviderStaticCapabilities.<vendor> 常量改为本包顶层 const，类本身在 T5 删除
+4. native_agent_provider_bundles.dart 中本 Provider 的组装函数（nativeBundleFromXxx
+   及 createXxxBundle 链路）随迁本包 src/；该文件随三家拆完后删除
+5. barrel 定稿（见 §2 导出规则）
+6. 测试随迁（§5 映射表）。**注意断言库替换**：`tool/test_packages.sh:17` 按 pubspec
+   里有没有 `sdk: flutter` 选 runner，插件包无 flutter 段 → 走 `dart test` → 一行
+   `package:flutter_test` 都不能留。实测 82 个待迁文件里 **52 个** import flutter_test，
+   但**零** `testWidgets` / `WidgetTester`（纯当断言库用），机械替换即可：
+
+     grep -rl "package:flutter_test/flutter_test.dart" \
+       packages/zeta_agent_provider_<x>/test \
+       | xargs sed -i '' \
+           's|package:flutter_test/flutter_test.dart|package:test/test.dart|'
+   随后契约测试一行接入：
+   // packages/zeta_agent_provider_<x>/test/contracts_test.dart
+   import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk_testing.dart';
+   void main() {
+     runAgentProviderContractTests(() => XxxContractFixture());
+   }
+   （XxxContractFixture 实现 sdk 的 AgentProviderContractFixture，
+    createBundle() 走本包 createXxxBundle 的 fake 依赖变体；
+    注意走 testing 独立 barrel——主 barrel 不导出套件，见 WP-B §3）
+7. 单包验收：flutter test packages/zeta_agent_provider_<x> 全绿
+8. 全仓验收：bash tool/test_full.sh 全绿（断言零修改）
+```
+
+## 4. 文件迁移清单
+
+### T1 · `zeta_agent_provider_codex`
+
+| 从（zeta_agent_providers） | 到（同相对路径） |
+|---|---|
+| `lib/codex_plugin.dart`（含 `defaultAgentProviderId = 'codex'`、`codexAgentProviderType = AgentProviderTypeId('codexAppServer')`、`codexAgentProviderDefinition`、`CodexAgentProviderPlugin`） | `lib/` 同名 |
+| `lib/src/datasources/app_server/**`（8 个文件） | `lib/src/datasources/app_server/**` |
+| `lib/src/datasources/local_history/codex_jsonl_history_parser.dart`、`codex_thread_history_reader.dart` | 同相对路径 |
+| `lib/src/mappers/codex_*.dart`（11 个） | `lib/src/mappers/` |
+| `lib/src/codex_cli_locator.dart`（注意：L3 import sdk 的 `cli_command_locator.dart`） | `lib/src/` |
+| `AgentProviderStaticCapabilities.codexAppServer` 常量 | `lib/src/codex_static_capabilities.dart`（顶层 const） |
+| `native_agent_provider_bundles.dart` 的 `nativeBundleFromCodex` + `createCodexBundle` 链路 | `lib/src/` |
+
+barrel 导出：`CodexAgentProviderPlugin`、`codexAgentProviderDefinition`、`codexAgentProviderType`、`defaultCodexAgentProviderConfig`、`defaultAgentProviderId` + 过渡白名单符号。
+
+**D7 红线自查**（每个 PR 必做）：`AgentProviderTypeId('codexAppServer')`、`'codex'`、`defaultCodexAgentProviderConfig` 全部字段值与搬迁前逐字节一致——这些字符串进了 `~/.zeta/config` 持久化与模型目录指纹。
+
+完成后：manifest 建文件（§6，只登记 Codex），app 的 Codex 引用全部换包。
+
+### T2 · `zeta_agent_provider_grok`
+
+| 从 | 到 |
+|---|---|
+| `lib/grok_plugin.dart`（含 `grokAgentProviderType = AgentProviderTypeId('acp')`） | `lib/` |
+| `lib/src/datasources/acp/**`（3 个 `grok_*`，含 `grok_models_cli.dart`） | 同相对路径 |
+| `lib/src/datasources/local_history/grok_*.dart`（4 个：chat_history_parser、session_history_reader、updates_history_parser、user_content_parser） | 同相对路径 |
+| `lib/src/mappers/grok_*.dart`（11 个） | `lib/src/mappers/` |
+| `lib/src/grok_cli_locator.dart` | `lib/src/` |
+| `AgentProviderStaticCapabilities.grokAcp` 常量 | 本包顶层 const |
+| `nativeBundleFromGrok` + `createGrokBundle` 链路 | `lib/src/` |
+
+注意：`grok_acp_agent_provider.dart` 的 barrel 导出历史上带 `hide JsonRpcPeerFactory`（与 sdk transport 冲突名）——迁移后 sdk 已是独立 barrel，检查该 hide 是否仍必要，不需要就删。
+
+### T3 · `zeta_agent_provider_claude_code`
+
+| 从 | 到 |
+|---|---|
+| `lib/claude_code_plugin.dart`（含 `claudeCodeAgentProviderType`、三个宿主注入参数的插件类；L11 `export ... show claudeCodeAccountDataEnrichmentKey`） | `lib/` |
+| `lib/src/datasources/claude_code/**`（24 个文件，含 `stream_json_peer.dart`——虽无前缀但全文 Claude 专有，WP-B §1.1 已实证） | 同相对路径 |
+| `lib/src/mappers/claude_code_*.dart`（4 个） | `lib/src/mappers/` |
+| `lib/src/claude_code_cli_locator.dart` | `lib/src/` |
+| `AgentProviderStaticCapabilities.claudeCode` 常量 | 本包顶层 const |
+| `claudeCodeAccountDataEnrichmentKey` 常量（定义于 `src/datasources/claude_code/claude_code_provider_config.dart:4`） | 随包自然随迁；barrel 保持导出（过渡白名单，WP-D T5 后改由 definition 字段承载） |
+| `nativeBundleFromClaudeCode` + `createClaudeCodeBundle` 链路 | `lib/src/` |
+
+Claude 特有：插件工厂收三个宿主注入（`sessionDecisionStoreFactory` / `hiddenThreadStore` / `metadataLoader`），签名原样随迁；manifest 继续透传（§6）。
+
+### T5 · 删除 `zeta_agent_providers`
+
+三个插件全部落地后：
+
+1. 全仓 `grep -rn "zeta_agent_providers"` 零残留（含注释里的路径示例与 G1 自查命令中的路径——守卫文本更新在 WP-E T1）。
+2. 删包目录、根 pubspec workspace 成员与依赖条目。
+3. 删 `AgentProviderStaticCapabilities` 类本体、`native_agent_provider_bundles.dart`、`built_in_agent_provider_plugins.dart`（能力/注册已由 manifest 承接）。
+4. `bash tool/test_full.sh` 全绿。
+
+## 5. 测试迁移映射表
+
+根 test 树 → 插件包（逐文件核对后执行；usage/management 相关测试在 WP-D 才迁，本表不含）：
+
+| 根 test 路径 | 目标包 |
+|---|---|
+| `test/src/features/agent/data/datasources/app_server/**` | codex |
+| `test/src/features/agent/data/mappers/codex_*_test.dart` | codex |
+| `test/src/features/agent/data/datasources/local_history/codex_*_test.dart` | codex |
+| `test/src/features/agent/data/datasources/acp/**` | grok |
+| `test/src/features/agent/data/datasources/local_history/grok_*_test.dart` | grok |
+| `test/src/features/agent/data/mappers/grok_*_test.dart` | grok |
+| `test/src/features/agent/data/datasources/claude_code/**` | claude_code |
+| `test/src/features/agent/data/mappers/claude_code_*_test.dart` | claude_code |
+
+注意事项：
+
+- 枚举命令（实施时先跑它生成真实清单再逐行核对）：
+  `git ls-files test/ | rg "(app_server|/acp/|claude_code|codex_|grok_)"`
+  实测去重后 **82 个文件**（初稿记 59 有误）。其中 **52 个** import `package:flutter_test`，需按 §3 第 6 步替换为 `package:test`。
+- `test/src/features/agent/data/native_agent_provider_bundle_test.dart` 是三家混合断言（经 `nativeBundleFromXxx` 组装）——函数本体随家迁，测试按家拆成三段随迁；纯组装一致性部分（若有）留根树改经 manifest 断言。
+- `datasources/app_server/codex_app_server_runtime_info.dart` 是 `part of 'codex_app_server_agent_provider.dart'` 的 part 文件——迁移时必须与主文件同包同相对路径，`part of` URI 不变。
+- 测试里对 fixture 的相对路径引用随包迁移调整；fixture（脱敏 wire 序列）一并随迁。
+- 跨厂商契约测试（不依赖具体厂商的部分）留在 core/sdk 或根 `test/src/features/agent/architecture/`，不为迁就迁移破坏 G1 纯度守卫。
+- 迁出后根树分片自然减重；`tool/test_shards.dart` 无需改动（目录仍在），分片耗时若失衡留 WP-E 处理。
+- `tool/test_packages.sh` 对 `packages/*` 自动发现，无需登记。
+
+### 5.1 留根测试的两层边界（重要设计，已按实测改写）
+
+**初稿方案（manifest 即唯一 fixture 源）已被实测推翻**，这里记录实测数据与新方案。
+
+实测（`grep -rln "package:zeta_agent_providers" test/`）：
+
+| 口径 | 初稿估计 | 实测 |
+|---|---|---|
+| 直接 import providers barrel 的根测试 | — | **125 个** |
+| 其中不在 §5 迁移集、**必须留根**的 | 约 25 个 | **77 个** |
+| 留根文件里只要**身份常量**（id / type / defaultConfig / settings 快照）的 | — | 57 个 |
+| 留根文件里要**厂商实现类型**的 | 0（初稿假设） | **20 个** |
+
+那 20 个要的是 `CodexAppServerAgentProvider`、`GrokAgentProviderPlugin`、`GrokPermissionPolicyAdapter`、`GrokPermissionMode`、`ClaudeCodeCliMetadataSnapshot`、`looksLikeGrokCliPath` 一类**实现符号**，分布在 `ide_shell_controller_test`、`agent_management_slice_runner_test`、`agent_management_page_test`、`agent_conversation_view_model_test`、`agent_provider_catalog_freeze_test`、`test/src/testing/activated_agent_provider_plugins.dart` 等 **app 级测试**里——搬不进插件包。
+
+若坚持「manifest 唯一」，manifest 的 `show` 列表就得把这些实现类型从**生产文件**重新导出，「显式收敛、不倒灌 barrel」当场失守，而且是为测试扩生产导出面。
+
+**新方案：双层边界（00-index D10）**
+
+```
+lib/  ：只有 lib/src/app/plugins/agent_provider_manifest.dart 可 import 插件包
+test/ ：只有 test/src/testing/**            可 import 插件包
+```
+
+`test/src/testing/` 本就是共享测试装配层（`activated_agent_provider_plugins.dart`、`provider_settings_test_store.dart`、`memory_feature_stores.dart` 都在里面），把它定义成**测试侧的 manifest 对应物**，语义自洽，也不用动生产代码。
+
+分工：
+
+| 测试需要什么 | 走哪条通道 |
+|---|---|
+| 身份常量（`defaultAgentProviderId` / `codexAgentProviderType` / `defaultCodexAgentProviderConfig` / settings 快照） | manifest 成员五的 `show` 再导出 + 成员派生快照（下方 `zetaBuiltInAgentProviderSettings`）——**57 个**文件纯 import 改写 |
+| 厂商实现类型 | 经 `test/src/testing/` 下的 harness 取；harness 直接 import 插件包——**20 个**文件改为 import harness |
+| 跨厂商不变量（`cli_locator_identity_test.dart`：断言 Grok locator 拒绝 codex 路径、反之亦然） | 明确归 `test/src/testing/`，两个插件包都放不下，不再假装它属于某一家 |
+
+manifest 侧仍提供派生快照（同时是 codec/DI 的生产来源，见 §6）：
+
+```dart
+/// 与旧 builtInAgentProviderSettings 逐字段相同的启动快照。
+const AgentProviderSettings zetaBuiltInAgentProviderSettings =
+    AgentProviderSettings(
+      providers: <AgentProviderConfig>[
+        defaultCodexAgentProviderConfig,
+        // T2/T3 追加
+      ],
+      activeProviderId: defaultAgentProviderId,
+    );
+
+/// 默认激活 Provider id（= 目录首个 definition，保持 'codex' 不变）。
+const String zetaDefaultAgentProviderId = defaultAgentProviderId;
+```
+
+**执行顺序**：先改 `test/src/testing/` 下的公共 harness（`provider_settings_test_store.dart:60/99`、`memory_feature_stores.dart:48`、`activated_agent_provider_plugins.dart:11`），多数下游测试经 harness 间接消掉 providers import；剩下的逐个改 import。全程**断言零修改**，符合本 WP 纪律。
+
+## 6. T4 · manifest 与注册点改造（与 T1 同 PR 落地，逐 PR 追加）
+
+新建 `lib/src/app/plugins/agent_provider_manifest.dart`——**`lib/` 下唯一允许 import 插件包的文件**（`test/` 侧的对应物是 `test/src/testing/`，见 §5.1 与 00-index D10；两者都由 WP-E 守卫固化）：
+
+```dart
+/// Agent Provider 插件的编译期 manifest。
+///
+/// 新增 Provider：根 pubspec 加依赖 + 本文件一行 import + 三处一行登记。
+/// 不做目录扫描/反射/自注册：本文件就是评审与编译期检查点。
+library;
+
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
+import 'package:zeta_agent_provider_codex/zeta_agent_provider_codex.dart';
+// import 'package:zeta_agent_provider_grok/...';        // T2 追加
+// import 'package:zeta_agent_provider_claude_code/...'; // T3 追加
+import 'package:zeta_plugin_kernel/zeta_plugin_kernel.dart';
+
+// ── 成员一：静态 definition 列表（替代 builtInAgentProviderDefinitions）──
+const List<AgentProviderDefinition> zetaAgentProviderDefinitions =
+    <AgentProviderDefinition>[codexAgentProviderDefinition /* T2/T3 追加 */];
+
+// ── 成员二：不依赖激活的只读目录（替代 builtInAgentProviderDefinitionCatalog）──
+// 供 codec / DI / 指纹白名单在激活前使用。与激活产出同源（同一常量），
+// 一致性由 WP-E 守卫测试双向核对。
+final AgentProviderDefinitionCatalog zetaAgentProviderDefinitionCatalog =
+    AgentProviderDefinitionCatalog(zetaAgentProviderDefinitions);
+
+// ── 成员三：编译期插件工厂目录（替代 createBuiltInAgentProviderPlugins）──
+List<ZetaPluginFactory> zetaAgentProviderPluginFactories({
+  AgentUiTextCatalog textCatalog = const FallbackAgentUiTextCatalog(),
+}) {
+  // Claude 的三个宿主注入在 T3 追加；它们由成员四的 provider 读入。
+  // manifest 是唯一允许认识厂商类型的文件，厂商专属参数集中在这里是可接受的
+  // （且有且仅有这里有）。
+  return <ZetaPluginFactory>[
+    CodexAgentProviderPlugin(textCatalog: textCatalog),
+    // T2/T3 追加
+  ];
+}
+
+// ── 成员四：插件专属宿主 store 的 Riverpod provider（T3 追加）──
+// claudeCodeSessionDecisionStoreFactoryProvider / claudeCodeHiddenThreadStoreProvider /
+// claudeCodeCliMetadataLoaderProvider 从 zeta_store_providers.dart 整体迁入本文件——
+// 它们的类型来自 Claude 插件包，只有 manifest 允许 import。
+
+// ── 成员五：身份符号再导出（留根测试的**身份常量**通道，§5.1）──
+// 实测 57 个留根测试只要身份常量（id / type / defaultConfig），统一经本文件再导出。
+// show 列表**只收身份常量**：厂商实现类型（CodexAppServerAgentProvider 等，20 个
+// 测试要用）一律走 test/src/testing/ 的 harness，绝不从生产文件倒灌出去。
+export 'package:zeta_agent_provider_codex/zeta_agent_provider_codex.dart'
+    show codexAgentProviderType, codexAgentProviderDefinition,
+        defaultCodexAgentProviderConfig;
+// T2/T3 追加 grok / claude 两行
+```
+
+> **生产注入注意**：`zeta_plugin_providers.dart` 调 `zetaAgentProviderPluginFactories` 时
+> 必须显式传入本地化 `AgentUiTextCatalog`（组合层既有做法）——默认参数里的
+> Fallback 只是测试与装配兜底，生产路径落空等于英文文案泄漏（G7 精神）。
+
+同步改造（**厂商类型不得逃出 manifest**——本设计的自洽关键）：
+
+1. **`zeta_plugin_catalog.dart`**：`ZetaPluginCatalog.builtIn` 改**厂商中立**签名——只收 `Iterable<ZetaPluginFactory> factories`（+ clock/metrics），不再出现 Claude 三参数。Claude 宿主注入由 manifest 函数自己携带（读成员四的 provider 后传入工厂），`zeta_plugin_providers.dart` 调 manifest 函数拿工厂列表再传 catalog。若 `ZetaPluginCatalog` 其他签名引用厂商类型，一并下沉为 core/api 中立类型。
+2. **Claude 三依赖的 Riverpod provider**（当前在 `zeta_store_providers.dart`）：整体迁入 manifest 成员四。
+3. **`zeta_store_providers.dart:77`**：`fingerprintExtraKeysFor: builtInAgentProviderDefinitionCatalog` → `zetaAgentProviderDefinitionCatalog`。
+4. **`agentProviderSettingsCodecProvider`**：codec 本体已是 catalog 驱动（`agent_provider_config_codec.dart:18` 的 `fallbackSettings => _providerDefinitions.defaultSettings`，`:45/:51` 用 `defaultDefinition.providerId`），只需把注入的 catalog 实例从 builtIn 换成 manifest 目录。catalog 的 `defaultSettings` 以 definitions 顺序生成，**manifest 保持 Codex 在首位**即保住 `activeProviderId='codex'` 的持久化默认（D7）。
+5. 过渡期「静态目录只含已拆出的 Provider」合法：`ensureDefaultProviders` 只补回已登记 definition，与现状行为一致（现状也是三选一目录）。
+
+## 7. DoD
+
+- [x] 三个插件包各自 `flutter test packages/zeta_agent_provider_<x>` 独立绿
+- [x] 每个插件包接入 `runAgentProviderContractTests` 且全绿
+- [x] `lib/` 下 manifest 是唯一 import 插件包的文件；`test/` 下仅 `test/src/testing/**` 可 import 插件包（§2 过渡白名单除外且均已注释登记）
+- [x] manifest 成员五的 `show` 列表只含身份常量，无厂商实现类型（目检 + 本轮精确出口守卫；WP-E 完整治理仍待执行）
+- [x] `zeta_agent_providers` 已删除，活动源码、测试、工具及当前架构说明零引用；历史计划中的迁前路径保留为证据
+- [x] `AgentProviderStaticCapabilities`、`native_agent_provider_bundles.dart`、`built_in_agent_provider_plugins.dart` 不存在了
+- [x] D7 红线：`grep -rn "codexAppServer\|'acp'\|claudeCode" packages/zeta_agent_provider_*/lib` 的字符串值与拆分前逐字节一致；`agent_provider_config_codec.dart` 无 diff
+- [x] 待迁测试无 `package:flutter_test` 残留：`grep -rn "package:flutter_test" packages/zeta_agent_provider_*/test` 零命中
+- [x] 当前变更集全量绿（2849 条）；既有测试断言语义未改，6230 个原断言缺失 0（允许的路径/import、符号与断言库等价替换详见验证记录）
+- [x] Codex 协议冒烟（`tool/smoke_codex_app_server.py --expected-version 0.144.5`）按 AGENTS.md 流程执行；无设备/凭据时在 PR 描述标「待执行/阻塞」，不得推断通过
+
+## 8. 风险
+
+| 风险 | 缓解 |
+|---|---|
+| 迁移中 import 图失真导致测试选择器漏算 | 本 WP 全部走 `test_full.sh`（已在 §3 固化） |
+| 过渡白名单失控扩散 | 白名单写死 §2，WP-E 守卫只放行这几个文件；新增一律打回 |
+| Claude 包体量大（30 文件）单 PR 难审 | T3 内部再拆两个 commit（先实现文件、后入口+测试），或按评审要求拆 PR |
+| Grok/Claude 历史解析被 usage 与 conversation 两处共用，迁走后 usage 侧断链 | §2 已列为过渡白名单，WP-D T4 收口 |
+| 根测试误留插件包 import | §5.1 双层边界：身份常量经 manifest、实现类型经 `test/src/testing/`；WP-E 守卫按这两层断言 |
+| 断言库替换漏改导致包内测试跑不起来 | `test_packages.sh` 对无 flutter 段的包用 `dart test`，漏改会直接编译失败——不会静默 |
+
+## 9. 开发记录
+
+| 日期 | 内容 |
+|---|---|
+| 2026-09-04 | 初稿 |
+| 2026-09-04 | 重写：三包文件数按实测清点（23/20/30）；`stream_json_peer` 归 Claude 实证落档；过渡白名单移除 `cli_process_runner`（WP-B 已迁 sdk）；新增 §5.1「manifest 即测试 fixture 源」取代测试身份常量文件方案（~25 个根测试文件纯 import 改写）；codec 的 catalog 驱动事实落档（`fallbackSettings => defaultSettings`，manifest 保持 Codex 首位保 D7）；barrel 导出清单补 `builtInAgentProviderSettings` 后继者 `zetaBuiltInAgentProviderSettings` |
+| 2026-09-04 | 完整勘察报告对账：Flutter 依赖实测（仅 2 个厂商 adapter 用 `@visibleForTesting`）→ 迁 `package:meta` 的一行替换方案落档，三插件包纯 Dart 论断成立；`native_agent_provider_bundles.dart` 实测 129 行、static capabilities 86 行、built_in 51 行；测试枚举实测 59 文件（58 测试 + 1 fixture 辅助）；补 `native_agent_provider_bundle_test` 按家拆分与 part 文件（`codex_app_server_runtime_info`）随迁两条注意事项 |
+| 2026-09-04 | 实证复核轮：① **§5.1 整节重写**——初稿「manifest 即唯一 fixture 源」被实测推翻：providers barrel 的根测试引用是 125 个（不是约 25），留根 77 个，其中 20 个要的是厂商**实现类型**（`CodexAppServerAgentProvider`/`GrokPermissionPolicyAdapter`/`ClaudeCodeCliMetadataSnapshot` 等，都在 app 级测试里搬不走），走 manifest `show` 等于把实现类型倒灌进生产导出面；改为双层边界（`lib/` 只有 manifest、`test/` 只有 `test/src/testing/`，见 00-index D10），manifest `show` 只收身份常量。② **断言库替换**：待迁测试实测 82 个（初稿记 59），其中 52 个 import `flutter_test`，而 `test_packages.sh:17` 对无 `sdk: flutter` 的包用 `dart test`——必须换 `package:test`（零 `testWidgets`，机械替换）；§3 第 6 步给出命令。③ 三包第三方依赖定案（codex `toml`、claude `crypto`+`unorm_dart`、grok 无、统一 `meta`）。④ `cli_locator_identity_test.dart`（跨厂商不变量）归属定案：`test/src/testing/`。⑤ 规模上调至每包 1.5–2.5 人天。 |
+| 2026-09-04 | 终审轮：① §2 白名单补 `agent_management_slice_runner.dart`（实测 `:4` import providers barrel、`:217/219` 用 enrichment key，此前漏列，WP-D T5 消灭）。② manifest 新增**成员五：身份符号 show 再导出**（约 25 个根测试还引用 `codexAgentProviderType` 等类型常量，纯派生快照不够，再导出守住「唯一 import 点」规则）与生产注入注意（localized textCatalog 必须显式传，fallback 只是测试兜底）。③ 契约测试接入改经 testing 独立 barrel（WP-B 终审定稿）。 |
+| 2026-09-05 | **WP-C 实现完成**：三个纯 Dart 插件、精确生产导出与独立 testing 入口落地；68 个生产文件完成 token 级等价审计；43 个根协议测试/辅助文件随迁，旧包时间戳断言分别进入 Codex/Grok，native bundle 断言按厂商迁移。注册入口与 Claude 两个宿主 store provider 集中到 manifest，旧聚合包删除。同步当前架构文档与受物理路径影响的既有守卫；完整验证与实测计划差异见 06-wpc-validation.md。 |

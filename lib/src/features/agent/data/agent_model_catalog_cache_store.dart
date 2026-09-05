@@ -1,16 +1,15 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:zeta/src/core/storage/atomic_text_file.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// `~/.zeta/cache/agent_models_v1.json` 的文件缓存实现。
 class FileAgentModelCatalogCacheStore implements AgentModelCatalogCacheStore {
-  FileAgentModelCatalogCacheStore({required File file})
-    : _storage = AtomicTextFile(file);
+  FileAgentModelCatalogCacheStore({required this._storage});
 
   static const int _version = 1;
-  final AtomicTextFile _storage;
+  final StorageService _storage;
 
   @override
   Future<List<AgentModelCatalogSnapshot>> load() async {
@@ -46,25 +45,6 @@ class FileAgentModelCatalogCacheStore implements AgentModelCatalogCacheStore {
         'entries': snapshots.map(_encodeSnapshot).toList(growable: false),
       }),
     );
-  }
-}
-
-/// 不访问用户文件的内存缓存，供测试和嵌入式宿主使用。
-class MemoryAgentModelCatalogCacheStore implements AgentModelCatalogCacheStore {
-  MemoryAgentModelCatalogCacheStore([
-    List<AgentModelCatalogSnapshot> snapshots =
-        const <AgentModelCatalogSnapshot>[],
-  ]) : _snapshots = List<AgentModelCatalogSnapshot>.from(snapshots);
-
-  List<AgentModelCatalogSnapshot> _snapshots;
-
-  @override
-  Future<List<AgentModelCatalogSnapshot>> load() async =>
-      List<AgentModelCatalogSnapshot>.unmodifiable(_snapshots);
-
-  @override
-  Future<void> save(List<AgentModelCatalogSnapshot> snapshots) async {
-    _snapshots = List<AgentModelCatalogSnapshot>.from(snapshots);
   }
 }
 

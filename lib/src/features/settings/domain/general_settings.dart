@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import 'package:meta/meta.dart';
 
 import 'package:zeta/src/features/settings/domain/app_language.dart';
 

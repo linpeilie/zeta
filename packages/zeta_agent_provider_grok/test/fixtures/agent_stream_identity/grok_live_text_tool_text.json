@@ -1,0 +1,115 @@
+{
+  "_fixture": {
+    "formatVersion": 1,
+    "provider": "grok",
+    "protocol": "ACP protocolVersion 1 with _x.ai/session/update",
+    "cliVersion": "0.2.101",
+    "localCliVersionChecked": "0.2.102 (ab5ebf69ac)",
+    "scenario": "Freeze the text -> tool start/update -> text -> turn_completed input order.",
+    "provenance": "Sanitized synthesis from the existing Grok 0.2.101 redacted capture shape and current tests.",
+    "privacy": "All text and identifiers are placeholders; no prompt, path, credential, token, or user file content is retained."
+  },
+  "events": [
+    {
+      "method": "session/update",
+      "params": {
+        "sessionId": "grok-session-redacted",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "[AGENT_TEXT_SEGMENT_1]"
+          },
+          "_meta": {
+            "promptId": "grok-turn-redacted"
+          }
+        },
+        "_meta": {
+          "eventId": "grok-event-agent-1"
+        }
+      }
+    },
+    {
+      "method": "session/update",
+      "params": {
+        "sessionId": "grok-session-redacted",
+        "update": {
+          "sessionUpdate": "tool_call",
+          "toolCallId": "grok-tool-redacted",
+          "title": "[TOOL_TITLE_REDACTED]",
+          "kind": "read",
+          "status": "pending",
+          "_meta": {
+            "promptId": "grok-turn-redacted"
+          }
+        },
+        "_meta": {
+          "eventId": "grok-event-tool-start"
+        }
+      }
+    },
+    {
+      "method": "session/update",
+      "params": {
+        "sessionId": "grok-session-redacted",
+        "update": {
+          "sessionUpdate": "tool_call_update",
+          "toolCallId": "grok-tool-redacted",
+          "kind": "read",
+          "status": "completed",
+          "content": {
+            "type": "content",
+            "content": {
+              "type": "text",
+              "text": "[TOOL_OUTPUT_REDACTED]"
+            }
+          },
+          "_meta": {
+            "promptId": "grok-turn-redacted"
+          }
+        },
+        "_meta": {
+          "eventId": "grok-event-tool-complete"
+        }
+      }
+    },
+    {
+      "method": "session/update",
+      "params": {
+        "sessionId": "grok-session-redacted",
+        "update": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "[AGENT_TEXT_SEGMENT_2]"
+          },
+          "_meta": {
+            "promptId": "grok-turn-redacted"
+          }
+        },
+        "_meta": {
+          "eventId": "grok-event-agent-2"
+        }
+      }
+    },
+    {
+      "method": "_x.ai/session/update",
+      "params": {
+        "sessionId": "grok-session-redacted",
+        "update": {
+          "sessionUpdate": "turn_completed",
+          "prompt_id": "grok-turn-redacted",
+          "stop_reason": "end_turn",
+          "usage": {
+            "inputTokens": 10,
+            "outputTokens": 5,
+            "totalTokens": 15
+          }
+        },
+        "_meta": {
+          "eventId": "grok-event-terminal"
+        }
+      }
+    }
+  ]
+}

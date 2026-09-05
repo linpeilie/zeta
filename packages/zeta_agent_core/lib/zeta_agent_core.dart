@@ -1,0 +1,124 @@
+/// Zeta 的中立 Agent 内核。
+///
+/// 这里是**机制层**：领域模型与端口、Binding/runtime 契约、事件管线、纯 reducer、
+/// TimelineStore 与 Effect 描述。所有 Provider 差异都必须在各自的 adapter/reducer
+/// 里消化完再进来（G1/G2）。
+///
+/// 明确不做的事：
+///
+/// - 不含 Provider 协议类型（JSON-RPC / ACP / stream-json 只存在于 data 层）；
+/// - 不读文件、不起进程（无 `dart:io`）；不依赖 Flutter SDK、Riverpod 或根 app；
+/// - 不产出本地化文案：需要用户可见文案时只接受注入的 `AgentUiTextCatalog`；
+/// - 事件管线、合并策略、缓冲、分发与 TimelineStore 五个 G1 文件里不出现任何
+///   具体 Provider 标识（由 `claude_code_shared_layer_purity_test` 强制）。
+///
+/// ## 开放 Provider 类型
+///
+/// 内核只定义值语义的 `AgentProviderTypeId`，不枚举任何内置实现。稳定 ID、默认
+/// CLI 配置、静态能力和显示名规则由 providers 包的显式插件 definition 声明；新增
+/// Provider 不需要修改本包或扩展一个闭集 switch。
+library;
+
+export 'src/domain/agent_attention_models.dart';
+export 'src/domain/agent_conversation_mode_models.dart';
+export 'src/domain/agent_event_models.dart';
+export 'src/domain/agent_file_change_models.dart';
+export 'src/domain/agent_message_models.dart';
+export 'src/domain/agent_model_catalog_models.dart';
+export 'src/domain/agent_model_codec.dart';
+export 'src/domain/agent_model_selection_models.dart';
+export 'src/domain/agent_models.dart';
+export 'src/domain/agent_permission_models.dart';
+export 'src/domain/agent_permission_policy_models.dart';
+export 'src/domain/agent_plan_approval_models.dart';
+export 'src/domain/agent_plan_execution_models.dart';
+export 'src/domain/agent_provider_bundle.dart';
+export 'src/domain/agent_provider_capabilities.dart';
+export 'src/domain/agent_provider_error_presentation.dart';
+export 'src/domain/agent_provider_models.dart';
+export 'src/domain/agent_provider_raw_payload.dart';
+export 'src/domain/agent_question_models.dart';
+export 'src/domain/agent_runtime_models.dart';
+export 'src/domain/agent_session_config_models.dart';
+export 'src/domain/agent_session_models.dart';
+export 'src/domain/agent_skill_models.dart';
+export 'src/domain/agent_thread_models.dart';
+export 'src/domain/agent_tool_models.dart';
+export 'src/domain/agent_turn_activity_models.dart';
+export 'src/domain/agent_turn_context_models.dart';
+export 'src/domain/agent_turn_history_models.dart';
+export 'src/domain/agent_turn_terminal_signal.dart';
+export 'src/domain/agent_ui_text_catalog.dart';
+export 'src/domain/agent_usage_models.dart';
+export 'src/domain/agent_usage_window_labels.dart';
+export 'src/domain/agent_user_input_models.dart';
+export 'src/domain/fallback_agent_ui_text_catalog.dart';
+export 'src/application/agent_conversation_binding.dart';
+export 'src/application/agent_conversation_binding_manager.dart';
+export 'src/application/agent_conversation_effect.dart';
+export 'src/application/agent_conversation_effect_runner.dart';
+export 'src/application/agent_conversation_event_processor.dart';
+export 'src/application/agent_conversation_mutation.dart';
+export 'src/application/agent_conversation_permission_selection_controller.dart';
+export 'src/application/agent_conversation_permission_state.dart';
+export 'src/application/agent_conversation_reducer.dart';
+export 'src/application/agent_conversation_reducer_context.dart';
+export 'src/application/agent_conversation_reducer_contexts.dart';
+export 'src/application/agent_conversation_session_state.dart';
+export 'src/application/reduction/agent_event_handler.dart';
+export 'src/application/reduction/agent_event_handler_registry.dart';
+export 'src/application/reduction/default_agent_handlers.dart';
+export 'src/application/reduction/handlers/auto_approval_review_handler.dart';
+export 'src/application/reduction/handlers/context_usage_handler.dart';
+export 'src/application/reduction/handlers/conversation_mode_updated_handler.dart';
+export 'src/application/reduction/handlers/deprecation_handler.dart';
+export 'src/application/reduction/handlers/error_handler.dart';
+export 'src/application/reduction/handlers/message_delta_handler.dart';
+export 'src/application/reduction/handlers/message_updated_handler.dart';
+export 'src/application/reduction/handlers/model_list_handler.dart';
+export 'src/application/reduction/handlers/model_rerouted_handler.dart';
+export 'src/application/reduction/handlers/no_op_handler.dart';
+export 'src/application/reduction/handlers/permission_requested_handler.dart';
+export 'src/application/reduction/handlers/permission_resolved_handler.dart';
+export 'src/application/reduction/handlers/plan_approval_requested_handler.dart';
+export 'src/application/reduction/handlers/plan_approval_resolved_handler.dart';
+export 'src/application/reduction/handlers/plan_updated_handler.dart';
+export 'src/application/reduction/handlers/question_requested_handler.dart';
+export 'src/application/reduction/handlers/question_resolved_handler.dart';
+export 'src/application/reduction/handlers/reasoning_delta_handler.dart';
+export 'src/application/reduction/handlers/session_config_handler.dart';
+export 'src/application/reduction/handlers/session_started_handler.dart';
+export 'src/application/reduction/handlers/status_handler.dart';
+export 'src/application/reduction/handlers/system_item_handler.dart';
+export 'src/application/reduction/handlers/thread_closed_handler.dart';
+export 'src/application/reduction/handlers/thread_compacted_handler.dart';
+export 'src/application/reduction/handlers/thread_name_handler.dart';
+export 'src/application/reduction/handlers/thread_preview_handler.dart';
+export 'src/application/reduction/handlers/thread_settings_handler.dart';
+export 'src/application/reduction/handlers/thread_status_handler.dart';
+export 'src/application/reduction/handlers/token_usage_handler.dart';
+export 'src/application/reduction/handlers/tool_call_handler.dart';
+export 'src/application/reduction/handlers/turn_completed_handler.dart';
+export 'src/application/reduction/handlers/turn_file_changes_handler.dart';
+export 'src/application/reduction/handlers/turn_started_handler.dart';
+export 'src/application/agent_detached_event_policy.dart';
+export 'src/application/agent_conversation_thread_snapshot.dart';
+export 'src/application/agent_conversation_timeline_store.dart';
+export 'src/application/agent_elapsed_ticker.dart';
+export 'src/application/agent_event_coalescing_policy.dart';
+export 'src/application/agent_event_observer.dart';
+export 'src/application/agent_event_pipeline.dart';
+export 'src/application/agent_listenable.dart';
+export 'src/application/agent_permission_catalog_controller.dart';
+export 'src/application/agent_permission_request_resolver.dart';
+export 'src/application/agent_provider_config_store.dart';
+export 'src/application/agent_provider_event_listener_gate.dart';
+export 'src/application/agent_provider_global_runtime.dart';
+export 'src/application/agent_provider_runtime_identity.dart';
+export 'src/application/agent_provider_runtime_registry.dart';
+export 'src/application/agent_turn_context_recorder.dart';
+export 'src/application/agent_turn_context_store.dart';
+export 'src/application/agent_ui_update_port.dart';
+export 'src/application/agent_ui_update_request.dart';
+export 'src/application/bounded_event_dispatcher.dart';
+export 'src/application/coalescing_event_buffer.dart';

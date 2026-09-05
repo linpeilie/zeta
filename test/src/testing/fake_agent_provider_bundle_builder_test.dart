@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 
 import 'ide_test_harness.dart';
 
@@ -13,7 +13,7 @@ void main() {
         conversation: provider,
       );
 
-      final bundle = factory.createBundle(AgentProviderConfig.defaultCodex);
+      final bundle = factory.createBundle(defaultCodexAgentProviderConfig);
 
       expect(bundle.runtime, isNotNull);
       expect(bundle.conversation, isNotNull);
@@ -41,7 +41,7 @@ void main() {
     test('fromFake 按 Fake 已实现接口发布可选端口', () {
       final provider = FakeAgentProvider();
       final factory = FakeAgentProviderBundleBuilder.fromFake(provider);
-      final bundle = factory.createBundle(AgentProviderConfig.defaultCodex);
+      final bundle = factory.createBundle(defaultCodexAgentProviderConfig);
 
       expect(bundle.threadCatalog, isNotNull);
       expect(bundle.localThreadList, isNotNull);
@@ -54,8 +54,8 @@ void main() {
         FakeAgentProvider(),
       );
 
-      final first = factory.createBundle(AgentProviderConfig.defaultCodex);
-      final second = factory.createBundle(AgentProviderConfig.defaultGrok);
+      final first = factory.createBundle(defaultCodexAgentProviderConfig);
+      final second = factory.createBundle(defaultGrokAgentProviderConfig);
 
       expect(identical(first, second), isTrue);
     });

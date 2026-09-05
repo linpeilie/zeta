@@ -10,6 +10,9 @@
 #ifndef AppVersion
   #error AppVersion must be provided by package_windows.ps1.
 #endif
+#ifndef ArtifactVersion
+  #error ArtifactVersion must be provided by package_windows.ps1.
+#endif
 #ifndef VersionInfoVersion
   #error VersionInfoVersion must be provided by package_windows.ps1.
 #endif
@@ -29,7 +32,7 @@ PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir={#OutputDir}
-OutputBaseFilename=zeta-{#AppVersion}-windows-x64-setup
+OutputBaseFilename=zeta-{#ArtifactVersion}-windows-x86_64-setup
 SetupIconFile={#ProjectRoot}\windows\runner\resources\app_icon.ico
 UninstallDisplayIcon={app}\zeta.exe
 Compression=lzma2

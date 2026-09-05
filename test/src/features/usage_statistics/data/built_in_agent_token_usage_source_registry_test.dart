@@ -1,37 +1,40 @@
+import '../../../testing/agent_management_test_definitions.dart';
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/data/datasources/claude_code/claude_code_session_history_reader.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import '../../../testing/agent_provider_implementations.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_query_service.dart';
 import 'package:zeta/src/features/usage_statistics/application/query_agent_usage_panel_repository.dart';
 import 'package:zeta/src/features/usage_statistics/application/query_usage_statistics_repository.dart';
-import 'package:zeta/src/features/usage_statistics/application/usage_statistics_controller.dart';
-import 'package:zeta/src/features/usage_statistics/data/built_in_agent_token_usage_source_registry.dart';
-import 'package:zeta/src/features/usage_statistics/data/providers/claude_code/claude_code_token_usage_source.dart';
-import 'package:zeta/src/features/usage_statistics/data/providers/codex/codex_token_usage_source.dart';
-import 'package:zeta/src/features/usage_statistics/data/providers/grok/grok_token_usage_source.dart';
-import 'package:zeta/src/features/usage_statistics/data/usage_statistics_partition_store.dart';
+import 'package:zeta/src/features/usage_statistics/data/contributed_agent_token_usage_source_registry.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_query_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_quota_source.dart';
+import '../../../testing/memory_feature_stores.dart';
+import '../../../testing/usage_statistics_test_bindings.dart';
 
 void main() {
   test('registry exposes every active Provider token source', () {
-    final registry = BuiltInAgentTokenUsageSourceRegistry(
-      MemoryUsageStatisticsPartitionStore(),
+    final registry = ContributedAgentTokenUsageSourceRegistry(
+      testAgentUsageContributions,
+      services: AgentUsageHostServices(
+        partitionPort: MemoryUsageStatisticsPartitionStore(),
+      ),
     );
 
     expect(
-      registry.createFor(AgentProviderConfig.defaultCodex),
+      registry.createFor(defaultCodexAgentProviderConfig),
       isA<CodexTokenUsageSource>(),
     );
     expect(
-      registry.createFor(AgentProviderConfig.defaultGrok),
+      registry.createFor(defaultGrokAgentProviderConfig),
       isA<GrokTokenUsageSource>(),
     );
     expect(
-      registry.createFor(AgentProviderConfig.defaultClaudeCode),
+      registry.createFor(defaultClaudeCodeAgentProviderConfig),
       isA<ClaudeCodeTokenUsageSource>(),
     );
   });
@@ -50,7 +53,7 @@ void main() {
       final startedAt = DateTime(2026, 8, 14, 9);
       final now = DateTime(2026, 8, 14, 12);
       await _writeClaudeHistory(userHome, startedAt);
-      final config = AgentProviderConfig.defaultClaudeCode.copyWith(
+      final config = defaultClaudeCodeAgentProviderConfig.copyWith(
         environment: <String, String>{
           Platform.isWindows ? 'USERPROFILE' : 'HOME': userHome.path,
         },
@@ -58,8 +61,11 @@ void main() {
       final queryService = AgentUsageQueryService(
         () async => <AgentProviderConfig>[config],
         const _UnsupportedQuotaSource(),
-        BuiltInAgentTokenUsageSourceRegistry(
-          MemoryUsageStatisticsPartitionStore(),
+        ContributedAgentTokenUsageSourceRegistry(
+          testAgentUsageContributions,
+          services: AgentUsageHostServices(
+            partitionPort: MemoryUsageStatisticsPartitionStore(),
+          ),
         ),
         clock: () => now,
       );
@@ -68,14 +74,16 @@ void main() {
         queryService,
         clock: () => now,
       ).loadProvider(config.id);
-      final statisticsController = UsageStatisticsController(
-        repository: QueryUsageStatisticsRepository(
-          queryService,
-          clock: () => now,
-        ),
+      final statisticsRepository = QueryUsageStatisticsRepository(
+        queryService,
         clock: () => now,
       );
-      addTearDown(statisticsController.dispose);
+      final statisticsBindings = UsageStatisticsTestBindings(
+        repository: statisticsRepository,
+        clock: () => now,
+      );
+      final statisticsController = statisticsBindings.notifier;
+      addTearDown(statisticsBindings.dispose);
       await statisticsController.initialize();
 
       expect(panelResult!.entry.providerId, defaultClaudeCodeProviderId);

@@ -1,5 +1,4 @@
-import 'package:zeta/src/features/agent/domain/agent_turn_context_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_turn_history_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// live 合成 turnId 与 Provider 历史 turnId 不一致时，用开始时间对齐的最大间隔。
 ///
@@ -40,7 +39,8 @@ AgentThreadHistorySnapshot overlayThreadTurnContext(
     threadId: snapshot.threadId,
     turns: List<AgentHistoryTurn>.unmodifiable(turns),
     currentTurn: currentTurn,
-    raw: snapshot.raw,
+    sourceLabel: snapshot.sourceLabel,
+    sessionPath: snapshot.sessionPath,
   );
 }
 
@@ -216,7 +216,6 @@ AgentHistoryTurn _overlayTurn(
     tokenUsageIsSessionCumulative: turn.tokenUsageIsSessionCumulative,
     errorMessage: turn.errorMessage,
     errorCode: turn.errorCode,
-    raw: turn.raw,
   );
 }
 

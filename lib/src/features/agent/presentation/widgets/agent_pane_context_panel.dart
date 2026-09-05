@@ -1,4 +1,20 @@
-part of '../agent_pane.dart';
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
+
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_ui/zeta_ui.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_region_state.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
+import 'package:zeta/src/features/agent/presentation/agent_flutter_listenable_adapter.dart';
+import 'package:zeta/src/features/agent/presentation/agent_presentation_l10n.dart';
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_region_builder.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_cards.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_styles.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
 /// 上下文详情面板的固定宽度。
 const double _agentContextPanelWidth = 360;
@@ -17,114 +33,174 @@ const double _agentContextKeyColumnWidth = 76;
 /// 消息数、提供商、上下文限制、token 占用、创建/活跃时间）与原始消息列表。
 /// 原始消息列表展示消息 ID、角色与时间，点击可展开查看 raw 协议原文。
 /// 面板正文包在 [SelectionArea] 中，支持拖选文本与系统复制菜单。
-class _AgentContextPanel extends StatefulWidget {
-  const _AgentContextPanel({required this.viewModel});
+class AgentContextPanel extends StatefulWidget {
+  const AgentContextPanel({
+    required this.controller,
+    required this.onClose,
+    super.key,
+  });
 
-  final AgentConversationViewModel viewModel;
+  final AgentConversationRuntimeController controller;
+  final VoidCallback onClose;
 
   @override
-  State<_AgentContextPanel> createState() => _AgentContextPanelState();
+  State<AgentContextPanel> createState() => _AgentContextPanelState();
 }
 
-class _AgentContextPanelState extends State<_AgentContextPanel> {
+class _AgentContextPanelState extends State<AgentContextPanel> {
   /// 原始消息行展开态：按条目 id 记录，避免父级重建时丢失。
   final Set<String> _expandedRawMessageIds = <String>{};
 
   /// 默认开启：隐藏工具调用、审批、系统事件等非主对话条目。
   bool _filterNonChatMessages = true;
+  late void Function() _unsubscribeProviderSettings;
+
+  @override
+  void initState() {
+    super.initState();
+    _subscribeProviderSettings();
+  }
+
+  @override
+  void didUpdateWidget(covariant AgentContextPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(
+      oldWidget.controller.providerController,
+      widget.controller.providerController,
+    )) {
+      _unsubscribeProviderSettings();
+      _subscribeProviderSettings();
+    }
+  }
+
+  void _subscribeProviderSettings() {
+    _unsubscribeProviderSettings = widget.controller.providerController
+        .subscribe(() {
+          if (mounted) {
+            setState(() {});
+          }
+        });
+  }
+
+  @override
+  void dispose() {
+    _unsubscribeProviderSettings();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final viewModel = widget.viewModel;
+    final controller = widget.controller;
     return ValueListenableBuilder<AgentConversationTurnState?>(
-      valueListenable: viewModel.liveTurnListenable,
+      valueListenable: controller.flutterLiveTurnListenable,
       builder: (context, liveTurnState, _) {
         // 上下文面板只组合已有 typed slice；live binding 改变时重绑稳定 turn
         // notifier，避免重新引入完整 ViewModel ChangeNotifier。
-        return ListenableBuilder(
-          listenable: Listenable.merge(<Listenable>[
-            viewModel.headerStateListenable,
-            viewModel.historyStateListenable,
-            viewModel.threadSnapshotListenable,
-            viewModel.providerController,
-            ?liveTurnState,
-          ]),
-          builder: (context, _) {
-            final colors = IdeColors.of(context);
-            final usage = viewModel.currentThreadTokenUsage;
-            final messages = viewModel.messages;
-            final rawItems = _buildContextRawItems(
-              timelineEntries: viewModel.timelineEntries,
-              filterNonChat: _filterNonChatMessages,
-              catalog: viewModel.textCatalog,
-              l10n: context.l10n,
-            );
-            return Container(
-              key: const ValueKey('agent-context-panel'),
-              width: _agentContextPanelWidth,
-              decoration: BoxDecoration(
-                color: colors.surface,
-                border: Border(
-                  left: BorderSide(color: colors.borderSubtle, width: 1),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _AgentContextPanelHeader(onClose: viewModel.hideContextPanel),
-                  // SelectionArea 覆盖概览与原始消息区，支持拖选 / 右键复制；
-                  // 关闭按钮留在区外，避免与选择手势争用。
-                  Expanded(
-                    child: SelectionArea(
-                      key: const ValueKey('agent-context-panel-selection'),
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.fromLTRB(
-                          IdeSpacing.space16,
-                          IdeSpacing.space8,
-                          IdeSpacing.space16,
-                          IdeSpacing.space20,
-                        ),
-                        child: RepaintBoundary(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              _AgentContextSummaryCard(
-                                title: viewModel.currentThreadTitle,
-                                sessionId: viewModel.sessionId,
-                                messageCount: messages.length,
-                                providerName: viewModel.activeProviderName,
-                                contextLimit: usage?.displayModelContextWindow,
-                                totalTokens: usage?.displayTotalTokens,
-                                inputTokens: usage?.displayInputTokens,
-                                outputTokens: usage?.displayOutputTokens,
-                                cachedTokens: usage?.displayCachedInputTokens,
-                                createdAt: viewModel.threadCreatedAt,
-                                lastActiveAt: viewModel.threadLastActiveAt,
-                              ),
-                              // 元数据区与原始消息之间不画线：靠一整段留白
-                              // 把两个功能区分开，面板整体保持无框线。
-                              const SizedBox(height: IdeSpacing.space32),
-                              _AgentContextRawMessageList(
-                                items: rawItems,
-                                filterNonChat: _filterNonChatMessages,
-                                expandedIds: _expandedRawMessageIds,
-                                onToggle: _toggleRawMessage,
-                                onFilterChanged: (value) {
-                                  setState(() {
-                                    _filterNonChatMessages = value;
-                                  });
-                                },
-                              ),
-                            ],
+        return AgentRegionBuilder<AgentHeaderState>(
+          bindingKey: controller.conversationBinding.key,
+          selector: agentConversationHeaderProvider.call,
+          builder: (context, _) =>
+              AgentRegionBuilder<AgentConversationHistoryState>(
+                bindingKey: controller.conversationBinding.key,
+                selector: agentConversationHistoryProvider.call,
+                builder: (context, _) => ListenableBuilder(
+                  // thread 快照与 Provider 目录不属于 region，仍走 listenable。
+                  listenable: Listenable.merge(<Listenable>[
+                    controller.flutterThreadSnapshotListenable,
+                    if (liveTurnState != null)
+                      AgentFlutterListenableAdapter(liveTurnState),
+                  ]),
+                  builder: (context, _) {
+                    final colors = IdeColors.of(context);
+                    final usage = controller.currentThreadTokenUsage;
+                    final messages = controller.messages;
+                    final rawItems = _buildContextRawItems(
+                      timelineEntries: controller.timelineEntries,
+                      filterNonChat: _filterNonChatMessages,
+                      catalog: controller.textCatalog,
+                      l10n: context.l10n,
+                    );
+                    return Container(
+                      key: const ValueKey('agent-context-panel'),
+                      width: _agentContextPanelWidth,
+                      decoration: BoxDecoration(
+                        color: colors.surface,
+                        border: Border(
+                          left: BorderSide(
+                            color: colors.borderSubtle,
+                            width: 1,
                           ),
                         ),
                       ),
-                    ),
-                  ),
-                ],
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _AgentContextPanelHeader(onClose: widget.onClose),
+                          // SelectionArea 覆盖概览与原始消息区，支持拖选 / 右键复制；
+                          // 关闭按钮留在区外，避免与选择手势争用。
+                          Expanded(
+                            child: SelectionArea(
+                              key: const ValueKey(
+                                'agent-context-panel-selection',
+                              ),
+                              child: SingleChildScrollView(
+                                padding: const EdgeInsets.fromLTRB(
+                                  IdeSpacing.space16,
+                                  IdeSpacing.space8,
+                                  IdeSpacing.space16,
+                                  IdeSpacing.space20,
+                                ),
+                                child: RepaintBoundary(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      _AgentContextSummaryCard(
+                                        title: controller.currentThreadTitle,
+                                        sessionId: controller.sessionId,
+                                        messageCount: messages.length,
+                                        providerName:
+                                            controller.activeProviderName,
+                                        contextLimit:
+                                            usage?.displayModelContextWindow,
+                                        totalTokens: usage?.displayTotalTokens,
+                                        inputTokens: usage?.displayInputTokens,
+                                        outputTokens:
+                                            usage?.displayOutputTokens,
+                                        cachedTokens:
+                                            usage?.displayCachedInputTokens,
+                                        createdAt: controller.threadCreatedAt,
+                                        lastActiveAt:
+                                            controller.threadLastActiveAt,
+                                      ),
+                                      // 元数据区与原始消息之间不画线：靠一整段留白
+                                      // 把两个功能区分开，面板整体保持无框线。
+                                      const SizedBox(
+                                        height: IdeSpacing.space32,
+                                      ),
+                                      _AgentContextRawMessageList(
+                                        items: rawItems,
+                                        filterNonChat: _filterNonChatMessages,
+                                        expandedIds: _expandedRawMessageIds,
+                                        onToggle: _toggleRawMessage,
+                                        onFilterChanged: (value) {
+                                          setState(() {
+                                            _filterNonChatMessages = value;
+                                          });
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
               ),
-            );
-          },
         );
       },
     );
@@ -174,6 +250,8 @@ class _AgentContextPanelHeader extends StatelessWidget {
           const Spacer(),
           IdeTooltip(
             message: context.l10n.agentClose,
+            // G8：IdeIconButton 没有 iconDense，且不接受自定义 15px 图标；
+            // 面板头 chrome 继续用 small+iconDense，避免被撑到 compact 24px。
             child: sf.IconButton.ghost(
               key: const ValueKey('agent-context-panel-close'),
               onPressed: onClose,
@@ -439,15 +517,15 @@ class _AgentContextRawMessageRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    final hasRaw = item.raw.isNotEmpty;
-    final rawText = hasRaw ? _prettyJson(item.raw) : '';
+    final rawText = item.rawText;
+    final hasRaw = rawText.isNotEmpty;
     return IdeCollapsibleCard(
       headerKey: ValueKey<String>('agent-context-raw-${item.id}'),
       bodyKey: ValueKey<String>('agent-context-raw-body-${item.id}'),
       expanded: expanded,
       canExpand: hasRaw,
       onToggle: onToggle,
-      hoverBackgroundColor: _agentHoverBackground(context),
+      hoverBackgroundColor: agentHoverBackground(context),
       padding: const EdgeInsets.symmetric(vertical: IdeSpacing.space2),
       bodyPadding: const EdgeInsets.only(top: IdeSpacing.space8),
       semanticLabel: context.l10n.agentRawMessages,
@@ -473,7 +551,7 @@ class _AgentContextRawMessageRow extends StatelessWidget {
           ),
           const SizedBox(width: IdeSpacing.space8),
           Text(
-            _extractRawTimestamp(item.raw),
+            _formatContextTimestamp(item.capturedAt),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: textStyles.caption.copyWith(
@@ -494,6 +572,8 @@ class _AgentContextRawMessageRow extends StatelessWidget {
                     label: context.l10n.agentCopyOriginal,
                     child: IdeTooltip(
                       message: context.l10n.agentCopyOriginal,
+                      // G8：IdeIconButton 没有 iconDense，且不接受自定义 14px 图标；
+                      // 行内复制继续用 small+iconDense，避免被撑到 compact 24px。
                       child: sf.IconButton.ghost(
                         key: ValueKey<String>(
                           'agent-context-raw-copy-${item.id}',
@@ -513,7 +593,7 @@ class _AgentContextRawMessageRow extends StatelessWidget {
                 ConstrainedBox(
                   constraints: const BoxConstraints(maxHeight: 360),
                   child: SingleChildScrollView(
-                    child: _AgentHighlightedCodeBlock(
+                    child: AgentHighlightedCodeBlock(
                       code: rawText,
                       language: 'json',
                     ),
@@ -525,7 +605,7 @@ class _AgentContextRawMessageRow extends StatelessWidget {
               padding: const EdgeInsets.only(top: IdeSpacing.space4),
               child: Text(
                 context.l10n.agentNoRawPayload,
-                style: _agentMetaTextStyle(context),
+                style: agentMetaTextStyle(context),
               ),
             ),
     );
@@ -550,7 +630,8 @@ class _ContextRawItem {
     required this.id,
     required this.displayId,
     required this.kindLabel,
-    required this.raw,
+    required this.rawText,
+    this.capturedAt,
   });
 
   /// 展开态与 ValueKey 使用的稳定 id。
@@ -562,7 +643,15 @@ class _ContextRawItem {
   /// 类型标签（用户 / 助手 / 工具 / …）。
   final String kindLabel;
 
-  final Map<String, Object?> raw;
+  /// 已渲染好的 JSON 文本。
+  ///
+  /// 面板只展示原始报文，**不从中取值**：所以这里存的是文本，不是可索引的 Map。
+  /// 时间来自 [capturedAt]（由适配层在包装 payload 时给出），不再靠翻 JSON 猜
+  /// `timestamp` / `created_at` 之类的键。
+  final String rawText;
+
+  /// 报文时间；协议未提供时为 null。
+  final DateTime? capturedAt;
 }
 
 /// 从时间线构建原始消息列表；[filterNonChat] 为 true 时仅保留主对话。
@@ -584,7 +673,8 @@ List<_ContextRawItem> _buildContextRawItems({
             id: message.id,
             displayId: message.id,
             kindLabel: _contextMessageKindLabel(message, l10n),
-            raw: message.raw,
+            rawText: message.raw.toPrettyJson(),
+            capturedAt: message.raw.capturedAt,
           ),
         );
       case AgentToolTimelineEntry(:final toolCall):
@@ -596,7 +686,8 @@ List<_ContextRawItem> _buildContextRawItems({
             id: toolCall.id,
             displayId: toolCall.id,
             kindLabel: _contextToolKindLabel(toolCall, l10n),
-            raw: _toolCallContextMap(toolCall, catalog),
+            rawText: _toolCallContextText(toolCall, catalog),
+            capturedAt: toolCall.raw.capturedAt ?? toolCall.startedAt,
           ),
         );
       case AgentPermissionTimelineEntry(:final request):
@@ -608,15 +699,16 @@ List<_ContextRawItem> _buildContextRawItems({
             id: request.id,
             displayId: request.id,
             kindLabel: l10n.agentKindApproval,
-            raw: request.raw.isNotEmpty
-                ? request.raw
-                : <String, Object?>{
+            capturedAt: request.raw.capturedAt,
+            rawText: request.raw.isNotEmpty
+                ? request.raw.toPrettyJson()
+                : _prettyJson(<String, Object?>{
                     'id': request.id,
                     'title': request.title,
                     'kind': request.kind.name,
                     'description': ?request.description,
                     'command': ?request.command,
-                  },
+                  }),
           ),
         );
       case AgentQuestionTimelineEntry(:final request):
@@ -628,9 +720,10 @@ List<_ContextRawItem> _buildContextRawItems({
             id: request.id,
             displayId: request.id,
             kindLabel: l10n.agentKindQuestion,
-            raw: request.raw.isNotEmpty
-                ? request.raw
-                : <String, Object?>{
+            capturedAt: request.raw.capturedAt,
+            rawText: request.raw.isNotEmpty
+                ? request.raw.toPrettyJson()
+                : _prettyJson(<String, Object?>{
                     'id': request.id,
                     'title': request.title,
                     'description': ?request.description,
@@ -642,7 +735,7 @@ List<_ContextRawItem> _buildContextRawItems({
                           },
                         )
                         .toList(growable: false),
-                  },
+                  }),
           ),
         );
       case AgentPlanApprovalTimelineEntry(:final request):
@@ -654,7 +747,8 @@ List<_ContextRawItem> _buildContextRawItems({
             id: request.id,
             displayId: request.id,
             kindLabel: l10n.agentKindPlanApproval,
-            raw: request.raw,
+            rawText: request.raw.toPrettyJson(),
+            capturedAt: request.raw.capturedAt,
           ),
         );
       case AgentHistoryEventTimelineEntry(:final event):
@@ -666,15 +760,16 @@ List<_ContextRawItem> _buildContextRawItems({
             id: event.id,
             displayId: event.id,
             kindLabel: _contextHistoryEventLabel(event, l10n),
-            raw: event.raw.isNotEmpty
-                ? event.raw
-                : <String, Object?>{
+            capturedAt: event.raw.capturedAt,
+            rawText: event.raw.isNotEmpty
+                ? event.raw.toPrettyJson()
+                : _prettyJson(<String, Object?>{
                     'id': event.id,
                     'kind': event.kind.name,
                     'title': event.title,
                     'description': ?event.description,
                     'content': ?event.content,
-                  },
+                  }),
           ),
         );
       case AgentTurnFileChangesTimelineEntry(:final turnId, :final snapshot):
@@ -686,10 +781,10 @@ List<_ContextRawItem> _buildContextRawItems({
             id: entry.id,
             displayId: turnId,
             kindLabel: l10n.agentKindFileChange,
-            raw: <String, Object?>{
+            rawText: _prettyJson(<String, Object?>{
               'turnId': turnId,
               'fileChanges': _fileChangeSnapshotContextMap(snapshot),
-            },
+            }),
           ),
         );
     }
@@ -736,6 +831,42 @@ String _contextHistoryEventLabel(
   };
 }
 
+/// 工具条目的展示契约：**typed 摘要在前，不可取值的原文作为独立段落附在后面**。
+///
+/// - 文件变更证据只能来自 `fileChanges` 快照，raw / wire 字段不得回流成证据
+///   （见 `agent_file_change_presentation_purity_test`）；
+/// - 其余工具保留 `rawInput` / `rawOutput` 的诊断价值，但它们是**独立文本段**，
+///   不再作为字符串塞进摘要 JSON——那会把整份报文二次转义成一行 `\n`。
+String _toolCallContextText(
+  AgentToolCall toolCall,
+  AgentUiTextCatalog catalog,
+) {
+  final buffer = StringBuffer(
+    _prettyJson(_toolCallContextMap(toolCall, catalog)),
+  );
+  if (toolCall.kind != AgentToolKind.edit) {
+    _appendRawSection(buffer, 'rawInput', toolCall.rawInput);
+    _appendRawSection(buffer, 'rawOutput', toolCall.rawOutput);
+  }
+  return buffer.toString();
+}
+
+/// 追加一段带标题的原文；空原文不占位。
+void _appendRawSection(
+  StringBuffer buffer,
+  String label,
+  AgentProviderRawPayload payload,
+) {
+  if (payload.isEmpty) {
+    return;
+  }
+  buffer
+    ..write('\n\n// ')
+    ..write(label)
+    ..write('\n')
+    ..write(payload.toPrettyJson());
+}
+
 Map<String, Object?> _toolCallContextMap(
   AgentToolCall toolCall,
   AgentUiTextCatalog catalog,
@@ -760,9 +891,6 @@ Map<String, Object?> _toolCallContextMap(
       'status': toolCall.status.name,
     };
   }
-  if (toolCall.raw.isNotEmpty) {
-    return toolCall.raw;
-  }
   return <String, Object?>{
     'id': toolCall.id,
     'title': toolCall.displayTitle(catalog),
@@ -770,8 +898,6 @@ Map<String, Object?> _toolCallContextMap(
     'status': toolCall.status.name,
     'content': ?toolCall.content,
     if (toolCall.locations.isNotEmpty) 'locations': toolCall.locations,
-    if (toolCall.rawInput.isNotEmpty) 'rawInput': toolCall.rawInput,
-    if (toolCall.rawOutput.isNotEmpty) 'rawOutput': toolCall.rawOutput,
   };
 }
 
@@ -831,54 +957,12 @@ String _formatContextDateTime(DateTime? dateTime) {
       '${two(dateTime.minute)}';
 }
 
-/// 从 raw payload 宽容提取消息时间；兼容记录级 timestamp、started/createdAt
-/// 以及内嵌 payload 内的同名字段。缺失时返回占位符。
-String _extractRawTimestamp(Map<String, Object?> raw) {
-  for (final key in const <String>[
-    'timestamp',
-    'startedAt',
-    'started_at',
-    'completedAt',
-    'completed_at',
-    'createdAt',
-    'created_at',
-  ]) {
-    final parsed = _rawToDateTime(raw[key]);
-    if (parsed != null) {
-      return _formatContextDateTime(parsed);
-    }
-  }
-  // 部分协议把时间戳放在内嵌 payload 中。
-  final payload = raw['payload'];
-  if (payload is Map<String, Object?>) {
-    for (final key in const <String>[
-      'timestamp',
-      'started_at',
-      'completed_at',
-    ]) {
-      final parsed = _rawToDateTime(payload[key]);
-      if (parsed != null) {
-        return _formatContextDateTime(parsed);
-      }
-    }
-  }
-  return '—';
-}
-
-/// 把 raw 中的时间字段解析为本地 DateTime；兼容秒/毫秒整数与 ISO 字符串。
-DateTime? _rawToDateTime(Object? value) {
-  if (value == null) {
-    return null;
-  }
-  if (value is int) {
-    // 小于 10^12 视为秒级时间戳，统一换算到毫秒。
-    final millis = value < 1000000000000 ? value * 1000 : value;
-    return DateTime.fromMillisecondsSinceEpoch(millis, isUtc: true).toLocal();
-  }
-  if (value is String) {
-    return DateTime.tryParse(value)?.toLocal();
-  }
-  return null;
+/// 报文时间：直接用适配层给出的 typed 时间戳。
+///
+/// 早期这里会去 raw payload 里逐个试 `timestamp` / `started_at` / `createdAt`
+/// 等键名——那是从原文取值，正是本次要消灭的模式。
+String _formatContextTimestamp(DateTime? capturedAt) {
+  return _formatContextDateTime(capturedAt);
 }
 
 /// 把 raw Map 序列化为带缩进的 JSON 字符串；失败时回退到 toString。

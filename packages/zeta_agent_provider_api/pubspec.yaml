@@ -1,0 +1,16 @@
+name: zeta_agent_provider_api
+description: Zeta Agent Provider 插件的宿主侧契约：definition/catalog/贡献类型/聚合 bundle 工厂。
+publish_to: 'none'
+version: 0.1.0
+resolution: workspace
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  zeta_agent_core: ^0.1.0
+  zeta_foundation: ^0.1.0
+  zeta_plugin_kernel: ^0.1.0
+
+dev_dependencies:
+  test: ^1.25.0

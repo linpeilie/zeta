@@ -1,13 +1,20 @@
+import '../testing/agent_management_test_definitions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/app/app.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
-import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 import 'package:zeta/src/ui/features/ide/views/ide_home.dart';
 
 import '../testing/ide_test_harness.dart';
+import '../testing/zeta_test_app.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
+import 'package:zeta/src/app/composition/zeta_environment_providers.dart';
+import 'package:zeta/src/app/localization/zeta_display_language_source.dart';
+import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
+import 'package:zeta/src/app/storage/zeta_store_providers.dart';
+import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_providers.dart';
+import 'package:zeta/src/app/window/zeta_window_host.dart';
 
 void main() {
   testWidgets('already-migrated IdeHome chrome follows the pumped locale', (
@@ -88,7 +95,7 @@ void main() {
     await _pumpIdeHome(
       tester,
       homeProviderDetectionLoader: () async => <ManagedAgent>[
-        _installedAgent(AgentDefinition.codex),
+        _installedAgent(codexAgentManagementDefinition),
       ],
     );
     await pumpUntilCondition(
@@ -111,7 +118,7 @@ void main() {
       tester,
       language: AppLanguage.english,
       homeProviderDetectionLoader: () async => <ManagedAgent>[
-        _installedAgent(AgentDefinition.codex),
+        _installedAgent(codexAgentManagementDefinition),
       ],
     );
     await pumpUntilCondition(
@@ -144,18 +151,29 @@ Future<void> _pumpIdeHome(
 
   final session = MemorySessionStore(null);
   await tester.pumpWidget(
-    MainApp(
-      enableNativeWindowFrame: true,
-      showWindowControls: false,
-      sessionLoader: session.load,
-      sessionSaver: session.save,
-      agentProviderFactory: FakeAgentProviderBundleBuilder.fromFake(
-        FakeAgentProvider(),
-      ),
-      agentProviderConfigStore: MemoryAgentProviderConfigStore(),
-      homeProviderDetectionLoader: homeProviderDetectionLoader,
-      displayLanguageOverride: language,
-      agentUsagePanelRepository: const _EmptyAgentUsageRepository(),
+    zetaTestApp(
+      overrides: <Override>[
+        zetaWindowHostProvider.overrideWithValue(
+          NativeDesktopWindowHost(showsWindowControls: false),
+        ),
+        ideSessionStoreProvider.overrideWithValue(session),
+        agentProviderBundleFactoryProvider.overrideWithValue(
+          FakeAgentProviderBundleBuilder.fromFake(FakeAgentProvider()),
+        ),
+        agentProviderConfigStoreProvider.overrideWithValue(
+          MemoryAgentProviderConfigStore(),
+        ),
+        if (homeProviderDetectionLoader case final loader?)
+          homeProviderDetectionLoaderProvider.overrideWithValue(loader),
+        if (language case final value?)
+          zetaDisplayLanguageSourceProvider.overrideWithValue(
+            FixedDisplayLanguageSource(value),
+          ),
+        agentUsagePanelRepositoryProvider.overrideWithValue(
+          const _EmptyAgentUsageRepository(),
+        ),
+        agentUsageAutoRefreshEnabledProvider.overrideWithValue(true),
+      ],
     ),
   );
   await tester.pump(const Duration(milliseconds: 1));

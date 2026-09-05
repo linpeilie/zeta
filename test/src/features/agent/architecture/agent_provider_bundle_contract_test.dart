@@ -1,13 +1,18 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../../../testing/provider_architecture_audit.dart'
+    show providerPluginLibRoots;
 
 /// 架构守卫：钉住 native Bundle 边界，避免测试万能 fake
 /// 或共享层分支出卖真实端口矩阵。
 void main() {
   group('provider bundle architecture contracts', () {
     test('no production adapter implements session configuration', () {
-      for (final file in _dartFiles('lib/src/features/agent/data')) {
+      for (final file in <File>[
+        for (final root in <String>[...providerPluginLibRoots()])
+          ..._dartFiles(root),
+      ]) {
         expect(
           file.readAsStringSync(),
           isNot(contains('AgentSessionConfigProvider')),
@@ -18,31 +23,33 @@ void main() {
 
     test('domain capabilities stay vendor-neutral', () {
       final source = File(
-        'lib/src/features/agent/domain/agent_provider_capabilities.dart',
+        'packages/zeta_agent_core/lib/src/domain/agent_provider_capabilities.dart',
       ).readAsStringSync();
 
       expect(source, isNot(contains('defaultsFor')));
       expect(source, isNot(contains('static const codexAppServer')));
       expect(source, isNot(contains('static const grokAcp')));
       expect(source, isNot(contains('static const claudeCode')));
-      expect(source, isNot(contains('AgentProviderKind.')));
+      expect(source, isNot(contains('AgentProviderTypeId.')));
     });
 
     test('shared bundle has no adapt path or provider-kind branches', () {
       final source = File(
-        'lib/src/features/agent/domain/agent_provider_bundle.dart',
+        'packages/zeta_agent_core/lib/src/domain/agent_provider_bundle.dart',
       ).readAsStringSync();
 
       expect(source, isNot(contains('factory AgentProviderBundle.adapt')));
       expect(source, isNot(contains('_LegacyAgent')));
       expect(
-        File('lib/src/features/agent/domain/agent_provider.dart').existsSync(),
+        File(
+          'packages/zeta_agent_core/lib/src/domain/agent_provider.dart',
+        ).existsSync(),
         isFalse,
       );
       for (final token in const <String>[
-        'AgentProviderKind.codexAppServer',
-        'AgentProviderKind.acp',
-        'AgentProviderKind.claudeCode',
+        'codexAgentProviderType',
+        'grokAgentProviderType',
+        'claudeCodeAgentProviderType',
         'codexAppServer',
         'grokAcp',
         'claudeCode',
@@ -55,10 +62,11 @@ void main() {
     });
 
     test(
-      'ViewModel still AND-gates reasoning UI on capability and model efforts',
+      'RuntimeController still AND-gates reasoning UI on capability and model efforts',
       () {
         final source = File(
-          'lib/src/features/agent/presentation/agent_conversation_view_model.dart',
+          'lib/src/features/agent/application/conversation_slice/'
+          'agent_conversation_runtime_controller.dart',
         ).readAsStringSync();
 
         expect(source, contains('bool get showReasoningEffort'));

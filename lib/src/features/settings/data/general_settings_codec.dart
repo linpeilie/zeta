@@ -1,7 +1,7 @@
 import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 
-/// `general.json` v3 编解码。
+/// 当前 `general.json` 编解码。
 final class GeneralSettingsCodec {
   const GeneralSettingsCodec();
 
@@ -19,39 +19,21 @@ final class GeneralSettingsCodec {
     };
   }
 
-  /// [fallbackLanguage] 仅用于损坏或未知版本且无法识别语言时。
+  /// [fallbackLanguage] 仅用于损坏或不支持版本的输入。
   GeneralSettings decode(Object? raw, {required AppLanguage fallbackLanguage}) {
     if (raw is! Map) {
       return GeneralSettings(appLanguage: fallbackLanguage);
     }
     final map = Map<Object?, Object?>.from(raw);
-    final version = map['version'];
-    if (version == 1 || version == 2) {
-      return GeneralSettings(
-        sendMessageShortcut: _decodeShortcut(map['sendMessageShortcut']),
-        notifications: version == 2
-            ? AgentNotificationSettings.tryDecode(map['notifications'])
-            : const AgentNotificationSettings(),
-        appLanguage: AppLanguage.simplifiedChinese,
-      );
-    }
-    if (version == currentVersion) {
-      return GeneralSettings(
-        sendMessageShortcut: _decodeShortcut(map['sendMessageShortcut']),
-        notifications: AgentNotificationSettings.tryDecode(
-          map['notifications'],
-        ),
-        appLanguage:
-            AppLanguagePersistence.tryParse(map['appLanguage']) ??
-            AppLanguage.english,
-      );
+    if (map['version'] != currentVersion) {
+      return GeneralSettings(appLanguage: fallbackLanguage);
     }
     return GeneralSettings(
       sendMessageShortcut: _decodeShortcut(map['sendMessageShortcut']),
       notifications: AgentNotificationSettings.tryDecode(map['notifications']),
       appLanguage:
           AppLanguagePersistence.tryParse(map['appLanguage']) ??
-          fallbackLanguage,
+          AppLanguage.english,
     );
   }
 

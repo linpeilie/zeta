@@ -1,0 +1,14 @@
+name: zeta_plugin_kernel
+description: Zeta 可信插件微内核：编译期注册、能力声明、激活顺序与生命周期目录。
+publish_to: 'none'
+version: 0.1.0
+resolution: workspace
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  zeta_foundation: ^0.1.0
+
+dev_dependencies:
+  test: ^1.25.0

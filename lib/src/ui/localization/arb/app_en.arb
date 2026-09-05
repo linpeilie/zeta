@@ -30,6 +30,10 @@
   "@shadcnInvalidURL": {
     "description": "shadcn URL validation"
   },
+  "shadcnNoSpellCheckReplacements": "No replacements found",
+  "@shadcnNoSpellCheckReplacements": {
+    "description": "shadcn spell check toolbar empty state"
+  },
   "shadcnFormLessThan": "Must be less than {value}",
   "@shadcnFormLessThan": {
     "description": "shadcn less-than validation; value is preformatted",
@@ -807,6 +811,30 @@
   "commonRemove": "Remove",
   "@commonRemove": {
     "description": "Common remove"
+  },
+  "uiLoading": "Loading",
+  "@uiLoading": {
+    "description": "Loading indicator semantics"
+  },
+  "uiRunning": "Running",
+  "@uiRunning": {
+    "description": "Busy spinner semantics"
+  },
+  "windowMinimize": "Minimize",
+  "@windowMinimize": {
+    "description": "Window minimize button"
+  },
+  "windowRestore": "Restore",
+  "@windowRestore": {
+    "description": "Window restore button"
+  },
+  "windowMaximize": "Maximize",
+  "@windowMaximize": {
+    "description": "Window maximize button"
+  },
+  "windowClose": "Close",
+  "@windowClose": {
+    "description": "Window close button"
   },
   "commonMenu": "Menu",
   "@commonMenu": {
@@ -2261,6 +2289,10 @@
   "@agentNoChatMessages": { "description": "No chat" },
   "agentNoRawMessages": "No raw messages",
   "@agentNoRawMessages": { "description": "No raw" },
+  "agentMarkdownCopyAll": "Copy all",
+  "@agentMarkdownCopyAll": { "description": "Copy the whole markdown document" },
+  "agentMarkdownClearSelection": "Clear selection",
+  "@agentMarkdownClearSelection": { "description": "Clear the markdown selection" },
   "agentCopyOriginal": "Copy original",
   "@agentCopyOriginal": { "description": "Copy original" },
   "agentCopiedOriginal": "Original copied.",
@@ -2591,6 +2623,24 @@
   "@agentTimeWithValue": { "description": "Navigation time line", "placeholders": { "time": { "type": "String", "example": "12:00" } } },
   "agentLoadingHistory": "Loading thread history",
   "@agentLoadingHistory": { "description": "History loading semantics" },
+  "agentThreadLoadingHistory": "Loading thread history...",
+  "@agentThreadLoadingHistory": { "description": "Header status while thread history is loading" },
+  "agentThreadOpenFailedRetry": "Thread open failed. Click this thread again to retry.",
+  "@agentThreadOpenFailedRetry": { "description": "Header status when thread open failed; click the thread to retry" },
+  "agentTurnTokenUsage": "{count} tokens",
+  "@agentTurnTokenUsage": { "description": "Short token usage label for a turn or thread total", "placeholders": { "count": { "type": "String", "example": "1.3k" } } },
+  "agentTokenUsageContextTooltip": "Usage: {percent}%\nUsed: {used}\nTotal: {total}",
+  "@agentTokenUsageContextTooltip": { "description": "Composer context-window token tooltip", "placeholders": { "percent": { "type": "String", "example": "65" }, "used": { "type": "String", "example": "1.3k" }, "total": { "type": "String", "example": "2k" } } },
+  "agentTokenUsageTotalLine": "Total: {value}",
+  "@agentTokenUsageTotalLine": { "description": "Token tooltip total line", "placeholders": { "value": { "type": "String", "example": "1.3k" } } },
+  "agentTokenUsageContextWindowLine": "Context window: {value}",
+  "@agentTokenUsageContextWindowLine": { "description": "Token tooltip context window line", "placeholders": { "value": { "type": "String", "example": "2k" } } },
+  "agentTokenUsageInputLine": "Input: {value}",
+  "@agentTokenUsageInputLine": { "description": "Token tooltip input line", "placeholders": { "value": { "type": "String", "example": "800" } } },
+  "agentTokenUsageCachedLine": "Cached: {value}",
+  "@agentTokenUsageCachedLine": { "description": "Token tooltip cached input line", "placeholders": { "value": { "type": "String", "example": "200" } } },
+  "agentTokenUsageOutputLine": "Output: {value}",
+  "@agentTokenUsageOutputLine": { "description": "Token tooltip output line", "placeholders": { "value": { "type": "String", "example": "300" } } },
   "agentNoSkills": "No skills found",
   "@agentNoSkills": { "description": "Skill picker empty" },
   "agentNoMatches": "No matches",

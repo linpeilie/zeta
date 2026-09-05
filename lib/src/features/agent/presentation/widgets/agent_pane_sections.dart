@@ -1,4 +1,32 @@
-part of '../agent_pane.dart';
+import 'dart:async';
+import 'dart:math' as math;
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_ui/zeta_ui.dart';
+import 'package:zeta/src/features/agent/application/agent_conversation_mode_controller.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_region_state.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
+import 'package:zeta/src/features/agent/presentation/agent_conversation_navigation.dart';
+import 'package:zeta/src/features/agent/presentation/agent_flutter_listenable_adapter.dart';
+import 'package:zeta/src/features/agent/presentation/agent_timeline_extent_descriptor.dart';
+import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
+import 'package:zeta/src/features/agent/presentation/agent_timeline_projection.dart';
+import 'package:zeta/src/features/agent/presentation/agent_timeline_projection_cache.dart';
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
+import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_region_builder.dart';
+import 'package:zeta/src/features/agent/presentation/timeline_rendering/agent_timeline_renderer.dart';
+import 'package:zeta/src/features/agent/presentation/timeline_rendering/agent_timeline_renderer_registry.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_mode_selector.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_cards.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_composer.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_messages.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_navigation_rail.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_styles.dart';
+import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
 /// 对话时间线与 Composer 的统一布局壳。
 ///
@@ -8,13 +36,14 @@ part of '../agent_pane.dart';
 /// 靠时间线内部的底部滚动 inset（见 [floatingPanelExtent]），而非缩短 viewport。
 enum _AgentConversationSlot { timeline, floatingPanel, footer }
 
-class _AgentConversationLayout extends StatefulWidget {
-  const _AgentConversationLayout({
+class AgentConversationLayout extends StatefulWidget {
+  const AgentConversationLayout({
     required this.pinFooterToBottom,
     required this.reduceMotion,
     required this.timeline,
     required this.floatingPanel,
     required this.footer,
+    super.key,
   });
 
   /// 为 true 时 Composer 贴底（已有对话 / 加载历史）；否则空草稿居中。
@@ -25,11 +54,11 @@ class _AgentConversationLayout extends StatefulWidget {
   final Widget footer;
 
   @override
-  State<_AgentConversationLayout> createState() =>
+  State<AgentConversationLayout> createState() =>
       _AgentConversationLayoutState();
 }
 
-class _AgentConversationLayoutState extends State<_AgentConversationLayout>
+class _AgentConversationLayoutState extends State<AgentConversationLayout>
     with SingleTickerProviderStateMixin {
   static const Alignment _newConversationAlignment = Alignment(0, -0.12);
 
@@ -48,7 +77,7 @@ class _AgentConversationLayoutState extends State<_AgentConversationLayout>
   }
 
   @override
-  void didUpdateWidget(covariant _AgentConversationLayout oldWidget) {
+  void didUpdateWidget(covariant AgentConversationLayout oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.pinFooterToBottom == widget.pinFooterToBottom) {
       if (widget.reduceMotion &&
@@ -198,15 +227,14 @@ class _AgentConversationLayoutDelegate extends MultiChildLayoutDelegate {
 /// Thread 历史加载中的对话区占位：Agent 图标 + 进度环 + 文案。
 ///
 /// 输入框由布局壳固定在底部；本组件只填充原时间线区域。
-class _AgentThreadHistoryLoading extends StatelessWidget {
-  const _AgentThreadHistoryLoading({
+class AgentThreadHistoryLoading extends StatelessWidget {
+  const AgentThreadHistoryLoading({
     required this.providerId,
-    required this.providerKind,
     required this.providerName,
+    super.key,
   });
 
   final String providerId;
-  final AgentProviderKind providerKind;
   final String providerName;
 
   @override
@@ -254,7 +282,6 @@ class _AgentThreadHistoryLoading extends StatelessWidget {
                               'agent-thread-history-loading-icon-$providerId',
                             ),
                             providerId: providerId,
-                            kind: providerKind,
                             size: 26,
                             color: colors.textSecondary,
                             semanticLabel: providerName,
@@ -294,25 +321,26 @@ class _AgentThreadHistoryLoading extends StatelessWidget {
 }
 
 /// 共享 920px 内容轴的可滚动对话区（CustomScrollView + block 级虚拟化）。
-class _AgentConversationTimeline extends StatelessWidget {
-  const _AgentConversationTimeline({
-    required this.viewModel,
+class AgentConversationTimeline extends StatelessWidget {
+  const AgentConversationTimeline({
+    required this.controller,
     required this.isActive,
     required this.scrollController,
     required this.pagePadding,
     required this.floatingPanelExtent,
     required this.projectionCache,
     required this.descriptorFactory,
-    required this.markdownCache,
-    required this.planRevisionDrafts,
+    required this.renderContext,
+    required this.rendererRegistry,
     required this.virtualListController,
     required this.scrollCoordinator,
     required this.scrollChromeTick,
     required this.onLastItemIdChanged,
     required this.onScrollToEndPressed,
+    super.key,
   });
 
-  final AgentConversationViewModel viewModel;
+  final AgentConversationRuntimeController controller;
 
   /// 前台才订阅 live 流式 listenable。
   final bool isActive;
@@ -323,10 +351,12 @@ class _AgentConversationTimeline extends StatelessWidget {
   final ValueListenable<double> floatingPanelExtent;
   final AgentTimelineProjectionCache projectionCache;
   final AgentTimelineExtentDescriptorFactory descriptorFactory;
-  final AgentMarkdownCache markdownCache;
 
-  /// 计划卡修改输入的草稿宿主；由 [AgentPane] 持有，跨虚拟列表回收存活。
-  final AgentPlanRevisionDraftStore planRevisionDrafts;
+  /// renderer 的稳定依赖（controller / markdown 缓存 / 计划草稿宿主）。
+  final AgentTimelineRenderContext renderContext;
+
+  /// block → renderer 的分发表。
+  final AgentTimelineRendererRegistry rendererRegistry;
   final IdeVirtualListController virtualListController;
   final IdeVirtualScrollCoordinator scrollCoordinator;
   final ValueListenable<int> scrollChromeTick;
@@ -336,259 +366,281 @@ class _AgentConversationTimeline extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // 非前台：不挂 live 高频信号，后台 thread 流式输出不重建此 canvas。
-    // pending 状态进入时间线信号：计划卡在流内渲染，pending 变化必须重建。
-    final timelineListenable = isActive
+    // live turn 与浮层高度不属于任何 region（§2.7），继续走 listenable。
+    final liveListenable = isActive
         ? Listenable.merge(<Listenable>[
-            viewModel.historyStateListenable,
-            viewModel.liveTurnListenable,
-            viewModel.expansionStateListenable,
-            viewModel.pendingInteractionStateListenable,
+            controller.flutterLiveTurnListenable,
             floatingPanelExtent,
-            ?viewModel.liveTurnState,
+            if (controller.liveTurnState case final liveTurnState?)
+              AgentFlutterListenableAdapter(liveTurnState),
           ])
-        : Listenable.merge(<Listenable>[
-            viewModel.historyStateListenable,
-            viewModel.expansionStateListenable,
-            viewModel.pendingInteractionStateListenable,
-            floatingPanelExtent,
-          ]);
+        : floatingPanelExtent;
 
-    // 导航轨贴 AgentPanel 全宽左侧；对话流仍经 _AgentContentAlign 居中限宽。
-    return ListenableBuilder(
-      listenable: timelineListenable,
-      builder: (context, _) {
-        final historyState = viewModel.historyState;
-        final standbySnapshot = historyState.standbyTurn;
-        final historyTurns = historyState.visibleTurns;
-        final liveTurnState = viewModel.liveTurnState;
-        final liveSnapshot = liveTurnState?.snapshot();
-        final expansionState = viewModel.expansionState;
-        final pendingState = viewModel.pendingInteractionState;
-        // 阻塞式计划文档自身已承载等待决策的反馈；仅在它展示时隐藏 live
-        // 活动条。实时步骤进度浮层不等价于活动状态，两者应同时保留。
-        final items = projectAgentTimelineViewportItems(
-          standbyTurn: standbySnapshot,
-          visibleHistoryTurns: historyTurns,
-          liveTurn: liveSnapshot,
-          resolveBlocks: projectionCache.resolve,
-          showLiveActivity: !pendingState.hasBlockingPlanDocument,
-        );
-        // 仅保留当前可见 turn 的投影缓存，避免历史窗口滑动后无限增长。
-        projectionCache.retainOnly(<String>{
-          if (standbySnapshot != null) standbySnapshot.id,
-          for (final turn in historyTurns) turn.id,
-          if (liveSnapshot != null) liveSnapshot.id,
-        });
-        // 计划请求消失即释放草稿，避免长会话里控制器无限累积。
-        planRevisionDrafts.retainOnly(<String>{
-          for (final request in pendingState.planApprovals) request.id,
-          if (pendingState.planExecutionHandoff case final handoff?) handoff.id,
-        });
+    // 导航轨贴 AgentPanel 全宽左侧；对话流仍经 AgentContentAlign 居中限宽。
+    // 三个 region 各订各的：pending 变化不再重建 history 那层。
+    return AgentRegionBuilder<AgentConversationHistoryState>(
+      bindingKey: controller.conversationBinding.key,
+      selector: agentConversationHistoryProvider.call,
+      builder: (context, historyState) => AgentRegionBuilder<AgentExpansionState>(
+        bindingKey: controller.conversationBinding.key,
+        selector: agentConversationExpansionProvider.call,
+        builder: (context, expansionState) =>
+            AgentRegionBuilder<AgentPendingInteractionState>(
+              bindingKey: controller.conversationBinding.key,
+              selector: agentConversationPendingInteractionProvider.call,
+              builder: (context, pendingState) => ListenableBuilder(
+                listenable: liveListenable,
+                builder: (context, _) {
+                  final standbySnapshot = historyState.standbyTurn;
+                  final historyTurns = historyState.visibleTurns;
+                  final liveTurnState = controller.liveTurnState;
+                  final liveSnapshot = liveTurnState?.snapshot();
+                  // 阻塞式计划文档自身已承载等待决策的反馈；仅在它展示时隐藏 live
+                  // 活动条。实时步骤进度浮层不等价于活动状态，两者应同时保留。
+                  final items = projectAgentTimelineViewportItems(
+                    standbyTurn: standbySnapshot,
+                    visibleHistoryTurns: historyTurns,
+                    liveTurn: liveSnapshot,
+                    resolveBlocks: projectionCache.resolve,
+                    showLiveActivity: !pendingState.hasBlockingPlanDocument,
+                  );
+                  // 仅保留当前可见 turn 的投影缓存，避免历史窗口滑动后无限增长。
+                  projectionCache.retainOnly(<String>{
+                    if (standbySnapshot != null) standbySnapshot.id,
+                    for (final turn in historyTurns) turn.id,
+                    if (liveSnapshot != null) liveSnapshot.id,
+                  });
+                  // 计划请求消失即释放草稿，避免长会话里控制器无限累积。
+                  renderContext.planRevisionDrafts.retainOnly(<String>{
+                    for (final request in pendingState.planApprovals)
+                      request.id,
+                    if (pendingState.planExecutionHandoff case final handoff?)
+                      handoff.id,
+                  });
 
-        onLastItemIdChanged(items.isEmpty ? null : items.last.id);
+                  onLastItemIdChanged(items.isEmpty ? null : items.last.id);
 
-        // Plan 浮层叠在时间线之上：viewport 不缩短，只在滚动内容底部加
-        // inset，使 stick-to-bottom / 手动滑到底时末项停在浮层上方。
-        final listPadding = pagePadding.copyWith(
-          bottom: pagePadding.bottom + floatingPanelExtent.value,
-        );
-        final navigationEntries = buildAgentConversationNavigationEntries(
-          visibleHistoryTurns: historyTurns,
-          liveTurn: liveSnapshot,
-          resolveBlocks: projectionCache.resolve,
-        );
-        final showNavigationRail = shouldShowAgentConversationNavigation(
-          navigationEntries,
-        );
+                  // Plan 浮层叠在时间线之上：viewport 不缩短，只在滚动内容底部加
+                  // inset，使 stick-to-bottom / 手动滑到底时末项停在浮层上方。
+                  final listPadding = pagePadding.copyWith(
+                    bottom: pagePadding.bottom + floatingPanelExtent.value,
+                  );
+                  final navigationEntries =
+                      buildAgentConversationNavigationEntries(
+                        visibleHistoryTurns: historyTurns,
+                        liveTurn: liveSnapshot,
+                        resolveBlocks: projectionCache.resolve,
+                        rendersInline: (block) =>
+                            rendererRegistry.resolve(block).rendersInline,
+                      );
+                  final showNavigationRail =
+                      shouldShowAgentConversationNavigation(navigationEntries);
 
-        final itemIndexes = <String, int>{
-          for (var index = 0; index < items.length; index++)
-            items[index].id: index,
-        };
-        final delegate = SliverChildBuilderDelegate(
-          (context, index) {
-            final item = items[index];
-            final itemKey = ValueKey<String>(
-              agentTimelineViewportItemKey(item),
-            );
-            final content = IndexedSemantics(
-              index: index,
-              child: RepaintBoundary(
-                child: _buildViewportItem(
-                  item,
-                  pendingState,
-                  previousItem: index > 0 ? items[index - 1] : null,
-                  nextItem: index + 1 < items.length ? items[index + 1] : null,
-                ),
-              ),
-            );
-            final keepAliveListenable = _prepareMarkdownWarmEntry(item);
-            if (keepAliveListenable == null) {
-              return KeyedSubtree(key: itemKey, child: content);
-            }
-            return ValueListenableBuilder<bool>(
-              key: itemKey,
-              valueListenable: keepAliveListenable,
-              child: content,
-              builder: (context, keepAlive, child) {
-                return KeepAlive(keepAlive: keepAlive, child: child!);
-              },
-            );
-          },
-          childCount: items.length,
-          findChildIndexCallback: (Key key) {
-            if (key is! ValueKey<String>) {
-              return null;
-            }
-            final value = key.value;
-            const prefix = 'timeline-viewport-';
-            if (!value.startsWith(prefix)) {
-              return null;
-            }
-            final id = value.substring(prefix.length);
-            return itemIndexes[id];
-          },
-          // Markdown 在根节点使用显式 KeepAlive；禁止嵌套子树发送 ParentData 通知。
-          addAutomaticKeepAlives: false,
-          // KeepAlive 必须直接控制 Sliver child 的 ParentData，因此在上方按
-          // KeepAlive → IndexedSemantics → RepaintBoundary 的顺序显式包装。
-          addRepaintBoundaries: false,
-          addSemanticIndexes: false,
-        );
+                  final itemIndexes = <String, int>{
+                    for (var index = 0; index < items.length; index++)
+                      items[index].id: index,
+                  };
+                  final delegate = SliverChildBuilderDelegate(
+                    (context, index) {
+                      final item = items[index];
+                      final itemKey = ValueKey<String>(
+                        agentTimelineViewportItemKey(item),
+                      );
+                      final content = IndexedSemantics(
+                        index: index,
+                        child: RepaintBoundary(
+                          child: _buildViewportItem(
+                            item,
+                            pendingState,
+                            previousItem: index > 0 ? items[index - 1] : null,
+                            nextItem: index + 1 < items.length
+                                ? items[index + 1]
+                                : null,
+                          ),
+                        ),
+                      );
+                      final keepAliveListenable = _prepareMarkdownWarmEntry(
+                        item,
+                      );
+                      if (keepAliveListenable == null) {
+                        return KeyedSubtree(key: itemKey, child: content);
+                      }
+                      return ValueListenableBuilder<bool>(
+                        key: itemKey,
+                        valueListenable: keepAliveListenable,
+                        child: content,
+                        builder: (context, keepAlive, child) {
+                          return KeepAlive(keepAlive: keepAlive, child: child!);
+                        },
+                      );
+                    },
+                    childCount: items.length,
+                    findChildIndexCallback: (Key key) {
+                      if (key is! ValueKey<String>) {
+                        return null;
+                      }
+                      final value = key.value;
+                      const prefix = 'timeline-viewport-';
+                      if (!value.startsWith(prefix)) {
+                        return null;
+                      }
+                      final id = value.substring(prefix.length);
+                      return itemIndexes[id];
+                    },
+                    // Markdown 在根节点使用显式 KeepAlive；禁止嵌套子树发送 ParentData 通知。
+                    addAutomaticKeepAlives: false,
+                    // KeepAlive 必须直接控制 Sliver child 的 ParentData，因此在上方按
+                    // KeepAlive → IndexedSemantics → RepaintBoundary 的顺序显式包装。
+                    addRepaintBoundaries: false,
+                    addSemanticIndexes: false,
+                  );
 
-        final scrollView = CustomScrollView(
-          key: const ValueKey('agent-message-list'),
-          controller: scrollController,
-          // 默认 cacheExtent 保留少量视口外 block，兼顾滚动流畅与虚拟化收益。
-          slivers: [
-            // 保留 pagePadding；内容最大宽由 _AgentContentAlign 约束。
-            // 底部额外 inset = Plan 浮层高度；两侧仍可透出对话流。
-            SliverPadding(
-              padding: listPadding,
-              sliver: IdeAnchoredDynamicSliverList(
-                controller: virtualListController,
-                delegate: delegate,
+                  final scrollView = CustomScrollView(
+                    key: const ValueKey('agent-message-list'),
+                    controller: scrollController,
+                    // 默认 cacheExtent 保留少量视口外 block，兼顾滚动流畅与虚拟化收益。
+                    slivers: [
+                      // 保留 pagePadding；内容最大宽由 AgentContentAlign 约束。
+                      // 底部额外 inset = Plan 浮层高度；两侧仍可透出对话流。
+                      SliverPadding(
+                        padding: listPadding,
+                        sliver: IdeAnchoredDynamicSliverList(
+                          controller: virtualListController,
+                          delegate: delegate,
+                        ),
+                      ),
+                    ],
+                  );
+
+                  return LayoutBuilder(
+                    builder: (context, panelConstraints) {
+                      final compactRail =
+                          panelConstraints.maxWidth <
+                          IdeMetrics.stackedRowBreakpoint;
+                      return Stack(
+                        children: [
+                          // 对话流：仍居中限宽（contentMaxWidth）。
+                          Positioned.fill(
+                            child: AgentContentAlign(
+                              child: LayoutBuilder(
+                                builder: (context, contentConstraints) {
+                                  final media = MediaQuery.of(context);
+                                  final layoutContext =
+                                      AgentTimelineLayoutContext(
+                                        // 必须使用 920px 内容轴内的真实局部宽度；窗口宽度会让
+                                        // 高度估算和 layout epoch 在多面板/窗口 resize 时失真。
+                                        crossAxisExtent: math.max(
+                                          0,
+                                          contentConstraints.maxWidth -
+                                              pagePadding.horizontal,
+                                        ),
+                                        devicePixelRatio:
+                                            media.devicePixelRatio,
+                                        textScale: media.textScaler.scale(1),
+                                        localeKey: Localizations.localeOf(
+                                          context,
+                                        ).toString(),
+                                      );
+
+                                  virtualListController.setItems(
+                                    descriptorFactory.describeAll(
+                                      items,
+                                      expansion: (
+                                        isCommandGroupExpanded: expansionState
+                                            .isCommandGroupExpanded,
+                                        isFileEditItemExpanded: expansionState
+                                            .isFileEditItemExpanded,
+                                        isPlanMessageInteractive: (messageId) =>
+                                            pendingState
+                                                .planExecutionHandoff
+                                                ?.messageId ==
+                                            messageId,
+                                      ),
+                                      layoutContext: layoutContext,
+                                    ),
+                                    epoch: layoutContext.toEpoch(),
+                                  );
+
+                                  return NotificationListener<
+                                    ScrollNotification
+                                  >(
+                                    onNotification: (notification) {
+                                      return dispatchUserScrollToCoordinator(
+                                        coordinator: scrollCoordinator,
+                                        notification: notification,
+                                        controller: scrollController,
+                                      );
+                                    },
+                                    child: ListenableBuilder(
+                                      listenable: scrollChromeTick,
+                                      builder: (context, _) {
+                                        final showButton =
+                                            _shouldShowScrollToEndButton();
+                                        return IdeVirtualScrollShell(
+                                          controller: scrollController,
+                                          semanticLabel:
+                                              context.l10n.timelineScrollbar,
+                                          showScrollToEndButton: showButton,
+                                          hasNewContent:
+                                              showButton &&
+                                              controller.liveTurnState != null,
+                                          onScrollToEnd: () {
+                                            unawaited(onScrollToEndPressed());
+                                          },
+                                          child: scrollView,
+                                        );
+                                      },
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                          // 导航轨：贴 AgentPanel 最左侧，不跟 920 内容轴走。
+                          if (showNavigationRail)
+                            Positioned(
+                              left: IdeSpacing.space4,
+                              top: 0,
+                              bottom: 0,
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: ListenableBuilder(
+                                  listenable: scrollChromeTick,
+                                  builder: (context, _) {
+                                    final activeTurnId =
+                                        _resolveActiveNavigationTurnId(
+                                          entries: navigationEntries,
+                                          items: items,
+                                          contentTopInset: listPadding.top,
+                                        );
+                                    return AgentConversationNavigationRail(
+                                      key: const ValueKey(
+                                        'agent-conversation-navigation-rail',
+                                      ),
+                                      entries: navigationEntries,
+                                      activeTurnId: activeTurnId,
+                                      compact: compactRail,
+                                      onSelectTurn: (entry) {
+                                        unawaited(
+                                          _scrollToNavigationEntry(
+                                            entry: entry,
+                                            contentTopInset: listPadding.top,
+                                          ),
+                                        );
+                                      },
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                        ],
+                      );
+                    },
+                  );
+                },
               ),
             ),
-          ],
-        );
-
-        return LayoutBuilder(
-          builder: (context, panelConstraints) {
-            final compactRail =
-                panelConstraints.maxWidth < IdeMetrics.stackedRowBreakpoint;
-            return Stack(
-              children: [
-                // 对话流：仍居中限宽（contentMaxWidth）。
-                Positioned.fill(
-                  child: _AgentContentAlign(
-                    child: LayoutBuilder(
-                      builder: (context, contentConstraints) {
-                        final media = MediaQuery.of(context);
-                        final layoutContext = AgentTimelineLayoutContext(
-                          // 必须使用 920px 内容轴内的真实局部宽度；窗口宽度会让
-                          // 高度估算和 layout epoch 在多面板/窗口 resize 时失真。
-                          crossAxisExtent: math.max(
-                            0,
-                            contentConstraints.maxWidth -
-                                pagePadding.horizontal,
-                          ),
-                          devicePixelRatio: media.devicePixelRatio,
-                          textScale: media.textScaler.scale(1),
-                          localeKey: Localizations.localeOf(context).toString(),
-                        );
-
-                        virtualListController.setItems(
-                          descriptorFactory.describeAll(
-                            items,
-                            expansion: (
-                              isCommandGroupExpanded:
-                                  expansionState.isCommandGroupExpanded,
-                              isFileEditItemExpanded:
-                                  expansionState.isFileEditItemExpanded,
-                              isPlanMessageInteractive: (messageId) =>
-                                  pendingState
-                                      .planExecutionHandoff
-                                      ?.messageId ==
-                                  messageId,
-                            ),
-                            layoutContext: layoutContext,
-                          ),
-                          epoch: layoutContext.toEpoch(),
-                        );
-
-                        return NotificationListener<ScrollNotification>(
-                          onNotification: (notification) {
-                            return dispatchUserScrollToCoordinator(
-                              coordinator: scrollCoordinator,
-                              notification: notification,
-                              controller: scrollController,
-                            );
-                          },
-                          child: ListenableBuilder(
-                            listenable: scrollChromeTick,
-                            builder: (context, _) {
-                              final showButton = _shouldShowScrollToEndButton();
-                              return IdeVirtualScrollShell(
-                                controller: scrollController,
-                                semanticLabel: context.l10n.timelineScrollbar,
-                                showScrollToEndButton: showButton,
-                                hasNewContent:
-                                    showButton &&
-                                    viewModel.liveTurnState != null,
-                                onScrollToEnd: () {
-                                  unawaited(onScrollToEndPressed());
-                                },
-                                child: scrollView,
-                              );
-                            },
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-                // 导航轨：贴 AgentPanel 最左侧，不跟 920 内容轴走。
-                if (showNavigationRail)
-                  Positioned(
-                    left: IdeSpacing.space4,
-                    top: 0,
-                    bottom: 0,
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: ListenableBuilder(
-                        listenable: scrollChromeTick,
-                        builder: (context, _) {
-                          final activeTurnId = _resolveActiveNavigationTurnId(
-                            entries: navigationEntries,
-                            items: items,
-                            contentTopInset: listPadding.top,
-                          );
-                          return _AgentConversationNavigationRail(
-                            key: const ValueKey(
-                              'agent-conversation-navigation-rail',
-                            ),
-                            entries: navigationEntries,
-                            activeTurnId: activeTurnId,
-                            compact: compactRail,
-                            onSelectTurn: (entry) {
-                              unawaited(
-                                _scrollToNavigationEntry(
-                                  entry: entry,
-                                  contentTopInset: listPadding.top,
-                                ),
-                              );
-                            },
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-              ],
-            );
-          },
-        );
-      },
+      ),
     );
   }
 
@@ -667,9 +719,8 @@ class _AgentConversationTimeline extends StatelessWidget {
         return _AgentTimelineBlockSection(
           turn: turn,
           block: block,
-          viewModel: viewModel,
-          markdownCache: markdownCache,
-          planRevisionDrafts: planRevisionDrafts,
+          renderContext: renderContext,
+          renderer: rendererRegistry.resolve(block),
           pendingState: pendingState,
           precededByOperationGroup: _isOperationGroupViewportItem(previousItem),
           followedByOperationGroup: _isOperationGroupViewportItem(nextItem),
@@ -677,13 +728,13 @@ class _AgentConversationTimeline extends StatelessWidget {
       case AgentLiveActivityViewportItem():
         return KeyedSubtree(
           key: const ValueKey('agent-live-turn-section'),
-          child: _AgentLiveActivityStatus(
-            viewModel: viewModel,
+          child: AgentLiveActivityStatus(
+            controller: controller,
             isActive: isActive,
           ),
         );
       case AgentTurnFooterViewportItem(:final turn):
-        return _AgentTurnFooter(turn: turn);
+        return AgentTurnFooter(turn: turn);
     }
   }
 
@@ -693,23 +744,14 @@ class _AgentConversationTimeline extends StatelessWidget {
     if (item is! AgentBlockViewportItem) {
       return null;
     }
-    final block = item.block;
-    if (block is! AgentTimelineEntryRenderBlock) {
-      return null;
-    }
-    final entry = block.entry;
-    if (entry is! AgentMessageTimelineEntry) {
-      return null;
-    }
-    final message = entry.message;
-    if (message.role != AgentMessageRole.agent || message.isPlan) {
-      return null;
-    }
-    return markdownCache.prepareWarmEntry(
-      messageId: message.id,
-      data: message.text,
-      preferIncrementalUpdate: item.isLive,
-    );
+    // 是否保温由 renderer 自己说了算；返回 null 即不包 KeepAlive。
+    return rendererRegistry
+        .resolve(item.block)
+        .prepareWarmEntry(
+          AgentTimelineRendererRegistry.payloadOf(item.block),
+          renderContext,
+          isLive: item.isLive,
+        );
   }
 }
 
@@ -726,9 +768,8 @@ class _AgentTimelineBlockSection extends StatelessWidget {
   const _AgentTimelineBlockSection({
     required this.turn,
     required this.block,
-    required this.viewModel,
-    required this.markdownCache,
-    required this.planRevisionDrafts,
+    required this.renderContext,
+    required this.renderer,
     required this.pendingState,
     this.precededByOperationGroup = false,
     this.followedByOperationGroup = false,
@@ -736,9 +777,10 @@ class _AgentTimelineBlockSection extends StatelessWidget {
 
   final AgentConversationTurnGroup turn;
   final AgentTimelineRenderBlock block;
-  final AgentConversationViewModel viewModel;
-  final AgentMarkdownCache markdownCache;
-  final AgentPlanRevisionDraftStore planRevisionDrafts;
+  final AgentTimelineRenderContext renderContext;
+
+  /// 已按 block 类型解析好的 renderer。
+  final AgentTimelineRenderer<Object> renderer;
 
   /// 计划卡在流内渲染，需要知道当前是否有待处理的计划请求。
   final AgentPendingInteractionState pendingState;
@@ -751,21 +793,18 @@ class _AgentTimelineBlockSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final content = switch (block) {
-      AgentTimelineEntryRenderBlock(:final entry) => _buildTimelineEntry(
-        context,
-        entry,
-        markdownCache: markdownCache,
-      ),
-      AgentTimelineCommandGroupRenderBlock(:final group) =>
-        _AgentCommandGroupCard(group: group, viewModel: viewModel),
-      AgentTimelineFileEditGroupRenderBlock(:final group) =>
-        _AgentFileEditGroupCard(group: group, viewModel: viewModel),
-    };
+    final content = renderer.build(
+      context,
+      AgentTimelineRendererRegistry.payloadOf(block),
+      renderContext,
+      turn: turn,
+      pendingState: pendingState,
+    );
     // 操作组间距由列表层统一包 Padding；卡片自身零 margin。
+    // 这是块间关系而非块内职责，因此不进 renderer。
     final child = isAgentTimelineOperationGroupBlock(block)
         ? Padding(
-            padding: _operationGroupOuterPadding(
+            padding: operationGroupOuterPadding(
               precededByOperationGroup: precededByOperationGroup,
               followedByOperationGroup: followedByOperationGroup,
             ),
@@ -777,106 +816,30 @@ class _AgentTimelineBlockSection extends StatelessWidget {
       child: child,
     );
   }
-
-  Widget _buildTimelineEntry(
-    BuildContext context,
-    AgentTimelineEntry entry, {
-    required AgentMarkdownCache markdownCache,
-  }) {
-    final isLiveTurn = viewModel.liveTurnState?.id == turn.id;
-    return switch (entry) {
-      AgentMessageTimelineEntry(:final message) => _AgentMessageEntry(
-        message: message,
-        // 历史与 live 正文均全文渲染，禁止折叠预览。
-        useStreamingMarkdown: isLiveTurn,
-        viewModel: viewModel,
-        markdownCache: markdownCache,
-        planRevisionDrafts: planRevisionDrafts,
-        planExecutionHandoff: pendingState.planExecutionHandoff,
-      ),
-      AgentToolTimelineEntry(:final toolCall) => _AgentToolCallCard(
-        toolCall: toolCall,
-        viewModel: viewModel,
-      ),
-      // 权限与提问仍在 Composer 上方的 dock 渲染，避免时间线出现重复卡片。
-      AgentPermissionTimelineEntry() => const SizedBox.shrink(),
-      AgentQuestionTimelineEntry() => const SizedBox.shrink(),
-      // 计划文档改在对话流内渲染：仍待审批时才是交互卡，决定后条目即被移除。
-      AgentPlanApprovalTimelineEntry(:final request) => _buildPlanApprovalCard(
-        context,
-        request,
-      ),
-      // 正常路径会在 grouping 中转成文件编辑组；此处仅作兜底。
-      AgentTurnFileChangesTimelineEntry() => const SizedBox.shrink(),
-      AgentHistoryEventTimelineEntry(:final event) => _AgentHistoryEventCard(
-        event: event,
-      ),
-    };
-  }
-
-  /// Provider 计划审批卡。
-  ///
-  /// 审批是阻塞请求、回合仍在运行，「修改」只能把意见随 `rejected` 决定回传，
-  /// 不能走 `sendMessage`。「执行」仅代表接受方案，不预授权任何操作。
-  Widget _buildPlanApprovalCard(
-    BuildContext context,
-    AgentPlanApprovalRequest request,
-  ) {
-    return _AgentPlanDocumentCard(
-      key: ValueKey<String>('agent-plan-approval-card-${request.id}'),
-      requestId: request.id,
-      title: request.title,
-      subtitle: context.l10n.agentAcceptPlanHint,
-      markdown: request.markdown,
-      todos: request.todos,
-      phases: request.phases,
-      revisionController: planRevisionDrafts.controllerFor(request.id),
-      revisionFocusNode: planRevisionDrafts.focusNodeFor(request.id),
-      viewModel: viewModel,
-      onRevise: (revision) => unawaited(
-        viewModel.respondToPlanApproval(
-          request,
-          AgentPlanApprovalDecisionKind.rejected,
-          reason: revision,
-        ),
-      ),
-      executeLabel: context.l10n.agentAcceptPlan,
-      onExecute: () => unawaited(
-        viewModel.respondToPlanApproval(
-          request,
-          AgentPlanApprovalDecisionKind.accepted,
-        ),
-      ),
-      onAbandon: () => unawaited(
-        viewModel.respondToPlanApproval(
-          request,
-          AgentPlanApprovalDecisionKind.cancelled,
-        ),
-      ),
-    );
-  }
 }
 
 /// 固定在 Composer 上方的待处理交互区。
 ///
 /// 权限与用户提问从独立 pending 状态读取；计划文档已改在对话流内渲染。
 /// [panelHeight] 由 AgentPane width-bucket 的约束旁路提供，不进入 bucket 身份。
-class _AgentPendingInteractionSection extends StatelessWidget {
-  const _AgentPendingInteractionSection({
-    required this.viewModel,
+class AgentPendingInteractionSection extends StatelessWidget {
+  const AgentPendingInteractionSection({
+    required this.controller,
     required this.panelHeight,
     required this.pagePadding,
+    super.key,
   });
 
-  final AgentConversationViewModel viewModel;
+  final AgentConversationRuntimeController controller;
   final double panelHeight;
   final EdgeInsets pagePadding;
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<AgentPendingInteractionState>(
-      valueListenable: viewModel.pendingInteractionStateListenable,
-      builder: (context, state, _) => _buildDock(context, state),
+    return AgentRegionBuilder<AgentPendingInteractionState>(
+      bindingKey: controller.conversationBinding.key,
+      selector: agentConversationPendingInteractionProvider.call,
+      builder: _buildDock,
     );
   }
 
@@ -918,9 +881,9 @@ class _AgentPendingInteractionSection extends StatelessWidget {
           padding: EdgeInsets.only(
             bottom: index < questionRequests.length - 1 ? IdeSpacing.space8 : 0,
           ),
-          child: _AgentQuestionCard(
+          child: AgentQuestionCard(
             request: questionRequests[index],
-            onRespond: (answers) => viewModel.respondToQuestion(
+            onRespond: (answers) => controller.respondToQuestion(
               questionRequests[index],
               answers: answers,
             ),
@@ -928,7 +891,7 @@ class _AgentPendingInteractionSection extends StatelessWidget {
         ),
     ];
 
-    return _AgentContentAlign(
+    return AgentContentAlign(
       child: Padding(
         padding: pagePadding.copyWith(
           top: IdeSpacing.space8,
@@ -956,11 +919,11 @@ class _AgentPendingInteractionSection extends StatelessWidget {
     AgentPermissionRequest request,
     AgentPendingInteractionState state,
   ) {
-    return _AgentPermissionCard(
+    return AgentPermissionCard(
       request: request,
       autoReview: state.autoReviewForTurn(request.turnId),
       onApproveGuardian: state.latestDeniedAutoReview != null
-          ? viewModel.approveGuardianDeniedAction
+          ? controller.approveGuardianDeniedAction
           : null,
       onRespond:
           ({
@@ -968,7 +931,7 @@ class _AgentPendingInteractionSection extends StatelessWidget {
             bool cancelTurn = false,
             AgentCommandApprovalDecisionKind? commandDecision,
             List<String> execpolicyAmendment = const <String>[],
-          }) => viewModel.respondToPermission(
+          }) => controller.respondToPermission(
             request,
             approved: approved,
             cancelTurn: cancelTurn,
@@ -979,9 +942,9 @@ class _AgentPendingInteractionSection extends StatelessWidget {
   }
 }
 
-class _AgentComposerSection extends StatelessWidget {
-  const _AgentComposerSection({
-    required this.viewModel,
+class AgentComposerSection extends StatelessWidget {
+  const AgentComposerSection({
+    required this.controller,
     required this.state,
     required this.inputController,
     required this.composerFocusNode,
@@ -997,7 +960,7 @@ class _AgentComposerSection extends StatelessWidget {
     super.key,
   });
 
-  final AgentConversationViewModel viewModel;
+  final AgentConversationRuntimeController controller;
   final AgentComposerState state;
   final TextEditingController inputController;
   final FocusNode composerFocusNode;
@@ -1015,7 +978,7 @@ class _AgentComposerSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _AgentContentAlign(
+    return AgentContentAlign(
       child: Padding(
         padding: pagePadding.copyWith(top: IdeSpacing.space8),
         child: ValueListenableBuilder<bool>(
@@ -1023,7 +986,7 @@ class _AgentComposerSection extends StatelessWidget {
           builder: (context, canSend, _) {
             return KeyedSubtree(
               key: anchorKey,
-              child: _AgentComposer(
+              child: AgentComposer(
                 controller: inputController,
                 focusNode: composerFocusNode,
                 canSubmit: canSend && state.canSubmitMessage,
@@ -1034,7 +997,7 @@ class _AgentComposerSection extends StatelessWidget {
                 onAttachImages: onAttachImages,
                 onRemoveImage: onRemoveImage,
                 onSend: onSend,
-                onCancel: viewModel.cancelActiveTurn,
+                onCancel: controller.cancelActiveTurn,
                 showImageAttachment: state.canAttachImages,
                 showResourceMention: state.canMentionResources,
                 showSkillInsert: state.canUseSkills,
@@ -1046,7 +1009,7 @@ class _AgentComposerSection extends StatelessWidget {
                 conversationModeAppliesToNextTurn:
                     state.conversationModeAppliesToNextTurn,
                 conversationModeContextId: state.conversationModeContextId,
-                onSelectConversationMode: viewModel.selectConversationMode,
+                onSelectConversationMode: controller.selectConversationMode,
                 showModelSelection: state.showModelSelection,
                 modelConfigState: state.modelConfigState,
                 showPermissionPolicy: state.showPermissionPolicy,
@@ -1055,17 +1018,17 @@ class _AgentComposerSection extends StatelessWidget {
                 selectedPermissionOptionId: state.selectedPermissionOptionId,
                 permissionApplyScopeHint: state.permissionApplyScopeHint,
                 sessionConfigOptions: state.sessionConfigOptions,
-                onSelectModel: viewModel.selectModel,
-                onSelectReasoningEffort: viewModel.selectReasoningEffort,
-                onSelectFastEnabled: viewModel.selectFastEnabled,
+                onSelectModel: controller.selectModel,
+                onSelectReasoningEffort: controller.selectReasoningEffort,
+                onSelectFastEnabled: controller.selectFastEnabled,
                 onResolveModelCompatibility:
-                    viewModel.resolveModelCompatibilityConflict,
+                    controller.resolveModelCompatibilityConflict,
                 onRetryModelConfiguration:
-                    viewModel.retryModelConfigurationSave,
+                    controller.retryModelConfigurationSave,
                 onCloseModelConfiguration:
-                    viewModel.clearModelConfigurationTransientState,
+                    controller.clearModelConfigurationTransientState,
                 onSelectPermissionOption: (option) async {
-                  final error = await viewModel.selectPermissionOption(option);
+                  final error = await controller.selectPermissionOption(option);
                   if (!context.mounted) {
                     return;
                   }
@@ -1077,13 +1040,13 @@ class _AgentComposerSection extends StatelessWidget {
                     );
                     return;
                   }
-                  final hint = viewModel.takePermissionApplyHint();
+                  final hint = controller.takePermissionApplyHint();
                   if (hint != null && hint.isNotEmpty) {
                     showIdeToast(context, message: hint);
                   }
                 },
                 onSelectSessionConfigOption:
-                    viewModel.selectSessionConfigOption,
+                    controller.selectSessionConfigOption,
                 onOpenMentionPicker: onOpenMentionPicker,
                 onInsertSkill: onInsertSkill,
               ),
@@ -1107,10 +1070,11 @@ AgentModeSelectorStatus _modeSelectorStatus(
   };
 }
 
-class _AgentContentAlign extends StatelessWidget {
-  const _AgentContentAlign({
+class AgentContentAlign extends StatelessWidget {
+  const AgentContentAlign({
     required this.child,
     this.shrinkWrapHeight = false,
+    super.key,
   });
 
   final Widget child;

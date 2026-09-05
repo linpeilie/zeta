@@ -1,14 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:zeta/src/features/agent/application/agent_provider_global_runtime.dart';
-import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/usage_statistics/data/global_runtime_agent_usage_quota_source.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_query_models.dart';
 
 import '../../../testing/agent_provider_stub_base.dart';
-import '../../../testing/legacy_bundle_factory_mixin.dart';
+import '../../../testing/test_agent_provider_bundle_factory.dart';
 
 void main() {
   test(
@@ -21,7 +19,7 @@ void main() {
         AgentProviderGlobalRuntime(runtimeRegistry: registry),
       );
 
-      final result = await source.loadQuota(AgentProviderConfig.defaultCodex);
+      final result = await source.loadQuota(defaultCodexAgentProviderConfig);
 
       expect(result.status, AgentUsageCapabilityStatus.available);
       expect(result.value?.providerId, defaultAgentProviderId);
@@ -39,7 +37,7 @@ void main() {
       AgentProviderGlobalRuntime(runtimeRegistry: registry),
     );
 
-    final result = await source.loadQuota(AgentProviderConfig.defaultCodex);
+    final result = await source.loadQuota(defaultCodexAgentProviderConfig);
 
     expect(result.status, AgentUsageCapabilityStatus.unavailable);
     expect(result.warning?.code, 'quota-unavailable');
@@ -55,14 +53,14 @@ void main() {
       AgentProviderGlobalRuntime(runtimeRegistry: registry),
     );
 
-    final result = await source.loadQuota(AgentProviderConfig.defaultCodex);
+    final result = await source.loadQuota(defaultCodexAgentProviderConfig);
 
     expect(result.status, AgentUsageCapabilityStatus.unsupported);
     expect(registry.debugLeaseCount, 0);
   });
 }
 
-final class _QuotaProviderFactory with LegacyBundleFactoryMixin {
+final class _QuotaProviderFactory with TestAgentProviderBundleFactory {
   _QuotaProviderFactory({required bool quotaThrows})
     : provider = _QuotaProvider(quotaThrows: quotaThrows);
 
@@ -72,7 +70,7 @@ final class _QuotaProviderFactory with LegacyBundleFactoryMixin {
   Object create(AgentProviderConfig config) => provider;
 }
 
-final class _PlainProviderFactory with LegacyBundleFactoryMixin {
+final class _PlainProviderFactory with TestAgentProviderBundleFactory {
   final _PlainProvider provider = _PlainProvider();
 
   @override
@@ -92,7 +90,7 @@ final class _QuotaProvider extends Fake
   int quotaReadCount = 0;
 
   @override
-  AgentProviderConfig get config => AgentProviderConfig.defaultCodex;
+  AgentProviderConfig get config => defaultCodexAgentProviderConfig;
 
   @override
   Stream<AgentEvent> get events => const Stream<AgentEvent>.empty();
@@ -123,7 +121,7 @@ final class _PlainProvider extends Fake
     with AgentProviderThreadLifecycleStub
     implements AgentRuntimePort, AgentConversationPort {
   @override
-  AgentProviderConfig get config => AgentProviderConfig.defaultCodex;
+  AgentProviderConfig get config => defaultCodexAgentProviderConfig;
 
   @override
   Stream<AgentEvent> get events => const Stream<AgentEvent>.empty();

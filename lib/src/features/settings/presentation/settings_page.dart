@@ -4,30 +4,21 @@ import 'package:flutter/material.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'package:zeta/src/app/localization/zeta_localization.dart';
-import 'package:zeta/src/features/settings/application/appearance_settings_controller.dart';
-import 'package:zeta/src/features/settings/application/general_settings_controller.dart';
-import 'package:zeta/src/features/settings/application/general_settings_update_result.dart';
+import 'package:zeta/src/features/settings/application/appearance_font_option.dart';
 import 'package:zeta/src/features/settings/domain/app_language.dart';
+import 'package:zeta/src/features/settings/presentation/appearance_theme_mode_mapper.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
+import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_notifier.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
-import 'package:zeta/src/features/agent_management/application/agent_management_controller.dart';
+import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_store.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_management_page.dart';
-import 'package:zeta/src/ui/core/ide_button.dart';
-import 'package:zeta/src/ui/core/ide_colors.dart';
-import 'package:zeta/src/ui/core/ide_metrics.dart';
-import 'package:zeta/src/ui/core/ide_spacing.dart';
-import 'package:zeta/src/ui/core/ide_select.dart';
-import 'package:zeta/src/ui/core/ide_switch.dart';
-import 'package:zeta/src/ui/core/ide_tabs.dart';
-import 'package:zeta/src/ui/core/ide_text_styles.dart';
-import 'package:zeta/src/ui/core/ide_toast.dart';
-import 'package:zeta/src/ui/core/pane_widgets.dart';
-import 'package:zeta/src/ui/core/rows/ide_list_row.dart';
-import 'package:zeta/src/ui/core/rows/ide_row_group.dart';
-import 'package:zeta/src/ui/core/rows/ide_settings_row.dart';
-import 'package:zeta/src/ui/core/surfaces/ide_surface.dart';
-import 'package:zeta/src/ui/core/workbench/ide_page_body.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/ui/localization/app_localizations_x.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_state.dart';
+import 'package:zeta/src/features/settings/presentation/settings_slice/settings_slice_providers.dart';
+import 'package:zeta/src/features/settings/application/appearance_settings_notifier.dart';
+import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_state.dart';
 
 enum SettingsSection { general, appearance, agents }
 
@@ -54,17 +45,13 @@ IdeSettingsRow _flatSettingsRow({
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
     required this.activeSection,
-    required this.appearanceController,
-    required this.generalSettingsController,
     required this.onSectionSelected,
-    this.agentManagementController,
+    this.agentManagementSliceStore,
     super.key,
   });
 
   final SettingsSection activeSection;
-  final AppearanceSettingsController appearanceController;
-  final GeneralSettingsController generalSettingsController;
-  final AgentManagementController? agentManagementController;
+  final AgentManagementSliceStore? agentManagementSliceStore;
   final ValueChanged<SettingsSection> onSectionSelected;
 
   @override
@@ -86,7 +73,7 @@ class _SettingsPageState extends State<SettingsPage> {
           width: _navigationWidth,
           child: SettingsNavigationPane(
             activeSection: widget.activeSection,
-            showAgentManagement: widget.agentManagementController != null,
+            showAgentManagement: widget.agentManagementSliceStore != null,
             onSectionSelected: (section) {
               unawaited(_handleSectionSelected(section));
             },
@@ -97,9 +84,7 @@ class _SettingsPageState extends State<SettingsPage> {
           child: SettingsPageCanvas(
             key: _canvasKey,
             activeSection: widget.activeSection,
-            appearanceController: widget.appearanceController,
-            generalSettingsController: widget.generalSettingsController,
-            agentManagementController: widget.agentManagementController,
+            agentManagementSliceStore: widget.agentManagementSliceStore,
           ),
         ),
       ],
@@ -178,16 +163,12 @@ class SettingsNavigationPane extends StatelessWidget {
 class SettingsPageCanvas extends StatefulWidget {
   const SettingsPageCanvas({
     required this.activeSection,
-    required this.appearanceController,
-    required this.generalSettingsController,
-    required this.agentManagementController,
+    this.agentManagementSliceStore,
     super.key,
   });
 
   final SettingsSection activeSection;
-  final AppearanceSettingsController appearanceController;
-  final GeneralSettingsController generalSettingsController;
-  final AgentManagementController? agentManagementController;
+  final AgentManagementSliceStore? agentManagementSliceStore;
 
   @override
   State<SettingsPageCanvas> createState() => SettingsPageCanvasState();
@@ -209,42 +190,40 @@ class SettingsPageCanvasState extends State<SettingsPageCanvas> {
   @override
   Widget build(BuildContext context) {
     return switch (widget.activeSection) {
-      SettingsSection.general => _GeneralSettingsPane(
-        generalSettingsController: widget.generalSettingsController,
-      ),
-      SettingsSection.appearance => _AppearanceSettingsPane(
-        appearanceController: widget.appearanceController,
-      ),
+      SettingsSection.general => const _GeneralSettingsPane(),
+      SettingsSection.appearance => const _AppearanceSettingsPane(),
       SettingsSection.agents =>
-        widget.agentManagementController == null
+        widget.agentManagementSliceStore == null
             ? IdeSurface.canvas(
                 child: EmptyState(text: context.l10n.settingsAgentsUnavailable),
               )
             : AgentManagementPage(
                 key: _agentManagementKey,
-                controller: widget.agentManagementController!,
+                sliceStore: widget.agentManagementSliceStore!,
               ),
     };
   }
 }
 
-class _GeneralSettingsPane extends StatefulWidget {
-  const _GeneralSettingsPane({required this.generalSettingsController});
+/// general 设置面板的写操作集。
+typedef _GeneralSettingsWriteOps = ({
+  void Function(AppLanguage language) setAppLanguage,
+  void Function(MessageSendShortcut shortcut) setMessageSendShortcut,
+  void Function(bool enabled) setNotificationsEnabled,
+  void Function(bool enabled) setTurnTerminalNotificationsEnabled,
+  void Function(bool enabled) setActionRequiredNotificationsEnabled,
+});
 
-  final GeneralSettingsController generalSettingsController;
+class _GeneralSettingsPane extends ConsumerStatefulWidget {
+  const _GeneralSettingsPane();
 
   @override
-  State<_GeneralSettingsPane> createState() => _GeneralSettingsPaneState();
+  ConsumerState<_GeneralSettingsPane> createState() =>
+      _GeneralSettingsPaneState();
 }
 
-class _GeneralSettingsPaneState extends State<_GeneralSettingsPane> {
-  Future<void> _setAppLanguage(AppLanguage language) async {
-    final result = await widget.generalSettingsController.setAppLanguage(
-      language,
-    );
-    if (!mounted || result != GeneralSettingsUpdateResult.persistenceFailed) {
-      return;
-    }
+class _GeneralSettingsPaneState extends ConsumerState<_GeneralSettingsPane> {
+  void _showLanguageSaveFailedToast() {
     showIdeToast(
       context,
       message: context.l10n.settingsLanguageSaveFailed,
@@ -255,208 +234,285 @@ class _GeneralSettingsPaneState extends State<_GeneralSettingsPane> {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    final isMacOS = Theme.of(context).platform == TargetPlatform.macOS;
-    final modifierLabel = isMacOS
-        ? l10n.settingsSendShortcutCmdEnter
-        : l10n.settingsSendShortcutCtrlEnter;
+    final slice = ref.watch(generalSettingsSliceProvider.notifier);
+    // 语言保存失败的 toast：只认 language 这一类失败，其余失败保持静默
+    // （快捷键/通知开关失败保持静默）。
+    ref.listen(
+      generalSettingsSliceProvider.select((state) => state.lastPersistFailure),
+      (previous, next) {
+        if (next == null ||
+            next.operation != GeneralSettingsPersistOperation.language) {
+          return;
+        }
+        _showLanguageSaveFailedToast();
+        slice.acknowledgeFailure();
+      },
+    );
+
+    final settings = ref.watch(generalSettingsSliceValueProvider);
     return IdeSurface.canvas(
       key: const ValueKey('settings-detail-panel'),
-      child: ValueListenableBuilder<GeneralSettings>(
-        valueListenable: widget.generalSettingsController.listenable,
-        builder: (context, settings, _) {
-          final description = switch (settings.sendMessageShortcut) {
-            MessageSendShortcut.enter => l10n.settingsSendShortcutEnterHint,
-            MessageSendShortcut.primaryModifierEnter =>
-              isMacOS
-                  ? l10n.settingsSendShortcutCmdHint
-                  : l10n.settingsSendShortcutCtrlHint,
-          };
-          final effectiveLanguage = ZetaLocalization.languageForLocale(
-            Localizations.localeOf(context),
-          );
-          final languagePending = settings.appLanguage != effectiveLanguage;
-          return IdePageBody(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                IdeRowGroup(
-                  key: const ValueKey('settings-language-group'),
-                  title: l10n.settingsLanguage,
-                  children: [
-                    _flatSettingsRow(
-                      key: const ValueKey('settings-language-row'),
-                      label: l10n.settingsLanguage,
-                      description: languagePending
-                          ? l10n.settingsLanguageRestartToApply
-                          : l10n.settingsLanguageHint,
-                      control: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 380),
-                        child: IdeSelect<AppLanguage>(
-                          key: const ValueKey('settings-language-select'),
-                          value: settings.appLanguage,
-                          popupMinWidth: 180,
-                          popupWidthPolicy:
-                              IdeSelectPopupWidthPolicy.fitContent,
-                          options: <IdeSelectOption<AppLanguage>>[
-                            IdeSelectOption<AppLanguage>(
-                              AppLanguage.english,
-                              l10n.settingsLanguageEnglish,
-                              key: const ValueKey('settings-language-english'),
-                            ),
-                            IdeSelectOption<AppLanguage>(
-                              AppLanguage.simplifiedChinese,
-                              l10n.settingsLanguageSimplifiedChinese,
-                              key: const ValueKey('settings-language-zh-hans'),
-                            ),
-                          ],
-                          onChanged: (value) {
-                            if (value == null) {
-                              return;
-                            }
-                            unawaited(_setAppLanguage(value));
-                          },
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: IdeSpacing.space32),
-                IdeRowGroup(
-                  key: const ValueKey('settings-general-group'),
-                  title: l10n.settingsMessageSending,
-                  children: [
-                    _flatSettingsRow(
-                      key: const ValueKey('settings-send-message-shortcut-row'),
-                      label: l10n.settingsSendShortcut,
-                      description: description,
-                      control: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 380),
-                        child: IdeTabs<MessageSendShortcut>(
-                          key: const ValueKey(
-                            'settings-send-message-shortcut-tabs',
-                          ),
-                          value: settings.sendMessageShortcut,
-                          semanticLabel: l10n.settingsSendShortcut,
-                          items: <IdeTabItem<MessageSendShortcut>>[
-                            IdeTabItem<MessageSendShortcut>(
-                              key: const ValueKey(
-                                'settings-send-message-shortcut-enter',
-                              ),
-                              value: MessageSendShortcut.enter,
-                              label: l10n.settingsSendShortcutEnter,
-                              leadingIcon: Icons.keyboard_return_rounded,
-                              semanticLabel: l10n.settingsSendShortcutEnter,
-                            ),
-                            IdeTabItem<MessageSendShortcut>(
-                              key: const ValueKey(
-                                'settings-send-message-shortcut-modifier',
-                              ),
-                              value: MessageSendShortcut.primaryModifierEnter,
-                              label: modifierLabel,
-                              leadingIcon: Icons.keyboard_command_key_rounded,
-                              semanticLabel: modifierLabel,
-                            ),
-                          ],
-                          onChanged: (value) {
-                            unawaited(
-                              widget.generalSettingsController
-                                  .setMessageSendShortcut(value),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: IdeSpacing.space32),
-                IdeRowGroup(
-                  key: const ValueKey('settings-agent-notifications-group'),
-                  title: l10n.settingsNotifications,
-                  children: [
-                    _flatSettingsRow(
-                      key: const ValueKey('settings-notifications-enabled-row'),
-                      label: l10n.settingsSystemNotifications,
-                      description: l10n.settingsSystemNotificationsHint,
-                      control: IdeSwitch(
-                        key: const ValueKey(
-                          'settings-notifications-enabled-switch',
-                        ),
-                        semanticLabel: l10n.settingsSystemNotifications,
-                        value: settings.notifications.enabled,
-                        onChanged: (value) {
-                          unawaited(
-                            widget.generalSettingsController
-                                .setNotificationsEnabled(value),
-                          );
-                        },
-                      ),
-                    ),
-                    _flatSettingsRow(
-                      key: const ValueKey(
-                        'settings-turn-terminal-notifications-row',
-                      ),
-                      label: l10n.settingsTurnTerminalNotifications,
-                      description: l10n.settingsTurnTerminalNotificationsHint,
-                      control: IdeSwitch(
-                        key: const ValueKey(
-                          'settings-turn-terminal-notifications-switch',
-                        ),
-                        semanticLabel: l10n.settingsTurnTerminalNotifications,
-                        value: settings.notifications.turnTerminalEnabled,
-                        enabled: settings.notifications.enabled,
-                        onChanged: settings.notifications.enabled
-                            ? (value) {
-                                unawaited(
-                                  widget.generalSettingsController
-                                      .setTurnTerminalNotificationsEnabled(
-                                        value,
-                                      ),
-                                );
-                              }
-                            : null,
-                      ),
-                    ),
-                    _flatSettingsRow(
-                      key: const ValueKey(
-                        'settings-action-required-notifications-row',
-                      ),
-                      label: l10n.settingsActionRequiredNotifications,
-                      description: l10n.settingsActionRequiredNotificationsHint,
-                      control: IdeSwitch(
-                        key: const ValueKey(
-                          'settings-action-required-notifications-switch',
-                        ),
-                        semanticLabel: l10n.settingsActionRequiredNotifications,
-                        value: settings.notifications.actionRequiredEnabled,
-                        enabled: settings.notifications.enabled,
-                        onChanged: settings.notifications.enabled
-                            ? (value) {
-                                unawaited(
-                                  widget.generalSettingsController
-                                      .setActionRequiredNotificationsEnabled(
-                                        value,
-                                      ),
-                                );
-                              }
-                            : null,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          );
-        },
+      child: _generalSettingsBody(
+        context: context,
+        settings: settings,
+        ops: (
+          setAppLanguage: slice.setAppLanguage,
+          setMessageSendShortcut: slice.setMessageSendShortcut,
+          setNotificationsEnabled: slice.setNotificationsEnabled,
+          setTurnTerminalNotificationsEnabled:
+              slice.setTurnTerminalNotificationsEnabled,
+          setActionRequiredNotificationsEnabled:
+              slice.setActionRequiredNotificationsEnabled,
+        ),
       ),
     );
   }
 }
 
-class _AppearanceSettingsPane extends StatelessWidget {
-  const _AppearanceSettingsPane({required this.appearanceController});
+/// general 设置面板正文。
+Widget _generalSettingsBody({
+  required BuildContext context,
+  required GeneralSettings settings,
+  required _GeneralSettingsWriteOps ops,
+}) {
+  final l10n = context.l10n;
+  final isMacOS = Theme.of(context).platform == TargetPlatform.macOS;
+  final modifierLabel = isMacOS
+      ? l10n.settingsSendShortcutCmdEnter
+      : l10n.settingsSendShortcutCtrlEnter;
+  final description = switch (settings.sendMessageShortcut) {
+    MessageSendShortcut.enter => l10n.settingsSendShortcutEnterHint,
+    MessageSendShortcut.primaryModifierEnter =>
+      isMacOS
+          ? l10n.settingsSendShortcutCmdHint
+          : l10n.settingsSendShortcutCtrlHint,
+  };
+  final effectiveLanguage = ZetaLocalization.languageForLocale(
+    Localizations.localeOf(context),
+  );
+  final languagePending = settings.appLanguage != effectiveLanguage;
+  return IdePageBody(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        IdeRowGroup(
+          key: const ValueKey('settings-language-group'),
+          title: l10n.settingsLanguage,
+          children: [
+            _flatSettingsRow(
+              key: const ValueKey('settings-language-row'),
+              label: l10n.settingsLanguage,
+              description: languagePending
+                  ? l10n.settingsLanguageRestartToApply
+                  : l10n.settingsLanguageHint,
+              control: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 380),
+                child: IdeSelect<AppLanguage>(
+                  key: const ValueKey('settings-language-select'),
+                  value: settings.appLanguage,
+                  popupMinWidth: 180,
+                  popupWidthPolicy: IdeSelectPopupWidthPolicy.fitContent,
+                  options: <IdeSelectOption<AppLanguage>>[
+                    IdeSelectOption<AppLanguage>(
+                      AppLanguage.english,
+                      l10n.settingsLanguageEnglish,
+                      key: const ValueKey('settings-language-english'),
+                    ),
+                    IdeSelectOption<AppLanguage>(
+                      AppLanguage.simplifiedChinese,
+                      l10n.settingsLanguageSimplifiedChinese,
+                      key: const ValueKey('settings-language-zh-hans'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value == null) {
+                      return;
+                    }
+                    ops.setAppLanguage(value);
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: IdeSpacing.space32),
+        IdeRowGroup(
+          key: const ValueKey('settings-general-group'),
+          title: l10n.settingsMessageSending,
+          children: [
+            _flatSettingsRow(
+              key: const ValueKey('settings-send-message-shortcut-row'),
+              label: l10n.settingsSendShortcut,
+              description: description,
+              control: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 380),
+                child: IdeTabs<MessageSendShortcut>(
+                  key: const ValueKey('settings-send-message-shortcut-tabs'),
+                  value: settings.sendMessageShortcut,
+                  semanticLabel: l10n.settingsSendShortcut,
+                  items: <IdeTabItem<MessageSendShortcut>>[
+                    IdeTabItem<MessageSendShortcut>(
+                      key: const ValueKey(
+                        'settings-send-message-shortcut-enter',
+                      ),
+                      value: MessageSendShortcut.enter,
+                      label: l10n.settingsSendShortcutEnter,
+                      leadingIcon: Icons.keyboard_return_rounded,
+                      semanticLabel: l10n.settingsSendShortcutEnter,
+                    ),
+                    IdeTabItem<MessageSendShortcut>(
+                      key: const ValueKey(
+                        'settings-send-message-shortcut-modifier',
+                      ),
+                      value: MessageSendShortcut.primaryModifierEnter,
+                      label: modifierLabel,
+                      leadingIcon: Icons.keyboard_command_key_rounded,
+                      semanticLabel: modifierLabel,
+                    ),
+                  ],
+                  onChanged: (value) {
+                    ops.setMessageSendShortcut(value);
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: IdeSpacing.space32),
+        IdeRowGroup(
+          key: const ValueKey('settings-agent-notifications-group'),
+          title: l10n.settingsNotifications,
+          children: [
+            _flatSettingsRow(
+              key: const ValueKey('settings-notifications-enabled-row'),
+              label: l10n.settingsSystemNotifications,
+              description: l10n.settingsSystemNotificationsHint,
+              control: IdeSwitch(
+                key: const ValueKey('settings-notifications-enabled-switch'),
+                semanticLabel: l10n.settingsSystemNotifications,
+                value: settings.notifications.enabled,
+                onChanged: (value) {
+                  ops.setNotificationsEnabled(value);
+                },
+              ),
+            ),
+            _flatSettingsRow(
+              key: const ValueKey('settings-turn-terminal-notifications-row'),
+              label: l10n.settingsTurnTerminalNotifications,
+              description: l10n.settingsTurnTerminalNotificationsHint,
+              control: IdeSwitch(
+                key: const ValueKey(
+                  'settings-turn-terminal-notifications-switch',
+                ),
+                semanticLabel: l10n.settingsTurnTerminalNotifications,
+                value: settings.notifications.turnTerminalEnabled,
+                enabled: settings.notifications.enabled,
+                onChanged: settings.notifications.enabled
+                    ? (value) {
+                        ops.setTurnTerminalNotificationsEnabled(value);
+                      }
+                    : null,
+              ),
+            ),
+            _flatSettingsRow(
+              key: const ValueKey('settings-action-required-notifications-row'),
+              label: l10n.settingsActionRequiredNotifications,
+              description: l10n.settingsActionRequiredNotificationsHint,
+              control: IdeSwitch(
+                key: const ValueKey(
+                  'settings-action-required-notifications-switch',
+                ),
+                semanticLabel: l10n.settingsActionRequiredNotifications,
+                value: settings.notifications.actionRequiredEnabled,
+                enabled: settings.notifications.enabled,
+                onChanged: settings.notifications.enabled
+                    ? (value) {
+                        ops.setActionRequiredNotificationsEnabled(value);
+                      }
+                    : null,
+              ),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
 
-  final AppearanceSettingsController appearanceController;
+/// appearance 设置面板的写操作与异步查询集。
+///
+/// **必须按 store 实例缓存**：`_FontChoiceSettingRow` 用 `choicesLoader` 的闭包
+/// 身份判断要不要重置 `_choicesFuture`，每次 build 造新闭包会让字体目录反复重载。
+typedef _AppearanceWriteOps = ({
+  void Function(ZetaThemeModePreference mode) setThemeMode,
+  void Function(double value) setUiFontSize,
+  void Function(double value) setCodeFontSize,
+  Future<List<AppearanceFontOption>> Function() loadUiFontChoices,
+  Future<List<AppearanceFontOption>> Function() loadCodeFontChoices,
+  Future<bool> Function(AppearanceFontChoice choice) setUiFontChoice,
+  Future<bool> Function(AppearanceFontChoice choice) setCodeFontChoice,
+  String Function(AppearanceFontChoice choice) displayNameFor,
+});
+
+class _AppearanceSettingsPane extends ConsumerStatefulWidget {
+  const _AppearanceSettingsPane();
+
+  @override
+  ConsumerState<_AppearanceSettingsPane> createState() =>
+      _AppearanceSettingsPaneState();
+}
+
+class _AppearanceSettingsPaneState
+    extends ConsumerState<_AppearanceSettingsPane> {
+  /// 缓存的写操作集与它所属的 notifier 身份。
+  Object? _opsOwner;
+  _AppearanceWriteOps? _ops;
+
+  _AppearanceWriteOps _opsFor(
+    Object owner,
+    _AppearanceWriteOps Function() build,
+  ) {
+    if (!identical(_opsOwner, owner) || _ops == null) {
+      _opsOwner = owner;
+      _ops = build();
+    }
+    return _ops!;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final notifier = ref.read(appearanceSettingsProvider.notifier);
+    final ops = _opsFor(notifier, () => _notifierOps(notifier));
+    final settings = ref.watch(appearanceSettingsValueProvider);
+    return IdeSurface.canvas(
+      key: const ValueKey('settings-detail-panel'),
+      child: _appearanceSettingsBody(
+        context: context,
+        settings: settings,
+        tabs: _tabs(context),
+        ops: ops,
+      ),
+    );
+  }
+
+  _AppearanceWriteOps _notifierOps(AppearanceSettingsNotifier notifier) {
+    return (
+      setThemeMode: (mode) {
+        unawaited(notifier.setThemeMode(mode));
+      },
+      setUiFontSize: (value) {
+        unawaited(notifier.setUiFontSize(value));
+      },
+      setCodeFontSize: (value) {
+        unawaited(notifier.setCodeFontSize(value));
+      },
+      loadUiFontChoices: () => notifier.ensureFontCatalog(forCodeFont: false),
+      loadCodeFontChoices: () => notifier.ensureFontCatalog(forCodeFont: true),
+      setUiFontChoice: notifier.setUiFontChoice,
+      setCodeFontChoice: notifier.setCodeFontChoice,
+      displayNameFor: notifier.displayNameFor,
+    );
+  }
 
   List<_ThemeModeTabSpec> _tabs(BuildContext context) {
     final l10n = context.l10n;
@@ -484,108 +540,107 @@ class _AppearanceSettingsPane extends StatelessWidget {
       ),
     ];
   }
+}
 
-  @override
-  Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    return IdeSurface.canvas(
-      key: const ValueKey('settings-detail-panel'),
-      child: ValueListenableBuilder<AppearanceSettings>(
-        valueListenable: appearanceController.listenable,
-        builder: (context, settings, _) {
-          return IdePageBody(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                IdeRowGroup(
-                  key: const ValueKey('settings-appearance-group'),
-                  title: l10n.settingsTheme,
-                  children: [
-                    _ThemeModeSection(
-                      tabs: _tabs(context),
-                      groupValue: settings.themeMode,
-                      onSelected: (value) {
-                        unawaited(appearanceController.setThemeMode(value));
-                      },
-                    ),
-                  ],
-                ),
-                const SizedBox(height: IdeSpacing.space32),
-                IdeRowGroup(
-                  key: const ValueKey('settings-appearance-font-group'),
-                  title: l10n.settingsFonts,
-                  children: [
-                    _FontChoiceSettingRow(
-                      key: const ValueKey('settings-ui-font-row'),
-                      keyPrefix: 'settings-ui-font',
-                      label: l10n.settingsUiFont,
-                      description: l10n.settingsUiFontHint,
-                      selectedChoice: settings.uiFontChoice,
-                      selectedLabel: _fontChoiceLabel(
-                        context,
-                        settings.uiFontChoice,
-                        systemFontDisplayName: appearanceController
-                            .displayNameFor(settings.uiFontChoice),
-                      ),
-                      choicesLoader: appearanceController.loadUiFontChoices,
-                      onChanged: appearanceController.setUiFontChoice,
-                      errorMessage: l10n.settingsUiFontLoadError,
-                    ),
-                    _FontSizeSettingRow(
-                      key: const ValueKey('settings-ui-font-size-row'),
-                      keyPrefix: 'settings-ui-font-size',
-                      label: l10n.settingsUiFontSize,
-                      description: l10n.settingsUiFontSizeHint(
-                        '${minUiFontSize.toInt()}',
-                        '${maxUiFontSize.toInt()}',
-                      ),
-                      value: settings.uiFontSize,
-                      min: minUiFontSize,
-                      max: maxUiFontSize,
-                      onChanged: (value) {
-                        unawaited(appearanceController.setUiFontSize(value));
-                      },
-                    ),
-                    _FontChoiceSettingRow(
-                      key: const ValueKey('settings-code-font-row'),
-                      keyPrefix: 'settings-code-font',
-                      label: l10n.settingsCodeFont,
-                      description: l10n.settingsCodeFontHint,
-                      selectedChoice: settings.codeFontChoice,
-                      selectedLabel: _fontChoiceLabel(
-                        context,
-                        settings.codeFontChoice,
-                        systemFontDisplayName: appearanceController
-                            .displayNameFor(settings.codeFontChoice),
-                      ),
-                      choicesLoader: appearanceController.loadCodeFontChoices,
-                      onChanged: appearanceController.setCodeFontChoice,
-                      errorMessage: l10n.settingsCodeFontLoadError,
-                    ),
-                    _FontSizeSettingRow(
-                      key: const ValueKey('settings-code-font-size-row'),
-                      keyPrefix: 'settings-code-font-size',
-                      label: l10n.settingsCodeFontSize,
-                      description: l10n.settingsCodeFontSizeHint(
-                        '${minCodeFontSize.toInt()}',
-                        '${maxCodeFontSize.toInt()}',
-                      ),
-                      value: settings.codeFontSize,
-                      min: minCodeFontSize,
-                      max: maxCodeFontSize,
-                      onChanged: (value) {
-                        unawaited(appearanceController.setCodeFontSize(value));
-                      },
-                    ),
-                  ],
-                ),
-              ],
+/// appearance 设置面板正文。
+Widget _appearanceSettingsBody({
+  required BuildContext context,
+  required AppearanceSettingsSlice settings,
+  required List<_ThemeModeTabSpec> tabs,
+  required _AppearanceWriteOps ops,
+}) {
+  final l10n = context.l10n;
+  return IdePageBody(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        IdeRowGroup(
+          key: const ValueKey('settings-appearance-group'),
+          title: l10n.settingsTheme,
+          children: [
+            _ThemeModeSection(
+              tabs: tabs,
+              groupValue: themeModeForPreference(settings.themeMode),
+              onSelected: (value) {
+                ops.setThemeMode(preferenceForThemeMode(value));
+              },
             ),
-          );
-        },
-      ),
-    );
-  }
+          ],
+        ),
+        const SizedBox(height: IdeSpacing.space32),
+        IdeRowGroup(
+          key: const ValueKey('settings-appearance-font-group'),
+          title: l10n.settingsFonts,
+          children: [
+            _FontChoiceSettingRow(
+              key: const ValueKey('settings-ui-font-row'),
+              keyPrefix: 'settings-ui-font',
+              label: l10n.settingsUiFont,
+              description: l10n.settingsUiFontHint,
+              selectedChoice: settings.uiFontChoice,
+              selectedLabel: _fontChoiceLabel(
+                context,
+                settings.uiFontChoice,
+                systemFontDisplayName: ops.displayNameFor(
+                  settings.uiFontChoice,
+                ),
+              ),
+              choicesLoader: ops.loadUiFontChoices,
+              onChanged: ops.setUiFontChoice,
+              errorMessage: l10n.settingsUiFontLoadError,
+            ),
+            _FontSizeSettingRow(
+              key: const ValueKey('settings-ui-font-size-row'),
+              keyPrefix: 'settings-ui-font-size',
+              label: l10n.settingsUiFontSize,
+              description: l10n.settingsUiFontSizeHint(
+                '${minUiFontSize.toInt()}',
+                '${maxUiFontSize.toInt()}',
+              ),
+              value: settings.uiFontSize,
+              min: minUiFontSize,
+              max: maxUiFontSize,
+              onChanged: (value) {
+                ops.setUiFontSize(value);
+              },
+            ),
+            _FontChoiceSettingRow(
+              key: const ValueKey('settings-code-font-row'),
+              keyPrefix: 'settings-code-font',
+              label: l10n.settingsCodeFont,
+              description: l10n.settingsCodeFontHint,
+              selectedChoice: settings.codeFontChoice,
+              selectedLabel: _fontChoiceLabel(
+                context,
+                settings.codeFontChoice,
+                systemFontDisplayName: ops.displayNameFor(
+                  settings.codeFontChoice,
+                ),
+              ),
+              choicesLoader: ops.loadCodeFontChoices,
+              onChanged: ops.setCodeFontChoice,
+              errorMessage: l10n.settingsCodeFontLoadError,
+            ),
+            _FontSizeSettingRow(
+              key: const ValueKey('settings-code-font-size-row'),
+              keyPrefix: 'settings-code-font-size',
+              label: l10n.settingsCodeFontSize,
+              description: l10n.settingsCodeFontSizeHint(
+                '${minCodeFontSize.toInt()}',
+                '${maxCodeFontSize.toInt()}',
+              ),
+              value: settings.codeFontSize,
+              min: minCodeFontSize,
+              max: maxCodeFontSize,
+              onChanged: (value) {
+                ops.setCodeFontSize(value);
+              },
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
 }
 
 class _ThemeModeTabSpec {

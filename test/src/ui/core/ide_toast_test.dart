@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
-import 'package:zeta/src/ui/core/app_theme.dart';
-import 'package:zeta/src/ui/core/ide_toast.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 
 void main() {
   testWidgets('showIdeToast renders info and error messages', (tester) async {
@@ -71,7 +70,10 @@ class _ToastHarness extends StatelessWidget {
       child: sf.ShadcnApp(
         theme: buildShadcnTheme(lightIdeTheme),
         darkTheme: buildShadcnTheme(darkIdeTheme),
-        materialTheme: buildMaterialTheme(lightIdeTheme),
+        builder: (context, child) => IdeMaterialLayer(
+          theme: buildMaterialTheme(lightIdeTheme),
+          child: child,
+        ),
         themeMode: sf.ThemeMode.light,
         home: sf.Scaffold(
           child: Builder(

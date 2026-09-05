@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
-import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
+import 'package:zeta_markdown/zeta_markdown.dart';
 
 /// Agent Markdown 的有界解析与渲染保温缓存。
 ///
@@ -11,15 +11,24 @@ import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 /// keep-alive bucket 中，避免为全部历史消息永久保活。
 final class AgentMarkdownCache {
   /// 创建缓存。
-  AgentMarkdownCache({this.maxWarmEntries = 8, this.maxControllerEntries = 24})
-    : assert(maxWarmEntries >= 0),
-      assert(maxControllerEntries >= maxWarmEntries);
+  AgentMarkdownCache({
+    this.maxWarmEntries = 8,
+    this.maxControllerEntries = 24,
+    this.syntaxSet,
+  }) : assert(maxWarmEntries >= 0),
+       assert(maxControllerEntries >= maxWarmEntries);
 
   /// 最多保留的 Markdown 渲染子树数量。
   final int maxWarmEntries;
 
   /// 最多保留的已解析 Markdown 控制器数量。
   final int maxControllerEntries;
+
+  /// 会话正文使用的 Markdown 语法集。
+  ///
+  /// 为空时用包内默认集（与上游 0.3.1 一致）。裁剪或增补语法都从这里注入，
+  /// 不要去改包内的默认列表——那会让上游同步的 diff 面扩大。
+  final MarkdownSyntaxSet? syntaxSet;
 
   final LinkedHashMap<String, _AgentMarkdownCacheEntry> _entries =
       LinkedHashMap<String, _AgentMarkdownCacheEntry>();
@@ -100,6 +109,7 @@ final class AgentMarkdownCache {
         messageId: messageId,
         controller: MarkdownController(
           data: preferIncrementalUpdate ? '' : data,
+          syntaxSet: syntaxSet,
         ),
       );
       debugCreatedControllerCount += 1;

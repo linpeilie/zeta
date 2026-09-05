@@ -1,54 +1,21 @@
 import 'dart:convert';
-import 'dart:io';
 
-import 'package:zeta/src/core/logging/app_logging.dart';
-import 'package:zeta/src/core/storage/atomic_text_file.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
+
 import 'package:zeta/src/features/agent/data/agent_turn_context_codec.dart';
-import 'package:zeta/src/features/agent/domain/agent_turn_context_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
-final _log = loggerFor('zeta.agent.turn_context');
+final _log = zetaLoggerFor('zeta.agent.turn_context');
 
-/// Zeta 发起 turn 时记录的会话上下文存储边界。
-abstract interface class AgentTurnContextStore {
-  Future<AgentThreadTurnContext?> load({
-    required String providerId,
-    required String threadId,
-  });
-
-  Future<void> save(AgentThreadTurnContext context);
-}
-
-/// 不落盘的会话上下文，供测试和无文件持久化宿主使用。
-final class MemoryAgentTurnContextStore implements AgentTurnContextStore {
-  MemoryAgentTurnContextStore({
-    Map<String, AgentThreadTurnContext> contexts =
-        const <String, AgentThreadTurnContext>{},
-  }) : _contexts = <String, AgentThreadTurnContext>{...contexts};
-
-  final Map<String, AgentThreadTurnContext> _contexts;
-
-  @override
-  Future<AgentThreadTurnContext?> load({
-    required String providerId,
-    required String threadId,
-  }) async {
-    return _contexts[_key(providerId, threadId)];
-  }
-
-  @override
-  Future<void> save(AgentThreadTurnContext context) async {
-    _contexts[_key(context.providerId, context.threadId)] = context;
-  }
-}
-
-/// `~/.zeta/state/session/<providerId>/<threadId>.json` 的版本化文件存储。
+/// `state/session/<providerId>/<threadId>.json` 的版本化存储。
 ///
 /// JSON 只保存白名单 turn 元数据；损坏或未知版本视为缺失，不阻断打开会话。
+/// 相对键由本类编码；具体文档由组合层注入的 [StorageServiceFactory] 打开。
 final class FileAgentTurnContextStore implements AgentTurnContextStore {
-  FileAgentTurnContextStore({required this._rootDirectory});
+  FileAgentTurnContextStore({required this._createStorage});
 
-  final Directory _rootDirectory;
-  final Map<String, AtomicTextFile> _files = <String, AtomicTextFile>{};
+  final StorageServiceFactory _createStorage;
+  final Map<String, StorageService> _files = <String, StorageService>{};
   final Map<String, Future<void>> _writeTails = <String, Future<void>>{};
 
   @override
@@ -56,12 +23,12 @@ final class FileAgentTurnContextStore implements AgentTurnContextStore {
     required String providerId,
     required String threadId,
   }) async {
-    final file = _fileFor(providerId, threadId);
-    if (file == null) {
+    final entry = _fileFor(providerId, threadId);
+    if (entry == null) {
       return null;
     }
     try {
-      final source = await file.read();
+      final source = await entry.storage.read();
       if (source == null || source.trim().isEmpty) {
         return null;
       }
@@ -82,36 +49,36 @@ final class FileAgentTurnContextStore implements AgentTurnContextStore {
 
   @override
   Future<void> save(AgentThreadTurnContext context) {
-    final file = _fileFor(context.providerId, context.threadId);
-    if (file == null) {
+    final entry = _fileFor(context.providerId, context.threadId);
+    if (entry == null) {
       _log.w('Skipped Agent turn context save because path is unsafe');
       return Future<void>.value();
     }
-    final key = file.file.path;
+    final key = entry.key;
     final previous = _writeTails[key] ?? Future<void>.value();
     final operation = previous.then((_) async {
-      await file.write(jsonEncode(encodeAgentThreadTurnContext(context)));
+      await entry.storage.write(
+        jsonEncode(encodeAgentThreadTurnContext(context)),
+      );
     });
     _writeTails[key] = operation.catchError((Object _) {});
     return operation;
   }
 
-  AtomicTextFile? _fileFor(String providerId, String threadId) {
+  ({String key, StorageService storage})? _fileFor(
+    String providerId,
+    String threadId,
+  ) {
     final providerSegment = encodeAgentTurnContextPathSegment(providerId);
     final threadSegment = encodeAgentTurnContextPathSegment(threadId);
     if (providerSegment == null || threadSegment == null) {
       return null;
     }
-    final path =
-        '${_rootDirectory.path}${Platform.pathSeparator}'
-        '$providerSegment${Platform.pathSeparator}'
-        '$threadSegment.json';
-    return _files.putIfAbsent(path, () => AtomicTextFile(File(path)));
+    final key = '$providerSegment/$threadSegment.json';
+    final storage = _files.putIfAbsent(key, () => _createStorage(key));
+    return (key: key, storage: storage);
   }
 }
-
-String _key(String providerId, String threadId) =>
-    '${providerId.trim()}\u0000${threadId.trim()}';
 
 /// 将 providerId / threadId 编码为安全文件名片段。
 String? encodeAgentTurnContextPathSegment(String value) {

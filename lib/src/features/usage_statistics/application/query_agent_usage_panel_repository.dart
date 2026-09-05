@@ -1,9 +1,9 @@
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_query_service.dart';
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_token_aggregation.dart';
 import 'package:zeta/src/features/usage_statistics/domain/fallback_usage_statistics_text_catalog.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_query_models.dart';
-import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_text_catalog.dart';
 
 /// 将统一用量查询事件投影为现有侧栏面板仓储契约。

@@ -1,4 +1,4 @@
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 typedef DesktopNotificationActivation = void Function(String? payload);
 
@@ -93,6 +93,19 @@ final class DesktopAttentionVisibility {
         providerId == attention.providerId &&
         threadId == attention.threadId;
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DesktopAttentionVisibility &&
+          other.windowFocused == windowFocused &&
+          other.agentCanvasVisible == agentCanvasVisible &&
+          other.providerId == providerId &&
+          other.threadId == threadId;
+
+  @override
+  int get hashCode =>
+      Object.hash(windowFocused, agentCanvasVisible, providerId, threadId);
 }
 
 typedef DesktopAttentionTargetActivator =

@@ -1,12 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 void main() {
   group('AgentProviderConfig', () {
     test('normalizes the built-in Claude provider display name', () {
-      expect(AgentProviderConfig.defaultClaudeCode.displayName, 'Claude');
+      expect(defaultClaudeCodeAgentProviderConfig.displayName, 'Claude');
       expect(
-        AgentProviderConfig.normalizeDisplayName(
+        zetaAgentProviderDefinitionCatalog.normalizeDisplayName(
           defaultClaudeCodeProviderId,
           'Claude Code',
         ),
@@ -184,7 +185,7 @@ void main() {
       );
     });
 
-    test('decodes session path from current and legacy cache payloads', () {
+    test('decodes session path from the current cache payload', () {
       final createdAt = DateTime.fromMillisecondsSinceEpoch(1);
       final updatedAt = DateTime.fromMillisecondsSinceEpoch(2);
 
@@ -200,18 +201,6 @@ void main() {
         'raw': const <String, Object?>{},
       });
       expect(current?.sessionPath, '/tmp/current.jsonl');
-
-      final legacy = AgentThreadSummary.tryDecode(<String, Object?>{
-        'id': 'thread-2',
-        'providerId': defaultAgentProviderId,
-        'projectPath': '/repo',
-        'preview': 'Preview',
-        'createdAt': createdAt.millisecondsSinceEpoch,
-        'updatedAt': updatedAt.millisecondsSinceEpoch,
-        'status': AgentThreadRuntimeStatus.idle.name,
-        'raw': const <String, Object?>{'path': '/tmp/legacy.jsonl'},
-      });
-      expect(legacy?.sessionPath, '/tmp/legacy.jsonl');
     });
   });
 }

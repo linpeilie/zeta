@@ -1,4 +1,4 @@
-import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
 
 extension AgentAccountStateL10n on AgentAccountState {

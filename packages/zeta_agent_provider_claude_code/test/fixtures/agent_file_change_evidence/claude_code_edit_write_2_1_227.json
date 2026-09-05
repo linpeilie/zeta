@@ -1,0 +1,117 @@
+{
+  "_fixture": {
+    "formatVersion": 1,
+    "provider": "claude_code",
+    "protocol": "Claude Code stream-json",
+    "cliVersion": "2.1.227",
+    "sourceKind": "sanitizedRealShape",
+    "scenario": "Successful Edit and Write tool lifecycles in temporary workspaces.",
+    "provenance": "Sanitized real captures from the locally installed CLI with session persistence disabled.",
+    "privacy": "Prompt, reply, identifiers, real paths, file content, tool result text, credentials, and stderr are not retained."
+  },
+  "scenarios": [
+    {
+      "name": "edit",
+      "frames": [
+        {
+          "type": "assistant",
+          "session_id": "claude-session-redacted-edit",
+          "uuid": "claude-event-redacted-edit-1",
+          "message": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "tool_use",
+                "id": "claude-tool-redacted-edit",
+                "name": "Edit",
+                "input": {
+                  "file_path": "<WORKSPACE_REDACTED>/sample.txt",
+                  "old_string": "[BEFORE_REDACTED]\n",
+                  "new_string": "[AFTER_REDACTED]\n",
+                  "replace_all": false
+                }
+              }
+            ]
+          }
+        },
+        {
+          "type": "user",
+          "session_id": "claude-session-redacted-edit",
+          "uuid": "claude-event-redacted-edit-2",
+          "message": {
+            "role": "user",
+            "content": [
+              {
+                "type": "tool_result",
+                "tool_use_id": "claude-tool-redacted-edit",
+                "content": "[TOOL_RESULT_REDACTED]"
+              }
+            ]
+          }
+        },
+        {
+          "type": "result",
+          "subtype": "success",
+          "session_id": "claude-session-redacted-edit",
+          "is_error": false
+        }
+      ],
+      "captureChecks": {
+        "fileContentChanged": true,
+        "toolResultWasStructuredDiff": false,
+        "temporaryWorkspaceCleaned": true
+      }
+    },
+    {
+      "name": "write",
+      "frames": [
+        {
+          "type": "assistant",
+          "session_id": "claude-session-redacted-write",
+          "uuid": "claude-event-redacted-write-1",
+          "message": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "tool_use",
+                "id": "claude-tool-redacted-write",
+                "name": "Write",
+                "input": {
+                  "file_path": "<WORKSPACE_REDACTED>/sample_new.txt",
+                  "content": "[WRITE_CONTENT_REDACTED]\n"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "type": "user",
+          "session_id": "claude-session-redacted-write",
+          "uuid": "claude-event-redacted-write-2",
+          "message": {
+            "role": "user",
+            "content": [
+              {
+                "type": "tool_result",
+                "tool_use_id": "claude-tool-redacted-write",
+                "content": "[TOOL_RESULT_REDACTED]"
+              }
+            ]
+          }
+        },
+        {
+          "type": "result",
+          "subtype": "success",
+          "session_id": "claude-session-redacted-write",
+          "is_error": false
+        }
+      ],
+      "captureChecks": {
+        "fileCreated": true,
+        "fileNonEmpty": true,
+        "toolResultWasStructuredDiff": false,
+        "temporaryWorkspaceCleaned": true
+      }
+    }
+  ]
+}

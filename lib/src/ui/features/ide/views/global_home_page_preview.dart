@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/widget_previews.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/ui/core/app_theme.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/ui/features/ide/views/global_home_page.dart';
 
 @Preview(
@@ -60,20 +59,23 @@ Widget _preview(Brightness brightness) {
       debugShowCheckedModeBanner: false,
       theme: buildShadcnTheme(lightTheme),
       darkTheme: buildShadcnTheme(darkTheme),
-      materialTheme: buildMaterialTheme(currentTheme),
+      builder: (context, child) => IdeMaterialLayer(
+        theme: buildMaterialTheme(currentTheme),
+        child: child,
+      ),
       themeMode: resolveShadcnThemeMode(themeMode),
       home: sf.Scaffold(
         child: GlobalHomePage(
           installedProviders: const <HomeProviderSummary>[
             HomeProviderSummary(
-              id: defaultAgentProviderId,
+              id: 'codex',
               displayName: 'Codex',
               vendor: 'OpenAI',
               version: '0.42.0',
               status: HomeProviderStatus.available,
             ),
             HomeProviderSummary(
-              id: grokAgentProviderId,
+              id: 'grok',
               displayName: 'Grok',
               vendor: 'xAI',
               version: '1.8.2',

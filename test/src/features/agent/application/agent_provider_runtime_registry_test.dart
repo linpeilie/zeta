@@ -2,9 +2,9 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:zeta/src/features/agent/application/agent_provider_runtime_registry.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/features/agent/domain/agent_provider_bundle.dart';
+import 'package:zeta_foundation/zeta_foundation.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 void main() {
   group('AgentProviderRuntimeRegistry', () {
@@ -16,7 +16,7 @@ void main() {
         List<Future<AgentProviderRuntimeLease>>.generate(
           12,
           (_) => registry.acquire(
-            AgentProviderConfig.defaultCodex,
+            defaultCodexAgentProviderConfig,
             scope: AgentProviderRuntimeScopeKey.global,
           ),
         ),
@@ -40,19 +40,19 @@ void main() {
       final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
 
       final codexA = await registry.acquire(
-        AgentProviderConfig.defaultCodex,
+        defaultCodexAgentProviderConfig,
         scope: AgentProviderRuntimeScopeKey.global,
       );
       final grokA = await registry.acquire(
-        AgentProviderConfig.defaultGrok,
+        defaultGrokAgentProviderConfig,
         scope: AgentProviderRuntimeScopeKey.global,
       );
       final codexB = await registry.acquire(
-        AgentProviderConfig.defaultCodex,
+        defaultCodexAgentProviderConfig,
         scope: AgentProviderRuntimeScopeKey.global,
       );
       final grokB = await registry.acquire(
-        AgentProviderConfig.defaultGrok,
+        defaultGrokAgentProviderConfig,
         scope: AgentProviderRuntimeScopeKey.global,
       );
 
@@ -72,11 +72,11 @@ void main() {
       final factory = _CountingProviderFactory();
       final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
       final first = await registry.acquire(
-        AgentProviderConfig.defaultCodex,
+        defaultCodexAgentProviderConfig,
         scope: AgentProviderRuntimeScopeKey.global,
       );
       final firstProvider = first.bundle.runtime as _FakeProvider;
-      final changed = AgentProviderConfig.defaultCodex.copyWith(
+      final changed = defaultCodexAgentProviderConfig.copyWith(
         command: 'codex-next',
       );
 
@@ -100,14 +100,14 @@ void main() {
       final factory = _CountingProviderFactory();
       final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
       final first = await registry.acquire(
-        AgentProviderConfig.defaultGrok,
+        defaultGrokAgentProviderConfig,
         scope: AgentProviderRuntimeScopeKey.global,
       );
       final firstIdentity = first.runtimeIdentity;
 
-      await registry.invalidateProvider(AgentProviderConfig.defaultGrok.id);
+      await registry.invalidateProvider(defaultGrokAgentProviderConfig.id);
       final second = await registry.acquire(
-        AgentProviderConfig.defaultGrok,
+        defaultGrokAgentProviderConfig,
         scope: AgentProviderRuntimeScopeKey.global,
       );
 
@@ -124,7 +124,7 @@ void main() {
       final factory = _CountingProviderFactory();
       final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
       await registry.acquire(
-        AgentProviderConfig.defaultCodex,
+        defaultCodexAgentProviderConfig,
         scope: AgentProviderRuntimeScopeKey.global,
       );
 
@@ -133,7 +133,7 @@ void main() {
       expect(factory.providers.single.disposeCount, 1);
       expect(
         () => registry.acquire(
-          AgentProviderConfig.defaultCodex,
+          defaultCodexAgentProviderConfig,
           scope: AgentProviderRuntimeScopeKey.global,
         ),
         throwsStateError,
@@ -141,18 +141,18 @@ void main() {
     });
 
     test('身份错配不得关闭已被其他 entry 持有的实例', () async {
-      final shared = _FakeProvider(AgentProviderConfig.defaultCodex);
+      final shared = _FakeProvider(defaultCodexAgentProviderConfig);
       final registry = AgentProviderRuntimeRegistry(
         providerFactory: _SingleProviderFactory(shared),
       );
       final codex = await registry.acquire(
-        AgentProviderConfig.defaultCodex,
+        defaultCodexAgentProviderConfig,
         scope: AgentProviderRuntimeScopeKey.global,
       );
 
       await expectLater(
         registry.acquire(
-          AgentProviderConfig.defaultGrok,
+          defaultGrokAgentProviderConfig,
           scope: AgentProviderRuntimeScopeKey.global,
         ),
         throwsStateError,
@@ -173,11 +173,11 @@ void main() {
       addTearDown(registry.close);
 
       final sessionA = await registry.acquire(
-        AgentProviderConfig.defaultGrok,
+        defaultGrokAgentProviderConfig,
         scope: AgentProviderRuntimeScopeKey.global,
       );
       final sessionB = await registry.acquire(
-        AgentProviderConfig.defaultGrok,
+        defaultGrokAgentProviderConfig,
         scope: AgentProviderRuntimeScopeKey.global,
       );
 
@@ -197,7 +197,7 @@ void main() {
       final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
       addTearDown(registry.close);
       final first = await registry.acquire(
-        AgentProviderConfig.defaultCodex,
+        defaultCodexAgentProviderConfig,
         scope: AgentProviderRuntimeScopeKey.global,
       );
       final firstIdentity = first.runtimeIdentity;
@@ -209,7 +209,7 @@ void main() {
       expect(factory.providers.single.disposeCount, 0);
 
       final second = await registry.acquire(
-        AgentProviderConfig.defaultCodex,
+        defaultCodexAgentProviderConfig,
         scope: AgentProviderRuntimeScopeKey.global,
       );
 
@@ -224,12 +224,12 @@ void main() {
       final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
       addTearDown(registry.close);
       final lease = await registry.acquire(
-        AgentProviderConfig.defaultCodex,
+        defaultCodexAgentProviderConfig,
         scope: AgentProviderRuntimeScopeKey.global,
       );
       expect(registry.debugLeaseCount, 1);
 
-      await registry.invalidateProvider(AgentProviderConfig.defaultCodex.id);
+      await registry.invalidateProvider(defaultCodexAgentProviderConfig.id);
 
       expect(factory.providers.single.disposeCount, 1);
       expect(lease.isCurrent, isFalse);
@@ -241,11 +241,11 @@ void main() {
       final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
       addTearDown(registry.close);
       final first = await registry.acquire(
-        AgentProviderConfig.defaultCodex,
+        defaultCodexAgentProviderConfig,
         scope: AgentProviderRuntimeScopeKey.global,
       );
       final second = await registry.acquire(
-        AgentProviderConfig.defaultCodex,
+        defaultCodexAgentProviderConfig,
         scope: AgentProviderRuntimeScopeKey.global,
       );
 
@@ -267,13 +267,13 @@ void main() {
       final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
       addTearDown(registry.close);
       final first = await registry.acquire(
-        AgentProviderConfig.defaultCodex,
+        defaultCodexAgentProviderConfig,
         scope: AgentProviderRuntimeScopeKey.global,
       );
 
-      await registry.invalidateProvider(AgentProviderConfig.defaultCodex.id);
+      await registry.invalidateProvider(defaultCodexAgentProviderConfig.id);
       final second = await registry.acquire(
-        AgentProviderConfig.defaultCodex,
+        defaultCodexAgentProviderConfig,
         scope: AgentProviderRuntimeScopeKey.global,
       );
 
@@ -294,11 +294,11 @@ void main() {
       addTearDown(registry.close);
 
       final first = await registry.acquire(
-        AgentProviderConfig.defaultCodex,
+        defaultCodexAgentProviderConfig,
         scope: AgentProviderRuntimeScopeKey.global,
       );
       final second = await registry.acquire(
-        AgentProviderConfig.defaultCodex,
+        defaultCodexAgentProviderConfig,
         scope: AgentProviderRuntimeScopeKey.global,
       );
 
@@ -315,16 +315,16 @@ void main() {
       addTearDown(registry.close);
 
       final sessionA = await registry.acquire(
-        AgentProviderConfig.defaultCodex,
+        defaultCodexAgentProviderConfig,
         scope: const AgentProviderRuntimeScopeKey.session('entry-a'),
       );
       final sessionB = await registry.acquire(
-        AgentProviderConfig.defaultCodex,
+        defaultCodexAgentProviderConfig,
         scope: const AgentProviderRuntimeScopeKey.session('entry-b'),
       );
       // 同一个 session id 再次获取应复用同一个实例。
       final sessionAAgain = await registry.acquire(
-        AgentProviderConfig.defaultCodex,
+        defaultCodexAgentProviderConfig,
         scope: const AgentProviderRuntimeScopeKey.session('entry-a'),
       );
 
@@ -350,11 +350,11 @@ void main() {
       const sessionScope = AgentProviderRuntimeScopeKey.session('entry-a');
 
       final global = await registry.acquire(
-        AgentProviderConfig.defaultCodex,
+        defaultCodexAgentProviderConfig,
         scope: AgentProviderRuntimeScopeKey.global,
       );
       final session = await registry.acquire(
-        AgentProviderConfig.defaultCodex,
+        defaultCodexAgentProviderConfig,
         scope: sessionScope,
       );
 
@@ -362,7 +362,7 @@ void main() {
       expect(identical(global.bundle.runtime, session.bundle.runtime), isFalse);
 
       await registry.invalidateScope(
-        AgentProviderConfig.defaultCodex.id,
+        defaultCodexAgentProviderConfig.id,
         sessionScope,
       );
 
@@ -381,16 +381,16 @@ void main() {
       const scopeB = AgentProviderRuntimeScopeKey.session('entry-b');
 
       final leaseA = await registry.acquire(
-        AgentProviderConfig.defaultCodex,
+        defaultCodexAgentProviderConfig,
         scope: scopeA,
       );
       final leaseB = await registry.acquire(
-        AgentProviderConfig.defaultCodex,
+        defaultCodexAgentProviderConfig,
         scope: scopeB,
       );
 
       await registry.invalidateScope(
-        AgentProviderConfig.defaultCodex.id,
+        defaultCodexAgentProviderConfig.id,
         scopeA,
       );
 
@@ -423,24 +423,24 @@ void main() {
       addTearDown(registry.close);
 
       final global = await registry.acquire(
-        AgentProviderConfig.defaultCodex,
+        defaultCodexAgentProviderConfig,
         scope: AgentProviderRuntimeScopeKey.global,
       );
       final sessionA = await registry.acquire(
-        AgentProviderConfig.defaultCodex,
+        defaultCodexAgentProviderConfig,
         scope: const AgentProviderRuntimeScopeKey.session('entry-a'),
       );
       final sessionB = await registry.acquire(
-        AgentProviderConfig.defaultCodex,
+        defaultCodexAgentProviderConfig,
         scope: const AgentProviderRuntimeScopeKey.session('entry-b'),
       );
       // 不同 Provider 的实例不应被误伤。
       final grok = await registry.acquire(
-        AgentProviderConfig.defaultGrok,
+        defaultGrokAgentProviderConfig,
         scope: AgentProviderRuntimeScopeKey.global,
       );
 
-      await registry.invalidateProvider(AgentProviderConfig.defaultCodex.id);
+      await registry.invalidateProvider(defaultCodexAgentProviderConfig.id);
 
       expect(global.isCurrent, isFalse);
       expect(sessionA.isCurrent, isFalse);
@@ -457,11 +457,11 @@ void main() {
       addTearDown(registry.close);
 
       final global = await registry.acquire(
-        AgentProviderConfig.defaultCodex,
+        defaultCodexAgentProviderConfig,
         scope: AgentProviderRuntimeScopeKey.global,
       );
       final session = await registry.acquire(
-        AgentProviderConfig.defaultCodex,
+        defaultCodexAgentProviderConfig,
         scope: const AgentProviderRuntimeScopeKey.session('entry-a'),
       );
 
@@ -484,11 +484,11 @@ void main() {
       addTearDown(registry.close);
 
       final global = await registry.acquire(
-        AgentProviderConfig.defaultCodex,
+        defaultCodexAgentProviderConfig,
         scope: AgentProviderRuntimeScopeKey.global,
       );
       final session = await registry.acquire(
-        AgentProviderConfig.defaultCodex,
+        defaultCodexAgentProviderConfig,
         scope: const AgentProviderRuntimeScopeKey.session('binding-1'),
       );
 
@@ -507,7 +507,7 @@ void main() {
       final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
       addTearDown(registry.close);
       final first = await registry.acquire(
-        AgentProviderConfig.defaultCodex,
+        defaultCodexAgentProviderConfig,
         scope: scope,
       );
 
@@ -519,7 +519,7 @@ void main() {
       await factory.disposeStarted.future;
       var acquiredReplacement = false;
       final replacementFuture = registry
-          .acquire(AgentProviderConfig.defaultCodex, scope: scope)
+          .acquire(defaultCodexAgentProviderConfig, scope: scope)
           .then((lease) {
             acquiredReplacement = true;
             return lease;
@@ -542,6 +542,122 @@ void main() {
         isFalse,
       );
       expect(replacement.isCurrent, isTrue);
+    });
+  });
+
+  group('AgentProviderRuntimeRegistry 指标', () {
+    test('创建、复用、失效与关闭都进入白名单指标', () async {
+      final metrics = InMemoryZetaMetricsPort();
+      final factory = _CountingProviderFactory();
+      final registry = AgentProviderRuntimeRegistry(
+        providerFactory: factory,
+        metrics: metrics,
+        // 生产由组合层注入；内核自己不认识 Provider 身份。
+        providerMetricLabel: zetaAgentProviderDefinitionCatalog.metricLabelFor,
+      );
+      final codexTags = ZetaMetricTags(
+        providerId: zetaAgentProviderDefinitionCatalog.metricLabelFor(
+          defaultAgentProviderId,
+        ),
+      );
+
+      final first = await registry.acquire(
+        defaultCodexAgentProviderConfig,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
+      final second = await registry.acquire(
+        defaultCodexAgentProviderConfig,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
+
+      expect(
+        metrics.totalOf(ZetaMetric.agentRuntimeCreated, tags: codexTags),
+        1,
+      );
+      expect(
+        metrics.totalOf(ZetaMetric.agentRuntimeLeaseReused, tags: codexTags),
+        1,
+      );
+      expect(metrics.lastValueOf(ZetaMetric.agentRuntimeActiveCount), 1);
+      expect(metrics.maxValueOf(ZetaMetric.agentRuntimeActiveLeases), 2);
+
+      await first.release();
+      await second.release();
+      expect(metrics.lastValueOf(ZetaMetric.agentRuntimeActiveLeases), 0);
+
+      await registry.invalidateProvider(defaultAgentProviderId);
+      expect(
+        metrics.totalOf(ZetaMetric.agentRuntimeInvalidated, tags: codexTags),
+        1,
+      );
+      expect(metrics.lastValueOf(ZetaMetric.agentRuntimeActiveCount), 0);
+
+      await registry.close();
+      expect(metrics.totalOf(ZetaMetric.agentRuntimeRegistryClosed), 1);
+    });
+
+    test('指标只携带 Provider ID，不含命令行、环境变量或路径', () async {
+      final metrics = InMemoryZetaMetricsPort();
+      final registry = AgentProviderRuntimeRegistry(
+        providerFactory: _CountingProviderFactory(),
+        metrics: metrics,
+        providerMetricLabel: zetaAgentProviderDefinitionCatalog.metricLabelFor,
+      );
+      addTearDown(registry.close);
+
+      final lease = await registry.acquire(
+        defaultCodexAgentProviderConfig.copyWith(
+          command: '/Users/tester/bin/secret-codex',
+          environment: const <String, String>{'API_KEY': 'sk-should-not-leak'},
+        ),
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
+      addTearDown(lease.release);
+
+      final text = metrics
+          .snapshot()
+          .map((series) => series.toString())
+          .join('\n');
+      expect(text, isNot(contains('secret-codex')));
+      expect(text, isNot(contains('sk-should-not-leak')));
+      expect(text, isNot(contains('/Users/')));
+      expect(text, contains(defaultAgentProviderId));
+    });
+
+    test('未注入解析函数时 Provider ID 只以 hash 进指标', () async {
+      final metrics = InMemoryZetaMetricsPort();
+      final registry = AgentProviderRuntimeRegistry(
+        providerFactory: _CountingProviderFactory(),
+        metrics: metrics,
+      );
+      addTearDown(registry.close);
+
+      final lease = await registry.acquire(
+        defaultCodexAgentProviderConfig,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
+      addTearDown(lease.release);
+
+      final text = metrics.snapshot().map((series) => '$series').join('\n');
+      expect(text, isNot(contains('codex')));
+      expect(text, contains('h.'));
+    });
+
+    test('默认 no-op 端口不产生任何采样', () async {
+      final metrics = InMemoryZetaMetricsPort(enabled: false);
+      final registry = AgentProviderRuntimeRegistry(
+        providerFactory: _CountingProviderFactory(),
+        metrics: metrics,
+      );
+      addTearDown(registry.close);
+
+      final lease = await registry.acquire(
+        defaultCodexAgentProviderConfig,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
+      await lease.release();
+
+      expect(metrics.seriesCount, 0);
     });
   });
 }

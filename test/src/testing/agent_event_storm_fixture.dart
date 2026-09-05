@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// 阶段 0 使用的固定 AgentEvent 风暴。
 ///

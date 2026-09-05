@@ -1,17 +1,16 @@
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 import 'dart:ui' show SemanticsAction;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_config_store.dart';
-import 'package:zeta/src/features/agent/data/agent_provider_static_capabilities.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
-import 'package:zeta/src/ui/core/ide_colors.dart';
-import 'package:zeta/src/ui/core/ide_effects.dart';
-import 'package:zeta/src/ui/core/pane_widgets.dart';
+import '../../../testing/agent_provider_implementations.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 
 import 'harness/agent_pane_test_harness.dart';
+import '../../../testing/memory_feature_stores.dart';
 
 void main() {
   group('AgentPane model config', () {
@@ -63,15 +62,16 @@ void main() {
         findsOneWidget,
       );
       final modelSelector = find.byKey(const ValueKey('agent-model-selector'));
-      final selectorSurface = tester.widget<PaneInteractiveSurface>(
-        modelSelector,
-      );
+      final selectorButton = tester.widget<IdeButton>(modelSelector);
       // effort 直接展示协议原值（如 medium），比中文单字略宽。
       expect(tester.getSize(modelSelector).width, lessThan(240));
-      expect(tester.getSize(modelSelector).height, 28);
-      expect(selectorSurface.backgroundColor, Colors.transparent);
-      expect(selectorSurface.borderColor, isNull);
-      expect(selectorSurface.borderRadius, IdeRadius.allSmall);
+      expect(
+        tester.getSize(modelSelector).height,
+        greaterThanOrEqualTo(
+          IdeMetrics.controlMinHeightFor(IdeControlSize.compact),
+        ),
+      );
+      expect(selectorButton.variant, IdeButtonVariant.ghost);
       expect(find.text('GPT-5.5'), findsOneWidget);
       final closedTriggerTooltip = find.ancestor(
         of: modelSelector,
@@ -105,15 +105,8 @@ void main() {
       expect(modelPopoverPanel.color, colors.surfaceElevated);
       expect(modelPopoverPanel.borderRadius, IdeRadius.allSmall);
       expect(modelPopoverPanel.boxShadow, isEmpty);
-      final openSelectorSurface = tester.widget<PaneInteractiveSurface>(
-        modelSelector,
-      );
-      expect(openSelectorSurface.selected, isTrue);
-      expect(
-        openSelectorSurface.selectedBackgroundColor,
-        colors.frame.withValues(alpha: 0.72),
-      );
-      expect(openSelectorSurface.selectedBorderColor, isNull);
+      final openSelectorButton = tester.widget<IdeButton>(modelSelector);
+      expect(openSelectorButton.variant, IdeButtonVariant.secondary);
       expect(
         find.descendant(of: modelSelector, matching: find.byType(Stack)),
         findsNothing,
@@ -227,7 +220,7 @@ void main() {
         MemoryAgentProviderConfigStore(
           const AgentProviderSettings(
             providers: <AgentProviderConfig>[
-              AgentProviderConfig.defaultClaudeCode,
+              defaultClaudeCodeAgentProviderConfig,
             ],
             activeProviderId: defaultClaudeCodeProviderId,
           ),
@@ -806,14 +799,14 @@ void main() {
       final store = ToggleFailAgentProviderConfigStore(
         AgentProviderSettings(
           providers: <AgentProviderConfig>[
-            AgentProviderConfig.defaultCodex.copyWith(
+            defaultCodexAgentProviderConfig.copyWith(
               selectedModel: 'gpt-5.5',
               selectedReasoningEffort: 'medium',
               modelPreferences: <String, AgentModelPreference>{
                 'gpt-5.5': initialPreference,
               },
             ),
-            AgentProviderConfig.defaultGrok,
+            defaultGrokAgentProviderConfig,
           ],
         ),
       );
@@ -904,11 +897,11 @@ void main() {
       final store = MemoryAgentProviderConfigStore(
         AgentProviderSettings(
           providers: <AgentProviderConfig>[
-            AgentProviderConfig.defaultCodex.copyWith(
+            defaultCodexAgentProviderConfig.copyWith(
               selectedModel: 'retired-model',
               selectedReasoningEffort: 'medium',
             ),
-            AgentProviderConfig.defaultGrok,
+            defaultGrokAgentProviderConfig,
           ],
         ),
       );
@@ -971,9 +964,8 @@ final class _ClaudeEffortModelProvider extends AgentPaneFakeProvider {
       );
 
   @override
-  AgentProviderConfig get config => AgentProviderConfig.defaultClaudeCode;
+  AgentProviderConfig get config => defaultClaudeCodeAgentProviderConfig;
 
   @override
-  AgentProviderCapabilities get capabilities =>
-      AgentProviderStaticCapabilities.claudeCode;
+  AgentProviderCapabilities get capabilities => claudeCodeStaticCapabilities;
 }

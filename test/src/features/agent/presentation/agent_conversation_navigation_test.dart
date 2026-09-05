@@ -1,13 +1,11 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent/application/agent_conversation_timeline_store.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
-import 'package:zeta/src/features/agent/domain/agent_models.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_navigation.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection.dart';
-import 'package:zeta/src/ui/core/virtualization/ide_virtual_item.dart';
-import 'package:zeta/src/ui/core/virtualization/ide_virtual_list_controller.dart';
+import 'package:zeta_ui/zeta_ui.dart';
 
 void main() {
   group('buildAgentConversationNavigationEntries', () {
@@ -91,7 +89,10 @@ void main() {
       expect(entries, hasLength(1));
       expect(entries.single.tokenUsage?.totalTokens, 1280);
       expect(
-        agentConversationNavigationTokenLabel(entries.single.tokenUsage),
+        agentConversationNavigationTokenLabel(
+          entries.single.tokenUsage,
+          lookupAppLocalizations(const Locale('en')),
+        ),
         '1.3k tokens',
       );
       expect(entries.single.anchorViewportItemId, contains('message-u1'));
@@ -265,7 +266,7 @@ void main() {
       expect(text, contains(l10n.agentTurnOrdinal('6')));
       expect(text, contains('建立 Agent 权限架构契约测试'));
       expect(text, contains(l10n.agentStatusCompleted));
-      expect(text, contains('1.3k tokens'));
+      expect(text, contains(l10n.agentTurnTokenUsage('1.3k')));
     });
   });
 }
