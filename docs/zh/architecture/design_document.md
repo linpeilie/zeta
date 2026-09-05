@@ -363,6 +363,11 @@ Application / Presentation 只以 `AgentProviderBundle` 的中立端口作为能
   `localThreadList`、`sessionConfiguration`、`planApproval`、`permissionPolicy`、
   `conversationModes`、`skills`、`usageQuota`。
 
+Session config 的执行结果为 `AgentCommandOutcome`：缺端口的 `UnsupportedError` 在 UI
+边界转换为 unsupported，未附着 runtime、请求失败与目标过期分别返回明确分类。同配置项
+请求在 RuntimeController 内串行，关闭结算全部等待者；控件只保存临时 pending/error，
+显示值继续来自 Provider 配置事件。详见开发者指南的 Session config 章节。
+
 `AgentRuntimePort` / `AgentConversationPort` 与各可选端口承载具体 CLI 对接和
 运行时边界，核心职责包括：
 

@@ -1,3 +1,4 @@
+import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/presentation/agent_conversation_navigation.dart';
 import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
@@ -86,4 +87,35 @@ extension AgentToolStatusL10n on AgentToolStatus {
     AgentToolStatus.failed => l10n.agentToolFailed,
     AgentToolStatus.cancelled => l10n.agentToolCancelled,
   };
+}
+
+/// WP-6 的 UI 结果边界；统一 Actions 接入后由命令 runner 承担异常翻译。
+Future<AgentCommandOutcome> invokeSessionConfigCommand(
+  Future<AgentCommandOutcome> Function() invoke,
+) async {
+  try {
+    return await invoke();
+  } on UnsupportedError {
+    return const AgentCommandOutcome.failed(
+      AgentCommandFailureKind.unsupported,
+    );
+  } on Object {
+    return const AgentCommandOutcome.failed(
+      AgentCommandFailureKind.requestFailed,
+    );
+  }
+}
+
+extension AgentSessionConfigFailureL10n on AgentCommandFailureKind {
+  /// 过期操作静默收尾，不把旧会话的错误显示到当前控件。
+  String? localizedSessionConfigMessage(AppLocalizations l10n) =>
+      switch (this) {
+        AgentCommandFailureKind.providerUnavailable =>
+          l10n.agentSessionConfigUnavailable,
+        AgentCommandFailureKind.unsupported =>
+          l10n.agentSessionConfigUnsupported,
+        AgentCommandFailureKind.requestFailed =>
+          l10n.agentCouldNotUpdateSessionOption,
+        AgentCommandFailureKind.staleTarget => null,
+      };
 }

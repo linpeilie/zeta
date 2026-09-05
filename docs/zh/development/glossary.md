@@ -100,6 +100,9 @@ processor 从脏区 + SessionState diff 派生的界面分区（header / compose
 会话 application 聚合：pipeline、region 投影、`AgentUiUpdateScheduler`、CommandPort 与 effect。Workspace entry 持有它；不再有 `AgentConversationViewModel`。
 `agent_conversation_runtime_controller.dart`
 
+**AgentCommandOutcome（命令结果）**
+命令显式返回 succeeded、ignored(reason) 或 failed(kind)。Session config 缺端口在执行层抛 UnsupportedError，由 UI 边界翻译为 unsupported；未执行不能被判成功，currentValue 仍等 Provider 事件更新。
+
 **AgentConversationSessionHandle**
 Slice registry 的解析结果：`store` + 可选 `controller`。只测切片镜像的容器里 controller 可空。
 

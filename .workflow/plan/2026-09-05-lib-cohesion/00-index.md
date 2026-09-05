@@ -1,6 +1,6 @@
 # lib 高内聚、低耦合改造 · 开发总入口
 
-> 类型：开发设计文档集；创建日期：2026-09-05。本文记录目标设计，不表示代码已实现。
+> 类型：开发设计文档集；创建日期：2026-09-05。本文记录目标设计；已实现阶段以本页状态表和验收记录为准。
 > 复核基线：`511cc0be`。本轮开始时工作区存在发布流程相关改动；本计划不包含发布、打包、依赖升级或 Provider 协议升级。
 > 六项问题编号与上轮审查一致；**编号不是执行顺序**。伪代码中的拟新增接口必须按目标文件清单实现，不是可直接粘贴编译的现有 API。
 
@@ -15,7 +15,7 @@
 | WP-3 | 单一状态 owner 与组合生命周期 | [状态与装配](03-wp3-state-ownership.md) | WP-1；其中 WP-3P 依赖 WP-4 | 未开始 |
 | WP-4 | Project Threads 重复规则收口 | [Thread 列表规则](04-wp4-project-threads.md) | 无；先基于现有 Store 收口 | 未开始 |
 | WP-5 | 首页探测逻辑下沉 | [首页探测](05-wp5-home-detection.md) | WP-3M | 未开始 |
-| WP-6 | Session config 显式失败与结果契约 | [配置命令](06-wp6-session-config.md) | 无；WP-2 后接入统一入口 | 未开始 |
+| WP-6 | Session config 显式失败与结果契约 | [配置命令](06-wp6-session-config.md) | 无；WP-2 后接入统一入口 | 已完成，见 §6 |
 
 推荐串行队列：**WP-6 → WP-1 → WP-4 → WP-3M → WP-3P → WP-3C → WP-2 → WP-5 → 集成验收**。WP-3M/P/C 是同一工作包的三个可独立提交阶段。WP-5 可在 WP-3M 完成后开发，但与 WP-1/WP-3M 修改同一 management state，合入前须重验。
 
@@ -38,7 +38,7 @@ flowchart LR
 
 ## 2. 本轮事实与设计边界
 
-### 2.1 已复核的事实
+### 2.1 设计编制时已复核的事实
 
 - 管理页快照身份来自全局 Provider 设置，状态来自当前 Canvas；参见 `IdeHome._managementRuntimeSnapshot`。
 - `agentConversationCommandProvider` 返回 RuntimeController，SliceStore 同时维护独立命令 intent/effect/operation 账本。
@@ -114,7 +114,7 @@ live-turn 的局部监听与无 replay UI effect 流沿用原通道。
 
 代码实施可触及六个工作包列出的 `lib/`、对应 `test/`、架构文档和需要新增的本地化 ARB。不修改各 Provider 协议实现，不升级依赖；若开发发现必须改变中立 core 契约，应先回写设计与影响面，不能静默扩大本计划。
 
-本轮只新增本目录的 Markdown。开发开始时重新检查 `git status --short` 与 HEAD；对他人已修改文件不得整文件覆盖、重置或顺手提交。文档行号是阅读锚点，定位以符号和当前源码为准。
+设计编制提交仅新增本目录的 Markdown。各工作包实施开始时重新检查 `git status --short` 与 HEAD；对他人已修改文件不得整文件覆盖、重置或顺手提交。文档行号是阅读锚点，定位以符号和当前源码为准。
 
 ## 5. 通用验证协议
 
@@ -164,7 +164,10 @@ bash tool/test_full.sh
 
 | 日期 | 工作包/阶段 | 实现提交 | 验证结果 | 状态 |
 |---|---|---|---|---|
-| 2026-09-05 | 文档编制 | 未提交 | 见本目录文档校验记录 | 设计已编制，代码未开始 |
+| 2026-09-05 | 文档编制 | `e951d9a5` | 见本目录文档校验记录 | 设计已编制，代码未开始 |
+| 2026-09-05 | WP-6 | 待收尾登记 | format / analyze 通过；定向 54 条、受影响 925 条通过；[验收记录](../../fix/2026-09-05-session-config/00-validation.md) | 已完成 |
+
+当前下一项：**WP-1 · 按 Provider 实例聚合会话运行事实**。WP-2 的统一 Actions 和 WP-3 的状态 owner 迁移尚未开始；WP-6 现有临时 UI 翻译边界的后继动作见其 §6.7。
 
 ## 7. 文档校验记录
 

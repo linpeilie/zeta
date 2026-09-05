@@ -145,6 +145,8 @@ flowchart TD
 
 **UI 按 capability 渲染，绝不按 provider 名字硬编码。** 端口缺失或 `capability = false` 时，对应入口根本不会出现在菜单里；应用层误调用会抛 `UnsupportedError`——**不允许静默成功**，因为静默成功会让用户以为操作生效了。
 
+Session config 用 `sessionConfiguration` 端口声明能力，命令返回 typed 结果；缺端口的异常在 UI 边界转换为 unsupported。配置请求按同一项串行并校验 thread/runtime，控件显示等待和局部失败，配置值仍由 Provider 事件确认。
+
 Bundle 是严格边界：工厂直接创建原生 `AgentProviderBundle`，旧 `AgentProvider`
 大接口已删除。RuntimeController 只持有中立端口。静态能力默认值由 data 组合层注入，
 Shared Domain 不按厂商名称 switch。

@@ -146,6 +146,8 @@ flowchart TD
 
 **UI renders by capability, never by provider name.** When a port is absent or `capability = false`, the corresponding entry point never appears in the menu, and an accidental call from the application layer throws `UnsupportedError` — **silent success is forbidden**, because it makes users believe something took effect when it didn't.
 
+Session configuration is declared by the `sessionConfiguration` port. Commands return typed outcomes; the UI boundary translates missing-port errors to unsupported. Requests for the same option run in order and validate their thread/runtime target. Controls show pending and local failure feedback, while Provider events remain the source of displayed values.
+
 The bundle is a strict boundary: the factory creates a native `AgentProviderBundle` directly, and the old `AgentProvider` facade is gone. The RuntimeController only retains neutral ports. Static capability defaults are injected by the data composition layer; Shared Domain does not switch on vendor names.
 
 This is also what makes "adding a provider without touching shared code" realistic. The normal scope of a new provider is:

@@ -3597,4 +3597,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String usageHistoryRowsCorrupt(String count, String name) {
     return '$count $name history lines were corrupt and skipped.';
   }
+
+  @override
+  String get agentSessionConfigUnsupported =>
+      'The current Provider does not support session configuration';
+
+  @override
+  String get agentSessionConfigUnavailable =>
+      'Session configuration is unavailable while the Provider is disconnected';
+
+  @override
+  String get agentSessionConfigApplying => 'Applying session option…';
 }

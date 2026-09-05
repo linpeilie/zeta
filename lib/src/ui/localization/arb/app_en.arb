@@ -2862,5 +2862,11 @@
   "usageSessionFilesUnreadable": "{count} {name} session files could not be read. Other data is shown.",
   "@usageSessionFilesUnreadable": { "description": "Usage session files unreadable", "placeholders": { "count": { "type": "String", "example": "2" }, "name": { "type": "String", "example": "Codex" } } },
   "usageHistoryRowsCorrupt": "{count} {name} history lines were corrupt and skipped.",
-  "@usageHistoryRowsCorrupt": { "description": "Usage history rows corrupt", "placeholders": { "count": { "type": "String", "example": "1" }, "name": { "type": "String", "example": "Claude Code" } } }
+  "@usageHistoryRowsCorrupt": { "description": "Usage history rows corrupt", "placeholders": { "count": { "type": "String", "example": "1" }, "name": { "type": "String", "example": "Claude Code" } } },
+  "agentSessionConfigUnsupported": "The current Provider does not support session configuration",
+  "@agentSessionConfigUnsupported": {"description": "Session configuration unsupported"},
+  "agentSessionConfigUnavailable": "Session configuration is unavailable while the Provider is disconnected",
+  "@agentSessionConfigUnavailable": {"description": "Session configuration provider disconnected"},
+  "agentSessionConfigApplying": "Applying session option…",
+  "@agentSessionConfigApplying": {"description": "Session configuration request pending"}
 }
