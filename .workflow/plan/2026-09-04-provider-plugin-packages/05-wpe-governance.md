@@ -1,6 +1,6 @@
 # WP-E · 治理：守卫、门禁文本、文档同步与收尾
 
-> 状态：未开始
+> 状态：已完成（2026-09-05）；实际修正及未核验边界见 [验收记录](08-wpe-validation.md)
 > 规模：约 1 人天
 > 依赖：WP-D 完成
 > 性质：加固与文档。守卫是「新增 Provider 只加一个包」这句话的长期保证——没有守卫，架构会在半年后悄悄漂移回去。
@@ -27,10 +27,10 @@ WP-A~D 完成后，目标态的约束目前只存在于文档里。本 WP 把它
    - `lib/**` 除 manifest 外不得出现三个 ProviderTypeId 字符串字面量（`'codexAppServer'` / `'acp'` / `'claudeCode'`）——防有人绕过包 import 直接写字面量重建厂商分支。
 3. **D7 持久化身份红线守卫**（并入 manifest 守卫文件）：
    - 从 manifest definitions 断言字符串逐字节：三个 `providerType.value`、三个 `providerId`、`AgentProviderSettings.currentVersion` 未变；enrichment key 改经 claude 的 `AgentCliManagementCapabilities.accountDataEnrichmentExtraKey == 'claudeCode.accountDataEnrichment'` 断言（WP-D §3.6 已把 key 折叠进能力位）；
-   - `git diff` 断言（CI 脚本或评审清单项）：`agent_provider_config_codec.dart`、`agent_provider_config_store.dart`、usage 索引根版本常量在本计划全周期无 diff。
-4. **贡献完备性守卫**（manifest 守卫文件内）：三个**内置**插件的贡献快照必须同时含 `AgentProviderPluginContribution` / `AgentManagementContribution` / `AgentUsageContribution` 三类，且 contribution 的 `providerId`/`providerType` 与 definition 一致——缺类即失败（防漏挂贡献导致功能静默缺失）。未来新插件只强制 bundle 贡献，management/usage 按其能力可选（`createFor` 返回 null 即 unsupported 语义）。**生效时点**：management/usage 贡献在 WP-D T2/T4 才挂上插件类，本守卫随 WP-D 收尾启用，不要提前到 WP-C。**附加 parity 断言**：`test/src/testing/agent_management_test_definitions.dart` 的测试字面量与对应贡献的 `definition` 逐字段一致（WP-D T0-5 引入的防漂移钩，含 `isBeta`）。
+   - `git diff` 评审清单项：config codec 只允许 import 迁移、config store 全文保持；usage 索引根版本与分区样本保持。全周期实测依据见 08 号记录，不把模型物理迁移误称为整个文件零 diff。
+4. **贡献完备性守卫**（manifest 守卫文件内）：三个**内置**插件的贡献快照必须同时含 `AgentProviderPluginContribution` / `AgentManagementContribution` / `AgentUsageContribution` 三类，且 contribution 的 `providerId`/`providerType` 与 definition 一致——缺类即失败（防漏挂贡献导致功能静默缺失）。按 WP-D 最终宿主契约，未来 Provider 也必须拥有三类贡献；未知 type 的 `createFor == null` 不等于已注册插件可以缺贡献。**生效时点**：management/usage 贡献在 WP-D T2/T4 才挂上插件类，本守卫随 WP-D 收尾启用，不要提前到 WP-C。**附加同源断言**：WP-D 已删除测试字面量副本，`test/src/testing/agent_management_test_definitions.dart` 必须直接复用贡献的 definition 对象。
    **已取消的一条**：初稿还要求断言「definition 的 enrichment key 与 capabilities 的 supports 位同真同假」——WP-D 把两者折叠成一个可空字段后该状态不可表示，守卫连同它要挡的 bug 一起消失。
-5. **C6 登记例外守卫**：两道 grep——① 全仓 `AgentDefinition.claudeCode` 零命中（静态表已在 WP-D T0 删除，任何命中都是重建静态目录）；② `lib/src/features/**/presentation/**` 内 `'claude_code'` 字符串字面量只允许 `agent_management_page.dart` 的 `_setupGuideAgentId` 一处（断言精确到文件+命中数；664 分支已改经 `requiresConnectionTestConfirmation` 能力位，不再是厂商分支）。新增命中即失败并提示「先泛化或回 WP-D 登记」。
+5. **C6 登记例外守卫**：两道 grep——① 生产 Dart AST 中 `AgentDefinition.claudeCode` 零引用（静态表已在 WP-D T0 删除，任何命中都是重建静态目录）；② 排除现有 `agent_provider_icon.dart` 中的 `_agentProviderIconAssets` const 资源表 key 后，`lib/src/features/**/presentation/**` 内 `'claude_code'` 字符串字面量只允许 `agent_management_page.dart` 的 `_setupGuideAgentId` 一处（断言精确到文件+命中数；664 分支已改经 `requiresConnectionTestConfirmation` 能力位，不再是厂商分支）。新增业务判断即失败；图标资源表例外精确到文件/const 表/key，不豁免整文件。
 6. **G1 纯度守卫路径更新**：`agent_core` 既有纯度守卫与自查脚本里 `packages/zeta_agent_providers/lib/src/mappers/acp_*.dart` 等路径替换为 sdk 对应路径；检查 `feature_layering_guard_test` 与包边界守卫里所有 `zeta_agent_providers` 引用，按新包结构重写断言（不是删除——守卫强度不许降）。**实测点名的三处字符串引用守卫**（搬迁后字符串不失效、守卫静默漏检，必须逐条核对）：
    - `agent_core_raw_payload_freeze_test.dart:133/154`：以字符串引用 `mappers/agent_provider_payload.dart` 路径 → 更新为 sdk 路径；
    - `agent_provider_catalog_freeze_test.dart:47`：以字符串引用 `claudeCodeAccountDataEnrichmentKey` → WP-D T5 后该 key 只剩 claude 包内一处声明，守卫改经 claude 的 `AgentCliManagementCapabilities.accountDataEnrichmentExtraKey` 断言（同守卫 3）；
@@ -66,7 +66,7 @@ WP-A~D 完成后，目标态的约束目前只存在于文档里。本 WP 把它
    | shard 5 (`test/src/features/agent/data`) | 73 个文件 | **不到 10 个**（54 迁插件包 + 约 8 迁 sdk） |
    | `packages` job（**串行 bash 循环**，`ci.yml:103`，单 job） | 21 个测试文件 | **约 83 个** |
 
-   6 个根分片并行跑空气，关键路径整体挪到那个串行 job 上。处理：给 `test_packages.sh` 加可选包名参数（`--only <pkg>`），`ci.yml` 的 packages job 改矩阵：
+   6 个根分片并行跑空气，关键路径整体挪到那个串行 job 上。处理：给 `test_packages.sh` 加可选包名参数（`--only <pkg>`），`ci.yml` 的 packages job 改矩阵。以下为原固定矩阵草案；最终实现采用 `--list-json` 自动发现并以 `fromJSON` 展开，避免新增插件还需修改第二份名单：
 
    ```yaml
    strategy:
@@ -90,12 +90,12 @@ WP-A~D 完成后，目标态的约束目前只存在于文档里。本 WP 把它
 
 ## 3. DoD
 
-- [ ] T1 **八类**守卫全部就位且各自能被「故意破坏」触发失败（每个守卫写一条反例自证）
-- [ ] T2 表格七行全部同步，交叉引用无旧包名残留（全仓 grep `zeta_agent_providers` 零命中，含 docs）
-- [ ] CI packages job 已矩阵化，最慢 job 耗时与根分片同量级
-- [ ] `flutter analyze` 干净、`test_full.sh` 全绿
-- [ ] 新人按 developer_guide 新流程能在不读其他文档的情况下完成一个 dummy Provider 插件（找一位没参与本计划的人走一遍，或按 WP-D T6 假插件路径自行演练）
-- [ ] `00-index.md` 状态与开发记录回写完毕
+- [x] T1 **八类**守卫全部就位且各自能被「故意破坏」触发失败（每个守卫写一条反例自证）
+- [x] T2 表格七行全部同步，交叉引用无旧包名残留（活动源码/测试/工具与 docs 旧包路径清零；.workflow 历史迁移清单保留审计原文）
+- [x] CI packages job 已按实际包目录动态矩阵化，根分片基于实测报告重平衡；远端 job 墙钟留待首次 CI 确认
+- [x] `flutter analyze` 干净、`test_full.sh` 全绿
+- [x] 新人按 developer_guide 新流程能在不读其他文档的情况下完成一个 dummy Provider 插件（找一位没参与本计划的人走一遍，或按 WP-D T6 假插件路径自行演练）
+- [x] `00-index.md` 状态与开发记录回写完毕
 
 ## 4. 风险
 
@@ -114,3 +114,9 @@ WP-A~D 完成后，目标态的约束目前只存在于文档里。本 WP 把它
 | 2026-09-04 | 完整勘察报告对账：守卫 6 点名三处字符串引用守卫（`agent_core_raw_payload_freeze_test` 路径字符串、`agent_provider_catalog_freeze_test` key 字符串、`agent_provider_bundle_contract_test` type 名字符串）——搬迁后字符串不失效、会静默漏检；守卫 5 收敛为 `page.dart:451` 一处（664 改经 `requiresConnectionTestConfirmation` 能力位）；守卫 4 附加测试字面量 parity 断言（WP-D T0-5 联动） |
 | 2026-09-04 | 实证复核轮：① **守卫 2 改双层边界**——`lib/` 只有 manifest、`test/` 只有 `test/src/testing/**`（实测 20 个留根测试要厂商实现类型，manifest `show` 会把实现类型倒灌进生产导出面），并加「show 列表只含身份常量」断言。② **新增守卫 7（贡献接缝与 fail-closed）**：组合层禁直接查 registry、空贡献表必须抛、覆盖 bundle 工厂的容器里 `exists(zetaPluginCatalogProvider)` 必须仍为 false——最后一条同时守住 WP-A 与 WP-D 两处最容易静默破坏的改动。③ 守卫 3 的 enrichment key 断言改指能力位（WP-D 已折叠）；守卫 4 取消 key/能力 parity 断言（状态已不可表示）。④ **T3-3 从「确认覆盖」升级为「CI 拓扑重排」**：packages 串行 job 从 21 → 约 83 个测试文件、shard 5 从 73 → 不到 10 个，关键路径会整体挪位，需矩阵化。 |
 | 2026-09-04 | 终审轮：守卫 5 改双 grep 形态——`AgentDefinition.claudeCode` 在 WP-D T0 后符号本身不存在（旧断言目标会编译失效），改为全仓零命中断言 + presentation 层 `'claude_code'` 字面量唯一命中（`_setupGuideAgentId`）断言；守卫 2 补启用前置（WP-C/WP-D 过渡白名单实测 6 组文件含 runner，WP-D DoD 清零后本守卫才生效） |
+
+## 6. 本轮实施修正（2026-09-05）
+
+完整事实与反例见 [WP-E 验收记录](08-wpe-validation.md)。草案的固定包名单改为 `test_packages.sh --list-json` → CI 动态矩阵 → `--only`，以支持未来插件自动进入 CI。贡献完备性沿用 WP-D 的三类必选约束，测试定义用对象同源断言。C6 的业务分支仍只有安装指引；另精确登记现有图标 const Map 的资源键，不能扩为能力/协议判断。D7 全周期的 codec 只有 import 迁移，索引 Store 有模型搬移，正文/持久化样本才是冻结证据。历史计划中的旧路径保留，不要求抹掉迁移历史。
+
+最终验收：格式化与 analyze 通过；受影响门禁 2893 条通过，补充一条出口反例后独立完整门禁 2894 条通过；10 个真实 --only 入口 981 条及 shard 5 的 363 条全部通过。WP-A～WP-E 归档，远端 CI 墙钟和历史额外 Plan 事件仍按 08 号记录标注。

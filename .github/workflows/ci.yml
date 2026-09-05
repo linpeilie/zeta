@@ -80,11 +80,31 @@ jobs:
         run: bash tool/test_shard.sh ${{ matrix.shard }}
 
   # packages/ 下的内部 Package 有各自的 test/ 入口，根 `flutter test` 不会覆盖，
-  # 而且要用各自的 dart/flutter 工具链跑 analyze + test。数量小，不进分片矩阵。
+  # 各包独立运行 analyze + test；矩阵覆盖由架构守卫与 packages/ 双向核对。
+  package-list:
+    name: Discover internal packages
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      packages: ${{ steps.discover.outputs.packages }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - name: Discover test entries
+        id: discover
+        run: |
+          packages=$(bash tool/test_packages.sh --list-json)
+          echo "packages=$packages" >> "$GITHUB_OUTPUT"
+
   packages:
-    name: Internal packages
+    name: Package ${{ matrix.package }}
+    needs: package-list
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJSON(needs.package-list.outputs.packages) }}
     steps:
       - name: Check out repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
@@ -100,4 +120,4 @@ jobs:
         run: flutter pub get --enforce-lockfile
 
       - name: Test packages
-        run: bash tool/test_packages.sh
+        run: bash tool/test_packages.sh --only ${{ matrix.package }}

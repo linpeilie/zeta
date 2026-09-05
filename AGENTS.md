@@ -29,7 +29,7 @@ bash tool/test_affected.sh   # 行为有变化时必跑：只跑受本次改动�
 
 **不要在开发循环里跑全量。** 全量是 2114 条、墙钟约 4m10s；一次改动通常只碰得到几十条。`tool/test_affected.sh` 从 git 变更集出发，沿 import 图做反向闭包算出受影响的测试，再自动追加架构守卫，通常 10–40s 出结果。它会打印选中了多少、为什么选中。
 
-**全量的强制点在 CI，不在你的终端。** CI 每个 PR 都会跑满 6 个分片 + 内部 Package，本地选择器漏了，合并前一定会被抓到。所以本地放心用窄的那一档。
+**全量的强制点在 CI，不在你的终端。** 内部包由 `test_packages.sh --list-json` 自动发现并逐包矩阵执行；本地 `--only <package>` 仅跑单包，不传参数仍覆盖全部包。 CI 每个 PR 都会跑满 6 个分片 + 内部 Package，本地选择器漏了，合并前一定会被抓到。所以本地放心用窄的那一档。
 
 按需要往上加档：
 
@@ -193,7 +193,7 @@ main → app → presentation/application → domain
 - 已物理拆出的内部 Package 在 `packages/`：`zeta_foundation`（平台中立公共契约：Clock / OperationId / Transition / 排版常量 / 日志与指标端口，以及集中在 `src/platform/` 的宿主路径工具）、`zeta_plugin_kernel`（可信插件微内核）、`zeta_ui`（Graphite 设计系统）、`zeta_markdown`（Markdown 渲染包，fork 自 `mixin_markdown_widget 0.3.1`）、`zeta_agent_core`（中立 Agent 内核：领域模型与端口、Binding/runtime 契约、事件管线、纯 reducer、TimelineStore、Effect 描述）、`zeta_agent_provider_api`（中立装配契约）、`zeta_agent_provider_sdk`（共享协议机制与独立 testing 入口）以及 `zeta_agent_provider_codex` / `zeta_agent_provider_grok` / `zeta_agent_provider_claude_code`（各厂商协议适配与插件入口）。依赖方向单向：`kernel → foundation`、`ui → foundation`、`agent_core → foundation`、`provider_api → {agent_core, kernel, foundation}`、`provider_sdk → {provider_api, agent_core, kernel, foundation}`、`provider_<vendor> → {provider_api, provider_sdk, agent_core, kernel, foundation}`；三个插件互不可见且禁止 Flutter / Riverpod；`zeta_markdown` 是**叶子**，只依赖 Flutter 与它自己的三方解析/高亮依赖，不依赖任何内部包（Graphite token 的映射发生在根应用侧）；`zeta_foundation` 的核心契约、`zeta_plugin_kernel` 与 `zeta_agent_core` 不依赖 Flutter，只有 `zeta_foundation/src/platform/` 的宿主工具可依赖明确的 Flutter 插件；`zeta_ui` 依赖 Flutter/shadcn 但**不依赖** Riverpod、`dart:io`、generated l10n 或任何业务模型（控件自有文案走 `ZetaUiTextCatalog` 注入）。`zeta_markdown` 是 vendor 包：改它先读 `packages/zeta_markdown/UPSTREAM.md`，所有定制走「新增注入点 + 默认值不变」，每次改动都要往那份清单追加一条；它的 SDK 下限跟随上游（`^3.5.0`）以保持与上游逐字节可比，不要对齐其他内部包。`zeta_agent_core` 的状态通知走纯 Dart `AgentListenable`，Flutter 投影只在 presentation adapter；日志走 `ZetaLogger` 端口，Provider 身份映射由组合层注入。
 - **Agent feature 的分层现状**：中立内核在 `packages/zeta_agent_core`；**Provider 协议适配分别在 `packages/zeta_agent_provider_codex`、`packages/zeta_agent_provider_grok`、`packages/zeta_agent_provider_claude_code`**（wire 字段、CLI 参数、会话文件格式只能出现在这里）；Zeta 自有持久化（provider 配置、模型目录缓存、turn 上下文文件）仍在 `lib/src/features/agent/data`，运行态事实由 application 层的 slice `Notifier` 独占，presentation 只订阅。新代码按这条边界放：中立机制进 core，Provider 语义进对应插件包，Zeta 自有状态与 UI 编排进 app。**application/domain 不得 import 具体插件包；中立 `zeta_agent_provider_api` 与 core 一样可被 application/domain/presentation 使用**；厂商 identity、私有配置 key 与指标标签由 data/app 组合层投影。**跨 Package 只能 import 对方顶层 barrel**，禁止 `package:<name>/src/...`。新增 Package 要先按[工程规范 §1](docs/zh/architecture/engineering_standards.md) 的判据论证，不按页面或团队机械拆包。
 
-- **Provider 编译期登记边界**：`lib/src/app/plugins/agent_provider_manifest.dart` 集中 definition、启动 settings、插件工厂和厂商专属宿主注入；身份再导出只能包含常量。根测试的实现类型只经 `test/src/testing/` 导入插件的独立 testing barrel，生产代码禁用 testing barrel。management/usage 由各插件贡献，中立契约和窄文案端口在 api，宿主只提供模型目录与不透明用量分区端口，不向插件注入 StorageService。lib 中具体插件 import 仅允许 manifest；根测试仅允许 test/src/testing。贡献经可覆盖 Riverpod 接缝消费，必须先激活并校验归属、唯一性与完备性；空表、冲突、关闭后重新解析均 fail-closed。原 WP-C 过渡白名单已清零；presentation 仅保留 [WP-D §3.6](.workflow/plan/2026-09-04-provider-plugin-packages/04-wpd-app-contributions.md) 登记的 Claude 专属安装指引 id 门，连接测试确认与账户增强均按能力声明。
+- **Provider 编译期登记边界**：`lib/src/app/plugins/agent_provider_manifest.dart` 集中 definition、启动 settings、插件工厂和厂商专属宿主注入；身份再导出只能包含常量。根测试的实现类型只经 `test/src/testing/` 导入插件的独立 testing barrel，生产代码禁用 testing barrel。management/usage 由各插件贡献，中立契约和窄文案端口在 api，宿主只提供模型目录与不透明用量分区端口，不向插件注入 StorageService。lib 中具体插件 import 仅允许 manifest；根测试仅允许 test/src/testing。贡献经可覆盖 Riverpod 接缝消费，必须先激活并校验归属、唯一性与完备性；空表、冲突、关闭后重新解析均 fail-closed。原 WP-C 过渡白名单已清零；品牌图标仅允许 `agent_provider_icon.dart` 中的 `_agentProviderIconAssets` 常量资源表，不能扩为能力/路由分支；presentation 业务判断仅保留 [WP-D §3.6](.workflow/plan/2026-09-04-provider-plugin-packages/04-wpd-app-contributions.md) 登记的 Claude 专属安装指引 id 门，连接测试确认与账户增强均按能力声明。
 
 > 正文：[工程规范 §1–2](docs/zh/architecture/engineering_standards.md) · 状态所有权与 Riverpod 边界：[工程规范 §3.0](docs/zh/architecture/engineering_standards.md#30-状态所有权与-riverpod-边界) · [架构总览「分层」](docs/zh/architecture/overview.md)
 
@@ -249,7 +249,7 @@ grep -rnE "sf\.(IconButton|TextField|Button)\." lib/src/features | wc -l
 | 你要动的东西 | 必守门禁 | 动手前必读 | 额外必做 |
 |---|---|---|---|
 | 新增或修改 `AgentEvent` | G1 G2 G3 | [开发者文档 §7「新增 AgentEvent 接入清单」](docs/zh/development/developer_guide.md) 的 **16 条**，逐项回答 | 每条答案用测试固定 |
-| 接入新 Provider | G1 G2 G4 G6 | [工程规范 §4.2](docs/zh/architecture/engineering_standards.md#42-共享适配层纯度门禁) + [开发者文档 §7](docs/zh/development/developer_guide.md) 十二步 | 改动范围应 = 自有 data 文件 + 中立 domain 契约 + `createBundle` 组合 + 契约测试；静态能力走 data 组合层，Domain 不按厂商 switch |
+| 接入新 Provider | G1 G2 G4 G6 | [工程规范 §4.2](docs/zh/architecture/engineering_standards.md#42-共享适配层纯度门禁) + [开发者文档 §7](docs/zh/development/developer_guide.md#新增-provider-插件) 插件接入流程 | 新建插件包并声明三类贡献，经 SDK 契约测试后只在根 pubspec + manifest 登记；不得修改共享 Store、其他插件或 app 业务分支；最后运行包隔离/manifest 守卫和真实 CLI 验收 |
 | Provider adapter / reducer / 流式显示 | G1 G2 G3 | [工程规范 §4.1](docs/zh/architecture/engineering_standards.md) | 带 Provider/CLI 版本的脱敏 fixture 序列测试；有 history/replay 就补 canonical signature 逐位置回归 |
 | Provider 文件变更证据 | G1 G2 G3 G6 G7 | [开发者文档 §7「文件变更证据接入」](docs/zh/development/developer_guide.md) | Provider-local tracker 输出完整 typed snapshot；command-only 不猜文件；live/history/replay 独立；正文不进日志或持久化 |
 | 权限选项 / 审批 / Plan 模式 | G4 G5 | [开发者文档 §7「权限选项选择」+「Plan conversation mode」](docs/zh/development/developer_guide.md) | 覆盖两 thread 两 Canvas 的真实 wire 参数、runtime 状态仅限所属 Binding、迟到 apply、旧 generation 丢弃 |
@@ -368,6 +368,7 @@ flutter test test/src/features/agent/presentation/agent_conversation_widget_test
 
 ## 5. 事实清单（容易记错的）
 
+- **Provider 插件登记入口**：`lib/src/app/plugins/agent_provider_manifest.dart`；实现分别在 `packages/zeta_agent_provider_codex` / `zeta_agent_provider_grok` / `zeta_agent_provider_claude_code`。中立契约在 api、共享机制在 sdk；守卫为 `provider_package_isolation_guard_test` / `agent_provider_manifest_test`，CI 包矩阵自动发现新包。
 - **活跃 Provider 是 Codex、Grok 和 Claude Code。** Claude Code 的当前协议事实以 `docs/protocols/claude_code_stream_json_protocol.md` 为准；`claude_code_provider_adapter.md` 只是历史提案。模型与套餐名称来自无 Prompt CLI initialize；`claudeCode.accountDataEnrichment` 只控制 Provider-local 的可选额度详情，不控制模型目录。
 - **Cursor 已彻底清退。** 当前 schema、Provider 枚举、catalog、UI、运行时组合、测试和 fixture 均不含 Cursor 兼容值；不为未发布数据保留 decode/fallback。任何重新支持都必须另立方案并重新取得真实协议证据，相关代码不得直接回流。
 - **Grok CLI 基线是 `0.2.119`**（grok-build）。更早版本不支持多会话，同时打开多个 Grok 会话时无法正确隔离会话状态和回合终态。

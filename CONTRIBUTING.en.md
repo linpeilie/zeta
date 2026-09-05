@@ -269,3 +269,5 @@ By participating you also agree to abide by our [Code of Conduct](CODE_OF_CONDUC
 This project is licensed under **GPL-3.0** — see [LICENSE](LICENSE). By contributing you agree to license your work under the same terms.
 
 Provider packages now separate neutral contracts (`provider_api`), shared mechanisms (`provider_sdk`) and each vendor implementation. Registration lives in `lib/src/app/plugins/agent_provider_manifest.dart`; root tests access implementation types through `test/src/testing/`. Management and usage sources are plugin contributions consumed through overridable host seams. Empty or conflicting contributions fail closed; transitional imports have been removed. See [package boundaries](docs/zh/architecture/engineering_standards.md#21-provider-插件包边界).
+
+To add a Provider, follow the [plugin workflow](docs/zh/development/developer_guide.md#新增-provider-插件), create its package, and register it in the root pubspec/manifest. Isolation and contribution guards cover future plugins; CI discovers test packages automatically. Run one package with `bash tool/test_packages.sh --only <package>` and the full gate with `bash tool/test_full.sh`.

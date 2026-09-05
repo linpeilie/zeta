@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../../../testing/provider_architecture_audit.dart'
+    show providerPluginLibRoots;
 
 /// 中立内核里 Provider raw payload 的守卫。
 ///
@@ -100,12 +102,14 @@ void main() {
 
   test('只有 SDK 内容盲包装器能构造原文', () {
     final offenders = <String>[];
-    for (final root in const <String>[
+    for (final root in <String>[
       'lib',
       'packages/zeta_agent_core/lib',
+      'packages/zeta_agent_provider_api/lib',
       'packages/zeta_ui/lib',
       'packages/zeta_foundation/lib',
       'packages/zeta_plugin_kernel/lib',
+      ...providerPluginLibRoots(),
       'packages/zeta_agent_provider_sdk/lib',
     ]) {
       for (final file in dartFilesIn(root)) {
@@ -131,10 +135,8 @@ void main() {
     // 直接调构造会绕过递归冻结与统一的 payload 边界。
     final offenders = <String>[];
     for (final file in <File>[
-      for (final root in const <String>[
-        'packages/zeta_agent_provider_codex/lib',
-        'packages/zeta_agent_provider_grok/lib',
-        'packages/zeta_agent_provider_claude_code/lib',
+      for (final root in <String>[
+        ...providerPluginLibRoots(),
         'packages/zeta_agent_provider_sdk/lib',
       ])
         ...dartFilesIn(root),
@@ -175,19 +177,23 @@ void main() {
 
   test('原文的唯一渲染出口是上下文面板', () {
     final offenders = <String>[];
-    for (final root in const <String>[
+    for (final root in <String>[
       'lib',
       'packages/zeta_agent_core/lib',
-      'packages/zeta_agent_provider_codex/lib',
-      'packages/zeta_agent_provider_grok/lib',
-      'packages/zeta_agent_provider_claude_code/lib',
+      'packages/zeta_agent_provider_api/lib',
+      'packages/zeta_agent_provider_sdk/lib',
+      ...providerPluginLibRoots(),
       'packages/zeta_ui/lib',
       'packages/zeta_foundation/lib',
       'packages/zeta_plugin_kernel/lib',
     ]) {
       for (final file in dartFilesIn(root)) {
         final path = normalize(file.path);
-        if (path == contextPanelPath ||
+        // SDK 契约测试验证渲染接口；生产导入独立 testing 子库另有守卫。
+        if (path.startsWith(
+              'packages/zeta_agent_provider_sdk/lib/src/testing/',
+            ) ||
+            path == contextPanelPath ||
             path.endsWith('agent_provider_raw_payload.dart')) {
           continue;
         }

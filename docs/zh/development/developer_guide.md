@@ -2,7 +2,7 @@
 
 最后更新：2026-08-15
 
-> Provider 拆包进度（2026-09-05）：实现与协议测试已进入三个独立插件包，宿主从 `agent_provider_manifest.dart` 登记 definitions/settings/factories。插件测试在各包目录执行 `dart test` 或 `flutter test`，并接入 SDK 的 `runAgentProviderContractTests`；根测试的实现访问统一走 `test/src/testing/`。management/usage 已贡献化，原 WP-C 过渡 import 已清零，WP-E 的完整守卫和 CI 重排仍待执行；见[工程规范 §2.1](../architecture/engineering_standards.md#21-provider-插件包边界)和 [WP-C](../../../.workflow/plan/2026-09-04-provider-plugin-packages/03-wpc-provider-split.md)。
+> Provider 拆包进度（2026-09-05）：实现与协议测试已进入三个独立插件包，宿主从 `agent_provider_manifest.dart` 登记 definitions/settings/factories。插件测试在各包目录执行 `dart test` 或 `flutter test`，并接入 SDK 的 `runAgentProviderContractTests`；根测试的实现访问统一走 `test/src/testing/`。management/usage 已贡献化，过渡 import 已清零；包隔离/贡献守卫、自动发现的 CI 包矩阵已就位；见[工程规范 §2.1](../architecture/engineering_standards.md#21-provider-插件包边界)和下方[新增 Provider 插件](#新增-provider-插件)。
 
 ## 1. 项目简介
 
@@ -301,7 +301,30 @@ Widget 读 region 只经 `AgentRegionBuilder` 的 `ref.watch(selector(bindingKey
 AgentPane Widget 状态。禁止再引入 `AgentConversationViewModel`、
 `AgentConversationUiStateStore` 或 `AgentConversationSliceComposition`。
 
-新增 provider 时：
+### 新增 Provider 插件
+
+以现有插件的目录结构为模板，只复用中立机制，不复制另一家的身份或 wire 假设。下面六步涵盖装配与验证；其后保留协议和生命周期的十二项检查。
+
+1. 新建 `packages/zeta_agent_provider_<name>/`，`pubspec.yaml` 写唯一 `name`、`version: 0.1.0`、`resolution: workspace`、`environment.sdk: ^3.12.2`。内部依赖只选实际使用的 `zeta_agent_core`、`zeta_agent_provider_api`、`zeta_agent_provider_sdk`、`zeta_foundation`、`zeta_plugin_kernel`（版本均 `^0.1.0`）；测试声明 `test`。包内 `lib/src/` 放实现，`test/` 放脱敏协议 fixture 和用例。禁止 Flutter、Riverpod、根 app 或其他厂商依赖。
+2. 在插件入口声明 `AgentProviderDefinition`：新的稳定 providerId/type、同身份 defaultConfig、静态 capabilities、`ZetaMetricLabel.constant('新插件的固定标签')` 和模型来源。新插件 `isDefault: false`，不要改变原默认项。实现 BundleFactory，只为真实支持的端口赋值；共享 transport/ACP/进程机制从 sdk 取得，协议解释留包内。
+3. 实现 `ZetaSynchronousPluginFactory.activate`，返回 handle，其 `contributions` 同时含 `AgentProviderPluginContribution`、`AgentManagementContribution`、`AgentUsageContribution`。三者归属和 id/type 必须一致，管理 definition 在插件中唯一声明。管理工厂只接 `AgentManagementHostServices`，用量工厂只接 `AgentUsageHostServices`；实际调用无能力时显式抛 `UnsupportedError`，不以空数据假装成功。handle 关闭回收插件资源，激活阶段不启动 CLI。
+4. 提供包顶层生产 barrel（definition、插件工厂及必要宿主注入类型），实现类型仅经独立 `_testing.dart` 导出。在包内测试调用 `runAgentProviderContractTests(NewProviderFixture.new)`；fixture 继承 `AgentProviderContractFixture`，提供 `definition` 和 `createBundle()`，按协议覆盖脱敏 `sampleWirePayloads` / `mapSampleWirePayload`，并完成下面协议/生命周期检查。不得让生产 barrel 导出 testing 子库。
+5. 根 `pubspec.yaml` 的 `workspace` 和 `dependencies` 登记新包；manifest 增加 import、definitions/settings/factories 三处登记，按需要 `export ... show` 身份常量。app 业务层、core、sdk、其他插件不需因新增厂商而改动。根测试若需访问实现，在 `test/src/testing/` 增加 testing barrel 转接；不向生产 manifest 倒灌类型。CI 自动发现包的 `pubspec.yaml` + `test/`，无需改矩阵名单。
+6. 执行下面命令。`agent_provider_manifest_test` 检查双向注册和三类贡献归属，包隔离守卫覆盖未来包名；第四插件的参考演练为 `test/src/app/plugins/fake_agent_provider_plugin_e2e_test.dart`（内存检测、第四行显示、用量 query 路由、空表/冲突与关闭失败）。真实 CLI smoke 仍须按下文及 AGENTS 的版本/平台要求验证，缺少设备或凭据只记录待核验。
+
+```sh
+flutter pub get --enforce-lockfile  # 新增 workspace 依赖时先生成并审阅有意的 lock 变化
+bash tool/test_packages.sh --only zeta_agent_provider_<name>
+flutter test test/src/app/plugins/agent_provider_manifest_test.dart test/src/architecture/provider_package_isolation_guard_test.dart test/src/app/plugins/fake_agent_provider_plugin_e2e_test.dart
+dart format .
+flutter analyze
+bash tool/test_full.sh
+```
+
+新包第一次登记需先运行 `flutter pub get` 产生有意的依赖变化并检查 lock；确认后再用 `--enforce-lockfile` 复验。默认品牌图标为中立扩展图标；现有品牌资源表只做图标映射，不可复制为能力分支。
+
+### 协议与生命周期检查
+
 
 1. 先确认现有 `AgentProviderBundle` 端口是否足够。能力域接到
    `conversation`、`threadCatalog`、`threadSubscription`、`threadNaming`、
@@ -315,7 +338,7 @@ AgentPane Widget 状态。禁止再引入 `AgentConversationViewModel`、
    policy（见 `AgentProviderStaticCapabilities`）；不要往 Shared Domain 增加厂商命名
    默认值或 `defaultsFor(kind)`。握手后若能力发生变化，由 `runtime.capabilities`
    返回更精确的动态值。
-3. 在 data 层新增具体 provider 实现，只实现真实支持的中立端口，并由
+3. 在插件包 `lib/src/` 新增具体 provider 实现，只实现真实支持的中立端口，并由
    `AgentProviderBundleFactory.createBundle` 直接返回原生 Bundle。application /
    presentation 只接收 bundle 端口。
 4. 把 provider 原始事件映射成 `AgentEvent`、`AgentToolCall`、
@@ -330,7 +353,7 @@ AgentPane Widget 状态。禁止再引入 `AgentConversationViewModel`、
    `AcpContentCodec` 和 `AcpSessionConfigMapper`；每个厂商自行实现 adapter/reducer，决定
    message segment、reasoning phase、tool upsert、去重和 lifecycle。共享 ACP 文件不得
    包含厂商分支或 eventId/turn scope 叙事策略。
-7. 在 factory 中接入 provider kind。
+7. 在插件 definition 声明开放 providerType，并由插件自己的 bundle factory 创建；禁止宿主新增按 type 分支。
 8. JSON-RPC provider 必须把裸 peer 包装为 `ProviderRuntimeJsonRpcPeer`，在握手成功后
    `markReady`、失败时 `markFailed`；dispose 先 `beginClosing`，再收尾 pending 交互和关闭 peer。
 9. Thread 的 list/read 与变更操作必须通过 `ProviderOperationScheduler`：list/read 使用

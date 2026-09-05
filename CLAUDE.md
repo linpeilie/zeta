@@ -64,3 +64,5 @@ Codex 协议升级、真实 CLI 冒烟的完整流程见 [`AGENTS.md` §2](AGENT
 分层、Provider 契约、事件管线、能力协商或持久化格式有变动时，`AGENTS.md`、`docs/architecture/`、`docs/guides/` 和 `CONTRIBUTING.md`（含英文版）要一起改。清单见 [`AGENTS.md` §6](AGENTS.md#6-改了架构边界同步这几处)。
 
 Provider 登记入口为 `lib/src/app/plugins/agent_provider_manifest.dart`；management/usage 实现与贡献均由插件拥有，中立端口在 api，宿主通过可覆盖贡献接缝装配。原 WP-C 过渡 import 已清零；详见 `AGENTS.md` G6 与 WP-D §3.6 的安装指引例外。
+
+新增 Provider 与守卫入口见[开发者文档 §7](docs/zh/development/developer_guide.md#新增-provider-插件)。内部包 CI 由实际目录动态生成矩阵，单包验证走 `test_packages.sh --only`；品牌内容例外与依赖边界统一查[工程规范 §2.1](docs/zh/architecture/engineering_standards.md#21-provider-插件包边界)。

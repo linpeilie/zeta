@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../../../testing/provider_architecture_audit.dart'
+    show providerPluginLibRoots;
 
 /// 架构守卫：钉住 native Bundle 边界，避免测试万能 fake
 /// 或共享层分支出卖真实端口矩阵。
@@ -8,11 +10,7 @@ void main() {
   group('provider bundle architecture contracts', () {
     test('no production adapter implements session configuration', () {
       for (final file in <File>[
-        for (final root in const <String>[
-          'packages/zeta_agent_provider_codex/lib',
-          'packages/zeta_agent_provider_grok/lib',
-          'packages/zeta_agent_provider_claude_code/lib',
-        ])
+        for (final root in <String>[...providerPluginLibRoots()])
           ..._dartFiles(root),
       ]) {
         expect(

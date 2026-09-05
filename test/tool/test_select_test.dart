@@ -255,8 +255,8 @@ void main() {
         'lib/src/features/agent/domain/model.dart',
       ], includeGuards: false);
 
-      // agent/domain 属于 6(agent-logic)。
-      expect(selection.shardIds, <int>[6]);
+      // agent/domain 随契约测试归入 5(contracts-data)。
+      expect(selection.shardIds, <int>[5]);
     });
   });
 

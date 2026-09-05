@@ -91,7 +91,15 @@ management repository 与 Token source/scanner/partition codec 都在各自插�
 
 管理插件仅借用 `AgentManagementHostServices` 的文本目录、runtime registry 和模型缓存窄端口。用量插件仅借用 `AgentUsagePartitionPort`，不获得 `StorageService` 或宿主路径；v4 根索引 Store 留宿主。原默认文案逐字保留，usage 未自动改成本地化目录。`AgentCliManagementCapabilities` 用可空增强键同时声明能力与持久化键，连接测试确认按能力门；整卡 Claude 安装指引仍是 [WP-D §3.6](../../../.workflow/plan/2026-09-04-provider-plugin-packages/04-wpd-app-contributions.md) 登记的单一品牌内容例外。
 
-通用版本比较、配置遮挡、日志清洗与用量扫描缓存属于 sdk 机制；宿主日志和插件共用的纯文本脱敏、显式环境 HOME 解析位于 foundation。旧测试断言与持久化身份保持不变，结构性守卫随物理路径更新，不允许扫描已删除目录而静默通过。WP-E 的完整治理与 CI 重排仍单独执行。
+通用版本比较、配置遮挡、日志清洗与用量扫描缓存属于 sdk 机制；宿主日志和插件共用的纯文本脱敏、显式环境 HOME 解析位于 foundation。旧测试断言与持久化身份保持不变，结构性守卫随物理路径更新，不允许扫描已删除目录而静默通过。隔离守卫动态发现所有 Provider 插件，含条件 import、export、相对路径；旧目录消失不能缩小保护范围。
+
+本节由 `test/src/architecture/provider_package_isolation_guard_test.dart`、`test/src/app/plugins/agent_provider_manifest_test.dart` 与现有 DAG/raw/feature 守卫共同执行，反例与真实仓库使用相同的 AST 判定器。静态 manifest 与激活目录必须双向同序一致，内置 id/type、配置版本 2、用量根索引版本 4 和增强键有冻结样本。所有 Provider（含新增插件）均须声明三类贡献；功能端口可以不支持，但不可通过缺失贡献或空成功伪装完整装配。
+
+品牌内容有两种严格限定的现存形态：管理页 `_setupGuideAgentId` 决定整卡安装指引；`agent_provider_icon.dart` 中的 `_agentProviderIconAssets` 只保存品牌图标资源和着色信息。后者不是能力或协议路由，AST 守卫只豁免该 const Map 的键；同文件其他厂商判断照常失败。未知 Provider 保持中立扩展图标。
+
+D8 文案目录遵循 `AgentUiTextCatalog` 的纯 Dart 接口 + 不可变 fallback + 宿主 ARB 实现模式；management 迁完整目录，usage source 只接五成员窄端口。D7 身份冻结要求变更评审核对配置 codec/store 的 diff，并对索引版本、分区 codec 与样本字节进行回归，不用源码路径是否存在代替行为验证。
+
+CI 使用自动发现的 package 矩阵，`test_packages.sh --only` 的分析与测试失败均使 job 失败；新增测试包不需要改第二份 CI 名单。根六片按语义归组：Agent 界面、通用 UI、其他 feature、app、契约/数据、Agent application。重平衡用 `report_test_timings.dart` 的报告，不将本地 suite 累计耗时宣称为 CI 墙钟。
 
 ## 3. 状态与异步编排
 

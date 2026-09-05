@@ -6,7 +6,7 @@ Written for someone opening this repository for the first time. The goal is to g
 
 For definitions of specific terms, see the [glossary](../development/glossary.md). For the complete rules and invariants, see the [design document](../../zh/architecture/design_document.md) and [engineering standards](../../zh/architecture/engineering_standards.md) (both Chinese).
 
-> Package update (2026-09-05): neutral contracts and shared mechanisms live in `zeta_agent_provider_api` and `zeta_agent_provider_sdk`. Codex, Grok and Claude Code have separate pure Dart plugin packages, registered in `agent_provider_manifest.dart`. Management and usage implementations now live in their owning plugins and are assembled through neutral, overridable contribution seams; see the [authoritative package boundaries](../../zh/architecture/engineering_standards.md#21-provider-插件包边界).
+> Package update (2026-09-05): neutral contracts and shared mechanisms live in `zeta_agent_provider_api` and `zeta_agent_provider_sdk`. Codex, Grok and Claude Code have separate pure Dart plugin packages, registered in `agent_provider_manifest.dart`. Management and usage implementations now live in their owning plugins and are assembled through neutral, overridable contribution seams; manifest parity and isolation guards cover future plugins, and CI discovers packages for independent matrix jobs. See the [authoritative package boundaries](../../zh/architecture/engineering_standards.md#21-provider-插件包边界).
 
 ## In one sentence
 

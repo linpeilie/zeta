@@ -236,3 +236,8 @@ Zeta 自有数据根目录：`config/`（配置）、`state/`（会话状态与�
 - `manifest`：`lib/src/app/plugins/agent_provider_manifest.dart`，编译期登记 definitions、settings、工厂和专属宿主注入；不进行运行时发现。
 
 `AgentManagementContribution` 提供管理定义与仓库工厂；`AgentUsageContribution` 按 providerType 提供用量工厂。宿主经独立可覆盖接缝取得同一份激活并校验的贡献快照。原过渡 import 已清零，依赖约束见[工程规范 §2.1](../architecture/engineering_standards.md#21-provider-插件包边界)。
+
+- **贡献类型**：`zeta.agent.provider-bundle-factory` 为 Bundle 工厂，`zeta.agent.management-repository` 为管理定义/工厂，`zeta.agent.token-usage-source` 为用量来源；每个激活 Provider 三类齐备且归属一致。
+- **D7 持久化身份红线**：包结构变化不得改动 providerId/type、配置版本、用量索引与私有增强键的持久化字节。
+- **D8 文案目录下沉**：中立 API 接口及不可变 fallback 下沉，宿主保留 ARB 实现；用量来源沿用五成员窄目录和原默认文本。
+- **动态 package 矩阵**：CI 通过 `test_packages.sh --list-json` 发现测试包，每个 job 用 `--only` 运行对应包；不涉及运行时插件发现。

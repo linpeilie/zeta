@@ -1599,7 +1599,7 @@ void main() {
 **允许的形态：**
 
 ```dart
-// packages/zeta_agent_providers/lib/src/grok/grok_bundle.dart
+// packages/zeta_agent_provider_grok/lib/src/grok_provider_bundle.dart
 AgentEventHandlerRegistry buildGrokHandlers() {
   final builder = defaultAgentHandlerRegistryBuilder();
   builder.register<AgentThreadNameUpdatedEvent>(GrokThreadNameHandler());
@@ -1656,7 +1656,7 @@ void main() {
 类型的共享 handler，但只能这样做：
 
 - 覆盖 handler **只能注册在该 Provider 自己的 bundle 里**
-  （`packages/zeta_agent_providers/lib/src/<provider>/`），通过
+  （`packages/zeta_agent_provider_<provider>/lib/src/`），通过
   `defaultAgentHandlerRegistryBuilder()` 之上的 `register<E>()` 覆盖。
 - 共享 handler 目录 `packages/zeta_agent_core/lib/src/application/reduction/`
   **禁止**出现任何 Provider 标识、`providerId` 分支或按实现类型分支——它和 G1

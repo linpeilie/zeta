@@ -6,7 +6,7 @@
 
 想查具体名词的定义，看[术语表](../development/glossary.md)。想看完整规则和不变量，看[设计文档](design_document.md)与[工程规范](engineering_standards.md)。
 
-> 2026-09-05 包结构更新：Provider 已拆为 api、sdk 与 Codex/Grok/Claude Code 三个纯 Dart 插件包；登记集中在 `agent_provider_manifest.dart`。management/usage 已由插件贡献，宿主只消费中立端口和可覆盖贡献接缝；完整依赖与失败处理规则见[工程规范 §2.1](engineering_standards.md#21-provider-插件包边界)。
+> 2026-09-05 包结构更新：Provider 已拆为 api、sdk 与 Codex/Grok/Claude Code 三个纯 Dart 插件包；登记集中在 `agent_provider_manifest.dart`。management/usage 已由插件贡献，宿主只消费中立端口和可覆盖贡献接缝；新增插件流程和八类守卫已落地，CI 逐包动态矩阵覆盖所有内部包；完整依赖与失败处理规则见[工程规范 §2.1](engineering_standards.md#21-provider-插件包边界)。
 
 ## 一句话概括
 

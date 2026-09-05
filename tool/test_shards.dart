@@ -6,9 +6,10 @@
 /// 都从这里读，改分片只改这一个文件。
 ///
 /// **分片按语义分组，不按贪心装箱。** 开发者要能一眼判断自己的改动落在哪片；
-/// 完美均衡的清单没人记得住，改一次目录就散架。当前最慢片是
-/// `agent-presentation`（约 104s），它是目录粒度下的下界——`test/src/features/
-/// agent/presentation` 一个目录就那么重，再加分片数也压不下去，除非拆到文件级。
+/// 完美均衡的清单没人记得住。WP-E 以 2026-09-05 全量 JSON 报告为输入：
+/// Provider 数据迁包后，旧 agent-data 的 suite 累计只剩 10.75s；
+/// 因此将数据、领域契约、架构守卫与测试工具归为 contracts-data。
+/// agent-presentation 仍是最大目录（suite 累计 122.01s，非 CI 墙钟）。
 ///
 /// 重平衡的输入是 `tool/report_test_timings.dart` 的输出（`test_shard.sh` 每片
 /// 都会打印一份），不要凭感觉挪目录。
@@ -30,9 +31,9 @@ class TestShard {
 
 /// 根 `test/` 目录的全部分片。
 ///
-/// `packages/*/test/` **不在这里**：5 个内部 Package 一共只有 8 个测试文件，
-/// 且需要各自的 `dart`/`flutter` 工具链与 `analyze`，继续走
-/// `tool/test_packages.sh`，在 CI 里是独立的 `packages` Job。
+/// `packages/*/test/` 不在这里：它们需要各自的 Dart/Flutter analyze 与 test，
+/// 由 `tool/test_packages.sh --only <package>` 在 CI package 矩阵中独立执行；
+/// 不传 --only 时仍自动发现并依次运行全部内部包。
 const List<TestShard> kRootTestShards = <TestShard>[
   TestShard(
     id: 1,
@@ -53,11 +54,14 @@ const List<TestShard> kRootTestShards = <TestShard>[
       'test/src/features/workspace',
     ],
   ),
+  TestShard(id: 4, name: 'app-shell', paths: <String>['test/src/app']),
   TestShard(
-    id: 4,
-    name: 'app-shell',
+    id: 5,
+    name: 'contracts-data',
     paths: <String>[
-      'test/src/app',
+      'test/src/features/agent/data',
+      'test/src/features/agent/domain',
+      'test/src/features/agent/architecture',
       'test/src/architecture',
       'test/src/core',
       'test/src/testing',
@@ -65,18 +69,9 @@ const List<TestShard> kRootTestShards = <TestShard>[
     ],
   ),
   TestShard(
-    id: 5,
-    name: 'agent-data',
-    paths: <String>['test/src/features/agent/data'],
-  ),
-  TestShard(
     id: 6,
     name: 'agent-logic',
-    paths: <String>[
-      'test/src/features/agent/application',
-      'test/src/features/agent/architecture',
-      'test/src/features/agent/domain',
-    ],
+    paths: <String>['test/src/features/agent/application'],
   ),
 ];
 

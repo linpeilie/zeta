@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../testing/provider_architecture_audit.dart' show isProviderPlugin;
 
 /// 内部 Package 依赖图守卫（**零容忍，无 allowlist**）。
 ///
@@ -114,7 +115,9 @@ void main() {
 
       expect(
         declared,
-        equals(entry.value),
+        isProviderPlugin(entry.key)
+            ? everyElement(isIn(entry.value))
+            : equals(entry.value),
         reason:
             '${entry.key} 的 manifest 内部依赖与允许的 DAG 不一致。'
             'manifest 多出的依赖迟早会变成代码里的越界 import。',
@@ -416,18 +419,17 @@ const String _pluginKernel = 'zeta_plugin_kernel';
 const String _agentCore = 'zeta_agent_core';
 const String _agentProviderApi = 'zeta_agent_provider_api';
 const String _agentProviderSdk = 'zeta_agent_provider_sdk';
-const String _agentProviderCodex = 'zeta_agent_provider_codex';
-const String _agentProviderGrok = 'zeta_agent_provider_grok';
-const String _agentProviderClaudeCode = 'zeta_agent_provider_claude_code';
-const Set<String> _providerPlugins = {
-  _agentProviderCodex,
-  _agentProviderGrok,
-  _agentProviderClaudeCode,
+final Set<String> _providerPlugins = {
+  for (final dir in Directory(
+    'packages',
+  ).listSync(followLinks: false).whereType<Directory>())
+    if (isProviderPlugin(dir.path.split(Platform.pathSeparator).last))
+      dir.path.split(Platform.pathSeparator).last,
 };
 const String _ui = 'zeta_ui';
 const String _app = 'app';
 
-const Set<String> _candidatePackages = <String>{
+final Set<String> _candidatePackages = <String>{
   _foundation,
   _pluginKernel,
   _agentCore,
@@ -442,7 +444,7 @@ const Set<String> _candidatePackages = <String>{
 ///
 /// 这些名字既是目录名，也是 `package:` scheme 名；跨 Package 只能 import 对方
 /// 的顶层 barrel，禁止 `package:<name>/src/...`。
-const Set<String> _materializedPackages = <String>{
+final Set<String> _materializedPackages = <String>{
   _foundation,
   _pluginKernel,
   _ui,
@@ -453,7 +455,7 @@ const Set<String> _materializedPackages = <String>{
 };
 
 /// 目标架构 §3.1 的依赖方向；根 app 是唯一可以看到所有 Package 的组合点。
-const Map<String, Set<String>> _allowedEdges = <String, Set<String>>{
+final Map<String, Set<String>> _allowedEdges = <String, Set<String>>{
   _foundation: <String>{_foundation},
   _pluginKernel: <String>{_pluginKernel, _foundation},
   _agentCore: <String>{_agentCore, _foundation},
@@ -470,36 +472,21 @@ const Map<String, Set<String>> _allowedEdges = <String, Set<String>>{
     _pluginKernel,
     _foundation,
   },
-  _agentProviderCodex: <String>{
-    ..._providerPlugins,
-    _agentProviderSdk,
-    _agentProviderApi,
-    _agentCore,
-    _pluginKernel,
-    _foundation,
-  },
-  _agentProviderGrok: <String>{
-    ..._providerPlugins,
-    _agentProviderSdk,
-    _agentProviderApi,
-    _agentCore,
-    _pluginKernel,
-    _foundation,
-  },
-  _agentProviderClaudeCode: <String>{
-    ..._providerPlugins,
-    _agentProviderSdk,
-    _agentProviderApi,
-    _agentCore,
-    _pluginKernel,
-    _foundation,
-  },
+  for (final plugin in _providerPlugins)
+    plugin: <String>{
+      plugin,
+      _agentProviderSdk,
+      _agentProviderApi,
+      _agentCore,
+      _pluginKernel,
+      _foundation,
+    },
   _ui: <String>{_ui, _foundation},
   _app: _candidatePackages,
 };
 
 /// 纯 Dart 候选层禁止的外部依赖前缀。
-const Map<String, List<String>> _bannedExternalPrefixes =
+final Map<String, List<String>> _bannedExternalPrefixes =
     <String, List<String>>{
       _foundation: <String>[
         'package:flutter/',
@@ -533,27 +520,14 @@ const Map<String, List<String>> _bannedExternalPrefixes =
         'package:shadcn_flutter/',
         'dart:ui',
       ],
-      _agentProviderCodex: <String>[
-        'package:flutter/',
-        'package:riverpod/',
-        'dart:ui',
-        'package:flutter_riverpod/',
-        'package:shadcn_flutter/',
-      ],
-      _agentProviderGrok: <String>[
-        'package:flutter/',
-        'package:riverpod/',
-        'dart:ui',
-        'package:flutter_riverpod/',
-        'package:shadcn_flutter/',
-      ],
-      _agentProviderClaudeCode: <String>[
-        'package:flutter/',
-        'package:riverpod/',
-        'dart:ui',
-        'package:flutter_riverpod/',
-        'package:shadcn_flutter/',
-      ],
+      for (final plugin in _providerPlugins)
+        plugin: <String>[
+          'package:flutter/',
+          'package:riverpod/',
+          'dart:ui',
+          'package:flutter_riverpod/',
+          'package:shadcn_flutter/',
+        ],
       _ui: <String>['package:flutter_riverpod/', 'dart:io'],
     };
 
@@ -693,7 +667,7 @@ String _posix(String path) => path.replaceAll(r'\', '/');
 ///
 /// manifest 与代码依赖必须一致：代码里改对了方向、manifest 却还留着旧依赖，
 /// 下一次有人 import 就会"合法地"违反 DAG。
-const Map<String, Set<String>> _manifestInternalDependencies =
+final Map<String, Set<String>> _manifestInternalDependencies =
     <String, Set<String>>{
       'zeta_foundation': <String>{},
       'zeta_plugin_kernel': <String>{'zeta_foundation'},
@@ -709,26 +683,13 @@ const Map<String, Set<String>> _manifestInternalDependencies =
         'zeta_foundation',
         'zeta_plugin_kernel',
       },
-      'zeta_agent_provider_codex': <String>{
-        'zeta_agent_core',
-        'zeta_agent_provider_api',
-        'zeta_agent_provider_sdk',
-        'zeta_foundation',
-        'zeta_plugin_kernel',
-      },
-      'zeta_agent_provider_grok': <String>{
-        'zeta_agent_core',
-        'zeta_agent_provider_api',
-        'zeta_agent_provider_sdk',
-        'zeta_foundation',
-        'zeta_plugin_kernel',
-      },
-      'zeta_agent_provider_claude_code': <String>{
-        'zeta_agent_core',
-        'zeta_agent_provider_api',
-        'zeta_agent_provider_sdk',
-        'zeta_foundation',
-        'zeta_plugin_kernel',
-      },
+      for (final plugin in _providerPlugins)
+        plugin: <String>{
+          'zeta_agent_core',
+          'zeta_agent_provider_api',
+          'zeta_agent_provider_sdk',
+          'zeta_foundation',
+          'zeta_plugin_kernel',
+        },
       'zeta_ui': <String>{'zeta_foundation'},
     };

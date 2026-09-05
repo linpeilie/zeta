@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import '../testing/provider_architecture_audit.dart' show isProviderPlugin;
 
 /// Feature 内部分层守卫（G6）。
 ///
@@ -147,9 +148,9 @@ void main() {
     for (final layer in const <String>['application', 'domain']) {
       for (final file in dartFilesInLayer(layer)) {
         if (importsOf(file).any(
-          (uri) => const <String>['codex', 'grok', 'claude_code'].any(
-            (vendor) => uri.startsWith('package:zeta_agent_provider_$vendor/'),
-          ),
+          (uri) =>
+              uri.startsWith('package:') &&
+              isProviderPlugin(uri.substring(8).split('/').first),
         )) {
           offenders.add(normalize(file.path));
         }
@@ -175,9 +176,9 @@ void main() {
     final offenders = <String>[
       for (final file in presentationFiles)
         if (importsOf(file).any(
-          (uri) => const <String>['codex', 'grok', 'claude_code'].any(
-            (vendor) => uri.startsWith('package:zeta_agent_provider_$vendor/'),
-          ),
+          (uri) =>
+              uri.startsWith('package:') &&
+              isProviderPlugin(uri.substring(8).split('/').first),
         ))
           normalize(file.path),
     ];
