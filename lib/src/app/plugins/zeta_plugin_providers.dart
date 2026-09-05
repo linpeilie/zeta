@@ -1,12 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 
 import 'package:zeta/src/app/composition/app_dependencies.dart';
 import 'package:zeta/src/app/localization/zeta_text_catalog_providers.dart';
 import 'package:zeta/src/app/plugins/zeta_plugin_catalog.dart';
-import 'package:zeta/src/app/storage/zeta_store_providers.dart';
 
 /// 编译期插件目录。
 ///
@@ -19,11 +18,15 @@ import 'package:zeta/src/app/storage/zeta_store_providers.dart';
 /// `ZetaAppComposition.shutdownOwnedAgentResources` 统一保证，容器只负责创建。
 final zetaPluginCatalogProvider = Provider<ZetaPluginCatalog>(
   (ref) => ZetaPluginCatalog.builtIn(
-    claudeCodeSessionDecisionStoreFactory: ref.watch(
-      claudeCodeSessionDecisionStoreFactoryProvider,
+    factories: zetaAgentProviderPluginFactories(
+      claudeCodeSessionDecisionStoreFactory: ref.watch(
+        claudeCodeSessionDecisionStoreFactoryProvider,
+      ),
+      claudeCodeHiddenThreadStore: ref.watch(
+        claudeCodeHiddenThreadStoreProvider,
+      ),
+      textCatalog: ref.watch(agentUiTextCatalogProvider),
     ),
-    claudeCodeHiddenThreadStore: ref.watch(claudeCodeHiddenThreadStoreProvider),
-    textCatalog: ref.watch(agentUiTextCatalogProvider),
     metrics: ref.watch(zetaMetricsPortProvider),
   ),
   name: 'zetaPluginCatalog',
@@ -66,8 +69,7 @@ final agentProviderRuntimeRegistryProvider =
       (ref) => AgentProviderRuntimeRegistry(
         providerFactory: ref.watch(agentProviderBundleFactoryProvider),
         metrics: ref.watch(zetaMetricsPortProvider),
-        providerMetricLabel:
-            builtInAgentProviderDefinitionCatalog.metricLabelFor,
+        providerMetricLabel: zetaAgentProviderDefinitionCatalog.metricLabelFor,
       ),
       name: 'agentProviderRuntimeRegistry',
     );

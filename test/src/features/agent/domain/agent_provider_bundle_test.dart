@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 
 import '../../../testing/ide_test_harness.dart';
 import '../../../testing/test_agent_provider_bundle_factory.dart';

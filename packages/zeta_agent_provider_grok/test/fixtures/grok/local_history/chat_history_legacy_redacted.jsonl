@@ -1,0 +1,4 @@
+{"type":"system","content":"legacy system prompt"}
+{"type":"user","content":[{"type":"text","text":"<user_query>\nlegacy hello\n</user_query>"}],"prompt_index":0}
+{"type":"assistant","content":"legacy world"}
+

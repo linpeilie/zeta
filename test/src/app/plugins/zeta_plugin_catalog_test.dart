@@ -4,14 +4,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/app/plugins/zeta_plugin_catalog.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
+import '../../testing/agent_provider_implementations.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_plugin_kernel/zeta_plugin_kernel.dart';
 
 void main() {
   group('ZetaPluginCatalog built-in Provider plugins', () {
     test('同步激活三个显式插件并解析唯一目标态目录', () {
-      final catalog = ZetaPluginCatalog.builtIn();
+      final catalog = ZetaPluginCatalog.builtIn(
+        factories: zetaAgentProviderPluginFactories(),
+      );
 
       final report = catalog.activate();
       final resolved = catalog.resolveAgentProviders();
@@ -34,19 +37,23 @@ void main() {
       );
       expect(
         resolved.definitions.defaultSettings.toJson(),
-        builtInAgentProviderSettings.toJson(),
+        zetaBuiltInAgentProviderSettings.toJson(),
       );
     });
 
     test('未激活时解析 fail-closed', () {
-      final catalog = ZetaPluginCatalog.builtIn();
+      final catalog = ZetaPluginCatalog.builtIn(
+        factories: zetaAgentProviderPluginFactories(),
+      );
 
       expect(catalog.resolveAgentProviders, throwsStateError);
       expect(catalog.report, isNull);
     });
 
     test('关闭后三个插件均 stopped，且从未创建 runtime', () async {
-      final catalog = ZetaPluginCatalog.builtIn()..activate();
+      final catalog = ZetaPluginCatalog.builtIn(
+        factories: zetaAgentProviderPluginFactories(),
+      )..activate();
 
       await catalog.close();
 
@@ -66,7 +73,10 @@ void main() {
     test('三个插件分别写入激活指标', () {
       final metrics = InMemoryZetaMetricsPort();
 
-      ZetaPluginCatalog.builtIn(metrics: metrics).activate();
+      ZetaPluginCatalog.builtIn(
+        factories: zetaAgentProviderPluginFactories(),
+        metrics: metrics,
+      ).activate();
 
       expect(metrics.totalOf(ZetaMetric.pluginActivated), 3);
       expect(metrics.lastValueOf(ZetaMetric.pluginActiveCount), 3);

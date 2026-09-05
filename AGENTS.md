@@ -77,7 +77,7 @@ packages/zeta_agent_core/lib/src/application/agent_event_coalescing_policy.dart
 packages/zeta_agent_core/lib/src/application/coalescing_event_buffer.dart
 packages/zeta_agent_core/lib/src/application/bounded_event_dispatcher.dart
 packages/zeta_agent_core/lib/src/application/agent_conversation_timeline_store.dart
-lib/src/features/agent/data/mappers/acp_*.dart      # 共享 ACP decoder/codec/mapper
+packages/zeta_agent_provider_sdk/lib/src/acp/acp_*.dart      # 共享 ACP decoder/codec/mapper
 ```
 
 这些文件里**禁止**出现：具体 Provider 的 import、按 `providerId`/kind/实现类型/显示名分支、从 raw 或 extra payload 猜身份、为某个 Provider 修乱序或补 id。文件变更的 owner/change id、动作、累计快照、可回放性与 tool/turn fallback 取舍同样属于 Provider 语义。厂商差异一律退回该 Provider 自己的 adapter/reducer 消化后输出语义完整的 `AgentEvent`。
@@ -88,7 +88,7 @@ lib/src/features/agent/data/mappers/acp_*.dart      # 共享 ACP decoder/codec/m
 类型的共享 handler，但只能这样做：
 
 - 覆盖 handler **只能注册在该 Provider 自己的 bundle 里**
-  （`packages/zeta_agent_providers/lib/src/<provider>/`），通过
+  （`packages/zeta_agent_provider_<vendor>/lib/src/`），通过
   `defaultAgentHandlerRegistryBuilder()` 之上的 `register<E>()` 覆盖。
 - 共享 handler 目录 `packages/zeta_agent_core/lib/src/application/reduction/`
   **禁止**出现任何 Provider 标识、`providerId` 分支或按实现类型分支——它和 G1
@@ -116,7 +116,7 @@ grep -rnE "(codex|grok|claude|cursor)" \
   packages/zeta_agent_core/lib/src/application/bounded_event_dispatcher.dart \
   packages/zeta_agent_core/lib/src/application/agent_conversation_timeline_store.dart \
   packages/zeta_agent_core/lib/src/application/reduction/ \
-  packages/zeta_agent_providers/lib/src/mappers/acp_*.dart \
+  packages/zeta_agent_provider_sdk/lib/src/acp/acp_*.dart \
   | grep -viE "^\S+:[0-9]+:\s*(///|//|\*)"
 ```
 
@@ -190,8 +190,10 @@ main → app → presentation/application → domain
 - **Riverpod 只用 `flutter_riverpod` 一个包**，允许出现在 application 及以上；`data` 与 `domain` 两层都禁——它们不持有状态。不要从传递依赖 `package:riverpod/` 导入；需要 `Override` 这类只在 `misc.dart` 导出的类型时用 `package:flutter_riverpod/misc.dart`。
 - **注意这让 application 的 Flutter 边界只剩约定**：`flutter_riverpod` 的 barrel 会带进 `ConsumerWidget` / `WidgetRef` / `ProviderScope`，而它们不匹配 `package:flutter/` 前缀，守卫拦不住。**application 里不准出现这些符号**——Widget 与 `WidgetRef` 是 presentation 的东西，切片只暴露不可变 state 与命令入口。守卫：`feature_layering_guard_test`（零容忍）。
 - 新代码进 `lib/src/features/<feature>/{domain,application,data,presentation}`，**不要新建顶层宽泛目录**。现有 feature：`agent`、`agent_management`、`desktop_notifications`、`ide_session`、`project_threads`、`settings`、`usage_statistics`、`workspace`。跨 feature 基础设施才进 `lib/src/core`；**跨 feature 复用的 UI 原语进 `packages/zeta_ui`**（设计系统已整体拆包，`lib/src/ui/core` 只剩需要本机 IO 的宿主侧封装）。
-- 已物理拆出的内部 Package 在 `packages/`：`zeta_foundation`（平台中立公共契约：Clock / OperationId / Transition / 排版常量 / 日志与指标端口，以及集中在 `src/platform/` 的宿主路径工具）、`zeta_plugin_kernel`（可信插件微内核）、`zeta_ui`（Graphite 设计系统）、`zeta_markdown`（Markdown 渲染包，fork 自 `mixin_markdown_widget 0.3.1`）、`zeta_agent_core`（中立 Agent 内核：领域模型与端口、Binding/runtime 契约、事件管线、纯 reducer、TimelineStore、Effect 描述）与 `zeta_agent_providers`（Codex / Grok / Claude Code 的协议 transport、data adapter、Provider-local tracker、插件入口）。依赖方向单向：`kernel → foundation`、`ui → foundation`、`agent_core → foundation`、`agent_providers → {agent_core, kernel, foundation}`；`zeta_markdown` 是**叶子**，只依赖 Flutter 与它自己的三方解析/高亮依赖，不依赖任何内部包（Graphite token 的映射发生在根应用侧）；`zeta_foundation` 的核心契约、`zeta_plugin_kernel` 与 `zeta_agent_core` 不依赖 Flutter，只有 `zeta_foundation/src/platform/` 的宿主工具可依赖明确的 Flutter 插件；`zeta_ui` 依赖 Flutter/shadcn 但**不依赖** Riverpod、`dart:io`、generated l10n 或任何业务模型（控件自有文案走 `ZetaUiTextCatalog` 注入）。`zeta_markdown` 是 vendor 包：改它先读 `packages/zeta_markdown/UPSTREAM.md`，所有定制走「新增注入点 + 默认值不变」，每次改动都要往那份清单追加一条；它的 SDK 下限跟随上游（`^3.5.0`）以保持与上游逐字节可比，不要对齐其他内部包。`zeta_agent_core` 的状态通知走纯 Dart `AgentListenable`，Flutter 投影只在 presentation adapter；日志走 `ZetaLogger` 端口，Provider 身份映射由组合层注入。
-- **Agent feature 的分层现状**：中立内核在 `packages/zeta_agent_core`；**Provider 协议适配在 `packages/zeta_agent_providers`**（wire 字段、CLI 参数、会话文件格式只能出现在这里）；Zeta 自有持久化（provider 配置、模型目录缓存、turn 上下文文件）仍在 `lib/src/features/agent/data`，运行态事实由 application 层的 slice `Notifier` 独占，presentation 只订阅。新代码按这条边界放：中立机制进 core，Provider 语义进 providers，Zeta 自有状态与 UI 编排进 app。**application/domain 不得 import `zeta_agent_providers`**；厂商 identity、私有配置 key 与指标标签由 data/app 组合层投影。**跨 Package 只能 import 对方顶层 barrel**，禁止 `package:<name>/src/...`。新增 Package 要先按[工程规范 §1](docs/zh/architecture/engineering_standards.md) 的判据论证，不按页面或团队机械拆包。
+- 已物理拆出的内部 Package 在 `packages/`：`zeta_foundation`（平台中立公共契约：Clock / OperationId / Transition / 排版常量 / 日志与指标端口，以及集中在 `src/platform/` 的宿主路径工具）、`zeta_plugin_kernel`（可信插件微内核）、`zeta_ui`（Graphite 设计系统）、`zeta_markdown`（Markdown 渲染包，fork 自 `mixin_markdown_widget 0.3.1`）、`zeta_agent_core`（中立 Agent 内核：领域模型与端口、Binding/runtime 契约、事件管线、纯 reducer、TimelineStore、Effect 描述）、`zeta_agent_provider_api`（中立装配契约）、`zeta_agent_provider_sdk`（共享协议机制与独立 testing 入口）以及 `zeta_agent_provider_codex` / `zeta_agent_provider_grok` / `zeta_agent_provider_claude_code`（各厂商协议适配与插件入口）。依赖方向单向：`kernel → foundation`、`ui → foundation`、`agent_core → foundation`、`provider_api → {agent_core, kernel, foundation}`、`provider_sdk → {provider_api, agent_core, kernel, foundation}`、`provider_<vendor> → {provider_api, provider_sdk, agent_core, kernel, foundation}`；三个插件互不可见且禁止 Flutter / Riverpod；`zeta_markdown` 是**叶子**，只依赖 Flutter 与它自己的三方解析/高亮依赖，不依赖任何内部包（Graphite token 的映射发生在根应用侧）；`zeta_foundation` 的核心契约、`zeta_plugin_kernel` 与 `zeta_agent_core` 不依赖 Flutter，只有 `zeta_foundation/src/platform/` 的宿主工具可依赖明确的 Flutter 插件；`zeta_ui` 依赖 Flutter/shadcn 但**不依赖** Riverpod、`dart:io`、generated l10n 或任何业务模型（控件自有文案走 `ZetaUiTextCatalog` 注入）。`zeta_markdown` 是 vendor 包：改它先读 `packages/zeta_markdown/UPSTREAM.md`，所有定制走「新增注入点 + 默认值不变」，每次改动都要往那份清单追加一条；它的 SDK 下限跟随上游（`^3.5.0`）以保持与上游逐字节可比，不要对齐其他内部包。`zeta_agent_core` 的状态通知走纯 Dart `AgentListenable`，Flutter 投影只在 presentation adapter；日志走 `ZetaLogger` 端口，Provider 身份映射由组合层注入。
+- **Agent feature 的分层现状**：中立内核在 `packages/zeta_agent_core`；**Provider 协议适配分别在 `packages/zeta_agent_provider_codex`、`packages/zeta_agent_provider_grok`、`packages/zeta_agent_provider_claude_code`**（wire 字段、CLI 参数、会话文件格式只能出现在这里）；Zeta 自有持久化（provider 配置、模型目录缓存、turn 上下文文件）仍在 `lib/src/features/agent/data`，运行态事实由 application 层的 slice `Notifier` 独占，presentation 只订阅。新代码按这条边界放：中立机制进 core，Provider 语义进对应插件包，Zeta 自有状态与 UI 编排进 app。**application/domain 不得 import 具体插件包；中立 `zeta_agent_provider_api` 与 core 一样可被 application/domain/presentation 使用**；厂商 identity、私有配置 key 与指标标签由 data/app 组合层投影。**跨 Package 只能 import 对方顶层 barrel**，禁止 `package:<name>/src/...`。新增 Package 要先按[工程规范 §1](docs/zh/architecture/engineering_standards.md) 的判据论证，不按页面或团队机械拆包。
+
+- **Provider 编译期登记边界**：`lib/src/app/plugins/agent_provider_manifest.dart` 集中 definition、启动 settings、插件工厂和厂商专属宿主注入；身份再导出只能包含常量。根测试的实现类型只经 `test/src/testing/` 导入插件的独立 testing barrel，生产代码禁用 testing barrel。当前 WP-C 已拆包，management/usage 尚未贡献化；仅允许 [WP-C §2](.workflow/plan/2026-09-04-provider-plugin-packages/03-wpc-provider-split.md) 登记的过渡 import，WP-D 必须清零，不得扩散。
 
 > 正文：[工程规范 §1–2](docs/zh/architecture/engineering_standards.md) · 状态所有权与 Riverpod 边界：[工程规范 §3.0](docs/zh/architecture/engineering_standards.md#30-状态所有权与-riverpod-边界) · [架构总览「分层」](docs/zh/architecture/overview.md)
 

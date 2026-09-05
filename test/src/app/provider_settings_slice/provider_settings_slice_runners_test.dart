@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_model_catalog_projection.dart';
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 import '../../testing/ide_test_harness.dart';
@@ -35,7 +35,7 @@ void main() {
         ),
         modelCatalogRepository: catalog,
         runtimeRegistry: registry,
-        providerDefinitions: builtInAgentProviderDefinitionCatalog,
+        providerDefinitions: zetaAgentProviderDefinitionCatalog,
       );
       addTearDown(composition.dispose);
       await composition.store.loadSettings();
@@ -74,7 +74,7 @@ void main() {
           store: MemoryAgentModelCatalogCacheStore(),
         ),
         runtimeRegistry: registry,
-        providerDefinitions: builtInAgentProviderDefinitionCatalog,
+        providerDefinitions: zetaAgentProviderDefinitionCatalog,
       );
       addTearDown(composition.dispose);
       await composition.store.loadSettings();
@@ -104,7 +104,7 @@ void main() {
           store: MemoryAgentModelCatalogCacheStore(),
         ),
         runtimeRegistry: registry,
-        providerDefinitions: builtInAgentProviderDefinitionCatalog,
+        providerDefinitions: zetaAgentProviderDefinitionCatalog,
       );
       addTearDown(composition.dispose);
       await composition.store.loadSettings();
@@ -134,7 +134,7 @@ void main() {
           store: MemoryAgentModelCatalogCacheStore(),
         ),
         runtimeRegistry: registry,
-        providerDefinitions: builtInAgentProviderDefinitionCatalog,
+        providerDefinitions: zetaAgentProviderDefinitionCatalog,
       );
       addTearDown(composition.dispose);
       await composition.store.loadSettings();
@@ -175,7 +175,7 @@ void main() {
             store: MemoryAgentModelCatalogCacheStore(),
           ),
           runtimeRegistry: registry,
-          providerDefinitions: builtInAgentProviderDefinitionCatalog,
+          providerDefinitions: zetaAgentProviderDefinitionCatalog,
         );
         addTearDown(composition.dispose);
 

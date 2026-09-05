@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
+// WP-C 过渡白名单：WP-D 迁入插件或通过贡献能力消除。
+import 'package:zeta_agent_provider_grok/zeta_agent_provider_grok.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/usage_statistics/data/providers/usage_scan_cache.dart';
 import 'package:zeta/src/features/usage_statistics/domain/fallback_usage_statistics_text_catalog.dart';

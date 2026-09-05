@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:test/test.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
@@ -14,7 +16,9 @@ abstract class AgentProviderContractFixture {
 
   List<Object> get sampleWirePayloads => const <Object>[];
 
-  List<AgentEvent> mapSampleWirePayload(Object payload) => const <AgentEvent>[];
+  /// 同步 mapper 与异步 transport 都可回放；只改变测试调度，不修改 Provider。
+  FutureOr<List<AgentEvent>> mapSampleWirePayload(Object payload) =>
+      const <AgentEvent>[];
 }
 
 /// 注册每个 Provider 插件必须复用的中立契约测试。
@@ -92,7 +96,7 @@ void runAgentProviderContractTests(
   });
 
   group('事件契约（G1/G2）', () {
-    test('适配层输出的时间线与交互 identity 非空', () {
+    test('适配层输出的时间线与交互 identity 非空', () async {
       final fixture = createFixture();
       if (fixture.sampleWirePayloads.isEmpty) {
         markTestSkipped('该插件尚未提供脱敏 wire fixture');
@@ -100,13 +104,13 @@ void runAgentProviderContractTests(
 
       final events = <AgentEvent>[
         for (final payload in fixture.sampleWirePayloads)
-          ...fixture.mapSampleWirePayload(payload),
+          ...await fixture.mapSampleWirePayload(payload),
       ];
       expect(events, isNotEmpty, reason: '非空 wire fixture 必须产出规范化事件');
       expect(_eventIdentityViolations(events), isEmpty);
     });
 
-    test('raw payload 保持不透明且可稳定渲染', () {
+    test('raw payload 保持不透明且可稳定渲染', () async {
       final fixture = createFixture();
       if (fixture.sampleWirePayloads.isEmpty) {
         markTestSkipped('该插件尚未提供脱敏 wire fixture');
@@ -114,7 +118,7 @@ void runAgentProviderContractTests(
 
       final payloads = <AgentProviderRawPayload>[
         for (final payload in fixture.sampleWirePayloads)
-          for (final event in fixture.mapSampleWirePayload(payload))
+          for (final event in await fixture.mapSampleWirePayload(payload))
             ..._rawPayloads(event),
       ];
       for (final payload in payloads) {
@@ -160,6 +164,7 @@ final class _OptionalPortContract {
     required this.name,
     required this.isPresent,
     this.capability,
+    this.discoversCapability = false,
   });
 
   final String name;
@@ -167,6 +172,9 @@ final class _OptionalPortContract {
 
   /// null 表示 core 没有为该端口声明冗余静态 capability，端口本身即真源。
   final bool? capability;
+
+  /// 目录查询先于能力协商；查询端口存在不代表已有可选项。
+  final bool discoversCapability;
 }
 
 List<_OptionalPortContract> _optionalPortContracts(AgentProviderBundle bundle) {
@@ -235,6 +243,7 @@ List<_OptionalPortContract> _optionalPortContracts(AgentProviderBundle bundle) {
       name: 'conversationModes',
       isPresent: bundle.conversationModes != null,
       capability: capabilities.supportsModeSelection,
+      discoversCapability: true,
     ),
     _OptionalPortContract(
       name: 'skills',
@@ -271,7 +280,9 @@ List<String> _portImpliesCapabilityViolations(
   Iterable<_OptionalPortContract> contracts,
 ) => <String>[
   for (final contract in contracts)
-    if (contract.isPresent && contract.capability == false)
+    if (contract.isPresent &&
+        contract.capability == false &&
+        !contract.discoversCapability)
       '${contract.name}: port present but capability=false',
 ];
 

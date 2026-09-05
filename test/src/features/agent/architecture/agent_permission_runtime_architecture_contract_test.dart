@@ -1,8 +1,9 @@
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
+import '../../../testing/agent_provider_implementations.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
 import '../../../testing/provider_settings_test_store.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
@@ -567,13 +568,13 @@ void main() {
         'packages/zeta_agent_core/lib/src/domain/agent_provider_models.dart',
       ).readAsStringSync();
       final dataMigration = File(
-        'packages/zeta_agent_providers/lib/src/agent_provider_permission_migration.dart',
+        'packages/zeta_agent_provider_api/lib/src/agent_provider_permission_migration.dart',
       );
       final codexPluginSource = File(
-        'packages/zeta_agent_providers/lib/codex_plugin.dart',
+        'packages/zeta_agent_provider_codex/lib/codex_plugin.dart',
       ).readAsStringSync();
       final grokPluginSource = File(
-        'packages/zeta_agent_providers/lib/grok_plugin.dart',
+        'packages/zeta_agent_provider_grok/lib/grok_plugin.dart',
       ).readAsStringSync();
       final appSource = File('lib/src/app/app.dart').readAsStringSync();
 
@@ -601,7 +602,7 @@ void main() {
         'packages/zeta_agent_core/lib/src/domain/agent_provider_models.dart',
       ).readAsStringSync();
       final codexProvider = File(
-        'packages/zeta_agent_providers/lib/src/datasources/app_server/'
+        'packages/zeta_agent_provider_codex/lib/src/datasources/app_server/'
         'codex_app_server_agent_provider.dart',
       ).readAsStringSync();
 

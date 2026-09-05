@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
+// WP-C 过渡白名单：WP-D 迁入插件或通过贡献能力消除。
+import 'package:zeta_agent_provider_claude_code/zeta_agent_provider_claude_code.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';

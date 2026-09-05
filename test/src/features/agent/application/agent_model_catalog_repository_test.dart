@@ -2,7 +2,8 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
+import '../../../testing/agent_provider_implementations.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import '../../../testing/memory_feature_stores.dart';
 
@@ -17,7 +18,7 @@ void main() {
       store = MemoryAgentModelCatalogCacheStore();
       repository = AgentModelCatalogRepository(
         store: store,
-        fingerprintExtraKeysFor: builtInAgentProviderDefinitionCatalog
+        fingerprintExtraKeysFor: zetaAgentProviderDefinitionCatalog
             .modelCatalogFingerprintExtraKeysFor,
         clock: () => now,
       );

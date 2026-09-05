@@ -257,3 +257,5 @@ chore: bump flutter action pin
 参与本项目即表示你同意遵守[行为准则](CODE_OF_CONDUCT.md)。
 
 本项目采用 **GPL-3.0** 许可，见 [LICENSE](LICENSE)。提交贡献即表示你同意以相同许可授权你的代码。
+
+Provider 包已分离中立契约（`provider_api`）、共享机制（`provider_sdk`）与三个独立厂商插件。登记入口是 `lib/src/app/plugins/agent_provider_manifest.dart`；根测试访问实现只经 `test/src/testing/`。management/usage 当前仍有 WP-C 过渡 import，详见[工程规范 §2.1](docs/zh/architecture/engineering_standards.md#21-provider-插件包边界wp-c)。

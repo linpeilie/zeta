@@ -9,6 +9,31 @@ void main() {
   runAgentProviderContractTests(_PassingFixture.new);
 
   group('contract suite self-test', () {
+    test('模式目录可以在尚无可选模式时参与能力发现', () {
+      final host = _FakeHost();
+      final bundle = AgentProviderBundle(
+        runtime: host,
+        conversation: host,
+        conversationModes: const _DiscoveryModeCatalog(),
+      );
+      addTearDown(host.dispose);
+      expect(agentProviderBundleContractViolations(bundle), isEmpty);
+    });
+
+    test('声明模式选择能力后仍必须提供目录端口', () {
+      final host = _FakeHost(
+        capabilities: const AgentProviderCapabilities(
+          supportsModeSelection: true,
+        ),
+      );
+      final bundle = AgentProviderBundle(runtime: host, conversation: host);
+      addTearDown(host.dispose);
+      expect(
+        agentProviderBundleContractViolations(bundle),
+        contains('conversationModes: capability=true but port is null'),
+      );
+    });
+
     test('全绿 fixture 没有端口/能力违规', () {
       final bundle = _PassingFixture().createBundle();
       addTearDown(bundle.runtime.dispose);
@@ -87,9 +112,10 @@ final class _FailingFixture extends AgentProviderContractFixture {
 }
 
 final class _FakeHost implements AgentRuntimePort, AgentConversationPort {
+  _FakeHost({this.capabilities = AgentProviderCapabilities.unsupported});
+
   @override
-  AgentProviderCapabilities get capabilities =>
-      AgentProviderCapabilities.unsupported;
+  final AgentProviderCapabilities capabilities;
 
   @override
   AgentProviderConfig get config => _config;
@@ -158,4 +184,12 @@ final class _FakeThreadCatalog implements AgentThreadCatalogPort {
     String? sessionPath,
     String? projectPath,
   }) => throw UnsupportedError('not used by contract self-test');
+}
+
+final class _DiscoveryModeCatalog implements AgentConversationModeCatalogPort {
+  const _DiscoveryModeCatalog();
+
+  @override
+  Future<AgentConversationModeCatalog> listConversationModes() =>
+      throw UnsupportedError('not queried by port contract');
 }

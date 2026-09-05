@@ -69,6 +69,12 @@ void main() {
                 ).listSync(recursive: true).whereType<File>(),
               ]
               .where((file) => file.path.endsWith('.dart'))
+              // 插件测试已随包迁移；本守卫只约束生产调用点。
+              .where(
+                (file) => !file.path
+                    .replaceAll(Platform.pathSeparator, '/')
+                    .contains('/test/'),
+              )
               .where(
                 (file) => file.readAsStringSync().contains(
                   'providerFactory.createBundle(',
@@ -94,7 +100,13 @@ void main() {
             in Directory(root)
                 .listSync(recursive: true)
                 .whereType<File>()
-                .where((file) => file.path.endsWith('.dart'))) {
+                .where((file) => file.path.endsWith('.dart'))
+                // 插件测试已随包迁移；本守卫只约束生产调用点。
+                .where(
+                  (file) => !file.path
+                      .replaceAll(Platform.pathSeparator, '/')
+                      .contains('/test/'),
+                )) {
           expect(
             file.readAsStringSync(),
             isNot(contains('/src/ui/')),

@@ -6,6 +6,8 @@
 
 想查具体名词的定义，看[术语表](../development/glossary.md)。想看完整规则和不变量，看[设计文档](design_document.md)与[工程规范](engineering_standards.md)。
 
+> 2026-09-05 包结构更新：Provider 已拆为 api、sdk 与 Codex/Grok/Claude Code 三个纯 Dart 插件包；登记集中在 `agent_provider_manifest.dart`。当前 management/usage 处于 WP-C 过渡态，完整依赖与白名单规则见[工程规范 §2.1](engineering_standards.md#21-provider-插件包边界wp-c)。
+
 ## 一句话概括
 
 Zeta 是一个**桌面壳层**：它不含模型，也不实现编辑器。它把本机已有的 Agent CLI 拉起来，把对方的私有协议翻译成一套中立的领域事件，再把这些事件渲染成可审计的时间线。

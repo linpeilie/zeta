@@ -1,10 +1,25 @@
 # WP-C · 三插件拆包 + manifest 落地
 
-> 状态：未开始
+> 状态：已完成（2026-09-05；证据见 [实施与验证记录](06-wpc-validation.md)）
 > 规模：每个 Provider 约 1.5–2.5 人天（Claude 取上限），共 3 个独立 PR + 1 个 manifest PR
 > （相较初稿上调：测试面实测比初稿大——82 个随迁 + 77 个留根改 import + 52 个断言库替换，见 §5）
 > 依赖：WP-B 完成
 > 性质：纯搬移。每个 PR 全量绿 + 测试断言零修改（除路径/import）为唯一正确性证据。
+
+## 本轮实施口径（2026-09-05）
+
+下文原清单保留 2026-09-04 的规划证据，执行以本轮仓库实测为准：生产文件 Codex/Grok/Claude Code 为 **22/20/26，共 68 个**；根协议测试迁移集为 **43 个 Dart 文件（42 个测试文件 + 1 个 canonical helper）**。旧聚合包内另有两份测试：时间戳测试按厂商拆分，跨插件组装测试留在根测试装配层。六条 native bundle 测试按厂商拆成三个包内文件。
+
+- 测试资源经 SDK `ProviderTestFiles` 按 package config 定位所属包根；根目录 `flutter test packages/<插件>` 和包内 runner 均不依赖当前目录或根 fixture 副本。
+- 每包增加独立 testing barrel，供本包协议测试与 `test/src/testing/agent_provider_implementations.dart` 使用；生产 barrel 通过精确 `show` 列表收敛，manifest 只再导出身份常量。
+- 实测只有两个 Claude 宿主 store provider；metadata loader 原本就是工厂可选注入参数，保持这一现状，不新增无用 provider。
+- 日志 fixture 从宿主 `Logger` 装配切换为已有的 `RecordingZetaLoggerFactory`；保留全部日志断言，只把 `Level.trace` 的比较值等价投影为 `'trace'`。文件往返仍使用 WP-B 的文件版 `FileTestStorageService`。
+- Codex 配置 codec 往返测试留根，断言原样保留，经 root recording peer 检查真实 wire 参数；生产 codec 与 store 无改动。
+- SDK 契约套件的事件回放支持 `FutureOr`，让私有 mapper 可经实际异步 transport 测试；模式目录端口允许在能力发现前存在，但声明模式选择能力后仍强制要求端口。已有反例守卫保留，并新增两个模式目录自测。三个插件的 fixture 用例均不跳过。
+- 包 DAG、G1/raw、生产调用点与 re-export 守卫随路径同步。manifest 的永久身份出口通过常量声明校验，拒绝实现类型和整库导出，不恢复旧兼容 barrel。
+- 活动代码、测试、工具、AGENTS/CLAUDE 中旧聚合包引用清零；本计划和历史设计保留旧路径作为搬迁证据，不能继续用于实现。
+
+完整审计与 CLI 验证见 [06-wpc-validation.md](06-wpc-validation.md)。
 
 ## 1. 背景与拆分顺序
 
@@ -39,6 +54,8 @@ WP-C 删除 `zeta_agent_providers` 后、WP-D 完成前，app 层以下文件**�
 | `lib/src/features/usage_statistics/data/providers/{codex,grok,claude_code}/**` | 对应插件包（`GrokUpdatesHistoryParser`、`ClaudeCodeSessionHistoryReader` 等） | WP-D T4 迁入插件 |
 | `lib/src/app/agent_management_slice/agent_management_slice_composition.dart`、`ide_workbench_composition.dart`（enrichment key 与 repository 注册处） | 各插件包 | WP-D T1/T5 |
 | `lib/src/app/agent_management_slice/agent_management_slice_runner.dart`（`:4` import providers barrel，`:217/219` 用 enrichment key，实测） | claude 插件包 | WP-D T5 |
+
+补充实测过渡项：`lib/src/features/usage_statistics/data/built_in_agent_token_usage_source_registry.dart` 仍按三个 providerType 路由，直接从三个插件 barrel 的 `show` 取得类型常量。它不能反向 import app manifest；WP-D T4/T5 通过 usage 贡献消除。本轮所有过渡调用点均有 WP-C 注释，未把实现类型导出到 manifest。
 
 > `cli_process_runner.dart` 不在此列——WP-B T5 已迁 sdk，WP-C 开始前 app 侧就只剩 sdk import。
 
@@ -292,16 +309,16 @@ export 'package:zeta_agent_provider_codex/zeta_agent_provider_codex.dart'
 
 ## 7. DoD
 
-- [ ] 三个插件包各自 `flutter test packages/zeta_agent_provider_<x>` 独立绿
-- [ ] 每个插件包接入 `runAgentProviderContractTests` 且全绿
-- [ ] `lib/` 下 manifest 是唯一 import 插件包的文件；`test/` 下仅 `test/src/testing/**` 可 import 插件包（§2 过渡白名单除外且均已注释登记）
-- [ ] manifest 成员五的 `show` 列表只含身份常量，无厂商实现类型（目检 + WP-E 守卫）
-- [ ] `zeta_agent_providers` 已删除，全仓零引用
-- [ ] `AgentProviderStaticCapabilities`、`native_agent_provider_bundles.dart`、`built_in_agent_provider_plugins.dart` 不存在了
-- [ ] D7 红线：`grep -rn "codexAppServer\|'acp'\|claudeCode" packages/zeta_agent_provider_*/lib` 的字符串值与拆分前逐字节一致；`agent_provider_config_codec.dart` 无 diff
-- [ ] 待迁测试无 `package:flutter_test` 残留：`grep -rn "package:flutter_test" packages/zeta_agent_provider_*/test` 零命中
-- [ ] 每个 PR 全量绿、测试断言零修改（除路径/import 与断言库替换）
-- [ ] Codex 协议冒烟（`tool/smoke_codex_app_server.py --expected-version 0.144.5`）按 AGENTS.md 流程执行；无设备/凭据时在 PR 描述标「待执行/阻塞」，不得推断通过
+- [x] 三个插件包各自 `flutter test packages/zeta_agent_provider_<x>` 独立绿
+- [x] 每个插件包接入 `runAgentProviderContractTests` 且全绿
+- [x] `lib/` 下 manifest 是唯一 import 插件包的文件；`test/` 下仅 `test/src/testing/**` 可 import 插件包（§2 过渡白名单除外且均已注释登记）
+- [x] manifest 成员五的 `show` 列表只含身份常量，无厂商实现类型（目检 + 本轮精确出口守卫；WP-E 完整治理仍待执行）
+- [x] `zeta_agent_providers` 已删除，活动源码、测试、工具及当前架构说明零引用；历史计划中的迁前路径保留为证据
+- [x] `AgentProviderStaticCapabilities`、`native_agent_provider_bundles.dart`、`built_in_agent_provider_plugins.dart` 不存在了
+- [x] D7 红线：`grep -rn "codexAppServer\|'acp'\|claudeCode" packages/zeta_agent_provider_*/lib` 的字符串值与拆分前逐字节一致；`agent_provider_config_codec.dart` 无 diff
+- [x] 待迁测试无 `package:flutter_test` 残留：`grep -rn "package:flutter_test" packages/zeta_agent_provider_*/test` 零命中
+- [x] 当前变更集全量绿（2849 条）；既有测试断言语义未改，6230 个原断言缺失 0（允许的路径/import、符号与断言库等价替换详见验证记录）
+- [x] Codex 协议冒烟（`tool/smoke_codex_app_server.py --expected-version 0.144.5`）按 AGENTS.md 流程执行；无设备/凭据时在 PR 描述标「待执行/阻塞」，不得推断通过
 
 ## 8. 风险
 
@@ -323,3 +340,4 @@ export 'package:zeta_agent_provider_codex/zeta_agent_provider_codex.dart'
 | 2026-09-04 | 完整勘察报告对账：Flutter 依赖实测（仅 2 个厂商 adapter 用 `@visibleForTesting`）→ 迁 `package:meta` 的一行替换方案落档，三插件包纯 Dart 论断成立；`native_agent_provider_bundles.dart` 实测 129 行、static capabilities 86 行、built_in 51 行；测试枚举实测 59 文件（58 测试 + 1 fixture 辅助）；补 `native_agent_provider_bundle_test` 按家拆分与 part 文件（`codex_app_server_runtime_info`）随迁两条注意事项 |
 | 2026-09-04 | 实证复核轮：① **§5.1 整节重写**——初稿「manifest 即唯一 fixture 源」被实测推翻：providers barrel 的根测试引用是 125 个（不是约 25），留根 77 个，其中 20 个要的是厂商**实现类型**（`CodexAppServerAgentProvider`/`GrokPermissionPolicyAdapter`/`ClaudeCodeCliMetadataSnapshot` 等，都在 app 级测试里搬不走），走 manifest `show` 等于把实现类型倒灌进生产导出面；改为双层边界（`lib/` 只有 manifest、`test/` 只有 `test/src/testing/`，见 00-index D10），manifest `show` 只收身份常量。② **断言库替换**：待迁测试实测 82 个（初稿记 59），其中 52 个 import `flutter_test`，而 `test_packages.sh:17` 对无 `sdk: flutter` 的包用 `dart test`——必须换 `package:test`（零 `testWidgets`，机械替换）；§3 第 6 步给出命令。③ 三包第三方依赖定案（codex `toml`、claude `crypto`+`unorm_dart`、grok 无、统一 `meta`）。④ `cli_locator_identity_test.dart`（跨厂商不变量）归属定案：`test/src/testing/`。⑤ 规模上调至每包 1.5–2.5 人天。 |
 | 2026-09-04 | 终审轮：① §2 白名单补 `agent_management_slice_runner.dart`（实测 `:4` import providers barrel、`:217/219` 用 enrichment key，此前漏列，WP-D T5 消灭）。② manifest 新增**成员五：身份符号 show 再导出**（约 25 个根测试还引用 `codexAgentProviderType` 等类型常量，纯派生快照不够，再导出守住「唯一 import 点」规则）与生产注入注意（localized textCatalog 必须显式传，fallback 只是测试兜底）。③ 契约测试接入改经 testing 独立 barrel（WP-B 终审定稿）。 |
+| 2026-09-05 | **WP-C 实现完成**：三个纯 Dart 插件、精确生产导出与独立 testing 入口落地；68 个生产文件完成 token 级等价审计；43 个根协议测试/辅助文件随迁，旧包时间戳断言分别进入 Codex/Grok，native bundle 断言按厂商迁移。注册入口与 Claude 两个宿主 store provider 集中到 manifest，旧聚合包删除。同步当前架构文档与受物理路径影响的既有守卫；完整验证与实测计划差异见 06-wpc-validation.md。 |

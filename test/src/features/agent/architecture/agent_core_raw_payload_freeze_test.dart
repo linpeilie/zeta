@@ -130,9 +130,17 @@ void main() {
   test('适配层统一经内容盲的 wrapAgentProviderPayload 包装原文', () {
     // 直接调构造会绕过递归冻结与统一的 payload 边界。
     final offenders = <String>[];
-    for (final file in dartFilesIn('packages/zeta_agent_providers/lib')) {
+    for (final file in <File>[
+      for (final root in const <String>[
+        'packages/zeta_agent_provider_codex/lib',
+        'packages/zeta_agent_provider_grok/lib',
+        'packages/zeta_agent_provider_claude_code/lib',
+        'packages/zeta_agent_provider_sdk/lib',
+      ])
+        ...dartFilesIn(root),
+    ]) {
       final path = normalize(file.path);
-      if (path.endsWith('mappers/agent_provider_payload.dart')) {
+      if (path.endsWith('payload/agent_provider_payload.dart')) {
         continue;
       }
       if (file.readAsStringSync().contains('AgentProviderRawPayload.wrap')) {
@@ -170,7 +178,9 @@ void main() {
     for (final root in const <String>[
       'lib',
       'packages/zeta_agent_core/lib',
-      'packages/zeta_agent_providers/lib',
+      'packages/zeta_agent_provider_codex/lib',
+      'packages/zeta_agent_provider_grok/lib',
+      'packages/zeta_agent_provider_claude_code/lib',
       'packages/zeta_ui/lib',
       'packages/zeta_foundation/lib',
       'packages/zeta_plugin_kernel/lib',

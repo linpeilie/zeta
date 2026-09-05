@@ -1,0 +1,31 @@
+/// 插件协议测试与宿主测试 harness 的实现入口；生产代码不得依赖。
+library;
+
+export 'claude_code_plugin.dart';
+export 'src/claude_code_cli_locator.dart';
+export 'src/claude_code_provider_bundle.dart';
+export 'src/claude_code_static_capabilities.dart';
+export 'src/datasources/claude_code/claude_code_agent_provider.dart';
+export 'src/datasources/claude_code/claude_code_anthropic_api_client.dart';
+export 'src/datasources/claude_code/claude_code_cli_metadata.dart';
+export 'src/datasources/claude_code/claude_code_cli_metadata_coordinator.dart';
+export 'src/datasources/claude_code/claude_code_cli_metadata_probe.dart';
+export 'src/datasources/claude_code/claude_code_control_request_handler.dart';
+export 'src/datasources/claude_code/claude_code_event_mapper.dart';
+export 'src/datasources/claude_code/claude_code_file_change_tracker.dart';
+export 'src/datasources/claude_code/claude_code_hidden_thread_store.dart';
+export 'src/datasources/claude_code/claude_code_macos_keychain_source.dart';
+export 'src/datasources/claude_code/claude_code_model_catalog.dart';
+export 'src/datasources/claude_code/claude_code_oauth_credentials_reader.dart';
+export 'src/datasources/claude_code/claude_code_permission_policy_adapter.dart';
+export 'src/datasources/claude_code/claude_code_plan_approval_adapter.dart';
+export 'src/datasources/claude_code/claude_code_process_starter.dart';
+export 'src/datasources/claude_code/claude_code_provider_config.dart';
+export 'src/datasources/claude_code/claude_code_question_adapter.dart';
+export 'src/datasources/claude_code/claude_code_session_history_reader.dart';
+export 'src/datasources/claude_code/claude_code_usage_quota_adapter.dart';
+export 'src/datasources/claude_code/stream_json_peer.dart';
+export 'src/mappers/claude_code_initialize_metadata_mapper.dart';
+export 'src/mappers/claude_code_permission_mode_codec.dart';
+export 'src/mappers/claude_code_stream_identity.dart';
+export 'src/mappers/claude_code_usage_quota_mapper.dart';

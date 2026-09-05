@@ -1,10 +1,11 @@
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
+import '../../../testing/agent_provider_implementations.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 import 'package:zeta/src/app/localization/zeta_localization.dart';

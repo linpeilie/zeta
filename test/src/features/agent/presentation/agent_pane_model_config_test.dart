@@ -1,10 +1,11 @@
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 import 'dart:ui' show SemanticsAction;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
+import '../../../testing/agent_provider_implementations.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 
@@ -966,6 +967,5 @@ final class _ClaudeEffortModelProvider extends AgentPaneFakeProvider {
   AgentProviderConfig get config => defaultClaudeCodeAgentProviderConfig;
 
   @override
-  AgentProviderCapabilities get capabilities =>
-      AgentProviderStaticCapabilities.claudeCode;
+  AgentProviderCapabilities get capabilities => claudeCodeStaticCapabilities;
 }

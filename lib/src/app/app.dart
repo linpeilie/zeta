@@ -1,7 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 
 import 'package:zeta/src/app/app_constants.dart';
@@ -132,7 +132,7 @@ class _MainAppState extends State<MainApp> {
       key: const ValueKey<String>('zeta.ide-home'),
       shellStateSnapshotRelay: composition.shellStateSnapshotRelay,
       workbenchCompositionFactory: composition.createWorkbenchComposition,
-      providerMetricLabel: builtInAgentProviderDefinitionCatalog.metricLabelFor,
+      providerMetricLabel: zetaAgentProviderDefinitionCatalog.metricLabelFor,
     );
   }
 }

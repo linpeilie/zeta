@@ -6,7 +6,7 @@ import 'package:zeta/src/features/agent/application/provider_settings_slice/agen
 import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_provider_settings_slice_state.dart';
 import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_provider_settings_slice_store.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 import '../../../../testing/ide_test_harness.dart';
 
 void main() {
@@ -21,7 +21,7 @@ void main() {
       final first = store.loadSettings();
       final second = store.loadSettings();
       final effect = runner.take<ProviderSettingsLoadEffect>();
-      final settings = builtInAgentProviderSettings.copyWith(
+      final settings = zetaBuiltInAgentProviderSettings.copyWith(
         activeProviderId: grokAgentProviderId,
       );
       store.loaded(effect.operationId, settings);
@@ -169,7 +169,7 @@ AgentProviderSettingsSliceNotifier _createStore(_ManualRunner runner) {
   final catalog = AgentModelCatalogRepository(
     store: MemoryAgentModelCatalogCacheStore(),
   );
-  final definitions = builtInAgentProviderDefinitionCatalog;
+  final definitions = zetaAgentProviderDefinitionCatalog;
   final container = ProviderContainer(
     overrides: <Override>[
       agentProviderSettingsSliceDependenciesProvider.overrideWithValue(
@@ -200,7 +200,7 @@ Future<void> _loadDefaults(
 ) async {
   final operation = store.loadSettings();
   final effect = runner.take<ProviderSettingsLoadEffect>();
-  store.loaded(effect.operationId, builtInAgentProviderSettings);
+  store.loaded(effect.operationId, zetaBuiltInAgentProviderSettings);
   await operation;
 }
 

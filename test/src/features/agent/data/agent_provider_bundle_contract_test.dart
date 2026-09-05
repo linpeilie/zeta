@@ -1,6 +1,7 @@
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
+import '../../../testing/agent_provider_implementations.dart';
 
 import '../../../testing/activated_agent_provider_plugins.dart';
 import '../../../testing/recording_json_rpc_peer.dart';

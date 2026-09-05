@@ -1,5 +1,5 @@
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 
 const handlerTestThreadId = 'thread-1';
 const handlerTestTurnId = 'turn-1';

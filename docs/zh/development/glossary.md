@@ -227,3 +227,12 @@ Zeta 自有数据根目录：`config/`（配置）、`state/`（会话状态与�
 
 **全量兜底触发（full-run trigger）**
 `pubspec.yaml`、`dart_test.yaml`、`analysis_options.yaml`、`.github/workflows/`、选择器自身——这些"地基"文件一变，import 图算不出影响面，`tool/test_affected.sh` 直接退化成全量。
+
+## Provider 插件包与 manifest
+
+- `provider_api`：宿主装配所需的中立契约，不包含厂商实现。
+- `provider_sdk`：共享协议机制与独立 testing 入口。
+- `provider_<vendor>`：单一厂商的协议实现及独立测试。
+- `manifest`：`lib/src/app/plugins/agent_provider_manifest.dart`，编译期登记 definitions、settings、工厂和专属宿主注入；不进行运行时发现。
+
+WP-C 当前过渡 import 与依赖约束见[工程规范 §2.1](../architecture/engineering_standards.md#21-provider-插件包边界wp-c)。

@@ -1,7 +1,7 @@
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk_testing.dart'
     as provider_sdk;
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 
 import 'package:zeta/src/features/settings/data/general_settings_store.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings_repository.dart';
@@ -51,7 +51,7 @@ class MemoryGeneralSettingsStore implements GeneralSettingsStore {
 class MemoryAgentProviderConfigStore
     extends provider_sdk.MemoryAgentProviderConfigStore {
   MemoryAgentProviderConfigStore([AgentProviderSettings? settings])
-    : super(settings ?? builtInAgentProviderSettings);
+    : super(settings ?? zetaBuiltInAgentProviderSettings);
 }
 
 /// 测试用用量分区仓库。

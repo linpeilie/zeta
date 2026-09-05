@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zeta_foundation/zeta_foundation.dart';
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 void main() {
@@ -553,11 +553,10 @@ void main() {
         providerFactory: factory,
         metrics: metrics,
         // 生产由组合层注入；内核自己不认识 Provider 身份。
-        providerMetricLabel:
-            builtInAgentProviderDefinitionCatalog.metricLabelFor,
+        providerMetricLabel: zetaAgentProviderDefinitionCatalog.metricLabelFor,
       );
       final codexTags = ZetaMetricTags(
-        providerId: builtInAgentProviderDefinitionCatalog.metricLabelFor(
+        providerId: zetaAgentProviderDefinitionCatalog.metricLabelFor(
           defaultAgentProviderId,
         ),
       );
@@ -602,8 +601,7 @@ void main() {
       final registry = AgentProviderRuntimeRegistry(
         providerFactory: _CountingProviderFactory(),
         metrics: metrics,
-        providerMetricLabel:
-            builtInAgentProviderDefinitionCatalog.metricLabelFor,
+        providerMetricLabel: zetaAgentProviderDefinitionCatalog.metricLabelFor,
       );
       addTearDown(registry.close);
 

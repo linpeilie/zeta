@@ -1,3 +1,4 @@
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -5,7 +6,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
+import 'agent_provider_implementations.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
@@ -247,7 +248,7 @@ class FakeAgentProvider
     this.responseText = 'Fake response from provider',
     this.turnErrorMessage,
     this.onResumeSession,
-    this.declaredCapabilities = AgentProviderStaticCapabilities.codexAppServer,
+    this.declaredCapabilities = codexStaticCapabilities,
     this.config = defaultCodexAgentProviderConfig,
     this.includeConversationTestThread = false,
     this.conversationThreadProviderId,

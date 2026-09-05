@@ -227,3 +227,7 @@ One of the 6 groups the root `test/` tree is split into by `kRootTestShards` in 
 
 **Full-run trigger**
 `pubspec.yaml`, `dart_test.yaml`, `analysis_options.yaml`, `.github/workflows/`, and the selector's own files. When one of these foundation files changes, the import graph cannot bound the blast radius, so `tool/test_affected.sh` falls back to the full suite.
+
+## Provider package manifest
+
+`provider_api` defines neutral host assembly contracts. `provider_sdk` provides shared protocol mechanisms and a separate testing entrypoint. Each `provider_<vendor>` owns its protocol implementation and tests. The compile-time manifest (`lib/src/app/plugins/agent_provider_manifest.dart`) registers definitions, settings and factories; it is not a runtime discovery system. WP-C still has documented host management/usage imports pending WP-D.

@@ -1,7 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
+import 'agent_provider_implementations.dart';
 import 'package:zeta_plugin_kernel/zeta_plugin_kernel.dart';
 
 /// 同步激活三个生产 Provider 插件，并把插件目录关闭登记到当前测试。
@@ -9,7 +10,7 @@ AgentProviderBundleFactory activateBuiltInAgentProviderBundleFactory({
   ClaudeCodeCliMetadataLoader? claudeCodeMetadataLoader,
 }) {
   final registry = ZetaPluginRegistry(
-    factories: createBuiltInAgentProviderPlugins(
+    factories: zetaAgentProviderPluginFactories(
       claudeCodeMetadataLoader: claudeCodeMetadataLoader,
     ),
   );

@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
@@ -109,7 +109,9 @@ void main() {
     );
     final providerController = createProviderSettingsTestStore(
       runtimeRegistry: registry,
-      configStore: MemoryAgentProviderConfigStore(builtInAgentProviderSettings),
+      configStore: MemoryAgentProviderConfigStore(
+        zetaBuiltInAgentProviderSettings,
+      ),
     );
     final bindingHarness = AgentConversationBindingTestHarness(
       registry: registry,

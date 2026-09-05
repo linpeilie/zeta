@@ -12,7 +12,7 @@ import 'dart:convert';
 /// - 没有 `operator []`、没有 `keys`、没有 `toMap()` —— `raw['x']` 直接编译失败；
 /// - 唯一出口是 [toPrettyJson]，只服务于"展示原始报文"这一个场景；
 /// - [toString] **不吐内容**，误拼进日志或异常消息也不会泄露 payload（G7）；
-/// - 构造只允许发生在 `zeta_agent_providers`（守卫强制）——原文只能从适配层进来。
+/// - 构造只允许发生在 `zeta_agent_provider_sdk` 的内容盲包装器（守卫强制）——原文只能从适配层进来。
 ///
 /// 需要从原文里取值时，正确做法是让 adapter 解析成 typed 字段传出来，
 /// 例如 `AgentToolCall.inputDetail` / `AgentToolCall.appendsProgress`。

@@ -2,6 +2,8 @@
 
 最后更新：2026-08-24
 
+> 2026-09-05 包结构更新：Provider 已拆为 api、sdk 与 Codex/Grok/Claude Code 三个纯 Dart 插件包；登记集中在 `agent_provider_manifest.dart`。当前 management/usage 处于 WP-C 过渡态，完整依赖与白名单规则见[工程规范 §2.1](engineering_standards.md#21-provider-插件包边界wp-c)。
+
 ## 1. 设计目标
 
 Zeta 的设计目标是让 Flutter UI、Agent provider、会话持久化和本地文件系统访问保持清晰分层。当前实现采用轻量 feature-sliced 结构，不引入大型架构框架；活跃 Provider 为 Codex app-server、Grok ACP 与 Claude Code stream-json，统一收敛到中立 provider 抽象。

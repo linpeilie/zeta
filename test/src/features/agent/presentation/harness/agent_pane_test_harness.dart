@@ -1,3 +1,4 @@
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 // Shared harness for AgentPane widget tests.
 // 避免 AgentPane 集成测试重复搭建 FakeProvider / Theme / pump 工具。
 import 'dart:async';
@@ -18,7 +19,7 @@ import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_co
 
 import '../../../../testing/memory_agent_composer_attachment_store.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
+import '../../../../testing/agent_provider_implementations.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
@@ -548,7 +549,7 @@ class AgentPaneFakeProvider
 
   @override
   AgentProviderCapabilities get capabilities =>
-      AgentProviderStaticCapabilities.codexAppServer.copyWith(
+      codexStaticCapabilities.copyWith(
         canForkThreadAtTurn: true,
         canSteerTurn: canSteerTurn,
         canCompactThread: canCompactThread,

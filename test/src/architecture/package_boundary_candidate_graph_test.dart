@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 ///
 /// `zeta_foundation` / `zeta_plugin_kernel` / `zeta_agent_core` /
 /// `zeta_agent_provider_api` / `zeta_agent_provider_sdk` /
-/// `zeta_agent_providers` / `zeta_ui` 与根 app 之间的依赖方向是单向 DAG。
+/// `Provider 插件包` / `zeta_ui` 与根 app 之间的依赖方向是单向 DAG。
 /// 本守卫断言三件事：
 ///
 /// - 依赖方向只能沿 [_allowedEdges]；
@@ -312,9 +312,13 @@ void main() {
     );
   });
 
-  test('zeta_agent_providers 不反向依赖根 app 与 UI', () {
+  test('Provider 插件包 不反向依赖根 app 与 UI', () {
     final providerFiles = files
-        .where((path) => path.startsWith('packages/zeta_agent_providers/lib/'))
+        .where(
+          (path) => _providerPlugins.any(
+            (package) => path.startsWith('packages/$package/lib/'),
+          ),
+        )
         .toList(growable: false);
 
     expect(providerFiles, isNotEmpty);
@@ -348,7 +352,9 @@ void main() {
     const protocolTokens = <String>['jsonrpc', 'session/update'];
     final offenders = <String>[];
     for (final path in files) {
-      if (path.startsWith('packages/zeta_agent_providers/') ||
+      if (_providerPlugins.any(
+            (package) => path.startsWith('packages/$package/'),
+          ) ||
           path.startsWith('packages/zeta_agent_provider_sdk/')) {
         continue;
       }
@@ -410,7 +416,14 @@ const String _pluginKernel = 'zeta_plugin_kernel';
 const String _agentCore = 'zeta_agent_core';
 const String _agentProviderApi = 'zeta_agent_provider_api';
 const String _agentProviderSdk = 'zeta_agent_provider_sdk';
-const String _agentProviders = 'zeta_agent_providers';
+const String _agentProviderCodex = 'zeta_agent_provider_codex';
+const String _agentProviderGrok = 'zeta_agent_provider_grok';
+const String _agentProviderClaudeCode = 'zeta_agent_provider_claude_code';
+const Set<String> _providerPlugins = {
+  _agentProviderCodex,
+  _agentProviderGrok,
+  _agentProviderClaudeCode,
+};
 const String _ui = 'zeta_ui';
 const String _app = 'app';
 
@@ -420,7 +433,7 @@ const Set<String> _candidatePackages = <String>{
   _agentCore,
   _agentProviderApi,
   _agentProviderSdk,
-  _agentProviders,
+  ..._providerPlugins,
   _ui,
   _app,
 };
@@ -436,7 +449,7 @@ const Set<String> _materializedPackages = <String>{
   _agentCore,
   _agentProviderApi,
   _agentProviderSdk,
-  _agentProviders,
+  ..._providerPlugins,
 };
 
 /// 目标架构 §3.1 的依赖方向；根 app 是唯一可以看到所有 Package 的组合点。
@@ -457,8 +470,24 @@ const Map<String, Set<String>> _allowedEdges = <String, Set<String>>{
     _pluginKernel,
     _foundation,
   },
-  _agentProviders: <String>{
-    _agentProviders,
+  _agentProviderCodex: <String>{
+    ..._providerPlugins,
+    _agentProviderSdk,
+    _agentProviderApi,
+    _agentCore,
+    _pluginKernel,
+    _foundation,
+  },
+  _agentProviderGrok: <String>{
+    ..._providerPlugins,
+    _agentProviderSdk,
+    _agentProviderApi,
+    _agentCore,
+    _pluginKernel,
+    _foundation,
+  },
+  _agentProviderClaudeCode: <String>{
+    ..._providerPlugins,
     _agentProviderSdk,
     _agentProviderApi,
     _agentCore,
@@ -504,9 +533,24 @@ const Map<String, List<String>> _bannedExternalPrefixes =
         'package:shadcn_flutter/',
         'dart:ui',
       ],
-      _agentProviders: <String>[
-        'package:flutter/material',
-        'package:flutter/widgets',
+      _agentProviderCodex: <String>[
+        'package:flutter/',
+        'package:riverpod/',
+        'dart:ui',
+        'package:flutter_riverpod/',
+        'package:shadcn_flutter/',
+      ],
+      _agentProviderGrok: <String>[
+        'package:flutter/',
+        'package:riverpod/',
+        'dart:ui',
+        'package:flutter_riverpod/',
+        'package:shadcn_flutter/',
+      ],
+      _agentProviderClaudeCode: <String>[
+        'package:flutter/',
+        'package:riverpod/',
+        'dart:ui',
         'package:flutter_riverpod/',
         'package:shadcn_flutter/',
       ],
@@ -665,7 +709,21 @@ const Map<String, Set<String>> _manifestInternalDependencies =
         'zeta_foundation',
         'zeta_plugin_kernel',
       },
-      'zeta_agent_providers': <String>{
+      'zeta_agent_provider_codex': <String>{
+        'zeta_agent_core',
+        'zeta_agent_provider_api',
+        'zeta_agent_provider_sdk',
+        'zeta_foundation',
+        'zeta_plugin_kernel',
+      },
+      'zeta_agent_provider_grok': <String>{
+        'zeta_agent_core',
+        'zeta_agent_provider_api',
+        'zeta_agent_provider_sdk',
+        'zeta_foundation',
+        'zeta_plugin_kernel',
+      },
+      'zeta_agent_provider_claude_code': <String>{
         'zeta_agent_core',
         'zeta_agent_provider_api',
         'zeta_agent_provider_sdk',

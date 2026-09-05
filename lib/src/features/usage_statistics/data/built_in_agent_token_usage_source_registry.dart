@@ -1,5 +1,11 @@
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
+// WP-C 过渡白名单：WP-D 将此注册表改为消费 usage 贡献。
+import 'package:zeta_agent_provider_codex/zeta_agent_provider_codex.dart'
+    show codexAgentProviderType;
+import 'package:zeta_agent_provider_grok/zeta_agent_provider_grok.dart'
+    show grokAgentProviderType;
+import 'package:zeta_agent_provider_claude_code/zeta_agent_provider_claude_code.dart'
+    show claudeCodeAgentProviderType;
 import 'package:zeta/src/features/usage_statistics/data/providers/claude_code/claude_code_token_usage_source.dart';
 import 'package:zeta/src/features/usage_statistics/data/providers/codex/codex_token_usage_source.dart';
 import 'package:zeta/src/features/usage_statistics/data/providers/grok/grok_token_usage_source.dart';

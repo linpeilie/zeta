@@ -1,6 +1,7 @@
 @Tags(['slow', 'shell'])
 library;
 
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -11,7 +12,7 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta/src/app/app.dart' show MainApp;
 import 'package:zeta/src/app/window/zeta_ticker_gate.dart';
 import 'package:zeta/src/app/composition/zeta_app_composition.dart';
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
+import '../testing/agent_provider_implementations.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
@@ -2892,8 +2893,9 @@ class _ModeCapableFakeAgentProvider extends FakeAgentProvider
     required super.threadHistories,
     required super.threadPages,
   }) : super(
-         declaredCapabilities: AgentProviderStaticCapabilities.codexAppServer
-             .copyWith(supportsModeSelection: true),
+         declaredCapabilities: codexStaticCapabilities.copyWith(
+           supportsModeSelection: true,
+         ),
        );
 
   @override

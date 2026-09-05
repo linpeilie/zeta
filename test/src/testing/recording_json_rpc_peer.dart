@@ -35,6 +35,12 @@ final class RecordingJsonRpcPeer implements JsonRpcPeer {
       StreamController<JsonRpcProtocolException>.broadcast();
 
   final List<RecordedJsonRpcCall> calls = <RecordedJsonRpcCall>[];
+
+  /// 与协议级 fixture 相同的请求顺序投影。
+  List<String> get requestMethods => calls.map((call) => call.method).toList();
+
+  /// 保留原始请求顺序，供宿主配置往返断言比对 wire 参数。
+  List<Object?> get requestParams => calls.map((call) => call.params).toList();
   final List<RecordedJsonRpcCall> notificationsSent = <RecordedJsonRpcCall>[];
 
   var _threadSequence = 0;

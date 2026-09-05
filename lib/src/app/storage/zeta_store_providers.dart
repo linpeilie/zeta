@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 
 import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
 import 'package:zeta/src/app/storage/zeta_storage_providers.dart';
@@ -74,7 +74,7 @@ final usageStatisticsPartitionStoreProvider =
 final agentModelCatalogRepositoryProvider =
     Provider<AgentModelCatalogRepository>(
       (ref) => AgentModelCatalogRepository(
-        fingerprintExtraKeysFor: builtInAgentProviderDefinitionCatalog
+        fingerprintExtraKeysFor: zetaAgentProviderDefinitionCatalog
             .modelCatalogFingerprintExtraKeysFor,
         store: FileAgentModelCatalogCacheStore(
           storage: ref.watch(agentModelCatalogStorageProvider),
@@ -99,25 +99,6 @@ final agentProviderConfigStoreProvider = Provider<AgentProviderConfigStore>(
   ),
   name: 'agentProviderConfigStore',
 );
-
-/// Claude Code 隐藏 thread 仓库。
-final claudeCodeHiddenThreadStoreProvider =
-    Provider<ClaudeCodeHiddenThreadStore>(
-      (ref) => FileClaudeCodeHiddenThreadStore(
-        storage: ref.watch(claudeHiddenThreadsStorageProvider),
-      ),
-      name: 'claudeCodeHiddenThreadStore',
-    );
-
-/// Claude Code 每会话决策仓库工厂。
-final claudeCodeSessionDecisionStoreFactoryProvider =
-    Provider<ClaudeCodeSessionDecisionStoreFactory>((ref) {
-      final openStorage = ref.watch(
-        claudeSessionDecisionStorageFactoryProvider,
-      );
-      return (sessionId) =>
-          FileClaudeCodeSessionDecisionStore(storage: openStorage(sessionId));
-    }, name: 'claudeCodeSessionDecisionStoreFactory');
 
 /// 常规设置仓库。
 final generalSettingsStoreProvider = Provider<GeneralSettingsStore>(

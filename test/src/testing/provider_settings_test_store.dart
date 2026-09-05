@@ -6,7 +6,7 @@ import 'package:zeta/src/features/agent/application/provider_settings_slice/agen
 import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_provider_settings_slice_store.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 
 import 'ide_test_harness.dart';
 
@@ -57,8 +57,7 @@ ProviderSettingsTestComposition createProviderSettingsTestComposition({
   AgentModelCatalogRepository? modelCatalogRepository,
   AgentProviderDefinitionCatalog? providerDefinitions,
 }) {
-  final definitions =
-      providerDefinitions ?? builtInAgentProviderDefinitionCatalog;
+  final definitions = providerDefinitions ?? zetaAgentProviderDefinitionCatalog;
   final catalog =
       modelCatalogRepository ??
       AgentModelCatalogRepository(
@@ -96,8 +95,7 @@ AgentProviderSettingsSliceNotifier createProviderSettingsTestStore({
   AgentModelCatalogRepository? modelCatalogRepository,
   AgentProviderDefinitionCatalog? providerDefinitions,
 }) {
-  final definitions =
-      providerDefinitions ?? builtInAgentProviderDefinitionCatalog;
+  final definitions = providerDefinitions ?? zetaAgentProviderDefinitionCatalog;
   final catalog =
       modelCatalogRepository ??
       AgentModelCatalogRepository(

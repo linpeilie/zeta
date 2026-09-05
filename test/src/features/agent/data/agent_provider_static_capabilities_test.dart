@@ -1,10 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 
 void main() {
   group('AgentProviderStaticCapabilities', () {
     test('keeps Codex thread lifecycle capabilities enabled', () {
-      final capabilities = builtInAgentProviderDefinitionCatalog
+      final capabilities = zetaAgentProviderDefinitionCatalog
           .staticCapabilitiesFor(codexAgentProviderType);
 
       expect(capabilities.canRenameThread, isTrue);
@@ -19,7 +19,7 @@ void main() {
     });
 
     test('reports only Grok operations that have real implementations', () {
-      final capabilities = builtInAgentProviderDefinitionCatalog
+      final capabilities = zetaAgentProviderDefinitionCatalog
           .staticCapabilitiesFor(grokAgentProviderType);
 
       expect(capabilities.canCreateSession, isTrue);
@@ -40,7 +40,7 @@ void main() {
     });
 
     test('exposes model, reasoning, and compact support for Claude Code', () {
-      final capabilities = builtInAgentProviderDefinitionCatalog
+      final capabilities = zetaAgentProviderDefinitionCatalog
           .staticCapabilitiesFor(claudeCodeAgentProviderType);
 
       expect(capabilities.canCreateSession, isTrue);

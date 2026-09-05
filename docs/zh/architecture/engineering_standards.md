@@ -77,6 +77,18 @@ main -> app -> presentation/application -> domain
 - domain 不依赖 Flutter widget、不访问本地文件系统、不引用具体 provider 实现。
 - app 可以引用具体 data 实现，因为 app 是依赖注入和默认实现装配点。
 
+### 2.1 Provider 插件包边界（WP-C）
+
+宿主侧中立装配契约位于 `zeta_agent_provider_api`；共享 transport、ACP codec、payload/CLI 工具与独立测试套件位于 `zeta_agent_provider_sdk`；Codex、Grok、Claude Code 分别位于 `zeta_agent_provider_codex`、`zeta_agent_provider_grok`、`zeta_agent_provider_claude_code`。三个插件为纯 Dart 包，可使用 `dart:io`，不得依赖 Flutter、Riverpod、根应用或其他插件。
+
+依赖方向为 `api → {core, kernel, foundation}`、`sdk → {api, core, kernel, foundation}`、`插件 → {api, sdk, core, kernel, foundation}`。api 与 core 同为中立契约层；sdk 的 testing barrel 单独暴露测试依赖，不得进入生产导入链。
+
+`lib/src/app/plugins/agent_provider_manifest.dart` 是编译期登记入口，集中静态 definitions、保持原顺序的 settings、工厂与插件专属宿主注入。`ZetaPluginCatalog` 只消费工厂列表并保持原有激活/关闭/fail-closed 语义。静态指标目录不读取激活链；配置 codec 继续使用既有的激活目录接缝，不改变语言冻结顺序。
+
+根测试的身份常量经 manifest 取得，实现类型只经 `test/src/testing/agent_provider_implementations.dart` 访问插件的独立 testing barrel。插件生产 barrel 仅暴露登记和宿主注入所需符号，以及已登记过渡调用点所需的精确 `show` 列表。
+
+当前仅完成物理拆包。management/usage 仍在宿主侧，过渡 import 的唯一清单在 [WP-C §2](../../../.workflow/plan/2026-09-04-provider-plugin-packages/03-wpc-provider-split.md)，WP-D 负责消除；不可把过渡清单解释为新增依赖的许可。旧测试的断言与持久化身份保持不变，结构性守卫随物理路径更新，不允许扫描已删除目录而静默通过。
+
 ## 3. 状态与异步编排
 
 ### 3.0 状态所有权与 Riverpod 边界

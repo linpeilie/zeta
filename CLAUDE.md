@@ -43,7 +43,7 @@ flutter run -d macos       # 或 -d windows / -d linux
 
 `dart_test.yaml` 固定并发 2，不要改。全量的强制点在 CI（6 个分片并行 + 内部 Package），本地默认只跑受影响的那一档。完整档位表见 [`AGENTS.md` §0](AGENTS.md#0-收尾协议每次改完代码必做)。
 
-仓库是 pub workspace：根 Flutter 应用 + `packages/zeta_foundation`、`packages/zeta_plugin_kernel`、`packages/zeta_ui`（Graphite 设计系统）、`packages/zeta_markdown`（Markdown 渲染，fork 自 `mixin_markdown_widget`，改它先读 `packages/zeta_markdown/UPSTREAM.md`）、`packages/zeta_agent_core`（中立 Agent 内核）、`packages/zeta_agent_providers`（Provider 协议适配）。
+仓库是 pub workspace：根 Flutter 应用 + `packages/zeta_foundation`、`packages/zeta_plugin_kernel`、`packages/zeta_ui`（Graphite 设计系统）、`packages/zeta_markdown`（Markdown 渲染，fork 自 `mixin_markdown_widget`，改它先读 `packages/zeta_markdown/UPSTREAM.md`）、`packages/zeta_agent_core`（中立 Agent 内核）、`packages/zeta_agent_provider_api`（中立装配契约）、`packages/zeta_agent_provider_sdk`（共享机制）、`packages/zeta_agent_provider_codex` / `packages/zeta_agent_provider_grok` / `packages/zeta_agent_provider_claude_code`（独立 Provider 插件）。
 
 单个测试文件：`flutter test test/src/features/agent/presentation/agent_conversation_widget_test.dart`
 
@@ -62,3 +62,5 @@ Codex 协议升级、真实 CLI 冒烟的完整流程见 [`AGENTS.md` §2](AGENT
 ## 改了架构边界
 
 分层、Provider 契约、事件管线、能力协商或持久化格式有变动时，`AGENTS.md`、`docs/architecture/`、`docs/guides/` 和 `CONTRIBUTING.md`（含英文版）要一起改。清单见 [`AGENTS.md` §6](AGENTS.md#6-改了架构边界同步这几处)。
+
+Provider 登记入口为 `lib/src/app/plugins/agent_provider_manifest.dart`；当前拆包过渡边界见 `AGENTS.md` G6 与 WP-C §2，management/usage 贡献化仍待 WP-D。

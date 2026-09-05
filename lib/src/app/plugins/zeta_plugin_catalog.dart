@@ -4,9 +4,7 @@ import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_plugin_kernel/zeta_plugin_kernel.dart';
 
 import 'package:zeta/src/app/logging/app_logging.dart';
-import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
 
 final _log = loggerFor('zeta.app.plugin_catalog');
 
@@ -15,33 +13,18 @@ final _log = loggerFor('zeta.app.plugin_catalog');
 /// 这是唯一的插件注册点：目录是一段写死的 Dart 代码，不扫描目录、不下载、
 /// 不反射。要新增插件就改这里，改动会经过评审和编译期检查。
 ///
-/// 内置目录显式登记 Codex、Grok 与 Claude Code 三个 Provider 插件。新增 Provider
-/// 只在 providers 包的 compile-time 目录追加一项，不扫描目录、不动态执行代码。
+/// Provider 工厂由 agent_provider_manifest.dart 显式登记并传入；目录只负责激活。
 final class ZetaPluginCatalog {
   ZetaPluginCatalog._(this._registry);
 
   /// 创建三个显式内置 Provider 插件的编译期目录。
   factory ZetaPluginCatalog.builtIn({
-    ClaudeCodeSessionDecisionStoreFactory?
-    claudeCodeSessionDecisionStoreFactory,
-    ClaudeCodeHiddenThreadStore? claudeCodeHiddenThreadStore,
-    ClaudeCodeCliMetadataLoader? claudeCodeMetadataLoader,
-    AgentUiTextCatalog textCatalog = const FallbackAgentUiTextCatalog(),
+    required Iterable<ZetaPluginFactory> factories,
     Clock clock = systemClock,
     ZetaMetricsPort metrics = noopZetaMetricsPort,
   }) {
     return ZetaPluginCatalog._(
-      ZetaPluginRegistry(
-        factories: createBuiltInAgentProviderPlugins(
-          claudeCodeSessionDecisionStoreFactory:
-              claudeCodeSessionDecisionStoreFactory,
-          claudeCodeHiddenThreadStore: claudeCodeHiddenThreadStore,
-          claudeCodeMetadataLoader: claudeCodeMetadataLoader,
-          textCatalog: textCatalog,
-        ),
-        clock: clock,
-        metrics: metrics,
-      ),
+      ZetaPluginRegistry(factories: factories, clock: clock, metrics: metrics),
     );
   }
 

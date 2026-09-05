@@ -5,7 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
+import '../../../testing/agent_provider_implementations.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_composition.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
@@ -652,14 +653,12 @@ final class _MemoryProviderSettingsPort implements AgentProviderSettingsPort {
     final config = providerConfigById(providerId);
     return config == null
         ? AgentProviderCapabilities.unsupported
-        : builtInAgentProviderDefinitionCatalog.staticCapabilitiesFor(
-            config.kind,
-          );
+        : zetaAgentProviderDefinitionCatalog.staticCapabilitiesFor(config.kind);
   }
 
   @override
   String modelCatalogSourceFor(AgentProviderConfig config) =>
-      builtInAgentProviderDefinitionCatalog.modelCatalogSourceFor(config);
+      zetaAgentProviderDefinitionCatalog.modelCatalogSourceFor(config);
 
   @override
   Future<AgentProviderSettings> loadSettings() async => _settings;

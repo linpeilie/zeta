@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:zeta_agent_providers/zeta_agent_providers.dart'
-    hide CliProcessResult, CliProcessRunner, ResolvedCliCommand;
+// WP-C 过渡白名单：WP-D 迁入插件或通过贡献能力消除。
+import 'package:zeta_agent_provider_claude_code/zeta_agent_provider_claude_code.dart';
+import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent_management/data/claude_code_auth_status_probe.dart';
-import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_cli_management_repository.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_text_catalog.dart';

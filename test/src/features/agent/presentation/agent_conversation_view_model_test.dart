@@ -9,7 +9,8 @@ import 'package:zeta/src/features/agent/application/agent_skills_catalog_control
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
+import '../../../testing/agent_provider_implementations.dart';
 import '../../../testing/provider_settings_test_store.dart';
 import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_command_scope.dart';
@@ -3350,8 +3351,9 @@ void main() {
       'compact stays unavailable without capability or while running',
       () async {
         final unsupportedProvider = _FakeAgentProvider(
-          declaredCapabilities: AgentProviderStaticCapabilities.codexAppServer
-              .copyWith(canCompactThread: false),
+          declaredCapabilities: codexStaticCapabilities.copyWith(
+            canCompactThread: false,
+          ),
         );
         final unsupportedViewModel = _createViewModel(
           unsupportedProvider,
@@ -3636,7 +3638,7 @@ void main() {
       () async {
         final provider = _FakeAgentProvider(
           providerConfig: defaultClaudeCodeAgentProviderConfig,
-          declaredCapabilities: AgentProviderStaticCapabilities.claudeCode,
+          declaredCapabilities: claudeCodeStaticCapabilities,
           availableModels: const AgentModelList(
             models: <AgentModelInfo>[
               AgentModelInfo(
@@ -3772,7 +3774,7 @@ void main() {
       () async {
         final provider = _FakeAgentProvider(
           providerConfig: defaultClaudeCodeAgentProviderConfig,
-          declaredCapabilities: AgentProviderStaticCapabilities.claudeCode,
+          declaredCapabilities: claudeCodeStaticCapabilities,
           availableModels: const AgentModelList(
             models: <AgentModelInfo>[
               AgentModelInfo(
@@ -4892,7 +4894,7 @@ AgentConversationRuntimeController _createViewModel(
   final controller = createProviderSettingsTestStore(
     runtimeRegistry: registry,
     configStore: MemoryAgentProviderConfigStore(
-      providerSettings ?? builtInAgentProviderSettings,
+      providerSettings ?? zetaBuiltInAgentProviderSettings,
     ),
     modelCatalogRepository: modelCatalogRepository,
   );
@@ -5136,9 +5138,7 @@ class _FakeAgentProvider
         const <String, Completer<AgentThreadHistorySnapshot>>{},
   }) : declaredCapabilities =
            declaredCapabilities ??
-           AgentProviderStaticCapabilities.codexAppServer.copyWith(
-             canForkThreadAtTurn: true,
-           ),
+           codexStaticCapabilities.copyWith(canForkThreadAtTurn: true),
        _defaultHistorySnapshot =
            historySnapshot ??
            const AgentThreadHistorySnapshot(

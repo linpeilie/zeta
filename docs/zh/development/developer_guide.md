@@ -2,6 +2,8 @@
 
 最后更新：2026-08-15
 
+> Provider 拆包进度（2026-09-05）：实现与协议测试已进入三个独立插件包，宿主从 `agent_provider_manifest.dart` 登记 definitions/settings/factories。插件测试在各包目录执行 `dart test` 或 `flutter test`，并接入 SDK 的 `runAgentProviderContractTests`；根测试的实现访问统一走 `test/src/testing/`。management/usage 贡献化及最终接入流程在 WP-D/WP-E 完成前仍有过渡项，见[工程规范 §2.1](../architecture/engineering_standards.md#21-provider-插件包边界wp-c)和 [WP-C](../../../.workflow/plan/2026-09-04-provider-plugin-packages/03-wpc-provider-split.md)。
+
 ## 1. 项目简介
 
 Zeta 是一个 Flutter Desktop 项目，当前支持 macOS、Linux 和 Windows 平台目录。应用主入口在 `lib/main.dart`，核心界面是三栏 Agent IDE 工作台。

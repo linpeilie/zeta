@@ -1,0 +1,108 @@
+{
+  "_fixture": {
+    "formatVersion": 1,
+    "provider": "grok",
+    "protocol": "ACP protocolVersion 1 with xAI session update extension",
+    "cliVersion": "1.0.0",
+    "sourceKind": "sanitizedRealShape",
+    "scenario": "Successful file Edit with diff content repeated in the terminal tool update.",
+    "provenance": "Sanitized real capture from the locally installed CLI in a temporary workspace.",
+    "privacy": "Prompt, reply, identifiers, build id, real path, file content, tool output, credentials, and stderr are not retained."
+  },
+  "events": [
+    {
+      "method": "session/update",
+      "params": {
+        "sessionId": "grok-session-redacted",
+        "update": {
+          "sessionUpdate": "tool_call",
+          "toolCallId": "grok-tool-redacted",
+          "title": "[TOOL_TITLE_REDACTED]",
+          "rawInput": {
+            "file_path": "<WORKSPACE_REDACTED>/sample.txt",
+            "old_string": "[BEFORE_REDACTED]\n",
+            "new_string": "[AFTER_REDACTED]\n"
+          }
+        },
+        "_meta": {
+          "eventId": "grok-event-redacted-1"
+        }
+      }
+    },
+    {
+      "method": "session/update",
+      "params": {
+        "sessionId": "grok-session-redacted",
+        "update": {
+          "sessionUpdate": "tool_call_update",
+          "toolCallId": "grok-tool-redacted",
+          "title": "[TOOL_TITLE_REDACTED]",
+          "kind": "edit",
+          "content": [
+            {
+              "type": "diff",
+              "path": "<WORKSPACE_REDACTED>/sample.txt",
+              "oldText": "[BEFORE_REDACTED]\n",
+              "newText": "[AFTER_REDACTED]\n"
+            }
+          ],
+          "rawInput": {
+            "file_path": "<WORKSPACE_REDACTED>/sample.txt",
+            "old_string": "[BEFORE_REDACTED]\n",
+            "new_string": "[AFTER_REDACTED]\n",
+            "replace_all": false,
+            "variant": "[VARIANT_REDACTED]"
+          }
+        },
+        "_meta": {
+          "eventId": "grok-event-redacted-2"
+        }
+      }
+    },
+    {
+      "method": "session/update",
+      "params": {
+        "sessionId": "grok-session-redacted",
+        "update": {
+          "sessionUpdate": "tool_call_update",
+          "toolCallId": "grok-tool-redacted",
+          "status": "completed",
+          "content": [
+            {
+              "type": "diff",
+              "path": "<WORKSPACE_REDACTED>/sample.txt",
+              "oldText": "[BEFORE_REDACTED]\n",
+              "newText": "[AFTER_REDACTED]\n"
+            }
+          ],
+          "rawOutputKeys": [
+            "EditsApplied",
+            "type"
+          ]
+        },
+        "_meta": {
+          "eventId": "grok-event-redacted-3"
+        }
+      }
+    },
+    {
+      "method": "_x.ai/session_notification",
+      "params": {
+        "sessionId": "grok-session-redacted",
+        "update": {
+          "sessionUpdate": "turn_completed",
+          "stop_reason": "end_turn"
+        },
+        "_meta": {
+          "eventId": "grok-event-redacted-4"
+        }
+      }
+    }
+  ],
+  "_captureChecks": {
+    "fileContentChanged": true,
+    "stopReason": "end_turn",
+    "permissionDecisionCount": 0,
+    "temporaryWorkspaceCleaned": true
+  }
+}

@@ -11,7 +11,7 @@ import 'package:zeta/src/app/storage/zeta_store_providers.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_session_slice_notifier.dart';
 import 'package:zeta/src/app/shell/ide_shell_controller.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 import 'package:zeta/src/features/ide_session/data/ide_session_store.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_session_slice_operations.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
@@ -1736,8 +1736,8 @@ class _ShellTestAgentProvider
   AgentProviderConfig get config => backend.config;
 
   @override
-  AgentProviderCapabilities get capabilities => AgentProviderStaticCapabilities
-      .codexAppServer
+  AgentProviderCapabilities get capabilities => codexAgentProviderDefinition
+      .staticCapabilities
       .copyWith(canForkThreadAtTurn: backend.canForkThreadAtTurn);
 
   @override

@@ -267,3 +267,5 @@ Please use the [issue templates](https://github.com/linpeilie/zeta/issues/new/ch
 By participating you also agree to abide by our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 This project is licensed under **GPL-3.0** — see [LICENSE](LICENSE). By contributing you agree to license your work under the same terms.
+
+Provider packages now separate neutral contracts (`provider_api`), shared mechanisms (`provider_sdk`) and each vendor implementation. Registration lives in `lib/src/app/plugins/agent_provider_manifest.dart`; root tests access implementation types through `test/src/testing/`. Management/usage still have documented WP-C transition imports. See [package boundaries](docs/zh/architecture/engineering_standards.md#21-provider-插件包边界wp-c).

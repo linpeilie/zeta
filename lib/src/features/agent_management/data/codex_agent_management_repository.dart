@@ -8,8 +8,8 @@ import 'package:zeta/src/core/security/sensitive_data_redactor.dart';
 import 'package:zeta/src/core/storage/zeta_data_paths.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta_agent_providers/zeta_agent_providers.dart'
-    hide CliProcessResult, CliProcessRunner, ResolvedCliCommand;
+// WP-C 过渡白名单：WP-D 迁入插件或通过贡献能力消除。
+import 'package:zeta_agent_provider_codex/zeta_agent_provider_codex.dart';
 import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_cli_management_repository.dart';
 import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';

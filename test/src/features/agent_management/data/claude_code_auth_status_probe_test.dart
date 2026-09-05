@@ -1,12 +1,12 @@
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta_agent_providers/zeta_agent_providers.dart'
-    hide CliProcessResult, CliProcessRunner, ResolvedCliCommand;
+import '../../../testing/agent_provider_implementations.dart';
+import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent_management/data/claude_code_auth_status_probe.dart';
-import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk.dart';
 
 void main() {
   group('ClaudeCodeAuthStatusProbe', () {
@@ -14,7 +14,7 @@ void main() {
       'projects the sanitized OAuth fixture and drops identity fields',
       () async {
         const fixturePath =
-            'test/src/features/agent/data/datasources/claude_code/fixtures/'
+            'packages/zeta_agent_provider_claude_code/test/datasources/claude_code/fixtures/'
             'auth_status_2_1_228_redacted.json';
         final runner = _FakeProcessRunner(
           result: CliProcessResult(

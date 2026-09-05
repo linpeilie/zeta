@@ -2,10 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:zeta_agent_providers/zeta_agent_providers.dart'
-    hide CliProcessResult, CliProcessRunner, ResolvedCliCommand;
-import 'package:zeta_agent_core/zeta_agent_core.dart';
+// WP-C 过渡白名单：WP-D 迁入插件或通过贡献能力消除。
+import 'package:zeta_agent_provider_claude_code/zeta_agent_provider_claude_code.dart';
 import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk.dart';
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// Claude Code `auth status --json` 的白名单投影。
 ///

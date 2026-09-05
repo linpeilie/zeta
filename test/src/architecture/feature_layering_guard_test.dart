@@ -146,9 +146,11 @@ void main() {
     final offenders = <String>[];
     for (final layer in const <String>['application', 'domain']) {
       for (final file in dartFilesInLayer(layer)) {
-        if (importsOf(
-          file,
-        ).any((uri) => uri.startsWith('package:zeta_agent_providers/'))) {
+        if (importsOf(file).any(
+          (uri) => const <String>['codex', 'grok', 'claude_code'].any(
+            (vendor) => uri.startsWith('package:zeta_agent_provider_$vendor/'),
+          ),
+        )) {
           offenders.add(normalize(file.path));
         }
       }
@@ -165,16 +167,18 @@ void main() {
 
   test('agent presentation 不得依赖具体 Provider package', () {
     // WP-7 T3 / WP-1 D1：scheduler 的指标标签必须由组合层注入，presentation
-    // 不能再直接 import zeta_agent_providers，否则无法下沉到 application。
+    // 不能再直接 import Provider 插件包，否则无法下沉到 application。
     final presentationFiles = Directory('lib/src/features/agent/presentation')
         .listSync(recursive: true)
         .whereType<File>()
         .where((file) => file.path.endsWith('.dart'));
     final offenders = <String>[
       for (final file in presentationFiles)
-        if (importsOf(
-          file,
-        ).any((uri) => uri.startsWith('package:zeta_agent_providers/')))
+        if (importsOf(file).any(
+          (uri) => const <String>['codex', 'grok', 'claude_code'].any(
+            (vendor) => uri.startsWith('package:zeta_agent_provider_$vendor/'),
+          ),
+        ))
           normalize(file.path),
     ];
 

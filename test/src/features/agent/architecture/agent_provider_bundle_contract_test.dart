@@ -7,7 +7,14 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('provider bundle architecture contracts', () {
     test('no production adapter implements session configuration', () {
-      for (final file in _dartFiles('lib/src/features/agent/data')) {
+      for (final file in <File>[
+        for (final root in const <String>[
+          'packages/zeta_agent_provider_codex/lib',
+          'packages/zeta_agent_provider_grok/lib',
+          'packages/zeta_agent_provider_claude_code/lib',
+        ])
+          ..._dartFiles(root),
+      ]) {
         expect(
           file.readAsStringSync(),
           isNot(contains('AgentSessionConfigProvider')),

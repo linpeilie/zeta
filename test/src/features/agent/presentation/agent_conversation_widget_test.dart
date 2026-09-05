@@ -1,7 +1,8 @@
-// ignore_for_file: deprecated_member_use
-
 @Tags(['slow', 'shell'])
 library;
+
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
+// ignore_for_file: deprecated_member_use
 
 import 'dart:io';
 
@@ -13,7 +14,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta_markdown/zeta_markdown.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
+import '../../../testing/agent_provider_implementations.dart';
+import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_file_change_evidence_views.dart';
@@ -734,7 +736,7 @@ void main() {
     final session = activeProjectSessionStore(tempDirectories);
     final provider = FakeAgentProvider(
       config: defaultGrokAgentProviderConfig,
-      declaredCapabilities: AgentProviderStaticCapabilities.grokAcp,
+      declaredCapabilities: grokStaticCapabilities,
       includeConversationTestThread: true,
       permissionOptions: const <AgentPermissionOption>[
         AgentPermissionOption(
@@ -866,7 +868,7 @@ void main() {
         config: defaultGrokAgentProviderConfig.copyWith(
           selectedPermissionOptionId: 'ask',
         ),
-        declaredCapabilities: AgentProviderStaticCapabilities.grokAcp,
+        declaredCapabilities: grokStaticCapabilities,
         includeConversationTestThread: true,
         permissionOptions: const <AgentPermissionOption>[
           AgentPermissionOption(
@@ -975,7 +977,7 @@ void main() {
     final session = activeProjectSessionStore(tempDirectories);
     final provider = FakeAgentProvider(
       config: defaultGrokAgentProviderConfig,
-      declaredCapabilities: AgentProviderStaticCapabilities.grokAcp,
+      declaredCapabilities: grokStaticCapabilities,
       turnErrorMessage: errorMessage,
       includeConversationTestThread: true,
     );
@@ -4418,8 +4420,9 @@ class _ModeCapableFakeAgentProvider extends FakeAgentProvider
   _ModeCapableFakeAgentProvider({required super.completeTurns})
     : super(
         includeConversationTestThread: true,
-        declaredCapabilities: AgentProviderStaticCapabilities.codexAppServer
-            .copyWith(supportsModeSelection: true),
+        declaredCapabilities: codexStaticCapabilities.copyWith(
+          supportsModeSelection: true,
+        ),
       );
 
   @override

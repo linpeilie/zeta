@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
-import 'package:zeta_agent_providers/zeta_agent_providers.dart';
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import '../../../testing/provider_settings_test_store.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
@@ -142,12 +142,12 @@ void main() {
 
     // 指标按 Provider 分序列；正文与路径不出现在任何序列里。
     final firstTags = ZetaMetricTags(
-      providerId: builtInAgentProviderDefinitionCatalog.metricLabelFor(
+      providerId: zetaAgentProviderDefinitionCatalog.metricLabelFor(
         defaultAgentProviderId,
       ),
     );
     final secondTags = ZetaMetricTags(
-      providerId: builtInAgentProviderDefinitionCatalog.metricLabelFor(
+      providerId: zetaAgentProviderDefinitionCatalog.metricLabelFor(
         grokAgentProviderId,
       ),
     );
@@ -200,7 +200,7 @@ AgentConversationRuntimeController _createViewModel(
     initialProjectPath: '/repo',
     uiFrameScheduler: FakeAgentFrameScheduler(),
     metrics: metrics ?? InMemoryZetaMetricsPort(enabled: false),
-    providerMetricLabel: builtInAgentProviderDefinitionCatalog.metricLabelFor,
+    providerMetricLabel: zetaAgentProviderDefinitionCatalog.metricLabelFor,
   );
 }
 
