@@ -1,3 +1,4 @@
+import 'src/datasources/claude_code/claude_code_credentials_refresh.dart';
 import 'src/management/contribution.dart';
 import 'src/usage/contribution.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
@@ -96,7 +97,7 @@ final class ClaudeCodeAgentProviderPlugin
 
 final class _ClaudeCodeAgentProviderBundleFactory
     implements AgentProviderBundleFactory {
-  const _ClaudeCodeAgentProviderBundleFactory({
+  _ClaudeCodeAgentProviderBundleFactory({
     required this.sessionDecisionStoreFactory,
     required this.hiddenThreadStore,
     required this.metadataLoader,
@@ -107,6 +108,7 @@ final class _ClaudeCodeAgentProviderBundleFactory
   final ClaudeCodeHiddenThreadStore? hiddenThreadStore;
   final ClaudeCodeCliMetadataLoader? metadataLoader;
   final AgentUiTextCatalog textCatalog;
+  final _refreshCoordinator = ClaudeCodeCredentialRefreshCoordinator();
 
   @override
   AgentProviderBundle createBundle(AgentProviderConfig config) {
@@ -117,6 +119,7 @@ final class _ClaudeCodeAgentProviderBundleFactory
     }
     return createClaudeCodeBundle(
       config,
+      refreshCoordinator: _refreshCoordinator,
       metadataLoader: metadataLoader,
       sessionDecisionStoreFactory: sessionDecisionStoreFactory,
       hiddenThreadStore: hiddenThreadStore,

@@ -1,6 +1,7 @@
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk.dart';
 import 'datasources/claude_code/claude_code_cli_metadata_coordinator.dart';
+import 'datasources/claude_code/claude_code_credentials_refresh.dart';
 import 'datasources/claude_code/claude_code_agent_provider.dart';
 import 'datasources/claude_code/claude_code_permission_policy_adapter.dart';
 import 'datasources/claude_code/claude_code_hidden_thread_store.dart';
@@ -11,6 +12,7 @@ AgentProviderBundle nativeBundleFromClaudeCode(
 ) {
   return AgentProviderBundle(
     runtime: provider,
+    acquisitionPreparation: provider,
     conversation: provider,
     threadCatalog: provider,
     threadCompaction: provider,
@@ -28,6 +30,7 @@ AgentProviderBundle nativeBundleFromClaudeCode(
 AgentProviderBundle createClaudeCodeBundle(
   AgentProviderConfig config, {
   ClaudeCodeCliMetadataLoader? metadataLoader,
+  ClaudeCodeCredentialRefreshCoordinator? refreshCoordinator,
   ClaudeCodeSessionDecisionStoreFactory? sessionDecisionStoreFactory,
   ClaudeCodeHiddenThreadStore? hiddenThreadStore,
   ProcessStarter? processStarter,
@@ -37,6 +40,7 @@ AgentProviderBundle createClaudeCodeBundle(
     ClaudeCodeAgentProvider(
       config: config,
       metadataLoader: metadataLoader,
+      refreshCoordinator: refreshCoordinator,
       sessionDecisionStoreFactory: sessionDecisionStoreFactory,
       hiddenThreadStore: hiddenThreadStore,
       processStarter: processStarter,

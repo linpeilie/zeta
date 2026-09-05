@@ -86,7 +86,8 @@ final class ClaudeCodeUsageQuotaAdapter {
     Map<String, Object?>? response;
     if (accountDataEnrichmentEnabled && !usesApiKey) {
       try {
-        final credentials = (await credentialsService.read()).credentials;
+        final credentials =
+            (await credentialsService.ensureFresh()).credentials;
         if (credentials != null &&
             _canReadSubscriptionUsage(credentials, _clock())) {
           response = await _remoteUsageLoader(

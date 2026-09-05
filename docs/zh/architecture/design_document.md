@@ -490,6 +490,8 @@ ABA；registry 还保证旧进程 dispose 完成前同 scope 的 acquire 等待�
 退出时统一关闭关联进程，global runtime 永不参与空闲回收。
 Registry 的 `acquire` 必须显式传入 global/session scope；使用统计面板只通过
 `AgentProviderGlobalRuntime` 获取配额，不保留 lease loader 或原始 Provider loader 兼容路径。
+Bundle 可声明中立 `acquisitionPreparation`，Registry 在每次新建/复用租约返回前等待，
+失败释放该租约，完成后重验 identity；共享层不接触具体认证协议。
 Project Threads 侧栏对**已打开** thread 的执行中/等待指示，以 entry 的
 `AgentConversationThreadSnapshot` 为真源，经 shell 调用 `syncRuntimeSnapshot` 更新
 `runningThreadIds`、摘要 `status`/waiting 与内存态 `completedThreadIds`。分区 UI 信号
@@ -530,8 +532,10 @@ turnId，并在自有 identity/reducer 内完成消息分段、reasoning phase�
 终态。历史只读扫描 `~/.claude/projects/<encoded-cwd>/*.jsonl`，使用独立 history
 identity/reducer；隐藏记录只写 Zeta 自有版本化列表，不改 Claude 文件。权限和 Plan
 审批分别使用独立 registry；模型切换与 `/compact` 都在当前 Binding 的空闲边界执行。
-模型目录和套餐名称由独立无 Prompt initialize 投影，额度详情才按可关闭配置读取 OAuth
-凭据并请求 usage API；两条路径都留在 Claude-local data 层。
+模型目录和套餐名称由独立无 Prompt initialize 投影，额度详情按可关闭配置请求 usage API。
+获取实例和新请求前统一调用 `credentialsService.ensureFresh()`，在到期前 5 分钟按需刷新，
+只更新原选中的 CLI 凭据存储并验证写回；认证准备独立于额度详情开关。刷新、锁和存储格式
+都留在 Claude-local data 层，Zeta 不保存凭据副本。
 实际 wire 与升级门禁见
 [Claude Code stream-json 协议基线](../protocols/claude_code_stream_json_protocol.md)。
 

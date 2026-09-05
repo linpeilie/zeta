@@ -45,7 +45,7 @@ sudo apt-get update && sudo apt-get install --yes \
 
 - **Codex** (default provider): `codex app-server` must be runnable locally. Without `--listen` it communicates over stdio. The adapter is developed against a pinned schema — see [Codex app-server protocol pinning](docs/zh/protocols/codex_app_server_protocol.md).
 - **Grok** (optional): Grok CLI (grok-build) **0.2.119 or newer**. That's the multi-session compatibility baseline; earlier versions can't correctly isolate session state or turn terminal states when several Grok sessions are open at once.
-- **Claude Code** (optional): `claude` must be runnable; interactive Claude.ai sign-in uses `claude auth login`. The current conversational stream-json sampling baseline is CLI **2.1.224** (not a minimum-version promise); see the [Claude Code stream-json protocol baseline](docs/zh/protocols/claude_code_stream_json_protocol.md) for boundaries and upgrade checks. Models and the plan name come from no-prompt initialize; only optional quota details read Provider-local OAuth credentials.
+- **Claude Code** (optional): `claude` must be runnable; interactive Claude.ai sign-in uses `claude auth login`. The current conversational stream-json sampling baseline is CLI **2.1.224** (not a minimum-version promise); see the [Claude Code stream-json protocol baseline](docs/zh/protocols/claude_code_stream_json_protocol.md) for boundaries and upgrade checks. Models and the plan name come from no-prompt initialize. Provider acquisition and new requests validate OAuth through one service, refreshing the selected CLI store when needed. Quota details remain an independently optional REST enhancement.
 
 For UI-only or docs-only changes you can skip all of these CLIs — the agent panel will simply report nothing detected.
 
@@ -231,6 +231,7 @@ Common types: `feat` / `fix` / `docs` / `refactor` / `test` / `chore` / `perf`.
 
 - All Zeta-owned data lives under `~/.zeta/`. JSON must be versioned with tolerant `tryDecode` — missing or corrupt fields must never block startup.
 - Provider-owned data adapters may read the corresponding CLI's private data for an explicit feature. Protocol fields, raw content, and paths must not leak into upper layers; read access does not authorize migration, rewriting, or deletion.
+- Claude OAuth refresh is a narrowly scoped writeback to the selected existing CLI store: reread under a compatible lock, preserve unrelated fields, and verify persistence. Never migrate sources, expand scopes, or create a Zeta credential copy. See the Claude protocol document, section 11.
 - Derived indexes and caches store only normalized allow-listed fields. **Never persist prompts, responses, tool output, file-change evidence bodies, raw error text, environment variables, credentials, provider raw payloads, or localized UI copy.**
 
 **Misc**

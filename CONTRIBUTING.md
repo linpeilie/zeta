@@ -45,7 +45,7 @@ sudo apt-get update && sudo apt-get install --yes \
 
 - **Codex**（默认 Provider）：本机能执行 `codex app-server`。未指定 `--listen` 时走 stdio。协议按 pinned schema 开发，见 [Codex app-server 协议版本锁定](docs/zh/protocols/codex_app_server_protocol.md)。
 - **Grok**（可选）：Grok CLI（grok-build）**0.2.119 或更高**。这是多会话兼容基线，更早的版本在同时打开多个 Grok 会话时无法正确隔离会话状态和回合终态。
-- **Claude Code**（可选）：本机能执行 `claude`；Claude.ai 交互式登录使用 `claude auth login`。当前 stream-json 对话取样基线是 CLI **2.1.224**（不是最低版本承诺），协议边界与升级检查见 [Claude Code stream-json 协议基线](docs/zh/protocols/claude_code_stream_json_protocol.md)。模型与套餐名称来自无 Prompt initialize；可选额度详情才读取 Provider-local OAuth 凭据。
+- **Claude Code**（可选）：本机能执行 `claude`；Claude.ai 交互式登录使用 `claude auth login`。当前 stream-json 对话取样基线是 CLI **2.1.224**（不是最低版本承诺），协议边界与升级检查见 [Claude Code stream-json 协议基线](docs/zh/protocols/claude_code_stream_json_protocol.md)。模型与套餐名称来自无 Prompt initialize；获取实例及新请求前统一校验 OAuth，并按需刷新到原 CLI 存储。额度详情是独立的可关闭 REST 增强。
 
 只改 UI 或文档的话，不装这些 CLI 也能跑起来，只是 Agent 面板会显示未检测到。
 
@@ -233,7 +233,7 @@ chore: bump flutter action pin
 **持久化与隐私**
 
 - Zeta 自有数据全部在 `~/.zeta/`，JSON 必须版本化 + 宽容 `tryDecode`（缺字段或损坏不能阻断启动）。
-- Provider 自有 data adapter 可以按明确功能读取对应 CLI 的私有数据；协议字段、原始内容和路径不得泄漏到上层。读取权限不等于迁移、改写或删除授权。
+- Provider 自有 data adapter 可以按明确功能读取对应 CLI 的私有数据；协议字段、原始内容和路径不得泄漏到上层。读取权限不等于迁移、改写或删除授权。Claude 按需 OAuth 刷新是明确的原存储写回能力，必须锁内重读、保留无关字段并验证写回，不得迁移来源或在 Zeta 建立凭据副本（协议 §11）。
 - 派生索引与缓存只保存规范化白名单字段。**禁止持久化 prompt、回复、工具输出、文件变更 evidence 正文、原始错误文本、环境变量、凭证、Provider raw payload 或 localized UI copy。**
 
 **其他**

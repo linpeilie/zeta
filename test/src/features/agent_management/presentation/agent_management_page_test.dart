@@ -199,7 +199,8 @@ void main() {
       await tester.pump();
       expect(find.text('额度详情增强'), findsOneWidget);
       expect(find.text('OAuth 凭据 · Usage REST'), findsOneWidget);
-      expect(find.textContaining('模型列表与套餐名称始终来自 Claude CLI'), findsOneWidget);
+      expect(find.textContaining('模型列表和套餐名称来自 Claude CLI'), findsOneWidget);
+      expect(find.textContaining('按需刷新到原存储'), findsOneWidget);
       expect(find.textContaining('claude auth login'), findsOneWidget);
       expect(find.textContaining('claude login'), findsNothing);
       expect(tester.widget<IdeSwitch>(switchFinder).value, isTrue);
@@ -246,7 +247,8 @@ void main() {
           ?.extra[testAccountDataEnrichmentKey],
       isFalse,
     );
-    expect(find.textContaining('模型列表与套餐名称始终来自 Claude CLI'), findsOneWidget);
+    expect(find.textContaining('模型列表和套餐名称来自 Claude CLI'), findsOneWidget);
+    expect(find.textContaining('按需刷新到原存储'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

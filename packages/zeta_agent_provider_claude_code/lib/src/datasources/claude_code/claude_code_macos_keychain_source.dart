@@ -14,6 +14,12 @@ abstract interface class ClaudeCodeSecureCredentialsSource {
   Future<String?> read();
 }
 
+/// Writes only the already-selected Keychain item; no migration or deletion.
+abstract interface class ClaudeCodeSecureCredentialsWriter {
+  void validateWrite(String contents);
+  Future<void> write(String contents);
+}
+
 /// 统一入口将其映射为 unreadable；不携带 stderr、路径或凭据。
 final class ClaudeCodeSecureCredentialsUnavailable implements Exception {
   const ClaudeCodeSecureCredentialsUnavailable();
@@ -46,26 +52,34 @@ typedef ClaudeCodeKeychainProcessRun =
       required Duration timeout,
     });
 
-/// 只读访问 Claude Code 在 macOS Keychain 中的 OAuth secure storage。
+typedef ClaudeCodeKeychainProcessStart =
+    Future<Process> Function(String executable, List<String> arguments);
+
+/// 访问 Claude Code 在 macOS Keychain 中的 OAuth secure storage。
 ///
 /// 命令始终通过 executable + 参数数组启动，不经过 shell。任何缺失、拒绝、超时或
 /// 失败都由统一 service 分类和回退；本层不保留底层错误。
 final class ClaudeCodeMacOsKeychainSource
-    implements ClaudeCodeSecureCredentialsSource {
+    implements
+        ClaudeCodeSecureCredentialsSource,
+        ClaudeCodeSecureCredentialsWriter {
   ClaudeCodeMacOsKeychainSource({
     Map<String, String>? environment,
     String? accountName,
     ClaudeCodeKeychainProcessRun? processRunner,
+    ClaudeCodeKeychainProcessStart? processStarter,
     this.timeout = const Duration(seconds: 10),
   }) : _environment = Map<String, String>.unmodifiable(
          environment ?? Platform.environment,
        ),
        _accountName = _nonEmpty(accountName),
-       _processRunner = processRunner ?? _runSecurity;
+       _processRunner = processRunner ?? _runSecurity,
+       _processStarter = processStarter ?? _startSecurity;
 
   final Map<String, String> _environment;
   final String? _accountName;
   final ClaudeCodeKeychainProcessRun _processRunner;
+  final ClaudeCodeKeychainProcessStart _processStarter;
   final Duration timeout;
 
   /// Claude Code 当前环境对应的 service 名；不含用户身份或凭据。
@@ -77,6 +91,56 @@ final class ClaudeCodeMacOsKeychainSource
         _nonEmpty(_environment['USER']) ??
         _nonEmpty(_environment['LOGNAME']) ??
         'claude-code-user';
+  }
+
+  @override
+  void validateWrite(String contents) {
+    _writeCommand(contents);
+  }
+
+  String _writeCommand(String contents) {
+    String quoted(String value) {
+      if (value.contains(RegExp(r'[\r\n\x00]'))) {
+        throw const ClaudeCodeSecureCredentialsUnavailable();
+      }
+      return '"${value.replaceAll(r'\', r'\\').replaceAll('"', r'\"')}"';
+    }
+
+    final hex = utf8
+        .encode(contents)
+        .map((b) => b.toRadixString(16).padLeft(2, '0'))
+        .join();
+    final command =
+        'add-generic-password -U -a ${quoted(accountName)} '
+        '-s ${quoted(serviceName)} -X "$hex"\n';
+    // security -i has a bounded line buffer. Never fall back to secret argv.
+    if (utf8.encode(command).length >= 4096) {
+      throw const ClaudeCodeSecureCredentialsUnavailable();
+    }
+    return command;
+  }
+
+  @override
+  Future<void> write(String contents) async {
+    final command = _writeCommand(contents);
+    Process? process;
+    try {
+      process = await _processStarter('/usr/bin/security', ['-i']);
+      final out = process.stdout.drain<void>();
+      final err = process.stderr.drain<void>();
+      process.stdin.write(command);
+      await process.stdin.close();
+      final exit = await process.exitCode.timeout(timeout);
+      await Future.wait([out, err]);
+      if (exit != 0) throw const ClaudeCodeSecureCredentialsUnavailable();
+      // Some interactive security failures still exit 0. Verify the item.
+      if (await read() != contents) {
+        throw const ClaudeCodeSecureCredentialsUnavailable();
+      }
+    } catch (_) {
+      process?.kill();
+      throw const ClaudeCodeSecureCredentialsUnavailable();
+    }
   }
 
   @override
@@ -192,3 +256,6 @@ String? _nonEmpty(Object? value) {
   final normalized = value.trim();
   return normalized.isEmpty ? null : normalized;
 }
+
+Future<Process> _startSecurity(String executable, List<String> arguments) =>
+    Process.start(executable, arguments, runInShell: false);

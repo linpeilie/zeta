@@ -184,9 +184,13 @@ Claude Code models and the plan name come from a separate, no-prompt CLI initial
 mapped to neutral models inside the Claude-local adapter. `supportedEffortLevels` are exposed as
 neutral reasoning options and applied to the next turn through `--effort`. This is a snapshot of
 options effective for the current CLI, not a guaranteed real-time exhaustive remote catalog. Quota
-details use a separate, optional OAuth usage path and degrade to the plan name on failure. Zeta
-persists only the normalized model cache, never credentials or raw payloads; the Claude CLI may still
-maintain its own auth, bootstrap, and cache state.
+details use a separate, optional OAuth usage path and degrade to the plan name on REST failure.
+The registry awaits optional `acquisitionPreparation` before returning a new or reused lease.
+Claude calls the same `ensureFresh()` service here and before new requests, refreshing within five
+minutes of expiry. Refresh failure blocks the operation; cancellation and approval responses remain
+available. Credentials are written only to the selected existing CLI store, under a lock and with
+readback verification. Zeta-owned storage and logs never contain credentials or raw payloads.
+See the Claude protocol document, section 11, for scope and platform validation limits.
 
 ## Three kinds of approval — don't conflate them
 
