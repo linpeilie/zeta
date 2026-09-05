@@ -59,7 +59,8 @@ final class ClaudeCodeSecureCredentialsWriteException
   final int? exitCode;
 
   @override
-  String toString() => 'ClaudeCodeSecureCredentialsWriteException('
+  String toString() =>
+      'ClaudeCodeSecureCredentialsWriteException('
       'stage=${stage.name}, reason=${reason.name}'
       '${exitCode == null ? '' : ', exitCode=$exitCode'})';
 }
@@ -355,7 +356,8 @@ Future<ClaudeCodeCredentialPersistenceReason?> _securityWriteFailure(
     if (message.contains('user interaction is not allowed')) {
       return ClaudeCodeCredentialPersistenceReason.interactionNotAllowed;
     }
-    if (message.contains('user canceled') || message.contains('user cancelled')) {
+    if (message.contains('user canceled') ||
+        message.contains('user cancelled')) {
       return ClaudeCodeCredentialPersistenceReason.userCanceled;
     }
     if (message.contains('passphrase you entered is not correct') ||
@@ -366,7 +368,9 @@ Future<ClaudeCodeCredentialPersistenceReason?> _securityWriteFailure(
         message.contains('no such keychain')) {
       return ClaudeCodeCredentialPersistenceReason.keychainUnavailable;
     }
-    if (RegExp(r'add-generic-password: returned [1-9][0-9]*').hasMatch(message)) {
+    if (RegExp(
+      r'add-generic-password: returned [1-9][0-9]*',
+    ).hasMatch(message)) {
       return ClaudeCodeCredentialPersistenceReason.commandFailed;
     }
     return null;

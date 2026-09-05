@@ -370,7 +370,8 @@ final class LocalClaudeCodeCredentialsService
             }
             writer.validateWrite(raw!);
           } catch (error) {
-            throw _persistenceException(error,
+            throw _persistenceException(
+              error,
               source: source,
               stage: ClaudeCodeCredentialPersistenceStage.preflight,
               refreshCompleted: false,
@@ -437,7 +438,10 @@ final class LocalClaudeCodeCredentialsService
           if (saved.source != source ||
               saved.credentials?.accessToken != next.accessToken ||
               saved.credentials?.refreshToken != next.refreshToken ||
-              saved.credentials?.expiresAt != next.expiresAt) {
+              // Claude persists Unix milliseconds; DateTime.now may carry
+              // microseconds. Compare the representation actually written.
+              saved.credentials?.expiresAt?.millisecondsSinceEpoch !=
+                  next.expiresAt!.millisecondsSinceEpoch) {
             throw const ClaudeCodeSecureCredentialsWriteException(
               ClaudeCodeCredentialPersistenceStage.verify,
               ClaudeCodeCredentialPersistenceReason.readbackMismatch,
@@ -449,7 +453,8 @@ final class LocalClaudeCodeCredentialsService
               error.failure != ClaudeCodeCredentialRefreshFailure.persistence) {
             rethrow;
           }
-          throw _persistenceException(error,
+          throw _persistenceException(
+            error,
             source: source,
             stage: ClaudeCodeCredentialPersistenceStage.write,
             refreshCompleted: true,
@@ -592,14 +597,18 @@ ClaudeCodeCredentialRefreshException _persistenceException(
   required ClaudeCodeCredentialPersistenceStage stage,
   required bool refreshCompleted,
 }) {
-  final detail = error is ClaudeCodeSecureCredentialsWriteException ? error : null;
+  final detail = error is ClaudeCodeSecureCredentialsWriteException
+      ? error
+      : null;
   return ClaudeCodeCredentialRefreshException(
     ClaudeCodeCredentialRefreshFailure.persistence,
     source: source,
     persistenceStage: detail?.stage ?? stage,
-    persistenceReason: detail?.reason ?? (source == ClaudeCodeCredentialsSource.file
-        ? ClaudeCodeCredentialPersistenceReason.fileWriteFailed
-        : ClaudeCodeCredentialPersistenceReason.commandFailed),
+    persistenceReason:
+        detail?.reason ??
+        (source == ClaudeCodeCredentialsSource.file
+            ? ClaudeCodeCredentialPersistenceReason.fileWriteFailed
+            : ClaudeCodeCredentialPersistenceReason.commandFailed),
     refreshCompleted: refreshCompleted,
     exitCode: detail?.exitCode,
   );

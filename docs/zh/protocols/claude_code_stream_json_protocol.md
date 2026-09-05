@@ -344,10 +344,14 @@ final credentials = result.credentials;
 - 明确的 `expiresAt <= now + 5 min` 才进入刷新；缺 refresh token 或 `user:inference` 时失败。缺凭据、显式外部认证和未知有效期交由 CLI 原有认证路径处理，不拼接其他账户的 refresh token。损坏或不可读凭据失败；这不是一次服务器端 token introspection，未过期但已撤销的 token 仍可能被远端拒绝。
 - 同一次插件激活的不同 runtime 按账户/配置目录合并进行中的刷新；没有长期 token 缓存。跨进程使用 Claude `proper-lockfile` 兼容的 canonical-directory `.lock`：原子 mkdir、mtime 心跳，锁内重读。不抢占旧锁，最长等待 12 秒；锁丢失时不得写回。
 - 当前只支持生产 Claude OAuth issuer，拒绝自定义/staging issuer 与 client ID override。`POST https://platform.claude.com/v1/oauth/token` 的 JSON 包含 `grant_type=refresh_token`、原 refresh token、固定 Claude client ID 和已授予的 scopes；不扩大 scope。总超时 15 秒、禁止重定向、不自动重试；400/401/403 归为 rejected，其余 HTTP 失败归为 transport。
-- 响应必须有非空 access token、有效正整数 `expires_in`；没有返回 refresh token 时保留原值，返回新值时一起轮换。`expiresAt = now + expires_in`，按 UTC Unix 毫秒保存。保留整个 envelope、其他账户字段、subscription/rate-limit metadata 和未知字段；不额外请求 profile。
+- 响应必须有非空 access token、有效正整数 `expires_in`；没有返回 refresh token 时保留原值，返回新值时一起轮换。`expiresAt = now + expires_in`，构造与写后比较均按 UTC Unix 毫秒精度；不得用 Dart 微秒值直接比较落盘后重读值。保留整个 envelope、其他账户字段、subscription/rate-limit metadata 和未知字段；不额外请求 profile。
 - 写前再次校验锁、目录、选中来源与原内容，避免覆盖刷新期间的外部登录。macOS 用 `security -i` 的 stdin 更新原 Keychain 条目，secret 不进 argv；拒绝超过工具行长上限的内容，不降级到命令行 secret。文件来源在原目录创建临时文件并原子替换：POSIX 写入 secret 前设为 0600；Windows PowerShell/.NET 复制原 ACL 后创建临时文件，通过 `File.Replace` 替换原文件。所有路径只来自 Claude-local data 层，临时文件正常结束即清理。
 - 写回后重读并比较 access/refresh/expiry，未确认成功则阻止本次操作；Keychain 失败不改写其他来源，不创建备份。即使发起请求的 runtime 在 HTTP 期间被关闭，也完成仍持有锁的轮换写回，以免丢失服务器新 refresh token；runtime 本身不会重新发布。
 - 稳定失败分类为 unavailable、unsupportedIssuer、rejected、transport、invalidResponse、lockUnavailable、lockLost、sourceChanged、persistence。网络超时、锁丢失、写回失败可能发生在服务端已轮换之后，后续可能需要重新登录；不能用旧凭据伪装成功。本次不增加定时刷新或 Zeta 401 强制刷新/请求重放。
+
+`persistence` 错误额外携带纯枚举/数值诊断：`source`、`stage=preflight/write/verify`、`reason`、`refreshCompleted` 和可选进程 `exitCode`。`refreshCompleted=false` 表示存储预检失败、尚未调用远端刷新；`true` 表示已得到有效刷新响应，但存储或校验失败。Keychain stderr 只在有界内存缓冲区映射到允许的原因枚举，原文、命令、账号和凭据不进入错误对象或日志。
+
+从仓库根目录执行 `dart packages/zeta_agent_provider_claude_code/tool/diagnose_credentials.dart` 可只读检查当前进程环境的凭据来源、有效期类别和 Keychain 命令预检；可用 `--config-dir DIRECTORY` 对齐自定义配置目录。此命令不调用 `ensureFresh()`、不刷新、不写回，也不证明 Keychain 写权限或远端 token 有效性。Zeta 配置中的其他环境覆盖仍须在诊断进程中显式对齐；不能将默认环境的结果当作其他账户的结果。
 
 ```dart
 // Claude data 层，在实际需要认证的操作前使用。
