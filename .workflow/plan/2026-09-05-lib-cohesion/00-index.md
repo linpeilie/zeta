@@ -166,7 +166,7 @@ bash tool/test_full.sh
 |---|---|---|---|---|
 | 2026-09-05 | 文档编制 | `e951d9a5` | 见本目录文档校验记录 | 设计已编制，代码未开始 |
 | 2026-09-05 | WP-6 | `8778a8ae` | format / analyze 通过；定向 54 条、受影响 925 条通过；[验收记录](../../fix/2026-09-05-session-config/00-validation.md) | 已完成 |
-| 2026-09-06 | WP-1 | 待登记本次实现提交 | format / analyze 通过；Shell 34 条、受影响 681 条通过；[验收记录](../../fix/2026-09-06-management-runtime/00-validation.md) | 已完成 |
+| 2026-09-06 | WP-1 | `ea56f5c9` | format / analyze 通过；Shell 34 条、受影响 681 条通过；[验收记录](../../fix/2026-09-06-management-runtime/00-validation.md) | 已完成 |
 
 当前下一项：**WP-4 · Project Threads 重复规则收口**。WP-2 的统一 Actions 和 WP-3 的状态 owner 迁移尚未开始；WP-6 现有临时 UI 翻译边界的后继动作见其 §6.7。
 
