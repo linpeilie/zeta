@@ -2,7 +2,7 @@
 
 - 日期：2026-09-05；实施基线：`e951d9a5`；开始时工作区干净。
 - 工作包：[lib cohesion / WP-6](../../plan/2026-09-05-lib-cohesion/06-wp6-session-config.md)。执行队列下一项为 WP-1。
-- 实现提交：待收尾登记。
+- 实现提交：`8778a8ae`。
 
 ## 1. 实现与生产接线
 
@@ -48,9 +48,9 @@
 | 两个定向文件 | 54 条通过；application 配置命令 29 条，Composer toolbar 25 条 |
 | `bash tool/test_affected.sh -- --reporter expanded` | 通过，925 条；选中 126/304 个根测试文件，含常驻与 Agent 架构守卫 |
 | `dart run tool/check_localized_ui_strings.dart --check` | 通过，0 个新字面量、0 allowlist 项 |
-| ARB key/placeholder 对齐、生成文件 | `flutter gen-l10n` 已执行；相关 contract 测试由受影响集覆盖 |
+| ARB key/placeholder 对齐、生成文件 | `flutter gen-l10n` 已执行；1043 个 key 及 placeholder 对齐；相关 contract 测试通过 |
 | `git diff --check` | 通过 |
-| 计划与阶段记录本地链接 | 已逐项核验，无失效链接 |
+| 计划与阶段记录本地链接 | 8 份文档、22 个本地链接通过，无失效链接 |
 | 依赖/协议/持久化范围 | pubspec、lock、packages、third_party、tool 与原生目录无改动 |
 
 WP-6 是局部行为修复，按总入口 §5.1 使用定向与受影响测试，未执行 `test_full.sh`；最终整合仍要求全量。未执行真实 CLI 或 Windows/Linux 人工验收，未据此声明跨平台实机通过。本次没有 Provider 协议或原生桌面改动。
