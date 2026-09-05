@@ -443,6 +443,12 @@ notifier 依赖了 runner provider，runner 再读 notifier 就构成 Riverpod �
   快照为准；升级 CLI 时先用 `tool/gen_codex_schema.*` 导出并 diff，再改
   适配层。流程见 `docs/protocols/codex_app_server_protocol.md`。
 
+### 管理运行事实边界
+
+管理运行状态只统计本 Workbench 的 session Binding，按精确配置实例 `providerId` 聚合所有前后台 entry，并保留无 entry 但仍有 runtime 的 Binding。默认 Provider 与 Canvas 选择不参与归属；global 模型预热、连接测试和外部 CLI 进程不计入。`ready` 只证明连接，活跃 turn/等待交互才证明运行；不从历史 active 或短 RPC 计数猜测 turn。禁用是配置策略，现存事实保留至实际 clear/remove。主状态按 running → error → starting → unavailable → idle → disabled → notRunning 投影，`hasErrors` 独立保留。
+
+`WorkspaceAgentRuntimeFactSource` 是 app 层唯一跨 feature 适配器；它借用 BindingManager 与 controller 的无正文观测，不拥有 runtime。controller 的观测与 ThreadSnapshot 共用安全发布边界，live 接线时冻结观测来源 identity/connection scope，避免旧状态被重新标记为新实例或新连接的事实。未取得 runtime 的启动失败用内存 `attemptEpoch` 隔离，重试前递增。source 按 Binding 对象身份管理订阅，回调必须校验 source/handle/subscription 代次并同步全量重读。`AgentManagementSliceStore` 仍是当前 owner，reducer 统一出口投影兼容 `ManagedAgent.runtimeState`；初始化、探测、连接测试与 settings ingress 不得各自赋值。运行事实、opaque key 和来源代次不落盘、不写日志。
+
 ### 4.1 Agent 流式身份与叙事边界
 
 Agent 时间线必须区分 Provider 原始身份和 Zeta 展示身份：

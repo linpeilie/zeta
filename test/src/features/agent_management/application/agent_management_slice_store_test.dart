@@ -1,3 +1,4 @@
+import 'package:zeta/src/features/agent_management/application/agent_management_runtime_facts.dart';
 import '../../../testing/agent_management_test_definitions.dart';
 import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,6 +11,120 @@ import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 
 void main() {
   group('AgentManagementSliceStore', () {
+    test(
+      'all async ingress preserves current session facts and exact instance summaries',
+      () async {
+        final runner = _RecordingRunner();
+        final store = _createStore(runner: runner, initialized: false);
+        addTearDown(store.close);
+        final facts = AgentManagementRuntimeFacts([
+          AgentManagementRuntimeFact(
+            observationKey: Object(),
+            providerId: defaultAgentProviderId,
+            runtimeIdentity: const AgentProviderRuntimeIdentity(
+              providerId: defaultAgentProviderId,
+              generation: 1,
+            ),
+            lifecycle: AgentConversationRuntimeLifecyclePhase.attached,
+            connected: true,
+            activeTurn: true,
+          ),
+          AgentManagementRuntimeFact(
+            observationKey: Object(),
+            providerId: 'custom',
+            lifecycle: AgentConversationRuntimeLifecyclePhase.dormant,
+            currentError: true,
+          ),
+        ]);
+        final init = store.initialize();
+        final initialEffect = runner.take<ManagementInitializeEffect>();
+        store.runtimeFactsReplaced(facts);
+        final before = store.state.runtimeByProviderId;
+        store.initializationSucceeded(
+          initialEffect.operationId,
+          store.state.providerSettings,
+          {
+            for (final entry in store.state.agentsById.entries)
+              entry.key: entry.value.copyWith(
+                runtimeState: AgentRuntimeState.idle,
+              ),
+          },
+        );
+        await init;
+        void expectFacts() {
+          expect(store.state.runtimeFacts, same(facts));
+          expect(store.agent.runtimeState, AgentRuntimeState.running);
+          expect(store.state.runtimeByProviderId, before);
+          expect(store.state.agentsById.containsKey('custom'), isFalse);
+        }
+
+        expectFacts();
+        final detection = store.detect();
+        await Future<void>.delayed(Duration.zero);
+        final effect = runner.take<DetectAgentsEffect>();
+        store.detectionStarted(effect.operationId, defaultAgentProviderId);
+        final detected = store.agent.copyWith(
+          runtimeState: AgentRuntimeState.error,
+        );
+        store.detectionProgressReported(
+          effect.operationId,
+          defaultAgentProviderId,
+          const AgentDetectionProgress(completed: 1, total: 1, message: ''),
+          detected,
+        );
+        expectFacts();
+        store.agentDetected(
+          effect.operationId,
+          defaultAgentProviderId,
+          detected,
+        );
+        store.detectionCompleted(effect.operationId);
+        await detection;
+        expectFacts();
+        for (final success in [true, false]) {
+          final pending = store.testConnection();
+          final effect = runner.take<TestAgentConnectionEffect>();
+          store.connectionTestSucceeded(
+            operationId: effect.operationId,
+            agentId: defaultAgentProviderId,
+            result: AgentConnectionTestResult(
+              success: success,
+              testedAt: DateTime(2026),
+              elapsed: Duration.zero,
+              cliCallable: success,
+              accountValid: success,
+              protocolReady: success,
+            ),
+            models: [],
+            modelSource: '',
+            modelsUpdatedAt: DateTime(2026),
+          );
+          await pending;
+          expectFacts();
+        }
+        store.providerSettingsChanged(
+          store.state.providerSettings.copyWith(
+            providers: [
+              for (final config in store.state.providerSettings.providers)
+                config.copyWith(enabled: false),
+            ],
+          ),
+        );
+        expect(store.agent.enabled, isFalse);
+        expect(store.agent.runtimeState, AgentRuntimeState.running);
+        expect(
+          store
+              .state
+              .runtimeByProviderId[defaultAgentProviderId]!
+              .connectedRuntimeCount,
+          1,
+        );
+        store.runtimeFactsReplaced(AgentManagementRuntimeFacts.empty);
+        expect(store.agent.runtimeState, AgentRuntimeState.disabled);
+        expect(store.state.runtimeByProviderId.containsKey('custom'), isFalse);
+      },
+    );
+
     test('cold initialization can retry after a listener throws', () async {
       // Arrange
       final runner = _RecordingRunner();

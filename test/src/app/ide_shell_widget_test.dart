@@ -2,6 +2,8 @@
 library;
 
 import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
+import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_workspace_providers.dart';
+import 'package:zeta/src/ui/features/ide/views/global_home_page.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -63,6 +65,77 @@ const int kStormDispatcherQueueBudget = 64;
 const int kStormPendingKeyBudget = 64;
 
 void main() {
+  testWidgets('runtime facts belong to the non-default provider across pages', (
+    tester,
+  ) async {
+    final composition = await _pumpIde(
+      tester,
+      enableNativeWindowFrame: true,
+      agentProviderFactory: _RuntimeSummaryProviderFactory(),
+      agentProviderConfigStore: MemoryAgentProviderConfigStore(),
+      homeProviderDetectionLoader: () async => [
+        _installedAgent(codexAgentManagementDefinition),
+        _installedAgent(grokAgentManagementDefinition),
+      ],
+    );
+    final workspace = composition.container.read(
+      agentConversationWorkspaceStoreProvider,
+    );
+    final entry = workspace.ensureDraftEntry(
+      projectPath: '',
+      providerId: grokAgentProviderId,
+    );
+    workspace.selectEntry(entry.entryId);
+    await tester.pump();
+    await entry.controller.sendMessage('start background work');
+    await tester.pump();
+    await tester.pump();
+    expect(entry.controller.isTurnRunning, isTrue);
+    expect(
+      composition.container
+          .read(agentProviderSettingsSliceProvider)
+          .settings
+          .activeProviderId,
+      defaultAgentProviderId,
+    );
+    void expectRuntimeOwners() {
+      final agents = composition
+          .takeStateSnapshot()
+          .shell
+          .agentManagement
+          .agentsById;
+      expect(
+        agents[grokAgentProviderId]!.runtimeState,
+        AgentRuntimeState.running,
+      );
+      expect(
+        agents[defaultAgentProviderId]!.runtimeState,
+        AgentRuntimeState.notRunning,
+      );
+    }
+
+    expectRuntimeOwners();
+    expect(
+      tester
+          .widget<GlobalHomePage>(find.byType(GlobalHomePage))
+          .installedProviders
+          .singleWhere((p) => p.id == grokAgentProviderId)
+          .status,
+      HomeProviderStatus.running,
+    );
+    workspace.selectEntry(workspace.entries.first.entryId);
+    await tester.pump();
+    expectRuntimeOwners();
+    await tester.tap(find.byKey(const ValueKey('titlebar-settings-action')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('settings-nav-agents')));
+    await tester.pump();
+    expectRuntimeOwners();
+    await tester.tap(find.byKey(const ValueKey('titlebar-back-action')));
+    await tester.pump();
+    expectRuntimeOwners();
+  });
+
   testWidgets('starts with the compact IDE panes', (tester) async {
     await _pumpIde(tester, enableNativeWindowFrame: true);
     await tester.pump();
@@ -2918,4 +2991,22 @@ class _ModeCapableFakeAgentProvider extends FakeAgentProvider
 
 double _widthOf(WidgetTester tester, String key) {
   return tester.getSize(find.byKey(ValueKey<String>(key))).width;
+}
+
+final class _RuntimeSummaryProviderFactory
+    implements AgentProviderBundleFactory {
+  @override
+  AgentProviderBundle createBundle(AgentProviderConfig config) =>
+      FakeAgentProviderBundleBuilder.fromFake(
+        _RuntimeSummaryProvider(config),
+      ).createBundle(config);
+}
+
+final class _RuntimeSummaryProvider extends FakeAgentProvider {
+  _RuntimeSummaryProvider(AgentProviderConfig config)
+    : super(config: config, completeTurns: false);
+
+  @override
+  AgentProviderLifecycleState get lifecycleState =>
+      AgentProviderLifecycleState.ready;
 }

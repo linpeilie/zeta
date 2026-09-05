@@ -1,3 +1,4 @@
+import '../agent_management_runtime_facts.dart';
 import 'package:meta/meta.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
@@ -79,11 +80,18 @@ final class AgentManagementSliceState {
     Map<String, AgentConfigurationDocument>? confirmedConfigurationsByAgentId,
     Map<String, List<AgentLogEntry>>? logsByAgentId,
     Map<AgentManagementOperationKey, OperationId>? pendingOperations,
+    AgentManagementRuntimeFacts? runtimeFacts,
+    Map<String, AgentManagementProviderRuntimeSummary>? runtimeByProviderId,
     this.detectionProgress,
     this.detectingAgentId,
     this.initialized = false,
     this.failure,
-  }) : agentsById = Map<String, ManagedAgent>.unmodifiable(agentsById),
+  }) : runtimeFacts = runtimeFacts ?? AgentManagementRuntimeFacts.empty,
+       runtimeByProviderId = Map.unmodifiable(
+         runtimeByProviderId ??
+             const <String, AgentManagementProviderRuntimeSummary>{},
+       ),
+       agentsById = Map<String, ManagedAgent>.unmodifiable(agentsById),
        orderedAgentIds = List<String>.unmodifiable(orderedAgentIds),
        capabilitiesByAgentId =
            Map<String, AgentCliManagementCapabilities>.unmodifiable(
@@ -118,6 +126,8 @@ final class AgentManagementSliceState {
     );
   }
 
+  final AgentManagementRuntimeFacts runtimeFacts;
+  final Map<String, AgentManagementProviderRuntimeSummary> runtimeByProviderId;
   final Map<String, ManagedAgent> agentsById;
   final List<String> orderedAgentIds;
   final String selectedAgentId;
@@ -133,6 +143,8 @@ final class AgentManagementSliceState {
   final AgentManagementFailure? failure;
 
   AgentManagementSliceState copyWith({
+    AgentManagementRuntimeFacts? runtimeFacts,
+    Map<String, AgentManagementProviderRuntimeSummary>? runtimeByProviderId,
     Map<String, ManagedAgent>? agentsById,
     List<String>? orderedAgentIds,
     String? selectedAgentId,
@@ -147,6 +159,8 @@ final class AgentManagementSliceState {
     Object? failure = _agentManagementSliceUnset,
   }) {
     return AgentManagementSliceState(
+      runtimeFacts: runtimeFacts ?? this.runtimeFacts,
+      runtimeByProviderId: runtimeByProviderId ?? this.runtimeByProviderId,
       agentsById: agentsById ?? this.agentsById,
       orderedAgentIds: orderedAgentIds ?? this.orderedAgentIds,
       selectedAgentId: selectedAgentId ?? this.selectedAgentId,

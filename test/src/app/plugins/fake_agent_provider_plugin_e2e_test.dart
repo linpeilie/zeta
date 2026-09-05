@@ -1,3 +1,4 @@
+import '../../testing/memory_agent_runtime_fact_source.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -98,9 +99,7 @@ void main() {
       ],
     );
     final workbench = safeApp.createWorkbenchComposition(
-      subscribeRuntime: (_) => () {},
-      runtimeSnapshotProvider: () =>
-          (activeAgentId: 'fourth', runtimeState: AgentRuntimeState.notRunning),
+      runtimeFactSource: MemoryAgentRuntimeFactSource(),
     );
     addTearDown(workbench.dispose);
     final store = workbench.agentManagementComposition.store;
@@ -223,11 +222,7 @@ void main() {
       );
       expect(
         () => app.createWorkbenchComposition(
-          subscribeRuntime: (_) => () {},
-          runtimeSnapshotProvider: () => (
-            activeAgentId: 'fourth',
-            runtimeState: AgentRuntimeState.notRunning,
-          ),
+          runtimeFactSource: MemoryAgentRuntimeFactSource(),
         ),
         throwsStateError,
       );

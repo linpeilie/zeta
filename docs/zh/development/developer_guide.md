@@ -492,6 +492,17 @@ create/resume/fork/send --> Binding.permissions.snapshotForRequest()
 快速 Provider 重绑后的迟到 apply、disposed controller 的迟到结果、旧 runtime generation 丢弃，
 以及 provider apply 成功但配置持久化失败时的只重试持久化语义。
 
+### 管理运行事实摘要
+
+管理运行状态只统计本 Workbench 的 session Binding，按精确配置实例 `providerId` 聚合所有前后台 entry，并保留无 entry 但仍有 runtime 的 Binding。默认 Provider 与 Canvas 选择不参与归属；global 模型预热、连接测试和外部 CLI 进程不计入。`ready` 只证明连接，活跃 turn/等待交互才证明运行；不从历史 active 或短 RPC 计数猜测 turn。禁用是配置策略，现存事实保留至实际 clear/remove。主状态按 running → error → starting → unavailable → idle → disabled → notRunning 投影，`hasErrors` 独立保留。
+
+- controller 通过 `runtimeObservationListenable` 发布无正文观测；连接、turn、waiting 与 Binding 生命周期变化都经既有安全边界刷新。来源 identity/scope 只在 live 接线时冻结，不能用新 runtime 给旧快照重新标记。首次启动与 Plan 执行均经同一个观测 helper 推进 `attemptEpoch`。
+- Shell 创建 `WorkspaceAgentRuntimeFactSource` 后调用 start；management composition 先 subscribe 再同步读取 current。subscribe 不立即回调，消费者只退订，不取得 source 生命周期控制权。
+- source 以 Binding 对象 identity 持有 opaque token；草稿晋升不重新计数。回调捕获 source/handle/subscription 代次，校验后全量重读；已 clear 或连接 scope 不匹配的旧 active 不能继续进入摘要。
+- `runtimeByProviderId` 保留所有精确实例（包括没有 management contribution 的自定义 id），selector 不补造厂商品牌卡片。reducer 所有入口统一投影 `ManagedAgent.runtimeState`；探测与连接测试只更新诊断字段。
+- source 不创建 controller、不获取租约、不启动插件、不关闭进程；retained ready runtime 计连接与 `unobservedTurnRuntimeCount`，不能猜测其 turn 是否活跃。关闭管理 composition 后，Shell 先关闭 source 再释放 Workspace。
+- 修改时运行纯聚合、source、Management Store、真实 `ide_shell_widget_test` 及 `agent_management_runtime_boundary_guard_test`；覆盖同 Provider 多 scope、启动失败重试、连接换代、历史 active、短 RPC、后台执行、禁用后实际清理和重复 close。
+
 ### Session config 命令结果与控件反馈
 
 - 配置能力只由 `AgentProviderBundle.sessionConfiguration` 声明，没有单独的

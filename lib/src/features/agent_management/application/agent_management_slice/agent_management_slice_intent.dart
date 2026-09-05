@@ -1,3 +1,4 @@
+import '../agent_management_runtime_facts.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 
@@ -321,13 +322,8 @@ final class ProviderSettingsSnapshotChanged extends AgentManagementSliceIntent {
   final AgentProviderSettings providerSettings;
 }
 
-/// runtime owner 的只读 ingress 快照。
-final class RuntimeSnapshotChanged extends AgentManagementSliceIntent {
-  const RuntimeSnapshotChanged({
-    required this.agentId,
-    required this.runtimeState,
-  });
-
-  final String agentId;
-  final AgentRuntimeState runtimeState;
+/// Shell session 事实源的全量替换。
+final class RuntimeFactsReplaced extends AgentManagementSliceIntent {
+  const RuntimeFactsReplaced(this.facts);
+  final AgentManagementRuntimeFacts facts;
 }

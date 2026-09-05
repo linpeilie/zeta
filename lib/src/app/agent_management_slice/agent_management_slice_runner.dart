@@ -10,14 +10,6 @@ import 'package:zeta/src/features/agent_management/application/agent_management_
 import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk.dart';
 import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 
-typedef AgentManagementRuntimeSnapshot = ({
-  String activeAgentId,
-  AgentRuntimeState runtimeState,
-});
-
-typedef AgentManagementRuntimeSnapshotProvider =
-    AgentManagementRuntimeSnapshot Function();
-
 /// Agent management MVI 的 app 组合层 effect runner。
 ///
 /// repository、Provider settings 写入与 runtime ingress 都停留在这一层；store
@@ -30,7 +22,6 @@ final class AgentManagementSliceRunnerAdapter
     required AgentProviderSettingsPort providerSettings,
     required AgentManagementSliceStore store,
     required AgentManagementTextCatalog textCatalog,
-    required AgentManagementRuntimeSnapshotProvider runtimeSnapshotProvider,
     DateTime Function()? now,
   }) : this._(
          repositories,
@@ -38,7 +29,6 @@ final class AgentManagementSliceRunnerAdapter
          providerSettings,
          store,
          textCatalog,
-         runtimeSnapshotProvider,
          now ?? DateTime.now,
        );
 
@@ -48,7 +38,6 @@ final class AgentManagementSliceRunnerAdapter
     this._providerSettings,
     this._store,
     this._textCatalog,
-    this._runtimeSnapshotProvider,
     this._now,
   ) : _definitions = Map.unmodifiable(definitions),
       _repositories = Map<String, AgentCliManagementRepository>.unmodifiable(
@@ -60,7 +49,6 @@ final class AgentManagementSliceRunnerAdapter
   final AgentProviderSettingsPort _providerSettings;
   final AgentManagementSliceStore _store;
   final AgentManagementTextCatalog _textCatalog;
-  final AgentManagementRuntimeSnapshotProvider _runtimeSnapshotProvider;
   final DateTime Function() _now;
 
   @override
@@ -134,23 +122,11 @@ final class AgentManagementSliceRunnerAdapter
               effect.operationId,
               id,
               mappedProgress,
-              partial.copyWith(
-                runtimeState: _runtimeState(
-                  id,
-                  partial.enabled,
-                  partial.runtimeState,
-                ),
-              ),
+              partial,
             );
           },
         );
-        final mapped = detected.copyWith(
-          runtimeState: _runtimeState(
-            id,
-            detected.enabled,
-            detected.runtimeState,
-          ),
-        );
+        final mapped = detected;
         _store.agentDetected(effect.operationId, id, mapped);
         await _persistDetectionSummary(id, config, mapped);
       }
@@ -480,29 +456,6 @@ final class AgentManagementSliceRunnerAdapter
           : config.arguments,
       extra: extra,
     );
-  }
-
-  AgentRuntimeState _runtimeState(
-    String agentId,
-    bool enabled,
-    AgentRuntimeState fallback,
-  ) {
-    if (!enabled) {
-      return AgentRuntimeState.disabled;
-    }
-    final snapshot = _runtimeSnapshotProvider();
-    if (snapshot.activeAgentId != agentId) {
-      return fallback == AgentRuntimeState.disabled
-          ? AgentRuntimeState.notRunning
-          : fallback;
-    }
-    final live = snapshot.runtimeState;
-    if (live == AgentRuntimeState.notRunning) {
-      return fallback == AgentRuntimeState.disabled
-          ? AgentRuntimeState.notRunning
-          : fallback;
-    }
-    return live;
   }
 
   AgentCliManagementRepository _repository(String agentId) {
