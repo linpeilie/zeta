@@ -1,3 +1,4 @@
+import '../../../testing/agent_management_test_definitions.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -12,10 +13,7 @@ import 'package:zeta/src/app/agent_management_slice/agent_management_slice_compo
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_store.dart';
-import 'package:zeta/src/features/agent_management/data/codex_agent_management_repository.dart';
-import 'package:zeta/src/features/agent_management/domain/agent_cli_management_repository.dart';
-import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
-import 'package:zeta/src/features/agent_management/domain/fallback_agent_management_text_catalog.dart';
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_configuration_editor.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_management_page.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
@@ -215,10 +213,7 @@ void main() {
       final disabledConfig = harness.providerController.providerConfigById(
         defaultClaudeCodeProviderId,
       );
-      expect(
-        disabledConfig?.extra[claudeCodeAccountDataEnrichmentKey],
-        isFalse,
-      );
+      expect(disabledConfig?.extra[testAccountDataEnrichmentKey], isFalse);
       expect(tester.widget<IdeSwitch>(switchFinder).value, isFalse);
       expect(tester.takeException(), isNull);
     },
@@ -247,7 +242,7 @@ void main() {
     expect(
       harness.providerController
           .providerConfigById(defaultClaudeCodeProviderId)
-          ?.extra[claudeCodeAccountDataEnrichmentKey],
+          ?.extra[testAccountDataEnrichmentKey],
       isFalse,
     );
     expect(find.textContaining('模型列表与套餐名称始终来自 Claude CLI'), findsOneWidget);
@@ -454,8 +449,9 @@ class _ManagementHarness {
     );
     final runtimeSignal = ChangeNotifier();
     final managementComposition = AgentManagementSliceComposition.create(
+      definitions: testAgentManagementDefinitions,
       repositories: <String, AgentCliManagementRepository>{
-        AgentDefinition.codex.id: repository,
+        codexAgentManagementDefinition.id: repository,
       },
       providerSettings: providerController,
       subscribeRuntime: (listener) {
@@ -535,7 +531,7 @@ class _ClaudeManagementHarness {
               'detectedCurrentVersion': '2.1.224',
               'detectedAccountState': accountState.name,
               'lastDetectedAt': DateTime.utc(2026, 8, 11).toIso8601String(),
-              claudeCodeAccountDataEnrichmentKey: ?accountDataEnrichmentEnabled,
+              testAccountDataEnrichmentKey: ?accountDataEnrichmentEnabled,
             },
           ),
         ],
@@ -544,6 +540,7 @@ class _ClaudeManagementHarness {
     );
     final runtimeSignal = ChangeNotifier();
     final managementComposition = AgentManagementSliceComposition.create(
+      definitions: testAgentManagementDefinitions,
       repositories: <String, AgentCliManagementRepository>{
         defaultClaudeCodeProviderId: repository,
       },
@@ -735,7 +732,7 @@ class _FakeClaudeManagementRepository
 
   @override
   AgentCliManagementCapabilities get managementCapabilities =>
-      const AgentCliManagementCapabilities(supportsAccountDataEnrichment: true);
+      testClaudeManagementCapabilities;
 
   @override
   AgentProviderConfig get defaultProviderConfig =>
@@ -759,7 +756,10 @@ class _FakeClaudeManagementRepository
     required bool enabled,
     AgentDetectionProgressCallback? onProgress,
   }) async {
-    return ManagedAgent.claudeCode(enabled: enabled).copyWith(
+    return ManagedAgent.forDefinition(
+      definition: claudeCodeAgentManagementDefinition,
+      enabled: enabled,
+    ).copyWith(
       installationState: AgentInstallationState.installed,
       accountState: accountState,
       accountLabel: accountLabel,

@@ -1,12 +1,12 @@
+import '../../../testing/agent_management_test_definitions.dart';
 import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 import 'package:flutter_test/flutter_test.dart';
-import '../../../testing/agent_provider_implementations.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_effect.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_state.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_store.dart';
-import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 
 void main() {
   group('AgentManagementSliceStore', () {
@@ -62,17 +62,24 @@ void main() {
             total: 2,
             message: 'stale',
           ),
-          ManagedAgent.grok(enabled: true),
+          ManagedAgent.forDefinition(
+            definition: grokAgentManagementDefinition,
+            enabled: true,
+          ),
         );
 
         // Assert
         expect(store.detectionProgress, isNull);
 
         // Act
-        final detected = ManagedAgent.codex(enabled: true).copyWith(
-          installationState: AgentInstallationState.installed,
-          currentVersion: '1.0.0',
-        );
+        final detected =
+            ManagedAgent.forDefinition(
+              definition: codexAgentManagementDefinition,
+              enabled: true,
+            ).copyWith(
+              installationState: AgentInstallationState.installed,
+              currentVersion: '1.0.0',
+            );
         store.detectionProgressReported(
           effect.operationId,
           defaultAgentProviderId,
@@ -239,8 +246,14 @@ AgentManagementSliceStore _createStore({
   return AgentManagementSliceStore(
     initialState: AgentManagementSliceState(
       agentsById: <String, ManagedAgent>{
-        defaultAgentProviderId: ManagedAgent.codex(enabled: true),
-        grokAgentProviderId: ManagedAgent.grok(enabled: true),
+        defaultAgentProviderId: ManagedAgent.forDefinition(
+          definition: codexAgentManagementDefinition,
+          enabled: true,
+        ),
+        grokAgentProviderId: ManagedAgent.forDefinition(
+          definition: grokAgentManagementDefinition,
+          enabled: true,
+        ),
       },
       orderedAgentIds: const <String>[
         defaultAgentProviderId,
@@ -257,7 +270,7 @@ AgentManagementSliceStore _createStore({
     effectRunner: runner,
     configurationNotLoadedMessage: 'not loaded',
     accountDataEnrichmentEnabledFor: (config) =>
-        config.extra[claudeCodeAccountDataEnrichmentKey] != false,
+        config.extra[testAccountDataEnrichmentKey] != false,
   );
 }
 

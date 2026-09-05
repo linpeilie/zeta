@@ -1,3 +1,7 @@
+import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
+import 'package:zeta/src/app/plugins/agent_contribution_providers.dart';
+import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
+import 'agent_management_test_definitions.dart';
 import 'package:flutter/widgets.dart' show Key;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
@@ -13,7 +17,7 @@ import 'package:zeta/src/app/storage/zeta_storage_bindings.dart';
 import 'package:zeta/src/app/storage/zeta_store_providers.dart';
 import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_providers.dart';
 import 'package:zeta/src/app/window/zeta_window_host.dart';
-import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_models.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_notifier.dart';
 import 'package:zeta/src/features/settings/data/system_font_catalog_service.dart';
@@ -76,6 +80,22 @@ Override headlessWindowHost({bool showsWindowControls = true}) =>
 /// widget test 不能碰本机的默认装配；用例已经覆盖的 provider 不再重复装。
 List<Override> _testDefaultsNotCoveredBy(List<Override> overrides) {
   return <Override>[
+    if (_covers(overrides, agentProviderBundleFactoryProvider) &&
+        !_covers(overrides, agentProviderDefinitionCatalogProvider) &&
+        !_covers(overrides, resolvedAgentProviderPluginsProvider))
+      agentProviderDefinitionCatalogProvider.overrideWithValue(
+        zetaAgentProviderDefinitionCatalog,
+      ),
+    if (_covers(overrides, agentProviderBundleFactoryProvider) &&
+        !_covers(overrides, agentManagementContributionsProvider))
+      agentManagementContributionsProvider.overrideWithValue(
+        testAgentManagementContributions,
+      ),
+    if (_covers(overrides, agentProviderBundleFactoryProvider) &&
+        !_covers(overrides, agentUsageContributionsProvider))
+      agentUsageContributionsProvider.overrideWithValue(
+        testAgentUsageContributions,
+      ),
     if (!_covers(overrides, zetaWindowHostProvider))
       zetaWindowHostProvider.overrideWithValue(HeadlessWindowHost()),
     if (!_covers(overrides, desktopNotificationServiceProvider))

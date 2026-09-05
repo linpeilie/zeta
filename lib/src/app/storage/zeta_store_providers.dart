@@ -1,3 +1,4 @@
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:zeta_agent_core/zeta_agent_core.dart';
@@ -62,13 +63,12 @@ final ideSessionStoreProvider = Provider<IdeSessionStore>(
 );
 
 /// 使用统计派生索引仓库。
-final usageStatisticsPartitionStoreProvider =
-    Provider<UsageStatisticsPartitionStore>(
-      (ref) => FileUsageStatisticsPartitionStore(
-        storage: ref.watch(usageStatisticsStorageProvider),
-      ),
-      name: 'usageStatisticsPartitionStore',
-    );
+final usageStatisticsPartitionStoreProvider = Provider<AgentUsagePartitionPort>(
+  (ref) => FileUsageStatisticsPartitionStore(
+    storage: ref.watch(usageStatisticsStorageProvider),
+  ),
+  name: 'usageStatisticsPartitionStore',
+);
 
 /// 应用级共享模型目录仓库。
 final agentModelCatalogRepositoryProvider =

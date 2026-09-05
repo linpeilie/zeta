@@ -1,3 +1,5 @@
+import '../../../testing/agent_management_test_definitions.dart';
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 import 'dart:convert';
 import 'dart:io';
@@ -8,10 +10,7 @@ import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_query_service.dart';
 import 'package:zeta/src/features/usage_statistics/application/query_agent_usage_panel_repository.dart';
 import 'package:zeta/src/features/usage_statistics/application/query_usage_statistics_repository.dart';
-import 'package:zeta/src/features/usage_statistics/data/built_in_agent_token_usage_source_registry.dart';
-import 'package:zeta/src/features/usage_statistics/data/providers/claude_code/claude_code_token_usage_source.dart';
-import 'package:zeta/src/features/usage_statistics/data/providers/codex/codex_token_usage_source.dart';
-import 'package:zeta/src/features/usage_statistics/data/providers/grok/grok_token_usage_source.dart';
+import 'package:zeta/src/features/usage_statistics/data/contributed_agent_token_usage_source_registry.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_query_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_quota_source.dart';
 import '../../../testing/memory_feature_stores.dart';
@@ -19,8 +18,11 @@ import '../../../testing/usage_statistics_test_bindings.dart';
 
 void main() {
   test('registry exposes every active Provider token source', () {
-    final registry = BuiltInAgentTokenUsageSourceRegistry(
-      MemoryUsageStatisticsPartitionStore(),
+    final registry = ContributedAgentTokenUsageSourceRegistry(
+      testAgentUsageContributions,
+      services: AgentUsageHostServices(
+        partitionPort: MemoryUsageStatisticsPartitionStore(),
+      ),
     );
 
     expect(
@@ -59,8 +61,11 @@ void main() {
       final queryService = AgentUsageQueryService(
         () async => <AgentProviderConfig>[config],
         const _UnsupportedQuotaSource(),
-        BuiltInAgentTokenUsageSourceRegistry(
-          MemoryUsageStatisticsPartitionStore(),
+        ContributedAgentTokenUsageSourceRegistry(
+          testAgentUsageContributions,
+          services: AgentUsageHostServices(
+            partitionPort: MemoryUsageStatisticsPartitionStore(),
+          ),
         ),
         clock: () => now,
       );

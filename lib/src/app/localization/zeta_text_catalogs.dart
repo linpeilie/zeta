@@ -1,5 +1,5 @@
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta/src/features/agent_management/domain/agent_management_text_catalog.dart';
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_text_catalog.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_text_catalog.dart';
@@ -79,7 +79,7 @@ final class AppZetaUiTextCatalog implements ZetaUiTextCatalog {
 }
 
 final class AppUsageStatisticsTextCatalog
-    implements UsageStatisticsTextCatalog {
+    implements UsageStatisticsTextCatalog, AgentUsageSourceTextCatalog {
   const AppUsageStatisticsTextCatalog(this._l10n);
 
   final AppLocalizations _l10n;

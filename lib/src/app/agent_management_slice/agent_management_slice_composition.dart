@@ -1,14 +1,9 @@
-// WP-C 过渡白名单：WP-D 迁入插件或通过贡献能力消除。
-import 'package:zeta_agent_provider_claude_code/zeta_agent_provider_claude_code.dart';
-
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_runner.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_effect.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_state.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_store.dart';
-import 'package:zeta/src/features/agent_management/domain/agent_cli_management_repository.dart';
-import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
-import 'package:zeta/src/features/agent_management/domain/agent_management_text_catalog.dart';
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 
 /// IdeHome 持有的 Agent management 页面组合。
 ///
@@ -46,23 +41,24 @@ final class AgentManagementSliceComposition {
 
   factory AgentManagementSliceComposition.create({
     required Map<String, AgentCliManagementRepository> repositories,
+    required Map<String, AgentDefinition> definitions,
     required AgentProviderSettingsPort providerSettings,
     required AgentManagementRuntimeSubscribe subscribeRuntime,
     required AgentManagementRuntimeSnapshotProvider runtimeSnapshotProvider,
     required AgentManagementTextCatalog textCatalog,
   }) {
     final orderedIds = <String>[
-      for (final definition in AgentDefinition.all)
+      for (final definition in definitions.values)
         if (repositories.containsKey(definition.id)) definition.id,
       for (final id in repositories.keys)
-        if (!AgentDefinition.all.any((definition) => definition.id == id)) id,
+        if (!definitions.values.any((definition) => definition.id == id)) id,
     ];
     final initialState = AgentManagementSliceState.initial(
       agentsById: <String, ManagedAgent>{
         for (final id in orderedIds)
           id: ManagedAgent.forDefinition(
             definition:
-                AgentDefinition.byId(id) ??
+                definitions[id] ??
                 AgentDefinition(
                   id: id,
                   displayName: id,
@@ -92,11 +88,16 @@ final class AgentManagementSliceComposition {
       initialState: initialState,
       effectRunner: deferredRunner,
       configurationNotLoadedMessage: textCatalog.configurationNotLoaded(),
-      accountDataEnrichmentEnabledFor: (config) =>
-          config.extra[claudeCodeAccountDataEnrichmentKey] != false,
+      accountDataEnrichmentEnabledFor: (config) {
+        final key = initialState
+            .capabilitiesByAgentId[config.id]
+            ?.accountDataEnrichmentExtraKey;
+        return key != null && config.extra[key] != false;
+      },
     );
     deferredRunner.delegate = AgentManagementSliceRunnerAdapter(
       repositories: repositories,
+      definitions: definitions,
       providerSettings: providerSettings,
       store: store,
       textCatalog: textCatalog,

@@ -17,4 +17,4 @@ flutter test
 
 协议测试与脱敏 fixture 随包存放；`contracts_test.dart` 复用 SDK 套件，包含事件回放。根应用通过 `lib/src/app/plugins/agent_provider_manifest.dart` 登记插件。
 
-当前为 WP-C 阶段。生产 barrel 中标记的过渡导出只服务于现有宿主 management/usage 调用点，WP-D 完成贡献化后收敛。持久化 providerId、providerType 与默认配置逐字保持原值。
+管理 repository 和用量 source/scanner/codec 随插件提供，激活句柄同时贡献 Provider、management 和 usage。生产 barrel 仅供 manifest 登记及必要的宿主注入；具体实现通过独立 testing barrel 测试。持久化 providerId、providerType 与默认配置逐字保持原值。

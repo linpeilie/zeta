@@ -1,3 +1,5 @@
+import 'package:zeta_foundation/zeta_foundation.dart';
+
 /// Zeta 自有数据在用户主目录下的统一路径集合（纯路径描述，无本机 IO）。
 ///
 /// 这里只描述 Zeta 的配置、状态、日志与缓存目录，不包含任何 Agent CLI 的
@@ -90,34 +92,6 @@ class ZetaDataPaths {
   /// 可丢弃、可重建的 Agent 模型目录缓存文件路径。
   String get agentModelCatalogCacheFilePath =>
       _joinPath(cacheDirectoryPath, 'agent_models_v1.json', _isWindows);
-}
-
-/// 按当前平台规则从环境变量中解析用户主目录。
-///
-/// Windows 优先使用 `USERPROFILE`，并兼容 `HOMEDRIVE` + `HOMEPATH`；
-/// 其他平台使用 `HOME`。测试可显式传入平台标记，避免依赖宿主机。
-String? resolveUserHomeDirectory({
-  required Map<String, String> environment,
-  required bool isWindows,
-}) {
-  if (isWindows) {
-    final userProfile = _nonEmpty(environment['USERPROFILE']);
-    if (userProfile != null) {
-      return userProfile;
-    }
-    final homeDrive = _nonEmpty(environment['HOMEDRIVE']);
-    final homePath = _nonEmpty(environment['HOMEPATH']);
-    if (homeDrive != null && homePath != null) {
-      return '$homeDrive$homePath';
-    }
-    return _nonEmpty(environment['HOME']);
-  }
-  return _nonEmpty(environment['HOME']);
-}
-
-String? _nonEmpty(String? value) {
-  final normalized = value?.trim();
-  return normalized == null || normalized.isEmpty ? null : normalized;
 }
 
 bool _isAbsolutePath(String value, bool isWindows) {

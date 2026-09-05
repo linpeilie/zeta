@@ -1,6 +1,6 @@
 # WP-D · app 层贡献化（management + usage statistics）
 
-> 状态：未开始
+> 状态：已完成（2026-09-05，见 [验证记录](07-wpd-validation.md)）
 > 规模：2–3 人天，建议 2 个 PR（management / usage 各一）
 > 依赖：WP-C 完成（插件包与 manifest 就位）
 > 性质：行为保持的重构（非纯搬移：构造签名换型 + 聚合逻辑改写）。每个 PR 全量绿为正确性证据；测试允许 import 改写，不允许断言改写。
@@ -526,7 +526,7 @@ const String _setupGuideAgentId = 'claude_code';
 1. composition/runner 按 §3.6 替换（capabilities map 来自 state 既有的 `capabilitiesByAgentId`，不需要新通道）。
 2. `page.dart:664` 已在 T0-4 经能力位改写；`page.dart:451` 已在 T0-4 以 `_setupGuideAgentId` 字面量形态登记为例外，本任务只需复核注释指向 §3.6。
 3. 插件包 barrel 移除 `claudeCodeAccountDataEnrichmentKey` 的过渡导出（WP-C 白名单收口）。
-**验收**：`grep -rn "claudeCodeAccountDataEnrichmentKey" lib/ test/` 零命中（该常量与其唯一声明点都在 claude 插件包内）。
+**验收**：`claudeCodeAccountDataEnrichmentKey` 在 lib/test 无生产引用或测试 import；现有 `agent_provider_catalog_freeze_test.dart` 的禁用符号匹配字符串保留，以免削弱守卫（该常量与其唯一声明点都在 claude 插件包内）。
 
 ### T6 · 端到端假插件验证
 **产出**：`test/src/app/plugins/fake_agent_provider_plugin_e2e_test.dart`
@@ -536,16 +536,16 @@ const String _setupGuideAgentId = 'claude_code';
 
 ## 5. DoD
 
-- [ ] C1–C5 实测位置全部消灭，`grep` 自证（命令见各任务）
-- [ ] 三个 repository 与三个 source 物理位于插件包，构造只经 contribution
-- [ ] **WP-C §2 过渡白名单清零**（grep `zeta_agent_provider_` 在 `lib/` 除 manifest 外零命中）——WP-E 守卫 2 的启用前置
-- [ ] app 层（含 composition/runner/page）除 C6 登记例外（`page.dart` 的 `_setupGuideAgentId` 一处字符串字面量）外无厂商标识分支
-- [ ] 贡献消费经接缝 provider，且空贡献表 fail-closed：`grep -rn "pluginRegistry\|\.registry\.contributions" lib/src/app/composition lib/src/app/usage_statistics_slice` 零命中
-- [ ] 12 个覆盖 bundle 工厂的测试文件仍不建插件目录（断言零修改，只允许加 `overrideWithValue`）
-- [ ] D7：enrichment key 值、索引版本与分区字节、definition 字段值逐字节不变
-- [ ] `LocalizedAgentManagementTextCatalog` / `LocalizedUsageStatisticsTextCatalog` 实现零 diff（仅 import 与 implements 列表）
-- [ ] T6 假插件 e2e 绿
-- [ ] 每个 PR `test_full.sh` 绿
+- [x] C1–C5 实测位置全部消灭，`grep` 自证（命令见各任务）
+- [x] 三个 repository 与三个 source 物理位于插件包，构造只经 contribution
+- [x] **WP-C §2 过渡白名单清零**（具体厂商包 `zeta_agent_provider_(codex|grok|claude_code)` 在 `lib/` 除 manifest 外无 import/export；api/sdk 属中立包）——WP-E 守卫 2 的启用前置
+- [x] app 层（含 composition/runner/page）除 C6 登记例外（`page.dart` 的 `_setupGuideAgentId` 一处字符串字面量）外无厂商标识分支
+- [x] 贡献消费经接缝 provider，且空贡献表 fail-closed：`grep -rn "pluginRegistry\|\.registry\.contributions" lib/src/app/composition lib/src/app/usage_statistics_slice` 零命中
+- [x] 覆盖 bundle 工厂的既有测试仍不建插件目录（本轮实测 11 个匹配文件，含一份结构守卫；通过测试助手及贡献接缝覆盖保持原断言）
+- [x] D7：enrichment key 值、索引版本与分区字节、definition 字段值逐字节不变
+- [x] `AppAgentManagementTextCatalog` / `AppUsageStatisticsTextCatalog` 实现体零 diff（当前树的实际命名；仅 import 与 implements 列表变化）
+- [x] T6 假插件 e2e 绿
+- [x] 本次完整变更集 `test_full.sh` 绿
 
 ## 6. 风险
 
@@ -568,3 +568,14 @@ const String _setupGuideAgentId = 'claude_code';
 | 2026-09-04 | 完整勘察报告对账：usage 闭包精确化（query 实测仅 earliest/forceRefresh，`UsageDateWindow`/`UsageTimeRangePreset` 不下沉；补 `UsageErrorCategory`）；`usage_scan_cache.dart` 三家共用实测落档（T4 迁 sdk）；claude source 无本地 scanner、claude management 构造无 runtimeRegistry/modelCatalog 两处差异落档；**664 分支实测为测试连接确认弹窗**（非 enrichment 编辑），改经新增能力位 `requiresConnectionTestConfirmation` 消灭，C6 登记例外收敛为 451 一处；T0 补根测试字面量 fixture（4 个引用点实测）与 WP-E parity 守卫联动 |
 | 2026-09-04 | 实证复核轮：① **§3.5 新增接缝与 fail-closed（00-index D9）**——实测现状两个装配点都不认识插件内核，12 个文件 20+ 处用例靠覆盖 `agentProviderBundleFactoryProvider` 来不建插件目录（`zeta_app_composition.dart:180` 明文依赖），直接查 registry 会逼着改断言；改为 `agentManagementContributionsProvider` / `agentUsageContributionsProvider` 两个可覆盖 provider，且空贡献表抛 `StateError`（`contributions<T>()` 在内核关闭后返回 `const []`，静默降级违反 G4）。② **enrichment key 折叠进能力位**——`String? accountDataEnrichmentExtraKey` + 派生 getter 取代「definition 持 key + capabilities 持 bool」，半状态不可表示，UI 读取点零改动，省掉一条 WP-E parity 守卫。③ 两个新贡献类型补 `contributionKind` 实现（`ZetaPluginContribution` 是 abstract base class，该成员必须实现且进诊断口径）。④ `AgentDefinition` 伪代码补回实测存在的 `isBeta` 字段。 |
 | 2026-09-04 | 终审轮：① **C6 内部矛盾修正**——T0 删除静态表后 `AgentDefinition.claudeCode` 符号不复存在，451 例外原样保留会编译失效；目标形态定为文件私有 `_setupGuideAgentId = 'claude_code'` 字面量（T0-4 同轮落地，非可选），并补「为什么不能力化 451」的论证（整卡 Claude 品牌内容 vs 664 的一句警告文案）；T0 验收 grep 与 WP-E 守卫 5 同步改为新形态。② T0-3 过渡文件的 claude key 来源写明（import claude barrel 过渡导出，加入 WP-C §2 白名单，T2 后消除）。③ DoD 新增「WP-C §2 过渡白名单清零」（WP-E 守卫 2 的启用前置）。④ usage source 构造签名实测核验：三家恰好只收 `(config, partitionStore, textCatalog)`，`AgentUsageHostServices` 不需要 home 解析字段（claude 的 homeDirectory 参数是可选自解析），设计无缺口。 |
+
+## 8. 本轮实测修正（2026-09-05）
+
+- 当前实际迁移为 4 个 management 生产文件、8 个 usage 生产文件、9 个测试文件；计划中的独立 config/log/version/locator shim 文件在 WP-C 完成树中不存在，不创建额外壳文件。
+- Grok 仍从 Codex repository 借用版本比较、配置遮挡、日志清洗。它们是中立机制，整体移到 sdk；纯文本脱敏及显式环境 HOME 解析由 foundation 承载，宿主日志与插件共用，避免跨插件 import 和重复实现。
+- 用量 fallback 实际为中文；保留原 5 个方法逐字文本，不按早期伪代码改成英文。`usageProjectName` 的默认“未知项目”亦保持原值。管理文本目录整体迁移，ARB 实现体不变。
+- Grok 管理实现已有 toml 依赖，从根移动后在 Grok pubspec 声明同一约束 `^0.18.0`；没有新增第三方版本。
+- 各插件实际是 `ZetaSynchronousPluginFactory`，贡献来自 activate 返回的 handle。宿主先解析 Provider，再校验每个插件自己拥有的三类贡献，避免伪代码直接读取未激活 registry 的空表。
+- T0–T5 在一个变更集中完成；不落地随后即删除的临时 app contribution 文件。完整验证及审计见 [WP-D 验证记录](07-wpd-validation.md)。
+
+- 最终验收：`dart format .`、`flutter analyze`、`bash tool/test_affected.sh` 和 `bash tool/test_full.sh` 全部通过；两个测试门禁各 2854 条，退出码均为 0。WP-D 完成，下一项 WP-E。

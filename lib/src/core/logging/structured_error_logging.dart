@@ -3,8 +3,6 @@ import 'dart:math' as math;
 
 import 'package:zeta_foundation/zeta_foundation.dart';
 
-import 'package:zeta/src/core/security/sensitive_data_redactor.dart';
-
 /// 写入带结构化、脱敏上下文的异常日志。
 ///
 /// 调用方只应传身份、状态和协议诊断，不应传用户输入正文。敏感键和文本会在

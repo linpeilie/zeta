@@ -102,6 +102,49 @@ final class ZetaPluginCatalog {
     return ResolvedAgentProviderPlugins(contributions);
   }
 
+  /// 校验每个激活 Provider 自身拥有的管理与用量贡献，禁止串用其他插件身份。
+  ResolvedAgentHostContributions resolveAgentHostContributions() {
+    resolveAgentProviders();
+    final management = <AgentManagementContribution>[];
+    final usage = <AgentUsageContribution>[];
+    final managementIds = <String>{};
+    final usageTypes = <Object>{};
+    for (final state in _registry.states) {
+      if (state.status != ZetaPluginStatus.active) continue;
+      final id = state.descriptor.id;
+      final providers = _registry
+          .contributionsOf<AgentProviderPluginContribution>(id);
+      final managed = _registry.contributionsOf<AgentManagementContribution>(
+        id,
+      );
+      final sources = _registry.contributionsOf<AgentUsageContribution>(id);
+      if (providers.isEmpty && managed.isEmpty && sources.isEmpty) continue;
+      if (providers.length != 1 || managed.length != 1 || sources.length != 1) {
+        throw StateError(
+          'Agent plugin must contribute one provider, management repository and usage source',
+        );
+      }
+      final definition = providers.single.definition;
+      final managementContribution = managed.single;
+      final usageContribution = sources.single;
+      if (managementContribution.providerId != definition.providerId ||
+          managementContribution.definition.id != definition.providerId ||
+          usageContribution.providerType != definition.providerType ||
+          !managementIds.add(managementContribution.providerId) ||
+          !usageTypes.add(usageContribution.providerType)) {
+        throw StateError(
+          'Duplicate or mismatched Agent host contribution identity',
+        );
+      }
+      management.add(managementContribution);
+      usage.add(usageContribution);
+    }
+    if (management.isEmpty || usage.isEmpty) {
+      throw StateError('No plugin contributed Agent host services');
+    }
+    return ResolvedAgentHostContributions(management: management, usage: usage);
+  }
+
   /// 激活并解析启动必需的 Provider；任一步失败都会立即回收已激活 handle。
   ///
   /// 该同步组合方法不把半激活目录交给调用方。插件关闭可以包含异步清理，因此
@@ -127,4 +170,15 @@ final class ZetaPluginCatalog {
       _log.e('Could not close plugins after Agent provider activation failed');
     }
   }
+}
+
+/// 从同一次激活结果提取的不可变宿主贡献。
+final class ResolvedAgentHostContributions {
+  ResolvedAgentHostContributions({
+    required Iterable<AgentManagementContribution> management,
+    required Iterable<AgentUsageContribution> usage,
+  }) : management = List.unmodifiable(management),
+       usage = List.unmodifiable(usage);
+  final List<AgentManagementContribution> management;
+  final List<AgentUsageContribution> usage;
 }

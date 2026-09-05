@@ -77,7 +77,7 @@ main -> app -> presentation/application -> domain
 - domain 不依赖 Flutter widget、不访问本地文件系统、不引用具体 provider 实现。
 - app 可以引用具体 data 实现，因为 app 是依赖注入和默认实现装配点。
 
-### 2.1 Provider 插件包边界（WP-C）
+### 2.1 Provider 插件包边界
 
 宿主侧中立装配契约位于 `zeta_agent_provider_api`；共享 transport、ACP codec、payload/CLI 工具与独立测试套件位于 `zeta_agent_provider_sdk`；Codex、Grok、Claude Code 分别位于 `zeta_agent_provider_codex`、`zeta_agent_provider_grok`、`zeta_agent_provider_claude_code`。三个插件为纯 Dart 包，可使用 `dart:io`，不得依赖 Flutter、Riverpod、根应用或其他插件。
 
@@ -85,9 +85,13 @@ main -> app -> presentation/application -> domain
 
 `lib/src/app/plugins/agent_provider_manifest.dart` 是编译期登记入口，集中静态 definitions、保持原顺序的 settings、工厂与插件专属宿主注入。`ZetaPluginCatalog` 只消费工厂列表并保持原有激活/关闭/fail-closed 语义。静态指标目录不读取激活链；配置 codec 继续使用既有的激活目录接缝，不改变语言冻结顺序。
 
-根测试的身份常量经 manifest 取得，实现类型只经 `test/src/testing/agent_provider_implementations.dart` 访问插件的独立 testing barrel。插件生产 barrel 仅暴露登记和宿主注入所需符号，以及已登记过渡调用点所需的精确 `show` 列表。
+根测试的身份常量经 manifest 取得，实现类型只经 `test/src/testing/agent_provider_implementations.dart` 访问插件的独立 testing barrel。插件生产 barrel 仅暴露登记和宿主注入所需符号；management/usage 实现和私有配置键不再作为过渡 API 导出。
 
-当前仅完成物理拆包。management/usage 仍在宿主侧，过渡 import 的唯一清单在 [WP-C §2](../../../.workflow/plan/2026-09-04-provider-plugin-packages/03-wpc-provider-split.md)，WP-D 负责消除；不可把过渡清单解释为新增依赖的许可。旧测试的断言与持久化身份保持不变，结构性守卫随物理路径更新，不允许扫描已删除目录而静默通过。
+management repository 与 Token source/scanner/partition codec 都在各自插件包；每个激活 Provider 自己贡献一份管理定义/工厂和一份按 providerType 路由的用量工厂。宿主目录校验同一插件的身份与贡献完备性，两个 Riverpod 接缝共享校验后的不可变快照；组合层只读可覆盖接缝，空表和重复身份抛错，未知用量类型仍返回 unsupported。内核关闭后重新解析不得返回过期贡献。
+
+管理插件仅借用 `AgentManagementHostServices` 的文本目录、runtime registry 和模型缓存窄端口。用量插件仅借用 `AgentUsagePartitionPort`，不获得 `StorageService` 或宿主路径；v4 根索引 Store 留宿主。原默认文案逐字保留，usage 未自动改成本地化目录。`AgentCliManagementCapabilities` 用可空增强键同时声明能力与持久化键，连接测试确认按能力门；整卡 Claude 安装指引仍是 [WP-D §3.6](../../../.workflow/plan/2026-09-04-provider-plugin-packages/04-wpd-app-contributions.md) 登记的单一品牌内容例外。
+
+通用版本比较、配置遮挡、日志清洗与用量扫描缓存属于 sdk 机制；宿主日志和插件共用的纯文本脱敏、显式环境 HOME 解析位于 foundation。旧测试断言与持久化身份保持不变，结构性守卫随物理路径更新，不允许扫描已删除目录而静默通过。WP-E 的完整治理与 CI 重排仍单独执行。
 
 ## 3. 状态与异步编排
 

@@ -4,7 +4,7 @@ import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_effect.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_intent.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_state.dart';
-import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 
 /// Agent 管理页的纯同步 reducer。
 Transition<AgentManagementSliceState, AgentManagementSliceEffect>

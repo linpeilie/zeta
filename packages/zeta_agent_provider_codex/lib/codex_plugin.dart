@@ -1,3 +1,5 @@
+import 'src/management/contribution.dart';
+import 'src/usage/contribution.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
@@ -91,6 +93,8 @@ final class _CodexAgentProviderPluginHandle implements ZetaPluginHandle {
   @override
   List<ZetaPluginContribution> get contributions => <ZetaPluginContribution>[
     _contribution,
+    createCodexManagementContribution(),
+    createCodexUsageContribution(),
   ];
 
   @override

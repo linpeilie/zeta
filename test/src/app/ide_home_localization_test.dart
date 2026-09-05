@@ -1,6 +1,7 @@
+import '../testing/agent_management_test_definitions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 import 'package:zeta/src/ui/features/ide/views/ide_home.dart';
@@ -94,7 +95,7 @@ void main() {
     await _pumpIdeHome(
       tester,
       homeProviderDetectionLoader: () async => <ManagedAgent>[
-        _installedAgent(AgentDefinition.codex),
+        _installedAgent(codexAgentManagementDefinition),
       ],
     );
     await pumpUntilCondition(
@@ -117,7 +118,7 @@ void main() {
       tester,
       language: AppLanguage.english,
       homeProviderDetectionLoader: () async => <ManagedAgent>[
-        _installedAgent(AgentDefinition.codex),
+        _installedAgent(codexAgentManagementDefinition),
       ],
     );
     await pumpUntilCondition(

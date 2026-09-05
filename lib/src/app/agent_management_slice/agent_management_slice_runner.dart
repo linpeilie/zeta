@@ -1,19 +1,14 @@
 import 'dart:async';
 
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-// WP-C 过渡白名单：WP-D 迁入插件或通过贡献能力消除。
-import 'package:zeta_agent_provider_claude_code/zeta_agent_provider_claude_code.dart';
 import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_effect.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_store.dart';
-import 'package:zeta/src/features/agent_management/data/codex_agent_management_repository.dart'
-    show isNewerVersion;
-import 'package:zeta/src/features/agent_management/domain/agent_cli_management_repository.dart';
-import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
-import 'package:zeta/src/features/agent_management/domain/agent_management_text_catalog.dart';
+import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk.dart';
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 
 typedef AgentManagementRuntimeSnapshot = ({
   String activeAgentId,
@@ -31,6 +26,7 @@ final class AgentManagementSliceRunnerAdapter
     implements AgentManagementSliceEffectRunner {
   AgentManagementSliceRunnerAdapter({
     required Map<String, AgentCliManagementRepository> repositories,
+    required Map<String, AgentDefinition> definitions,
     required AgentProviderSettingsPort providerSettings,
     required AgentManagementSliceStore store,
     required AgentManagementTextCatalog textCatalog,
@@ -38,6 +34,7 @@ final class AgentManagementSliceRunnerAdapter
     DateTime Function()? now,
   }) : this._(
          repositories,
+         definitions,
          providerSettings,
          store,
          textCatalog,
@@ -47,15 +44,18 @@ final class AgentManagementSliceRunnerAdapter
 
   AgentManagementSliceRunnerAdapter._(
     Map<String, AgentCliManagementRepository> repositories,
+    Map<String, AgentDefinition> definitions,
     this._providerSettings,
     this._store,
     this._textCatalog,
     this._runtimeSnapshotProvider,
     this._now,
-  ) : _repositories = Map<String, AgentCliManagementRepository>.unmodifiable(
+  ) : _definitions = Map.unmodifiable(definitions),
+      _repositories = Map<String, AgentCliManagementRepository>.unmodifiable(
         repositories,
       );
 
+  final Map<String, AgentDefinition> _definitions;
   final Map<String, AgentCliManagementRepository> _repositories;
   final AgentProviderSettingsPort _providerSettings;
   final AgentManagementSliceStore _store;
@@ -185,8 +185,7 @@ final class AgentManagementSliceRunnerAdapter
         _textCatalog.cannotToggleEnabled(
           enabled: effect.enabled,
           displayName:
-              AgentDefinition.byId(effect.agentId)?.displayName ??
-              repository.agentId,
+              _definitions[effect.agentId]?.displayName ?? repository.agentId,
           error: error,
         ),
       );
@@ -197,10 +196,10 @@ final class AgentManagementSliceRunnerAdapter
     UpdateAccountDataEnrichmentEffect effect,
   ) async {
     final repository = _repository(effect.agentId);
-    if (!(_descriptor(
-          repository,
-        )?.managementCapabilities.supportsAccountDataEnrichment ??
-        false)) {
+    final key = _descriptor(
+      repository,
+    )?.managementCapabilities.accountDataEnrichmentExtraKey;
+    if (key == null) {
       _store.accountDataEnrichmentUpdateFailed(
         effect.operationId,
         effect.agentId,
@@ -216,9 +215,9 @@ final class AgentManagementSliceRunnerAdapter
       final current = _configForAgent(_providerSettings.settings, repository);
       final extra = Map<String, Object?>.from(current.extra);
       if (effect.enabled) {
-        extra.remove(claudeCodeAccountDataEnrichmentKey);
+        extra.remove(key);
       } else {
-        extra[claudeCodeAccountDataEnrichmentKey] = false;
+        extra[key] = false;
       }
       await _providerSettings.updateProviderConfig(
         current.copyWith(extra: extra),
@@ -381,7 +380,7 @@ final class AgentManagementSliceRunnerAdapter
         ? extra['detectedLatestVersion'] as String
         : null;
     final definition =
-        AgentDefinition.byId(agentId) ??
+        _definitions[agentId] ??
         _store.state.agentsById[agentId]?.definition ??
         AgentDefinition(
           id: agentId,
@@ -427,10 +426,16 @@ final class AgentManagementSliceRunnerAdapter
       }
     }
     return _descriptor(repository)?.defaultProviderConfig ??
-        defaultCodexAgentProviderConfig.copyWith(
+        AgentProviderConfig(
+          kind:
+              zetaAgentProviderDefinitionCatalog
+                  .definitionForProviderId(repository.agentId)
+                  ?.providerType ??
+              const AgentProviderTypeId('unknown'),
+          command: repository.agentId,
           id: repository.agentId,
           displayName:
-              AgentDefinition.byId(repository.agentId)?.displayName ??
+              _definitions[repository.agentId]?.displayName ??
               repository.agentId,
         );
   }

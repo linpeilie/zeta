@@ -1,7 +1,7 @@
 # Provider 插件化拆包 · 总索引与开发记录
 
 > 任务日期：2026-09-04
-> 状态：开发中（WP-A、WP-B、WP-C 已完成）
+> 状态：开发中（WP-A、WP-B、WP-C、WP-D 已完成；下一项 WP-E）
 > 前置：会话 UI 渲染改造（2026-09-03 计划，WP-1/2/3/4/6/7 已完成，WP-5 显式跳过）已收尾，本计划与其无代码依赖。
 
 ## 1. 目标（用户验收口径）
@@ -143,7 +143,7 @@ WP-D 把 management/usage 从「组合层直接 new」改成「读插件贡献�
 | WP-A | [01-wpa-provider-api.md](01-wpa-provider-api.md) | 契约包：definition/catalog/contribution/聚合工厂上移 + metricLabel 入 definition | 1 人天 | 无 | 已完成 |
 | WP-B | [02-wpb-provider-sdk.md](02-wpb-provider-sdk.md) | 共享机制包：13+1 文件逐行 import 反查实证归属 + `cli_process_runner` 入 sdk + 契约测试套件骨架 | 0.5–1 人天 | A | 已完成 |
 | WP-C | [03-wpc-provider-split.md](03-wpc-provider-split.md) | 三个 Provider 各自拆包（本轮实测 22/20/26 生产文件），manifest 落地，43 个根协议测试/辅助文件随迁，测试双层边界收口，删旧包 | 每个 1.5–2.5 人天 | B | 已完成 |
-| WP-D | [04-wpd-app-contributions.md](04-wpd-app-contributions.md) | usage/management 贡献化（D4+D8）：模型闭包下沉 api、文案目录下沉、窄端口 ×2、聚合改写，消除 app 侧耦合 C4/C5/C6/C7 与 C10 的一处（另一处登记例外） | 2–3 人天 | C | 未开始 |
+| WP-D | [04-wpd-app-contributions.md](04-wpd-app-contributions.md) | usage/management 贡献化（D4+D8）：模型闭包下沉 api、文案目录下沉、窄端口 ×2、聚合改写，消除 app 侧耦合 C4/C5/C6/C7 与 C10 的一处（另一处登记例外） | 2–3 人天 | C | 已完成 |
 | WP-E | [05-wpe-governance.md](05-wpe-governance.md) | 八类守卫测试（新增贡献接缝/fail-closed 一类）、门禁文本与文档同步、CI 拓扑重排、全量收尾 | 1–1.5 人天 | D | 未开始 |
 
 ## 6. 新增 Provider 的目标流程（最终验收）
@@ -171,3 +171,4 @@ WP-D 把 management/usage 从「组合层直接 new」改成「读插件贡献�
 | 2026-09-04 | 实证复核轮（逐条拿到代码里核对，修正 3 个结构性漏洞 + 5 处事实错误）：① **`acp_sdk` / `dart_acp_sdk` 全仓不存在**——`pubspec.lock` 零 `acp` 条目，四个 `acp_*` mapper 只 import core、直接读裸 JSON map（`acp_content_codec.dart:10-20`）；WP-B 四处引用全删，依赖方向图同步（若日后要引 typed ACP SDK，属独立提案，牵动 D7 与 Grok 冒烟，不进本计划）。② **D3 注入口径**：WP-A T4 原写法读激活链上的 `agentProviderDefinitionCatalogProvider`，会让 12 个文件、20+ 处覆盖 bundle 工厂的测试开始真建插件目录并使 `ProviderContainer.exists` 判据失真，直接推翻 WP-A「断言零修改」的验收；改为只读静态目录。③ **D9 新增**：WP-D 的贡献消费必须出可覆盖接缝（`agentManagementContributionsProvider` / `agentUsageContributionsProvider`）且空集 fail-closed（内核关闭后 `contributions<T>()` 返回 `const []`，会让管理页/用量面板静默缺项，违反 G4）。④ **D10 新增**：测试侧边界从「manifest 唯一」改为 `test/src/testing/`——实测 125 个根测试 import providers，77 个留根，其中 20 个要的是厂商实现类型（`CodexAppServerAgentProvider` 等），manifest `show` 方案会把实现类型倒灌进生产导出面。⑤ **C7 折叠**：能力位与 key 合一（`String? accountDataEnrichmentExtraKey`），消掉一处运行期抛错与一条 parity 守卫。⑥ 事实修正：`agent_provider_definition.dart` 现状**未** import foundation（WP-A 待确认项定案：必须显式加）；`AgentDefinition` 漏 `isBeta`；待迁测试 59→**82**、根引用「约 25」→**77**；三包第三方依赖定案（codex `toml`、claude `crypto`+`unorm_dart`、三包 `meta`，sdk 零第三方）。⑦ 新增工作量：52 个待迁测试要把 `flutter_test` 换 `test`（`test_packages.sh:17` 按 pubspec 有无 `sdk: flutter` 选 runner）；测试公共零件（`fixture_reader` 等 4 个 + app 层 `FileStorageService`/`app_logging`）需入 sdk testing barrel；CI 拓扑翻转（shard 5 从 73→<10，`packages` 串行 job 从 21→~83）需矩阵化。 |
 | 2026-09-05 | **WP-C 实现与审计**：三个插件、manifest、测试双层入口与精确生产导出已落地；实测迁移生产 68 文件，协议测试/辅助 43 文件，另拆旧包两份测试和 native bundle 用例。既有 6230 个变更范围内断言经 token 归一化比对无丢失，新增 5 个测试工具/守卫断言。依赖锁文件、配置 codec/store 无 diff；指定 0.144.5 app-server 冒烟 18/18 通过。额外 Plan 冒烟 18/19，未观察到 turn/plan/updated，单独保留待核验，不宣称通过。详见 [WP-C 验证记录](06-wpc-validation.md)。 |
 | 2026-09-05 | **WP-C 完成**：最终格式化、静态分析及完整门禁通过（根 1942 条 + 10 个内部包 907 条，共 2849 条）；根目录与包内运行三个插件测试均通过（155/177/213）。32 份 fixture 逐字节不变，锁文件与配置持久化实现无 diff。下一项为 WP-D；额外 Plan 冒烟缺失事件继续按验证记录标为待核验。 |
+| 2026-09-05 | **WP-D 完成**：management/usage 模型与窄端口进入 api，12 个实现文件及 9 个测试文件进入三个插件；激活后按插件所有者校验三类贡献，经独立 Riverpod 接缝装配，空表与身份冲突 fail-closed。根生产具体插件引用收敛到 manifest；私有增强键与连接确认改由能力声明。原有 11867 个断言无丢失，配置/索引/文案身份保持；最终格式化、静态分析、受影响测试与独立完整门禁通过（根 1873 + 内部包 981，共 2854 条），锁文件无漂移。详见 [WP-D 验证记录](07-wpd-validation.md)。下一项 WP-E。 |

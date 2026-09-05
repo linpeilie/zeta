@@ -1,6 +1,6 @@
 import 'package:zeta_foundation/zeta_foundation.dart';
 
-import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 
 sealed class AgentManagementSliceEffect {
   const AgentManagementSliceEffect();

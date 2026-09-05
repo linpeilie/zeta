@@ -15,3 +15,5 @@ export 'src/payload/context_window_codec.dart';
 export 'src/transport/json_rpc_stdio_transport.dart';
 export 'src/transport/provider_operation_scheduler.dart';
 export 'src/transport/provider_runtime_json_rpc_peer.dart';
+export 'src/cli/management_helpers.dart';
+export 'src/usage/usage_scan_cache.dart';

@@ -1,3 +1,5 @@
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
+import 'package:zeta/src/app/plugins/agent_contribution_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:zeta_agent_core/zeta_agent_core.dart';
@@ -14,7 +16,7 @@ import 'package:zeta/src/features/usage_statistics/application/agent_usage_query
 import 'package:zeta/src/features/usage_statistics/application/query_agent_usage_panel_repository.dart';
 import 'package:zeta/src/features/usage_statistics/application/query_usage_statistics_repository.dart';
 import 'package:zeta/src/features/usage_statistics/application/usage_statistics_slice/usage_statistics_slice_store.dart';
-import 'package:zeta/src/features/usage_statistics/data/built_in_agent_token_usage_source_registry.dart';
+import 'package:zeta/src/features/usage_statistics/data/contributed_agent_token_usage_source_registry.dart';
 import 'package:zeta/src/features/usage_statistics/data/global_runtime_agent_usage_quota_source.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_repository.dart';
@@ -37,8 +39,11 @@ final _agentUsageQueryServiceProvider = Provider<AgentUsageQueryService>((ref) {
         runtimeRegistry: ref.watch(agentProviderRuntimeRegistryProvider),
       ),
     ),
-    BuiltInAgentTokenUsageSourceRegistry(
-      ref.watch(usageStatisticsPartitionStoreProvider),
+    ContributedAgentTokenUsageSourceRegistry(
+      ref.watch(agentUsageContributionsProvider),
+      services: AgentUsageHostServices(
+        partitionPort: ref.watch(usageStatisticsPartitionStoreProvider),
+      ),
     ),
   );
 }, name: 'agentUsageQueryService');

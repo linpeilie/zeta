@@ -11,7 +11,7 @@ import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_operations.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_store.dart';
-import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_configuration_editor.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_log_view.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_management_l10n.dart';
@@ -41,6 +41,9 @@ const double _agentLogoSize = 24;
 
 /// 详情页「基础信息」标签下切换单栏 / 双栏的宽度阈值。
 const double _overviewTwoColumnBreakpoint = 780;
+
+/// WP-D §3.6 登记例外：整卡内容为 Claude 专属安装指引。
+const String _setupGuideAgentId = 'claude_code';
 
 /// 设置中的 Agent 管理列表、详情、配置和日志页面。
 class AgentManagementPage extends StatefulWidget {
@@ -447,8 +450,7 @@ class AgentManagementPageState extends State<AgentManagementPage> {
             agent: agent,
             onDetect: _operations.detect,
           );
-          final setupGuide =
-              agent.definition.id == AgentDefinition.claudeCode.id
+          final setupGuide = agent.definition.id == _setupGuideAgentId
               ? const _ClaudeCodeSetupGuideCard()
               : null;
           final accountDataEnrichment =
@@ -661,7 +663,12 @@ class AgentManagementPageState extends State<AgentManagementPage> {
   }
 
   Future<void> _testConnection() async {
-    if (_operations.selectedAgentId == AgentDefinition.claudeCode.id) {
+    if (widget
+            .sliceStore
+            .state
+            .capabilitiesByAgentId[_operations.selectedAgentId]
+            ?.requiresConnectionTestConfirmation ==
+        true) {
       final confirmed = await showIdeDialog<bool>(
         context: context,
         barrierDismissible: false,

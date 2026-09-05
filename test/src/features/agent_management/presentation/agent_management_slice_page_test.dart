@@ -1,3 +1,4 @@
+import '../../../testing/agent_management_test_definitions.dart';
 import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 import 'dart:async';
 
@@ -5,14 +6,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
-import '../../../testing/agent_provider_implementations.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_effect.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_state.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_store.dart';
-import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_configuration_editor.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_management_page.dart';
 import 'package:zeta_ui/zeta_ui.dart';
@@ -29,8 +29,11 @@ void main() {
       final store = AgentManagementSliceStore(
         initialState: AgentManagementSliceState.initial(
           agentsById: <String, ManagedAgent>{
-            defaultClaudeCodeProviderId: ManagedAgent.claudeCode(enabled: true)
-                .copyWith(
+            defaultClaudeCodeProviderId:
+                ManagedAgent.forDefinition(
+                  definition: claudeCodeAgentManagementDefinition,
+                  enabled: true,
+                ).copyWith(
                   installationState: AgentInstallationState.installed,
                   currentVersion: '2.1.224',
                 ),
@@ -46,7 +49,7 @@ void main() {
         effectRunner: runner,
         configurationNotLoadedMessage: '配置文件尚未加载',
         accountDataEnrichmentEnabledFor: (config) =>
-            config.extra[claudeCodeAccountDataEnrichmentKey] != false,
+            config.extra[testAccountDataEnrichmentKey] != false,
       );
       runner.store = store;
       addTearDown(store.close);
@@ -194,8 +197,11 @@ final class _SlicePageHarness {
     final store = AgentManagementSliceStore(
       initialState: AgentManagementSliceState(
         agentsById: <String, ManagedAgent>{
-          defaultClaudeCodeProviderId: ManagedAgent.claudeCode(enabled: true)
-              .copyWith(
+          defaultClaudeCodeProviderId:
+              ManagedAgent.forDefinition(
+                definition: claudeCodeAgentManagementDefinition,
+                enabled: true,
+              ).copyWith(
                 installationState: AgentInstallationState.installed,
                 currentVersion: '2.1.224',
                 accountState: AgentAccountState.loggedIn,
@@ -205,9 +211,7 @@ final class _SlicePageHarness {
         orderedAgentIds: const <String>[defaultClaudeCodeProviderId],
         selectedAgentId: defaultClaudeCodeProviderId,
         capabilitiesByAgentId: const <String, AgentCliManagementCapabilities>{
-          defaultClaudeCodeProviderId: AgentCliManagementCapabilities(
-            supportsAccountDataEnrichment: true,
-          ),
+          defaultClaudeCodeProviderId: testClaudeManagementCapabilities,
         },
         providerSettings: AgentProviderSettings(
           providers: <AgentProviderConfig>[providerConfig],
@@ -218,7 +222,7 @@ final class _SlicePageHarness {
       effectRunner: runner,
       configurationNotLoadedMessage: '配置文件尚未加载',
       accountDataEnrichmentEnabledFor: (config) =>
-          config.extra[claudeCodeAccountDataEnrichmentKey] != false,
+          config.extra[testAccountDataEnrichmentKey] != false,
     );
     runner.store = store;
     return _SlicePageHarness(store: store, runner: runner);
@@ -275,7 +279,7 @@ final class _InteractiveRunner implements AgentManagementSliceEffectRunner {
         final updated = current.copyWith(
           extra: <String, Object?>{
             ...current.extra,
-            claudeCodeAccountDataEnrichmentKey: effect.enabled ? null : false,
+            testAccountDataEnrichmentKey: effect.enabled ? null : false,
           }..removeWhere((key, value) => value == null),
         );
         store.accountDataEnrichmentUpdated(

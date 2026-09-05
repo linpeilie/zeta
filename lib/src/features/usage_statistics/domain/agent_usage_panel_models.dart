@@ -1,5 +1,5 @@
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta/src/features/usage_statistics/domain/usage_statistics_models.dart';
 
 /// Context 面板中单个 Provider 配置实例的轻量用量快照。
 class AgentUsagePanelEntry {

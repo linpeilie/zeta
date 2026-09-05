@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
-import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'package:zeta/src/ui/core/system_file_manager.dart';
 
 /// 首页可用 Provider 列表的探测端口。

@@ -1,3 +1,5 @@
+import '../testing/agent_management_test_definitions.dart';
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -19,7 +21,7 @@ import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.
 import 'package:zeta/src/features/usage_statistics/application/query_agent_usage_panel_repository.dart';
 import 'package:zeta/src/features/usage_statistics/application/query_usage_statistics_repository.dart';
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_query_service.dart';
-import 'package:zeta/src/features/usage_statistics/data/built_in_agent_token_usage_source_registry.dart';
+import 'package:zeta/src/features/usage_statistics/data/contributed_agent_token_usage_source_registry.dart';
 import 'package:zeta/src/features/usage_statistics/data/global_runtime_agent_usage_quota_source.dart';
 import 'package:zeta/src/features/usage_statistics/domain/agent_usage_panel_models.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_directory_picker.dart';
@@ -80,8 +82,11 @@ void main() {
       GlobalRuntimeAgentUsageQuotaSource(
         AgentProviderGlobalRuntime(runtimeRegistry: runtimeRegistry),
       ),
-      BuiltInAgentTokenUsageSourceRegistry(
-        MemoryUsageStatisticsPartitionStore(),
+      ContributedAgentTokenUsageSourceRegistry(
+        testAgentUsageContributions,
+        services: AgentUsageHostServices(
+          partitionPort: MemoryUsageStatisticsPartitionStore(),
+        ),
       ),
     );
     final usageBindings = UsageStatisticsTestBindings(

@@ -1,7 +1,7 @@
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
-import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_model_catalog_projection.dart';
 import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_provider_settings_slice_store.dart';
 import 'package:zeta/src/features/agent/presentation/provider_settings_slice/agent_provider_settings_slice_providers.dart';

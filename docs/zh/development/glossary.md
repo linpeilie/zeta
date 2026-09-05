@@ -235,4 +235,4 @@ Zeta 自有数据根目录：`config/`（配置）、`state/`（会话状态与�
 - `provider_<vendor>`：单一厂商的协议实现及独立测试。
 - `manifest`：`lib/src/app/plugins/agent_provider_manifest.dart`，编译期登记 definitions、settings、工厂和专属宿主注入；不进行运行时发现。
 
-WP-C 当前过渡 import 与依赖约束见[工程规范 §2.1](../architecture/engineering_standards.md#21-provider-插件包边界wp-c)。
+`AgentManagementContribution` 提供管理定义与仓库工厂；`AgentUsageContribution` 按 providerType 提供用量工厂。宿主经独立可覆盖接缝取得同一份激活并校验的贡献快照。原过渡 import 已清零，依赖约束见[工程规范 §2.1](../architecture/engineering_standards.md#21-provider-插件包边界)。

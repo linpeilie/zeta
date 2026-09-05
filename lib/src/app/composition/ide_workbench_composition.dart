@@ -1,13 +1,9 @@
+import 'package:zeta/src/app/agent_management_slice/agent_management_model_catalog_port_adapter.dart';
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_composition.dart';
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_runner.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
-import 'package:zeta/src/features/agent_management/data/claude_code_agent_management_repository.dart';
-import 'package:zeta/src/features/agent_management/data/codex_agent_management_repository.dart';
-import 'package:zeta/src/features/agent_management/data/grok_agent_management_repository.dart';
-import 'package:zeta/src/features/agent_management/domain/agent_cli_management_repository.dart';
-import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
-import 'package:zeta/src/features/agent_management/domain/agent_management_text_catalog.dart';
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 /// 由 app 组合层预先绑好 data 依赖、只等 Shell 相关入参的工作台组合工厂。
@@ -35,6 +31,7 @@ final class IdeWorkbenchComposition {
 
   /// 按当前 Provider 目录组装 Agent Management 的 Repository 与 slice 组合。
   factory IdeWorkbenchComposition.create({
+    required Iterable<AgentManagementContribution> contributions,
     required AgentModelCatalogRepository modelCatalogRepository,
     required AgentProviderRuntimeRegistry runtimeRegistry,
     required AgentProviderSettingsPort providerSettings,
@@ -42,27 +39,36 @@ final class IdeWorkbenchComposition {
     required AgentManagementRuntimeSnapshotProvider runtimeSnapshotProvider,
     required AgentManagementTextCatalog textCatalog,
   }) {
-    // 按 G4：能力差异由各 Repository 自己声明，这里只做 id → 实现的登记，
-    // 不按 Provider 名字分支出任何行为。
+    final byId = <String, AgentManagementContribution>{};
+    for (final contribution in contributions) {
+      if (contribution.providerId != contribution.definition.id ||
+          byId.containsKey(contribution.providerId)) {
+        throw StateError('Duplicate or mismatched Agent management identity');
+      }
+      byId[contribution.providerId] = contribution;
+    }
+    if (byId.isEmpty) {
+      throw StateError('No plugin contributed agent management repositories');
+    }
+    final services = AgentManagementHostServices(
+      textCatalog: textCatalog,
+      runtimeRegistry: runtimeRegistry,
+      modelCatalog: AgentManagementModelCatalogPortAdapter(
+        modelCatalogRepository,
+      ),
+    );
     final repositories = <String, AgentCliManagementRepository>{
-      AgentDefinition.codex.id: CodexAgentManagementRepository(
-        modelCatalogRepository: modelCatalogRepository,
-        runtimeRegistry: runtimeRegistry,
-        textCatalog: textCatalog,
-      ),
-      AgentDefinition.grok.id: GrokAgentManagementRepository(
-        modelCatalogRepository: modelCatalogRepository,
-        runtimeRegistry: runtimeRegistry,
-        textCatalog: textCatalog,
-      ),
-      AgentDefinition.claudeCode.id: ClaudeCodeAgentManagementRepository(
-        textCatalog: textCatalog,
-      ),
+      for (final c in byId.values) c.providerId: c.createRepository(services),
     };
-
+    for (final entry in repositories.entries) {
+      if (entry.key != entry.value.agentId) {
+        throw StateError('Agent management repository identity mismatch');
+      }
+    }
     return IdeWorkbenchComposition._(
       AgentManagementSliceComposition.create(
         repositories: repositories,
+        definitions: {for (final c in byId.values) c.providerId: c.definition},
         providerSettings: providerSettings,
         subscribeRuntime: subscribeRuntime,
         runtimeSnapshotProvider: runtimeSnapshotProvider,

@@ -19,7 +19,7 @@ import 'package:zeta/src/features/agent/application/conversation_slice/agent_con
 import 'package:zeta/src/features/agent/presentation/provider_settings_slice/agent_model_catalog_projection_providers.dart';
 import 'package:zeta/src/features/agent/presentation/provider_settings_slice/agent_provider_settings_slice_providers.dart';
 import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_provider_settings_slice_store.dart';
-import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_management_page.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
@@ -2280,9 +2280,9 @@ void main() {
         ),
       ),
       homeProviderDetectionLoader: () async => <ManagedAgent>[
-        _installedAgent(AgentDefinition.codex),
+        _installedAgent(codexAgentManagementDefinition),
         ManagedAgent.forDefinition(
-          definition: AgentDefinition.grok,
+          definition: grokAgentManagementDefinition,
           enabled: true,
         ).copyWith(installationState: AgentInstallationState.notInstalled),
       ],

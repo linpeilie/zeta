@@ -21,3 +21,5 @@ export 'src/operation/operation_id.dart';
 export 'src/storage/storage_service.dart';
 export 'src/time/clock.dart';
 export 'src/typography/app_typography.dart';
+export 'src/security/sensitive_data_redactor.dart';
+export 'src/paths/user_home_directory.dart';

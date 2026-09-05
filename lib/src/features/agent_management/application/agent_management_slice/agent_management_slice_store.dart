@@ -8,7 +8,7 @@ import 'package:zeta/src/features/agent_management/application/agent_management_
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_intent.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_reducer.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_state.dart';
-import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 
 /// Agent management effect 的 app 组合层执行入口。
 abstract interface class AgentManagementSliceEffectRunner {

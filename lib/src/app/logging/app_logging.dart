@@ -7,8 +7,6 @@ import 'package:logger/logger.dart' as logger;
 import 'package:zeta_foundation/zeta_foundation.dart';
 
 import 'package:zeta/src/core/logging/structured_error_logging.dart';
-import 'package:zeta/src/core/security/sensitive_data_redactor.dart';
-import 'package:zeta/src/core/storage/zeta_data_paths.dart';
 
 /// 统一的应用日志器。
 ///

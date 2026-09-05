@@ -1,7 +1,6 @@
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'package:meta/meta.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-
-import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 
 /// Riverpod 模型目录投影的安全查询键。
 ///

@@ -1,3 +1,4 @@
+import '../../testing/agent_management_test_definitions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
@@ -6,9 +7,7 @@ import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_composition.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
-import 'package:zeta/src/features/agent_management/domain/agent_cli_management_repository.dart';
-import 'package:zeta/src/features/agent_management/domain/agent_management_models.dart';
-import 'package:zeta/src/features/agent_management/domain/fallback_agent_management_text_catalog.dart';
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import '../../testing/memory_feature_stores.dart';
 
 void main() {
@@ -34,6 +33,7 @@ void main() {
       var runtimeState = AgentRuntimeState.notRunning;
       final repository = _RunnerRepository();
       final composition = AgentManagementSliceComposition.create(
+        definitions: testAgentManagementDefinitions,
         repositories: <String, AgentCliManagementRepository>{
           defaultClaudeCodeProviderId: repository,
         },
@@ -102,7 +102,7 @@ final class _RunnerRepository
 
   @override
   AgentCliManagementCapabilities get managementCapabilities =>
-      const AgentCliManagementCapabilities(supportsAccountDataEnrichment: true);
+      testClaudeManagementCapabilities;
 
   @override
   AgentProviderConfig get defaultProviderConfig =>
@@ -124,15 +124,19 @@ final class _RunnerRepository
     AgentDetectionProgressCallback? onProgress,
   }) async {
     detectionCalls += 1;
-    final detected = ManagedAgent.claudeCode(enabled: enabled).copyWith(
-      installationState: AgentInstallationState.installed,
-      executablePath: '/opt/claude',
-      currentVersion: '2.2.0',
-      latestVersion: '2.2.0',
-      accountState: AgentAccountState.loggedIn,
-      lastDetectedAt: DateTime.utc(2026, 8, 23),
-      logPaths: const <String>['/tmp/claude.log'],
-    );
+    final detected =
+        ManagedAgent.forDefinition(
+          definition: claudeCodeAgentManagementDefinition,
+          enabled: enabled,
+        ).copyWith(
+          installationState: AgentInstallationState.installed,
+          executablePath: '/opt/claude',
+          currentVersion: '2.2.0',
+          latestVersion: '2.2.0',
+          accountState: AgentAccountState.loggedIn,
+          lastDetectedAt: DateTime.utc(2026, 8, 23),
+          logPaths: const <String>['/tmp/claude.log'],
+        );
     onProgress?.call(
       const AgentDetectionProgress(completed: 1, total: 1, message: 'done'),
       detected,

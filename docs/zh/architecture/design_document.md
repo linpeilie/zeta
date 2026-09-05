@@ -2,7 +2,7 @@
 
 最后更新：2026-08-24
 
-> 2026-09-05 包结构更新：Provider 已拆为 api、sdk 与 Codex/Grok/Claude Code 三个纯 Dart 插件包；登记集中在 `agent_provider_manifest.dart`。当前 management/usage 处于 WP-C 过渡态，完整依赖与白名单规则见[工程规范 §2.1](engineering_standards.md#21-provider-插件包边界wp-c)。
+> 2026-09-05 包结构更新：Provider 已拆为 api、sdk 与 Codex/Grok/Claude Code 三个纯 Dart 插件包；登记集中在 `agent_provider_manifest.dart`。management/usage 已由插件贡献，宿主只消费中立端口和可覆盖贡献接缝；完整依赖与失败处理规则见[工程规范 §2.1](engineering_standards.md#21-provider-插件包边界)。
 
 ## 1. 设计目标
 

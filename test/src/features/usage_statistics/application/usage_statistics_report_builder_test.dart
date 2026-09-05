@@ -1,3 +1,4 @@
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:zeta/src/features/usage_statistics/application/usage_statistics_report_builder.dart';

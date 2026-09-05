@@ -1,9 +1,10 @@
+import '../../../testing/agent_management_test_definitions.dart';
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
-import '../../../testing/agent_provider_implementations.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import '../../../testing/memory_feature_stores.dart';
 
@@ -188,9 +189,7 @@ void main() {
     test('account data enrichment participates in the safe fingerprint', () {
       final enabled = defaultClaudeCodeAgentProviderConfig;
       final disabled = enabled.copyWith(
-        extra: const <String, Object?>{
-          claudeCodeAccountDataEnrichmentKey: false,
-        },
+        extra: const <String, Object?>{testAccountDataEnrichmentKey: false},
       );
 
       expect(

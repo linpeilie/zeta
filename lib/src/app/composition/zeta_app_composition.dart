@@ -1,3 +1,4 @@
+import 'package:zeta/src/app/plugins/agent_contribution_providers.dart';
 import 'dart:async';
 
 import 'package:flutter/widgets.dart' show Locale;
@@ -159,6 +160,7 @@ final class ZetaAppComposition implements ZetaShutdownHook {
     required AgentManagementRuntimeSnapshotProvider runtimeSnapshotProvider,
   }) {
     return IdeWorkbenchComposition.create(
+      contributions: container.read(agentManagementContributionsProvider),
       modelCatalogRepository: container.read(
         agentModelCatalogRepositoryProvider,
       ),
