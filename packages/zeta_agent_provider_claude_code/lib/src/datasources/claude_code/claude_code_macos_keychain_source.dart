@@ -21,11 +21,47 @@ abstract interface class ClaudeCodeSecureCredentialsWriter {
 }
 
 /// 统一入口将其映射为 unreadable；不携带 stderr、路径或凭据。
-final class ClaudeCodeSecureCredentialsUnavailable implements Exception {
+base class ClaudeCodeSecureCredentialsUnavailable implements Exception {
   const ClaudeCodeSecureCredentialsUnavailable();
 
   @override
   String toString() => 'ClaudeCodeSecureCredentialsUnavailable';
+}
+
+/// Only allow-listed diagnostics; never retain command text or stderr.
+enum ClaudeCodeCredentialPersistenceStage { preflight, write, verify }
+
+enum ClaudeCodeCredentialPersistenceReason {
+  writerUnavailable,
+  invalidIdentity,
+  payloadTooLarge,
+  processUnavailable,
+  timeout,
+  interactionNotAllowed,
+  userCanceled,
+  authenticationFailed,
+  keychainUnavailable,
+  commandFailed,
+  fileWriteFailed,
+  readbackUnavailable,
+  readbackMismatch,
+}
+
+final class ClaudeCodeSecureCredentialsWriteException
+    extends ClaudeCodeSecureCredentialsUnavailable {
+  const ClaudeCodeSecureCredentialsWriteException(
+    this.stage,
+    this.reason, {
+    this.exitCode,
+  });
+  final ClaudeCodeCredentialPersistenceStage stage;
+  final ClaudeCodeCredentialPersistenceReason reason;
+  final int? exitCode;
+
+  @override
+  String toString() => 'ClaudeCodeSecureCredentialsWriteException('
+      'stage=${stage.name}, reason=${reason.name}'
+      '${exitCode == null ? '' : ', exitCode=$exitCode'})';
 }
 
 /// 参数化 `security` 调用的白名单结果；刻意不保存 stderr。
@@ -101,7 +137,10 @@ final class ClaudeCodeMacOsKeychainSource
   String _writeCommand(String contents) {
     String quoted(String value) {
       if (value.contains(RegExp(r'[\r\n\x00]'))) {
-        throw const ClaudeCodeSecureCredentialsUnavailable();
+        throw const ClaudeCodeSecureCredentialsWriteException(
+          ClaudeCodeCredentialPersistenceStage.preflight,
+          ClaudeCodeCredentialPersistenceReason.invalidIdentity,
+        );
       }
       return '"${value.replaceAll(r'\', r'\\').replaceAll('"', r'\"')}"';
     }
@@ -115,7 +154,10 @@ final class ClaudeCodeMacOsKeychainSource
         '-s ${quoted(serviceName)} -X "$hex"\n';
     // security -i has a bounded line buffer. Never fall back to secret argv.
     if (utf8.encode(command).length >= 4096) {
-      throw const ClaudeCodeSecureCredentialsUnavailable();
+      throw const ClaudeCodeSecureCredentialsWriteException(
+        ClaudeCodeCredentialPersistenceStage.preflight,
+        ClaudeCodeCredentialPersistenceReason.payloadTooLarge,
+      );
     }
     return command;
   }
@@ -123,23 +165,62 @@ final class ClaudeCodeMacOsKeychainSource
   @override
   Future<void> write(String contents) async {
     final command = _writeCommand(contents);
-    Process? process;
+    final Process process;
     try {
       process = await _processStarter('/usr/bin/security', ['-i']);
-      final out = process.stdout.drain<void>();
-      final err = process.stderr.drain<void>();
-      process.stdin.write(command);
-      await process.stdin.close();
-      final exit = await process.exitCode.timeout(timeout);
-      await Future.wait([out, err]);
-      if (exit != 0) throw const ClaudeCodeSecureCredentialsUnavailable();
-      // Some interactive security failures still exit 0. Verify the item.
-      if (await read() != contents) {
-        throw const ClaudeCodeSecureCredentialsUnavailable();
-      }
     } catch (_) {
-      process?.kill();
-      throw const ClaudeCodeSecureCredentialsUnavailable();
+      throw const ClaudeCodeSecureCredentialsWriteException(
+        ClaudeCodeCredentialPersistenceStage.write,
+        ClaudeCodeCredentialPersistenceReason.processUnavailable,
+      );
+    }
+    try {
+      // Bound stdin delivery and pipe draining as well as process exit.
+      await (() async {
+        final out = process.stdout.drain<void>().catchError((Object _) {});
+        final err = _securityWriteFailure(process.stderr);
+        process.stdin.write(command);
+        await process.stdin.close();
+        final exit = await process.exitCode;
+        await out;
+        final reason = await err;
+        if (exit != 0 || reason != null) {
+          throw ClaudeCodeSecureCredentialsWriteException(
+            ClaudeCodeCredentialPersistenceStage.write,
+            reason ?? ClaudeCodeCredentialPersistenceReason.commandFailed,
+            exitCode: exit,
+          );
+        }
+      })().timeout(timeout);
+    } on ClaudeCodeSecureCredentialsWriteException {
+      rethrow;
+    } on TimeoutException {
+      process.kill();
+      throw const ClaudeCodeSecureCredentialsWriteException(
+        ClaudeCodeCredentialPersistenceStage.write,
+        ClaudeCodeCredentialPersistenceReason.timeout,
+      );
+    } catch (_) {
+      process.kill();
+      throw const ClaudeCodeSecureCredentialsWriteException(
+        ClaudeCodeCredentialPersistenceStage.write,
+        ClaudeCodeCredentialPersistenceReason.commandFailed,
+      );
+    }
+    final String? saved;
+    try {
+      saved = await read();
+    } catch (_) {
+      throw const ClaudeCodeSecureCredentialsWriteException(
+        ClaudeCodeCredentialPersistenceStage.verify,
+        ClaudeCodeCredentialPersistenceReason.readbackUnavailable,
+      );
+    }
+    if (saved != contents) {
+      throw const ClaudeCodeSecureCredentialsWriteException(
+        ClaudeCodeCredentialPersistenceStage.verify,
+        ClaudeCodeCredentialPersistenceReason.readbackMismatch,
+      );
     }
   }
 
@@ -259,3 +340,37 @@ String? _nonEmpty(Object? value) {
 
 Future<Process> _startSecurity(String executable, List<String> arguments) =>
     Process.start(executable, arguments, runInShell: false);
+
+Future<ClaudeCodeCredentialPersistenceReason?> _securityWriteFailure(
+  Stream<List<int>> stderr,
+) async {
+  // Keep a bounded private buffer, drain all input, emit only an enum.
+  final bytes = <int>[];
+  try {
+    await for (final chunk in stderr) {
+      final available = 16384 - bytes.length;
+      if (available > 0) bytes.addAll(chunk.take(available));
+    }
+    final message = utf8.decode(bytes, allowMalformed: true).toLowerCase();
+    if (message.contains('user interaction is not allowed')) {
+      return ClaudeCodeCredentialPersistenceReason.interactionNotAllowed;
+    }
+    if (message.contains('user canceled') || message.contains('user cancelled')) {
+      return ClaudeCodeCredentialPersistenceReason.userCanceled;
+    }
+    if (message.contains('passphrase you entered is not correct') ||
+        message.contains('authorization/authentication failed')) {
+      return ClaudeCodeCredentialPersistenceReason.authenticationFailed;
+    }
+    if (message.contains('specified keychain could not be found') ||
+        message.contains('no such keychain')) {
+      return ClaudeCodeCredentialPersistenceReason.keychainUnavailable;
+    }
+    if (RegExp(r'add-generic-password: returned [1-9][0-9]*').hasMatch(message)) {
+      return ClaudeCodeCredentialPersistenceReason.commandFailed;
+    }
+    return null;
+  } catch (_) {
+    return ClaudeCodeCredentialPersistenceReason.commandFailed;
+  }
+}

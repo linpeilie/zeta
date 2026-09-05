@@ -106,7 +106,10 @@ final class NativeDesktopWindowHost implements ZetaWindowHost {
     );
 
     if (Platform.isMacOS) {
-      await WindowManipulator.initialize(enableWindowDelegate: true);
+      // 这里只配置标题栏；窗口事件代理必须留给 window_manager。
+      // 启用第二个 NSWindowDelegate 会覆盖它，丢失 blur/minimize 等事件，
+      // 导致后台会话仍被判为可见，系统通知与 Dock 提醒一起被抑制。
+      await WindowManipulator.initialize(enableWindowDelegate: false);
     }
 
     await windowManager.waitUntilReadyToShow(options, () async {

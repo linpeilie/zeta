@@ -363,12 +363,17 @@ final class LocalClaudeCodeCredentialsService
         if (source == ClaudeCodeCredentialsSource.keychain) {
           try {
             if (writer == null) {
-              throw const ClaudeCodeSecureCredentialsUnavailable();
+              throw const ClaudeCodeSecureCredentialsWriteException(
+                ClaudeCodeCredentialPersistenceStage.preflight,
+                ClaudeCodeCredentialPersistenceReason.writerUnavailable,
+              );
             }
             writer.validateWrite(raw!);
-          } catch (_) {
-            throw const ClaudeCodeCredentialRefreshException(
-              ClaudeCodeCredentialRefreshFailure.persistence,
+          } catch (error) {
+            throw _persistenceException(error,
+              source: source,
+              stage: ClaudeCodeCredentialPersistenceStage.preflight,
+              refreshCompleted: false,
             );
           }
         }
@@ -423,18 +428,31 @@ final class LocalClaudeCodeCredentialsService
             await writeClaudeCredentialFile(path, encoded);
           }
           final saved = await read();
+          if (saved.status != ClaudeCodeCredentialsStatus.available) {
+            throw const ClaudeCodeSecureCredentialsWriteException(
+              ClaudeCodeCredentialPersistenceStage.verify,
+              ClaudeCodeCredentialPersistenceReason.readbackUnavailable,
+            );
+          }
           if (saved.source != source ||
               saved.credentials?.accessToken != next.accessToken ||
               saved.credentials?.refreshToken != next.refreshToken ||
               saved.credentials?.expiresAt != next.expiresAt) {
-            throw const ClaudeCodeSecureCredentialsUnavailable();
+            throw const ClaudeCodeSecureCredentialsWriteException(
+              ClaudeCodeCredentialPersistenceStage.verify,
+              ClaudeCodeCredentialPersistenceReason.readbackMismatch,
+            );
           }
           return saved;
-        } on ClaudeCodeCredentialRefreshException {
-          rethrow;
-        } catch (_) {
-          throw const ClaudeCodeCredentialRefreshException(
-            ClaudeCodeCredentialRefreshFailure.persistence,
+        } catch (error) {
+          if (error is ClaudeCodeCredentialRefreshException &&
+              error.failure != ClaudeCodeCredentialRefreshFailure.persistence) {
+            rethrow;
+          }
+          throw _persistenceException(error,
+            source: source,
+            stage: ClaudeCodeCredentialPersistenceStage.write,
+            refreshCompleted: true,
           );
         }
       }),
@@ -567,3 +585,22 @@ int? _unixMilliseconds(Object? value) => switch (value) {
   String() => int.tryParse(value.trim()),
   _ => null,
 };
+
+ClaudeCodeCredentialRefreshException _persistenceException(
+  Object error, {
+  required ClaudeCodeCredentialsSource? source,
+  required ClaudeCodeCredentialPersistenceStage stage,
+  required bool refreshCompleted,
+}) {
+  final detail = error is ClaudeCodeSecureCredentialsWriteException ? error : null;
+  return ClaudeCodeCredentialRefreshException(
+    ClaudeCodeCredentialRefreshFailure.persistence,
+    source: source,
+    persistenceStage: detail?.stage ?? stage,
+    persistenceReason: detail?.reason ?? (source == ClaudeCodeCredentialsSource.file
+        ? ClaudeCodeCredentialPersistenceReason.fileWriteFailed
+        : ClaudeCodeCredentialPersistenceReason.commandFailed),
+    refreshCompleted: refreshCompleted,
+    exitCode: detail?.exitCode,
+  );
+}
