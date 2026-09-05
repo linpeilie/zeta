@@ -238,7 +238,7 @@ Future<void> onChanged(Object value) async {
 
 ### 6.7 实施与验收记录（2026-09-05）
 
-实现提交：待收尾登记。完整证据见 [阶段验收记录](../../fix/2026-09-05-session-config/00-validation.md)。
+实现提交：`8778a8ae`。完整证据见 [阶段验收记录](../../fix/2026-09-05-session-config/00-validation.md)。
 
 - [x] executor 与 CommandPort 使用 typed outcome；缺端口/明确拒绝能力的 UnsupportedError 透传，生产 Section helper 翻译。
 - [x] 同 configId 队列、入队前冻结目标、执行前目录/只读检查、返回后 runtime/scope 校验与幂等关闭等待者。
