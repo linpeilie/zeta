@@ -154,6 +154,8 @@ UI 一律按 `AgentProviderCapabilities` 和 `AgentProviderBundle` 端口是否�
 
 当前 bundle 端口：必选 `runtime` / `conversation`；可选 `threadCatalog` / `threadSubscription` / `threadNaming` / `threadArchival` / `threadDeletion` / `threadCompaction` / `threadBranching` / `turnSteering` / `permissionResponses` / `questions` / `deniedActionOverride` / `modelCatalog` / `conversationModes` / `skills` / `localThreadList` / `sessionConfiguration` / `planApproval` / `permissionPolicy` / `usageQuota`（见 `lib/src/features/agent/domain/agent_provider_bundle.dart`）。
 
+生命周期可选端口 `acquisitionPreparation` 由 Registry 在每次 acquire 返回租约前等待，包含复用；失败必须释放本次租约，等待后重新校验 runtime identity。端口只准备运行条件，不返回凭据、不启动会话、不改变审批策略。请求前的再次准备由各 Provider 自己负责。
+
 > 正文：[架构总览「Provider 能力协商」](docs/zh/architecture/overview.md) · [工程规范 §4](docs/zh/architecture/engineering_standards.md)
 
 ### G5 · 四种审批语义隔离，且绝不预授权
@@ -204,6 +206,7 @@ Zeta 自有数据全部在 `~/.zeta/`：`config/` · `state/` · `logs/` · `cac
 - 持久化 JSON 必须**版本化 + 宽容解码**：缺字段、损坏、旧版本、未知字段都不能阻断应用启动。
 - 派生索引、缓存、日志、系统通知 payload **只保存规范化白名单字段**。
 - **禁止落盘**：prompt、回复正文、工具输出、文件变更 evidence 正文（替换片段、写入内容、patch）、原始错误文本、session 文件路径、环境变量值、凭证、Provider raw payload、localized UI copy（ARB 字符串、文本目录输出）。
+- 凭据写入的唯一产品例外是 Claude-local 的按需 OAuth 刷新：获取实例及新请求前校验，必要时只更新已选中的 Claude CLI 自有 Keychain 条目或 credentials 文件。必须锁内重读、保留无关字段、验证写回，禁止迁移来源、建立 Zeta 凭据副本、日志输出或扩大 scope；取消和审批回写不得被刷新阻塞。规则细节见 [Claude 协议 §11](docs/zh/protocols/claude_code_stream_json_protocol.md)。
 - JSON-RPC transport 日志不得记录 prompt、文件内容、认证参数或 stderr 原文；Agent 日志进 UI 前必须在 data 层完成脱敏。
 - **指标同样受此约束**：只能通过 `ZetaMetricsPort`（`lib/src/core/observability/`）上报，指标名必须登记进 `ZetaMetric` 白名单枚举，标签只有 `providerId` / `component` / `outcome` 三个规范化维度。采集实现只在 `lib/src/app/observability` 组合，业务层一律只见端口且默认 no-op；Riverpod `ProviderObserver` 不得读取 provider state 或 family 参数。
 

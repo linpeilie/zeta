@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
+import 'claude_code_credentials_service.dart';
+
 import 'package:zeta_agent_provider_claude_code/src/claude_code_cli_locator.dart';
 import 'package:zeta_agent_provider_claude_code/src/datasources/claude_code/claude_code_cli_metadata.dart';
 import 'package:zeta_agent_provider_claude_code/src/datasources/claude_code/claude_code_process_starter.dart';
@@ -40,11 +42,16 @@ class ClaudeCodeCliMetadataProbe {
     this.workingDirectory,
     this.locator,
     this.processStarter,
+    ClaudeCodeCredentialsService? credentialsService,
     String Function()? requestIdFactory,
     this.maxLineBytes = kStreamJsonDefaultMaxLineBytes,
-  }) : requestIdFactory = requestIdFactory ?? _randomRequestId;
+  }) : credentialsService =
+           credentialsService ??
+           LocalClaudeCodeCredentialsService.forProvider(config),
+       requestIdFactory = requestIdFactory ?? _randomRequestId;
 
   final AgentProviderConfig config;
+  final ClaudeCodeCredentialsService credentialsService;
   final Duration timeout;
   final String? workingDirectory;
   final ClaudeCodeCliLocator? locator;
@@ -59,6 +66,7 @@ class ClaudeCodeCliMetadataProbe {
       );
     }
 
+    await credentialsService.ensureFresh();
     final command = await _resolveCommand();
     final requestId = requestIdFactory().trim();
     if (requestId.isEmpty) {

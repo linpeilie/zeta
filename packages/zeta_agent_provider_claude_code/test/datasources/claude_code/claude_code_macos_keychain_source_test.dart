@@ -1,10 +1,87 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:test/test.dart';
 import 'package:zeta_agent_provider_claude_code/zeta_agent_provider_claude_code_testing.dart';
 
 void main() {
   group('ClaudeCodeMacOsKeychainSource', () {
+    test(
+      'writes a quoted interactive command over stdin and verifies storage',
+      () async {
+        const contents = '{"claudeAiOauth":{"accessToken":"synthetic-secret"}}';
+        final sink = _Input();
+        final process = _Process(sink);
+        final source = ClaudeCodeMacOsKeychainSource(
+          environment: const {'USER': 'fixture "quoted" user'},
+          processStarter: (executable, arguments) async {
+            expect(executable, '/usr/bin/security');
+            expect(arguments, ['-i']);
+            return process;
+          },
+          processRunner: (executable, arguments, {required timeout}) async =>
+              const ClaudeCodeKeychainProcessResult(
+                exitCode: 0,
+                stdout: contents,
+              ),
+        );
+        await source.write(contents);
+        final command = utf8.decode(sink.bytes);
+        expect(command, startsWith('add-generic-password -U '));
+        expect(command, contains(r'-a "fixture \"quoted\" user"'));
+        final hex = RegExp(r'-X "([0-9a-f]+)"').firstMatch(command)!.group(1)!;
+        expect(
+          utf8.decode([
+            for (var i = 0; i < hex.length; i += 2)
+              int.parse(hex.substring(i, i + 2), radix: 16),
+          ]),
+          contents,
+        );
+        expect(command.split('\n'), hasLength(2));
+      },
+    );
+
+    test(
+      'interactive exit zero with unchanged storage is still a failure',
+      () async {
+        final source = ClaudeCodeMacOsKeychainSource(
+          environment: const {'USER': 'fixture'},
+          processStarter: (_, arguments) async => _Process(_Input()),
+          processRunner: (_, arguments, {required timeout}) async =>
+              const ClaudeCodeKeychainProcessResult(
+                exitCode: 0,
+                stdout: 'unchanged',
+              ),
+        );
+        await expectLater(
+          source.write('synthetic-new'),
+          throwsA(isA<ClaudeCodeSecureCredentialsUnavailable>()),
+        );
+      },
+    );
+
+    test(
+      'oversized command and newline account are rejected before process start',
+      () async {
+        var starts = 0;
+        for (final account in ['fixture', 'bad\naccount']) {
+          final source = ClaudeCodeMacOsKeychainSource(
+            environment: {'USER': account},
+            processStarter: (_, arguments) async {
+              starts++;
+              throw StateError('must not start');
+            },
+          );
+          await expectLater(
+            source.write(account == 'fixture' ? 'x' * 2200 : 'short'),
+            throwsA(isA<ClaudeCodeSecureCredentialsUnavailable>()),
+          );
+        }
+        expect(starts, 0);
+      },
+    );
+
     test(
       'uses the production service and parameterized account arguments',
       () async {
@@ -183,4 +260,33 @@ final class _KeychainCall {
   final String executable;
   final List<String> arguments;
   final Duration timeout;
+}
+
+final class _Input implements StreamConsumer<List<int>> {
+  final bytes = <int>[];
+  @override
+  Future<void> addStream(Stream<List<int>> stream) async {
+    await for (final chunk in stream) {
+      bytes.addAll(chunk);
+    }
+  }
+
+  @override
+  Future<void> close() async {}
+}
+
+final class _Process implements Process {
+  _Process(_Input input) : stdin = IOSink(input);
+  @override
+  final IOSink stdin;
+  @override
+  Stream<List<int>> get stdout => const Stream.empty();
+  @override
+  Stream<List<int>> get stderr => const Stream.empty();
+  @override
+  Future<int> get exitCode async => 0;
+  @override
+  bool kill([ProcessSignal signal = ProcessSignal.sigterm]) => true;
+  @override
+  int get pid => 0;
 }

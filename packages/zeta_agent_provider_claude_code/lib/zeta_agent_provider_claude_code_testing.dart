@@ -36,3 +36,5 @@ export 'src/management/definition.dart';
 export 'src/usage/claude_code_token_usage_source.dart';
 export 'src/usage/claude_code_usage_partition_codec.dart';
 export 'src/usage/contribution.dart';
+
+export 'src/datasources/claude_code/claude_code_credentials_refresh.dart';

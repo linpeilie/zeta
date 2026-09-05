@@ -84,9 +84,11 @@ Logs are not cleaned up automatically; delete old files yourself.
 
 ## Credentials
 
-Zeta does not store, refresh or write back any assistant's login credentials.
+Zeta never saves login credentials in its own configuration, caches, or logs.
 
-The only feature that touches credentials at all is Claude Code's quota detail switch, which is off by default. With it on, Zeta reads the credentials once when querying quota, makes one read-only request, and discards them — nothing is written to Zeta's configuration or cache. See [Connecting AI Assistants](agents.md#claude-codes-quota-detail-switch).
+When using Claude Code, Zeta checks credentials before provider acquisition and new requests, refreshing within five minutes of expiry. It updates only the original Claude store: the macOS Keychain item, or the credentials file on Windows/Linux (also on macOS when that file was the original source). It does not migrate sources or create credential backups. Refresh or writeback failure blocks the operation; cancellation and approval responses remain available.
+
+The quota detail switch controls usage queries separately. Turning it off does not disable credential checks or refresh. See [Connecting AI Assistants](agents.md#claude-codes-quota-detail-switch).
 
 ## What's in a notification
 

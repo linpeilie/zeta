@@ -2,12 +2,15 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:unorm_dart/unorm_dart.dart' as unorm;
+import 'package:zeta_agent_core/zeta_agent_core.dart' show AgentProviderConfig;
 
 import 'claude_code_macos_keychain_source.dart';
+import 'claude_code_credentials_refresh.dart';
 
-/// 仅供 Claude data 层使用；凭据不缓存、不序列化、不写回或自动刷新。
+/// Claude data 层统一入口。read 只读；ensureFresh 按需刷新并更新 CLI 自有存储。
 abstract interface class ClaudeCodeCredentialsService {
   Future<ClaudeCodeCredentialsResult> read();
+  Future<ClaudeCodeCredentialsResult> ensureFresh();
 }
 
 enum ClaudeCodeCredentialsStatus {
@@ -135,15 +138,42 @@ final class LocalClaudeCodeCredentialsService
     this.homeDirectory,
     ClaudeCodeCredentialsFileSource? fileSource,
     ClaudeCodeSecureCredentialsSource? secureSource,
+    this.secureWriter,
+    ClaudeCodeOAuthRefreshClient? refreshClient,
+    ClaudeCodeCredentialLock? refreshLock,
+    ClaudeCodeCredentialRefreshCoordinator? refreshCoordinator,
+    DateTime Function()? clock,
   }) : _environment = Map<String, String>.unmodifiable(
          environment ?? Platform.environment,
        ),
        _platform = platform ?? _currentPlatform(),
+       _refreshClient =
+           refreshClient ?? HttpClaudeCodeOAuthRefreshClient(clock: clock),
+       _refreshLock = refreshLock ?? const DirectoryClaudeCodeCredentialLock(),
+       _refreshCoordinator =
+           refreshCoordinator ?? ClaudeCodeCredentialRefreshCoordinator(),
+       _clock = clock ?? DateTime.now,
        _fileSource = fileSource ?? const FileClaudeCodeCredentialsFileSource(),
        _secureSource =
            secureSource ??
            ClaudeCodeMacOsKeychainSource(environment: environment);
 
+  factory LocalClaudeCodeCredentialsService.forProvider(
+    AgentProviderConfig config, {
+    ClaudeCodeCredentialRefreshCoordinator? refreshCoordinator,
+  }) => LocalClaudeCodeCredentialsService(
+    refreshCoordinator: refreshCoordinator,
+    oauthEnabled:
+        !config.arguments.contains('--bare') &&
+        config.extra['hasApiKey'] != true,
+    environment: {...Platform.environment, ...config.environment},
+  );
+
+  final ClaudeCodeSecureCredentialsWriter? secureWriter;
+  final ClaudeCodeOAuthRefreshClient _refreshClient;
+  final ClaudeCodeCredentialLock _refreshLock;
+  final ClaudeCodeCredentialRefreshCoordinator _refreshCoordinator;
+  final DateTime Function() _clock;
   final bool oauthEnabled;
   final Map<String, String> _environment;
   final ClaudeCodeCredentialsPlatform? _platform;
@@ -228,6 +258,199 @@ final class LocalClaudeCodeCredentialsService
         source: ClaudeCodeCredentialsSource.file,
       );
     }
+  }
+
+  @override
+  Future<ClaudeCodeCredentialsResult> ensureFresh() async {
+    try {
+      return await _ensureFresh();
+    } on ClaudeCodeCredentialRefreshException {
+      rethrow;
+    } catch (_) {
+      throw const ClaudeCodeCredentialRefreshException(
+        ClaudeCodeCredentialRefreshFailure.unavailable,
+      );
+    }
+  }
+
+  Future<ClaudeCodeCredentialsResult> _ensureFresh() async {
+    final initial = await read();
+    if (!_needsRefresh(initial)) return initial;
+    final path = _resolveCredentialsPath();
+    if (path == null ||
+        initial.source == ClaudeCodeCredentialsSource.environment) {
+      throw const ClaudeCodeCredentialRefreshException(
+        ClaudeCodeCredentialRefreshFailure.unavailable,
+      );
+    }
+    // Do not send custom/staging credentials to the production issuer.
+    if (_nonEmpty(_environment['CLAUDE_CODE_CUSTOM_OAUTH_URL']) != null ||
+        _nonEmpty(_environment['CLAUDE_CODE_OAUTH_CLIENT_ID']) != null ||
+        (_environment['USER_TYPE'] == 'ant' &&
+            ['USE_LOCAL_OAUTH', 'USE_STAGING_OAUTH'].any(
+              (key) => [
+                '1',
+                'true',
+                'yes',
+                'on',
+              ].contains(_environment[key]?.trim().toLowerCase()),
+            ))) {
+      throw const ClaudeCodeCredentialRefreshException(
+        ClaudeCodeCredentialRefreshFailure.unsupportedIssuer,
+      );
+    }
+    final String directory;
+    try {
+      directory = await File(path).parent.resolveSymbolicLinks();
+    } catch (_) {
+      throw const ClaudeCodeCredentialRefreshException(
+        ClaudeCodeCredentialRefreshFailure.lockUnavailable,
+      );
+    }
+    final identity =
+        '$directory|${_platform?.name}|${_environment['USER'] ?? _environment['LOGNAME'] ?? ''}|${_environment['CLAUDE_CONFIG_DIR'] ?? ''}';
+    return _refreshCoordinator.run(
+      identity,
+      () => _refreshLock.run(directory, (validate) async {
+        final fresh = await read();
+        if (!_needsRefresh(fresh)) return fresh;
+        final source = fresh.source;
+        final String? raw;
+        if (source == ClaudeCodeCredentialsSource.keychain) {
+          raw = await _secureSource.read();
+        } else if (source == ClaudeCodeCredentialsSource.file) {
+          // An unreadable/corrupt primary may later shadow a rotated file token.
+          if (_platform == ClaudeCodeCredentialsPlatform.macOS) {
+            try {
+              if (await _secureSource.read() != null) {
+                throw const ClaudeCodeCredentialRefreshException(
+                  ClaudeCodeCredentialRefreshFailure.sourceChanged,
+                );
+              }
+            } catch (_) {
+              throw const ClaudeCodeCredentialRefreshException(
+                ClaudeCodeCredentialRefreshFailure.sourceChanged,
+              );
+            }
+          }
+          if (await FileSystemEntity.type(path, followLinks: false) ==
+              FileSystemEntityType.link) {
+            throw const ClaudeCodeCredentialRefreshException(
+              ClaudeCodeCredentialRefreshFailure.sourceChanged,
+            );
+          }
+          raw = await _fileSource.read(path);
+        } else {
+          throw const ClaudeCodeCredentialRefreshException(
+            ClaudeCodeCredentialRefreshFailure.unavailable,
+          );
+        }
+        final current = _decode(raw, source!);
+        if (!_needsRefresh(current)) return current;
+        final credentials = current.credentials!;
+        if (credentials.refreshToken == null ||
+            !credentials.scopes.contains('user:inference')) {
+          throw const ClaudeCodeCredentialRefreshException(
+            ClaudeCodeCredentialRefreshFailure.unavailable,
+          );
+        }
+        final writer = source == ClaudeCodeCredentialsSource.keychain
+            ? secureWriter ??
+                  (_secureSource is ClaudeCodeSecureCredentialsWriter
+                      ? _secureSource as ClaudeCodeSecureCredentialsWriter
+                      : null)
+            : null;
+        if (source == ClaudeCodeCredentialsSource.keychain) {
+          try {
+            if (writer == null) {
+              throw const ClaudeCodeSecureCredentialsUnavailable();
+            }
+            writer.validateWrite(raw!);
+          } catch (_) {
+            throw const ClaudeCodeCredentialRefreshException(
+              ClaudeCodeCredentialRefreshFailure.persistence,
+            );
+          }
+        }
+        Future<void> validateSourceDirectory() async {
+          if (await File(path).parent.resolveSymbolicLinks() != directory) {
+            throw const ClaudeCodeCredentialRefreshException(
+              ClaudeCodeCredentialRefreshFailure.sourceChanged,
+            );
+          }
+        }
+
+        await validateSourceDirectory();
+        await validate();
+        final next = await _refreshClient.refresh(credentials);
+        if (next.accessToken.isEmpty ||
+            next.refreshToken == null ||
+            !(next.expiresAt?.isAfter(_clock()) ?? false)) {
+          throw const ClaudeCodeCredentialRefreshException(
+            ClaudeCodeCredentialRefreshFailure.invalidResponse,
+          );
+        }
+        // Commit even when a requesting runtime was disposed during HTTP. The
+        // server may have rotated the refresh token; callers guard publication.
+        await validate();
+        await validateSourceDirectory();
+        final selected = await read();
+        final latestRaw = source == ClaudeCodeCredentialsSource.keychain
+            ? await _secureSource.read()
+            : await _fileSource.read(path);
+        if (selected.source != source || latestRaw != raw) {
+          throw const ClaudeCodeCredentialRefreshException(
+            ClaudeCodeCredentialRefreshFailure.sourceChanged,
+          );
+        }
+        final envelope = jsonDecode(raw!) as Map<String, dynamic>;
+        final oauth = Map<String, dynamic>.from(
+          envelope['claudeAiOauth'] as Map,
+        );
+        oauth.addAll({
+          'accessToken': next.accessToken,
+          'refreshToken': next.refreshToken,
+          'expiresAt': next.expiresAt!.millisecondsSinceEpoch,
+          'scopes': next.scopes,
+        });
+        envelope['claudeAiOauth'] = oauth;
+        final encoded = jsonEncode(envelope);
+        try {
+          await validate();
+          if (source == ClaudeCodeCredentialsSource.keychain) {
+            await writer!.write(encoded);
+          } else {
+            await writeClaudeCredentialFile(path, encoded);
+          }
+          final saved = await read();
+          if (saved.source != source ||
+              saved.credentials?.accessToken != next.accessToken ||
+              saved.credentials?.refreshToken != next.refreshToken ||
+              saved.credentials?.expiresAt != next.expiresAt) {
+            throw const ClaudeCodeSecureCredentialsUnavailable();
+          }
+          return saved;
+        } on ClaudeCodeCredentialRefreshException {
+          rethrow;
+        } catch (_) {
+          throw const ClaudeCodeCredentialRefreshException(
+            ClaudeCodeCredentialRefreshFailure.persistence,
+          );
+        }
+      }),
+    );
+  }
+
+  bool _needsRefresh(ClaudeCodeCredentialsResult result) {
+    if (result.status == ClaudeCodeCredentialsStatus.unreadable ||
+        result.status == ClaudeCodeCredentialsStatus.malformed) {
+      throw const ClaudeCodeCredentialRefreshException(
+        ClaudeCodeCredentialRefreshFailure.unavailable,
+      );
+    }
+    final expiry = result.credentials?.expiryAt(_clock());
+    return expiry == ClaudeCodeCredentialExpiry.expired ||
+        expiry == ClaudeCodeCredentialExpiry.expiringSoon;
   }
 
   bool get _usesOtherAuthentication =>

@@ -5,7 +5,9 @@
 > 已落地的 stream-json wire、能力边界与升级门禁以
 > [Claude Code stream-json 协议基线](claude_code_stream_json_protocol.md) 为准。
 > 本提案原定的 OAuth `/v1/models` 与静态目录兜底已经被否决并删除。当前实现改为
-> 从无 Prompt 的 CLI initialize 读取模型和套餐名称；OAuth REST 只用于可关闭的额度详情。
+> 从无 Prompt 的 CLI initialize 读取模型和套餐名称。2026-09-05 新增获取实例/新请求前
+> 按需 OAuth 刷新并写回原 CLI 存储，独立于额度开关；下文只读、不刷新等约束仅反映历史提案。
+> 当前事实以协议基线 §11 为准。
 >
 > 2026-08-13 起，旧 `AgentProvider` 大接口、`AgentProviderBundle.adapt` 与 Domain 中的
 > `defaultsFor(kind)` 已删除。静态能力走 data 层 `AgentProviderStaticCapabilities`，

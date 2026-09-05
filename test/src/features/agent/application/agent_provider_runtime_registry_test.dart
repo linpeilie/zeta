@@ -8,6 +8,98 @@ import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 void main() {
   group('AgentProviderRuntimeRegistry', () {
+    test('新建、并发和复用租约都等待 preparation', () async {
+      final gate = Completer<void>();
+      var calls = 0;
+      final factory = _CountingProviderFactory(
+        preparation: _Preparation(() {
+          calls++;
+          return gate.future;
+        }),
+      );
+      final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
+      addTearDown(registry.close);
+      var returned = 0;
+      Future<AgentProviderRuntimeLease> acquire() async {
+        final lease = await registry.acquire(
+          defaultCodexAgentProviderConfig,
+          scope: AgentProviderRuntimeScopeKey.global,
+        );
+        returned++;
+        return lease;
+      }
+
+      final first = acquire();
+      final second = acquire();
+      await pumpEventQueue();
+      expect(calls, 2);
+      expect(returned, 0);
+      expect(factory.createCount, 1);
+      gate.complete();
+      final leases = await Future.wait([first, second]);
+      await Future.wait(leases.map((l) => l.release()));
+      final reused = await acquire();
+      expect(calls, 3);
+      expect(factory.createCount, 1);
+      await reused.release();
+      expect(registry.debugLeaseCount, 0);
+    });
+
+    test('preparation 失败释放本次租约并允许重试', () async {
+      var fail = true;
+      final factory = _CountingProviderFactory(
+        preparation: _Preparation(() async {
+          if (fail) throw StateError('preparation failed');
+        }),
+      );
+      final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
+      addTearDown(registry.close);
+      await expectLater(
+        registry.acquire(
+          defaultCodexAgentProviderConfig,
+          scope: AgentProviderRuntimeScopeKey.global,
+        ),
+        throwsStateError,
+      );
+      expect(registry.debugLeaseCount, 0);
+      fail = false;
+      final lease = await registry.acquire(
+        defaultCodexAgentProviderConfig,
+        scope: AgentProviderRuntimeScopeKey.global,
+      );
+      expect(lease.isCurrent, isTrue);
+      expect(factory.createCount, 1);
+      await lease.release();
+    });
+
+    for (final close in [false, true]) {
+      test('preparation 等待期间 ${close ? '关闭' : '失效'} 不返回旧实例', () async {
+        final gate = Completer<void>();
+        final factory = _CountingProviderFactory(
+          preparation: _Preparation(() => gate.future),
+        );
+        final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
+        addTearDown(registry.close);
+        final pending = expectLater(
+          registry.acquire(
+            defaultCodexAgentProviderConfig,
+            scope: AgentProviderRuntimeScopeKey.global,
+          ),
+          throwsStateError,
+        );
+        await pumpEventQueue();
+        if (close) {
+          await registry.close();
+        } else {
+          await registry.invalidateProvider(defaultCodexAgentProviderConfig.id);
+        }
+        gate.complete();
+        await pending;
+        expect(factory.providers.single.disposeCount, 1);
+        expect(registry.debugLeaseCount, 0);
+      });
+    }
+
     test('并发获取同一 Provider 时只创建一个实例', () async {
       final factory = _CountingProviderFactory();
       final registry = AgentProviderRuntimeRegistry(providerFactory: factory);
@@ -663,7 +755,9 @@ void main() {
 }
 
 final class _CountingProviderFactory implements AgentProviderBundleFactory {
-  _CountingProviderFactory({this.disposeThrows = false});
+  _CountingProviderFactory({this.disposeThrows = false, this.preparation});
+
+  final AgentProviderAcquisitionPreparationPort? preparation;
 
   final bool disposeThrows;
   final List<_FakeProvider> providers = <_FakeProvider>[];
@@ -674,7 +768,11 @@ final class _CountingProviderFactory implements AgentProviderBundleFactory {
   AgentProviderBundle createBundle(AgentProviderConfig config) {
     final provider = _FakeProvider(config, disposeThrows: disposeThrows);
     providers.add(provider);
-    return AgentProviderBundle(runtime: provider, conversation: provider);
+    return AgentProviderBundle(
+      runtime: provider,
+      conversation: provider,
+      acquisitionPreparation: preparation,
+    );
   }
 }
 
@@ -755,4 +853,11 @@ final class _GatedDisposeProvider extends Fake
     }
     await allowDispose.future;
   }
+}
+
+final class _Preparation implements AgentProviderAcquisitionPreparationPort {
+  _Preparation(this.prepare);
+  final Future<void> Function() prepare;
+  @override
+  Future<void> prepareForAcquisition() => prepare();
 }

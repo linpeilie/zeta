@@ -364,6 +364,7 @@ void main() {
           },
         });
         final macReader = LocalClaudeCodeCredentialsService(
+          environment: const {},
           credentialsPath: '/fixture/mac/.credentials.json',
           secureSource: ClaudeCodeMacOsKeychainSource(
             environment: const <String, String>{'USER': 'fixture-user'},
@@ -378,6 +379,7 @@ void main() {
           platform: ClaudeCodeCredentialsPlatform.macOS,
         );
         final windowsReader = LocalClaudeCodeCredentialsService(
+          environment: const {},
           credentialsPath: r'C:\fixture\.claude\.credentials.json',
           fileSource: _StaticCredentialsFileSource(credentialsJson),
           platform: ClaudeCodeCredentialsPlatform.windows,
@@ -480,6 +482,9 @@ final class _StaticCredentialsFileSource
 final class _CredentialsService implements ClaudeCodeCredentialsService {
   const _CredentialsService(this.load);
   final Future<ClaudeCodeOAuthCredentials?> Function() load;
+
+  @override
+  Future<ClaudeCodeCredentialsResult> ensureFresh() => read();
 
   @override
   Future<ClaudeCodeCredentialsResult> read() async {
