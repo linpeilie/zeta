@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,6 +12,10 @@ import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 
 import 'harness/agent_pane_test_harness.dart';
+import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_composer.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_sections.dart';
+import '../../../testing/localized_widget_test_host.dart';
 
 void main() {
   group('AgentPane composer toolbar', () {
@@ -1150,6 +1156,319 @@ void main() {
       },
     );
 
+    testWidgets(
+      'session config pending disables only its own control and waits for provider events',
+      (tester) async {
+        final (provider, controller) = await _mountSessionConfig(tester);
+        final gate = Completer<void>();
+        provider.onSessionConfigRequest = (_, id, _) =>
+            id == 'session-model' ? gate.future : Future.value();
+        await _chooseSmartConfig(tester);
+        expect(tester.widget<IdeTab>(_configSelector).enabled, isFalse);
+        expect(find.text('Fast'), findsOneWidget);
+        final other = find.byKey(const ValueKey('agent-session-config-toggle'));
+        expect(tester.widget<IdeTab>(other).enabled, isTrue);
+        await tester.tap(other);
+        await tester.pump();
+        expect(provider.sessionConfigSelections, [
+          ('config-thread', 'session-model', 'smart'),
+          ('config-thread', 'toggle', true),
+        ]);
+        gate.complete();
+        await tester.pump();
+        await tester.pump();
+        expect(tester.widget<IdeTab>(_configSelector).enabled, isTrue);
+        expect(find.text('Fast'), findsOneWidget);
+        _emitSessionConfig(provider, value: 'smart');
+        await tester.pump();
+        expect(find.text('Smart'), findsOneWidget);
+        expect(controller.sessionConfigOptions.first.currentValue, 'smart');
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    for (final failure in <Object>[
+      StateError('private raw message'),
+      UnsupportedError('private raw message'),
+    ]) {
+      testWidgets(
+        'session config shows local failure and can retry the same value: ${failure.runtimeType}',
+        (tester) async {
+          final (provider, controller) = await _mountSessionConfig(tester);
+          final status = controller.headerState;
+          provider.onSessionConfigRequest = (_, _, _) async => throw failure;
+          await _chooseSmartConfig(tester);
+          final error = find.byKey(
+            const ValueKey('agent-session-config-session-model-error'),
+          );
+          expect(error, findsOneWidget);
+          final tooltip = tester.widget<IdeTooltip>(
+            find.ancestor(of: error, matching: find.byType(IdeTooltip)).first,
+          );
+          expect(
+            tooltip.message,
+            failure is UnsupportedError
+                ? '当前 Provider 不支持会话配置'
+                : 'Could not update session option',
+          );
+          expect(find.textContaining('private raw message'), findsNothing);
+          expect(controller.headerState, status);
+          expect(find.text('Fast'), findsOneWidget);
+          expect(tester.widget<IdeTab>(_configSelector).enabled, isTrue);
+          provider.onSessionConfigRequest = null;
+          await _chooseSmartConfig(tester);
+          expect(provider.sessionConfigSelections.length, 2);
+          expect(error, findsNothing);
+          expect(find.text('Fast'), findsOneWidget);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+
+    testWidgets(
+      'session config stale control without a port reports unsupported through production callback',
+      (tester) async {
+        final provider = _SessionConfigUiProvider();
+        addTearDown(provider.closeEvents);
+        final factory = AgentPaneNoSessionConfigFactory(
+          provider,
+          hasSessionConfiguration: true,
+        );
+        final controller = createAgentPaneViewModel(
+          provider,
+          initialThread: agentPaneThread(id: 'config-thread', title: 'Config'),
+          providerFactory: factory,
+        );
+        addTearDown(controller.dispose);
+        await tester.pumpWidget(AgentPaneTestApp(viewModel: controller));
+        await controller.initialization;
+        await controller.sendMessage('start');
+        _emitSessionConfig(provider);
+        provider.emitEvent(
+          const AgentTurnCompletedEvent(
+            sessionId: 'config-thread',
+            turnId: 'turn-1',
+          ),
+        );
+        await tester.pump();
+        final staleState = controller.composerState;
+        expect(_configSelector, findsOneWidget);
+        factory.hasSessionConfiguration = false;
+        await tester.runAsync(() async {
+          await controller.conversationBinding.invalidateRuntime();
+          final activity = await controller.conversationBinding.beginTurn();
+          await activity.release();
+        });
+        await tester.pump();
+        expect(controller.sessionConfigOptions, isEmpty);
+        expect(_configSelector, findsNothing);
+
+        // 重放已捕获的旧控件快照，仍通过生产 Section 的结果边界发起误调用。
+        final input = TextEditingController();
+        final focus = FocusNode();
+        final canSend = ValueNotifier(false);
+        addTearDown(input.dispose);
+        addTearDown(focus.dispose);
+        addTearDown(canSend.dispose);
+        await pumpLocalizedWidget(
+          tester,
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: AgentComposerSection(
+              controller: controller,
+              state: staleState,
+              inputController: input,
+              composerFocusNode: focus,
+              canSendListenable: canSend,
+              draftImagePaths: const [],
+              onAttachImages: () {},
+              onRemoveImage: (_) {},
+              onSend: () {},
+              onOpenMentionPicker: () {},
+              onInsertSkill: () {},
+              pagePadding: EdgeInsets.zero,
+            ),
+          ),
+        );
+        await _chooseSmartConfig(tester);
+        expect(provider.sessionConfigSelections, isEmpty);
+        expect(
+          find.byKey(
+            const ValueKey('agent-session-config-session-model-error'),
+          ),
+          findsOneWidget,
+        );
+        final callback = tester
+            .widget<AgentComposer>(find.byType(AgentComposer))
+            .onSelectSessionConfigOption;
+        final result = await callback('session-model', 'smart');
+        expect(
+          result,
+          isA<AgentCommandFailed>().having(
+            (result) => result.kind,
+            'kind',
+            AgentCommandFailureKind.unsupported,
+          ),
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets('session config pending leaves cancel available', (
+      tester,
+    ) async {
+      final (provider, _) = await _mountSessionConfig(
+        tester,
+        completeTurn: false,
+      );
+      final gate = Completer<void>();
+      provider.onSessionConfigRequest = (_, _, _) => gate.future;
+      await _chooseSmartConfig(tester);
+      await tester.tap(find.byKey(const ValueKey('agent-cancel-button')));
+      await tester.pump();
+      expect(provider.cancelCalls, 1);
+      expect(gate.isCompleted, isFalse);
+      gate.complete();
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets(
+      'session config late failure after control disposal is silent',
+      (tester) async {
+        final (provider, _) = await _mountSessionConfig(tester);
+        final gate = Completer<void>();
+        provider.onSessionConfigRequest = (_, _, _) => gate.future;
+        await _chooseSmartConfig(tester);
+        await tester.pumpWidget(const SizedBox.shrink());
+        gate.completeError(StateError('late private error'));
+        await tester.pump();
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'session config runtime invalidation during request produces no local error',
+      (tester) async {
+        final (provider, controller) = await _mountSessionConfig(tester);
+        final gate = Completer<void>();
+        provider.onSessionConfigRequest = (_, _, _) => gate.future;
+        await _chooseSmartConfig(tester);
+        await tester.runAsync(controller.conversationBinding.invalidateRuntime);
+        gate.completeError(StateError('late private error'));
+        await tester.pump();
+        await tester.pump();
+        expect(controller.conversationBinding.currentRuntime, isNull);
+        expect(
+          find.byKey(
+            const ValueKey('agent-session-config-session-model-error'),
+          ),
+          findsNothing,
+        );
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
+      },
+    );
+
+    testWidgets(
+      'session config reused control ignores previous entry result and keeps current pending',
+      (tester) async {
+        final first = _SessionConfigUiProvider();
+        final second = _SessionConfigUiProvider();
+        addTearDown(first.closeEvents);
+        addTearDown(second.closeEvents);
+        final controllers = [
+          for (final provider in [first, second])
+            createAgentPaneViewModel(
+              provider,
+              initialThread: agentPaneThread(
+                id: 'config-thread',
+                title: 'Config',
+              ),
+            ),
+        ];
+        for (final controller in controllers) {
+          addTearDown(controller.dispose);
+          await controller.initialization;
+          await controller.sendMessage('start');
+        }
+        _emitSessionConfig(first);
+        _emitSessionConfig(second);
+        for (final provider in [first, second]) {
+          provider.emitEvent(
+            const AgentTurnCompletedEvent(
+              sessionId: 'config-thread',
+              turnId: 'turn-1',
+            ),
+          );
+        }
+        await tester.pump();
+        var current = controllers.first;
+        final input = TextEditingController();
+        final focus = FocusNode();
+        final canSend = ValueNotifier(false);
+        addTearDown(input.dispose);
+        addTearDown(focus.dispose);
+        addTearDown(canSend.dispose);
+        late StateSetter rebuild;
+        await pumpLocalizedWidget(
+          tester,
+          locale: const Locale('zh'),
+          child: StatefulBuilder(
+            builder: (context, setState) {
+              rebuild = setState;
+              return Align(
+                alignment: Alignment.bottomCenter,
+                child: AgentComposerSection(
+                  controller: current,
+                  state: current.composerState,
+                  inputController: input,
+                  composerFocusNode: focus,
+                  canSendListenable: canSend,
+                  draftImagePaths: const [],
+                  onAttachImages: () {},
+                  onRemoveImage: (_) {},
+                  onSend: () {},
+                  onOpenMentionPicker: () {},
+                  onInsertSkill: () {},
+                  pagePadding: EdgeInsets.zero,
+                ),
+              );
+            },
+          ),
+        );
+        final firstGate = Completer<void>();
+        final secondGate = Completer<void>();
+        first.onSessionConfigRequest = (_, _, _) => firstGate.future;
+        second.onSessionConfigRequest = (_, _, _) => secondGate.future;
+        await _chooseSmartConfig(tester);
+        final element = tester.element(_configSelector);
+        rebuild(() => current = controllers.last);
+        await tester.pump();
+        // 同一 option id / thread key，entry 的 controller lifetime 仍然不同。
+        expect(tester.widget<IdeTab>(_configSelector).enabled, isTrue);
+        expect(element.mounted, isFalse); // 旧浮层被销毁。
+        await _chooseSmartConfig(tester);
+        firstGate.completeError(StateError('old entry failure'));
+        await tester.pump();
+        await tester.pump();
+        expect(tester.widget<IdeTab>(_configSelector).enabled, isFalse);
+        expect(
+          find.byKey(
+            const ValueKey('agent-session-config-session-model-error'),
+          ),
+          findsNothing,
+        );
+        secondGate.complete();
+        await tester.pump();
+        await tester.pump();
+        expect(tester.widget<IdeTab>(_configSelector).enabled, isTrue);
+        expect(first.sessionConfigSelections.length, 1);
+        expect(second.sessionConfigSelections.length, 1);
+        expect(tester.takeException(), isNull);
+      },
+    );
+
     testWidgets('draft image remove button clears the thumbnail strip', (
       tester,
     ) async {
@@ -1245,4 +1564,95 @@ void main() {
       },
     );
   });
+}
+
+final _configSelector = find.byKey(
+  const ValueKey('agent-session-config-session-model'),
+);
+
+Future<void> _chooseSmartConfig(WidgetTester tester) async {
+  await tester.tap(_configSelector);
+  await tester.pump(const Duration(milliseconds: 300));
+  await tester.tap(
+    find.byKey(
+      const ValueKey('agent-session-config-session-model-option-smart'),
+    ),
+  );
+  await tester.pump(const Duration(milliseconds: 300));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
+}
+
+void _emitSessionConfig(
+  AgentPaneFakeProvider provider, {
+  String value = 'fast',
+}) {
+  provider.emitEvent(
+    AgentSessionConfigUpdatedEvent(
+      sessionId: 'config-thread',
+      options: [
+        AgentSessionConfigOption(
+          id: 'session-model',
+          name: 'Model',
+          kind: AgentSessionConfigOptionKind.select,
+          currentValue: value,
+          values: const [
+            AgentSessionConfigValue(id: 'fast', label: 'Fast'),
+            AgentSessionConfigValue(id: 'smart', label: 'Smart'),
+          ],
+        ),
+        const AgentSessionConfigOption(
+          id: 'toggle',
+          name: 'Toggle',
+          kind: AgentSessionConfigOptionKind.boolean,
+          currentValue: false,
+        ),
+      ],
+    ),
+  );
+}
+
+Future<(_SessionConfigUiProvider, AgentConversationRuntimeController)>
+_mountSessionConfig(
+  WidgetTester tester, {
+  bool hasPort = true,
+  bool completeTurn = true,
+}) async {
+  final provider = _SessionConfigUiProvider();
+  addTearDown(provider.closeEvents);
+  final controller = createAgentPaneViewModel(
+    provider,
+    initialThread: agentPaneThread(id: 'config-thread', title: 'Config'),
+    providerFactory: hasPort ? null : AgentPaneNoSessionConfigFactory(provider),
+  );
+  addTearDown(controller.dispose);
+  await tester.pumpWidget(AgentPaneTestApp(viewModel: controller));
+  await controller.initialization;
+  await controller.sendMessage('start');
+  _emitSessionConfig(provider);
+  if (completeTurn) {
+    provider.emitEvent(
+      const AgentTurnCompletedEvent(
+        sessionId: 'config-thread',
+        turnId: 'turn-1',
+      ),
+    );
+  }
+  await tester.pump();
+  return (provider, controller);
+}
+
+class _SessionConfigUiProvider extends AgentPaneFakeProvider {
+  int cancelCalls = 0;
+  // 此 fake 同时用于 global/session 两个 scope，事件流随测试独立关闭。
+  @override
+  Future<void> dispose() async {}
+  Future<void> closeEvents() => super.dispose();
+  @override
+  Future<void> cancelTurn(AgentTurn turn) async {
+    cancelCalls++;
+    emitEvent(
+      AgentTurnCompletedEvent(sessionId: turn.sessionId, turnId: turn.id),
+    );
+  }
 }

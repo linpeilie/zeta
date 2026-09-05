@@ -106,4 +106,10 @@ abstract interface class AgentConversationCommandPort {
   Future<AgentCommandOutcome> ensureSkillsCatalog();
 
   Future<AgentCommandOutcome> retryConversationModes();
+
+  /// 更新当前会话配置；缺少端口时抛出 [UnsupportedError]。
+  Future<AgentCommandOutcome> selectSessionConfigOption(
+    String configId,
+    Object value,
+  );
 }

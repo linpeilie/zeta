@@ -152,6 +152,12 @@ UI 一律按 `AgentProviderCapabilities` 和 `AgentProviderBundle` 端口是否�
 
 **不得用 no-op、空 answers 或语义不等价的降级伪造能力**——静默成功会让用户以为操作生效了。
 
+Session config 以 `bundle.sessionConfiguration` 端口为能力真源，不新增重复能力位。
+执行层返回 `AgentCommandOutcome`，缺端口仍抛 `UnsupportedError`；UI 边界翻译为
+`failed(unsupported)`。同配置项串行，入队时冻结 thread/runtime identity/scope，执行前与
+返回后复核；关闭立即结算所有等待者为 `staleTarget`。显示值仅由 Provider 配置事件更新，
+失败不得写入全局 status.details 或记录 configId/value/异常原文。
+
 当前 bundle 端口：必选 `runtime` / `conversation`；可选 `threadCatalog` / `threadSubscription` / `threadNaming` / `threadArchival` / `threadDeletion` / `threadCompaction` / `threadBranching` / `turnSteering` / `permissionResponses` / `questions` / `deniedActionOverride` / `modelCatalog` / `conversationModes` / `skills` / `localThreadList` / `sessionConfiguration` / `planApproval` / `permissionPolicy` / `usageQuota`（见 `lib/src/features/agent/domain/agent_provider_bundle.dart`）。
 
 生命周期可选端口 `acquisitionPreparation` 由 Registry 在每次 acquire 返回租约前等待，包含复用；失败必须释放本次租约，等待后重新校验 runtime identity。端口只准备运行条件，不返回凭据、不启动会话、不改变审批策略。请求前的再次准备由各 Provider 自己负责。

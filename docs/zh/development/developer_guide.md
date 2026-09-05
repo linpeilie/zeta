@@ -492,6 +492,30 @@ create/resume/fork/send --> Binding.permissions.snapshotForRequest()
 快速 Provider 重绑后的迟到 apply、disposed controller 的迟到结果、旧 runtime generation 丢弃，
 以及 provider apply 成功但配置持久化失败时的只重试持久化语义。
 
+### Session config 命令结果与控件反馈
+
+- 配置能力只由 `AgentProviderBundle.sessionConfiguration` 声明，没有单独的
+  `supportsSessionConfiguration`。`AgentConversationCommandPort.selectSessionConfigOption`
+  返回 `Future<AgentCommandOutcome>`；执行层缺端口或 Provider 明确拒绝能力时仍抛
+  `UnsupportedError`，当前 `AgentComposerSection` 经 `invokeSessionConfigCommand` 翻译为
+  `failed(unsupported)`。后续 WP-2 统一 Actions 时迁移该翻译，不能恢复 void 回调。
+- 草稿、只读、无效 id/值为 `ignored(notAllowed)`；值等价为 `ignored(unchanged)`；
+  无已附着 runtime 为 `failed(providerUnavailable)`；请求异常为 `failed(requestFailed)`；
+  关闭或 thread/runtime/scope 失效为 `failed(staleTarget)`。只有实际执行完成且目标有效
+  才能返回 `succeeded()`，不把未执行 callback 的 null 返回当成功。
+- RuntimeController 按 configId 串行，不阻塞其他配置、取消、权限或提问回写。请求入队前
+  冻结 thread、typed runtime identity 与命令 scope，执行前重新读取端口目录；select 仅接受
+  目录声明的 String/bool/有限 num 标量，boolean 仅接受 bool，其余配置种类仍不支持。
+  dispose 立即结算执行中和排队中的 waiter，尚未开始项释放闭包；已发出的请求仍可结束，
+  不把 waiter 结算宣称为 Provider I/O 已取消。
+- 控件只持有 pending、failure kind 和选择代数。pending 期间仅禁用自身；失败在旁边显示
+  错误图标、悬停文案和辅助功能提示，保留原值并允许重试；换 entry/runtime 或销毁后丢弃
+  旧反馈。成功不乐观修改 currentValue，它仍由既有 typed options/Provider 事件发布。
+  UI 不显示异常原文，失败不覆盖全局 header/composer status。
+- 验证从真实 AgentPane/ComposerSection 选值开始，覆盖缺端口、延迟/失败/重试、独立取消、
+  同 key 队列、不同 key 并行、禁用、关闭、runtime 换代和同 thread key 的 entry 重开。
+  具体用例与阶段证据见 [WP-6](../../../.workflow/plan/2026-09-05-lib-cohesion/06-wp6-session-config.md)。
+
 ### Skill 输入与 Composer token
 
 - Domain 使用 `AgentUserInput.skill`、`AgentSkillMetadata` / `AgentSkillsCatalog`；

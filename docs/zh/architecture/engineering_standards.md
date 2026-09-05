@@ -317,6 +317,11 @@ notifier 依赖了 runner provider，runner 再读 notifier 就构成 Riverpod �
   隐藏不支持入口，application 和 data 层执行前仍要校验。禁止以静默 no-op 或语义不等价
   的降级伪造 thread/turn 能力。
 - bundle 端口为空时，对应 capability 必须不可用；不支持功能不得靠 no-op 伪装成“已实现”。
+- Session config 仅以 `sessionConfiguration` 端口声明能力。executor 返回 typed
+  `AgentCommandOutcome`，缺端口继续抛 `UnsupportedError`，presentation 边界翻译为
+  `failed(unsupported)`。同 configId 队列在入队前冻结目标，执行前/返回后复核
+  thread、runtime identity 与 scope；dispose 立即结算 waiter。currentValue 只消费
+  Provider 事件；请求失败不写全局 status.details，不记录配置 id、值或原始异常。
 - 已绑定真实 thread 的 `AgentConversationBinding` 不得原地改绑到另一个 thread。fork
   返回 `AgentSession` 后必须走 Shell 的新 thread 通用流程：由
   `ProjectThreadsSliceRunner.registerSession` 登记列表，再通过 `selectProjectThread` 创建或

@@ -321,6 +321,12 @@ final class _FakeRegionSource implements AgentConversationRegionSource {
 final class _UnusedCommandPort implements AgentConversationCommandPort {
   const _UnusedCommandPort();
 
+  @override
+  Future<AgentCommandOutcome> selectSessionConfigOption(
+    String configId,
+    Object value,
+  ) async => _ignored;
+
   static const AgentCommandOutcome _ignored = AgentCommandOutcome.ignored(
     AgentCommandIgnoreReason.emptyInput,
   );
