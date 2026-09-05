@@ -11,10 +11,152 @@ import '../../support/provider_test_files.dart';
 
 void main() {
   group('ClaudeCodeAgentProvider', () {
+    test(
+      'credential gate blocks acquisition, process start and metadata requests',
+      () async {
+        var processCalls = 0;
+        var metadataCalls = 0;
+        final provider = ClaudeCodeAgentProvider(
+          config: defaultClaudeCodeAgentProviderConfig,
+          credentialsService: _CredentialsService(
+            () async => throw const ClaudeCodeCredentialRefreshException(
+              ClaudeCodeCredentialRefreshFailure.rejected,
+            ),
+          ),
+          metadataLoader: () async {
+            metadataCalls++;
+            return const ClaudeCodeCliMetadataSnapshot(
+              models: AgentModelList(models: []),
+            );
+          },
+          processStarter:
+              (executable, arguments, {workingDirectory, environment}) async {
+                processCalls++;
+                throw StateError('must not start');
+              },
+        );
+        addTearDown(provider.dispose);
+        final bundle = nativeBundleFromClaudeCode(provider);
+        expect(identical(bundle.acquisitionPreparation, provider), isTrue);
+        final fails = throwsA(isA<ClaudeCodeCredentialRefreshException>());
+        await expectLater(
+          bundle.acquisitionPreparation!.prepareForAcquisition(),
+          fails,
+        );
+        await expectLater(
+          provider.startSession(
+            context: const AgentContext(projectPath: '/fixture'),
+          ),
+          fails,
+        );
+        await expectLater(provider.listModels(), fails);
+        await expectLater(provider.refreshModels(), fails);
+        await expectLater(provider.readUsageQuota(), fails);
+        expect(processCalls, 0);
+        expect(metadataCalls, 0);
+      },
+    );
+
+    test(
+      'every turn rechecks credentials and a failed check admits no prompt',
+      () async {
+        final process = _FakeClaudeProcess();
+        var denied = false;
+        var checks = 0;
+        final provider = ClaudeCodeAgentProvider(
+          config: defaultClaudeCodeAgentProviderConfig,
+          credentialsService: _CredentialsService(() async {
+            checks++;
+            if (denied) {
+              throw const ClaudeCodeCredentialRefreshException(
+                ClaudeCodeCredentialRefreshFailure.rejected,
+              );
+            }
+            return null;
+          }),
+          processStarter: _starter(process),
+          locator: const _FakeClaudeCodeCliLocator(),
+        );
+        addTearDown(provider.dispose);
+        final events = <AgentEvent>[];
+        provider.events.listen(events.add);
+        const context = AgentContext(projectPath: '/fixture');
+        final session = await provider.startSession(context: context);
+        process.emitInit(sessionId: session.id);
+        await pumpEventQueue();
+        final before = checks;
+        denied = true;
+        await expectLater(
+          provider.sendMessage(
+            session: session,
+            context: context,
+            message: 'blocked',
+          ),
+          throwsA(isA<ClaudeCodeCredentialRefreshException>()),
+        );
+        expect(checks, before + 1);
+        expect(process.receivedUserTexts, isEmpty);
+        expect(events.whereType<AgentTurnStartedEvent>(), isEmpty);
+        denied = false;
+        await provider.sendMessage(
+          session: session,
+          context: context,
+          message: 'allowed',
+        );
+        await pumpEventQueue();
+        expect(process.receivedUserTexts, ['allowed']);
+        process.emitResultSuccess(sessionId: session.id);
+        await pumpEventQueue();
+        denied = true;
+        await expectLater(
+          provider.sendMessage(
+            session: session,
+            context: context,
+            message: 'blocked again',
+          ),
+          throwsA(isA<ClaudeCodeCredentialRefreshException>()),
+        );
+        expect(process.receivedUserTexts, ['allowed']);
+      },
+    );
+
+    test('shares one lazy credentials service with quota operations', () async {
+      var reads = 0;
+      final service = _CredentialsService(() async {
+        reads++;
+        return ClaudeCodeOAuthCredentials(
+          accessToken: 'fixture-access',
+          refreshToken: 'fixture-refresh',
+          // Unknown expiry cannot trigger a real HTTP request.
+        );
+      });
+      final provider = ClaudeCodeAgentProvider(
+        config: defaultClaudeCodeAgentProviderConfig,
+        credentialsService: service,
+        metadataLoader: () async => const ClaudeCodeCliMetadataSnapshot(
+          models: AgentModelList(models: []),
+          subscriptionType: 'pro',
+        ),
+      );
+      addTearDown(provider.dispose);
+      expect(identical(provider.credentialsService, service), isTrue);
+      expect(reads, 0);
+      await provider.initialize();
+      expect(reads, 0);
+      expect(
+        (await provider.credentialsService.read()).credentials!.refreshToken,
+        'fixture-refresh',
+      );
+      expect(reads, 1);
+      expect((await provider.readUsageQuota())?.windows, isEmpty);
+      expect(reads, 3);
+    });
+
     test('hello turn maps init/text/result and usage', () async {
       final process = _FakeClaudeProcess();
       var idSeq = 0;
       final provider = ClaudeCodeAgentProvider(
+        credentialsService: _CredentialsService(() async => null),
         config: defaultClaudeCodeAgentProviderConfig,
         processStarter: _starter(process),
         locator: const _FakeClaudeCodeCliLocator(),
@@ -81,6 +223,7 @@ void main() {
         final process = _FakeClaudeProcess();
         var idSeq = 0;
         final provider = ClaudeCodeAgentProvider(
+          credentialsService: _CredentialsService(() async => null),
           config: defaultClaudeCodeAgentProviderConfig.copyWith(
             selectedModel: 'opus',
             selectedReasoningEffort: 'xhigh',
@@ -123,6 +266,7 @@ void main() {
       () async {
         final process = _FakeClaudeProcess();
         final provider = ClaudeCodeAgentProvider(
+          credentialsService: _CredentialsService(() async => null),
           config: defaultClaudeCodeAgentProviderConfig,
           processStarter: _starter(process),
           locator: const _FakeClaudeCodeCliLocator(),
@@ -184,6 +328,7 @@ void main() {
         final process = _FakeClaudeProcess();
         var idSeq = 0;
         final provider = ClaudeCodeAgentProvider(
+          credentialsService: _CredentialsService(() async => null),
           config: defaultClaudeCodeAgentProviderConfig,
           processStarter: _starter(process),
           locator: const _FakeClaudeCodeCliLocator(),
@@ -265,6 +410,7 @@ void main() {
       () async {
         final process = _FakeClaudeProcess();
         final provider = ClaudeCodeAgentProvider(
+          credentialsService: _CredentialsService(() async => null),
           config: defaultClaudeCodeAgentProviderConfig,
           processStarter: _starter(process),
           locator: const _FakeClaudeCodeCliLocator(),
@@ -363,6 +509,7 @@ void main() {
       () async {
         final process = _FakeClaudeProcess();
         final provider = ClaudeCodeAgentProvider(
+          credentialsService: _CredentialsService(() async => null),
           config: defaultClaudeCodeAgentProviderConfig,
           processStarter: _starter(process),
           locator: const _FakeClaudeCodeCliLocator(),
@@ -446,6 +593,7 @@ void main() {
     test('unknown control_request type is still fail-closed denied', () async {
       final process = _FakeClaudeProcess();
       final provider = ClaudeCodeAgentProvider(
+        credentialsService: _CredentialsService(() async => null),
         config: defaultClaudeCodeAgentProviderConfig,
         processStarter: _starter(process),
         locator: const _FakeClaudeCodeCliLocator(),
@@ -489,6 +637,7 @@ void main() {
         final starts = <_RecordedProcessStart>[];
         final processes = <_FakeClaudeProcess>[firstProcess, secondProcess];
         final provider = ClaudeCodeAgentProvider(
+          credentialsService: _CredentialsService(() async => null),
           config: defaultClaudeCodeAgentProviderConfig,
           processStarter: _queueStarter(processes, starts),
           locator: const _FakeClaudeCodeCliLocator(),
@@ -532,6 +681,7 @@ void main() {
         final process = _FakeClaudeProcess();
         final starts = <_RecordedProcessStart>[];
         final provider = ClaudeCodeAgentProvider(
+          credentialsService: _CredentialsService(() async => null),
           config: defaultClaudeCodeAgentProviderConfig,
           processStarter: _queueStarter(<_FakeClaudeProcess>[process], starts),
           locator: const _FakeClaudeCodeCliLocator(),
@@ -574,6 +724,7 @@ void main() {
     test('thread catalog delegates to the Claude history reader', () async {
       final reader = _RecordingClaudeCodeSessionHistoryReader();
       final provider = ClaudeCodeAgentProvider(
+        credentialsService: _CredentialsService(() async => null),
         config: defaultClaudeCodeAgentProviderConfig,
         sessionHistoryReader: reader,
       );
@@ -603,6 +754,7 @@ void main() {
       () async {
         var metadataCalls = 0;
         final provider = ClaudeCodeAgentProvider(
+          credentialsService: _CredentialsService(() async => null),
           config: defaultClaudeCodeAgentProviderConfig.copyWith(
             extra: const <String, Object?>{
               claudeCodeAccountDataEnrichmentKey: false,
@@ -635,6 +787,7 @@ void main() {
           },
         );
         final provider = ClaudeCodeAgentProvider(
+          credentialsService: _CredentialsService(() async => null),
           config: defaultClaudeCodeAgentProviderConfig,
           modelCatalog: catalog,
         );
@@ -653,6 +806,7 @@ void main() {
       final gate = Completer<ClaudeCodeCliMetadataSnapshot>();
       var metadataCalls = 0;
       final provider = ClaudeCodeAgentProvider(
+        credentialsService: _CredentialsService(() async => null),
         config: defaultClaudeCodeAgentProviderConfig.copyWith(
           extra: const <String, Object?>{
             claudeCodeAccountDataEnrichmentKey: false,
@@ -686,11 +840,13 @@ void main() {
         providerName: 'Claude Code',
         metadataLoader: () async =>
             _metadataSnapshot('quota-model', subscriptionType: 'max'),
-        credentialsLoader: () async => ClaudeCodeOAuthCredentials(
-          accessToken: 'sensitive-test-token',
-          expiresAt: DateTime.utc(2099),
-          subscriptionType: 'max',
-          scopes: const <String>['user:inference', 'user:profile'],
+        credentialsService: _CredentialsService(
+          () async => ClaudeCodeOAuthCredentials(
+            accessToken: 'sensitive-test-token',
+            expiresAt: DateTime.utc(2099),
+            subscriptionType: 'max',
+            scopes: const <String>['user:inference', 'user:profile'],
+          ),
         ),
         remoteUsageLoader:
             ({
@@ -701,6 +857,7 @@ void main() {
             },
       );
       final provider = ClaudeCodeAgentProvider(
+        credentialsService: _CredentialsService(() async => null),
         config: defaultClaudeCodeAgentProviderConfig,
         usageQuotaAdapter: adapter,
       );
@@ -719,6 +876,7 @@ void main() {
       final process = _FakeClaudeProcess();
       final starts = <_RecordedProcessStart>[];
       final provider = ClaudeCodeAgentProvider(
+        credentialsService: _CredentialsService(() async => null),
         config: defaultClaudeCodeAgentProviderConfig.copyWith(
           selectedModel: 'haiku',
           selectedReasoningEffort: 'high',
@@ -747,6 +905,7 @@ void main() {
         final secondProcess = _FakeClaudeProcess();
         final starts = <_RecordedProcessStart>[];
         final provider = ClaudeCodeAgentProvider(
+          credentialsService: _CredentialsService(() async => null),
           config: defaultClaudeCodeAgentProviderConfig,
           processStarter: _queueStarter(<_FakeClaudeProcess>[
             firstProcess,
@@ -795,6 +954,7 @@ void main() {
       final secondProcess = _FakeClaudeProcess();
       final starts = <_RecordedProcessStart>[];
       final provider = ClaudeCodeAgentProvider(
+        credentialsService: _CredentialsService(() async => null),
         config: defaultClaudeCodeAgentProviderConfig.copyWith(
           selectedReasoningEffort: 'high',
         ),
@@ -838,6 +998,7 @@ void main() {
         final secondProcess = _FakeClaudeProcess();
         final starts = <_RecordedProcessStart>[];
         final provider = ClaudeCodeAgentProvider(
+          credentialsService: _CredentialsService(() async => null),
           config: defaultClaudeCodeAgentProviderConfig,
           processStarter: _queueStarter(<_FakeClaudeProcess>[
             firstProcess,
@@ -886,6 +1047,7 @@ void main() {
         final secondProcess = _FakeClaudeProcess();
         final starts = <_RecordedProcessStart>[];
         final provider = ClaudeCodeAgentProvider(
+          credentialsService: _CredentialsService(() async => null),
           config: defaultClaudeCodeAgentProviderConfig,
           processStarter: _queueStarter(<_FakeClaudeProcess>[
             firstProcess,
@@ -945,6 +1107,7 @@ void main() {
         final executionProcess = _FakeClaudeProcess();
         final starts = <_RecordedProcessStart>[];
         final provider = ClaudeCodeAgentProvider(
+          credentialsService: _CredentialsService(() async => null),
           config: defaultClaudeCodeAgentProviderConfig,
           processStarter: _queueStarter(<_FakeClaudeProcess>[
             planProcess,
@@ -1007,6 +1170,7 @@ void main() {
       final process = _FakeClaudeProcess();
       final starts = <_RecordedProcessStart>[];
       final provider = ClaudeCodeAgentProvider(
+        credentialsService: _CredentialsService(() async => null),
         config: defaultClaudeCodeAgentProviderConfig,
         processStarter: _queueStarter(<_FakeClaudeProcess>[process], starts),
         locator: const _FakeClaudeCodeCliLocator(),
@@ -1065,6 +1229,7 @@ void main() {
       final process = _FakeClaudeProcess();
       final starts = <_RecordedProcessStart>[];
       final provider = ClaudeCodeAgentProvider(
+        credentialsService: _CredentialsService(() async => null),
         config: defaultClaudeCodeAgentProviderConfig,
         processStarter: _queueStarter(<_FakeClaudeProcess>[process], starts),
         locator: const _FakeClaudeCodeCliLocator(),
@@ -1105,6 +1270,7 @@ void main() {
         );
         final process = _FakeClaudeProcess();
         final provider = ClaudeCodeAgentProvider(
+          credentialsService: _CredentialsService(() async => null),
           config: defaultClaudeCodeAgentProviderConfig,
           processStarter: _starter(process),
           locator: const _FakeClaudeCodeCliLocator(),
@@ -1506,5 +1672,24 @@ class _FakeStdinConsumer implements StreamConsumer<List<int>> {
 Future<void> _closeController(StreamController<List<int>> controller) async {
   if (!controller.isClosed) {
     await controller.close();
+  }
+}
+
+final class _CredentialsService implements ClaudeCodeCredentialsService {
+  const _CredentialsService(this.load);
+  final Future<ClaudeCodeOAuthCredentials?> Function() load;
+
+  @override
+  Future<ClaudeCodeCredentialsResult> ensureFresh() => read();
+
+  @override
+  Future<ClaudeCodeCredentialsResult> read() async {
+    final credentials = await load();
+    return credentials == null
+        ? const ClaudeCodeCredentialsResult.missing()
+        : ClaudeCodeCredentialsResult.available(
+            credentials,
+            source: ClaudeCodeCredentialsSource.file,
+          );
   }
 }

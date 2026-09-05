@@ -284,7 +284,7 @@ UI 必须如实说明这一边界。登录指引使用 `claude auth login`。
 归一化为 `Claude Pro`、`Claude Max`、`Claude Team` 或 `Claude Enterprise`。它不依赖
 `claudeCode.accountDataEnrichment`；关闭额度详情增强时，模型目录和套餐名称仍可读取。
 
-额度窗口是独立、可关闭的只读增强：
+额度窗口查询是独立、可关闭的增强：
 
 - 仅在 `claudeCode.accountDataEnrichment=true`、非 API key 模式、OAuth token 未过期，且
   scopes 同时含 `user:inference` 与 `user:profile` 时请求 `GET /api/oauth/usage`。
@@ -293,12 +293,79 @@ UI 必须如实说明这一边界。登录指引使用 `claude auth login`。
 - 映射 `five_hour`、`seven_day`、可选 `seven_day_sonnet` / `seven_day_opus` 和
   `extra_usage`。`monthly_limit=null` 只表示 unlimited；不得猜币种、余额或绝对 Token 总额。
 - macOS 优先通过参数化 `security find-generic-password` 读取 Claude Code Keychain 条目，
-  miss、拒绝、损坏或超时后才回退 Claude 自有 credentials 文件；Windows 使用 Claude 自有
-  credentials 文件。凭据只在一次请求期间存在于内存，不进入 Zeta 配置、缓存或日志。
+  miss、拒绝、存储 JSON 损坏或超时后才回退 Claude 自有 credentials 文件；Windows/Linux
+  使用 Claude 自有 credentials 文件。已成功解码的 Keychain 对象是权威来源，即使其中
+  OAuth 字段缺失、损坏或已过期，也不切换文件里的另一账户。凭据只在一次请求期间存在于
+  内存，不进入 Zeta 配置、缓存或日志。
 
-配置 key 为兼容旧数据继续保留，但 UI 名称是“额度详情增强”。它只控制上述凭据读取和
-usage REST，不控制 initialize 模型或套餐名称。Zeta 不刷新、迁移、改写或删除 Claude
-凭据；与此同时，也不能把“Zeta 不持久化 token”扩大解释为 Claude CLI 自己绝对不写状态。
+配置 key 为兼容旧数据继续保留，但 UI 名称是“额度详情增强”。它只控制 usage REST，
+不控制 initialize 模型、套餐名称或下面的认证准备。Zeta 只为按需刷新更新原有 CLI
+凭据存储，不迁移来源或创建 Zeta 凭据副本；CLI 自身仍可能写认证、bootstrap 等状态。
+
+### 跨平台统一凭据入口
+
+Claude 插件 data 层统一经 `ClaudeCodeCredentialsService` 获取凭据，默认实现为
+`LocalClaudeCodeCredentialsService`。Provider 组合一次服务实例并注入额度适配器；
+`provider.credentialsService` 是包内后续 data 操作的同一入口。不在生产 barrel 导出
+实现或 token 模型，不向中立 Bundle 增加凭据端口。初始化不读取凭据。
+
+```dart
+// 仅在 Claude 插件 data 层的实际操作期间使用；不记录或缓存 result。
+final result = await credentialsService.read();
+final credentials = result.credentials;
+// credentials?.accessToken / refreshToken / expiresAt
+```
+
+- 有效环境由进程环境加所属 Provider 的 `config.environment` 覆盖得到。配置目录优先
+  `CLAUDE_CONFIG_DIR`（NFC），否则 macOS/Linux 使用 `$HOME/.claude`，Windows 使用
+  `%USERPROFILE%\.claude`；文件名统一为 `.credentials.json`，分隔符按目标平台选择。
+- 显式 `CLAUDE_CODE_OAUTH_TOKEN` 优先于本地存储，只有 `user:inference` scope；
+  `refreshToken` / `expiresAt` / 订阅字段保持 null，不与其他来源拼接。
+- API key、非 OAuth bearer、Bedrock/Vertex/Foundry、`--bare` 或配置声明 API key 时
+  返回 `notApplicable`，不读取其他账户；没有宿主 FD 传递契约时，OAuth FD 返回
+  `unsupported`，不根据其他进程的 FD 数字读取或回退本地账户。
+- 一次返回 `accessToken`、可空 `refreshToken`、可空 UTC `expiresAt`、不可变 `scopes`、
+  可空 `subscriptionType` / `rateLimitTier`。`expiresAt` 源值按 Unix 毫秒解码；未知字段
+  忽略，缺失有效期保持未知，非空但非法/越界有效期归为 `malformed`。
+- 结果状态区分 `available / missing / unreadable / malformed / notApplicable /
+  unsupported`，来源仅为 `environment / keychain / file`；不含路径、原始异常或 payload。
+  `available` 不保证 token 当前有效。`expiryAt(now)` 区分未知、已过期、5 分钟内到期和
+  有效；过期凭据仍保留 refresh token。额度操作在读取完成后检查当前时间和 scopes，
+  过期或未知有效期均不请求 HTTP，不改变原有 plan-only 降级语义。
+- 每次调用重新读取，不长驻缓存 secret，外部 CLI 轮换/退出在下一次读取生效；
+  `read()` 不发网络请求、不刷新、不写回存储；`ensureFresh()` 执行以下刷新流程。
+  诊断字符串不包含任一 token 或前缀。
+
+### 获取实例与请求前的刷新
+
+- 新建或复用 Provider 租约：Registry 等待中立 `acquisitionPreparation.prepareForAcquisition()`，Claude 调用 `credentialsService.ensureFresh()`。失败释放本次租约；准备期间关闭/失效的 runtime 不返回给调用方。构造和 `initialize()` 仍保持惰性，不启动会话。
+- 已持有实例：启动/恢复 CLI 会话、发送每个新 turn（含 `/compact`）、读取/刷新模型、读取套餐额度前再次调用同一服务；独立的显式连接测试也在 metadata probe 启动前调用该服务；额度 REST 使用该服务返回的最新 token。CLI 内部的逐轮 HTTP、重试和 tool continuation 仍由 CLI 自己认证，不由 Zeta 截获。
+- 取消及权限/提问/Plan 审批回写用于结算已有请求，不等待 token 刷新。认证准备不会改变 tool 权限、Plan 模式或已有审批决定。
+- 明确的 `expiresAt <= now + 5 min` 才进入刷新；缺 refresh token 或 `user:inference` 时失败。缺凭据、显式外部认证和未知有效期交由 CLI 原有认证路径处理，不拼接其他账户的 refresh token。损坏或不可读凭据失败；这不是一次服务器端 token introspection，未过期但已撤销的 token 仍可能被远端拒绝。
+- 同一次插件激活的不同 runtime 按账户/配置目录合并进行中的刷新；没有长期 token 缓存。跨进程使用 Claude `proper-lockfile` 兼容的 canonical-directory `.lock`：原子 mkdir、mtime 心跳，锁内重读。不抢占旧锁，最长等待 12 秒；锁丢失时不得写回。
+- 当前只支持生产 Claude OAuth issuer，拒绝自定义/staging issuer 与 client ID override。`POST https://platform.claude.com/v1/oauth/token` 的 JSON 包含 `grant_type=refresh_token`、原 refresh token、固定 Claude client ID 和已授予的 scopes；不扩大 scope。总超时 15 秒、禁止重定向、不自动重试；400/401/403 归为 rejected，其余 HTTP 失败归为 transport。
+- 响应必须有非空 access token、有效正整数 `expires_in`；没有返回 refresh token 时保留原值，返回新值时一起轮换。`expiresAt = now + expires_in`，构造与写后比较均按 UTC Unix 毫秒精度；不得用 Dart 微秒值直接比较落盘后重读值。保留整个 envelope、其他账户字段、subscription/rate-limit metadata 和未知字段；不额外请求 profile。
+- 写前再次校验锁、目录、选中来源与原内容，避免覆盖刷新期间的外部登录。macOS 用 `security -i` 的 stdin 更新原 Keychain 条目，secret 不进 argv；拒绝超过工具行长上限的内容，不降级到命令行 secret。文件来源在原目录创建临时文件并原子替换：POSIX 写入 secret 前设为 0600；Windows PowerShell/.NET 复制原 ACL 后创建临时文件，通过 `File.Replace` 替换原文件。所有路径只来自 Claude-local data 层，临时文件正常结束即清理。
+- 写回后重读并比较 access/refresh/expiry，未确认成功则阻止本次操作；Keychain 失败不改写其他来源，不创建备份。即使发起请求的 runtime 在 HTTP 期间被关闭，也完成仍持有锁的轮换写回，以免丢失服务器新 refresh token；runtime 本身不会重新发布。
+- 稳定失败分类为 unavailable、unsupportedIssuer、rejected、transport、invalidResponse、lockUnavailable、lockLost、sourceChanged、persistence。网络超时、锁丢失、写回失败可能发生在服务端已轮换之后，后续可能需要重新登录；不能用旧凭据伪装成功。本次不增加定时刷新或 Zeta 401 强制刷新/请求重放。
+
+`persistence` 错误额外携带纯枚举/数值诊断：`source`、`stage=preflight/write/verify`、`reason`、`refreshCompleted` 和可选进程 `exitCode`。`refreshCompleted=false` 表示存储预检失败、尚未调用远端刷新；`true` 表示已得到有效刷新响应，但存储或校验失败。Keychain stderr 只在有界内存缓冲区映射到允许的原因枚举，原文、命令、账号和凭据不进入错误对象或日志。
+
+从仓库根目录执行 `dart packages/zeta_agent_provider_claude_code/tool/diagnose_credentials.dart` 可只读检查当前进程环境的凭据来源、有效期类别和 Keychain 命令预检；可用 `--config-dir DIRECTORY` 对齐自定义配置目录。此命令不调用 `ensureFresh()`、不刷新、不写回，也不证明 Keychain 写权限或远端 token 有效性。Zeta 配置中的其他环境覆盖仍须在诊断进程中显式对齐；不能将默认环境的结果当作其他账户的结果。
+
+```dart
+// Claude data 层，在实际需要认证的操作前使用。
+final result = await credentialsService.ensureFresh();
+final credentials = result.credentials;
+// 仅在当前操作使用，不记录或持久化到 Zeta。
+```
+
+并发锁仅协调遵守同一锁协议的刷新进程；外部登录/注销未必使用该锁。写前内容比较可识别已观察到的变化，但不是对所有外部写入者的跨进程 CAS。生产协议基线和三系统真实账号验收须分别记录，不能从合成测试推断通过。
+
+读取规则参考本地 `claude-code` checkout `77a7934e` 的 `src/utils/auth.ts`、
+`src/utils/secureStorage/` 与 `src/services/oauth/client.ts`。该项目自述为逆向还原，
+类型文件包含 stub；此处对齐读取及刷新机制，不视为官方稳定协议。实现测试使用合成凭据，
+跨平台模拟通过不等于三系统真实登录凭据验收通过。
 
 ## 12. 升级与验证
 

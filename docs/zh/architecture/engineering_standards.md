@@ -331,6 +331,7 @@ notifier 依赖了 runner provider，runner 再读 notifier 就构成 Riverpod �
 - Registry `acquire` 必须显式传入 global/session scope，不得提供默认 global 兼容值。
   使用统计面板只能通过 `AgentProviderGlobalRuntime` 读取 bundle 的 quota 端口；不得接受
   raw Provider loader、lease loader 或 shared-provider predicate 等并行生命周期入口。
+- 可选 `AgentProviderAcquisitionPreparationPort` 属于中立生命周期机制。Registry 每次 acquire（含复用）返回前等待准备，失败释放该租约，等待后重新校验有效性；端口不暴露凭据或 Provider 协议。准备不能启动会话或扩大权限；运行中的新请求由具体 Provider 再次校验自身认证条件。
 - `AgentConversationBindingManager` 按 `draft(providerId, entryId)` 或
   `thread(providerId, threadId)` 唯一映射逻辑会话。草稿拿到真实 threadId 后必须原子晋升；
   目标 key 已存在时 fail-closed。Workspace 只持有 Binding lease，RuntimeController 不得持有
@@ -570,6 +571,7 @@ Provider 契约测试。若 PR 因 Provider 差异修改 CoalescingPolicy/Buffer
   `lib/src/app/storage/zeta_store_providers.dart` 的 provider 组装，不把 bindings 或
   `StorageService` 当构造参数向下钻；presentation/application 不拼接 `~/.zeta` 路径。
   存储 provider 的默认值保持 fail-closed：组合根替它装了，调用方就换不掉了。
+- Claude 按需 OAuth 刷新可更新其原有 CLI 凭据存储，这是明确的认证维护能力：macOS 只写已选中的 Keychain 条目，文件来源只原位替换已有文件。锁内重读、远端刷新、保留无关字段和写回校验必须完整执行；不得迁移来源、备份 secret、扩大 scope 或把凭据保存到 Zeta 自有目录。其余 Provider 私有数据读取不自动获得写入授权，详见 Claude 协议 §11。
 - 当前不读取旧 SharedPreferences，也没有历史文件迁移器或 marker。
 - 会话状态使用当前版本 JSON；字段新增时提供默认值。
 - `tryDecode` 或等价宽容读取逻辑必须处理空值、损坏 JSON、不支持版本和未知字段。

@@ -3395,7 +3395,7 @@ abstract class AppLocalizations {
   /// Quota enrichment body
   ///
   /// In en, this message translates to:
-  /// **'This switch only controls whether Zeta briefly reads Claude Code OAuth credentials and calls the usage REST API. Model lists and plan names always come from the Claude CLI; Zeta does not refresh, write back, or persist credentials.'**
+  /// **'This switch only controls Claude Code quota detail queries. Models and plan names come from the Claude CLI. Before acquiring a provider or starting a new request, Zeta checks credentials and refreshes the original store when needed. Credentials are never saved in Zeta configuration, caches, or logs.'**
   String get mgmtQuotaEnrichmentBody;
 
   /// Onboarding title
@@ -5453,7 +5453,7 @@ abstract class AppLocalizations {
   /// Claude setup login body
   ///
   /// In en, this message translates to:
-  /// **'Run claude auth login to sign in to your Anthropic account. Auto-detect never reads credential contents; quota enrichment only does the read-only query described above and never writes the credential file.'**
+  /// **'Run claude auth login to sign in to your Anthropic account. Auto-detect does not read credential contents. Using the Claude provider checks credentials and refreshes the original store when needed. The switch above controls quota detail queries separately.'**
   String get mgmtSetupLoginBody;
 
   /// Claude setup docs title

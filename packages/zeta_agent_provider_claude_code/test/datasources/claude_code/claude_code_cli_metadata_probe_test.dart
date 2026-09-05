@@ -16,6 +16,27 @@ final _fixtureRoot = providerTestFiles.path(
 void main() {
   group('ClaudeCodeCliMetadataProbe', () {
     test(
+      'standalone connection probe checks credentials before starting CLI',
+      () async {
+        var starts = 0;
+        final probe = ClaudeCodeCliMetadataProbe(
+          config: defaultClaudeCodeAgentProviderConfig,
+          credentialsService: const _Credentials(fail: true),
+          processStarter:
+              (executable, arguments, {workingDirectory, environment}) async {
+                starts++;
+                throw StateError('must not start');
+              },
+        );
+        await expectLater(
+          probe.probe(),
+          throwsA(isA<ClaudeCodeCredentialRefreshException>()),
+        );
+        expect(starts, 0);
+      },
+    );
+
+    test(
       'sends only initialize and accepts only the matching success',
       () async {
         // Arrange
@@ -179,6 +200,7 @@ ClaudeCodeCliMetadataProbe _probe({
   int maxLineBytes = 4 * 1024 * 1024,
 }) {
   return ClaudeCodeCliMetadataProbe(
+    credentialsService: const _Credentials(),
     config: config,
     timeout: timeout,
     workingDirectory: '/fixture/workspace',
@@ -358,5 +380,22 @@ class _FakeStdinConsumer implements StreamConsumer<List<int>> {
 Future<void> _closeController(StreamController<List<int>> controller) async {
   if (!controller.isClosed) {
     await controller.close();
+  }
+}
+
+final class _Credentials implements ClaudeCodeCredentialsService {
+  const _Credentials({this.fail = false});
+  final bool fail;
+  @override
+  Future<ClaudeCodeCredentialsResult> read() async =>
+      const ClaudeCodeCredentialsResult.missing();
+  @override
+  Future<ClaudeCodeCredentialsResult> ensureFresh() async {
+    if (fail) {
+      throw const ClaudeCodeCredentialRefreshException(
+        ClaudeCodeCredentialRefreshFailure.rejected,
+      );
+    }
+    return read();
   }
 }

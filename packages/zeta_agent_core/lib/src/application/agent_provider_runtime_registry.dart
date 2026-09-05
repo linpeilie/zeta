@@ -80,7 +80,7 @@ class AgentProviderRuntimeRegistry extends AgentChangeNotifier {
         );
         final lease = _createLease(existing);
         _publishRuntimeGauges();
-        return lease;
+        return _preparationRequired(lease) ? _prepareLease(lease) : lease;
       }
 
       _log.t('Creating application Agent provider: ${config.id} ($scope)');
@@ -131,7 +131,27 @@ class AgentProviderRuntimeRegistry extends AgentChangeNotifier {
       notifyListeners();
       final lease = _createLease(entry);
       _publishRuntimeGauges();
+      return _preparationRequired(lease) ? _prepareLease(lease) : lease;
+    }
+  }
+
+  bool _preparationRequired(AgentProviderRuntimeLease lease) =>
+      lease.bundle.acquisitionPreparation != null;
+
+  Future<AgentProviderRuntimeLease> _prepareLease(
+    AgentProviderRuntimeLease lease,
+  ) async {
+    try {
+      await lease.bundle.acquisitionPreparation?.prepareForAcquisition();
+      if (!lease.isCurrent) {
+        throw StateError(
+          'Agent runtime invalidated during acquisition preparation',
+        );
+      }
       return lease;
+    } catch (_) {
+      await lease.release();
+      rethrow;
     }
   }
 

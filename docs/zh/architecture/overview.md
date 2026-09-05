@@ -185,8 +185,11 @@ flowchart LR
 Claude Code 的模型与套餐名称来自独立、无 Prompt 的 CLI initialize，并在 Claude-local
 mapper 中变成中立模型；`supportedEffortLevels` 作为中立思考程度展示，并在下一回合经
 `--effort` 生效。这只是当前 CLI 有效选项快照，不是实时远端全量目录。额度详情是另一条
-可关闭的 OAuth usage 读取路径，失败时保留套餐名称。Zeta 只持久化规范化模型缓存，不保存
-凭据或 raw payload；Claude CLI 仍可能维护自己的认证、bootstrap 与缓存状态。
+可关闭的 OAuth usage 读取路径，REST 失败时保留套餐名称。
+Registry 获取新建或复用租约前等待可选 `acquisitionPreparation`，Claude 在此处以及
+每次新请求前统一调用 `ensureFresh()`，在到期前 5 分钟按需刷新。刷新失败阻止本次操作，
+取消和审批回写仍可结算。凭据只更新原选中的 CLI 存储，锁内重读并验证写回；Zeta 自有
+目录和日志不保存凭据或 raw payload。详见 Claude 协议 §11。
 
 ## 三种审批，别搞混
 

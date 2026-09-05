@@ -18,10 +18,10 @@ void main() {
         clock: () => now,
         // 与 credentials.subscriptionType 故意不同，证明套餐名只来自 initialize。
         metadataLoader: () async => _metadata('team'),
-        credentialsLoader: () async {
+        credentialsService: _CredentialsService(() async {
           credentialReads += 1;
           return _credentials;
-        },
+        }),
         remoteUsageLoader:
             ({
               required String accessToken,
@@ -72,10 +72,10 @@ void main() {
             metadataCalls += 1;
             return _metadata('team');
           },
-          credentialsLoader: () async {
+          credentialsService: _CredentialsService(() async {
             credentialReads += 1;
             return _credentials;
-          },
+          }),
           remoteUsageLoader:
               ({
                 required String accessToken,
@@ -97,7 +97,7 @@ void main() {
 
     test('disabled enhancement never starts macOS security', () async {
       var securityCalls = 0;
-      final reader = ClaudeCodeOAuthCredentialsReader(
+      final reader = LocalClaudeCodeCredentialsService(
         environment: const <String, String>{
           'HOME': '/fixture/home',
           'USER': 'fixture-user',
@@ -112,14 +112,14 @@ void main() {
             );
           },
         ),
-        isMacOS: true,
+        platform: ClaudeCodeCredentialsPlatform.macOS,
       );
       final adapter = ClaudeCodeUsageQuotaAdapter(
         providerId: 'claude_code',
         providerName: 'Claude Code',
         accountDataEnrichmentEnabled: false,
         metadataLoader: () async => _metadata('pro'),
-        credentialsLoader: reader.read,
+        credentialsService: reader,
       );
 
       final result = await adapter.readUsageQuota();
@@ -136,7 +136,7 @@ void main() {
           providerId: 'claude_code',
           providerName: 'Claude Code',
           metadataLoader: () async => _metadata('Claude Pro'),
-          credentialsLoader: () async => null,
+          credentialsService: _CredentialsService(() async => null),
           remoteUsageLoader:
               ({
                 required String accessToken,
@@ -175,6 +175,13 @@ void main() {
             ),
           ),
           (
+            name: 'unknown expiry',
+            credentials: ClaudeCodeOAuthCredentials(
+              accessToken: 'unknown-expiry-sensitive-token',
+              scopes: const ['user:inference', 'user:profile'],
+            ),
+          ),
+          (
             name: 'expired token',
             credentials: ClaudeCodeOAuthCredentials(
               accessToken: 'expired-sensitive-token',
@@ -193,7 +200,9 @@ void main() {
             providerName: 'Claude Code',
             clock: () => DateTime.utc(2026, 8, 12, 8),
             metadataLoader: () async => _metadata('pro'),
-            credentialsLoader: () async => credentialsCase.credentials,
+            credentialsService: _CredentialsService(
+              () async => credentialsCase.credentials,
+            ),
             remoteUsageLoader:
                 ({
                   required String accessToken,
@@ -219,7 +228,7 @@ void main() {
           providerId: 'claude_code',
           providerName: 'Claude Code',
           metadataLoader: () async => _metadata('max'),
-          credentialsLoader: () async => _credentials,
+          credentialsService: _CredentialsService(() async => _credentials),
           // API client 将非 200 响应统一折叠为 null，adapter 不读取响应体。
           remoteUsageLoader:
               ({
@@ -242,7 +251,7 @@ void main() {
           providerId: 'claude_code',
           providerName: 'Claude Code',
           metadataLoader: () async => _metadata('enterprise'),
-          credentialsLoader: () async => _credentials,
+          credentialsService: _CredentialsService(() async => _credentials),
           remoteUsageLoader:
               ({
                 required String accessToken,
@@ -261,6 +270,33 @@ void main() {
       },
     );
 
+    test('checks expiry after an asynchronous credential read', () async {
+      var now = DateTime.utc(2026, 9, 5);
+      final expiry = now.add(const Duration(seconds: 1));
+      var remoteCalls = 0;
+      final adapter = ClaudeCodeUsageQuotaAdapter(
+        providerId: 'claude_code',
+        providerName: 'Claude Code',
+        clock: () => now,
+        metadataLoader: () async => _metadata('pro'),
+        credentialsService: _CredentialsService(() async {
+          now = expiry;
+          return ClaudeCodeOAuthCredentials(
+            accessToken: 'expired-during-read',
+            expiresAt: expiry,
+            scopes: const ['user:inference', 'user:profile'],
+          );
+        }),
+        remoteUsageLoader:
+            ({required accessToken, required claudeCodeVersion}) async {
+              remoteCalls++;
+              return null;
+            },
+      );
+      expect((await adapter.readUsageQuota())?.windows, isEmpty);
+      expect(remoteCalls, 0);
+    });
+
     test('concurrent callers share one request', () async {
       final response = Completer<Map<String, Object?>?>();
       var remoteCalls = 0;
@@ -268,7 +304,7 @@ void main() {
         providerId: 'claude_code',
         providerName: 'Claude Code',
         metadataLoader: () async => _metadata('Claude Pro'),
-        credentialsLoader: () async => _credentials,
+        credentialsService: _CredentialsService(() async => _credentials),
         remoteUsageLoader:
             ({
               required String accessToken,
@@ -299,7 +335,7 @@ void main() {
         metadataLoader: () async {
           throw StateError('redacted metadata failure');
         },
-        credentialsLoader: () async => _credentials,
+        credentialsService: _CredentialsService(() async => _credentials),
         remoteUsageLoader:
             ({
               required String accessToken,
@@ -327,7 +363,8 @@ void main() {
             'scopes': <String>['user:profile', 'user:inference'],
           },
         });
-        final macReader = ClaudeCodeOAuthCredentialsReader(
+        final macReader = LocalClaudeCodeCredentialsService(
+          environment: const {},
           credentialsPath: '/fixture/mac/.credentials.json',
           secureSource: ClaudeCodeMacOsKeychainSource(
             environment: const <String, String>{'USER': 'fixture-user'},
@@ -339,14 +376,13 @@ void main() {
             },
           ),
           fileSource: const _StaticCredentialsFileSource(null),
-          isMacOS: true,
-          clock: () => now,
+          platform: ClaudeCodeCredentialsPlatform.macOS,
         );
-        final windowsReader = ClaudeCodeOAuthCredentialsReader(
+        final windowsReader = LocalClaudeCodeCredentialsService(
+          environment: const {},
           credentialsPath: r'C:\fixture\.claude\.credentials.json',
           fileSource: _StaticCredentialsFileSource(credentialsJson),
-          isMacOS: false,
-          clock: () => now,
+          platform: ClaudeCodeCredentialsPlatform.windows,
         );
 
         Future<Map<String, Object?>?> loadUsage({
@@ -366,14 +402,14 @@ void main() {
         }
 
         ClaudeCodeUsageQuotaAdapter adapterFor(
-          ClaudeCodeOAuthCredentialsReader reader,
+          LocalClaudeCodeCredentialsService reader,
         ) {
           return ClaudeCodeUsageQuotaAdapter(
             providerId: 'claude_code',
             providerName: 'Claude Code',
             clock: () => now,
             metadataLoader: () async => _metadata('team'),
-            credentialsLoader: reader.read,
+            credentialsService: reader,
             remoteUsageLoader: loadUsage,
           );
         }
@@ -441,4 +477,23 @@ final class _StaticCredentialsFileSource
 
   @override
   Future<String?> read(String path) async => contents;
+}
+
+final class _CredentialsService implements ClaudeCodeCredentialsService {
+  const _CredentialsService(this.load);
+  final Future<ClaudeCodeOAuthCredentials?> Function() load;
+
+  @override
+  Future<ClaudeCodeCredentialsResult> ensureFresh() => read();
+
+  @override
+  Future<ClaudeCodeCredentialsResult> read() async {
+    final credentials = await load();
+    return credentials == null
+        ? const ClaudeCodeCredentialsResult.missing()
+        : ClaudeCodeCredentialsResult.available(
+            credentials,
+            source: ClaudeCodeCredentialsSource.file,
+          );
+  }
 }

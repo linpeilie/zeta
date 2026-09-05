@@ -5,13 +5,14 @@ import 'dart:math';
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_agent_provider_claude_code/src/claude_code_static_capabilities.dart';
 import 'package:zeta_agent_provider_claude_code/src/claude_code_cli_locator.dart';
+import 'package:zeta_agent_provider_claude_code/src/datasources/claude_code/claude_code_credentials_refresh.dart';
 import 'package:zeta_agent_provider_claude_code/src/datasources/claude_code/claude_code_control_request_handler.dart';
 import 'package:zeta_agent_provider_claude_code/src/datasources/claude_code/claude_code_cli_metadata_coordinator.dart';
 import 'package:zeta_agent_provider_claude_code/src/datasources/claude_code/claude_code_cli_metadata_probe.dart';
 import 'package:zeta_agent_provider_claude_code/src/datasources/claude_code/claude_code_event_mapper.dart';
 import 'package:zeta_agent_provider_claude_code/src/datasources/claude_code/claude_code_hidden_thread_store.dart';
 import 'package:zeta_agent_provider_claude_code/src/datasources/claude_code/claude_code_model_catalog.dart';
-import 'package:zeta_agent_provider_claude_code/src/datasources/claude_code/claude_code_oauth_credentials_reader.dart';
+import 'package:zeta_agent_provider_claude_code/src/datasources/claude_code/claude_code_credentials_service.dart';
 import 'package:zeta_agent_provider_claude_code/src/datasources/claude_code/claude_code_permission_policy_adapter.dart';
 import 'package:zeta_agent_provider_claude_code/src/datasources/claude_code/claude_code_provider_config.dart';
 import 'package:zeta_agent_provider_claude_code/src/datasources/claude_code/claude_code_plan_approval_adapter.dart';
@@ -38,6 +39,7 @@ final _log = zetaLoggerFor('zeta.agent.claude_code.provider');
 class ClaudeCodeAgentProvider
     implements
         AgentRuntimePort,
+        AgentProviderAcquisitionPreparationPort,
         AgentConversationPort,
         AgentThreadCatalogPort,
         AgentThreadCompactionPort,
@@ -56,6 +58,8 @@ class ClaudeCodeAgentProvider
     ClaudeCodeCliMetadataLoader? metadataLoader,
     ClaudeCodeCliMetadataCoordinator? metadataCoordinator,
     ClaudeCodeUsageQuotaAdapter? usageQuotaAdapter,
+    ClaudeCodeCredentialsService? credentialsService,
+    ClaudeCodeCredentialRefreshCoordinator? refreshCoordinator,
     ClaudeCodeControlRequestHandler? controlRequestHandler,
     ClaudeCodeQuestionAdapter? questionAdapter,
     ClaudeCodeSessionDecisionStoreFactory? sessionDecisionStoreFactory,
@@ -84,6 +88,12 @@ class ClaudeCodeAgentProvider
          serviceTierId: config.selectedServiceTier,
        ),
        _idFactory = idFactory ?? _defaultIdFactory {
+    this.credentialsService =
+        credentialsService ??
+        LocalClaudeCodeCredentialsService.forProvider(
+          config,
+          refreshCoordinator: refreshCoordinator,
+        );
     final sharedMetadata =
         metadataCoordinator ??
         ClaudeCodeCliMetadataCoordinator(
@@ -91,16 +101,11 @@ class ClaudeCodeAgentProvider
               metadataLoader ??
               ClaudeCodeCliMetadataProbe(
                 config: config,
+                credentialsService: this.credentialsService,
                 locator: locator,
                 processStarter: processStarter,
               ).probe,
         );
-    final credentialsReader = ClaudeCodeOAuthCredentialsReader(
-      environment: <String, String>{
-        ...Platform.environment,
-        ...config.environment,
-      },
-    );
     _modelCatalog =
         modelCatalog ??
         ClaudeCodeModelCatalog(metadataLoader: sharedMetadata.refreshForModels);
@@ -117,7 +122,7 @@ class ClaudeCodeAgentProvider
           claudeCodeVersion: _nonEmptyConfigValue(
             config.extra['detectedCurrentVersion'],
           ),
-          credentialsLoader: credentialsReader.read,
+          credentialsService: this.credentialsService,
         );
     _planApprovalAdapter = _mapper.planApprovalAdapter;
     _permissionMode = ClaudeCodePermissionModeCodec.parseOptionId(
@@ -140,6 +145,9 @@ class ClaudeCodeAgentProvider
   final ClaudeCodeEventMapper _mapper;
   late final ClaudeCodeModelCatalog _modelCatalog;
   late final ClaudeCodeUsageQuotaAdapter _usageQuotaAdapter;
+
+  /// Claude data 层统一凭据入口；初始化不预读，调用方不得缓存结果。
+  late final ClaudeCodeCredentialsService credentialsService;
   final ClaudeCodeControlRequestHandler _controlHandler;
   final ClaudeCodeQuestionAdapter _questionAdapter;
   final ClaudeCodeSessionHistoryReader _sessionHistoryReader;
@@ -208,6 +216,13 @@ class ClaudeCodeAgentProvider
 
   /// 测试/诊断：等待用户回答的 Claude Code 提问数。
   int get questionPendingCount => _questionAdapter.pendingCount;
+
+  @override
+  Future<void> prepareForAcquisition() async {
+    _ensureNotDisposed();
+    await credentialsService.ensureFresh();
+    _ensureNotDisposed();
+  }
 
   @override
   Future<void> initialize() async {
@@ -335,8 +350,8 @@ class ClaudeCodeAgentProvider
   }
 
   @override
-  Future<AgentUsageQuotaSnapshot?> readUsageQuota() {
-    _ensureNotDisposed();
+  Future<AgentUsageQuotaSnapshot?> readUsageQuota() async {
+    await prepareForAcquisition();
     return _usageQuotaAdapter.readUsageQuota();
   }
 
@@ -346,6 +361,7 @@ class ClaudeCodeAgentProvider
     bool includeHidden = false,
     bool forceRefresh = false,
   }) async {
+    await prepareForAcquisition();
     if (forceRefresh) {
       return refreshModels(limit: limit, includeHidden: includeHidden);
     }
@@ -355,7 +371,8 @@ class ClaudeCodeAgentProvider
   Future<AgentModelList> refreshModels({
     int limit = 20,
     bool includeHidden = false,
-  }) {
+  }) async {
+    await prepareForAcquisition();
     return _modelCatalog.refreshModels(
       limit: limit,
       includeHidden: includeHidden,
@@ -474,6 +491,7 @@ class ClaudeCodeAgentProvider
     late final String text;
     try {
       await initialize();
+      await prepareForAcquisition();
       if (_peer == null || _runtimeScope == null || _sessionId == null) {
         throw StateError(
           'Claude Code session is not started; call startSession first',
@@ -824,6 +842,7 @@ class ClaudeCodeAgentProvider
     required String? model,
     required String? reasoningEffort,
   }) async {
+    await prepareForAcquisition();
     final normalizedModel = _normalizeModel(model);
     final normalizedReasoningEffort = _normalizeReasoningEffort(
       reasoningEffort,

@@ -225,6 +225,9 @@ Dart 端通过 `zeta/desktop_attention` MethodChannel 调用：
 
 ### 9.2 macOS
 
+- `NSWindow.delegate` 由 `window_manager` 独占，将失焦/最小化事件传给窗口状态；
+  `macos_window_utils` 只负责标题栏外观，初始化必须保持
+  `enableWindowDelegate: false`，避免覆盖代理后后台会话仍被判为可见。
 - `NSApp.dockTile.badgeLabel` 展示数字，大于 99 显示 `99+`；
 - `NSApp.requestUserAttention(.informationalRequest)` 请求 Dock 提醒；
 - 未读为 0 时将 badgeLabel 设为 `nil`。
@@ -294,7 +297,7 @@ Dart 端通过 `zeta/desktop_attention` MethodChannel 调用：
 
 手工验收至少覆盖：
 
-1. 最小化 Zeta 后完成 turn，出现系统通知和平台提醒；
+1. 分别用切换应用、隐藏窗口和最小化使 Zeta 进入后台，再完成 turn，确认系统通知和平台提醒；
 2. 停留在同一 thread 且窗口有焦点时不发通知；
 3. 切到其他 thread 时，权限申请产生一条通知；
 4. 点击通知恢复正确项目/thread，未读标记清除；

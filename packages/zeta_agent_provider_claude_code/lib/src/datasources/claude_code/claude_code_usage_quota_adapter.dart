@@ -1,11 +1,8 @@
 import 'package:zeta_agent_provider_claude_code/src/datasources/claude_code/claude_code_anthropic_api_client.dart';
 import 'package:zeta_agent_provider_claude_code/src/datasources/claude_code/claude_code_cli_metadata_coordinator.dart';
-import 'package:zeta_agent_provider_claude_code/src/datasources/claude_code/claude_code_oauth_credentials_reader.dart';
+import 'package:zeta_agent_provider_claude_code/src/datasources/claude_code/claude_code_credentials_service.dart';
 import 'package:zeta_agent_provider_claude_code/src/mappers/claude_code_usage_quota_mapper.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-
-typedef ClaudeCodeUsageCredentialsLoader =
-    Future<ClaudeCodeOAuthCredentials?> Function();
 
 typedef ClaudeCodeRemoteUsageLoader =
     Future<Map<String, Object?>?> Function({
@@ -25,13 +22,11 @@ final class ClaudeCodeUsageQuotaAdapter {
     this.usesApiKey = false,
     this.claudeCodeVersion,
     required ClaudeCodeCliMetadataLoader metadataLoader,
-    ClaudeCodeUsageCredentialsLoader? credentialsLoader,
+    required this.credentialsService,
     ClaudeCodeRemoteUsageLoader? remoteUsageLoader,
     DateTime Function()? clock,
     this.textCatalog = const FallbackAgentUiTextCatalog(),
   }) : _loadMetadata = metadataLoader,
-       _credentialsLoader =
-           credentialsLoader ?? ClaudeCodeOAuthCredentialsReader().read,
        _remoteUsageLoader =
            remoteUsageLoader ?? ClaudeCodeAnthropicApiClient().readUsageQuota,
        _clock = clock ?? DateTime.now;
@@ -44,7 +39,7 @@ final class ClaudeCodeUsageQuotaAdapter {
   final bool usesApiKey;
   final String? claudeCodeVersion;
   final ClaudeCodeCliMetadataLoader _loadMetadata;
-  final ClaudeCodeUsageCredentialsLoader _credentialsLoader;
+  final ClaudeCodeCredentialsService credentialsService;
   final ClaudeCodeRemoteUsageLoader _remoteUsageLoader;
   final DateTime Function() _clock;
   final AgentUiTextCatalog textCatalog;
@@ -69,7 +64,7 @@ final class ClaudeCodeUsageQuotaAdapter {
     }
 
     _lastAttemptAt = now;
-    final operation = _load(now);
+    final operation = _load();
     _inFlight = operation;
     try {
       return await operation;
@@ -80,7 +75,7 @@ final class ClaudeCodeUsageQuotaAdapter {
     }
   }
 
-  Future<AgentUsageQuotaSnapshot?> _load(DateTime attemptedAt) async {
+  Future<AgentUsageQuotaSnapshot?> _load() async {
     String? subscriptionType;
     try {
       subscriptionType = (await _loadMetadata()).subscriptionType;
@@ -91,9 +86,10 @@ final class ClaudeCodeUsageQuotaAdapter {
     Map<String, Object?>? response;
     if (accountDataEnrichmentEnabled && !usesApiKey) {
       try {
-        final credentials = await _credentialsLoader();
+        final credentials =
+            (await credentialsService.ensureFresh()).credentials;
         if (credentials != null &&
-            _canReadSubscriptionUsage(credentials, attemptedAt)) {
+            _canReadSubscriptionUsage(credentials, _clock())) {
           response = await _remoteUsageLoader(
             accessToken: credentials.accessToken,
             claudeCodeVersion: claudeCodeVersion,
@@ -120,7 +116,7 @@ bool _canReadSubscriptionUsage(
   DateTime attemptedAt,
 ) {
   if (credentials.accessToken.trim().isEmpty ||
-      !credentials.expiresAt.isAfter(attemptedAt)) {
+      !(credentials.expiresAt?.isAfter(attemptedAt) ?? false)) {
     return false;
   }
   // Claude Code 用 user:inference 区分 Claude.ai 订阅 OAuth，并额外要求

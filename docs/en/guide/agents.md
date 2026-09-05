@@ -113,13 +113,13 @@ Even so, logs can still contain project paths and file names. Give them a look b
 
 ## Claude Code's quota detail switch
 
-The Claude Code page has a **Quota detail** switch, off by default.
+The Claude Code page has a **Quota detail** switch, on by default and optional.
 
-Turning it on lets Zeta read Claude Code's stored credentials momentarily and make one usage query, so it can show the five-hour window, weekly windows and extra quota.
+Turning it on lets Zeta query usage with valid Claude Code credentials to show the five-hour window, weekly windows and extra quota.
 
 Leaving it off doesn't affect normal use: the model list and plan name always come from the Claude command-line tool itself, independently of this switch.
 
-Either way, Zeta **never refreshes, writes back, or stores** those credentials — they stay in memory only for the duration of that single read-only request.
+Regardless of this switch, Zeta checks credentials before acquiring a Claude provider or starting a new request, refreshing within five minutes of expiry. It updates only the original Claude credential store, never Zeta configuration, caches, or logs. Refresh failure stops the operation; sign in again with `claude auth login` when needed.
 
 ## Version requirements
 

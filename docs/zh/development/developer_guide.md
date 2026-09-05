@@ -281,6 +281,8 @@ dispose 完成前同 scope acquire 必须等待。配置失效会同时清理 gl
 Registry acquire 必须显式选择 global/session scope；使用统计面板只通过 global runtime
 访问中立 quota 端口，不接受 raw Provider/lease loader 兼容路径。
 
+有前置条件的 Provider 可在 bundle 提供 `acquisitionPreparation`。Registry 对新建与复用租约均等待 `prepareForAcquisition()`，失败释放本次租约；准备结束后失效/关闭的实例不得返回。准备不等于 `runtime.initialize()`，也不启动 session。共享层只认识这个中立端口，Claude 的 token 判断和刷新仍在自有 data 层；已持有实例的新请求也调用同一 `ensureFresh()`。
+
 ### Conversation Slice 接入
 
 会话 UI 发布是两跳。Workspace entry 持有 Binding lease、`AgentConversationRuntimeController`
@@ -630,8 +632,8 @@ Claude Code 模型目录是 Provider-local 的特殊协议来源，但不改变�
   不得以空目录覆盖缓存。Provider coordinator 只能合并 in-flight，不能持有第二套长期 TTL。
 - 历史模型与缓存目录无法匹配时只允许强制刷新一次；仍不可匹配则保留当前有效模型，
   不得把目录外模型 id 写进 Composer selection。
-- `claudeCode.accountDataEnrichment` 只控制额度凭据与 usage REST；关闭时模型和套餐名称仍
-  来自 initialize。
+- `claudeCode.accountDataEnrichment` 只控制额度详情 REST；关闭时模型和套餐名称仍
+  来自 initialize，Provider 获取/请求前的认证校验与刷新仍执行。
 
 当前活跃 Provider 是 Codex、Grok 与 Claude Code。当前 schema 不包含 Cursor provider id、
 kind 或兼容配置；重新支持必须另立方案并重新采集真实、脱敏的协议证据，不能恢复历史
@@ -861,7 +863,11 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
   到 `AgentUsageQuotaSnapshot`，原始 billing JSON 不得泄漏到 presentation。
 - Claude 的 `planType` 只来自 initialize metadata；可选 `/api/oauth/usage` 仅补额度窗口
   与 extra usage。只有增强开启、非 API key、token 有效且 scopes 同时含
-  `user:inference` / `user:profile` 时才能读凭据并发请求；5 秒超时、60 秒节流且不重试。
+  `user:inference` / `user:profile` 时才能发请求；5 秒超时、60 秒节流且不重试。
+  凭据统一经 Claude-local `ClaudeCodeCredentialsService`：`read()` 只读，
+  `ensureFresh()` 在到期前 5 分钟按需刷新并校验原存储写回。API key 模式跳过 OAuth，
+  增强关闭仅跳过额度 REST，不跳过 Provider 获取/请求前的认证准备；未知有效期不访问额度 API。
+  刷新失败阻止本次 Provider 操作，错误只含规范化分类。详见协议文档 §11。
   REST 失败或增强关闭返回 plan-only，UI 不得伪造 0% 窗口、100% 剩余、币种或余额。
 - 调用统计依赖中立 `AgentUsageRecord`，provider 原始 JSON key 只允许出现在 data 层。
 - Codex 使用统计扫描 `$CODEX_HOME/sessions/**/rollout-*.jsonl`：只要首行是合法

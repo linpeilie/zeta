@@ -8,6 +8,7 @@ final class AgentProviderBundle {
   const AgentProviderBundle({
     required this.runtime,
     required this.conversation,
+    this.acquisitionPreparation,
     this.threadCatalog,
     this.threadSubscription,
     this.threadNaming,
@@ -28,6 +29,10 @@ final class AgentProviderBundle {
     this.permissionPolicy,
     this.usageQuota,
   });
+
+  /// Optional provider-owned admission check; awaited for every acquisition,
+  /// including reused runtimes. It must not start a conversation or grant permissions.
+  final AgentProviderAcquisitionPreparationPort? acquisitionPreparation;
 
   final AgentRuntimePort runtime;
   final AgentConversationPort conversation;
@@ -56,6 +61,11 @@ final class AgentProviderBundle {
   final AgentUsageQuotaProvider? usageQuota;
 
   AgentProviderCapabilities get capabilities => runtime.capabilities;
+}
+
+/// Provider-neutral asynchronous admission at the runtime lease boundary.
+abstract interface class AgentProviderAcquisitionPreparationPort {
+  Future<void> prepareForAcquisition();
 }
 
 /// 直接创建原生 [AgentProviderBundle] 的工厂。

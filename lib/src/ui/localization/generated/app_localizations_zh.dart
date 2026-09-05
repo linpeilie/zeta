@@ -1800,7 +1800,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get mgmtQuotaEnrichmentBody =>
-      '此开关只控制 Zeta 是否瞬时读取 Claude Code OAuth 凭据并调用 usage REST。模型列表与套餐名称始终来自 Claude CLI；Zeta 不会刷新、写回或持久化凭据。';
+      '此开关只控制 Claude Code 额度详情查询。模型列表和套餐名称来自 Claude CLI。获取实例和发起新请求前，Zeta 会校验登录凭据并按需刷新到原存储，不在 Zeta 配置、缓存或日志中保存凭据。';
 
   @override
   String get mgmtOnboardingTitle => '接入指引';
@@ -2887,7 +2887,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get mgmtSetupLoginBody =>
-      '运行 claude auth login 完成 Anthropic 账号登录。自动检测不会读取凭据内容；额度详情增强只做上方说明的瞬时只读查询，且绝不写回凭据文件。';
+      '运行 claude auth login 完成 Anthropic 账号登录。自动检测不读取凭据内容；使用 Claude Provider 时会校验并按需刷新原有登录凭据。额度详情查询由上方开关单独控制。';
 
   @override
   String get mgmtSetupDocsTitle => '3. 官方文档';
