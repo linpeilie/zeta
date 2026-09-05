@@ -11,6 +11,38 @@ import '../../support/provider_test_files.dart';
 
 void main() {
   group('ClaudeCodeAgentProvider', () {
+    test('shares one lazy credentials service with quota operations', () async {
+      var reads = 0;
+      final service = _CredentialsService(() async {
+        reads++;
+        return ClaudeCodeOAuthCredentials(
+          accessToken: 'fixture-access',
+          refreshToken: 'fixture-refresh',
+          // Unknown expiry cannot trigger a real HTTP request.
+        );
+      });
+      final provider = ClaudeCodeAgentProvider(
+        config: defaultClaudeCodeAgentProviderConfig,
+        credentialsService: service,
+        metadataLoader: () async => const ClaudeCodeCliMetadataSnapshot(
+          models: AgentModelList(models: []),
+          subscriptionType: 'pro',
+        ),
+      );
+      addTearDown(provider.dispose);
+      expect(identical(provider.credentialsService, service), isTrue);
+      expect(reads, 0);
+      await provider.initialize();
+      expect(reads, 0);
+      expect(
+        (await provider.credentialsService.read()).credentials!.refreshToken,
+        'fixture-refresh',
+      );
+      expect(reads, 1);
+      expect((await provider.readUsageQuota())?.windows, isEmpty);
+      expect(reads, 2);
+    });
+
     test('hello turn maps init/text/result and usage', () async {
       final process = _FakeClaudeProcess();
       var idSeq = 0;
@@ -686,11 +718,13 @@ void main() {
         providerName: 'Claude Code',
         metadataLoader: () async =>
             _metadataSnapshot('quota-model', subscriptionType: 'max'),
-        credentialsLoader: () async => ClaudeCodeOAuthCredentials(
-          accessToken: 'sensitive-test-token',
-          expiresAt: DateTime.utc(2099),
-          subscriptionType: 'max',
-          scopes: const <String>['user:inference', 'user:profile'],
+        credentialsService: _CredentialsService(
+          () async => ClaudeCodeOAuthCredentials(
+            accessToken: 'sensitive-test-token',
+            expiresAt: DateTime.utc(2099),
+            subscriptionType: 'max',
+            scopes: const <String>['user:inference', 'user:profile'],
+          ),
         ),
         remoteUsageLoader:
             ({
@@ -1506,5 +1540,21 @@ class _FakeStdinConsumer implements StreamConsumer<List<int>> {
 Future<void> _closeController(StreamController<List<int>> controller) async {
   if (!controller.isClosed) {
     await controller.close();
+  }
+}
+
+final class _CredentialsService implements ClaudeCodeCredentialsService {
+  const _CredentialsService(this.load);
+  final Future<ClaudeCodeOAuthCredentials?> Function() load;
+
+  @override
+  Future<ClaudeCodeCredentialsResult> read() async {
+    final credentials = await load();
+    return credentials == null
+        ? const ClaudeCodeCredentialsResult.missing()
+        : ClaudeCodeCredentialsResult.available(
+            credentials,
+            source: ClaudeCodeCredentialsSource.file,
+          );
   }
 }

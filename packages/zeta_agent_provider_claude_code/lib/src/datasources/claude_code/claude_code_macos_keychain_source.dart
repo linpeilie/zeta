@@ -8,9 +8,18 @@ import 'package:unorm_dart/unorm_dart.dart' as unorm;
 
 /// Claude Code secure storage 的只读窄接口。
 ///
-/// 返回值只在调用栈内存活；实现不得记录、缓存或持久化凭据正文。
+/// 返回值只在调用栈内存活；null 仅代表缺失，失败抛脱敏异常。
+/// 实现不得记录、缓存或持久化凭据正文。
 abstract interface class ClaudeCodeSecureCredentialsSource {
   Future<String?> read();
+}
+
+/// 统一入口将其映射为 unreadable；不携带 stderr、路径或凭据。
+final class ClaudeCodeSecureCredentialsUnavailable implements Exception {
+  const ClaudeCodeSecureCredentialsUnavailable();
+
+  @override
+  String toString() => 'ClaudeCodeSecureCredentialsUnavailable';
 }
 
 /// 参数化 `security` 调用的白名单结果；刻意不保存 stderr。
@@ -40,7 +49,7 @@ typedef ClaudeCodeKeychainProcessRun =
 /// 只读访问 Claude Code 在 macOS Keychain 中的 OAuth secure storage。
 ///
 /// 命令始终通过 executable + 参数数组启动，不经过 shell。任何缺失、拒绝、超时或
-/// 损坏输出都折叠为 null，由上层 reader 再读取 `.credentials.json`。
+/// 失败都由统一 service 分类和回退；本层不保留底层错误。
 final class ClaudeCodeMacOsKeychainSource
     implements ClaudeCodeSecureCredentialsSource {
   ClaudeCodeMacOsKeychainSource({
@@ -81,12 +90,13 @@ final class ClaudeCodeMacOsKeychainSource
         '-s',
         serviceName,
       ], timeout: timeout);
+      if (result.exitCode == 44) return null;
       if (result.exitCode != 0) {
-        return null;
+        throw const ClaudeCodeSecureCredentialsUnavailable();
       }
       return _nonEmpty(result.stdout);
     } catch (_) {
-      return null;
+      throw const ClaudeCodeSecureCredentialsUnavailable();
     }
   }
 }

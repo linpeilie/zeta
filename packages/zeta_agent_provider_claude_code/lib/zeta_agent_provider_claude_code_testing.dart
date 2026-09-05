@@ -16,7 +16,7 @@ export 'src/datasources/claude_code/claude_code_file_change_tracker.dart';
 export 'src/datasources/claude_code/claude_code_hidden_thread_store.dart';
 export 'src/datasources/claude_code/claude_code_macos_keychain_source.dart';
 export 'src/datasources/claude_code/claude_code_model_catalog.dart';
-export 'src/datasources/claude_code/claude_code_oauth_credentials_reader.dart';
+export 'src/datasources/claude_code/claude_code_credentials_service.dart';
 export 'src/datasources/claude_code/claude_code_permission_policy_adapter.dart';
 export 'src/datasources/claude_code/claude_code_plan_approval_adapter.dart';
 export 'src/datasources/claude_code/claude_code_process_starter.dart';

@@ -293,12 +293,52 @@ UI 必须如实说明这一边界。登录指引使用 `claude auth login`。
 - 映射 `five_hour`、`seven_day`、可选 `seven_day_sonnet` / `seven_day_opus` 和
   `extra_usage`。`monthly_limit=null` 只表示 unlimited；不得猜币种、余额或绝对 Token 总额。
 - macOS 优先通过参数化 `security find-generic-password` 读取 Claude Code Keychain 条目，
-  miss、拒绝、损坏或超时后才回退 Claude 自有 credentials 文件；Windows 使用 Claude 自有
-  credentials 文件。凭据只在一次请求期间存在于内存，不进入 Zeta 配置、缓存或日志。
+  miss、拒绝、存储 JSON 损坏或超时后才回退 Claude 自有 credentials 文件；Windows/Linux
+  使用 Claude 自有 credentials 文件。已成功解码的 Keychain 对象是权威来源，即使其中
+  OAuth 字段缺失、损坏或已过期，也不切换文件里的另一账户。凭据只在一次请求期间存在于
+  内存，不进入 Zeta 配置、缓存或日志。
 
 配置 key 为兼容旧数据继续保留，但 UI 名称是“额度详情增强”。它只控制上述凭据读取和
 usage REST，不控制 initialize 模型或套餐名称。Zeta 不刷新、迁移、改写或删除 Claude
 凭据；与此同时，也不能把“Zeta 不持久化 token”扩大解释为 Claude CLI 自己绝对不写状态。
+
+### 跨平台统一凭据入口
+
+Claude 插件 data 层只经 `ClaudeCodeCredentialsService.read()` 获取凭据，默认实现为
+`LocalClaudeCodeCredentialsService`。Provider 组合一次服务实例并注入额度适配器；
+`provider.credentialsService` 是包内后续 data 操作的同一入口。不在生产 barrel 导出
+实现或 token 模型，不向中立 Bundle 增加凭据端口。初始化不读取凭据。
+
+```dart
+// 仅在 Claude 插件 data 层的实际操作期间使用；不记录或缓存 result。
+final result = await credentialsService.read();
+final credentials = result.credentials;
+// credentials?.accessToken / refreshToken / expiresAt
+```
+
+- 有效环境由进程环境加所属 Provider 的 `config.environment` 覆盖得到。配置目录优先
+  `CLAUDE_CONFIG_DIR`（NFC），否则 macOS/Linux 使用 `$HOME/.claude`，Windows 使用
+  `%USERPROFILE%\.claude`；文件名统一为 `.credentials.json`，分隔符按目标平台选择。
+- 显式 `CLAUDE_CODE_OAUTH_TOKEN` 优先于本地存储，只有 `user:inference` scope；
+  `refreshToken` / `expiresAt` / 订阅字段保持 null，不与其他来源拼接。
+- API key、非 OAuth bearer、Bedrock/Vertex/Foundry、`--bare` 或配置声明 API key 时
+  返回 `notApplicable`，不读取其他账户；没有宿主 FD 传递契约时，OAuth FD 返回
+  `unsupported`，不根据其他进程的 FD 数字读取或回退本地账户。
+- 一次返回 `accessToken`、可空 `refreshToken`、可空 UTC `expiresAt`、不可变 `scopes`、
+  可空 `subscriptionType` / `rateLimitTier`。`expiresAt` 源值按 Unix 毫秒解码；未知字段
+  忽略，缺失有效期保持未知，非空但非法/越界有效期归为 `malformed`。
+- 结果状态区分 `available / missing / unreadable / malformed / notApplicable /
+  unsupported`，来源仅为 `environment / keychain / file`；不含路径、原始异常或 payload。
+  `available` 不保证 token 当前有效。`expiryAt(now)` 区分未知、已过期、5 分钟内到期和
+  有效；过期凭据仍保留 refresh token。额度操作在读取完成后检查当前时间和 scopes，
+  过期或未知有效期均不请求 HTTP，不改变原有 plan-only 降级语义。
+- 每次调用重新读取，不长驻缓存 secret，外部 CLI 轮换/退出在下一次读取生效；
+  service 不发网络请求、不刷新、不写回任何存储。诊断字符串不包含任一 token 或前缀。
+
+读取规则参考本地 `claude-code` checkout `77a7934e` 的 `src/utils/auth.ts`、
+`src/utils/secureStorage/` 与 `src/services/oauth/client.ts`。该项目自述为逆向还原，
+类型文件包含 stub；此处仅对齐实际读取逻辑，不视为官方稳定协议。实现测试使用合成凭据，
+跨平台模拟通过不等于三系统真实登录凭据验收通过。
 
 ## 12. 升级与验证
 
