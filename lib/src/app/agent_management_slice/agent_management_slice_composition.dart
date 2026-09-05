@@ -1,3 +1,4 @@
+import 'package:zeta/src/features/agent_management/application/agent_management_runtime_facts.dart';
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_runner.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_effect.dart';
@@ -9,33 +10,35 @@ import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 ///
 /// 它拥有 store/runner 与两个 ingress 监听；repository、settings store 和 runtime
 /// 均由上层拥有，关闭本对象时只摘监听并关闭页面 store。
-/// 运行时变化订阅端口：注册 listener，返回取消订阅的回调。
-typedef AgentManagementRuntimeSubscribe =
-    void Function() Function(void Function() listener);
-
 final class AgentManagementSliceComposition {
   AgentManagementSliceComposition._({
     required this.store,
     required this._providerSettings,
-    required this._subscribeRuntime,
-    required this._runtimeSnapshotProvider,
+    required AgentManagementRuntimeFactSource runtimeFactSource,
   }) {
-    _unsubscribeProviderSettings = _providerSettings.subscribe(
+    final unsubscribeSettings = _providerSettings.subscribe(
       _handleProviderSettingsChanged,
     );
-    _unsubscribeRuntime = _subscribeRuntime(_handleRuntimeChanged);
+    void Function()? unsubscribeRuntime;
+    try {
+      unsubscribeRuntime = runtimeFactSource.subscribe(
+        store.runtimeFactsReplaced,
+      );
+      store.runtimeFactsReplaced(runtimeFactSource.current);
+    } catch (_) {
+      unsubscribeRuntime?.call();
+      unsubscribeSettings();
+      store.close();
+      rethrow;
+    }
+    _unsubscribeProviderSettings = unsubscribeSettings;
+    _unsubscribeRuntime = unsubscribeRuntime;
   }
 
   final AgentManagementSliceStore store;
   final AgentProviderSettingsPort _providerSettings;
 
-  /// 运行时变化订阅；返回取消订阅的回调。
-  ///
-  /// 纯 Dart 函数端口，**不是** Flutter `Listenable`：Agent Management 不应该
-  /// 因为要感知运行时变化就依赖 Shell 的 Widget 通知机制。
-  final AgentManagementRuntimeSubscribe _subscribeRuntime;
   late final void Function() _unsubscribeRuntime;
-  final AgentManagementRuntimeSnapshotProvider _runtimeSnapshotProvider;
   late final void Function() _unsubscribeProviderSettings;
   bool _closed = false;
 
@@ -43,8 +46,7 @@ final class AgentManagementSliceComposition {
     required Map<String, AgentCliManagementRepository> repositories,
     required Map<String, AgentDefinition> definitions,
     required AgentProviderSettingsPort providerSettings,
-    required AgentManagementRuntimeSubscribe subscribeRuntime,
-    required AgentManagementRuntimeSnapshotProvider runtimeSnapshotProvider,
+    required AgentManagementRuntimeFactSource runtimeFactSource,
     required AgentManagementTextCatalog textCatalog,
   }) {
     final orderedIds = <String>[
@@ -85,7 +87,9 @@ final class AgentManagementSliceComposition {
     );
     final deferredRunner = _DeferredAgentManagementRunner();
     final store = AgentManagementSliceStore(
-      initialState: initialState,
+      initialState: initialState.copyWith(
+        runtimeFacts: runtimeFactSource.current,
+      ),
       effectRunner: deferredRunner,
       configurationNotLoadedMessage: textCatalog.configurationNotLoaded(),
       accountDataEnrichmentEnabledFor: (config) {
@@ -101,13 +105,11 @@ final class AgentManagementSliceComposition {
       providerSettings: providerSettings,
       store: store,
       textCatalog: textCatalog,
-      runtimeSnapshotProvider: runtimeSnapshotProvider,
     );
     return AgentManagementSliceComposition._(
       store: store,
       providerSettings: providerSettings,
-      subscribeRuntime: subscribeRuntime,
-      runtimeSnapshotProvider: runtimeSnapshotProvider,
+      runtimeFactSource: runtimeFactSource,
     );
   }
 
@@ -125,14 +127,6 @@ final class AgentManagementSliceComposition {
     if (!_closed) {
       store.providerSettingsChanged(_providerSettings.settings);
     }
-  }
-
-  void _handleRuntimeChanged() {
-    if (_closed) {
-      return;
-    }
-    final snapshot = _runtimeSnapshotProvider();
-    store.runtimeSnapshotChanged(snapshot.activeAgentId, snapshot.runtimeState);
   }
 }
 

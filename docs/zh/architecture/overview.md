@@ -193,6 +193,10 @@ Registry 获取新建或复用租约前等待可选 `acquisitionPreparation`，C
 取消和审批回写仍可结算。凭据只更新原选中的 CLI 存储，锁内重读并验证写回；Zeta 自有
 目录和日志不保存凭据或 raw payload。详见 Claude 协议 §11。
 
+### 管理状态的会话范围
+
+管理运行状态只统计本 Workbench 的 session Binding，按精确配置实例 `providerId` 聚合所有前后台 entry，并保留无 entry 但仍有 runtime 的 Binding。默认 Provider 与 Canvas 选择不参与归属；global 模型预热、连接测试和外部 CLI 进程不计入。`ready` 只证明连接，活跃 turn/等待交互才证明运行；不从历史 active 或短 RPC 计数猜测 turn。禁用是配置策略，现存事实保留至实际 clear/remove。主状态按 running → error → starting → unavailable → idle → disabled → notRunning 投影，`hasErrors` 独立保留。
+
 ## 三种审批，别搞混
 
 这是新人最容易踩的坑。看起来都是"弹个卡片让用户点"，但它们是**三种独立的领域语义**，不共享 request/decision 模型：

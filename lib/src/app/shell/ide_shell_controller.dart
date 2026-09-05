@@ -1,3 +1,4 @@
+import 'package:zeta/src/app/agent_management_slice/workspace_agent_runtime_fact_source.dart';
 import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'dart:async';
 
@@ -88,6 +89,9 @@ class IdeShellController {
       metrics: metrics,
       providerMetricLabel: providerMetricLabel,
     );
+    agentRuntimeFactSource = WorkspaceAgentRuntimeFactSource(
+      agentConversationWorkspaceStore,
+    )..start();
     _bootstrapAgentEntry = agentConversationWorkspaceStore.ensureDraftEntry(
       projectPath: _bootstrapProjectPath,
       providerId: agentProviderController.activeProviderId,
@@ -144,6 +148,7 @@ class IdeShellController {
   late final Future<AgentModelCatalogLoadResult> Function()
   _loadActiveModelCatalog;
   late final AgentConversationWorkspaceStore agentConversationWorkspaceStore;
+  late final WorkspaceAgentRuntimeFactSource agentRuntimeFactSource;
   late final AgentThreadWorkspaceEntry _bootstrapAgentEntry;
   late final ProjectThreadsOperations projectThreadsController;
   late final ProjectThreadsSliceStore projectThreadsSliceStore;
@@ -171,15 +176,6 @@ class IdeShellController {
   AgentConversationRuntimeController get selectedAgentController =>
       agentConversationWorkspaceStore.selectedEntry?.controller ??
       _bootstrapAgentEntry.controller;
-
-  /// 订阅 Shell 的运行时变化；返回取消订阅的回调。
-  ///
-  /// 纯 Dart 函数端口：调用方（Agent Management）因此不必把 Shell 当成
-  /// Flutter `Listenable`，也就不依赖它是不是 `ChangeNotifier`。
-  void Function() subscribeRuntimeChanges(void Function() listener) {
-    addListener(listener);
-    return () => removeListener(listener);
-  }
 
   /// Shell 自维护的 listener 列表（纯 Dart）。
   ///
@@ -1201,6 +1197,7 @@ class IdeShellController {
     );
     _unsubscribeProjectThreads();
     projectThreadsController.dispose();
+    agentRuntimeFactSource.close();
     agentConversationWorkspaceStore.dispose();
     // 在 workspace 条目释放后再拆索引监听，避免 popover 仍挂在 listenable 上。
     _fileIndexController.removeListener(_handleFileIndexChanged);

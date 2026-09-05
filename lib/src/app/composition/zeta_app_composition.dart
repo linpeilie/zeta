@@ -1,3 +1,4 @@
+import 'package:zeta/src/features/agent_management/application/agent_management_runtime_facts.dart';
 import 'package:zeta/src/app/plugins/agent_contribution_providers.dart';
 import 'dart:async';
 
@@ -6,8 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:zeta_ui/zeta_ui.dart';
 
-import 'package:zeta/src/app/agent_management_slice/agent_management_slice_composition.dart';
-import 'package:zeta/src/app/agent_management_slice/agent_management_slice_runner.dart';
 import 'package:zeta/src/app/composition/agent_resource_shutdown.dart';
 import 'package:zeta/src/app/composition/ide_workbench_composition.dart';
 import 'package:zeta/src/app/composition/zeta_state_snapshot.dart';
@@ -154,10 +153,9 @@ final class ZetaAppComposition implements ZetaShutdownHook {
 
   /// 工作台组合工厂：把 Repository / registry / 文本目录闭包在 app 层。
   ///
-  /// `IdeHome` 只补 Shell 派生的两个入参，因此 UI 层不再出现任何 Repository 类型。
+  /// `IdeHome` 只补 Shell 持有的只读事实源，因此 UI 层不再出现任何 Repository 类型。
   IdeWorkbenchComposition createWorkbenchComposition({
-    required AgentManagementRuntimeSubscribe subscribeRuntime,
-    required AgentManagementRuntimeSnapshotProvider runtimeSnapshotProvider,
+    required AgentManagementRuntimeFactSource runtimeFactSource,
   }) {
     return IdeWorkbenchComposition.create(
       contributions: container.read(agentManagementContributionsProvider),
@@ -168,8 +166,7 @@ final class ZetaAppComposition implements ZetaShutdownHook {
       providerSettings: container.read(
         agentProviderSettingsSliceProvider.notifier,
       ),
-      subscribeRuntime: subscribeRuntime,
-      runtimeSnapshotProvider: runtimeSnapshotProvider,
+      runtimeFactSource: runtimeFactSource,
       textCatalog: container.read(agentManagementTextCatalogProvider),
     );
   }

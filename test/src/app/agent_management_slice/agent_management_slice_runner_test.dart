@@ -1,3 +1,4 @@
+import '../../testing/memory_agent_runtime_fact_source.dart';
 import '../../testing/agent_management_test_definitions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -29,8 +30,7 @@ void main() {
           activeProviderId: defaultClaudeCodeProviderId,
         ),
       );
-      final runtimeSignal = ChangeNotifier();
-      var runtimeState = AgentRuntimeState.notRunning;
+      final runtimeSource = MemoryAgentRuntimeFactSource();
       final repository = _RunnerRepository();
       final composition = AgentManagementSliceComposition.create(
         definitions: testAgentManagementDefinitions,
@@ -38,20 +38,13 @@ void main() {
           defaultClaudeCodeProviderId: repository,
         },
         providerSettings: settingsPort,
-        subscribeRuntime: (listener) {
-          runtimeSignal.addListener(listener);
-          return () => runtimeSignal.removeListener(listener);
-        },
-        runtimeSnapshotProvider: () => (
-          activeAgentId: defaultClaudeCodeProviderId,
-          runtimeState: runtimeState,
-        ),
+        runtimeFactSource: runtimeSource,
         textCatalog: const FallbackAgentManagementTextCatalog(),
       );
       final store = composition.store;
       addTearDown(() {
         composition.close();
-        runtimeSignal.dispose();
+        expect(runtimeSource.listenerCount, 0);
         settingsPort.dispose();
       });
 
@@ -70,8 +63,16 @@ void main() {
       final document = await store.loadConfiguration();
       final saved = await store.saveConfiguration('{"saved":true}');
       final logs = await store.loadLogs();
-      runtimeState = AgentRuntimeState.running;
-      runtimeSignal.notifyListeners();
+      runtimeSource.replace(
+        AgentManagementRuntimeFacts([
+          AgentManagementRuntimeFact(
+            observationKey: Object(),
+            providerId: defaultClaudeCodeProviderId,
+            lifecycle: AgentConversationRuntimeLifecyclePhase.attached,
+            activeTurn: true,
+          ),
+        ]),
+      );
 
       // Assert
       expect(repository.detectionCalls, 1);

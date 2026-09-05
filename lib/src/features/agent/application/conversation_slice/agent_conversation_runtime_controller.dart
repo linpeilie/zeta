@@ -1,3 +1,4 @@
+import 'agent_conversation_runtime_observation.dart';
 import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -151,6 +152,9 @@ final class AgentConversationRuntimeController
         AgentValueNotifier<AgentConversationThreadSnapshot>(
           _buildThreadSnapshot(),
         );
+    _runtimeObservationListenable = AgentValueNotifier(
+      _buildRuntimeObservation(_threadSnapshotListenable.value),
+    );
     _initialization = thread == null
         ? Future<void>.value()
         : _openBoundThread(thread);
@@ -222,6 +226,16 @@ final class AgentConversationRuntimeController
   final AgentElapsedTicker _elapsedTicker = AgentElapsedTicker();
   late final AgentValueNotifier<AgentConversationThreadSnapshot>
   _threadSnapshotListenable;
+
+  late final AgentValueNotifier<AgentConversationRuntimeObservation>
+  _runtimeObservationListenable;
+  int _runtimeObservationAttemptEpoch = 0;
+  // 观测来源在 live 接线时冻结；不能把旧 turn 状态重新标成新连接的事实。
+  AgentProviderRuntimeIdentity? _runtimeObservationIdentity;
+  AgentRuntimeScope? _runtimeObservationConnectionScope;
+  int get runtimeObservationAttemptEpoch => _runtimeObservationAttemptEpoch;
+  AgentValueListenable<AgentConversationRuntimeObservation>
+  get runtimeObservationListenable => _runtimeObservationListenable;
 
   /// ViewModel 只读取 Binding 暴露的中立运行时端口。
   AgentRuntimePort? get _currentRuntime =>
@@ -1957,7 +1971,7 @@ final class AgentConversationRuntimeController
           _permissionSelectionController.snapshotForRequest(
             threadId: selectedThreadId,
           );
-      _turnActivity ??= await conversationBinding.beginTurn();
+      _turnActivity ??= await _beginObservedTurn();
       bundle = _turnActivity!.runtime.bundle;
       _modelSelectionController.bindRuntime(bundle.runtime);
       await _bindLiveRuntime(
@@ -2887,7 +2901,7 @@ final class AgentConversationRuntimeController
     try {
       await loadSettings();
       providerOperation = 'provider/ensure';
-      activity = await conversationBinding.beginTurn();
+      activity = await _beginObservedTurn();
       final bundle = activity.runtime.bundle;
       requestRuntime = bundle.runtime;
       await _bindLiveRuntime(
@@ -3051,6 +3065,7 @@ final class AgentConversationRuntimeController
     _uiUpdateScheduler.dispose();
     unawaited(_effectController.close());
     _uiUpdateListeners.clear();
+    _runtimeObservationListenable.dispose();
     _threadSnapshotListenable.dispose();
     _timeline.dispose();
   }
@@ -3080,9 +3095,24 @@ final class AgentConversationRuntimeController
     unawaited(activity?.release());
   }
 
+  Future<AgentConversationTurnActivity> _beginObservedTurn() {
+    if (conversationBinding.currentRuntime == null &&
+        conversationBinding.runtimeLifecycle.phase !=
+            AgentConversationRuntimeLifecyclePhase.starting) {
+      _runtimeObservationAttemptEpoch++;
+    }
+    return conversationBinding.beginTurn();
+  }
+
   void _handleConversationBindingChanged() {
     if (_disposed) {
       return;
+    }
+    if (_buildRuntimeObservation(_buildThreadSnapshot()) !=
+        _runtimeObservationListenable.value) {
+      _publishUiChanges(
+        AgentUiUpdateRequest(urgency: AgentUiUpdateUrgency.immediate),
+      );
     }
     // ChangeNotifier 同时承载操作计数、starting、attached 与清除通知。只有 Binding
     // 按精确 identity 确认的 cleared 转换才表示真实断开；dormant/starting 不能
@@ -3268,6 +3298,12 @@ final class AgentConversationRuntimeController
     _modelSelectionController.bindRuntime(bundle.runtime);
     _permissionSelectionController.bindThread(threadId);
     await _replaceProviderEventSubscription(bundle, threadId: threadId);
+    _runtimeObservationIdentity = runtimeIdentity;
+    _runtimeObservationConnectionScope =
+        _eventPipeline?.currentListenerScope?.runtimeScope;
+    _publishUiChanges(
+      AgentUiUpdateRequest(urgency: AgentUiUpdateUrgency.immediate),
+    );
     _log.t('Bound conversation runtime: ${bundle.runtime.config.id}');
   }
 
@@ -4200,7 +4236,28 @@ final class AgentConversationRuntimeController
 
   /// 将当前 isTurnRunning / runtimeStatus 等推到 [threadSnapshotListenable]。
   void _syncThreadSnapshotListenable() {
-    _publishThreadSnapshot(_buildThreadSnapshot());
+    final thread = _buildThreadSnapshot();
+    _runtimeObservationListenable.value = _buildRuntimeObservation(thread);
+    _publishThreadSnapshot(thread);
+  }
+
+  AgentConversationRuntimeObservation _buildRuntimeObservation(
+    AgentConversationThreadSnapshot thread,
+  ) {
+    final runtime = conversationBinding.currentRuntime;
+    return AgentConversationRuntimeObservation(
+      bindingKey: conversationBinding.key,
+      runtimeIdentity: runtime == null ? null : _runtimeObservationIdentity,
+      connectionScope: runtime == null
+          ? null
+          : _runtimeObservationConnectionScope,
+      attemptEpoch: _runtimeObservationAttemptEpoch,
+      lifecycle: conversationBinding.runtimeLifecycle.phase,
+      connectionState: status.state,
+      isTurnRunning: thread.isTurnRunning,
+      waitingOnApproval: thread.waitingOnApproval,
+      waitingOnUserInput: thread.waitingOnUserInput,
+    );
   }
 
   void _publishThreadSnapshot(AgentConversationThreadSnapshot snapshot) {

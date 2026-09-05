@@ -1,6 +1,6 @@
+import 'package:zeta/src/features/agent_management/application/agent_management_runtime_facts.dart';
 import 'package:zeta/src/app/agent_management_slice/agent_management_model_catalog_port_adapter.dart';
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_composition.dart';
-import 'package:zeta/src/app/agent_management_slice/agent_management_slice_runner.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
 import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
@@ -10,11 +10,10 @@ import 'package:zeta_agent_core/zeta_agent_core.dart';
 ///
 /// `IdeHome` 需要在 `initState` 里拿到 Shell 之后才能建工作台组合，但它**不应该
 /// 为此看到 Repository**。所以 app 层把 Repository / registry / 文本目录都闭包进
-/// 这个工厂，`IdeHome` 只补两个 Shell 派生的入参。
+/// 这个工厂，`IdeHome` 只转交 Shell 持有的只读事实源。
 typedef IdeWorkbenchCompositionFactory =
     IdeWorkbenchComposition Function({
-      required AgentManagementRuntimeSubscribe subscribeRuntime,
-      required AgentManagementRuntimeSnapshotProvider runtimeSnapshotProvider,
+      required AgentManagementRuntimeFactSource runtimeFactSource,
     });
 
 /// 工作台级 feature 组合的唯一构造点。
@@ -35,8 +34,7 @@ final class IdeWorkbenchComposition {
     required AgentModelCatalogRepository modelCatalogRepository,
     required AgentProviderRuntimeRegistry runtimeRegistry,
     required AgentProviderSettingsPort providerSettings,
-    required AgentManagementRuntimeSubscribe subscribeRuntime,
-    required AgentManagementRuntimeSnapshotProvider runtimeSnapshotProvider,
+    required AgentManagementRuntimeFactSource runtimeFactSource,
     required AgentManagementTextCatalog textCatalog,
   }) {
     final byId = <String, AgentManagementContribution>{};
@@ -70,8 +68,7 @@ final class IdeWorkbenchComposition {
         repositories: repositories,
         definitions: {for (final c in byId.values) c.providerId: c.definition},
         providerSettings: providerSettings,
-        subscribeRuntime: subscribeRuntime,
-        runtimeSnapshotProvider: runtimeSnapshotProvider,
+        runtimeFactSource: runtimeFactSource,
         textCatalog: textCatalog,
       ),
     );

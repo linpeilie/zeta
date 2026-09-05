@@ -1,3 +1,4 @@
+import 'package:zeta/src/features/agent_management/application/agent_management_runtime_facts.dart';
 import 'package:flutter/material.dart';
 
 import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon.dart';
@@ -38,7 +39,8 @@ final class HomeProviderSummary {
     required this.vendor,
     required this.status,
     this.version,
-  });
+    HomeProviderStatus? availabilityStatus,
+  }) : availabilityStatus = availabilityStatus ?? status;
 
   factory HomeProviderSummary.fromManagedAgent(ManagedAgent agent) {
     return HomeProviderSummary(
@@ -47,6 +49,9 @@ final class HomeProviderSummary {
       vendor: agent.definition.vendor,
       version: agent.currentVersion,
       status: _resolveProviderStatus(agent),
+      availabilityStatus: _resolveProviderStatus(
+        agent.copyWith(runtimeState: AgentRuntimeState.notRunning),
+      ),
     );
   }
 
@@ -55,6 +60,35 @@ final class HomeProviderSummary {
   final String vendor;
   final String? version;
   final HomeProviderStatus status;
+  final HomeProviderStatus availabilityStatus;
+
+  /// 检测缓存只提供可用性；实时运行状态始终来自同一管理摘要。
+  HomeProviderSummary withRuntime(
+    AgentManagementProviderRuntimeSummary? runtime,
+  ) {
+    if (runtime == null) return this;
+    final liveStatus = switch (runtime.state) {
+      AgentRuntimeState.running ||
+      AgentRuntimeState.starting => HomeProviderStatus.running,
+      AgentRuntimeState.error ||
+      AgentRuntimeState.unavailable => HomeProviderStatus.error,
+      AgentRuntimeState.disabled => HomeProviderStatus.disabled,
+      _ =>
+        runtime.enabled
+            ? (availabilityStatus == HomeProviderStatus.disabled
+                  ? HomeProviderStatus.available
+                  : availabilityStatus)
+            : HomeProviderStatus.disabled,
+    };
+    return HomeProviderSummary(
+      id: id,
+      displayName: displayName,
+      vendor: vendor,
+      version: version,
+      status: liveStatus,
+      availabilityStatus: availabilityStatus,
+    );
+  }
 }
 
 /// 没有活动项目时显示的全局软件首页。

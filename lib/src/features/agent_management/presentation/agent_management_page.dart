@@ -187,6 +187,15 @@ class AgentManagementPageState extends State<AgentManagementPage> {
                                       itemBuilder: (context, index) {
                                         final agent = visibleAgents[index];
                                         return _AgentListRow(
+                                          hasRuntimeErrors:
+                                              widget
+                                                  .sliceStore
+                                                  .state
+                                                  .runtimeByProviderId[agent
+                                                      .definition
+                                                      .id]
+                                                  ?.hasErrors ??
+                                              false,
                                           agent: agent,
                                           showDivider:
                                               index < visibleAgents.length - 1,
@@ -821,12 +830,14 @@ class _DetectionProgressBanner extends StatelessWidget {
 class _AgentListRow extends StatelessWidget {
   const _AgentListRow({
     required this.agent,
+    required this.hasRuntimeErrors,
     required this.onOpen,
     required this.onEnabledChanged,
     required this.showDivider,
   });
 
   final ManagedAgent agent;
+  final bool hasRuntimeErrors;
   final VoidCallback onOpen;
   final ValueChanged<bool> onEnabledChanged;
   final bool showDivider;
@@ -845,6 +856,7 @@ class _AgentListRow extends StatelessWidget {
             installed: agent.installed,
           ),
           trailing: _AgentRowStatus(
+            hasRuntimeErrors: hasRuntimeErrors,
             agent: agent,
             compact: compact,
             onEnabledChanged: onEnabledChanged,
@@ -867,11 +879,13 @@ class _AgentListRow extends StatelessWidget {
 class _AgentRowStatus extends StatelessWidget {
   const _AgentRowStatus({
     required this.agent,
+    required this.hasRuntimeErrors,
     required this.compact,
     required this.onEnabledChanged,
   });
 
   final ManagedAgent agent;
+  final bool hasRuntimeErrors;
   final bool compact;
   final ValueChanged<bool> onEnabledChanged;
 
@@ -881,10 +895,23 @@ class _AgentRowStatus extends StatelessWidget {
     // 两个断点都不画 `>` 箭头：整行可点击已由 `PaneInteractiveSurface` 的
     // hover 高亮表达，重复一个指向性图标只会让右端多一列噪音。
     if (compact) {
-      final status = _priorityAgentStatus(colors, agent, context.l10n);
-      return _AgentStatusText(
-        key: const ValueKey('agent-row-status-compact'),
-        status: status,
+      final status = agent.runtimeState == AgentRuntimeState.running
+          ? _AgentStatus(
+              label: agent.runtimeState.localizedLabel(context.l10n),
+              icon: Icons.circle_outlined,
+              color: colors.textSecondary,
+            )
+          : _priorityAgentStatus(colors, agent, context.l10n);
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (hasRuntimeErrors)
+            _RuntimeErrorIndicator(providerId: agent.definition.id),
+          _AgentStatusText(
+            key: const ValueKey('agent-row-status-compact'),
+            status: status,
+          ),
+        ],
       );
     }
 
@@ -903,6 +930,8 @@ class _AgentRowStatus extends StatelessWidget {
       key: const ValueKey('agent-row-status-wide'),
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (hasRuntimeErrors)
+          _RuntimeErrorIndicator(providerId: agent.definition.id),
         SizedBox(
           width: _statusBadgeSlotWidth,
           child: agent.definition.isBeta
@@ -976,6 +1005,22 @@ class _AgentRowStatus extends StatelessWidget {
       ],
     );
   }
+}
+
+class _RuntimeErrorIndicator extends StatelessWidget {
+  const _RuntimeErrorIndicator({required this.providerId});
+  final String providerId;
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: context.l10n.mgmtRuntimeError,
+    child: Icon(
+      Icons.error_outline_rounded,
+      key: ValueKey('agent-runtime-error-$providerId'),
+      semanticLabel: context.l10n.mgmtRuntimeError,
+      size: 16,
+      color: IdeColors.of(context).error,
+    ),
+  );
 }
 
 class _AgentStatusText extends StatelessWidget {

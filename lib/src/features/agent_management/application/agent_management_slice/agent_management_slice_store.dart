@@ -1,3 +1,4 @@
+import '../agent_management_runtime_facts.dart';
 import 'dart:async';
 
 import 'package:zeta_agent_core/zeta_agent_core.dart';
@@ -30,7 +31,7 @@ final class AgentManagementSliceStore implements AgentManagementOperations {
     required this.configurationNotLoadedMessage,
     required this.accountDataEnrichmentEnabledFor,
     OperationIdGenerator Function(String scope)? operationIdGeneratorFactory,
-  }) : _state = initialState,
+  }) : _state = projectManagementRuntimeState(initialState),
        _generatorFactory =
            operationIdGeneratorFactory ??
            ((scope) => OperationIdGenerator(scope: scope));
@@ -359,13 +360,9 @@ final class AgentManagementSliceStore implements AgentManagementOperations {
     }
   }
 
-  /// runtime owner ingress。
-  void runtimeSnapshotChanged(String agentId, AgentRuntimeState runtimeState) {
-    if (!_closed) {
-      _dispatch(
-        RuntimeSnapshotChanged(agentId: agentId, runtimeState: runtimeState),
-      );
-    }
+  /// Shell session 事实 ingress；无需当前选中 Provider。
+  void runtimeFactsReplaced(AgentManagementRuntimeFacts facts) {
+    if (!_closed) _dispatch(RuntimeFactsReplaced(facts));
   }
 
   void initializationSucceeded(
