@@ -16,6 +16,12 @@ dart "${script_dir}/release_metadata.dart" \
   --pubspec "${project_root}/pubspec.yaml" \
   >/dev/null
 
+create_dmg="$(command -v create-dmg || true)"
+if [[ -z "${create_dmg}" ]] || [[ "$("${create_dmg}" --version)" != '8.1.0' ]]; then
+  echo "Install sindresorhus/create-dmg with Node.js >=20: npm install --global create-dmg@8.1.0" >&2
+  exit 1
+fi
+
 build_directory="${project_root}/build/macos/Build/Products/Release"
 universal_app="${build_directory}/Zeta.app"
 if [[ ! -d "${universal_app}" ]]; then
@@ -147,7 +153,7 @@ package_variant() {
   local variant="$2"
   local portable_package="${dist_directory}/zeta-${release_version}-macos-${variant}.zip"
   local dmg_package="${dist_directory}/zeta-${release_version}-macos-${variant}.dmg"
-  local staging_directory="${temporary_root}/dmg-${variant}"
+  local dmg_work_directory="${temporary_root}/dmg-${variant}"
   local mount_directory="${temporary_root}/mount-${variant}"
   local zip_directory="${temporary_root}/zip-${variant}"
 
@@ -169,15 +175,22 @@ package_variant() {
   fi
   verify_variant_app "${zip_directory}/Zeta.app" "${variant}"
 
-  mkdir -p -- "${staging_directory}" "${mount_directory}"
-  ditto "${app_path}" "${staging_directory}/Zeta.app"
-  ln -s /Applications "${staging_directory}/Applications"
-  hdiutil create \
-    -volname Zeta \
-    -srcfolder "${staging_directory}" \
-    -ov \
-    -format UDZO \
-    "${dmg_package}"
+  mkdir -p -- "${dmg_work_directory}" "${mount_directory}"
+  (
+    # Isolate the output name and prevent implicit license.txt/license.rtf pickup.
+    cd "${dmg_work_directory}"
+    "${create_dmg}" \
+      --no-version-in-filename \
+      --no-code-sign \
+      --dmg-title=Zeta \
+      "${app_path}" \
+      "${dmg_work_directory}"
+  )
+  if [[ ! -f "${dmg_work_directory}/Zeta.dmg" ]]; then
+    echo "create-dmg did not produce Zeta.dmg for ${variant}." >&2
+    exit 1
+  fi
+  mv -- "${dmg_work_directory}/Zeta.dmg" "${dmg_package}"
   hdiutil verify "${dmg_package}"
 
   mounted_device="$(
@@ -190,6 +203,12 @@ package_variant() {
   )"
   if [[ -z "${mounted_device}" || ! -d "${mount_directory}/Zeta.app" ]]; then
     echo "Could not mount and inspect ${dmg_package}." >&2
+    exit 1
+  fi
+  if [[ ! -L "${mount_directory}/Applications" ]] ||
+    [[ "$(readlink "${mount_directory}/Applications")" != '/Applications' ]] ||
+    [[ ! -s "${mount_directory}/.DS_Store" ]]; then
+    echo "The DMG is missing its Applications link or Finder layout: ${dmg_package}" >&2
     exit 1
   fi
   verify_variant_app "${mount_directory}/Zeta.app" "${variant}"
