@@ -1,6 +1,6 @@
 # 发版指南
 
-最后更新：2026-08-25
+最后更新：2026-09-05
 
 ## 1. 发布方式
 
@@ -112,6 +112,27 @@ Tag 推送后的流程如下：
 macOS 先构建 universal App，并验证所有 Mach-O 同时包含 arm64/x86_64，再派生两个
 单架构 App、重新 ad-hoc 签名和分别验证 ZIP/DMG。Linux 四种包都来自同一 staging
 tree；AppImage 工具和 runtime 的下载提交及 SHA-256 固定，校验异常会直接失败。
+
+### macOS DMG 打包工具
+
+DMG 使用 [sindresorhus/create-dmg 8.1.0](https://github.com/sindresorhus/create-dmg/tree/v8.1.0)
+的原版默认背景、窗口和图标布局。CI 使用 Node.js 22.23.2；本地打包也建议使用该版本
+（工具要求 Node.js ≥20），并先安装同一版本的 npm 工具（不是 Homebrew 的同名 Shell 工具）：
+
+```sh
+npm install --global create-dmg@8.1.0
+create-dmg --version
+```
+
+然后按发布工作流构建 universal App，并运行 `bash tool/packaging/package_macos.sh <release-version>`。
+脚本在每个架构的独立临时目录生成 `Zeta.dmg`，再恢复包含发布版本与架构的附件名称，
+避免三种架构互相覆盖，也避免自动读取工作目录中的 `license.txt` / `license.rtf`。
+镜像使用工具默认的 APFS / ULFO 格式；`--no-code-sign` 仅跳过 DMG 签名，App 的
+ad-hoc 签名与 ZIP/DMG 内的架构、签名校验照常执行。打包时还会检查 Applications
+符号链接与 Finder 布局文件，最终生成 SHA-256。
+
+首次接入及升级工具后，由人工在 Finder 中验收默认背景、图标、窗口布局，以及拖拽到
+Applications 后的启动行为；脚本校验不能替代外观和安装验收。
 
 ## 6. 发布后验证
 

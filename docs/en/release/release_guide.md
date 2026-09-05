@@ -1,6 +1,6 @@
 # Release Guide
 
-Last updated: 2026-08-25
+Last updated: 2026-09-05
 
 > Translated from [the Chinese original](../../zh/release/release_guide.md), which is the source of truth if the two diverge.
 
@@ -97,6 +97,33 @@ Every successful release contains 12 distribution packages plus a `.sha256` for 
 `<version>` in an asset name is the tag with the leading `v` removed, without the build number. For example, `v0.2.0-beta.1` produces `zeta-0.2.0-beta.1-linux-x86_64.AppImage`. Linux beta packages use `0.2.0~beta.1` internally for correct ordering semantics; Windows and macOS application metadata still use the numeric version from `pubspec.yaml`.
 
 macOS builds the universal app first and verifies that every Mach-O binary contains both arm64 and x86_64, then derives the two single-architecture apps, re-signs them ad-hoc, and verifies each ZIP and DMG separately. All four Linux packages come from the same staging tree. The download commit and SHA-256 of the AppImage tooling and runtime are pinned, and a verification mismatch fails the build outright.
+
+### macOS DMG tooling
+
+DMGs use the original default background, window and icon layout from
+[sindresorhus/create-dmg 8.1.0](https://github.com/sindresorhus/create-dmg/tree/v8.1.0).
+CI uses Node.js 22.23.2; use the same version locally where possible (the tool
+requires Node.js >=20). Install the same npm tool version, not the similarly
+named Homebrew shell tool:
+
+```sh
+npm install --global create-dmg@8.1.0
+create-dmg --version
+```
+
+Build the universal app as in the release workflow, then run
+`bash tool/packaging/package_macos.sh <release-version>`. The script generates
+`Zeta.dmg` in a separate temporary working directory for each architecture, then
+renames it to include the release version and architecture. This prevents output
+collisions and implicit inclusion of a working-directory `license.txt` or
+`license.rtf`. Images use the tool's default APFS / ULFO format. `--no-code-sign`
+only skips DMG signing; app ad-hoc signing and architecture/signature checks of
+the ZIP and DMG contents still run. Packaging also verifies the Applications
+symlink and Finder layout file before writing SHA-256 checksums.
+
+On initial adoption and tool upgrades, manually verify the default background,
+icons and window layout in Finder, then drag the app into Applications and launch
+it. Script checks do not replace visual and installation acceptance.
 
 ## 6. Verifying after release
 
