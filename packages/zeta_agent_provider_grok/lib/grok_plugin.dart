@@ -31,6 +31,10 @@ const AgentProviderDefinition grokAgentProviderDefinition =
       defaultConfig: defaultGrokAgentProviderConfig,
       staticCapabilities: grokStaticCapabilities,
       modelCatalogSourceLabel: 'Grok ACP',
+      icon: AgentProviderSvgIcon(
+        packageName: 'zeta_agent_provider_grok',
+        assetPath: 'assets/icon.svg',
+      ),
       metricLabel: ZetaMetricLabel.constant('grok'),
     );
 

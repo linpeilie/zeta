@@ -33,6 +33,10 @@ const AgentProviderDefinition codexAgentProviderDefinition =
       defaultConfig: defaultCodexAgentProviderConfig,
       staticCapabilities: codexStaticCapabilities,
       modelCatalogSourceLabel: 'Codex app-server',
+      icon: AgentProviderSvgIcon(
+        packageName: 'zeta_agent_provider_codex',
+        assetPath: 'assets/icon.svg',
+      ),
       metricLabel: ZetaMetricLabel.constant('codex'),
       isDefault: true,
     );

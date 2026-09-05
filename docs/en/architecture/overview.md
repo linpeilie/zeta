@@ -8,6 +8,8 @@ For definitions of specific terms, see the [glossary](../development/glossary.md
 
 > Package update (2026-09-05): neutral contracts and shared mechanisms live in `zeta_agent_provider_api` and `zeta_agent_provider_sdk`. Codex, Grok and Claude Code have separate pure Dart plugin packages, registered in `agent_provider_manifest.dart`. Management and usage implementations now live in their owning plugins and are assembled through neutral, overridable contribution seams; manifest parity and isolation guards cover future plugins, and CI discovers packages for independent matrix jobs. See the [authoritative package boundaries](../../zh/architecture/engineering_standards.md#21-provider-插件包边界).
 
+Provider plugins own their SVG assets and `AgentProviderDefinition.icon` metadata. Package-level `flutter.assets` declarations do not introduce a Flutter SDK dependency. The host entry point injects static lookup through `agentProviderIconsOverride` and owns theme, sizing, semantics and fallback rendering. Icon lookup must not activate plugins, infer brands from custom instance names, or persist asset metadata.
+
 ## In one sentence
 
 Zeta is a **desktop shell**. It ships no model and implements no editor. It launches the agent CLIs already on your machine, translates their proprietary protocols into a set of neutral domain events, and renders those events as an auditable timeline.

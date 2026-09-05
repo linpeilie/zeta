@@ -19,3 +19,8 @@ dependencies:
 
 dev_dependencies:
   test: ^1.25.0
+
+# 仅声明静态资源；协议实现与测试仍为纯 Dart。
+flutter:
+  assets:
+    - assets/icon.svg

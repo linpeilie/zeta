@@ -1,6 +1,8 @@
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 
+import 'agent_provider_svg_icon.dart';
+
 /// 单个 compile-time Provider 插件公开的静态定义。
 ///
 /// 这里保存初始化前就能确定的白名单 metadata；协议原文、凭证和 runtime 状态均不
@@ -15,6 +17,7 @@ final class AgentProviderDefinition {
     required this.metricLabel,
     this.modelCatalogFingerprintExtraKeys = const <String>{},
     this.isDefault = false,
+    this.icon,
   });
 
   /// 内置配置的稳定 id。
@@ -42,6 +45,9 @@ final class AgentProviderDefinition {
   ///
   /// 值只用于进程内哈希，原始 extra 不进入缓存快照；集合必须是编译期白名单。
   final Set<String> modelCatalogFingerprintExtraKeys;
+
+  /// 插件可选的静态品牌图标；缺省时宿主显示中立图标。
+  final AgentProviderSvgIcon? icon;
 
   /// 是否是 active 配置损坏时的默认 Provider。
   final bool isDefault;

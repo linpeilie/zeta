@@ -7,5 +7,6 @@ library;
 
 export 'src/agent_provider_definition.dart';
 export 'src/agent_provider_plugin_contribution.dart';
+export 'src/agent_provider_svg_icon.dart';
 export 'src/management.dart';
 export 'src/usage.dart';

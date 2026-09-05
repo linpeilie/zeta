@@ -241,3 +241,5 @@ Zeta 自有数据根目录：`config/`（配置）、`state/`（会话状态与�
 - **D7 持久化身份红线**：包结构变化不得改动 providerId/type、配置版本、用量索引与私有增强键的持久化字节。
 - **D8 文案目录下沉**：中立 API 接口及不可变 fallback 下沉，宿主保留 ARB 实现；用量来源沿用五成员窄目录和原默认文本。
 - **动态 package 矩阵**：CI 通过 `test_packages.sh --list-json` 发现测试包，每个 job 用 `--only` 运行对应包；不涉及运行时插件发现。
+
+**Provider 图标描述（`AgentProviderSvgIcon`）**：api 中的纯 Dart 静态元数据，包含所属包名、SVG 相对路径和着色策略。由插件 Definition 声明，宿主统一渲染；不代表协议能力，不参与激活或持久化。

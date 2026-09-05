@@ -1,3 +1,4 @@
+import 'package:zeta/src/app/plugins/agent_provider_icon_overrides.dart';
 import '../../../testing/agent_management_test_definitions.dart';
 import 'dart:io';
 
@@ -854,6 +855,7 @@ Future<void> _pumpManagementPage(
         codeFontFamily: 'JetBrainsMono',
       ),
       child: ProviderScope(
+        overrides: [agentProviderIconsOverride()],
         child: sf.ShadcnApp(
           locale: ZetaLocalization.simplifiedChinese,
           supportedLocales: ZetaLocalization.supportedLocales,

@@ -18,6 +18,10 @@ const _primaryDefinition = AgentProviderDefinition(
   staticCapabilities: AgentProviderCapabilities.unsupported,
   modelCatalogSourceLabel: 'Primary',
   metricLabel: ZetaMetricLabel.constant('primary'),
+  icon: AgentProviderSvgIcon(
+    packageName: 'fixture_primary',
+    assetPath: 'assets/icon.svg',
+  ),
   isDefault: true,
 );
 
@@ -39,6 +43,27 @@ void main() {
   final catalog = AgentProviderDefinitionCatalog(
     const <AgentProviderDefinition>[_primaryDefinition, _secondaryDefinition],
   );
+
+  test('static branding is optional and never enters persisted settings', () {
+    expect(
+      catalog.definitionForProviderId('primary')?.icon,
+      same(_primaryDefinition.icon),
+    );
+    expect(
+      catalog.definitionForType(_primaryType)?.icon,
+      same(_primaryDefinition.icon),
+    );
+    expect(catalog.definitionForProviderId('secondary')?.icon, isNull);
+    expect(_primaryDefinition.icon?.colorPolicy, AgentIconColorPolicy.themed);
+    expect(
+      catalog.defaultSettings.toJson().toString(),
+      isNot(contains('assets/icon.svg')),
+    );
+    expect(
+      catalog.defaultSettings.toJson().toString(),
+      isNot(contains('fixture_primary')),
+    );
+  });
 
   test('metricLabelFor returns the label declared by a known provider', () {
     expect(

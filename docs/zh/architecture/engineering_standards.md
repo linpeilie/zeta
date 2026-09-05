@@ -95,7 +95,7 @@ management repository 与 Token source/scanner/partition codec 都在各自插�
 
 本节由 `test/src/architecture/provider_package_isolation_guard_test.dart`、`test/src/app/plugins/agent_provider_manifest_test.dart` 与现有 DAG/raw/feature 守卫共同执行，反例与真实仓库使用相同的 AST 判定器。静态 manifest 与激活目录必须双向同序一致，内置 id/type、配置版本 2、用量根索引版本 4 和增强键有冻结样本。所有 Provider（含新增插件）均须声明三类贡献；功能端口可以不支持，但不可通过缺失贡献或空成功伪装完整装配。
 
-品牌内容有两种严格限定的现存形态：管理页 `_setupGuideAgentId` 决定整卡安装指引；`agent_provider_icon.dart` 中的 `_agentProviderIconAssets` 只保存品牌图标资源和着色信息。后者不是能力或协议路由，AST 守卫只豁免该 const Map 的键；同文件其他厂商判断照常失败。未知 Provider 保持中立扩展图标。
+Provider 图标的 SVG 与 `AgentProviderDefinition.icon` 由各插件包拥有；包内 `flutter.assets` 仅声明静态资源，不引入 Flutter SDK 依赖。宿主入口通过 `agentProviderIconsOverride` 注入静态查询，统一处理主题、尺寸、语义与失败回退；图标查询不得触发插件激活、猜测自定义实例品牌或写入持久化配置。未知 Provider 或缺省图标显示中立扩展图标。宿主不再保留厂商资源表；AST 守卫不豁免图标文件中的身份字面量。管理页 `_setupGuideAgentId` 的整卡安装指引仍是唯一登记的品牌内容例外。
 
 D8 文案目录遵循 `AgentUiTextCatalog` 的纯 Dart 接口 + 不可变 fallback + 宿主 ARB 实现模式；management 迁完整目录，usage source 只接五成员窄端口。D7 身份冻结要求变更评审核对配置 codec/store 的 diff，并对索引版本、分区 codec 与样本字节进行回归，不用源码路径是否存在代替行为验证。
 

@@ -40,6 +40,11 @@ const AgentProviderDefinition claudeCodeAgentProviderDefinition =
       defaultConfig: defaultClaudeCodeAgentProviderConfig,
       staticCapabilities: claudeCodeStaticCapabilities,
       modelCatalogSourceLabel: 'Claude Code',
+      icon: AgentProviderSvgIcon(
+        packageName: 'zeta_agent_provider_claude_code',
+        assetPath: 'assets/icon.svg',
+        colorPolicy: AgentIconColorPolicy.original,
+      ),
       metricLabel: ZetaMetricLabel.constant('claude_code'),
       modelCatalogFingerprintExtraKeys: <String>{
         claudeCodeAccountDataEnrichmentKey,

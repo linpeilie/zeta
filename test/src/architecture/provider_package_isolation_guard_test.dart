@@ -95,6 +95,11 @@ void main() {
       'lib/src/features/agent/presentation/widgets/agent_provider_icon.dart',
       "bool show(String id) => id == 'claude_code';",
     ),
+    (
+      'setup-guide',
+      'lib/src/features/agent/presentation/widgets/agent_provider_icon.dart',
+      "const _agentProviderIconAssets = {'claude_code': 'assets/brand.svg'};",
+    ),
     ('setup-guide', providerSetupGuidePath, "const anotherId = 'claude_code';"),
     (
       'static-vendor-table',

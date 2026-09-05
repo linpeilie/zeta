@@ -261,3 +261,5 @@ chore: bump flutter action pin
 Provider 包已分离中立契约（`provider_api`）、共享机制（`provider_sdk`）与三个独立厂商插件。登记入口是 `lib/src/app/plugins/agent_provider_manifest.dart`；根测试访问实现只经 `test/src/testing/`。management/usage 由插件贡献，原过渡 import 已清零；空贡献或冲突必须 fail-closed，详见[工程规范 §2.1](docs/zh/architecture/engineering_standards.md#21-provider-插件包边界)。
 
 新增 Provider 按[开发者文档插件流程](docs/zh/development/developer_guide.md#新增-provider-插件)建包并登记根 pubspec/manifest；隔离与贡献守卫自动覆盖未来插件，CI 自动发现测试包。单包检查用 `bash tool/test_packages.sh --only <package>`，完整门禁仍是 `bash tool/test_full.sh`。
+
+Provider 图标的 SVG 与 `AgentProviderDefinition.icon` 由各插件包拥有；包内 `flutter.assets` 仅声明静态资源，不引入 Flutter SDK 依赖。宿主入口通过 `agentProviderIconsOverride` 注入静态查询，统一处理主题、尺寸、语义与失败回退；图标查询不得触发插件激活、猜测自定义实例品牌或写入持久化配置。

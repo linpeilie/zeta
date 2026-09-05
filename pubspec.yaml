@@ -67,7 +67,6 @@ flutter:
   uses-material-design: true
   assets:
     - assets/branding/
-    - assets/icons/agents/
   fonts:
     # 界面无衬线体。Geist 不含中日韩字形，中文由平台回退链承接
     # （见 resolvePlatformUiFontFamilyFallback）。

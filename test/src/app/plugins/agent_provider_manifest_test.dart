@@ -1,3 +1,7 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:zeta/src/app/plugins/agent_provider_icon_overrides.dart';
+import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_icon_resolver.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 import 'package:zeta/src/app/plugins/zeta_plugin_catalog.dart';
@@ -17,6 +21,10 @@ void main() {
     catalog.activate();
     final resolved = catalog.resolveAgentProviders();
     final host = catalog.resolveAgentHostContributions();
+    expect(
+      resolved.definitions.definitions.map((d) => d.icon),
+      zetaAgentProviderDefinitions.map((d) => d.icon),
+    );
     expect(
       _identity(zetaAgentProviderDefinitions),
       _identity(resolved.definitions.definitions),
@@ -82,6 +90,42 @@ void main() {
       );
     }
   });
+
+  test(
+    'static icon lookup never constructs or activates the plugin catalog',
+    () {
+      final container = ProviderContainer(
+        overrides: [
+          agentProviderIconsOverride(),
+          zetaPluginCatalogProvider.overrideWith(
+            (ref) => throw StateError('Unexpected activation'),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      final resolve = container.read(agentProviderIconResolverProvider);
+      for (final definition in zetaAgentProviderDefinitions) {
+        expect(definition.icon, isNotNull);
+        expect(resolve(definition.providerId), same(definition.icon));
+      }
+      expect(resolve('custom-claude-provider'), isNull);
+      expect(container.exists(zetaPluginCatalogProvider), isFalse);
+      expect(container.exists(resolvedAgentProviderPluginsProvider), isFalse);
+    },
+  );
+
+  test(
+    'an unconfigured standalone icon resolver safely returns no branding',
+    () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      expect(
+        container.read(agentProviderIconResolverProvider)('unregistered'),
+        isNull,
+      );
+      expect(container.exists(zetaPluginCatalogProvider), isFalse);
+    },
+  );
 
   test('D7 内置身份、类型与增强键逐字节冻结，允许追加未来插件', () {
     expect(_frozenIdentityViolations(zetaAgentProviderDefinitions), isEmpty);

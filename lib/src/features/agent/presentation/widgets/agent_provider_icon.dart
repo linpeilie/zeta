@@ -1,35 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart' as svg;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_icon_resolver.dart';
 
 import 'package:zeta_ui/zeta_ui.dart';
 
-const Map<String, _AgentProviderIconAsset> _agentProviderIconAssets =
-    <String, _AgentProviderIconAsset>{
-      'codex': _AgentProviderIconAsset(path: 'assets/icons/agents/codex.svg'),
-      'grok': _AgentProviderIconAsset(path: 'assets/icons/agents/grok.svg'),
-      'claude_code': _AgentProviderIconAsset(
-        path: 'assets/icons/agents/claude.svg',
-        preserveOriginalColor: true,
-      ),
-    };
-
-final class _AgentProviderIconAsset {
-  const _AgentProviderIconAsset({
-    required this.path,
-    this.preserveOriginalColor = false,
-  });
-
-  final String path;
-
-  /// 原色是品牌语义的一部分时，不应用主题前景色滤镜。
-  final bool preserveOriginalColor;
-}
-
 /// 使用稳定 Provider id 渲染对应的 Agent 品牌图标。
 ///
-/// 内置品牌由统一资源表声明保留原色或随主题着色；未知 Provider 使用中立扩展
+/// 品牌由插件静态描述声明保留原色或随主题着色；未知 Provider 使用中立扩展
 /// 图标。presentation 不读取协议类型，也不参与插件路由。
-class AgentProviderIcon extends StatelessWidget {
+class AgentProviderIcon extends ConsumerWidget {
   /// 创建 Agent Provider 图标。
   const AgentProviderIcon({
     required this.providerId,
@@ -56,9 +37,9 @@ class AgentProviderIcon extends StatelessWidget {
   final String? semanticLabel;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final effectiveColor = color ?? IdeColors.of(context).textSecondary;
-    final asset = _agentProviderIconAssets[providerId];
+    final asset = ref.watch(agentProviderIconResolverProvider)(providerId);
     if (asset == null) {
       return _buildFallback(effectiveColor);
     }
@@ -66,12 +47,13 @@ class AgentProviderIcon extends StatelessWidget {
     final normalizedSemanticLabel = semanticLabel?.trim();
     final hasSemanticLabel = normalizedSemanticLabel?.isNotEmpty ?? false;
     return svg.SvgPicture.asset(
-      asset.path,
+      asset.assetPath,
+      package: asset.packageName,
       key: ValueKey<String>('agent-provider-icon-svg-$providerId'),
       width: size,
       height: size,
       fit: BoxFit.contain,
-      colorFilter: asset.preserveOriginalColor
+      colorFilter: asset.colorPolicy == AgentIconColorPolicy.original
           ? null
           : ColorFilter.mode(effectiveColor, BlendMode.srcIn),
       semanticsLabel: hasSemanticLabel ? normalizedSemanticLabel : null,

@@ -8,6 +8,8 @@
 
 > 2026-09-05 包结构更新：Provider 已拆为 api、sdk 与 Codex/Grok/Claude Code 三个纯 Dart 插件包；登记集中在 `agent_provider_manifest.dart`。management/usage 已由插件贡献，宿主只消费中立端口和可覆盖贡献接缝；新增插件流程和八类守卫已落地，CI 逐包动态矩阵覆盖所有内部包；完整依赖与失败处理规则见[工程规范 §2.1](engineering_standards.md#21-provider-插件包边界)。
 
+Provider 图标的 SVG 与 `AgentProviderDefinition.icon` 由各插件包拥有；包内 `flutter.assets` 仅声明静态资源，不引入 Flutter SDK 依赖。宿主入口通过 `agentProviderIconsOverride` 注入静态查询，统一处理主题、尺寸、语义与失败回退；图标查询不得触发插件激活、猜测自定义实例品牌或写入持久化配置。
+
 ## 一句话概括
 
 Zeta 是一个**桌面壳层**：它不含模型，也不实现编辑器。它把本机已有的 Agent CLI 拉起来，把对方的私有协议翻译成一套中立的领域事件，再把这些事件渲染成可审计的时间线。

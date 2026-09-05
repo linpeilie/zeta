@@ -8,6 +8,7 @@ import 'package:zeta_foundation/platform.dart';
 
 import 'package:flutter_riverpod/misc.dart' show Override;
 
+import 'package:zeta/src/app/plugins/agent_provider_icon_overrides.dart';
 import 'package:zeta/src/app/app.dart';
 import 'package:zeta/src/app/composition/zeta_app_composition.dart';
 import 'package:zeta/src/app/storage/zeta_data_file_system.dart';
@@ -61,6 +62,7 @@ void main() {
         overrides: <Override>[
           zetaWindowHostProvider.overrideWithValue(windowHost),
           ...storage.providerOverrides,
+          agentProviderIconsOverride(),
           settingsFallbackLanguageProvider.overrideWithValue(
             firstSystemLanguage,
           ),

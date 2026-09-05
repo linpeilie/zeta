@@ -321,7 +321,13 @@ flutter analyze
 bash tool/test_full.sh
 ```
 
-新包第一次登记需先运行 `flutter pub get` 产生有意的依赖变化并检查 lock；确认后再用 `--enforce-lockfile` 复验。默认品牌图标为中立扩展图标；现有品牌资源表只做图标映射，不可复制为能力分支。
+新包第一次登记需先运行 `flutter pub get` 产生有意的依赖变化并检查 lock；确认后再用 `--enforce-lockfile` 复验。品牌图标接入遵循以下边界：
+
+- 将 SVG 放入自有包的 `assets/`，在该包 `pubspec.yaml` 的 `flutter.assets` 声明相对路径，无需增加 Flutter SDK 或 `flutter_svg` 依赖。
+- 在插件 `AgentProviderDefinition.icon` 声明 `AgentProviderSvgIcon(packageName: 包名, assetPath: 相对路径)`；单色图标默认 `themed`，原色品牌显式选择 `AgentIconColorPolicy.original`。
+- 宿主通过 `agentProviderIconsOverride` 从静态 manifest 注入 `agentProviderIconResolverProvider`；生产入口与测试助手复用同一装配，调用方可覆盖。不可读取激活目录，也不新增厂商图标表。
+- 按已登记稳定 id 查询；未知、自定义实例及未声明图标均保持中立回退，不按名称推断类型。尺寸、主题颜色、无障碍与加载失败回退由宿主统一处理，资源描述不落盘。
+- `agent_provider_icon_test` 动态验证所有 manifest 图标的打包与 SVG 解码，同时覆盖原色、主题色、未知 id、第四个定义与错误回退渲染；只验证 Widget 存在不能证明资源打包成功。
 
 ### 协议与生命周期检查
 

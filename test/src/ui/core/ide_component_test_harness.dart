@@ -1,3 +1,5 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:zeta/src/app/plugins/agent_provider_icon_overrides.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
@@ -37,26 +39,29 @@ Future<void> pumpIdeComponent(
   final currentTheme = themeMode == ThemeMode.dark ? darkTheme : lightTheme;
   await tester.pumpWidget(
     // 与生产一致：设计系统文案由宿主注入，测试才能断言本地化后的无障碍标签。
-    IdeUiTextScope(
-      catalog: AppZetaUiTextCatalog(
-        lookupAppLocalizations(ZetaLocalization.simplifiedChinese),
-      ),
-      child: IdeThemeScope(
-        themeMode: themeMode,
-        lightTheme: lightTheme,
-        darkTheme: darkTheme,
-        child: sf.ShadcnApp(
-          locale: ZetaLocalization.simplifiedChinese,
-          supportedLocales: ZetaLocalization.supportedLocales,
-          localizationsDelegates: ZetaLocalization.delegates,
-          theme: buildShadcnTheme(lightTheme),
-          darkTheme: buildShadcnTheme(darkTheme),
-          builder: (context, child) => IdeMaterialLayer(
-            theme: buildMaterialTheme(currentTheme),
-            child: child,
+    ProviderScope(
+      overrides: [agentProviderIconsOverride()],
+      child: IdeUiTextScope(
+        catalog: AppZetaUiTextCatalog(
+          lookupAppLocalizations(ZetaLocalization.simplifiedChinese),
+        ),
+        child: IdeThemeScope(
+          themeMode: themeMode,
+          lightTheme: lightTheme,
+          darkTheme: darkTheme,
+          child: sf.ShadcnApp(
+            locale: ZetaLocalization.simplifiedChinese,
+            supportedLocales: ZetaLocalization.supportedLocales,
+            localizationsDelegates: ZetaLocalization.delegates,
+            theme: buildShadcnTheme(lightTheme),
+            darkTheme: buildShadcnTheme(darkTheme),
+            builder: (context, child) => IdeMaterialLayer(
+              theme: buildMaterialTheme(currentTheme),
+              child: child,
+            ),
+            themeMode: resolveShadcnThemeMode(themeMode),
+            home: sf.Scaffold(child: SizedBox.expand(child: child)),
           ),
-          themeMode: resolveShadcnThemeMode(themeMode),
-          home: sf.Scaffold(child: SizedBox.expand(child: child)),
         ),
       ),
     ),

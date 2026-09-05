@@ -1,3 +1,5 @@
+import 'package:zeta/src/app/plugins/agent_provider_icon_overrides.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_icon_resolver.dart';
 import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 import 'package:zeta/src/app/plugins/agent_contribution_providers.dart';
 import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
@@ -80,6 +82,8 @@ Override headlessWindowHost({bool showsWindowControls = true}) =>
 /// widget test 不能碰本机的默认装配；用例已经覆盖的 provider 不再重复装。
 List<Override> _testDefaultsNotCoveredBy(List<Override> overrides) {
   return <Override>[
+    if (!_covers(overrides, agentProviderIconResolverProvider))
+      agentProviderIconsOverride(),
     if (_covers(overrides, agentProviderBundleFactoryProvider) &&
         !_covers(overrides, agentProviderDefinitionCatalogProvider) &&
         !_covers(overrides, resolvedAgentProviderPluginsProvider))

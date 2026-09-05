@@ -178,20 +178,7 @@ List<String> auditProviderArchitecture(Map<String, String> sources) {
     }
     if (path.startsWith('lib/src/features/') &&
         path.contains('/presentation/')) {
-      final hits = visitor.claudeIdentityLiterals.where((node) {
-        // 品牌资源表只映射资产，不参与能力与协议路由。精确到常量表的 key。
-        final parent = node.parent;
-        final declaration = node.thisOrAncestorOfType<VariableDeclaration>();
-        final brandAsset =
-            path ==
-                'lib/src/features/agent/presentation/widgets/agent_provider_icon.dart' &&
-            parent is MapLiteralEntry &&
-            identical(parent.key, node) &&
-            declaration?.name.lexeme == '_agentProviderIconAssets' &&
-            declaration?.parent is VariableDeclarationList &&
-            (declaration!.parent as VariableDeclarationList).isConst;
-        return !brandAsset;
-      }).length;
+      final hits = visitor.claudeIdentityLiterals.length;
       guideHits += hits;
       if (hits > 0 &&
           (path != providerSetupGuidePath ||
