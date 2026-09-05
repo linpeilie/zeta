@@ -1,13 +1,13 @@
 # WP-6 · Session config 显式失败与结果契约
 
-> 对应问题：问题 6（缺能力静默成功）。工作包：WP-6。状态：仅设计文档，实现未开始。
+> 对应问题：问题 6（缺能力静默成功）。工作包：WP-6。状态：已完成；实现与验收见 §6.7。
 > 前置：无，可独立先行修复；后续由 [WP-2](02-wp2-conversation-actions.md) 接入统一命令入口。返回 [开发总入口](00-index.md)。
-> 本章全部拟新增/拟调整 API 与 Dart 风格伪代码都是开发设计，不是已存在或已编译通过的实现。既有 Provider 能力、权限与生命周期门禁仍有效。
+> §6.1–6.6 保留开发设计与伪代码；具体落地差异与验证证据记录在 §6.7。既有 Provider 能力、权限与生命周期门禁仍有效。
 
 
 ### 6.1 事实与固定目标
 
-`agent_conversation_runtime_controller.dart:1401-1437` 现为 `Future<void>`：无 thread 时 return；`sessionConfiguration == null` 时 return；catch 把错误写进 header/composer 后 Future 仍正常完成。`agent_pane_sections.dart:1048` 接给 `agent_pane_composer.dart` 的 void 回调，控件不能知道是否生效。
+设计基线中，`agent_conversation_runtime_controller.dart:1401-1437` 为 `Future<void>`：无 thread 时 return；`sessionConfiguration == null` 时 return；catch 把错误写进 header/composer 后 Future 仍正常完成。`agent_pane_sections.dart:1048` 接给 `agent_pane_composer.dart` 的 void 回调，控件不能知道是否生效。
 
 `AgentConversationBinding.currentRuntime` 每次读取新建一个 context（core binding:259），因此下面比较其 typed `runtimeIdentity`，不能对 context 本身使用 identical，否则正常请求全被误判 stale。
 
@@ -234,3 +234,20 @@ Future<void> onChanged(Object value) async {
 **回滚**：WP6 可独立 revert，保留 WP2 时需同步将它从 Actions/executor/测试 API 表中完整恢复到前一版本，不允许仅退方法签名而保留 await 成功的 UI 假设。推荐在 WP2 落地后不单独回滚此安全边界修复；确需回滚按依赖顺序先回滚 WP2 的 session-config 接入，再回滚本提交。无数据迁移。
 
 **与 WP-3 关闭解析一致**：WP-2 获取的 Actions 已捕获 ownerKey+lifetime；Closing/Closed 的旧 UI 得到空终止投影和拒绝动作，不能再次按 BindingKey 把配置请求解析到新 entry。WP-6 自身 executor 队列继续按原 runtimeIdentity/scope 校验，真实 owner 的依赖在 build 时 ref.read 冻结。
+
+
+### 6.7 实施与验收记录（2026-09-05）
+
+实现提交：待收尾登记。完整证据见 [阶段验收记录](../../fix/2026-09-05-session-config/00-validation.md)。
+
+- [x] executor 与 CommandPort 使用 typed outcome；缺端口/明确拒绝能力的 UnsupportedError 透传，生产 Section helper 翻译。
+- [x] 同 configId 队列、入队前冻结目标、执行前目录/只读检查、返回后 runtime/scope 校验与幂等关闭等待者。
+- [x] 当前端口缺失时隐藏旧目录；真实旧控件快照迟到调用仍显示 typed unsupported。
+- [x] pending 仅限制当前控件；错误图标/tooltip/语义提示保持单行工具栏，原值由 Provider 事件确认，失败可重试。
+- [x] 双 Provider/双 thread、同 key 重开、排队/await/catch 换代、关闭时挂起请求与迟到异常均有回归。
+- [x] `dart format .`、`flutter analyze`、54 条定向测试、925 条受影响测试和本地化字面量门禁通过。
+- [x] AGENTS、开发/架构文档、双语总览/术语/贡献指南与 CHANGELOG 同步；依赖、Provider 包、协议和持久化格式无改动。
+
+实现细节相对伪代码：队列项使用 settled 与可清空 execute 闭包，不额外保留无消费者的 started 标志；控件上下文由当前 controller 生命周期、Provider/thread 上下文与 typed runtime identity 组成。错误提示采用行内图标及 tooltip，避免在现有窄工具栏内新增一行导致溢出。禁用 Provider 会使已发起请求的 scope 失效，因此排队请求返回 stale；禁用后新发起的请求仍按只读返回 notAllowed。
+
+本工作包按 §5.1 的行为修复门禁收尾，不要求本地全量；全量保留在最终整合。未执行真实 CLI 和 Windows/Linux 实机验收。后续执行 WP-1；WP-2 接入时删除 standalone helper，由 Actions runner 承担同一异常翻译，保留 executor 队列和控件结果契约。

@@ -2862,5 +2862,11 @@
   "usageSessionFilesUnreadable": "{count} 个 {name} 会话文件读取失败，已展示其余数据。",
   "@usageSessionFilesUnreadable": { "description": "Usage session files unreadable", "placeholders": { "count": { "type": "String", "example": "2" }, "name": { "type": "String", "example": "Codex" } } },
   "usageHistoryRowsCorrupt": "{count} 行 {name} 历史损坏，已跳过并继续统计。",
-  "@usageHistoryRowsCorrupt": { "description": "Usage history rows corrupt", "placeholders": { "count": { "type": "String", "example": "1" }, "name": { "type": "String", "example": "Claude Code" } } }
+  "@usageHistoryRowsCorrupt": { "description": "Usage history rows corrupt", "placeholders": { "count": { "type": "String", "example": "1" }, "name": { "type": "String", "example": "Claude Code" } } },
+  "agentSessionConfigUnsupported": "当前 Provider 不支持会话配置",
+  "@agentSessionConfigUnsupported": {"description": "Session configuration unsupported"},
+  "agentSessionConfigUnavailable": "Provider 未连接，暂时无法修改会话配置",
+  "@agentSessionConfigUnavailable": {"description": "Session configuration provider disconnected"},
+  "agentSessionConfigApplying": "正在应用会话配置…",
+  "@agentSessionConfigApplying": {"description": "Session configuration request pending"}
 }

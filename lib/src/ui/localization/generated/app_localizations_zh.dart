@@ -3481,4 +3481,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String usageHistoryRowsCorrupt(String count, String name) {
     return '$count 行 $name 历史损坏，已跳过并继续统计。';
   }
+
+  @override
+  String get agentSessionConfigUnsupported => '当前 Provider 不支持会话配置';
+
+  @override
+  String get agentSessionConfigUnavailable => 'Provider 未连接，暂时无法修改会话配置';
+
+  @override
+  String get agentSessionConfigApplying => '正在应用会话配置…';
 }

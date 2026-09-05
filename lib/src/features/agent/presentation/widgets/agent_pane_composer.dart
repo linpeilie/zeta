@@ -1,4 +1,7 @@
 import 'dart:async';
+
+import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
+import 'package:zeta/src/features/agent/presentation/agent_presentation_l10n.dart';
 import 'dart:convert';
 import 'dart:math' as math;
 
@@ -51,6 +54,7 @@ class AgentComposer extends StatelessWidget {
     required this.selectedPermissionOptionId,
     this.permissionApplyScopeHint,
     required this.sessionConfigOptions,
+    required this.sessionConfigCommandContextId,
     required this.onSelectModel,
     required this.onSelectReasoningEffort,
     required this.onSelectFastEnabled,
@@ -119,6 +123,9 @@ class AgentComposer extends StatelessWidget {
   /// 当前 session 由 provider 动态下发的配置项。
   final List<AgentSessionConfigOption> sessionConfigOptions;
 
+  /// 当前 entry 生命周期与 runtime 的不透明标识，仅清理控件临时反馈。
+  final Object sessionConfigCommandContextId;
+
   final Future<bool> Function(String modelId) onSelectModel;
   final Future<bool> Function(String? effort) onSelectReasoningEffort;
   final Future<bool> Function(bool enabled) onSelectFastEnabled;
@@ -126,7 +133,7 @@ class AgentComposer extends StatelessWidget {
   final Future<bool> Function() onRetryModelConfiguration;
   final VoidCallback onCloseModelConfiguration;
   final ValueChanged<AgentPermissionOption> onSelectPermissionOption;
-  final void Function(String configId, Object value)
+  final Future<AgentCommandOutcome> Function(String configId, Object value)
   onSelectSessionConfigOption;
 
   /// 打开 @-mention 文件 picker（More actions 菜单入口）。
@@ -184,6 +191,8 @@ class AgentComposer extends StatelessWidget {
     for (final option in sessionConfigOptions) {
       addSelector(
         _SessionConfigOptionControl(
+          key: ValueKey(option.id),
+          commandContextId: sessionConfigCommandContextId,
           option: option,
           onSelect: (value) => onSelectSessionConfigOption(option.id, value),
         ),
@@ -1106,71 +1115,162 @@ class _ComposerImageDraftStrip extends StatelessWidget {
 }
 
 /// Provider 动态下发的 session 配置控件。
-class _SessionConfigOptionControl extends StatelessWidget {
+class _SessionConfigOptionControl extends StatefulWidget {
   const _SessionConfigOptionControl({
     required this.option,
+    required this.commandContextId,
     required this.onSelect,
+    super.key,
   });
 
   final AgentSessionConfigOption option;
-  final ValueChanged<Object> onSelect;
+  final Object commandContextId;
+  final Future<AgentCommandOutcome> Function(Object value) onSelect;
+
+  @override
+  State<_SessionConfigOptionControl> createState() =>
+      _SessionConfigOptionControlState();
+}
+
+class _SessionConfigOptionControlState
+    extends State<_SessionConfigOptionControl> {
+  bool _pending = false;
+  AgentCommandFailureKind? _failure;
+  int _selectionGeneration = 0;
+
+  @override
+  void didUpdateWidget(covariant _SessionConfigOptionControl oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.commandContextId != widget.commandContextId ||
+        oldWidget.option.id != widget.option.id) {
+      _selectionGeneration++;
+      _pending = false;
+      _failure = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _selectionGeneration++;
+    super.dispose();
+  }
+
+  Future<void> _select(Object value) async {
+    if (_pending) return;
+    final generation = ++_selectionGeneration;
+    final identity = widget.commandContextId;
+    setState(() {
+      _pending = true;
+      _failure = null;
+    });
+    final outcome = await widget.onSelect(value);
+    if (!mounted ||
+        generation != _selectionGeneration ||
+        identity != widget.commandContextId) {
+      return;
+    }
+    setState(() {
+      _pending = false;
+      _failure = outcome is AgentCommandFailed ? outcome.kind : null;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
+    final option = widget.option;
+    final error = _failure?.localizedSessionConfigMessage(context.l10n);
+    final tooltip = _pending
+        ? context.l10n.agentSessionConfigApplying
+        : option.description ?? option.name;
+    final Widget control;
     if (option.kind == AgentSessionConfigOptionKind.boolean) {
       final selected = option.currentValue == true;
-      return IdeTooltip(
-        message: option.description ?? option.name,
+      control = IdeTooltip(
+        message: tooltip,
         child: IdeTab(
           key: ValueKey<String>('agent-session-config-${option.id}'),
-          label: '${option.name}: ${selected ? 'On' : 'Off'}',
+          label:
+              '${option.name}: ${selected ? context.l10n.agentFastOn : context.l10n.agentFastOff}',
           leadingIcon: _sessionConfigIcon(option.category),
-          trailingIcon: null,
+          trailingIcon: _pending ? Icons.hourglass_top_rounded : null,
           selected: selected,
-          onPressed: () => onSelect(!selected),
-          semanticLabel: option.name,
+          enabled: !_pending,
+          onPressed: () => unawaited(_select(!selected)),
+          semanticLabel: _pending
+              ? context.l10n.agentSessionConfigApplying
+              : option.name,
+        ),
+      );
+    } else {
+      control = IdePopupSelect<Object>(
+        // 换 entry/runtime 后销毁旧浮层，避免继续使用旧目录与回调。
+        key: ValueKey(widget.commandContextId),
+        tooltip: tooltip,
+        placeholder: option.name,
+        value: option.currentValue,
+        onChanged: (value) => unawaited(_select(value)),
+        focusNodeDebugLabel: 'agent-session-selector-trigger',
+        items: <IdePopupSelectItem<Object>>[
+          for (final value in option.values)
+            IdePopupSelectItem<Object>(
+              key: ValueKey<String>(
+                'agent-session-config-${option.id}-option-${value.id}',
+              ),
+              value: value.id,
+              label: value.label,
+            ),
+        ],
+        triggerBuilder:
+            (
+              context, {
+              required label,
+              required isOpen,
+              required enabled,
+              required focusNode,
+              required onPressed,
+            }) => IdeTab(
+              key: ValueKey<String>('agent-session-config-${option.id}'),
+              focusNode: focusNode,
+              label: label,
+              leadingIcon: _sessionConfigIcon(option.category),
+              trailingIcon: _pending
+                  ? Icons.hourglass_top_rounded
+                  : Icons.keyboard_arrow_down_rounded,
+              selected: isOpen,
+              enabled: enabled && !_pending,
+              onPressed: onPressed,
+              semanticLabel: _pending
+                  ? context.l10n.agentSessionConfigApplying
+                  : option.description ?? option.name,
+            ),
+        itemBuilder: (context, item, {required selected}) => Text(
+          item.label,
+          overflow: TextOverflow.ellipsis,
+          style: IdeTextStyles.of(context).bodyMedium,
         ),
       );
     }
-    return IdePopupSelect<Object>(
-      tooltip: option.description ?? option.name,
-      placeholder: option.name,
-      value: option.currentValue,
-      onChanged: onSelect,
-      focusNodeDebugLabel: 'agent-session-selector-trigger',
-      items: <IdePopupSelectItem<Object>>[
-        for (final value in option.values)
-          IdePopupSelectItem<Object>(
-            key: ValueKey<String>(
-              'agent-session-config-${option.id}-option-${value.id}',
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        control,
+        if (error != null) ...[
+          const SizedBox(width: IdeSpacing.space4),
+          IdeTooltip(
+            message: error,
+            child: Semantics(
+              liveRegion: true,
+              label: error,
+              child: IdeIconBox(
+                Icons.error_outline_rounded,
+                key: ValueKey('agent-session-config-${option.id}-error'),
+                size: IdeSpacing.space16,
+                color: IdeColors.of(context).error,
+              ),
             ),
-            value: value.id,
-            label: value.label,
           ),
+        ],
       ],
-      triggerBuilder:
-          (
-            context, {
-            required label,
-            required isOpen,
-            required enabled,
-            required focusNode,
-            required onPressed,
-          }) => IdeTab(
-            key: ValueKey<String>('agent-session-config-${option.id}'),
-            focusNode: focusNode,
-            label: label,
-            leadingIcon: _sessionConfigIcon(option.category),
-            selected: isOpen,
-            enabled: enabled,
-            onPressed: onPressed,
-            semanticLabel: option.description ?? option.name,
-          ),
-      itemBuilder: (context, item, {required selected}) => Text(
-        item.label,
-        overflow: TextOverflow.ellipsis,
-        style: IdeTextStyles.of(context).bodyMedium,
-      ),
     );
   }
 }

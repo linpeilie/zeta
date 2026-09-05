@@ -6352,6 +6352,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count} {name} history lines were corrupt and skipped.'**
   String usageHistoryRowsCorrupt(String count, String name);
+
+  /// Session configuration unsupported
+  ///
+  /// In en, this message translates to:
+  /// **'The current Provider does not support session configuration'**
+  String get agentSessionConfigUnsupported;
+
+  /// Session configuration provider disconnected
+  ///
+  /// In en, this message translates to:
+  /// **'Session configuration is unavailable while the Provider is disconnected'**
+  String get agentSessionConfigUnavailable;
+
+  /// Session configuration request pending
+  ///
+  /// In en, this message translates to:
+  /// **'Applying session option…'**
+  String get agentSessionConfigApplying;
 }
 
 class _AppLocalizationsDelegate

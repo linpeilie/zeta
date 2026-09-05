@@ -1,4 +1,6 @@
 import 'dart:async';
+
+import 'package:zeta/src/features/agent/presentation/agent_presentation_l10n.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -1018,6 +1020,14 @@ class AgentComposerSection extends StatelessWidget {
                 selectedPermissionOptionId: state.selectedPermissionOptionId,
                 permissionApplyScopeHint: state.permissionApplyScopeHint,
                 sessionConfigOptions: state.sessionConfigOptions,
+                sessionConfigCommandContextId: (
+                  controller,
+                  state.conversationModeContextId,
+                  controller
+                      .conversationBinding
+                      .currentRuntime
+                      ?.runtimeIdentity,
+                ),
                 onSelectModel: controller.selectModel,
                 onSelectReasoningEffort: controller.selectReasoningEffort,
                 onSelectFastEnabled: controller.selectFastEnabled,
@@ -1045,8 +1055,11 @@ class AgentComposerSection extends StatelessWidget {
                     showIdeToast(context, message: hint);
                   }
                 },
-                onSelectSessionConfigOption:
-                    controller.selectSessionConfigOption,
+                onSelectSessionConfigOption: (configId, value) =>
+                    invokeSessionConfigCommand(
+                      () =>
+                          controller.selectSessionConfigOption(configId, value),
+                    ),
                 onOpenMentionPicker: onOpenMentionPicker,
                 onInsertSkill: onInsertSkill,
               ),

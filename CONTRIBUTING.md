@@ -204,7 +204,7 @@ chore: bump flutter action pin
 - Provider 覆盖 handler 只能注册在该 Provider 自己的 bundle；权限 / 提问 / Plan 审批三类事件的 handler 不允许覆盖（Plan 执行交接没有对应事件，保护在 effect 层）。
 - 文件变更必须由 Provider-local tracker 先形成完整 typed snapshot；Store 只机械透传，UI 不读 raw，只有命令时不得猜路径或 diff。
 - 新增 Provider 的正常改动范围 = 自有 data 文件 + 中立 domain 契约 + factory 组合 + 契约测试。如果你发现必须改共享层，说明抽象没做对，先开 Issue 讨论。
-- UI 一律按 **capability** 渲染，不按 provider kind 或名称硬编码。未支持的能力必须 `capability = false` 并抛 `UnsupportedError`，**不得静默成功**。
+- UI 一律按 **capability** 渲染，不按 provider kind 或名称硬编码。未支持的能力必须 `capability = false` 并抛 `UnsupportedError`，**不得静默成功**。 Session config 只声明可选端口，不另造能力位；执行层缺端口仍抛错，UI 翻译 typed failure，不以 Future 正常结束推断成功。
 - Provider 进程只由 `AgentProviderRuntimeRegistry` 创建；全局操作走 `AgentProviderGlobalRuntime`，会话实例只由 `AgentConversationBinding.beginTurn()` 惰性创建。Binding 显式区分 dormant/starting/attached/cleared，只有匹配 runtime identity 的 cleared 才是断连。RuntimeController 不持有 lease/scope/pin，空闲回收归 Binding Manager。
 - Workspace entry 创建时一次性绑定 thread、Binding 与 RuntimeController；RuntimeController 不提供跨 thread 切换/恢复兼容入口，只允许更新 project/file context。Registry 获取 runtime 必须显式传 scope。
 - 真实 thread 的 Binding 不得原地改绑；fork 返回的 session 走 Shell 的新 thread 通用登记/选择流程，后续操作只作用于 fork 结果。

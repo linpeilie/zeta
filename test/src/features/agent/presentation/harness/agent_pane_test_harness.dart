@@ -261,6 +261,7 @@ const AgentModelList agentPaneSingleReasoningModelList = AgentModelList(
 AgentConversationRuntimeController createAgentPaneViewModel(
   AgentPaneFakeProvider provider, {
   AgentThreadSummary? initialThread,
+  AgentProviderBundleFactory? providerFactory,
   AgentConversationModeController? conversationModeController,
   List<WorkspaceNode> Function()? workspaceFilesProvider,
   Listenable? workspaceFilesListenable,
@@ -270,6 +271,7 @@ AgentConversationRuntimeController createAgentPaneViewModel(
     provider,
     MemoryAgentProviderConfigStore(),
     initialThread: initialThread,
+    providerFactory: providerFactory,
     conversationModeController: conversationModeController,
     workspaceFilesProvider: workspaceFilesProvider,
     workspaceFilesListenable: workspaceFilesListenable,
@@ -281,13 +283,14 @@ AgentConversationRuntimeController createAgentPaneViewModelWithStore(
   AgentPaneFakeProvider provider,
   AgentProviderConfigStore configStore, {
   AgentThreadSummary? initialThread,
+  AgentProviderBundleFactory? providerFactory,
   AgentConversationModeController? conversationModeController,
   List<WorkspaceNode> Function()? workspaceFilesProvider,
   Listenable? workspaceFilesListenable,
   bool Function()? workspaceFilesIndexReady,
 }) {
   final registry = AgentProviderRuntimeRegistry(
-    providerFactory: AgentPaneFakeProviderFactory(provider),
+    providerFactory: providerFactory ?? AgentPaneFakeProviderFactory(provider),
   );
   addTearDown(registry.close);
   final controller = createProviderSettingsTestStore(
@@ -467,6 +470,28 @@ class AgentPaneFakeProviderFactory with TestAgentProviderBundleFactory {
   Object create(AgentProviderConfig config) => provider;
 }
 
+/// 保留会话生命周期，仅省略配置端口，覆盖旧控件的防御性误调用。
+class AgentPaneNoSessionConfigFactory implements AgentProviderBundleFactory {
+  AgentPaneNoSessionConfigFactory(
+    this.provider, {
+    this.hasSessionConfiguration = false,
+  });
+  final AgentPaneFakeProvider provider;
+  bool hasSessionConfiguration;
+
+  @override
+  AgentProviderBundle createBundle(AgentProviderConfig config) =>
+      AgentProviderBundle(
+        runtime: provider,
+        conversation: provider,
+        threadCatalog: provider,
+        threadSubscription: provider,
+        modelCatalog: provider,
+        permissionPolicy: provider.permissionPolicy,
+        sessionConfiguration: hasSessionConfiguration ? provider : null,
+      );
+}
+
 class AgentPaneFakeProvider
     with AgentProviderThreadLifecycleStub
     implements
@@ -540,6 +565,9 @@ class AgentPaneFakeProvider
   int _nextTurnSequence = 0;
 
   void emitEvent(AgentEvent event) {
+    if (event is AgentSessionConfigUpdatedEvent) {
+      _sessionOptions[event.sessionId] = event.options;
+    }
     _events.add(event);
   }
 
@@ -690,9 +718,15 @@ class AgentPaneFakeProvider
     questionResponses.add(response);
   }
 
+  final Map<String, List<AgentSessionConfigOption>> _sessionOptions = {};
+
+  /// 延迟或拒绝外部请求，currentValue 仍仅由 typed Provider 事件更新。
+  Future<void> Function(String sessionId, String configId, Object value)?
+  onSessionConfigRequest;
+
   @override
   List<AgentSessionConfigOption> sessionConfigOptions(String sessionId) {
-    return const <AgentSessionConfigOption>[];
+    return _sessionOptions[sessionId] ?? const <AgentSessionConfigOption>[];
   }
 
   @override
@@ -702,6 +736,7 @@ class AgentPaneFakeProvider
     required Object value,
   }) async {
     sessionConfigSelections.add((sessionId, configId, value));
+    await onSessionConfigRequest?.call(sessionId, configId, value);
   }
 
   @override

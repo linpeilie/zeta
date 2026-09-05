@@ -720,14 +720,16 @@ final class AgentConversationRuntimeController
 
   /// 当前 session 可直接渲染的动态配置；未知类型按 ACP 约定忽略。
   List<AgentSessionConfigOption> get sessionConfigOptions =>
-      List<AgentSessionConfigOption>.unmodifiable(
-        _sessionConfigOptions.where(
-          (option) =>
-              (option.kind == AgentSessionConfigOptionKind.select &&
-                  option.values.isNotEmpty) ||
-              option.kind == AgentSessionConfigOptionKind.boolean,
-        ),
-      );
+      conversationBinding.currentRuntime?.bundle.sessionConfiguration == null
+      ? const []
+      : List<AgentSessionConfigOption>.unmodifiable(
+          _sessionConfigOptions.where(
+            (option) =>
+                (option.kind == AgentSessionConfigOptionKind.select &&
+                    option.values.isNotEmpty) ||
+                option.kind == AgentSessionConfigOptionKind.boolean,
+          ),
+        );
 
   AgentModelInfo? get selectedModel => _modelSelectionController.selectedModel;
 
@@ -1398,43 +1400,167 @@ final class AgentConversationRuntimeController
   void clearModelConfigurationTransientState() =>
       _modelSelectionController.clearTransientState();
 
-  Future<void> selectSessionConfigOption(String configId, Object value) async {
-    final sessionId = _selectedThreadId;
-    if (sessionId == null) {
-      return;
+  // 仅串行同一配置项；取消和审批始终使用各自的独立通道。
+  final Map<String, Future<void>> _sessionConfigTails = {};
+  final Set<_SessionConfigQueuedCommand> _sessionConfigPending = {};
+
+  @override
+  Future<AgentCommandOutcome> selectSessionConfigOption(
+    String configId,
+    Object value,
+  ) {
+    if (_disposed) {
+      return Future.value(
+        const AgentCommandOutcome.failed(AgentCommandFailureKind.staleTarget),
+      );
     }
-    try {
-      await _runCurrentBundle<void>((bundle) async {
-        final sessionConfiguration = bundle.sessionConfiguration;
-        if (sessionConfiguration == null) {
-          return;
-        }
-        await sessionConfiguration.setSessionConfigOption(
-          sessionId: sessionId,
-          configId: configId,
-          value: value,
-        );
-      });
-    } catch (error) {
-      _log.w(
-        'Could not update Agent session config $configId '
-        '(${error.runtimeType})',
+    final cleanedId = configId.trim();
+    final targetThread = _selectedThreadId;
+    if (cleanedId.isEmpty || targetThread == null || isReadOnly) {
+      return Future.value(
+        const AgentCommandOutcome.ignored(AgentCommandIgnoreReason.notAllowed),
       );
-      _status = AgentProviderStatus(
-        state: AgentProviderConnectionState.error,
-        message: _textCatalog.couldNotUpdateSessionOption,
-        details: error.toString(),
-      );
-      _publishUiChanges(
-        AgentUiUpdateRequest(
-          regions: const <AgentUiRegion>{
-            AgentUiRegion.header,
-            AgentUiRegion.composer,
-          },
-          urgency: AgentUiUpdateUrgency.immediate,
+    }
+    final issuedScope = currentCommandScope();
+    // currentRuntime 每次构造新 context；只比较其中的 typed identity。
+    final issuedIdentity = conversationBinding.currentRuntime?.runtimeIdentity;
+    if (issuedIdentity == null) {
+      return Future.value(
+        const AgentCommandOutcome.failed(
+          AgentCommandFailureKind.providerUnavailable,
         ),
       );
     }
+    if (!_isSessionConfigScalar(value)) {
+      return Future.value(
+        const AgentCommandOutcome.ignored(AgentCommandIgnoreReason.notAllowed),
+      );
+    }
+
+    // 在排队前捕获目标，轮到旧请求时不得认领后来创建的实例。
+    bool targetMatches({bool beforeExecution = false}) =>
+        !_disposed &&
+        _selectedThreadId == targetThread &&
+        conversationBinding.currentRuntime?.runtimeIdentity == issuedIdentity &&
+        (beforeExecution
+            ? issuedScope.matchesForExecution(currentCommandScope())
+            : issuedScope.matchesForCommit(currentCommandScope()));
+
+    return _enqueueSessionConfig(cleanedId, () async {
+      const stale = AgentCommandOutcome.failed(
+        AgentCommandFailureKind.staleTarget,
+      );
+      if (!targetMatches(beforeExecution: true)) return stale;
+      try {
+        final outcome = await _runCurrentBundle<AgentCommandOutcome>((
+          bundle,
+        ) async {
+          if (!targetMatches(beforeExecution: true)) return stale;
+          if (isReadOnly) {
+            return const AgentCommandOutcome.ignored(
+              AgentCommandIgnoreReason.notAllowed,
+            );
+          }
+          final port = bundle.sessionConfiguration;
+          if (port == null) {
+            throw UnsupportedError('Session configuration is not supported');
+          }
+          final option = port
+              .sessionConfigOptions(targetThread)
+              .where((option) => option.id == cleanedId)
+              .firstOrNull;
+          if (option == null || !_acceptsSessionConfigValue(option, value)) {
+            return const AgentCommandOutcome.ignored(
+              AgentCommandIgnoreReason.notAllowed,
+            );
+          }
+          if (option.currentValue == value) {
+            return const AgentCommandOutcome.ignored(
+              AgentCommandIgnoreReason.unchanged,
+            );
+          }
+          await port.setSessionConfigOption(
+            sessionId: targetThread,
+            configId: cleanedId,
+            value: value,
+          );
+          return targetMatches()
+              ? const AgentCommandOutcome.succeeded()
+              : stale;
+        });
+        if (!targetMatches()) return stale;
+        return outcome ??
+            const AgentCommandOutcome.failed(
+              AgentCommandFailureKind.providerUnavailable,
+            );
+      } on UnsupportedError {
+        if (!targetMatches()) return stale;
+        rethrow;
+      } on Object catch (error) {
+        if (!targetMatches()) return stale;
+        // 配置 id、值和异常原文均不进入日志或全局 header 状态。
+        _log.w('Could not update Agent session config (${error.runtimeType})');
+        return const AgentCommandOutcome.failed(
+          AgentCommandFailureKind.requestFailed,
+        );
+      }
+    });
+  }
+
+  static bool _isSessionConfigScalar(Object value) =>
+      value is String || value is bool || (value is num && value.isFinite);
+
+  static bool _acceptsSessionConfigValue(
+    AgentSessionConfigOption option,
+    Object value,
+  ) => switch (option.kind) {
+    AgentSessionConfigOptionKind.boolean => value is bool,
+    AgentSessionConfigOptionKind.select => option.values.any(
+      (candidate) =>
+          _isSessionConfigScalar(candidate.id) && candidate.id == value,
+    ),
+    _ => false,
+  };
+
+  Future<AgentCommandOutcome> _enqueueSessionConfig(
+    String configId,
+    Future<AgentCommandOutcome> Function() execute,
+  ) {
+    final item = _SessionConfigQueuedCommand(execute);
+    _sessionConfigPending.add(item);
+    final previous = _sessionConfigTails[configId] ?? Future<void>.value();
+    late final Future<void> tail;
+    tail = previous
+        .then((_) async {
+          if (item.settled) return;
+          final invoke = item.execute!;
+          item.execute = null;
+          try {
+            item.finish(await invoke());
+          } on Object catch (error, stack) {
+            item.finishError(error, stack);
+          }
+        })
+        .whenComplete(() {
+          _sessionConfigPending.remove(item);
+          if (identical(_sessionConfigTails[configId], tail)) {
+            _sessionConfigTails.remove(configId);
+          }
+        });
+    // 错误只结算调用方 Future，tail 正常完成，保证后一项仍可执行。
+    _sessionConfigTails[configId] = tail;
+    return item.result.future;
+  }
+
+  void _closeSessionConfigCommands() {
+    for (final item in _sessionConfigPending.toList()) {
+      item.finish(
+        const AgentCommandOutcome.failed(AgentCommandFailureKind.staleTarget),
+      );
+    }
+    _sessionConfigPending.clear();
+    _sessionConfigTails.clear();
+    // 已发出的 Provider 请求仍可能结束，幂等 finish 防止二次完成。
   }
 
   void _handleModelList(AgentModelList modelList) {
@@ -2905,6 +3031,7 @@ final class AgentConversationRuntimeController
 
   void dispose() {
     _disposed = true;
+    _closeSessionConfigCommands();
     // Pane 关闭时兜底释放仍在运行的 Binding 活动令牌。
     _releaseTurnActivity();
     _invalidateProviderEventListener(
@@ -4191,5 +4318,28 @@ final class _AgentConversationSessionEffects
   @override
   void applyModelList(AgentModelList models) {
     _controller._applyModelList(models);
+  }
+}
+
+/// 仅持有待执行闭包和调用方 waiter，关闭时释放尚未执行的值捕获。
+final class _SessionConfigQueuedCommand {
+  _SessionConfigQueuedCommand(this.execute);
+
+  Future<AgentCommandOutcome> Function()? execute;
+  final Completer<AgentCommandOutcome> result = Completer();
+  bool settled = false;
+
+  void finish(AgentCommandOutcome outcome) {
+    if (settled) return;
+    settled = true;
+    execute = null;
+    result.complete(outcome);
+  }
+
+  void finishError(Object error, StackTrace stack) {
+    if (settled) return;
+    settled = true;
+    execute = null;
+    result.completeError(error, stack);
   }
 }

@@ -100,6 +100,9 @@ One Binding owns one UI-region state. `AgentConversationSliceStore` is the owner
 The application aggregate for a conversation: pipeline, region projection, `AgentUiUpdateScheduler`, CommandPort, and effects. A workspace entry holds it; there is no `AgentConversationViewModel`.
 `agent_conversation_runtime_controller.dart`
 
+**AgentCommandOutcome**
+An explicit command result: succeeded, ignored(reason), or failed(kind). Session configuration throws UnsupportedError at the executor when the port is absent; the UI boundary translates it to unsupported. A skipped execution is never success, and currentValue still comes from Provider events.
+
 **AgentConversationSessionHandle**
 What the slice registry resolves: `store` plus an optional `controller`. The controller may be null in containers that only test the slice mirror.
 
