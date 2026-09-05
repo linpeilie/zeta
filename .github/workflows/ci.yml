@@ -18,6 +18,8 @@ concurrency:
 
 env:
   FLUTTER_VERSION: 3.47.0
+  # 与提交的 lockfile 保持同一包源，避免开发机镜像配置引起重新解析。
+  PUB_HOSTED_URL: https://pub.dev
 
 jobs:
   static:

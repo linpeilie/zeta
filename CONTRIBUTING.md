@@ -138,8 +138,21 @@ flutter analyze
 bash tool/test_affected.sh
 ```
 
-CI 会跑完整版本（`dart format --set-exit-if-changed`、`flutter analyze --enforce-lockfile`、
+CI 先执行 `flutter pub get --enforce-lockfile`，再跑完整版本（`dart format --set-exit-if-changed`、`flutter analyze`、
 6 个测试分片并行、内部 Package 的 analyze + test），本地先过一遍窄的能省一轮往返。
+
+根应用与内部 Package 共用 `pubspec.lock`，提交的 hosted 包源统一为 `https://pub.dev`。
+本机使用镜像时，提交前需切回该包源，并使用 `.github/workflows/ci.yml` 声明的 Flutter 版本：
+
+```sh
+export PUB_HOSTED_URL=https://pub.dev
+flutter pub get
+git diff -- pubspec.lock
+flutter pub get --enforce-lockfile
+```
+
+包源 URL 也是锁定信息；即使包版本相同，镜像与官方源不同也会触发重新解析。
+审阅并提交有意的锁文件变化，保留 CI 的 `--enforce-lockfile` 检查。
 
 **新增测试文件时**：根 `test/` 按目录切片，测试放进已有目录就自动归片，不用登记。
 只有新建顶层测试目录时才要回 [`tool/test_shards.dart`](tool/test_shards.dart) 加一条——

@@ -16,6 +16,8 @@ concurrency:
 
 env:
   FLUTTER_VERSION: 3.47.0
+  # 与 CI 和提交的 lockfile 保持同一包源。
+  PUB_HOSTED_URL: https://pub.dev
 
 jobs:
   prepare:
