@@ -107,6 +107,149 @@ void main() {
     );
   }
 
+  test(
+    'preflight failure reports that the remote refresh was not attempted',
+    () async {
+      final secure = _Secure(_json())
+        ..preflightFailure = const ClaudeCodeSecureCredentialsWriteException(
+          ClaudeCodeCredentialPersistenceStage.preflight,
+          ClaudeCodeCredentialPersistenceReason.payloadTooLarge,
+        );
+      await expectLater(
+        service(
+          platform: ClaudeCodeCredentialsPlatform.macOS,
+          secure: secure,
+        ).ensureFresh(),
+        throwsA(
+          isA<ClaudeCodeCredentialRefreshException>()
+              .having(
+                (e) => e.source,
+                'source',
+                ClaudeCodeCredentialsSource.keychain,
+              )
+              .having(
+                (e) => e.persistenceStage,
+                'stage',
+                ClaudeCodeCredentialPersistenceStage.preflight,
+              )
+              .having(
+                (e) => e.persistenceReason,
+                'reason',
+                ClaudeCodeCredentialPersistenceReason.payloadTooLarge,
+              )
+              .having((e) => e.refreshCompleted, 'refreshCompleted', false),
+        ),
+      );
+      expect(client.calls, 0);
+      expect(secure.writes, 0);
+    },
+  );
+
+  test(
+    'write diagnostics retain the stage and remote progress, never secrets',
+    () async {
+      final secure = _Secure(_json())
+        ..writeFailure = const ClaudeCodeSecureCredentialsWriteException(
+          ClaudeCodeCredentialPersistenceStage.write,
+          ClaudeCodeCredentialPersistenceReason.interactionNotAllowed,
+          exitCode: 1,
+        );
+      await expectLater(
+        service(
+          platform: ClaudeCodeCredentialsPlatform.macOS,
+          secure: secure,
+        ).ensureFresh(),
+        throwsA(
+          isA<ClaudeCodeCredentialRefreshException>().having(
+            (e) => e.toString(),
+            'diagnostics',
+            'ClaudeCodeCredentialRefreshException(persistence, source=keychain, stage=write, reason=interactionNotAllowed, refreshCompleted=true, exitCode=1)',
+          ),
+        ),
+      );
+      expect(client.calls, 1);
+    },
+  );
+
+  test('final verification failures have their own stage', () async {
+    final secure = _Secure(_json())..dropWrite = true;
+    await expectLater(
+      service(
+        platform: ClaudeCodeCredentialsPlatform.macOS,
+        secure: secure,
+      ).ensureFresh(),
+      throwsA(
+        isA<ClaudeCodeCredentialRefreshException>()
+            .having(
+              (e) => e.persistenceStage,
+              'stage',
+              ClaudeCodeCredentialPersistenceStage.verify,
+            )
+            .having(
+              (e) => e.persistenceReason,
+              'reason',
+              ClaudeCodeCredentialPersistenceReason.readbackMismatch,
+            )
+            .having((e) => e.refreshCompleted, 'refreshCompleted', true),
+      ),
+    );
+  });
+
+  for (final platform in ClaudeCodeCredentialsPlatform.values) {
+    test(
+      '${platform.name}: readback uses persisted millisecond expiry precision',
+      () async {
+        final preciseExpiry = _now.add(
+          const Duration(hours: 1, microseconds: 731),
+        );
+        client = _Refresh(
+          () async => ClaudeCodeOAuthCredentials(
+            accessToken: 'synthetic-new',
+            refreshToken: 'synthetic-rotated',
+            expiresAt: preciseExpiry,
+            scopes: ['user:inference', 'user:profile'],
+          ),
+        );
+        final secure = _Secure(
+          platform == ClaudeCodeCredentialsPlatform.macOS ? _json() : null,
+        );
+        final reader = service(platform: platform, secure: secure);
+        final result = await reader.ensureFresh();
+        await reader.ensureFresh();
+        expect(
+          result.credentials!.expiresAt,
+          DateTime.fromMillisecondsSinceEpoch(
+            preciseExpiry.millisecondsSinceEpoch,
+            isUtc: true,
+          ),
+        );
+        expect(result.credentials!.accessToken, 'synthetic-new');
+        expect(result.credentials!.refreshToken, 'synthetic-rotated');
+        expect(client.calls, 1);
+      },
+    );
+  }
+
+  test(
+    'a real one-millisecond expiry mismatch still fails verification',
+    () async {
+      final secure = _Secure(_json())..offsetExpiry = true;
+      await expectLater(
+        service(
+          platform: ClaudeCodeCredentialsPlatform.macOS,
+          secure: secure,
+        ).ensureFresh(),
+        throwsA(
+          isA<ClaudeCodeCredentialRefreshException>().having(
+            (e) => e.persistenceReason,
+            'reason',
+            ClaudeCodeCredentialPersistenceReason.readbackMismatch,
+          ),
+        ),
+      );
+    },
+  );
+
   test('five-minute boundary refreshes, six minutes does not', () async {
     await file.writeAsString(
       _json(expiry: _now.add(const Duration(minutes: 6))),
@@ -424,7 +567,7 @@ void main() {
         );
         final result = await HttpClaudeCodeOAuthRefreshClient(
           clientFactory: () => http,
-          clock: () => _now,
+          clock: () => _now.add(const Duration(microseconds: 731)),
         ).refresh(current);
         expect(
           http.uri,
@@ -536,8 +679,12 @@ final class _Secure
         ClaudeCodeSecureCredentialsWriter {
   _Secure(this.contents);
   String? contents;
-  bool denyRead = false, denyWrite = false, dropWrite = false;
+  bool denyRead = false,
+      denyWrite = false,
+      dropWrite = false,
+      offsetExpiry = false;
   int writes = 0;
+  ClaudeCodeSecureCredentialsWriteException? preflightFailure, writeFailure;
   @override
   Future<String?> read() async {
     if (denyRead) throw StateError('synthetic-private-error');
@@ -545,12 +692,25 @@ final class _Secure
   }
 
   @override
-  void validateWrite(String value) {}
+  void validateWrite(String value) {
+    if (preflightFailure != null) throw preflightFailure!;
+  }
+
   @override
   Future<void> write(String value) async {
     writes++;
+    if (writeFailure != null) throw writeFailure!;
     if (denyWrite) throw StateError('synthetic-private-error');
-    if (!dropWrite) contents = value;
+    if (!dropWrite) {
+      if (offsetExpiry) {
+        final decoded = jsonDecode(value) as Map;
+        decoded['claudeAiOauth']['expiresAt'] =
+            (decoded['claudeAiOauth']['expiresAt'] as int) + 1;
+        contents = jsonEncode(decoded);
+      } else {
+        contents = value;
+      }
+    }
   }
 }
 

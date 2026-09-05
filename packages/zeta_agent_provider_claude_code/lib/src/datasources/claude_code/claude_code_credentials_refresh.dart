@@ -35,15 +35,9 @@ final class ClaudeCodeCredentialRefreshException implements Exception {
   final bool? refreshCompleted;
   final int? exitCode;
   @override
-  String toString() => 'ClaudeCodeCredentialRefreshException('
-      '${[
-        failure.name,
-        if (source != null) 'source=${source!.name}',
-        if (persistenceStage != null) 'stage=${persistenceStage!.name}',
-        if (persistenceReason != null) 'reason=${persistenceReason!.name}',
-        if (refreshCompleted != null) 'refreshCompleted=$refreshCompleted',
-        if (exitCode != null) 'exitCode=$exitCode',
-      ].join(', ')})';
+  String toString() =>
+      'ClaudeCodeCredentialRefreshException('
+      '${[failure.name, if (source != null) 'source=${source!.name}', if (persistenceStage != null) 'stage=${persistenceStage!.name}', if (persistenceReason != null) 'reason=${persistenceReason!.name}', if (refreshCompleted != null) 'refreshCompleted=$refreshCompleted', if (exitCode != null) 'exitCode=$exitCode'].join(', ')})';
 }
 
 /// One coordinator is shared by all runtimes of a Claude plugin activation.
@@ -166,7 +160,10 @@ final class HttpClaudeCodeOAuthRefreshClient
       return ClaudeCodeOAuthCredentials(
         accessToken: token,
         refreshToken: refresh,
-        expiresAt: _clock().toUtc().add(Duration(seconds: seconds.toInt())),
+        expiresAt: DateTime.fromMillisecondsSinceEpoch(
+          _clock().millisecondsSinceEpoch + seconds.toInt() * 1000,
+          isUtc: true,
+        ),
         scopes: scope is String
             ? scope.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList()
             : current.scopes,
