@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'claude_code_credentials_service.dart';
+import 'claude_code_macos_keychain_source.dart';
 
 /// Stable failures only. Never attach HTTP bodies, tokens, paths or IO errors.
 enum ClaudeCodeCredentialRefreshFailure {
@@ -19,10 +20,30 @@ enum ClaudeCodeCredentialRefreshFailure {
 }
 
 final class ClaudeCodeCredentialRefreshException implements Exception {
-  const ClaudeCodeCredentialRefreshException(this.failure);
+  const ClaudeCodeCredentialRefreshException(
+    this.failure, {
+    this.source,
+    this.persistenceStage,
+    this.persistenceReason,
+    this.refreshCompleted,
+    this.exitCode,
+  });
   final ClaudeCodeCredentialRefreshFailure failure;
+  final ClaudeCodeCredentialsSource? source;
+  final ClaudeCodeCredentialPersistenceStage? persistenceStage;
+  final ClaudeCodeCredentialPersistenceReason? persistenceReason;
+  final bool? refreshCompleted;
+  final int? exitCode;
   @override
-  String toString() => 'ClaudeCodeCredentialRefreshException(${failure.name})';
+  String toString() => 'ClaudeCodeCredentialRefreshException('
+      '${[
+        failure.name,
+        if (source != null) 'source=${source!.name}',
+        if (persistenceStage != null) 'stage=${persistenceStage!.name}',
+        if (persistenceReason != null) 'reason=${persistenceReason!.name}',
+        if (refreshCompleted != null) 'refreshCompleted=$refreshCompleted',
+        if (exitCode != null) 'exitCode=$exitCode',
+      ].join(', ')})';
 }
 
 /// One coordinator is shared by all runtimes of a Claude plugin activation.
