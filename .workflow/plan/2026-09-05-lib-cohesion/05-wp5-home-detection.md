@@ -564,7 +564,7 @@ Widget buildGlobalHome(ref) {
 
 ## 实施登记（2026-09-06）
 
-已完成，实现提交待登记。实现入口为 `AgentManagementSliceNotifier.ensureDetected/refreshDetection/cancelDetection`、`agentManagementHomeProvider` 与 app 的 `ContributedAgentManagementDetectionAdapter`。详见 [验收记录](../../refactor/2026-09-06-home-detection/00-validation.md)：format / analyze / localized / affected / full 均通过，受影响 880 条，完整门禁根 2118 条 + 内部包 1076 条。89 个原测试声明全部保留，12 条断言调整逐项登记；三条跨版本回归均在前置实现失败、当前实现通过。初始化读取旧设置的额外回归同样完成红绿验证。
+已完成，实现提交 `d2461d25`。实现入口为 `AgentManagementSliceNotifier.ensureDetected/refreshDetection/cancelDetection`、`agentManagementHomeProvider` 与 app 的 `ContributedAgentManagementDetectionAdapter`。详见 [验收记录](../../refactor/2026-09-06-home-detection/00-validation.md)：format / analyze / localized / affected / full 均通过，受影响 880 条，完整门禁根 2118 条 + 内部包 1076 条。89 个原测试声明全部保留，12 条断言调整逐项登记；三条跨版本回归均在前置实现失败、当前实现通过。初始化读取旧设置的额外回归同样完成红绿验证。
 
 实施细化：现有页面实际操作是“打开程序目录”和“复制启动命令”；本次窄 catalog 同时保留打开目录，并补足计划要求的“复制程序位置”，不向 UI 暴露原始路径。贡献目录仍按现有 app-session 冻结，刷新不重新激活插件；目录代次校验与 owner 替换用隔离测试覆盖。成功确认未安装时清除原 schema 中的旧 `cliPath`，避免下次启动恢复为已安装。进程相关配置变化还会拒绝正在等待的旧显式连接检查结果。
 
