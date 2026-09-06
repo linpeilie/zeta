@@ -1,3 +1,4 @@
+import 'memory_agent_management_repository.dart';
 import 'package:zeta/src/app/plugins/agent_provider_icon_overrides.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_icon_resolver.dart';
 import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
@@ -67,7 +68,7 @@ ZetaAppComposition zetaTestComposition({
       ...overrides,
     ],
   );
-  addTearDown(composition.dispose);
+  addTearDown(composition.close);
   return composition;
 }
 
@@ -93,7 +94,9 @@ List<Override> _testDefaultsNotCoveredBy(List<Override> overrides) {
     if (_covers(overrides, agentProviderBundleFactoryProvider) &&
         !_covers(overrides, agentManagementContributionsProvider))
       agentManagementContributionsProvider.overrideWithValue(
-        testAgentManagementContributions,
+        testAgentManagementContributions
+            .map(memoryManagementContribution)
+            .toList(),
       ),
     if (_covers(overrides, agentProviderBundleFactoryProvider) &&
         !_covers(overrides, agentUsageContributionsProvider))

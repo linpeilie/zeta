@@ -556,3 +556,5 @@ T5：pane 门闩改为读 `agentConversationComposerProvider`（或局部已有�
 3. **未进 region 的头栏字段**：`projectName` / `projectPath` 仍直读 ViewModel。
 4. **死投影字段**：`AgentHeaderState.showRunningIndicator`、`AgentComposerState.conversationModeStatusMessage` 无生产读取；T2 平移投影时保留（相等性/测试），不要当无主删除。
 5. **context_panel 订阅 `providerController`**：presentation 直接听 settings 端口。T5 前要有替代订阅，否则删 ViewModel 后面板目录不刷新。
+
+> 2026-09-06 后继：Management 已按 [lib cohesion WP-3M](../2026-09-05-lib-cohesion/03-wp3-state-ownership.md) 迁移 application Notifier；Conversation 的后继由 WP-3C 承接。此记录不修改本文件的历史目标和验收证据。

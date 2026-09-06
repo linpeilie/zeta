@@ -1,3 +1,11 @@
+import 'dart:async';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
+import '../../testing/zeta_test_app.dart';
+import '../../testing/ide_test_harness.dart'
+    show FakeAgentProvider, FakeAgentProviderBundleBuilder;
+import '../../testing/agent_management_test_container.dart';
+import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_notifier.dart';
 import '../../testing/memory_agent_runtime_fact_source.dart';
 import '../../testing/agent_management_test_definitions.dart';
 import 'package:flutter/foundation.dart';
@@ -32,18 +40,25 @@ void main() {
       );
       final runtimeSource = MemoryAgentRuntimeFactSource();
       final repository = _RunnerRepository();
-      final composition = AgentManagementSliceComposition.create(
-        definitions: testAgentManagementDefinitions,
-        repositories: <String, AgentCliManagementRepository>{
-          defaultClaudeCodeProviderId: repository,
-        },
-        providerSettings: settingsPort,
-        runtimeFactSource: runtimeSource,
-        textCatalog: const FallbackAgentManagementTextCatalog(),
+      final composition = managementAppTestContainer(
+        AgentManagementCompositionInputs(
+          definitions: testAgentManagementDefinitions,
+          repositories: <String, AgentCliManagementRepository>{
+            defaultClaudeCodeProviderId: repository,
+          },
+          providerSettings: settingsPort,
+          textCatalog: const FallbackAgentManagementTextCatalog(),
+        ),
       );
-      final store = composition.store;
-      addTearDown(() {
-        composition.close();
+      final store = composition.read(agentManagementSliceProvider.notifier);
+      final subscription = composition.listen(
+        agentManagementRuntimeIngressProvider(runtimeSource),
+        (_, _) {},
+      );
+      subscription.read().start();
+      addTearDown(() async {
+        subscription.close();
+        await closeManagementTestContainer(composition);
         expect(runtimeSource.listenerCount, 0);
         settingsPort.dispose();
       });
@@ -92,11 +107,151 @@ void main() {
       );
     },
   );
+  test('detection drain includes persistence already in progress', () async {
+    final settings = _SettingsPort(
+      AgentProviderSettings(providers: [defaultClaudeCodeAgentProviderConfig]),
+    );
+    final write = Completer<void>();
+    settings.updateGate = write;
+    final repository = _RunnerRepository();
+    final container = managementAppTestContainer(_inputs(repository, settings));
+    addTearDown(() async {
+      await closeManagementTestContainer(container);
+      settings.dispose();
+    });
+    final owner = container.read(agentManagementSliceProvider.notifier);
+    await owner.initialize();
+    final detection = expectLater(owner.detect(), throwsStateError);
+    await Future<void>.delayed(Duration.zero);
+    expect(settings.updateCalls, 1);
+    owner.stopAcceptingCommandsAndSettleWaiters();
+    await detection;
+    var drained = false;
+    final drain = owner.drainExecutions().then((_) => drained = true);
+    await Future<void>.delayed(Duration.zero);
+    expect(drained, isFalse);
+    write.complete();
+    await drain;
+    expect(repository.detectionCalls, 1);
+  });
+
+  for (final stopDuringRead in [false, true]) {
+    test(
+      'logs drain includes ${stopDuringRead ? 'read' : 'discover'} and stops later steps',
+      () async {
+        final settings = _SettingsPort(
+          AgentProviderSettings(
+            providers: [defaultClaudeCodeAgentProviderConfig],
+          ),
+        );
+        final repository = _RunnerRepository();
+        final gate = Completer<void>();
+        if (stopDuringRead) {
+          repository.logsGate = gate;
+        } else {
+          repository.discoverGate = gate;
+        }
+        final container = managementAppTestContainer(
+          _inputs(repository, settings),
+        );
+        addTearDown(() async {
+          await closeManagementTestContainer(container);
+          settings.dispose();
+        });
+        final owner = container.read(agentManagementSliceProvider.notifier);
+        await owner.initialize();
+        final logs = expectLater(owner.loadLogs(), throwsStateError);
+        await Future<void>.delayed(Duration.zero);
+        expect(repository.logCalls, stopDuringRead ? 1 : 0);
+        owner.stopAcceptingCommandsAndSettleWaiters();
+        await logs;
+        var drained = false;
+        final drain = owner.drainExecutions().then((_) => drained = true);
+        await Future<void>.delayed(Duration.zero);
+        expect(drained, isFalse);
+        gate.complete();
+        await drain;
+        expect(repository.logCalls, stopDuringRead ? 1 : 0);
+        expect(owner.logs, isEmpty);
+      },
+    );
+  }
+
+  test(
+    'app builds management without Widgets and close waits save before registry and container',
+    () async {
+      final settings = _SettingsPort(
+        AgentProviderSettings(
+          providers: [defaultClaudeCodeAgentProviderConfig],
+        ),
+      );
+      final repository = _RunnerRepository();
+      final saveGate = Completer<void>();
+      repository.saveGate = saveGate;
+      final registry = _RecordingRegistry();
+      final app = zetaTestComposition(
+        overrides: [
+          agentManagementCompositionInputsProvider.overrideWithValue(
+            _inputs(repository, settings),
+          ),
+          agentProviderRuntimeRegistryProvider.overrideWithValue(registry),
+          agentProviderBundleFactoryProvider.overrideWithValue(
+            registry.providerFactory,
+          ),
+        ],
+      );
+      final owner = app.container.read(agentManagementSliceProvider.notifier);
+      await owner.initialize();
+      expect(owner.initialized, isTrue);
+      final facts = MemoryAgentRuntimeFactSource();
+      final detach = app.connectManagementRuntimeFacts(facts);
+      expect(facts.listenerCount, 1);
+      detach();
+      expect(facts.listenerCount, 0);
+      expect(owner.isClosed, isFalse);
+      final detachAgain = app.connectManagementRuntimeFacts(facts);
+      expect(facts.listenerCount, 1);
+      final anotherBorrow = app.connectManagementRuntimeFacts(facts);
+      detachAgain();
+      expect(facts.listenerCount, 1);
+      await owner.loadConfiguration();
+      final saved = expectLater(
+        owner.saveConfiguration('new config'),
+        throwsStateError,
+      );
+      expect(repository.saveCalls, 1);
+      var containerDisposed = false;
+      app.container.listen(
+        agentManagementSliceProvider,
+        (_, _) {},
+        onError: (_, _) {},
+      );
+      app.container.read(
+        _disposalProbeProvider(() => containerDisposed = true),
+      );
+      final close = app.close();
+      expect(app.close(), same(close));
+      app.dispose();
+      await saved;
+      expect(registry.closeCalls, 0);
+      expect(facts.listenerCount, 0);
+      anotherBorrow();
+      expect(containerDisposed, isFalse);
+      saveGate.complete();
+      await close;
+      expect(registry.closeCalls, 1);
+      expect(containerDisposed, isTrue);
+      settings.dispose();
+    },
+  );
 }
 
 final class _RunnerRepository
     implements AgentCliManagementRepository, AgentCliManagementDescriptor {
   int detectionCalls = 0;
+  int saveCalls = 0;
+  int logCalls = 0;
+  Completer<void>? saveGate, discoverGate, logsGate;
 
   @override
   String get agentId => defaultClaudeCodeProviderId;
@@ -189,6 +344,8 @@ final class _RunnerRepository
     required String content,
     bool overwriteExternalChanges = false,
   }) async {
+    saveCalls += 1;
+    await saveGate?.future;
     return AgentConfigurationSaveResult(
       document: AgentConfigurationDocument(
         path: original.path,
@@ -203,23 +360,28 @@ final class _RunnerRepository
   }
 
   @override
-  Future<List<String>> discoverLogPaths() async => const <String>[
-    '/tmp/claude.log',
-  ];
+  Future<List<String>> discoverLogPaths() async {
+    await discoverGate?.future;
+    return const ['/tmp/claude.log'];
+  }
 
   @override
   Future<List<AgentLogEntry>> readLogs(
     List<String> paths, {
     int maxLines = 1000,
-  }) async => <AgentLogEntry>[
-    AgentLogEntry(
-      id: 'log',
-      sourcePath: paths.single,
-      message: 'safe log',
-      level: AgentLogLevel.info,
-      timestamp: DateTime.utc(2026, 8, 23),
-    ),
-  ];
+  }) async {
+    logCalls += 1;
+    await logsGate?.future;
+    return [
+      AgentLogEntry(
+        id: 'log',
+        sourcePath: paths.single,
+        message: 'safe log',
+        level: AgentLogLevel.info,
+        timestamp: DateTime.utc(2026, 8, 23),
+      ),
+    ];
+  }
 }
 
 final class _SettingsPort extends ChangeNotifier
@@ -230,6 +392,8 @@ final class _SettingsPort extends ChangeNotifier
       );
 
   AgentProviderSettings _settings;
+  Completer<void>? updateGate;
+  int updateCalls = 0;
 
   final AgentModelCatalogRepository modelCatalogRepository;
 
@@ -309,6 +473,8 @@ final class _SettingsPort extends ChangeNotifier
     AgentProviderConfig updated, {
     bool restartProvider = false,
   }) async {
+    updateCalls += 1;
+    await updateGate?.future;
     _settings = AgentProviderSettings(
       providers: <AgentProviderConfig>[
         for (final provider in _settings.providers)
@@ -352,5 +518,36 @@ final class _SettingsPort extends ChangeNotifier
   void Function() subscribe(void Function() listener) {
     addListener(listener);
     return () => removeListener(listener);
+  }
+}
+
+AgentManagementCompositionInputs _inputs(
+  _RunnerRepository repository,
+  _SettingsPort settings,
+) => AgentManagementCompositionInputs(
+  repositories: {defaultClaudeCodeProviderId: repository},
+  definitions: testAgentManagementDefinitions,
+  providerSettings: settings,
+  textCatalog: const FallbackAgentManagementTextCatalog(),
+);
+final _disposalProbeProvider = Provider.family<void, void Function()>((
+  ref,
+  callback,
+) {
+  ref.onDispose(callback);
+});
+
+final class _RecordingRegistry extends AgentProviderRuntimeRegistry {
+  _RecordingRegistry()
+    : super(
+        providerFactory: FakeAgentProviderBundleBuilder.fromFake(
+          FakeAgentProvider(),
+        ),
+      );
+  int closeCalls = 0;
+  @override
+  Future<void> close() {
+    closeCalls += 1;
+    return super.close();
   }
 }

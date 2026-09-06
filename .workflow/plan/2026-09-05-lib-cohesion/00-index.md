@@ -12,7 +12,7 @@
 |---|---|---|---|---|
 | WP-1 | 管理页运行状态归属与多 Provider 聚合 | [运行状态聚合](01-wp1-runtime-summary.md) | 无；WP-3 更换源 owner 时保持本契约 | 已完成，见 §6 |
 | WP-2 | Conversation 命令入口统一 | [会话命令](02-wp2-conversation-actions.md) | WP-6、WP-3C | 未开始 |
-| WP-3 | 单一状态 owner 与组合生命周期 | [状态与装配](03-wp3-state-ownership.md) | WP-1；其中 WP-3P 依赖 WP-4 | 未开始 |
+| WP-3 | 单一状态 owner 与组合生命周期 | [状态与装配](03-wp3-state-ownership.md) | WP-1；其中 WP-3P 依赖 WP-4 | WP-3M 已完成，P/C 未开始，见 §6 |
 | WP-4 | Project Threads 重复规则收口 | [Thread 列表规则](04-wp4-project-threads.md) | 无；先基于现有 Store 收口 | 已完成，见 §6 |
 | WP-5 | 首页探测逻辑下沉 | [首页探测](05-wp5-home-detection.md) | WP-3M | 未开始 |
 | WP-6 | Session config 显式失败与结果契约 | [配置命令](06-wp6-session-config.md) | 无；WP-2 后接入统一入口 | 已完成，见 §6 |
@@ -168,8 +168,9 @@ bash tool/test_full.sh
 | 2026-09-05 | WP-6 | `8778a8ae` | format / analyze 通过；定向 54 条、受影响 925 条通过；[验收记录](../../fix/2026-09-05-session-config/00-validation.md) | 已完成 |
 | 2026-09-06 | WP-1 | `ea56f5c9` | format / analyze 通过；Shell 34 条、受影响 681 条通过；[验收记录](../../fix/2026-09-06-management-runtime/00-validation.md) | 已完成 |
 | 2026-09-06 | WP-4 | `11c6d9c8` | format / analyze / affected / full 通过；33 条旧测试的 131 条原断言保留；定向 59、集成/分层 45，full 根 2007 + 内部包 1076；[验收记录](../../refactor/2026-09-06-project-threads/00-validation.md) | 已完成 |
+| 2026-09-06 | WP-3M | 随本次提交登记 | format / analyze / affected / full 通过；101 条定向，133 条原业务断言保留（O-04 按设计调整）；full 根 2024 + 内部包 1076；[验收记录](../../refactor/2026-09-06-management-owner/00-validation.md) | 已完成 |
 
-当前下一项：**WP-3M · Management owner 迁移**。WP-4 已收口唯一 Store 业务与索引；WP-3P 的 Deferred / listener / presentation 镜像迁移仍待执行。WP-2 的统一 Actions 和 WP-3 的状态 owner 迁移尚未开始；WP-6 现有临时 UI 翻译边界的后继动作见其 §6.7。
+当前下一项：**WP-3P · Project Threads owner 迁移**。WP-3M 已迁移管理状态 owner、具名结果回流与真实执行排空；管理 owner 由应用拥有，Shell 事实源通过独立 ingress 借用。WP-4 的唯一 Store 业务与索引为 P 阶段基线；Project Threads / Workspace / Conversation 的 listener、镜像、Deferred、registry 和完整 Shell 前移仍待 P/C。WP-2 统一 Actions 与 WP-5 首页探测仍未开始。
 
 ## 7. 文档校验记录
 

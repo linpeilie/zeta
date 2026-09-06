@@ -6,28 +6,28 @@ import 'package:zeta_foundation/zeta_foundation.dart';
 
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_effect.dart';
-import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_store.dart';
+import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_dependencies.dart';
 import 'package:zeta_agent_provider_sdk/zeta_agent_provider_sdk.dart';
 import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 
 /// Agent management MVI 的 app 组合层 effect runner。
 ///
-/// repository、Provider settings 写入与 runtime ingress 都停留在这一层；store
-/// 只接收 typed result intent，不保存原始异常对象。
+/// repository、Provider settings 写入与 runtime ingress 都停留在这一层；具名 result sink
+/// 只接收类型化结果，不保存原始异常对象。
 final class AgentManagementSliceRunnerAdapter
     implements AgentManagementSliceEffectRunner {
   AgentManagementSliceRunnerAdapter({
     required Map<String, AgentCliManagementRepository> repositories,
     required Map<String, AgentDefinition> definitions,
     required AgentProviderSettingsPort providerSettings,
-    required AgentManagementSliceStore store,
+    required AgentManagementResultSink sink,
     required AgentManagementTextCatalog textCatalog,
     DateTime Function()? now,
   }) : this._(
          repositories,
          definitions,
          providerSettings,
-         store,
+         sink,
          textCatalog,
          now ?? DateTime.now,
        );
@@ -36,7 +36,7 @@ final class AgentManagementSliceRunnerAdapter
     Map<String, AgentCliManagementRepository> repositories,
     Map<String, AgentDefinition> definitions,
     this._providerSettings,
-    this._store,
+    this._sink,
     this._textCatalog,
     this._now,
   ) : _definitions = Map.unmodifiable(definitions),
@@ -47,29 +47,30 @@ final class AgentManagementSliceRunnerAdapter
   final Map<String, AgentDefinition> _definitions;
   final Map<String, AgentCliManagementRepository> _repositories;
   final AgentProviderSettingsPort _providerSettings;
-  final AgentManagementSliceStore _store;
+  final AgentManagementResultSink _sink;
   final AgentManagementTextCatalog _textCatalog;
   final DateTime Function() _now;
 
   @override
-  void run(AgentManagementSliceEffect effect) {
+  Future<void> run(AgentManagementSliceEffect effect) {
+    if (_sink.isClosed) return Future<void>.value();
     switch (effect) {
       case ManagementInitializeEffect():
-        unawaited(_initialize(effect));
+        return _initialize(effect);
       case DetectAgentsEffect():
-        unawaited(_detect(effect));
+        return _detect(effect);
       case UpdateProviderEnabledEffect():
-        unawaited(_updateProviderEnabled(effect));
+        return _updateProviderEnabled(effect);
       case UpdateAccountDataEnrichmentEffect():
-        unawaited(_updateAccountDataEnrichment(effect));
+        return _updateAccountDataEnrichment(effect);
       case TestAgentConnectionEffect():
-        unawaited(_testConnection(effect));
+        return _testConnection(effect);
       case LoadAgentConfigurationEffect():
-        unawaited(_loadConfiguration(effect));
+        return _loadConfiguration(effect);
       case SaveAgentConfigurationEffect():
-        unawaited(_saveConfiguration(effect));
+        return _saveConfiguration(effect);
       case LoadAgentLogsEffect():
-        unawaited(_loadLogs(effect));
+        return _loadLogs(effect);
     }
   }
 
@@ -89,9 +90,9 @@ final class AgentManagementSliceRunnerAdapter
           repository: entry.value,
         );
       }
-      _store.initializationSucceeded(effect.operationId, settings, agents);
+      _sink.initializationSucceeded(effect.operationId, settings, agents);
     } catch (error, stackTrace) {
-      _store.initializationFailed(effect.operationId, error, stackTrace);
+      _sink.initializationFailed(effect.operationId, error, stackTrace);
     }
   }
 
@@ -100,10 +101,12 @@ final class AgentManagementSliceRunnerAdapter
       final ids = _repositories.keys.toList(growable: false);
       var index = 0;
       for (final id in ids) {
+        if (_sink.isClosed) return;
         index += 1;
         final repository = _repository(id);
-        _store.detectionStarted(effect.operationId, id);
+        _sink.detectionStarted(effect.operationId, id);
         final config = _configForAgent(_providerSettings.settings, repository);
+        if (_sink.isClosed) return;
         final detected = await repository.detect(
           providerConfig: config,
           enabled: config.enabled,
@@ -118,7 +121,7 @@ final class AgentManagementSliceRunnerAdapter
                 message: progress.message,
               ),
             );
-            _store.detectionProgressReported(
+            _sink.detectionProgressReported(
               effect.operationId,
               id,
               mappedProgress,
@@ -126,13 +129,15 @@ final class AgentManagementSliceRunnerAdapter
             );
           },
         );
+        if (_sink.isClosed) return;
         final mapped = detected;
-        _store.agentDetected(effect.operationId, id, mapped);
+        _sink.agentDetected(effect.operationId, id, mapped);
+        if (_sink.isClosed) return;
         await _persistDetectionSummary(id, config, mapped);
       }
-      _store.detectionCompleted(effect.operationId);
+      _sink.detectionCompleted(effect.operationId);
     } catch (error) {
-      _store.detectionFailed(
+      _sink.detectionFailed(
         effect.operationId,
         _textCatalog.detectionIncomplete(error),
       );
@@ -148,14 +153,14 @@ final class AgentManagementSliceRunnerAdapter
         effect.agentId,
         effect.enabled,
       );
-      _store.providerEnabledUpdated(
+      _sink.providerEnabledUpdated(
         effect.operationId,
         effect.agentId,
         effect.enabled,
         _providerSettings.settings,
       );
     } catch (error) {
-      _store.providerEnabledUpdateFailed(
+      _sink.providerEnabledUpdateFailed(
         effect.operationId,
         effect.agentId,
         _textCatalog.cannotToggleEnabled(
@@ -176,7 +181,7 @@ final class AgentManagementSliceRunnerAdapter
       repository,
     )?.managementCapabilities.accountDataEnrichmentExtraKey;
     if (key == null) {
-      _store.accountDataEnrichmentUpdateFailed(
+      _sink.accountDataEnrichmentUpdateFailed(
         effect.operationId,
         effect.agentId,
         _textCatalog.accountDataEnrichmentSaveFailed(
@@ -198,13 +203,13 @@ final class AgentManagementSliceRunnerAdapter
       await _providerSettings.updateProviderConfig(
         current.copyWith(extra: extra),
       );
-      _store.accountDataEnrichmentUpdated(
+      _sink.accountDataEnrichmentUpdated(
         effect.operationId,
         effect.agentId,
         _providerSettings.settings,
       );
     } catch (error) {
-      _store.accountDataEnrichmentUpdateFailed(
+      _sink.accountDataEnrichmentUpdateFailed(
         effect.operationId,
         effect.agentId,
         _textCatalog.accountDataEnrichmentSaveFailed(error),
@@ -218,7 +223,7 @@ final class AgentManagementSliceRunnerAdapter
       final result = await repository.testConnection(
         providerConfig: _configForAgent(_providerSettings.settings, repository),
       );
-      _store.connectionTestSucceeded(
+      _sink.connectionTestSucceeded(
         operationId: effect.operationId,
         agentId: effect.agentId,
         result: result.$1,
@@ -229,7 +234,7 @@ final class AgentManagementSliceRunnerAdapter
         modelsUpdatedAt: _now(),
       );
     } catch (error) {
-      _store.connectionTestFailed(
+      _sink.connectionTestFailed(
         effect.operationId,
         effect.agentId,
         _textCatalog.connectionTestFailed(error),
@@ -240,9 +245,9 @@ final class AgentManagementSliceRunnerAdapter
   Future<void> _loadConfiguration(LoadAgentConfigurationEffect effect) async {
     try {
       final document = await _repository(effect.agentId).readConfiguration();
-      _store.configurationLoaded(effect.operationId, effect.agentId, document);
+      _sink.configurationLoaded(effect.operationId, effect.agentId, document);
     } catch (error) {
-      _store.configurationLoadFailed(
+      _sink.configurationLoadFailed(
         effect.operationId,
         effect.agentId,
         _textCatalog.configurationReadFailed(error),
@@ -257,14 +262,14 @@ final class AgentManagementSliceRunnerAdapter
         content: effect.content,
         overwriteExternalChanges: effect.overwriteExternalChanges,
       );
-      _store.configurationSaved(
+      _sink.configurationSaved(
         effect.operationId,
         effect.agentId,
         effect.original.signature,
         result,
       );
     } catch (error, stackTrace) {
-      _store.configurationSaveFailed(
+      _sink.configurationSaveFailed(
         effect.operationId,
         effect.agentId,
         error,
@@ -277,10 +282,11 @@ final class AgentManagementSliceRunnerAdapter
     try {
       final repository = _repository(effect.agentId);
       final paths = await repository.discoverLogPaths();
+      if (_sink.isClosed) return;
       final logs = await repository.readLogs(paths);
-      _store.logsLoaded(effect.operationId, effect.agentId, paths, logs);
+      _sink.logsLoaded(effect.operationId, effect.agentId, paths, logs);
     } catch (error) {
-      _store.logsLoadFailed(
+      _sink.logsLoadFailed(
         effect.operationId,
         effect.agentId,
         _textCatalog.logsReadFailed(error),
@@ -302,6 +308,7 @@ final class AgentManagementSliceRunnerAdapter
         path: path,
       );
     }
+    if (_sink.isClosed) return;
     updated = updated.copyWith(
       id: agentId,
       extra: <String, Object?>{
@@ -357,7 +364,7 @@ final class AgentManagementSliceRunnerAdapter
         : null;
     final definition =
         _definitions[agentId] ??
-        _store.state.agentsById[agentId]?.definition ??
+        _sink.current.agentsById[agentId]?.definition ??
         AgentDefinition(
           id: agentId,
           displayName: agentId,

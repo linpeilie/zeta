@@ -179,6 +179,8 @@ Future<void> _pumpIdeHome(
   await tester.pump(const Duration(milliseconds: 1));
   await tester.idle();
   await tester.pump();
+  // The app container closes after the legacy Widget-owned Shell has unmounted.
+  addTearDown(() => tester.pumpWidget(const SizedBox.shrink()));
 }
 
 ManagedAgent _installedAgent(AgentDefinition definition) {

@@ -1,3 +1,5 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_notifier.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -14,23 +16,21 @@ import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
 /// Codex TOML 配置编辑器。
-class AgentConfigurationEditor extends StatefulWidget {
-  const AgentConfigurationEditor({
-    required this.operations,
-    this.onDirtyChanged,
-    super.key,
-  });
+class AgentConfigurationEditor extends ConsumerStatefulWidget {
+  const AgentConfigurationEditor({this.onDirtyChanged, super.key});
 
-  final AgentManagementOperations operations;
   final ValueChanged<bool>? onDirtyChanged;
 
   @override
-  State<AgentConfigurationEditor> createState() =>
+  ConsumerState<AgentConfigurationEditor> createState() =>
       AgentConfigurationEditorState();
 }
 
 /// 暴露未保存状态，供设置页在离开前确认。
-class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
+class AgentConfigurationEditorState
+    extends ConsumerState<AgentConfigurationEditor> {
+  AgentManagementOperations get _operations =>
+      ref.read(agentManagementOperationsProvider);
   late final _TomlEditingController _editingController;
   late final TextEditingController _searchController;
   bool _revealed = false;
@@ -51,7 +51,7 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
       if (!mounted) {
         return;
       }
-      final existing = widget.operations.configuration;
+      final existing = _operations.configuration;
       if (existing != null) {
         _setEditorContent(
           _revealed ? existing.content : existing.maskedContent,
@@ -98,6 +98,7 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(agentManagementSliceProvider);
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     final brightness = sf.Theme.of(context).brightness;
@@ -105,8 +106,8 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
       ..syntaxTheme = brightness == Brightness.dark ? vs2015Theme : githubTheme
       ..baseStyle = textStyles.codeSmall.copyWith(color: colors.textPrimary);
 
-    final document = widget.operations.configuration;
-    if (widget.operations.loadingConfiguration && document == null) {
+    final document = _operations.configuration;
+    if (_operations.loadingConfiguration && document == null) {
       return Center(
         child: IdeLoadingIndicator(
           width: 32,
@@ -117,9 +118,7 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
     }
     if (document == null) {
       return EmptyState(
-        text:
-            widget.operations.operationError ??
-            context.l10n.mgmtConfigNotLoadedYet,
+        text: _operations.operationError ?? context.l10n.mgmtConfigNotLoadedYet,
       );
     }
 
@@ -336,13 +335,12 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
             const SizedBox(width: IdeSpacing.space8),
             sf.PrimaryButton(
               key: const ValueKey('agent-config-save-button'),
-              onPressed:
-                  _dirty && valid && !widget.operations.savingConfiguration
+              onPressed: _dirty && valid && !_operations.savingConfiguration
                   ? _save
                   : null,
               size: sf.ButtonSize.small,
               child: Text(
-                widget.operations.savingConfiguration
+                _operations.savingConfiguration
                     ? context.l10n.mgmtSaving
                     : context.l10n.mgmtSaveConfig,
               ),
@@ -354,7 +352,7 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
   }
 
   Future<void> _load() async {
-    final document = await widget.operations.loadConfiguration();
+    final document = await _operations.loadConfiguration();
     if (document == null || !mounted) {
       return;
     }
@@ -365,7 +363,7 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
   }
 
   void _toggleReveal() {
-    final document = widget.operations.configuration;
+    final document = _operations.configuration;
     if (document == null || _dirty) {
       return;
     }
@@ -376,7 +374,7 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
           : document.maskedContent;
       _editingController.selection = const TextSelection.collapsed(offset: 0);
       _validationError = _revealed
-          ? widget.operations.validateConfiguration(document.content)
+          ? _operations.validateConfiguration(document.content)
           : null;
     });
   }
@@ -385,9 +383,9 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
     if (!_revealed) {
       return;
     }
-    final document = widget.operations.configuration;
+    final document = _operations.configuration;
     final dirty = document != null && content != document.content;
-    final error = widget.operations.validateConfiguration(content);
+    final error = _operations.validateConfiguration(content);
     if (dirty == _dirty && error == _validationError) {
       return;
     }
@@ -398,7 +396,7 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
   }
 
   void _discardChanges() {
-    final document = widget.operations.configuration;
+    final document = _operations.configuration;
     if (document == null) {
       return;
     }
@@ -407,7 +405,7 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
 
   Future<void> _save({bool overwriteExternalChanges = false}) async {
     try {
-      final result = await widget.operations.saveConfiguration(
+      final result = await _operations.saveConfiguration(
         _editingController.text,
         overwriteExternalChanges: overwriteExternalChanges,
       );
@@ -495,7 +493,7 @@ class AgentConfigurationEditorState extends State<AgentConfigurationEditor> {
       _editingController.text = content;
       _editingController.selection = const TextSelection.collapsed(offset: 0);
       _validationError = _revealed
-          ? widget.operations.validateConfiguration(content)
+          ? _operations.validateConfiguration(content)
           : null;
       _setDirty(dirty);
     });

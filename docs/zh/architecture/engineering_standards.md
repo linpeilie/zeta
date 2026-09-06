@@ -177,7 +177,7 @@ widget test 不另开一套模式开关：`zetaTestComposition` / `zetaTestApp` 
 这条约束有个硬理由：**Riverpod 对同一容器内的重复 override 直接断言失败**（`ProviderContainer`
 构造时就抛，debug 下必现）。组合根一旦替某个 provider 装了默认 override，调用方就再也覆盖不掉
 它——fake 进不来。所以组合根内部只装三类调用方不该碰的东西：已解析的可观测性实例、显示语言
-冻结之后才存在的文本目录、三个切片组合的 store 出口。其余一律留给 `overrides`。
+冻结之后才存在的文本目录、切片的冻结依赖与 Runner factory 接缝。其余一律留给 `overrides`。
 
 同理，声明在 feature `application` 层的 provider 够不到 `data` 实现（那是反向依赖），兜底写不
 进 body：外观仓库、系统字体目录、目录选择器就属于这一类。窗口宿主必须先
@@ -212,6 +212,10 @@ notifier 依赖了 runner provider，runner 再读 notifier 就构成 Riverpod �
 （`test/src/architecture/`）和 review diff 都变噪。provider 一律手写声明。
 
 守卫：`feature_layering_guard_test`。
+
+Management 的状态、operation waiter 与执行账本由应用会话级 `AgentManagementSliceNotifier` 独占；`agentManagementSliceProvider` 非 family、非 autoDispose。`build` 只读取冻结依赖，Runner factory 接收具名 `AgentManagementResultSink`，不得持 Ref 回读 owner。设置与运行事实经独立 app ingress 输入，Page、Editor、LogView 只读 provider 与 `AgentManagementOperations`，没有旧 Store、Deferred 或状态镜像。
+
+关闭先封命令入口并以原 `StateError` 结算等待者，再 `await drainExecutions()` 等待已发出的真实 I/O，最后释放 runtime registry、插件和容器；`ZetaAppComposition.close()` 可等待且幂等，同步 `dispose()` 只启动同一关闭过程。Runner 返回的执行 Future 包含探测后的持久化与日志的两段读取，不能拿已结算的调用方 Future 当作资源释放证据。原初始化/保存错误和堆栈只沿 Future 传播，不加入新状态或日志。
 
 ### 3.1 容器与控制器
 
@@ -455,7 +459,7 @@ Project Threads 的同步命令、列表事实和 thread → project 反查索�
 
 管理运行状态只统计本 Workbench 的 session Binding，按精确配置实例 `providerId` 聚合所有前后台 entry，并保留无 entry 但仍有 runtime 的 Binding。默认 Provider 与 Canvas 选择不参与归属；global 模型预热、连接测试和外部 CLI 进程不计入。`ready` 只证明连接，活跃 turn/等待交互才证明运行；不从历史 active 或短 RPC 计数猜测 turn。禁用是配置策略，现存事实保留至实际 clear/remove。主状态按 running → error → starting → unavailable → idle → disabled → notRunning 投影，`hasErrors` 独立保留。
 
-`WorkspaceAgentRuntimeFactSource` 是 app 层唯一跨 feature 适配器；它借用 BindingManager 与 controller 的无正文观测，不拥有 runtime。controller 的观测与 ThreadSnapshot 共用安全发布边界，live 接线时冻结观测来源 identity/connection scope，避免旧状态被重新标记为新实例或新连接的事实。未取得 runtime 的启动失败用内存 `attemptEpoch` 隔离，重试前递增。source 按 Binding 对象身份管理订阅，回调必须校验 source/handle/subscription 代次并同步全量重读。`AgentManagementSliceStore` 仍是当前 owner，reducer 统一出口投影兼容 `ManagedAgent.runtimeState`；初始化、探测、连接测试与 settings ingress 不得各自赋值。运行事实、opaque key 和来源代次不落盘、不写日志。
+`WorkspaceAgentRuntimeFactSource` 是 app 层唯一跨 feature 适配器；它借用 BindingManager 与 controller 的无正文观测，不拥有 runtime。controller 的观测与 ThreadSnapshot 共用安全发布边界，live 接线时冻结观测来源 identity/connection scope，避免旧状态被重新标记为新实例或新连接的事实。未取得 runtime 的启动失败用内存 `attemptEpoch` 隔离，重试前递增。source 按 Binding 对象身份管理订阅，回调必须校验 source/handle/subscription 代次并同步全量重读。`AgentManagementSliceNotifier` 是唯一管理 owner，reducer 统一出口投影兼容 `ManagedAgent.runtimeState`；初始化、探测、连接测试与 settings ingress 不得各自赋值。运行事实、opaque key 和来源代次不落盘、不写日志。
 
 ### 4.1 Agent 流式身份与叙事边界
 
