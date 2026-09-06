@@ -872,7 +872,7 @@ M 阶段已完成，P/C 仍未开始。生产结果入口、原断言审计、13
 
 ## 12. WP-3P 实施验收（2026-09-06）
 
-P-1/P-2 完成，详见 [验收记录](../../refactor/2026-09-06-project-threads-owner/00-validation.md)，实现提交见总入口。
+P-1/P-2 完成，详见 [验收记录](../../refactor/2026-09-06-project-threads-owner/00-validation.md)，实现提交 `c2a5219d`。
 
 - 唯一 Project Threads Notifier 与 app BindingManager/global runtime 已接入生产 Shell；旧 Store、镜像、Deferred、重复 manager fallback 删除。
 - WP-4 的 33 条原业务测试/131 条断言全部保留；本次开始的 51 条 Store/Runner 测试及其 201 条断言保留。23 条新增回归覆盖同步结算、依赖冻结、ABA/迟到 ingress、真实执行排空、关闭资源顺序、早退出与结构负例。
