@@ -1,3 +1,4 @@
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_actions.dart';
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_owner_key.dart';
@@ -38,6 +39,9 @@ final class ConversationSliceLifetimeCoordinator {
   int get retainedOwnerCount => _owners.length;
   int get releaseMarkerCount => _releaseCompletionMarkers.length;
   int get closeFutureCount => _closeFutures.length;
+
+  AgentConversationActions actionsForOwner(AgentConversationOwnerKey key) =>
+      _owners[key] ?? const AgentClosedConversationActions();
 
   void ensureSlice(AgentConversationOwnerKey key) {
     if (_closing) throw StateError('Conversation lifetimes are closing');

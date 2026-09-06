@@ -1,3 +1,4 @@
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_actions.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -25,6 +26,7 @@ class AgentMessageEntry extends StatelessWidget {
     required this.message,
     required this.useStreamingMarkdown,
     required this.controller,
+    required this.actions,
     required this.markdownCache,
     required this.planRevisionDrafts,
     required this.planExecutionHandoff,
@@ -34,6 +36,7 @@ class AgentMessageEntry extends StatelessWidget {
   final AgentConversationMessage message;
   final bool useStreamingMarkdown;
   final AgentConversationRuntimeController controller;
+  final AgentConversationActions actions;
   final AgentMarkdownCache markdownCache;
   final AgentPlanRevisionDraftStore planRevisionDrafts;
 
@@ -52,6 +55,7 @@ class AgentMessageEntry extends StatelessWidget {
         message: message,
         useStreamingMarkdown: useStreamingMarkdown,
         controller: controller,
+        actions: actions,
         markdownCache: markdownCache,
       );
     }
@@ -77,6 +81,7 @@ class AgentMessageEntry extends StatelessWidget {
       message: message,
       useStreamingMarkdown: useStreamingMarkdown,
       controller: controller,
+      actions: actions,
       markdownCache: markdownCache,
     );
   }
@@ -102,17 +107,18 @@ class AgentMessageEntry extends StatelessWidget {
       revisionController: planRevisionDrafts.controllerFor(request.id),
       revisionFocusNode: planRevisionDrafts.focusNodeFor(request.id),
       controller: controller,
+      actions: actions,
       executionPermission: request.executionPermission,
       executionPermissionOptions: controller.composerState.permissionOptions,
       onSelectExecutionPermission: (option) =>
-          controller.selectPlanExecutionPermissionOption(request, option),
+          actions.selectPlanExecutionPermissionOption(request, option),
       onRevise: (revision) => unawaited(
-        controller.revisePlanExecution(request, revisionMessage: revision),
+        actions.revisePlanExecution(request, revisionMessage: revision),
       ),
       onExecute: request.executionPermission == null
           ? null
-          : () => unawaited(controller.startPlanExecution(request)),
-      onAbandon: () => controller.dismissPlanExecution(request),
+          : () => unawaited(actions.startPlanExecution(request)),
+      onAbandon: () => actions.dismissPlanExecution(request),
     );
   }
 }
@@ -124,11 +130,13 @@ class AgentMessageEntry extends StatelessWidget {
 class AgentLiveActivityStatus extends StatelessWidget {
   const AgentLiveActivityStatus({
     required this.controller,
+    required this.actions,
     required this.isActive,
     super.key,
   });
 
   final AgentConversationRuntimeController controller;
+  final AgentConversationActions actions;
   final bool isActive;
 
   @override
@@ -434,12 +442,14 @@ class _AgentBubbleMessage extends StatelessWidget {
     required this.message,
     required this.useStreamingMarkdown,
     required this.controller,
+    required this.actions,
     required this.markdownCache,
   });
 
   final AgentConversationMessage message;
   final bool useStreamingMarkdown;
   final AgentConversationRuntimeController controller;
+  final AgentConversationActions actions;
   final AgentMarkdownCache markdownCache;
 
   @override
@@ -592,7 +602,7 @@ class _AgentBubbleMessage extends StatelessWidget {
     final text = textController.text;
     textController.dispose();
     if (confirmed == true && text.trim().isNotEmpty) {
-      await controller.editLastUserMessageAndRetry(text);
+      await actions.editLastUserMessageAndRetry(text);
     }
   }
 }
@@ -659,12 +669,14 @@ class _AgentPlanMessageCard extends StatelessWidget {
     required this.message,
     required this.useStreamingMarkdown,
     required this.controller,
+    required this.actions,
     required this.markdownCache,
   });
 
   final AgentConversationMessage message;
   final bool useStreamingMarkdown;
   final AgentConversationRuntimeController controller;
+  final AgentConversationActions actions;
   final AgentMarkdownCache markdownCache;
 
   @override
@@ -684,7 +696,7 @@ class _AgentPlanMessageCard extends StatelessWidget {
               toggleKey: ValueKey<String>('agent-plan-toggle-${message.id}'),
               bodyKey: ValueKey<String>('agent-plan-body-${message.id}'),
               expanded: expanded,
-              onToggle: () => controller.togglePlanMessage(message.id),
+              onToggle: () => actions.togglePlanMessage(message.id),
               leading: Icon(
                 Icons.checklist_rounded,
                 size: 16,

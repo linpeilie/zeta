@@ -254,3 +254,8 @@ The three contribution kinds are `zeta.agent.provider-bundle-factory`, `zeta.age
 ### Management ResultSink and execution drain
 
 `AgentManagementResultSink` is the named result interface captured by a runner for one app-session owner. A logical waiter tracks the command caller; a physical execution Future tracks completion of already-started I/O. Closing can settle the waiter with `StateError` immediately, but borrowed resources remain alive until `drainExecutions()` finishes. This ledger stays private to the owner, outside UI state and persistence.
+
+
+Conversation UI writes use `AgentConversationActions`. A live handle is the entry's `AgentConversationSliceNotifier`; closed or unknown targets return a stateless rejecting handle. Each call freezes its typed payload, operation ID, owner lifetime and scope, then runs through the synchronous reducer and scoped executor with a typed result. Approval admission remains separate for all four meanings. Only permission preferences and each session config key serialize; cancellation and approvals stay independent. Closing immediately settles UI waiters as staleTarget while the existing lifecycle still owns I/O and lease release.
+
+Model saves report each request's success, confirmation requirement, supersession, unchanged value or failure. Fork results distinguish createdSession from activation and never persist the product. Edit-and-retry sends through the new entry's Actions and propagates its actual result. Widgets capture a stable Actions handle instead of resolving a reusable BindingKey in a late callback. RuntimeController remains the executor and read source, with internal bootstrap calls explicitly identified.

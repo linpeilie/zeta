@@ -10,7 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   const effectPath =
       'lib/src/features/agent/application/conversation_slice/'
-      'agent_conversation_slice_effect.dart';
+      'agent_conversation_command_payload.dart';
   const runnerPath =
       'lib/src/features/agent/application/conversation_slice/'
       'agent_conversation_command_effect_runner.dart';
@@ -23,8 +23,8 @@ void main() {
 
     expect(
       source,
-      contains('const AgentConversationCommandEffect(this.operationId'),
-      reason: '找不到命令 effect 基类，守卫的锚点失效了',
+      contains('const AgentConversationCommandEnvelope({'),
+      reason: '找不到命令信封，守卫的锚点失效了',
     );
     expect(
       source,
@@ -49,9 +49,10 @@ void main() {
       reason: 'await 期间 Provider 可能重启，结果回写前必须再校验一次',
     );
 
-    final executionIndex = source.indexOf('matchesForExecution');
-    final invokeIndex = source.indexOf('await invoke()');
-    final commitIndex = source.indexOf('matchesForCommit');
+    final body = source.substring(source.indexOf('Future<void> _runAsync('));
+    final executionIndex = body.indexOf('_canExecute(e)');
+    final invokeIndex = body.indexOf('await _invokeAsync(');
+    final commitIndex = body.indexOf('_canCommit(e)');
     expect(executionIndex, isNonNegative);
     expect(invokeIndex, greaterThan(executionIndex), reason: '执行前校验必须在调用之前');
     expect(commitIndex, greaterThan(invokeIndex), reason: '回写前校验必须在调用之后');

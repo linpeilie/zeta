@@ -1,8 +1,8 @@
 # WP-2 · Conversation 统一命令入口
 
-> 对应问题：问题 2（命令双路径）。工作包：WP-2。状态：仅设计文档，实现未开始。
+> 对应问题：问题 2（命令双路径）。工作包：WP-2。状态：已完成，验收记录见文末。
 > 前置：[WP-3C 单一 Conversation owner](03-wp3-state-ownership.md)、[WP-6 Session config 结果契约](06-wp6-session-config.md)。返回 [开发总入口](00-index.md)。
-> 本文基于当前 checkout 的只读核查；全部拟新增/拟调整 API 与 Dart 风格伪代码都是开发设计，不是已存在或已编译通过的实现。既有发布流程改动不属于本工作包。
+> §2.1–2.10 保留实施前的只读核查、开发设计与伪代码；当前实现校正见 §2.11，验证结果以验收记录为准。既有发布流程改动不属于本工作包。
 
 
 ### 2.1 问题、目标与依赖
@@ -639,3 +639,12 @@ Future<AgentCommandOutcome> submitMessage(String text, { /*完整参数*/ }) =>
 **可验收产物**：逐项覆盖表已签收；普通动作 Future 无永久 pending；fork typed session 正确；四种审批隔离；无 UI→executor 写方法；无 runner↔Notifier import/Ref 环；相关 l10n/ARB 对齐和 localized checker 通过；全量绿，运行态和存储格式不变。
 
 **回滚**：WP2 独立提交，回滚以完整提交为单位（Actions+UI+结果桥+测试）进行，不能仅把 provider 指回 controller 留下其余 typed 账本。WP6 独立修复可以保留；WP3 单 owner 可以保留，临时恢复旧 executor 调用也必须明确整包回滚的版本边界，不能以功能开关长期维持双入口。无数据迁移，因此无需回滚持久化。
+
+
+### 2.11 实现校正与验收入口
+
+- 沿用 WP-3 §13 的 autoDispose + 显式 keepAlive 回收机制；§2.6 原非 autoDispose 伪代码不代表当前实现。
+- Actions 共 35 个方法；固定 scope 常量放在 payload 文件，与完整 typed command 信封保持同一归属。旧命令 provider 和 presentation session-config 翻译器均删除，无兼容写入口。
+- 复核发现本地 `AgentPlanExecutionHandoffController` 仍以“第一个可执行选项”兜底，违反 G5/本文目标；本次一并移除此回退。另在 adopt 后、新发送前复核执行 scope。这是明确的权限行为修正，单独登记旧断言变化，不声称只迁移接口；不改 Provider 协议或 core 包。
+- 普通结果同时覆盖 executor/runner/scope 读取异常；已知 fork 产物不因回写校验失败而丢失。模型保存按各 revision 结算，关闭后重试不创建新 waiter；编辑交接返回后先校验 source scope，再恢复源状态。
+- [本次验收与逐项接线记录](../../refactor/2026-09-06-conversation-actions/00-validation.md)。最终完整门禁已通过，下一项为 WP-5 首页探测。

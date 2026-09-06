@@ -1,3 +1,4 @@
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_actions.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -35,11 +36,13 @@ class AgentCommandGroupCard extends StatelessWidget {
   const AgentCommandGroupCard({
     required this.group,
     required this.controller,
+    required this.actions,
     super.key,
   });
 
   final AgentTimelineCommandGroup group;
   final AgentConversationRuntimeController controller;
+  final AgentConversationActions actions;
 
   @override
   Widget build(BuildContext context) {
@@ -52,7 +55,7 @@ class AgentCommandGroupCard extends StatelessWidget {
           kind: AgentTimelineGroupKind.command,
           groupId: group.id,
           expanded: expanded,
-          onToggle: () => controller.toggleCommandGroup(group.id),
+          onToggle: () => actions.toggleCommandGroup(group.id),
           titleSpan: TextSpan(text: commandGroupSummary(group, context.l10n)),
           leadingIcon: Icons.segment_rounded,
           semanticLabel: context.l10n.agentCommandGroup,
@@ -108,11 +111,13 @@ class AgentFileEditGroupCard extends StatefulWidget {
   const AgentFileEditGroupCard({
     required this.group,
     required this.controller,
+    required this.actions,
     super.key,
   });
 
   final AgentTimelineFileEditGroup group;
   final AgentConversationRuntimeController controller;
+  final AgentConversationActions actions;
 
   @override
   State<AgentFileEditGroupCard> createState() => _AgentFileEditGroupCardState();
@@ -147,6 +152,7 @@ class _AgentFileEditGroupCardState extends State<AgentFileEditGroupCard> {
               ),
               item: widget.group.items[index],
               controller: widget.controller,
+              actions: widget.actions,
             ),
           ],
         ],
@@ -160,10 +166,12 @@ class _AgentFileEditItemRow extends StatelessWidget {
     super.key,
     required this.item,
     required this.controller,
+    required this.actions,
   });
 
   final AgentTimelineFileEditItem item;
   final AgentConversationRuntimeController controller;
+  final AgentConversationActions actions;
 
   @override
   Widget build(BuildContext context) {
@@ -177,7 +185,7 @@ class _AgentFileEditItemRow extends StatelessWidget {
           status: item.status,
           expanded: expanded,
           onToggle: item.hasDetails
-              ? () => controller.toggleFileEditItem(item.id)
+              ? () => actions.toggleFileEditItem(item.id)
               : () {},
         );
       },
@@ -319,11 +327,13 @@ class AgentToolCallCard extends StatelessWidget {
   const AgentToolCallCard({
     required this.toolCall,
     required this.controller,
+    required this.actions,
     super.key,
   });
 
   final AgentToolCall toolCall;
   final AgentConversationRuntimeController controller;
+  final AgentConversationActions actions;
 
   @override
   Widget build(BuildContext context) {
@@ -355,7 +365,7 @@ class AgentToolCallCard extends StatelessWidget {
             expanded: expanded,
             canExpand: canExpand,
             onToggle: canExpand
-                ? () => controller.toggleToolCall(toolCall.id)
+                ? () => actions.toggleToolCall(toolCall.id)
                 : () {},
             titleWidget: IdeTimelineRow(
               title: _toolCardTitle(toolCall, context.l10n),
@@ -437,6 +447,7 @@ class AgentPlanDocumentCard extends StatelessWidget {
     required this.revisionController,
     required this.revisionFocusNode,
     required this.controller,
+    required this.actions,
     required this.onRevise,
     required this.onExecute,
     required this.onAbandon,
@@ -459,6 +470,7 @@ class AgentPlanDocumentCard extends StatelessWidget {
   final TextEditingController revisionController;
   final FocusNode revisionFocusNode;
   final AgentConversationRuntimeController controller;
+  final AgentConversationActions actions;
   final AgentPlanExecutionPermissionChoice? executionPermission;
   final List<AgentPermissionOption> executionPermissionOptions;
   final ValueChanged<AgentPermissionOption>? onSelectExecutionPermission;
@@ -754,12 +766,12 @@ class AgentPlanDocumentCard extends StatelessWidget {
     }
     return AgentModelConfig(
       state: modelConfigState,
-      onSelectModel: controller.selectModel,
-      onSelectReasoningEffort: controller.selectReasoningEffort,
-      onSelectFastEnabled: controller.selectFastEnabled,
-      onResolveCompatibility: controller.resolveModelCompatibilityConflict,
-      onRetrySave: controller.retryModelConfigurationSave,
-      onPopoverClosed: controller.clearModelConfigurationTransientState,
+      onSelectModel: actions.selectModel,
+      onSelectReasoningEffort: actions.selectReasoningEffort,
+      onSelectFastEnabled: actions.selectFastEnabled,
+      onResolveCompatibility: actions.resolveModelCompatibilityConflict,
+      onRetrySave: actions.retryModelConfigurationSave,
+      onPopoverClosed: actions.clearModelConfigurationTransientState,
     );
   }
 }
@@ -2011,6 +2023,7 @@ Widget buildAgentPlanApprovalCard(
   BuildContext context,
   AgentPlanApprovalRequest request, {
   required AgentConversationRuntimeController controller,
+  required AgentConversationActions actions,
   required AgentPlanRevisionDraftStore planRevisionDrafts,
 }) {
   return AgentPlanDocumentCard(
@@ -2024,8 +2037,9 @@ Widget buildAgentPlanApprovalCard(
     revisionController: planRevisionDrafts.controllerFor(request.id),
     revisionFocusNode: planRevisionDrafts.focusNodeFor(request.id),
     controller: controller,
+    actions: actions,
     onRevise: (revision) => unawaited(
-      controller.respondToPlanApproval(
+      actions.respondToPlanApproval(
         request,
         AgentPlanApprovalDecisionKind.rejected,
         reason: revision,
@@ -2033,13 +2047,13 @@ Widget buildAgentPlanApprovalCard(
     ),
     executeLabel: context.l10n.agentAcceptPlan,
     onExecute: () => unawaited(
-      controller.respondToPlanApproval(
+      actions.respondToPlanApproval(
         request,
         AgentPlanApprovalDecisionKind.accepted,
       ),
     ),
     onAbandon: () => unawaited(
-      controller.respondToPlanApproval(
+      actions.respondToPlanApproval(
         request,
         AgentPlanApprovalDecisionKind.cancelled,
       ),

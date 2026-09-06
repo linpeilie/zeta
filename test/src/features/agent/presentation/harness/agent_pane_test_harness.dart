@@ -232,6 +232,7 @@ const AgentModelList agentPaneSingleReasoningModelList = AgentModelList(
 AgentConversationRuntimeController createAgentPaneViewModel(
   AgentPaneFakeProvider provider, {
   AgentThreadSummary? initialThread,
+  String? draftEntryId,
   AgentProviderBundleFactory? providerFactory,
   AgentConversationModeController? conversationModeController,
   List<WorkspaceNode> Function()? workspaceFilesProvider,
@@ -242,6 +243,7 @@ AgentConversationRuntimeController createAgentPaneViewModel(
     provider,
     MemoryAgentProviderConfigStore(),
     initialThread: initialThread,
+    draftEntryId: draftEntryId,
     providerFactory: providerFactory,
     conversationModeController: conversationModeController,
     workspaceFilesProvider: workspaceFilesProvider,
@@ -254,6 +256,7 @@ AgentConversationRuntimeController createAgentPaneViewModelWithStore(
   AgentPaneFakeProvider provider,
   AgentProviderConfigStore configStore, {
   AgentThreadSummary? initialThread,
+  String? draftEntryId,
   AgentProviderBundleFactory? providerFactory,
   AgentConversationModeController? conversationModeController,
   List<WorkspaceNode> Function()? workspaceFilesProvider,
@@ -275,7 +278,7 @@ AgentConversationRuntimeController createAgentPaneViewModelWithStore(
   );
   addTearDown(bindingHarness.close);
   final bindingLease = initialThread == null
-      ? bindingHarness.acquireDraft(provider.config)
+      ? bindingHarness.acquireDraft(provider.config, entryId: draftEntryId)
       : bindingHarness.acquireThread(
           config: provider.config,
           threadId: initialThread.id,

@@ -262,3 +262,8 @@ Zeta 自有数据根目录：`config/`（配置）、`state/`（会话状态与�
 ### Management ResultSink 与执行排空
 
 `AgentManagementResultSink` 是 Runner 捕获的具名结果入口，绑定一个应用会话 owner。逻辑 waiter 表示命令调用方等待结果；物理 execution Future 表示已发出的 I/O 结束。关闭可先以 `StateError` 结算 waiter，但必须 `await drainExecutions()` 才能释放借用资源。该账本仅在 owner 内存中，不进入不可变 UI state 或持久化。
+
+
+Conversation 的 UI 写操作统一调用 `AgentConversationActions`，Live 句柄就是该 entry 的 `AgentConversationSliceNotifier`；关闭/未知目标只返回无状态拒绝句柄。每次调用冻结 typed payload、OperationId、owner lifetime 和 scope，经同步 reducer/runner 执行并返回 typed outcome。四类审批独立去重；只串行权限偏好与同项 session config，取消和审批不排在配置后面。关闭立即以 staleTarget 结算全部 UI waiter，底层 I/O 与租约释放仍由既有生命周期负责。
+
+模型保存逐请求区分 succeeded、requiresConfirmation、superseded、unchanged 与失败；fork 返回 outcome、内存中的 createdSession 和 activated，不能用“创建了 session”推断激活成功。编辑后分支交接经 Shell 新 entry 的 Actions 发送并回传真实结果。Widget/弹层捕获稳定 Actions，不能在迟到回调中重新解析 BindingKey；RuntimeController 只保留 executor、内部初始化与只读查询职责。正文、权限快照、产物与错误原文不进入新增状态、日志或持久化。

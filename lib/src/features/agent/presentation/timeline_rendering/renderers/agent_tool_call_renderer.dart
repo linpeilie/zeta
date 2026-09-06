@@ -34,6 +34,7 @@ final class AgentToolCallRenderer
     return AgentToolCallCard(
       toolCall: payload.toolCall,
       controller: renderContext.controller,
+      actions: renderContext.actions,
     );
   }
 

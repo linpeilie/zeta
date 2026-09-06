@@ -11,7 +11,7 @@
 | 工作包 | 对应问题 | 详细设计 | 前置条件 | 实现状态 |
 |---|---|---|---|---|
 | WP-1 | 管理页运行状态归属与多 Provider 聚合 | [运行状态聚合](01-wp1-runtime-summary.md) | 无；WP-3 更换源 owner 时保持本契约 | 已完成，见 §6 |
-| WP-2 | Conversation 命令入口统一 | [会话命令](02-wp2-conversation-actions.md) | WP-6、WP-3C | 未开始 |
+| WP-2 | Conversation 命令入口统一 | [会话命令](02-wp2-conversation-actions.md) | WP-6、WP-3C | 已完成，见 §6 |
 | WP-3 | 单一状态 owner 与组合生命周期 | [状态与装配](03-wp3-state-ownership.md) | WP-1；其中 WP-3P 依赖 WP-4 | WP-3M/P/C 已完成，见 §6 |
 | WP-4 | Project Threads 重复规则收口 | [Thread 列表规则](04-wp4-project-threads.md) | 无；先基于现有 Store 收口 | 已完成，见 §6 |
 | WP-5 | 首页探测逻辑下沉 | [首页探测](05-wp5-home-detection.md) | WP-3M | 未开始 |
@@ -171,8 +171,9 @@ bash tool/test_full.sh
 | 2026-09-06 | WP-3M | `62a16ed6` | format / analyze / affected / full 通过；101 条定向，133 条原业务断言保留（O-04 按设计调整）；full 根 2024 + 内部包 1076；[验收记录](../../refactor/2026-09-06-management-owner/00-validation.md) | 已完成 |
 | 2026-09-06 | WP-3P | `c2a5219d` | format / analyze / affected / full 通过；WP-4 的 33 条测试与 131 条断言保留；新增 23 条生命周期/接线/守卫；full 根 2047 + 内部包 1076；[验收记录](../../refactor/2026-09-06-project-threads-owner/00-validation.md) | 已完成 |
 | 2026-09-06 | WP-3C | `c2197f76` | format / analyze / affected / full 通过；新增 13 条回归，287 条旧测试保留，8 条结构/终止投影断言调整单独登记；full 根 2060 + 内部包 1076；[验收记录](../../refactor/2026-09-06-conversation-owner/00-validation.md) | 已完成 |
+| 2026-09-06 | WP-2 | 待登记（本提交） | format / analyze / localized / affected / full 通过；35 个 Actions；281 个原测试声明保留，29 条断言调整单独登记；affected 778，full 根 2087 + 内部包 1076；[验收记录](../../refactor/2026-09-06-conversation-actions/00-validation.md) | 已完成 |
 
-当前下一项：**WP-2 · Conversation 统一 Actions**。WP-3M/P/C 已完成单 owner、稳定 ownerKey、完整 Shell 前移、snapshot 与显式 entry/应用关闭编排；Conversation family 的显式保活回收修正见 WP-3 §13。命令仍沿用既有 executor/OperationId 契约，WP-2 负责统一 Actions、typed outcome 和 waiter。WP-5 首页探测仍未开始。
+当前下一项：**WP-5 · 首页探测逻辑下沉**。WP-3M/P/C 已完成单 owner 与显式生命周期，WP-2 已统一 35 个 Conversation Actions、typed outcome 和 waiter，并收紧本地 Plan 权限默认回退。WP-5 仍未开始，完成后进行本系列集成验收。
 
 ## 7. 文档校验记录
 

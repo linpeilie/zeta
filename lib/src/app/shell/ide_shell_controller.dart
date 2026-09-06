@@ -1,3 +1,4 @@
+import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
 import 'package:zeta/src/app/conversation_workspace_slice/conversation_slice_lifetime_coordinator.dart';
 import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_entry_resources.dart';
 import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
@@ -865,7 +866,9 @@ class IdeShellController {
     if (_isDisposed || entry.closing) return entry;
     if (entry.controller.activeProviderId != providerId) {
       try {
-        await entry.controller.switchActiveProvider(providerId);
+        await lifetimes
+            .actionsForOwner(entry.ownerKey)
+            .switchActiveProvider(providerId);
       } catch (error, stackTrace) {
         _log.w(
           'Could not select provider $providerId for project draft $projectPath',
@@ -882,6 +885,7 @@ class IdeShellController {
     );
     projectThreadsController.clearSelectedThread(projectPath);
     agentConversationWorkspace.removeThreadMapping(projectPath);
+    // Entry bootstrap only; user catalog requests go through Actions.
     unawaited(entry.controller.loadModels());
     if (persistSelection) {
       _requestSessionSave();
@@ -918,8 +922,9 @@ class IdeShellController {
       await entry.controller.initialization;
     } else if (entry.controller.threadOpenPhase ==
         AgentThreadOpenPhase.openFailed) {
-      await entry.controller.retryOpenThread();
+      await lifetimes.actionsForOwner(entry.ownerKey).retryOpenThread();
     } else {
+      // Entry bootstrap only; user catalog requests go through Actions.
       unawaited(entry.controller.loadModels());
     }
     if (_isDisposed || entry.closing) return entry;
@@ -1029,7 +1034,7 @@ class IdeShellController {
     _syncSelectedThreadTitleFromList();
   }
 
-  Future<void> _openCreatedThread({
+  Future<AgentCommandOutcome> _openCreatedThread({
     required AgentSession session,
     required AgentContext context,
     String? initialMessage,
@@ -1061,8 +1066,11 @@ class IdeShellController {
       contextFilePath: context.filePath,
     );
     if (trimmedMessage != null && trimmedMessage.isNotEmpty) {
-      await entry.controller.sendMessage(trimmedMessage);
+      return lifetimes
+          .actionsForOwner(entry.ownerKey)
+          .sendMessage(trimmedMessage);
     }
+    return const AgentCommandOutcome.succeeded();
   }
 
   /// 从当前时间线取首条用户消息，作为新 thread 的临时列表 preview。

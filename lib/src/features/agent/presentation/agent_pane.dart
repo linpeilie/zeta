@@ -1,3 +1,4 @@
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_actions.dart';
 import 'dart:async';
 import 'agent_pane_retention.dart';
 
@@ -18,7 +19,6 @@ import 'package:zeta/src/features/agent/presentation/timeline_rendering/agent_ti
 import 'package:zeta/src/features/agent/presentation/timeline_rendering/agent_timeline_renderers.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_extent_descriptor.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_projection_cache.dart';
-import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_body.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_context_panel.dart';
 
@@ -126,6 +126,7 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
 
   /// renderer 的稳定依赖；会话（controller / 缓存）换代时重建。
   late AgentTimelineRenderContext _renderContext;
+  late AgentConversationActions _actions;
   late Widget Function(BuildContext, _AgentPaneWidthClass)
   _responsiveBodyBuilder;
 
@@ -137,13 +138,19 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
     _projectionCache = AgentTimelineProjectionCache(
       textCatalog: widget.controller.textCatalog,
     );
+    _actions = ref.read(
+      agentConversationActionsProvider(
+        widget.controller.conversationBinding.key,
+      ),
+    );
     _renderContext = _createRenderContext();
     _composer = AgentPaneComposerSession(
       runtime: widget.controller,
       messageSendShortcut: widget.messageSendShortcut,
       isMounted: () => mounted,
       attachments: () => ref.read(agentComposerAttachmentPortProvider),
-      submitMessage: _submitMessage,
+      submitMessage: _actions.sendMessage,
+      actions: _actions,
       hostContext: () => context,
     );
     if (retained != null) _composer.restoreDraft(retained);
@@ -171,7 +178,16 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
     }
     _hideContextPanel();
     unawaited(_uiEffectSubscription.cancel());
-    _composer.updateRuntime(widget.controller);
+    _actions = ref.read(
+      agentConversationActionsProvider(
+        widget.controller.conversationBinding.key,
+      ),
+    );
+    _composer.updateRuntime(
+      widget.controller,
+      actions: _actions,
+      submitMessage: _actions.sendMessage,
+    );
     _responsiveBodyBuilder = _createResponsiveBodyBuilder();
     _projectionCache.clear();
     _descriptorFactory.clearCache();
@@ -201,7 +217,9 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
 
   AgentTimelineRenderContext _createRenderContext() {
     return AgentTimelineRenderContext(
+      bindingKey: widget.controller.conversationBinding.key,
       controller: widget.controller,
+      actions: _actions,
       markdownCache: _markdownCache,
       planRevisionDrafts: _planRevisionDrafts,
     );
@@ -243,28 +261,6 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
     _markdownCache.dispose();
     _planRevisionDrafts.dispose();
     super.dispose();
-  }
-
-  void _submitMessage(
-    String text, {
-    required List<String> localImagePaths,
-    required List<({String name, String path})> mentions,
-    required List<AgentSkillRef> skills,
-  }) {
-    unawaited(
-      ref
-          .read(
-            agentConversationCommandProvider(
-              widget.controller.conversationBinding.key,
-            ),
-          )
-          .sendMessage(
-            text,
-            localImagePaths: localImagePaths,
-            mentions: mentions,
-            skills: skills,
-          ),
-    );
   }
 
   void _notifyScrollChrome() {
@@ -322,6 +318,7 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
     };
     return AgentPaneBody(
       controller: widget.controller,
+      actions: _actions,
       isActive: widget.isActive,
       pagePadding: pagePadding,
       scrollController: _scrollController,

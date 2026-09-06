@@ -138,7 +138,11 @@ Workspace 与 Conversation 已完成 WP-3C：`AgentConversationWorkspaceNotifier
 
 关闭顺序为：停止 Shell/M/P 命令 → 刷新已有 session 保存 → 等待 M/P 真实执行排空 → 关闭管理消费者与事实源 → 逐 entry 关闭 ingress、撤下可见项、退订、dispose controller、await lease release → BindingManager → runtime registry → plugin catalog → container。entry/app 重复关闭共享同一 Future；失败保持 Closing/失败终态，不标记释放、不销毁容器掩盖失败。lease release 只证明 consumer 释放，CLI 退出仍以 registry close 为准。
 
-物理 Conversation family 在 build 取得显式 `keepAlive`，协调器保留容器级订阅。只有 lease 释放成功且终止空投影无人观察后才撤销保活并 invalidate；`autoDispose` 此时仅回收已关闭投影，不决定业务资源寿命。这是对原非 autoDispose 伪代码的实现修正：当前 Riverpod 普通 family 的 invalidate 不删除缓存节点。Workspace、Management、Project Threads 的 app owner 仍非 autoDispose。WP-2 统一 Actions 尚未实施，当前 UI 命令仍经既有 executor。
+物理 Conversation family 在 build 取得显式 `keepAlive`，协调器保留容器级订阅。只有 lease 释放成功且终止空投影无人观察后才撤销保活并 invalidate；`autoDispose` 此时仅回收已关闭投影，不决定业务资源寿命。这是对原非 autoDispose 伪代码的实现修正：当前 Riverpod 普通 family 的 invalidate 不删除缓存节点。Workspace、Management、Project Threads 的 app owner 仍非 autoDispose。WP-2 已统一 Actions，命令接线见下文。
+
+Conversation 的 UI 写操作统一调用 `AgentConversationActions`，Live 句柄就是该 entry 的 `AgentConversationSliceNotifier`；关闭/未知目标只返回无状态拒绝句柄。每次调用冻结 typed payload、OperationId、owner lifetime 和 scope，经同步 reducer/runner 执行并返回 typed outcome。四类审批独立去重；只串行权限偏好与同项 session config，取消和审批不排在配置后面。关闭立即以 staleTarget 结算全部 UI waiter，底层 I/O 与租约释放仍由既有生命周期负责。
+
+模型保存逐请求区分 succeeded、requiresConfirmation、superseded、unchanged 与失败；fork 返回 outcome、内存中的 createdSession 和 activated，不能用“创建了 session”推断激活成功。编辑后分支交接经 Shell 新 entry 的 Actions 发送并回传真实结果。Widget/弹层捕获稳定 Actions，不能在迟到回调中重新解析 BindingKey；RuntimeController 只保留 executor、内部初始化与只读查询职责。正文、权限快照、产物与错误原文不进入新增状态、日志或持久化。
 
 ## Provider 能力协商
 

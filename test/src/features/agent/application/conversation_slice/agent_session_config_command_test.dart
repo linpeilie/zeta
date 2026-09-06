@@ -3,7 +3,7 @@ import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
-import 'package:zeta/src/features/agent/presentation/agent_presentation_l10n.dart';
+import '../../../../testing/conversation_test_scope.dart';
 import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
@@ -57,9 +57,10 @@ void main() {
         throwsUnsupportedError,
       );
       expect(
-        await invokeSessionConfigCommand(
-          () => f.controller.selectSessionConfigOption('mode', 'smart'),
-        ),
+        await connectedConversationTestOwner(
+          regions: f.controller,
+          commands: f.controller,
+        ).selectSessionConfigOption('mode', 'smart'),
         _failed(AgentCommandFailureKind.unsupported),
       );
       expect(f.provider.sessionConfigSelections, isEmpty);

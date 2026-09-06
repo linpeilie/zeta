@@ -38,6 +38,7 @@ final class AgentPlanApprovalRenderer
       context,
       payload.request,
       controller: renderContext.controller,
+      actions: renderContext.actions,
       planRevisionDrafts: renderContext.planRevisionDrafts,
     );
   }

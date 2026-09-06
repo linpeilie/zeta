@@ -89,23 +89,6 @@ extension AgentToolStatusL10n on AgentToolStatus {
   };
 }
 
-/// WP-6 的 UI 结果边界；统一 Actions 接入后由命令 runner 承担异常翻译。
-Future<AgentCommandOutcome> invokeSessionConfigCommand(
-  Future<AgentCommandOutcome> Function() invoke,
-) async {
-  try {
-    return await invoke();
-  } on UnsupportedError {
-    return const AgentCommandOutcome.failed(
-      AgentCommandFailureKind.unsupported,
-    );
-  } on Object {
-    return const AgentCommandOutcome.failed(
-      AgentCommandFailureKind.requestFailed,
-    );
-  }
-}
-
 extension AgentSessionConfigFailureL10n on AgentCommandFailureKind {
   /// 过期操作静默收尾，不把旧会话的错误显示到当前控件。
   String? localizedSessionConfigMessage(AppLocalizations l10n) =>

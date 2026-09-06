@@ -50,6 +50,15 @@ enum AgentCommandIgnoreReason {
 
   /// 值没有变化，无需执行。
   unchanged,
+
+  /// 等待用户确认兼容配置。
+  requiresConfirmation,
+
+  /// 已被新的保存快照或 generation 覆盖。
+  superseded,
+
+  /// 同类审批已在提交中。
+  alreadyPending,
 }
 
 /// 命令没做任何事。

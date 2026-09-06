@@ -284,3 +284,8 @@ Provider 包已分离中立契约（`provider_api`）、共享机制（`provider
 新增 Provider 按[开发者文档插件流程](docs/zh/development/developer_guide.md#新增-provider-插件)建包并登记根 pubspec/manifest；隔离与贡献守卫自动覆盖未来插件，CI 自动发现测试包。单包检查用 `bash tool/test_packages.sh --only <package>`，完整门禁仍是 `bash tool/test_full.sh`。
 
 Provider 图标的 SVG 与 `AgentProviderDefinition.icon` 由各插件包拥有；包内 `flutter.assets` 仅声明静态资源，不引入 Flutter SDK 依赖。宿主入口通过 `agentProviderIconsOverride` 注入静态查询，统一处理主题、尺寸、语义与失败回退；图标查询不得触发插件激活、猜测自定义实例品牌或写入持久化配置。
+
+
+Conversation 的 UI 写操作统一调用 `AgentConversationActions`，Live 句柄就是该 entry 的 `AgentConversationSliceNotifier`；关闭/未知目标只返回无状态拒绝句柄。每次调用冻结 typed payload、OperationId、owner lifetime 和 scope，经同步 reducer/runner 执行并返回 typed outcome。四类审批独立去重；只串行权限偏好与同项 session config，取消和审批不排在配置后面。关闭立即以 staleTarget 结算全部 UI waiter，底层 I/O 与租约释放仍由既有生命周期负责。
+
+模型保存逐请求区分 succeeded、requiresConfirmation、superseded、unchanged 与失败；fork 返回 outcome、内存中的 createdSession 和 activated，不能用“创建了 session”推断激活成功。编辑后分支交接经 Shell 新 entry 的 Actions 发送并回传真实结果。Widget/弹层捕获稳定 Actions，不能在迟到回调中重新解析 BindingKey；RuntimeController 只保留 executor、内部初始化与只读查询职责。正文、权限快照、产物与错误原文不进入新增状态、日志或持久化。

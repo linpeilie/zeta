@@ -1,3 +1,4 @@
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_command_payload.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_command_scope.dart';
@@ -49,17 +50,13 @@ void main() {
 
       final transition = agentConversationSliceReduce(
         state,
-        const AgentConversationSendMessageRequested(
-          operationId,
-          _testScope,
-          text: 'hi',
-        ),
+        _request(operationId, AgentSendMessageCommand(text: 'hi')),
       );
 
       expect(transition.state.pendingOperations, <OperationId>{operationId});
       expect(
         transition.effects.single,
-        isA<AgentConversationSendMessageEffect>(),
+        isA<AgentConversationExecuteCommandEffect>(),
       );
       // 会话事实的 owner 仍是 TimelineStore：命令不越过它改 region。
       expect(identical(transition.state.header, state.header), isTrue);
@@ -84,11 +81,7 @@ void main() {
 
       final transition = agentConversationSliceReduce(
         state,
-        const AgentConversationSendMessageRequested(
-          next,
-          _testScope,
-          text: 'retry',
-        ),
+        _request(next, AgentSendMessageCommand(text: 'retry')),
       );
 
       expect(transition.state.lastFailure, isNull);
@@ -105,7 +98,7 @@ void main() {
 
       final transition = agentConversationSliceReduce(
         state,
-        const AgentConversationCommandSucceeded(operationId),
+        const AgentConversationOperationSettled(operationId, null),
       );
 
       expect(transition.state.pendingOperations, isEmpty);
@@ -123,11 +116,9 @@ void main() {
 
       final transition = agentConversationSliceReduce(
         state,
-        const AgentConversationCommandFailed(
-          AgentConversationOperationFailure(
-            operationId: operationId,
-            kind: AgentCommandFailureKind.requestFailed,
-          ),
+        const AgentConversationOperationSettled(
+          operationId,
+          AgentCommandFailureKind.requestFailed,
         ),
       );
 
@@ -153,15 +144,13 @@ void main() {
 
       final succeeded = agentConversationSliceReduce(
         state,
-        const AgentConversationCommandSucceeded(stale),
+        const AgentConversationOperationSettled(stale, null),
       );
       final failed = agentConversationSliceReduce(
         state,
-        const AgentConversationCommandFailed(
-          AgentConversationOperationFailure(
-            operationId: stale,
-            kind: AgentCommandFailureKind.requestFailed,
-          ),
+        const AgentConversationOperationSettled(
+          stale,
+          AgentCommandFailureKind.requestFailed,
         ),
       );
 
@@ -192,22 +181,28 @@ void main() {
       expect(state.hasPendingOperationInScope(scopes.first), isFalse);
     });
 
-    test('展开态切换只发 effect，不占用在途身份', () {
+    test('展开态切换登记身份并发出同步 effect', () {
       final state = _initialState();
 
       final transition = agentConversationSliceReduce(
         state,
-        const AgentConversationExpansionToggled(
-          target: AgentConversationExpansionTarget.toolCall,
-          id: 'call-1',
+        _request(
+          const OperationId(
+            scope: AgentConversationOperationScopes.expansion,
+            sequence: 1,
+          ),
+          const AgentToggleExpansionCommand(
+            target: AgentConversationExpansionTarget.toolCall,
+            id: 'call-1',
+          ),
         ),
       );
 
-      expect(identical(transition.state, state), isTrue);
-      expect(transition.state.pendingOperations, isEmpty);
+      expect(identical(transition.state.header, state.header), isTrue);
+      expect(transition.state.pendingOperations, hasLength(1));
       expect(
         transition.effects.single,
-        isA<AgentConversationToggleExpansionEffect>(),
+        isA<AgentConversationExecuteCommandEffect>(),
       );
     });
   });
@@ -232,4 +227,16 @@ const _testScope = AgentConversationCommandScope(
   connectionEpoch: 1,
   listenerGeneration: 1,
   threadId: 'thread-1',
+);
+
+AgentConversationCommandRequested _request(
+  OperationId id,
+  AgentConversationCommandPayload payload,
+) => AgentConversationCommandRequested(
+  AgentConversationCommandEnvelope(
+    id: id,
+    scope: _testScope,
+    ownerLifetimeToken: Object(),
+    payload: payload,
+  ),
 );
