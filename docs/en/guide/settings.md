@@ -50,9 +50,9 @@ On first launch, Zeta follows your system language.
 
 Interface and code fonts are configured separately, each with its own typeface and size.
 
-**Interface font** is used for ordinary interface text and Markdown prose. It defaults to the bundled Geist. You can also pick your system default, or choose from the fonts installed on your machine — the list is searchable.
+**Interface font** is used for ordinary interface text and Markdown prose. It defaults to the system UI font. You can also choose from the fonts installed on your machine — the list is searchable.
 
-**Code font** is used for code blocks, commands, diffs and tool output. It defaults to the bundled JetBrainsMono.
+**Code font** is used for code blocks, commands, diffs and tool output. It defaults to the system monospace font. You can also choose from the monospace fonts installed on your machine.
 
 **Sizes** are adjusted independently:
 

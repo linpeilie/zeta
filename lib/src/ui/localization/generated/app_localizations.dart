@@ -1070,17 +1070,11 @@ abstract class AppLocalizations {
   /// **'Increase {label}'**
   String settingsIncreaseSomething(String label);
 
-  /// Geist default label
+  /// System default font label
   ///
   /// In en, this message translates to:
-  /// **'Geist (built-in default)'**
-  String get settingsFontGeistDefault;
-
-  /// JetBrains default label
-  ///
-  /// In en, this message translates to:
-  /// **'JetBrainsMono (built-in default)'**
-  String get settingsFontJetBrainsDefault;
+  /// **'System default'**
+  String get settingsFontSystemDefault;
 
   /// Common cancel
   ///
@@ -5467,24 +5461,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'See the Anthropic Claude Code docs for full capabilities and protocol details: {url}'**
   String mgmtSetupDocsBody(String url);
-
-  /// Bundled Geist font label
-  ///
-  /// In en, this message translates to:
-  /// **'Geist (built-in default)'**
-  String get fontGeistBundled;
-
-  /// Search alias for system default font
-  ///
-  /// In en, this message translates to:
-  /// **'System default'**
-  String get fontSystemDefaultAlias;
-
-  /// Bundled JetBrains Mono label
-  ///
-  /// In en, this message translates to:
-  /// **'JetBrainsMono (built-in default)'**
-  String get fontJetBrainsBundled;
 
   /// Conversation mode load error
   ///

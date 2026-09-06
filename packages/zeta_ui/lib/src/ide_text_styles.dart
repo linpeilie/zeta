@@ -223,7 +223,7 @@ class IdeTextStyles {
     required IdeColors colors,
     String? uiFontFamily,
     List<String> uiFontFamilyFallback = const <String>[],
-    String codeFontFamily = bundledCodeFontFamily,
+    String? codeFontFamily,
     double uiFontSize = defaultUiFontSize,
     double codeFontSize = defaultCodeFontSize,
   }) {

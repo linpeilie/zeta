@@ -533,10 +533,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get settingsFontGeistDefault => 'Geist（内置默认）';
-
-  @override
-  String get settingsFontJetBrainsDefault => 'JetBrainsMono（内置默认）';
+  String get settingsFontSystemDefault => '系统默认';
 
   @override
   String get commonCancel => '取消';
@@ -2896,15 +2893,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String mgmtSetupDocsBody(String url) {
     return '完整能力与协议说明见 Anthropic Claude Code 文档：$url';
   }
-
-  @override
-  String get fontGeistBundled => 'Geist（内置默认）';
-
-  @override
-  String get fontSystemDefaultAlias => '系统默认';
-
-  @override
-  String get fontJetBrainsBundled => 'JetBrainsMono（内置默认）';
 
   @override
   String get agentModeLoadFailed => '无法加载对话模式，请重试。';

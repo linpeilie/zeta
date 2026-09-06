@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
-import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 
 void main() {
@@ -72,14 +71,8 @@ void main() {
 }
 
 Future<void> _pumpStatusCard(WidgetTester tester, Widget child) async {
-  final lightTheme = buildIdeThemeData(
-    brightness: Brightness.light,
-    codeFontFamily: bundledCodeFontFamily,
-  );
-  final darkTheme = buildIdeThemeData(
-    brightness: Brightness.dark,
-    codeFontFamily: bundledCodeFontFamily,
-  );
+  final lightTheme = buildIdeThemeData(brightness: Brightness.light);
+  final darkTheme = buildIdeThemeData(brightness: Brightness.dark);
   await tester.pumpWidget(
     IdeThemeScope(
       themeMode: ThemeMode.dark,

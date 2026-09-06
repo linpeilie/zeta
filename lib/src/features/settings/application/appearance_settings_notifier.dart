@@ -160,10 +160,7 @@ final class AppearanceSettingsNotifier
         return const <AppearanceFontOption>[];
       }
       final options = <AppearanceFontOption>[
-        if (forCodeFont)
-          const AppearanceFontOption.bundledJetBrainsMono()
-        else
-          const AppearanceFontOption.systemDefault(),
+        const AppearanceFontOption.systemDefault(),
         ...families.map(AppearanceFontOption.system),
       ];
       final names = <String, String>{
@@ -334,7 +331,7 @@ final class AppearanceSettingsNotifier
       );
       if (resolved == null) {
         normalized = normalized.copyWith(
-          codeFontChoice: const AppearanceFontChoice.bundledJetBrainsMono(),
+          codeFontChoice: const AppearanceFontChoice.systemDefault(),
         );
       } else if (resolved != codeChoice) {
         normalized = normalized.copyWith(codeFontChoice: resolved);
@@ -361,9 +358,7 @@ final class AppearanceSettingsNotifier
   }) async {
     switch (choice.kind) {
       case AppearanceFontChoiceKind.systemDefault:
-        return forCodeFont ? null : choice;
-      case AppearanceFontChoiceKind.bundledJetBrainsMono:
-        return forCodeFont ? choice : null;
+        return choice;
       case AppearanceFontChoiceKind.system:
         try {
           return await _resolveSystemChoice(

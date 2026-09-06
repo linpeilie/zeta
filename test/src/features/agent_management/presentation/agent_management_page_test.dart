@@ -226,18 +226,20 @@ void main() {
       IdeMetrics.keyValueLabelWidth + IdeSpacing.space8,
     );
 
-    // 排版分工：名称/版本这类机器数据走等宽，厂商这类人类文案走 UI 字体。
-    String fontOf(String label, String value) => tester
+    // 排版分工：名称/版本这类机器数据走代码字体，厂商这类人类文案走 UI 字体。
+    // 系统默认 UI 字体在测试宿主上可能是 null（交给引擎解析）。
+    String? fontOf(String label, String value) => tester
         .widget<Text>(
           find.descendant(
             of: _keyValueRowFor(label),
             matching: find.text(value),
           ),
         )
-        .style!
-        .fontFamily!;
+        .style
+        ?.fontFamily;
 
     final identifierFont = fontOf('名称', 'Codex');
+    expect(identifierFont, isNotNull);
     expect(fontOf('启动命令', 'codex'), identifierFont);
     expect(fontOf('通信协议', 'JSON-RPC'), identifierFont);
     expect(fontOf('厂商', 'OpenAI'), isNot(identifierFont));

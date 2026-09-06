@@ -548,10 +548,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get settingsFontGeistDefault => 'Geist (built-in default)';
-
-  @override
-  String get settingsFontJetBrainsDefault => 'JetBrainsMono (built-in default)';
+  String get settingsFontSystemDefault => 'System default';
 
   @override
   String get commonCancel => 'Cancel';
@@ -2992,15 +2989,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String mgmtSetupDocsBody(String url) {
     return 'See the Anthropic Claude Code docs for full capabilities and protocol details: $url';
   }
-
-  @override
-  String get fontGeistBundled => 'Geist (built-in default)';
-
-  @override
-  String get fontSystemDefaultAlias => 'System default';
-
-  @override
-  String get fontJetBrainsBundled => 'JetBrainsMono (built-in default)';
 
   @override
   String get agentModeLoadFailed =>

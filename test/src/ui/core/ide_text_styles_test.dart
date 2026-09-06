@@ -30,19 +30,19 @@ void main() {
     expect(styles.metricValue.fontSize, 27);
   });
 
-  test('机器标识符与数值使用等宽字体', () {
+  test('机器标识符与数值使用代码字体', () {
     final styles = IdeTextStyles.resolve(
       colors: IdeColors.light,
-      uiFontFamily: 'Geist',
-      codeFontFamily: 'JetBrainsMono',
+      uiFontFamily: 'Segoe UI',
+      codeFontFamily: 'Cascadia Mono',
     );
 
-    expect(styles.identifier.fontFamily, 'JetBrainsMono');
-    expect(styles.numeric.fontFamily, 'JetBrainsMono');
-    expect(styles.metricValue.fontFamily, 'JetBrainsMono');
+    expect(styles.identifier.fontFamily, 'Cascadia Mono');
+    expect(styles.numeric.fontFamily, 'Cascadia Mono');
+    expect(styles.metricValue.fontFamily, 'Cascadia Mono');
     // 对照：普通界面文本仍走 UI 字体。
-    expect(styles.bodyMedium.fontFamily, 'Geist');
-    expect(styles.rowTitle.fontFamily, 'Geist');
+    expect(styles.bodyMedium.fontFamily, 'Segoe UI');
+    expect(styles.rowTitle.fontFamily, 'Segoe UI');
   });
 
   test('表格数值与指标数值启用等宽数字，保证按位对齐', () {

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 
 void main() {
@@ -12,6 +11,12 @@ void main() {
         '.AppleSystemUIFont',
       );
       expect(resolvePlatformUiFontFamily(TargetPlatform.linux), isNull);
+    });
+
+    test('为桌面平台解析系统等宽字体', () {
+      expect(resolvePlatformCodeFontFamily(TargetPlatform.windows), 'Consolas');
+      expect(resolvePlatformCodeFontFamily(TargetPlatform.macOS), 'Menlo');
+      expect(resolvePlatformCodeFontFamily(TargetPlatform.linux), isNull);
     });
 
     test('为桌面平台提供稳定的中文备用字体顺序', () {
@@ -33,10 +38,9 @@ void main() {
       );
     });
 
-    test('跟随应用默认时把内置 Geist 同步到三套主题投影', () {
+    test('跟随系统默认时把平台字体同步到三套主题投影', () {
       final ideTheme = buildIdeThemeData(
         brightness: Brightness.light,
-        codeFontFamily: 'JetBrainsMono',
         platform: TargetPlatform.windows,
       );
 
@@ -47,49 +51,47 @@ void main() {
         colors: ideTheme.colors,
         uiFontFamily: ideTheme.uiFontFamily,
         uiFontFamilyFallback: ideTheme.uiFontFamilyFallback,
+        codeFontFamily: ideTheme.codeFontFamily,
       ).rowTitle;
 
-      // 主字体是内置 Geist；中文仍然靠平台 fallback 链承接。
-      expect(ideTheme.uiFontFamily, bundledUiFontFamily);
+      expect(ideTheme.uiFontFamily, 'Segoe UI');
+      expect(ideTheme.codeFontFamily, 'Consolas');
       expect(ideTheme.uiFontFamilyFallback, const <String>[
         'Microsoft YaHei UI',
         'Microsoft YaHei',
       ]);
-      expect(shadcnTypography.sans.fontFamily, bundledUiFontFamily);
+      expect(shadcnTypography.sans.fontFamily, 'Segoe UI');
       expect(
         shadcnTypography.sans.fontFamilyFallback,
         ideTheme.uiFontFamilyFallback,
       );
-      expect(materialTextStyle?.fontFamily, bundledUiFontFamily);
+      expect(shadcnTypography.mono.fontFamily, 'Consolas');
+      expect(materialTextStyle?.fontFamily, 'Segoe UI');
       expect(
         materialTextStyle?.fontFamilyFallback,
         ideTheme.uiFontFamilyFallback,
       );
-      expect(
-        materialTheme.primaryTextTheme.bodyMedium?.fontFamily,
-        bundledUiFontFamily,
-      );
+      expect(materialTheme.primaryTextTheme.bodyMedium?.fontFamily, 'Segoe UI');
       expect(
         materialTheme.primaryTextTheme.bodyMedium?.fontFamilyFallback,
         ideTheme.uiFontFamilyFallback,
       );
-      expect(ideTextStyle.fontFamily, bundledUiFontFamily);
+      expect(ideTextStyle.fontFamily, 'Segoe UI');
       expect(ideTextStyle.fontFamilyFallback, ideTheme.uiFontFamilyFallback);
     });
 
-    test('没有稳定系统主字体的平台同样落到内置 Geist', () {
+    test('没有稳定系统主字体的平台把主字体交给引擎解析', () {
       final ideTheme = buildIdeThemeData(
         brightness: Brightness.light,
-        codeFontFamily: 'JetBrainsMono',
         platform: TargetPlatform.linux,
       );
 
       final typography = buildShadcnTheme(ideTheme).typography;
 
-      // Linux 没有稳定的系统 UI 字体名，过去会退成 null 交给引擎；
-      // 现在统一落到内置 Geist，三平台观感一致。
-      expect(ideTheme.uiFontFamily, bundledUiFontFamily);
-      expect(typography.sans.fontFamily, bundledUiFontFamily);
+      expect(ideTheme.uiFontFamily, isNull);
+      expect(ideTheme.codeFontFamily, isNull);
+      expect(typography.sans.fontFamily, isNull);
+      expect(typography.mono.fontFamily, isNull);
       expect(typography.sans.fontFamilyFallback, ideTheme.uiFontFamilyFallback);
     });
 
@@ -97,7 +99,7 @@ void main() {
       final ideTheme = buildIdeThemeData(
         brightness: Brightness.dark,
         uiFontFamily: 'Segoe UI',
-        codeFontFamily: 'JetBrainsMono',
+        codeFontFamily: 'Cascadia Mono',
         platform: TargetPlatform.windows,
       );
 
@@ -106,7 +108,7 @@ void main() {
       expect(ideTheme.uiFontFamily, 'Segoe UI');
       expect(typography.sans.fontFamily, 'Segoe UI');
       expect(typography.sans.fontFamilyFallback, ideTheme.uiFontFamilyFallback);
-      expect(typography.mono.fontFamily, 'JetBrainsMono');
+      expect(typography.mono.fontFamily, 'Cascadia Mono');
       expect(typography.mono.fontFamilyFallback, ideTheme.uiFontFamilyFallback);
     });
   });
