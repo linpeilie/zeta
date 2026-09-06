@@ -172,7 +172,7 @@ bash tool/test_full.sh
 | 2026-09-06 | WP-3P | `c2a5219d` | format / analyze / affected / full 通过；WP-4 的 33 条测试与 131 条断言保留；新增 23 条生命周期/接线/守卫；full 根 2047 + 内部包 1076；[验收记录](../../refactor/2026-09-06-project-threads-owner/00-validation.md) | 已完成 |
 | 2026-09-06 | WP-3C | `c2197f76` | format / analyze / affected / full 通过；新增 13 条回归，287 条旧测试保留，8 条结构/终止投影断言调整单独登记；full 根 2060 + 内部包 1076；[验收记录](../../refactor/2026-09-06-conversation-owner/00-validation.md) | 已完成 |
 | 2026-09-06 | WP-2 | `16cba246` | format / analyze / localized / affected / full 通过；35 个 Actions；281 个原测试声明保留，29 条断言调整单独登记；affected 778，full 根 2087 + 内部包 1076；[验收记录](../../refactor/2026-09-06-conversation-actions/00-validation.md) | 已完成 |
-| 2026-09-06 | WP-5 | 待登记 | format / analyze / localized / affected / full 通过；89 个原测试声明保留，12 条断言调整单独登记；affected 880，full 根 2118 + 内部包 1076；[验收记录](../../refactor/2026-09-06-home-detection/00-validation.md) | 已完成 |
+| 2026-09-06 | WP-5 | `d2461d25` | format / analyze / localized / affected / full 通过；89 个原测试声明保留，12 条断言调整单独登记；affected 880，full 根 2118 + 内部包 1076；[验收记录](../../refactor/2026-09-06-home-detection/00-validation.md) | 已完成 |
 
 当前下一项：**集成验收**。WP-1 至 WP-6 及 WP-3M/P/C 均已完成；WP-5 已统一首页与管理页探测状态、逐 Provider 确认结果和取消/关闭结算。下一阶段按 §5–6 复核整套生产入口与交接证据；真实 CLI 和各平台手工验收仍需执行，不以本次自动化全绿替代。
 
