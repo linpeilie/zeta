@@ -1,3 +1,4 @@
+import 'management_detection_test_support.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart' show AgentElapsedTicker;
 import 'frame_driven_app_timer.dart';
 import 'package:zeta/src/app/ide_session_slice/ide_session_slice_overrides.dart';
@@ -19,7 +20,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_notifier.dart';
 import 'package:zeta/src/app/app.dart';
 import 'package:zeta/src/app/composition/zeta_app_composition.dart';
-import 'package:zeta/src/app/composition/zeta_environment_providers.dart';
 import 'package:zeta/src/app/desktop_attention_slice/desktop_attention_providers.dart';
 import 'package:zeta/src/app/localization/zeta_display_language_source.dart';
 import 'package:zeta/src/app/storage/zeta_storage_bindings.dart';
@@ -152,9 +152,9 @@ List<Override> _testDefaultsNotCoveredBy(List<Override> overrides) {
           ref.watch(settingsFallbackLanguageProvider),
         ),
       ),
-    if (!_covers(overrides, homeProviderDetectionLoaderProvider))
-      homeProviderDetectionLoaderProvider.overrideWithValue(
-        _loadNoInstalledHomeProviders,
+    if (!_covers(overrides, agentManagementDetectionPortProvider))
+      agentManagementDetectionPortProvider.overrideWithValue(
+        FixtureManagementDetectionPort(_loadNoInstalledHomeProviders),
       ),
     if (!_covers(overrides, agentUsageAutoRefreshEnabledProvider))
       agentUsageAutoRefreshEnabledProvider.overrideWithValue(false),

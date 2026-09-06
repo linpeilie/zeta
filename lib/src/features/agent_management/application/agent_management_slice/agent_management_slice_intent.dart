@@ -1,3 +1,6 @@
+import '../agent_management_agent_view.dart';
+import '../agent_management_detection_state.dart';
+import '../agent_management_detection_port.dart';
 import '../agent_management_runtime_facts.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
@@ -18,12 +21,12 @@ final class ManagementInitialized extends AgentManagementSliceIntent {
   const ManagementInitialized({
     required this.operationId,
     required this.providerSettings,
-    required this.agentsById,
+    required this.confirmedByProviderId,
   });
 
   final OperationId operationId;
   final AgentProviderSettings providerSettings;
-  final Map<String, ManagedAgent> agentsById;
+  final Map<String, AgentDetectionConfirmedRecord> confirmedByProviderId;
 }
 
 final class ManagementInitializationFailed extends AgentManagementSliceIntent {
@@ -38,59 +41,34 @@ final class AgentSelected extends AgentManagementSliceIntent {
   final String agentId;
 }
 
+/// owner 生命周期 intent 不触发第二次探测 effect。
 final class DetectionRequested extends AgentManagementSliceIntent {
   const DetectionRequested(this.operationId);
-
   final OperationId operationId;
 }
 
-final class AgentDetectionStarted extends AgentManagementSliceIntent {
-  const AgentDetectionStarted({
-    required this.operationId,
-    required this.agentId,
-  });
-
+final class DetectionRunStarted extends AgentManagementSliceIntent {
+  const DetectionRunStarted(this.operationId, this.providerIds);
   final OperationId operationId;
-  final String agentId;
+  final List<String> providerIds;
 }
 
-final class AgentDetectionProgressReported extends AgentManagementSliceIntent {
-  const AgentDetectionProgressReported({
-    required this.operationId,
-    required this.agentId,
-    required this.progress,
-    required this.partial,
-  });
-
+final class DetectionResultAccepted extends AgentManagementSliceIntent {
+  const DetectionResultAccepted(this.operationId, this.event);
   final OperationId operationId;
-  final String agentId;
-  final AgentDetectionProgress progress;
-  final ManagedAgent partial;
+  final AgentManagementDetectionEvent event;
 }
 
-final class AgentDetectionSucceeded extends AgentManagementSliceIntent {
-  const AgentDetectionSucceeded({
-    required this.operationId,
-    required this.agentId,
-    required this.agent,
-  });
-
+final class DetectionRunFinished extends AgentManagementSliceIntent {
+  const DetectionRunFinished(this.operationId, this.result);
   final OperationId operationId;
-  final String agentId;
-  final ManagedAgent agent;
+  final AgentManagementDetectionRunResult result;
 }
 
-final class DetectionCompleted extends AgentManagementSliceIntent {
-  const DetectionCompleted(this.operationId);
-
-  final OperationId operationId;
-}
-
-final class DetectionFailed extends AgentManagementSliceIntent {
-  const DetectionFailed({required this.operationId, required this.message});
-
-  final OperationId operationId;
-  final String message;
+final class ManagementCatalogReplaced extends AgentManagementSliceIntent {
+  const ManagementCatalogReplaced(this.generation, this.definitions);
+  final int generation;
+  final Map<String, AgentManagementDisplayDefinition> definitions;
 }
 
 final class ProviderEnabledToggled extends AgentManagementSliceIntent {
@@ -190,7 +168,7 @@ final class ConnectionTestSucceeded extends AgentManagementSliceIntent {
 
   final OperationId operationId;
   final String agentId;
-  final AgentConnectionTestResult result;
+  final AgentManagementConnectionCheckSummary result;
   final List<AgentModelInfo> models;
   final String modelSource;
   final DateTime modelsUpdatedAt;
@@ -293,13 +271,13 @@ final class LogsLoadSucceeded extends AgentManagementSliceIntent {
   const LogsLoadSucceeded({
     required this.operationId,
     required this.agentId,
-    required this.paths,
+    required this.fileCount,
     required this.logs,
   });
 
   final OperationId operationId;
   final String agentId;
-  final List<String> paths;
+  final int fileCount;
   final List<AgentLogEntry> logs;
 }
 

@@ -1,3 +1,5 @@
+import 'package:flutter/services.dart';
+import 'package:zeta/src/app/agent_management_slice/agent_management_details_catalog.dart';
 import '../../../testing/agent_management_test_container.dart';
 import '../../../testing/memory_agent_runtime_fact_source.dart';
 import '../../../testing/agent_management_test_definitions.dart';
@@ -83,6 +85,56 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets(
+    'executable display is shortened and copy click resolves only inside app catalog',
+    (tester) async {
+      final harness = _ClaudeManagementHarness.create();
+      addTearDown(harness.dispose);
+      harness.repository.executable = '/private/fixture/claude';
+      await harness.managementStore.refreshDetection();
+      final copied = <String>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            copied.add((call.arguments as Map)['text'] as String);
+          }
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      await _pumpManagementPage(
+        tester,
+        container: harness._managementComposition,
+      );
+      await tester.tap(find.byKey(const ValueKey('agent-row-claude_code')));
+      await tester.pump();
+      expect(find.text('…/claude'), findsOneWidget);
+      expect(find.text('/private/fixture/claude'), findsNothing);
+      final copy = find.byWidgetPredicate(
+        (widget) => widget is IdeIconButton && widget.semanticLabel == '复制程序位置',
+      );
+      await tester.ensureVisible(copy);
+      await tester.tap(copy);
+      await tester.pump();
+      expect(copied, ['/private/fixture/claude']);
+      harness._managementComposition
+          .read(appAgentManagementDetailsCatalogProvider)
+          .close();
+      await tester.tap(copy);
+      await tester.pump();
+      expect(copied, hasLength(1));
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('renders list and opens responsive Codex detail page', (
     tester,
@@ -774,6 +826,7 @@ class _FakeClaudeManagementRepository
   final AgentAccountState accountState;
   final String? accountLabel;
   int testConnectionCalls = 0;
+  String? executable;
 
   @override
   AgentCliManagementCapabilities get managementCapabilities =>
@@ -809,6 +862,7 @@ class _FakeClaudeManagementRepository
       accountState: accountState,
       accountLabel: accountLabel,
       currentVersion: '2.1.224',
+      executablePath: executable,
     );
   }
 

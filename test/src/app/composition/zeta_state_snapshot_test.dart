@@ -1,6 +1,6 @@
+import '../../testing/management_detection_test_support.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/app/composition/zeta_state_snapshot.dart';
-import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_state.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_project.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
@@ -80,7 +80,7 @@ void main() {
       selectedConversationEntryId: 'entry-1',
       projectHomeActive: false,
       agentManagement: ZetaAgentManagementStateSnapshot.fromState(
-        AgentManagementSliceState(
+        managementFixtureState(
           agentsById: const {},
           orderedAgentIds: const [],
           selectedAgentId: 'provider-1',

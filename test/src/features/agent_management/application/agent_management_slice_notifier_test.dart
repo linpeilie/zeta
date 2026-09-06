@@ -1,3 +1,4 @@
+import '../../../testing/management_detection_test_support.dart';
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../testing/agent_management_test_container.dart';
@@ -9,7 +10,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_effect.dart';
-import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_state.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_notifier.dart';
 import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 
@@ -47,12 +47,7 @@ void main() {
         store.initializationSucceeded(
           initialEffect.operationId,
           store.current.providerSettings,
-          {
-            for (final entry in store.current.agentsById.entries)
-              entry.key: entry.value.copyWith(
-                runtimeState: AgentRuntimeState.idle,
-              ),
-          },
+          store.current.detection.confirmedByProviderId,
         );
         await init;
         void expectFacts() {
@@ -66,23 +61,23 @@ void main() {
         final detection = store.detect();
         await Future<void>.delayed(Duration.zero);
         final effect = runner.take<DetectAgentsEffect>();
-        store.detectionStarted(effect.operationId, defaultAgentProviderId);
-        final detected = store.agent.copyWith(
-          runtimeState: AgentRuntimeState.error,
-        );
-        store.detectionProgressReported(
+        store.testDetectionStarted(effect.operationId, defaultAgentProviderId);
+        final detected = fixtureForView(
+          store.agent,
+        ).copyWith(runtimeState: AgentRuntimeState.error);
+        store.testDetectionProgress(
           effect.operationId,
           defaultAgentProviderId,
           const AgentDetectionProgress(completed: 1, total: 1, message: ''),
           detected,
         );
         expectFacts();
-        store.agentDetected(
+        store.testAgentDetected(
           effect.operationId,
           defaultAgentProviderId,
           detected,
         );
-        store.detectionCompleted(effect.operationId);
+        completeTestDetection(effect.operationId);
         await detection;
         expectFacts();
         for (final success in [true, false]) {
@@ -91,7 +86,7 @@ void main() {
           store.connectionTestSucceeded(
             operationId: effect.operationId,
             agentId: defaultAgentProviderId,
-            result: AgentConnectionTestResult(
+            result: AgentManagementConnectionCheckSummary(
               success: success,
               testedAt: DateTime(2026),
               elapsed: Duration.zero,
@@ -143,12 +138,12 @@ void main() {
           owner.initializationSucceeded(
             initialize.operationId,
             owner.current.providerSettings,
-            owner.current.agentsById,
+            owner.current.detection.confirmedByProviderId,
           );
           owner.initializationSucceeded(
             initialize.operationId,
             owner.current.providerSettings,
-            owner.current.agentsById,
+            owner.current.detection.confirmedByProviderId,
           );
           return Future<void>.value();
         };
@@ -197,7 +192,7 @@ void main() {
         owner.initializationSucceeded(
           next.operationId,
           owner.current.providerSettings,
-          owner.current.agentsById,
+          owner.current.detection.confirmedByProviderId,
         );
         await retry;
         expect(() => owner.saveConfiguration('before load'), throwsStateError);
@@ -261,9 +256,10 @@ void main() {
         final detection = owner.detect();
         await Future<void>.delayed(Duration.zero);
         final detecting = runner.take<DetectAgentsEffect>();
-        await owner.detect();
-        owner.detectionFailed(detecting.operationId, 'detection failed');
+        final joinedDetection = owner.detect();
+        owner.testDetectionFailed(detecting.operationId, 'detection failed');
         await detection;
+        await joinedDetection;
         final enabling = owner.setEnabled(false);
         final toggling = runner.take<UpdateProviderEnabledEffect>();
         owner.providerEnabledUpdateFailed(
@@ -331,13 +327,13 @@ void main() {
           _document(signature: 'base', content: 'base'),
         );
         await load;
+        final detection = old.refreshDetection();
         final waiters = <Future<Object?>>[
           old.testConnection(),
           old.loadConfiguration(),
           old.saveConfiguration('write'),
           old.loadLogs(),
           old.setEnabled(false),
-          old.detect(),
         ];
         await Future<void>.delayed(Duration.zero);
         final checks = [
@@ -356,6 +352,8 @@ void main() {
         final lateEffect = runner.take<TestAgentConnectionEffect>();
         old.stopAcceptingCommandsAndSettleWaiters();
         await Future.wait(checks);
+        expect((await detection).status, DetectionRunStatus.closed);
+        completeAllTestDetections();
         await old.drainExecutions();
         oldContainer.dispose();
         final freshRunner = _RecordingRunner();
@@ -516,7 +514,7 @@ void main() {
           store.initializationSucceeded(
             effect.operationId,
             store.current.providerSettings,
-            store.current.agentsById,
+            store.current.detection.confirmedByProviderId,
           );
           await pending;
           expect(store.initialized, isTrue);
@@ -538,8 +536,8 @@ void main() {
         final detection = store.detect();
         await Future<void>.delayed(Duration.zero);
         final effect = runner.take<DetectAgentsEffect>();
-        store.detectionStarted(effect.operationId, defaultAgentProviderId);
-        store.detectionProgressReported(
+        store.testDetectionStarted(effect.operationId, defaultAgentProviderId);
+        store.testDetectionProgress(
           effect.operationId,
           grokAgentProviderId,
           const AgentDetectionProgress(
@@ -565,7 +563,7 @@ void main() {
               installationState: AgentInstallationState.installed,
               currentVersion: '1.0.0',
             );
-        store.detectionProgressReported(
+        store.testDetectionProgress(
           effect.operationId,
           defaultAgentProviderId,
           const AgentDetectionProgress(
@@ -575,12 +573,12 @@ void main() {
           ),
           detected,
         );
-        store.agentDetected(
+        store.testAgentDetected(
           effect.operationId,
           defaultAgentProviderId,
           detected,
         );
-        store.detectionCompleted(effect.operationId);
+        completeTestDetection(effect.operationId);
         await detection;
 
         // Assert
@@ -604,7 +602,7 @@ void main() {
         final pending = store.testConnection();
         final effect = runner.take<TestAgentConnectionEffect>();
         store.selectAgent(grokAgentProviderId);
-        final result = AgentConnectionTestResult(
+        final result = AgentManagementConnectionCheckSummary(
           success: true,
           testedAt: DateTime.utc(2026, 8, 23),
           elapsed: const Duration(milliseconds: 4),
@@ -730,7 +728,7 @@ ProviderContainer _createContainer({
   );
   final container = managementTestContainer(
     registerTearDown: registerTearDown,
-    initialState: AgentManagementSliceState(
+    initialState: managementFixtureState(
       agentsById: <String, ManagedAgent>{
         defaultAgentProviderId: ManagedAgent.forDefinition(
           definition: codexAgentManagementDefinition,
@@ -788,7 +786,11 @@ final class _RecordingRunner implements AgentManagementSliceEffectRunner {
   @override
   Future<void> run(AgentManagementSliceEffect effect) async {
     effects.add(effect);
-    await execute?.call(effect);
+    if (execute != null) {
+      await execute!(effect);
+    } else if (effect is DetectAgentsEffect) {
+      await holdTestDetection(effect);
+    }
   }
 
   T take<T extends AgentManagementSliceEffect>() {

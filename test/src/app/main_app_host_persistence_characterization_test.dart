@@ -1,3 +1,5 @@
+import 'package:zeta/src/features/agent_management/application/agent_management_home_state.dart';
+import '../testing/management_detection_test_support.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -13,7 +15,6 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import '../testing/ide_test_harness.dart';
 import '../testing/fake_workspace_directory_picker.dart';
 import '../testing/zeta_test_app.dart';
-import 'package:zeta/src/app/composition/zeta_environment_providers.dart';
 import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
 import 'package:zeta/src/app/storage/zeta_store_providers.dart';
 import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_providers.dart';
@@ -82,14 +83,16 @@ void main() {
     await tester.pump();
 
     final loader = composition.container.read(
-      homeProviderDetectionLoaderProvider,
+      agentManagementDetectionPortProvider,
     );
+    expect(loader, isNotNull, reason: '测试须在统一探测端口替换所有本机 I/O');
+    expect(loader, isA<FixtureManagementDetectionPort>());
     expect(
-      loader,
-      isNotNull,
-      reason: 'loader 为 null 时 IdeHome 会真的去初始化 Agent Management 扫描本机',
+      composition.container
+          .read(agentManagementHomeProvider)
+          .installedProviders,
+      isEmpty,
     );
-    expect(await loader!(), isEmpty);
   });
 
   testWidgets('测试组合根关闭 Agent 用量自动刷新', (tester) async {
@@ -125,7 +128,7 @@ void main() {
     await tester.pump();
 
     expect(
-      composition.container.read(homeProviderDetectionLoaderProvider),
+      composition.container.read(agentManagementDetectionPortProvider),
       isNotNull,
     );
   });
@@ -134,7 +137,7 @@ void main() {
 Future<ZetaAppComposition> _pumpzetaTestApp(
   WidgetTester tester, {
   AgentUsagePanelRepository? agentUsagePanelRepository,
-  HomeProviderDetectionLoader? homeProviderDetectionLoader,
+  Future<List<ManagedAgent>> Function()? homeProviderDetectionLoader,
   MemorySessionStore? session,
   WorkspaceDirectoryPicker? directoryPicker,
 }) async {
@@ -163,7 +166,9 @@ Future<ZetaAppComposition> _pumpzetaTestApp(
         agentUsageAutoRefreshEnabledProvider.overrideWithValue(true),
       ],
       if (homeProviderDetectionLoader case final loader?)
-        homeProviderDetectionLoaderProvider.overrideWithValue(loader),
+        agentManagementDetectionPortProvider.overrideWithValue(
+          FixtureManagementDetectionPort(loader),
+        ),
     ],
   );
   await tester.pumpWidget(MainApp(composition: composition));

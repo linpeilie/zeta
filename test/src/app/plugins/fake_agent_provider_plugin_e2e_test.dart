@@ -1,3 +1,4 @@
+import 'package:zeta/src/features/agent_management/application/agent_management_detection_port.dart';
 import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_notifier.dart';
 import 'package:flutter/material.dart';
@@ -93,6 +94,9 @@ void main() {
     ];
     final safeApp = zetaTestComposition(
       overrides: [
+        agentManagementDetectionPortProvider.overrideWith(
+          (ref) => ref.read(agentManagementDefaultDetectionPortProvider),
+        ),
         agentProviderBundleFactoryProvider.overrideWithValue(_BundleFactory()),
         agentProviderDefinitionCatalogProvider.overrideWithValue(definitions),
         agentManagementContributionsProvider.overrideWithValue(safeManagement),
