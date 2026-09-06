@@ -49,7 +49,7 @@ void main() {
 
   test('lib/src/ui 不得 import 或构造 feature data', () {
     // UI 层直接 new Repository 会把工作台钉死在具体 Provider 的 data 实现上（G6）。
-    // 装配决策属于 app 层的 IdeWorkbenchComposition。
+    // 装配决策属于 app 层的 provider composition。
     final uiFiles = Directory('lib/src/ui')
         .listSync(recursive: true)
         .whereType<File>()

@@ -509,11 +509,21 @@ create/resume/fork/send --> Binding.permissions.snapshotForRequest()
 管理运行状态只统计本 Workbench 的 session Binding，按精确配置实例 `providerId` 聚合所有前后台 entry，并保留无 entry 但仍有 runtime 的 Binding。默认 Provider 与 Canvas 选择不参与归属；global 模型预热、连接测试和外部 CLI 进程不计入。`ready` 只证明连接，活跃 turn/等待交互才证明运行；不从历史 active 或短 RPC 计数猜测 turn。禁用是配置策略，现存事实保留至实际 clear/remove。主状态按 running → error → starting → unavailable → idle → disabled → notRunning 投影，`hasErrors` 独立保留。
 
 - controller 通过 `runtimeObservationListenable` 发布无正文观测；连接、turn、waiting 与 Binding 生命周期变化都经既有安全边界刷新。来源 identity/scope 只在 live 接线时冻结，不能用新 runtime 给旧快照重新标记。首次启动与 Plan 执行均经同一个观测 helper 推进 `attemptEpoch`。
-- Shell 创建 `WorkspaceAgentRuntimeFactSource` 后调用 start；management composition 先 subscribe 再同步读取 current。subscribe 不立即回调，消费者只退订，不取得 source 生命周期控制权。
+- Shell 创建 `WorkspaceAgentRuntimeFactSource` 后调用 start；app ingress 先 subscribe 再同步读取 current。subscribe 不立即回调，消费者只退订，不取得 source 生命周期控制权。
 - source 以 Binding 对象 identity 持有 opaque token；草稿晋升不重新计数。回调捕获 source/handle/subscription 代次，校验后全量重读；已 clear 或连接 scope 不匹配的旧 active 不能继续进入摘要。
 - `runtimeByProviderId` 保留所有精确实例（包括没有 management contribution 的自定义 id），selector 不补造厂商品牌卡片。reducer 所有入口统一投影 `ManagedAgent.runtimeState`；探测与连接测试只更新诊断字段。
-- source 不创建 controller、不获取租约、不启动插件、不关闭进程；retained ready runtime 计连接与 `unobservedTurnRuntimeCount`，不能猜测其 turn 是否活跃。关闭管理 composition 后，Shell 先关闭 source 再释放 Workspace。
-- 修改时运行纯聚合、source、Management Store、真实 `ide_shell_widget_test` 及 `agent_management_runtime_boundary_guard_test`；覆盖同 Provider 多 scope、启动失败重试、连接换代、历史 active、短 RPC、后台执行、禁用后实际清理和重复 close。
+- source 不创建 controller、不获取租约、不启动插件、不关闭进程；retained ready runtime 计连接与 `unobservedTurnRuntimeCount`，不能猜测其 turn 是否活跃。事实消费者退订后，Shell 先关闭 source 再释放 Workspace。
+- 修改时运行纯聚合、source、Management Notifier、真实 `ide_shell_widget_test` 及 `agent_management_runtime_boundary_guard_test`；覆盖同 Provider 多 scope、启动失败重试、连接换代、历史 active、短 RPC、后台执行、禁用后实际清理和重复 close。
+
+### Management owner 生命周期
+
+Management 的状态、operation waiter 与执行账本由应用会话级 `AgentManagementSliceNotifier` 独占；`agentManagementSliceProvider` 非 family、非 autoDispose。`build` 只读取冻结依赖，Runner factory 接收具名 `AgentManagementResultSink`，不得持 Ref 回读 owner。设置与运行事实经独立 app ingress 输入，Page、Editor、LogView 只读 provider 与 `AgentManagementOperations`，没有旧 Store、Deferred 或状态镜像。
+
+关闭先封命令入口并以原 `StateError` 结算等待者，再 `await drainExecutions()` 等待已发出的真实 I/O，最后释放 runtime registry、插件和容器；`ZetaAppComposition.close()` 可等待且幂等，同步 `dispose()` 只启动同一关闭过程。Runner 返回的执行 Future 包含探测后的持久化与日志的两段读取，不能拿已结算的调用方 Future 当作资源释放证据。原初始化/保存错误和堆栈只沿 Future 传播，不加入新状态或日志。
+
+WP-3M 阶段边界：管理 owner 与设置 ingress 在应用组合中、Widget 之前建立并初始化；Shell 尚由 IdeHome 创建（WP-3C 再前移），因此首次事实订阅在挂载后的回调中借用 Shell source，先订阅再同步重读 current。这里不缓存 management state、不延迟 Runner 结果。多个借用者共享订阅，最后一个释放时只退订；同一 source 立即重接可用。IdeHome 卸载不关闭管理 owner。
+
+验证 `agent_management_slice_notifier_test`、`agent_management_slice_runner_test`、真实管理页面/Shell，以及含正反例的 `agent_management_owner_guard_test`。测试覆盖 app inputs 或 application 依赖接缝；不要包装第二套业务 controller，也不要覆盖应用内部已经安装的同名 provider。
 
 ### Session config 命令结果与控件反馈
 

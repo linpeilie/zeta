@@ -255,3 +255,7 @@ Zeta 自有数据根目录：`config/`（配置）、`state/`（会话状态与�
 - **动态 package 矩阵**：CI 通过 `test_packages.sh --list-json` 发现测试包，每个 job 用 `--only` 运行对应包；不涉及运行时插件发现。
 
 **Provider 图标描述（`AgentProviderSvgIcon`）**：api 中的纯 Dart 静态元数据，包含所属包名、SVG 相对路径和着色策略。由插件 Definition 声明，宿主统一渲染；不代表协议能力，不参与激活或持久化。
+
+### Management ResultSink 与执行排空
+
+`AgentManagementResultSink` 是 Runner 捕获的具名结果入口，绑定一个应用会话 owner。逻辑 waiter 表示命令调用方等待结果；物理 execution Future 表示已发出的 I/O 结束。关闭可先以 `StateError` 结算 waiter，但必须 `await drainExecutions()` 才能释放借用资源。该账本仅在 owner 内存中，不进入不可变 UI state 或持久化。

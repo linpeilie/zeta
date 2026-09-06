@@ -1,3 +1,5 @@
+import 'package:flutter_riverpod/misc.dart' show ProviderException;
+import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_notifier.dart';
 import '../../testing/memory_agent_runtime_fact_source.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -98,11 +100,11 @@ void main() {
         agentUsageContributionsProvider.overrideWithValue(usage),
       ],
     );
-    final workbench = safeApp.createWorkbenchComposition(
-      runtimeFactSource: MemoryAgentRuntimeFactSource(),
+    final disconnect = safeApp.connectManagementRuntimeFacts(
+      MemoryAgentRuntimeFactSource(),
     );
-    addTearDown(workbench.dispose);
-    final store = workbench.agentManagementComposition.store;
+    addTearDown(disconnect);
+    final store = safeApp.container.read(agentManagementSliceProvider.notifier);
     await store.initialize();
     await store.detect();
     expect(fourth.repository.detectCalls, 1);
@@ -127,7 +129,8 @@ void main() {
           brightness: Brightness.dark,
           codeFontFamily: 'JetBrainsMono',
         ),
-        child: ProviderScope(
+        child: UncontrolledProviderScope(
+          container: safeApp.container,
           child: sf.ShadcnApp(
             locale: ZetaLocalization.simplifiedChinese,
             supportedLocales: ZetaLocalization.supportedLocales,
@@ -137,9 +140,7 @@ void main() {
               theme: buildMaterialTheme(theme),
               child: child,
             ),
-            home: sf.Scaffold(
-              child: AgentManagementPage(sliceStore: store, autoDetect: false),
-            ),
+            home: sf.Scaffold(child: AgentManagementPage(autoDetect: false)),
           ),
         ),
       ),
@@ -212,21 +213,25 @@ void main() {
         ),
       ],
     ]) {
-      final app = zetaTestComposition(
-        overrides: [
-          agentProviderBundleFactoryProvider.overrideWithValue(
-            _BundleFactory(),
-          ),
-          agentManagementContributionsProvider.overrideWithValue(contributions),
-        ],
-      );
       expect(
-        () => app.createWorkbenchComposition(
-          runtimeFactSource: MemoryAgentRuntimeFactSource(),
+        () => zetaTestComposition(
+          overrides: [
+            agentProviderBundleFactoryProvider.overrideWithValue(
+              _BundleFactory(),
+            ),
+            agentManagementContributionsProvider.overrideWithValue(
+              contributions,
+            ),
+          ],
         ),
-        throwsStateError,
+        throwsA(
+          isA<ProviderException>().having(
+            (error) => _rootException(error),
+            'cause',
+            isA<StateError>(),
+          ),
+        ),
       );
-      expect(app.container.exists(zetaPluginCatalogProvider), isFalse);
     }
   });
 
@@ -387,4 +392,11 @@ final class _Source implements AgentTokenUsageSource {
       refreshedAt: query.earliest,
     );
   }
+}
+
+Object _rootException(Object error) {
+  while (error is ProviderException) {
+    error = error.exception;
+  }
+  return error;
 }

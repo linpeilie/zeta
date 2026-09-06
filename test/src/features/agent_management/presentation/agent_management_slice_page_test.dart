@@ -1,3 +1,5 @@
+import '../../../testing/agent_management_test_container.dart';
+import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_dependencies.dart';
 import '../../../testing/agent_management_test_definitions.dart';
 import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 import 'dart:async';
@@ -11,7 +13,7 @@ import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_effect.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_state.dart';
-import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_store.dart';
+import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_notifier.dart';
 import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_configuration_editor.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_management_page.dart';
@@ -26,7 +28,7 @@ void main() {
       final providerConfig = defaultClaudeCodeAgentProviderConfig.copyWith(
         extra: const <String, Object?>{},
       );
-      final store = AgentManagementSliceStore(
+      final container = managementTestContainer(
         initialState: AgentManagementSliceState.initial(
           agentsById: <String, ManagedAgent>{
             defaultClaudeCodeProviderId:
@@ -51,14 +53,14 @@ void main() {
         accountDataEnrichmentEnabledFor: (config) =>
             config.extra[testAccountDataEnrichmentKey] != false,
       );
+      final store = container.read(agentManagementSliceProvider.notifier);
       runner.store = store;
-      addTearDown(store.close);
 
       // Act
       await _pumpSlicePage(
         tester,
-        store,
-        child: _ManagementListenerHost(store: store),
+        container,
+        child: const _ManagementListenerHost(),
       );
       await tester.pumpAndSettle();
 
@@ -79,8 +81,8 @@ void main() {
     (tester) async {
       // Arrange
       final harness = _SlicePageHarness.create();
-      addTearDown(harness.store.close);
-      await _pumpSlicePage(tester, harness.store);
+
+      await _pumpSlicePage(tester, harness.container);
 
       // Act
       await tester.tap(find.byKey(const ValueKey('agent-detect-button')));
@@ -138,8 +140,8 @@ void main() {
     (tester) async {
       // Arrange
       final harness = _SlicePageHarness.create(conflictOnFirstSave: true);
-      addTearDown(harness.store.close);
-      await _pumpSlicePage(tester, harness.store);
+
+      await _pumpSlicePage(tester, harness.container);
       await tester.tap(find.byKey(const ValueKey('agent-row-claude_code')));
       await tester.pump();
       await tester.tap(find.text('配置'));
@@ -184,9 +186,15 @@ void main() {
 }
 
 final class _SlicePageHarness {
-  _SlicePageHarness({required this.store, required this.runner});
+  _SlicePageHarness({
+    required this.container,
+    required this.store,
+    required this.runner,
+  });
 
-  final AgentManagementSliceStore store;
+  final ProviderContainer container;
+
+  final AgentManagementSliceNotifier store;
   final _InteractiveRunner runner;
 
   factory _SlicePageHarness.create({bool conflictOnFirstSave = false}) {
@@ -194,7 +202,7 @@ final class _SlicePageHarness {
     final providerConfig = defaultClaudeCodeAgentProviderConfig.copyWith(
       extra: const <String, Object?>{},
     );
-    final store = AgentManagementSliceStore(
+    final container = managementTestContainer(
       initialState: AgentManagementSliceState(
         agentsById: <String, ManagedAgent>{
           defaultClaudeCodeProviderId:
@@ -224,8 +232,13 @@ final class _SlicePageHarness {
       accountDataEnrichmentEnabledFor: (config) =>
           config.extra[testAccountDataEnrichmentKey] != false,
     );
+    final store = container.read(agentManagementSliceProvider.notifier);
     runner.store = store;
-    return _SlicePageHarness(store: store, runner: runner);
+    return _SlicePageHarness(
+      container: container,
+      store: store,
+      runner: runner,
+    );
   }
 }
 
@@ -233,7 +246,7 @@ final class _InteractiveRunner implements AgentManagementSliceEffectRunner {
   _InteractiveRunner({required this.conflictOnFirstSave});
 
   final bool conflictOnFirstSave;
-  late AgentManagementSliceStore store;
+  late AgentManagementSliceNotifier store;
   int detectionCalls = 0;
   int accountUpdateCalls = 0;
   int connectionTestCalls = 0;
@@ -241,7 +254,7 @@ final class _InteractiveRunner implements AgentManagementSliceEffectRunner {
   final List<bool> saveOverwriteValues = <bool>[];
 
   @override
-  void run(AgentManagementSliceEffect effect) {
+  Future<void> run(AgentManagementSliceEffect effect) async {
     switch (effect) {
       case ManagementInitializeEffect():
         throw StateError('The test store starts initialized');
@@ -271,11 +284,11 @@ final class _InteractiveRunner implements AgentManagementSliceEffectRunner {
           effect.operationId,
           effect.agentId,
           effect.enabled,
-          store.state.providerSettings,
+          store.current.providerSettings,
         );
       case UpdateAccountDataEnrichmentEffect():
         accountUpdateCalls += 1;
-        final current = store.state.providerSettings.providers.single;
+        final current = store.current.providerSettings.providers.single;
         final updated = current.copyWith(
           extra: <String, Object?>{
             ...current.extra,
@@ -373,23 +386,23 @@ final class _InteractiveRunner implements AgentManagementSliceEffectRunner {
 
 final class _ColdInitializationRunner
     implements AgentManagementSliceEffectRunner {
-  late AgentManagementSliceStore store;
+  late AgentManagementSliceNotifier store;
   int initializationCalls = 0;
   int detectionCalls = 0;
 
   @override
-  void run(AgentManagementSliceEffect effect) {
+  Future<void> run(AgentManagementSliceEffect effect) async {
     switch (effect) {
       case ManagementInitializeEffect():
         initializationCalls += 1;
         store.initializationSucceeded(
           effect.operationId,
-          store.state.providerSettings,
-          store.state.agentsById,
+          store.current.providerSettings,
+          store.current.agentsById,
         );
       case DetectAgentsEffect():
         detectionCalls += 1;
-        final agent = store.state.agentsById[defaultClaudeCodeProviderId]!;
+        final agent = store.current.agentsById[defaultClaudeCodeProviderId]!;
         store.detectionStarted(effect.operationId, defaultClaudeCodeProviderId);
         store.agentDetected(
           effect.operationId,
@@ -411,50 +424,34 @@ final class _ColdInitializationRunner
   String? validateConfiguration(String agentId, String content) => null;
 }
 
-final class _ManagementListenerHost extends StatefulWidget {
-  const _ManagementListenerHost({required this.store});
-
-  final AgentManagementSliceStore store;
-
+final class _ManagementListenerHost extends ConsumerStatefulWidget {
+  const _ManagementListenerHost();
   @override
-  State<_ManagementListenerHost> createState() =>
+  ConsumerState<_ManagementListenerHost> createState() =>
       _ManagementListenerHostState();
 }
 
 final class _ManagementListenerHostState
-    extends State<_ManagementListenerHost> {
+    extends ConsumerState<_ManagementListenerHost> {
   int _notificationCount = 0;
-
   @override
   void initState() {
     super.initState();
-    widget.store.addListener(_handleManagementChanged);
-  }
-
-  @override
-  void dispose() {
-    widget.store.removeListener(_handleManagementChanged);
-    super.dispose();
-  }
-
-  void _handleManagementChanged() {
-    setState(() {
-      _notificationCount += 1;
+    ref.listenManual(agentManagementSliceProvider, (_, _) {
+      setState(() => _notificationCount += 1);
     });
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      value: '$_notificationCount',
-      child: AgentManagementPage(sliceStore: widget.store),
-    );
-  }
+  Widget build(BuildContext context) => Semantics(
+    value: '$_notificationCount',
+    child: const AgentManagementPage(),
+  );
 }
 
 Future<void> _pumpSlicePage(
   WidgetTester tester,
-  AgentManagementSliceStore store, {
+  ProviderContainer container, {
   Widget? child,
 }) async {
   tester.view
@@ -470,7 +467,8 @@ Future<void> _pumpSlicePage(
     codeFontFamily: 'JetBrainsMono',
   );
   await tester.pumpWidget(
-    ProviderScope(
+    UncontrolledProviderScope(
+      container: container,
       child: IdeThemeScope(
         themeMode: ThemeMode.light,
         lightTheme: ideTheme,
@@ -488,9 +486,7 @@ Future<void> _pumpSlicePage(
             child: child,
           ),
           home: sf.Scaffold(
-            child:
-                child ??
-                AgentManagementPage(sliceStore: store, autoDetect: false),
+            child: child ?? const AgentManagementPage(autoDetect: false),
           ),
         ),
       ),

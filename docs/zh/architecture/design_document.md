@@ -111,7 +111,7 @@ ProjectThreadsSliceRunner
     -> AgentThreadCatalogPort? / AgentThreadNamingPort? / AgentThreadArchivalPort?
     -> AgentThreadDeletionPort? / AgentThreadBranchingPort?
 
-AgentManagementController
+AgentManagementSliceNotifier -> AgentManagementSliceRunnerAdapter
   -> CodexAgentManagementRepository | GrokAgentManagementRepository
      | ClaudeCodeAgentManagementRepository
     -> CLI 身份、版本与登录态检查
@@ -559,9 +559,11 @@ deep link、workspace 恢复、历史入口、运行时组合、测试与 fixtur
 
 ### 管理适配
 
-`AgentManagementController` 负责管理页异步编排，并复用
-`AgentProviderSettingsController` 的全局 provider 配置。各活跃 CLI 使用独立 management
-repository；协议 transport 不记录 prompt、文件内容或 stderr 原文。
+Management 的状态、operation waiter 与执行账本由应用会话级 `AgentManagementSliceNotifier` 独占；`agentManagementSliceProvider` 非 family、非 autoDispose。`build` 只读取冻结依赖，Runner factory 接收具名 `AgentManagementResultSink`，不得持 Ref 回读 owner。设置与运行事实经独立 app ingress 输入，Page、Editor、LogView 只读 provider 与 `AgentManagementOperations`，没有旧 Store、Deferred 或状态镜像。
+
+关闭先封命令入口并以原 `StateError` 结算等待者，再 `await drainExecutions()` 等待已发出的真实 I/O，最后释放 runtime registry、插件和容器；`ZetaAppComposition.close()` 可等待且幂等，同步 `dispose()` 只启动同一关闭过程。Runner 返回的执行 Future 包含探测后的持久化与日志的两段读取，不能拿已结算的调用方 Future 当作资源释放证据。原初始化/保存错误和堆栈只沿 Future 传播，不加入新状态或日志。
+
+`AgentManagementSliceRunnerAdapter` 通过 `AgentProviderSettingsPort` 读写配置；各活跃 CLI 使用独立 management repository，协议 transport 不记录 prompt、文件内容或 stderr 原文。
 
 Claude Code 自动检测执行 `--version`、`claude auth status --json` 与日志路径枚举，不按
 凭据文件名猜登录态。显式连接测试创建临时、`--no-session-persistence` 的 metadata peer，
@@ -654,7 +656,7 @@ conversation mode 的 UI 回写仍受当前 thread gate 约束。
 
 生产链：`RuntimeController.runtimeObservationListenable + BindingManager + Workspace → WorkspaceAgentRuntimeFactSource → Management.runtimeFactsReplaced → aggregateManagementRuntime → runtimeByProviderId`。计数分别为 active turn、ready runtime、starting Binding、error Binding、unavailable Binding，以及无当前会话观测的 runtime；runtime 以完整 identity 去重，Binding 的 opaque token 在 draft 晋升时保持不变。
 
-source 由 Shell 创建并 start，管理 composition 借用端口；退出顺序为管理消费者退订/关闭 → source close → Workspace/BindingManager。source 同时观察 retained Binding 的事件通知但不读取内容，只同步重读中立 lifecycle。管理行独立显示运行错误；首页保留当前诊断缓存机制，但实时状态按 exact id 从同一摘要投影。WP-3 的 Notifier owner 迁移与 WP-5 的诊断缓存收口另行实施。
+source 由 Shell 创建并 start，app ingress 借用端口；Shell 卸载顺序为事实消费者退订 → source close → Workspace/BindingManager。管理 owner 由应用关闭，与页面卸载分离。source 同时观察 retained Binding 的事件通知但不读取内容，只同步重读中立 lifecycle。管理行独立显示运行错误；首页保留当前诊断缓存机制，但实时状态按 exact id 从同一摘要投影。WP-3M 已迁移 Management owner；Project Threads 与 Workspace/Conversation owner 分别待 WP-3P/C，WP-5 的诊断缓存收口仍待实施。
 
 ### 当前已落地的对话体验
 

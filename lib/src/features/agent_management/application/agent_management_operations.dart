@@ -4,7 +4,7 @@ import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 
 /// Agent 管理页面可发起的操作与只读快照。
 ///
-/// 契约本身不依赖 Flutter，由页面级 MVI store 唯一实现。
+/// 契约本身不依赖 Flutter，由应用会话级 AgentManagementSliceNotifier 唯一实现。
 abstract interface class AgentManagementOperations {
   List<ManagedAgent> get agents;
 

@@ -131,7 +131,7 @@ class _MainAppState extends State<MainApp> {
     return IdeHome(
       key: const ValueKey<String>('zeta.ide-home'),
       shellStateSnapshotRelay: composition.shellStateSnapshotRelay,
-      workbenchCompositionFactory: composition.createWorkbenchComposition,
+      connectManagementRuntimeFacts: composition.connectManagementRuntimeFacts,
       providerMetricLabel: zetaAgentProviderDefinitionCatalog.metricLabelFor,
     );
   }

@@ -55,6 +55,10 @@ Project Threads commands enter `ProjectThreadsOperations`, implemented by the ap
 
 **New code goes into the matching feature — not back into broad top-level directories.**
 
+Management state, typed command waiters, and physical execution tracking belong to the app-session `AgentManagementSliceNotifier`. Its provider is neither a family nor auto-disposed. Build reads frozen inputs once; the runner factory captures a named result sink, never a Ref that resolves another owner. Settings and runtime facts enter through separate app subscriptions. The page, editor, and log view consume providers and `AgentManagementOperations`; the old Store, Deferred runner, and state mirror have been removed.
+
+Shutdown settles logical callers first, awaits `drainExecutions()` for actual I/O, then closes the runtime registry, plugins, and container. Await `ZetaAppComposition.close()` for completion; synchronous `dispose()` starts the same cached close. Detection persistence and both log-reading stages belong to the physical execution Future. Initialization/save errors and stacks remain in the caller Future, never new state or diagnostic logs.
+
 ## The agent event pipeline
 
 This is the one path worth understanding thoroughly. A raw notification from the CLI passes through all of this before it becomes a line on screen:

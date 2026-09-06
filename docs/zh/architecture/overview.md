@@ -55,6 +55,10 @@ Project Threads 的同步命令、列表事实和 thread → project 反查索�
 
 当前 Store 的 listener、presentation 镜像和 `_DeferredProjectThreadsSliceRunner` 仍保留；后续 WP-3P 迁移到 application Notifier，不能把本次规则收口视为发布机制迁移完成。
 
+Management 的状态、operation waiter 与执行账本由应用会话级 `AgentManagementSliceNotifier` 独占；`agentManagementSliceProvider` 非 family、非 autoDispose。`build` 只读取冻结依赖，Runner factory 接收具名 `AgentManagementResultSink`，不得持 Ref 回读 owner。设置与运行事实经独立 app ingress 输入，Page、Editor、LogView 只读 provider 与 `AgentManagementOperations`，没有旧 Store、Deferred 或状态镜像。
+
+关闭先封命令入口并以原 `StateError` 结算等待者，再 `await drainExecutions()` 等待已发出的真实 I/O，最后释放 runtime registry、插件和容器；`ZetaAppComposition.close()` 可等待且幂等，同步 `dispose()` 只启动同一关闭过程。Runner 返回的执行 Future 包含探测后的持久化与日志的两段读取，不能拿已结算的调用方 Future 当作资源释放证据。原初始化/保存错误和堆栈只沿 Future 传播，不加入新状态或日志。
+
 **新代码进对应 feature，不要回到顶层宽泛目录。**
 
 ## Agent 事件管线

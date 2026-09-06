@@ -1,5 +1,5 @@
+import '../../../testing/agent_management_test_container.dart';
 import '../../../testing/memory_agent_runtime_fact_source.dart';
-import 'package:zeta/src/app/plugins/agent_provider_icon_overrides.dart';
 import '../../../testing/agent_management_test_definitions.dart';
 import 'dart:io';
 
@@ -14,7 +14,7 @@ import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_composition.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
-import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_store.dart';
+import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_notifier.dart';
 import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_configuration_editor.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_management_page.dart';
@@ -68,7 +68,7 @@ void main() {
       );
       await _pumpManagementPage(
         tester,
-        controller: harness.managementStore,
+        container: harness._managementComposition,
         size: Size(width, 800),
       );
       expect(
@@ -93,7 +93,7 @@ void main() {
 
     await _pumpManagementPage(
       tester,
-      controller: harness.managementStore,
+      container: harness._managementComposition,
       size: const Size(680, 760),
     );
 
@@ -147,7 +147,7 @@ void main() {
 
     await _pumpManagementPage(
       tester,
-      controller: harness.managementStore,
+      container: harness._managementComposition,
       size: const Size(1280, 900),
     );
     await tester.tap(find.byKey(const ValueKey('agent-row-codex')));
@@ -197,7 +197,10 @@ void main() {
     addTearDown(harness.dispose);
     await tester.runAsync(harness.managementStore.initialize);
 
-    await _pumpManagementPage(tester, controller: harness.managementStore);
+    await _pumpManagementPage(
+      tester,
+      container: harness._managementComposition,
+    );
 
     expect(find.byKey(const ValueKey('agent-row-status-wide')), findsOneWidget);
     expect(find.byType(StateLabel), findsNothing);
@@ -223,7 +226,10 @@ void main() {
       addTearDown(harness.dispose);
       await tester.runAsync(harness.managementStore.initialize);
 
-      await _pumpManagementPage(tester, controller: harness.managementStore);
+      await _pumpManagementPage(
+        tester,
+        container: harness._managementComposition,
+      );
       expect(find.text('Claude'), findsOneWidget);
       expect(
         find.byKey(
@@ -272,7 +278,10 @@ void main() {
     addTearDown(harness.dispose);
     await tester.runAsync(harness.managementStore.initialize);
 
-    await _pumpManagementPage(tester, controller: harness.managementStore);
+    await _pumpManagementPage(
+      tester,
+      container: harness._managementComposition,
+    );
     await tester.tap(find.byKey(const ValueKey('agent-row-claude_code')));
     await tester.pump();
 
@@ -301,7 +310,10 @@ void main() {
     addTearDown(harness.dispose);
     await tester.runAsync(harness.managementStore.initialize);
 
-    await _pumpManagementPage(tester, controller: harness.managementStore);
+    await _pumpManagementPage(
+      tester,
+      container: harness._managementComposition,
+    );
     await tester.tap(find.byKey(const ValueKey('agent-row-claude_code')));
     await tester.pump();
 
@@ -346,7 +358,10 @@ void main() {
       await tester.runAsync(harness.managementStore.initialize);
       await tester.runAsync(harness.managementStore.detect);
 
-      await _pumpManagementPage(tester, controller: harness.managementStore);
+      await _pumpManagementPage(
+        tester,
+        container: harness._managementComposition,
+      );
       await tester.tap(find.byKey(const ValueKey('agent-row-claude_code')));
       await tester.pump();
 
@@ -388,7 +403,10 @@ void main() {
     config.writeAsStringSync('model = "old"\n');
     await tester.runAsync(harness.managementStore.loadConfiguration);
 
-    await _pumpManagementPage(tester, controller: harness.managementStore);
+    await _pumpManagementPage(
+      tester,
+      container: harness._managementComposition,
+    );
     await tester.tap(find.byKey(const ValueKey('agent-row-codex')));
     await tester.pump();
     await tester.tap(find.text('配置'));
@@ -457,8 +475,8 @@ class _ManagementHarness {
   final Directory root;
   final CodexAgentManagementRepository repository;
   final _MemoryProviderSettingsPort providerController;
-  final AgentManagementSliceStore managementStore;
-  final AgentManagementSliceComposition _managementComposition;
+  final AgentManagementSliceNotifier managementStore;
+  final ProviderContainer _managementComposition;
   final AgentProviderRuntimeRegistry _registry;
 
   static _ManagementHarness create() {
@@ -490,27 +508,30 @@ class _ManagementHarness {
       runtimeRegistry: registry,
       codexHomeProvider: () => root.path,
     );
-    final managementComposition = AgentManagementSliceComposition.create(
-      definitions: testAgentManagementDefinitions,
-      repositories: <String, AgentCliManagementRepository>{
-        codexAgentManagementDefinition.id: repository,
-      },
-      providerSettings: providerController,
-      runtimeFactSource: MemoryAgentRuntimeFactSource(),
-      textCatalog: const FallbackAgentManagementTextCatalog(),
+    final managementComposition = managementAppTestContainer(
+      AgentManagementCompositionInputs(
+        definitions: testAgentManagementDefinitions,
+        repositories: <String, AgentCliManagementRepository>{
+          codexAgentManagementDefinition.id: repository,
+        },
+        providerSettings: providerController,
+        textCatalog: const FallbackAgentManagementTextCatalog(),
+      ),
     );
     return _ManagementHarness(
       root: root,
       repository: repository,
       providerController: providerController,
-      managementStore: managementComposition.store,
+      managementStore: managementComposition.read(
+        agentManagementSliceProvider.notifier,
+      ),
       managementComposition: managementComposition,
       registry: registry,
     );
   }
 
   Future<void> dispose() async {
-    _managementComposition.close();
+    await closeManagementTestContainer(_managementComposition);
     providerController.dispose();
     await _registry.close();
     for (var attempt = 0; attempt < 5 && await root.exists(); attempt++) {
@@ -534,8 +555,8 @@ class _ClaudeManagementHarness {
 
   final _FakeClaudeManagementRepository repository;
   final _MemoryProviderSettingsPort providerController;
-  final AgentManagementSliceStore managementStore;
-  final AgentManagementSliceComposition _managementComposition;
+  final AgentManagementSliceNotifier managementStore;
+  final ProviderContainer _managementComposition;
   final AgentProviderRuntimeRegistry _registry;
 
   static _ClaudeManagementHarness create({
@@ -569,26 +590,29 @@ class _ClaudeManagementHarness {
         activeProviderId: defaultClaudeCodeProviderId,
       ),
     );
-    final managementComposition = AgentManagementSliceComposition.create(
-      definitions: testAgentManagementDefinitions,
-      repositories: <String, AgentCliManagementRepository>{
-        defaultClaudeCodeProviderId: repository,
-      },
-      providerSettings: providerController,
-      runtimeFactSource: MemoryAgentRuntimeFactSource(),
-      textCatalog: const FallbackAgentManagementTextCatalog(),
+    final managementComposition = managementAppTestContainer(
+      AgentManagementCompositionInputs(
+        definitions: testAgentManagementDefinitions,
+        repositories: <String, AgentCliManagementRepository>{
+          defaultClaudeCodeProviderId: repository,
+        },
+        providerSettings: providerController,
+        textCatalog: const FallbackAgentManagementTextCatalog(),
+      ),
     );
     return _ClaudeManagementHarness(
       repository: repository,
       providerController: providerController,
-      managementStore: managementComposition.store,
+      managementStore: managementComposition.read(
+        agentManagementSliceProvider.notifier,
+      ),
       managementComposition: managementComposition,
       registry: registry,
     );
   }
 
   Future<void> dispose() async {
-    _managementComposition.close();
+    await closeManagementTestContainer(_managementComposition);
     providerController.dispose();
     await _registry.close();
   }
@@ -851,7 +875,7 @@ class _FakeClaudeManagementRepository
 
 Future<void> _pumpManagementPage(
   WidgetTester tester, {
-  required AgentManagementSliceStore controller,
+  required ProviderContainer container,
   Size size = const Size(1200, 820),
 }) async {
   tester.view
@@ -874,8 +898,8 @@ Future<void> _pumpManagementPage(
         brightness: Brightness.dark,
         codeFontFamily: 'JetBrainsMono',
       ),
-      child: ProviderScope(
-        overrides: [agentProviderIconsOverride()],
+      child: UncontrolledProviderScope(
+        container: container,
         child: sf.ShadcnApp(
           locale: ZetaLocalization.simplifiedChinese,
           supportedLocales: ZetaLocalization.supportedLocales,
@@ -885,12 +909,7 @@ Future<void> _pumpManagementPage(
             theme: buildMaterialTheme(ideTheme),
             child: child,
           ),
-          home: sf.Scaffold(
-            child: AgentManagementPage(
-              sliceStore: controller,
-              autoDetect: false,
-            ),
-          ),
+          home: sf.Scaffold(child: AgentManagementPage(autoDetect: false)),
         ),
       ),
     ),

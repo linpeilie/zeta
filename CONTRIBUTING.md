@@ -208,6 +208,7 @@ Project Threads 业务入口统一为 `ProjectThreadsOperations`（当前由 Sto
 - 新增 Provider 的正常改动范围 = 自有 data 文件 + 中立 domain 契约 + factory 组合 + 契约测试。如果你发现必须改共享层，说明抽象没做对，先开 Issue 讨论。
 - UI 一律按 **capability** 渲染，不按 provider kind 或名称硬编码。未支持的能力必须 `capability = false` 并抛 `UnsupportedError`，**不得静默成功**。 Session config 只声明可选端口，不另造能力位；执行层缺端口仍抛错，UI 翻译 typed failure，不以 Future 正常结束推断成功。
 - 管理运行状态按精确 Provider 实例 id 汇总全部 Workbench session Binding；默认/前台选择不参与归属，global 预热与短 RPC 不代表活跃 turn。保留禁用后的实际运行事实及独立错误标志，摘要只存内存。
+- 管理切片使用应用会话级 Notifier 单一 owner，Runner 经具名 sink 回流真实执行结果；页面退订只取消观察。退出先结算调用方，再排空 I/O，最后释放 runtime/插件/容器；测试和宿主需要完成时 await `ZetaAppComposition.close()`。
 - Provider 进程只由 `AgentProviderRuntimeRegistry` 创建；全局操作走 `AgentProviderGlobalRuntime`，会话实例只由 `AgentConversationBinding.beginTurn()` 惰性创建。Binding 显式区分 dormant/starting/attached/cleared，只有匹配 runtime identity 的 cleared 才是断连。RuntimeController 不持有 lease/scope/pin，空闲回收归 Binding Manager。
 - Workspace entry 创建时一次性绑定 thread、Binding 与 RuntimeController；RuntimeController 不提供跨 thread 切换/恢复兼容入口，只允许更新 project/file context。Registry 获取 runtime 必须显式传 scope。
 - 真实 thread 的 Binding 不得原地改绑；fork 返回的 session 走 Shell 的新 thread 通用登记/选择流程，后续操作只作用于 fork 结果。
