@@ -502,7 +502,7 @@ WP-1 不依赖 WP3 的理由：当前 workspace entries 已存在，WP-1 只需�
 
 ## 10. 2026-09-06 实施与验收
 
-实现提交待登记；[完整验收记录](../../refactor/2026-09-06-project-threads/00-validation.md)。
+实现提交 `11c6d9c8`；[完整验收记录](../../refactor/2026-09-06-project-threads/00-validation.md)。
 
 Runner 同步业务与第二张索引已删除，Store 提供唯一 `threadFor` 查询并保护关闭后索引及移除回调。33 条旧测试按 §7 分配到 S 15 / I 14 / C 4，131 条原断言经 AST token 比对完整保留；新增 14 条行为回归和 4 条带正反例的结构守卫。定向 59 条及 Shell/Widget/分层 45 条通过；format / analyze / affected / full / diff check 全部通过，full 包含根 2007 条及内部包 1076 条（内部包分析全部通过）。收尾详情及首次遥测失败的处理见验收记录。
 
