@@ -27,9 +27,8 @@ const String _aggregateCursorPrefix = 'agg:';
 /// 状态**——所有结果经构造时注入的 [ProjectThreadsStateOwner] typed ingress 回流到
 /// `ProjectThreadsSliceStore`。
 ///
-/// 合并自原先的 `ProjectThreadsController` + `ProjectThreadsSliceRunnerAdapter`：
-/// 那两层之间是一比一转发，adapter 只做 effect → controller 方法的分发，
-/// 属于迁移期接缝。
+/// 同步选择、session 登记、运行态同步与 thread → project 索引由 Store 独占。
+/// 外部命令只经 Store 的 operations 入口派发 effect；这里仅保留 I/O 调度资源。
 final class ProjectThreadsSliceRunner
     implements ProjectThreadsSliceEffectRunner {
   ProjectThreadsSliceRunner({
@@ -47,7 +46,6 @@ final class ProjectThreadsSliceRunner
   final AgentUiTextCatalog _textCatalog;
 
   final Map<String, int> _loadTokens = <String, int>{};
-  final Map<String, String> _projectPathByThreadId = <String, String>{};
   final Map<String, Timer> _searchDebounceTimers = <String, Timer>{};
 
   bool _disposed = false;
@@ -55,16 +53,12 @@ final class ProjectThreadsSliceRunner
   /// 当前会话因删除/归档/关闭而被清空时回调（projectPath, threadId）。
   void Function(String projectPath, String threadId)? onActiveThreadCleared;
 
-  ProjectThreadListState stateFor(String projectPath) {
+  ProjectThreadListState _stateFor(String projectPath) {
     return stateOwner.stateFor(projectPath);
   }
 
-  ProjectThreadsSessionSnapshot get sessionSnapshot {
-    return buildProjectThreadsSessionSnapshot(stateOwner.states);
-  }
-
   /// 从 IDE 会话恢复项目 thread 状态。
-  void restoreSession({
+  void _restoreSession({
     required List<String> projectPaths,
     required String? activeProjectPath,
     required ProjectThreadsSessionSnapshot snapshot,
@@ -75,26 +69,23 @@ final class ProjectThreadsSliceRunner
       snapshot: snapshot,
     );
     stateOwner.applyStatesReplacement(plan.states);
-    for (final entry in plan.states.entries) {
-      _registerStateThreadMappings(entry.key, entry.value);
-    }
     for (final path in plan.projectsToLoad) {
-      unawaited(loadInitial(path));
+      unawaited(_loadInitial(path));
     }
   }
 
   /// 记录或激活一个项目；新项目默认展开并加载首屏。
-  void activateProject(String projectPath) {
-    final current = stateFor(projectPath);
+  void _activateProject(String projectPath) {
+    final current = _stateFor(projectPath);
     stateOwner.applyProjectState(
       projectPath,
       current.copyWith(isExpanded: true),
     );
-    unawaited(loadInitial(projectPath));
+    unawaited(_loadInitial(projectPath));
   }
 
   /// 清理已经不在项目列表中的状态。
-  void retainProjects(List<String> projectPaths) {
+  void _retainProjects(List<String> projectPaths) {
     final allowed = projectPaths.toSet();
     final removed = stateOwner.states.keys
         .where((path) => !allowed.contains(path))
@@ -104,27 +95,24 @@ final class ProjectThreadsSliceRunner
       _loadTokens.remove(path);
       _searchDebounceTimers.remove(path)?.cancel();
     }
-    _projectPathByThreadId.removeWhere(
-      (_, projectPath) => removed.contains(projectPath),
-    );
   }
 
   /// 点击项目时切换展开状态；展开时自动加载首屏。
-  Future<void> toggleProject(String projectPath) async {
-    final current = stateFor(projectPath);
+  Future<void> _toggleProject(String projectPath) async {
+    final current = _stateFor(projectPath);
     final next = current.copyWith(isExpanded: !current.isExpanded);
     stateOwner.applyProjectState(projectPath, next);
     if (next.isExpanded && !next.hasLoaded) {
-      await loadInitial(projectPath);
+      await _loadInitial(projectPath);
     }
   }
 
   /// 切换活动/已归档视图并重新加载。
-  Future<void> setArchivedView({
+  Future<void> _setArchivedView({
     required String projectPath,
     required bool archived,
   }) async {
-    final current = stateFor(projectPath);
+    final current = _stateFor(projectPath);
     if (current.archived == archived) {
       return;
     }
@@ -138,15 +126,15 @@ final class ProjectThreadsSliceRunner
         selectedThreadId: null,
       ),
     );
-    await loadInitial(projectPath);
+    await _loadInitial(projectPath);
   }
 
   /// 更新搜索词；防抖后重新加载首屏。
-  void setSearchTerm({
+  void _setSearchTerm({
     required String projectPath,
     required String searchTerm,
   }) {
-    final current = stateFor(projectPath);
+    final current = _stateFor(projectPath);
     if (current.searchTerm == searchTerm) {
       return;
     }
@@ -160,12 +148,12 @@ final class ProjectThreadsSliceRunner
       if (_disposed) {
         return;
       }
-      unawaited(loadInitial(projectPath));
+      unawaited(_loadInitial(projectPath));
     });
   }
 
   /// 重新加载首屏，保留旧缓存直到新数据返回。
-  Future<void> loadInitial(String projectPath) {
+  Future<void> _loadInitial(String projectPath) {
     return _loadPage(
       projectPath: projectPath,
       limit: projectThreadInitialLimit,
@@ -175,8 +163,8 @@ final class ProjectThreadsSliceRunner
   }
 
   /// 追加加载下一页。
-  Future<void> loadMore(String projectPath) async {
-    final current = stateFor(projectPath);
+  Future<void> _loadMore(String projectPath) async {
+    final current = _stateFor(projectPath);
     final cursor = current.nextCursor;
     if (cursor == null || current.isLoadingMore) {
       return;
@@ -189,206 +177,8 @@ final class ProjectThreadsSliceRunner
     );
   }
 
-  /// 选中某条 thread，并写入全局唯一选择状态（跨项目互斥高亮）。
-  void selectThread(String projectPath, AgentThreadSummary thread) {
-    _registerThreadMapping(projectPath, thread.id);
-    selectThreadId(projectPath, thread.id);
-  }
-
-  /// 更新选中 id 并同步高亮；会清除其他项目的选中态。
-  void selectThreadId(String projectPath, String threadId) {
-    _registerThreadMapping(projectPath, threadId);
-    stateOwner.applyThreadSelection(projectPath, threadId);
-  }
-
-  /// 清空指定项目的 thread 选中态，用于切换到全新的会话草稿。
-  void clearSelectedThread(String projectPath) {
-    stateOwner.applyThreadSelectionClear(projectPath);
-  }
-
-  /// 进入项目首页时清除全局唯一的 thread 高亮。
-  void clearAllSelectedThreads() {
-    stateOwner.applyAllThreadSelectionsClear();
-  }
-
-  /// 显式登记 thread 所属项目，供实时事件反查列表分组。
-  void registerThreadMapping(String projectPath, String threadId) {
-    _registerThreadMapping(projectPath, threadId);
-  }
-
-  /// 登记 provider 已创建或恢复成功的 session，并立即缓存其 provider 归属。
-  ///
-  /// 这样新 thread 无需等待下一次列表刷新，也能以完整摘要参与会话持久化和恢复。
-  ///
-  /// [preview] 可传入首条用户消息等临时摘要，避免列表在 generated_title
-  /// 写入前只能显示短 id。
-  ///
-  /// [markRunning] 为 true 时乐观写入执行中指示（新建 thread 首条消息场景），
-  /// 避免 active provider 事件订阅尚未跟上时侧栏无转圈动画。
-  AgentThreadSummary registerSession(
-    String projectPath,
-    AgentSession session, {
-    String? preview,
-    bool markRunning = false,
-  }) {
-    _registerThreadMapping(projectPath, session.id);
-    // title 只在 provider 已给出正式名时写入；首条用户消息只放 preview，
-    // 避免把临时文案/「New thread」占位写进 title 后挡住后续 generated_title。
-    final formalTitle = isAgentThreadTitlePlaceholder(session.title)
-        ? null
-        : session.title?.trim();
-    final resolvedPreview = (preview ?? session.title ?? '').trim();
-    final now = DateTime.now();
-    final thread = AgentThreadSummary(
-      id: session.id,
-      providerId: session.providerId,
-      projectPath: projectPath,
-      title: formalTitle,
-      preview: resolvedPreview,
-      createdAt: now,
-      updatedAt: now,
-      status: AgentThreadRuntimeStatus.idle,
-    );
-    stateOwner.applyThreadPrepend(projectPath: projectPath, thread: thread);
-    if (formalTitle != null) {
-      stateOwner.applyThreadTitle(
-        projectPath: projectPath,
-        threadId: session.id,
-        title: formalTitle,
-      );
-    }
-    selectThreadId(projectPath, session.id);
-    if (markRunning) {
-      _setThreadRunning(session.id, isRunning: true);
-    }
-    return thread;
-  }
-
-  /// 由详情侧 turn 状态同步列表执行中指示（不依赖 provider 事件是否已送达）。
-  void setThreadRunning(String threadId, {required bool isRunning}) {
-    _setThreadRunning(threadId, isRunning: isRunning);
-  }
-
-  /// 清除列表上「后台执行完毕」绿色提示（用户点击完成 icon）。
-  void dismissCompletedThread({
-    required String projectPath,
-    required String threadId,
-  }) {
-    stateOwner.applyCompletedThreadDismissal(
-      projectPath: projectPath,
-      threadId: threadId,
-    );
-  }
-
-  /// 用常驻 thread runtime 快照同步列表状态。
-  ///
-  /// 这里不依赖当前 active provider 的单路事件流；已打开 thread 的后台执行、
-  /// 等待审批与等待输入都应由各自 runtime 常驻同步。
-  ///
-  /// 标题同步对 **全部 Provider** 生效：仅当 snapshot 携带非占位正式标题时
-  /// 才 `updateThreadTitle`。新建会话的「New thread」/空串若写进列表 title，
-  /// 会被当成正式名，后续首条消息临时标题与 generated_title 都可能被挡住。
-  void syncRuntimeSnapshot({
-    required String projectPath,
-    required AgentConversationThreadSnapshot snapshot,
-  }) {
-    final sessionId = snapshot.sessionId;
-    if (sessionId == null || sessionId.isEmpty) {
-      return;
-    }
-    _registerThreadMapping(projectPath, sessionId);
-    final threadTitle = snapshot.threadTitle.trim();
-    final currentTitle = stateFor(projectPath).threads
-        .where((thread) => thread.id == sessionId)
-        .map((thread) => thread.title?.trim())
-        .firstOrNull;
-    if (!isAgentThreadTitlePlaceholder(threadTitle) &&
-        currentTitle != threadTitle) {
-      stateOwner.applyThreadTitle(
-        projectPath: projectPath,
-        threadId: sessionId,
-        title: threadTitle,
-      );
-    }
-    final threadPreview = snapshot.threadPreview.trim();
-    if (threadPreview.isNotEmpty) {
-      final currentPreview = stateFor(projectPath).threads
-          .where((thread) => thread.id == sessionId)
-          .map((thread) => thread.preview)
-          .firstOrNull;
-      if (currentPreview != threadPreview) {
-        stateOwner.applyThreadPreview(
-          projectPath: projectPath,
-          threadId: sessionId,
-          preview: threadPreview,
-        );
-      }
-    }
-    final runtimeStatus = _effectiveListRuntimeStatus(snapshot);
-    if (runtimeStatus != null) {
-      stateOwner.applyThreadRuntimeStatus(
-        projectPath: projectPath,
-        threadId: sessionId,
-        status: runtimeStatus,
-        waitingOnApproval: snapshot.waitingOnApproval,
-        waitingOnUserInput: snapshot.waitingOnUserInput,
-      );
-    }
-    // 先写 status 再写 running：isTurnRunning=false 时 setThreadRunning 会
-    // 收束残留 active，避免 status 事件迟到时侧栏一直转圈。
-    _setThreadRunning(sessionId, isRunning: snapshot.isTurnRunning);
-  }
-
-  /// 将详情侧 snapshot 映射为列表可消费的 runtime status。
-  ///
-  /// turn 已结束但 `thread/status/changed` 仍停留在 active 时，若无 waiting
-  /// 标志，视为 idle，避免列表 `isBusy` 假阳性。
-  AgentThreadRuntimeStatus? _effectiveListRuntimeStatus(
-    AgentConversationThreadSnapshot snapshot,
-  ) {
-    final status = snapshot.runtimeStatus;
-    if (status == null) {
-      return null;
-    }
-    if (!snapshot.isTurnRunning &&
-        status == AgentThreadRuntimeStatus.active &&
-        !snapshot.waitingOnApproval &&
-        !snapshot.waitingOnUserInput) {
-      return AgentThreadRuntimeStatus.idle;
-    }
-    return status;
-  }
-
-  /// 更新列表中某条 thread 的标题（供 shell 从详情侧回写）。
-  void updateThreadTitle({
-    required String projectPath,
-    required String threadId,
-    required String? title,
-  }) {
-    _registerThreadMapping(projectPath, threadId);
-    stateOwner.applyThreadTitle(
-      projectPath: projectPath,
-      threadId: threadId,
-      title: title,
-    );
-  }
-
-  /// 更新列表中某条 thread 的旁文案（供 shell 从详情侧回写）。
-  void updateThreadPreview({
-    required String projectPath,
-    required String threadId,
-    required String preview,
-  }) {
-    _registerThreadMapping(projectPath, threadId);
-    stateOwner.applyThreadPreview(
-      projectPath: projectPath,
-      threadId: threadId,
-      preview: preview,
-    );
-  }
-
   /// 重命名 thread；乐观更新标题，以 `thread/name/updated` 为准。
-  Future<void> renameThread({
+  Future<void> _renameThread({
     required String projectPath,
     required String threadId,
     required String name,
@@ -424,7 +214,7 @@ final class ProjectThreadsSliceRunner
   }
 
   /// 归档 thread。
-  Future<void> archiveThread({
+  Future<void> _archiveThread({
     required String projectPath,
     required String threadId,
   }) async {
@@ -455,7 +245,7 @@ final class ProjectThreadsSliceRunner
   }
 
   /// 取消归档 thread。
-  Future<void> unarchiveThread({
+  Future<void> _unarchiveThread({
     required String projectPath,
     required String threadId,
   }) async {
@@ -486,7 +276,7 @@ final class ProjectThreadsSliceRunner
   }
 
   /// 删除 provider 端 thread；若只支持本地索引，则仅从 Zeta 列表移除。
-  Future<void> deleteThread({
+  Future<void> _deleteThread({
     required String projectPath,
     required String threadId,
   }) async {
@@ -531,7 +321,7 @@ final class ProjectThreadsSliceRunner
   }
 
   /// 分叉 thread，返回 Provider 创建的新会话；调用方负责登记并切换 Agent 面板。
-  Future<AgentSession?> forkThread({
+  Future<AgentSession?> _forkThread({
     required String projectPath,
     required String threadId,
     AgentPermissionRequestSnapshot? permissionSnapshot,
@@ -616,47 +406,47 @@ final class ProjectThreadsSliceRunner
     }
     switch (effect) {
       case RestoreProjectThreadsEffect():
-        restoreSession(
+        _restoreSession(
           projectPaths: effect.projectPaths,
           activeProjectPath: effect.activeProjectPath,
           snapshot: effect.snapshot,
         );
       case ActivateProjectThreadsEffect():
-        activateProject(effect.projectPath);
+        _activateProject(effect.projectPath);
       case RetainProjectThreadsEffect():
-        retainProjects(effect.projectPaths);
+        _retainProjects(effect.projectPaths);
       case ToggleProjectThreadsEffect():
         unawaited(
-          _completeVoid(effect.operationId, toggleProject(effect.projectPath)),
+          _completeVoid(effect.operationId, _toggleProject(effect.projectPath)),
         );
       case SetArchivedProjectThreadsEffect():
         unawaited(
           _completeVoid(
             effect.operationId,
-            setArchivedView(
+            _setArchivedView(
               projectPath: effect.projectPath,
               archived: effect.archived,
             ),
           ),
         );
       case SetProjectThreadSearchEffect():
-        setSearchTerm(
+        _setSearchTerm(
           projectPath: effect.projectPath,
           searchTerm: effect.searchTerm,
         );
       case LoadInitialProjectThreadsEffect():
         unawaited(
-          _completeVoid(effect.operationId, loadInitial(effect.projectPath)),
+          _completeVoid(effect.operationId, _loadInitial(effect.projectPath)),
         );
       case LoadMoreProjectThreadsEffect():
         unawaited(
-          _completeVoid(effect.operationId, loadMore(effect.projectPath)),
+          _completeVoid(effect.operationId, _loadMore(effect.projectPath)),
         );
       case RenameProjectThreadEffect():
         unawaited(
           _completeVoid(
             effect.operationId,
-            renameThread(
+            _renameThread(
               projectPath: effect.projectPath,
               threadId: effect.threadId,
               name: effect.name,
@@ -667,7 +457,7 @@ final class ProjectThreadsSliceRunner
         unawaited(
           _completeVoid(
             effect.operationId,
-            archiveThread(
+            _archiveThread(
               projectPath: effect.projectPath,
               threadId: effect.threadId,
             ),
@@ -677,7 +467,7 @@ final class ProjectThreadsSliceRunner
         unawaited(
           _completeVoid(
             effect.operationId,
-            unarchiveThread(
+            _unarchiveThread(
               projectPath: effect.projectPath,
               threadId: effect.threadId,
             ),
@@ -687,7 +477,7 @@ final class ProjectThreadsSliceRunner
         unawaited(
           _completeVoid(
             effect.operationId,
-            deleteThread(
+            _deleteThread(
               projectPath: effect.projectPath,
               threadId: effect.threadId,
             ),
@@ -716,7 +506,7 @@ final class ProjectThreadsSliceRunner
 
   Future<void> _fork(ForkProjectThreadEffect effect) async {
     try {
-      final session = await forkThread(
+      final session = await _forkThread(
         projectPath: effect.projectPath,
         threadId: effect.threadId,
         permissionSnapshot: effect.permissionSnapshot,
@@ -738,7 +528,6 @@ final class ProjectThreadsSliceRunner
     }
     _disposed = true;
     _loadTokens.clear();
-    _projectPathByThreadId.clear();
     for (final timer in _searchDebounceTimers.values) {
       timer.cancel();
     }
@@ -751,7 +540,7 @@ final class ProjectThreadsSliceRunner
     required String? cursor,
     required bool append,
   }) async {
-    final current = stateFor(projectPath);
+    final current = _stateFor(projectPath);
     if (current.isLoadingInitial || current.isLoadingMore) {
       return;
     }
@@ -776,11 +565,11 @@ final class ProjectThreadsSliceRunner
         archived: current.archived,
         searchTerm: searchTerm.isEmpty ? null : searchTerm,
       );
-      if (_loadTokens[projectPath] != token) {
+      if (_disposed || _loadTokens[projectPath] != token) {
         return;
       }
 
-      final latest = stateFor(projectPath);
+      final latest = _stateFor(projectPath);
       // 全部 provider 失败时保留已有缓存，仅更新错误态。
       if (page.threads.isEmpty &&
           page.errorMessage != null &&
@@ -796,7 +585,6 @@ final class ProjectThreadsSliceRunner
         return;
       }
 
-      _registerThreadSummaries(projectPath, page.threads);
       final merged = append
           ? _appendUnique(latest.threads, page.threads)
           : _replaceWithPageKeepingRuntimeThreads(
@@ -832,10 +620,10 @@ final class ProjectThreadsSliceRunner
         error: error,
         stackTrace: stackTrace,
       );
-      if (_loadTokens[projectPath] != token) {
+      if (_disposed || _loadTokens[projectPath] != token) {
         return;
       }
-      final latest = stateFor(projectPath);
+      final latest = _stateFor(projectPath);
       stateOwner.applyProjectState(
         projectPath,
         latest.copyWith(
@@ -900,7 +688,7 @@ final class ProjectThreadsSliceRunner
 
     final merged = _mergeThreadsByRecency(threadsByProviderId.values);
 
-    final offset = appendOffsetFromCursor(cursor);
+    final offset = _appendOffsetFromCursor(cursor);
     final pageThreads = merged.skip(offset).take(limit).toList(growable: false);
     final nextOffset = offset + pageThreads.length;
     final nextCursor = nextOffset < merged.length
@@ -990,7 +778,7 @@ final class ProjectThreadsSliceRunner
   }
 
   /// 解析聚合游标；非法或空时从 0 开始。
-  static int appendOffsetFromCursor(String? cursor) {
+  static int _appendOffsetFromCursor(String? cursor) {
     if (cursor == null || cursor.isEmpty) {
       return 0;
     }
@@ -1031,7 +819,7 @@ final class ProjectThreadsSliceRunner
     required Future<T> Function(AgentProviderBundle bundle) operation,
   }) async {
     await providerController.loadSettings();
-    final ownerId = _providerIdForThread(projectPath, threadId);
+    final ownerId = stateOwner.threadFor(projectPath, threadId)?.providerId;
     if (ownerId == null || !providerController.isProviderEnabled(ownerId)) {
       return null;
     }
@@ -1042,64 +830,19 @@ final class ProjectThreadsSliceRunner
     return globalRuntime.run(config, (runtime) => operation(runtime.bundle));
   }
 
-  String? _providerIdForThread(String projectPath, String threadId) {
-    for (final thread in stateFor(projectPath).threads) {
-      if (thread.id == threadId) {
-        return thread.providerId;
-      }
-    }
-    return null;
-  }
-
   void _removeThreadFromList({
     required String projectPath,
     required String threadId,
     required bool notifyCleared,
   }) {
+    if (_disposed) return;
     final cleared = stateOwner.applyThreadRemoval(
       projectPath: projectPath,
       threadId: threadId,
     );
-    _projectPathByThreadId.remove(threadId);
-    if (cleared && notifyCleared) {
+    if (!_disposed && cleared && notifyCleared) {
       onActiveThreadCleared?.call(projectPath, threadId);
     }
-  }
-
-  void _setThreadRunning(String threadId, {required bool isRunning}) {
-    final projectPath = _projectPathByThreadId[threadId];
-    if (projectPath == null) {
-      return;
-    }
-    stateOwner.applyThreadRunning(
-      projectPath: projectPath,
-      threadId: threadId,
-      isRunning: isRunning,
-    );
-  }
-
-  void _registerStateThreadMappings(
-    String projectPath,
-    ProjectThreadListState state,
-  ) {
-    _registerThreadSummaries(projectPath, state.threads);
-    final selectedThreadId = state.selectedThreadId;
-    if (selectedThreadId != null) {
-      _registerThreadMapping(projectPath, selectedThreadId);
-    }
-  }
-
-  void _registerThreadSummaries(
-    String projectPath,
-    Iterable<AgentThreadSummary> threads,
-  ) {
-    for (final thread in threads) {
-      _registerThreadMapping(projectPath, thread.id);
-    }
-  }
-
-  void _registerThreadMapping(String projectPath, String threadId) {
-    _projectPathByThreadId[threadId] = projectPath;
   }
 
   List<AgentThreadSummary> _appendUnique(

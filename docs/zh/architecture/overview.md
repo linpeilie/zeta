@@ -51,6 +51,10 @@ lib/src/features/<feature>/
 
 现有 feature：`agent`（Provider 抽象与对话）、`agent_management`（CLI 检测与诊断）、`desktop_notifications`、`ide_session`（会话恢复）、`project_threads`、`settings`、`usage_statistics`、`workspace`（文件树）。
 
+Project Threads 的同步命令、列表事实和 thread → project 反查索引由 `ProjectThreadsSliceStore` 独占，Shell、Widget 与业务回归统一经 `ProjectThreadsOperations` 调用。`ProjectThreadsSliceRunner` 只通过 `run(effect)` 执行 Provider I/O、分页与搜索调度；远端归属查询经 `ProjectThreadsStateOwner.threadFor` 读取当前项目第一个匹配摘要，不猜活跃 Provider。分页提交只补齐映射，保留窗口外显式登记；整体恢复重建索引，retain/remove/close 清理对应归属，关闭后的 ingress 不再改变索引或触发选中项移除回调。
+
+当前 Store 的 listener、presentation 镜像和 `_DeferredProjectThreadsSliceRunner` 仍保留；后续 WP-3P 迁移到 application Notifier，不能把本次规则收口视为发布机制迁移完成。
+
 **新代码进对应 feature，不要回到顶层宽泛目录。**
 
 ## Agent 事件管线
