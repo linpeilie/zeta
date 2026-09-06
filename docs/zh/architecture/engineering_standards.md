@@ -220,7 +220,7 @@ Management 的状态、operation waiter 与执行账本由应用会话级 `Agent
 ### 3.1 容器与控制器
 
 - 纯状态容器只暴露不可变状态和同步 intent 入口，例如
-  `ProjectThreadsSliceStore`。
+  `ProjectThreadsSliceNotifier`。
 - effect runner 收敛分页、恢复、缓存、provider 调用和竞态处理，例如 `ProjectThreadsSliceRunner`；
   状态由对应的 MVI store 独占，runner 只经 typed ingress 回流。
 - 高吞吐 UI 使用结构相等的不可变 state slice 与分区 `ValueListenable`，不得用整数
@@ -255,11 +255,13 @@ Management 的状态、operation waiter 与执行账本由应用会话级 `Agent
 
 ### Project Threads 规则与索引所有权
 
-Project Threads 的同步命令、列表事实和 thread → project 反查索引由 `ProjectThreadsSliceStore` 独占，Shell、Widget 与业务回归统一经 `ProjectThreadsOperations` 调用。`ProjectThreadsSliceRunner` 只通过 `run(effect)` 执行 Provider I/O、分页与搜索调度；远端归属查询经 `ProjectThreadsStateOwner.threadFor` 读取当前项目第一个匹配摘要，不猜活跃 Provider。分页提交只补齐映射，保留窗口外显式登记；整体恢复重建索引，retain/remove/close 清理对应归属，关闭后的 ingress 不再改变索引或触发选中项移除回调。
+Project Threads 的同步命令、列表事实和 thread → project 反查索引由 `ProjectThreadsSliceNotifier` 独占，Shell、Widget 与业务回归统一经 `ProjectThreadsOperations` 调用。`ProjectThreadsSliceRunner` 只通过 `run(effect)` 执行 Provider I/O、分页与搜索调度；远端归属查询经 `ProjectThreadsStateOwner.threadFor` 读取当前项目第一个匹配摘要，不猜活跃 Provider。分页提交只补齐映射，保留窗口外显式登记；整体恢复重建索引，retain/remove/close 清理对应归属，关闭后的 ingress 不再改变索引或触发选中项移除回调。
 
-当前 Store 的 listener、presentation 镜像和 `_DeferredProjectThreadsSliceRunner` 仍保留；后续 WP-3P 迁移到 application Notifier，不能把本次规则收口视为发布机制迁移完成。
+WP-3P 已移除手写 listener、presentation 镜像与 Deferred；`projectThreadsSliceProvider` 是非 family、非 autoDispose 的应用级 owner，build 用 `ref.read` 冻结依赖，runner factory 只接收 `ProjectThreadsStateOwner`。Shell 借用 Operations 与独立 Riverpod 订阅，卸载只解除回调/订阅，不关闭此 owner。BindingManager 与 global runtime 由 app provider 提供，Workspace 与 Runner 共享同一实例。
 
-同步业务测试使用固定注入时钟和 recording effect runner；I/O 测试必须通过真实 `ProjectThreadsSliceComposition.create(...).store`，不得恢复一套测试专用 Runner 业务入口。结构守卫：`project_threads_state_owner_guard_test`。
+关闭先封入口：pending void 正常完成、fork 返回 null；Runner.close 取消未触发的搜索 Timer、失效加载 token，`drainExecutions()` 等待已启动的恢复/激活/搜索、聚合查询和写入全部结束（eagerError: false，失败 Future 不替换），然后 app 关闭 BindingManager → runtime registry → plugin → container。所有未知/重复回执仍按 OperationId 判 stale；错误及堆栈只结算 Future，不进入列表状态或持久化。
+
+同步业务测试使用固定注入时钟和 recording effect runner；I/O 测试必须通过真实 `projectThreadsSliceOverrides()` 与 `projectThreadsCompositionInputsProvider`，不得恢复一套测试专用 Runner 业务入口。结构守卫：`project_threads_state_owner_guard_test`。
 
 ## 4. Provider 与协议边界
 

@@ -5,7 +5,7 @@ import 'package:zeta/src/features/project_threads/domain/project_thread_list_sta
 
 /// Project Threads effect runner 写入列表事实所依赖的纯 application 端口。
 ///
-/// runner 只负责 Provider 查询、能力校验、防抖与分页；具体状态由 MVI store 独占。
+/// runner 只负责 Provider 查询、能力校验、防抖与分页；具体状态由 application Notifier 独占。
 /// application 因而不反向 import presentation。
 abstract interface class ProjectThreadsStateOwner {
   Map<String, ProjectThreadListState> get states;
@@ -68,7 +68,8 @@ abstract interface class ProjectThreadsStateOwner {
     required AgentThreadSummary thread,
   });
 
-  void Function() subscribe(void Function() listener);
+  /// Selection removal has committed; notify the attached Shell once.
+  void activeThreadCleared(String projectPath, String threadId);
 
   /// effect 的成功回执。
   void operationSucceeded(OperationId operationId);

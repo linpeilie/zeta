@@ -1,3 +1,6 @@
+import 'package:zeta/src/app/composition/agent_session_resource_providers.dart';
+import 'package:zeta/src/app/project_threads_slice/project_threads_slice_composition.dart';
+import 'package:zeta/src/features/project_threads/application/project_threads_slice/project_threads_slice_notifier.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -184,7 +187,10 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
         workspaceFileIndexControllerProvider,
       ),
       ideSessionOperations: ref.read(ideSessionSliceProvider.notifier),
-      agentProviderFactory: ref.read(agentProviderBundleFactoryProvider),
+      projectThreadsController: ref.read(projectThreadsOperationsProvider),
+      subscribeProjectThreads: ref.read(projectThreadsChangesProvider),
+      bindingManager: ref.read(agentConversationBindingManagerProvider),
+      agentProviderGlobalRuntime: ref.read(agentProviderGlobalRuntimeProvider),
       agentProviderSettingsPort: ref.read(
         agentProviderSettingsSliceProvider.notifier,
       ),
@@ -271,7 +277,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
   /// 这里刻意同步读取各唯一 owner，既不缓存也不注册 listener；生产 Widget 仍只
   /// watch 各自的 feature selector。
   ZetaShellStateSnapshot _takeShellStateSnapshot() {
-    final threadStates = _shellController.projectThreadsSliceStore.state;
+    final threadStates = ref.read(projectThreadsSliceProvider);
     final projectThreads = <String, ZetaProjectThreadsStateSnapshot>{
       for (final entry in threadStates.statesByProject.entries)
         entry.key: ZetaProjectThreadsStateSnapshot.fromState(
@@ -519,14 +525,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
       ),
     );
 
-    return ProviderScope(
-      overrides: [
-        projectThreadsSliceStoreProvider.overrideWithValue(
-          _shellController.projectThreadsSliceStore,
-        ),
-      ],
-      child: body,
-    );
+    return body;
   }
 
   List<WindowMenu> _windowMenus(BuildContext context) {

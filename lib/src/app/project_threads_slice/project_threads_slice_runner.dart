@@ -4,7 +4,7 @@ import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
 import 'package:zeta/src/features/project_threads/application/project_threads_slice/project_threads_slice_effect.dart';
-import 'package:zeta/src/features/project_threads/application/project_threads_slice/project_threads_slice_store.dart';
+import 'package:zeta/src/features/project_threads/application/project_threads_slice/project_threads_slice_dependencies.dart';
 import 'package:zeta/src/features/project_threads/application/project_threads_state_owner.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
 import 'package:zeta/src/features/project_threads/domain/project_threads_session_snapshot.dart';
@@ -25,10 +25,10 @@ const String _aggregateCursorPrefix = 'agg:';
 ///
 /// Provider 查询、能力校验、搜索防抖、分页与写操作都在这里执行；**它不拥有列表
 /// 状态**——所有结果经构造时注入的 [ProjectThreadsStateOwner] typed ingress 回流到
-/// `ProjectThreadsSliceStore`。
+/// `ProjectThreadsSliceNotifier`。
 ///
-/// 同步选择、session 登记、运行态同步与 thread → project 索引由 Store 独占。
-/// 外部命令只经 Store 的 operations 入口派发 effect；这里仅保留 I/O 调度资源。
+/// 同步选择、session 登记、运行态同步与 thread → project 索引由 owner 独占。
+/// 外部命令只经 owner 的 operations 入口派发 effect；这里仅保留 I/O 调度资源。
 final class ProjectThreadsSliceRunner
     implements ProjectThreadsSliceEffectRunner {
   ProjectThreadsSliceRunner({
@@ -49,9 +49,44 @@ final class ProjectThreadsSliceRunner
   final Map<String, Timer> _searchDebounceTimers = <String, Timer>{};
 
   bool _disposed = false;
+  final Set<Future<void>> _executions = {};
+  Future<void>? _drainFuture;
 
-  /// 当前会话因删除/归档/关闭而被清空时回调（projectPath, threadId）。
-  void Function(String projectPath, String threadId)? onActiveThreadCleared;
+  void _startExecution(Future<void> Function() execute) {
+    if (_disposed) return;
+    final execution = Completer<void>();
+    final future = execution.future;
+    _executions.add(future);
+    unawaited(
+      future.then<void>(
+        (_) {
+          _executions.remove(future);
+        },
+        onError: (Object error, StackTrace trace) {
+          _executions.remove(future);
+          try {
+            _log.e('Project threads execution failed');
+          } catch (_) {}
+        },
+      ),
+    );
+    try {
+      execution.complete(execute());
+    } catch (error, trace) {
+      execution.completeError(error, trace);
+    }
+  }
+
+  @override
+  Future<void> drainExecutions() {
+    if (!_disposed) {
+      throw StateError('Project Threads runner must close before drain');
+    }
+    return _drainFuture ??= Future.wait<void>(
+      List.of(_executions),
+      eagerError: false,
+    ).then<void>((_) {});
+  }
 
   ProjectThreadListState _stateFor(String projectPath) {
     return stateOwner.stateFor(projectPath);
@@ -70,18 +105,19 @@ final class ProjectThreadsSliceRunner
     );
     stateOwner.applyStatesReplacement(plan.states);
     for (final path in plan.projectsToLoad) {
-      unawaited(_loadInitial(path));
+      _startExecution(() => _loadInitial(path));
     }
   }
 
   /// 记录或激活一个项目；新项目默认展开并加载首屏。
   void _activateProject(String projectPath) {
+    if (_disposed) return;
     final current = _stateFor(projectPath);
     stateOwner.applyProjectState(
       projectPath,
       current.copyWith(isExpanded: true),
     );
-    unawaited(_loadInitial(projectPath));
+    _startExecution(() => _loadInitial(projectPath));
   }
 
   /// 清理已经不在项目列表中的状态。
@@ -99,6 +135,7 @@ final class ProjectThreadsSliceRunner
 
   /// 点击项目时切换展开状态；展开时自动加载首屏。
   Future<void> _toggleProject(String projectPath) async {
+    if (_disposed) return;
     final current = _stateFor(projectPath);
     final next = current.copyWith(isExpanded: !current.isExpanded);
     stateOwner.applyProjectState(projectPath, next);
@@ -112,6 +149,7 @@ final class ProjectThreadsSliceRunner
     required String projectPath,
     required bool archived,
   }) async {
+    if (_disposed) return;
     final current = _stateFor(projectPath);
     if (current.archived == archived) {
       return;
@@ -134,6 +172,7 @@ final class ProjectThreadsSliceRunner
     required String projectPath,
     required String searchTerm,
   }) {
+    if (_disposed) return;
     final current = _stateFor(projectPath);
     if (current.searchTerm == searchTerm) {
       return;
@@ -142,13 +181,14 @@ final class ProjectThreadsSliceRunner
       projectPath,
       current.copyWith(searchTerm: searchTerm),
     );
+    if (_disposed) return;
     _searchDebounceTimers.remove(projectPath)?.cancel();
     _searchDebounceTimers[projectPath] = Timer(projectThreadSearchDebounce, () {
       _searchDebounceTimers.remove(projectPath);
       if (_disposed) {
         return;
       }
-      unawaited(_loadInitial(projectPath));
+      _startExecution(() => _loadInitial(projectPath));
     });
   }
 
@@ -164,6 +204,7 @@ final class ProjectThreadsSliceRunner
 
   /// 追加加载下一页。
   Future<void> _loadMore(String projectPath) async {
+    if (_disposed) return;
     final current = _stateFor(projectPath);
     final cursor = current.nextCursor;
     if (cursor == null || current.isLoadingMore) {
@@ -208,6 +249,7 @@ final class ProjectThreadsSliceRunner
           threadId: threadId,
           title: trimmed,
         );
+        if (_disposed) return;
         await threadNaming.renameThread(threadId: threadId, name: trimmed);
       },
     );
@@ -326,7 +368,7 @@ final class ProjectThreadsSliceRunner
     required String threadId,
     AgentPermissionRequestSnapshot? permissionSnapshot,
   }) async {
-    final session = await _runForThread<AgentSession>(
+    final session = await _runForThread<AgentSession?>(
       projectPath: projectPath,
       threadId: threadId,
       operation: (bundle) async {
@@ -347,6 +389,7 @@ final class ProjectThreadsSliceRunner
           threadId: threadId,
           supplied: permissionSnapshot,
         );
+        if (_disposed) return null;
         return threadBranching.forkThread(
           threadId: threadId,
           context: AgentContext(projectPath: projectPath),
@@ -416,12 +459,15 @@ final class ProjectThreadsSliceRunner
       case RetainProjectThreadsEffect():
         _retainProjects(effect.projectPaths);
       case ToggleProjectThreadsEffect():
-        unawaited(
-          _completeVoid(effect.operationId, _toggleProject(effect.projectPath)),
+        _startExecution(
+          () => _completeVoid(
+            effect.operationId,
+            _toggleProject(effect.projectPath),
+          ),
         );
       case SetArchivedProjectThreadsEffect():
-        unawaited(
-          _completeVoid(
+        _startExecution(
+          () => _completeVoid(
             effect.operationId,
             _setArchivedView(
               projectPath: effect.projectPath,
@@ -435,16 +481,20 @@ final class ProjectThreadsSliceRunner
           searchTerm: effect.searchTerm,
         );
       case LoadInitialProjectThreadsEffect():
-        unawaited(
-          _completeVoid(effect.operationId, _loadInitial(effect.projectPath)),
+        _startExecution(
+          () => _completeVoid(
+            effect.operationId,
+            _loadInitial(effect.projectPath),
+          ),
         );
       case LoadMoreProjectThreadsEffect():
-        unawaited(
-          _completeVoid(effect.operationId, _loadMore(effect.projectPath)),
+        _startExecution(
+          () =>
+              _completeVoid(effect.operationId, _loadMore(effect.projectPath)),
         );
       case RenameProjectThreadEffect():
-        unawaited(
-          _completeVoid(
+        _startExecution(
+          () => _completeVoid(
             effect.operationId,
             _renameThread(
               projectPath: effect.projectPath,
@@ -454,8 +504,8 @@ final class ProjectThreadsSliceRunner
           ),
         );
       case ArchiveProjectThreadEffect():
-        unawaited(
-          _completeVoid(
+        _startExecution(
+          () => _completeVoid(
             effect.operationId,
             _archiveThread(
               projectPath: effect.projectPath,
@@ -464,8 +514,8 @@ final class ProjectThreadsSliceRunner
           ),
         );
       case UnarchiveProjectThreadEffect():
-        unawaited(
-          _completeVoid(
+        _startExecution(
+          () => _completeVoid(
             effect.operationId,
             _unarchiveThread(
               projectPath: effect.projectPath,
@@ -474,8 +524,8 @@ final class ProjectThreadsSliceRunner
           ),
         );
       case DeleteProjectThreadEffect():
-        unawaited(
-          _completeVoid(
+        _startExecution(
+          () => _completeVoid(
             effect.operationId,
             _deleteThread(
               projectPath: effect.projectPath,
@@ -484,7 +534,7 @@ final class ProjectThreadsSliceRunner
           ),
         );
       case ForkProjectThreadEffect():
-        unawaited(_fork(effect));
+        _startExecution(() => _fork(effect));
     }
   }
 
@@ -540,6 +590,7 @@ final class ProjectThreadsSliceRunner
     required String? cursor,
     required bool append,
   }) async {
+    if (_disposed) return;
     final current = _stateFor(projectPath);
     if (current.isLoadingInitial || current.isLoadingMore) {
       return;
@@ -644,6 +695,13 @@ final class ProjectThreadsSliceRunner
     required String? searchTerm,
   }) async {
     await providerController.loadSettings();
+    if (_disposed) {
+      return const _AggregatedThreadPage(
+        threads: [],
+        nextCursor: null,
+        errorMessage: null,
+      );
+    }
     final enabled = providerController.enabledProviders;
     if (enabled.isEmpty) {
       return _AggregatedThreadPage(
@@ -658,6 +716,7 @@ final class ProjectThreadsSliceRunner
 
     await Future.wait(
       enabled.map((config) async {
+        if (_disposed) return;
         final staticCapabilities = providerController.capabilitiesForProviderId(
           config.id,
         );
@@ -735,7 +794,7 @@ final class ProjectThreadsSliceRunner
     String? pageCursor;
     final seenIds = <String>{};
 
-    while (collected.length < projectThreadPerProviderFetchCap) {
+    while (!_disposed && collected.length < projectThreadPerProviderFetchCap) {
       final remaining = projectThreadPerProviderFetchCap - collected.length;
       final pageLimit = remaining < projectThreadPageLimit
           ? remaining
@@ -819,6 +878,7 @@ final class ProjectThreadsSliceRunner
     required Future<T> Function(AgentProviderBundle bundle) operation,
   }) async {
     await providerController.loadSettings();
+    if (_disposed) return null;
     final ownerId = stateOwner.threadFor(projectPath, threadId)?.providerId;
     if (ownerId == null || !providerController.isProviderEnabled(ownerId)) {
       return null;
@@ -827,7 +887,10 @@ final class ProjectThreadsSliceRunner
     if (config == null) {
       return null;
     }
-    return globalRuntime.run(config, (runtime) => operation(runtime.bundle));
+    return globalRuntime.run<T?>(config, (runtime) async {
+      if (_disposed) return null;
+      return operation(runtime.bundle);
+    });
   }
 
   void _removeThreadFromList({
@@ -841,7 +904,7 @@ final class ProjectThreadsSliceRunner
       threadId: threadId,
     );
     if (!_disposed && cleared && notifyCleared) {
-      onActiveThreadCleared?.call(projectPath, threadId);
+      stateOwner.activeThreadCleared(projectPath, threadId);
     }
   }
 

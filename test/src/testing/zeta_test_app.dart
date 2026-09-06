@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:zeta/src/app/composition/agent_session_resource_providers.dart';
 import 'memory_agent_management_repository.dart';
 import 'package:zeta/src/app/plugins/agent_provider_icon_overrides.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_icon_resolver.dart';
@@ -83,6 +85,10 @@ Override headlessWindowHost({bool showsWindowControls = true}) =>
 /// widget test 不能碰本机的默认装配；用例已经覆盖的 provider 不再重复装。
 List<Override> _testDefaultsNotCoveredBy(List<Override> overrides) {
   return <Override>[
+    if (!_covers(overrides, agentBindingSweepTimerFactoryProvider))
+      agentBindingSweepTimerFactoryProvider.overrideWithValue(
+        (_, callback) => ManualBindingSweepTimer(callback),
+      ),
     if (!_covers(overrides, agentProviderIconResolverProvider))
       agentProviderIconsOverride(),
     if (_covers(overrides, agentProviderBundleFactoryProvider) &&
@@ -155,3 +161,24 @@ bool _covers<T>(List<Override> overrides, Provider<T> provider) {
 
 Future<List<ManagedAgent>> _loadNoInstalledHomeProviders() async =>
     const <ManagedAgent>[];
+
+/// App resources outlive Widget unmount. Tests advance idle scans explicitly,
+/// so Flutter's per-Widget fake timer invariant does not own an app timer.
+final class ManualBindingSweepTimer implements Timer {
+  ManualBindingSweepTimer(this.callback);
+  final void Function(Timer) callback;
+  bool _active = true;
+  int _tick = 0;
+  void fire() {
+    if (!_active) return;
+    _tick++;
+    callback(this);
+  }
+
+  @override
+  bool get isActive => _active;
+  @override
+  int get tick => _tick;
+  @override
+  void cancel() => _active = false;
+}

@@ -384,15 +384,17 @@ bash tool/test_full.sh
 
 ### Project Threads 同步规则与异步回流
 
-Project Threads 的同步命令、列表事实和 thread → project 反查索引由 `ProjectThreadsSliceStore` 独占，Shell、Widget 与业务回归统一经 `ProjectThreadsOperations` 调用。`ProjectThreadsSliceRunner` 只通过 `run(effect)` 执行 Provider I/O、分页与搜索调度；远端归属查询经 `ProjectThreadsStateOwner.threadFor` 读取当前项目第一个匹配摘要，不猜活跃 Provider。分页提交只补齐映射，保留窗口外显式登记；整体恢复重建索引，retain/remove/close 清理对应归属，关闭后的 ingress 不再改变索引或触发选中项移除回调。
+Project Threads 的同步命令、列表事实和 thread → project 反查索引由 `ProjectThreadsSliceNotifier` 独占，Shell、Widget 与业务回归统一经 `ProjectThreadsOperations` 调用。`ProjectThreadsSliceRunner` 只通过 `run(effect)` 执行 Provider I/O、分页与搜索调度；远端归属查询经 `ProjectThreadsStateOwner.threadFor` 读取当前项目第一个匹配摘要，不猜活跃 Provider。分页提交只补齐映射，保留窗口外显式登记；整体恢复重建索引，retain/remove/close 清理对应归属，关闭后的 ingress 不再改变索引或触发选中项移除回调。
 
-- 同步回归用 Store + recording runner，注入固定 `now`，并断言不产生 Provider effect。
-- 恢复、查询、分页、搜索、rename/archive/delete/fork 经真实 composition.store 验证 Future 结算和最终状态；不要直接调用 Runner 私有 helper。
+- 同步回归用 application Notifier + recording runner，注入固定 `now`，并断言不产生 Provider effect。
+- 恢复、查询、分页、搜索、rename/archive/delete/fork 经真实 app overrides → Notifier → Runner 验证 Future 结算和最终状态；不要直接调用 Runner 私有 helper。
 - 初始列表和选中 id 建立映射；整体 restore 重建，分页按提交态补齐；显式窗口外映射保留，retain 只删移除项目，remove 只删目标映射，close 清空并拒绝迟到 ingress。
-- 选中项移除先由 Store 确认，再经 composition 通知 Shell；关闭后不得回调。现有 void Future 完成/fork 返回 null 的关闭语义保持。
+- 选中项移除先由 owner 确认，再经具名 `activeThreadCleared` 通知 Shell；关闭后不得回调。现有 void Future 完成/fork 返回 null 的关闭语义保持。
 - 5/10/50 分页、300 ms 防抖、String threadId、首个摘要匹配及 v4 快照不变；跨 Provider 同 id 需另立整体键迁移方案。
 
-当前 Store 的 listener、presentation 镜像和 `_DeferredProjectThreadsSliceRunner` 仍保留；后续 WP-3P 迁移到 application Notifier，不能把本次规则收口视为发布机制迁移完成。 验证入口见 `project_threads_slice_store_test`、app 下的 `project_threads_slice_runner_test`、`project_threads_session_snapshot_codec_test` 和 `project_threads_state_owner_guard_test`。
+WP-3P 已移除手写 listener、presentation 镜像与 Deferred；`projectThreadsSliceProvider` 是非 family、非 autoDispose 的应用级 owner，build 用 `ref.read` 冻结依赖，runner factory 只接收 `ProjectThreadsStateOwner`。Shell 借用 Operations 与独立 Riverpod 订阅，卸载只解除回调/订阅，不关闭此 owner。BindingManager 与 global runtime 由 app provider 提供，Workspace 与 Runner 共享同一实例。
+
+关闭先封入口：pending void 正常完成、fork 返回 null；Runner.close 取消未触发的搜索 Timer、失效加载 token，`drainExecutions()` 等待已启动的恢复/激活/搜索、聚合查询和写入全部结束（eagerError: false，失败 Future 不替换），然后 app 关闭 BindingManager → runtime registry → plugin → container。所有未知/重复回执仍按 OperationId 判 stale；错误及堆栈只结算 Future，不进入列表状态或持久化。 验证入口见 `project_threads_slice_notifier_test`、app 下的 `project_threads_slice_runner_test`、`project_threads_session_snapshot_codec_test` 和 `project_threads_state_owner_guard_test`。
 
 ### 文件变更证据接入
 

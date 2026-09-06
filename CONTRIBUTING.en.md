@@ -190,7 +190,7 @@ Common types: `feat` / `fix` / `docs` / `refactor` / `test` / `chore` / `perf`.
 
 **Layering and dependency direction**
 
-Project Threads business callers use `ProjectThreadsOperations`, currently implemented by the Store. The Store alone owns synchronous rules and the reverse index; the Runner only executes effects. Tests must use the same Store entry point and cover mappings outside the visible page and late results after close. The Notifier publication migration remains scheduled for WP-3P.
+Project Threads callers use `ProjectThreadsOperations` on the application `ProjectThreadsSliceNotifier`. Production and tests share the app input and runner factory seams. Do not restore a Store, state mirror, Deferred runner or duplicate Runner business methods. Cover mappings outside the visible window, late ingress after close, and draining background queries without waiters. Shell and Workspace borrow the app BindingManager; settle callers, await physical execution, then release the manager and runtime/plugins.
 
 - One-way: `main → app → presentation/application → domain`, `app → data → domain`, `presentation → zeta_ui` (the design system in `packages/zeta_ui`), `presentation → zeta_markdown` (the Markdown renderer in `packages/zeta_markdown`, forked from upstream — read `packages/zeta_markdown/UPSTREAM.md` before touching it).
 - New code goes into the matching `features/<feature>/{domain,application,data,presentation}` — not back into broad top-level directories.

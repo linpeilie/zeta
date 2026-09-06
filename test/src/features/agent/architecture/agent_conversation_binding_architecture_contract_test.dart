@@ -21,22 +21,44 @@ void main() {
     });
 
     test(
-      'app shell reads BundleFactory provider and does not wrap old Factory',
+      'app owns runtime resources and Shell borrows them without old Factory',
       () {
-        // 装配点是 `IdeHome`：它从容器读 bundle 工厂再交给 Shell，`app.dart`
-        // 不再经手（依赖不从构造函数下钻）。
+        // WP-3P: app creates the registry/manager once; IdeHome passes borrowed
+        // resources to Shell until full workbench assembly moves in WP-3C.
         final homeSource = File(
           'lib/src/ui/features/ide/views/ide_home.dart',
         ).readAsStringSync();
         expect(
           homeSource,
-          contains('ref.read(agentProviderBundleFactoryProvider)'),
+          contains('ref.read(agentConversationBindingManagerProvider)'),
         );
         expect(
           File(
             'lib/src/app/shell/ide_shell_controller.dart',
           ).readAsStringSync(),
-          contains('AgentProviderBundleFactory'),
+          contains('required this.agentProviderRuntimeRegistry'),
+        );
+        final appResources = File(
+          'lib/src/app/composition/agent_session_resource_providers.dart',
+        ).readAsStringSync();
+        final pluginProviders = File(
+          'lib/src/app/plugins/zeta_plugin_providers.dart',
+        ).readAsStringSync();
+        expect(
+          appResources,
+          contains(
+            'runtimeRegistry: ref.read(agentProviderRuntimeRegistryProvider)',
+          ),
+        );
+        expect(
+          pluginProviders,
+          contains(
+            'providerFactory: ref.watch(agentProviderBundleFactoryProvider)',
+          ),
+        );
+        expect(
+          homeSource,
+          isNot(contains('ref.read(agentProviderBundleFactoryProvider)')),
         );
 
         const files = <String>[
