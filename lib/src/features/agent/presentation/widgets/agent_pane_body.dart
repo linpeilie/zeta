@@ -1,6 +1,7 @@
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_actions.dart';
 import 'package:flutter/material.dart';
 
+import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_region_state.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
@@ -46,7 +47,7 @@ class AgentPaneBody extends StatelessWidget {
     required this.onRemoveImage,
     required this.onSend,
     required this.onOpenMentionPicker,
-    required this.onInsertSkill,
+    required this.onSelectSkill,
     required this.onToggleContextPanel,
     super.key,
   });
@@ -77,7 +78,7 @@ class AgentPaneBody extends StatelessWidget {
   final ValueChanged<String> onRemoveImage;
   final VoidCallback onSend;
   final VoidCallback onOpenMentionPicker;
-  final VoidCallback onInsertSkill;
+  final ValueChanged<AgentSkillMetadata> onSelectSkill;
   final VoidCallback onToggleContextPanel;
 
   @override
@@ -199,7 +200,7 @@ class AgentPaneBody extends StatelessWidget {
                                               onSend: onSend,
                                               onOpenMentionPicker:
                                                   onOpenMentionPicker,
-                                              onInsertSkill: onInsertSkill,
+                                              onSelectSkill: onSelectSkill,
                                             ),
                                         ],
                                       );

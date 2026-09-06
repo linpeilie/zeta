@@ -157,6 +157,42 @@ void main() {
     });
   }
 
+  testWidgets('IdeContextMenu 子菜单在展开后可激活子项', (tester) async {
+    var childPresses = 0;
+    await pumpIdeComponent(
+      tester,
+      child: Center(
+        child: IdeContextMenu(
+          closeOnActivate: false,
+          actions: <IdeContextMenuAction>[
+            IdeContextMenuAction(
+              key: const ValueKey('parent-action'),
+              label: 'Parent',
+              children: <IdeContextMenuAction>[
+                IdeContextMenuAction(
+                  key: const ValueKey('child-action'),
+                  label: 'Child',
+                  onPressed: () => childPresses += 1,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+
+    expect(find.text('Child'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('parent-action')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Child'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('child-action')));
+    await tester.pump();
+    expect(childPresses, 1);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('closeOnActivate 先移除弹层再执行 action 并回焦 trigger', (tester) async {
     var presses = 0;
     await pumpIdeComponent(

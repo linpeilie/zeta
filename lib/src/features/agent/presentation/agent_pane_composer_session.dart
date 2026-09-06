@@ -628,6 +628,10 @@ final class AgentPaneComposerSession {
     _insertSkill(skill);
   }
 
+  void selectSkillFromMenu(AgentSkillMetadata skill) {
+    _insertSkill(skill);
+  }
+
   void openSkillPickerFromMenu() {
     if (!_runtime.canUseSkills || skillPickerOpen || _skillPickerOpening) {
       return;

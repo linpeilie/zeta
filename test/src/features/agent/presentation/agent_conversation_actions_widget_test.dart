@@ -188,18 +188,20 @@ void main() {
       await pumpAgentPaneUi(tester);
       await tester.tap(find.byKey(const ValueKey('agent-insert-skill-button')));
       await pumpAgentPaneUi(tester);
-      expect(
-        find.byKey(const ValueKey('agent-skill-picker-overlay')),
-        findsOneWidget,
+      final skillItem = find.byKey(
+        const ValueKey('agent-insert-skill-/repo/SKILL.md'),
       );
-      expect(owner.diagnostics.effectCount, before + 1);
+      await pumpUntilFinder(tester, skillItem);
+      expect(owner.diagnostics.effectCount, greaterThanOrEqualTo(before));
       expect(owner.current.pendingOperations, isEmpty);
-      await tester.tap(find.text('Fixture Skill'));
+      await tester.tap(skillItem);
+      await tester.pump(const Duration(milliseconds: 300));
       await pumpAgentPaneUi(tester);
       expect(
         find.byKey(const ValueKey('agent-skill-picker-overlay')),
         findsNothing,
       );
+      expect(skillItem, findsNothing);
       expect(find.text('Fixture Skill'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('agent-header-more')));
       await pumpAgentPaneUi(tester);

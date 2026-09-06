@@ -11,7 +11,8 @@ import 'surfaces/ide_surface.dart';
 class IdeContextMenuAction {
   const IdeContextMenuAction({
     required this.label,
-    required this.onPressed,
+    this.onPressed,
+    this.children = const <IdeContextMenuAction>[],
     this.key,
     this.leadingIcon,
     this.enabled = true,
@@ -27,7 +28,12 @@ class IdeContextMenuAction {
   final bool destructive;
   final String? semanticLabel;
   final bool dividerAbove;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
+
+  /// 嵌套子菜单；非空时该项展开 submenu，而不是立刻执行 [onPressed]。
+  final List<IdeContextMenuAction> children;
+
+  bool get hasChildren => children.isNotEmpty;
 
   /// 返回 [dividerAbove] 置为 [value] 的新菜单项（其余字段不变）。
   IdeContextMenuAction withDividerAbove(bool value) {
@@ -40,6 +46,7 @@ class IdeContextMenuAction {
       semanticLabel: semanticLabel,
       dividerAbove: value,
       onPressed: onPressed,
+      children: children,
     );
   }
 }
@@ -163,17 +170,30 @@ class _ContextMenuActionButton extends StatelessWidget implements sf.MenuItem {
         height: 32,
         child: sf.MenuButton(
           enabled: action.enabled,
-          autoClose: false,
+          autoClose: !action.hasChildren,
+          subMenu: action.hasChildren
+              ? <sf.MenuItem>[
+                  for (final child in action.children)
+                    _ContextMenuActionButton(
+                      key: child.key,
+                      action: child,
+                      closeOnActivate: closeOnActivate,
+                    ),
+                ]
+              : null,
           leading: action.leadingIcon == null
               ? null
               : Icon(action.leadingIcon, size: 14, color: foreground),
-          onPressed: action.enabled
+          onPressed:
+              action.enabled && action.onPressed != null && !action.hasChildren
               ? (context) {
+                  final onPressed = action.onPressed!;
+                  sf.Data.maybeOf<sf.MenuGroupData>(context)?.closeAll();
                   if (!closeOnActivate) {
-                    action.onPressed();
+                    onPressed();
                     return;
                   }
-                  sf.closeOverlay(context).whenComplete(action.onPressed);
+                  sf.closeOverlay(context).whenComplete(onPressed);
                 }
               : null,
           child: Align(
