@@ -1,3 +1,10 @@
+import 'package:zeta/src/features/agent_management/application/agent_management_agent_view.dart';
+import 'package:zeta/src/features/agent_management/application/agent_management_detection_port.dart';
+import 'package:zeta/src/features/agent_management/presentation/agent_management_details_catalog.dart';
+import 'agent_management_details_catalog.dart';
+import 'agent_management_detection_projection.dart';
+import 'agent_management_repository_config.dart';
+import 'contributed_agent_management_detection_adapter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
@@ -76,6 +83,20 @@ final agentManagementCompositionInputsProvider =
     });
 
 List<Override> agentManagementSliceOverrides() => [
+  agentManagementDetailsCatalogProvider.overrideWith(
+    (ref) => ref.read(appAgentManagementDetailsCatalogProvider),
+  ),
+  agentManagementDefaultDetectionPortProvider.overrideWith((ref) {
+    final inputs = ref.read(agentManagementCompositionInputsProvider);
+    return ContributedAgentManagementDetectionAdapter(
+      repositories: inputs.repositories,
+      definitions: inputs.definitions,
+      settings: inputs.providerSettings,
+      details: ref.read(appAgentManagementDetailsCatalogProvider),
+      textCatalog: inputs.textCatalog,
+      configFor: AgentManagementRepositoryConfig(inputs.definitions).configFor,
+    );
+  }),
   agentManagementSliceDependenciesProvider.overrideWith((ref) {
     final inputs = ref.read(agentManagementCompositionInputsProvider);
     final orderedIds = <String>[
@@ -86,23 +107,11 @@ List<Override> agentManagementSliceOverrides() => [
           id,
     ];
     final initialState = AgentManagementSliceState.initial(
-      agentsById: <String, ManagedAgent>{
+      definitionsByProviderId: <String, AgentManagementDisplayDefinition>{
         for (final id in orderedIds)
-          id: ManagedAgent.forDefinition(
-            definition:
-                inputs.definitions[id] ??
-                AgentDefinition(
-                  id: id,
-                  displayName: id,
-                  vendor: 'Unknown',
-                  commandName: id,
-                  protocol: 'unknown',
-                  transport: 'unknown',
-                  configFormat: 'unknown',
-                  defaultConfigRelativePath: '',
-                  npmPackage: '',
-                ),
-            enabled: inputs.providerSettings.isProviderEnabled(id),
+          id: managementDisplayDefinition(
+            inputs.definitions[id] ??
+                (throw StateError('Missing management display definition')),
           ),
       },
       orderedAgentIds: orderedIds,
@@ -130,7 +139,11 @@ List<Override> agentManagementSliceOverrides() => [
   }),
   agentManagementRunnerFactoryProvider.overrideWith((ref) {
     final inputs = ref.read(agentManagementCompositionInputsProvider);
+    final detectionPort = ref.read(agentManagementDetectionPortProvider);
+    final details = ref.read(appAgentManagementDetailsCatalogProvider);
     return (sink) => AgentManagementSliceRunnerAdapter(
+      detectionPort: detectionPort,
+      detailsCatalog: details,
       repositories: inputs.repositories,
       definitions: inputs.definitions,
       providerSettings: inputs.providerSettings,

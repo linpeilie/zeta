@@ -1,3 +1,4 @@
+import '../../../testing/management_detection_test_support.dart';
 import '../../../testing/agent_management_test_container.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_dependencies.dart';
 import '../../../testing/agent_management_test_definitions.dart';
@@ -12,7 +13,6 @@ import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_effect.dart';
-import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_state.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_notifier.dart';
 import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_configuration_editor.dart';
@@ -29,7 +29,8 @@ void main() {
         extra: const <String, Object?>{},
       );
       final container = managementTestContainer(
-        initialState: AgentManagementSliceState.initial(
+        initialState: managementFixtureState(
+          selectedAgentId: defaultClaudeCodeProviderId,
           agentsById: <String, ManagedAgent>{
             defaultClaudeCodeProviderId:
                 ManagedAgent.forDefinition(
@@ -203,7 +204,7 @@ final class _SlicePageHarness {
       extra: const <String, Object?>{},
     );
     final container = managementTestContainer(
-      initialState: AgentManagementSliceState(
+      initialState: managementFixtureState(
         agentsById: <String, ManagedAgent>{
           defaultClaudeCodeProviderId:
               ManagedAgent.forDefinition(
@@ -259,26 +260,30 @@ final class _InteractiveRunner implements AgentManagementSliceEffectRunner {
       case ManagementInitializeEffect():
         throw StateError('The test store starts initialized');
       case DetectAgentsEffect():
+        unawaited(holdTestDetection(effect));
         detectionCalls += 1;
-        final detected = store.agent.copyWith(
+        final detected = fixtureForView(store.agent).copyWith(
           installationState: AgentInstallationState.installed,
           currentVersion: '2.1.224',
           accountState: AgentAccountState.loggedIn,
           logPaths: const <String>['/tmp/claude.log'],
         );
-        store.detectionStarted(effect.operationId, defaultClaudeCodeProviderId);
-        store.detectionProgressReported(
+        store.testDetectionStarted(
+          effect.operationId,
+          defaultClaudeCodeProviderId,
+        );
+        store.testDetectionProgress(
           effect.operationId,
           defaultClaudeCodeProviderId,
           const AgentDetectionProgress(completed: 1, total: 1, message: 'done'),
           detected,
         );
-        store.agentDetected(
+        store.testAgentDetected(
           effect.operationId,
           defaultClaudeCodeProviderId,
           detected,
         );
-        store.detectionCompleted(effect.operationId);
+        completeTestDetection(effect.operationId);
       case UpdateProviderEnabledEffect():
         store.providerEnabledUpdated(
           effect.operationId,
@@ -308,7 +313,7 @@ final class _InteractiveRunner implements AgentManagementSliceEffectRunner {
         store.connectionTestSucceeded(
           operationId: effect.operationId,
           agentId: effect.agentId,
-          result: AgentConnectionTestResult(
+          result: AgentManagementConnectionCheckSummary(
             success: true,
             testedAt: DateTime.utc(2026, 8, 23),
             elapsed: const Duration(milliseconds: 5),
@@ -363,20 +368,15 @@ final class _InteractiveRunner implements AgentManagementSliceEffectRunner {
         );
       case LoadAgentLogsEffect():
         logsLoadCalls += 1;
-        store.logsLoaded(
-          effect.operationId,
-          effect.agentId,
-          const <String>['/tmp/claude.log'],
-          <AgentLogEntry>[
-            AgentLogEntry(
-              id: 'log-1',
-              sourcePath: '/tmp/claude.log',
-              message: 'sanitized log line',
-              level: AgentLogLevel.info,
-              timestamp: DateTime.utc(2026, 8, 23),
-            ),
-          ],
-        );
+        store.logsLoaded(effect.operationId, effect.agentId, 1, <AgentLogEntry>[
+          AgentLogEntry(
+            id: 'log-1',
+            sourcePath: '/tmp/claude.log',
+            message: 'sanitized log line',
+            level: AgentLogLevel.info,
+            timestamp: DateTime.utc(2026, 8, 23),
+          ),
+        ]);
     }
   }
 
@@ -398,18 +398,22 @@ final class _ColdInitializationRunner
         store.initializationSucceeded(
           effect.operationId,
           store.current.providerSettings,
-          store.current.agentsById,
+          store.current.detection.confirmedByProviderId,
         );
       case DetectAgentsEffect():
+        unawaited(holdTestDetection(effect));
         detectionCalls += 1;
         final agent = store.current.agentsById[defaultClaudeCodeProviderId]!;
-        store.detectionStarted(effect.operationId, defaultClaudeCodeProviderId);
-        store.agentDetected(
+        store.testDetectionStarted(
           effect.operationId,
           defaultClaudeCodeProviderId,
-          agent,
         );
-        store.detectionCompleted(effect.operationId);
+        store.testAgentDetected(
+          effect.operationId,
+          defaultClaudeCodeProviderId,
+          fixtureForView(agent),
+        );
+        completeTestDetection(effect.operationId);
       case UpdateProviderEnabledEffect() ||
           UpdateAccountDataEnrichmentEffect() ||
           TestAgentConnectionEffect() ||

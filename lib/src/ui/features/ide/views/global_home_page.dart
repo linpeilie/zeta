@@ -1,8 +1,7 @@
-import 'package:zeta/src/features/agent_management/application/agent_management_runtime_facts.dart';
+import 'package:zeta/src/features/agent_management/application/agent_management_home_state.dart';
 import 'package:flutter/material.dart';
 
 import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon.dart';
-import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
@@ -20,76 +19,6 @@ const double _statusDotSize = 6;
 /// 直接取两档 [IdeSpacing.space32]：这一页只有一个焦点，标题得先被空白托起来
 /// 才立得住，页面级 padding 的 12px 远远不够。窄屏回落到一档。
 const double _heroTopSpace = IdeSpacing.space32 * 2;
-
-/// 首页 Provider 的归一化状态。
-enum HomeProviderStatus {
-  available,
-  running,
-  disabled,
-  needsLogin,
-  error,
-  detecting,
-}
-
-/// 首页消费的 Provider 轻量摘要。
-final class HomeProviderSummary {
-  const HomeProviderSummary({
-    required this.id,
-    required this.displayName,
-    required this.vendor,
-    required this.status,
-    this.version,
-    HomeProviderStatus? availabilityStatus,
-  }) : availabilityStatus = availabilityStatus ?? status;
-
-  factory HomeProviderSummary.fromManagedAgent(ManagedAgent agent) {
-    return HomeProviderSummary(
-      id: agent.definition.id,
-      displayName: agent.definition.displayName,
-      vendor: agent.definition.vendor,
-      version: agent.currentVersion,
-      status: _resolveProviderStatus(agent),
-      availabilityStatus: _resolveProviderStatus(
-        agent.copyWith(runtimeState: AgentRuntimeState.notRunning),
-      ),
-    );
-  }
-
-  final String id;
-  final String displayName;
-  final String vendor;
-  final String? version;
-  final HomeProviderStatus status;
-  final HomeProviderStatus availabilityStatus;
-
-  /// 检测缓存只提供可用性；实时运行状态始终来自同一管理摘要。
-  HomeProviderSummary withRuntime(
-    AgentManagementProviderRuntimeSummary? runtime,
-  ) {
-    if (runtime == null) return this;
-    final liveStatus = switch (runtime.state) {
-      AgentRuntimeState.running ||
-      AgentRuntimeState.starting => HomeProviderStatus.running,
-      AgentRuntimeState.error ||
-      AgentRuntimeState.unavailable => HomeProviderStatus.error,
-      AgentRuntimeState.disabled => HomeProviderStatus.disabled,
-      _ =>
-        runtime.enabled
-            ? (availabilityStatus == HomeProviderStatus.disabled
-                  ? HomeProviderStatus.available
-                  : availabilityStatus)
-            : HomeProviderStatus.disabled,
-    };
-    return HomeProviderSummary(
-      id: id,
-      displayName: displayName,
-      vendor: vendor,
-      version: version,
-      status: liveStatus,
-      availabilityStatus: availabilityStatus,
-    );
-  }
-}
 
 /// 没有活动项目时显示的全局软件首页。
 ///
@@ -293,11 +222,14 @@ class _ProviderRow extends StatelessWidget {
     final colors = IdeColors.of(context);
     final version = provider.version?.trim();
     final statusLabel = _providerStatusLabel(context, provider.status);
+    final subtitle = version == null || version.isEmpty
+        ? provider.vendor
+        : '${provider.vendor} · $version';
     return IdeListRow(
       title: provider.displayName,
-      subtitle: version == null || version.isEmpty
-          ? provider.vendor
-          : '${provider.vendor} · $version',
+      subtitle: provider.isStale
+          ? '$subtitle · ${context.l10n.mgmtDetectionStale}'
+          : subtitle,
       // 图标锁进一个正方形槽：品牌 SVG 按高度缩放后，宽度会随各家 logo 的比例
       // 浮动（Codex 在 18 高时是 19.1 宽）。槽一旦不定宽，下面那条分隔线的缩进
       // 就对不上标题左边缘——那正是这条线唯一要做对的事。
@@ -393,32 +325,6 @@ class _ProvidersPlaceholder extends StatelessWidget {
       ),
     );
   }
-}
-
-HomeProviderStatus _resolveProviderStatus(ManagedAgent agent) {
-  if (agent.installationState == AgentInstallationState.detecting) {
-    return HomeProviderStatus.detecting;
-  }
-  if (!agent.enabled || agent.runtimeState == AgentRuntimeState.disabled) {
-    return HomeProviderStatus.disabled;
-  }
-  if (agent.accountState == AgentAccountState.loggedOut ||
-      agent.accountState == AgentAccountState.expired ||
-      agent.accountState == AgentAccountState.unavailable) {
-    return HomeProviderStatus.needsLogin;
-  }
-  if (agent.runtimeState == AgentRuntimeState.error ||
-      agent.runtimeState == AgentRuntimeState.unavailable) {
-    return HomeProviderStatus.error;
-  }
-  if (agent.runtimeState == AgentRuntimeState.running ||
-      agent.runtimeState == AgentRuntimeState.starting ||
-      agent.runtimeState == AgentRuntimeState.stopping) {
-    return HomeProviderStatus.running;
-  }
-  // 「有新版本」不在首页出现：升级是 Agent 管理页的事，首页只回答「现在能不能
-  // 用」。可更新的 Provider 依然是可用的，就按可用显示。
-  return HomeProviderStatus.available;
 }
 
 String _providerStatusLabel(BuildContext context, HomeProviderStatus status) {

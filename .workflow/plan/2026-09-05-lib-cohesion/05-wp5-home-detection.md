@@ -560,3 +560,12 @@ Widget buildGlobalHome(ref) {
 建议新建 `test/src/features/agent_management/application/agent_management_detection_state_test.dart`、`agent_management_detection_notifier_test.dart`、`test/src/app/agent_management_slice/contributed_agent_management_detection_adapter_test.dart`；扩展实际IdeHome集成，保留GlobalHomePage纯渲染测试。重构结束按项目规则完成format、analyze、相关守卫和完整重构门禁。
 
 回滚：WP-5单独提交；回退时同时恢复入口、selector和UI调用，不留下两套探测port。不要用“首页临时缓存”修补探测回归。由于本方案不新增持久化schema，历史摘要仍可读；回滚不得清空用户已有Provider配置或探测缓存。WP-1/3的单owner与运行事实聚合仍保留，WP-5回滚只影响探测流程。
+
+
+## 实施登记（2026-09-06）
+
+已完成，实现提交待登记。实现入口为 `AgentManagementSliceNotifier.ensureDetected/refreshDetection/cancelDetection`、`agentManagementHomeProvider` 与 app 的 `ContributedAgentManagementDetectionAdapter`。详见 [验收记录](../../refactor/2026-09-06-home-detection/00-validation.md)：format / analyze / localized / affected / full 均通过，受影响 880 条，完整门禁根 2118 条 + 内部包 1076 条。89 个原测试声明全部保留，12 条断言调整逐项登记；三条跨版本回归均在前置实现失败、当前实现通过。初始化读取旧设置的额外回归同样完成红绿验证。
+
+实施细化：现有页面实际操作是“打开程序目录”和“复制启动命令”；本次窄 catalog 同时保留打开目录，并补足计划要求的“复制程序位置”，不向 UI 暴露原始路径。贡献目录仍按现有 app-session 冻结，刷新不重新激活插件；目录代次校验与 owner 替换用隔离测试覆盖。成功确认未安装时清除原 schema 中的旧 `cliPath`，避免下次启动恢复为已安装。进程相关配置变化还会拒绝正在等待的旧显式连接检查结果。
+
+未执行真实 CLI、原生文件管理器手工打开、macOS 手工退出与 Windows/Linux Profile；后续交给本系列集成验收，不将 fixture 测试当作平台实测。

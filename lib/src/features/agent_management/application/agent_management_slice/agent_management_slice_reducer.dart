@@ -1,6 +1,8 @@
+import '../agent_management_agent_view.dart';
+import '../agent_management_detection_state.dart';
+import '../agent_management_detection_port.dart';
 import '../agent_management_runtime_aggregation.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
-import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_effect.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_intent.dart';
@@ -30,26 +32,9 @@ AgentManagementSliceState projectManagementRuntimeState(
       config.id: config.enabled,
   };
   final summaries = aggregateManagementRuntime(state.runtimeFacts, enabled);
-  var changed = false;
-  final agents = <String, ManagedAgent>{};
-  for (final entry in state.agentsById.entries) {
-    final summary = summaries[entry.key]!;
-    final agent = entry.value;
-    if (agent.runtimeState != summary.state ||
-        agent.enabled != summary.enabled) {
-      changed = true;
-      agents[entry.key] = agent.copyWith(
-        runtimeState: summary.state,
-        enabled: summary.enabled,
-      );
-    } else {
-      agents[entry.key] = agent;
-    }
-  }
-  if (!changed && zetaMapEquals(summaries, state.runtimeByProviderId)) {
-    return state;
-  }
-  return state.copyWith(agentsById: agents, runtimeByProviderId: summaries);
+  return zetaMapEquals(summaries, state.runtimeByProviderId)
+      ? state
+      : state.copyWith(runtimeByProviderId: summaries);
 }
 
 /// Agent 管理页的纯同步 reducer。
@@ -81,7 +66,12 @@ Transition<AgentManagementSliceState, AgentManagementSliceEffect> _reduce(
       }
       return Transition.stateOnly(
         state.copyWith(
-          agentsById: intent.agentsById,
+          detection: state.detection.copyWith(
+            confirmedByProviderId: {
+              ...intent.confirmedByProviderId,
+              ...state.detection.confirmedByProviderId,
+            },
+          ),
           providerSettings: intent.providerSettings,
           pendingOperations: _removePending(state.pendingOperations, key),
           initialized: true,
@@ -114,96 +104,84 @@ Transition<AgentManagementSliceState, AgentManagementSliceEffect> _reduce(
       );
 
     case DetectionRequested():
-      final key = _globalKey(AgentManagementOperationKind.detection);
-      return Transition(
-        state.copyWith(
-          pendingOperations: _putPending(
-            state.pendingOperations,
-            key,
-            intent.operationId,
-          ),
-          detectionProgress: null,
-          detectingAgentId: null,
-          failure: null,
-        ),
-        <AgentManagementSliceEffect>[DetectAgentsEffect(intent.operationId)],
-      );
-
-    case AgentDetectionStarted():
-      final key = _globalKey(AgentManagementOperationKind.detection);
-      if (!_accepts(state, key, intent.operationId) ||
-          !state.agentsById.containsKey(intent.agentId)) {
-        return Transition.none(state);
-      }
       return Transition.stateOnly(
         state.copyWith(
-          detectingAgentId: intent.agentId,
-          detectionProgress: null,
-        ),
-      );
-
-    case AgentDetectionProgressReported():
-      final key = _globalKey(AgentManagementOperationKind.detection);
-      if (!_accepts(state, key, intent.operationId) ||
-          state.detectingAgentId != intent.agentId) {
-        return Transition.none(state);
-      }
-      return Transition.stateOnly(
-        state.copyWith(
-          agentsById: _replaceAgent(
-            state.agentsById,
-            intent.agentId,
-            intent.partial,
-          ),
-          detectionProgress: intent.progress,
-        ),
-      );
-
-    case AgentDetectionSucceeded():
-      final key = _globalKey(AgentManagementOperationKind.detection);
-      if (!_accepts(state, key, intent.operationId) ||
-          state.detectingAgentId != intent.agentId) {
-        return Transition.none(state);
-      }
-      return Transition.stateOnly(
-        state.copyWith(
-          agentsById: _replaceAgent(
-            state.agentsById,
-            intent.agentId,
-            intent.agent,
-          ),
-          detectingAgentId: null,
-        ),
-      );
-
-    case DetectionCompleted():
-      final key = _globalKey(AgentManagementOperationKind.detection);
-      if (!_accepts(state, key, intent.operationId)) {
-        return Transition.none(state);
-      }
-      return Transition.stateOnly(
-        state.copyWith(
-          pendingOperations: _removePending(state.pendingOperations, key),
-          detectionProgress: null,
-          detectingAgentId: null,
-          failure: null,
-        ),
-      );
-
-    case DetectionFailed():
-      final key = _globalKey(AgentManagementOperationKind.detection);
-      if (!_accepts(state, key, intent.operationId)) {
-        return Transition.none(state);
-      }
-      return Transition.stateOnly(
-        state.copyWith(
-          pendingOperations: _removePending(state.pendingOperations, key),
-          detectingAgentId: null,
-          failure: AgentManagementFailure(
-            kind: AgentManagementFailureKind.detection,
+          detection: AgentManagementDetectionState(
+            phase: ManagementDetectionPhase.initializing,
             operationId: intent.operationId,
-            message: intent.message,
+            automaticAttemptConsumed: true,
+            confirmedByProviderId: {
+              for (final e in state.detection.confirmedByProviderId.entries)
+                e.key: e.value.stale(),
+            },
           ),
+        ),
+      );
+    case DetectionRunStarted():
+      if (state.detection.operationId != intent.operationId ||
+          !state.detection.isLoading) {
+        return Transition.none(state);
+      }
+      return Transition.stateOnly(
+        state.copyWith(
+          detection: state.detection.copyWith(
+            phase: ManagementDetectionPhase.running,
+            outcomesByProviderId: {
+              for (final id in intent.providerIds)
+                id: ProviderDetectionOutcome.pending,
+            },
+          ),
+        ),
+      );
+    case DetectionResultAccepted():
+      return Transition.stateOnly(_acceptDetectionEvent(state, intent));
+    case DetectionRunFinished():
+      if (state.detection.operationId != intent.operationId ||
+          !state.detection.isLoading) {
+        return Transition.none(state);
+      }
+      final canceled =
+          intent.result.status == DetectionRunStatus.canceled ||
+          intent.result.status == DetectionRunStatus.closed;
+      return Transition.stateOnly(
+        state.copyWith(
+          detection: state.detection.copyWith(
+            phase: switch (intent.result.status) {
+              DetectionRunStatus.succeeded =>
+                ManagementDetectionPhase.succeeded,
+              DetectionRunStatus.partialFailure =>
+                ManagementDetectionPhase.partialFailure,
+              DetectionRunStatus.failed => ManagementDetectionPhase.failed,
+              _ => ManagementDetectionPhase.canceled,
+            },
+            outcomesByProviderId: {
+              for (final e in state.detection.outcomesByProviderId.entries)
+                e.key: e.value == ProviderDetectionOutcome.pending
+                    ? (canceled
+                          ? ProviderDetectionOutcome.canceled
+                          : ProviderDetectionOutcome.failed)
+                    : e.value,
+            },
+            pendingPartialByProviderId: {},
+            progressByProviderId: {},
+            lastResult: intent.result,
+          ),
+          detectionProgress: null,
+          detectingAgentId: null,
+        ),
+      );
+    case ManagementCatalogReplaced():
+      return Transition.stateOnly(
+        state.copyWith(
+          catalogGeneration: intent.generation,
+          definitionsByProviderId: intent.definitions,
+          orderedAgentIds: intent.definitions.keys.toList(),
+          detection: AgentManagementDetectionState(
+            automaticAttemptConsumed: state.detection.automaticAttemptConsumed,
+            phase: ManagementDetectionPhase.canceled,
+            lastResult: AgentManagementDetectionRunResult.canceled,
+          ),
+          confirmedConnectionChecksByProviderId: {},
         ),
       );
 
@@ -238,16 +216,8 @@ Transition<AgentManagementSliceState, AgentManagementSliceEffect> _reduce(
       if (!_accepts(state, key, intent.operationId)) {
         return Transition.none(state);
       }
-      final current = state.agentsById[intent.agentId];
       return Transition.stateOnly(
         state.copyWith(
-          agentsById: current == null
-              ? state.agentsById
-              : _replaceAgent(
-                  state.agentsById,
-                  intent.agentId,
-                  current.copyWith(enabled: intent.enabled),
-                ),
           providerSettings: intent.providerSettings,
           pendingOperations: _removePending(state.pendingOperations, key),
           failure: null,
@@ -349,27 +319,17 @@ Transition<AgentManagementSliceState, AgentManagementSliceEffect> _reduce(
       if (!_accepts(state, key, intent.operationId)) {
         return Transition.none(state);
       }
-      final current = state.agentsById[intent.agentId];
-      final tested = current?.copyWith(
-        connectionTest: intent.result,
-        models: intent.models,
-        modelsUpdatedAt: intent.models.isEmpty
-            ? current.modelsUpdatedAt
-            : intent.modelsUpdatedAt,
-        modelSource: intent.models.isEmpty
-            ? current.modelSource
-            : intent.modelSource,
-        errorStage: intent.result.success ? null : intent.result.failureStage,
-        errorMessage: intent.result.success ? null : intent.result.message,
-        errorDetails: intent.result.success
-            ? null
-            : intent.result.rawErrorSummary,
-      );
       return Transition.stateOnly(
         state.copyWith(
-          agentsById: tested == null
-              ? state.agentsById
-              : _replaceAgent(state.agentsById, intent.agentId, tested),
+          confirmedConnectionChecksByProviderId: {
+            ...state.confirmedConnectionChecksByProviderId,
+            intent.agentId: AgentManagementConnectionCheckState(
+              result: intent.result,
+              models: intent.models,
+              modelsUpdatedAt: intent.modelsUpdatedAt,
+              modelSource: intent.modelSource,
+            ),
+          },
           pendingOperations: _removePending(state.pendingOperations, key),
           failure: null,
         ),
@@ -484,7 +444,6 @@ Transition<AgentManagementSliceState, AgentManagementSliceEffect> _reduce(
           state.copyWith(pendingOperations: pendingRemoved),
         );
       }
-      final currentAgent = state.agentsById[intent.agentId];
       return Transition.stateOnly(
         state.copyWith(
           confirmedConfigurationsByAgentId:
@@ -492,16 +451,6 @@ Transition<AgentManagementSliceState, AgentManagementSliceEffect> _reduce(
                 ...state.confirmedConfigurationsByAgentId,
                 intent.agentId: intent.result.document,
               },
-          agentsById: currentAgent == null
-              ? state.agentsById
-              : _replaceAgent(
-                  state.agentsById,
-                  intent.agentId,
-                  currentAgent.copyWith(
-                    configExists: true,
-                    configModifiedAt: intent.result.document.modifiedAt,
-                  ),
-                ),
           pendingOperations: pendingRemoved,
           failure: null,
         ),
@@ -549,16 +498,12 @@ Transition<AgentManagementSliceState, AgentManagementSliceEffect> _reduce(
       if (!_accepts(state, key, intent.operationId)) {
         return Transition.none(state);
       }
-      final current = state.agentsById[intent.agentId];
       return Transition.stateOnly(
         state.copyWith(
-          agentsById: current == null
-              ? state.agentsById
-              : _replaceAgent(
-                  state.agentsById,
-                  intent.agentId,
-                  current.copyWith(logPaths: intent.paths),
-                ),
+          logFileCountsByProviderId: {
+            ...state.logFileCountsByProviderId,
+            intent.agentId: intent.fileCount,
+          },
           logsByAgentId: <String, List<AgentLogEntry>>{
             ...state.logsByAgentId,
             intent.agentId: intent.logs,
@@ -579,28 +524,34 @@ Transition<AgentManagementSliceState, AgentManagementSliceEffect> _reduce(
       );
 
     case ProviderSettingsSnapshotChanged():
-      var changed = false;
-      final agents = Map<String, ManagedAgent>.from(state.agentsById);
-      for (final entry in agents.entries.toList(growable: false)) {
-        final enabled = _providerEnabled(
-          intent.providerSettings,
-          entry.key,
-          fallback: entry.value.enabled,
-        );
-        if (entry.value.enabled == enabled) {
-          continue;
+      final checks = {...state.confirmedConnectionChecksByProviderId};
+      final pending = {...state.pendingOperations};
+      for (final old in state.providerSettings.providers) {
+        final updated = intent.providerSettings.providers
+            .where((p) => p.id == old.id)
+            .firstOrNull;
+        if (updated == null ||
+            old.kind != updated.kind ||
+            old.command != updated.command ||
+            !zetaMapEquals(old.environment, updated.environment) ||
+            old.selectedPermissionOptionId !=
+                updated.selectedPermissionOptionId ||
+            !zetaListEquals(old.arguments, updated.arguments) ||
+            !zetaMapEquals(
+              _processExtra(old.extra),
+              _processExtra(updated.extra),
+            )) {
+          checks.remove(old.id);
+          pending.remove(
+            _agentKey(AgentManagementOperationKind.connectionTest, old.id),
+          );
         }
-        changed = true;
-        agents[entry.key] = entry.value.copyWith(enabled: enabled);
-      }
-      if (!changed &&
-          identical(state.providerSettings, intent.providerSettings)) {
-        return Transition.none(state);
       }
       return Transition.stateOnly(
         state.copyWith(
-          agentsById: agents,
           providerSettings: intent.providerSettings,
+          confirmedConnectionChecksByProviderId: checks,
+          pendingOperations: pending,
         ),
       );
 
@@ -664,21 +615,89 @@ Map<AgentManagementOperationKey, OperationId> _removePending(
     if (entry.key != key) entry.key: entry.value,
 };
 
-Map<String, ManagedAgent> _replaceAgent(
-  Map<String, ManagedAgent> source,
-  String agentId,
-  ManagedAgent agent,
-) => <String, ManagedAgent>{...source, agentId: agent};
+Map<String, Object?> _processExtra(Map<String, Object?> extra) => {
+  for (final e in extra.entries)
+    if (!e.key.startsWith('detected') && e.key != 'lastDetectedAt')
+      e.key: e.value,
+};
 
-bool _providerEnabled(
-  AgentProviderSettings settings,
-  String agentId, {
-  required bool fallback,
-}) {
-  for (final provider in settings.providers) {
-    if (provider.id == agentId) {
-      return provider.enabled;
-    }
+AgentManagementSliceState _acceptDetectionEvent(
+  AgentManagementSliceState state,
+  DetectionResultAccepted intent,
+) {
+  final d = state.detection;
+  final event = intent.event;
+  final id = event.providerId;
+  if (d.operationId != intent.operationId ||
+      d.phase != ManagementDetectionPhase.running ||
+      !d.outcomesByProviderId.containsKey(id)) {
+    return state;
   }
-  return fallback;
+  if (event is DetectionCacheWriteWarning) {
+    return state.copyWith(
+      detection: d.copyWith(
+        cacheWriteWarningProviderIds: {...d.cacheWriteWarningProviderIds, id},
+      ),
+    );
+  }
+  if (d.outcomesByProviderId[id] != ProviderDetectionOutcome.pending) {
+    return state;
+  }
+  switch (event) {
+    case DetectionProviderStarted():
+      return state.copyWith(detectingAgentId: id, detectionProgress: null);
+    case DetectionProviderProgress():
+      if (state.detectingAgentId != id) return state;
+      return state.copyWith(
+        detection: d.copyWith(
+          pendingPartialByProviderId: {
+            ...d.pendingPartialByProviderId,
+            id: event.partial,
+          },
+          progressByProviderId: {...d.progressByProviderId, id: event.progress},
+        ),
+        detectingAgentId: id,
+        detectionProgress: event.progress,
+      );
+    case DetectionProviderSucceeded():
+      if (state.detectingAgentId != id) return state;
+      return state.copyWith(
+        detection: d.copyWith(
+          confirmedByProviderId: {
+            ...d.confirmedByProviderId,
+            id: AgentDetectionConfirmedRecord(
+              details: event.details,
+              confirmedAt: event.confirmedAt ?? event.details.lastDetectedAt,
+              freshness: DetectionFreshness.confirmedThisRun,
+            ),
+          },
+          pendingPartialByProviderId: {...d.pendingPartialByProviderId}
+            ..remove(id),
+          progressByProviderId: {...d.progressByProviderId}..remove(id),
+          outcomesByProviderId: {
+            ...d.outcomesByProviderId,
+            id: ProviderDetectionOutcome.succeeded,
+          },
+        ),
+        detectingAgentId: null,
+        detectionProgress: null,
+      );
+    case DetectionProviderFailed():
+      return state.copyWith(
+        detection: d.copyWith(
+          pendingPartialByProviderId: {...d.pendingPartialByProviderId}
+            ..remove(id),
+          progressByProviderId: {...d.progressByProviderId}..remove(id),
+          outcomesByProviderId: {
+            ...d.outcomesByProviderId,
+            id: ProviderDetectionOutcome.failed,
+          },
+          failuresByProviderId: {...d.failuresByProviderId, id: event.failure},
+        ),
+        detectingAgentId: null,
+        detectionProgress: null,
+      );
+    case DetectionCacheWriteWarning():
+      return state;
+  }
 }

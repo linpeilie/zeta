@@ -1,3 +1,5 @@
+import 'package:zeta/src/features/agent_management/application/agent_management_home_state.dart';
+import '../../../../testing/management_detection_test_support.dart';
 import '../../../../testing/agent_management_test_definitions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -210,33 +212,43 @@ void main() {
     ).copyWith(installationState: AgentInstallationState.installed);
 
     expect(
-      HomeProviderSummary.fromManagedAgent(
-        installed.copyWith(runtimeState: AgentRuntimeState.running),
+      HomeProviderSummary.fromAgentView(
+        managementFixtureView(
+          installed.copyWith(runtimeState: AgentRuntimeState.running),
+        ),
       ).status,
       HomeProviderStatus.running,
     );
     expect(
-      HomeProviderSummary.fromManagedAgent(
-        installed.copyWith(runtimeState: AgentRuntimeState.disabled),
+      HomeProviderSummary.fromAgentView(
+        managementFixtureView(
+          installed.copyWith(runtimeState: AgentRuntimeState.disabled),
+        ),
       ).status,
       HomeProviderStatus.disabled,
     );
     expect(
-      HomeProviderSummary.fromManagedAgent(
-        installed.copyWith(accountState: AgentAccountState.loggedOut),
+      HomeProviderSummary.fromAgentView(
+        managementFixtureView(
+          installed.copyWith(accountState: AgentAccountState.loggedOut),
+        ),
       ).status,
       HomeProviderStatus.needsLogin,
     );
     expect(
-      HomeProviderSummary.fromManagedAgent(
-        installed.copyWith(runtimeState: AgentRuntimeState.error),
+      HomeProviderSummary.fromAgentView(
+        managementFixtureView(
+          installed.copyWith(runtimeState: AgentRuntimeState.error),
+        ),
       ).status,
       HomeProviderStatus.error,
     );
     // 「可更新」不再是首页状态：能用就是能用，升级归 Agent 管理页管。
     expect(
-      HomeProviderSummary.fromManagedAgent(
-        installed.copyWith(versionState: AgentVersionState.updateAvailable),
+      HomeProviderSummary.fromAgentView(
+        managementFixtureView(
+          installed.copyWith(versionState: AgentVersionState.updateAvailable),
+        ),
       ).status,
       HomeProviderStatus.available,
     );

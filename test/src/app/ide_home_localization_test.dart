@@ -1,3 +1,4 @@
+import '../testing/management_detection_test_support.dart';
 import '../testing/agent_management_test_definitions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,7 +10,6 @@ import 'package:zeta/src/ui/features/ide/views/ide_home.dart';
 import '../testing/ide_test_harness.dart';
 import '../testing/zeta_test_app.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
-import 'package:zeta/src/app/composition/zeta_environment_providers.dart';
 import 'package:zeta/src/app/localization/zeta_display_language_source.dart';
 import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
 import 'package:zeta/src/app/storage/zeta_store_providers.dart';
@@ -46,7 +46,13 @@ void main() {
     expect(find.byKey(const ValueKey('agent-management-page')), findsOneWidget);
     expect(find.text('已安装'), findsWidgets);
     expect(find.text('全部支持'), findsOneWidget);
-    expect(find.text('自动检测 Agent'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('agent-detect-button')),
+        matching: find.text('自动检测 Agent'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('Installed'), findsNothing);
     expect(find.text('All supported'), findsNothing);
     expect(find.text('Auto-detect Agents'), findsNothing);
@@ -81,7 +87,13 @@ void main() {
 
     expect(find.text('Installed'), findsWidgets);
     expect(find.text('All supported'), findsOneWidget);
-    expect(find.text('Auto-detect Agents'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('agent-detect-button')),
+        matching: find.text('Auto-detect Agents'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('已安装'), findsNothing);
     expect(find.text('全部支持'), findsNothing);
     expect(find.text('自动检测 Agent'), findsNothing);
@@ -164,7 +176,9 @@ Future<void> _pumpIdeHome(
           MemoryAgentProviderConfigStore(),
         ),
         if (homeProviderDetectionLoader case final loader?)
-          homeProviderDetectionLoaderProvider.overrideWithValue(loader),
+          agentManagementDetectionPortProvider.overrideWithValue(
+            FixtureManagementDetectionPort(loader),
+          ),
         if (language case final value?)
           zetaDisplayLanguageSourceProvider.overrideWithValue(
             FixedDisplayLanguageSource(value),

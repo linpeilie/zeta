@@ -1,3 +1,4 @@
+import '../../testing/management_detection_test_support.dart';
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
@@ -97,7 +98,7 @@ void main() {
       expect(saved.document.content, '{"saved":true}');
       expect(store.configuration?.signature, 'saved');
       expect(logs.single.message, 'safe log');
-      expect(store.agent.logPaths, const <String>['/tmp/claude.log']);
+      expect(store.agent.availableLogFileCount, 1);
       expect(store.agent.runtimeState, AgentRuntimeState.running);
       expect(
         settingsPort
@@ -121,11 +122,11 @@ void main() {
     });
     final owner = container.read(agentManagementSliceProvider.notifier);
     await owner.initialize();
-    final detection = expectLater(owner.detect(), throwsStateError);
+    final detection = owner.refreshDetection();
     await Future<void>.delayed(Duration.zero);
     expect(settings.updateCalls, 1);
     owner.stopAcceptingCommandsAndSettleWaiters();
-    await detection;
+    expect((await detection).status, DetectionRunStatus.closed);
     var drained = false;
     final drain = owner.drainExecutions().then((_) => drained = true);
     await Future<void>.delayed(Duration.zero);

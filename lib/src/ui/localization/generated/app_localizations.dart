@@ -6370,6 +6370,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Applying session option…'**
   String get agentSessionConfigApplying;
+
+  /// mgmtDetectionStale
+  ///
+  /// In en, this message translates to:
+  /// **'Previously confirmed'**
+  String get mgmtDetectionStale;
+
+  /// mgmtDetectionFailedProviders
+  ///
+  /// In en, this message translates to:
+  /// **'Detection failed for {names}. Previously confirmed results are retained. You can retry.'**
+  String mgmtDetectionFailedProviders(String names);
+
+  /// mgmtDetectionCacheWarning
+  ///
+  /// In en, this message translates to:
+  /// **'Detection completed, but some results could not be saved.'**
+  String get mgmtDetectionCacheWarning;
+
+  /// mgmtCopyExecutableLocation
+  ///
+  /// In en, this message translates to:
+  /// **'Copy executable location'**
+  String get mgmtCopyExecutableLocation;
+
+  /// mgmtExecutableLocationUnavailable
+  ///
+  /// In en, this message translates to:
+  /// **'The executable location is unavailable. Run detection again.'**
+  String get mgmtExecutableLocationUnavailable;
 }
 
 class _AppLocalizationsDelegate

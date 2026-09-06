@@ -59,7 +59,12 @@ WP-3P 已移除手写 listener、presentation 镜像与 Deferred；`projectThrea
 
 Management 的状态、operation waiter 与执行账本由应用会话级 `AgentManagementSliceNotifier` 独占；`agentManagementSliceProvider` 非 family、非 autoDispose。`build` 只读取冻结依赖，Runner factory 接收具名 `AgentManagementResultSink`，不得持 Ref 回读 owner。设置与运行事实经独立 app ingress 输入，Page、Editor、LogView 只读 provider 与 `AgentManagementOperations`，没有旧 Store、Deferred 或状态镜像。
 
-关闭先封命令入口并以原 `StateError` 结算等待者，再 `await drainExecutions()` 等待已发出的真实 I/O，最后释放 runtime registry、插件和容器；`ZetaAppComposition.close()` 可等待且幂等，同步 `dispose()` 只启动同一关闭过程。Runner 返回的执行 Future 包含探测后的持久化与日志的两段读取，不能拿已结算的调用方 Future 当作资源释放证据。原初始化/保存错误和堆栈只沿 Future 传播，不加入新状态或日志。
+关闭先封命令入口；探测等待者结算为 typed `closed`，其他操作仍以原 `StateError` 结算，再 `await drainExecutions()` 等待已发出的真实 I/O，最后释放 runtime registry、插件和容器；`ZetaAppComposition.close()` 可等待且幂等，同步 `dispose()` 只启动同一关闭过程。Runner 返回的执行 Future 包含探测后的持久化与日志的两段读取，不能拿已结算的调用方 Future 当作资源释放证据。原初始化/保存错误和堆栈只沿 Future 传播，不加入新状态或日志。
+
+首页与管理页的探测结果也由该 owner 独占。确认记录和临时进度分开，部分失败只保留失败项的旧结果；当前启用设置、显式连接检查和 session 运行事实在安全 `AgentManagementAgentView` 中投影。首页没有本地探测缓存，直接订阅 `agentManagementHomeProvider`。`ensureDetected()` 在工作台内只自动尝试一次，显式刷新加入同一个正在初始化/运行/排空的 Future；逻辑取消立即返回结果但不提前释放真实 I/O。
+
+Provider 仓储的路径和详细诊断停在 app 适配器，application 仅保存安全字段与 opaque handle；详情目录提供缩略显示及受控的复制/打开操作，探测与连接检查各自拥有独立资源槽。缓存写失败与探测失败分列，成功结果不回滚；落盘前重读当前配置，仅合并既有探测白名单。贡献目录保持 app-session 冻结，目录代次用于拒绝旧结果。
+
 
 **新代码进对应 feature，不要回到顶层宽泛目录。**
 

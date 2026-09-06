@@ -1,3 +1,7 @@
+import 'agent_management_slice_effect.dart';
+import '../agent_management_detection_port.dart';
+import '../agent_management_agent_view.dart';
+import '../agent_management_detection_state.dart';
 import '../agent_management_runtime_facts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'agent_management_slice_dependencies.dart';
@@ -58,9 +62,9 @@ final class AgentManagementSliceNotifier
       <String, OperationIdGenerator>{};
   final Map<OperationId, Completer<void>> _voidCompleters =
       <OperationId, Completer<void>>{};
-  final Map<OperationId, Completer<AgentConnectionTestResult?>>
+  final Map<OperationId, Completer<AgentManagementConnectionCheckSummary?>>
   _connectionCompleters =
-      <OperationId, Completer<AgentConnectionTestResult?>>{};
+      <OperationId, Completer<AgentManagementConnectionCheckSummary?>>{};
   final Map<OperationId, Completer<AgentConfigurationDocument?>>
   _configurationLoadCompleters =
       <OperationId, Completer<AgentConfigurationDocument?>>{};
@@ -85,10 +89,12 @@ final class AgentManagementSliceNotifier
   bool get isClosed => _closed;
 
   @override
-  List<ManagedAgent> get agents => AgentManagementSliceSelectors.agents(state);
+  List<AgentManagementAgentView> get agents =>
+      AgentManagementSliceSelectors.agents(state);
 
   @override
-  ManagedAgent get agent => AgentManagementSliceSelectors.selectedAgent(state);
+  AgentManagementAgentView get agent =>
+      AgentManagementSliceSelectors.selectedAgent(state);
 
   @override
   String get selectedAgentId => state.selectedAgentId;
@@ -109,7 +115,7 @@ final class AgentManagementSliceNotifier
   bool get initialized => state.initialized;
 
   @override
-  bool get detecting => _isPending(AgentManagementOperationKind.detection);
+  bool get detecting => state.detection.isLoading;
 
   @override
   bool get testing => _isPending(
@@ -182,7 +188,7 @@ final class AgentManagementSliceNotifier
       );
     }
     if (state.initialized) {
-      if (autoDetect && !detecting) _startAutoDetect();
+      if (autoDetect) _startAutoDetect();
       return Future<void>.value();
     }
     _autoDetectAfterInitialize |= autoDetect;
@@ -201,18 +207,162 @@ final class AgentManagementSliceNotifier
   }
 
   @override
-  Future<void> detect() async {
-    _ensureOpen();
-    if (detecting) {
-      return;
+  Future<AgentManagementDetectionRunResult> detect() => refreshDetection();
+
+  @override
+  Future<AgentManagementDetectionRunResult> ensureDetected() =>
+      _requestDetection(explicit: false);
+  @override
+  Future<AgentManagementDetectionRunResult> refreshDetection() =>
+      _requestDetection(explicit: true);
+
+  _ActiveDetectionRun? _activeRun;
+  int _ownerGeneration = 0;
+
+  Future<AgentManagementDetectionRunResult> _requestDetection({
+    required bool explicit,
+  }) {
+    if (_closed) return Future.value(AgentManagementDetectionRunResult.closed);
+    final active = _activeRun;
+    if (active != null) return active.caller.future;
+    if (!explicit && state.detection.automaticAttemptConsumed) {
+      return Future.value(
+        state.detection.lastResult ??
+            AgentManagementDetectionRunResult.canceled,
+      );
     }
-    await initialize();
-    _ensureOpen();
-    final operationId = _nextOperationId(detectionOperationScope);
-    final completer = Completer<void>();
-    _voidCompleters[operationId] = completer;
-    _dispatch(DetectionRequested(operationId));
-    return completer.future;
+    final run = _ActiveDetectionRun(
+      _nextOperationId(detectionOperationScope),
+      _ownerGeneration,
+      state.catalogGeneration,
+    );
+    // 占位和排空登记都先于 dispatch，抵抗同步 observer 重入。
+    _activeRun = run;
+    _trackAndReport(run.executionDone.future);
+    unawaited(_executeDetection(run));
+    return run.caller.future;
+  }
+
+  bool _acceptsRun(_ActiveDetectionRun run) =>
+      !_closed &&
+      identical(_activeRun, run) &&
+      _ownerGeneration == run.ownerGeneration &&
+      state.catalogGeneration == run.catalogGeneration &&
+      !run.cancellation.isCanceled;
+  void _requireRun(_ActiveDetectionRun run) {
+    if (!_acceptsRun(run)) throw const AgentManagementDetectionCanceled();
+  }
+
+  Future<void> _executeDetection(_ActiveDetectionRun run) async {
+    try {
+      _dispatch(DetectionRequested(run.id));
+      _requireRun(run);
+      await initialize(autoDetect: false);
+      _requireRun(run);
+      final ids = List<String>.unmodifiable(state.orderedAgentIds);
+      _dispatch(DetectionRunStarted(run.id, ids));
+      _requireRun(run);
+      await effectRunner.run(
+        DetectAgentsEffect(
+          run.id,
+          providerIds: ids,
+          catalogGeneration: run.catalogGeneration,
+          ownerGeneration: run.ownerGeneration,
+          cancellation: run.cancellation,
+        ),
+      );
+      _requireRun(run);
+      final outcomes = state.detection.outcomesByProviderId.values;
+      final succeeded = outcomes
+          .where((v) => v == ProviderDetectionOutcome.succeeded)
+          .length;
+      final result = ids.isNotEmpty && succeeded == ids.length
+          ? AgentManagementDetectionRunResult.succeeded
+          : succeeded > 0
+          ? AgentManagementDetectionRunResult.partialFailure
+          : AgentManagementDetectionRunResult.failed(_detectionFailure(run));
+      _finishDetection(run, result);
+    } on AgentManagementDetectionCanceled {
+      _finishDetection(
+        run,
+        _closed
+            ? AgentManagementDetectionRunResult.closed
+            : AgentManagementDetectionRunResult.canceled,
+      );
+    } catch (_) {
+      _finishDetection(
+        run,
+        _closed
+            ? AgentManagementDetectionRunResult.closed
+            : AgentManagementDetectionRunResult.failed(_detectionFailure(run)),
+      );
+    } finally {
+      if (!run.caller.isCompleted) {
+        run.settle(
+          _closed
+              ? AgentManagementDetectionRunResult.closed
+              : AgentManagementDetectionRunResult.canceled,
+        );
+      }
+      if (identical(_activeRun, run)) _activeRun = null;
+      run.executionDone.complete();
+    }
+  }
+
+  AgentManagementFailure _detectionFailure(_ActiveDetectionRun run) =>
+      AgentManagementFailure(
+        kind: AgentManagementFailureKind.detection,
+        operationId: run.id,
+      );
+  void _finishDetection(
+    _ActiveDetectionRun run,
+    AgentManagementDetectionRunResult result,
+  ) {
+    if (!run.caller.isCompleted) {
+      // 先确定终态再发布，避免 observer 的取消改写已经完成的结果。
+      run.settle(result);
+      if (!_closed && identical(_activeRun, run)) {
+        _dispatch(DetectionRunFinished(run.id, result));
+      }
+    }
+  }
+
+  @override
+  void cancelDetection() {
+    final run = _activeRun;
+    if (run == null) return;
+    run.cancellation.cancel();
+    _finishDetection(run, AgentManagementDetectionRunResult.canceled);
+  }
+
+  /// 新目录必须使用新 generation；相同 id 的新定义不能接收旧结果。
+  void replaceDetectionCatalog(
+    int generation,
+    Map<String, AgentManagementDisplayDefinition> definitions,
+  ) {
+    if (_closed || generation == state.catalogGeneration) return;
+    cancelDetection();
+    _dispatch(ManagementCatalogReplaced(generation, definitions));
+  }
+
+  @override
+  bool acceptDetectionResult(
+    OperationId id,
+    int ownerGeneration,
+    int catalogGeneration,
+    AgentManagementDetectionEvent event,
+  ) {
+    final run = _activeRun;
+    if (run == null ||
+        run.id != id ||
+        run.ownerGeneration != ownerGeneration ||
+        run.catalogGeneration != catalogGeneration ||
+        !_acceptsRun(run)) {
+      return false;
+    }
+    final before = state;
+    _dispatch(DetectionResultAccepted(id, event));
+    return !identical(before, state);
   }
 
   @override
@@ -270,14 +420,14 @@ final class AgentManagementSliceNotifier
   }
 
   @override
-  Future<AgentConnectionTestResult?> testConnection() {
+  Future<AgentManagementConnectionCheckSummary?> testConnection() {
     _ensureOpen();
     if (testing) {
-      return Future<AgentConnectionTestResult?>.value();
+      return Future<AgentManagementConnectionCheckSummary?>.value();
     }
     final agentId = selectedAgentId;
     final operationId = _nextAgentOperationId('connection-test', agentId);
-    final completer = Completer<AgentConnectionTestResult?>();
+    final completer = Completer<AgentManagementConnectionCheckSummary?>();
     _connectionCompleters[operationId] = completer;
     _dispatch(
       ConnectionTestRequested(operationId: operationId, agentId: agentId),
@@ -365,7 +515,7 @@ final class AgentManagementSliceNotifier
   void initializationSucceeded(
     OperationId operationId,
     AgentProviderSettings settings,
-    Map<String, ManagedAgent> agentsById,
+    Map<String, AgentDetectionConfirmedRecord> confirmedByProviderId,
   ) {
     if (_closed) return;
     final accepted = _accepts(
@@ -376,7 +526,7 @@ final class AgentManagementSliceNotifier
       ManagementInitialized(
         operationId: operationId,
         providerSettings: settings,
-        agentsById: agentsById,
+        confirmedByProviderId: confirmedByProviderId,
       ),
     );
     if (accepted) {
@@ -411,62 +561,6 @@ final class AgentManagementSliceNotifier
         completer.completeError(error, stackTrace);
       }
     }
-  }
-
-  @override
-  void detectionStarted(OperationId operationId, String agentId) {
-    if (_closed) return;
-    _dispatch(
-      AgentDetectionStarted(operationId: operationId, agentId: agentId),
-    );
-  }
-
-  @override
-  void detectionProgressReported(
-    OperationId operationId,
-    String agentId,
-    AgentDetectionProgress progress,
-    ManagedAgent partial,
-  ) {
-    if (_closed) return;
-    _dispatch(
-      AgentDetectionProgressReported(
-        operationId: operationId,
-        agentId: agentId,
-        progress: progress,
-        partial: partial,
-      ),
-    );
-  }
-
-  @override
-  void agentDetected(
-    OperationId operationId,
-    String agentId,
-    ManagedAgent detected,
-  ) {
-    if (_closed) return;
-    _dispatch(
-      AgentDetectionSucceeded(
-        operationId: operationId,
-        agentId: agentId,
-        agent: detected,
-      ),
-    );
-  }
-
-  @override
-  void detectionCompleted(OperationId operationId) {
-    if (_closed) return;
-    _dispatch(DetectionCompleted(operationId));
-    _voidCompleters.remove(operationId)?.complete();
-  }
-
-  @override
-  void detectionFailed(OperationId operationId, String message) {
-    if (_closed) return;
-    _dispatch(DetectionFailed(operationId: operationId, message: message));
-    _voidCompleters.remove(operationId)?.complete();
   }
 
   @override
@@ -543,12 +637,20 @@ final class AgentManagementSliceNotifier
   void connectionTestSucceeded({
     required OperationId operationId,
     required String agentId,
-    required AgentConnectionTestResult result,
+    required AgentManagementConnectionCheckSummary result,
     required List<AgentModelInfo> models,
     required String modelSource,
     required DateTime modelsUpdatedAt,
   }) {
     if (_closed) return;
+    if (!_accepts(
+      AgentManagementOperationKind.connectionTest,
+      operationId,
+      agentId: agentId,
+    )) {
+      _connectionCompleters.remove(operationId)?.complete(null);
+      return;
+    }
     _dispatch(
       ConnectionTestSucceeded(
         operationId: operationId,
@@ -652,7 +754,7 @@ final class AgentManagementSliceNotifier
   void logsLoaded(
     OperationId operationId,
     String agentId,
-    List<String> paths,
+    int fileCount,
     List<AgentLogEntry> entries,
   ) {
     if (_closed) return;
@@ -660,7 +762,7 @@ final class AgentManagementSliceNotifier
       LogsLoadSucceeded(
         operationId: operationId,
         agentId: agentId,
-        paths: paths,
+        fileCount: fileCount,
         logs: entries,
       ),
     );
@@ -688,6 +790,12 @@ final class AgentManagementSliceNotifier
       return;
     }
     _closed = true;
+    _ownerGeneration += 1;
+    final run = _activeRun;
+    if (run != null) {
+      run.cancellation.cancel();
+      run.settle(AgentManagementDetectionRunResult.closed);
+    }
     final error = StateError('AgentManagementSliceStore is closed');
     _completeClosed(_initializeCompleter, error);
     _initializeCompleter = null;
@@ -752,7 +860,14 @@ final class AgentManagementSliceNotifier
     final before = state;
     final transition = agentManagementSliceReduce(before, intent);
     if (!identical(transition.state, before)) {
-      state = transition.state;
+      try {
+        state = transition.state;
+      } catch (_) {
+        // 发布已提交后，观察者失败不能回滚结果或让调用者悬挂。
+        try {
+          _log.e('Agent management observer failed');
+        } catch (_) {}
+      }
     }
     for (final effect in transition.effects) {
       if (_closed) break;
@@ -785,18 +900,7 @@ final class AgentManagementSliceNotifier
       _generators.putIfAbsent(scope, () => _generatorFactory(scope)).next();
 
   void _startAutoDetect() {
-    unawaited(
-      detect().onError((error, stackTrace) {
-        // autoDetect 没有调用方可接收 Future；页面销毁导致的关闭错误在此消费，
-        // 其他异常仍保留原栈抛出。
-        if (!_closed) {
-          Error.throwWithStackTrace(
-            error ?? StateError('Agent management auto-detect failed'),
-            stackTrace,
-          );
-        }
-      }),
-    );
+    unawaited(ensureDetected());
   }
 
   void _ensureOpen() {
@@ -809,5 +913,32 @@ final class AgentManagementSliceNotifier
 void _completeClosed<T>(Completer<T>? completer, Object error) {
   if (completer != null && !completer.isCompleted) {
     completer.completeError(error);
+  }
+}
+
+final class _DetectionCancellation implements AgentManagementCancellation {
+  bool _canceled = false;
+  @override
+  bool get isCanceled => _canceled;
+  void cancel() {
+    _canceled = true;
+  }
+
+  @override
+  void throwIfCanceled() {
+    if (_canceled) throw const AgentManagementDetectionCanceled();
+  }
+}
+
+final class _ActiveDetectionRun {
+  _ActiveDetectionRun(this.id, this.ownerGeneration, this.catalogGeneration);
+  final OperationId id;
+  final int ownerGeneration;
+  final int catalogGeneration;
+  final cancellation = _DetectionCancellation();
+  final caller = Completer<AgentManagementDetectionRunResult>();
+  final executionDone = Completer<void>();
+  void settle(AgentManagementDetectionRunResult result) {
+    if (!caller.isCompleted) caller.complete(result);
   }
 }

@@ -3608,4 +3608,23 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentSessionConfigApplying => 'Applying session option…';
+
+  @override
+  String get mgmtDetectionStale => 'Previously confirmed';
+
+  @override
+  String mgmtDetectionFailedProviders(String names) {
+    return 'Detection failed for $names. Previously confirmed results are retained. You can retry.';
+  }
+
+  @override
+  String get mgmtDetectionCacheWarning =>
+      'Detection completed, but some results could not be saved.';
+
+  @override
+  String get mgmtCopyExecutableLocation => 'Copy executable location';
+
+  @override
+  String get mgmtExecutableLocationUnavailable =>
+      'The executable location is unavailable. Run detection again.';
 }

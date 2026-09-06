@@ -1,3 +1,5 @@
+import 'agent_management_agent_view.dart';
+import 'agent_management_detection_state.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
@@ -6,9 +8,9 @@ import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 ///
 /// 契约本身不依赖 Flutter，由应用会话级 AgentManagementSliceNotifier 唯一实现。
 abstract interface class AgentManagementOperations {
-  List<ManagedAgent> get agents;
+  List<AgentManagementAgentView> get agents;
 
-  ManagedAgent get agent;
+  AgentManagementAgentView get agent;
 
   String get selectedAgentId;
 
@@ -46,13 +48,17 @@ abstract interface class AgentManagementOperations {
 
   Future<void> initialize({bool autoDetect = false});
 
-  Future<void> detect();
+  /// 显式刷新同义入口；保留调用方的 typed 终态。
+  Future<AgentManagementDetectionRunResult> detect();
+  Future<AgentManagementDetectionRunResult> ensureDetected();
+  Future<AgentManagementDetectionRunResult> refreshDetection();
+  void cancelDetection();
 
   Future<void> setEnabled(bool enabled);
 
   Future<void> setAccountDataEnrichmentEnabled(bool enabled);
 
-  Future<AgentConnectionTestResult?> testConnection();
+  Future<AgentManagementConnectionCheckSummary?> testConnection();
 
   Future<AgentConfigurationDocument?> loadConfiguration();
 

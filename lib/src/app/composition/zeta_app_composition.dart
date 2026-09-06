@@ -1,3 +1,5 @@
+import 'package:zeta/src/app/agent_management_slice/agent_management_home_detection_coordinator.dart';
+import 'package:zeta/src/app/agent_management_slice/agent_management_details_catalog.dart';
 import 'workbench_session_providers.dart';
 import 'package:zeta/src/app/agent_management_slice/workspace_agent_runtime_fact_source.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_notifier.dart';
@@ -220,6 +222,7 @@ final class ZetaAppComposition implements ZetaShutdownHook {
   ProviderSubscription<AgentManagementInputSubscription>?
   _managementRuntimeSubscription;
   AgentManagementSliceNotifier? _managementOwner;
+  AgentManagementHomeDetectionCoordinator? _homeDetectionCoordinator;
   ProjectThreadsSliceNotifier? _projectThreadsOwner;
   AgentManagementInputSubscription? _managementSettingsIngress;
   Future<void>? _shutdownFuture;
@@ -258,6 +261,7 @@ final class ZetaAppComposition implements ZetaShutdownHook {
     final workbench = _workbench;
     workbench?.shell.stopAcceptingCommands();
     // Logical callers finish immediately; physical I/O still owns borrowed resources.
+    _homeDetectionCoordinator?.close();
     management?.stopAcceptingCommandsAndSettleWaiters();
     _projectThreadsOwner?.stopAcceptingCommandsAndSettleWaiters();
     if (workbench != null) await workbench.shell.saveNow();
@@ -265,6 +269,9 @@ final class ZetaAppComposition implements ZetaShutdownHook {
       if (management != null) management.drainExecutions(),
       if (_projectThreadsOwner case final threads?) threads.drainExecutions(),
     ], eagerError: false);
+    if (container.exists(appAgentManagementDetailsCatalogProvider)) {
+      container.read(appAgentManagementDetailsCatalogProvider).close();
+    }
     _managementSettingsIngress?.close();
     _managementRuntimeIngress?.close();
     _managementRuntimeSubscription?.close();
@@ -401,6 +408,10 @@ final class ZetaAppComposition implements ZetaShutdownHook {
       final runtimeIngress = runtimeSubscription.read();
       _managementRuntimeIngress = runtimeIngress;
       runtimeIngress.start();
+      _homeDetectionCoordinator = AgentManagementHomeDetectionCoordinator(
+        workbench.shell,
+        management,
+      )..start();
       workbench.shell.start();
     }
     _localeRuntimeReady = true;

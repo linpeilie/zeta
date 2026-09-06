@@ -1,3 +1,6 @@
+import '../agent_management_detection_port.dart';
+import '../agent_management_agent_view.dart';
+import '../agent_management_detection_state.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
@@ -16,7 +19,7 @@ abstract interface class AgentManagementResultSink {
   void initializationSucceeded(
     OperationId id,
     AgentProviderSettings settings,
-    Map<String, ManagedAgent> agentsById,
+    Map<String, AgentDetectionConfirmedRecord> confirmedByProviderId,
   );
   void initializationFailed(
     OperationId id,
@@ -24,16 +27,12 @@ abstract interface class AgentManagementResultSink {
     StackTrace stackTrace,
   );
 
-  void detectionStarted(OperationId id, String agentId);
-  void detectionProgressReported(
+  bool acceptDetectionResult(
     OperationId id,
-    String agentId,
-    AgentDetectionProgress progress,
-    ManagedAgent partial,
+    int ownerGeneration,
+    int catalogGeneration,
+    AgentManagementDetectionEvent event,
   );
-  void agentDetected(OperationId id, String agentId, ManagedAgent detected);
-  void detectionCompleted(OperationId id);
-  void detectionFailed(OperationId id, String message);
 
   void providerEnabledUpdated(
     OperationId id,
@@ -60,7 +59,7 @@ abstract interface class AgentManagementResultSink {
   void connectionTestSucceeded({
     required OperationId operationId,
     required String agentId,
-    required AgentConnectionTestResult result,
+    required AgentManagementConnectionCheckSummary result,
     required List<AgentModelInfo> models,
     required String modelSource,
     required DateTime modelsUpdatedAt,
@@ -87,7 +86,7 @@ abstract interface class AgentManagementResultSink {
   void logsLoaded(
     OperationId id,
     String agentId,
-    List<String> paths,
+    int fileCount,
     List<AgentLogEntry> entries,
   );
   void logsLoadFailed(OperationId id, String agentId, String message);
