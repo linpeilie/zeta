@@ -1,19 +1,10 @@
-import 'package:zeta_foundation/zeta_foundation.dart';
-import 'agent_conversation_slice_effect.dart';
-import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
-import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_command_scope.dart';
-import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_region_state.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
+import '../agent_command_outcome.dart';
+import 'agent_conversation_command_result.dart';
+import 'agent_conversation_slice_effect.dart';
+import 'agent_conversation_command_scope.dart';
+import 'agent_conversation_region_state.dart';
 
-/// Conversation slice 的 **region 只读来源**。
-///
-/// 切片只需要"五个 region 的当前值 + 批处理 UI 更新通知 + 当前作用域"，不需要整个
-/// runtime controller。把它收成端口之后，SliceStore 与 controller 之间只剩这一条
-/// 窄依赖。
-///
-/// **订阅是纯 Dart 的**：一次 [AgentUiUpdateRequest] 携带 region 集合，SliceStore
-/// 据此组装一次 `RegionsRefreshed`。不再按 region 拆成五条 listener——那是
-/// UiStateStore 时代一拆一合的中间态。
 abstract interface class AgentConversationRegionSource {
   AgentConversationHistoryState get historyState;
   AgentHeaderState get headerState;
@@ -34,92 +25,74 @@ abstract interface class AgentConversationRegionSource {
   AgentConversationCommandScope currentCommandScope();
 }
 
-/// Conversation slice 的 **命令执行端口**。
-///
-/// 切片产出的 effect 描述最终落到这些方法上。**每个方法都必须显式回报结果**
-/// （`AgentCommandOutcome`），不允许用"Future 正常结束"推断成功——Agent 的命令
-/// 会吞异常、提前 return 或用 `null` 表示失败。
-///
-/// G5：四种审批语义各自独立成方法，不共享已授权状态。
 abstract interface class AgentConversationCommandPort {
-  void toggleToolCall(String toolCallId);
-  void togglePlanMessage(String messageId);
-  void toggleActivePlan(String turnId);
-  void toggleCommandGroup(String commandGroupId);
-  void toggleFileEditItem(String fileEditItemId);
-
-  void dismissPlanExecution(AgentPlanExecutionRequest request);
-
   Future<AgentCommandOutcome> sendMessage(
     String text, {
-    List<String> localImagePaths,
-    List<({String name, String path})> mentions,
-    List<AgentSkillRef> skills,
+    List<String> localImagePaths = const [],
+    List<({String name, String path})> mentions = const [],
+    List<AgentSkillRef> skills = const [],
     AgentPermissionRequestSnapshot? permissionSnapshotOverride,
   });
-
   Future<AgentCommandOutcome> cancelActiveTurn();
-
   Future<AgentCommandOutcome> editLastUserMessageAndRetry(String newText);
-
   Future<AgentCommandOutcome> retryOpenThread();
-
   Future<AgentCommandOutcome> respondToPermission(
     AgentPermissionRequest request, {
     required bool approved,
-    bool cancelTurn,
+    bool cancelTurn = false,
     AgentCommandApprovalDecisionKind? commandDecision,
-    List<String> execpolicyAmendment,
+    List<String> execpolicyAmendment = const [],
   });
-
   Future<AgentCommandOutcome> respondToQuestion(
     AgentQuestionRequest request, {
-    Map<String, List<String>> answers,
+    Map<String, List<String>> answers = const {},
   });
-
   Future<AgentCommandOutcome> respondToPlanApproval(
     AgentPlanApprovalRequest request,
     AgentPlanApprovalDecisionKind kind, {
     String? reason,
   });
-
+  Future<AgentCommandOutcome> startPlanExecution(
+    AgentPlanExecutionRequest request,
+  );
   Future<AgentCommandOutcome> revisePlanExecution(
     AgentPlanExecutionRequest request, {
     String? revisionMessage,
   });
-
-  Future<AgentCommandOutcome> startPlanExecution(
+  AgentCommandOutcome dismissPlanExecution(AgentPlanExecutionRequest request);
+  AgentCommandOutcome selectPlanExecutionPermissionOption(
     AgentPlanExecutionRequest request,
+    AgentPermissionOption option,
   );
-
   Future<AgentCommandOutcome> approveGuardianDeniedAction();
-
-  /// fork 用 `null` 表示失败；调用方必须显式翻译，不得让它冒充成功。
-  Future<AgentSession?> forkCurrentThread();
-
+  Future<AgentForkCommandOutcome> forkCurrentThread();
   Future<AgentCommandOutcome> renameCurrentThread(String name);
-
   Future<AgentCommandOutcome> archiveCurrentThread();
-
   Future<AgentCommandOutcome> compactCurrentThread();
-
-  Future<AgentCommandOutcome> loadModels({bool forceRefresh});
-
+  AgentCommandOutcome toggleToolCall(String toolCallId);
+  AgentCommandOutcome togglePlanMessage(String messageId);
+  AgentCommandOutcome toggleActivePlan(String turnId);
+  AgentCommandOutcome toggleCommandGroup(String commandGroupId);
+  AgentCommandOutcome toggleFileEditItem(String fileEditItemId);
+  Future<AgentCommandOutcome> loadModels({bool forceRefresh = false});
   Future<AgentCommandOutcome> ensureSkillsCatalog();
-
   Future<AgentCommandOutcome> retryConversationModes();
-
-  /// 更新当前会话配置；缺少端口时抛出 [UnsupportedError]。
+  AgentCommandOutcome selectConversationMode(AgentConversationModeId modeId);
+  Future<AgentCommandOutcome> selectModel(String modelId);
+  Future<AgentCommandOutcome> selectReasoningEffort(String? effort);
+  Future<AgentCommandOutcome> selectFastEnabled(bool enabled);
+  Future<AgentCommandOutcome> resolveModelCompatibilityConflict();
+  Future<AgentCommandOutcome> retryModelConfigurationSave();
+  AgentCommandOutcome clearModelConfigurationTransientState();
+  Future<AgentCommandOutcome> selectPermissionOption(
+    AgentPermissionOption option,
+  );
+  Future<AgentCommandOutcome> retryPermissionPreferencePersistence();
   Future<AgentCommandOutcome> selectSessionConfigOption(
     String configId,
     Object value,
   );
-}
-
-abstract interface class AgentConversationResultSink {
-  bool get isClosed;
-  void completeCommand(OperationId operationId);
-  void failCommand(OperationId operationId, AgentCommandFailureKind kind);
+  Future<AgentCommandOutcome> switchActiveProvider(String providerId);
 }
 
 abstract interface class AgentConversationSliceEffectRunner {

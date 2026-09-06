@@ -126,11 +126,12 @@ class AgentComposer extends StatelessWidget {
   /// 当前 entry 生命周期与 runtime 的不透明标识，仅清理控件临时反馈。
   final Object sessionConfigCommandContextId;
 
-  final Future<bool> Function(String modelId) onSelectModel;
-  final Future<bool> Function(String? effort) onSelectReasoningEffort;
-  final Future<bool> Function(bool enabled) onSelectFastEnabled;
-  final Future<bool> Function() onResolveModelCompatibility;
-  final Future<bool> Function() onRetryModelConfiguration;
+  final Future<AgentCommandOutcome> Function(String modelId) onSelectModel;
+  final Future<AgentCommandOutcome> Function(String? effort)
+  onSelectReasoningEffort;
+  final Future<AgentCommandOutcome> Function(bool enabled) onSelectFastEnabled;
+  final Future<AgentCommandOutcome> Function() onResolveModelCompatibility;
+  final Future<AgentCommandOutcome> Function() onRetryModelConfiguration;
   final VoidCallback onCloseModelConfiguration;
   final ValueChanged<AgentPermissionOption> onSelectPermissionOption;
   final Future<AgentCommandOutcome> Function(String configId, Object value)

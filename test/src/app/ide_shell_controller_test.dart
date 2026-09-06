@@ -1,3 +1,12 @@
+import 'package:flutter/material.dart' show Locale, ValueKey;
+import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_notifier.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_messages.dart';
+import 'package:zeta/src/features/agent/presentation/agent_markdown_cache.dart';
+import 'package:zeta/src/features/agent/presentation/agent_plan_revision_drafts.dart';
+import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
+import '../testing/localized_widget_test_host.dart';
+import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
 import '../testing/conversation_workspace_test_container.dart';
 import 'package:zeta/src/app/project_threads_slice/project_threads_slice_composition.dart';
 import 'package:zeta/src/features/project_threads/application/project_threads_slice/project_threads_slice_notifier.dart';
@@ -341,7 +350,8 @@ void main() {
     final session = await sourceEntry.controller.forkCurrentThread();
     await _flushAsync();
 
-    expect(session?.id, 'forked-thread-a');
+    expect(session.createdSession?.id, 'forked-thread-a');
+    expect(session.activated, isTrue);
     expect(
       shell.projectThreadStateFor(directory.path).selectedThreadId,
       'forked-thread-a',
@@ -369,79 +379,238 @@ void main() {
     expect(sourceEntry.binding.hasRuntime, isFalse);
   });
 
-  test('编辑后重试登记并选中 fork thread，再由新 Binding 发送', () async {
-    final directory = Directory.systemTemp.createTempSync('zeta_shell_');
-    tempDirectories.add(directory);
-    final harness = await _openShellWithSelectedThread(
-      directory: directory,
-      threadIds: const <String>['thread-a'],
-      selectedThreadId: 'thread-a',
-      completeTurns: true,
-      canForkThreadAtTurn: true,
-      threadHistories: const <String, AgentThreadHistorySnapshot>{
-        'thread-a': AgentThreadHistorySnapshot(
-          threadId: 'thread-a',
-          turns: <AgentHistoryTurn>[
-            AgentHistoryTurn(
-              id: 'turn-1',
-              status: AgentHistoryTurnStatus.completed,
-              entries: <AgentHistoryEntry>[
-                AgentHistoryMessageEntry(
-                  id: 'user-1',
-                  role: AgentMessageRole.user,
-                  text: 'first prompt',
+  for (final failSend in [false, true]) {
+    test(
+      failSend
+          ? '编辑后新分支发送失败回传 source Actions，保留已创建分支'
+          : '编辑后重试登记并选中 fork thread，再由新 Binding 发送',
+      () async {
+        final directory = Directory.systemTemp.createTempSync('zeta_shell_');
+        tempDirectories.add(directory);
+        final harness = await _openShellWithSelectedThread(
+          directory: directory,
+          threadIds: const <String>['thread-a'],
+          selectedThreadId: 'thread-a',
+          completeTurns: true,
+          canForkThreadAtTurn: true,
+          threadHistories: const <String, AgentThreadHistorySnapshot>{
+            'thread-a': AgentThreadHistorySnapshot(
+              threadId: 'thread-a',
+              turns: <AgentHistoryTurn>[
+                AgentHistoryTurn(
+                  id: 'turn-1',
+                  status: AgentHistoryTurnStatus.completed,
+                  entries: <AgentHistoryEntry>[
+                    AgentHistoryMessageEntry(
+                      id: 'user-1',
+                      role: AgentMessageRole.user,
+                      text: 'first prompt',
+                    ),
+                  ],
+                ),
+                AgentHistoryTurn(
+                  id: 'turn-2',
+                  status: AgentHistoryTurnStatus.completed,
+                  entries: <AgentHistoryEntry>[
+                    AgentHistoryMessageEntry(
+                      id: 'user-2',
+                      role: AgentMessageRole.user,
+                      text: 'old prompt',
+                    ),
+                  ],
                 ),
               ],
             ),
-            AgentHistoryTurn(
-              id: 'turn-2',
-              status: AgentHistoryTurnStatus.completed,
-              entries: <AgentHistoryEntry>[
-                AgentHistoryMessageEntry(
-                  id: 'user-2',
-                  role: AgentMessageRole.user,
-                  text: 'old prompt',
-                ),
-              ],
+            'forked-thread-a': AgentThreadHistorySnapshot(
+              threadId: 'forked-thread-a',
+              turns: <AgentHistoryTurn>[],
             ),
+          },
+        );
+        final shell = harness.shell;
+        final backend = harness.backend;
+        addTearDown(shell.stopAcceptingCommands);
+        final sourceEntry = shell.agentConversationWorkspace.selectedEntry!;
+        expect(sourceEntry.controller.canEditLastUserMessage, isTrue);
+
+        if (failSend) backend.sendFailure = StateError('fixture send failure');
+        final sourceActions = shell.lifetimes.actionsForOwner(
+          sourceEntry.ownerKey,
+        );
+        final outcome = await sourceActions.editLastUserMessageAndRetry(
+          'new prompt',
+        );
+        expect(
+          outcome,
+          failSend
+              ? isA<AgentCommandFailed>().having(
+                  (v) => v.kind,
+                  'kind',
+                  AgentCommandFailureKind.requestFailed,
+                )
+              : isA<AgentCommandSucceeded>(),
+        );
+        await _flushAsync();
+
+        final selectedEntry = shell.agentConversationWorkspace.selectedEntry!;
+        expect(selectedEntry, isNot(same(sourceEntry)));
+        expect(selectedEntry.binding.threadId, 'forked-thread-a');
+        expect(sourceEntry.binding.threadId, 'thread-a');
+        expect(
+          (backend.instances.first.forkBoundaries.single
+                  as AgentForkThroughTurn)
+              .turnId,
+          'turn-1',
+        );
+        expect(backend.instances, hasLength(2));
+        expect(
+          backend.instances.last.sentMessages,
+          <({String sessionId, String? message})>[
+            (sessionId: 'forked-thread-a', message: 'new prompt'),
           ],
-        ),
-        'forked-thread-a': AgentThreadHistorySnapshot(
-          threadId: 'forked-thread-a',
-          turns: <AgentHistoryTurn>[],
-        ),
+        );
+        final forkedThread = shell
+            .projectThreadStateFor(directory.path)
+            .threads
+            .firstWhere((thread) => thread.id == 'forked-thread-a');
+        expect(forkedThread.preview, 'new prompt');
       },
     );
+  }
+
+  testWidgets('编辑对话框经 source Actions 创建分支并结算新 entry 发送失败', (tester) async {
+    final directory = Directory.systemTemp.createTempSync('zeta_shell_');
+    tempDirectories.add(directory);
+    final harness = (await tester.runAsync(
+      () => _openShellWithSelectedThread(
+        directory: directory,
+        threadIds: const <String>['thread-a'],
+        selectedThreadId: 'thread-a',
+        completeTurns: true,
+        canForkThreadAtTurn: true,
+        threadHistories: const <String, AgentThreadHistorySnapshot>{
+          'thread-a': AgentThreadHistorySnapshot(
+            threadId: 'thread-a',
+            turns: <AgentHistoryTurn>[
+              AgentHistoryTurn(
+                id: 'turn-1',
+                status: AgentHistoryTurnStatus.completed,
+                entries: <AgentHistoryEntry>[
+                  AgentHistoryMessageEntry(
+                    id: 'user-1',
+                    role: AgentMessageRole.user,
+                    text: 'first prompt',
+                  ),
+                ],
+              ),
+              AgentHistoryTurn(
+                id: 'turn-2',
+                status: AgentHistoryTurnStatus.completed,
+                entries: <AgentHistoryEntry>[
+                  AgentHistoryMessageEntry(
+                    id: 'user-2',
+                    role: AgentMessageRole.user,
+                    text: 'old prompt',
+                  ),
+                ],
+              ),
+            ],
+          ),
+          'forked-thread-a': AgentThreadHistorySnapshot(
+            threadId: 'forked-thread-a',
+            turns: <AgentHistoryTurn>[],
+          ),
+        },
+      ),
+    ))!;
     final shell = harness.shell;
     final backend = harness.backend;
     addTearDown(shell.stopAcceptingCommands);
-    final sourceEntry = shell.agentConversationWorkspace.selectedEntry!;
-    expect(sourceEntry.controller.canEditLastUserMessage, isTrue);
-
-    await sourceEntry.controller.editLastUserMessageAndRetry('new prompt');
-    await _flushAsync();
-
-    final selectedEntry = shell.agentConversationWorkspace.selectedEntry!;
-    expect(selectedEntry, isNot(same(sourceEntry)));
-    expect(selectedEntry.binding.threadId, 'forked-thread-a');
-    expect(sourceEntry.binding.threadId, 'thread-a');
+    final source = shell.agentConversationWorkspace.selectedEntry!;
+    final container = conversationWorkspaceTestContainer(
+      shell.agentConversationWorkspace,
+    );
+    final owner = container.read(
+      agentConversationSliceOwnerProvider(source.ownerKey).notifier,
+    );
+    final cache = AgentMarkdownCache();
+    final drafts = AgentPlanRevisionDraftStore();
+    addTearDown(cache.dispose);
+    addTearDown(drafts.dispose);
+    await pumpLocalizedWidget(
+      tester,
+      locale: const Locale('zh'),
+      child: UncontrolledProviderScope(
+        container: container,
+        child: AgentMessageEntry(
+          message: source.controller.messages.lastWhere(
+            (message) => message.role == AgentMessageRole.user,
+          ),
+          useStreamingMarkdown: false,
+          controller: source.controller,
+          actions: shell.lifetimes.actionsForOwner(source.ownerKey),
+          markdownCache: cache,
+          planRevisionDrafts: drafts,
+          planExecutionHandoff: null,
+        ),
+      ),
+    );
+    final l10n = lookupAppLocalizations(const Locale('zh'));
+    await tester.tap(find.byKey(const ValueKey('agent-edit-retry-user-2')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(sf.TextField), 'new prompt');
+    backend.sendFailure = StateError('fixture send failure');
+    await tester.tap(find.text(l10n.agentCreateBranchSend));
+    await tester.pumpAndSettle();
+    await tester.runAsync(_flushAsync);
+    await tester.pumpAndSettle();
+    for (
+      var attempt = 0;
+      attempt < 20 && owner.current.pendingOperations.isNotEmpty;
+      attempt++
+    ) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 100)),
+      );
+      for (final scheduler in _uiFrameSchedulers) {
+        scheduler.drainFrames();
+      }
+      await tester.pump();
+    }
+    final created = shell.agentConversationWorkspace.selectedEntry!;
+    final createdOwner = container.read(
+      agentConversationSliceOwnerProvider(created.ownerKey).notifier,
+    );
+    expect(source.binding.threadId, 'thread-a');
+    expect(created.binding.threadId, 'forked-thread-a');
     expect(
       (backend.instances.first.forkBoundaries.single as AgentForkThroughTurn)
           .turnId,
       'turn-1',
     );
-    expect(backend.instances, hasLength(2));
     expect(
-      backend.instances.last.sentMessages,
-      <({String sessionId, String? message})>[
-        (sessionId: 'forked-thread-a', message: 'new prompt'),
-      ],
+      backend.instances.first.forkPermissionSnapshots.single,
+      source.controller.permissionSnapshotForThread('thread-a'),
     );
-    final forkedThread = shell
-        .projectThreadStateFor(directory.path)
-        .threads
-        .firstWhere((thread) => thread.id == 'forked-thread-a');
-    expect(forkedThread.preview, 'new prompt');
+    expect(backend.instances.last.sentMessages, [
+      (sessionId: 'forked-thread-a', message: 'new prompt'),
+    ]);
+    expect(owner.diagnostics.effectCount, 1);
+    expect(createdOwner.diagnostics.effectCount, 1);
+    expect(owner.current.pendingOperations, isEmpty);
+    expect(createdOwner.current.pendingOperations, isEmpty);
+    expect(
+      owner.current.lastFailure?.kind,
+      AgentCommandFailureKind.requestFailed,
+    );
+    expect(
+      createdOwner.current.lastFailure?.kind,
+      AgentCommandFailureKind.requestFailed,
+    );
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.runAsync(_flushAsync);
+    shell.stopAcceptingCommands();
+    expect(tester.takeException(), isNull);
   });
 
   test(
@@ -1715,6 +1884,7 @@ class _ProviderBackend {
   final bool canForkThreadAtTurn;
   final List<_ShellTestAgentProvider> instances = <_ShellTestAgentProvider>[];
   final List<String> readThreadIds = <String>[];
+  Object? sendFailure;
 
   bool anyUnsubscribed(String threadId) {
     return instances.any(
@@ -1868,6 +2038,7 @@ class _ShellTestAgentProvider
             .map((input) => input.text)
             .join('\n');
     sentMessages.add((sessionId: session.id, message: resolvedMessage));
+    if (backend.sendFailure case final failure?) throw failure;
     final turn = AgentTurn(id: 'turn-${session.id}', sessionId: session.id);
     _events.add(AgentTurnStartedEvent(turn));
     if (backend.completeTurns) {

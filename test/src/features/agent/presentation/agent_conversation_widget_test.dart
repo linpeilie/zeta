@@ -1,6 +1,8 @@
 @Tags(['slow', 'shell'])
 library;
 
+import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
+
 import '../../../testing/conversation_test_scope.dart';
 
 import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
@@ -1993,151 +1995,177 @@ void main() {
     expect(find.byKey(const ValueKey('agent-context-panel')), findsNothing);
   });
 
-  testWidgets('forks the current thread from the header more menu', (
-    tester,
-  ) async {
-    final createdAt = DateTime(2024, 1, 15, 10, 30);
-    AgentSession? selectedFork;
-    final provider = FakeAgentProvider(
-      threadHistories: <String, AgentThreadHistorySnapshot>{
-        'thread-fork': AgentThreadHistorySnapshot(
-          threadId: 'thread-fork',
-          turns: <AgentHistoryTurn>[
-            AgentHistoryTurn(
-              id: 'turn-1',
-              status: AgentHistoryTurnStatus.completed,
-              entries: <AgentHistoryEntry>[
-                const AgentHistoryMessageEntry(
-                  id: 'msg-user-fork',
-                  role: AgentMessageRole.user,
-                  text: 'Hello',
+  for (final activationFails in [false, true]) {
+    testWidgets(
+      activationFails
+          ? 'fork menu records activation failure once after creation'
+          : 'forks the current thread from the header more menu',
+      (tester) async {
+        var activationCount = 0;
+        final createdAt = DateTime(2024, 1, 15, 10, 30);
+        AgentSession? selectedFork;
+        final provider = FakeAgentProvider(
+          threadHistories: <String, AgentThreadHistorySnapshot>{
+            'thread-fork': AgentThreadHistorySnapshot(
+              threadId: 'thread-fork',
+              turns: <AgentHistoryTurn>[
+                AgentHistoryTurn(
+                  id: 'turn-1',
+                  status: AgentHistoryTurnStatus.completed,
+                  entries: <AgentHistoryEntry>[
+                    const AgentHistoryMessageEntry(
+                      id: 'msg-user-fork',
+                      role: AgentMessageRole.user,
+                      text: 'Hello',
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
-        ),
+          },
+        );
+        final registry = AgentProviderRuntimeRegistry(
+          providerFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
+        );
+        addTearDown(registry.close);
+        final controller = createProviderSettingsTestStore(
+          runtimeRegistry: registry,
+          configStore: MemoryAgentProviderConfigStore(),
+        );
+        addTearDown(controller.dispose);
+        final bindingHarness = AgentConversationBindingTestHarness(
+          registry: registry,
+          settings: controller,
+        );
+        addTearDown(bindingHarness.close);
+        final thread = AgentThreadSummary(
+          id: 'thread-fork',
+          providerId: defaultAgentProviderId,
+          projectPath: '/repo',
+          title: 'Fork thread',
+          preview: 'Fork thread',
+          sessionPath: '/repo/thread-fork.jsonl',
+          createdAt: createdAt,
+          updatedAt: createdAt,
+          recencyAt: createdAt,
+          status: AgentThreadRuntimeStatus.idle,
+        );
+        final bindingLease = bindingHarness.acquireThread(
+          config: provider.config,
+          threadId: thread.id,
+        );
+        final viewModel = AgentConversationRuntimeController(
+          providerController: controller,
+          conversationBinding: bindingLease.binding,
+          globalRuntime: bindingHarness.globalRuntime,
+          composerStateOwner: AgentConversationComposerStateOwner.create(
+            providerController: controller,
+          ),
+          initialProjectPath: '/repo',
+          initialThread: thread,
+          onCreatedThread:
+              ({
+                required session,
+                required context,
+                String? initialMessage,
+              }) async {
+                activationCount++;
+                selectedFork = session;
+                return activationFails
+                    ? const AgentCommandOutcome.failed(
+                        AgentCommandFailureKind.requestFailed,
+                      )
+                    : const AgentCommandOutcome.succeeded();
+              },
+          uiFrameScheduler: const SchedulerBindingAgentFrameScheduler(),
+        );
+        addTearDown(viewModel.dispose);
+        final sliceRegistry = _registerConversationSlice(viewModel);
+        await viewModel.initialization;
+
+        final lightIdeTheme = buildIdeThemeData(
+          brightness: Brightness.light,
+          codeFontFamily: 'CodeFont',
+        );
+        final darkIdeTheme = buildIdeThemeData(
+          brightness: Brightness.dark,
+          codeFontFamily: 'CodeFont',
+        );
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: sliceRegistry,
+            child: IdeThemeScope(
+              themeMode: ThemeMode.dark,
+              lightTheme: lightIdeTheme,
+              darkTheme: darkIdeTheme,
+              child: sf.ShadcnApp(
+                locale: ZetaLocalization.simplifiedChinese,
+                supportedLocales: ZetaLocalization.supportedLocales,
+                localizationsDelegates: ZetaLocalization.delegates,
+                theme: buildShadcnTheme(lightIdeTheme),
+                darkTheme: buildShadcnTheme(darkIdeTheme),
+                builder: (context, child) => IdeMaterialLayer(
+                  theme: buildMaterialTheme(darkIdeTheme),
+                  child: child,
+                ),
+                themeMode: sf.ThemeMode.dark,
+                home: sf.Scaffold(child: AgentPane(controller: viewModel)),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        // 分叉不再作为标题栏独立按钮常驻。
+        expect(find.byKey(const ValueKey('agent-header-fork')), findsNothing);
+
+        // 通过「更多」菜单进入分叉。
+        await tester.tap(find.byKey(const ValueKey('agent-header-more')));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+
+        // 菜单顺序：上下文 → 分隔符 → 重命名 → 分叉当前会话 → 归档。
+        final menuKeys = <String>[
+          'agent-header-menu-context',
+          'agent-header-menu-rename',
+          'agent-header-menu-fork',
+          'agent-header-menu-archive',
+        ];
+        final tops = <double>[];
+        for (final key in menuKeys) {
+          final finder = find.byKey(ValueKey<String>(key));
+          expect(finder, findsOneWidget);
+          tops.add(tester.getTopLeft(finder).dy);
+        }
+        for (var index = 1; index < tops.length; index += 1) {
+          expect(tops[index], greaterThan(tops[index - 1]));
+        }
+        // 分隔符恰好一个，位于「上下文」与「重命名」之间。
+        expect(find.byType(sf.MenuDivider), findsOneWidget);
+        final dividerTop = tester.getTopLeft(find.byType(sf.MenuDivider)).dy;
+        expect(dividerTop, greaterThan(tops[0]));
+        expect(dividerTop, lessThan(tops[1]));
+
+        final forkAction = find.byKey(const ValueKey('agent-header-menu-fork'));
+        await tester.tap(forkAction);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+
+        expect(provider.forkedThreads, contains('thread-fork'));
+        expect(selectedFork?.id, 'forked-thread-fork');
+        expect(activationCount, 1);
+        final owner =
+            conversationTestActions(viewModel)
+                as AgentConversationSliceNotifier;
+        expect(owner.current.pendingOperations, isEmpty);
+        expect(
+          owner.current.lastFailure?.kind,
+          activationFails ? AgentCommandFailureKind.requestFailed : isNull,
+        );
+        expect(owner.diagnostics.effectCount, 1);
       },
     );
-    final registry = AgentProviderRuntimeRegistry(
-      providerFactory: FakeAgentProviderBundleBuilder.fromFake(provider),
-    );
-    addTearDown(registry.close);
-    final controller = createProviderSettingsTestStore(
-      runtimeRegistry: registry,
-      configStore: MemoryAgentProviderConfigStore(),
-    );
-    addTearDown(controller.dispose);
-    final bindingHarness = AgentConversationBindingTestHarness(
-      registry: registry,
-      settings: controller,
-    );
-    addTearDown(bindingHarness.close);
-    final thread = AgentThreadSummary(
-      id: 'thread-fork',
-      providerId: defaultAgentProviderId,
-      projectPath: '/repo',
-      title: 'Fork thread',
-      preview: 'Fork thread',
-      sessionPath: '/repo/thread-fork.jsonl',
-      createdAt: createdAt,
-      updatedAt: createdAt,
-      recencyAt: createdAt,
-      status: AgentThreadRuntimeStatus.idle,
-    );
-    final bindingLease = bindingHarness.acquireThread(
-      config: provider.config,
-      threadId: thread.id,
-    );
-    final viewModel = AgentConversationRuntimeController(
-      providerController: controller,
-      conversationBinding: bindingLease.binding,
-      globalRuntime: bindingHarness.globalRuntime,
-      composerStateOwner: AgentConversationComposerStateOwner.create(
-        providerController: controller,
-      ),
-      initialProjectPath: '/repo',
-      initialThread: thread,
-      onCreatedThread:
-          ({required session, required context, String? initialMessage}) async {
-            selectedFork = session;
-          },
-      uiFrameScheduler: const SchedulerBindingAgentFrameScheduler(),
-    );
-    addTearDown(viewModel.dispose);
-    final sliceRegistry = _registerConversationSlice(viewModel);
-    await viewModel.initialization;
-
-    final lightIdeTheme = buildIdeThemeData(
-      brightness: Brightness.light,
-      codeFontFamily: 'CodeFont',
-    );
-    final darkIdeTheme = buildIdeThemeData(
-      brightness: Brightness.dark,
-      codeFontFamily: 'CodeFont',
-    );
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: sliceRegistry,
-        child: IdeThemeScope(
-          themeMode: ThemeMode.dark,
-          lightTheme: lightIdeTheme,
-          darkTheme: darkIdeTheme,
-          child: sf.ShadcnApp(
-            locale: ZetaLocalization.simplifiedChinese,
-            supportedLocales: ZetaLocalization.supportedLocales,
-            localizationsDelegates: ZetaLocalization.delegates,
-            theme: buildShadcnTheme(lightIdeTheme),
-            darkTheme: buildShadcnTheme(darkIdeTheme),
-            builder: (context, child) => IdeMaterialLayer(
-              theme: buildMaterialTheme(darkIdeTheme),
-              child: child,
-            ),
-            themeMode: sf.ThemeMode.dark,
-            home: sf.Scaffold(child: AgentPane(controller: viewModel)),
-          ),
-        ),
-      ),
-    );
-    await tester.pump();
-
-    // 分叉不再作为标题栏独立按钮常驻。
-    expect(find.byKey(const ValueKey('agent-header-fork')), findsNothing);
-
-    // 通过「更多」菜单进入分叉。
-    await tester.tap(find.byKey(const ValueKey('agent-header-more')));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-
-    // 菜单顺序：上下文 → 分隔符 → 重命名 → 分叉当前会话 → 归档。
-    final menuKeys = <String>[
-      'agent-header-menu-context',
-      'agent-header-menu-rename',
-      'agent-header-menu-fork',
-      'agent-header-menu-archive',
-    ];
-    final tops = <double>[];
-    for (final key in menuKeys) {
-      final finder = find.byKey(ValueKey<String>(key));
-      expect(finder, findsOneWidget);
-      tops.add(tester.getTopLeft(finder).dy);
-    }
-    for (var index = 1; index < tops.length; index += 1) {
-      expect(tops[index], greaterThan(tops[index - 1]));
-    }
-    // 分隔符恰好一个，位于「上下文」与「重命名」之间。
-    expect(find.byType(sf.MenuDivider), findsOneWidget);
-    final dividerTop = tester.getTopLeft(find.byType(sf.MenuDivider)).dy;
-    expect(dividerTop, greaterThan(tops[0]));
-    expect(dividerTop, lessThan(tops[1]));
-
-    final forkAction = find.byKey(const ValueKey('agent-header-menu-fork'));
-    await tester.tap(forkAction);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-
-    expect(provider.forkedThreads, contains('thread-fork'));
-    expect(selectedFork?.id, 'forked-thread-fork');
-  });
+  }
 
   testWidgets(
     'shows session total token usage in header and context window in composer while running',

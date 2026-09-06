@@ -1,3 +1,4 @@
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_actions.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -14,12 +15,14 @@ import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 class AgentHeader extends StatelessWidget {
   const AgentHeader({
     required this.controller,
+    required this.actions,
     required this.state,
     required this.onToggleContextPanel,
     super.key,
   });
 
   final AgentConversationRuntimeController controller;
+  final AgentConversationActions actions;
   final AgentHeaderState state;
   final VoidCallback onToggleContextPanel;
 
@@ -196,6 +199,7 @@ class AgentHeader extends StatelessWidget {
             const SizedBox(width: IdeSpacing.space4),
             _AgentHeaderMoreButton(
               controller: controller,
+              actions: actions,
               state: state,
               onToggleContextPanel: onToggleContextPanel,
             ),
@@ -210,11 +214,13 @@ class AgentHeader extends StatelessWidget {
 class _AgentHeaderMoreButton extends StatefulWidget {
   const _AgentHeaderMoreButton({
     required this.controller,
+    required this.actions,
     required this.state,
     required this.onToggleContextPanel,
   });
 
   final AgentConversationRuntimeController controller;
+  final AgentConversationActions actions;
   final AgentHeaderState state;
   final VoidCallback onToggleContextPanel;
 
@@ -248,6 +254,7 @@ class _AgentHeaderMoreButtonState extends State<_AgentHeaderMoreButton> {
     setState(() {
       _menuOpen = true;
     });
+    final capturedActions = widget.actions;
     final canRename = widget.state.canRename;
     final canArchive = widget.state.canArchive;
     final canFork = widget.state.canFork;
@@ -259,7 +266,7 @@ class _AgentHeaderMoreButtonState extends State<_AgentHeaderMoreButton> {
           label: context.l10n.agentRename,
           leadingIcon: Icons.drive_file_rename_outline_rounded,
           onPressed: () {
-            unawaited(_showRenameDialog());
+            unawaited(_showRenameDialog(capturedActions));
           },
         ),
       if (canFork)
@@ -268,7 +275,7 @@ class _AgentHeaderMoreButtonState extends State<_AgentHeaderMoreButton> {
           label: context.l10n.agentForkSession,
           leadingIcon: Icons.call_split_rounded,
           onPressed: () {
-            unawaited(widget.controller.forkCurrentThread());
+            unawaited(capturedActions.forkCurrentThread());
           },
         ),
       if (canArchive)
@@ -277,7 +284,7 @@ class _AgentHeaderMoreButtonState extends State<_AgentHeaderMoreButton> {
           label: context.l10n.agentArchive,
           leadingIcon: Icons.archive_outlined,
           onPressed: () {
-            unawaited(widget.controller.archiveCurrentThread());
+            unawaited(capturedActions.archiveCurrentThread());
           },
         ),
     ];
@@ -334,7 +341,9 @@ class _AgentHeaderMoreButtonState extends State<_AgentHeaderMoreButton> {
     entry.dismiss();
   }
 
-  Future<void> _showRenameDialog() async {
+  Future<void> _showRenameDialog(
+    AgentConversationActions capturedActions,
+  ) async {
     final controller = TextEditingController(text: widget.state.title);
     final name = await showIdeDialog<String>(
       context: context,
@@ -371,7 +380,7 @@ class _AgentHeaderMoreButtonState extends State<_AgentHeaderMoreButton> {
     if (!mounted || name == null || name.isEmpty) {
       return;
     }
-    await widget.controller.renameCurrentThread(name);
+    await capturedActions.renameCurrentThread(name);
   }
 
   @override

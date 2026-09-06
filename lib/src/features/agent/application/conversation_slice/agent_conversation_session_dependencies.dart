@@ -1,3 +1,4 @@
+import 'agent_conversation_command_result_sink.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
@@ -22,7 +23,7 @@ final class AgentConversationSessionDependencies {
   final AgentConversationCommandScope Function() scopeSnapshot;
   final void Function(AgentConversationOwnerKey) onProjectionUnobserved;
   final AgentConversationSliceEffectRunner Function(
-    AgentConversationResultSink,
+    AgentConversationCommandResultSink,
   )?
   runnerFactory;
   final OperationIdGenerator Function(String)? operationIdGeneratorFactory;

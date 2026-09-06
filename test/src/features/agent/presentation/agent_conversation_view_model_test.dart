@@ -15,7 +15,6 @@ import '../../../testing/agent_provider_implementations.dart';
 import '../../../testing/provider_settings_test_store.dart';
 import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_command_scope.dart';
-import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_intent.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 
@@ -141,7 +140,10 @@ void main() {
         final plan = viewModel.composerState.permissionOptions.singleWhere(
           (option) => option.id == ':plan',
         );
-        expect(await viewModel.selectPermissionOption(plan), isNull);
+        expect(
+          await viewModel.selectPermissionOption(plan),
+          isA<AgentCommandSucceeded>(),
+        );
         expect(provider.permissionPolicy.applyCount, 0);
         expect(viewModel.permissionApplyScopeHint, isNull);
 
@@ -185,7 +187,10 @@ void main() {
         final plan = viewModel.composerState.permissionOptions.singleWhere(
           (option) => option.id == ':plan',
         );
-        expect(await viewModel.selectPermissionOption(plan), isNull);
+        expect(
+          await viewModel.selectPermissionOption(plan),
+          isA<AgentCommandSucceeded>(),
+        );
         expect(provider.permissionPolicy.applyCount, 0);
         expect(viewModel.permissionApplyScopeHint, isNull);
 
@@ -3457,6 +3462,7 @@ void main() {
                 openedSession = session;
                 openedContext = context;
                 openedInitialMessage = initialMessage;
+                return const AgentCommandOutcome.succeeded();
               },
         );
         addTearDown(viewModel.dispose);
@@ -4688,10 +4694,7 @@ void main() {
         );
         addTearDown(store.closeForEntryRelease);
 
-        store.toggleExpansion(
-          AgentConversationExpansionTarget.toolCall,
-          'call-from-slice',
-        );
+        store.toggleToolCall('call-from-slice');
         await _drainTypedUiUpdate();
 
         // 展开集合的 owner 仍是 TimelineStore：切片只是把结果投影回来。
@@ -4713,7 +4716,8 @@ void main() {
         );
         addTearDown(store.closeForEntryRelease);
 
-        final operation = store.sendMessage(text: 'hello');
+        store.sendMessage('hello');
+        final operation = store.current.pendingOperations.last;
         await _drainTypedUiUpdate();
         await pumpEventQueue();
 
@@ -4736,7 +4740,7 @@ void main() {
         );
         addTearDown(store.closeForEntryRelease);
 
-        store.sendMessage(text: '   ');
+        store.sendMessage('   ');
         await _drainTypedUiUpdate();
         await pumpEventQueue();
 
@@ -4755,10 +4759,7 @@ void main() {
 
         // 草稿会话没有 threadId：rename 属于"当前不允许"，按忽略处理，
         // 不该冒充成功、也不该报错给用户。
-        store.mutateThread(
-          AgentConversationThreadMutationKind.rename,
-          name: '新名字',
-        );
+        store.renameCurrentThread('新名字');
         await _drainTypedUiUpdate();
         await pumpEventQueue();
 
@@ -4784,7 +4785,8 @@ void main() {
         );
         addTearDown(store.closeForEntryRelease);
 
-        final operation = store.sendMessage(text: 'hello');
+        store.sendMessage('hello');
+        final operation = store.current.pendingOperations.last;
         // 命令在途期间 Provider 重启：runtime 换代。
         scope = AgentConversationCommandScope(
           bindingKey: bindingKey,

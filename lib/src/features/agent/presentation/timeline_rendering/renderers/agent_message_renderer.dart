@@ -49,6 +49,7 @@ final class AgentMessageRenderer
       // 历史与 live 正文均全文渲染，禁止折叠预览。
       useStreamingMarkdown: isLiveTurn,
       controller: renderContext.controller,
+      actions: renderContext.actions,
       markdownCache: renderContext.markdownCache,
       planRevisionDrafts: renderContext.planRevisionDrafts,
       planExecutionHandoff: pendingState.planExecutionHandoff,

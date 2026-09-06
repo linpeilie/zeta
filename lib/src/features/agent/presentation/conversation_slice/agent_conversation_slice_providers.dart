@@ -1,18 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_region_state.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
-import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_ports.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_owner_key.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_session_dependencies.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_state.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_notifier.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-
-/// 运行时命令面暂保留 executor 路径；WP-2 统一 Actions。
-final agentConversationCommandProvider = Provider.autoDispose
-    .family<AgentConversationCommandPort, AgentConversationBindingKey>(
-      (ref, key) => ref.watch(agentConversationRuntimeProvider(key)),
-    );
 
 final agentConversationRuntimeProvider = Provider.autoDispose
     .family<AgentConversationRuntimeController, AgentConversationBindingKey>((

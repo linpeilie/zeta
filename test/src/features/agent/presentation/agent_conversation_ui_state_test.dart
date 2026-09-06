@@ -1,7 +1,6 @@
 import '../../../testing/conversation_test_scope.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_command_scope.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_region_state.dart';
 import 'agent_conversation_ui_state_fixtures.dart';
@@ -320,112 +319,7 @@ final class _FakeRegionSource implements AgentConversationRegionSource {
 
 final class _UnusedCommandPort implements AgentConversationCommandPort {
   const _UnusedCommandPort();
-
   @override
-  Future<AgentCommandOutcome> selectSessionConfigOption(
-    String configId,
-    Object value,
-  ) async => _ignored;
-
-  static const AgentCommandOutcome _ignored = AgentCommandOutcome.ignored(
-    AgentCommandIgnoreReason.emptyInput,
-  );
-
-  @override
-  void toggleToolCall(String toolCallId) {}
-
-  @override
-  void togglePlanMessage(String messageId) {}
-
-  @override
-  void toggleActivePlan(String turnId) {}
-
-  @override
-  void toggleCommandGroup(String commandGroupId) {}
-
-  @override
-  void toggleFileEditItem(String fileEditItemId) {}
-
-  @override
-  void dismissPlanExecution(AgentPlanExecutionRequest request) {}
-
-  @override
-  Future<AgentCommandOutcome> sendMessage(
-    String text, {
-    List<String> localImagePaths = const <String>[],
-    List<({String name, String path})> mentions =
-        const <({String name, String path})>[],
-    List<AgentSkillRef> skills = const <AgentSkillRef>[],
-    AgentPermissionRequestSnapshot? permissionSnapshotOverride,
-  }) async => _ignored;
-
-  @override
-  Future<AgentCommandOutcome> cancelActiveTurn() async => _ignored;
-
-  @override
-  Future<AgentCommandOutcome> editLastUserMessageAndRetry(
-    String newText,
-  ) async => _ignored;
-
-  @override
-  Future<AgentCommandOutcome> retryOpenThread() async => _ignored;
-
-  @override
-  Future<AgentCommandOutcome> respondToPermission(
-    AgentPermissionRequest request, {
-    required bool approved,
-    bool cancelTurn = false,
-    AgentCommandApprovalDecisionKind? commandDecision,
-    List<String> execpolicyAmendment = const <String>[],
-  }) async => _ignored;
-
-  @override
-  Future<AgentCommandOutcome> respondToQuestion(
-    AgentQuestionRequest request, {
-    Map<String, List<String>> answers = const <String, List<String>>{},
-  }) async => _ignored;
-
-  @override
-  Future<AgentCommandOutcome> respondToPlanApproval(
-    AgentPlanApprovalRequest request,
-    AgentPlanApprovalDecisionKind kind, {
-    String? reason,
-  }) async => _ignored;
-
-  @override
-  Future<AgentCommandOutcome> revisePlanExecution(
-    AgentPlanExecutionRequest request, {
-    String? revisionMessage,
-  }) async => _ignored;
-
-  @override
-  Future<AgentCommandOutcome> startPlanExecution(
-    AgentPlanExecutionRequest request,
-  ) async => _ignored;
-
-  @override
-  Future<AgentCommandOutcome> approveGuardianDeniedAction() async => _ignored;
-
-  @override
-  Future<AgentSession?> forkCurrentThread() async => null;
-
-  @override
-  Future<AgentCommandOutcome> renameCurrentThread(String name) async =>
-      _ignored;
-
-  @override
-  Future<AgentCommandOutcome> archiveCurrentThread() async => _ignored;
-
-  @override
-  Future<AgentCommandOutcome> compactCurrentThread() async => _ignored;
-
-  @override
-  Future<AgentCommandOutcome> loadModels({bool forceRefresh = false}) async =>
-      _ignored;
-
-  @override
-  Future<AgentCommandOutcome> ensureSkillsCatalog() async => _ignored;
-
-  @override
-  Future<AgentCommandOutcome> retryConversationModes() async => _ignored;
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnsupportedError('Unused command');
 }

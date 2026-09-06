@@ -1,3 +1,4 @@
+import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -71,11 +72,12 @@ class AgentModelConfig extends StatefulWidget {
   });
 
   final AgentModelConfigUiState state;
-  final Future<bool> Function(String modelId) onSelectModel;
-  final Future<bool> Function(String? effort) onSelectReasoningEffort;
-  final Future<bool> Function(bool enabled) onSelectFastEnabled;
-  final Future<bool> Function() onResolveCompatibility;
-  final Future<bool> Function() onRetrySave;
+  final Future<AgentCommandOutcome> Function(String modelId) onSelectModel;
+  final Future<AgentCommandOutcome> Function(String? effort)
+  onSelectReasoningEffort;
+  final Future<AgentCommandOutcome> Function(bool enabled) onSelectFastEnabled;
+  final Future<AgentCommandOutcome> Function() onResolveCompatibility;
+  final Future<AgentCommandOutcome> Function() onRetrySave;
   final VoidCallback onPopoverClosed;
 
   @override
@@ -233,7 +235,7 @@ class _AgentModelConfigState extends State<AgentModelConfig> {
 
   Future<void> _commitModelSelection(String modelId) async {
     final success = await widget.onSelectModel(modelId);
-    if (!mounted || success) {
+    if (!mounted || !success.isFailure) {
       return;
     }
     // 保存失败时 ViewModel 已完成回滚；下一帧合并其确认态并恢复展开位置。

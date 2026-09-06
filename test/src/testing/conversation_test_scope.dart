@@ -1,3 +1,5 @@
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_actions.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
@@ -70,6 +72,19 @@ final class ConversationTestScope {
     );
     _owners.add(owner);
     return owner;
+  }
+
+  AgentConversationActions actionsFor(
+    AgentConversationRuntimeController runtime,
+  ) {
+    for (final input in _inputs.values) {
+      if (identical(input.executor, runtime)) {
+        return container.read(
+          agentConversationSliceOwnerProvider(input.ownerKey).notifier,
+        );
+      }
+    }
+    return create(regions: runtime, commands: runtime);
   }
 
   Future<void> close() async {
@@ -163,3 +178,7 @@ final class _StateRegions implements AgentConversationRegionSource {
   @override
   void removeUiUpdateListener(void Function(AgentUiUpdateRequest) listener) {}
 }
+
+AgentConversationActions conversationTestActions(
+  AgentConversationRuntimeController runtime,
+) => conversationTestScope.actionsFor(runtime);

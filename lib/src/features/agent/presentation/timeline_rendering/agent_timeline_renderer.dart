@@ -12,7 +12,7 @@ import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_region_state.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
-import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_ports.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_actions.dart';
 import 'package:zeta/src/features/agent/presentation/agent_markdown_cache.dart';
 import 'package:zeta/src/features/agent/presentation/agent_plan_revision_drafts.dart';
 import 'package:zeta/src/features/agent/presentation/timeline_rendering/agent_timeline_extent_math.dart';
@@ -26,14 +26,16 @@ final class AgentTimelineRenderContext {
   /// 创建渲染上下文。
   const AgentTimelineRenderContext({
     required this.controller,
+    required this.actions,
+    required this.bindingKey,
     required this.markdownCache,
     required this.planRevisionDrafts,
   });
 
   /// 会话运行时协调器。
   ///
-  /// 卡片当前统一接收它（既是命令面也是 binding 身份来源）；需要窄依赖的
-  /// renderer 用 [commands] / [bindingKey] 两个只读面，不要新增对它的耦合。
+  /// 卡片当前统一接收它（仅供现有只读查询）；需要窄依赖的
+  /// renderer 用 [actions] / [bindingKey] 两个只读面，不要新增对它的耦合。
   final AgentConversationRuntimeController controller;
 
   /// Markdown 渲染缓存（含保温）。
@@ -43,11 +45,10 @@ final class AgentTimelineRenderContext {
   final AgentPlanRevisionDraftStore planRevisionDrafts;
 
   /// 命令执行面（窄接口）。
-  AgentConversationCommandPort get commands => controller;
+  final AgentConversationActions actions;
 
   /// 本会话的冻结 Binding 身份，`AgentRegionBuilder` 用它分键订阅。
-  AgentConversationBindingKey get bindingKey =>
-      controller.conversationBinding.key;
+  final AgentConversationBindingKey bindingKey;
 }
 
 /// 单个 payload 类型的完整渲染条目。

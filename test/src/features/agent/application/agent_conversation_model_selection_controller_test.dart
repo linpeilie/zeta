@@ -1,3 +1,4 @@
+import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -9,6 +10,101 @@ import 'package:zeta/src/features/agent/application/agent_conversation_model_sel
 import '../../../testing/agent_provider_stub_base.dart';
 
 void main() {
+  test(
+    'each save reports its own result when an older failure is followed by success',
+    () async {
+      final firstSave = Completer<void>();
+      var count = 0;
+      final controller = AgentConversationModelSelectionController(
+        persistSelection: (_, _) async {
+          if (++count == 1) await firstSave.future;
+        },
+      );
+      addTearDown(controller.dispose);
+      controller.seedFromConfig(_configuredProvider());
+      controller.handleModelList(_modelList);
+      final first = controller.selectReasoningEffort('low');
+      final second = controller.selectReasoningEffort('medium');
+      firstSave.completeError(StateError('older save failed'));
+      expect(
+        await first,
+        isA<AgentCommandFailed>().having(
+          (v) => v.kind,
+          'kind',
+          AgentCommandFailureKind.requestFailed,
+        ),
+      );
+      expect(await second, isA<AgentCommandSucceeded>());
+      expect(controller.selectedReasoningEffort, 'medium');
+      expect(controller.saveError, isNull);
+      expect(count, 2);
+    },
+  );
+
+  test(
+    'generation reset supersedes its waiter; disposal settles new waiter without waiting for IO',
+    () async {
+      final gate = Completer<void>();
+      final controller = AgentConversationModelSelectionController(
+        persistSelection: (_, _) => gate.future,
+      );
+      controller.seedFromConfig(_configuredProvider());
+      controller.handleModelList(_modelList);
+      final old = controller.selectModel('gpt-5.4-mini');
+      controller.resetForProvider(_configuredProvider());
+      expect(
+        await old,
+        isA<AgentCommandIgnored>().having(
+          (v) => v.reason,
+          'reason',
+          AgentCommandIgnoreReason.superseded,
+        ),
+      );
+      controller.handleModelList(_modelList);
+      final next = controller.selectModel('gpt-5.4-mini');
+      controller.dispose();
+      expect(
+        await next,
+        isA<AgentCommandFailed>().having(
+          (v) => v.kind,
+          'kind',
+          AgentCommandFailureKind.staleTarget,
+        ),
+      );
+      gate.complete();
+      await Future<void>.delayed(Duration.zero);
+    },
+  );
+
+  test(
+    'retry after disposal rejects without creating another save waiter',
+    () async {
+      var saves = 0;
+      final controller = AgentConversationModelSelectionController(
+        persistSelection: (_, _) async {
+          saves++;
+          throw StateError('save failed');
+        },
+      );
+      controller.seedFromConfig(_configuredProvider());
+      controller.handleModelList(_modelList);
+      expect(
+        await controller.selectReasoningEffort('low'),
+        isA<AgentCommandFailed>(),
+      );
+      controller.dispose();
+      expect(
+        await controller.retryFailedSelection(),
+        isA<AgentCommandFailed>().having(
+          (value) => value.kind,
+          'kind',
+          AgentCommandFailureKind.staleTarget,
+        ),
+      );
+      expect(saves, 1);
+    },
+  );
+
   group('AgentConversationModelSelectionController', () {
     test('reconciles invalid config selection to provider defaults', () async {
       final persistedSelections = <AgentModelSelection>[];
@@ -131,7 +227,14 @@ void main() {
 
       final fastAccepted = await controller.selectFastEnabled(true);
 
-      expect(fastAccepted, isFalse);
+      expect(
+        fastAccepted,
+        isA<AgentCommandIgnored>().having(
+          (value) => value.reason,
+          'reason',
+          AgentCommandIgnoreReason.requiresConfirmation,
+        ),
+      );
       expect(controller.selectedReasoningEffort, 'xhigh');
       expect(controller.selectedFastEnabled, isFalse);
       expect(
@@ -139,19 +242,32 @@ void main() {
         '切换到 high 并开启 Fast',
       );
 
-      expect(await controller.resolveCompatibilityConflict(), isTrue);
+      expect(
+        await controller.resolveCompatibilityConflict(),
+        isA<AgentCommandSucceeded>(),
+      );
       expect(controller.selectedReasoningEffort, 'high');
       expect(controller.selectedFastEnabled, isTrue);
 
       final xhighAccepted = await controller.selectReasoningEffort('xhigh');
-      expect(xhighAccepted, isFalse);
+      expect(
+        xhighAccepted,
+        isA<AgentCommandIgnored>().having(
+          (value) => value.reason,
+          'reason',
+          AgentCommandIgnoreReason.requiresConfirmation,
+        ),
+      );
       expect(controller.selectedReasoningEffort, 'high');
       expect(
         controller.compatibilityConflict?.actionLabel,
         '关闭 Fast 并切换到 xhigh',
       );
 
-      expect(await controller.resolveCompatibilityConflict(), isTrue);
+      expect(
+        await controller.resolveCompatibilityConflict(),
+        isA<AgentCommandSucceeded>(),
+      );
       expect(controller.selectedReasoningEffort, 'xhigh');
       expect(controller.selectedFastEnabled, isFalse);
     });
@@ -170,12 +286,22 @@ void main() {
       controller.seedFromConfig(_configuredProvider());
       controller.handleModelList(_modelList);
 
-      expect(await controller.selectModel('gpt-5.4-mini'), isFalse);
+      expect(
+        await controller.selectModel('gpt-5.4-mini'),
+        isA<AgentCommandFailed>().having(
+          (value) => value.kind,
+          'kind',
+          AgentCommandFailureKind.requestFailed,
+        ),
+      );
       expect(controller.selectedModelId, 'gpt-5.5');
       expect(controller.saveError, isNotNull);
 
       shouldFail = false;
-      expect(await controller.retryFailedSelection(), isTrue);
+      expect(
+        await controller.retryFailedSelection(),
+        isA<AgentCommandSucceeded>(),
+      );
       expect(controller.selectedModelId, 'gpt-5.4-mini');
       expect(controller.saveError, isNull);
     });
@@ -203,9 +329,16 @@ void main() {
         final fast = controller.selectFastEnabled(true);
         firstSave.complete();
 
-        expect(await low, isTrue);
-        expect(await medium, isTrue);
-        expect(await fast, isTrue);
+        expect(await low, isA<AgentCommandSucceeded>());
+        expect(
+          await medium,
+          isA<AgentCommandIgnored>().having(
+            (value) => value.reason,
+            'reason',
+            AgentCommandIgnoreReason.superseded,
+          ),
+        );
+        expect(await fast, isA<AgentCommandSucceeded>());
         expect(persisted, hasLength(2));
         expect(persisted.last.reasoningEffort, 'medium');
         expect(persisted.last.serviceTierId, 'priority');
@@ -224,7 +357,14 @@ void main() {
       controller.seedFromConfig(_configuredProvider());
       controller.handleModelList(_modelList);
 
-      expect(await controller.selectModel('gpt-5.5'), isTrue);
+      expect(
+        await controller.selectModel('gpt-5.5'),
+        isA<AgentCommandIgnored>().having(
+          (value) => value.reason,
+          'reason',
+          AgentCommandIgnoreReason.unchanged,
+        ),
+      );
       expect(saveCount, 0);
     });
 
@@ -240,7 +380,14 @@ void main() {
       controller.seedFromConfig(_configuredProvider());
       controller.handleModelList(_modelList);
 
-      expect(await controller.selectModel('gpt-legacy'), isFalse);
+      expect(
+        await controller.selectModel('gpt-legacy'),
+        isA<AgentCommandIgnored>().having(
+          (value) => value.reason,
+          'reason',
+          AgentCommandIgnoreReason.notAllowed,
+        ),
+      );
       expect(controller.selectedModelId, 'gpt-5.5');
       expect(saveCount, 0);
     });

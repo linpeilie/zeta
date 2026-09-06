@@ -35,6 +35,7 @@ final class AgentFileEditGroupRenderer
     return AgentFileEditGroupCard(
       group: payload.group,
       controller: renderContext.controller,
+      actions: renderContext.actions,
     );
   }
 
