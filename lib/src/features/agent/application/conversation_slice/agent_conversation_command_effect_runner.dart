@@ -5,7 +5,6 @@ import 'package:zeta/src/features/agent/application/conversation_slice/agent_con
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_effect.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_intent.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_ports.dart';
-import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
 
 /// 经窄命令端口执行切片副作用。
 ///
@@ -14,17 +13,30 @@ import 'package:zeta/src/features/agent/application/conversation_slice/agent_con
 final class AgentConversationCommandEffectRunner
     implements AgentConversationSliceEffectRunner {
   AgentConversationCommandEffectRunner({
-    required this.commands,
-    required this.store,
-    required this.scopeSnapshot,
-  });
+    required AgentConversationCommandPort commands,
+    required AgentConversationResultSink sink,
+    required AgentConversationCommandScope Function() scopeSnapshot,
+  }) : _commands = commands, // ignore: prefer_initializing_formals
+       _sink = sink, // ignore: prefer_initializing_formals
+       _scopeSnapshot = scopeSnapshot; // ignore: prefer_initializing_formals
 
-  final AgentConversationCommandPort commands;
-  final AgentConversationSliceStore Function() store;
-  final AgentConversationCommandScope Function() scopeSnapshot;
+  AgentConversationCommandPort? _commands;
+  AgentConversationResultSink? _sink;
+  AgentConversationCommandScope Function()? _scopeSnapshot;
+  bool _closed = false;
+
+  @override
+  void close() {
+    _closed = true;
+    _commands = null;
+    _sink = null;
+    _scopeSnapshot = null;
+  }
 
   @override
   void run(AgentConversationSliceEffect effect) {
+    if (_closed) return;
+    final commands = _commands!;
     switch (effect) {
       case AgentConversationToggleExpansionEffect():
         switch (effect.target) {
@@ -58,11 +70,12 @@ final class AgentConversationCommandEffectRunner
     AgentConversationCommandEffect effect,
     Future<AgentCommandOutcome> Function() invoke,
   ) async {
+    if (_closed) return;
     final operationId = effect.operationId;
 
     // 校验一：执行前。世界已经换代就不要再打这一枪。
-    if (!effect.scope.matchesForExecution(scopeSnapshot())) {
-      store().failCommand(operationId, AgentCommandFailureKind.staleTarget);
+    if (!effect.scope.matchesForExecution(_scopeSnapshot!())) {
+      _sink?.failCommand(operationId, AgentCommandFailureKind.staleTarget);
       return;
     }
 
@@ -77,23 +90,26 @@ final class AgentConversationCommandEffectRunner
       );
     }
 
+    if (_closed) return;
+
     // 校验二：结果回写前。await 期间 Provider 可能重启、Binding 可能换代，
     // 那样这个结果属于另一个世界，不能写进当前切片。
-    if (!effect.scope.matchesForCommit(scopeSnapshot())) {
-      store().failCommand(operationId, AgentCommandFailureKind.staleTarget);
+    if (!effect.scope.matchesForCommit(_scopeSnapshot!())) {
+      _sink?.failCommand(operationId, AgentCommandFailureKind.staleTarget);
       return;
     }
 
     switch (outcome) {
       // 被忽略的命令（空输入、状态不允许）没有可展示的错误，按完成收口。
       case AgentCommandSucceeded() || AgentCommandIgnored():
-        store().completeCommand(operationId);
+        _sink?.completeCommand(operationId);
       case AgentCommandFailed(:final kind):
-        store().failCommand(operationId, kind);
+        _sink?.failCommand(operationId, kind);
     }
   }
 
   Future<AgentCommandOutcome> _invoke(AgentConversationCommandEffect effect) {
+    final commands = _commands!;
     return switch (effect) {
       AgentConversationSendMessageEffect() => commands.sendMessage(
         effect.text,

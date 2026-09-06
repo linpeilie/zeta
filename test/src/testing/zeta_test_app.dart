@@ -1,3 +1,7 @@
+import 'package:zeta_agent_core/zeta_agent_core.dart' show AgentElapsedTicker;
+import 'frame_driven_app_timer.dart';
+import 'package:zeta/src/app/ide_session_slice/ide_session_slice_overrides.dart';
+import 'package:zeta/src/app/composition/workbench_session_providers.dart';
 import 'dart:async';
 import 'package:zeta/src/app/composition/agent_session_resource_providers.dart';
 import 'memory_agent_management_repository.dart';
@@ -62,7 +66,9 @@ MainApp zetaTestApp({Key? key, List<Override> overrides = const <Override>[]}) {
 /// 6. 记录型外链打开器——widget test 不拉起系统浏览器。
 ZetaAppComposition zetaTestComposition({
   List<Override> overrides = const <Override>[],
+  Future<void> Function(Future<void>)? verifyClose,
 }) {
+  TestWidgetsFlutterBinding.ensureInitialized();
   final composition = ZetaAppComposition.create(
     overrides: <Override>[
       ...ZetaStorageBindings.memory().providerOverrides,
@@ -70,7 +76,15 @@ ZetaAppComposition zetaTestComposition({
       ...overrides,
     ],
   );
-  addTearDown(composition.close);
+  addTearDown(() async {
+    final closing = composition.close();
+    if (verifyClose == null) {
+      await closing;
+    } else {
+      await verifyClose(closing);
+      composition.container.dispose();
+    }
+  });
   return composition;
 }
 
@@ -85,6 +99,19 @@ Override headlessWindowHost({bool showsWindowControls = true}) =>
 /// widget test 不能碰本机的默认装配；用例已经覆盖的 provider 不再重复装。
 List<Override> _testDefaultsNotCoveredBy(List<Override> overrides) {
   return <Override>[
+    if (!_covers(overrides, ideSessionSaveTimerFactoryProvider))
+      ideSessionSaveTimerFactoryProvider.overrideWithValue(
+        (delay, callback) =>
+            TestWidgetsFlutterBinding.ensureInitialized().inTest
+            ? FrameDrivenAppTimer(delay, callback)
+            : Timer(delay, callback),
+      ),
+    if (!_covers(overrides, agentElapsedTickerFactoryProvider))
+      agentElapsedTickerFactoryProvider.overrideWithValue(
+        () => TestWidgetsFlutterBinding.ensureInitialized().inTest
+            ? FrameDrivenAgentElapsedTicker()
+            : AgentElapsedTicker(),
+      ),
     if (!_covers(overrides, agentBindingSweepTimerFactoryProvider))
       agentBindingSweepTimerFactoryProvider.overrideWithValue(
         (_, callback) => ManualBindingSweepTimer(callback),

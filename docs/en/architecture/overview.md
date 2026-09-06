@@ -53,7 +53,7 @@ Existing features: `agent` (provider abstraction and conversation), `agent_manag
 
 Project Threads commands enter `ProjectThreadsOperations`, implemented by the application-session `ProjectThreadsSliceNotifier`. Its non-family, non-autoDispose provider owns synchronous rules, list state, the reverse index and waiters; build reads frozen dependencies and creates a runner from its typed sink. The app Runner keeps I/O scheduling resources, reads ownership through `StateOwner.threadFor`, and preserves explicit mappings outside the visible window. Shell borrows operations and a Riverpod subscription; the old Store, mirror and Deferred runner are removed. App providers own the shared BindingManager and global runtime; Workspace borrows them.
 
-Shutdown settles void waiters normally and fork waiters with null, cancels pending debounce timers and rejects late ingress. It then awaits all started executions, including restore/activation/search queries without waiters and the last Provider in an aggregate query, before closing BindingManager, runtime registry, plugins and the container. Drain failure remains a failed Future. Workspace/Conversation ownership and moving the full Shell into app composition remain WP-3C.
+Shutdown settles void waiters normally and fork waiters with null, cancels pending debounce timers and rejects late ingress. It then awaits all started executions, including restore/activation/search queries without waiters and the last Provider in an aggregate query, before closing BindingManager, runtime registry, plugins and the container. Drain failure remains a failed Future. WP-3C completes Workspace/Conversation ownership and full Shell composition as described below.
 
 **New code goes into the matching feature — not back into broad top-level directories.**
 
@@ -75,7 +75,7 @@ flowchart LR
     proc --> store["TimelineStore<br/><i>dumb merge by entryId</i>"]
     proc --> eff["EffectRunner<br/><i>side-effect exit</i>"]
     store --> runtime["RuntimeController<br/>region projection + frame coalesce"]
-    runtime --> slice["SliceStore<br/>one RegionsRefreshed"]
+    runtime --> slice["SliceNotifier<br/>one RegionsRefreshed"]
     slice --> ui["selector → AgentRegionBuilder"]
 
     classDef vendor fill:#F5A62333,stroke:#F5A623
@@ -118,18 +118,26 @@ After TimelineStore there are only **two hops**. Do not reintroduce a ViewModel,
 ```mermaid
 flowchart LR
     tl["TimelineStore"] --> rt["RuntimeController<br/>project regions · scheduler"]
-    rt --> sl["SliceStore<br/>one RegionsRefreshed"]
-    sl --> sel["SliceNotifier / family selector"]
+    rt --> sl["SliceNotifier<br/>one RegionsRefreshed"]
+    sl --> sel["BindingKey alias selector"]
     sel --> rb["AgentRegionBuilder"]
     rt --> cmd["CommandPort"]
     cmd --> pane["AgentPane"]
 ```
 
 - `AgentConversationRuntimeController` (application) owns the pipeline, region projection, `AgentUiUpdateScheduler`, CommandPort, and effects.
-- `AgentConversationSliceStore.connected` dispatches once per `AgentUiUpdateRequest`, by region.
+- `AgentConversationSliceNotifier` dispatches once per `AgentUiUpdateRequest`, by region.
 - Widgets read a region only through `AgentRegionBuilder`'s `ref.watch(selector(bindingKey))`. Send goes through `agentConversationCommandProvider`. High-frequency live-turn updates may use the presentation Flutter listenable adapter.
-- A workspace entry composes thread, Binding, RuntimeController, and SliceStore once. Context-panel visibility is AgentPane widget state, not an application snapshot.
+- A workspace entry composes thread, Binding, RuntimeController, and a stable ownerKey once. Context-panel visibility is AgentPane widget state, not an application snapshot.
 - The shell reads only `AgentConversationThreadSnapshot` (`selectedAgentController`).
+
+WP-3C gives Workspace and Conversation one writable owner each. `AgentConversationWorkspaceNotifier` holds entry resources and immutable workspace state; an application `AgentConversationSliceNotifier` owns each entry's regions and command ledger. `AgentConversationOwnerKey(entryId, lifetimeToken)` survives draft promotion and runtime restart; reopening a thread allocates a new token. BindingKey is an alias: Live resolves the owner, Closing/Closed returns an empty terminal projection, and Unknown returns an unavailable projection.
+
+The composition root constructs the complete `workbenchSessionProvider` and starts facts, management ingress and idempotent `Shell.start()` after locale resolution and before Widgets. IdeHome borrows that session and subscriptions. Unmounting does not close owners, Bindings or runtimes. Presentation retains drafts and scroll positions in memory under weak controller identity, clears them on entry close, and does not retain focus, popovers or IME composing. Diagnostic snapshots read owners on demand without a Shell relay.
+
+Shutdown stops Shell/M/P commands, flushes session persistence, drains M/P executions, detaches fact consumers and the source, closes entry ingress and controllers, awaits entry lease releases, then closes BindingManager, runtime registry, plugins and container. Repeated entry/app close returns the same Future, including failure; a failed stage is not marked released and the container remains inspectable. Lease release is not proof of CLI exit.
+
+The Conversation family takes an explicit keepAlive link in build and is retained by a container subscription. Only successful release plus an unobserved empty terminal projection permits dropping that link and invalidating the provider. autoDispose therefore reclaims closed projections, never business resources. This corrects the original non-autoDispose pseudocode because the current Riverpod implementation keeps ordinary family cache nodes after invalidate. App Workspace/M/P owners remain non-autoDispose. Unified Conversation Actions are still pending WP-2.
 
 ## Provider capability negotiation
 

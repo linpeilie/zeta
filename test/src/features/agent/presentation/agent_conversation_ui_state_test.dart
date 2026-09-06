@@ -1,10 +1,9 @@
+import '../../../testing/conversation_test_scope.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_command_scope.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_region_state.dart';
-import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_ports.dart';
-import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
 import 'agent_conversation_ui_state_fixtures.dart';
 
 void main() {
@@ -165,23 +164,23 @@ void main() {
 
   group('SliceStore UI update ingress', () {
     late _FakeRegionSource regions;
-    late AgentConversationSliceStore store;
+    late AgentConversationSliceNotifier store;
 
     setUp(() {
       regions = _FakeRegionSource();
-      store = AgentConversationSliceStore.connected(
+      store = connectedConversationTestOwner(
         regions: regions,
         commands: const _UnusedCommandPort(),
       );
     });
 
-    tearDown(() => store.dispose());
+    tearDown(() => store.closeForEntryRelease());
 
     test(
       'equal state does not notify and one region does not notify others',
       () {
         var notifications = 0;
-        store.addListener(() => notifications += 1);
+        listenConversationTestOwner(store, () => notifications += 1);
 
         regions.emit(
           AgentUiUpdateRequest(
@@ -206,14 +205,14 @@ void main() {
         );
 
         expect(notifications, 1);
-        expect(store.state.header.title, 'Renamed');
-        expect(store.state.composer, regions.composer);
+        expect(store.current.header.title, 'Renamed');
+        expect(store.current.composer, regions.composer);
       },
     );
 
     test('live-only request does not mutate slice regions', () {
       var notifications = 0;
-      store.addListener(() => notifications += 1);
+      listenConversationTestOwner(store, () => notifications += 1);
 
       regions.emit(
         AgentUiUpdateRequest(
@@ -234,7 +233,7 @@ void main() {
     });
 
     test('disposed store rejects later UI updates', () {
-      store.dispose();
+      store.closeForEntryRelease();
       regions.header = agentHeaderStateFixture(title: 'Ignored');
       regions.emit(
         AgentUiUpdateRequest(
@@ -243,7 +242,8 @@ void main() {
         ),
       );
 
-      expect(store.state.header.title, 'Thread');
+      expect(store.current.header.title, isEmpty);
+      expect(store.current.history.visibleTurns, isEmpty);
       expect(store.diagnostics.publishCount, 0);
     });
   });

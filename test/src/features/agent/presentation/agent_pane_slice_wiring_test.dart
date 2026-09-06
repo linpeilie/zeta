@@ -1,7 +1,7 @@
+import '../../../testing/conversation_test_scope.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_intent.dart';
-import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 import 'agent_conversation_ui_state_fixtures.dart';
@@ -19,17 +19,17 @@ void main() {
         initialThread: agentPaneThread(id: 'thread-1', title: '会话一'),
       );
       addTearDown(viewModel.dispose);
-      final store = AgentConversationSliceStore.connected(
+      final store = connectedConversationTestOwner(
         regions: viewModel,
         commands: viewModel,
       );
-      addTearDown(store.dispose);
+      addTearDown(store.closeForEntryRelease);
 
       await tester.pumpWidget(
         AgentPaneTestApp(
           viewModel: viewModel,
           sliceStores:
-              <AgentConversationBindingKey, AgentConversationSliceStore>{
+              <AgentConversationBindingKey, AgentConversationSliceNotifier>{
                 viewModel.conversationBinding.key: store,
               },
         ),
@@ -61,17 +61,17 @@ void main() {
         initialThread: agentPaneThread(id: 'thread-1', title: '会话一'),
       );
       addTearDown(viewModel.dispose);
-      final store = AgentConversationSliceStore.connected(
+      final store = connectedConversationTestOwner(
         regions: viewModel,
         commands: viewModel,
       );
-      addTearDown(store.dispose);
+      addTearDown(store.closeForEntryRelease);
 
       await tester.pumpWidget(
         AgentPaneTestApp(
           viewModel: viewModel,
           sliceStores:
-              <AgentConversationBindingKey, AgentConversationSliceStore>{
+              <AgentConversationBindingKey, AgentConversationSliceNotifier>{
                 viewModel.conversationBinding.key: store,
               },
         ),
@@ -95,17 +95,17 @@ void main() {
         initialThread: agentPaneThread(id: 'thread-1', title: '会话一'),
       );
       addTearDown(viewModel.dispose);
-      final store = AgentConversationSliceStore.connected(
+      final store = connectedConversationTestOwner(
         regions: viewModel,
         commands: viewModel,
       );
-      addTearDown(store.dispose);
+      addTearDown(store.closeForEntryRelease);
 
       await tester.pumpWidget(
         AgentPaneTestApp(
           viewModel: viewModel,
           sliceStores:
-              <AgentConversationBindingKey, AgentConversationSliceStore>{
+              <AgentConversationBindingKey, AgentConversationSliceNotifier>{
                 viewModel.conversationBinding.key: store,
               },
         ),

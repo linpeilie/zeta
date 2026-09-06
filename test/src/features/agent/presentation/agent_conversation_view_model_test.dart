@@ -1,3 +1,4 @@
+import '../../../testing/conversation_test_scope.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -16,7 +17,6 @@ import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_command_scope.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_intent.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
-import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
 import 'package:zeta/src/features/agent/presentation/agent_timeline_grouping.dart';
 
 import '../../../testing/agent_provider_stub_base.dart';
@@ -4662,28 +4662,31 @@ void main() {
       test('expansion 变化经 scheduler 流进切片', () async {
         final viewModel = _createViewModel(_FakeAgentProvider());
         addTearDown(viewModel.dispose);
-        final store = AgentConversationSliceStore.connected(
+        final store = connectedConversationTestOwner(
           regions: viewModel,
           commands: viewModel,
         );
-        addTearDown(store.dispose);
+        addTearDown(store.closeForEntryRelease);
 
         viewModel.toggleToolCall('call-1');
         viewModel.toggleToolCall('call-2');
         await _drainTypedUiUpdate();
 
-        expect(store.state.expansion.toolCallIds, <String>{'call-1', 'call-2'});
+        expect(store.current.expansion.toolCallIds, <String>{
+          'call-1',
+          'call-2',
+        });
         expect(store.diagnostics.publishCount, greaterThan(0));
       });
 
       test('切片命令经 effect 打到现有 port，状态由 region 回流', () async {
         final viewModel = _createViewModel(_FakeAgentProvider());
         addTearDown(viewModel.dispose);
-        final store = AgentConversationSliceStore.connected(
+        final store = connectedConversationTestOwner(
           regions: viewModel,
           commands: viewModel,
         );
-        addTearDown(store.dispose);
+        addTearDown(store.closeForEntryRelease);
 
         store.toggleExpansion(
           AgentConversationExpansionTarget.toolCall,
@@ -4693,7 +4696,10 @@ void main() {
 
         // 展开集合的 owner 仍是 TimelineStore：切片只是把结果投影回来。
         expect(viewModel.isToolCallExpanded('call-from-slice'), isTrue);
-        expect(store.state.expansion.toolCallIds, contains('call-from-slice'));
+        expect(
+          store.current.expansion.toolCallIds,
+          contains('call-from-slice'),
+        );
       });
 
       test('port 吞掉的失败必须记成失败，而不是成功', () async {
@@ -4701,11 +4707,11 @@ void main() {
           _FakeAgentProvider(sendError: StateError('send failed')),
         );
         addTearDown(viewModel.dispose);
-        final store = AgentConversationSliceStore.connected(
+        final store = connectedConversationTestOwner(
           regions: viewModel,
           commands: viewModel,
         );
-        addTearDown(store.dispose);
+        addTearDown(store.closeForEntryRelease);
 
         final operation = store.sendMessage(text: 'hello');
         await _drainTypedUiUpdate();
@@ -4713,10 +4719,10 @@ void main() {
 
         // ViewModel 的 sendMessage 会 catch 掉异常并正常返回；靠"没抛异常"
         // 判定就会把这次失败记成成功。
-        expect(store.state.pendingOperations, isEmpty);
-        expect(store.state.lastFailure?.operationId, operation);
+        expect(store.current.pendingOperations, isEmpty);
+        expect(store.current.lastFailure?.operationId, operation);
         expect(
-          store.state.lastFailure?.kind,
+          store.current.lastFailure?.kind,
           AgentCommandFailureKind.requestFailed,
         );
       });
@@ -4724,28 +4730,28 @@ void main() {
       test('空输入被忽略：不留在途，也不报错', () async {
         final viewModel = _createViewModel(_FakeAgentProvider());
         addTearDown(viewModel.dispose);
-        final store = AgentConversationSliceStore.connected(
+        final store = connectedConversationTestOwner(
           regions: viewModel,
           commands: viewModel,
         );
-        addTearDown(store.dispose);
+        addTearDown(store.closeForEntryRelease);
 
         store.sendMessage(text: '   ');
         await _drainTypedUiUpdate();
         await pumpEventQueue();
 
-        expect(store.state.pendingOperations, isEmpty);
-        expect(store.state.lastFailure, isNull);
+        expect(store.current.pendingOperations, isEmpty);
+        expect(store.current.lastFailure, isNull);
       });
 
       test('能力缺失的 thread 操作记成失败', () async {
         final viewModel = _createViewModel(_FakeAgentProvider());
         addTearDown(viewModel.dispose);
-        final store = AgentConversationSliceStore.connected(
+        final store = connectedConversationTestOwner(
           regions: viewModel,
           commands: viewModel,
         );
-        addTearDown(store.dispose);
+        addTearDown(store.closeForEntryRelease);
 
         // 草稿会话没有 threadId：rename 属于"当前不允许"，按忽略处理，
         // 不该冒充成功、也不该报错给用户。
@@ -4756,8 +4762,8 @@ void main() {
         await _drainTypedUiUpdate();
         await pumpEventQueue();
 
-        expect(store.state.pendingOperations, isEmpty);
-        expect(store.state.lastFailure, isNull);
+        expect(store.current.pendingOperations, isEmpty);
+        expect(store.current.lastFailure, isNull);
       });
 
       test('runtime 换代后旧命令不执行，也不写回结果', () async {
@@ -4771,12 +4777,12 @@ void main() {
           connectionEpoch: 1,
           listenerGeneration: 1,
         );
-        final store = AgentConversationSliceStore.connected(
+        final store = connectedConversationTestOwner(
           regions: viewModel,
           commands: viewModel,
           scopeSnapshot: () => scope,
         );
-        addTearDown(store.dispose);
+        addTearDown(store.closeForEntryRelease);
 
         final operation = store.sendMessage(text: 'hello');
         // 命令在途期间 Provider 重启：runtime 换代。
@@ -4789,10 +4795,10 @@ void main() {
         await _drainTypedUiUpdate();
         await pumpEventQueue();
 
-        expect(store.state.pendingOperations, isEmpty);
-        expect(store.state.lastFailure?.operationId, operation);
+        expect(store.current.pendingOperations, isEmpty);
+        expect(store.current.lastFailure?.operationId, operation);
         expect(
-          store.state.lastFailure?.kind,
+          store.current.lastFailure?.kind,
           AgentCommandFailureKind.staleTarget,
         );
       });
@@ -4800,17 +4806,17 @@ void main() {
       test('store dispose 后 ViewModel 再变不再流进切片', () async {
         final viewModel = _createViewModel(_FakeAgentProvider());
         addTearDown(viewModel.dispose);
-        final store = AgentConversationSliceStore.connected(
+        final store = connectedConversationTestOwner(
           regions: viewModel,
           commands: viewModel,
         );
 
-        store.dispose();
+        store.closeForEntryRelease();
         viewModel.toggleToolCall('after-dispose');
         await _drainTypedUiUpdate();
 
         expect(store.isClosed, isTrue);
-        expect(store.state.expansion.toolCallIds, isEmpty);
+        expect(store.current.expansion.toolCallIds, isEmpty);
       });
     });
   });

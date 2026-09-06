@@ -1,3 +1,4 @@
+import '../../../testing/conversation_test_scope.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -15,14 +16,10 @@ import 'package:zeta_ui/zeta_ui.dart';
 import '../../../testing/provider_settings_test_store.dart';
 
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
-import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
-import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
-import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
 import 'package:zeta/src/features/agent/presentation/agent_ui_update_scheduler.dart';
 
 import '../../../testing/ide_test_harness.dart';
 import '../../../testing/agent_conversation_binding_test_harness.dart';
-import '../../../testing/memory_agent_composer_attachment_store.dart';
 
 void main() {
   testWidgets('disabled Agent keeps history visible and hides the composer', (
@@ -170,32 +167,14 @@ Future<void> _pumpAgentPane(
     brightness: Brightness.light,
     codeFontFamily: 'JetBrainsMono',
   );
-  final sliceStore = AgentConversationSliceStore.connected(
+  final sliceStore = connectedConversationTestOwner(
     regions: viewModel,
     commands: viewModel,
   );
-  final sliceRegistry = AgentConversationSliceStoreRegistry()
-    ..bind((requestedKey) {
-      if (requestedKey == viewModel.conversationBinding.key) {
-        return AgentConversationSessionHandle(
-          store: sliceStore,
-          controller: viewModel,
-        );
-      }
-      throw StateError('No test conversation slice for $requestedKey');
-    });
-  addTearDown(() {
-    sliceRegistry.unbind();
-    sliceStore.dispose();
-  });
+  addTearDown(sliceStore.closeForEntryRelease);
   await tester.pumpWidget(
-    ProviderScope(
-      overrides: [
-        agentConversationSliceStoreRegistryProvider.overrideWithValue(
-          sliceRegistry,
-        ),
-        memoryAgentComposerAttachmentOverride(),
-      ],
+    UncontrolledProviderScope(
+      container: conversationTestScope.container,
       child: IdeThemeScope(
         themeMode: ThemeMode.light,
         lightTheme: ideTheme,

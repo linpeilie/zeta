@@ -47,7 +47,7 @@ void main() {
 
     for (final path in const <String>[
       'lib/src/app/shell/ide_shell_controller.dart',
-      'lib/src/app/conversation_workspace_slice/agent_conversation_workspace_store.dart',
+      'lib/src/app/conversation_workspace_slice/agent_conversation_workspace_notifier.dart',
       'lib/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart',
     ]) {
       final source = File(path).readAsStringSync();

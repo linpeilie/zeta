@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'agent_pane_retention.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -99,6 +100,7 @@ class AgentPane extends ConsumerStatefulWidget {
 
 class _AgentPaneState extends ConsumerState<AgentPane> {
   late final AgentPaneComposerSession _composer;
+  late final AgentPaneRetention _retention;
   late final IdeSmoothScrollController _scrollController;
   final ValueNotifier<bool> _contextPanelVisible = ValueNotifier<bool>(false);
   late StreamSubscription<AgentUiEffect> _uiEffectSubscription;
@@ -130,6 +132,8 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
   @override
   void initState() {
     super.initState();
+    _retention = ref.read(agentPaneRetentionProvider);
+    final retained = _retention.take(widget.controller);
     _projectionCache = AgentTimelineProjectionCache(
       textCatalog: widget.controller.textCatalog,
     );
@@ -142,13 +146,18 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
       submitMessage: _submitMessage,
       hostContext: () => context,
     );
+    if (retained != null) _composer.restoreDraft(retained);
     _responsiveBodyBuilder = _createResponsiveBodyBuilder();
     _scrollController = IdeSmoothScrollController(
+      initialScrollOffset: retained?.scrollMetrics?.pixels ?? 0,
       smoothScrollingEnabled: false,
     );
     _scrollDriver = IdeScrollControllerDriver(_scrollController);
     _scrollCoordinator = IdeVirtualScrollCoordinator(driver: _scrollDriver)
       ..onModeChanged = _notifyScrollChrome;
+    if (retained?.freeScroll == true && retained?.scrollMetrics != null) {
+      _scrollCoordinator.onUserScroll(retained!.scrollMetrics!);
+    }
     _scrollController.addListener(_handleScrollChanged);
     _uiEffectSubscription = widget.controller.uiEffects.listen(_handleUiEffect);
   }
@@ -199,11 +208,32 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
   }
 
   @override
+  void deactivate() {
+    _retention.save(
+      widget.controller,
+      AgentPaneRetainedState(
+        document: _composer.inputController.snapshot(),
+        imagePaths: List.unmodifiable(_composer.draftImagePaths.value),
+        stagedPaths: _composer.stagedClipboardPaths,
+        scrollMetrics: _scrollController.hasClients
+            ? IdeVirtualScrollMetricsSnapshot(
+                pixels: _scrollController.offset,
+                maxScrollExtent: _scrollController.position.maxScrollExtent,
+                viewportDimension: _scrollController.position.viewportDimension,
+              )
+            : null,
+        freeScroll: _scrollCoordinator.mode == IdeVirtualScrollMode.free,
+      ),
+    );
+    super.deactivate();
+  }
+
+  @override
   void dispose() {
     unawaited(_uiEffectSubscription.cancel());
     _scrollController.removeListener(_handleScrollChanged);
     _scrollCoordinator.onModeChanged = null;
-    _composer.dispose();
+    _composer.dispose(retainDraft: _retention.accepts(widget.controller));
     _scrollController.dispose();
     _contextPanelVisible.dispose();
     _scrollChromeTick.dispose();

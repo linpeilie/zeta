@@ -1,3 +1,5 @@
+import 'package:zeta_foundation/zeta_foundation.dart';
+import 'agent_conversation_slice_effect.dart';
 import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_command_scope.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_region_state.dart';
@@ -112,4 +114,15 @@ abstract interface class AgentConversationCommandPort {
     String configId,
     Object value,
   );
+}
+
+abstract interface class AgentConversationResultSink {
+  bool get isClosed;
+  void completeCommand(OperationId operationId);
+  void failCommand(OperationId operationId, AgentCommandFailureKind kind);
+}
+
+abstract interface class AgentConversationSliceEffectRunner {
+  void run(AgentConversationSliceEffect effect);
+  void close();
 }

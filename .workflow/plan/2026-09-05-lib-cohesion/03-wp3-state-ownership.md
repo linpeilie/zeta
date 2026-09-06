@@ -1,6 +1,6 @@
 # WP-3 · 单一状态 owner 与完整组合生命周期
 
-> 状态：WP-3M/P 已完成；WP-3C 未开始。前置：WP-1；WP-3P 另需 WP-4。阶段顺序：M → P → C。
+> 状态：WP-3M/P/C 已完成，见 §11–13。前置：WP-1；WP-3P 另需 WP-4。阶段顺序：M → P → C。
 > 统一决策见 [总入口](00-index.md)。本章代码块均为 Dart 风格伪代码，新增类型属于目标设计；现有 `Store` 不能通过改名继续保留镜像发布链。
 
 ## 1. 问题、范围与可观察目标
@@ -587,7 +587,7 @@ final class AgentConversationOwnerUnknown extends AgentConversationOwnerResoluti
 final agentConversationOwnerResolutionProvider = Provider.autoDispose.family<
     AgentConversationOwnerResolution, AgentConversationBindingKey>(resolveAlias);
 
-final agentConversationSliceOwnerProvider = NotifierProvider.family<
+final agentConversationSliceOwnerProvider = NotifierProvider.autoDispose.family<
     AgentConversationSliceNotifier, AgentConversationSliceState,
     AgentConversationOwnerKey>(AgentConversationSliceNotifier.new);
 
@@ -622,6 +622,7 @@ class AgentConversationSliceNotifier extends Notifier<AgentConversationSliceStat
   bool _closed = false; // 与 WP-2 的 Actions/账本共享唯一标志
 
   AgentConversationSliceState build() {
+    projectionRetention = ref.keepAlive(); // 只在释放成功且空投影无观察者时撤销，见 §13
     deps = ref.read(agentConversationSessionDependenciesProvider(ownerKey));
     runner = AgentConversationCommandEffectRunner(
       commands: deps.executor, sink: this,
@@ -657,7 +658,7 @@ class AgentConversationSliceNotifier extends Notifier<AgentConversationSliceStat
 
 `closeCommandIngress` 是本章与 WP-2 **同一个方法**：设置 `_closed`、按该阶段结果契约结算所有 owner waiters、清空账本；不再另留 `closed` 或 `settleOwnerWaitersAsClosed` 第二实现。WP-3C 先按旧命令契约迁移，WP-2 替换为其 §2.6 的 typed outcome 实现。该方法内部只在入口检查一次 `_closed`，不能设置后再调用一个因 `_closed` 而提前返回的结算 helper。`cleanupWithoutPublishingState` 在 Ref 销毁时调用同一个 closeCommandIngress，再幂等退订/清引用，但不读取或写入 state。
 
-SessionDependencies/OwnerResolution/Actions 三种纯查询 family 统一 autoDispose：它们不关闭资源，避免关闭后缓存还持有旧 controller 或 BindingKey。真实 owner 仍非 autoDispose，且由 coordinator 显式关闭；两者不可混淆。
+SessionDependencies/OwnerResolution/Actions 三种纯查询 family 统一 autoDispose：它们不关闭资源，避免关闭后缓存还持有旧 controller 或 BindingKey。真实 owner 在 build 显式 keepAlive，资源成功释放且空投影无人观察后才允许回收，详见 §13 的 Riverpod 实现修正。
 
 WP-3C 暂时保留现有 UI 命令指向 executor 的行为，迁移状态发布不同时重写所有命令；WP-2 紧接着切换唯一 Actions 入口。该阶段不得宣称“命令已统一”，保留 WP-2 未完成状态。
 
@@ -767,6 +768,7 @@ void scheduleEviction() {
 // coordinator：onProjectionUnobserved 的实现。
 void evictClosedProjection(OwnerKey key) {
   if (!releaseCompletionMarkers.contains(key)) return;
+  releaseClosedProjectionRetention(key);
   invalidateClosedSlice(key); // 此时已无订阅，不会立刻重建 owner
   workspace.removeClosedAliasesIfStillOwnedBy(key);
   ownerHandles.remove(key);
@@ -826,11 +828,11 @@ Management/Project Threads 的关闭负责停止自己的任务和结算 waiter�
 - [x] **M-2**：迁 Notifier、替换 UI family(store)、删镜像/Deferred；WP-1 summary ingress 不变。
 - [x] **P-1**：确认 WP-4 回归与唯一索引已合入，迁 Project Threads Notifier。
 - [x] **P-2**：Shell 注入 Operations，独立 BindingManager provider 建立，删旧 composition/store。
-- [ ] **C-1**：引入 OwnerKey 与资源 deps，先补草稿晋升/ABA/无 UI 装配回归。
-- [ ] **C-2**：Workspace state 迁 Notifier，entry 去掉 SliceStore；保持 reducer不变量。
-- [ ] **C-3**：Conversation state迁Notifier、BindingKey facade、lifetime coordinator，删除两个registry。
-- [ ] **C-4**：Shell 构造/start分离、workbench组合前移、退出和snapshot接线迁移。
-- [ ] **C-5**：删除旧owner/镜像/Deferred，更新架构文档和守卫，完成全部门禁。
+- [x] **C-1**：引入 OwnerKey 与资源 deps，先补草稿晋升/ABA/无 UI 装配回归。
+- [x] **C-2**：Workspace state 迁 Notifier，entry 去掉 SliceStore；保持 reducer不变量。
+- [x] **C-3**：Conversation state迁Notifier、BindingKey facade、lifetime coordinator，删除两个registry。
+- [x] **C-4**：Shell 构造/start分离、workbench组合前移、退出和snapshot接线迁移。
+- [x] **C-5**：删除旧owner/镜像/Deferred，更新架构文档和守卫，完成全部门禁。
 
 M/P/C 各阶段可单独提交；P 阶段如暂时仍由旧 workspace 持有 BindingManager，必须作为同提交内部过渡完成到唯一 app provider，不能提交两份管理器并存的状态。
 
@@ -878,3 +880,13 @@ P-1/P-2 完成，详见 [验收记录](../../refactor/2026-09-06-project-threads
 - WP-4 的 33 条原业务测试/131 条断言全部保留；本次开始的 51 条 Store/Runner 测试及其 201 条断言保留。23 条新增回归覆盖同步结算、依赖冻结、ABA/迟到 ingress、真实执行排空、关闭资源顺序、早退出与结构负例。
 - format、analyze、affected、full 均退出 0；完整门禁根 2047 条 + 内部包 1076 条，10 个内部包分析通过。依赖、协议包、v4 codec、intent/effect/reducer 和测试并发无变更。
 - Shell Widget/恢复/分层回归通过；真实 CLI 和桌面手工退出未执行。完整 Shell/Workspace/Conversation 的无 UI 装配、重挂与 entry 生命周期仍由下一项 WP-3C 承接，不扩大本次完成范围。
+
+## 13. WP-3C 实施验收（2026-09-06）
+
+实现采用单 Workspace Notifier、稳定 OwnerKey family、纯 BindingKey facade、显式 lifetime coordinator 与完整 workbench composition；移除旧 Store、两个 registry、presentation 镜像与 Shell snapshot relay。命令契约继续沿用旧 OperationId/执行端口；没有提前完成 WP-2。
+
+**Riverpod 回收修正**：当前锁定 Riverpod 3.4.3 的非 autoDispose family 在 invalidate 后销毁旧状态，但保留 family element 缓存节点，O-09 的 `container.exists` 连续开关回归失败。因此物理 family 使用 autoDispose + build 内显式 keepAlive，coordinator 再持有容器级订阅；只有 lease release 成功、空投影无观察者且 token 匹配后才关闭 keepAlive 并 invalidate。关闭失败不撤销保活。autoDispose 不释放 controller/lease/runtime；页面退订与 live entry 生存期无关。Workspace/M/P 仍是非 autoDispose owner。后续 WP-2 必须保留此边界，不能恢复无保活的 owner。
+
+**额外文件范围**：为 O-10 添加 presentation `agent_pane_retention.dart`、ComposerDocumentSnapshot 和草稿恢复接口，只驻内存且弱引用 entry identity；entry 关闭清理 staged attachments，焦点/弹层/IME composing 不恢复。为了让测试中的应用资源正确跨过 Widget 卸载，新增 session 保存与 elapsed ticker 工厂接缝，以及 `frame_driven_app_timer.dart` 测试调度器；正常生产默认 Timer/AgentElapsedTicker 不变。测试依赖通过 `conversation_test_scope.dart`、`conversation_workspace_test_container.dart` 注入到真实 owner。
+
+C-1 至 C-5 完成。format/analyze/affected/full 通过，根 2060 + 内部包 1076；新增 13 条生命周期/真实重挂/AST 回归，287 条旧测试全部保留，8 条结构/终止投影断言调整逐项登记。验收记录：[WP-3C](../../refactor/2026-09-06-conversation-owner/00-validation.md)。真实 CLI 与桌面手工验收仍待执行；下一项 WP-2 Actions，WP-5 仍未开始。

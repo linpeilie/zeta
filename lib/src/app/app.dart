@@ -1,7 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
-import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 
 import 'package:zeta/src/app/app_constants.dart';
@@ -121,18 +120,6 @@ class _MainAppState extends State<MainApp> {
   }
 
   Widget _buildHome() {
-    final composition = _composition;
-    // 这一支只在语言冻结之后走到（见 build 里的 isReady 分支），因此 `IdeHome`
-    // 自己从容器读文本目录与插件链上的 provider 时都已经有值。
-    //
-    // 这里只补**容器里还没有的东西**：状态快照桥与工作台工厂。凡是已经装进
-    // Riverpod 的依赖一律不经这里下钻——那只是把
-    // `container.read` 换个地方写，还会让 `IdeHome` 的构造函数继续膨胀。
-    return IdeHome(
-      key: const ValueKey<String>('zeta.ide-home'),
-      shellStateSnapshotRelay: composition.shellStateSnapshotRelay,
-      connectManagementRuntimeFacts: composition.connectManagementRuntimeFacts,
-      providerMetricLabel: zetaAgentProviderDefinitionCatalog.metricLabelFor,
-    );
+    return const IdeHome(key: ValueKey<String>('zeta.ide-home'));
   }
 }

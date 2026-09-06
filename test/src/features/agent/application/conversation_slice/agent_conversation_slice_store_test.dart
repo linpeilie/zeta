@@ -1,3 +1,4 @@
+import '../../../../testing/conversation_test_scope.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_command_scope.dart';
@@ -5,31 +6,30 @@ import 'package:zeta/src/features/agent/application/conversation_slice/agent_con
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_intent.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_reducer.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_state.dart';
-import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 import '../../presentation/agent_conversation_ui_state_fixtures.dart';
 
 void main() {
-  group('AgentConversationSliceStore', () {
+  group('AgentConversationSliceNotifier', () {
     test('命令铸造单调身份，同作用域序号不复用', () {
       final runner = _RecordingRunner();
       final store = _store(runner);
-      addTearDown(store.dispose);
+      addTearDown(store.closeForEntryRelease);
 
       final first = store.sendMessage(text: 'one');
       final second = store.sendMessage(text: 'two');
 
       expect(first.scope, AgentConversationOperationScopes.send);
       expect(second.sequence, first.sequence + 1);
-      expect(store.state.pendingOperations, <Object>{first, second});
+      expect(store.current.pendingOperations, <Object>{first, second});
       expect(runner.effects, hasLength(2));
     });
 
     test('不同作用域各自计数，不互相影响', () {
       final runner = _RecordingRunner();
       final store = _store(runner);
-      addTearDown(store.dispose);
+      addTearDown(store.closeForEntryRelease);
 
       final send = store.sendMessage(text: 'one');
       final cancel = store.cancelActiveTurn();
@@ -42,9 +42,9 @@ void main() {
     test('状态未变时不发布，避免无谓 rebuild', () {
       final runner = _RecordingRunner();
       final store = _store(runner);
-      addTearDown(store.dispose);
+      addTearDown(store.closeForEntryRelease);
       var notifications = 0;
-      store.addListener(() => notifications += 1);
+      listenConversationTestOwner(store, () => notifications += 1);
 
       store.refreshRegions(const AgentConversationRegionsRefreshed());
       // 同值 region 也不该触发发布。
@@ -60,9 +60,9 @@ void main() {
     test('region 变化发布一次', () {
       final runner = _RecordingRunner();
       final store = _store(runner);
-      addTearDown(store.dispose);
+      addTearDown(store.closeForEntryRelease);
       var notifications = 0;
-      store.addListener(() => notifications += 1);
+      listenConversationTestOwner(store, () => notifications += 1);
 
       store.refreshRegions(
         AgentConversationRegionsRefreshed(
@@ -71,43 +71,43 @@ void main() {
       );
 
       expect(notifications, 1);
-      expect(store.state.header.title, '新标题');
+      expect(store.current.header.title, '新标题');
     });
 
     test('迟到结果被丢弃并计数', () {
       final runner = _RecordingRunner();
       final store = _store(runner);
-      addTearDown(store.dispose);
+      addTearDown(store.closeForEntryRelease);
 
       final first = store.sendMessage(text: 'one');
       store.completeCommand(first);
       // 同一个身份再回一次：已经不在途，必须丢弃。
       store.completeCommand(first);
 
-      expect(store.state.pendingOperations, isEmpty);
+      expect(store.current.pendingOperations, isEmpty);
       expect(store.diagnostics.staleResultCount, 1);
     });
 
     test('失败结果记录消息，随下一次命令清空', () {
       final runner = _RecordingRunner();
       final store = _store(runner);
-      addTearDown(store.dispose);
+      addTearDown(store.closeForEntryRelease);
 
       final first = store.sendMessage(text: 'one');
       store.failCommand(first, AgentCommandFailureKind.requestFailed);
       expect(
-        store.state.lastFailure?.kind,
+        store.current.lastFailure?.kind,
         AgentCommandFailureKind.requestFailed,
       );
 
       store.sendMessage(text: 'two');
-      expect(store.state.lastFailure, isNull);
+      expect(store.current.lastFailure, isNull);
     });
 
     test('命令带上发起时的作用域快照', () {
       final runner = _RecordingRunner();
       final store = _store(runner);
-      addTearDown(store.dispose);
+      addTearDown(store.closeForEntryRelease);
 
       store.sendMessage(text: 'one');
 
@@ -118,12 +118,12 @@ void main() {
     test('作用域变化后发起的命令带的是新快照', () {
       final runner = _RecordingRunner();
       var scope = _testScope;
-      final store = AgentConversationSliceStore(
+      final store = conversationTestOwner(
         initialState: _initialSliceState(),
         effectRunner: runner,
         scopeSnapshot: () => scope,
       );
-      addTearDown(store.dispose);
+      addTearDown(store.closeForEntryRelease);
 
       store.sendMessage(text: 'before restart');
       scope = const AgentConversationCommandScope(
@@ -151,8 +151,8 @@ void main() {
       final runner = _RecordingRunner();
       final store = _store(runner);
 
-      store.dispose();
-      store.sendMessage(text: 'ignored');
+      store.closeForEntryRelease();
+      expect(() => store.sendMessage(text: 'ignored'), throwsStateError);
 
       expect(store.isClosed, isTrue);
       expect(runner.effects, isEmpty);
@@ -164,8 +164,8 @@ void main() {
       final secondRunner = _RecordingRunner();
       final first = _store(firstRunner);
       final second = _store(secondRunner);
-      addTearDown(first.dispose);
-      addTearDown(second.dispose);
+      addTearDown(first.closeForEntryRelease);
+      addTearDown(second.closeForEntryRelease);
 
       final firstOperation = first.sendMessage(text: 'a');
       second.refreshRegions(
@@ -174,10 +174,10 @@ void main() {
         ),
       );
 
-      expect(first.state.pendingOperations, <Object>{firstOperation});
-      expect(second.state.pendingOperations, isEmpty);
-      expect(first.state.header.title, 'Thread');
-      expect(second.state.header.title, '第二个会话');
+      expect(first.current.pendingOperations, <Object>{firstOperation});
+      expect(second.current.pendingOperations, isEmpty);
+      expect(first.current.header.title, 'Thread');
+      expect(second.current.header.title, '第二个会话');
       expect(firstRunner.effects, hasLength(1));
       expect(secondRunner.effects, isEmpty);
     });
@@ -187,13 +187,13 @@ void main() {
       final secondRunner = _RecordingRunner();
       final first = _store(firstRunner);
       final second = _store(secondRunner);
-      addTearDown(second.dispose);
+      addTearDown(second.closeForEntryRelease);
 
-      first.dispose();
+      first.closeForEntryRelease();
       final operation = second.sendMessage(text: 'still works');
 
       expect(second.isClosed, isFalse);
-      expect(second.state.pendingOperations, <Object>{operation});
+      expect(second.current.pendingOperations, <Object>{operation});
       expect(
         secondRunner.effects.single,
         isA<AgentConversationSendMessageEffect>(),
@@ -203,7 +203,7 @@ void main() {
     test('四种审批语义各走各的作用域（G5）', () {
       final runner = _RecordingRunner();
       final store = _store(runner);
-      addTearDown(store.dispose);
+      addTearDown(store.closeForEntryRelease);
 
       store.dispatch(
         AgentConversationRegionsRefreshed(
@@ -212,13 +212,13 @@ void main() {
       );
 
       expect(
-        store.state.hasPendingOperationInScope(
+        store.current.hasPendingOperationInScope(
           AgentConversationOperationScopes.permission,
         ),
         isFalse,
       );
       expect(
-        store.state.hasPendingOperationInScope(
+        store.current.hasPendingOperationInScope(
           AgentConversationOperationScopes.question,
         ),
         isFalse,
@@ -237,8 +237,10 @@ AgentConversationSliceState _initialSliceState() {
   );
 }
 
-AgentConversationSliceStore _store(AgentConversationSliceEffectRunner runner) {
-  return AgentConversationSliceStore(
+AgentConversationSliceNotifier _store(
+  AgentConversationSliceEffectRunner runner,
+) {
+  return conversationTestOwner(
     initialState: AgentConversationSliceState(
       header: agentHeaderStateFixture(),
       composer: agentComposerStateFixture(),
@@ -252,6 +254,8 @@ AgentConversationSliceStore _store(AgentConversationSliceEffectRunner runner) {
 }
 
 final class _RecordingRunner implements AgentConversationSliceEffectRunner {
+  @override
+  void close() {}
   final List<AgentConversationSliceEffect> effects =
       <AgentConversationSliceEffect>[];
 

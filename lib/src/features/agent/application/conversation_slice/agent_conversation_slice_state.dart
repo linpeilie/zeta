@@ -1,3 +1,6 @@
+import 'package:zeta_agent_core/zeta_agent_core.dart';
+import '../agent_conversation_mode_controller.dart';
+import 'agent_model_config_ui_state.dart';
 import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_region_state.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
@@ -46,6 +49,8 @@ final class AgentConversationOperationFailure {
 /// 流式 turn 的局部内容**不在这里**：`AgentUiRegion.liveTurn` /
 /// `liveTurnBinding` 继续走 TimelineStore 的局部重建路径（同文档 §2.7），
 /// 否则每个 token 都会触发一次切片发布，直接撞穿 Phase 0 的帧预算。
+enum AgentConversationProjectionStatus { live, closed, unavailable }
+
 final class AgentConversationSliceState {
   const AgentConversationSliceState({
     required this.header,
@@ -55,7 +60,101 @@ final class AgentConversationSliceState {
     required this.history,
     this.pendingOperations = const <OperationId>{},
     this.lastFailure,
+    this.projectionStatus = AgentConversationProjectionStatus.live,
   });
+
+  final AgentConversationProjectionStatus projectionStatus;
+
+  factory AgentConversationSliceState.closedProjection() =>
+      AgentConversationSliceState._terminal(
+        AgentConversationProjectionStatus.closed,
+      );
+  factory AgentConversationSliceState.unavailableProjection() =>
+      AgentConversationSliceState._terminal(
+        AgentConversationProjectionStatus.unavailable,
+      );
+
+  factory AgentConversationSliceState._terminal(
+    AgentConversationProjectionStatus status,
+  ) => AgentConversationSliceState(
+    projectionStatus: status,
+    header: const AgentHeaderState(
+      title: '',
+      threadOpenPhase: AgentThreadOpenPhase.idle,
+      systemNoticeLabel: null,
+      statusCapsuleLabel: null,
+      waitingOnApproval: false,
+      waitingOnUserInput: false,
+      showRunningIndicator: false,
+      runningActivityLabel: null,
+      segmentStartedAt: null,
+      turnStartedAt: null,
+      tokenUsage: null,
+      isTurnRunning: false,
+      isReadOnly: true,
+      canFork: false,
+      canRename: false,
+      canArchive: false,
+      isPlanMode: false,
+    ),
+    composer: AgentComposerState(
+      canSubmitMessage: false,
+      isTurnRunning: false,
+      threadOpenPhase: AgentThreadOpenPhase.idle,
+      contextUsage: null,
+      isReadOnly: true,
+      canAttachImages: false,
+      canMentionResources: false,
+      canUseSkills: false,
+      conversationModeStatus: AgentConversationModeLoadStatus.ready,
+      conversationModeOptions: const [],
+      selectedConversationMode: null,
+      conversationModeAppliesToNextTurn: false,
+      conversationModeStatusMessage: null,
+      conversationModeContextId: status,
+      showModelSelection: false,
+      modelConfigState: AgentModelConfigUiState(
+        models: const [],
+        selectedModelId: null,
+        selectedReasoningEffort: null,
+        selectedServiceTierId: null,
+        preferences: const {},
+        savingModelIds: const {},
+        isRefreshing: false,
+        appliesNextTurn: false,
+        supportsReasoningOptions: false,
+        supportsServiceTierSelection: false,
+      ),
+      showPermissionPolicy: false,
+      permissionPolicyLabel: '',
+      permissionOptions: const [],
+      selectedPermissionOptionId: null,
+      sessionConfigOptions: const [],
+    ),
+    pendingInteractions: AgentPendingInteractionState(
+      permissions: const [],
+      questions: const [],
+      planApprovals: const [],
+      planExecutionHandoff: null,
+      isReadOnly: true,
+      autoReviewsByTurnId: const {},
+      latestDeniedAutoReview: null,
+    ),
+    expansion: AgentExpansionState(
+      toolCallIds: const [],
+      planMessageIds: const [],
+      activePlanTurnIds: const [],
+      commandGroupIds: const [],
+      fileEditItemIds: const [],
+    ),
+    history: AgentConversationHistoryState(
+      standbyTurn: null,
+      visibleTurns: const [],
+      threadOpenPhase: AgentThreadOpenPhase.idle,
+      providerId: '',
+      providerName: '',
+    ),
+  );
 
   /// 头栏投影。
   final AgentHeaderState header;
@@ -101,6 +200,7 @@ final class AgentConversationSliceState {
     bool clearLastFailure = false,
   }) {
     return AgentConversationSliceState(
+      projectionStatus: projectionStatus,
       header: header ?? this.header,
       composer: composer ?? this.composer,
       pendingInteractions: pendingInteractions ?? this.pendingInteractions,
@@ -115,6 +215,7 @@ final class AgentConversationSliceState {
   bool operator ==(Object other) {
     return identical(this, other) ||
         other is AgentConversationSliceState &&
+            other.projectionStatus == projectionStatus &&
             other.header == header &&
             other.composer == composer &&
             other.pendingInteractions == pendingInteractions &&
@@ -126,6 +227,7 @@ final class AgentConversationSliceState {
 
   @override
   int get hashCode => Object.hash(
+    projectionStatus,
     header,
     composer,
     pendingInteractions,

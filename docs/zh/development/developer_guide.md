@@ -186,7 +186,7 @@ windows/
 - `lib/src/features/desktop_notifications`：Agent attention 去重、可见性抑制、
   系统通知插件适配和三端任务栏/Dock/urgency MethodChannel。
 - `lib/src/features/ide_session`：IDE 会话模型、状态构建、恢复协调和持久化。
-- `lib/src/features/project_threads`：项目 thread 列表状态、同步业务 Store、恢复快照与 presentation 镜像；分页及远端操作在 app Runner；
+- `lib/src/features/project_threads`：项目 thread 列表状态、同步规则与唯一 application Notifier、恢复快照和 selectors；分页及远端操作在 app Runner；
   打开中 thread 的执行中/等待态由常驻 workspace 的 `threadSnapshot` 经
   `syncRuntimeSnapshot` 写入，不依赖 shell 单路 provider 事件流。
 - `lib/src/features/settings`：常规/外观设置，含 `AppLanguage` 与 `general.json` v3 codec。
@@ -221,7 +221,7 @@ windows/
 - 优先使用 `const` 和不可变 widget。
 - 只属于单个 Widget 的临时状态（hover、popover 开合、动画控制器）继续用 `StatefulWidget`。
 - **跨 Widget 共享的状态是 application 层的 `Notifier` / `AsyncNotifier`**，用纯 Dart 的
-  `package:riverpod`。不要手写 listener 列表，也不要写只做 `state = store.state` 的镜像
+  `package:flutter_riverpod`（不使用 Widget API）。不要手写 listener 列表，也不要写只做 `state = store.state` 的镜像
   notifier——一份状态只能有一个 owner。
 - **依赖注入走 `ProviderScope` / `ProviderContainer` overrides**，不用构造参数向下钻，也不用
   可变注册表反向 `bind()`。没有安全默认值的依赖声明成会抛错的 `Provider`。
@@ -245,7 +245,7 @@ windows/
   `ConsumerWidget` / `WidgetRef`——那是 presentation 的东西。正文见
   [工程规范 §3.0](../architecture/engineering_standards.md#30-状态所有权与-riverpod-边界)，
   规则索引见 `AGENTS.md` §1 G6 与 §3。
-- `autoDispose` 只用于纯 UI 镜像；Binding lease、CLI runtime、进程与文件句柄的生命周期由显式
+- `autoDispose` 只回收纯 selector 或显式释放后的空投影；Binding lease、CLI runtime、进程与文件句柄的生命周期由显式
   application 逻辑决定。
 - 异步优先 `AsyncNotifier` + `AsyncValue`；provider 之外手写异步编排时，仍必须用 token 或版本号
   隔离旧结果。
@@ -285,23 +285,21 @@ Registry acquire 必须显式选择 global/session scope；使用统计面板只
 
 ### Conversation Slice 接入
 
-会话 UI 发布是两跳。Workspace entry 持有 Binding lease、`AgentConversationRuntimeController`
-与 `AgentConversationSliceStore`；slice registry 解析 `AgentConversationSessionHandle`
-（`store` + 可选 `controller`）。未知 BindingKey fail-closed。
+Workspace 与 Conversation 已完成 WP-3C：`AgentConversationWorkspaceNotifier` 直接拥有 entry 资源表与不可变 workspace state；每个 entry 的 `AgentConversationSliceNotifier` 独占轻量 regions 和命令账本。`AgentConversationOwnerKey(entryId, lifetimeToken)` 在草稿晋升和 runtime restart 时不变，同 thread 关闭重开分配新 token；BindingKey 只作查询别名。Live 解析真实 owner，Closing/Closed 返回无正文的终止投影，Unknown 返回不可用空投影。
+
+`workbenchSessionProvider` 先构造完整 Shell，组合根在语言冻结后、Widget 挂载前启动事实源、管理 ingress 和幂等 `Shell.start()`。IdeHome 只借用已有 workbench 与订阅；卸载不关闭 owner、Binding 或 runtime。草稿与滚动快照仅驻留 presentation 内存，按 controller 弱身份保存并在 entry 关闭时清理；焦点、弹层和 IME composing 不保留。诊断 snapshot 按需读取唯一 owner，不使用 Shell relay。
+
+关闭顺序为：停止 Shell/M/P 命令 → 刷新已有 session 保存 → 等待 M/P 真实执行排空 → 关闭管理消费者与事实源 → 逐 entry 关闭 ingress、撤下可见项、退订、dispose controller、await lease release → BindingManager → runtime registry → plugin catalog → container。entry/app 重复关闭共享同一 Future；失败保持 Closing/失败终态，不标记释放、不销毁容器掩盖失败。lease release 只证明 consumer 释放，CLI 退出仍以 registry close 为准。
+
+物理 Conversation family 在 build 取得显式 `keepAlive`，协调器保留容器级订阅。只有 lease 释放成功且终止空投影无人观察后才撤销保活并 invalidate；`autoDispose` 此时仅回收已关闭投影，不决定业务资源寿命。这是对原非 autoDispose 伪代码的实现修正：当前 Riverpod 普通 family 的 invalidate 不删除缓存节点。Workspace、Management、Project Threads 的 app owner 仍非 autoDispose。WP-2 统一 Actions 尚未实施，当前 UI 命令仍经既有 executor。
 
 ```
-TimelineStore
- → AgentConversationRuntimeController（region 投影 + AgentUiUpdateScheduler）
- → AgentConversationSliceStore（每个 AgentUiUpdateRequest 一次 RegionsRefreshed）
- → AgentConversationSliceNotifier / family selector
- → AgentRegionBuilder(bindingKey, selector)
+TimelineStore → RuntimeController / AgentUiUpdateScheduler
+ → application AgentConversationSliceNotifier（一次 RegionsRefreshed）
+ → BindingKey alias selector → AgentRegionBuilder
 ```
 
-Widget 读 region 只经 `AgentRegionBuilder` 的 `ref.watch(selector(bindingKey))`。发送走
-`agentConversationCommandProvider`；未进 CommandPort 的命令仍走 RuntimeController
-（`agentConversationRuntimeProvider`，controller 为空时 fail-closed）。上下文面板显隐属于
-AgentPane Widget 状态。禁止再引入 `AgentConversationViewModel`、
-`AgentConversationUiStateStore` 或 `AgentConversationSliceComposition`。
+测试在 owner 首次创建前覆盖 `agentConversationWorkspaceInputsProvider` 等外部端口，内部 dependencies/alias 接线由 composition 安装一次。不要用 Widget 回填资源或覆盖已经运行的 owner。`conversation_owner_lifecycle_test.dart` 覆盖无 UI、晋升、重开、延迟释放、失败与回收；`ide_shell_widget_test.dart` 覆盖真实页面重挂。
 
 ### 新增 Provider 插件
 
@@ -392,7 +390,7 @@ Project Threads 的同步命令、列表事实和 thread → project 反查索�
 - 选中项移除先由 owner 确认，再经具名 `activeThreadCleared` 通知 Shell；关闭后不得回调。现有 void Future 完成/fork 返回 null 的关闭语义保持。
 - 5/10/50 分页、300 ms 防抖、String threadId、首个摘要匹配及 v4 快照不变；跨 Provider 同 id 需另立整体键迁移方案。
 
-WP-3P 已移除手写 listener、presentation 镜像与 Deferred；`projectThreadsSliceProvider` 是非 family、非 autoDispose 的应用级 owner，build 用 `ref.read` 冻结依赖，runner factory 只接收 `ProjectThreadsStateOwner`。Shell 借用 Operations 与独立 Riverpod 订阅，卸载只解除回调/订阅，不关闭此 owner。BindingManager 与 global runtime 由 app provider 提供，Workspace 与 Runner 共享同一实例。
+WP-3P 已移除手写 listener、presentation 镜像与 Deferred；`projectThreadsSliceProvider` 是非 family、非 autoDispose 的应用级 owner，build 用 `ref.read` 冻结依赖，runner factory 只接收 `ProjectThreadsStateOwner`。Shell 借用 Operations 与独立 Riverpod 订阅；停止 Shell 只解除回调/订阅，owner 由应用关闭。BindingManager 与 global runtime 由 app provider 提供，Workspace 与 Runner 共享同一实例。
 
 关闭先封入口：pending void 正常完成、fork 返回 null；Runner.close 取消未触发的搜索 Timer、失效加载 token，`drainExecutions()` 等待已启动的恢复/激活/搜索、聚合查询和写入全部结束（eagerError: false，失败 Future 不替换），然后 app 关闭 BindingManager → runtime registry → plugin → container。所有未知/重复回执仍按 OperationId 判 stale；错误及堆栈只结算 Future，不进入列表状态或持久化。 验证入口见 `project_threads_slice_notifier_test`、app 下的 `project_threads_slice_runner_test`、`project_threads_session_snapshot_codec_test` 和 `project_threads_state_owner_guard_test`。
 
@@ -511,10 +509,10 @@ create/resume/fork/send --> Binding.permissions.snapshotForRequest()
 管理运行状态只统计本 Workbench 的 session Binding，按精确配置实例 `providerId` 聚合所有前后台 entry，并保留无 entry 但仍有 runtime 的 Binding。默认 Provider 与 Canvas 选择不参与归属；global 模型预热、连接测试和外部 CLI 进程不计入。`ready` 只证明连接，活跃 turn/等待交互才证明运行；不从历史 active 或短 RPC 计数猜测 turn。禁用是配置策略，现存事实保留至实际 clear/remove。主状态按 running → error → starting → unavailable → idle → disabled → notRunning 投影，`hasErrors` 独立保留。
 
 - controller 通过 `runtimeObservationListenable` 发布无正文观测；连接、turn、waiting 与 Binding 生命周期变化都经既有安全边界刷新。来源 identity/scope 只在 live 接线时冻结，不能用新 runtime 给旧快照重新标记。首次启动与 Plan 执行均经同一个观测 helper 推进 `attemptEpoch`。
-- Shell 创建 `WorkspaceAgentRuntimeFactSource` 后调用 start；app ingress 先 subscribe 再同步读取 current。subscribe 不立即回调，消费者只退订，不取得 source 生命周期控制权。
+- app provider 创建 `WorkspaceAgentRuntimeFactSource`，组合根在 Shell.start 前启动；app ingress 先 subscribe 再同步读取 current。subscribe 不立即回调，消费者只退订，不取得 source 生命周期控制权。
 - source 以 Binding 对象 identity 持有 opaque token；草稿晋升不重新计数。回调捕获 source/handle/subscription 代次，校验后全量重读；已 clear 或连接 scope 不匹配的旧 active 不能继续进入摘要。
 - `runtimeByProviderId` 保留所有精确实例（包括没有 management contribution 的自定义 id），selector 不补造厂商品牌卡片。reducer 所有入口统一投影 `ManagedAgent.runtimeState`；探测与连接测试只更新诊断字段。
-- source 不创建 controller、不获取租约、不启动插件、不关闭进程；retained ready runtime 计连接与 `unobservedTurnRuntimeCount`，不能猜测其 turn 是否活跃。事实消费者退订后，Shell 先关闭 source 再释放 Workspace。
+- source 不创建 controller、不获取租约、不启动插件、不关闭进程；retained ready runtime 计连接与 `unobservedTurnRuntimeCount`，不能猜测其 turn 是否活跃。事实消费者退订后，组合根先关闭 source 再 await Workspace entries 释放。
 - 修改时运行纯聚合、source、Management Notifier、真实 `ide_shell_widget_test` 及 `agent_management_runtime_boundary_guard_test`；覆盖同 Provider 多 scope、启动失败重试、连接换代、历史 active、短 RPC、后台执行、禁用后实际清理和重复 close。
 
 ### Management owner 生命周期
@@ -523,7 +521,7 @@ Management 的状态、operation waiter 与执行账本由应用会话级 `Agent
 
 关闭先封命令入口并以原 `StateError` 结算等待者，再 `await drainExecutions()` 等待已发出的真实 I/O，最后释放 runtime registry、插件和容器；`ZetaAppComposition.close()` 可等待且幂等，同步 `dispose()` 只启动同一关闭过程。Runner 返回的执行 Future 包含探测后的持久化与日志的两段读取，不能拿已结算的调用方 Future 当作资源释放证据。原初始化/保存错误和堆栈只沿 Future 传播，不加入新状态或日志。
 
-WP-3M 阶段边界：管理 owner 与设置 ingress 在应用组合中、Widget 之前建立并初始化；Shell 尚由 IdeHome 创建（WP-3C 再前移），因此首次事实订阅在挂载后的回调中借用 Shell source，先订阅再同步重读 current。这里不缓存 management state、不延迟 Runner 结果。多个借用者共享订阅，最后一个释放时只退订；同一 source 立即重接可用。IdeHome 卸载不关闭管理 owner。
+WP-3C 已将 Shell、事实源和 ingress 全部前移到应用组合；先订阅再同步重读 current，页面卸载只释放自己的订阅，不关闭这些资源。
 
 验证 `agent_management_slice_notifier_test`、`agent_management_slice_runner_test`、真实管理页面/Shell，以及含正反例的 `agent_management_owner_guard_test`。测试覆盖 app inputs 或 application 依赖接缝；不要包装第二套业务 controller，也不要覆盖应用内部已经安装的同名 provider。
 

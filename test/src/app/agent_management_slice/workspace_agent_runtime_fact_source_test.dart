@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'package:zeta/src/app/agent_management_slice/workspace_agent_runtime_fact_source.dart';
-import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_workspace_store.dart';
+import '../../testing/conversation_workspace_test_container.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_runtime_aggregation.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_runtime_facts.dart';
 
@@ -111,7 +111,9 @@ void main() {
       await h.frames.single.runInBuildPhaseAsync(a.binding.invalidateRuntime);
       expect(h.summary('grok').activeTurnCount, 0);
       expect(h.summary('grok').connectedRuntimeCount, 0);
-      h.workspace.removeEntry(a.entryId);
+      await conversationWorkspaceTestLifetimes(
+        h.workspace,
+      ).closeEntry(a.ownerKey);
       final b = await h.thread(
         'grok',
         'thread-1',
@@ -255,7 +257,9 @@ void main() {
       await h.flush();
       final key = h.fact(a).observationKey;
       final provider = h.provider(a);
-      h.workspace.removeEntry(a.entryId);
+      await conversationWorkspaceTestLifetimes(
+        h.workspace,
+      ).closeEntry(a.ownerKey);
       expect(h.source.current.bindings.single.observationKey, same(key));
       expect(h.summary('grok').connectedRuntimeCount, 1);
       expect(h.summary('grok').unobservedTurnRuntimeCount, 1);
@@ -314,6 +318,7 @@ void main() {
         publications++;
         if (publications == 1) {
           h.workspace.ensureDraftEntry(
+            callbacks: conversationWorkspaceTestCallbacks(h.workspace),
             projectPath: '/other',
             providerId: 'codex',
           );
@@ -345,7 +350,7 @@ final class _Harness {
     );
     bindingManager = AgentConversationBindingManager(runtimeRegistry: registry)
       ..start();
-    workspace = AgentConversationWorkspaceStore(
+    workspace = createConversationWorkspaceTestOwner(
       bindingManager: bindingManager,
       providerController: settings.store,
       runtimeRegistry: registry,
@@ -361,7 +366,10 @@ final class _Harness {
         return f;
       },
     );
-    source = WorkspaceAgentRuntimeFactSource(workspace)..start();
+    source = WorkspaceAgentRuntimeFactSource(
+      workspace,
+      subscribeWorkspace: conversationWorkspaceTestChanges(workspace),
+    )..start();
   }
   static Future<_Harness> create() async {
     final h = _Harness();
@@ -375,11 +383,12 @@ final class _Harness {
   late final AgentProviderRuntimeRegistry registry;
   late final AgentConversationBindingManager bindingManager;
   late final ProviderSettingsTestComposition settings;
-  late final AgentConversationWorkspaceStore workspace;
+  late final AgentConversationWorkspaceNotifier workspace;
   late final WorkspaceAgentRuntimeFactSource source;
 
-  Future<AgentThreadWorkspaceEntry> draft(String id) async {
+  Future<AgentConversationEntryResources> draft(String id) async {
     final entry = workspace.ensureDraftEntry(
+      callbacks: conversationWorkspaceTestCallbacks(workspace),
       projectPath: '/repo',
       providerId: id,
     );
@@ -388,12 +397,13 @@ final class _Harness {
     return entry;
   }
 
-  Future<AgentThreadWorkspaceEntry> thread(
+  Future<AgentConversationEntryResources> thread(
     String provider,
     String id, {
     required AgentThreadRuntimeStatus status,
   }) async {
     final entry = workspace.ensureThreadEntry(
+      callbacks: conversationWorkspaceTestCallbacks(workspace),
       projectPath: '/repo',
       thread: AgentThreadSummary(
         id: id,
@@ -412,9 +422,9 @@ final class _Harness {
     return entry;
   }
 
-  _Provider provider(AgentThreadWorkspaceEntry e) =>
+  _Provider provider(AgentConversationEntryResources e) =>
       e.binding.currentRuntime!.bundle.runtime as _Provider;
-  AgentManagementRuntimeFact fact(AgentThreadWorkspaceEntry e) =>
+  AgentManagementRuntimeFact fact(AgentConversationEntryResources e) =>
       source.current.bindings.singleWhere(
         (f) => e.binding.currentRuntime == null
             ? f.providerId == e.providerId
@@ -436,7 +446,7 @@ final class _Harness {
 
   Future<void> dispose() async {
     source.close();
-    workspace.dispose();
+    await closeConversationWorkspaceTestOwner(workspace);
     await bindingManager.close();
     await settings.dispose();
     await registry.close();

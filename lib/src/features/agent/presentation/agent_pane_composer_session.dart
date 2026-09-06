@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'agent_pane_retention.dart';
 import 'dart:math' as math;
 
 import 'package:file_selector/file_selector.dart';
@@ -127,7 +128,16 @@ final class AgentPaneComposerSession {
     _runtime = runtime;
   }
 
-  void dispose() {
+  List<String> get stagedClipboardPaths =>
+      List.unmodifiable(_stagedClipboardPaths);
+  void restoreDraft(AgentPaneRetainedState snapshot) {
+    inputController.restore(snapshot.document);
+    draftImagePaths.value = snapshot.imagePaths;
+    _stagedClipboardPaths.addAll(snapshot.stagedPaths);
+    syncCanSend();
+  }
+
+  void dispose({bool retainDraft = false}) {
     inputController.removeListener(_handleInputChanged);
     inputController.removeListener(_handleSkillQueryChanged);
     inputController.removeListener(_handleSlashQueryChanged);
@@ -143,7 +153,7 @@ final class AgentPaneComposerSession {
     canSendNotifier.dispose();
     final leftover = List<String>.of(_stagedClipboardPaths);
     draftImagePaths.dispose();
-    if (leftover.isNotEmpty) {
+    if (!retainDraft && leftover.isNotEmpty) {
       unawaited(discardStaged(leftover));
     }
   }

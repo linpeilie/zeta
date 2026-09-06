@@ -1,3 +1,4 @@
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_owner_key.dart';
 import 'package:meta/meta.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
@@ -7,6 +8,7 @@ import 'package:zeta_foundation/zeta_foundation.dart';
 final class AgentConversationWorkspaceEntryState {
   const AgentConversationWorkspaceEntryState({
     required this.entryId,
+    required this.ownerKey,
     required this.projectPath,
     required this.providerId,
     required this.threadId,
@@ -15,6 +17,7 @@ final class AgentConversationWorkspaceEntryState {
   });
 
   final String entryId;
+  final AgentConversationOwnerKey ownerKey;
   final String projectPath;
   final String providerId;
   final String? threadId;
@@ -28,6 +31,7 @@ final class AgentConversationWorkspaceEntryState {
       identical(this, other) ||
       other is AgentConversationWorkspaceEntryState &&
           other.entryId == entryId &&
+          other.ownerKey == ownerKey &&
           other.projectPath == projectPath &&
           other.providerId == providerId &&
           other.threadId == threadId &&
@@ -37,6 +41,7 @@ final class AgentConversationWorkspaceEntryState {
   @override
   int get hashCode => Object.hash(
     entryId,
+    ownerKey,
     projectPath,
     providerId,
     threadId,
@@ -51,15 +56,30 @@ final class AgentConversationWorkspaceState {
   AgentConversationWorkspaceState({
     Iterable<AgentConversationWorkspaceEntryState> entries =
         const <AgentConversationWorkspaceEntryState>[],
+    Map<AgentConversationBindingKey, AgentConversationOwnerResolution> aliases =
+        const {},
     this.selectedEntryId,
     this.projectHomeActive = false,
     Map<String, String> threadIdsByProject = const <String, String>{},
-  }) : entries = List<AgentConversationWorkspaceEntryState>.unmodifiable(
+  }) : aliases = Map.unmodifiable(aliases),
+       entries = List<AgentConversationWorkspaceEntryState>.unmodifiable(
          entries,
        ),
        threadIdsByProject = Map<String, String>.unmodifiable(
          threadIdsByProject,
        );
+
+  final Map<AgentConversationBindingKey, AgentConversationOwnerResolution>
+  aliases;
+  AgentConversationWorkspaceState withAliases(
+    Map<AgentConversationBindingKey, AgentConversationOwnerResolution> aliases,
+  ) => AgentConversationWorkspaceState(
+    entries: entries,
+    aliases: aliases,
+    selectedEntryId: selectedEntryId,
+    projectHomeActive: projectHomeActive,
+    threadIdsByProject: threadIdsByProject,
+  );
 
   final List<AgentConversationWorkspaceEntryState> entries;
   final String? selectedEntryId;
@@ -85,11 +105,15 @@ final class AgentConversationWorkspaceState {
       other is AgentConversationWorkspaceState &&
           other.selectedEntryId == selectedEntryId &&
           other.projectHomeActive == projectHomeActive &&
+          zetaMapEquals(other.aliases, aliases) &&
           zetaListEquals(other.entries, entries) &&
           zetaMapEquals(other.threadIdsByProject, threadIdsByProject);
 
   @override
   int get hashCode => Object.hash(
+    Object.hashAllUnordered(
+      aliases.entries.map((e) => Object.hash(e.key, e.value)),
+    ),
     Object.hashAll(entries),
     selectedEntryId,
     projectHomeActive,

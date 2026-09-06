@@ -11,7 +11,7 @@ import 'package:zeta_foundation/zeta_foundation.dart';
 /// presentation 与切片共同消费。
 ///
 /// 发布机制（帧调度 + SliceStore ingress）住在 application 的
-/// `AgentUiUpdateScheduler` / `AgentConversationSliceStore`。
+/// `AgentUiUpdateScheduler` / `AgentConversationSliceNotifier`。
 
 /// Agent 头栏实际渲染所需的不可变状态。
 @immutable
