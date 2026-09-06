@@ -207,6 +207,7 @@ void main() {
           find.byKey(const ValueKey('agent-attach-image-button')),
           findsOneWidget,
         );
+        expect(find.byType(sf.MenuDivider), findsNothing);
         expect(
           tester.getRect(popover).bottom,
           lessThanOrEqualTo(tester.getRect(moreActionsButton).top),
