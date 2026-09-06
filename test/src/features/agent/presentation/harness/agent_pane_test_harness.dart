@@ -1,3 +1,4 @@
+import '../../../../testing/conversation_test_scope.dart';
 import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 // Shared harness for AgentPane widget tests.
 // 避免 AgentPane 集成测试重复搭建 FakeProvider / Theme / pump 工具。
@@ -13,11 +14,7 @@ import 'package:zeta/src/features/agent/application/agent_conversation_mode_cont
 import 'package:zeta/src/features/agent/application/agent_conversation_model_selection_controller.dart';
 import 'package:zeta/src/features/agent/application/agent_skills_catalog_controller.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
-import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
-import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
-import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
 
-import '../../../../testing/memory_agent_composer_attachment_store.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import '../../../../testing/agent_provider_implementations.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
@@ -50,7 +47,7 @@ class AgentPaneTestApp extends StatefulWidget {
     this.messageSendShortcut = MessageSendShortcut.enter,
     this.platform,
     this.sliceStores =
-        const <AgentConversationBindingKey, AgentConversationSliceStore>{},
+        const <AgentConversationBindingKey, AgentConversationSliceNotifier>{},
   });
 
   final AgentConversationRuntimeController viewModel;
@@ -65,7 +62,7 @@ class AgentPaneTestApp extends StatefulWidget {
   final TargetPlatform? platform;
 
   /// 可注入已经由测试显式驱动的切片 store；默认由本 Harness 创建必选 binding。
-  final Map<AgentConversationBindingKey, AgentConversationSliceStore>
+  final Map<AgentConversationBindingKey, AgentConversationSliceNotifier>
   sliceStores;
 
   @override
@@ -73,8 +70,7 @@ class AgentPaneTestApp extends StatefulWidget {
 }
 
 class _AgentPaneTestAppState extends State<AgentPaneTestApp> {
-  late final AgentConversationSliceStore? _ownedStore;
-  late final AgentConversationSliceStoreRegistry _registry;
+  late final AgentConversationSliceNotifier? _ownedStore;
 
   @override
   void initState() {
@@ -82,35 +78,15 @@ class _AgentPaneTestAppState extends State<AgentPaneTestApp> {
     final key = widget.viewModel.conversationBinding.key;
     _ownedStore = widget.sliceStores.containsKey(key)
         ? null
-        : AgentConversationSliceStore.connected(
+        : connectedConversationTestOwner(
             regions: widget.viewModel,
             commands: widget.viewModel,
           );
-    _registry = AgentConversationSliceStoreRegistry()
-      ..bind((requestedKey) {
-        final injected = widget.sliceStores[requestedKey];
-        if (injected != null) {
-          return AgentConversationSessionHandle(
-            store: injected,
-            controller: requestedKey == widget.viewModel.conversationBinding.key
-                ? widget.viewModel
-                : null,
-          );
-        }
-        if (requestedKey == widget.viewModel.conversationBinding.key) {
-          return AgentConversationSessionHandle(
-            store: _ownedStore!,
-            controller: widget.viewModel,
-          );
-        }
-        throw StateError('No test conversation slice for $requestedKey');
-      });
   }
 
   @override
   void dispose() {
-    _registry.unbind();
-    _ownedStore?.dispose();
+    _ownedStore?.closeForEntryRelease();
     super.dispose();
   }
 
@@ -129,13 +105,8 @@ class _AgentPaneTestAppState extends State<AgentPaneTestApp> {
     final activeIdeTheme = widget.themeMode == ThemeMode.light
         ? lightIdeTheme
         : darkIdeTheme;
-    return ProviderScope(
-      overrides: [
-        agentConversationSliceStoreRegistryProvider.overrideWithValue(
-          _registry,
-        ),
-        memoryAgentComposerAttachmentOverride(),
-      ],
+    return UncontrolledProviderScope(
+      container: conversationTestScope.container,
       child: IdeThemeScope(
         themeMode: widget.themeMode,
         lightTheme: lightIdeTheme,

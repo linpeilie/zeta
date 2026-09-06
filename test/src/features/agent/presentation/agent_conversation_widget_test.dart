@@ -1,6 +1,8 @@
 @Tags(['slow', 'shell'])
 library;
 
+import '../../../testing/conversation_test_scope.dart';
+
 import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 // ignore_for_file: deprecated_member_use
 
@@ -27,14 +29,10 @@ import 'package:zeta_ui/zeta_ui.dart';
 import '../../../testing/provider_settings_test_store.dart';
 
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_composer_state_owner.dart';
-import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
-import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
-import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
 
 import '../../../testing/ide_test_harness.dart';
 import '../../../testing/agent_conversation_binding_test_harness.dart';
 import '../../../testing/fake_workspace_directory_picker.dart';
-import '../../../testing/memory_agent_composer_attachment_store.dart';
 import '../../../testing/zeta_test_app.dart';
 
 import 'package:flutter_riverpod/misc.dart' show Override;
@@ -1440,13 +1438,8 @@ void main() {
         codeFontFamily: 'CodeFont',
       );
       await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            agentConversationSliceStoreRegistryProvider.overrideWithValue(
-              sliceRegistry,
-            ),
-            memoryAgentComposerAttachmentOverride(),
-          ],
+        UncontrolledProviderScope(
+          container: sliceRegistry,
           child: IdeThemeScope(
             themeMode: ThemeMode.dark,
             lightTheme: lightIdeTheme,
@@ -1540,13 +1533,8 @@ void main() {
       codeFontFamily: 'CodeFont',
     );
     await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          agentConversationSliceStoreRegistryProvider.overrideWithValue(
-            sliceRegistry,
-          ),
-          memoryAgentComposerAttachmentOverride(),
-        ],
+      UncontrolledProviderScope(
+        container: sliceRegistry,
         child: IdeThemeScope(
           themeMode: ThemeMode.dark,
           lightTheme: lightIdeTheme,
@@ -1767,13 +1755,8 @@ void main() {
       codeFontFamily: 'CodeFont',
     );
     await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          agentConversationSliceStoreRegistryProvider.overrideWithValue(
-            sliceRegistry,
-          ),
-          memoryAgentComposerAttachmentOverride(),
-        ],
+      UncontrolledProviderScope(
+        container: sliceRegistry,
         child: IdeThemeScope(
           themeMode: ThemeMode.dark,
           lightTheme: lightIdeTheme,
@@ -2093,13 +2076,8 @@ void main() {
       codeFontFamily: 'CodeFont',
     );
     await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          agentConversationSliceStoreRegistryProvider.overrideWithValue(
-            sliceRegistry,
-          ),
-          memoryAgentComposerAttachmentOverride(),
-        ],
+      UncontrolledProviderScope(
+        container: sliceRegistry,
         child: IdeThemeScope(
           themeMode: ThemeMode.dark,
           lightTheme: lightIdeTheme,
@@ -4386,20 +4364,15 @@ Future<void> pumpUntilAgentComposer(WidgetTester tester) async {
   );
 }
 
-AgentConversationSliceStoreRegistry _registerConversationSlice(
+ProviderContainer _registerConversationSlice(
   AgentConversationRuntimeController viewModel,
 ) {
-  final store = AgentConversationSliceStore.connected(
+  final store = connectedConversationTestOwner(
     regions: viewModel,
     commands: viewModel,
   );
-  addTearDown(store.dispose);
-  return AgentConversationSliceStoreRegistry()..bind((requestedKey) {
-    if (requestedKey != viewModel.conversationBinding.key) {
-      throw StateError('No test conversation slice for $requestedKey');
-    }
-    return AgentConversationSessionHandle(store: store, controller: viewModel);
-  });
+  addTearDown(store.closeForEntryRelease);
+  return conversationTestScope.container;
 }
 
 /// 完整 Shell 含有常驻监听与动效，按有限帧推进普通交互，避免每次都扫描到 settle。

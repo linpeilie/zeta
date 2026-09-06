@@ -12,6 +12,7 @@ final class AgentConversationWorkspaceReducer {
     return switch (intent) {
       AgentConversationWorkspaceEntryRegistered(:final entry) =>
         AgentConversationWorkspaceState(
+          aliases: state.aliases,
           entries: <AgentConversationWorkspaceEntryState>[
             ...state.entries,
             entry,
@@ -29,6 +30,7 @@ final class AgentConversationWorkspaceReducer {
         :final fallbackEntryId,
       ) =>
         AgentConversationWorkspaceState(
+          aliases: state.aliases,
           entries: state.entries.where((entry) => entry.entryId != entryId),
           selectedEntryId: state.selectedEntryId == entryId
               ? fallbackEntryId
@@ -38,12 +40,14 @@ final class AgentConversationWorkspaceReducer {
         ),
       AgentConversationWorkspaceEntrySelected(:final entryId) =>
         AgentConversationWorkspaceState(
+          aliases: state.aliases,
           entries: state.entries,
           selectedEntryId: entryId,
           threadIdsByProject: state.threadIdsByProject,
         ),
       AgentConversationWorkspaceHomeEntered() =>
         AgentConversationWorkspaceState(
+          aliases: state.aliases,
           entries: state.entries,
           projectHomeActive: true,
           threadIdsByProject: state.threadIdsByProject,
@@ -53,6 +57,7 @@ final class AgentConversationWorkspaceReducer {
         :final threadId,
       ) =>
         AgentConversationWorkspaceState(
+          aliases: state.aliases,
           entries: state.entries,
           selectedEntryId: state.selectedEntryId,
           projectHomeActive: state.projectHomeActive,
@@ -63,6 +68,7 @@ final class AgentConversationWorkspaceReducer {
         ),
       AgentConversationWorkspaceThreadMappingRemoved(:final projectPath) =>
         AgentConversationWorkspaceState(
+          aliases: state.aliases,
           entries: state.entries,
           selectedEntryId: state.selectedEntryId,
           projectHomeActive: state.projectHomeActive,
@@ -73,6 +79,7 @@ final class AgentConversationWorkspaceReducer {
         ),
       AgentConversationWorkspaceThreadMappingsRestored(:final mappings) =>
         AgentConversationWorkspaceState(
+          aliases: state.aliases,
           entries: state.entries,
           selectedEntryId: state.selectedEntryId,
           projectHomeActive: state.projectHomeActive,
@@ -86,6 +93,7 @@ final class AgentConversationWorkspaceReducer {
     AgentConversationWorkspaceEntryState replacement,
   ) {
     return AgentConversationWorkspaceState(
+      aliases: state.aliases,
       entries: <AgentConversationWorkspaceEntryState>[
         for (final entry in state.entries)
           if (entry.entryId == replacement.entryId) replacement else entry,

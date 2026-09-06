@@ -192,6 +192,10 @@ Common types: `feat` / `fix` / `docs` / `refactor` / `test` / `chore` / `perf`.
 
 Project Threads callers use `ProjectThreadsOperations` on the application `ProjectThreadsSliceNotifier`. Production and tests share the app input and runner factory seams. Do not restore a Store, state mirror, Deferred runner or duplicate Runner business methods. Cover mappings outside the visible window, late ingress after close, and draining background queries without waiters. Shell and Workspace borrow the app BindingManager; settle callers, await physical execution, then release the manager and runtime/plugins.
 
+WP-3C gives Workspace and Conversation one writable owner each. `AgentConversationWorkspaceNotifier` holds entry resources and immutable workspace state; an application `AgentConversationSliceNotifier` owns each entry's regions and command ledger. `AgentConversationOwnerKey(entryId, lifetimeToken)` survives draft promotion and runtime restart; reopening a thread allocates a new token. BindingKey is an alias: Live resolves the owner, Closing/Closed returns an empty terminal projection, and Unknown returns an unavailable projection.
+
+Shutdown stops Shell/M/P commands, flushes session persistence, drains M/P executions, detaches fact consumers and the source, closes entry ingress and controllers, awaits entry lease releases, then closes BindingManager, runtime registry, plugins and container. Repeated entry/app close returns the same Future, including failure; a failed stage is not marked released and the container remains inspectable. Lease release is not proof of CLI exit.
+
 - One-way: `main → app → presentation/application → domain`, `app → data → domain`, `presentation → zeta_ui` (the design system in `packages/zeta_ui`), `presentation → zeta_markdown` (the Markdown renderer in `packages/zeta_markdown`, forked from upstream — read `packages/zeta_markdown/UPSTREAM.md` before touching it).
 - New code goes into the matching `features/<feature>/{domain,application,data,presentation}` — not back into broad top-level directories.
 - `main.dart` only bootstraps; `lib/src/app` is the single composition point.

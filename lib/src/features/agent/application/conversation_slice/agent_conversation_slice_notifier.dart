@@ -1,26 +1,18 @@
+import 'dart:async';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:meta/meta.dart';
+import 'package:flutter_riverpod/misc.dart' show KeepAliveLink;
+import 'agent_conversation_owner_key.dart';
+import 'agent_conversation_session_dependencies.dart';
 import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_command_effect_runner.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_command_scope.dart';
-import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_effect.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_intent.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_ports.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_reducer.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_state.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
-
-/// 执行切片副作用的端口。
-///
-/// 实现住在 presentation 组合层（调用现有 application port）；切片本身只描述
-/// 要做什么，不知道怎么做。
-abstract interface class AgentConversationSliceEffectRunner {
-  /// 执行一个副作用。
-  ///
-  /// 命令类副作用完成后必须调用 [AgentConversationSliceStore.completeCommand]
-  /// 或 [AgentConversationSliceStore.failCommand] 回写结果。
-  void run(AgentConversationSliceEffect effect);
-}
 
 /// 切片诊断计数，用于回归测试与帧预算断言。
 @immutable
@@ -45,81 +37,76 @@ final class AgentConversationSliceDiagnostics {
   final int staleResultCount;
 }
 
-/// 单个 Agent Conversation 的薄 store。
-///
-/// 职责只有四件事：
-///
-/// 1. 为命令意图铸造 [OperationId]（reducer 因此保持纯同步）；
-/// 2. 调 reducer，把新状态发布出去（状态相等则不发布）；
-/// 3. 把 effect 交给 runner；
-/// 4. 关闭后拒绝一切写入。
-///
-/// 它**不拥有**任何会话事实：region 状态由 [AgentUiUpdateRequest] ingress
-/// 带进来，owner 仍是 TimelineStore 与 runtime controller。
-final class AgentConversationSliceStore {
-  /// 生产装配：订阅 [regions] 的批处理 UI 更新，并用 [commands] 执行 effect。
-  factory AgentConversationSliceStore.connected({
-    required AgentConversationRegionSource regions,
-    required AgentConversationCommandPort commands,
-    AgentConversationCommandScope Function()? scopeSnapshot,
-    OperationIdGenerator Function(String scope)? operationIdGeneratorFactory,
-  }) {
-    late final AgentConversationSliceStore store;
-    final resolveScope = scopeSnapshot ?? regions.currentCommandScope;
-    store = AgentConversationSliceStore(
-      initialState: AgentConversationSliceState(
-        header: regions.headerState,
-        composer: regions.composerState,
-        pendingInteractions: regions.pendingInteractionState,
-        expansion: regions.expansionState,
-        history: regions.historyState,
-      ),
-      effectRunner: AgentConversationCommandEffectRunner(
-        commands: commands,
-        store: () => store,
-        scopeSnapshot: resolveScope,
-      ),
-      scopeSnapshot: resolveScope,
-      operationIdGeneratorFactory: operationIdGeneratorFactory,
-      regions: regions,
+final agentConversationSliceOwnerProvider = NotifierProvider.autoDispose
+    .family<
+      AgentConversationSliceNotifier,
+      AgentConversationSliceState,
+      AgentConversationOwnerKey
+    >(AgentConversationSliceNotifier.new, name: 'agentConversationSliceOwner');
+
+/// entry 生命周期内唯一的轻量 region 与命令账本 owner。
+final class AgentConversationSliceNotifier
+    extends Notifier<AgentConversationSliceState>
+    implements AgentConversationResultSink {
+  AgentConversationSliceNotifier(this.ownerKey);
+  final AgentConversationOwnerKey ownerKey;
+  AgentConversationSliceEffectRunner? _effectRunner;
+  AgentConversationRegionSource? _regions;
+  AgentConversationCommandScope Function()? _scopeSnapshot;
+  OperationIdGenerator Function(String)? _generatorFactory;
+  void Function(AgentConversationOwnerKey)? _onProjectionUnobserved;
+  final Map<String, OperationIdGenerator> _generators = {};
+  KeepAliveLink? _projectionRetention;
+  bool _observed = true;
+  int _observationRevision = 0;
+
+  @override
+  AgentConversationSliceState build() {
+    _projectionRetention = ref.keepAlive();
+    final deps = ref.read(
+      agentConversationSessionDependenciesProvider(ownerKey),
     );
-    return store;
+    if (deps.ownerKey != ownerKey) {
+      throw StateError('Mismatched conversation owner');
+    }
+    _regions = deps.regions;
+    _scopeSnapshot = deps.scopeSnapshot;
+    _generatorFactory =
+        deps.operationIdGeneratorFactory ??
+        ((scope) => OperationIdGenerator(scope: scope));
+    _onProjectionUnobserved = deps.onProjectionUnobserved;
+    _effectRunner =
+        deps.runnerFactory?.call(this) ??
+        AgentConversationCommandEffectRunner(
+          commands: deps.executor,
+          sink: this,
+          scopeSnapshot: deps.scopeSnapshot,
+        );
+    final initial = AgentConversationSliceState(
+      header: deps.regions.headerState,
+      composer: deps.regions.composerState,
+      pendingInteractions: deps.regions.pendingInteractionState,
+      expansion: deps.regions.expansionState,
+      history: deps.regions.historyState,
+    );
+    deps.regions.addUiUpdateListener(_onUiUpdate);
+    ref.onCancel(() {
+      _observed = false;
+      _scheduleReclamation();
+    });
+    ref.onResume(() {
+      _observed = true;
+      _observationRevision++;
+    });
+    ref.onDispose(() {
+      _closeResources();
+      _onProjectionUnobserved = null;
+    });
+    return initial;
   }
 
-  AgentConversationSliceStore({
-    required AgentConversationSliceState initialState,
-    required this._effectRunner,
-    required this._scopeSnapshot,
-    OperationIdGenerator Function(String scope)? operationIdGeneratorFactory,
-    AgentConversationRegionSource? regions,
-  }) : _state = initialState,
-       // Named `regions` keeps the production factory readable.
-       _regions = regions, // ignore: prefer_initializing_formals
-       _generatorFactory =
-           operationIdGeneratorFactory ??
-           ((scope) => OperationIdGenerator(scope: scope)) {
-    _regions?.addUiUpdateListener(_onUiUpdate);
-  }
-
-  final AgentConversationSliceEffectRunner _effectRunner;
-  final AgentConversationRegionSource? _regions;
-
-  /// 拍下"此刻的 Binding / runtime / thread"。
-  ///
-  /// 由组合层注入：store 在 application 层，读不到 runtime。
-  final AgentConversationCommandScope Function() _scopeSnapshot;
-  final OperationIdGenerator Function(String scope) _generatorFactory;
-  final Map<String, OperationIdGenerator> _generators =
-      <String, OperationIdGenerator>{};
-
-  /// 监听器列表。
-  ///
-  /// 这里刻意**不用 `ChangeNotifier`**：application 层禁止 import Flutter
-  /// （目标架构 §12.5）。语义与 `ChangeNotifier` 对齐——通知期间允许增删监听，
-  /// 因此遍历前先复制一份快照。
-  final List<void Function()> _listeners = <void Function()>[];
-
-  AgentConversationSliceState _state;
+  AgentConversationSliceState get current => state;
+  bool get isProjectionObserved => _observed;
   bool _closed = false;
   int _dispatchCount = 0;
   int _publishCount = 0;
@@ -127,9 +114,9 @@ final class AgentConversationSliceStore {
   int _staleResultCount = 0;
 
   /// 当前切片状态。
-  AgentConversationSliceState get state => _state;
 
   /// store 是否已关闭。
+  @override
   bool get isClosed => _closed;
 
   AgentConversationSliceDiagnostics get diagnostics =>
@@ -148,20 +135,19 @@ final class AgentConversationSliceStore {
       return;
     }
     _dispatchCount += 1;
-    final before = _state;
+    final before = state;
     final transition = agentConversationSliceReduce(before, intent);
 
     if (!identical(transition.state, before) && transition.state != before) {
-      _state = transition.state;
+      state = transition.state;
       _publishCount += 1;
-      _notifyListeners();
     } else if (_isStaleResult(before, intent)) {
       _staleResultCount += 1;
     }
 
     for (final effect in transition.effects) {
       _effectCount += 1;
-      _effectRunner.run(effect);
+      _effectRunner?.run(effect);
     }
   }
 
@@ -213,7 +199,7 @@ final class AgentConversationSliceStore {
   OperationId _nextOperationId(String scope) {
     final generator = _generators.putIfAbsent(
       scope,
-      () => _generatorFactory(scope),
+      () => _generatorFactory!(scope),
     );
     return generator.next();
   }
@@ -222,7 +208,8 @@ final class AgentConversationSliceStore {
   ({OperationId operationId, AgentConversationCommandScope scope}) _identity(
     String scope,
   ) {
-    return (operationId: _nextOperationId(scope), scope: _scopeSnapshot());
+    if (_closed) throw StateError('Conversation command ingress is closed');
+    return (operationId: _nextOperationId(scope), scope: _scopeSnapshot!());
   }
 
   OperationId sendMessage({
@@ -423,12 +410,14 @@ final class AgentConversationSliceStore {
   // -------------------------------------------------------------------------
 
   /// 命令成功。身份对不上（例如已被新一次操作取代）时静默丢弃。
+  @override
   void completeCommand(OperationId operationId) =>
       dispatch(AgentConversationCommandSucceeded(operationId));
 
   /// 命令失败。
   ///
   /// 只收**分类**：调用方不得把原始错误文本传进来当 UI 文案。
+  @override
   void failCommand(OperationId operationId, AgentCommandFailureKind kind) =>
       dispatch(
         AgentConversationCommandFailed(
@@ -439,33 +428,44 @@ final class AgentConversationSliceStore {
         ),
       );
 
-  /// 订阅状态变化。
-  void addListener(void Function() listener) {
-    if (_closed) {
-      return;
-    }
-    _listeners.add(listener);
+  /// 封闭唯一命令入口；当前账本不对外提供 Future，清空即结算所有在途身份。
+  void closeCommandIngress() {
+    if (_closed) return;
+    _closeResources();
+    state = AgentConversationSliceState.closedProjection();
+    _scheduleReclamation();
   }
 
-  /// 取消订阅；未注册过的监听器会被忽略。
-  void removeListener(void Function() listener) {
-    _listeners.remove(listener);
+  void closeForEntryRelease() => closeCommandIngress();
+
+  /// 只在应用确认 lease 已释放且无观察者后撤销保活；不释放业务资源。
+  void releaseClosedProjectionRetention() {
+    if (!_closed || _observed) {
+      throw StateError('Cannot reclaim a live or observed conversation');
+    }
+    _projectionRetention?.close();
+    _projectionRetention = null;
   }
 
-  void _notifyListeners() {
-    // 通知期间可能有监听器增删，先复制快照再遍历。
-    for (final listener in List<void Function()>.of(_listeners)) {
-      listener();
-    }
-  }
-
-  void dispose() {
-    if (_closed) {
-      return;
-    }
+  void _closeResources() {
+    if (_closed) return;
     _closed = true;
     _regions?.removeUiUpdateListener(_onUiUpdate);
-    _listeners.clear();
+    _regions = null;
+    _effectRunner?.close();
+    _effectRunner = null;
+    _scopeSnapshot = null;
+    _generatorFactory = null;
+    _generators.clear();
+  }
+
+  void _scheduleReclamation() {
+    final revision = ++_observationRevision;
+    scheduleMicrotask(() {
+      if (_closed && !_observed && revision == _observationRevision) {
+        _onProjectionUnobserved?.call(ownerKey);
+      }
+    });
   }
 
   bool _isStaleResult(

@@ -22,7 +22,7 @@ Zeta 的设计目标是让 Flutter UI、Agent provider、会话持久化和本�
 - features/ide_session：会话状态、版本化持久化、恢复计划和恢复协调。
 - features/desktop_notifications：Provider 中立注意力信号的可见性判定、
   进程内未读、系统通知和平台任务栏/Dock 端口。
-- features/project_threads：项目 thread 快照、同步业务与唯一列表 Store；分页及远端操作由 app Runner 执行，presentation 暂保留只读镜像。
+- features/project_threads：项目 thread 快照、同步规则与唯一 application Notifier；分页及远端操作由 app Runner 执行，presentation 使用 selectors。
 - features/usage_statistics：跨项目调用记录、统计口径、Codex 历史索引、套餐限额与
   使用统计页面。
 - features/workspace：文件树规则、树构建、文件节点映射和文件 pane。
@@ -60,10 +60,10 @@ main()
 IdeShellController
   -> IdeSessionStore
   -> AgentProviderSettingsController
-  -> AgentConversationWorkspaceStore（entry / 选择 / project home / project→thread 唯一 owner）
+  -> AgentConversationWorkspaceNotifier（entry / 选择 / project home / project→thread 唯一 owner）
     -> 每个 runtime entry 持有 ConversationBinding lease
     -> AgentConversationRuntimeController -> 固定 Binding（不持有 Provider lease/scope/pin）
-    -> AgentConversationSliceStore（每个 entry 必建，未知 BindingKey fail-closed）
+    -> AgentConversationSliceNotifier（稳定 ownerKey；BindingKey 仅作别名）
   -> ProjectThreadsOperations（ProjectThreadsSliceNotifier：同步规则与索引）
     -> ProjectThreadsSliceRunner.run(effect)（I/O）
 
@@ -82,7 +82,7 @@ AgentConversationRuntimeController
     -> AgentUiUpdateScheduler（application，按 Flutter frame 合并）
       -> AgentFrameScheduler（presentation 生产适配：SchedulerBindingAgentFrameScheduler）
       -> addUiUpdateListener
-        -> AgentConversationSliceStore.connected
+        -> AgentConversationSliceNotifier
           -> header/composer/pending/expansion/history 一次 RegionsRefreshed
           -> live turn 增量通知 + AgentUiEffect stream
   -> AgentConversationComposerStateOwner
@@ -518,7 +518,7 @@ Project Threads 的同步命令、列表事实和 thread → project 反查索�
 
 首屏 5 条、追加 10 条、每 Provider 聚合上限 50 条、搜索防抖 300 ms 保持；原始 String threadId 与 IDE session v4 不迁移，也不宣称解决跨 Provider 同 id 碰撞。远端成功/错误按 OperationId 结算，关闭时未完成 void Future 正常完成、fork Future 返回 null。fork 的 Binding 权限快照优先级保持。
 
-WP-3P 已移除手写 listener、presentation 镜像与 Deferred；`projectThreadsSliceProvider` 是非 family、非 autoDispose 的应用级 owner，build 用 `ref.read` 冻结依赖，runner factory 只接收 `ProjectThreadsStateOwner`。Shell 借用 Operations 与独立 Riverpod 订阅，卸载只解除回调/订阅，不关闭此 owner。BindingManager 与 global runtime 由 app provider 提供，Workspace 与 Runner 共享同一实例。
+WP-3P 已移除手写 listener、presentation 镜像与 Deferred；`projectThreadsSliceProvider` 是非 family、非 autoDispose 的应用级 owner，build 用 `ref.read` 冻结依赖，runner factory 只接收 `ProjectThreadsStateOwner`。Shell 借用 Operations 与独立 Riverpod 订阅；停止 Shell 只解除回调/订阅，owner 由应用关闭。BindingManager 与 global runtime 由 app provider 提供，Workspace 与 Runner 共享同一实例。
 
 关闭先封入口：pending void 正常完成、fork 返回 null；Runner.close 取消未触发的搜索 Timer、失效加载 token，`drainExecutions()` 等待已启动的恢复/激活/搜索、聚合查询和写入全部结束（eagerError: false，失败 Future 不替换），然后 app 关闭 BindingManager → runtime registry → plugin → container。所有未知/重复回执仍按 OperationId 判 stale；错误及堆栈只结算 Future，不进入列表状态或持久化。
 
@@ -658,7 +658,7 @@ conversation mode 的 UI 回写仍受当前 thread gate 约束。
 
 生产链：`RuntimeController.runtimeObservationListenable + BindingManager + Workspace → WorkspaceAgentRuntimeFactSource → Management.runtimeFactsReplaced → aggregateManagementRuntime → runtimeByProviderId`。计数分别为 active turn、ready runtime、starting Binding、error Binding、unavailable Binding，以及无当前会话观测的 runtime；runtime 以完整 identity 去重，Binding 的 opaque token 在 draft 晋升时保持不变。
 
-source 由 Shell 创建并 start，app ingress 借用端口；Shell 卸载顺序为事实消费者退订 → source close → Workspace；BindingManager 留在 app shutdown 排空之后关闭。管理 owner 由应用关闭，与页面卸载分离。source 同时观察 retained Binding 的事件通知但不读取内容，只同步重读中立 lifecycle。管理行独立显示运行错误；首页保留当前诊断缓存机制，但实时状态按 exact id 从同一摘要投影。WP-3M 已迁移 Management owner；Project Threads owner 已完成 WP-3P，Workspace/Conversation owner 待 WP-3C，WP-5 的诊断缓存收口仍待实施。
+source 由 app provider 创建，组合根在 Shell.start 前启动。管理 ingress 只借用订阅；退出先停止消费者，再关闭 source、await Workspace entries、BindingManager 和 registry/plugin。管理摘要语义保持 WP-1；WP-3M/P/C 已完成，WP-5 首页诊断缓存收口仍待实施。
 
 ### 当前已落地的对话体验
 
@@ -870,3 +870,13 @@ IDE 会话状态目前版本为 4，持久化内容包括：
 - 支持更多 Agent provider。
 - 把复杂 UI 状态进一步拆成更小的切片。
 - 在需要深链、多屏或 Web 支持时再引入声明式路由。
+
+## Workspace 与 Conversation 生命周期（WP-3C）
+
+Workspace 与 Conversation 已完成 WP-3C：`AgentConversationWorkspaceNotifier` 直接拥有 entry 资源表与不可变 workspace state；每个 entry 的 `AgentConversationSliceNotifier` 独占轻量 regions 和命令账本。`AgentConversationOwnerKey(entryId, lifetimeToken)` 在草稿晋升和 runtime restart 时不变，同 thread 关闭重开分配新 token；BindingKey 只作查询别名。Live 解析真实 owner，Closing/Closed 返回无正文的终止投影，Unknown 返回不可用空投影。
+
+`workbenchSessionProvider` 先构造完整 Shell，组合根在语言冻结后、Widget 挂载前启动事实源、管理 ingress 和幂等 `Shell.start()`。IdeHome 只借用已有 workbench 与订阅；卸载不关闭 owner、Binding 或 runtime。草稿与滚动快照仅驻留 presentation 内存，按 controller 弱身份保存并在 entry 关闭时清理；焦点、弹层和 IME composing 不保留。诊断 snapshot 按需读取唯一 owner，不使用 Shell relay。
+
+关闭顺序为：停止 Shell/M/P 命令 → 刷新已有 session 保存 → 等待 M/P 真实执行排空 → 关闭管理消费者与事实源 → 逐 entry 关闭 ingress、撤下可见项、退订、dispose controller、await lease release → BindingManager → runtime registry → plugin catalog → container。entry/app 重复关闭共享同一 Future；失败保持 Closing/失败终态，不标记释放、不销毁容器掩盖失败。lease release 只证明 consumer 释放，CLI 退出仍以 registry close 为准。
+
+物理 Conversation family 在 build 取得显式 `keepAlive`，协调器保留容器级订阅。只有 lease 释放成功且终止空投影无人观察后才撤销保活并 invalidate；`autoDispose` 此时仅回收已关闭投影，不决定业务资源寿命。这是对原非 autoDispose 伪代码的实现修正：当前 Riverpod 普通 family 的 invalidate 不删除缓存节点。Workspace、Management、Project Threads 的 app owner 仍非 autoDispose。WP-2 统一 Actions 尚未实施，当前 UI 命令仍经既有 executor。

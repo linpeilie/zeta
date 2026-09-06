@@ -164,9 +164,9 @@ Session config 以 `bundle.sessionConfiguration` 端口为能力真源，不新�
 
 > 正文：[架构总览「Provider 能力协商」](docs/zh/architecture/overview.md) · [工程规范 §4](docs/zh/architecture/engineering_standards.md)
 
-管理运行摘要必须按精确配置实例 id 聚合 Workbench 全部 session Binding；默认 Provider、Canvas 选择、global 预热和短 RPC 不得代替会话运行事实。禁用不能凭空清零现存运行事实；错误标志必须独立于 running 主状态。Shell 拥有只读事实源，管理 composition 只退订；关闭时先关闭管理消费者，再关闭事实源，最后关闭 Workspace/BindingManager。事实源不得 acquire/release/invalidate runtime 或持久化摘要。
+管理运行摘要必须按精确配置实例 id 聚合 Workbench 全部 session Binding；默认 Provider、Canvas 选择、global 预热和短 RPC 不得代替会话运行事实。禁用不能凭空清零现存运行事实；错误标志必须独立于 running 主状态。app provider 拥有只读事实源，管理 ingress 只退订；应用关闭时先关闭管理消费者，再关闭事实源，最后关闭 Workspace entries/BindingManager。事实源不得 acquire/release/invalidate runtime 或持久化摘要。
 
-管理状态与命令账本由 app-session `AgentManagementSliceNotifier` 独占，非 family/autoDispose；build 冻结依赖，Runner 只持具名 result sink。页面不传 Store、不维护状态镜像。关闭先结算等待者，再 await 真实执行 `drainExecutions()`，最后关闭 runtime registry、插件和容器；需要关闭完成的调用方必须 await `ZetaAppComposition.close()`。Shell 的事实源仍按 WP-3M 阶段接缝借用，后续 WP-3C 再前移 Shell，不得因 UI 退订销毁管理 owner。
+管理状态与命令账本由 app-session `AgentManagementSliceNotifier` 独占，非 family/autoDispose；build 冻结依赖，Runner 只持具名 result sink。页面不传 Store、不维护状态镜像。关闭先结算等待者，再 await 真实执行 `drainExecutions()`，最后关闭 runtime registry、插件和容器；需要关闭完成的调用方必须 await `ZetaAppComposition.close()`。完整 Shell 与事实源已在 app composition 中、Widget 之前启动，不得因 UI 退订销毁任何会话资源。
 
 > 接线与计数：[开发者文档「管理运行事实摘要」](docs/zh/development/developer_guide.md#管理运行事实摘要)
 
@@ -208,6 +208,7 @@ main → app → presentation/application → domain
 - **Agent feature 的分层现状**：中立内核在 `packages/zeta_agent_core`；**Provider 协议适配分别在 `packages/zeta_agent_provider_codex`、`packages/zeta_agent_provider_grok`、`packages/zeta_agent_provider_claude_code`**（wire 字段、CLI 参数、会话文件格式只能出现在这里）；Zeta 自有持久化（provider 配置、模型目录缓存、turn 上下文文件）仍在 `lib/src/features/agent/data`，运行态事实由 application 层的 slice `Notifier` 独占，presentation 只订阅。新代码按这条边界放：中立机制进 core，Provider 语义进对应插件包，Zeta 自有状态与 UI 编排进 app。**application/domain 不得 import 具体插件包；中立 `zeta_agent_provider_api` 与 core 一样可被 application/domain/presentation 使用**；厂商 identity、私有配置 key 与指标标签由 data/app 组合层投影。**跨 Package 只能 import 对方顶层 barrel**，禁止 `package:<name>/src/...`。新增 Package 要先按[工程规范 §1](docs/zh/architecture/engineering_standards.md) 的判据论证，不按页面或团队机械拆包。
 
 - **Project Threads owner 边界**：同步命令、列表事实与 thread → project 索引只由 `ProjectThreadsSliceNotifier` 拥有；Shell/Widget/业务测试经 `ProjectThreadsOperations`，Runner 只执行 effect 和 I/O 调度。远端归属从 `StateOwner.threadFor` 读取摘要，不猜活跃 Provider；分页不得清掉窗口外显式映射，关闭后 ingress 不复活索引或通知选中项移除。应用级 Notifier 非 family/autoDispose，冻结依赖；禁止手写 listener、状态镜像与 Deferred。Shell/Workspace 借用 app 唯一 BindingManager，页面退订不关闭 owner/manager。关闭时 void waiter 正常完成、fork 返回 null，真实 Runner 排空包括无 waiter 的恢复/激活/搜索查询；drain 完成后才关闭 BindingManager/runtime/plugin。
+- **Conversation owner 边界**：Workspace Notifier 拥有 entry 资源表；Conversation Notifier 按 `AgentConversationOwnerKey(entryId, lifetimeToken)` 独占 regions/账本，草稿晋升不换 owner，重开分配新 token。BindingKey 只作 Live/Closing/Closed/Unknown 别名；退场 selector 返回空投影。完整 Shell 由 app 组合并显式 start，IdeHome 不创建或关闭业务资源。关闭必须复用同一 Future，lease 成功前不标 released；先排空 M/P，再关闭事实源、entries、manager、registry、plugin、container。失败保留失败终态，禁止伪造重试成功。
 
 - **Provider 编译期登记边界**：`lib/src/app/plugins/agent_provider_manifest.dart` 集中 definition、启动 settings、插件工厂和厂商专属宿主注入；身份再导出只能包含常量。根测试的实现类型只经 `test/src/testing/` 导入插件的独立 testing barrel，生产代码禁用 testing barrel。management/usage 由各插件贡献，中立契约和窄文案端口在 api，宿主只提供模型目录与不透明用量分区端口，不向插件注入 StorageService。lib 中具体插件 import 仅允许 manifest；根测试仅允许 test/src/testing。贡献经可覆盖 Riverpod 接缝消费，必须先激活并校验归属、唯一性与完备性；空表、冲突、关闭后重新解析均 fail-closed。原 WP-C 过渡白名单已清零；品牌图标由各插件的 `AgentProviderDefinition.icon` 与包内 SVG 声明，宿主只读独立静态查询接缝并统一渲染，不得为图标激活插件或维护厂商资源表；presentation 业务判断仅保留 [WP-D §3.6](.workflow/plan/2026-09-04-provider-plugin-packages/04-wpd-app-contributions.md) 登记的 Claude 专属安装指引 id 门，连接测试确认与账户增强均按能力声明。
 
@@ -319,12 +320,12 @@ lint 已经覆盖的不再重复，这里只写 `flutter analyze` 抓不到的�
 
 **Riverpod 是本项目的状态管理与依赖注入方案，不是可选的投影层。** 能用它表达的东西就用它表达，不要再手写等价物。
 
-- **跨 Widget 共享的状态一律是 application 层的 `Notifier` / `AsyncNotifier`**（`package:riverpod`，纯 Dart）。不要再手写 `List<void Function()> _listeners` + `addListener` / `removeListener` / `notifyListeners`，也不要写只做 `state = store.state` 的镜像 `Notifier`——**一份状态只能有一个 owner**。
+- **跨 Widget 共享的状态一律是 application 层的 `Notifier` / `AsyncNotifier`**（只从 `flutter_riverpod` 导入，不使用 Widget API）。不要再手写 `List<void Function()> _listeners` + `addListener` / `removeListener` / `notifyListeners`，也不要写只做 `state = store.state` 的镜像 `Notifier`——**一份状态只能有一个 owner**。
 - **只属于单个 Widget 的临时状态继续用 `StatefulWidget`**（hover、popover 开合、输入法 composing、动画控制器）。不要为它们建 provider。
 - **依赖注入走 `ProviderScope` / `ProviderContainer` 的 overrides，不走构造参数向下钻。** 没有安全默认值的依赖用会抛错的 `Provider` 声明（fail-closed）；测试用 `ProviderContainer(overrides: ...)` 注入 fake。**禁止**用可变注册表 / relay 把对象反向 `bind()` 回 provider——那是所有权放错层的信号。
 - **组合根只接 `overrides`。** `ZetaAppComposition.create` 不收依赖参数：有安全默认值的依赖把生产实现写进 **provider 的 body**，没有的保持 fail-closed 由入口装。测试走 `zetaTestComposition` / `zetaTestApp`：助手自动装内存存储、无头窗口、空 CLI 探测等不碰本机的实现，用例要换就覆盖对应 provider（同一 provider 只覆盖一次，用例优先）。这条不是风格——Riverpod 对同一容器内的重复 override 直接断言失败，**组合根内部装过的 provider，调用方就再也覆盖不掉**，所以凡是调用方可能想换的东西，组合根一律不装。声明在 feature `application` 层、够不到 `data` 实现的 provider（外观仓库、字体目录、目录选择器），以及必须先 `prepareDesktopWindow` 的窗口宿主，兜底由 `lib/main.dart` 与测试助手各自装。
 - **环境开关不做布尔参数，做实现。** "接管原生窗口"是 `ZetaWindowHost` 的两个实现，"显示语言等不等持久化设置"是 `ZetaDisplayLanguageSource` 的两个实现——不是一路传下去的 `bool`。加平台调用时只改实现，调用点不必再补一次 `if`。平台 `WindowListener` 只允许出现在 `ZetaWindowSurfaceNotifier`（UI 快照）和 `NativeDesktopWindowHost` 的关窗拦截；`MainApp` / `IdeHome` 禁止 mixin。生产注入已经 `prepareDesktopWindow` 的 host，测试装 `HeadlessWindowHost`。
-- **生命周期交给 Riverpod**：清理写 `ref.onDispose`，不要手写 `dispose()` 链；跨 provider 的联动用 `ref.listen` / `ref.watch`，不要手写订阅回调再自己取消。**但 `autoDispose` 只用于纯 UI 镜像**：Binding lease、CLI runtime、进程和文件句柄的生命周期永远由显式的 application 逻辑决定，绝不能由「有没有 Widget 在看」决定。
+- **订阅清理交给 Riverpod，业务资源显式关闭**：`ref.onDispose` 只做幂等退订与清引用；需要 await 的资源释放由应用生命周期完成。`autoDispose` 可回收 selector/派生视图，以及已显式关闭的空 Conversation 投影；Conversation family 必须先取得显式 keepAlive，只有 entry 释放成功且投影无人观察时才撤销。Binding lease、CLI runtime、进程和文件句柄绝不能由 Widget 观察人数决定。
 - **异步用 `AsyncNotifier` + `AsyncValue`**，靠 `ref` 的自动取消与 `ref.mounted` 处理竞态，不要再手写 token/version guard。仍然手写异步编排时（例如 provider 之外的 controller），token/version guard 与 disposed 检查照旧是硬要求。
 - **构造环用工厂注入解，不用延迟绑定。** store 与 effect runner 互相需要时，注入一个 `Runner Function(Notifier)` 工厂 provider，让 notifier 在 `build()` 里用 `this` 把 runner 造出来。不要造 `_DeferredXxxRunner` 这类空壳，也**不要**让 runner 持 `Ref` 反向 `ref.read(xxxProvider.notifier)`——Riverpod 会判定成 `CircularDependencyError`，deferred read 也救不了。
 - reducer 仍然是纯同步的（G3），副作用仍然走 EffectRunner。Riverpod 换掉的是**发布机制与装配方式**，不是 MVI 的 intent / reducer / effect 三段式。

@@ -1,12 +1,14 @@
 @Tags(['slow', 'shell'])
 library;
 
+import 'package:zeta/src/app/composition/workbench_session_providers.dart';
+
 import 'package:zeta/src/features/project_threads/application/project_threads_slice/project_threads_slice_notifier.dart';
 
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_notifier.dart';
 
 import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
-import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_workspace_providers.dart';
+import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_workspace_notifier.dart';
 import 'package:zeta/src/ui/features/ide/views/global_home_page.dart';
 import 'dart:io';
 
@@ -82,9 +84,13 @@ void main() {
       ],
     );
     final workspace = composition.container.read(
-      agentConversationWorkspaceStoreProvider,
+      agentConversationWorkspaceProvider.notifier,
     );
     final entry = workspace.ensureDraftEntry(
+      callbacks: composition.container
+          .read(workbenchSessionProvider)
+          .shell
+          .entryCallbacks,
       projectPath: '',
       providerId: grokAgentProviderId,
     );
@@ -897,7 +903,7 @@ void main() {
         (paneElement.widget as AgentPane).controller.conversationBinding.key;
     final container = ProviderScope.containerOf(paneElement);
 
-    expect(container.read(agentConversationSliceStoreProvider(key)), isNotNull);
+    expect(container.read(agentConversationSliceProvider(key)), isNotNull);
   });
 
   testWidgets('Provider settings 根组合固定为 slice 单一路径', (tester) async {
@@ -1563,6 +1569,62 @@ void main() {
         'localTimelineBuild=$localTimelineBuildCount '
         'builds=$buildCounts',
       );
+    },
+  );
+
+  testWidgets(
+    'IdeHome remount preserves entry owners, draft, scroll and pane widths',
+    (tester) async {
+      final retained = await _prepareRetainedAgentState(tester);
+      final app = tester.widget<MainApp>(find.byType(MainApp)).composition;
+      final workbench = app.container.read(workbenchSessionProvider);
+      final entry = workbench.shell.agentConversationWorkspace.selectedEntry!;
+      final binding = entry.binding;
+      // Retain a real session runtime through the Binding's production activity path.
+      final activity = await binding.beginTurn();
+      addTearDown(activity.release);
+      final runtime = binding.currentRuntime;
+      expect(runtime, isNotNull);
+      final ownerKey = entry.ownerKey;
+      final selectedEntry = workbench.shell.selectedAgentWorkspaceEntryId;
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      expect(binding.currentRuntime?.runtimeIdentity, runtime!.runtimeIdentity);
+      expect(binding.currentRuntime?.bundle, same(runtime.bundle));
+      expect(
+        workbench.shell.agentConversationWorkspace.selectedEntry!.ownerKey,
+        ownerKey,
+      );
+      await tester.pumpWidget(MainApp(composition: app));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(app.container.read(workbenchSessionProvider), same(workbench));
+      expect(workbench.shell.selectedAgentWorkspaceEntryId, selectedEntry);
+      expect(
+        workbench.shell.agentConversationWorkspace.selectedEntry!.binding,
+        same(binding),
+      );
+      expect(
+        tester.widget<EditableText>(_agentMessageInput()).controller.text,
+        retained.draft,
+      );
+      final scroll = tester
+          .widget<ScrollView>(find.byKey(const ValueKey('agent-message-list')))
+          .controller!;
+      expect(scroll.offset, closeTo(retained.scrollOffset, 0.1));
+      expect(
+        _widthOf(tester, 'workbench-navigation-inline'),
+        retained.navigationWidth,
+      );
+      expect(
+        _widthOf(tester, 'workbench-inspector-inline'),
+        retained.inspectorWidth,
+      );
+      expect(binding.currentRuntime?.runtimeIdentity, runtime.runtimeIdentity);
+      expect(binding.currentRuntime?.bundle, same(runtime.bundle));
+      expect(activity.isCurrent, isTrue);
+      expect(tester.takeException(), isNull);
+      await activity.release();
     },
   );
 

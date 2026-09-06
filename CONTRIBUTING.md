@@ -195,6 +195,10 @@ chore: bump flutter action pin
 
 Project Threads 业务统一经 `ProjectThreadsOperations`，由 application `ProjectThreadsSliceNotifier` 独占规则、索引与等待者；生产和测试共享 app inputs/runner factory。禁止恢复 Store、状态镜像、Deferred 或第二套 Runner 业务。覆盖窗口外映射、关闭后的迟到结果及无 waiter 后台查询排空。Shell/Workspace 借用 app BindingManager；关闭先结算调用方，再等待真实执行，最后释放管理器与 runtime/plugin。
 
+Workspace 与 Conversation 已完成 WP-3C：`AgentConversationWorkspaceNotifier` 直接拥有 entry 资源表与不可变 workspace state；每个 entry 的 `AgentConversationSliceNotifier` 独占轻量 regions 和命令账本。`AgentConversationOwnerKey(entryId, lifetimeToken)` 在草稿晋升和 runtime restart 时不变，同 thread 关闭重开分配新 token；BindingKey 只作查询别名。Live 解析真实 owner，Closing/Closed 返回无正文的终止投影，Unknown 返回不可用空投影。
+
+关闭顺序为：停止 Shell/M/P 命令 → 刷新已有 session 保存 → 等待 M/P 真实执行排空 → 关闭管理消费者与事实源 → 逐 entry 关闭 ingress、撤下可见项、退订、dispose controller、await lease release → BindingManager → runtime registry → plugin catalog → container。entry/app 重复关闭共享同一 Future；失败保持 Closing/失败终态，不标记释放、不销毁容器掩盖失败。lease release 只证明 consumer 释放，CLI 退出仍以 registry close 为准。
+
 - 依赖单向：`main → app → presentation/application → domain`，`app → data → domain`，`presentation → zeta_ui`（`packages/zeta_ui` 设计系统）、`presentation → zeta_markdown`（`packages/zeta_markdown` Markdown 渲染包，fork 自上游，改它先读 `packages/zeta_markdown/UPSTREAM.md`）。
 - 新代码进对应的 `features/<feature>/{domain,application,data,presentation}`，不要回到顶层宽泛目录。
 - `main.dart` 只做启动；`lib/src/app` 是唯一装配点。

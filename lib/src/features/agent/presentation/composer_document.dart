@@ -94,11 +94,31 @@ final class ComposerSerializedDocument {
   final List<({String name, String path})> mentions;
 }
 
+/// 内存恢复值；不保存 IME composing 范围。
+final class ComposerDocumentSnapshot {
+  ComposerDocumentSnapshot(
+    TextEditingValue value,
+    Iterable<ComposerInlineToken> tokens,
+  ) : value = value.copyWith(composing: TextRange.empty),
+      tokens = List.unmodifiable(tokens);
+  final TextEditingValue value;
+  final List<ComposerInlineToken> tokens;
+}
+
 /// 维护 text + 原子 Skill token 的 Composer 控制器。
 ///
 /// 底层文本用 [kComposerSkillSentinel] 占位；[buildTextSpan] 渲染为 chip。
 /// 退格/删除碰到 sentinel 时整块移除对应 skill。
 final class ComposerDocumentController extends TextEditingController {
+  ComposerDocumentSnapshot snapshot() =>
+      ComposerDocumentSnapshot(value, _tokens);
+  void restore(ComposerDocumentSnapshot snapshot) {
+    _tokens
+      ..clear()
+      ..addAll(snapshot.tokens);
+    _setValueInternal(snapshot.value);
+  }
+
   final List<ComposerInlineToken> _tokens = <ComposerInlineToken>[];
   bool _applyingInternalMutation = false;
 

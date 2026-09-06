@@ -23,15 +23,11 @@ void main() {
     test(
       'app owns runtime resources and Shell borrows them without old Factory',
       () {
-        // WP-3P: app creates the registry/manager once; IdeHome passes borrowed
-        // resources to Shell until full workbench assembly moves in WP-3C.
+        // App constructs the workbench; IdeHome only reads the completed session.
         final homeSource = File(
           'lib/src/ui/features/ide/views/ide_home.dart',
         ).readAsStringSync();
-        expect(
-          homeSource,
-          contains('ref.read(agentConversationBindingManagerProvider)'),
-        );
+        expect(homeSource, contains('ref.read(workbenchSessionProvider)'));
         expect(
           File(
             'lib/src/app/shell/ide_shell_controller.dart',
@@ -177,7 +173,7 @@ void main() {
       ).readAsStringSync();
       final workspace = File(
         'lib/src/app/conversation_workspace_slice/'
-        'agent_conversation_workspace_store.dart',
+        'agent_conversation_workspace_notifier.dart',
       ).readAsStringSync();
 
       for (final legacy in const <String>[

@@ -103,7 +103,7 @@ A data-change flag TimelineStore raises after a write (history / liveTurn / live
 A UI partition derived by the processor from dirty regions plus a SessionState field diff (header / composer / pendingInteraction / expansion / history / liveTurn, and so on). Widgets subscribe by region.
 
 **Conversation slice**
-One Binding owns one UI-region state. `AgentConversationSliceStore` is the owner; the Riverpod family only mirrors it. Unknown BindingKeys fail closed. The publish chain is two hops: RuntimeController → SliceStore → selector / `AgentRegionBuilder`. Do not reintroduce a ViewModel, UiStateStore, or SliceComposition.
+WP-3C gives Workspace and Conversation one writable owner each. `AgentConversationWorkspaceNotifier` holds entry resources and immutable workspace state; an application `AgentConversationSliceNotifier` owns each entry's regions and command ledger. `AgentConversationOwnerKey(entryId, lifetimeToken)` survives draft promotion and runtime restart; reopening a thread allocates a new token. BindingKey is an alias: Live resolves the owner, Closing/Closed returns an empty terminal projection, and Unknown returns an unavailable projection.
 
 **AgentConversationRuntimeController**
 The application aggregate for a conversation: pipeline, region projection, `AgentUiUpdateScheduler`, CommandPort, and effects. A workspace entry holds it; there is no `AgentConversationViewModel`.
@@ -112,8 +112,11 @@ The application aggregate for a conversation: pipeline, region projection, `Agen
 **AgentCommandOutcome**
 An explicit command result: succeeded, ignored(reason), or failed(kind). Session configuration throws UnsupportedError at the executor when the port is absent; the UI boundary translates it to unsupported. A skipped execution is never success, and currentValue still comes from Provider events.
 
-**AgentConversationSessionHandle**
-What the slice registry resolves: `store` plus an optional `controller`. The controller may be null in containers that only test the slice mirror.
+**AgentConversationOwnerKey**
+entryId plus an in-memory lifetimeToken. Promotion preserves it; reopening does not reuse it.
+
+**AgentConversationOwnerResolution**
+Live / Closing / Closed / Unknown resolution of a BindingKey alias. Only Live resolves session dependencies. Other selector states are empty and reject new commands.
 
 **AgentRegionBuilder**
 Presentation subscription to one region selector: `ref.watch(selector(bindingKey))`. Send goes through `agentConversationCommandProvider`.

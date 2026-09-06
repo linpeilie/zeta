@@ -302,6 +302,8 @@ Future<void> _pumpzetaTestApp(
       ],
     ),
   );
+  // Flush Riverpod's zero-duration disposal task created before Widget mount.
+  await tester.pump(const Duration(milliseconds: 1));
 }
 
 class _DeferredGeneralSettingsStore implements GeneralSettingsStore {

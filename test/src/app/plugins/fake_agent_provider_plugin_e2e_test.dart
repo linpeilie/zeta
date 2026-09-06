@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/misc.dart' show ProviderException;
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_notifier.dart';
-import '../../testing/memory_agent_runtime_fact_source.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -100,10 +99,6 @@ void main() {
         agentUsageContributionsProvider.overrideWithValue(usage),
       ],
     );
-    final disconnect = safeApp.connectManagementRuntimeFacts(
-      MemoryAgentRuntimeFactSource(),
-    );
-    addTearDown(disconnect);
     final store = safeApp.container.read(agentManagementSliceProvider.notifier);
     await store.initialize();
     await store.detect();
@@ -168,7 +163,7 @@ void main() {
     );
     await tester.pumpWidget(const SizedBox.shrink());
     await catalog.close();
-    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1));
   });
 
   test('未激活、关闭、essential 失败及缺项均拒绝宿主贡献', () async {

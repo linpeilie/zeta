@@ -229,36 +229,3 @@ final class ZetaManagedAgentStateSnapshot {
   final AgentVersionState versionState;
   final bool needsAttention;
 }
-
-typedef ZetaShellStateSnapshotReader = ZetaShellStateSnapshot Function();
-
-/// MainApp 与唯一 Workbench 组合边界之间的无监听按需读取桥。
-///
-/// relay 不缓存快照；每次 [read] 都从当前 feature owner 取一个一致的同步投影。
-final class ZetaShellStateSnapshotRelay {
-  ZetaShellStateSnapshotReader? _reader;
-
-  bool get isBound => _reader != null;
-
-  void bind(ZetaShellStateSnapshotReader reader) {
-    final current = _reader;
-    if (current != null && current != reader) {
-      throw StateError('A shell state snapshot reader is already bound');
-    }
-    _reader = reader;
-  }
-
-  void unbind(ZetaShellStateSnapshotReader reader) {
-    if (_reader == reader) {
-      _reader = null;
-    }
-  }
-
-  ZetaShellStateSnapshot read() {
-    final reader = _reader;
-    if (reader == null) {
-      throw StateError('The shell state snapshot reader is not bound');
-    }
-    return reader();
-  }
-}

@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_workspace_store.dart';
+import '../../../testing/conversation_workspace_test_container.dart';
 import 'package:zeta/src/features/agent/application/agent_model_catalog_repository.dart';
 import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
@@ -21,7 +21,7 @@ import '../presentation/harness/agent_pane_test_harness.dart';
 /// Workspace 只维护 Binding 租约：两个 thread 运行时隔离，历史读取严格惰性，
 /// 单个 Binding 失效不会影响其他会话。
 void main() {
-  group('AgentConversationWorkspaceStore conversation binding', () {
+  group('AgentConversationWorkspaceNotifier conversation binding', () {
     test('AC1：两个 workspace entry 各自发一条消息，各自拿到独立实例、两条都完成', () async {
       final harness = _WorkspaceHarness();
       addTearDown(harness.dispose);
@@ -140,7 +140,7 @@ void main() {
         runtimeRegistry: registry,
       )..start();
       addTearDown(bindingManager.close);
-      final controller = AgentConversationWorkspaceStore(
+      final controller = createConversationWorkspaceTestOwner(
         bindingManager: bindingManager,
         providerController: providerController,
         workspaceFileCorpus: _emptyWorkspaceFileCorpus(),
@@ -153,17 +153,19 @@ void main() {
         },
       );
       addTearDown(() async {
-        controller.dispose();
+        await closeConversationWorkspaceTestOwner(controller);
         await bindingManager.close();
         providerController.dispose();
         await registry.close();
       });
 
       final foreground = controller.ensureDraftEntry(
+        callbacks: conversationWorkspaceTestCallbacks(controller),
         projectPath: '/repo',
         providerId: defaultCodexAgentProviderConfig.id,
       );
       final background = controller.ensureDraftEntry(
+        callbacks: conversationWorkspaceTestCallbacks(controller),
         projectPath: '/repo',
         providerId: defaultGrokAgentProviderConfig.id,
       );
@@ -208,7 +210,7 @@ final class _WorkspaceHarness {
     );
     bindingManager = AgentConversationBindingManager(runtimeRegistry: registry)
       ..start();
-    controller = AgentConversationWorkspaceStore(
+    controller = createConversationWorkspaceTestOwner(
       bindingManager: bindingManager,
       providerController: providerController,
       workspaceFileCorpus: _emptyWorkspaceFileCorpus(),
@@ -226,13 +228,14 @@ final class _WorkspaceHarness {
   late final AgentProviderRuntimeRegistry registry;
   late final AgentConversationBindingManager bindingManager;
   late final AgentProviderSettingsSliceNotifier providerController;
-  late final AgentConversationWorkspaceStore controller;
+  late final AgentConversationWorkspaceNotifier controller;
 
-  Future<AgentThreadWorkspaceEntry> createEntry({
+  Future<AgentConversationEntryResources> createEntry({
     required String threadId,
   }) async {
     final summary = thread(id: threadId);
     final entry = controller.ensureThreadEntry(
+      callbacks: conversationWorkspaceTestCallbacks(controller),
       projectPath: '/repo',
       thread: summary,
     );
@@ -261,7 +264,7 @@ final class _WorkspaceHarness {
   }
 
   Future<void> dispose() async {
-    controller.dispose();
+    await closeConversationWorkspaceTestOwner(controller);
     await bindingManager.close();
     providerController.dispose();
     await registry.close();

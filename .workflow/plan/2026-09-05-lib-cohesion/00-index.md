@@ -12,7 +12,7 @@
 |---|---|---|---|---|
 | WP-1 | 管理页运行状态归属与多 Provider 聚合 | [运行状态聚合](01-wp1-runtime-summary.md) | 无；WP-3 更换源 owner 时保持本契约 | 已完成，见 §6 |
 | WP-2 | Conversation 命令入口统一 | [会话命令](02-wp2-conversation-actions.md) | WP-6、WP-3C | 未开始 |
-| WP-3 | 单一状态 owner 与组合生命周期 | [状态与装配](03-wp3-state-ownership.md) | WP-1；其中 WP-3P 依赖 WP-4 | WP-3M/P 已完成，C 未开始，见 §6 |
+| WP-3 | 单一状态 owner 与组合生命周期 | [状态与装配](03-wp3-state-ownership.md) | WP-1；其中 WP-3P 依赖 WP-4 | WP-3M/P/C 已完成，见 §6 |
 | WP-4 | Project Threads 重复规则收口 | [Thread 列表规则](04-wp4-project-threads.md) | 无；先基于现有 Store 收口 | 已完成，见 §6 |
 | WP-5 | 首页探测逻辑下沉 | [首页探测](05-wp5-home-detection.md) | WP-3M | 未开始 |
 | WP-6 | Session config 显式失败与结果契约 | [配置命令](06-wp6-session-config.md) | 无；WP-2 后接入统一入口 | 已完成，见 §6 |
@@ -102,7 +102,7 @@ live-turn 的局部监听与无 replay UI effect 流沿用原通道。
 |---|---|---|
 | `AgentConversationOwnerKey` | agent/application/conversation_slice | entryId + 内存 Object token；晋升不变，重新打开是新 token |
 | `AgentConversationSessionDependencies` | agent/application/conversation_slice | regions、executor、scope、ownerKey 及纯投影回收回调；构造时冻结，不含 Widget/Shell 对象 |
-| `agentConversationSliceOwnerProvider(ownerKey)` | agent/application/conversation_slice | 非 autoDispose 的真实 Notifier family |
+| `agentConversationSliceOwnerProvider(ownerKey)` | agent/application/conversation_slice | 显式 keepAlive、释放后才可回收的真实 Notifier family（WP-3 §13） |
 | `agentConversationOwnerResolutionProvider(bindingKey)` | application 声明、app 接线 | Live/Closing/Closed/Unknown；仅 Live 可解析 owner，其他状态返回空投影并拒绝命令 |
 | `AgentConversationActions` | agent/application/conversation_slice | 唯一 UI 写入口；签名与 WP-2 的映射表一致 |
 | `ConversationSliceLifetimeCoordinator` | app/conversation_workspace_slice | eager 创建 owner、关闭与清理投影；不成为另一个状态 store |
@@ -170,8 +170,9 @@ bash tool/test_full.sh
 | 2026-09-06 | WP-4 | `11c6d9c8` | format / analyze / affected / full 通过；33 条旧测试的 131 条原断言保留；定向 59、集成/分层 45，full 根 2007 + 内部包 1076；[验收记录](../../refactor/2026-09-06-project-threads/00-validation.md) | 已完成 |
 | 2026-09-06 | WP-3M | `62a16ed6` | format / analyze / affected / full 通过；101 条定向，133 条原业务断言保留（O-04 按设计调整）；full 根 2024 + 内部包 1076；[验收记录](../../refactor/2026-09-06-management-owner/00-validation.md) | 已完成 |
 | 2026-09-06 | WP-3P | `c2a5219d` | format / analyze / affected / full 通过；WP-4 的 33 条测试与 131 条断言保留；新增 23 条生命周期/接线/守卫；full 根 2047 + 内部包 1076；[验收记录](../../refactor/2026-09-06-project-threads-owner/00-validation.md) | 已完成 |
+| 2026-09-06 | WP-3C | 本次提交（完成后登记 hash） | format / analyze / affected / full 通过；新增 13 条回归，287 条旧测试保留，8 条结构/终止投影断言调整单独登记；full 根 2060 + 内部包 1076；[验收记录](../../refactor/2026-09-06-conversation-owner/00-validation.md) | 已完成 |
 
-当前下一项：**WP-3C · Workspace / Conversation 单 owner 与完整组合生命周期**。WP-3M/P 已迁移管理与 Project Threads owner、具名结果回流和真实执行排空；BindingManager/global runtime 由 app provider 提供，Shell/Workspace 借用同一实例。WP-4 的同步规则与索引断言保留，Project Threads 的 Store、镜像和 Deferred 已删除。Workspace / Conversation 的 listener、镜像、registry、完整 Shell 前移及 snapshot/entry 关闭编排仍待 C；WP-2 统一 Actions 与 WP-5 首页探测仍未开始。
+当前下一项：**WP-2 · Conversation 统一 Actions**。WP-3M/P/C 已完成单 owner、稳定 ownerKey、完整 Shell 前移、snapshot 与显式 entry/应用关闭编排；Conversation family 的显式保活回收修正见 WP-3 §13。命令仍沿用既有 executor/OperationId 契约，WP-2 负责统一 Actions、typed outcome 和 waiter。WP-5 首页探测仍未开始。
 
 ## 7. 文档校验记录
 

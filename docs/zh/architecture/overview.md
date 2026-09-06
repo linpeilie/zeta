@@ -53,7 +53,7 @@ lib/src/features/<feature>/
 
 Project Threads 的同步命令、列表事实和 thread → project 反查索引由 `ProjectThreadsSliceNotifier` 独占，Shell、Widget 与业务回归统一经 `ProjectThreadsOperations` 调用。`ProjectThreadsSliceRunner` 只通过 `run(effect)` 执行 Provider I/O、分页与搜索调度；远端归属查询经 `ProjectThreadsStateOwner.threadFor` 读取当前项目第一个匹配摘要，不猜活跃 Provider。分页提交只补齐映射，保留窗口外显式登记；整体恢复重建索引，retain/remove/close 清理对应归属，关闭后的 ingress 不再改变索引或触发选中项移除回调。
 
-WP-3P 已移除手写 listener、presentation 镜像与 Deferred；`projectThreadsSliceProvider` 是非 family、非 autoDispose 的应用级 owner，build 用 `ref.read` 冻结依赖，runner factory 只接收 `ProjectThreadsStateOwner`。Shell 借用 Operations 与独立 Riverpod 订阅，卸载只解除回调/订阅，不关闭此 owner。BindingManager 与 global runtime 由 app provider 提供，Workspace 与 Runner 共享同一实例。
+WP-3P 已移除手写 listener、presentation 镜像与 Deferred；`projectThreadsSliceProvider` 是非 family、非 autoDispose 的应用级 owner，build 用 `ref.read` 冻结依赖，runner factory 只接收 `ProjectThreadsStateOwner`。Shell 借用 Operations 与独立 Riverpod 订阅；停止 Shell 只解除回调/订阅，owner 由应用关闭。BindingManager 与 global runtime 由 app provider 提供，Workspace 与 Runner 共享同一实例。
 
 关闭先封入口：pending void 正常完成、fork 返回 null；Runner.close 取消未触发的搜索 Timer、失效加载 token，`drainExecutions()` 等待已启动的恢复/激活/搜索、聚合查询和写入全部结束（eagerError: false，失败 Future 不替换），然后 app 关闭 BindingManager → runtime registry → plugin → container。所有未知/重复回执仍按 OperationId 判 stale；错误及堆栈只结算 Future，不进入列表状态或持久化。
 
@@ -77,7 +77,7 @@ flowchart LR
     proc --> store["TimelineStore<br/><i>按 entryId dumb merge</i>"]
     proc --> eff["EffectRunner<br/><i>副作用出口</i>"]
     store --> runtime["RuntimeController<br/>region 投影 + frame 合并"]
-    runtime --> slice["SliceStore<br/>一次 RegionsRefreshed"]
+    runtime --> slice["SliceNotifier<br/>一次 RegionsRefreshed"]
     slice --> ui["selector → AgentRegionBuilder"]
 
     classDef vendor fill:#F5A62333,stroke:#F5A623
@@ -119,18 +119,26 @@ TimelineStore 之后只允许**两跳**。禁止再经 ViewModel、`AgentConvers
 ```mermaid
 flowchart LR
     tl["TimelineStore"] --> rt["RuntimeController<br/>投影 region · scheduler"]
-    rt --> sl["SliceStore<br/>一次 RegionsRefreshed"]
-    sl --> sel["SliceNotifier / family selector"]
+    rt --> sl["SliceNotifier<br/>一次 RegionsRefreshed"]
+    sl --> sel["BindingKey alias selector"]
     sel --> rb["AgentRegionBuilder"]
     rt --> cmd["CommandPort"]
     cmd --> pane["AgentPane"]
 ```
 
 - `AgentConversationRuntimeController`（application）拥有 pipeline、region 投影、`AgentUiUpdateScheduler`、CommandPort 与 effect。
-- `AgentConversationSliceStore.connected` 对每个 `AgentUiUpdateRequest` 做一次按 region 的 dispatch。
+- `AgentConversationSliceNotifier` 对每个 `AgentUiUpdateRequest` 做一次按 region 的 dispatch。
 - Widget 读 region 只经 `AgentRegionBuilder` 的 `ref.watch(selector(bindingKey))`；发送走 `agentConversationCommandProvider`。高频 live turn 可由 presentation 的 Flutter listenable 适配。
-- Workspace entry 一次性组合 thread、Binding、RuntimeController 与 SliceStore。上下文面板显隐属于 AgentPane 的 Widget 状态，不进 application 快照。
+- Workspace entry 一次性组合 thread、Binding、RuntimeController 与稳定 ownerKey。上下文面板显隐属于 AgentPane 的 Widget 状态，不进 application 快照。
 - Shell 只读 `AgentConversationThreadSnapshot`（`selectedAgentController`）。
+
+Workspace 与 Conversation 已完成 WP-3C：`AgentConversationWorkspaceNotifier` 直接拥有 entry 资源表与不可变 workspace state；每个 entry 的 `AgentConversationSliceNotifier` 独占轻量 regions 和命令账本。`AgentConversationOwnerKey(entryId, lifetimeToken)` 在草稿晋升和 runtime restart 时不变，同 thread 关闭重开分配新 token；BindingKey 只作查询别名。Live 解析真实 owner，Closing/Closed 返回无正文的终止投影，Unknown 返回不可用空投影。
+
+`workbenchSessionProvider` 先构造完整 Shell，组合根在语言冻结后、Widget 挂载前启动事实源、管理 ingress 和幂等 `Shell.start()`。IdeHome 只借用已有 workbench 与订阅；卸载不关闭 owner、Binding 或 runtime。草稿与滚动快照仅驻留 presentation 内存，按 controller 弱身份保存并在 entry 关闭时清理；焦点、弹层和 IME composing 不保留。诊断 snapshot 按需读取唯一 owner，不使用 Shell relay。
+
+关闭顺序为：停止 Shell/M/P 命令 → 刷新已有 session 保存 → 等待 M/P 真实执行排空 → 关闭管理消费者与事实源 → 逐 entry 关闭 ingress、撤下可见项、退订、dispose controller、await lease release → BindingManager → runtime registry → plugin catalog → container。entry/app 重复关闭共享同一 Future；失败保持 Closing/失败终态，不标记释放、不销毁容器掩盖失败。lease release 只证明 consumer 释放，CLI 退出仍以 registry close 为准。
+
+物理 Conversation family 在 build 取得显式 `keepAlive`，协调器保留容器级订阅。只有 lease 释放成功且终止空投影无人观察后才撤销保活并 invalidate；`autoDispose` 此时仅回收已关闭投影，不决定业务资源寿命。这是对原非 autoDispose 伪代码的实现修正：当前 Riverpod 普通 family 的 invalidate 不删除缓存节点。Workspace、Management、Project Threads 的 app owner 仍非 autoDispose。WP-2 统一 Actions 尚未实施，当前 UI 命令仍经既有 executor。
 
 ## Provider 能力协商
 

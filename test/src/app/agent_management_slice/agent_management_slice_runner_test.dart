@@ -204,14 +204,25 @@ void main() {
       await owner.initialize();
       expect(owner.initialized, isTrue);
       final facts = MemoryAgentRuntimeFactSource();
-      final detach = app.connectManagementRuntimeFacts(facts);
+      final factsSubscription = app.container.listen(
+        agentManagementRuntimeIngressProvider(facts),
+        (_, _) {},
+      );
+      addTearDown(factsSubscription.close);
+      final detach = app.container
+          .read(agentManagementRuntimeIngressProvider(facts))
+          .borrow();
       expect(facts.listenerCount, 1);
       detach();
       expect(facts.listenerCount, 0);
       expect(owner.isClosed, isFalse);
-      final detachAgain = app.connectManagementRuntimeFacts(facts);
+      final detachAgain = app.container
+          .read(agentManagementRuntimeIngressProvider(facts))
+          .borrow();
       expect(facts.listenerCount, 1);
-      final anotherBorrow = app.connectManagementRuntimeFacts(facts);
+      final anotherBorrow = app.container
+          .read(agentManagementRuntimeIngressProvider(facts))
+          .borrow();
       detachAgain();
       expect(facts.listenerCount, 1);
       await owner.loadConfiguration();
@@ -234,8 +245,8 @@ void main() {
       app.dispose();
       await saved;
       expect(registry.closeCalls, 0);
-      expect(facts.listenerCount, 0);
       anotherBorrow();
+      expect(facts.listenerCount, 0);
       expect(containerDisposed, isFalse);
       saveGate.complete();
       await close;

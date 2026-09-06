@@ -1,3 +1,4 @@
+import '../testing/conversation_workspace_test_container.dart';
 import 'package:zeta/src/app/project_threads_slice/project_threads_slice_composition.dart';
 import 'package:zeta/src/features/project_threads/application/project_threads_slice/project_threads_slice_notifier.dart';
 import 'package:zeta/src/features/project_threads/application/project_threads_slice/project_threads_slice_dependencies.dart';
@@ -170,7 +171,7 @@ void main() {
       addTearDown(() async {
         unsubscribeProviderSettings();
         usageBindings.dispose();
-        shell.dispose();
+        shell.stopAcceptingCommands();
         await runtimeRegistry.close();
       });
 
@@ -258,7 +259,7 @@ void main() {
         agentProviderSettingsPort: providerSettings.store,
         activeModelCatalogLoader: providerSettings.loadActiveModelCatalog,
       );
-      addTearDown(shell.dispose);
+      addTearDown(shell.stopAcceptingCommands);
 
       await shell.openProject();
       await _flushAsync();
@@ -334,8 +335,8 @@ void main() {
     );
     final shell = harness.shell;
     final backend = harness.backend;
-    addTearDown(shell.dispose);
-    final sourceEntry = shell.agentConversationWorkspaceStore.selectedEntry!;
+    addTearDown(shell.stopAcceptingCommands);
+    final sourceEntry = shell.agentConversationWorkspace.selectedEntry!;
 
     final session = await sourceEntry.controller.forkCurrentThread();
     await _flushAsync();
@@ -345,7 +346,7 @@ void main() {
       shell.projectThreadStateFor(directory.path).selectedThreadId,
       'forked-thread-a',
     );
-    final selectedEntry = shell.agentConversationWorkspaceStore.selectedEntry!;
+    final selectedEntry = shell.agentConversationWorkspace.selectedEntry!;
     expect(selectedEntry, isNot(same(sourceEntry)));
     expect(selectedEntry.binding.threadId, 'forked-thread-a');
     expect(sourceEntry.binding.threadId, 'thread-a');
@@ -413,14 +414,14 @@ void main() {
     );
     final shell = harness.shell;
     final backend = harness.backend;
-    addTearDown(shell.dispose);
-    final sourceEntry = shell.agentConversationWorkspaceStore.selectedEntry!;
+    addTearDown(shell.stopAcceptingCommands);
+    final sourceEntry = shell.agentConversationWorkspace.selectedEntry!;
     expect(sourceEntry.controller.canEditLastUserMessage, isTrue);
 
     await sourceEntry.controller.editLastUserMessageAndRetry('new prompt');
     await _flushAsync();
 
-    final selectedEntry = shell.agentConversationWorkspaceStore.selectedEntry!;
+    final selectedEntry = shell.agentConversationWorkspace.selectedEntry!;
     expect(selectedEntry, isNot(same(sourceEntry)));
     expect(selectedEntry.binding.threadId, 'forked-thread-a');
     expect(sourceEntry.binding.threadId, 'thread-a');
@@ -484,7 +485,7 @@ void main() {
         onAgentTurnTerminal: terminalSignals.add,
         onAgentAttention: attentions.add,
       );
-      addTearDown(shell.dispose);
+      addTearDown(shell.stopAcceptingCommands);
       await _flushAsync();
 
       // Act
@@ -519,7 +520,7 @@ void main() {
       final shell = harness.shell;
       final provider = harness.provider;
       final viewModel = shell.selectedAgentController;
-      addTearDown(shell.dispose);
+      addTearDown(shell.stopAcceptingCommands);
 
       provider.emit(
         const AgentTurnStartedEvent(
@@ -637,7 +638,7 @@ void main() {
     final shell = harness.shell;
     final provider = harness.provider;
     final viewModel = shell.selectedAgentController;
-    addTearDown(shell.dispose);
+    addTearDown(shell.stopAcceptingCommands);
     await shell.saveNow();
     harness.sessionSaves.reset();
 
@@ -718,7 +719,7 @@ void main() {
     );
     final shell = harness.shell;
     final provider = harness.provider;
-    addTearDown(shell.dispose);
+    addTearDown(shell.stopAcceptingCommands);
     await shell.saveNow();
 
     var shellNotifications = 0;
@@ -833,7 +834,7 @@ void main() {
     final provider = harness.provider;
     final oldViewModel = shell.selectedAgentController;
     final oldSnapshot = oldViewModel.threadSnapshot;
-    addTearDown(shell.dispose);
+    addTearDown(shell.stopAcceptingCommands);
 
     final threadB = shell
         .projectThreadStateFor(directory.path)
@@ -985,7 +986,7 @@ void main() {
       agentProviderSettingsPort: providerSettings.store,
       activeModelCatalogLoader: providerSettings.loadActiveModelCatalog,
     );
-    addTearDown(shell.dispose);
+    addTearDown(shell.stopAcceptingCommands);
 
     await shell.openProject();
     await _flushAsync();
@@ -1083,7 +1084,7 @@ void main() {
       agentProviderSettingsPort: providerSettings.store,
       activeModelCatalogLoader: providerSettings.loadActiveModelCatalog,
     );
-    addTearDown(shell.dispose);
+    addTearDown(shell.stopAcceptingCommands);
 
     // Act：恢复项目时不自动创建或选中旧 Thread workspace。
     for (
@@ -1192,7 +1193,7 @@ void main() {
         agentProviderSettingsPort: providerSettings.store,
         activeModelCatalogLoader: providerSettings.loadActiveModelCatalog,
       );
-      addTearDown(shell.dispose);
+      addTearDown(shell.stopAcceptingCommands);
 
       // Act + Assert: opening a project lands on its home.
       await shell.openProject();
@@ -1301,7 +1302,7 @@ void main() {
       agentProviderSettingsPort: providerSettings.store,
       activeModelCatalogLoader: providerSettings.loadActiveModelCatalog,
     );
-    addTearDown(shell.dispose);
+    addTearDown(shell.stopAcceptingCommands);
 
     await _flushAsync();
     await _flushAsync();
@@ -1358,7 +1359,7 @@ void main() {
       agentProviderSettingsPort: providerSettings.store,
       activeModelCatalogLoader: providerSettings.loadActiveModelCatalog,
     );
-    addTearDown(shell.dispose);
+    addTearDown(shell.stopAcceptingCommands);
 
     await _flushAsync();
     await _flushAsync();
@@ -1447,7 +1448,7 @@ void main() {
       activeModelCatalogLoader: providerSettings.loadActiveModelCatalog,
       now: () => openedNow,
     );
-    addTearDown(shell.dispose);
+    addTearDown(shell.stopAcceptingCommands);
 
     await _flushAsync();
     await _flushAsync();
@@ -1613,7 +1614,7 @@ class _SelectedThreadShellHarness {
   final ProviderSettingsTestComposition providerSettings;
 
   Future<void> dispose() async {
-    shell.dispose();
+    shell.stopAcceptingCommands();
     await providerSettings.dispose();
   }
 
@@ -1952,12 +1953,29 @@ IdeShellController _createShellController({
       ),
     ),
   );
+  final conversations = createConversationWorkspaceTestOwner(
+    providerController: agentProviderSettingsPort,
+    workspaceFileCorpus: workspaceFileCorpus,
+    runtimeRegistry: registry,
+    bindingManager: manager,
+    globalRuntime: global,
+    uiFrameSchedulerFactory: agentUiFrameSchedulerFactory,
+    onTurnTerminal: onAgentTurnTerminal,
+    onAttention: onAgentAttention,
+  );
+  late final IdeShellController shell;
   addTearDown(() async {
-    await closeProjectThreadsTestContainer(container);
+    shell.stopAcceptingCommands();
+    await shell.saveNow();
+    final threads = container.read(projectThreadsSliceProvider.notifier);
+    threads.stopAcceptingCommandsAndSettleWaiters();
+    await threads.drainExecutions();
+    await closeConversationWorkspaceTestOwner(conversations);
     await manager.close();
     if (agentProviderRuntimeRegistry == null) await registry.close();
+    container.dispose();
   });
-  return IdeShellController(
+  shell = IdeShellController(
     workspace: workspace,
     workspaceFileCorpus: workspaceFileCorpus,
     workspaceFileIndexController: workspaceFileIndexController,
@@ -1966,12 +1984,15 @@ IdeShellController _createShellController({
     activeModelCatalogLoader: activeModelCatalogLoader,
     agentProviderRuntimeRegistry: registry,
     agentProviderGlobalRuntime: global,
-    bindingManager: manager,
+    agentConversationWorkspace: conversations,
+    lifetimes: conversationWorkspaceTestLifetimes(conversations),
+    subscribeConversationWorkspace: conversationWorkspaceTestChanges(
+      conversations,
+    ),
     projectThreadsController: container.read(projectThreadsOperationsProvider),
     subscribeProjectThreads: container.read(projectThreadsChangesProvider),
-    agentUiFrameSchedulerFactory: agentUiFrameSchedulerFactory,
-    onAgentTurnTerminal: onAgentTurnTerminal,
-    onAgentAttention: onAgentAttention,
     now: now,
   );
+  shell.start();
+  return shell;
 }

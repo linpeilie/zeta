@@ -155,13 +155,15 @@ import Flutter」那条守卫**拦不住它们**。也就是说 application 与 
 真要重新拉紧，两条路——恢复核心包依赖并按包禁，或者加一条符号级黑名单守卫；后者漏一个符号
 就开一个口子，比按包禁脆。
 
-**会话 UI 发布是两跳。** TimelineStore 之后：`AgentConversationRuntimeController` 投影
-region 并经 `AgentUiUpdateScheduler` 发出 `AgentUiUpdateRequest`；
-`AgentConversationSliceStore` 对每个 request 做一次 `RegionsRefreshed` dispatch。
-presentation 的 `AgentConversationSliceNotifier` 镜像 store，`AgentRegionBuilder` 只
-`ref.watch(selector(bindingKey))`。禁止再经 `AgentConversationUiStateStore`、
-`AgentConversationSliceComposition` 或 `AgentConversationViewModel` 做第三跳。上下文面板
-显隐属于 AgentPane 的 Widget 状态，不进 application 快照。
+**会话 UI 发布是两跳。** RuntimeController 经 AgentUiUpdateScheduler 投影 regions，application 的 AgentConversationSliceNotifier 对每个 request 做一次 RegionsRefreshed，再由纯 selector / AgentRegionBuilder 订阅。没有手写 Store 或镜像 Notifier；live-turn 增量通道保持不变。上下文面板显隐属于 Widget 状态。
+
+Workspace 与 Conversation 已完成 WP-3C：`AgentConversationWorkspaceNotifier` 直接拥有 entry 资源表与不可变 workspace state；每个 entry 的 `AgentConversationSliceNotifier` 独占轻量 regions 和命令账本。`AgentConversationOwnerKey(entryId, lifetimeToken)` 在草稿晋升和 runtime restart 时不变，同 thread 关闭重开分配新 token；BindingKey 只作查询别名。Live 解析真实 owner，Closing/Closed 返回无正文的终止投影，Unknown 返回不可用空投影。
+
+`workbenchSessionProvider` 先构造完整 Shell，组合根在语言冻结后、Widget 挂载前启动事实源、管理 ingress 和幂等 `Shell.start()`。IdeHome 只借用已有 workbench 与订阅；卸载不关闭 owner、Binding 或 runtime。草稿与滚动快照仅驻留 presentation 内存，按 controller 弱身份保存并在 entry 关闭时清理；焦点、弹层和 IME composing 不保留。诊断 snapshot 按需读取唯一 owner，不使用 Shell relay。
+
+关闭顺序为：停止 Shell/M/P 命令 → 刷新已有 session 保存 → 等待 M/P 真实执行排空 → 关闭管理消费者与事实源 → 逐 entry 关闭 ingress、撤下可见项、退订、dispose controller、await lease release → BindingManager → runtime registry → plugin catalog → container。entry/app 重复关闭共享同一 Future；失败保持 Closing/失败终态，不标记释放、不销毁容器掩盖失败。lease release 只证明 consumer 释放，CLI 退出仍以 registry close 为准。
+
+物理 Conversation family 在 build 取得显式 `keepAlive`，协调器保留容器级订阅。只有 lease 释放成功且终止空投影无人观察后才撤销保活并 invalidate；`autoDispose` 此时仅回收已关闭投影，不决定业务资源寿命。这是对原非 autoDispose 伪代码的实现修正：当前 Riverpod 普通 family 的 invalidate 不删除缓存节点。Workspace、Management、Project Threads 的 app owner 仍非 autoDispose。WP-2 统一 Actions 尚未实施，当前 UI 命令仍经既有 executor。
 
 **依赖注入同样归 Riverpod。** 没有安全默认值的依赖用会抛错的 `Provider` 声明保持 fail-closed；
 测试用 `ProviderContainer(overrides: ...)`。这取代了两种旧写法：把几十个可空依赖挂在根 Widget
@@ -195,7 +197,7 @@ hook、原生菜单、抢前台）；「显示语言等不等持久化设置」�
 Widget 禁止 mixin。生产必须注入已经 `prepareDesktopWindow` 的那一份 host（provider
 fail-closed）；测试装 `HeadlessWindowHost`。守卫：`window_listener_guard_test`。
 
-**`autoDispose` 的适用范围是硬边界。** 它只能决定**纯 UI 镜像**的存活：selector、投影、派生视图。
+**`autoDispose` 的适用范围是硬边界。** 它只能决定 selector、派生视图和显式释放后空投影的存活；Conversation family 的保活只在本节规定的释放条件成立时撤销。
 Binding lease、CLI runtime、子进程、文件句柄的生命周期永远由显式的 application 逻辑决定，
 绝不能由「当前有没有 Widget 在看」决定——否则用户切个面板就会杀掉一个正在跑的 turn。
 
@@ -257,7 +259,7 @@ Management 的状态、operation waiter 与执行账本由应用会话级 `Agent
 
 Project Threads 的同步命令、列表事实和 thread → project 反查索引由 `ProjectThreadsSliceNotifier` 独占，Shell、Widget 与业务回归统一经 `ProjectThreadsOperations` 调用。`ProjectThreadsSliceRunner` 只通过 `run(effect)` 执行 Provider I/O、分页与搜索调度；远端归属查询经 `ProjectThreadsStateOwner.threadFor` 读取当前项目第一个匹配摘要，不猜活跃 Provider。分页提交只补齐映射，保留窗口外显式登记；整体恢复重建索引，retain/remove/close 清理对应归属，关闭后的 ingress 不再改变索引或触发选中项移除回调。
 
-WP-3P 已移除手写 listener、presentation 镜像与 Deferred；`projectThreadsSliceProvider` 是非 family、非 autoDispose 的应用级 owner，build 用 `ref.read` 冻结依赖，runner factory 只接收 `ProjectThreadsStateOwner`。Shell 借用 Operations 与独立 Riverpod 订阅，卸载只解除回调/订阅，不关闭此 owner。BindingManager 与 global runtime 由 app provider 提供，Workspace 与 Runner 共享同一实例。
+WP-3P 已移除手写 listener、presentation 镜像与 Deferred；`projectThreadsSliceProvider` 是非 family、非 autoDispose 的应用级 owner，build 用 `ref.read` 冻结依赖，runner factory 只接收 `ProjectThreadsStateOwner`。Shell 借用 Operations 与独立 Riverpod 订阅；停止 Shell 只解除回调/订阅，owner 由应用关闭。BindingManager 与 global runtime 由 app provider 提供，Workspace 与 Runner 共享同一实例。
 
 关闭先封入口：pending void 正常完成、fork 返回 null；Runner.close 取消未触发的搜索 Timer、失效加载 token，`drainExecutions()` 等待已启动的恢复/激活/搜索、聚合查询和写入全部结束（eagerError: false，失败 Future 不替换），然后 app 关闭 BindingManager → runtime registry → plugin → container。所有未知/重复回执仍按 OperationId 判 stale；错误及堆栈只结算 Future，不进入列表状态或持久化。
 
