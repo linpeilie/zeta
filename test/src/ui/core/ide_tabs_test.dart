@@ -13,6 +13,18 @@ void main() {
     expect(find.byType(sf.Tabs), findsOneWidget);
     expect(find.text('selected:overview'), findsOneWidget);
 
+    final selectedWeight = DefaultTextStyle.of(
+      tester.element(find.text('概览')),
+    ).style.fontWeight;
+    final unselectedWeight = DefaultTextStyle.of(
+      tester.element(find.text('详情')),
+    ).style.fontWeight;
+    final bodySmall = IdeTextStyles.of(
+      tester.element(find.text('概览')),
+    ).bodySmall;
+    expect(selectedWeight, bodySmall.fontWeight);
+    expect(unselectedWeight, bodySmall.fontWeight);
+
     await tester.tap(find.byKey(const ValueKey('details-tab')));
     await tester.pump();
 
