@@ -35,6 +35,10 @@ void main() {
     ).bodySmall.fontSize;
     expect(label.style?.fontSize, expectedSize);
     expect(
+      label.style?.fontWeight,
+      IdeTextStyles.of(tester.element(find.text('Codex'))).bodySmall.fontWeight,
+    );
+    expect(
       tester.getSize(find.byKey(const ValueKey('sample-select'))).height,
       closeTo(
         IdeMetrics.controlNaturalHeightFor(

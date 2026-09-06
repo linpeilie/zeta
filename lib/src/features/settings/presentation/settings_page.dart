@@ -790,10 +790,7 @@ class _FontChoiceSettingRowState extends State<_FontChoiceSettingRow> {
             widget.selectedLabel,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: textStyles.bodySmall.copyWith(
-              color: colors.textPrimary,
-              fontWeight: FontWeight.w600,
-            ),
+            style: textStyles.bodySmall.copyWith(color: colors.textPrimary),
           ),
           onChanged: (choice) {
             unawaited(_handleChanged(choice));

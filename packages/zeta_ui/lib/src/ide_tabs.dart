@@ -310,10 +310,7 @@ class _IdeTabContent extends StatelessWidget {
     final content = AnimatedDefaultTextStyle(
       duration: IdeMotion.durationNormal,
       curve: IdeMotion.curveDefault,
-      style: textStyles.bodySmall.copyWith(
-        color: foreground,
-        fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-      ),
+      style: textStyles.bodySmall.copyWith(color: foreground),
       child: TweenAnimationBuilder<Color?>(
         duration: IdeMotion.durationNormal,
         curve: IdeMotion.curveDefault,
@@ -355,7 +352,7 @@ class _IdeTabContent extends StatelessWidget {
       ),
     );
 
-    // 选中态由底色、文字主色与字重表达，不再画下划线：Tab 组本身已经有选中
+    // 选中态由底色与文字主色表达，不再画下划线或加粗：Tab 组本身已经有选中
     // pill，独立 Tab 有选中底色与描边，再加一条横线属于第三重冗余表达。
     final animatedContent = AnimatedOpacity(
       opacity: enabled ? (selected ? 1 : 0.82) : 0.48,
