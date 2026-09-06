@@ -63,8 +63,10 @@ class AgentComposer extends StatelessWidget {
     required this.onCloseModelConfiguration,
     required this.onSelectPermissionOption,
     required this.onSelectSessionConfigOption,
+    required this.availableSkills,
     required this.onOpenMentionPicker,
-    required this.onInsertSkill,
+    required this.onSelectSkill,
+    this.onEnsureSkills,
     super.key,
   });
 
@@ -137,11 +139,17 @@ class AgentComposer extends StatelessWidget {
   final Future<AgentCommandOutcome> Function(String configId, Object value)
   onSelectSessionConfigOption;
 
+  /// 当前项目可用的 Skill 目录快照，供「+」菜单子菜单展示。
+  final List<AgentSkillMetadata> availableSkills;
+
   /// 打开 @-mention 文件 picker（More actions 菜单入口）。
   final VoidCallback onOpenMentionPicker;
 
-  /// 打开 skill 插入选择器。
-  final VoidCallback onInsertSkill;
+  /// 从「+」菜单子菜单插入一条 Skill。
+  final ValueChanged<AgentSkillMetadata> onSelectSkill;
+
+  /// 打开「+」菜单时预热 Skill 目录；失败由空态展示。
+  final Future<void> Function()? onEnsureSkills;
 
   @override
   Widget build(BuildContext context) {
@@ -457,6 +465,7 @@ class AgentComposer extends StatelessWidget {
       showMentionFile: showResourceMention,
       showInsertSkill: showSkillInsert,
       showAttachImage: showImageAttachment,
+      availableSkills: availableSkills,
       contextId: conversationModeContextId,
       // 再次选择 Plan 时切回 Default，与工具栏标识清除一致。
       onTogglePlan: () => onSelectConversationMode(
@@ -465,7 +474,8 @@ class AgentComposer extends StatelessWidget {
             : AgentConversationModeId.plan,
       ),
       onMentionFile: onOpenMentionPicker,
-      onInsertSkill: onInsertSkill,
+      onSelectSkill: onSelectSkill,
+      onEnsureSkills: onEnsureSkills,
       onAttachImage: onAttachImages,
     );
   }
@@ -594,11 +604,13 @@ class _ComposerMoreActionsButton extends StatefulWidget {
     required this.showMentionFile,
     required this.showInsertSkill,
     required this.showAttachImage,
+    required this.availableSkills,
     required this.contextId,
     required this.onTogglePlan,
     required this.onMentionFile,
-    required this.onInsertSkill,
+    required this.onSelectSkill,
     required this.onAttachImage,
+    this.onEnsureSkills,
   });
 
   final bool showPlan;
@@ -606,12 +618,14 @@ class _ComposerMoreActionsButton extends StatefulWidget {
   final bool showMentionFile;
   final bool showInsertSkill;
   final bool showAttachImage;
+  final List<AgentSkillMetadata> availableSkills;
   final Object contextId;
 
   /// 切换 Plan / Default draft 模式。
   final VoidCallback onTogglePlan;
   final VoidCallback onMentionFile;
-  final VoidCallback onInsertSkill;
+  final ValueChanged<AgentSkillMetadata> onSelectSkill;
+  final Future<void> Function()? onEnsureSkills;
   final VoidCallback onAttachImage;
 
   @override
@@ -621,13 +635,20 @@ class _ComposerMoreActionsButton extends StatefulWidget {
 
 class _ComposerMoreActionsButtonState
     extends State<_ComposerMoreActionsButton> {
-  static const double _preferredWidth = 196;
+  static const double _preferredWidth = 228;
   static const double _maxHeight = 240;
 
   final FocusNode _triggerFocusNode = FocusNode(
     debugLabel: 'agent-more-actions-trigger',
   );
+  late final ValueNotifier<List<AgentSkillMetadata>> _skills;
   IdePopoverHandle<void>? _popoverEntry;
+
+  @override
+  void initState() {
+    super.initState();
+    _skills = ValueNotifier<List<AgentSkillMetadata>>(widget.availableSkills);
+  }
 
   bool get _hasActions =>
       widget.showPlan ||
@@ -638,6 +659,9 @@ class _ComposerMoreActionsButtonState
   @override
   void didUpdateWidget(covariant _ComposerMoreActionsButton oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.availableSkills, widget.availableSkills)) {
+      _skills.value = widget.availableSkills;
+    }
     final shouldDismiss =
         _popoverEntry != null &&
         (oldWidget.contextId != widget.contextId ||
@@ -660,6 +684,7 @@ class _ComposerMoreActionsButtonState
   @override
   void dispose() {
     _popoverEntry?.dismiss();
+    _skills.dispose();
     _triggerFocusNode.dispose();
     super.dispose();
   }
@@ -676,6 +701,10 @@ class _ComposerMoreActionsButtonState
   void _showPopover() {
     if (_popoverEntry != null || !_hasActions) {
       return;
+    }
+    final ensureSkills = widget.onEnsureSkills;
+    if (widget.showInsertSkill && ensureSkills != null) {
+      unawaited(ensureSkills());
     }
     final mediaQuery = MediaQuery.of(context);
     final viewport = mediaQuery.size;
@@ -710,10 +739,13 @@ class _ComposerMoreActionsButtonState
         child: ConstrainedBox(
           constraints: BoxConstraints(maxHeight: maxHeight),
           child: SingleChildScrollView(
-            child: IdeContextMenu(
-              minWidth: width,
-              closeOnActivate: false,
-              actions: _buildActions(),
+            child: ValueListenableBuilder<List<AgentSkillMetadata>>(
+              valueListenable: _skills,
+              builder: (context, skills, _) => IdeContextMenu(
+                minWidth: width,
+                closeOnActivate: false,
+                actions: _buildActions(skills),
+              ),
             ),
           ),
         ),
@@ -745,15 +777,17 @@ class _ComposerMoreActionsButtonState
     unawaited(entry.future.whenComplete(action));
   }
 
-  List<IdeContextMenuAction> _buildActions() {
+  List<IdeContextMenuAction> _buildActions(List<AgentSkillMetadata> skills) {
+    final l10n = context.l10n;
+    final enabledSkills = skills
+        .where((skill) => skill.enabled)
+        .toList(growable: false);
     return <IdeContextMenuAction>[
       if (widget.showPlan)
         IdeContextMenuAction(
           key: const ValueKey('agent-more-actions-plan'),
           label: 'Plan',
-          leadingIcon: widget.planSelected
-              ? Icons.check_rounded
-              : Icons.alt_route_rounded,
+          leadingIcon: sf.LucideIcons.lightbulb,
           semanticLabel: widget.planSelected
               ? 'Plan, selected, tap to clear'
               : 'Plan',
@@ -762,21 +796,37 @@ class _ComposerMoreActionsButtonState
       if (widget.showMentionFile)
         IdeContextMenuAction(
           key: const ValueKey('agent-mention-file-button'),
-          label: context.l10n.agentMentionFile,
-          leadingIcon: Icons.alternate_email_rounded,
+          label: l10n.agentMentionFile,
+          leadingIcon: sf.LucideIcons.folderSymlink,
           onPressed: () => _activateAction(widget.onMentionFile),
         ),
       if (widget.showInsertSkill)
         IdeContextMenuAction(
           key: const ValueKey('agent-insert-skill-button'),
-          label: context.l10n.agentInsertSkill,
-          leadingIcon: Icons.auto_awesome_rounded,
-          onPressed: () => _activateAction(widget.onInsertSkill),
+          label: l10n.agentInsertSkill,
+          leadingIcon: sf.LucideIcons.container,
+          children: enabledSkills.isEmpty
+              ? <IdeContextMenuAction>[
+                  IdeContextMenuAction(
+                    key: const ValueKey('agent-insert-skill-empty'),
+                    label: l10n.agentNoAvailableSkills,
+                    enabled: false,
+                  ),
+                ]
+              : <IdeContextMenuAction>[
+                  for (final skill in enabledSkills)
+                    IdeContextMenuAction(
+                      key: ValueKey<String>('agent-insert-skill-${skill.path}'),
+                      label: skill.label,
+                      onPressed: () =>
+                          _activateAction(() => widget.onSelectSkill(skill)),
+                    ),
+                ],
         ),
       if (widget.showAttachImage)
         IdeContextMenuAction(
           key: const ValueKey('agent-attach-image-button'),
-          label: context.l10n.agentAttachImage,
+          label: l10n.agentAttachImage,
           leadingIcon: Icons.image_outlined,
           onPressed: () => _activateAction(widget.onAttachImage),
         ),

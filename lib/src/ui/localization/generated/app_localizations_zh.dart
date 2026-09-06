@@ -2057,10 +2057,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get agentMoreActionsExpanded => 'More actions, expanded';
 
   @override
-  String get agentMentionFile => 'Mention file';
+  String get agentMentionFile => '文件和文件夹';
 
   @override
-  String get agentInsertSkill => 'Insert skill';
+  String get agentInsertSkill => 'Skills';
+
+  @override
+  String get agentNoAvailableSkills => '暂无可用 Skill';
 
   @override
   String get agentAttachImage => 'Attach image';

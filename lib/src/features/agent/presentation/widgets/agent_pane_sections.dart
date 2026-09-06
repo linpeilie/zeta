@@ -963,7 +963,7 @@ class AgentComposerSection extends StatelessWidget {
     required this.onRemoveImage,
     required this.onSend,
     required this.onOpenMentionPicker,
-    required this.onInsertSkill,
+    required this.onSelectSkill,
     required this.pagePadding,
     this.anchorKey,
     super.key,
@@ -980,7 +980,7 @@ class AgentComposerSection extends StatelessWidget {
   final ValueChanged<String> onRemoveImage;
   final VoidCallback onSend;
   final VoidCallback onOpenMentionPicker;
-  final VoidCallback onInsertSkill;
+  final ValueChanged<AgentSkillMetadata> onSelectSkill;
   final EdgeInsets pagePadding;
 
   /// Skill popover 锚定用；挂在 Composer 根节点上。
@@ -1057,8 +1057,16 @@ class AgentComposerSection extends StatelessWidget {
                   }
                 },
                 onSelectSessionConfigOption: actions.selectSessionConfigOption,
+                availableSkills: controller.skillCandidates(),
                 onOpenMentionPicker: onOpenMentionPicker,
-                onInsertSkill: onInsertSkill,
+                onSelectSkill: onSelectSkill,
+                onEnsureSkills: () async {
+                  try {
+                    await actions.ensureSkillsCatalog();
+                  } catch (_) {
+                    // 目录失败时仍打开「+」菜单，Skills 子菜单走空态。
+                  }
+                },
               ),
             );
           },

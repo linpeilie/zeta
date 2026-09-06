@@ -345,7 +345,7 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
       onRemoveImage: _composer.removeDraftImage,
       onSend: _composer.sendMessage,
       onOpenMentionPicker: _composer.openMentionPickerFromMenu,
-      onInsertSkill: _composer.openSkillPickerFromMenu,
+      onSelectSkill: _composer.selectSkillFromMenu,
       onToggleContextPanel: _toggleContextPanel,
     );
   }

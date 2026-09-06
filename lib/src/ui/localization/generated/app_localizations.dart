@@ -3872,17 +3872,23 @@ abstract class AppLocalizations {
   /// **'More actions, expanded'**
   String get agentMoreActionsExpanded;
 
-  /// Mention file
+  /// Composer menu item to mention files and folders
   ///
   /// In en, this message translates to:
-  /// **'Mention file'**
+  /// **'Files and folders'**
   String get agentMentionFile;
 
-  /// Insert skill
+  /// Composer menu item to insert a Skill
   ///
   /// In en, this message translates to:
-  /// **'Insert skill'**
+  /// **'Skills'**
   String get agentInsertSkill;
+
+  /// Empty Skills submenu in composer more-actions
+  ///
+  /// In en, this message translates to:
+  /// **'No skills available'**
+  String get agentNoAvailableSkills;
 
   /// Attach image
   ///

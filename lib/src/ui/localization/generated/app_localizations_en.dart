@@ -2129,10 +2129,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get agentMoreActionsExpanded => 'More actions, expanded';
 
   @override
-  String get agentMentionFile => 'Mention file';
+  String get agentMentionFile => 'Files and folders';
 
   @override
-  String get agentInsertSkill => 'Insert skill';
+  String get agentInsertSkill => 'Skills';
+
+  @override
+  String get agentNoAvailableSkills => 'No skills available';
 
   @override
   String get agentAttachImage => 'Attach image';

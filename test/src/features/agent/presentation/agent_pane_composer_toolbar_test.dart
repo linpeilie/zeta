@@ -199,10 +199,12 @@ void main() {
         );
         expect(popover, findsOneWidget);
         expect(planAction, findsOneWidget);
+        expect(find.byIcon(sf.LucideIcons.lightbulb), findsOneWidget);
         expect(
           find.byKey(const ValueKey('agent-mention-file-button')),
           findsOneWidget,
         );
+        expect(find.byIcon(sf.LucideIcons.folderSymlink), findsOneWidget);
         expect(
           find.byKey(const ValueKey('agent-attach-image-button')),
           findsOneWidget,
@@ -1304,7 +1306,7 @@ void main() {
               onRemoveImage: (_) {},
               onSend: () {},
               onOpenMentionPicker: () {},
-              onInsertSkill: () {},
+              onSelectSkill: (_) {},
               pagePadding: EdgeInsets.zero,
             ),
           ),
@@ -1450,7 +1452,7 @@ void main() {
                   onRemoveImage: (_) {},
                   onSend: () {},
                   onOpenMentionPicker: () {},
-                  onInsertSkill: () {},
+                  onSelectSkill: (_) {},
                   pagePadding: EdgeInsets.zero,
                 ),
               );
@@ -1583,7 +1585,85 @@ void main() {
         await tester.pump();
       },
     );
+
+    testWidgets('Skills submenu lists catalog entries and inserts the skill', (
+      tester,
+    ) async {
+      final provider = _ComposerSkillsProvider();
+      final viewModel = createAgentPaneViewModel(
+        provider,
+        initialThread: agentPaneThread(
+          id: 'thread-skills-menu',
+          title: 'Skills menu',
+        ),
+      );
+      addTearDown(provider.dispose);
+      addTearDown(viewModel.dispose);
+      await tester.pumpWidget(AgentPaneTestApp(viewModel: viewModel));
+      await viewModel.initialization;
+      await pumpAgentPaneUi(tester);
+
+      await tester.tap(find.byKey(const ValueKey('agent-more-actions-button')));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.byIcon(sf.LucideIcons.container), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('agent-insert-skill-button')));
+      final skillItem = find.byKey(
+        const ValueKey('agent-insert-skill-/repo/SKILL.md'),
+      );
+      await pumpUntilFinder(tester, skillItem);
+      await tester.tap(skillItem);
+      await tester.pump(const Duration(milliseconds: 300));
+      await pumpAgentPaneUi(tester);
+
+      expect(
+        find.byKey(const ValueKey('agent-more-actions-popover')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('agent-skill-picker-overlay')),
+        findsNothing,
+      );
+      expect(skillItem, findsNothing);
+      expect(find.text('Fixture Skill'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
   });
+}
+
+class _ComposerSkillsProvider extends AgentPaneModeFakeProvider
+    implements AgentSkillsPort {
+  _ComposerSkillsProvider() : super(models: agentPaneModelConfigList);
+
+  @override
+  AgentProviderCapabilities get capabilities => super.capabilities.copyWith(
+    supportsSkillInput: true,
+    supportsModeSelection: true,
+  );
+
+  @override
+  Stream<void> get skillsChanged => const Stream.empty();
+
+  @override
+  Future<AgentSkillsCatalog> listSkills({
+    List<String> cwds = const [],
+    bool forceReload = false,
+  }) async => AgentSkillsCatalog(
+    entries: [
+      AgentSkillsCatalogEntry(
+        cwd: '/repo',
+        skills: const [
+          AgentSkillMetadata(
+            name: 'fixture',
+            displayName: 'Fixture Skill',
+            path: '/repo/SKILL.md',
+            description: 'Fixture skill',
+            enabled: true,
+          ),
+        ],
+      ),
+    ],
+  );
 }
 
 final _configSelector = find.byKey(
