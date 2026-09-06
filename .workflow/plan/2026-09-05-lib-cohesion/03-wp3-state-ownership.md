@@ -889,4 +889,4 @@ P-1/P-2 完成，详见 [验收记录](../../refactor/2026-09-06-project-threads
 
 **额外文件范围**：为 O-10 添加 presentation `agent_pane_retention.dart`、ComposerDocumentSnapshot 和草稿恢复接口，只驻内存且弱引用 entry identity；entry 关闭清理 staged attachments，焦点/弹层/IME composing 不恢复。为了让测试中的应用资源正确跨过 Widget 卸载，新增 session 保存与 elapsed ticker 工厂接缝，以及 `frame_driven_app_timer.dart` 测试调度器；正常生产默认 Timer/AgentElapsedTicker 不变。测试依赖通过 `conversation_test_scope.dart`、`conversation_workspace_test_container.dart` 注入到真实 owner。
 
-C-1 至 C-5 完成。format/analyze/affected/full 通过，根 2060 + 内部包 1076；新增 13 条生命周期/真实重挂/AST 回归，287 条旧测试全部保留，8 条结构/终止投影断言调整逐项登记。验收记录：[WP-3C](../../refactor/2026-09-06-conversation-owner/00-validation.md)。真实 CLI 与桌面手工验收仍待执行；下一项 WP-2 Actions，WP-5 仍未开始。
+C-1 至 C-5 完成，实现提交 `c2197f76`。format/analyze/affected/full 通过，根 2060 + 内部包 1076；新增 13 条生命周期/真实重挂/AST 回归，287 条旧测试全部保留，8 条结构/终止投影断言调整逐项登记。验收记录：[WP-3C](../../refactor/2026-09-06-conversation-owner/00-validation.md)。真实 CLI 与桌面手工验收仍待执行；下一项 WP-2 Actions，WP-5 仍未开始。
