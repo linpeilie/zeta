@@ -1,3 +1,4 @@
+import 'agent_conversation_command_result.dart';
 import 'agent_conversation_runtime_observation.dart';
 import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'dart:async';
@@ -35,7 +36,7 @@ final _log = zetaLoggerFor('zeta.agent.conversation');
 /// [initialMessage] 只用于“编辑后重试”：Shell 必须在新 thread 成为当前会话后，
 /// 再由新 runtime 提交这条消息。
 typedef AgentCreatedThreadCallback =
-    Future<void> Function({
+    Future<AgentCommandOutcome> Function({
       required AgentSession session,
       required AgentContext context,
       String? initialMessage,
@@ -550,8 +551,17 @@ final class AgentConversationRuntimeController
       _conversationModeController.state.appliesToNextTurn;
 
   /// 更新下一新 turn 的对话模式。
-  void selectConversationMode(AgentConversationModeId modeId) {
+  @override
+  AgentCommandOutcome selectConversationMode(AgentConversationModeId modeId) {
+    final before = _conversationModeController.state.draftMode;
     _conversationModeController.selectMode(modeId);
+    return _conversationModeController.state.draftMode == before
+        ? AgentCommandOutcome.ignored(
+            before == modeId
+                ? AgentCommandIgnoreReason.unchanged
+                : AgentCommandIgnoreReason.notAllowed,
+          )
+        : const AgentCommandOutcome.succeeded();
   }
 
   /// 确认上一 Plan 回合，并用 Default 模式启动新的执行回合。
@@ -572,6 +582,7 @@ final class AgentConversationRuntimeController
         AgentCommandIgnoreReason.notAllowed,
       );
     }
+    final executionScope = currentCommandScope();
     final validatedRequest = _reconcilePlanExecutionPermission(currentRequest);
     final executionPermission = validatedRequest?.executionPermission;
     if (validatedRequest == null || executionPermission == null) {
@@ -621,6 +632,11 @@ final class AgentConversationRuntimeController
         urgency: AgentUiUpdateUrgency.immediate,
       ),
     );
+    if (_disposed || !executionScope.matchesForCommit(currentCommandScope())) {
+      return const AgentCommandOutcome.failed(
+        AgentCommandFailureKind.staleTarget,
+      );
+    }
     // 交接的成败就是这次发送的成败，直接透传，不再自己编造结果。
     return sendMessage(
       planExecutionPrompt,
@@ -629,12 +645,15 @@ final class AgentConversationRuntimeController
   }
 
   /// 仅修改本地执行卡的一次性权限，不 apply Provider，也不持久化默认偏好。
-  void selectPlanExecutionPermissionOption(
+  @override
+  AgentCommandOutcome selectPlanExecutionPermissionOption(
     AgentPlanExecutionRequest request,
     AgentPermissionOption option,
   ) {
     if (!_canResolvePlanExecution(request)) {
-      return;
+      return const AgentCommandOutcome.ignored(
+        AgentCommandIgnoreReason.notAllowed,
+      );
     }
     AgentPermissionOption? availableOption;
     for (final candidate in _permissionSelectionController.options) {
@@ -651,7 +670,9 @@ final class AgentConversationRuntimeController
                   _permissionSelectionController.runtimeIdentity,
             ) ==
             null) {
-      return;
+      return const AgentCommandOutcome.ignored(
+        AgentCommandIgnoreReason.notAllowed,
+      );
     }
     _publishUiChanges(
       AgentUiUpdateRequest(
@@ -659,6 +680,7 @@ final class AgentConversationRuntimeController
         urgency: AgentUiUpdateUrgency.immediate,
       ),
     );
+    return const AgentCommandOutcome.succeeded();
   }
 
   /// 继续修改计划，并确保下一回合仍使用 Plan 模式。
@@ -702,10 +724,12 @@ final class AgentConversationRuntimeController
 
   /// 关闭本地执行提示，不向 Provider 回写任何审批结果。
   @override
-  void dismissPlanExecution(AgentPlanExecutionRequest request) {
+  AgentCommandOutcome dismissPlanExecution(AgentPlanExecutionRequest request) {
     if (!_canResolvePlanExecution(request) ||
         !_planExecutionHandoffController.resolve(request)) {
-      return;
+      return const AgentCommandOutcome.ignored(
+        AgentCommandIgnoreReason.notAllowed,
+      );
     }
     _resolvePlanExecutionAttention(request);
     _publishUiChanges(
@@ -717,12 +741,17 @@ final class AgentConversationRuntimeController
         urgency: AgentUiUpdateUrgency.immediate,
       ),
     );
+    return const AgentCommandOutcome.succeeded();
   }
 
   /// 重试当前 Provider 的模式目录探测。
   @override
   Future<AgentCommandOutcome> retryConversationModes() async {
     await _conversationModeController.retryCatalog();
+    if (_conversationModeController.state.status ==
+        AgentConversationModeLoadStatus.unavailable) {
+      throw UnsupportedError('Conversation modes are unavailable');
+    }
     // 目录状态本身就是结果：失败会停在 failed 状态，不靠"没抛异常"判定。
     return _conversationModeController.state.status ==
             AgentConversationModeLoadStatus.error
@@ -846,17 +875,21 @@ final class AgentConversationRuntimeController
   @override
   Future<AgentCommandOutcome> ensureSkillsCatalog() async {
     if (!canUseSkills) {
-      return const AgentCommandOutcome.ignored(
-        AgentCommandIgnoreReason.notAllowed,
-      );
+      throw UnsupportedError('Skill input is unavailable');
     }
     // catalog：skill 目录属于「会话之前的信息」（04 §0.4），不建立订阅。
     // `_runGlobalBundle` 不吞异常，失败会往上抛。
-    await _runGlobalBundle(
-      _ensureSkillsCatalog,
-      preferredProviderId: _selectedProviderId,
-    );
-    return const AgentCommandOutcome.succeeded();
+    await _runGlobalBundle((bundle) async {
+      if (bundle.skills == null) {
+        throw UnsupportedError('Skill catalog is unavailable');
+      }
+      await _ensureSkillsCatalog(bundle);
+    }, preferredProviderId: _selectedProviderId);
+    return _skillsCatalogController.state.status == AgentSkillsLoadStatus.error
+        ? const AgentCommandOutcome.failed(
+            AgentCommandFailureKind.requestFailed,
+          )
+        : const AgentCommandOutcome.succeeded();
   }
 
   bool get canRenameCurrentThread =>
@@ -886,9 +919,12 @@ final class AgentConversationRuntimeController
       providerController.enabledProviders;
 
   /// 切换 active provider（双后端共存）。
-  Future<void> switchActiveProvider(String providerId) async {
+  @override
+  Future<AgentCommandOutcome> switchActiveProvider(String providerId) async {
     if (providerId == activeProviderId) {
-      return;
+      return const AgentCommandOutcome.ignored(
+        AgentCommandIgnoreReason.unchanged,
+      );
     }
     if (!providerController.isProviderEnabled(providerId)) {
       throw StateError('Provider $providerId is not enabled');
@@ -901,6 +937,7 @@ final class AgentConversationRuntimeController
       );
     }
     await switchRequest(providerId);
+    return const AgentCommandOutcome.succeeded();
   }
 
   AgentPermissionSelection? get permissionSelection =>
@@ -1131,7 +1168,7 @@ final class AgentConversationRuntimeController
   }
 
   @override
-  void toggleToolCall(String toolCallId) {
+  AgentCommandOutcome toggleToolCall(String toolCallId) {
     _timeline.toggleToolCall(toolCallId);
     _publishUiChanges(
       AgentUiUpdateRequest(
@@ -1139,10 +1176,11 @@ final class AgentConversationRuntimeController
         urgency: AgentUiUpdateUrgency.immediate,
       ),
     );
+    return const AgentCommandOutcome.succeeded();
   }
 
   @override
-  void togglePlanMessage(String messageId) {
+  AgentCommandOutcome togglePlanMessage(String messageId) {
     _timeline.togglePlanMessage(messageId);
     _publishUiChanges(
       AgentUiUpdateRequest(
@@ -1150,10 +1188,11 @@ final class AgentConversationRuntimeController
         urgency: AgentUiUpdateUrgency.immediate,
       ),
     );
+    return const AgentCommandOutcome.succeeded();
   }
 
   @override
-  void toggleActivePlan(String turnId) {
+  AgentCommandOutcome toggleActivePlan(String turnId) {
     _timeline.toggleActivePlan(turnId);
     _publishUiChanges(
       AgentUiUpdateRequest(
@@ -1161,10 +1200,11 @@ final class AgentConversationRuntimeController
         urgency: AgentUiUpdateUrgency.immediate,
       ),
     );
+    return const AgentCommandOutcome.succeeded();
   }
 
   @override
-  void toggleCommandGroup(String commandGroupId) {
+  AgentCommandOutcome toggleCommandGroup(String commandGroupId) {
     _timeline.toggleCommandGroup(commandGroupId);
     _publishUiChanges(
       AgentUiUpdateRequest(
@@ -1172,10 +1212,11 @@ final class AgentConversationRuntimeController
         urgency: AgentUiUpdateUrgency.immediate,
       ),
     );
+    return const AgentCommandOutcome.succeeded();
   }
 
   @override
-  void toggleFileEditItem(String fileEditItemId) {
+  AgentCommandOutcome toggleFileEditItem(String fileEditItemId) {
     _timeline.toggleFileEditItem(fileEditItemId);
     _publishUiChanges(
       AgentUiUpdateRequest(
@@ -1183,6 +1224,7 @@ final class AgentConversationRuntimeController
         urgency: AgentUiUpdateUrgency.immediate,
       ),
     );
+    return const AgentCommandOutcome.succeeded();
   }
 
   /// 加载全局 provider 设置。
@@ -1319,42 +1361,77 @@ final class AgentConversationRuntimeController
           );
   }
 
-  Future<bool> selectModel(String modelId) =>
+  @override
+  Future<AgentCommandOutcome> selectModel(String modelId) =>
       _modelSelectionController.selectModel(modelId);
 
-  Future<bool> selectReasoningEffort(String? effort) =>
+  @override
+  Future<AgentCommandOutcome> selectReasoningEffort(String? effort) =>
       _modelSelectionController.selectReasoningEffort(effort);
 
-  /// 用户选择权限选项；返回错误文案（供 UI toast），成功时返回 null。
-  Future<String?> selectPermissionOption(AgentPermissionOption option) async {
-    if (isTurnRunning) {
-      return _textCatalog.cannotSwitchPermissionDuringTurn;
+  /// Actions runner 串行此操作与保存重试，保持破坏性错误读取归属。
+  @override
+  Future<AgentCommandOutcome> selectPermissionOption(
+    AgentPermissionOption option,
+  ) async {
+    if (!_permissionSelectionController.hasPort) {
+      throw UnsupportedError('Permission selection is unavailable');
     }
+    if (isTurnRunning ||
+        !_permissionSelectionController.options.any(
+          (candidate) => candidate.id == option.id && candidate.allowed,
+        )) {
+      return const AgentCommandOutcome.ignored(
+        AgentCommandIgnoreReason.notAllowed,
+      );
+    }
+    final scope = currentCommandScope();
     await _permissionSelectionController.selectOption(option);
+    final failed = _permissionSelectionController.takeLastError() != null;
+    if (_disposed || !scope.matchesForCommit(currentCommandScope())) {
+      return const AgentCommandOutcome.failed(
+        AgentCommandFailureKind.staleTarget,
+      );
+    }
     _publishUiChanges(
       AgentUiUpdateRequest(
-        regions: const <AgentUiRegion>{AgentUiRegion.composer},
+        regions: const {AgentUiRegion.composer},
         urgency: AgentUiUpdateUrgency.immediate,
       ),
     );
-    return _permissionSelectionController.takeLastError();
+    return failed
+        ? const AgentCommandOutcome.failed(
+            AgentCommandFailureKind.requestFailed,
+          )
+        : const AgentCommandOutcome.succeeded();
   }
 
-  /// 最近一次权限 apply 的紧凑提示（下次会话生效等）。
-  String? takePermissionApplyHint() =>
-      _permissionSelectionController.takeApplyHint();
-
   /// 只重试默认偏好持久化，不重复调用 Provider apply。
-  Future<bool> retryPermissionPreferencePersistence() async {
+  @override
+  Future<AgentCommandOutcome> retryPermissionPreferencePersistence() async {
+    if (!_permissionSelectionController.hasPort) {
+      throw UnsupportedError('Permission selection is unavailable');
+    }
+    final scope = currentCommandScope();
     final succeeded = await _permissionSelectionController
         .retryPersistOptionId();
+    _permissionSelectionController.takeLastError();
+    if (_disposed || !scope.matchesForCommit(currentCommandScope())) {
+      return const AgentCommandOutcome.failed(
+        AgentCommandFailureKind.staleTarget,
+      );
+    }
     _publishUiChanges(
       AgentUiUpdateRequest(
-        regions: const <AgentUiRegion>{AgentUiRegion.composer},
+        regions: const {AgentUiRegion.composer},
         urgency: AgentUiUpdateUrgency.immediate,
       ),
     );
-    return succeeded;
+    return succeeded
+        ? const AgentCommandOutcome.succeeded()
+        : const AgentCommandOutcome.failed(
+            AgentCommandFailureKind.requestFailed,
+          );
   }
 
   /// Guardian 拒绝后的人工放行。
@@ -1404,17 +1481,23 @@ final class AgentConversationRuntimeController
         : const AgentCommandOutcome.failed(AgentCommandFailureKind.unsupported);
   }
 
-  Future<bool> selectFastEnabled(bool enabled) =>
+  @override
+  Future<AgentCommandOutcome> selectFastEnabled(bool enabled) =>
       _modelSelectionController.selectFastEnabled(enabled);
 
-  Future<bool> resolveModelCompatibilityConflict() =>
+  @override
+  Future<AgentCommandOutcome> resolveModelCompatibilityConflict() =>
       _modelSelectionController.resolveCompatibilityConflict();
 
-  Future<bool> retryModelConfigurationSave() =>
+  @override
+  Future<AgentCommandOutcome> retryModelConfigurationSave() =>
       _modelSelectionController.retryFailedSelection();
 
-  void clearModelConfigurationTransientState() =>
-      _modelSelectionController.clearTransientState();
+  @override
+  AgentCommandOutcome clearModelConfigurationTransientState() {
+    _modelSelectionController.clearTransientState();
+    return const AgentCommandOutcome.succeeded();
+  }
 
   // 仅串行同一配置项；取消和审批始终使用各自的独立通道。
   final Map<String, Future<void>> _sessionConfigTails = {};
@@ -1837,7 +1920,8 @@ final class AgentConversationRuntimeController
     _projectPath = projectPath;
     _contextFilePath = contextFilePath;
     if (projectChanged && canUseSkills) {
-      unawaited(ensureSkillsCatalog());
+      // Context bootstrap has no user command; missing optional catalogs are valid.
+      unawaited(_preloadContextSkills());
     }
     _publishUiChanges(
       AgentUiUpdateRequest(
@@ -2314,6 +2398,7 @@ final class AgentConversationRuntimeController
       // 也不建立 live 事件订阅。下一次用户提交时才由 beginTurn resume。
       // Thread entry 是独立 VM：共享 catalog 预热不会写入本实例的 _modelList。
       // 打开历史时与读 history 并行 hydrate，避免 composer 因 models 为空隐藏选择器。
+      // Entry bootstrap hydrates catalogs internally; user refreshes use Actions.
       final modelsFuture = loadModels();
       if (previousThreadId != null && previousThreadId != thread.id) {
         // 不阻塞历史加载：退订失败只记日志。
@@ -2623,6 +2708,7 @@ final class AgentConversationRuntimeController
     }
 
     final switchToken = _threadSwitchToken;
+    final sourceScope = currentCommandScope();
     _status = AgentProviderStatus(
       state: AgentProviderConnectionState.running,
       message: _textCatalog.creatingBranch,
@@ -2660,16 +2746,27 @@ final class AgentConversationRuntimeController
           ),
         );
       });
-      if (!_isCurrentSwitch(switchToken)) {
+      if (!_isCurrentSwitch(switchToken) ||
+          !sourceScope.matchesForCommit(currentCommandScope())) {
         return const AgentCommandOutcome.failed(
           AgentCommandFailureKind.staleTarget,
         );
       }
-      await _openCreatedThread(session, initialMessage: trimmed);
+      final outcome = await _openCreatedThread(
+        session,
+        initialMessage: trimmed,
+      );
+      if (!_isCurrentSwitch(switchToken) ||
+          !sourceScope.matchesForCommit(currentCommandScope())) {
+        return const AgentCommandOutcome.failed(
+          AgentCommandFailureKind.staleTarget,
+        );
+      }
       _restoreSourceAfterBranchCreated();
-      return const AgentCommandOutcome.succeeded();
+      return outcome;
     } on Object catch (error) {
-      if (!_isCurrentSwitch(switchToken)) {
+      if (!_isCurrentSwitch(switchToken) ||
+          !sourceScope.matchesForCommit(currentCommandScope())) {
         return const AgentCommandOutcome.failed(
           AgentCommandFailureKind.staleTarget,
         );
@@ -2691,12 +2788,16 @@ final class AgentConversationRuntimeController
 
   /// 分叉当前会话为新 thread，并切换到分叉结果。
   @override
-  Future<AgentSession?> forkCurrentThread() async {
+  Future<AgentForkCommandOutcome> forkCurrentThread() async {
     final threadId = sessionId;
     if (threadId == null || !canForkCurrentThread) {
-      return null;
+      return AgentForkCommandOutcome.ignored(
+        AgentCommandIgnoreReason.notAllowed,
+      );
     }
     final switchToken = _threadSwitchToken;
+    final sourceScope = currentCommandScope();
+    AgentSession? createdSession;
     try {
       final session = await _runGlobalBundle((bundle) {
         final threadBranching = bundle.threadBranching;
@@ -2717,19 +2818,59 @@ final class AgentConversationRuntimeController
           ),
         );
       });
-      if (!_isCurrentSwitch(switchToken)) {
-        return session;
+      createdSession = session;
+      if (!_isCurrentSwitch(switchToken) ||
+          !sourceScope.matchesForCommit(currentCommandScope())) {
+        return AgentForkCommandOutcome.failed(
+          AgentCommandFailureKind.staleTarget,
+          createdSession: session,
+        );
       }
-      await _openCreatedThread(session);
-      return session;
+      final outcome = await _openCreatedThread(session);
+      if (!_isCurrentSwitch(switchToken) ||
+          !sourceScope.matchesForCommit(currentCommandScope())) {
+        return AgentForkCommandOutcome.failed(
+          AgentCommandFailureKind.staleTarget,
+          createdSession: session,
+        );
+      }
+      return switch (outcome) {
+        AgentCommandSucceeded() => AgentForkCommandOutcome.completed(session),
+        AgentCommandFailed(:final kind) => AgentForkCommandOutcome.failed(
+          kind,
+          createdSession: session,
+        ),
+        AgentCommandIgnored() => AgentForkCommandOutcome.failed(
+          AgentCommandFailureKind.staleTarget,
+          createdSession: session,
+        ),
+      };
+    } on UnsupportedError {
+      if (createdSession != null) {
+        return AgentForkCommandOutcome.failed(
+          AgentCommandFailureKind.unsupported,
+          createdSession: createdSession,
+        );
+      }
+      rethrow;
     } catch (error) {
+      if (!_isCurrentSwitch(switchToken) ||
+          !sourceScope.matchesForCommit(currentCommandScope())) {
+        return AgentForkCommandOutcome.failed(
+          AgentCommandFailureKind.staleTarget,
+          createdSession: createdSession,
+        );
+      }
       _log.w('Could not fork thread $threadId (${error.runtimeType})');
       _markError('Could not fork thread', details: error.toString());
-      return null;
+      return AgentForkCommandOutcome.failed(
+        AgentCommandFailureKind.requestFailed,
+        createdSession: createdSession,
+      );
     }
   }
 
-  Future<void> _openCreatedThread(
+  Future<AgentCommandOutcome> _openCreatedThread(
     AgentSession session, {
     String? initialMessage,
   }) {
@@ -3307,6 +3448,17 @@ final class AgentConversationRuntimeController
       AgentUiUpdateRequest(urgency: AgentUiUpdateUrgency.immediate),
     );
     _log.t('Bound conversation runtime: ${bundle.runtime.config.id}');
+  }
+
+  Future<void> _preloadContextSkills() async {
+    try {
+      await _runGlobalBundle(
+        _ensureSkillsCatalog,
+        preferredProviderId: _selectedProviderId,
+      );
+    } on Object catch (error) {
+      _log.w('Could not preload context skills (${error.runtimeType})');
+    }
   }
 
   Future<void> _ensureSkillsCatalog(AgentProviderBundle bundle) async {

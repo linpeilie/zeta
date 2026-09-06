@@ -1,6 +1,7 @@
+import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_actions.dart';
 import 'dart:async';
 
-import 'package:zeta/src/features/agent/presentation/agent_presentation_l10n.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -326,6 +327,7 @@ class AgentThreadHistoryLoading extends StatelessWidget {
 class AgentConversationTimeline extends StatelessWidget {
   const AgentConversationTimeline({
     required this.controller,
+    required this.actions,
     required this.isActive,
     required this.scrollController,
     required this.pagePadding,
@@ -343,6 +345,7 @@ class AgentConversationTimeline extends StatelessWidget {
   });
 
   final AgentConversationRuntimeController controller;
+  final AgentConversationActions actions;
 
   /// 前台才订阅 live 流式 listenable。
   final bool isActive;
@@ -732,6 +735,7 @@ class AgentConversationTimeline extends StatelessWidget {
           key: const ValueKey('agent-live-turn-section'),
           child: AgentLiveActivityStatus(
             controller: controller,
+            actions: actions,
             isActive: isActive,
           ),
         );
@@ -827,12 +831,14 @@ class _AgentTimelineBlockSection extends StatelessWidget {
 class AgentPendingInteractionSection extends StatelessWidget {
   const AgentPendingInteractionSection({
     required this.controller,
+    required this.actions,
     required this.panelHeight,
     required this.pagePadding,
     super.key,
   });
 
   final AgentConversationRuntimeController controller;
+  final AgentConversationActions actions;
   final double panelHeight;
   final EdgeInsets pagePadding;
 
@@ -885,7 +891,7 @@ class AgentPendingInteractionSection extends StatelessWidget {
           ),
           child: AgentQuestionCard(
             request: questionRequests[index],
-            onRespond: (answers) => controller.respondToQuestion(
+            onRespond: (answers) => actions.respondToQuestion(
               questionRequests[index],
               answers: answers,
             ),
@@ -925,7 +931,7 @@ class AgentPendingInteractionSection extends StatelessWidget {
       request: request,
       autoReview: state.autoReviewForTurn(request.turnId),
       onApproveGuardian: state.latestDeniedAutoReview != null
-          ? controller.approveGuardianDeniedAction
+          ? actions.approveGuardianDeniedAction
           : null,
       onRespond:
           ({
@@ -933,7 +939,7 @@ class AgentPendingInteractionSection extends StatelessWidget {
             bool cancelTurn = false,
             AgentCommandApprovalDecisionKind? commandDecision,
             List<String> execpolicyAmendment = const <String>[],
-          }) => controller.respondToPermission(
+          }) => actions.respondToPermission(
             request,
             approved: approved,
             cancelTurn: cancelTurn,
@@ -947,6 +953,7 @@ class AgentPendingInteractionSection extends StatelessWidget {
 class AgentComposerSection extends StatelessWidget {
   const AgentComposerSection({
     required this.controller,
+    required this.actions,
     required this.state,
     required this.inputController,
     required this.composerFocusNode,
@@ -963,6 +970,7 @@ class AgentComposerSection extends StatelessWidget {
   });
 
   final AgentConversationRuntimeController controller;
+  final AgentConversationActions actions;
   final AgentComposerState state;
   final TextEditingController inputController;
   final FocusNode composerFocusNode;
@@ -999,7 +1007,7 @@ class AgentComposerSection extends StatelessWidget {
                 onAttachImages: onAttachImages,
                 onRemoveImage: onRemoveImage,
                 onSend: onSend,
-                onCancel: controller.cancelActiveTurn,
+                onCancel: actions.cancelActiveTurn,
                 showImageAttachment: state.canAttachImages,
                 showResourceMention: state.canMentionResources,
                 showSkillInsert: state.canUseSkills,
@@ -1011,7 +1019,7 @@ class AgentComposerSection extends StatelessWidget {
                 conversationModeAppliesToNextTurn:
                     state.conversationModeAppliesToNextTurn,
                 conversationModeContextId: state.conversationModeContextId,
-                onSelectConversationMode: controller.selectConversationMode,
+                onSelectConversationMode: actions.selectConversationMode,
                 showModelSelection: state.showModelSelection,
                 modelConfigState: state.modelConfigState,
                 showPermissionPolicy: state.showPermissionPolicy,
@@ -1028,38 +1036,27 @@ class AgentComposerSection extends StatelessWidget {
                       .currentRuntime
                       ?.runtimeIdentity,
                 ),
-                onSelectModel: controller.selectModel,
-                onSelectReasoningEffort: controller.selectReasoningEffort,
-                onSelectFastEnabled: controller.selectFastEnabled,
+                onSelectModel: actions.selectModel,
+                onSelectReasoningEffort: actions.selectReasoningEffort,
+                onSelectFastEnabled: actions.selectFastEnabled,
                 onResolveModelCompatibility:
-                    controller.resolveModelCompatibilityConflict,
-                onRetryModelConfiguration:
-                    controller.retryModelConfigurationSave,
+                    actions.resolveModelCompatibilityConflict,
+                onRetryModelConfiguration: actions.retryModelConfigurationSave,
                 onCloseModelConfiguration:
-                    controller.clearModelConfigurationTransientState,
+                    actions.clearModelConfigurationTransientState,
                 onSelectPermissionOption: (option) async {
-                  final error = await controller.selectPermissionOption(option);
-                  if (!context.mounted) {
-                    return;
-                  }
-                  if (error != null && error.isNotEmpty) {
+                  final outcome = await actions.selectPermissionOption(option);
+                  if (context.mounted &&
+                      outcome is AgentCommandFailed &&
+                      outcome.kind != AgentCommandFailureKind.staleTarget) {
                     showIdeToast(
                       context,
-                      message: error,
+                      message: context.l10n.agentPermSwitchFailed,
                       tone: IdeToastTone.error,
                     );
-                    return;
-                  }
-                  final hint = controller.takePermissionApplyHint();
-                  if (hint != null && hint.isNotEmpty) {
-                    showIdeToast(context, message: hint);
                   }
                 },
-                onSelectSessionConfigOption: (configId, value) =>
-                    invokeSessionConfigCommand(
-                      () =>
-                          controller.selectSessionConfigOption(configId, value),
-                    ),
+                onSelectSessionConfigOption: actions.selectSessionConfigOption,
                 onOpenMentionPicker: onOpenMentionPicker,
                 onInsertSkill: onInsertSkill,
               ),

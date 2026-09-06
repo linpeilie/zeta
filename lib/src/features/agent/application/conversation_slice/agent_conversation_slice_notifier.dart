@@ -1,3 +1,7 @@
+import 'agent_conversation_actions.dart';
+import 'agent_conversation_command_payload.dart';
+import 'agent_conversation_command_result.dart';
+import 'agent_conversation_command_result_sink.dart';
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:meta/meta.dart';
@@ -47,7 +51,7 @@ final agentConversationSliceOwnerProvider = NotifierProvider.autoDispose
 /// entry 生命周期内唯一的轻量 region 与命令账本 owner。
 final class AgentConversationSliceNotifier
     extends Notifier<AgentConversationSliceState>
-    implements AgentConversationResultSink {
+    implements AgentConversationActions, AgentConversationCommandResultSink {
   AgentConversationSliceNotifier(this.ownerKey);
   final AgentConversationOwnerKey ownerKey;
   AgentConversationSliceEffectRunner? _effectRunner;
@@ -113,10 +117,7 @@ final class AgentConversationSliceNotifier
   int _effectCount = 0;
   int _staleResultCount = 0;
 
-  /// 当前切片状态。
-
-  /// store 是否已关闭。
-  @override
+  /// 当前 owner 是否已关闭。
   bool get isClosed => _closed;
 
   AgentConversationSliceDiagnostics get diagnostics =>
@@ -145,9 +146,15 @@ final class AgentConversationSliceNotifier
       _staleResultCount += 1;
     }
 
+    if (intent is AgentConversationCommandRequested &&
+        transition.effects.isEmpty) {
+      throw StateError('Command did not produce an effect');
+    }
     for (final effect in transition.effects) {
       _effectCount += 1;
-      _effectRunner?.run(effect);
+      final runner = _effectRunner;
+      if (runner == null) throw StateError('Conversation runner is closed');
+      runner.run(effect);
     }
   }
 
@@ -196,239 +203,344 @@ final class AgentConversationSliceNotifier
   // 命令入口：铸造身份 → dispatch
   // -------------------------------------------------------------------------
 
-  OperationId _nextOperationId(String scope) {
-    final generator = _generators.putIfAbsent(
-      scope,
-      () => _generatorFactory!(scope),
-    );
-    return generator.next();
-  }
+  final Map<OperationId, Completer<AgentConversationCommandResult>> _waiters =
+      {};
+  final Map<OperationId, AgentConversationCommandEnvelope> _inFlight = {};
+  // 四类 admission 表只隔离重复提交，不合并任何审批决定或授权状态。
+  final Set<String> _permissionAdmissions = {};
+  final Set<String> _questionAdmissions = {};
+  final Set<String> _planApprovalAdmissions = {};
+  final Set<String> _planExecutionAdmissions = {};
 
-  /// 命令身份 = 操作 id + 发起时的作用域快照。两者在同一时刻拍下。
-  ({OperationId operationId, AgentConversationCommandScope scope}) _identity(
-    String scope,
+  (Set<String>, String)? _admission(AgentConversationCommandPayload payload) =>
+      switch (payload) {
+        AgentRespondPermissionCommand(:final request) => (
+          _permissionAdmissions,
+          request.id,
+        ),
+        AgentRespondQuestionCommand(:final request) => (
+          _questionAdmissions,
+          request.id,
+        ),
+        AgentRespondPlanApprovalCommand(:final request) => (
+          _planApprovalAdmissions,
+          request.id,
+        ),
+        AgentStartPlanExecutionCommand(:final request) ||
+        AgentRevisePlanExecutionCommand(:final request) ||
+        AgentDismissPlanExecutionCommand(
+          :final request,
+        ) => (_planExecutionAdmissions, request.id),
+        _ => null,
+      };
+
+  Future<AgentConversationCommandResult> _submit(
+    AgentConversationCommandPayload Function() freeze,
   ) {
-    if (_closed) throw StateError('Conversation command ingress is closed');
-    return (operationId: _nextOperationId(scope), scope: _scopeSnapshot!());
+    if (_closed) return Future.value(_staleResult);
+    late final AgentConversationCommandEnvelope command;
+    late final AgentConversationCommandPayload payload;
+    try {
+      payload = freeze();
+      final admission = _admission(payload);
+      if (admission != null && admission.$1.contains(admission.$2)) {
+        return Future.value(
+          const AgentConversationCommandResult.regular(
+            AgentCommandOutcome.ignored(
+              AgentCommandIgnoreReason.alreadyPending,
+            ),
+          ),
+        );
+      }
+      final generator = _generators.putIfAbsent(
+        payload.fixedScope,
+        () => _generatorFactory!(payload.fixedScope),
+      );
+      command = AgentConversationCommandEnvelope(
+        id: generator.next(),
+        scope: _scopeSnapshot!(),
+        ownerLifetimeToken: ownerKey.lifetimeToken,
+        payload: payload,
+      );
+      admission?.$1.add(admission.$2);
+    } on Object {
+      return Future.value(
+        const AgentConversationCommandResult.regular(
+          AgentCommandOutcome.failed(AgentCommandFailureKind.requestFailed),
+        ),
+      );
+    }
+    final waiter = Completer<AgentConversationCommandResult>();
+    _waiters[command.id] = waiter;
+    _inFlight[command.id] = command;
+    try {
+      dispatch(AgentConversationCommandRequested(command));
+    } on Object {
+      settle(
+        command.id,
+        const AgentConversationCommandResult.regular(
+          AgentCommandOutcome.failed(AgentCommandFailureKind.requestFailed),
+        ),
+      );
+    }
+    return waiter.future;
   }
 
-  OperationId sendMessage({
-    required String text,
-    List<String> localImagePaths = const <String>[],
-    List<({String name, String path})> mentions =
-        const <({String name, String path})>[],
-    List<AgentSkillRef> skills = const <AgentSkillRef>[],
-  }) {
-    final identity = _identity(AgentConversationOperationScopes.send);
-    dispatch(
-      AgentConversationSendMessageRequested(
-        identity.operationId,
-        identity.scope,
-        text: text,
-        localImagePaths: localImagePaths,
-        mentions: mentions,
-        skills: skills,
-      ),
-    );
-    return identity.operationId;
-  }
-
-  OperationId cancelActiveTurn() {
-    final identity = _identity(AgentConversationOperationScopes.cancel);
-    dispatch(
-      AgentConversationActiveTurnCancelRequested(
-        identity.operationId,
-        identity.scope,
-      ),
-    );
-    return identity.operationId;
-  }
-
-  OperationId editLastUserMessage(String text) {
-    final identity = _identity(
-      AgentConversationOperationScopes.editLastMessage,
-    );
-    dispatch(
-      AgentConversationLastUserMessageEditRequested(
-        identity.operationId,
-        identity.scope,
-        text: text,
-      ),
-    );
-    return identity.operationId;
-  }
-
-  OperationId retryOpenThread() {
-    final identity = _identity(AgentConversationOperationScopes.retryOpen);
-    dispatch(
-      AgentConversationThreadOpenRetried(identity.operationId, identity.scope),
-    );
-    return identity.operationId;
-  }
-
-  /// 权限决定。**独立链路**：不复用提问 / Plan 的任何已授权状态（G5）。
-  OperationId respondToPermission(
+  @override
+  Future<AgentCommandOutcome> sendMessage(
+    String text, {
+    List<String> localImagePaths = const [],
+    List<({String name, String path})> mentions = const [],
+    List<AgentSkillRef> skills = const [],
+    AgentPermissionRequestSnapshot? permissionSnapshotOverride,
+  }) => _submit(
+    () => AgentSendMessageCommand(
+      text: text,
+      localImagePaths: localImagePaths,
+      mentions: mentions,
+      skills: skills,
+      permissionSnapshotOverride: permissionSnapshotOverride,
+    ),
+  ).then((result) => result.outcome);
+  @override
+  Future<AgentCommandOutcome> cancelActiveTurn() => _submit(
+    () => AgentCancelActiveTurnCommand(),
+  ).then((result) => result.outcome);
+  @override
+  Future<AgentCommandOutcome> editLastUserMessageAndRetry(String newText) =>
+      _submit(
+        () => AgentEditLastUserMessageCommand(newText: newText),
+      ).then((result) => result.outcome);
+  @override
+  Future<AgentCommandOutcome> retryOpenThread() => _submit(
+    () => AgentRetryOpenThreadCommand(),
+  ).then((result) => result.outcome);
+  @override
+  Future<AgentCommandOutcome> respondToPermission(
     AgentPermissionRequest request, {
     required bool approved,
     bool cancelTurn = false,
     AgentCommandApprovalDecisionKind? commandDecision,
-    List<String> execpolicyAmendment = const <String>[],
-  }) {
-    final identity = _identity(AgentConversationOperationScopes.permission);
-    dispatch(
-      AgentConversationPermissionResponded(
-        identity.operationId,
-        identity.scope,
-        request: request,
-        approved: approved,
-        cancelTurn: cancelTurn,
-        commandDecision: commandDecision,
-        execpolicyAmendment: execpolicyAmendment,
-      ),
-    );
-    return identity.operationId;
-  }
-
-  /// 提问回答。**独立链路**。
-  OperationId respondToQuestion(
+    List<String> execpolicyAmendment = const [],
+  }) => _submit(
+    () => AgentRespondPermissionCommand(
+      request: request,
+      approved: approved,
+      cancelTurn: cancelTurn,
+      commandDecision: commandDecision,
+      execpolicyAmendment: execpolicyAmendment,
+    ),
+  ).then((result) => result.outcome);
+  @override
+  Future<AgentCommandOutcome> respondToQuestion(
     AgentQuestionRequest request, {
-    Map<String, List<String>> answers = const <String, List<String>>{},
-  }) {
-    final identity = _identity(AgentConversationOperationScopes.question);
-    dispatch(
-      AgentConversationQuestionResponded(
-        identity.operationId,
-        identity.scope,
-        request: request,
-        answers: answers,
-      ),
-    );
-    return identity.operationId;
-  }
-
-  /// Plan 审批。**独立链路**。
-  OperationId respondToPlanApproval(
+    Map<String, List<String>> answers = const {},
+  }) => _submit(
+    () => AgentRespondQuestionCommand(request: request, answers: answers),
+  ).then((result) => result.outcome);
+  @override
+  Future<AgentCommandOutcome> respondToPlanApproval(
     AgentPlanApprovalRequest request,
-    AgentPlanApprovalDecisionKind decision, {
+    AgentPlanApprovalDecisionKind kind, {
     String? reason,
-  }) {
-    final identity = _identity(AgentConversationOperationScopes.planApproval);
-    dispatch(
-      AgentConversationPlanApprovalResponded(
-        identity.operationId,
-        identity.scope,
-        request: request,
-        decision: decision,
-        reason: reason,
-      ),
-    );
-    return identity.operationId;
-  }
-
-  /// Plan 本地执行交接。**独立链路**。
-  OperationId startPlanExecution(AgentPlanExecutionRequest request) {
-    final identity = _identity(AgentConversationOperationScopes.planExecution);
-    dispatch(
-      AgentConversationPlanExecutionStarted(
-        identity.operationId,
-        identity.scope,
-        request: request,
-      ),
-    );
-    return identity.operationId;
-  }
-
-  OperationId revisePlanExecution(
+  }) => _submit(
+    () => AgentRespondPlanApprovalCommand(
+      request: request,
+      kind: kind,
+      reason: reason,
+    ),
+  ).then((result) => result.outcome);
+  @override
+  Future<AgentCommandOutcome> startPlanExecution(
+    AgentPlanExecutionRequest request,
+  ) => _submit(
+    () => AgentStartPlanExecutionCommand(request: request),
+  ).then((result) => result.outcome);
+  @override
+  Future<AgentCommandOutcome> revisePlanExecution(
     AgentPlanExecutionRequest request, {
-    required String feedback,
-  }) {
-    final identity = _identity(AgentConversationOperationScopes.planExecution);
-    dispatch(
-      AgentConversationPlanExecutionRevised(
-        identity.operationId,
-        identity.scope,
-        request: request,
-        feedback: feedback,
-      ),
-    );
-    return identity.operationId;
-  }
-
-  void dismissPlanExecution(AgentPlanExecutionRequest request) =>
-      dispatch(AgentConversationPlanExecutionDismissed(request));
-
-  OperationId approveGuardianDeniedAction() {
-    final identity = _identity(
-      AgentConversationOperationScopes.guardianOverride,
-    );
-    dispatch(
-      AgentConversationGuardianDeniedActionApproved(
-        identity.operationId,
-        identity.scope,
-      ),
-    );
-    return identity.operationId;
-  }
-
-  OperationId mutateThread(
-    AgentConversationThreadMutationKind kind, {
-    String? name,
-  }) {
-    final identity = _identity(AgentConversationOperationScopes.threadMutation);
-    dispatch(
-      AgentConversationThreadMutationRequested(
-        identity.operationId,
-        identity.scope,
-        kind: kind,
-        name: name,
-      ),
-    );
-    return identity.operationId;
-  }
-
-  OperationId loadCatalog(
-    AgentConversationCatalogKind kind, {
-    bool forceRefresh = false,
-  }) {
-    final identity = _identity(AgentConversationOperationScopes.catalog);
-    dispatch(
-      AgentConversationCatalogLoadRequested(
-        identity.operationId,
-        identity.scope,
-        kind: kind,
-        forceRefresh: forceRefresh,
-      ),
-    );
-    return identity.operationId;
-  }
-
-  void toggleExpansion(AgentConversationExpansionTarget target, String id) =>
-      dispatch(AgentConversationExpansionToggled(target: target, id: id));
-
-  // -------------------------------------------------------------------------
-  // result 回写
-  // -------------------------------------------------------------------------
-
-  /// 命令成功。身份对不上（例如已被新一次操作取代）时静默丢弃。
+    String? revisionMessage,
+  }) => _submit(
+    () => AgentRevisePlanExecutionCommand(
+      request: request,
+      revisionMessage: revisionMessage,
+    ),
+  ).then((result) => result.outcome);
   @override
-  void completeCommand(OperationId operationId) =>
-      dispatch(AgentConversationCommandSucceeded(operationId));
-
-  /// 命令失败。
-  ///
-  /// 只收**分类**：调用方不得把原始错误文本传进来当 UI 文案。
+  Future<AgentCommandOutcome> dismissPlanExecution(
+    AgentPlanExecutionRequest request,
+  ) => _submit(
+    () => AgentDismissPlanExecutionCommand(request: request),
+  ).then((result) => result.outcome);
   @override
-  void failCommand(OperationId operationId, AgentCommandFailureKind kind) =>
-      dispatch(
-        AgentConversationCommandFailed(
-          AgentConversationOperationFailure(
-            operationId: operationId,
-            kind: kind,
-          ),
-        ),
+  Future<AgentCommandOutcome> selectPlanExecutionPermissionOption(
+    AgentPlanExecutionRequest request,
+    AgentPermissionOption option,
+  ) => _submit(
+    () => AgentSelectPlanExecutionPermissionCommand(
+      request: request,
+      option: option,
+    ),
+  ).then((result) => result.outcome);
+  @override
+  Future<AgentCommandOutcome> approveGuardianDeniedAction() => _submit(
+    () => AgentApproveGuardianDeniedActionCommand(),
+  ).then((result) => result.outcome);
+  @override
+  Future<AgentForkCommandOutcome> forkCurrentThread() =>
+      _submit(() => AgentForkCurrentThreadCommand()).then(
+        (result) =>
+            result.fork ??
+            AgentForkCommandOutcome.fromRegularFailure(result.outcome),
       );
+  @override
+  Future<AgentCommandOutcome> renameCurrentThread(String name) => _submit(
+    () => AgentRenameCurrentThreadCommand(name: name),
+  ).then((result) => result.outcome);
+  @override
+  Future<AgentCommandOutcome> archiveCurrentThread() => _submit(
+    () => AgentArchiveCurrentThreadCommand(),
+  ).then((result) => result.outcome);
+  @override
+  Future<AgentCommandOutcome> compactCurrentThread() => _submit(
+    () => AgentCompactCurrentThreadCommand(),
+  ).then((result) => result.outcome);
+  @override
+  Future<AgentCommandOutcome> toggleToolCall(String toolCallId) => _submit(
+    () => AgentToggleExpansionCommand(
+      target: AgentConversationExpansionTarget.toolCall,
+      id: toolCallId,
+    ),
+  ).then((result) => result.outcome);
+  @override
+  Future<AgentCommandOutcome> togglePlanMessage(String messageId) => _submit(
+    () => AgentToggleExpansionCommand(
+      target: AgentConversationExpansionTarget.planMessage,
+      id: messageId,
+    ),
+  ).then((result) => result.outcome);
+  @override
+  Future<AgentCommandOutcome> toggleActivePlan(String turnId) => _submit(
+    () => AgentToggleExpansionCommand(
+      target: AgentConversationExpansionTarget.activePlan,
+      id: turnId,
+    ),
+  ).then((result) => result.outcome);
+  @override
+  Future<AgentCommandOutcome> toggleCommandGroup(String commandGroupId) =>
+      _submit(
+        () => AgentToggleExpansionCommand(
+          target: AgentConversationExpansionTarget.commandGroup,
+          id: commandGroupId,
+        ),
+      ).then((result) => result.outcome);
+  @override
+  Future<AgentCommandOutcome> toggleFileEditItem(String fileEditItemId) =>
+      _submit(
+        () => AgentToggleExpansionCommand(
+          target: AgentConversationExpansionTarget.fileEditItem,
+          id: fileEditItemId,
+        ),
+      ).then((result) => result.outcome);
+  @override
+  Future<AgentCommandOutcome> loadModels({bool forceRefresh = false}) =>
+      _submit(
+        () => AgentLoadModelsCommand(forceRefresh: forceRefresh),
+      ).then((result) => result.outcome);
+  @override
+  Future<AgentCommandOutcome> ensureSkillsCatalog() => _submit(
+    () => AgentEnsureSkillsCatalogCommand(),
+  ).then((result) => result.outcome);
+  @override
+  Future<AgentCommandOutcome> retryConversationModes() => _submit(
+    () => AgentRetryConversationModesCommand(),
+  ).then((result) => result.outcome);
+  @override
+  Future<AgentCommandOutcome> selectConversationMode(
+    AgentConversationModeId modeId,
+  ) => _submit(
+    () => AgentSelectConversationModeCommand(modeId: modeId),
+  ).then((result) => result.outcome);
+  @override
+  Future<AgentCommandOutcome> selectModel(String modelId) => _submit(
+    () => AgentSelectModelCommand(modelId: modelId),
+  ).then((result) => result.outcome);
+  @override
+  Future<AgentCommandOutcome> selectReasoningEffort(String? effort) => _submit(
+    () => AgentSelectReasoningEffortCommand(effort: effort),
+  ).then((result) => result.outcome);
+  @override
+  Future<AgentCommandOutcome> selectFastEnabled(bool enabled) => _submit(
+    () => AgentSelectFastEnabledCommand(enabled: enabled),
+  ).then((result) => result.outcome);
+  @override
+  Future<AgentCommandOutcome> resolveModelCompatibilityConflict() => _submit(
+    () => AgentResolveModelCompatibilityCommand(),
+  ).then((result) => result.outcome);
+  @override
+  Future<AgentCommandOutcome> retryModelConfigurationSave() => _submit(
+    () => AgentRetryModelSaveCommand(),
+  ).then((result) => result.outcome);
+  @override
+  Future<AgentCommandOutcome> clearModelConfigurationTransientState() =>
+      _submit(
+        () => AgentClearModelTransientStateCommand(),
+      ).then((result) => result.outcome);
+  @override
+  Future<AgentCommandOutcome> selectPermissionOption(
+    AgentPermissionOption option,
+  ) => _submit(
+    () => AgentSelectPermissionOptionCommand(option: option),
+  ).then((result) => result.outcome);
+  @override
+  Future<AgentCommandOutcome> retryPermissionPreferencePersistence() => _submit(
+    () => AgentRetryPermissionPersistenceCommand(),
+  ).then((result) => result.outcome);
+  @override
+  Future<AgentCommandOutcome> selectSessionConfigOption(
+    String configId,
+    Object value,
+  ) => _submit(
+    () =>
+        AgentSelectSessionConfigOptionCommand(configId: configId, value: value),
+  ).then((result) => result.outcome);
+  @override
+  Future<AgentCommandOutcome> switchActiveProvider(String providerId) =>
+      _submit(
+        () => AgentSwitchProviderCommand(providerId: providerId),
+      ).then((result) => result.outcome);
 
-  /// 封闭唯一命令入口；当前账本不对外提供 Future，清空即结算所有在途身份。
+  @override
+  bool isOpenOperation(OperationId id, Object ownerLifetimeToken) =>
+      !_closed &&
+      identical(ownerLifetimeToken, ownerKey.lifetimeToken) &&
+      _inFlight.containsKey(id);
+
+  @override
+  void settle(OperationId id, AgentConversationCommandResult result) {
+    final waiter = _waiters.remove(id);
+    final command = _inFlight.remove(id);
+    if (waiter == null || command == null) {
+      _staleResultCount++;
+      return;
+    }
+    final admission = _admission(command.payload);
+    admission?.$1.remove(admission.$2);
+    final safeResult = result.withoutDiagnostic();
+    try {
+      if (!_closed) {
+        dispatch(AgentConversationOperationSettled(id, safeResult.failureKind));
+      }
+    } finally {
+      if (!waiter.isCompleted) waiter.complete(safeResult);
+    }
+  }
+
+  static const _staleResult = AgentConversationCommandResult.regular(
+    AgentCommandOutcome.failed(AgentCommandFailureKind.staleTarget),
+  );
+
+  /// 封闭命令入口，立即结算 UI 等待者；已发 I/O 由资源生命周期负责。
   void closeCommandIngress() {
     if (_closed) return;
     _closeResources();
@@ -450,6 +562,15 @@ final class AgentConversationSliceNotifier
   void _closeResources() {
     if (_closed) return;
     _closed = true;
+    for (final waiter in _waiters.values) {
+      if (!waiter.isCompleted) waiter.complete(_staleResult);
+    }
+    _waiters.clear();
+    _inFlight.clear();
+    _permissionAdmissions.clear();
+    _questionAdmissions.clear();
+    _planApprovalAdmissions.clear();
+    _planExecutionAdmissions.clear();
     _regions?.removeUiUpdateListener(_onUiUpdate);
     _regions = null;
     _effectRunner?.close();
@@ -472,12 +593,7 @@ final class AgentConversationSliceNotifier
     AgentConversationSliceState before,
     AgentConversationSliceIntent intent,
   ) {
-    return switch (intent) {
-      AgentConversationCommandSucceeded(:final operationId) ||
-      AgentConversationCommandFailed(
-        :final operationId,
-      ) => !before.pendingOperations.contains(operationId),
-      _ => false,
-    };
+    return intent is AgentConversationOperationSettled &&
+        !before.pendingOperations.contains(intent.id);
   }
 }

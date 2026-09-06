@@ -1,10 +1,11 @@
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_command_payload.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_command_result.dart';
 import '../../../../testing/conversation_test_scope.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_command_scope.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_effect.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_intent.dart';
-import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_reducer.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_state.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
@@ -17,8 +18,10 @@ void main() {
       final store = _store(runner);
       addTearDown(store.closeForEntryRelease);
 
-      final first = store.sendMessage(text: 'one');
-      final second = store.sendMessage(text: 'two');
+      store.sendMessage('one');
+      final first = store.current.pendingOperations.last;
+      store.sendMessage('two');
+      final second = store.current.pendingOperations.last;
 
       expect(first.scope, AgentConversationOperationScopes.send);
       expect(second.sequence, first.sequence + 1);
@@ -31,8 +34,10 @@ void main() {
       final store = _store(runner);
       addTearDown(store.closeForEntryRelease);
 
-      final send = store.sendMessage(text: 'one');
-      final cancel = store.cancelActiveTurn();
+      store.sendMessage('one');
+      final send = store.current.pendingOperations.last;
+      store.cancelActiveTurn();
+      final cancel = store.current.pendingOperations.last;
 
       expect(send.scope, AgentConversationOperationScopes.send);
       expect(cancel.scope, AgentConversationOperationScopes.cancel);
@@ -79,10 +84,21 @@ void main() {
       final store = _store(runner);
       addTearDown(store.closeForEntryRelease);
 
-      final first = store.sendMessage(text: 'one');
-      store.completeCommand(first);
+      store.sendMessage('one');
+      final first = store.current.pendingOperations.last;
+      store.settle(
+        first,
+        const AgentConversationCommandResult.regular(
+          AgentCommandOutcome.succeeded(),
+        ),
+      );
       // 同一个身份再回一次：已经不在途，必须丢弃。
-      store.completeCommand(first);
+      store.settle(
+        first,
+        const AgentConversationCommandResult.regular(
+          AgentCommandOutcome.succeeded(),
+        ),
+      );
 
       expect(store.current.pendingOperations, isEmpty);
       expect(store.diagnostics.staleResultCount, 1);
@@ -93,14 +109,20 @@ void main() {
       final store = _store(runner);
       addTearDown(store.closeForEntryRelease);
 
-      final first = store.sendMessage(text: 'one');
-      store.failCommand(first, AgentCommandFailureKind.requestFailed);
+      store.sendMessage('one');
+      final first = store.current.pendingOperations.last;
+      store.settle(
+        first,
+        const AgentConversationCommandResult.regular(
+          AgentCommandOutcome.failed(AgentCommandFailureKind.requestFailed),
+        ),
+      );
       expect(
         store.current.lastFailure?.kind,
         AgentCommandFailureKind.requestFailed,
       );
 
-      store.sendMessage(text: 'two');
+      store.sendMessage('two');
       expect(store.current.lastFailure, isNull);
     });
 
@@ -109,10 +131,11 @@ void main() {
       final store = _store(runner);
       addTearDown(store.closeForEntryRelease);
 
-      store.sendMessage(text: 'one');
+      store.sendMessage('one');
 
-      final effect = runner.effects.single as AgentConversationCommandEffect;
-      expect(effect.scope, _testScope);
+      final effect =
+          runner.effects.single as AgentConversationExecuteCommandEffect;
+      expect(effect.command.scope, _testScope);
     });
 
     test('作用域变化后发起的命令带的是新快照', () {
@@ -125,7 +148,7 @@ void main() {
       );
       addTearDown(store.closeForEntryRelease);
 
-      store.sendMessage(text: 'before restart');
+      store.sendMessage('before restart');
       scope = const AgentConversationCommandScope(
         bindingKey: AgentConversationBindingKey.thread(
           providerId: 'codex',
@@ -136,15 +159,20 @@ void main() {
         listenerGeneration: 2,
         threadId: 'thread-1',
       );
-      store.sendMessage(text: 'after restart');
+      store.sendMessage('after restart');
 
       final effects = runner.effects
-          .cast<AgentConversationCommandEffect>()
+          .cast<AgentConversationExecuteCommandEffect>()
           .toList();
-      expect(effects.first.scope.connectionEpoch, 1);
-      expect(effects.last.scope.connectionEpoch, 2);
+      expect(effects.first.command.scope.connectionEpoch, 1);
+      expect(effects.last.command.scope.connectionEpoch, 2);
       // 旧 effect 的快照不会被后来的世界改写。
-      expect(effects.first.scope.matchesForCommit(effects.last.scope), isFalse);
+      expect(
+        effects.first.command.scope.matchesForCommit(
+          effects.last.command.scope,
+        ),
+        isFalse,
+      );
     });
 
     test('dispose 后拒绝一切写入', () {
@@ -152,7 +180,16 @@ void main() {
       final store = _store(runner);
 
       store.closeForEntryRelease();
-      expect(() => store.sendMessage(text: 'ignored'), throwsStateError);
+      expect(
+        store.sendMessage('ignored'),
+        completion(
+          isA<AgentCommandFailed>().having(
+            (value) => value.kind,
+            'kind',
+            AgentCommandFailureKind.staleTarget,
+          ),
+        ),
+      );
 
       expect(store.isClosed, isTrue);
       expect(runner.effects, isEmpty);
@@ -167,7 +204,8 @@ void main() {
       addTearDown(first.closeForEntryRelease);
       addTearDown(second.closeForEntryRelease);
 
-      final firstOperation = first.sendMessage(text: 'a');
+      first.sendMessage('a');
+      final firstOperation = first.current.pendingOperations.last;
       second.refreshRegions(
         AgentConversationRegionsRefreshed(
           header: agentHeaderStateFixture(title: '第二个会话'),
@@ -190,13 +228,14 @@ void main() {
       addTearDown(second.closeForEntryRelease);
 
       first.closeForEntryRelease();
-      final operation = second.sendMessage(text: 'still works');
+      second.sendMessage('still works');
+      final operation = second.current.pendingOperations.last;
 
       expect(second.isClosed, isFalse);
       expect(second.current.pendingOperations, <Object>{operation});
       expect(
         secondRunner.effects.single,
-        isA<AgentConversationSendMessageEffect>(),
+        isA<AgentConversationExecuteCommandEffect>(),
       );
     });
 

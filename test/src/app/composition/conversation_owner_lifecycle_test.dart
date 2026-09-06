@@ -1,3 +1,5 @@
+import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_command_result.dart';
 import 'package:zeta/src/app/composition/agent_session_resource_providers.dart';
 import 'package:zeta/src/app/plugins/zeta_plugin_catalog.dart';
 import 'dart:async';
@@ -76,13 +78,15 @@ void main() {
       await entry.controller.loadSettings();
       final key = entry.ownerKey;
       final owner = c.read(agentConversationSliceOwnerProvider(key).notifier);
-      final first = owner.sendMessage(text: 'first');
+      owner.sendMessage('first');
+      final first = owner.current.pendingOperations.last;
       await _until(() => !owner.current.pendingOperations.contains(first));
       final previousRuntime = entry.binding.currentRuntime!.runtimeIdentity;
       await entry.binding.invalidateRuntime();
       c.invalidate(agentConversationWorkspaceInputsProvider);
       c.invalidate(agentConversationSessionDependenciesProvider(key));
-      final next = owner.sendMessage(text: 'after restart');
+      owner.sendMessage('after restart');
+      final next = owner.current.pendingOperations.last;
       await _until(() => !owner.current.pendingOperations.contains(next));
       expect(
         entry.binding.currentRuntime!.runtimeIdentity,
@@ -144,7 +148,8 @@ void main() {
       final draft = entry.binding.key;
       final key = entry.ownerKey;
       final owner = c.read(agentConversationSliceOwnerProvider(key).notifier);
-      final command = owner.sendMessage(text: 'first message');
+      owner.sendMessage('first message');
+      final command = owner.current.pendingOperations.last;
       await _until(() => !owner.current.pendingOperations.contains(command));
       expect(entry.binding.key, isNot(draft));
       expect(entry.ownerKey, same(key));
@@ -277,7 +282,8 @@ void main() {
         agentConversationSliceOwnerProvider(old.ownerKey),
         (_, _) {},
       );
-      final operation = oldOwner.sendMessage(text: 'old');
+      oldOwner.sendMessage('old');
+      final operation = oldOwner.current.pendingOperations.last;
       await w.lifetimes.closeEntry(old.ownerKey);
       final next = workspace.ensureThreadEntry(
         projectPath: '/repo',
@@ -293,7 +299,12 @@ void main() {
         isNot(same(old.ownerKey.lifetimeToken)),
       );
       expect(nextOwner, isNot(same(oldOwner)));
-      oldOwner.completeCommand(operation);
+      oldOwner.settle(
+        operation,
+        const AgentConversationCommandResult.regular(
+          AgentCommandOutcome.succeeded(),
+        ),
+      );
       expect(oldOwner.current.pendingOperations, isEmpty);
       expect(nextOwner.current, same(before));
       subscription.close();

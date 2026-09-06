@@ -1,3 +1,4 @@
+import 'agent_command_outcome.dart';
 import 'dart:async';
 
 import 'package:zeta_agent_core/zeta_agent_core.dart';
@@ -75,7 +76,8 @@ class AgentConversationModelSelectionController {
   String? _selectionNotice;
 
   Future<void>? _saveLoop;
-  final Map<int, Completer<bool>> _saveWaiters = <int, Completer<bool>>{};
+  final Map<int, Completer<AgentCommandOutcome>> _saveWaiters =
+      <int, Completer<AgentCommandOutcome>>{};
   int _revision = 0;
   int _processedRevision = 0;
   int _generation = 0;
@@ -139,7 +141,9 @@ class AgentConversationModelSelectionController {
   /// 切换 provider 时解绑旧实例，并按新配置清空、恢复模型状态。
   void resetForProvider(AgentProviderConfig config) {
     _generation += 1;
-    _completeAllWaiters(false);
+    _completeAllWaiters(
+      const AgentCommandOutcome.ignored(AgentCommandIgnoreReason.superseded),
+    );
     _revision = 0;
     _processedRevision = 0;
     _savingModelIds.clear();
@@ -173,7 +177,9 @@ class AgentConversationModelSelectionController {
   /// 用当前 thread/session 已知的运行时配置回填选择器，但不持久化为 provider 默认值。
   void applyRuntimeSelection(AgentModelSelection selection) {
     _generation += 1;
-    _completeAllWaiters(false);
+    _completeAllWaiters(
+      const AgentCommandOutcome.ignored(AgentCommandIgnoreReason.superseded),
+    );
     _revision = 0;
     _processedRevision = 0;
     _savingModelIds.clear();
@@ -245,14 +251,18 @@ class AgentConversationModelSelectionController {
   }
 
   /// 选择模型并恢复该模型上次通过 capability 校验的配置。
-  Future<bool> selectModel(String modelId) {
+  Future<AgentCommandOutcome> selectModel(String modelId) {
     final model = findModel(modelId);
     if (model == null || !model.enabled) {
-      return Future<bool>.value(false);
+      return Future.value(
+        const AgentCommandOutcome.ignored(AgentCommandIgnoreReason.notAllowed),
+      );
     }
     if (_modelSelection.modelId == modelId) {
       _clearTransientState();
-      return Future<bool>.value(true);
+      return Future.value(
+        const AgentCommandOutcome.ignored(AgentCommandIgnoreReason.unchanged),
+      );
     }
     final preference = _normalizePreference(
       model,
@@ -261,16 +271,20 @@ class AgentConversationModelSelectionController {
     return _applyPreference(preference, field: AgentModelConfigField.model);
   }
 
-  Future<bool> selectReasoningEffort(String? effort) {
+  Future<AgentCommandOutcome> selectReasoningEffort(String? effort) {
     final model = selectedModel;
     if (model == null) {
-      return Future<bool>.value(false);
+      return Future.value(
+        const AgentCommandOutcome.ignored(AgentCommandIgnoreReason.notAllowed),
+      );
     }
     final supported =
         effort == null ||
         model.supportedReasoningEfforts.any((item) => item.effort == effort);
     if (!supported) {
-      return Future<bool>.value(false);
+      return Future.value(
+        const AgentCommandOutcome.ignored(AgentCommandIgnoreReason.notAllowed),
+      );
     }
     if (_isExtraHigh(effort) && selectedFastEnabled) {
       final effortLabel = effort!.trim();
@@ -284,7 +298,11 @@ class AgentConversationModelSelectionController {
         ),
       );
       _notify();
-      return Future<bool>.value(false);
+      return Future.value(
+        const AgentCommandOutcome.ignored(
+          AgentCommandIgnoreReason.requiresConfirmation,
+        ),
+      );
     }
 
     final current = _preferenceForSelectedModel(model);
@@ -302,16 +320,22 @@ class AgentConversationModelSelectionController {
   }
 
   /// 打开或关闭当前模型的 Fast 服务档位。
-  Future<bool> selectFastEnabled(bool enabled) {
+  Future<AgentCommandOutcome> selectFastEnabled(bool enabled) {
     final model = selectedModel;
     final fastTier = model == null ? null : agentFastServiceTier(model);
     if (model == null || fastTier == null || !fastTier.enabled) {
-      return Future<bool>.value(false);
+      return Future.value(
+        const AgentCommandOutcome.ignored(AgentCommandIgnoreReason.notAllowed),
+      );
     }
     if (enabled && _isExtraHigh(_modelSelection.reasoningEffort)) {
       final compatibleEffort = _fastCompatibleEffort(model);
       if (compatibleEffort == null) {
-        return Future<bool>.value(false);
+        return Future.value(
+          const AgentCommandOutcome.ignored(
+            AgentCommandIgnoreReason.notAllowed,
+          ),
+        );
       }
       final currentEffort = _modelSelection.reasoningEffort!.trim();
       _compatibilityConflict = AgentModelCompatibilityConflict(
@@ -325,7 +349,11 @@ class AgentConversationModelSelectionController {
         ),
       );
       _notify();
-      return Future<bool>.value(false);
+      return Future.value(
+        const AgentCommandOutcome.ignored(
+          AgentCommandIgnoreReason.requiresConfirmation,
+        ),
+      );
     }
 
     final current = _preferenceForSelectedModel(model);
@@ -340,11 +368,13 @@ class AgentConversationModelSelectionController {
   }
 
   /// 按提示一次提交 Fast 与思考程度的兼容调整。
-  Future<bool> resolveCompatibilityConflict() {
+  Future<AgentCommandOutcome> resolveCompatibilityConflict() {
     final conflict = _compatibilityConflict;
     final model = selectedModel;
     if (conflict == null || model == null || conflict.modelId != model.id) {
-      return Future<bool>.value(false);
+      return Future.value(
+        const AgentCommandOutcome.ignored(AgentCommandIgnoreReason.notAllowed),
+      );
     }
     final fastTier = agentFastServiceTier(model);
     final resolution = conflict.resolution;
@@ -359,10 +389,17 @@ class AgentConversationModelSelectionController {
   }
 
   /// 重试最近一次失败的完整快照。
-  Future<bool> retryFailedSelection() {
+  Future<AgentCommandOutcome> retryFailedSelection() {
+    if (_disposed) {
+      return Future.value(
+        const AgentCommandOutcome.failed(AgentCommandFailureKind.staleTarget),
+      );
+    }
     final failed = _failedSnapshot;
     if (failed == null) {
-      return Future<bool>.value(false);
+      return Future.value(
+        const AgentCommandOutcome.ignored(AgentCommandIgnoreReason.notAllowed),
+      );
     }
     _modelSelection = failed.selection;
     _preferences = Map<String, AgentModelPreference>.from(failed.preferences);
@@ -380,10 +417,21 @@ class AgentConversationModelSelectionController {
     _reconcileSelection();
   }
 
-  Future<bool> _applyPreference(
+  Future<AgentCommandOutcome> _applyPreference(
     AgentModelPreference preference, {
     required AgentModelConfigField field,
   }) {
+    if (_disposed) {
+      return Future.value(
+        const AgentCommandOutcome.failed(AgentCommandFailureKind.staleTarget),
+      );
+    }
+    if (_sameSelection(_modelSelection, preference.selection)) {
+      _clearTransientState();
+      return Future.value(
+        const AgentCommandOutcome.ignored(AgentCommandIgnoreReason.unchanged),
+      );
+    }
     _preferences = <String, AgentModelPreference>{
       ..._preferences,
       preference.modelId: preference,
@@ -397,12 +445,12 @@ class AgentConversationModelSelectionController {
     return _schedulePersistence(field: field, modelId: preference.modelId);
   }
 
-  Future<bool> _schedulePersistence({
+  Future<AgentCommandOutcome> _schedulePersistence({
     required AgentModelConfigField field,
     required String modelId,
   }) {
     final revision = ++_revision;
-    final completer = Completer<bool>();
+    final completer = Completer<AgentCommandOutcome>();
     _saveWaiters[revision] = completer;
     _latestField = field;
     _latestModelId = modelId;
@@ -452,6 +500,12 @@ class AgentConversationModelSelectionController {
         }
         _processedRevision = targetRevision;
         if (targetRevision < _revision) {
+          _completeWaitersThrough(
+            targetRevision,
+            const AgentCommandOutcome.failed(
+              AgentCommandFailureKind.requestFailed,
+            ),
+          );
           // 新快照已接管状态；继续保存最终值，不让过期失败触发回滚。
           continue;
         }
@@ -470,7 +524,12 @@ class AgentConversationModelSelectionController {
           message: _textCatalog.modelSaveFailed,
           details: error.toString(),
         );
-        _completeWaitersThrough(targetRevision, false);
+        _completeWaitersThrough(
+          targetRevision,
+          const AgentCommandOutcome.failed(
+            AgentCommandFailureKind.requestFailed,
+          ),
+        );
         _notify();
         return;
       }
@@ -483,7 +542,10 @@ class AgentConversationModelSelectionController {
         snapshot.preferences,
       );
       _processedRevision = targetRevision;
-      _completeWaitersThrough(targetRevision, true);
+      _completeWaitersThrough(
+        targetRevision,
+        const AgentCommandOutcome.succeeded(),
+      );
       if (_processedRevision == _revision) {
         _savingModelIds.clear();
         _saveError = null;
@@ -671,19 +733,25 @@ class AgentConversationModelSelectionController {
     _notify();
   }
 
-  void _completeWaitersThrough(int revision, bool result) {
+  void _completeWaitersThrough(int revision, AgentCommandOutcome result) {
     final completed = _saveWaiters.keys
         .where((candidate) => candidate <= revision)
         .toList(growable: false);
     for (final key in completed) {
       final waiter = _saveWaiters.remove(key);
       if (waiter != null && !waiter.isCompleted) {
-        waiter.complete(result);
+        waiter.complete(
+          key == revision
+              ? result
+              : const AgentCommandOutcome.ignored(
+                  AgentCommandIgnoreReason.superseded,
+                ),
+        );
       }
     }
   }
 
-  void _completeAllWaiters(bool result) {
+  void _completeAllWaiters(AgentCommandOutcome result) {
     for (final waiter in _saveWaiters.values) {
       if (!waiter.isCompleted) {
         waiter.complete(result);
@@ -719,7 +787,9 @@ class AgentConversationModelSelectionController {
     }
     _disposed = true;
     _generation += 1;
-    _completeAllWaiters(false);
+    _completeAllWaiters(
+      const AgentCommandOutcome.failed(AgentCommandFailureKind.staleTarget),
+    );
     _listeners.clear();
   }
 }

@@ -1,3 +1,4 @@
+import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
 import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 import 'dart:io';
 
@@ -474,7 +475,7 @@ void main() {
                 required session,
                 required context,
                 String? initialMessage,
-              }) async {},
+              }) async => const AgentCommandOutcome.succeeded(),
           uiFrameScheduler: FakeAgentFrameScheduler(),
         );
         addTearDown(viewModel.dispose);

@@ -18,10 +18,13 @@ final class AgentConversationBindingTestHarness {
       <AgentConversationBindingLease>[];
   int _nextEntryId = 0;
 
-  AgentConversationBindingLease acquireDraft(AgentProviderConfig config) {
+  AgentConversationBindingLease acquireDraft(
+    AgentProviderConfig config, {
+    String? entryId,
+  }) {
     final lease = manager.acquireDraft(
       providerId: config.id,
-      entryId: 'test-binding-${_nextEntryId += 1}',
+      entryId: entryId ?? 'test-binding-${_nextEntryId += 1}',
       resolveConfig: (providerId) {
         final current = settings.providerConfigById(providerId);
         if (current != null) {

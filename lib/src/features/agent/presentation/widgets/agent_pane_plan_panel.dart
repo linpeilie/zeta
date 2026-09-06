@@ -1,3 +1,4 @@
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_actions.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -21,12 +22,14 @@ const double _activePlanScrollMaxHeight = 200;
 class AgentActivePlanSection extends StatelessWidget {
   const AgentActivePlanSection({
     required this.controller,
+    required this.actions,
     required this.pagePadding,
     required this.onExtentChanged,
     super.key,
   });
 
   final AgentConversationRuntimeController controller;
+  final AgentConversationActions actions;
   final EdgeInsets pagePadding;
 
   /// 向时间线同步浮层实测高度，用于滚动底部 inset（不缩短 viewport）。
@@ -87,9 +90,8 @@ class AgentActivePlanSection extends StatelessWidget {
                                     entries: entries,
                                     expanded: controller.expansionState
                                         .isActivePlanExpanded(turnState.id),
-                                    onToggle: () => controller.toggleActivePlan(
-                                      turnState.id,
-                                    ),
+                                    onToggle: () =>
+                                        actions.toggleActivePlan(turnState.id),
                                   ),
                                 ),
                               ),

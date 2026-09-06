@@ -1,3 +1,5 @@
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_actions.dart';
+import 'package:zeta/src/features/agent/application/agent_command_outcome.dart';
 import 'dart:async';
 import 'agent_pane_retention.dart';
 import 'dart:math' as math;
@@ -20,7 +22,7 @@ import 'package:zeta/src/features/agent/presentation/widgets/agent_slash_command
 
 /// Composer 提交回调：由壳把文本交给会话命令面。
 typedef AgentPaneSubmitMessage =
-    void Function(
+    Future<AgentCommandOutcome> Function(
       String text, {
       required List<String> localImagePaths,
       required List<({String name, String path})> mentions,
@@ -37,6 +39,7 @@ final class AgentPaneComposerSession {
     required this.isMounted,
     required this.attachments,
     required this.submitMessage,
+    required this.actions,
     required this.hostContext,
   }) {
     focusNode = FocusNode(
@@ -70,7 +73,8 @@ final class AgentPaneComposerSession {
   MessageSendShortcut messageSendShortcut;
   final bool Function() isMounted;
   final AgentComposerAttachmentPort Function() attachments;
-  final AgentPaneSubmitMessage submitMessage;
+  AgentPaneSubmitMessage submitMessage;
+  AgentConversationActions actions;
   final BuildContext Function() hostContext;
 
   final ComposerDocumentController inputController =
@@ -124,8 +128,14 @@ final class AgentPaneComposerSession {
       _runtime.canCompactCurrentThread ||
       _runtime.canUseSkills;
 
-  void updateRuntime(AgentConversationRuntimeController runtime) {
+  void updateRuntime(
+    AgentConversationRuntimeController runtime, {
+    required AgentConversationActions actions,
+    required AgentPaneSubmitMessage submitMessage,
+  }) {
     _runtime = runtime;
+    this.actions = actions;
+    this.submitMessage = submitMessage;
   }
 
   List<String> get stagedClipboardPaths =>
@@ -566,11 +576,13 @@ final class AgentPaneComposerSession {
     }
     _stagedClipboardPaths.removeAll(images);
     syncCanSend();
-    submitMessage(
-      serialized.text,
-      localImagePaths: images,
-      mentions: mentions,
-      skills: serialized.skills,
+    unawaited(
+      submitMessage(
+        serialized.text,
+        localImagePaths: images,
+        mentions: mentions,
+        skills: serialized.skills,
+      ),
     );
   }
 
@@ -603,10 +615,10 @@ final class AgentPaneComposerSession {
     switch (id) {
       case SlashCommandId.plan:
         if (_runtime.selectedConversationMode != AgentConversationModeId.plan) {
-          _runtime.selectConversationMode(AgentConversationModeId.plan);
+          actions.selectConversationMode(AgentConversationModeId.plan);
         }
       case SlashCommandId.compact:
-        unawaited(_runtime.compactCurrentThread());
+        unawaited(actions.compactCurrentThread());
     }
     focusNode.requestFocus();
   }
@@ -666,7 +678,7 @@ final class AgentPaneComposerSession {
     _skillPickerOpening = true;
     try {
       try {
-        await _runtime.ensureSkillsCatalog();
+        await actions.ensureSkillsCatalog();
       } catch (_) {
         // 目录失败时仍展示 picker，由空态提示用户。
       }
@@ -711,7 +723,7 @@ final class AgentPaneComposerSession {
     try {
       if (_runtime.canUseSkills) {
         try {
-          await _runtime.ensureSkillsCatalog();
+          await actions.ensureSkillsCatalog();
         } catch (_) {
           // 目录失败时仍展示菜单；Skills 可为空，命令仍可用。
         }

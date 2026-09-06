@@ -418,7 +418,7 @@ void main() {
     });
 
     test(
-      'falls back to first executable option when catalog default is planningOnly',
+      'requires an explicit choice when catalog default is planningOnly',
       () {
         final controller = AgentPlanExecutionHandoffController();
         final offered = controller.offerCompletedPlan(
@@ -441,10 +441,16 @@ void main() {
           currentRuntimeIdentity: null,
         );
 
-        expect(reconciled?.executionPermission?.label, 'Ask');
+        expect(reconciled?.executionPermission, isNull);
+        final selected = controller.selectExecutionPermission(
+          request: reconciled!,
+          option: options[1],
+          currentRuntimeIdentity: null,
+        );
+        expect(selected?.executionPermission?.selection?.optionId, 'ask');
         expect(
-          reconciled?.executionPermission?.origin,
-          AgentPlanExecutionPermissionOrigin.catalogDefault,
+          selected?.executionPermission?.origin,
+          AgentPlanExecutionPermissionOrigin.userOverride,
         );
       },
     );

@@ -291,7 +291,11 @@ Workspace 与 Conversation 已完成 WP-3C：`AgentConversationWorkspaceNotifier
 
 关闭顺序为：停止 Shell/M/P 命令 → 刷新已有 session 保存 → 等待 M/P 真实执行排空 → 关闭管理消费者与事实源 → 逐 entry 关闭 ingress、撤下可见项、退订、dispose controller、await lease release → BindingManager → runtime registry → plugin catalog → container。entry/app 重复关闭共享同一 Future；失败保持 Closing/失败终态，不标记释放、不销毁容器掩盖失败。lease release 只证明 consumer 释放，CLI 退出仍以 registry close 为准。
 
-物理 Conversation family 在 build 取得显式 `keepAlive`，协调器保留容器级订阅。只有 lease 释放成功且终止空投影无人观察后才撤销保活并 invalidate；`autoDispose` 此时仅回收已关闭投影，不决定业务资源寿命。这是对原非 autoDispose 伪代码的实现修正：当前 Riverpod 普通 family 的 invalidate 不删除缓存节点。Workspace、Management、Project Threads 的 app owner 仍非 autoDispose。WP-2 统一 Actions 尚未实施，当前 UI 命令仍经既有 executor。
+物理 Conversation family 在 build 取得显式 `keepAlive`，协调器保留容器级订阅。只有 lease 释放成功且终止空投影无人观察后才撤销保活并 invalidate；`autoDispose` 此时仅回收已关闭投影，不决定业务资源寿命。这是对原非 autoDispose 伪代码的实现修正：当前 Riverpod 普通 family 的 invalidate 不删除缓存节点。Workspace、Management、Project Threads 的 app owner 仍非 autoDispose。WP-2 已统一 Actions，命令接线见下文。
+
+Conversation 的 UI 写操作统一调用 `AgentConversationActions`，Live 句柄就是该 entry 的 `AgentConversationSliceNotifier`；关闭/未知目标只返回无状态拒绝句柄。每次调用冻结 typed payload、OperationId、owner lifetime 和 scope，经同步 reducer/runner 执行并返回 typed outcome。四类审批独立去重；只串行权限偏好与同项 session config，取消和审批不排在配置后面。关闭立即以 staleTarget 结算全部 UI waiter，底层 I/O 与租约释放仍由既有生命周期负责。
+
+模型保存逐请求区分 succeeded、requiresConfirmation、superseded、unchanged 与失败；fork 返回 outcome、内存中的 createdSession 和 activated，不能用“创建了 session”推断激活成功。编辑后分支交接经 Shell 新 entry 的 Actions 发送并回传真实结果。Widget/弹层捕获稳定 Actions，不能在迟到回调中重新解析 BindingKey；RuntimeController 只保留 executor、内部初始化与只读查询职责。正文、权限快照、产物与错误原文不进入新增状态、日志或持久化。
 
 ```
 TimelineStore → RuntimeController / AgentUiUpdateScheduler
@@ -530,8 +534,8 @@ WP-3C 已将 Shell、事实源和 ingress 全部前移到应用组合；先订�
 - 配置能力只由 `AgentProviderBundle.sessionConfiguration` 声明，没有单独的
   `supportsSessionConfiguration`。`AgentConversationCommandPort.selectSessionConfigOption`
   返回 `Future<AgentCommandOutcome>`；执行层缺端口或 Provider 明确拒绝能力时仍抛
-  `UnsupportedError`，当前 `AgentComposerSection` 经 `invokeSessionConfigCommand` 翻译为
-  `failed(unsupported)`。后续 WP-2 统一 Actions 时迁移该翻译，不能恢复 void 回调。
+  `UnsupportedError`，`AgentComposerSection` 通过 Actions/command runner 翻译为
+  `failed(unsupported)`；旧 presentation 翻译器已移除，不能恢复 void 回调。
 - 草稿、只读、无效 id/值为 `ignored(notAllowed)`；值等价为 `ignored(unchanged)`；
   无已附着 runtime 为 `failed(providerUnavailable)`；请求异常为 `failed(requestFailed)`；
   关闭或 thread/runtime/scope 失效为 `failed(staleTarget)`。只有实际执行完成且目标有效
@@ -590,7 +594,7 @@ WP-3C 已将 Shell、事实源和 ingress 全部前移到应用组合；先订�
   `AgentConversationRuntimeController` 只负责绑定 Provider/thread 与冻结 `AgentTurnConfiguration`，Widget 不直接发 RPC。
 - Plan 终态的执行确认由 `AgentPlanExecutionHandoffController` 管理，是非持久化的本地
   application 状态。必须在 `completeLiveTurnGroup` 清除 structured plan 之前捕获快照；
-  Widget 只渲染请求并调用 RuntimeController 的 start/revise/dismiss 动作。
+  Widget 只渲染请求并调用 Actions 的 start/revise/dismiss 动作。
 - 执行交接与 Provider 计划审批共用 `_AgentPlanDockCard` 壳（正文可滚、底栏固定）；
   交接卡出现时 `blocksComposer` 为 true，隐藏主 Composer。交接底栏整合修订输入与
   「执行计划」：执行始终新建 Default 回合；「继续规划 / 发送修改」保持 Plan，可选
@@ -601,15 +605,14 @@ WP-3C 已将 Shell、事实源和 ingress 全部前移到应用组合；先订�
   `--permission-mode plan` 进程里继续写文件。
 - Run plan 必须先选择 Default（若对话 Plan 可用），再创建一个新的 turn；不得把它实现成
   当前 turn steer，也不得调用 `AgentPlanApprovalPort`。有权限端口时，执行快照不得使用
-  `planningOnly` 项：优先恢复进入只读规划前的选择（同 Binding/thread，**不**绑 runtime
-  generation），否则 catalog 中第一个非 planning 的 allowed 项；都没有则禁止执行。
-  点交接「执行」会 **会话内 adopt** 该权限（可 apply 到当前 runtime），**不** persist
-  用户默认。离开只读规划 ≠ 预授权命令/文件/网络。卡内改选仍只写本地一次性快照，
-  不 apply、不持久化。继续规划显式保留 Plan，关闭不改变权限状态。
+  `planningOnly` 项：只恢复同 Binding/thread/runtime generation 仍有效的用户明确选择；
+  失效时仅使用 catalog 声明的保守默认。默认不可执行或目录不可用时必须等待用户显式选择，
+  禁止取第一个非 planning allowed 项。卡内改选只形成一次性本地快照，不 apply、不持久化。
+  点执行前后均校验所属 scope；会话内 adopt 不得绕开上述条件，也不得预授权命令、文件或网络。
+  继续规划显式保留 Plan，关闭不改变权限状态。
 - 新增或修改该流程时至少覆盖：成功 Plan 展示、失败/中断不展示、结构化步骤回退、
-  Default 执行快照、planningOnly 种子丢弃、Plan 前权限恢复、catalog fallback、
-  卡上改选零 apply、点执行会话 adopt、继续规划模式、
-  陈旧请求与 thread/provider/workspace 切换清理。
+  Default 执行快照、planningOnly 种子丢弃、同 generation 的 Plan 前权限恢复、catalog 保守默认、
+  无可执行默认时要求显式选择、卡上改选零 apply、继续规划模式、旧 generation 和迟到 apply 丢弃。
 - 模式来自 `bundle.conversationModes` 的运行时目录。端口为空、method-not-found、目录损坏
   或缺少 Default/Plan 时隐藏选择器，继续使用原有普通对话，不用 Prompt 伪造 Plan。
 - 模式选择是“下一回合”配置。活动 turn 使用 `turn/steer` 时不修改 mode；切回 Default

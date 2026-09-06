@@ -1,3 +1,4 @@
+import '../../../testing/conversation_test_scope.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -1059,7 +1060,14 @@ void main() {
       final error = await viewModel.selectPermissionOption(
         agentPaneDefaultPermissionOptions.last,
       );
-      expect(error, contains('当前回合执行中'));
+      expect(
+        error,
+        isA<AgentCommandIgnored>().having(
+          (value) => value.reason,
+          'reason',
+          AgentCommandIgnoreReason.notAllowed,
+        ),
+      );
       expect(provider.permissionApplyCount, 0);
 
       provider.emitEvent(
@@ -1240,7 +1248,16 @@ void main() {
           providerFactory: factory,
         );
         addTearDown(controller.dispose);
-        await tester.pumpWidget(AgentPaneTestApp(viewModel: controller));
+        final liveOwner = connectedConversationTestOwner(
+          regions: controller,
+          commands: controller,
+        );
+        await tester.pumpWidget(
+          AgentPaneTestApp(
+            viewModel: controller,
+            sliceStores: {controller.conversationBinding.key: liveOwner},
+          ),
+        );
         await controller.initialization;
         await controller.sendMessage('start');
         _emitSessionConfig(provider);
@@ -1276,6 +1293,7 @@ void main() {
             alignment: Alignment.bottomCenter,
             child: AgentComposerSection(
               controller: controller,
+              actions: liveOwner,
               state: staleState,
               inputController: input,
               composerFocusNode: focus,
@@ -1421,6 +1439,7 @@ void main() {
                 alignment: Alignment.bottomCenter,
                 child: AgentComposerSection(
                   controller: current,
+                  actions: conversationTestActions(current),
                   state: current.composerState,
                   inputController: input,
                   composerFocusNode: focus,

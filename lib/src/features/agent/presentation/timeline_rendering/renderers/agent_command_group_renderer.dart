@@ -48,6 +48,7 @@ final class AgentCommandGroupRenderer
     return AgentCommandGroupCard(
       group: payload.group,
       controller: renderContext.controller,
+      actions: renderContext.actions,
     );
   }
 

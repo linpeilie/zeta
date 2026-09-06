@@ -1,3 +1,4 @@
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_actions.dart';
 import 'package:flutter/material.dart';
 
 import 'package:zeta_ui/zeta_ui.dart';
@@ -20,6 +21,7 @@ import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 class AgentPaneBody extends StatelessWidget {
   const AgentPaneBody({
     required this.controller,
+    required this.actions,
     required this.isActive,
     required this.pagePadding,
     required this.scrollController,
@@ -50,6 +52,7 @@ class AgentPaneBody extends StatelessWidget {
   });
 
   final AgentConversationRuntimeController controller;
+  final AgentConversationActions actions;
   final bool isActive;
   final EdgeInsets pagePadding;
   final ScrollController scrollController;
@@ -91,6 +94,7 @@ class AgentPaneBody extends StatelessWidget {
               builder: (context, state) {
                 return AgentHeader(
                   controller: controller,
+                  actions: actions,
                   state: state,
                   onToggleContextPanel: onToggleContextPanel,
                 );
@@ -121,6 +125,7 @@ class AgentPaneBody extends StatelessWidget {
                         )
                       : AgentConversationTimeline(
                           controller: controller,
+                          actions: actions,
                           isActive: isActive,
                           scrollController: scrollController,
                           pagePadding: pagePadding,
@@ -137,6 +142,7 @@ class AgentPaneBody extends StatelessWidget {
                         ),
                   floatingPanel: AgentActivePlanSection(
                     controller: controller,
+                    actions: actions,
                     pagePadding: pagePadding,
                     onExtentChanged: onActivePlanExtentChanged,
                   ),
@@ -146,6 +152,7 @@ class AgentPaneBody extends StatelessWidget {
                     children: [
                       AgentPendingInteractionSection(
                         controller: controller,
+                        actions: actions,
                         panelHeight: panelHeight,
                         pagePadding: pagePadding,
                       ),
@@ -178,6 +185,7 @@ class AgentPaneBody extends StatelessWidget {
                                               ),
                                               anchorKey: composerAnchorKey,
                                               controller: controller,
+                                              actions: actions,
                                               state: composerState,
                                               inputController: inputController,
                                               composerFocusNode:

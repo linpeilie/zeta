@@ -91,9 +91,9 @@ final class AgentPlanExecutionHandoffController {
       );
     }
 
-    final defaultOption =
-        _executableOption(available, catalogDefault) ??
-        _firstExecutableOption(available);
+    // G5: only the catalog's declared default is a safe automatic fallback.
+    // Ordering conveys no permission semantics; otherwise require a user choice.
+    final defaultOption = _executableOption(available, catalogDefault);
     if (defaultOption == null) {
       return _replacePendingPermission(request, null, seed: null, origin: null);
     }
@@ -355,17 +355,6 @@ AgentPermissionOption? _executableOption(
     if (option.id == selection.optionId &&
         option.allowed &&
         !option.planningOnly) {
-      return option;
-    }
-  }
-  return null;
-}
-
-AgentPermissionOption? _firstExecutableOption(
-  Iterable<AgentPermissionOption> options,
-) {
-  for (final option in options) {
-    if (option.allowed && !option.planningOnly) {
       return option;
     }
   }
