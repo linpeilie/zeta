@@ -1,5 +1,7 @@
+import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_runtime_facts.dart';
-import 'package:zeta/src/app/plugins/agent_contribution_providers.dart';
+import 'package:zeta/src/app/agent_management_slice/agent_management_slice_composition.dart';
+import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_notifier.dart';
 import 'dart:async';
 
 import 'package:flutter/widgets.dart' show Locale;
@@ -8,7 +10,6 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:zeta_ui/zeta_ui.dart';
 
 import 'package:zeta/src/app/composition/agent_resource_shutdown.dart';
-import 'package:zeta/src/app/composition/ide_workbench_composition.dart';
 import 'package:zeta/src/app/composition/zeta_state_snapshot.dart';
 import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_workspace_providers.dart';
 import 'package:zeta/src/app/desktop_attention_slice/desktop_attention_slice_overrides.dart';
@@ -21,7 +22,6 @@ import 'package:zeta/src/app/observability/zeta_observability.dart';
 import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
 import 'package:zeta/src/app/provider_settings_slice/provider_settings_slice_overrides.dart';
 import 'package:zeta/src/app/settings_slice/settings_slice_overrides.dart';
-import 'package:zeta/src/app/storage/zeta_store_providers.dart';
 import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_slice_overrides.dart';
 import 'package:zeta/src/app/window/zeta_shutdown_hook.dart';
 import 'package:zeta/src/app/window/zeta_window_host.dart';
@@ -53,7 +53,7 @@ import 'package:zeta/src/ui/localization/generated/app_localizations.dart';
 ///
 /// 1. 正式容器复用的已解析可观测性实例；
 /// 2. 显示语言冻结之后才存在的文本目录（值还没有，写不进 provider body）；
-/// 3. 尚未迁移的切片组合 store（组合对象由本类持有，provider 只是读出口）。
+/// 3. 切片的冻结依赖与 Runner factory，状态由 application Notifier 持有。
 ///
 /// 生命周期：**谁创建谁 [dispose]**。生产入口交给进程退出与窗口关闭 hook，测试用
 /// `addTearDown`。
@@ -70,7 +70,12 @@ final class ZetaAppComposition implements ZetaShutdownHook {
     );
     _windowHost = container.read(zetaWindowHostProvider);
     _windowHost.addShutdownHook(this);
-    _start();
+    try {
+      _start();
+    } catch (_) {
+      dispose();
+      rethrow;
+    }
   }
 
   /// 建出组合根并立即开始装配。
@@ -151,24 +156,31 @@ final class ZetaAppComposition implements ZetaShutdownHook {
     );
   }
 
-  /// 工作台组合工厂：把 Repository / registry / 文本目录闭包在 app 层。
-  ///
-  /// `IdeHome` 只补 Shell 持有的只读事实源，因此 UI 层不再出现任何 Repository 类型。
-  IdeWorkbenchComposition createWorkbenchComposition({
-    required AgentManagementRuntimeFactSource runtimeFactSource,
-  }) {
-    return IdeWorkbenchComposition.create(
-      contributions: container.read(agentManagementContributionsProvider),
-      modelCatalogRepository: container.read(
-        agentModelCatalogRepositoryProvider,
-      ),
-      runtimeRegistry: container.read(agentProviderRuntimeRegistryProvider),
-      providerSettings: container.read(
-        agentProviderSettingsSliceProvider.notifier,
-      ),
-      runtimeFactSource: runtimeFactSource,
-      textCatalog: container.read(agentManagementTextCatalogProvider),
+  /// Borrow Shell runtime facts without creating or replacing the management owner.
+  void Function() connectManagementRuntimeFacts(
+    AgentManagementRuntimeFactSource source,
+  ) {
+    if (_disposed || _managementOwner?.isClosed != false) {
+      throw StateError('Management app session is not open');
+    }
+    final subscription = container.listen(
+      agentManagementRuntimeIngressProvider(source),
+      (_, _) {},
     );
+    try {
+      final release = subscription.read().borrow();
+      void disconnect() {
+        release();
+        subscription.close();
+        _managementRuntimeDisconnectors.remove(disconnect);
+      }
+
+      _managementRuntimeDisconnectors.add(disconnect);
+      return disconnect;
+    } catch (_) {
+      subscription.close();
+      rethrow;
+    }
   }
 
   /// 按依赖反序关闭本实例拥有的 Agent 资源。
@@ -180,8 +192,25 @@ final class ZetaAppComposition implements ZetaShutdownHook {
   /// 只关**已经建出来的**：覆盖了 bundle 工厂的用例根本不会建插件目录，
   /// [ProviderContainer.exists] 就是这个"建没建过"的判据。两个 `close()` 本身可
   /// 重复调用，因此本方法幂等。
-  Future<void> shutdownOwnedAgentResources() {
-    return shutdownAgentResourcesInOrder(
+  final Set<void Function()> _managementRuntimeDisconnectors = {};
+  AgentManagementSliceNotifier? _managementOwner;
+  AgentManagementInputSubscription? _managementSettingsIngress;
+  Future<void>? _shutdownFuture;
+  Future<void>? _closeFuture;
+
+  Future<void> shutdownOwnedAgentResources() =>
+      _shutdownFuture ??= _shutdownOwnedAgentResources();
+
+  Future<void> _shutdownOwnedAgentResources() async {
+    final management = _managementOwner;
+    // Logical callers finish immediately; physical I/O still owns borrowed resources.
+    management?.stopAcceptingCommandsAndSettleWaiters();
+    _managementSettingsIngress?.close();
+    for (final disconnect in List.of(_managementRuntimeDisconnectors)) {
+      disconnect();
+    }
+    await management?.drainExecutions();
+    await shutdownAgentResourcesInOrder(
       closeRuntimeRegistry: _closerFor(
         agentProviderRuntimeRegistryProvider,
         (registry) => registry.close,
@@ -196,18 +225,18 @@ final class ZetaAppComposition implements ZetaShutdownHook {
   @override
   Future<void> run() => shutdownOwnedAgentResources();
 
-  /// 关闭组合根。谁创建谁调用；重复调用安全。
-  void dispose() {
-    if (_disposed) {
-      return;
-    }
+  Future<void> close() => _closeFuture ??= _close();
+
+  Future<void> _close() async {
     _disposed = true;
     _windowHost.removeShutdownHook(this);
-    // 关闭动作在容器销毁前同步取出，await 发生在容器已经关掉之后也不受影响。
-    unawaited(shutdownOwnedAgentResources());
-    // Provider Settings、两个 settings 切片与 Desktop Attention 由 provider 拥有，
-    // `ref.onDispose` 随容器一起关。
+    await shutdownOwnedAgentResources();
     container.dispose();
+  }
+
+  /// Synchronous Flutter disposal starts the same close; completion requires await close().
+  void dispose() {
+    unawaited(close());
   }
 
   void _start() {
@@ -271,6 +300,23 @@ final class ZetaAppComposition implements ZetaShutdownHook {
     // 查询仍按页面/侧栏命令惰性启动。
     container.read(usageStatisticsSliceProvider.notifier);
     container.read(agentUsagePanelSliceProvider.notifier);
+    container.read(agentManagementSliceProvider);
+    final management = container.read(agentManagementSliceProvider.notifier);
+    _managementOwner = management;
+    final ingress = container.read(agentManagementSettingsIngressProvider);
+    _managementSettingsIngress = ingress;
+    ingress.start();
+    unawaited(
+      management.initialize().onError((error, trace) {
+        if (!management.isClosed) {
+          try {
+            zetaLoggerFor(
+              'zeta.agent.management',
+            ).e('Agent management initialization failed');
+          } catch (_) {}
+        }
+      }),
+    );
     _localeRuntimeReady = true;
   }
 
@@ -299,6 +345,7 @@ final class ZetaAppComposition implements ZetaShutdownHook {
       ...desktopAttentionSliceOverrides(),
       ...ideSessionSliceOverrides(),
       ...providerSettingsSliceOverrides(),
+      ...agentManagementSliceOverrides(),
       ...settingsSliceOverrides(),
       ...usageStatisticsSliceOverrides(),
       ...workspaceOverrides(),

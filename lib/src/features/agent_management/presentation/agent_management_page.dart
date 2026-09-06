@@ -10,12 +10,11 @@ import 'package:zeta/src/ui/core/system_file_manager.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_operations.dart';
-import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_store.dart';
+import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_notifier.dart';
 import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_configuration_editor.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_log_view.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_management_l10n.dart';
-import 'package:zeta/src/features/agent_management/presentation/agent_management_slice/agent_management_slice_providers.dart';
 import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 import 'package:zeta/src/ui/localization/relative_time.dart';
 import 'package:zeta_ui/zeta_ui.dart';
@@ -46,22 +45,18 @@ const double _overviewTwoColumnBreakpoint = 780;
 const String _setupGuideAgentId = 'claude_code';
 
 /// 设置中的 Agent 管理列表、详情、配置和日志页面。
-class AgentManagementPage extends StatefulWidget {
-  const AgentManagementPage({
-    required this.sliceStore,
-    this.autoDetect = true,
-    super.key,
-  });
+class AgentManagementPage extends ConsumerStatefulWidget {
+  const AgentManagementPage({this.autoDetect = true, super.key});
 
-  final AgentManagementSliceStore sliceStore;
   final bool autoDetect;
 
   @override
-  State<AgentManagementPage> createState() => AgentManagementPageState();
+  ConsumerState<AgentManagementPage> createState() =>
+      AgentManagementPageState();
 }
 
 /// 设置容器通过该状态检查配置编辑器是否可以安全离开。
-class AgentManagementPageState extends State<AgentManagementPage> {
+class AgentManagementPageState extends ConsumerState<AgentManagementPage> {
   final GlobalKey<AgentConfigurationEditorState> _configurationKey =
       GlobalKey<AgentConfigurationEditorState>();
   late final TextEditingController _searchController;
@@ -69,7 +64,8 @@ class AgentManagementPageState extends State<AgentManagementPage> {
   _AgentListTab _listTab = _AgentListTab.installed;
   _AgentDetailTab _detailTab = _AgentDetailTab.overview;
 
-  AgentManagementOperations get _operations => widget.sliceStore;
+  AgentManagementOperations get _operations =>
+      ref.read(agentManagementOperationsProvider);
 
   @override
   void initState() {
@@ -99,12 +95,8 @@ class AgentManagementPageState extends State<AgentManagementPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer(
-      builder: (context, ref, _) {
-        ref.watch(agentManagementSliceProvider(widget.sliceStore));
-        return _buildPage(context);
-      },
-    );
+    ref.watch(agentManagementSliceProvider);
+    return _buildPage(context);
   }
 
   Widget _buildPage(BuildContext context) {
@@ -114,7 +106,6 @@ class AgentManagementPageState extends State<AgentManagementPage> {
         _ManagementView.list => _buildListPage(context),
         _ManagementView.detail => _buildDetailPage(context),
         _ManagementView.logs => AgentLogView(
-          operations: _operations,
           onBack: () {
             setState(() {
               _view = _ManagementView.detail;
@@ -188,9 +179,10 @@ class AgentManagementPageState extends State<AgentManagementPage> {
                                         final agent = visibleAgents[index];
                                         return _AgentListRow(
                                           hasRuntimeErrors:
-                                              widget
-                                                  .sliceStore
-                                                  .state
+                                              ref
+                                                  .read(
+                                                    agentManagementSliceProvider,
+                                                  )
                                                   .runtimeByProviderId[agent
                                                       .definition
                                                       .id]
@@ -431,7 +423,6 @@ class AgentManagementPageState extends State<AgentManagementPage> {
                 _AgentDetailTab.models => _buildModels(context, agent),
                 _AgentDetailTab.configuration => AgentConfigurationEditor(
                   key: _configurationKey,
-                  operations: _operations,
                 ),
               },
             ),
@@ -633,6 +624,7 @@ class AgentManagementPageState extends State<AgentManagementPage> {
     if (!mounted) {
       return;
     }
+    unawaited(_operations.loadLogs());
     setState(() {
       _view = _ManagementView.logs;
     });
@@ -672,9 +664,8 @@ class AgentManagementPageState extends State<AgentManagementPage> {
   }
 
   Future<void> _testConnection() async {
-    if (widget
-            .sliceStore
-            .state
+    if (ref
+            .read(agentManagementSliceProvider)
             .capabilitiesByAgentId[_operations.selectedAgentId]
             ?.requiresConnectionTestConfirmation ==
         true) {

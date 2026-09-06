@@ -6,7 +6,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'package:zeta_foundation/zeta_foundation.dart';
-import 'package:zeta/src/app/agent_management_slice/agent_management_slice_composition.dart';
+import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_notifier.dart';
 import 'package:zeta/src/app/composition/app_dependencies.dart';
 import 'package:zeta/src/app/composition/ide_workbench_composition.dart';
 import 'package:zeta/src/app/composition/zeta_environment_providers.dart';
@@ -62,19 +62,19 @@ import 'package:zeta/src/features/workspace/application/workspace_notifier.dart'
 /// **依赖从容器读，不从构造函数下钻。** 凡是组合根已经装进 Riverpod 的依赖
 /// （bundle 工厂、runtime 池、两个 registry、文本目录、指标端口、探测 loader……）
 /// 一律由 `_IdeHomeState` 自己 `ref.read`，调用方要换实现就覆盖对应的 provider。
-/// 经构造函数传的只剩**容器里还没有的那些**：状态快照桥与工作台工厂。
+/// 经构造函数传的只剩**容器里还没有的那些**：状态快照桥与 Shell 事实订阅接缝。
 class IdeHome extends ConsumerStatefulWidget {
   const IdeHome({
     required this.shellStateSnapshotRelay,
-    required this.workbenchCompositionFactory,
+    required this.connectManagementRuntimeFacts,
     this.providerMetricLabel = ZetaMetricLabel.hashed,
     super.key,
   });
 
   final ZetaShellStateSnapshotRelay shellStateSnapshotRelay;
 
-  /// app 组合层预绑的工作台组合工厂；UI 不再看到任何 Repository。
-  final IdeWorkbenchCompositionFactory workbenchCompositionFactory;
+  /// 连接 Shell 事实源；只返回退订句柄，不创建管理 owner。
+  final ManagementRuntimeFactsConnector connectManagementRuntimeFacts;
 
   final ZetaMetricLabel Function(String providerId) providerMetricLabel;
 
@@ -88,7 +88,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
   static const double _maxPanelWidth = IdeMetrics.sidePaneMaxWidth;
 
   late final IdeShellController _shellController;
-  late final IdeWorkbenchComposition _workbenchComposition;
+  void Function()? _disconnectManagementRuntimeFacts;
 
   /// 窗口宿主：原生标题栏、菜单与抢前台都经它；测试里通常什么都不做。
   ///
@@ -120,8 +120,6 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
   late final HomeProviderDetectionLoader? _homeProviderDetectionLoader = ref
       .read(homeProviderDetectionLoaderProvider);
 
-  AgentManagementSliceComposition get _agentManagementComposition =>
-      _workbenchComposition.agentManagementComposition;
   late final void Function() _unsubscribeProviderSettings;
   late final AgentUsagePanelSliceNotifier _agentUsagePanelController;
   late final AgentUsageRefreshCoordinator _agentUsageRefreshCoordinator;
@@ -167,7 +165,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
       GlobalKey<SettingsPageCanvasState>();
 
   AgentManagementOperations get _agentManagementOperations =>
-      _agentManagementComposition.store;
+      ref.read(agentManagementOperationsProvider);
 
   @override
   void initState() {
@@ -228,11 +226,17 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
     _unsubscribeProviderSettings = _shellController.agentProviderController
         .subscribe(_handleAgentProviderSettingsUsageChanged);
     unawaited(_desktopAttention.initialize());
-    _workbenchComposition = widget.workbenchCompositionFactory(
-      runtimeFactSource: _shellController.agentRuntimeFactSource,
-    );
-    _agentManagementComposition.store.addListener(
-      _handleAgentManagementChanged,
+    // WP-3M: the owner already exists; the legacy Shell is still Widget-created
+    // until WP-3C. Attach inputs after mount, then subscribe + reread full facts.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _disconnectManagementRuntimeFacts = widget.connectManagementRuntimeFacts(
+        _shellController.agentRuntimeFactSource,
+      );
+    });
+    ref.listenManual(
+      agentManagementSliceProvider,
+      (_, _) => _handleAgentManagementChanged(),
     );
     _agentUsageRefreshCoordinator = AgentUsageRefreshCoordinator(
       // turn 完成 / 启动预热走静默刷新：已有数据时不闪加载横条。
@@ -312,7 +316,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
       selectedConversationEntryId: selectedEntryId,
       projectHomeActive: _shellController.isProjectHomeActive,
       agentManagement: ZetaAgentManagementStateSnapshot.fromState(
-        _agentManagementComposition.store.state,
+        ref.read(agentManagementSliceProvider),
       ),
     );
   }
@@ -326,10 +330,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
     );
     _unsubscribeProviderSettings();
     _agentUsageRefreshCoordinator.dispose();
-    _agentManagementComposition.store.removeListener(
-      _handleAgentManagementChanged,
-    );
-    _workbenchComposition.dispose();
+    _disconnectManagementRuntimeFacts?.call();
     _conversationSliceStoreRegistry.unbind();
     _conversationWorkspaceStoreRegistry.unbind(
       _shellController.agentConversationWorkspaceStore,
@@ -629,8 +630,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
                 ? SettingsPageCanvas(
                     key: _settingsCanvasKey,
                     activeSection: _settingsSection,
-                    agentManagementSliceStore:
-                        _agentManagementComposition.store,
+                    showAgentManagement: true,
                   )
                 : const SizedBox.shrink(),
           ),
@@ -659,9 +659,8 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
         installedProviders: [
           for (final provider in _installedHomeProviders)
             provider.withRuntime(
-              _agentManagementComposition
-                  .store
-                  .state
+              ref
+                  .read(agentManagementSliceProvider)
                   .runtimeByProviderId[provider.id],
             ),
         ],

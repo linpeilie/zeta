@@ -122,3 +122,5 @@ WP-5（spike 结论后再排期）
 | 2026-09-03 | WP-6 T10 | 正文光标修复 | 包内按文本块声明 I-Beam 缺省（可选中才给），链接 click 仍在更内层优先；应用侧两处 MouseRegion 补丁删除。没走 span 缺省那条路——那有 9 处构造点。补一条「单段正文只有一个文本光标区域」防补丁复活。WP-6 的 P0/P1 至此全部落地 |
 | 2026-09-03 | WP-6 T14/T15 | 治理收尾 | UPSTREAM.md 补同步节奏/SOP/合入后三节（SOP 写明 `--strip-trailing-cr` 与改名预处理两个实际坑）；README 加注入点清单与稳定引用警告；developer_guide 加「Markdown 渲染」小节。按 `AGENTS.md` §6 一并同步 AGENTS/CLAUDE/工程规范/中英文架构总览/中英文 CONTRIBUTING；CHANGELOG 记 6 条。阶段五 P2 按用户决定跳过 |
 | 2026-09-04 | WP-7 T1–T5 | `feature/wp7-hygiene` | T3 此前已合入。T1 头栏/token 文案接入 l10n（含导航轨同源短标签）；T2 alpha 常量落在 styles（`0.88` 已随 WP-2/WP-4 删除，`0.65` 在 group card）；T4 基线 9 处 ghost 按钮补 G8 注释，AGENTS.md 基线 10→9；T5 保留正则并补单测 |
+
+> 2026-09-06 后继记录：Management owner 迁移由 [lib cohesion WP-3M](../2026-09-05-lib-cohesion/03-wp3-state-ownership.md#4-wp-3mmanagement-owner-迁移) 实施；Conversation/Workspace 的后续所有权迁移仍归 WP-3C。本历史计划的完成标记不替代后继验收。

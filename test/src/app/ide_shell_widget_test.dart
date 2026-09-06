@@ -1,6 +1,8 @@
 @Tags(['slow', 'shell'])
 library;
 
+import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_notifier.dart';
+
 import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_workspace_providers.dart';
 import 'package:zeta/src/ui/features/ide/views/global_home_page.dart';
@@ -969,10 +971,9 @@ void main() {
     await tester.pump();
 
     expect(tester.takeException(), isNull);
-    final managementPage = tester.widget<AgentManagementPage>(
-      find.byType(AgentManagementPage),
-    );
-    final store = managementPage.sliceStore;
+    final store = ProviderScope.containerOf(
+      tester.element(find.byType(AgentManagementPage)),
+    ).read(agentManagementSliceProvider.notifier);
     await pumpUntilCondition(
       tester,
       () => store.initialized,

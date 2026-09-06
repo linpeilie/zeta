@@ -166,6 +166,8 @@ Session config 以 `bundle.sessionConfiguration` 端口为能力真源，不新�
 
 管理运行摘要必须按精确配置实例 id 聚合 Workbench 全部 session Binding；默认 Provider、Canvas 选择、global 预热和短 RPC 不得代替会话运行事实。禁用不能凭空清零现存运行事实；错误标志必须独立于 running 主状态。Shell 拥有只读事实源，管理 composition 只退订；关闭时先关闭管理消费者，再关闭事实源，最后关闭 Workspace/BindingManager。事实源不得 acquire/release/invalidate runtime 或持久化摘要。
 
+管理状态与命令账本由 app-session `AgentManagementSliceNotifier` 独占，非 family/autoDispose；build 冻结依赖，Runner 只持具名 result sink。页面不传 Store、不维护状态镜像。关闭先结算等待者，再 await 真实执行 `drainExecutions()`，最后关闭 runtime registry、插件和容器；需要关闭完成的调用方必须 await `ZetaAppComposition.close()`。Shell 的事实源仍按 WP-3M 阶段接缝借用，后续 WP-3C 再前移 Shell，不得因 UI 退订销毁管理 owner。
+
 > 接线与计数：[开发者文档「管理运行事实摘要」](docs/zh/development/developer_guide.md#管理运行事实摘要)
 
 ### G5 · 四种审批语义隔离，且绝不预授权

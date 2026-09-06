@@ -1,4 +1,5 @@
-import 'dart:async';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_notifier.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -11,21 +12,18 @@ import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
 /// Agent 磁盘日志或受控内存诊断的查看、搜索、复制和刷新页面。
-class AgentLogView extends StatefulWidget {
-  const AgentLogView({
-    required this.operations,
-    required this.onBack,
-    super.key,
-  });
+class AgentLogView extends ConsumerStatefulWidget {
+  const AgentLogView({required this.onBack, super.key});
 
-  final AgentManagementOperations operations;
   final VoidCallback onBack;
 
   @override
-  State<AgentLogView> createState() => _AgentLogViewState();
+  ConsumerState<AgentLogView> createState() => _AgentLogViewState();
 }
 
-class _AgentLogViewState extends State<AgentLogView> {
+class _AgentLogViewState extends ConsumerState<AgentLogView> {
+  AgentManagementOperations get _operations =>
+      ref.read(agentManagementOperationsProvider);
   late final TextEditingController _searchController;
   AgentLogLevel? _level;
 
@@ -33,7 +31,6 @@ class _AgentLogViewState extends State<AgentLogView> {
   void initState() {
     super.initState();
     _searchController = TextEditingController()..addListener(_refreshView);
-    unawaited(widget.operations.loadLogs());
   }
 
   @override
@@ -46,9 +43,10 @@ class _AgentLogViewState extends State<AgentLogView> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(agentManagementSliceProvider);
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
-    final entries = _filteredEntries(widget.operations.logs);
+    final entries = _filteredEntries(_operations.logs);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -78,14 +76,14 @@ class _AgentLogViewState extends State<AgentLogView> {
                       children: [
                         Text(
                           context.l10n.mgmtRuntimeLogsTitle(
-                            widget.operations.agent.definition.displayName,
+                            _operations.agent.definition.displayName,
                           ),
                           style: textStyles.pageTitle,
                         ),
                         Text(
                           context.l10n.mgmtLogSourcesLoaded(
-                            '${widget.operations.agent.logPaths.length}',
-                            '${widget.operations.logs.length}',
+                            '${_operations.agent.logPaths.length}',
+                            '${_operations.logs.length}',
                           ),
                           style: textStyles.caption.copyWith(
                             color: colors.textSecondary,
@@ -95,12 +93,12 @@ class _AgentLogViewState extends State<AgentLogView> {
                     ),
                   ),
                   sf.OutlineButton(
-                    onPressed: widget.operations.loadingLogs
+                    onPressed: _operations.loadingLogs
                         ? null
-                        : widget.operations.loadLogs,
+                        : _operations.loadLogs,
                     size: sf.ButtonSize.small,
                     child: Text(
-                      widget.operations.loadingLogs
+                      _operations.loadingLogs
                           ? context.l10n.mgmtRefreshing
                           : context.l10n.mgmtRefresh,
                     ),
@@ -180,7 +178,7 @@ class _AgentLogViewState extends State<AgentLogView> {
           ),
         ),
         Expanded(
-          child: widget.operations.loadingLogs && widget.operations.logs.isEmpty
+          child: _operations.loadingLogs && _operations.logs.isEmpty
               ? Center(
                   child: IdeLoadingIndicator(
                     width: 32,

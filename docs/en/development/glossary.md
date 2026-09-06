@@ -247,3 +247,7 @@ One of the 6 groups the root `test/` tree is split into by `kRootTestShards` in 
 The three contribution kinds are `zeta.agent.provider-bundle-factory`, `zeta.agent.management-repository`, and `zeta.agent.token-usage-source`; every activated Provider must own all three with matching identities. **D7** freezes persisted IDs, types, versions and private setting keys. **D8** moves neutral text interfaces and immutable fallback catalogs into the API while keeping ARB implementations in the host. The **dynamic package matrix** discovers test packages using `test_packages.sh --list-json` and runs each through `--only`; this is CI discovery, not runtime plugin discovery.
 
 **Provider icon descriptor (`AgentProviderSvgIcon`)**: pure Dart static metadata in the API package containing the owning package name, relative SVG path and color policy. Declared by a plugin definition and rendered by the host; it is neither a protocol capability nor activation or persistence state.
+
+### Management ResultSink and execution drain
+
+`AgentManagementResultSink` is the named result interface captured by a runner for one app-session owner. A logical waiter tracks the command caller; a physical execution Future tracks completion of already-started I/O. Closing can settle the waiter with `StateError` immediately, but borrowed resources remain alive until `drainExecutions()` finishes. This ledger stays private to the owner, outside UI state and persistence.

@@ -350,6 +350,14 @@ factory 的 app 装配闭包只捕获当次 app-session 的稳定 repositories/�
 4. 订阅清理由持有 ref.listen 的 provider 处理；owner close 后具名 ingress 都先检查 closed，关停过程不依赖页面是否挂载。
 5. 根组合 eager 创建 management owner 与该 ingress provider 后，才调用 initialize；这保证同步 fake/repository 回流时 waiter 已存在，状态发布不发生在 Widget 构造途中。
 
+### 4.3.1 WP-3M 实施接缝校正（2026-09-06）
+
+WP-3M 阶段边界：管理 owner 与设置 ingress 在应用组合中、Widget 之前建立并初始化；Shell 尚由 IdeHome 创建（WP-3C 再前移），因此首次事实订阅在挂载后的回调中借用 Shell source，先订阅再同步重读 current。这里不缓存 management state、不延迟 Runner 结果。多个借用者共享订阅，最后一个释放时只退订；同一 source 立即重接可用。IdeHome 卸载不关闭管理 owner。
+
+现有中立源通过 `subscribe` 端口消费；独立 ingress provider 持有订阅并在 `ref.onDispose` 清理，不另外复制成 Riverpod 状态源。`AgentManagementCompositionInputs` 冻结 repository、定义、设置端口与文案。`ide_workbench_composition.dart` 当前只声明 `ManagementRuntimeFactsConnector`，不再创建管理组合。源码存在的 Project Threads/Conversation Deferred 和 registry 仍属于 P/C 阶段。
+
+物理任务在调用可能同步回流的 Runner 之前登记完成桥，桥只随 Runner 的真实 Future 完成；因此 Runner 内重入关闭也能被 drain 等待，不将 caller waiter 当执行结果。
+
 ### 4.4 原子切换与验收
 
 1. 按 §4.1 完整接口替换 Runner 的所有 Store 调用；原 _store.state 只读点改为 current。生产 Runner 与 fake 一起改为返回真实 Future；保留 fake 同步回流能力，不能靠多加一轮调度掩盖 waiter 登记顺序。
@@ -805,8 +813,8 @@ Management/Project Threads 的关闭负责停止自己的任务和结算 waiter�
 
 ## 8. 分阶段开发清单
 
-- [ ] **M-1**：抽出 Management result sink/factory，列出 Runner 对原 Store 的调用矩阵。
-- [ ] **M-2**：迁 Notifier、替换 UI family(store)、删镜像/Deferred；WP-1 summary ingress 不变。
+- [x] **M-1**：抽出 Management result sink/factory，列出 Runner 对原 Store 的调用矩阵。
+- [x] **M-2**：迁 Notifier、替换 UI family(store)、删镜像/Deferred；WP-1 summary ingress 不变。
 - [ ] **P-1**：确认 WP-4 回归与唯一索引已合入，迁 Project Threads Notifier。
 - [ ] **P-2**：Shell 注入 Operations，独立 BindingManager provider 建立，删旧 composition/store。
 - [ ] **C-1**：引入 OwnerKey 与资源 deps，先补草稿晋升/ABA/无 UI 装配回归。
@@ -839,7 +847,7 @@ M/P/C 各阶段可单独提交；P 阶段如暂时仍由旧 workspace 持有 Bin
 
 现有重点文件：`test/src/features/agent/presentation/agent_conversation_slice_providers_test.dart`、`test/src/features/agent/application/conversation_slice/agent_conversation_slice_store_test.dart`、`test/src/features/agent_management/application/agent_management_slice_store_test.dart`、`test/src/features/project_threads/application/project_threads_slice_store_test.dart`、`test/src/app/ide_shell_controller_test.dart`、`test/src/app/ide_shell_widget_test.dart`、`test/src/app/composition/zeta_state_snapshot_test.dart`。测试文件可随 owner 更名；断言迁移必须保持语义，特别是“移除UI订阅不释放会话”。
 
-新增架构守卫放 `test/src/architecture/slice_owner_boundary_guard_test.dart`（拟新增），通过 AST 扫真实生产符号：本包指定目录无镜像 Notifier、无两种registry、无Deferred；IdeHome不创建/释放业务owner；workspace不依赖slice owner；UI不构造runner。对每条规则加一个最小反例，核心AgentListenable/局部Widget State明确不在禁用范围。
+M 阶段守卫已落在 `test/src/architecture/agent_management_owner_guard_test.dart`，只覆盖管理 owner/Runner/UI；P/C 再补完整 `test/src/architecture/slice_owner_boundary_guard_test.dart`（拟新增），通过 AST 扫真实生产符号：本包指定目录无镜像 Notifier、无两种registry、无Deferred；IdeHome不创建/释放业务owner；workspace不依赖slice owner；UI不构造runner。对每条规则加一个最小反例，核心AgentListenable/局部Widget State明确不在禁用范围。
 
 验收需证明单 owner 和生产接线，而非仅旧类名消失。M/P/C 收尾分别运行格式化、analyze、受影响测试与完整门禁；最后补真实工作台的切页/后台运行/退出验收记录。没有真实桌面验收时记“待执行”，不推断通过。
 
@@ -848,3 +856,7 @@ M/P/C 各阶段可单独提交；P 阶段如暂时仍由旧 workspace 持有 Bin
 回滚以 M/P/C 提交为单位；已依赖新 owner 的 WP-2/WP-5 必须先回退，不能重新引入并行镜像救场。数据格式不变，无数据回滚脚本。
 
 同步 `AGENTS.md` §3、工程规范 §3.0/§3.1、开发者指南 Conversation Slice 接入、架构总览中英文、术语表 owner/BindingKey、根 snapshot/关闭设计。给旧 2026-09-03 WP-1 追加后继文档引用，不改其历史目标和验收证据。本阶段保留尚未执行的 WP-2 命令迁移状态，不能提前删除其入口测试。
+
+## 11. WP-3M 实施验收（2026-09-06）
+
+M 阶段已完成，P/C 仍未开始。生产结果入口、原断言审计、13 条新增行为回归和 4 条 AST 守卫，以及 format/analyze/affected/full 的当次证据见 [WP-3M 验收记录](../../refactor/2026-09-06-management-owner/00-validation.md)。完整门禁根 2024 + 内部包 1076 通过；真实桌面手动验收仍待执行。首次 Shell 事实接线的 M 阶段调整见 §4.3.1，不代表 O-01/06/07/08/09/11 的完整 Workspace/Conversation 迁移已经完成。
