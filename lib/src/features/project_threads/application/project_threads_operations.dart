@@ -3,7 +3,7 @@ import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
 import 'package:zeta/src/features/project_threads/domain/project_threads_session_snapshot.dart';
 
-/// Project Threads MVI store 对 Shell 暴露的稳定操作面。
+/// Project Threads application Notifier 对 Shell 暴露的稳定操作面。
 abstract interface class ProjectThreadsOperations {
   ProjectThreadListState stateFor(String projectPath);
 
@@ -101,6 +101,4 @@ abstract interface class ProjectThreadsOperations {
   });
 
   void Function(String projectPath, String threadId)? onActiveThreadCleared;
-
-  void dispose();
 }

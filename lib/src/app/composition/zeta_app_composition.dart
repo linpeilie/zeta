@@ -1,3 +1,6 @@
+import 'package:zeta/src/app/composition/agent_session_resource_providers.dart';
+import 'package:zeta/src/app/project_threads_slice/project_threads_slice_composition.dart';
+import 'package:zeta/src/features/project_threads/application/project_threads_slice/project_threads_slice_notifier.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_runtime_facts.dart';
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_composition.dart';
@@ -194,6 +197,7 @@ final class ZetaAppComposition implements ZetaShutdownHook {
   /// 重复调用，因此本方法幂等。
   final Set<void Function()> _managementRuntimeDisconnectors = {};
   AgentManagementSliceNotifier? _managementOwner;
+  ProjectThreadsSliceNotifier? _projectThreadsOwner;
   AgentManagementInputSubscription? _managementSettingsIngress;
   Future<void>? _shutdownFuture;
   Future<void>? _closeFuture;
@@ -202,14 +206,24 @@ final class ZetaAppComposition implements ZetaShutdownHook {
       _shutdownFuture ??= _shutdownOwnedAgentResources();
 
   Future<void> _shutdownOwnedAgentResources() async {
+    // Native shutdown may run before asynchronous locale resolution finishes.
+    _disposed = true;
     final management = _managementOwner;
     // Logical callers finish immediately; physical I/O still owns borrowed resources.
     management?.stopAcceptingCommandsAndSettleWaiters();
+    _projectThreadsOwner?.stopAcceptingCommandsAndSettleWaiters();
     _managementSettingsIngress?.close();
     for (final disconnect in List.of(_managementRuntimeDisconnectors)) {
       disconnect();
     }
-    await management?.drainExecutions();
+    await Future.wait<void>([
+      if (management != null) management.drainExecutions(),
+      if (_projectThreadsOwner case final threads?) threads.drainExecutions(),
+    ], eagerError: false);
+    await _closerFor(
+      agentConversationBindingManagerProvider,
+      (manager) => manager.close,
+    )?.call();
     await shutdownAgentResourcesInOrder(
       closeRuntimeRegistry: _closerFor(
         agentProviderRuntimeRegistryProvider,
@@ -281,6 +295,7 @@ final class ZetaAppComposition implements ZetaShutdownHook {
   ///
   /// 幂等：只有第一次调用真正装配。
   void installLocaleDependentRuntime(AppLanguage language) {
+    if (_disposed) return;
     if (!_localeRuntimeReady) {
       _frozenDisplayLocale = ZetaLocalization.localeFor(language);
       _textCatalogs = ZetaTextCatalogs(
@@ -300,6 +315,8 @@ final class ZetaAppComposition implements ZetaShutdownHook {
     // 查询仍按页面/侧栏命令惰性启动。
     container.read(usageStatisticsSliceProvider.notifier);
     container.read(agentUsagePanelSliceProvider.notifier);
+    container.read(projectThreadsSliceProvider);
+    _projectThreadsOwner = container.read(projectThreadsSliceProvider.notifier);
     container.read(agentManagementSliceProvider);
     final management = container.read(agentManagementSliceProvider.notifier);
     _managementOwner = management;
@@ -346,6 +363,7 @@ final class ZetaAppComposition implements ZetaShutdownHook {
       ...ideSessionSliceOverrides(),
       ...providerSettingsSliceOverrides(),
       ...agentManagementSliceOverrides(),
+      ...projectThreadsSliceOverrides(),
       ...settingsSliceOverrides(),
       ...usageStatisticsSliceOverrides(),
       ...workspaceOverrides(),

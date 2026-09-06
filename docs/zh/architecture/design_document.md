@@ -64,7 +64,7 @@ IdeShellController
     -> 每个 runtime entry 持有 ConversationBinding lease
     -> AgentConversationRuntimeController -> 固定 Binding（不持有 Provider lease/scope/pin）
     -> AgentConversationSliceStore（每个 entry 必建，未知 BindingKey fail-closed）
-  -> ProjectThreadsOperations（ProjectThreadsSliceStore：同步规则与索引）
+  -> ProjectThreadsOperations（ProjectThreadsSliceNotifier：同步规则与索引）
     -> ProjectThreadsSliceRunner.run(effect)（I/O）
 
 AgentConversationRuntimeController
@@ -514,11 +514,13 @@ Provider 的 Thread 访问统一经过 `ProviderOperationScheduler`。列表使�
 
 ### Project Threads 的规则与 I/O
 
-Project Threads 的同步命令、列表事实和 thread → project 反查索引由 `ProjectThreadsSliceStore` 独占，Shell、Widget 与业务回归统一经 `ProjectThreadsOperations` 调用。`ProjectThreadsSliceRunner` 只通过 `run(effect)` 执行 Provider I/O、分页与搜索调度；远端归属查询经 `ProjectThreadsStateOwner.threadFor` 读取当前项目第一个匹配摘要，不猜活跃 Provider。分页提交只补齐映射，保留窗口外显式登记；整体恢复重建索引，retain/remove/close 清理对应归属，关闭后的 ingress 不再改变索引或触发选中项移除回调。
+Project Threads 的同步命令、列表事实和 thread → project 反查索引由 `ProjectThreadsSliceNotifier` 独占，Shell、Widget 与业务回归统一经 `ProjectThreadsOperations` 调用。`ProjectThreadsSliceRunner` 只通过 `run(effect)` 执行 Provider I/O、分页与搜索调度；远端归属查询经 `ProjectThreadsStateOwner.threadFor` 读取当前项目第一个匹配摘要，不猜活跃 Provider。分页提交只补齐映射，保留窗口外显式登记；整体恢复重建索引，retain/remove/close 清理对应归属，关闭后的 ingress 不再改变索引或触发选中项移除回调。
 
 首屏 5 条、追加 10 条、每 Provider 聚合上限 50 条、搜索防抖 300 ms 保持；原始 String threadId 与 IDE session v4 不迁移，也不宣称解决跨 Provider 同 id 碰撞。远端成功/错误按 OperationId 结算，关闭时未完成 void Future 正常完成、fork Future 返回 null。fork 的 Binding 权限快照优先级保持。
 
-当前 Store 的 listener、presentation 镜像和 `_DeferredProjectThreadsSliceRunner` 仍保留；后续 WP-3P 迁移到 application Notifier，不能把本次规则收口视为发布机制迁移完成。
+WP-3P 已移除手写 listener、presentation 镜像与 Deferred；`projectThreadsSliceProvider` 是非 family、非 autoDispose 的应用级 owner，build 用 `ref.read` 冻结依赖，runner factory 只接收 `ProjectThreadsStateOwner`。Shell 借用 Operations 与独立 Riverpod 订阅，卸载只解除回调/订阅，不关闭此 owner。BindingManager 与 global runtime 由 app provider 提供，Workspace 与 Runner 共享同一实例。
+
+关闭先封入口：pending void 正常完成、fork 返回 null；Runner.close 取消未触发的搜索 Timer、失效加载 token，`drainExecutions()` 等待已启动的恢复/激活/搜索、聚合查询和写入全部结束（eagerError: false，失败 Future 不替换），然后 app 关闭 BindingManager → runtime registry → plugin → container。所有未知/重复回执仍按 OperationId 判 stale；错误及堆栈只结算 Future，不进入列表状态或持久化。
 
 ### 默认 provider
 
@@ -656,7 +658,7 @@ conversation mode 的 UI 回写仍受当前 thread gate 约束。
 
 生产链：`RuntimeController.runtimeObservationListenable + BindingManager + Workspace → WorkspaceAgentRuntimeFactSource → Management.runtimeFactsReplaced → aggregateManagementRuntime → runtimeByProviderId`。计数分别为 active turn、ready runtime、starting Binding、error Binding、unavailable Binding，以及无当前会话观测的 runtime；runtime 以完整 identity 去重，Binding 的 opaque token 在 draft 晋升时保持不变。
 
-source 由 Shell 创建并 start，app ingress 借用端口；Shell 卸载顺序为事实消费者退订 → source close → Workspace/BindingManager。管理 owner 由应用关闭，与页面卸载分离。source 同时观察 retained Binding 的事件通知但不读取内容，只同步重读中立 lifecycle。管理行独立显示运行错误；首页保留当前诊断缓存机制，但实时状态按 exact id 从同一摘要投影。WP-3M 已迁移 Management owner；Project Threads 与 Workspace/Conversation owner 分别待 WP-3P/C，WP-5 的诊断缓存收口仍待实施。
+source 由 Shell 创建并 start，app ingress 借用端口；Shell 卸载顺序为事实消费者退订 → source close → Workspace；BindingManager 留在 app shutdown 排空之后关闭。管理 owner 由应用关闭，与页面卸载分离。source 同时观察 retained Binding 的事件通知但不读取内容，只同步重读中立 lifecycle。管理行独立显示运行错误；首页保留当前诊断缓存机制，但实时状态按 exact id 从同一摘要投影。WP-3M 已迁移 Management owner；Project Threads owner 已完成 WP-3P，Workspace/Conversation owner 待 WP-3C，WP-5 的诊断缓存收口仍待实施。
 
 ### 当前已落地的对话体验
 
@@ -853,7 +855,7 @@ IDE 会话状态目前版本为 4，持久化内容包括：
   tool upsert、终态竞态和迟到事件决策；共享层 fixture 保持 Provider 无关。
 - AgentConversationRuntimeController 状态机。
 - Agent 管理的版本比较、配置校验/冲突/备份、日志脱敏和禁用只读联动。
-- ProjectThreadsSliceStore 与 effect/query runner 的分页、缓存、选择和错误状态分工。
+- ProjectThreadsSliceNotifier 与 effect/query runner 的分页、缓存、选择和错误状态分工。
 - App 或关键 Pane 的 widget 行为。
 
 新增功能应优先选择最靠近风险点的测试层级，避免为了简单 UI 调整引入过重测试。

@@ -1,3 +1,12 @@
+import 'package:zeta/src/app/project_threads_slice/project_threads_slice_composition.dart';
+import 'package:zeta/src/features/project_threads/application/project_threads_slice/project_threads_slice_notifier.dart';
+import 'package:zeta/src/features/project_threads/application/project_threads_slice/project_threads_slice_dependencies.dart';
+import 'package:zeta/src/features/project_threads/application/project_threads_slice/project_threads_slice_state.dart';
+import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
+import 'package:zeta/src/features/workspace/application/workspace_notifier.dart';
+import 'package:zeta/src/features/workspace/application/workspace_file_corpus_port.dart';
+import 'package:zeta/src/features/workspace/application/workspace_file_index_controller.dart';
+import '../testing/project_threads_test_container.dart';
 import '../testing/agent_management_test_definitions.dart';
 import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'dart:async';
@@ -133,7 +142,7 @@ void main() {
       final workspace = _bindWorkspace(
         directoryPicker: FakeWorkspaceDirectoryPicker.cancelled(),
       );
-      final shell = IdeShellController(
+      final shell = _createShellController(
         agentUiFrameSchedulerFactory: _createUiFrameScheduler,
         workspace: workspace.notifier,
         workspaceFileCorpus: workspace.corpus,
@@ -237,7 +246,7 @@ void main() {
       final workspace = _bindWorkspace(
         directoryPicker: FakeWorkspaceDirectoryPicker(directory.path),
       );
-      final shell = IdeShellController(
+      final shell = _createShellController(
         agentUiFrameSchedulerFactory: _createUiFrameScheduler,
         workspace: workspace.notifier,
         workspaceFileCorpus: workspace.corpus,
@@ -461,7 +470,7 @@ void main() {
       final workspace = _bindWorkspace(
         directoryPicker: FakeWorkspaceDirectoryPicker.cancelled(),
       );
-      final shell = IdeShellController(
+      final shell = _createShellController(
         agentUiFrameSchedulerFactory: _createUiFrameScheduler,
         workspace: workspace.notifier,
         workspaceFileCorpus: workspace.corpus,
@@ -964,7 +973,7 @@ void main() {
     final workspace = _bindWorkspace(
       directoryPicker: FakeWorkspaceDirectoryPicker(directory.path),
     );
-    final shell = IdeShellController(
+    final shell = _createShellController(
       agentUiFrameSchedulerFactory: _createUiFrameScheduler,
       workspace: workspace.notifier,
       workspaceFileCorpus: workspace.corpus,
@@ -1062,7 +1071,7 @@ void main() {
     final workspace = _bindWorkspace(
       directoryPicker: FakeWorkspaceDirectoryPicker(directory.path),
     );
-    final shell = IdeShellController(
+    final shell = _createShellController(
       agentUiFrameSchedulerFactory: _createUiFrameScheduler,
       workspace: workspace.notifier,
       workspaceFileCorpus: workspace.corpus,
@@ -1171,7 +1180,7 @@ void main() {
       final workspace = _bindWorkspace(
         directoryPicker: FakeWorkspaceDirectoryPicker(firstDirectory.path),
       );
-      final shell = IdeShellController(
+      final shell = _createShellController(
         agentUiFrameSchedulerFactory: _createUiFrameScheduler,
         workspace: workspace.notifier,
         workspaceFileCorpus: workspace.corpus,
@@ -1217,9 +1226,10 @@ void main() {
       expect(shell.isProjectHomeActive, isTrue);
       expect(shell.selectedAgentWorkspaceEntryId, isNull);
       expect(
-        shell.projectThreadsSliceStore.states.values.every(
-          (state) => state.selectedThreadId == null,
-        ),
+        (shell.projectThreadsController as ProjectThreadsSliceNotifier)
+            .states
+            .values
+            .every((state) => state.selectedThreadId == null),
         isTrue,
       );
 
@@ -1274,7 +1284,7 @@ void main() {
     final workspace = _bindWorkspace(
       directoryPicker: FakeWorkspaceDirectoryPicker(directory.path),
     );
-    final shell = IdeShellController(
+    final shell = _createShellController(
       agentUiFrameSchedulerFactory: _createUiFrameScheduler,
       workspace: workspace.notifier,
       workspaceFileCorpus: workspace.corpus,
@@ -1331,7 +1341,7 @@ void main() {
     final workspace = _bindWorkspace(
       directoryPicker: FakeWorkspaceDirectoryPicker.cancelled(),
     );
-    final shell = IdeShellController(
+    final shell = _createShellController(
       agentUiFrameSchedulerFactory: _createUiFrameScheduler,
       workspace: workspace.notifier,
       workspaceFileCorpus: workspace.corpus,
@@ -1419,7 +1429,7 @@ void main() {
       directoryPicker: FakeWorkspaceDirectoryPicker(firstDirectory.path),
       now: () => openedNow,
     );
-    final shell = IdeShellController(
+    final shell = _createShellController(
       agentUiFrameSchedulerFactory: _createUiFrameScheduler,
       workspace: workspace.notifier,
       workspaceFileCorpus: workspace.corpus,
@@ -1534,7 +1544,7 @@ Future<_SelectedThreadShellHarness> _openShellWithSelectedThread({
   final workspace = _bindWorkspace(
     directoryPicker: FakeWorkspaceDirectoryPicker(directory.path),
   );
-  final shell = IdeShellController(
+  final shell = _createShellController(
     agentUiFrameSchedulerFactory: _createUiFrameScheduler,
     workspace: workspace.notifier,
     workspaceFileCorpus: workspace.corpus,
@@ -1906,4 +1916,62 @@ class _CallbackSessionStore implements IdeSessionStore {
   Future<void> save(IdeSessionState state) async {
     onSave?.call(state.encode());
   }
+}
+
+// Explicit application resources, shared by the real Shell and real thread owner.
+IdeShellController _createShellController({
+  required WorkspaceNotifier workspace,
+  required WorkspaceFileCorpusPort workspaceFileCorpus,
+  required WorkspaceFileIndexController workspaceFileIndexController,
+  required IdeSessionSliceOperations ideSessionOperations,
+  required AgentProviderBundleFactory agentProviderFactory,
+  required AgentProviderSettingsPort agentProviderSettingsPort,
+  required Future<AgentModelCatalogLoadResult> Function()
+  activeModelCatalogLoader,
+  AgentProviderRuntimeRegistry? agentProviderRuntimeRegistry,
+  AgentFrameScheduler Function()? agentUiFrameSchedulerFactory,
+  void Function(AgentTurnTerminalSignal)? onAgentTurnTerminal,
+  void Function(AgentWorkspaceAttention)? onAgentAttention,
+  DateTime Function()? now,
+}) {
+  final registry =
+      agentProviderRuntimeRegistry ??
+      AgentProviderRuntimeRegistry(providerFactory: agentProviderFactory);
+  final manager = AgentConversationBindingManager(runtimeRegistry: registry)
+    ..start();
+  final global = AgentProviderGlobalRuntime(runtimeRegistry: registry);
+  final container = projectThreadsAppTestContainer(
+    ProjectThreadsCompositionInputs(
+      providerSettings: agentProviderSettingsPort,
+      globalRuntime: global,
+      bindingManager: manager,
+      textCatalog: const FallbackAgentUiTextCatalog(),
+      dependencies: ProjectThreadsSliceDependencies(
+        initialState: ProjectThreadsSliceState(),
+        now: now,
+      ),
+    ),
+  );
+  addTearDown(() async {
+    await closeProjectThreadsTestContainer(container);
+    await manager.close();
+    if (agentProviderRuntimeRegistry == null) await registry.close();
+  });
+  return IdeShellController(
+    workspace: workspace,
+    workspaceFileCorpus: workspaceFileCorpus,
+    workspaceFileIndexController: workspaceFileIndexController,
+    ideSessionOperations: ideSessionOperations,
+    agentProviderSettingsPort: agentProviderSettingsPort,
+    activeModelCatalogLoader: activeModelCatalogLoader,
+    agentProviderRuntimeRegistry: registry,
+    agentProviderGlobalRuntime: global,
+    bindingManager: manager,
+    projectThreadsController: container.read(projectThreadsOperationsProvider),
+    subscribeProjectThreads: container.read(projectThreadsChangesProvider),
+    agentUiFrameSchedulerFactory: agentUiFrameSchedulerFactory,
+    onAgentTurnTerminal: onAgentTurnTerminal,
+    onAgentAttention: onAgentAttention,
+    now: now,
+  );
 }

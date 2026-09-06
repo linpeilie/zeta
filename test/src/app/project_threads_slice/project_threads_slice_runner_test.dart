@@ -1,10 +1,21 @@
+import 'package:zeta/src/app/localization/zeta_display_language_source.dart';
+import 'package:zeta/src/features/settings/domain/app_language.dart';
+import 'package:zeta_plugin_kernel/zeta_plugin_kernel.dart';
+import 'package:zeta/src/app/plugins/zeta_plugin_catalog.dart';
+import 'package:zeta/src/app/composition/agent_session_resource_providers.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
+import 'package:zeta/src/app/storage/zeta_store_providers.dart';
+import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
+import '../../testing/zeta_test_app.dart';
+import '../../testing/project_threads_test_container.dart';
 import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import '../../testing/agent_provider_implementations.dart';
 import 'package:zeta/src/app/project_threads_slice/project_threads_slice_runner.dart';
-import 'package:zeta/src/features/project_threads/application/project_threads_slice/project_threads_slice_store.dart';
+import 'package:zeta/src/features/project_threads/application/project_threads_slice/project_threads_slice_notifier.dart';
 import 'package:zeta/src/features/project_threads/domain/project_threads_session_snapshot.dart';
 import '../../testing/provider_settings_test_store.dart';
 import '../../testing/agent_provider_stub_base.dart';
@@ -45,23 +56,26 @@ void main() {
       final bindingManager = AgentConversationBindingManager(
         runtimeRegistry: registry,
       );
-      final composition = ProjectThreadsSliceComposition.create(
-        providerController: settings,
-        globalRuntime: AgentProviderGlobalRuntime(runtimeRegistry: registry),
-        bindingManager: bindingManager,
-        textCatalog: const FallbackAgentUiTextCatalog(),
+      final container = projectThreadsAppTestContainer(
+        ProjectThreadsCompositionInputs(
+          providerSettings: settings,
+          globalRuntime: AgentProviderGlobalRuntime(runtimeRegistry: registry),
+          bindingManager: bindingManager,
+          textCatalog: const FallbackAgentUiTextCatalog(),
+        ),
       );
+      final controller = container.read(projectThreadsSliceProvider.notifier);
       addTearDown(() async {
-        composition.store.dispose();
+        await closeProjectThreadsTestContainer(container);
         settings.dispose();
         await bindingManager.close();
         await registry.close();
       });
 
-      await composition.store.loadInitial('/repo');
+      await controller.loadInitial('/repo');
 
-      expect(composition.store.stateFor('/repo').threads.single.id, 'thread-1');
-      expect(composition.store.stateFor('/repo').hasLoaded, isTrue);
+      expect(controller.stateFor('/repo').threads.single.id, 'thread-1');
+      expect(controller.stateFor('/repo').hasLoaded, isTrue);
       expect(provider.listQueries.single.projectPath, '/repo');
     },
   );
@@ -92,23 +106,23 @@ void main() {
       final bindingManager = AgentConversationBindingManager(
         runtimeRegistry: registry,
       );
-      final composition = ProjectThreadsSliceComposition.create(
-        providerController: settings,
-        globalRuntime: AgentProviderGlobalRuntime(runtimeRegistry: registry),
-        bindingManager: bindingManager,
-        textCatalog: const FallbackAgentUiTextCatalog(),
+      final container = projectThreadsAppTestContainer(
+        ProjectThreadsCompositionInputs(
+          providerSettings: settings,
+          globalRuntime: AgentProviderGlobalRuntime(runtimeRegistry: registry),
+          bindingManager: bindingManager,
+          textCatalog: const FallbackAgentUiTextCatalog(),
+        ),
       );
+      final controller = container.read(projectThreadsSliceProvider.notifier);
       addTearDown(() async {
-        composition.store.dispose();
+        await closeProjectThreadsTestContainer(container);
         settings.dispose();
         await bindingManager.close();
         await registry.close();
       });
 
-      composition.store.setSearchTerm(
-        projectPath: '/repo',
-        searchTerm: 'needle',
-      );
+      controller.setSearchTerm(projectPath: '/repo', searchTerm: 'needle');
       expect(provider.listQueries, isEmpty);
 
       await Future<void>.delayed(const Duration(milliseconds: 350));
@@ -152,38 +166,35 @@ void main() {
       final bindingManager = AgentConversationBindingManager(
         runtimeRegistry: registry,
       );
-      final composition = ProjectThreadsSliceComposition.create(
-        providerController: settings,
-        globalRuntime: AgentProviderGlobalRuntime(runtimeRegistry: registry),
-        bindingManager: bindingManager,
-        textCatalog: const FallbackAgentUiTextCatalog(),
+      final container = projectThreadsAppTestContainer(
+        ProjectThreadsCompositionInputs(
+          providerSettings: settings,
+          globalRuntime: AgentProviderGlobalRuntime(runtimeRegistry: registry),
+          bindingManager: bindingManager,
+          textCatalog: const FallbackAgentUiTextCatalog(),
+        ),
       );
+      final controller = container.read(projectThreadsSliceProvider.notifier);
       addTearDown(() async {
-        composition.store.dispose();
+        await closeProjectThreadsTestContainer(container);
         settings.dispose();
         await bindingManager.close();
         await registry.close();
       });
 
-      await composition.store.loadInitial('/repo');
-      await composition.store.renameThread(
+      await controller.loadInitial('/repo');
+      await controller.renameThread(
         projectPath: '/repo',
         threadId: 'rename',
         name: 'Renamed',
       );
-      await composition.store.archiveThread(
-        projectPath: '/repo',
-        threadId: 'archive',
-      );
-      await composition.store.unarchiveThread(
+      await controller.archiveThread(projectPath: '/repo', threadId: 'archive');
+      await controller.unarchiveThread(
         projectPath: '/repo',
         threadId: 'unarchive',
       );
-      await composition.store.deleteThread(
-        projectPath: '/repo',
-        threadId: 'delete',
-      );
-      final forked = await composition.store.forkThread(
+      await controller.deleteThread(projectPath: '/repo', threadId: 'delete');
+      final forked = await controller.forkThread(
         projectPath: '/repo',
         threadId: 'fork',
       );
@@ -197,7 +208,7 @@ void main() {
       expect(provider.forkedThreads, <String>['fork']);
       expect(forked?.id, 'forked-fork');
       expect(
-        composition.store
+        controller
             .stateFor('/repo')
             .threads
             .where((thread) => thread.id == 'rename')
@@ -205,7 +216,7 @@ void main() {
             .title,
         'Renamed',
       );
-      final remainingIds = composition.store
+      final remainingIds = controller
           .stateFor('/repo')
           .threads
           .map((thread) => thread.id)
@@ -610,14 +621,17 @@ void main() {
       final bindingManager = AgentConversationBindingManager(
         runtimeRegistry: registry,
       );
-      final controller = ProjectThreadsSliceComposition.create(
-        providerController: providerController,
-        globalRuntime: AgentProviderGlobalRuntime(runtimeRegistry: registry),
-        textCatalog: const FallbackAgentUiTextCatalog(),
-        bindingManager: bindingManager,
-      ).store;
+      final container = projectThreadsAppTestContainer(
+        ProjectThreadsCompositionInputs(
+          providerSettings: providerController,
+          globalRuntime: AgentProviderGlobalRuntime(runtimeRegistry: registry),
+          textCatalog: const FallbackAgentUiTextCatalog(),
+          bindingManager: bindingManager,
+        ),
+      );
+      final controller = container.read(projectThreadsSliceProvider.notifier);
       addTearDown(() async {
-        controller.dispose();
+        await closeProjectThreadsTestContainer(container);
         providerController.dispose();
         await bindingManager.close();
         await registry.close();
@@ -678,14 +692,17 @@ void main() {
         const AgentPermissionSelection(optionId: ':read-only'),
         syncPort: false,
       );
-      final controller = ProjectThreadsSliceComposition.create(
-        providerController: providerController,
-        globalRuntime: AgentProviderGlobalRuntime(runtimeRegistry: registry),
-        bindingManager: bindingManager,
-        textCatalog: const FallbackAgentUiTextCatalog(),
-      ).store;
+      final container = projectThreadsAppTestContainer(
+        ProjectThreadsCompositionInputs(
+          providerSettings: providerController,
+          globalRuntime: AgentProviderGlobalRuntime(runtimeRegistry: registry),
+          bindingManager: bindingManager,
+          textCatalog: const FallbackAgentUiTextCatalog(),
+        ),
+      );
+      final controller = container.read(projectThreadsSliceProvider.notifier);
       addTearDown(() async {
-        controller.dispose();
+        await closeProjectThreadsTestContainer(container);
         await bindingLease.release();
         await bindingManager.close();
         providerController.dispose();
@@ -788,13 +805,13 @@ void main() {
       final loading = store.loadInitial('/repo');
       await _flushAsync();
       store.setSearchTerm(projectPath: '/repo', searchTerm: 'pending');
-      final before = store.state;
-      store.dispose();
+      final before = store.current;
+      store.stopAcceptingCommandsAndSettleWaiters();
       await loading;
       page.complete(_page(_threads(1), nextCursor: null));
       await Future<void>.delayed(projectThreadSearchDebounce);
       await _flushAsync();
-      expect(store.state, same(before));
+      expect(store.current, same(before));
       expect(provider.listQueries, hasLength(1));
       expect(store.staleResultCount, 0);
     },
@@ -825,8 +842,8 @@ void main() {
       await _flushAsync();
       expect(provider.archivedThreads, ['archive']);
       expect(provider.forkedThreads, ['fork']);
-      final before = store.state;
-      store.dispose();
+      final before = store.current;
+      store.stopAcceptingCommandsAndSettleWaiters();
       await archiving;
       expect(await forking, isNull);
       archive.complete();
@@ -834,7 +851,7 @@ void main() {
         const AgentSession(id: 'late', providerId: defaultAgentProviderId),
       );
       await _flushAsync();
-      expect(store.state, same(before));
+      expect(store.current, same(before));
       expect(callbacks, 0);
       expect(store.staleResultCount, 0);
     },
@@ -844,16 +861,22 @@ void main() {
     'owner closure during removal publication suppresses external callback',
     () async {
       final provider = _FakeAgentProvider(pages: []);
-      final store = _createController(provider);
+      late ProjectThreadsSliceNotifier store;
+      store = _createController(
+        provider,
+        onChange: () {
+          if (store.threadFor('/repo', 'selected') == null) {
+            store.stopAcceptingCommandsAndSettleWaiters();
+          }
+        },
+      );
       store.registerSession(
         '/repo',
         const AgentSession(id: 'selected', providerId: defaultAgentProviderId),
       );
       var callbacks = 0;
       store.onActiveThreadCleared = (_, _) => callbacks++;
-      store.subscribe(() {
-        if (store.threadFor('/repo', 'selected') == null) store.dispose();
-      });
+
       await store.archiveThread(projectPath: '/repo', threadId: 'selected');
       expect(store.stateFor('/repo').threads, isEmpty);
       expect(callbacks, 0);
@@ -903,9 +926,252 @@ void main() {
       expect(provider.forkedThreads, isEmpty);
     },
   );
+
+  test(
+    'synchronous optimistic rename observer can stop before the remote write',
+    () async {
+      final provider = _FakeAgentProvider(pages: []);
+      late ProjectThreadsSliceNotifier owner;
+      Future<void>? reentrantDrain;
+      owner = _createController(
+        provider,
+        onChange: () {
+          if (owner.threadFor('/repo', 'a')?.title == 'new') {
+            owner.stopAcceptingCommandsAndSettleWaiters();
+            reentrantDrain = owner.drainExecutions();
+          }
+        },
+      );
+      owner.registerSession(
+        '/repo',
+        const AgentSession(id: 'a', providerId: defaultAgentProviderId),
+      );
+      await owner.renameThread(
+        projectPath: '/repo',
+        threadId: 'a',
+        name: 'new',
+      );
+      expect(reentrantDrain, isNotNull);
+      expect(owner.drainExecutions(), same(reentrantDrain));
+      await reentrantDrain;
+      expect(provider.writeCalls, 0);
+      expect(provider.renamedThreads, isEmpty);
+      expect(owner.staleResultCount, 0);
+    },
+  );
+
+  for (final source in [
+    'restore',
+    'activate',
+    'search',
+    'initial',
+    'toggle',
+    'archived',
+    'more',
+  ]) {
+    test('drain waits for every Provider query from $source', () async {
+      final first = Completer<AgentThreadPage>();
+      final last = Completer<AgentThreadPage>();
+      final codex = _FakeAgentProvider(pages: [])..nextListCompleter = first;
+      final grok = _FakeAgentProvider(
+        pages: [],
+        config: defaultGrokAgentProviderConfig,
+      )..nextListCompleter = last;
+      final owner = _createMultiProviderController(codex: codex, grok: grok);
+      Future<void>? command;
+      switch (source) {
+        case 'restore':
+          owner.restoreSession(
+            projectPaths: ['/repo'],
+            activeProjectPath: '/repo',
+            snapshot: const ProjectThreadsSessionSnapshot(),
+          );
+        case 'activate':
+          owner.activateProject('/repo');
+        case 'search':
+          owner.setSearchTerm(projectPath: '/repo', searchTerm: 'needle');
+        case 'initial':
+          command = owner.loadInitial('/repo');
+        case 'toggle':
+          command = owner.toggleProject('/repo');
+        case 'archived':
+          command = owner.setArchivedView(projectPath: '/repo', archived: true);
+        case 'more':
+          owner.applyProjectState(
+            '/repo',
+            const ProjectThreadListState(nextCursor: 'agg:5'),
+          );
+          command = owner.loadMore('/repo');
+      }
+      if (source == 'search') {
+        await Future<void>.delayed(const Duration(milliseconds: 350));
+      }
+      await pumpEventQueue(times: 10);
+      expect(codex.listQueries, hasLength(1));
+      expect(grok.listQueries, hasLength(1));
+      final before = owner.current;
+      owner.stopAcceptingCommandsAndSettleWaiters();
+      await command;
+      var done = false;
+      final drain = owner.drainExecutions();
+      expect(owner.drainExecutions(), same(drain));
+      final observed = drain.then((_) => done = true);
+      first.complete(const AgentThreadPage(threads: [], nextCursor: null));
+      await pumpEventQueue(times: 5);
+      expect(done, isFalse);
+      expect(codex.disposeCalls + grok.disposeCalls, 0);
+      last.complete(const AgentThreadPage(threads: [], nextCursor: null));
+      await observed;
+      expect(owner.current, same(before));
+    });
+  }
+
+  for (final operation in [
+    'archive',
+    'fork',
+    'rename',
+    'unarchive',
+    'delete',
+  ]) {
+    test(
+      'drain includes physical $operation after its caller is settled',
+      () async {
+        final provider = _FakeAgentProvider(pages: []);
+        final owner = _createController(provider);
+        owner.registerSession(
+          '/repo',
+          const AgentSession(id: 'a', providerId: defaultAgentProviderId),
+        );
+        final gate = Completer<void>();
+        provider.writeGate = gate;
+        final Future<Object?> command = switch (operation) {
+          'archive' => owner.archiveThread(projectPath: '/repo', threadId: 'a'),
+          'fork' => owner.forkThread(projectPath: '/repo', threadId: 'a'),
+          'rename' => owner.renameThread(
+            projectPath: '/repo',
+            threadId: 'a',
+            name: 'new',
+          ),
+          'unarchive' => owner.unarchiveThread(
+            projectPath: '/repo',
+            threadId: 'a',
+          ),
+          _ => owner.deleteThread(projectPath: '/repo', threadId: 'a'),
+        };
+        await pumpEventQueue(times: 10);
+        expect(provider.writeCalls, 1);
+        owner.stopAcceptingCommandsAndSettleWaiters();
+        expect(await command, isNull);
+        var done = false;
+        final drain = owner.drainExecutions().then((_) => done = true);
+        await pumpEventQueue(times: 5);
+        expect(done, isFalse);
+        expect(provider.disposeCalls, 0);
+        gate.complete();
+        await drain;
+      },
+    );
+  }
+
+  test(
+    'app owns threads before Widgets and keeps bindings and runtime until query drain',
+    () async {
+      final provider = _FakeAgentProvider(pages: []);
+      final factory = _FakeAgentProviderFactory(provider);
+      final registry = _ShutdownRegistry(factory);
+      final plugin = _ShutdownPlugin();
+      final catalog = ZetaPluginCatalog.forTesting(factories: [plugin])
+        ..activate();
+      final app = zetaTestComposition(
+        overrides: [
+          agentProviderBundleFactoryProvider.overrideWithValue(factory),
+          agentProviderRuntimeRegistryProvider.overrideWithValue(registry),
+          zetaPluginCatalogProvider.overrideWithValue(catalog),
+          agentProviderConfigStoreProvider.overrideWithValue(
+            MemoryAgentProviderConfigStore(
+              const AgentProviderSettings(
+                providers: [defaultCodexAgentProviderConfig],
+              ),
+            ),
+          ),
+        ],
+      );
+      await app.ready;
+      final container = app.container;
+      expect(container.read(zetaPluginCatalogProvider), same(catalog));
+      final owner = container.read(projectThreadsSliceProvider.notifier);
+      final manager = container.read(agentConversationBindingManagerProvider);
+      final inputs = container.read(projectThreadsCompositionInputsProvider);
+      expect(inputs.bindingManager, same(manager));
+      expect(manager.runtimeRegistry, same(registry));
+      expect(provider.listQueries, isEmpty);
+      final gate = Completer<AgentThreadPage>();
+      provider.nextListCompleter = gate;
+      final command = owner.loadInitial('/repo');
+      await pumpEventQueue(times: 10);
+      expect(provider.listQueries, hasLength(1));
+      var disposed = false;
+      container.read(
+        Provider((ref) {
+          ref.onDispose(() => disposed = true);
+          return true;
+        }),
+      );
+      final closing = app.close();
+      expect(app.close(), same(closing));
+      await command;
+      expect(owner.isClosed, isTrue);
+      expect(manager.isRunning, isTrue);
+      expect(registry.closeCalls, 0);
+      expect(provider.disposeCalls, 0);
+      expect(plugin.closed, isFalse);
+      expect(disposed, isFalse);
+      gate.complete(const AgentThreadPage(threads: [], nextCursor: null));
+      await closing;
+      expect(manager.isRunning, isFalse);
+      expect(registry.closeCalls, 1);
+      expect(provider.disposeCalls, 1);
+      expect(plugin.closed, isTrue);
+      expect(disposed, isTrue);
+    },
+  );
+  test(
+    'shutdown before locale resolution cannot construct a late thread owner',
+    () async {
+      final language = Completer<AppLanguage>();
+      final factory = _FakeAgentProviderFactory(_FakeAgentProvider(pages: []));
+      final app = zetaTestComposition(
+        overrides: [
+          agentProviderBundleFactoryProvider.overrideWithValue(factory),
+          zetaDisplayLanguageSourceProvider.overrideWithValue(
+            GeneralSettingsDisplayLanguageSource(() => language.future),
+          ),
+        ],
+      );
+      expect(app.isReady, isFalse);
+      expect(app.container.exists(projectThreadsSliceProvider), isFalse);
+      expect(
+        app.container.exists(agentConversationBindingManagerProvider),
+        isFalse,
+      );
+      await app.shutdownOwnedAgentResources();
+      language.complete(AppLanguage.english);
+      await pumpEventQueue(times: 10);
+      expect(app.isReady, isFalse);
+      expect(app.container.exists(projectThreadsSliceProvider), isFalse);
+      expect(
+        app.container.exists(agentConversationBindingManagerProvider),
+        isFalse,
+      );
+      await app.close();
+    },
+  );
 }
 
-ProjectThreadsSliceStore _createController(_FakeAgentProvider provider) {
+ProjectThreadsSliceNotifier _createController(
+  _FakeAgentProvider provider, {
+  void Function()? onChange,
+}) {
   // 单 provider 配置，避免默认 Codex+Grok 下同一 fake 被聚合调用两次。
   final registry = AgentProviderRuntimeRegistry(
     providerFactory: _FakeAgentProviderFactory(provider),
@@ -922,22 +1188,28 @@ ProjectThreadsSliceStore _createController(_FakeAgentProvider provider) {
   final bindingManager = AgentConversationBindingManager(
     runtimeRegistry: registry,
   );
-  final controller = ProjectThreadsSliceComposition.create(
-    providerController: providerController,
-    globalRuntime: AgentProviderGlobalRuntime(runtimeRegistry: registry),
-    textCatalog: const FallbackAgentUiTextCatalog(),
-    bindingManager: bindingManager,
-  ).store;
+  final container = projectThreadsAppTestContainer(
+    ProjectThreadsCompositionInputs(
+      providerSettings: providerController,
+      globalRuntime: AgentProviderGlobalRuntime(runtimeRegistry: registry),
+      textCatalog: const FallbackAgentUiTextCatalog(),
+      bindingManager: bindingManager,
+    ),
+  );
+  final controller = container.read(projectThreadsSliceProvider.notifier);
   addTearDown(() async {
-    controller.dispose();
+    await closeProjectThreadsTestContainer(container);
     providerController.dispose();
     await bindingManager.close();
     await registry.close();
   });
+  if (onChange != null) {
+    container.listen(projectThreadsSliceProvider, (_, _) => onChange());
+  }
   return controller;
 }
 
-ProjectThreadsSliceStore _createMultiProviderController({
+ProjectThreadsSliceNotifier _createMultiProviderController({
   required _FakeAgentProvider codex,
   required _FakeAgentProvider grok,
   List<String>? createdProviderIds,
@@ -964,14 +1236,17 @@ ProjectThreadsSliceStore _createMultiProviderController({
   final bindingManager = AgentConversationBindingManager(
     runtimeRegistry: registry,
   );
-  final controller = ProjectThreadsSliceComposition.create(
-    providerController: providerController,
-    globalRuntime: AgentProviderGlobalRuntime(runtimeRegistry: registry),
-    textCatalog: const FallbackAgentUiTextCatalog(),
-    bindingManager: bindingManager,
-  ).store;
+  final container = projectThreadsAppTestContainer(
+    ProjectThreadsCompositionInputs(
+      providerSettings: providerController,
+      globalRuntime: AgentProviderGlobalRuntime(runtimeRegistry: registry),
+      textCatalog: const FallbackAgentUiTextCatalog(),
+      bindingManager: bindingManager,
+    ),
+  );
+  final controller = container.read(projectThreadsSliceProvider.notifier);
   addTearDown(() async {
-    controller.dispose();
+    await closeProjectThreadsTestContainer(container);
     providerController.dispose();
     await bindingManager.close();
     await registry.close();
@@ -1074,18 +1349,27 @@ class _FakeAgentProvider
   Completer<void>? pendingArchive;
   Completer<AgentSession>? pendingFork;
   Object? renameFailure;
+  Completer<void>? writeGate;
+  int writeCalls = 0;
+  int disposeCalls = 0;
+  Future<void> _waitWrite() async {
+    writeCalls++;
+    await writeGate?.future;
+  }
 
   @override
   Future<void> renameThread({
     required String threadId,
     required String name,
   }) async {
+    await _waitWrite();
     await super.renameThread(threadId: threadId, name: name);
     if (renameFailure case final failure?) throw failure;
   }
 
   @override
   Future<void> archiveThread(String threadId) async {
+    await _waitWrite();
     await super.archiveThread(threadId);
     await pendingArchive?.future;
   }
@@ -1098,6 +1382,7 @@ class _FakeAgentProvider
     AgentPermissionRequestSnapshot permissionSnapshot =
         const AgentPermissionRequestSnapshot.providerFallback(),
   }) async {
+    await _waitWrite();
     final session = await super.forkThread(
       threadId: threadId,
       context: context,
@@ -1105,6 +1390,18 @@ class _FakeAgentProvider
       permissionSnapshot: permissionSnapshot,
     );
     return pendingFork == null ? session : await pendingFork!.future;
+  }
+
+  @override
+  Future<void> unarchiveThread(String threadId) async {
+    await _waitWrite();
+    await super.unarchiveThread(threadId);
+  }
+
+  @override
+  Future<void> deleteThread(String threadId) async {
+    await _waitWrite();
+    await super.deleteThread(threadId);
   }
 
   Completer<AgentThreadPage>? nextListCompleter;
@@ -1229,10 +1526,42 @@ class _FakeAgentProvider
 
   @override
   Future<void> dispose() async {
+    disposeCalls++;
     await _events.close();
   }
 
   void emit(AgentEvent event) {
     _events.add(event);
+  }
+}
+
+class _ShutdownRegistry extends AgentProviderRuntimeRegistry {
+  _ShutdownRegistry(AgentProviderBundleFactory factory)
+    : super(providerFactory: factory);
+  int closeCalls = 0;
+  @override
+  Future<void> close() {
+    closeCalls++;
+    return super.close();
+  }
+}
+
+final class _ShutdownPlugin
+    implements ZetaSynchronousPluginFactory, ZetaPluginHandle {
+  bool closed = false;
+  @override
+  final descriptor = ZetaPluginDescriptor(
+    id: 'test.shutdown',
+    apiVersion: ZetaPluginApiVersion.current,
+  );
+  @override
+  final contributions = const <ZetaPluginContribution>[];
+  @override
+  Future<ZetaPluginHandle> activate(ZetaPluginContext context) async => this;
+  @override
+  ZetaPluginHandle activateSynchronously(ZetaPluginContext context) => this;
+  @override
+  Future<void> close() async {
+    closed = true;
   }
 }

@@ -229,7 +229,7 @@ final class AgentConversationWorkspaceStore {
     required this.providerController,
     required this.workspaceFileCorpus,
     required this.runtimeRegistry,
-    AgentConversationBindingManager? bindingManager,
+    required this.bindingManager,
     AgentProviderGlobalRuntime? globalRuntime,
     this._onTurnTerminal,
     this._onAttention,
@@ -240,19 +240,10 @@ final class AgentConversationWorkspaceStore {
     this.metrics = noopZetaMetricsPort,
     this.providerMetricLabel = ZetaMetricLabel.hashed,
     this._reducer = const AgentConversationWorkspaceReducer(),
-  }) : bindingManager =
-           bindingManager ??
-           AgentConversationBindingManager(
-             runtimeRegistry: runtimeRegistry,
-             textCatalog: textCatalog ?? const FallbackAgentUiTextCatalog(),
-           ),
-       globalRuntime =
+  }) : globalRuntime =
            globalRuntime ??
            AgentProviderGlobalRuntime(runtimeRegistry: runtimeRegistry),
-       _ownsBindingManager = bindingManager == null,
-       _textCatalog = textCatalog ?? const FallbackAgentUiTextCatalog() {
-    this.bindingManager.start();
-  }
+       _textCatalog = textCatalog ?? const FallbackAgentUiTextCatalog();
 
   /// @mention 只经 workspace 查询端口取语料，不拼接索引实现或 Flutter listener。
   final WorkspaceFileCorpusPort workspaceFileCorpus;
@@ -261,7 +252,6 @@ final class AgentConversationWorkspaceStore {
 
   final AgentConversationBindingManager bindingManager;
   final AgentProviderGlobalRuntime globalRuntime;
-  final bool _ownsBindingManager;
   final void Function(AgentTurnTerminalSignal)? _onTurnTerminal;
   final void Function(AgentWorkspaceAttention)? _onAttention;
   final AgentCreatedThreadCallback? onCreatedThread;
@@ -527,9 +517,6 @@ final class AgentConversationWorkspaceStore {
       entry.dispose();
     }
     _entries.clear();
-    if (_ownsBindingManager) {
-      unawaited(bindingManager.close());
-    }
     _listeners.clear();
     _entryChangedListeners.clear();
   }

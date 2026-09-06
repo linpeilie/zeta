@@ -1,17 +1,19 @@
+import '../../../testing/project_threads_test_container.dart';
+import 'package:zeta/src/features/project_threads/application/project_threads_slice/project_threads_slice_dependencies.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
 import 'package:zeta/src/features/project_threads/application/project_threads_slice/project_threads_slice_effect.dart';
 import 'package:zeta/src/features/project_threads/application/project_threads_slice/project_threads_slice_state.dart';
-import 'package:zeta/src/features/project_threads/application/project_threads_slice/project_threads_slice_store.dart';
+import 'package:zeta/src/features/project_threads/application/project_threads_slice/project_threads_slice_notifier.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
 
 void main() {
-  group('ProjectThreadsSliceStore', () {
+  group('ProjectThreadsSliceNotifier', () {
     test('keeps selection globally unique and publishes immutable state', () {
       final runner = _RecordingRunner();
-      final store = ProjectThreadsSliceStore(
+      final container = projectThreadsTestContainer(
         initialState: ProjectThreadsSliceState(
           statesByProject: <String, ProjectThreadListState>{
             '/a': ProjectThreadListState(
@@ -25,9 +27,10 @@ void main() {
         effectRunner: runner,
         now: () => DateTime.fromMillisecondsSinceEpoch(20),
       );
-      addTearDown(store.dispose);
+      final store = container.read(projectThreadsSliceProvider.notifier);
+      addTearDown(store.stopAcceptingCommandsAndSettleWaiters);
       var publishes = 0;
-      store.subscribe(() => publishes += 1);
+      container.listen(projectThreadsSliceProvider, (_, _) => publishes += 1);
 
       store.selectThreadId('/a', 'a');
       store.selectThreadId('/b', 'b');
@@ -45,7 +48,7 @@ void main() {
       'preserves running, promotion and background completion semantics',
       () {
         final runner = _RecordingRunner();
-        final store = ProjectThreadsSliceStore(
+        final container = projectThreadsTestContainer(
           initialState: ProjectThreadsSliceState(
             statesByProject: <String, ProjectThreadListState>{
               '/repo': ProjectThreadListState(
@@ -60,7 +63,8 @@ void main() {
           effectRunner: runner,
           now: () => DateTime.fromMillisecondsSinceEpoch(20),
         );
-        addTearDown(store.dispose);
+        final store = container.read(projectThreadsSliceProvider.notifier);
+        addTearDown(store.stopAcceptingCommandsAndSettleWaiters);
 
         store.registerThreadMapping('/repo', 'background');
         store.setThreadRunning('background', isRunning: true);
@@ -78,11 +82,12 @@ void main() {
       'routes async commands through typed effects and settles by id',
       () async {
         final runner = _RecordingRunner();
-        final store = ProjectThreadsSliceStore(
+        final container = projectThreadsTestContainer(
           initialState: ProjectThreadsSliceState(),
           effectRunner: runner,
         );
-        addTearDown(store.dispose);
+        final store = container.read(projectThreadsSliceProvider.notifier);
+        addTearDown(store.stopAcceptingCommandsAndSettleWaiters);
 
         final future = store.loadInitial('/repo');
         final effect = runner.effects.single as LoadInitialProjectThreadsEffect;
@@ -99,12 +104,13 @@ void main() {
     test('registers a session without copying state into the runner', () {
       final runner = _RecordingRunner();
       final now = DateTime.fromMillisecondsSinceEpoch(42);
-      final store = ProjectThreadsSliceStore(
+      final container = projectThreadsTestContainer(
         initialState: ProjectThreadsSliceState(),
         effectRunner: runner,
         now: () => now,
       );
-      addTearDown(store.dispose);
+      final store = container.read(projectThreadsSliceProvider.notifier);
+      addTearDown(store.stopAcceptingCommandsAndSettleWaiters);
 
       final thread = store.registerSession(
         '/repo',
@@ -124,14 +130,15 @@ void main() {
 
     test('dispose closes runner and drops late state/result ingress', () async {
       final runner = _RecordingRunner();
-      final store = ProjectThreadsSliceStore(
+      final container = projectThreadsTestContainer(
         initialState: ProjectThreadsSliceState(),
         effectRunner: runner,
       );
+      final store = container.read(projectThreadsSliceProvider.notifier);
       final future = store.loadInitial('/repo');
       final effect = runner.effects.single as LoadInitialProjectThreadsEffect;
 
-      store.dispose();
+      store.stopAcceptingCommandsAndSettleWaiters();
       store.applyProjectState(
         '/repo',
         const ProjectThreadListState(isExpanded: true),
@@ -738,7 +745,7 @@ void main() {
       'initial summaries and selected ids seed mappings without a runner',
       () {
         final runner = _RecordingRunner();
-        final store = ProjectThreadsSliceStore(
+        final container = projectThreadsTestContainer(
           initialState: ProjectThreadsSliceState(
             statesByProject: {
               '/a': ProjectThreadListState(threads: [_thread('a')]),
@@ -747,7 +754,8 @@ void main() {
           ),
           effectRunner: runner,
         );
-        addTearDown(store.dispose);
+        final store = container.read(projectThreadsSliceProvider.notifier);
+        addTearDown(store.stopAcceptingCommandsAndSettleWaiters);
         store.setThreadRunning('a', isRunning: true);
         store.setThreadRunning('outside', isRunning: true);
         expect(store.stateFor('/a').runningThreadIds, {'a'});
@@ -843,7 +851,7 @@ void main() {
       'close settles pending operations once and rejects late ingress and new commands',
       () async {
         final runner = _RecordingRunner();
-        final store = ProjectThreadsSliceStore(
+        final container = projectThreadsTestContainer(
           initialState: ProjectThreadsSliceState(
             statesByProject: {
               '/repo': ProjectThreadListState(
@@ -854,6 +862,7 @@ void main() {
           ),
           effectRunner: runner,
         );
+        final store = container.read(projectThreadsSliceProvider.notifier);
         final loading = store.loadInitial('/repo');
         final forking = store.forkThread(
           projectPath: '/repo',
@@ -862,9 +871,9 @@ void main() {
         final load = runner.effects[0] as LoadInitialProjectThreadsEffect;
         final fork = runner.effects[1] as ForkProjectThreadEffect;
         var publishes = 0;
-        store.subscribe(() => publishes++);
-        final before = store.state;
-        store.dispose();
+        container.listen(projectThreadsSliceProvider, (_, _) => publishes++);
+        final before = store.current;
+        store.stopAcceptingCommandsAndSettleWaiters();
         await loading;
         expect(await forking, isNull);
         store.applyStatesReplacement({
@@ -893,7 +902,7 @@ void main() {
           fork.operationId,
           const AgentSession(id: 'late', providerId: defaultAgentProviderId),
         );
-        expect(store.state, same(before));
+        expect(store.current, same(before));
         expect(store.staleResultCount, 0);
         expect(publishes, 0);
         expect(runner.closed, isTrue);
@@ -932,15 +941,18 @@ final class _RecordingRunner implements ProjectThreadsSliceEffectRunner {
 
   @override
   void close() => closed = true;
+
+  @override
+  Future<void> drainExecutions() async {}
 }
 
 final _fixedNow = DateTime.utc(2026, 9, 6);
 
-ProjectThreadsSliceStore _createSyncStore({
+ProjectThreadsSliceNotifier _createSyncStore({
   List<AgentThreadSummary> threads = const [],
 }) {
   final runner = _RecordingRunner();
-  final store = ProjectThreadsSliceStore(
+  final container = projectThreadsTestContainer(
     initialState: ProjectThreadsSliceState(
       statesByProject: {
         if (threads.isNotEmpty)
@@ -950,13 +962,14 @@ ProjectThreadsSliceStore _createSyncStore({
     effectRunner: runner,
     now: () => _fixedNow,
   );
+  final store = container.read(projectThreadsSliceProvider.notifier);
   addTearDown(() {
     expect(
       runner.effects,
       isEmpty,
       reason: 'Synchronous business must not invoke Provider effects',
     );
-    store.dispose();
+    store.stopAcceptingCommandsAndSettleWaiters();
   });
   return store;
 }

@@ -34,7 +34,10 @@ List<String> _violations(String source) {
       final name = member.name.lexeme;
       final normalized = name.startsWith('_') ? name.substring(1) : name;
       if (_synchronousMembers.contains(normalized) ||
-          (!name.startsWith('_') && name != 'run' && name != 'close')) {
+          (!name.startsWith('_') &&
+              name != 'run' &&
+              name != 'close' &&
+              name != 'drainExecutions')) {
         violations.add(name);
       }
     } else if (member is FieldDeclaration) {
@@ -76,6 +79,7 @@ void main() {
         final Map<String, Timer> _timers = {};
         void run(Object effect) { _loadInitial(); }
         void close() {}
+        Future<void> drainExecutions() async {}
         void _loadInitial() {}
         Object _stateFor() => owner.stateFor('/repo');
         // registerSession and Map<String, String> in text are not members.

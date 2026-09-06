@@ -1,6 +1,6 @@
 # WP-3 · 单一状态 owner 与完整组合生命周期
 
-> 状态：未开始。前置：WP-1；WP-3P 另需 WP-4。阶段顺序：M → P → C。
+> 状态：WP-3M/P 已完成；WP-3C 未开始。前置：WP-1；WP-3P 另需 WP-4。阶段顺序：M → P → C。
 > 统一决策见 [总入口](00-index.md)。本章代码块均为 Dart 风格伪代码，新增类型属于目标设计；现有 `Store` 不能通过改名继续保留镜像发布链。
 
 ## 1. 问题、范围与可观察目标
@@ -54,6 +54,7 @@
 | 修改 | `lib/src/app/project_threads_slice/project_threads_slice_composition.dart` | provider 装配与 factory，删除 Deferred |
 | 修改 | `lib/src/app/project_threads_slice/project_threads_slice_runner.dart` | 保留WP-4的void run/close，跟踪真实后台任务并新增drainExecutions |
 | 删除 | 原 Project Threads Store 文件 | 保留 Operations/StateOwner 的语义，更新实现名 |
+| 新增 | `lib/src/app/composition/agent_session_resource_providers.dart` | P 阶段 app 唯一 BindingManager/global runtime 与 sweep timer factory |
 | 新增 | `lib/src/features/agent/application/conversation_slice/agent_conversation_owner_key.dart` | 稳定 entry 身份 |
 | 新增 | 同目录 `agent_conversation_session_dependencies.dart` | regions/executor/scope/ownerKey 的不可变依赖 |
 | 新增 | 同目录 `agent_conversation_slice_notifier.dart` | C 阶段真实 owner，接收批处理 regions |
@@ -495,6 +496,14 @@ operationSucceeded / operationFailed / forkSucceeded 继续只结算匹配 Opera
 - shutdown 先 stop 再 drain：关闭时 void/fork 调用方立即按 §5.3 结算；一个可控 Provider 查询/写入尚未完成时，drain 仍 pending。额外覆盖没有 command waiter 的 restore/activate/Timer 触发查询，以及跨 Provider 聚合中仍未返回的最后一个 Future；直到全部结束，借用 runtime/BindingManager/plugin 都保持有效。
 - 不依赖未来 WP-2 才出现的 outcome/waiter 辅助类型，P 阶段本身能够独立构建与全量验证。
 
+### 5.5 WP-3P 实施接缝校正（2026-09-06）
+
+- 依赖在 `project_threads_slice_dependencies.dart` 声明；app 的 `ProjectThreadsCompositionInputs` 是根 overrides 可替换的外部资源/初态接缝。application factory 只安装一次，不经 Ref 回读 Notifier。
+- StateOwner 的手写 `subscribe` 与 Operations 的 `dispose` 从业务端口移除：Shell 借用 `projectThreadsChangesProvider` 提供的真实 Riverpod 订阅；关闭由 `ProjectThreadsOwnerLifecycle` 交给 app。业务 Operations 签名与 §5.3 结果契约保持。
+- `activeThreadCleared` 是具名 typed ingress；Runner 不再持公共回调，owner 只在未关闭时调用现有 `onActiveThreadCleared`。Shell 完成构造后安装，卸载解除。
+- `agent_session_resource_providers.dart` 提供唯一 manager/global runtime；Shell 不再自行创建或关闭 registry/global/manager，Workspace 不再有 manager fallback。普通 Widget 测试通过 `agentBindingSweepTimerFactoryProvider` 注入可控定时器；不因 Widget 卸载回收 app 资源，核心 idle sweep 行为继续由 BindingManager 专项测试验证。
+- app 在显示语言冻结后、Widget 前建立 Project Threads owner；退出先 stop M/P，等待两者全部真实执行，再关闭 manager、registry、plugin、container。完整 Shell/workspace entry 生命周期与 snapshot relay 仍待 C，不提前登记 O-01 的 workspace 或 O-09/O-10 的完整 Shell 重挂保证。
+
 ## 6. WP-3C：稳定身份与 Conversation 单 owner
 
 ### 6.1 草稿晋升不能重建 owner
@@ -815,8 +824,8 @@ Management/Project Threads 的关闭负责停止自己的任务和结算 waiter�
 
 - [x] **M-1**：抽出 Management result sink/factory，列出 Runner 对原 Store 的调用矩阵。
 - [x] **M-2**：迁 Notifier、替换 UI family(store)、删镜像/Deferred；WP-1 summary ingress 不变。
-- [ ] **P-1**：确认 WP-4 回归与唯一索引已合入，迁 Project Threads Notifier。
-- [ ] **P-2**：Shell 注入 Operations，独立 BindingManager provider 建立，删旧 composition/store。
+- [x] **P-1**：确认 WP-4 回归与唯一索引已合入，迁 Project Threads Notifier。
+- [x] **P-2**：Shell 注入 Operations，独立 BindingManager provider 建立，删旧 composition/store。
 - [ ] **C-1**：引入 OwnerKey 与资源 deps，先补草稿晋升/ABA/无 UI 装配回归。
 - [ ] **C-2**：Workspace state 迁 Notifier，entry 去掉 SliceStore；保持 reducer不变量。
 - [ ] **C-3**：Conversation state迁Notifier、BindingKey facade、lifetime coordinator，删除两个registry。
@@ -860,3 +869,12 @@ M 阶段守卫已落在 `test/src/architecture/agent_management_owner_guard_test
 ## 11. WP-3M 实施验收（2026-09-06）
 
 M 阶段已完成，P/C 仍未开始。生产结果入口、原断言审计、13 条新增行为回归和 4 条 AST 守卫，以及 format/analyze/affected/full 的当次证据见 [WP-3M 验收记录](../../refactor/2026-09-06-management-owner/00-validation.md)。完整门禁根 2024 + 内部包 1076 通过；真实桌面手动验收仍待执行。首次 Shell 事实接线的 M 阶段调整见 §4.3.1，不代表 O-01/06/07/08/09/11 的完整 Workspace/Conversation 迁移已经完成。
+
+## 12. WP-3P 实施验收（2026-09-06）
+
+P-1/P-2 完成，详见 [验收记录](../../refactor/2026-09-06-project-threads-owner/00-validation.md)，实现提交见总入口。
+
+- 唯一 Project Threads Notifier 与 app BindingManager/global runtime 已接入生产 Shell；旧 Store、镜像、Deferred、重复 manager fallback 删除。
+- WP-4 的 33 条原业务测试/131 条断言全部保留；本次开始的 51 条 Store/Runner 测试及其 201 条断言保留。23 条新增回归覆盖同步结算、依赖冻结、ABA/迟到 ingress、真实执行排空、关闭资源顺序、早退出与结构负例。
+- format、analyze、affected、full 均退出 0；完整门禁根 2047 条 + 内部包 1076 条，10 个内部包分析通过。依赖、协议包、v4 codec、intent/effect/reducer 和测试并发无变更。
+- Shell Widget/恢复/分层回归通过；真实 CLI 和桌面手工退出未执行。完整 Shell/Workspace/Conversation 的无 UI 装配、重挂与 entry 生命周期仍由下一项 WP-3C 承接，不扩大本次完成范围。

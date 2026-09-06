@@ -1,5 +1,8 @@
 import 'dart:async';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'project_threads_slice_dependencies.dart';
+
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 
@@ -13,31 +16,37 @@ import 'package:zeta/src/features/project_threads/application/project_threads_se
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
 import 'package:zeta/src/features/project_threads/domain/project_threads_session_snapshot.dart';
 
-/// Project Threads effect 的 app 组合层执行端口。
-abstract interface class ProjectThreadsSliceEffectRunner {
-  void run(ProjectThreadsSliceEffect effect);
+final projectThreadsSliceProvider =
+    NotifierProvider<ProjectThreadsSliceNotifier, ProjectThreadsSliceState>(
+      ProjectThreadsSliceNotifier.new,
+      name: 'projectThreadsSlice',
+    );
 
-  void close();
-}
+final projectThreadsOperationsProvider = Provider<ProjectThreadsOperations>(
+  (ref) => ref.read(projectThreadsSliceProvider.notifier),
+  name: 'projectThreadsOperations',
+);
 
-/// Project Threads 的纯 Dart MVI owner。
-///
-/// Store 自己维护 listener，不依赖 Flutter/Riverpod。Provider 查询、搜索防抖和
-/// thread 写操作均由 [effectRunner] 执行；runner 回流只能调用 typed
-/// [ProjectThreadsStateOwner] 入口。
-final class ProjectThreadsSliceStore
-    implements ProjectThreadsOperations, ProjectThreadsStateOwner {
-  ProjectThreadsSliceStore({
-    required ProjectThreadsSliceState initialState,
-    required this.effectRunner,
-    OperationIdGenerator Function(String scope)? operationIdGeneratorFactory,
-    DateTime Function()? now,
-  }) : _state = initialState,
-       _generatorFactory =
-           operationIdGeneratorFactory ??
-           ((scope) => OperationIdGenerator(scope: scope)),
-       _now = now ?? DateTime.now {
-    _rebuildThreadMappings();
+/// App-session owner of list state, the thread index and command waiters.
+final class ProjectThreadsSliceNotifier
+    extends Notifier<ProjectThreadsSliceState>
+    implements
+        ProjectThreadsOperations,
+        ProjectThreadsStateOwner,
+        ProjectThreadsOwnerLifecycle {
+  @override
+  ProjectThreadsSliceState build() {
+    if (_built) {
+      throw StateError('Project Threads owner requires a new app session');
+    }
+    _built = true;
+    final deps = ref.read(projectThreadsSliceDependenciesProvider);
+    _generatorFactory = deps.operationIdGeneratorFactory;
+    _now = deps.now;
+    _rebuildThreadMappings(deps.initialState);
+    effectRunner = ref.read(projectThreadsRunnerFactoryProvider)(this);
+    ref.onDispose(stopAcceptingCommandsAndSettleWaiters);
+    return deps.initialState;
   }
 
   static const String _toggleScope = 'project-threads/toggle';
@@ -50,37 +59,37 @@ final class ProjectThreadsSliceStore
   static const String _deleteScope = 'project-threads/delete';
   static const String _forkScope = 'project-threads/fork';
 
-  final ProjectThreadsSliceEffectRunner effectRunner;
-  final OperationIdGenerator Function(String scope) _generatorFactory;
-  final DateTime Function() _now;
+  late final ProjectThreadsSliceEffectRunner effectRunner;
+  late final OperationIdGenerator Function(String scope) _generatorFactory;
+  late final DateTime Function() _now;
   final Map<String, OperationIdGenerator> _generators =
       <String, OperationIdGenerator>{};
-  final List<void Function()> _listeners = <void Function()>[];
   final Map<String, String> _projectPathByThreadId = <String, String>{};
   final Map<OperationId, Completer<void>> _voidCompleters =
       <OperationId, Completer<void>>{};
   final Map<OperationId, Completer<AgentSession?>> _forkCompleters =
       <OperationId, Completer<AgentSession?>>{};
 
-  ProjectThreadsSliceState _state;
+  bool _built = false;
+  Future<void>? _drainFuture;
   bool _closed = false;
   int _staleResultCount = 0;
 
-  ProjectThreadsSliceState get state => _state;
+  ProjectThreadsSliceState get current => state;
 
   bool get isClosed => _closed;
 
   int get staleResultCount => _staleResultCount;
 
   @override
-  Map<String, ProjectThreadListState> get states => _state.statesByProject;
+  Map<String, ProjectThreadListState> get states => state.statesByProject;
 
   @override
   void Function(String projectPath, String threadId)? onActiveThreadCleared;
 
   @override
   ProjectThreadListState stateFor(String projectPath) {
-    return _state.stateFor(projectPath);
+    return state.stateFor(projectPath);
   }
 
   @override
@@ -90,7 +99,7 @@ final class ProjectThreadsSliceStore
 
   @override
   ProjectThreadsSessionSnapshot get sessionSnapshot {
-    return buildProjectThreadsSessionSnapshot(_state.statesByProject);
+    return buildProjectThreadsSessionSnapshot(state.statesByProject);
   }
 
   @override
@@ -277,6 +286,7 @@ final class ProjectThreadsSliceStore
     required String projectPath,
     required AgentConversationThreadSnapshot snapshot,
   }) {
+    if (_closed) return;
     final sessionId = snapshot.sessionId;
     if (sessionId == null || sessionId.isEmpty) {
       return;
@@ -435,7 +445,7 @@ final class ProjectThreadsSliceStore
   void applyStatesReplacement(Map<String, ProjectThreadListState> states) {
     if (_closed) return;
     _dispatch(ProjectThreadStatesReplaced(states));
-    _rebuildThreadMappings();
+    _rebuildThreadMappings(state);
   }
 
   @override
@@ -571,12 +581,9 @@ final class ProjectThreadsSliceStore
   }
 
   @override
-  void Function() subscribe(void Function() listener) {
-    if (_closed) {
-      return () {};
-    }
-    _listeners.add(listener);
-    return () => _listeners.remove(listener);
+  void activeThreadCleared(String projectPath, String threadId) {
+    if (_closed) return;
+    onActiveThreadCleared?.call(projectPath, threadId);
   }
 
   /// effect runner 的成功回执。
@@ -602,7 +609,7 @@ final class ProjectThreadsSliceStore
   }
 
   @override
-  void dispose() {
+  void stopAcceptingCommandsAndSettleWaiters() {
     if (_closed) {
       return;
     }
@@ -619,9 +626,17 @@ final class ProjectThreadsSliceStore
     }
     _voidCompleters.clear();
     _forkCompleters.clear();
-    _listeners.clear();
     _projectPathByThreadId.clear();
+    onActiveThreadCleared = null;
     effectRunner.close();
+  }
+
+  @override
+  Future<void> drainExecutions() {
+    if (!_closed) {
+      throw StateError('Project Threads owner must stop before drain');
+    }
+    return _drainFuture ??= effectRunner.drainExecutions();
   }
 
   Future<void> _runVoid(
@@ -639,13 +654,13 @@ final class ProjectThreadsSliceStore
     if (_closed) {
       return;
     }
-    final before = _state;
+    final before = state;
     final transition = projectThreadsSliceReduce(before, intent);
     if (!identical(transition.state, before)) {
-      _state = transition.state;
-      _notifyListeners();
+      state = transition.state;
     }
     for (final effect in transition.effects) {
+      if (_closed) break;
       effectRunner.run(effect);
     }
     _settleResult(intent);
@@ -693,15 +708,9 @@ final class ProjectThreadsSliceStore
     }
   }
 
-  void _notifyListeners() {
-    for (final listener in List<void Function()>.of(_listeners)) {
-      listener();
-    }
-  }
-
-  void _rebuildThreadMappings() {
+  void _rebuildThreadMappings(ProjectThreadsSliceState initialState) {
     _projectPathByThreadId.clear();
-    for (final entry in _state.statesByProject.entries) {
+    for (final entry in initialState.statesByProject.entries) {
       _registerStateThreadMappings(entry.key, entry.value);
     }
   }

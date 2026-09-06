@@ -136,7 +136,12 @@ void main() {
       await providerController.loadSettings();
       final signals = <AgentTurnTerminalSignal>[];
       final schedulers = <FakeAgentFrameScheduler>[];
+      final bindingManager = AgentConversationBindingManager(
+        runtimeRegistry: registry,
+      )..start();
+      addTearDown(bindingManager.close);
       final controller = AgentConversationWorkspaceStore(
+        bindingManager: bindingManager,
         providerController: providerController,
         workspaceFileCorpus: _emptyWorkspaceFileCorpus(),
         runtimeRegistry: registry,
@@ -149,6 +154,7 @@ void main() {
       );
       addTearDown(() async {
         controller.dispose();
+        await bindingManager.close();
         providerController.dispose();
         await registry.close();
       });
@@ -200,7 +206,10 @@ final class _WorkspaceHarness {
       ),
       runtimeRegistry: registry,
     );
+    bindingManager = AgentConversationBindingManager(runtimeRegistry: registry)
+      ..start();
     controller = AgentConversationWorkspaceStore(
+      bindingManager: bindingManager,
       providerController: providerController,
       workspaceFileCorpus: _emptyWorkspaceFileCorpus(),
       runtimeRegistry: registry,
@@ -215,6 +224,7 @@ final class _WorkspaceHarness {
   final _MultiInstanceProviderFactory factory = _MultiInstanceProviderFactory();
   final List<FakeAgentFrameScheduler> _schedulers = <FakeAgentFrameScheduler>[];
   late final AgentProviderRuntimeRegistry registry;
+  late final AgentConversationBindingManager bindingManager;
   late final AgentProviderSettingsSliceNotifier providerController;
   late final AgentConversationWorkspaceStore controller;
 
@@ -252,6 +262,7 @@ final class _WorkspaceHarness {
 
   Future<void> dispose() async {
     controller.dispose();
+    await bindingManager.close();
     providerController.dispose();
     await registry.close();
   }
