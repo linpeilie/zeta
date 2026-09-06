@@ -3490,4 +3490,21 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get agentSessionConfigApplying => '正在应用会话配置…';
+
+  @override
+  String get mgmtDetectionStale => '上次确认结果';
+
+  @override
+  String mgmtDetectionFailedProviders(String names) {
+    return '以下 Agent 探测失败：$names。已保留上次确认结果，可重新探测。';
+  }
+
+  @override
+  String get mgmtDetectionCacheWarning => '检测已完成，但部分结果暂未保存。';
+
+  @override
+  String get mgmtCopyExecutableLocation => '复制程序位置';
+
+  @override
+  String get mgmtExecutableLocationUnavailable => '程序位置暂不可用，请重新探测。';
 }

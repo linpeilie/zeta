@@ -2868,5 +2868,31 @@
   "agentSessionConfigUnavailable": "Provider 未连接，暂时无法修改会话配置",
   "@agentSessionConfigUnavailable": {"description": "Session configuration provider disconnected"},
   "agentSessionConfigApplying": "正在应用会话配置…",
-  "@agentSessionConfigApplying": {"description": "Session configuration request pending"}
+  "@agentSessionConfigApplying": {"description": "Session configuration request pending"},
+  "mgmtDetectionStale": "上次确认结果",
+  "@mgmtDetectionStale": {
+    "description": "mgmtDetectionStale"
+  },
+  "mgmtDetectionFailedProviders": "以下 Agent 探测失败：{names}。已保留上次确认结果，可重新探测。",
+  "@mgmtDetectionFailedProviders": {
+    "description": "mgmtDetectionFailedProviders",
+    "placeholders": {
+      "names": {
+        "type": "String",
+        "example": "Agent A"
+      }
+    }
+  },
+  "mgmtDetectionCacheWarning": "检测已完成，但部分结果暂未保存。",
+  "@mgmtDetectionCacheWarning": {
+    "description": "mgmtDetectionCacheWarning"
+  },
+  "mgmtCopyExecutableLocation": "复制程序位置",
+  "@mgmtCopyExecutableLocation": {
+    "description": "mgmtCopyExecutableLocation"
+  },
+  "mgmtExecutableLocationUnavailable": "程序位置暂不可用，请重新探测。",
+  "@mgmtExecutableLocationUnavailable": {
+    "description": "mgmtExecutableLocationUnavailable"
+  }
 }

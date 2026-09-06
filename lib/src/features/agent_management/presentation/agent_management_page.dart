@@ -1,12 +1,13 @@
+import '../application/agent_management_detection_state.dart';
+import 'agent_management_details_catalog.dart';
+import '../application/agent_management_agent_view.dart';
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
-import 'package:zeta/src/ui/core/system_file_manager.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_operations.dart';
@@ -77,7 +78,11 @@ class AgentManagementPageState extends ConsumerState<AgentManagementPage> {
       if (!mounted) {
         return;
       }
-      unawaited(_operations.initialize(autoDetect: widget.autoDetect));
+      if (widget.autoDetect) {
+        unawaited(_operations.ensureDetected());
+      } else {
+        unawaited(_operations.initialize());
+      }
     });
   }
 
@@ -95,8 +100,38 @@ class AgentManagementPageState extends ConsumerState<AgentManagementPage> {
 
   @override
   Widget build(BuildContext context) {
-    ref.watch(agentManagementSliceProvider);
-    return _buildPage(context);
+    final state = ref.watch(agentManagementSliceProvider);
+    final detection = state.detection;
+    final failureIds = detection.failuresByProviderId.keys;
+    final failed =
+        detection.phase == ManagementDetectionPhase.failed ||
+        detection.phase == ManagementDetectionPhase.partialFailure;
+    final names = (failureIds.isEmpty ? state.orderedAgentIds : failureIds)
+        .map((id) => state.definitionsByProviderId[id]?.displayName ?? id)
+        .join(', ');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (failed)
+          Padding(
+            padding: IdeSpacing.all16,
+            child: Text(
+              context.l10n.mgmtDetectionFailedProviders(names),
+              key: const ValueKey('management-detection-failure'),
+              style: IdeTextStyles.of(context).bodySmall,
+            ),
+          ),
+        if (detection.cacheWriteWarningProviderIds.isNotEmpty)
+          Padding(
+            padding: IdeSpacing.all16,
+            child: Text(
+              context.l10n.mgmtDetectionCacheWarning,
+              style: IdeTextStyles.of(context).meta,
+            ),
+          ),
+        Expanded(child: _buildPage(context)),
+      ],
+    );
   }
 
   Widget _buildPage(BuildContext context) {
@@ -262,7 +297,7 @@ class AgentManagementPageState extends ConsumerState<AgentManagementPage> {
           ? context.l10n.mgmtDetecting
           : context.l10n.mgmtAutoDetect,
       variant: IdeButtonVariant.accentOutline,
-      onPressed: detecting ? null : _operations.detect,
+      onPressed: detecting ? null : _operations.refreshDetection,
       leading: detecting
           ? const IdeLoadingIndicator(width: 18, height: 10)
           : null,
@@ -304,7 +339,10 @@ class AgentManagementPageState extends ConsumerState<AgentManagementPage> {
     );
   }
 
-  Widget _buildListEmptyState(BuildContext context, List<ManagedAgent> agents) {
+  Widget _buildListEmptyState(
+    BuildContext context,
+    List<AgentManagementAgentView> agents,
+  ) {
     final installedTab = _listTab == _AgentListTab.installed;
     final noQuery = _searchController.text.trim().isEmpty;
     final anyInstalled = agents.any((agent) => agent.installed);
@@ -314,7 +352,7 @@ class AgentManagementPageState extends ConsumerState<AgentManagementPage> {
         title: context.l10n.mgmtEmptyInstalledTitle,
         description: context.l10n.mgmtEmptyInstalledBody,
         primaryLabel: context.l10n.mgmtAutoDetect,
-        onPrimary: _operations.detect,
+        onPrimary: _operations.refreshDetection,
         secondaryLabel: context.l10n.mgmtViewAllSupported,
         onSecondary: () {
           setState(() {
@@ -368,7 +406,9 @@ class AgentManagementPageState extends ConsumerState<AgentManagementPage> {
                 IdeButton(
                   key: const ValueKey('agent-open-logs-button'),
                   label: context.l10n.mgmtViewLogs,
-                  onPressed: agent.logPaths.isEmpty ? null : _openLogs,
+                  onPressed: agent.availableLogFileCount == 0
+                      ? null
+                      : _openLogs,
                 ),
                 IdeButton(
                   label: agent.enabled
@@ -432,14 +472,14 @@ class AgentManagementPageState extends ConsumerState<AgentManagementPage> {
     );
   }
 
-  Widget _buildOverview(BuildContext context, ManagedAgent agent) {
+  Widget _buildOverview(BuildContext context, AgentManagementAgentView agent) {
     return SingleChildScrollView(
       padding: IdeSpacing.all16,
       child: LayoutBuilder(
         builder: (context, constraints) {
           final information = _AgentInformationCard(
             agent: agent,
-            onDetect: _operations.detect,
+            onDetect: _operations.refreshDetection,
             onOpenExecutableDirectory: _openExecutableDirectory,
             onCopyCommand: () => _copyText(
               agent.definition.commandName,
@@ -448,7 +488,7 @@ class AgentManagementPageState extends ConsumerState<AgentManagementPage> {
           );
           final diagnostics = _AgentDiagnosticsCard(
             agent: agent,
-            onDetect: _operations.detect,
+            onDetect: _operations.refreshDetection,
           );
           final setupGuide = agent.definition.id == _setupGuideAgentId
               ? const _ClaudeCodeSetupGuideCard()
@@ -523,7 +563,7 @@ class AgentManagementPageState extends ConsumerState<AgentManagementPage> {
     );
   }
 
-  Widget _buildModels(BuildContext context, ManagedAgent agent) {
+  Widget _buildModels(BuildContext context, AgentManagementAgentView agent) {
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     if (agent.models.isEmpty) {
@@ -569,7 +609,7 @@ class AgentManagementPageState extends ConsumerState<AgentManagementPage> {
     );
   }
 
-  bool _matchesList(ManagedAgent agent) {
+  bool _matchesList(AgentManagementAgentView agent) {
     if (_listTab == _AgentListTab.installed && !agent.installed) {
       return false;
     }
@@ -709,17 +749,21 @@ class AgentManagementPageState extends ConsumerState<AgentManagementPage> {
   }
 
   Future<void> _openExecutableDirectory() async {
-    final path = _operations.agent.executablePath;
-    if (path == null) {
+    final handle = _operations.agent.detailsHandle;
+    if (handle == null) {
       return;
     }
     try {
-      await openPathInSystemFileManager(File(path).parent.path);
+      await ref
+          .read(agentManagementDetailsCatalogProvider)
+          .openExecutableDirectory(handle);
     } catch (error) {
       if (mounted) {
         showIdeToast(
           context,
-          message: context.l10n.mgmtCannotOpenExecutableDir('$error'),
+          message: context.l10n.mgmtCannotOpenExecutableDir(
+            context.l10n.mgmtUnknownError,
+          ),
           tone: IdeToastTone.error,
         );
       }
@@ -749,7 +793,7 @@ enum _AgentDetailTab { overview, models, configuration }
 class _AgentDetailStatusSummary extends StatelessWidget {
   const _AgentDetailStatusSummary({required this.agent});
 
-  final ManagedAgent agent;
+  final AgentManagementAgentView agent;
 
   @override
   Widget build(BuildContext context) {
@@ -827,7 +871,7 @@ class _AgentListRow extends StatelessWidget {
     required this.showDivider,
   });
 
-  final ManagedAgent agent;
+  final AgentManagementAgentView agent;
   final bool hasRuntimeErrors;
   final VoidCallback onOpen;
   final ValueChanged<bool> onEnabledChanged;
@@ -875,7 +919,7 @@ class _AgentRowStatus extends StatelessWidget {
     required this.onEnabledChanged,
   });
 
-  final ManagedAgent agent;
+  final AgentManagementAgentView agent;
   final bool hasRuntimeErrors;
   final bool compact;
   final ValueChanged<bool> onEnabledChanged;
@@ -1058,7 +1102,7 @@ class _AgentStatus {
 
 _AgentStatus _priorityAgentStatus(
   IdeColors colors,
-  ManagedAgent agent,
+  AgentManagementAgentView agent,
   AppLocalizations l10n,
 ) {
   if (agent.runtimeState == AgentRuntimeState.error ||
@@ -1229,7 +1273,7 @@ class _ActionEmptyState extends StatelessWidget {
   }
 }
 
-class _AgentInformationCard extends StatelessWidget {
+class _AgentInformationCard extends ConsumerWidget {
   const _AgentInformationCard({
     required this.agent,
     required this.onDetect,
@@ -1237,13 +1281,15 @@ class _AgentInformationCard extends StatelessWidget {
     required this.onCopyCommand,
   });
 
-  final ManagedAgent agent;
+  final AgentManagementAgentView agent;
   final VoidCallback onDetect;
   final VoidCallback onOpenExecutableDirectory;
   final VoidCallback onCopyCommand;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final catalog = ref.watch(agentManagementDetailsCatalogProvider);
+    final display = catalog.display(agent.detailsHandle);
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     return IdeSection(
@@ -1317,11 +1363,39 @@ class _AgentInformationCard extends StatelessWidget {
               ),
               IdeKeyValueRow(
                 label: context.l10n.mgmtExecutablePath,
-                value: agent.executablePath ?? context.l10n.mgmtNotDetected,
+                value: display.executableLocationLabel.isEmpty
+                    ? context.l10n.mgmtNotDetected
+                    : display.executableLocationLabel,
                 tone: IdeKeyValueTone.code,
-                selectable: agent.executablePath != null,
+                selectable: agent.executableLocated && display.available,
+                trailing: IdeIconButton(
+                  icon: Icons.copy_rounded,
+                  semanticLabel: context.l10n.mgmtCopyExecutableLocation,
+                  onPressed:
+                      agent.executableLocated &&
+                          display.available &&
+                          agent.detailsHandle != null
+                      ? () async {
+                          try {
+                            await catalog.copyExecutableLocation(
+                              agent.detailsHandle!,
+                            );
+                          } catch (_) {
+                            if (context.mounted) {
+                              showIdeToast(
+                                context,
+                                message: context
+                                    .l10n
+                                    .mgmtExecutableLocationUnavailable,
+                                tone: IdeToastTone.error,
+                              );
+                            }
+                          }
+                        }
+                      : null,
+                ),
               ),
-              if (agent.executablePath == null)
+              if (!agent.executableLocated || !display.available)
                 Padding(
                   padding: const EdgeInsets.only(
                     left: IdeMetrics.keyValueLabelWidth + IdeSpacing.space8,
@@ -1349,7 +1423,7 @@ class _AgentInformationCard extends StatelessWidget {
                     ),
                     IdeButton(
                       label: context.l10n.mgmtOpenDirectory,
-                      onPressed: agent.executablePath == null
+                      onPressed: !agent.executableLocated || !display.available
                           ? null
                           : onOpenExecutableDirectory,
                     ),
@@ -1364,14 +1438,16 @@ class _AgentInformationCard extends StatelessWidget {
   }
 }
 
-class _AgentDiagnosticsCard extends StatelessWidget {
+class _AgentDiagnosticsCard extends ConsumerWidget {
   const _AgentDiagnosticsCard({required this.agent, required this.onDetect});
 
-  final ManagedAgent agent;
+  final AgentManagementAgentView agent;
   final VoidCallback onDetect;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final catalog = ref.watch(agentManagementDetailsCatalogProvider);
+    final display = catalog.display(agent.diagnosticHandle);
     final colors = IdeColors.of(context);
     final textStyles = IdeTextStyles.of(context);
     final connectionReady = _hasSuccessfulConnectionTest(agent);
@@ -1455,7 +1531,9 @@ class _AgentDiagnosticsCard extends StatelessWidget {
         ),
     ];
     final hasSupplement =
-        agent.errorDetails != null || agent.suggestion != null || !healthy;
+        display.diagnosticDescription.isNotEmpty ||
+        agent.suggestion != null ||
+        !healthy;
     return IdeSection(
       title: context.l10n.mgmtDiagnostics,
       subtitle: healthy
@@ -1482,9 +1560,9 @@ class _AgentDiagnosticsCard extends StatelessWidget {
             const IdeRowDivider(),
             const SizedBox(height: IdeSpacing.space12),
           ],
-          if (agent.errorDetails case final String errorDetails) ...[
+          if (display.diagnosticDescription.isNotEmpty) ...[
             SelectableText(
-              errorDetails,
+              display.diagnosticDescription,
               maxLines: 8,
               style: textStyles.codeSmall.copyWith(color: colors.textSecondary),
             ),
@@ -1731,14 +1809,17 @@ class _SetupGuideStep extends StatelessWidget {
   }
 }
 
-String _accountEvidenceLabel(ManagedAgent agent, AppLocalizations l10n) {
+String _accountEvidenceLabel(
+  AgentManagementAgentView agent,
+  AppLocalizations l10n,
+) {
   final label = agent.accountLabel?.trim();
   return label == null || label.isEmpty
       ? agent.accountState.localizedLabel(l10n)
       : label;
 }
 
-bool _hasSuccessfulConnectionTest(ManagedAgent agent) {
+bool _hasSuccessfulConnectionTest(AgentManagementAgentView agent) {
   return agent.connectionTest?.protocolReady == true;
 }
 

@@ -82,7 +82,7 @@ class _AgentLogViewState extends ConsumerState<AgentLogView> {
                         ),
                         Text(
                           context.l10n.mgmtLogSourcesLoaded(
-                            '${_operations.agent.logPaths.length}',
+                            '${_operations.agent.availableLogFileCount}',
                             '${_operations.logs.length}',
                           ),
                           style: textStyles.caption.copyWith(

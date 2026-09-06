@@ -523,7 +523,18 @@ create/resume/fork/send --> Binding.permissions.snapshotForRequest()
 
 Management 的状态、operation waiter 与执行账本由应用会话级 `AgentManagementSliceNotifier` 独占；`agentManagementSliceProvider` 非 family、非 autoDispose。`build` 只读取冻结依赖，Runner factory 接收具名 `AgentManagementResultSink`，不得持 Ref 回读 owner。设置与运行事实经独立 app ingress 输入，Page、Editor、LogView 只读 provider 与 `AgentManagementOperations`，没有旧 Store、Deferred 或状态镜像。
 
-关闭先封命令入口并以原 `StateError` 结算等待者，再 `await drainExecutions()` 等待已发出的真实 I/O，最后释放 runtime registry、插件和容器；`ZetaAppComposition.close()` 可等待且幂等，同步 `dispose()` 只启动同一关闭过程。Runner 返回的执行 Future 包含探测后的持久化与日志的两段读取，不能拿已结算的调用方 Future 当作资源释放证据。原初始化/保存错误和堆栈只沿 Future 传播，不加入新状态或日志。
+关闭先封命令入口；探测等待者结算为 typed `closed`，其他操作仍以原 `StateError` 结算，再 `await drainExecutions()` 等待已发出的真实 I/O，最后释放 runtime registry、插件和容器；`ZetaAppComposition.close()` 可等待且幂等，同步 `dispose()` 只启动同一关闭过程。Runner 返回的执行 Future 包含探测后的持久化与日志的两段读取，不能拿已结算的调用方 Future 当作资源释放证据。原初始化/保存错误和堆栈只沿 Future 传播，不加入新状态或日志。
+
+WP-5 将首页探测纳入同一 owner。`AgentManagementDetectionState` 区分逐 Provider confirmed、pending partial、outcome、失败与缓存写入警告；只有正式成功覆盖本 Provider 的确认记录，部分失败保留其他成功结果和失败项的旧记录。成功的 `notInstalled` 才能移除已安装行。`agentsById` 仅为由显示定义、确认记录、当前 settings、显式连接检查和运行事实计算出的安全只读 getter，没有可写 backing field。
+
+`ensureDetected()` 消耗工作台的一次自动尝试；`refreshDetection()` 是显式重试。首次 await/dispatch 前占住同一 caller Future，并登记物理执行；初始化期间、正在运行和取消后的排空期间均加入同一 Future。逻辑取消立即结算 `canceled`、清空临时进度，仍等待已发出的仓储/持久化完成。异常映射为 normalized failure，不把原始异常写入新 state；observer 异常不改变已接受的成功回执。贡献目录在 app 会话内冻结；新目录代次取消旧 run，相同 id 的旧结果不能进入新定义。
+
+`ContributedAgentManagementDetectionAdapter` 在 app 中将仓储 `ManagedAgent` 转成安全 `AgentDetectionDetails` / partial，逐 Provider 隔离失败。持久化前读取最新配置，只合并现有探测白名单，不回写旧 enabled、command、arguments、environment、权限或无关 extra；确认未安装时移除旧 `cliPath`。缓存写失败不撤销探测成功。显式连接测试的摘要和非空模型覆盖单列保存，空模型保留探测目录；进程相关配置变化会清除显式覆盖并拒绝尚未返回的旧检查结果。
+
+路径和详细诊断只在 app 的 `AppAgentManagementDetailsCatalog` 中。application 仅持 opaque handle、是否定位到程序以及日志文件数；presentation 只能取得缩略/脱敏显示，复制和打开位置由 catalog 内部完成。新 handle 在成功事件发布前可读，回执拒绝即丢弃；探测和显式连接检查各自最多保留一个确认槽，替换令旧 handle 失效，关闭清空。配置编辑和日志读取继续走原独立端口。
+
+首页通过 `agentManagementHomeProvider` 订阅同一 state。app coordinator 在初始恢复完成且没有活动项目时调用 ensure，管理页首次需要时加入该入口；切页/卸载不取消探测。首页测试统一覆盖 `agentManagementDetectionPortProvider`，不得恢复专用 Home loader 或列表回滚缓存。
+
 
 WP-3C 已将 Shell、事实源和 ingress 全部前移到应用组合；先订阅再同步重读 current，页面卸载只释放自己的订阅，不关闭这些资源。
 

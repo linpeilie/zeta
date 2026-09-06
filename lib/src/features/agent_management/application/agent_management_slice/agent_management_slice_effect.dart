@@ -1,3 +1,4 @@
+import '../agent_management_detection_port.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 
 import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
@@ -13,7 +14,17 @@ final class ManagementInitializeEffect extends AgentManagementSliceEffect {
 }
 
 final class DetectAgentsEffect extends AgentManagementSliceEffect {
-  const DetectAgentsEffect(this.operationId);
+  const DetectAgentsEffect(
+    this.operationId, {
+    required this.providerIds,
+    required this.catalogGeneration,
+    required this.ownerGeneration,
+    required this.cancellation,
+  });
+  final List<String> providerIds;
+  final int catalogGeneration;
+  final int ownerGeneration;
+  final AgentManagementCancellation cancellation;
 
   final OperationId operationId;
 }

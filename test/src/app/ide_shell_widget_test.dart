@@ -1,6 +1,14 @@
 @Tags(['slow', 'shell'])
 library;
 
+import 'package:zeta/src/features/agent_management/application/agent_management_home_state.dart';
+
+import 'dart:async';
+import 'package:zeta_foundation/zeta_foundation.dart';
+import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_state.dart';
+
+import '../testing/management_detection_test_support.dart';
+
 import 'package:zeta/src/app/composition/workbench_session_providers.dart';
 
 import 'package:zeta/src/features/project_threads/application/project_threads_slice/project_threads_slice_notifier.dart';
@@ -144,6 +152,90 @@ void main() {
     await tester.pump();
     expectRuntimeOwners();
   });
+
+  for (final fails in [false, true]) {
+    testWidgets(
+      'home management home shares in-flight confirmed detection ${fails ? 'failure' : 'success'}',
+      (tester) async {
+        final port = _PageDetectionPort();
+        final composition = await _pumpIde(
+          tester,
+          enableNativeWindowFrame: true,
+          detectionPort: port,
+        );
+        final owner = composition.container.read(
+          agentManagementSliceProvider.notifier,
+        );
+        final pending = owner.ensureDetected();
+        expect(port.calls, 1);
+        port.succeed(defaultAgentProviderId, '1.0');
+        port.emit(const DetectionProviderStarted(grokAgentProviderId));
+        port.emit(
+          const DetectionProviderProgress(
+            grokAgentProviderId,
+            AgentDetectionProgress(completed: 1, total: 2, message: 'pending'),
+            AgentDetectionPartial(currentVersion: 'unconfirmed'),
+          ),
+        );
+        await tester.pump();
+        expect(
+          tester
+              .widget<GlobalHomePage>(find.byType(GlobalHomePage))
+              .installedProviders
+              .map((p) => p.version),
+          ['1.0'],
+        );
+        await tester.tap(
+          find.byKey(const ValueKey('titlebar-settings-action')),
+        );
+        await tester.pump();
+        await tester.tap(find.byKey(const ValueKey('settings-nav-agents')));
+        await tester.pump();
+        expect(owner.ensureDetected(), same(pending));
+        expect(port.calls, 1);
+        if (fails) {
+          port.emit(
+            DetectionProviderFailed(
+              grokAgentProviderId,
+              AgentManagementFailure(
+                kind: AgentManagementFailureKind.detection,
+                operationId: port.id,
+                agentId: grokAgentProviderId,
+              ),
+            ),
+          );
+        } else {
+          port.succeed(grokAgentProviderId, '2.0');
+        }
+        port.succeed(defaultClaudeCodeProviderId, '3.0');
+        port.done.complete();
+        expect(
+          (await pending).status,
+          fails
+              ? DetectionRunStatus.partialFailure
+              : DetectionRunStatus.succeeded,
+        );
+        await tester.pump();
+        expect(find.text('1.0'), findsWidgets);
+        if (fails) {
+          expect(
+            find.byKey(const ValueKey('management-detection-failure')),
+            findsOneWidget,
+          );
+        }
+        await tester.tap(find.byKey(const ValueKey('titlebar-back-action')));
+        await tester.pump();
+        final home = tester.widget<GlobalHomePage>(find.byType(GlobalHomePage));
+        expect(
+          home.installedProviders.map((p) => p.version),
+          fails ? ['1.0', '3.0'] : ['1.0', '2.0', '3.0'],
+        );
+        expect(home.providerError != null, fails);
+        expect(port.calls, 1);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 
   testWidgets('starts with the compact IDE panes', (tester) async {
     await _pumpIde(tester, enableNativeWindowFrame: true);
@@ -2455,6 +2547,7 @@ Future<ZetaAppComposition> _pumpIde(
   String? initialSessionJson,
   MemorySessionStore? sessionStore,
   Future<List<ManagedAgent>> Function()? homeProviderDetectionLoader,
+  AgentManagementDetectionPort? detectionPort,
   bool flushInitialUsageRefresh = true,
 }) async {
   tester.view
@@ -2486,8 +2579,12 @@ Future<ZetaAppComposition> _pumpIde(
         agentProviderConfigStoreProvider.overrideWithValue(store),
       if (agentProviderAvailabilityLoader case final loader?)
         agentProviderAvailabilityLoaderProvider.overrideWithValue(loader),
+      if (detectionPort != null)
+        agentManagementDetectionPortProvider.overrideWithValue(detectionPort),
       if (homeProviderDetectionLoader case final loader?)
-        homeProviderDetectionLoaderProvider.overrideWithValue(loader),
+        agentManagementDetectionPortProvider.overrideWithValue(
+          FixtureManagementDetectionPort(loader),
+        ),
       agentUsagePanelRepositoryProvider.overrideWithValue(
         agentUsagePanelRepository ?? const _EmptyAgentUsageRepository(),
       ),
@@ -3073,4 +3170,37 @@ final class _RuntimeSummaryProvider extends FakeAgentProvider {
   @override
   AgentProviderLifecycleState get lifecycleState =>
       AgentProviderLifecycleState.ready;
+}
+
+final class _PageDetectionPort implements AgentManagementDetectionPort {
+  int calls = 0;
+  final done = Completer<void>();
+  late OperationId id;
+  late bool Function(AgentManagementDetectionEvent) emit;
+  @override
+  Future<void> detect({
+    required OperationId operationId,
+    required List<String> providerIds,
+    required int catalogGeneration,
+    required AgentManagementCancellation cancellation,
+    required bool Function(AgentManagementDetectionEvent) emit,
+  }) {
+    calls++;
+    id = operationId;
+    this.emit = emit;
+    return done.future;
+  }
+
+  void succeed(String id, String version) {
+    emit(DetectionProviderStarted(id));
+    emit(
+      DetectionProviderSucceeded(
+        id,
+        AgentDetectionDetails(
+          installationState: AgentInstallationState.installed,
+          currentVersion: version,
+        ),
+      ),
+    );
+  }
 }

@@ -1,9 +1,9 @@
+import 'package:zeta/src/features/agent_management/application/agent_management_home_state.dart';
 import 'package:zeta/src/app/composition/workbench_session_providers.dart';
 import 'package:zeta/src/features/project_threads/application/project_threads_slice/project_threads_slice_notifier.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
@@ -22,7 +22,6 @@ import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/desktop_notifications/application/desktop_attention_slice_notifier.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_models.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_operations.dart';
-import 'package:zeta_agent_provider_api/zeta_agent_provider_api.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_session_slice_notifier.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
 import 'package:zeta/src/features/project_threads/presentation/project_threads_slice/project_threads_slice_providers.dart';
@@ -83,8 +82,6 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
   /// 首页探测端口；null 表示由首页走自己的默认实现。
   late final AgentProviderAvailabilityLoader? _agentProviderAvailabilityLoader =
       ref.read(agentProviderAvailabilityLoaderProvider);
-  late final HomeProviderDetectionLoader? _homeProviderDetectionLoader = ref
-      .read(homeProviderDetectionLoaderProvider);
 
   late final void Function() _unsubscribeProviderSettings;
   late final AgentUsagePanelSliceNotifier _agentUsagePanelController;
@@ -105,13 +102,6 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
   bool _agentUsageExpanded = false;
   bool _settingsPageMounted = false;
   bool _usageStatisticsPageMounted = false;
-  bool _globalHomeLoadRequested = false;
-  bool _homeProvidersLoading = false;
-  bool _agentManagementHomeRefreshScheduled = false;
-  List<HomeProviderSummary> _installedHomeProviders =
-      const <HomeProviderSummary>[];
-  String? _homeProviderError;
-  int _globalHomeLoadToken = 0;
   IdeWorkbenchOverlay? _activeOverlay;
   FocusNode? _overlayTriggerFocusNode;
   double _leftPanelWidth = _initialPanelWidth;
@@ -148,9 +138,6 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
     final workbench = ref.read(workbenchSessionProvider);
     _shellController = workbench.shell;
     _leftPanelWidth = _effectiveLeftPanelWidth;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _maybeStartGlobalHomeLoad();
-    });
     _statusSubscription = workbench.events.status.listen(_showStatus);
     _terminalSubscription = workbench.events.terminals.listen(
       _handleAgentTurnTerminal,
@@ -162,10 +149,6 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
     _unsubscribeProviderSettings = _shellController.agentProviderController
         .subscribe(_handleAgentProviderSettingsUsageChanged);
     unawaited(_desktopAttention.initialize());
-    ref.listenManual(
-      agentManagementSliceProvider,
-      (_, _) => _handleAgentManagementChanged(),
-    );
     _agentUsageRefreshCoordinator = AgentUsageRefreshCoordinator(
       // turn 完成 / 启动预热走静默刷新：已有数据时不闪加载横条。
       refresh: () => _agentUsagePanelController.refresh(showLoading: false),
@@ -513,18 +496,20 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
       if (!_shellController.initialRestoreCompleted) {
         return _buildGlobalHomeRestoringState();
       }
-      return GlobalHomePage(
-        installedProviders: [
-          for (final provider in _installedHomeProviders)
-            provider.withRuntime(
-              ref
-                  .read(agentManagementSliceProvider)
-                  .runtimeByProviderId[provider.id],
-            ),
-        ],
-        onOpenProject: _openProject,
-        isLoadingProviders: _homeProvidersLoading,
-        providerError: _homeProviderError,
+      return Consumer(
+        builder: (context, ref, _) {
+          final home = ref.watch(agentManagementHomeProvider);
+          return GlobalHomePage(
+            installedProviders: home.installedProviders,
+            onOpenProject: _openProject,
+            isLoadingProviders: home.isLoading,
+            providerError: home.detectionFailure == null
+                ? null
+                : context.l10n.workbenchProviderDetectionFailed(
+                    context.l10n.mgmtUnknownError,
+                  ),
+          );
+        },
       );
     }
 
@@ -939,13 +924,11 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
     if (!_leftPanelWidthDragging) {
       _leftPanelWidth = _effectiveLeftPanelWidth;
     }
-    _maybeStartGlobalHomeLoad();
     _rebuild();
   }
 
   /// Workspace 变化：activeProjectPath 同时影响首页预热与 Attention 可见性。
   void _handleWorkspaceChanged() {
-    _maybeStartGlobalHomeLoad();
     _updateDesktopAttentionVisibility();
     _rebuild();
   }
@@ -1012,145 +995,6 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
     }
     _updateDesktopAttentionVisibility();
     return activated;
-  }
-
-  void _maybeStartGlobalHomeLoad() {
-    final globalHomeVisible =
-        _shellController.initialRestoreCompleted &&
-        _shellController.activeProjectPath == null;
-    if (!globalHomeVisible) {
-      if (_shellController.activeProjectPath != null) {
-        _globalHomeLoadRequested = false;
-        _globalHomeLoadToken += 1;
-      }
-      return;
-    }
-    if (_globalHomeLoadRequested) {
-      return;
-    }
-    _globalHomeLoadRequested = true;
-    final token = ++_globalHomeLoadToken;
-    unawaited(_shellController.refreshRecentHomeData());
-    unawaited(_loadHomeProviders(token));
-  }
-
-  Future<void> _loadHomeProviders(int token) async {
-    if (!mounted || token != _globalHomeLoadToken) {
-      return;
-    }
-    setState(() {
-      _homeProvidersLoading = true;
-      _homeProviderError = null;
-    });
-
-    final cachedProviders = List<HomeProviderSummary>.from(
-      _installedHomeProviders,
-    );
-    try {
-      final injectedLoader = _homeProviderDetectionLoader;
-      if (injectedLoader != null) {
-        final agents = await injectedLoader();
-        if (!mounted || token != _globalHomeLoadToken) {
-          return;
-        }
-        _setInstalledHomeProviders(agents);
-      } else {
-        await _agentManagementOperations.initialize();
-        if (!mounted || token != _globalHomeLoadToken) {
-          return;
-        }
-        _setInstalledHomeProviders(_agentManagementOperations.agents);
-        cachedProviders
-          ..clear()
-          ..addAll(_installedHomeProviders);
-        setState(() {});
-
-        await _agentManagementOperations.detect();
-        if (!mounted || token != _globalHomeLoadToken) {
-          return;
-        }
-        final detectionError = _agentManagementOperations.operationError;
-        if (detectionError == null) {
-          _setInstalledHomeProviders(_agentManagementOperations.agents);
-        } else {
-          _installedHomeProviders = List<HomeProviderSummary>.unmodifiable(
-            cachedProviders,
-          );
-          _homeProviderError = detectionError;
-        }
-      }
-    } catch (error) {
-      if (!mounted || token != _globalHomeLoadToken) {
-        return;
-      }
-      _installedHomeProviders = List<HomeProviderSummary>.unmodifiable(
-        cachedProviders,
-      );
-      _homeProviderError = context.l10n.workbenchProviderDetectionFailed(
-        '$error',
-      );
-    } finally {
-      if (mounted && token == _globalHomeLoadToken) {
-        setState(() {
-          _homeProvidersLoading = false;
-        });
-      }
-    }
-  }
-
-  void _setInstalledHomeProviders(Iterable<ManagedAgent> agents) {
-    _installedHomeProviders = List<HomeProviderSummary>.unmodifiable(
-      agents
-          .where(
-            (agent) =>
-                agent.installationState == AgentInstallationState.installed,
-          )
-          .map(HomeProviderSummary.fromManagedAgent),
-    );
-  }
-
-  void _refreshHomeAvailability() {
-    if (!_homeProvidersLoading && _homeProviderDetectionLoader == null) {
-      _setInstalledHomeProviders(_agentManagementOperations.agents);
-    }
-  }
-
-  void _handleAgentManagementChanged() {
-    if (!mounted) {
-      return;
-    }
-    if (_page != _IdeHomePage.home ||
-        _shellController.activeProjectPath != null) {
-      // 设置页会自行监听同一状态；这里只刷新隐藏首页的缓存，回到首页时
-      // 页面切换本身会触发重建，无需让 Workbench 根节点在子页构建期标脏。
-      _refreshHomeAvailability();
-      return;
-    }
-    if (SchedulerBinding.instance.schedulerPhase ==
-        SchedulerPhase.persistentCallbacks) {
-      if (_agentManagementHomeRefreshScheduled) {
-        return;
-      }
-      _agentManagementHomeRefreshScheduled = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _agentManagementHomeRefreshScheduled = false;
-        if (!mounted) {
-          return;
-        }
-        if (_page != _IdeHomePage.home ||
-            _shellController.activeProjectPath != null) {
-          _refreshHomeAvailability();
-          return;
-        }
-        setState(() {
-          _refreshHomeAvailability();
-        });
-      });
-      return;
-    }
-    setState(() {
-      _refreshHomeAvailability();
-    });
   }
 
   void _showStatus(String message) {

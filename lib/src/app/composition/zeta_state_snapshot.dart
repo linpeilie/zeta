@@ -1,3 +1,5 @@
+import 'package:zeta/src/features/agent_management/application/agent_management_detection_state.dart';
+import 'package:zeta/src/features/agent_management/application/agent_management_agent_view.dart';
 import 'package:meta/meta.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
@@ -183,13 +185,17 @@ final class ZetaAgentManagementStateSnapshot {
     : orderedAgentIds = List.unmodifiable(state.orderedAgentIds),
       agentsById = Map.unmodifiable(<String, ZetaManagedAgentStateSnapshot>{
         for (final id in state.orderedAgentIds)
-          if (state.agentsById[id] case final ManagedAgent agent)
+          if (state.agentsById[id] case final AgentManagementAgentView agent)
             id: ZetaManagedAgentStateSnapshot.fromAgent(agent),
       }),
       selectedAgentId = state.selectedAgentId,
       initialized = state.initialized,
-      pendingOperationCount = state.pendingOperations.length,
-      hasFailure = state.failure != null;
+      pendingOperationCount =
+          state.pendingOperations.length + (state.detection.isLoading ? 1 : 0),
+      hasFailure =
+          state.failure != null ||
+          state.detection.phase == ManagementDetectionPhase.failed ||
+          state.detection.phase == ManagementDetectionPhase.partialFailure;
 
   final List<String> orderedAgentIds;
   final Map<String, ZetaManagedAgentStateSnapshot> agentsById;
@@ -211,7 +217,9 @@ final class ZetaManagedAgentStateSnapshot {
     required this.needsAttention,
   });
 
-  factory ZetaManagedAgentStateSnapshot.fromAgent(ManagedAgent agent) {
+  factory ZetaManagedAgentStateSnapshot.fromAgent(
+    AgentManagementAgentView agent,
+  ) {
     return ZetaManagedAgentStateSnapshot(
       enabled: agent.enabled,
       installationState: agent.installationState,

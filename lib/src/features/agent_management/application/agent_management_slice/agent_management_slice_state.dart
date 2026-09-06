@@ -1,3 +1,5 @@
+import '../agent_management_agent_view.dart';
+import '../agent_management_detection_state.dart';
 import '../agent_management_runtime_facts.dart';
 import 'package:meta/meta.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
@@ -72,7 +74,14 @@ const Object _agentManagementSliceUnset = Object();
 @immutable
 final class AgentManagementSliceState {
   AgentManagementSliceState({
-    required Map<String, ManagedAgent> agentsById,
+    required Map<String, AgentManagementDisplayDefinition>
+    definitionsByProviderId,
+    AgentManagementDetectionState? detection,
+    Map<String, AgentManagementConnectionCheckState>
+        confirmedConnectionChecksByProviderId =
+        const {},
+    Map<String, int> logFileCountsByProviderId = const {},
+    this.catalogGeneration = 0,
     required List<String> orderedAgentIds,
     required this.selectedAgentId,
     required Map<String, AgentCliManagementCapabilities> capabilitiesByAgentId,
@@ -91,7 +100,12 @@ final class AgentManagementSliceState {
          runtimeByProviderId ??
              const <String, AgentManagementProviderRuntimeSummary>{},
        ),
-       agentsById = Map<String, ManagedAgent>.unmodifiable(agentsById),
+       definitionsByProviderId = Map.unmodifiable(definitionsByProviderId),
+       detection = detection ?? AgentManagementDetectionState(),
+       confirmedConnectionChecksByProviderId = Map.unmodifiable(
+         confirmedConnectionChecksByProviderId,
+       ),
+       logFileCountsByProviderId = Map.unmodifiable(logFileCountsByProviderId),
        orderedAgentIds = List<String>.unmodifiable(orderedAgentIds),
        capabilitiesByAgentId =
            Map<String, AgentCliManagementCapabilities>.unmodifiable(
@@ -110,13 +124,14 @@ final class AgentManagementSliceState {
            );
 
   factory AgentManagementSliceState.initial({
-    required Map<String, ManagedAgent> agentsById,
+    required Map<String, AgentManagementDisplayDefinition>
+    definitionsByProviderId,
     required List<String> orderedAgentIds,
     required Map<String, AgentCliManagementCapabilities> capabilitiesByAgentId,
     required AgentProviderSettings providerSettings,
   }) {
     return AgentManagementSliceState(
-      agentsById: agentsById,
+      definitionsByProviderId: definitionsByProviderId,
       orderedAgentIds: orderedAgentIds,
       selectedAgentId: orderedAgentIds.isEmpty
           ? providerSettings.activeProviderId
@@ -128,7 +143,16 @@ final class AgentManagementSliceState {
 
   final AgentManagementRuntimeFacts runtimeFacts;
   final Map<String, AgentManagementProviderRuntimeSummary> runtimeByProviderId;
-  final Map<String, ManagedAgent> agentsById;
+  final Map<String, AgentManagementDisplayDefinition> definitionsByProviderId;
+  final int catalogGeneration;
+  final AgentManagementDetectionState detection;
+  final Map<String, AgentManagementConnectionCheckState>
+  confirmedConnectionChecksByProviderId;
+  final Map<String, int> logFileCountsByProviderId;
+  Map<String, AgentManagementAgentView> get agentsById => Map.unmodifiable({
+    for (final entry in definitionsByProviderId.entries)
+      entry.key: composeManagedAgent(this, entry.key),
+  });
   final List<String> orderedAgentIds;
   final String selectedAgentId;
   final Map<String, AgentCliManagementCapabilities> capabilitiesByAgentId;
@@ -145,7 +169,12 @@ final class AgentManagementSliceState {
   AgentManagementSliceState copyWith({
     AgentManagementRuntimeFacts? runtimeFacts,
     Map<String, AgentManagementProviderRuntimeSummary>? runtimeByProviderId,
-    Map<String, ManagedAgent>? agentsById,
+    Map<String, AgentManagementDisplayDefinition>? definitionsByProviderId,
+    int? catalogGeneration,
+    AgentManagementDetectionState? detection,
+    Map<String, AgentManagementConnectionCheckState>?
+    confirmedConnectionChecksByProviderId,
+    Map<String, int>? logFileCountsByProviderId,
     List<String>? orderedAgentIds,
     String? selectedAgentId,
     Map<String, AgentCliManagementCapabilities>? capabilitiesByAgentId,
@@ -161,7 +190,15 @@ final class AgentManagementSliceState {
     return AgentManagementSliceState(
       runtimeFacts: runtimeFacts ?? this.runtimeFacts,
       runtimeByProviderId: runtimeByProviderId ?? this.runtimeByProviderId,
-      agentsById: agentsById ?? this.agentsById,
+      definitionsByProviderId:
+          definitionsByProviderId ?? this.definitionsByProviderId,
+      catalogGeneration: catalogGeneration ?? this.catalogGeneration,
+      detection: detection ?? this.detection,
+      confirmedConnectionChecksByProviderId:
+          confirmedConnectionChecksByProviderId ??
+          this.confirmedConnectionChecksByProviderId,
+      logFileCountsByProviderId:
+          logFileCountsByProviderId ?? this.logFileCountsByProviderId,
       orderedAgentIds: orderedAgentIds ?? this.orderedAgentIds,
       selectedAgentId: selectedAgentId ?? this.selectedAgentId,
       capabilitiesByAgentId:
@@ -189,14 +226,21 @@ final class AgentManagementSliceState {
 
 /// UI 与兼容 port 共用的纯 selector。
 abstract final class AgentManagementSliceSelectors {
-  static List<ManagedAgent> agents(AgentManagementSliceState state) {
-    return List<ManagedAgent>.unmodifiable(<ManagedAgent>[
-      for (final id in state.orderedAgentIds)
-        if (state.agentsById[id] case final ManagedAgent agent) agent,
-    ]);
+  static List<AgentManagementAgentView> agents(
+    AgentManagementSliceState state,
+  ) {
+    return List<AgentManagementAgentView>.unmodifiable(
+      <AgentManagementAgentView>[
+        for (final id in state.orderedAgentIds)
+          if (state.agentsById[id] case final AgentManagementAgentView agent)
+            agent,
+      ],
+    );
   }
 
-  static ManagedAgent selectedAgent(AgentManagementSliceState state) {
+  static AgentManagementAgentView selectedAgent(
+    AgentManagementSliceState state,
+  ) {
     final selected = state.agentsById[state.selectedAgentId];
     if (selected != null) {
       return selected;
@@ -279,5 +323,29 @@ Map<String, List<AgentLogEntry>> _freezeLogs(
       for (final entry in source.entries)
         entry.key: List<AgentLogEntry>.unmodifiable(entry.value),
     },
+  );
+}
+
+/// 所有展示字段从各自真源合成，不写回第二份 Agent 缓存。
+AgentManagementAgentView composeManagedAgent(
+  AgentManagementSliceState state,
+  String id,
+) {
+  final details =
+      state.detection.confirmedByProviderId[id]?.details ??
+      AgentDetectionDetails();
+  final enabled = _providerConfig(state, id)?.enabled ?? true;
+  final document = state.confirmedConfigurationsByAgentId[id];
+  return AgentManagementAgentView(
+    definition: state.definitionsByProviderId[id]!,
+    details: details,
+    enabled: enabled,
+    runtimeState:
+        state.runtimeByProviderId[id]?.state ??
+        (enabled ? AgentRuntimeState.notRunning : AgentRuntimeState.disabled),
+    connectionCheck: state.confirmedConnectionChecksByProviderId[id],
+    confirmedConfigExists: document?.exists,
+    confirmedConfigModifiedAt: document?.modifiedAt,
+    logFileCount: state.logFileCountsByProviderId[id],
   );
 }

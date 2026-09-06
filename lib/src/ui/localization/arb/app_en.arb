@@ -2868,5 +2868,31 @@
   "agentSessionConfigUnavailable": "Session configuration is unavailable while the Provider is disconnected",
   "@agentSessionConfigUnavailable": {"description": "Session configuration provider disconnected"},
   "agentSessionConfigApplying": "Applying session option…",
-  "@agentSessionConfigApplying": {"description": "Session configuration request pending"}
+  "@agentSessionConfigApplying": {"description": "Session configuration request pending"},
+  "mgmtDetectionStale": "Previously confirmed",
+  "@mgmtDetectionStale": {
+    "description": "mgmtDetectionStale"
+  },
+  "mgmtDetectionFailedProviders": "Detection failed for {names}. Previously confirmed results are retained. You can retry.",
+  "@mgmtDetectionFailedProviders": {
+    "description": "mgmtDetectionFailedProviders",
+    "placeholders": {
+      "names": {
+        "type": "String",
+        "example": "Agent A"
+      }
+    }
+  },
+  "mgmtDetectionCacheWarning": "Detection completed, but some results could not be saved.",
+  "@mgmtDetectionCacheWarning": {
+    "description": "mgmtDetectionCacheWarning"
+  },
+  "mgmtCopyExecutableLocation": "Copy executable location",
+  "@mgmtCopyExecutableLocation": {
+    "description": "mgmtCopyExecutableLocation"
+  },
+  "mgmtExecutableLocationUnavailable": "The executable location is unavailable. Run detection again.",
+  "@mgmtExecutableLocationUnavailable": {
+    "description": "mgmtExecutableLocationUnavailable"
+  }
 }

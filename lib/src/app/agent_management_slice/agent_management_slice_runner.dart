@@ -1,8 +1,11 @@
+import 'agent_management_repository_config.dart';
+import 'package:zeta/src/features/agent_management/application/agent_management_detection_state.dart';
+import 'package:zeta/src/features/agent_management/application/agent_management_detection_port.dart';
+import 'agent_management_detection_projection.dart';
+import 'agent_management_details_catalog.dart';
 import 'dart:async';
 
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
-import 'package:zeta_foundation/zeta_foundation.dart';
 
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_effect.dart';
@@ -22,6 +25,8 @@ final class AgentManagementSliceRunnerAdapter
     required AgentProviderSettingsPort providerSettings,
     required AgentManagementResultSink sink,
     required AgentManagementTextCatalog textCatalog,
+    required AgentManagementDetectionPort detectionPort,
+    required AppAgentManagementDetailsCatalog detailsCatalog,
     DateTime Function()? now,
   }) : this._(
          repositories,
@@ -29,6 +34,8 @@ final class AgentManagementSliceRunnerAdapter
          providerSettings,
          sink,
          textCatalog,
+         detectionPort,
+         detailsCatalog,
          now ?? DateTime.now,
        );
 
@@ -38,6 +45,8 @@ final class AgentManagementSliceRunnerAdapter
     this._providerSettings,
     this._sink,
     this._textCatalog,
+    this._detectionPort,
+    this._detailsCatalog,
     this._now,
   ) : _definitions = Map.unmodifiable(definitions),
       _repositories = Map<String, AgentCliManagementRepository>.unmodifiable(
@@ -45,11 +54,14 @@ final class AgentManagementSliceRunnerAdapter
       );
 
   final Map<String, AgentDefinition> _definitions;
+  late final _config = AgentManagementRepositoryConfig(_definitions);
   final Map<String, AgentCliManagementRepository> _repositories;
   final AgentProviderSettingsPort _providerSettings;
   final AgentManagementResultSink _sink;
   final AgentManagementTextCatalog _textCatalog;
   final DateTime Function() _now;
+  final AgentManagementDetectionPort _detectionPort;
+  final AppAgentManagementDetailsCatalog _detailsCatalog;
 
   @override
   Future<void> run(AgentManagementSliceEffect effect) {
@@ -81,14 +93,23 @@ final class AgentManagementSliceRunnerAdapter
 
   Future<void> _initialize(ManagementInitializeEffect effect) async {
     try {
-      final settings = await _providerSettings.loadSettings();
-      final agents = <String, ManagedAgent>{};
+      await _providerSettings.loadSettings();
+      // loadSettings 复用首轮 Future；当前设置可能早已被用户修改。
+      final settings = _providerSettings.settings;
+      final agents = <String, AgentDetectionConfirmedRecord>{};
       for (final entry in _repositories.entries) {
-        agents[entry.key] = _restoreCachedAgent(
+        final cached = _restoreCachedAgent(
           agentId: entry.key,
-          config: _configForAgent(settings, entry.value),
+          config: _config.configFor(settings, entry.value),
           repository: entry.value,
         );
+        if (cached.installed) {
+          agents[entry.key] = AgentDetectionConfirmedRecord(
+            details: managementDetectionDetails(cached),
+            confirmedAt: cached.lastDetectedAt,
+            freshness: DetectionFreshness.restoredCache,
+          );
+        }
       }
       _sink.initializationSucceeded(effect.operationId, settings, agents);
     } catch (error, stackTrace) {
@@ -96,53 +117,18 @@ final class AgentManagementSliceRunnerAdapter
     }
   }
 
-  Future<void> _detect(DetectAgentsEffect effect) async {
-    try {
-      final ids = _repositories.keys.toList(growable: false);
-      var index = 0;
-      for (final id in ids) {
-        if (_sink.isClosed) return;
-        index += 1;
-        final repository = _repository(id);
-        _sink.detectionStarted(effect.operationId, id);
-        final config = _configForAgent(_providerSettings.settings, repository);
-        if (_sink.isClosed) return;
-        final detected = await repository.detect(
-          providerConfig: config,
-          enabled: config.enabled,
-          onProgress: (progress, partial) {
-            final mappedProgress = AgentDetectionProgress(
-              completed: progress.completed,
-              total: progress.total,
-              message: _textCatalog.detectionProgress(
-                index: '$index',
-                total: '${ids.length}',
-                name: partial.definition.displayName,
-                message: progress.message,
-              ),
-            );
-            _sink.detectionProgressReported(
-              effect.operationId,
-              id,
-              mappedProgress,
-              partial,
-            );
-          },
-        );
-        if (_sink.isClosed) return;
-        final mapped = detected;
-        _sink.agentDetected(effect.operationId, id, mapped);
-        if (_sink.isClosed) return;
-        await _persistDetectionSummary(id, config, mapped);
-      }
-      _sink.detectionCompleted(effect.operationId);
-    } catch (error) {
-      _sink.detectionFailed(
-        effect.operationId,
-        _textCatalog.detectionIncomplete(error),
-      );
-    }
-  }
+  Future<void> _detect(DetectAgentsEffect effect) => _detectionPort.detect(
+    operationId: effect.operationId,
+    providerIds: effect.providerIds,
+    catalogGeneration: effect.catalogGeneration,
+    cancellation: effect.cancellation,
+    emit: (event) => _sink.acceptDetectionResult(
+      effect.operationId,
+      effect.ownerGeneration,
+      effect.catalogGeneration,
+      event,
+    ),
+  );
 
   Future<void> _updateProviderEnabled(
     UpdateProviderEnabledEffect effect,
@@ -177,9 +163,10 @@ final class AgentManagementSliceRunnerAdapter
     UpdateAccountDataEnrichmentEffect effect,
   ) async {
     final repository = _repository(effect.agentId);
-    final key = _descriptor(
-      repository,
-    )?.managementCapabilities.accountDataEnrichmentExtraKey;
+    final key = _config
+        .descriptor(repository)
+        ?.managementCapabilities
+        .accountDataEnrichmentExtraKey;
     if (key == null) {
       _sink.accountDataEnrichmentUpdateFailed(
         effect.operationId,
@@ -193,7 +180,7 @@ final class AgentManagementSliceRunnerAdapter
       return;
     }
     try {
-      final current = _configForAgent(_providerSettings.settings, repository);
+      final current = _config.configFor(_providerSettings.settings, repository);
       final extra = Map<String, Object?>.from(current.extra);
       if (effect.enabled) {
         extra.remove(key);
@@ -221,23 +208,52 @@ final class AgentManagementSliceRunnerAdapter
     final repository = _repository(effect.agentId);
     try {
       final result = await repository.testConnection(
-        providerConfig: _configForAgent(_providerSettings.settings, repository),
+        providerConfig: _config.configFor(
+          _providerSettings.settings,
+          repository,
+        ),
       );
-      _sink.connectionTestSucceeded(
-        operationId: effect.operationId,
-        agentId: effect.agentId,
-        result: result.$1,
-        models: result.$2,
-        modelSource:
-            _descriptor(repository)?.connectionModelSourceLabel ??
-            repository.agentId,
-        modelsUpdatedAt: _now(),
+      if (_sink.isClosed) return;
+      final handle = _detailsCatalog.stage(
+        diagnostic: result.$1.rawErrorSummary,
       );
+      final summary = managementConnectionSummary(result.$1, handle: handle);
+      try {
+        _sink.connectionTestSucceeded(
+          operationId: effect.operationId,
+          agentId: effect.agentId,
+          result: summary,
+          models: result.$2,
+          modelSource:
+              _config.descriptor(repository)?.connectionModelSourceLabel ??
+              repository.agentId,
+          modelsUpdatedAt: _now(),
+        );
+        if (identical(
+              _sink
+                  .current
+                  .confirmedConnectionChecksByProviderId[effect.agentId]
+                  ?.result,
+              summary,
+            ) &&
+            !_sink.isClosed) {
+          _detailsCatalog.confirm(
+            effect.agentId,
+            AgentManagementDetailsKind.explicitConnectionCheck,
+            handle,
+          );
+        } else {
+          _detailsCatalog.discard(handle);
+        }
+      } catch (_) {
+        _detailsCatalog.discard(handle);
+        rethrow;
+      }
     } catch (error) {
       _sink.connectionTestFailed(
         effect.operationId,
         effect.agentId,
-        _textCatalog.connectionTestFailed(error),
+        _textCatalog.connectionTestFailed(''),
       );
     }
   }
@@ -284,7 +300,7 @@ final class AgentManagementSliceRunnerAdapter
       final paths = await repository.discoverLogPaths();
       if (_sink.isClosed) return;
       final logs = await repository.readLogs(paths);
-      _sink.logsLoaded(effect.operationId, effect.agentId, paths, logs);
+      _sink.logsLoaded(effect.operationId, effect.agentId, paths.length, logs);
     } catch (error) {
       _sink.logsLoadFailed(
         effect.operationId,
@@ -294,51 +310,12 @@ final class AgentManagementSliceRunnerAdapter
     }
   }
 
-  Future<void> _persistDetectionSummary(
-    String agentId,
-    AgentProviderConfig previous,
-    ManagedAgent detected,
-  ) async {
-    final repository = _repository(agentId);
-    var updated = _sanitizeProviderConfig(previous, repository);
-    final path = detected.executablePath;
-    if (path != null && _acceptsExecutablePath(repository, path)) {
-      updated = await repository.providerConfigForPath(
-        current: updated,
-        path: path,
-      );
-    }
-    if (_sink.isClosed) return;
-    updated = updated.copyWith(
-      id: agentId,
-      extra: <String, Object?>{
-        ...updated.extra,
-        'detectedCurrentVersion': detected.currentVersion,
-        'detectedLatestVersion': detected.latestVersion,
-        'detectedAccountState': detected.accountState.name,
-        'lastDetectedAt': detected.lastDetectedAt?.toIso8601String(),
-        if (detected.connectionTest?.protocolVersion != null)
-          'detectedProtocolVersion': detected.connectionTest!.protocolVersion,
-        if (path != null && _acceptsExecutablePath(repository, path))
-          'cliPath': path,
-      },
-    );
-    final commandChanged =
-        updated.command != previous.command ||
-        !zetaListEquals(updated.arguments, previous.arguments);
-    await _providerSettings.updateProviderConfig(
-      updated,
-      restartProvider:
-          commandChanged && _providerSettings.activeProviderId == agentId,
-    );
-  }
-
   ManagedAgent _restoreCachedAgent({
     required String agentId,
     required AgentProviderConfig config,
     required AgentCliManagementRepository repository,
   }) {
-    final sanitized = _sanitizeProviderConfig(config, repository);
+    final sanitized = _config.sanitize(config, repository);
     final extra = sanitized.extra;
     final accountName = extra['detectedAccountState'];
     final accountState = AgentAccountState.values.firstWhere(
@@ -349,7 +326,7 @@ final class AgentManagementSliceRunnerAdapter
         ? extra['cliPath'] as String
         : null;
     final executablePath =
-        rawPath != null && _acceptsExecutablePath(repository, rawPath)
+        rawPath != null && _config.acceptsExecutablePath(repository, rawPath)
         ? rawPath
         : null;
     final currentVersion = executablePath == null
@@ -364,7 +341,6 @@ final class AgentManagementSliceRunnerAdapter
         : null;
     final definition =
         _definitions[agentId] ??
-        _sink.current.agentsById[agentId]?.definition ??
         AgentDefinition(
           id: agentId,
           displayName: agentId,
@@ -399,72 +375,6 @@ final class AgentManagementSliceRunnerAdapter
     );
   }
 
-  AgentProviderConfig _configForAgent(
-    AgentProviderSettings settings,
-    AgentCliManagementRepository repository,
-  ) {
-    for (final provider in settings.providers) {
-      if (provider.id == repository.agentId) {
-        return _sanitizeProviderConfig(provider, repository);
-      }
-    }
-    return _descriptor(repository)?.defaultProviderConfig ??
-        AgentProviderConfig(
-          kind:
-              zetaAgentProviderDefinitionCatalog
-                  .definitionForProviderId(repository.agentId)
-                  ?.providerType ??
-              const AgentProviderTypeId('unknown'),
-          command: repository.agentId,
-          id: repository.agentId,
-          displayName:
-              _definitions[repository.agentId]?.displayName ??
-              repository.agentId,
-        );
-  }
-
-  AgentProviderConfig _sanitizeProviderConfig(
-    AgentProviderConfig config,
-    AgentCliManagementRepository repository,
-  ) {
-    final descriptor = _descriptor(repository);
-    if (descriptor == null) {
-      return config.copyWith(id: repository.agentId);
-    }
-    final defaults = descriptor.defaultProviderConfig;
-    final extra = Map<String, Object?>.from(config.extra)
-      ..remove('timeoutSeconds');
-    final cliPath = extra['cliPath'] is String
-        ? extra['cliPath'] as String
-        : null;
-    final commandIsPath = _looksLikeFilePath(config.command);
-    final commandWrong =
-        commandIsPath && !descriptor.acceptsExecutablePath(config.command);
-    final cliPathWrong =
-        cliPath != null && !descriptor.acceptsExecutablePath(cliPath);
-    final kindWrong = config.kind != defaults.kind;
-    if (cliPathWrong) {
-      extra.remove('cliPath');
-      extra.remove('detectedCurrentVersion');
-      extra.remove('detectedLatestVersion');
-    }
-    final needsDefaultCommand =
-        kindWrong ||
-        commandWrong ||
-        config.command.trim().isEmpty ||
-        (cliPathWrong && config.command == cliPath);
-    return config.copyWith(
-      id: repository.agentId,
-      displayName: defaults.displayName,
-      kind: defaults.kind,
-      command: needsDefaultCommand ? defaults.command : config.command,
-      arguments: kindWrong || needsDefaultCommand
-          ? defaults.arguments
-          : config.arguments,
-      extra: extra,
-    );
-  }
-
   AgentCliManagementRepository _repository(String agentId) {
     final repository = _repositories[agentId];
     if (repository == null) {
@@ -474,25 +384,4 @@ final class AgentManagementSliceRunnerAdapter
     }
     return repository;
   }
-
-  AgentCliManagementDescriptor? _descriptor(
-    AgentCliManagementRepository repository,
-  ) => repository is AgentCliManagementDescriptor
-      ? repository as AgentCliManagementDescriptor
-      : null;
-
-  bool _acceptsExecutablePath(
-    AgentCliManagementRepository repository,
-    String path,
-  ) => _descriptor(repository)?.acceptsExecutablePath(path) ?? true;
-}
-
-bool _looksLikeFilePath(String value) {
-  return value.contains('/') ||
-      value.contains('\\') ||
-      value.contains(':') ||
-      value.endsWith('.exe') ||
-      value.endsWith('.cmd') ||
-      value.endsWith('.bat') ||
-      value.endsWith('.ps1');
 }

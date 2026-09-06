@@ -1,3 +1,6 @@
+import 'management_detection_test_support.dart';
+import 'package:zeta/src/app/agent_management_slice/agent_management_details_catalog.dart';
+import 'package:zeta/src/features/agent_management/presentation/agent_management_details_catalog.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_composition.dart';
@@ -17,6 +20,9 @@ ProviderContainer managementTestContainer({
 }) {
   final container = ProviderContainer(
     overrides: [
+      agentManagementDetailsCatalogProvider.overrideWith(
+        (ref) => ref.read(appAgentManagementDetailsCatalogProvider),
+      ),
       agentProviderIconsOverride(),
       agentManagementSliceDependenciesProvider.overrideWithValue(
         AgentManagementSliceDependencies(
@@ -54,6 +60,7 @@ ProviderContainer managementAppTestContainer(
 Future<void> closeManagementTestContainer(ProviderContainer container) async {
   final owner = container.read(agentManagementSliceProvider.notifier);
   owner.stopAcceptingCommandsAndSettleWaiters();
+  completeAllTestDetections();
   await owner.drainExecutions();
   container.dispose();
 }
