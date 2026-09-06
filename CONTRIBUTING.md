@@ -193,6 +193,8 @@ chore: bump flutter action pin
 
 **分层与依赖方向**
 
+Project Threads 业务入口统一为 `ProjectThreadsOperations`（当前由 Store 实现）；Store 独占同步规则和反查索引，Runner 只执行 effect。测试不能绕过 Store 调用第二套 Runner 业务方法；覆盖分页窗口外映射与关闭后的迟到结果。发布机制的 Notifier 迁移留待 WP-3P。
+
 - 依赖单向：`main → app → presentation/application → domain`，`app → data → domain`，`presentation → zeta_ui`（`packages/zeta_ui` 设计系统）、`presentation → zeta_markdown`（`packages/zeta_markdown` Markdown 渲染包，fork 自上游，改它先读 `packages/zeta_markdown/UPSTREAM.md`）。
 - 新代码进对应的 `features/<feature>/{domain,application,data,presentation}`，不要回到顶层宽泛目录。
 - `main.dart` 只做启动；`lib/src/app` 是唯一装配点。

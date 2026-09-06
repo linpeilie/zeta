@@ -186,7 +186,7 @@ windows/
 - `lib/src/features/desktop_notifications`：Agent attention 去重、可见性抑制、
   系统通知插件适配和三端任务栏/Dock/urgency MethodChannel。
 - `lib/src/features/ide_session`：IDE 会话模型、状态构建、恢复协调和持久化。
-- `lib/src/features/project_threads`：项目 thread 列表状态、恢复快照、分页控制器和 view model；
+- `lib/src/features/project_threads`：项目 thread 列表状态、同步业务 Store、恢复快照与 presentation 镜像；分页及远端操作在 app Runner；
   打开中 thread 的执行中/等待态由常驻 workspace 的 `threadSnapshot` 经
   `syncRuntimeSnapshot` 写入，不依赖 shell 单路 provider 事件流。
 - `lib/src/features/settings`：常规/外观设置，含 `AppLanguage` 与 `general.json` v3 codec。
@@ -381,6 +381,18 @@ bash tool/test_full.sh
     fork 必须覆盖真实 thread A → 新 thread B：返回的 session 通过 Shell 通用新 thread
     登记/选择流程进入列表，B 使用独立 Entry/Binding 并成为当前选择，A 不改绑，随后
     rename/send 只能作用于 B；普通 fork 不得提前创建 B 的 session runtime。
+
+### Project Threads 同步规则与异步回流
+
+Project Threads 的同步命令、列表事实和 thread → project 反查索引由 `ProjectThreadsSliceStore` 独占，Shell、Widget 与业务回归统一经 `ProjectThreadsOperations` 调用。`ProjectThreadsSliceRunner` 只通过 `run(effect)` 执行 Provider I/O、分页与搜索调度；远端归属查询经 `ProjectThreadsStateOwner.threadFor` 读取当前项目第一个匹配摘要，不猜活跃 Provider。分页提交只补齐映射，保留窗口外显式登记；整体恢复重建索引，retain/remove/close 清理对应归属，关闭后的 ingress 不再改变索引或触发选中项移除回调。
+
+- 同步回归用 Store + recording runner，注入固定 `now`，并断言不产生 Provider effect。
+- 恢复、查询、分页、搜索、rename/archive/delete/fork 经真实 composition.store 验证 Future 结算和最终状态；不要直接调用 Runner 私有 helper。
+- 初始列表和选中 id 建立映射；整体 restore 重建，分页按提交态补齐；显式窗口外映射保留，retain 只删移除项目，remove 只删目标映射，close 清空并拒绝迟到 ingress。
+- 选中项移除先由 Store 确认，再经 composition 通知 Shell；关闭后不得回调。现有 void Future 完成/fork 返回 null 的关闭语义保持。
+- 5/10/50 分页、300 ms 防抖、String threadId、首个摘要匹配及 v4 快照不变；跨 Provider 同 id 需另立整体键迁移方案。
+
+当前 Store 的 listener、presentation 镜像和 `_DeferredProjectThreadsSliceRunner` 仍保留；后续 WP-3P 迁移到 application Notifier，不能把本次规则收口视为发布机制迁移完成。 验证入口见 `project_threads_slice_store_test`、app 下的 `project_threads_slice_runner_test`、`project_threads_session_snapshot_codec_test` 和 `project_threads_state_owner_guard_test`。
 
 ### 文件变更证据接入
 
