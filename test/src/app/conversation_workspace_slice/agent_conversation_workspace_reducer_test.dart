@@ -1,3 +1,4 @@
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_owner_key.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_workspace_intent.dart';
 import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_workspace_reducer.dart';
@@ -65,6 +66,7 @@ void main() {
 
 AgentConversationWorkspaceEntryState _entry(String entryId) {
   return AgentConversationWorkspaceEntryState(
+    ownerKey: AgentConversationOwnerKey(entryId),
     entryId: entryId,
     projectPath: '/workspace',
     providerId: 'codex',

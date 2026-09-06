@@ -2,16 +2,21 @@ import 'dart:async';
 import 'dart:collection';
 
 import 'package:zeta_agent_core/zeta_agent_core.dart';
-import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_workspace_store.dart';
+import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_workspace_notifier.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_runtime_controller.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_runtime_facts.dart';
 
-/// Shell 拥有的 session 事实源。只观察现存 Binding，不创建/释放 runtime 或租约。
+/// 应用拥有的 session 事实源。只观察现存 Binding，不创建/释放 runtime 或租约。
 final class WorkspaceAgentRuntimeFactSource
     implements AgentManagementRuntimeFactSource {
-  WorkspaceAgentRuntimeFactSource(this.workspace);
+  WorkspaceAgentRuntimeFactSource(
+    this.workspace, {
+    required this.subscribeWorkspace,
+  });
+  final void Function() Function(void Function()) subscribeWorkspace;
+  void Function()? _unsubscribeWorkspace;
 
-  final AgentConversationWorkspaceStore workspace;
+  final AgentConversationWorkspaceNotifier workspace;
   final _handles = Map<AgentConversationBinding, _ObservationHandle>.identity();
   final _listeners = <void Function(AgentManagementRuntimeFacts)>[];
   AgentManagementRuntimeFacts _current = AgentManagementRuntimeFacts.empty;
@@ -29,7 +34,7 @@ final class WorkspaceAgentRuntimeFactSource
     if (_started) return;
     _started = true;
     workspace.bindingManager.addListener(_reconcile);
-    workspace.addListener(_reconcile);
+    _unsubscribeWorkspace = subscribeWorkspace(_reconcile);
     try {
       _reconcile();
     } catch (_) {
@@ -226,7 +231,8 @@ final class WorkspaceAgentRuntimeFactSource
     _closed = true;
     _generation++;
     workspace.bindingManager.removeListener(_reconcile);
-    workspace.removeListener(_reconcile);
+    _unsubscribeWorkspace?.call();
+    _unsubscribeWorkspace = null;
     for (final handle in _handles.values) {
       handle.detach();
     }

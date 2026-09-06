@@ -1,11 +1,10 @@
+import '../../../testing/conversation_test_scope.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_command_scope.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_effect.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_intent.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_state.dart';
-import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store.dart';
-import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 
@@ -38,10 +37,10 @@ void main() {
     });
 
     test('未知 BindingKey 不会静默走旧路径', () {
-      final store = _store('会话一');
-      addTearDown(store.dispose);
+      final store = _store('会话一', _firstKey);
+      addTearDown(store.closeForEntryRelease);
       final container = _container(
-        <AgentConversationBindingKey, AgentConversationSliceStore>{
+        <AgentConversationBindingKey, AgentConversationSliceNotifier>{
           _firstKey: store,
         },
       );
@@ -51,18 +50,20 @@ void main() {
         '会话一',
       );
       expect(
-        () => container.read(agentConversationSliceProvider(_secondKey)),
-        throwsA(isA<Object>()),
+        container
+            .read(agentConversationSliceProvider(_secondKey))
+            .projectionStatus,
+        AgentConversationProjectionStatus.unavailable,
       );
     });
 
     test('同一个容器里两个 entry 完全隔离', () {
-      final first = _store('会话一');
-      final second = _store('会话二');
-      addTearDown(first.dispose);
-      addTearDown(second.dispose);
+      final first = _store('会话一', _firstKey);
+      final second = _store('会话二', _secondKey);
+      addTearDown(first.closeForEntryRelease);
+      addTearDown(second.closeForEntryRelease);
       final container = _container(
-        <AgentConversationBindingKey, AgentConversationSliceStore>{
+        <AgentConversationBindingKey, AgentConversationSliceNotifier>{
           _firstKey: first,
           _secondKey: second,
         },
@@ -95,12 +96,12 @@ void main() {
     });
 
     test('draft 与 thread 是不同的 key，不会互相串', () {
-      final draft = _store('草稿');
+      final draft = _store('草稿', _draftKey);
       final thread = _store('会话');
-      addTearDown(draft.dispose);
-      addTearDown(thread.dispose);
+      addTearDown(draft.closeForEntryRelease);
+      addTearDown(thread.closeForEntryRelease);
       final container = _container(
-        <AgentConversationBindingKey, AgentConversationSliceStore>{
+        <AgentConversationBindingKey, AgentConversationSliceNotifier>{
           _draftKey: draft,
           _firstKey: thread,
         },
@@ -118,9 +119,9 @@ void main() {
 
     test('store 变化经 Notifier 反映到 selector', () {
       final store = _store();
-      addTearDown(store.dispose);
+      addTearDown(store.closeForEntryRelease);
       final container = _container(
-        <AgentConversationBindingKey, AgentConversationSliceStore>{
+        <AgentConversationBindingKey, AgentConversationSliceNotifier>{
           _firstKey: store,
         },
       );
@@ -144,9 +145,9 @@ void main() {
 
     test('只变 header 时，其余 region selector 不重新计算', () {
       final store = _store();
-      addTearDown(store.dispose);
+      addTearDown(store.closeForEntryRelease);
       final container = _container(
-        <AgentConversationBindingKey, AgentConversationSliceStore>{
+        <AgentConversationBindingKey, AgentConversationSliceNotifier>{
           _firstKey: store,
         },
       );
@@ -175,17 +176,21 @@ void main() {
       );
     });
 
-    test('容器 dispose 只摘监听，不释放 store', () {
+    test('selector 退订只摘监听，不释放 owner', () {
       final store = _store();
-      addTearDown(store.dispose);
+      addTearDown(store.closeForEntryRelease);
       final container = _container(
-        <AgentConversationBindingKey, AgentConversationSliceStore>{
+        <AgentConversationBindingKey, AgentConversationSliceNotifier>{
           _firstKey: store,
         },
       );
       container.read(agentConversationSliceProvider(_firstKey));
 
-      container.dispose();
+      final subscription = container.listen(
+        agentConversationSliceProvider(_firstKey),
+        (_, _) {},
+      );
+      subscription.close();
 
       // store 的生命周期跟随 workspace entry 的 binding lease。
       expect(store.isClosed, isFalse);
@@ -194,16 +199,16 @@ void main() {
           header: agentHeaderStateFixture(title: '仍然可用'),
         ),
       );
-      expect(store.state.header.title, '仍然可用');
+      expect(store.current.header.title, '仍然可用');
     });
 
     test('invalidate 一个 key 不影响另一个 key 的监听', () {
-      final first = _store('会话一');
-      final second = _store('会话二');
-      addTearDown(first.dispose);
-      addTearDown(second.dispose);
+      final first = _store('会话一', _firstKey);
+      final second = _store('会话二', _secondKey);
+      addTearDown(first.closeForEntryRelease);
+      addTearDown(second.closeForEntryRelease);
       final container = _container(
-        <AgentConversationBindingKey, AgentConversationSliceStore>{
+        <AgentConversationBindingKey, AgentConversationSliceNotifier>{
           _firstKey: first,
           _secondKey: second,
         },
@@ -227,29 +232,16 @@ void main() {
 }
 
 ProviderContainer _container(
-  Map<AgentConversationBindingKey, AgentConversationSliceStore> stores,
+  Map<AgentConversationBindingKey, AgentConversationSliceNotifier> owners,
 ) {
-  final registry = AgentConversationSliceStoreRegistry()
-    ..bind(
-      (key) => AgentConversationSessionHandle(
-        store:
-            stores[key] ??
-            (throw StateError(
-              'No conversation slice store registered for $key',
-            )),
-      ),
-    );
-  final container = ProviderContainer(
-    overrides: [
-      agentConversationSliceStoreRegistryProvider.overrideWithValue(registry),
-    ],
-  );
-  addTearDown(container.dispose);
-  return container;
+  return conversationTestScope.container;
 }
 
-AgentConversationSliceStore _store([String title = 'Thread']) {
-  return AgentConversationSliceStore(
+AgentConversationSliceNotifier _store([
+  String title = 'Thread',
+  AgentConversationBindingKey key = _firstKey,
+]) {
+  return conversationTestOwner(
     initialState: AgentConversationSliceState(
       header: agentHeaderStateFixture(title: title),
       composer: agentComposerStateFixture(),
@@ -258,12 +250,13 @@ AgentConversationSliceStore _store([String title = 'Thread']) {
       history: agentConversationHistoryStateFixture(),
     ),
     effectRunner: _NoopRunner(),
-    scopeSnapshot: () =>
-        const AgentConversationCommandScope(bindingKey: _firstKey),
+    scopeSnapshot: () => AgentConversationCommandScope(bindingKey: key),
   );
 }
 
 final class _NoopRunner implements AgentConversationSliceEffectRunner {
+  @override
+  void close() {}
   @override
   void run(AgentConversationSliceEffect effect) {}
 }

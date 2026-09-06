@@ -103,7 +103,7 @@ TimelineStore 在写入后举起的数据变化标记（history / liveTurn / liv
 processor 从脏区 + SessionState diff 派生的界面分区（header / composer / pendingInteraction / expansion / history / liveTurn 等）。Widget 按 region 订阅。
 
 **Conversation Slice（会话切片）**
-一个 Binding 对应一份 UI 区域状态。`AgentConversationSliceStore` 是 owner；Riverpod family 只镜像。未知 BindingKey fail-closed。发布链路是两跳：RuntimeController → SliceStore → selector / `AgentRegionBuilder`。不得再经 ViewModel、UiStateStore 或 SliceComposition 转手。
+Workspace 与 Conversation 已完成 WP-3C：`AgentConversationWorkspaceNotifier` 直接拥有 entry 资源表与不可变 workspace state；每个 entry 的 `AgentConversationSliceNotifier` 独占轻量 regions 和命令账本。`AgentConversationOwnerKey(entryId, lifetimeToken)` 在草稿晋升和 runtime restart 时不变，同 thread 关闭重开分配新 token；BindingKey 只作查询别名。Live 解析真实 owner，Closing/Closed 返回无正文的终止投影，Unknown 返回不可用空投影。
 
 **AgentConversationRuntimeController**
 会话 application 聚合：pipeline、region 投影、`AgentUiUpdateScheduler`、CommandPort 与 effect。Workspace entry 持有它；不再有 `AgentConversationViewModel`。
@@ -112,8 +112,11 @@ processor 从脏区 + SessionState diff 派生的界面分区（header / compose
 **AgentCommandOutcome（命令结果）**
 命令显式返回 succeeded、ignored(reason) 或 failed(kind)。Session config 缺端口在执行层抛 UnsupportedError，由 UI 边界翻译为 unsupported；未执行不能被判成功，currentValue 仍等 Provider 事件更新。
 
-**AgentConversationSessionHandle**
-Slice registry 的解析结果：`store` + 可选 `controller`。只测切片镜像的容器里 controller 可空。
+**AgentConversationOwnerKey**
+entryId 与仅驻内存的 lifetimeToken；同 entry 晋升不变，关闭重开不复用。
+
+**AgentConversationOwnerResolution**
+BindingKey 的 Live / Closing / Closed / Unknown 解析。只有 Live 可取会话依赖，其他状态的 selector 返回无正文空投影并拒绝新命令。
 
 **AgentRegionBuilder**
 presentation 订阅一个 region selector：`ref.watch(selector(bindingKey))`。发送走 `agentConversationCommandProvider`。

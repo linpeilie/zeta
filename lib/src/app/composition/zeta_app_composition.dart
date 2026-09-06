@@ -1,8 +1,10 @@
+import 'workbench_session_providers.dart';
+import 'package:zeta/src/app/agent_management_slice/workspace_agent_runtime_fact_source.dart';
+import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_notifier.dart';
 import 'package:zeta/src/app/composition/agent_session_resource_providers.dart';
 import 'package:zeta/src/app/project_threads_slice/project_threads_slice_composition.dart';
 import 'package:zeta/src/features/project_threads/application/project_threads_slice/project_threads_slice_notifier.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
-import 'package:zeta/src/features/agent_management/application/agent_management_runtime_facts.dart';
 import 'package:zeta/src/app/agent_management_slice/agent_management_slice_composition.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_notifier.dart';
 import 'dart:async';
@@ -14,7 +16,6 @@ import 'package:zeta_ui/zeta_ui.dart';
 
 import 'package:zeta/src/app/composition/agent_resource_shutdown.dart';
 import 'package:zeta/src/app/composition/zeta_state_snapshot.dart';
-import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_workspace_providers.dart';
 import 'package:zeta/src/app/desktop_attention_slice/desktop_attention_slice_overrides.dart';
 import 'package:zeta/src/app/ide_session_slice/ide_session_slice_overrides.dart';
 import 'package:zeta/src/app/localization/zeta_display_language_source.dart';
@@ -29,9 +30,7 @@ import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_slice_overr
 import 'package:zeta/src/app/window/zeta_shutdown_hook.dart';
 import 'package:zeta/src/app/window/zeta_window_host.dart';
 import 'package:zeta/src/app/workspace_slice/workspace_overrides.dart';
-import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
 import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_provider_settings_slice_store.dart';
-import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
 import 'package:zeta/src/features/desktop_notifications/application/desktop_attention_slice_notifier.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_session_slice_notifier.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_notifier.dart';
@@ -109,17 +108,6 @@ final class ZetaAppComposition implements ZetaShutdownHook {
 
   late final ZetaWindowHost _windowHost;
 
-  /// 在 `IdeHome.initState` 同步接入 Workspace，保证首个会话 build 只有新路径。
-  final AgentConversationSliceStoreRegistry conversationSliceStoreRegistry =
-      AgentConversationSliceStoreRegistry();
-  final AgentConversationWorkspaceStoreRegistry
-  conversationWorkspaceStoreRegistry =
-      AgentConversationWorkspaceStoreRegistry();
-
-  /// 诊断/恢复测试按需读取 Shell 投影的桥；没有 listener，不参与 Widget rebuild。
-  final ZetaShellStateSnapshotRelay shellStateSnapshotRelay =
-      ZetaShellStateSnapshotRelay();
-
   ZetaTextCatalogs? _textCatalogs;
   var _generalSettingsReady = false;
   var _localeRuntimeReady = false;
@@ -146,7 +134,7 @@ final class ZetaAppComposition implements ZetaShutdownHook {
   /// 按需读取当前逻辑状态树；生产 Widget 不得订阅或在 build 中调用。
   ZetaStateSnapshot takeStateSnapshot() {
     return ZetaStateSnapshot(
-      shell: shellStateSnapshotRelay.read(),
+      shell: _takeShellStateSnapshot(),
       ideSession: container.read(ideSessionSliceProvider),
       usageStatistics: container.read(usageStatisticsSliceProvider),
       agentUsagePanel: container.read(agentUsagePanelSliceProvider),
@@ -159,31 +147,62 @@ final class ZetaAppComposition implements ZetaShutdownHook {
     );
   }
 
-  /// Borrow Shell runtime facts without creating or replacing the management owner.
-  void Function() connectManagementRuntimeFacts(
-    AgentManagementRuntimeFactSource source,
-  ) {
-    if (_disposed || _managementOwner?.isClosed != false) {
-      throw StateError('Management app session is not open');
+  /// 诊断与恢复测试使用的无正文 Shell 投影。
+  ///
+  /// 这里刻意同步读取各唯一 owner，既不缓存也不注册 listener；生产 Widget 仍只
+  /// watch 各自的 feature selector。
+  ZetaShellStateSnapshot _takeShellStateSnapshot() {
+    final shell = container.read(workbenchSessionProvider).shell;
+    final threadStates = container.read(projectThreadsSliceProvider);
+    final projectThreads = <String, ZetaProjectThreadsStateSnapshot>{
+      for (final entry in threadStates.statesByProject.entries)
+        entry.key: ZetaProjectThreadsStateSnapshot.fromState(
+          entry.key,
+          entry.value,
+        ),
+    };
+    final entries = shell.agentWorkspaceEntries;
+    final selectedEntryId = shell.selectedAgentWorkspaceEntryId;
+    final conversations = <String, ZetaConversationStateSnapshot>{};
+    for (final entry in entries) {
+      final slice = container.read(
+        agentConversationSliceOwnerProvider(entry.ownerKey),
+      );
+      final pendingInteractions = slice.pendingInteractions;
+      conversations[entry.entryId] = ZetaConversationStateSnapshot(
+        entryId: entry.entryId,
+        projectPath: entry.projectPath,
+        providerId: entry.providerId,
+        threadId: entry.threadId,
+        isDraft: entry.isDraft,
+        isSelected: entry.entryId == selectedEntryId,
+        sliceAvailable: true,
+        threadOpenPhase: slice.header.threadOpenPhase,
+        runtimeStatus: entry.threadSnapshot.runtimeStatus,
+        isTurnRunning: slice.header.isTurnRunning,
+        isReadOnly: slice.header.isReadOnly,
+        visibleTurnCount: slice.history.visibleTurns.length,
+        pendingInteractionCount:
+            pendingInteractions.permissions.length +
+            pendingInteractions.questions.length +
+            pendingInteractions.planApprovals.length +
+            (pendingInteractions.planExecutionHandoff == null ? 0 : 1),
+        pendingOperationCount: slice.pendingOperations.length,
+      );
     }
-    final subscription = container.listen(
-      agentManagementRuntimeIngressProvider(source),
-      (_, _) {},
+    return ZetaShellStateSnapshot(
+      workspace: shell.workspaceState,
+      projectThreadsByProjectPath: projectThreads,
+      orderedConversationEntryIds: <String>[
+        for (final entry in entries) entry.entryId,
+      ],
+      conversationsByEntryId: conversations,
+      selectedConversationEntryId: selectedEntryId,
+      projectHomeActive: shell.isProjectHomeActive,
+      agentManagement: ZetaAgentManagementStateSnapshot.fromState(
+        container.read(agentManagementSliceProvider),
+      ),
     );
-    try {
-      final release = subscription.read().borrow();
-      void disconnect() {
-        release();
-        subscription.close();
-        _managementRuntimeDisconnectors.remove(disconnect);
-      }
-
-      _managementRuntimeDisconnectors.add(disconnect);
-      return disconnect;
-    } catch (_) {
-      subscription.close();
-      rethrow;
-    }
   }
 
   /// 按依赖反序关闭本实例拥有的 Agent 资源。
@@ -195,51 +214,85 @@ final class ZetaAppComposition implements ZetaShutdownHook {
   /// 只关**已经建出来的**：覆盖了 bundle 工厂的用例根本不会建插件目录，
   /// [ProviderContainer.exists] 就是这个"建没建过"的判据。两个 `close()` 本身可
   /// 重复调用，因此本方法幂等。
-  final Set<void Function()> _managementRuntimeDisconnectors = {};
+  WorkbenchSession? _workbench;
+  WorkspaceAgentRuntimeFactSource? _runtimeFacts;
+  AgentManagementInputSubscription? _managementRuntimeIngress;
+  ProviderSubscription<AgentManagementInputSubscription>?
+  _managementRuntimeSubscription;
   AgentManagementSliceNotifier? _managementOwner;
   ProjectThreadsSliceNotifier? _projectThreadsOwner;
   AgentManagementInputSubscription? _managementSettingsIngress;
   Future<void>? _shutdownFuture;
   Future<void>? _closeFuture;
 
-  Future<void> shutdownOwnedAgentResources() =>
-      _shutdownFuture ??= _shutdownOwnedAgentResources();
+  Future<void> shutdownOwnedAgentResources() {
+    final existing = _shutdownFuture;
+    if (existing != null) return existing;
+    final completion = Completer<void>();
+    _shutdownFuture = completion.future;
+    unawaited(
+      _shutdownOwnedAgentResources().then(
+        completion.complete,
+        onError: completion.completeError,
+      ),
+    );
+    return completion.future;
+  }
 
   Future<void> _shutdownOwnedAgentResources() async {
     // Native shutdown may run before asynchronous locale resolution finishes.
     _disposed = true;
+    final closeManager = _closerFor(
+      agentConversationBindingManagerProvider,
+      (manager) => manager.close,
+    );
+    final closeRegistry = _closerFor(
+      agentProviderRuntimeRegistryProvider,
+      (registry) => registry.close,
+    );
+    final closePlugins = _closerFor(
+      zetaPluginCatalogProvider,
+      (catalog) => catalog.close,
+    );
     final management = _managementOwner;
+    final workbench = _workbench;
+    workbench?.shell.stopAcceptingCommands();
     // Logical callers finish immediately; physical I/O still owns borrowed resources.
     management?.stopAcceptingCommandsAndSettleWaiters();
     _projectThreadsOwner?.stopAcceptingCommandsAndSettleWaiters();
-    _managementSettingsIngress?.close();
-    for (final disconnect in List.of(_managementRuntimeDisconnectors)) {
-      disconnect();
-    }
+    if (workbench != null) await workbench.shell.saveNow();
     await Future.wait<void>([
       if (management != null) management.drainExecutions(),
       if (_projectThreadsOwner case final threads?) threads.drainExecutions(),
     ], eagerError: false);
-    await _closerFor(
-      agentConversationBindingManagerProvider,
-      (manager) => manager.close,
-    )?.call();
+    _managementSettingsIngress?.close();
+    _managementRuntimeIngress?.close();
+    _managementRuntimeSubscription?.close();
+    _runtimeFacts?.close();
+    if (workbench != null) {
+      await workbench.lifetimes.closeAllEntries();
+      await workbench.events.close();
+    }
+    await closeManager?.call();
     await shutdownAgentResourcesInOrder(
-      closeRuntimeRegistry: _closerFor(
-        agentProviderRuntimeRegistryProvider,
-        (registry) => registry.close,
-      ),
-      closePluginCatalog: _closerFor(
-        zetaPluginCatalogProvider,
-        (catalog) => catalog.close,
-      ),
+      closeRuntimeRegistry: closeRegistry,
+      closePluginCatalog: closePlugins,
     );
   }
 
   @override
   Future<void> run() => shutdownOwnedAgentResources();
 
-  Future<void> close() => _closeFuture ??= _close();
+  Future<void> close() {
+    final existing = _closeFuture;
+    if (existing != null) return existing;
+    final completion = Completer<void>();
+    _closeFuture = completion.future;
+    unawaited(
+      _close().then(completion.complete, onError: completion.completeError),
+    );
+    return completion.future;
+  }
 
   Future<void> _close() async {
     _disposed = true;
@@ -334,6 +387,22 @@ final class ZetaAppComposition implements ZetaShutdownHook {
         }
       }),
     );
+    if (!_localeRuntimeReady) {
+      final workbench = container.read(workbenchSessionProvider);
+      _workbench = workbench;
+      final facts = container.read(workspaceAgentRuntimeFactSourceProvider);
+      _runtimeFacts = facts;
+      facts.start();
+      final runtimeSubscription = container.listen(
+        agentManagementRuntimeIngressProvider(facts),
+        (_, _) {},
+      );
+      _managementRuntimeSubscription = runtimeSubscription;
+      final runtimeIngress = runtimeSubscription.read();
+      _managementRuntimeIngress = runtimeIngress;
+      runtimeIngress.start();
+      workbench.shell.start();
+    }
     _localeRuntimeReady = true;
   }
 
@@ -367,12 +436,7 @@ final class ZetaAppComposition implements ZetaShutdownHook {
       ...settingsSliceOverrides(),
       ...usageStatisticsSliceOverrides(),
       ...workspaceOverrides(),
-      agentConversationSliceStoreRegistryProvider.overrideWithValue(
-        conversationSliceStoreRegistry,
-      ),
-      agentConversationWorkspaceStoreRegistryProvider.overrideWithValue(
-        conversationWorkspaceStoreRegistry,
-      ),
+      ...conversationWorkspaceOverrides(),
       ...extra,
     ];
   }

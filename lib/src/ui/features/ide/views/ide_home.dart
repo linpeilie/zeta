@@ -1,5 +1,4 @@
-import 'package:zeta/src/app/composition/agent_session_resource_providers.dart';
-import 'package:zeta/src/app/project_threads_slice/project_threads_slice_composition.dart';
+import 'package:zeta/src/app/composition/workbench_session_providers.dart';
 import 'package:zeta/src/features/project_threads/application/project_threads_slice/project_threads_slice_notifier.dart';
 import 'dart:async';
 
@@ -8,27 +7,17 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
-import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_notifier.dart';
-import 'package:zeta/src/app/composition/app_dependencies.dart';
-import 'package:zeta/src/app/composition/ide_workbench_composition.dart';
 import 'package:zeta/src/app/composition/zeta_environment_providers.dart';
 import 'package:zeta/src/app/window/zeta_window_host.dart';
 import 'package:zeta/src/app/window/zeta_window_surface.dart';
 import 'package:zeta/src/app/app_constants.dart';
-import 'package:zeta/src/app/composition/zeta_state_snapshot.dart';
 import 'package:zeta/src/app/desktop_attention_slice/desktop_attention_providers.dart';
-import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_workspace_providers.dart';
-import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_workspace_store.dart';
+import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_workspace_notifier.dart';
+import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_entry_resources.dart';
 import 'package:zeta/src/app/menu_action_bridge.dart';
 import 'package:zeta/src/app/shell/ide_shell_controller.dart';
-import 'package:zeta/src/app/localization/zeta_text_catalog_providers.dart';
-import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
-import 'package:zeta/src/app/storage/zeta_store_providers.dart';
 import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_providers.dart';
-import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_store_registry.dart';
-import 'package:zeta/src/features/agent/application/provider_settings_slice/agent_provider_settings_slice_store.dart';
-import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_conversation_slice_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/desktop_notifications/application/desktop_attention_slice_notifier.dart';
 import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention_models.dart';
@@ -54,7 +43,6 @@ import 'package:zeta/src/ui/features/ide/views/project_home_page.dart';
 import 'package:zeta/src/ui/features/ide/views/project_agent_sidebar.dart';
 import 'package:zeta/src/ui/features/ide/views/project_list_pane.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:zeta/src/features/workspace/application/workspace_file_corpus.dart';
 import 'package:zeta/src/features/workspace/application/workspace_notifier.dart';
 
 /// IDE 主界面。
@@ -62,24 +50,10 @@ import 'package:zeta/src/features/workspace/application/workspace_notifier.dart'
 /// 首页由标题栏入口控制 Projects / Agent 统计合并栏，中央保留 Agent 主编辑区；
 /// 具体项目、会话和 Agent thread 编排由 [IdeShellController] 承接。
 ///
-/// **依赖从容器读，不从构造函数下钻。** 凡是组合根已经装进 Riverpod 的依赖
-/// （bundle 工厂、runtime 池、两个 registry、文本目录、指标端口、探测 loader……）
-/// 一律由 `_IdeHomeState` 自己 `ref.read`，调用方要换实现就覆盖对应的 provider。
-/// 经构造函数传的只剩**容器里还没有的那些**：状态快照桥与 Shell 事实订阅接缝。
+/// 页面读取应用已启动的 Workbench，只拥有订阅和局部界面状态。
+/// entry、会话 owner、Shell 和运行资源都由组合根显式关闭。
 class IdeHome extends ConsumerStatefulWidget {
-  const IdeHome({
-    required this.shellStateSnapshotRelay,
-    required this.connectManagementRuntimeFacts,
-    this.providerMetricLabel = ZetaMetricLabel.hashed,
-    super.key,
-  });
-
-  final ZetaShellStateSnapshotRelay shellStateSnapshotRelay;
-
-  /// 连接 Shell 事实源；只返回退订句柄，不创建管理 owner。
-  final ManagementRuntimeFactsConnector connectManagementRuntimeFacts;
-
-  final ZetaMetricLabel Function(String providerId) providerMetricLabel;
+  const IdeHome({super.key});
 
   @override
   ConsumerState<IdeHome> createState() => _IdeHomeState();
@@ -91,26 +65,15 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
   static const double _maxPanelWidth = IdeMetrics.sidePaneMaxWidth;
 
   late final IdeShellController _shellController;
-  void Function()? _disconnectManagementRuntimeFacts;
+  late final _IdeHomeUiMemory _uiMemory;
+  StreamSubscription<String>? _statusSubscription;
+  StreamSubscription<AgentTurnTerminalSignal>? _terminalSubscription;
 
   /// 窗口宿主：原生标题栏、菜单与抢前台都经它；测试里通常什么都不做。
   ///
   /// 在 `initState` 取一次并留住：`dispose()` 里还可能用到，而那时
   /// `ref` 已经不能再读了。窗口事件本身走 [zetaWindowSurfaceProvider]。
   late final ZetaWindowHost _windowHost = ref.read(zetaWindowHostProvider);
-
-  /// 会话与切片 store 的两个 registry。
-  ///
-  /// 同样在 `initState` 解析一次并留住：`dispose()` 里还要 `unbind`，而那时
-  /// `ref` 已经不能再读了。
-  late final AgentConversationSliceStoreRegistry
-  _conversationSliceStoreRegistry = ref.read(
-    agentConversationSliceStoreRegistryProvider,
-  );
-  late final AgentConversationWorkspaceStoreRegistry
-  _conversationWorkspaceStoreRegistry = ref.read(
-    agentConversationWorkspaceStoreRegistryProvider,
-  );
 
   /// 是否在启动及每个回合结束后通过事件消息刷新 Agent 用量。
   late final bool _agentUsageAutoRefreshEnabled = ref.read(
@@ -134,7 +97,6 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
     desktopAttentionTargetActivatorRelayProvider,
   );
   late final DesktopAttentionTargetActivator _desktopAttentionTargetActivator;
-  late final ZetaShellStateSnapshotReader _shellStateSnapshotReader;
   bool _nativeMenuConfigured = false;
 
   bool _rightSidebarVisible = false;
@@ -180,66 +142,26 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
     _agentUsagePanelController = ref.read(
       agentUsagePanelSliceProvider.notifier,
     );
-    _shellController = IdeShellController(
-      workspace: ref.read(workspaceProvider.notifier),
-      workspaceFileCorpus: ref.read(workspaceFileCorpusProvider),
-      workspaceFileIndexController: ref.read(
-        workspaceFileIndexControllerProvider,
-      ),
-      ideSessionOperations: ref.read(ideSessionSliceProvider.notifier),
-      projectThreadsController: ref.read(projectThreadsOperationsProvider),
-      subscribeProjectThreads: ref.read(projectThreadsChangesProvider),
-      bindingManager: ref.read(agentConversationBindingManagerProvider),
-      agentProviderGlobalRuntime: ref.read(agentProviderGlobalRuntimeProvider),
-      agentProviderSettingsPort: ref.read(
-        agentProviderSettingsSliceProvider.notifier,
-      ),
-      activeModelCatalogLoader: () => ref
-          .read(agentProviderSettingsSliceProvider.notifier)
-          .loadActiveModelCatalog(),
-      projectLocationOpener: ref.read(projectLocationOpenerProvider),
-      statusReporter: _showStatus,
-      agentProviderRuntimeRegistry: ref.read(
-        agentProviderRuntimeRegistryProvider,
-      ),
-      onAgentTurnTerminal: _handleAgentTurnTerminal,
-      onAgentAttention: (attention) {
-        unawaited(_desktopAttention.handleAttention(attention));
-      },
-      turnContextStore: ref.read(agentTurnContextStoreProvider),
-      agentUiTextCatalog: ref.read(agentUiTextCatalogProvider),
-      metrics: ref.read(zetaMetricsPortProvider),
-      providerMetricLabel: widget.providerMetricLabel,
+    _uiMemory = ref.read(_ideHomeUiMemoryProvider);
+    _rightSidebarVisible = _uiMemory.rightSidebarVisible;
+    _rightPanelWidth = _uiMemory.rightPanelWidth;
+    final workbench = ref.read(workbenchSessionProvider);
+    _shellController = workbench.shell;
+    _leftPanelWidth = _effectiveLeftPanelWidth;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _maybeStartGlobalHomeLoad();
+    });
+    _statusSubscription = workbench.events.status.listen(_showStatus);
+    _terminalSubscription = workbench.events.terminals.listen(
+      _handleAgentTurnTerminal,
     );
-    // 定向订阅三个切片，而不是监听整个 Shell。
-    //
-    // IDE Session 走 Riverpod：订阅与取消都由 `ref.listen` 在 build 里管，
-    // 不需要自己存一个取消回调再在 dispose 里调。
-    //
-    // IdeHome 从 Shell 读的每一项都是这三个 store 的投影：
-    // workbenchLayout / initialRestoreCompleted ← IDE Session；
-    // projects / activeProjectPath ← Workspace（Riverpod）；
-    // selectedEntry / projectHomeActive ← Conversation Workspace。
-    _shellController.agentConversationWorkspaceStore.addListener(
-      _handleConversationWorkspaceChanged,
-    );
-    _conversationWorkspaceStoreRegistry.bind(
-      _shellController.agentConversationWorkspaceStore,
-    );
-    _conversationSliceStoreRegistry.bind(
-      _shellController.agentConversationWorkspaceStore.handleForBinding,
+    ref.listenManual(
+      agentConversationWorkspaceProvider,
+      (_, _) => _handleConversationWorkspaceChanged(),
     );
     _unsubscribeProviderSettings = _shellController.agentProviderController
         .subscribe(_handleAgentProviderSettingsUsageChanged);
     unawaited(_desktopAttention.initialize());
-    // WP-3M: the owner already exists; the legacy Shell is still Widget-created
-    // until WP-3C. Attach inputs after mount, then subscribe + reread full facts.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _disconnectManagementRuntimeFacts = widget.connectManagementRuntimeFacts(
-        _shellController.agentRuntimeFactSource,
-      );
-    });
     ref.listenManual(
       agentManagementSliceProvider,
       (_, _) => _handleAgentManagementChanged(),
@@ -248,8 +170,6 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
       // turn 完成 / 启动预热走静默刷新：已有数据时不闪加载横条。
       refresh: () => _agentUsagePanelController.refresh(showLoading: false),
     );
-    _shellStateSnapshotReader = _takeShellStateSnapshot;
-    widget.shellStateSnapshotRelay.bind(_shellStateSnapshotReader);
     if (_agentUsageAutoRefreshEnabled) {
       _scheduleInitialAgentUsageRefresh();
     }
@@ -272,76 +192,15 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
     }
   }
 
-  /// 诊断与恢复测试使用的无正文 Shell 投影。
-  ///
-  /// 这里刻意同步读取各唯一 owner，既不缓存也不注册 listener；生产 Widget 仍只
-  /// watch 各自的 feature selector。
-  ZetaShellStateSnapshot _takeShellStateSnapshot() {
-    final threadStates = ref.read(projectThreadsSliceProvider);
-    final projectThreads = <String, ZetaProjectThreadsStateSnapshot>{
-      for (final entry in threadStates.statesByProject.entries)
-        entry.key: ZetaProjectThreadsStateSnapshot.fromState(
-          entry.key,
-          entry.value,
-        ),
-    };
-    final entries = _shellController.agentWorkspaceEntries;
-    final selectedEntryId = _shellController.selectedAgentWorkspaceEntryId;
-    final conversations = <String, ZetaConversationStateSnapshot>{};
-    for (final entry in entries) {
-      final slice = entry.sliceStore.state;
-      final pendingInteractions = slice.pendingInteractions;
-      conversations[entry.entryId] = ZetaConversationStateSnapshot(
-        entryId: entry.entryId,
-        projectPath: entry.projectPath,
-        providerId: entry.providerId,
-        threadId: entry.threadId,
-        isDraft: entry.isDraft,
-        isSelected: entry.entryId == selectedEntryId,
-        sliceAvailable: true,
-        threadOpenPhase: slice.header.threadOpenPhase,
-        runtimeStatus: entry.threadSnapshot.runtimeStatus,
-        isTurnRunning: slice.header.isTurnRunning,
-        isReadOnly: slice.header.isReadOnly,
-        visibleTurnCount: slice.history.visibleTurns.length,
-        pendingInteractionCount:
-            pendingInteractions.permissions.length +
-            pendingInteractions.questions.length +
-            pendingInteractions.planApprovals.length +
-            (pendingInteractions.planExecutionHandoff == null ? 0 : 1),
-        pendingOperationCount: slice.pendingOperations.length,
-      );
-    }
-    return ZetaShellStateSnapshot(
-      workspace: _shellController.workspaceState,
-      projectThreadsByProjectPath: projectThreads,
-      orderedConversationEntryIds: <String>[
-        for (final entry in entries) entry.entryId,
-      ],
-      conversationsByEntryId: conversations,
-      selectedConversationEntryId: selectedEntryId,
-      projectHomeActive: _shellController.isProjectHomeActive,
-      agentManagement: ZetaAgentManagementStateSnapshot.fromState(
-        ref.read(agentManagementSliceProvider),
-      ),
-    );
-  }
-
   @override
   void dispose() {
+    _uiMemory.rightSidebarVisible = _rightSidebarVisible;
+    _uiMemory.rightPanelWidth = _rightPanelWidth;
     MenuActionBridge.instance.setOpenProject(null);
-    widget.shellStateSnapshotRelay.unbind(_shellStateSnapshotReader);
-    _shellController.agentConversationWorkspaceStore.removeListener(
-      _handleConversationWorkspaceChanged,
-    );
+    unawaited(_statusSubscription?.cancel());
+    unawaited(_terminalSubscription?.cancel());
     _unsubscribeProviderSettings();
     _agentUsageRefreshCoordinator.dispose();
-    _disconnectManagementRuntimeFacts?.call();
-    _conversationSliceStoreRegistry.unbind();
-    _conversationWorkspaceStoreRegistry.unbind(
-      _shellController.agentConversationWorkspaceStore,
-    );
-    _shellController.dispose();
     _desktopAttentionTargetActivatorRelay.unbind(
       _desktopAttentionTargetActivator,
     );
@@ -672,10 +531,10 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
     return Consumer(
       builder: (context, ref, _) {
         final workspaceState = ref.watch(agentConversationWorkspaceProvider);
-        final workspaceStore = ref.watch(
-          agentConversationWorkspaceStoreProvider,
+        final workspaceStore = ref.read(
+          agentConversationWorkspaceProvider.notifier,
         );
-        final entries = <AgentThreadWorkspaceEntry>[
+        final entries = <AgentConversationEntryResources>[
           for (final entryState in workspaceState.entries)
             workspaceStore.entryById(entryState.entryId),
         ];
@@ -702,7 +561,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
   }
 
   Widget _buildAgentEntryPages({
-    required List<AgentThreadWorkspaceEntry> entries,
+    required List<AgentConversationEntryResources> entries,
     required String projectPath,
     required String projectHomeId,
     required String selectedId,
@@ -1108,8 +967,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
           .clamp(_minPanelWidth, _maxPanelWidth);
 
   void _updateDesktopAttentionVisibility() {
-    final entry =
-        _shellController.agentConversationWorkspaceStore.selectedEntry;
+    final entry = _shellController.agentConversationWorkspace.selectedEntry;
     unawaited(
       _desktopAttention.updateVisibility(
         DesktopAttentionVisibility(
@@ -1386,3 +1244,11 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
 }
 
 enum _IdeHomePage { home, settings, usageStatistics }
+
+/// 仅窗口表现偏好；无业务 owner、controller 或输入正文。
+final _ideHomeUiMemoryProvider = Provider((ref) => _IdeHomeUiMemory());
+
+final class _IdeHomeUiMemory {
+  bool rightSidebarVisible = false;
+  double rightPanelWidth = IdeMetrics.sidePaneDefaultWidth;
+}

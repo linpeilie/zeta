@@ -98,14 +98,5 @@ void main() {
     expect(snapshot.projectThreadsByProjectPath, isEmpty);
     expect(snapshot.orderedConversationEntryIds, const <String>['entry-1']);
     expect(snapshot.conversationsByEntryId.keys, const <String>['entry-1']);
-
-    final relay = ZetaShellStateSnapshotRelay();
-    ZetaShellStateSnapshot reader() => snapshot;
-    relay.bind(reader);
-    expect(relay.read(), same(snapshot));
-    expect(() => relay.bind(() => snapshot), throwsStateError);
-    relay.unbind(reader);
-    expect(relay.isBound, isFalse);
-    expect(relay.read, throwsStateError);
   });
 }

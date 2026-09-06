@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:io';
 
 import 'package:flutter_riverpod/misc.dart' show Override;
@@ -17,6 +19,9 @@ import 'package:zeta/src/app/storage/zeta_store_providers.dart';
 ///
 /// 仓库从 `ideSessionStoreProvider` 读：落盘还是内存已经由 `ZetaStorageBindings`
 /// 在组合根决定一次，这里不再接收 store 参数。测试要换实现就覆盖那个 provider。
+final ideSessionSaveTimerFactoryProvider =
+    Provider<Timer Function(Duration, void Function())>((ref) => Timer.new);
+
 List<Override> ideSessionSliceOverrides({
   Duration saveDelay = sessionSaveDelay,
   bool Function(String path)? fileExists,
@@ -25,9 +30,11 @@ List<Override> ideSessionSliceOverrides({
   return <Override>[
     ideSessionSliceEffectRunnerFactoryProvider.overrideWith((ref) {
       final sessionStore = ref.watch(ideSessionStoreProvider);
+      final timerFactory = ref.read(ideSessionSaveTimerFactoryProvider);
       return (notifier) {
         final coordinator = IdeSessionPersistenceCoordinator(
           store: sessionStore,
+          timerFactory: timerFactory,
           saveDelay: saveDelay,
           fileExists: fileExists ?? (path) => File(path).existsSync(),
           directoryExists:

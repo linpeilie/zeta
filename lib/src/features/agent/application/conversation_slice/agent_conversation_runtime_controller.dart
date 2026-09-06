@@ -54,6 +54,7 @@ final class AgentConversationRuntimeController
     required AgentConversationComposerStateOwner composerStateOwner,
     AgentUiTextCatalog? textCatalog,
     AgentConversationTimelineStore? timelineStore,
+    AgentElapsedTicker? elapsedTicker,
     this.workspaceFileCorpus,
     this.onTurnTerminal,
     this.onAttention,
@@ -67,7 +68,8 @@ final class AgentConversationRuntimeController
     this.metrics = noopZetaMetricsPort,
     ZetaMetricLabel Function(String providerId) providerMetricLabel =
         ZetaMetricLabel.hashed,
-  }) : _textCatalog = textCatalog ?? const FallbackAgentUiTextCatalog(),
+  }) : _elapsedTicker = elapsedTicker ?? AgentElapsedTicker(),
+       _textCatalog = textCatalog ?? const FallbackAgentUiTextCatalog(),
        _timeline =
            timelineStore ??
            AgentConversationTimelineStore(
@@ -223,7 +225,7 @@ final class AgentConversationRuntimeController
   late final AgentConversationEventProcessor _eventProcessor;
   AgentUiUpdateRequest? _debugLastUiUpdateRequest;
   bool _threadSnapshotRefreshPending = false;
-  final AgentElapsedTicker _elapsedTicker = AgentElapsedTicker();
+  final AgentElapsedTicker _elapsedTicker;
   late final AgentValueNotifier<AgentConversationThreadSnapshot>
   _threadSnapshotListenable;
 

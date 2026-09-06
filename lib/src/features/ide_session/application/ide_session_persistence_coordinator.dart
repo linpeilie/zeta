@@ -20,6 +20,7 @@ class IdeSessionPersistenceCoordinator {
     required this.saveDelay,
     required this.fileExists,
     required this.directoryExists,
+    this.timerFactory = Timer.new,
   });
 
   final IdeSessionStore store;
@@ -29,6 +30,7 @@ class IdeSessionPersistenceCoordinator {
   final bool Function(String path) fileExists;
   final bool Function(String path) directoryExists;
 
+  final Timer Function(Duration, void Function()) timerFactory;
   Timer? _saveTimer;
   int _restoreToken = 0;
   bool _isRestoring = false;
@@ -100,7 +102,7 @@ class IdeSessionPersistenceCoordinator {
     }
 
     _saveTimer?.cancel();
-    _saveTimer = Timer(saveDelay, () {
+    _saveTimer = timerFactory(saveDelay, () {
       unawaited(_saveSnapshot(snapshot));
     });
   }
