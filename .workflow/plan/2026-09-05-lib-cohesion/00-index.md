@@ -169,7 +169,7 @@ bash tool/test_full.sh
 | 2026-09-06 | WP-1 | `ea56f5c9` | format / analyze 通过；Shell 34 条、受影响 681 条通过；[验收记录](../../fix/2026-09-06-management-runtime/00-validation.md) | 已完成 |
 | 2026-09-06 | WP-4 | `11c6d9c8` | format / analyze / affected / full 通过；33 条旧测试的 131 条原断言保留；定向 59、集成/分层 45，full 根 2007 + 内部包 1076；[验收记录](../../refactor/2026-09-06-project-threads/00-validation.md) | 已完成 |
 | 2026-09-06 | WP-3M | `62a16ed6` | format / analyze / affected / full 通过；101 条定向，133 条原业务断言保留（O-04 按设计调整）；full 根 2024 + 内部包 1076；[验收记录](../../refactor/2026-09-06-management-owner/00-validation.md) | 已完成 |
-| 2026-09-06 | WP-3P | 本次提交 | format / analyze / affected / full 通过；WP-4 的 33 条测试与 131 条断言保留；新增 23 条生命周期/接线/守卫；full 根 2047 + 内部包 1076；[验收记录](../../refactor/2026-09-06-project-threads-owner/00-validation.md) | 已完成 |
+| 2026-09-06 | WP-3P | `c2a5219d` | format / analyze / affected / full 通过；WP-4 的 33 条测试与 131 条断言保留；新增 23 条生命周期/接线/守卫；full 根 2047 + 内部包 1076；[验收记录](../../refactor/2026-09-06-project-threads-owner/00-validation.md) | 已完成 |
 
 当前下一项：**WP-3C · Workspace / Conversation 单 owner 与完整组合生命周期**。WP-3M/P 已迁移管理与 Project Threads owner、具名结果回流和真实执行排空；BindingManager/global runtime 由 app provider 提供，Shell/Workspace 借用同一实例。WP-4 的同步规则与索引断言保留，Project Threads 的 Store、镜像和 Deferred 已删除。Workspace / Conversation 的 listener、镜像、registry、完整 Shell 前移及 snapshot/entry 关闭编排仍待 C；WP-2 统一 Actions 与 WP-5 首页探测仍未开始。
 
