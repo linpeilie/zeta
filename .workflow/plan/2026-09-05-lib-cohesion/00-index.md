@@ -170,7 +170,7 @@ bash tool/test_full.sh
 | 2026-09-06 | WP-4 | `11c6d9c8` | format / analyze / affected / full 通过；33 条旧测试的 131 条原断言保留；定向 59、集成/分层 45，full 根 2007 + 内部包 1076；[验收记录](../../refactor/2026-09-06-project-threads/00-validation.md) | 已完成 |
 | 2026-09-06 | WP-3M | `62a16ed6` | format / analyze / affected / full 通过；101 条定向，133 条原业务断言保留（O-04 按设计调整）；full 根 2024 + 内部包 1076；[验收记录](../../refactor/2026-09-06-management-owner/00-validation.md) | 已完成 |
 | 2026-09-06 | WP-3P | `c2a5219d` | format / analyze / affected / full 通过；WP-4 的 33 条测试与 131 条断言保留；新增 23 条生命周期/接线/守卫；full 根 2047 + 内部包 1076；[验收记录](../../refactor/2026-09-06-project-threads-owner/00-validation.md) | 已完成 |
-| 2026-09-06 | WP-3C | 本次提交（完成后登记 hash） | format / analyze / affected / full 通过；新增 13 条回归，287 条旧测试保留，8 条结构/终止投影断言调整单独登记；full 根 2060 + 内部包 1076；[验收记录](../../refactor/2026-09-06-conversation-owner/00-validation.md) | 已完成 |
+| 2026-09-06 | WP-3C | `c2197f76` | format / analyze / affected / full 通过；新增 13 条回归，287 条旧测试保留，8 条结构/终止投影断言调整单独登记；full 根 2060 + 内部包 1076；[验收记录](../../refactor/2026-09-06-conversation-owner/00-validation.md) | 已完成 |
 
 当前下一项：**WP-2 · Conversation 统一 Actions**。WP-3M/P/C 已完成单 owner、稳定 ownerKey、完整 Shell 前移、snapshot 与显式 entry/应用关闭编排；Conversation family 的显式保活回收修正见 WP-3 §13。命令仍沿用既有 executor/OperationId 契约，WP-2 负责统一 Actions、typed outcome 和 waiter。WP-5 首页探测仍未开始。
 
