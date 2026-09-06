@@ -168,7 +168,7 @@ bash tool/test_full.sh
 | 2026-09-05 | WP-6 | `8778a8ae` | format / analyze 通过；定向 54 条、受影响 925 条通过；[验收记录](../../fix/2026-09-05-session-config/00-validation.md) | 已完成 |
 | 2026-09-06 | WP-1 | `ea56f5c9` | format / analyze 通过；Shell 34 条、受影响 681 条通过；[验收记录](../../fix/2026-09-06-management-runtime/00-validation.md) | 已完成 |
 | 2026-09-06 | WP-4 | `11c6d9c8` | format / analyze / affected / full 通过；33 条旧测试的 131 条原断言保留；定向 59、集成/分层 45，full 根 2007 + 内部包 1076；[验收记录](../../refactor/2026-09-06-project-threads/00-validation.md) | 已完成 |
-| 2026-09-06 | WP-3M | 随本次提交登记 | format / analyze / affected / full 通过；101 条定向，133 条原业务断言保留（O-04 按设计调整）；full 根 2024 + 内部包 1076；[验收记录](../../refactor/2026-09-06-management-owner/00-validation.md) | 已完成 |
+| 2026-09-06 | WP-3M | `62a16ed6` | format / analyze / affected / full 通过；101 条定向，133 条原业务断言保留（O-04 按设计调整）；full 根 2024 + 内部包 1076；[验收记录](../../refactor/2026-09-06-management-owner/00-validation.md) | 已完成 |
 
 当前下一项：**WP-3P · Project Threads owner 迁移**。WP-3M 已迁移管理状态 owner、具名结果回流与真实执行排空；管理 owner 由应用拥有，Shell 事实源通过独立 ingress 借用。WP-4 的唯一 Store 业务与索引为 P 阶段基线；Project Threads / Workspace / Conversation 的 listener、镜像、Deferred、registry 和完整 Shell 前移仍待 P/C。WP-2 统一 Actions 与 WP-5 首页探测仍未开始。
 
