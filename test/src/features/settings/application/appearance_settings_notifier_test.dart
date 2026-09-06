@@ -116,7 +116,7 @@ void main() {
       );
     });
 
-    test('代码字体要求等宽：非等宽系统字体回落 bundled', () async {
+    test('代码字体要求等宽：非等宽系统字体回落系统默认', () async {
       final dataStore = MemoryAppearanceSettingsStore(
         const AppearanceSettings(
           codeFontChoice: AppearanceFontChoice.system('Maple UI'),
@@ -132,7 +132,7 @@ void main() {
 
       expect(
         container.read(appearanceSettingsValueProvider).codeFontChoice.kind,
-        AppearanceFontChoiceKind.bundledJetBrainsMono,
+        AppearanceFontChoiceKind.systemDefault,
       );
     });
 
@@ -158,31 +158,43 @@ void main() {
   });
 
   group('AppearanceSettingsNotifier · 字体解析', () {
-    test('界面槽位拒绝 bundled；代码槽位拒绝 systemDefault', () async {
-      final container = _container();
+    test('界面与代码槽位都接受系统默认', () async {
+      final dataStore = MemoryAppearanceSettingsStore(
+        const AppearanceSettings(
+          uiFontChoice: AppearanceFontChoice.system('Maple UI'),
+          codeFontChoice: AppearanceFontChoice.system('Cascadia Mono'),
+        ),
+      );
+      final container = _container(
+        repository: dataStore,
+        fontCatalog: _FakeFontCatalog(families: const [_systemFont, _monoFont]),
+        initial: const AppearanceSettings(
+          uiFontChoice: AppearanceFontChoice.system('Maple UI'),
+          codeFontChoice: AppearanceFontChoice.system('Cascadia Mono'),
+        ),
+      );
       addTearDown(container.dispose);
       final notifier = container.read(appearanceSettingsProvider.notifier);
 
       expect(
         await notifier.setUiFontChoice(
-          const AppearanceFontChoice.bundledJetBrainsMono(),
+          const AppearanceFontChoice.systemDefault(),
         ),
-        isFalse,
+        isTrue,
       );
       expect(
         container.read(appearanceSettingsValueProvider).uiFontChoice.kind,
         AppearanceFontChoiceKind.systemDefault,
       );
-
       expect(
         await notifier.setCodeFontChoice(
           const AppearanceFontChoice.systemDefault(),
         ),
-        isFalse,
+        isTrue,
       );
       expect(
         container.read(appearanceSettingsValueProvider).codeFontChoice.kind,
-        AppearanceFontChoiceKind.bundledJetBrainsMono,
+        AppearanceFontChoiceKind.systemDefault,
       );
     });
 
@@ -211,17 +223,24 @@ void main() {
       );
     });
 
-    test('字体目录：界面槽位默认项在前，展示名进映射', () async {
+    test('字体目录：界面与代码槽位默认项都在前，展示名进映射', () async {
       final container = _container(
-        fontCatalog: _FakeFontCatalog(families: const [_systemFont]),
+        fontCatalog: _FakeFontCatalog(families: const [_systemFont, _monoFont]),
       );
       addTearDown(container.dispose);
       final notifier = container.read(appearanceSettingsProvider.notifier);
 
-      final options = await notifier.ensureFontCatalog(forCodeFont: false);
+      final uiOptions = await notifier.ensureFontCatalog(forCodeFont: false);
+      final codeOptions = await notifier.ensureFontCatalog(forCodeFont: true);
 
-      expect(options.length, 2);
-      expect(options.first.choice.kind, AppearanceFontChoiceKind.systemDefault);
+      expect(
+        uiOptions.first.choice.kind,
+        AppearanceFontChoiceKind.systemDefault,
+      );
+      expect(
+        codeOptions.first.choice.kind,
+        AppearanceFontChoiceKind.systemDefault,
+      );
       expect(
         container
             .read(appearanceSettingsProvider)

@@ -289,16 +289,18 @@ projection 与 unified diff 以 turn render revision 缓存，代码高亮复用
   注意 `shadcn_flutter` 的组件参数只接受 `BorderRadius`、不接受 `ShapeBorder`，
   所以 sf 渲染的表面必然是圆形圆角——把平滑圆角限制在面板档也避开了这层
   无法统一的混合状态。
-- 字体分工：界面文本用内置 Geist（`bundledUiFontFamily`），
-  **机器标识符与数值一律用内置 JetBrains Mono**（`bundledCodeFontFamily`）。
+- 字体分工：界面文本与代码文本默认跟随系统字体
+  （`resolvePlatformUiFontFamily` / `resolvePlatformCodeFontFamily`），
+  **机器标识符与数值一律走代码字体**。
   对应 token 为 `identifier`（模型 ID、Provider 名、thread ID）、
   `numeric`（表格数字列，启用 `tabularFigures` 并右对齐）、
   `metricValue`（指标大数字，同样等宽 + `tabularFigures`），
   路径类次级标识符继续用 `codeSmall`。
   UI 样式按界面字号缩放，等宽样式按代码字号缩放，两者在设置页各自可调。
-- Geist 不含中日韩字形，中文由 `resolvePlatformUiFontFamilyFallback`
+- 中文由 `resolvePlatformUiFontFamilyFallback`
   的平台回退链（PingFang SC / Microsoft YaHei UI / Noto Sans CJK SC）承接；
-  外观设置里「跟随应用默认」解析到内置 Geist，用户仍可显式改回系统字体。
+  外观设置里「系统默认」解析到当前平台公开的系统 UI / 等宽字体，
+  用户仍可改选本机已安装的字体。
 - Graphite token 通过 `IdeThemeScope` / `IdeThemeData` 成为运行时真源；
   `buildShadcnTheme` 只把项目 token 投影到 `shadcn_flutter` 的 `sf.ThemeData`，
   不再反向从第三方 theme 回读语义色。

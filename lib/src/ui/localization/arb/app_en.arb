@@ -718,7 +718,7 @@
       },
       "value": {
         "type": "String",
-        "example": "Geist"
+        "example": "System default"
       }
     }
   },
@@ -784,13 +784,9 @@
       }
     }
   },
-  "settingsFontGeistDefault": "Geist (built-in default)",
-  "@settingsFontGeistDefault": {
-    "description": "Geist default label"
-  },
-  "settingsFontJetBrainsDefault": "JetBrainsMono (built-in default)",
-  "@settingsFontJetBrainsDefault": {
-    "description": "JetBrains default label"
+  "settingsFontSystemDefault": "System default",
+  "@settingsFontSystemDefault": {
+    "description": "System default font label"
   },
   "commonCancel": "Cancel",
   "@commonCancel": {
@@ -2571,12 +2567,7 @@
   "@mgmtSetupDocsTitle": { "description": "Claude setup docs title" },
   "mgmtSetupDocsBody": "See the Anthropic Claude Code docs for full capabilities and protocol details: {url}",
   "@mgmtSetupDocsBody": { "description": "Claude setup docs body", "placeholders": { "url": { "type": "String", "example": "https://docs.anthropic.com" } } },
-  "fontGeistBundled": "Geist (built-in default)",
-  "@fontGeistBundled": { "description": "Bundled Geist font label" },
-  "fontSystemDefaultAlias": "System default",
-  "@fontSystemDefaultAlias": { "description": "Search alias for system default font" },
-  "fontJetBrainsBundled": "JetBrainsMono (built-in default)",
-  "@fontJetBrainsBundled": { "description": "Bundled JetBrains Mono label" },
+
   "agentModeLoadFailed": "Could not load conversation modes. Please retry.",
   "@agentModeLoadFailed": { "description": "Conversation mode load error" },
   "agentFastIncompatible": "Fast is incompatible with “{effort}”",

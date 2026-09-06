@@ -23,7 +23,7 @@ class IdeThemeData {
     required this.colors,
     this.uiFontFamily,
     this.uiFontFamilyFallback = const <String>[],
-    required this.codeFontFamily,
+    this.codeFontFamily,
     this.uiFontSize = defaultUiFontSize,
     this.codeFontSize = defaultCodeFontSize,
   });
@@ -46,14 +46,15 @@ class IdeThemeData {
   /// 当前平台的 UI 备用字体族，主要承接主字体缺失的中日韩字符。
   ///
   /// 生效位置：`IdeTextStyles`、Material 与 shadcn 的所有文本样式。
-  /// 系统默认字体不再继承 GeistSans，而是由平台默认字体配合此列表解析。
+  /// 系统默认字体由平台默认字体配合此列表解析。
   final List<String> uiFontFamilyFallback;
 
-  /// 代码字体族（默认 [bundledCodeFontFamily]）。
+  /// 已解析的代码字体族；`null` 表示由平台字体引擎选择默认等宽字体。
   ///
   /// 生效位置：`IdeTextStyles` 的 code* 样式；shadcn mono / inlineCode。
-  /// 来源：外观设置 `AppearanceSettings.codeFontFamily`。
-  final String codeFontFamily;
+  /// 来源：外观设置 `AppearanceSettings.codeFontFamily`；系统默认选项会映射为
+  /// 当前平台稳定公开的等宽字体。
+  final String? codeFontFamily;
 
   /// UI 基准字号（逻辑 px），驱动界面排版整体缩放。
   ///
@@ -184,6 +185,17 @@ String? resolvePlatformUiFontFamily(TargetPlatform platform) {
   };
 }
 
+/// 返回平台稳定公开的系统等宽字体；没有稳定名称的平台交给引擎解析。
+String? resolvePlatformCodeFontFamily(TargetPlatform platform) {
+  return switch (platform) {
+    TargetPlatform.windows => 'Consolas',
+    TargetPlatform.macOS || TargetPlatform.iOS => 'Menlo',
+    TargetPlatform.linux ||
+    TargetPlatform.android ||
+    TargetPlatform.fuchsia => null,
+  };
+}
+
 /// 构建 Graphite light/dark 主题数据；这是项目语义 token 的唯一装配入口。
 ///
 /// 生效位置：`MainApp` 根据 `AppearanceSettings` 分别构建 light/dark 实例，
@@ -192,22 +204,22 @@ String? resolvePlatformUiFontFamily(TargetPlatform platform) {
 IdeThemeData buildIdeThemeData({
   required Brightness brightness,
   String? uiFontFamily,
-  required String codeFontFamily,
+  String? codeFontFamily,
   double uiFontSize = defaultUiFontSize,
   double codeFontSize = defaultCodeFontSize,
   TargetPlatform? platform,
 }) {
   final resolvedPlatform = platform ?? defaultTargetPlatform;
-  // 「跟随应用默认」解析到内置 Geist，而不是平台系统字体。
-  final resolvedUiFontFamily =
-      _normalizeFontFamily(uiFontFamily) ?? bundledUiFontFamily;
   return IdeThemeData(
     brightness: brightness,
     colors: _baseIdeColorsForBrightness(brightness),
-    uiFontFamily: resolvedUiFontFamily,
+    uiFontFamily:
+        _normalizeFontFamily(uiFontFamily) ??
+        resolvePlatformUiFontFamily(resolvedPlatform),
     uiFontFamilyFallback: resolvePlatformUiFontFamilyFallback(resolvedPlatform),
     codeFontFamily:
-        _normalizeFontFamily(codeFontFamily) ?? bundledCodeFontFamily,
+        _normalizeFontFamily(codeFontFamily) ??
+        resolvePlatformCodeFontFamily(resolvedPlatform),
     uiFontSize: uiFontSize,
     codeFontSize: codeFontSize,
   );

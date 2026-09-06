@@ -489,7 +489,7 @@ void main() {
     );
     expect(popupFinder, findsOneWidget);
     expect(
-      find.descendant(of: popupFinder, matching: find.text('Geist（内置默认）')),
+      find.descendant(of: popupFinder, matching: find.text('系统默认')),
       findsOneWidget,
     );
     expect(
@@ -585,7 +585,7 @@ void main() {
   });
 
   testWidgets(
-    'code font select keeps bundled default and only lists code fonts',
+    'code font select keeps system default and only lists code fonts',
     (tester) async {
       final settings = await _pumpSettingsPage(
         tester,
@@ -607,7 +607,7 @@ void main() {
       expect(selectFinder, findsOneWidget);
       expect(
         tester.widget<sf.Select<AppearanceFontChoice>>(selectFinder).value,
-        const AppearanceFontChoice.bundledJetBrainsMono(),
+        const AppearanceFontChoice.systemDefault(),
       );
 
       await tester.tap(selectFinder);
@@ -617,10 +617,7 @@ void main() {
         const ValueKey('settings-code-font-select-popup'),
       );
       expect(
-        find.descendant(
-          of: popupFinder,
-          matching: find.text('JetBrainsMono（内置默认）'),
-        ),
+        find.descendant(of: popupFinder, matching: find.text('系统默认')),
         findsOneWidget,
       );
       expect(
@@ -645,10 +642,7 @@ void main() {
       await _pumpSelectOverlay(tester);
 
       expect(
-        find.descendant(
-          of: popupFinder,
-          matching: find.text('JetBrainsMono（内置默认）'),
-        ),
+        find.descendant(of: popupFinder, matching: find.text('系统默认')),
         findsNothing,
       );
       expect(

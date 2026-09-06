@@ -82,7 +82,7 @@ final class AppearanceSettingsSlice {
   const AppearanceSettingsSlice({
     this.themeMode = ZetaThemeModePreference.system,
     this.uiFontChoice = const AppearanceFontChoice.systemDefault(),
-    this.codeFontChoice = const AppearanceFontChoice.bundledJetBrainsMono(),
+    this.codeFontChoice = const AppearanceFontChoice.systemDefault(),
     this.uiFontSize = defaultUiFontSize,
     this.codeFontSize = defaultCodeFontSize,
   });

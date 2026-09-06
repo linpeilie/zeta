@@ -1,5 +1,14 @@
 # 开发记录
 
+## 2026-09-06
+
+### 去掉内嵌字体，默认使用系统字体
+
+- 从 `pubspec.yaml` 移除 Geist / JetBrains Mono 声明，并删除 `assets/fonts/`。
+- 「系统默认」解析到 `resolvePlatformUiFontFamily` /
+  `resolvePlatformCodeFontFamily`；Linux 等没有稳定公开字体名的平台交给引擎。
+- 外观设置代码字体默认改为 `systemDefault`；旧版 `bundledJetBrainsMono` 宽容解码为系统默认。
+
 ## 2026-07-21
 
 ### 收紧 Projects 列表条目垂直间距

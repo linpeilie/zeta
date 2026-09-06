@@ -39,14 +39,8 @@ Widget globalHomeCompactLightPreview() => _preview(Brightness.light);
 Widget globalHomeCompactDarkPreview() => _preview(Brightness.dark);
 
 Widget _preview(Brightness brightness) {
-  final lightTheme = buildIdeThemeData(
-    brightness: Brightness.light,
-    codeFontFamily: 'JetBrainsMono',
-  );
-  final darkTheme = buildIdeThemeData(
-    brightness: Brightness.dark,
-    codeFontFamily: 'JetBrainsMono',
-  );
+  final lightTheme = buildIdeThemeData(brightness: Brightness.light);
+  final darkTheme = buildIdeThemeData(brightness: Brightness.dark);
   final currentTheme = brightness == Brightness.dark ? darkTheme : lightTheme;
   final themeMode = brightness == Brightness.dark
       ? ThemeMode.dark

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 
 void main() {
@@ -56,14 +55,8 @@ void main() {
 
   group('设计系统 token', () {
     testWidgets('IdeColors / IdeTextStyles 在主题 scope 下可解析', (tester) async {
-      final lightTheme = buildIdeThemeData(
-        brightness: Brightness.light,
-        codeFontFamily: bundledCodeFontFamily,
-      );
-      final darkTheme = buildIdeThemeData(
-        brightness: Brightness.dark,
-        codeFontFamily: bundledCodeFontFamily,
-      );
+      final lightTheme = buildIdeThemeData(brightness: Brightness.light);
+      final darkTheme = buildIdeThemeData(brightness: Brightness.dark);
       late IdeColors colors;
       late IdeTextStyles textStyles;
 

@@ -21,7 +21,7 @@ const double minCodeFontSize = 10;
 const double maxCodeFontSize = 24;
 
 /// 字体选择来源。
-enum AppearanceFontChoiceKind { systemDefault, system, bundledJetBrainsMono }
+enum AppearanceFontChoiceKind { systemDefault, system }
 
 /// 单个字体设置项。
 @immutable
@@ -34,10 +34,6 @@ class AppearanceFontChoice {
     : kind = AppearanceFontChoiceKind.system,
       assert(fontFamily != '');
 
-  const AppearanceFontChoice.bundledJetBrainsMono()
-    : kind = AppearanceFontChoiceKind.bundledJetBrainsMono,
-      fontFamily = bundledCodeFontFamily;
-
   final AppearanceFontChoiceKind kind;
   final String? fontFamily;
 
@@ -45,14 +41,10 @@ class AppearanceFontChoice {
 
   bool get isSystemFont => kind == AppearanceFontChoiceKind.system;
 
-  bool get isBundledJetBrainsMono =>
-      kind == AppearanceFontChoiceKind.bundledJetBrainsMono;
-
   /// 稳定标识，供测试 key 和缓存使用。
   String get stableId => switch (kind) {
     AppearanceFontChoiceKind.systemDefault => 'system-default',
     AppearanceFontChoiceKind.system => 'system-${fontFamily ?? ''}',
-    AppearanceFontChoiceKind.bundledJetBrainsMono => 'bundled-jetbrains-mono',
   };
 
   Map<String, Object?> toJson() {
@@ -60,7 +52,6 @@ class AppearanceFontChoice {
       'kind': switch (kind) {
         AppearanceFontChoiceKind.systemDefault => 'systemDefault',
         AppearanceFontChoiceKind.system => 'system',
-        AppearanceFontChoiceKind.bundledJetBrainsMono => 'bundledJetBrainsMono',
       },
       if (fontFamily != null) 'fontFamily': fontFamily,
     };
@@ -80,8 +71,8 @@ class AppearanceFontChoice {
       'systemDefault' => const AppearanceFontChoice.systemDefault(),
       'system' when fontFamily is String && fontFamily.isNotEmpty =>
         AppearanceFontChoice.system(fontFamily),
-      'bundledJetBrainsMono' =>
-        const AppearanceFontChoice.bundledJetBrainsMono(),
+      // 旧版内置 JetBrains Mono 已移除，宽容迁移到系统默认。
+      'bundledJetBrainsMono' => const AppearanceFontChoice.systemDefault(),
       _ => fallback,
     };
   }
@@ -103,7 +94,7 @@ class AppearanceSettings {
   const AppearanceSettings({
     this.themeMode = ZetaThemeModePreference.system,
     this.uiFontChoice = const AppearanceFontChoice.systemDefault(),
-    this.codeFontChoice = const AppearanceFontChoice.bundledJetBrainsMono(),
+    this.codeFontChoice = const AppearanceFontChoice.systemDefault(),
     this.uiFontSize = defaultUiFontSize,
     this.codeFontSize = defaultCodeFontSize,
   }) : assert(uiFontSize >= minUiFontSize && uiFontSize <= maxUiFontSize),
@@ -124,9 +115,8 @@ class AppearanceSettings {
   String? get uiFontFamily =>
       uiFontChoice.isSystemFont ? uiFontChoice.fontFamily : null;
 
-  String get codeFontFamily => codeFontChoice.isSystemFont
-      ? codeFontChoice.fontFamily!
-      : bundledCodeFontFamily;
+  String? get codeFontFamily =>
+      codeFontChoice.isSystemFont ? codeFontChoice.fontFamily : null;
 
   AppearanceSettings copyWith({
     ZetaThemeModePreference? themeMode,
@@ -175,7 +165,7 @@ class AppearanceSettings {
       ),
       codeFontChoice: AppearanceFontChoice.tryDecode(
         map['codeFontChoice'],
-        fallback: const AppearanceFontChoice.bundledJetBrainsMono(),
+        fallback: const AppearanceFontChoice.systemDefault(),
       ),
       uiFontSize: _parseFontSize(
         map['uiFontSize'],

@@ -75,6 +75,28 @@ void main() {
       );
     });
 
+    test('migrates bundled JetBrains Mono to system default', () async {
+      await settingsFile.writeAsString(
+        jsonEncode(<String, Object?>{
+          'version': 1,
+          'codeFontChoice': <String, Object?>{
+            'kind': 'bundledJetBrainsMono',
+            'fontFamily': 'JetBrainsMono',
+          },
+        }),
+      );
+      final store = FileAppearanceSettingsRepository(
+        storage: FileStorageService(settingsFile),
+      );
+
+      expect(
+        await store.load(),
+        const AppearanceSettings(
+          codeFontChoice: AppearanceFontChoice.systemDefault(),
+        ),
+      );
+    });
+
     test('uses default font sizes for older or damaged values', () async {
       await settingsFile.writeAsString(
         jsonEncode(<String, Object?>{

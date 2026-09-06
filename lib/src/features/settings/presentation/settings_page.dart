@@ -837,8 +837,18 @@ class _FontChoiceSettingRowState extends State<_FontChoiceSettingRow> {
             builder: (context, searchQuery) async {
               final l10n = context.l10n;
               final choices = await _loadChoices();
+              final query = searchQuery ?? '';
               final filtered = choices
-                  .where((option) => option.matches(searchQuery ?? ''))
+                  .where((option) {
+                    if (option.matches(query)) {
+                      return true;
+                    }
+                    final display = _fontOptionDisplayLabelFor(
+                      l10n,
+                      option,
+                    ).toLowerCase();
+                    return display.contains(query.trim().toLowerCase());
+                  })
                   .toList(growable: false);
               return sf.SelectItemList(
                 children: [
@@ -955,9 +965,7 @@ String _fontChoiceLabel(
 }) {
   return switch (choice.kind) {
     AppearanceFontChoiceKind.systemDefault =>
-      context.l10n.settingsFontGeistDefault,
-    AppearanceFontChoiceKind.bundledJetBrainsMono =>
-      context.l10n.settingsFontJetBrainsDefault,
+      context.l10n.settingsFontSystemDefault,
     AppearanceFontChoiceKind.system =>
       systemFontDisplayName ?? choice.fontFamily!,
   };
@@ -968,9 +976,7 @@ String _fontOptionDisplayLabelFor(
   AppearanceFontOption option,
 ) {
   return switch (option.choice.kind) {
-    AppearanceFontChoiceKind.systemDefault => l10n.settingsFontGeistDefault,
-    AppearanceFontChoiceKind.bundledJetBrainsMono =>
-      l10n.settingsFontJetBrainsDefault,
+    AppearanceFontChoiceKind.systemDefault => l10n.settingsFontSystemDefault,
     AppearanceFontChoiceKind.system => option.label,
   };
 }

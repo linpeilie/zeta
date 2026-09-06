@@ -23,18 +23,14 @@ class AppearanceFontOption {
     );
   }
 
-  /// 界面字体的「跟随应用默认」选项。
+  /// 界面 / 代码字体的「系统默认」选项。
   ///
-  /// 它解析到内置 Geist（见 `buildIdeThemeData`），所以展示名按内置字体来写。
+  /// 展示名由 presentation 用 l10n 覆盖；这里的 [label] 只用于搜索匹配，
+  /// 使用连字符避免英文 "System default" 被 "source" 这类子串误命中。
   const AppearanceFontOption.systemDefault()
     : choice = const AppearanceFontChoice.systemDefault(),
-      label = 'Geist',
-      searchAliases = const <String>['Geist', 'system default'];
-
-  const AppearanceFontOption.bundledJetBrainsMono()
-    : choice = const AppearanceFontChoice.bundledJetBrainsMono(),
-      label = 'JetBrainsMono',
-      searchAliases = const <String>['JetBrains Mono'];
+      label = 'system-default',
+      searchAliases = const <String>['system-default', 'default'];
 
   final AppearanceFontChoice choice;
   final String label;

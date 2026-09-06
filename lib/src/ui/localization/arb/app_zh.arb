@@ -718,7 +718,7 @@
       },
       "value": {
         "type": "String",
-        "example": "Geist"
+        "example": "系统默认"
       }
     }
   },
@@ -784,13 +784,9 @@
       }
     }
   },
-  "settingsFontGeistDefault": "Geist（内置默认）",
-  "@settingsFontGeistDefault": {
-    "description": "Geist default label"
-  },
-  "settingsFontJetBrainsDefault": "JetBrainsMono（内置默认）",
-  "@settingsFontJetBrainsDefault": {
-    "description": "JetBrains default label"
+  "settingsFontSystemDefault": "系统默认",
+  "@settingsFontSystemDefault": {
+    "description": "System default font label"
   },
   "commonCancel": "取消",
   "@commonCancel": {
@@ -2571,12 +2567,7 @@
   "@mgmtSetupDocsTitle": { "description": "Claude setup docs title" },
   "mgmtSetupDocsBody": "完整能力与协议说明见 Anthropic Claude Code 文档：{url}",
   "@mgmtSetupDocsBody": { "description": "Claude setup docs body", "placeholders": { "url": { "type": "String", "example": "https://docs.anthropic.com" } } },
-  "fontGeistBundled": "Geist（内置默认）",
-  "@fontGeistBundled": { "description": "Bundled Geist font label" },
-  "fontSystemDefaultAlias": "系统默认",
-  "@fontSystemDefaultAlias": { "description": "Search alias for system default font" },
-  "fontJetBrainsBundled": "JetBrainsMono（内置默认）",
-  "@fontJetBrainsBundled": { "description": "Bundled JetBrains Mono label" },
+
   "agentModeLoadFailed": "无法加载对话模式，请重试。",
   "@agentModeLoadFailed": { "description": "Conversation mode load error" },
   "agentFastIncompatible": "Fast 与“{effort}”不兼容",
