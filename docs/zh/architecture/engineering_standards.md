@@ -249,6 +249,14 @@ notifier 依赖了 runner provider，runner 再读 notifier 就构成 Riverpod �
   `ValueNotifier` 或 timer 的，必须在 `dispose` 中释放；通知前应检查 disposed 状态。
 - 对外暴露的集合默认使用不可变列表、不可变 map 或 unmodifiable view。
 
+### Project Threads 规则与索引所有权
+
+Project Threads 的同步命令、列表事实和 thread → project 反查索引由 `ProjectThreadsSliceStore` 独占，Shell、Widget 与业务回归统一经 `ProjectThreadsOperations` 调用。`ProjectThreadsSliceRunner` 只通过 `run(effect)` 执行 Provider I/O、分页与搜索调度；远端归属查询经 `ProjectThreadsStateOwner.threadFor` 读取当前项目第一个匹配摘要，不猜活跃 Provider。分页提交只补齐映射，保留窗口外显式登记；整体恢复重建索引，retain/remove/close 清理对应归属，关闭后的 ingress 不再改变索引或触发选中项移除回调。
+
+当前 Store 的 listener、presentation 镜像和 `_DeferredProjectThreadsSliceRunner` 仍保留；后续 WP-3P 迁移到 application Notifier，不能把本次规则收口视为发布机制迁移完成。
+
+同步业务测试使用固定注入时钟和 recording effect runner；I/O 测试必须通过真实 `ProjectThreadsSliceComposition.create(...).store`，不得恢复一套测试专用 Runner 业务入口。结构守卫：`project_threads_state_owner_guard_test`。
+
 ## 4. Provider 与协议边界
 
 `AgentProviderBundle` 是 application / presentation 的稳定能力边界；
@@ -324,7 +332,7 @@ notifier 依赖了 runner provider，runner 再读 notifier 就构成 Riverpod �
   Provider 事件；请求失败不写全局 status.details，不记录配置 id、值或原始异常。
 - 已绑定真实 thread 的 `AgentConversationBinding` 不得原地改绑到另一个 thread。fork
   返回 `AgentSession` 后必须走 Shell 的新 thread 通用流程：由
-  `ProjectThreadsSliceRunner.registerSession` 登记列表，再通过 `selectProjectThread` 创建或
+  `ProjectThreadsOperations.registerSession`（生产实现为 Store） 登记列表，再通过 `selectProjectThread` 创建或
   复用独立 Workspace Entry/Binding 并选中；“编辑后重试”最后才由新 RuntimeController 发送。
   源 RuntimeController 只发起 fork，不得继续在源 Binding 上执行新 thread 的 rename/send。
 - 启动时机由 `AgentProviderBootstrapPolicy` 描述；需要项目目录的 provider 不得在获得

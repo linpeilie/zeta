@@ -1,10 +1,10 @@
 # WP-4 · Project Threads 同步业务与索引收口
 
-返回 [开发总入口](00-index.md)。本章全部伪代码均为目标设计，代码实现尚未开始。
+返回 [开发总入口](00-index.md)。下文保留设计与迁移清单；2026-09-06 实现与全部收尾门禁已完成，见 §10。
 
 | 项目 | 约定 |
 |---|---|
-| 状态 | 待开发；本文只给出设计与验收要求 |
+| 状态 | 已完成；实现与验收见 §10 |
 | 目标 | Shell、Widget 与测试使用同一个 ProjectThreadsOperations 入口；同步业务规则和 thread→project 映射只归一个 owner |
 | 前置 | 无代码前置；先复核本章证据与现有测试基线 |
 | 后继 | WP-3P：把本章已经收口的 Store 迁成 application Notifier |
@@ -435,14 +435,14 @@ Future<void> _loadPage(/* 原参数不变 */) async {
 
 ### 8.1 完成条件
 
-- [ ] Shell 的 ProjectThreadsOperations 实现仍只有生产 Store，所有旧同步业务回归从同一入口调用。
-- [ ] §3.1 Runner 重复方法与重复 map 全部清除；Runner 的真实 effect 分支和 loader 保护保持。
-- [ ] Store 的 initial / restore / page / explicit mapping / remove / retain / close 维护全部核对。
-- [ ] 旧测试 33 条逐条有目标，关键断言不删除；新增回归覆盖异步结果与唯一映射的接合处。
-- [ ] sessionStateVersion=4、字段名、Provider id/type、分页 5/10/50、search 300 ms 保持。
-- [ ] G4/G5 能力与权限路径不放宽；没有 Provider wire 字段进入 application/domain。
-- [ ] 列表选中/完成提示/标题/预览/排序语义由真实 Store + 真实 effect 组合验证。
-- [ ] 总索引明确 WP-4 完成、WP-3P 待执行；不把尚存的 Deferred/镜像标成已移除。
+- [x] Shell 的 ProjectThreadsOperations 实现仍只有生产 Store，所有旧同步业务回归从同一入口调用。
+- [x] §3.1 Runner 重复方法与重复 map 全部清除；Runner 的真实 effect 分支和 loader 保护保持。
+- [x] Store 的 initial / restore / page / explicit mapping / remove / retain / close 维护全部核对。
+- [x] 旧测试 33 条逐条有目标，关键断言不删除；新增回归覆盖异步结果与唯一映射的接合处。
+- [x] sessionStateVersion=4、字段名、Provider id/type、分页 5/10/50、search 300 ms 保持。
+- [x] G4/G5 能力与权限路径不放宽；没有 Provider wire 字段进入 application/domain。
+- [x] 列表选中/完成提示/标题/预览/排序语义由真实 Store + 真实 effect 组合验证。
+- [x] 总索引明确 WP-4 完成、WP-3P 待执行；不把尚存的 Deferred/镜像标成已移除。
 
 ### 8.2 必须执行的门禁
 
@@ -466,7 +466,7 @@ git diff --check
 
 本章是重构，受影响测试不能代替全量门禁。当前 tool/test_full.sh 已包含根测试和内部 Package 测试，完成一次即可，不额外机械重复 test_packages.sh。若变更了测试基础设施/守卫选择器本身，也必须全量收尾。真实 CLI 非本章必要验收，因为未改协议；如实施过程中越界改了 adapter，则必须退出本章范围，按对应 Provider 规则单独立项与真实 CLI 验收。
 
-当前任务只是写设计文档，不执行上述代码改动或门禁；不得把计划中的检查写成已经通过。
+设计编制阶段未执行上述门禁；实际实现与验收证据另记在 §10，不以设计要求代替测试结果。
 
 ### 8.3 可回滚单元
 
@@ -498,3 +498,12 @@ WP-1 不依赖 WP3 的理由：当前 workspace entries 已存在，WP-1 只需�
 全计划门禁建议：WP-1/WP-6 若为窄行为修复，开发与收尾至少 format/analyze/affected；若同时搬文件或调整测试基础设施，则升级 full。WP-4、WP3 各分支、WP-2、WP-5 都涉及职责/调用链收口，按重构收尾 full。每个工作项保存自己的测试入口与行为冻结清单，最终整组再对所有已落地变更执行一次全量 gate。代码不变的当前文档交付只做链接、文件存在、依赖 DAG 和内容一致性核验，不跑 Flutter 全量。
 
 现有计划模板可以沿用：总索引列目标、现状证据、决策、WP 表、依赖和开发记录；每章列状态/依赖/性质、逐步任务、伪代码、风险、DoD、验证记录。2026-09-03 旧计划曾将某些镜像模式登记为迁移方案，不应复制其历史豁免作为新规则；当前根 AGENTS.md 优先。根 AGENTS.md 引用的 docs/prompts/refactoring.md 在当前目录不存在，实施时应在总索引记录此文档缺口，按当前 AGENTS.md 的明确全量重构约束执行，而不是猜测旧文件内容。
+
+
+## 10. 2026-09-06 实施与验收
+
+实现提交待登记；[完整验收记录](../../refactor/2026-09-06-project-threads/00-validation.md)。
+
+Runner 同步业务与第二张索引已删除，Store 提供唯一 `threadFor` 查询并保护关闭后索引及移除回调。33 条旧测试按 §7 分配到 S 15 / I 14 / C 4，131 条原断言经 AST token 比对完整保留；新增 14 条行为回归和 4 条带正反例的结构守卫。定向 59 条及 Shell/Widget/分层 45 条通过；format / analyze / affected / full / diff check 全部通过，full 包含根 2007 条及内部包 1076 条（内部包分析全部通过）。收尾详情及首次遥测失败的处理见验收记录。
+
+本次开始时工作区干净；设计中的历史 release 未提交变更已不适用。Provider 包、权限策略、操作签名、intent/effect/reducer、5/10/50 分页、300 ms 防抖、v4 与裸 threadId 均保持。当前 Deferred、Store listener、presentation 镜像留待 WP-3P；串行队列下一项为 WP-3M。

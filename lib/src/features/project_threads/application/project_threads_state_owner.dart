@@ -12,6 +12,9 @@ abstract interface class ProjectThreadsStateOwner {
 
   ProjectThreadListState stateFor(String projectPath);
 
+  /// 当前项目列表中第一个匹配的摘要；不根据活跃 Provider 推断归属。
+  AgentThreadSummary? threadFor(String projectPath, String threadId);
+
   void applyStatesReplacement(Map<String, ProjectThreadListState> states);
 
   void applyProjectsRetention(List<String> projectPaths);

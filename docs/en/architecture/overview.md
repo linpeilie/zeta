@@ -51,6 +51,8 @@ lib/src/features/<feature>/
 
 Existing features: `agent` (provider abstraction and conversation), `agent_management` (CLI detection and diagnostics), `desktop_notifications`, `ide_session` (restore), `project_threads`, `settings`, `usage_statistics`, `workspace` (file tree).
 
+Project Threads commands enter `ProjectThreadsOperations`, implemented by the application Store. The Store owns synchronous rules, list state, and the thread-to-project index. The app Runner executes effects and keeps only I/O scheduling resources; it reads thread ownership through `StateOwner.threadFor` and sends typed results back. Pages preserve explicit mappings outside the visible window, and closed owners reject late updates and removal callbacks. The current Store listeners, presentation mirror, and Deferred runner remain until WP-3P.
+
 **New code goes into the matching feature — not back into broad top-level directories.**
 
 ## The agent event pipeline

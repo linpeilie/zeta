@@ -22,7 +22,7 @@ Zeta 的设计目标是让 Flutter UI、Agent provider、会话持久化和本�
 - features/ide_session：会话状态、版本化持久化、恢复计划和恢复协调。
 - features/desktop_notifications：Provider 中立注意力信号的可见性判定、
   进程内未读、系统通知和平台任务栏/Dock 端口。
-- features/project_threads：项目 thread 快照、列表状态、分页控制器和 presentation view model。
+- features/project_threads：项目 thread 快照、同步业务与唯一列表 Store；分页及远端操作由 app Runner 执行，presentation 暂保留只读镜像。
 - features/usage_statistics：跨项目调用记录、统计口径、Codex 历史索引、套餐限额与
   使用统计页面。
 - features/workspace：文件树规则、树构建、文件节点映射和文件 pane。
@@ -64,7 +64,8 @@ IdeShellController
     -> 每个 runtime entry 持有 ConversationBinding lease
     -> AgentConversationRuntimeController -> 固定 Binding（不持有 Provider lease/scope/pin）
     -> AgentConversationSliceStore（每个 entry 必建，未知 BindingKey fail-closed）
-  -> ProjectThreadsSliceRunner
+  -> ProjectThreadsOperations（ProjectThreadsSliceStore：同步规则与索引）
+    -> ProjectThreadsSliceRunner.run(effect)（I/O）
 
 AgentConversationRuntimeController
   -> AgentEventPipeline（事件资源唯一所有者）
@@ -510,6 +511,14 @@ Provider 的 Thread 访问统一经过 `ProviderOperationScheduler`。列表使�
 压缩等变更使用 Thread 级 `exclusive`。同一资源上的连续读取可并发，独占操作保持 FIFO
 并阻塞后续读取；不同资源仍可并发。Provider dispose 先停止调度器接收新任务，再关闭
 连接并等待已入场操作结束，避免队列任务在关闭阶段重新发起 RPC。
+
+### Project Threads 的规则与 I/O
+
+Project Threads 的同步命令、列表事实和 thread → project 反查索引由 `ProjectThreadsSliceStore` 独占，Shell、Widget 与业务回归统一经 `ProjectThreadsOperations` 调用。`ProjectThreadsSliceRunner` 只通过 `run(effect)` 执行 Provider I/O、分页与搜索调度；远端归属查询经 `ProjectThreadsStateOwner.threadFor` 读取当前项目第一个匹配摘要，不猜活跃 Provider。分页提交只补齐映射，保留窗口外显式登记；整体恢复重建索引，retain/remove/close 清理对应归属，关闭后的 ingress 不再改变索引或触发选中项移除回调。
+
+首屏 5 条、追加 10 条、每 Provider 聚合上限 50 条、搜索防抖 300 ms 保持；原始 String threadId 与 IDE session v4 不迁移，也不宣称解决跨 Provider 同 id 碰撞。远端成功/错误按 OperationId 结算，关闭时未完成 void Future 正常完成、fork Future 返回 null。fork 的 Binding 权限快照优先级保持。
+
+当前 Store 的 listener、presentation 镜像和 `_DeferredProjectThreadsSliceRunner` 仍保留；后续 WP-3P 迁移到 application Notifier，不能把本次规则收口视为发布机制迁移完成。
 
 ### 默认 provider
 

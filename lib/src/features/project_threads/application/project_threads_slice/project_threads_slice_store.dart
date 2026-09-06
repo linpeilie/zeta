@@ -23,7 +23,7 @@ abstract interface class ProjectThreadsSliceEffectRunner {
 /// Project Threads 的纯 Dart MVI owner。
 ///
 /// Store 自己维护 listener，不依赖 Flutter/Riverpod。Provider 查询、搜索防抖和
-/// thread 写操作均由 [effectRunner] 执行；controller 回流只能调用 typed
+/// thread 写操作均由 [effectRunner] 执行；runner 回流只能调用 typed
 /// [ProjectThreadsStateOwner] 入口。
 final class ProjectThreadsSliceStore
     implements ProjectThreadsOperations, ProjectThreadsStateOwner {
@@ -81,6 +81,11 @@ final class ProjectThreadsSliceStore
   @override
   ProjectThreadListState stateFor(String projectPath) {
     return _state.stateFor(projectPath);
+  }
+
+  @override
+  AgentThreadSummary? threadFor(String projectPath, String threadId) {
+    return _threadById(stateFor(projectPath), threadId);
   }
 
   @override
@@ -203,6 +208,7 @@ final class ProjectThreadsSliceStore
 
   @override
   void registerThreadMapping(String projectPath, String threadId) {
+    if (_closed) return;
     _projectPathByThreadId[threadId] = projectPath;
   }
 
@@ -427,12 +433,14 @@ final class ProjectThreadsSliceStore
 
   @override
   void applyStatesReplacement(Map<String, ProjectThreadListState> states) {
+    if (_closed) return;
     _dispatch(ProjectThreadStatesReplaced(states));
     _rebuildThreadMappings();
   }
 
   @override
   void applyProjectsRetention(List<String> projectPaths) {
+    if (_closed) return;
     _dispatch(ProjectThreadProjectsRetained(projectPaths));
     final allowed = projectPaths.toSet();
     _projectPathByThreadId.removeWhere(
@@ -442,6 +450,7 @@ final class ProjectThreadsSliceStore
 
   @override
   void applyProjectState(String projectPath, ProjectThreadListState state) {
+    if (_closed) return;
     _dispatch(ProjectThreadStateApplied(projectPath, state));
     _registerStateThreadMappings(projectPath, state);
   }
@@ -541,6 +550,7 @@ final class ProjectThreadsSliceStore
     required String projectPath,
     required String threadId,
   }) {
+    if (_closed) return false;
     final current = stateFor(projectPath);
     final exists = current.threads.any((thread) => thread.id == threadId);
     final clearedSelection = exists && current.selectedThreadId == threadId;
@@ -548,7 +558,7 @@ final class ProjectThreadsSliceStore
     if (exists) {
       _projectPathByThreadId.remove(threadId);
     }
-    return clearedSelection;
+    return !_closed && clearedSelection;
   }
 
   @override
