@@ -1,6 +1,8 @@
 @Tags(['slow', 'shell'])
 library;
 
+import 'package:zeta/src/features/project_threads/application/project_threads_slice/project_threads_slice_notifier.dart';
+
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_notifier.dart';
 
 import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
@@ -28,7 +30,6 @@ import 'package:zeta/src/features/agent_management/presentation/agent_management
 import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
-import 'package:zeta/src/features/project_threads/presentation/project_threads_slice/project_threads_slice_providers.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_notifier.dart';
 import 'package:zeta/src/features/settings/presentation/settings_slice/settings_slice_providers.dart';
@@ -1047,7 +1048,7 @@ void main() {
       find.byKey(const ValueKey('ide-window-frame')),
     );
     final container = ProviderScope.containerOf(frameContext, listen: false);
-    final store = container.read(projectThreadsSliceStoreProvider);
+    final store = container.read(projectThreadsSliceProvider.notifier);
 
     store.applyProjectState(
       '/slice-probe',

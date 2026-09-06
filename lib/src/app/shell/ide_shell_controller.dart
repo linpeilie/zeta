@@ -4,7 +4,6 @@ import 'dart:async';
 
 import 'package:zeta/src/app/logging/app_logging.dart';
 import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_workspace_store.dart';
-import 'package:zeta/src/app/project_threads_slice/project_threads_slice_composition.dart';
 import 'package:zeta_foundation/zeta_foundation.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
 import 'package:zeta/src/features/agent/application/agent_provider_settings_port.dart';
@@ -17,7 +16,6 @@ import 'package:zeta/src/features/ide_session/domain/ide_session_state.dart';
 import 'package:zeta/src/features/ide_session/domain/ide_workbench_layout_state.dart';
 import 'package:zeta/src/features/ide_session/domain/recent_project_summary.dart';
 import 'package:zeta/src/features/project_threads/application/project_threads_operations.dart';
-import 'package:zeta/src/features/project_threads/application/project_threads_slice/project_threads_slice_store.dart';
 import 'package:zeta/src/features/project_threads/application/project_threads_session_snapshot_codec.dart';
 import 'package:zeta/src/features/project_threads/domain/project_thread_list_state.dart';
 import 'package:zeta/src/features/workspace/application/workspace_file_index_controller.dart';
@@ -43,13 +41,16 @@ class IdeShellController {
     required WorkspaceFileCorpusPort workspaceFileCorpus,
     required WorkspaceFileIndexController workspaceFileIndexController,
     required this.ideSessionOperations,
-    required AgentProviderBundleFactory agentProviderFactory,
+    required this.projectThreadsController,
+    required void Function() Function(void Function()) subscribeProjectThreads,
+    required AgentConversationBindingManager bindingManager,
+    required this.agentProviderGlobalRuntime,
     required AgentProviderSettingsPort agentProviderSettingsPort,
     required Future<AgentModelCatalogLoadResult> Function()
     activeModelCatalogLoader,
     this._projectLocationOpener = openPathInSystemFileManager,
     this._statusReporter,
-    AgentProviderRuntimeRegistry? agentProviderRuntimeRegistry,
+    required this.agentProviderRuntimeRegistry,
     AgentFrameScheduler Function()? agentUiFrameSchedulerFactory,
     void Function(AgentTurnTerminalSignal)? onAgentTurnTerminal,
     void Function(AgentWorkspaceAttention)? onAgentAttention,
@@ -59,16 +60,6 @@ class IdeShellController {
     this.providerMetricLabel = ZetaMetricLabel.hashed,
     DateTime Function()? now,
   }) : _now = now ?? DateTime.now {
-    this.agentProviderRuntimeRegistry =
-        agentProviderRuntimeRegistry ??
-        AgentProviderRuntimeRegistry(
-          providerFactory: agentProviderFactory,
-          metrics: metrics,
-        );
-    agentProviderGlobalRuntime = AgentProviderGlobalRuntime(
-      runtimeRegistry: this.agentProviderRuntimeRegistry,
-    );
-    _ownsAgentProviderRuntimeRegistry = agentProviderRuntimeRegistry == null;
     _workspace = workspace;
     _fileIndexController = workspaceFileIndexController;
     _fileIndexController.addListener(_handleFileIndexChanged);
@@ -77,8 +68,9 @@ class IdeShellController {
     _workspaceFileCorpus = workspaceFileCorpus;
     agentConversationWorkspaceStore = AgentConversationWorkspaceStore(
       providerController: agentProviderController,
+      bindingManager: bindingManager,
       workspaceFileCorpus: _workspaceFileCorpus,
-      runtimeRegistry: this.agentProviderRuntimeRegistry,
+      runtimeRegistry: agentProviderRuntimeRegistry,
       globalRuntime: agentProviderGlobalRuntime,
       onTurnTerminal: onAgentTurnTerminal,
       onAttention: onAgentAttention,
@@ -97,23 +89,13 @@ class IdeShellController {
       providerId: agentProviderController.activeProviderId,
     );
     agentConversationWorkspaceStore.selectEntry(_bootstrapAgentEntry.entryId);
-    final projectThreadsComposition = ProjectThreadsSliceComposition.create(
-      providerController: agentProviderController,
-      globalRuntime: agentProviderGlobalRuntime,
-      bindingManager: agentConversationWorkspaceStore.bindingManager,
-      textCatalog: agentUiTextCatalog,
-      now: _now,
-    );
-    projectThreadsController = projectThreadsComposition.store;
-    projectThreadsSliceStore = projectThreadsComposition.store;
-    projectThreadsController.onActiveThreadCleared = _handleActiveThreadCleared;
     agentConversationWorkspaceStore.addListener(
       _handleAgentConversationWorkspaceChanged,
     );
     agentConversationWorkspaceStore.addEntryChangedListener(
       _handleConversationWorkspaceEntryChanged,
     );
-    _unsubscribeProjectThreads = projectThreadsSliceStore.subscribe(
+    _unsubscribeProjectThreads = subscribeProjectThreads(
       _handleProjectThreadsChanged,
     );
     _syncAllConversationWorkspaceEntries();
@@ -121,6 +103,7 @@ class IdeShellController {
     unawaited(selectedAgentController.loadSettings());
     unawaited(_prewarmActiveModelCatalog());
     unawaited(_restoreSession());
+    projectThreadsController.onActiveThreadCleared = _handleActiveThreadCleared;
   }
 
   Future<void> _prewarmActiveModelCatalog() async {
@@ -140,7 +123,6 @@ class IdeShellController {
 
   late final AgentProviderRuntimeRegistry agentProviderRuntimeRegistry;
   late final AgentProviderGlobalRuntime agentProviderGlobalRuntime;
-  late final bool _ownsAgentProviderRuntimeRegistry;
   late final WorkspaceNotifier _workspace;
   late final WorkspaceFileIndexController _fileIndexController;
   late final WorkspaceFileCorpusPort _workspaceFileCorpus;
@@ -151,7 +133,6 @@ class IdeShellController {
   late final WorkspaceAgentRuntimeFactSource agentRuntimeFactSource;
   late final AgentThreadWorkspaceEntry _bootstrapAgentEntry;
   late final ProjectThreadsOperations projectThreadsController;
-  late final ProjectThreadsSliceStore projectThreadsSliceStore;
   late final void Function() _unsubscribeProjectThreads;
   final AgentUiTextCatalog agentUiTextCatalog;
 
@@ -1196,14 +1177,11 @@ class IdeShellController {
       _handleConversationWorkspaceEntryChanged,
     );
     _unsubscribeProjectThreads();
-    projectThreadsController.dispose();
+    projectThreadsController.onActiveThreadCleared = null;
     agentRuntimeFactSource.close();
     agentConversationWorkspaceStore.dispose();
     // 在 workspace 条目释放后再拆索引监听，避免 popover 仍挂在 listenable 上。
     _fileIndexController.removeListener(_handleFileIndexChanged);
-    if (_ownsAgentProviderRuntimeRegistry) {
-      unawaited(agentProviderRuntimeRegistry.close());
-    }
     _stateListeners.clear();
   }
 }

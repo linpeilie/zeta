@@ -343,7 +343,10 @@ final class _Harness {
       configStore: MemoryAgentProviderConfigStore(),
       runtimeRegistry: registry,
     );
+    bindingManager = AgentConversationBindingManager(runtimeRegistry: registry)
+      ..start();
     workspace = AgentConversationWorkspaceStore(
+      bindingManager: bindingManager,
       providerController: settings.store,
       runtimeRegistry: registry,
       workspaceFileCorpus: CallbackWorkspaceFileCorpusPort(
@@ -370,6 +373,7 @@ final class _Harness {
   final factory = _Factory();
   final frames = <FakeAgentFrameScheduler>[];
   late final AgentProviderRuntimeRegistry registry;
+  late final AgentConversationBindingManager bindingManager;
   late final ProviderSettingsTestComposition settings;
   late final AgentConversationWorkspaceStore workspace;
   late final WorkspaceAgentRuntimeFactSource source;
@@ -433,6 +437,7 @@ final class _Harness {
   Future<void> dispose() async {
     source.close();
     workspace.dispose();
+    await bindingManager.close();
     await settings.dispose();
     await registry.close();
     for (final provider in factory.created) {

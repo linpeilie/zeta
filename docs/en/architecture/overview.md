@@ -51,7 +51,9 @@ lib/src/features/<feature>/
 
 Existing features: `agent` (provider abstraction and conversation), `agent_management` (CLI detection and diagnostics), `desktop_notifications`, `ide_session` (restore), `project_threads`, `settings`, `usage_statistics`, `workspace` (file tree).
 
-Project Threads commands enter `ProjectThreadsOperations`, implemented by the application Store. The Store owns synchronous rules, list state, and the thread-to-project index. The app Runner executes effects and keeps only I/O scheduling resources; it reads thread ownership through `StateOwner.threadFor` and sends typed results back. Pages preserve explicit mappings outside the visible window, and closed owners reject late updates and removal callbacks. The current Store listeners, presentation mirror, and Deferred runner remain until WP-3P.
+Project Threads commands enter `ProjectThreadsOperations`, implemented by the application-session `ProjectThreadsSliceNotifier`. Its non-family, non-autoDispose provider owns synchronous rules, list state, the reverse index and waiters; build reads frozen dependencies and creates a runner from its typed sink. The app Runner keeps I/O scheduling resources, reads ownership through `StateOwner.threadFor`, and preserves explicit mappings outside the visible window. Shell borrows operations and a Riverpod subscription; the old Store, mirror and Deferred runner are removed. App providers own the shared BindingManager and global runtime; Workspace borrows them.
+
+Shutdown settles void waiters normally and fork waiters with null, cancels pending debounce timers and rejects late ingress. It then awaits all started executions, including restore/activation/search queries without waiters and the last Provider in an aggregate query, before closing BindingManager, runtime registry, plugins and the container. Drain failure remains a failed Future. Workspace/Conversation ownership and moving the full Shell into app composition remain WP-3C.
 
 **New code goes into the matching feature — not back into broad top-level directories.**
 
