@@ -764,7 +764,6 @@ class _ComposerMoreActionsButtonState
           key: const ValueKey('agent-mention-file-button'),
           label: context.l10n.agentMentionFile,
           leadingIcon: Icons.alternate_email_rounded,
-          dividerAbove: widget.showPlan,
           onPressed: () => _activateAction(widget.onMentionFile),
         ),
       if (widget.showInsertSkill)
@@ -772,7 +771,6 @@ class _ComposerMoreActionsButtonState
           key: const ValueKey('agent-insert-skill-button'),
           label: context.l10n.agentInsertSkill,
           leadingIcon: Icons.auto_awesome_rounded,
-          dividerAbove: widget.showPlan || widget.showMentionFile,
           onPressed: () => _activateAction(widget.onInsertSkill),
         ),
       if (widget.showAttachImage)
@@ -780,10 +778,6 @@ class _ComposerMoreActionsButtonState
           key: const ValueKey('agent-attach-image-button'),
           label: context.l10n.agentAttachImage,
           leadingIcon: Icons.image_outlined,
-          dividerAbove:
-              widget.showPlan ||
-              widget.showMentionFile ||
-              widget.showInsertSkill,
           onPressed: () => _activateAction(widget.onAttachImage),
         ),
     ];
