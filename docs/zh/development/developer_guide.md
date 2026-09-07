@@ -1,14 +1,16 @@
 # 开发者文档
 
-最后更新：2026-08-15
+最后核对：2026-09-07（文档整理）
 
-> Provider 拆包进度（2026-09-05）：实现与协议测试已进入三个独立插件包，宿主从 `agent_provider_manifest.dart` 登记 definitions/settings/factories。插件测试在各包目录执行 `dart test` 或 `flutter test`，并接入 SDK 的 `runAgentProviderContractTests`；根测试的实现访问统一走 `test/src/testing/`。management/usage 已贡献化，过渡 import 已清零；包隔离/贡献守卫、自动发现的 CI 包矩阵已就位；见[工程规范 §2.1](../architecture/engineering_standards.md#21-provider-插件包边界)和下方[新增 Provider 插件](#新增-provider-插件)。
+本文面向贡献者，保留环境、命令和专项接入清单。分层与生命周期约束见[工程规范](../architecture/engineering_standards.md)，文档改动见[文档维护](documentation.md)。
 
 ## 1. 项目简介
 
 Zeta 是一个 Flutter Desktop 项目，当前支持 macOS、Linux 和 Windows 平台目录。应用主入口在 `lib/main.dart`，核心界面是三栏 Agent IDE 工作台。
 
 ## 2. 环境要求
+
+Linux 构建需要 clang、cmake、ninja-build、pkg-config、libgtk-3-dev、liblzma-dev、libfontconfig1-dev。安装方式按发行版处理；SDK 版本以仓库 CI 为准。
 
 - Flutter SDK，需兼容 `pubspec.yaml` 中的 Dart SDK 约束 `^3.12.2`。
 - 支持 Flutter desktop 的本地开发环境。
@@ -40,12 +42,12 @@ dart run tool/check_localized_ui_strings.dart --check
 
 ### 3.1 测试档位
 
-**开发循环里不跑全量。** 全量 2114 条、墙钟约 4m10s，而一次改动通常只碰得到几十条。
+开发循环使用定向或受影响测试。测试数量和耗时以当次报告为准；代码重构、发版和测试基础设施改动收尾必须跑完整门禁。
 
-| 档位 | 命令（Windows 用同名 `.ps1`） | 什么时候用 |
+| 档位 | 命令（Windows 可用对应 `.ps1`） | 什么时候用 |
 | --- | --- | --- |
 | 单文件 | `flutter test <路径>` | 正在写某个测试 |
-| **受影响** | `bash tool/test_affected.sh` | **默认档，每次改完代码** |
+| **受影响** | `bash tool/test_affected.sh` | 行为变化的默认档 |
 | 受影响分片 | `bash tool/test_affected.sh --shards` → `bash tool/test_shard.sh <id>` | 改动跨层 / 跨 feature |
 | 按 Package | `bash tool/test_packages.sh` | 只动了 `packages/` |
 | 按名称 | `flutter test <目录> --plain-name "<用例名>"` | 定向复现单条用例 |
@@ -53,15 +55,14 @@ dart run tool/check_localized_ui_strings.dart --check
 | 完整门禁 | `bash tool/test_full.sh` | 重构收尾、发版、改测试基础设施 |
 
 `tool/test_affected.sh` 的选择逻辑在 `tool/test_select.dart`：从 git 变更集出发，
-沿 import 图做**反向闭包**找出可能受影响的测试，再追加架构守卫。所有启发式都往
-"多跑几个"的方向兜底——**宁可多选，不可漏选**。地基文件（`pubspec.yaml`、
+沿 import 图做**反向闭包**找出可能受影响的测试，再追加架构守卫。选择器按保守范围追加测试，避免漏选。基础配置文件（`pubspec.yaml`、
 `dart_test.yaml`、`.github/workflows/`、选择器自身）变更时直接退化成全量。
 
 `tool/test_full.sh` 生成 `.dart_tool/test-results/full.json`，并在终端列出最慢的
 测试文件与用例；`tool/test_shard.sh` 每片生成 `shard-<id>.json`，同样打印摘要——
 这是重平衡分片时唯一该看的数据。
 
-**全量的强制点在 CI，不在本地终端。** 每个 PR 跑满 6 个分片 + 内部 Package。
+每个 PR 在 CI 跑满 6 个分片和内部 Package；本地完整门禁适用条件见上表。
 
 `dart_test.yaml` 的 `concurrency: 2` 是内存保护门禁，不因提速而调整。
 
@@ -69,12 +70,10 @@ dart run tool/check_localized_ui_strings.dart --check
 
 根 `test/` 按 `tool/test_shards.dart` 的 `kRootTestShards` 切成 6 片，CI 每片一个
 并行 Job。分片按**语义分组**（`agent-presentation` / `ui` / `features` /
-`app-shell` / `agent-data` / `agent-logic`）而不是贪心装箱——开发者要能一眼判断
-改动落在哪片，完美均衡的清单没人记得住。
+`app-shell` / `contracts-data` / `agent-logic`），便于判断改动范围。
 
 清单按**目录前缀**匹配，所以新增测试放进已有目录就自动归片。只有新建顶层测试
-目录时才要回 `tool/test_shards.dart` 加一条；`test/src/architecture/
-test_shard_coverage_guard_test.dart` 会拦住漏登记的孤儿文件，并比对 CI 矩阵与
+目录时才要回 `tool/test_shards.dart` 加一条；`test/src/architecture/test_shard_coverage_guard_test.dart` 会拦住漏登记的孤儿文件，并比对 CI 矩阵与
 清单是否一致。
 
 重新导出 Codex app-server JSON Schema（协议升级 / 审计时）：
@@ -87,7 +86,7 @@ test_shard_coverage_guard_test.dart` 会拦住漏登记的孤儿文件，并比�
 ./tool/gen_codex_schema.ps1
 ```
 
-对真实 `codex app-server --stdio` 做核心链路与 Plan experimental 冒烟：
+对真实 `codex app-server`（默认 stdio） 做核心链路与 Plan experimental 冒烟：
 
 ```sh
 python tool/smoke_codex_app_server.py --expected-version 0.144.5
@@ -102,159 +101,23 @@ Plan smoke 会开启 experimental API、探测模式目录、发送 Plan / Defau
 Prompt、回复、文件内容、凭证、原始 JSONL、thread/turn id 或 stderr 原文。若
 `turn/plan/updated` 等实验事件缺失，脚本会保留实际方法名级诊断并返回失败。
 
-Cursor 的旧 smoke 与发布材料只作为
-[退役历史证据](../history/cursor_acp_release_validation.md) 保留，当前版本没有 Cursor 启动工具。
+Cursor 不受支持，不恢复旧兼容逻辑；重新接入需要独立方案和真实协议证据。
 
 Linux 或 Windows 开发时，将 `flutter run` 的设备改为对应桌面设备。
 
 ## 4. 目录结构
 
-```text
-lib/
-  main.dart
-  src/
-    app/
-      localization/
-    core/
-    features/
-      agent/
-        application/
-        data/
-        domain/
-        presentation/
-      agent_management/
-        application/
-        data/
-        domain/
-        presentation/
-      desktop_notifications/
-        application/
-        data/
-        domain/
-      ide_session/
-        application/
-        data/
-        domain/
-      project_threads/
-        application/
-        domain/
-        presentation/
-      settings/
-        application/
-        data/
-        domain/
-        presentation/
-      usage_statistics/
-        application/
-        data/
-        domain/
-        presentation/
-      workspace/
-        application/
-        domain/
-        presentation/
-    ui/
-      core/
-      features/ide/
-      localization/
-        arb/
-        generated/
-test/
-docs/
-tool/
-third_party/
-  codex_app_server_schema/
-linux/
-macos/
-windows/
-```
-
-重要模块：
-
-- `lib/src/app`：应用装配、窗口启动、菜单桥接、shell controller 和常量。
-- `lib/src/app/localization`：启动冻结 Locale、`ZetaLocalization` delegates，以及
-  按 feature 拆分的不可变文本目录适配器。
-- `lib/src/core`：日志、`~/.zeta` 路径布局、原子文本写入等跨功能基础设施。
-- `lib/src/features/agent`：Agent provider 抽象、Codex app-server、Grok ACP、Claude Code
-  stream-json、
-  共享事件映射、纯同步 conversation reducer、事件 processor、scope-aware effect runner、
-  类型化 UI 更新端口、presentation frame scheduler、对话状态和 Agent pane。无 pump 的
-  调度单测使用 `FakeAgentFrameScheduler` 手动推进 frame。
-- `lib/src/features/agent_management`：Codex/Grok/Claude Code CLI 检测、身份/版本/账号
-  诊断、显式连接测试、配置安全编辑和 Agent 管理页面。自动检测不调用模型；Claude Code
-  的连接测试只发无 Prompt initialize，但 CLI 仍可能维护自身认证/bootstrap 缓存。
-- `lib/src/features/desktop_notifications`：Agent attention 去重、可见性抑制、
-  系统通知插件适配和三端任务栏/Dock/urgency MethodChannel。
-- `lib/src/features/ide_session`：IDE 会话模型、状态构建、恢复协调和持久化。
-- `lib/src/features/project_threads`：项目 thread 列表状态、同步规则与唯一 application Notifier、恢复快照和 selectors；分页及远端操作在 app Runner；
-  打开中 thread 的执行中/等待态由常驻 workspace 的 `threadSnapshot` 经
-  `syncRuntimeSnapshot` 写入，不依赖 shell 单路 provider 事件流。
-- `lib/src/features/settings`：常规/外观设置，含 `AppLanguage` 与 `general.json` v3 codec。
-- `lib/src/features/usage_statistics`：Codex 全局历史读取、版本化派生索引、统计聚合
-  controller、响应式统计页面和任务详情抽屉。
-- `lib/src/features/workspace`：工作区目录规则、文件树构建、文件节点映射和 file tree pane。
-- `lib/src/ui/core`：主题、窗口框架、pane、panel、`IdeChip`、empty state 和状态标签等共享 UI 原语。
-- `lib/src/ui/features/ide`：IDE shell 视图、项目列表 pane 和 active provider controller。
-- `lib/src/ui/localization`：ARB、generated `AppLocalizations`、`context.l10n`、
-  Zeta shadcn 适配器与相对时间静态 token。
-- `test/src`：app、core、feature 各层的单元测试和 widget 测试。
-- `tool/`：仓库维护脚本（含 Codex schema 导出、真实 CLI smoke 与
-  `check_localized_ui_strings.dart`）。
-- `third_party/codex_app_server_schema/`：pinned Codex app-server JSON Schema 快照。
-
-桌面通知不得从 Provider raw payload 直接组装；应复用归一化
-`AgentAttentionSignal`，并保证正文不含 prompt、回复、命令和完整路径。扩展事件类别或
-平台行为前先阅读
-[Agent 桌面通知与任务栏未读提醒详细设计](../architecture/desktop_agent_notification_design.md)。
+模块职责见[架构总览](../architecture/overview.md#分层)。新代码放在对应 feature；厂商实现位于各 Provider 插件包，根 app 只在 manifest 登记。
 
 ## 5. 开发流程
 
-1. 修改前先理解目标模块的现有职责和依赖方向。
-2. Dart 文件改动后运行 `dart format .`。
-3. 完成代码改动后运行 `flutter analyze`。
-4. 修改行为或新增逻辑时运行 `bash tool/test_affected.sh`，并补充对应测试；重构收尾改跑 `bash tool/test_full.sh`。
-5. 如果平台生成文件发生变化，确认是否由 Flutter 工具产生，并在提交说明中解释原因。
+分支、提交和 PR 流程见[贡献指南](../../../CONTRIBUTING.md)。修改前明确影响面，修改后运行适用检查；更新现行文档，工作记录只留决定、结果和未完成项。
 
 ## 6. 编码约定
 
-- 使用现代空安全 Dart。
-- 优先使用 `const` 和不可变 widget。
-- 只属于单个 Widget 的临时状态（hover、popover 开合、动画控制器）继续用 `StatefulWidget`。
-- **跨 Widget 共享的状态是 application 层的 `Notifier` / `AsyncNotifier`**，用纯 Dart 的
-  `package:flutter_riverpod`（不使用 Widget API）。不要手写 listener 列表，也不要写只做 `state = store.state` 的镜像
-  notifier——一份状态只能有一个 owner。
-- **依赖注入走 `ProviderScope` / `ProviderContainer` overrides**，不用构造参数向下钻，也不用
-  可变注册表反向 `bind()`。没有安全默认值的依赖声明成会抛错的 `Provider`。
-- **组合根只接 `overrides`**：`ZetaAppComposition.create(overrides:)`。要换实现就覆盖
-  对应 provider，不要往 `create` 上加参数——加了也没用，组合根装过的 provider 调用方覆盖不掉
-  （同容器重复 override 会被 Riverpod 断言拦下）。有安全默认值的依赖把生产实现写进自己的
-  provider body。
-- **测试同一个口径**：`zetaTestApp(overrides:)` / `zetaTestComposition(...)`。助手自动补内存
-  存储、无头窗口、空 CLI 探测、关闭用量刷新等；用例覆盖同一 provider 时以用例为准。窗口控制
-  按钮用 `headlessWindowHost(showsWindowControls: …)`，窗口事件经 `HeadlessWindowHost.emit*`
-  派发。测 ticker 生命周期时调 `ZetaTickerGateState.didChangeAppLifecycleState`（不要走
-  `binding.handleAppLifecycleStateChanged`：测试里它会关掉 frames，`pump` 不再重建）。
-  Agent 工厂必须覆盖
-  `agentProviderBundleFactoryProvider`（`widget_test_hygiene_guard_test` 会拦）。
-- **窗口监听分两处、各干各的**：`ZetaWindowSurfaceNotifier` 译 UI 快照（ticker / 通知焦点）；
-  `NativeDesktopWindowHost` 在 `prepareDesktopWindow` 之后拦截关窗并跑 `ZetaShutdownHook`。
-  组合根本身实现该接口，关日志仍接在 hook 列表后面。`MainApp` / `IdeHome` 禁止 mixin。生产由
-  `lib/main.dart` 注入已经 prepare 的 host（`zetaWindowHostProvider` fail-closed）。
-- Riverpod 只用 `flutter_riverpod` 一个包，允许出现在 `application` 及以上；`domain` / `data`
-  两层都禁。不要从传递依赖 `package:riverpod/` 导入。application 里也不要出现
-  `ConsumerWidget` / `WidgetRef`——那是 presentation 的东西。正文见
-  [工程规范 §3.0](../architecture/engineering_standards.md#30-状态所有权与-riverpod-边界)，
-  规则索引见 `AGENTS.md` §1 G6 与 §3。
-- `autoDispose` 只回收纯 selector 或显式释放后的空投影；Binding lease、CLI runtime、进程与文件句柄的生命周期由显式
-  application 逻辑决定。
-- 异步优先 `AsyncNotifier` + `AsyncValue`；provider 之外手写异步编排时，仍必须用 token 或版本号
-  隔离旧结果。
-- 对外暴露集合时优先返回不可变集合或 unmodifiable view。
-- 公共 API 添加 `///` 文档。
-- 新实现中，对公共 API、协议适配、状态机、错误处理和不直观分支优先补充中文注释。
-- 不使用 `print`，需要保留的诊断信息使用 `dart:developer` 或项目日志封装。
+分层、单一状态所有者、依赖注入、UI token 和敏感数据限制见[工程规范](../architecture/engineering_standards.md)。优先不可变模型，公共 API 与不直观的协议、竞态和错误分支写中文注释；不要重复代码字面行为。
 
-更完整的架构和评审规则见 [工程规范](../architecture/engineering_standards.md)。
+诊断走已有日志/指标端口，不用 print 或新建全局记录器。新增依赖需说明内建方案不足之处，避免无关锁文件和生成文件变化。
 
 ## 7. Agent provider 开发指南
 
@@ -285,13 +148,13 @@ Registry acquire 必须显式选择 global/session scope；使用统计面板只
 
 ### Conversation Slice 接入
 
-Workspace 与 Conversation 已完成 WP-3C：`AgentConversationWorkspaceNotifier` 直接拥有 entry 资源表与不可变 workspace state；每个 entry 的 `AgentConversationSliceNotifier` 独占轻量 regions 和命令账本。`AgentConversationOwnerKey(entryId, lifetimeToken)` 在草稿晋升和 runtime restart 时不变，同 thread 关闭重开分配新 token；BindingKey 只作查询别名。Live 解析真实 owner，Closing/Closed 返回无正文的终止投影，Unknown 返回不可用空投影。
+Workspace 与 Conversation 的所有权：`AgentConversationWorkspaceNotifier` 直接拥有 entry 资源表与不可变 workspace state；每个 entry 的 `AgentConversationSliceNotifier` 独占轻量 regions 和命令账本。`AgentConversationOwnerKey(entryId, lifetimeToken)` 在草稿晋升和 runtime restart 时不变，同 thread 关闭重开分配新 token；BindingKey 只作查询别名。Live 解析真实 owner，Closing/Closed 返回无正文的终止投影，Unknown 返回不可用空投影。
 
 `workbenchSessionProvider` 先构造完整 Shell，组合根在语言冻结后、Widget 挂载前启动事实源、管理 ingress 和幂等 `Shell.start()`。IdeHome 只借用已有 workbench 与订阅；卸载不关闭 owner、Binding 或 runtime。草稿与滚动快照仅驻留 presentation 内存，按 controller 弱身份保存并在 entry 关闭时清理；焦点、弹层和 IME composing 不保留。诊断 snapshot 按需读取唯一 owner，不使用 Shell relay。
 
 关闭顺序为：停止 Shell/M/P 命令 → 刷新已有 session 保存 → 等待 M/P 真实执行排空 → 关闭管理消费者与事实源 → 逐 entry 关闭 ingress、撤下可见项、退订、dispose controller、await lease release → BindingManager → runtime registry → plugin catalog → container。entry/app 重复关闭共享同一 Future；失败保持 Closing/失败终态，不标记释放、不销毁容器掩盖失败。lease release 只证明 consumer 释放，CLI 退出仍以 registry close 为准。
 
-物理 Conversation family 在 build 取得显式 `keepAlive`，协调器保留容器级订阅。只有 lease 释放成功且终止空投影无人观察后才撤销保活并 invalidate；`autoDispose` 此时仅回收已关闭投影，不决定业务资源寿命。这是对原非 autoDispose 伪代码的实现修正：当前 Riverpod 普通 family 的 invalidate 不删除缓存节点。Workspace、Management、Project Threads 的 app owner 仍非 autoDispose。WP-2 已统一 Actions，命令接线见下文。
+物理 Conversation family 在 build 取得显式 `keepAlive`，协调器保留容器级订阅。只有 lease 释放成功且终止空投影无人观察后才撤销保活并 invalidate；`autoDispose` 此时仅回收已关闭投影，不决定业务资源寿命。这是对原非 autoDispose 伪代码的实现修正：当前 Riverpod 普通 family 的 invalidate 不删除缓存节点。Workspace、Management、Project Threads 的 app owner 仍非 autoDispose。会话命令统一经 Actions，接线见下文。
 
 Conversation 的 UI 写操作统一调用 `AgentConversationActions`，Live 句柄就是该 entry 的 `AgentConversationSliceNotifier`；关闭/未知目标只返回无状态拒绝句柄。每次调用冻结 typed payload、OperationId、owner lifetime 和 scope，经同步 reducer/runner 执行并返回 typed outcome。四类审批独立去重；只串行权限偏好与同项 session config，取消和审批不排在配置后面。关闭立即以 staleTarget 结算全部 UI waiter，底层 I/O 与租约释放仍由既有生命周期负责。
 
@@ -386,17 +249,15 @@ bash tool/test_full.sh
 
 ### Project Threads 同步规则与异步回流
 
-Project Threads 的同步命令、列表事实和 thread → project 反查索引由 `ProjectThreadsSliceNotifier` 独占，Shell、Widget 与业务回归统一经 `ProjectThreadsOperations` 调用。`ProjectThreadsSliceRunner` 只通过 `run(effect)` 执行 Provider I/O、分页与搜索调度；远端归属查询经 `ProjectThreadsStateOwner.threadFor` 读取当前项目第一个匹配摘要，不猜活跃 Provider。分页提交只补齐映射，保留窗口外显式登记；整体恢复重建索引，retain/remove/close 清理对应归属，关闭后的 ingress 不再改变索引或触发选中项移除回调。
+状态所有权和关闭规则见[工程规范 §3](../architecture/engineering_standards.md#3-状态与异步编排)。修改时通过 `ProjectThreadsOperations` 触发真实生产路径，只替换外部端口。
 
-- 同步回归用 application Notifier + recording runner，注入固定 `now`，并断言不产生 Provider effect。
-- 恢复、查询、分页、搜索、rename/archive/delete/fork 经真实 app overrides → Notifier → Runner 验证 Future 结算和最终状态；不要直接调用 Runner 私有 helper。
-- 初始列表和选中 id 建立映射；整体 restore 重建，分页按提交态补齐；显式窗口外映射保留，retain 只删移除项目，remove 只删目标映射，close 清空并拒绝迟到 ingress。
-- 选中项移除先由 owner 确认，再经具名 `activeThreadCleared` 通知 Shell；关闭后不得回调。现有 void Future 完成/fork 返回 null 的关闭语义保持。
-- 5/10/50 分页、300 ms 防抖、String threadId、首个摘要匹配及 v4 快照不变；跨 Provider 同 id 需另立整体键迁移方案。
+验证重点：
 
-WP-3P 已移除手写 listener、presentation 镜像与 Deferred；`projectThreadsSliceProvider` 是非 family、非 autoDispose 的应用级 owner，build 用 `ref.read` 冻结依赖，runner factory 只接收 `ProjectThreadsStateOwner`。Shell 借用 Operations 与独立 Riverpod 订阅；停止 Shell 只解除回调/订阅，owner 由应用关闭。BindingManager 与 global runtime 由 app provider 提供，Workspace 与 Runner 共享同一实例。
-
-关闭先封入口：pending void 正常完成、fork 返回 null；Runner.close 取消未触发的搜索 Timer、失效加载 token，`drainExecutions()` 等待已启动的恢复/激活/搜索、聚合查询和写入全部结束（eagerError: false，失败 Future 不替换），然后 app 关闭 BindingManager → runtime registry → plugin → container。所有未知/重复回执仍按 OperationId 判 stale；错误及堆栈只结算 Future，不进入列表状态或持久化。 验证入口见 `project_threads_slice_notifier_test`、app 下的 `project_threads_slice_runner_test`、`project_threads_session_snapshot_codec_test` 和 `project_threads_state_owner_guard_test`。
+- 同步规则只由 `ProjectThreadsSliceNotifier` 执行；Runner 执行 effect 和 I/O。
+- 远端归属从 `StateOwner.threadFor` 查询，分页保留窗口外显式映射。
+- 两 Provider、多项目、关闭重开和迟到结果不改变错误目标。
+- close 结算 void/null 调用方后仍等待查询、搜索和写入排空，再关闭 BindingManager。
+- Shell 与 Workspace 借用 app 唯一 manager；测试覆盖真实接线及 `project_threads_state_owner_guard_test`。
 
 ### 文件变更证据接入
 
@@ -521,24 +382,17 @@ create/resume/fork/send --> Binding.permissions.snapshotForRequest()
 
 ### Management owner 生命周期
 
-Management 的状态、operation waiter 与执行账本由应用会话级 `AgentManagementSliceNotifier` 独占；`agentManagementSliceProvider` 非 family、非 autoDispose。`build` 只读取冻结依赖，Runner factory 接收具名 `AgentManagementResultSink`，不得持 Ref 回读 owner。设置与运行事实经独立 app ingress 输入，Page、Editor、LogView 只读 provider 与 `AgentManagementOperations`，没有旧 Store、Deferred 或状态镜像。
+所有权、检测状态与关闭次序见[工程规范 §3](../architecture/engineering_standards.md#3-状态与异步编排)。接入时复用 `agentManagementSliceProvider`，页面通过 `AgentManagementOperations`，不建第二套 controller、Store 或首页缓存。
 
-关闭先封命令入口；探测等待者结算为 typed `closed`，其他操作仍以原 `StateError` 结算，再 `await drainExecutions()` 等待已发出的真实 I/O，最后释放 runtime registry、插件和容器；`ZetaAppComposition.close()` 可等待且幂等，同步 `dispose()` 只启动同一关闭过程。Runner 返回的执行 Future 包含探测后的持久化与日志的两段读取，不能拿已结算的调用方 Future 当作资源释放证据。原初始化/保存错误和堆栈只沿 Future 传播，不加入新状态或日志。
+修改检测或管理命令时验证：
 
-WP-5 将首页探测纳入同一 owner。`AgentManagementDetectionState` 区分逐 Provider confirmed、pending partial、outcome、失败与缓存写入警告；只有正式成功覆盖本 Provider 的确认记录，部分失败保留其他成功结果和失败项的旧记录。成功的 `notInstalled` 才能移除已安装行。`agentsById` 仅为由显示定义、确认记录、当前 settings、显式连接检查和运行事实计算出的安全只读 getter，没有可写 backing field。
+- 首页和管理页共用确认结果，partial 只表示进度；失败不撤销其他 Provider 的成功结果。
+- ensure、刷新、取消后排空期间共享正在进行的调用，关闭后不接受迟到结果。
+- 持久化前读取最新配置，只合并检测白名单，不能覆盖刷新期间的新选择。
+- 程序路径和详细诊断留在 app 目录，application 只持安全投影和 opaque handle。
+- 调用方 Future 结算与真实 I/O 排空分别验证；最终 await `ZetaAppComposition.close()`。
 
-`ensureDetected()` 消耗工作台的一次自动尝试；`refreshDetection()` 是显式重试。首次 await/dispatch 前占住同一 caller Future，并登记物理执行；初始化期间、正在运行和取消后的排空期间均加入同一 Future。逻辑取消立即结算 `canceled`、清空临时进度，仍等待已发出的仓储/持久化完成。异常映射为 normalized failure，不把原始异常写入新 state；observer 异常不改变已接受的成功回执。贡献目录在 app 会话内冻结；新目录代次取消旧 run，相同 id 的旧结果不能进入新定义。
-
-`ContributedAgentManagementDetectionAdapter` 在 app 中将仓储 `ManagedAgent` 转成安全 `AgentDetectionDetails` / partial，逐 Provider 隔离失败。持久化前读取最新配置，只合并现有探测白名单，不回写旧 enabled、command、arguments、environment、权限或无关 extra；确认未安装时移除旧 `cliPath`。缓存写失败不撤销探测成功。显式连接测试的摘要和非空模型覆盖单列保存，空模型保留探测目录；进程相关配置变化会清除显式覆盖并拒绝尚未返回的旧检查结果。
-
-路径和详细诊断只在 app 的 `AppAgentManagementDetailsCatalog` 中。application 仅持 opaque handle、是否定位到程序以及日志文件数；presentation 只能取得缩略/脱敏显示，复制和打开位置由 catalog 内部完成。新 handle 在成功事件发布前可读，回执拒绝即丢弃；探测和显式连接检查各自最多保留一个确认槽，替换令旧 handle 失效，关闭清空。配置编辑和日志读取继续走原独立端口。
-
-首页通过 `agentManagementHomeProvider` 订阅同一 state。app coordinator 在初始恢复完成且没有活动项目时调用 ensure，管理页首次需要时加入该入口；切页/卸载不取消探测。首页测试统一覆盖 `agentManagementDetectionPortProvider`，不得恢复专用 Home loader 或列表回滚缓存。
-
-
-WP-3C 已将 Shell、事实源和 ingress 全部前移到应用组合；先订阅再同步重读 current，页面卸载只释放自己的订阅，不关闭这些资源。
-
-验证 `agent_management_slice_notifier_test`、`agent_management_slice_runner_test`、真实管理页面/Shell，以及含正反例的 `agent_management_owner_guard_test`。测试覆盖 app inputs 或 application 依赖接缝；不要包装第二套业务 controller，也不要覆盖应用内部已经安装的同名 provider。
+运行 Notifier、Runner、真实管理页面/Shell 回归和 `agent_management_owner_guard_test`。依赖通过已声明接缝覆盖，同一 provider 不重复 override。
 
 ### Session config 命令结果与控件反馈
 
@@ -562,7 +416,7 @@ WP-3C 已将 Shell、事实源和 ingress 全部前移到应用组合；先订�
   UI 不显示异常原文，失败不覆盖全局 header/composer status。
 - 验证从真实 AgentPane/ComposerSection 选值开始，覆盖缺端口、延迟/失败/重试、独立取消、
   同 key 队列、不同 key 并行、禁用、关闭、runtime 换代和同 thread key 的 entry 重开。
-  具体用例与阶段证据见 [WP-6](../../../.workflow/plan/2026-09-05-lib-cohesion/06-wp6-session-config.md)。
+  原阶段验证摘要见 [应用状态与命令记录](../../../.workflow/plan/2026-09-05-lib-cohesion/00-index.md)。
 
 ### Skill 输入与 Composer token
 
@@ -728,7 +582,7 @@ synthetic fixture 或退役实现。
 - EffectRunner 执行 turn-completed 回调、模型目录记录和结构化错误日志，并在执行前重新校验
   listener generation、runtime/epoch 与必要 thread scope；TimelineStore 只执行增量 mutation，
   不决定 UI urgency。
-- 多 thread 常驻时，侧栏 busy 真源是各 entry 的 `AgentConversationThreadSnapshot`
+- 多 thread 常驻时，侧栏 busy 唯一依据是各 entry 的 `AgentConversationThreadSnapshot`
   （`isTurnRunning` / `runtimeStatus` / waiting），经 shell `syncRuntimeSnapshot` 写入
   `runningThreadIds` 与摘要 status。Processor 在对应 mutation 后登记 snapshot 刷新，
   presentation 仅在 typed UI scheduler 的安全发布回调中写入 listenable；turn 结束后若无
@@ -831,12 +685,12 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
 - 新增面板或重复项时优先复用 `Pane`、`PanelCard`、主题常量和现有间距。
 - UI 组件库使用 `shadcn_flutter`，必须 `as sf` 导入；Graphite 语义 token 通过
   `IdeThemeScope` / `IdeColors.of(context)` / `IdeTextStyles.of(context)` 读取。
-- 通知反馈使用 `showIdeToast`（`lib/src/ui/core/ide_toast.dart`）。
+- 通知反馈使用 `showIdeToast`（`packages/zeta_ui/lib/src/ide_toast.dart`）。
 - 不要再引入已移除的 `shadcn_ui` 或任何旧 `Shad*` API。
 
 ### 界面语言与文案
 
-- 首期只支持英语与简体中文。产品语义是 `zh-Hans`；资源文件因 Flutter `gen-l10n`
+- 当前只支持英语与简体中文。产品语义是 `zh-Hans`；资源文件因 Flutter `gen-l10n`
   要求基础 `zh` fallback，使用 `app_en.arb` + `app_zh.arb`（`@@locale: zh`），
   不要再拆第三种界面语言。
 - 语言偏好是 `settings` domain 的 `AppLanguage`，持久化码 `en` / `zh-Hans`。
@@ -859,7 +713,7 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
   `ZetaTextCatalogs` 在 app 组合层包装同一份 `AppLocalizations`；测试与未注入
   路径可用与 zh ARB 对齐的 `Fallback*`。禁止把 generated l10n、`Locale` 或
   `BuildContext` 下沉到 application / data / domain。
-- 英文 ARB 是 key、description、placeholder 的模板真源；两份 ARB 必须对齐。
+- 英文 ARB 是 key、description、placeholder 的模板唯一依据；两份 ARB 必须对齐。
   placeholder 一律 `String`，禁用 plural / date / number formatter。日期、数字、
   百分比、相对时间继续用语言无关算法（相对时间只翻译
   `formatLocalizedRelativeTime` 的静态 token）。`Agent` / `Provider` / `Thread` /
@@ -997,10 +851,12 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
 
 ## 9. 会话和持久化
 
-Zeta 自有数据统一写入用户主目录下的以下结构：
+本文中的 `<Zeta 数据目录>` 指生产入口在系统应用文档目录下创建的 `.zeta`，不固定为 HOME；路径解析见工程规范 §5。
+
+Zeta 自有数据使用以下结构：
 
 ```text
-~/.zeta/
+<Zeta 数据目录>/
   config/
     providers.json
     appearance.json
@@ -1009,14 +865,14 @@ Zeta 自有数据统一写入用户主目录下的以下结构：
     ide_session.json
     usage_statistics_index.json
     session/<providerId>/<threadId>.json
+    claude_code/
   logs/
     zeta-YYYY-MM-DD.log
   cache/
     agent_models_v1.json
 ```
 
-`main` 在 `runApp` 前解析 HOME、配置文件日志并准备存储目录；`app` 把具体文件
-注入各 feature data store。当前没有旧版 SharedPreferences 或历史文件迁移；目录准备失败时
+`main` 在 `runApp` 前取得应用文档目录、配置文件日志并准备存储目录；`app` 通过存储 provider 装配各 feature data store。当前没有旧版 SharedPreferences 或历史文件迁移；目录准备失败时
 本次运行使用内存状态，不阻止主界面启动。
 
 会话状态使用版本化 JSON。变更字段时：
@@ -1025,7 +881,7 @@ Zeta 自有数据统一写入用户主目录下的以下结构：
 - 新字段提供默认值。
 - 当前没有历史版本需要迁移；未来格式变更须明确决定是否重新播种空状态。
 - 不要把 provider 全局配置复制进每个项目状态。
-- 不要在 presentation/application 中直接构造 `File('~/.zeta/...')`。
+- 不要在 presentation/application 中直接构造 本机数据目录路径。
 
 `general.json` 当前为 v3，保存发送快捷键、通知开关和 `appLanguage`
 （`en` / `zh-Hans`）。只解码 v3；未知语言回退英语，损坏或不支持版本使用启动编排的
@@ -1049,9 +905,9 @@ Agent CLI 的数据不属于这套目录：Codex/Grok/Claude Code 配置与 sess
 Provider 自有 data adapter 可以按明确功能读取对应 CLI 的配置、
 会话、日志和账号 metadata；application/presentation 不自行遍历这些目录，也不接收原始
 路径或 payload。读取权限不自动授权迁移、复制、改写或删除；派生索引与隐藏列表仍只写
-`~/.zeta`。
+`<Zeta 数据目录>`。
 Codex 使用统计仍只读原 rollout JSONL，并把可重建的派生索引写入
-`~/.zeta/state`。
+`<Zeta 数据目录>/state`。
 
 `AgentFileChangeSnapshot` 及其替换片段、写入内容、unified patch 只属于当前内存时间线。
 不得把它们加入 IDE session、thread summary、模型缓存、使用统计索引、日志或系统通知；ignored

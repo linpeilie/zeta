@@ -1,7 +1,7 @@
 blank_issues_enabled: false
 contact_links:
   - name: 故障排查 / Troubleshooting
-    url: https://github.com/linpeilie/zeta/blob/dev/docs/product/troubleshooting.md
+    url: https://github.com/linpeilie/zeta/blob/dev/docs/zh/guide/troubleshooting.md
     about: 提 Issue 前先看常见问题与数据说明。/ Check common problems and the data reference first.
   - name: 提问与讨论 / Questions and discussion
     url: https://github.com/linpeilie/zeta/discussions

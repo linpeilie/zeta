@@ -1,68 +1,33 @@
 # Notifications
 
-While the assistant works, you're usually doing something else. When a task finishes, or it's stuck waiting for you, Zeta uses a system notification to get your attention.
+When you leave a conversation, Zeta can notify you when its task ends or needs a response.
 
-## When you get notified
+## Events that can notify you
 
-Zeta only notifies you when **you aren't already looking at that conversation.** Three conditions have to hold simultaneously for it to stay quiet:
+- A task completes, fails or is interrupted.
+- The assistant needs permission, an answer or agreement to a plan.
+- A plan is ready to execute.
 
-1. The Zeta window has focus
-2. The conversation view is showing (not Settings, not Usage statistics)
-3. The conversation currently open is the one the event came from
+No repeated reminder is sent while you are viewing that conversation on Zeta's conversation page. Notifications can arrive when another app, conversation, settings or usage page is active. Delivery also depends on your system settings.
 
-All three, and Zeta assumes you're watching and doesn't interrupt. If any one of them fails, you get a notification.
+## Open the details
 
-## What it notifies you about
+A notification contains the event category and a short project name. Select it to open the conversation. If the conversation is deleted or cannot be found, Zeta reports that it cannot open it.
 
-Two categories, each with its own switch in settings.
+Notifications do not show message bodies, commands, full paths or error details.
 
-**Task finished**
+## Taskbar reminders
 
-- Task completed
-- Task failed
-- Task interrupted
+The Windows taskbar, Mac Dock and some Linux desktops can also flash or show badges or other reminders. Returning to the conversation clears its unread mark. The appearance depends on your system.
 
-**Needs your confirmation**
+## Change notification settings
 
-- Permission required
-- Question waiting for an answer
-- Plan waiting for approval
-- Plan ready to execute
+Open “Settings → General → Notifications”:
 
-## What a notification looks like
-
-The title is just the category — "Task completed", "Permission required". The body is the project directory name and "Agent session".
-
-Notifications **never** contain your prompt, the assistant's reply, command text, full paths, question wording, or error details. That's deliberate: system notifications land in your operating system's notification centre, which is not the place for any of that. To see what actually happened, click through to the conversation.
-
-Clicking a notification brings Zeta to the front and opens the matching conversation. If that conversation has been deleted or isn't in your current project list, Zeta tells you it can't open it rather than failing silently.
-
-## Taskbar and Dock
-
-There are quieter signals too:
-
-- **Windows** — the taskbar icon flashes and shows an unread count
-- **macOS** — a badge on the Dock icon
-- **Linux** — depends on your desktop environment, usually a window urgency hint
-
-These clear on their own once you return to the conversation.
-
-## Where the switches are
-
-**Settings → General → Notifications** has three:
-
-| Switch | What it does |
+| Switch | Effect |
 | --- | --- |
-| System notifications | The master switch. With this off, the other two do nothing. |
-| Task finished | Notify when a task completes, fails or is interrupted. |
-| Needs confirmation | Notify when a permission, question, plan approval or execution confirmation is waiting. |
+| System notifications | Turns all system notifications on or off |
+| Task ended | Controls completion, failure and interruption reminders |
+| Needs confirmation | Controls requests waiting for a response and plan-execution reminders |
 
-## Not getting notifications
-
-First check that your operating system grants Zeta permission:
-
-- **macOS** — System Settings → Notifications → Zeta
-- **Windows** — Settings → System → Notifications
-- **Linux** — depends on whether your desktop's notification service is running
-
-Then check you aren't being filtered out by the "you're already watching" rule above. More cases in [Troubleshooting](troubleshooting.md#desktop-notifications).
+If reminders do not arrive, check these switches, system notification permissions and Do Not Disturb. See [Troubleshooting](troubleshooting.md#notifications).

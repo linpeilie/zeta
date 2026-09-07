@@ -1,6 +1,6 @@
 # Codex app-server 协议版本锁定
 
-最后更新：2026-08-12
+文档与路径核对：2026-09-07；协议取样日期见各节，本次未重新运行真实 CLI。
 
 ## 1. 目的
 
@@ -19,7 +19,6 @@ Zeta 的默认 Agent provider（`CodexAppServerAgentProvider`）按 Codex CLI
 | 导出命令 | `codex app-server generate-json-schema --out <dir>` |
 | Schema 快照目录 | [`third_party/codex_app_server_schema/`](../../../third_party/codex_app_server_schema) |
 | 生成脚本 | [`tool/gen_codex_schema.sh`](../../../tool/gen_codex_schema.sh)、[`tool/gen_codex_schema.ps1`](../../../tool/gen_codex_schema.ps1) |
-| 适配计划 | `plan/codex_app_server_adaptation_plan.md`（已随 `plan/` 目录移除，仅存于 Git 历史） |
 
 > 说明：本次快照直接取自 `codex-rust-v0.144.5` release 源码中已生成的
 > stable JSON Schema；未纳入实验性 API，也继续排除键序不稳定的 v2 聚合文件。
@@ -93,10 +92,9 @@ Windows 上若 PATH 里的 npm 全局 `codex` 偏旧，脚本会优先尝试
    - 四个联合类型的 method 增减
    - 已适配方法的 params / notification 字段变更
    - 服务端请求响应 schema（避免非法应答）
-4. 按 diff 更新 `lib/src/features/agent` 适配层与测试。
-5. 更新本文件的 pinned 版本说明，以及
-   `plan/codex_app_server_adaptation_plan.md` 中的协议基准段落。
-6. 用真实 `codex app-server --stdio` 做冒烟：
+4. 按 diff 更新 `packages/zeta_agent_provider_codex` 的适配层与测试。
+5. 更新中英文协议文档的版本说明，并将实际验证结果记入 `.workflow/`。
+6. 用真实 `codex app-server` 做冒烟（默认使用 stdio，无需额外参数）：
    - 核心链路：`python tool/smoke_codex_app_server.py --expected-version 0.144.5`
    - Plan 实验链路：`python tool/smoke_codex_plan_mode.py --expected-version 0.144.5`
 7. 若本机版本不是目标版本，可省略 `--expected-version` 做兼容性诊断，但结果不能
@@ -181,7 +179,9 @@ registry。
 | Schema 模式 | experimental（由实际 CLI 生成并核对） |
 | 结果 | 18/19 通过；`turn/plan/updated` 未出现，严格 smoke 返回失败 |
 | 已验证 | experimental initialize、Default/Plan 目录、Plan/Default settings、Plan delta、用户提问应答、下一 turn 才切模式、重启 resume、本地 mode 恢复与 settings 收敛 |
-| 未替代的门禁 | `0.144.5` experimental 真实运行仍需在具备对应 CLI 的环境执行 |
+| 当次结论 | 此次兼容性结果不能替代 `0.144.5` 的目标版本验收 |
+
+后续 `0.144.5` Darwin x64 的 stable smoke 为 18/18，experimental Plan 仍为 18/19；完整记录见 [WP-E 验证](../../../.workflow/plan/2026-09-04-provider-plugin-packages/08-wpe-validation.md)。缺失事件仍列为[未完成事项](../../../.workflow/pending-validation.md)。
 
 smoke 只输出平台、版本、Schema 模式、检查项、方法名和计数；不输出或持久化
 Prompt、回复、文件内容、凭证、原始 JSONL、thread/turn id 或 stderr 原文。脚本使用临时

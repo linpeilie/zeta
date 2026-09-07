@@ -71,7 +71,7 @@ void main() {
   /// `AgentTimelineDirtyRegion` 脏位集合与 `takeDirtyRegions()`，各写方法在
   /// **值真正变化时**置位，取代原先只有 `_activityDirty` 一个布尔的做法。
   /// 目的：让 UI region 由「谁改了数据谁举手」派生，而不是由 reducer 硬编码
-  /// （见 docs/plan/agent_event_chain_refactor.md §7）。
+  /// （见 docs/zh/architecture/engineering_standards.md §4.2）。
   /// 本次不触碰 merge / identity / 终态判定，G2 边界不变。已按停线流程批准。
   const g1ContentBaselines = <String, _FileBaseline>{
     'packages/zeta_agent_core/lib/src/application/agent_event_pipeline.dart':

@@ -103,7 +103,7 @@ A data-change flag TimelineStore raises after a write (history / liveTurn / live
 A UI partition derived by the processor from dirty regions plus a SessionState field diff (header / composer / pendingInteraction / expansion / history / liveTurn, and so on). Widgets subscribe by region.
 
 **Conversation slice**
-WP-3C gives Workspace and Conversation one writable owner each. `AgentConversationWorkspaceNotifier` holds entry resources and immutable workspace state; an application `AgentConversationSliceNotifier` owns each entry's regions and command ledger. `AgentConversationOwnerKey(entryId, lifetimeToken)` survives draft promotion and runtime restart; reopening a thread allocates a new token. BindingKey is an alias: Live resolves the owner, Closing/Closed returns an empty terminal projection, and Unknown returns an unavailable projection.
+Workspace and Conversation each have one writable owner. `AgentConversationWorkspaceNotifier` holds entry resources and immutable workspace state; an application `AgentConversationSliceNotifier` owns each entry's regions and command ledger. `AgentConversationOwnerKey(entryId, lifetimeToken)` survives draft promotion and runtime restart; reopening a thread allocates a new token. BindingKey is an alias: Live resolves the owner, Closing/Closed returns an empty terminal projection, and Unknown returns an unavailable projection.
 
 **AgentConversationRuntimeController**
 The application aggregate for a conversation: pipeline, region projection, `AgentUiUpdateScheduler`, CommandPort, and effects. A workspace entry holds it; there is no `AgentConversationViewModel`.
@@ -177,7 +177,7 @@ The neutral signal that turn terminal states, permissions, questions, plan appro
 The rich-text input area at the bottom. Supports pasting or attaching images, `$` to insert a Skill, `/` for the command menu, and `@` to reference project files.
 
 **Skill token**
-An atomic chip in the composer, rendered from a `U+FFFC` placeholder plus a `WidgetSpan` as `$name`, deleted as a whole on backspace. Serialized to text on send with a `type: skill` input item. Codex only (`supportsSkillInput`).
+An atomic chip in the composer, rendered from a `U+FFFC` placeholder plus a `WidgetSpan` as `$name`, deleted as a whole on backspace. Serialized to text on send with a `type: skill` input item. Controlled by `supportsSkillInput` and the Skills port; currently supported by Codex and Grok.
 
 **Pending interaction**
 The approval/question card area pinned above the composer. Cards are removed once answered and don't reappear in the timeline.
@@ -185,7 +185,7 @@ The approval/question card area pinned above the composer. Cards are removed onc
 ## UI skeleton
 
 **Workbench**
-The persistent skeleton of `WindowFrame` + `IdeWorkbenchScaffold`. `IdeHome` is the sole composition boundary; page switching only swaps slot content.
+The persistent skeleton of `WindowFrame` + `IdeWorkbenchScaffold`. The app composition layer creates and starts business resources; `IdeHome` subscribes and assembles the interface. Page switching only swaps slot content.
 
 **Slot**
 Three positions: Navigation (left), Canvas (center), Inspector (right). Feature pages supply slot content and **must not replace the top-level workbench**.
@@ -195,12 +195,12 @@ The cross-page retention container. Mounts lazily, preserves State and scroll po
 
 **Graphite tokens**
 The dark Graphite Night / light Graphite Day semantic token sets, with `IdeThemeScope` as the source of truth. The `shadcn_flutter` theme is only a projection and must never be read back from. Business code must not hard-code colors, radii, or shadows. Surfaces follow a strictly monotonic luminance ladder (frame to canvas to pane to control to popover); depth comes from that ladder plus 1px translucent hairlines, with zero shadows anywhere except a deliberately faint fallback on floating layers.
-`lib/src/ui/core/`
+`packages/zeta_ui/lib/`
 
 ## Interface language
 
 **AppLanguage**
-The first ship has only `english` / `simplifiedChinese`, persisted as `en` / `zh-Hans`. Flutter `Locale` is not a domain model; it exists only in the app/UI composition layer.
+Currently supports only `english` / `simplifiedChinese`, persisted as `en` / `zh-Hans`. Flutter `Locale` is not a domain model; it exists only in the app/UI composition layer.
 
 **Text catalog**
 An immutable, pure-Dart port declared at a feature's domain boundary — for example `AgentUiTextCatalog`. Application / data / reducer code uses it to produce this process's Zeta copy and must not hold a `BuildContext`, generated l10n, or Flutter `Locale`.
@@ -213,15 +213,15 @@ A fresh install inspects only the first entry of `PlatformDispatcher`'s preferre
 
 ## Data and diagnostics
 
-**Zeta data directory (written `~/.zeta/` throughout the docs)**
-The root of Zeta-owned data: `config/`, `state/` (session state and derived indexes), `logs/` (daily), `cache/` (discardable). The real location is resolved per platform by `path_provider` and is currently a **`.zeta` folder inside the system documents directory** (`~/Documents/.zeta` on macOS and Linux, `%USERPROFILE%\Documents\.zeta` on Windows) — not `~/.zeta` in the home directory. The docs keep `~/.zeta/` as shorthand. For the user-facing file-by-file breakdown, see the [data reference](../guide/data-and-privacy.md#what-zeta-writes-to-your-machine).
+**Zeta data directory**
+Production startup gets the system application Documents directory through `ZetaUserDirectory`, then creates `.zeta` with `config/`, `state/`, `logs/` and `cache/`. Do not abbreviate this as `~/.zeta`, which suggests the user home directory. See [Data and Privacy](../guide/data-and-privacy.md#what-zeta-saves) for locations and cleanup effects.
 
 **Derived index**
 A rebuildable statistics cache storing normalized allow-listed fields only. Prompts, response bodies, tool output, raw error text, credentials, and provider raw payloads must never be persisted.
 
 **Redaction**
 Processing applied before writing logs or showing diagnostics: authorization headers, `Bearer` tokens, `sk-` keys, and `api_key`/`token`/`secret`/`password` style values are masked, and the home directory becomes `~`.
-`lib/src/core/security/sensitive_data_redactor.dart`
+`packages/zeta_foundation/lib/src/security/sensitive_data_redactor.dart`
 
 **Pinned schema**
 The Codex app-server JSON Schema snapshot under `third_party/codex_app_server_schema/`. Before upgrading the protocol, run `tool/gen_codex_schema.sh --diff` to review changes, then update the adapter.
@@ -232,7 +232,7 @@ The Codex app-server JSON Schema snapshot under `third_party/codex_app_server_sc
 ## Test execution
 
 **Affected tests**
-The set of tests that could change behavior because of the current change, computed by starting from the git change set and walking the import graph **backwards**. `bash tool/test_affected.sh` is the default rung of the dev loop; the selection logic lives in `tool/test_select.dart` and is designed to over-select rather than ever under-select. The full suite is enforced in CI, not in your terminal.
+The set of tests that could change behavior because of the current change, computed by starting from the git change set and walking the import graph **backwards**. `bash tool/test_affected.sh` is the default rung of the dev loop; the selection logic lives in `tool/test_select.dart` and is designed to over-select rather than ever under-select. CI always runs the full suite. Local refactoring, releases and test infrastructure changes also require the full gate.
 
 **Shard (runner)**
 One of the 6 groups the root `test/` tree is split into by `kRootTestShards` in `tool/test_shards.dart`, each running as its own parallel CI job (`fail-fast: false`). Shards are grouped **semantically** and matched by directory prefix, so a test dropped into an existing directory is picked up automatically. Run one locally with `bash tool/test_shard.sh <id>`.

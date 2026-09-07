@@ -1,10 +1,9 @@
 # Claude Code stream-json 协议基线
 
-最后更新：2026-08-17
+最后核对：2026-09-07（文档与路径；下列取样日期不变）
 
 本文记录 Zeta 当前 Claude Code Provider 的实际协议边界、已验证帧形状和升级门禁。
-它是实现与维护时的事实基线；早期取舍和未落地设想见
-[Claude Code Provider 接入适配文档（历史提案）](claude_code_provider_adapter.md)。
+实现维护以本文和包内 fixture 为依据。早期适配提案已被现行实现替代，保留在 Git 历史。
 
 ## 1. 基线与适用范围
 
@@ -15,7 +14,7 @@
 | 核心链路冒烟 | macOS / x86_64，CLI `2.1.227` |
 | 取样日期 | 2026-08-11—2026-08-12 |
 | 传输 | stdin/stdout 行分隔 JSON（stream-json） |
-| fixture | `test/src/features/agent/data/datasources/claude_code/fixtures/` |
+| fixture | `packages/zeta_agent_provider_claude_code/test/datasources/claude_code/fixtures/` |
 
 CLI 自报版本与 `system.init` 版本可能不同。Zeta 分别保留二者的诊断语义，不把其中
 一个改写成另一个，也不据此推断协议兼容。

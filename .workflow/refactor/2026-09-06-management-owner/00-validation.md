@@ -7,7 +7,7 @@
 - 执行日期 2026-09-06；分支 `dev`；开始 HEAD `3afb87e9`，工作区干净。前置 WP-4 `11c6d9c8`、WP-1 `ea56f5c9`、WP-6 `8778a8ae` 已登记并核对。
 - 本次只执行 WP-3M；不推进 WP-3P/C、WP-2 或 WP-5。保留现有 Project Threads/Conversation 的 Store、Deferred、registry 和 Shell 构造位置。
 - 不修改 Provider 包、协议、权限、依赖版本、持久化格式或测试并发；management operations 的签名、state、intent、effect、reducer 保持原语义。
-- 仓库引用的 `docs/prompts/refactoring.md`、`.agents/skills`、`.claude/skills` 和 `.codegraph` 当前不存在；执行 AGENTS 明示的完整重构门禁，不初始化额外工具。
+- 仓库引用的 `AGENTS.md`、`.agents/skills`、`.claude/skills` 和 `.codegraph` 当前不存在；执行 AGENTS 明示的完整重构门禁，不初始化额外工具。
 
 ## 2. 生产接线与生命周期
 

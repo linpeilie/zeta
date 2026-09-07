@@ -1,6 +1,6 @@
 # Release Guide
 
-Last updated: 2026-09-05
+Documentation checked: 2026-09-07. Release operations and remote settings were not reverified for this edit.
 
 > Translated from [the Chinese original](../../zh/release/release_guide.md), which is the source of truth if the two diverge.
 
@@ -8,7 +8,7 @@ Last updated: 2026-09-05
 
 Zeta uses a [GitHub Actions release workflow](../../../.github/workflows/release.yml) to build and publish desktop packages for Windows, macOS and Linux. The workflow only listens for `v*` tags pushed to GitHub. A tag must point at a commit reachable from `main` and pass the version pre-check described below.
 
-The repository has GitHub immutable releases enabled. The publish job hands every asset to the GitHub CLI, which internally creates a temporary draft, uploads the assets, and publishes the release once all uploads succeed. Do not create a release manually beforehand.
+The release process is designed for GitHub immutable releases. The publish job hands every asset to the GitHub CLI, which internally creates a temporary draft, uploads the assets, and publishes the release once all uploads succeed. Do not create a release manually beforehand.
 
 Releases still do not perform Windows code signing or Apple notarization. macOS derived packages are re-signed ad-hoc so the split-architecture app bundles remain structurally valid, but users may still see SmartScreen or Gatekeeper prompts on first run.
 
@@ -155,7 +155,7 @@ it. Script checks do not replace visual and installation acceptance.
 - **A draft was left behind after the workflow was force-cancelled** — the publish script prints the draft URL and fails closed. Confirm and delete that draft manually, then re-run. The script never guesses at or auto-deletes a remote draft.
 - **Already published, with correct release type, tag, 24 asset names and attestation** — a re-run counts as success and does not modify the release again.
 - **Already published, but status, asset manifest or attestation do not match** — the workflow fails explicitly. An immutable release cannot be repaired or topped up; fix the problem and cut a new tag.
-- A tag or release that is already public must never be rewritten, or deleted and reused. The existing immutable `v0.1.0-beta.4`, which has no assets, stays as it is. Beta 6/7 drafts left behind by the old workflow are not deleted automatically by CI; after merging these changes, use a new tag `v0.1.0-beta.8` for end-to-end acceptance.
+- Never rewrite a public tag or release, or delete and reuse it. Choose the next version from the actual release plan after checking existing remote tags; do not reuse a temporary version from an old task.
 - If the tag pre-check fails and no public release was produced, you may delete the bad tag once you have confirmed nothing external is using it. For anything already public, always increment the version and cut a new tag.
 
 ## 8. Release checklist

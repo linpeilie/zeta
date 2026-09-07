@@ -7,7 +7,7 @@
 - 执行日期：2026-09-06；分支 `dev`；开始 HEAD `55955959`，工作区干净，无需保留同期未提交文件。前置 WP-1 实现提交 `ea56f5c9`，WP-6 实现提交 `8778a8ae`。
 - 生产接收者核验：`IdeShellController` 将 `projectThreadsController` 与 `projectThreadsSliceStore` 都指向 composition.store；session 登记及 runtime snapshot 同步也由该 Store 接收。Shell、Widget 接线无需修改。
 - 本次只收口当前 Store/Runner；不迁 Notifier，不改 Provider 包、权限策略、操作签名、intent/effect/reducer、v4 codec、分页算法、锁文件或测试并发。
-- 仓库引用的 `docs/prompts/refactoring.md`、`.agents/skills`、`.claude/skills` 与 `.codegraph` 当前不存在；遵守 AGENTS 明示的重构 full 要求，使用源码与 import 调用图核验。
+- 仓库引用的 `AGENTS.md`、`.agents/skills`、`.claude/skills` 与 `.codegraph` 当前不存在；遵守 AGENTS 明示的重构 full 要求，使用源码与 import 调用图核验。
 - 当前锁文件使用 `https://pub.dev`。首次按历史配置用镜像解析造成工具生成锁文件差异，已撤销并以官方源重新解析；最终必须确认锁文件无 diff。历史镜像配置不适用于本次 checkout。
 
 ## 2. 实现与保持的行为
