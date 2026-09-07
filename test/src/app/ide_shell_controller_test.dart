@@ -334,6 +334,46 @@ void main() {
     },
   );
 
+  test('openThreadFromRoute opens a listed thread', () async {
+    final directory = Directory.systemTemp.createTempSync('zeta_shell_');
+    tempDirectories.add(directory);
+    final harness = await _openShellWithSelectedThread(
+      directory: directory,
+      threadIds: const <String>['thread-a', 'thread-b'],
+      selectedThreadId: 'thread-a',
+    );
+    addTearDown(harness.dispose);
+
+    final opened = await harness.shell.openThreadFromRoute(
+      directory.path,
+      'thread-b',
+    );
+
+    expect(opened, isTrue);
+    expect(harness.shell.selectedAgentController.sessionId, 'thread-b');
+    expect(
+      await harness.shell.openThreadFromRoute(directory.path, 'missing-thread'),
+      isFalse,
+    );
+  });
+
+  test('openProjectHomeFromRoute enters the project home', () async {
+    final directory = Directory.systemTemp.createTempSync('zeta_shell_');
+    tempDirectories.add(directory);
+    final harness = await _openShellWithSelectedThread(
+      directory: directory,
+      threadIds: const <String>['thread-a'],
+      selectedThreadId: 'thread-a',
+    );
+    addTearDown(harness.dispose);
+
+    await harness.shell.openProjectHomeFromRoute(directory.path);
+
+    expect(harness.shell.activeProjectPath, directory.path);
+    expect(harness.shell.isProjectHomeActive, isTrue);
+    expect(harness.shell.selectedAgentWorkspaceEntryId, isNull);
+  });
+
   test('fork 将 Provider 新建的 thread 登记并选中，后续操作只作用于新 thread', () async {
     final directory = Directory.systemTemp.createTempSync('zeta_shell_');
     tempDirectories.add(directory);

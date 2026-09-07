@@ -12,6 +12,10 @@ import 'package:zeta/src/app/localization/zeta_text_catalog_providers.dart';
 import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
 import 'package:zeta/src/app/plugins/zeta_plugin_providers.dart';
 import 'package:zeta/src/app/project_threads_slice/project_threads_slice_composition.dart';
+import 'package:zeta/src/app/router/app_navigation.dart';
+import 'package:zeta/src/app/router/project_id_mapping.dart';
+import 'package:zeta/src/app/router/registered_provider_ids.dart';
+import 'package:zeta/src/app/router/router_coordinator.dart';
 import 'package:zeta/src/app/shell/ide_shell_controller.dart';
 import 'package:zeta/src/app/storage/zeta_store_providers.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_owner_key.dart';
@@ -73,6 +77,8 @@ final agentConversationWorkspaceInputsProvider =
         elapsedTickerFactory: ref.read(agentElapsedTickerFactoryProvider),
         onTurnTerminal: events.turnTerminal,
         onAttention: (value) => unawaited(attention.handleAttention(value)),
+        navigationPort: ref.read(appNavigationPortProvider),
+        projectIdMapping: ref.read(projectIdMappingProvider),
       );
     });
 
@@ -171,6 +177,20 @@ final workbenchSessionProvider = Provider<WorkbenchSession>((ref) {
     agentUiTextCatalog: ref.read(agentUiTextCatalogProvider),
     metrics: ref.read(zetaMetricsPortProvider),
     providerMetricLabel: zetaAgentProviderDefinitionCatalog.metricLabelFor,
+    navigationPort: ref.read(appNavigationPortProvider),
+    projectIdMapping: ref.read(projectIdMappingProvider),
   );
   return WorkbenchSession(shell: shell, lifetimes: lifetimes, events: events);
 }, dependencies: [ideSessionSliceProvider]);
+
+final routerCoordinatorProvider = Provider<RouterCoordinator>((ref) {
+  final coordinator = RouterCoordinator(
+    ref: ref,
+    mapping: ref.read(projectIdMappingProvider),
+    navigation: ref.read(appNavigationPortProvider),
+    readProviderIds: () => ref.read(registeredProviderIdsProvider),
+    readHost: () => ref.read(workbenchSessionProvider).shell,
+  );
+  ref.onDispose(coordinator.dispose);
+  return coordinator;
+}, name: 'routerCoordinator');

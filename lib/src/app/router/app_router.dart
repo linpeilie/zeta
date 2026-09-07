@@ -2,24 +2,17 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:zeta/src/app/plugins/agent_provider_manifest.dart';
+import 'package:zeta/src/app/composition/workbench_session_providers.dart';
 import 'package:zeta/src/app/router/app_redirect.dart';
 import 'package:zeta/src/app/router/app_route_location.dart';
 import 'package:zeta/src/app/router/app_routes.dart';
 import 'package:zeta/src/app/router/project_id_mapping.dart';
+import 'package:zeta/src/app/router/registered_provider_ids.dart';
 import 'package:zeta/src/app/router/route_refresh_bridge.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_session_slice_notifier.dart';
 
 final rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
 final shellNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'shell');
-
-/// 已登记 provider id，供 draft 路由同步校验。
-final registeredProviderIdsProvider = Provider<Set<String>>(
-  (ref) => zetaAgentProviderDefinitionCatalog.definitions
-      .map((definition) => definition.providerId)
-      .toSet(),
-  name: 'registeredProviderIds',
-);
 
 /// GoRouter 单例。plain Provider，非 autoDispose；任何路径不得重建该实例。
 ///
@@ -49,7 +42,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       shellNavigatorKey: shellNavigatorKey,
     ),
   );
+  final coordinator = ref.read(routerCoordinatorProvider);
+  coordinator.attach(router);
   ref.onDispose(() {
+    coordinator.detach();
     router.dispose();
     bridge.dispose();
   });
