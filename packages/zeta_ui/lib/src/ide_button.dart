@@ -51,9 +51,13 @@ enum IdeButtonVariant {
 /// - 字号偏大（shadcn `typography.small` 14 vs IDE bodySmall 11）
 /// - 固定 [IdeMetrics.toolbarHeight] 后文案顶对齐
 ///
+/// 键盘焦点关掉 shadcn [sf.FocusOutline]（外侧半透明环会被工具栏 `ClipRect`
+/// 裁切成残缺描边），改在控件内侧画 1px [IdeColors.focusRing]。
+///
 /// 与 [IdeChip] 的分工：
 /// - **Button**：动作触发（刷新、打开、确认）与带图标的筛选触发器；
 /// - **Chip**：属性标签、可删除 tag、轻量状态胶囊。
+/// 带展开箭头的工具栏选择触发器走 [IdeToolbarSelectTrigger]。
 class IdeButton extends StatelessWidget {
   /// 创建一个紧凑 IDE 按钮。
   const IdeButton({
@@ -174,6 +178,7 @@ class IdeButton extends StatelessWidget {
       onPressed: isEnabled ? onPressed : null,
       focusNode: focusNode,
       enabled: isEnabled,
+      disableFocusOutline: true,
       style: _resolveStyle(
         variant,
         EdgeInsets.symmetric(
@@ -270,7 +275,49 @@ class IdeButton extends StatelessWidget {
         density: density,
       ),
     };
-    return base.copyWith(padding: (context, states, value) => padding);
+    return base.copyWith(
+      padding: (context, states, value) => padding,
+      decoration: (context, states, value) =>
+          _graphiteKeyboardFocusDecoration(context, states, value),
+    );
+  }
+
+  /// 键盘焦点环画在 bounds 内侧，避免被 Composer 工具栏的裁切容器剪掉。
+  static Decoration _graphiteKeyboardFocusDecoration(
+    BuildContext context,
+    Set<WidgetState> states,
+    Decoration decoration,
+  ) {
+    if (!states.contains(WidgetState.focused) ||
+        states.contains(WidgetState.disabled)) {
+      return decoration;
+    }
+    final focusSide = BorderSide(
+      color: IdeColors.of(context).focusRing,
+      width: 1,
+      strokeAlign: BorderSide.strokeAlignInside,
+    );
+    if (decoration is BoxDecoration) {
+      return decoration.copyWith(
+        borderRadius: decoration.borderRadius ?? IdeRadius.allSmall,
+        border: Border.fromBorderSide(focusSide),
+      );
+    }
+    if (decoration is ShapeDecoration) {
+      final shape = decoration.shape;
+      if (shape is RoundedRectangleBorder) {
+        return decoration.copyWith(
+          shape: RoundedRectangleBorder(
+            borderRadius: shape.borderRadius,
+            side: focusSide,
+          ),
+        );
+      }
+      if (shape is CircleBorder) {
+        return decoration.copyWith(shape: CircleBorder(side: focusSide));
+      }
+    }
+    return decoration;
   }
 
   static Color _resolveForeground({
@@ -376,6 +423,7 @@ class IdeIconButton extends StatelessWidget {
           onPressed: isEnabled ? onPressed : null,
           focusNode: focusNode,
           enabled: isEnabled,
+          disableFocusOutline: true,
           style: IdeButton._resolveStyle(variant, EdgeInsets.all(padding)),
           alignment: Alignment.center,
           child: IdeIconBox(

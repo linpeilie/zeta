@@ -390,92 +390,64 @@ class _ModelConfigTrigger extends StatelessWidget {
       tooltip.write('\n$refreshError');
     }
 
-    return IdeTooltip(
-      message: tooltip.toString(),
-      enabled: !open,
-      child: IdeButton(
-        key: const ValueKey('agent-model-selector'),
-        label: modelLabel,
-        semanticLabel: refreshError == null
-            ? context.l10n.agentModelConfigSemantic(modelLabel)
-            : context.l10n.agentModelConfigErrorSemantic(
-                modelLabel,
-                refreshError,
-              ),
-        variant: open ? IdeButtonVariant.secondary : IdeButtonVariant.ghost,
-        focusNode: focusNode,
-        onPressed: onPressed,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // 只限制模型名本身；外层保持无界，避免触发器在高 DPI 下
-            // 扩张到最大宽度。
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 140),
-              child: Text(
-                modelLabel,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: textStyles.bodySmall.copyWith(
-                  color: colors.textSecondary,
-                  fontWeight: FontWeight.w600,
-                ),
+    return IdeToolbarSelectTrigger(
+      buttonKey: const ValueKey('agent-model-selector'),
+      label: modelLabel,
+      semanticLabel: refreshError == null
+          ? context.l10n.agentModelConfigSemantic(modelLabel)
+          : context.l10n.agentModelConfigErrorSemantic(
+              modelLabel,
+              refreshError,
+            ),
+      tooltip: tooltip.toString(),
+      open: open,
+      focusNode: focusNode,
+      onPressed: onPressed,
+      isLoading: state.isRefreshing,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 只限制模型名本身；外层保持无界，避免触发器在高 DPI 下
+          // 扩张到最大宽度。
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 140),
+            child: Text(
+              modelLabel,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: textStyles.bodySmall.copyWith(
+                color: colors.textSecondary,
+                fontWeight: FontWeight.w600,
               ),
             ),
-            if (effortLabel != null) ...[
-              const SizedBox(width: IdeSpacing.space4),
-              Text(
-                '· $effortLabel',
-                maxLines: 1,
-                style: textStyles.bodySmall.copyWith(
-                  color: colors.textTertiary,
-                ),
-              ),
-            ],
-            if (state.selectedFastEnabled) ...[
-              const SizedBox(width: IdeSpacing.space4),
-              IdeIconBox(
-                Icons.bolt_rounded,
-                key: const ValueKey('agent-model-fast-enabled'),
-                size: 13,
-                color: colors.warning,
-              ),
-            ],
-            if (refreshError != null) ...[
-              const SizedBox(width: IdeSpacing.space4),
-              IdeIconBox(
-                Icons.error_outline_rounded,
-                key: const ValueKey('agent-model-refresh-error'),
-                size: 13,
-                color: colors.error,
-              ),
-            ],
+          ),
+          if (effortLabel != null) ...[
             const SizedBox(width: IdeSpacing.space4),
-            if (state.isRefreshing)
-              IdeIconBox.custom(
-                child: IdeBusySpinner(
-                  size: 12,
-                  strokeWidth: 1.5,
-                  color: colors.textTertiary,
-                ),
-              )
-            else
-              IdeIconBox.custom(
-                child: AnimatedRotation(
-                  turns: open ? 0.5 : 0,
-                  duration: MediaQuery.disableAnimationsOf(context)
-                      ? Duration.zero
-                      : IdeMotion.durationNormal,
-                  curve: IdeMotion.curveDefault,
-                  child: Icon(
-                    Icons.keyboard_arrow_down_rounded,
-                    size: 13,
-                    color: colors.textTertiary,
-                  ),
-                ),
-              ),
+            Text(
+              '· $effortLabel',
+              maxLines: 1,
+              style: textStyles.bodySmall.copyWith(color: colors.textTertiary),
+            ),
           ],
-        ),
+          if (state.selectedFastEnabled) ...[
+            const SizedBox(width: IdeSpacing.space4),
+            IdeIconBox(
+              Icons.bolt_rounded,
+              key: const ValueKey('agent-model-fast-enabled'),
+              size: 13,
+              color: colors.warning,
+            ),
+          ],
+          if (refreshError != null) ...[
+            const SizedBox(width: IdeSpacing.space4),
+            IdeIconBox(
+              Icons.error_outline_rounded,
+              key: const ValueKey('agent-model-refresh-error'),
+              size: 13,
+              color: colors.error,
+            ),
+          ],
+        ],
       ),
     );
   }

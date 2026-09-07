@@ -592,6 +592,9 @@ Provider 契约测试。若 PR 因 Provider 差异修改 CoalescingPolicy/Buffer
   锚点弹出层（Composer 模型/权限/模式、菜单、选择列表）统一用 `IdePopoverPanel`，
   与 Composer 外卡同色、同描边、同 medium 圆角，并带浮层投影；不要再叠
   `sf.Card` 或 SelectPopup 自带卡片。`IdeSurface.popover` 仅用于用量统计等独立浮层面板。
+  Composer 工具栏选择触发器（模型 / 权限 / 模式）走 `IdeToolbarSelectTrigger`。
+  `IdeButton` / `IdeIconButton` 关闭 shadcn `FocusOutline`，键盘焦点用内侧
+  1px `IdeColors.focusRing`，不要再叠会被裁切的外侧焦点环。
 - IDE 通知统一走 `showIdeToast`，不要在 feature 页散落 `sf.showToast` builder。
 - 长项目路径、文件路径、thread 标题、工具调用摘要和 diff 统计必须限制行数并使用 ellipsis。
 - 非文本按钮需要 tooltip；重要自定义控件需要语义标签。

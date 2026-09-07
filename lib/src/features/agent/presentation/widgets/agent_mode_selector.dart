@@ -170,69 +170,42 @@ class _AgentModeSelectorState extends State<AgentModeSelector> {
                 ),
               )
             : _agentModeSelectorLabelMaxWidth;
-        return IdeTooltip(
-          message: display.tooltip,
-          enabled: !open,
-          child: IdeButton(
-            key: const ValueKey('agent-mode-selector'),
-            label: display.visibleLabel,
-            semanticLabel: display.semanticLabel,
-            variant: open ? IdeButtonVariant.secondary : IdeButtonVariant.ghost,
-            focusNode: _triggerFocusNode,
-            onPressed: _canOpen ? _togglePopover : null,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Semantics(
-                  label: context.l10n.agentConversationModeIcon,
-                  excludeSemantics: true,
-                  child: IdeIconBox(
-                    Icons.alt_route_rounded,
-                    size: 13,
-                    color: colors.textTertiary,
+        return IdeToolbarSelectTrigger(
+          buttonKey: const ValueKey('agent-mode-selector'),
+          label: display.visibleLabel,
+          semanticLabel: display.semanticLabel,
+          tooltip: display.tooltip,
+          open: open,
+          focusNode: _triggerFocusNode,
+          onPressed: _canOpen ? _togglePopover : null,
+          isLoading: isLoading,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Semantics(
+                label: context.l10n.agentConversationModeIcon,
+                excludeSemantics: true,
+                child: IdeIconBox(
+                  Icons.alt_route_rounded,
+                  size: 13,
+                  color: colors.textTertiary,
+                ),
+              ),
+              const SizedBox(width: IdeSpacing.space4),
+              ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: availableLabelWidth),
+                child: Text(
+                  display.visibleLabel,
+                  key: const ValueKey('agent-mode-selector-label'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textStyles.bodySmall.copyWith(
+                    color: colors.textSecondary,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(width: IdeSpacing.space4),
-                ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: availableLabelWidth),
-                  child: Text(
-                    display.visibleLabel,
-                    key: const ValueKey('agent-mode-selector-label'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: textStyles.bodySmall.copyWith(
-                      color: colors.textSecondary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: IdeSpacing.space4),
-                if (isLoading)
-                  IdeIconBox.custom(
-                    key: const ValueKey('agent-mode-selector-loading'),
-                    child: IdeBusySpinner(
-                      size: 12,
-                      strokeWidth: 1.5,
-                      color: colors.textTertiary,
-                    ),
-                  )
-                else
-                  IdeIconBox.custom(
-                    child: AnimatedRotation(
-                      turns: open ? 0.5 : 0,
-                      duration: MediaQuery.disableAnimationsOf(context)
-                          ? Duration.zero
-                          : IdeMotion.durationNormal,
-                      curve: IdeMotion.curveDefault,
-                      child: Icon(
-                        Icons.keyboard_arrow_down_rounded,
-                        size: 13,
-                        color: colors.textTertiary,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+              ),
+            ],
           ),
         );
       },

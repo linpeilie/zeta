@@ -145,8 +145,8 @@ abstract final class IdeEffects {
   ///
   /// [accent] 通常传入 `IdeColors.focusRing`。
   ///
-  /// 生效位置：Agent Composer 外卡聚焦态（`agent_pane_composer`）；
-  /// 其它可聚焦控件可复用同一套环。
+  /// 生效位置：Agent Composer 外卡聚焦态（`agent_pane_composer`）、
+  /// `IdeSwitch`；紧凑按钮的键盘焦点改走内侧 1px 描边，不使用本投影。
   static List<BoxShadow> focusRing(
     Brightness brightness, {
     required Color accent,

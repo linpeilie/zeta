@@ -37,6 +37,7 @@ export 'src/ide_tabs.dart';
 export 'src/ide_text_styles.dart';
 export 'src/ide_timeline_row.dart';
 export 'src/ide_toast.dart';
+export 'src/ide_toolbar_select_trigger.dart';
 export 'src/layout/ide_constraint_bucket_builder.dart';
 export 'src/metrics/compact_metric_bar.dart';
 export 'src/pane_widgets.dart';
