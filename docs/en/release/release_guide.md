@@ -10,6 +10,8 @@ Create a PR targeting `main`, review the version and release notes, then merge i
 
 Use the project `$zeta-release` Skill with an explicit version or just a beta/stable channel to select the next version automatically. Human review, committing, and merging remain separate steps.
 
+The Skill creates the GitHub PR through `gh`. Fetching main is for comparison and validation only; do not automatically merge, pull with a merge, or rebase. Report PR conflicts; branch synchronization and conflict resolution require separate explicit instructions.
+
 ## 2. Version and release notes
 
 - Root `release.json` contains `schemaVersion: 1` and a `version` of `X.Y.Z` or `X.Y.Z-beta.N`, without a `v` prefix. This determines the release tag and package version.
@@ -71,8 +73,8 @@ Before editing, report the baseline and selected version, then continue without 
    ```
 
    Use CI's `PUB_HOSTED_URL=https://pub.dev` to avoid lockfile changes from local mirrors.
-4. Review and edit the notes, commit with the code, push, and create a PR to `main`. PR checks validate version progression and notes.
-5. Merge after checks pass. Merging starts publication; do not manually create/push tags or create a GitHub Release beforehand.
+4. Review and edit the notes, commit with the code, and push the source branch. Check for an existing PR with `gh pr list --base main --head <source-branch> --state open`, then create it on GitHub with `gh pr create --base main --head <source-branch> --title <title> --body-file <body-file>`, or update the existing PR with `gh pr edit`. Verify branches and status with `gh pr view` and return the PR URL. PR checks validate version progression and notes.
+5. After checks pass, the user merges the PR on GitHub to start publication. “Commit and open a PR” does not include a local merge or `gh pr merge`; the Skill does not automatically resolve PR conflicts. Do not manually create/push tags or create a GitHub Release beforehand.
 
 ## 4. Automated workflow
 
