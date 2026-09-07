@@ -657,7 +657,8 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
   presentation 层，不写会话。
 - 需要跨页面保持的 Canvas 应使用稳定位置、稳定 Key 和保活容器。Key 必须放在可能因
   slot 增删而换位的 Flex 子节点上，不能只放在其内部后代；保活容器必须只布局活动页，
-  非活动页面同时退出布局并暂停 ticker。
+  非活动页面同时退出布局、暂停 ticker，并排除焦点遍历与指针命中，避免 Tab 把保活页
+  滚入视口。
 - Agent 会话与主要页面统一使用 `IdeRetainedPageView`；不要用 `IndexedStack` 保留
   长时间线，否则隐藏页面仍会参与 resize layout。
 - `IdeConstraintBucketBuilder` 的稳定回调可跨父级 resize 复用 child。若 builder 捕获

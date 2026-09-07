@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 
@@ -242,6 +243,69 @@ void main() {
     await tester.pump(const Duration(milliseconds: 32));
     expect(stateB.tickCount, greaterThan(hiddenTickCount));
   });
+
+  testWidgets('离屏 keep-alive 页不参与焦点遍历，Tab 也不会把它滚入视口', (tester) async {
+    var selectedId = 'a';
+    late StateSetter setHostState;
+    final focusA1 = FocusNode(debugLabel: 'field-a1');
+    final focusA2 = FocusNode(debugLabel: 'field-a2');
+    final focusB = FocusNode(debugLabel: 'field-b');
+    addTearDown(focusA1.dispose);
+    addTearDown(focusA2.dispose);
+    addTearDown(focusB.dispose);
+
+    await pumpIdeComponent(
+      tester,
+      size: const Size(400, 300),
+      child: StatefulBuilder(
+        builder: (context, setState) {
+          setHostState = setState;
+          return IdeRetainedPageView(
+            selectedId: selectedId,
+            pages: [
+              IdeRetainedPage(
+                id: 'a',
+                child: _FocusablePage(id: 'a', nodes: [focusA1, focusA2]),
+              ),
+              IdeRetainedPage(
+                id: 'b',
+                child: _FocusablePage(id: 'b', nodes: [focusB]),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    setHostState(() => selectedId = 'b');
+    await tester.pump();
+    await tester.pump();
+    expect(focusB.canRequestFocus, isTrue);
+    focusB.requestFocus();
+    await tester.pump();
+    expect(focusB.hasPrimaryFocus, isTrue);
+
+    setHostState(() => selectedId = 'a');
+    await tester.pump();
+    await tester.pump();
+
+    expect(focusB.hasPrimaryFocus, isFalse);
+    expect(focusB.canRequestFocus, isFalse);
+    expect(focusA1.canRequestFocus, isTrue);
+    expect(focusA2.canRequestFocus, isTrue);
+
+    focusA2.requestFocus();
+    await tester.pump();
+    expect(focusA2.hasPrimaryFocus, isTrue);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+
+    expect(focusB.hasPrimaryFocus, isFalse);
+    expect(focusB.canRequestFocus, isFalse);
+    final pageView = tester.widget<PageView>(find.byType(PageView));
+    expect(pageView.controller!.page, closeTo(0, 0.001));
+  });
 }
 
 class _ProbePage extends StatefulWidget {
@@ -326,6 +390,33 @@ class _TickerCountingPageState extends State<_TickerCountingPage>
   @override
   Widget build(BuildContext context) {
     return Center(child: Text('ticker-${widget.label}'));
+  }
+}
+
+class _FocusablePage extends StatelessWidget {
+  const _FocusablePage({required this.id, required this.nodes});
+
+  final String id;
+  final List<FocusNode> nodes;
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: Colors.blue,
+      child: Column(
+        children: [
+          for (var i = 0; i < nodes.length; i += 1)
+            Focus(
+              focusNode: nodes[i],
+              child: SizedBox(
+                width: 120,
+                height: 40,
+                child: Text('focus-$id-$i'),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }
 

@@ -573,7 +573,8 @@ Provider 契约测试。若 PR 因 Provider 差异修改 CoalescingPolicy/Buffer
 - 跨页面保活的 Canvas 必须保证关键 State、`ScrollController`、输入控制器和当前 Thread
   不被销毁。可能因兄弟 slot 增删而换位的 Flex 子节点必须直接使用稳定 Key；仅给内部
   Widget 加 Key 不足以保证父级 Element 复用。保活实现必须只布局活动页面；禁止用
-  `IndexedStack` 保留包含长时间线的页面或会话。
+  `IndexedStack` 保留包含长时间线的页面或会话。非活动 keep-alive 页不得进入焦点遍历、
+  指针命中和语义树；禁止只暂停 ticker 却仍允许 Tab 把隐藏页滚入视口。
 - 连续 resize 只允许按布局语义档位更新业务树。`IdeConstraintBucketBuilder` 的稳定
   callback 不得因父级每像素重建而失效；捕获了新配置的 callback 必须显式改变身份。
 - Agent 时间线必须使用 block / activity / footer 粒度的稳定 viewport item 与
