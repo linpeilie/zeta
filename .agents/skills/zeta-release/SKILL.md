@@ -1,23 +1,28 @@
 ---
 name: zeta-release
-description: 为 Zeta 准备 beta 或 stable 正式版本：指定版本、更新应用版本、按同通道 tag 确定提交范围、提炼用户更新说明，并交付人工审读及到 main 的 PR。用于 Zeta 发版准备，不把创建 Skill 或准备版本视为推送发布 tag 的授权。
+description: 为 Zeta 准备 beta 或 stable 正式版本：指定版本、更新应用版本、按同通道 tag 确定提交范围、提炼用户更新说明，并交付人工审读及到 main 的 PR。用于 Zeta 发版准备；PR 合入 main 后由流水线自动发布。
 ---
 
 # Zeta 发布准备
 
-在当前 Zeta 仓库执行。目标是可审读的版本改动和更新说明，以及合入 `main` 的 PR；默认不创建或推送发布 tag、不合并 PR、不直接发布 Release。
+在当前 Zeta 仓库执行。目标是可审读的版本改动和更新说明，以及合入 `main` 的 PR；PR 合并成功即自动执行发布。Skill 不手工打 tag、不代替用户合并 PR。
 
 ## 1. 先指定版本并读取项目约定
 
 - 首先取得用户明确指定的目标 tag，例如 `v0.1.0-beta.12` 或 `v0.1.0`。没有版本号时先询问，不猜测或自行决定本次发布版本。
 - `vX.Y.Z-beta.N` 是 beta；`vX.Y.Z` 是 stable。数字不得有前导零，N 必须大于零；不接受 rc 或 tag build metadata。
-- 先执行 `git status`，保留现有改动；定位仓库根目录并读取 `AGENTS.md`、`docs/zh/release/release_guide.md`、`docs/zh/development/documentation.md` 的更新日志规范，以及 `pubspec.yaml`、`.github/workflows/release.yml`。路径均相对仓库根目录。
-- 若需理解代码，遵循仓库 CodeGraph 规则。现行发布校验以 `tool/packaging/release_metadata.dart` 为准，文档与脚本冲突时先查明原因。
+- 先执行 `git status`，保留现有改动；定位仓库根目录并读取 `AGENTS.md`、`docs/zh/release/release_guide.md`、`docs/zh/development/documentation.md` 的更新日志规范，以及 `release.json`、`pubspec.yaml`、`.github/workflows/release.yml`。路径均相对仓库根目录。
+- 若需理解代码，遵循仓库 CodeGraph 规则。现行发布校验以 `tool/packaging/release_plan.dart` 和 `release_metadata.dart` 为准，文档与脚本冲突时先查明原因。
 - 核对当前分支和远端；默认准备来源是 `dev`，PR 目标是 `main`，不擅自切换或丢弃用户正在工作的分支。
 - 获取完整历史和最新远端 tags（不强制改写已有 tag）。网络失败或浅克隆历史不全时明确范围未验证，不能把缺失 tag 当成首次发布。
 - 检查目标 tag 是否已存在于本地或远端。已存在则核对其提交和发布状态；不移动、删除或复用公开 tag，要求用户指定可用的新版本后再做依赖该版本的修改。
 
-## 2. 更新应用版本
+## 2. 校验递增并更新应用版本
+
+- `release.json` 的 `schemaVersion` 保持 1，`version` 写完整发布版本、不带 v（例如 `0.1.0-beta.13`）。这是流水线的发布版本真源。
+- 在编辑之前比较目标版本与远端所有合法发布 tag，以及 `origin/main` 的发布版本。必须严格更大；相同和回退都拒绝。此处跨通道比较，与更新说明的“同通道基线”分开。
+- 使用 `release_plan.dart` 的数值排序语义：先比较 X/Y/Z，再比较 beta 序号；同核心版本 `beta.12 > beta.9`，正式版高于任意 beta。正式版之后不能回到同核心 beta，但可发布更高核心版本的 beta。不得用字符串比较或只校验目标 tag 不存在。
+- 第 5 节文稿准备完成后、提交前执行 `dart tool/packaging/release_plan.dart --previous-ref origin/main`（先获取最新远端 main 和完整 tags），校验版本、平台数字版本和同版更新说明。Skill 不使用 `--allow-existing` 绕过重复版本检查；该参数仅供 CI 重跑同一已发布提交。
 
 - `pubspec.yaml` 写 `X.Y.Z+BUILD`；即使发布 beta，也不能写入 `-beta.N`。Windows/macOS 元数据依赖数字版本；不要机械替换所有平台文件中的版本字符串。
 - 用户指定 build number 时校验为正整数；未指定时读取当前值和已发布版本的值，默认取可确认的最大值加一，并在交稿中说明。beta 序号不等于 build number。
@@ -60,12 +65,12 @@ git log --no-merges --format=fuller "$PREV..$HEAD_SHA"
 
 ## 5. 增量写入项目文档
 
-- 先查找本版本已有更新说明，包括 `CHANGELOG.md` 的同版内容。已有独立同版文件就沿用其路径；否则新建 `docs/zh/release/notes/<目标tag>.md`。
+- 先查找并读取本版本已有更新说明，包括 `CHANGELOG.md` 的同版内容。发布正文固定为 `docs/zh/release/notes/<目标tag>.md`；旧稿在其他位置时保留人工内容迁入此路径，并修正原入口，避免两份正文。
 - 无论文件还是同版章节，只要存在就先完整读取，再局部增量编辑。保留人工措辞、已确认内容和限制；新提交并入已有主题、去重，不整篇重生成覆盖旧稿。旧稿与当前证据矛盾时修正相应段落并在交稿说明。
 - `CHANGELOG.md` 为本版本提供简短入口并链接到独立文稿；已存在入口时只更新相关部分，不重复增加同版章节，不批量改写其他版本。
 - 正文结构为“开场点出版本主线 → `###` 主题分节 → 每节 1～5 条 bullet 或短段”，节标题带一个 emoji。不额外规定开场句数、分节数量或禁止版本级 `##` 标题。
 - 项目有英文同版文稿时同步操作、限制和事实；没有时按项目文档语言策略提供明确中文入口，不虚构已经完成的翻译。
-- 核对发布脚本如何消费说明。目前 `tool/packaging/publish_github_release.sh` 使用 `--generate-notes`，不会自动读取该文件。每次核对现状，交稿注明文稿是否已接入发布流程；本 Skill 的文稿准备不自动授权修改发布脚本或发布后覆盖 Release。
+- 发布流程使用 `--notes-file` 读取同版文稿，不再自动拼接提交列表；必须将更新说明与 `release.json`、`pubspec.yaml` 一起纳入 PR。
 
 ## 6. 自查与验证
 
@@ -83,4 +88,5 @@ git log --no-merges --format=fuller "$PREV..$HEAD_SHA"
 - 同时准备 PR 标题与正文，正文说明用户变化、版本/范围、更新说明路径、验证和未完成事项。
 - 用户审读并提交后，继续创建到 `main` 的 PR；已有对应 PR 则更新它，不重复创建。源分支和 push 的范围须核对，不能把不相关提交带入；沿用会话中已有的提交、推送和 PR 授权，不重复索要。
 - 使用 GitHub 工具或 `gh pr create --base main --head <源分支> --title <标题> --body-file <正文文件>`，正文文件保留真实换行。没有凭据、远端分支或必要授权时如实说明尚未创建并交付准备好的内容，不能伪报 PR URL。
-- 准备阶段不直接推送 main。只有用户另行要求实际发布时，才在 PR 合并后按发版指南核对 main 可达性、版本、门禁和 tag 唯一性，再执行已授权的 tag 发布；不手工提前创建 GitHub Release。
+- 准备阶段不直接推送 main、不手工创建 tag 或 GitHub Release。提醒用户：PR 合并成功后会自动发布。流程固定合并提交，重新校验版本递增，通过测试和构建后自动创建指向该提交的 tag 并发布；合并后可跟踪 Actions 状态和 Release URL，不把 PR 创建等同于发布成功。
+- 发布完成后查看 Actions 的 tag 核验结果：远端当前版本 tag 必须存在且解析到本次合并 SHA。tag 由发布流程自动创建，核验失败不能报告发布流程成功，也不手工覆盖已有 tag。

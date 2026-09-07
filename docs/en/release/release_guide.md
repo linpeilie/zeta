@@ -6,99 +6,75 @@ Documentation checked: 2026-09-07. Release operations and remote settings were n
 
 ## 1. How releases work
 
-Zeta uses a [GitHub Actions release workflow](../../../.github/workflows/release.yml) to build and publish desktop packages for Windows, macOS and Linux. The workflow only listens for `v*` tags pushed to GitHub. A tag must point at a commit reachable from `main` and pass the version pre-check described below.
+Create a PR targeting `main`, review the version and release notes, then merge it to trigger the [release workflow](../../../.github/workflows/release.yml). Closing an unmerged PR does not publish. No manual tag is required. Every stage uses the PR's fixed merge commit, even if main advances later.
 
-The release process is designed for GitHub immutable releases. The publish job hands every asset to the GitHub CLI, which internally creates a temporary draft, uploads the assets, and publishes the release once all uploads succeed. Do not create a release manually beforehand.
+Use the project `$zeta-release` Skill to prepare a version, for example `v0.1.0-beta.13`. Human review, committing, and merging remain separate steps.
 
-Releases still do not perform Windows code signing or Apple notarization. macOS derived packages are re-signed ad-hoc so the split-architecture app bundles remain structurally valid, but users may still see SmartScreen or Gatekeeper prompts on first run.
+## 2. Version and release notes
 
-## 2. Before releasing
+- Root `release.json` contains `schemaVersion: 1` and a `version` of `X.Y.Z` or `X.Y.Z-beta.N`, without a `v` prefix. This determines the release tag and package version.
+- `pubspec.yaml` contains `X.Y.Z+BUILD`, with the same core version and a positive build number. Windows/macOS metadata remains numeric; beta sequence and build number are independent.
+- Numeric fields cannot have leading zeroes; beta N must be positive. Other prerelease channels and tag build metadata are unsupported.
+- The version must exceed every existing valid release tag. PR validation also compares against the target main version. Numeric ordering applies: `0.1.0-beta.9 < 0.1.0-beta.12 < 0.1.0 < 0.1.1-beta.1`. Equal or older versions fail; increasing BUILD alone cannot bypass this.
+- Nonempty notes must exist at `docs/zh/release/notes/v<version>.md`. Follow the [changelog conventions (Chinese)](../../zh/development/documentation.md#更新日志规范), read existing drafts before incremental edits, and link the notes from `CHANGELOG.md`. GitHub Release uses this file directly, without generated commit lists.
 
-Follow the [changelog conventions (Chinese)](../../zh/development/documentation.md#更新日志规范) when writing this version's release notes.
+Example:
 
-1. Confirm the code to be released is merged into `main` and your working tree is clean.
-2. Update `version` in `pubspec.yaml`:
+```json
+{"schemaVersion": 1, "version": "0.1.0-beta.13"}
+```
 
-   ```yaml
-   version: 0.2.0+2
-   ```
+```yaml
+version: 0.1.0+2
+```
 
-   `0.2.0` is the numeric application version and must match the tag's core version. `2` is a positive integer build number. Windows and macOS application metadata use these two numeric fields and never carry a beta suffix.
-3. Commit the version change and push it to `main`.
-4. Run the full release gate before creating the tag:
+The migration's `release.json` records the existing `0.1.0-beta.12` baseline; it is not a new release request. Before merging with the new workflow, select a higher version and add its notes through the Skill. The baseline cannot be republished.
+
+## 3. Before releasing
+
+1. Fetch full remote history and tags; prepare a higher version on `dev` or the selected release branch.
+2. Update `release.json`, `pubspec.yaml`, versioned notes and the `CHANGELOG.md` link together.
+3. Run validation and the full gate:
 
    ```sh
+   git fetch origin --tags
+   dart tool/packaging/release_plan.dart --previous-ref origin/main
    flutter pub get --enforce-lockfile
    flutter analyze
    bash tool/test_full.sh
    ```
 
-## 3. Tag rules
+   Use CI's `PUB_HOSTED_URL=https://pub.dev` to avoid lockfile changes from local mirrors.
+4. Review and edit the notes, commit with the code, push, and create a PR to `main`. PR checks validate version progression and notes.
+5. Merge after checks pass. Merging starts publication; do not manually create/push tags or create a GitHub Release beforehand.
 
-The workflow accepts only these two forms:
+## 4. Automated workflow
 
-| `pubspec.yaml` | Valid tag | Release type |
-| --- | --- | --- |
-| `version: 0.2.0+2` | `v0.2.0` | Stable release, marked Latest |
-| `version: 0.2.0+2` | `v0.2.0-beta.1` | Pre-release, not Latest |
+1. Process merged PRs to main only; pin their merge SHA and verify main ancestry.
+2. Read the version and notes from that commit and validate progression, numeric metadata, and notes availability.
+3. Run reusable CI at the same commit, then build Windows, macOS and Linux packages.
+4. Serialize publication, fetch remote tags again, and recheck progression so an older concurrent build cannot supersede a newer release.
+5. Verify the 24-file manifest and SHA-256, then use `gh release create --target <merge-SHA> --notes-file <versioned-notes>` to create the tag and publish. Beta is Pre-release and not Latest; stable is Latest.
+6. Verify published state, assets, Release attestation, and each uploaded file.
+7. After publication, fetch the version tag from the remote, resolve its commit (supporting lightweight and annotated tags), verify it matches the merge SHA, and record it in the Actions summary. A missing or mismatched tag fails the workflow; tags are never overwritten or moved.
 
-No numeric segment may carry a leading zero, and the beta ordinal must be a positive integer without leading zeros. These tags are rejected by the pre-check:
+Only publication has `contents: write`. An existing tag must point to the same merge SHA; reusing a version on another commit fails. Published versions are never rewritten.
 
-- `v0.3.0` — core version does not match `pubspec.yaml`.
-- `v0.2.0-beta.0` or `v0.2.0-beta.01` — invalid beta ordinal.
-- `v0.2.0-rc.1` — the release channel currently supports stable and beta only.
-- `0.2.0` — missing the `v` prefix.
-- `v0.2.0+2` — tags do not accept build metadata.
-- Any tag pointing at a commit outside `main`'s history.
+With attachments, GitHub CLI creates a temporary draft, uploads assets, and publishes; the script does not pass `--draft`. See the [GitHub CLI documentation](https://cli.github.com/manual/gh_release_create) for automatic tag targeting and notes input.
 
-You can check the metadata locally on its own:
+## 5. Packages and platform acceptance
 
-```sh
-dart tool/packaging/release_metadata.dart \
-  --tag v0.2.0-beta.1 \
-  --pubspec pubspec.yaml
-```
-
-The command prints JSON; CI additionally passes `--github-output` to write the GitHub Actions output file.
-
-## 4. Creating and pushing the tag
-
-A beta release, for example:
-
-```sh
-git switch main
-git pull --ff-only
-git tag -a v0.2.0-beta.1 -m "Zeta v0.2.0-beta.1"
-git push origin v0.2.0-beta.1
-```
-
-For a stable release, use `v0.2.0` instead. The tag must point at a commit that already carries the correct `pubspec.yaml` version. After pushing, no manual GitHub Release is needed.
-
-## 5. What the automation does
-
-Once the tag is pushed:
-
-1. `Validate release metadata` checks the tag format, `pubspec.yaml`, and reachability from `main`.
-2. The release workflow calls the reusable CI from the same commit, running formatting, analysis, the six test shards and the internal package gate. Once all pass, Windows, macOS and Linux build in parallel. Ordinary CI only watches branches and pull requests, so a tag push does not start a second independent CI run.
-3. The publish job collects the assets and verifies them against an exact 24-item manifest plus local SHA-256 sums.
-4. A single `gh release create <tag> <24 assets>` call runs, without an explicit `--draft`. The GitHub CLI handles the temporary draft, uploads every asset, and publishes — which is what immutable releases require.
-5. After publishing, the release status and the 24 asset names are verified, along with the GitHub Release attestation and `gh release verify-asset` for every local file uploaded in this run.
-
-Only the final publish job holds `contents: write`. Betas are automatically marked pre-release and are never set as Latest.
-
-Every successful release contains 12 distribution packages plus a `.sha256` for each — 24 assets in total:
+A successful release contains 12 packages and their `.sha256` files, totaling 24 assets:
 
 | Platform | Packages |
 | --- | --- |
 | Windows x86_64 | ZIP, Inno Setup EXE |
-| macOS arm64 | ZIP, DMG |
-| macOS x86_64 | ZIP, DMG |
-| macOS universal | ZIP, DMG |
-| Linux x86_64 | `tar.gz`, DEB, RPM, AppImage |
+| macOS arm64 / x86_64 / universal | ZIP and DMG for each |
+| Linux x86_64 | tar.gz, DEB, RPM, AppImage |
 
-`<version>` in an asset name is the tag with the leading `v` removed, without the build number. For example, `v0.2.0-beta.1` produces `zeta-0.2.0-beta.1-linux-x86_64.AppImage`. Linux beta packages use `0.2.0~beta.1` internally for correct ordering semantics; Windows and macOS application metadata still use the numeric version from `pubspec.yaml`.
+Asset versions include the beta suffix but exclude BUILD. Linux beta package metadata uses `X.Y.Z~beta.N`; Windows/macOS use numeric app versions.
 
-macOS builds the universal app first and verifies that every Mach-O binary contains both arm64 and x86_64, then derives the two single-architecture apps, re-signs them ad-hoc, and verifies each ZIP and DMG separately. All four Linux packages come from the same staging tree. The download commit and SHA-256 of the AppImage tooling and runtime are pinned, and a verification mismatch fails the build outright.
+Windows code signing and macOS notarization are not enabled; derived macOS apps are ad-hoc signed again. First launch may show SmartScreen or Gatekeeper prompts. macOS builds universal apps before deriving single-architecture packages. Linux packages share one staging tree, and downloaded AppImage tools/runtime use pinned SHA-256 checks. Automation does not replace real installation and startup acceptance.
 
 ### macOS DMG tooling
 
@@ -150,22 +126,20 @@ it. Script checks do not replace visual and installation acceptance.
 
 5. Verify the actual architectures of all three macOS packages, and run an install-and-launch smoke test on the target platform.
 
-## 7. Failure recovery and immutability constraints
+## 7. Recovery and immutable releases
 
-- **Build or quality gate failed** — the release job never runs. Fix the code and version, then create a new tag.
-- **Asset upload failed** — the GitHub CLI will not publish an incomplete release. Re-run the failed job.
-- **A draft was left behind after the workflow was force-cancelled** — the publish script prints the draft URL and fails closed. Confirm and delete that draft manually, then re-run. The script never guesses at or auto-deletes a remote draft.
-- **Already published, with correct release type, tag, 24 asset names and attestation** — a re-run counts as success and does not modify the release again.
-- **Already published, but status, asset manifest or attestation do not match** — the workflow fails explicitly. An immutable release cannot be repaired or topped up; fix the problem and cut a new tag.
-- Never rewrite a public tag or release, or delete and reuse it. Choose the next version from the actual release plan after checking existing remote tags; do not reuse a temporary version from an old task.
-- If the tag pre-check fails and no public release was produced, you may delete the bad tag once you have confirmed nothing external is using it. For anything already public, always increment the version and cut a new tag.
+- Build or quality failure: publication does not run. Retry the same merged commit; code fixes require a new PR with a higher release version.
+- Upload failure: the CLI does not publish incomplete assets. Retry the failed job.
+- A cancelled run may leave a draft. The script reports its URL and stops; inspect and remove the draft manually before retrying.
+- A valid already-published immutable release can be verified on retry only when its tag still points to the original merge commit. State, assets and attestation must match.
+- Incorrect published releases cannot be repaired or have assets appended. Fix through a new PR and higher version. Never rewrite or delete and reuse public tags/releases.
 
-## 8. Release checklist
+## 8. Checklist
 
-- [ ] The numeric version and positive integer build number in `pubspec.yaml` are updated.
-- [ ] The version commit is merged and pushed to `main`.
-- [ ] `flutter analyze` and `bash tool/test_full.sh` pass.
-- [ ] The tag is `vX.Y.Z` or `vX.Y.Z-beta.N`, and its core version matches the application version.
-- [ ] All GitHub Actions jobs succeeded.
-- [ ] Release type, Latest status, release notes and all 24 assets are correct.
-- [ ] Release attestation, local SHA-256 sums, macOS architectures and the target-platform launch smoke test all pass.
+- [ ] `release.json`, the numeric `pubspec.yaml` version and positive BUILD agree.
+- [ ] Notes were reviewed and the version strictly exceeds previous versions.
+- [ ] Version and notes merged through a PR to main; publication pins that merge commit.
+- [ ] Analysis and the full test gate pass.
+- [ ] The automatically created tag has the expected version and merge SHA.
+- [ ] GitHub Actions succeeds; release type, Latest status, notes and all 24 assets are correct.
+- [ ] Attestation, SHA-256, macOS architectures and target-platform installation/startup acceptance pass.

@@ -1,19 +1,24 @@
 name: CI
 
 on:
-  # Tag push 只由 release.yml 调用本工作流，避免再启动一份独立 CI。
+  # 发布流程通过 workflow_call 校验固定的合并提交。
   push:
     branches:
       - main
   pull_request:
   workflow_dispatch:
   workflow_call:
+    inputs:
+      checkout-ref:
+        type: string
+        required: false
+        default: ''
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  group: ci-${{ github.workflow }}-${{ inputs.checkout-ref || github.head_ref || github.ref }}
   cancel-in-progress: true
 
 env:
@@ -29,6 +34,9 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+          fetch-depth: 0
 
       - name: Set up Flutter
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
@@ -40,6 +48,16 @@ jobs:
       # 使用 lockfile 安装，顺带发现 pubspec.lock 与 pubspec.yaml 的漂移。
       - name: Install dependencies
         run: flutter pub get --enforce-lockfile
+
+      - name: Validate release PR version and notes
+        if: github.event_name == 'pull_request' && github.event.action != 'closed' && github.base_ref == 'main'
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          git fetch origin --tags
+          dart tool/packaging/release_plan.dart --previous-ref "${BASE_SHA}"
 
       - name: Verify formatting
         run: dart format --output=none --set-exit-if-changed .
@@ -65,6 +83,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
 
       - name: Set up Flutter
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
@@ -92,6 +112,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
       - name: Discover test entries
         id: discover
         run: |
@@ -110,6 +132,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
 
       - name: Set up Flutter
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0

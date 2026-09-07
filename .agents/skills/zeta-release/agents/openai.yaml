@@ -1,4 +1,4 @@
 interface:
   display_name: "Zeta 发布准备"
-  short_description: "准备 beta 和正式版本、提炼用户更新说明并交付到 main 的 PR"
+  short_description: "校验 beta 和正式版本递增、提炼更新说明并准备合并后自动发布的 PR"
   default_prompt: "使用 $zeta-release 为当前 Zeta 项目准备指定版本，更新版本号和用户更新说明，完成人工审读交接并准备到 main 的 PR。"
