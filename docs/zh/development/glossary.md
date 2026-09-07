@@ -2,9 +2,9 @@
 
 中文 ｜ [English](../../en/development/glossary.md)
 
-这些词在代码和文档里高频出现，含义都很具体。第一次读仓库时建议先扫一遍，之后遇到不确定的再回来查。
+本文供开发者查阅代码中的领域概念；用户操作说明见[使用指南](../README.md)。
 
-先看整体是怎么串起来的：[架构总览](../architecture/overview.md)。
+模块关系见：[架构总览](../architecture/overview.md)。
 
 ## 会话与回合
 
@@ -12,7 +12,7 @@
 一次持续的对话，归属于某个项目目录。它由 Provider 侧维护，可以列出、读取历史、恢复、分支、重命名、归档、删除——但每一项能力都取决于该 Provider 是否声明支持。UI 里显示在左侧 Projects 面板的项目节点下。
 
 **Turn（回合）**
-一次"用户发一条 → Agent 干完活"的完整往返。是使用统计的计数单位：一个 turn 算一次调用。终态有 `completed` / `failed` / `interrupted` 三种；运行中和未知状态不计入成功率分母。
+一次"用户发一条 → Agent 完成任务"的完整往返。是使用统计的计数单位：一个 turn 算一次调用。终态有 `completed` / `failed` / `interrupted` 三种；运行中和未知状态不计入成功率分母。
 
 **Turn steering（回合追加）**
 在一个 turn 还在跑的时候，往里追加输入，而不是新开一个 turn。对应可选端口 `turnSteering`。注意：Plan 的"执行计划"**不是** steer，它必须新建回合。
@@ -53,7 +53,7 @@ Agent 思考过程的阶段划分，在时间线上折叠展示。
 Provider 明确给出的内容证据：替换前后片段、写入内容或 unified patch；也可以只有路径/动作摘要。三种正文不能互相伪造，只有命令时不生成文件变更证据。`replayable` 可由历史/重放重建，`liveOnly` 只表示当前实时 fallback。
 
 **Live / history / replay**
-时间线的三种数据来源：正在流式接收的、从 Provider 读回的历史、本地重放。**三者必须使用各自独立的 reducer 实例**，共用会导致状态串味。
+时间线的三种数据来源：正在流式接收的、从 Provider 读回的历史、本地重放。**三者必须使用各自独立的 reducer 实例**，共用会混入其他数据来源的状态。
 
 ## 事件管线
 
@@ -103,7 +103,7 @@ TimelineStore 在写入后举起的数据变化标记（history / liveTurn / liv
 processor 从脏区 + SessionState diff 派生的界面分区（header / composer / pendingInteraction / expansion / history / liveTurn 等）。Widget 按 region 订阅。
 
 **Conversation Slice（会话切片）**
-Workspace 与 Conversation 已完成 WP-3C：`AgentConversationWorkspaceNotifier` 直接拥有 entry 资源表与不可变 workspace state；每个 entry 的 `AgentConversationSliceNotifier` 独占轻量 regions 和命令账本。`AgentConversationOwnerKey(entryId, lifetimeToken)` 在草稿晋升和 runtime restart 时不变，同 thread 关闭重开分配新 token；BindingKey 只作查询别名。Live 解析真实 owner，Closing/Closed 返回无正文的终止投影，Unknown 返回不可用空投影。
+Workspace 与 Conversation 各有一个可写 owner：`AgentConversationWorkspaceNotifier` 直接拥有 entry 资源表与不可变 workspace state；每个 entry 的 `AgentConversationSliceNotifier` 独占轻量 regions 和命令账本。`AgentConversationOwnerKey(entryId, lifetimeToken)` 在草稿晋升和 runtime restart 时不变，同 thread 关闭重开分配新 token；BindingKey 只作查询别名。Live 解析真实 owner，Closing/Closed 返回无正文的终止投影，Unknown 返回不可用空投影。
 
 **AgentConversationRuntimeController**
 会话 application 聚合：pipeline、region 投影、`AgentUiUpdateScheduler`、CommandPort 与 effect。Workspace entry 持有它；不再有 `AgentConversationViewModel`。
@@ -177,7 +177,7 @@ Zeta 自己的本地工作流，**不是** Provider 计划审批。Plan 回合�
 底部的富文本输入区。支持粘贴/选择图片、`$` 插入 Skill、`/` 唤出命令菜单、`@` 引用项目文件。
 
 **Skill token**
-Composer 里的原子 chip，用 `U+FFFC` 占位符 + `WidgetSpan` 渲染成 `$name`，退格整块删除。发送时序列化为文本并附带 `type: skill` 输入项。仅 Codex 支持（`supportsSkillInput`）。
+Composer 里的原子 chip，用 `U+FFFC` 占位符 + `WidgetSpan` 渲染成 `$name`，退格整块删除。发送时序列化为文本并附带 `type: skill` 输入项。由 `supportsSkillInput` 与 Skills 端口共同控制，当前 Codex 和 Grok 支持。
 
 **Pending interaction（待处理交互）**
 固定在输入框上方的审批/提问卡片区。响应后自动移除，且不在时间线里重复出现。
@@ -185,7 +185,7 @@ Composer 里的原子 chip，用 `U+FFFC` 占位符 + `WidgetSpan` 渲染成 `$n
 ## UI 骨架
 
 **Workbench（工作台）**
-`WindowFrame` + `IdeWorkbenchScaffold` 组成的常驻骨架。`IdeHome` 是唯一的组合边界，页面切换只换 slot 内容。
+`WindowFrame` + `IdeWorkbenchScaffold` 组成的常驻骨架。app 组合层创建和启动业务资源，`IdeHome` 订阅并组成界面；页面切换只换 slot 内容。
 
 **Slot（槽位）**
 三个位置：Navigation（左）、Canvas（中）、Inspector（右）。feature 页面只提供 slot 内容，**不得替换顶层 workbench**。
@@ -194,13 +194,13 @@ Composer 里的原子 chip，用 `U+FFFC` 占位符 + `WidgetSpan` 渲染成 `$n
 跨页面保活的容器。延迟挂载、保留已访问页面的 State 和滚动位置、暂停离屏 ticker。**不要用 `IndexedStack` 替代**——它会一直保留长时间线的布局开销。
 
 **Graphite token（设计 token）**
-深色 Graphite Night / 浅色 Graphite Day 两套语义 token，真源是 `IdeThemeScope`。`shadcn_flutter` 的 theme 只是投影，不能反向回读。业务代码禁止硬编码颜色、圆角和阴影。表面遵循严格单调的明度阶梯（frame → canvas → pane → control → popover），层级只靠阶梯加 1px 半透明描边表达，除浮层的极淡兜底投影外全局零阴影。
-`lib/src/ui/core/`
+深色 Graphite Night / 浅色 Graphite Day 两套语义 token，唯一来源是 `IdeThemeScope`。`shadcn_flutter` 的 theme 只是投影，不能反向回读。业务代码禁止硬编码颜色、圆角和阴影。表面遵循严格单调的明度阶梯（frame → canvas → pane → control → popover），层级只靠阶梯加 1px 半透明描边表达，除浮层的极淡投影外全局零阴影。
+`packages/zeta_ui/lib/`
 
 ## 界面语言
 
 **AppLanguage（界面语言）**
-首期仅 `english` / `simplifiedChinese`，持久化码 `en` / `zh-Hans`。Flutter `Locale` 不是领域模型，只在 app/UI 组合层出现。
+当前仅 `english` / `simplifiedChinese`，持久化码 `en` / `zh-Hans`。Flutter `Locale` 不是领域模型，只在 app/UI 组合层出现。
 
 **文本目录（text catalog）**
 feature 在 domain 边界声明的不可变纯 Dart 接口，例如 `AgentUiTextCatalog`。application / data / reducer 用它生成当前进程的 Zeta 文案，不持有 `BuildContext`、generated l10n 或 Flutter `Locale`。
@@ -213,15 +213,15 @@ feature 在 domain 边界声明的不可变纯 Dart 接口，例如 `AgentUiText
 
 ## 数据与诊断
 
-**Zeta 数据目录（文档中常写作 `~/.zeta/`）**
-Zeta 自有数据根目录：`config/`（配置）、`state/`（会话状态与派生索引）、`logs/`（按天日志）、`cache/`（可丢弃缓存）。实际位置由 `path_provider` 按平台解析，当前为**系统文档目录下的 `.zeta` 文件夹**（macOS / Linux `~/Documents/.zeta`，Windows `%USERPROFILE%\Documents\.zeta`），不是用户主目录下的 `~/.zeta`。文档中沿用 `~/.zeta/` 作为简写。用户视角的逐文件说明见[数据与隐私](../guide/data-and-privacy.md#zeta-在你电脑上写的文件)。
+**Zeta 数据目录**
+由生产入口通过 `ZetaUserDirectory` 取得系统应用文档目录，再创建 `.zeta`。下分 `config/`、`state/`、`logs/` 和 `cache/`。不使用 `~/.zeta` 作为简写，以免与用户 HOME 混淆。具体位置与清理影响见[数据与隐私](../guide/data-and-privacy.md#zeta-自己保存什么)。
 
 **派生索引（derived index）**
 可重建的统计缓存，只存规范化白名单字段。禁止落盘 prompt、回复正文、工具输出、原始错误文本、凭证或 Provider raw payload。
 
 **脱敏（redaction）**
 写日志或展示诊断前的处理：认证头、`Bearer` token、`sk-` 密钥、`api_key`/`token`/`secret`/`password` 类键值会被打码，用户主目录替换为 `~`。
-`lib/src/core/security/sensitive_data_redactor.dart`
+`packages/zeta_foundation/lib/src/security/sensitive_data_redactor.dart`
 
 **Pinned schema（协议快照）**
 `third_party/codex_app_server_schema/` 下的 Codex app-server JSON Schema 快照。升级协议前先跑 `tool/gen_codex_schema.sh --diff` 对比差异，再改适配层。
@@ -232,7 +232,7 @@ Zeta 自有数据根目录：`config/`（配置）、`state/`（会话状态与�
 ## 测试执行
 
 **受影响测试（affected tests）**
-从 git 变更集出发、沿 import 图做**反向闭包**算出的、可能因本次改动而改变行为的测试集合。`bash tool/test_affected.sh` 是开发循环的默认档；选择逻辑在 `tool/test_select.dart`，设计上只允许"多选"不允许"漏选"。全量的强制点在 CI，不在本地终端。
+从 git 变更集出发、沿 import 图做**反向闭包**算出的、可能因本次改动而改变行为的测试集合。`bash tool/test_affected.sh` 是开发循环的默认档；选择逻辑在 `tool/test_select.dart`，设计上只允许"多选"不允许"漏选"。CI 始终跑全量；本地在重构、发版和测试基础设施改动时也必须跑完整门禁。
 
 **分片（shard / runner）**
 根 `test/` 被 `tool/test_shards.dart` 的 `kRootTestShards` 切成的 6 组，CI 每组一个并行 Job（`fail-fast: false`）。分片按**语义分组**且按目录前缀匹配——测试落进已有目录自动归片，不用登记。本地跑单片用 `bash tool/test_shard.sh <id>`。
@@ -240,8 +240,8 @@ Zeta 自有数据根目录：`config/`（配置）、`state/`（会话状态与�
 **分片覆盖守卫**
 `test/src/architecture/test_shard_coverage_guard_test.dart`：断言每个测试文件恰好属于一个分片、清单路径真实存在、CI 矩阵与清单一致。没有它，新增测试可能不属于任何分片而永远不被执行。
 
-**全量兜底触发（full-run trigger）**
-`pubspec.yaml`、`dart_test.yaml`、`analysis_options.yaml`、`.github/workflows/`、选择器自身——这些"地基"文件一变，import 图算不出影响面，`tool/test_affected.sh` 直接退化成全量。
+**全量触发条件（full-run trigger）**
+`pubspec.yaml`、`dart_test.yaml`、`analysis_options.yaml`、`.github/workflows/`、选择器自身——这些基础配置文件一变，import 图算不出影响面，`tool/test_affected.sh` 直接退化成全量。
 
 ## Provider 插件包与 manifest
 

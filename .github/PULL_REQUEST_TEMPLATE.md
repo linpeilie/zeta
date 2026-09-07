@@ -45,8 +45,8 @@ Chinese first, English second. For items that don't apply, tick them and note "N
       / UI renders by capability; unsupported paths throw `UnsupportedError` instead of silently succeeding
 - [ ] 未硬编码颜色、圆角、阴影；语义 token 走 `IdeThemeScope` / `IdeColors` / `IdeTextStyles`
       / No hard-coded colors, radii, or shadows; semantic tokens only
-- [ ] 未读取或改写 `~/.codex`、`~/.grok`、`~/.cursor`；新增持久化字段在白名单内，未落盘 prompt、回复、工具输出、原始错误文本或凭证
-      / No access to other CLIs' config; no prompts, responses, tool output, raw errors, or credentials persisted
+- [ ] 助手私有数据访问限于对应 Provider 的明确功能，写入有独立产品契约；新增持久化字段在白名单内，未落盘敏感正文、原始错误或凭据
+      / Provider-private access stays within defined features; writes have a separate product contract; no sensitive bodies, raw errors or credentials persisted
 - [ ] 未引入自动授权命令、文件或网络的行为
       / No behavior that auto-authorizes commands, files, or network access
 

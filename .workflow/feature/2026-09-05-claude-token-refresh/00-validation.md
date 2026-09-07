@@ -17,7 +17,7 @@
 
 ## 参考与迁移取舍
 
-- 本地参考：`/Users/linpeilie/Development/Workspace/OpenSource/claude-code` checkout `77a7934e`。
+- 本地参考：Claude Code 外部源码 checkout `77a7934e`（个人绝对路径已移除，未将该副本当作官方协议证据）。
 - `src/utils/auth.ts`：`checkAndRefreshOAuthTokenIfNeeded`、`handleOAuth401Error`；`src/services/oauth/client.ts`：refresh grant 与响应映射；`src/utils/secureStorage/`：Keychain/文件存储策略。
 - 该 checkout 自述为逆向还原并含 stub，不将其视为官方稳定协议。没有复制其 force 后仍按到期时间提前返回、忽略保存结果以及凭据存储迁移/删除逻辑。
 - proper-lockfile 锁协议核对：[v4.1.2 lockfile.js](https://github.com/moxystudio/node-proper-lockfile/blob/v4.1.2/lib/lockfile.js)。Windows 替换语义参考：[Microsoft ReplaceFileW](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-replacefilew)。

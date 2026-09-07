@@ -5,7 +5,7 @@
 ## 1. 基线与范围
 
 - 执行日期：2026-09-06；分支 `dev`；开始 HEAD `70a2dc8e`，工作区干净。前置 WP-4 `11c6d9c8`；WP-3M `62a16ed6` 与验收登记 `70a2dc8e`。
-- 读取总入口、WP-3 §5/§7/§9、WP-4 与 M 验收记录、工程规范状态/生命周期章节；`docs/prompts/refactoring.md` 仍缺失，遵守 AGENTS 的重构全量门禁。
+- 读取总入口、WP-3 §5/§7/§9、WP-4 与 M 验收记录、工程规范状态/生命周期章节；`AGENTS.md` 仍缺失，遵守 AGENTS 的重构全量门禁。
 - 范围为 Project Threads 单 owner、执行排空、共享资源装配及真实 Shell/Widget 接线。未改 Provider 协议、依赖版本、String threadId、v4 持久化、reducer/intent/effect、分页与能力规则；Workspace/Conversation 的 owner 和完整 Shell 前移仍待 C。
 
 ## 2. 最终实现

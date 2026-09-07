@@ -1,7 +1,7 @@
 # WP-6 · 会话配置结果与等待状态验收
 
 - 日期：2026-09-05；实施基线：`e951d9a5`；开始时工作区干净。
-- 工作包：[lib cohesion / WP-6](../../plan/2026-09-05-lib-cohesion/06-wp6-session-config.md)。执行队列下一项为 WP-1。
+- 工作包：[lib cohesion / WP-6](../../plan/2026-09-05-lib-cohesion/00-index.md)。执行队列下一项为 WP-1。
 - 实现提交：`8778a8ae`。
 
 ## 1. 实现与生产接线

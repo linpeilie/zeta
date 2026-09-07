@@ -1,6 +1,6 @@
 # 发版指南
 
-最后更新：2026-09-05
+文档核对：2026-09-07；发布操作和远端设置未在本次重新验证。
 
 ## 1. 发布方式
 
@@ -8,7 +8,7 @@ Zeta 使用 [GitHub Actions 发布工作流](../../../.github/workflows/release.
 Windows、macOS 和 Linux 桌面安装包。工作流只监听推送到 GitHub 的 `v*` Tag；Tag
 必须指向 `main` 分支历史中的提交，并通过下文的版本预检。
 
-仓库启用了 GitHub immutable releases。发布作业把全部附件交给 GitHub CLI；CLI 会在
+发布流程按 GitHub immutable releases 的要求组织。发布作业把全部附件交给 GitHub CLI；CLI 会在
 内部创建临时草稿、上传附件，并在全部上传成功后公开 Release。不要预先手动创建 Release。
 
 当前发布仍不做 Windows 代码签名或 Apple notarization。macOS 派生包会重新执行 ad-hoc
@@ -167,9 +167,7 @@ Applications 后的启动行为；脚本校验不能替代外观和安装验收�
   不重复修改 Release。
 - 已发布但状态、附件清单或 attestation 不一致：工作流明确失败。immutable Release 不能
   修复或补传，必须修正后创建新 Tag。
-- 已经公开的 Tag 或 Release 不得改写、删除后复用。当前没有附件的 immutable
-  `v0.1.0-beta.4` 保持原样。旧工作流留下的 Beta 6/7 草稿不由 CI 自动删除；合并本次
-  修改后应使用新 Tag `v0.1.0-beta.8` 做端到端验收。
+- 已经公开的 Tag 或 Release 不得改写、删除后复用。失败后的下一版本由实际发布计划确定；先核对远端已有 Tag，不沿用历史任务中指定的临时版本号。
 - Tag 预检失败且尚未产生公开 Release 时，确认该 Tag 未被外部使用后才可删除错误 Tag；
   已公开版本一律递增版本并发新 Tag。
 

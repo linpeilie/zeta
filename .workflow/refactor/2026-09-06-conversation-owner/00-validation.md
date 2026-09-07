@@ -5,7 +5,7 @@
 ## 1. 基线与范围
 
 - 2026-09-06，分支 `dev`，开始 HEAD `59837d63`，工作区干净。前置 WP-3P `c2a5219d`、WP-3M `62a16ed6`、WP-4 `11c6d9c8`。
-- 已读总入口、WP-3C 与前置验收、AGENTS、工程规范状态/生命周期及 Conversation 接入章节。`docs/prompts/refactoring.md` 仍缺失，执行 AGENTS 明文要求的重构全量门禁。
+- 已读总入口、WP-3C 与前置验收、AGENTS、工程规范状态/生命周期及 Conversation 接入章节。`AGENTS.md` 仍缺失，执行 AGENTS 明文要求的重构全量门禁。
 - 只改根应用的状态发布、装配、entry 生命周期、页面恢复及对应测试/文档。不改 Provider 私有协议、packages、依赖或 lock、并发、session v4 持久化格式；Conversation intent/effect/reducer 与核心 TimelineStore 不变。Workspace reducer 仅增加 aliases 透传。
 
 ## 2. 最终生产链

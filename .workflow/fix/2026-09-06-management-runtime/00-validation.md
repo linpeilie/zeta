@@ -2,7 +2,7 @@
 
 - 实施日期：2026-09-05 至 2026-09-06；基线：`cf518b64`，开始时工作区干净。
 - 前置证据：WP-6 实现 `8778a8ae`、验收登记 `cf518b64`。
-- 工作包：[lib cohesion / WP-1](../../plan/2026-09-05-lib-cohesion/01-wp1-runtime-summary.md)。后继为 WP-4。
+- 工作包：[lib cohesion / WP-1](../../plan/2026-09-05-lib-cohesion/00-index.md)。后继为 WP-4。
 - 实现提交：`ea56f5c9`。
 
 ## 1. 实现与生产接线
