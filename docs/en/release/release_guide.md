@@ -14,6 +14,8 @@ Releases still do not perform Windows code signing or Apple notarization. macOS 
 
 ## 2. Before releasing
 
+Follow the [changelog conventions (Chinese)](../../zh/development/documentation.md#更新日志规范) when writing this version's release notes.
+
 1. Confirm the code to be released is merged into `main` and your working tree is clean.
 2. Update `version` in `pubspec.yaml`:
 

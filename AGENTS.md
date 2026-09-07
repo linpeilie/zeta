@@ -91,6 +91,6 @@ Zeta 文案走 `context.l10n` 或不可变文本目录；Flutter Locale/l10n 不
 
 开发循环用定向测试，不反复跑全量；`dart_test.yaml` 并发保持 2。真实 CLI/平台验收不能由 fake 测试替代，未执行须写明原因。CI 跑全部分片和内部包。
 
-不提交生成噪音、日志或构建产物。用户可感知变化记入 `CHANGELOG.md`；架构变化更新对应现行文档，工作记录只保留决策、验证证据和未完成事项。不要复制规则到 `CLAUDE.md`。
+不提交生成噪音、日志或构建产物。用户可感知变化记入 `CHANGELOG.md`，写法遵循[更新日志规范](docs/zh/development/documentation.md#更新日志规范)；架构变化更新对应现行文档，工作记录只保留决策、验证证据和未完成事项。不要复制规则到 `CLAUDE.md`。
 
 回复说明改动、验证和未完成项；最后附【Git 提交信息】，用独立 `sh` 代码块给出 Conventional Commit，摘要不超过 50 字符。不自动提交代码。

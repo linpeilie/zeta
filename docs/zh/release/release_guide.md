@@ -17,6 +17,8 @@ Gatekeeper 提示。
 
 ## 2. 发布前准备
 
+编写本版本更新说明时，遵循[更新日志规范](../development/documentation.md#更新日志规范)。
+
 1. 确认待发布代码已经合并到 `main`，并且本地工作区没有未提交改动。
 2. 更新 `pubspec.yaml` 中的 `version`：
 
