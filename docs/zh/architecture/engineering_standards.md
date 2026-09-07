@@ -648,6 +648,9 @@ Provider 契约测试。若 PR 因 Provider 差异修改 CoalescingPolicy/Buffer
 - 包含多字段配置的 application controller 必须覆盖快速连续更新、过期请求、
   确认态回滚、完整快照重试与损坏持久化输入。
 - provider datasource 和 transport 用 fake process、fake storage 或 callback 注入。
+  生产 Claude bundle 的 `listModels` / `prepareForAcquisition` 会刷新本机登录；
+  测试必须把凭据指到临时空目录（`isolatedClaudeCodeProviderConfig`），不得使用
+  用户 HOME 下的 `.claude`。
 - pane、timeline、file tree 等用户可见行为用 widget test。
 - resize 相关测试至少覆盖外窗 1197/1196/1195px（`wideBreakpoint` + 工作台左右
   `space8` ± 1）、Agent Canvas 641/640/639px、隐藏

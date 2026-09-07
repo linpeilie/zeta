@@ -40,7 +40,7 @@ void main() {
         );
       },
     );
-    final bundle = factory.createBundle(defaultClaudeCodeAgentProviderConfig);
+    final bundle = factory.createBundle(isolatedClaudeCodeProviderConfig());
     addTearDown(bundle.runtime.dispose);
 
     final models = await bundle.modelCatalog!.listModels();

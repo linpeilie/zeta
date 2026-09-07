@@ -144,7 +144,7 @@ dispose 完成前同 scope acquire 必须等待。配置失效会同时清理 gl
 Registry acquire 必须显式选择 global/session scope；使用统计面板只通过 global runtime
 访问中立 quota 端口，不接受 raw Provider/lease loader 兼容路径。
 
-有前置条件的 Provider 可在 bundle 提供 `acquisitionPreparation`。Registry 对新建与复用租约均等待 `prepareForAcquisition()`，失败释放本次租约；准备结束后失效/关闭的实例不得返回。准备不等于 `runtime.initialize()`，也不启动 session。共享层只认识这个中立端口，Claude 的 token 判断和刷新仍在自有 data 层；已持有实例的新请求也调用同一 `ensureFresh()`。
+有前置条件的 Provider 可在 bundle 提供 `acquisitionPreparation`。Registry 对新建与复用租约均等待 `prepareForAcquisition()`，失败释放本次租约；准备结束后失效/关闭的实例不得返回。准备不等于 `runtime.initialize()`，也不启动 session。共享层只认识这个中立端口，Claude 的 token 判断和刷新仍在自有 data 层；已持有实例的新请求也调用同一 `ensureFresh()`。调用生产 Claude `listModels` 的测试须用 `isolatedClaudeCodeProviderConfig`，不得读写用户 HOME 下的 `.claude`。
 
 ### Conversation Slice 接入
 
