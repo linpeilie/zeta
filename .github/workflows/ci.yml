@@ -1,12 +1,9 @@
 name: CI
 
 on:
-  # 发布流程通过 workflow_call 校验固定的合并提交。
-  push:
-    branches:
-      - main
+  # 日常 CI 仅在目标为 develop 的 PR 上运行；发布仍通过 workflow_call 调用。
   pull_request:
-  workflow_dispatch:
+    branches: [develop]
   workflow_call:
     inputs:
       checkout-ref:
@@ -48,16 +45,6 @@ jobs:
       # 使用 lockfile 安装，顺带发现 pubspec.lock 与 pubspec.yaml 的漂移。
       - name: Install dependencies
         run: flutter pub get --enforce-lockfile
-
-      - name: Validate release PR version and notes
-        if: github.event_name == 'pull_request' && github.event.action != 'closed' && github.base_ref == 'main'
-        shell: bash
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          set -euo pipefail
-          git fetch origin --tags
-          dart tool/packaging/release_plan.dart --previous-ref "${BASE_SHA}"
 
       - name: Verify formatting
         run: dart format --output=none --set-exit-if-changed .

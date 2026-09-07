@@ -25,7 +25,7 @@ After finishing `release/*` or `hotfix/*`, also use `gh` to create a PR back to 
 - Root `release.json` contains `schemaVersion: 1` and a `version` of `X.Y.Z` or `X.Y.Z-beta.N`, without a `v` prefix. This determines the release tag and package version.
 - `pubspec.yaml` contains `X.Y.Z+BUILD`, with the same core version and a positive build number. Windows/macOS metadata remains numeric; beta sequence and build number are independent.
 - Numeric fields cannot have leading zeroes; beta N must be positive. Other prerelease channels and tag build metadata are unsupported.
-- The version must exceed every existing valid release tag. PR validation also compares against the target main version. Numeric ordering applies: `0.1.0-beta.9 < 0.1.0-beta.12 < 0.1.0 < 0.1.1-beta.1`. Equal or older versions fail; increasing BUILD alone cannot bypass this.
+- The version must exceed every existing valid release tag. Local release preparation also compares against the target main version. Numeric ordering applies: `0.1.0-beta.9 < 0.1.0-beta.12 < 0.1.0 < 0.1.1-beta.1`. Equal or older versions fail; increasing BUILD alone cannot bypass this.
 - Nonempty notes must exist at `docs/zh/release/notes/v<version>.md`. Follow the [changelog conventions (Chinese)](../../zh/development/documentation.md#更新日志规范), read existing drafts before incremental edits, and link the notes from `CHANGELOG.md`. GitHub Release uses this file directly, without generated commit lists.
 
 Example:
@@ -81,10 +81,12 @@ Before editing, report the baseline and selected version, then continue without 
    ```
 
    Use CI's `PUB_HOSTED_URL=https://pub.dev` to avoid lockfile changes from local mirrors.
-4. Review and edit the notes, commit with the code, and push the source branch. Check for an existing PR with `gh pr list --base main --head <source-branch> --state open`, then create it on GitHub with `gh pr create --base main --head <source-branch> --title <title> --body-file <body-file>`, or update the existing PR with `gh pr edit`. Verify branches and status with `gh pr view` and return the PR URL. PR checks validate version progression and notes.
+4. Review and edit the notes, commit with the code, and push the source branch. Check for an existing PR with `gh pr list --base main --head <source-branch> --state open`, then create it on GitHub with `gh pr create --base main --head <source-branch> --title <title> --body-file <body-file>`, or update the existing PR with `gh pr edit`. Verify branches and status with `gh pr view` and return the PR URL. Run local version and notes validation before committing. PRs to main do not trigger standalone CI; release preflight validates the version and notes again after merging.
 5. After checks pass, the user merges the PR on GitHub to start publication. “Commit and open a PR” does not include a local merge or `gh pr merge`; the Skill does not automatically resolve PR conflicts. Do not manually create/push tags or create a GitHub Release beforehand.
 
 ## 4. Automated workflow
+
+Standalone CI runs only for PRs targeting `develop`, with no push or manual trigger. `workflow_call` remains available: release calls still run all checks at the merge commit passed through `checkout-ref`. PR branch filters do not restrict this call.
 
 1. Process merged PRs to main only; pin their merge SHA and verify main ancestry.
 2. Read the version and notes from that commit and validate progression, numeric metadata, and notes availability.
