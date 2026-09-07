@@ -59,5 +59,6 @@ Source: "{#BuildDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs c
 Name: "{autoprograms}\Zeta"; Filename: "{app}\zeta.exe"
 Name: "{autodesktop}\Zeta"; Filename: "{app}\zeta.exe"; Tasks: desktopicon
 
-[Run]
-Filename: "{app}\zeta.exe"; Description: "Launch Zeta"; Flags: nowait postinstall skipifsilent
+; Do not add a postinstall [Run] launch entry. Starting Zeta from Setup.exe
+; inherits the installer process environment and races first-run assistant
+; detection, which can fail the project session list until the next launch.

@@ -15,7 +15,7 @@ Zeta 支持 Codex、Grok 和 Claude Code。请按所选助手的官方说明安�
 | 电脑 | 选择 |
 | --- | --- |
 | Mac | `.dmg`；不确定芯片类型时选名称含 `universal` 的包 |
-| Windows 64 位 | 名称以 `setup.exe` 结尾的安装包 |
+| Windows 64 位 | 名称以 `setup.exe` 结尾的安装包；安装结束后从开始菜单打开 Zeta |
 | Linux 64 位 | 适合所用系统的 `.deb`、`.rpm` 或 `.AppImage` |
 
 也可以选免安装压缩包，解压后运行 Zeta。下载页中的 `.sha256` 文件用于检查下载是否完整。

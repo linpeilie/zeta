@@ -15,7 +15,7 @@ Download a package for your system from [Releases](https://github.com/linpeilie/
 | Computer | Package |
 | --- | --- |
 | Mac | A `.dmg`; choose one containing `universal` if unsure which chip you have |
-| 64-bit Windows | The installer ending in `setup.exe` |
+| 64-bit Windows | The installer ending in `setup.exe`; after setup, open Zeta from the Start menu |
 | 64-bit Linux | A `.deb`, `.rpm` or `.AppImage` suitable for your system |
 
 Portable archives are also available: extract one and run Zeta. The `.sha256` files let you check that a download is intact.

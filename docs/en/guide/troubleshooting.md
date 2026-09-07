@@ -10,6 +10,8 @@ Check the symptom below. If it persists, use the reporting instructions at the e
 
 **The window is blank or closes immediately.** Record the system version, Zeta version and steps. If a log was created, inspect today's file under `logs` in the [data folder](data-and-privacy.md#what-zeta-saves).
 
+**Conversation list fails right after install.** Quit Zeta fully, then open it from the Start menu.
+
 **Settings disappear after restart.** Check that Documents is writable, the disk has space and a cleanup tool has not removed `.zeta`. Do not move or remove this folder while Zeta runs.
 
 ## Assistant connections
