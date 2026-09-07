@@ -8,6 +8,8 @@
 
 发布准备可调用项目内 `$zeta-release` Skill，既可指定版本，也可只选择 beta 或正式版，由 Skill 自动确定下一个版本。Skill 不代替人工审读、提交或合并 PR。
 
+Skill 通过 `gh` 在 GitHub 创建 PR。本地获取 main 仅用于比较和校验，不自动执行 merge、会合并的 pull 或 rebase；遇到 PR 冲突时报告状态，分支同步与冲突处理须另有明确指示。
+
 ## 2. 版本与更新说明
 
 - 根目录 `release.json` 保存发布身份：`schemaVersion` 为 1，`version` 为 `X.Y.Z` 或 `X.Y.Z-beta.N`，不含 `v` 前缀。流水线由此生成 tag 和分发包版本。
@@ -69,8 +71,8 @@ Skill 在修改前说明基线和选出的版本，随后直接继续，不额�
    ```
 
    使用 CI 指定的 `PUB_HOSTED_URL=https://pub.dev`，避免本机镜像配置改变锁文件。
-4. 人工审读并修改说明，随代码提交、推送，创建到 `main` 的 PR。PR 检查验证版本递增和文稿存在。
-5. 检查通过后合并 PR，即授权流水线执行发布。不要再手工打 tag、推送 tag 或提前创建 GitHub Release。
+4. 人工审读并修改说明，随代码提交、推送源分支。先用 `gh pr list --base main --head <源分支> --state open` 查重，再用 `gh pr create --base main --head <源分支> --title <标题> --body-file <正文文件>` 在 GitHub 创建 PR；已有 PR 用 `gh pr edit` 更新。通过 `gh pr view` 核对分支与状态，交付 PR URL。PR 检查验证版本递增和文稿存在。
+5. 检查通过后由用户在 GitHub 合并 PR，即授权流水线执行发布。“提交并发起 PR”不包含本地合并或 `gh pr merge`；Skill 不自动处理 PR 冲突。不要再手工打 tag、推送 tag 或提前创建 GitHub Release。
 
 ## 4. 自动化流程
 
