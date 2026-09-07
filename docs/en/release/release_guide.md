@@ -6,18 +6,24 @@ Documentation checked: 2026-09-07. Release operations and remote settings were n
 
 ## 1. How releases work
 
-Create a PR targeting `main`, review the version and release notes, then merge it to trigger the [release workflow](../../../.github/workflows/release.yml). Closing an unmerged PR does not publish. No manual tag is required. Every stage uses the PR's fixed merge commit, even if main advances later.
+Prepare versions and notes on `develop`; do not create a `release/*` branch. Use `hotfix/*` from `main` only for urgent production fixes. After stable-version acceptance, create a PR from `develop` to `main`, review the version and release notes, then merge it to trigger the [release workflow](../../../.github/workflows/release.yml). Closing an unmerged PR does not publish. No manual tag is required. Every stage uses the PR's fixed merge commit, even if main advances later.
 
-Use the project `$zeta-release` Skill with an explicit version or just a beta/stable channel to select the next version automatically. Human review, committing, and merging remain separate steps.
+Use the project `$zeta-release` Skill with an explicit version or just a beta/stable channel to select the next version automatically. The Skill prepares in place on the checked-out `develop` branch and does not create or switch to `release/*`. Human review, committing, and merging remain separate steps.
 
 The Skill creates the GitHub PR through `gh`. Fetching main is for comparison and validation only; do not automatically merge, pull with a merge, or rebase. Report PR conflicts; branch synchronization and conflict resolution require separate explicit instructions.
+
+### Branch flow and current automation limits
+
+See the [branch model](../../../CONTRIBUTING.en.md#branch-model). The `$zeta-release` path prepares versions and notes on `develop` and does not create `release/*`. Only ready stable versions enter `main`. Prepare beta on `develop`; do not merge a prerelease into `main` to publish it.
+
+The current workflow still triggers only after a PR merges into `main` and accepts beta metadata. Publishing beta from `develop` is not implemented yet. This update does not mean that automation exists. Beta version and notes preparation can continue, but publication requires adapting the workflow first; the previous beta-to-main route must not be used.
 
 ## 2. Version and release notes
 
 - Root `release.json` contains `schemaVersion: 1` and a `version` of `X.Y.Z` or `X.Y.Z-beta.N`, without a `v` prefix. This determines the release tag and package version.
 - `pubspec.yaml` contains `X.Y.Z+BUILD`, with the same core version and a positive build number. Windows/macOS metadata remains numeric; beta sequence and build number are independent.
 - Numeric fields cannot have leading zeroes; beta N must be positive. Other prerelease channels and tag build metadata are unsupported.
-- The version must exceed every existing valid release tag. PR validation also compares against the target main version. Numeric ordering applies: `0.1.0-beta.9 < 0.1.0-beta.12 < 0.1.0 < 0.1.1-beta.1`. Equal or older versions fail; increasing BUILD alone cannot bypass this.
+- The version must exceed every existing valid release tag. Local release preparation also compares against the target main version. Numeric ordering applies: `0.1.0-beta.9 < 0.1.0-beta.12 < 0.1.0 < 0.1.1-beta.1`. Equal or older versions fail; increasing BUILD alone cannot bypass this.
 - Nonempty notes must exist at `docs/zh/release/notes/v<version>.md`. Follow the [changelog conventions (Chinese)](../../zh/development/documentation.md#更新日志规范), read existing drafts before incremental edits, and link the notes from `CHANGELOG.md`. GitHub Release uses this file directly, without generated commit lists.
 
 Example:
@@ -60,7 +66,7 @@ Before editing, report the baseline and selected version, then continue without 
 
 ## 3. Before releasing
 
-1. Fetch full remote history and tags; prepare a higher version on `dev` or the selected release branch.
+1. Fetch full remote history and tags; prepare the next version on the current `develop` branch without creating or switching to `release/*`. Preserve the worktree. If the checkout is not `develop`, do not switch branches for the user.
 2. Update `release.json`, `pubspec.yaml`, versioned notes and the `CHANGELOG.md` link together.
 3. Run validation and the full gate:
 
@@ -73,10 +79,12 @@ Before editing, report the baseline and selected version, then continue without 
    ```
 
    Use CI's `PUB_HOSTED_URL=https://pub.dev` to avoid lockfile changes from local mirrors.
-4. Review and edit the notes, commit with the code, and push the source branch. Check for an existing PR with `gh pr list --base main --head <source-branch> --state open`, then create it on GitHub with `gh pr create --base main --head <source-branch> --title <title> --body-file <body-file>`, or update the existing PR with `gh pr edit`. Verify branches and status with `gh pr view` and return the PR URL. PR checks validate version progression and notes.
+4. Review and edit the notes, commit with the code, and push `develop`. Check for an existing PR with `gh pr list --base main --head develop --state open`, then create it on GitHub with `gh pr create --base main --head develop --title <title> --body-file <body-file>`, or update the existing PR with `gh pr edit`. Verify branches and status with `gh pr view` and return the PR URL. Run local version and notes validation before committing. PRs to main do not trigger standalone CI; release preflight validates the version and notes again after merging.
 5. After checks pass, the user merges the PR on GitHub to start publication. “Commit and open a PR” does not include a local merge or `gh pr merge`; the Skill does not automatically resolve PR conflicts. Do not manually create/push tags or create a GitHub Release beforehand.
 
 ## 4. Automated workflow
+
+Standalone CI runs only for PRs targeting `develop`, with no push or manual trigger. `workflow_call` remains available: release calls still run all checks at the merge commit passed through `checkout-ref`. PR branch filters do not restrict this call.
 
 1. Process merged PRs to main only; pin their merge SHA and verify main ancestry.
 2. Read the version and notes from that commit and validate progression, numeric metadata, and notes availability.

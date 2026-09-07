@@ -1440,73 +1440,55 @@ class _PermissionOptionButtonState extends State<PermissionOptionButton> {
     final tooltip = hasHint
         ? context.l10n.agentPermissionModeHint(scopeHint)
         : context.l10n.agentPermissionMode;
-    return IdeTooltip(
-      message: tooltip,
-      enabled: !open,
-      child: IdeButton(
-        key: widget.surfaceKey,
-        label: displayLabel,
-        semanticLabel: hasHint
-            ? context.l10n.agentPermissionModeSemantic(displayLabel, scopeHint)
-            : context.l10n.agentPermissionModeOnly(displayLabel),
-        variant: open ? IdeButtonVariant.secondary : IdeButtonVariant.ghost,
-        focusNode: _triggerFocusNode,
-        onPressed: widget.enabled && widget.options.isNotEmpty
-            ? _togglePopover
-            : null,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IdeIconBox(
-              Icons.shield_outlined,
-              size: 14,
-              color: colors.textSecondary,
+    return IdeToolbarSelectTrigger(
+      buttonKey: widget.surfaceKey,
+      label: displayLabel,
+      semanticLabel: hasHint
+          ? context.l10n.agentPermissionModeSemantic(displayLabel, scopeHint)
+          : context.l10n.agentPermissionModeOnly(displayLabel),
+      tooltip: tooltip,
+      open: open,
+      focusNode: _triggerFocusNode,
+      onPressed: widget.enabled && widget.options.isNotEmpty
+          ? _togglePopover
+          : null,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IdeIconBox(
+            Icons.shield_outlined,
+            size: 14,
+            color: colors.textSecondary,
+          ),
+          const SizedBox(width: IdeSpacing.space6),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 140),
+            child: Text(
+              displayLabel,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: textStyles.bodySmall.copyWith(
+                color: colors.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
             ),
-            const SizedBox(width: IdeSpacing.space6),
+          ),
+          if (hasHint) ...[
+            const SizedBox(width: IdeSpacing.space4),
             ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 140),
+              constraints: const BoxConstraints(maxWidth: 72),
               child: Text(
-                displayLabel,
+                scopeHint,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: textStyles.bodySmall.copyWith(
-                  color: colors.textSecondary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            if (hasHint) ...[
-              const SizedBox(width: IdeSpacing.space4),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 72),
-                child: Text(
-                  scopeHint,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: textStyles.bodySmall.copyWith(
-                    color: colors.textTertiary,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ],
-            const SizedBox(width: IdeSpacing.space4),
-            IdeIconBox.custom(
-              child: AnimatedRotation(
-                turns: open ? 0.5 : 0,
-                duration: MediaQuery.disableAnimationsOf(context)
-                    ? Duration.zero
-                    : IdeMotion.durationNormal,
-                curve: IdeMotion.curveDefault,
-                child: Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  size: 13,
                   color: colors.textTertiary,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ),
           ],
-        ),
+        ],
       ),
     );
   }

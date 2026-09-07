@@ -26,6 +26,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('trigger')));
     await tester.pump();
     expect(find.byType(sf.SelectPopup<String>), findsOneWidget);
+    expect(find.byType(IdePopoverPanel), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('option-smart')));
     await tester.pump();

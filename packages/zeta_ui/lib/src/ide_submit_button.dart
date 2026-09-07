@@ -72,19 +72,24 @@ class IdeSubmitButton extends StatelessWidget {
               shape: BoxShape.circle,
             ),
             child: ClipOval(
-              child: sf.IconButton.ghost(
-                key: buttonKey,
-                onPressed: onPressed,
-                size: sf.ButtonSize.small,
-                density: sf.ButtonDensity.iconDense,
-                shape: sf.ButtonShape.circle,
-                disableTransition: filled,
-                // 提交动作是 Composer 中最强的单图标行动，沿用原 22px 视觉尺寸；
-                // displayLarge 的默认行盒为 23px，同时让它随 UI 字号自然缩放。
-                icon: IdeIconBox(
-                  icon,
-                  style: IdeTextStyles.of(context).displayLarge,
-                  color: foregroundColor,
+              child: sf.ComponentTheme<sf.FocusOutlineTheme>(
+                data: const sf.FocusOutlineTheme(
+                  border: Border.fromBorderSide(BorderSide.none),
+                ),
+                child: sf.IconButton.ghost(
+                  key: buttonKey,
+                  onPressed: onPressed,
+                  size: sf.ButtonSize.small,
+                  density: sf.ButtonDensity.iconDense,
+                  shape: sf.ButtonShape.circle,
+                  disableTransition: filled,
+                  // 提交动作是 Composer 中最强的单图标行动，沿用原 22px 视觉尺寸；
+                  // displayLarge 的默认行盒为 23px，同时让它随 UI 字号自然缩放。
+                  icon: IdeIconBox(
+                    icon,
+                    style: IdeTextStyles.of(context).displayLarge,
+                    color: foregroundColor,
+                  ),
                 ),
               ),
             ),

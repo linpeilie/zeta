@@ -1,12 +1,15 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
+import 'ide_colors.dart';
+import 'ide_effects.dart';
 import 'ide_motion.dart';
 import 'ide_spacing.dart';
 import 'ide_stable_overlay.dart';
+import 'pane_widgets.dart';
 
 /// IDE 统一 popover 宽高约束语义。
 enum IdePopoverConstraint {
@@ -283,16 +286,72 @@ IdePopoverHandle<void> _showIdeAnchoredPopover({
   );
 }
 
-/// 与选择菜单表面一致的通用弹层容器。
+/// Composer 同款的锚点弹层表面。
+///
+/// 底色、描边和圆角与 Agent Composer 外卡一致（[IdeColors.panel]、
+/// [IdeRadius.allMedium]、[IdeColors.border]）。浮层额外使用
+/// [IdeEffects.overlayShadow]，避免盖在同色内容上时边缘糊掉。
+///
+/// 模型、权限、模式、Skill、提及、斜线命令、上下文菜单和选择列表都应
+/// 使用本容器，不要再叠 `sf.Card` 或另一层 [PanelCard]。
 class IdePopoverPanel extends StatelessWidget {
   const IdePopoverPanel({required this.child, super.key});
 
   final Widget child;
 
+  /// 去掉 shadcn [sf.Card] / [sf.OutlinedContainer] 自带的底色与描边。
+  ///
+  /// [sf.SelectPopup] 仍会画一层 [sf.ModalContainer]；包在 [IdePopoverPanel]
+  /// 里时必须调用本方法，否则会出现双层卡片。
+  static Widget hideInnerSurface({required Widget child}) {
+    return Builder(
+      builder: (context) {
+        final theme = sf.Theme.of(context);
+        return sf.Theme(
+          data: theme.copyWith(
+            colorScheme: () =>
+                theme.colorScheme.copyWith(card: () => Colors.transparent),
+          ),
+          child: sf.ComponentTheme<sf.CardTheme>(
+            data: const sf.CardTheme(
+              filled: true,
+              fillColor: Colors.transparent,
+              borderWidth: 0,
+              borderColor: Colors.transparent,
+              boxShadow: <BoxShadow>[],
+              padding: EdgeInsets.zero,
+              surfaceBlur: 0,
+              surfaceOpacity: 1,
+            ),
+            child: sf.ComponentTheme<sf.OutlinedContainerTheme>(
+              data: const sf.OutlinedContainerTheme(
+                backgroundColor: Colors.transparent,
+                borderColor: Colors.transparent,
+                borderWidth: 0,
+                borderStyle: BorderStyle.none,
+                boxShadow: <BoxShadow>[],
+                padding: EdgeInsets.zero,
+                surfaceBlur: 0,
+                surfaceOpacity: 1,
+              ),
+              child: child,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return sf.Card(
-      padding: EdgeInsets.zero,
+    final colors = IdeColors.of(context);
+    final brightness = sf.Theme.of(context).brightness;
+    return PanelCard(
+      color: colors.panel,
+      borderColor: colors.border,
+      borderRadius: IdeRadius.allMedium,
+      boxShadow: IdeEffects.overlayShadow(brightness),
+      showBorder: true,
       clipBehavior: Clip.antiAlias,
       child: child,
     );

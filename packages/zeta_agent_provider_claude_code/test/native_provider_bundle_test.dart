@@ -38,7 +38,7 @@ void main() {
       },
     );
     final bundle = providerFactory.createBundle(
-      defaultClaudeCodeAgentProviderConfig,
+      isolatedClaudeCodeProviderConfig(),
     );
     addTearDown(bundle.runtime.dispose);
 

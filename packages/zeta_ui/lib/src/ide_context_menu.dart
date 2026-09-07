@@ -3,9 +3,9 @@ import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'ide_colors.dart';
 import 'ide_effects.dart';
+import 'ide_popover.dart';
 import 'ide_spacing.dart';
 import 'ide_text_styles.dart';
-import 'surfaces/ide_surface.dart';
 
 @immutable
 class IdeContextMenuAction {
@@ -75,44 +75,48 @@ class IdeContextMenu extends StatelessWidget {
       ),
     );
     return RepaintBoundary(
-      child: IdeSurface.popover(
-        padding: IdeSpacing.all4,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minWidth: minWidth),
-          child: sf.Theme(
-            data: menuTheme,
-            child: sf.ComponentTheme(
-              data: sf.MenuButtonTheme(
-                decoration: (context, states, value) {
-                  final color = states.contains(WidgetState.disabled)
-                      ? Colors.transparent
-                      : states.contains(WidgetState.pressed)
-                      ? colors.pressedSurface
-                      : states.contains(WidgetState.hovered) ||
-                            states.contains(WidgetState.focused) ||
-                            states.contains(WidgetState.selected)
-                      ? colors.hoverSurface
-                      : Colors.transparent;
-                  return BoxDecoration(
-                    color: color,
-                    borderRadius: IdeRadius.allSmall,
-                  );
-                },
-                padding: (context, states, value) =>
-                    const EdgeInsets.symmetric(horizontal: IdeSpacing.space12),
-                margin: (context, states, value) => EdgeInsets.zero,
-              ),
-              child: sf.MenuGroup(
-                direction: Axis.vertical,
-                onDismissed: () {
-                  sf.closeOverlay(context);
-                },
-                builder: (context, children) => Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  mainAxisSize: MainAxisSize.min,
-                  children: children,
+      child: IdePopoverPanel(
+        child: Padding(
+          padding: IdeSpacing.all4,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: minWidth),
+            child: sf.Theme(
+              data: menuTheme,
+              child: sf.ComponentTheme(
+                data: sf.MenuButtonTheme(
+                  decoration: (context, states, value) {
+                    final color = states.contains(WidgetState.disabled)
+                        ? Colors.transparent
+                        : states.contains(WidgetState.pressed)
+                        ? colors.pressedSurface
+                        : states.contains(WidgetState.hovered) ||
+                              states.contains(WidgetState.focused) ||
+                              states.contains(WidgetState.selected)
+                        ? colors.hoverSurface
+                        : Colors.transparent;
+                    return BoxDecoration(
+                      color: color,
+                      borderRadius: IdeRadius.allSmall,
+                    );
+                  },
+                  padding: (context, states, value) =>
+                      const EdgeInsets.symmetric(
+                        horizontal: IdeSpacing.space12,
+                      ),
+                  margin: (context, states, value) => EdgeInsets.zero,
                 ),
-                children: _buildMenuItems(),
+                child: sf.MenuGroup(
+                  direction: Axis.vertical,
+                  onDismissed: () {
+                    sf.closeOverlay(context);
+                  },
+                  builder: (context, children) => Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
+                    children: children,
+                  ),
+                  children: _buildMenuItems(),
+                ),
               ),
             ),
           ),

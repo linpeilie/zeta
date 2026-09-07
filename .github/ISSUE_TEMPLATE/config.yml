@@ -1,7 +1,7 @@
 blank_issues_enabled: false
 contact_links:
   - name: 故障排查 / Troubleshooting
-    url: https://github.com/linpeilie/zeta/blob/dev/docs/zh/guide/troubleshooting.md
+    url: https://github.com/linpeilie/zeta/blob/develop/docs/zh/guide/troubleshooting.md
     about: 提 Issue 前先看常见问题与数据说明。/ Check common problems and the data reference first.
   - name: 提问与讨论 / Questions and discussion
     url: https://github.com/linpeilie/zeta/discussions
@@ -10,5 +10,5 @@ contact_links:
     url: https://github.com/linpeilie/zeta/security/advisories/new
     about: 请勿公开提交安全问题，使用私密上报。/ Do not report security issues publicly — use private reporting.
   - name: 贡献指南 / Contributing guide
-    url: https://github.com/linpeilie/zeta/blob/dev/CONTRIBUTING.md
+    url: https://github.com/linpeilie/zeta/blob/develop/CONTRIBUTING.md
     about: 提交代码前请先阅读架构红线。/ Read the architectural hard lines before submitting code.

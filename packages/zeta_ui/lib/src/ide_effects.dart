@@ -127,8 +127,8 @@ abstract final class IdeEffects {
   /// `IdeColors.surfaceOverlay` 加 `border` 细边，本阴影只负责让浮层边缘
   /// 不至于和同色背景糊在一起，所以模糊半径和偏移都远小于常规 Material 浮层。
   ///
-  /// 生效位置：`IdeSurface` popover 级、`IdeToast`、`IdeWorkbenchScaffold`
-  /// 窄屏浮层侧栏、项目列表 Provider 选择 Popover 等。
+  /// 生效位置：`IdePopoverPanel`、`IdeSurface` popover 级、`IdeToast`、
+  /// `IdeWorkbenchScaffold` 窄屏浮层侧栏等。
   static List<BoxShadow> overlayShadow(Brightness brightness) {
     return [
       BoxShadow(
@@ -145,8 +145,8 @@ abstract final class IdeEffects {
   ///
   /// [accent] 通常传入 `IdeColors.focusRing`。
   ///
-  /// 生效位置：Agent Composer 外卡聚焦态（`agent_pane_composer`）；
-  /// 其它可聚焦控件可复用同一套环。
+  /// 生效位置：Agent Composer 外卡聚焦态（`agent_pane_composer`）、
+  /// `IdeSwitch`；紧凑按钮的键盘焦点改走内侧 1px 描边，不使用本投影。
   static List<BoxShadow> focusRing(
     Brightness brightness, {
     required Color accent,

@@ -106,11 +106,8 @@ void main() {
     expect(find.byType(sf.MenuButton), findsNWidgets(3));
     expect(find.byType(sf.MenuDivider), findsOneWidget);
     expect(find.byType(sf.MenuPopup), findsNothing);
-    expect(find.byType(IdeSurface), findsOneWidget);
-    expect(
-      tester.widget<IdeSurface>(find.byType(IdeSurface)).level,
-      IdeSurfaceLevel.popover,
-    );
+    expect(find.byType(IdePopoverPanel), findsOneWidget);
+    expect(find.byType(IdeSurface), findsNothing);
     expect(
       tester.getSize(find.byKey(const ValueKey('semantic-action'))).height,
       32,
@@ -150,7 +147,13 @@ void main() {
         ),
       );
 
-      expect(find.byType(IdeSurface), findsOneWidget);
+      expect(find.byType(IdePopoverPanel), findsOneWidget);
+      expect(find.byType(IdeSurface), findsNothing);
+      final popoverCard = tester.widget<PanelCard>(find.byType(PanelCard));
+      final colors = IdeColors.of(tester.element(find.byType(IdeContextMenu)));
+      expect(popoverCard.color, colors.panel);
+      expect(popoverCard.borderRadius, IdeRadius.allMedium);
+      expect(popoverCard.boxShadow, isNotEmpty);
       expect(find.byType(sf.MenuPopup), findsNothing);
       expect(find.byType(sf.ModalContainer), findsNothing);
       expect(tester.takeException(), isNull);

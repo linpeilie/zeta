@@ -44,15 +44,10 @@ class _NewThreadProviderPopoverState extends State<NewThreadProviderPopover> {
       builder: (context, snapshot) {
         final providers = snapshot.data ?? const <AgentProviderConfig>[];
         final selectedProvider = _selectedProvider(providers);
-        final colors = IdeColors.of(context);
         final textStyles = IdeTextStyles.of(context);
-        final brightness = sf.Theme.of(context).brightness;
         return RepaintBoundary(
-          child: PanelCard(
+          child: IdePopoverPanel(
             key: const ValueKey<String>('new-thread-provider-popover'),
-            color: colors.surfaceOverlay,
-            borderRadius: IdeRadius.allLarge,
-            boxShadow: IdeEffects.overlayShadow(brightness),
             child: SizedBox(
               width: 300,
               child: Padding(

@@ -4,18 +4,24 @@
 
 ## 1. 发布方式
 
-向 `main` 创建 PR，人工审读版本与更新说明后合并，即触发 [发布工作流](../../../.github/workflows/release.yml)。关闭但未合并的 PR 不发布；无需手动创建 tag。工作流固定使用该 PR 的合并提交，测试、构建和发布不会改用后来推进的 main。
+常规发布在 `develop` 上准备版本与说明，不另建 `release/*`。生产紧急修复仍可从 `main` 拉出 `hotfix/*`。完成稳定版本验收后，从 `develop` 向 `main` 创建 PR，人工审读版本与更新说明后合并，即触发 [发布工作流](../../../.github/workflows/release.yml)。关闭但未合并的 PR 不发布；无需手动创建 tag。工作流固定使用该 PR 的合并提交，测试、构建和发布不会改用后来推进的 main。
 
-发布准备可调用项目内 `$zeta-release` Skill，既可指定版本，也可只选择 beta 或正式版，由 Skill 自动确定下一个版本。Skill 不代替人工审读、提交或合并 PR。
+发布准备可调用项目内 `$zeta-release` Skill，既可指定版本，也可只选择 beta 或正式版，由 Skill 自动确定下一个版本。Skill 在已检出的 `develop` 上就地准备，不创建或切换 `release/*`，也不代替人工审读、提交或合并 PR。
 
 Skill 通过 `gh` 在 GitHub 创建 PR。本地获取 main 仅用于比较和校验，不自动执行 merge、会合并的 pull 或 rebase；遇到 PR 冲突时报告状态，分支同步与冲突处理须另有明确指示。
+
+### 分支流转与当前自动化边界
+
+完整[分支模型](../../../CONTRIBUTING.md#分支模型)以贡献指南为准。`$zeta-release` 常规路径只在 `develop` 上准备版本与说明，不拉 `release/*`。`main` 仅接收已就绪的稳定版本；beta 在 `develop` 上准备，不为发布 beta 将预发布版本合入 `main`。
+
+当前工作流仍只在 PR 合入 `main` 后触发，且支持读取 beta 版本。它尚未适配从 `develop` 发布 beta；本次约定调整不代表该自动化已实现。beta 可继续准备版本与说明，发布需先适配工作流；不能沿用旧方式把 beta 合入 `main`。
 
 ## 2. 版本与更新说明
 
 - 根目录 `release.json` 保存发布身份：`schemaVersion` 为 1，`version` 为 `X.Y.Z` 或 `X.Y.Z-beta.N`，不含 `v` 前缀。流水线由此生成 tag 和分发包版本。
 - `pubspec.yaml` 保存 `X.Y.Z+BUILD`，核心版本必须一致，BUILD 为正整数。Windows/macOS 元数据不写 beta 后缀，beta 序号与 build number 独立。
 - 数字段不能有前导零，beta 序号必须大于零。不支持 rc、tag build metadata 或其他预发布通道。
-- 发布版本必须高于所有已有合法发布 tag；PR 检查还要求高于目标 main 已记录的版本。按数字比较核心版本与 beta 序号，同核心正式版高于任意 beta，例如 `0.1.0-beta.9 < 0.1.0-beta.12 < 0.1.0 < 0.1.1-beta.1`。相同或回退均失败，不能靠提高 BUILD 绕过。
+- 发布版本必须高于所有已有合法发布 tag；本地发布准备还要求高于目标 main 已记录的版本。按数字比较核心版本与 beta 序号，同核心正式版高于任意 beta，例如 `0.1.0-beta.9 < 0.1.0-beta.12 < 0.1.0 < 0.1.1-beta.1`。相同或回退均失败，不能靠提高 BUILD 绕过。
 - 同版更新说明固定在 `docs/zh/release/notes/v<version>.md`，必须非空。按[更新日志规范](../development/documentation.md#更新日志规范)编写，已有文稿先读再增量修改；`CHANGELOG.md` 链接到正文。GitHub Release 直接读取这份文件，不再自动生成提交列表。
 
 例如 beta 版本对应：
@@ -58,7 +64,7 @@ Skill 在修改前说明基线和选出的版本，随后直接继续，不额�
 
 ## 3. 发布前准备
 
-1. 获取完整远端历史和 tags，在 `dev` 或指定发布分支准备更高版本。
+1. 获取完整远端历史和 tags，在当前 `develop` 上准备更高版本，不创建或切换 `release/*`。保留当前工作区；当前不在 `develop` 时不要代为切换。
 2. 同时更新 `release.json`、`pubspec.yaml`、同版说明和 `CHANGELOG.md` 入口。
 3. 执行版本检查和完整门禁：
 
@@ -71,10 +77,12 @@ Skill 在修改前说明基线和选出的版本，随后直接继续，不额�
    ```
 
    使用 CI 指定的 `PUB_HOSTED_URL=https://pub.dev`，避免本机镜像配置改变锁文件。
-4. 人工审读并修改说明，随代码提交、推送源分支。先用 `gh pr list --base main --head <源分支> --state open` 查重，再用 `gh pr create --base main --head <源分支> --title <标题> --body-file <正文文件>` 在 GitHub 创建 PR；已有 PR 用 `gh pr edit` 更新。通过 `gh pr view` 核对分支与状态，交付 PR URL。PR 检查验证版本递增和文稿存在。
+4. 人工审读并修改说明，随代码提交、推送 `develop`。先用 `gh pr list --base main --head develop --state open` 查重，再用 `gh pr create --base main --head develop --title <标题> --body-file <正文文件>` 在 GitHub 创建 PR；已有 PR 用 `gh pr edit` 更新。通过 `gh pr view` 核对分支与状态，交付 PR URL。提交前执行本地版本与文稿校验；main 的 PR 不触发独立 CI，合并后由发布预检再次校验版本与文稿。
 5. 检查通过后由用户在 GitHub 合并 PR，即授权流水线执行发布。“提交并发起 PR”不包含本地合并或 `gh pr merge`；Skill 不自动处理 PR 冲突。不要再手工打 tag、推送 tag 或提前创建 GitHub Release。
 
 ## 4. 自动化流程
+
+独立 CI 仅由目标为 `develop` 的 PR 触发，不响应 push 或手动触发。`workflow_call` 保留，发布流程仍可调用全部检查，并通过 `checkout-ref` 固定被测合并提交；PR 的分支过滤不限制该调用。
 
 1. 仅处理合入 main 的 PR，固定其合并 SHA，确认该 SHA 位于 main 历史中。
 2. 从该提交读取发布版本与文稿，验证数字版本一致、版本递增和文稿存在。

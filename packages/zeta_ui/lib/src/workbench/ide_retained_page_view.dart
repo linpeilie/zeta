@@ -19,7 +19,9 @@ class IdeRetainedPage {
 /// 用于替代会布局全部 child 的 [IndexedStack]：
 /// - 不可手势滚动，索引由 [selectedId] 驱动并以 [PageController.jumpToPage] 同步；
 /// - 已访问页通过 [AutomaticKeepAliveClientMixin] 保留 State（草稿、滚动等）；
-/// - 离屏 keep-alive 子树不参与父约束的持续 layout，并通过 [TickerMode] 暂停动画。
+/// - 离屏 keep-alive 子树不参与父约束的持续 layout，并通过 [TickerMode] 暂停动画；
+/// - 非活动页同时退出焦点遍历、指针命中和语义树，避免 Tab 触发
+///   [Scrollable.ensureVisible] 把画布滚到保活页。
 class IdeRetainedPageView extends StatefulWidget {
   const IdeRetainedPageView({
     required this.pages,
@@ -169,9 +171,20 @@ class _IdeRetainedKeepAlivePageState extends State<_IdeRetainedKeepAlivePage>
   Widget build(BuildContext context) {
     super.build(context);
     // PageView 子项默认不强制撑满；expand 保证 Agent/Settings 获得有界约束。
-    return TickerMode(
-      enabled: widget.active,
-      child: SizedBox.expand(child: widget.child),
+    // 离屏 keep-alive 子树仍挂在 PageView 里；必须排除焦点和指针，
+    // 否则 Tab 会命中隐藏页并触发 Scrollable.ensureVisible，把画布滚离当前页。
+    return ExcludeFocus(
+      excluding: !widget.active,
+      child: IgnorePointer(
+        ignoring: !widget.active,
+        child: ExcludeSemantics(
+          excluding: !widget.active,
+          child: TickerMode(
+            enabled: widget.active,
+            child: SizedBox.expand(child: widget.child),
+          ),
+        ),
+      ),
     );
   }
 }

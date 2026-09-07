@@ -2,7 +2,23 @@
 
 中文 ｜ [English](CONTRIBUTING.en.md)
 
-开发分支和 PR 目标使用 `dev`；正式发布从 `main` 创建 Tag。提交前阅读与改动有关的[工程规范](docs/zh/architecture/engineering_standards.md)。
+日常开发集成到 `develop`，`main` 始终保留生产就绪的最新稳定版本。提交前阅读与改动有关的[工程规范](docs/zh/architecture/engineering_standards.md)。
+
+## 分支模型
+
+本项目使用已创建的 `main` 和 `develop` 两条长期分支，不另设 `master` 或 `dev`。
+
+| 分支 | 来源 | 用途与合并目标 |
+| --- | --- | --- |
+| `main` | 长期保留 | 生产就绪代码，任何时候代表可发布的最新稳定版本；接收完成验收的 `release/*` 和 `hotfix/*` PR。 |
+| `develop` | 长期保留 | 日常集成，所有新功能和修复最终都要合入此分支。 |
+| `feature/*` | `develop` | 新功能和日常修复，完成后通过 PR 合回 `develop`。 |
+| `release/*` | `develop` | 发布前最终测试、必要修复和版本号修订；完成后通过 PR 合入 `main`，发布流程打版本标签，并通过另一 PR 合回 `develop`。 |
+| `hotfix/*` | `main` | 紧急修复生产环境严重问题；完成后通过 PR 合入 `main` 并打版本标签，同时通过另一 PR 合回 `develop`。 |
+
+辅助分支均为短期分支，全部目标 PR 合并完成后删除；`release/*` 和 `hotfix/*` 须确认发布及标签成功后再删除。不要在只合入 `main` 后提前删除尚需回合 `develop` 的源分支。两个长期分支持续保留。
+
+分支名示例：`feature/notification-logo`、`release/0.1.0`、`hotfix/0.1.1`。所有合并通过 GitHub PR 审读；发起 PR 不等于授权本地 merge、rebase 或自动合并 PR。正式发布与标签操作见[发版指南](docs/zh/release/release_guide.md)。
 
 ## 准备环境
 
@@ -19,7 +35,7 @@ macOS 或 Linux 将设备名改为 `macos` 或 `linux`。Linux 构建依赖及�
 
 ## 修改与提交
 
-1. 从 `dev` 创建分支。先检查已有改动，避免覆盖他人的工作。
+1. 日常功能和修复从 `develop` 创建 `feature/*`，完成后通过 PR 合回 `develop`；发布和紧急修复按下方分支模型操作。先检查已有改动，避免覆盖他人的工作。
 2. 保持一个 PR 解决一个问题。新增 Provider 或大范围架构调整时，先明确范围、接口和验证方式。
 3. 补充相关测试，更新对应现行文档；用户可感知变化写入 [CHANGELOG.md](CHANGELOG.md)。
 4. 运行下面适用的检查，再提交 PR。描述实际变化、验证结果和未执行项。

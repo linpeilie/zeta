@@ -191,7 +191,7 @@ Composer 里的原子 chip，用 `U+FFFC` 占位符 + `WidgetSpan` 渲染成 `$n
 三个位置：Navigation（左）、Canvas（中）、Inspector（右）。feature 页面只提供 slot 内容，**不得替换顶层 workbench**。
 
 **IdeRetainedPageView（保活页面栈）**
-跨页面保活的容器。延迟挂载、保留已访问页面的 State 和滚动位置、暂停离屏 ticker。**不要用 `IndexedStack` 替代**——它会一直保留长时间线的布局开销。
+跨页面保活的容器。延迟挂载、保留已访问页面的 State 和滚动位置、暂停离屏 ticker，并让非活动页退出焦点遍历。**不要用 `IndexedStack` 替代**——它会一直保留长时间线的布局开销。
 
 **Graphite token（设计 token）**
 深色 Graphite Night / 浅色 Graphite Day 两套语义 token，唯一来源是 `IdeThemeScope`。`shadcn_flutter` 的 theme 只是投影，不能反向回读。业务代码禁止硬编码颜色、圆角和阴影。表面遵循严格单调的明度阶梯（frame → canvas → pane → control → popover），层级只靠阶梯加 1px 半透明描边表达，除浮层的极淡投影外全局零阴影。

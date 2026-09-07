@@ -96,15 +96,28 @@ void main() {
       expect(popoverRect.height, greaterThan(0));
       expect(popoverRect.top, greaterThanOrEqualTo(0));
       expect(popoverRect.bottom, lessThanOrEqualTo(viewportHeight));
-      final popoverPanel = find.descendant(
-        of: popover,
-        matching: find.byType(PanelCard),
+      final popoverChrome = tester.widget<PanelCard>(
+        find
+            .descendant(
+              of: find.byType(IdePopoverPanel),
+              matching: find.byType(PanelCard),
+            )
+            .first,
       );
-      final modelPopoverPanel = tester.widget<PanelCard>(popoverPanel.first);
       final colors = IdeColors.of(tester.element(modelSelector));
-      expect(modelPopoverPanel.color, colors.surfaceElevated);
-      expect(modelPopoverPanel.borderRadius, IdeRadius.allSmall);
-      expect(modelPopoverPanel.boxShadow, isEmpty);
+      expect(popoverChrome.color, colors.panel);
+      expect(popoverChrome.borderColor, colors.border);
+      expect(popoverChrome.borderRadius, IdeRadius.allMedium);
+      expect(popoverChrome.boxShadow, isNotEmpty);
+      final expandedConfigCard = tester.widget<PanelCard>(
+        find.descendant(
+          of: find.byKey(const ValueKey('agent-model-inline-config-gpt-5.5')),
+          matching: find.byType(PanelCard),
+        ),
+      );
+      expect(expandedConfigCard.color, colors.surfaceElevated);
+      expect(expandedConfigCard.borderRadius, IdeRadius.allSmall);
+      expect(expandedConfigCard.boxShadow, isEmpty);
       final openSelectorButton = tester.widget<IdeButton>(modelSelector);
       expect(openSelectorButton.variant, IdeButtonVariant.secondary);
       expect(

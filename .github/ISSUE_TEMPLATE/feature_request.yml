@@ -5,15 +5,15 @@ body:
   - type: markdown
     attributes:
       value: |
-        提之前请先看一眼 [README 的「能做什么」](https://github.com/linpeilie/zeta/blob/dev/README.md#能做什么)
-        和[产品需求文档](https://github.com/linpeilie/zeta/blob/dev/docs/zh/product/product_requirements.md)。
+        提之前请先看一眼 [README 的「能做什么」](https://github.com/linpeilie/zeta/blob/develop/README.md#能做什么)
+        和[产品需求文档](https://github.com/linpeilie/zeta/blob/develop/docs/zh/product/product_requirements.md)。
         Zeta 连接本机 AI 编码助手，提供对话、操作记录和文件浏览，不包含模型或代码编辑器。
 
         ---
 
         Before filing, please skim
-        [what Zeta can do](https://github.com/linpeilie/zeta/blob/dev/README.en.md#what-you-can-do)
-        and the [product requirements](https://github.com/linpeilie/zeta/blob/dev/docs/en/product/product_requirements.md).
+        [what Zeta can do](https://github.com/linpeilie/zeta/blob/develop/README.en.md#what-you-can-do)
+        and the [product requirements](https://github.com/linpeilie/zeta/blob/develop/docs/en/product/product_requirements.md).
         Zeta connects local AI coding assistants for conversations, operation records and file browsing. It does not include a model or code editor.
 
   - type: checkboxes

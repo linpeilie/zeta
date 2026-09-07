@@ -973,12 +973,24 @@ void main() {
         );
         expect(popover, findsOneWidget);
         expect(tester.getSize(popover).width, 288);
-        // 方案 B：弹层不再叠加 PanelCard 外层，由 shadcn SelectPopup 自带卡
-        // 作为唯一表面，避免「两层」视觉。
+        // 弹层唯一表面是 IdePopoverPanel（Composer 同款 PanelCard），
+        // 不再依赖 shadcn SelectPopup 自带卡片。
+        expect(
+          find.descendant(of: popover, matching: find.byType(IdePopoverPanel)),
+          findsOneWidget,
+        );
         expect(
           find.descendant(of: popover, matching: find.byType(PanelCard)),
-          findsNothing,
+          findsOneWidget,
         );
+        final permissionChrome = tester.widget<PanelCard>(
+          find.descendant(of: popover, matching: find.byType(PanelCard)),
+        );
+        final popoverColors = IdeColors.of(tester.element(popover));
+        expect(permissionChrome.color, popoverColors.panel);
+        expect(permissionChrome.borderColor, popoverColors.border);
+        expect(permissionChrome.borderRadius, IdeRadius.allMedium);
+        expect(permissionChrome.boxShadow, isNotEmpty);
         expect(
           find.byType(sf.SelectPopup<AgentPermissionOption>),
           findsOneWidget,

@@ -573,7 +573,8 @@ Provider 契约测试。若 PR 因 Provider 差异修改 CoalescingPolicy/Buffer
 - 跨页面保活的 Canvas 必须保证关键 State、`ScrollController`、输入控制器和当前 Thread
   不被销毁。可能因兄弟 slot 增删而换位的 Flex 子节点必须直接使用稳定 Key；仅给内部
   Widget 加 Key 不足以保证父级 Element 复用。保活实现必须只布局活动页面；禁止用
-  `IndexedStack` 保留包含长时间线的页面或会话。
+  `IndexedStack` 保留包含长时间线的页面或会话。非活动 keep-alive 页不得进入焦点遍历、
+  指针命中和语义树；禁止只暂停 ticker 却仍允许 Tab 把隐藏页滚入视口。
 - 连续 resize 只允许按布局语义档位更新业务树。`IdeConstraintBucketBuilder` 的稳定
   callback 不得因父级每像素重建而失效；捕获了新配置的 callback 必须显式改变身份。
 - Agent 时间线必须使用 block / activity / footer 粒度的稳定 viewport item 与
@@ -587,8 +588,14 @@ Provider 契约测试。若 PR 因 Provider 差异修改 CoalescingPolicy/Buffer
   走 `IdeThemeScope` / `IdeColors` / `IdeTextStyles`；第三方组件走 `sf.*`。
 - 统一 `import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;`，禁止旧
   `shadcn_ui` / `Shad*` / `showShadDialog` API。
-- 新 pane 或重复项优先复用 `Pane`、`PanelCard`、`IdeTabs` / `IdeTab`、`IdeChip`、
+- 新 pane 或重复项优先复用 `Pane`、`PanelCard`、`IdePopoverPanel`、`IdeTabs` / `IdeTab`、`IdeChip`、
   `IdeContextMenu`、`IdeStatusCard`、`WindowFrame` 和主题常量。
+  锚点弹出层（Composer 模型/权限/模式、菜单、选择列表）统一用 `IdePopoverPanel`，
+  与 Composer 外卡同色、同描边、同 medium 圆角，并带浮层投影；不要再叠
+  `sf.Card` 或 SelectPopup 自带卡片。`IdeSurface.popover` 仅用于用量统计等独立浮层面板。
+  Composer 工具栏选择触发器（模型 / 权限 / 模式）走 `IdeToolbarSelectTrigger`。
+  `IdeButton` / `IdeIconButton` 关闭 shadcn `FocusOutline`，键盘焦点用内侧
+  1px `IdeColors.focusRing`，不要再叠会被裁切的外侧焦点环。
 - IDE 通知统一走 `showIdeToast`，不要在 feature 页散落 `sf.showToast` builder。
 - 长项目路径、文件路径、thread 标题、工具调用摘要和 diff 统计必须限制行数并使用 ellipsis。
 - 非文本按钮需要 tooltip；重要自定义控件需要语义标签。
@@ -645,6 +652,9 @@ Provider 契约测试。若 PR 因 Provider 差异修改 CoalescingPolicy/Buffer
 - 包含多字段配置的 application controller 必须覆盖快速连续更新、过期请求、
   确认态回滚、完整快照重试与损坏持久化输入。
 - provider datasource 和 transport 用 fake process、fake storage 或 callback 注入。
+  生产 Claude bundle 的 `listModels` / `prepareForAcquisition` 会刷新本机登录；
+  测试必须把凭据指到临时空目录（`isolatedClaudeCodeProviderConfig`），不得使用
+  用户 HOME 下的 `.claude`。
 - pane、timeline、file tree 等用户可见行为用 widget test。
 - resize 相关测试至少覆盖外窗 1197/1196/1195px（`wideBreakpoint` + 工作台左右
   `space8` ± 1）、Agent Canvas 641/640/639px、隐藏

@@ -144,7 +144,7 @@ dispose 完成前同 scope acquire 必须等待。配置失效会同时清理 gl
 Registry acquire 必须显式选择 global/session scope；使用统计面板只通过 global runtime
 访问中立 quota 端口，不接受 raw Provider/lease loader 兼容路径。
 
-有前置条件的 Provider 可在 bundle 提供 `acquisitionPreparation`。Registry 对新建与复用租约均等待 `prepareForAcquisition()`，失败释放本次租约；准备结束后失效/关闭的实例不得返回。准备不等于 `runtime.initialize()`，也不启动 session。共享层只认识这个中立端口，Claude 的 token 判断和刷新仍在自有 data 层；已持有实例的新请求也调用同一 `ensureFresh()`。
+有前置条件的 Provider 可在 bundle 提供 `acquisitionPreparation`。Registry 对新建与复用租约均等待 `prepareForAcquisition()`，失败释放本次租约；准备结束后失效/关闭的实例不得返回。准备不等于 `runtime.initialize()`，也不启动 session。共享层只认识这个中立端口，Claude 的 token 判断和刷新仍在自有 data 层；已持有实例的新请求也调用同一 `ensureFresh()`。调用生产 Claude `listModels` 的测试须用 `isolatedClaudeCodeProviderConfig`，不得读写用户 HOME 下的 `.claude`。
 
 ### Conversation Slice 接入
 
@@ -657,7 +657,8 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
   presentation 层，不写会话。
 - 需要跨页面保持的 Canvas 应使用稳定位置、稳定 Key 和保活容器。Key 必须放在可能因
   slot 增删而换位的 Flex 子节点上，不能只放在其内部后代；保活容器必须只布局活动页，
-  非活动页面同时退出布局并暂停 ticker。
+  非活动页面同时退出布局、暂停 ticker，并排除焦点遍历与指针命中，避免 Tab 把保活页
+  滚入视口。
 - Agent 会话与主要页面统一使用 `IdeRetainedPageView`；不要用 `IndexedStack` 保留
   长时间线，否则隐藏页面仍会参与 resize layout。
 - `IdeConstraintBucketBuilder` 的稳定回调可跨父级 resize 复用 child。若 builder 捕获
@@ -681,7 +682,10 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
 - Projects 侧栏的项目项与 thread 项只使用水平 padding；不要为条目增加上下
   padding，行高由内容和稳定点击区域 token 决定。
 - 非文本按钮应提供 tooltip。
-- 新增面板或重复项时优先复用 `Pane`、`PanelCard`、主题常量和现有间距。
+- 新增面板或重复项时优先复用 `Pane`、`PanelCard`、`IdePopoverPanel`、主题常量和现有间距。
+  Composer 及锚点菜单/选择列表的弹层表面走 `IdePopoverPanel`，不要再包一层 `sf.Card`。
+  输入框工具栏里的模型、权限、模式选择触发器走 `IdeToolbarSelectTrigger`；
+  `IdeButton` 的键盘焦点用 Graphite 内侧环，不要打开 shadcn `FocusOutline`。
 - UI 组件库使用 `shadcn_flutter`，必须 `as sf` 导入；Graphite 语义 token 通过
   `IdeThemeScope` / `IdeColors.of(context)` / `IdeTextStyles.of(context)` 读取。
 - 通知反馈使用 `showIdeToast`（`packages/zeta_ui/lib/src/ide_toast.dart`）。

@@ -2,7 +2,23 @@
 
 English ｜ [中文](CONTRIBUTING.md)
 
-Use `dev` for development branches and PRs. Release tags are created from `main`. Read the [engineering standards](docs/zh/architecture/engineering_standards.md) (Chinese) relevant to your change.
+Integrate daily development into `develop`; `main` always holds the latest production-ready stable version. Read the [engineering standards](docs/zh/architecture/engineering_standards.md) (Chinese) relevant to your change.
+
+## Branch model
+
+The project uses the existing `main` and `develop` as its two long-lived branches; no separate `master` or `dev` is used.
+
+| Branch | Source | Purpose and merge targets |
+| --- | --- | --- |
+| `main` | Long-lived | Always contains the latest production-ready stable version; receives validated `release/*` and `hotfix/*` PRs. |
+| `develop` | Long-lived | Daily integration; every feature and fix must ultimately reach this branch. |
+| `feature/*` | `develop` | Features and routine fixes; merge back into `develop` through a PR. |
+| `release/*` | `develop` | Final testing, necessary fixes and version updates; merge into `main` through a PR for publication and tagging, and back into `develop` through a separate PR. |
+| `hotfix/*` | `main` | Urgent fixes for severe production problems; merge into `main` through a PR for publication and tagging, and back into `develop` through a separate PR. |
+
+Auxiliary branches are temporary. Delete them only after all target PRs have merged; for `release/*` and `hotfix/*`, also confirm publication and tagging succeeded. Do not delete the source after merging only into `main` while its `develop` PR is still pending. Keep both long-lived branches.
+
+Examples: `feature/notification-logo`, `release/0.1.0`, `hotfix/0.1.1`. Review merges through GitHub PRs; opening a PR does not authorize local merges, rebases or automatic PR merging. See the [release guide](docs/en/release/release_guide.md) for publication and tagging.
 
 ## Environment
 
@@ -19,7 +35,7 @@ Assistant integration work needs the corresponding installed, signed-in assistan
 
 ## Changes and PRs
 
-1. Branch from `dev`. Inspect existing changes and preserve others' work.
+1. Create `feature/*` from `develop` for features and routine fixes, then open a PR back to `develop`. Follow the branch model below for releases and urgent fixes. Inspect existing changes and preserve others' work.
 2. Keep each PR focused. Define scope, contracts and verification before adding a provider or making a broad architectural change.
 3. Add relevant tests and update current documentation. Put user-visible changes in [CHANGELOG.md](CHANGELOG.md).
 4. Run applicable checks below. Describe the actual change, results and checks not performed in the PR.

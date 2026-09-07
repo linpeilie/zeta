@@ -111,6 +111,77 @@ void main() {
       colors.onAccent,
     );
   });
+
+  testWidgets('键盘焦点关闭 shadcn FocusOutline，改用内侧 Graphite 描边', (tester) async {
+    final focusNode = FocusNode(debugLabel: 'ide-button-focus');
+    addTearDown(focusNode.dispose);
+    addTearDown(() {
+      FocusManager.instance.highlightStrategy =
+          FocusHighlightStrategy.automatic;
+    });
+    FocusManager.instance.highlightStrategy =
+        FocusHighlightStrategy.alwaysTraditional;
+
+    await pumpIdeComponent(
+      tester,
+      child: Align(
+        alignment: Alignment.center,
+        child: IdeButton(
+          key: const ValueKey('focus-button'),
+          label: '筛选',
+          focusNode: focusNode,
+          onPressed: _noop,
+        ),
+      ),
+    );
+
+    expect(
+      tester.widget<sf.Button>(find.byType(sf.Button)).disableFocusOutline,
+      isTrue,
+    );
+
+    focusNode.requestFocus();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(focusNode.hasFocus, isTrue);
+    expect(
+      tester.widget<sf.FocusOutline>(find.byType(sf.FocusOutline)).focused,
+      isFalse,
+    );
+    final colors = IdeColors.of(
+      tester.element(find.byKey(const ValueKey('focus-button'))),
+    );
+    expect(
+      tester.allWidgets.any(
+        (widget) => _decorationHasFocusRing(widget, colors.focusRing),
+      ),
+      isTrue,
+    );
+  });
+}
+
+bool _decorationHasFocusRing(Widget widget, Color focusRing) {
+  Object? decoration;
+  if (widget is DecoratedBox) {
+    decoration = widget.decoration;
+  } else if (widget is Container) {
+    decoration = widget.decoration;
+  } else {
+    try {
+      decoration = (widget as dynamic).decoration;
+    } catch (_) {
+      return false;
+    }
+  }
+  if (decoration is BoxDecoration) {
+    return decoration.border?.top.color == focusRing;
+  }
+  if (decoration is ShapeDecoration) {
+    final shape = decoration.shape;
+    return shape is RoundedRectangleBorder && shape.side.color == focusRing;
+  }
+  return false;
 }
 
 void _noop() {}
