@@ -1,9 +1,11 @@
 name: CI
 
 on:
-  # 日常 CI 仅在目标为 develop 的 PR 上运行；发布仍通过 workflow_call 调用。
+  # 目标为 develop 或 main 的 PR 都跑独立 CI，结果出现在该 PR 的检查页。
+  # branches 过滤的是 base（目标分支），因此 develop→main 会命中 main。
+  # 合入 main 后的发布仍通过 workflow_call 再跑一遍。
   pull_request:
-    branches: [develop]
+    branches: [develop, main]
   workflow_call:
     inputs:
       checkout-ref:
