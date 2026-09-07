@@ -1,3 +1,4 @@
+import 'package:zeta/src/features/agent/presentation/agent_pane_presentation_store.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane_retention.dart';
 import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_entry_resources.dart';
 import 'dart:async';
@@ -103,9 +104,11 @@ List<Override> conversationWorkspaceOverrides() => [
 final conversationEntryLeaseReleaseProvider =
     Provider<Future<void> Function(AgentConversationEntryResources)>((ref) {
       final retention = ref.read(agentPaneRetentionProvider);
+      final presentationStore = ref.read(agentPanePresentationStoreProvider);
       return (entry) async {
         await entry.bindingLease.release();
         await retention.closeEntry(entry.controller);
+        presentationStore.closeEntry(entry.controller);
       };
     });
 

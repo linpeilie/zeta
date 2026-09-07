@@ -1,5 +1,6 @@
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_actions.dart';
 import 'dart:async';
+import 'agent_pane_presentation_store.dart';
 import 'agent_pane_retention.dart';
 
 import 'package:flutter/foundation.dart';
@@ -48,10 +49,10 @@ class AgentPane extends ConsumerStatefulWidget {
   /// 当前消息输入框使用的发送快捷键。
   final MessageSendShortcut messageSendShortcut;
 
-  /// 是否为前台 canvas。
+  /// 是否为 keep-alive 栈中的前台页。
   ///
-  /// 非前台时时间线不订阅 live 高频 listenable，仅保留 history/expansion
-  /// 与 threadSnapshot 侧栏路径。
+  /// `false` 表示被覆盖的保留页：时间线不订阅 live 高频 listenable，也不跟随
+  /// 自动滚动。W4 删除 `IdeRetainedPageView` 后该标志恒为 true。
   final bool isActive;
 
   /// 测试用：走与粘贴相同的暂存端口，把字节写成草稿图。
@@ -94,6 +95,18 @@ class AgentPane extends ConsumerStatefulWidget {
     return state._composer.draftImagePaths.value;
   }
 
+  /// 测试用：读取当前会话的 Markdown 缓存。
+  @visibleForTesting
+  static AgentMarkdownCache debugMarkdownCache(GlobalKey key) {
+    final state = key.currentState;
+    if (state is! _AgentPaneState) {
+      throw StateError(
+        'AgentPane is not mounted for $key (state=${state.runtimeType})',
+      );
+    }
+    return state._markdownCache;
+  }
+
   @override
   ConsumerState<AgentPane> createState() => _AgentPaneState();
 }
@@ -101,6 +114,8 @@ class AgentPane extends ConsumerStatefulWidget {
 class _AgentPaneState extends ConsumerState<AgentPane> {
   late final AgentPaneComposerSession _composer;
   late final AgentPaneRetention _retention;
+  late final AgentPanePresentationStore _presentationStore;
+  late AgentPanePresentationCache _presentation;
   late final IdeSmoothScrollController _scrollController;
   final ValueNotifier<bool> _contextPanelVisible = ValueNotifier<bool>(false);
   late StreamSubscription<AgentUiEffect> _uiEffectSubscription;
@@ -120,9 +135,11 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
       buildAgentTimelineRendererRegistry();
   late final AgentTimelineExtentDescriptorFactory _descriptorFactory =
       AgentTimelineExtentDescriptorFactory(registry: _rendererRegistry);
-  AgentMarkdownCache _markdownCache = AgentMarkdownCache();
-  AgentPlanRevisionDraftStore _planRevisionDrafts =
-      AgentPlanRevisionDraftStore();
+
+  AgentMarkdownCache get _markdownCache => _presentation.markdownCache;
+
+  AgentPlanRevisionDraftStore get _planRevisionDrafts =>
+      _presentation.planRevisionDrafts;
 
   /// renderer 的稳定依赖；会话（controller / 缓存）换代时重建。
   late AgentTimelineRenderContext _renderContext;
@@ -134,6 +151,8 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
   void initState() {
     super.initState();
     _retention = ref.read(agentPaneRetentionProvider);
+    _presentationStore = ref.read(agentPanePresentationStoreProvider);
+    _presentation = _presentationStore.cacheFor(widget.controller);
     final retained = _retention.take(widget.controller);
     _projectionCache = AgentTimelineProjectionCache(
       textCatalog: widget.controller.textCatalog,
@@ -191,16 +210,8 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
     _responsiveBodyBuilder = _createResponsiveBodyBuilder();
     _projectionCache.clear();
     _descriptorFactory.clearCache();
-    final previousMarkdownCache = _markdownCache;
-    _markdownCache = AgentMarkdownCache();
-    final previousPlanDrafts = _planRevisionDrafts;
-    _planRevisionDrafts = AgentPlanRevisionDraftStore();
-    // controller 与两个缓存都换了实例，渲染上下文必须跟着换代。
+    _presentation = _presentationStore.cacheFor(widget.controller);
     _renderContext = _createRenderContext();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      previousMarkdownCache.dispose();
-      previousPlanDrafts.dispose();
-    });
     _virtualListController.synchronizeNow(
       const <IdeVirtualItemDescriptor>[],
       epoch: const IdeLayoutEpoch(
@@ -258,8 +269,6 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
     _activePlanPanelExtent.dispose();
     _projectionCache.clear();
     _descriptorFactory.clearCache();
-    _markdownCache.dispose();
-    _planRevisionDrafts.dispose();
     super.dispose();
   }
 
