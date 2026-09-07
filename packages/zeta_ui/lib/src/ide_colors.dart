@@ -182,14 +182,16 @@ class IdeColors {
 
   /// 最上层覆盖表面，与页面内容分离且必须保持不透明。
   ///
-  /// 生效位置：`IdeContextMenu`、Provider 选择 Popover、`IdeTooltip`、
-  /// 用量统计筛选层和模型配置内部的次级选择层；同时投影为 shadcn popover。
+  /// 生效位置：`IdeTooltip`、用量统计筛选层和 `IdeSurface.popover`
+  /// （用量等独立浮层面板）；同时投影为 shadcn popover。
+  /// 锚点菜单与 Composer 选择弹层改走 [panel]（见 [IdePopoverPanel]）。
   final Color surfaceOverlay;
 
   /// Composer 专用的连续面板背景。
   ///
   /// 生效位置：Agent Composer 外卡、输入区及其拖拽角遮罩，
-  /// 以及模型/工作目录权限的共享选择弹层。该字段保留独立语义，
+  /// 以及 [IdePopoverPanel]（模型/权限/模式/Skill/提及/斜线命令、
+  /// 上下文菜单、选择列表与新建会话 Provider 选择弹层）。该字段保留独立语义，
   /// 便于 Composer 未来与通用 [surface] 分色。
   final Color panel;
 

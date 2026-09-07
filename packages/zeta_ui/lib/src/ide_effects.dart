@@ -127,8 +127,8 @@ abstract final class IdeEffects {
   /// `IdeColors.surfaceOverlay` 加 `border` 细边，本阴影只负责让浮层边缘
   /// 不至于和同色背景糊在一起，所以模糊半径和偏移都远小于常规 Material 浮层。
   ///
-  /// 生效位置：`IdeSurface` popover 级、`IdeToast`、`IdeWorkbenchScaffold`
-  /// 窄屏浮层侧栏、项目列表 Provider 选择 Popover 等。
+  /// 生效位置：`IdePopoverPanel`、`IdeSurface` popover 级、`IdeToast`、
+  /// `IdeWorkbenchScaffold` 窄屏浮层侧栏等。
   static List<BoxShadow> overlayShadow(Brightness brightness) {
     return [
       BoxShadow(

@@ -681,7 +681,8 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
 - Projects 侧栏的项目项与 thread 项只使用水平 padding；不要为条目增加上下
   padding，行高由内容和稳定点击区域 token 决定。
 - 非文本按钮应提供 tooltip。
-- 新增面板或重复项时优先复用 `Pane`、`PanelCard`、主题常量和现有间距。
+- 新增面板或重复项时优先复用 `Pane`、`PanelCard`、`IdePopoverPanel`、主题常量和现有间距。
+  Composer 及锚点菜单/选择列表的弹层表面走 `IdePopoverPanel`，不要再包一层 `sf.Card`。
 - UI 组件库使用 `shadcn_flutter`，必须 `as sf` 导入；Graphite 语义 token 通过
   `IdeThemeScope` / `IdeColors.of(context)` / `IdeTextStyles.of(context)` 读取。
 - 通知反馈使用 `showIdeToast`（`packages/zeta_ui/lib/src/ide_toast.dart`）。

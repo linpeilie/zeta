@@ -190,6 +190,7 @@ class _IdePopupSelectState<T extends Object> extends State<IdePopupSelect<T>> {
 /// 已建立弹层约束时使用的选择列表表面。
 ///
 /// 这是 [IdePopupSelect] 与需要自定义头部的复合选择器之间的低层共享机制。
+/// 外层走 [IdePopoverPanel]，并去掉 [sf.SelectPopup] 自带卡片，避免双层描边。
 class IdePopupSelectList<T extends Object> extends StatelessWidget {
   const IdePopupSelectList({
     required this.value,
@@ -204,23 +205,29 @@ class IdePopupSelectList<T extends Object> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return sf.Data.inherit(
-      data: sf.SelectData(
-        autoClose: true,
-        hasSelection: value != null,
-        enabled: true,
-        expandIcon: null,
-        isSelected: (candidate) => candidate == value,
-        onChanged: (candidate, selected) {
-          if (candidate is! T) {
-            return false;
-          }
-          return onChanged(candidate, selected);
-        },
-      ),
-      child: sf.SelectPopup<T>.noVirtualization(
-        autoClose: true,
-        items: sf.SelectItemList(children: items),
+    return IdePopoverPanel(
+      child: IdePopoverPanel.hideInnerSurface(
+        child: sf.Data.inherit(
+          data: sf.SelectData(
+            autoClose: true,
+            hasSelection: value != null,
+            enabled: true,
+            expandIcon: null,
+            isSelected: (candidate) => candidate == value,
+            onChanged: (candidate, selected) {
+              if (candidate is! T) {
+                return false;
+              }
+              return onChanged(candidate, selected);
+            },
+          ),
+          child: sf.SelectPopup<T>.noVirtualization(
+            autoClose: true,
+            surfaceBlur: 0,
+            surfaceOpacity: 1,
+            items: sf.SelectItemList(children: items),
+          ),
+        ),
       ),
     );
   }
