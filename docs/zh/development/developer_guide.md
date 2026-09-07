@@ -416,12 +416,11 @@ create/resume/fork/send --> Binding.permissions.snapshotForRequest()
   UI 不显示异常原文，失败不覆盖全局 header/composer status。
 - 验证从真实 AgentPane/ComposerSection 选值开始，覆盖缺端口、延迟/失败/重试、独立取消、
   同 key 队列、不同 key 并行、禁用、关闭、runtime 换代和同 thread key 的 entry 重开。
-  原阶段验证摘要见 [应用状态与命令记录](../../../.workflow/plan/2026-09-05-lib-cohesion/00-index.md)。
 
 ### Skill 输入与 Composer token
 
 - Domain 使用 `AgentUserInput.skill`、`AgentSkillMetadata` / `AgentSkillsCatalog`；
-  capability 位为 `supportsSkillInput`（Codex 开，Grok 与 Claude Code 关）。
+  capability 位为 `supportsSkillInput`（Codex 与 Grok 开，Claude Code 关）。
 - Codex 通过可选端口 `bundle.skills`（`AgentSkillsPort`）暴露 `skills/list` 与
   `skills/changed`；application 层由 `AgentSkillsCatalogController` 做
   stale-while-revalidate / single-flight。
@@ -821,8 +820,7 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
 ### Markdown 渲染
 
 会话正文、计划文档与工具卡正文都由 `packages/zeta_markdown` 渲染——它是
-`mixin_markdown_widget 0.3.1` 的 fork（MIT），决策见
-`.workflow/plan/2026-09-03-agent-conversation-ui-rendering/00-index.md` 的 DR-001。
+`mixin_markdown_widget 0.3.1` 的 fork（MIT）。包职责与定制说明见[包 README](../../../packages/zeta_markdown/README.md)。
 
 **改之前先读 `packages/zeta_markdown/UPSTREAM.md`。** 所有定制都走「新增注入点 +
 默认值与上游一致」，这样上游同步时只需逐文件 diff。想改什么，去对应的注入点：

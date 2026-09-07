@@ -191,3 +191,6 @@ target
 
 # Rust 工具链产物：本仓库没有 Cargo.toml，Cargo.lock 属于误提交
 Cargo.lock
+
+# Local workflow notes
+/.workflow/

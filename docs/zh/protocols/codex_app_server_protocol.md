@@ -93,7 +93,7 @@ Windows 上若 PATH 里的 npm 全局 `codex` 偏旧，脚本会优先尝试
    - 已适配方法的 params / notification 字段变更
    - 服务端请求响应 schema（避免非法应答）
 4. 按 diff 更新 `packages/zeta_agent_provider_codex` 的适配层与测试。
-5. 更新中英文协议文档的版本说明，并将实际验证结果记入 `.workflow/`。
+5. 更新中英文协议文档的版本说明，并记录实际验证结果、平台和 CLI 版本。
 6. 用真实 `codex app-server` 做冒烟（默认使用 stdio，无需额外参数）：
    - 核心链路：`python tool/smoke_codex_app_server.py --expected-version 0.144.5`
    - Plan 实验链路：`python tool/smoke_codex_plan_mode.py --expected-version 0.144.5`
@@ -181,7 +181,7 @@ registry。
 | 已验证 | experimental initialize、Default/Plan 目录、Plan/Default settings、Plan delta、用户提问应答、下一 turn 才切模式、重启 resume、本地 mode 恢复与 settings 收敛 |
 | 当次结论 | 此次兼容性结果不能替代 `0.144.5` 的目标版本验收 |
 
-后续 `0.144.5` Darwin x64 的 stable smoke 为 18/18，experimental Plan 仍为 18/19；完整记录见 [WP-E 验证](../../../.workflow/plan/2026-09-04-provider-plugin-packages/08-wpe-validation.md)。缺失事件仍列为[未完成事项](../../../.workflow/pending-validation.md)。
+后续历史记录中，`0.144.5` Darwin x64 的 stable smoke 为 18/18，experimental Plan 为 18/19，缺少 `turn/plan/updated`。这些结果仅适用于当时的版本和环境，原始记录可从 Git 历史查阅。
 
 smoke 只输出平台、版本、Schema 模式、检查项、方法名和计数；不输出或持久化
 Prompt、回复、文件内容、凭证、原始 JSONL、thread/turn id 或 stderr 原文。脚本使用临时

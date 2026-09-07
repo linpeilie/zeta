@@ -7,16 +7,14 @@ import 'package:analyzer/dart/ast/ast.dart';
 /// 已删除的过渡 API 不得重新出现在生产代码里。
 ///
 /// 这是零容忍守卫：没有 allowlist，也不接受"先加回来再慢慢改"。
-/// 每个符号在删除时都已确认生产调用者为 0（见
-/// `.workflow/refactor/2026-08-24-phase4-transition-cleanup/02-现状测绘.md`），
-/// 重新出现只可能是有人又把旧路径接了回去。
+/// 每个符号在删除时均已确认没有生产调用者；重新出现说明旧路径被重新接入。
 void main() {
   final production = _productionDartFiles();
 
   test('已删除的过渡符号不得重新出现在 lib/ 与 packages/', () {
     // 注意：这里只能放**唯一归属**于被删路径的名字。
     // `displayTitle` 故意不在名单里——它同时是 AgentToolCallUiText 的活 API，
-    // 按名字断言会误伤（见 02-现状测绘.md §1.1）。
+    // 按名字断言会误伤仍在使用的 API。
     const deleted = <String>[
       // 修订号别名：统一到 contentRevision
       'renderRevision',

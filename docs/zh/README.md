@@ -32,6 +32,6 @@
 - [发版指南](release/release_guide.md)：版本、构建、附件和发布验证。
 - [文档维护](development/documentation.md)：读者划分、清理与自查。
 
-## 规则与记录
+## 项目规则
 
-[AGENTS.md](../../AGENTS.md)维护 AI 开发核心规则；[.workflow](../../.workflow/README.md)保存工作证据和未完成事项。[安全策略](../../SECURITY.md)与[行为准则](../../CODE_OF_CONDUCT.md)适用于项目参与者。
+[AGENTS.md](../../AGENTS.md)维护 AI 开发核心规则。[安全策略](../../SECURITY.md)与[行为准则](../../CODE_OF_CONDUCT.md)适用于项目参与者。

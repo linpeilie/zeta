@@ -6,7 +6,6 @@
 | 参与开发 / Contribute | [贡献指南](../CONTRIBUTING.md) · [Contributing](../CONTRIBUTING.en.md) |
 | 了解结构 / Architecture | [中文](zh/architecture/overview.md) · [English](en/architecture/overview.md) |
 | AI 开发规则 / AI development rules | [AGENTS.md](../AGENTS.md) |
-| 工作记录与未完成事项 / Work records and outstanding checks | [.workflow](../.workflow/README.md) |
 | 维护文档 / Maintain documentation | [文档维护](zh/development/documentation.md) |
 
 `guide/` 面向使用者；`architecture/`、`development/`、`protocols/`、`release/` 面向贡献者和维护者。`product/` 说明产品范围。用户指南有中英文版本，尚未翻译的工程文档在英文索引中直接链接到中文版。

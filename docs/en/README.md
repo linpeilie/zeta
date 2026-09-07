@@ -35,6 +35,6 @@ The following engineering pages are maintained in Chinese:
 - [Claude Code protocol](../zh/protocols/claude_code_stream_json_protocol.md) and [usage accounting](../zh/protocols/claude_code_token_metering.md)
 - [Documentation maintenance](../zh/development/documentation.md)
 
-## Rules and work records
+## Project rules
 
-[AGENTS.md](../../AGENTS.md) holds core AI development rules. [.workflow](../../.workflow/README.md) holds evidence and outstanding work. The [security policy](../../SECURITY.md) and [code of conduct](../../CODE_OF_CONDUCT.md) apply to project participation.
+[AGENTS.md](../../AGENTS.md) holds core AI development rules. The [security policy](../../SECURITY.md) and [code of conduct](../../CODE_OF_CONDUCT.md) apply to project participation.
