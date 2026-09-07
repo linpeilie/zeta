@@ -6,11 +6,19 @@ Documentation checked: 2026-09-07. Release operations and remote settings were n
 
 ## 1. How releases work
 
-Create a PR targeting `main`, review the version and release notes, then merge it to trigger the [release workflow](../../../.github/workflows/release.yml). Closing an unmerged PR does not publish. No manual tag is required. Every stage uses the PR's fixed merge commit, even if main advances later.
+Create `release/*` from `develop`, or `hotfix/*` from `main` for urgent production fixes. After stable-version acceptance, create a PR targeting `main`, review the version and release notes, then merge it to trigger the [release workflow](../../../.github/workflows/release.yml). Closing an unmerged PR does not publish. No manual tag is required. Every stage uses the PR's fixed merge commit, even if main advances later.
 
 Use the project `$zeta-release` Skill with an explicit version or just a beta/stable channel to select the next version automatically. Human review, committing, and merging remain separate steps.
 
 The Skill creates the GitHub PR through `gh`. Fetching main is for comparison and validation only; do not automatically merge, pull with a merge, or rebase. Report PR conflicts; branch synchronization and conflict resolution require separate explicit instructions.
+
+### Branch flow and current automation limits
+
+See the [branch model](../../../CONTRIBUTING.en.md#branch-model). Only ready stable versions enter `main`. Test and revise beta versions on `release/*`; do not merge a prerelease into `main` to publish it.
+
+The current workflow still triggers only after a PR merges into `main` and accepts beta metadata. Publishing beta from `release/*` is not implemented yet. This branch-policy update changes documentation only. Beta version and notes preparation can continue, but publication requires adapting the workflow first; the previous beta-to-main route must not be used.
+
+After finishing `release/*` or `hotfix/*`, also use `gh` to create a PR back to `develop` with `--base develop` and the same source branch, or update an existing PR. Delete the auxiliary branch only after both target PRs are manually merged and publication and tagging succeed. Automatic publication does not merge back into `develop` or delete branches.
 
 ## 2. Version and release notes
 
@@ -60,7 +68,7 @@ Before editing, report the baseline and selected version, then continue without 
 
 ## 3. Before releasing
 
-1. Fetch full remote history and tags; prepare a higher version on `dev` or the selected release branch.
+1. Fetch full remote history and tags; create or continue the matching `release/*` from `develop`, or `hotfix/*` from `main` for an urgent production fix. Preserve the worktree and do not switch branches without accounting for existing work.
 2. Update `release.json`, `pubspec.yaml`, versioned notes and the `CHANGELOG.md` link together.
 3. Run validation and the full gate:
 

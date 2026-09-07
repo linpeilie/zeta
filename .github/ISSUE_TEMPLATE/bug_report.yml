@@ -22,7 +22,7 @@ body:
       options:
         - label: 我已搜索过现有 Issue，没有找到重复。/ I searched existing issues and found no duplicate.
           required: true
-        - label: 我已查看过[故障排查文档](https://github.com/linpeilie/zeta/blob/dev/docs/zh/guide/troubleshooting.md)。/ I checked the [troubleshooting guide](https://github.com/linpeilie/zeta/blob/dev/docs/en/guide/troubleshooting.md).
+        - label: 我已查看过[故障排查文档](https://github.com/linpeilie/zeta/blob/develop/docs/zh/guide/troubleshooting.md)。/ I checked the [troubleshooting guide](https://github.com/linpeilie/zeta/blob/develop/docs/en/guide/troubleshooting.md).
           required: true
         - label: 这不是安全漏洞（安全问题请走私密上报）。/ This is not a security vulnerability (those go through private reporting).
           required: true

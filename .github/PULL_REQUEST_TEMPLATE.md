@@ -32,8 +32,8 @@ Chinese first, English second. For items that don't apply, tick them and note "N
 
 ## 架构门禁 / Architecture checklist
 
-> 详见 [CONTRIBUTING 架构红线](https://github.com/linpeilie/zeta/blob/dev/CONTRIBUTING.md#架构红线)。
-> See [architectural hard lines](https://github.com/linpeilie/zeta/blob/dev/CONTRIBUTING.en.md#architectural-hard-lines).
+> 详见 [CONTRIBUTING 架构红线](https://github.com/linpeilie/zeta/blob/develop/CONTRIBUTING.md#架构红线)。
+> See [architectural hard lines](https://github.com/linpeilie/zeta/blob/develop/CONTRIBUTING.en.md#architectural-hard-lines).
 
 - [ ] 依赖方向未被打破，新代码放在对应 feature 的 domain/application/data/presentation 下
       / Dependency direction intact; new code sits in the right feature layer

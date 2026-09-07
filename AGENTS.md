@@ -6,7 +6,7 @@ Zeta 是连接本机 AI 编码助手的 Flutter 桌面应用。支持 Codex、Gr
 
 ## 开始工作
 
-- 先看 `git status`，保留用户已有改动；默认开发分支是 `dev`。
+- 先看 `git status`，保留用户已有改动；日常集成分支是 `develop`；分支来源、PR 目标和生命周期遵循[贡献指南](CONTRIBUTING.md#分支模型)。
 - 有 `.codegraph/` 时，定位和理解代码先用 `codegraph explore` / `codegraph node` 或同名 MCP 工具；没有索引就用 `rg`，不自行建索引。
 - 按下表阅读相关细则，不必每次通读所有文档。版本以 `pubspec.yaml`、CI 和协议快照为准，不复制历史测试数或耗时作为当前事实。
 
