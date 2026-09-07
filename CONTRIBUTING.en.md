@@ -1,289 +1,61 @@
-# Contributing to Zeta
+# Contributing
 
-[中文](CONTRIBUTING.md) ｜ English
+English ｜ [中文](CONTRIBUTING.md)
 
-Thanks for your interest in Zeta. This document covers environment setup, day-to-day commands, the PR process, and the architectural **hard lines** this project enforces.
+Use `dev` for development branches and PRs. Release tags are created from `main`. Read the [engineering standards](docs/zh/architecture/engineering_standards.md) (Chinese) relevant to your change.
 
-Reading it once before you start will save you most of the rework.
+## Environment
 
-## Contents
-
-- [Three things first](#three-things-first)
-- [Setting up](#setting-up)
-- [Everyday commands](#everyday-commands)
-- [Before you commit](#before-you-commit)
-- [Commit message format](#commit-message-format)
-- [Pull request process](#pull-request-process)
-- [Architectural hard lines](#architectural-hard-lines)
-- [Testing expectations](#testing-expectations)
-- [Reporting issues](#reporting-issues)
-- [License](#license)
-
-## Three things first
-
-1. **The default branch is `dev`.** Branch from it and target it in PRs.
-2. **Keep changes small and focused.** For large refactors, new providers, or changes to event-pipeline contracts, open an issue to discuss the approach first — please don't drop a several-thousand-line PR unannounced.
-3. **This project enforces strict layering.** A PR that violates the [hard lines](#architectural-hard-lines) won't be merged even if the feature works. These constraints exist so that multiple providers can coexist without contaminating each other — they aren't box-ticking. The [architecture overview](docs/en/architecture/overview.md) explains why in about 15 minutes.
-
-## Setting up
-
-**Requirements**
-
-- Flutter SDK (stable channel), compatible with the Dart SDK constraint `^3.12.2` in `pubspec.yaml`
-- CI builds with **Flutter stable 3.44.4**; a very different local version may produce different analyzer results
-- A working Flutter Desktop environment (macOS / Windows / Linux)
-
-**Extra build dependencies on Linux**
+Use the Flutter version in [CI](.github/workflows/ci.yml), the Dart constraint in [pubspec.yaml](pubspec.yaml), and the Flutter Desktop build environment for your platform.
 
 ```sh
-sudo apt-get update && sudo apt-get install --yes \
-  clang cmake ninja-build pkg-config \
-  libgtk-3-dev liblzma-dev libfontconfig1-dev
+flutter pub get --enforce-lockfile
+flutter run -d windows
 ```
 
-**To exercise agent features you also need**
+Use `macos` or `linux` on those systems. Linux build dependencies and other commands are in the [developer guide](docs/zh/development/developer_guide.md) (Chinese).
 
-- **Codex** (default provider): `codex app-server` must be runnable locally. Without `--listen` it communicates over stdio. The adapter is developed against a pinned schema — see [Codex app-server protocol pinning](docs/zh/protocols/codex_app_server_protocol.md).
-- **Grok** (optional): Grok CLI (grok-build) **0.2.119 or newer**. That's the multi-session compatibility baseline; earlier versions can't correctly isolate session state or turn terminal states when several Grok sessions are open at once.
-- **Claude Code** (optional): `claude` must be runnable; interactive Claude.ai sign-in uses `claude auth login`. The current conversational stream-json sampling baseline is CLI **2.1.224** (not a minimum-version promise); see the [Claude Code stream-json protocol baseline](docs/zh/protocols/claude_code_stream_json_protocol.md) for boundaries and upgrade checks. Models and the plan name come from no-prompt initialize. Provider acquisition and new requests validate OAuth through one service, refreshing the selected CLI store when needed. Quota details remain an independently optional REST enhancement.
+Assistant integration work needs the corresponding installed, signed-in assistant. Documentation and isolated tests do not need real accounts. Use fakes in tests without accidentally accessing local credentials or starting paid conversations.
 
-For UI-only or docs-only changes you can skip all of these CLIs — the agent panel will simply report nothing detected.
+## Changes and PRs
 
-**Run it**
+1. Branch from `dev`. Inspect existing changes and preserve others' work.
+2. Keep each PR focused. Define scope, contracts and verification before adding a provider or making a broad architectural change.
+3. Add relevant tests and update current documentation. Put user-visible changes in [CHANGELOG.md](CHANGELOG.md).
+4. Run applicable checks below. Describe the actual change, results and checks not performed in the PR.
+
+Use Conventional Commits, for example `fix(agent): retain history titles`. Keep the summary within 50 characters and explain the reason in the body when needed.
+
+## Verification
 
 ```sh
-flutter pub get
-flutter run -d macos    # or -d windows / -d linux
+dart format .                 # After editing Dart
+flutter analyze               # Before finishing code changes
+bash tool/test_affected.sh     # For behavior changes
 ```
 
-## Everyday commands
+- Internal package: `bash tool/test_packages.sh --only <package>`.
+- Code refactoring, releases or test infrastructure: `bash tool/test_full.sh`, including internal packages.
+- UI text: `dart run tool/check_localized_ui_strings.dart --check`.
+- Documentation only: check links, heading anchors, facts and translations using the [documentation checklist](docs/zh/development/documentation.md); Flutter tests are not required.
 
-```sh
-dart format .              # required after editing Dart files
-flutter analyze            # required before wrapping up a change
-bash tool/test_affected.sh # required when behavior changes: runs only affected tests
-```
+Use targeted or affected tests while developing. Keep concurrency at 2. CI runs every shard and internal package. Register new top-level test directories in `tool/test_shards.dart`. Do not weaken business assertions to make refactoring pass.
 
-### Don't run the full suite in your dev loop
-
-The full suite is 2114 tests, about 4m10s wall clock, while a single change
-usually touches a few dozen. `tool/test_affected.sh` starts from the git change
-set, walks the import graph backwards to find the tests that could be affected,
-adds the architecture guards, and typically finishes in 10–40s. It prints how
-many tests it picked and why:
-
-```sh
-# Windows PowerShell
-./tool/test_affected.ps1
-
-# macOS / Linux / Git Bash
-bash tool/test_affected.sh
-
-bash tool/test_affected.sh --print   # list what would run, don't execute
-bash tool/test_affected.sh --shards  # list which shards are affected
-bash tool/test_affected.sh --base origin/dev   # diff a branch, not just the working tree
-```
-
-**The full suite is enforced in CI, not in your terminal.** Every PR runs all 6
-test shards plus the internal packages, so anything the local selector misses is
-caught before merge.
-
-### Widen the scope as needed
-
-```sh
-# A single test file
-flutter test test/src/features/agent/presentation/agent_conversation_widget_test.dart
-
-# Reproduce one case by name
-flutter test test/src/features/agent --plain-name "<test name>"
-
-# Run a whole shard (manifest in tool/test_shards.dart; get ids via --shards)
-bash tool/test_shard.sh 3          # Windows: ./tool/test_shard.ps1 3
-
-# Only touched packages/: analyze + test each internal package
-bash tool/test_packages.sh
-
-# Quick full run: excludes the `slow` full-shell, performance, and tooling tests
-bash tool/test_fast.sh             # Windows: ./tool/test_fast.ps1
-
-# Complete gate: root tests + timing report + every internal package.
-# Also writes a JSON report to .dart_tool/test-results/full.json
-bash tool/test_full.sh             # Windows: ./tool/test_full.ps1
-```
-
-**Refactoring is the exception and must run the complete gate**: refactors move
-files and rewrite imports, so the import graph itself is unreliable — "zero
-changes to test assertions plus a green full suite" is the only evidence a
-refactor is correct.
-
-> `dart_test.yaml` pins `concurrency: 2`. A single worker running the large widget tests loads the full IDE shell, and raising concurrency triggers memory spikes. **Please don't change it to speed up local runs.**
-
-**When upgrading the Codex protocol** (before touching the adapter):
-
-```sh
-./tool/gen_codex_schema.sh --diff        # Windows: ./tool/gen_codex_schema.ps1 -Diff
-```
-
-Diff `third_party/codex_app_server_schema/` first, then change the adapter. Afterwards, smoke against the real CLI:
-
-```sh
-python tool/smoke_codex_app_server.py --expected-version 0.144.5
-python tool/smoke_codex_plan_mode.py --expected-version 0.144.5
-```
-
-The smoke scripts use a temporary read-only workspace and never emit prompts, responses, file contents, credentials, or raw JSONL. See [developer guide §3](docs/zh/development/developer_guide.md) (Chinese).
-
-## Before you commit
-
-Run all three, in order:
-
-```sh
-dart format .
-flutter analyze
-bash tool/test_affected.sh
-```
-
-CI runs the complete version (`dart format --set-exit-if-changed`,
-`flutter analyze`, `--enforce-lockfile`, all 6 test shards in parallel, and
-analyze + test for every internal package), so a narrow local pass saves a round
-trip.
-
-**When adding a test file**: the root `test/` tree is sharded by directory, so a
-test dropped into an existing directory is picked up automatically — no
-registration needed. Only a brand-new top-level test directory needs an entry in
-[`tool/test_shards.dart`](tool/test_shards.dart), and
-`test/src/architecture/test_shard_coverage_guard_test.dart` fails the build if
-you forget.
-
-Also:
-
-- If generated platform directories (`linux/`, `macos/`, `windows/`) show unexpected changes, **confirm they came from Flutter tooling** and explain in the PR why you're keeping them.
-- Before adding a third-party dependency, confirm the Flutter/Dart built-ins genuinely fall short, and describe what each new dependency is for in the PR description.
-
-## Commit message format
-
-[Conventional Commits](https://www.conventionalcommits.org/), summary under 50 characters:
-
-```
-feat: add grok thread archiving
-fix: guard stale model catalog overwrite
-docs: add bilingual contributing guide
-refactor: extract plan handoff controller
-chore: bump flutter action pin
-```
-
-Common types: `feat` / `fix` / `docs` / `refactor` / `test` / `chore` / `perf`.
-
-## Pull request process
-
-1. Branch from `dev`; `feat/xxx` or `fix/xxx` naming is preferred.
-2. Keep history clean and don't mix unrelated changes into one PR.
-3. Fill in the PR template, especially the **architecture checklist** — if an item doesn't apply, say why.
-4. Make sure CI is green.
-5. Wait for review. Changes touching the event pipeline, provider contracts, or persistence formats get reviewed closely.
-
-**Behavior changes require tests.** Untested behavior changes generally won't be merged.
+The shared lockfile uses `https://pub.dev`. Review changes before submitting and avoid local mirror URLs or unintended upgrades. Record real-CLI and platform checks separately; automated success does not prove real-device behavior.
 
 ## Architectural hard lines
 
-**Reading the code for the first time? Start with the [architecture overview](docs/en/architecture/overview.md)** (~15 minutes, with diagrams) and the [glossary](docs/en/development/glossary.md). Full rules live in [engineering standards](docs/zh/architecture/engineering_standards.md) and [developer guide §7](docs/zh/development/developer_guide.md). These are the ones most often tripped over:
+- Vendor protocols stay in each plugin's data layer. UI and shared core consume neutral contracts.
+- Providers determine message identity and file-change evidence; the shared store does not guess IDs or read raw protocol data.
+- Reducers are synchronous and free of side effects. Async operations recheck conversation identity and lifetime.
+- Unsupported capabilities hide their controls and fail explicitly.
+- Permissions, questions, plan approval and execution handoff remain separate. Accepting a plan grants no advance permission.
+- Each state has one application Notifier owner. Page subscriptions do not determine resource lifetime.
+- Sensitive bodies and credentials do not enter Zeta settings, statistics, logs or notifications. Reading assistant data does not authorize writing it.
+- UI uses the design system and text catalogs rather than duplicating low-level styling in feature pages.
 
-**Layering and dependency direction**
+Details and exceptions are maintained in the [engineering standards](docs/zh/architecture/engineering_standards.md). [AGENTS.md](AGENTS.md) is the concise AI development entry point.
 
-Project Threads callers use `ProjectThreadsOperations` on the application `ProjectThreadsSliceNotifier`. Production and tests share the app input and runner factory seams. Do not restore a Store, state mirror, Deferred runner or duplicate Runner business methods. Cover mappings outside the visible window, late ingress after close, and draining background queries without waiters. Shell and Workspace borrow the app BindingManager; settle callers, await physical execution, then release the manager and runtime/plugins.
+## Reports and license
 
-WP-3C gives Workspace and Conversation one writable owner each. `AgentConversationWorkspaceNotifier` holds entry resources and immutable workspace state; an application `AgentConversationSliceNotifier` owns each entry's regions and command ledger. `AgentConversationOwnerKey(entryId, lifetimeToken)` survives draft promotion and runtime restart; reopening a thread allocates a new token. BindingKey is an alias: Live resolves the owner, Closing/Closed returns an empty terminal projection, and Unknown returns an unavailable projection.
-
-Shutdown stops Shell/M/P commands, flushes session persistence, drains M/P executions, detaches fact consumers and the source, closes entry ingress and controllers, awaits entry lease releases, then closes BindingManager, runtime registry, plugins and container. Repeated entry/app close returns the same Future, including failure; a failed stage is not marked released and the container remains inspectable. Lease release is not proof of CLI exit.
-
-- One-way: `main → app → presentation/application → domain`, `app → data → domain`, `presentation → zeta_ui` (the design system in `packages/zeta_ui`), `presentation → zeta_markdown` (the Markdown renderer in `packages/zeta_markdown`, forked from upstream — read `packages/zeta_markdown/UPSTREAM.md` before touching it).
-- New code goes into the matching `features/<feature>/{domain,application,data,presentation}` — not back into broad top-level directories.
-- `main.dart` only bootstraps; `lib/src/app` is the single composition point.
-
-**Provider isolation (the big one)**
-
-- Raw provider protocol **may only exist in the data layer**. UI and application code consume neutral domain events and contracts.
-- Shared layers (decoder, CoalescingPolicy/Buffer, Pipeline, TimelineStore, handler registry) **must contain no provider imports, kind branches, id branches, or raw field reads**.
-- Provider override handlers may be registered only in that provider's own bundle; permission / question / plan-approval handlers cannot be overridden (plan-execution handoff has no matching event — it is protected at the effect layer).
-- File changes must become complete typed snapshots in a provider-local tracker first. The Store only carries them mechanically, the UI never reads raw fields, and a command-only path must not invent a path or diff.
-- Adding a provider should touch only its own data files, neutral domain contracts, factory wiring, and contract tests. If you find yourself needing to modify a shared layer, the abstraction is wrong — open an issue first.
-- UI renders strictly by **capability**, never hard-coded on provider kind or name. Unsupported capabilities must report `capability = false` and throw `UnsupportedError` — **never succeed silently**. Session configuration uses its optional port without a duplicate capability flag; the executor still throws for a missing port, and the UI translates that to a typed failure rather than inferring success from Future completion.
-- Management runtime status aggregates all Workbench session bindings by exact provider instance id. Default/foreground selection does not assign ownership; global warmup and short RPCs do not imply active turns. Preserve physical facts after disabling and retain independent error flags. Summaries stay in memory.
-- Management has one app-session Notifier owner and a named runner result sink. UI unsubscribe only ends observation. Shutdown settles callers, drains actual I/O, then releases runtimes, plugins, and the container; await `ZetaAppComposition.close()` when completion matters.
-- Provider processes are created only by `AgentProviderRuntimeRegistry`. Global work uses `AgentProviderGlobalRuntime`; session instances are created lazily only by `AgentConversationBinding.beginTurn()`. A binding distinguishes dormant/starting/attached/cleared explicitly, and only a cleared transition for the matching runtime identity is a disconnect. RuntimeControllers own no lease/scope/pin, and the binding manager owns idle reclamation.
-- A workspace entry binds its thread, binding, and RuntimeController once. RuntimeControllers expose no cross-thread switch/restore compatibility API and may update only project/file context. Runtime acquisition must pass an explicit scope.
-- A binding attached to a real thread must never be rebound in place. A forked session goes through the shell's standard new-thread registration and selection flow, and later operations target only the fork result.
-- `AgentProviderBundle` is the only Application / Presentation capability surface and is created directly by `createBundle`; the old `AgentProvider` facade is gone. Each binding owns one immutable permission snapshot, with no cross-provider/runtime/thread permission registry. Static capability defaults are injected by the data composition layer; Domain does not switch on vendor names.
-
-**Event pipeline**
-
-- Before adding or changing an `AgentEvent`, work through all 16 items of the onboarding checklist in [developer guide §7](docs/zh/development/developer_guide.md) and pin the behavior with tests.
-- Reducers must be purely synchronous: no Flutter scheduler, `Timer`, `Future`, or external callbacks. Side effects go through the scope-aware EffectRunner.
-- Live / history / replay must each use a **separate reducer instance**.
-
-**Permission model**
-
-- Permission approval, user questions, and plan approval are **three independent domain semantics** and do not share request/decision models.
-- The post-plan "execution confirmation" is a local Zeta workflow, not provider plan approval: it must start an explicit new Default turn and must not pre-authorize commands, files, or network access.
-- Execution permission restores only a still-valid pre-Plan user selection from the same binding/thread/runtime; otherwise it uses the provider catalog's conservative default. A card override is turn-only and must not apply or persist. **Changes that auto-upgrade authorization will not be accepted.**
-
-**Theming and UI**
-
-- Import `shadcn_flutter` only `as sf`; semantic tokens go through `IdeThemeScope` / `IdeColors.of(context)` / `IdeTextStyles.of(context)`.
-- No Material `ThemeData` / `ColorScheme.fromSeed`, no bare `Color(0x...)`, no hand-written `BoxShadow`, no ad-hoc `BorderRadius.circular(...)`.
-- Use `showIdeToast` for notifications; don't call `sf.showToast` directly from features.
-- The timeline forbids post-frame measurement, `GlobalKey` height probing, and post-layout `setState` feedback loops.
-- User-visible Zeta copy goes through `context.l10n` or a feature text catalog — do not add Chinese or English literals in production code. Application / data layers must not import generated l10n or Flutter `Locale`. Brand names, product terms, and provider/user/raw content stay verbatim.
-
-**Persistence and privacy**
-
-- All Zeta-owned data lives under `~/.zeta/`. JSON must be versioned with tolerant `tryDecode` — missing or corrupt fields must never block startup.
-- Provider-owned data adapters may read the corresponding CLI's private data for an explicit feature. Protocol fields, raw content, and paths must not leak into upper layers; read access does not authorize migration, rewriting, or deletion.
-- Claude OAuth refresh is a narrowly scoped writeback to the selected existing CLI store: reread under a compatible lock, preserve unrelated fields, and verify persistence. Never migrate sources, expand scopes, or create a Zeta credential copy. See the Claude protocol document, section 11.
-- Derived indexes and caches store only normalized allow-listed fields. **Never persist prompts, responses, tool output, file-change evidence bodies, raw error text, environment variables, credentials, provider raw payloads, or localized UI copy.**
-
-**Misc**
-
-- No `print`; use `dart:developer` or `lib/src/core/logging`.
-- Document public APIs with `///`. New comments are preferably in Chinese, focused on protocol adaptation, state machines, error handling, and non-obvious branches.
-- **Cursor is retired.** Cursor-related code will not be reinstated.
-
-## Testing expectations
-
-- Behavior changes must at least cover the riskiest state transitions.
-- Prefer fakes/stubs over mocks; follow Arrange / Act / Assert.
-- Inject dependencies through constructors.
-- Tests for shared layers (decoder, coalescing, TimelineStore) must use **provider-agnostic fixtures** and come with architecture guard tests.
-- When changing page-switching behavior, add widget tests against the real `IdeHome` verifying that elements, drafts, scroll positions, and panel widths aren't reset.
-
-## Reporting issues
-
-Before filing, skim [troubleshooting](docs/en/guide/troubleshooting.md) and [data reference](docs/en/guide/data-and-privacy.md) — undetected CLIs, missing notifications, and confusing usage numbers are usually answered there.
-
-Please use the [issue templates](https://github.com/linpeilie/zeta/issues/new/choose). Zeta problems are highly environment-dependent, so try to fill in:
-
-- OS and version
-- Zeta version (About page or installer filename)
-- `flutter --version` output, if running from source
-- Agent CLI and version (`codex --version` / `grok --version`)
-
-**Redact logs before pasting.** Logs under `~/.zeta/logs/` may contain your project paths and filenames. They don't record prompts, response bodies, or credentials, but paths can still be sensitive.
-
-**Do not open public issues for security vulnerabilities.** Use GitHub's private reporting instead (Security → Report a vulnerability).
-
-## License
-
-By participating you also agree to abide by our [Code of Conduct](CODE_OF_CONDUCT.md).
-
-This project is licensed under **GPL-3.0** — see [LICENSE](LICENSE). By contributing you agree to license your work under the same terms.
-
-Provider packages now separate neutral contracts (`provider_api`), shared mechanisms (`provider_sdk`) and each vendor implementation. Registration lives in `lib/src/app/plugins/agent_provider_manifest.dart`; root tests access implementation types through `test/src/testing/`. Management and usage sources are plugin contributions consumed through overridable host seams. Empty or conflicting contributions fail closed; transitional imports have been removed. See [package boundaries](docs/zh/architecture/engineering_standards.md#21-provider-插件包边界).
-
-To add a Provider, follow the [plugin workflow](docs/zh/development/developer_guide.md#新增-provider-插件), create its package, and register it in the root pubspec/manifest. Isolation and contribution guards cover future plugins; CI discovers test packages automatically. Run one package with `bash tool/test_packages.sh --only <package>` and the full gate with `bash tool/test_full.sh`.
-
-Provider plugins own their SVG assets and `AgentProviderDefinition.icon` metadata. Package-level `flutter.assets` declarations do not introduce a Flutter SDK dependency. The host entry point injects static lookup through `agentProviderIconsOverride` and owns theme, sizing, semantics and fallback rendering. Icon lookup must not activate plugins, infer brands from custom instance names, or persist asset metadata.
-
-
-Conversation UI writes use `AgentConversationActions`. A live handle is the entry's `AgentConversationSliceNotifier`; closed or unknown targets return a stateless rejecting handle. Each call freezes its typed payload, operation ID, owner lifetime and scope, then runs through the synchronous reducer and scoped executor with a typed result. Approval admission remains separate for all four meanings. Only permission preferences and each session config key serialize; cancellation and approvals stay independent. Closing immediately settles UI waiters as staleTarget while the existing lifecycle still owns I/O and lease release.
-
-Model saves report each request's success, confirmation requirement, supersession, unchanged value or failure. Fork results distinguish createdSession from activation and never persist the product. Edit-and-retry sends through the new entry's Actions and propagates its actual result. Widgets capture a stable Actions handle instead of resolving a reusable BindingKey in a late callback. RuntimeController remains the executor and read source, with internal bootstrap calls explicitly identified.
+For bugs, provide reproduction steps, versions and observed results. Report vulnerabilities privately using [SECURITY.md](SECURITY.md). Follow the [code of conduct](CODE_OF_CONDUCT.md). Contributions use the project's [GPL-3.0 license](LICENSE).

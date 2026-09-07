@@ -1,12 +1,12 @@
 # 工程规范
 
-最后更新：2026-08-13
+最后核对：2026-09-07（文档整理）
 
-本文从当前 `lib/` 重构后的代码结构中提炼长期遵循的工程规范。它补充根目录 `AGENTS.md`，用于指导后续功能开发、重构和评审。
+本文维护长期工程约束和专项细则。AI 开发核心规则见 [AGENTS.md](../../../AGENTS.md)，接入步骤见[开发者指南](../development/developer_guide.md)。
 
 ## 1. 代码组织
 
-当前 `lib/src` 采用面向功能的分层结构：
+`lib/src` 按功能分层，各 feature 按实际需要设置以下目录：
 
 ```text
 lib/
@@ -14,36 +14,13 @@ lib/
   src/
     app/
     core/
-    features/
-      agent/
-        application/
-        data/
-        domain/
-        presentation/
-      agent_management/
-        application/
-        data/
-        domain/
-        presentation/
-      desktop_notifications/
-        application/
-        data/
-        domain/
-      ide_session/
-        application/
-        data/
-        domain/
-      project_threads/
-        application/
-        domain/
-        presentation/
-      workspace/
-        application/
-        domain/
-        presentation/
-    ui/
-      core/
-      features/ide/
+    features/<feature>/
+      domain/
+      application/
+      data/
+      presentation/
+    ui/core/
+    ui/features/ide/
 ```
 
 - `main.dart` 只负责 Flutter 绑定、窗口启动、全局错误日志和 `runApp`。
@@ -71,11 +48,13 @@ main -> app -> presentation/application -> domain
                        presentation -> zeta_markdown
 ```
 
-- presentation 可以读取 RuntimeController / slice selector 暴露的状态并触发动作，但不直接解析 provider 原始协议。
+- presentation 订阅 application 的状态和命令契约；application 不依赖 presentation。UI 不直接解析 Provider 原始协议。
 - application 负责异步流程、恢复、分页、竞态隔离和状态写入，不负责绘制 widget。
 - data 实现 provider、JSON-RPC、JSONL、版本化本地 JSON 文件等具体细节，并把外部 payload 映射为 domain 模型。Provider 自有 data adapter 可按明确功能读取对应 CLI 的私有数据，但原始结构与路径不得泄漏到上层。
-- domain 不依赖 Flutter widget、不访问本地文件系统、不引用具体 provider 实现。
+- domain 禁止 Flutter、`dart:io`、Riverpod 和厂商协议；不可变标记用 `meta`，集合比较用 foundation 的纯 Dart 工具。
 - app 可以引用具体 data 实现，因为 app 是依赖注入和默认实现装配点。
+
+内部包只通过公开 barrel 相互引用。`zeta_plugin_kernel → zeta_foundation`、`zeta_agent_core → zeta_foundation`、`zeta_ui → zeta_foundation`；kernel/core 与 foundation 核心契约不依赖 Flutter，foundation 的宿主工具例外仅限 `src/platform/`。`zeta_markdown` 不依赖任何内部包；UI 的禁止依赖见 §1。新增包先论证独立职责与依赖边界，不按页面拆包。
 
 ### 2.1 Provider 插件包边界
 
@@ -89,15 +68,15 @@ main -> app -> presentation/application -> domain
 
 management repository 与 Token source/scanner/partition codec 都在各自插件包；每个激活 Provider 自己贡献一份管理定义/工厂和一份按 providerType 路由的用量工厂。宿主目录校验同一插件的身份与贡献完备性，两个 Riverpod 接缝共享校验后的不可变快照；组合层只读可覆盖接缝，空表和重复身份抛错，未知用量类型仍返回 unsupported。内核关闭后重新解析不得返回过期贡献。
 
-管理插件仅借用 `AgentManagementHostServices` 的文本目录、runtime registry 和模型缓存窄端口。用量插件仅借用 `AgentUsagePartitionPort`，不获得 `StorageService` 或宿主路径；v4 根索引 Store 留宿主。原默认文案逐字保留，usage 未自动改成本地化目录。`AgentCliManagementCapabilities` 用可空增强键同时声明能力与持久化键，连接测试确认按能力门；整卡 Claude 安装指引仍是 [WP-D §3.6](../../../.workflow/plan/2026-09-04-provider-plugin-packages/04-wpd-app-contributions.md) 登记的单一品牌内容例外。
+管理插件仅借用 `AgentManagementHostServices` 的文本目录、runtime registry 和模型缓存窄端口。用量插件仅借用 `AgentUsagePartitionPort`，不获得 `StorageService` 或宿主路径；v4 根索引 Store 留宿主。原默认文案逐字保留，usage 未自动改成本地化目录。`AgentCliManagementCapabilities` 用可空增强键同时声明能力与持久化键，连接测试确认按能力门；整卡 Claude 安装指引是本节登记的单一品牌内容例外，范围如下。
 
 通用版本比较、配置遮挡、日志清洗与用量扫描缓存属于 sdk 机制；宿主日志和插件共用的纯文本脱敏、显式环境 HOME 解析位于 foundation。旧测试断言与持久化身份保持不变，结构性守卫随物理路径更新，不允许扫描已删除目录而静默通过。隔离守卫动态发现所有 Provider 插件，含条件 import、export、相对路径；旧目录消失不能缩小保护范围。
 
 本节由 `test/src/architecture/provider_package_isolation_guard_test.dart`、`test/src/app/plugins/agent_provider_manifest_test.dart` 与现有 DAG/raw/feature 守卫共同执行，反例与真实仓库使用相同的 AST 判定器。静态 manifest 与激活目录必须双向同序一致，内置 id/type、配置版本 2、用量根索引版本 4 和增强键有冻结样本。所有 Provider（含新增插件）均须声明三类贡献；功能端口可以不支持，但不可通过缺失贡献或空成功伪装完整装配。
 
-Provider 图标的 SVG 与 `AgentProviderDefinition.icon` 由各插件包拥有；包内 `flutter.assets` 仅声明静态资源，不引入 Flutter SDK 依赖。宿主入口通过 `agentProviderIconsOverride` 注入静态查询，统一处理主题、尺寸、语义与失败回退；图标查询不得触发插件激活、猜测自定义实例品牌或写入持久化配置。未知 Provider 或缺省图标显示中立扩展图标。宿主不再保留厂商资源表；AST 守卫不豁免图标文件中的身份字面量。管理页 `_setupGuideAgentId` 的整卡安装指引仍是唯一登记的品牌内容例外。
+Provider 图标的 SVG 与 `AgentProviderDefinition.icon` 由各插件包拥有；包内 `flutter.assets` 仅声明静态资源，不引入 Flutter SDK 依赖。宿主入口通过 `agentProviderIconsOverride` 注入静态查询，统一处理主题、尺寸、语义与失败回退；图标查询不得触发插件激活、猜测自定义实例品牌或写入持久化配置。未知 Provider 或缺省图标显示中立扩展图标。宿主不再保留厂商资源表；AST 守卫不豁免图标文件中的身份字面量。管理页 `_setupGuideAgentId` 仅选择整张 Claude 安装指引卡；内容含厂商品牌，不作为可复用能力。不得用此例外新增业务分支。第二家需要安装指引时，须一并设计内容契约并移除该例外；连接确认与额度增强仍按 capability。
 
-D8 文案目录遵循 `AgentUiTextCatalog` 的纯 Dart 接口 + 不可变 fallback + 宿主 ARB 实现模式；management 迁完整目录，usage source 只接五成员窄端口。D7 身份冻结要求变更评审核对配置 codec/store 的 diff，并对索引版本、分区 codec 与样本字节进行回归，不用源码路径是否存在代替行为验证。
+插件文案目录遵循 `AgentUiTextCatalog` 的纯 Dart 接口 + 不可变 fallback + 宿主 ARB 实现模式；management 迁完整目录，usage source 只接五成员窄端口。持久化身份冻结要求变更评审核对配置 codec/store 的 diff，并对索引版本、分区 codec 与样本字节进行回归，不用源码路径是否存在代替行为验证。
 
 CI 使用自动发现的 package 矩阵，`test_packages.sh --only` 的分析与测试失败均使 job 失败；新增测试包不需要改第二份 CI 名单。根六片按语义归组：Agent 界面、通用 UI、其他 feature、app、契约/数据、Agent application。重平衡用 `report_test_timings.dart` 的报告，不将本地 suite 累计耗时宣称为 CI 墙钟。
 
@@ -108,122 +87,45 @@ CI 使用自动发现的 package 矩阵，`test_packages.sh --only` 的分析与
 核心模式是 MVI：**不可变 state + 同步 reducer + effect runner**。Riverpod 承担其中的
 **发布机制与依赖装配**，MVI 的三段式本身不变。
 
-**为什么把 `Notifier` 放进 application 层。** 这条边界曾经写成「application 不许 import
-riverpod」，实际约束的目标是 application 不依赖 Flutter。但那个写法让每个切片都要付三份税：
+跨 Widget 状态由 application 的 `Notifier` / `AsyncNotifier` 独占；不额外建立手写 Store、listener 列表或镜像 Notifier。
 
-1. application 里手写一份 `List<void Function()> _listeners` 复刻 `ChangeNotifier` 的语义；
-2. presentation 里再写一个零状态的 `Notifier`，`build()` 只做 `state = store.state`；
-3. 组合层再写一个 `Provider` 占位 + `overrideWithValue` 把已构造的对象塞进去。
+| 层 | Riverpod 使用 |
+| --- | --- |
+| domain / data / 内部包 | 禁止；core 通知使用 `AgentListenable` |
+| application | 仅状态与命令 API，禁止 Widget、WidgetRef、ProviderScope |
+| presentation / app / 宿主 UI | 可用 |
 
-三份代码描述的是同一件事，却制造了**两个 owner**（store 和镜像 notifier）和一条只为绕开
-边界而存在的反向绑定链路。现在切片的 `Notifier` 直接住在 application：
-
-| 层 | Riverpod |
-|---|---|
-| `domain` | 禁止 |
-| `application` | **允许**（slice `Notifier` / `AsyncNotifier` 住在这里） |
-| `data` | 禁止 |
-| `presentation` / `app` / `ui/` | 允许 |
-| `packages/*` 内部 Package | 禁止（`zeta_agent_core` 继续用 `AgentListenable`） |
-
-`domain` 禁：只有不可变模型和端口，没有状态所有权。`data` 禁：仓储和 codec 由 application
-装配，自己不订阅、不发布。
-
-**只用 `flutter_riverpod` 一个包。** `riverpod` 核心包是纯 Dart，理论上可以让 application
-彻底不碰 Flutter；实践上收益不足以抵消成本。理由有三条：
-
-- 整个 `lib/` 本来就是 Flutter 包。`package_boundary_candidate_graph_test` 把 `lib/` 划成
-  单个候选包 `_app`，`_bannedExternalPrefixes` 里没有 `_app` 条目——现有架构并没有把 feature
-  application 层拆成 Flutter-free 包的计划。真正平台中立的是已拆出的 `zeta_foundation` /
-  `zeta_plugin_kernel` / `zeta_agent_core`。
-- 测试也没差别：仓库全部走 `flutter test`。
-- 两个包同时存在会让「该 import 哪个」变成反复的临时判断。它们导出的是**同一批声明**
-  （`flutter_riverpod/lib/src/internals.dart` 第一行就是
-  `export 'package:riverpod/src/internals.dart';`），因此混用不会类型不匹配、Dart 也不报歧义
-  ——纯粹是可读性成本，不值得付。
-
-所以根 `pubspec.yaml` 只声明 `flutter_riverpod`；`riverpod` 只作为传递依赖存在，代码里不得
-直接 import 它（那属于未声明依赖）。需要 `Override` 这类只在 `misc.dart` 导出的类型时，用
-`package:flutter_riverpod/misc.dart`。守卫：`feature_layering_guard_test` 的
-「Riverpod 只用 flutter_riverpod 一个 barrel」。
-
-**这条选择的已知代价，写在这里免得下次有人当 bug 报。** `flutter_riverpod` 的 barrel 会带进
-`ConsumerWidget` / `ConsumerStatefulWidget` / `WidgetRef` / `ProviderScope`，而
-`'package:flutter_riverpod/'` 并不匹配 `'package:flutter/'` 前缀，所以「application 不得
-import Flutter」那条守卫**拦不住它们**。也就是说 application 与 Flutter 的解耦从此是约定而
-非物理边界：切片只暴露不可变 state 与命令入口，Widget 与 `WidgetRef` 属于 presentation。
-真要重新拉紧，两条路——恢复核心包依赖并按包禁，或者加一条符号级黑名单守卫；后者漏一个符号
-就开一个口子，比按包禁脆。
+只从 `flutter_riverpod` 导入，必要时使用其 `misc.dart`。不直接导入传递依赖 `riverpod`，不引入状态管理 codegen。application 同时禁止直接导入 `package:flutter/`；跨包 barrel 带入的 Widget 符号也不例外。守卫：`feature_layering_guard_test`。
 
 **会话 UI 发布是两跳。** RuntimeController 经 AgentUiUpdateScheduler 投影 regions，application 的 AgentConversationSliceNotifier 对每个 request 做一次 RegionsRefreshed，再由纯 selector / AgentRegionBuilder 订阅。没有手写 Store 或镜像 Notifier；live-turn 增量通道保持不变。上下文面板显隐属于 Widget 状态。
 
-Workspace 与 Conversation 已完成 WP-3C：`AgentConversationWorkspaceNotifier` 直接拥有 entry 资源表与不可变 workspace state；每个 entry 的 `AgentConversationSliceNotifier` 独占轻量 regions 和命令账本。`AgentConversationOwnerKey(entryId, lifetimeToken)` 在草稿晋升和 runtime restart 时不变，同 thread 关闭重开分配新 token；BindingKey 只作查询别名。Live 解析真实 owner，Closing/Closed 返回无正文的终止投影，Unknown 返回不可用空投影。
+Workspace 与 Conversation 的所有权：`AgentConversationWorkspaceNotifier` 直接拥有 entry 资源表与不可变 workspace state；每个 entry 的 `AgentConversationSliceNotifier` 独占轻量 regions 和命令账本。`AgentConversationOwnerKey(entryId, lifetimeToken)` 在草稿晋升和 runtime restart 时不变，同 thread 关闭重开分配新 token；BindingKey 只作查询别名。Live 解析真实 owner，Closing/Closed 返回无正文的终止投影，Unknown 返回不可用空投影。
 
 `workbenchSessionProvider` 先构造完整 Shell，组合根在语言冻结后、Widget 挂载前启动事实源、管理 ingress 和幂等 `Shell.start()`。IdeHome 只借用已有 workbench 与订阅；卸载不关闭 owner、Binding 或 runtime。草稿与滚动快照仅驻留 presentation 内存，按 controller 弱身份保存并在 entry 关闭时清理；焦点、弹层和 IME composing 不保留。诊断 snapshot 按需读取唯一 owner，不使用 Shell relay。
 
 关闭顺序为：停止 Shell/M/P 命令 → 刷新已有 session 保存 → 等待 M/P 真实执行排空 → 关闭管理消费者与事实源 → 逐 entry 关闭 ingress、撤下可见项、退订、dispose controller、await lease release → BindingManager → runtime registry → plugin catalog → container。entry/app 重复关闭共享同一 Future；失败保持 Closing/失败终态，不标记释放、不销毁容器掩盖失败。lease release 只证明 consumer 释放，CLI 退出仍以 registry close 为准。
 
-物理 Conversation family 在 build 取得显式 `keepAlive`，协调器保留容器级订阅。只有 lease 释放成功且终止空投影无人观察后才撤销保活并 invalidate；`autoDispose` 此时仅回收已关闭投影，不决定业务资源寿命。这是对原非 autoDispose 伪代码的实现修正：当前 Riverpod 普通 family 的 invalidate 不删除缓存节点。Workspace、Management、Project Threads 的 app owner 仍非 autoDispose。WP-2 已统一 Actions，命令接线见下文。
+物理 Conversation family 在 build 取得显式 `keepAlive`，协调器保留容器级订阅。只有 lease 释放成功且终止空投影无人观察后才撤销保活并 invalidate；`autoDispose` 此时仅回收已关闭投影，不决定业务资源寿命。这是对原非 autoDispose 伪代码的实现修正：当前 Riverpod 普通 family 的 invalidate 不删除缓存节点。Workspace、Management、Project Threads 的 app owner 仍非 autoDispose。会话命令统一经 Actions，接线见下文。
 
 Conversation 的 UI 写操作统一调用 `AgentConversationActions`，Live 句柄就是该 entry 的 `AgentConversationSliceNotifier`；关闭/未知目标只返回无状态拒绝句柄。每次调用冻结 typed payload、OperationId、owner lifetime 和 scope，经同步 reducer/runner 执行并返回 typed outcome。四类审批独立去重；只串行权限偏好与同项 session config，取消和审批不排在配置后面。关闭立即以 staleTarget 结算全部 UI waiter，底层 I/O 与租约释放仍由既有生命周期负责。
 
 模型保存逐请求区分 succeeded、requiresConfirmation、superseded、unchanged 与失败；fork 返回 outcome、内存中的 createdSession 和 activated，不能用“创建了 session”推断激活成功。编辑后分支交接经 Shell 新 entry 的 Actions 发送并回传真实结果。Widget/弹层捕获稳定 Actions，不能在迟到回调中重新解析 BindingKey；RuntimeController 只保留 executor、内部初始化与只读查询职责。正文、权限快照、产物与错误原文不进入新增状态、日志或持久化。
 
-**依赖注入同样归 Riverpod。** 没有安全默认值的依赖用会抛错的 `Provider` 声明保持 fail-closed；
-测试用 `ProviderContainer(overrides: ...)`。这取代了两种旧写法：把几十个可空依赖挂在根 Widget
-构造函数上向下钻，以及用可变注册表把运行期才造出来的对象反向 `bind()` 回 provider。后者尤其
-危险——它让「谁拥有这个对象」在编译期不可见，读到未绑定状态只能靠运行期抛错兜底。
+依赖注入使用 Riverpod overrides。无安全默认值的依赖声明为抛错的 Provider；有安全默认值的实现放在 provider body。`ZetaAppComposition.create` 只接收 overrides，不装调用方需要替换的默认 override。
 
-**组合根只接 `overrides`，生产默认值写进 provider body。** `ZetaAppComposition.create`
-不再收依赖参数。有安全默认值的依赖（窗口宿主、显示语言来源、桌面通知、Agent bundle 工厂与
-runtime 池、用量仓储与自动刷新开关、探测 loader）把**生产实现**写在自己的 provider body 里。
-widget test 不另开一套模式开关：`zetaTestComposition` / `zetaTestApp` 自动装不碰本机的那份
-（内存存储、无头窗口、空 CLI 探测、关闭用量刷新），用例要换就覆盖对应 provider。
+feature application 声明但无法依赖 data 实现的端口，由入口装配；窗口宿主先 `prepareDesktopWindow`。测试使用 `zetaTestComposition` / `zetaTestApp` 提供内存存储、无头窗口和隔离的探测实现；同一 provider 只覆盖一次。
 
-这条约束有个硬理由：**Riverpod 对同一容器内的重复 override 直接断言失败**（`ProviderContainer`
-构造时就抛，debug 下必现）。组合根一旦替某个 provider 装了默认 override，调用方就再也覆盖不掉
-它——fake 进不来。所以组合根内部只装三类调用方不该碰的东西：已解析的可观测性实例、显示语言
-冻结之后才存在的文本目录、切片的冻结依赖与 Runner factory 接缝。其余一律留给 `overrides`。
+环境差异用实现表达，例如 Native/Headless WindowHost，不向业务代码传递环境布尔开关。平台 WindowListener 只允许在 app 窗口模块，`MainApp` / `IdeHome` 不持有原生窗口监听。
 
-同理，声明在 feature `application` 层的 provider 够不到 `data` 实现（那是反向依赖），兜底写不
-进 body：外观仓库、系统字体目录、目录选择器就属于这一类。窗口宿主必须先
-`prepareDesktopWindow` 才能拦截关窗，也不能写进 provider body。这些都由 `lib/main.dart` 和
-测试助手各自装一份，组合根不碰。
+`ref.onDispose` 只做幂等退订与清引用。需要 await 的资源由应用生命周期关闭；autoDispose 不决定 Binding、runtime、进程或文件句柄寿命。Conversation family 按前述显式释放条件撤销保活。
 
-**环境差异做成实现，不做成布尔参数。** 「接管原生窗口」不是一个标志位，而是
-`ZetaWindowHost` 的 `NativeDesktopWindowHost` / `HeadlessWindowHost` 两个实现（窗口事件、关闭
-hook、原生菜单、抢前台）；「显示语言等不等持久化设置」是 `ZetaDisplayLanguageSource` 的两个
-实现。布尔开关的代价是每加一个平台调用都要在调用点补一次 `if`，漏一处就在 widget test 里打到
-真实平台通道；换成实现之后，调用点只有一条路径。
-
-平台 `WindowListener` 只允许出现在 app 窗口模块：`ZetaWindowSurfaceNotifier` 译成 UI 快照，
-`NativeDesktopWindowHost` 的关窗拦截跑 shutdown hook。`MainApp` / `IdeHome` / feature
-Widget 禁止 mixin。生产必须注入已经 `prepareDesktopWindow` 的那一份 host（provider
-fail-closed）；测试装 `HeadlessWindowHost`。守卫：`window_listener_guard_test`。
-
-**`autoDispose` 的适用范围是硬边界。** 它只能决定 selector、派生视图和显式释放后空投影的存活；Conversation family 的保活只在本节规定的释放条件成立时撤销。
-Binding lease、CLI runtime、子进程、文件句柄的生命周期永远由显式的 application 逻辑决定，
-绝不能由「当前有没有 Widget 在看」决定——否则用户切个面板就会杀掉一个正在跑的 turn。
-
-**构造环用工厂注入解，不用延迟绑定。** store 需要 runner 执行副作用、runner 需要 store 回流结果，
-这不是真的循环依赖，只是构造顺序问题。解法是注入一个 `Runner Function(Notifier)` 工厂 provider：
-notifier 在 `build()` 里用 `this` 把 runner 造出来，runner 拿到的是普通构造参数，环从此不存在。
-
-反过来「runner provider 持 `Ref`，在回调里 `ref.read(xxxProvider.notifier)`」是**行不通的**：
-notifier 依赖了 runner provider，runner 再读 notifier 就构成 Riverpod 眼中的
-`CircularDependencyError`，把 read 推迟到异步回调里也一样会被判定。同样不要再写
-`_DeferredXxxRunner` 这类空壳转发器。
-
-**不引入 codegen。** `riverpod_generator` / `build_runner` 的产物会让直接读源码 AST 的架构守卫
-（`test/src/architecture/`）和 review diff 都变噪。provider 一律手写声明。
-
-守卫：`feature_layering_guard_test`。
+Runner 通过 `Runner Function(Notifier)` 工厂取得 owner/result sink。禁止 Deferred 空壳、可变 relay 或 Runner 持 Ref 回读 owner。AsyncNotifier 的竞态使用 ref 生命周期；跨会话业务操作仍必须保留 identity、scope 和 generation 复核，不能用 `ref.mounted` 替代。
 
 Management 的状态、operation waiter 与执行账本由应用会话级 `AgentManagementSliceNotifier` 独占；`agentManagementSliceProvider` 非 family、非 autoDispose。`build` 只读取冻结依赖，Runner factory 接收具名 `AgentManagementResultSink`，不得持 Ref 回读 owner。设置与运行事实经独立 app ingress 输入，Page、Editor、LogView 只读 provider 与 `AgentManagementOperations`，没有旧 Store、Deferred 或状态镜像。
 
 关闭先封命令入口；探测等待者结算为 typed `closed`，其他操作仍以原 `StateError` 结算，再 `await drainExecutions()` 等待已发出的真实 I/O，最后释放 runtime registry、插件和容器；`ZetaAppComposition.close()` 可等待且幂等，同步 `dispose()` 只启动同一关闭过程。Runner 返回的执行 Future 包含探测后的持久化与日志的两段读取，不能拿已结算的调用方 Future 当作资源释放证据。原初始化/保存错误和堆栈只沿 Future 传播，不加入新状态或日志。
 
-WP-5 将首页探测纳入同一 owner。`AgentManagementDetectionState` 区分逐 Provider confirmed、pending partial、outcome、失败与缓存写入警告；只有正式成功覆盖本 Provider 的确认记录，部分失败保留其他成功结果和失败项的旧记录。成功的 `notInstalled` 才能移除已安装行。`agentsById` 仅为由显示定义、确认记录、当前 settings、显式连接检查和运行事实计算出的安全只读 getter，没有可写 backing field。
+首页探测与管理页共用同一 owner。`AgentManagementDetectionState` 区分逐 Provider confirmed、pending partial、outcome、失败与缓存写入警告；只有正式成功覆盖本 Provider 的确认记录，部分失败保留其他成功结果和失败项的旧记录。成功的 `notInstalled` 才能移除已安装行。`agentsById` 仅为由显示定义、确认记录、当前 settings、显式连接检查和运行事实计算出的安全只读 getter，没有可写 backing field。
 
 `ensureDetected()` 消耗工作台的一次自动尝试；`refreshDetection()` 是显式重试。首次 await/dispatch 前占住同一 caller Future，并登记物理执行；初始化期间、正在运行和取消后的排空期间均加入同一 Future。逻辑取消立即结算 `canceled`、清空临时进度，仍等待已发出的仓储/持久化完成。异常映射为 normalized failure，不把原始异常写入新 state；observer 异常不改变已接受的成功回执。贡献目录在 app 会话内冻结；新目录代次取消旧 run，相同 id 的旧结果不能进入新定义。
 
@@ -239,8 +141,8 @@ WP-5 将首页探测纳入同一 owner。`AgentManagementDetectionState` 区分�
 - 纯状态容器只暴露不可变状态和同步 intent 入口，例如
   `ProjectThreadsSliceNotifier`。
 - effect runner 收敛分页、恢复、缓存、provider 调用和竞态处理，例如 `ProjectThreadsSliceRunner`；
-  状态由对应的 MVI store 独占，runner 只经 typed ingress 回流。
-- 高吞吐 UI 使用结构相等的不可变 state slice 与分区 `ValueListenable`，不得用整数
+  状态由对应的 application Notifier 独占，runner 只经 typed ingress 回流。
+- 高频 UI 订阅结构相等的不可变 state slice；core 的 `AgentListenable` 仅在 presentation 适配为 Flutter listenable。不得用整数
   version/revision 作为主要刷新协议。Timeline 的 live turn 保留稳定对象和增量 mutation，
   不得因不可变状态迁移在每个 delta 复制完整历史。
 - Agent UI 更新由 application 的 `AgentConversationRuntimeController` 经
@@ -266,15 +168,14 @@ WP-5 将首页探测纳入同一 owner。`AgentManagementDetectionState` 区分�
   合并或取消过期请求，保存失败时整体回滚关联字段并保留可重试快照。
 - 业务选择态与短生命周期的 UI 展开态必须分离；例如 Composer 的
   `selectedModelId` 可持久化，`expandedModelId` 只由 Popover 持有。
-- Riverpod 管理的资源用 `ref.onDispose` 释放。provider 之外仍持有 `ChangeNotifier`、
-  `ValueNotifier` 或 timer 的，必须在 `dispose` 中释放；通知前应检查 disposed 状态。
+- `ref.onDispose` 只做同步退订与清引用，需要 await 的业务资源按 §3.0 关闭。presentation 持有的 `ChangeNotifier`、`ValueNotifier` 或 Timer 也须显式释放；不得据此在 application/domain 引入 Flutter 通知器。
 - 对外暴露的集合默认使用不可变列表、不可变 map 或 unmodifiable view。
 
 ### Project Threads 规则与索引所有权
 
 Project Threads 的同步命令、列表事实和 thread → project 反查索引由 `ProjectThreadsSliceNotifier` 独占，Shell、Widget 与业务回归统一经 `ProjectThreadsOperations` 调用。`ProjectThreadsSliceRunner` 只通过 `run(effect)` 执行 Provider I/O、分页与搜索调度；远端归属查询经 `ProjectThreadsStateOwner.threadFor` 读取当前项目第一个匹配摘要，不猜活跃 Provider。分页提交只补齐映射，保留窗口外显式登记；整体恢复重建索引，retain/remove/close 清理对应归属，关闭后的 ingress 不再改变索引或触发选中项移除回调。
 
-WP-3P 已移除手写 listener、presentation 镜像与 Deferred；`projectThreadsSliceProvider` 是非 family、非 autoDispose 的应用级 owner，build 用 `ref.read` 冻结依赖，runner factory 只接收 `ProjectThreadsStateOwner`。Shell 借用 Operations 与独立 Riverpod 订阅；停止 Shell 只解除回调/订阅，owner 由应用关闭。BindingManager 与 global runtime 由 app provider 提供，Workspace 与 Runner 共享同一实例。
+Project Threads 不使用手写 listener、presentation 镜像与 Deferred；`projectThreadsSliceProvider` 是非 family、非 autoDispose 的应用级 owner，build 用 `ref.read` 冻结依赖，runner factory 只接收 `ProjectThreadsStateOwner`。Shell 借用 Operations 与独立 Riverpod 订阅；停止 Shell 只解除回调/订阅，owner 由应用关闭。BindingManager 与 global runtime 由 app provider 提供，Workspace 与 Runner 共享同一实例。
 
 关闭先封入口：pending void 正常完成、fork 返回 null；Runner.close 取消未触发的搜索 Timer、失效加载 token，`drainExecutions()` 等待已启动的恢复/激活/搜索、聚合查询和写入全部结束（eagerError: false，失败 Future 不替换），然后 app 关闭 BindingManager → runtime registry → plugin → container。所有未知/重复回执仍按 OperationId 判 stale；错误及堆栈只结算 Future，不进入列表状态或持久化。
 
@@ -287,12 +188,12 @@ WP-3P 已移除手写 listener、presentation 镜像与 Deferred；`projectThrea
 
 - UI 只消费 `AgentEvent`、`AgentThreadSummary`、`AgentPermissionRequest`、
   `AgentQuestionRequest`、`AgentToolCall` 等中立模型。
-- 已迁移能力域（`conversation`、`threadCatalog`、`threadSubscription`、
+- 能力域（`conversation`、`threadCatalog`、`threadSubscription`、
   `threadNaming`、`threadArchival`、`threadDeletion`、`threadCompaction`、
   `threadBranching`、`turnSteering`、`permissionResponses`、`questions`、
-  `deniedActionOverride`、`modelCatalog`、
+  `deniedActionOverride`、`modelCatalog`、`skills`、
   `localThreadList`、`sessionConfiguration`、`planApproval`、`conversationModes`、
-  `permissionPolicy`、`usageQuota`）优先通过 bundle 端口访问；Bundle 和
+  `permissionPolicy`、`usageQuota`）通过 bundle 端口访问；Bundle 和
   `AgentRuntimePort` 不得向 controller / RuntimeController 暴露原始 `AgentProvider`；
   controller / RuntimeController 不再通过 provider kind、`is SomeProvider` 或直接调用
   已迁移旧方法做分支。
@@ -302,7 +203,7 @@ WP-3P 已移除手写 listener、presentation 镜像与 Deferred；`projectThrea
   协议字段只允许出现在 data adapter/codec。是否展示权限选择器由
   `bundle.permissionPolicy != null` 决定，不得再使用
   `supportsPermissionPolicySelection` / `supportsPermissionProfile*` 静态位。
-- Provider 默认权限偏好持久化在 `~/.zeta` 的 provider settings 当前格式中，真源为单一
+- Provider 默认权限偏好持久化在 Zeta 数据目录 的 provider settings 当前格式中，唯一依据为单一
   `selectedPermissionOptionId`。`AgentProviderSettingsCodec` 只解码当前外层版本；损坏或
   不支持版本回退到插件默认设置。Domain `AgentProviderConfig` 只保存归一化 optionId，
   不提供配置 `tryDecode` 门面。
@@ -327,7 +228,7 @@ WP-3P 已移除手写 listener、presentation 镜像与 Deferred；`projectThrea
   旧裸 `permissionSelection` 参数、`AgentTurnConfiguration.permissionSelection` 与 Provider
   内兼容合并 setter/facade 均不得恢复。
 - session runtime 激活后，Binding 内的 `AgentConversationPermissionState` 是 provider
-  default、session effective 与 runtime selection 的唯一运行态真源；provider config 只负责初次
+  default、session effective 与 runtime selection 的唯一运行态唯一依据；provider config 只负责初次
   seed 和持久化。Project Threads 必须优先从已存在 Binding 冻结 thread 请求；没有
   Binding 时才使用 provider default 与 catalog default，禁止从其他会话借用 runtime 状态。
   `AgentPermissionRequestResolver` 只能是无状态优先级函数，不得缓存 selection。
@@ -413,7 +314,7 @@ WP-3P 已移除手写 listener、presentation 镜像与 Deferred；`projectThrea
 - 操作系统通知不得包含 prompt、回复、命令、问题、错误原文、完整路径或 raw payload；
   payload 只保留定位与幂等必需的版本、Provider/thread 和 identity。
 - 窗口获得焦点、Agent Canvas 可见且当前 thread 一致时必须抑制系统通知并清除
-  该 thread 未读。任务栏/Dock 只是内部未读的投影，不是业务真源。
+  该 thread 未读。任务栏/Dock 只是内部未读的投影，不是业务唯一依据。
 - Conversation mode 通过可选 `conversationModes` 端口和运行时目录发现，不按 provider kind
   或 CLI 版本硬编码。模式是 thread 粘性、逐 turn 提交的状态，由 application controller
   管理 draft / confirmed / pending；不得写入 Provider 全局可变配置。
@@ -472,7 +373,7 @@ WP-3P 已移除手写 listener、presentation 镜像与 Deferred；`projectThrea
   命令、文件或网络白名单。
 - Codex app-server 协议以 `third_party/codex_app_server_schema` 的 pinned
   快照为准；升级 CLI 时先用 `tool/gen_codex_schema.*` 导出并 diff，再改
-  适配层。流程见 `docs/protocols/codex_app_server_protocol.md`。
+  适配层。流程见 `docs/zh/protocols/codex_app_server_protocol.md`。
 
 ### 管理运行事实边界
 
@@ -547,6 +448,18 @@ phase；被正文、tool、plan 或交互打断后的 reasoning 必须使用新 
 - Cursor 已彻底清退，不参与当前 schema、catalog、UI、Provider 组合、live/replay/load、
   ACP 扩展、进程启动、测试或 fixture；不得为未发布数据保留 decode/fallback 兼容值。
 
+### 原始协议与字段重建
+
+`AgentProviderRawPayload` 递归冻结原文，不暴露 `operator []`、keys 或 toMap；唯一内容出口 `toPrettyJson()` 仅供上下文面板。适配层使用内容无关的 `wrapAgentProviderPayload(...)`，不得直接调用底层 wrap。`capturedAt` 必须由具体 Provider envelope mapper 显式提取并传入，共享包装器不得扫描 timestamp/createdAt 等字段推测。
+
+需要业务语义时声明 typed 字段。新增字段必须检查 `AgentConversationTimelineStore._mergeToolCall`、history snapshot 的 enrich/overlay 等逐字段重建位置；默认值会掩盖遗漏，必须以回归覆盖。共享层、日志、指标和持久化不得读取原文。守卫：`agent_core_raw_payload_freeze_test`。
+
+### Provider handler 覆盖
+
+覆盖只在该 Provider 自己的 bundle 中，通过 `defaultAgentHandlerRegistryBuilder()` 上的 `register<E>()` 注册。PR 必须说明共享实现为何不适用；共享 reduction 目录不得加入厂商身份分支。
+
+权限、提问、Plan 审批共六个 requested/resolved handler 在 seal 后禁止覆盖。Plan 执行交接由 turn 完成 effect 触发，其保护在 effect 层：`AgentAutoStartPlanExecutionEffect` 必须 `requireThread: true`、scope 含 turnId，执行前重新校验 listener generation、runtime/epoch。覆盖 `AgentTurnCompletedEvent` handler 时必须验证对执行交接的影响，不放宽权限。
+
 ### 4.2 共享适配层纯度门禁
 
 本节中的“共享适配层”包括共享协议 decoder/codec/transport、
@@ -554,8 +467,7 @@ phase；被正文、tool、plan 或交互打断后的 reasoning 必须使用新 
 `BoundedEventDispatcher`、`AgentConversationTimelineStore`、共享 handler 注册表
 （`packages/zeta_agent_core/lib/src/application/reduction/`），以及消费中立
 `AgentEvent` 的 application/presentation 投影。它们是 Provider 无关的机制层，
-不是安放厂商兼容逻辑的兜底层。Grok、Codex 等 Provider 自有的 mapper、adapter、
-reducer 和 history parser 不属于共享适配层。
+厂商兼容逻辑留在各 Provider 自有的 mapper、adapter、reducer 和 history parser 中；这些实现不属于共享适配层。
 
 共享适配层只允许承担以下职责：
 
@@ -599,7 +511,7 @@ Provider 契约测试。若 PR 因 Provider 差异修改 CoalescingPolicy/Buffer
 
 持久化数据必须可演进、可恢复、可容错。
 
-- Zeta 自有配置、状态、派生索引、日志和预留缓存统一位于 `~/.zeta`：
+- 生产入口以系统应用文档目录为基址创建 `.zeta`，见 `ZetaUserDirectory.getUserDirectory` 与 `lib/main.dart`；`ZetaDataPaths.fromHomeDirectory` 是通用路径构造器，不能据名称推断生产使用 HOME。以下文件均相对于实际数据目录：
   `config/providers.json`、`config/appearance.json`、`config/general.json`、
   `state/ide_session.json`、`state/usage_statistics_index.json`、
   `logs/zeta-YYYY-MM-DD.log` 与 `cache/agent_models_v1.json`。
@@ -611,7 +523,7 @@ Provider 契约测试。若 PR 因 Provider 差异修改 CoalescingPolicy/Buffer
   解析一次（生产 `.file(paths)`、测试 `.memory()`），把 `providerOverrides` 展开进
   `ZetaAppComposition.create(overrides:)`，store 由
   `lib/src/app/storage/zeta_store_providers.dart` 的 provider 组装，不把 bindings 或
-  `StorageService` 当构造参数向下钻；presentation/application 不拼接 `~/.zeta` 路径。
+  `StorageService` 当构造参数向下钻；presentation/application 不拼接数据目录路径。
   存储 provider 的默认值保持 fail-closed：组合根替它装了，调用方就换不掉了。
 - Claude 按需 OAuth 刷新可更新其原有 CLI 凭据存储，这是明确的认证维护能力：macOS 只写已选中的 Keychain 条目，文件来源只原位替换已有文件。锁内重读、远端刷新、保留无关字段和写回校验必须完整执行；不得迁移来源、备份 secret、扩大 scope 或把凭据保存到 Zeta 自有目录。其余 Provider 私有数据读取不自动获得写入授权，详见 Claude 协议 §11。
 - 当前不读取旧 SharedPreferences，也没有历史文件迁移器或 marker。
@@ -623,7 +535,7 @@ Provider 契约测试。若 PR 因 Provider 差异修改 CoalescingPolicy/Buffer
   宽容解码忽略损坏条目并用最新 capability 重新归一化。
 - provider 模型目录由 app 级共享仓储统一读取和缓存。启动预热不得阻塞主界面，只预热
   active provider；普通读取采用 stale-while-revalidate 与 single-flight，显式刷新绕过
-  provider 内存缓存。共享仓储是 TTL 的唯一真源；refresh loader 必须读取 Provider 权威
+  provider 内存缓存。共享仓储是 TTL 的唯一依据；refresh loader 必须读取 Provider 权威
   来源。single-flight identity 必须包含安全配置指纹，并以 generation/version 守卫阻止
   失效配置的旧任务回写。协议分页必须完整拉取，失败不得覆盖最近一次可用目录。
 - 相同模型目录的 response 与 runtime event 不得重复持久化；实际内容未变化的主动事件应
@@ -635,7 +547,8 @@ Provider 契约测试。若 PR 因 Provider 差异修改 CoalescingPolicy/Buffer
 - Agent 配置保存必须先校验语法、检测外部修改、写入同目录临时文件并保留原文件
   备份；不得直接覆盖符号链接或在失败后破坏原配置。
 - Agent 日志在进入 UI 前完成凭证与用户目录脱敏。
-- 应用根日志同时保留 developer 输出并按本地日期追加到 `~/.zeta/logs`；文件 sink
+- 指标只经 `ZetaMetricsPort` 上报；名称登记在 `ZetaMetric` 白名单，标签仅允许规范化的 `providerId`、`component`、`outcome`。采集在 app 组合，业务默认 no-op；`ProviderObserver` 不读取 provider state 或 family 参数。日志和指标不得记录 prompt、回复正文、工具输出、原始错误、环境变量值、凭据或原始协议。
+- 应用根日志同时保留 developer 输出并按本地日期追加到数据目录中的 `logs/`；文件 sink
   必须串行写入、脱敏消息，写入失败不能递归进入根 Logger，并在正常关闭窗口前
   排空待写队列。
 - 使用统计派生索引只保存聚合所需元数据；禁止写入 Prompt、回复正文、工具输出、
@@ -649,7 +562,7 @@ Provider 契约测试。若 PR 因 Provider 差异修改 CoalescingPolicy/Buffer
 
 ## 6. UI 与交互
 
-Zeta 是桌面工具，不是营销页。界面应紧凑、克制、可扫描。
+界面需保持可读的信息密度，支持键盘、文字放大和窄窗口。
 
 - `IdeHome` 是主要页面唯一的 Workbench 组合边界。首页、设置、Agent 管理和使用统计
   必须由同一个常驻 `WindowFrame` + `IdeWorkbenchScaffold` 承载，只切换
@@ -683,7 +596,7 @@ Zeta 是桌面工具，不是营销页。界面应紧凑、克制、可扫描。
 - Popover 中的可选列表应支持 roving focus、禁用项原因、Esc 关闭与焦点恢复；
   展开动画必须遵循 reduce motion，不得在用户滚动时强制自动定位。
 - 流式消息、语法高亮代码块、diff 明细等高频或重绘成本高的区域应使用 `RepaintBoundary`。
-- 桌面布局优先用 `Expanded`、`Flexible`、`LayoutBuilder`、scroll view 和固定高度工具栏避免溢出。
+- 桌面布局优先用 `Expanded`、`Flexible`、`LayoutBuilder`、scroll view 和具有足够最小高度的工具栏避免溢出。
 - 统计页等宽数据面板在宽屏可双栏排列，窄屏必须回退为单栏；宽表格使用受限的
   横向滚动，不得挤压文本到不可读宽度。
 - 界面语言只有英语与简体中文。生产 Locale 在常规设置加载后冻结为
@@ -695,8 +608,8 @@ Zeta 是桌面工具，不是营销页。界面应紧凑、克制、可扫描。
   （`AgentUiTextCatalog`、`AgentManagementTextCatalog`、
   `UsageStatisticsTextCatalog`、`DesktopAttentionTextCatalog`），禁止下沉
   Flutter `Locale`、`BuildContext` 或 generated l10n。
-- 英文 ARB 是 key / description / placeholder 的模板真源；`app_en.arb` 与
-  `app_zh.arb` 必须一一对应。首期禁用 plural / date / number formatter；日期、
+- 英文 ARB 是 key / description / placeholder 的模板唯一依据；`app_en.arb` 与
+  `app_zh.arb` 必须一一对应。当前禁用 plural / date / number formatter；日期、
   数字、百分比和相对时间继续用语言无关算法，目录只翻译外围静态 token。
   `Agent` / `Provider` / `Thread` / `Token` 等产品术语保持英文。
 - `shadcn_flutter` 上游只有英语资源。Zeta 自有 `ZetaShadcnLocalizations` 覆盖
@@ -706,6 +619,14 @@ Zeta 是桌面工具，不是营销页。界面应紧凑、克制、可扫描。
   `dart run tool/check_localized_ui_strings.dart --check`；品牌、产品术语、
   Provider/user/raw、协议 key 与日志由扫描器跳过，allowlist 不得再登记新的
   zeta_copy 债务。Provider 返回值、用户输入、路径、命令和模型名保持原文。
+
+### 控件尺寸与视觉约束
+
+- 禁止在 feature 中使用裸 `Color(0x...)`、手写 `BoxShadow`、`BorderRadius.circular` 或 Material ThemeData。通知统一 `showIdeToast`。
+- Select、Tabs、Button、TextField 的高度由 `controlPaddingYFor`、内容和 `controlMinHeightFor` 决定，不外套固定 height/maxHeight。`controlNaturalHeightFor` 仅用于断言与占位。
+- 控件图标使用 `IdeIconBox`。标题栏、列表行、工具栏等容器使用 token 的 minHeight，且不得低于内部控件自然高度。
+- feature 使用 Ide 封装，不直接新建 `sf.Button` / `sf.IconButton` / `sf.TextField` / `sf.Select`。缺少封装时先补公共组件；必要例外在调用点说明并对齐 IdeMetrics。
+- 新 ARB key 同步中英文、description 和 String placeholder，不使用 plural/date/number formatter。用户文档按[文档维护](../development/documentation.md)写日常语言，不机械保留开发术语。
 
 ## 7. 文件系统与工作区
 
@@ -745,13 +666,13 @@ Zeta 是桌面工具，不是营销页。界面应紧凑、克制、可扫描。
 
 ### 8.1 测试选择与分片
 
-**门禁强度没有下降，只是全量的强制点从本地终端搬到了 CI。**
+CI 必须覆盖全部分片与内部包；本地按改动风险选测试。
 
 开发循环的默认档是 `bash tool/test_affected.sh`：从 git 变更集出发，沿 import 图
 做反向闭包算出受影响的测试，再追加架构守卫。选择逻辑在 `tool/test_select.dart`，
 设计上只允许一个方向的误差——**宁可多选，不可漏选**：
 
-- 地基文件（`pubspec.yaml`、`dart_test.yaml`、`analysis_options.yaml`、
+- 基础配置文件（`pubspec.yaml`、`dart_test.yaml`、`analysis_options.yaml`、
   `.github/workflows/`、选择器自身）变更直接退化成全量；
 - 内部 Package 的 barrel `export` 会把整包展开，改 `zeta_agent_core` 一个文件就
   拉起全部依赖方，这是保守但正确的行为；
@@ -770,11 +691,9 @@ Zeta 是桌面工具，不是营销页。界面应紧凑、克制、可扫描。
 - **CI 必须跑满全部分片 + `tool/test_packages.sh`。** 分片是并行手段，不是取样
   手段；任何"只在 CI 跑受影响分片"的提议都是把门禁降级。
 - **重构必须跑完整门禁。** 重构会搬文件、改 import，import 图本身失真，而
-  "测试断言零修改 + 全量绿"是重构唯一的正确性证据。
+  重构必须保持业务断言不变，并通过完整门禁。
 
 `test/src/architecture/test_shard_coverage_guard_test.dart` 守住这套结构：每个测试
-文件恰好属于一片、清单路径真实存在、CI 矩阵与清单一致。没有这层守卫，新增测试
-文件会静默地不属于任何一片而永远不被执行——AppFlowy 的 `integration_test/` 下就
-有 15 个测试文件因此从未运行过。
+文件恰好属于一片、清单路径真实存在、CI 矩阵与清单一致。新增测试必须恰好属于一个分片，避免遗漏。
 
 评审时优先检查依赖方向、协议泄漏、异步竞态、持久化兼容性、文件系统性能和 UI 溢出风险。

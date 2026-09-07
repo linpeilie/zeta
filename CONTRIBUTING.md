@@ -2,290 +2,60 @@
 
 中文 ｜ [English](CONTRIBUTING.en.md)
 
-感谢你对 Zeta 感兴趣。这份文档说明如何搭环境、改代码、提 PR，以及本项目在架构上有哪些**不能碰的红线**。
+开发分支和 PR 目标使用 `dev`；正式发布从 `main` 创建 Tag。提交前阅读与改动有关的[工程规范](docs/zh/architecture/engineering_standards.md)。
 
-先读一遍再动手，能省掉大部分返工。
+## 准备环境
 
-## 目录
-
-- [先说三件事](#先说三件事)
-- [搭建开发环境](#搭建开发环境)
-- [日常命令](#日常命令)
-- [提交前必做](#提交前必做)
-- [提交信息格式](#提交信息格式)
-- [Pull Request 流程](#pull-request-流程)
-- [架构红线](#架构红线)
-- [测试要求](#测试要求)
-- [报告问题](#报告问题)
-- [许可](#许可)
-
-## 先说三件事
-
-1. **默认分支是 `dev`**，请基于它开分支和提 PR。
-2. **改动要小而聚焦。** 大规模重构、新增 Provider、改动事件管线契约，请先开 Issue 讨论方案，不要直接甩一个几千行的 PR。
-3. **本项目有严格的分层约束。** 违反[架构红线](#架构红线)的 PR 无论功能是否正确都不会合并——这些约束是为了让多 Provider 接入不互相污染，不是形式主义。[架构总览](docs/zh/architecture/overview.md)用十几分钟讲清了为什么。
-
-## 搭建开发环境
-
-**基础要求**
-
-- Flutter SDK（stable 通道），需兼容 `pubspec.yaml` 的 Dart SDK 约束 `^3.12.2`
-- CI 使用 **Flutter stable 3.44.4**，本地版本差太远可能出现分析结果不一致
-- 支持 Flutter Desktop 的本地环境（macOS / Windows / Linux）
-
-**Linux 额外的构建依赖**
+Flutter 版本以 [CI](.github/workflows/ci.yml) 为准，Dart 约束见 [pubspec.yaml](pubspec.yaml)。需要对应平台的 Flutter Desktop 构建环境。
 
 ```sh
-sudo apt-get update && sudo apt-get install --yes \
-  clang cmake ninja-build pkg-config \
-  libgtk-3-dev liblzma-dev libfontconfig1-dev
-```
-
-**运行 Agent 功能还需要**
-
-- **Codex**（默认 Provider）：本机能执行 `codex app-server`。未指定 `--listen` 时走 stdio。协议按 pinned schema 开发，见 [Codex app-server 协议版本锁定](docs/zh/protocols/codex_app_server_protocol.md)。
-- **Grok**（可选）：Grok CLI（grok-build）**0.2.119 或更高**。这是多会话兼容基线，更早的版本在同时打开多个 Grok 会话时无法正确隔离会话状态和回合终态。
-- **Claude Code**（可选）：本机能执行 `claude`；Claude.ai 交互式登录使用 `claude auth login`。当前 stream-json 对话取样基线是 CLI **2.1.224**（不是最低版本承诺），协议边界与升级检查见 [Claude Code stream-json 协议基线](docs/zh/protocols/claude_code_stream_json_protocol.md)。模型与套餐名称来自无 Prompt initialize；获取实例及新请求前统一校验 OAuth，并按需刷新到原 CLI 存储。额度详情是独立的可关闭 REST 增强。
-
-只改 UI 或文档的话，不装这些 CLI 也能跑起来，只是 Agent 面板会显示未检测到。
-
-**启动**
-
-```sh
-flutter pub get
-flutter run -d macos    # 或 -d windows / -d linux
-```
-
-## 日常命令
-
-```sh
-dart format .              # 编辑 Dart 文件后必跑
-flutter analyze            # 结束改动前必跑
-bash tool/test_affected.sh # 行为变化时必跑：只跑受影响的测试
-```
-
-### 别在开发循环里跑全量
-
-全量是 2114 条、墙钟约 4m10s，而一次改动通常只碰得到几十条。`tool/test_affected.sh`
-从 git 变更集出发，沿 import 图做反向闭包算出受影响的测试，自动追加架构守卫，
-通常 10–40s 出结果，并打印选中了多少、为什么选中：
-
-```sh
-# Windows PowerShell
-./tool/test_affected.ps1
-
-# macOS / Linux / Git Bash
-bash tool/test_affected.sh
-
-bash tool/test_affected.sh --print   # 只看会跑哪些，不执行
-bash tool/test_affected.sh --shards  # 只看命中哪些分片
-bash tool/test_affected.sh --base origin/dev   # 与某个分支比对而不是只看工作区
-```
-
-**全量的强制点在 CI，不在你的终端。** 每个 PR 都会跑满 6 个测试分片 + 内部
-Package，本地选择器漏了，合并前一定会被抓到。
-
-### 按需要往上加档
-
-```sh
-# 单个测试文件
-flutter test test/src/features/agent/presentation/agent_conversation_widget_test.dart
-
-# 定向复现单条用例
-flutter test test/src/features/agent --plain-name "<用例名>"
-
-# 跑整片（分片清单在 tool/test_shards.dart，用 --shards 拿 id）
-bash tool/test_shard.sh 3          # Windows: ./tool/test_shard.ps1 3
-
-# 只动了 packages/：逐个内部 Package 的 analyze + test
-bash tool/test_packages.sh
-
-# 快速全量：排除标记为 slow 的完整 Shell、性能和工具链测试
-bash tool/test_fast.sh             # Windows: ./tool/test_fast.ps1
-
-# 完整门禁：根测试 + 耗时报告 + 全部内部 Package，
-# 顺带把 JSON 报告写入 .dart_tool/test-results/full.json
-bash tool/test_full.sh             # Windows: ./tool/test_full.ps1
-```
-
-**重构是例外，必须跑完整门禁**：重构会搬文件、改 import，import 图本身就失真，
-而"测试断言零修改 + 全量绿"正是重构唯一的正确性证据。
-
-> `dart_test.yaml` 固定了 `concurrency: 2`。大 Widget 测试单个 worker 会加载完整 IDE Shell，放开并发容易触发内存峰值。**请不要为了跑得快而改掉它。**
-
-**Codex 协议升级时**（改适配层之前）：
-
-```sh
-./tool/gen_codex_schema.sh --diff        # Windows: ./tool/gen_codex_schema.ps1 -Diff
-```
-
-先对比 `third_party/codex_app_server_schema/` 的差异，再动适配层。之后用真实 CLI 冒烟：
-
-```sh
-python tool/smoke_codex_app_server.py --expected-version 0.144.5
-python tool/smoke_codex_plan_mode.py --expected-version 0.144.5
-```
-
-冒烟脚本使用临时只读 workspace，输出不含 Prompt、回复、文件内容、凭证或原始 JSONL。详见 [开发者文档 §3](docs/zh/development/developer_guide.md)。
-
-## 提交前必做
-
-按顺序跑完这三条，缺一不可：
-
-```sh
-dart format .
-flutter analyze
-bash tool/test_affected.sh
-```
-
-CI 先执行 `flutter pub get --enforce-lockfile`，再跑完整版本（`dart format --set-exit-if-changed`、`flutter analyze`、
-6 个测试分片并行、内部 Package 的 analyze + test），本地先过一遍窄的能省一轮往返。
-
-根应用与内部 Package 共用 `pubspec.lock`，提交的 hosted 包源统一为 `https://pub.dev`。
-本机使用镜像时，提交前需切回该包源，并使用 `.github/workflows/ci.yml` 声明的 Flutter 版本：
-
-```sh
-export PUB_HOSTED_URL=https://pub.dev
-flutter pub get
-git diff -- pubspec.lock
 flutter pub get --enforce-lockfile
+flutter run -d windows
 ```
 
-包源 URL 也是锁定信息；即使包版本相同，镜像与官方源不同也会触发重新解析。
-审阅并提交有意的锁文件变化，保留 CI 的 `--enforce-lockfile` 检查。
+macOS 或 Linux 将设备名改为 `macos` 或 `linux`。Linux 构建依赖及其他命令见[开发者指南](docs/zh/development/developer_guide.md)。
 
-**新增测试文件时**：根 `test/` 按目录切片，测试放进已有目录就自动归片，不用登记。
-只有新建顶层测试目录时才要回 [`tool/test_shards.dart`](tool/test_shards.dart) 加一条——
-`test/src/architecture/test_shard_coverage_guard_test.dart` 会拦住漏登记的孤儿文件。
+开发助手连接功能时，需要安装并登录相应助手。纯文档和隔离测试不需要真实账号；测试使用 fake，不能意外访问本机凭据或发起付费对话。
 
-另外：
+## 修改与提交
 
-- 如果 `linux/`、`macos/`、`windows/` 等平台生成目录出现了非预期改动，**先确认是不是 Flutter 工具产生的**，保留的话要在 PR 里说明原因。
-- 新增第三方依赖前，先确认 Flutter / Dart 内建方案确实不够用，并在 PR 描述里说明每个新依赖的用途。
+1. 从 `dev` 创建分支。先检查已有改动，避免覆盖他人的工作。
+2. 保持一个 PR 解决一个问题。新增 Provider 或大范围架构调整时，先明确范围、接口和验证方式。
+3. 补充相关测试，更新对应现行文档；用户可感知变化写入 [CHANGELOG.md](CHANGELOG.md)。
+4. 运行下面适用的检查，再提交 PR。描述实际变化、验证结果和未执行项。
 
-## 提交信息格式
+提交使用 Conventional Commits，例如 `fix(agent): 修复历史会话标题丢失`。摘要不超过 50 字符；正文在需要时说明原因。
 
-使用 [Conventional Commits](https://www.conventionalcommits.org/)，摘要不超过 50 字符：
+## 验证
 
-```
-feat: add grok thread archiving
-fix: guard stale model catalog overwrite
-docs: add bilingual contributing guide
-refactor: extract plan handoff controller
-chore: bump flutter action pin
+```sh
+dart format .                 # 修改 Dart 后
+flutter analyze               # 代码改动收尾
+bash tool/test_affected.sh     # 行为变化
 ```
 
-常用类型：`feat` / `fix` / `docs` / `refactor` / `test` / `chore` / `perf`。
+- 内部包：`bash tool/test_packages.sh --only <package>`。
+- 代码重构、发版、测试基础设施改动：`bash tool/test_full.sh`，包括内部包检查。
+- 界面文案：`dart run tool/check_localized_ui_strings.dart --check`。
+- 纯文档：核对链接、标题锚点、事实和中英文内容，按[文档维护](docs/zh/development/documentation.md)自查，无需 Flutter 测试。
 
-## Pull Request 流程
+开发循环先用单文件或受影响测试；并发保持 2。CI 执行所有分片和内部包。新增顶层测试目录须登记 `tool/test_shards.dart`；不要删改业务断言来让重构通过。
 
-1. 从 `dev` 开分支，分支名建议 `feat/xxx`、`fix/xxx`。
-2. 保持提交历史清晰，避免把无关改动混进同一个 PR。
-3. 填写 PR 模板，特别是**架构门禁勾选项**——如果某项不适用，写明为什么。
-4. 确保 CI 全绿。
-5. 等待 review。涉及事件管线、Provider 契约或持久化格式的改动，review 会比较细，请有心理准备。
-
-**行为变化必须配测试。** 没有测试的行为改动一般不会合并。
+依赖锁文件使用 `https://pub.dev` 包源。提交前检查锁文件变化；不要混入本机镜像地址或意外升级。真实 CLI 和平台验收需单独记录，自动化通过不能替代实机结果。
 
 ## 架构红线
 
-**第一次读代码，先看[架构总览](docs/zh/architecture/overview.md)**（十几分钟，带图）和[术语表](docs/zh/development/glossary.md)。完整规则见[工程规范](docs/zh/architecture/engineering_standards.md)和[开发者文档 §7](docs/zh/development/developer_guide.md)。以下是最常被踩的几条：
+- 厂商协议只在各自插件的 data 层，UI 与共享内核消费中立契约。
+- Provider 决定消息身份和文件变更证据；共享 Store 不猜 id，不读取原始协议。
+- reducer 同步且无副作用；异步执行前后复核会话身份和生命周期。
+- 不支持的能力隐藏入口并明确失败，不伪造成功。
+- 权限、提问、Plan 审批、执行交接独立，接受计划不预授权操作。
+- 状态由单一 application Notifier 拥有，业务资源不因页面退订而销毁。
+- 敏感正文和凭据不进入 Zeta 的配置、统计、日志和通知；助手私有数据的读取不自动授权写入。
+- UI 使用设计系统和文案目录，不在业务页面复制底层控件样式。
 
-**分层与依赖方向**
+详细边界和例外只在[工程规范](docs/zh/architecture/engineering_standards.md)维护。AI 开发的简版约束见 [AGENTS.md](AGENTS.md)。
 
-Project Threads 业务统一经 `ProjectThreadsOperations`，由 application `ProjectThreadsSliceNotifier` 独占规则、索引与等待者；生产和测试共享 app inputs/runner factory。禁止恢复 Store、状态镜像、Deferred 或第二套 Runner 业务。覆盖窗口外映射、关闭后的迟到结果及无 waiter 后台查询排空。Shell/Workspace 借用 app BindingManager；关闭先结算调用方，再等待真实执行，最后释放管理器与 runtime/plugin。
+## 报告与许可
 
-Workspace 与 Conversation 已完成 WP-3C：`AgentConversationWorkspaceNotifier` 直接拥有 entry 资源表与不可变 workspace state；每个 entry 的 `AgentConversationSliceNotifier` 独占轻量 regions 和命令账本。`AgentConversationOwnerKey(entryId, lifetimeToken)` 在草稿晋升和 runtime restart 时不变，同 thread 关闭重开分配新 token；BindingKey 只作查询别名。Live 解析真实 owner，Closing/Closed 返回无正文的终止投影，Unknown 返回不可用空投影。
-
-关闭顺序为：停止 Shell/M/P 命令 → 刷新已有 session 保存 → 等待 M/P 真实执行排空 → 关闭管理消费者与事实源 → 逐 entry 关闭 ingress、撤下可见项、退订、dispose controller、await lease release → BindingManager → runtime registry → plugin catalog → container。entry/app 重复关闭共享同一 Future；失败保持 Closing/失败终态，不标记释放、不销毁容器掩盖失败。lease release 只证明 consumer 释放，CLI 退出仍以 registry close 为准。
-
-- 依赖单向：`main → app → presentation/application → domain`，`app → data → domain`，`presentation → zeta_ui`（`packages/zeta_ui` 设计系统）、`presentation → zeta_markdown`（`packages/zeta_markdown` Markdown 渲染包，fork 自上游，改它先读 `packages/zeta_markdown/UPSTREAM.md`）。
-- 新代码进对应的 `features/<feature>/{domain,application,data,presentation}`，不要回到顶层宽泛目录。
-- `main.dart` 只做启动；`lib/src/app` 是唯一装配点。
-
-**Provider 隔离（最重要）**
-
-- Provider 的原始协议**只能存在于 data 层**。UI 和 application 消费中立的 domain 事件与契约。
-- 共享层（decoder、CoalescingPolicy/Buffer、Pipeline、TimelineStore、handler 注册表）**禁止出现任何 Provider 的 import、kind 分支、id 分支或 raw 字段读取**。
-- Provider 覆盖 handler 只能注册在该 Provider 自己的 bundle；权限 / 提问 / Plan 审批三类事件的 handler 不允许覆盖（Plan 执行交接没有对应事件，保护在 effect 层）。
-- 文件变更必须由 Provider-local tracker 先形成完整 typed snapshot；Store 只机械透传，UI 不读 raw，只有命令时不得猜路径或 diff。
-- 新增 Provider 的正常改动范围 = 自有 data 文件 + 中立 domain 契约 + factory 组合 + 契约测试。如果你发现必须改共享层，说明抽象没做对，先开 Issue 讨论。
-- UI 一律按 **capability** 渲染，不按 provider kind 或名称硬编码。未支持的能力必须 `capability = false` 并抛 `UnsupportedError`，**不得静默成功**。 Session config 只声明可选端口，不另造能力位；执行层缺端口仍抛错，UI 翻译 typed failure，不以 Future 正常结束推断成功。
-- 管理运行状态按精确 Provider 实例 id 汇总全部 Workbench session Binding；默认/前台选择不参与归属，global 预热与短 RPC 不代表活跃 turn。保留禁用后的实际运行事实及独立错误标志，摘要只存内存。
-- 管理切片使用应用会话级 Notifier 单一 owner，Runner 经具名 sink 回流真实执行结果；页面退订只取消观察。退出先结算调用方，再排空 I/O，最后释放 runtime/插件/容器；测试和宿主需要完成时 await `ZetaAppComposition.close()`。
-- Provider 进程只由 `AgentProviderRuntimeRegistry` 创建；全局操作走 `AgentProviderGlobalRuntime`，会话实例只由 `AgentConversationBinding.beginTurn()` 惰性创建。Binding 显式区分 dormant/starting/attached/cleared，只有匹配 runtime identity 的 cleared 才是断连。RuntimeController 不持有 lease/scope/pin，空闲回收归 Binding Manager。
-- Workspace entry 创建时一次性绑定 thread、Binding 与 RuntimeController；RuntimeController 不提供跨 thread 切换/恢复兼容入口，只允许更新 project/file context。Registry 获取 runtime 必须显式传 scope。
-- 真实 thread 的 Binding 不得原地改绑；fork 返回的 session 走 Shell 的新 thread 通用登记/选择流程，后续操作只作用于 fork 结果。
-- `AgentProviderBundle` 是 Application / Presentation 的唯一能力入口，由 `createBundle` 直接创建；旧 `AgentProvider` 大接口已删除。每个 Binding 独占一份不可变权限快照，不得恢复跨 provider/runtime/thread 的权限注册表。静态能力默认值由 data 组合层注入，Domain 不按厂商名称 switch。
-
-**事件管线**
-
-- 新增或修改 `AgentEvent` 前，必须逐项回答[开发者文档 §7 的 16 条接入清单](docs/zh/development/developer_guide.md)，并用测试固定行为。
-- reducer 必须纯同步：不得出现 Flutter scheduler、`Timer`、`Future` 或外部回调，副作用走 scope-aware EffectRunner。
-- live / history / replay 必须使用**独立的 reducer 实例**。
-
-**权限模型**
-
-- 权限审批、用户提问、Plan 审批是**三种独立的领域语义**，不共享 request/decision 模型。
-- Plan 终态后的「执行确认」是 Zeta 本地工作流，不是 Provider 计划审批：必须新建显式 Default 回合，不得预授权命令、文件或网络操作。
-- 执行权限只恢复同 Binding/thread/runtime 中仍有效的 Plan 前用户选择；否则使用 Provider catalog 的保守默认。卡内覆盖仅限该 turn，不能 apply 或持久化。**任何自动升级授权的改动都不会被接受。**
-
-**主题与 UI**
-
-- `shadcn_flutter` 只能 `as sf` 导入；语义 token 走 `IdeThemeScope` / `IdeColors.of(context)` / `IdeTextStyles.of(context)`。
-- 禁止 Material `ThemeData` / `ColorScheme.fromSeed`、裸 `Color(0x...)`、手写 `BoxShadow`、临时 `BorderRadius.circular(...)`。
-- 通知统一用 `showIdeToast`，不要在 feature 里直接调 `sf.showToast`。
-- 时间线禁止 post-frame 测量、`GlobalKey` 查高、layout 后 `setState` 反馈环。
-- 用户可见的 Zeta 文案走 `context.l10n` 或 feature 文本目录，不要在生产代码里新写中英文字面量。application / data 不得 import generated l10n 或 Flutter `Locale`。品牌名、产品术语和 Provider/user/raw 内容保持原文。
-
-**持久化与隐私**
-
-- Zeta 自有数据全部在 `~/.zeta/`，JSON 必须版本化 + 宽容 `tryDecode`（缺字段或损坏不能阻断启动）。
-- Provider 自有 data adapter 可以按明确功能读取对应 CLI 的私有数据；协议字段、原始内容和路径不得泄漏到上层。读取权限不等于迁移、改写或删除授权。Claude 按需 OAuth 刷新是明确的原存储写回能力，必须锁内重读、保留无关字段并验证写回，不得迁移来源或在 Zeta 建立凭据副本（协议 §11）。
-- 派生索引与缓存只保存规范化白名单字段。**禁止持久化 prompt、回复、工具输出、文件变更 evidence 正文、原始错误文本、环境变量、凭证、Provider raw payload 或 localized UI copy。**
-
-**其他**
-
-- 不使用 `print`，诊断信息走 `dart:developer` 或 `lib/src/core/logging`。
-- 公共 API 写 `///` 文档；新代码优先中文注释，重点覆盖协议适配、状态机、错误处理和不直观分支。
-- **Cursor 已退役**，相关代码不接受回流。
-
-## 测试要求
-
-- 行为变化至少覆盖风险最高的状态转换。
-- 优先用 fake / stub 而不是 mock，遵循 Arrange / Act / Assert。
-- 依赖通过构造函数注入。
-- 共享层（decoder、Coalescing、TimelineStore）的测试必须使用 **Provider 无关的 fixture**，并配套架构守卫测试。
-- 改动页面切换行为时，要用真实的 `IdeHome` 补 Widget 测试，验证 Element、草稿、滚动位置、面板宽度不被重置。
-
-## 报告问题
-
-开 Issue 之前，先翻一下[故障排查](docs/zh/guide/troubleshooting.md)和[数据与隐私](docs/zh/guide/data-and-privacy.md)——CLI 检测不到、通知不弹、统计对不上这类问题多半在那里有答案。
-
-请使用 [Issue 模板](https://github.com/linpeilie/zeta/issues/new/choose)。Zeta 的问题高度依赖环境，模板里的这些信息请尽量填全：
-
-- 操作系统与版本
-- Zeta 版本（关于页面或安装包文件名）
-- `flutter --version` 输出（如果是从源码运行）
-- Agent CLI 与版本（`codex --version` / `grok --version`）
-
-**贴日志前请先脱敏。** `~/.zeta/logs/` 下的日志可能包含你的项目路径和文件名。日志本身不记录 prompt、回复正文和凭证，但路径信息仍可能敏感。
-
-**安全漏洞请不要开公开 Issue**，改用 GitHub 的私密漏洞上报（Security → Report a vulnerability）。威胁模型与范围界定见[安全策略](SECURITY.md)。
-
-## 许可
-
-参与本项目即表示你同意遵守[行为准则](CODE_OF_CONDUCT.md)。
-
-本项目采用 **GPL-3.0** 许可，见 [LICENSE](LICENSE)。提交贡献即表示你同意以相同许可授权你的代码。
-
-Provider 包已分离中立契约（`provider_api`）、共享机制（`provider_sdk`）与三个独立厂商插件。登记入口是 `lib/src/app/plugins/agent_provider_manifest.dart`；根测试访问实现只经 `test/src/testing/`。management/usage 由插件贡献，原过渡 import 已清零；空贡献或冲突必须 fail-closed，详见[工程规范 §2.1](docs/zh/architecture/engineering_standards.md#21-provider-插件包边界)。
-
-新增 Provider 按[开发者文档插件流程](docs/zh/development/developer_guide.md#新增-provider-插件)建包并登记根 pubspec/manifest；隔离与贡献守卫自动覆盖未来插件，CI 自动发现测试包。单包检查用 `bash tool/test_packages.sh --only <package>`，完整门禁仍是 `bash tool/test_full.sh`。
-
-Provider 图标的 SVG 与 `AgentProviderDefinition.icon` 由各插件包拥有；包内 `flutter.assets` 仅声明静态资源，不引入 Flutter SDK 依赖。宿主入口通过 `agentProviderIconsOverride` 注入静态查询，统一处理主题、尺寸、语义与失败回退；图标查询不得触发插件激活、猜测自定义实例品牌或写入持久化配置。
-
-
-Conversation 的 UI 写操作统一调用 `AgentConversationActions`，Live 句柄就是该 entry 的 `AgentConversationSliceNotifier`；关闭/未知目标只返回无状态拒绝句柄。每次调用冻结 typed payload、OperationId、owner lifetime 和 scope，经同步 reducer/runner 执行并返回 typed outcome。四类审批独立去重；只串行权限偏好与同项 session config，取消和审批不排在配置后面。关闭立即以 staleTarget 结算全部 UI waiter，底层 I/O 与租约释放仍由既有生命周期负责。
-
-模型保存逐请求区分 succeeded、requiresConfirmation、superseded、unchanged 与失败；fork 返回 outcome、内存中的 createdSession 和 activated，不能用“创建了 session”推断激活成功。编辑后分支交接经 Shell 新 entry 的 Actions 发送并回传真实结果。Widget/弹层捕获稳定 Actions，不能在迟到回调中重新解析 BindingKey；RuntimeController 只保留 executor、内部初始化与只读查询职责。正文、权限快照、产物与错误原文不进入新增状态、日志或持久化。
+缺陷请提供复现步骤、版本和实际结果；安全问题按 [SECURITY.md](SECURITY.md) 私密上报。参与讨论须遵守[行为准则](CODE_OF_CONDUCT.md)。贡献内容使用项目的 [GPL-3.0 许可证](LICENSE)。

@@ -1,311 +1,105 @@
-# Architecture overview
+# Architecture Overview
 
-[中文](../../zh/architecture/overview.md) ｜ English
+English ｜ [中文](../../zh/architecture/overview.md)
 
-Written for someone opening this repository for the first time. The goal is to give you a working mental model in about fifteen minutes, so you know which layer to touch.
+This page describes responsibilities and data paths for contributors. Detailed rules are in the [engineering standards](../../zh/architecture/engineering_standards.md), implementation steps in the [developer guide](../../zh/development/developer_guide.md), and definitions in the [glossary](../development/glossary.md).
 
-For definitions of specific terms, see the [glossary](../development/glossary.md). For the complete rules and invariants, see the [design document](../../zh/architecture/design_document.md) and [engineering standards](../../zh/architecture/engineering_standards.md) (both Chinese).
+Zeta starts local agent CLIs, translates vendor protocols into neutral events, and displays conversations, tools and file-change evidence. Model inference, tool execution and vendor history formats remain with each CLI.
 
-> Package update (2026-09-05): neutral contracts and shared mechanisms live in `zeta_agent_provider_api` and `zeta_agent_provider_sdk`. Codex, Grok and Claude Code have separate pure Dart plugin packages, registered in `agent_provider_manifest.dart`. Management and usage implementations now live in their owning plugins and are assembled through neutral, overridable contribution seams; manifest parity and isolation guards cover future plugins, and CI discovers packages for independent matrix jobs. See the [authoritative package boundaries](../../zh/architecture/engineering_standards.md#21-provider-插件包边界).
-
-Provider plugins own their SVG assets and `AgentProviderDefinition.icon` metadata. Package-level `flutter.assets` declarations do not introduce a Flutter SDK dependency. The host entry point injects static lookup through `agentProviderIconsOverride` and owns theme, sizing, semantics and fallback rendering. Icon lookup must not activate plugins, infer brands from custom instance names, or persist asset metadata.
-
-## In one sentence
-
-Zeta is a **desktop shell**. It ships no model and implements no editor. It launches the agent CLIs already on your machine, translates their proprietary protocols into a set of neutral domain events, and renders those events as an auditable timeline.
-
-The active providers are Codex app-server (default), Grok ACP, and Claude Code stream-json; Cursor is retired. See the [Claude Code protocol baseline](../../zh/protocols/claude_code_stream_json_protocol.md) for its current wire contract.
-
-So the architecture revolves around exactly one question: **how do we keep provider-specific protocol differences from contaminating shared code?** Most constraints you'll read about are derived from that question.
-
-## Layering
+## Layers
 
 ```mermaid
 flowchart TD
-    main["main.dart<br/><i>bootstrap only</i>"] --> app["app<br/><i>single composition point · DI</i>"]
-    app --> pres["presentation<br/><i>widgets · region selectors</i>"]
-    app --> appl["application<br/><i>workflow · RuntimeController</i>"]
-    app --> data["data<br/><i>protocol adapters · storage</i>"]
-    pres --> appl
-    pres --> domain
-    appl --> domain["domain<br/><i>pure models and contracts</i>"]
+    main[main: platform startup] --> app[app: composition and lifetime]
+    app --> presentation[presentation: UI]
+    app --> application[application: state and commands]
+    app --> data[data: protocols and storage]
+    presentation --> application
+    presentation --> domain[domain: neutral models and ports]
+    application --> domain
     data --> domain
-    pres --> uicore["zeta_ui<br/><i>theme tokens · workbench primitives</i>"]
-    pres --> md["zeta_markdown<br/><i>Markdown rendering · upstream fork</i>"]
-
-    classDef pure fill:#1B84FF22,stroke:#1B84FF
-    class domain pure
+    presentation --> ui[zeta_ui / zeta_markdown]
 ```
 
-**Dependencies are one-way; you can't reverse an arrow.** The critical rule: `domain` is pure — no Flutter, no `dart:io`, no provider protocol fields. Any time you want to import a Codex type into domain, you're in the wrong layer.
+Presentation subscribes to application state and command contracts. Application does not depend on presentation. Domain contains no Flutter, file I/O or vendor protocol fields. Feature code stays in its feature, shared infrastructure in core, and reusable UI in `zeta_ui`.
 
-Code is sliced by feature, and each feature is split into those same four layers:
+## Internal packages
 
-```
-lib/src/features/<feature>/
-├── domain/         models, contracts, pure rules
-├── application/    controllers, workflow orchestration
-├── data/           protocol adapters, storage implementations
-└── presentation/   widgets, region selectors
-```
+| Package | Responsibility |
+| --- | --- |
+| `zeta_foundation` | Clock, logging, metrics and collection contracts; host helpers under `src/platform/` |
+| `zeta_plugin_kernel` | Plugin activation, contributions and shutdown |
+| `zeta_agent_core` | Domain, Binding/runtime, event pipeline, reducers and store |
+| `zeta_agent_provider_api` | Neutral composition, management and usage contracts |
+| `zeta_agent_provider_sdk` | Shared protocol mechanisms and separate testing entry points |
+| `zeta_agent_provider_codex` / `grok` / `claude_code` | Vendor protocols, configuration, history, management and usage |
+| `zeta_ui` | Graphite design system without business-model dependencies |
+| `zeta_markdown` | Markdown rendering without internal-package dependencies |
 
-Existing features: `agent` (provider abstraction and conversation), `agent_management` (CLI detection and diagnostics), `desktop_notifications`, `ide_session` (restore), `project_threads`, `settings`, `usage_statistics`, `workspace` (file tree).
+`lib/src/app/plugins/agent_provider_manifest.dart` registers plugins. Composition validates contribution ownership, uniqueness and completeness. Vendor packages do not depend on one another. Plugin icons are static assets and can be read without activating plugins.
 
-Project Threads commands enter `ProjectThreadsOperations`, implemented by the application-session `ProjectThreadsSliceNotifier`. Its non-family, non-autoDispose provider owns synchronous rules, list state, the reverse index and waiters; build reads frozen dependencies and creates a runner from its typed sink. The app Runner keeps I/O scheduling resources, reads ownership through `StateOwner.threadFor`, and preserves explicit mappings outside the visible window. Shell borrows operations and a Riverpod subscription; the old Store, mirror and Deferred runner are removed. App providers own the shared BindingManager and global runtime; Workspace borrows them.
-
-Shutdown settles void waiters normally and fork waiters with null, cancels pending debounce timers and rejects late ingress. It then awaits all started executions, including restore/activation/search queries without waiters and the last Provider in an aggregate query, before closing BindingManager, runtime registry, plugins and the container. Drain failure remains a failed Future. WP-3C completes Workspace/Conversation ownership and full Shell composition as described below.
-
-**New code goes into the matching feature — not back into broad top-level directories.**
-
-Management state, typed command waiters, and physical execution tracking belong to the app-session `AgentManagementSliceNotifier`. Its provider is neither a family nor auto-disposed. Build reads frozen inputs once; the runner factory captures a named result sink, never a Ref that resolves another owner. Settings and runtime facts enter through separate app subscriptions. The page, editor, and log view consume providers and `AgentManagementOperations`; the old Store, Deferred runner, and state mirror have been removed.
-
-Shutdown settles detection callers with typed `closed` and other callers with the existing `StateError`, awaits `drainExecutions()` for actual I/O, then closes the runtime registry, plugins, and container. Await `ZetaAppComposition.close()` for completion; synchronous `dispose()` starts the same cached close. Detection persistence and both log-reading stages belong to the physical execution Future. Initialization/save errors and stacks remain in the caller Future, never new state or diagnostic logs.
-
-The same owner now owns Home detection. Confirmed records and partial progress are separate; a provider failure retains only that provider's previous confirmed evidence. `AgentManagementAgentView` derives display values from those records, current settings, explicit connection checks and session runtime facts. Home subscribes to `agentManagementHomeProvider` without its own detector or rollback cache. `ensureDetected()` consumes one automatic attempt per workbench. Explicit refresh joins the same Future during initialization, detection or cancellation drain. Cancel settles the caller immediately with `canceled`; shutdown uses `closed`, while physical I/O remains tracked until completion.
-
-Repository paths and detailed diagnostics stay in the app adapter's resource catalog. Application state holds safe fields and opaque handles; presentation receives shortened display text and narrow copy/open actions. Detection and explicit connection checks use independent resource slots. Cache-write warnings do not roll back successful detection. Persistence re-reads the latest settings and merges only the existing detection whitelist. Contribution definitions remain frozen for the app session, and generation checks reject obsolete results.
-
-
-## The agent event pipeline
-
-This is the one path worth understanding thoroughly. A raw notification from the CLI passes through all of this before it becomes a line on screen:
+## Event pipeline
 
 ```mermaid
 flowchart LR
-    cli["Agent CLI<br/>stdio JSON-RPC"] --> dec["decoder<br/><i>shared · syntax only</i>"]
-    dec --> ad["provider adapter<br/>+ reducer<br/><i>vendor-specific</i>"]
-    ad --> ev(["AgentEvent<br/><i>neutral domain event</i>"])
-    ev --> pipe["AgentEventPipeline<br/><i>gate → coalesce → bounded dispatch</i>"]
-    pipe --> proc["EventProcessor<br/><i>pure sync reducer</i>"]
-    proc --> store["TimelineStore<br/><i>dumb merge by entryId</i>"]
-    proc --> eff["EffectRunner<br/><i>side-effect exit</i>"]
-    store --> runtime["RuntimeController<br/>region projection + frame coalesce"]
-    runtime --> slice["SliceNotifier<br/>one RegionsRefreshed"]
-    slice --> ui["selector → AgentRegionBuilder"]
-
-    classDef vendor fill:#F5A62333,stroke:#F5A623
-    classDef neutral fill:#1B84FF22,stroke:#1B84FF
-    class ad vendor
-    class ev,pipe,proc,store,runtime,slice,ui neutral
+    cli[Vendor protocol] --> adapter[Provider adapter / tracker]
+    adapter --> event[Neutral AgentEvent]
+    event --> pipeline[Pipeline / Buffer / Dispatcher]
+    pipeline --> reducer[Synchronous reducer / handler registry]
+    reducer --> store[TimelineStore / SessionState]
+    reducer --> effects[EffectRunner]
+    store --> runtime[RuntimeController / UI scheduler]
+    runtime --> regions[Application regions]
+    regions --> widgets[Presentation]
 ```
 
-Exactly one box is orange. **Everything after it must be provider-agnostic** — that's the entire point of the design.
+Providers determine identity, segments, deduplication, terminal state and file-change evidence before entering shared code. `sourceItemId` is protocol metadata, not a UI merge rule. The store merges by explicit IDs only.
 
-Responsibilities break down like this:
+The pipeline checks targets on admission and dispatch. High-frequency events use neutral coalescing rules. Reducers synchronously return state, mutations, snapshots and effects. Live, history and replay share registry definitions but keep separate reducers and scratch state.
 
-| Stage | Owns | Explicitly doesn't own |
+EffectRunner checks generation, runtime/epoch and required thread/turn scope before execution. Raw protocol data remains immutable and opaque, for display in the context panel only.
+
+## State and commands
+
+| State | Owner | Write entry |
 | --- | --- | --- |
-| decoder | protocol syntax, transport lifecycle | any provider branching |
-| **provider adapter / reducer** | vendor field compatibility, entryId assignment, segmentation, dedup, terminal states, complete file-change snapshots | punting unresolved semantics downstream |
-| pipeline | subscription scope, coalescing, bounded dispatch | business semantics |
-| processor / reducer | state transitions, timeline mutation descriptions; reduction dispatched via the handler registry; UI regions derived from dirty bits + SessionState diff | async work, Flutter scheduling, hard-coding which pane to refresh, branching on providerId |
-| TimelineStore | update on same entryId, create on new entryId; raise dirty regions only when values change | inference, id rewriting, judging UI urgency |
-| UI | rendering | parsing protocol |
+| Runtime facts and timeline | RuntimeController / core | Event processing |
+| Conversation regions and command ledger | `AgentConversationSliceNotifier` | `AgentConversationActions` |
+| Workspace entry resources | `AgentConversationWorkspaceNotifier` | App orchestration |
+| Project thread list and reverse index | `ProjectThreadsSliceNotifier` | `ProjectThreadsOperations` |
+| Management, detection and runtime summary | `AgentManagementSliceNotifier` | `AgentManagementOperations` and controlled ingress |
+| Focus, popovers and IME state | Widget | Widget events |
 
-The three rules most often violated:
+Cross-widget state has no parallel hand-written store or mirror Notifier. Runners take frozen dependencies and an owner/result sink, not a Ref used to resolve the owner again.
 
-1. **A provider's `sourceItemId` / `sourceMessageId` is metadata only.** entryId, message segmentation, reasoning phases, dedup, and terminal states are all decided by that provider's own adapter/reducer. TimelineStore merges blindly — it never guesses.
-2. **Reducers must be purely synchronous.** No `Timer`, no `Future`, no Flutter scheduler, no external callbacks. Side effects go through the EffectRunner, which validates scope.
-3. **Live / history / replay each get their own reducer instance.** Sharing one bleeds state across them.
-4. **File changes render only typed evidence supplied by the provider.** Replacement snippets, written content, and unified patches retain their distinct meaning. A command-only path remains a command card; Zeta never parses the command or current workspace to invent a diff.
+Commands freeze payload, owner lifetime and scope before queueing and recheck on return. Old handles cannot find a new entry through BindingKey. Cancellation and approvals do not wait for preference saves. Settling a caller Future does not prove I/O has drained.
 
-An `AgentFileChangeSnapshot` is a complete cumulative snapshot assembled by the provider before the shared
-pipeline. The Store replaces it mechanically and the UI renders by evidence type. A Codex turn aggregate is
-an explicit `liveOnly` fallback: it cannot masquerade as recoverable history or appear alongside later
-tool-scoped evidence.
+## Binding and lifetime
 
-Before adding or changing an `AgentEvent`, work through all 16 items of the onboarding checklist in [developer guide §7](../../zh/development/developer_guide.md).
+Each workspace entry owns separate conversation resources. `AgentConversationOwnerKey(entryId, lifetimeToken)` survives draft promotion; reopening after close uses a new token. BindingKey is an alias. Closing, closed and unknown targets expose no old body or writable entry.
 
-## Conversation UI publish
+The app constructs and starts the Shell before widgets mount. Opening history or a draft does not itself start a CLI; the Binding creates the session on execution. Page switches and subscriptions do not determine process, lease or file-handle lifetime.
 
-After TimelineStore there are only **two hops**. Do not reintroduce a ViewModel, `AgentConversationUiStateStore`, or `AgentConversationSliceComposition`:
+Shutdown rejects new commands and settles waiters, drains management and project-thread execution, then closes consumers and fact sources, entries/controllers/leases, BindingManager, registry, plugins and the container. Repeated close calls share one Future. Failed releases remain failures. Conversation auto-disposal only reclaims an explicitly released empty projection.
 
-```mermaid
-flowchart LR
-    tl["TimelineStore"] --> rt["RuntimeController<br/>project regions · scheduler"]
-    rt --> sl["SliceNotifier<br/>one RegionsRefreshed"]
-    sl --> sel["BindingKey alias selector"]
-    sel --> rb["AgentRegionBuilder"]
-    rt --> cmd["CommandPort"]
-    cmd --> pane["AgentPane"]
-```
+Management summaries aggregate all foreground and background Bindings by exact provider configuration ID, not by the selected page or default assistant.
 
-- `AgentConversationRuntimeController` (application) owns the pipeline, region projection, `AgentUiUpdateScheduler`, CommandPort, and effects.
-- `AgentConversationSliceNotifier` dispatches once per `AgentUiUpdateRequest`, by region.
-- Widgets read a region only through `AgentRegionBuilder`'s `ref.watch(selector(bindingKey))`. Send goes through `agentConversationCommandProvider`. High-frequency live-turn updates may use the presentation Flutter listenable adapter.
-- A workspace entry composes thread, Binding, RuntimeController, and a stable ownerKey once. Context-panel visibility is AgentPane widget state, not an application snapshot.
-- The shell reads only `AgentConversationThreadSnapshot` (`selectedAgentController`).
+## Capabilities and approvals
 
-WP-3C gives Workspace and Conversation one writable owner each. `AgentConversationWorkspaceNotifier` holds entry resources and immutable workspace state; an application `AgentConversationSliceNotifier` owns each entry's regions and command ledger. `AgentConversationOwnerKey(entryId, lifetimeToken)` survives draft promotion and runtime restart; reopening a thread allocates a new token. BindingKey is an alias: Live resolves the owner, Closing/Closed returns an empty terminal projection, and Unknown returns an unavailable projection.
+Controls use capabilities and bundle ports. Execution checks again and throws `UnsupportedError` for missing support. Session configuration distinguishes failure and stale targets; displayed values change only through provider events.
 
-The composition root constructs the complete `workbenchSessionProvider` and starts facts, management ingress and idempotent `Shell.start()` after locale resolution and before Widgets. IdeHome borrows that session and subscriptions. Unmounting does not close owners, Bindings or runtimes. Presentation retains drafts and scroll positions in memory under weak controller identity, clears them on entry close, and does not retain focus, popovers or IME composing. Diagnostic snapshots read owners on demand without a Shell relay.
-
-Shutdown stops Shell/M/P commands, flushes session persistence, drains M/P executions, detaches fact consumers and the source, closes entry ingress and controllers, awaits entry lease releases, then closes BindingManager, runtime registry, plugins and container. Repeated entry/app close returns the same Future, including failure; a failed stage is not marked released and the container remains inspectable. Lease release is not proof of CLI exit.
-
-The Conversation family takes an explicit keepAlive link in build and is retained by a container subscription. Only successful release plus an unobserved empty terminal projection permits dropping that link and invalidating the provider. autoDispose therefore reclaims closed projections, never business resources. This corrects the original non-autoDispose pseudocode because the current Riverpod implementation keeps ordinary family cache nodes after invalidate. App Workspace/M/P owners remain non-autoDispose. WP-2 now provides unified Conversation Actions.
-
-
-Conversation UI writes use `AgentConversationActions`. A live handle is the entry's `AgentConversationSliceNotifier`; closed or unknown targets return a stateless rejecting handle. Each call freezes its typed payload, operation ID, owner lifetime and scope, then runs through the synchronous reducer and scoped executor with a typed result. Approval admission remains separate for all four meanings. Only permission preferences and each session config key serialize; cancellation and approvals stay independent. Closing immediately settles UI waiters as staleTarget while the existing lifecycle still owns I/O and lease release.
-
-Model saves report each request's success, confirmation requirement, supersession, unchanged value or failure. Fork results distinguish createdSession from activation and never persist the product. Edit-and-retry sends through the new entry's Actions and propagates its actual result. Widgets capture a stable Actions handle instead of resolving a reusable BindingKey in a late callback. RuntimeController remains the executor and read source, with internal bootstrap calls explicitly identified.
-
-## Provider capability negotiation
-
-Zeta doesn't assume every agent can do the same things. Each provider exposes a set of ports through `AgentProviderBundle`, only two of which are required:
-
-```mermaid
-flowchart TD
-    bundle["AgentProviderBundle"]
-    bundle --> req["required<br/>runtime · conversation"]
-    bundle --> opt["optional ports"]
-    opt --> o1["threadCatalog / threadSubscription / threadNaming"]
-    opt --> o2["threadArchival / threadDeletion / threadCompaction"]
-    opt --> o3["threadBranching / turnSteering / permissionResponses"]
-    opt --> o4["questions / deniedActionOverride / modelCatalog"]
-    opt --> o5["sessionConfiguration / planApproval / skills"]
-
-    classDef must fill:#1B84FF22,stroke:#1B84FF
-    classDef may fill:#8888,stroke:#888,stroke-dasharray:4
-    class req must
-    class opt,o1,o2,o3,o4,o5 may
-```
-
-**UI renders by capability, never by provider name.** When a port is absent or `capability = false`, the corresponding entry point never appears in the menu, and an accidental call from the application layer throws `UnsupportedError` — **silent success is forbidden**, because it makes users believe something took effect when it didn't.
-
-Session configuration is declared by the `sessionConfiguration` port. Commands return typed outcomes; the UI boundary translates missing-port errors to unsupported. Requests for the same option run in order and validate their thread/runtime target. Controls show pending and local failure feedback, while Provider events remain the source of displayed values.
-
-The bundle is a strict boundary: the factory creates a native `AgentProviderBundle` directly, and the old `AgentProvider` facade is gone. The RuntimeController only retains neutral ports. Static capability defaults are injected by the data composition layer; Shared Domain does not switch on vendor names.
-
-This is also what makes "adding a provider without touching shared code" realistic. The normal scope of a new provider is:
-
-```
-its own data files  +  neutral domain contracts  +  factory wiring  +  contract tests
-```
-
-If you find yourself needing to change a shared layer, stop and open an issue — that usually means the abstraction is wrong.
-
-## Conversation bindings and provider lifecycle
-
-Panes and RuntimeControllers never own provider processes directly:
-
-```mermaid
-flowchart LR
-    Settings["ProviderSettingsController"] --> Global["ProviderGlobalRuntime"]
-    Global --> Registry["ProviderRuntimeRegistry"]
-    Manager["ConversationBindingManager"] --> Binding["ConversationBinding"]
-    Binding --> Registry
-    RT["RuntimeController"] --> Global
-    RT --> Binding
-```
-
-- The registry is the sole owner of instances and child processes. There is one non-reaped global runtime per provider ID.
-- A binding uniquely represents one logical conversation by draft/thread key and owns its session runtime, event generation, single-conversation permission snapshot, and active operations; permission state is not kept in a cross-conversation registry.
-- The workspace composes a matching thread summary, binding, and RuntimeController once when creating an entry. A RuntimeController's thread identity is fixed; it may update only project/file context, while selecting another thread selects another entry.
-- Creating a draft, opening a thread, or reading history/models/skills does not start a session runtime. Only the first submitted turn calls `beginTurn()`.
-- A binding distinguishes dormant, starting, attached, and cleared explicitly. Starting is not a disconnect; only a cleared transition for the matching runtime identity may settle the current turn as interrupted.
-- A binding already attached to a real thread is never rebound in place. The session returned by fork is registered like any newly created thread, then the shell reuses the standard selection flow to create its separate entry/binding; subsequent history, rename, and send operations target that new thread.
-- Late cancel, steer, and interaction responses may only use `runCurrent()` and fail closed after runtime reclamation.
-- The manager runs a single-flight sweep every minute. A session is reaped only after ten idle minutes with no active turn/RPC, using an exact runtime identity; a replacement waits for the old process to finish disposing.
-- Runtime acquisition must explicitly choose a global or session scope. Shared model/usage features consume neutral ports, and the usage panel always uses the global runtime.
-
-Claude Code models and the plan name come from a separate, no-prompt CLI initialize call and are
-mapped to neutral models inside the Claude-local adapter. `supportedEffortLevels` are exposed as
-neutral reasoning options and applied to the next turn through `--effort`. This is a snapshot of
-options effective for the current CLI, not a guaranteed real-time exhaustive remote catalog. Quota
-details use a separate, optional OAuth usage path and degrade to the plan name on REST failure.
-The registry awaits optional `acquisitionPreparation` before returning a new or reused lease.
-Claude calls the same `ensureFresh()` service here and before new requests, refreshing within five
-minutes of expiry. Refresh failure blocks the operation; cancellation and approval responses remain
-available. Credentials are written only to the selected existing CLI store, under a lock and with
-readback verification. Zeta-owned storage and logs never contain credentials or raw payloads.
-See the Claude protocol document, section 11, for scope and platform validation limits.
-
-### Session scope of management status
-
-Management runtime summaries cover only this Workbench's session bindings, grouped by exact configured `providerId` across foreground and background entries, including retained bindings without an entry. Default-provider choice and Canvas selection do not determine ownership. Global catalog warmup, connection tests, and external CLI processes are excluded. Ready means connected; a live turn or pending interaction means running. Historical active flags and short RPC counts cannot establish a live turn. Disabled policy preserves existing facts until actual clear/removal. Primary status follows running → error → starting → unavailable → idle → disabled → notRunning, while `hasErrors` remains independent.
-
-## Three kinds of approval — don't conflate them
-
-This is the most common newcomer trap. They all look like "show a card and wait for a click", but they are **three independent domain semantics** that do not share request/decision models:
-
-| Type | Initiated by | Meaning |
-| --- | --- | --- |
-| **Permission approval** | provider | I want to run a command / write a file / reach the network — authorize me |
-| **User question** | provider | I need an answer before I can continue |
-| **Plan approval** | provider | please approve this plan |
-
-There's a fourth thing, and it belongs to **none** of the above:
-
-- **Plan execution handoff** — a local Zeta workflow. After a Plan turn succeeds, Zeta asks whether to execute. Choosing to run **starts an explicit new Default turn** and **pre-authorizes nothing** the plan mentioned. The card restores the still-valid permission selected before Plan; if its scope or option is stale, it falls back to the provider catalog's conservative default and allows a one-turn override.
-
-That last one is frequently misimplemented as "steer the current turn" or "call the planApproval port". Both are wrong.
+Permissions, questions, provider plan approval and local execution handoff are separate. Handoff starts a new Default turn without using an approval port. Plan acceptance grants no advance authorization. Execution restores only valid user-selected permissions, otherwise using the provider's conservative default or requiring a choice.
 
 ## Workbench UI
 
-```mermaid
-flowchart TD
-    home["IdeHome<br/><i>single composition boundary</i>"] --> frame["WindowFrame<br/><i>persistent</i>"]
-    frame --> scaffold["IdeWorkbenchScaffold<br/><i>persistent</i>"]
-    scaffold --> nav["Navigation slot<br/>Projects + agent usage / settings nav"]
-    scaffold --> canvas["Canvas slot<br/>Agent / settings / usage"]
-    scaffold --> insp["Inspector slot<br/>Files / Tools"]
-```
+`IdeHome` composes one Workbench; pages fill Navigation, Canvas and Inspector. Retained pages lay out only the active page, avoiding `IndexedStack` for long timelines.
 
-Page switching only swaps slot content; `WindowFrame` and `IdeWorkbenchScaffold` stay the same Element throughout. **Feature pages must not replace the top-level workbench.**
+Timeline construction is limited to visible blocks, with parsing and projection cached by content revision. Resize must not reparse unchanged bodies. Floating plans and pending interactions are positioned in one layout pass without post-layout measurement feedback.
 
-Workbench chrome padding lives on `IdeHome`: `space8` on the left, right, and bottom, and `space0` on top so the workbench sits flush with the title bar and there is no hairline between them. `IdeWorkbenchScaffold` is flush to that chrome; rails keep only the inner `space4` gap. Feature pages must not add another window-level inset.
-
-The Agent home page mounts no Activity Rail. A leading title-bar action on `WindowFrame` is the sole visibility control for the merged sidebar; inside the Navigation slot, one `ProjectAgentSidebar` card contains Projects / Threads and the read-only agent-usage summary at the bottom. Usage keeps a collapsed summary in place and opens the full breakdown in a popover anchored above that summary. In Compact mode the entire sidebar reuses the Navigation Overlay, and dismissing it with the scrim or Escape restores focus to the title-bar action.
-
-Sidebar visibility, sidebar width, and the selected usage provider are application-level Workbench preferences restored tolerantly from `ide_session.json`. The expanded usage popover is transient UI and is never persisted: it is inset by one `space4` step on each side of the sidebar width, scrolls inside itself when the content exceeds the space above the anchor, offers no height drag handle, and collapses on an outside click or the summary toggle. A terminal signal from either a foreground or background thread only makes usage follow that signal's provider and refresh silently; it never switches the conversation's active provider.
-
-Cross-page retention uses `IdeRetainedPageView`, not `IndexedStack` (the latter keeps paying layout cost for long timelines). The timeline is virtualized with `SliverList.builder`, and streaming turns, syntax highlighting, and diff regions each get a `RepaintBoundary`.
-
-Post-frame measurement, `GlobalKey` height probing, and post-layout `setState` feedback loops are forbidden — all of them produce visible jitter on long timelines.
-
-On theming: import `shadcn_flutter` only `as sf`, and route all semantic colors through `IdeThemeScope` / `IdeColors.of(context)`. Business code must not contain bare `Color(0x...)`, hand-written `BoxShadow`, or ad-hoc `BorderRadius.circular(...)`.
-
-## Interface language
-
-The first ship supports English and Simplified Chinese only. The preference is `AppLanguage` in settings, stored in `config/general.json` (v3, codes `en` / `zh-Hans`). `MainApp` freezes the process Locale after general settings load, then mounts UI that has copy. Changing the setting shows “restart to apply”; the current process neither follows the OS locale nor remounts the workbench.
-
-First launch, or an unavailable general-settings file, looks at the first preferred system locale only: Simplified Chinese (including bare `zh`) selects Chinese; Traditional Chinese and anything else fall back to English. A valid current settings file takes precedence. Widgets read `context.l10n`; application / data / reducer code only receives immutable text catalogs — Flutter Locale and generated l10n must not sink below the UI/app composition layer. Product terms `Agent` / `Provider` / `Thread` / `Token` stay English; date, number, and relative-time formats do not change with the UI language. Provider/user/raw strings are never translated.
-
-`shadcn_flutter` ships English only; Zeta’s own adapter maps the public localization API onto the same ARB set. OS-owned surfaces such as the native file picker may keep the system language.
+UI uses Graphite tokens and Ide controls. Text comes from ARB or immutable catalogs; Flutter Locale and generated localization do not enter neutral layers. English or Simplified Chinese is fixed at startup, with restart required after changing the setting.
 
 ## Persistence
 
-All Zeta-owned data lives under `~/.zeta/`:
+Startup resolves `.zeta` under the system application Documents directory and supplies stores through `ZetaStorageBindings`. Business layers receive storage interfaces, not host paths. Configuration, state, logs and caches are separated; JSON is versioned and decoded leniently.
 
-```
-config/   providers.json · appearance.json · general.json
-state/    ide_session.json · usage_statistics_index.json
-logs/     zeta-YYYY-MM-DD.log
-cache/    agent_models_v1.json
-```
-
-Three hard requirements:
-
-- **Versioned JSON with tolerant decoding.** Missing fields, corruption, and unsupported versions must never block startup; there is no historical-version migration path.
-- **Read Provider-private data only inside that Provider's data adapter.** Protocol fields, raw content, and private paths stay out of upper layers; read access does not automatically authorize migration, rewriting, or deletion.
-- **Derived indexes store allow-listed fields only.** Never persist prompts, response bodies, tool output, file-change evidence bodies, raw error text, environment variables, credentials, provider raw payloads, or localized UI copy.
-
-Feature stores also must not assemble `File('~/.zeta/...')` themselves in presentation or application code — concrete files are injected from `lib/src/app`.
-
-For the user-facing file listing and cleanup instructions, see the [data reference](../guide/data-and-privacy.md#what-zeta-writes-to-your-machine).
-
-## Where to start for a given change
-
-| What you want to do | Mainly touches |
-| --- | --- |
-| Restyle a timeline card | `features/agent/presentation` + `zeta_ui` tokens |
-| Change Markdown rendering (syntax set / code palette / code toolbar / context menu / cursor) | injection points in `packages/zeta_markdown` plus the mapping in `agent_pane_styles.dart`; read `packages/zeta_markdown/UPSTREAM.md` first |
-| Fix a streaming glitch in one provider | that provider's `data/` adapter / reducer |
-| Add or fix provider file-change evidence | that provider's `data/` tracker + neutral domain/presentation; the shared Store only carries it mechanically |
-| Surface a capability the provider already supports | domain port and capability → application → presentation |
-| Onboard a brand-new agent CLI | new `data/` implementation + factory wiring + contract tests |
-| Change file-tree ignore rules | `features/workspace/domain/workspace_directory_rules.dart` |
-| Change a persisted field | that feature's `data/` + current-version decoding + tolerant fallback for corrupt/unsupported input |
-| Add user-visible copy | ARB (`app_en.arb` / `app_zh.arb`) or the matching feature text catalog; run the literal scanner |
-
-**Read before you start**: the [hard lines in CONTRIBUTING](../../../CONTRIBUTING.en.md#architectural-hard-lines) are the short version; [engineering standards](../../zh/architecture/engineering_standards.md) is the complete version with review gates.
+Sensitive bodies and credentials do not enter Zeta's own records. Plugins may read their CLI's private data for defined functions. Writes require a separate product contract. Claude sign-in renewal updates the original CLI credential store without making a Zeta copy. See engineering standards §5 and the [Claude protocol](../../zh/protocols/claude_code_stream_json_protocol.md).

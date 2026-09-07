@@ -200,3 +200,7 @@ diff -r --strip-trailing-cr   /tmp/mmw/packages/mixin_markdown_widget/lib   <仓
 
 - `lib/src/selection/mixin_selection_area.dart` 与其中的 `MixinSelectionArea` —— 这里的 "Mixin" 是上游组织名而非包标识；改名会让选择区相关文件的同步 diff 全量失配。
 - `lib/src/render/local_image_provider_io.dart`（含 `dart:io`）—— 删除会扩大同步 diff 面；本包不进 `zeta_ui`，不受其纯度约束。
+
+### 2026-09-07 · 文档引用清理
+
+README 改为引用本文件的基线和定制记录，移除已删除工作计划的路径；未修改包内源码、测试或默认行为。

@@ -31,10 +31,16 @@ final class FlutterDesktopNotificationService
           requestSoundPermission: false,
         ),
         linux: LinuxInitializationSettings(defaultActionName: linuxActionName),
-        windows: const WindowsInitializationSettings(
+        windows: WindowsInitializationSettings(
           appName: 'Zeta',
           appUserModelId: 'io.github.linpeilie.zeta',
           guid: '9b5bb3b5-a44b-4f52-8a51-7991b7ab2831',
+          // Windows notification identity needs an image file, independently
+          // of the icon embedded in the executable. Resolve from the bundle,
+          // since the working directory can differ when launched by a shortcut.
+          iconPath: File(Platform.resolvedExecutable).parent.uri
+              .resolve('data/flutter_assets/assets/branding/zeta_logo.png')
+              .toFilePath(),
         ),
       ),
       onDidReceiveNotificationResponse: (response) {

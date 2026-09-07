@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 4 ]]; then
-  echo "Usage: publish_github_release.sh <tag> <release-version> <true|false> <dist-directory>" >&2
+if [[ $# -ne 6 ]]; then
+  echo "Usage: publish_github_release.sh <tag> <release-version> <true|false> <dist-directory> <commit-sha> <notes-file>" >&2
   exit 64
 fi
 
@@ -10,6 +10,22 @@ tag="$1"
 release_version="$2"
 prerelease="$3"
 dist_directory="$4"
+commit_sha="$5"
+notes_file="$6"
+if [[ ! "${commit_sha}" =~ ^[0-9a-f]{40}$ ]] || [[ ! -s "${notes_file}" ]]; then
+  echo "A full commit SHA and nonempty release notes file are required." >&2
+  exit 64
+fi
+if [[ "$(git rev-parse HEAD)" != "${commit_sha}" ]]; then
+  echo "Publishing checkout differs from the build commit." >&2
+  exit 1
+fi
+if git show-ref --verify --quiet "refs/tags/${tag}"; then
+  if [[ "$(git rev-parse "${tag}^{commit}")" != "${commit_sha}" ]]; then
+    echo "Existing tag points to another commit." >&2
+    exit 1
+  fi
+fi
 repository="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}"
 : "${GH_TOKEN:?GH_TOKEN is required}"
 
@@ -134,9 +150,9 @@ create_args=(
   "${tag}"
   "${asset_paths[@]}"
   --repo "${repository}"
-  --verify-tag
+  --target "${commit_sha}"
   --title "Zeta ${tag}"
-  --generate-notes
+  --notes-file "${notes_file}"
 )
 if [[ "${prerelease}" == 'true' ]]; then
   create_args+=(--prerelease --latest=false)

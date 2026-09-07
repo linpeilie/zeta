@@ -1,6 +1,6 @@
 # Agent 桌面通知与任务栏未读提醒详细设计
 
-最后更新：2026-08-24
+最后核对：2026-09-07（状态所有权与配置路径）
 
 ## 1. 背景与目标
 
@@ -79,9 +79,9 @@ Provider data adapter
       -> AgentTurnCompletedEffect / AgentAttentionEffect
         -> AgentConversationEffectRunner
         -> AgentConversationRuntimeController
-            -> AgentConversationWorkspaceStore（补 provider/project/thread 上下文）
+            -> AgentConversationWorkspaceNotifier（补 provider/project/thread 上下文）
               -> IdeShellController callback
-                -> DesktopAttentionSliceStore + pure reducer
+                -> DesktopAttentionSliceNotifier + pure reducer
                    -> typed effect
                      -> app DesktopAttentionSliceRunner
                         |-- AgentNotificationSettingsSource
@@ -89,12 +89,12 @@ Provider data adapter
                         |     -> flutter_local_notifications
                         |-- DesktopAttentionIndicator
                         |     -> zeta/desktop_attention MethodChannel
-                        `-- IdeHome target activator relay
+                        `-- app 注入的 target activator
 ```
 
 依赖方向为 `presentation/application -> domain`、`data -> domain`、`app -> data`。
 feature reducer/store 不依赖 Widget、系统通知实现或 Provider 原始协议；系统端口只在 app
-runner 组装。Riverpod provider 只镜像 store，不拥有未读状态。
+runner 组装。`desktopAttentionSliceProvider` 的 Notifier 独占未读状态，不另建 Store 或镜像层。
 
 ## 5. 核心模型
 
@@ -154,7 +154,7 @@ Unread -- duplicate identity --> Unread（no-op）
 Unread -- category disabled --> Absent + cancel system notification
 ```
 
-`DesktopAttentionSliceStore` 以不可变 `DesktopAttentionSliceState` 保存进程内未读，
+`DesktopAttentionSliceNotifier` 以不可变 `DesktopAttentionSliceState` 保存进程内未读，
 纯 reducer 负责状态转移并产出 typed effect，app 组合层的 runner 独占系统端口：
 
 1. `resolved` 优先处理，不受开关和可见性影响；
@@ -240,29 +240,15 @@ Dart 端通过 `zeta/desktop_attention` MethodChannel 调用：
 
 ## 10. 设置与持久化
 
-设置页“常规”分区新增：
+设置页“常规”分区提供：
 
 - 系统通知总开关，默认开启；
 - 任务结束，默认开启；
 - 需要确认，默认开启。
 
-持久化文件为 `~/.zeta/config/general.json`，`GeneralSettings` 版本由 1 升为 2：
+通知设置位于 Zeta 数据目录的 `config/general.json`。当前 GeneralSettings 使用 v3，通知字段为 `notifications.enabled`、`turnTerminalEnabled`、`actionRequiredEnabled`；完整格式由对应 codec 维护，不复制旧版 JSON 示例。
 
-```json
-{
-  "version": 2,
-  "sendMessageShortcut": "enter",
-  "notifications": {
-    "enabled": true,
-    "turnTerminalEnabled": true,
-    "actionRequiredEnabled": true
-  }
-}
-```
-
-读取 version 1 时保留原发送快捷键，通知字段使用默认值；字段缺失、类型损坏或
-未知版本不阻塞应用启动。运行时关闭分类会同时清理已有同类未读；从关闭
-切回开启时重新请求必要的系统权限。
+缺失、损坏或不支持的版本使用启动流程提供的默认设置，不能阻断启动。关闭分类同时清理同类未读；重新开启时申请所需系统权限。通知本身与未读列表不持久化。
 
 ## 11. 异常、竞态与生命周期
 
@@ -272,7 +258,7 @@ Dart 端通过 `zeta/desktop_attention` MethodChannel 调用：
 - 用户提交本地决策时先发 `resolved`，即使 Provider 回包迟到或丢失，也不留下
   无法操作的陈旧未读。Provider 后续的 resolved 为幂等 no-op。
 - 通知 ID 在单进程内单调增加；不用它作业务 identity。
-- Controller dispose 时移除设置监听并释放通知 service。应用进程退出后未读不恢复。
+- 应用关闭时退订设置和 attention ingress，排空 runner 后关闭通知 service；页面退订不释放这些资源。进程退出后未读不恢复。
 - 任务栏或通知插件错误不中断 Agent 事件 pipeline。
 
 ## 12. 性能与可观测性
@@ -280,7 +266,7 @@ Dart 端通过 `zeta/desktop_attention` MethodChannel 调用：
 - raised/resolved 去重和删除为平均 `O(1)`；按 thread 标记已读为 `O(n)`，`n` 仅是当前进程
   尚未处理的提醒数。
 - 高频 delta、reasoning、tool progress 不产生 attention effect，不进入通知链路。
-- 日志使用 `zeta.desktop_attention`，只记录操作名与异常，不记录通知正文和 payload。
+- 日志使用 `zeta.desktop_attention`，只记录操作名与规范化失败分类，不记录通知正文、原始异常或 payload。
 - Windows 不创建 overlay icon 或 GDI 资源，仅处理任务栏闪烁请求。
 
 ## 13. 测试与验收

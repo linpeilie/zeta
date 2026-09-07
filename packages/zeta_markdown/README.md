@@ -12,7 +12,7 @@ Zeta 的 Markdown 渲染包：fork 自 [`mixin_markdown_widget`](https://github.
 - 普通文本的 I-Beam 光标
 - 增删语法集（`==mark==` 等）
 
-决策记录见 `.workflow/plan/2026-09-03-agent-conversation-ui-rendering/00-index.md` 的 DR-001；改造任务拆解见同目录 `06-wp6-markdown-vendor.md`。
+上游基线、定制记录和同步步骤见 [UPSTREAM.md](UPSTREAM.md)。
 
 ## 定位与依赖方向
 
@@ -37,7 +37,7 @@ zeta_markdown → {flutter, markdown, re_highlight, pretext, flutter_math_fork, 
 ## 注入点清单
 
 每个都遵守「默认值 = 上游行为」，不传参时渲染结果与 `mixin_markdown_widget 0.3.1`
-一致。改造背景见 `.workflow/plan/2026-09-03-agent-conversation-ui-rendering/06-wp6-markdown-vendor.md`。
+一致。各项定制的源码位置和测试记录见 [UPSTREAM.md](UPSTREAM.md#本地改动清单)。
 
 | 注入点 | 类型 | 解决什么 |
 |---|---|---|

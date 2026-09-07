@@ -1,0 +1,4 @@
+interface:
+  display_name: "Zeta 发布准备"
+  short_description: "按通道自动递增或指定发布版本，提炼更新说明并准备到 main 的 PR"
+  default_prompt: "使用 $zeta-release 发布beta版本，自动确定下一个版本号，更新用户说明并准备到 main 的 PR。"

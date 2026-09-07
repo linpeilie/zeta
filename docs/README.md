@@ -1,27 +1,16 @@
 # Zeta 文档 / Documentation
 
-文档按语言分目录，两边结构相同。
-
-Documentation is organised by language; both trees share the same structure.
-
-| | |
+| 阅读目的 / Purpose | 入口 / Start here |
 | --- | --- |
-| **中文** | [docs/zh/](zh/README.md) |
-| **English** | [docs/en/](en/README.md) |
+| 使用 Zeta / Use Zeta | [中文指南](zh/README.md) · [English guide](en/README.md) |
+| 参与开发 / Contribute | [贡献指南](../CONTRIBUTING.md) · [Contributing](../CONTRIBUTING.en.md) |
+| 了解结构 / Architecture | [中文](zh/architecture/overview.md) · [English](en/architecture/overview.md) |
+| AI 开发规则 / AI development rules | [AGENTS.md](../AGENTS.md) |
+| 维护文档 / Maintain documentation | [文档维护](zh/development/documentation.md) |
 
-```
-docs/
-├── zh/ · en/
-│   ├── guide/          使用指南 / user guide
-│   ├── architecture/   架构 / architecture
-│   ├── development/    开发者文档与术语表 / developer guide and glossary
-│   ├── product/        产品需求 / product requirements
-│   ├── protocols/      Agent 协议适配 / assistant protocol adaptation
-│   ├── release/        发版流程 / release process
-│   └── history/        历史归档 / archive
-└── images/             截图与拍摄规格（语言无关）/ screenshots and capture spec
-```
+`guide/` 面向使用者；`architecture/`、`development/`、`protocols/`、`release/` 面向贡献者和维护者。`product/` 说明产品范围。用户指南有中英文版本，尚未翻译的工程文档在英文索引中直接链接到中文版。
 
-英文树目前只包含已翻译的部分，缺失的条目会在中文索引里标注。
+`guide/` is for users. Architecture, development, protocol and release pages are for contributors and maintainers. `product/` defines product scope. User guides are available in both languages; the English index links to Chinese engineering pages where no translation exists.
 
-The English tree currently holds the pages that have been translated; the Chinese index marks what is still Chinese-only.
+已失效的方案和被现行文档替代的重复材料从工作树移除，可在 Git 历史中查阅。
+Obsolete proposals and superseded duplicates remain available in Git history.
