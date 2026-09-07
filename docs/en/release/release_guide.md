@@ -6,19 +6,17 @@ Documentation checked: 2026-09-07. Release operations and remote settings were n
 
 ## 1. How releases work
 
-Create `release/*` from `develop`, or `hotfix/*` from `main` for urgent production fixes. After stable-version acceptance, create a PR targeting `main`, review the version and release notes, then merge it to trigger the [release workflow](../../../.github/workflows/release.yml). Closing an unmerged PR does not publish. No manual tag is required. Every stage uses the PR's fixed merge commit, even if main advances later.
+Prepare versions and notes on `develop`; do not create a `release/*` branch. Use `hotfix/*` from `main` only for urgent production fixes. After stable-version acceptance, create a PR from `develop` to `main`, review the version and release notes, then merge it to trigger the [release workflow](../../../.github/workflows/release.yml). Closing an unmerged PR does not publish. No manual tag is required. Every stage uses the PR's fixed merge commit, even if main advances later.
 
-Use the project `$zeta-release` Skill with an explicit version or just a beta/stable channel to select the next version automatically. Human review, committing, and merging remain separate steps.
+Use the project `$zeta-release` Skill with an explicit version or just a beta/stable channel to select the next version automatically. The Skill prepares in place on the checked-out `develop` branch and does not create or switch to `release/*`. Human review, committing, and merging remain separate steps.
 
 The Skill creates the GitHub PR through `gh`. Fetching main is for comparison and validation only; do not automatically merge, pull with a merge, or rebase. Report PR conflicts; branch synchronization and conflict resolution require separate explicit instructions.
 
 ### Branch flow and current automation limits
 
-See the [branch model](../../../CONTRIBUTING.en.md#branch-model). Only ready stable versions enter `main`. Test and revise beta versions on `release/*`; do not merge a prerelease into `main` to publish it.
+See the [branch model](../../../CONTRIBUTING.en.md#branch-model). The `$zeta-release` path prepares versions and notes on `develop` and does not create `release/*`. Only ready stable versions enter `main`. Prepare beta on `develop`; do not merge a prerelease into `main` to publish it.
 
-The current workflow still triggers only after a PR merges into `main` and accepts beta metadata. Publishing beta from `release/*` is not implemented yet. This branch-policy update changes documentation only. Beta version and notes preparation can continue, but publication requires adapting the workflow first; the previous beta-to-main route must not be used.
-
-After finishing `release/*` or `hotfix/*`, also use `gh` to create a PR back to `develop` with `--base develop` and the same source branch, or update an existing PR. Delete the auxiliary branch only after both target PRs are manually merged and publication and tagging succeed. Automatic publication does not merge back into `develop` or delete branches.
+The current workflow still triggers only after a PR merges into `main` and accepts beta metadata. Publishing beta from `develop` is not implemented yet. This update does not mean that automation exists. Beta version and notes preparation can continue, but publication requires adapting the workflow first; the previous beta-to-main route must not be used.
 
 ## 2. Version and release notes
 
@@ -68,7 +66,7 @@ Before editing, report the baseline and selected version, then continue without 
 
 ## 3. Before releasing
 
-1. Fetch full remote history and tags; create or continue the matching `release/*` from `develop`, or `hotfix/*` from `main` for an urgent production fix. Preserve the worktree and do not switch branches without accounting for existing work.
+1. Fetch full remote history and tags; prepare the next version on the current `develop` branch without creating or switching to `release/*`. Preserve the worktree. If the checkout is not `develop`, do not switch branches for the user.
 2. Update `release.json`, `pubspec.yaml`, versioned notes and the `CHANGELOG.md` link together.
 3. Run validation and the full gate:
 
@@ -81,7 +79,7 @@ Before editing, report the baseline and selected version, then continue without 
    ```
 
    Use CI's `PUB_HOSTED_URL=https://pub.dev` to avoid lockfile changes from local mirrors.
-4. Review and edit the notes, commit with the code, and push the source branch. Check for an existing PR with `gh pr list --base main --head <source-branch> --state open`, then create it on GitHub with `gh pr create --base main --head <source-branch> --title <title> --body-file <body-file>`, or update the existing PR with `gh pr edit`. Verify branches and status with `gh pr view` and return the PR URL. Run local version and notes validation before committing. PRs to main do not trigger standalone CI; release preflight validates the version and notes again after merging.
+4. Review and edit the notes, commit with the code, and push `develop`. Check for an existing PR with `gh pr list --base main --head develop --state open`, then create it on GitHub with `gh pr create --base main --head develop --title <title> --body-file <body-file>`, or update the existing PR with `gh pr edit`. Verify branches and status with `gh pr view` and return the PR URL. Run local version and notes validation before committing. PRs to main do not trigger standalone CI; release preflight validates the version and notes again after merging.
 5. After checks pass, the user merges the PR on GitHub to start publication. “Commit and open a PR” does not include a local merge or `gh pr merge`; the Skill does not automatically resolve PR conflicts. Do not manually create/push tags or create a GitHub Release beforehand.
 
 ## 4. Automated workflow

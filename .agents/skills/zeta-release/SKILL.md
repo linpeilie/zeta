@@ -5,7 +5,7 @@ description: 为 Zeta 准备 beta 或 stable 正式版本：支持指定版本�
 
 # Zeta 发布准备
 
-在当前 Zeta 仓库执行。目标是可审读的版本改动和更新说明，以及在稳定版本就绪后通过 `gh` 在 GitHub 创建目标为 `main` 和 `develop` 的 PR；GitHub 上的 PR 合并成功即自动执行发布。Skill 不手工打 tag、不代替用户合并 PR，也不在本地执行发布分支与 main 之间的合并。
+在当前 Zeta 仓库执行。目标是可审读的版本改动和更新说明，以及在稳定版本就绪后通过 `gh` 从 `develop` 创建目标为 `main` 的 PR；GitHub 上的 PR 合并成功即自动执行发布。Skill 不手工打 tag、不代替用户合并 PR，不创建或切换 `release/*`，也不在本地把 `develop` 与 `main` 互相合并。
 
 ## 1. 确定发布通道或版本并读取项目约定
 
@@ -13,8 +13,9 @@ description: 为 Zeta 准备 beta 或 stable 正式版本：支持指定版本�
 - `vX.Y.Z-beta.N` 是 beta；`vX.Y.Z` 是 stable。数字不得有前导零，N 必须大于零；不接受 rc 或 tag build metadata。
 - 先执行 `git status`，保留现有改动；定位仓库根目录并读取 `AGENTS.md`、`docs/zh/release/release_guide.md`、`docs/zh/development/documentation.md` 的更新日志规范，以及 `release.json`、`pubspec.yaml`、`.github/workflows/release.yml`。路径均相对仓库根目录。
 - 若需理解代码，遵循仓库 CodeGraph 规则。现行发布校验以 `tool/packaging/release_plan.dart` 和 `release_metadata.dart` 为准，文档与脚本冲突时先查明原因。
-- 核对当前分支和远端，遵循 `CONTRIBUTING.md` 的分支模型：常规发布在从 `develop` 创建的 `release/*` 准备；生产紧急修复在从 `main` 创建的 `hotfix/*` 准备。稳定版本完成后分别向 `main` 和 `develop` 发起 PR。不直接用 `develop` 或 `feature/*` 向 main 发版，不擅自切换或丢弃用户正在工作的分支。
-- `main` 始终代表最新可发布稳定版本。beta 只在 `release/*` 准备与验证，不创建 beta 到 main 的发布 PR。当前工作流尚不支持从 `release/*` 发布 beta；可完成版本、文稿和验证，交稿须明确自动发布待适配，不宣称已支持或把 beta 合入 main 来绕过。
+- 核对当前分支和远端。常规发布准备只在已检出的 `develop` 上进行：就地改版本与文稿，禁止创建、检出或切换到 `release/*`、`hotfix/*` 或其他辅助分支，也禁止为发版执行 `git checkout` / `git switch` / `git_create_branch`。若当前不在 `develop`，停止并说明，等用户回到 `develop` 后再跑；不要代为切换。贡献指南里的 `release/*` 不是本 Skill 路径。
+- `main` 始终代表最新可发布稳定版本。beta 在 `develop` 上准备与验证，不创建 beta 到 `main` 的发布 PR。当前工作流只在 PR 合入 `main` 后发布，尚未适配从 `develop` 发布 beta；交稿须明确自动发布待适配，不宣称已支持或把 beta 合入 `main` 来绕过。
+- 稳定版本完成后，源分支就是 `develop`，只向 `main` 发起 PR；不另建发布分支，也不再向 `develop` 开回合 PR。hotfix 不在本 Skill 常规路径内处理。
 - 获取 main 仅用于只读比较和版本校验，不执行 `git merge`、会合并的 `git pull` 或 `git rebase` 来同步分支或消除 PR 冲突。发现分支分叉或冲突时报告状态，继续可独立完成的发布准备；分支同步和冲突处理须另有用户明确指示，不能作为创建 PR 的隐含步骤。
 - 获取完整历史和最新远端 tags（不强制改写已有 tag）。网络失败或浅克隆历史不全时明确范围未验证，不能把缺失 tag 当成首次发布。
 - 检查目标 tag 是否已存在于本地或远端。显式指定的版本重复或回退时明确拒绝，不擅自替用户改号；自动选择的版本遇到新的远端版本时重新获取基线并计算，若远端持续变化则暂停并说明，不无限重试。不移动、删除或复用公开 tag。
@@ -100,17 +101,15 @@ git log --no-merges --format=fuller "$PREV..$HEAD_SHA"
 - 发版准备按现行 AGENTS 和发版指南执行门禁：`flutter pub get --enforce-lockfile`、`flutter analyze`、`bash tool/test_full.sh`；Dart 改动另按规则格式化。使用 CI 指定包源，保留原锁文件，不顺便升级依赖。
 - 验证失败或无法执行时记录真实原因；不把文稿完成说成发布通过，不把 fake 测试说成真实安装验收。
 
-## 7. 交稿与发布、回合 PR
+## 7. 交稿与发布 PR
 
-交付目标 tag/通道、应用版本及 build number、基线 tag 与 `HEAD_SHA`、文稿链接、主题证据摘要、验证结果和待确认项。明确提醒：**请人工审读并修改更新说明，再随本次代码一起提交，稳定版本就绪后通过 PR 合入 main，并回合 develop。**
+交付目标 tag/通道、应用版本及 build number、基线 tag 与 `HEAD_SHA`、文稿链接、主题证据摘要、验证结果和待确认项。明确提醒：**请人工审读并修改更新说明，再随本次代码一起提交；稳定版本就绪后从 `develop` 向 `main` 发起 PR。**
 
 - 遵循项目“不自动提交”规则；除非用户在当前会话明确授权提交，否则先交付修改和可直接使用的 Conventional Commit 信息。不要为创建 PR 私自提交用户尚未审读的内容。
 - 同时准备 PR 标题与正文，正文说明用户变化、版本/范围、更新说明路径、验证和未完成事项。
 - 以下到 main 的发布 PR 步骤仅适用于已就绪的稳定版本；beta 按第 1 节自动化边界交稿。
-- 用户审读并提交后，核对 GitHub 仓库、源分支和 push 范围，将源分支推送到对应远端，通过 `gh` 创建到 `main` 的 PR。不能把不相关提交带入；沿用会话中已有的提交、推送和 PR 授权，不重复索要。
-- 先用 `gh pr list --base main --head <源分支> --state open` 检查已有 PR；有则用 `gh pr edit` 更新标题和正文，无则用 `gh pr create --base main --head <源分支> --title <标题> --body-file <正文文件>` 创建。正文文件保留真实换行。交付真实 PR URL，并通过 `gh pr view` 核对源分支、目标分支与状态。没有凭据、远端分支或必要授权时如实说明尚未创建并交付准备好的内容，不能伪报 PR URL。
-- “提交并发起 PR”指提交并推送源分支、在 GitHub 创建 PR，不授权本地 merge、rebase 或 `gh pr merge`。GitHub 报告 PR 冲突时交付 PR URL 和冲突状态，不自动修改分支历史；PR 由用户在 GitHub 审读并合并。
+- 用户审读并提交后，核对 GitHub 仓库、源分支和 push 范围，将 `develop` 推送到对应远端，通过 `gh` 创建到 `main` 的 PR。不能把不相关提交带入；沿用会话中已有的提交、推送和 PR 授权，不重复索要。
+- 先用 `gh pr list --base main --head develop --state open` 检查已有 PR；有则用 `gh pr edit` 更新标题和正文，无则用 `gh pr create --base main --head develop --title <标题> --body-file <正文文件>` 创建。正文文件保留真实换行。交付真实 PR URL，并通过 `gh pr view` 核对源分支、目标分支与状态。没有凭据、远端分支或必要授权时如实说明尚未创建并交付准备好的内容，不能伪报 PR URL。
+- “提交并发起 PR”指提交并推送 `develop`、在 GitHub 创建到 `main` 的 PR，不授权本地 merge、rebase 或 `gh pr merge`。GitHub 报告 PR 冲突时交付 PR URL 和冲突状态，不自动修改分支历史；PR 由用户在 GitHub 审读并合并。
 - 准备阶段不直接推送 main、不手工创建 tag 或 GitHub Release。提醒用户：PR 合并成功后会自动发布。流程固定合并提交，重新校验版本递增，通过测试和构建后自动创建指向该提交的 tag 并发布；合并后可跟踪 Actions 状态和 Release URL，不把 PR 创建等同于发布成功。
 - 发布完成后查看 Actions 的 tag 核验结果：远端当前版本 tag 必须存在且解析到本次合并 SHA。tag 由发布流程自动创建，核验失败不能报告发布流程成功，也不手工覆盖已有 tag。
-
-- 发布分支和紧急修复分支还须通过 `gh pr list --base develop --head <源分支> --state open` 检查回合 PR，使用 `gh pr create --base develop --head <源分支> --title <标题> --body-file <正文文件>` 创建，已有则用 `gh pr edit` 更新。交付两个目标 PR 的 URL 和状态，不自动合并。提醒用户在两个 PR 均合并且发布、标签成功后删除辅助分支，长期保留 main 和 develop。
