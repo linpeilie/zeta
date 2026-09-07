@@ -8,7 +8,7 @@ Documentation checked: 2026-09-07. Release operations and remote settings were n
 
 Create a PR targeting `main`, review the version and release notes, then merge it to trigger the [release workflow](../../../.github/workflows/release.yml). Closing an unmerged PR does not publish. No manual tag is required. Every stage uses the PR's fixed merge commit, even if main advances later.
 
-Use the project `$zeta-release` Skill to prepare a version, for example `v0.1.0-beta.13`. Human review, committing, and merging remain separate steps.
+Use the project `$zeta-release` Skill with an explicit version or just a beta/stable channel to select the next version automatically. Human review, committing, and merging remain separate steps.
 
 ## 2. Version and release notes
 
@@ -28,7 +28,33 @@ Example:
 version: 0.1.0+2
 ```
 
-The migration's `release.json` records the existing `0.1.0-beta.12` baseline; it is not a new release request. Before merging with the new workflow, select a higher version and add its notes through the Skill. The baseline cannot be republished.
+The migration's `release.json` records the existing `0.1.0-beta.12` baseline; it is not a new release request. Before merging with the new workflow, automatically select or explicitly specify a higher version and add its notes through the Skill. The baseline cannot be republished.
+
+### Automatic next-version selection
+
+Example requests:
+
+```text
+Use $zeta-release to publish a beta version.
+Use $zeta-release to publish a stable version.
+Use $zeta-release to prepare v0.2.0-beta.1.
+```
+
+A channel-only request does not require a version-number follow-up. Fetch complete history, current remote main and tags, then take the numeric maximum across all valid local/remote release tags, main's release version and the current `release.json` version. Do not restrict this baseline to one channel. An explicit version takes precedence; equal or older versions are rejected, not silently replaced.
+
+| Highest known version | Publish beta | Publish stable |
+| --- | --- | --- |
+| `0.1.0-beta.12` | `0.1.0-beta.13` | `0.1.0` |
+| `0.1.0` | `0.1.1-beta.1` | `0.1.1` |
+| `0.2.0-beta.9` | `0.2.0-beta.10` | `0.2.0` |
+
+From a beta baseline, increment its beta sequence or remove the suffix for stable. From a stable baseline, increment the patch number and append `-beta.1` for beta. Major/minor upgrades require an explicit full version; they are not inferred from commits.
+
+When continuing the same unpublished draft, reuse its version and BUILD if same-channel version changes, versioned notes or an existing PR establish that the target was already selected, and it remains above all tags and main's version. A configuration value alone is not draft evidence. Repeated preparation must not keep incrementing or reuse a published version.
+
+Only when complete history contains no valid release tags, main has no release version, and the current branch has no `release.json`, initialize from the `pubspec.yaml` core: `X.Y.Z-beta.1` for beta or `X.Y.Z` for stable. Invalid configuration, unavailable remotes and incomplete history require a reported pause, not first-release fallback. If neither channel nor version is given and context is unclear, ask only for the channel.
+
+Before editing, report the baseline and selected version, then continue without an extra confirmation step. Strict progression checks still apply. A new preparation uses the highest confirmed BUILD plus one; continuing a draft preserves it. Selection happens in the Skill, which writes the version files; CI reads the committed version without incrementing again. If new remote versions invalidate an automatic choice, refresh and recalculate; pause on persistent remote changes rather than retrying indefinitely.
 
 ## 3. Before releasing
 
