@@ -37,4 +37,4 @@ Local operation does not mean offline processing: an assistant may send content 
 - Large text and narrow windows stay readable, with keyboard access to key actions.
 - Errors offer a next step; missing data is not represented as success or zero usage.
 
-Outstanding platform checks are in the [work records](../../../.workflow/README.md). Requirements define intended behavior, not evidence that a test was performed.
+Requirements define intended behavior, not evidence that a test was performed.

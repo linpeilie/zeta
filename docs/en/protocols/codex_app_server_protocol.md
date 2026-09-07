@@ -83,7 +83,7 @@ On Windows, if the globally installed npm `codex` on `PATH` is outdated, the scr
    - Params / notification field changes on methods you already adapt
    - Server request response schemas, to avoid sending invalid replies
 4. Update the adapter and tests under `packages/zeta_agent_provider_codex` according to the diff.
-5. Update the Chinese and English protocol version notes and record actual verification results in `.workflow/`.
+5. Update the Chinese and English protocol version notes and record actual verification results, platform and CLI version.
 6. Smoke-test against a real `codex app-server` (stdio is the default; no extra flag is needed):
    - Core path: `python tool/smoke_codex_app_server.py --expected-version 0.144.5`
    - Experimental plan path: `python tool/smoke_codex_plan_mode.py --expected-version 0.144.5`
@@ -149,7 +149,7 @@ On 2026-07-23, `tool/smoke_codex_plan_mode.py` completed one redacted compatibil
 | Verified | Experimental initialize, Default/Plan catalog, Plan/Default settings, plan deltas, user question answering, mode switching only on the next turn, restart resume, local mode restore and settings convergence |
 | Scope of this result | This compatibility run does not replace target-version verification for `0.144.5` |
 
-A later `0.144.5` run on Darwin x64 passed 18/18 stable checks; experimental Plan still passed 18/19. See the [WP-E validation record](../../../.workflow/plan/2026-09-04-provider-plugin-packages/08-wpe-validation.md). The missing event remains in [pending verification](../../../.workflow/pending-validation.md).
+A later historical `0.144.5` run on Darwin x64 passed 18/18 stable checks and 18/19 experimental Plan checks; `turn/plan/updated` was absent. These results apply only to that version and environment. The original records remain in Git history.
 
 The smoke test emits only platform, version, schema mode, check names, method names and counts. It never emits or persists prompts, replies, file contents, credentials, raw JSONL, thread/turn ids or raw stderr. The script uses a temporary empty workspace and a read-only sandbox, and archives the threads it creates by default.
 
