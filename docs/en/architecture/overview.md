@@ -63,14 +63,16 @@ EffectRunner checks generation, runtime/epoch and required thread/turn scope bef
 
 | State | Owner | Write entry |
 | --- | --- | --- |
+| Current page, active project, selected thread, settings section | GoRouter (URL) | Navigation (`context.go` / `AppNavigationPort`) |
 | Runtime facts and timeline | RuntimeController / core | Event processing |
 | Conversation regions and command ledger | `AgentConversationSliceNotifier` | `AgentConversationActions` |
-| Workspace entry resources | `AgentConversationWorkspaceNotifier` | App orchestration |
+| Workspace entry resources | `AgentConversationWorkspaceNotifier` | App orchestration and route reconcile |
 | Project thread list and reverse index | `ProjectThreadsSliceNotifier` | `ProjectThreadsOperations` |
 | Management, detection and runtime summary | `AgentManagementSliceNotifier` | `AgentManagementOperations` and controlled ingress |
+| Composer drafts and timeline scroll | Presentation `AgentPaneRetention` | Pane deactivate / entry close |
 | Focus, popovers and IME state | Widget | Widget events |
 
-Cross-widget state has no parallel hand-written store or mirror Notifier. Runners take frozen dependencies and an owner/result sink, not a Ref used to resolve the owner again.
+Cross-widget business state has no parallel hand-written store or mirror Notifier. Location is not written through slice selection fields. Runners take frozen dependencies and an owner/result sink, not a Ref used to resolve the owner again.
 
 Commands freeze payload, owner lifetime and scope before queueing and recheck on return. Old handles cannot find a new entry through BindingKey. Cancellation and approvals do not wait for preference saves. Settling a caller Future does not prove I/O has drained.
 
@@ -92,7 +94,7 @@ Permissions, questions, provider plan approval and local execution handoff are s
 
 ## Workbench UI
 
-`IdeHome` composes one Workbench; pages fill Navigation, Canvas and Inspector. Retained pages lay out only the active page, avoiding `IndexedStack` for long timelines.
+`IdeHome` composes one Workbench; pages fill Navigation, Canvas and Inspector. The center column is the route's child; location is the URL. Composer drafts and scroll survive via presentation-layer retention. Do not use `IndexedStack` for long timelines.
 
 Timeline construction is limited to visible blocks, with parsing and projection cached by content revision. Resize must not reparse unchanged bodies. Floating plans and pending interactions are positioned in one layout pass without post-layout measurement feedback.
 

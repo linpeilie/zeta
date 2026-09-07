@@ -185,13 +185,25 @@ Composer 里的原子 chip，用 `U+FFFC` 占位符 + `WidgetSpan` 渲染成 `$n
 ## UI 骨架
 
 **Workbench（工作台）**
-`WindowFrame` + `IdeWorkbenchScaffold` 组成的常驻骨架。app 组合层创建和启动业务资源，`IdeHome` 订阅并组成界面；页面切换只换 slot 内容。
+`WindowFrame` + `IdeWorkbenchScaffold` 组成的常驻骨架。app 组合层创建和启动业务资源，`IdeHome` 订阅并组成界面。中栏内容是 `ShellRoute` 的 child；设置页压在壳之上。
 
 **Slot（槽位）**
 三个位置：Navigation（左）、Canvas（中）、Inspector（右）。feature 页面只提供 slot 内容，**不得替换顶层 workbench**。
 
+**路由位置（route location）**
+当前页、活动项目、选中会话和设置分区的唯一真源，编码为内部 URL。内容路由：`/`、`/project/:projectId`、`/project/:projectId/draft/:providerId`、`/project/:projectId/thread/:threadId`；设置：`/settings/:section`。Widget 用 `GoRouterState.of(context)` 读取；写位置走导航。细则见[开发者指南 §8](developer_guide.md#8-路由开发指南)。
+
+**projectId**
+项目规范化路径的 sha256 前 12 位十六进制。本机路径不进 URL、日志或指标。
+
+**AppNavigationPort**
+非 widget 层的导航出口（`go` / `replace`）。GoRouter 由组合根装配；application 对象不 import `go_router`。
+
+**AgentPaneRetention**
+按 RuntimeController 弱身份保存会话输入草稿和滚动偏移。pane `deactivate` 写入，`initState` 经 `initialScrollOffset` 恢复，entry 关闭时清除。
+
 **IdeRetainedPageView（保活页面栈）**
-跨页面保活的容器。延迟挂载、保留已访问页面的 State 和滚动位置、暂停离屏 ticker，并让非活动页退出焦点遍历。**不要用 `IndexedStack` 替代**——它会一直保留长时间线的布局开销。
+历史上用过的跨页面保活容器。新代码不要再扩大使用面；会话切换后的保留改走 retention/缓存 store 与路由直渲。**不要用 `IndexedStack` 替代**——它会一直保留长时间线的布局开销。
 
 **Graphite token（设计 token）**
 深色 Graphite Night / 浅色 Graphite Day 两套语义 token，唯一来源是 `IdeThemeScope`。`shadcn_flutter` 的 theme 只是投影，不能反向回读。业务代码禁止硬编码颜色、圆角和阴影。表面遵循严格单调的明度阶梯（frame → canvas → pane → control → popover），层级只靠阶梯加 1px 半透明描边表达，除浮层的极淡投影外全局零阴影。

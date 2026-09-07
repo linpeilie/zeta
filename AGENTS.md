@@ -13,9 +13,10 @@ Zeta 是连接本机 AI 编码助手的 Flutter 桌面应用。支持 Codex、Gr
 | 改动 | 必读 |
 | --- | --- |
 | 分层、状态、生命周期 | [工程规范 §1–3](docs/zh/architecture/engineering_standards.md) |
+| 路由、位置状态 | [工程规范 §3](docs/zh/architecture/engineering_standards.md#3-状态与异步编排)、[开发者指南 §8](docs/zh/development/developer_guide.md#8-路由开发指南) |
 | Provider、事件、流式消息、审批 | [工程规范 §4](docs/zh/architecture/engineering_standards.md#4-provider-与协议边界)、[开发者指南 §7](docs/zh/development/developer_guide.md#7-agent-provider-开发指南) |
-| UI、文案、性能 | [工程规范 §6](docs/zh/architecture/engineering_standards.md#6-ui-与交互)、[开发者指南 §8](docs/zh/development/developer_guide.md#8-ui-开发指南) |
-| 存储、统计、通知 | [工程规范 §5](docs/zh/architecture/engineering_standards.md#5-持久化与恢复)、[开发者指南 §9](docs/zh/development/developer_guide.md#9-会话和持久化) |
+| UI、文案、性能 | [工程规范 §6](docs/zh/architecture/engineering_standards.md#6-ui-与交互)、[开发者指南 §9](docs/zh/development/developer_guide.md#9-ui-开发指南) |
+| 存储、统计、通知 | [工程规范 §5](docs/zh/architecture/engineering_standards.md#5-持久化与恢复)、[开发者指南 §10](docs/zh/development/developer_guide.md#10-会话和持久化) |
 | 协议升级 | [Codex](docs/zh/protocols/codex_app_server_protocol.md)、[Claude Code](docs/zh/protocols/claude_code_stream_json_protocol.md) |
 | Markdown 渲染包 | [UPSTREAM.md](packages/zeta_markdown/UPSTREAM.md)；定制保留上游默认值，变更追加记录 |
 | 文档 | [文档维护](docs/zh/development/documentation.md) |
@@ -55,8 +56,9 @@ Session config 以端口为能力真源，结果走 `AgentCommandOutcome`；显�
 - 依赖方向：`main → app → presentation/application → domain`；`app → data → domain`。presentation 订阅 application 状态和命令契约；application 不依赖 presentation。
 - `domain` 无 Flutter、`dart:io` 或厂商协议。协议、CLI 配置与历史解析只在各 Provider 插件的 data 层；中立机制在 core/sdk，Zeta 自有状态在根应用。
 - 具体插件只由 manifest 导入；根测试实现类型只经 `test/src/testing/`。跨包只用公开 barrel，生产代码禁用 testing barrel。新 Provider 声明完整贡献，不能要求修改共享 Store 或其他插件。
-- 跨 Widget 状态由 application 的 `Notifier` / `AsyncNotifier` 独占；只用 `flutter_riverpod`，禁 Widget API、手写 listener 状态库、镜像 Notifier、延迟绑定及状态管理 codegen。Widget 临时状态留 presentation。
-- 依赖注入走 Riverpod overrides；组合根不覆盖调用方可替换的依赖。Runner 用工厂取得 owner/result sink，不反向查 provider。
+- 跨 Widget 的业务状态由 application 的 `Notifier` / `AsyncNotifier` 独占；位置（当前页、活动项目、选中会话、设置分区）以路由 URL 为唯一真源，slice 只作投影，写位置只走导航。会话级 UI 快照（输入草稿、滚动、Markdown/plan 缓存）经 presentation 层 retention/缓存 store 按 controller 弱身份承载，随 entry 关闭清除；禁止把切换后仍需保留的状态私藏在会被路由销毁的 widget State。只用 `flutter_riverpod`，禁 Widget API、手写 listener 状态库、镜像 Notifier、延迟绑定及状态管理 codegen。焦点、弹层、IME 等临时状态留 presentation。
+- GoRouter 由 app 层单例 Provider 持有，任何路径不得重建该实例。redirect 是同步纯函数，闭包内只 `ref.read`、禁止 `ref.watch`。Widget 读位置用 `GoRouterState.of(context)`；非 widget 消费方才用路由投影。细则见[开发者指南 §8](docs/zh/development/developer_guide.md#8-路由开发指南)。
+- 依赖注入走 Riverpod overrides；组合根不覆盖调用方可替换的依赖。Runner 用工厂取得 owner/result sink，不反向查 provider。application、domain 与 data 不得 import `go_router`；app 层需要导航的对象只依赖注入的导航端口。
 - UI 会话命令只经 `AgentConversationActions`；Project Threads 只经 `ProjectThreadsOperations`。旧句柄不得重新定位新 owner；异步结果复核 owner lifetime/scope，每个等待者恰好结算一次。
 - 业务资源显式关闭，不随页面退订释放。关闭复用同一 Future，先结算等待者并排空真实执行，再释放 entry/lease、BindingManager、registry、插件和容器；释放失败不得伪报成功。详见工程规范 §3。
 - 新代码进入对应 feature；跨 feature UI 复用进 `zeta_ui`，不建宽泛顶层目录。各内部包的依赖限制见工程规范 §2。
@@ -65,7 +67,7 @@ Session config 以端口为能力真源，结果走 `AgentCommandOutcome`；显�
 
 入口通过 `ZetaStorageBindings` 装配存储，业务层不拼本机路径。JSON 必须版本化、宽容解码；损坏或未知字段不能阻断恢复。
 
-配置、索引、缓存、日志、指标和通知不得保存 prompt、回复正文、工具输出、文件变更正文、原始错误、会话文件路径、环境变量值、凭据或原始协议。日志与指标只用既有端口和白名单。
+配置、索引、缓存、日志、指标和通知不得保存 prompt、回复正文、工具输出、文件变更正文、原始错误、会话文件路径、环境变量值、凭据、原始协议或路由位置参数（projectId、threadId、providerId、完整 URL、本机路径）。日志与指标只用既有端口和白名单；路由诊断必要时只落 route name。
 
 读取助手私有数据限于明确功能，不自动获得写权限。Claude 按需登录续期仅更新已选中的原 CLI 凭据存储：锁内重读、保留无关字段、校验写回，不迁移或另存副本；取消与审批不受续期阻塞。
 

@@ -63,14 +63,16 @@ EffectRunner 在执行前复核 generation、runtime/epoch 及所需 thread/turn
 
 | 状态 | 所有者 | 写入口 |
 | --- | --- | --- |
+| 当前页、活动项目、选中会话、设置分区 | GoRouter（URL） | 导航（`context.go` / `AppNavigationPort`） |
 | 会话运行事实与时间线 | RuntimeController / core | 事件处理链 |
 | 会话 regions 与命令账本 | `AgentConversationSliceNotifier` | `AgentConversationActions` |
-| Workspace entry 资源表 | `AgentConversationWorkspaceNotifier` | app 编排 |
+| Workspace entry 资源表 | `AgentConversationWorkspaceNotifier` | app 编排与路由 reconcile |
 | 项目会话列表与反查索引 | `ProjectThreadsSliceNotifier` | `ProjectThreadsOperations` |
 | 管理、检测与运行摘要 | `AgentManagementSliceNotifier` | `AgentManagementOperations` 与受控 ingress |
+| 会话输入草稿与滚动 | presentation `AgentPaneRetention` | pane deactivate / entry 关闭 |
 | 焦点、弹层、输入法状态 | Widget | Widget 事件 |
 
-跨 Widget 状态不再通过手写 Store 和镜像 Notifier 重复发布。Runner 接受冻结依赖及 owner/result sink，不持 Ref 反向解析状态。
+跨 Widget 业务状态不再通过手写 Store 和镜像 Notifier 重复发布。位置不写进 slice 选中字段。Runner 接受冻结依赖及 owner/result sink，不持 Ref 反向解析状态。
 
 会话命令入队时冻结 payload、owner lifetime 与 scope，回写前再次校验。旧句柄不能通过 BindingKey 找到新 entry。取消与审批不等待偏好保存；调用方 Future 结算不等于底层 I/O 已排空。
 
@@ -92,7 +94,7 @@ EffectRunner 在执行前复核 generation、runtime/epoch 及所需 thread/turn
 
 ## 工作台 UI
 
-`IdeHome` 组合唯一 Workbench 骨架，各页填充 Navigation、Canvas、Inspector。保留页面状态时只布局当前页面，不用 `IndexedStack` 同时布局长时间线。
+`IdeHome` 组合唯一 Workbench 骨架，各页填充 Navigation、Canvas、Inspector。中栏内容由路由直接渲染；位置以 URL 为真源。跨会话的草稿与滚动由 presentation 层 retention 保留，不用 `IndexedStack` 同时布局长时间线。
 
 时间线按可见块构建，解析和投影随内容版本缓存。resize 不应重复解析未变化正文；浮动计划与待确认区在单次布局内定位，不做布局后测高反馈。
 
