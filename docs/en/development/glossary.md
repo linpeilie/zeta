@@ -185,7 +185,7 @@ The approval/question card area pinned above the composer. Cards are removed onc
 ## UI skeleton
 
 **Workbench**
-The persistent skeleton of `WindowFrame` + `IdeWorkbenchScaffold`. The app composition layer creates and starts business resources; `IdeHome` subscribes and assembles the interface. The center column is the `ShellRoute` child; settings are pushed above the shell.
+The persistent skeleton of `WindowFrame` + `IdeWorkbenchScaffold`. The app composition layer creates and starts business resources; `IdeHome` subscribes and assembles the interface. The center column is the `ShellRoute` child; settings are pushed above the shell with matching chrome, and section switches `replace` in place.
 
 **Slot**
 Three positions: Navigation (left), Canvas (center), Inspector (right). Feature pages supply slot content and **must not replace the top-level workbench**.

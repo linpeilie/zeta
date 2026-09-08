@@ -1,6 +1,6 @@
 # 工程规范
 
-最后核对：2026-09-07（位置真源改为路由）
+最后核对：2026-09-08（设置页改为根导航全屏压栈）
 
 本文维护长期工程约束和专项细则。AI 开发核心规则见 [AGENTS.md](../../../AGENTS.md)，接入步骤见[开发者指南](../development/developer_guide.md)。
 
@@ -102,9 +102,9 @@ CI 使用自动发现的 package 矩阵，`test_packages.sh --only` 的分析与
 
 **位置与路由。** `appRouterProvider` 是 plain `Provider<GoRouter>`（非 autoDispose），创建一次并由 `ref.onDispose` 销毁；任何路径不得重建该实例。redirect 必须是同步纯函数（`resolveAppRedirect`）：根据 `AppRouteSnapshot` 规范化 URL，目标等于当前位置时返回 `null`，闭包内只 `ref.read` 组装快照，禁止 `ref.watch`（watch 会重建 provider，路由栈丢失）。`refreshListenable` 桥只订阅打开项目集合变化，listener 内做内容相等门控后再 `notifyListeners()`；恢复完成标记只在 redirect 内同步读取，启动后的位置切换用显式 `replace`，不经该桥。禁止把整个 workspace/会话 slice 接到 refresh 桥。
 
-Widget 内读位置一律 `GoRouterState.of(context)`（InheritedModel，与 Navigator 换页同帧）。Riverpod 路由投影只服务非 widget 消费方（reconcile、快照、日志），不得用于侧栏高亮或中栏选中态。写位置只走 `context.go` / `context.replace` 或注入的 `AppNavigationPort`；UI 与 app 编排不得再调用 slice 的选择方法作为显示入口。`RouterCoordinator` 只做资源 reconcile（打开项目、ensure draft/thread entry、释放），失败由目标页显示错误态；仅目标非法时才显式导航回落。projectId 是规范化路径 sha256 的前 12 位十六进制，本机路径不进 URL。
+Widget 内读位置一律 `GoRouterState.of(context)`（InheritedModel，与 Navigator 换页同帧）。Riverpod 路由投影只服务非 widget 消费方（reconcile、快照、日志），不得用于侧栏高亮或中栏选中态。写位置只走 `context.go` / `context.replace` / `context.push` 或注入的 `AppNavigationPort`；UI 与 app 编排不得再调用 slice 的选择方法作为显示入口。`RouterCoordinator` 只做资源 reconcile（打开项目、ensure draft/thread entry、释放），失败由目标页显示错误态；仅目标非法时才显式导航回落。projectId 是规范化路径 sha256 的前 12 位十六进制，本机路径不进 URL。
 
-内容路由（`/`、`/project/...`）使用 `NoTransitionPage` 并由路由 builder 直接渲染目标页。Page 使用 `state.pageKey` 按路由模式复用；参数变化只给目标页 Widget 设 Key。设置页 `/settings/:section` 用 `parentNavigatorKey` 压在壳之上。壳内用 Offstage 盖住内容路由时不得对内容子树关闭 `TickerMode`（Riverpod 3 会暂停 `ref.watch`）。跨会话仍需保留的输入草稿与滚动复用 `AgentPaneRetention`（Expando，按 controller 弱键；`deactivate` 保存、`initState` 经 `initialScrollOffset` 恢复、entry 关闭 `closeEntry` 清除）。Markdown 解析缓存与 plan revision drafts 放 presentation 层 `AgentPanePresentationStore`，同样按 controller 弱键，随 entry 关闭 dispose；pane `dispose` 或 controller 换代不得销毁这批缓存。焦点、弹层和 IME composing 不保留。切换后仍需保留却私藏在 widget State 的状态必须上移。
+内容路由（`/`、`/project/...`）使用 `NoTransitionPage` 并由路由 builder 直接渲染目标页。Page 使用 `state.pageKey` 按路由模式复用；参数变化只给目标页 Widget 设 Key。设置页 `/settings/:section` 用 `parentNavigatorKey` 压在壳之上：打开用 `push`、分区 `replace` 复用稳定 pageKey、关闭 `pop`，`onExit` 承接未保存确认。设置页 `CustomTransitionPage(opaque: false)`，避免根 Navigator 关掉下层 overlay ticker；壳被设置盖住时 Offstage，不得对内容子树关闭 `TickerMode`（Riverpod 3 会暂停 `ref.watch`）。跨会话仍需保留的输入草稿与滚动复用 `AgentPaneRetention`（Expando，按 controller 弱键；`deactivate` 保存、`initState` 经 `initialScrollOffset` 恢复、entry 关闭 `closeEntry` 清除）。Markdown 解析缓存与 plan revision drafts 放 presentation 层 `AgentPanePresentationStore`，同样按 controller 弱键，随 entry 关闭 dispose；pane `dispose` 或 controller 换代不得销毁这批缓存。焦点、弹层和 IME composing 不保留。切换后仍需保留却私藏在 widget State 的状态必须上移。
 
 **会话 UI 发布是两跳。** RuntimeController 经 AgentUiUpdateScheduler 投影 regions，application 的 AgentConversationSliceNotifier 对每个 request 做一次 RegionsRefreshed，再由纯 selector / AgentRegionBuilder 订阅。没有手写 Store 或镜像 Notifier；live-turn 增量通道保持不变。上下文面板显隐属于 Widget 状态。
 
@@ -573,11 +573,11 @@ Provider 契约测试。若 PR 因 Provider 差异修改 CoalescingPolicy/Buffer
 
 界面需保持可读的信息密度，支持键盘、文字放大和窄窗口。
 
-- `IdeHome` 是主要页面唯一的 Workbench 组合边界。首页、项目页、会话页由 `ShellRoute` 的 child 填入 Canvas；设置页作为全屏路由压在壳之上。Feature 页面不得另建或替换顶层骨架。
+- `IdeHome` 是内容页的 Workbench 组合边界。首页、项目页、会话页由 `ShellRoute` 的 child 填入 Canvas；设置页作为全屏路由压在壳之上，自带同等 `WindowFrame` chrome。内容 Feature 页面不得另建或替换顶层骨架。打开设置用 `push`，分区切换用 `replace` 与稳定 pageKey，关闭用 `pop`；`onExit` 承接未保存确认。
 - Workbench 负责布局模式、Pane 表面与 Overlay，Feature 负责业务内容、控制器和离开
   确认。设置页应通过 `SettingsNavigationPane` 与 `SettingsPageCanvas` 接入，
   `activeSection` 来自路由参数；不把设置分区或 Agent 配置规则下沉到共享 Scaffold。
-- 位置与中栏内容由路由直接渲染，高亮与内容同读 `GoRouterState.of(context)`。跨会话仍需保留的输入草稿、滚动偏移走 presentation 层 `AgentPaneRetention`；Markdown/plan 缓存走 presentation store。禁止用 `IndexedStack` 保留包含长时间线的页面或会话。可能因兄弟 slot 增删而换位的 Flex 子节点必须直接使用稳定 Key。设置页覆盖期间，被压栈的工作区路由在 Navigator 中自然保活。
+- 位置与中栏内容由路由直接渲染，高亮与内容同读 `GoRouterState.of(context)`。跨会话仍需保留的输入草稿、滚动偏移走 presentation 层 `AgentPaneRetention`；Markdown/plan 缓存走 presentation store。禁止用 `IndexedStack` 保留包含长时间线的页面或会话。可能因兄弟 slot 增删而换位的 Flex 子节点必须直接使用稳定 Key。设置页覆盖期间，被压栈的工作区路由在 Navigator 中自然保活；设置页必须 `opaque: false`，壳 Offstage 时不得关闭内容子树的 `TickerMode`。
 - 连续 resize 只允许按布局语义档位更新业务树。`IdeConstraintBucketBuilder` 的稳定
   callback 不得因父级每像素重建而失效；捕获了新配置的 callback 必须显式改变身份。
 - Agent 时间线必须使用 block / activity / footer 粒度的稳定 viewport item 与

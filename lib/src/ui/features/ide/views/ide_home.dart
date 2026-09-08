@@ -4,6 +4,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'package:zeta/src/features/agent_management/application/agent_management_slice/agent_management_slice_notifier.dart';
@@ -17,6 +18,7 @@ import 'package:zeta/src/app/menu_action_bridge.dart';
 import 'package:zeta/src/app/router/app_route_context.dart';
 import 'package:zeta/src/app/router/app_route_location.dart';
 import 'package:zeta/src/app/router/project_id_mapping.dart';
+import 'package:zeta/src/app/router/settings_route_intents.dart';
 import 'package:zeta/src/app/shell/ide_shell_controller.dart';
 import 'package:zeta/src/app/usage_statistics_slice/usage_statistics_providers.dart';
 import 'package:zeta_agent_core/zeta_agent_core.dart';
@@ -25,7 +27,6 @@ import 'package:zeta/src/features/desktop_notifications/domain/desktop_attention
 import 'package:zeta/src/features/agent_management/application/agent_management_operations.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_session_slice_notifier.dart';
 import 'package:zeta/src/features/settings/domain/settings_section.dart';
-import 'package:zeta/src/features/settings/presentation/settings_page.dart';
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_panel_slice/agent_usage_panel_slice_store.dart';
 import 'package:zeta/src/features/usage_statistics/application/agent_usage_refresh_coordinator.dart';
 import 'package:zeta/src/features/usage_statistics/presentation/agent_usage_panel.dart';
@@ -41,15 +42,16 @@ import 'package:zeta/src/features/workspace/application/workspace_notifier.dart'
 
 /// IDE 主界面壳。
 ///
-/// 标题栏、侧栏和设置/用量覆盖层仍由本组件持有；中栏内容是路由壳
-/// 下发的 [child]，必须始终留在树上。
+/// 标题栏、侧栏和用量覆盖层仍由本组件持有；中栏内容是路由壳下发的
+/// [child]，必须始终留在树上。设置页压在根导航上时，本壳保持挂载并
+/// Offstage，避免卸载会话页。
 ///
 /// 页面读取应用已启动的 Workbench，只拥有订阅和局部界面状态。
 /// entry、会话 owner、Shell 和运行资源都由组合根显式关闭。
 class IdeHome extends ConsumerStatefulWidget {
   const IdeHome({required this.child, super.key});
 
-  /// 当前内容路由页；设置/用量覆盖时仍保持挂载。
+  /// 当前内容路由页；设置压栈或用量覆盖时仍保持挂载。
   final Widget child;
 
   @override
@@ -98,24 +100,21 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
 
   /// Agent 统计弹层是否展开；弹层是临时 UI，不写入会话。
   bool _agentUsageExpanded = false;
-  bool _settingsPageMounted = false;
+  bool _usageStatisticsVisible = false;
   bool _usageStatisticsPageMounted = false;
+  bool? _lastSettingsCovering;
   IdeWorkbenchOverlay? _activeOverlay;
   FocusNode? _overlayTriggerFocusNode;
   double _leftPanelWidth = _initialPanelWidth;
   bool _leftPanelWidthDragging = false;
   double _rightPanelWidth = _initialPanelWidth;
   sf.ToastOverlay? _statusToast;
-  _IdeHomePage _page = _IdeHomePage.home;
-  SettingsSection _settingsSection = SettingsSection.general;
   final FocusNode _leftSidebarFocusNode = FocusNode(
     debugLabel: 'TitleBarLeftSidebarAction',
   );
   final FocusNode _rightSidebarFocusNode = FocusNode(
     debugLabel: 'TitleBarRightSidebarAction',
   );
-  final GlobalKey<SettingsPageCanvasState> _settingsCanvasKey =
-      GlobalKey<SettingsPageCanvasState>();
 
   AgentManagementOperations get _agentManagementOperations =>
       ref.read(agentManagementOperationsProvider);
@@ -242,7 +241,47 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
       }
       _updateDesktopAttentionVisibility();
     });
-    final homePage = _page == _IdeHomePage.home;
+    ref.listen(openUsageStatisticsAfterSettingsProvider, (previous, next) {
+      if (!next) {
+        return;
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        if (GoRouter.of(context).routerDelegate.currentConfiguration.isEmpty) {
+          return;
+        }
+        if (context.rootRouteLocation is SettingsLocation) {
+          return;
+        }
+        if (ref
+            .read(openUsageStatisticsAfterSettingsProvider.notifier)
+            .consume()) {
+          _openUsageStatisticsPage();
+        }
+      });
+    });
+    final router = GoRouter.of(context);
+    return ListenableBuilder(
+      listenable: router.routerDelegate,
+      builder: (context, _) {
+        return _buildWindow(context);
+      },
+    );
+  }
+
+  Widget _buildWindow(BuildContext context) {
+    final settingsCovering = _isSettingsCovering();
+    if (_lastSettingsCovering != settingsCovering) {
+      _lastSettingsCovering = settingsCovering;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _updateDesktopAttentionVisibility();
+        }
+      });
+    }
+    final homePage = !_usageStatisticsVisible;
     final leftSidebarVisible =
         homePage && _shellController.workbenchLayout.leftSidebarVisible;
     final workbenchWidth =
@@ -272,51 +311,40 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
       key: const ValueKey('ide-window-frame'),
       enableNativeWindowFrame: _windowHost.rendersNativeChrome,
       menus: _windowMenus(context),
-      titleBarLeadingActions: switch (_page) {
-        _IdeHomePage.home => <WindowTitleBarAction>[
-          WindowTitleBarAction(
-            key: const ValueKey('titlebar-left-sidebar-action'),
-            icon: leftSidebarVisible
-                ? sf.LucideIcons.panelLeftClose
-                : sf.LucideIcons.panelLeftOpen,
-            tooltip: leftSidebarVisible
-                ? context.l10n.workbenchHideLeftSidebar
-                : context.l10n.workbenchShowLeftSidebar,
-            semanticLabel: leftSidebarVisible
-                ? context.l10n.workbenchHideLeftSidebar
-                : context.l10n.workbenchShowLeftSidebar,
-            active: leftSidebarVisible,
-            focusNode: _leftSidebarFocusNode,
-            onPressed: () => _toggleLeftSidebar(_leftSidebarFocusNode),
-          ),
-        ],
-        // 设置页 / 使用统计页脱离主界面栈，标题栏折叠位改为返回主界面。
-        _IdeHomePage.settings => <WindowTitleBarAction>[
-          WindowTitleBarAction(
-            key: const ValueKey('titlebar-back-action'),
-            icon: Icons.arrow_back_rounded,
-            tooltip: context.l10n.workbenchBackToHome,
-            semanticLabel: context.l10n.workbenchBackToHome,
-            onPressed: () => unawaited(_closeSettingsPage()),
-          ),
-        ],
-        _IdeHomePage.usageStatistics => <WindowTitleBarAction>[
-          WindowTitleBarAction(
-            key: const ValueKey('titlebar-back-action'),
-            icon: Icons.arrow_back_rounded,
-            tooltip: context.l10n.workbenchBackToHome,
-            semanticLabel: context.l10n.workbenchBackToHome,
-            onPressed: _closeUsageStatisticsPage,
-          ),
-        ],
-      },
+      titleBarLeadingActions: homePage
+          ? <WindowTitleBarAction>[
+              WindowTitleBarAction(
+                key: const ValueKey('titlebar-left-sidebar-action'),
+                icon: leftSidebarVisible
+                    ? sf.LucideIcons.panelLeftClose
+                    : sf.LucideIcons.panelLeftOpen,
+                tooltip: leftSidebarVisible
+                    ? context.l10n.workbenchHideLeftSidebar
+                    : context.l10n.workbenchShowLeftSidebar,
+                semanticLabel: leftSidebarVisible
+                    ? context.l10n.workbenchHideLeftSidebar
+                    : context.l10n.workbenchShowLeftSidebar,
+                active: leftSidebarVisible,
+                focusNode: _leftSidebarFocusNode,
+                onPressed: () => _toggleLeftSidebar(_leftSidebarFocusNode),
+              ),
+            ]
+          : <WindowTitleBarAction>[
+              WindowTitleBarAction(
+                key: const ValueKey('titlebar-back-action'),
+                icon: Icons.arrow_back_rounded,
+                tooltip: context.l10n.workbenchBackToHome,
+                semanticLabel: context.l10n.workbenchBackToHome,
+                onPressed: _closeUsageStatisticsPage,
+              ),
+            ],
       titleBarActions: <WindowTitleBarAction>[
         WindowTitleBarAction(
           key: const ValueKey('titlebar-usage-statistics-action'),
           icon: sf.LucideIcons.chartLine,
           tooltip: context.l10n.workbenchUsageStatistics,
           semanticLabel: context.l10n.workbenchOpenUsageStatistics,
-          active: _page == _IdeHomePage.usageStatistics,
+          active: _usageStatisticsVisible,
           onPressed: _openUsageStatisticsPage,
         ),
         WindowTitleBarAction(
@@ -324,7 +352,6 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
           icon: sf.RadixIcons.mixerHorizontal,
           tooltip: 'Settings',
           semanticLabel: context.l10n.workbenchOpenSettings,
-          active: _page == _IdeHomePage.settings,
           onPressed: _openSettingsPage,
         ),
         WindowTitleBarAction(
@@ -365,7 +392,18 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
       ),
     );
 
-    return body;
+    // 结构保持稳定，只切换 offstage：父级从有到无会重建 WindowFrame Element，
+    // 设置返回后保活断言会失败。
+    return Offstage(
+      offstage: settingsCovering,
+      child: ExcludeFocus(
+        excluding: settingsCovering,
+        child: IgnorePointer(
+          ignoring: settingsCovering,
+          child: ExcludeSemantics(excluding: settingsCovering, child: body),
+        ),
+      ),
+    );
   }
 
   List<WindowMenu> _windowMenus(BuildContext context) {
@@ -397,16 +435,11 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
   ///
   /// - Agent 首页：Wide/Medium 内联 Navigation，Inspector 仅 Wide 内联；其余
   ///   模式通过 Workbench Overlay 展示对应 Pane。
-  /// - 设置与 Agent 管理：不显示 Activity Rail，设置 Navigation 在所有模式下
-  ///   保持内联，不提供 Inspector。
   /// - 使用统计：不显示 Activity Rail，只提供 Canvas。
   Widget _buildWorkbench() {
-    final homePage = _page == _IdeHomePage.home;
-    final settingsPage = _page == _IdeHomePage.settings;
+    final homePage = !_usageStatisticsVisible;
     final workbenchLayout = _shellController.workbenchLayout;
-    final navigationVisible = settingsPage
-        ? true
-        : homePage && workbenchLayout.leftSidebarVisible;
+    final navigationVisible = homePage && workbenchLayout.leftSidebarVisible;
     final inspectorVisible = homePage && _rightSidebarVisible;
     final activeOverlay = _activeOverlay == IdeWorkbenchOverlay.inspector
         ? IdeWorkbenchOverlay.inspector
@@ -415,22 +448,11 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
         : null;
     return IdeWorkbenchScaffold(
       key: const ValueKey('ide-workbench'),
-      navigationPane: settingsPage
-          ? SettingsNavigationPane(
-              activeSection: _settingsSection,
-              showAgentManagement: true,
-              onSectionSelected: (section) {
-                unawaited(_selectSettingsSection(section));
-              },
-            )
-          : homePage
-          ? _buildLeftPanel()
-          : null,
+      navigationPane: homePage ? _buildLeftPanel() : null,
       navigationResizeHandle: navigationVisible
           ? _buildNavigationResizeHandle()
           : null,
       navigationVisible: navigationVisible,
-      navigationInlineInCompact: settingsPage,
       navigationWidth: _leftPanelWidth,
       canvas: _buildOverlayCanvas(),
       inspectorPane: homePage ? _buildFilesPanel() : null,
@@ -445,14 +467,12 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
     );
   }
 
-  /// Home 画布是路由 child，必须留在树上；设置/用量用 Offstage 盖住。
+  /// Home 画布是路由 child，必须留在树上；用量用 Offstage 盖住。
   ///
   /// Home 不能关 [TickerMode]：Riverpod 3 会在 `TickerMode` 关闭时暂停
   /// `ref.watch`，盖住画布时设置改快捷键等订阅会丢。
   Widget _buildOverlayCanvas() {
-    final homePage = _page == _IdeHomePage.home;
-    final settingsPage = _page == _IdeHomePage.settings;
-    final usagePage = _page == _IdeHomePage.usageStatistics;
+    final homePage = !_usageStatisticsVisible;
     return Stack(
       fit: StackFit.expand,
       children: <Widget>[
@@ -465,17 +485,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
           ),
         ),
         _gatedCanvasPage(
-          active: settingsPage,
-          child: _settingsPageMounted
-              ? SettingsPageCanvas(
-                  key: _settingsCanvasKey,
-                  activeSection: _settingsSection,
-                  showAgentManagement: true,
-                )
-              : const SizedBox.shrink(),
-        ),
-        _gatedCanvasPage(
-          active: usagePage,
+          active: _usageStatisticsVisible,
           child: _usageStatisticsPageMounted
               ? _buildUsageStatisticsPage()
               : const SizedBox.shrink(),
@@ -799,7 +809,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
       });
       return;
     }
-    if (_page == _IdeHomePage.home &&
+    if (!_usageStatisticsVisible &&
         _shellController.workbenchLayout.leftSidebarVisible) {
       _overlayTriggerFocusNode = null;
       _shellController.setLeftSidebarVisible(false);
@@ -874,6 +884,18 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
       (_shellController.workbenchLayout.leftSidebarWidth ?? _initialPanelWidth)
           .clamp(_minPanelWidth, _maxPanelWidth);
 
+  bool _isSettingsCovering() {
+    final router = GoRouter.maybeOf(context);
+    if (router == null) {
+      return false;
+    }
+    final configuration = router.routerDelegate.currentConfiguration;
+    if (configuration.isEmpty) {
+      return false;
+    }
+    return parseAppRouteLocation(router.state.uri) is SettingsLocation;
+  }
+
   void _updateDesktopAttentionVisibility() {
     if (!mounted) {
       return;
@@ -884,7 +906,8 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
         DesktopAttentionVisibility(
           windowFocused: ref.read(zetaWindowSurfaceProvider).focused,
           agentCanvasVisible:
-              _page == _IdeHomePage.home &&
+              !_isSettingsCovering() &&
+              !_usageStatisticsVisible &&
               !_shellController.isProjectHomeActive,
           providerId: entry?.providerId,
           threadId: entry?.threadId,
@@ -910,7 +933,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
       return activated;
     }
     setState(() {
-      _page = _IdeHomePage.home;
+      _usageStatisticsVisible = false;
       _activeOverlay = null;
       _overlayTriggerFocusNode = null;
     });
@@ -952,26 +975,22 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
   }
 
   void _openSettingsPage() {
-    if (_page == _IdeHomePage.settings) {
+    if (context.rootRouteLocation is SettingsLocation) {
       return;
     }
-    setState(() {
-      _settingsPageMounted = true;
-      _page = _IdeHomePage.settings;
-      _settingsSection = SettingsSection.general;
-      _activeOverlay = null;
-      _overlayTriggerFocusNode = null;
-    });
-    _updateDesktopAttentionVisibility();
+    if (_usageStatisticsVisible) {
+      _closeUsageStatisticsPage();
+    }
+    context.pushLocation(const SettingsLocation(SettingsSection.general));
   }
 
   void _openUsageStatisticsPage() {
-    if (_page == _IdeHomePage.usageStatistics) {
+    if (_usageStatisticsVisible) {
       return;
     }
     setState(() {
       _usageStatisticsPageMounted = true;
-      _page = _IdeHomePage.usageStatistics;
+      _usageStatisticsVisible = true;
       _activeOverlay = null;
       _overlayTriggerFocusNode = null;
     });
@@ -979,11 +998,11 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
   }
 
   void _closeUsageStatisticsPage() {
-    if (_page != _IdeHomePage.usageStatistics) {
+    if (!_usageStatisticsVisible) {
       return;
     }
     setState(() {
-      _page = _IdeHomePage.home;
+      _usageStatisticsVisible = false;
       _activeOverlay = null;
       _overlayTriggerFocusNode = null;
     });
@@ -991,44 +1010,12 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
   }
 
   void _openAgentManagementFromUsage() {
-    setState(() {
-      _settingsPageMounted = true;
-      _page = _IdeHomePage.settings;
-      _settingsSection = SettingsSection.agents;
-      _activeOverlay = null;
-      _overlayTriggerFocusNode = null;
-    });
-    _updateDesktopAttentionVisibility();
-  }
-
-  Future<void> _selectSettingsSection(SettingsSection section) async {
-    if (section == _settingsSection ||
-        !(await _settingsCanvasKey.currentState?.confirmCanLeave() ?? true) ||
-        !mounted) {
-      return;
+    if (_usageStatisticsVisible) {
+      _closeUsageStatisticsPage();
     }
-    setState(() {
-      _settingsSection = section;
-    });
-    _updateDesktopAttentionVisibility();
-  }
-
-  Future<void> _closeSettingsPage() async {
-    if (_page != _IdeHomePage.settings ||
-        !(await _settingsCanvasKey.currentState?.confirmCanLeave() ?? true) ||
-        !mounted) {
-      return;
-    }
-    setState(() {
-      _page = _IdeHomePage.home;
-      _activeOverlay = null;
-      _overlayTriggerFocusNode = null;
-    });
-    _updateDesktopAttentionVisibility();
+    context.pushLocation(const SettingsLocation(SettingsSection.agents));
   }
 }
-
-enum _IdeHomePage { home, settings, usageStatistics }
 
 /// 仅窗口表现偏好；无业务 owner、controller 或输入正文。
 final _ideHomeUiMemoryProvider = Provider((ref) => _IdeHomeUiMemory());

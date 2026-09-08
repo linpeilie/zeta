@@ -1,6 +1,6 @@
 # 开发者文档
 
-最后核对：2026-09-08（路由直渲中栏，删除保活栈）
+最后核对：2026-09-08（设置页改为根导航全屏压栈）
 
 本文面向贡献者，保留环境、命令和专项接入清单。分层与生命周期约束见[工程规范](../architecture/engineering_standards.md)，文档改动见[文档维护](documentation.md)。
 
@@ -642,7 +642,7 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
 
 `projectId` 是项目规范化路径 sha256 的前 12 位十六进制，本机路径不进 URL。id 与参数字符集限定 `[A-Za-z0-9_-]`。threadId 复用现有会话 id，并依赖其全局唯一（当前均为 UUID）；reconcile 用映射或深链 payload 中的 providerId 校验归属。
 
-内容路由（`/`、`/project/...`）声明在 `ShellRoute` 内，builder 直接渲染中栏页面。设置路由使用 `parentNavigatorKey: rootNavigatorKey`，压在整个壳之上。
+内容路由（`/`、`/project/...`）声明在 `ShellRoute` 内，builder 直接渲染中栏页面。设置路由使用 `parentNavigatorKey: rootNavigatorKey`，压在整个壳之上。打开设置必须 `push`（`pushLocation`），不能 `go`：`go('/settings/...')` 会卸掉壳内内容路由，会话页随之销毁。分区切换用 `replace`（`replaceLocation`）并复用稳定 pageKey `settings-page`，画布原位更新、不叠第二层。关闭用 `pop`；`GoRoute.onExit` 询问未保存的 Agent 配置，用户取消则阻止离开。设置页用 `CustomTransitionPage(opaque: false)`：默认不透明 `NoTransitionPage` 会让根 Navigator 关掉下层 overlay 的 ticker；`TickerMode(enabled: true)` 不能覆盖祖先（AND）。壳再用 Offstage 藏工作区，Riverpod 3 订阅保持活着。
 
 ### Router 单例
 
@@ -660,8 +660,8 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
 
 ### 读位置与写位置
 
-- Widget 内读当前位置用 `GoRouterState.of(context)`（与换页同帧）。侧栏高亮与中栏内容必须同源，不得用晚一帧的 Riverpod 投影驱动显示选中态。
-- UI 写位置走 `context.go` / `context.replace`（或 `goLocation` 扩展）。app 层对象（workspace notifier、shell controller、通知深链）只依赖注入的 `AppNavigationPort`，不 import `go_router`。
+- Widget 内读当前位置用 `GoRouterState.of(context)`（与换页同帧）。侧栏高亮与中栏内容必须同源，不得用晚一帧的 Riverpod 投影驱动显示选中态。壳要判断设置是否盖住时读顶层 URI（`GoRouter.state.uri` / `rootRouteLocation`），不要用壳内 `routeLocation`。
+- UI 写位置走 `context.go` / `context.replace` / `context.push`（或 `goLocation` / `replaceLocation` / `pushLocation` 扩展）。app 层对象（workspace notifier、shell controller、通知深链）只依赖注入的 `AppNavigationPort`，不 import `go_router`。
 - 禁止再把 slice 的 `selectThread` / `selectEntry` / `selectKnownProject` 当作显示入口。资源副作用由 `RouterCoordinator` 按路由位置 reconcile，走既有 intent/EffectRunner（G3）。
 - 新建会话：先导航到 draft URL，reconcile 再 `ensureDraftEntry`（不建 provider session）；首发消息得到 threadId 后 `replace` 到 thread URL。
 - Provider 切换：`ensureDraftEntry` 保留；内部选中改为导航到目标 provider 的 draft URL。
@@ -673,7 +673,7 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
 3. 滚动恢复只走 `IdeSmoothScrollController(initialScrollOffset:)`，在 ScrollPosition 创建时生效。
 4. 高亮与中栏同读 `GoRouterState.of(context)`，切换帧内不出现「旧高亮 + 新内容」或相反。
 5. 切换 reconcile 不得重拉会话列表；`refreshListenable` 保持单输入与内容门控。
-6. 壳内用 Offstage 盖住内容路由时，不得对内容子树关闭 `TickerMode`：Riverpod 3 会据此暂停 `ref.watch`。
+6. 壳内用 Offstage 盖住内容路由时，不得对内容子树关闭 `TickerMode`：Riverpod 3 会据此暂停 `ref.watch`。压在根导航上的设置页必须 `opaque: false`，否则 Navigator 会关掉下层 overlay ticker，子树无法自行打开。
 
 ### 会话 UI 状态
 
@@ -695,8 +695,10 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
 
 ## 9. UI 开发指南
 
-- `IdeHome` 持有主要页面唯一的 `WindowFrame` 和 `IdeWorkbenchScaffold`。新增主要页面时
+- `IdeHome` 持有内容页的 `WindowFrame` 和 `IdeWorkbenchScaffold`。新增内容页面时
   只提供 Navigation、Canvas、Inspector slot 内容，不得用页面组件替换整个 Workbench。
+  设置页是根导航压栈，自带同等 chrome 盖住壳；壳保持挂载（Offstage），不关
+  `TickerMode`。
 - 工作台外圈 padding 只写在 `IdeHome`：左右与底部 `IdeSpacing.space8`，顶部
   `space0` 与标题栏贴齐，标题栏不再画底部分隔线。Scaffold 外侧贴边，rail 只保留
   内侧 `space4`；Feature 页不要再套一层窗口级外距。

@@ -185,7 +185,7 @@ Composer 里的原子 chip，用 `U+FFFC` 占位符 + `WidgetSpan` 渲染成 `$n
 ## UI 骨架
 
 **Workbench（工作台）**
-`WindowFrame` + `IdeWorkbenchScaffold` 组成的常驻骨架。app 组合层创建和启动业务资源，`IdeHome` 订阅并组成界面。中栏内容是 `ShellRoute` 的 child；设置页压在壳之上。
+`WindowFrame` + `IdeWorkbenchScaffold` 组成的常驻骨架。app 组合层创建和启动业务资源，`IdeHome` 订阅并组成界面。中栏内容是 `ShellRoute` 的 child；设置页压在壳之上（`push`），自带同等 chrome，分区 `replace` 原位更新。
 
 **Slot（槽位）**
 三个位置：Navigation（左）、Canvas（中）、Inspector（右）。feature 页面只提供 slot 内容，**不得替换顶层 workbench**。
