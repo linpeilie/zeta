@@ -1,9 +1,12 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 
+import 'package:zeta/src/app/composition/workbench_session_providers.dart';
 import 'package:zeta/src/app/desktop_attention_slice/desktop_attention_providers.dart';
 import 'package:zeta/src/app/desktop_attention_slice/desktop_attention_slice_runner.dart';
 import 'package:zeta/src/app/localization/zeta_text_catalog_providers.dart';
 import 'package:zeta/src/app/settings_slice/settings_slice_notification_source.dart';
+import 'package:zeta/src/app/window/zeta_window_host.dart';
 import 'package:zeta/src/features/desktop_notifications/application/desktop_attention_slice_notifier.dart';
 
 /// Desktop Attention 切片的组合根装配。
@@ -31,9 +34,25 @@ List<Override> desktopAttentionSliceOverrides() {
         notificationService: notificationService,
         indicator: indicator,
         notificationSettingsSource: notificationSettingsSource,
-        activateTarget: relay.call,
+        activateTarget: (providerId, threadId) {
+          if (relay.isBound) {
+            return relay.call(providerId, threadId);
+          }
+          return _activateFromRouter(ref, providerId, threadId);
+        },
         textCatalog: textCatalog,
       );
     }),
   ];
+}
+
+Future<bool> _activateFromRouter(
+  Ref ref,
+  String providerId,
+  String threadId,
+) async {
+  await ref.read(zetaWindowHostProvider).revealWindow();
+  return ref
+      .read(routerCoordinatorProvider)
+      .activateThreadFromDeepLink(providerId, threadId);
 }

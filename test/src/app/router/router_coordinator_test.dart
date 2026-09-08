@@ -167,14 +167,74 @@ void main() {
       ),
     );
   });
+
+  test('deep link waits for restore then opens the thread', () async {
+    host.restoreGate = Completer<void>();
+    host.projectPathByThread['tid'] = _projectPath;
+    final pending = coordinator.activateThreadFromDeepLink('codex', 'tid');
+    await Future<void>.delayed(Duration.zero);
+    expect(navigation.goes, isEmpty);
+    expect(host.calls, isEmpty);
+
+    host.restoreGate.complete();
+    expect(await pending, isTrue);
+    expect(navigation.goes, <AppRouteLocation>[
+      ThreadLocation(projectId, 'tid'),
+    ]);
+    expect(host.calls, <String>['thread:$_projectPath:tid']);
+  });
+
+  test(
+    'deep link returns false without navigating when the thread is unknown',
+    () async {
+      expect(
+        await coordinator.activateThreadFromDeepLink('codex', 'missing'),
+        isFalse,
+      );
+      expect(navigation.goes, isEmpty);
+      expect(host.calls, isEmpty);
+    },
+  );
+
+  test('deep link failure after go returns false', () async {
+    host.projectPathByThread['tid'] = _projectPath;
+    host.openThreadResult = false;
+    expect(
+      await coordinator.activateThreadFromDeepLink('codex', 'tid'),
+      isFalse,
+    );
+    expect(navigation.goes, <AppRouteLocation>[
+      ThreadLocation(projectId, 'tid'),
+    ]);
+    expect(
+      status(),
+      RouteReconcileFailed(
+        ThreadLocation(projectId, 'tid'),
+        RouteReconcileReason.conversationOpenFailed,
+      ),
+    );
+  });
 }
 
 final class _FakeReconcileHost implements RouteReconcileHost {
+  Completer<void> restoreGate = Completer<void>()..complete();
+  final Map<String, String> projectPathByThread = <String, String>{};
   final List<String> calls = <String>[];
   Completer<void>? gate;
   Completer<void>? entered;
   bool openThreadResult = true;
   Object? throwOnOpen;
+
+  @override
+  Future<void> get initialRestoreDone => restoreGate.future;
+
+  @override
+  String? projectPathForThread({
+    required String threadId,
+    String? providerIdHint,
+  }) {
+    return projectPathByThread[threadId];
+  }
 
   @override
   Future<void> openProjectHomeFromRoute(String projectPath) async {

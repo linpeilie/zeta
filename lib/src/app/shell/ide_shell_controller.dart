@@ -200,6 +200,7 @@ class IdeShellController implements RouteReconcileHost {
       ideSessionOperations.state.initialRestoreCompleted;
 
   /// 等待启动会话恢复收敛，供冷启动通知定位避免与恢复竞态。
+  @override
   Future<void> get initialRestoreDone =>
       ideSessionOperations.initialRestoreDone;
 
@@ -457,6 +458,17 @@ class IdeShellController implements RouteReconcileHost {
     } catch (_) {
       return;
     }
+  }
+
+  @override
+  String? projectPathForThread({
+    required String threadId,
+    String? providerIdHint,
+  }) {
+    return resolveThreadTarget(
+      threadId: threadId,
+      providerIdHint: providerIdHint,
+    )?.projectPath;
   }
 
   @override

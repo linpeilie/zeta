@@ -3,9 +3,9 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_workspace_notifier.dart';
 import 'package:zeta/src/app/router/app_route_location.dart';
 import 'package:zeta/src/app/router/project_id_mapping.dart';
+import 'package:zeta/src/app/router/restore_route_location.dart';
 import 'package:zeta/src/app/router/route_reconcile_host.dart';
 import 'package:zeta/src/app/router/route_reconcile_status.dart';
 import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_session_slice_notifier.dart';
@@ -45,6 +45,8 @@ final class RouterCoordinator {
   final Map<int, Completer<bool>> _reconcileWaiters = <int, Completer<bool>>{};
   ProviderSubscription<bool>? _restoreSub;
   bool _restoreReplaceAttempted = false;
+
+  static const Duration _deepLinkTimeout = Duration(seconds: 10);
 
   RouteReconcileHost get _host => _readHost();
 
@@ -126,14 +128,16 @@ final class RouterCoordinator {
     }
     _restoreReplaceAttempted = true;
     final current = parseAppRouteLocation(_routerUri(router));
-    if (current is! GlobalHomeLocation) {
-      return;
-    }
     final canonical = _canonicalLocationAfterRestore();
-    if (canonical is GlobalHomeLocation) {
+    final target = restoreReplaceTarget(
+      current: current,
+      restoreCompleted: true,
+      canonical: canonical,
+    );
+    if (target == null) {
       return;
     }
-    router.replace(canonical.toPath());
+    _navigation.replace(target);
   }
 
   AppRouteLocation _canonicalLocationAfterRestore() {
@@ -141,21 +145,52 @@ final class RouterCoordinator {
     _mapping.syncProjects(
       workspace.openProjects.map((project) => project.path),
     );
-    final path = workspace.activeProjectPath;
-    if (path == null) {
-      return const GlobalHomeLocation();
+    return canonicalLocationAfterRestore(
+      activeProjectPath: workspace.activeProjectPath,
+      mapping: _mapping,
+    );
+  }
+
+  /// 通知深链：恢复完成后再 `go` 到会话 URL，reconcile 打开资源。
+  Future<bool> activateThreadFromDeepLink(
+    String providerId,
+    String threadId,
+  ) async {
+    await _host.initialRestoreDone;
+    if (_disposed) {
+      return false;
     }
-    final projectId = _mapping.idForPath(path);
+    final projectPath = _host.projectPathForThread(
+      threadId: threadId,
+      providerIdHint: providerId,
+    );
+    if (projectPath == null) {
+      return false;
+    }
+    var projectId = _mapping.idForPath(projectPath);
     if (projectId == null) {
-      return const GlobalHomeLocation();
+      final workspace = _ref.read(workspaceProvider);
+      _mapping.syncProjects(
+        workspace.openProjects.map((project) => project.path),
+      );
+      projectId = _mapping.idForPath(projectPath);
     }
-    final threadId = _ref
-        .read(agentConversationWorkspaceProvider)
-        .threadIdsByProject[path];
-    if (threadId == null || threadId.isEmpty) {
-      return ProjectHomeLocation(projectId);
+    if (projectId == null) {
+      return false;
     }
-    return ThreadLocation(projectId, threadId);
+    final location = ThreadLocation(projectId, threadId);
+    final seqBefore = _seq;
+    _navigation.go(location);
+    if (_disposed) {
+      return false;
+    }
+    if (_seq != seqBefore) {
+      final waiter = _reconcileWaiters[_seq];
+      if (waiter != null) {
+        return waiter.future.timeout(_deepLinkTimeout, onTimeout: () => false);
+      }
+    }
+    return reconcile(location);
   }
 
   /// GoRouter.state 在尚未解析首屏匹配时为空；此时读信息提供者上的 URI。

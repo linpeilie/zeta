@@ -266,6 +266,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
     return ListenableBuilder(
       listenable: router.routerDelegate,
       builder: (context, _) {
+        _closeUsageWhenConversationRoute();
         return _buildWindow(context);
       },
     );
@@ -916,46 +917,44 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
     );
   }
 
+  void _closeUsageWhenConversationRoute() {
+    if (!_usageStatisticsVisible) {
+      return;
+    }
+    final location = context.routeLocation;
+    if (location is! ThreadLocation && location is! DraftThreadLocation) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _usageStatisticsVisible) {
+        _closeUsageStatisticsPage();
+      }
+    });
+  }
+
   Future<bool> _activateAttentionTarget(
     String providerId,
     String threadId,
   ) async {
-    await _shellController.initialRestoreDone;
+    await _windowHost.revealWindow();
     if (!mounted) {
       return false;
     }
-    await _windowHost.revealWindow();
-    final activated = await _shellController.activateAgentThread(
-      providerId: providerId,
-      threadId: threadId,
-    );
+    if (_usageStatisticsVisible) {
+      _closeUsageStatisticsPage();
+    }
+    final activated = await ref
+        .read(routerCoordinatorProvider)
+        .activateThreadFromDeepLink(providerId, threadId);
     if (!mounted) {
       return activated;
     }
-    setState(() {
-      _usageStatisticsVisible = false;
-      _activeOverlay = null;
-      _overlayTriggerFocusNode = null;
-    });
     if (!activated) {
       showIdeToast(
         context,
         message: context.l10n.workbenchCannotOpenNotificationThread,
         tone: IdeToastTone.error,
       );
-    } else {
-      final selected =
-          _shellController.agentConversationWorkspace.selectedEntry;
-      final projectPath = selected?.projectPath;
-      final selectedThreadId = selected?.threadId;
-      if (projectPath != null && selectedThreadId != null) {
-        final mapping = ref.read(projectIdMappingProvider);
-        mapping.syncProjects(_shellController.projects);
-        final projectId = mapping.idForPath(projectPath);
-        if (projectId != null) {
-          context.goLocation(ThreadLocation(projectId, selectedThreadId));
-        }
-      }
     }
     _updateDesktopAttentionVisibility();
     return activated;

@@ -1,6 +1,6 @@
 # 工程规范
 
-最后核对：2026-09-08（设置页改为根导航全屏压栈）
+最后核对：2026-09-08（通知深链与启动恢复走路由）
 
 本文维护长期工程约束和专项细则。AI 开发核心规则见 [AGENTS.md](../../../AGENTS.md)，接入步骤见[开发者指南](../development/developer_guide.md)。
 
@@ -100,7 +100,7 @@ CI 使用自动发现的 package 矩阵，`test_packages.sh --only` 的分析与
 
 只从 `flutter_riverpod` 导入，必要时使用其 `misc.dart`。不直接导入传递依赖 `riverpod`，不引入状态管理 codegen。application 同时禁止直接导入 `package:flutter/` 与 `package:go_router/`；跨包 barrel 带入的 Widget 符号也不例外。守卫：`feature_layering_guard_test`。
 
-**位置与路由。** `appRouterProvider` 是 plain `Provider<GoRouter>`（非 autoDispose），创建一次并由 `ref.onDispose` 销毁；任何路径不得重建该实例。redirect 必须是同步纯函数（`resolveAppRedirect`）：根据 `AppRouteSnapshot` 规范化 URL，目标等于当前位置时返回 `null`，闭包内只 `ref.read` 组装快照，禁止 `ref.watch`（watch 会重建 provider，路由栈丢失）。`refreshListenable` 桥只订阅打开项目集合变化，listener 内做内容相等门控后再 `notifyListeners()`；恢复完成标记只在 redirect 内同步读取，启动后的位置切换用显式 `replace`，不经该桥。禁止把整个 workspace/会话 slice 接到 refresh 桥。
+**位置与路由。** `appRouterProvider` 是 plain `Provider<GoRouter>`（非 autoDispose），创建一次并由 `ref.onDispose` 销毁；任何路径不得重建该实例。redirect 必须是同步纯函数（`resolveAppRedirect`）：根据 `AppRouteSnapshot` 规范化 URL，目标等于当前位置时返回 `null`，闭包内只 `ref.read` 组装快照，禁止 `ref.watch`（watch 会重建 provider，路由栈丢失）。`refreshListenable` 桥只订阅打开项目集合变化，listener 内做内容相等门控后再 `notifyListeners()`；恢复完成标记只在 redirect 内同步读取，启动后有活动项目时显式 `replace` 到项目首页，不经该桥，也不自动打开上次会话。禁止把整个 workspace/会话 slice 接到 refresh 桥。通知深链等 `initialRestoreDone` 后 `go` 到会话 URL；找不到则失败并丢掉该条未读。
 
 Widget 内读位置一律 `GoRouterState.of(context)`（InheritedModel，与 Navigator 换页同帧）。Riverpod 路由投影只服务非 widget 消费方（reconcile、快照、日志），不得用于侧栏高亮或中栏选中态。写位置只走 `context.go` / `context.replace` / `context.push` 或注入的 `AppNavigationPort`；UI 与 app 编排不得再调用 slice 的选择方法作为显示入口。`RouterCoordinator` 只做资源 reconcile（打开项目、ensure draft/thread entry、释放），失败由目标页显示错误态；仅目标非法时才显式导航回落。projectId 是规范化路径 sha256 的前 12 位十六进制，本机路径不进 URL。
 

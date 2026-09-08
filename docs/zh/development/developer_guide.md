@@ -1,6 +1,6 @@
 # 开发者文档
 
-最后核对：2026-09-08（设置页改为根导航全屏压栈）
+最后核对：2026-09-08（通知深链与启动恢复走路由）
 
 本文面向贡献者，保留环境、命令和专项接入清单。分层与生命周期约束见[工程规范](../architecture/engineering_standards.md)，文档改动见[文档维护](documentation.md)。
 
@@ -656,7 +656,8 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
 - GoRouter `redirect` 闭包内只 `ref.read` 组装 `AppRouteSnapshot`，**禁止 `ref.watch`**。
 - redirect 只同步校验：恢复是否完成、projectId 是否在内存映射中、settings section 是否合法、draft 的 providerId 是否已登记。threadId 存在性是异步问题，redirect 放行，由页面与 `RouterCoordinator` 处理。
 - `refreshListenable` 桥只订阅打开项目集合。listener 内先比较路径集合内容，有增删才 `syncProjects` 并 `notifyListeners()`。文件树、索引进度、会话 slice 高频变更不得接入该桥。
-- 启动恢复：`initialLocation` 为 `/`；恢复未完成时 redirect 把一切规范到 `/`；`initialRestoreDone` 后显式 `replace` 到 canonical 位置，不经 refresh 桥。
+- 启动恢复：`initialLocation` 为 `/`；恢复未完成时 redirect 把一切规范到 `/`，中栏显示恢复占位。`initialRestoreDone` 后显式 `replace` 到项目首页（有活动项目时）或留在 `/`，不经 refresh 桥，也不自动打开上次会话。
+- 通知深链：等恢复完成后 `go` 到 `/project/:projectId/thread/:threadId`；找不到会话则返回 `false`，runner 丢掉该条未读。深链已离开 `/` 时，恢复 replace 不得改写当前位置。
 
 ### 读位置与写位置
 
@@ -691,6 +692,7 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
 
 - `resolveAppRedirect` 用纯函数矩阵覆盖：恢复未就绪、裸/非法 settings、未知 projectId/providerId、合法位置返回 `null`、目标等于当前返回 `null`。
 - refresh 桥：高频 slice 噪声与集合内容不变的新身份不得 `notifyListeners`；增删项目恰好一次且 mapping 已同步。
+- 深链与恢复：恢复未就绪时任何位置规范到 `/`；完成后 `replace` 到项目首页；深链排队等恢复再 `go` 会话 URL；找不到会话返回 false；深链先行时恢复不得改写位置。
 - 测试壳经 overrides 注入 `GoRouter`（可指定 `initialLocation`），不要再直接 `pump` 无路由的 `IdeHome` 充当整壳。
 
 ## 9. UI 开发指南
