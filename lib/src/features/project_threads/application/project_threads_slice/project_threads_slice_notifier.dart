@@ -563,6 +563,7 @@ final class ProjectThreadsSliceNotifier
     if (_closed) return false;
     final current = stateFor(projectPath);
     final exists = current.threads.any((thread) => thread.id == threadId);
+    // 返回编排选中是否被清掉，供 shell 决定是否导航离开；不是 UI 高亮。
     final clearedSelection = exists && current.selectedThreadId == threadId;
     _dispatch(ProjectThreadRemoved(projectPath, threadId));
     if (exists) {
@@ -724,6 +725,7 @@ final class ProjectThreadsSliceNotifier
     }
     final selectedThreadId = state.selectedThreadId;
     if (selectedThreadId != null) {
+      // 当前编排会话可能尚未进入已加载分页，仍要登记映射。
       registerThreadMapping(projectPath, selectedThreadId);
     }
   }

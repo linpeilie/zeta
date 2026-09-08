@@ -34,6 +34,6 @@ The menu opens projects and exits the app. Other buttons return to the conversat
 
 Drag between columns to resize them. In a narrow window, sidebars open over the conversation and can be closed to continue reading.
 
-The project list, column widths and some expanded items are saved. Switching to settings or usage and back preserves your draft and reading position. Unsent drafts are not guaranteed to survive closing the app.
+The project list, column widths and some expanded items are saved. Reopening Zeta returns to the last project, not the last conversation; clicking a notification still opens that conversation. Switching to settings, usage or another conversation and back preserves your draft and reading position. Unsent drafts are not guaranteed to survive closing the app.
 
 Adjust fonts, text size and the light or dark theme in [Settings](settings.md).

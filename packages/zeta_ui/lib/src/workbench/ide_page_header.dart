@@ -24,8 +24,8 @@ class IdePageHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
     final styles = IdeTextStyles.of(context);
-    return SizedBox(
-      height: IdeMetrics.pageHeaderHeight,
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: IdeMetrics.pageHeaderHeight),
       child: DecoratedBox(
         decoration: BoxDecoration(
           border: Border(bottom: BorderSide(color: colors.borderSubtle)),
@@ -40,6 +40,7 @@ class IdePageHeader extends StatelessWidget {
               ],
               Expanded(
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [

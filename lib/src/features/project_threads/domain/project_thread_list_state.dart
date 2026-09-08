@@ -51,9 +51,12 @@ class ProjectThreadListState {
   /// 最近一次加载错误；保留已有 thread 缓存。
   final String? errorMessage;
 
-  /// 当前项目下被全局选中的 thread id。
+  /// 编排用的当前 thread id，不是侧栏高亮真源。
   ///
-  /// 运行时全局至多一个项目持有非空值；其它项目必须为 null，以保证侧栏只有一条选中样式。
+  /// 打开会话时由 reconcile/`selectThread` 写入，供：列表刷新时保住尚未出现在
+  /// Provider 页里的当前会话、登记 thread→project 映射、删除时判断是否清掉编排
+  /// 选中、以及会话快照 `selectedThreadIdsByProject`。侧栏高亮只读路由
+  /// `highlightedThreadId`。运行时全局至多一个项目持有非空值。
   final String? selectedThreadId;
 
   /// 是否显示已归档线程（对应 `thread/list` 的 `archived`）。

@@ -10,6 +10,8 @@ import 'package:zeta/src/features/settings/presentation/appearance_theme_mode_ma
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_notifier.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
+import 'package:zeta/src/features/settings/domain/settings_section.dart';
+import 'package:zeta/src/features/settings/presentation/settings_can_leave.dart';
 import 'package:zeta/src/features/agent_management/presentation/agent_management_page.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/ui/localization/app_localizations_x.dart';
@@ -18,8 +20,6 @@ import 'package:zeta/src/features/settings/application/settings_slice/general_se
 import 'package:zeta/src/features/settings/presentation/settings_slice/settings_slice_providers.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_notifier.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_state.dart';
-
-enum SettingsSection { general, appearance, agents }
 
 /// 平铺设置行：不自带横向内边距，也不自带分割线。
 ///
@@ -159,7 +159,7 @@ class SettingsNavigationPane extends StatelessWidget {
 }
 
 /// 设置页放入 Workbench Canvas slot 的业务内容。
-class SettingsPageCanvas extends StatefulWidget {
+class SettingsPageCanvas extends ConsumerStatefulWidget {
   const SettingsPageCanvas({
     required this.activeSection,
     this.showAgentManagement = false,
@@ -170,13 +170,28 @@ class SettingsPageCanvas extends StatefulWidget {
   final bool showAgentManagement;
 
   @override
-  State<SettingsPageCanvas> createState() => SettingsPageCanvasState();
+  ConsumerState<SettingsPageCanvas> createState() => SettingsPageCanvasState();
 }
 
 /// 设置 Canvas 的可离开状态，由设置 Feature 持有并供页面路由入口查询。
-class SettingsPageCanvasState extends State<SettingsPageCanvas> {
+class SettingsPageCanvasState extends ConsumerState<SettingsPageCanvas> {
   final GlobalKey<AgentManagementPageState> _agentManagementKey =
       GlobalKey<AgentManagementPageState>();
+
+  late final SettingsCanLeaveRegistry _canLeaveRegistry;
+
+  @override
+  void initState() {
+    super.initState();
+    _canLeaveRegistry = ref.read(settingsCanLeaveRegistryProvider);
+    _canLeaveRegistry.register(confirmCanLeave);
+  }
+
+  @override
+  void dispose() {
+    _canLeaveRegistry.unregister(confirmCanLeave);
+    super.dispose();
+  }
 
   /// 当前设置内容是否允许离开；Agent 配置编辑器可能需要先确认未保存内容。
   Future<bool> confirmCanLeave() async {

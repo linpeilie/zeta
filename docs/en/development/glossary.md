@@ -185,13 +185,25 @@ The approval/question card area pinned above the composer. Cards are removed onc
 ## UI skeleton
 
 **Workbench**
-The persistent skeleton of `WindowFrame` + `IdeWorkbenchScaffold`. The app composition layer creates and starts business resources; `IdeHome` subscribes and assembles the interface. Page switching only swaps slot content.
+The persistent skeleton of `WindowFrame` + `IdeWorkbenchScaffold`. The app composition layer creates and starts business resources; `IdeHome` subscribes and assembles the interface. The center column is the `ShellRoute` child; settings are pushed above the shell with matching chrome, and section switches `replace` in place.
 
 **Slot**
 Three positions: Navigation (left), Canvas (center), Inspector (right). Feature pages supply slot content and **must not replace the top-level workbench**.
 
-**IdeRetainedPageView**
-The cross-page retention container. Mounts lazily, preserves State and scroll position for visited pages, pauses off-screen tickers, and keeps inactive pages out of focus traversal. **Don't substitute `IndexedStack`** — it keeps paying layout cost for long timelines.
+**Route location**
+The single source of truth for the current page, active project, selected thread and settings section, encoded as an internal URL. Content routes: `/`, `/project/:projectId`, `/project/:projectId/draft/:providerId`, `/project/:projectId/thread/:threadId`; settings: `/settings/:section`. Widgets read `GoRouterState.of(context)`; writes go through navigation. See [developer guide §8](../../zh/development/developer_guide.md#8-路由开发指南) (Chinese).
+
+**projectId**
+The first 12 hex characters of the SHA-256 of the normalized project path. Host paths do not enter URLs, logs or metrics.
+
+**AppNavigationPort**
+The non-widget navigation port (`go` / `replace`). The composition root wires GoRouter; application objects must not import `go_router`.
+
+**AgentPaneRetention**
+Composer drafts and timeline scroll stored by weak RuntimeController identity. Written on pane `deactivate`, restored via `initialScrollOffset` in `initState`, and cleared when the entry closes.
+
+**IdeRetainedPageView (removed)**
+A former cross-page keep-alive container, removed when routes started rendering the canvas directly. Session retention now uses the presentation store. Do not substitute `IndexedStack` — it keeps paying layout cost for long timelines.
 
 **Graphite tokens**
 The dark Graphite Night / light Graphite Day semantic token sets, with `IdeThemeScope` as the source of truth. The `shadcn_flutter` theme is only a projection and must never be read back from. Business code must not hard-code colors, radii, or shadows. Surfaces follow a strictly monotonic luminance ladder (frame to canvas to pane to control to popover); depth comes from that ladder plus 1px translucent hairlines, with zero shadows anywhere except a deliberately faint fallback on floating layers.

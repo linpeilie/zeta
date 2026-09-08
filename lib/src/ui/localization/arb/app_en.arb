@@ -896,6 +896,18 @@
   "@workbenchCannotOpenNotificationThread": {
     "description": "Notification thread missing"
   },
+  "conversationLoadingTitle": "Opening conversation",
+  "@conversationLoadingTitle": {
+    "description": "Conversation route title while the session is opening"
+  },
+  "conversationOpenFailed": "Could not open this conversation",
+  "@conversationOpenFailed": {
+    "description": "Conversation route empty state after open failed"
+  },
+  "conversationOpenFailedBack": "Back to project",
+  "@conversationOpenFailedBack": {
+    "description": "Conversation route failed-state back button"
+  },
   "workbenchProviderDetectionFailed": "Could not detect Provider: {error}",
   "@workbenchProviderDetectionFailed": {
     "description": "Provider detect error",

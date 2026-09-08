@@ -6,17 +6,18 @@ import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/app/app_constants.dart';
 import 'package:zeta/src/app/composition/zeta_app_composition.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';
+import 'package:zeta/src/app/router/app_router.dart';
 import 'package:zeta/src/app/window/zeta_ticker_gate.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_notifier.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/appearance_settings_slice_mapping.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/features/settings/presentation/appearance_theme_mode_mapper.dart';
-import 'package:zeta/src/ui/features/ide/views/ide_home.dart';
 
 /// 应用根组件。
 ///
 /// **只负责 Widget 那一半**：把 [ZetaAppComposition] 挂到树上、按外观建主题、
-/// 把已经装好的东西接到 `IdeHome`。窗口监听与 ticker 闸门在 [ZetaTickerGate]。
+/// 就绪后把 `GoRouter` 接到 `ShadcnApp.router`。窗口监听与 ticker 闸门在
+/// [ZetaTickerGate]。 `IdeHome` 由 ShellRoute 挂载，不在这里直接构造。
 /// 容器、插件目录、Provider 运行时池与三个切片组合都在 composition 里，由调用方
 /// 创建——这正是 Riverpod 官方的形状：测试自己建容器、用 overrides 换掉任何依赖，
 /// `MainApp` 因此不需要一个注入参数。
@@ -63,12 +64,13 @@ class _MainAppState extends State<MainApp> {
   Widget _buildApp(BuildContext context) {
     return Consumer(
       builder: (context, ref, _) => _buildThemedApp(
+        ref,
         appearanceSettingsFromSlice(ref.watch(appearanceSettingsValueProvider)),
       ),
     );
   }
 
-  Widget _buildThemedApp(AppearanceSettings settings) {
+  Widget _buildThemedApp(WidgetRef ref, AppearanceSettings settings) {
     final lightIdeTheme = buildIdeThemeData(
       brightness: Brightness.light,
       uiFontFamily: settings.uiFontFamily,
@@ -94,32 +96,41 @@ class _MainAppState extends State<MainApp> {
         themeMode: flutterThemeMode,
         lightTheme: lightIdeTheme,
         darkTheme: darkIdeTheme,
-        child: sf.ShadcnApp(
-          debugShowCheckedModeBanner: false,
-          title: appTitle,
-          locale: _composition.frozenDisplayLocale,
-          supportedLocales: ZetaLocalization.supportedLocales,
-          localizationsDelegates: ZetaLocalization.delegates,
-          theme: buildShadcnTheme(lightIdeTheme),
-          darkTheme: buildShadcnTheme(darkIdeTheme),
-          themeMode: resolveShadcnThemeMode(flutterThemeMode),
-          // 0.0.54 起 ShadcnApp 不再安装 Material 祖先，改由这一层补齐。
-          builder: (context, child) => IdeMaterialLayer(
-            theme: buildMaterialTheme(materialIdeTheme),
-            child: child,
-          ),
-          home: _composition.isReady
-              ? _buildHome()
-              : ColoredBox(
+        child: _composition.isReady
+            ? sf.ShadcnApp.router(
+                debugShowCheckedModeBanner: false,
+                title: appTitle,
+                locale: _composition.frozenDisplayLocale,
+                supportedLocales: ZetaLocalization.supportedLocales,
+                localizationsDelegates: ZetaLocalization.delegates,
+                theme: buildShadcnTheme(lightIdeTheme),
+                darkTheme: buildShadcnTheme(darkIdeTheme),
+                themeMode: resolveShadcnThemeMode(flutterThemeMode),
+                builder: (context, child) => IdeMaterialLayer(
+                  theme: buildMaterialTheme(materialIdeTheme),
+                  child: child,
+                ),
+                routerConfig: ref.watch(appRouterProvider),
+              )
+            : sf.ShadcnApp(
+                debugShowCheckedModeBanner: false,
+                title: appTitle,
+                locale: _composition.frozenDisplayLocale,
+                supportedLocales: ZetaLocalization.supportedLocales,
+                localizationsDelegates: ZetaLocalization.delegates,
+                theme: buildShadcnTheme(lightIdeTheme),
+                darkTheme: buildShadcnTheme(darkIdeTheme),
+                themeMode: resolveShadcnThemeMode(flutterThemeMode),
+                builder: (context, child) => IdeMaterialLayer(
+                  theme: buildMaterialTheme(materialIdeTheme),
+                  child: child,
+                ),
+                home: ColoredBox(
                   key: const ValueKey<String>('zeta.localization-loading'),
                   color: materialIdeTheme.colors.frame,
                 ),
-        ),
+              ),
       ),
     );
-  }
-
-  Widget _buildHome() {
-    return const IdeHome(key: ValueKey<String>('zeta.ide-home'));
   }
 }

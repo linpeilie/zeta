@@ -73,14 +73,18 @@ void main() {
     );
   });
 
-  test('application 不得 import Flutter（G6）', () {
+  test('application 不得 import Flutter 或 go_router（G6）', () {
     final applicationFiles = dartFilesInLayer('application');
     expect(applicationFiles, isNotEmpty, reason: '扫不到 application 文件说明守卫本身失效了');
 
     final offenders = <String>[];
     for (final file in applicationFiles) {
       final path = normalize(file.path);
-      if (importsOf(file).any((uri) => uri.startsWith('package:flutter/'))) {
+      if (importsOf(file).any(
+        (uri) =>
+            uri.startsWith('package:flutter/') ||
+            uri.startsWith('package:go_router'),
+      )) {
         offenders.add(path);
       }
     }
@@ -91,7 +95,8 @@ void main() {
       reason:
           'application 只能用纯 Dart：`@immutable` 走 package:meta，集合相等走 '
           'zeta_foundation 的 zeta*Equals，状态发布走 package:riverpod 的 Notifier '
-          '而不是 ChangeNotifier：\n${offenders.join('\n')}',
+          '而不是 ChangeNotifier；位置导航走注入的端口，不得 import go_router：\n'
+          '${offenders.join('\n')}',
     );
   });
 
@@ -99,7 +104,10 @@ void main() {
     final offenders = <String>[];
     for (final layer in const <String>['data', 'domain']) {
       for (final file in dartFilesInLayer(layer)) {
-        if (importsOf(file).any((uri) => uri.contains('riverpod'))) {
+        if (importsOf(file).any(
+          (uri) =>
+              uri.contains('riverpod') || uri.startsWith('package:go_router'),
+        )) {
           offenders.add(normalize(file.path));
         }
       }
@@ -110,7 +118,8 @@ void main() {
       isEmpty,
       reason:
           'data 是仓储与 codec、domain 只有不可变模型与端口：两层都由 application '
-          '装配，自己不订阅也不发布状态（工程规范 §3.0）：\n${offenders.join('\n')}',
+          '装配，自己不订阅也不发布状态，也不得 import go_router（工程规范 §3.0）：\n'
+          '${offenders.join('\n')}',
     );
   });
 
@@ -203,7 +212,8 @@ void main() {
         (uri) =>
             uri.startsWith('package:flutter/') ||
             uri == 'dart:io' ||
-            uri.contains('riverpod'),
+            uri.contains('riverpod') ||
+            uri.startsWith('package:go_router'),
       );
       if (impure) {
         offenders.add(path);

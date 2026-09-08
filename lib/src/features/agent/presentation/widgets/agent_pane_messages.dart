@@ -131,13 +131,11 @@ class AgentLiveActivityStatus extends StatelessWidget {
   const AgentLiveActivityStatus({
     required this.controller,
     required this.actions,
-    required this.isActive,
     super.key,
   });
 
   final AgentConversationRuntimeController controller;
   final AgentConversationActions actions;
-  final bool isActive;
 
   @override
   Widget build(BuildContext context) {
@@ -203,9 +201,6 @@ class AgentLiveActivityStatus extends StatelessWidget {
           );
         }
 
-        if (!isActive) {
-          return content(DateTime.now());
-        }
         return ListenableBuilder(
           listenable: controller.flutterElapsedClockListenable,
           builder: (context, _) => content(controller.elapsedNow),

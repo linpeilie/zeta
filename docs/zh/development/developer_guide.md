@@ -1,6 +1,6 @@
 # 开发者文档
 
-最后核对：2026-09-07（文档整理）
+最后核对：2026-09-08（路由迁移验收）
 
 本文面向贡献者，保留环境、命令和专项接入清单。分层与生命周期约束见[工程规范](../architecture/engineering_standards.md)，文档改动见[文档维护](documentation.md)。
 
@@ -107,7 +107,7 @@ Linux 或 Windows 开发时，将 `flutter run` 的设备改为对应桌面设�
 
 ## 4. 目录结构
 
-模块职责见[架构总览](../architecture/overview.md#分层)。新代码放在对应 feature；厂商实现位于各 Provider 插件包，根 app 只在 manifest 登记。
+模块职责见[架构总览](../architecture/overview.md#分层)。新代码放在对应 feature；厂商实现位于各 Provider 插件包，根 app 只在 manifest 登记。路由配置与位置编解码放在 `lib/src/app/router/`，见[§8](#8-路由开发指南)。
 
 ## 5. 开发流程
 
@@ -115,7 +115,7 @@ Linux 或 Windows 开发时，将 `flutter run` 的设备改为对应桌面设�
 
 ## 6. 编码约定
 
-分层、单一状态所有者、依赖注入、UI token 和敏感数据限制见[工程规范](../architecture/engineering_standards.md)。优先不可变模型，公共 API 与不直观的协议、竞态和错误分支写中文注释；不要重复代码字面行为。
+分层、单一状态所有者、位置路由、依赖注入、UI token 和敏感数据限制见[工程规范](../architecture/engineering_standards.md)。优先不可变模型，公共 API 与不直观的协议、竞态和错误分支写中文注释；不要重复代码字面行为。
 
 诊断走已有日志/指标端口，不用 print 或新建全局记录器。新增依赖需说明内建方案不足之处，避免无关锁文件和生成文件变化。
 
@@ -150,7 +150,7 @@ Registry acquire 必须显式选择 global/session scope；使用统计面板只
 
 Workspace 与 Conversation 的所有权：`AgentConversationWorkspaceNotifier` 直接拥有 entry 资源表与不可变 workspace state；每个 entry 的 `AgentConversationSliceNotifier` 独占轻量 regions 和命令账本。`AgentConversationOwnerKey(entryId, lifetimeToken)` 在草稿晋升和 runtime restart 时不变，同 thread 关闭重开分配新 token；BindingKey 只作查询别名。Live 解析真实 owner，Closing/Closed 返回无正文的终止投影，Unknown 返回不可用空投影。
 
-`workbenchSessionProvider` 先构造完整 Shell，组合根在语言冻结后、Widget 挂载前启动事实源、管理 ingress 和幂等 `Shell.start()`。IdeHome 只借用已有 workbench 与订阅；卸载不关闭 owner、Binding 或 runtime。草稿与滚动快照仅驻留 presentation 内存，按 controller 弱身份保存并在 entry 关闭时清理；焦点、弹层和 IME composing 不保留。诊断 snapshot 按需读取唯一 owner，不使用 Shell relay。
+`workbenchSessionProvider` 先构造完整 Shell，组合根在语言冻结后、Widget 挂载前启动事实源、管理 ingress 和幂等 `Shell.start()`。IdeHome 只借用已有 workbench 与订阅；卸载不关闭 owner、Binding 或 runtime。草稿与滚动快照仅驻留 presentation 内存，按 controller 弱身份保存并在 entry 关闭时清理；Markdown/plan 缓存同样按 controller 弱身份驻留 presentation store，随 entry 关闭 dispose。焦点、弹层和 IME composing 不保留。诊断 snapshot 按需读取唯一 owner，不使用 Shell relay。位置写入口见[§8](#8-路由开发指南)。
 
 关闭顺序为：停止 Shell/M/P 命令 → 刷新已有 session 保存 → 等待 M/P 真实执行排空 → 关闭管理消费者与事实源 → 逐 entry 关闭 ingress、撤下可见项、退订、dispose controller、await lease release → BindingManager → runtime registry → plugin catalog → container。entry/app 重复关闭共享同一 Future；失败保持 Closing/失败终态，不标记释放、不销毁容器掩盖失败。lease release 只证明 consumer 释放，CLI 退出仍以 registry close 为准。
 
@@ -626,16 +626,114 @@ Claude initialize 的 `supportedEffortLevels` 只在 `supportsEffort=true` 时�
 `supportedReasoningEfforts`，保持 CLI 原始顺序并保留未知字符串以兼容后续档位；选择值由
 Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 effort 时不得自行猜测。
 
-## 8. UI 开发指南
+## 8. 路由开发指南
 
-- `IdeHome` 持有主要页面唯一的 `WindowFrame` 和 `IdeWorkbenchScaffold`。新增主要页面时
+位置（当前页、活动项目、选中会话、设置分区）以 go_router 的 URL 为唯一真源；slice 只拥有业务状态。所有权细则见[工程规范 §3](../architecture/engineering_standards.md#3-状态与异步编排)。不采用 `go_router_builder`（G6 禁止状态管理 codegen）。
+
+### 路由表
+
+| 路径 | 页面 |
+| --- | --- |
+| `/` | 全局首页 |
+| `/project/:projectId` | 项目首页 |
+| `/project/:projectId/draft/:providerId` | 草稿会话（新建未发消息；身份 = project+provider） |
+| `/project/:projectId/thread/:threadId` | 已有会话 |
+| `/usage` | 使用统计页（根导航覆盖页） |
+| `/settings/:section` | 设置页（`section` ∈ `general` / `appearance` / `agents`）；裸 `/settings` 重定向到 `/settings/general` |
+
+`projectId` 是 `normalizeWorkspaceProjectPath` 结果的 sha256 前 12 位十六进制，本机路径不进 URL。散列与工作区使用同一身份规则，不转小写、不额外折叠分隔符、不解析符号链接；映射碰撞必须失败，不能覆盖另一项目。id 与参数字符集限定 `[A-Za-z0-9_-]`。threadId 复用现有会话 id，并依赖其全局唯一（当前均为 UUID）；reconcile 用映射或深链 payload 中的 providerId 校验归属。
+
+内容路由（`/`、`/project/...`）声明在 `ShellRoute` 内，builder 直接渲染中栏页面。设置与 `/usage` 使用 `parentNavigatorKey: rootNavigatorKey`，压在整个壳之上，共用 `WorkbenchCoverPage`。打开设置必须 `push`（`pushLocation`），不能 `go`：`go('/settings/...')` 会卸掉壳内内容路由，会话页随之销毁。分区切换用 `replace`（`replaceLocation`）并复用稳定 pageKey `settings-page`，画布原位更新、不叠第二层。关闭用 `pop`；`GoRoute.onExit` 询问未保存的 Agent 配置，用户取消则阻止离开。设置页用 `CustomTransitionPage(opaque: false)`：默认不透明 `NoTransitionPage` 会让根 Navigator 关掉下层 overlay 的 ticker；`TickerMode(enabled: true)` 不能覆盖祖先（AND）。壳再用 Offstage 藏工作区，Riverpod 3 订阅保持活着。使用统计采用相同覆盖方式；从内容页打开用 `push`，设置与统计互换用 `replace`，返回用 `pop`。覆盖页使用主动获得焦点的 `FocusScope`，防止壳的 `ExcludeFocus` 将键盘焦点留在旧路由。不使用局部页面 bool 或 post-frame 命令桥。
+
+### Router 单例
+
+- `appRouterProvider` 是 plain `Provider<GoRouter>`（非 autoDispose）。创建一次，`ref.onDispose` 销毁；测试用 Riverpod overrides 替换。
+- 不得 `watch` 会导致 `appRouterProvider` 重建的依赖，也不得在 widget 里新建 `GoRouter`。重建即丢失路由栈。
+- `ShadcnApp.router(routerConfig: ref.watch(appRouterProvider))` 是根上唯一的合法 watch。
+
+### redirect 与 refresh 桥
+
+- `resolveAppRedirect({location, snapshot})` 是同步纯函数：无副作用、可矩阵测试。目标等于当前位置时必须返回 `null`（防回路）；`redirectLimit` 保持默认 5。
+- GoRouter `redirect` 闭包内只 `ref.read` 组装 `AppRouteSnapshot`，**禁止 `ref.watch`**。
+- redirect 只同步校验：恢复是否完成、projectId 是否在内存映射中、settings section 是否合法、draft 的 providerId 是否已登记。threadId 存在性是异步问题，redirect 放行，由页面与 `RouterCoordinator` 处理。
+- `refreshListenable` 桥只订阅打开项目集合。listener 内先比较路径集合内容，有增删才 `syncProjects` 并 `notifyListeners()`。文件树、索引进度、会话 slice 高频变更不得接入该桥。
+- 启动恢复：`initialLocation` 为 `/`；恢复未完成时 redirect 把一切规范到 `/`，中栏显示恢复占位。`initialRestoreDone` 后显式 `replace` 到项目首页（有活动项目时）或留在 `/`，不经 refresh 桥，也不自动打开上次会话。
+- 通知深链：等恢复完成后通过 `AppNavigationPort.navigateTo` 导航。端口区分实际到达、拦截、被取代、不可用和超时；到达后再等待目标资源 reconcile。`go` 返回不代表导航成功，禁止提前打开目标。未保存确认共享一次对话框，每个等待者复核原导航请求；关闭先结算导航与 reconcile 等待者。找不到会话返回 `false`；深链已离开 `/` 时，恢复 replace 不得改写当前位置。
+
+### 读位置与写位置
+
+- Widget 内读当前位置用 `GoRouterState.of(context)`（与换页同帧）。侧栏项目/会话高亮与中栏内容必须同源：项目行只认 URL 中的 `projectId`，会话行只认 `threadId`。不得用 `workspace.activeProjectPath` 或 `ProjectThreadListState.selectedThreadId` 做显示回退。壳要判断设置或统计是否盖住时读顶层 URI（`GoRouter.state.uri` / `rootRouteLocation`），不要用壳内 `routeLocation`。
+- UI 写位置走 `context.go` / `context.replace` / `context.push`（或 `goLocation` / `replaceLocation` / `pushLocation` 扩展）。app 层对象（workspace notifier、shell controller、通知深链）只依赖注入的 `AppNavigationPort`，不 import `go_router`。
+- 禁止再把 slice 的 `selectThread` / `selectEntry` / `selectKnownProject` 当作显示入口。资源副作用由 `RouterCoordinator` 按路由位置 reconcile，走既有 intent/EffectRunner（G3）。
+- 新建会话：先导航到 draft URL，reconcile 再 `ensureDraftEntry`（不建 provider session）。Coordinator 按内容路由访问绑定 owner lifetime，并观察 entry 晋升与关闭；前台晋升后 `replace` 到 thread URL，被设置/统计覆盖时延后到返回。返回先规范化再 reconcile，避免重建草稿；离开原内容访问后丢弃待处理替换。Shell 的后台 session 同步不导航。
+- 每次新目标使旧 reconcile 作用域和成功缓存失效，旧等待者立即结算。Host 在等待后写项目上下文、选择或快照前检查 `isCurrent`；资源加载可以并行，不串行阻塞快速返回。重复目标只在选择仍有效时幂等；侧栏同 URL 重试通过 Coordinator 显式跳过成功缓存。
+- 关闭当前内容 owner 时返回项目首页；若被覆盖则在返回时回落。后台 owner 关闭不影响前台。列表摘要与已打开 entry 的目标解析均校验项目、Provider 提示和 thread 身份。
+- 项目行展开/折叠只调用独立的展开操作；激活项目只由导航驱动。
+- Provider 切换：`ensureDraftEntry` 保留；内部选中改为导航到目标 provider 的 draft URL。
+
+### 无屏闪纪律
+
+1. 内容路由一律 `NoTransitionPage`，Page 使用 `state.pageKey` 按路由模式复用；参数变化只给目标页 Widget 设 Key，避免同模式在壳 Navigator 里叠多个 Page。
+2. draft/thread 共用 `ConversationRoutePage` 的加载、失败、设置订阅与去抖 spinner。builder 同步读 slice：已打开的会话首帧即内容；冷开走骨架（标题来自列表 summary，深链目标未加载时用通用标题）+ 去抖 loading（显式状态机，持续超过约 100ms 才转圈；禁止裸 `Future.delayed`）。
+3. 滚动恢复只走 `IdeSmoothScrollController(initialScrollOffset:)`，在 ScrollPosition 创建时生效。
+4. 高亮与中栏同读 `GoRouterState.of(context)`，切换帧内不出现「旧高亮 + 新内容」或相反。
+5. 切换 reconcile 不得重拉会话列表；`refreshListenable` 保持单输入与内容门控。
+6. 壳内用 Offstage 盖住内容路由时，不得对内容子树关闭 `TickerMode`：Riverpod 3 会据此暂停 `ref.watch`。压在根导航上的设置页必须 `opaque: false`，否则 Navigator 会关掉下层 overlay ticker，子树无法自行打开。
+
+### 会话 UI 状态
+
+路由切换会销毁并重建中栏页面。跨销毁仍需保留的状态不得私藏在会被丢掉的 widget State。
+
+已上移、随 entry 关闭清除：
+
+- 输入草稿（文档/图片/staged 路径）与时间线滚动 + freeScroll：`AgentPaneRetention`（Expando，按 controller 弱键）。`deactivate` 保存，`initState` 恢复，entry 关闭 `closeEntry` 清除。
+- Markdown 解析缓存与 plan revision drafts：`AgentPanePresentationStore`（同样按 controller 弱键）。pane `dispose` 或 controller 换代不得销毁缓存；entry 关闭回调里 dispose。
+- 会话运行时、历史、工具/计划/命令组展开、模式草稿、权限选择：entry 的 region / timeline store。
+
+切换后重置即可（焦点、弹层、IME、导航轨 hover、代码高亮节点缓存、上下文面板显隐与原文展开、提问卡填答进度、Composer 动画）。
+
+未完成：文件编辑组标题的展开仍在 `AgentFileEditGroupCard` 的 widget State；命令组已走 expansion region。上移需要 `AgentConversationExpansionTarget`、timeline store 与 extent 估算（当前估算按组内文件行计高，与折叠头不一致）。提问卡未提交答案随 pane 销毁丢失，pending 请求仍在 region。
+
+### 敏感内容
+
+日志、指标、缓存和通知不得写入 projectId、threadId、完整 URL 或本机路径；必要时只落 route name。见 G7 与工程规范 §5。
+
+### 测试
+
+- `resolveAppRedirect` 用纯函数矩阵覆盖：恢复未就绪、裸/非法 settings、未知 projectId/providerId、合法位置返回 `null`、目标等于当前返回 `null`。
+- refresh 桥：高频 slice 噪声与集合内容不变的新身份不得 `notifyListeners`；增删项目恰好一次且 mapping 已同步。
+- 深链与恢复：恢复未就绪时任何位置规范到 `/`；完成后 `replace` 到项目首页；深链等待恢复与实际导航提交；找不到会话、拦截、被取代和关闭必须失败；深链先行时恢复不得改写位置。
+- `navigation_regression_test.dart` 覆盖 A→慢加载 B→A、设置期间草稿晋升、离开后迟到晋升、项目归属校验、统计覆盖保留、异步未保存确认、深链拦截和单次打开、删除后回落，以及过期确认、两倍文字下的语义标签和键盘返回。
+- 侧栏高亮：路由 threadId 与 slice `selectedThreadId` 不一致时只亮路由目标；项目首页不高亮任何会话。
+- 测试壳经 overrides 注入 `GoRouter`（可指定 `initialLocation`），不要再直接 `pump` 无路由的 `IdeHome` 充当整壳。
+
+### 验收结论与偏差
+
+路由单例、redirect 纯函数、ShellRoute 直渲中栏、设置压栈且 `opaque: false`、深链等恢复完成再导航、侧栏高亮读 `GoRouterState.of(context)`，均已落地。
+
+与设计稿不同或未完成的项：
+
+- 启动恢复落到项目首页，不自动打开上次会话（产品选择；设计初稿曾写会话 URL）。
+- 设置分区用 `push` / `replace` / `pop`，不能 `go`（`go` 会卸掉壳内内容路由）。
+- 矩阵里的 `app_router_shell_test.dart` 未单独立项；行为覆盖在 redirect、coordinator、restore/deeplink、settings 路由等测试中。
+- `agent_pane_rebuild_benchmark_test.dart` 与对照 JSON 未入库，无法复跑 `PERF_BENCH`。切换成本不进常规 CI。
+- 文件编辑组标题展开、提问卡未提交答案仍私藏 widget State，见上一节。
+- 本机 Windows `tool/test_full.ps1` 根应用 2189 通过、6 失败：`test/tool/test_packages_test.dart` 用 `chmod`/`bash` 测 `test_packages.sh`。内部包 `zeta_agent_provider_claude_code` 凭据文件写回与 `zeta_agent_provider_sdk` 测试路径分隔符比较在 Windows 失败。CI 在 Ubuntu 跑全量。这些失败与路由迁移无关，本项不修。
+
+真实桌面手测（切会话无屏闪、设置未保存拦截等）未在本机执行，不能用自动化结果代替。
+
+## 9. UI 开发指南
+
+- `IdeHome` 持有内容页的 `WindowFrame` 和 `IdeWorkbenchScaffold`。新增内容页面时
   只提供 Navigation、Canvas、Inspector slot 内容，不得用页面组件替换整个 Workbench。
+  设置和使用统计是根导航压栈，共用 chrome 盖住壳；壳保持挂载（Offstage），不关
+  `TickerMode`。
 - 工作台外圈 padding 只写在 `IdeHome`：左右与底部 `IdeSpacing.space8`，顶部
   `space0` 与标题栏贴齐，标题栏不再画底部分隔线。Scaffold 外侧贴边，rail 只保留
   内侧 `space4`；Feature 页不要再套一层窗口级外距。
 - Agent 首页、设置/Agent 管理和使用统计分别按设计文档中的 slot 矩阵组合：Agent 首页
   的 Navigation slot 使用一个 `ProjectAgentSidebar` 组合 Projects / Threads 与底部统计；
-  设置 Feature 使用 `SettingsNavigationPane` + `SettingsPageCanvas`，使用统计只占用 Canvas。
+  设置 Feature 使用 `SettingsNavigationPane` + `SettingsPageCanvas`（压栈路由形态见[§8](#8-路由开发指南)），使用统计只占用 Canvas。
 - Agent 首页不得重新挂载 Activity Rail，也不得恢复 Projects / 统计 / Files 的局部显隐
   入口。合并左栏只由 `WindowFrame.titleBarLeadingActions` 中的标题栏按钮控制，Files
   Inspector 只由 `WindowFrame.titleBarActions` 中的右侧栏按钮控制；隐藏后入口仍可操作。
@@ -655,12 +753,9 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
 - 左栏显隐、左栏宽度和统计 Provider 选择统一写入应用级
   `IdeWorkbenchLayoutState`。JSON 按字段宽容读取；统计展开态是临时弹层状态，只留在
   presentation 层，不写会话。
-- 需要跨页面保持的 Canvas 应使用稳定位置、稳定 Key 和保活容器。Key 必须放在可能因
-  slot 增删而换位的 Flex 子节点上，不能只放在其内部后代；保活容器必须只布局活动页，
-  非活动页面同时退出布局、暂停 ticker，并排除焦点遍历与指针命中，避免 Tab 把保活页
-  滚入视口。
-- Agent 会话与主要页面统一使用 `IdeRetainedPageView`；不要用 `IndexedStack` 保留
-  长时间线，否则隐藏页面仍会参与 resize layout。
+- 需要跨页面保持的 slot 子节点使用稳定位置和稳定 Key。Key 必须放在可能因
+  slot 增删而换位的 Flex 子节点上，不能只放在其内部后代。
+- 会话内容由路由直接渲染，跨销毁保留走 presentation 层 retention/缓存 store，见[§8](#8-路由开发指南)。不要用 `IndexedStack` 保留长时间线。
 - `IdeConstraintBucketBuilder` 的稳定回调可跨父级 resize 复用 child。若 builder 捕获
   可变父配置，应让回调身份随配置变化；AgentPane 本身只在 compact / regular 档位或
   view model 真正替换时重建响应式业务树。
@@ -672,7 +767,7 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
 - Composer、Pending interaction 与 Active plan 的高度关系必须在同一次 layout 中解决；
   禁止重新引入 post-frame 测量、`GlobalKey` 查高或 layout 后 `setState` 反馈环。
 - 页面容器只负责切换 slot。搜索、筛选、未保存配置确认等业务状态继续归对应 Feature；
-  例如离开 Agent 管理前通过 `SettingsPageCanvasState.confirmCanLeave()` 查询。
+  例如离开设置前通过 `SettingsPageCanvasState.confirmCanLeave()` 查询，由设置路由 `onExit` 承接。
 - Agent 标题栏「更多」菜单打开的上下文详情面板是只读审计视图：正文放在统一
   `SelectionArea` 内；展开原始消息时，JSON 高亮 `RichText` 必须接入选择注册器，旁边提供
   「复制原文」按钮。复制只写系统剪贴板并给出 Toast，不得写入 Zeta 持久化状态或日志。
@@ -748,11 +843,11 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
   provider kind 或显示名称硬编码。
 - 使用统计是标题栏全局页面，不属于设置分区。统计表格在窄窗口保留横向滚动，
   分析区按可用宽度从双栏切换为单栏。
-- 修改主要页面切换行为时，必须使用实际 `IdeHome` 补 Widget 测试，至少验证
-  `WindowFrame`/Workbench/AgentPane Element、当前 Thread、草稿、对话滚动位置、
-  Pane 宽度和可见状态没有被重置。
+- 修改主要页面切换行为时，必须使用实际 `IdeHome`（经路由壳）补 Widget 测试。设置或
+  统计覆盖再返回时，验证骨架、当前会话、草稿、滚动位置、Pane 宽度和可见状态保持。
+  会话之间切换验证草稿与滚动经 retention 恢复，不要求 AgentPane Element 跨会话存活。
 - 修改 resize 热路径时，除 Widget 回归外还要在 Windows Profile 运行
-  1280→1000→1280 的 10 秒场景，并记录 UI/Raster p95、慢帧率、隐藏页
+  1280→1000→1280 的 10 秒场景，并记录 UI/Raster p95、慢帧率、Offstage 工作区
   build/layout、viewport item、projection/diff/highlight 与 transient callback 计数。
   Debug 数据不能作为性能通过结论；未达标数据必须如实保留。
 
@@ -851,7 +946,7 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
    工具栏用 `Ide*` 控件（底层 shadcn Button）。缺 delegates 会渲染成错误组件、缺
    shadcn 主题会直接断言失败，两种情况量到的都不是真实布局。
 
-## 9. 会话和持久化
+## 10. 会话和持久化
 
 本文中的 `<Zeta 数据目录>` 指生产入口在系统应用文档目录下创建的 `.zeta`，不固定为 HOME；路径解析见工程规范 §5。
 
@@ -915,14 +1010,14 @@ Codex 使用统计仍只读原 rollout JSONL，并把可重建的派生索引写
 不得把它们加入 IDE session、thread summary、模型缓存、使用统计索引、日志或系统通知；ignored
 诊断只允许 method/type/reason/count 等白名单字段，损坏 evidence 只计数，不串行化原文。
 
-## 10. 文件系统注意事项
+## 11. 文件系统注意事项
 
 - 文件树不应递归扫描整个项目。
 - 不跟随符号链接。
 - 大目录和工具缓存目录应继续忽略。
 - 目录读取失败返回空列表或用户可理解状态，不让异常冒泡到 UI 崩溃。
 
-## 11. 测试建议
+## 12. 测试建议
 
 - 纯逻辑、JSON 编解码和状态机使用单元测试。
 - Widget 渲染和用户交互使用 `flutter_test`。
@@ -985,7 +1080,7 @@ flutter test test/src/features/agent/presentation/agent_conversation_view_model_
 flutter test test/src/features/agent/application/agent_conversation_timeline_store_test.dart
 ```
 
-## 12. 常见问题
+## 13. 常见问题
 
 ### Codex provider 启动失败
 

@@ -328,7 +328,6 @@ class AgentConversationTimeline extends StatelessWidget {
   const AgentConversationTimeline({
     required this.controller,
     required this.actions,
-    required this.isActive,
     required this.scrollController,
     required this.pagePadding,
     required this.floatingPanelExtent,
@@ -347,8 +346,6 @@ class AgentConversationTimeline extends StatelessWidget {
   final AgentConversationRuntimeController controller;
   final AgentConversationActions actions;
 
-  /// 前台才订阅 live 流式 listenable。
-  final bool isActive;
   final ScrollController scrollController;
   final EdgeInsets pagePadding;
 
@@ -370,16 +367,13 @@ class AgentConversationTimeline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 非前台：不挂 live 高频信号，后台 thread 流式输出不重建此 canvas。
     // live turn 与浮层高度不属于任何 region（§2.7），继续走 listenable。
-    final liveListenable = isActive
-        ? Listenable.merge(<Listenable>[
-            controller.flutterLiveTurnListenable,
-            floatingPanelExtent,
-            if (controller.liveTurnState case final liveTurnState?)
-              AgentFlutterListenableAdapter(liveTurnState),
-          ])
-        : floatingPanelExtent;
+    final liveListenable = Listenable.merge(<Listenable>[
+      controller.flutterLiveTurnListenable,
+      floatingPanelExtent,
+      if (controller.liveTurnState case final liveTurnState?)
+        AgentFlutterListenableAdapter(liveTurnState),
+    ]);
 
     // 导航轨贴 AgentPanel 全宽左侧；对话流仍经 AgentContentAlign 居中限宽。
     // 三个 region 各订各的：pending 变化不再重建 history 那层。
@@ -736,7 +730,6 @@ class AgentConversationTimeline extends StatelessWidget {
           child: AgentLiveActivityStatus(
             controller: controller,
             actions: actions,
-            isActive: isActive,
           ),
         );
       case AgentTurnFooterViewportItem(:final turn):
