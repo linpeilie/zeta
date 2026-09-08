@@ -76,6 +76,8 @@ Cross-widget business state has no parallel hand-written store or mirror Notifie
 
 Commands freeze payload, owner lifetime and scope before queueing and recheck on return. Old handles cannot find a new entry through BindingKey. Cancellation and approvals do not wait for preference saves. Settling a caller Future does not prove I/O has drained.
 
+Settings and usage statistics share a root-navigator covering page and preserve the content page on return. Notification navigation waits for a committed route before resource readiness; asynchronous selection checks the navigation generation. The router coordinator handles draft promotion and entry closure against the content visit and owner lifetime, without replacing a covering page.
+
 ## Binding and lifetime
 
 Each workspace entry owns separate conversation resources. `AgentConversationOwnerKey(entryId, lifetimeToken)` survives draft promotion; reopening after close uses a new token. BindingKey is an alias. Closing, closed and unknown targets expose no old body or writable entry.

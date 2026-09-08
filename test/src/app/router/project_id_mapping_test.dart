@@ -4,7 +4,7 @@ import 'package:zeta/src/app/router/project_id_mapping.dart';
 
 void main() {
   test(
-    'hashPath is stable across Windows separators, case and trailing slash',
+    'hashPath shares workspace normalization without folding case or separators',
     () {
       const unix = '/Users/me/project';
       const windows = r'C:\Users\me\project';
@@ -14,7 +14,7 @@ void main() {
       );
       expect(
         ProjectIdMapping.hashPath(windows),
-        ProjectIdMapping.hashPath(r'c:/users/me/project'),
+        isNot(ProjectIdMapping.hashPath(r'c:/users/me/project')),
       );
       expect(
         ProjectIdMapping.hashPath(windows),
@@ -58,12 +58,9 @@ void main() {
     expect(mapping.pathForId('deadbeefdead'), isNull);
   });
 
-  test('idForPath matches a synced path by normalized hash', () {
+  test('idForPath respects the workspace path identity', () {
     final mapping = ProjectIdMapping();
     mapping.syncProjects(const <String>[r'C:\Users\me\project']);
-    expect(
-      mapping.idForPath(r'c:/users/me/project'),
-      mapping.idForPath(r'C:\Users\me\project'),
-    );
+    expect(mapping.idForPath(r'c:/users/me/project'), isNull);
   });
 }

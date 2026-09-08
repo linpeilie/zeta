@@ -99,12 +99,31 @@ final class SettingsLocation extends AppRouteLocation {
   int get hashCode => Object.hash(runtimeType, section);
 }
 
+final class UsageLocation extends AppRouteLocation {
+  const UsageLocation();
+
+  @override
+  String toPath() => '/usage';
+
+  @override
+  bool operator ==(Object other) => other is UsageLocation;
+
+  @override
+  int get hashCode => runtimeType.hashCode;
+}
+
+bool isCoveringLocation(AppRouteLocation location) =>
+    location is SettingsLocation || location is UsageLocation;
+
 /// 解析入口：路由 builder、redirect、coordinator 共用。
 /// 非法或缺失参数回落到合法位置对象，不抛异常。
 AppRouteLocation parseAppRouteLocation(Uri uri) {
   final segs = uri.pathSegments;
   if (segs.isEmpty) {
     return const GlobalHomeLocation();
+  }
+  if (segs.length == 1 && segs[0] == 'usage') {
+    return const UsageLocation();
   }
   if (segs[0] == 'settings') {
     final name = segs.length > 1 ? segs[1] : SettingsSection.general.name;
@@ -142,4 +161,9 @@ abstract interface class AppNavigationPort {
   void go(AppRouteLocation location);
 
   void replace(AppRouteLocation location);
+
+  /// 只在路由实际提交后返回 reached；资源就绪由 reconcile 单独结算。
+  Future<NavigationOutcome> navigateTo(AppRouteLocation location);
 }
+
+enum NavigationOutcome { reached, blocked, superseded, unavailable, timedOut }

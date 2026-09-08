@@ -7,6 +7,7 @@ void main() {
   group('toPath / parse round-trip', () {
     const locations = <AppRouteLocation>[
       GlobalHomeLocation(),
+      UsageLocation(),
       ProjectHomeLocation('aaaaaaaaaaaa'),
       DraftThreadLocation('aaaaaaaaaaaa', 'codex'),
       ThreadLocation('aaaaaaaaaaaa', '550e8400-e29b-41d4-a716-446655440000'),

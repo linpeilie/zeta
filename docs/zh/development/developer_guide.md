@@ -638,11 +638,12 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
 | `/project/:projectId` | 项目首页 |
 | `/project/:projectId/draft/:providerId` | 草稿会话（新建未发消息；身份 = project+provider） |
 | `/project/:projectId/thread/:threadId` | 已有会话 |
+| `/usage` | 使用统计页（根导航覆盖页） |
 | `/settings/:section` | 设置页（`section` ∈ `general` / `appearance` / `agents`）；裸 `/settings` 重定向到 `/settings/general` |
 
-`projectId` 是项目规范化路径 sha256 的前 12 位十六进制，本机路径不进 URL。id 与参数字符集限定 `[A-Za-z0-9_-]`。threadId 复用现有会话 id，并依赖其全局唯一（当前均为 UUID）；reconcile 用映射或深链 payload 中的 providerId 校验归属。
+`projectId` 是 `normalizeWorkspaceProjectPath` 结果的 sha256 前 12 位十六进制，本机路径不进 URL。散列与工作区使用同一身份规则，不转小写、不额外折叠分隔符、不解析符号链接；映射碰撞必须失败，不能覆盖另一项目。id 与参数字符集限定 `[A-Za-z0-9_-]`。threadId 复用现有会话 id，并依赖其全局唯一（当前均为 UUID）；reconcile 用映射或深链 payload 中的 providerId 校验归属。
 
-内容路由（`/`、`/project/...`）声明在 `ShellRoute` 内，builder 直接渲染中栏页面。设置路由使用 `parentNavigatorKey: rootNavigatorKey`，压在整个壳之上。打开设置必须 `push`（`pushLocation`），不能 `go`：`go('/settings/...')` 会卸掉壳内内容路由，会话页随之销毁。分区切换用 `replace`（`replaceLocation`）并复用稳定 pageKey `settings-page`，画布原位更新、不叠第二层。关闭用 `pop`；`GoRoute.onExit` 询问未保存的 Agent 配置，用户取消则阻止离开。设置页用 `CustomTransitionPage(opaque: false)`：默认不透明 `NoTransitionPage` 会让根 Navigator 关掉下层 overlay 的 ticker；`TickerMode(enabled: true)` 不能覆盖祖先（AND）。壳再用 Offstage 藏工作区，Riverpod 3 订阅保持活着。
+内容路由（`/`、`/project/...`）声明在 `ShellRoute` 内，builder 直接渲染中栏页面。设置与 `/usage` 使用 `parentNavigatorKey: rootNavigatorKey`，压在整个壳之上，共用 `WorkbenchCoverPage`。打开设置必须 `push`（`pushLocation`），不能 `go`：`go('/settings/...')` 会卸掉壳内内容路由，会话页随之销毁。分区切换用 `replace`（`replaceLocation`）并复用稳定 pageKey `settings-page`，画布原位更新、不叠第二层。关闭用 `pop`；`GoRoute.onExit` 询问未保存的 Agent 配置，用户取消则阻止离开。设置页用 `CustomTransitionPage(opaque: false)`：默认不透明 `NoTransitionPage` 会让根 Navigator 关掉下层 overlay 的 ticker；`TickerMode(enabled: true)` 不能覆盖祖先（AND）。壳再用 Offstage 藏工作区，Riverpod 3 订阅保持活着。使用统计采用相同覆盖方式；从内容页打开用 `push`，设置与统计互换用 `replace`，返回用 `pop`。覆盖页使用主动获得焦点的 `FocusScope`，防止壳的 `ExcludeFocus` 将键盘焦点留在旧路由。不使用局部页面 bool 或 post-frame 命令桥。
 
 ### Router 单例
 
@@ -657,20 +658,23 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
 - redirect 只同步校验：恢复是否完成、projectId 是否在内存映射中、settings section 是否合法、draft 的 providerId 是否已登记。threadId 存在性是异步问题，redirect 放行，由页面与 `RouterCoordinator` 处理。
 - `refreshListenable` 桥只订阅打开项目集合。listener 内先比较路径集合内容，有增删才 `syncProjects` 并 `notifyListeners()`。文件树、索引进度、会话 slice 高频变更不得接入该桥。
 - 启动恢复：`initialLocation` 为 `/`；恢复未完成时 redirect 把一切规范到 `/`，中栏显示恢复占位。`initialRestoreDone` 后显式 `replace` 到项目首页（有活动项目时）或留在 `/`，不经 refresh 桥，也不自动打开上次会话。
-- 通知深链：等恢复完成后 `go` 到 `/project/:projectId/thread/:threadId`；找不到会话则返回 `false`，runner 丢掉该条未读。深链已离开 `/` 时，恢复 replace 不得改写当前位置。
+- 通知深链：等恢复完成后通过 `AppNavigationPort.navigateTo` 导航。端口区分实际到达、拦截、被取代、不可用和超时；到达后再等待目标资源 reconcile。`go` 返回不代表导航成功，禁止提前打开目标。未保存确认共享一次对话框，每个等待者复核原导航请求；关闭先结算导航与 reconcile 等待者。找不到会话返回 `false`；深链已离开 `/` 时，恢复 replace 不得改写当前位置。
 
 ### 读位置与写位置
 
-- Widget 内读当前位置用 `GoRouterState.of(context)`（与换页同帧）。侧栏项目/会话高亮与中栏内容必须同源：项目行只认 URL 中的 `projectId`，会话行只认 `threadId`。不得用 `workspace.activeProjectPath` 或 `ProjectThreadListState.selectedThreadId` 做显示回退。壳要判断设置是否盖住时读顶层 URI（`GoRouter.state.uri` / `rootRouteLocation`），不要用壳内 `routeLocation`。
+- Widget 内读当前位置用 `GoRouterState.of(context)`（与换页同帧）。侧栏项目/会话高亮与中栏内容必须同源：项目行只认 URL 中的 `projectId`，会话行只认 `threadId`。不得用 `workspace.activeProjectPath` 或 `ProjectThreadListState.selectedThreadId` 做显示回退。壳要判断设置或统计是否盖住时读顶层 URI（`GoRouter.state.uri` / `rootRouteLocation`），不要用壳内 `routeLocation`。
 - UI 写位置走 `context.go` / `context.replace` / `context.push`（或 `goLocation` / `replaceLocation` / `pushLocation` 扩展）。app 层对象（workspace notifier、shell controller、通知深链）只依赖注入的 `AppNavigationPort`，不 import `go_router`。
 - 禁止再把 slice 的 `selectThread` / `selectEntry` / `selectKnownProject` 当作显示入口。资源副作用由 `RouterCoordinator` 按路由位置 reconcile，走既有 intent/EffectRunner（G3）。
-- 新建会话：先导航到 draft URL，reconcile 再 `ensureDraftEntry`（不建 provider session）；首发消息得到 threadId 后 `replace` 到 thread URL。
+- 新建会话：先导航到 draft URL，reconcile 再 `ensureDraftEntry`（不建 provider session）。Coordinator 按内容路由访问绑定 owner lifetime，并观察 entry 晋升与关闭；前台晋升后 `replace` 到 thread URL，被设置/统计覆盖时延后到返回。返回先规范化再 reconcile，避免重建草稿；离开原内容访问后丢弃待处理替换。Shell 的后台 session 同步不导航。
+- 每次新目标使旧 reconcile 作用域和成功缓存失效，旧等待者立即结算。Host 在等待后写项目上下文、选择或快照前检查 `isCurrent`；资源加载可以并行，不串行阻塞快速返回。重复目标只在选择仍有效时幂等；侧栏同 URL 重试通过 Coordinator 显式跳过成功缓存。
+- 关闭当前内容 owner 时返回项目首页；若被覆盖则在返回时回落。后台 owner 关闭不影响前台。列表摘要与已打开 entry 的目标解析均校验项目、Provider 提示和 thread 身份。
+- 项目行展开/折叠只调用独立的展开操作；激活项目只由导航驱动。
 - Provider 切换：`ensureDraftEntry` 保留；内部选中改为导航到目标 provider 的 draft URL。
 
 ### 无屏闪纪律
 
 1. 内容路由一律 `NoTransitionPage`，Page 使用 `state.pageKey` 按路由模式复用；参数变化只给目标页 Widget 设 Key，避免同模式在壳 Navigator 里叠多个 Page。
-2. builder 同步读 slice：已打开的会话首帧即内容；冷开走骨架（标题来自列表 summary，深链目标未加载时用通用标题）+ 去抖 loading（显式状态机，持续超过约 100ms 才转圈；禁止裸 `Future.delayed`）。
+2. draft/thread 共用 `ConversationRoutePage` 的加载、失败、设置订阅与去抖 spinner。builder 同步读 slice：已打开的会话首帧即内容；冷开走骨架（标题来自列表 summary，深链目标未加载时用通用标题）+ 去抖 loading（显式状态机，持续超过约 100ms 才转圈；禁止裸 `Future.delayed`）。
 3. 滚动恢复只走 `IdeSmoothScrollController(initialScrollOffset:)`，在 ScrollPosition 创建时生效。
 4. 高亮与中栏同读 `GoRouterState.of(context)`，切换帧内不出现「旧高亮 + 新内容」或相反。
 5. 切换 reconcile 不得重拉会话列表；`refreshListenable` 保持单输入与内容门控。
@@ -698,7 +702,8 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
 
 - `resolveAppRedirect` 用纯函数矩阵覆盖：恢复未就绪、裸/非法 settings、未知 projectId/providerId、合法位置返回 `null`、目标等于当前返回 `null`。
 - refresh 桥：高频 slice 噪声与集合内容不变的新身份不得 `notifyListeners`；增删项目恰好一次且 mapping 已同步。
-- 深链与恢复：恢复未就绪时任何位置规范到 `/`；完成后 `replace` 到项目首页；深链排队等恢复再 `go` 会话 URL；找不到会话返回 false；深链先行时恢复不得改写位置。
+- 深链与恢复：恢复未就绪时任何位置规范到 `/`；完成后 `replace` 到项目首页；深链等待恢复与实际导航提交；找不到会话、拦截、被取代和关闭必须失败；深链先行时恢复不得改写位置。
+- `navigation_regression_test.dart` 覆盖 A→慢加载 B→A、设置期间草稿晋升、离开后迟到晋升、项目归属校验、统计覆盖保留、异步未保存确认、深链拦截和单次打开、删除后回落，以及过期确认、两倍文字下的语义标签和键盘返回。
 - 侧栏高亮：路由 threadId 与 slice `selectedThreadId` 不一致时只亮路由目标；项目首页不高亮任何会话。
 - 测试壳经 overrides 注入 `GoRouter`（可指定 `initialLocation`），不要再直接 `pump` 无路由的 `IdeHome` 充当整壳。
 
@@ -721,7 +726,7 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
 
 - `IdeHome` 持有内容页的 `WindowFrame` 和 `IdeWorkbenchScaffold`。新增内容页面时
   只提供 Navigation、Canvas、Inspector slot 内容，不得用页面组件替换整个 Workbench。
-  设置页是根导航压栈，自带同等 chrome 盖住壳；壳保持挂载（Offstage），不关
+  设置和使用统计是根导航压栈，共用 chrome 盖住壳；壳保持挂载（Offstage），不关
   `TickerMode`。
 - 工作台外圈 padding 只写在 `IdeHome`：左右与底部 `IdeSpacing.space8`，顶部
   `space0` 与标题栏贴齐，标题栏不再画底部分隔线。Scaffold 外侧贴边，rail 只保留

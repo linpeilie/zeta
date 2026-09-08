@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:zeta/src/features/workspace/domain/workspace_project.dart';
 
 /// 项目路径 ↔ 不透明 `projectId` 双向映射。
 ///
@@ -10,37 +11,35 @@ final class ProjectIdMapping {
   final Map<String, String> _idByPath = <String, String>{};
   final Map<String, String> _pathById = <String, String>{};
 
-  /// 输入为 `WorkspaceProject.path` 形态；散列前再规范化，
-  /// 保证 Windows 下大小写与分隔符差异得到同一 id。
+  /// 与工作区共用路径身份规则；大小写敏感目录不能在路由中合并。
   static String hashPath(String path) {
-    final normalized = path
-        .trim()
-        .replaceAll(r'\', '/')
-        .replaceAll(RegExp('/+\$'), '')
-        .toLowerCase();
+    final normalized = normalizeWorkspaceProjectPath(path);
     return sha256.convert(utf8.encode(normalized)).toString().substring(0, 12);
   }
 
-  /// 随 `openProjects` 存废建立或回收。
+  /// 先验证整批映射再发布；碰撞时不覆盖另一项目或留下半份映射。
   void syncProjects(Iterable<String> openPaths) {
-    final live = openPaths.toSet();
-    _idByPath.removeWhere((path, _) => !live.contains(path));
-    _pathById.removeWhere((_, path) => !live.contains(path));
-    for (final path in live) {
+    final ids = <String, String>{};
+    final paths = <String, String>{};
+    for (final rawPath in openPaths) {
+      final path = normalizeWorkspaceProjectPath(rawPath);
       final id = hashPath(path);
-      _idByPath[path] = id;
-      _pathById[id] = path;
+      if (paths.containsKey(id) && paths[id] != path) {
+        throw StateError('Project route identity collision');
+      }
+      ids[path] = id;
+      paths[id] = path;
     }
+    _idByPath
+      ..clear()
+      ..addAll(ids);
+    _pathById
+      ..clear()
+      ..addAll(paths);
   }
 
-  String? idForPath(String path) {
-    final direct = _idByPath[path];
-    if (direct != null) {
-      return direct;
-    }
-    final id = hashPath(path);
-    return _pathById.containsKey(id) ? id : null;
-  }
+  String? idForPath(String path) =>
+      _idByPath[normalizeWorkspaceProjectPath(path)];
 
   String? pathForId(String id) => _pathById[id];
 

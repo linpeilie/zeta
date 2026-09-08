@@ -322,6 +322,9 @@ class IdeShellController implements RouteReconcileHost {
     }
   }
 
+  Future<void> toggleProjectExpansion(String path) =>
+      projectThreadsController.toggleProject(path);
+
   Future<void> selectKnownProject(String path) async {
     if (_isDisposed) return;
     _cancelPendingSessionRestore();
@@ -435,8 +438,9 @@ class IdeShellController implements RouteReconcileHost {
   Future<void> startNewThreadForProject(
     String projectPath, {
     required String providerId,
+    bool Function() isCurrent = routeReconcileIsCurrent,
   }) async {
-    if (_isDisposed) return;
+    if (_isDisposed || !isCurrent()) return;
     if (!_canMutateAgentHistory(providerId: providerId)) {
       return;
     }
@@ -444,8 +448,12 @@ class IdeShellController implements RouteReconcileHost {
 
     // workspace-scoped provider 在切换时不能先于项目上下文初始化。
     if (projectPath != activeProjectPath) {
-      await _loadProject(projectPath, activateThreads: false);
-      if (activeProjectPath != projectPath) {
+      await _loadProject(
+        projectPath,
+        activateThreads: false,
+        isCurrent: isCurrent,
+      );
+      if (!isCurrent() || activeProjectPath != projectPath) {
         return;
       }
     }
@@ -454,9 +462,10 @@ class IdeShellController implements RouteReconcileHost {
       await _selectWorkspaceDraftEntry(
         projectPath: projectPath,
         providerId: providerId,
+        isCurrent: isCurrent,
       );
     } catch (_) {
-      return;
+      if (isCurrent()) rethrow;
     }
   }
 
@@ -472,12 +481,19 @@ class IdeShellController implements RouteReconcileHost {
   }
 
   @override
-  Future<void> openProjectHomeFromRoute(String projectPath) async {
-    if (_isDisposed) return;
+  Future<void> openProjectHomeFromRoute(
+    String projectPath, {
+    bool Function() isCurrent = routeReconcileIsCurrent,
+  }) async {
+    if (_isDisposed || !isCurrent()) return;
     if (projectPath != activeProjectPath) {
-      await _loadProject(projectPath, activateThreads: false);
+      await _loadProject(
+        projectPath,
+        activateThreads: false,
+        isCurrent: isCurrent,
+      );
     }
-    if (_isDisposed || activeProjectPath != projectPath) return;
+    if (_isDisposed || !isCurrent() || activeProjectPath != projectPath) return;
     _markProjectOpened(projectPath);
     final needRefresh = !projectThreadsController
         .stateFor(projectPath)
@@ -504,6 +520,7 @@ class IdeShellController implements RouteReconcileHost {
     }
     for (final entry in agentConversationWorkspace.entries) {
       if (entry.threadId == threadId &&
+          (projectPathHint == null || entry.projectPath == projectPathHint) &&
           (providerIdHint == null || entry.providerId == providerIdHint) &&
           entry.projectPath.isNotEmpty) {
         final now = _now();
@@ -528,16 +545,28 @@ class IdeShellController implements RouteReconcileHost {
   }
 
   @override
-  Future<bool> openThreadFromRoute(String projectPath, String threadId) async {
-    if (_isDisposed) return false;
+  Future<bool> openThreadFromRoute(
+    String projectPath,
+    String threadId, {
+    bool Function() isCurrent = routeReconcileIsCurrent,
+  }) async {
+    if (_isDisposed || !isCurrent()) return false;
     final target = resolveThreadTarget(
       threadId: threadId,
       projectPathHint: projectPath,
     );
     if (target == null) return false;
-    await selectProjectThread(target.projectPath, target.thread);
-    if (_isDisposed) return false;
-    return agentConversationWorkspace.selectedEntry?.threadId == threadId;
+    await selectProjectThread(
+      target.projectPath,
+      target.thread,
+      isCurrent: isCurrent,
+    );
+    if (_isDisposed || !isCurrent()) return false;
+    final selected = agentConversationWorkspace.selectedEntry;
+    return selected?.threadId == threadId &&
+        selected?.providerId == target.thread.providerId &&
+        selected?.projectPath == projectPath &&
+        selected?.controller.threadOpenPhase != AgentThreadOpenPhase.openFailed;
   }
 
   Future<void> openProjectInSystemFileManager(String projectPath) async {
@@ -596,13 +625,18 @@ class IdeShellController implements RouteReconcileHost {
 
   Future<void> selectProjectThread(
     String projectPath,
-    AgentThreadSummary thread,
-  ) async {
-    if (_isDisposed) return;
+    AgentThreadSummary thread, {
+    bool Function() isCurrent = routeReconcileIsCurrent,
+  }) async {
+    if (_isDisposed || !isCurrent()) return;
     if (projectPath != activeProjectPath) {
-      await _loadProject(projectPath, activateThreads: false);
+      await _loadProject(
+        projectPath,
+        activateThreads: false,
+        isCurrent: isCurrent,
+      );
     }
-    if (activeProjectPath != projectPath) {
+    if (!isCurrent() || activeProjectPath != projectPath) {
       return;
     }
     _markProjectOpened(projectPath);
@@ -610,6 +644,7 @@ class IdeShellController implements RouteReconcileHost {
       projectPath: projectPath,
       thread: thread,
       persistSelection: true,
+      isCurrent: isCurrent,
     );
   }
 
@@ -676,7 +711,11 @@ class IdeShellController implements RouteReconcileHost {
   /// 外部 application 切片已经提交会话字段后，请求保存完整 Shell 快照。
   void requestSessionSave() => _requestSessionSave();
 
-  Future<void> _loadProject(String path, {bool activateThreads = true}) async {
+  Future<void> _loadProject(
+    String path, {
+    bool activateThreads = true,
+    bool Function() isCurrent = routeReconcileIsCurrent,
+  }) async {
     if (_isDisposed) return;
     _homeRefreshToken += 1;
     _log.i('Opening project folder: $path');
@@ -684,7 +723,7 @@ class IdeShellController implements RouteReconcileHost {
 
     try {
       final loaded = await _workspace.openOrActivate(path);
-      if (!loaded || _isDisposed || activeProjectPath != path) {
+      if (!loaded || _isDisposed || !isCurrent() || activeProjectPath != path) {
         return;
       }
 
@@ -921,6 +960,7 @@ class IdeShellController implements RouteReconcileHost {
     required String projectPath,
     required String providerId,
     bool persistSelection = true,
+    bool Function() isCurrent = routeReconcileIsCurrent,
   }) async {
     final entry = agentConversationWorkspace.ensureDraftEntry(
       callbacks: entryCallbacks,
@@ -930,7 +970,7 @@ class IdeShellController implements RouteReconcileHost {
     entry.applyDraftIdentity(projectPath: projectPath, providerId: providerId);
     agentConversationWorkspace.selectEntry(entry.entryId);
     await entry.controller.loadSettings();
-    if (_isDisposed || entry.closing) return entry;
+    if (_isDisposed || entry.closing || !isCurrent()) return entry;
     if (entry.controller.activeProviderId != providerId) {
       try {
         await lifetimes
@@ -946,6 +986,7 @@ class IdeShellController implements RouteReconcileHost {
         rethrow;
       }
     }
+    if (_isDisposed || entry.closing || !isCurrent()) return entry;
     entry.controller.updateContext(
       projectPath: projectPath,
       contextFilePath: _currentWorkspaceFilePath,
@@ -965,6 +1006,7 @@ class IdeShellController implements RouteReconcileHost {
     required String projectPath,
     required AgentThreadSummary thread,
     bool persistSelection = true,
+    bool Function() isCurrent = routeReconcileIsCurrent,
   }) async {
     final existingEntry = agentConversationWorkspace.entryForThread(
       providerId: thread.providerId,
@@ -994,7 +1036,7 @@ class IdeShellController implements RouteReconcileHost {
       // Entry bootstrap only; user catalog requests go through Actions.
       unawaited(entry.controller.loadModels());
     }
-    if (_isDisposed || entry.closing) return entry;
+    if (_isDisposed || entry.closing || !isCurrent()) return entry;
     _syncSelectedThreadTitleFromList();
     if (persistSelection) {
       _requestSessionSave();
@@ -1068,7 +1110,6 @@ class IdeShellController implements RouteReconcileHost {
         state.threads.any(
           (thread) => thread.id == sessionId && thread.providerId == providerId,
         );
-    var registeredNewSession = false;
     if (currentSession != null && !hasProviderSummary) {
       projectThreadsController.registerSession(
         projectPath,
@@ -1076,7 +1117,6 @@ class IdeShellController implements RouteReconcileHost {
         preview: _provisionalThreadPreview(entry.controller),
         markRunning: snapshot.isTurnRunning,
       );
-      registeredNewSession = true;
     }
     if (sessionId != null) {
       projectThreadsController.registerThreadMapping(projectPath, sessionId);
@@ -1100,13 +1140,6 @@ class IdeShellController implements RouteReconcileHost {
     agentConversationWorkspace.setThreadMapping(projectPath, sessionId);
     projectThreadsController.selectThreadId(projectPath, sessionId);
     _syncSelectedThreadTitleFromList();
-
-    if (registeredNewSession) {
-      final projectId = projectIdMapping?.idForPath(projectPath);
-      if (projectId != null) {
-        navigationPort?.replace(ThreadLocation(projectId, sessionId));
-      }
-    }
   }
 
   Future<AgentCommandOutcome> _openCreatedThread({

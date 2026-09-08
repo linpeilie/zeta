@@ -43,6 +43,7 @@ String? resolveAppRedirect({
   return switch (current) {
     GlobalHomeLocation() => null,
     SettingsLocation() => null,
+    UsageLocation() => null,
     ProjectHomeLocation(:final projectId) => checkProject(projectId),
     ThreadLocation(:final projectId) => checkProject(projectId),
     DraftThreadLocation(:final projectId, :final providerId) =>

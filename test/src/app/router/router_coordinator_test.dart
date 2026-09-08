@@ -133,6 +133,35 @@ void main() {
     expect(host.calls, isEmpty);
   });
 
+  test('explicit retry reopens the same successful location', () async {
+    final location = ProjectHomeLocation(projectId);
+    expect(await coordinator.reconcile(location), isTrue);
+    host.calls.clear();
+    expect(await coordinator.reconcile(location, retry: true), isTrue);
+    expect(host.calls, ['home:$_projectPath']);
+  });
+
+  test('close settles a deep link still waiting for restore', () async {
+    host.restoreGate = Completer<void>();
+    final pending = coordinator.activateThreadFromDeepLink('codex', 'tid');
+    coordinator.dispose();
+    expect(await pending, isFalse);
+    expect(navigation.goes, isEmpty);
+    expect(host.calls, isEmpty);
+  });
+
+  test('close settles reconcile without waiting for the resource', () async {
+    host.gate = Completer<void>();
+    host.entered = Completer<void>();
+    final pending = coordinator.reconcile(ProjectHomeLocation(projectId));
+    await host.entered!.future;
+    coordinator.dispose();
+    expect(await pending, isFalse);
+    host.gate!.complete();
+    await Future<void>.delayed(Duration.zero);
+    expect(navigation.goes, isEmpty);
+  });
+
   test('a newer location invalidates an in-flight reconcile', () async {
     host.gate = Completer<void>();
     host.entered = Completer<void>();
@@ -196,6 +225,21 @@ void main() {
     },
   );
 
+  test(
+    'deep link reuses reconcile completed before navigation returns',
+    () async {
+      host.projectPathByThread['tid'] = _projectPath;
+      navigation.onNavigate = (location) async {
+        expect(await coordinator.reconcile(location), isTrue);
+      };
+      expect(
+        await coordinator.activateThreadFromDeepLink('codex', 'tid'),
+        isTrue,
+      );
+      expect(host.calls, ['thread:$_projectPath:tid']);
+    },
+  );
+
   test('deep link failure after go returns false', () async {
     host.projectPathByThread['tid'] = _projectPath;
     host.openThreadResult = false;
@@ -237,7 +281,10 @@ final class _FakeReconcileHost implements RouteReconcileHost {
   }
 
   @override
-  Future<void> openProjectHomeFromRoute(String projectPath) async {
+  Future<void> openProjectHomeFromRoute(
+    String projectPath, {
+    bool Function() isCurrent = routeReconcileIsCurrent,
+  }) async {
     calls.add('home:$projectPath');
     await _wait();
   }
@@ -246,13 +293,18 @@ final class _FakeReconcileHost implements RouteReconcileHost {
   Future<void> startNewThreadForProject(
     String projectPath, {
     required String providerId,
+    bool Function() isCurrent = routeReconcileIsCurrent,
   }) async {
     calls.add('draft:$projectPath:$providerId');
     await _wait();
   }
 
   @override
-  Future<bool> openThreadFromRoute(String projectPath, String threadId) async {
+  Future<bool> openThreadFromRoute(
+    String projectPath,
+    String threadId, {
+    bool Function() isCurrent = routeReconcileIsCurrent,
+  }) async {
     calls.add('thread:$projectPath:$threadId');
     await _wait();
     final error = throwOnOpen;
@@ -272,11 +324,19 @@ final class _FakeReconcileHost implements RouteReconcileHost {
 }
 
 final class _RecordingNavigationPort implements AppNavigationPort {
+  Future<void> Function(AppRouteLocation)? onNavigate;
   final List<AppRouteLocation> goes = <AppRouteLocation>[];
   final List<AppRouteLocation> replaces = <AppRouteLocation>[];
 
   @override
   void go(AppRouteLocation location) => goes.add(location);
+
+  @override
+  Future<NavigationOutcome> navigateTo(AppRouteLocation location) async {
+    goes.add(location);
+    await onNavigate?.call(location);
+    return NavigationOutcome.reached;
+  }
 
   @override
   void replace(AppRouteLocation location) => replaces.add(location);

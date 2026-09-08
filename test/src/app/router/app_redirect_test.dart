@@ -40,6 +40,7 @@ void main() {
         providerIds: _providers,
       );
       expect(_redirect('/settings/general', snapshot: pending), '/');
+      expect(_redirect('/usage', snapshot: pending), '/');
       expect(_redirect('/project/$_projectId', snapshot: pending), '/');
       expect(
         _redirect('/project/$_projectId/thread/tid', snapshot: pending),
@@ -108,6 +109,7 @@ void main() {
 
   test('global home stays; unknown paths normalize without looping', () {
     expect(_redirect('/'), isNull);
+    expect(_redirect('/usage'), isNull);
     expect(_redirect('/not-a-route'), '/');
     expect(_redirect('/project/has.dot'), '/');
   });

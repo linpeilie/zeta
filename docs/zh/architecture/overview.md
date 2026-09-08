@@ -92,6 +92,8 @@ EffectRunner 在执行前复核 generation、runtime/epoch 及所需 thread/turn
 
 四类交互分别处理：权限审批、用户提问、Provider Plan 审批、Zeta 本地执行交接。执行交接新建 Default 回合，不复用审批端口。接受计划不预授权其中的操作；恢复权限仅限仍有效的用户选择，否则采用 Provider 的保守默认或要求明确选择。
 
+设置与使用统计作为根导航覆盖页共用窗口框架，返回时保留内容页。通知导航先等待路由提交，再等待资源就绪；异步选择按导航代次校验。草稿晋升和 entry 关闭由路由协调器按内容访问与 owner lifetime 处理，覆盖期间不抢走当前页面。
+
 ## 工作台 UI
 
 `IdeHome` 组合唯一 Workbench 骨架，各页填充 Navigation、Canvas、Inspector。中栏内容由路由直接渲染；位置以 URL 为真源。跨会话的草稿与滚动由 presentation 层 retention 保留，不用 `IndexedStack` 同时布局长时间线。

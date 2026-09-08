@@ -7,7 +7,8 @@ import 'package:zeta/src/app/router/pages/draft_conversation_route_page.dart';
 import 'package:zeta/src/app/router/pages/global_home_route_page.dart';
 import 'package:zeta/src/app/router/pages/project_home_route_page.dart';
 import 'package:zeta/src/app/router/pages/settings_route_page.dart';
-import 'package:zeta/src/app/router/settings_route_intents.dart';
+import 'package:zeta/src/app/router/app_navigation.dart';
+import 'package:zeta/src/app/router/pages/usage_route_page.dart';
 import 'package:zeta/src/features/settings/domain/settings_section.dart';
 import 'package:zeta/src/features/settings/presentation/settings_can_leave.dart';
 import 'package:zeta/src/ui/features/ide/views/ide_home.dart';
@@ -27,9 +28,9 @@ Widget _noPageTransition(
 
 /// 设置页盖住壳，但必须 `opaque: false`：根 Navigator 遇到不透明 overlay 会把下层
 /// `tickerEnabled` 关掉；`TickerMode(enabled: true)` 不能覆盖祖先（AND）。
-CustomTransitionPage<void> _settingsCoveringPage(Widget child) {
+CustomTransitionPage<void> _coveringPage(String key, Widget child) {
   return CustomTransitionPage<void>(
-    key: const ValueKey<String>('settings-page'),
+    key: ValueKey<String>(key),
     opaque: false,
     transitionDuration: Duration.zero,
     reverseTransitionDuration: Duration.zero,
@@ -45,12 +46,11 @@ SettingsSection _settingsSectionOf(GoRouterState state) {
 
 Future<bool> _onExitSettings(BuildContext context, GoRouterState state) async {
   final container = ProviderScope.containerOf(context, listen: false);
-  final canLeave = container.read(settingsCanLeaveRegistryProvider).callback;
-  final allowed = canLeave == null ? true : await canLeave();
-  if (!allowed) {
-    container.read(openUsageStatisticsAfterSettingsProvider.notifier).cancel();
-  }
-  return allowed;
+  final canLeave = container.read(settingsCanLeaveRegistryProvider).confirm;
+  final navigation = container.read(appNavigationPortProvider);
+  return navigation is MountableAppNavigationPort
+      ? navigation.confirmExit(canLeave)
+      : canLeave();
 }
 
 /// 声明式路由表。内容路由在 [IdeHome] 壳内直渲；设置页压在根导航上。
@@ -115,6 +115,12 @@ List<RouteBase> buildAppRoutes({
       ],
     ),
     GoRoute(
+      path: '/usage',
+      parentNavigatorKey: rootNavigatorKey,
+      pageBuilder: (context, state) =>
+          _coveringPage('usage-page', const UsageRoutePage()),
+    ),
+    GoRoute(
       path: '/settings',
       redirect: (context, state) => '/settings/general',
     ),
@@ -122,7 +128,8 @@ List<RouteBase> buildAppRoutes({
       path: '/settings/:section',
       parentNavigatorKey: rootNavigatorKey,
       onExit: _onExitSettings,
-      pageBuilder: (context, state) => _settingsCoveringPage(
+      pageBuilder: (context, state) => _coveringPage(
+        'settings-page',
         SettingsRoutePage(section: _settingsSectionOf(state)),
       ),
     ),
