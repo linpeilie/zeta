@@ -273,7 +273,18 @@ class IdeShellController implements RouteReconcileHost {
       if (path == null || _isDisposed) {
         return;
       }
+      // 用户已接管启动恢复：解锁 redirect，否则会一直停在 `/` 转圈。
+      ideSessionOperations.completeInitialRestore();
       await _onProjectActivated(path, activateThreads: true);
+      if (_isDisposed) return;
+      final mapping = projectIdMapping;
+      if (mapping != null) {
+        mapping.syncProjects(projects);
+        final projectId = mapping.idForPath(path);
+        if (projectId != null) {
+          navigationPort?.go(ProjectHomeLocation(projectId));
+        }
+      }
     } catch (error, stackTrace) {
       _log.w(
         'Could not open project folder',
@@ -1036,16 +1047,16 @@ class IdeShellController implements RouteReconcileHost {
     }
 
     final snapshot = entry.threadSnapshot;
-    final sessionId = snapshot.sessionId;
-    final state = projectThreadsController.stateFor(projectPath);
     final currentSession = entry.controller.currentSession;
+    final sessionId = currentSession?.id ?? snapshot.sessionId;
+    final providerId = currentSession?.providerId ?? snapshot.providerId;
+    final state = projectThreadsController.stateFor(projectPath);
     final hasProviderSummary =
         sessionId == null ||
         state.threads.any(
-          (thread) =>
-              thread.id == sessionId &&
-              thread.providerId == snapshot.providerId,
+          (thread) => thread.id == sessionId && thread.providerId == providerId,
         );
+    var registeredNewSession = false;
     if (currentSession != null && !hasProviderSummary) {
       projectThreadsController.registerSession(
         projectPath,
@@ -1053,6 +1064,7 @@ class IdeShellController implements RouteReconcileHost {
         preview: _provisionalThreadPreview(entry.controller),
         markRunning: snapshot.isTurnRunning,
       );
+      registeredNewSession = true;
     }
     if (sessionId != null) {
       projectThreadsController.registerThreadMapping(projectPath, sessionId);
@@ -1076,6 +1088,13 @@ class IdeShellController implements RouteReconcileHost {
     agentConversationWorkspace.setThreadMapping(projectPath, sessionId);
     projectThreadsController.selectThreadId(projectPath, sessionId);
     _syncSelectedThreadTitleFromList();
+
+    if (registeredNewSession) {
+      final projectId = projectIdMapping?.idForPath(projectPath);
+      if (projectId != null) {
+        navigationPort?.replace(ThreadLocation(projectId, sessionId));
+      }
+    }
   }
 
   Future<AgentCommandOutcome> _openCreatedThread({

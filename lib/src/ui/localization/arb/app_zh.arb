@@ -896,6 +896,18 @@
   "@workbenchCannotOpenNotificationThread": {
     "description": "Notification thread missing"
   },
+  "conversationLoadingTitle": "正在打开会话",
+  "@conversationLoadingTitle": {
+    "description": "Conversation route title while the session is opening"
+  },
+  "conversationOpenFailed": "无法打开该会话",
+  "@conversationOpenFailed": {
+    "description": "Conversation route empty state after open failed"
+  },
+  "conversationOpenFailedBack": "返回项目",
+  "@conversationOpenFailedBack": {
+    "description": "Conversation route failed-state back button"
+  },
   "workbenchProviderDetectionFailed": "无法检测 Provider：{error}",
   "@workbenchProviderDetectionFailed": {
     "description": "Provider detect error",

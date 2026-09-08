@@ -3,10 +3,13 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:zeta/src/app/conversation_workspace_slice/agent_conversation_workspace_notifier.dart';
 import 'package:zeta/src/app/router/app_route_location.dart';
 import 'package:zeta/src/app/router/project_id_mapping.dart';
 import 'package:zeta/src/app/router/route_reconcile_host.dart';
 import 'package:zeta/src/app/router/route_reconcile_status.dart';
+import 'package:zeta/src/features/ide_session/application/ide_session_slice/ide_session_slice_notifier.dart';
+import 'package:zeta/src/features/workspace/application/workspace_notifier.dart';
 
 /// 只做资源 reconcile：位置 → Shell 方法、串行化、过期检查、失败状态。
 ///
@@ -40,6 +43,8 @@ final class RouterCoordinator {
   bool _disposed = false;
   AppRouteLocation? _settledLocation;
   final Map<int, Completer<bool>> _reconcileWaiters = <int, Completer<bool>>{};
+  ProviderSubscription<bool>? _restoreSub;
+  bool _restoreReplaceAttempted = false;
 
   RouteReconcileHost get _host => _readHost();
 
@@ -52,10 +57,25 @@ final class RouterCoordinator {
     detach();
     _router = router;
     router.routerDelegate.addListener(_onLocationChanged);
-    unawaited(reconcile(parseAppRouteLocation(router.state.uri)));
+    _restoreSub = _ref.listen<bool>(
+      ideSessionSliceProvider.select((state) => state.initialRestoreCompleted),
+      (previous, completed) {
+        if (_disposed || previous == true || !completed) {
+          return;
+        }
+        _replaceAfterRestoreIfNeeded();
+      },
+    );
+    if (router.routerDelegate.currentConfiguration.isNotEmpty) {
+      unawaited(reconcile(parseAppRouteLocation(_routerUri(router))));
+      _replaceAfterRestoreIfNeeded();
+    }
   }
 
   void detach() {
+    _restoreSub?.close();
+    _restoreSub = null;
+    _restoreReplaceAttempted = false;
     final router = _router;
     if (router == null) {
       return;
@@ -83,7 +103,68 @@ final class RouterCoordinator {
     if (_disposed || router == null) {
       return;
     }
-    unawaited(reconcile(parseAppRouteLocation(router.state.uri)));
+    if (router.routerDelegate.currentConfiguration.isEmpty) {
+      return;
+    }
+    unawaited(reconcile(parseAppRouteLocation(_routerUri(router))));
+    _replaceAfterRestoreIfNeeded();
+  }
+
+  void _replaceAfterRestoreIfNeeded() {
+    if (_restoreReplaceAttempted) {
+      return;
+    }
+    final router = _router;
+    if (_disposed || router == null) {
+      return;
+    }
+    if (router.routerDelegate.currentConfiguration.isEmpty) {
+      return;
+    }
+    if (!_ref.read(ideSessionSliceProvider).initialRestoreCompleted) {
+      return;
+    }
+    _restoreReplaceAttempted = true;
+    final current = parseAppRouteLocation(_routerUri(router));
+    if (current is! GlobalHomeLocation) {
+      return;
+    }
+    final canonical = _canonicalLocationAfterRestore();
+    if (canonical is GlobalHomeLocation) {
+      return;
+    }
+    router.replace(canonical.toPath());
+  }
+
+  AppRouteLocation _canonicalLocationAfterRestore() {
+    final workspace = _ref.read(workspaceProvider);
+    _mapping.syncProjects(
+      workspace.openProjects.map((project) => project.path),
+    );
+    final path = workspace.activeProjectPath;
+    if (path == null) {
+      return const GlobalHomeLocation();
+    }
+    final projectId = _mapping.idForPath(path);
+    if (projectId == null) {
+      return const GlobalHomeLocation();
+    }
+    final threadId = _ref
+        .read(agentConversationWorkspaceProvider)
+        .threadIdsByProject[path];
+    if (threadId == null || threadId.isEmpty) {
+      return ProjectHomeLocation(projectId);
+    }
+    return ThreadLocation(projectId, threadId);
+  }
+
+  /// GoRouter.state 在尚未解析首屏匹配时为空；此时读信息提供者上的 URI。
+  Uri _routerUri(GoRouter router) {
+    final configuration = router.routerDelegate.currentConfiguration;
+    if (configuration.isEmpty) {
+      return router.routeInformationProvider.value.uri;
+    }
+    return router.state.uri;
   }
 
   bool _stale(int seq) => _disposed || seq != _seq;

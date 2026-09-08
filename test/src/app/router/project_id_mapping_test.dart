@@ -57,4 +57,13 @@ void main() {
     expect(mapping.idForPath('/missing'), isNull);
     expect(mapping.pathForId('deadbeefdead'), isNull);
   });
+
+  test('idForPath matches a synced path by normalized hash', () {
+    final mapping = ProjectIdMapping();
+    mapping.syncProjects(const <String>[r'C:\Users\me\project']);
+    expect(
+      mapping.idForPath(r'c:/users/me/project'),
+      mapping.idForPath(r'C:\Users\me\project'),
+    );
+  });
 }

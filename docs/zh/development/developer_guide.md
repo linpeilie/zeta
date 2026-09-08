@@ -1,6 +1,6 @@
 # 开发者文档
 
-最后核对：2026-09-07（新增路由开发指南）
+最后核对：2026-09-08（路由直渲中栏，删除保活栈）
 
 本文面向贡献者，保留环境、命令和专项接入清单。分层与生命周期约束见[工程规范](../architecture/engineering_standards.md)，文档改动见[文档维护](documentation.md)。
 
@@ -668,11 +668,12 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
 
 ### 无屏闪纪律
 
-1. 内容路由一律 `NoTransitionPage`。
+1. 内容路由一律 `NoTransitionPage`，Page 使用 `state.pageKey` 按路由模式复用；参数变化只给目标页 Widget 设 Key，避免同模式在壳 Navigator 里叠多个 Page。
 2. builder 同步读 slice：已打开的会话首帧即内容；冷开走骨架（标题来自列表 summary，深链目标未加载时用通用标题）+ 去抖 loading（显式状态机，持续超过约 100ms 才转圈；禁止裸 `Future.delayed`）。
 3. 滚动恢复只走 `IdeSmoothScrollController(initialScrollOffset:)`，在 ScrollPosition 创建时生效。
 4. 高亮与中栏同读 `GoRouterState.of(context)`，切换帧内不出现「旧高亮 + 新内容」或相反。
 5. 切换 reconcile 不得重拉会话列表；`refreshListenable` 保持单输入与内容门控。
+6. 壳内用 Offstage 盖住内容路由时，不得对内容子树关闭 `TickerMode`：Riverpod 3 会据此暂停 `ref.watch`。
 
 ### 会话 UI 状态
 
@@ -723,7 +724,7 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
   presentation 层，不写会话。
 - 需要跨页面保持的 slot 子节点使用稳定位置和稳定 Key。Key 必须放在可能因
   slot 增删而换位的 Flex 子节点上，不能只放在其内部后代。
-- 会话内容由路由直接渲染，跨销毁保留走 presentation 层 retention/缓存 store，见[§8](#8-路由开发指南)。不要用 `IndexedStack` 保留长时间线。不要把 `IdeRetainedPageView` 扩到新代码路径。
+- 会话内容由路由直接渲染，跨销毁保留走 presentation 层 retention/缓存 store，见[§8](#8-路由开发指南)。不要用 `IndexedStack` 保留长时间线。
 - `IdeConstraintBucketBuilder` 的稳定回调可跨父级 resize 复用 child。若 builder 捕获
   可变父配置，应让回调身份随配置变化；AgentPane 本身只在 compact / regular 档位或
   view model 真正替换时重建响应式业务树。

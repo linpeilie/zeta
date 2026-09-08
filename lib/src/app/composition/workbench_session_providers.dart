@@ -186,14 +186,19 @@ final workbenchSessionProvider = Provider<WorkbenchSession>((ref) {
   return WorkbenchSession(shell: shell, lifetimes: lifetimes, events: events);
 }, dependencies: [ideSessionSliceProvider]);
 
-final routerCoordinatorProvider = Provider<RouterCoordinator>((ref) {
-  final coordinator = RouterCoordinator(
-    ref: ref,
-    mapping: ref.read(projectIdMappingProvider),
-    navigation: ref.read(appNavigationPortProvider),
-    readProviderIds: () => ref.read(registeredProviderIdsProvider),
-    readHost: () => ref.read(workbenchSessionProvider).shell,
-  );
-  ref.onDispose(coordinator.dispose);
-  return coordinator;
-}, name: 'routerCoordinator');
+final routerCoordinatorProvider = Provider<RouterCoordinator>(
+  (ref) {
+    final coordinator = RouterCoordinator(
+      ref: ref,
+      mapping: ref.read(projectIdMappingProvider),
+      navigation: ref.read(appNavigationPortProvider),
+      readProviderIds: () => ref.read(registeredProviderIdsProvider),
+      readHost: () => ref.read(workbenchSessionProvider).shell,
+    );
+    ref.onDispose(coordinator.dispose);
+    return coordinator;
+  },
+  name: 'routerCoordinator',
+  // workbenchSession 自身带 dependencies；readHost 的 ref.read 必须列入，否则 reconcile 会被 scoped 断言拒绝。
+  dependencies: [ideSessionSliceProvider, workbenchSessionProvider],
+);

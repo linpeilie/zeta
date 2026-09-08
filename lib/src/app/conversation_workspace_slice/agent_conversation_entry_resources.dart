@@ -78,6 +78,7 @@ final class AgentConversationEntryResources {
     required this.onChanged,
   }) : _threadSnapshot = controller.threadSnapshot {
     controller.threadSnapshotListenable.addListener(_handleRuntimeChanged);
+    bindingLease.binding.addListener(_handleRuntimeChanged);
     _unsubscribeProviderSettings = providerController.subscribe(
       _handleRuntimeChanged,
     );
@@ -165,7 +166,7 @@ final class AgentConversationEntryResources {
       _threadSnapshot = nextSnapshot;
       changed = true;
     }
-    final sessionId = nextSnapshot.sessionId;
+    final sessionId = nextSnapshot.sessionId ?? controller.currentSession?.id;
     if (sessionId != null) {
       final nextKey = AgentThreadWorkspaceKey.thread(
         providerId: nextSnapshot.providerId,
@@ -185,6 +186,7 @@ final class AgentConversationEntryResources {
     if (_disposed) return;
     _disposed = true;
     controller.threadSnapshotListenable.removeListener(_handleRuntimeChanged);
+    bindingLease.binding.removeListener(_handleRuntimeChanged);
     _unsubscribeProviderSettings();
   }
 

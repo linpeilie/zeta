@@ -634,6 +634,15 @@ class AppLocalizationsEn extends AppLocalizations {
       'Could not open the session from the notification. It may have been deleted or is not in the current project list.';
 
   @override
+  String get conversationLoadingTitle => 'Opening conversation';
+
+  @override
+  String get conversationOpenFailed => 'Could not open this conversation';
+
+  @override
+  String get conversationOpenFailedBack => 'Back to project';
+
+  @override
   String workbenchProviderDetectionFailed(String error) {
     return 'Could not detect Provider: $error';
   }

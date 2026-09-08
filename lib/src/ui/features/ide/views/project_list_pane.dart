@@ -49,6 +49,7 @@ class ProjectListPane extends StatelessWidget {
     required this.onDeleteThread,
     required this.onForkThread,
     required this.onDismissCompletedThread,
+    this.highlightedThreadId,
     super.key,
   });
 
@@ -70,6 +71,7 @@ class ProjectListPane extends StatelessWidget {
   final ProjectThreadAction onDeleteThread;
   final ProjectThreadAction onForkThread;
   final ProjectThreadCompletedDismissed onDismissCompletedThread;
+  final String? highlightedThreadId;
 
   @override
   Widget build(BuildContext context) {
@@ -88,6 +90,7 @@ class ProjectListPane extends StatelessWidget {
                 return _ProjectTile(
                   path: path,
                   selected: selected,
+                  highlightedThreadId: highlightedThreadId,
                   threadState: threadStateFor(path),
                   onTap: () => onSelectProject(path),
                   onSelectThread: onSelectThread,
@@ -124,6 +127,7 @@ class _ProjectTile extends StatefulWidget {
   const _ProjectTile({
     required this.path,
     required this.selected,
+    required this.highlightedThreadId,
     required this.threadState,
     required this.onTap,
     required this.onSelectThread,
@@ -144,6 +148,7 @@ class _ProjectTile extends StatefulWidget {
 
   final String path;
   final bool selected;
+  final String? highlightedThreadId;
   final ProjectThreadListState threadState;
   final VoidCallback onTap;
   final ProjectThreadSelected onSelectThread;
@@ -498,6 +503,7 @@ class _ProjectTileState extends State<_ProjectTile> {
             _ProjectThreadList(
               projectPath: widget.path,
               state: widget.threadState,
+              highlightedThreadId: widget.highlightedThreadId,
               onSelectThread: widget.onSelectThread,
               onLoadMoreThreads: widget.onLoadMoreThreads,
               onRetryThreads: widget.onRetryThreads,
@@ -519,6 +525,7 @@ class _ProjectThreadList extends StatelessWidget {
   const _ProjectThreadList({
     required this.projectPath,
     required this.state,
+    required this.highlightedThreadId,
     required this.onSelectThread,
     required this.onLoadMoreThreads,
     required this.onRetryThreads,
@@ -533,6 +540,7 @@ class _ProjectThreadList extends StatelessWidget {
 
   final String projectPath;
   final ProjectThreadListState state;
+  final String? highlightedThreadId;
   final ProjectThreadSelected onSelectThread;
   final VoidCallback onLoadMoreThreads;
   final VoidCallback onRetryThreads;
@@ -553,7 +561,8 @@ class _ProjectThreadList extends StatelessWidget {
           thread: thread,
           // 仅 Zeta live（runningThreadIds）显示执行中；忽略外部客户端 list active。
           isZetaLiveRunning: state.isThreadRunning(thread.id),
-          selected: thread.id == state.selectedThreadId,
+          selected:
+              thread.id == (highlightedThreadId ?? state.selectedThreadId),
           showCompleted: state.completedThreadIds.contains(thread.id),
           archivedView: state.archived,
           capabilities: capabilitiesForProvider(thread.providerId),

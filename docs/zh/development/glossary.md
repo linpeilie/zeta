@@ -202,8 +202,8 @@ Composer 里的原子 chip，用 `U+FFFC` 占位符 + `WidgetSpan` 渲染成 `$n
 **AgentPaneRetention**
 按 RuntimeController 弱身份保存会话输入草稿和滚动偏移。pane `deactivate` 写入，`initState` 经 `initialScrollOffset` 恢复，entry 关闭时清除。
 
-**IdeRetainedPageView（保活页面栈）**
-历史上用过的跨页面保活容器。新代码不要再扩大使用面；会话切换后的保留改走 retention/缓存 store 与路由直渲。**不要用 `IndexedStack` 替代**——它会一直保留长时间线的布局开销。
+**IdeRetainedPageView（已删除）**
+历史上的跨页面保活容器，已随路由直渲移除。会话切换后的保留走 retention/缓存 store。不要用 `IndexedStack` 替代——它会一直保留长时间线的布局开销。
 
 **Graphite token（设计 token）**
 深色 Graphite Night / 浅色 Graphite Day 两套语义 token，唯一来源是 `IdeThemeScope`。`shadcn_flutter` 的 theme 只是投影，不能反向回读。业务代码禁止硬编码颜色、圆角和阴影。表面遵循严格单调的明度阶梯（frame → canvas → pane → control → popover），层级只靠阶梯加 1px 半透明描边表达，除浮层的极淡投影外全局零阴影。

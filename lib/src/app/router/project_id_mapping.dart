@@ -33,7 +33,14 @@ final class ProjectIdMapping {
     }
   }
 
-  String? idForPath(String path) => _idByPath[path];
+  String? idForPath(String path) {
+    final direct = _idByPath[path];
+    if (direct != null) {
+      return direct;
+    }
+    final id = hashPath(path);
+    return _pathById.containsKey(id) ? id : null;
+  }
 
   String? pathForId(String id) => _pathById[id];
 

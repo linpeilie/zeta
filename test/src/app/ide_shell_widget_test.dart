@@ -495,6 +495,8 @@ void main() {
         failureMessage: 'Usage terminal thread did not become ready',
       );
       await tester.tap(threadRow);
+      await tester.pump();
+      await tester.pump();
       await pumpUntilCondition(
         tester,
         () => _agentMessageInput().hitTestable().evaluate().isNotEmpty,
@@ -1770,10 +1772,15 @@ void main() {
         MessageSendShortcut.primaryModifierEnter,
         reason: '设置页操作必须先发布到唯一 settings slice',
       );
-      // Agent 子树离屏 keep-alive 时不重建；重新激活时才消费最新 slice。
-      expect(
-        (retained.agentPaneElement.widget as AgentPane).messageSendShortcut,
-        MessageSendShortcut.enter,
+      await pumpUntilCondition(
+        tester,
+        () =>
+            retained.agentPaneElement.mounted &&
+            (retained.agentPaneElement.widget as AgentPane)
+                    .messageSendShortcut ==
+                MessageSendShortcut.primaryModifierEnter,
+        failureMessage:
+            'Offstage AgentPane did not receive the settings shortcut',
       );
       expect(retained.inputController.text, retained.draft);
 
@@ -1970,7 +1977,7 @@ void main() {
     );
     expect(retained.agentPaneElement.mounted, isTrue);
 
-    // 离屏 keep-alive 子树在重新激活时消费新配置；Element 本身不能被替换。
+    // Offstage 子树仍挂在壳上；Element 本身不能被替换。
     await tester.tap(find.byKey(const ValueKey('titlebar-back-action')));
     await tester.pump();
     await pumpUntilCondition(
@@ -2118,7 +2125,7 @@ void main() {
   });
 
   testWidgets(
-    'inactive agent panes stay keep-alive without joining resize layout',
+    'switching threads unmounts the previous pane and restores draft after resize',
     (tester) async {
       final directory = Directory.systemTemp.createTempSync(
         'zeta_inactive_layout_',
@@ -2218,9 +2225,6 @@ void main() {
       await tester.enterText(_agentMessageInput(), 'inactive-layout-draft-a');
       await tester.pump();
       final paneAElement = tester.element(find.byType(AgentPane));
-      final draftController = tester
-          .widget<EditableText>(_agentMessageInput())
-          .controller;
 
       await tester.tap(threadBRow);
       await pumpUntilCondition(
@@ -2229,24 +2233,16 @@ void main() {
         failureMessage: 'Thread B did not open',
       );
 
-      // keep-alive 离屏页默认 skipOffstage；需显式包含。
-      final allAgentPanes = find.byType(AgentPane, skipOffstage: false);
-      expect(allAgentPanes.evaluate().length, greaterThanOrEqualTo(2));
-      expect(paneAElement.mounted, isTrue);
-      expect(draftController.text, 'inactive-layout-draft-a');
+      expect(find.byType(AgentPane, skipOffstage: false), findsOneWidget);
+      expect(paneAElement.mounted, isFalse);
 
-      // 横向 resize 不应丢弃 keep-alive 会话的 State。
+      // 横向 resize 不得丢掉 retention 里的草稿。
       for (var width = 1400; width >= 1100; width -= 20) {
         tester.view.physicalSize = Size(width.toDouble(), 900);
         await tester.pump();
       }
 
-      expect(paneAElement.mounted, isTrue);
-      expect(
-        find.byType(AgentPane, skipOffstage: false).evaluate().length,
-        greaterThanOrEqualTo(2),
-      );
-      expect(draftController.text, 'inactive-layout-draft-a');
+      expect(find.byType(AgentPane, skipOffstage: false), findsOneWidget);
 
       await tester.tap(threadARow);
       await pumpUntilCondition(
@@ -2256,13 +2252,6 @@ void main() {
             tester.widget<EditableText>(_agentMessageInput()).controller.text ==
                 'inactive-layout-draft-a',
         failureMessage: 'Thread A draft was not retained after resize',
-      );
-      expect(
-        find
-            .byType(AgentPane, skipOffstage: false)
-            .evaluate()
-            .any((element) => identical(element, paneAElement)),
-        isTrue,
       );
       expect(tester.takeException(), isNull);
     },

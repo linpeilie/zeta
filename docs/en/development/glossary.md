@@ -202,8 +202,8 @@ The non-widget navigation port (`go` / `replace`). The composition root wires Go
 **AgentPaneRetention**
 Composer drafts and timeline scroll stored by weak RuntimeController identity. Written on pane `deactivate`, restored via `initialScrollOffset` in `initState`, and cleared when the entry closes.
 
-**IdeRetainedPageView**
-A historical cross-page retention container. Do not expand it in new code; session retention now uses the presentation store plus direct route rendering. **Don't substitute `IndexedStack`** — it keeps paying layout cost for long timelines.
+**IdeRetainedPageView (removed)**
+A former cross-page keep-alive container, removed when routes started rendering the canvas directly. Session retention now uses the presentation store. Do not substitute `IndexedStack` — it keeps paying layout cost for long timelines.
 
 **Graphite tokens**
 The dark Graphite Night / light Graphite Day semantic token sets, with `IdeThemeScope` as the source of truth. The `shadcn_flutter` theme is only a projection and must never be read back from. Business code must not hard-code colors, radii, or shadows. Surfaces follow a strictly monotonic luminance ladder (frame to canvas to pane to control to popover); depth comes from that ladder plus 1px translucent hairlines, with zero shadows anywhere except a deliberately faint fallback on floating layers.
