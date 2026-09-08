@@ -585,7 +585,7 @@ class _IdeHomeState extends ConsumerState<IdeHome> {
             : mapping.pathForId(routeProjectId);
         return ProjectListPane(
           projects: workspace.projectPaths,
-          activeProject: routeProjectPath ?? workspace.activeProjectPath,
+          activeProject: routeProjectPath,
           highlightedThreadId: highlightedThreadId,
           threadStateFor: projectThreadsState.stateFor,
           onSelectProject: (path) {

@@ -23,7 +23,6 @@ class AgentPaneBody extends StatelessWidget {
   const AgentPaneBody({
     required this.controller,
     required this.actions,
-    required this.isActive,
     required this.pagePadding,
     required this.scrollController,
     required this.floatingPanelExtent,
@@ -54,7 +53,6 @@ class AgentPaneBody extends StatelessWidget {
 
   final AgentConversationRuntimeController controller;
   final AgentConversationActions actions;
-  final bool isActive;
   final EdgeInsets pagePadding;
   final ScrollController scrollController;
   final ValueNotifier<double> floatingPanelExtent;
@@ -127,7 +125,6 @@ class AgentPaneBody extends StatelessWidget {
                       : AgentConversationTimeline(
                           controller: controller,
                           actions: actions,
-                          isActive: isActive,
                           scrollController: scrollController,
                           pagePadding: pagePadding,
                           floatingPanelExtent: floatingPanelExtent,

@@ -1,6 +1,6 @@
 # 开发者文档
 
-最后核对：2026-09-08（通知深链与启动恢复走路由）
+最后核对：2026-09-08（路由选中态清理）
 
 本文面向贡献者，保留环境、命令和专项接入清单。分层与生命周期约束见[工程规范](../architecture/engineering_standards.md)，文档改动见[文档维护](documentation.md)。
 
@@ -661,7 +661,7 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
 
 ### 读位置与写位置
 
-- Widget 内读当前位置用 `GoRouterState.of(context)`（与换页同帧）。侧栏高亮与中栏内容必须同源，不得用晚一帧的 Riverpod 投影驱动显示选中态。壳要判断设置是否盖住时读顶层 URI（`GoRouter.state.uri` / `rootRouteLocation`），不要用壳内 `routeLocation`。
+- Widget 内读当前位置用 `GoRouterState.of(context)`（与换页同帧）。侧栏项目/会话高亮与中栏内容必须同源：项目行只认 URL 中的 `projectId`，会话行只认 `threadId`。不得用 `workspace.activeProjectPath` 或 `ProjectThreadListState.selectedThreadId` 做显示回退。壳要判断设置是否盖住时读顶层 URI（`GoRouter.state.uri` / `rootRouteLocation`），不要用壳内 `routeLocation`。
 - UI 写位置走 `context.go` / `context.replace` / `context.push`（或 `goLocation` / `replaceLocation` / `pushLocation` 扩展）。app 层对象（workspace notifier、shell controller、通知深链）只依赖注入的 `AppNavigationPort`，不 import `go_router`。
 - 禁止再把 slice 的 `selectThread` / `selectEntry` / `selectKnownProject` 当作显示入口。资源副作用由 `RouterCoordinator` 按路由位置 reconcile，走既有 intent/EffectRunner（G3）。
 - 新建会话：先导航到 draft URL，reconcile 再 `ensureDraftEntry`（不建 provider session）；首发消息得到 threadId 后 `replace` 到 thread URL。
@@ -678,11 +678,17 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
 
 ### 会话 UI 状态
 
-路由切换会销毁并重建中栏页面。跨销毁仍需保留的状态不得私藏在会被丢掉的 widget State：
+路由切换会销毁并重建中栏页面。跨销毁仍需保留的状态不得私藏在会被丢掉的 widget State。
 
-- 输入草稿（文档/图片/staged 路径）与时间线滚动 + freeScroll：既有 `AgentPaneRetention`（Expando，按 controller 弱键）。`deactivate` 保存，`initState` 恢复，entry 关闭 `closeEntry` 清除。
+已上移、随 entry 关闭清除：
+
+- 输入草稿（文档/图片/staged 路径）与时间线滚动 + freeScroll：`AgentPaneRetention`（Expando，按 controller 弱键）。`deactivate` 保存，`initState` 恢复，entry 关闭 `closeEntry` 清除。
 - Markdown 解析缓存与 plan revision drafts：`AgentPanePresentationStore`（同样按 controller 弱键）。pane `dispose` 或 controller 换代不得销毁缓存；entry 关闭回调里 dispose。
-- 焦点、动画中间态可重置。
+- 会话运行时、历史、工具/计划/命令组展开、模式草稿、权限选择：entry 的 region / timeline store。
+
+切换后重置即可（焦点、弹层、IME、导航轨 hover、代码高亮节点缓存、上下文面板显隐与原文展开、提问卡填答进度、Composer 动画）。
+
+未完成：文件编辑组标题的展开仍在 `AgentFileEditGroupCard` 的 widget State；命令组已走 expansion region。上移需要 `AgentConversationExpansionTarget`、timeline store 与 extent 估算（当前估算按组内文件行计高，与折叠头不一致）。提问卡未提交答案随 pane 销毁丢失，pending 请求仍在 region。
 
 ### 敏感内容
 
@@ -693,6 +699,7 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
 - `resolveAppRedirect` 用纯函数矩阵覆盖：恢复未就绪、裸/非法 settings、未知 projectId/providerId、合法位置返回 `null`、目标等于当前返回 `null`。
 - refresh 桥：高频 slice 噪声与集合内容不变的新身份不得 `notifyListeners`；增删项目恰好一次且 mapping 已同步。
 - 深链与恢复：恢复未就绪时任何位置规范到 `/`；完成后 `replace` 到项目首页；深链排队等恢复再 `go` 会话 URL；找不到会话返回 false；深链先行时恢复不得改写位置。
+- 侧栏高亮：路由 threadId 与 slice `selectedThreadId` 不一致时只亮路由目标；项目首页不高亮任何会话。
 - 测试壳经 overrides 注入 `GoRouter`（可指定 `initialLocation`），不要再直接 `pump` 无路由的 `IdeHome` 充当整壳。
 
 ## 9. UI 开发指南

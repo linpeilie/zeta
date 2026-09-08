@@ -71,6 +71,8 @@ class ProjectListPane extends StatelessWidget {
   final ProjectThreadAction onDeleteThread;
   final ProjectThreadAction onForkThread;
   final ProjectThreadCompletedDismissed onDismissCompletedThread;
+
+  /// 路由当前会话 id；侧栏高亮只认这个值，不读 [ProjectThreadListState.selectedThreadId]。
   final String? highlightedThreadId;
 
   @override
@@ -561,8 +563,7 @@ class _ProjectThreadList extends StatelessWidget {
           thread: thread,
           // 仅 Zeta live（runningThreadIds）显示执行中；忽略外部客户端 list active。
           isZetaLiveRunning: state.isThreadRunning(thread.id),
-          selected:
-              thread.id == (highlightedThreadId ?? state.selectedThreadId),
+          selected: thread.id == highlightedThreadId,
           showCompleted: state.completedThreadIds.contains(thread.id),
           archivedView: state.archived,
           capabilities: capabilitiesForProvider(thread.providerId),

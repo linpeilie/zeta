@@ -40,7 +40,6 @@ class AgentPane extends ConsumerStatefulWidget {
   const AgentPane({
     required this.controller,
     this.messageSendShortcut = MessageSendShortcut.enter,
-    this.isActive = true,
     super.key,
   });
 
@@ -48,12 +47,6 @@ class AgentPane extends ConsumerStatefulWidget {
 
   /// 当前消息输入框使用的发送快捷键。
   final MessageSendShortcut messageSendShortcut;
-
-  /// 是否为 keep-alive 栈中的前台页。
-  ///
-  /// `false` 表示被覆盖的保留页：时间线不订阅 live 高频 listenable，也不跟随
-  /// 自动滚动。W4 删除 `IdeRetainedPageView` 后该标志恒为 true。
-  final bool isActive;
 
   /// 测试用：走与粘贴相同的暂存端口，把字节写成草稿图。
   @visibleForTesting
@@ -328,7 +321,6 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
     return AgentPaneBody(
       controller: widget.controller,
       actions: _actions,
-      isActive: widget.isActive,
       pagePadding: pagePadding,
       scrollController: _scrollController,
       floatingPanelExtent: _activePlanPanelExtent,
@@ -378,7 +370,7 @@ class _AgentPaneState extends ConsumerState<AgentPane> {
   }
 
   void _handleUiEffect(AgentUiEffect effect) {
-    if (!widget.isActive || effect is! AgentRequestAutoScroll) {
+    if (effect is! AgentRequestAutoScroll) {
       return;
     }
     _scrollCoordinator.notifyContentChanged(lastItemId: _lastTimelineItemId);

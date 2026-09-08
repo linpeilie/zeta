@@ -1,6 +1,6 @@
 # 工程规范
 
-最后核对：2026-09-08（通知深链与启动恢复走路由）
+最后核对：2026-09-08（路由选中态清理）
 
 本文维护长期工程约束和专项细则。AI 开发核心规则见 [AGENTS.md](../../../AGENTS.md)，接入步骤见[开发者指南](../development/developer_guide.md)。
 
@@ -102,7 +102,7 @@ CI 使用自动发现的 package 矩阵，`test_packages.sh --only` 的分析与
 
 **位置与路由。** `appRouterProvider` 是 plain `Provider<GoRouter>`（非 autoDispose），创建一次并由 `ref.onDispose` 销毁；任何路径不得重建该实例。redirect 必须是同步纯函数（`resolveAppRedirect`）：根据 `AppRouteSnapshot` 规范化 URL，目标等于当前位置时返回 `null`，闭包内只 `ref.read` 组装快照，禁止 `ref.watch`（watch 会重建 provider，路由栈丢失）。`refreshListenable` 桥只订阅打开项目集合变化，listener 内做内容相等门控后再 `notifyListeners()`；恢复完成标记只在 redirect 内同步读取，启动后有活动项目时显式 `replace` 到项目首页，不经该桥，也不自动打开上次会话。禁止把整个 workspace/会话 slice 接到 refresh 桥。通知深链等 `initialRestoreDone` 后 `go` 到会话 URL；找不到则失败并丢掉该条未读。
 
-Widget 内读位置一律 `GoRouterState.of(context)`（InheritedModel，与 Navigator 换页同帧）。Riverpod 路由投影只服务非 widget 消费方（reconcile、快照、日志），不得用于侧栏高亮或中栏选中态。写位置只走 `context.go` / `context.replace` / `context.push` 或注入的 `AppNavigationPort`；UI 与 app 编排不得再调用 slice 的选择方法作为显示入口。`RouterCoordinator` 只做资源 reconcile（打开项目、ensure draft/thread entry、释放），失败由目标页显示错误态；仅目标非法时才显式导航回落。projectId 是规范化路径 sha256 的前 12 位十六进制，本机路径不进 URL。
+Widget 内读位置一律 `GoRouterState.of(context)`（InheritedModel，与 Navigator 换页同帧）。Riverpod 路由投影只服务非 widget 消费方（reconcile、快照、日志），不得用于侧栏高亮或中栏选中态。写位置只走 `context.go` / `context.replace` / `context.push` 或注入的 `AppNavigationPort`；UI 与 app 编排不得再调用 slice 的选择方法作为显示入口。`ProjectThreadListState.selectedThreadId` 只服务编排（列表刷新保住当前会话、thread 映射、删除后是否离开、会话快照），侧栏高亮只读路由参数。`WorkspaceState.activeProjectPath` 同样只服务加载与恢复，项目行高亮只读 URL 中的 projectId。`RouterCoordinator` 只做资源 reconcile（打开项目、ensure draft/thread entry、释放），失败由目标页显示错误态；仅目标非法时才显式导航回落。projectId 是规范化路径 sha256 的前 12 位十六进制，本机路径不进 URL。
 
 内容路由（`/`、`/project/...`）使用 `NoTransitionPage` 并由路由 builder 直接渲染目标页。Page 使用 `state.pageKey` 按路由模式复用；参数变化只给目标页 Widget 设 Key。设置页 `/settings/:section` 用 `parentNavigatorKey` 压在壳之上：打开用 `push`、分区 `replace` 复用稳定 pageKey、关闭 `pop`，`onExit` 承接未保存确认。设置页 `CustomTransitionPage(opaque: false)`，避免根 Navigator 关掉下层 overlay ticker；壳被设置盖住时 Offstage，不得对内容子树关闭 `TickerMode`（Riverpod 3 会暂停 `ref.watch`）。跨会话仍需保留的输入草稿与滚动复用 `AgentPaneRetention`（Expando，按 controller 弱键；`deactivate` 保存、`initState` 经 `initialScrollOffset` 恢复、entry 关闭 `closeEntry` 清除）。Markdown 解析缓存与 plan revision drafts 放 presentation 层 `AgentPanePresentationStore`，同样按 controller 弱键，随 entry 关闭 dispose；pane `dispose` 或 controller 换代不得销毁这批缓存。焦点、弹层和 IME composing 不保留。切换后仍需保留却私藏在 widget State 的状态必须上移。
 

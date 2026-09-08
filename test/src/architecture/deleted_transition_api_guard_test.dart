@@ -32,6 +32,9 @@ void main() {
       // 只有测试用过的 callback store
       'CallbackAgentProviderConfigStore',
       'CallbackAppearanceSettingsStore',
+      // 路由直渲后删除的保活容器
+      'IdeRetainedPageView',
+      'IdeRetainedPage',
     ];
 
     for (final symbol in deleted) {
