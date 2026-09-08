@@ -1,6 +1,6 @@
 # 开发者文档
 
-最后核对：2026-09-08（路由选中态清理）
+最后核对：2026-09-08（路由迁移验收）
 
 本文面向贡献者，保留环境、命令和专项接入清单。分层与生命周期约束见[工程规范](../architecture/engineering_standards.md)，文档改动见[文档维护](documentation.md)。
 
@@ -702,6 +702,21 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
 - 侧栏高亮：路由 threadId 与 slice `selectedThreadId` 不一致时只亮路由目标；项目首页不高亮任何会话。
 - 测试壳经 overrides 注入 `GoRouter`（可指定 `initialLocation`），不要再直接 `pump` 无路由的 `IdeHome` 充当整壳。
 
+### 验收结论与偏差
+
+路由单例、redirect 纯函数、ShellRoute 直渲中栏、设置压栈且 `opaque: false`、深链等恢复完成再导航、侧栏高亮读 `GoRouterState.of(context)`，均已落地。
+
+与设计稿不同或未完成的项：
+
+- 启动恢复落到项目首页，不自动打开上次会话（产品选择；设计初稿曾写会话 URL）。
+- 设置分区用 `push` / `replace` / `pop`，不能 `go`（`go` 会卸掉壳内内容路由）。
+- 矩阵里的 `app_router_shell_test.dart` 未单独立项；行为覆盖在 redirect、coordinator、restore/deeplink、settings 路由等测试中。
+- `agent_pane_rebuild_benchmark_test.dart` 与对照 JSON 未入库，无法复跑 `PERF_BENCH`。切换成本不进常规 CI。
+- 文件编辑组标题展开、提问卡未提交答案仍私藏 widget State，见上一节。
+- 本机 Windows `tool/test_full.ps1` 根应用 2189 通过、6 失败：`test/tool/test_packages_test.dart` 用 `chmod`/`bash` 测 `test_packages.sh`。内部包 `zeta_agent_provider_claude_code` 凭据文件写回与 `zeta_agent_provider_sdk` 测试路径分隔符比较在 Windows 失败。CI 在 Ubuntu 跑全量。这些失败与路由迁移无关，本项不修。
+
+真实桌面手测（切会话无屏闪、设置未保存拦截等）未在本机执行，不能用自动化结果代替。
+
 ## 9. UI 开发指南
 
 - `IdeHome` 持有内容页的 `WindowFrame` 和 `IdeWorkbenchScaffold`。新增内容页面时
@@ -823,11 +838,11 @@ Provider 在下一回合通过 `--effort` 传递。initialize 未声明默认 ef
   provider kind 或显示名称硬编码。
 - 使用统计是标题栏全局页面，不属于设置分区。统计表格在窄窗口保留横向滚动，
   分析区按可用宽度从双栏切换为单栏。
-- 修改主要页面切换行为时，必须使用实际 `IdeHome` 补 Widget 测试，至少验证
-  `WindowFrame`/Workbench/AgentPane Element、当前 Thread、草稿、对话滚动位置、
-  Pane 宽度和可见状态没有被重置。
+- 修改主要页面切换行为时，必须使用实际 `IdeHome`（经路由壳）补 Widget 测试。设置或
+  统计覆盖再返回时，验证骨架、当前会话、草稿、滚动位置、Pane 宽度和可见状态保持。
+  会话之间切换验证草稿与滚动经 retention 恢复，不要求 AgentPane Element 跨会话存活。
 - 修改 resize 热路径时，除 Widget 回归外还要在 Windows Profile 运行
-  1280→1000→1280 的 10 秒场景，并记录 UI/Raster p95、慢帧率、隐藏页
+  1280→1000→1280 的 10 秒场景，并记录 UI/Raster p95、慢帧率、Offstage 工作区
   build/layout、viewport item、projection/diff/highlight 与 transient callback 计数。
   Debug 数据不能作为性能通过结论；未达标数据必须如实保留。
 

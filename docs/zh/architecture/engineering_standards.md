@@ -1,6 +1,6 @@
 # 工程规范
 
-最后核对：2026-09-08（路由选中态清理）
+最后核对：2026-09-08（路由迁移验收）
 
 本文维护长期工程约束和专项细则。AI 开发核心规则见 [AGENTS.md](../../../AGENTS.md)，接入步骤见[开发者指南](../development/developer_guide.md)。
 
@@ -660,12 +660,13 @@ Provider 契约测试。若 PR 因 Provider 差异修改 CoalescingPolicy/Buffer
   用户 HOME 下的 `.claude`。
 - pane、timeline、file tree 等用户可见行为用 widget test。
 - resize 相关测试至少覆盖外窗 1197/1196/1195px（`wideBreakpoint` + 工作台左右
-  `space8` ± 1）、Agent Canvas 641/640/639px、隐藏
-  retained page 的 build/layout 增量、viewport item 构建上界、缓存命中和 transient
+  `space8` ± 1）、Agent Canvas 641/640/639px、设置覆盖下 Offstage 工作区的
+  build/layout 增量、viewport item 构建上界、缓存命中和 transient
   callback 不增长。
-- 主要页面切换必须使用实际 `IdeHome` 做集成级 Widget 测试。Agent → Settings → Agent
-  与 Agent → Usage → Agent 至少验证常驻骨架、AgentPane Element、当前 Thread、草稿、
-  非零滚动位置、Pane 宽度和 Pane 可见状态保持。
+- 主要页面切换必须使用实际 `IdeHome`（经路由壳）做集成级 Widget 测试。设置或统计
+  压在工作区之上再返回时，至少验证常驻骨架、当前会话、草稿、非零滚动位置、
+  Pane 宽度和可见状态保持。会话之间切换验证草稿与滚动经 retention 恢复，不要求
+  AgentPane Element 跨会话存活。
 - 简单视觉调整可以只运行分析和相关 widget test，但行为变化必须补测试。
 - 外部 CLI 的自动化测试不能替代真实平台验收。Beta provider 发布前使用脱敏 smoke，分别
   记录 OS/架构、CLI 版本、Schema/包装器类型和结果；没有设备或凭据时必须标记“待执行/阻塞”，
