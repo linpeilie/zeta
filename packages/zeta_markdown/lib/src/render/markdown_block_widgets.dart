@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../core/document.dart';
+import '../selection/native_selection.dart';
 import '../widgets/markdown_theme.dart';
 import '../widgets/markdown_types.dart';
 
@@ -233,11 +234,12 @@ class MarkdownAdaptiveTableLayout extends StatelessWidget {
         final idealWidth = math.max(availableWidth, layoutPlan.minimumWidth);
         final table = tableBuilder(customWidths, const FlexColumnWidth());
 
-        return SingleChildScrollView(
+        return markdownIsolateNestedScrollable(
+          context: context,
           key: viewportKey,
           controller: scrollController,
           scrollDirection: Axis.horizontal,
-          child: MarkdownTableContentFrame(
+          content: MarkdownTableContentFrame(
             borderRadius: borderRadius,
             child: ConstrainedBox(
               constraints: BoxConstraints(
@@ -467,7 +469,9 @@ class MarkdownListBlockView extends StatelessWidget {
                         width: markerWidth,
                         child: Align(
                           alignment: AlignmentDirectional.topEnd,
-                          child: _buildMarker(context, index),
+                          child: SelectionContainer.disabled(
+                            child: _buildMarker(context, index),
+                          ),
                         ),
                       ),
                       SizedBox(width: markerGap),
@@ -578,6 +582,39 @@ class MarkdownCodeBlockView extends StatelessWidget {
       math.max(8, resolvedPadding.right - 4),
       resolvedPadding.top,
     );
+    final joinNative = joinsFlutterSelectionArea(context);
+    Widget code = Text.rich(
+      key: directTextKey,
+      codeSpan,
+      style: theme.codeBlockStyle,
+      softWrap: false,
+    );
+    if (joinNative) {
+      code = MarkdownNativeSelectionBlock(child: code);
+    }
+    Widget? chrome = toolbar;
+    if (chrome == null && toolbarBuilder == null) {
+      chrome = Tooltip(
+        message: 'Copy code',
+        child: IconButton(
+          visualDensity: VisualDensity.compact,
+          constraints: const BoxConstraints.tightFor(
+            width: 28,
+            height: 28,
+          ),
+          padding: EdgeInsets.zero,
+          style: IconButton.styleFrom(
+            backgroundColor: Colors.transparent,
+            foregroundColor: theme.bodyStyle.color?.withValues(alpha: 0.72),
+          ),
+          icon: const Icon(Icons.copy_rounded, size: 18),
+          onPressed: onCopyCode,
+        ),
+      );
+    }
+    if (chrome != null) {
+      chrome = SelectionContainer.disabled(child: chrome);
+    }
 
     return SizedBox(
       width: double.infinity,
@@ -594,41 +631,17 @@ class MarkdownCodeBlockView extends StatelessWidget {
               Expanded(
                 child: ClipRect(
                   key: viewportKey,
-                  child: SingleChildScrollView(
+                  child: markdownIsolateNestedScrollable(
+                    context: context,
                     controller: scrollController,
                     scrollDirection: Axis.horizontal,
-                    child: Text.rich(
-                      key: directTextKey,
-                      codeSpan,
-                      style: theme.codeBlockStyle,
-                      softWrap: false,
-                    ),
+                    content: code,
                   ),
                 ),
               ),
-              if (toolbar != null) ...<Widget>[
+              if (chrome != null) ...<Widget>[
                 const SizedBox(width: 8),
-                toolbar,
-              ] else if (toolbarBuilder == null) ...<Widget>[
-                const SizedBox(width: 8),
-                Tooltip(
-                  message: 'Copy code',
-                  child: IconButton(
-                    visualDensity: VisualDensity.compact,
-                    constraints: const BoxConstraints.tightFor(
-                      width: 28,
-                      height: 28,
-                    ),
-                    padding: EdgeInsets.zero,
-                    style: IconButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      foregroundColor:
-                          theme.bodyStyle.color?.withValues(alpha: 0.72),
-                    ),
-                    icon: const Icon(Icons.copy_rounded, size: 18),
-                    onPressed: onCopyCode,
-                  ),
-                ),
+                chrome,
               ],
             ],
           ),

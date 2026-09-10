@@ -2,18 +2,38 @@ import Cocoa
 import CoreText
 import FlutterMacOS
 
+/// 承接 Edit 菜单的 `copy:`。⌘C 已从菜单 keyEquivalent 拿掉，交给 Flutter
+/// Shortcuts；点菜单 Copy 时若对话选区有焦点，再转到 Dart。
+private final class ZetaFlutterViewController: FlutterViewController {
+  private var editMenuChannel: FlutterMethodChannel?
+
+  func setupEditMenuChannel() {
+    let channel = FlutterMethodChannel(
+      name: "zeta/edit_menu",
+      binaryMessenger: engine.binaryMessenger
+    )
+    editMenuChannel = channel
+  }
+
+  override func copy(_ sender: Any?) {
+    super.copy(sender)
+    editMenuChannel?.invokeMethod("copy", arguments: nil)
+  }
+}
+
 class MainFlutterWindow: NSWindow {
   /// 字体目录通道必须与 Flutter 引擎一起注册，避免 Dart 启动后才补注册的竞态。
   private var systemFontCatalogChannel: FlutterMethodChannel?
   private var desktopAttentionChannel: FlutterMethodChannel?
 
   override func awakeFromNib() {
-    let flutterViewController = FlutterViewController()
+    let flutterViewController = ZetaFlutterViewController()
     let windowFrame = self.frame
     self.contentViewController = flutterViewController
     self.setFrame(windowFrame, display: true)
 
     RegisterGeneratedPlugins(registry: flutterViewController)
+    flutterViewController.setupEditMenuChannel()
     setupSystemFontCatalogChannel(
       binaryMessenger: flutterViewController.engine.binaryMessenger
     )

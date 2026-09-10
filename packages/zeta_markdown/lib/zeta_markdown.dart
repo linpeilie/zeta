@@ -8,6 +8,7 @@ export 'src/parser/markdown_document_parser.dart';
 export 'src/parser/markdown_syntaxes.dart';
 export 'src/render/markdown_code_highlight_palette.dart';
 export 'src/selection/mixin_selection_area.dart';
+export 'src/selection/native_selection.dart';
 export 'src/selection/selection_controller.dart';
 export 'src/streaming/streaming_state.dart';
 export 'src/widgets/markdown_controller.dart';

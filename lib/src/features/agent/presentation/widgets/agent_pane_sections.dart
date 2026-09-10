@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_markdown/zeta_markdown.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_mode_controller.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_region_state.dart';
@@ -22,6 +23,7 @@ import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_co
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_region_builder.dart';
 import 'package:zeta/src/features/agent/presentation/timeline_rendering/agent_timeline_renderer.dart';
 import 'package:zeta/src/features/agent/presentation/timeline_rendering/agent_timeline_renderer_registry.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_conversation_selection.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_mode_selector.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_cards.dart';
@@ -445,16 +447,18 @@ class AgentConversationTimeline extends StatelessWidget {
                       final itemKey = ValueKey<String>(
                         agentTimelineViewportItemKey(item),
                       );
-                      final content = IndexedSemantics(
-                        index: index,
-                        child: RepaintBoundary(
-                          child: _buildViewportItem(
-                            item,
-                            pendingState,
-                            previousItem: index > 0 ? items[index - 1] : null,
-                            nextItem: index + 1 < items.length
-                                ? items[index + 1]
-                                : null,
+                      final content = MarkdownSelectionScrollRestore(
+                        child: IndexedSemantics(
+                          index: index,
+                          child: RepaintBoundary(
+                            child: _buildViewportItem(
+                              item,
+                              pendingState,
+                              previousItem: index > 0 ? items[index - 1] : null,
+                              nextItem: index + 1 < items.length
+                                  ? items[index + 1]
+                                  : null,
+                            ),
                           ),
                         ),
                       );
@@ -586,7 +590,9 @@ class AgentConversationTimeline extends StatelessWidget {
                                           onScrollToEnd: () {
                                             unawaited(onScrollToEndPressed());
                                           },
-                                          child: scrollView,
+                                          child: AgentConversationSelectionArea(
+                                            child: scrollView,
+                                          ),
                                         );
                                       },
                                     ),

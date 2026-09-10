@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../clipboard/plain_text_serializer.dart';
 import '../core/document.dart';
 import '../debug.dart';
+import '../selection/native_selection.dart';
 import '../selection/selection_host.dart';
 import '../selection/selection_controller.dart';
 import '../selection/selection_registrar.dart';
@@ -536,15 +537,17 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       );
     }
 
-    if (!widget.selectable || widget.selectionController == null) {
+    if (!widget.selectable) {
       return _finishBuildWithLog(
         buildStopwatch,
-        scrollable,
+        SelectionContainer.disabled(child: scrollable),
         blockCount: widget.document.blocks.length,
       );
     }
 
-    if (_usesInheritedSelection(_selectionRegistrar)) {
+    if (widget.selectionController == null ||
+        _usesInheritedSelection(_selectionRegistrar) ||
+        joinsFlutterSelectionArea(context)) {
       return _finishBuildWithLog(
         buildStopwatch,
         scrollable,

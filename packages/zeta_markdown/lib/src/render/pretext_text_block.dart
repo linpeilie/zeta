@@ -9,6 +9,8 @@ import 'package:pretext/pretext.dart';
 import 'package:pretext/src/segment.dart' as pretext_segment;
 
 import '../core/document.dart';
+import '../selection/native_selection.dart';
+import 'chip_text.dart';
 
 @immutable
 class MarkdownPretextInlineRun {
@@ -135,6 +137,34 @@ class MarkdownPretextTextBlock extends StatelessWidget {
         <MarkdownPretextInlineRun>[
           MarkdownPretextInlineRun(text: text, style: style),
         ];
+    if (joinsFlutterSelectionArea(context)) {
+      if (effectiveRuns.any((run) => run.decoration != null)) {
+        return MarkdownChipText(
+          _buildNativeSpan(
+            runs: effectiveRuns,
+            fallbackStyle: fallbackStyle,
+          ),
+          style: fallbackStyle,
+          textAlign: textAlign,
+          textScaler: textScaler,
+          textDirection: textDirection,
+          textKey: directTextKey,
+        );
+      }
+      return MarkdownNativeSelectionBlock(
+        child: Text.rich(
+          buildMarkdownPretextSpan(
+            runs: effectiveRuns,
+            fallbackStyle: fallbackStyle,
+          ),
+          key: directTextKey,
+          style: fallbackStyle,
+          textAlign: textAlign,
+          textScaler: textScaler,
+          textDirection: textDirection,
+        ),
+      );
+    }
     if (intrinsicWidthSafe ||
         preferDirectRichText ||
         _requiresDirectTextRichRendering(effectiveRuns)) {
@@ -333,6 +363,37 @@ InlineSpan buildMarkdownPretextSpan({
   required TextStyle fallbackStyle,
 }) {
   return _buildFullSpan(runs: runs, fallbackStyle: fallbackStyle);
+}
+
+/// Native-selection span: inline-code chips stay as text ([MarkdownChipSpan])
+/// instead of [WidgetSpan], so highlight boxes come from the same paragraph.
+InlineSpan _buildNativeSpan({
+  required List<MarkdownPretextInlineRun> runs,
+  required TextStyle fallbackStyle,
+}) {
+  return TextSpan(
+    style: fallbackStyle,
+    children: <InlineSpan>[
+      for (final run in runs)
+        if (run.renderSpan != null)
+          run.renderSpan!
+        else if (run.decoration == null)
+          TextSpan(
+            text: run.text,
+            style: run.style,
+            mouseCursor: run.mouseCursor,
+            recognizer: run.recognizer,
+          )
+        else
+          MarkdownChipSpan(
+            text: run.text,
+            style: run.style,
+            recognizer: run.recognizer,
+            mouseCursor: run.mouseCursor,
+            fill: run.decoration!.backgroundColor,
+          ),
+    ],
+  );
 }
 
 String markdownPretextRenderText(List<MarkdownPretextInlineRun> runs) {
