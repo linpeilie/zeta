@@ -525,10 +525,11 @@ class AgentComposer extends StatelessWidget {
               icon: Icons.arrow_upward_rounded,
               onPressed: canSubmit ? onSend : null,
             )
-          : const SizedBox(
-              key: ValueKey('agent-send-unavailable-placeholder'),
-              width: 40,
-              height: 40,
+          : SizedBox.square(
+              key: const ValueKey('agent-send-unavailable-placeholder'),
+              dimension: IdeMetrics.controlIconBoxFor(
+                IdeTextStyles.of(context).displayLarge,
+              ),
             ),
     );
   }

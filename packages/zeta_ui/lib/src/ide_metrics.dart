@@ -181,6 +181,18 @@ abstract final class IdeMetrics {
   /// 生效位置：项目列表操作按钮、文件树折叠按钮、侧栏图标按钮等。
   static const double iconButtonHitSize = 28;
 
+  /// Composer 发送/停止钮外环描边宽度。
+  ///
+  /// 外环与圆盘同色，空隙露出卡片底；启用/禁用只换色，不改几何。
+  /// 生效位置：`IdeSubmitButton`。
+  static const double submitButtonRingWidth = 1;
+
+  /// 发送/停止钮外环与圆盘之间的空隙（单侧）。
+  ///
+  /// 生效位置：`IdeSubmitButton`。外环直径对齐 `displayLarge` 图标盒（默认
+  /// 23px），圆盘与字形收在环内。
+  static const double submitButtonRingGap = IdeSpacing.space2;
+
   // ---------------------------------------------------------------------------
   // 开关（IdeSwitch）
   // ---------------------------------------------------------------------------

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:shadcn_flutter/shadcn_flutter.dart' as sf;
 
 import 'ide_colors.dart';
 import 'ide_icon_box.dart';
@@ -12,6 +11,9 @@ import 'pane_widgets.dart';
 /// [filled] 用于发送等主行动，[filled] 为 false 时用于停止等中性行动；回调为空
 /// 时自动切换到禁用态。背景、前景与 hover 行为均由 Graphite 语义色统一解析，
 /// 调用方只提供动作图标与文案。
+///
+/// 外环直径对齐 [IdeTextStyles.displayLarge] 图标盒（默认 23px）；圆盘和字形
+/// 收在环内，空隙露出卡片底。启用/禁用只换色、不改几何。
 class IdeSubmitButton extends StatelessWidget {
   /// 创建发送/停止按钮。
   const IdeSubmitButton({
@@ -44,6 +46,7 @@ class IdeSubmitButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = IdeColors.of(context);
+    final textStyles = IdeTextStyles.of(context);
     final enabled = onPressed != null;
     final backgroundColor = filled
         ? colors.accent
@@ -53,6 +56,10 @@ class IdeSubmitButton extends StatelessWidget {
         : enabled
         ? colors.textSecondary
         : colors.textSecondary.withValues(alpha: 0.72);
+    final ringSize = IdeMetrics.controlIconBoxFor(textStyles.displayLarge);
+    const inset =
+        IdeMetrics.submitButtonRingWidth + IdeMetrics.submitButtonRingGap;
+    final discSize = (ringSize - 2 * inset).clamp(0, ringSize).toDouble();
 
     return IdeTooltip(
       message: tooltip,
@@ -61,34 +68,36 @@ class IdeSubmitButton extends StatelessWidget {
         enabled: enabled,
         label: tooltip,
         excludeSemantics: true,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            minWidth: IdeMetrics.controlMinHeightCompact,
-            minHeight: IdeMetrics.controlMinHeightCompact,
-          ),
+        child: SizedBox.square(
+          dimension: ringSize,
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: backgroundColor,
               shape: BoxShape.circle,
+              border: Border.all(
+                color: backgroundColor,
+                width: IdeMetrics.submitButtonRingWidth,
+              ),
             ),
-            child: ClipOval(
-              child: sf.ComponentTheme<sf.FocusOutlineTheme>(
-                data: const sf.FocusOutlineTheme(
-                  border: Border.fromBorderSide(BorderSide.none),
+            child: Padding(
+              padding: const EdgeInsets.all(inset),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: backgroundColor,
+                  shape: BoxShape.circle,
                 ),
-                child: sf.IconButton.ghost(
-                  key: buttonKey,
-                  onPressed: onPressed,
-                  size: sf.ButtonSize.small,
-                  density: sf.ButtonDensity.iconDense,
-                  shape: sf.ButtonShape.circle,
-                  disableTransition: filled,
-                  // 提交动作是 Composer 中最强的单图标行动，沿用原 22px 视觉尺寸；
-                  // displayLarge 的默认行盒为 23px，同时让它随 UI 字号自然缩放。
-                  icon: IdeIconBox(
-                    icon,
-                    style: IdeTextStyles.of(context).displayLarge,
-                    color: foregroundColor,
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: InkWell(
+                    key: buttonKey,
+                    customBorder: const CircleBorder(),
+                    onTap: onPressed,
+                    child: Center(
+                      child: IdeIconBox(
+                        icon,
+                        style: TextStyle(fontSize: discSize, height: 1),
+                        color: foregroundColor,
+                      ),
+                    ),
                   ),
                 ),
               ),
