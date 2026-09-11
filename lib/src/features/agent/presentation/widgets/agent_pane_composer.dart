@@ -20,6 +20,7 @@ import 'package:zeta/src/ui/localization/app_localizations_x.dart';
 
 /// 底部输入面板。
 ///
+/// 整张卡片是输入框的命中区：点内边距、工具栏空白也会聚焦，指针为 I-beam。
 /// 上半部分是多行输入框，下半部分是操作行：左侧通过“更多操作”菜单承载文件、
 /// 图片和 Plan 快捷入口；**仅当 draft 为 Plan 时**在工具栏展示 Plan 标识（Default
 /// 不占位）。会话配置/审批策略渐进展示；模型选择器固定在右侧，位于上下文进度
@@ -440,11 +441,26 @@ class AgentComposer extends StatelessWidget {
             ),
           ),
         );
+        // 整卡并进输入框的默认 TapRegion：桌面 pointer down 落在 EditableText
+        // 紧框外会先失焦，只在 onTap 里 requestFocus 会打断 IME。按钮、附件和
+        // 输入框在更深子树，自己的点击与指针仍赢。
         return _ComposerRunningGlowBorder(
           active: isTurnRunning,
           color: colors.focusRing,
           brightness: brightness,
-          child: composer,
+          child: MouseRegion(
+            key: const ValueKey('agent-composer-hit-target'),
+            cursor: SystemMouseCursors.text,
+            child: TextFieldTapRegion(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  focusNode.requestFocus();
+                },
+                child: composer,
+              ),
+            ),
+          ),
         );
       },
     );
@@ -509,10 +525,11 @@ class AgentComposer extends StatelessWidget {
               icon: Icons.arrow_upward_rounded,
               onPressed: canSubmit ? onSend : null,
             )
-          : const SizedBox(
-              key: ValueKey('agent-send-unavailable-placeholder'),
-              width: 40,
-              height: 40,
+          : SizedBox.square(
+              key: const ValueKey('agent-send-unavailable-placeholder'),
+              dimension: IdeMetrics.controlIconBoxFor(
+                IdeTextStyles.of(context).displayLarge,
+              ),
             ),
     );
   }

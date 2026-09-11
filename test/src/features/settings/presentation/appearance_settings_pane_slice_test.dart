@@ -6,6 +6,7 @@ import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta/src/app/settings_slice/settings_slice_overrides.dart';
 import 'package:zeta/src/features/settings/application/appearance_settings_notifier.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
+import 'package:zeta/src/features/settings/domain/settings_section.dart';
 import 'package:zeta/src/features/settings/domain/system_font_catalog_service.dart';
 import 'package:zeta/src/features/settings/domain/system_font_family.dart';
 import 'package:zeta/src/features/settings/presentation/settings_page.dart';

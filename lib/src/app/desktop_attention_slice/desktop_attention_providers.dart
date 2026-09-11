@@ -27,9 +27,8 @@ final desktopAttentionIndicatorProvider = Provider<DesktopAttentionIndicator>(
 
 /// 「点开通知就跳到那个会话」的落点。
 ///
-/// 真正能激活会话的只有已挂载的 `IdeHome`，而 effect runner 在它之前就要建出来
-/// ——这是一条**运行期才补齐**的边，用 relay 显式表达：未绑定时激活返回 false，
-/// 切片据此把这条未读丢掉，而不是当成已读。
+/// 生产默认走 [RouterCoordinator.activateThreadFromDeepLink]。测试和 IdeHome
+/// 的 toast / 用量收口仍可 [bind] 本 relay；未绑定则组合根走 coordinator。
 final desktopAttentionTargetActivatorRelayProvider =
     Provider<DesktopAttentionTargetActivatorRelay>(
       (ref) => DesktopAttentionTargetActivatorRelay(),
@@ -39,6 +38,8 @@ final desktopAttentionTargetActivatorRelayProvider =
 /// target activator 在 `IdeHome.initState` 绑定、`dispose` 解绑。
 final class DesktopAttentionTargetActivatorRelay {
   DesktopAttentionTargetActivator? _activator;
+
+  bool get isBound => _activator != null;
 
   void bind(DesktopAttentionTargetActivator activator) {
     if (_activator != null && !identical(_activator, activator)) {

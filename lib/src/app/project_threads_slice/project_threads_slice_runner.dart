@@ -964,6 +964,7 @@ final class ProjectThreadsSliceRunner
     if (!preserveRuntimeThreads || current.threads.isEmpty) {
       return incoming;
     }
+    // selectedThreadId 是编排身份：刷新时保住尚未出现在 Provider 页里的当前会话。
     final retainedIds = <String>{
       ...current.runningThreadIds,
       ...current.completedThreadIds,

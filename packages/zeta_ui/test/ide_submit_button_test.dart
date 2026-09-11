@@ -27,11 +27,25 @@ void main() {
     expect(find.byKey(const ValueKey('state')), findsOneWidget);
     expect(find.byKey(const ValueKey('button')), findsOneWidget);
     expect(find.byType(IdeIconBox), findsOneWidget);
-    expect(
-      tester.getSize(find.byType(IdeSubmitButton)).shortestSide,
-      greaterThanOrEqualTo(IdeMetrics.controlMinHeightCompact),
+    final ringSize = IdeMetrics.controlIconBoxFor(
+      IdeTextStyles.of(
+        tester.element(find.byType(IdeSubmitButton)),
+      ).displayLarge,
     );
-    expect(_decoration(tester).color, colors.accent);
+    expect(tester.getSize(find.byType(IdeSubmitButton)).shortestSide, ringSize);
+    expect(_discDecoration(tester).color, colors.accent);
+    expect(_ringDecoration(tester).border?.top.color, colors.accent);
+    expect(
+      _ringDecoration(tester).border?.top.width,
+      IdeMetrics.submitButtonRingWidth,
+    );
+    expect(
+      tester.getSize(find.byKey(const ValueKey('button'))).shortestSide,
+      ringSize -
+          2 *
+              (IdeMetrics.submitButtonRingWidth +
+                  IdeMetrics.submitButtonRingGap),
+    );
     expect(
       tester.widget<Icon>(find.byIcon(Icons.arrow_upward_rounded)).color,
       colors.onAccent,
@@ -57,7 +71,14 @@ void main() {
       ),
     );
 
-    expect(_decoration(tester).color, colors.border.withValues(alpha: 0.36));
+    expect(
+      _discDecoration(tester).color,
+      colors.border.withValues(alpha: 0.36),
+    );
+    expect(
+      _ringDecoration(tester).border?.top.color,
+      colors.border.withValues(alpha: 0.36),
+    );
     expect(
       tester.widget<Icon>(find.byIcon(Icons.stop_rounded)).color,
       colors.textSecondary,
@@ -74,7 +95,11 @@ void main() {
       ),
     );
 
-    expect(_decoration(tester).color, colors.border.withValues(alpha: 0.2));
+    expect(_discDecoration(tester).color, colors.border.withValues(alpha: 0.2));
+    expect(
+      _ringDecoration(tester).border?.top.color,
+      colors.border.withValues(alpha: 0.2),
+    );
     expect(
       tester.widget<Icon>(find.byIcon(Icons.arrow_upward_rounded)).color,
       colors.textSecondary.withValues(alpha: 0.72),
@@ -107,7 +132,19 @@ void main() {
   });
 }
 
-BoxDecoration _decoration(WidgetTester tester) {
+BoxDecoration _discDecoration(WidgetTester tester) {
+  return _circleDecorations(
+    tester,
+  ).firstWhere((decoration) => decoration.color != null);
+}
+
+BoxDecoration _ringDecoration(WidgetTester tester) {
+  return _circleDecorations(
+    tester,
+  ).firstWhere((decoration) => decoration.border != null);
+}
+
+Iterable<BoxDecoration> _circleDecorations(WidgetTester tester) {
   return tester
       .widgetList<DecoratedBox>(
         find.descendant(
@@ -117,7 +154,7 @@ BoxDecoration _decoration(WidgetTester tester) {
       )
       .map((widget) => widget.decoration)
       .whereType<BoxDecoration>()
-      .firstWhere((decoration) => decoration.shape == BoxShape.circle);
+      .where((decoration) => decoration.shape == BoxShape.circle);
 }
 
 Future<void> _pumpSubmitButton(WidgetTester tester, Widget child) async {

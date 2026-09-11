@@ -86,7 +86,7 @@
                                     <action selector="cut:" target="-1" id="YJe-68-I9s"/>
                                 </connections>
                             </menuItem>
-                            <menuItem title="Copy" keyEquivalent="c" id="x3v-GG-iWU">
+                            <menuItem title="Copy" keyEquivalent="" id="x3v-GG-iWU">
                                 <connections>
                                     <action selector="copy:" target="-1" id="G1f-GL-Joy"/>
                                 </connections>

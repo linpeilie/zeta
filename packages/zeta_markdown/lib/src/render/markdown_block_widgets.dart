@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../core/document.dart';
+import '../selection/native_selection.dart';
 import '../widgets/markdown_theme.dart';
 import '../widgets/markdown_types.dart';
 
@@ -233,11 +234,12 @@ class MarkdownAdaptiveTableLayout extends StatelessWidget {
         final idealWidth = math.max(availableWidth, layoutPlan.minimumWidth);
         final table = tableBuilder(customWidths, const FlexColumnWidth());
 
-        return SingleChildScrollView(
+        return markdownIsolateNestedScrollable(
+          context: context,
           key: viewportKey,
           controller: scrollController,
           scrollDirection: Axis.horizontal,
-          child: MarkdownTableContentFrame(
+          content: MarkdownTableContentFrame(
             borderRadius: borderRadius,
             child: ConstrainedBox(
               constraints: BoxConstraints(
@@ -467,7 +469,9 @@ class MarkdownListBlockView extends StatelessWidget {
                         width: markerWidth,
                         child: Align(
                           alignment: AlignmentDirectional.topEnd,
-                          child: _buildMarker(context, index),
+                          child: SelectionContainer.disabled(
+                            child: _buildMarker(context, index),
+                          ),
                         ),
                       ),
                       SizedBox(width: markerGap),
@@ -540,6 +544,7 @@ class MarkdownCodeBlockView extends StatelessWidget {
     this.language,
     this.lineCount = 0,
     this.toolbarBuilder,
+    this.toolbarAbove = false,
   });
 
   final MarkdownThemeData theme;
@@ -557,6 +562,8 @@ class MarkdownCodeBlockView extends StatelessWidget {
 
   /// 自绘工具栏；为空时用包内默认的复制按钮（上游行为）。
   final MarkdownCodeBlockToolbarBuilder? toolbarBuilder;
+
+  final bool toolbarAbove;
 
   @override
   Widget build(BuildContext context) {
@@ -578,6 +585,48 @@ class MarkdownCodeBlockView extends StatelessWidget {
       math.max(8, resolvedPadding.right - 4),
       resolvedPadding.top,
     );
+    final joinNative = joinsFlutterSelectionArea(context);
+    Widget code = Text.rich(
+      key: directTextKey,
+      codeSpan,
+      style: theme.codeBlockStyle,
+      softWrap: false,
+    );
+    if (joinNative) {
+      code = MarkdownNativeSelectionBlock(child: code);
+    }
+    Widget? chrome = toolbar;
+    if (chrome == null && toolbarBuilder == null) {
+      chrome = Tooltip(
+        message: 'Copy code',
+        child: IconButton(
+          visualDensity: VisualDensity.compact,
+          constraints: const BoxConstraints.tightFor(
+            width: 28,
+            height: 28,
+          ),
+          padding: EdgeInsets.zero,
+          style: IconButton.styleFrom(
+            backgroundColor: Colors.transparent,
+            foregroundColor: theme.bodyStyle.color?.withValues(alpha: 0.72),
+          ),
+          icon: const Icon(Icons.copy_rounded, size: 18),
+          onPressed: onCopyCode,
+        ),
+      );
+    }
+    if (chrome != null) {
+      chrome = SelectionContainer.disabled(child: chrome);
+    }
+    final viewport = ClipRect(
+      key: viewportKey,
+      child: markdownIsolateNestedScrollable(
+        context: context,
+        controller: scrollController,
+        scrollDirection: Axis.horizontal,
+        content: code,
+      ),
+    );
 
     return SizedBox(
       width: double.infinity,
@@ -588,50 +637,24 @@ class MarkdownCodeBlockView extends StatelessWidget {
         ),
         child: Padding(
           padding: effectivePadding,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Expanded(
-                child: ClipRect(
-                  key: viewportKey,
-                  child: SingleChildScrollView(
-                    controller: scrollController,
-                    scrollDirection: Axis.horizontal,
-                    child: Text.rich(
-                      key: directTextKey,
-                      codeSpan,
-                      style: theme.codeBlockStyle,
-                      softWrap: false,
+          child: toolbarAbove && toolbar != null
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [chrome!, const SizedBox(height: 8), viewport],
+                )
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Expanded(
+                      child: viewport,
                     ),
-                  ),
+                    if (chrome != null) ...<Widget>[
+                      const SizedBox(width: 8),
+                      chrome,
+                    ],
+                  ],
                 ),
-              ),
-              if (toolbar != null) ...<Widget>[
-                const SizedBox(width: 8),
-                toolbar,
-              ] else if (toolbarBuilder == null) ...<Widget>[
-                const SizedBox(width: 8),
-                Tooltip(
-                  message: 'Copy code',
-                  child: IconButton(
-                    visualDensity: VisualDensity.compact,
-                    constraints: const BoxConstraints.tightFor(
-                      width: 28,
-                      height: 28,
-                    ),
-                    padding: EdgeInsets.zero,
-                    style: IconButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      foregroundColor:
-                          theme.bodyStyle.color?.withValues(alpha: 0.72),
-                    ),
-                    icon: const Icon(Icons.copy_rounded, size: 18),
-                    onPressed: onCopyCode,
-                  ),
-                ),
-              ],
-            ],
-          ),
         ),
       ),
     );

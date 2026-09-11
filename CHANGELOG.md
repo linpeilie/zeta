@@ -2,6 +2,10 @@
 
 记录用户可感知的变化。下列未发布条目已合并重复项；各发布版本的实际范围见 [Releases](https://github.com/linpeilie/zeta/releases)。
 
+## [v0.1.0-beta.15]
+
+这次 beta 改善了对话阅读、复制与切换体验，修复长文件路径挤压代码正文的问题，并保留切换对话时的草稿和阅读位置，详见[完整更新说明](docs/zh/release/notes/v0.1.0-beta.15.md)。
+
 ## [v0.1.0-beta.14]
 
 这次 beta 更新统一了对话输入框菜单的外观，并修正键盘焦点，详见[完整更新说明](docs/zh/release/notes/v0.1.0-beta.14.md)。

@@ -618,6 +618,15 @@ class AppLocalizationsZh extends AppLocalizations {
       '无法打开通知对应的会话：该会话可能已被删除或不在当前项目列表中。';
 
   @override
+  String get conversationLoadingTitle => '正在打开会话';
+
+  @override
+  String get conversationOpenFailed => '无法打开该会话';
+
+  @override
+  String get conversationOpenFailedBack => '返回项目';
+
+  @override
   String workbenchProviderDetectionFailed(String error) {
     return '无法检测 Provider：$error';
   }

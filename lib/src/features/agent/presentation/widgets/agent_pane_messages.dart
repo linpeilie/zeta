@@ -131,13 +131,11 @@ class AgentLiveActivityStatus extends StatelessWidget {
   const AgentLiveActivityStatus({
     required this.controller,
     required this.actions,
-    required this.isActive,
     super.key,
   });
 
   final AgentConversationRuntimeController controller;
   final AgentConversationActions actions;
-  final bool isActive;
 
   @override
   Widget build(BuildContext context) {
@@ -157,55 +155,56 @@ class AgentLiveActivityStatus extends StatelessWidget {
               ? waitingLabel
               : liveActivityStatusText(state, now, context.l10n);
           final accent = isWaiting ? colors.warning : colors.accent;
-          return Padding(
-            key: const ValueKey<String>('agent-live-activity-status'),
-            padding: const EdgeInsets.only(
-              bottom: IdeSpacing.space10,
-              top: IdeSpacing.space2,
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                if (isWaiting)
-                  Icon(
-                    state.waitingOnApproval
-                        ? Icons.verified_user_outlined
-                        : state.waitingOnUserInput
-                        ? Icons.edit_note_rounded
-                        : Icons.error_outline_rounded,
-                    size: 14,
-                    color: accent,
-                  )
-                else
-                  IdeBusySpinner(
-                    key: const ValueKey<String>('agent-live-activity-spinner'),
-                    size: 12,
-                    strokeWidth: 1.8,
-                    semanticsLabel: context.l10n.agentTurnRunning,
-                  ),
-                const SizedBox(width: IdeSpacing.space8),
-                Expanded(
-                  child: Text(
-                    statusText,
-                    key: const ValueKey<String>('agent-live-activity-label'),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: textStyles.bodySmall.copyWith(
-                      color: isWaiting
-                          ? colors.warning
-                          : colors.textSecondary.withValues(alpha: 0.9),
-                      fontWeight: FontWeight.w500,
+          return SelectionContainer.disabled(
+            child: Padding(
+              key: const ValueKey<String>('agent-live-activity-status'),
+              padding: const EdgeInsets.only(
+                bottom: IdeSpacing.space10,
+                top: IdeSpacing.space2,
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  if (isWaiting)
+                    Icon(
+                      state.waitingOnApproval
+                          ? Icons.verified_user_outlined
+                          : state.waitingOnUserInput
+                          ? Icons.edit_note_rounded
+                          : Icons.error_outline_rounded,
+                      size: 14,
+                      color: accent,
+                    )
+                  else
+                    IdeBusySpinner(
+                      key: const ValueKey<String>(
+                        'agent-live-activity-spinner',
+                      ),
+                      size: 12,
+                      strokeWidth: 1.8,
+                      semanticsLabel: context.l10n.agentTurnRunning,
+                    ),
+                  const SizedBox(width: IdeSpacing.space8),
+                  Expanded(
+                    child: Text(
+                      statusText,
+                      key: const ValueKey<String>('agent-live-activity-label'),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: textStyles.bodySmall.copyWith(
+                        color: isWaiting
+                            ? colors.warning
+                            : colors.textSecondary.withValues(alpha: 0.9),
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           );
         }
 
-        if (!isActive) {
-          return content(DateTime.now());
-        }
         return ListenableBuilder(
           listenable: controller.flutterElapsedClockListenable,
           builder: (context, _) => content(controller.elapsedNow),

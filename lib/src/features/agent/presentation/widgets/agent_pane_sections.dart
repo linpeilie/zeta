@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'package:zeta_agent_core/zeta_agent_core.dart';
+import 'package:zeta_markdown/zeta_markdown.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/features/agent/application/agent_conversation_mode_controller.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_region_state.dart';
@@ -22,6 +23,7 @@ import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_co
 import 'package:zeta/src/features/agent/presentation/conversation_slice/agent_region_builder.dart';
 import 'package:zeta/src/features/agent/presentation/timeline_rendering/agent_timeline_renderer.dart';
 import 'package:zeta/src/features/agent/presentation/timeline_rendering/agent_timeline_renderer_registry.dart';
+import 'package:zeta/src/features/agent/presentation/widgets/agent_conversation_selection.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_mode_selector.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_provider_icon.dart';
 import 'package:zeta/src/features/agent/presentation/widgets/agent_pane_cards.dart';
@@ -328,7 +330,6 @@ class AgentConversationTimeline extends StatelessWidget {
   const AgentConversationTimeline({
     required this.controller,
     required this.actions,
-    required this.isActive,
     required this.scrollController,
     required this.pagePadding,
     required this.floatingPanelExtent,
@@ -347,8 +348,6 @@ class AgentConversationTimeline extends StatelessWidget {
   final AgentConversationRuntimeController controller;
   final AgentConversationActions actions;
 
-  /// 前台才订阅 live 流式 listenable。
-  final bool isActive;
   final ScrollController scrollController;
   final EdgeInsets pagePadding;
 
@@ -370,16 +369,13 @@ class AgentConversationTimeline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 非前台：不挂 live 高频信号，后台 thread 流式输出不重建此 canvas。
     // live turn 与浮层高度不属于任何 region（§2.7），继续走 listenable。
-    final liveListenable = isActive
-        ? Listenable.merge(<Listenable>[
-            controller.flutterLiveTurnListenable,
-            floatingPanelExtent,
-            if (controller.liveTurnState case final liveTurnState?)
-              AgentFlutterListenableAdapter(liveTurnState),
-          ])
-        : floatingPanelExtent;
+    final liveListenable = Listenable.merge(<Listenable>[
+      controller.flutterLiveTurnListenable,
+      floatingPanelExtent,
+      if (controller.liveTurnState case final liveTurnState?)
+        AgentFlutterListenableAdapter(liveTurnState),
+    ]);
 
     // 导航轨贴 AgentPanel 全宽左侧；对话流仍经 AgentContentAlign 居中限宽。
     // 三个 region 各订各的：pending 变化不再重建 history 那层。
@@ -451,16 +447,18 @@ class AgentConversationTimeline extends StatelessWidget {
                       final itemKey = ValueKey<String>(
                         agentTimelineViewportItemKey(item),
                       );
-                      final content = IndexedSemantics(
-                        index: index,
-                        child: RepaintBoundary(
-                          child: _buildViewportItem(
-                            item,
-                            pendingState,
-                            previousItem: index > 0 ? items[index - 1] : null,
-                            nextItem: index + 1 < items.length
-                                ? items[index + 1]
-                                : null,
+                      final content = MarkdownSelectionScrollRestore(
+                        child: IndexedSemantics(
+                          index: index,
+                          child: RepaintBoundary(
+                            child: _buildViewportItem(
+                              item,
+                              pendingState,
+                              previousItem: index > 0 ? items[index - 1] : null,
+                              nextItem: index + 1 < items.length
+                                  ? items[index + 1]
+                                  : null,
+                            ),
                           ),
                         ),
                       );
@@ -592,7 +590,9 @@ class AgentConversationTimeline extends StatelessWidget {
                                           onScrollToEnd: () {
                                             unawaited(onScrollToEndPressed());
                                           },
-                                          child: scrollView,
+                                          child: AgentConversationSelectionArea(
+                                            child: scrollView,
+                                          ),
                                         );
                                       },
                                     ),
@@ -736,7 +736,6 @@ class AgentConversationTimeline extends StatelessWidget {
           child: AgentLiveActivityStatus(
             controller: controller,
             actions: actions,
-            isActive: isActive,
           ),
         );
       case AgentTurnFooterViewportItem(:final turn):

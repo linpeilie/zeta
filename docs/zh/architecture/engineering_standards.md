@@ -1,6 +1,6 @@
 # 工程规范
 
-最后核对：2026-09-07（文档整理）
+最后核对：2026-09-08（路由迁移验收）
 
 本文维护长期工程约束和专项细则。AI 开发核心规则见 [AGENTS.md](../../../AGENTS.md)，接入步骤见[开发者指南](../development/developer_guide.md)。
 
@@ -13,6 +13,7 @@ lib/
   main.dart
   src/
     app/
+      router/
     core/
     features/<feature>/
       domain/
@@ -24,7 +25,8 @@ lib/
 ```
 
 - `main.dart` 只负责 Flutter 绑定、窗口启动、全局错误日志和 `runApp`。
-- `app` 是运行时装配层，负责组合窗口、shell controller、provider factory、持久化 store 和应用根组件。
+- `app` 是运行时装配层，负责组合窗口、shell controller、路由、provider factory、持久化 store 和应用根组件。
+- `app/router` 放 GoRouter 单例、redirect 策略、位置编解码、refresh 桥和资源 reconcile；路由页面 widget 可放在同目录 `pages/`，数据装配留在页面内部。
 - `core` 放跨功能基础设施，例如日志、路径工具等，不依赖具体 feature。
 - `features/<feature>/domain` 放纯模型、枚举、接口和领域状态。
 - `features/<feature>/application` 放用例协调、恢复计划、分页加载、状态编排和跨对象协作。
@@ -49,6 +51,7 @@ main -> app -> presentation/application -> domain
 ```
 
 - presentation 订阅 application 的状态和命令契约；application 不依赖 presentation。UI 不直接解析 Provider 原始协议。
+- `go_router` 只允许在 `app` 与 presentation 使用。application、domain、data 与内部包不得 import `package:go_router`。app 层需要导航的对象只依赖注入的 `AppNavigationPort`，由组合根接上 GoRouter。
 - application 负责异步流程、恢复、分页、竞态隔离和状态写入，不负责绘制 widget。
 - data 实现 provider、JSON-RPC、JSONL、版本化本地 JSON 文件等具体细节，并把外部 payload 映射为 domain 模型。Provider 自有 data adapter 可按明确功能读取对应 CLI 的私有数据，但原始结构与路径不得泄漏到上层。
 - domain 禁止 Flutter、`dart:io`、Riverpod 和厂商协议；不可变标记用 `meta`，集合比较用 foundation 的纯 Dart 工具。
@@ -87,7 +90,7 @@ CI 使用自动发现的 package 矩阵，`test_packages.sh --only` 的分析与
 核心模式是 MVI：**不可变 state + 同步 reducer + effect runner**。Riverpod 承担其中的
 **发布机制与依赖装配**，MVI 的三段式本身不变。
 
-跨 Widget 状态由 application 的 `Notifier` / `AsyncNotifier` 独占；不额外建立手写 Store、listener 列表或镜像 Notifier。
+跨 Widget 的**业务状态**由 application 的 `Notifier` / `AsyncNotifier` 独占；不额外建立手写 Store、listener 列表或镜像 Notifier。**位置状态**（当前页、活动项目、选中会话、设置分区）以 GoRouter URL 为唯一真源，slice 只作投影。**会话级 UI 快照**（输入草稿、滚动、Markdown/plan 缓存）归 presentation 层 retention/缓存 store，不进 application slice。
 
 | 层 | Riverpod 使用 |
 | --- | --- |
@@ -95,13 +98,21 @@ CI 使用自动发现的 package 矩阵，`test_packages.sh --only` 的分析与
 | application | 仅状态与命令 API，禁止 Widget、WidgetRef、ProviderScope |
 | presentation / app / 宿主 UI | 可用 |
 
-只从 `flutter_riverpod` 导入，必要时使用其 `misc.dart`。不直接导入传递依赖 `riverpod`，不引入状态管理 codegen。application 同时禁止直接导入 `package:flutter/`；跨包 barrel 带入的 Widget 符号也不例外。守卫：`feature_layering_guard_test`。
+只从 `flutter_riverpod` 导入，必要时使用其 `misc.dart`。不直接导入传递依赖 `riverpod`，不引入状态管理 codegen。application 同时禁止直接导入 `package:flutter/` 与 `package:go_router/`；跨包 barrel 带入的 Widget 符号也不例外。守卫：`feature_layering_guard_test`。
+
+**位置与路由。** `appRouterProvider` 是 plain `Provider<GoRouter>`（非 autoDispose），创建一次并由 `ref.onDispose` 销毁；任何路径不得重建该实例。redirect 必须是同步纯函数（`resolveAppRedirect`）：根据 `AppRouteSnapshot` 规范化 URL，目标等于当前位置时返回 `null`，闭包内只 `ref.read` 组装快照，禁止 `ref.watch`（watch 会重建 provider，路由栈丢失）。`refreshListenable` 桥只订阅打开项目集合变化，listener 内做内容相等门控后再 `notifyListeners()`；恢复完成标记只在 redirect 内同步读取，启动后有活动项目时显式 `replace` 到项目首页，不经该桥，也不自动打开上次会话。禁止把整个 workspace/会话 slice 接到 refresh 桥。通知深链等 `initialRestoreDone` 后经导航端口等待实际路由提交，再等待资源 reconcile；找不到、被拦截或被取代均失败。不能以 `go` 返回或同步序号变化推断导航完成。
+
+Widget 内读位置一律 `GoRouterState.of(context)`（InheritedModel，与 Navigator 换页同帧）。Riverpod 路由投影只服务非 widget 消费方（reconcile、快照、日志），不得用于侧栏高亮或中栏选中态。写位置只走 `context.go` / `context.replace` / `context.push` 或注入的 `AppNavigationPort`；UI 与 app 编排不得再调用 slice 的选择方法作为显示入口。`ProjectThreadListState.selectedThreadId` 只服务编排（列表刷新保住当前会话、thread 映射、删除后是否离开、会话快照），侧栏高亮只读路由参数。`WorkspaceState.activeProjectPath` 同样只服务加载与恢复，项目行高亮只读 URL 中的 projectId。`RouterCoordinator` 根据已提交位置协调资源打开，并按当前内容 owner 的晋升与关闭规范化 URL。打开失败由目标页显示错误态；目标非法或当前 owner 关闭时显式导航回落。projectId 是工作区 `normalizeWorkspaceProjectPath` 结果的 sha256 前 12 位十六进制；不额外小写化或折叠分隔符，映射碰撞明确失败，本机路径不进 URL。
+
+内容路由（`/`、`/project/...`）使用 `NoTransitionPage` 并由路由 builder 直接渲染目标页。Page 使用 `state.pageKey` 按路由模式复用；参数变化只给目标页 Widget 设 Key。设置 `/settings/:section` 和使用统计 `/usage` 共用覆盖页 chrome，用 `parentNavigatorKey` 压在壳之上：打开用 `push`、分区 `replace` 复用稳定 pageKey、关闭 `pop`，`onExit` 承接未保存确认。设置与统计互换用 `replace`，不另建局部页面状态或延迟命令桥。覆盖页 `CustomTransitionPage(opaque: false)`，避免根 Navigator 关掉下层 overlay ticker；壳被设置或统计盖住时 Offstage，不得对内容子树关闭 `TickerMode`（Riverpod 3 会暂停 `ref.watch`）。跨会话仍需保留的输入草稿与滚动复用 `AgentPaneRetention`（Expando，按 controller 弱键；`deactivate` 保存、`initState` 经 `initialScrollOffset` 恢复、entry 关闭 `closeEntry` 清除）。Markdown 解析缓存与 plan revision drafts 放 presentation 层 `AgentPanePresentationStore`，同样按 controller 弱键，随 entry 关闭 dispose；pane `dispose` 或 controller 换代不得销毁这批缓存。焦点、弹层和 IME composing 不保留。切换后仍需保留却私藏在 widget State 的状态必须上移。
+
+路由 reconcile 的 generation 必须传到 Host，在异步等待后写位置投影或项目上下文前校验；旧任务立即结算等待者，真实资源 I/O 仍按生命周期排空。进入新目标即失效旧的成功缓存，避免 A→B→A 跳过选择。Coordinator 按内容访问绑定 owner lifetime，观察草稿晋升和 entry 关闭；覆盖期间延后 URL 规范化，返回时先规范化再打开资源，离开原内容后丢弃待处理替换。应用关闭先停导航与 reconcile，再释放 owner，不能在资源撤下期间继续导航。
 
 **会话 UI 发布是两跳。** RuntimeController 经 AgentUiUpdateScheduler 投影 regions，application 的 AgentConversationSliceNotifier 对每个 request 做一次 RegionsRefreshed，再由纯 selector / AgentRegionBuilder 订阅。没有手写 Store 或镜像 Notifier；live-turn 增量通道保持不变。上下文面板显隐属于 Widget 状态。
 
 Workspace 与 Conversation 的所有权：`AgentConversationWorkspaceNotifier` 直接拥有 entry 资源表与不可变 workspace state；每个 entry 的 `AgentConversationSliceNotifier` 独占轻量 regions 和命令账本。`AgentConversationOwnerKey(entryId, lifetimeToken)` 在草稿晋升和 runtime restart 时不变，同 thread 关闭重开分配新 token；BindingKey 只作查询别名。Live 解析真实 owner，Closing/Closed 返回无正文的终止投影，Unknown 返回不可用空投影。
 
-`workbenchSessionProvider` 先构造完整 Shell，组合根在语言冻结后、Widget 挂载前启动事实源、管理 ingress 和幂等 `Shell.start()`。IdeHome 只借用已有 workbench 与订阅；卸载不关闭 owner、Binding 或 runtime。草稿与滚动快照仅驻留 presentation 内存，按 controller 弱身份保存并在 entry 关闭时清理；焦点、弹层和 IME composing 不保留。诊断 snapshot 按需读取唯一 owner，不使用 Shell relay。
+`workbenchSessionProvider` 先构造完整 Shell，组合根在语言冻结后、Widget 挂载前启动事实源、管理 ingress 和幂等 `Shell.start()`。IdeHome 只借用已有 workbench 与订阅；卸载不关闭 owner、Binding 或 runtime。草稿与滚动快照仅驻留 presentation 内存，按 controller 弱身份保存并在 entry 关闭时清理；Markdown/plan 缓存同样按 controller 弱身份驻留 presentation store，随 entry 关闭 dispose。焦点、弹层和 IME composing 不保留。诊断 snapshot 按需读取唯一 owner，不使用 Shell relay。
 
 关闭顺序为：停止 Shell/M/P 命令 → 刷新已有 session 保存 → 等待 M/P 真实执行排空 → 关闭管理消费者与事实源 → 逐 entry 关闭 ingress、撤下可见项、退订、dispose controller、await lease release → BindingManager → runtime registry → plugin catalog → container。entry/app 重复关闭共享同一 Future；失败保持 Closing/失败终态，不标记释放、不销毁容器掩盖失败。lease release 只证明 consumer 释放，CLI 退出仍以 registry close 为准。
 
@@ -547,7 +558,7 @@ Provider 契约测试。若 PR 因 Provider 差异修改 CoalescingPolicy/Buffer
 - Agent 配置保存必须先校验语法、检测外部修改、写入同目录临时文件并保留原文件
   备份；不得直接覆盖符号链接或在失败后破坏原配置。
 - Agent 日志在进入 UI 前完成凭证与用户目录脱敏。
-- 指标只经 `ZetaMetricsPort` 上报；名称登记在 `ZetaMetric` 白名单，标签仅允许规范化的 `providerId`、`component`、`outcome`。采集在 app 组合，业务默认 no-op；`ProviderObserver` 不读取 provider state 或 family 参数。日志和指标不得记录 prompt、回复正文、工具输出、原始错误、环境变量值、凭据或原始协议。
+- 指标只经 `ZetaMetricsPort` 上报；名称登记在 `ZetaMetric` 白名单，标签仅允许规范化的 `providerId`、`component`、`outcome`。采集在 app 组合，业务默认 no-op；`ProviderObserver` 不读取 provider state 或 family 参数。日志和指标不得记录 prompt、回复正文、工具输出、原始错误、环境变量值、凭据、原始协议或路由位置参数（projectId、threadId、完整 URL、本机路径）；路由诊断必要时只落 route name。
 - 应用根日志同时保留 developer 输出并按本地日期追加到数据目录中的 `logs/`；文件 sink
   必须串行写入、脱敏消息，写入失败不能递归进入根 Logger，并在正常关闭窗口前
   排空待写队列。
@@ -564,17 +575,11 @@ Provider 契约测试。若 PR 因 Provider 差异修改 CoalescingPolicy/Buffer
 
 界面需保持可读的信息密度，支持键盘、文字放大和窄窗口。
 
-- `IdeHome` 是主要页面唯一的 Workbench 组合边界。首页、设置、Agent 管理和使用统计
-  必须由同一个常驻 `WindowFrame` + `IdeWorkbenchScaffold` 承载，只切换
-  Navigation、Canvas、Inspector slot；Feature 页面不得另建或替换顶层骨架。
+- `IdeHome` 是内容页的 Workbench 组合边界。首页、项目页、会话页由 `ShellRoute` 的 child 填入 Canvas；设置页作为全屏路由压在壳之上，自带同等 `WindowFrame` chrome。内容 Feature 页面不得另建或替换顶层骨架。打开设置用 `push`，分区切换用 `replace` 与稳定 pageKey，关闭用 `pop`；`onExit` 承接未保存确认。
 - Workbench 负责布局模式、Pane 表面与 Overlay，Feature 负责业务内容、控制器和离开
-  确认。设置页应通过 `SettingsNavigationPane` 与 `SettingsPageCanvas` 接入 slot，
-  不把设置分区或 Agent 配置规则下沉到共享 Scaffold。
-- 跨页面保活的 Canvas 必须保证关键 State、`ScrollController`、输入控制器和当前 Thread
-  不被销毁。可能因兄弟 slot 增删而换位的 Flex 子节点必须直接使用稳定 Key；仅给内部
-  Widget 加 Key 不足以保证父级 Element 复用。保活实现必须只布局活动页面；禁止用
-  `IndexedStack` 保留包含长时间线的页面或会话。非活动 keep-alive 页不得进入焦点遍历、
-  指针命中和语义树；禁止只暂停 ticker 却仍允许 Tab 把隐藏页滚入视口。
+  确认。设置页应通过 `SettingsNavigationPane` 与 `SettingsPageCanvas` 接入，
+  `activeSection` 来自路由参数；不把设置分区或 Agent 配置规则下沉到共享 Scaffold。
+- 位置与中栏内容由路由直接渲染，高亮与内容同读 `GoRouterState.of(context)`。跨会话仍需保留的输入草稿、滚动偏移走 presentation 层 `AgentPaneRetention`；Markdown/plan 缓存走 presentation store。禁止用 `IndexedStack` 保留包含长时间线的页面或会话。可能因兄弟 slot 增删而换位的 Flex 子节点必须直接使用稳定 Key。设置页覆盖期间，被压栈的工作区路由在 Navigator 中自然保活；设置页必须 `opaque: false`，壳 Offstage 时不得关闭内容子树的 `TickerMode`。
 - 连续 resize 只允许按布局语义档位更新业务树。`IdeConstraintBucketBuilder` 的稳定
   callback 不得因父级每像素重建而失效；捕获了新配置的 callback 必须显式改变身份。
 - Agent 时间线必须使用 block / activity / footer 粒度的稳定 viewport item 与
@@ -657,12 +662,13 @@ Provider 契约测试。若 PR 因 Provider 差异修改 CoalescingPolicy/Buffer
   用户 HOME 下的 `.claude`。
 - pane、timeline、file tree 等用户可见行为用 widget test。
 - resize 相关测试至少覆盖外窗 1197/1196/1195px（`wideBreakpoint` + 工作台左右
-  `space8` ± 1）、Agent Canvas 641/640/639px、隐藏
-  retained page 的 build/layout 增量、viewport item 构建上界、缓存命中和 transient
+  `space8` ± 1）、Agent Canvas 641/640/639px、设置覆盖下 Offstage 工作区的
+  build/layout 增量、viewport item 构建上界、缓存命中和 transient
   callback 不增长。
-- 主要页面切换必须使用实际 `IdeHome` 做集成级 Widget 测试。Agent → Settings → Agent
-  与 Agent → Usage → Agent 至少验证常驻骨架、AgentPane Element、当前 Thread、草稿、
-  非零滚动位置、Pane 宽度和 Pane 可见状态保持。
+- 主要页面切换必须使用实际 `IdeHome`（经路由壳）做集成级 Widget 测试。设置或统计
+  压在工作区之上再返回时，至少验证常驻骨架、当前会话、草稿、非零滚动位置、
+  Pane 宽度和可见状态保持。会话之间切换验证草稿与滚动经 retention 恢复，不要求
+  AgentPane Element 跨会话存活。
 - 简单视觉调整可以只运行分析和相关 widget test，但行为变化必须补测试。
 - 外部 CLI 的自动化测试不能替代真实平台验收。Beta provider 发布前使用脱敏 smoke，分别
   记录 OS/架构、CLI 版本、Schema/包装器类型和结果；没有设备或凭据时必须标记“待执行/阻塞”，

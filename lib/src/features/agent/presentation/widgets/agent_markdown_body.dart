@@ -98,20 +98,23 @@ class _AgentMarkdownBodyState extends ConsumerState<AgentMarkdownBody> {
   Widget build(BuildContext context) {
     // 正文 I-Beam 由包内按块声明（WP-6 T10），这里不再套外层 MouseRegion——
     // 那种补丁会把图片、表格等非文本块也一并改成文本光标。
-    return MarkdownWidget(
-      controller: _lease.controller,
-      theme: (widget.themeBuilder ?? agentMarkdownTheme)(context),
-      useColumn: true,
-      selectable: true,
-      padding: EdgeInsets.zero,
-      enableCopyFullDocumentShortcut: false,
-      contextMenuLabels: agentMarkdownContextMenuLabels(context),
-      contextMenuBuilder: agentMarkdownContextMenu,
-      // 必须传稳定引用：MarkdownDocumentView.didUpdateWidget 按引用比较
-      // onTapLink，不等就清空整份 block 行缓存，而 block 的 GlobalKey 仍被
-      // 复用——每帧重建一次会把渲染对象在帧中拆装，直接炸布局断言。
-      onTapLink: _handleTapLink,
-      codeBlockToolbarBuilder: agentCodeBlockToolbar,
+    return MarkdownNativeSelectionBlock(
+      child: MarkdownWidget(
+        controller: _lease.controller,
+        theme: (widget.themeBuilder ?? agentMarkdownTheme)(context),
+        useColumn: true,
+        selectable: true,
+        padding: EdgeInsets.zero,
+        enableCopyFullDocumentShortcut: false,
+        contextMenuLabels: agentMarkdownContextMenuLabels(context),
+        contextMenuBuilder: agentMarkdownContextMenu,
+        // 必须传稳定引用：MarkdownDocumentView.didUpdateWidget 按引用比较
+        // onTapLink，不等就清空整份 block 行缓存，而 block 的 GlobalKey 仍被
+        // 复用——每帧重建一次会把渲染对象在帧中拆装，直接炸布局断言。
+        onTapLink: _handleTapLink,
+        codeBlockToolbarBuilder: agentCodeBlockToolbar,
+        codeBlockToolbarAbove: true,
+      ),
     );
   }
 
@@ -134,18 +137,21 @@ class AgentRawMarkdownBody extends ConsumerStatefulWidget {
 class _AgentRawMarkdownBodyState extends ConsumerState<AgentRawMarkdownBody> {
   @override
   Widget build(BuildContext context) {
-    return MarkdownWidget(
-      data: widget.data,
-      theme: agentMarkdownTheme(context),
-      useColumn: true,
-      selectable: true,
-      padding: EdgeInsets.zero,
-      enableCopyFullDocumentShortcut: false,
-      contextMenuLabels: agentMarkdownContextMenuLabels(context),
-      contextMenuBuilder: agentMarkdownContextMenu,
-      // 同上：稳定引用，别在这里写闭包。
-      onTapLink: _handleTapLink,
-      codeBlockToolbarBuilder: agentCodeBlockToolbar,
+    return MarkdownNativeSelectionBlock(
+      child: MarkdownWidget(
+        data: widget.data,
+        theme: agentMarkdownTheme(context),
+        useColumn: true,
+        selectable: true,
+        padding: EdgeInsets.zero,
+        enableCopyFullDocumentShortcut: false,
+        contextMenuLabels: agentMarkdownContextMenuLabels(context),
+        contextMenuBuilder: agentMarkdownContextMenu,
+        // 同上：稳定引用，别在这里写闭包。
+        onTapLink: _handleTapLink,
+        codeBlockToolbarBuilder: agentCodeBlockToolbar,
+        codeBlockToolbarAbove: true,
+      ),
     );
   }
 

@@ -196,6 +196,20 @@ diff -r --strip-trailing-cr   /tmp/mmw/packages/mixin_markdown_widget/lib   <仓
 测试：`test/zeta_text_cursor_test.dart`（可选中为 I-Beam / 不可选中保持 defer /
 挂 onTapLink 后链接 span 是 click）。
 
+### 2026-09-10 · 加入祖先 SelectionArea 时走原生选区
+
+对话流把整条时间线包在 Flutter `SelectionArea` 里。祖先 `SelectionRegistrarScope.registrar != null` 时：
+
+- `MarkdownDocumentView` 不再包 `MarkdownSelectionHost`（避免自绘 overlay 与原生选区抢手势）。
+- `MarkdownPretextTextBlock` 用单个 `RenderParagraph` 画字，行内 code 是 `MarkdownChipSpan`（同一 paragraph 上画 chip），不再拆成 pretext 逐行 Column / WidgetSpan。
+- 代码块正文包 `MarkdownNativeSelectionBlock`；列表标记与代码工具栏 `SelectionContainer.disabled`。
+
+独立 `MarkdownWidget`（没有祖先 SelectionArea）仍走原来的 overlay 选区，上游同步时 overlay 路径行为不变。
+
+新增：`lib/src/selection/native_selection.dart`、`lib/src/render/chip_text.dart`；测试 `test/zeta_native_selection_test.dart`。
+
+时间线 / 代码块 / 宽表的 `Scrollable` 比内容小。若它们直接看见 `SelectionRegistrarScope`，Flutter 会给每个滚动层装 `_ScrollableSelectionHandler`，在选词、拖选和虚拟列表纠偏时断言 `Drag target size is larger than scrollable size`。因此 `SelectionArea` 外包 `MarkdownSelectionScrollIsolation`，列表项与横滑内容再 `MarkdownSelectionScrollRestore` / `markdownIsolateNestedScrollable`，让 paragraph 仍登记到外层选区，滚动层不再当选区自动滚目标。
+
 **未改**（有意保留，减小同步 diff 面）：
 
 - `lib/src/selection/mixin_selection_area.dart` 与其中的 `MixinSelectionArea` —— 这里的 "Mixin" 是上游组织名而非包标识；改名会让选择区相关文件的同步 diff 全量失配。
@@ -204,3 +218,16 @@ diff -r --strip-trailing-cr   /tmp/mmw/packages/mixin_markdown_widget/lib   <仓
 ### 2026-09-07 · 文档引用清理
 
 README 改为引用本文件的基线和定制记录，移除已删除工作计划的路径；未修改包内源码、测试或默认行为。
+
+### 2026-09-11 · 可选顶部代码块工具栏
+
+- `MarkdownWidget`、`MarkdownDocumentView` 和 `MarkdownBlockBuilder` 新增
+  `codeBlockToolbarAbove`（默认 false），透传到 `MarkdownCodeBlockView.toolbarAbove`。
+- 开启且自绘工具栏非空时，工具栏与代码正文上下排列，正文使用完整内容宽度。
+  未开启、未注入 builder 或 builder 返回 null 时维持原有行为。
+- 布局选项变化时清除 block 行缓存；正文的滚动、选区 key 和复制回调保持原接线。
+- 宿主负责约束工具栏标签宽度。Zeta 开启顶部布局，将文件引用显示为文件名和行号，
+  并使用省略与 tooltip 展示长标签。
+- 测试：`test/zeta_code_block_toolbar_test.dart` 覆盖默认布局与运行时切换；
+  根应用 `agent_code_block_toolbar_test.dart` 覆盖长路径、未知标签、Windows 路径、
+  窄窗口、双倍文字大小与复制反馈。

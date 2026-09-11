@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../clipboard/plain_text_serializer.dart';
 import '../core/document.dart';
 import '../debug.dart';
+import '../selection/native_selection.dart';
 import '../selection/selection_host.dart';
 import '../selection/selection_controller.dart';
 import '../selection/selection_registrar.dart';
@@ -32,6 +33,7 @@ class MarkdownDocumentView extends StatefulWidget {
     this.selectionController,
     this.onTapLink,
     this.codeBlockToolbarBuilder,
+    this.codeBlockToolbarAbove = false,
     this.onCopyPlainText,
     this.enableCopyFullDocumentShortcut = true,
     this.showCopyAllInContextMenu = true,
@@ -55,6 +57,9 @@ class MarkdownDocumentView extends StatefulWidget {
 
   /// 自绘代码块工具栏；为空时保持包内默认的复制按钮。
   final MarkdownCodeBlockToolbarBuilder? codeBlockToolbarBuilder;
+
+  /// Place a custom toolbar above the code; false preserves the inline default.
+  final bool codeBlockToolbarAbove;
   final VoidCallback? onCopyPlainText;
 
   /// 是否允许弹出右键菜单；false 时右键完全无反应。
@@ -178,7 +183,8 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     if (oldWidget.theme != widget.theme ||
         oldWidget.onTapLink != widget.onTapLink ||
         oldWidget.imageBuilder != widget.imageBuilder ||
-        oldWidget.selectable != widget.selectable) {
+        oldWidget.selectable != widget.selectable ||
+        oldWidget.codeBlockToolbarAbove != widget.codeBlockToolbarAbove) {
       _cachedBlockRows.clear();
     }
     _syncSelectionParticipant(participantChanged: true);
@@ -479,6 +485,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       imageBuilder: widget.imageBuilder,
       codeBlockBuilder: widget.codeBlockBuilder,
       codeBlockToolbarBuilder: widget.codeBlockToolbarBuilder,
+      codeBlockToolbarAbove: widget.codeBlockToolbarAbove,
       bulletBuilder: widget.bulletBuilder,
       onTapLink: widget.onTapLink,
       onRequestContextMenu: _showToolbar,
@@ -536,15 +543,17 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       );
     }
 
-    if (!widget.selectable || widget.selectionController == null) {
+    if (!widget.selectable) {
       return _finishBuildWithLog(
         buildStopwatch,
-        scrollable,
+        SelectionContainer.disabled(child: scrollable),
         blockCount: widget.document.blocks.length,
       );
     }
 
-    if (_usesInheritedSelection(_selectionRegistrar)) {
+    if (widget.selectionController == null ||
+        _usesInheritedSelection(_selectionRegistrar) ||
+        joinsFlutterSelectionArea(context)) {
       return _finishBuildWithLog(
         buildStopwatch,
         scrollable,

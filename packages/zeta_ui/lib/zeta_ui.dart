@@ -58,7 +58,6 @@ export 'src/virtualization/ide_virtual_scrollbar.dart';
 export 'src/window_frame.dart';
 export 'src/workbench/ide_page_body.dart';
 export 'src/workbench/ide_page_header.dart';
-export 'src/workbench/ide_retained_page_view.dart';
 export 'src/workbench/ide_section.dart';
 export 'src/workbench/ide_toolbar.dart';
 export 'src/workbench/ide_workbench_scaffold.dart';

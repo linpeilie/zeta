@@ -77,12 +77,12 @@ Skill 在修改前说明基线和选出的版本，随后直接继续，不额�
    ```
 
    使用 CI 指定的 `PUB_HOSTED_URL=https://pub.dev`，避免本机镜像配置改变锁文件。
-4. 人工审读并修改说明，随代码提交、推送 `develop`。先用 `gh pr list --base main --head develop --state open` 查重，再用 `gh pr create --base main --head develop --title <标题> --body-file <正文文件>` 在 GitHub 创建 PR；已有 PR 用 `gh pr edit` 更新。通过 `gh pr view` 核对分支与状态，交付 PR URL。提交前执行本地版本与文稿校验；main 的 PR 不触发独立 CI，合并后由发布预检再次校验版本与文稿。
+4. 人工审读并修改说明，随代码提交、推送 `develop`。先用 `gh pr list --base main --head develop --state open` 查重，再用 `gh pr create --base main --head develop --title <标题> --body-file <正文文件>` 在 GitHub 创建 PR；已有 PR 用 `gh pr edit` 更新。通过 `gh pr view` 核对分支与状态，交付 PR URL。提交前执行本地版本与文稿校验。目标为 `main` 的 PR 会跑独立 CI；合并后由发布预检再次校验版本与文稿。
 5. 检查通过后由用户在 GitHub 合并 PR，即授权流水线执行发布。“提交并发起 PR”不包含本地合并或 `gh pr merge`；Skill 不自动处理 PR 冲突。不要再手工打 tag、推送 tag 或提前创建 GitHub Release。
 
 ## 4. 自动化流程
 
-独立 CI 仅由目标为 `develop` 的 PR 触发，不响应 push 或手动触发。`workflow_call` 保留，发布流程仍可调用全部检查，并通过 `checkout-ref` 固定被测合并提交；PR 的分支过滤不限制该调用。
+独立 CI 由目标为 `develop` 或 `main` 的 PR 触发，不响应 push 或手动触发。`workflow_call` 保留，发布流程仍可调用全部检查，并通过 `checkout-ref` 固定被测合并提交；PR 的分支过滤不限制该调用。
 
 1. 仅处理合入 main 的 PR，固定其合并 SHA，确认该 SHA 位于 main 历史中。
 2. 从该提交读取发布版本与文稿，验证数字版本一致、版本递增和文稿存在。

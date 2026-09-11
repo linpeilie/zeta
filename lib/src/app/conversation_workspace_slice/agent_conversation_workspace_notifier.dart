@@ -13,6 +13,8 @@ import 'agent_conversation_entry_resources.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_owner_key.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_session_dependencies.dart';
 import 'package:zeta/src/features/agent/presentation/agent_ui_update_scheduler.dart';
+import 'package:zeta/src/app/router/app_route_location.dart';
+import 'package:zeta/src/app/router/project_id_mapping.dart';
 import 'package:zeta/src/features/workspace/application/workspace_file_corpus_port.dart';
 
 final class AgentConversationWorkspaceDependencies {
@@ -30,6 +32,8 @@ final class AgentConversationWorkspaceDependencies {
     AgentUiTextCatalog? textCatalog,
     this.metrics = noopZetaMetricsPort,
     this.providerMetricLabel = ZetaMetricLabel.hashed,
+    this.navigationPort,
+    this.projectIdMapping,
   }) : _textCatalog = textCatalog ?? const FallbackAgentUiTextCatalog();
 
   /// @mention 只经 workspace 查询端口取语料，不拼接索引实现或 Flutter listener。
@@ -54,6 +58,9 @@ final class AgentConversationWorkspaceDependencies {
 
   /// Provider 身份到白名单指标标签的组合层投影。
   final ZetaMetricLabel Function(String providerId) providerMetricLabel;
+
+  final AppNavigationPort? navigationPort;
+  final ProjectIdMapping? projectIdMapping;
 
   final AgentUiTextCatalog _textCatalog;
 }
@@ -381,6 +388,14 @@ final class AgentConversationWorkspaceNotifier
           providerId: providerId,
         );
         selectEntry(draft.entryId);
+        final projectId = _dependencies.projectIdMapping?.idForPath(
+          entry.projectPath,
+        );
+        if (projectId != null) {
+          _dependencies.navigationPort?.go(
+            DraftThreadLocation(projectId, providerId),
+          );
+        }
       },
       onCreatedThread: callbacks.onCreatedThread,
       initialProjectPath: projectPath,

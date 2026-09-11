@@ -39,6 +39,7 @@ class MarkdownBlockBuilder {
     this.bulletBuilder,
     this.onTapLink,
     this.codeBlockToolbarBuilder,
+    this.codeBlockToolbarAbove = false,
     required this.onRequestContextMenu,
     required Map<String, CachedBlockRow> cachedBlockRows,
     required this.tableLayoutPlanCache,
@@ -62,6 +63,9 @@ class MarkdownBlockBuilder {
 
   /// 自绘代码块工具栏；为空时保持包内默认的复制按钮。
   final MarkdownCodeBlockToolbarBuilder? codeBlockToolbarBuilder;
+
+  /// Place a custom toolbar above the code; false preserves the inline default.
+  final bool codeBlockToolbarAbove;
   final void Function(Offset) onRequestContextMenu;
   final MarkdownTableLayoutPlanCache tableLayoutPlanCache;
   final MarkdownCodeHighlightCache codeHighlightCache;
@@ -1677,6 +1681,7 @@ class MarkdownBlockBuilder {
       language: block.language,
       lineCount: const MarkdownCodeSyntaxHighlighter().lineCountOf(block.code),
       toolbarBuilder: codeBlockToolbarBuilder,
+      toolbarAbove: codeBlockToolbarAbove,
       scrollController: scrollController ??
           keysRegistry.codeBlockScrollControllers
               .putIfAbsent(block.id, ScrollController.new),

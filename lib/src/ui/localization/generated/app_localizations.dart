@@ -1238,6 +1238,24 @@ abstract class AppLocalizations {
   /// **'Could not open the session from the notification. It may have been deleted or is not in the current project list.'**
   String get workbenchCannotOpenNotificationThread;
 
+  /// Conversation route title while the session is opening
+  ///
+  /// In en, this message translates to:
+  /// **'Opening conversation'**
+  String get conversationLoadingTitle;
+
+  /// Conversation route empty state after open failed
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open this conversation'**
+  String get conversationOpenFailed;
+
+  /// Conversation route failed-state back button
+  ///
+  /// In en, this message translates to:
+  /// **'Back to project'**
+  String get conversationOpenFailedBack;
+
   /// Provider detect error
   ///
   /// In en, this message translates to:

@@ -18,6 +18,7 @@ import 'package:zeta/src/features/settings/domain/app_language.dart';
 import 'package:zeta/src/features/settings/domain/appearance_settings.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
 import 'package:zeta/src/features/settings/domain/system_font_family.dart';
+import 'package:zeta/src/features/settings/domain/settings_section.dart';
 import 'package:zeta/src/features/settings/presentation/settings_page.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 import 'package:zeta/src/app/localization/zeta_localization.dart';

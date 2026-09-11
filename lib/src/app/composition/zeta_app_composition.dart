@@ -1,3 +1,4 @@
+import 'package:zeta/src/app/router/app_navigation.dart';
 import 'package:zeta/src/app/agent_management_slice/agent_management_home_detection_coordinator.dart';
 import 'package:zeta/src/app/agent_management_slice/agent_management_details_catalog.dart';
 import 'workbench_session_providers.dart';
@@ -259,6 +260,13 @@ final class ZetaAppComposition implements ZetaShutdownHook {
     );
     final management = _managementOwner;
     final workbench = _workbench;
+    if (container.exists(routerCoordinatorProvider)) {
+      container.read(routerCoordinatorProvider).dispose();
+    }
+    if (container.exists(appNavigationPortProvider)) {
+      final navigation = container.read(appNavigationPortProvider);
+      if (navigation is MountableAppNavigationPort) navigation.detach();
+    }
     workbench?.shell.stopAcceptingCommands();
     // Logical callers finish immediately; physical I/O still owns borrowed resources.
     _homeDetectionCoordinator?.close();

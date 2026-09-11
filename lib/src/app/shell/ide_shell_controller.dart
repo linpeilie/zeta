@@ -25,6 +25,9 @@ import 'package:zeta/src/features/workspace/application/workspace_file_corpus_po
 import 'package:zeta/src/features/workspace/application/workspace_notifier.dart';
 import 'package:zeta/src/features/workspace/application/workspace_restore_snapshot.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_node.dart';
+import 'package:zeta/src/app/router/app_route_location.dart';
+import 'package:zeta/src/app/router/project_id_mapping.dart';
+import 'package:zeta/src/app/router/route_reconcile_host.dart';
 import 'package:zeta/src/features/workspace/domain/workspace_project.dart';
 
 final _log = loggerFor('zeta.app.ide_shell_controller');
@@ -35,7 +38,7 @@ typedef IdeShellStatusReporter = void Function(String message);
 ///
 /// 它承接项目打开、文件树状态、会话恢复/保存以及 Agent thread 选择同步，
 /// 让页面只负责三栏布局和 UI 事件转发。
-class IdeShellController {
+class IdeShellController implements RouteReconcileHost {
   static const String _bootstrapProjectPath = '';
 
   IdeShellController({
@@ -58,6 +61,8 @@ class IdeShellController {
     this.agentUiTextCatalog = const FallbackAgentUiTextCatalog(),
     this.metrics = noopZetaMetricsPort,
     this.providerMetricLabel = ZetaMetricLabel.hashed,
+    this.navigationPort,
+    this.projectIdMapping,
     DateTime Function()? now,
   }) : _now = now ?? DateTime.now {
     _workspace = workspace;
@@ -135,6 +140,8 @@ class IdeShellController {
   /// app 组合层注入的脱敏指标端口；默认 no-op，探针只剩常量分支。
   final ZetaMetricsPort metrics;
   final ZetaMetricLabel Function(String providerId) providerMetricLabel;
+  final AppNavigationPort? navigationPort;
+  final ProjectIdMapping? projectIdMapping;
 
   int _homeRefreshToken = 0;
   bool _isDisposed = false;
@@ -193,6 +200,7 @@ class IdeShellController {
       ideSessionOperations.state.initialRestoreCompleted;
 
   /// 等待启动会话恢复收敛，供冷启动通知定位避免与恢复竞态。
+  @override
   Future<void> get initialRestoreDone =>
       ideSessionOperations.initialRestoreDone;
 
@@ -266,7 +274,18 @@ class IdeShellController {
       if (path == null || _isDisposed) {
         return;
       }
+      // 用户已接管启动恢复：解锁 redirect，否则会一直停在 `/` 转圈。
+      ideSessionOperations.completeInitialRestore();
       await _onProjectActivated(path, activateThreads: true);
+      if (_isDisposed) return;
+      final mapping = projectIdMapping;
+      if (mapping != null) {
+        mapping.syncProjects(projects);
+        final projectId = mapping.idForPath(path);
+        if (projectId != null) {
+          navigationPort?.go(ProjectHomeLocation(projectId));
+        }
+      }
     } catch (error, stackTrace) {
       _log.w(
         'Could not open project folder',
@@ -302,6 +321,9 @@ class IdeShellController {
       await projectThreadsController.loadInitial(path);
     }
   }
+
+  Future<void> toggleProjectExpansion(String path) =>
+      projectThreadsController.toggleProject(path);
 
   Future<void> selectKnownProject(String path) async {
     if (_isDisposed) return;
@@ -412,11 +434,13 @@ class IdeShellController {
     );
   }
 
+  @override
   Future<void> startNewThreadForProject(
     String projectPath, {
     required String providerId,
+    bool Function() isCurrent = routeReconcileIsCurrent,
   }) async {
-    if (_isDisposed) return;
+    if (_isDisposed || !isCurrent()) return;
     if (!_canMutateAgentHistory(providerId: providerId)) {
       return;
     }
@@ -424,8 +448,12 @@ class IdeShellController {
 
     // workspace-scoped provider 在切换时不能先于项目上下文初始化。
     if (projectPath != activeProjectPath) {
-      await _loadProject(projectPath, activateThreads: false);
-      if (activeProjectPath != projectPath) {
+      await _loadProject(
+        projectPath,
+        activateThreads: false,
+        isCurrent: isCurrent,
+      );
+      if (!isCurrent() || activeProjectPath != projectPath) {
         return;
       }
     }
@@ -434,10 +462,111 @@ class IdeShellController {
       await _selectWorkspaceDraftEntry(
         projectPath: projectPath,
         providerId: providerId,
+        isCurrent: isCurrent,
       );
     } catch (_) {
-      return;
+      if (isCurrent()) rethrow;
     }
+  }
+
+  @override
+  String? projectPathForThread({
+    required String threadId,
+    String? providerIdHint,
+  }) {
+    return resolveThreadTarget(
+      threadId: threadId,
+      providerIdHint: providerIdHint,
+    )?.projectPath;
+  }
+
+  @override
+  Future<void> openProjectHomeFromRoute(
+    String projectPath, {
+    bool Function() isCurrent = routeReconcileIsCurrent,
+  }) async {
+    if (_isDisposed || !isCurrent()) return;
+    if (projectPath != activeProjectPath) {
+      await _loadProject(
+        projectPath,
+        activateThreads: false,
+        isCurrent: isCurrent,
+      );
+    }
+    if (_isDisposed || !isCurrent() || activeProjectPath != projectPath) return;
+    _markProjectOpened(projectPath);
+    final needRefresh = !projectThreadsController
+        .stateFor(projectPath)
+        .hasLoaded;
+    _enterProjectHome(refreshThreads: needRefresh);
+  }
+
+  /// 由 (providerId 可选提示, threadId) 解析打开目标：先列表，后已开 entry 合成。
+  ({String projectPath, AgentThreadSummary thread})? resolveThreadTarget({
+    required String threadId,
+    String? providerIdHint,
+    String? projectPathHint,
+  }) {
+    final paths = projectPathHint != null
+        ? <String>[projectPathHint]
+        : projects;
+    for (final path in paths) {
+      for (final thread in projectThreadsController.stateFor(path).threads) {
+        if (thread.id == threadId &&
+            (providerIdHint == null || thread.providerId == providerIdHint)) {
+          return (projectPath: path, thread: thread);
+        }
+      }
+    }
+    for (final entry in agentConversationWorkspace.entries) {
+      if (entry.threadId == threadId &&
+          (projectPathHint == null || entry.projectPath == projectPathHint) &&
+          (providerIdHint == null || entry.providerId == providerIdHint) &&
+          entry.projectPath.isNotEmpty) {
+        final now = _now();
+        return (
+          projectPath: entry.projectPath,
+          thread: AgentThreadSummary(
+            id: threadId,
+            providerId: entry.providerId,
+            projectPath: entry.projectPath,
+            title: entry.controller.currentThreadTitle,
+            preview: entry.controller.currentThreadTitle,
+            createdAt: now,
+            updatedAt: now,
+            status:
+                entry.threadSnapshot.runtimeStatus ??
+                AgentThreadRuntimeStatus.idle,
+          ),
+        );
+      }
+    }
+    return null;
+  }
+
+  @override
+  Future<bool> openThreadFromRoute(
+    String projectPath,
+    String threadId, {
+    bool Function() isCurrent = routeReconcileIsCurrent,
+  }) async {
+    if (_isDisposed || !isCurrent()) return false;
+    final target = resolveThreadTarget(
+      threadId: threadId,
+      projectPathHint: projectPath,
+    );
+    if (target == null) return false;
+    await selectProjectThread(
+      target.projectPath,
+      target.thread,
+      isCurrent: isCurrent,
+    );
+    if (_isDisposed || !isCurrent()) return false;
+    final selected = agentConversationWorkspace.selectedEntry;
+    return selected?.threadId == threadId &&
+        selected?.providerId == target.thread.providerId &&
+        selected?.projectPath == projectPath &&
+        selected?.controller.threadOpenPhase != AgentThreadOpenPhase.openFailed;
   }
 
   Future<void> openProjectInSystemFileManager(String projectPath) async {
@@ -496,13 +625,18 @@ class IdeShellController {
 
   Future<void> selectProjectThread(
     String projectPath,
-    AgentThreadSummary thread,
-  ) async {
-    if (_isDisposed) return;
+    AgentThreadSummary thread, {
+    bool Function() isCurrent = routeReconcileIsCurrent,
+  }) async {
+    if (_isDisposed || !isCurrent()) return;
     if (projectPath != activeProjectPath) {
-      await _loadProject(projectPath, activateThreads: false);
+      await _loadProject(
+        projectPath,
+        activateThreads: false,
+        isCurrent: isCurrent,
+      );
     }
-    if (activeProjectPath != projectPath) {
+    if (!isCurrent() || activeProjectPath != projectPath) {
       return;
     }
     _markProjectOpened(projectPath);
@@ -510,6 +644,7 @@ class IdeShellController {
       projectPath: projectPath,
       thread: thread,
       persistSelection: true,
+      isCurrent: isCurrent,
     );
   }
 
@@ -518,47 +653,14 @@ class IdeShellController {
     required String providerId,
     required String threadId,
   }) async {
-    AgentThreadSummary? target;
-    String? projectPath;
-    for (final path in projects) {
-      for (final thread in projectThreadsController.stateFor(path).threads) {
-        if (thread.providerId == providerId && thread.id == threadId) {
-          target = thread;
-          projectPath = path;
-          break;
-        }
-      }
-      if (target != null) {
-        break;
-      }
-    }
-
-    final openEntry = agentConversationWorkspace.entryForThread(
-      providerId: providerId,
+    final target = resolveThreadTarget(
       threadId: threadId,
+      providerIdHint: providerId,
     );
-    if (target == null &&
-        openEntry != null &&
-        openEntry.projectPath.isNotEmpty) {
-      final now = _now();
-      projectPath = openEntry.projectPath;
-      target = AgentThreadSummary(
-        id: threadId,
-        providerId: providerId,
-        projectPath: projectPath,
-        title: openEntry.controller.currentThreadTitle,
-        preview: openEntry.controller.currentThreadTitle,
-        createdAt: now,
-        updatedAt: now,
-        status:
-            openEntry.threadSnapshot.runtimeStatus ??
-            AgentThreadRuntimeStatus.idle,
-      );
-    }
-    if (target == null || projectPath == null) {
+    if (target == null) {
       return false;
     }
-    await selectProjectThread(projectPath, target);
+    await selectProjectThread(target.projectPath, target.thread);
     final selected = agentConversationWorkspace.selectedEntry;
     return selected?.providerId == providerId && selected?.threadId == threadId;
   }
@@ -609,7 +711,11 @@ class IdeShellController {
   /// 外部 application 切片已经提交会话字段后，请求保存完整 Shell 快照。
   void requestSessionSave() => _requestSessionSave();
 
-  Future<void> _loadProject(String path, {bool activateThreads = true}) async {
+  Future<void> _loadProject(
+    String path, {
+    bool activateThreads = true,
+    bool Function() isCurrent = routeReconcileIsCurrent,
+  }) async {
     if (_isDisposed) return;
     _homeRefreshToken += 1;
     _log.i('Opening project folder: $path');
@@ -617,7 +723,7 @@ class IdeShellController {
 
     try {
       final loaded = await _workspace.openOrActivate(path);
-      if (!loaded || _isDisposed || activeProjectPath != path) {
+      if (!loaded || _isDisposed || !isCurrent() || activeProjectPath != path) {
         return;
       }
 
@@ -854,6 +960,7 @@ class IdeShellController {
     required String projectPath,
     required String providerId,
     bool persistSelection = true,
+    bool Function() isCurrent = routeReconcileIsCurrent,
   }) async {
     final entry = agentConversationWorkspace.ensureDraftEntry(
       callbacks: entryCallbacks,
@@ -863,7 +970,7 @@ class IdeShellController {
     entry.applyDraftIdentity(projectPath: projectPath, providerId: providerId);
     agentConversationWorkspace.selectEntry(entry.entryId);
     await entry.controller.loadSettings();
-    if (_isDisposed || entry.closing) return entry;
+    if (_isDisposed || entry.closing || !isCurrent()) return entry;
     if (entry.controller.activeProviderId != providerId) {
       try {
         await lifetimes
@@ -879,6 +986,7 @@ class IdeShellController {
         rethrow;
       }
     }
+    if (_isDisposed || entry.closing || !isCurrent()) return entry;
     entry.controller.updateContext(
       projectPath: projectPath,
       contextFilePath: _currentWorkspaceFilePath,
@@ -898,6 +1006,7 @@ class IdeShellController {
     required String projectPath,
     required AgentThreadSummary thread,
     bool persistSelection = true,
+    bool Function() isCurrent = routeReconcileIsCurrent,
   }) async {
     final existingEntry = agentConversationWorkspace.entryForThread(
       providerId: thread.providerId,
@@ -927,7 +1036,7 @@ class IdeShellController {
       // Entry bootstrap only; user catalog requests go through Actions.
       unawaited(entry.controller.loadModels());
     }
-    if (_isDisposed || entry.closing) return entry;
+    if (_isDisposed || entry.closing || !isCurrent()) return entry;
     _syncSelectedThreadTitleFromList();
     if (persistSelection) {
       _requestSessionSave();
@@ -992,15 +1101,14 @@ class IdeShellController {
     }
 
     final snapshot = entry.threadSnapshot;
-    final sessionId = snapshot.sessionId;
-    final state = projectThreadsController.stateFor(projectPath);
     final currentSession = entry.controller.currentSession;
+    final sessionId = currentSession?.id ?? snapshot.sessionId;
+    final providerId = currentSession?.providerId ?? snapshot.providerId;
+    final state = projectThreadsController.stateFor(projectPath);
     final hasProviderSummary =
         sessionId == null ||
         state.threads.any(
-          (thread) =>
-              thread.id == sessionId &&
-              thread.providerId == snapshot.providerId,
+          (thread) => thread.id == sessionId && thread.providerId == providerId,
         );
     if (currentSession != null && !hasProviderSummary) {
       projectThreadsController.registerSession(
@@ -1054,6 +1162,11 @@ class IdeShellController {
     );
     await selectProjectThread(projectPath, thread);
     if (_isDisposed) throw StateError('Workbench is closing');
+
+    final projectId = projectIdMapping?.idForPath(projectPath);
+    if (projectId != null) {
+      navigationPort?.replace(ThreadLocation(projectId, session.id));
+    }
 
     final entry = agentConversationWorkspace.selectedEntry;
     if (entry?.providerId != session.providerId ||

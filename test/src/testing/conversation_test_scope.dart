@@ -12,6 +12,7 @@ import 'package:zeta/src/features/agent/application/conversation_slice/agent_con
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_state.dart';
 import 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_command_scope.dart';
 import 'memory_agent_composer_attachment_store.dart';
+import 'package:zeta/src/features/agent/presentation/agent_pane_presentation_store.dart';
 import 'package:zeta/src/features/agent/presentation/agent_pane_retention.dart';
 
 export 'package:zeta/src/features/agent/application/conversation_slice/agent_conversation_slice_ports.dart';
@@ -97,6 +98,12 @@ final class ConversationTestScope {
       final retention = container.read(agentPaneRetentionProvider);
       for (final input in _inputs.values) {
         await retention.closeEntry(input.executor);
+      }
+    }
+    if (container.exists(agentPanePresentationStoreProvider)) {
+      final store = container.read(agentPanePresentationStoreProvider);
+      for (final input in _inputs.values) {
+        store.closeEntry(input.executor);
       }
     }
     container.dispose();

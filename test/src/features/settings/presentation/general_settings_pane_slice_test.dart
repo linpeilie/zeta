@@ -7,6 +7,7 @@ import 'package:zeta/src/app/localization/zeta_localization.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_effect.dart';
 import 'package:zeta/src/features/settings/application/settings_slice/general_settings_slice_notifier.dart';
 import 'package:zeta/src/features/settings/domain/general_settings.dart';
+import 'package:zeta/src/features/settings/domain/settings_section.dart';
 import 'package:zeta/src/features/settings/presentation/settings_page.dart';
 import 'package:zeta_ui/zeta_ui.dart';
 
