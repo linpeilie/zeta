@@ -100,6 +100,14 @@ Swift 和原生 API 错误。发布通过 `workflow_call` 调用质量门禁时�
 
 GitHub CLI 在有附件时自动完成临时草稿、附件上传和公开发布，脚本不传 `--draft`。自动 tag 的目标提交与文稿参数见 [GitHub CLI 文档](https://cli.github.com/manual/gh_release_create)。
 
+### 发布后同步 develop
+
+tag 校验成功后，在同一个串行发布作业中执行 `tool/packaging/sync_release_to_develop.sh`，重新获取 `main` 和 `develop`，确认发布提交属于 main 历史，再将 main 合回 develop。没有分叉时快进到同一提交；develop 已有新提交时创建普通 merge commit，保留两边历史。重复运行已同步的版本不会增加提交。
+
+推送不使用 force。若 develop 在推送期间推进，重新获取并合并，最多尝试三次；冲突、权限不足或分支保护拒绝会让作业失败，不自动选择某一侧。已发布的 Release 和 tag 保持不变；处理冲突或权限后可重新运行失败的发布作业。
+
+此步骤使用发布作业已有的 `contents: write` 和 checkout 凭据。develop 的保护规则或 ruleset 必须允许该工作流身份直接推送普通 merge commit；权限声明本身不会绕过保护规则。同步包含获取时的 main 提交，之后新进入 main 的提交由后续发布同步。它不保证有新开发提交时两条分支的 tip 相同。
+
 ## 5. 分发包与平台验收
 
 成功发布包含 12 个分发包及其 `.sha256`，合计 24 项：
@@ -180,3 +188,4 @@ Applications 后的启动行为；脚本校验不能替代外观和安装验收�
 - [ ] GitHub Actions 全部成功。
 - [ ] Release 类型、Latest 状态、Release Notes 和 24 个附件正确。
 - [ ] Release attestation、本地 SHA-256、macOS 架构和目标平台启动冒烟均通过。
+- [ ] 发布作业已将 main 合回 develop，保留两边提交历史。

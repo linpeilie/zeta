@@ -103,6 +103,14 @@ Only publication has `contents: write`. An existing tag must point to the same m
 
 With attachments, GitHub CLI creates a temporary draft, uploads assets, and publishes; the script does not pass `--draft`. See the [GitHub CLI documentation](https://cli.github.com/manual/gh_release_create) for automatic tag targeting and notes input.
 
+### Synchronizing develop after publication
+
+After tag verification, the same serialized publishing job runs `tool/packaging/sync_release_to_develop.sh`. It fetches main and develop, verifies the release commit belongs to main history, then merges main into develop. A fast-forward gives both branches the same commit when possible; divergent development creates an ordinary merge commit preserving both histories. Rerunning an already synchronized release adds no commit.
+
+Pushes never use force. If develop advances during the push, fetch and merge again, for up to three attempts. Conflicts, missing permissions or branch protection rejection fail the job without choosing either side automatically. The published Release and tag remain intact; resolve the conflict or permissions and rerun the failed publishing job.
+
+This step uses the publishing job's existing `contents: write` permission and checkout credentials. Any develop protection or ruleset must allow this workflow identity to push ordinary merge commits directly; declaring write permission does not bypass protection. Synchronization includes main as fetched; later main commits are handled by subsequent releases. Branch tips need not match when develop contains new development commits.
+
 ## 5. Packages and platform acceptance
 
 A successful release contains 12 packages and their `.sha256` files, totaling 24 assets:
@@ -184,3 +192,4 @@ it. Script checks do not replace visual and installation acceptance.
 - [ ] The automatically created tag has the expected version and merge SHA.
 - [ ] GitHub Actions succeeds; release type, Latest status, notes and all 24 assets are correct.
 - [ ] Attestation, SHA-256, macOS architectures and target-platform installation/startup acceptance pass.
+- [ ] The publishing job merged main back into develop, preserving both histories.

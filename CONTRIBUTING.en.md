@@ -13,12 +13,14 @@ The project uses the existing `main` and `develop` as its two long-lived branche
 | `main` | Long-lived | Always contains the latest production-ready stable version; receives validated `release/*` and `hotfix/*` PRs. |
 | `develop` | Long-lived | Daily integration; every feature and fix must ultimately reach this branch. |
 | `feature/*` | `develop` | Features and routine fixes; merge back into `develop` through a PR. |
-| `release/*` | `develop` | Final testing, necessary fixes and version updates; merge into `main` through a PR for publication and tagging, and back into `develop` through a separate PR. |
-| `hotfix/*` | `main` | Urgent fixes for severe production problems; merge into `main` through a PR for publication and tagging, and back into `develop` through a separate PR. |
+| `release/*` | `develop` | Final testing, necessary fixes and version updates; merge into `main` through a PR for publication and tagging, then let the workflow merge `main` back into `develop` after publication and tag verification. |
+| `hotfix/*` | `main` | Urgent fixes for severe production problems; merge into `main` through a PR for publication and tagging, then let the workflow merge `main` back into `develop` after publication and tag verification. |
 
-Auxiliary branches are temporary. Delete them only after all target PRs have merged; for `release/*` and `hotfix/*`, also confirm publication and tagging succeeded. Do not delete the source after merging only into `main` while its `develop` PR is still pending. Keep both long-lived branches.
+Auxiliary branches are temporary. Delete them only after all target PRs have merged; for `release/*` and `hotfix/*`, also confirm publication, tagging and the automatic merge back into `develop` succeeded. Keep both long-lived branches.
 
 Examples: `feature/notification-logo`, `release/0.1.0`, `hotfix/0.1.1`. Review merges through GitHub PRs; opening a PR does not authorize local merges, rebases or automatic PR merging. See the [release guide](docs/en/release/release_guide.md) for publication and tagging.
+
+The post-release automatic `main` → `develop` merge is an exception to the PR merge rule: preserve shared ancestry using a fast-forward or ordinary merge, never squash, rebase or force-push.
 
 ## Environment
 
