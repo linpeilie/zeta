@@ -15,8 +15,9 @@ private final class ZetaFlutterViewController: FlutterViewController {
     editMenuChannel = channel
   }
 
-  override func copy(_ sender: Any?) {
-    super.copy(sender)
+  // FlutterViewController 没有 copy(_:)；这是响应链上的菜单 action，
+  // 通过 IBAction 暴露 copy: selector，不覆写或调用 NSObject 的对象复制方法。
+  @IBAction func copy(_ sender: Any?) {
     editMenuChannel?.invokeMethod("copy", arguments: nil)
   }
 }

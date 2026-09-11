@@ -54,6 +54,35 @@ jobs:
       - name: Analyze
         run: flutter analyze
 
+  # Dart analyze/test 不编译 Swift。PR 阶段用与发布相同的配置验证原生宿主，
+  # 避免合并后才发现 AppKit/FlutterMacOS API 错误。
+  # workflow_call 的发布路径已有独立 macOS 构建作业，不重复构建。
+  macos-build:
+    if: github.event_name == 'pull_request'
+    name: Build macOS runner
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get --enforce-lockfile
+
+      - name: Build universal macOS release
+        run: |
+          flutter config --no-enable-macos-arm64-only
+          flutter build macos --release
+
   # 根测试按 tool/test_shards.dart 的清单分片并行。分片是**语义分组**而不是贪心
   # 装箱，开发者要能一眼判断改动落在哪片；本地只跑受影响的分片见
   # `bash tool/test_affected.sh --shards`。
