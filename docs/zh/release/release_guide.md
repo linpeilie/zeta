@@ -84,6 +84,10 @@ Skill 在修改前说明基线和选出的版本，随后直接继续，不额�
 
 独立 CI 由目标为 `develop` 或 `main` 的 PR 触发，不响应 push 或手动触发。`workflow_call` 保留，发布流程仍可调用全部检查，并通过 `checkout-ref` 固定被测合并提交；PR 的分支过滤不限制该调用。
 
+PR 检查还会在 macOS 上编译 universal release，提前发现 Dart 分析无法检查的
+Swift 和原生 API 错误。发布通过 `workflow_call` 调用质量门禁时跳过这项重复构建，
+随后仍由发布流程的 macOS 作业执行同配置构建与打包。
+
 1. 仅处理合入 main 的 PR，固定其合并 SHA，确认该 SHA 位于 main 历史中。
 2. 从该提交读取发布版本与文稿，验证数字版本一致、版本递增和文稿存在。
 3. 调用同一提交的 reusable CI；质量门禁通过后，在 Windows、macOS、Linux 构建分发包。

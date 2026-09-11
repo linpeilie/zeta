@@ -62,7 +62,9 @@ dart run tool/check_localized_ui_strings.dart --check
 测试文件与用例；`tool/test_shard.sh` 每片生成 `shard-<id>.json`，同样打印摘要——
 这是重平衡分片时唯一该看的数据。
 
-每个 PR 在 CI 跑满 6 个分片和内部 Package；本地完整门禁适用条件见上表。
+每个 PR 在 CI 跑满 6 个分片和内部 Package，并在 macOS 上编译 universal release，
+提前检查 Swift、AppKit 与 FlutterMacOS 的兼容性。Dart 分析和 Widget 测试不能替代
+原生编译；该检查不打包、上传或发布应用。本地完整门禁适用条件见上表。
 
 `dart_test.yaml` 的 `concurrency: 2` 是内存保护门禁，不因提速而调整。
 

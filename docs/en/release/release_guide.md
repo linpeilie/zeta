@@ -86,6 +86,11 @@ Before editing, report the baseline and selected version, then continue without 
 
 Standalone CI runs for PRs targeting `develop` or `main`, with no push or manual trigger. `workflow_call` remains available: release calls still run all checks at the merge commit passed through `checkout-ref`. PR branch filters do not restrict this call.
 
+PR checks also compile a universal macOS release to catch Swift and native API
+errors that Dart analysis cannot detect. Release calls through `workflow_call`
+skip this duplicate build; the release workflow's macOS job still builds with
+the same configuration and creates the packages afterward.
+
 1. Process merged PRs to main only; pin their merge SHA and verify main ancestry.
 2. Read the version and notes from that commit and validate progression, numeric metadata, and notes availability.
 3. Run reusable CI at the same commit, then build Windows, macOS and Linux packages.
