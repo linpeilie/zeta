@@ -41,6 +41,7 @@ class _AgentCodeBlockToolbar extends StatefulWidget {
 
 class _AgentCodeBlockToolbarState extends State<_AgentCodeBlockToolbar> {
   static const _feedbackDuration = Duration(milliseconds: 1500);
+  static final _fileReference = RegExp(r'^(\d+):(\d+):(.+)$');
 
   Timer? _resetTimer;
   bool _copied = false;
@@ -70,15 +71,33 @@ class _AgentCodeBlockToolbarState extends State<_AgentCodeBlockToolbar> {
     final l10n = context.l10n;
     final metaStyle = textStyles.meta.copyWith(color: colors.textTertiary);
     final language = widget.language?.trim();
+    final reference = language == null
+        ? null
+        : _fileReference.firstMatch(language);
+    final path = reference?.group(3);
+    final label = path == null
+        ? language
+        : '${path.split(RegExp(r"[/\\]")).last} · ${reference!.group(1)}–${reference.group(2)}';
 
     return Row(
-      mainAxisSize: MainAxisSize.min,
+      mainAxisSize: MainAxisSize.max,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: <Widget>[
         if (language != null && language.isNotEmpty) ...<Widget>[
-          Text(language, style: metaStyle),
+          Expanded(
+            child: IdeTooltip(
+              message: language,
+              child: Text(
+                label!,
+                style: metaStyle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
           const SizedBox(width: IdeSpacing.space8),
-        ],
+        ] else
+          const Spacer(),
         if (widget.lineCount > 0) ...<Widget>[
           Text(l10n.agentLineCount('${widget.lineCount}'), style: metaStyle),
           const SizedBox(width: IdeSpacing.space6),

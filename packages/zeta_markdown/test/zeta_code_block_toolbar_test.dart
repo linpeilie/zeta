@@ -10,6 +10,7 @@ void main() {
   Future<void> pump(
     WidgetTester tester, {
     MarkdownCodeBlockToolbarBuilder? toolbarBuilder,
+    bool toolbarAbove = false,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -17,6 +18,7 @@ void main() {
           body: MarkdownWidget(
             data: source,
             codeBlockToolbarBuilder: toolbarBuilder,
+            codeBlockToolbarAbove: toolbarAbove,
           ),
         ),
       ),
@@ -28,6 +30,23 @@ void main() {
     await pump(tester);
 
     expect(find.byIcon(Icons.copy_rounded), findsOneWidget);
+  });
+
+  testWidgets('顶部工具栏占独立一行，切换布局会更新缓存', (tester) async {
+    Widget toolbar(BuildContext context, MarkdownCodeBlockToolbarData data) =>
+        const Text('toolbar');
+    final viewport = find.byWidgetPredicate((widget) =>
+        widget is SingleChildScrollView &&
+        widget.scrollDirection == Axis.horizontal);
+    await pump(tester, toolbarBuilder: toolbar);
+    final inlineWidth = tester.getSize(viewport).width;
+    await pump(tester, toolbarBuilder: toolbar, toolbarAbove: true);
+    expect(tester.takeException(), isNull);
+    expect(tester.getSize(viewport).width, greaterThan(inlineWidth));
+    expect(tester.getRect(viewport).top,
+        greaterThan(tester.getRect(find.text('toolbar')).bottom));
+    await pump(tester, toolbarBuilder: toolbar);
+    expect(tester.getSize(viewport).width, inlineWidth);
   });
 
   testWidgets('注入后用自绘工具栏替换默认按钮，并拿到语言与行数', (tester) async {
