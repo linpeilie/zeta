@@ -218,3 +218,16 @@ diff -r --strip-trailing-cr   /tmp/mmw/packages/mixin_markdown_widget/lib   <仓
 ### 2026-09-07 · 文档引用清理
 
 README 改为引用本文件的基线和定制记录，移除已删除工作计划的路径；未修改包内源码、测试或默认行为。
+
+### 2026-09-11 · 可选顶部代码块工具栏
+
+- `MarkdownWidget`、`MarkdownDocumentView` 和 `MarkdownBlockBuilder` 新增
+  `codeBlockToolbarAbove`（默认 false），透传到 `MarkdownCodeBlockView.toolbarAbove`。
+- 开启且自绘工具栏非空时，工具栏与代码正文上下排列，正文使用完整内容宽度。
+  未开启、未注入 builder 或 builder 返回 null 时维持原有行为。
+- 布局选项变化时清除 block 行缓存；正文的滚动、选区 key 和复制回调保持原接线。
+- 宿主负责约束工具栏标签宽度。Zeta 开启顶部布局，将文件引用显示为文件名和行号，
+  并使用省略与 tooltip 展示长标签。
+- 测试：`test/zeta_code_block_toolbar_test.dart` 覆盖默认布局与运行时切换；
+  根应用 `agent_code_block_toolbar_test.dart` 覆盖长路径、未知标签、Windows 路径、
+  窄窗口、双倍文字大小与复制反馈。

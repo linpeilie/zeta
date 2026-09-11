@@ -33,6 +33,7 @@ class MarkdownDocumentView extends StatefulWidget {
     this.selectionController,
     this.onTapLink,
     this.codeBlockToolbarBuilder,
+    this.codeBlockToolbarAbove = false,
     this.onCopyPlainText,
     this.enableCopyFullDocumentShortcut = true,
     this.showCopyAllInContextMenu = true,
@@ -56,6 +57,9 @@ class MarkdownDocumentView extends StatefulWidget {
 
   /// 自绘代码块工具栏；为空时保持包内默认的复制按钮。
   final MarkdownCodeBlockToolbarBuilder? codeBlockToolbarBuilder;
+
+  /// Place a custom toolbar above the code; false preserves the inline default.
+  final bool codeBlockToolbarAbove;
   final VoidCallback? onCopyPlainText;
 
   /// 是否允许弹出右键菜单；false 时右键完全无反应。
@@ -179,7 +183,8 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     if (oldWidget.theme != widget.theme ||
         oldWidget.onTapLink != widget.onTapLink ||
         oldWidget.imageBuilder != widget.imageBuilder ||
-        oldWidget.selectable != widget.selectable) {
+        oldWidget.selectable != widget.selectable ||
+        oldWidget.codeBlockToolbarAbove != widget.codeBlockToolbarAbove) {
       _cachedBlockRows.clear();
     }
     _syncSelectionParticipant(participantChanged: true);
@@ -480,6 +485,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       imageBuilder: widget.imageBuilder,
       codeBlockBuilder: widget.codeBlockBuilder,
       codeBlockToolbarBuilder: widget.codeBlockToolbarBuilder,
+      codeBlockToolbarAbove: widget.codeBlockToolbarAbove,
       bulletBuilder: widget.bulletBuilder,
       onTapLink: widget.onTapLink,
       onRequestContextMenu: _showToolbar,

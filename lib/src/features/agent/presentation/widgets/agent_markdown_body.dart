@@ -113,6 +113,7 @@ class _AgentMarkdownBodyState extends ConsumerState<AgentMarkdownBody> {
         // 复用——每帧重建一次会把渲染对象在帧中拆装，直接炸布局断言。
         onTapLink: _handleTapLink,
         codeBlockToolbarBuilder: agentCodeBlockToolbar,
+        codeBlockToolbarAbove: true,
       ),
     );
   }
@@ -149,6 +150,7 @@ class _AgentRawMarkdownBodyState extends ConsumerState<AgentRawMarkdownBody> {
         // 同上：稳定引用，别在这里写闭包。
         onTapLink: _handleTapLink,
         codeBlockToolbarBuilder: agentCodeBlockToolbar,
+        codeBlockToolbarAbove: true,
       ),
     );
   }

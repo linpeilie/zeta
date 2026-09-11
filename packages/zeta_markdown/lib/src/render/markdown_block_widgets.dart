@@ -544,6 +544,7 @@ class MarkdownCodeBlockView extends StatelessWidget {
     this.language,
     this.lineCount = 0,
     this.toolbarBuilder,
+    this.toolbarAbove = false,
   });
 
   final MarkdownThemeData theme;
@@ -561,6 +562,8 @@ class MarkdownCodeBlockView extends StatelessWidget {
 
   /// 自绘工具栏；为空时用包内默认的复制按钮（上游行为）。
   final MarkdownCodeBlockToolbarBuilder? toolbarBuilder;
+
+  final bool toolbarAbove;
 
   @override
   Widget build(BuildContext context) {
@@ -615,6 +618,15 @@ class MarkdownCodeBlockView extends StatelessWidget {
     if (chrome != null) {
       chrome = SelectionContainer.disabled(child: chrome);
     }
+    final viewport = ClipRect(
+      key: viewportKey,
+      child: markdownIsolateNestedScrollable(
+        context: context,
+        controller: scrollController,
+        scrollDirection: Axis.horizontal,
+        content: code,
+      ),
+    );
 
     return SizedBox(
       width: double.infinity,
@@ -625,26 +637,24 @@ class MarkdownCodeBlockView extends StatelessWidget {
         ),
         child: Padding(
           padding: effectivePadding,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Expanded(
-                child: ClipRect(
-                  key: viewportKey,
-                  child: markdownIsolateNestedScrollable(
-                    context: context,
-                    controller: scrollController,
-                    scrollDirection: Axis.horizontal,
-                    content: code,
-                  ),
+          child: toolbarAbove && toolbar != null
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [chrome!, const SizedBox(height: 8), viewport],
+                )
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Expanded(
+                      child: viewport,
+                    ),
+                    if (chrome != null) ...<Widget>[
+                      const SizedBox(width: 8),
+                      chrome,
+                    ],
+                  ],
                 ),
-              ),
-              if (chrome != null) ...<Widget>[
-                const SizedBox(width: 8),
-                chrome,
-              ],
-            ],
-          ),
         ),
       ),
     );

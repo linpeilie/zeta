@@ -37,7 +37,8 @@ void main() {
       markdown:
           '说明文字：\n\n```dart\nvoid main() {\n  final a = 1;\n'
           '  print("hello");\n}\n```\n\n收尾说明。\n',
-      realHeight: 145.6,
+      // 顶部工具栏 24px + 与正文间距 8px，相比行内布局增加 32px。
+      realHeight: 177.6,
     ),
     'table': (
       markdown:

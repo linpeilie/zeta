@@ -26,6 +26,7 @@ class MarkdownWidget extends StatefulWidget {
     this.padding,
     this.onTapLink,
     this.codeBlockToolbarBuilder,
+    this.codeBlockToolbarAbove = false,
     this.imageBuilder,
     this.codeBlockBuilder,
     this.bulletBuilder,
@@ -59,6 +60,9 @@ class MarkdownWidget extends StatefulWidget {
   ///
   /// 与 `codeBlockBuilder` 一样要传稳定引用，别在 build 里现写闭包。
   final MarkdownCodeBlockToolbarBuilder? codeBlockToolbarBuilder;
+
+  /// Place a custom toolbar above the code; false preserves the inline default.
+  final bool codeBlockToolbarAbove;
   final MarkdownImageBuilder? imageBuilder;
   final MarkdownCodeBlockBuilder? codeBlockBuilder;
   final MarkdownBulletBuilder? bulletBuilder;
@@ -163,6 +167,7 @@ class _MarkdownWidgetState extends State<MarkdownWidget> {
                   contextMenuLabels: widget.contextMenuLabels,
                   onTapLink: widget.onTapLink,
                   codeBlockToolbarBuilder: widget.codeBlockToolbarBuilder,
+                  codeBlockToolbarAbove: widget.codeBlockToolbarAbove,
                   imageBuilder: widget.imageBuilder,
                   codeBlockBuilder: widget.codeBlockBuilder,
                   bulletBuilder: widget.bulletBuilder,
