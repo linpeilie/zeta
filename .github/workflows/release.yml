@@ -288,3 +288,10 @@ jobs:
             exit 1
           fi
           printf 'Published tag `%s` at commit `%s`.\n' "${RELEASE_TAG}" "${tag_commit}" >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Merge main back into develop
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+          RELEASE_COMMIT: ${{ needs.prepare.outputs.commit }}
+        run: bash ./tool/packaging/sync_release_to_develop.sh "$RELEASE_TAG" "$RELEASE_COMMIT"

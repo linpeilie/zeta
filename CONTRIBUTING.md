@@ -13,12 +13,14 @@
 | `main` | 长期保留 | 生产就绪代码，任何时候代表可发布的最新稳定版本；接收完成验收的 `release/*` 和 `hotfix/*` PR。 |
 | `develop` | 长期保留 | 日常集成，所有新功能和修复最终都要合入此分支。 |
 | `feature/*` | `develop` | 新功能和日常修复，完成后通过 PR 合回 `develop`。 |
-| `release/*` | `develop` | 发布前最终测试、必要修复和版本号修订；完成后通过 PR 合入 `main`，发布流程打版本标签，并通过另一 PR 合回 `develop`。 |
-| `hotfix/*` | `main` | 紧急修复生产环境严重问题；完成后通过 PR 合入 `main` 并打版本标签，同时通过另一 PR 合回 `develop`。 |
+| `release/*` | `develop` | 发布前最终测试、必要修复和版本号修订；完成后通过 PR 合入 `main`，发布流程打版本标签，发布并校验 tag 后由工作流将 `main` 合回 `develop`。 |
+| `hotfix/*` | `main` | 紧急修复生产环境严重问题；完成后通过 PR 合入 `main` 并打版本标签，发布并校验 tag 后由工作流将 `main` 合回 `develop`。 |
 
-辅助分支均为短期分支，全部目标 PR 合并完成后删除；`release/*` 和 `hotfix/*` 须确认发布及标签成功后再删除。不要在只合入 `main` 后提前删除尚需回合 `develop` 的源分支。两个长期分支持续保留。
+辅助分支均为短期分支，目标 PR 合并完成后删除；`release/*` 和 `hotfix/*` 须确认发布、标签及自动回合并 `develop` 成功后再删除。两个长期分支持续保留。
 
 分支名示例：`feature/notification-logo`、`release/0.1.0`、`hotfix/0.1.1`。所有合并通过 GitHub PR 审读；发起 PR 不等于授权本地 merge、rebase 或自动合并 PR。正式发布与标签操作见[发版指南](docs/zh/release/release_guide.md)。
+
+发布完成后的 `main` → `develop` 自动回合并是 PR 合并规则的特例：保留共同提交历史，允许快进或普通 merge，不使用 squash、rebase 或强推。
 
 ## 准备环境
 
